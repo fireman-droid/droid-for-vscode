@@ -1,0 +1,30 @@
+# The primary agent owns orchestration, architectural decisions, and final synthesis.
+model = "gpt-5.6-sol"
+model_reasoning_effort = "xhigh"
+
+[features]
+multi_agent = true
+
+[agents]
+max_threads = 5
+interrupt_message = true
+
+[agents.planner]
+description = "Quality-first planner for architecture, dependency analysis, work breakdown, and validation strategy."
+config_file = "agents/planner.toml"
+
+[agents.code_writer]
+description = "Implementation agent for scoped production changes after the plan and ownership boundaries are clear."
+config_file = "agents/code-writer.toml"
+
+[agents.explorer]
+description = "Read-only repository mapper for locating code paths, conventions, dependencies, and change impact."
+config_file = "agents/explorer.toml"
+
+[agents.tester]
+description = "Test implementation and verification agent for regressions, edge cases, and acceptance criteria."
+config_file = "agents/tester.toml"
+
+[agents.reviewer]
+description = "Quality-first final reviewer for correctness, security, regressions, integration risks, and missing tests."
+config_file = "agents/reviewer.toml"
