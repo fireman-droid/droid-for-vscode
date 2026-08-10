@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["react", "react-dom"]
+  },
+  "include": [
+    "../shared/bridgeMessages.ts",
+    "./**/*.ts",
+    "./**/*.tsx"
+  ],
+  "exclude": ["./**/*.test.ts", "./**/*.test.tsx"]
+}

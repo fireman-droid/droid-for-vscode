@@ -1,0 +1,1908 @@
+import type {
+  ConnectionState,
+  HostToWebviewMessage,
+  SessionCatalogState,
+  SessionSummary,
+  TurnStatus,
+  WebviewToHostMessage,
+} from '../shared/bridgeMessages';
+import {
+  MAX_BRIDGE_ID_LENGTH,
+  MAX_SESSION_CATALOG_ITEMS as SESSION_CATALOG_LIMIT,
+  MAX_SESSION_TITLE_LENGTH as SESSION_TITLE_LIMIT,
+} from '../shared/bridgeMessages';
+import type { DroidRuntime } from '../runtime/DroidRuntime';
+import type {
+  RuntimeSessionTarget,
+} from '../runtime/DroidRuntime';
+import type {
+  RuntimeAvailability,
+  RuntimeEvent,
+} from '../runtime/runtimeEvents';
+import type { RuntimeInteractionHandler } from '../runtime/runtimeInteractions';
+import type {
+  SessionCatalog,
+  SessionCatalogEntry,
+  SessionCatalogResult,
+} from '../runtime/SessionCatalog';
+import {
+  createUnavailableSessionHistoryLoader,
+  type SessionHistoryLoader,
+} from '../runtime/history/SessionHistory';
+import {
+  createTurnActivityState,
+  projectAssistantDelta,
+  projectThinkingDelta,
+  projectToolEvent,
+  type TurnActivityState,
+} from './turnActivityState';
+import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
+import {
+  SESSION_RECOVERY_DEBOUNCE_MS,
+  SessionRecoveryStore,
+  type SessionRecoveryPersistence,
+} from './SessionRecoveryStore';
+import {
+  appendAcceptedUserPrompt,
+  createHostTranscriptState,
+  projectHostTranscriptMessage,
+  type HostTranscriptProjectionMessage,
+  type HostTranscriptState,
+} from './hostTranscriptState';
+
+export type DroidRuntimeFactory = (
+  interactionHandler: RuntimeInteractionHandler,
+) => DroidRuntime;
+
+export interface WorkspaceContext {
+  readonly cwd: string | null;
+  readonly trusted: boolean;
+}
+
+export type WorkspaceContextProvider = () => WorkspaceContext;
+export type ChatControllerListener = (
+  message: HostToWebviewMessage,
+) => void;
+type UnsequencedHostMessage =
+  HostToWebviewMessage extends infer Message
+    ? Message extends HostToWebviewMessage
+      ? Omit<Message, 'sequence'>
+      : never
+    : never;
+
+interface CurrentTurn {
+  readonly turnId: string;
+  status: TurnStatus;
+  error?: string;
+  activity: TurnActivityState;
+}
+
+interface DisposableSubscription {
+  dispose(): void;
+}
+
+const TURN_FAILURE_MESSAGE =
+  'Droid could not complete this turn. Retry to start a fresh session.';
+const RUNTIME_EVENT_ERROR_MESSAGE =
+  'Droid reported a runtime error while processing this turn.';
+const ASSISTANT_OUTPUT_TRUNCATED_MESSAGE =
+  'Assistant output exceeded the display limit and was truncated.';
+const CATALOG_ERROR_MESSAGE =
+  'Saved Droid sessions could not be loaded.';
+const SESSION_OPERATION_BLOCKED_MESSAGE =
+  'Finish the current Droid activity before changing sessions.';
+const UNKNOWN_SESSION_MESSAGE =
+  'The selected Droid session is not available in this workspace.';
+const SESSION_CLOSE_FAILED_MESSAGE =
+  'The current Droid session could not be closed.';
+const SESSION_RESUME_FAILED_MESSAGE =
+  'The selected Droid session could not be opened.';
+const SESSION_NEW_FAILED_MESSAGE =
+  'A new Droid session could not be created.';
+const WORKSPACE_CHANGED_MESSAGE =
+  'The workspace changed before the Droid session could be opened.';
+
+export class ChatController {
+  private readonly listeners = new Set<ChatControllerListener>();
+  private readonly interactions: PendingInteractionCoordinator;
+  private runtime: DroidRuntime | null = null;
+  private connection: ConnectionState = { status: 'idle' };
+  private sessions: SessionCatalogState = {
+    status: 'idle',
+    items: [],
+  };
+  private transcript: HostTranscriptState =
+    createHostTranscriptState('unavailable');
+  private sessionId: string | null = null;
+  private turn: CurrentTurn | null = null;
+  private sequence = -1;
+  private runtimeGeneration = 0;
+  private turnGeneration = 0;
+  private catalogGeneration = 0;
+  private catalogCwd: string | null = null;
+  private activeRuntimeCwd: string | null = null;
+  private initialization: Promise<void> | null = null;
+  private workspaceContext: WorkspaceContext;
+  private workspaceContextGeneration = 0;
+  private workspaceTransition: Promise<void> | null = null;
+  private sessionOperationInProgress = false;
+  private refreshInProgress = false;
+  private readonly managedRuntimes = new Set<DroidRuntime>();
+  private readonly runtimeClosures = new Map<
+    DroidRuntime,
+    Promise<void>
+  >();
+  private readonly closedRuntimes = new WeakSet<DroidRuntime>();
+  private disposed = false;
+  private disposal: Promise<void> | null = null;
+  private pendingRecoveryCheckpoint: {
+    readonly sessionId: string;
+    readonly cache: HostTranscriptState;
+  } | null = null;
+  private recoveryCheckpointTimer: ReturnType<typeof setTimeout> | null =
+    null;
+
+  constructor(
+    private readonly createRuntime: DroidRuntimeFactory,
+    private readonly getWorkspaceContext: WorkspaceContextProvider,
+    private readonly sessionCatalog: SessionCatalog =
+      createEmptySessionCatalog(),
+    private readonly recoveryStore: SessionRecoveryStore =
+      createTransientRecoveryStore(),
+    private readonly sessionHistory: SessionHistoryLoader =
+      createUnavailableSessionHistoryLoader(),
+  ) {
+    this.workspaceContext = {
+      ...this.getWorkspaceContext(),
+    };
+    this.interactions = new PendingInteractionCoordinator(
+      ({ sessionId, turnId, request }) => {
+        if (!this.ensureActiveRuntimeWorkspaceCurrent()) {
+          return;
+        }
+        this.emit({
+          type: 'interaction.request',
+          sessionId,
+          turnId,
+          request,
+        });
+      },
+      ({ sessionId, turnId, requestId }) => {
+        this.emit({
+          type: 'interaction.closed',
+          sessionId,
+          turnId,
+          requestId,
+        });
+      },
+    );
+  }
+
+  subscribe(listener: ChatControllerListener): DisposableSubscription {
+    if (this.disposed) {
+      return { dispose() {} };
+    }
+
+    this.listeners.add(listener);
+    return {
+      dispose: () => {
+        this.listeners.delete(listener);
+      },
+    };
+  }
+
+  handleMessage(message: WebviewToHostMessage): void {
+    if (this.disposed) {
+      return;
+    }
+
+    switch (message.type) {
+      case 'webview.ready':
+        void this.handleReady();
+        return;
+      case 'turn.send':
+        this.handleSend(
+          message.sessionId,
+          message.turnId,
+          message.text,
+        );
+        return;
+      case 'turn.stop':
+        this.handleStop(message.sessionId, message.turnId);
+        return;
+      case 'runtime.retry':
+        this.handleRetry(message.sessionId);
+        return;
+      case 'permission.respond':
+        if (!this.ensureActiveRuntimeWorkspaceCurrent()) {
+          return;
+        }
+        this.interactions.respondPermission(message);
+        return;
+      case 'ask-user.respond':
+        if (!this.ensureActiveRuntimeWorkspaceCurrent()) {
+          return;
+        }
+        this.interactions.respondAskUser(message);
+        return;
+      case 'sessions.refresh':
+        this.handleRefresh();
+        return;
+      case 'session.select':
+        this.handleSessionSelect(message.sessionId);
+        return;
+      case 'session.new':
+        this.handleSessionNew();
+        return;
+    }
+  }
+
+  handleWorkspaceContextChanged(): void {
+    if (this.disposed) {
+      return;
+    }
+
+    const workspace = this.getWorkspaceContext();
+    if (isSameWorkspaceContext(this.workspaceContext, workspace)) {
+      return;
+    }
+    this.workspaceContext = { ...workspace };
+    if (this.initialization === null) {
+      return;
+    }
+
+    const generation = ++this.workspaceContextGeneration;
+    const staleRuntimes = [...this.managedRuntimes];
+    this.runtimeGeneration += 1;
+    this.turnGeneration += 1;
+    if (
+      this.recoveryCheckpointTimer !== null ||
+      this.pendingRecoveryCheckpoint !== null
+    ) {
+      this.checkpointRecoveryTranscript();
+    }
+    this.runtime = null;
+    this.activeRuntimeCwd = null;
+    this.turn = null;
+    this.interactions.cancelAll();
+    if (isUsableWorkspace(workspace)) {
+      this.bindCatalogViewToWorkspace(workspace.cwd);
+      this.connection = {
+        status: 'unavailable',
+        message: WORKSPACE_CHANGED_MESSAGE,
+      };
+      this.emitSnapshot();
+    } else {
+      this.clearCatalog();
+      this.emitWorkspaceUnavailable(workspace);
+    }
+    this.queueWorkspaceTransition(generation, staleRuntimes);
+  }
+
+  dispose(): Promise<void> {
+    if (this.disposal) {
+      return this.disposal;
+    }
+
+    this.checkpointRecoveryTranscript();
+    this.interactions.cancelAll();
+    this.disposed = true;
+    this.runtimeGeneration += 1;
+    this.turnGeneration += 1;
+    this.listeners.clear();
+    const runtimes = [...this.managedRuntimes];
+    this.runtime = null;
+    this.disposal = (async () => {
+      await Promise.allSettled([
+        ...runtimes.map((runtime) => this.closeRuntime(runtime)),
+        this.recoveryStore.flush(),
+      ]);
+      await this.recoveryStore.dispose();
+    })();
+    return this.disposal;
+  }
+
+  private async handleReady(): Promise<void> {
+    if (this.initialization) {
+      await this.initialization;
+      await this.waitForWorkspaceTransition();
+      if (this.disposed) {
+        return;
+      }
+      if (!this.ensureActiveRuntimeWorkspaceCurrent()) {
+        return;
+      }
+      this.emitSnapshot();
+      this.interactions.replayPending();
+      return;
+    }
+
+    this.initialization = this.startup();
+    await this.initialization;
+  }
+
+  private async startup(): Promise<void> {
+    let recoveryLoaded = false;
+    while (!this.disposed) {
+      const workspace = this.getWorkspaceContext();
+      if (!isUsableWorkspace(workspace)) {
+        this.clearCatalog();
+        this.emitWorkspaceUnavailable(workspace);
+        return;
+      }
+
+      this.connection = { status: 'connecting' };
+      const catalogRequest = this.beginCatalogLoad(workspace.cwd);
+      const [, catalog] = await Promise.all([
+        recoveryLoaded
+          ? Promise.resolve()
+          : this.recoveryStore.load(),
+        this.loadCatalog(workspace.cwd),
+      ]);
+      recoveryLoaded = true;
+      if (this.disposed) {
+        return;
+      }
+      if (!this.isCurrentCatalogRequest(catalogRequest, workspace.cwd)) {
+        this.discardCatalogRequest(catalogRequest);
+        continue;
+      }
+      this.sessions = catalog;
+
+      const selectedSessionId =
+        this.recoveryStore.getSelectedSessionId();
+      const resumable =
+        selectedSessionId !== null &&
+        this.hasCatalogSession(selectedSessionId, workspace.cwd);
+      const target: RuntimeSessionTarget = resumable
+        ? {
+            kind: 'resume',
+            cwd: workspace.cwd,
+            sessionId: selectedSessionId,
+          }
+        : { kind: 'new', cwd: workspace.cwd };
+      await this.activateInitialRuntime(
+        target,
+        resumable ? selectedSessionId : null,
+      );
+      if (this.isTargetWorkspaceCurrent(workspace.cwd)) {
+        return;
+      }
+    }
+  }
+
+  private handleSend(
+    sessionId: string,
+    turnId: string,
+    text: string,
+  ): void {
+    const runtime = this.runtime;
+    if (
+      runtime !== null &&
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    if (
+      runtime === null ||
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId ||
+      text.trim().length === 0 ||
+      this.turn?.turnId === turnId ||
+      isTurnActive(this.turn) ||
+      this.sessionOperationInProgress
+    ) {
+      return;
+    }
+
+    const runtimeGeneration = this.runtimeGeneration;
+    const turnGeneration = ++this.turnGeneration;
+    this.turn = {
+      turnId,
+      status: 'submitting',
+      activity: createTurnActivityState(),
+    };
+    this.interactions.beginTurn(sessionId, turnId);
+    this.transcript = appendAcceptedUserPrompt(
+      this.transcript,
+      turnId,
+      text,
+    );
+    this.scheduleRecoveryCheckpoint();
+    this.touchActiveSession();
+    this.emitTurnState(sessionId, turnId, 'submitting');
+    void this.consumeTurn(
+      runtime,
+      runtimeGeneration,
+      turnGeneration,
+      sessionId,
+      turnId,
+      text,
+    );
+  }
+
+  private async consumeTurn(
+    runtime: DroidRuntime,
+    runtimeGeneration: number,
+    turnGeneration: number,
+    sessionId: string,
+    turnId: string,
+    text: string,
+  ): Promise<void> {
+    let terminalEventSeen = false;
+
+    try {
+      for await (const event of runtime.sendTurn(text)) {
+        if (
+          !this.isCurrentTurn(
+            runtime,
+            runtimeGeneration,
+            turnGeneration,
+            sessionId,
+            turnId,
+          )
+        ) {
+          return;
+        }
+
+        if (event.type === 'turn-complete') {
+          terminalEventSeen = true;
+          this.handleTurnComplete(sessionId, turnId, event);
+          return;
+        }
+
+        if (this.turn?.status === 'stopping') {
+          continue;
+        }
+
+        this.handleRuntimeEvent(sessionId, turnId, event);
+      }
+    } catch {
+      if (
+        this.isCurrentTurn(
+          runtime,
+          runtimeGeneration,
+          turnGeneration,
+          sessionId,
+          turnId,
+        )
+      ) {
+        terminalEventSeen = true;
+        this.failTurn(sessionId, turnId, 'runtime-stream-failed');
+      }
+    }
+
+    if (
+      !terminalEventSeen &&
+      this.isCurrentTurn(
+        runtime,
+        runtimeGeneration,
+        turnGeneration,
+        sessionId,
+        turnId,
+      )
+    ) {
+      this.failTurn(sessionId, turnId, 'runtime-stream-ended');
+    }
+  }
+
+  private handleRuntimeEvent(
+    sessionId: string,
+    turnId: string,
+    event: Exclude<RuntimeEvent, { type: 'turn-complete' }>,
+  ): void {
+    switch (event.type) {
+      case 'text-delta': {
+        const turn = this.turn;
+        if (turn === null) {
+          return;
+        }
+        const result = projectAssistantDelta(
+          turn.activity,
+          event.text,
+        );
+        turn.activity = result.state;
+        if (result.projection === null) {
+          return;
+        }
+        if (result.projection.delta.length > 0) {
+          this.startStreaming(sessionId, turnId);
+          this.emit({
+            type: 'assistant.delta',
+            sessionId,
+            turnId,
+            delta: result.projection.delta,
+          });
+        }
+        if (result.projection.truncated) {
+          this.emit({
+            type: 'runtime.diagnostic',
+            sessionId,
+            turnId,
+            severity: 'warning',
+            code: 'assistant-output-truncated',
+            message: ASSISTANT_OUTPUT_TRUNCATED_MESSAGE,
+          });
+        }
+        return;
+      }
+      case 'thinking-delta': {
+        this.startStreaming(sessionId, turnId);
+        const turn = this.turn;
+        if (turn === null) {
+          return;
+        }
+        const result = projectThinkingDelta(
+          turn.activity,
+          event.text,
+        );
+        turn.activity = result.state;
+        if (result.projection !== null) {
+          this.emit({
+            type: 'thinking.delta',
+            sessionId,
+            turnId,
+            ...result.projection,
+          });
+        }
+        return;
+      }
+      case 'thinking-complete':
+        this.emit({
+          type: 'thinking.complete',
+          sessionId,
+          turnId,
+          durationMs: event.durationMs,
+        });
+        return;
+      case 'tool-start':
+      case 'tool-progress':
+      case 'tool-result': {
+        this.startStreaming(sessionId, turnId);
+        const turn = this.turn;
+        if (turn === null) {
+          return;
+        }
+        const result = projectToolEvent(turn.activity, event);
+        turn.activity = result.state;
+        if (result.projection !== null) {
+          this.emit({
+            type: 'tool.activity',
+            sessionId,
+            turnId,
+            ...result.projection,
+          });
+        }
+        return;
+      }
+      case 'working-state':
+        if (event.isWorking) {
+          this.startStreaming(sessionId, turnId);
+        }
+        return;
+      case 'error':
+        this.emit({
+          type: 'runtime.diagnostic',
+          sessionId,
+          turnId,
+          severity: 'error',
+          code: 'runtime-event-error',
+          message: RUNTIME_EVENT_ERROR_MESSAGE,
+        });
+        return;
+    }
+  }
+
+  private handleTurnComplete(
+    sessionId: string,
+    turnId: string,
+    event: Extract<RuntimeEvent, { type: 'turn-complete' }>,
+  ): void {
+    this.interactions.endTurn(sessionId, turnId);
+    switch (event.outcome) {
+      case 'success':
+        this.setTurnStatus(sessionId, turnId, 'completed');
+        void this.flushRecoveryCheckpoint();
+        return;
+      case 'interrupted':
+        this.setTurnStatus(sessionId, turnId, 'interrupted');
+        void this.flushRecoveryCheckpoint();
+        return;
+      case 'error_during_execution':
+        this.failTurn(sessionId, turnId, 'runtime-execution-failed');
+        return;
+      case 'error_structured_output':
+        this.failTurn(sessionId, turnId, 'runtime-structured-output-failed');
+        return;
+    }
+  }
+
+  private handleStop(sessionId: string, turnId: string): void {
+    const runtime = this.runtime;
+    if (
+      runtime !== null &&
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    if (
+      runtime === null ||
+      sessionId !== this.sessionId ||
+      this.turn?.turnId !== turnId ||
+      (this.turn.status !== 'submitting' &&
+        this.turn.status !== 'streaming')
+    ) {
+      return;
+    }
+
+    this.interactions.endTurn(sessionId, turnId);
+    this.setTurnStatus(sessionId, turnId, 'stopping');
+    const runtimeGeneration = this.runtimeGeneration;
+    const turnGeneration = this.turnGeneration;
+    void runtime.interrupt().catch(() => {
+      if (
+        this.isCurrentTurn(
+          runtime,
+          runtimeGeneration,
+          turnGeneration,
+          sessionId,
+          turnId,
+        )
+      ) {
+        this.failTurn(sessionId, turnId, 'runtime-interrupt-failed');
+      }
+    });
+  }
+
+  private handleRetry(sessionId: string | null): void {
+    if (
+      this.sessionOperationInProgress ||
+      this.refreshInProgress ||
+      sessionId !== this.sessionId ||
+      (this.connection.status !== 'unavailable' &&
+        this.turn?.status !== 'failed')
+    ) {
+      return;
+    }
+
+    const workspace = this.getWorkspaceContext();
+    if (!isUsableWorkspace(workspace)) {
+      this.emitWorkspaceUnavailable(workspace);
+      return;
+    }
+    if (
+      this.sessions.status === 'idle' ||
+      this.catalogCwd !== workspace.cwd
+    ) {
+      this.sessionOperationInProgress = true;
+      void this.retryAfterWorkspaceBecomesAvailable(
+        workspace.cwd,
+      ).finally(() => {
+        this.sessionOperationInProgress = false;
+      });
+      return;
+    }
+    const resumableId =
+      this.sessionId !== null &&
+      this.hasCatalogSession(this.sessionId, workspace.cwd)
+        ? this.sessionId
+        : null;
+    this.startReplacement(
+      resumableId === null
+        ? { kind: 'new', cwd: workspace.cwd }
+        : {
+            kind: 'resume',
+            cwd: workspace.cwd,
+            sessionId: resumableId,
+          },
+    );
+  }
+
+  private async retryAfterWorkspaceBecomesAvailable(
+    cwd: string,
+  ): Promise<void> {
+    const catalogRequest = this.beginCatalogLoad(cwd);
+    this.emitSnapshot();
+    const [, catalog] = await Promise.all([
+      this.recoveryStore.load(),
+      this.loadCatalog(cwd),
+    ]);
+    if (this.disposed) {
+      return;
+    }
+    if (!this.isCurrentCatalogRequest(catalogRequest, cwd)) {
+      this.discardCatalogRequest(catalogRequest);
+      return;
+    }
+    this.sessions = catalog;
+    const selectedSessionId =
+      this.recoveryStore.getSelectedSessionId();
+    await this.replaceRuntime(
+      selectedSessionId !== null &&
+        this.hasCatalogSession(selectedSessionId, cwd)
+        ? {
+            kind: 'resume',
+            cwd,
+            sessionId: selectedSessionId,
+          }
+        : { kind: 'new', cwd },
+    );
+  }
+
+  private handleSessionNew(): void {
+    const workspace = this.getWorkspaceContext();
+    if (!this.canReplaceSession() || !isUsableWorkspace(workspace)) {
+      if (!isUsableWorkspace(workspace)) {
+        this.emitWorkspaceUnavailable(workspace);
+      }
+      return;
+    }
+    this.bindCatalogViewToWorkspace(workspace.cwd);
+    this.startReplacement({ kind: 'new', cwd: workspace.cwd });
+  }
+
+  private handleSessionSelect(sessionId: string): void {
+    const workspace = this.getWorkspaceContext();
+    if (!isUsableWorkspace(workspace)) {
+      this.clearCatalog();
+      this.emitWorkspaceUnavailable(workspace);
+      return;
+    }
+    if (!this.canReplaceSession()) {
+      return;
+    }
+    if (this.catalogCwd !== workspace.cwd) {
+      this.emitSessionDiagnostic(
+        'session-selection-invalid',
+        UNKNOWN_SESSION_MESSAGE,
+      );
+      this.startCatalogRefresh(workspace.cwd);
+      return;
+    }
+    if (
+      this.sessions.status !== 'ready' ||
+      !this.hasCatalogSession(sessionId, workspace.cwd)
+    ) {
+      this.emitSessionDiagnostic(
+        'session-selection-invalid',
+        UNKNOWN_SESSION_MESSAGE,
+      );
+      return;
+    }
+    if (
+      sessionId === this.sessionId &&
+      this.activeRuntimeCwd === workspace.cwd
+    ) {
+      this.emitSnapshot();
+      return;
+    }
+    this.startReplacement({
+      kind: 'resume',
+      cwd: workspace.cwd,
+      sessionId,
+    });
+  }
+
+  private handleRefresh(): void {
+    if (
+      this.connection.status === 'connecting' ||
+      this.refreshInProgress ||
+      this.sessionOperationInProgress
+    ) {
+      this.emitSessionDiagnostic(
+        'session-operation-blocked',
+        SESSION_OPERATION_BLOCKED_MESSAGE,
+      );
+      return;
+    }
+    const workspace = this.getWorkspaceContext();
+    if (!isUsableWorkspace(workspace)) {
+      this.emitWorkspaceUnavailable(workspace);
+      return;
+    }
+
+    this.startCatalogRefresh(workspace.cwd);
+  }
+
+  private startCatalogRefresh(cwd: string): void {
+    const previousActive = this.activeSessionSummary();
+    const catalogRequest = this.beginCatalogLoad(cwd);
+    this.refreshInProgress = true;
+    this.emitSnapshot();
+    void this.refreshCatalog(
+      cwd,
+      catalogRequest,
+      previousActive,
+    ).finally(() => {
+      this.refreshInProgress = false;
+    });
+  }
+
+  private async refreshCatalog(
+    cwd: string,
+    catalogRequest: number,
+    previousActive: SessionSummary | undefined,
+  ): Promise<void> {
+    const result = await this.loadCatalog(cwd);
+    if (this.disposed) {
+      return;
+    }
+    if (!this.isCurrentCatalogRequest(catalogRequest, cwd)) {
+      this.discardCatalogRequest(catalogRequest);
+      return;
+    }
+    if (result.status === 'error') {
+      this.sessions = {
+        status: 'error',
+        items: this.markActive(this.sessions.items),
+        message: CATALOG_ERROR_MESSAGE,
+      };
+    } else {
+      this.sessions = this.withActiveSession(
+        result,
+        previousActive,
+      );
+    }
+    this.emitSnapshot();
+  }
+
+  private canReplaceSession(): boolean {
+    if (
+      isTurnActive(this.turn) ||
+      this.interactions.hasPending() ||
+      this.connection.status === 'connecting' ||
+      this.sessionOperationInProgress ||
+      this.refreshInProgress
+    ) {
+      this.emitSessionDiagnostic(
+        'session-operation-blocked',
+        SESSION_OPERATION_BLOCKED_MESSAGE,
+      );
+      return false;
+    }
+    return true;
+  }
+
+  private startReplacement(target: RuntimeSessionTarget): void {
+    this.sessionOperationInProgress = true;
+    this.connection = { status: 'connecting' };
+    this.emitSnapshot();
+    void this.replaceRuntime(target).finally(() => {
+      this.sessionOperationInProgress = false;
+    });
+  }
+
+  private async replaceRuntime(
+    target: RuntimeSessionTarget,
+  ): Promise<void> {
+    const generation = ++this.runtimeGeneration;
+    this.turnGeneration += 1;
+    this.interactions.cancelAll();
+    await this.flushRecoveryCheckpoint();
+    if (!this.isCurrentRuntimeGeneration(generation)) {
+      return;
+    }
+    if (!this.isTargetWorkspaceCurrent(target.cwd)) {
+      this.reportWorkspaceChanged(generation);
+      return;
+    }
+
+    const previousRuntime = this.runtime;
+    if (previousRuntime) {
+      try {
+        await this.closeRuntime(previousRuntime);
+      } catch {
+        if (
+          this.isCurrentRuntimeGeneration(generation) &&
+          this.isTargetWorkspaceCurrent(target.cwd)
+        ) {
+          this.connection = {
+            status: 'unavailable',
+            message: SESSION_CLOSE_FAILED_MESSAGE,
+          };
+          this.emitSessionDiagnostic(
+            'session-close-failed',
+            SESSION_CLOSE_FAILED_MESSAGE,
+          );
+          this.emitSnapshot();
+        } else if (this.isCurrentRuntimeGeneration(generation)) {
+          this.reportWorkspaceChanged(generation);
+        }
+        return;
+      }
+      if (!this.isCurrentRuntimeGeneration(generation)) {
+        return;
+      }
+      if (this.runtime === previousRuntime) {
+        this.runtime = null;
+      }
+      if (!this.isTargetWorkspaceCurrent(target.cwd)) {
+        this.reportWorkspaceChanged(generation);
+        return;
+      }
+    }
+
+    const transcript = await this.prepareActivationTranscript(
+      target,
+      generation,
+    );
+    if (transcript === null) {
+      if (
+        this.isCurrentRuntimeGeneration(generation) &&
+        !this.isTargetWorkspaceCurrent(target.cwd)
+      ) {
+        this.reportWorkspaceChanged(generation);
+      }
+      return;
+    }
+    if (
+      !this.isCurrentRuntimeGeneration(generation) ||
+      !this.isTargetWorkspaceCurrent(target.cwd)
+    ) {
+      if (this.isCurrentRuntimeGeneration(generation)) {
+        this.reportWorkspaceChanged(generation);
+      }
+      return;
+    }
+    const activation = await this.createInitializedRuntime(
+      target,
+      generation,
+    );
+    if (
+      !activation ||
+      !this.isCurrentRuntimeGeneration(generation) ||
+      !this.isTargetWorkspaceCurrent(target.cwd)
+    ) {
+      if (
+        this.isCurrentRuntimeGeneration(generation) &&
+        !this.isTargetWorkspaceCurrent(target.cwd)
+      ) {
+        this.reportWorkspaceChanged(generation);
+      }
+      return;
+    }
+    if (activation.status === 'failed') {
+      this.connection = {
+        status: 'unavailable',
+        message:
+          target.kind === 'resume'
+            ? SESSION_RESUME_FAILED_MESSAGE
+            : SESSION_NEW_FAILED_MESSAGE,
+      };
+      this.emitSessionDiagnostic(
+        target.kind === 'resume'
+          ? 'session-resume-failed'
+          : 'session-new-failed',
+        this.connection.message!,
+      );
+      this.emitSnapshot();
+      return;
+    }
+
+    if (!this.isTargetWorkspaceCurrent(target.cwd)) {
+      await this.closeRuntime(activation.runtime).catch(() => undefined);
+      this.reportWorkspaceChanged(generation);
+      return;
+    }
+    await this.activateRuntime(
+      target,
+      activation.runtime,
+      activation.id,
+      generation,
+      transcript,
+    );
+  }
+
+  private async activateInitialRuntime(
+    target: RuntimeSessionTarget,
+    failedResumeId: string | null,
+  ): Promise<void> {
+    const generation = ++this.runtimeGeneration;
+    const transcript = await this.prepareActivationTranscript(
+      target,
+      generation,
+    );
+    if (transcript === null) {
+      return;
+    }
+    if (
+      !this.isCurrentRuntimeGeneration(generation) ||
+      !this.isTargetWorkspaceCurrent(target.cwd)
+    ) {
+      return;
+    }
+    const activation = await this.createInitializedRuntime(
+      target,
+      generation,
+    );
+    if (
+      !activation ||
+      !this.isCurrentRuntimeGeneration(generation) ||
+      !this.isTargetWorkspaceCurrent(target.cwd)
+    ) {
+      return;
+    }
+    if (activation.status === 'failed') {
+      if (failedResumeId) {
+        this.sessionId = failedResumeId;
+        this.transcript =
+          this.recoveryStore.readSession(failedResumeId) ??
+          createHostTranscriptState('unavailable');
+        this.sessions = this.withActiveSession(this.sessions);
+      } else {
+        this.sessionId = null;
+        this.transcript = createHostTranscriptState('unavailable');
+      }
+      this.connection = {
+        status: 'unavailable',
+        message: activation.message,
+      };
+      this.emitSnapshot();
+      return;
+    }
+    if (!this.isTargetWorkspaceCurrent(target.cwd)) {
+      await this.closeRuntime(activation.runtime).catch(() => undefined);
+      return;
+    }
+    await this.activateRuntime(
+      target,
+      activation.runtime,
+      activation.id,
+      generation,
+      transcript,
+    );
+  }
+
+  private async prepareActivationTranscript(
+    target: RuntimeSessionTarget,
+    generation: number,
+  ): Promise<HostTranscriptState | null> {
+    if (target.kind === 'new') {
+      return createHostTranscriptState('complete');
+    }
+
+    let loaded;
+    try {
+      loaded = await this.sessionHistory.loadHistory({
+        cwd: target.cwd,
+        sessionId: target.sessionId,
+      });
+    } catch {
+      loaded = null;
+    }
+    if (
+      !this.isCurrentRuntimeGeneration(generation) ||
+      !this.isTargetWorkspaceCurrent(target.cwd)
+    ) {
+      return null;
+    }
+    if (loaded?.status === 'available') {
+      return loaded.state;
+    }
+    return (
+      this.recoveryStore.readSession(target.sessionId) ??
+      createHostTranscriptState('unavailable')
+    );
+  }
+
+  private async createInitializedRuntime(
+    target: RuntimeSessionTarget,
+    generation: number,
+  ): Promise<
+    | {
+        readonly status: 'available';
+        readonly runtime: DroidRuntime;
+        readonly id: string;
+      }
+    | { readonly status: 'failed'; readonly message: string }
+    | null
+  > {
+    let runtime: DroidRuntime;
+    try {
+      runtime = this.createRuntime(
+        this.interactions.createRuntimeHandler(),
+      );
+    } catch {
+      return {
+        status: 'failed',
+        message: 'The local Droid runtime could not be created.',
+      };
+    }
+    this.managedRuntimes.add(runtime);
+
+    let availability: RuntimeAvailability;
+    try {
+      availability = await runtime.initialize(target);
+    } catch {
+      await this.closeRuntime(runtime).catch(() => undefined);
+      return this.isCurrentRuntimeGeneration(generation) &&
+        this.isTargetWorkspaceCurrent(target.cwd)
+        ? {
+            status: 'failed',
+            message: 'The local Droid runtime could not be initialized.',
+          }
+        : null;
+    }
+
+    if (
+      !this.isCurrentRuntimeGeneration(generation) ||
+      !this.isTargetWorkspaceCurrent(target.cwd)
+    ) {
+      await this.closeRuntime(runtime).catch(() => undefined);
+      return null;
+    }
+    if (
+      availability.status === 'unavailable' ||
+      !isSafeBridgeId(availability.sessionId) ||
+      (target.kind === 'resume' &&
+        availability.sessionId !== target.sessionId)
+    ) {
+      await this.closeRuntime(runtime).catch(() => undefined);
+      if (
+        !this.isCurrentRuntimeGeneration(generation) ||
+        !this.isTargetWorkspaceCurrent(target.cwd)
+      ) {
+        return null;
+      }
+      return {
+        status: 'failed',
+        message:
+          availability.status === 'unavailable'
+            ? unavailableMessage(availability.reason)
+            : target.kind === 'resume'
+              ? SESSION_RESUME_FAILED_MESSAGE
+              : SESSION_NEW_FAILED_MESSAGE,
+      };
+    }
+
+    return {
+      status: 'available',
+      runtime,
+      id: availability.sessionId,
+    };
+  }
+
+  private async activateRuntime(
+    target: RuntimeSessionTarget,
+    runtime: DroidRuntime,
+    sessionId: string,
+    generation: number,
+    transcript: HostTranscriptState,
+  ): Promise<void> {
+    if (
+      !this.isActivationCandidateCurrent(
+        runtime,
+        generation,
+        target.cwd,
+      )
+    ) {
+      await this.closeRuntime(runtime).catch(() => undefined);
+      if (
+        this.isCurrentRuntimeGeneration(generation) &&
+        !this.isTargetWorkspaceCurrent(target.cwd)
+      ) {
+        this.reportWorkspaceChanged(generation);
+      }
+      return;
+    }
+    this.recoveryStore.writeSession(sessionId, transcript);
+    await this.recoveryStore.flush();
+    if (
+      !this.isActivationCandidateCurrent(
+        runtime,
+        generation,
+        target.cwd,
+      )
+    ) {
+      await this.closeRuntime(runtime).catch(() => undefined);
+      if (
+        this.isCurrentRuntimeGeneration(generation) &&
+        !this.isTargetWorkspaceCurrent(target.cwd)
+      ) {
+        this.reportWorkspaceChanged(generation);
+      }
+      return;
+    }
+
+    this.runtime = runtime;
+    this.activeRuntimeCwd = target.cwd;
+    this.sessionId = sessionId;
+    this.turn = null;
+    this.transcript = transcript;
+    this.sessions = this.withActiveSession(
+      this.sessions,
+      target.kind === 'new'
+        ? {
+            id: sessionId,
+            title: 'New session',
+            messageCount: 0,
+            modifiedTime: new Date().toISOString(),
+            active: true,
+          }
+        : undefined,
+    );
+    this.connection = { status: 'connected' };
+    this.recoveryStore.selectSession(sessionId);
+    void this.recoveryStore.flush();
+    this.emitSnapshot();
+  }
+
+  private async loadCatalog(cwd: string): Promise<SessionCatalogState> {
+    let result: SessionCatalogResult;
+    try {
+      result = await this.sessionCatalog.listSessions(cwd);
+    } catch {
+      result = {
+        status: 'unavailable',
+        reason: 'catalog-failed',
+        message: CATALOG_ERROR_MESSAGE,
+      };
+    }
+    if (result.status === 'unavailable') {
+      return {
+        status: 'error',
+        items: [],
+        message: CATALOG_ERROR_MESSAGE,
+      };
+    }
+    return {
+      status: 'ready',
+      items: projectCatalogEntries(result.sessions),
+    };
+  }
+
+  private failTurn(
+    sessionId: string,
+    turnId: string,
+    code: string,
+  ): void {
+    if (this.turn?.turnId !== turnId) {
+      return;
+    }
+
+    this.interactions.endTurn(sessionId, turnId);
+    this.turn.status = 'failed';
+    this.turn.error = TURN_FAILURE_MESSAGE;
+    this.emit({
+      type: 'turn.error',
+      sessionId,
+      turnId,
+      code,
+      message: TURN_FAILURE_MESSAGE,
+      retryable: true,
+    });
+    this.emitTurnState(sessionId, turnId, 'failed');
+    void this.flushRecoveryCheckpoint();
+  }
+
+  private setTurnStatus(
+    sessionId: string,
+    turnId: string,
+    status: TurnStatus,
+  ): void {
+    if (this.turn?.turnId !== turnId) {
+      return;
+    }
+
+    this.turn.status = status;
+    this.emitTurnState(sessionId, turnId, status);
+  }
+
+  private startStreaming(sessionId: string, turnId: string): void {
+    if (this.turn?.status === 'submitting') {
+      this.setTurnStatus(sessionId, turnId, 'streaming');
+    }
+  }
+
+  private emitSnapshot(): void {
+    const sessions = this.withActiveSession(this.sessions);
+    this.emit({
+      type: 'host.snapshot',
+      sessionId: this.sessionId,
+      connection: this.connection,
+      turn:
+        this.turn === null
+          ? null
+          : {
+              turnId: this.turn.turnId,
+              status: this.turn.status,
+              ...(this.turn.error === undefined
+                ? {}
+                : { error: this.turn.error }),
+            },
+      sessions,
+      transcript: this.transcript.transcript,
+      historyStatus: this.transcript.historyStatus,
+      truncated: this.transcript.truncated,
+    });
+  }
+
+  private emitTurnState(
+    sessionId: string,
+    turnId: string,
+    status: TurnStatus,
+  ): void {
+    this.emit({
+      type: 'turn.state',
+      sessionId,
+      turnId,
+      status,
+    });
+  }
+
+  private emit(
+    message: UnsequencedHostMessage,
+  ): void {
+    if (this.disposed) {
+      return;
+    }
+
+    const withSequence = {
+      ...message,
+      sequence: this.nextSequence(),
+    } as HostToWebviewMessage;
+    this.projectTranscript(withSequence);
+    for (const listener of this.listeners) {
+      listener(withSequence);
+    }
+  }
+
+  private projectTranscript(message: HostToWebviewMessage): void {
+    if (
+      this.sessionId === null ||
+      message.sessionId !== this.sessionId ||
+      !isTranscriptProjection(message)
+    ) {
+      return;
+    }
+    this.transcript = projectHostTranscriptMessage(
+      this.transcript,
+      message,
+    );
+    this.scheduleRecoveryCheckpoint();
+  }
+
+  private scheduleRecoveryCheckpoint(): void {
+    const sessionId = this.sessionId;
+    if (sessionId === null) {
+      return;
+    }
+    this.pendingRecoveryCheckpoint = {
+      sessionId,
+      cache: this.transcript,
+    };
+    if (this.recoveryCheckpointTimer !== null) {
+      return;
+    }
+    this.recoveryCheckpointTimer = setTimeout(() => {
+      this.recoveryCheckpointTimer = null;
+      const checkpoint = this.pendingRecoveryCheckpoint;
+      this.pendingRecoveryCheckpoint = null;
+      if (checkpoint) {
+        this.recoveryStore.writeSession(
+          checkpoint.sessionId,
+          checkpoint.cache,
+        );
+      }
+    }, SESSION_RECOVERY_DEBOUNCE_MS);
+  }
+
+  private checkpointRecoveryTranscript(): void {
+    if (this.recoveryCheckpointTimer !== null) {
+      clearTimeout(this.recoveryCheckpointTimer);
+      this.recoveryCheckpointTimer = null;
+    }
+    this.pendingRecoveryCheckpoint = null;
+    if (this.sessionId !== null) {
+      this.recoveryStore.writeSession(
+        this.sessionId,
+        this.transcript,
+      );
+    }
+  }
+
+  private flushRecoveryCheckpoint(): Promise<void> {
+    this.checkpointRecoveryTranscript();
+    return this.recoveryStore.flush();
+  }
+
+  private emitSessionDiagnostic(
+    code: string,
+    message: string,
+  ): void {
+    this.emit({
+      type: 'runtime.diagnostic',
+      sessionId: this.sessionId,
+      turnId: null,
+      severity: 'warning',
+      code,
+      message,
+    });
+  }
+
+  private emitWorkspaceUnavailable(workspace: WorkspaceContext): void {
+    this.connection =
+      workspace.cwd === null
+        ? {
+            status: 'unavailable',
+            message: 'Open a workspace folder to use DroidVisX.',
+          }
+        : {
+            status: 'unavailable',
+            message:
+              'Trust this workspace to start the local Droid runtime.',
+          };
+    this.emitSnapshot();
+  }
+
+  private hasCatalogSession(sessionId: string, cwd: string): boolean {
+    return (
+      this.catalogCwd === cwd &&
+      this.sessions.status === 'ready' &&
+      this.sessions.items.some(({ id }) => id === sessionId)
+    );
+  }
+
+  private activeSessionSummary(): SessionSummary | undefined {
+    return this.sessionId === null
+      ? undefined
+      : this.sessions.items.find(({ id }) => id === this.sessionId);
+  }
+
+  private withActiveSession(
+    sessions: SessionCatalogState,
+    fallback?: SessionSummary,
+  ): SessionCatalogState {
+    if (
+      this.sessionId === null ||
+      this.catalogCwd === null ||
+      this.activeRuntimeCwd !== this.catalogCwd
+    ) {
+      return {
+        ...sessions,
+        items: sessions.items.map((item) => ({
+          ...item,
+          active: false,
+        })),
+      };
+    }
+    const existing = sessions.items.find(
+      ({ id }) => id === this.sessionId,
+    );
+    const active =
+      existing ??
+      fallback ??
+      this.activeSessionSummary() ?? {
+        id: this.sessionId,
+        title: 'Current session',
+        messageCount: 0,
+        modifiedTime: new Date().toISOString(),
+        active: true,
+      };
+    const items = sessions.items
+      .filter(({ id }) => id !== this.sessionId)
+      .map((item) => ({ ...item, active: false }));
+    if (items.length >= SESSION_CATALOG_LIMIT) {
+      items.length = SESSION_CATALOG_LIMIT - 1;
+    }
+    items.push({ ...active, active: true });
+    return { ...sessions, items };
+  }
+
+  private markActive(
+    items: readonly SessionSummary[],
+  ): readonly SessionSummary[] {
+    return this.withActiveSession({
+      status: this.sessions.status,
+      items,
+    }).items;
+  }
+
+  private touchActiveSession(): void {
+    if (this.sessionId === null) {
+      return;
+    }
+    const modifiedTime = new Date().toISOString();
+    this.sessions = {
+      ...this.sessions,
+      items: this.sessions.items.map((item) =>
+        item.id === this.sessionId
+          ? { ...item, modifiedTime }
+          : item,
+      ),
+    };
+  }
+
+  private closeRuntime(runtime: DroidRuntime): Promise<void> {
+    if (this.closedRuntimes.has(runtime)) {
+      return Promise.resolve();
+    }
+    const existing = this.runtimeClosures.get(runtime);
+    if (existing) {
+      return existing;
+    }
+    const closure = Promise.resolve()
+      .then(() => runtime.dispose())
+      .then(() => {
+        this.closedRuntimes.add(runtime);
+        this.managedRuntimes.delete(runtime);
+      })
+      .finally(() => {
+        if (this.runtimeClosures.get(runtime) === closure) {
+          this.runtimeClosures.delete(runtime);
+        }
+      });
+    this.runtimeClosures.set(runtime, closure);
+    return closure;
+  }
+
+  private queueWorkspaceTransition(
+    generation: number,
+    staleRuntimes: readonly DroidRuntime[],
+  ): void {
+    const previous =
+      this.workspaceTransition ?? Promise.resolve();
+    const transition = previous
+      .catch(() => undefined)
+      .then(() =>
+        this.reconcileWorkspaceContext(
+          generation,
+          staleRuntimes,
+        ),
+      )
+      .catch(() => {
+        if (
+          this.disposed ||
+          generation !== this.workspaceContextGeneration
+        ) {
+          return;
+        }
+        this.connection = {
+          status: 'unavailable',
+          message: WORKSPACE_CHANGED_MESSAGE,
+        };
+        this.emitSnapshot();
+      });
+    this.workspaceTransition = transition;
+    void transition.finally(() => {
+      if (this.workspaceTransition === transition) {
+        this.workspaceTransition = null;
+      }
+    });
+  }
+
+  private async reconcileWorkspaceContext(
+    generation: number,
+    staleRuntimes: readonly DroidRuntime[],
+  ): Promise<void> {
+    const results = await Promise.allSettled([
+      this.recoveryStore.flush(),
+      ...staleRuntimes.map((runtime) => this.closeRuntime(runtime)),
+    ]);
+    if (
+      this.disposed ||
+      generation !== this.workspaceContextGeneration
+    ) {
+      return;
+    }
+    if (results.slice(1).some((result) => result.status === 'rejected')) {
+      this.connection = {
+        status: 'unavailable',
+        message: SESSION_CLOSE_FAILED_MESSAGE,
+      };
+      this.emitSessionDiagnostic(
+        'session-close-failed',
+        SESSION_CLOSE_FAILED_MESSAGE,
+      );
+      this.emitSnapshot();
+      return;
+    }
+
+    const workspace = this.getWorkspaceContext();
+    if (!isSameWorkspaceContext(this.workspaceContext, workspace)) {
+      this.handleWorkspaceContextChanged();
+      return;
+    }
+    if (!isUsableWorkspace(workspace)) {
+      return;
+    }
+    if (
+      this.runtime !== null &&
+      this.activeRuntimeCwd === workspace.cwd
+    ) {
+      return;
+    }
+
+    const initialStartup = this.initialization;
+    if (initialStartup !== null) {
+      await initialStartup;
+    }
+    if (
+      this.disposed ||
+      generation !== this.workspaceContextGeneration
+    ) {
+      return;
+    }
+    if (
+      this.runtime !== null &&
+      this.activeRuntimeCwd === workspace.cwd
+    ) {
+      return;
+    }
+    if (!this.isTargetWorkspaceCurrent(workspace.cwd)) {
+      this.handleWorkspaceContextChanged();
+      return;
+    }
+    await this.startup();
+  }
+
+  private async waitForWorkspaceTransition(): Promise<void> {
+    while (this.workspaceTransition !== null) {
+      await this.workspaceTransition;
+    }
+  }
+
+  private nextSequence(): number {
+    if (this.sequence >= Number.MAX_SAFE_INTEGER) {
+      throw new Error('DroidVisX host message sequence was exhausted.');
+    }
+    this.sequence += 1;
+    return this.sequence;
+  }
+
+  private isCurrentRuntime(
+    runtime: DroidRuntime,
+    generation: number,
+  ): boolean {
+    return (
+      this.isCurrentRuntimeGeneration(generation) &&
+      this.runtime === runtime
+    );
+  }
+
+  private isCurrentRuntimeGeneration(generation: number): boolean {
+    return !this.disposed && this.runtimeGeneration === generation;
+  }
+
+  private beginCatalogLoad(cwd: string): number {
+    const generation = ++this.catalogGeneration;
+    this.catalogCwd = cwd;
+    this.sessions = { status: 'loading', items: [] };
+    return generation;
+  }
+
+  private bindCatalogViewToWorkspace(cwd: string): void {
+    if (this.catalogCwd === cwd) {
+      return;
+    }
+    this.catalogGeneration += 1;
+    this.catalogCwd = cwd;
+    this.sessions = { status: 'idle', items: [] };
+  }
+
+  private clearCatalog(): void {
+    this.catalogGeneration += 1;
+    this.catalogCwd = null;
+    this.sessions = { status: 'idle', items: [] };
+  }
+
+  private isCurrentCatalogRequest(
+    generation: number,
+    cwd: string,
+  ): boolean {
+    return (
+      !this.disposed &&
+      this.catalogGeneration === generation &&
+      this.catalogCwd === cwd &&
+      this.isTargetWorkspaceCurrent(cwd)
+    );
+  }
+
+  private discardCatalogRequest(generation: number): void {
+    if (
+      this.disposed ||
+      this.catalogGeneration !== generation
+    ) {
+      return;
+    }
+    const workspace = this.getWorkspaceContext();
+    this.catalogGeneration += 1;
+    this.catalogCwd = isUsableWorkspace(workspace)
+      ? workspace.cwd
+      : null;
+    this.sessions = { status: 'idle', items: [] };
+    if (isUsableWorkspace(workspace)) {
+      this.emitSnapshot();
+    } else {
+      this.emitWorkspaceUnavailable(workspace);
+    }
+  }
+
+  private isTargetWorkspaceCurrent(cwd: string): boolean {
+    const workspace = this.getWorkspaceContext();
+    return isUsableWorkspace(workspace) && workspace.cwd === cwd;
+  }
+
+  private isActivationCandidateCurrent(
+    runtime: DroidRuntime,
+    generation: number,
+    cwd: string,
+  ): boolean {
+    return (
+      this.isCurrentRuntimeGeneration(generation) &&
+      this.managedRuntimes.has(runtime) &&
+      this.isTargetWorkspaceCurrent(cwd)
+    );
+  }
+
+  private ensureActiveRuntimeWorkspaceCurrent(): boolean {
+    if (
+      this.runtime === null ||
+      (this.activeRuntimeCwd !== null &&
+        this.isTargetWorkspaceCurrent(this.activeRuntimeCwd))
+    ) {
+      return true;
+    }
+    this.handleWorkspaceContextChanged();
+    return false;
+  }
+
+  private reportWorkspaceChanged(generation: number): void {
+    if (!this.isCurrentRuntimeGeneration(generation)) {
+      return;
+    }
+    this.connection = {
+      status: 'unavailable',
+      message: WORKSPACE_CHANGED_MESSAGE,
+    };
+    this.emitSessionDiagnostic(
+      'workspace-changed',
+      WORKSPACE_CHANGED_MESSAGE,
+    );
+    this.emitSnapshot();
+  }
+
+  private isCurrentTurn(
+    runtime: DroidRuntime,
+    runtimeGeneration: number,
+    turnGeneration: number,
+    sessionId: string,
+    turnId: string,
+  ): boolean {
+    if (
+      this.isCurrentRuntime(runtime, runtimeGeneration) &&
+      this.turnGeneration === turnGeneration &&
+      this.sessionId === sessionId &&
+      this.turn?.turnId === turnId &&
+      isTurnActive(this.turn)
+    ) {
+      return this.ensureActiveRuntimeWorkspaceCurrent();
+    }
+    return false;
+  }
+}
+
+function isTurnActive(turn: CurrentTurn | null): boolean {
+  return (
+    turn?.status === 'submitting' ||
+    turn?.status === 'streaming' ||
+    turn?.status === 'stopping'
+  );
+}
+
+function unavailableMessage(
+  reason: Extract<
+    RuntimeAvailability,
+    { status: 'unavailable' }
+  >['reason'],
+): string {
+  switch (reason) {
+    case 'cli-not-found':
+      return 'Install the Droid CLI and sign in before using DroidVisX.';
+    case 'invalid-cwd':
+      return 'Droid could not use the selected workspace folder.';
+    case 'initialization-failed':
+      return 'The local Droid runtime could not be initialized.';
+  }
+}
+
+function isUsableWorkspace(
+  workspace: WorkspaceContext,
+): workspace is { readonly cwd: string; readonly trusted: true } {
+  return workspace.cwd !== null && workspace.trusted;
+}
+
+function isSameWorkspaceContext(
+  left: WorkspaceContext,
+  right: WorkspaceContext,
+): boolean {
+  return left.cwd === right.cwd && left.trusted === right.trusted;
+}
+
+function isTranscriptProjection(
+  message: HostToWebviewMessage,
+): message is HostTranscriptProjectionMessage {
+  return (
+    message.type === 'assistant.delta' ||
+    message.type === 'thinking.delta' ||
+    message.type === 'thinking.complete' ||
+    message.type === 'tool.activity' ||
+    message.type === 'runtime.diagnostic' ||
+    message.type === 'turn.state'
+  );
+}
+
+function projectCatalogEntries(
+  entries: readonly SessionCatalogEntry[],
+): SessionSummary[] {
+  const items: SessionSummary[] = [];
+  const ids = new Set<string>();
+  for (const entry of entries) {
+    if (
+      items.length >= SESSION_CATALOG_LIMIT ||
+      !isSafeBridgeId(entry.id) ||
+      ids.has(entry.id) ||
+      !Number.isSafeInteger(entry.messageCount) ||
+      entry.messageCount < 0
+    ) {
+      continue;
+    }
+    const modified = new Date(entry.modifiedTime);
+    if (!Number.isFinite(modified.getTime())) {
+      continue;
+    }
+    ids.add(entry.id);
+    items.push({
+      id: entry.id,
+      title: sanitizeSessionTitle(entry.title),
+      messageCount: entry.messageCount,
+      modifiedTime: modified.toISOString(),
+      active: false,
+    });
+  }
+  return items;
+}
+
+function sanitizeSessionTitle(title: string): string {
+  if (typeof title !== 'string') {
+    return 'Untitled session';
+  }
+  const safe = title
+    .replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, SESSION_TITLE_LIMIT)
+    .trim();
+  return safe || 'Untitled session';
+}
+
+function isSafeBridgeId(value: string): boolean {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_BRIDGE_ID_LENGTH &&
+    value.trim() === value &&
+    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
+  );
+}
+
+function createEmptySessionCatalog(): SessionCatalog {
+  return {
+    async listSessions() {
+      return { status: 'available', sessions: [] };
+    },
+  };
+}
+
+function createTransientRecoveryStore(): SessionRecoveryStore {
+  const values = new Map<string, unknown>();
+  const persistence: SessionRecoveryPersistence = {
+    get<T>(key: string): T | undefined {
+      return values.get(key) as T | undefined;
+    },
+    async update(key: string, value: unknown): Promise<void> {
+      values.set(key, value);
+    },
+  };
+  return new SessionRecoveryStore(persistence);
+}

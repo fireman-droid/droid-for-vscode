@@ -1,0 +1,87 @@
+{
+  "name": "droidvisx",
+  "displayName": "DroidVisX",
+  "description": "A secure VS Code chat surface for Factory Droid.",
+  "version": "0.0.0",
+  "publisher": "droidvisx",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.108.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension/extension.cjs",
+  "activationEvents": [
+    "onView:droidvisx.chat",
+    "onCommand:droidvisx.focusView"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "droidvisx.focusView",
+        "title": "DroidVisX: Open Chat"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "droidvisx",
+          "title": "DroidVisX",
+          "icon": "resources/droidvisx.svg"
+        }
+      ]
+    },
+    "views": {
+      "droidvisx": [
+        {
+          "id": "droidvisx.chat",
+          "name": "DroidVisX",
+          "type": "webview"
+        }
+      ]
+    }
+  },
+  "packageManager": "pnpm@10.2.0",
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "test:extension": "vitest run src/shared src/extension",
+    "test:webview": "vitest run src/webview",
+    "test:integration": "pnpm run build && node src/integration/runTest.mjs",
+    "smoke:runtime": "tsx src/runtime/runtimeSmoke.ts",
+    "smoke:capabilities": "tsx src/runtime/capabilities/capabilitySmoke.ts",
+    "test": "vitest run",
+    "typecheck:webview": "tsc -p src/webview/tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.extension.json --noEmit && tsc -p tsconfig.webview.json --noEmit && pnpm run typecheck:webview",
+    "package:prepare": "pnpm run typecheck && pnpm run test && pnpm run build",
+    "package:vsix": "pnpm run package:prepare && vsce package --no-dependencies --out dist/droidvisx.vsix",
+    "verify:vsix": "node src/integration/verifyVsix.mjs dist/droidvisx.vsix",
+    "vscode:prepublish": "pnpm run build"
+  },
+  "dependencies": {
+    "@assistant-ui/react": "0.15.12",
+    "@assistant-ui/react-markdown": "0.14.10",
+    "@factory/droid-sdk": "0.7.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1"
+  },
+  "devDependencies": {
+    "@testing-library/react": "16.3.0",
+    "@testing-library/user-event": "14.6.1",
+    "@types/node": "^24.10.1",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
+    "@types/vscode": "1.108.0",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "3.9.2",
+    "esbuild": "^0.27.0",
+    "jsdom": "27.2.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15"
+  }
+}

@@ -1,60 +1,65 @@
-# Project Agent Workflow
+# Project Instructions
 
-This repository uses a quality-first multi-agent workflow for non-trivial work.
-The primary agent remains responsible for scope, orchestration, integration,
-validation, and the final answer.
+This repository uses one primary agent and one dedicated code-writing
+subagent. Avoid multi-agent orchestration unless the user explicitly asks for
+it.
 
-## Role routing
+## Current phase
 
-- Use `planner` for architecture, dependency analysis, staged implementation
-  plans, risk analysis, and validation strategy.
-- Use `explorer` for independent read-only repository mapping and targeted
-  investigations that can run in parallel.
-- Use `code_writer` for production implementation after scope, dependencies,
-  and file ownership are clear.
-- Use `tester` for test implementation, regression coverage, and independent
-  verification.
-- Use `reviewer` after implementation and testing for final quality review.
+The project is in implementation. Treat the user's current requirements and
+the production code as the behavioral source of truth. Keep
+`docs/product/implementation-status.md` accurate as the durable record of what
+is production-wired, partial, probe-only, or not implemented.
 
-Small, localized changes do not require delegation. For substantial work,
-start with planning and use subagents only for bounded workstreams that can
-proceed independently or benefit from isolated context.
+The Cursor Secondary Sidebar is the primary chat surface. The previous UI
+specification and concept images are obsolete and must not be restored or used
+as implementation requirements. Do not invent unsupported Droid capabilities
+or turn visual sample data into an implicit runtime contract.
 
-## Orchestration contract
+## Execution model
 
-1. Inspect the repository and clarify the desired outcome.
-2. Ask `planner` for an evidence-backed plan before substantial edits.
-3. Use `explorer` in parallel only when separate discovery questions exist.
-4. Assign each implementation workstream to one `code_writer` with explicit
-   file ownership and acceptance criteria.
-5. Never let two active agents edit the same file or overlapping code paths.
-6. Respect dependency order; do not parallelize work whose inputs are not yet
-   stable.
-7. Ask `tester` to cover changed behavior and run relevant validation.
-8. Ask `reviewer` to inspect the integrated result after tests complete.
-9. Resolve material findings, rerun affected checks, and only then report
-   completion.
+- The primary agent owns requirements, repository inspection, planning,
+  architecture, integration, validation, review, status tracking, and the
+  final answer.
+- Delegate production and test code implementation to the project
+  `code-writer`, which uses the configured BYOK `custom:gpt-5.6-terra` model.
+- Give `code-writer` one bounded, end-to-end feature slice with the relevant
+  context, constraints, acceptance criteria, and validation expectations.
+- Do not invoke planner, explorer, tester, reviewer, or research subagents as a
+  routine workflow. Use another subagent only when the user explicitly asks.
+- Do not split one feature across multiple simultaneous code writers.
+- Prefer one implementation handoff and one returned result over serial agent
+  stages.
 
-Wait for all delegated work needed by the current stage before integrating or
-moving to a dependent stage. Return distilled findings and decisions to the
-primary thread instead of dumping raw logs.
+## Delivery loop
+
+1. The primary agent inspects only the code needed for the requested feature.
+2. Define one user-visible vertical slice and an observable completion
+   criterion.
+3. Delegate its production and test code to `code-writer`.
+4. The primary agent reviews the integrated diff and runs focused validation.
+5. Run broad tests, type checks, and builds once at the end when justified.
+6. Package and perform visible Cursor verification when the requested slice
+   affects the extension UI.
+7. Update `docs/product/implementation-status.md` in the same change.
+
+Capability research and probes must support an active product slice. Do not
+expand them into standalone projects without explicit user approval.
 
 ## Engineering rules
 
 - Preserve existing user changes and unrelated files.
 - Follow repository-local conventions discovered from the codebase.
 - Prefer small, coherent changes over broad rewrites.
+- Keep modules narrow, dependencies explicit, and control flow easy to trace.
+- Prefer functions and composition over managers, wrappers, inheritance, or
+  speculative abstraction layers.
+- Validate at trust boundaries; do not spread redundant guards, catch-all
+  fallbacks, or impossible-state handling through internal code.
 - Do not invent APIs, commands, or project structure; verify them locally.
 - Treat generated files, lockfiles, migrations, and public contracts carefully.
 - Run focused checks first and broader checks in proportion to risk.
 - Report commands actually run, failures, skipped checks, and remaining risks.
 - Do not declare success based only on code edits; verify observable behavior.
-
-## Example invocation
-
-For a large feature, ask Codex:
-
-> Use the project agent workflow. Have `planner` produce the implementation
-> plan, delegate independent discovery to `explorer`, assign non-overlapping
-> workstreams to `code_writer`, then use `tester` and `reviewer`. Wait for each
-> dependency stage and return one integrated result.
+- A capability is complete only when its Runtime, Host, Bridge, UI, tests,
+  package, and visible verification are complete for the agreed scope.
