@@ -345,7 +345,8 @@ DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以
 - `src/`、测试、构建配置、依赖锁文件和工程文档已纳入 Git
 - 旧 UI 规格和旧概念图已按用户决定删除
 - 旧 `.codex` 多 Agent 工作流已删除
-- 项目只保留 BYOK `custom:gpt-5.6-terra` code-writer
+- 项目只保留使用 BYOK `custom:gpt-5.6-terra` 的
+  `backend-writer` 和 `frontend-writer`
 - `artifacts/`、本地 `.factory/skills/`、`.workflow/`、`dist/` 和 `node_modules/` 已忽略
 
 后续交付顺序和完成标准见

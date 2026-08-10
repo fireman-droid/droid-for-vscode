@@ -44,12 +44,37 @@ Droid 真实能力
 1. 基于当前实际 UI 制作该模块的少量原型。
 2. 用户确认布局、状态和主要交互。
 3. 固定模块目标、非目标和验收标准。
-4. 交给 BYOK `custom:gpt-5.6-terra` code-writer 实现生产代码和测试。
-5. 主 Agent 集成、验证、打包和汇报。
+4. 交给 BYOK Terra `backend-writer` 实现 Runtime、Host、Bridge 和测试。
+5. 主 Agent 检查并冻结共享 Bridge Contract。
+6. 交给 BYOK Terra `frontend-writer` 实现 Webview、样式和测试。
+7. 主 Agent 集成、验证、打包和汇报。
 
 原型只定义视觉和交互，不得凭空定义 Droid Runtime 能力。
 
-### 3. 一个模块一次正式验证
+### 3. 前后端角色边界
+
+默认文件所有权：
+
+```text
+backend-writer
+├─ src/runtime/**
+├─ src/extension/**
+└─ src/shared/**
+
+frontend-writer
+└─ src/webview/**
+```
+
+两个角色都使用 `custom:gpt-5.6-terra`。
+
+- Backend 负责定义和验证严格 Bridge Contract。
+- Frontend 只消费已经冻结的 Contract，不增加假字段或前端专用后门。
+- Contract 未冻结时默认先 Backend、后 Frontend。
+- Contract 已冻结且文件完全不重叠时，才允许两个角色并行。
+- 两个角色不得同时编辑同一文件。
+- `package.json` 等跨层文件由主 Agent 明确分配单一所有者。
+
+### 4. 一个模块一次正式验证
 
 - 开发期间只运行相关聚焦测试。
 - 模块集成后运行一次完整测试和 TypeScript 检查。
@@ -57,7 +82,7 @@ Droid 真实能力
 - 每个完成模块形成一个独立 Git Commit。
 - 同一模块没有完成前，不并行铺开下一个模块。
 
-### 4. 完成必须可见
+### 5. 完成必须可见
 
 只有代码、测试、打包和 Cursor 验收全部完成，模块才能在
 `implementation-status.md` 中标记为“生产已接通”。
