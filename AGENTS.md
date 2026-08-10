@@ -9,7 +9,9 @@ it.
 The project is in implementation. Treat the user's current requirements and
 the production code as the behavioral source of truth. Keep
 `docs/product/implementation-status.md` accurate as the durable record of what
-is production-wired, partial, probe-only, or not implemented.
+is production-wired, partial, probe-only, or not implemented. Follow
+`docs/product/delivery-plan.md` for module order, execution boundaries, and
+completion criteria.
 
 The Cursor Secondary Sidebar is the primary chat surface. The previous UI
 specification and concept images are obsolete and must not be restored or used

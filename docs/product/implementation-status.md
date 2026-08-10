@@ -21,7 +21,7 @@
 
 DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以及基础 Session、历史记录、权限交互和恢复安全能力。
 
-它目前还不是完整的 Droid GUI，也没有完成产品规格要求的完整 MVP 后端适配。动态 Composer、Context、Rewind、Changes/Diff、daemon 主运行路径、Skills、Commands、MCP 管理、Mission 和 Manage Droid 等主要功能仍未实现。
+它目前还不是完整的 Droid GUI，也没有完成项目目标要求的完整 MVP 后端适配。动态 Composer、Context、Rewind、Changes/Diff、daemon 主运行路径、Skills、Commands、MCP 管理、Mission 和 Manage Droid 等主要功能仍未实现。
 
 ## 生产已接通
 
@@ -338,33 +338,35 @@ DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以
 - 所有 TypeScript 检查：通过
 - Production Build：通过
 
-## 仓库状态风险
+## 仓库状态
 
-当前工作区不是可复现的正常提交状态：
+当前实现已在提交 `0fb5e5c` 中形成可复现检查点：
 
-- `docs/product/droidvisx-ui-spec.md` 在工作区被删除，但可从 `HEAD` 恢复
-- `design/ui-concepts/round-04-refined/` 的批准原型在工作区被删除，但可从 `HEAD` 恢复
-- `src/`、`package.json`、构建文件和多数工程文档仍是未跟踪文件
-- `docs/engineering/technology-selection.md` 在工作区和当前 `HEAD` 中都不存在
-- 当前实现和 Capability Matrix 还没有形成完整、可复现的 Git 提交
+- `src/`、测试、构建配置、依赖锁文件和工程文档已纳入 Git
+- 旧 UI 规格和旧概念图已按用户决定删除
+- 旧 `.codex` 多 Agent 工作流已删除
+- 项目只保留 BYOK `custom:gpt-5.6-terra` code-writer
+- `artifacts/`、本地 `.factory/skills/`、`.workflow/`、`dist/` 和 `node_modules/` 已忽略
 
-在继续大规模实现之前，应先保存和规范化当前仓库状态，避免丢失已有成果。
+后续交付顺序和完成标准见
+[`delivery-plan.md`](./delivery-plan.md)。
 
 ## 建议的下一条真实产品实现链
 
-下一阶段不应继续停留在纯能力调查。建议完成一条可见、可验证的生产链：
+下一阶段执行
+[`delivery-plan.md`](./delivery-plan.md)
+中的模块 1“Session Settings 与 Context”：
 
 1. 生产 Runtime 读取 Session Settings 和 Context Stats
 2. 增加严格的 Host 状态与更新接口
 3. 增加双向 Bridge DTO 与敌对输入测试
 4. Composer 显示并修改 Mode、Model、Reasoning 和 Autonomy
 5. 显示 Context 使用量和明细
-6. 实现 Session Rename
-7. 运行完整测试、TypeScript 检查和 Production Build
-8. 重新打包 VSIX
-9. 安装后在 Cursor 中执行可见验收
+6. 运行完整测试、TypeScript 检查和 Production Build
+7. 重新打包 VSIX
+8. 安装后在 Cursor 中执行可见验收
 
-在开始前还需要明确 daemon 主路径与当前 Node `ProcessTransport` 的迁移顺序。
+Session Rename、附件、Rewind 和 daemon 主路径迁移不进入模块 1。
 
 ## 维护规则
 
