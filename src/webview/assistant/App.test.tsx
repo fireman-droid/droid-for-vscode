@@ -131,9 +131,16 @@ describe('assistant-ui App bridge commands', () => {
   it('restores drafts and posts exact send, stop, retry, and settlements', async () => {
     const user = userEvent.setup();
     render(<App />);
-    expect(posted[0]).toEqual({
+    // Boot beacons precede the handshake; the ready message must still
+    // be posted exactly once.
+    expect(posted).toContainEqual({
       type: 'webview.ready',
       protocolVersion: 2,
+    });
+    expect(posted).toContainEqual({
+      type: 'webview.diagnostic',
+      kind: 'boot-ok',
+      detail: 'build dev',
     });
     const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
     await waitFor(() => expect(input.value).toBe('Restored draft'));
@@ -304,7 +311,7 @@ describe('assistant-ui App bridge commands', () => {
     const user = userEvent.setup();
     render(<App />);
     await waitFor(() =>
-      expect(posted[0]).toEqual({
+      expect(posted).toContainEqual({
         type: 'webview.ready',
         protocolVersion: 2,
       }),

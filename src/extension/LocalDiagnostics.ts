@@ -17,6 +17,7 @@ import type {
 const DEFAULT_MAX_FILE_BYTES = 512 * 1024;
 const DEFAULT_BACKUP_COUNT = 2;
 const MAX_NAME_LENGTH = 96;
+const MAX_DETAIL_LENGTH = 2_048;
 const MAX_ATTRIBUTE_COUNT = 16;
 const MAX_ATTRIBUTE_KEY_LENGTH = 48;
 const MAX_ATTRIBUTE_STRING_LENGTH = 96;
@@ -54,6 +55,7 @@ interface PersistedDiagnosticRecord {
   readonly attributes?: Readonly<
     Record<string, RuntimeDiagnosticAttribute>
   >;
+  readonly detail?: string;
 }
 
 const nodeFileSystem: DiagnosticsFileSystem = {
@@ -160,6 +162,9 @@ export class LocalDiagnostics implements RuntimeDiagnosticSink {
       ...(event.attributes === undefined
         ? {}
         : { attributes: projectAttributes(event.attributes) }),
+      ...(event.detail === undefined
+        ? {}
+        : { detail: sanitizeDetail(event.detail) }),
     };
     this.sequence += 1;
 
@@ -309,12 +314,22 @@ function safeCode(value: string, fallback: string): string {
     : fallback;
 }
 
+function sanitizeDetail(detail: string): string {
+  // eslint-disable-next-line no-control-regex
+  return detail.replace(/[\u0000-\u0008\u000b-\u001f]/gu, ' ').slice(
+    0,
+    MAX_DETAIL_LENGTH,
+  );
+}
+
 function formatOutputRecord(record: PersistedDiagnosticRecord): string {
   const attributes =
     record.attributes === undefined
       ? ''
       : ` ${JSON.stringify(record.attributes)}`;
-  return `[${record.timestamp}] [${record.level}] ${record.source}:${record.name}${attributes}`;
+  const detail =
+    record.detail === undefined ? '' : ` | ${record.detail}`;
+  return `[${record.timestamp}] [${record.level}] ${record.source}:${record.name}${attributes}${detail}`;
 }
 
 function isMissingFile(error: unknown): boolean {

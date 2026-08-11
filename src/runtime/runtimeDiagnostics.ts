@@ -6,6 +6,13 @@ export interface RuntimeDiagnosticEvent {
   readonly attributes?: Readonly<
     Record<string, RuntimeDiagnosticAttribute>
   >;
+  /**
+   * Bounded free text for failure reports (webview boot errors and
+   * similar) where redacting the message would make the record useless.
+   * Only explicit failure paths may set it; regular events keep using
+   * the redaction-safe attributes.
+   */
+  readonly detail?: string;
 }
 
 export interface RuntimeDiagnosticSink {

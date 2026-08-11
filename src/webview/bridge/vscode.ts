@@ -18,11 +18,46 @@ interface VsCodeApi {
 
 declare function acquireVsCodeApi(): VsCodeApi;
 
+declare const __DVX_BUILD_ID__: string | undefined;
+
+/** Build id stamped by esbuild; 'dev' under tests and harnesses. */
+export const WEBVIEW_BUILD_ID =
+  typeof __DVX_BUILD_ID__ === 'string' ? __DVX_BUILD_ID__ : 'dev';
+
 let api: VsCodeApi | undefined;
 
 export function getVsCodeApi(): VsCodeApi {
-  api ??= acquireVsCodeApi();
+  // The boot beacon script in the webview HTML acquires the API first
+  // (it can only be acquired once per page) and shares it here.
+  api ??=
+    (globalThis as { __dvxApi?: VsCodeApi }).__dvxApi ??
+    acquireVsCodeApi();
   return api;
+}
+
+/**
+ * Marks the bundle as booted for the HTML watchdog and reports the
+ * running build so a stale cached bundle is visible in the logs.
+ */
+export function announceBooted(vscode: VsCodeApi): void {
+  (globalThis as { __dvxBooted?: boolean }).__dvxBooted = true;
+  vscode.postMessage({
+    type: 'webview.diagnostic',
+    kind: 'boot-ok',
+    detail: `build ${WEBVIEW_BUILD_ID}`,
+  });
+}
+
+/** Reports that the first non-empty transcript committed to the DOM. */
+export function announceRendered(
+  vscode: VsCodeApi,
+  itemCount: number,
+): void {
+  vscode.postMessage({
+    type: 'webview.diagnostic',
+    kind: 'render-ok',
+    detail: `items ${itemCount}`,
+  });
 }
 
 export function restoreDraft(vscode: VsCodeApi): string {

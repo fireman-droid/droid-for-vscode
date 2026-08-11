@@ -186,6 +186,28 @@ export interface WebviewReadyMessage {
   readonly protocolVersion: typeof BRIDGE_PROTOCOL_VERSION;
 }
 
+export const WEBVIEW_DIAGNOSTIC_KINDS = [
+  'boot-ok',
+  'render-ok',
+  'boot-timeout',
+  'error',
+  'unhandledrejection',
+] as const;
+export type WebviewDiagnosticKind =
+  (typeof WEBVIEW_DIAGNOSTIC_KINDS)[number];
+export const MAX_WEBVIEW_DIAGNOSTIC_DETAIL_LENGTH = 2_048;
+
+/**
+ * Boot and failure beacons from the webview. They exist so a blank or
+ * frozen webview leaves a trace in the local diagnostics log instead of
+ * failing silently.
+ */
+export interface WebviewDiagnosticMessage {
+  readonly type: 'webview.diagnostic';
+  readonly kind: WebviewDiagnosticKind;
+  readonly detail: string;
+}
+
 export interface TurnSendMessage {
   readonly type: 'turn.send';
   readonly sessionId: string;
@@ -467,6 +489,7 @@ export type SessionSettingUpdateMessage =
 
 export type WebviewToHostMessage =
   | WebviewReadyMessage
+  | WebviewDiagnosticMessage
   | TurnSendMessage
   | TurnStopMessage
   | TurnEditResendMessage

@@ -52,6 +52,10 @@ import {
   type TurnEditResendMessage,
   type TurnSendMessage,
   type TurnStopMessage,
+  MAX_WEBVIEW_DIAGNOSTIC_DETAIL_LENGTH,
+  WEBVIEW_DIAGNOSTIC_KINDS,
+  type WebviewDiagnosticKind,
+  type WebviewDiagnosticMessage,
   type WebviewReadyMessage,
   type WebviewToHostMessage,
   type WorkspaceSearchFilesMessage,
@@ -74,6 +78,8 @@ export function parseWebviewMessage(
     switch (value.type) {
       case 'webview.ready':
         return parseWebviewReady(value);
+      case 'webview.diagnostic':
+        return parseWebviewDiagnostic(value);
       case 'turn.send':
         return parseTurnSend(value);
       case 'turn.stop':
@@ -163,6 +169,28 @@ function parseWebviewReady(
   return {
     type: 'webview.ready',
     protocolVersion: BRIDGE_PROTOCOL_VERSION,
+  };
+}
+
+function parseWebviewDiagnostic(
+  value: UnknownRecord,
+): WebviewDiagnosticMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'kind', 'detail']) ||
+    typeof value.kind !== 'string' ||
+    !(WEBVIEW_DIAGNOSTIC_KINDS as readonly string[]).includes(
+      value.kind,
+    ) ||
+    typeof value.detail !== 'string' ||
+    value.detail.length > MAX_WEBVIEW_DIAGNOSTIC_DETAIL_LENGTH
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'webview.diagnostic',
+    kind: value.kind as WebviewDiagnosticKind,
+    detail: value.detail,
   };
 }
 

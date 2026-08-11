@@ -467,11 +467,21 @@ Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限�
 - Logger、File 和 Output Channel Sink 失败不会改变 Runtime 或 Extension
   行为
 
+- Webview 启动信标：webview HTML 内置无交互 bootstrap 脚本，捕获
+  资源加载失败、未捕获异常、未处理 Promise 拒绝，并带 10 秒启动
+  看门狗（超时在面板内渲染纯文本兜底提示）；Bundle 挂载后上报
+  `boot-ok`（含构建号，可发现陈旧缓存 Bundle）与首个非空转录提交后
+  的 `render-ok`；这些 `webview.diagnostic` 消息由
+  `DroidViewProvider` 记入诊断日志
+
 安全限制：
 
 - 不记录 Prompt/Message 文本、Tool 输入或输出、命令、路径、Session/
   Request/Tool/Terminal/Subagent ID、原始错误、凭据、Token 或 Stack Trace
 - 字符串 Attribute 只保留短的 Code-like 值；未知 SDK Message 不进入日志
+- 例外：`webview.diagnostic` 失败信标携带有界 `detail` 自由文本
+  （≤2048 字符、剥离控制字符），因为脱敏后的空白页报错毫无诊断价值；
+  该字段仅本地落盘
 
 主要实现：
 
@@ -479,6 +489,8 @@ Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限�
 - `src/runtime/runtimeDiagnostics.ts`
 - `src/runtime/FactoryDroidRuntime.ts`
 - `src/extension/extension.ts`
+- `src/extension/webviewHtml.ts`（启动信标脚本）
+- `src/extension/DroidViewProvider.ts`（信标入日志）
 
 ### 11. Workspace 与安全边界
 
@@ -790,6 +802,9 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - 用户尚未在真实 Cursor 中完成最终可见验收
 - 由于版本号仍为 `0.0.0`，现有 Cursor 窗口需要 Reload Window 才会换到
   新 Bundle
+- 2026-08-11 晚间已重新打包并安装含 webview 启动信标的构建
+  （`droidvisx-0.0.0.vsix`，512.43 KB）；因怀疑 webview service worker
+  缓存陈旧，本次验收要求完整退出并重启 Cursor，而非仅 Reload Window
 
 ## 验证状态
 
@@ -913,14 +928,32 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 ## 下一步
 
-1. 观察性收尾：execute 类 Tool 的流式输出预览（有界、脱敏），以及
-   收起状态下最近一条操作的滚动播报。
-2. `/` 动态命令与 Droid Commands 列表（含最近使用）。
-3. Session 管理补全：Archive / Delete / Favorite 与分支关系展示。
-4. 恢复体验：激活时先渲染本地恢复快照，CLI resume 在后台完成后再
-   对齐（当前 CLI load_session + context stats 约 10s 为主要等待）。
-5. 完整 Spec Mode 与 Mission 启动/阶段展示。
-6. 每个切片保持完整测试、打包、安装和 Cursor 可见验收。
+按用户决定（2026-08-11）：第一档 UI/观察性打磨全部暂缓，方案已写入
+`[tier1-polish-plan.md](./tier1-polish-plan.md)`；先完成第二、第三档
+难点，验收后最后回来做第一档。
+
+第二档（核心功能缺口，先做）：
+
+1. `/` 动态命令与 Droid Commands 列表（含最近使用）。
+2. Session 管理补全：Archive / Delete / Favorite 与分支关系展示。
+3. Composer 动态化剩余项（模型/推理档位与 CLI 能力完全对齐）。
+
+第三档（V1/V2 难点，随后）：
+
+4. 完整 Spec Mode 流程（起草、审批、编辑规格的产品化闭环）。
+5. Mission 启动与阶段展示。
+6. 子代理（Subagent）活动的层级展示。
+
+第一档（最后执行）：见 `tier1-polish-plan.md`，顺序为流式输出预览 →
+恢复提速 → 收起播报 → 回复动画。
+
+另有未决线索：用户报告 webview 面板空白"卡死"（Chrome harness 用
+真实恢复数据无法复现，扩展主机日志健康）。已上线 webview 启动信标
+与兜底文案；下次复现时 `DroidVisX Logs` 会给出 boot/render 信标与
+具体错误。主要怀疑长时间运行的 Cursor 主进程在多次 VSIX 重装后
+webview service worker 缓存损坏，需完整重启 Cursor 验证。
+
+每个切片保持完整测试、打包、安装和 Cursor 可见验收。
 
 ## 维护规则
 

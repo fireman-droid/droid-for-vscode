@@ -44,11 +44,13 @@ describe('getWebviewHtml', () => {
     expect(html).not.toContain('command:');
     expect(html).not.toContain('http:');
     expect(html).not.toContain('https:');
-    expect(scriptTags).toHaveLength(1);
+    // Exactly two scripts: the inline boot beacon and the bundle, both
+    // under the CSP nonce.
+    expect(scriptTags).toHaveLength(2);
     expect(scriptTags.every((tag) => tag.includes(`nonce="${nonce}"`))).toBe(
       true,
     );
-    expect(scriptTags[0]).toContain(
+    expect(scriptTags[1]).toContain(
       'src="vscode-webview://test/dist/webview/webview.js"',
     );
     expect(styleLinks).toHaveLength(1);
@@ -61,9 +63,10 @@ describe('getWebviewHtml', () => {
   it('leaves ready-handshake ownership with the React bundle', () => {
     const html = getWebviewHtml(webview, assets, nonce);
 
-    expect(html).not.toContain('acquireVsCodeApi');
+    // The boot beacon script only reports diagnostics; the protocol
+    // handshake stays in the bundle.
     expect(html).not.toContain('webview.ready');
-    expect(html).not.toContain('droidvisx-bootstrap');
+    expect(html).toContain('webview.diagnostic');
     expect(html).not.toContain('innerHTML');
     expect(html).not.toContain('outerHTML');
     expect(html).not.toContain('document.write');

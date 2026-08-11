@@ -2,6 +2,14 @@ import { build } from 'esbuild';
 import { rm } from 'node:fs/promises';
 import { isBuiltin } from 'node:module';
 
+// Stamped into the webview bundle so boot beacons in the diagnostics log
+// prove which build actually ran (stale webview caches are invisible
+// otherwise).
+const buildId = new Date()
+  .toISOString()
+  .replace(/[-:]/gu, '')
+  .slice(0, 15);
+
 const extensionResult = await build({
   entryPoints: ['src/extension/extension.ts'],
   outfile: 'dist/extension/extension.cjs',
@@ -34,6 +42,7 @@ const webviewResult = await build({
   minify: true,
   define: {
     'process.env.NODE_ENV': '"production"',
+    __DVX_BUILD_ID__: JSON.stringify(buildId),
   },
   loader: {
     '.woff2': 'file',

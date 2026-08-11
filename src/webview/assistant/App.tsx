@@ -17,7 +17,9 @@ import {
   type WebviewToHostMessage,
 } from '../../shared/bridgeMessages';
 import {
+  announceBooted,
   announceReady,
+  announceRendered,
   getVsCodeApi,
   persistDraft,
   readHostMessage,
@@ -100,12 +102,23 @@ export function App(): React.JSX.Element {
     };
     window.addEventListener('message', handleMessage);
     persistDraft(vscode, initialDraft);
+    announceBooted(vscode);
     announceReady(vscode);
     return () => {
       window.removeEventListener('message', handleMessage);
       flush();
     };
   }, [initialDraft, vscode]);
+
+  // One-shot beacon proving the first non-empty transcript reached the
+  // DOM; its absence in the logs isolates a render-phase hang.
+  const renderedBeaconRef = useRef(false);
+  useEffect(() => {
+    if (!renderedBeaconRef.current && state.transcript.length > 0) {
+      renderedBeaconRef.current = true;
+      announceRendered(vscode, state.transcript.length);
+    }
+  }, [state.transcript.length, vscode]);
 
   const active = isTurnActive(state.turn);
   const hasInteraction = state.interactions.length > 0;

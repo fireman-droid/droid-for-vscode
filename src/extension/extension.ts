@@ -58,6 +58,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const provider = new DroidViewProvider(
     context.extensionUri,
     controller,
+    diagnostics,
   );
   activeController = controller;
 

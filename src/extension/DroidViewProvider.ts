@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 
+import type { RuntimeDiagnosticSink } from '../runtime/runtimeDiagnostics';
 import { parseWebviewMessage } from '../shared/validateMessage';
 import type { ChatController } from './ChatController';
 import { getWebviewHtml } from './webviewHtml';
@@ -18,6 +19,7 @@ export class DroidViewProvider
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly controller: ChatController,
+    private readonly diagnostics?: RuntimeDiagnosticSink,
   ) {}
 
   resolveWebviewView(
@@ -66,6 +68,18 @@ export class DroidViewProvider
       (untrustedMessage: unknown) => {
         const message = parseWebviewMessage(untrustedMessage);
         if (message === undefined) {
+          return;
+        }
+
+        if (message.type === 'webview.diagnostic') {
+          this.diagnostics?.record({
+            level:
+              message.kind === 'boot-ok' || message.kind === 'render-ok'
+                ? 'info'
+                : 'error',
+            name: `webview.${message.kind}`,
+            detail: message.detail,
+          });
           return;
         }
 
