@@ -217,6 +217,23 @@ Thinking 行的动作文字带从左到右的 shimmer 动画，收起/展开的�
 （4）修复 Context 弹层中 Compact 区块相对其余内容左缩进不齐
 （补齐 16px 水平内边距）。
 
+同日追加长会话性能与卡死修复（用户反馈"页面一点击就卡死、无法
+发话、恢复对话慢"）：（1）Thinking 行展开从全局共享状态改为每行
+独立 `useState`——旧行为点一次会同时展开会话内全部 Thinking 行
+（stress harness 实测 120 回合下一次点击展开 201 个 `<details>`，
+主线程阻塞 150ms+，真实长会话为秒级），现在只切换被点击的行。
+（2）plan 行默认展开改为仅当所在消息处于 running（活跃回合）时
+生效，恢复的历史回合全部折叠挂载，降低首屏 DOM 与布局成本。
+（3）Host→Webview 桥接消息在 webview 侧按动画帧合批（rAF +
+50ms 隐藏兜底），流式 delta 高频到达时每帧只做一次 reducer 批量
+派发；此前每条消息单独渲染，120 回合会话下每条 delta 约 50ms
+长任务、40ms 间隔到达即主线程饱和。（4）默认消息窗口从 200 条
+收窄到 60 条（`Show earlier messages` 步长 120），首屏渲染阻塞
+从约 1.46s 降到约 0.57s，流式期间 50ms+ 长任务从连续出现降为 0
+（`artifacts/stress-harness.html` 120 回合复测）。相应更新
+App 测试：host 消息现在异步落地，断言改用 `findByRole`/`waitFor`，
+Thinking 断言改为逐行独立展开。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件

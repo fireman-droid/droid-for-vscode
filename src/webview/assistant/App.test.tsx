@@ -209,7 +209,11 @@ describe('assistant-ui App bridge commands', () => {
       message: 'Runtime failed',
       retryable: true,
     });
-    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    // Host messages flush on the next animation frame, so the Retry
+    // button appears asynchronously.
+    await user.click(
+      await screen.findByRole('button', { name: 'Retry' }),
+    );
     expect(posted).toContainEqual({
       type: 'runtime.retry',
       sessionId: 'session-a',
@@ -242,7 +246,7 @@ describe('assistant-ui App bridge commands', () => {
       },
     });
     await user.dblClick(
-      screen.getByRole('button', { name: 'Allow once' }),
+      await screen.findByRole('button', { name: 'Allow once' }),
     );
     expect(
       posted.filter((message) => message.type === 'permission.respond'),
@@ -283,7 +287,9 @@ describe('assistant-ui App bridge commands', () => {
         ],
       },
     });
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Cancel' }),
+    );
     expect(posted).toContainEqual({
       type: 'ask-user.respond',
       sessionId: 'session-a',
@@ -353,14 +359,14 @@ describe('assistant-ui App bridge commands', () => {
     expect(thinkingRows).toHaveLength(2);
     expect(thinkingRows.every((row) => row?.open === false)).toBe(true);
 
+    // Expansion is per row: toggling one Thinking row must not open the
+    // others, which stalled long transcripts when it expanded them all.
     await user.click(thinkingLabels[0]!.closest('summary')!);
-    await waitFor(() =>
-      expect(thinkingRows.every((row) => row?.open)).toBe(true),
-    );
-    await user.click(thinkingLabels[1]!.closest('summary')!);
-    await waitFor(() =>
-      expect(thinkingRows.every((row) => row?.open === false)).toBe(true),
-    );
+    await waitFor(() => expect(thinkingRows[0]?.open).toBe(true));
+    expect(thinkingRows[1]?.open).toBe(false);
+    await user.click(thinkingLabels[0]!.closest('summary')!);
+    await waitFor(() => expect(thinkingRows[0]?.open).toBe(false));
+    expect(thinkingRows[1]?.open).toBe(false);
 
     const sessionControls = screen.getByRole<HTMLButtonElement>('button', {
       name: 'Session controls',

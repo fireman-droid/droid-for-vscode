@@ -41,11 +41,12 @@ export interface RuntimeAdapterCallbacks {
 /**
  * Long sessions mount only the trailing message window by default. Rendering
  * every message makes assistant-ui's per-update store notifications and the
- * DOM grow with session length; measured at 2,000 transcript items this cost
- * ~75ms of main-thread work per streamed delta.
+ * DOM grow with session length; at a 200-message window each streamed delta
+ * cost ~50ms of main-thread work and session recovery blocked for seconds,
+ * so the window stays small and "Show earlier messages" loads the rest.
  */
-export const DEFAULT_MESSAGE_WINDOW = 200;
-export const MESSAGE_WINDOW_STEP = 200;
+export const DEFAULT_MESSAGE_WINDOW = 60;
+export const MESSAGE_WINDOW_STEP = 120;
 
 export interface DroidRuntimeWindow {
   readonly runtime: AssistantRuntime;

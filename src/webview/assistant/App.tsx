@@ -62,17 +62,49 @@ export function App(): React.JSX.Element {
   const sendPendingRef = useRef(false);
 
   useEffect(() => {
-    const handleMessage = (event: MessageEvent<unknown>): void => {
-      const message = readHostMessage(event.data);
-      if (message !== undefined) {
-        sendPendingRef.current = false;
+    // Host messages are coalesced into one dispatch batch per animation
+    // frame; during streaming the host can emit deltas faster than the
+    // transcript re-renders, and per-message renders saturate the main
+    // thread on long sessions. The timeout keeps messages flowing when
+    // the webview is hidden and frames stop.
+    let queue: NonNullable<ReturnType<typeof readHostMessage>>[] = [];
+    let frameId: number | null = null;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+    const flush = (): void => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+        frameId = null;
+      }
+      if (timerId !== null) {
+        clearTimeout(timerId);
+        timerId = null;
+      }
+      if (queue.length === 0) {
+        return;
+      }
+      const batch = queue;
+      queue = [];
+      sendPendingRef.current = false;
+      for (const message of batch) {
         dispatch({ type: 'host.message', message });
       }
+    };
+    const handleMessage = (event: MessageEvent<unknown>): void => {
+      const message = readHostMessage(event.data);
+      if (message === undefined) {
+        return;
+      }
+      queue.push(message);
+      frameId ??= requestAnimationFrame(flush);
+      timerId ??= setTimeout(flush, 50);
     };
     window.addEventListener('message', handleMessage);
     persistDraft(vscode, initialDraft);
     announceReady(vscode);
-    return () => window.removeEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      flush();
+    };
   }, [initialDraft, vscode]);
 
   const active = isTurnActive(state.turn);

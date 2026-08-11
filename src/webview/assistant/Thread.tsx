@@ -5,6 +5,7 @@ import {
   MessagePrimitive,
   ThreadPrimitive,
   useAui,
+  useAuiState,
 } from '@assistant-ui/react';
 import {
   createContext,
@@ -56,36 +57,6 @@ export interface RewindFileInfo {
   readonly messageId: string;
   readonly restorableCount: number;
   readonly createdCount: number;
-}
-
-interface ThinkingExpansion {
-  readonly expanded: boolean;
-  readonly setExpanded: (expanded: boolean) => void;
-}
-
-// Holding the shared Thinking expansion in a dedicated provider keeps a
-// toggle from re-rendering the whole transcript: only Thinking rows
-// subscribe to this context.
-const ThinkingExpansionContext = createContext<ThinkingExpansion>({
-  expanded: false,
-  setExpanded: () => undefined,
-});
-
-function ThinkingExpansionProvider({
-  children,
-}: {
-  readonly children: ReactNode;
-}): React.JSX.Element {
-  const [expanded, setExpanded] = useState(false);
-  const value = useMemo(
-    () => ({ expanded, setExpanded }),
-    [expanded],
-  );
-  return (
-    <ThinkingExpansionContext.Provider value={value}>
-      {children}
-    </ThinkingExpansionContext.Provider>
-  );
 }
 
 // Tool rows deep inside the transcript open native diffs through this
@@ -222,7 +193,6 @@ export const DroidThread = memo(function DroidThread({
       >
         <FileDiffContext.Provider value={onOpenFileDiff}>
         <RegenerateContext.Provider value={onRegenerate}>
-        <ThinkingExpansionProvider>
           <div className="dvx-reading-column">
             <HistoryNotice
               historyStatus={historyStatus}
@@ -267,7 +237,6 @@ export const DroidThread = memo(function DroidThread({
             {pending ? <PendingResponse activity={activity} /> : null}
             {inlineInteraction}
           </div>
-        </ThinkingExpansionProvider>
         </RegenerateContext.Provider>
         </FileDiffContext.Provider>
         <ThreadPrimitive.ViewportFooter className="dvx-thread-footer">
@@ -658,7 +627,10 @@ function ThinkingRow({
   readonly statusType: string | undefined;
   readonly durationMs: number | null;
 }): React.JSX.Element {
-  const { expanded, setExpanded } = useContext(ThinkingExpansionContext);
+  // Expansion is per row: a shared toggle used to open every Thinking
+  // row in the session at once, which stalled long transcripts for
+  // seconds on a single click.
+  const [expanded, setExpanded] = useState(false);
   return (
     <details
       className="dvx-activity-row dvx-thinking-row"
@@ -1454,10 +1426,17 @@ function ToolActivityRow({
   readonly activity: ToolActivityPresentation;
   readonly toolName: string;
 }): React.JSX.Element {
-  // Plan rows default to open so the checklist is visible; every row
-  // stays user-toggleable. `open` is always a defined boolean so React
-  // never leaves a stale `open` attribute on a reused <details> node.
-  const [open, setOpen] = useState(activity.detailKind === 'plan');
+  // Plan rows open by default only when they appear inside a live
+  // turn, so the checklist is visible while Droid works but recovered
+  // histories mount collapsed and stay cheap to lay out. `open` is
+  // always a defined boolean so React never leaves a stale `open`
+  // attribute on a reused <details> node.
+  const messageRunning = useAuiState(
+    (s) => s.message.status?.type === 'running',
+  );
+  const [open, setOpen] = useState(
+    activity.detailKind === 'plan' && messageRunning,
+  );
   const running = activity.status === 'running';
   return (
     <details
