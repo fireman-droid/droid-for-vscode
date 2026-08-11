@@ -124,6 +124,17 @@ ApplyPatch）的行内新增工作区相对路径 chip。Runtime 从 SDK tool_ca
 消息，Host 复验路径包含关系后经 `vscode.diff` 打开 git HEAD ↔ Working
 原生对比，无 git 或无 HEAD 版本时回退为直接打开文件，失败发出 warning
 诊断。原始 Tool 参数与输出仍然不进 Webview。
+
+同日追加每轮 Changes 摘要：回合成功或被中断后，Host 收集该回合工具
+触碰的工作区相对路径（去重、首见顺序、上限 24 个），经
+`git diff --numstat --relative` 对 HEAD 异步读取增删行数，然后向转录
+追加 `changes` 项并广播 `turn.changes` 消息。Webview 在回合末尾渲染
+扁平 “Changes · N files” 行，chip 显示文件名与 +A/−D（untracked、
+二进制或无 git 时省略计数），点击复用 `file.openDiff` 打开原生对比。
+历史加载按回合合成同样的摘要行（无行数）。恢复存储同步支持
+`changes` 项，并修复了上一切片引入的回归：持久化 checkpoint 中带
+`filePath` 的 Tool 项此前会被恢复校验整体拒绝；同时修复 Webview
+store 在实时 `tool.activity` 更新中丢失 `filePath` 的问题。
 下一轮严格两小时实现窗口的证据、范围、执行顺序、验收和回滚已经固化到
 `docs/preflight/`。该预研确认 Context 的累计 `used`、Breakdown
 `usedTokens`、`freeTokens` 和 Category Sum 都不能表示当前窗口；只有公开
@@ -599,8 +610,10 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 ### Changes 与 Diff
 
-- [ ] 每轮 Changes 摘要
-- [ ] 文件增删行统计
+- [x] 每轮 Changes 摘要（回合完成后转录内追加 `changes` 项，历史
+      加载按回合合成；文件 chip 点击打开原生 Diff）
+- [x] 文件增删行统计（回合完成时 `git diff --numstat` 对 HEAD 测量，
+      untracked/二进制/无 git 显示无计数 chip，历史摘要不带计数）
 - [ ] Changes 页面
 - [x] 使用 `vscode.diff`（Tool 行文件 chip 点击打开 HEAD ↔ Working
       原生对比，无 git HEAD 版本时回退打开文件）

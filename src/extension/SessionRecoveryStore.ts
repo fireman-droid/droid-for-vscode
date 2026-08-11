@@ -2,6 +2,7 @@ import {
   DIAGNOSTIC_SEVERITIES,
   MAX_ASSISTANT_TEXT_LENGTH,
   MAX_BRIDGE_ID_LENGTH,
+  MAX_CHANGED_FILES_PER_TURN,
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
@@ -12,6 +13,7 @@ import {
   TRANSCRIPT_THINKING_STATUSES,
   TRANSCRIPT_TOOL_STATUSES,
   TOOL_ACTIVITY_UPDATE_KINDS,
+  type ChangedFileSummary,
   type SessionHistoryStatus,
   type SessionTranscriptItem,
 } from '../shared/bridgeMessages';
@@ -33,6 +35,7 @@ import {
   summarizeToolAction,
   type ToolActivityUpdateKind,
 } from '../shared/toolActivity';
+import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
 
 export const SESSION_RECOVERY_VERSION = 1;
 export const SESSION_RECOVERY_STORAGE_KEY =
@@ -500,6 +503,8 @@ function parseTranscriptItem(
       return parseThinking(value);
     case 'tool':
       return parseTool(value);
+    case 'changes':
+      return parseChanges(value);
     case 'diagnostic':
       return parseDiagnostic(value);
     default:
@@ -603,13 +608,17 @@ function parseTool(
     'latestUpdateKind',
   ] as const;
   const legacy = hasExactKeys(value, legacyKeys);
-  if (!legacy && !hasExactKeys(value, currentKeys, ['durationMs'])) {
+  if (
+    !legacy &&
+    !hasExactKeys(value, currentKeys, ['durationMs', 'filePath'])
+  ) {
     return undefined;
   }
   const id = dataValue(value, 'id');
   const turnId = dataValue(value, 'turnId');
   const toolUseId = dataValue(value, 'toolUseId');
   const toolName = dataValue(value, 'toolName');
+  const filePath = legacy ? undefined : dataValue(value, 'filePath');
   const action = legacy
     ? typeof toolName === 'string'
       ? summarizeToolAction(toolName)
@@ -637,7 +646,8 @@ function parseTool(
     ((progressCount === 0 && latestUpdateKind === null) ||
       ((progressCount as number) > 0 && latestUpdateKind !== null)) &&
     (durationMs === undefined ||
-      (Number.isSafeInteger(durationMs) && (durationMs as number) >= 0))
+      (Number.isSafeInteger(durationMs) && (durationMs as number) >= 0)) &&
+    (filePath === undefined || isSafeWorkspaceRelativePath(filePath))
     ? {
         id,
         kind: 'tool',
@@ -652,8 +662,62 @@ function parseTool(
         ...(durationMs === undefined
           ? {}
           : { durationMs: durationMs as number }),
+        ...(filePath === undefined
+          ? {}
+          : { filePath: filePath as string }),
       }
     : undefined;
+}
+
+function parseChanges(
+  value: UnknownRecord,
+): Extract<SessionTranscriptItem, { kind: 'changes' }> | undefined {
+  if (!hasExactKeys(value, ['id', 'kind', 'turnId', 'files'])) {
+    return undefined;
+  }
+  const id = dataValue(value, 'id');
+  const turnId = dataValue(value, 'turnId');
+  const filesValue = dataValue(value, 'files');
+  if (
+    !isId(id) ||
+    !isId(turnId) ||
+    !isExactArray(filesValue, 1, MAX_CHANGED_FILES_PER_TURN)
+  ) {
+    return undefined;
+  }
+  const files: ChangedFileSummary[] = [];
+  const paths = new Set<string>();
+  for (const fileValue of filesValue) {
+    if (!isStrictRecord(fileValue)) {
+      return undefined;
+    }
+    const path = dataValue(fileValue, 'path');
+    const additions = dataValue(fileValue, 'additions');
+    const deletions = dataValue(fileValue, 'deletions');
+    if (
+      !hasExactKeys(fileValue, ['path', 'additions', 'deletions']) ||
+      !isSafeWorkspaceRelativePath(path) ||
+      paths.has(path as string) ||
+      !isNullableChangeCount(additions) ||
+      !isNullableChangeCount(deletions)
+    ) {
+      return undefined;
+    }
+    paths.add(path as string);
+    files.push({
+      path: path as string,
+      additions: additions as number | null,
+      deletions: deletions as number | null,
+    });
+  }
+  return { id, kind: 'changes', turnId, files };
+}
+
+function isNullableChangeCount(value: unknown): value is number | null {
+  return (
+    value === null ||
+    (Number.isSafeInteger(value) && (value as number) >= 0)
+  );
 }
 
 function parseDiagnostic(

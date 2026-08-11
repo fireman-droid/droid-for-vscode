@@ -65,6 +65,24 @@ export function createTurnActivityState(): TurnActivityState {
   };
 }
 
+/**
+ * Unique workspace-relative file paths the turn's tools changed, in
+ * first-observed order.
+ */
+export function collectToolFilePaths(
+  state: TurnActivityState,
+): readonly string[] {
+  const paths: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of state.tools.values()) {
+    if (entry.filePath !== undefined && !seen.has(entry.filePath)) {
+      seen.add(entry.filePath);
+      paths.push(entry.filePath);
+    }
+  }
+  return paths;
+}
+
 export function projectAssistantDelta(
   state: TurnActivityState,
   text: string,

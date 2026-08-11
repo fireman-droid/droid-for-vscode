@@ -334,6 +334,33 @@ export function assistantWebviewReducer(
         },
         upsertTool(state.transcript, event),
       );
+    case 'turn.changes': {
+      if (event.sessionId !== state.sessionId) {
+        return advance(state, event.sequence);
+      }
+      // Arrives after the turn reached a terminal state; the summary
+      // belongs at the end of that turn's items.
+      const id = `changes:${event.turnId}`;
+      if (
+        state.transcript.some(
+          (item) => item.kind === 'changes' && item.turnId === event.turnId,
+        )
+      ) {
+        return advance(state, event.sequence);
+      }
+      return boundTranscript(
+        { ...state, sequence: event.sequence },
+        [
+          ...state.transcript,
+          {
+            id,
+            kind: 'changes',
+            turnId: event.turnId,
+            files: event.files,
+          },
+        ],
+      );
+    }
     case 'runtime.diagnostic':
       if (!acceptsDiagnostic(state, event.sessionId, event.turnId)) {
         return advance(state, event.sequence);
@@ -691,6 +718,9 @@ function upsertTool(
         ...(event.durationMs === undefined
           ? {}
           : { durationMs: event.durationMs }),
+        ...(event.filePath === undefined
+          ? {}
+          : { filePath: event.filePath }),
       };
     });
   }
@@ -715,6 +745,9 @@ function upsertTool(
       ...(event.durationMs === undefined
         ? {}
         : { durationMs: event.durationMs }),
+      ...(event.filePath === undefined
+        ? {}
+        : { filePath: event.filePath }),
     },
   ];
 }

@@ -116,6 +116,12 @@ describe('projectSessionHistory', () => {
           { kind: 'tool', toolName: 'Edit', filePath: 'src/app.ts' },
           { kind: 'tool', toolName: 'Edit' },
           { kind: 'tool', toolName: 'Read' },
+          {
+            kind: 'changes',
+            files: [
+              { path: 'src/app.ts', additions: null, deletions: null },
+            ],
+          },
         ],
       },
     });
@@ -128,6 +134,65 @@ describe('projectSessionHistory', () => {
     // Without a workspace root no paths are projected at all.
     const rootless = projectSessionHistory(loaded);
     expect(JSON.stringify(rootless)).not.toContain('app.ts');
+  });
+
+  it('synthesizes one changes summary per history turn after its last item', () => {
+    const root = resolve('workspace-root');
+    const loaded = response([
+      message('assistant-1', 'assistant', [
+        {
+          type: 'tool_use',
+          id: 'tool-1',
+          name: 'Edit',
+          input: { file_path: 'src/a.ts' },
+        },
+        { type: 'text', text: 'First turn summary.' },
+      ]),
+      message('user-1', 'user', [
+        { type: 'text', text: 'Next question' },
+      ]),
+      message('assistant-2', 'assistant', [
+        {
+          type: 'tool_use',
+          id: 'tool-2',
+          name: 'Create',
+          input: { file_path: 'docs/new.md' },
+        },
+        {
+          type: 'tool_use',
+          id: 'tool-3',
+          name: 'Edit',
+          input: { file_path: 'docs/new.md' },
+        },
+      ]),
+    ]);
+
+    const result = projectSessionHistory(loaded, {
+      workspaceRoot: root,
+    });
+    expect(result.status).toBe('available');
+    const transcript =
+      result.status === 'available' ? result.state.transcript : [];
+    const kinds = transcript.map((item) => item.kind);
+    expect(kinds).toEqual([
+      'tool',
+      'assistant',
+      'changes',
+      'user',
+      'tool',
+      'tool',
+      'changes',
+    ]);
+    const summaries = transcript.filter(
+      (item) => item.kind === 'changes',
+    );
+    expect(summaries[0]).toMatchObject({
+      files: [{ path: 'src/a.ts', additions: null, deletions: null }],
+    });
+    // Duplicate paths within a turn collapse to one entry.
+    expect(summaries[1]).toMatchObject({
+      files: [{ path: 'docs/new.md', additions: null, deletions: null }],
+    });
   });
 
   it('omits hidden content and marks visible attachment omissions partial', () => {

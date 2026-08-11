@@ -1,6 +1,7 @@
 import {
   MAX_ASSISTANT_TEXT_LENGTH,
   MAX_BRIDGE_ID_LENGTH,
+  MAX_CHANGED_FILES_PER_TURN,
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
@@ -100,7 +101,10 @@ export function projectSessionHistory(
 
     const truncated = projection.partial;
     const state: HostTranscriptState = {
-      transcript: readTranscript(projection),
+      transcript: appendHistoryTurnChanges(
+        readTranscript(projection),
+        projection.transcriptTextUnits,
+      ),
       historyStatus: truncated ? 'partial' : 'complete',
       truncated,
     };
@@ -678,6 +682,86 @@ function readTranscript(
     }
   }
   return transcript;
+}
+
+/**
+ * Inserts a per-turn changed-files summary after each history turn
+ * whose tools named workspace files. Line counts are unknown for
+ * history, so they stay null. Synthesis stops when the transcript
+ * would exceed its item or text-unit budget.
+ */
+function appendHistoryTurnChanges(
+  transcript: readonly SessionTranscriptItem[],
+  usedTextUnits: number,
+): SessionTranscriptItem[] {
+  const filesByTurn = new Map<string, string[]>();
+  for (const item of transcript) {
+    if (item.kind !== 'tool' || item.filePath === undefined) {
+      continue;
+    }
+    const files = filesByTurn.get(item.turnId) ?? [];
+    if (
+      !files.includes(item.filePath) &&
+      files.length < MAX_CHANGED_FILES_PER_TURN
+    ) {
+      files.push(item.filePath);
+    }
+    filesByTurn.set(item.turnId, files);
+  }
+  if (filesByTurn.size === 0) {
+    return [...transcript];
+  }
+
+  const lastTurnIndex = new Map<string, number>();
+  transcript.forEach((item, index) => {
+    if (item.kind !== 'user' && item.turnId !== null) {
+      lastTurnIndex.set(item.turnId, index);
+    }
+  });
+
+  const ids = new Set(transcript.map((item) => item.id));
+  let remainingItems =
+    MAX_SESSION_TRANSCRIPT_ITEMS - transcript.length;
+  let remainingUnits =
+    MAX_SESSION_TRANSCRIPT_TEXT_UNITS - usedTextUnits;
+  const result: SessionTranscriptItem[] = [];
+  transcript.forEach((item, index) => {
+    result.push(item);
+    if (item.kind === 'user' || item.turnId === null) {
+      return;
+    }
+    const files = filesByTurn.get(item.turnId);
+    if (
+      files === undefined ||
+      lastTurnIndex.get(item.turnId) !== index ||
+      remainingItems <= 0
+    ) {
+      return;
+    }
+    const id = stableTranscriptId('changes', item.turnId);
+    if (ids.has(id)) {
+      return;
+    }
+    const changes: SessionTranscriptItem = {
+      id,
+      kind: 'changes',
+      turnId: item.turnId,
+      files: files.map((path) => ({
+        path,
+        additions: null,
+        deletions: null,
+      })),
+    };
+    const units = transcriptItemTextUnits(changes);
+    if (units > remainingUnits) {
+      return;
+    }
+    remainingItems -= 1;
+    remainingUnits -= units;
+    ids.add(id);
+    result.push(changes);
+  });
+  return result;
 }
 
 function boundedIdentity(value: unknown, fallback: number): string {

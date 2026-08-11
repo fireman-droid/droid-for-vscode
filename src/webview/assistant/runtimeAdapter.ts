@@ -363,6 +363,18 @@ function mapItemToPart(
           },
         },
       };
+    case 'changes':
+      return {
+        type: 'data',
+        name: 'droid-changes',
+        data: {
+          files: item.files.map((file) => ({
+            path: file.path,
+            additions: file.additions,
+            deletions: file.deletions,
+          })),
+        },
+      };
     case 'diagnostic':
       return {
         type: 'data',

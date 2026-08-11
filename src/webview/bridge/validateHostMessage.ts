@@ -46,6 +46,7 @@ import {
   TOOL_ACTIVITY_UPDATE_KINDS,
   ATTACHMENT_KINDS,
   MAX_ATTACHMENT_NAME_LENGTH,
+  MAX_CHANGED_FILES_PER_TURN,
   MAX_PENDING_ATTACHMENTS,
   SKILL_LOCATIONS,
   TRANSCRIPT_THINKING_STATUSES,
@@ -55,6 +56,7 @@ import {
   type AskUserQuestion,
   type AttachmentKind,
   type AttachmentSummary,
+  type ChangedFileSummary,
   type ConnectionState,
   type DiagnosticSeverity,
   type HostToWebviewMessage,
@@ -175,6 +177,8 @@ export function readHostMessage(
         return parseThinkingComplete(value);
       case 'tool.activity':
         return parseToolActivity(value);
+      case 'turn.changes':
+        return parseTurnChanges(value);
       case 'runtime.diagnostic':
         return parseRuntimeDiagnostic(value);
       case 'turn.state':
@@ -497,6 +501,68 @@ function parseToolActivity(
       ? {}
       : { filePath: value.filePath }),
   };
+}
+
+function parseTurnChanges(
+  value: UnknownRecord,
+): Extract<HostToWebviewMessage, { type: 'turn.changes' }> | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sequence',
+      'sessionId',
+      'turnId',
+      'files',
+    ]) ||
+    !hasTurnIdentity(value)
+  ) {
+    return undefined;
+  }
+  const files = parseChangedFiles(value.files);
+  if (files === undefined) {
+    return undefined;
+  }
+
+  return {
+    type: 'turn.changes',
+    sequence: value.sequence,
+    sessionId: value.sessionId,
+    turnId: value.turnId,
+    files,
+  };
+}
+
+function parseChangedFiles(
+  value: unknown,
+): ChangedFileSummary[] | undefined {
+  if (!isExactArray(value, 1, MAX_CHANGED_FILES_PER_TURN)) {
+    return undefined;
+  }
+  const files: ChangedFileSummary[] = [];
+  const paths = new Set<string>();
+  for (const fileValue of value) {
+    if (
+      !isStrictRecord(fileValue) ||
+      !hasExactKeys(fileValue, ['path', 'additions', 'deletions']) ||
+      !isSafeWorkspaceRelativePath(fileValue.path) ||
+      paths.has(fileValue.path) ||
+      !isNullableCount(fileValue.additions) ||
+      !isNullableCount(fileValue.deletions)
+    ) {
+      return undefined;
+    }
+    paths.add(fileValue.path);
+    files.push({
+      path: fileValue.path,
+      additions: fileValue.additions,
+      deletions: fileValue.deletions,
+    });
+  }
+  return files;
+}
+
+function isNullableCount(value: unknown): value is number | null {
+  return value === null || isCount(value);
 }
 
 function parseRuntimeDiagnostic(
@@ -1605,11 +1671,34 @@ function parseSessionTranscriptItem(
       return parseThinkingTranscriptItem(value);
     case 'tool':
       return parseToolTranscriptItem(value);
+    case 'changes':
+      return parseChangesTranscriptItem(value);
     case 'diagnostic':
       return parseDiagnosticTranscriptItem(value);
     default:
       return undefined;
   }
+}
+
+function parseChangesTranscriptItem(
+  value: UnknownRecord,
+): Extract<SessionTranscriptItem, { kind: 'changes' }> | undefined {
+  if (
+    !hasExactKeys(value, ['id', 'kind', 'turnId', 'files']) ||
+    !isId(value.id) ||
+    !isId(value.turnId)
+  ) {
+    return undefined;
+  }
+  const files = parseChangedFiles(value.files);
+  return files === undefined
+    ? undefined
+    : {
+        id: value.id,
+        kind: 'changes',
+        turnId: value.turnId,
+        files,
+      };
 }
 
 function parseUserTranscriptItem(

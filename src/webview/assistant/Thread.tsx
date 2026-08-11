@@ -473,9 +473,13 @@ const AssistantMessage = memo(function AssistantMessage():
               );
             }
             case 'data':
-              return part.name === 'droid-diagnostic' ? (
-                <Diagnostic data={part.data} />
-              ) : null;
+              if (part.name === 'droid-diagnostic') {
+                return <Diagnostic data={part.data} />;
+              }
+              if (part.name === 'droid-changes') {
+                return <ChangesSummary data={part.data} />;
+              }
+              return null;
             default:
               return null;
           }
@@ -552,6 +556,91 @@ function ThinkingRow({
         smooth={THINKING_SMOOTH_OPTIONS}
       />
     </details>
+  );
+}
+
+interface ChangedFileEntry {
+  readonly path: string;
+  readonly additions: number | null;
+  readonly deletions: number | null;
+}
+
+function readChangedFiles(data: unknown): readonly ChangedFileEntry[] {
+  if (
+    typeof data !== 'object' ||
+    data === null ||
+    !Array.isArray((data as { files?: unknown }).files)
+  ) {
+    return [];
+  }
+  const files: ChangedFileEntry[] = [];
+  for (const entry of (data as { files: unknown[] }).files) {
+    if (
+      typeof entry !== 'object' ||
+      entry === null ||
+      typeof (entry as { path?: unknown }).path !== 'string'
+    ) {
+      continue;
+    }
+    const { path, additions, deletions } = entry as {
+      path: string;
+      additions?: unknown;
+      deletions?: unknown;
+    };
+    files.push({
+      path,
+      additions: typeof additions === 'number' ? additions : null,
+      deletions: typeof deletions === 'number' ? deletions : null,
+    });
+  }
+  return files;
+}
+
+function ChangesSummary({
+  data,
+}: {
+  readonly data: unknown;
+}): React.JSX.Element | null {
+  const openFileDiff = useContext(FileDiffContext);
+  const files = readChangedFiles(data);
+  if (files.length === 0) {
+    return null;
+  }
+  return (
+    <div className="dvx-changes" role="group" aria-label="Changed files">
+      <span className="dvx-changes-label">
+        Changes · {files.length} {files.length === 1 ? 'file' : 'files'}
+      </span>
+      <div className="dvx-changes-files">
+        {files.map((file) => (
+          <button
+            key={file.path}
+            type="button"
+            className="dvx-changes-file"
+            title={`Open changes for ${file.path}`}
+            onClick={() => openFileDiff(file.path)}
+          >
+            <span className="dvx-changes-name">
+              {file.path.split('/').at(-1) ?? file.path}
+            </span>
+            {file.additions !== null || file.deletions !== null ? (
+              <span className="dvx-changes-stats">
+                {file.additions !== null ? (
+                  <span className="dvx-changes-add">
+                    +{file.additions}
+                  </span>
+                ) : null}
+                {file.deletions !== null ? (
+                  <span className="dvx-changes-del">
+                    −{file.deletions}
+                  </span>
+                ) : null}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

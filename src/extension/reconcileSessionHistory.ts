@@ -168,6 +168,11 @@ function transcriptItemKey(item: SessionTranscriptItem): string {
       return JSON.stringify([item.kind, item.text]);
     case 'tool':
       return JSON.stringify([item.kind, item.toolName, item.action]);
+    case 'changes':
+      return JSON.stringify([
+        item.kind,
+        item.files.map((file) => file.path),
+      ]);
     case 'diagnostic':
       return JSON.stringify([
         item.kind,

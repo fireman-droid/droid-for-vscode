@@ -30,6 +30,10 @@ import type {
   FileDiffOpener,
   FileDiffOutcome,
 } from './fileDiffOpener';
+import type {
+  ChangeStatsReader,
+  FileChangeStat,
+} from './changeStats';
 import { ChatController } from './ChatController';
 import {
   SessionRecoveryStore,
@@ -2027,6 +2031,119 @@ describe('ChatController', () => {
     });
   });
 
+  it('publishes a per-turn changes summary with git line stats', async () => {
+    const runtime = createMockRuntime(async function* () {
+      yield {
+        type: 'tool-start',
+        toolName: 'Edit',
+        toolUseId: 'tool-1',
+        action: 'Edited workspace files',
+        filePath: 'src/app.ts',
+      };
+      yield {
+        type: 'tool-result',
+        toolName: 'Edit',
+        toolUseId: 'tool-1',
+        action: 'Edited workspace files',
+        isError: false,
+      };
+      yield {
+        type: 'tool-start',
+        toolName: 'Create',
+        toolUseId: 'tool-2',
+        action: 'Created workspace files',
+        filePath: 'docs/new.md',
+      };
+      yield {
+        type: 'tool-result',
+        toolName: 'Create',
+        toolUseId: 'tool-2',
+        action: 'Created workspace files',
+        isError: false,
+      };
+      yield successfulTurn();
+    });
+    const read = vi.fn(
+      async (): Promise<ReadonlyMap<string, FileChangeStat>> =>
+        new Map([['src/app.ts', { additions: 3, deletions: 1 }]]),
+    );
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { read },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Change files');
+    await vi.waitFor(() => {
+      expect(
+        messages.find((message) => message.type === 'turn.changes'),
+      ).toBeDefined();
+    });
+
+    // Untracked files keep null stats; order follows tool order.
+    expect(read).toHaveBeenCalledWith(['src/app.ts', 'docs/new.md']);
+    expect(
+      messages.find((message) => message.type === 'turn.changes'),
+    ).toMatchObject({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      files: [
+        { path: 'src/app.ts', additions: 3, deletions: 1 },
+        { path: 'docs/new.md', additions: null, deletions: null },
+      ],
+    });
+  });
+
+  it('skips the changes summary when no tool named a workspace file', async () => {
+    const runtime = createMockRuntime(async function* () {
+      yield {
+        type: 'tool-start',
+        toolName: 'Read',
+        toolUseId: 'tool-1',
+        action: 'Read workspace files',
+      };
+      yield {
+        type: 'tool-result',
+        toolName: 'Read',
+        toolUseId: 'tool-1',
+        action: 'Read workspace files',
+        isError: false,
+      };
+      yield successfulTurn();
+    });
+    const read = vi.fn(
+      async (): Promise<ReadonlyMap<string, FileChangeStat>> => new Map(),
+    );
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { read },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Read only');
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
+    expect(read).not.toHaveBeenCalled();
+    expect(
+      messages.find((message) => message.type === 'turn.changes'),
+    ).toBeUndefined();
+  });
+
   it('forks the session, adopts the copy, and keeps the original in the catalog', async () => {
     const runtime = Object.assign(createMockRuntime(), {
       fork: vi.fn(async () => ({ sessionId: 'session-fork' })),
@@ -3773,6 +3890,7 @@ function createController(
   history?: SessionHistoryLoader,
   attachments?: AttachmentSources,
   fileDiff?: FileDiffOpener,
+  changeStats?: ChangeStatsReader,
 ) {
   const controller = new ChatController(
     createRuntime,
@@ -3786,6 +3904,7 @@ function createController(
     history,
     attachments,
     fileDiff,
+    changeStats,
   );
   const messages: HostToWebviewMessage[] = [];
   controller.subscribe((message) => {

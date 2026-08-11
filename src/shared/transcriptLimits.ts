@@ -35,6 +35,16 @@ export function transcriptItemTextUnits(
         item.status.length +
         (item.latestUpdateKind?.length ?? 0)
       );
+    case 'changes':
+      return (
+        item.id.length +
+        item.kind.length +
+        item.turnId.length +
+        item.files.reduce(
+          (total, file) => total + file.path.length + 16,
+          0,
+        )
+      );
     case 'diagnostic':
       return (
         item.id.length +

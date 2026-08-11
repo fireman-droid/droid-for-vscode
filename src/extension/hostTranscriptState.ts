@@ -1,5 +1,6 @@
 import {
   MAX_ASSISTANT_TEXT_LENGTH,
+  MAX_CHANGED_FILES_PER_TURN,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
@@ -7,6 +8,7 @@ import {
   MAX_TOOL_NAME_LENGTH,
   MAX_TURN_TEXT_LENGTH,
   type AssistantDeltaMessage,
+  type ChangedFileSummary,
   type RuntimeDiagnosticMessage,
   type SessionHistoryStatus,
   type SessionTranscriptItem,
@@ -130,6 +132,30 @@ export function truncateFromUserMessage(
     historyStatus: state.historyStatus,
     truncated: state.truncated,
   };
+}
+
+/**
+ * Appends the per-turn changed-files summary. No-ops when the turn
+ * already has one or the file list is empty.
+ */
+export function appendTurnChanges(
+  state: HostTranscriptState,
+  turnId: string,
+  files: readonly ChangedFileSummary[],
+): HostTranscriptState {
+  if (files.length === 0) {
+    return state;
+  }
+  const id = stableTranscriptId('changes', turnId);
+  if (state.transcript.some((item) => item.id === id)) {
+    return state;
+  }
+  return appendItem(state, {
+    id,
+    kind: 'changes',
+    turnId,
+    files: files.slice(0, MAX_CHANGED_FILES_PER_TURN),
+  });
 }
 
 export function projectHostTranscriptMessage(

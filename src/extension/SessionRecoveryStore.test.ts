@@ -64,6 +64,124 @@ describe('SessionRecoveryStore', () => {
     });
   });
 
+  it('round-trips tool file paths and per-turn changes summaries', async () => {
+    const persistence = memoryPersistence({
+      version: SESSION_RECOVERY_VERSION,
+      selectedSessionId: 'session-1',
+      sessions: [
+        storedSession('session-1', 3, [
+          {
+            id: 'tool-1',
+            kind: 'tool',
+            turnId: 'turn-1',
+            toolUseId: 'use-1',
+            toolName: 'Edit',
+            action: 'Updated workspace files',
+            status: 'completed',
+            progressCount: 0,
+            latestUpdateKind: null,
+            filePath: 'src/app.ts',
+          },
+          {
+            id: 'changes-1',
+            kind: 'changes',
+            turnId: 'turn-1',
+            files: [
+              { path: 'src/app.ts', additions: 3, deletions: 1 },
+              { path: 'docs/new.md', additions: null, deletions: null },
+            ],
+          },
+        ]),
+      ],
+    });
+    const store = new SessionRecoveryStore(persistence);
+
+    await store.load();
+
+    expect(store.readSession('session-1')).toMatchObject({
+      transcript: [
+        expect.objectContaining({
+          kind: 'tool',
+          filePath: 'src/app.ts',
+        }),
+        expect.objectContaining({
+          kind: 'changes',
+          files: [
+            { path: 'src/app.ts', additions: 3, deletions: 1 },
+            { path: 'docs/new.md', additions: null, deletions: null },
+          ],
+        }),
+      ],
+    });
+  });
+
+  it('rejects unsafe persisted file paths and change summaries', async () => {
+    for (const items of [
+      [
+        {
+          id: 'tool-1',
+          kind: 'tool',
+          turnId: 'turn-1',
+          toolUseId: 'use-1',
+          toolName: 'Edit',
+          action: 'Updated workspace files',
+          status: 'completed',
+          progressCount: 0,
+          latestUpdateKind: null,
+          filePath: '../outside.ts',
+        },
+      ],
+      [
+        {
+          id: 'changes-1',
+          kind: 'changes',
+          turnId: 'turn-1',
+          files: [],
+        },
+      ],
+      [
+        {
+          id: 'changes-1',
+          kind: 'changes',
+          turnId: 'turn-1',
+          files: [
+            { path: 'C:/absolute.ts', additions: 1, deletions: 0 },
+          ],
+        },
+      ],
+      [
+        {
+          id: 'changes-1',
+          kind: 'changes',
+          turnId: 'turn-1',
+          files: [
+            {
+              path: 'src/app.ts',
+              additions: 1,
+              deletions: 0,
+              patch: 'raw diff must not persist',
+            },
+          ],
+        },
+      ],
+    ]) {
+      const persistence = memoryPersistence({
+        version: SESSION_RECOVERY_VERSION,
+        selectedSessionId: 'session-1',
+        sessions: [
+          storedSession(
+            'session-1',
+            1,
+            items as unknown as SessionTranscriptItem[],
+          ),
+        ],
+      });
+      const store = new SessionRecoveryStore(persistence);
+      await store.load();
+      expect(store.readSession('session-1')).toBeUndefined();
+    }
+  });
+
   it('rejects inconsistent persisted tool progress metadata', async () => {
     const persistence = memoryPersistence({
       version: SESSION_RECOVERY_VERSION,

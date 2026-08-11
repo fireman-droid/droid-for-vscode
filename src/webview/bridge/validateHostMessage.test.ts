@@ -130,6 +130,15 @@ describe('readHostMessage', () => {
           latestUpdateKind: 'status',
         },
         {
+          id: 'changes-1',
+          kind: 'changes',
+          turnId: 'turn-1',
+          files: [
+            { path: 'src/app.ts', additions: 3, deletions: 1 },
+            { path: 'docs/new.md', additions: null, deletions: null },
+          ],
+        },
+        {
           id: 'diagnostic-1',
           kind: 'diagnostic',
           turnId: null,
@@ -368,6 +377,16 @@ describe('readHostMessage', () => {
       progressCount: 0,
       latestUpdateKind: null,
       filePath: 'src/webview/assistant/App.tsx',
+    },
+    {
+      type: 'turn.changes',
+      sequence: 7,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      files: [
+        { path: 'src/app.ts', additions: 3, deletions: 1 },
+        { path: 'docs/new.md', additions: null, deletions: null },
+      ],
     },
     {
       type: 'runtime.diagnostic',
@@ -1119,6 +1138,53 @@ describe('readHostMessage', () => {
       progressCount: 0,
       latestUpdateKind: null,
       filePath: '',
+    },
+    {
+      type: 'turn.changes',
+      sequence: 5,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      files: [],
+    },
+    {
+      type: 'turn.changes',
+      sequence: 5,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      files: [{ path: '../outside.ts', additions: 1, deletions: 0 }],
+    },
+    {
+      type: 'turn.changes',
+      sequence: 5,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      files: [
+        { path: 'src/app.ts', additions: 1, deletions: 0 },
+        { path: 'src/app.ts', additions: 2, deletions: 0 },
+      ],
+    },
+    {
+      type: 'turn.changes',
+      sequence: 5,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      files: [
+        { path: 'src/app.ts', additions: -1, deletions: 0 },
+      ],
+    },
+    {
+      type: 'turn.changes',
+      sequence: 5,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      files: [
+        {
+          path: 'src/app.ts',
+          additions: 1,
+          deletions: 0,
+          patch: 'raw diff must not cross',
+        },
+      ],
     },
     {
       type: 'turn.state',

@@ -10,6 +10,7 @@ import {
   SessionRecoveryStore,
   type SessionRecoveryPersistence,
 } from './SessionRecoveryStore';
+import { createGitChangeStatsReader } from './changeStats';
 import { createVscodeAttachmentSources } from './vscodeAttachmentSources';
 import { createVscodeFileDiffOpener } from './vscodeFileDiff';
 
@@ -48,6 +49,9 @@ export function activate(context: vscode.ExtensionContext): void {
     new FactorySessionHistoryLoader(),
     attachmentSources,
     createVscodeFileDiffOpener(),
+    createGitChangeStatsReader(
+      () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+    ),
   );
   const provider = new DroidViewProvider(
     context.extensionUri,

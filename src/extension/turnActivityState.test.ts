@@ -7,6 +7,7 @@ import {
   MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
 } from '../shared/bridgeMessages';
 import {
+  collectToolFilePaths,
   createTurnActivityState,
   projectAssistantDelta,
   projectThinkingDelta,
@@ -243,6 +244,47 @@ describe('turnActivityState', () => {
       filePath: 'docs/new.md',
     });
     expect(repeated.projection).toBeNull();
+  });
+
+  it('collects unique tool file paths in first-observed order', () => {
+    let state = createTurnActivityState();
+    const events = [
+      {
+        type: 'tool-start' as const,
+        toolName: 'Edit',
+        toolUseId: 'tool-1',
+        action: 'Updated workspace files',
+        filePath: 'src/b.ts',
+      },
+      {
+        type: 'tool-start' as const,
+        toolName: 'Read',
+        toolUseId: 'tool-2',
+        action: 'Read workspace files',
+      },
+      {
+        type: 'tool-start' as const,
+        toolName: 'Create',
+        toolUseId: 'tool-3',
+        action: 'Created workspace files',
+        filePath: 'src/a.ts',
+      },
+      {
+        type: 'tool-start' as const,
+        toolName: 'Edit',
+        toolUseId: 'tool-4',
+        action: 'Updated workspace files',
+        filePath: 'src/b.ts',
+      },
+    ];
+    for (const event of events) {
+      state = projectToolEvent(state, event).state;
+    }
+    expect(collectToolFilePaths(state)).toEqual([
+      'src/b.ts',
+      'src/a.ts',
+    ]);
+    expect(collectToolFilePaths(createTurnActivityState())).toEqual([]);
   });
 
   it('creates a terminal tool row when the result arrives first', () => {

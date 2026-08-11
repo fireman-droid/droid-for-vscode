@@ -58,6 +58,7 @@ import {
   type SessionHistoryLoader,
 } from '../runtime/history/SessionHistory';
 import {
+  collectToolFilePaths,
   createTurnActivityState,
   projectAssistantDelta,
   projectThinkingDelta,
@@ -72,6 +73,7 @@ import {
 } from './SessionRecoveryStore';
 import {
   appendAcceptedUserPrompt,
+  appendTurnChanges,
   attachUserMessageId,
   createHostTranscriptState,
   projectHostTranscriptMessage,
@@ -79,6 +81,10 @@ import {
   type HostTranscriptProjectionMessage,
   type HostTranscriptState,
 } from './hostTranscriptState';
+import {
+  createUnavailableChangeStatsReader,
+  type ChangeStatsReader,
+} from './changeStats';
 import { reconcileSessionHistory } from './reconcileSessionHistory';
 import {
   createUnavailableAttachmentSources,
@@ -281,6 +287,8 @@ export class ChatController {
       createUnavailableAttachmentSources(),
     private readonly fileDiff: FileDiffOpener =
       createUnavailableFileDiffOpener(),
+    private readonly changeStats: ChangeStatsReader =
+      createUnavailableChangeStatsReader(),
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
@@ -815,11 +823,13 @@ export class ChatController {
     this.interactions.endTurn(sessionId, turnId);
     switch (event.outcome) {
       case 'success':
+        this.publishTurnChanges(sessionId, turnId);
         this.setTurnStatus(sessionId, turnId, 'completed');
         void this.flushRecoveryCheckpoint();
         this.refreshContextAfterTurn(sessionId);
         return;
       case 'interrupted':
+        this.publishTurnChanges(sessionId, turnId);
         this.setTurnStatus(sessionId, turnId, 'interrupted');
         void this.flushRecoveryCheckpoint();
         this.refreshContextAfterTurn(sessionId);
@@ -831,6 +841,54 @@ export class ChatController {
         this.failTurn(sessionId, turnId, 'runtime-structured-output-failed');
         return;
     }
+  }
+
+  /**
+   * Publishes the changed-files summary for a finished turn. Line
+   * counts come from git HEAD asynchronously; the summary is dropped
+   * when the session changes before the stats arrive.
+   */
+  private publishTurnChanges(sessionId: string, turnId: string): void {
+    if (
+      this.sessionId !== sessionId ||
+      this.turn?.turnId !== turnId
+    ) {
+      return;
+    }
+    const paths = collectToolFilePaths(this.turn.activity);
+    if (paths.length === 0) {
+      return;
+    }
+    const runtimeGeneration = this.runtimeGeneration;
+    void this.changeStats.read(paths).then((stats) => {
+      if (
+        this.disposed ||
+        this.sessionId !== sessionId ||
+        this.runtimeGeneration !== runtimeGeneration
+      ) {
+        return;
+      }
+      const files = paths.map((path) => {
+        const stat = stats.get(path);
+        return {
+          path,
+          additions: stat?.additions ?? null,
+          deletions: stat?.deletions ?? null,
+        };
+      });
+      const next = appendTurnChanges(this.transcript, turnId, files);
+      if (next === this.transcript) {
+        return;
+      }
+      this.transcript = next;
+      this.scheduleRecoveryCheckpoint();
+      this.emit({
+        type: 'turn.changes',
+        sessionId,
+        turnId,
+        files,
+      });
+    });
   }
 
   private handleStop(sessionId: string, turnId: string): void {

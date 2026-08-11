@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   MAX_ASSISTANT_TEXT_LENGTH,
+  MAX_CHANGED_FILES_PER_TURN,
   MAX_SESSION_TRANSCRIPT_ITEMS,
   type SessionTranscriptItem,
 } from '../shared/bridgeMessages';
 import {
   appendAcceptedUserPrompt,
+  appendTurnChanges,
   attachUserMessageId,
   createHostTranscriptState,
   hydrateHostTranscriptState,
@@ -412,6 +414,45 @@ describe('hostTranscriptState', () => {
         filePath: 'src/app.ts',
       }),
     ]);
+  });
+
+  it('appends a bounded per-turn changes summary exactly once', () => {
+    let state = appendAcceptedUserPrompt(
+      createHostTranscriptState('complete'),
+      'turn-1',
+      'Change files',
+    );
+    const files = [
+      { path: 'src/app.ts', additions: 3, deletions: 1 },
+      { path: 'docs/new.md', additions: null, deletions: null },
+    ];
+    state = appendTurnChanges(state, 'turn-1', files);
+    expect(state.transcript.at(-1)).toEqual({
+      id: stableTranscriptId('changes', 'turn-1'),
+      kind: 'changes',
+      turnId: 'turn-1',
+      files,
+    });
+
+    // Repeated publication and empty lists are no-ops.
+    expect(appendTurnChanges(state, 'turn-1', files)).toBe(state);
+    expect(appendTurnChanges(state, 'turn-2', [])).toBe(state);
+
+    // Oversized lists are clipped to the bridge bound.
+    const oversized = Array.from(
+      { length: MAX_CHANGED_FILES_PER_TURN + 5 },
+      (_, index) => ({
+        path: `src/file-${index}.ts`,
+        additions: index,
+        deletions: 0,
+      }),
+    );
+    const clipped = appendTurnChanges(state, 'turn-2', oversized);
+    const changes = clipped.transcript.at(-1);
+    expect(changes?.kind).toBe('changes');
+    expect(
+      changes?.kind === 'changes' ? changes.files : [],
+    ).toHaveLength(MAX_CHANGED_FILES_PER_TURN);
   });
 
   it('never projects interaction or raw tool payload shapes', () => {

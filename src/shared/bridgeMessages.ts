@@ -637,11 +637,33 @@ export interface DiagnosticTranscriptItem {
   readonly message: string;
 }
 
+export const MAX_CHANGED_FILES_PER_TURN = 24;
+
+/**
+ * One workspace-relative file a turn changed. Line counts are measured
+ * against git HEAD when the turn completes; null when unavailable
+ * (no git, binary file, or untracked file).
+ */
+export interface ChangedFileSummary {
+  readonly path: string;
+  readonly additions: number | null;
+  readonly deletions: number | null;
+}
+
+/** Per-turn summary of the files its tools created or modified. */
+export interface ChangesTranscriptItem {
+  readonly id: string;
+  readonly kind: 'changes';
+  readonly turnId: string;
+  readonly files: readonly ChangedFileSummary[];
+}
+
 export type SessionTranscriptItem =
   | UserTranscriptItem
   | AssistantTranscriptItem
   | ThinkingTranscriptItem
   | ToolTranscriptItem
+  | ChangesTranscriptItem
   | DiagnosticTranscriptItem;
 
 export interface HostSnapshotMessage {
@@ -751,6 +773,15 @@ export interface ToolActivityMessage {
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
   readonly durationMs?: number;
   readonly filePath?: string;
+}
+
+/** Announces the changed-files summary for a finished turn. */
+export interface TurnChangesMessage {
+  readonly type: 'turn.changes';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly files: readonly ChangedFileSummary[];
 }
 
 export interface RuntimeDiagnosticMessage {
@@ -864,6 +895,7 @@ export type HostToWebviewMessage =
   | ThinkingDeltaMessage
   | ThinkingCompleteMessage
   | ToolActivityMessage
+  | TurnChangesMessage
   | RuntimeDiagnosticMessage
   | TurnStateMessage
   | UserMessageMetaMessage
