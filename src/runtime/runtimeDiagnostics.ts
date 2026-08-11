@@ -7,14 +7,20 @@ export interface RuntimeDiagnosticEvent {
     Record<string, RuntimeDiagnosticAttribute>
   >;
   /**
-   * Bounded free text for failure reports (webview boot errors and
-   * similar) where redacting the message would make the record useless.
-   * Only explicit failure paths may set it; regular events keep using
-   * the redaction-safe attributes.
+   * Free text payload (prompt text, tool detail, raw error, stack).
+   * The sink applies credential scrubbing and a length bound; no other
+   * filtering (full-fidelity local logging by user decision).
    */
   readonly detail?: string;
 }
 
 export interface RuntimeDiagnosticSink {
   record(event: RuntimeDiagnosticEvent): void;
+  /**
+   * Optional turn correlation scope: while a scope is open the sink
+   * stamps every record (host, sdk, and webview beacons) with the
+   * Bridge turnId so one interaction reads as a single timeline.
+   */
+  beginTurnScope?(turnId: string): void;
+  endTurnScope?(): void;
 }

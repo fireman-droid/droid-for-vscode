@@ -70,7 +70,7 @@ describe('FactoryDroidRuntime', () => {
     ]);
   });
 
-  it('records bounded lifecycle timings without prompt content', async () => {
+  it('records full-fidelity lifecycle diagnostics with the prompt text', async () => {
     const session = createMockSession(async function* () {
       yield textDelta('hello');
       yield successfulResult();
@@ -83,12 +83,13 @@ describe('FactoryDroidRuntime', () => {
     });
 
     await runtime.initialize('C:\\workspace');
-    await collect(runtime.sendTurn('private prompt content'));
+    await collect(runtime.sendTurn('real prompt content'));
 
     expect(diagnostics.record).toHaveBeenCalledWith({
       level: 'info',
       name: 'runtime.turn.started',
-      attributes: { textLength: 22, attachmentCount: 0 },
+      attributes: { textLength: 19, attachmentCount: 0 },
+      detail: 'real prompt content',
     });
     expect(diagnostics.record).toHaveBeenCalledWith({
       level: 'info',
@@ -98,12 +99,52 @@ describe('FactoryDroidRuntime', () => {
         outcome: 'success',
         projectedEventCount: 2,
         toolStartCount: 0,
+        toolUniqueCount: 0,
         toolProgressCount: 0,
         toolResultCount: 0,
       },
     });
-    expect(JSON.stringify(diagnostics.record.mock.calls)).not.toContain(
-      'private prompt content',
+  });
+
+  it('logs one tool.started per toolUseId despite delta re-emissions', async () => {
+    const session = createMockSession(async function* () {
+      yield toolCall('tool-1', 'Read');
+      yield toolCall('tool-1', 'Read');
+      yield toolCall('tool-2', 'Execute');
+      yield toolResult('tool-1', 'Read');
+      yield successfulResult();
+    });
+    const diagnostics = { record: vi.fn() };
+    const runtime = new FactoryDroidRuntime({
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      createSdkSession: async () => session,
+      diagnostics,
+    });
+
+    await runtime.initialize('C:\\workspace');
+    await collect(runtime.sendTurn('run the tools'));
+
+    const started = diagnostics.record.mock.calls.filter(
+      ([event]) => event.name === 'runtime.tool.started',
+    );
+    expect(started).toHaveLength(2);
+    expect(started[0]?.[0]?.attributes).toMatchObject({
+      tool: 'Read',
+      toolUseId: 'tool-1',
+    });
+    expect(started[1]?.[0]?.attributes).toMatchObject({
+      tool: 'Execute',
+      toolUseId: 'tool-2',
+    });
+    expect(diagnostics.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'runtime.turn.finished',
+        attributes: expect.objectContaining({
+          toolStartCount: 3,
+          toolUniqueCount: 2,
+          toolResultCount: 1,
+        }),
+      }),
     );
   });
 
@@ -1720,6 +1761,28 @@ function textDelta(text: string): DroidStreamEvent {
     messageId: 'message-1',
     blockIndex: 0,
     text,
+  };
+}
+
+function toolCall(toolUseId: string, name: string): DroidStreamEvent {
+  return {
+    type: 'tool_call',
+    name,
+    toolUseId,
+    input: {},
+  };
+}
+
+function toolResult(
+  toolUseId: string,
+  toolName: string,
+): DroidStreamEvent {
+  return {
+    type: 'tool_result',
+    toolUseId,
+    toolName,
+    content: '',
+    isError: false,
   };
 }
 

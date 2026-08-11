@@ -7,6 +7,7 @@
 artifacts/**
 design/**
 docs/**
+!docs/product/log-analysis-playbook.md
 src/**
 node_modules/**
 dist/**

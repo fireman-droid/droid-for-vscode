@@ -197,6 +197,8 @@ export const WEBVIEW_DIAGNOSTIC_KINDS = [
   'boot-timeout',
   'error',
   'unhandledrejection',
+  'perf-longtask',
+  'perf-batch',
 ] as const;
 export type WebviewDiagnosticKind =
   (typeof WEBVIEW_DIAGNOSTIC_KINDS)[number];

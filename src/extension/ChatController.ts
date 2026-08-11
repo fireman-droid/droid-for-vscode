@@ -55,6 +55,10 @@ import type {
 } from '../runtime/runtimeEvents';
 import type { RuntimeInteractionHandler } from '../runtime/runtimeInteractions';
 import type {
+  RuntimeDiagnosticEvent,
+  RuntimeDiagnosticSink,
+} from '../runtime/runtimeDiagnostics';
+import type {
   SessionCatalog,
   SessionCatalogEntry,
   SessionCatalogResult,
@@ -318,6 +322,12 @@ export class ChatController {
     readonly items: readonly CommandSummary[];
   } | null = null;
   private commandsRefreshInProgress = false;
+  private readonly interactionOpenedAt = new Map<string, number>();
+  /** Outbound Bridge message accounting for the active turn (P5). */
+  private turnIo: {
+    counts: Map<string, number>;
+    bytes: number;
+  } | null = null;
 
   constructor(
     private readonly createRuntime: DroidRuntimeFactory,
@@ -338,6 +348,7 @@ export class ChatController {
       createUnavailableExternalUrlOpener(),
     private readonly recentCommands: RecentCommandsStore =
       new RecentCommandsStore(),
+    private readonly diagnostics?: RuntimeDiagnosticSink,
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
@@ -347,6 +358,18 @@ export class ChatController {
         if (!this.ensureActiveRuntimeWorkspaceCurrent()) {
           return;
         }
+        this.interactionOpenedAt.set(
+          request.requestId,
+          performance.now(),
+        );
+        this.recordHost({
+          level: 'info',
+          name: 'host.interaction.opened',
+          attributes: {
+            kind: request.kind,
+            requestId: request.requestId,
+          },
+        });
         this.emit({
           type: 'interaction.request',
           sessionId,
@@ -355,6 +378,22 @@ export class ChatController {
         });
       },
       ({ sessionId, turnId, requestId }) => {
+        const openedAt = this.interactionOpenedAt.get(requestId);
+        this.interactionOpenedAt.delete(requestId);
+        this.recordHost({
+          level: 'info',
+          name: 'host.interaction.closed',
+          attributes: {
+            requestId,
+            ...(openedAt === undefined
+              ? {}
+              : {
+                  pendingMs: Math.round(
+                    performance.now() - openedAt,
+                  ),
+                }),
+          },
+        });
         this.emit({
           type: 'interaction.closed',
           sessionId,
@@ -665,6 +704,7 @@ export class ChatController {
     sessionId: string,
     turnId: string,
     text: string,
+    kind: 'send' | 'edit-resend' = 'send',
   ): void {
     const runtime = this.runtime;
     if (
@@ -688,6 +728,18 @@ export class ChatController {
 
     const runtimeGeneration = this.runtimeGeneration;
     const turnGeneration = ++this.turnGeneration;
+    this.diagnostics?.beginTurnScope?.(turnId);
+    this.turnIo = { counts: new Map(), bytes: 0 };
+    this.recordHost({
+      level: 'info',
+      name: 'host.turn.accepted',
+      attributes: {
+        kind,
+        textLength: text.length,
+        sessionId,
+      },
+      detail: text,
+    });
     this.turn = {
       turnId,
       status: 'submitting',
@@ -1117,7 +1169,7 @@ export class ChatController {
       // forked session id, the truncated transcript with the edited
       // prompt, and the submitting turn, so the webview adopts the fork
       // atomically.
-      this.handleSend(forkedSessionId, turnId, text);
+      this.handleSend(forkedSessionId, turnId, text, 'edit-resend');
       this.emitSnapshot();
     });
   }
@@ -1317,16 +1369,14 @@ export class ChatController {
     });
 
     let transcript: HostTranscriptState | null = null;
-    try {
-      const loaded = await this.sessionHistory.loadHistory({
+    {
+      const loaded = await this.loadHistoryTimed(
         cwd,
-        sessionId: compactedSessionId,
-      });
-      if (loaded.status === 'available') {
+        compactedSessionId,
+      );
+      if (loaded?.status === 'available') {
         transcript = loaded.state;
       }
-    } catch {
-      transcript = null;
     }
     if (
       !this.isCurrentSessionOperation(
@@ -1495,16 +1545,11 @@ export class ChatController {
     // The fork copies the conversation, but message IDs may differ, so
     // reload its history; keep the current transcript if that fails.
     let transcript: HostTranscriptState | null = null;
-    try {
-      const loaded = await this.sessionHistory.loadHistory({
-        cwd,
-        sessionId: forkedSessionId,
-      });
-      if (loaded.status === 'available') {
+    {
+      const loaded = await this.loadHistoryTimed(cwd, forkedSessionId);
+      if (loaded?.status === 'available') {
         transcript = loaded.state;
       }
-    } catch {
-      transcript = null;
     }
     if (
       !this.isCurrentSessionOperation(
@@ -3153,15 +3198,10 @@ export class ChatController {
     }
 
     const recovered = this.recoveryStore.readSession(target.sessionId);
-    let loaded;
-    try {
-      loaded = await this.sessionHistory.loadHistory({
-        cwd: target.cwd,
-        sessionId: target.sessionId,
-      });
-    } catch {
-      loaded = null;
-    }
+    const loaded = await this.loadHistoryTimed(
+      target.cwd,
+      target.sessionId,
+    );
     if (
       !this.isCurrentRuntimeGeneration(generation) ||
       !this.isTargetWorkspaceCurrent(target.cwd)
@@ -3169,9 +3209,75 @@ export class ChatController {
       return null;
     }
     if (loaded?.status === 'available') {
-      return reconcileSessionHistory(loaded.state, recovered);
+      const reconcileStart = performance.now();
+      const reconciled = reconcileSessionHistory(
+        loaded.state,
+        recovered,
+      );
+      // Recovery reconciliation accounting (P7): a merge that degrades
+      // to concatenation (reconciled ≈ recovered + loaded) is the
+      // signature of the duplicate-transcript / duplicate-toolUseId
+      // class of bugs.
+      this.recordHost({
+        level: 'info',
+        name: 'host.perf.recovery',
+        attributes: {
+          sessionId: target.sessionId,
+          recovered: recovered?.transcript.length ?? 0,
+          loaded: loaded.state.transcript.length,
+          reconciled: reconciled.transcript.length,
+          reconcileMs: Math.round(
+            performance.now() - reconcileStart,
+          ),
+        },
+      });
+      return reconciled;
     }
     return recovered ?? createHostTranscriptState('unavailable');
+  }
+
+  /** Timed history load with a structured log record (P6). */
+  private async loadHistoryTimed(
+    cwd: string,
+    sessionId: string,
+  ): Promise<Awaited<
+    ReturnType<SessionHistoryLoader['loadHistory']>
+  > | null> {
+    const startedAt = performance.now();
+    try {
+      const loaded = await this.sessionHistory.loadHistory({
+        cwd,
+        sessionId,
+      });
+      this.recordHost({
+        level: 'info',
+        name: 'runtime.history.finished',
+        attributes: {
+          durationMs: Math.round(performance.now() - startedAt),
+          outcome: loaded.status,
+          sessionId,
+          ...(loaded.status === 'available'
+            ? {
+                items: loaded.state.transcript.length,
+                historyStatus: loaded.state.historyStatus,
+              }
+            : {}),
+        },
+      });
+      return loaded;
+    } catch (error) {
+      this.recordHost({
+        level: 'error',
+        name: 'runtime.history.finished',
+        attributes: {
+          durationMs: Math.round(performance.now() - startedAt),
+          outcome: 'failed',
+          sessionId,
+        },
+        detail: formatUnknownError(error),
+      });
+      return null;
+    }
   }
 
   private async createInitializedRuntime(
@@ -3528,8 +3634,14 @@ export class ChatController {
   }
 
   private emitSnapshot(): void {
+    if (this.turn === null) {
+      // Invariant: an open turn scope always corresponds to the live
+      // turn. Session adoption paths clear the turn without a terminal
+      // turn.state, so close the scope here.
+      this.diagnostics?.endTurnScope?.();
+    }
     const sessions = this.withActiveSession(this.sessions);
-    this.emit({
+    const snapshot = {
       type: 'host.snapshot',
       sessionId: this.sessionId,
       connection: this.connection,
@@ -3550,7 +3662,20 @@ export class ChatController {
       transcript: this.transcript.transcript,
       historyStatus: this.transcript.historyStatus,
       truncated: this.transcript.truncated,
-    });
+    } satisfies UnsequencedHostMessage;
+    try {
+      this.recordHost({
+        level: 'debug',
+        name: 'host.perf.snapshot',
+        attributes: {
+          bytes: JSON.stringify(snapshot).length,
+          items: this.transcript.transcript.length,
+        },
+      });
+    } catch {
+      // Measurement failures never block the snapshot.
+    }
+    this.emit(snapshot);
   }
 
   private emitTurnState(
@@ -3564,6 +3689,51 @@ export class ChatController {
       turnId,
       status,
     });
+    this.recordHost({
+      level: 'debug',
+      name: 'host.turn.state',
+      attributes: { status },
+    });
+    if (
+      status === 'completed' ||
+      status === 'interrupted' ||
+      status === 'failed'
+    ) {
+      this.flushTurnIo();
+      this.diagnostics?.endTurnScope?.();
+    }
+  }
+
+  /** Emits the per-turn outbound Bridge message accounting (P5). */
+  private flushTurnIo(): void {
+    const io = this.turnIo;
+    this.turnIo = null;
+    if (io === null) {
+      return;
+    }
+    const attributes: Record<string, number> = {
+      bytesOut: io.bytes,
+      messagesOut: [...io.counts.values()].reduce(
+        (sum, count) => sum + count,
+        0,
+      ),
+    };
+    for (const [type, count] of io.counts) {
+      attributes[`n_${type.replaceAll('.', '_')}`] = count;
+    }
+    this.recordHost({
+      level: 'debug',
+      name: 'host.perf.turn-io',
+      attributes,
+    });
+  }
+
+  private recordHost(event: RuntimeDiagnosticEvent): void {
+    try {
+      this.diagnostics?.record(event);
+    } catch {
+      // Diagnostics must never alter controller behavior.
+    }
   }
 
   private emitSettings(sessionId: string): void {
@@ -3669,6 +3839,17 @@ export class ChatController {
       ...message,
       sequence: this.nextSequence(),
     } as HostToWebviewMessage;
+    if (this.turnIo !== null) {
+      this.turnIo.counts.set(
+        message.type,
+        (this.turnIo.counts.get(message.type) ?? 0) + 1,
+      );
+      try {
+        this.turnIo.bytes += JSON.stringify(withSequence).length;
+      } catch {
+        // Unserializable messages still count by type.
+      }
+    }
     this.projectTranscript(withSequence);
     for (const listener of this.listeners) {
       listener(withSequence);
@@ -3738,6 +3919,14 @@ export class ChatController {
     code: string,
     message: string,
   ): void {
+    // Mirror UI-facing business failures into the local log; without
+    // this they vanish whenever the webview is closed or broken.
+    this.recordHost({
+      level: 'warn',
+      name: 'host.ui.diagnostic',
+      attributes: { code },
+      detail: message,
+    });
     this.emit({
       type: 'runtime.diagnostic',
       sessionId: this.sessionId,
@@ -4455,6 +4644,17 @@ function createEmptySessionCatalog(): SessionCatalog {
       return { status: 'available', sessions: [] };
     },
   };
+}
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.stack ?? `${error.name}: ${error.message}`;
+  }
+  try {
+    return JSON.stringify(error) ?? String(error);
+  } catch {
+    return String(error);
+  }
 }
 
 function createTransientRecoveryStore(): SessionRecoveryStore {

@@ -10,6 +10,8 @@ const expectedEntries = [
   'extension/dist/webview/assets/inter-latin-wght-normal.woff2',
   'extension/dist/webview/webview.css',
   'extension/dist/webview/webview.js',
+  // Shipped so "Export Diagnostics Bundle" can include the AI playbook.
+  'extension/docs/product/log-analysis-playbook.md',
   'extension/package.json',
   'extension/resources/droidvisx.svg',
 ].sort();

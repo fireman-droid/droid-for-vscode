@@ -22,6 +22,7 @@ import {
   announceRendered,
   getVsCodeApi,
   persistDraft,
+  postPerfBeacon,
   readHostMessage,
   restoreDraft,
 } from '../bridge/vscode';
@@ -72,6 +73,8 @@ export function App(): React.JSX.Element {
     let queue: NonNullable<ReturnType<typeof readHostMessage>>[] = [];
     let frameId: number | null = null;
     let timerId: ReturnType<typeof setTimeout> | null = null;
+    // rAF batching accounting (P3), reported once per finished turn.
+    let batchStats = { flushes: 0, messages: 0, maxBatch: 0, maxFlushMs: 0 };
     const flush = (): void => {
       if (frameId !== null) {
         cancelAnimationFrame(frameId);
@@ -87,8 +90,31 @@ export function App(): React.JSX.Element {
       const batch = queue;
       queue = [];
       sendPendingRef.current = false;
+      const flushStart = performance.now();
+      let turnFinished = false;
       for (const message of batch) {
+        if (
+          message.type === 'turn.state' &&
+          (message.status === 'completed' ||
+            message.status === 'interrupted' ||
+            message.status === 'failed')
+        ) {
+          turnFinished = true;
+        }
         dispatch({ type: 'host.message', message });
+      }
+      const flushMs = performance.now() - flushStart;
+      batchStats.flushes += 1;
+      batchStats.messages += batch.length;
+      batchStats.maxBatch = Math.max(batchStats.maxBatch, batch.length);
+      batchStats.maxFlushMs = Math.max(batchStats.maxFlushMs, flushMs);
+      if (turnFinished && batchStats.messages > 0) {
+        postPerfBeacon(
+          vscode,
+          'perf-batch',
+          `flushes ${batchStats.flushes} messages ${batchStats.messages} maxBatch ${batchStats.maxBatch} maxFlushMs ${Math.round(batchStats.maxFlushMs)}`,
+        );
+        batchStats = { flushes: 0, messages: 0, maxBatch: 0, maxFlushMs: 0 };
       }
     };
     const handleMessage = (event: MessageEvent<unknown>): void => {
@@ -109,6 +135,48 @@ export function App(): React.JSX.Element {
       flush();
     };
   }, [initialDraft, vscode]);
+
+  useEffect(() => {
+    // Main-thread stall accounting (P2): long tasks are aggregated and
+    // reported at most once per 30s window, only when any occurred.
+    if (typeof PerformanceObserver !== 'function') {
+      return;
+    }
+    let count = 0;
+    let totalMs = 0;
+    let maxMs = 0;
+    let observer: PerformanceObserver;
+    try {
+      observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          count += 1;
+          totalMs += entry.duration;
+          maxMs = Math.max(maxMs, entry.duration);
+        }
+      });
+      observer.observe({ entryTypes: ['longtask'] });
+    } catch {
+      // The longtask entry type is unsupported in some environments.
+      return;
+    }
+    const intervalId = setInterval(() => {
+      if (count === 0) {
+        return;
+      }
+      postPerfBeacon(
+        vscode,
+        'perf-longtask',
+        `count ${count} maxMs ${Math.round(maxMs)} totalMs ${Math.round(totalMs)} windowMs 30000`,
+      );
+      count = 0;
+      totalMs = 0;
+      maxMs = 0;
+    }, 30_000);
+    return () => {
+      clearInterval(intervalId);
+      observer.disconnect();
+    };
+  }, [vscode]);
 
   // One-shot beacon proving the first non-empty transcript reached the
   // DOM; its absence in the logs isolates a render-phase hang.

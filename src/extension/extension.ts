@@ -5,6 +5,7 @@ import { FactorySessionCatalog } from '../runtime/FactorySessionCatalog';
 import { FactorySessionHistoryLoader } from '../runtime/history/FactorySessionHistoryLoader';
 import { ChatController } from './ChatController';
 import { DroidViewProvider } from './DroidViewProvider';
+import { exportDiagnosticsBundle } from './exportDiagnostics';
 import { LocalDiagnostics } from './LocalDiagnostics';
 import {
   SessionRecoveryStore,
@@ -18,16 +19,32 @@ import { createVscodeFileDiffOpener } from './vscodeFileDiff';
 
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
+const exportDiagnosticsCommand = 'droidvisx.exportDiagnostics';
 let activeController: ChatController | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
+  // globalStorage survives Cursor's per-boot log directory cleanup and
+  // aggregates all windows into one per-day file set.
+  const logDirectory = vscode.Uri.joinPath(
+    context.globalStorageUri,
+    'logs',
+  ).fsPath;
   const diagnostics = new LocalDiagnostics({
-    directory: context.logUri.fsPath,
+    directory: logDirectory,
     output: vscode.window.createOutputChannel('DroidVisX Logs'),
+    workspace: () =>
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
   });
   diagnostics.record({
     level: 'info',
     name: 'extension.activated',
+    attributes: {
+      extensionVersion:
+        (context.extension.packageJSON as { version?: string })
+          .version ?? 'unknown',
+      appName: vscode.env.appName,
+      vscodeVersion: vscode.version,
+    },
   });
   const persistence: SessionRecoveryPersistence = {
     get: <T>(key: string) => context.workspaceState.get<T>(key),
@@ -56,6 +73,7 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     createVscodeExternalUrlOpener(),
     new RecentCommandsStore(persistence),
+    diagnostics,
   );
   const provider = new DroidViewProvider(
     context.extensionUri,
@@ -91,6 +109,31 @@ export function activate(context: vscode.ExtensionContext): void {
       });
       diagnostics.show();
     }),
+    vscode.commands.registerCommand(
+      exportDiagnosticsCommand,
+      async () => {
+        diagnostics.record({
+          level: 'info',
+          name: 'diagnostics.exported',
+        });
+        await diagnostics.flush();
+        try {
+          await exportDiagnosticsBundle(context, logDirectory);
+        } catch (error) {
+          diagnostics.record({
+            level: 'error',
+            name: 'diagnostics.export-failed',
+            detail:
+              error instanceof Error
+                ? (error.stack ?? error.message)
+                : String(error),
+          });
+          void vscode.window.showErrorMessage(
+            'DroidVisX diagnostics export failed. See DroidVisX Logs.',
+          );
+        }
+      },
+    ),
   );
 }
 

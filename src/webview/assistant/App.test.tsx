@@ -140,7 +140,7 @@ describe('assistant-ui App bridge commands', () => {
     expect(posted).toContainEqual({
       type: 'webview.diagnostic',
       kind: 'boot-ok',
-      detail: 'build dev',
+      detail: expect.stringMatching(/^build dev bootMs \d+$/),
     });
     const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
     await waitFor(() => expect(input.value).toBe('Restored draft'));

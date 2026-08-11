@@ -1,4 +1,11 @@
-import { appendFile, mkdir, rename, stat, unlink } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import {
+  appendFile,
+  mkdir,
+  readdir,
+  stat,
+  unlink,
+} from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type {
@@ -14,16 +21,22 @@ import type {
   RuntimeDiagnosticSink,
 } from '../runtime/runtimeDiagnostics';
 
-const DEFAULT_MAX_FILE_BYTES = 512 * 1024;
-const DEFAULT_BACKUP_COUNT = 2;
-const MAX_NAME_LENGTH = 96;
-const MAX_DETAIL_LENGTH = 2_048;
-const MAX_ATTRIBUTE_COUNT = 16;
-const MAX_ATTRIBUTE_KEY_LENGTH = 48;
-const MAX_ATTRIBUTE_STRING_LENGTH = 96;
-const SAFE_CODE_PATTERN = /^[a-zA-Z0-9_.:-]+$/u;
-const PROHIBITED_ATTRIBUTE_KEY_PATTERN =
-  /(?:id|path|cwd|args?|command|prompt|content|output|error|stack|cause|token|secret|credential|apikey)$/iu;
+/**
+ * Full-fidelity local diagnostics (user decision, 2026-08-11): this is a
+ * personal local tool and the logs exist so an AI can debug against real
+ * content. Prompts, tool inputs/outputs, commands, paths, session/turn/
+ * tool IDs, raw errors, and stack traces are all persisted as-is. The
+ * only filtering is credential scrubbing (API keys, tokens, auth
+ * headers) — that is secret hygiene, not privacy redaction.
+ */
+const DEFAULT_MAX_TOTAL_BYTES = 200 * 1024 * 1024;
+const MAX_NAME_LENGTH = 128;
+const MAX_DETAIL_LENGTH = 16_384;
+const MAX_ATTRIBUTE_COUNT = 32;
+const MAX_ATTRIBUTE_KEY_LENGTH = 64;
+const MAX_ATTRIBUTE_STRING_LENGTH = 8_192;
+const NAME_PATTERN = /^[a-zA-Z0-9_.:-]+$/u;
+const LOG_FILE_PATTERN = /^droidvisx-\d{8}\.jsonl$/u;
 
 interface DiagnosticsFileSystem {
   mkdir(path: string, options: { recursive: true }): Promise<unknown>;
@@ -33,25 +46,32 @@ interface DiagnosticsFileSystem {
     options: { encoding: 'utf8'; mode: number },
   ): Promise<void>;
   stat(path: string): Promise<{ size: number }>;
-  rename(from: string, to: string): Promise<void>;
+  readdir(path: string): Promise<string[]>;
   unlink(path: string): Promise<void>;
 }
 
 interface LocalDiagnosticsOptions {
+  /** Log directory (globalStorage/logs); stable across Cursor windows. */
   readonly directory: string;
   readonly output: Pick<vscode.OutputChannel, 'appendLine' | 'show' | 'dispose'>;
+  /** Workspace path stamped on every record. */
+  readonly workspace?: () => string | null;
   readonly now?: () => Date;
-  readonly maxFileBytes?: number;
-  readonly backupCount?: number;
+  readonly maxTotalBytes?: number;
   readonly fileSystem?: DiagnosticsFileSystem;
 }
 
 interface PersistedDiagnosticRecord {
   readonly timestamp: string;
   readonly sequence: number;
+  /** Activation instance id; new per extension activation. */
+  readonly act: string;
   readonly source: 'host' | 'sdk';
   readonly level: RuntimeDiagnosticEvent['level'];
   readonly name: string;
+  readonly workspace?: string;
+  /** Bridge turnId of the active turn scope, if any. */
+  readonly turn?: string;
   readonly attributes?: Readonly<
     Record<string, RuntimeDiagnosticAttribute>
   >;
@@ -62,33 +82,36 @@ const nodeFileSystem: DiagnosticsFileSystem = {
   mkdir,
   appendFile,
   stat,
-  rename,
+  readdir,
   unlink,
 };
 
 export class LocalDiagnostics implements RuntimeDiagnosticSink {
-  readonly filePath: string;
+  readonly directory: string;
+  readonly act: string;
   readonly observability: DroidObservability;
 
-  private readonly directory: string;
   private readonly output: LocalDiagnosticsOptions['output'];
+  private readonly workspace: () => string | null;
   private readonly now: () => Date;
-  private readonly maxFileBytes: number;
-  private readonly backupCount: number;
+  private readonly maxTotalBytes: number;
   private readonly fileSystem: DiagnosticsFileSystem;
   private writeQueue: Promise<void> = Promise.resolve();
   private sequence = 0;
   private disposed = false;
+  private currentTurn: string | null = null;
+  /** Sizes of known log files; lazily seeded from disk on first write. */
+  private knownSizes: Map<string, number> | null = null;
 
   constructor(options: LocalDiagnosticsOptions) {
     this.directory = options.directory;
     this.output = options.output;
+    this.workspace = options.workspace ?? (() => null);
     this.now = options.now ?? (() => new Date());
-    this.maxFileBytes =
-      options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
-    this.backupCount = options.backupCount ?? DEFAULT_BACKUP_COUNT;
+    this.maxTotalBytes =
+      options.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES;
     this.fileSystem = options.fileSystem ?? nodeFileSystem;
-    this.filePath = join(this.directory, 'droidvisx.jsonl');
+    this.act = randomBytes(3).toString('hex');
     this.observability = {
       logger: {
         log: (event) => this.recordSdkLog(event),
@@ -99,8 +122,21 @@ export class LocalDiagnostics implements RuntimeDiagnosticSink {
     };
   }
 
+  /** Path of the log file the next record would be appended to. */
+  get filePath(): string {
+    return join(this.directory, currentFileName(this.now()));
+  }
+
   record(event: RuntimeDiagnosticEvent): void {
     this.enqueue('host', event);
+  }
+
+  beginTurnScope(turnId: string): void {
+    this.currentTurn = turnId;
+  }
+
+  endTurnScope(): void {
+    this.currentTurn = null;
   }
 
   show(): void {
@@ -125,10 +161,11 @@ export class LocalDiagnostics implements RuntimeDiagnosticSink {
   }
 
   private recordSdkLog(event: DroidLogEvent): void {
-    this.enqueue('sdk', {
+    this.enqueueRaw('sdk', {
       level: event.level,
       name: projectSdkLogName(event),
-      attributes: projectAttributes(event.attributes),
+      attributes: event.attributes,
+      detail: formatSdkLogDetail(event),
     });
   }
 
@@ -137,11 +174,11 @@ export class LocalDiagnostics implements RuntimeDiagnosticSink {
       level: 'debug',
       name: 'sdk.metric',
       attributes: {
-        metric: safeCode(event.name, 'unclassified'),
+        metric: event.name,
         kind: event.kind,
         unit: event.unit,
         value: Number.isFinite(event.value) ? event.value : 0,
-        ...projectAttributes(event.attributes),
+        ...event.attributes,
       },
     });
   }
@@ -150,15 +187,31 @@ export class LocalDiagnostics implements RuntimeDiagnosticSink {
     source: PersistedDiagnosticRecord['source'],
     event: RuntimeDiagnosticEvent,
   ): void {
+    this.enqueueRaw(source, event);
+  }
+
+  private enqueueRaw(
+    source: PersistedDiagnosticRecord['source'],
+    event: {
+      readonly level: RuntimeDiagnosticEvent['level'];
+      readonly name: string;
+      readonly attributes?: Readonly<Record<string, unknown>>;
+      readonly detail?: string;
+    },
+  ): void {
     if (this.disposed) {
       return;
     }
+    const workspace = safeWorkspace(this.workspace);
     const record: PersistedDiagnosticRecord = {
       timestamp: this.now().toISOString(),
       sequence: this.sequence,
+      act: this.act,
       source,
       level: event.level,
-      name: safeCode(event.name, `${source}.event`),
+      name: boundedName(event.name, `${source}.event`),
+      ...(workspace === null ? {} : { workspace }),
+      ...(this.currentTurn === null ? {} : { turn: this.currentTurn }),
       ...(event.attributes === undefined
         ? {}
         : { attributes: projectAttributes(event.attributes) }),
@@ -174,76 +227,113 @@ export class LocalDiagnostics implements RuntimeDiagnosticSink {
     } catch {
       // Keep file diagnostics working when the Output Channel is unavailable.
     }
+    const fileName = currentFileName(this.now());
     this.writeQueue = this.writeQueue
-      .then(() => this.writeLine(line))
+      .then(() => this.writeLine(fileName, line))
       .catch(() => {
         // Sink failures are contained and later records can still be queued.
       });
   }
 
-  private async writeLine(line: string): Promise<void> {
+  private async writeLine(
+    fileName: string,
+    line: string,
+  ): Promise<void> {
     await this.fileSystem.mkdir(this.directory, { recursive: true });
+    const sizes = await this.loadKnownSizes();
     const lineBytes = Buffer.byteLength(line, 'utf8');
-    if ((await this.currentSize()) + lineBytes > this.maxFileBytes) {
-      await this.rotate();
-    }
-    await this.fileSystem.appendFile(this.filePath, line, {
-      encoding: 'utf8',
-      mode: 0o600,
-    });
+    await this.fileSystem.appendFile(
+      join(this.directory, fileName),
+      line,
+      {
+        encoding: 'utf8',
+        mode: 0o600,
+      },
+    );
+    sizes.set(fileName, (sizes.get(fileName) ?? 0) + lineBytes);
+    await this.enforceTotalBudget(sizes, fileName);
   }
 
-  private async currentSize(): Promise<number> {
+  private async loadKnownSizes(): Promise<Map<string, number>> {
+    if (this.knownSizes !== null) {
+      return this.knownSizes;
+    }
+    const sizes = new Map<string, number>();
     try {
-      return (await this.fileSystem.stat(this.filePath)).size;
-    } catch (error) {
-      if (isMissingFile(error)) {
-        return 0;
+      const entries = await this.fileSystem.readdir(this.directory);
+      for (const entry of entries) {
+        if (!LOG_FILE_PATTERN.test(entry)) {
+          continue;
+        }
+        try {
+          sizes.set(
+            entry,
+            (await this.fileSystem.stat(join(this.directory, entry)))
+              .size,
+          );
+        } catch {
+          // A file that cannot be measured is excluded from the budget.
+        }
       }
-      throw error;
+    } catch {
+      // An unreadable directory starts with an empty budget.
     }
+    this.knownSizes = sizes;
+    return sizes;
   }
 
-  private async rotate(): Promise<void> {
-    if (this.backupCount <= 0) {
-      await this.removeIfPresent(this.filePath);
+  /**
+   * Deletes whole oldest-day files until the total stays under the
+   * budget. The current day's file is never deleted, so a single very
+   * heavy day may overshoot the cap by design.
+   */
+  private async enforceTotalBudget(
+    sizes: Map<string, number>,
+    currentFile: string,
+  ): Promise<void> {
+    let total = 0;
+    for (const size of sizes.values()) {
+      total += size;
+    }
+    if (total <= this.maxTotalBytes) {
       return;
     }
-    await this.removeIfPresent(`${this.filePath}.${this.backupCount}`);
-    for (let index = this.backupCount - 1; index >= 1; index -= 1) {
-      await this.renameIfPresent(
-        `${this.filePath}.${index}`,
-        `${this.filePath}.${index + 1}`,
-      );
-    }
-    await this.renameIfPresent(this.filePath, `${this.filePath}.1`);
-  }
-
-  private async removeIfPresent(path: string): Promise<void> {
-    try {
-      await this.fileSystem.unlink(path);
-    } catch (error) {
-      if (!isMissingFile(error)) {
-        throw error;
+    const deletable = [...sizes.keys()]
+      .filter((name) => name !== currentFile)
+      .sort();
+    for (const name of deletable) {
+      if (total <= this.maxTotalBytes) {
+        return;
       }
-    }
-  }
-
-  private async renameIfPresent(from: string, to: string): Promise<void> {
-    try {
-      await this.fileSystem.rename(from, to);
-    } catch (error) {
-      if (!isMissingFile(error)) {
-        throw error;
+      try {
+        await this.fileSystem.unlink(join(this.directory, name));
+        total -= sizes.get(name) ?? 0;
+        sizes.delete(name);
+      } catch {
+        // Undeletable backups stay; the budget is best-effort.
       }
     }
   }
 }
 
+/** Daily log file name derived from the UTC date. */
+function currentFileName(now: Date): string {
+  const date = now.toISOString().slice(0, 10).replaceAll('-', '');
+  return `droidvisx-${date}.jsonl`;
+}
+
+function safeWorkspace(
+  workspace: () => string | null,
+): string | null {
+  try {
+    return workspace();
+  } catch {
+    return null;
+  }
+}
+
 function projectAttributes(
-  attributes:
-    | Readonly<Record<string, RuntimeDiagnosticAttribute>>
-    | undefined,
+  attributes: Readonly<Record<string, unknown>> | undefined,
 ): Readonly<Record<string, RuntimeDiagnosticAttribute>> | undefined {
   if (attributes === undefined) {
     return undefined;
@@ -253,16 +343,12 @@ function projectAttributes(
     if (Object.keys(projected).length >= MAX_ATTRIBUTE_COUNT) {
       break;
     }
-    const key = safeCode(rawKey, '');
-    if (
-      key.length === 0 ||
-      key.length > MAX_ATTRIBUTE_KEY_LENGTH ||
-      PROHIBITED_ATTRIBUTE_KEY_PATTERN.test(key)
-    ) {
+    const key = rawKey.slice(0, MAX_ATTRIBUTE_KEY_LENGTH);
+    if (key.length === 0) {
       continue;
     }
     if (typeof rawValue === 'string') {
-      projected[key] = safeCode(rawValue, 'redacted').slice(
+      projected[key] = scrubCredentials(rawValue).slice(
         0,
         MAX_ATTRIBUTE_STRING_LENGTH,
       );
@@ -271,8 +357,22 @@ function projectAttributes(
       !Number.isFinite(rawValue)
     ) {
       projected[key] = 0;
-    } else {
+    } else if (
+      typeof rawValue === 'number' ||
+      typeof rawValue === 'boolean' ||
+      rawValue === null
+    ) {
       projected[key] = rawValue;
+    } else if (rawValue !== undefined) {
+      // SDK attributes can carry nested objects; serialize instead of
+      // dropping them (full fidelity).
+      try {
+        projected[key] = scrubCredentials(
+          JSON.stringify(rawValue) ?? String(rawValue),
+        ).slice(0, MAX_ATTRIBUTE_STRING_LENGTH);
+      } catch {
+        // Unserializable values are omitted.
+      }
     }
   }
   return Object.keys(projected).length === 0 ? undefined : projected;
@@ -303,23 +403,78 @@ function projectSdkLogName(event: DroidLogEvent): string {
     case '[DroidClient] Ask-user handler resolved':
       return 'sdk.ask_user.finished';
     default:
-      return safeCode(event.name, 'sdk.log');
+      return boundedName(event.name, 'sdk.log');
   }
 }
 
-function safeCode(value: string, fallback: string): string {
+/** Full-fidelity SDK log payload: raw message plus error and stack. */
+function formatSdkLogDetail(event: DroidLogEvent): string | undefined {
+  const parts: string[] = [];
+  if (typeof event.message === 'string' && event.message.length > 0) {
+    parts.push(event.message);
+  }
+  const error = (
+    event as {
+      error?: { name?: string; message?: string; stack?: string };
+    }
+  ).error;
+  if (error !== undefined && error !== null) {
+    const label = [error.name, error.message]
+      .filter((part) => typeof part === 'string' && part.length > 0)
+      .join(': ');
+    if (label.length > 0) {
+      parts.push(label);
+    }
+    if (typeof error.stack === 'string' && error.stack.length > 0) {
+      parts.push(error.stack);
+    }
+  }
+  return parts.length === 0 ? undefined : parts.join('\n');
+}
+
+function boundedName(value: string, fallback: string): string {
   const bounded = value.slice(0, MAX_NAME_LENGTH);
-  return bounded.length > 0 && SAFE_CODE_PATTERN.test(bounded)
+  return bounded.length > 0 && NAME_PATTERN.test(bounded)
     ? bounded
     : fallback;
 }
 
+/**
+ * Secret hygiene: strips credential-shaped values from free text. This
+ * is the only filtering applied to the full-fidelity log.
+ */
+// Token-format patterns run first so `Authorization: Bearer <token>`
+// is consumed whole before the assignment pattern sees it.
+const TOKEN_PATTERNS: readonly RegExp[] = [
+  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/giu,
+  /\bsk-[A-Za-z0-9_-]{16,}\b/gu,
+  /\bgh[opusr]_[A-Za-z0-9]{20,}\b/gu,
+  /\bgithub_pat_[A-Za-z0-9_]{20,}\b/gu,
+  /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/gu,
+  /\bAKIA[0-9A-Z]{16}\b/gu,
+  // JWTs.
+  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/gu,
+];
+
+// key: value / key=value assignments for credential-named keys.
+const ASSIGNMENT_PATTERN =
+  /((?:api[-_]?key|secret|token|passwd|password|credential|authorization|access[-_]?key)["']?\s*[:=]\s*)("?)[^\s"'`,;&]+\2/giu;
+
+export function scrubCredentials(text: string): string {
+  let scrubbed = text;
+  for (const pattern of TOKEN_PATTERNS) {
+    scrubbed = scrubbed.replace(pattern, '[REDACTED]');
+  }
+  return scrubbed.replace(ASSIGNMENT_PATTERN, '$1[REDACTED]');
+}
+
 function sanitizeDetail(detail: string): string {
+  // Keep newlines and tabs (stacks, commands); JSON escaping keeps the
+  // record single-line. Strip only the remaining control characters.
   // eslint-disable-next-line no-control-regex
-  return detail.replace(/[\u0000-\u0008\u000b-\u001f]/gu, ' ').slice(
-    0,
-    MAX_DETAIL_LENGTH,
-  );
+  return scrubCredentials(detail)
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/gu, ' ')
+    .slice(0, MAX_DETAIL_LENGTH);
 }
 
 function formatOutputRecord(record: PersistedDiagnosticRecord): string {
@@ -327,15 +482,8 @@ function formatOutputRecord(record: PersistedDiagnosticRecord): string {
     record.attributes === undefined
       ? ''
       : ` ${JSON.stringify(record.attributes)}`;
+  const turn = record.turn === undefined ? '' : ` turn=${record.turn}`;
   const detail =
     record.detail === undefined ? '' : ` | ${record.detail}`;
-  return `[${record.timestamp}] [${record.level}] ${record.source}:${record.name}${attributes}${detail}`;
-}
-
-function isMissingFile(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    'code' in error &&
-    error.code === 'ENOENT'
-  );
+  return `[${record.timestamp}] [${record.level}] ${record.source}:${record.name}${turn}${attributes}${detail}`;
 }

@@ -275,6 +275,8 @@ export class FactoryDroidRuntime implements DroidRuntime {
     let toolProgressCount = 0;
     let toolResultCount = 0;
     let outcome = 'stream-ended';
+    let failureDetail: string | undefined;
+    const startedTools = new Set<string>();
     this.recordDiagnostic({
       level: 'info',
       name: 'runtime.turn.started',
@@ -282,6 +284,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
         textLength: text.length,
         attachmentCount: attachments?.length ?? 0,
       },
+      detail: text,
     });
 
     try {
@@ -303,14 +306,27 @@ export class FactoryDroidRuntime implements DroidRuntime {
           switch (event.type) {
             case 'tool-start':
               toolStartCount += 1;
-              // The action text is intentionally omitted: the
-              // diagnostics sink redacts free-text values, so the
-              // safe, useful signal is the timestamped event itself,
-              // which surfaces a live play-by-play of tool activity.
-              this.recordDiagnostic({
-                level: 'debug',
-                name: 'runtime.tool.started',
-              });
+              // tool_call_delta re-emits tool-start for the same tool;
+              // log only the first sighting per toolUseId so the log
+              // reads one line per real tool invocation.
+              if (!startedTools.has(event.toolUseId)) {
+                startedTools.add(event.toolUseId);
+                this.recordDiagnostic({
+                  level: 'debug',
+                  name: 'runtime.tool.started',
+                  attributes: {
+                    tool: event.toolName,
+                    toolUseId: event.toolUseId,
+                    action: event.action,
+                    ...(event.filePath === undefined
+                      ? {}
+                      : { filePath: event.filePath }),
+                  },
+                  ...(event.detail === undefined
+                    ? {}
+                    : { detail: event.detail }),
+                });
+              }
               break;
             case 'tool-progress':
               toolProgressCount += 1;
@@ -320,13 +336,18 @@ export class FactoryDroidRuntime implements DroidRuntime {
               this.recordDiagnostic({
                 level: event.isError ? 'warn' : 'debug',
                 name: 'runtime.tool.finished',
-                attributes: { isError: event.isError },
+                attributes: {
+                  tool: event.toolName,
+                  toolUseId: event.toolUseId,
+                  isError: event.isError,
+                },
               });
               break;
             case 'error':
               this.recordDiagnostic({
                 level: 'error',
                 name: 'runtime.stream.error',
+                detail: describeUnknown(sdkEvent),
               });
               break;
           }
@@ -338,6 +359,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
       }
     } catch (error) {
       outcome = 'failed';
+      failureDetail = describeUnknown(error);
       throw error;
     } finally {
       this.recordDiagnostic({
@@ -353,9 +375,13 @@ export class FactoryDroidRuntime implements DroidRuntime {
           outcome,
           projectedEventCount,
           toolStartCount,
+          toolUniqueCount: startedTools.size,
           toolProgressCount,
           toolResultCount,
         },
+        ...(failureDetail === undefined
+          ? {}
+          : { detail: failureDetail }),
       });
       if (this.activeTurn === turn) {
         this.activeTurn = null;
@@ -1179,6 +1205,18 @@ export class FactoryDroidRuntime implements DroidRuntime {
     } catch {
       // Diagnostics must never alter Runtime behavior.
     }
+  }
+}
+
+/** Renders an unknown value (SDK event or thrown error) for the log. */
+function describeUnknown(value: unknown): string {
+  if (value instanceof Error) {
+    return value.stack ?? `${value.name}: ${value.message}`;
+  }
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
   }
 }
 

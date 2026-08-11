@@ -38,17 +38,21 @@ export function getVsCodeApi(): VsCodeApi {
 /**
  * Marks the bundle as booted for the HTML watchdog and reports the
  * running build so a stale cached bundle is visible in the logs.
+ * `bootMs` measures timeOrigin -> bundle mount (P1).
  */
 export function announceBooted(vscode: VsCodeApi): void {
   (globalThis as { __dvxBooted?: boolean }).__dvxBooted = true;
   vscode.postMessage({
     type: 'webview.diagnostic',
     kind: 'boot-ok',
-    detail: `build ${WEBVIEW_BUILD_ID}`,
+    detail: `build ${WEBVIEW_BUILD_ID} bootMs ${Math.round(performance.now())}`,
   });
 }
 
-/** Reports that the first non-empty transcript committed to the DOM. */
+/**
+ * Reports that the first non-empty transcript committed to the DOM.
+ * `renderMs` measures timeOrigin -> first non-empty commit (P1).
+ */
 export function announceRendered(
   vscode: VsCodeApi,
   itemCount: number,
@@ -56,7 +60,20 @@ export function announceRendered(
   vscode.postMessage({
     type: 'webview.diagnostic',
     kind: 'render-ok',
-    detail: `items ${itemCount}`,
+    detail: `items ${itemCount} renderMs ${Math.round(performance.now())}`,
+  });
+}
+
+/** Posts an aggregated performance beacon (P2 longtask / P3 batch). */
+export function postPerfBeacon(
+  vscode: VsCodeApi,
+  kind: 'perf-longtask' | 'perf-batch',
+  detail: string,
+): void {
+  vscode.postMessage({
+    type: 'webview.diagnostic',
+    kind,
+    detail: detail.slice(0, 2048),
   });
 }
 

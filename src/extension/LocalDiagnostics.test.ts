@@ -1,10 +1,10 @@
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { LocalDiagnostics } from './LocalDiagnostics';
+import { LocalDiagnostics, scrubCredentials } from './LocalDiagnostics';
 
 const temporaryDirectories: string[] = [];
 
@@ -16,37 +16,101 @@ afterEach(async () => {
   );
 });
 
+const silentOutput = () => ({
+  appendLine: vi.fn(),
+  show: vi.fn(),
+  dispose: vi.fn(),
+});
+
 describe('LocalDiagnostics', () => {
-  it('persists bounded records without messages, paths, IDs, or raw errors', async () => {
+  it('persists full-fidelity records with act, workspace, and turn fields', async () => {
     const directory = await temporaryDirectory();
-    const outputLines: string[] = [];
     const diagnostics = new LocalDiagnostics({
       directory,
-      output: {
-        appendLine: (line) => outputLines.push(line),
-        show: vi.fn(),
-        dispose: vi.fn(),
+      output: silentOutput(),
+      workspace: () => 'D:\\projects\\demo',
+      now: () => new Date('2026-08-11T12:00:00.000Z'),
+    });
+
+    diagnostics.record({
+      level: 'info',
+      name: 'runtime.turn.started',
+      attributes: {
+        textLength: 11,
+        sessionId: 'session-abc',
+        filePath: 'C:\\repo\\src\\main.ts',
       },
-      now: () => new Date('2026-08-09T12:00:00.000Z'),
+      detail: 'real prompt',
+    });
+    diagnostics.beginTurnScope('turn-uuid-1');
+    diagnostics.record({
+      level: 'error',
+      name: 'runtime.stream.error',
+      detail: 'Error: boom\n    at stack frame line 1',
+    });
+    diagnostics.endTurnScope();
+    diagnostics.record({
+      level: 'info',
+      name: 'host.turn.state',
+      attributes: { status: 'completed' },
+    });
+    await diagnostics.flush();
+
+    expect(diagnostics.filePath).toBe(
+      join(directory, 'droidvisx-20260811.jsonl'),
+    );
+    const records = (await readFile(diagnostics.filePath, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+    expect(records[0]).toMatchObject({
+      sequence: 0,
+      act: diagnostics.act,
+      source: 'host',
+      level: 'info',
+      name: 'runtime.turn.started',
+      workspace: 'D:\\projects\\demo',
+      attributes: {
+        textLength: 11,
+        sessionId: 'session-abc',
+        filePath: 'C:\\repo\\src\\main.ts',
+      },
+      detail: 'real prompt',
+    });
+    expect(records[0]).not.toHaveProperty('turn');
+    expect(records[1]).toMatchObject({
+      turn: 'turn-uuid-1',
+      detail: 'Error: boom\n    at stack frame line 1',
+    });
+    expect(records[2]).not.toHaveProperty('turn');
+    expect(diagnostics.act).toMatch(/^[0-9a-f]{6}$/);
+  });
+
+  it('passes SDK log messages, attributes, and stacks through', async () => {
+    const directory = await temporaryDirectory();
+    const diagnostics = new LocalDiagnostics({
+      directory,
+      output: silentOutput(),
+      now: () => new Date('2026-08-11T12:00:00.000Z'),
     });
 
     diagnostics.observability.logger?.log({
       level: 'error',
       name: 'droid.sdk.error',
-      message: 'secret prompt and C:\\private\\workspace',
+      message: 'request failed for C:\\repo\\workspace',
       attributes: {
-        requestId: 'private-request-id',
-        sessionId: 'private-session-id',
-        cwd: 'C:\\private\\workspace',
+        requestId: 'request-9',
+        sessionId: 'session-7',
+        cwd: 'C:\\repo\\workspace',
         method: 'add_user_message',
-        messageByteLength: 200,
-        cause: 'private stack trace',
       },
       error: {
-        message: 'private error',
         name: 'Error',
+        message: 'transport closed',
+        stack: 'Error: transport closed\n    at Transport.send',
       },
-    });
+    } as never);
     diagnostics.observability.metrics?.record({
       name: 'cli_jsonrpc_child_spawn_latency',
       kind: 'histogram',
@@ -54,100 +118,127 @@ describe('LocalDiagnostics', () => {
       unit: 'ms',
       attributes: {
         outcome: 'success',
-        path: 'C:\\private\\droid.exe',
-      },
-    });
-    diagnostics.record({
-      level: 'info',
-      name: 'runtime.turn.finished',
-      attributes: {
-        durationMs: 84,
-        outcome: 'completed',
-        terminalId: 'private-terminal-id',
+        path: 'C:\\droid\\droid.exe',
       },
     });
     await diagnostics.flush();
 
     const contents = await readFile(diagnostics.filePath, 'utf8');
-    const serializedOutput = outputLines.join('\n');
-    for (const prohibited of [
-      'secret prompt',
-      'private',
-      'workspace',
-      'requestId',
-      'sessionId',
-      'terminalId',
-      'stack trace',
-    ]) {
-      expect(contents).not.toContain(prohibited);
-      expect(serializedOutput).not.toContain(prohibited);
-    }
     const records = contents
       .trim()
       .split('\n')
       .map((line) => JSON.parse(line) as Record<string, unknown>);
-    expect(records).toMatchObject([
-      {
-        source: 'sdk',
-        level: 'error',
-        name: 'droid.sdk.error',
-        attributes: {
-          method: 'add_user_message',
-          messageByteLength: 200,
-        },
+    expect(records[0]).toMatchObject({
+      source: 'sdk',
+      name: 'droid.sdk.error',
+      attributes: {
+        requestId: 'request-9',
+        sessionId: 'session-7',
+        cwd: 'C:\\repo\\workspace',
+        method: 'add_user_message',
       },
-      {
-        source: 'sdk',
-        level: 'debug',
-        name: 'sdk.metric',
-        attributes: {
-          metric: 'cli_jsonrpc_child_spawn_latency',
-          value: 42,
-          outcome: 'success',
-        },
+    });
+    expect(records[0]?.detail).toContain(
+      'request failed for C:\\repo\\workspace',
+    );
+    expect(records[0]?.detail).toContain('at Transport.send');
+    expect(records[1]).toMatchObject({
+      source: 'sdk',
+      name: 'sdk.metric',
+      attributes: {
+        metric: 'cli_jsonrpc_child_spawn_latency',
+        value: 42,
+        path: 'C:\\droid\\droid.exe',
       },
-      {
-        source: 'host',
-        level: 'info',
-        name: 'runtime.turn.finished',
-        attributes: {
-          durationMs: 84,
-          outcome: 'completed',
-        },
-      },
-    ]);
+    });
   });
 
-  it('rotates within a bounded retention count', async () => {
+  it('scrubs credential-shaped values while keeping the rest verbatim', async () => {
     const directory = await temporaryDirectory();
     const diagnostics = new LocalDiagnostics({
       directory,
-      output: {
-        appendLine: vi.fn(),
-        show: vi.fn(),
-        dispose: vi.fn(),
-      },
-      maxFileBytes: 220,
-      backupCount: 2,
+      output: silentOutput(),
+      now: () => new Date('2026-08-11T12:00:00.000Z'),
     });
 
-    for (let index = 0; index < 8; index += 1) {
+    diagnostics.record({
+      level: 'error',
+      name: 'runtime.stream.error',
+      attributes: {
+        header: 'Authorization: Bearer abc123def456ghi789',
+        openai: 'failed with sk-proj-abcdefghijklmnop1234',
+        assignment: 'api_key=super-secret-value plus context',
+      },
+      detail:
+        'command `curl -H "Authorization: Bearer abc123def456ghi789"` failed in C:\\repo (token: ghp_abcdefghijklmnopqrst1234)',
+    });
+    await diagnostics.flush();
+
+    const contents = await readFile(diagnostics.filePath, 'utf8');
+    expect(contents).not.toContain('abc123def456ghi789');
+    expect(contents).not.toContain('sk-proj-abcdefghijklmnop1234');
+    expect(contents).not.toContain('super-secret-value');
+    expect(contents).not.toContain('ghp_abcdefghijklmnopqrst1234');
+    expect(contents).toContain('[REDACTED]');
+    // Non-credential free text stays verbatim.
+    expect(contents).toContain('failed in C:\\\\repo');
+    expect(contents).toContain('curl -H');
+  });
+
+  it('writes one file per UTC day', async () => {
+    const directory = await temporaryDirectory();
+    let now = new Date('2026-08-11T23:59:00.000Z');
+    const diagnostics = new LocalDiagnostics({
+      directory,
+      output: silentOutput(),
+      now: () => now,
+    });
+
+    diagnostics.record({ level: 'info', name: 'extension.activated' });
+    now = new Date('2026-08-12T00:01:00.000Z');
+    diagnostics.record({ level: 'info', name: 'runtime.turn.started' });
+    await diagnostics.flush();
+
+    expect((await readdir(directory)).sort()).toEqual([
+      'droidvisx-20260811.jsonl',
+      'droidvisx-20260812.jsonl',
+    ]);
+  });
+
+  it('deletes oldest whole-day files when the total budget is exceeded', async () => {
+    const directory = await temporaryDirectory();
+    // Pre-existing older days from previous runs.
+    await writeFile(
+      join(directory, 'droidvisx-20260808.jsonl'),
+      'x'.repeat(400),
+    );
+    await writeFile(
+      join(directory, 'droidvisx-20260809.jsonl'),
+      'x'.repeat(400),
+    );
+    await writeFile(join(directory, 'unrelated.txt'), 'keep me');
+
+    const diagnostics = new LocalDiagnostics({
+      directory,
+      output: silentOutput(),
+      now: () => new Date('2026-08-11T12:00:00.000Z'),
+      maxTotalBytes: 1_000,
+    });
+    for (let index = 0; index < 4; index += 1) {
       diagnostics.record({
         level: 'info',
         name: 'runtime.turn.finished',
-        attributes: {
-          durationMs: index,
-          outcome: 'completed',
-        },
+        attributes: { durationMs: index },
       });
     }
     await diagnostics.flush();
 
-    expect((await readdir(directory)).sort()).toEqual([
-      'droidvisx.jsonl',
-      'droidvisx.jsonl.1',
-      'droidvisx.jsonl.2',
-    ]);
+    const entries = (await readdir(directory)).sort();
+    // Oldest days go first; the current day's file is never deleted,
+    // and non-log files are untouched.
+    expect(entries).not.toContain('droidvisx-20260808.jsonl');
+    expect(entries).toContain('droidvisx-20260811.jsonl');
+    expect(entries).toContain('unrelated.txt');
   });
 
   it('contains Output Channel and file sink failures', async () => {
@@ -176,6 +267,27 @@ describe('LocalDiagnostics', () => {
     expect(() => diagnostics.show()).not.toThrow();
     await expect(diagnostics.flush()).resolves.toBeUndefined();
     expect(() => diagnostics.dispose()).not.toThrow();
+  });
+});
+
+describe('scrubCredentials', () => {
+  it.each([
+    [
+      'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature',
+      /Bearer/,
+    ],
+    ['api-key: sk-abcdefghijklmnop1234', /api-key/],
+    ['AWS key AKIAIOSFODNN7EXAMPLE in output', /AWS key/],
+    ['slack xoxb-12345678-abcdefghij', /slack/],
+  ])('scrubs %s', (input) => {
+    const scrubbed = scrubCredentials(input);
+    expect(scrubbed).toContain('[REDACTED]');
+  });
+
+  it('keeps ordinary paths, commands, and ids untouched', () => {
+    const input =
+      'Ran `git status` in C:\\repo for session-abc turn 4f3e; tokenizer=cl100k';
+    expect(scrubCredentials(input)).toBe(input);
   });
 });
 

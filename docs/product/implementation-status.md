@@ -211,7 +211,8 @@ Thinking 行的动作文字带从左到右的 shimmer 动画，收起/展开的�
 循环为每个 tool-start / tool-result / stream error 追加带时间戳的
 结构化诊断（`runtime.tool.started` / `runtime.tool.finished` /
 `runtime.stream.error`），在 DroidVisX Logs 输出通道形成实时步骤
-时间线；遵循诊断脱敏边界，不记录命令/路径等自由文本。Tool 行的
+时间线（2026-08-11 全保真改造后按 toolUseId 去重并携带
+tool/toolUseId/命令原文，见第 10 节）。Tool 行的
 `<details>` 改为受控 open 状态（每行 `useState`，plan 默认开），
 修复复用 DOM 节点时 `open` 残留的 React 非受控 details 缺陷。
 （4）修复 Context 弹层中 Compact 区块相对其余内容左缩进不齐
@@ -453,47 +454,96 @@ Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限�
 - `src/extension/SessionRecoveryStore.ts`
 - `src/extension/ChatController.ts`
 
-### 10. 本地结构化诊断
+### 10. 本地结构化诊断（2026-08-11 全保真改造）
 
-- 把同一个隐私安全 SDK Observability Bundle 注入 `ProcessTransport` 和
-  `createSession()` / `resumeSession()`
-- 记录 Runtime 初始化和 Turn 的结果、耗时、文本长度和投影事件数量
-- Turn 结束诊断分别记录隐私安全的 Tool Start、Progress 和 Result 事件计数，
-  用于区分“SDK 未发送可选进度”和“Bridge 丢失进度”
-- Context 读取记录开始、耗时以及 `success`、`sdk-error` 或
-  `invalid-stats` 结果；非法值只记录 `non-integer`、`negative`、
-  `invalid-accuracy` 或 `projection-error` 等安全分类，不记录原始响应或错误
-- 使用 `DroidVisX Logs` Output Channel，并贡献 `DroidVisX: Open Logs`
-  Command
-- 在 VS Code Extension Log 目录写入 JSONL；当前文件上限 512 KiB，保留
-  两个轮换备份
-- Logger、File 和 Output Channel Sink 失败不会改变 Runtime 或 Extension
-  行为
+存储与格式：
 
-- Webview 启动信标：webview HTML 内置无交互 bootstrap 脚本，捕获
-  资源加载失败、未捕获异常、未处理 Promise 拒绝，并带 10 秒启动
-  看门狗（超时在面板内渲染纯文本兜底提示）；Bundle 挂载后上报
-  `boot-ok`（含构建号，可发现陈旧缓存 Bundle）与首个非空转录提交后
-  的 `render-ok`；这些 `webview.diagnostic` 消息由
-  `DroidViewProvider` 记入诊断日志
+- 日志写入 `context.globalStorageUri/logs/`（Windows 实际路径
+  `C:\Users\<user>\AppData\Roaming\Cursor\User\globalStorage\droidvisx.droidvisx\logs\`），
+  按 UTC 日期分文件 `droidvisx-YYYYMMDD.jsonl`，所有窗口汇聚写同一份
+  当日文件；总量上限 200 MB，超限删除最旧整天文件（当天永不删除）
+- 每条记录带 `act`（激活实例 id，6 hex，生命周期分段锚点）、
+  `workspace`（工作区路径）、可选 `turn`（回合关联 id，见下）
+- `DroidVisX Logs` Output Channel 镜像保留；Logger、File 和 Output
+  Channel Sink 失败不改变 Runtime 或 Extension 行为
 
-安全限制：
+全保真策略（用户明确决定，本地个人工具）：
 
-- 不记录 Prompt/Message 文本、Tool 输入或输出、命令、路径、Session/
-  Request/Tool/Terminal/Subagent ID、原始错误、凭据、Token 或 Stack Trace
-- 字符串 Attribute 只保留短的 Code-like 值；未知 SDK Message 不进入日志
-- 例外：`webview.diagnostic` 失败信标携带有界 `detail` 自由文本
-  （≤2048 字符、剥离控制字符），因为脱敏后的空白页报错毫无诊断价值；
-  该字段仅本地落盘
+- **默认记录原文**：prompt/消息文本（`runtime.turn.started` /
+  `host.turn.accepted` 的 `detail`）、工具输入命令
+  （`runtime.tool.started.detail`）、路径、会话/回合/工具 ID、
+  原始错误与堆栈、SDK 原始日志消息与 CLI stderr
+- **唯一过滤是凭据扫除**（`scrubCredentials`）：Bearer/JWT/`sk-`/
+  `gh?_`/`github_pat_`/`xox?-`/`AKIA` 及 `key[:=]value` 赋值模式
+  替换为 `[REDACTED]`；这是密钥安全，不是隐私脱敏
+- 原 `projectAttributes` 白名单投影与 `safeCode` 值域限制已移除；
+  保留结构约束（name 字符集 ≤128、attributes ≤32 键、字符串值
+  ≤8192、detail ≤16384）
+- SDK observability 转投同样全保真（message + error 堆栈入
+  `detail`，attributes 原样通过）；SDK 内部自行 redact 的部分不可控
+
+回合关联与骨架事件：
+
+- `RuntimeDiagnosticSink` 增加可选 `beginTurnScope`/`endTurnScope`；
+  `ChatController` 在接受回合时开启、终态（completed/interrupted/
+  failed）时关闭，期间全部记录（Runtime/SDK/Webview 信标）自动带
+  顶层 `turn` 字段（Bridge turnId 明文）
+- 新增 Host 事件：`host.turn.accepted`（kind: send/edit-resend +
+  prompt 全文）、`host.turn.state`（每次状态推送）、
+  `host.interaction.opened/closed`（含 `pendingMs` 用户思考时长）、
+  `host.bridge.rejected`（入站消息校验拒绝，原始 JSON ≤2048）
+- **`emitSessionDiagnostic` 全部镜像入盘**（`host.ui.diagnostic`，
+  code + 用户可见消息），约 40 个业务失败调用点不再只发 Webview
+- `runtime.tool.started` 按 `toolUseId` 去重（每个真实工具一条，
+  带 tool/toolUseId/action/detail）；`runtime.turn.finished` 新增
+  `toolUniqueCount`（真实工具数，区别于含 delta 虚计的
+  `toolStartCount`）
+
+性能埋点（P1–P9）：
+
+- P1 首屏：`webview.boot-ok` 带 `bootMs`，`webview.render-ok` 带
+  `renderMs`（timeOrigin 起算）
+- P2 长任务：Webview `PerformanceObserver('longtask')` 聚合，每 30s
+  窗口最多一条 `webview.perf-longtask`（count/maxMs/totalMs）
+- P3 合批：rAF 消息合批统计，回合终态发 `webview.perf-batch`
+  （flushes/messages/maxBatch/maxFlushMs）
+- P4 快照大小：每次 host.snapshot 记 `host.perf.snapshot`
+  （bytes/items）
+- P5 回合出站总账：终态记 `host.perf.turn-io`（bytesOut/
+  messagesOut/每消息类型计数）
+- P6 历史加载：`runtime.history.finished`（durationMs/outcome/
+  items，激活恢复、compact、fork 三处复用）
+- P7 恢复对账：`host.perf.recovery`（recovered/loaded/reconciled/
+  reconcileMs；`reconciled ≈ recovered + loaded` 即重复 toolUseId
+  类 bug 特征）
+- P8 = tool.started 去重（见上）；P9 = 既有 `durationMs` 全保留
+
+导出：
+
+- 新命令 `DroidVisX: Export Diagnostics Bundle`
+  （`droidvisx.exportDiagnostics`）：`showSaveDialog` 选位置，打包
+  全部日志文件 + `metadata.json`（扩展/SDK/VS Code 版本、OS、
+  工作区）+ `log-analysis-playbook.md`（随 VSIX 分发）为一个 zip
+  （yazl）
+
+Webview 启动信标（既有能力保留）：资源加载失败、未捕获异常、未处理
+Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存。
 
 主要实现：
 
-- `src/extension/LocalDiagnostics.ts`
-- `src/runtime/runtimeDiagnostics.ts`
-- `src/runtime/FactoryDroidRuntime.ts`
-- `src/extension/extension.ts`
-- `src/extension/webviewHtml.ts`（启动信标脚本）
-- `src/extension/DroidViewProvider.ts`（信标入日志）
+- `src/extension/LocalDiagnostics.ts`（全保真 sink + 凭据扫除 +
+  按日轮换 + 200MB 容量）
+- `src/runtime/runtimeDiagnostics.ts`（turn 作用域接口）
+- `src/runtime/FactoryDroidRuntime.ts`（tool 去重、prompt/错误原文）
+- `src/extension/ChatController.ts`（turn 作用域、骨架事件、镜像、
+  P4–P7）
+- `src/extension/exportDiagnostics.ts`（导出命令）
+- `src/extension/extension.ts`、`src/extension/DroidViewProvider.ts`、
+  `src/extension/webviewHtml.ts`
+- `src/webview/bridge/vscode.ts`、`src/webview/assistant/App.tsx`
+  （P1–P3 信标）
+- 分析手册：`docs/product/log-analysis-playbook.md`（事件词典与
+  schema 的当前真相）
 
 ### 11. Workspace 与安全边界
 
@@ -829,11 +879,29 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   （8 files, 515.87 KB），`npx vsce package --no-dependencies` 与
   `cursor --install-extension --force` 均成功；版本号仍为 `0.0.0`，
   现有窗口需 Reload Window（或完整重启）后加载新 Bundle
+- 2026-08-11 深夜再次打包并安装含**全保真日志改造切片**的构建：
+  `droidvisx-0.0.0.vsix` 546,041 字节（9 files，新增 VSIX 内
+  `docs/product/log-analysis-playbook.md` 供导出命令打包），修改
+  时间 2026-08-11T15:24:06Z，SHA-256
+  `C8FD511C244E51C7D41A6B762FADA1EBC5FB9C74349487ABC062BFEC213FB82F`，
+  `cursor --install-extension --force` 安装成功；安装后已在新日志
+  位置 `%APPDATA%\Cursor\User\globalStorage\droidvisx.droidvisx\logs\droidvisx-20260811.jsonl`
+  确认真实激活记录落盘（含 `act`/`workspace`/全保真 attributes、
+  `bootMs`、`runtime.history.finished`、`host.perf.recovery`）
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- 全保真日志改造切片（2026-08-11 深夜）：`LocalDiagnostics` 单测
+  重写为 8 tests（全保真字段/turn 作用域、SDK 透传、凭据扫除、
+  按日分文件、200MB 最旧整天清理、Sink Failure 隔离、
+  `scrubCredentials` 正反例），`FactoryDroidRuntime` 新增
+  tool.started 按 toolUseId 去重测试；全量 `vitest`
+  34 files / 714 tests 全部通过；三个 tsconfig `typecheck` 通过；
+  build + `npx vsce package --no-dependencies` + 安装成功；真实
+  激活记录已在 globalStorage 新日志位置确认（含另一窗口的完整
+  resume 链路：boot-ok bootMs、history.finished、perf.recovery）
 - Capability Contract/Probe 聚焦测试：28/28
 - Capability 实机无提示 smoke：通过
 - 最新 Runtime/Composer/Store/Interaction/App 聚焦测试：40/40 通过

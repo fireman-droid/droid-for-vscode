@@ -5,6 +5,20 @@ import { parseWebviewMessage } from '../shared/validateMessage';
 import type { ChatController } from './ChatController';
 import { getWebviewHtml } from './webviewHtml';
 
+const BEACON_ERROR_KINDS: ReadonlySet<string> = new Set([
+  'boot-timeout',
+  'error',
+  'unhandledrejection',
+]);
+
+function safeStringify(value: unknown): string {
+  try {
+    return (JSON.stringify(value) ?? String(value)).slice(0, 2048);
+  } catch {
+    return String(value).slice(0, 2048);
+  }
+}
+
 export class DroidViewProvider
   implements vscode.WebviewViewProvider, vscode.Disposable
 {
@@ -68,15 +82,22 @@ export class DroidViewProvider
       (untrustedMessage: unknown) => {
         const message = parseWebviewMessage(untrustedMessage);
         if (message === undefined) {
+          // Validation rejections used to be silent, which made
+          // host<->webview message loss undiagnosable.
+          this.diagnostics?.record({
+            level: 'warn',
+            name: 'host.bridge.rejected',
+            attributes: { direction: 'inbound' },
+            detail: safeStringify(untrustedMessage),
+          });
           return;
         }
 
         if (message.type === 'webview.diagnostic') {
           this.diagnostics?.record({
-            level:
-              message.kind === 'boot-ok' || message.kind === 'render-ok'
-                ? 'info'
-                : 'error',
+            level: BEACON_ERROR_KINDS.has(message.kind)
+              ? 'error'
+              : 'info',
             name: `webview.${message.kind}`,
             detail: message.detail,
           });

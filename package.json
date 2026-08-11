@@ -17,7 +17,8 @@
   "activationEvents": [
     "onView:droidvisx.chat",
     "onCommand:droidvisx.focusView",
-    "onCommand:droidvisx.openLogs"
+    "onCommand:droidvisx.openLogs",
+    "onCommand:droidvisx.exportDiagnostics"
   ],
   "contributes": {
     "commands": [
@@ -28,6 +29,10 @@
       {
         "command": "droidvisx.openLogs",
         "title": "DroidVisX: Open Logs"
+      },
+      {
+        "command": "droidvisx.exportDiagnostics",
+        "title": "DroidVisX: Export Diagnostics Bundle"
       }
     ],
     "viewsContainers": {
@@ -74,7 +79,8 @@
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-markdown": "10.1.0",
-    "remark-gfm": "4.0.1"
+    "remark-gfm": "4.0.1",
+    "yazl": "^3.3.1"
   },
   "devDependencies": {
     "@testing-library/react": "16.3.0",
@@ -83,6 +89,7 @@
     "@types/react": "19.2.0",
     "@types/react-dom": "19.2.0",
     "@types/vscode": "1.108.0",
+    "@types/yazl": "^3.3.1",
     "@vscode/test-electron": "3.1.0",
     "@vscode/vsce": "3.9.2",
     "esbuild": "^0.27.0",
