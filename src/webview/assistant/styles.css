@@ -2316,6 +2316,63 @@ body {
   font-size: 11px;
 }
 
+.dvx-session-row-shell {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.dvx-session-row-shell .dvx-session-row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dvx-session-rename {
+  display: none;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dvx-muted);
+  cursor: pointer;
+}
+
+.dvx-session-row-shell:hover .dvx-session-rename,
+.dvx-session-rename:focus-visible {
+  display: inline-flex;
+}
+
+.dvx-session-rename:hover:not(:disabled) {
+  color: var(--dvx-ink);
+  background: rgb(0 0 0 / 6%);
+}
+
+.dvx-session-row-renaming {
+  display: flex;
+  cursor: default;
+}
+
+.dvx-session-rename-input {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--dvx-accent);
+  border-radius: 5px;
+  background: var(--dvx-surface, #fff);
+  color: #404040;
+  font: inherit;
+  font-size: 12px;
+}
+
+.dvx-session-rename-input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dvx-accent) 22%, transparent);
+}
+
 /* Interactions render as a flat inline block inside the conversation flow:
    one surface, hairline separators, no stacked cards. */
 .dvx-interaction-panel {

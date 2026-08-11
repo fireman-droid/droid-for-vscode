@@ -1582,6 +1582,101 @@ describe('ChatController', () => {
     expect(createRuntime).toHaveBeenCalledOnce();
   });
 
+  it('renames the active session through the runtime and retitles the catalog', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      rename: vi.fn(async () => {}),
+    });
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    // Wrong session id is ignored.
+    controller.handleMessage({
+      type: 'session.rename',
+      sessionId: 'session-other',
+      title: 'Ignored',
+    });
+    expect(runtime.rename).not.toHaveBeenCalled();
+
+    controller.handleMessage({
+      type: 'session.rename',
+      sessionId: 'session-1',
+      title: '  Fireworks demo  ',
+    });
+    expect(runtime.rename).toHaveBeenCalledWith('Fireworks demo');
+    await vi.waitFor(() => {
+      const snapshot = messages
+        .filter(
+          (message) => message.type === 'host.snapshot',
+        )
+        .at(-1);
+      expect(snapshot).toMatchObject({
+        sessions: {
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'session-1',
+              title: 'Fireworks demo',
+              active: true,
+            }),
+          ]),
+        },
+      });
+    });
+  });
+
+  it('reports a safe diagnostic when the runtime cannot rename', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      rename: vi.fn(async () => {
+        throw new Error('private SDK failure detail');
+      }),
+    });
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'session.rename',
+      sessionId: 'session-1',
+      title: 'New title',
+    });
+    await vi.waitFor(() => {
+      expect(messages.at(-1)).toMatchObject({
+        type: 'runtime.diagnostic',
+        code: 'session-rename-failed',
+      });
+    });
+    expect(JSON.stringify(messages)).not.toContain(
+      'private SDK failure detail',
+    );
+
+    // A runtime without rename support reports unsupported.
+    const bare = createMockRuntime();
+    const second = createController(
+      () => bare,
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+    );
+    ready(second.controller);
+    await waitForConnected(second.messages);
+    second.controller.handleMessage({
+      type: 'session.rename',
+      sessionId: 'session-1',
+      title: 'New title',
+    });
+    expect(second.messages.at(-1)).toMatchObject({
+      type: 'runtime.diagnostic',
+      code: 'session-rename-unsupported',
+    });
+  });
+
   it('clears stale catalog rows before loading a changed workspace', async () => {
     const workspace = {
       cwd: 'C:\\workspace-a',

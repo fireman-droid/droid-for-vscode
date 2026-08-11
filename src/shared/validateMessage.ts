@@ -6,6 +6,7 @@ import {
   MAX_EDITED_SPEC_LENGTH,
   MAX_MODEL_ID_LENGTH,
   MAX_PERMISSION_OPTION_VALUE_LENGTH,
+  MAX_SESSION_TITLE_LENGTH,
   MAX_TURN_TEXT_LENGTH,
   SESSION_AUTONOMY_LEVELS,
   SESSION_INTERACTION_MODES,
@@ -16,6 +17,7 @@ import {
   type RuntimeRetryMessage,
   type SessionContextRefreshMessage,
   type SessionNewMessage,
+  type SessionRenameMessage,
   type SessionSelectMessage,
   type SessionSettingUpdateMessage,
   type SessionsRefreshMessage,
@@ -61,6 +63,8 @@ export function parseWebviewMessage(
         return parseSessionSelect(value);
       case 'session.new':
         return parseSessionNew(value);
+      case 'session.rename':
+        return parseSessionRename(value);
       case 'session.context.refresh':
         return parseSessionContextRefresh(value);
       case 'session.setting.update':
@@ -306,6 +310,25 @@ function parseSessionNew(
   }
 
   return { type: 'session.new' };
+}
+
+function parseSessionRename(
+  value: UnknownRecord,
+): SessionRenameMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'title']) ||
+    !isId(value.sessionId) ||
+    !isNonEmptyBoundedString(value.title, MAX_SESSION_TITLE_LENGTH) ||
+    value.title.trim().length === 0
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'session.rename',
+    sessionId: value.sessionId,
+    title: value.title,
+  };
 }
 
 function parseSessionContextRefresh(

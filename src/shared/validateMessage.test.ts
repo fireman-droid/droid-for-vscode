@@ -8,6 +8,7 @@ import {
   MAX_EDITED_SPEC_LENGTH,
   MAX_MODEL_ID_LENGTH,
   MAX_PERMISSION_OPTION_VALUE_LENGTH,
+  MAX_SESSION_TITLE_LENGTH,
   MAX_TURN_TEXT_LENGTH,
 } from './bridgeMessages';
 import {
@@ -87,6 +88,11 @@ describe('parseWebviewMessage', () => {
     },
     {
       type: 'session.new',
+    },
+    {
+      type: 'session.rename',
+      sessionId: 'session-1',
+      title: 'Renamed session',
     },
     {
       type: 'session.context.refresh',
@@ -216,6 +222,20 @@ describe('parseWebviewMessage', () => {
       sessionId: 's'.repeat(MAX_BRIDGE_ID_LENGTH + 1),
     },
     { type: 'session.new', sessionId: 'session-1' },
+    { type: 'session.rename', sessionId: 'session-1', title: '' },
+    { type: 'session.rename', sessionId: 'session-1', title: '   ' },
+    {
+      type: 'session.rename',
+      sessionId: 'session-1',
+      title: 't'.repeat(MAX_SESSION_TITLE_LENGTH + 1),
+    },
+    {
+      type: 'session.rename',
+      sessionId: 'session-1',
+      title: 'Renamed',
+      extra: true,
+    },
+    { type: 'session.rename', sessionId: '', title: 'Renamed' },
     { type: 'session.context.refresh', sessionId: '' },
     {
       type: 'session.setting.update',

@@ -136,6 +136,12 @@ const EDIT_RESEND_UNSUPPORTED_MESSAGE =
 const EDIT_RESEND_FAILED_MESSAGE =
   'Droid could not rewind the session to that message.';
 const MAX_FORK_TITLE_LENGTH = 60;
+const RENAME_BLOCKED_MESSAGE =
+  'Wait for the current session operation to finish before renaming.';
+const RENAME_UNSUPPORTED_MESSAGE =
+  'This session cannot be renamed.';
+const RENAME_FAILED_MESSAGE =
+  'Droid could not rename the session.';
 const CONTEXT_READ_FAILED_MESSAGE =
   'Droid did not return context usage. Retry, then open DroidVisX Logs if this continues.';
 const MODEL_CATALOG_UNSUPPORTED_MESSAGE =
@@ -296,6 +302,9 @@ export class ChatController {
         return;
       case 'session.new':
         this.handleSessionNew();
+        return;
+      case 'session.rename':
+        this.handleSessionRename(message.sessionId, message.title);
         return;
       case 'session.context.refresh':
         this.handleContextRefresh(message.sessionId);
@@ -981,6 +990,86 @@ export class ChatController {
     }
     this.bindCatalogViewToWorkspace(workspace.cwd);
     this.startReplacement({ kind: 'new', cwd: workspace.cwd });
+  }
+
+  private handleSessionRename(sessionId: string, title: string): void {
+    const runtime = this.runtime;
+    if (
+      runtime !== null &&
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    const trimmedTitle = title.trim();
+    if (
+      runtime === null ||
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId ||
+      trimmedTitle.length === 0
+    ) {
+      return;
+    }
+    if (
+      this.sessionOperationInProgress ||
+      this.refreshInProgress
+    ) {
+      this.emitSessionDiagnostic(
+        'session-rename-blocked',
+        RENAME_BLOCKED_MESSAGE,
+      );
+      return;
+    }
+    if (typeof runtime.rename !== 'function') {
+      this.emitSessionDiagnostic(
+        'session-rename-unsupported',
+        RENAME_UNSUPPORTED_MESSAGE,
+      );
+      return;
+    }
+
+    const generation = this.runtimeGeneration;
+    const cwd = this.activeRuntimeCwd;
+    if (cwd === null) {
+      return;
+    }
+    void runtime.rename(trimmedTitle).then(
+      () => {
+        if (
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        this.sessions = {
+          ...this.sessions,
+          items: this.sessions.items.map((item) =>
+            item.id === sessionId
+              ? { ...item, title: trimmedTitle }
+              : item,
+          ),
+        };
+        this.emitSnapshot();
+      },
+      () => {
+        if (
+          this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          this.emitSessionDiagnostic(
+            'session-rename-failed',
+            RENAME_FAILED_MESSAGE,
+          );
+        }
+      },
+    );
   }
 
   private handleSessionSelect(sessionId: string): void {

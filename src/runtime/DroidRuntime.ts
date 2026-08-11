@@ -126,5 +126,10 @@ export interface DroidRuntime {
    * runtime cannot rewind.
    */
   rewind?(params: RuntimeRewindParams): Promise<RuntimeRewindResult>;
+  /**
+   * Renames the active session. Optional: absent when the runtime
+   * cannot rename sessions.
+   */
+  rename?(title: string): Promise<void>;
   dispose(): Promise<void>;
 }

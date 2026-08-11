@@ -72,6 +72,7 @@ export interface FactoryDroidSession {
   rewind?(
     params: FactoryDroidSessionRewindParams,
   ): Promise<{ session: FactoryDroidSession }>;
+  rename?(params: { title: string }): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -401,6 +402,36 @@ export class FactoryDroidRuntime implements DroidRuntime {
       },
     });
     return { sessionId: nextSession.id };
+  }
+
+  async rename(title: string): Promise<void> {
+    const session = this.requireSession();
+    if (typeof session.rename !== 'function') {
+      throw new Error('The Droid session does not support rename.');
+    }
+
+    const startedAt = performance.now();
+    try {
+      await session.rename({ title });
+    } catch (error) {
+      this.recordDiagnostic({
+        level: 'error',
+        name: 'runtime.rename.finished',
+        attributes: {
+          durationMs: Math.round(performance.now() - startedAt),
+          outcome: 'sdk-error',
+        },
+      });
+      throw error;
+    }
+    this.recordDiagnostic({
+      level: 'info',
+      name: 'runtime.rename.finished',
+      attributes: {
+        durationMs: Math.round(performance.now() - startedAt),
+        outcome: 'success',
+      },
+    });
   }
 
   dispose(): Promise<void> {
@@ -957,6 +988,9 @@ function createCatalogSessionView(
   };
   if (typeof session.rewind === 'function') {
     view.rewind = (params) => session.rewind!(params);
+  }
+  if (typeof session.rename === 'function') {
+    view.rename = (params) => session.rename!(params);
   }
   return view;
 }

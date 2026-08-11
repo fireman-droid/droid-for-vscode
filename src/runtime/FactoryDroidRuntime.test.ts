@@ -183,6 +183,27 @@ describe('FactoryDroidRuntime', () => {
     ).rejects.toThrow('does not support rewind');
   });
 
+  it('renames the active session through the SDK', async () => {
+    const session = Object.assign(
+      createMockSession(async function* () {}),
+      { rename: vi.fn(async () => {}) },
+    );
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    await runtime.rename('Fireworks demo');
+    expect(session.rename).toHaveBeenCalledWith({
+      title: 'Fireworks demo',
+    });
+
+    const bare = createMockSession(async function* () {});
+    const bareRuntime = createRuntime(async () => bare);
+    await bareRuntime.initialize('C:\\workspace');
+    await expect(bareRuntime.rename('Nope')).rejects.toThrow(
+      'does not support rename',
+    );
+  });
+
   it('projects settings and context through runtime-owned DTOs', async () => {
     const session = createMockSession(async function* () {});
     const runtime = createRuntime(async () => session);

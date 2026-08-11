@@ -232,6 +232,20 @@ export function App(): React.JSX.Element {
     },
     [vscode],
   );
+  const handleRenameSession = useCallback(
+    (targetSessionId: string, title: string): void => {
+      const trimmed = title.trim();
+      if (trimmed.length === 0) {
+        return;
+      }
+      post(vscode, {
+        type: 'session.rename',
+        sessionId: targetSessionId,
+        title: trimmed,
+      });
+    },
+    [vscode],
+  );
   const handleContextRefresh = useCallback((): void => {
     if (sessionId === null) {
       return;
@@ -304,6 +318,7 @@ export function App(): React.JSX.Element {
           sessionActionsDisabled={sessionActionsDisabled}
           onNewSession={handleNewSession}
           onSelectSession={handleSelectSession}
+          onRenameSession={handleRenameSession}
         />
         <DroidThread
           pending={showPending}
@@ -351,11 +366,13 @@ function Header({
   sessionActionsDisabled,
   onNewSession,
   onSelectSession,
+  onRenameSession,
 }: {
   readonly state: typeof initialAssistantWebviewState;
   readonly sessionActionsDisabled: boolean;
   readonly onNewSession: () => void;
   readonly onSelectSession: (sessionId: string) => void;
+  readonly onRenameSession: (sessionId: string, title: string) => void;
 }): React.JSX.Element {
   const connectionLabel = formatConnectionStatus(state.connection.status);
   return (
@@ -387,6 +404,7 @@ function Header({
           sessions={state.sessions}
           actionsDisabled={sessionActionsDisabled}
           onSelectSession={onSelectSession}
+          onRenameSession={onRenameSession}
         />
       </div>
     </header>

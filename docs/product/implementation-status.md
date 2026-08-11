@@ -46,6 +46,12 @@ Composer 附件/控件、发送后自动滚到底部、Assistant 消息 Hover Co
 Session 目录切换、Webview 内联编辑器）。该切片已通过 typecheck、
 460 项测试、构建与浏览器冒烟（双击开编辑器、Resend 发出正确
 `turn.editResend`、Fork 快照后 UI 正确截断切换）。
+
+同日追加 Session Rename：会话抽屉中活跃会话行提供 Rename 铅笔按钮，
+内联输入 Enter 提交、Escape 取消；Bridge `session.rename`（标题
+1..256 字符、去空白校验）经 Host 调用 SDK `session.rename` 并回发
+更新后的目录快照。仅支持当前活跃 Session；Archive/Delete/Favorite
+无公开 SDK 来源，保持未实现。
 下一轮严格两小时实现窗口的证据、范围、执行顺序、验收和回滚已经固化到
 `docs/preflight/`。该预研确认 Context 的累计 `used`、Breakdown
 `usedTokens`、`freeTokens` 和 Category Sum 都不能表示当前窗口；只有公开
@@ -390,7 +396,7 @@ Assistant 消息 Regenerate 与文件级 Rewind 安全检查仍未实现。
 | Retry                       | 关闭并重新创建或恢复 Runtime                                                                                                 | 不会重新发送失败 Prompt，也不是消息级 Regenerate/Reload          |
 | CLI/连接诊断                | CLI 不存在、工作区无效、未信任和初始化失败提示                                                                               | 实际登录状态、登录操作、版本兼容 UI、账户状态、升级入口          |
 | Session 搜索                | 在最多 50 条本地结果中按标题或 ID 过滤                                                                                       | daemon 全量搜索、内容搜索、分页、排序和筛选                      |
-| Session 生命周期            | List、Refresh、New、Select、Resume                                                                                           | Rename、Archive、Delete、Favorite、Fork、Compact、Rewind         |
+| Session 生命周期            | List、Refresh、New、Select、Resume、活跃 Session Rename、编辑重问触发的 Rewind Fork                                          | Archive、Delete、Favorite、显式 Fork、Compact                    |
 | Session 历史                | 文本、Thinking、Tool 生命周期                                                                                                | 历史 Image、Document 和未知 Block 会被省略并标记为 partial       |
 | Tool 展示                   | 语义动作、技术 Tool 名、有界进度计数/类别、生命周期和实时观察到的真实耗时；不显示原始 Call ID                                | 参数、输出、结果、文件变更、Apply/Open 操作                      |
 | 消息操作                    | Copy、Reuse in Composer、双击内联编辑并从该消息 Rewind 重问                                                                  | Assistant Regenerate、`getRewindInfo` 文件安全检查、文件恢复选择 |
@@ -440,7 +446,8 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
 - Skills
 - MCP Servers 和 Tools
 - 图片和文档附件能力
-- Session Rename、Archive、Fork、Compact、Rewind
+- Session Archive、显式 Fork、Compact（Rename 和编辑重问 Rewind
+  已生产接通）
 - Mission Mode 和 Events
 - Worktree Session Creation
 
@@ -533,7 +540,7 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [ ] MCP Tool 浏览
 - [ ] MCP 启用、禁用和认证
 - [ ] Custom Droids
-- [ ] Session Rename
+- [x] Session Rename（活跃 Session 内联重命名）
 - [ ] Session Archive / Unarchive
 - [ ] Session Delete
 - [ ] Session Favorite

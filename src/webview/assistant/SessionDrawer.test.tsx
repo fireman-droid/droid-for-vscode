@@ -38,6 +38,7 @@ describe('SessionDrawer', () => {
         sessions={sessions}
         actionsDisabled={false}
         onSelectSession={onSelect}
+        onRenameSession={vi.fn()}
       />,
     );
     const toggle = screen.getByRole('button', { name: 'Sessions' });
@@ -74,6 +75,7 @@ describe('SessionDrawer', () => {
         sessions={sessions}
         actionsDisabled
         onSelectSession={vi.fn()}
+        onRenameSession={vi.fn()}
       />,
     );
     await user.click(screen.getByRole('button', { name: 'Sessions' }));
@@ -87,5 +89,50 @@ describe('SessionDrawer', () => {
     expect(
       screen.queryByRole('complementary', { name: 'Session history' }),
     ).toBeNull();
+  });
+
+  it('renames only the active session through an inline editor', async () => {
+    const user = userEvent.setup();
+    const onRename = vi.fn();
+    render(
+      <SessionDrawer
+        sessions={sessions}
+        actionsDisabled={false}
+        onSelectSession={vi.fn()}
+        onRenameSession={onRename}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+
+    // Only the active session exposes the rename affordance.
+    expect(
+      screen.getAllByRole('button', { name: 'Rename session' }),
+    ).toHaveLength(1);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Rename session' }),
+    );
+    const input = screen.getByRole<HTMLInputElement>('textbox', {
+      name: 'Rename session',
+    });
+    expect(input.value).toBe('Current work');
+
+    await user.clear(input);
+    await user.type(input, '  Fireworks demo  {Enter}');
+    expect(onRename).toHaveBeenCalledOnce();
+    expect(onRename).toHaveBeenCalledWith(
+      'session-a',
+      'Fireworks demo',
+    );
+
+    // Escape cancels without renaming and keeps the drawer open.
+    await user.click(
+      screen.getByRole('button', { name: 'Rename session' }),
+    );
+    await user.keyboard('{Escape}');
+    expect(onRename).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole('complementary', { name: 'Session history' }),
+    ).toBeTruthy();
   });
 });

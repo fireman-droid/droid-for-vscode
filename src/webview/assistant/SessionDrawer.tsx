@@ -15,6 +15,7 @@ interface SessionDrawerProps {
   readonly sessions: SessionCatalogState;
   readonly actionsDisabled: boolean;
   readonly onSelectSession: (sessionId: string) => void;
+  readonly onRenameSession: (sessionId: string, title: string) => void;
 }
 
 const MODIFIED_TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
@@ -26,6 +27,7 @@ export const SessionDrawer = memo(function SessionDrawer({
   sessions,
   actionsDisabled,
   onSelectSession,
+  onRenameSession,
 }: SessionDrawerProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -143,6 +145,7 @@ export const SessionDrawer = memo(function SessionDrawer({
                       onSelect={(sessionId) =>
                         runOnce(() => onSelectSession(sessionId))
                       }
+                      onRename={onRenameSession}
                     />
                   ))}
                 </ul>
@@ -195,13 +198,65 @@ function SessionRow({
   session,
   disabled,
   onSelect,
+  onRename,
 }: {
   readonly session: SessionSummary;
   readonly disabled: boolean;
   readonly onSelect: (sessionId: string) => void;
+  readonly onRename: (sessionId: string, title: string) => void;
 }): React.JSX.Element {
+  const [renaming, setRenaming] = useState(false);
+  const [renameText, setRenameText] = useState(session.title);
+
+  useEffect(() => {
+    setRenaming(false);
+    setRenameText(session.title);
+  }, [session.title]);
+
+  const submitRename = (): void => {
+    setRenaming(false);
+    const trimmed = renameText.trim();
+    if (trimmed.length > 0 && trimmed !== session.title) {
+      onRename(session.id, trimmed);
+    } else {
+      setRenameText(session.title);
+    }
+  };
+
+  if (renaming) {
+    return (
+      <li>
+        <div className="dvx-session-row dvx-session-row-renaming">
+          <input
+            className="dvx-session-rename-input"
+            type="text"
+            aria-label="Rename session"
+            value={renameText}
+            autoFocus
+            maxLength={256}
+            onChange={(event) =>
+              setRenameText(event.currentTarget.value)
+            }
+            onBlur={submitRename}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                submitRename();
+              } else if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                setRenaming(false);
+                setRenameText(session.title);
+              }
+            }}
+          />
+        </div>
+      </li>
+    );
+  }
+
   return (
-    <li>
+    <li className="dvx-session-row-shell">
       <button
         type="button"
         className="dvx-session-row"
@@ -214,7 +269,42 @@ function SessionRow({
           {formatModifiedTime(session.modifiedTime)}
         </time>
       </button>
+      {session.active ? (
+        <button
+          type="button"
+          className="dvx-session-rename"
+          aria-label="Rename session"
+          title="Rename session"
+          disabled={disabled}
+          onClick={() => {
+            setRenameText(session.title);
+            setRenaming(true);
+          }}
+        >
+          <RenameIcon />
+        </button>
+      ) : null}
     </li>
+  );
+}
+
+function RenameIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="m11.1 2.6 2.3 2.3-7.6 7.6-3 .7.7-3 7.6-7.6Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

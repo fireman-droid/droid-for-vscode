@@ -230,6 +230,13 @@ export interface SessionNewMessage {
   readonly type: 'session.new';
 }
 
+/** Renames the currently active session. */
+export interface SessionRenameMessage {
+  readonly type: 'session.rename';
+  readonly sessionId: string;
+  readonly title: string;
+}
+
 export interface SessionContextRefreshMessage {
   readonly type: 'session.context.refresh';
   readonly sessionId: string;
@@ -272,6 +279,7 @@ export type WebviewToHostMessage =
   | SessionsRefreshMessage
   | SessionSelectMessage
   | SessionNewMessage
+  | SessionRenameMessage
   | SessionContextRefreshMessage
   | SessionSettingUpdateMessage;
 
