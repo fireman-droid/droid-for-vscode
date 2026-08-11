@@ -3,6 +3,7 @@ import {
   type AttachmentSummary,
   type HostToWebviewMessage,
   type InteractionRequest,
+  type McpAuthPhase,
   type ModelCatalogState,
   type SessionContextState,
   type SessionMcpState,
@@ -46,6 +47,12 @@ export interface AssistantWebviewState {
   readonly skills: SessionSkillsState | { status: 'idle'; items: readonly [] };
   /** MCP servers load lazily; 'idle' means not requested yet. */
   readonly mcp: SessionMcpState | { status: 'idle'; items: readonly [] };
+  /** Progress of the one in-flight MCP browser authentication flow. */
+  readonly mcpAuth: {
+    readonly serverName: string;
+    readonly phase: McpAuthPhase;
+    readonly message: string | null;
+  } | null;
   /** Attachments staged on the host for the next prompt. */
   readonly attachments: readonly AttachmentSummary[];
   /** Latest workspace file search result for the `@` mention popup. */
@@ -92,6 +99,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   modelCatalog: { status: 'loading', items: [] },
   skills: { status: 'idle', items: [] },
   mcp: { status: 'idle', items: [] },
+  mcpAuth: null,
   attachments: [],
   fileSearch: null,
   rewindInfo: null,
@@ -177,6 +185,8 @@ export function assistantWebviewReducer(
           event.sessionId === state.sessionId
             ? state.mcp
             : { status: 'idle', items: [] },
+        mcpAuth:
+          event.sessionId === state.sessionId ? state.mcpAuth : null,
         attachments:
           event.sessionId === state.sessionId ? state.attachments : [],
         fileSearch:
@@ -209,6 +219,7 @@ export function assistantWebviewReducer(
               modelCatalog: { status: 'loading', items: [] },
               skills: { status: 'idle', items: [] },
               mcp: { status: 'idle', items: [] },
+              mcpAuth: null,
               attachments: [],
               interactions: [],
               terminalTurnId: null,
@@ -266,6 +277,18 @@ export function assistantWebviewReducer(
           : event.mcp;
       return { ...state, sequence: event.sequence, mcp };
     }
+    case 'mcp.auth':
+      return event.sessionId === state.sessionId
+        ? {
+            ...state,
+            sequence: event.sequence,
+            mcpAuth: {
+              serverName: event.serverName,
+              phase: event.phase,
+              message: event.message,
+            },
+          }
+        : advance(state, event.sequence);
     case 'session.attachments':
       return event.sessionId === state.sessionId
         ? {

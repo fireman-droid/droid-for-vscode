@@ -8,6 +8,7 @@ import type {
   SessionCatalogState,
   SessionContextState,
   SessionContextStats,
+  McpAuthPhase,
   McpServerSummary,
   SessionMcpState,
   SessionSettingUpdateMessage,
@@ -97,6 +98,10 @@ import {
   createUnavailableFileDiffOpener,
   type FileDiffOpener,
 } from './fileDiffOpener';
+import {
+  createUnavailableExternalUrlOpener,
+  type ExternalUrlOpener,
+} from './externalUrlOpener';
 
 export type DroidRuntimeFactory = (
   interactionHandler: RuntimeInteractionHandler,
@@ -200,6 +205,20 @@ const MCP_LOAD_FAILED_MESSAGE =
   'Droid did not return the MCP catalog. Retry from the MCP panel.';
 const MCP_TOGGLE_FAILED_MESSAGE =
   'Droid could not update that MCP server. The list may be stale; refresh it.';
+const MCP_AUTH_UNSUPPORTED_MESSAGE =
+  'This Droid runtime does not support MCP authentication.';
+const MCP_AUTH_START_FAILED_MESSAGE =
+  'Droid could not start authentication for that MCP server.';
+const MCP_AUTH_BROWSER_MESSAGE =
+  'Complete the sign-in in your browser.';
+const MCP_AUTH_NO_URL_MESSAGE =
+  'Waiting for Droid to finish authentication.';
+const MCP_AUTH_BROWSER_FAILED_MESSAGE =
+  'The sign-in page could not be opened in a browser.';
+const MCP_AUTH_TIMEOUT_MESSAGE =
+  'Stopped waiting for browser authentication. Refresh the MCP list to check the result.';
+/** How long the host waits for an MCP auth outcome before giving up. */
+const MCP_AUTH_WAIT_TIMEOUT_MS = 10 * 60_000;
 const CONTEXT_READ_FAILED_MESSAGE =
   'Droid did not return context usage. Retry, then open DroidVisX Logs if this continues.';
 const MODEL_CATALOG_UNSUPPORTED_MESSAGE =
@@ -275,6 +294,8 @@ export class ChatController {
   } | null = null;
   private recoveryCheckpointTimer: ReturnType<typeof setTimeout> | null =
     null;
+  private mcpAuthServerName: string | null = null;
+  private mcpAuthTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly createRuntime: DroidRuntimeFactory,
@@ -291,6 +312,8 @@ export class ChatController {
       createUnavailableFileDiffOpener(),
     private readonly changeStats: ChangeStatsReader =
       createUnavailableChangeStatsReader(),
+    private readonly externalUrl: ExternalUrlOpener =
+      createUnavailableExternalUrlOpener(),
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
@@ -421,6 +444,9 @@ export class ChatController {
           message.enabled,
         );
         return;
+      case 'mcp.server.authenticate':
+        this.handleMcpServerAuthenticate(message.sessionId, message.name);
+        return;
       case 'attachment.pick':
         this.handleAttachmentPick(message.sessionId);
         return;
@@ -502,6 +528,11 @@ export class ChatController {
 
     this.checkpointRecoveryTranscript();
     this.interactions.cancelAll();
+    if (this.mcpAuthTimer !== null) {
+      clearTimeout(this.mcpAuthTimer);
+      this.mcpAuthTimer = null;
+    }
+    this.mcpAuthServerName = null;
     this.disposed = true;
     this.runtimeGeneration += 1;
     this.turnGeneration += 1;
@@ -1979,6 +2010,147 @@ export class ChatController {
           });
         },
       );
+  }
+
+  private handleMcpServerAuthenticate(
+    sessionId: string,
+    name: string,
+  ): void {
+    const runtime = this.runtime;
+    if (
+      sessionId !== this.sessionId ||
+      runtime === null ||
+      this.connection.status !== 'connected' ||
+      this.sessionOperationInProgress ||
+      this.mcpAuthServerName !== null ||
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    if (typeof runtime.authenticateMcpServer !== 'function') {
+      this.emitMcpAuth(
+        sessionId,
+        name,
+        'error',
+        MCP_AUTH_UNSUPPORTED_MESSAGE,
+      );
+      return;
+    }
+
+    this.mcpAuthServerName = name;
+    this.emitMcpAuth(sessionId, name, 'started', null);
+    const generation = this.runtimeGeneration;
+    const cwd = this.activeRuntimeCwd!;
+    const isCurrentFlow = () =>
+      this.mcpAuthServerName === name &&
+      this.isCurrentSessionOperation(runtime, generation, sessionId, cwd);
+    const finishFlow = () => {
+      if (this.mcpAuthTimer !== null) {
+        clearTimeout(this.mcpAuthTimer);
+        this.mcpAuthTimer = null;
+      }
+      this.mcpAuthServerName = null;
+    };
+    this.mcpAuthTimer = setTimeout(() => {
+      if (this.mcpAuthServerName !== name) {
+        return;
+      }
+      finishFlow();
+      if (
+        this.isCurrentSessionOperation(runtime, generation, sessionId, cwd)
+      ) {
+        this.emitMcpAuth(
+          sessionId,
+          name,
+          'error',
+          MCP_AUTH_TIMEOUT_MESSAGE,
+        );
+      }
+    }, MCP_AUTH_WAIT_TIMEOUT_MS);
+
+    void runtime
+      .authenticateMcpServer(name, (outcome) => {
+        if (this.mcpAuthServerName !== name) {
+          return;
+        }
+        const current = this.isCurrentSessionOperation(
+          runtime,
+          generation,
+          sessionId,
+          cwd,
+        );
+        finishFlow();
+        if (!current) {
+          return;
+        }
+        this.emitMcpAuth(sessionId, name, outcome, null);
+        if (outcome === 'success') {
+          this.handleMcpRefresh(sessionId);
+        }
+      })
+      .then(
+        async ({ authUrl }) => {
+          if (!isCurrentFlow()) {
+            return;
+          }
+          if (authUrl === null) {
+            this.emitMcpAuth(
+              sessionId,
+              name,
+              'browser',
+              MCP_AUTH_NO_URL_MESSAGE,
+            );
+            return;
+          }
+          const opened = await this.externalUrl.openExternal(authUrl);
+          if (!isCurrentFlow()) {
+            return;
+          }
+          this.emitMcpAuth(
+            sessionId,
+            name,
+            'browser',
+            opened
+              ? MCP_AUTH_BROWSER_MESSAGE
+              : MCP_AUTH_BROWSER_FAILED_MESSAGE,
+          );
+        },
+        () => {
+          if (this.mcpAuthServerName !== name) {
+            return;
+          }
+          const current = this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          );
+          finishFlow();
+          if (current) {
+            this.emitMcpAuth(
+              sessionId,
+              name,
+              'error',
+              MCP_AUTH_START_FAILED_MESSAGE,
+            );
+          }
+        },
+      );
+  }
+
+  private emitMcpAuth(
+    sessionId: string,
+    serverName: string,
+    phase: McpAuthPhase,
+    message: string | null,
+  ): void {
+    this.emit({
+      type: 'mcp.auth',
+      sessionId,
+      serverName,
+      phase,
+      message,
+    });
   }
 
   private emitMcp(sessionId: string, mcp: SessionMcpState): void {

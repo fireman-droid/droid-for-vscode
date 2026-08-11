@@ -377,6 +377,16 @@ export interface McpServerToggleMessage {
   readonly enabled: boolean;
 }
 
+/**
+ * Starts browser OAuth authentication for an MCP server. The host
+ * reports progress via `mcp.auth` messages.
+ */
+export interface McpServerAuthenticateMessage {
+  readonly type: 'mcp.server.authenticate';
+  readonly sessionId: string;
+  readonly name: string;
+}
+
 export type SessionSettingUpdateMessage =
   | {
       readonly type: 'session.setting.update';
@@ -423,6 +433,7 @@ export type WebviewToHostMessage =
   | SkillToggleMessage
   | McpRefreshMessage
   | McpServerToggleMessage
+  | McpServerAuthenticateMessage
   | AttachmentPickMessage
   | AttachmentAddEditorMessage
   | AttachmentAddSelectionMessage
@@ -609,6 +620,19 @@ export interface McpServerSummary {
   readonly tools: readonly McpToolSummary[];
 }
 
+export const MCP_AUTH_PHASES = [
+  'started',
+  'browser',
+  'success',
+  'cancelled',
+  'failed',
+  'error',
+] as const;
+export type McpAuthPhase = (typeof MCP_AUTH_PHASES)[number];
+
+/** Longest accepted `mcp.auth` progress message. */
+export const MAX_MCP_AUTH_MESSAGE_LENGTH = 256;
+
 export type SessionMcpState =
   | {
       readonly status: 'loading';
@@ -778,6 +802,21 @@ export interface SessionAttachmentsStateMessage {
   readonly sequence: number;
   readonly sessionId: string;
   readonly attachments: readonly AttachmentSummary[];
+}
+
+/**
+ * Progress of one browser OAuth authentication flow for an MCP
+ * server. `started` means the host accepted the request; `browser`
+ * means the OAuth URL was opened (or Droid reported none) and the
+ * host is waiting for the outcome; the remaining phases are terminal.
+ */
+export interface McpAuthStateMessage {
+  readonly type: 'mcp.auth';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly serverName: string;
+  readonly phase: McpAuthPhase;
+  readonly message: string | null;
 }
 
 /**
@@ -962,6 +1001,7 @@ export type HostToWebviewMessage =
   | ModelCatalogStateMessage
   | SessionSkillsStateMessage
   | SessionMcpStateMessage
+  | McpAuthStateMessage
   | SessionAttachmentsStateMessage
   | WorkspaceFilesMessage
   | RewindInfoStateMessage

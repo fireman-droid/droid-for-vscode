@@ -23,6 +23,7 @@ import {
   MAX_RUNTIME_MODEL_CATALOG_ITEMS,
   MAX_RUNTIME_MODEL_DISPLAY_NAME_LENGTH,
   MAX_RUNTIME_MODEL_ID_LENGTH,
+  MAX_RUNTIME_MCP_AUTH_URL_LENGTH,
   MAX_RUNTIME_MCP_NAME_LENGTH,
   MAX_RUNTIME_MCP_SERVERS,
   MAX_RUNTIME_MCP_TOOLS_PER_SERVER,
@@ -53,6 +54,8 @@ import {
   type RuntimeSessionSettings,
   type RuntimeSessionSettingUpdate,
   type RuntimeSessionTarget,
+  type RuntimeMcpAuthOutcome,
+  type RuntimeMcpAuthStart,
   type RuntimeMcpServer,
   type RuntimeMcpServerStatus,
   type RuntimeMcpTool,
@@ -68,6 +71,13 @@ import {
   type RuntimeInteractionHandler,
 } from './runtimeInteractions';
 import type { RuntimeDiagnosticSink } from './runtimeDiagnostics';
+
+/** How long to wait for the OAuth URL notification after an accepted
+ * MCP authentication request. */
+const MCP_AUTH_URL_WAIT_MS = 15_000;
+/** How long the one-shot MCP auth completion subscription stays alive
+ * before it is dropped without an outcome. */
+const MCP_AUTH_COMPLETION_SUBSCRIPTION_MS = 10 * 60_000;
 
 export interface FactoryDroidSessionRewindParams {
   readonly messageId: string;
@@ -130,6 +140,13 @@ export interface FactoryDroidSession {
     enabled: boolean;
     settingsLevel: 'user';
   }): Promise<{ success: boolean }>;
+  authenticateMcpServer?(params: {
+    serverName: string;
+  }): Promise<{ success: boolean }>;
+  onNotification?(
+    callback: (notification: Record<string, unknown>) => void,
+    filter?: { type?: string },
+  ): () => void;
   close(): Promise<void>;
 }
 
@@ -759,6 +776,106 @@ export class FactoryDroidRuntime implements DroidRuntime {
     }
   }
 
+  async authenticateMcpServer(
+    name: string,
+    onCompleted: (outcome: RuntimeMcpAuthOutcome) => void,
+  ): Promise<RuntimeMcpAuthStart> {
+    const session = this.requireSession();
+    if (
+      typeof session.authenticateMcpServer !== 'function' ||
+      typeof session.onNotification !== 'function'
+    ) {
+      throw new Error(
+        'The Droid session does not support MCP authentication.',
+      );
+    }
+
+    let authUrl: string | null = null;
+    let resolveUrl: (() => void) | null = null;
+    const urlArrived = new Promise<void>((resolve) => {
+      resolveUrl = resolve;
+    });
+    const unsubscribeRequired = session.onNotification(
+      (notification) => {
+        if (notification['serverName'] !== name) {
+          return;
+        }
+        const url = notification['authUrl'];
+        if (
+          typeof url === 'string' &&
+          url.length > 0 &&
+          url.length <= MAX_RUNTIME_MCP_AUTH_URL_LENGTH &&
+          /^https?:\/\//.test(url)
+        ) {
+          authUrl = url;
+        }
+        resolveUrl?.();
+      },
+      { type: 'mcp_auth_required' },
+    );
+
+    let completionDone = false;
+    let completionTimer: ReturnType<typeof setTimeout> | null = null;
+    let unsubscribeCompleted = () => {};
+    const finishCompletion = () => {
+      if (completionDone) {
+        return;
+      }
+      completionDone = true;
+      if (completionTimer !== null) {
+        clearTimeout(completionTimer);
+        completionTimer = null;
+      }
+      unsubscribeCompleted();
+    };
+    unsubscribeCompleted = session.onNotification(
+      (notification) => {
+        if (notification['serverName'] !== name || completionDone) {
+          return;
+        }
+        const outcome = notification['outcome'];
+        if (
+          outcome === 'success' ||
+          outcome === 'cancelled' ||
+          outcome === 'failed'
+        ) {
+          finishCompletion();
+          onCompleted(outcome);
+        }
+      },
+      { type: 'mcp_auth_completed' },
+    );
+    // Stop listening eventually so an abandoned browser flow does not
+    // leave a subscription behind for the session's whole lifetime.
+    completionTimer = setTimeout(
+      finishCompletion,
+      MCP_AUTH_COMPLETION_SUBSCRIPTION_MS,
+    );
+
+    try {
+      const result = await session.authenticateMcpServer({
+        serverName: name,
+      });
+      if (result.success !== true) {
+        throw new Error('Droid refused to start MCP authentication.');
+      }
+      // The OAuth URL arrives as a separate notification shortly after
+      // the request is accepted; wait briefly for it.
+      await Promise.race([
+        urlArrived,
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, MCP_AUTH_URL_WAIT_MS);
+        }),
+      ]);
+      return { authUrl };
+    } catch (error) {
+      finishCompletion();
+      throw error;
+    } finally {
+      unsubscribeRequired();
+    }
+  }
+
   dispose(): Promise<void> {
     if (this.disposal) {
       return this.disposal;
@@ -1340,6 +1457,14 @@ function createCatalogSessionView(
   }
   if (typeof session.toggleMcpServer === 'function') {
     view.toggleMcpServer = (params) => session.toggleMcpServer!(params);
+  }
+  if (typeof session.authenticateMcpServer === 'function') {
+    view.authenticateMcpServer = (params) =>
+      session.authenticateMcpServer!(params);
+  }
+  if (typeof session.onNotification === 'function') {
+    view.onNotification = (callback, filter) =>
+      session.onNotification!(callback, filter);
   }
   return view;
 }

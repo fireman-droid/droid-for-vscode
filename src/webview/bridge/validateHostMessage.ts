@@ -30,6 +30,8 @@ import {
   MAX_SKILL_DESCRIPTION_LENGTH,
   MAX_SKILL_ITEMS,
   MAX_SKILL_NAME_LENGTH,
+  MAX_MCP_AUTH_MESSAGE_LENGTH,
+  MCP_AUTH_PHASES,
   MCP_SERVER_STATUSES,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
@@ -75,6 +77,7 @@ import {
   type SessionInteractionMode,
   type SessionReasoningEffort,
   type SessionSettingsState,
+  type McpAuthPhase,
   type McpServerStatus,
   type McpServerSummary,
   type McpToolSummary,
@@ -168,6 +171,8 @@ export function readHostMessage(
         return parseSessionSkillsMessage(value);
       case 'session.mcp':
         return parseSessionMcpMessage(value);
+      case 'mcp.auth':
+        return parseMcpAuth(value);
       case 'session.attachments':
         return parseSessionAttachmentsMessage(value);
       case 'workspace.files':
@@ -1583,6 +1588,47 @@ function isMcpServerStatus(value: unknown): value is McpServerStatus {
   return (
     typeof value === 'string' &&
     (MCP_SERVER_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+function parseMcpAuth(
+  value: UnknownRecord,
+): Extract<HostToWebviewMessage, { type: 'mcp.auth' }> | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sequence',
+      'sessionId',
+      'serverName',
+      'phase',
+      'message',
+    ]) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId) ||
+    !isNonEmptyBoundedString(value.serverName, MAX_MCP_NAME_LENGTH) ||
+    !isMcpAuthPhase(value.phase) ||
+    (value.message !== null &&
+      !isNonEmptyBoundedString(
+        value.message,
+        MAX_MCP_AUTH_MESSAGE_LENGTH,
+      ))
+  ) {
+    return undefined;
+  }
+  return {
+    type: 'mcp.auth',
+    sequence: value.sequence,
+    sessionId: value.sessionId,
+    serverName: value.serverName,
+    phase: value.phase,
+    message: value.message,
+  };
+}
+
+function isMcpAuthPhase(value: unknown): value is McpAuthPhase {
+  return (
+    typeof value === 'string' &&
+    (MCP_AUTH_PHASES as readonly string[]).includes(value)
   );
 }
 

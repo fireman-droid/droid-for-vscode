@@ -12,6 +12,7 @@ import {
 } from './SessionRecoveryStore';
 import { createGitChangeStatsReader } from './changeStats';
 import { createVscodeAttachmentSources } from './vscodeAttachmentSources';
+import { createVscodeExternalUrlOpener } from './vscodeExternalUrlOpener';
 import { createVscodeFileDiffOpener } from './vscodeFileDiff';
 
 const focusViewCommand = 'droidvisx.focusView';
@@ -52,6 +53,7 @@ export function activate(context: vscode.ExtensionContext): void {
     createGitChangeStatsReader(
       () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
     ),
+    createVscodeExternalUrlOpener(),
   );
   const provider = new DroidViewProvider(
     context.extensionUri,

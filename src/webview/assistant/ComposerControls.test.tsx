@@ -55,6 +55,8 @@ describe('ComposerControls', () => {
         mcp={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
       />,
     );
 
@@ -86,6 +88,8 @@ describe('ComposerControls', () => {
         mcp={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
       />,
     );
 
@@ -133,6 +137,8 @@ describe('ComposerControls', () => {
         mcp={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
       />,
     );
 
@@ -182,6 +188,8 @@ describe('ComposerControls', () => {
         mcp={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
       />,
     );
 
@@ -281,6 +289,8 @@ describe('ComposerControls', () => {
         mcp={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
       />,
     );
 
@@ -345,6 +355,8 @@ describe('ComposerControls', () => {
         mcp={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
       />,
     );
 
@@ -376,6 +388,8 @@ describe('ComposerControls', () => {
         mcp={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
       />,
     );
     expect(screen.getByRole('alert').textContent).toContain(
@@ -407,6 +421,8 @@ describe('ComposerControls', () => {
         mcp={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
       />,
     );
 
@@ -454,6 +470,8 @@ describe('ComposerControls', () => {
         mcp={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
       />,
     );
 
@@ -487,6 +505,7 @@ describe('ComposerControls', () => {
     const user = userEvent.setup();
     const onMcpRefresh = vi.fn();
     const onMcpServerToggle = vi.fn();
+    const onMcpServerAuthenticate = vi.fn();
     const { rerender } = render(
       <ComposerControls
         settings={settings}
@@ -507,6 +526,8 @@ describe('ComposerControls', () => {
         mcp={{ status: 'idle', items: [] }}
         onMcpRefresh={onMcpRefresh}
         onMcpServerToggle={onMcpServerToggle}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
       />,
     );
 
@@ -567,11 +588,20 @@ describe('ComposerControls', () => {
         }}
         onMcpRefresh={onMcpRefresh}
         onMcpServerToggle={onMcpServerToggle}
+        mcpAuth={null}
+        onMcpServerAuthenticate={onMcpServerAuthenticate}
       />,
     );
 
     expect(screen.getByText('linear')).toBeDefined();
     expect(screen.getByText('needs auth')).toBeDefined();
+
+    // Only servers that need auth offer the browser sign-in button.
+    const authButton = screen.getByRole('button', {
+      name: 'Authenticate in browser',
+    });
+    await user.click(authButton);
+    expect(onMcpServerAuthenticate).toHaveBeenCalledWith('sentry');
 
     // Tools stay collapsed until expanded, then show read-only and off badges.
     expect(screen.queryByText('list-issues')).toBeNull();
@@ -626,6 +656,8 @@ describe('ComposerControls', () => {
         mcp={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
       />,
     );
 
@@ -663,6 +695,8 @@ describe('ComposerControls', () => {
         mcp={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
       />,
     );
 

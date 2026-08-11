@@ -8,6 +8,7 @@ import {
 
 import type {
   ConfirmedSessionSettings,
+  McpAuthPhase,
   McpServerSummary,
   ModelCatalogItem,
   ModelCatalogState,
@@ -33,6 +34,13 @@ export type McpPanelState =
   | SessionMcpState
   | { readonly status: 'idle'; readonly items: readonly [] };
 
+/** Progress of the one in-flight MCP browser authentication flow. */
+export interface McpAuthProgress {
+  readonly serverName: string;
+  readonly phase: McpAuthPhase;
+  readonly message: string | null;
+}
+
 interface ComposerControlsProps {
   readonly settings: SessionSettingsState;
   readonly context: SessionContextState;
@@ -48,6 +56,8 @@ interface ComposerControlsProps {
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onMcpRefresh: () => void;
   readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
+  readonly mcpAuth: McpAuthProgress | null;
+  readonly onMcpServerAuthenticate: (name: string) => void;
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
   readonly onAttachSelection: () => void;
@@ -124,6 +134,8 @@ export function ComposerControls({
   onSkillToggle,
   onMcpRefresh,
   onMcpServerToggle,
+  mcpAuth,
+  onMcpServerAuthenticate,
   onAttachFiles,
   onAttachEditor,
   onAttachSelection,
@@ -271,6 +283,8 @@ export function ComposerControls({
           onSkillToggle={onSkillToggle}
           onMcpRefresh={onMcpRefresh}
           onMcpServerToggle={onMcpServerToggle}
+          mcpAuth={mcpAuth}
+          onMcpServerAuthenticate={onMcpServerAuthenticate}
           onAttach={(source) => {
             setOpenPanel(null);
             if (source === 'files') {
@@ -370,6 +384,8 @@ function SettingsPopover({
   onSkillToggle,
   onMcpRefresh,
   onMcpServerToggle,
+  mcpAuth,
+  onMcpServerAuthenticate,
   onAttach,
 }: {
   readonly id: string;
@@ -390,6 +406,8 @@ function SettingsPopover({
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onMcpRefresh: () => void;
   readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
+  readonly mcpAuth: McpAuthProgress | null;
+  readonly onMcpServerAuthenticate: (name: string) => void;
   readonly onAttach: (source: AttachSource) => void;
 }): React.JSX.Element {
   const [query, setQuery] = useState('');
@@ -458,10 +476,12 @@ function SettingsPopover({
       >
         <McpPanel
           mcp={mcp}
+          auth={mcpAuth}
           disabled={disabled}
           onBack={() => onViewChange('root')}
           onRefresh={onMcpRefresh}
           onToggle={onMcpServerToggle}
+          onAuthenticate={onMcpServerAuthenticate}
         />
       </div>
     );
@@ -714,18 +734,25 @@ function SkillRow({
 
 function McpPanel({
   mcp,
+  auth,
   disabled,
   onBack,
   onRefresh,
   onToggle,
+  onAuthenticate,
 }: {
   readonly mcp: McpPanelState;
+  readonly auth: McpAuthProgress | null;
   readonly disabled: boolean;
   readonly onBack: () => void;
   readonly onRefresh: () => void;
   readonly onToggle: (name: string, enabled: boolean) => void;
+  readonly onAuthenticate: (name: string) => void;
 }): React.JSX.Element {
   const busy = mcp.status === 'loading' || mcp.status === 'idle';
+  const authPending =
+    auth !== null &&
+    (auth.phase === 'started' || auth.phase === 'browser');
   return (
     <div className="dvx-skills-panel">
       <div className="dvx-popover-heading">
@@ -773,8 +800,11 @@ function McpPanel({
             <McpServerRow
               key={server.name}
               server={server}
+              auth={auth?.serverName === server.name ? auth : null}
               disabled={disabled || busy}
+              authDisabled={disabled || busy || authPending}
               onToggle={onToggle}
+              onAuthenticate={onAuthenticate}
             />
           ))}
         </ul>
@@ -785,16 +815,38 @@ function McpPanel({
 
 function McpServerRow({
   server,
+  auth,
   disabled,
+  authDisabled,
   onToggle,
+  onAuthenticate,
 }: {
   readonly server: McpServerSummary;
+  readonly auth: McpAuthProgress | null;
   readonly disabled: boolean;
+  readonly authDisabled: boolean;
   readonly onToggle: (name: string, enabled: boolean) => void;
+  readonly onAuthenticate: (name: string) => void;
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const enabled = server.status !== 'disabled';
   const toolCount = server.toolCount ?? server.tools.length;
+  const authPending =
+    auth !== null &&
+    (auth.phase === 'started' || auth.phase === 'browser');
+  const authStatusText =
+    auth === null
+      ? null
+      : auth.message ??
+        (auth.phase === 'started'
+          ? 'Starting authentication…'
+          : auth.phase === 'success'
+            ? 'Authentication succeeded.'
+            : auth.phase === 'cancelled'
+              ? 'Authentication was cancelled.'
+              : auth.phase === 'failed'
+                ? 'Authentication failed.'
+                : null);
   return (
     <li className="dvx-skill-row dvx-mcp-row">
       <div className="dvx-skill-copy">
@@ -812,6 +864,29 @@ function McpServerRow({
             <span className="dvx-skill-location">needs auth</span>
           ) : null}
         </span>
+        {server.requiresAuth ? (
+          <button
+            type="button"
+            className="dvx-mcp-auth-button"
+            disabled={authDisabled}
+            onClick={() => onAuthenticate(server.name)}
+          >
+            {authPending ? 'Authenticating…' : 'Authenticate in browser'}
+          </button>
+        ) : null}
+        {authStatusText !== null ? (
+          <span
+            className={`dvx-mcp-auth-status${
+              auth !== null &&
+              (auth.phase === 'failed' || auth.phase === 'error')
+                ? ' dvx-error-text'
+                : ''
+            }`}
+            role="status"
+          >
+            {authStatusText}
+          </span>
+        ) : null}
         {server.tools.length > 0 ? (
           <button
             type="button"

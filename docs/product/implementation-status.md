@@ -70,8 +70,8 @@ authUrl、inputSchema、配置来源），服务器与工具均去重限量。Ho
 `session.mcp` 消息回发 loading/ready/error/unsupported 状态；启停经
 SDK `toggleMcpServer`（settingsLevel: user）后重新 list 回发。UI 显示
 状态圆点（connected/connecting/failed/disabled）、needs auth 徽标，
-Tool 列表可展开并带 read-only/off 徽标。MCP 认证流程（OAuth URL 跳转）
-无安全公开渠道，保持未实现。
+Tool 列表可展开并带 read-only/off 徽标。MCP 认证流程后续已实现，
+见下文 MCP 浏览器认证段落。
 
 同日追加 Session Compact：Context 浮层新增 “Compact conversation”
 动作（`session.compact` Bridge 消息）。Runtime 经 SDK `session.compact()`
@@ -165,6 +165,18 @@ SDK `getRewindInfo`，有受影响文件时编辑器内显示恢复勾选项
 （默认保留当前工作区），勾选后 Rewind 以 SDK 报告的
 `filesToRestore`/`filesToDelete` 恢复文件。三个切片均已通过
 typecheck 与全量 615 项测试。
+
+同日追加 MCP 浏览器认证：MCP 面板中 needs auth 的服务器行新增
+“Authenticate in browser” 按钮（Bridge `mcp.server.authenticate` /
+`mcp.auth` 消息）。Runtime 经 SDK `session.authenticateMcpServer`
+发起认证，并订阅 `mcp_auth_required` / `mcp_auth_completed` 通知：
+前者带出经校验的 http(s) OAuth URL（≤2048 字符），后者一次性回报
+success/cancelled/failed 结果（订阅 10 分钟后自动释放）。Host 打开
+系统浏览器（`vscode.env.openExternal`）、以
+started/browser/终态阶段广播 `mcp.auth`、同一时间只允许一个认证流、
+10 分钟无结果则以超时错误收尾；success 后自动重新拉取 MCP 目录。
+Webview 在服务器行内显示按钮、进行中状态与结果文案。OAuth URL 只在
+Host/Runtime 流转，不进 Webview。
 
 ### 当前 Figma Design 还原边界
 
@@ -655,7 +667,8 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [x] MCP Server 列表（`+` 面板 MCP servers 视图，状态与 needs auth 徽标）
 - [x] MCP Tool 浏览（服务器行内展开，read-only/off 徽标）
 - [x] MCP Server 启用与禁用（SDK `toggleMcpServer`，user 级设置）
-- [ ] MCP 认证（OAuth 跳转无安全公开渠道）
+- [x] MCP 认证（MCP 面板 “Authenticate in browser”，SDK
+      `authenticateMcpServer` + auth 通知，系统浏览器完成 OAuth）
 - [ ] Custom Droids
 - [x] Session Rename（活跃 Session 内联重命名）
 - [ ] Session Archive / Unarchive

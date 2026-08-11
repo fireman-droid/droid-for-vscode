@@ -26,7 +26,11 @@ import {
   type SessionContextState,
   type SessionSettingsState,
 } from '../../shared/bridgeMessages';
-import type { McpPanelState, SkillsPanelState } from './ComposerControls';
+import type {
+  McpAuthProgress,
+  McpPanelState,
+  SkillsPanelState,
+} from './ComposerControls';
 import {
   ComposerControls,
   type SessionSettingSelection,
@@ -120,6 +124,8 @@ interface DroidThreadProps {
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onMcpRefresh: () => void;
   readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
+  readonly mcpAuth: McpAuthProgress | null;
+  readonly onMcpServerAuthenticate: (name: string) => void;
   readonly attachments: readonly AttachmentSummary[];
   readonly fileSearch: FileSearchResult | null;
   readonly onFileSearch: (requestId: string, query: string) => void;
@@ -170,6 +176,8 @@ export const DroidThread = memo(function DroidThread({
   onSkillToggle,
   onMcpRefresh,
   onMcpServerToggle,
+  mcpAuth,
+  onMcpServerAuthenticate,
   attachments,
   fileSearch,
   onFileSearch,
@@ -275,6 +283,8 @@ export const DroidThread = memo(function DroidThread({
             onSkillToggle={onSkillToggle}
             onMcpRefresh={onMcpRefresh}
             onMcpServerToggle={onMcpServerToggle}
+            mcpAuth={mcpAuth}
+            onMcpServerAuthenticate={onMcpServerAuthenticate}
             attachments={attachments}
             fileSearch={fileSearch}
             onFileSearch={onFileSearch}
@@ -821,6 +831,8 @@ function Composer({
   onSkillToggle,
   onMcpRefresh,
   onMcpServerToggle,
+  mcpAuth,
+  onMcpServerAuthenticate,
   attachments,
   fileSearch,
   onFileSearch,
@@ -851,6 +863,8 @@ function Composer({
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onMcpRefresh: () => void;
   readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
+  readonly mcpAuth: McpAuthProgress | null;
+  readonly onMcpServerAuthenticate: (name: string) => void;
   readonly attachments: readonly AttachmentSummary[];
   readonly fileSearch: FileSearchResult | null;
   readonly onFileSearch: (requestId: string, query: string) => void;
@@ -1046,6 +1060,8 @@ function Composer({
             onSkillToggle={onSkillToggle}
             onMcpRefresh={onMcpRefresh}
             onMcpServerToggle={onMcpServerToggle}
+            mcpAuth={mcpAuth}
+            onMcpServerAuthenticate={onMcpServerAuthenticate}
             onAttachFiles={onAttachFiles}
             onAttachEditor={onAttachEditor}
             onAttachSelection={onAttachSelection}

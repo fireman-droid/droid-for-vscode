@@ -150,6 +150,25 @@ export interface RuntimeMcpServer {
   readonly tools: readonly RuntimeMcpTool[];
 }
 
+export const RUNTIME_MCP_AUTH_OUTCOMES = [
+  'success',
+  'cancelled',
+  'failed',
+] as const;
+export type RuntimeMcpAuthOutcome =
+  (typeof RUNTIME_MCP_AUTH_OUTCOMES)[number];
+
+/** Longest accepted OAuth URL for an MCP authentication flow. */
+export const MAX_RUNTIME_MCP_AUTH_URL_LENGTH = 2048;
+
+export interface RuntimeMcpAuthStart {
+  /**
+   * Browser URL the user must visit to finish authentication, or null
+   * when Droid reported no OAuth step for this server.
+   */
+  readonly authUrl: string | null;
+}
+
 export const MAX_RUNTIME_ATTACHMENTS = 8;
 /** Base64 payload cap for one image attachment (~4 MiB decoded). */
 export const MAX_RUNTIME_IMAGE_BASE64_LENGTH = 6 * 1024 * 1024;
@@ -280,5 +299,15 @@ export interface DroidRuntime {
    * level. Optional: absent when unsupported.
    */
   setMcpServerEnabled?(name: string, enabled: boolean): Promise<void>;
+  /**
+   * Starts OAuth authentication for an MCP server. Resolves with the
+   * browser URL once Droid reports it (or null when no OAuth step is
+   * needed). `onCompleted` fires at most once when Droid later reports
+   * the flow's outcome. Optional: absent when unsupported.
+   */
+  authenticateMcpServer?(
+    name: string,
+    onCompleted: (outcome: RuntimeMcpAuthOutcome) => void,
+  ): Promise<RuntimeMcpAuthStart>;
   dispose(): Promise<void>;
 }

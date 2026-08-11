@@ -115,6 +115,11 @@ describe('parseWebviewMessage', () => {
       enabled: false,
     },
     {
+      type: 'mcp.server.authenticate',
+      sessionId: 'session-1',
+      name: 'linear',
+    },
+    {
       type: 'session.compact',
       sessionId: 'session-1',
     },
@@ -447,6 +452,22 @@ describe('parseWebviewMessage', () => {
       type: 'mcp.server.toggle',
       sessionId: 'session-1',
       name: 'linear',
+    },
+    {
+      type: 'mcp.server.authenticate',
+      sessionId: 'session-1',
+      name: '',
+    },
+    {
+      type: 'mcp.server.authenticate',
+      sessionId: 'session-1',
+      name: 'l'.repeat(129),
+    },
+    {
+      type: 'mcp.server.authenticate',
+      sessionId: 'session-1',
+      name: 'linear',
+      extra: true,
     },
     {
       type: 'session.setting.update',

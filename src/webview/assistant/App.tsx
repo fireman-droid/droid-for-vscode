@@ -378,6 +378,19 @@ export function App(): React.JSX.Element {
     },
     [sessionId, vscode],
   );
+  const handleMcpServerAuthenticate = useCallback(
+    (name: string): void => {
+      if (sessionId === null) {
+        return;
+      }
+      post(vscode, {
+        type: 'mcp.server.authenticate',
+        sessionId,
+        name,
+      });
+    },
+    [sessionId, vscode],
+  );
   const handleAttachFiles = useCallback((): void => {
     if (sessionId === null) {
       return;
@@ -508,6 +521,8 @@ export function App(): React.JSX.Element {
           onSkillToggle={handleSkillToggle}
           onMcpRefresh={handleMcpRefresh}
           onMcpServerToggle={handleMcpServerToggle}
+          mcpAuth={state.mcpAuth}
+          onMcpServerAuthenticate={handleMcpServerAuthenticate}
           attachments={state.attachments}
           fileSearch={state.fileSearch}
           onFileSearch={handleFileSearch}

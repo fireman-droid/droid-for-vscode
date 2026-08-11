@@ -34,6 +34,7 @@ import type {
   ChangeStatsReader,
   FileChangeStat,
 } from './changeStats';
+import type { ExternalUrlOpener } from './externalUrlOpener';
 import { ChatController } from './ChatController';
 import {
   SessionRecoveryStore,
@@ -2367,6 +2368,94 @@ describe('ChatController', () => {
     expect(JSON.stringify(messages)).not.toContain('aW1n');
   });
 
+  it('runs the MCP browser auth flow and refreshes the list on success', async () => {
+    let completed:
+      | ((outcome: 'success' | 'cancelled' | 'failed') => void)
+      | null = null;
+    const runtime = Object.assign(createMockRuntime(), {
+      listMcpServers: vi.fn(async () => []),
+      setMcpServerEnabled: vi.fn(async () => {}),
+      authenticateMcpServer: vi.fn(
+        async (
+          _name: string,
+          onCompleted: (
+            outcome: 'success' | 'cancelled' | 'failed',
+          ) => void,
+        ) => {
+          completed = onCompleted;
+          return { authUrl: 'https://auth.example/flow' };
+        },
+      ),
+    });
+    const opened: string[] = [];
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        openExternal: async (url) => {
+          opened.push(url);
+          return true;
+        },
+      },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'mcp.server.authenticate',
+      sessionId: 'session-1',
+      name: 'sentry',
+    });
+    await vi.waitFor(() => {
+      expect(mcpAuthMessages(messages).map(({ phase }) => phase)).toEqual([
+        'started',
+        'browser',
+      ]);
+    });
+    expect(opened).toEqual(['https://auth.example/flow']);
+    expect(runtime.authenticateMcpServer).toHaveBeenCalledTimes(1);
+
+    // A second request while one flow is pending is ignored.
+    controller.handleMessage({
+      type: 'mcp.server.authenticate',
+      sessionId: 'session-1',
+      name: 'linear',
+    });
+    expect(runtime.authenticateMcpServer).toHaveBeenCalledTimes(1);
+
+    completed!('success');
+    await vi.waitFor(() => {
+      expect(mcpAuthMessages(messages).at(-1)).toMatchObject({
+        serverName: 'sentry',
+        phase: 'success',
+      });
+    });
+    // Success refreshes the MCP catalog.
+    await vi.waitFor(() => {
+      expect(runtime.listMcpServers).toHaveBeenCalled();
+    });
+
+    // A runtime without the capability answers with an error phase.
+    const unsupported = createController(() => createMockRuntime());
+    ready(unsupported.controller);
+    await waitForConnected(unsupported.messages);
+    unsupported.controller.handleMessage({
+      type: 'mcp.server.authenticate',
+      sessionId: 'session-1',
+      name: 'sentry',
+    });
+    expect(mcpAuthMessages(unsupported.messages).at(-1)).toMatchObject({
+      serverName: 'sentry',
+      phase: 'error',
+    });
+  });
+
   it('answers rewind info requests with file-impact counts', async () => {
     const runtime = Object.assign(createMockRuntime(), {
       getRewindInfo: vi.fn(async () => ({
@@ -4016,6 +4105,7 @@ function createController(
   attachments?: AttachmentSources,
   fileDiff?: FileDiffOpener,
   changeStats?: ChangeStatsReader,
+  externalUrl?: ExternalUrlOpener,
 ) {
   const controller = new ChatController(
     createRuntime,
@@ -4030,6 +4120,7 @@ function createController(
     attachments,
     fileDiff,
     changeStats,
+    externalUrl,
   );
   const messages: HostToWebviewMessage[] = [];
   controller.subscribe((message) => {
@@ -4267,6 +4358,17 @@ function mcpMessages(
       HostToWebviewMessage,
       { type: 'session.mcp' }
     > => message.type === 'session.mcp',
+  );
+}
+
+function mcpAuthMessages(
+  messages: readonly HostToWebviewMessage[],
+): Extract<HostToWebviewMessage, { type: 'mcp.auth' }>[] {
+  return messages.filter(
+    (message): message is Extract<
+      HostToWebviewMessage,
+      { type: 'mcp.auth' }
+    > => message.type === 'mcp.auth',
   );
 }
 

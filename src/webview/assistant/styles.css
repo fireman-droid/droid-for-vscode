@@ -2870,6 +2870,34 @@ body {
   text-decoration: underline;
 }
 
+.dvx-mcp-auth-button {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 3px 10px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 999px;
+  background: var(--dvx-surface);
+  color: var(--dvx-ink);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.dvx-mcp-auth-button:hover:not(:disabled) {
+  border-color: var(--dvx-accent);
+  color: var(--dvx-accent);
+}
+
+.dvx-mcp-auth-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.dvx-mcp-auth-status {
+  color: var(--dvx-muted);
+  font-size: 11px;
+}
+
 .dvx-mcp-tool-list {
   display: flex;
   flex-direction: column;

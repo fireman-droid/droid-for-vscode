@@ -24,6 +24,7 @@ import {
   type AttachmentRemoveMessage,
   type FileOpenDiffMessage,
   type McpRefreshMessage,
+  type McpServerAuthenticateMessage,
   type McpServerToggleMessage,
   type PermissionRespondMessage,
   type RewindInfoRequestMessage,
@@ -101,6 +102,8 @@ export function parseWebviewMessage(
         return parseMcpRefresh(value);
       case 'mcp.server.toggle':
         return parseMcpServerToggle(value);
+      case 'mcp.server.authenticate':
+        return parseMcpServerAuthenticate(value);
       case 'attachment.pick':
         return parseAttachmentPick(value);
       case 'attachment.addEditor':
@@ -543,6 +546,24 @@ function parseMcpServerToggle(
     sessionId: value.sessionId,
     name: value.name,
     enabled: value.enabled,
+  };
+}
+
+function parseMcpServerAuthenticate(
+  value: UnknownRecord,
+): McpServerAuthenticateMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'name']) ||
+    !isId(value.sessionId) ||
+    !isNonEmptyBoundedString(value.name, MAX_MCP_NAME_LENGTH)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'mcp.server.authenticate',
+    sessionId: value.sessionId,
+    name: value.name,
   };
 }
 

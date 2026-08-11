@@ -540,6 +540,100 @@ describe('FactoryDroidRuntime', () => {
     );
   });
 
+  it('starts MCP authentication and reports the OAuth URL and outcome', async () => {
+    type NotificationListener = (
+      notification: Record<string, unknown>,
+    ) => void;
+    const listeners = new Map<string, NotificationListener[]>();
+    const session = Object.assign(
+      createMockSession(async function* () {}),
+      {
+        authenticateMcpServer: vi.fn(
+          async (params: { serverName: string }) => {
+            queueMicrotask(() => {
+              for (const listener of listeners.get('mcp_auth_required') ??
+                []) {
+                listener({
+                  type: 'mcp_auth_required',
+                  serverName: params.serverName,
+                  authUrl: 'https://auth.example/flow',
+                  message: 'Sign in',
+                  state: 'abc',
+                });
+              }
+            });
+            return { success: true };
+          },
+        ),
+        onNotification: vi.fn(
+          (
+            listener: NotificationListener,
+            filter?: { type?: string },
+          ) => {
+            const key = filter?.type ?? '*';
+            const bucket = listeners.get(key) ?? [];
+            bucket.push(listener);
+            listeners.set(key, bucket);
+            return () => {
+              const current = listeners.get(key) ?? [];
+              listeners.set(
+                key,
+                current.filter((entry) => entry !== listener),
+              );
+            };
+          },
+        ),
+      },
+    );
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    const onCompleted = vi.fn();
+    const start = await runtime.authenticateMcpServer(
+      'sentry',
+      onCompleted,
+    );
+    expect(start).toEqual({ authUrl: 'https://auth.example/flow' });
+    expect(session.authenticateMcpServer).toHaveBeenCalledWith({
+      serverName: 'sentry',
+    });
+
+    // Completion notifications for other servers are ignored.
+    for (const listener of listeners.get('mcp_auth_completed') ?? []) {
+      listener({
+        type: 'mcp_auth_completed',
+        serverName: 'linear',
+        outcome: 'failed',
+        message: 'no',
+      });
+      listener({
+        type: 'mcp_auth_completed',
+        serverName: 'sentry',
+        outcome: 'success',
+        message: 'ok',
+      });
+      // A second outcome must not re-fire the callback.
+      listener({
+        type: 'mcp_auth_completed',
+        serverName: 'sentry',
+        outcome: 'failed',
+        message: 'late',
+      });
+    }
+    expect(onCompleted).toHaveBeenCalledTimes(1);
+    expect(onCompleted).toHaveBeenCalledWith('success');
+    // The URL listener is released once the start call resolves.
+    expect(listeners.get('mcp_auth_required') ?? []).toHaveLength(0);
+
+    const bare = createRuntime(async () =>
+      createMockSession(async function* () {}),
+    );
+    await bare.initialize('C:\\workspace');
+    await expect(
+      bare.authenticateMcpServer('sentry', vi.fn()),
+    ).rejects.toThrow('does not support MCP authentication');
+  });
+
   it('renames the active session through the SDK', async () => {
     const session = Object.assign(
       createMockSession(async function* () {}),

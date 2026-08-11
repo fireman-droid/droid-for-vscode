@@ -295,6 +295,52 @@ describe('assistantWebviewReducer', () => {
     expect(state.rewindInfo).toBeNull();
   });
 
+  it('tracks MCP auth progress for the active session only', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'mcp.auth',
+        sequence: 1,
+        sessionId: 'session-a',
+        serverName: 'sentry',
+        phase: 'browser',
+        message: 'Complete the sign-in in your browser.',
+      },
+    });
+    expect(state.mcpAuth).toEqual({
+      serverName: 'sentry',
+      phase: 'browser',
+      message: 'Complete the sign-in in your browser.',
+    });
+
+    // Other-session progress advances the sequence only.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'mcp.auth',
+        sequence: 2,
+        sessionId: 'session-other',
+        serverName: 'linear',
+        phase: 'failed',
+        message: null,
+      },
+    });
+    expect(state.sequence).toBe(2);
+    expect(state.mcpAuth?.serverName).toBe('sentry');
+
+    // Switching sessions drops stale progress.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(3, 'session-b'),
+    });
+    expect(state.mcpAuth).toBeNull();
+  });
+
   it('isolates sequenced settings, context, and catalogs by session', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',
