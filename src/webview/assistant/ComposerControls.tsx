@@ -6,10 +6,12 @@ import {
   useState,
 } from 'react';
 
+import { MCP_SERVER_TYPES } from '../../shared/bridgeMessages';
 import type {
   ConfirmedSessionSettings,
   McpAuthPhase,
   McpServerSummary,
+  McpServerType,
   ModelCatalogItem,
   ModelCatalogState,
   SessionAutonomyLevel,
@@ -41,6 +43,15 @@ export interface McpAuthProgress {
   readonly message: string | null;
 }
 
+/** Payload for registering a new MCP server from the MCP panel. */
+export interface McpServerAddParams {
+  readonly name: string;
+  readonly serverType: McpServerType;
+  readonly command?: string;
+  readonly args?: readonly string[];
+  readonly url?: string;
+}
+
 interface ComposerControlsProps {
   readonly settings: SessionSettingsState;
   readonly context: SessionContextState;
@@ -56,6 +67,8 @@ interface ComposerControlsProps {
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onMcpRefresh: () => void;
   readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
+  readonly onMcpServerAdd: (params: McpServerAddParams) => void;
+  readonly onMcpServerRemove: (name: string) => void;
   readonly mcpAuth: McpAuthProgress | null;
   readonly onMcpServerAuthenticate: (name: string) => void;
   readonly onAttachFiles: () => void;
@@ -136,6 +149,8 @@ export function ComposerControls({
   onSkillToggle,
   onMcpRefresh,
   onMcpServerToggle,
+  onMcpServerAdd,
+  onMcpServerRemove,
   mcpAuth,
   onMcpServerAuthenticate,
   onAttachFiles,
@@ -287,6 +302,8 @@ export function ComposerControls({
           onSkillToggle={onSkillToggle}
           onMcpRefresh={onMcpRefresh}
           onMcpServerToggle={onMcpServerToggle}
+          onMcpServerAdd={onMcpServerAdd}
+          onMcpServerRemove={onMcpServerRemove}
           mcpAuth={mcpAuth}
           onMcpServerAuthenticate={onMcpServerAuthenticate}
           onAttach={(source) => {
@@ -397,6 +414,8 @@ function SettingsPopover({
   onSkillToggle,
   onMcpRefresh,
   onMcpServerToggle,
+  onMcpServerAdd,
+  onMcpServerRemove,
   mcpAuth,
   onMcpServerAuthenticate,
   onAttach,
@@ -419,6 +438,8 @@ function SettingsPopover({
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onMcpRefresh: () => void;
   readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
+  readonly onMcpServerAdd: (params: McpServerAddParams) => void;
+  readonly onMcpServerRemove: (name: string) => void;
   readonly mcpAuth: McpAuthProgress | null;
   readonly onMcpServerAuthenticate: (name: string) => void;
   readonly onAttach: (source: AttachSource) => void;
@@ -494,6 +515,8 @@ function SettingsPopover({
           onBack={() => onViewChange('root')}
           onRefresh={onMcpRefresh}
           onToggle={onMcpServerToggle}
+          onAdd={onMcpServerAdd}
+          onRemove={onMcpServerRemove}
           onAuthenticate={onMcpServerAuthenticate}
         />
       </div>
@@ -752,6 +775,8 @@ function McpPanel({
   onBack,
   onRefresh,
   onToggle,
+  onAdd,
+  onRemove,
   onAuthenticate,
 }: {
   readonly mcp: McpPanelState;
@@ -760,8 +785,11 @@ function McpPanel({
   readonly onBack: () => void;
   readonly onRefresh: () => void;
   readonly onToggle: (name: string, enabled: boolean) => void;
+  readonly onAdd: (params: McpServerAddParams) => void;
+  readonly onRemove: (name: string) => void;
   readonly onAuthenticate: (name: string) => void;
 }): React.JSX.Element {
+  const [adding, setAdding] = useState(false);
   const busy = mcp.status === 'loading' || mcp.status === 'idle';
   const authPending =
     auth !== null &&
@@ -781,12 +809,30 @@ function McpPanel({
         <button
           type="button"
           className="dvx-popover-refresh"
+          disabled={disabled || busy}
+          aria-expanded={adding}
+          onClick={() => setAdding((current) => !current)}
+        >
+          {adding ? 'Close' : 'Add'}
+        </button>
+        <button
+          type="button"
+          className="dvx-popover-refresh"
           disabled={busy}
           onClick={onRefresh}
         >
           Refresh
         </button>
       </div>
+      {adding ? (
+        <McpAddServerForm
+          disabled={disabled || busy}
+          onSubmit={(params) => {
+            setAdding(false);
+            onAdd(params);
+          }}
+        />
+      ) : null}
       {mcp.status === 'unsupported' || mcp.status === 'error' ? (
         <p
           className={`dvx-popover-message ${
@@ -817,6 +863,7 @@ function McpPanel({
               disabled={disabled || busy}
               authDisabled={disabled || busy || authPending}
               onToggle={onToggle}
+              onRemove={onRemove}
               onAuthenticate={onAuthenticate}
             />
           ))}
@@ -826,12 +873,103 @@ function McpPanel({
   );
 }
 
+function McpAddServerForm({
+  disabled,
+  onSubmit,
+}: {
+  readonly disabled: boolean;
+  readonly onSubmit: (params: McpServerAddParams) => void;
+}): React.JSX.Element {
+  const [name, setName] = useState('');
+  const [serverType, setServerType] = useState<McpServerType>('stdio');
+  const [target, setTarget] = useState('');
+  const trimmedName = name.trim();
+  const trimmedTarget = target.trim();
+  const targetValid =
+    serverType === 'stdio'
+      ? trimmedTarget.length > 0
+      : /^https?:\/\//.test(trimmedTarget);
+  const canSubmit =
+    !disabled && trimmedName.length > 0 && targetValid;
+  const submit = (): void => {
+    if (!canSubmit) {
+      return;
+    }
+    if (serverType === 'stdio') {
+      const [command = '', ...args] = trimmedTarget.split(/\s+/);
+      onSubmit({
+        name: trimmedName,
+        serverType,
+        command,
+        ...(args.length > 0 ? { args } : {}),
+      });
+    } else {
+      onSubmit({ name: trimmedName, serverType, url: trimmedTarget });
+    }
+  };
+  return (
+    <form
+      className="dvx-mcp-add-form"
+      aria-label="Add MCP server"
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit();
+      }}
+    >
+      <input
+        className="dvx-mcp-add-input"
+        type="text"
+        placeholder="Server name"
+        aria-label="Server name"
+        value={name}
+        maxLength={128}
+        onChange={(event) => setName(event.currentTarget.value)}
+      />
+      <div className="dvx-mcp-add-types" role="radiogroup" aria-label="Server type">
+        {MCP_SERVER_TYPES.map((type) => (
+          <button
+            key={type}
+            type="button"
+            role="radio"
+            className="dvx-mcp-add-type"
+            aria-checked={serverType === type}
+            onClick={() => setServerType(type)}
+          >
+            {type}
+          </button>
+        ))}
+      </div>
+      <input
+        className="dvx-mcp-add-input"
+        type="text"
+        placeholder={
+          serverType === 'stdio'
+            ? 'Command, e.g. npx -y my-mcp-server'
+            : 'URL, e.g. https://example.com/mcp'
+        }
+        aria-label={serverType === 'stdio' ? 'Launch command' : 'Server URL'}
+        value={target}
+        maxLength={1024}
+        onChange={(event) => setTarget(event.currentTarget.value)}
+      />
+      <button
+        type="submit"
+        className="dvx-mcp-add-submit"
+        disabled={!canSubmit}
+      >
+        Add server
+      </button>
+    </form>
+  );
+}
+
 function McpServerRow({
   server,
   auth,
   disabled,
   authDisabled,
   onToggle,
+  onRemove,
   onAuthenticate,
 }: {
   readonly server: McpServerSummary;
@@ -839,9 +977,19 @@ function McpServerRow({
   readonly disabled: boolean;
   readonly authDisabled: boolean;
   readonly onToggle: (name: string, enabled: boolean) => void;
+  readonly onRemove: (name: string) => void;
   readonly onAuthenticate: (name: string) => void;
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
+  // A stray click should not leave the destructive confirm armed.
+  useEffect(() => {
+    if (!confirmingRemove) {
+      return;
+    }
+    const timer = setTimeout(() => setConfirmingRemove(false), 4000);
+    return () => clearTimeout(timer);
+  }, [confirmingRemove]);
   const enabled = server.status !== 'disabled';
   const toolCount = server.toolCount ?? server.tools.length;
   const authPending =
@@ -900,20 +1048,39 @@ function McpServerRow({
             {authStatusText}
           </span>
         ) : null}
-        {server.tools.length > 0 ? (
+        <span className="dvx-mcp-row-actions">
+          {server.tools.length > 0 ? (
+            <button
+              type="button"
+              className="dvx-mcp-tools-toggle"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((current) => !current)}
+            >
+              {expanded ? 'Hide tools' : `Show ${toolCount} tools`}
+            </button>
+          ) : (
+            <span className="dvx-skill-description">
+              {toolCount} tools
+            </span>
+          )}
           <button
             type="button"
-            className="dvx-mcp-tools-toggle"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((current) => !current)}
+            className={`dvx-mcp-remove${
+              confirmingRemove ? ' dvx-mcp-remove-confirm' : ''
+            }`}
+            disabled={disabled}
+            onClick={() => {
+              if (confirmingRemove) {
+                setConfirmingRemove(false);
+                onRemove(server.name);
+              } else {
+                setConfirmingRemove(true);
+              }
+            }}
           >
-            {expanded ? 'Hide tools' : `Show ${toolCount} tools`}
+            {confirmingRemove ? 'Confirm remove' : 'Remove'}
           </button>
-        ) : (
-          <span className="dvx-skill-description">
-            {toolCount} tools
-          </span>
-        )}
+        </span>
         {expanded ? (
           <ul className="dvx-mcp-tool-list" aria-label={`${server.name} tools`}>
             {server.tools.map((tool) => (

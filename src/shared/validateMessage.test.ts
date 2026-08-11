@@ -120,6 +120,40 @@ describe('parseWebviewMessage', () => {
       name: 'linear',
     },
     {
+      type: 'mcp.server.add',
+      sessionId: 'session-1',
+      name: 'local-tools',
+      serverType: 'stdio',
+      command: 'npx',
+      args: ['-y', 'my-mcp-server'],
+    },
+    {
+      type: 'mcp.server.add',
+      sessionId: 'session-1',
+      name: 'local-tools',
+      serverType: 'stdio',
+      command: 'my-server.exe',
+    },
+    {
+      type: 'mcp.server.add',
+      sessionId: 'session-1',
+      name: 'remote',
+      serverType: 'http',
+      url: 'https://example.com/mcp',
+    },
+    {
+      type: 'mcp.server.add',
+      sessionId: 'session-1',
+      name: 'remote-sse',
+      serverType: 'sse',
+      url: 'http://localhost:3000/sse',
+    },
+    {
+      type: 'mcp.server.remove',
+      sessionId: 'session-1',
+      name: 'linear',
+    },
+    {
       type: 'session.compact',
       sessionId: 'session-1',
     },
@@ -485,6 +519,71 @@ describe('parseWebviewMessage', () => {
     },
     {
       type: 'mcp.server.authenticate',
+      sessionId: 'session-1',
+      name: 'linear',
+      extra: true,
+    },
+    // stdio servers must not carry a URL.
+    {
+      type: 'mcp.server.add',
+      sessionId: 'session-1',
+      name: 'local-tools',
+      serverType: 'stdio',
+      command: 'npx',
+      url: 'https://example.com',
+    },
+    // stdio servers require a command.
+    {
+      type: 'mcp.server.add',
+      sessionId: 'session-1',
+      name: 'local-tools',
+      serverType: 'stdio',
+    },
+    // http servers must not carry a command.
+    {
+      type: 'mcp.server.add',
+      sessionId: 'session-1',
+      name: 'remote',
+      serverType: 'http',
+      url: 'https://example.com/mcp',
+      command: 'npx',
+    },
+    // URLs must be http(s).
+    {
+      type: 'mcp.server.add',
+      sessionId: 'session-1',
+      name: 'remote',
+      serverType: 'http',
+      url: 'file:///etc/passwd',
+    },
+    // Unknown server types are rejected.
+    {
+      type: 'mcp.server.add',
+      sessionId: 'session-1',
+      name: 'remote',
+      serverType: 'websocket',
+      url: 'https://example.com/mcp',
+    },
+    // Args must be non-empty bounded strings.
+    {
+      type: 'mcp.server.add',
+      sessionId: 'session-1',
+      name: 'local-tools',
+      serverType: 'stdio',
+      command: 'npx',
+      args: [''],
+    },
+    {
+      type: 'mcp.server.add',
+      sessionId: 'session-1',
+      name: 'local-tools',
+      serverType: 'stdio',
+      command: 'npx',
+      args: ['a'.repeat(513)],
+    },
+    { type: 'mcp.server.remove', sessionId: 'session-1', name: '' },
+    {
+      type: 'mcp.server.remove',
       sessionId: 'session-1',
       name: 'linear',
       extra: true,

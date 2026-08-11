@@ -63,6 +63,13 @@ export const MAX_MCP_SERVERS = 100;
 export const MAX_MCP_TOOLS_PER_SERVER = 200;
 export const MAX_MCP_NAME_LENGTH = 128;
 export const MAX_MCP_TOOL_DESCRIPTION_LENGTH = 512;
+export const MAX_MCP_COMMAND_LENGTH = 1024;
+export const MAX_MCP_URL_LENGTH = 2048;
+export const MAX_MCP_ARGS = 24;
+export const MAX_MCP_ARG_LENGTH = 512;
+
+export const MCP_SERVER_TYPES = ['stdio', 'http', 'sse'] as const;
+export type McpServerType = (typeof MCP_SERVER_TYPES)[number];
 
 export const CONNECTION_STATUSES = [
   'idle',
@@ -393,6 +400,28 @@ export interface McpServerToggleMessage {
 }
 
 /**
+ * Registers a new MCP server at the user settings level. Stdio
+ * servers carry a launch command with optional arguments; http and
+ * sse servers carry an endpoint URL.
+ */
+export interface McpServerAddMessage {
+  readonly type: 'mcp.server.add';
+  readonly sessionId: string;
+  readonly name: string;
+  readonly serverType: McpServerType;
+  readonly command?: string;
+  readonly args?: readonly string[];
+  readonly url?: string;
+}
+
+/** Removes an MCP server by name at the user settings level. */
+export interface McpServerRemoveMessage {
+  readonly type: 'mcp.server.remove';
+  readonly sessionId: string;
+  readonly name: string;
+}
+
+/**
  * Starts browser OAuth authentication for an MCP server. The host
  * reports progress via `mcp.auth` messages.
  */
@@ -448,6 +477,8 @@ export type WebviewToHostMessage =
   | SkillToggleMessage
   | McpRefreshMessage
   | McpServerToggleMessage
+  | McpServerAddMessage
+  | McpServerRemoveMessage
   | McpServerAuthenticateMessage
   | AttachmentPickMessage
   | AttachmentAddEditorMessage

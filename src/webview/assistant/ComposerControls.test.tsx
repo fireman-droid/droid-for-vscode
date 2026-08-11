@@ -633,6 +633,82 @@ describe('ComposerControls', () => {
     expect(screen.getByText('1/2 on')).toBeDefined();
   });
 
+  it('adds and removes MCP servers from the MCP panel', async () => {
+    const user = userEvent.setup();
+    const onMcpServerAdd = vi.fn();
+    const onMcpServerRemove = vi.fn();
+    render(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{
+          status: 'ready',
+          items: [
+            {
+              name: 'linear',
+              status: 'connected',
+              toolCount: 0,
+              requiresAuth: false,
+              tools: [],
+            },
+          ],
+        }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        onMcpServerAdd={onMcpServerAdd}
+        onMcpServerRemove={onMcpServerRemove}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Session controls' }));
+    await user.click(screen.getByText('MCP servers').closest('button')!);
+
+    // The add form collects a name, a type, and a URL for http servers.
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    const form = screen.getByRole('form', { name: 'Add MCP server' });
+    expect(form).toBeDefined();
+    const submit = screen.getByRole('button', { name: 'Add server' });
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+    await user.type(
+      screen.getByRole('textbox', { name: 'Server name' }),
+      'remote',
+    );
+    await user.click(screen.getByRole('radio', { name: 'http' }));
+    await user.type(
+      screen.getByRole('textbox', { name: 'Server URL' }),
+      'https://example.com/mcp',
+    );
+    await user.click(screen.getByRole('button', { name: 'Add server' }));
+    expect(onMcpServerAdd).toHaveBeenCalledWith({
+      name: 'remote',
+      serverType: 'http',
+      url: 'https://example.com/mcp',
+    });
+
+    // Removal requires a second confirming click.
+    await user.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(onMcpServerRemove).not.toHaveBeenCalled();
+    await user.click(
+      screen.getByRole('button', { name: 'Confirm remove' }),
+    );
+    expect(onMcpServerRemove).toHaveBeenCalledWith('linear');
+  });
+
   it('offers compaction from the context popover', async () => {
     const user = userEvent.setup();
     const onCompact = vi.fn();

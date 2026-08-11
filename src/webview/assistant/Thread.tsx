@@ -29,6 +29,7 @@ import {
 import type {
   McpAuthProgress,
   McpPanelState,
+  McpServerAddParams,
   SkillsPanelState,
 } from './ComposerControls';
 import {
@@ -124,6 +125,8 @@ interface DroidThreadProps {
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onMcpRefresh: () => void;
   readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
+  readonly onMcpServerAdd: (params: McpServerAddParams) => void;
+  readonly onMcpServerRemove: (name: string) => void;
   readonly mcpAuth: McpAuthProgress | null;
   readonly onMcpServerAuthenticate: (name: string) => void;
   readonly attachments: readonly AttachmentSummary[];
@@ -178,6 +181,8 @@ export const DroidThread = memo(function DroidThread({
   onSkillToggle,
   onMcpRefresh,
   onMcpServerToggle,
+  onMcpServerAdd,
+  onMcpServerRemove,
   mcpAuth,
   onMcpServerAuthenticate,
   attachments,
@@ -287,6 +292,8 @@ export const DroidThread = memo(function DroidThread({
             onSkillToggle={onSkillToggle}
             onMcpRefresh={onMcpRefresh}
             onMcpServerToggle={onMcpServerToggle}
+            onMcpServerAdd={onMcpServerAdd}
+            onMcpServerRemove={onMcpServerRemove}
             mcpAuth={mcpAuth}
             onMcpServerAuthenticate={onMcpServerAuthenticate}
             attachments={attachments}
@@ -837,6 +844,8 @@ function Composer({
   onSkillToggle,
   onMcpRefresh,
   onMcpServerToggle,
+  onMcpServerAdd,
+  onMcpServerRemove,
   mcpAuth,
   onMcpServerAuthenticate,
   attachments,
@@ -871,6 +880,8 @@ function Composer({
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onMcpRefresh: () => void;
   readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
+  readonly onMcpServerAdd: (params: McpServerAddParams) => void;
+  readonly onMcpServerRemove: (name: string) => void;
   readonly mcpAuth: McpAuthProgress | null;
   readonly onMcpServerAuthenticate: (name: string) => void;
   readonly attachments: readonly AttachmentSummary[];
@@ -1070,6 +1081,8 @@ function Composer({
             onSkillToggle={onSkillToggle}
             onMcpRefresh={onMcpRefresh}
             onMcpServerToggle={onMcpServerToggle}
+            onMcpServerAdd={onMcpServerAdd}
+            onMcpServerRemove={onMcpServerRemove}
             mcpAuth={mcpAuth}
             onMcpServerAuthenticate={onMcpServerAuthenticate}
             onAttachFiles={onAttachFiles}

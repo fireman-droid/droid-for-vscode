@@ -1900,6 +1900,80 @@ describe('ChatController', () => {
     expect(JSON.stringify(messages)).not.toContain('private mcp failure');
   });
 
+  it('adds and removes MCP servers, then rebroadcasts the catalog', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      listMcpServers: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            name: 'local-tools',
+            status: 'connected',
+            toolCount: 0,
+            requiresAuth: false,
+            tools: [],
+          },
+        ])
+        .mockResolvedValueOnce([]),
+      addMcpServer: vi.fn(async () => {}),
+      removeMcpServer: vi.fn(async () => {}),
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'mcp.server.add',
+      sessionId: 'session-1',
+      name: 'local-tools',
+      serverType: 'stdio',
+      command: 'npx',
+      args: ['-y', 'my-mcp-server'],
+    });
+    expect(runtime.addMcpServer).toHaveBeenCalledWith({
+      name: 'local-tools',
+      serverType: 'stdio',
+      command: 'npx',
+      args: ['-y', 'my-mcp-server'],
+    });
+    await vi.waitFor(() => {
+      expect(mcpMessages(messages).at(-1)?.mcp).toMatchObject({
+        status: 'ready',
+        items: [{ name: 'local-tools' }],
+      });
+    });
+
+    controller.handleMessage({
+      type: 'mcp.server.remove',
+      sessionId: 'session-1',
+      name: 'local-tools',
+    });
+    expect(runtime.removeMcpServer).toHaveBeenCalledWith('local-tools');
+    await vi.waitFor(() => {
+      expect(mcpMessages(messages).at(-1)?.mcp).toMatchObject({
+        status: 'ready',
+        items: [],
+      });
+    });
+
+    // A failing add surfaces as a safe error state.
+    runtime.addMcpServer.mockRejectedValueOnce(
+      new Error('private add failure'),
+    );
+    controller.handleMessage({
+      type: 'mcp.server.add',
+      sessionId: 'session-1',
+      name: 'broken',
+      serverType: 'http',
+      url: 'https://example.com/mcp',
+    });
+    await vi.waitFor(() => {
+      expect(mcpMessages(messages).at(-1)?.mcp).toMatchObject({
+        status: 'error',
+      });
+    });
+    expect(JSON.stringify(messages)).not.toContain('private add failure');
+  });
+
   it('compacts the session, adopts the continuation, and reloads its transcript', async () => {
     const runtime = Object.assign(createMockRuntime(), {
       compact: vi.fn(async () => ({

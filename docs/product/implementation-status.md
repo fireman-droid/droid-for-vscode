@@ -179,6 +179,17 @@ started/browser/终态阶段广播 `mcp.auth`、同一时间只允许一个认�
 Webview 在服务器行内显示按钮、进行中状态与结果文案。OAuth URL 只在
 Host/Runtime 流转，不进 Webview。
 
+同日追加 MCP Server 添加与移除：MCP 面板顶部新增 Add 按钮展开内联
+表单（名称、stdio/http/sse 类型选择、stdio 命令行或 http(s) URL），
+提交经 `mcp.server.add` 消息（Bridge 双向校验：stdio 必须带命令且
+不得带 URL，http/sse 必须带 http(s) URL 且不得带命令，args 有界）
+调用 SDK `session.addMcpServer`；每个 Server 行新增两段式
+Remove/Confirm remove 按钮（4 秒未确认自动复位），经
+`mcp.server.remove` 调用 SDK `session.removeMcpServer`
+（user settings 级）。任一变更成功后 Host 重新拉取并广播 MCP
+目录，失败以安全 error 状态回报不泄露内部错误。stdio 命令行按
+空白拆分为 command+args，不支持带引号参数。
+
 同日追加 Problems / Git changes 附件源：Composer `+` 面板新增
 “Attach problems”（工作区诊断，`路径:行 [严重级] (来源) 消息` 文本，
 上限 200 条超出截断）与 “Attach git changes”（`git diff HEAD

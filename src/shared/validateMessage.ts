@@ -6,7 +6,12 @@ import {
   MAX_EDITED_SPEC_LENGTH,
   MAX_MODEL_ID_LENGTH,
   MAX_PERMISSION_OPTION_VALUE_LENGTH,
+  MAX_MCP_ARG_LENGTH,
+  MAX_MCP_ARGS,
+  MAX_MCP_COMMAND_LENGTH,
   MAX_MCP_NAME_LENGTH,
+  MAX_MCP_URL_LENGTH,
+  MCP_SERVER_TYPES,
   MAX_SESSION_TITLE_LENGTH,
   MAX_SKILL_NAME_LENGTH,
   MAX_TOOL_FILE_PATH_LENGTH,
@@ -26,8 +31,11 @@ import {
   type AttachmentRemoveMessage,
   type FileOpenDiffMessage,
   type McpRefreshMessage,
+  type McpServerAddMessage,
   type McpServerAuthenticateMessage,
+  type McpServerRemoveMessage,
   type McpServerToggleMessage,
+  type McpServerType,
   type PermissionRespondMessage,
   type RewindInfoRequestMessage,
   type RuntimeRetryMessage,
@@ -104,6 +112,10 @@ export function parseWebviewMessage(
         return parseMcpRefresh(value);
       case 'mcp.server.toggle':
         return parseMcpServerToggle(value);
+      case 'mcp.server.add':
+        return parseMcpServerAdd(value);
+      case 'mcp.server.remove':
+        return parseMcpServerRemove(value);
       case 'mcp.server.authenticate':
         return parseMcpServerAuthenticate(value);
       case 'attachment.pick':
@@ -552,6 +564,88 @@ function parseMcpServerToggle(
     sessionId: value.sessionId,
     name: value.name,
     enabled: value.enabled,
+  };
+}
+
+function parseMcpServerAdd(
+  value: UnknownRecord,
+): McpServerAddMessage | undefined {
+  if (
+    !hasExactKeys(
+      value,
+      ['type', 'sessionId', 'name', 'serverType'],
+      ['command', 'args', 'url'],
+    ) ||
+    !isId(value.sessionId) ||
+    !isNonEmptyBoundedString(value.name, MAX_MCP_NAME_LENGTH) ||
+    !MCP_SERVER_TYPES.includes(value.serverType as McpServerType)
+  ) {
+    return undefined;
+  }
+  const serverType = value.serverType as McpServerType;
+
+  if (serverType === 'stdio') {
+    if (
+      value.url !== undefined ||
+      !isNonEmptyBoundedString(value.command, MAX_MCP_COMMAND_LENGTH)
+    ) {
+      return undefined;
+    }
+    let args: readonly string[] | undefined;
+    if (value.args !== undefined) {
+      if (
+        !Array.isArray(value.args) ||
+        value.args.length > MAX_MCP_ARGS ||
+        !value.args.every((arg) =>
+          isNonEmptyBoundedString(arg, MAX_MCP_ARG_LENGTH),
+        )
+      ) {
+        return undefined;
+      }
+      args = value.args as readonly string[];
+    }
+    return {
+      type: 'mcp.server.add',
+      sessionId: value.sessionId,
+      name: value.name,
+      serverType,
+      command: value.command,
+      ...(args === undefined ? {} : { args }),
+    };
+  }
+
+  if (
+    value.command !== undefined ||
+    value.args !== undefined ||
+    !isNonEmptyBoundedString(value.url, MAX_MCP_URL_LENGTH) ||
+    !/^https?:\/\//.test(value.url)
+  ) {
+    return undefined;
+  }
+  return {
+    type: 'mcp.server.add',
+    sessionId: value.sessionId,
+    name: value.name,
+    serverType,
+    url: value.url,
+  };
+}
+
+function parseMcpServerRemove(
+  value: UnknownRecord,
+): McpServerRemoveMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'name']) ||
+    !isId(value.sessionId) ||
+    !isNonEmptyBoundedString(value.name, MAX_MCP_NAME_LENGTH)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'mcp.server.remove',
+    sessionId: value.sessionId,
+    name: value.name,
   };
 }
 

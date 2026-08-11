@@ -9,6 +9,7 @@ import type {
   SessionContextState,
   SessionContextStats,
   McpAuthPhase,
+  McpServerAddMessage,
   McpServerSummary,
   SessionMcpState,
   SessionSettingUpdateMessage,
@@ -205,6 +206,10 @@ const MCP_LOAD_FAILED_MESSAGE =
   'Droid did not return the MCP catalog. Retry from the MCP panel.';
 const MCP_TOGGLE_FAILED_MESSAGE =
   'Droid could not update that MCP server. The list may be stale; refresh it.';
+const MCP_ADD_FAILED_MESSAGE =
+  'Droid could not add that MCP server. Check the command or URL and retry.';
+const MCP_REMOVE_FAILED_MESSAGE =
+  'Droid could not remove that MCP server. The list may be stale; refresh it.';
 const MCP_AUTH_UNSUPPORTED_MESSAGE =
   'This Droid runtime does not support MCP authentication.';
 const MCP_AUTH_START_FAILED_MESSAGE =
@@ -447,6 +452,14 @@ export class ChatController {
           message.name,
           message.enabled,
         );
+        return;
+      case 'mcp.server.add': {
+        const { type: _type, sessionId, ...params } = message;
+        this.handleMcpServerAdd(sessionId, params);
+        return;
+      }
+      case 'mcp.server.remove':
+        this.handleMcpServerRemove(message.sessionId, message.name);
         return;
       case 'mcp.server.authenticate':
         this.handleMcpServerAuthenticate(message.sessionId, message.name);
@@ -2017,6 +2030,121 @@ export class ChatController {
             status: 'error',
             items: [],
             message: MCP_TOGGLE_FAILED_MESSAGE,
+          });
+        },
+      );
+  }
+
+  private handleMcpServerAdd(
+    sessionId: string,
+    params: Omit<McpServerAddMessage, 'type' | 'sessionId'>,
+  ): void {
+    const runtime = this.runtime;
+    if (
+      sessionId !== this.sessionId ||
+      runtime === null ||
+      this.connection.status !== 'connected' ||
+      this.sessionOperationInProgress ||
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    if (
+      typeof runtime.addMcpServer !== 'function' ||
+      typeof runtime.listMcpServers !== 'function'
+    ) {
+      this.emitMcp(sessionId, {
+        status: 'unsupported',
+        items: [],
+        message: MCP_UNSUPPORTED_MESSAGE,
+      });
+      return;
+    }
+    this.applyMcpMutation(
+      sessionId,
+      runtime,
+      () => runtime.addMcpServer!(params),
+      MCP_ADD_FAILED_MESSAGE,
+    );
+  }
+
+  private handleMcpServerRemove(sessionId: string, name: string): void {
+    const runtime = this.runtime;
+    if (
+      sessionId !== this.sessionId ||
+      runtime === null ||
+      this.connection.status !== 'connected' ||
+      this.sessionOperationInProgress ||
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    if (
+      typeof runtime.removeMcpServer !== 'function' ||
+      typeof runtime.listMcpServers !== 'function'
+    ) {
+      this.emitMcp(sessionId, {
+        status: 'unsupported',
+        items: [],
+        message: MCP_UNSUPPORTED_MESSAGE,
+      });
+      return;
+    }
+    this.applyMcpMutation(
+      sessionId,
+      runtime,
+      () => runtime.removeMcpServer!(name),
+      MCP_REMOVE_FAILED_MESSAGE,
+    );
+  }
+
+  /**
+   * Runs one MCP catalog mutation, then re-reads and broadcasts the
+   * catalog. The caller must have verified `listMcpServers` support.
+   */
+  private applyMcpMutation(
+    sessionId: string,
+    runtime: DroidRuntime,
+    mutation: () => Promise<void>,
+    failureMessage: string,
+  ): void {
+    this.emitMcp(sessionId, { status: 'loading', items: [] });
+    const generation = this.runtimeGeneration;
+    const cwd = this.activeRuntimeCwd!;
+    void mutation()
+      .then(() => runtime.listMcpServers!())
+      .then(
+        (servers) => {
+          if (
+            !this.isCurrentSessionOperation(
+              runtime,
+              generation,
+              sessionId,
+              cwd,
+            )
+          ) {
+            return;
+          }
+          this.emitMcp(sessionId, {
+            status: 'ready',
+            items: servers.map(projectMcpServerSummary),
+          });
+        },
+        () => {
+          if (
+            !this.isCurrentSessionOperation(
+              runtime,
+              generation,
+              sessionId,
+              cwd,
+            )
+          ) {
+            return;
+          }
+          this.emitMcp(sessionId, {
+            status: 'error',
+            items: [],
+            message: failureMessage,
           });
         },
       );

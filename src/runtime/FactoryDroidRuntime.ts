@@ -57,6 +57,7 @@ import {
   type RuntimeMcpAuthOutcome,
   type RuntimeMcpAuthStart,
   type RuntimeMcpServer,
+  type RuntimeMcpServerAddParams,
   type RuntimeMcpServerStatus,
   type RuntimeMcpTool,
   type RuntimeSkill,
@@ -138,6 +139,17 @@ export interface FactoryDroidSession {
   toggleMcpServer?(params: {
     serverName: string;
     enabled: boolean;
+    settingsLevel: 'user';
+  }): Promise<{ success: boolean }>;
+  addMcpServer?(params: {
+    name: string;
+    type: 'stdio' | 'http' | 'sse';
+    command?: string;
+    args?: string[];
+    url?: string;
+  }): Promise<{ success: boolean }>;
+  removeMcpServer?(params: {
+    serverName: string;
     settingsLevel: 'user';
   }): Promise<{ success: boolean }>;
   authenticateMcpServer?(params: {
@@ -773,6 +785,49 @@ export class FactoryDroidRuntime implements DroidRuntime {
     });
     if (result.success !== true) {
       throw new Error('Droid refused to update the MCP server.');
+    }
+  }
+
+  async addMcpServer(params: RuntimeMcpServerAddParams): Promise<void> {
+    const session = this.requireSession();
+    if (typeof session.addMcpServer !== 'function') {
+      throw new Error(
+        'The Droid session does not support adding MCP servers.',
+      );
+    }
+    const request: Parameters<
+      NonNullable<FactoryDroidSession['addMcpServer']>
+    >[0] = {
+      name: params.name,
+      type: params.serverType,
+    };
+    if (params.serverType === 'stdio') {
+      request.command = params.command;
+      if (params.args !== undefined && params.args.length > 0) {
+        request.args = [...params.args];
+      }
+    } else {
+      request.url = params.url;
+    }
+    const result = await session.addMcpServer(request);
+    if (result.success !== true) {
+      throw new Error('Droid refused to add the MCP server.');
+    }
+  }
+
+  async removeMcpServer(name: string): Promise<void> {
+    const session = this.requireSession();
+    if (typeof session.removeMcpServer !== 'function') {
+      throw new Error(
+        'The Droid session does not support removing MCP servers.',
+      );
+    }
+    const result = await session.removeMcpServer({
+      serverName: name,
+      settingsLevel: 'user',
+    });
+    if (result.success !== true) {
+      throw new Error('Droid refused to remove the MCP server.');
     }
   }
 
@@ -1457,6 +1512,12 @@ function createCatalogSessionView(
   }
   if (typeof session.toggleMcpServer === 'function') {
     view.toggleMcpServer = (params) => session.toggleMcpServer!(params);
+  }
+  if (typeof session.addMcpServer === 'function') {
+    view.addMcpServer = (params) => session.addMcpServer!(params);
+  }
+  if (typeof session.removeMcpServer === 'function') {
+    view.removeMcpServer = (params) => session.removeMcpServer!(params);
   }
   if (typeof session.authenticateMcpServer === 'function') {
     view.authenticateMcpServer = (params) =>

@@ -24,7 +24,10 @@ import {
   restoreDraft,
 } from '../bridge/vscode';
 import { InteractionPanel } from './Interactions';
-import type { SessionSettingSelection } from './ComposerControls';
+import type {
+  McpServerAddParams,
+  SessionSettingSelection,
+} from './ComposerControls';
 import {
   canSendMessage,
   DEFAULT_MESSAGE_WINDOW,
@@ -378,6 +381,32 @@ export function App(): React.JSX.Element {
     },
     [sessionId, vscode],
   );
+  const handleMcpServerAdd = useCallback(
+    (params: McpServerAddParams): void => {
+      if (sessionId === null) {
+        return;
+      }
+      post(vscode, {
+        type: 'mcp.server.add',
+        sessionId,
+        ...params,
+      });
+    },
+    [sessionId, vscode],
+  );
+  const handleMcpServerRemove = useCallback(
+    (name: string): void => {
+      if (sessionId === null) {
+        return;
+      }
+      post(vscode, {
+        type: 'mcp.server.remove',
+        sessionId,
+        name,
+      });
+    },
+    [sessionId, vscode],
+  );
   const handleMcpServerAuthenticate = useCallback(
     (name: string): void => {
       if (sessionId === null) {
@@ -533,6 +562,8 @@ export function App(): React.JSX.Element {
           onSkillToggle={handleSkillToggle}
           onMcpRefresh={handleMcpRefresh}
           onMcpServerToggle={handleMcpServerToggle}
+          onMcpServerAdd={handleMcpServerAdd}
+          onMcpServerRemove={handleMcpServerRemove}
           mcpAuth={state.mcpAuth}
           onMcpServerAuthenticate={handleMcpServerAuthenticate}
           attachments={state.attachments}

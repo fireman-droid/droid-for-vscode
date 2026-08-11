@@ -150,6 +150,24 @@ export interface RuntimeMcpServer {
   readonly tools: readonly RuntimeMcpTool[];
 }
 
+export const RUNTIME_MCP_SERVER_TYPES = [
+  'stdio',
+  'http',
+  'sse',
+] as const;
+export type RuntimeMcpServerType =
+  (typeof RUNTIME_MCP_SERVER_TYPES)[number];
+
+export interface RuntimeMcpServerAddParams {
+  readonly name: string;
+  readonly serverType: RuntimeMcpServerType;
+  /** Launch command for stdio servers. */
+  readonly command?: string;
+  readonly args?: readonly string[];
+  /** Endpoint URL for http and sse servers. */
+  readonly url?: string;
+}
+
 export const RUNTIME_MCP_AUTH_OUTCOMES = [
   'success',
   'cancelled',
@@ -299,6 +317,16 @@ export interface DroidRuntime {
    * level. Optional: absent when unsupported.
    */
   setMcpServerEnabled?(name: string, enabled: boolean): Promise<void>;
+  /**
+   * Registers a new MCP server at the user settings level. Optional:
+   * absent when unsupported.
+   */
+  addMcpServer?(params: RuntimeMcpServerAddParams): Promise<void>;
+  /**
+   * Removes an MCP server by name at the user settings level.
+   * Optional: absent when unsupported.
+   */
+  removeMcpServer?(name: string): Promise<void>;
   /**
    * Starts OAuth authentication for an MCP server. Resolves with the
    * browser URL once Droid reports it (or null when no OAuth step is

@@ -540,6 +540,78 @@ describe('FactoryDroidRuntime', () => {
     );
   });
 
+  it('adds and removes MCP servers through the SDK session', async () => {
+    const session = Object.assign(
+      createMockSession(async function* () {}),
+      {
+        addMcpServer: vi.fn(async () => ({ success: true })),
+        removeMcpServer: vi.fn(async () => ({ success: true })),
+      },
+    );
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    await runtime.addMcpServer({
+      name: 'local-tools',
+      serverType: 'stdio',
+      command: 'npx',
+      args: ['-y', 'my-mcp-server'],
+    });
+    expect(session.addMcpServer).toHaveBeenCalledWith({
+      name: 'local-tools',
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', 'my-mcp-server'],
+    });
+
+    await runtime.addMcpServer({
+      name: 'remote',
+      serverType: 'http',
+      url: 'https://example.com/mcp',
+      // A stray command must not leak into http requests.
+      command: 'npx',
+    });
+    expect(session.addMcpServer).toHaveBeenLastCalledWith({
+      name: 'remote',
+      type: 'http',
+      url: 'https://example.com/mcp',
+    });
+
+    await runtime.removeMcpServer('remote');
+    expect(session.removeMcpServer).toHaveBeenCalledWith({
+      serverName: 'remote',
+      settingsLevel: 'user',
+    });
+
+    session.addMcpServer.mockResolvedValueOnce({ success: false });
+    await expect(
+      runtime.addMcpServer({
+        name: 'broken',
+        serverType: 'sse',
+        url: 'https://example.com/sse',
+      }),
+    ).rejects.toThrow('refused');
+    session.removeMcpServer.mockResolvedValueOnce({ success: false });
+    await expect(runtime.removeMcpServer('broken')).rejects.toThrow(
+      'refused',
+    );
+
+    const bare = createRuntime(async () =>
+      createMockSession(async function* () {}),
+    );
+    await bare.initialize('C:\\workspace');
+    await expect(
+      bare.addMcpServer({
+        name: 'x',
+        serverType: 'http',
+        url: 'https://example.com',
+      }),
+    ).rejects.toThrow('does not support adding');
+    await expect(bare.removeMcpServer('x')).rejects.toThrow(
+      'does not support removing',
+    );
+  });
+
   it('starts MCP authentication and reports the OAuth URL and outcome', async () => {
     type NotificationListener = (
       notification: Record<string, unknown>,
