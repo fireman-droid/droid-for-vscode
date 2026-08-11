@@ -1,6 +1,6 @@
 # Droid capability matrix
 
-- Status date: **2026-08-10**
+- Status date: **2026-08-11**
 - Capability schema: **0.1**
 - Repository SDK: **`@factory/droid-sdk` 0.7.0**
 - Factory protocol: **1.151.0**
@@ -42,6 +42,9 @@ approval to switch DroidVisX away from its current local `ProcessTransport`.
 
 “Current” describes DroidVisX as of the status date:
 
+- **Production wired**: Runtime, Host, strict Bridge, Webview, focused tests,
+  package, and the current visible-acceptance status are tracked in
+  `docs/product/implementation-status.md`.
 - **Host baseline**: already represented by the existing Host runtime.
 - **Probe only**: the new opt-in probe performs a no-prompt, read-only
   structural check.
@@ -50,16 +53,16 @@ approval to switch DroidVisX away from its current local `ProcessTransport`.
 
 | Capability IDs | Public Node | Stable daemon | Unstable daemon | Config / CLI | Current |
 | --- | --- | --- | --- | --- | --- |
-| `sessions.list`, `sessions.resume` | `listSessions`, `resumeSession` | `sessions.list`, `sessions.resume` | — | CLI session UI exists separately | Host baseline; probe only |
-| `sessions.load` | Public low-level `DroidClient.loadSession`; this is not a high-level `DroidSession` history method | `sessions.getMessages` | — | — | Gated |
+| `sessions.list`, `sessions.resume` | `listSessions`, `resumeSession` | `sessions.list`, `sessions.resume` | — | CLI session UI exists separately | Production wired; probe also covers structural resume |
+| `sessions.load` | Public low-level `DroidClient.loadSession`; this is not a high-level `DroidSession` history method | `sessions.getMessages` | — | — | Production wired through bounded low-level history adapter |
 | `sessions.search` | — | `sessions.search` | — | — | Gated |
 | `sessions.rename` | `DroidSession.rename` | `sessions.rename` | — | CLI | Gated |
 | `sessions.archive` | — | `sessions.archive` / `unarchive` | — | CLI | Gated |
 | `sessions.fork`, `sessions.compact`, `sessions.rewind` | Public replacement operations | Stable session operations | — | CLI | Gated; mutation forbidden in probe |
-| `turns.streaming`, `turns.thinking`, `tools.execution` | Public stream/events and `listTools` | Public stream/events | — | CLI | Host baseline; tool list is probe only |
-| `permissions.requests`, `permissions.ask-user` | Public cancelling/settling handlers | Public handlers | — | CLI | Host baseline; probe always cancels |
-| `settings.live`, `settings.mode`, `settings.model`, `settings.reasoning`, `settings.autonomy` | Live read-only settings and explicit mutation method | Session settings and defaults resources | — | Settings files | Live presence is probe only; controls gated |
-| `settings.context` | `getContextStats` | Session context operations | — | — | Probe only |
+| `turns.streaming`, `turns.thinking`, `tools.execution` | Public stream/events and `listTools` | Public stream/events | — | CLI | Production streaming/Thinking/semantic Tool lifecycle; Tool list remains probe only |
+| `permissions.requests`, `permissions.ask-user` | Public cancelling/settling handlers | Public handlers | — | CLI | Production wired; probe always cancels |
+| `settings.live`, `settings.mode`, `settings.model`, `settings.reasoning`, `settings.autonomy` | Live read-only settings and explicit mutation method | Session settings and defaults resources | — | Settings files | Production wired, including authoritative reread; probe remains structural only |
+| `settings.context` | High-level `getContextStats`; low-level `DroidClient.getContextBreakdown`; public raw last-call notification/load fields | `sessions.getContextBreakdown` | — | — | Production safe read/refresh and unavailable fallback; truthful last-call meter is the next slice |
 | `attachments.images`, `attachments.documents` | `DroidSession.stream` accepts `MessageOptions.images` / `files` | `ConnectedDroidSession.stream` accepts the same `MessageOptions` | — | — | Stable runtime access; no DroidVisX UI support claimed |
 | `skills.list` | `listSkills` | `skills.list` | — | Skill files/settings | Probe only |
 | `skills.manage` | `setSkillDisabled` | `skills.setDisabled` | — | Skill files/settings | Gated; mutation forbidden in probe |
@@ -74,7 +77,7 @@ approval to switch DroidVisX away from its current local `ProcessTransport`.
 | `worktrees.lifecycle` | — | No dedicated public resource in `DaemonResources` | — | CLI | Blocked pending evidence |
 | `terminals.lifecycle` | — | `terminals` resource | — | CLI | Gated |
 | `processes.background` | — | No dedicated stable process resource established | — | CLI | Blocked pending evidence |
-| `workspace.cwd` | Live session cwd | `workspace` resource | — | CLI | Host baseline; presence is probe only |
+| `workspace.cwd` | Live session cwd | `workspace` resource | — | CLI | Production Host/Runtime workspace boundary; presence is also probed |
 | `workspace.files` | — | List/search/read file methods | — | CLI/tools | Gated |
 | `git.repository`, `git.pull-requests` | Tool execution is not a Git control API | `git` resource | — | CLI/tools | Gated |
 | `plugins.manage`, `marketplaces.manage` | — | Stable resources | — | Configuration | Gated |
@@ -82,7 +85,7 @@ approval to switch DroidVisX away from its current local `ProcessTransport`.
 | `custom-models.manage` | Session model selection is not custom-model management | `customModels` resource | — | Configuration | Gated |
 | `auth.login` | — | Daemon accepts Host-side API-key auth | — | CLI login | Gated; credentials never reported |
 | `account.profile`, `account.usage`, `account.org-policy` | Unresolved | Unresolved | — | CLI/config behavior is not a public data API | Blocked pending evidence |
-| `diagnostics.observability` | Public injected observability | — | — | CLI diagnostics | Gated |
+| `diagnostics.observability` | Public injected observability | — | — | CLI diagnostics | Production wired with content-minimal local diagnostics |
 | `diagnostics.feedback` | No public session facade method | `feedback` resource | — | CLI | Gated |
 | `diagnostics.update` | — | `updates.trigger` | — | CLI update | Gated |
 | `automations.lifecycle` | — | `automations` resource | — | CLI/config | Gated |
@@ -127,13 +130,20 @@ must all report supported/succeeded. Any unavailable, malformed, partial, or
 timed-out required result exits unsuccessfully.
 
 A successful opt-in local smoke run completed after the deadline and
-fail-closed hardening in this snapshot, with CLI `0.190.0`: one saved session
+fail-closed hardening in an earlier snapshot, with CLI `0.190.0`: one saved session
 was resumed, all seven structural observation groups and every required
 capability projection were supported, and cleanup succeeded. The single JSON
 report was reviewed and contained only versions, bounded counts,
 field-presence booleans, fixed capability IDs, and fixed state/reason values.
 It contained no names, paths, session IDs, settings values, content, URLs,
 prompts, credentials, or raw errors.
+
+The currently installed CLI is `0.191.1`. Separate no-prompt, read-only
+low-level probes on 2026-08-11 confirmed that Context Stats `used` and
+Breakdown `usedTokens`/category sums are cumulative, while
+`lastCallCompactionTokens` matches the validated load-response last-call sum
+`inputTokens + cacheReadTokens + (outputTokens ?? 0)`. These probes emitted
+only aggregate numbers and no session IDs, paths, names, or content.
 
 ## Unresolved gaps
 
@@ -145,6 +155,8 @@ prompts, credentials, or raw errors.
 5. A secure daemon authentication/key handoff suitable for an Extension Host
    without exposing credentials to a Webview.
 6. Compatibility behavior when CLI and SDK protocol versions differ.
+7. Published cross-field semantics for cumulative Breakdown categories and
+   `freeTokens`; until then they are not current-window UI data.
 
 Until resolved with official evidence, these remain hidden or disabled. Droid
 session files, unexported SDK internals, raw daemon protocol messages, and
@@ -173,8 +185,9 @@ For every SDK or CLI upgrade:
    capability IDs; do not alter the Webview contract yet.
 2. **Session history adapter:** add a bounded Host projection over public
    low-level Node `DroidClient.loadSession` or stable daemon history access.
-3. **Settings and context reads:** expose only fields whose support probes pass;
-   keep mutations separate.
+3. **Truthful Context meter:** project only validated latest-call usage over a
+   validated budget; cumulative Stats/Breakdown totals remain diagnostics, not
+   fullness.
 4. **Explicit mutation slices:** rename/archive, then fork/compact/rewind, each
    with replacement and recovery tests.
 5. **Discovery slices:** commands, MCP, Skills, plugins, and marketplaces;
