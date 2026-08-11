@@ -176,6 +176,19 @@ export interface TurnStopMessage {
   readonly turnId: string;
 }
 
+/**
+ * Rewinds the session to the user message identified by `messageId`
+ * (SDK message id), then resends `text` as a fresh turn in the forked
+ * session.
+ */
+export interface TurnEditResendMessage {
+  readonly type: 'turn.editResend';
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly messageId: string;
+  readonly text: string;
+}
+
 export interface RuntimeRetryMessage {
   readonly type: 'runtime.retry';
   readonly sessionId: string | null;
@@ -252,6 +265,7 @@ export type WebviewToHostMessage =
   | WebviewReadyMessage
   | TurnSendMessage
   | TurnStopMessage
+  | TurnEditResendMessage
   | RuntimeRetryMessage
   | PermissionRespondMessage
   | AskUserRespondMessage
@@ -358,6 +372,8 @@ export interface UserTranscriptItem {
   readonly id: string;
   readonly kind: 'user';
   readonly text: string;
+  /** SDK message id; present when this message can anchor a rewind. */
+  readonly messageId?: string;
 }
 
 export interface AssistantTranscriptItem {
@@ -510,6 +526,18 @@ export interface TurnStateMessage {
   readonly status: TurnStatus;
 }
 
+/**
+ * Announces the SDK message id assigned to the user prompt of a live
+ * turn so the webview can enable edit-and-resend for it.
+ */
+export interface UserMessageMetaMessage {
+  readonly type: 'user.message-meta';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly messageId: string;
+}
+
 export interface TurnErrorMessage {
   readonly type: 'turn.error';
   readonly sequence: number;
@@ -590,6 +618,7 @@ export type HostToWebviewMessage =
   | ToolActivityMessage
   | RuntimeDiagnosticMessage
   | TurnStateMessage
+  | UserMessageMetaMessage
   | TurnErrorMessage
   | InteractionRequestMessage
   | InteractionClosedMessage;

@@ -25,6 +25,8 @@ import {
   RUNTIME_INTERACTION_MODES,
   RUNTIME_REASONING_EFFORTS,
   type DroidRuntime,
+  type RuntimeRewindParams,
+  type RuntimeRewindResult,
   type RuntimeContextAccuracy,
   type RuntimeContextStats,
   type RuntimeModelCatalog,
@@ -43,6 +45,17 @@ import {
 } from './runtimeInteractions';
 import type { RuntimeDiagnosticSink } from './runtimeDiagnostics';
 
+export interface FactoryDroidSessionRewindParams {
+  readonly messageId: string;
+  readonly filesToRestore: Array<{
+    filePath: string;
+    contentHash: string;
+    size: number;
+  }>;
+  readonly filesToDelete: Array<{ filePath: string }>;
+  readonly forkTitle: string;
+}
+
 export interface FactoryDroidSession {
   readonly id: string;
   readonly settings: Readonly<SessionSettings>;
@@ -56,6 +69,9 @@ export interface FactoryDroidSession {
     params: DroidSessionUpdateSettingsOptions,
   ): Promise<unknown>;
   getContextStats(): Promise<GetContextStatsResult>;
+  rewind?(
+    params: FactoryDroidSessionRewindParams,
+  ): Promise<{ session: FactoryDroidSession }>;
   close(): Promise<void>;
 }
 
@@ -319,6 +335,72 @@ export class FactoryDroidRuntime implements DroidRuntime {
     }
 
     await this.session.interrupt();
+  }
+
+  async rewind(
+    params: RuntimeRewindParams,
+  ): Promise<RuntimeRewindResult> {
+    const session = this.requireSession();
+    if (this.activeTurn) {
+      throw new Error(
+        'Droid runtime cannot rewind while a turn is active.',
+      );
+    }
+    if (typeof session.rewind !== 'function') {
+      throw new Error('The Droid session does not support rewind.');
+    }
+
+    const startedAt = performance.now();
+    this.recordDiagnostic({
+      level: 'info',
+      name: 'runtime.rewind.started',
+    });
+
+    let nextSession: FactoryDroidSession;
+    try {
+      const outcome = await session.rewind({
+        messageId: params.messageId,
+        filesToRestore: [],
+        filesToDelete: [],
+        forkTitle: params.forkTitle,
+      });
+      nextSession = outcome.session;
+    } catch (error) {
+      this.recordDiagnostic({
+        level: 'error',
+        name: 'runtime.rewind.finished',
+        attributes: {
+          durationMs: Math.round(performance.now() - startedAt),
+          outcome: 'sdk-error',
+        },
+      });
+      throw error;
+    }
+
+    // The SDK replaces the rewound session in place; re-apply the
+    // captured model catalog view so `availableModels` survives the fork.
+    const availableModels = session.availableModels;
+    this.session =
+      availableModels === undefined
+        ? nextSession
+        : createCatalogSessionView(nextSession, availableModels);
+    if (this.sessionTarget) {
+      this.sessionTarget = {
+        kind: 'resume',
+        cwd: this.sessionTarget.cwd,
+        sessionId: nextSession.id,
+      };
+    }
+
+    this.recordDiagnostic({
+      level: 'info',
+      name: 'runtime.rewind.finished',
+      attributes: {
+        durationMs: Math.round(performance.now() - startedAt),
+        outcome: 'success',
+      },
+    });
+    return { sessionId: nextSession.id };
   }
 
   dispose(): Promise<void> {
@@ -849,7 +931,7 @@ function createCatalogSessionView(
   session: FactoryDroidSession,
   availableModels: readonly AvailableModelConfig[],
 ): FactoryDroidSession {
-  return {
+  const view: FactoryDroidSession = {
     get id() {
       return session.id;
     },
@@ -873,4 +955,8 @@ function createCatalogSessionView(
       return session.close();
     },
   };
+  if (typeof session.rewind === 'function') {
+    view.rewind = (params) => session.rewind!(params);
+  }
+  return view;
 }

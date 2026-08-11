@@ -98,6 +98,12 @@ describe('readHostMessage', () => {
       transcript: [
         { id: 'user-1', kind: 'user', text: 'Implement sessions.' },
         {
+          id: 'user-2',
+          kind: 'user',
+          text: 'With a rewind anchor.',
+          messageId: 'sdk-message-1',
+        },
+        {
           id: 'assistant-1',
           kind: 'assistant',
           turnId: 'turn-1',
@@ -245,6 +251,13 @@ describe('readHostMessage', () => {
       sessionId: 'session-1',
       turnId: 'turn-1',
       status: 'streaming',
+    },
+    {
+      type: 'user.message-meta',
+      sequence: 21,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      messageId: 'sdk-message-1',
     },
     {
       type: 'turn.error',
@@ -727,6 +740,28 @@ describe('readHostMessage', () => {
       sessionId: 'session-1',
       turnId: 'turn-1',
       status: 'invented',
+    },
+    {
+      type: 'user.message-meta',
+      sequence: 5,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      messageId: '',
+    },
+    {
+      type: 'user.message-meta',
+      sequence: 5,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      messageId: 'm'.repeat(MAX_BRIDGE_ID_LENGTH + 1),
+    },
+    {
+      type: 'user.message-meta',
+      sequence: 5,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      messageId: 'sdk-message-1',
+      extra: true,
     },
     {
       type: 'turn.error',

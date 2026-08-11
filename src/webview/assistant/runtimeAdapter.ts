@@ -23,6 +23,8 @@ export interface SafeRuntimeMessage {
   readonly content: ThreadMessageLike['content'];
   readonly status?: ThreadMessageLike['status'];
   readonly optimistic?: boolean;
+  /** SDK message id for user messages that can anchor a rewind. */
+  readonly messageId?: string;
 }
 
 type SafeRuntimePart = Exclude<
@@ -159,7 +161,12 @@ export function convertSafeRuntimeMessage(
     role: message.role,
     content: message.content,
     ...(message.status === undefined ? {} : { status: message.status }),
-    metadata: message.optimistic ? { isOptimistic: true } : {},
+    metadata: {
+      ...(message.optimistic ? { isOptimistic: true } : {}),
+      custom: {
+        messageId: message.messageId ?? null,
+      },
+    },
   };
 }
 
@@ -250,6 +257,9 @@ export function mapTranscriptToRuntimeMessages(
         role: 'user',
         content: [{ type: 'text', text: item.text }],
         optimistic,
+        ...(item.messageId === undefined
+          ? {}
+          : { messageId: item.messageId }),
       };
       nextEntries.push([
         item.id,

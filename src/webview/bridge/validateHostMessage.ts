@@ -151,6 +151,8 @@ export function readHostMessage(
         return parseRuntimeDiagnostic(value);
       case 'turn.state':
         return parseTurnState(value);
+      case 'user.message-meta':
+        return parseUserMessageMeta(value);
       case 'turn.error':
         return parseTurnError(value);
       case 'interaction.request':
@@ -521,6 +523,35 @@ function parseTurnState(
     sessionId: value.sessionId,
     turnId: value.turnId,
     status: value.status,
+  };
+}
+
+function parseUserMessageMeta(
+  value: UnknownRecord,
+): Extract<
+  HostToWebviewMessage,
+  { type: 'user.message-meta' }
+> | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sequence',
+      'sessionId',
+      'turnId',
+      'messageId',
+    ]) ||
+    !hasTurnIdentity(value) ||
+    !isId(value.messageId)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'user.message-meta',
+    sequence: value.sequence,
+    sessionId: value.sessionId,
+    turnId: value.turnId,
+    messageId: value.messageId,
   };
 }
 
@@ -1217,14 +1248,22 @@ function parseUserTranscriptItem(
   value: UnknownRecord,
 ): Extract<SessionTranscriptItem, { kind: 'user' }> | undefined {
   if (
-    !hasExactKeys(value, ['id', 'kind', 'text']) ||
+    !hasExactKeys(value, ['id', 'kind', 'text'], ['messageId']) ||
     !isId(value.id) ||
-    !isBoundedString(value.text, MAX_TURN_TEXT_LENGTH)
+    !isBoundedString(value.text, MAX_TURN_TEXT_LENGTH) ||
+    (value.messageId !== undefined && !isId(value.messageId))
   ) {
     return undefined;
   }
 
-  return { id: value.id, kind: 'user', text: value.text };
+  return {
+    id: value.id,
+    kind: 'user',
+    text: value.text,
+    ...(value.messageId === undefined
+      ? {}
+      : { messageId: value.messageId }),
+  };
 }
 
 function parseAssistantTranscriptItem(

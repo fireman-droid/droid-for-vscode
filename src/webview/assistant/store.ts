@@ -9,6 +9,7 @@ import {
   type TurnStatus,
 } from '../../shared/bridgeMessages';
 import { trimTranscriptToLimits } from '../../shared/transcriptLimits';
+import { stableTranscriptId } from '../../shared/hostTranscriptState';
 
 export interface AssistantTurn {
   readonly turnId: string;
@@ -288,6 +289,37 @@ export function assistantWebviewReducer(
           message: event.message,
         }),
       );
+    case 'user.message-meta': {
+      if (event.sessionId !== state.sessionId) {
+        return advance(state, event.sequence);
+      }
+      // The prompt item id depends on its origin: optimistic sends use
+      // `user:<turnId>`, host snapshots use the stable transcript id.
+      const promptIds = new Set([
+        `user:${event.turnId}`,
+        stableTranscriptId('user', event.turnId),
+      ]);
+      const index = state.transcript.findIndex(
+        (item) => item.kind === 'user' && promptIds.has(item.id),
+      );
+      const item = state.transcript[index];
+      if (
+        item === undefined ||
+        item.kind !== 'user' ||
+        item.messageId === event.messageId
+      ) {
+        return advance(state, event.sequence);
+      }
+      return {
+        ...state,
+        sequence: event.sequence,
+        transcript: state.transcript.map((entry, entryIndex) =>
+          entryIndex === index
+            ? { ...item, messageId: event.messageId }
+            : entry,
+        ),
+      };
+    }
     case 'turn.state':
       if (event.sessionId !== state.sessionId) {
         return advance(state, event.sequence);

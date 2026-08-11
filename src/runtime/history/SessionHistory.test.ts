@@ -54,7 +54,9 @@ describe('projectSessionHistory', () => {
         historyStatus: 'complete',
         truncated: false,
         transcript: [
-          { kind: 'user', text: 'Question' },
+          // User messages intentionally expose the SDK message id as
+          // `messageId`; it anchors edit-and-resend rewinds.
+          { kind: 'user', text: 'Question', messageId: 'raw-user-id' },
           {
             kind: 'thinking',
             text: 'Visible thought',
@@ -71,7 +73,6 @@ describe('projectSessionHistory', () => {
       },
     });
     const serialized = JSON.stringify(first);
-    expect(serialized).not.toContain('raw-user-id');
     expect(serialized).not.toContain('raw-assistant-id');
     expect(serialized).not.toContain('raw-tool-id');
     expect(serialized).not.toContain('private');

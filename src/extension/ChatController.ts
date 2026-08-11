@@ -61,8 +61,10 @@ import {
 } from './SessionRecoveryStore';
 import {
   appendAcceptedUserPrompt,
+  attachUserMessageId,
   createHostTranscriptState,
   projectHostTranscriptMessage,
+  truncateFromUserMessage,
   type HostTranscriptProjectionMessage,
   type HostTranscriptState,
 } from './hostTranscriptState';
@@ -127,6 +129,13 @@ const SETTINGS_UPDATE_BLOCKED_MESSAGE =
   'Finish the current interaction or setting update before changing settings.';
 const SETTINGS_UPDATE_UNSUPPORTED_MESSAGE =
   'This setting is not available for the current Droid session.';
+const EDIT_RESEND_BLOCKED_MESSAGE =
+  'Finish the current Droid activity before editing an earlier message.';
+const EDIT_RESEND_UNSUPPORTED_MESSAGE =
+  'This message cannot be edited and resent.';
+const EDIT_RESEND_FAILED_MESSAGE =
+  'Droid could not rewind the session to that message.';
+const MAX_FORK_TITLE_LENGTH = 60;
 const CONTEXT_READ_FAILED_MESSAGE =
   'Droid did not return context usage. Retry, then open DroidVisX Logs if this continues.';
 const MODEL_CATALOG_UNSUPPORTED_MESSAGE =
@@ -255,6 +264,14 @@ export class ChatController {
         return;
       case 'turn.stop':
         this.handleStop(message.sessionId, message.turnId);
+        return;
+      case 'turn.editResend':
+        this.handleEditResend(
+          message.sessionId,
+          message.turnId,
+          message.messageId,
+          message.text,
+        );
         return;
       case 'runtime.retry':
         this.handleRetry(message.sessionId);
@@ -631,6 +648,20 @@ export class ChatController {
         }
         return;
       }
+      case 'user-message':
+        this.transcript = attachUserMessageId(
+          this.transcript,
+          turnId,
+          event.messageId,
+        );
+        this.scheduleRecoveryCheckpoint();
+        this.emit({
+          type: 'user.message-meta',
+          sessionId,
+          turnId,
+          messageId: event.messageId,
+        });
+        return;
       case 'working-state':
         if (event.isWorking) {
           this.startStreaming(sessionId, turnId);
@@ -713,6 +744,156 @@ export class ChatController {
         this.failTurn(sessionId, turnId, 'runtime-interrupt-failed');
       }
     });
+  }
+
+  private handleEditResend(
+    sessionId: string,
+    turnId: string,
+    messageId: string,
+    text: string,
+  ): void {
+    const runtime = this.runtime;
+    if (
+      runtime !== null &&
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    if (
+      runtime === null ||
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId ||
+      text.trim().length === 0 ||
+      this.turn?.turnId === turnId
+    ) {
+      return;
+    }
+    if (
+      isTurnActive(this.turn) ||
+      this.interactions.hasPending() ||
+      this.sessionOperationInProgress ||
+      this.refreshInProgress ||
+      this.settingsUpdate !== null
+    ) {
+      this.emitSessionDiagnostic(
+        'edit-resend-blocked',
+        EDIT_RESEND_BLOCKED_MESSAGE,
+      );
+      return;
+    }
+    if (typeof runtime.rewind !== 'function') {
+      this.emitSessionDiagnostic(
+        'edit-resend-unsupported',
+        EDIT_RESEND_UNSUPPORTED_MESSAGE,
+      );
+      return;
+    }
+    const truncated = truncateFromUserMessage(
+      this.transcript,
+      messageId,
+    );
+    if (truncated === null) {
+      this.emitSessionDiagnostic(
+        'edit-resend-unsupported',
+        EDIT_RESEND_UNSUPPORTED_MESSAGE,
+      );
+      return;
+    }
+
+    this.sessionOperationInProgress = true;
+    void this.performEditResend(
+      runtime,
+      sessionId,
+      messageId,
+      text,
+      truncated,
+    ).then((forkedSessionId) => {
+      this.sessionOperationInProgress = false;
+      if (forkedSessionId === null) {
+        return;
+      }
+      // Send first, then snapshot: the single snapshot then carries the
+      // forked session id, the truncated transcript with the edited
+      // prompt, and the submitting turn, so the webview adopts the fork
+      // atomically.
+      this.handleSend(forkedSessionId, turnId, text);
+      this.emitSnapshot();
+    });
+  }
+
+  /**
+   * Rewinds the runtime to `messageId` and adopts the forked session.
+   * Returns the forked session id when the controller should resend the
+   * edited prompt, or null when the operation failed or became stale.
+   */
+  private async performEditResend(
+    runtime: DroidRuntime,
+    sessionId: string,
+    messageId: string,
+    text: string,
+    truncated: HostTranscriptState,
+  ): Promise<string | null> {
+    const generation = this.runtimeGeneration;
+    const cwd = this.activeRuntimeCwd;
+    if (cwd === null) {
+      return null;
+    }
+
+    let forkedSessionId: string;
+    try {
+      const result = await runtime.rewind!({
+        messageId,
+        forkTitle: forkTitleFromText(text),
+      });
+      forkedSessionId = result.sessionId;
+    } catch {
+      if (
+        this.isCurrentSessionOperation(
+          runtime,
+          generation,
+          sessionId,
+          cwd,
+        )
+      ) {
+        this.emitSessionDiagnostic(
+          'edit-resend-failed',
+          EDIT_RESEND_FAILED_MESSAGE,
+        );
+      }
+      return null;
+    }
+    if (
+      !this.isCurrentSessionOperation(
+        runtime,
+        generation,
+        sessionId,
+        cwd,
+      )
+    ) {
+      return null;
+    }
+    if (!isSafeBridgeId(forkedSessionId)) {
+      this.emitSessionDiagnostic(
+        'edit-resend-failed',
+        EDIT_RESEND_FAILED_MESSAGE,
+      );
+      return null;
+    }
+
+    this.sessionId = forkedSessionId;
+    this.transcript = truncated;
+    this.turn = null;
+    this.sessions = this.withActiveSession(this.sessions, {
+      id: forkedSessionId,
+      title: forkTitleFromText(text),
+      messageCount: 0,
+      modifiedTime: new Date().toISOString(),
+      active: true,
+    });
+    this.recoveryStore.writeSession(forkedSessionId, truncated);
+    this.recoveryStore.selectSession(forkedSessionId);
+    void this.recoveryStore.flush();
+    return forkedSessionId;
   }
 
   private handleRetry(sessionId: string | null): void {
@@ -2479,6 +2660,13 @@ function isEnumValue<const Values extends readonly string[]>(
 
 function isSafeContextNumber(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+function forkTitleFromText(text: string): string {
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  return collapsed.length <= MAX_FORK_TITLE_LENGTH
+    ? collapsed
+    : `${collapsed.slice(0, MAX_FORK_TITLE_LENGTH - 1)}…`;
 }
 
 function isSafeBridgeId(value: string): boolean {

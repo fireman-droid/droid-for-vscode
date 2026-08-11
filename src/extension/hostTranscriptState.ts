@@ -87,6 +87,50 @@ export function appendAcceptedUserPrompt(
   );
 }
 
+export function attachUserMessageId(
+  state: HostTranscriptState,
+  turnId: string,
+  messageId: string,
+): HostTranscriptState {
+  const id = stableTranscriptId('user', turnId);
+  const index = state.transcript.findIndex(
+    (item) => item.kind === 'user' && item.id === id,
+  );
+  if (index < 0) {
+    return state;
+  }
+  const existing = state.transcript[index] as Extract<
+    SessionTranscriptItem,
+    { kind: 'user' }
+  >;
+  if (existing.messageId === messageId) {
+    return state;
+  }
+  return replaceItem(state, index, { ...existing, messageId });
+}
+
+/**
+ * Drops the user item carrying `messageId` and everything after it,
+ * mirroring an SDK rewind to that message. Returns null when the
+ * message is not part of the transcript.
+ */
+export function truncateFromUserMessage(
+  state: HostTranscriptState,
+  messageId: string,
+): HostTranscriptState | null {
+  const index = state.transcript.findIndex(
+    (item) => item.kind === 'user' && item.messageId === messageId,
+  );
+  if (index < 0) {
+    return null;
+  }
+  return {
+    transcript: state.transcript.slice(0, index),
+    historyStatus: state.historyStatus,
+    truncated: state.truncated,
+  };
+}
+
 export function projectHostTranscriptMessage(
   state: HostTranscriptState,
   message: HostTranscriptProjectionMessage,

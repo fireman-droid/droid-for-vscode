@@ -99,6 +99,15 @@ export type RuntimeSessionTarget =
       readonly sessionId: string;
     };
 
+export interface RuntimeRewindParams {
+  readonly messageId: string;
+  readonly forkTitle: string;
+}
+
+export interface RuntimeRewindResult {
+  readonly sessionId: string;
+}
+
 export interface DroidRuntime {
   initialize(
     target: RuntimeSessionTarget | string,
@@ -111,5 +120,11 @@ export interface DroidRuntime {
   ): Promise<RuntimeSessionSettings>;
   sendTurn(text: string): AsyncIterable<RuntimeEvent>;
   interrupt(): Promise<void>;
+  /**
+   * Rewinds the active session to the given user message, forking a new
+   * session that this runtime then targets. Optional: absent when the
+   * runtime cannot rewind.
+   */
+  rewind?(params: RuntimeRewindParams): Promise<RuntimeRewindResult>;
   dispose(): Promise<void>;
 }

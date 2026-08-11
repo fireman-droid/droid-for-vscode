@@ -512,11 +512,21 @@ function parseUser(
 ): Extract<SessionTranscriptItem, { kind: 'user' }> | undefined {
   const id = dataValue(value, 'id');
   const text = dataValue(value, 'text');
-  return hasExactKeys(value, ['id', 'kind', 'text']) &&
-    isId(id) &&
-    isBoundedString(text, MAX_TURN_TEXT_LENGTH)
-    ? { id, kind: 'user', text }
-    : undefined;
+  const messageId = dataValue(value, 'messageId');
+  if (
+    !hasExactKeys(value, ['id', 'kind', 'text'], ['messageId']) ||
+    !isId(id) ||
+    !isBoundedString(text, MAX_TURN_TEXT_LENGTH) ||
+    (messageId !== undefined && !isId(messageId))
+  ) {
+    return undefined;
+  }
+  return {
+    id,
+    kind: 'user',
+    text,
+    ...(messageId === undefined ? {} : { messageId }),
+  };
 }
 
 function parseAssistant(

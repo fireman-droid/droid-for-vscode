@@ -205,6 +205,61 @@ describe('assistantWebviewReducer', () => {
     ]);
   });
 
+  it('attaches the SDK message id to the matching user prompt', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'turn.send',
+      turnId: 'turn-a',
+      text: 'Inspect this',
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'user.message-meta',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        messageId: 'sdk-msg-1',
+      },
+    });
+
+    expect(state.transcript).toMatchObject([
+      {
+        id: 'user:turn-a',
+        kind: 'user',
+        text: 'Inspect this',
+        messageId: 'sdk-msg-1',
+      },
+    ]);
+
+    const wrongSession = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'user.message-meta',
+        sequence: 2,
+        sessionId: 'session-other',
+        turnId: 'turn-a',
+        messageId: 'sdk-msg-other',
+      },
+    });
+    expect(wrongSession.transcript).toEqual(state.transcript);
+
+    const unknownTurn = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'user.message-meta',
+        sequence: 3,
+        sessionId: 'session-a',
+        turnId: 'turn-unknown',
+        messageId: 'sdk-msg-2',
+      },
+    });
+    expect(unknownTurn.transcript).toEqual(state.transcript);
+  });
+
   it('keeps interactions generation-safe, unique, and closes once', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',

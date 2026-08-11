@@ -19,6 +19,7 @@ import {
   type SessionSelectMessage,
   type SessionSettingUpdateMessage,
   type SessionsRefreshMessage,
+  type TurnEditResendMessage,
   type TurnSendMessage,
   type TurnStopMessage,
   type WebviewReadyMessage,
@@ -46,6 +47,8 @@ export function parseWebviewMessage(
         return parseTurnSend(value);
       case 'turn.stop':
         return parseTurnStop(value);
+      case 'turn.editResend':
+        return parseTurnEditResend(value);
       case 'runtime.retry':
         return parseRuntimeRetry(value);
       case 'permission.respond':
@@ -125,6 +128,36 @@ function parseTurnStop(value: UnknownRecord): TurnStopMessage | undefined {
     type: 'turn.stop',
     sessionId: value.sessionId,
     turnId: value.turnId,
+  };
+}
+
+function parseTurnEditResend(
+  value: UnknownRecord,
+): TurnEditResendMessage | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sessionId',
+      'turnId',
+      'messageId',
+      'text',
+    ]) ||
+    !isId(value.sessionId) ||
+    !isId(value.turnId) ||
+    !isId(value.messageId) ||
+    typeof value.text !== 'string' ||
+    value.text.length === 0 ||
+    value.text.length > MAX_TURN_TEXT_LENGTH
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'turn.editResend',
+    sessionId: value.sessionId,
+    turnId: value.turnId,
+    messageId: value.messageId,
+    text: value.text,
   };
 }
 

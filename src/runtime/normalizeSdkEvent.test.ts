@@ -324,9 +324,42 @@ describe('normalizeSdkEvent', () => {
     });
   });
 
+  it('projects only the SDK user message id as a rewind anchor', () => {
+    const projected = normalizeSdkEvent(
+      sdkEvent('user', {
+        message: {
+          id: 'sdk-message-1',
+          role: 'user',
+          content: [{ type: 'text', text: 'sensitive prompt text' }],
+        },
+      }),
+    );
+
+    expect(projected).toEqual({
+      type: 'user-message',
+      messageId: 'sdk-message-1',
+    });
+    expect(JSON.stringify(projected)).not.toContain('sensitive');
+    expect(
+      normalizeSdkEvent(sdkEvent('user', { message: { id: '' } })),
+    ).toBeUndefined();
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('user', {
+          message: { id: 'x'.repeat(MAX_BRIDGE_ID_LENGTH + 1) },
+        }),
+      ),
+    ).toBeUndefined();
+    expect(
+      normalizeSdkEvent(sdkEvent('user', { message: null })),
+    ).toBeUndefined();
+    expect(
+      normalizeSdkEvent(sdkEvent('user', { content: 'sensitive' })),
+    ).toBeUndefined();
+  });
+
   it.each([
     'assistant_text_complete',
-    'user',
     'assistant',
     'token_usage_update',
     'permission_resolved',

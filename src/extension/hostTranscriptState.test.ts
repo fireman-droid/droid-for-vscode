@@ -7,11 +7,13 @@ import {
 } from '../shared/bridgeMessages';
 import {
   appendAcceptedUserPrompt,
+  attachUserMessageId,
   createHostTranscriptState,
   hydrateHostTranscriptState,
   MAX_HOST_TRANSCRIPT_DIAGNOSTICS,
   projectHostTranscriptMessage,
   stableTranscriptId,
+  truncateFromUserMessage,
   type HostTranscriptProjectionMessage,
   type HostTranscriptState,
 } from './hostTranscriptState';
@@ -404,6 +406,71 @@ describe('hostTranscriptState', () => {
         status: 'running',
       }),
     ]);
+  });
+
+  it('attaches the SDK message id to the accepted prompt of a turn', () => {
+    const base = appendAcceptedUserPrompt(
+      createHostTranscriptState('complete'),
+      'turn-1',
+      'First question',
+    );
+
+    const attached = attachUserMessageId(base, 'turn-1', 'sdk-msg-1');
+    expect(attached.transcript).toEqual([
+      {
+        id: stableTranscriptId('user', 'turn-1'),
+        kind: 'user',
+        text: 'First question',
+        messageId: 'sdk-msg-1',
+      },
+    ]);
+
+    expect(attachUserMessageId(attached, 'turn-1', 'sdk-msg-1')).toBe(
+      attached,
+    );
+    expect(attachUserMessageId(base, 'turn-unknown', 'sdk-msg-1')).toBe(
+      base,
+    );
+  });
+
+  it('truncates the transcript from a rewound user message', () => {
+    let state = appendAcceptedUserPrompt(
+      createHostTranscriptState('complete'),
+      'turn-1',
+      'First question',
+    );
+    state = attachUserMessageId(state, 'turn-1', 'sdk-msg-1');
+    state = project(state, {
+      type: 'assistant.delta',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      delta: 'First answer',
+    });
+    state = appendAcceptedUserPrompt(state, 'turn-2', 'Second question');
+    state = attachUserMessageId(state, 'turn-2', 'sdk-msg-2');
+    state = project(state, {
+      type: 'assistant.delta',
+      sessionId: 'session-1',
+      turnId: 'turn-2',
+      delta: 'Second answer',
+    });
+
+    const truncated = truncateFromUserMessage(state, 'sdk-msg-2');
+    expect(truncated?.transcript).toEqual([
+      expect.objectContaining({
+        kind: 'user',
+        text: 'First question',
+        messageId: 'sdk-msg-1',
+      }),
+      expect.objectContaining({
+        kind: 'assistant',
+        text: 'First answer',
+      }),
+    ]);
+
+    const fromFirst = truncateFromUserMessage(state, 'sdk-msg-1');
+    expect(fromFirst?.transcript).toEqual([]);
+    expect(truncateFromUserMessage(state, 'sdk-msg-unknown')).toBeNull();
   });
 });
 

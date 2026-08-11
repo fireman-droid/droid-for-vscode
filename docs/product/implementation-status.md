@@ -8,12 +8,12 @@
 
 ## 状态定义
 
-| 状态 | 判定标准 |
-| --- | --- |
-| **生产已接通** | 用户界面、Bridge、Extension Host 和 Droid Runtime 之间存在完整生产链路，并有相应测试证据 |
-| **部分完成** | 只实现了规格中的一部分，或者当前行为是临时替代方案 |
-| **仅探测/声明** | SDK、daemon、CLI 或配置中存在能力证据，但 Extension 和 UI 没有消费该能力 |
-| **未实现** | 没有完整的 UI、Bridge、Host 和 Runtime 适配链路 |
+| 状态            | 判定标准                                                                                 |
+| --------------- | ---------------------------------------------------------------------------------------- |
+| **生产已接通**  | 用户界面、Bridge、Extension Host 和 Droid Runtime 之间存在完整生产链路，并有相应测试证据 |
+| **部分完成**    | 只实现了规格中的一部分，或者当前行为是临时替代方案                                       |
+| **仅探测/声明** | SDK、daemon、CLI 或配置中存在能力证据，但 Extension 和 UI 没有消费该能力                 |
+| **未实现**      | 没有完整的 UI、Bridge、Host 和 Runtime 适配链路                                          |
 
 能力声明或 smoke probe **不等于产品功能已经实现**。
 
@@ -37,6 +37,15 @@ Tool/Thinking 行内联真实耗时（Runtime 计时经 Bridge 可选 `durationM
 完整 typecheck、445 项测试、重新打包（`.vscodeignore` 排除
 `.cursor/**`，VSIX 回到 8 个入口）并安装到 Cursor；仍等待用户
 Reload Window 后的最终可见验收。
+
+2026-08-11 追加交互修复与“编辑并重问”切片：待处理交互不再禁用
+Composer 附件/控件、发送后自动滚到底部、Assistant 消息 Hover Copy、
+代码块 highlight.js 语法高亮 + 单独复制按钮，以及双击历史用户消息
+内联编辑并经 SDK `session.rewind` 分支重问（Bridge `turn.editResend` /
+`user.message-meta`、Runtime `rewind`、Host 转录截断与
+Session 目录切换、Webview 内联编辑器）。该切片已通过 typecheck、
+460 项测试、构建与浏览器冒烟（双击开编辑器、Resend 发出正确
+`turn.editResend`、Fork 快照后 UI 正确截断切换）。
 下一轮严格两小时实现窗口的证据、范围、执行顺序、验收和回滚已经固化到
 `docs/preflight/`。该预研确认 Context 的累计 `used`、Breakdown
 `usedTokens`、`freeTokens` 和 Category Sum 都不能表示当前窗口；只有公开
@@ -47,7 +56,8 @@ Schema 中最新 Provider Call 的 `lastCallTokenUsage` /
 但公开的 `initializeSession()` / `loadSession()` 响应包含经过 SDK Schema
 验证的 `availableModels`。生产 Runtime 现在只投影其中由 SDK 标记为
 `isCustom: true` 的 BYOK Model，Model 和对应 Reasoning 选项可以安全选择；
-目录缺失或非法时仍然 fail closed，不会使用硬编码模型。Rewind、
+目录缺失或非法时仍然 fail closed，不会使用硬编码模型。历史用户消息
+现在支持双击内联编辑并通过 SDK Rewind 从该消息分支重新提问。
 Changes/Diff、daemon 主运行路径、Skills、
 Commands、MCP、Mission 和 Manage Droid 等主要功能仍未实现。
 
@@ -146,11 +156,16 @@ Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限�
 
 - assistant-ui 原生 Copy
 - “Reuse” 把历史用户文本非破坏性填入当前 Composer
-- 双击用户消息执行同一 Reuse 操作并聚焦 Composer
-- Reuse 同步 React Draft、VS Code 持久化 Draft 和 assistant-ui Composer
-- Copy 或 Reuse 都不会自动发送、修改历史、回退文件或创建分支
+- 双击带 SDK Message ID 的历史用户消息在原位打开内联编辑器，可修改后
+  Resend；Host 通过 SDK `session.rewind` 建立分支 Session、截断转录并以
+  编辑后的文本重新提问
+- 没有 SDK Message ID 的用户消息（例如刚发送、Host 尚未回传
+  `user.message-meta` 的乐观消息）双击仍执行非破坏性 Reuse
+- Resend 会在有活跃 Turn 或待处理交互时被拒绝；Rewind 不恢复或删除
+  工作区文件（`filesToRestore`/`filesToDelete` 恒为空）
+- Copy 和 Reuse 不会自动发送、修改历史、回退文件或创建分支
 
-这不是历史 Edit、Resend、Regenerate 或 Rewind。
+Assistant 消息 Regenerate 与文件级 Rewind 安全检查仍未实现。
 
 ### 4. 权限请求
 
@@ -369,22 +384,22 @@ Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限�
 
 ### 其他部分完成项
 
-| 功能 | 当前实现 | 尚缺内容 |
-| --- | --- | --- |
-| Session Settings 与 Context | Runtime、Host、Bridge v2、Mode/Autonomy/Model/Reasoning 更新、Context 使用进度、固定暖色响应式 UI、测试、VSIX 和安装均已完成 | 用户在真实 Cursor 中最终可见验收 |
-| Retry | 关闭并重新创建或恢复 Runtime | 不会重新发送失败 Prompt，也不是消息级 Regenerate/Reload |
-| CLI/连接诊断 | CLI 不存在、工作区无效、未信任和初始化失败提示 | 实际登录状态、登录操作、版本兼容 UI、账户状态、升级入口 |
-| Session 搜索 | 在最多 50 条本地结果中按标题或 ID 过滤 | daemon 全量搜索、内容搜索、分页、排序和筛选 |
-| Session 生命周期 | List、Refresh、New、Select、Resume | Rename、Archive、Delete、Favorite、Fork、Compact、Rewind |
-| Session 历史 | 文本、Thinking、Tool 生命周期 | 历史 Image、Document 和未知 Block 会被省略并标记为 partial |
-| Tool 展示 | 语义动作、技术 Tool 名、有界进度计数/类别、生命周期和实时观察到的真实耗时；不显示原始 Call ID | 参数、输出、结果、文件变更、Apply/Open 操作 |
-| 消息操作 | Copy、Reuse in Composer 和双击 Reuse；不会自动发送 | 历史 Edit、Resend、Regenerate、分支和 Rewind |
-| 本地诊断 | SDK Observability、Host 生命周期/耗时、Output Channel、Open Logs、轮换 JSONL | 用户可配置级别、导出诊断包、遥测或远程上传 |
-| Spec | ExitSpecMode 计划显示、编辑和审批；审批后的 `settings_updated` 会触发权威 Mode 回读 | 主动进入 Spec Mode、完整计划生命周期、实施交接 |
-| Mission | Mission 相关确认可以显示为通用权限卡片 | Mission 状态、事件、阶段、Worker、控制和独立 UI |
-| Diff | 权限详情可以显示原始文本或 Patch | 原生 Diff 模型、Hunk 操作、`vscode.diff`、Changes 页面 |
-| Workspace | 使用 `workspaceFolders[0]` | 多根工作区选择 |
-| Extension 入口 | 当前贡献 Activity Bar Webview | 与“Secondary Sidebar 为主界面”的当前项目要求仍需统一 |
+| 功能                        | 当前实现                                                                                                                     | 尚缺内容                                                         |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Session Settings 与 Context | Runtime、Host、Bridge v2、Mode/Autonomy/Model/Reasoning 更新、Context 使用进度、固定暖色响应式 UI、测试、VSIX 和安装均已完成 | 用户在真实 Cursor 中最终可见验收                                 |
+| Retry                       | 关闭并重新创建或恢复 Runtime                                                                                                 | 不会重新发送失败 Prompt，也不是消息级 Regenerate/Reload          |
+| CLI/连接诊断                | CLI 不存在、工作区无效、未信任和初始化失败提示                                                                               | 实际登录状态、登录操作、版本兼容 UI、账户状态、升级入口          |
+| Session 搜索                | 在最多 50 条本地结果中按标题或 ID 过滤                                                                                       | daemon 全量搜索、内容搜索、分页、排序和筛选                      |
+| Session 生命周期            | List、Refresh、New、Select、Resume                                                                                           | Rename、Archive、Delete、Favorite、Fork、Compact、Rewind         |
+| Session 历史                | 文本、Thinking、Tool 生命周期                                                                                                | 历史 Image、Document 和未知 Block 会被省略并标记为 partial       |
+| Tool 展示                   | 语义动作、技术 Tool 名、有界进度计数/类别、生命周期和实时观察到的真实耗时；不显示原始 Call ID                                | 参数、输出、结果、文件变更、Apply/Open 操作                      |
+| 消息操作                    | Copy、Reuse in Composer、双击内联编辑并从该消息 Rewind 重问                                                                  | Assistant Regenerate、`getRewindInfo` 文件安全检查、文件恢复选择 |
+| 本地诊断                    | SDK Observability、Host 生命周期/耗时、Output Channel、Open Logs、轮换 JSONL                                                 | 用户可配置级别、导出诊断包、遥测或远程上传                       |
+| Spec                        | ExitSpecMode 计划显示、编辑和审批；审批后的 `settings_updated` 会触发权威 Mode 回读                                          | 主动进入 Spec Mode、完整计划生命周期、实施交接                   |
+| Mission                     | Mission 相关确认可以显示为通用权限卡片                                                                                       | Mission 状态、事件、阶段、Worker、控制和独立 UI                  |
+| Diff                        | 权限详情可以显示原始文本或 Patch                                                                                             | 原生 Diff 模型、Hunk 操作、`vscode.diff`、Changes 页面           |
+| Workspace                   | 使用 `workspaceFolders[0]`                                                                                                   | 多根工作区选择                                                   |
+| Extension 入口              | 当前贡献 Activity Bar Webview                                                                                                | 与“Secondary Sidebar 为主界面”的当前项目要求仍需统一             |
 
 ## 仅探测/声明，没有接入产品
 
@@ -469,6 +484,7 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
 Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Settings
 为最终显示值；待处理 Permission/AskUser、重复更新、Session 替换和非法目录值
 仍会阻止更新。
+
 ### Context 与附件
 
 - [ ] 文件附件
@@ -487,15 +503,15 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 - [x] Copy 历史用户消息
 - [x] 非破坏性 Reuse in Composer
-- [ ] 编辑历史用户消息
-- [ ] 消息级重新发送
+- [x] 编辑历史用户消息（双击内联编辑器）
+- [x] 消息级重新发送（经 SDK Rewind 分支）
 - [ ] Assistant 消息 Regenerate
 - [ ] Turn Envelope
 - [ ] `getRewindInfo`
 - [ ] 文件变化安全检查
 - [ ] 保留当前工作区或恢复文件的选择
 - [ ] 冲突检测
-- [ ] Rewind 后建立分支 Session
+- [x] Rewind 后建立分支 Session（Fork 自动接管为当前 Session）
 
 ### Changes 与 Diff
 
@@ -538,7 +554,7 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [ ] Hooks 管理
 - [ ] Automations
 - [ ] Custom Models 的创建、编辑和 Provider 管理（已配置 BYOK Model 的选择
-  已接通）
+      已接通）
 - [ ] 组织策略
 - [ ] Account Profile
 - [ ] Account Usage
@@ -698,11 +714,11 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - `artifacts/`、本地 `.factory/skills/`、`.workflow/`、`dist/` 和 `node_modules/` 已忽略
 
 后续交付顺序和完成标准见
-[`delivery-plan.md`](./delivery-plan.md)。
+`[delivery-plan.md](./delivery-plan.md)`。
 
 ## 下一步
 
-1. 按 [`docs/preflight/00-two-hour-runbook.md`](../preflight/00-two-hour-runbook.md)
+1. 按 `[docs/preflight/00-two-hour-runbook.md](../preflight/00-two-hour-runbook.md)`
    执行严格两小时垂直切片，不在窗口内继续调研。
 2. 首先接通 Last-call Context Meter；如果公开事件/加载响应无法安全接通，
    保留 Unavailable 状态，不使用私有 `_client` 或累计 Token 推断。

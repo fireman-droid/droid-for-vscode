@@ -172,6 +172,35 @@ export function App(): React.JSX.Element {
     },
     [vscode],
   );
+  const handleEditResend = useCallback(
+    (messageId: string, text: string): void => {
+      const trimmed = text.trim();
+      if (
+        sessionId === null ||
+        connectionStatus !== 'connected' ||
+        isTurnActive(state.turn) ||
+        interactionCount > 0 ||
+        trimmed.length === 0 ||
+        text.length > MAX_TURN_TEXT_LENGTH
+      ) {
+        return;
+      }
+      post(vscode, {
+        type: 'turn.editResend',
+        sessionId,
+        turnId: createTurnId(),
+        messageId,
+        text,
+      });
+    },
+    [
+      connectionStatus,
+      interactionCount,
+      sessionId,
+      state.turn,
+      vscode,
+    ],
+  );
   const handleReuseMessage = useCallback(
     (text: string): void => {
       const nextDraft = text.slice(0, MAX_TURN_TEXT_LENGTH);
@@ -304,6 +333,12 @@ export function App(): React.JSX.Element {
           onSettingUpdate={handleSettingUpdate}
           onDraftChange={handleDraftChange}
           onReuseMessage={handleReuseMessage}
+          onEditResend={handleEditResend}
+          editResendEnabled={
+            connectionStatus === 'connected' &&
+            !active &&
+            !hasInteraction
+          }
           inlineInteraction={inlineInteraction}
         />
       </div>

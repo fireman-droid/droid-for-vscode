@@ -86,6 +86,8 @@ interface DroidThreadProps {
   readonly onSettingUpdate: (update: SessionSettingSelection) => void;
   readonly onDraftChange: (draft: string) => void;
   readonly onReuseMessage: (text: string) => void;
+  readonly onEditResend: (messageId: string, text: string) => void;
+  readonly editResendEnabled: boolean;
   readonly inlineInteraction?: ReactNode;
 }
 
@@ -111,6 +113,8 @@ export const DroidThread = memo(function DroidThread({
   onSettingUpdate,
   onDraftChange,
   onReuseMessage,
+  onEditResend,
+  editResendEnabled,
   inlineInteraction,
 }: DroidThreadProps): React.JSX.Element {
   return (
@@ -158,7 +162,10 @@ export const DroidThread = memo(function DroidThread({
                 message.role === 'user' ? (
                   <UserMessage
                     text={readMessageText(message.content)}
+                    messageId={readUserMessageId(message.metadata)}
+                    editResendEnabled={editResendEnabled}
                     onReuse={onReuseMessage}
+                    onEditResend={onEditResend}
                   />
                 ) : (
                   <AssistantMessage />
@@ -194,15 +201,39 @@ export const DroidThread = memo(function DroidThread({
 
 function UserMessage({
   text,
+  messageId,
+  editResendEnabled,
   onReuse,
+  onEditResend,
 }: {
   readonly text: string;
+  readonly messageId: string | null;
+  readonly editResendEnabled: boolean;
   readonly onReuse: (text: string) => void;
+  readonly onEditResend: (messageId: string, text: string) => void;
 }): React.JSX.Element {
   const [reused, setReused] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(text);
+  const editable = messageId !== null;
   const reuse = (): void => {
     onReuse(text);
     setReused(true);
+  };
+  const openEditor = (): void => {
+    setEditText(text);
+    setEditing(true);
+  };
+  const submitEdit = (): void => {
+    if (
+      messageId === null ||
+      !editResendEnabled ||
+      editText.trim().length === 0
+    ) {
+      return;
+    }
+    setEditing(false);
+    onEditResend(messageId, editText);
   };
   return (
     <MessagePrimitive.Root
@@ -210,37 +241,105 @@ function UserMessage({
       aria-label="You"
     >
       <div className="dvx-user-message-content">
-        <MessagePrimitive.Parts>
-          {({ part }) =>
-            part.type === 'text' ? (
-              <div
-                className="dvx-user-bubble"
-                title="Double-click to reuse in Composer"
-                onDoubleClick={reuse}
+        {editing ? (
+          <div className="dvx-user-edit">
+            <textarea
+              className="dvx-user-edit-input"
+              aria-label="Edit message and resend"
+              value={editText}
+              maxLength={MAX_TURN_TEXT_LENGTH}
+              rows={Math.min(
+                8,
+                Math.max(2, editText.split('\n').length),
+              )}
+              autoFocus
+              onChange={(event) =>
+                setEditText(event.currentTarget.value)
+              }
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  submitEdit();
+                } else if (event.key === 'Escape') {
+                  setEditing(false);
+                }
+              }}
+            />
+            <div className="dvx-user-edit-hint">
+              Resending starts a new conversation branch from this
+              message.
+            </div>
+            <div className="dvx-user-edit-actions">
+              <button
+                className="dvx-message-action"
+                type="button"
+                onClick={() => setEditing(false)}
               >
-                {part.text}
-              </div>
-            ) : null
-          }
-        </MessagePrimitive.Parts>
-        <ActionBarPrimitive.Root className="dvx-user-actions">
-          <ActionBarPrimitive.Copy
-            className="dvx-message-action"
-            aria-label="Copy message"
-          >
-            <CopyIcon />
-            <span>Copy</span>
-          </ActionBarPrimitive.Copy>
-          <button
-            className="dvx-message-action"
-            type="button"
-            aria-label="Reuse message in Composer"
-            onClick={reuse}
-          >
-            <ReuseIcon />
-            <span>Reuse</span>
-          </button>
-        </ActionBarPrimitive.Root>
+                Cancel
+              </button>
+              <button
+                className="dvx-message-action dvx-user-edit-send"
+                type="button"
+                disabled={
+                  !editResendEnabled ||
+                  editText.trim().length === 0
+                }
+                onClick={submitEdit}
+              >
+                Resend
+              </button>
+            </div>
+          </div>
+        ) : (
+          <MessagePrimitive.Parts>
+            {({ part }) =>
+              part.type === 'text' ? (
+                <div
+                  className="dvx-user-bubble"
+                  title={
+                    editable
+                      ? 'Double-click to edit and resend from here'
+                      : 'Double-click to reuse in Composer'
+                  }
+                  onDoubleClick={editable ? openEditor : reuse}
+                >
+                  {part.text}
+                </div>
+              ) : null
+            }
+          </MessagePrimitive.Parts>
+        )}
+        {editing ? null : (
+          <ActionBarPrimitive.Root className="dvx-user-actions">
+            <ActionBarPrimitive.Copy
+              className="dvx-message-action"
+              aria-label="Copy message"
+            >
+              <CopyIcon />
+              <span>Copy</span>
+            </ActionBarPrimitive.Copy>
+            <button
+              className="dvx-message-action"
+              type="button"
+              aria-label="Reuse message in Composer"
+              onClick={reuse}
+            >
+              <ReuseIcon />
+              <span>Reuse</span>
+            </button>
+            {editable ? (
+              <button
+                className="dvx-message-action"
+                type="button"
+                aria-label="Edit message and resend from here"
+                onClick={openEditor}
+              >
+                <EditIcon />
+                <span>Edit</span>
+              </button>
+            ) : null}
+          </ActionBarPrimitive.Root>
+        )}
         <span className="dvx-visually-hidden" aria-live="polite">
           {reused ? 'Message added to Composer.' : ''}
         </span>
@@ -546,6 +645,19 @@ function CopyIcon(): React.JSX.Element {
   );
 }
 
+function EditIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path
+        d="m9.6 2.2 2.2 2.2-6.6 6.6-2.7.5.5-2.7 6.6-6.6Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function ReuseIcon(): React.JSX.Element {
   return (
     <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -727,6 +839,22 @@ function formatUpdateKind(kind: string): string {
     default:
       return 'message';
   }
+}
+
+function readUserMessageId(metadata: unknown): string | null {
+  if (
+    typeof metadata === 'object' &&
+    metadata !== null &&
+    'custom' in metadata &&
+    typeof metadata.custom === 'object' &&
+    metadata.custom !== null &&
+    'messageId' in metadata.custom &&
+    typeof metadata.custom.messageId === 'string' &&
+    metadata.custom.messageId.length > 0
+  ) {
+    return metadata.custom.messageId;
+  }
+  return null;
 }
 
 function readMessageText(content: readonly unknown[]): string {

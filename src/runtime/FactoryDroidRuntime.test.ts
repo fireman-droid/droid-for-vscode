@@ -132,6 +132,57 @@ describe('FactoryDroidRuntime', () => {
     });
   });
 
+  it('rewinds to a user message and adopts the forked session', async () => {
+    const forked = {
+      ...createMockSession(async function* () {
+        yield textDelta('from fork');
+        yield successfulResult();
+      }),
+      id: 'session-fork',
+    };
+    const session = Object.assign(
+      createMockSession(async function* () {}),
+      {
+        rewind: vi.fn(async () => ({ session: forked })),
+      },
+    );
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    const result = await runtime.rewind({
+      messageId: 'sdk-msg-1',
+      forkTitle: 'Edited prompt',
+    });
+
+    expect(result).toEqual({ sessionId: 'session-fork' });
+    expect(session.rewind).toHaveBeenCalledWith({
+      messageId: 'sdk-msg-1',
+      filesToRestore: [],
+      filesToDelete: [],
+      forkTitle: 'Edited prompt',
+    });
+
+    const events = await collect(runtime.sendTurn('again'));
+    expect(forked.stream).toHaveBeenCalledWith('again', {
+      includePartialMessages: true,
+    });
+    expect(session.stream).not.toHaveBeenCalled();
+    expect(events).toEqual([
+      { type: 'text-delta', text: 'from fork' },
+      { type: 'turn-complete', outcome: 'success' },
+    ]);
+  });
+
+  it('refuses to rewind without session support or during a turn', async () => {
+    const session = createMockSession(async function* () {});
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    await expect(
+      runtime.rewind({ messageId: 'sdk-msg-1', forkTitle: 'Edited' }),
+    ).rejects.toThrow('does not support rewind');
+  });
+
   it('projects settings and context through runtime-owned DTOs', async () => {
     const session = createMockSession(async function* () {});
     const runtime = createRuntime(async () => session);

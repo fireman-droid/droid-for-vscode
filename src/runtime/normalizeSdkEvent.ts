@@ -77,6 +77,9 @@ export function normalizeSdkEvent(
         : undefined;
     }
 
+    case 'user':
+      return normalizeUserMessage(event.message);
+
     case 'working_state_changed':
       return {
         type: 'working-state',
@@ -102,6 +105,22 @@ export function normalizeSdkEvent(
     default:
       return undefined;
   }
+}
+
+function normalizeUserMessage(
+  message: unknown,
+): RuntimeEvent | undefined {
+  if (
+    typeof message !== 'object' ||
+    message === null ||
+    !('id' in message) ||
+    typeof message.id !== 'string' ||
+    message.id.length === 0 ||
+    message.id.length > MAX_BRIDGE_ID_LENGTH
+  ) {
+    return undefined;
+  }
+  return { type: 'user-message', messageId: message.id };
 }
 
 function normalizeToolActivity<

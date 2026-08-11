@@ -1305,6 +1305,59 @@ body {
   padding-right: 4px;
 }
 
+.dvx-user-edit {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dvx-user-edit-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--dvx-line);
+  border-radius: 12px;
+  background: var(--dvx-user);
+  color: #262626;
+  font: inherit;
+  font-size: 13px;
+  line-height: 21.125px;
+  resize: vertical;
+}
+
+.dvx-user-edit-input:focus-visible {
+  border-color: var(--vscode-focusBorder, #d2643d);
+  outline: none;
+}
+
+.dvx-user-edit-hint {
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.dvx-user-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.dvx-user-edit-send {
+  color: #fff;
+  background: var(--vscode-focusBorder, #d2643d);
+}
+
+.dvx-user-edit-send:hover:not(:disabled), .dvx-user-edit-send:focus-visible {
+  color: #fff;
+  background: #b8532f;
+}
+
+.dvx-user-edit-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .dvx-markdown {
   min-width: 0;
   overflow-wrap: anywhere;

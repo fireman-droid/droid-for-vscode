@@ -54,6 +54,10 @@ export type RuntimeEvent =
       isError: boolean;
     }
   | {
+      type: 'user-message';
+      messageId: string;
+    }
+  | {
       type: 'working-state';
       isWorking: boolean;
     }

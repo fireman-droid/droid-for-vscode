@@ -1,5 +1,6 @@
 import {
   MAX_ASSISTANT_TEXT_LENGTH,
+  MAX_BRIDGE_ID_LENGTH,
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
@@ -143,6 +144,13 @@ function projectMessage(
   }
 
   const messageIdentity = boundedIdentity(value.id, messageIndex);
+  const sdkMessageId =
+    role === 'user' &&
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    value.id.length <= MAX_BRIDGE_ID_LENGTH
+      ? value.id
+      : undefined;
   const turnId = stableTranscriptId(
     'assistant',
     'history-turn',
@@ -179,6 +187,7 @@ function projectMessage(
       turnId,
       messageIndex,
       blockIndex,
+      sdkMessageId,
     );
   }
   projection.rawBlocksProcessed += blockCount;
@@ -192,6 +201,7 @@ function projectBlock(
   turnId: string,
   messageIndex: number,
   blockIndex: number,
+  sdkMessageId: string | undefined,
 ): void {
   switch (block.type) {
     case 'text':
@@ -210,6 +220,7 @@ function projectBlock(
         turnId,
         messageIndex,
         blockIndex,
+        sdkMessageId,
       );
       return;
     case 'thinking':
@@ -263,6 +274,7 @@ function appendText(
   turnId: string,
   messageIndex: number,
   blockIndex: number,
+  sdkMessageId: string | undefined,
 ): void {
   const safeText =
     role === 'assistant'
@@ -295,7 +307,14 @@ function appendText(
   appendTranscriptItem(
     projection,
     role === 'user'
-      ? { id, kind: 'user', text }
+      ? {
+          id,
+          kind: 'user',
+          text,
+          ...(sdkMessageId === undefined
+            ? {}
+            : { messageId: sdkMessageId }),
+        }
       : { id, kind: 'assistant', turnId, text },
   );
 }
