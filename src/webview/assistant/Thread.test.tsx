@@ -9,6 +9,7 @@ import {
   PendingResponse,
   filterSlashCommands,
   findSlashToken,
+  formatThinkingLabel,
 } from './Thread';
 
 afterEach(cleanup);
@@ -61,6 +62,36 @@ describe('HistoryNotice', () => {
     render(<HistoryNotice historyStatus="complete" truncated />);
     expect(screen.getByRole('note').textContent).toContain(
       'local display',
+    );
+  });
+});
+
+describe('formatThinkingLabel', () => {
+  it('reads completed thinking as a past-tense duration', () => {
+    expect(formatThinkingLabel('complete', 3_000)).toBe(
+      'Thought for 3s',
+    );
+    expect(formatThinkingLabel('complete', 3_240)).toBe(
+      'Thought for 3s',
+    );
+    expect(formatThinkingLabel('complete', 72_000)).toBe(
+      'Thought for 1m 12s',
+    );
+    expect(formatThinkingLabel('complete', 120_400)).toBe(
+      'Thought for 2m',
+    );
+  });
+
+  it('keeps sub-second runs qualitative and fractions visible', () => {
+    expect(formatThinkingLabel('complete', 320)).toBe('Thought briefly');
+    expect(formatThinkingLabel('complete', 700)).toBe('Thought for 0.7s');
+  });
+
+  it('degrades without a duration and names stopped runs', () => {
+    expect(formatThinkingLabel('complete', null)).toBe('Thought');
+    expect(formatThinkingLabel(undefined, null)).toBe('Thought');
+    expect(formatThinkingLabel('incomplete', 3_000)).toBe(
+      'Thinking stopped',
     );
   });
 });

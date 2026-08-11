@@ -1012,13 +1012,11 @@ function ThinkingRow({
     >
       <summary>
         <span className="dvx-activity-indicator" />
-        Thinking
-        <span className="dvx-activity-state">
-          {formatPartStatus(statusType)}
-          {durationMs !== null && statusType !== 'running'
-            ? ` · ${formatDuration(durationMs)}`
-            : ''}
-        </span>
+        {statusType === 'running' ? (
+          <span className="dvx-shimmer-text">Thinking</span>
+        ) : (
+          formatThinkingLabel(statusType, durationMs)
+        )}
         <ActivityChevron />
       </summary>
       <MessagePartPrimitive.Text
@@ -1943,17 +1941,6 @@ export function HistoryNotice({
   return null;
 }
 
-function formatPartStatus(status: string | undefined): string {
-  switch (status) {
-    case 'running':
-      return 'active';
-    case 'incomplete':
-      return 'stopped';
-    default:
-      return 'complete';
-  }
-}
-
 interface ToolActivityPresentation {
   readonly action: string;
   readonly status: string;
@@ -2178,6 +2165,36 @@ function readReasoningDuration(part: unknown): number | null {
 function firstLine(text: string): string {
   const line = text.split('\n', 1)[0] ?? text;
   return line.length > 120 ? `${line.slice(0, 119)}…` : line;
+}
+
+// Completed Thinking rows read as a past-tense fact, mirroring the
+// Cursor "Thought for Xs" affordance; sub-500ms runs are too short
+// for a number to be meaningful.
+export function formatThinkingLabel(
+  statusType: string | undefined,
+  durationMs: number | null,
+): string {
+  if (statusType === 'incomplete') {
+    return 'Thinking stopped';
+  }
+  if (durationMs === null) {
+    return 'Thought';
+  }
+  if (durationMs < 500) {
+    return 'Thought briefly';
+  }
+  if (durationMs < 1_000) {
+    return `Thought for ${(durationMs / 1_000).toFixed(1)}s`;
+  }
+  const totalSeconds = Math.round(durationMs / 1_000);
+  if (totalSeconds < 60) {
+    return `Thought for ${totalSeconds}s`;
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds === 0
+    ? `Thought for ${minutes}m`
+    : `Thought for ${minutes}m ${seconds}s`;
 }
 
 function formatDuration(durationMs: number): string {

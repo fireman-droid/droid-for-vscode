@@ -359,7 +359,14 @@ describe('assistant-ui App bridge commands', () => {
       ],
     });
 
-    const thinkingLabels = await screen.findAllByText('Thinking');
+    // Completed rows read as past tense; only running rows still say
+    // "Thinking" (with the shimmer treatment).
+    const completedLabel = await screen.findByText('Thought');
+    const runningLabel = await screen.findByText('Thinking');
+    expect(runningLabel.classList.contains('dvx-shimmer-text')).toBe(
+      true,
+    );
+    const thinkingLabels = [completedLabel, runningLabel];
     const thinkingRows = thinkingLabels.map((label) =>
       label.closest('details'),
     );

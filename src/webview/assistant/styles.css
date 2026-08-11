@@ -1328,10 +1328,12 @@ html, body, #root {
 
 /* Keep the turn calm: when several tools of one batch are still
    running only the newest row animates, and while a permission or
-   question interaction waits on the user every shimmer pauses. The
-   static rows keep their "Working" state text. */
+   question interaction waits on the user every shimmer pauses
+   (including the running Thinking label). The static rows keep
+   their "Working" state text. */
 .dvx-activity-running:has(~ .dvx-activity-running) .dvx-tool-action,
-.dvx-thread-pending .dvx-activity-running .dvx-tool-action {
+.dvx-thread-pending .dvx-activity-running .dvx-tool-action,
+.dvx-thread-pending .dvx-thinking-row .dvx-shimmer-text {
   background-image: none;
   background-clip: border-box;
   -webkit-background-clip: border-box;
@@ -1522,6 +1524,15 @@ body {
   display: grid;
   min-width: 0;
   color-scheme: light;
+
+  /* Motion tokens (streaming-experience-design): every new animation
+     references these; legacy animations migrate opportunistically. */
+  --dvx-duration-instant: 50ms;   /* hover yield, instant feedback */
+  --dvx-duration-fast: 100ms;     /* fades */
+  --dvx-duration-normal: 150ms;   /* collapse/expand, chevron */
+  --dvx-duration-slow: 200ms;     /* per-item fade-in, block entry */
+  --dvx-duration-slower: 300ms;   /* large block entry ceiling */
+  --dvx-easing-out-strong: cubic-bezier(0.215, 0.61, 0.355, 1);
   --dvx-accent-soft: #fff0ea;
   --dvx-code: #f7f5f1;
   --dvx-accent: #f2612e;
@@ -1920,7 +1931,8 @@ body {
   transform: rotate(0deg);
   transform-box: fill-box;
   transform-origin: 50% 50%;
-  transition: transform 300ms ease-out;
+  transition: transform var(--dvx-duration-normal)
+    var(--dvx-easing-out-strong);
 }
 
 .dvx-activity-row:not([open]) .dvx-activity-chevron {

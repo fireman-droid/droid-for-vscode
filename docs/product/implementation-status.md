@@ -1059,11 +1059,53 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension dist/droidvisx.vsix --force` 均成功；
   版本号仍为 `0.0.0`，现有窗口需 Reload Window（或完整重启）后
   加载新 Bundle
+- 2026-08-12 凌晨打包并安装含 **Streaming 批次一：Thinking
+  shimmer + 过去式文案** 的构建：`dist/droidvisx.vsix` 626,967
+  字节（9 files, 612.27 KB），SHA-256
+  `2E322F4BFB18E33365CD967CD0833F3AB377B44D52A3B5D2C996293C5D2ED244`，
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix` 与
+  `cursor --install-extension dist/droidvisx.vsix --force`
+  （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
+  需 Reload Window（或完整重启）后加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- Streaming 体验批次一：Thinking shimmer + 过去式文案 + 动效
+  token（2026-08-12 凌晨，按
+  `docs/product/streaming-experience-design.md` §2-B 与统一前置
+  H 项，纯 Webview）：`styles.css` `.dvx-shell` 变量块新增动效
+  token 表（`--dvx-duration-instant/fast/normal/slow/slower` +
+  `--dvx-easing-out-strong`），`.dvx-activity-chevron` 过渡迁移为
+  token 引用（300ms ease-out → 150ms strong-out）；`ThinkingRow`
+  running 态标签包 `.dvx-shimmer-text` 复用既有 1.6s 暖色 shimmer
+  （风格差异不对齐 Cursor 2s，照设计判定），完成态由
+  `Thinking` + `complete · 3.2s` 改为一体过去式
+  `formatThinkingLabel`——`<500ms → "Thought briefly"`、
+  `<1s → "Thought for 0.7s"`（一位小数）、`≥1s` 取整秒
+  `"Thought for 3s"` / `"Thought for 1m 12s"`、durationMs 缺失
+  降级 `"Thought"`、incomplete → `"Thinking stopped"`（决策：
+  设计文字说复用 `formatDuration`，但其 <10s 输出一位小数与验收
+  标准的 `"Thought for 3s"` 冲突，按验收标准自实现取整，<1s
+  分支与 Cursor 参考行为一致）；`formatPartStatus` 唯一调用点
+  消失随之删除；交互等待抑制规则扩展
+  `.dvx-thread-pending .dvx-thinking-row .dvx-shimmer-text`，
+  reduced-motion 由既有 `.dvx-shimmer-text` 规则天然覆盖。单测
+  +3（`formatThinkingLabel` 边界）并修正 `App.test.tsx` 对完成
+  态标签的旧断言（42 files / 913 tests 全绿）。**无头冒烟**
+  `node artifacts/smoke-thinking-shimmer.mjs`（配
+  `artifacts/thinking-shimmer-harness.html`，三条 thinking 转录：
+  3240ms 完成 / 320ms 完成 / active）：标签
+  `["Thought for 3s","Thought briefly","Thinking"]`；running 标签
+  `getComputedStyle().animationName === 'dvx-activity-shimmer'`；
+  加 `dvx-thread-pending` 类后 animationName `none`、移除后恢复；
+  `prefers-reduced-motion: reduce` 仿真下 `none`，**PASS**。
+  门禁：typecheck 三 tsconfig 全过；test 42/913 全过；build、
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix`
+  （612.27 KB）、`cursor --install-extension --force`
+  （successfully installed）均成功。批次二/三（活动聚合、入场
+  动画与回放静默）未开工。
 - 切片 3+：消息卡片编辑重发（2026-08-12 凌晨，按
   `docs/product/message-card-design.md` §5 分层实施）：**Bridge**
   先冻结——`UserTranscriptItem` 扩展有界 `attachments`
