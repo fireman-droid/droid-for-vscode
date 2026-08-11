@@ -117,6 +117,39 @@ describe('FactorySessionCatalog', () => {
     });
   });
 
+  it('delegates favorite writes to the sessions directory writer', async () => {
+    const writeFavoriteFile = vi.fn(async () => true);
+    const catalog = new FactorySessionCatalog({
+      listSdkSessions: async () => [],
+      sessionsDirectory: 'D:\\fake\\sessions',
+      writeFavoriteFile,
+    });
+
+    await expect(
+      catalog.writeFavorite('session-1', true),
+    ).resolves.toBe(true);
+    expect(writeFavoriteFile).toHaveBeenCalledOnce();
+    expect(writeFavoriteFile).toHaveBeenCalledWith(
+      'D:\\fake\\sessions',
+      'session-1',
+      true,
+    );
+  });
+
+  it('reports false when the favorites writer throws', async () => {
+    const catalog = new FactorySessionCatalog({
+      listSdkSessions: async () => [],
+      sessionsDirectory: 'D:\\fake\\sessions',
+      writeFavoriteFile: async () => {
+        throw new Error('EACCES: C:\\Users\\person\\.factory');
+      },
+    });
+
+    await expect(
+      catalog.writeFavorite('session-1', false),
+    ).resolves.toBe(false);
+  });
+
   it('returns a generic failure without exposing SDK errors', async () => {
     const catalog = new FactorySessionCatalog({
       listSdkSessions: async () => {

@@ -189,6 +189,12 @@ const RENAME_UNSUPPORTED_MESSAGE =
   'This session cannot be renamed.';
 const RENAME_FAILED_MESSAGE =
   'Droid could not rename the session.';
+const FAVORITE_BLOCKED_MESSAGE =
+  'Wait for the current session operation to finish before changing favorites.';
+const FAVORITE_UNSUPPORTED_MESSAGE =
+  'Session favorites are not available in this Droid runtime.';
+const FAVORITE_FAILED_MESSAGE =
+  'The session favorite could not be saved.';
 const SKILLS_UNSUPPORTED_MESSAGE =
   'This Droid runtime does not expose skills.';
 const SKILLS_LOAD_FAILED_MESSAGE =
@@ -480,6 +486,12 @@ export class ChatController {
         return;
       case 'session.rename':
         this.handleSessionRename(message.sessionId, message.title);
+        return;
+      case 'session.favorite':
+        this.handleSessionFavorite(
+          message.sessionId,
+          message.favorite,
+        );
         return;
       case 'session.context.refresh':
         this.handleContextRefresh(message.sessionId);
@@ -1251,6 +1263,7 @@ export class ChatController {
       messageCount: 0,
       modifiedTime: new Date().toISOString(),
       active: true,
+      isFavorite: false,
     });
     this.recoveryStore.writeSession(forkedSessionId, truncated);
     this.recoveryStore.selectSession(forkedSessionId);
@@ -1372,6 +1385,7 @@ export class ChatController {
       messageCount: 0,
       modifiedTime: new Date().toISOString(),
       active: true,
+      isFavorite: false,
     });
 
     let transcript: HostTranscriptState | null = null;
@@ -1546,6 +1560,7 @@ export class ChatController {
       messageCount: 0,
       modifiedTime: new Date().toISOString(),
       active: true,
+      isFavorite: false,
     });
 
     // The fork copies the conversation, but message IDs may differ, so
@@ -1749,6 +1764,96 @@ export class ChatController {
         }
       },
     );
+  }
+
+  private handleSessionFavorite(
+    sessionId: string,
+    favorite: boolean,
+  ): void {
+    const workspace = this.getWorkspaceContext();
+    if (!isUsableWorkspace(workspace)) {
+      return;
+    }
+    if (this.sessionOperationInProgress || this.refreshInProgress) {
+      this.emitSessionDiagnostic(
+        'session-favorite-blocked',
+        FAVORITE_BLOCKED_MESSAGE,
+      );
+      return;
+    }
+    if (
+      this.sessions.status !== 'ready' ||
+      !this.hasCatalogSession(sessionId, workspace.cwd)
+    ) {
+      this.emitSessionDiagnostic(
+        'session-favorite-invalid',
+        UNKNOWN_SESSION_MESSAGE,
+      );
+      return;
+    }
+    const writeFavorite = this.sessionCatalog.writeFavorite?.bind(
+      this.sessionCatalog,
+    );
+    if (writeFavorite === undefined) {
+      this.emitSessionDiagnostic(
+        'session-favorite-unsupported',
+        FAVORITE_UNSUPPORTED_MESSAGE,
+      );
+      return;
+    }
+
+    // Blocks concurrent catalog reads/writes for the duration of the
+    // file write and the follow-up re-list.
+    this.refreshInProgress = true;
+    void (async () => {
+      let written = false;
+      try {
+        written = await writeFavorite(sessionId, favorite);
+      } catch {
+        written = false;
+      }
+      if (this.disposed) {
+        return;
+      }
+      if (!written) {
+        this.refreshInProgress = false;
+        this.emitSessionDiagnostic(
+          'session-favorite-failed',
+          FAVORITE_FAILED_MESSAGE,
+        );
+        return;
+      }
+
+      // Close the loop through the public listSessions() readback so
+      // the drawer shows what the SDK actually reports.
+      const previousActive = this.activeSessionSummary();
+      const catalogGeneration = this.catalogGeneration;
+      const result = await this.loadCatalog(workspace.cwd);
+      this.refreshInProgress = false;
+      if (
+        this.disposed ||
+        this.catalogGeneration !== catalogGeneration ||
+        this.catalogCwd !== workspace.cwd ||
+        !this.isTargetWorkspaceCurrent(workspace.cwd)
+      ) {
+        return;
+      }
+      if (result.status === 'ready') {
+        this.sessions = this.withActiveSession(result, previousActive);
+      } else {
+        // The write succeeded but the re-list failed; reflect the
+        // write locally so the toggle does not look ignored.
+        this.sessions = {
+          ...this.sessions,
+          items: this.sessions.items.map((item) =>
+            item.id === sessionId
+              ? { ...item, isFavorite: favorite }
+              : item,
+          ),
+        };
+      }
+      this.emitSnapshot();
+    })();
   }
 
   private handleSessionSelect(sessionId: string): void {
@@ -3423,6 +3528,7 @@ export class ChatController {
             messageCount: 0,
             modifiedTime: new Date().toISOString(),
             active: true,
+            isFavorite: false,
           }
         : undefined,
     );
@@ -4005,6 +4111,7 @@ export class ChatController {
         messageCount: 0,
         modifiedTime: new Date().toISOString(),
         active: true,
+        isFavorite: false,
       };
     const items = sessions.items
       .filter(({ id }) => id !== this.sessionId)
@@ -4426,6 +4533,7 @@ function projectCatalogEntries(
       messageCount: entry.messageCount,
       modifiedTime: modified.toISOString(),
       active: false,
+      isFavorite: entry.isFavorite === true,
     });
   }
   return items;

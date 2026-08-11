@@ -89,6 +89,7 @@ describe('readHostMessage', () => {
             messageCount: 5,
             modifiedTime: '2026-08-09T09:00:00.000Z',
             active: true,
+            isFavorite: true,
           },
         ],
       },
@@ -1644,6 +1645,7 @@ describe('readHostMessage', () => {
           index === 0 ? Number.MAX_SAFE_INTEGER : index,
         modifiedTime: '2026-08-09T09:00:00.000Z',
         active: index === 0,
+        isFavorite: index % 2 === 0,
       }),
     );
     const transcript = Array.from(
@@ -1670,6 +1672,20 @@ describe('readHostMessage', () => {
     };
 
     expect(readHostMessage(message)).toEqual(message);
+  });
+
+  it('defaults a missing favorite flag to false', () => {
+    const snapshot = createSessionSnapshot();
+    const { isFavorite: _omitted, ...summaryWithoutFavorite } =
+      snapshot.sessions.items[0];
+    const parsed = readHostMessage({
+      ...snapshot,
+      sessions: {
+        ...snapshot.sessions,
+        items: [summaryWithoutFavorite],
+      },
+    });
+    expect(parsed).toEqual(snapshot);
   });
 
   it.each([
@@ -1734,6 +1750,16 @@ describe('readHostMessage', () => {
         sessions: {
           ...snapshot.sessions,
           items: [{ ...snapshot.sessions.items[0], title: 'Bad\u0000title' }],
+        },
+      }),
+    },
+    {
+      name: 'non-boolean favorite flag',
+      mutate: (snapshot: ReturnType<typeof createSessionSnapshot>) => ({
+        ...snapshot,
+        sessions: {
+          ...snapshot.sessions,
+          items: [{ ...snapshot.sessions.items[0], isFavorite: 'yes' }],
         },
       }),
     },
@@ -2457,6 +2483,7 @@ function createSessionSnapshot(): Extract<
           messageCount: 1,
           modifiedTime: '2026-08-09T09:00:00.000Z',
           active: true,
+          isFavorite: false,
         },
       ],
     },

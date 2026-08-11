@@ -7,6 +7,10 @@ import {
   type SessionCatalogEntry,
   type SessionCatalogResult,
 } from './SessionCatalog';
+import {
+  defaultSessionsDirectory,
+  writeFavorite as writeFavoriteFile,
+} from './sessionFavorites';
 
 export const FACTORY_SESSION_CATALOG_LIMIT = 50;
 
@@ -15,15 +19,44 @@ export type FactorySessionLister = (options: {
   limit: typeof FACTORY_SESSION_CATALOG_LIMIT;
 }) => Promise<readonly unknown[]>;
 
+export type FactoryFavoriteWriter = (
+  sessionsDirectory: string,
+  sessionId: string,
+  favorite: boolean,
+) => Promise<boolean>;
+
 export interface FactorySessionCatalogOptions {
   readonly listSdkSessions?: FactorySessionLister;
+  readonly sessionsDirectory?: string;
+  readonly writeFavoriteFile?: FactoryFavoriteWriter;
 }
 
 export class FactorySessionCatalog implements SessionCatalog {
   private readonly listSdkSessions: FactorySessionLister;
+  private readonly sessionsDirectory: string;
+  private readonly writeFavoriteFile: FactoryFavoriteWriter;
 
   constructor(options: FactorySessionCatalogOptions = {}) {
     this.listSdkSessions = options.listSdkSessions ?? listSessions;
+    this.sessionsDirectory =
+      options.sessionsDirectory ?? defaultSessionsDirectory();
+    this.writeFavoriteFile =
+      options.writeFavoriteFile ?? writeFavoriteFile;
+  }
+
+  async writeFavorite(
+    sessionId: string,
+    favorite: boolean,
+  ): Promise<boolean> {
+    try {
+      return await this.writeFavoriteFile(
+        this.sessionsDirectory,
+        sessionId,
+        favorite,
+      );
+    } catch {
+      return false;
+    }
   }
 
   async listSessions(cwd: string): Promise<SessionCatalogResult> {

@@ -23,4 +23,10 @@ export type SessionCatalogResult =
 
 export interface SessionCatalog {
   listSessions(cwd: string): Promise<SessionCatalogResult>;
+  /**
+   * Marks or unmarks one session as favorite. Optional because the
+   * write path is a CLI private-file contract, not a session RPC.
+   * Resolves `false` on any failure instead of throwing.
+   */
+  writeFavorite?(sessionId: string, favorite: boolean): Promise<boolean>;
 }

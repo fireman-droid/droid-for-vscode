@@ -95,6 +95,16 @@ describe('parseWebviewMessage', () => {
       title: 'Renamed session',
     },
     {
+      type: 'session.favorite',
+      sessionId: 'session-1',
+      favorite: true,
+    },
+    {
+      type: 'session.favorite',
+      sessionId: 'session-1',
+      favorite: false,
+    },
+    {
       type: 'skills.refresh',
       sessionId: 'session-1',
     },
@@ -361,6 +371,21 @@ describe('parseWebviewMessage', () => {
       extra: true,
     },
     { type: 'session.rename', sessionId: '', title: 'Renamed' },
+    { type: 'session.favorite', sessionId: '', favorite: true },
+    { type: 'session.favorite', sessionId: 'session-1' },
+    { type: 'session.favorite', sessionId: 'session-1', favorite: 'yes' },
+    { type: 'session.favorite', sessionId: 'session-1', favorite: 1 },
+    {
+      type: 'session.favorite',
+      sessionId: 'session-1',
+      favorite: true,
+      extra: true,
+    },
+    {
+      type: 'session.favorite',
+      sessionId: 's'.repeat(MAX_BRIDGE_ID_LENGTH + 1),
+      favorite: true,
+    },
     { type: 'session.context.refresh', sessionId: '' },
     { type: 'session.compact', sessionId: '' },
     { type: 'session.compact', sessionId: 'session-1', extra: true },

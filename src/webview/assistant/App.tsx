@@ -471,6 +471,16 @@ export function App(): React.JSX.Element {
     },
     [vscode],
   );
+  const handleToggleFavorite = useCallback(
+    (targetSessionId: string, favorite: boolean): void => {
+      post(vscode, {
+        type: 'session.favorite',
+        sessionId: targetSessionId,
+        favorite,
+      });
+    },
+    [vscode],
+  );
   const handleOpenFileDiff = useCallback(
     (path: string): void => {
       if (sessionId === null || connectionStatus !== 'connected') {
@@ -647,6 +657,7 @@ export function App(): React.JSX.Element {
           onSelectSession={handleSelectSession}
           onRenameSession={handleRenameSession}
           onForkSession={handleForkSession}
+          onToggleFavorite={handleToggleFavorite}
         />
         <DroidThread
           pending={showPending}
@@ -730,6 +741,7 @@ function Header({
   onSelectSession,
   onRenameSession,
   onForkSession,
+  onToggleFavorite,
 }: {
   readonly state: typeof initialAssistantWebviewState;
   readonly sessionActionsDisabled: boolean;
@@ -737,6 +749,10 @@ function Header({
   readonly onSelectSession: (sessionId: string) => void;
   readonly onRenameSession: (sessionId: string, title: string) => void;
   readonly onForkSession: (sessionId: string) => void;
+  readonly onToggleFavorite: (
+    sessionId: string,
+    favorite: boolean,
+  ) => void;
 }): React.JSX.Element {
   const connectionLabel = formatConnectionStatus(state.connection.status);
   return (
@@ -770,6 +786,7 @@ function Header({
           onSelectSession={onSelectSession}
           onRenameSession={onRenameSession}
           onForkSession={onForkSession}
+          onToggleFavorite={onToggleFavorite}
         />
       </div>
     </header>

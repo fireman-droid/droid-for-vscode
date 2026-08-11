@@ -42,6 +42,7 @@ import {
   type RuntimeRetryMessage,
   type SessionCompactMessage,
   type SessionContextRefreshMessage,
+  type SessionFavoriteMessage,
   type SessionForkMessage,
   type SessionNewMessage,
   type SessionRenameMessage,
@@ -104,6 +105,8 @@ export function parseWebviewMessage(
         return parseSessionNew(value);
       case 'session.rename':
         return parseSessionRename(value);
+      case 'session.favorite':
+        return parseSessionFavorite(value);
       case 'session.context.refresh':
         return parseSessionContextRefresh(value);
       case 'session.compact':
@@ -448,6 +451,24 @@ function parseSessionRename(
     type: 'session.rename',
     sessionId: value.sessionId,
     title: value.title,
+  };
+}
+
+function parseSessionFavorite(
+  value: UnknownRecord,
+): SessionFavoriteMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'favorite']) ||
+    !isId(value.sessionId) ||
+    typeof value.favorite !== 'boolean'
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'session.favorite',
+    sessionId: value.sessionId,
+    favorite: value.favorite,
   };
 }
 

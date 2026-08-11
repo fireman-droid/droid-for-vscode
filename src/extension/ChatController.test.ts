@@ -1687,6 +1687,133 @@ describe('ChatController', () => {
     });
   });
 
+  it('writes a favorite through the catalog and re-lists the sessions', async () => {
+    let favored = false;
+    const writeFavorite = vi.fn(async (_id: string, favorite: boolean) => {
+      favored = favorite;
+      return true;
+    });
+    const catalog: SessionCatalog = {
+      listSessions: vi.fn(async () => ({
+        status: 'available' as const,
+        sessions: [
+          catalogEntry('session-1'),
+          { ...catalogEntry('session-2'), isFavorite: favored },
+        ],
+      })),
+      writeFavorite,
+    };
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      catalog,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'session.favorite',
+      sessionId: 'session-2',
+      favorite: true,
+    });
+    expect(writeFavorite).toHaveBeenCalledWith('session-2', true);
+    await vi.waitFor(() => {
+      const snapshot = messages
+        .filter((message) => message.type === 'host.snapshot')
+        .at(-1);
+      expect(snapshot).toMatchObject({
+        sessions: {
+          status: 'ready',
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'session-2',
+              isFavorite: true,
+            }),
+          ]),
+        },
+      });
+    });
+  });
+
+  it('rejects favorite writes for unknown sessions and unsupported catalogs', async () => {
+    const writeFavorite = vi.fn(async () => true);
+    const catalog: SessionCatalog = {
+      listSessions: vi.fn(async () => ({
+        status: 'available' as const,
+        sessions: [catalogEntry('session-1')],
+      })),
+      writeFavorite,
+    };
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      catalog,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'session.favorite',
+      sessionId: 'forged-session',
+      favorite: true,
+    });
+    expect(writeFavorite).not.toHaveBeenCalled();
+    expect(messages.at(-1)).toMatchObject({
+      type: 'runtime.diagnostic',
+      code: 'session-favorite-invalid',
+    });
+
+    // A catalog without a favorites writer reports unsupported.
+    const second = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+    );
+    ready(second.controller);
+    await waitForConnected(second.messages);
+    second.controller.handleMessage({
+      type: 'session.favorite',
+      sessionId: 'session-1',
+      favorite: true,
+    });
+    expect(second.messages.at(-1)).toMatchObject({
+      type: 'runtime.diagnostic',
+      code: 'session-favorite-unsupported',
+    });
+  });
+
+  it('reports a safe diagnostic when the favorites file write fails', async () => {
+    const catalog: SessionCatalog = {
+      listSessions: vi.fn(async () => ({
+        status: 'available' as const,
+        sessions: [catalogEntry('session-1')],
+      })),
+      writeFavorite: vi.fn(async () => {
+        throw new Error('C:\\Users\\person\\.factory\\.favorites');
+      }),
+    };
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      catalog,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'session.favorite',
+      sessionId: 'session-1',
+      favorite: true,
+    });
+    await vi.waitFor(() => {
+      expect(messages.at(-1)).toMatchObject({
+        type: 'runtime.diagnostic',
+        code: 'session-favorite-failed',
+      });
+    });
+    expect(JSON.stringify(messages)).not.toContain('.favorites');
+  });
+
   it('lists skills on request and re-lists after a toggle', async () => {
     const runtime = Object.assign(createMockRuntime(), {
       listSkills: vi

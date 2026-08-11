@@ -1867,19 +1867,19 @@ function parseSessionCatalog(
 function parseSessionSummary(value: unknown): SessionSummary | undefined {
   if (
     !isStrictRecord(value) ||
-    !hasExactKeys(value, [
-      'id',
-      'title',
-      'messageCount',
-      'modifiedTime',
-      'active',
-    ]) ||
+    !hasExactKeys(
+      value,
+      ['id', 'title', 'messageCount', 'modifiedTime', 'active'],
+      ['isFavorite'],
+    ) ||
     !isId(value.id) ||
     !isBoundedString(value.title, MAX_SESSION_TITLE_LENGTH) ||
     hasControlCharacter(value.title) ||
     !isSequence(value.messageCount) ||
     !isIsoDate(value.modifiedTime) ||
-    typeof value.active !== 'boolean'
+    typeof value.active !== 'boolean' ||
+    (value.isFavorite !== undefined &&
+      typeof value.isFavorite !== 'boolean')
   ) {
     return undefined;
   }
@@ -1890,6 +1890,7 @@ function parseSessionSummary(value: unknown): SessionSummary | undefined {
     messageCount: value.messageCount,
     modifiedTime: value.modifiedTime,
     active: value.active,
+    isFavorite: value.isFavorite === true,
   };
 }
 

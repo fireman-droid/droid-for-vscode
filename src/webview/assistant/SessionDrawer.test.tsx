@@ -18,6 +18,7 @@ const sessions: SessionCatalogState = {
       messageCount: 3,
       modifiedTime: '2026-02-20T10:00:00.000Z',
       active: true,
+      isFavorite: false,
     },
     {
       id: 'session-b',
@@ -25,6 +26,7 @@ const sessions: SessionCatalogState = {
       messageCount: 7,
       modifiedTime: '2026-02-19T09:00:00.000Z',
       active: false,
+      isFavorite: false,
     },
   ],
 };
@@ -134,5 +136,77 @@ describe('SessionDrawer', () => {
     expect(
       screen.getByRole('complementary', { name: 'Session history' }),
     ).toBeTruthy();
+  });
+
+  it('toggles favorites from any row', async () => {
+    const user = userEvent.setup();
+    const onToggleFavorite = vi.fn();
+    render(
+      <SessionDrawer
+        sessions={sessions}
+        actionsDisabled={false}
+        onSelectSession={vi.fn()}
+        onRenameSession={vi.fn()}
+        onForkSession={vi.fn()}
+        onToggleFavorite={onToggleFavorite}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+
+    // Every row exposes the toggle, active or not, and no group
+    // headers render while nothing is favorited.
+    const stars = screen.getAllByRole('button', {
+      name: 'Add session to favorites',
+    });
+    expect(stars).toHaveLength(2);
+    expect(screen.queryByText('Favorites')).toBeNull();
+
+    await user.click(stars[1]);
+    expect(onToggleFavorite).toHaveBeenCalledOnce();
+    expect(onToggleFavorite).toHaveBeenCalledWith('session-b', true);
+  });
+
+  it('groups favorited sessions ahead of the rest', async () => {
+    const user = userEvent.setup();
+    const onToggleFavorite = vi.fn();
+    const favorited: SessionCatalogState = {
+      status: 'ready',
+      items: [
+        sessions.items[0],
+        { ...sessions.items[1], isFavorite: true },
+      ],
+    };
+    render(
+      <SessionDrawer
+        sessions={favorited}
+        actionsDisabled={false}
+        onSelectSession={vi.fn()}
+        onRenameSession={vi.fn()}
+        onForkSession={vi.fn()}
+        onToggleFavorite={onToggleFavorite}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+
+    // The favorites group renders first and holds the starred row.
+    const headings = screen.getAllByRole('heading', { level: 3 });
+    expect(headings.map((heading) => heading.textContent)).toEqual([
+      'Favorites',
+      'Recent',
+    ]);
+    const favoriteGroup = screen.getByRole('region', {
+      name: 'Favorites',
+    });
+    expect(favoriteGroup.textContent).toContain('Previous refactor');
+    const recentGroup = screen.getByRole('region', { name: 'Recent' });
+    expect(recentGroup.textContent).toContain('Current work');
+
+    // A favorited row offers removal.
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Remove session from favorites',
+      }),
+    );
+    expect(onToggleFavorite).toHaveBeenCalledWith('session-b', false);
   });
 });

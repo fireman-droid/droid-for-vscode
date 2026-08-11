@@ -218,6 +218,15 @@ tool/toolUseId/命令原文，见第 10 节）。Tool 行的
 （4）修复 Context 弹层中 Compact 区块相对其余内容左缩进不齐
 （补齐 16px 水平内边距）。
 
+同日深夜追加 Session Favorite 与列表分组（V1 #1）：会话抽屉每行
+星标按钮切换收藏（Bridge `session.favorite` 双侧校验），收藏状态
+持久化到 CLI 私有 `~/.factory/sessions/.favorites` JSON 数组
+（**非官方契约**，逆向 CLI 行为所得；临时文件 + rename 原子写，
+文件内容损坏时拒绝写入以免破坏 CLI 自身数据）。目录投影为每条
+`SessionSummary` 附带 `isFavorite`，抽屉列表按 Favorites/Recent
+两组渲染（无收藏时不显示组标签）。Session Delete 无任何 API 保持
+不做；Archive 留待 daemon 路径。
+
 同日追加长会话性能与卡死修复（用户反馈"页面一点击就卡死、无法
 发话、恢复对话慢"）：（1）Thinking 行展开从全局共享状态改为每行
 独立 `useState`——旧行为点一次会同时展开会话内全部 Thinking 行
@@ -633,7 +642,7 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
 | Retry                       | 关闭并重新创建或恢复 Runtime                                                                                                 | 不会重新发送失败 Prompt，也不是消息级 Regenerate/Reload          |
 | CLI/连接诊断                | CLI 不存在、工作区无效、未信任和初始化失败提示                                                                               | 实际登录状态、登录操作、版本兼容 UI、账户状态、升级入口          |
 | Session 搜索                | 在最多 50 条本地结果中按标题或 ID 过滤                                                                                       | daemon 全量搜索、内容搜索、分页、排序和筛选                      |
-| Session 生命周期            | List、Refresh、New、Select、Resume、活跃 Session Rename、编辑重问触发的 Rewind Fork、显式 Fork、Compact                      | Archive、Delete、Favorite（无公开 SDK 渠道）                     |
+| Session 生命周期            | List、Refresh、New、Select、Resume、活跃 Session Rename、编辑重问触发的 Rewind Fork、显式 Fork、Compact、任意行 Favorite（CLI 私有 `.favorites` 文件契约，非官方 API） | Archive（等 daemon 路径）、Delete（无任何 API，fail closed）     |
 | Session 历史                | 文本、Thinking、Tool 生命周期                                                                                                | 历史 Image、Document 和未知 Block 会被省略并标记为 partial       |
 | Tool 展示                   | 语义动作、技术 Tool 名、有界进度计数/类别、生命周期和实时观察到的真实耗时、文件修改类 Tool 的工作区相对路径 chip（点击打开原生 Diff）；不显示原始 Call ID | 参数、输出、结果、增删行统计、Apply/Open 操作                    |
 | 消息操作                    | Copy、Reuse in Composer、双击内联编辑并从该消息 Rewind 重问、最后一条回答 Regenerate、编辑器内 `getRewindInfo` 文件影响提示与可选文件恢复 | Rewind 冲突检测、Turn Envelope                                   |
@@ -798,7 +807,9 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [x] Session Rename（活跃 Session 内联重命名）
 - [ ] Session Archive / Unarchive
 - [ ] Session Delete
-- [ ] Session Favorite
+- [x] Session Favorite（任意行星标切换 + Favorites/Recent 分组；
+      持久化为 CLI 私有 `~/.factory/sessions/.favorites` JSON 数组，
+      **非官方契约**，文件损坏时 fail closed 不写入）
 - [x] Session Fork（会话抽屉活跃行 Fork 按钮，SDK `session.fork()`，
       收养副本 Session，原 Session 保留在目录中）
 - [x] Session Compact（Context 浮层 “Compact conversation”，SDK
@@ -810,6 +821,10 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [ ] Mission 阶段和 Worker 摘要
 
 ## V2 未完成
+
+> **用户排除（近期不做）**：跨设备 Session、界面中文化、个人体验基线、
+> 账号用量 —— 见 [`HANDOVER.md`](../HANDOVER.md) 第 3 节。下列清单
+> 含历史台账项；与 HANDOVER「V2 远期」索引对照，排除项勿开工。
 
 - [ ] Mission Control
 - [ ] Worker 详情
@@ -896,11 +911,39 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension --force` 安装成功；版本号仍为
   `0.0.0`，现有窗口需 Reload Window（或完整重启）后加载新 Bundle；
   受影响的 ai-drawing 会话在重载后应显示 75 条而非 134 条
+- 2026-08-11 深夜再次打包并安装含**收藏与分组切片**（Session
+  Favorite 星标 + Favorites/Recent 分组）的构建：
+  `dist/droidvisx.vsix` 547,484 字节，修改时间
+  2026-08-11T16:39:34Z，SHA-256
+  `82D63DC4042F143085FBCDC612B2314DC916678D04D584143D409E024C60CDA8`，
+  `verify:vsix` 与 `cursor --install-extension --force` 均成功；
+  版本号仍为 `0.0.0`，现有窗口需 Reload Window（或完整重启）后
+  加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- 收藏与分组切片（2026-08-11 深夜，V1 #1）：Bridge 新增
+  `session.favorite` 消息（双侧校验对称，含敌对输入用例）与
+  `SessionSummary.isFavorite` 字段（缺省安全默认 false）；Runtime 新增
+  `sessionFavorites.ts`（读 `~/.factory/sessions/.favorites` JSON
+  数组、临时文件 + rename 原子写、文件损坏/IO 失败 fail closed）并经
+  `SessionCatalog.writeFavorite` 可选方法接入 `FactorySessionCatalog`；
+  Host 校验目标 Session 在目录内后写文件、成功则就地更新
+  `isFavorite` 并静默重载目录，失败发 warning 诊断；Webview 会话
+  抽屉按 Favorites/Recent 分组渲染（无收藏时不显示组标签）、每行
+  星标按钮（已收藏常显、未收藏 hover 显示）。聚焦测试 4 files /
+  337 tests 通过；`pnpm run typecheck` 三个 tsconfig 全部通过；
+  `pnpm run test` 36 files / 745 tests 全部通过；`pnpm run build`、
+  `npx vsce package --no-dependencies`、`pnpm run verify:vsix`、
+  `cursor --install-extension --force` 均成功；无头 Chrome 冒烟
+  `artifacts/smoke-favorites.mjs`（配 `favorites-harness.html`）
+  实测：3 条会话渲染为 Favorites(1)/Recent(2) 两组、收藏行星标
+  `aria-pressed=true` 且常显、未收藏行星标默认隐藏、无横向溢出、
+  点击星标发出正确 `{type:'session.favorite', sessionId, favorite:true}`
+  出站消息，verdict pass。真实 Cursor 可见验收等待用户 Reload
+  Window 后完成
 - 静态复查修复轮（2026-08-11 深夜，P1 污染检查点 + 3×P2）：
   `reconcileSessionHistory` 新增 2 个回归用例（陈旧重复尾回合跳过、
   151/75 污染形态 fixture）；聚焦测试 4 files / 113 tests 通过；
@@ -1076,24 +1119,53 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 ## 下一步
 
-按用户决定（2026-08-11）：第一档 UI/观察性打磨全部暂缓，方案已写入
-`[tier1-polish-plan.md](./tier1-polish-plan.md)`；先完成第二、第三档
-难点，验收后最后回来做第一档。
+按用户决定（2026-08-11）：第一档 UI/观察性打磨大部分暂缓，方案已写入
+[`tier1-polish-plan.md`](./tier1-polish-plan.md)；路线索引与排除项见
+[`HANDOVER.md`](../HANDOVER.md) 第 3 节（本节的顺序须与其保持一致）。
 
-第二档（核心功能缺口，先做）：
+### V1 剩余（按执行顺序）
 
-1. `/` 动态命令与 Droid Commands 列表（含最近使用）。
-2. Session 管理补全：Archive / Delete / Favorite 与分支关系展示。
-3. Composer 动态化剩余项（模型/推理档位与 CLI 能力完全对齐）。
+1. ~~**收藏与分组**~~ — 已完成（2026-08-11 深夜，见验证状态
+   「收藏与分组切片」；[`session-management-design.md`](./session-management-design.md) §1）。
+2. **恢复提速** — 快照先行渲染，重开窗口秒出内容
+   （[`tier1-polish-plan.md`](./tier1-polish-plan.md) §3；从第一档提前）。
+3. **对话内图片 + Composer 拖拽/粘贴** — 转录显示 AI/历史/工具截图 +
+   输入框拖入或粘贴图片为附件
+   （[`rich-content-design.md`](./rich-content-design.md) §1、§1.5）。
+4. **完整 Spec Mode 闭环**
+   （[`spec-mission-design.md`](./spec-mission-design.md) §1）。
+5. **Canvas / 原型预览**
+   （[`rich-content-design.md`](./rich-content-design.md) §2）。
+6. **子代理摘要层级 + Mission 只读展示**
+   （[`spec-mission-design.md`](./spec-mission-design.md) §3、§2）。
+7. **第一档打磨剩余** — 流式命令输出预览 → 收起播报 → 回复动画
+   （[`tier1-polish-plan.md`](./tier1-polish-plan.md) §1、§2、§4）。
+8. **发版卫生** — 版本号脱离 0.0.0、CHANGELOG、正式 VSIX（做前与用户确认）。
 
-第三档（V1/V2 难点，随后）：
+### 用户明确排除（近期不做）
 
-4. 完整 Spec Mode 流程（起草、审批、编辑规格的产品化闭环）。
-5. Mission 启动与阶段展示。
-6. 子代理（Subagent）活动的层级展示。
+跨设备 Session、界面中文化（i18n）、个人体验基线（首次引导/通知/设置页/
+快捷键）、账号用量 —— 详见 [`HANDOVER.md`](../HANDOVER.md) 第 3 节
+「用户明确排除」。勿自行加回。
 
-第一档（最后执行）：见 `tier1-polish-plan.md`，顺序为流式输出预览 →
-恢复提速 → 收起播报 → 回复动画。
+### V1 前已完成（勿重复）
+
+`/` 动态命令（含最近使用）、Assistant Regenerate、Composer `@` 提及、
+Rewind 文件安全检查、MCP 浏览器认证与增删、Problems/Git changes 附件、
+全保真日志与诊断导出、活动 shimmer 打磨、历史 messageId 锚点对齐、
+toolCallId 重复白屏修复与 AppErrorBoundary、污染检查点尾段复活修复等
+（正文各节有记录）。
+
+### 架构专项（独立于 V1，插队位置用户定）
+
+daemon 化 —— [`daemon-architecture-design.md`](./daemon-architecture-design.md)
++ [`daemon-implementation-plan.md`](./daemon-implementation-plan.md)。
+见 HANDOVER 第 7 节。
+
+### 第一档与恢复提速的关系
+
+「恢复提速」已从第一档提前到 V1 #2；第一档剩余三项（§1 流式输出、
+§2 收起播报、§4 回复动画）排在 V1 #7。
 
 空白"卡死"已定位并修复（2026-08-11 晚）：启动信标捕获到
 `Duplicate key toolCallId-... in useResources`——恢复检查点与重新加载

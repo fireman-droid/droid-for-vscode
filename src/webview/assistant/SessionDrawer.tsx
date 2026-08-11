@@ -17,6 +17,10 @@ interface SessionDrawerProps {
   readonly onSelectSession: (sessionId: string) => void;
   readonly onRenameSession: (sessionId: string, title: string) => void;
   readonly onForkSession: (sessionId: string) => void;
+  readonly onToggleFavorite: (
+    sessionId: string,
+    favorite: boolean,
+  ) => void;
 }
 
 const MODIFIED_TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
@@ -30,6 +34,7 @@ export const SessionDrawer = memo(function SessionDrawer({
   onSelectSession,
   onRenameSession,
   onForkSession,
+  onToggleFavorite,
 }: SessionDrawerProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -70,6 +75,10 @@ export const SessionDrawer = memo(function SessionDrawer({
               session.id.toLowerCase().includes(normalizedQuery),
           ),
     [normalizedQuery, sessions.items],
+  );
+  const sessionGroups = useMemo(
+    () => groupSessions(filteredSessions),
+    [filteredSessions],
   );
   const operationLoading = sessions.status === 'loading';
   const disabled =
@@ -138,22 +147,40 @@ export const SessionDrawer = memo(function SessionDrawer({
                 className="dvx-session-nav"
                 aria-label="Session history"
               >
-                <ul className="dvx-session-list">
-                  {filteredSessions.map((session) => (
-                    <SessionRow
-                      key={session.id}
-                      session={session}
-                      disabled={disabled}
-                      onSelect={(sessionId) =>
-                        runOnce(() => onSelectSession(sessionId))
-                      }
-                      onRename={onRenameSession}
-                      onFork={(sessionId) =>
-                        runOnce(() => onForkSession(sessionId))
-                      }
-                    />
-                  ))}
-                </ul>
+                {sessionGroups.map((group) => (
+                  <section
+                    key={group.key}
+                    className="dvx-session-group"
+                    aria-label={group.label ?? undefined}
+                  >
+                    {group.label !== null ? (
+                      <h3 className="dvx-session-group-label">
+                        {group.label}
+                      </h3>
+                    ) : null}
+                    <ul className="dvx-session-list">
+                      {group.items.map((session) => (
+                        <SessionRow
+                          key={session.id}
+                          session={session}
+                          disabled={disabled}
+                          onSelect={(sessionId) =>
+                            runOnce(() => onSelectSession(sessionId))
+                          }
+                          onRename={onRenameSession}
+                          onFork={(sessionId) =>
+                            runOnce(() => onForkSession(sessionId))
+                          }
+                          onToggleFavorite={(sessionId, favorite) =>
+                            runOnce(() =>
+                              onToggleFavorite(sessionId, favorite),
+                            )
+                          }
+                        />
+                      ))}
+                    </ul>
+                  </section>
+                ))}
               </nav>
             ) : normalizedQuery.length > 0 ||
               sessions.status === 'ready' ||
@@ -172,6 +199,34 @@ export const SessionDrawer = memo(function SessionDrawer({
     </>
   );
 });
+
+interface SessionGroup {
+  readonly key: string;
+  readonly label: string | null;
+  readonly items: readonly SessionSummary[];
+}
+
+/**
+ * Partitions the catalog into a pinned Favorites group and the rest.
+ * Order within each group keeps the host's modified-time ordering.
+ * Without favorites the list renders ungrouped, exactly as before.
+ */
+function groupSessions(
+  items: readonly SessionSummary[],
+): readonly SessionGroup[] {
+  const favorites = items.filter((session) => session.isFavorite);
+  if (favorites.length === 0) {
+    return [{ key: 'all', label: null, items }];
+  }
+  const rest = items.filter((session) => !session.isFavorite);
+  const groups: SessionGroup[] = [
+    { key: 'favorites', label: 'Favorites', items: favorites },
+  ];
+  if (rest.length > 0) {
+    groups.push({ key: 'recent', label: 'Recent', items: rest });
+  }
+  return groups;
+}
 
 function CatalogStatus({
   sessions,
@@ -205,12 +260,17 @@ function SessionRow({
   onSelect,
   onRename,
   onFork,
+  onToggleFavorite,
 }: {
   readonly session: SessionSummary;
   readonly disabled: boolean;
   readonly onSelect: (sessionId: string) => void;
   readonly onRename: (sessionId: string, title: string) => void;
   readonly onFork: (sessionId: string) => void;
+  readonly onToggleFavorite: (
+    sessionId: string,
+    favorite: boolean,
+  ) => void;
 }): React.JSX.Element {
   const [renaming, setRenaming] = useState(false);
   const [renameText, setRenameText] = useState(session.title);
@@ -276,6 +336,31 @@ function SessionRow({
           {formatModifiedTime(session.modifiedTime)}
         </time>
       </button>
+      <button
+        type="button"
+        className={
+          session.isFavorite
+            ? 'dvx-session-star dvx-session-star-active'
+            : 'dvx-session-star'
+        }
+        aria-label={
+          session.isFavorite
+            ? 'Remove session from favorites'
+            : 'Add session to favorites'
+        }
+        aria-pressed={session.isFavorite}
+        title={
+          session.isFavorite
+            ? 'Remove from favorites'
+            : 'Add to favorites'
+        }
+        disabled={disabled}
+        onClick={() =>
+          onToggleFavorite(session.id, !session.isFavorite)
+        }
+      >
+        <StarIcon filled={session.isFavorite} />
+      </button>
       {session.active ? (
         <>
           <button
@@ -304,6 +389,30 @@ function SessionRow({
         </>
       ) : null}
     </li>
+  );
+}
+
+function StarIcon({
+  filled,
+}: {
+  readonly filled: boolean;
+}): React.JSX.Element {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill={filled ? 'currentColor' : 'none'}
+      aria-hidden="true"
+    >
+      <path
+        d="m8 2.2 1.76 3.57 3.94.57-2.85 2.78.67 3.92L8 11.19l-3.52 1.85.67-3.92L2.3 6.34l3.94-.57L8 2.2Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

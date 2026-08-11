@@ -304,6 +304,18 @@ export interface SessionRenameMessage {
   readonly title: string;
 }
 
+/**
+ * Marks or unmarks a catalog session as favorite. Favorites persist
+ * through the droid CLI's private `.favorites` file (there is no
+ * official write API); the readback loop is the public
+ * `listSessions()` `isFavorite` flag.
+ */
+export interface SessionFavoriteMessage {
+  readonly type: 'session.favorite';
+  readonly sessionId: string;
+  readonly favorite: boolean;
+}
+
 export interface SessionContextRefreshMessage {
   readonly type: 'session.context.refresh';
   readonly sessionId: string;
@@ -513,6 +525,7 @@ export type WebviewToHostMessage =
   | SessionSelectMessage
   | SessionNewMessage
   | SessionRenameMessage
+  | SessionFavoriteMessage
   | SessionContextRefreshMessage
   | SessionCompactMessage
   | SessionForkMessage
@@ -547,6 +560,8 @@ export interface SessionSummary {
   readonly messageCount: number;
   readonly modifiedTime: string;
   readonly active: boolean;
+  /** True when the CLI's `.favorites` file lists this session. */
+  readonly isFavorite: boolean;
 }
 
 export interface SessionCatalogState {

@@ -25,6 +25,7 @@ function snapshot(
           messageCount: 0,
           modifiedTime: '2026-02-20T10:00:00.000Z',
           active: true,
+          isFavorite: false,
         },
       ],
     },
