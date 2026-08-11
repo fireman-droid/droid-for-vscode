@@ -32,15 +32,27 @@ const KNOWN_TOOL_ACTIONS: Readonly<Record<string, string>> = {
   write: 'Updated workspace files',
 };
 
+/**
+ * Lookup keys a raw SDK tool name may match under: the full name and
+ * its namespace leaf, both stripped to lowercase alphanumerics. Shared
+ * by the action summary below and the webview activity grouping so the
+ * two classifications can never drift apart.
+ */
+export function toolNameCandidates(
+  toolName: string,
+): readonly [string, string] {
+  const safeName = toolName.replace(/\p{Cc}/gu, '').trim();
+  const leaf = safeName.split(/[.:/]/u).at(-1) ?? safeName;
+  return [
+    safeName.replace(/[^\p{L}\p{N}]/gu, '').toLocaleLowerCase(),
+    leaf.replace(/[^\p{L}\p{N}]/gu, '').toLocaleLowerCase(),
+  ];
+}
+
 export function summarizeToolAction(toolName: string): string {
   const safeName = toolName.replace(/\p{Cc}/gu, '').trim();
   const leaf = safeName.split(/[.:/]/u).at(-1) ?? safeName;
-  const normalized = safeName
-    .replace(/[^\p{L}\p{N}]/gu, '')
-    .toLocaleLowerCase();
-  const normalizedLeaf = leaf
-    .replace(/[^\p{L}\p{N}]/gu, '')
-    .toLocaleLowerCase();
+  const [normalized, normalizedLeaf] = toolNameCandidates(toolName);
   const known =
     KNOWN_TOOL_ACTIONS[normalized] ??
     KNOWN_TOOL_ACTIONS[normalizedLeaf];

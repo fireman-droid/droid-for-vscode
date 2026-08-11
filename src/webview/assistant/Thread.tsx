@@ -46,6 +46,12 @@ import {
   ComposerControls,
   type SessionSettingSelection,
 } from './ComposerControls';
+import {
+  ACTIVITY_GROUP_KEY,
+  activityGroupBy,
+  summarizeActivityGroup,
+  type GroupCandidatePart,
+} from './activityGrouping';
 import { DroidMarkdownText } from './MarkdownText';
 import { TranscriptImage } from './TranscriptImage';
 
@@ -874,9 +880,18 @@ const AssistantMessage = memo(function AssistantMessage():
       className="dvx-message dvx-message-assistant"
       aria-label="Droid"
     >
-      <MessagePrimitive.Parts>
-        {({ part }) => {
+      <MessagePrimitive.GroupedParts
+        groupBy={activityGroupBy}
+        indicator="never"
+      >
+        {({ part, children }) => {
           switch (part.type) {
+            case ACTIVITY_GROUP_KEY:
+              return (
+                <ActivityGroup indices={part.indices}>
+                  {children}
+                </ActivityGroup>
+              );
             case 'text':
               return <DroidMarkdownText />;
             case 'reasoning':
@@ -908,7 +923,7 @@ const AssistantMessage = memo(function AssistantMessage():
               return null;
           }
         }}
-      </MessagePrimitive.Parts>
+      </MessagePrimitive.GroupedParts>
       <ActionBarPrimitive.Root
         className="dvx-assistant-actions"
         hideWhenRunning
@@ -2098,6 +2113,116 @@ function ToolActivityRow({
         </div>
       )}
     </details>
+  );
+}
+
+/**
+ * A coalesced run of exploration tools (and swallowed short Thinking).
+ * While any member runs it shows an "Exploring" header over a bounded
+ * auto-scrolling preview of the live rows; once finished it collapses
+ * to an "Explored 3 files, 2 searches" summary that expands on click.
+ * Runs below the batch threshold render their rows unchanged.
+ */
+function ActivityGroup({
+  indices,
+  children,
+}: {
+  readonly indices: readonly number[];
+  readonly children: ReactNode;
+}): React.JSX.Element {
+  const parts = useAuiState((s) => s.message.parts);
+  const summary = useMemo(() => {
+    const members: GroupCandidatePart[] = [];
+    for (const index of indices) {
+      const member = parts[index];
+      if (member !== undefined) {
+        members.push(member);
+      }
+    }
+    return summarizeActivityGroup(members);
+  }, [parts, indices]);
+  const [expanded, setExpanded] = useState(false);
+  const previewRef = useRef<HTMLDivElement | null>(null);
+
+  // Keep the newest activity visible in the bounded preview; the
+  // browser clamps scrollTop, and reduced-motion already forces
+  // scroll-behavior to auto so this never animates there.
+  useEffect(() => {
+    const preview = previewRef.current;
+    if (preview !== null) {
+      preview.scrollTop = preview.scrollHeight;
+    }
+  }, [summary.memberCount, summary.anyRunning]);
+
+  if (!summary.renderAsGroup) {
+    return <>{children}</>;
+  }
+
+  if (summary.anyRunning) {
+    return (
+      <div className="dvx-activity-group dvx-activity-group-running">
+        <div className="dvx-activity-group-header">
+          <span className="dvx-activity-indicator" />
+          <span className="dvx-shimmer-text">Exploring</span>
+        </div>
+        <div
+          className="dvx-activity-group-preview"
+          ref={previewRef}
+          aria-label="Exploration in progress"
+        >
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  const stateBits: string[] = [];
+  if (summary.failedCount > 0) {
+    stateBits.push(
+      `${summary.failedCount} failed`,
+    );
+  }
+  if (summary.stoppedCount > 0) {
+    stateBits.push('stopped');
+  }
+  if (summary.durationMs !== null) {
+    stateBits.push(formatDuration(summary.durationMs));
+  }
+  return (
+    <div className="dvx-activity-group">
+      <button
+        type="button"
+        className="dvx-activity-group-summary"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <span className="dvx-activity-indicator" />
+        <span className="dvx-tool-action">
+          Explored {summary.countsLabel}
+        </span>
+        {stateBits.length > 0 ? (
+          <span
+            className={`dvx-activity-state${
+              summary.failedCount > 0
+                ? ' dvx-activity-state-failed'
+                : ''
+            }`}
+          >
+            {stateBits.join(' · ')}
+          </span>
+        ) : null}
+        <ActivityChevron />
+      </button>
+      <div
+        className={`dvx-activity-group-details${
+          expanded ? ' dvx-activity-group-details-open' : ''
+        }`}
+      >
+        <div className="dvx-activity-group-details-inner">
+          {children}
+        </div>
+      </div>
+    </div>
   );
 }
 

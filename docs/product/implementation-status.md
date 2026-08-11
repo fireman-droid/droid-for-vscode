@@ -1067,11 +1067,74 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension dist/droidvisx.vsix --force`
   （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
   需 Reload Window（或完整重启）后加载新 Bundle
+- 2026-08-12 凌晨打包并安装含 **Streaming 批次二：工具活动聚合**
+  的构建：`dist/droidvisx.vsix` 628,666 字节（9 files,
+  613.93 KB），SHA-256
+  `A430A1295CF239CF9B49298F1F02CA951607FF6CA258FD609F49DCAB847C0B82`，
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix` 与
+  `cursor --install-extension dist/droidvisx.vsix --force`
+  （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
+  需 Reload Window（或完整重启）后加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- Streaming 体验批次二：工具活动聚合（2026-08-12 凌晨，按
+  `docs/product/streaming-experience-design.md` A 项与
+  `activity-aggregation-research.md` 证据，纯 Webview 零 Bridge
+  改动）：新增纯函数模块
+  `src/webview/assistant/activityGrouping.ts`——探索类工具语义
+  分类（read→file、grep/glob/websearch→search、ls→folder、
+  fetchurl→fetch、taskoutput→task-check、skill→skill；execute/
+  edit/todowrite/交互/未知工具一律不可分组），复用
+  `toolActivity.ts` 新抽出的 `toolNameCandidates`（全名 + 命名
+  空间叶名归一化）保证与动作摘要分类永不漂移；
+  `activityGroupBy` 供 `MessagePrimitive.GroupedParts`（core
+  0.3.11 邻接聚合原语，组树按消息 `useMemo`、组节点 key 取首
+  成员 toolCallId 流式追加稳定）做序列连续性分组；**穿插短
+  Thinking（≤200 字符且 ≤2 行）吞入组、长 reasoning 与全部
+  text/data/交互块切组（决策：设计文档 V1 原本不吞 thinking，
+  按用户 2026-08-12 凌晨点名的"短 Thinking 吞组"实施，上限贴近
+  Cursor 短文本规则）**；成组门槛 = 总成员 ≥3 且真实工具 ≥2
+  （纯读 3 条即成组，纯 thinking 永不成组）。
+  `summarizeActivityGroup` 输出真实语义计数摘要（
+  `"3 files, 2 searches"`，file 类按 filePath 去重、唯一已知
+  文件显示文件名），耗时求和、failed/stopped 计数。`Thread.tsx`
+  `AssistantMessage` 由 `MessagePrimitive.Parts` 迁移到
+  `GroupedParts`（`indicator="never"` 保持现状），新增
+  `ActivityGroup` 两态组件：running 态组头 `Exploring` 套既有
+  `.dvx-shimmer-text` shimmer + 有界预览窗（max-height 144px、
+  顶部 28px 渐隐蒙版、scroll-behavior smooth 自动滚到最新，
+  reduced-motion 下全局规则已强制 auto）；完成态收成
+  `Explored 3 files, 2 searches · 3.6s` 按钮行（aria-expanded），
+  点击经 grid-template-rows 0fr→1fr 的
+  `var(--dvx-duration-normal)`（150ms）过渡展开明细，明细行
+  复用既有 `ToolActivityRow`/`ThinkingRow`（耗时/detail/filePath
+  chip 全保留）；低于门槛的组原样渲染普通行。shimmer 不变式
+  扩展：预览窗内成员行与吞入 thinking 全部静默（每回合至多组头
+  一个 shimmer），`.dvx-thread-pending` 抑制组头 shimmer，
+  reduced-motion 显式 `transition-property: none` 覆盖新增过渡。
+  恢复历史直接挂载为收起摘要态（不播动画，冒烟实证）。单测
+  +15（`activityGrouping.test.ts`：分类、吞组阈值、成组门槛、
+  running/failed/stopped 汇总、filePath 去重与单文件名）；
+  `toolActivity.ts` 重构后既有套件全绿。**无头冒烟**
+  `node artifacts/smoke-activity-group.mjs`（配
+  `artifacts/activity-group-harness.html`，三回合转录：5 工具
+  完成组 / 2 工具低于门槛 / 2 完成 + 短 thinking + 1 running）：
+  历史组挂载即收起摘要 `Explored 3 files, 2 searches` + `3.6s`
+  且 grid-rows 为 0px；点击展开 aria-expanded=true 且 grid-rows
+  变化；running 组组头 animationName `dvx-activity-shimmer` 而
+  预览窗内 shimmer 计数 0、max-height 144px；`dvx-thread-pending`
+  加类后组头 `none`、移除恢复；reduced-motion 仿真下组头 `none`
+  且明细过渡 transition-property `none`；低门槛回合 2 行普通行
+  无组壳，**PASS**。长会话性能：分组由原语按消息 `useMemo`
+  （依赖 parts 数组身份），完成组明细 DOM 与既有逐行渲染等量，
+  未引入整树重算。门禁：typecheck 三 tsconfig 全过；test
+  43 files / 928 tests 全绿；build、`npx vsce package`
+  （613.93 KB）、`cursor --install-extension --force`
+  （successfully installed）均成功。批次三（入场动画 + Todo
+  折叠）见下一条目。
 - Streaming 体验批次一：Thinking shimmer + 过去式文案 + 动效
   token（2026-08-12 凌晨，按
   `docs/product/streaming-experience-design.md` §2-B 与统一前置

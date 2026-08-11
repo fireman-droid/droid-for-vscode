@@ -1970,6 +1970,114 @@ body {
   font-family: inherit;
 }
 
+/* Exploration groups (streaming-experience design item A): while the
+   run is live the group shows a shimmering "Exploring" header over a
+   bounded auto-scrolling preview; finished runs collapse to an
+   "Explored 3 files, 2 searches" summary that expands on click. */
+.dvx-activity-group {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #4d4842;
+}
+
+.dvx-activity-group .dvx-activity-row {
+  margin-bottom: 4px;
+}
+
+.dvx-activity-group .dvx-activity-row:last-child {
+  margin-bottom: 0;
+}
+
+.dvx-activity-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 21px;
+  color: #404040;
+  font-weight: 500;
+  line-height: 21.125px;
+}
+
+.dvx-activity-group-preview {
+  overflow-y: auto;
+  max-height: 144px;
+  margin-top: 4px;
+  padding-left: 12px;
+  scroll-behavior: smooth;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 28px
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 28px
+  );
+}
+
+/* Only the group header shimmers while the run is live; member rows
+   inside the preview stay static so each turn keeps at most one
+   shimmer (activity-shimmer-fix invariant). */
+.dvx-activity-group-preview .dvx-activity-running .dvx-tool-action,
+.dvx-activity-group-preview .dvx-shimmer-text,
+.dvx-thread-pending .dvx-activity-group-header .dvx-shimmer-text {
+  background-image: none;
+  background-clip: border-box;
+  -webkit-background-clip: border-box;
+  color: #6b6259;
+  animation: none;
+}
+
+.dvx-activity-group-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  min-height: 21px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #404040;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 500;
+  line-height: 21.125px;
+  text-align: left;
+}
+
+.dvx-activity-group-summary[aria-expanded='false']
+  .dvx-activity-chevron {
+  transform: rotate(-90deg);
+}
+
+.dvx-activity-state-failed {
+  color: #b3401f;
+}
+
+.dvx-activity-group-details {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dvx-duration-normal)
+    var(--dvx-easing-out-strong);
+}
+
+.dvx-activity-group-details-open {
+  grid-template-rows: 1fr;
+}
+
+.dvx-activity-group-details-inner {
+  overflow: hidden;
+  min-height: 0;
+  padding-left: 12px;
+}
+
+.dvx-activity-group-details-open .dvx-activity-group-details-inner {
+  padding-top: 6px;
+}
+
 .dvx-thread-footer {
   position: sticky;
   z-index: 4;
@@ -4049,6 +4157,10 @@ body {
     -webkit-background-clip: border-box;
     color: #6b6259;
     animation: none;
+  }
+
+  .dvx-activity-group-details {
+    transition-property: none;
   }
 }
 
