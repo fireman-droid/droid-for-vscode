@@ -504,7 +504,6 @@ function projectAskUserRequest(
         question.question,
         MAX_ASK_USER_QUESTION_LENGTH,
       ) ||
-      question.options.length === 0 ||
       question.options.length > MAX_RUNTIME_ASK_USER_OPTIONS ||
       !question.options.every((option) =>
         isNonEmptyBoundedString(option, MAX_ASK_USER_OPTION_LENGTH),

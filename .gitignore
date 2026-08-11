@@ -5,4 +5,5 @@ coverage/
 .vite/
 artifacts/
 .factory/skills/
+.cursor/skills/
 .workflow/

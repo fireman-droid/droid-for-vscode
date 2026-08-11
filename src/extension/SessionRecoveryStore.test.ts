@@ -56,9 +56,39 @@ describe('SessionRecoveryStore', () => {
         expect.objectContaining({
           kind: 'tool',
           status: 'stopped',
+          action: 'Read workspace files',
+          progressCount: 0,
+          latestUpdateKind: null,
         }),
       ],
     });
+  });
+
+  it('rejects inconsistent persisted tool progress metadata', async () => {
+    const persistence = memoryPersistence({
+      version: SESSION_RECOVERY_VERSION,
+      selectedSessionId: 'session-1',
+      sessions: [
+        storedSession('session-1', 1, [
+          {
+            id: 'tool-1',
+            kind: 'tool',
+            turnId: 'turn-1',
+            toolUseId: 'use-1',
+            toolName: 'Read',
+            action: 'Read workspace files',
+            status: 'completed',
+            progressCount: 0,
+            latestUpdateKind: 'tool-result',
+          },
+        ]),
+      ],
+    });
+    const store = new SessionRecoveryStore(persistence);
+
+    await store.load();
+
+    expect(store.readSession('session-1')).toBeUndefined();
   });
 
   it('keeps live complete caches and downgrades empty complete caches only after restart', async () => {

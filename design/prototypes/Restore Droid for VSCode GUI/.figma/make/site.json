@@ -1,0 +1,10 @@
+{
+  "description": "This GUI tool enhances the droid for VSCode experience, providing users with an intuitive interface for efficient Android development and debugging.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

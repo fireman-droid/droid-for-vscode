@@ -233,7 +233,12 @@ function mapItemToPart(
         args: {},
         argsText: '',
         providerMetadata: {
-          droidvisx: { status: item.status },
+          droidvisx: {
+            action: item.action,
+            status: item.status,
+            progressCount: item.progressCount,
+            latestUpdateKind: item.latestUpdateKind,
+          },
         },
       };
     case 'diagnostic':

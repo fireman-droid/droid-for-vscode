@@ -1,7 +1,10 @@
 import type * as vscodeTypes from 'vscode';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { HostToWebviewMessage } from '../shared/bridgeMessages';
+import {
+  BRIDGE_PROTOCOL_VERSION,
+  type HostToWebviewMessage,
+} from '../shared/bridgeMessages';
 import type { ChatController } from './ChatController';
 
 const vscodeMock = vi.hoisted(() => ({
@@ -55,10 +58,13 @@ describe('DroidViewProvider', () => {
 
     view.receive({ type: 'not-supported' });
     expect(controller.handleMessage).not.toHaveBeenCalled();
-    view.receive({ type: 'webview.ready', protocolVersion: 1 });
+    view.receive({
+      type: 'webview.ready',
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
+    });
     expect(controller.handleMessage).toHaveBeenCalledWith({
       type: 'webview.ready',
-      protocolVersion: 1,
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
     });
 
     const snapshot: HostToWebviewMessage = {
@@ -68,6 +74,9 @@ describe('DroidViewProvider', () => {
       connection: { status: 'idle' },
       turn: null,
       sessions: { status: 'idle', items: [] },
+      settings: { status: 'loading', value: null },
+      context: { status: 'loading', value: null },
+      modelCatalog: { status: 'loading', items: [] },
       transcript: [],
       historyStatus: 'unavailable',
       truncated: false,
@@ -99,7 +108,10 @@ describe('DroidViewProvider', () => {
       {} as vscodeTypes.WebviewViewResolveContext,
       {} as vscodeTypes.CancellationToken,
     );
-    second.receive({ type: 'webview.ready', protocolVersion: 1 });
+    second.receive({
+      type: 'webview.ready',
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
+    });
     expect(controller.handleMessage).toHaveBeenCalledOnce();
     expect(controller.subscribe).toHaveBeenCalledTimes(2);
 
@@ -132,9 +144,15 @@ describe('DroidViewProvider', () => {
     expect(first.viewSubscription.dispose).toHaveBeenCalledOnce();
     expect(controller.unsubscribe).toHaveBeenCalledOnce();
 
-    first.receive({ type: 'webview.ready', protocolVersion: 1 });
+    first.receive({
+      type: 'webview.ready',
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
+    });
     expect(controller.handleMessage).not.toHaveBeenCalled();
-    second.receive({ type: 'webview.ready', protocolVersion: 1 });
+    second.receive({
+      type: 'webview.ready',
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
+    });
     expect(controller.handleMessage).toHaveBeenCalledOnce();
 
     const snapshot: HostToWebviewMessage = {
@@ -144,6 +162,9 @@ describe('DroidViewProvider', () => {
       connection: { status: 'idle' },
       turn: null,
       sessions: { status: 'idle', items: [] },
+      settings: { status: 'loading', value: null },
+      context: { status: 'loading', value: null },
+      modelCatalog: { status: 'loading', items: [] },
       transcript: [],
       historyStatus: 'unavailable',
       truncated: false,
@@ -180,8 +201,14 @@ describe('DroidViewProvider', () => {
       {} as vscodeTypes.CancellationToken,
     );
 
-    first.receive({ type: 'webview.ready', protocolVersion: 1 });
-    late.receive({ type: 'webview.ready', protocolVersion: 1 });
+    first.receive({
+      type: 'webview.ready',
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
+    });
+    late.receive({
+      type: 'webview.ready',
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
+    });
     expect(controller.handleMessage).not.toHaveBeenCalled();
     expect(controller.subscribe).toHaveBeenCalledOnce();
     expect(controller.unsubscribe).toHaveBeenCalledOnce();

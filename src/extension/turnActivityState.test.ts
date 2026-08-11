@@ -4,6 +4,7 @@ import {
   MAX_ASSISTANT_TEXT_LENGTH,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
+  MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
 } from '../shared/bridgeMessages';
 import {
   createTurnActivityState,
@@ -105,34 +106,52 @@ describe('turnActivityState', () => {
       type: 'tool-start',
       toolName: 'Read',
       toolUseId: 'tool-1',
+      action: 'Read workspace files',
     });
     const duplicate = projectToolEvent(started.state, {
       type: 'tool-progress',
       toolName: 'Read',
       toolUseId: 'tool-1',
+      action: 'Read workspace files',
+      updateKind: 'status',
     });
     const completed = projectToolEvent(duplicate.state, {
       type: 'tool-result',
       toolName: 'Read safely',
       toolUseId: 'tool-1',
+      action: 'Read workspace files',
       isError: false,
     });
     const regressed = projectToolEvent(completed.state, {
       type: 'tool-start',
       toolName: 'Read',
       toolUseId: 'tool-1',
+      action: 'Read workspace files',
     });
 
     expect(started.projection).toEqual({
       toolUseId: 'tool-1',
       toolName: 'Read',
+      action: 'Read workspace files',
       status: 'running',
+      progressCount: 0,
+      latestUpdateKind: null,
     });
-    expect(duplicate.projection).toBeNull();
+    expect(duplicate.projection).toEqual({
+      toolUseId: 'tool-1',
+      toolName: 'Read',
+      action: 'Read workspace files',
+      status: 'running',
+      progressCount: 1,
+      latestUpdateKind: 'status',
+    });
     expect(completed.projection).toEqual({
       toolUseId: 'tool-1',
       toolName: 'Read safely',
+      action: 'Read workspace files',
       status: 'completed',
+      progressCount: 1,
+      latestUpdateKind: 'status',
     });
     expect(regressed.projection).toBeNull();
   });
@@ -142,13 +161,17 @@ describe('turnActivityState', () => {
       type: 'tool-result',
       toolName: 'Write',
       toolUseId: 'tool-result-only',
+      action: 'Updated workspace files',
       isError: true,
     });
 
     expect(result.projection).toEqual({
       toolUseId: 'tool-result-only',
       toolName: 'Write',
+      action: 'Updated workspace files',
       status: 'failed',
+      progressCount: 0,
+      latestUpdateKind: null,
     });
   });
 
@@ -159,6 +182,7 @@ describe('turnActivityState', () => {
         type: 'tool-start',
         toolName: `Tool ${index}`,
         toolUseId: `tool-${index}`,
+        action: `Used Tool ${index}`,
       }).state;
     }
 
@@ -166,11 +190,13 @@ describe('turnActivityState', () => {
       type: 'tool-start',
       toolName: 'Over cap',
       toolUseId: 'over-cap',
+      action: 'Used Over cap',
     });
     const completed = projectToolEvent(ignored.state, {
       type: 'tool-result',
       toolName: 'Tool 0',
       toolUseId: 'tool-0',
+      action: 'Used Tool 0',
       isError: false,
     });
 
@@ -180,6 +206,41 @@ describe('turnActivityState', () => {
     expect(completed.projection).toMatchObject({
       toolUseId: 'tool-0',
       status: 'completed',
+    });
+  });
+
+  it('bounds progress updates without losing terminal lifecycle', () => {
+    let state = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'Execute',
+      toolUseId: 'tool-progress',
+      action: 'Ran a local command',
+    }).state;
+    for (
+      let index = 0;
+      index < MAX_TOOL_PROGRESS_UPDATES_PER_TOOL + 1;
+      index += 1
+    ) {
+      state = projectToolEvent(state, {
+        type: 'tool-progress',
+        toolName: 'Execute',
+        toolUseId: 'tool-progress',
+        action: 'Ran a local command',
+        updateKind: 'status',
+      }).state;
+    }
+    const completed = projectToolEvent(state, {
+      type: 'tool-result',
+      toolName: 'Execute',
+      toolUseId: 'tool-progress',
+      action: 'Ran a local command',
+      isError: false,
+    });
+
+    expect(completed.projection).toMatchObject({
+      status: 'completed',
+      progressCount: MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
+      latestUpdateKind: 'status',
     });
   });
 });

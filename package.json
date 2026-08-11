@@ -16,13 +16,18 @@
   "main": "./dist/extension/extension.cjs",
   "activationEvents": [
     "onView:droidvisx.chat",
-    "onCommand:droidvisx.focusView"
+    "onCommand:droidvisx.focusView",
+    "onCommand:droidvisx.openLogs"
   ],
   "contributes": {
     "commands": [
       {
         "command": "droidvisx.focusView",
         "title": "DroidVisX: Open Chat"
+      },
+      {
+        "command": "droidvisx.openLogs",
+        "title": "DroidVisX: Open Logs"
       }
     ],
     "viewsContainers": {
@@ -64,6 +69,7 @@
     "@assistant-ui/react": "0.15.12",
     "@assistant-ui/react-markdown": "0.14.10",
     "@factory/droid-sdk": "0.7.0",
+    "@fontsource-variable/inter": "^5.3.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-markdown": "10.1.0",

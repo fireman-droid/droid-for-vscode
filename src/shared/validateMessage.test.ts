@@ -6,6 +6,7 @@ import {
   MAX_ASK_USER_ANSWER_LENGTH,
   MAX_BRIDGE_ID_LENGTH,
   MAX_EDITED_SPEC_LENGTH,
+  MAX_MODEL_ID_LENGTH,
   MAX_PERMISSION_OPTION_VALUE_LENGTH,
   MAX_TURN_TEXT_LENGTH,
 } from './bridgeMessages';
@@ -80,6 +81,34 @@ describe('parseWebviewMessage', () => {
     {
       type: 'session.new',
     },
+    {
+      type: 'session.context.refresh',
+      sessionId: 'session-1',
+    },
+    {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'interactionMode',
+      value: 'mission',
+    },
+    {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'modelId',
+      value: 'model-1',
+    },
+    {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'reasoningEffort',
+      value: 'xhigh',
+    },
+    {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'autonomyLevel',
+      value: 'high',
+    },
   ])('accepts $type', (message) => {
     expect(parseWebviewMessage(message)).toEqual(message);
     expect(isWebviewToHostMessage(message)).toBe(true);
@@ -91,7 +120,7 @@ describe('parseWebviewMessage', () => {
     'turn.send',
     {},
     { type: 'unknown' },
-    { type: 'webview.ready', protocolVersion: 2 },
+    { type: 'webview.ready', protocolVersion: 1 },
     {
       type: 'webview.ready',
       protocolVersion: BRIDGE_PROTOCOL_VERSION,
@@ -144,6 +173,25 @@ describe('parseWebviewMessage', () => {
       sessionId: 's'.repeat(MAX_BRIDGE_ID_LENGTH + 1),
     },
     { type: 'session.new', sessionId: 'session-1' },
+    { type: 'session.context.refresh', sessionId: '' },
+    {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'interactionMode',
+      value: 'agi',
+    },
+    {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'autonomyLevel',
+      value: 3,
+    },
+    {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'unknown',
+      value: 'high',
+    },
   ])('rejects malformed input %#', (message) => {
     expect(parseWebviewMessage(message)).toBeUndefined();
     expect(isWebviewToHostMessage(message)).toBe(false);
@@ -206,6 +254,80 @@ describe('parseWebviewMessage', () => {
     };
 
     expect(parseWebviewMessage(message)).toEqual(message);
+  });
+
+  it.each([
+    ['interactionMode', 'auto'],
+    ['interactionMode', 'spec'],
+    ['interactionMode', 'mission'],
+    ['autonomyLevel', 'off'],
+    ['autonomyLevel', 'low'],
+    ['autonomyLevel', 'medium'],
+    ['autonomyLevel', 'high'],
+    ['reasoningEffort', 'none'],
+    ['reasoningEffort', 'dynamic'],
+    ['reasoningEffort', 'off'],
+    ['reasoningEffort', 'minimal'],
+    ['reasoningEffort', 'low'],
+    ['reasoningEffort', 'medium'],
+    ['reasoningEffort', 'high'],
+    ['reasoningEffort', 'xhigh'],
+    ['reasoningEffort', 'max'],
+  ])('accepts legal %s value %s', (field, value) => {
+    expect(
+      parseWebviewMessage({
+        type: 'session.setting.update',
+        sessionId: 'session-1',
+        field,
+        value,
+      }),
+    ).toBeDefined();
+  });
+
+  it('bounds model IDs and rejects hostile setting commands', () => {
+    const maximum = {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'modelId',
+      value: 'm'.repeat(MAX_MODEL_ID_LENGTH),
+    };
+    expect(parseWebviewMessage(maximum)).toEqual(maximum);
+    expect(
+      parseWebviewMessage({
+        ...maximum,
+        value: 'm'.repeat(MAX_MODEL_ID_LENGTH + 1),
+      }),
+    ).toBeUndefined();
+    expect(
+      parseWebviewMessage({
+        ...maximum,
+        extra: true,
+      }),
+    ).toBeUndefined();
+    expect(
+      parseWebviewMessage({
+        ...maximum,
+        [Symbol('extra')]: true,
+      }),
+    ).toBeUndefined();
+
+    const accessor = {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'modelId',
+      get value() {
+        throw new Error('hostile value');
+      },
+    };
+    const proxy = new Proxy(maximum, {
+      ownKeys() {
+        throw new Error('hostile command');
+      },
+    });
+    expect(() => parseWebviewMessage(accessor)).not.toThrow();
+    expect(parseWebviewMessage(accessor)).toBeUndefined();
+    expect(() => parseWebviewMessage(proxy)).not.toThrow();
+    expect(parseWebviewMessage(proxy)).toBeUndefined();
   });
 
   it('rejects a prompt one character over the shared length limit', () => {

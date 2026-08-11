@@ -17,4 +17,5 @@ AGENTS.md
 esbuild.mjs
 pnpm-lock.yaml
 tsconfig*.json
+vitest.config.ts
 *.log

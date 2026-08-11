@@ -13,12 +13,18 @@ import {
 } from '../../shared/hostTranscriptState';
 import { isStrictRecord } from '../../shared/strictValidation';
 import {
+  MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
+  transcriptItemTextUnits,
+} from '../../shared/transcriptLimits';
+import { summarizeToolAction } from '../../shared/toolActivity';
+import {
   type SessionHistoryResult,
   unavailableSessionHistory,
 } from './SessionHistory';
 
-const MAX_RAW_MESSAGES_TO_PROJECT = 1_000;
+const MAX_RAW_MESSAGES_TO_PROJECT = 10_000;
 const MAX_RAW_BLOCKS_PER_MESSAGE = 1_000;
+const MAX_RAW_BLOCKS_TO_PROJECT = 20_000;
 const MAX_IDENTITY_SOURCE_LENGTH = 2_048;
 const SYSTEM_REMINDER_START = '<system-reminder>';
 const SYSTEM_REMINDER_END = '</system-reminder>';
@@ -45,6 +51,8 @@ interface Projection {
   readonly toolCounts: Map<string, number>;
   transcriptHead: number;
   transcriptSize: number;
+  transcriptTextUnits: number;
+  rawBlocksProcessed: number;
   partial: boolean;
 }
 
@@ -66,6 +74,8 @@ export function projectSessionHistory(
       toolCounts: new Map(),
       transcriptHead: 0,
       transcriptSize: 0,
+      transcriptTextUnits: 0,
+      rawBlocksProcessed: 0,
       partial: messages.length > MAX_RAW_MESSAGES_TO_PROJECT,
     };
     const firstMessage = Math.max(
@@ -139,13 +149,18 @@ function projectMessage(
     messageIdentity,
     String(messageIndex),
   );
-  if (value.content.length > MAX_RAW_BLOCKS_PER_MESSAGE) {
-    projection.partial = true;
-  }
+  const remainingBlocks = Math.max(
+    0,
+    MAX_RAW_BLOCKS_TO_PROJECT - projection.rawBlocksProcessed,
+  );
   const blockCount = Math.min(
     value.content.length,
     MAX_RAW_BLOCKS_PER_MESSAGE,
+    remainingBlocks,
   );
+  if (blockCount < value.content.length) {
+    projection.partial = true;
+  }
   for (
     let blockIndex = 0;
     blockIndex < blockCount;
@@ -166,6 +181,7 @@ function projectMessage(
       blockIndex,
     );
   }
+  projection.rawBlocksProcessed += blockCount;
 }
 
 function projectBlock(
@@ -424,7 +440,10 @@ function appendTool(
     turnId,
     toolUseId,
     toolName,
+    action: summarizeToolAction(toolName),
     status: 'stopped',
+    progressCount: 0,
+    latestUpdateKind: null,
   });
   projection.toolCounts.set(
     turnId,
@@ -464,10 +483,13 @@ function completeTool(
   if (existing?.kind !== 'tool') {
     return;
   }
-  projection.transcript[index] = {
+  const updated: SessionTranscriptItem = {
     ...existing,
     status: block.isError === true ? 'failed' : 'completed',
   };
+  projection.transcript[index] = updated;
+  projection.transcriptTextUnits +=
+    transcriptItemTextUnits(updated) - transcriptItemTextUnits(existing);
 }
 
 function isVisibleMessage(
@@ -550,6 +572,21 @@ function appendTranscriptItem(
   }
   projection.transcript[index] = item;
   projection.positions.set(item.id, index);
+  projection.transcriptTextUnits += transcriptItemTextUnits(item);
+  while (
+    projection.transcriptSize > 0 &&
+    projection.transcriptTextUnits >
+      MAX_SESSION_TRANSCRIPT_TEXT_UNITS
+  ) {
+    const evictedIndex = projection.transcriptHead;
+    evictTranscriptItem(projection, evictedIndex);
+    projection.transcript[evictedIndex] = undefined;
+    projection.transcriptHead =
+      (projection.transcriptHead + 1) %
+      MAX_SESSION_TRANSCRIPT_ITEMS;
+    projection.transcriptSize -= 1;
+    projection.partial = true;
+  }
 }
 
 function evictTranscriptItem(
@@ -560,6 +597,7 @@ function evictTranscriptItem(
   if (item === undefined) {
     return;
   }
+  projection.transcriptTextUnits -= transcriptItemTextUnits(item);
   projection.ids.delete(item.id);
   projection.positions.delete(item.id);
   if (item.kind !== 'tool') {

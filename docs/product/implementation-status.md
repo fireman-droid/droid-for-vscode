@@ -2,7 +2,7 @@
 
 > 本文档是 DroidVisX 当前实现范围的持续更新台账，用来区分“已经接入产品的功能”“部分实现”“仅能力声明/探测”以及“尚未实现”。
 >
-> 最后核对日期：2026-08-10
+> 最后核对日期：2026-08-11
 >
 > 核对对象：当前工作区源码、Bridge、Extension Host、Droid Runtime 适配、Webview、测试、VSIX 与 Cursor 安装状态
 
@@ -19,9 +19,61 @@
 
 ## 当前结论
 
-DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以及基础 Session、历史记录、权限交互和恢复安全能力。
+DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以及基础
+Session、历史记录、权限交互和恢复安全能力。Module 1 的 Session
+Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断、
+Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
-它目前还不是完整的 Droid GUI，也没有完成项目目标要求的完整 MVP 后端适配。动态 Composer、Context、Rewind、Changes/Diff、daemon 主运行路径、Skills、Commands、MCP 管理、Mission 和 Manage Droid 等主要功能仍未实现。
+Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
+本次 Figma Design 还原已经重新打包、验证并安装 VSIX，但现有 Cursor 窗口
+仍需 Reload Window 才会加载同版本号下的新 Bundle；当前尚未形成完成提交。
+下一轮严格两小时实现窗口的证据、范围、执行顺序、验收和回滚已经固化到
+`docs/preflight/`。该预研确认 Context 的累计 `used`、Breakdown
+`usedTokens`、`freeTokens` 和 Category Sum 都不能表示当前窗口；只有公开
+Schema 中最新 Provider Call 的 `lastCallTokenUsage` /
+`lastCallCompactionTokens` 可以作为当前 Compaction Meter 分子。该正确 Meter
+尚未接入当前生产包，当前包继续使用不会伪造百分比的 Unavailable 降级。
+公开高层 Node Session 没有模型目录方法，
+但公开的 `initializeSession()` / `loadSession()` 响应包含经过 SDK Schema
+验证的 `availableModels`。生产 Runtime 现在只投影其中由 SDK 标记为
+`isCustom: true` 的 BYOK Model，Model 和对应 Reasoning 选项可以安全选择；
+目录缺失或非法时仍然 fail closed，不会使用硬编码模型。Rewind、
+Changes/Diff、daemon 主运行路径、Skills、
+Commands、MCP、Mission 和 Manage Droid 等主要功能仍未实现。
+
+### 当前 Figma Design 还原边界
+
+当前生产 Webview 以 Figma Design 文件
+`Jelb6rz1qdLl5uko9ETjqH` 的页面 `0:1` 为视觉来源。实现依据是通过 Figma
+MCP 读取的节点结构、尺寸和样式，而不是旧 Make 导出或截图估算。默认
+430×850.25 参考面板中的 60px Header、Transcript/Composer 留白、默认
+Composer、待处理请求 Composer、History、Settings、Context、Model、
+Permission、Plan、AskUser 和 Mission 状态均已映射到生产组件；生产 Shell
+不再保留 Figma 演示画布的固定 430px 外框、圆角和居中灰色背景，而是填满
+Cursor 提供的整个 Webview 容器。
+Inter Latin 字形随 Webview 本地打包，CJK 字形继续使用系统回退字体。
+Composer 的 Send、Thinking 和 Tool 箭头使用自身坐标系居中的 SVG；Plus、
+Context 和 Model 浮层固定在 Composer 上方约 7px。
+本轮再次按 Conversation、History、Permission 和 Plan 的节点级结构核对
+生产实现。Webview 使用 Figma 的 `#f5f3ef` Surface、`#262626` Ink、
+`#a1a1a1` Subtle、`#e5e5e5` Border、`#f2612e` Accent 和
+`#ec003f` Danger；权限与 Plan 使用 398px Inline Request、368px Card
+Shell 和 336px 正文列。真实数据超过 Figma 示例时，正文在卡片内滚动，
+长按钮标签换行或在窄栏分行，不扩大 Webview 或产生横向溢出。
+
+`design/prototypes/Restore Droid for VSCode GUI` 和旧 Make 导出仅保留为历史
+参考。所有真实 Session、Turn、模型、Context、权限和 AskUser 数据仍只
+来自已校验的 Bridge，Figma 中的示例数据不会进入生产 Runtime。
+
+为了不把原型样例误作 Droid 产品能力，以下原型控件不会显示为可用功能：
+
+- 固定模型清单与 “Add Models”，生产 UI 仅显示 Runtime 返回且 SDK 标记为
+  `isCustom: true` 的 BYOK `availableModels`；
+- Skills/MCP 管理、文件附件、全局或永久权限；
+- 完整 Mission 管理、Worker、阶段和进度界面。
+
+Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限卡片显示和
+结算。ExitSpec 的计划则只在真实权限选项允许时显示和编辑。
 
 ## 生产已接通
 
@@ -35,6 +87,10 @@ DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以
 - Stop 中断当前轮次
 - Markdown/GFM 安全渲染
 - Webview 草稿保存与恢复
+- 空闲时 Enter 发送、Shift+Enter 换行；Turn 运行时不支持排队，因此
+  Composer 明确提示先 Stop，而不是继续显示错误的 “Enter to send”
+- Turn 运行期间持续显示真实工作状态；即使 Droid 没有发送可选的
+  `tool_progress`，界面也不会在长 Tool/Thinking 间隔中表现为静止
 
 主要实现：
 
@@ -47,20 +103,48 @@ DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以
 ### 2. Thinking 和 Tool 生命周期
 
 - Thinking 流式内容和折叠展示
+- 所有 Thinking 默认收起；用户切换任意一个 Thinking 时，同一 Thread
+  中的全部 Thinking 同步展开或收起
+- 同一 Turn 内交错到达的 Thinking、Tool 和 Assistant Text 保留真实事件
+  顺序，不再把后续正文合并回最早的 Assistant Text 段
+- Thinking 正文使用 Figma 的 Inter 12.5px / 20.313px 和
+  `#a1a1a1`，Chevron 使用 14×14 SVG
+- Thinking 和 Assistant Markdown 使用 assistant-ui 有界平滑提交，避免
+  原始大块文本直接刷新造成的可见分块和不必要布局抖动
 - Tool 开始、运行、完成和失败状态
-- 同一个 Tool 的重复事件合并
+- 以 “Read workspace files”“Ran a local command” 等语义动作作为主标签
+- Droid SDK 的 `tool_progress` 是可选事件；只有真实收到进度事件时才显示
+  有界计数和最新通用更新类别，没有进度事件时只显示真实生命周期，不伪造
+  “缺少进度”告警
 - Stop、刷新和 Runtime 重建后的状态收敛
 - Tool 数量和文本长度限制
 
 安全限制：
 
-- UI 只接收 Tool 名称、关联 ID 和生命周期
-- Tool 参数、原始输出、完整结果和其他 SDK Payload 不进入 Webview
+- UI 只接收 Tool 名称、语义动作、关联 ID、生命周期、有界进度计数和通用
+  更新类别；关联 ID 仅用于内部关联，不再作为 Tool 行主内容显示
+- 命令、路径、参数、Snippet、原始输出、完整结果、详细错误、Terminal/
+  Subagent ID 和其他 SDK Payload 不进入 Webview
 
-### 3. 权限请求
+### 3. 用户消息操作
+
+- assistant-ui 原生 Copy
+- “Reuse” 把历史用户文本非破坏性填入当前 Composer
+- 双击用户消息执行同一 Reuse 操作并聚焦 Composer
+- Reuse 同步 React Draft、VS Code 持久化 Draft 和 assistant-ui Composer
+- Copy 或 Reuse 都不会自动发送、修改历史、回退文件或创建分支
+
+这不是历史 Edit、Resend、Regenerate 或 Rewind。
+
+### 4. 权限请求
 
 - 投影 Droid SDK 返回的真实权限选项
 - Edit、Execute、Create、Patch、MCP Tool、Sandbox、Spec 和 Mission 等确认类别
+- 使用 Figma 的安静 Inline Request 层级，不把每个 Tool 再绘制成独立大卡片
+- 拒绝操作与主要允许操作始终可见；额外 Session/Always Allow 范围只在
+  真实 SDK 选项存在时进入 14px Chevron 的 Split Button 菜单
+- Split Button 使用统一 32px 高按钮体、32px Chevron 分段、单一外轮廓和
+  内部分隔线；窄栏时操作区换行而不产生横向溢出
 - 有界的标题、详情和风险说明
 - 防止重复响应
 - 请求与精确的 Workspace、Session、Turn 和 Runtime Generation 绑定
@@ -72,24 +156,33 @@ DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以
 - `src/extension/pendingInteractionCoordinator.ts`
 - `src/webview/assistant/Interactions.tsx`
 
-### 4. AskUser
+### 5. AskUser
 
 - 单选
 - 多选
+- 无预设选项的开放文本问题（SDK `options: []`）
+- SDK 若把 Factory 问卷标记文本放进单个 Question，UI 会把字面量 `\n`、
+  `[topic]` 和 `[option]` 格式化为可读问卷，并改为单个开放文本回答，不再
+  显示无关的 Yes/No 选项
 - 自定义答案
 - 一次处理多个问题
 - Submit 和 Cancel
 - 按原问题索引精确返回答案
 
-### 5. Exit Spec 审批子集
+### 6. Exit Spec 审批子集
 
 - 显示 `ExitSpecMode` 返回的计划
+- 通过安全 GFM Markdown 显示标题、列表和代码，不暴露原始 `####` 标记
 - 在 SDK 提供可编辑选项时编辑计划
+- 可见操作遵循 Figma 的 Deny、Edit、Approve 层级；额外审批范围进入
+  Split Button 菜单
 - 返回 Droid SDK 提供的审批结果
+- SDK 发出 `settings_updated` 后，Host 重新读取当前 Session 的权威
+  Settings；ExitSpec 审批继续执行时 Mode 不再停留在旧的 Spec 显示
 
 这只是 Exit Spec 权限交互，不代表完整 Spec Mode 已实现。
 
-### 6. 基础 Session 导航
+### 7. 基础 Session 导航
 
 - 列出当前工作区的本地 Session
 - 刷新列表
@@ -97,6 +190,10 @@ DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以
 - 选择和恢复 Session
 - 本地按标题或 ID 过滤
 - 显示更新时间和消息数量
+- History 搜索使用单一 33px 外框，原生 Search Input 不再叠加第二层边框
+  或 Focus Outline
+- History 使用内部列表作为唯一纵向滚动容器，隐藏浏览器 Scrollbar，
+  右边缘保持 `#f5f3ef` Surface，不再出现黑色边条
 
 主要实现：
 
@@ -104,7 +201,7 @@ DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以
 - `src/webview/assistant/SessionDrawer.tsx`
 - `src/extension/ChatController.ts`
 
-### 7. 旧 Session 历史加载
+### 8. 旧 Session 历史加载
 
 - 使用公开低层接口 `DroidClient.loadSession()`
 - 加载 CLI 创建的已有 Session
@@ -112,26 +209,68 @@ DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以
 - 过滤隐藏内容、Hook 内容和 SDK 系统标记
 - 对过长内容进行截断
 - 对不支持的内容显示 partial/unavailable 状态
+- 最多检查公开响应末尾 10,000 条 Message，并以 20,000 个 Block、2,000
+  个可见 Transcript Item 和 1,000,000 UTF-16 Text Unit 作为独立安全上限；
+  普通历史不再受旧 200 Item 窗口限制
 
 主要实现：
 
 - `src/runtime/history/FactorySessionHistoryLoader.ts`
 - `src/runtime/history/projectSessionHistory.ts`
 
-### 8. Session 和 Webview 恢复
+### 9. Session 和 Webview 恢复
 
 - 保存选中的 Session
 - 保存有界的 Transcript 恢复缓存
 - Webview 刷新后恢复快照
 - 恢复未处理的权限交互
 - Host 重启后把未完成活动归一为停止状态
+- 恢复旧 Session 时对公开 SDK 历史与本地安全缓存做顺序重叠核对；若 SDK
+  只返回已压缩的后缀，保留本地已观察到的较早前缀，而不是用较短结果覆盖
+- 公开历史或合并后的时间线不完整时独立标记 `partial`；只有来源或本地安全
+  预算确实裁剪了内容时才标记 `truncated`，不把本地缓存冒充 Droid 的完整
+  权威历史
+
+边界：如果 CLI/SDK 在 DroidVisX 首次观察前已不再通过公开接口返回较早内容，
+或本地 2,000 Item / 1,000,000 Text Unit 安全预算也已用尽，DroidVisX
+无法从私有 CLI 文件恢复这些内容。
 
 主要实现：
 
 - `src/extension/SessionRecoveryStore.ts`
 - `src/extension/ChatController.ts`
 
-### 9. Workspace 与安全边界
+### 10. 本地结构化诊断
+
+- 把同一个隐私安全 SDK Observability Bundle 注入 `ProcessTransport` 和
+  `createSession()` / `resumeSession()`
+- 记录 Runtime 初始化和 Turn 的结果、耗时、文本长度和投影事件数量
+- Turn 结束诊断分别记录隐私安全的 Tool Start、Progress 和 Result 事件计数，
+  用于区分“SDK 未发送可选进度”和“Bridge 丢失进度”
+- Context 读取记录开始、耗时以及 `success`、`sdk-error` 或
+  `invalid-stats` 结果；非法值只记录 `non-integer`、`negative`、
+  `invalid-accuracy` 或 `projection-error` 等安全分类，不记录原始响应或错误
+- 使用 `DroidVisX Logs` Output Channel，并贡献 `DroidVisX: Open Logs`
+  Command
+- 在 VS Code Extension Log 目录写入 JSONL；当前文件上限 512 KiB，保留
+  两个轮换备份
+- Logger、File 和 Output Channel Sink 失败不会改变 Runtime 或 Extension
+  行为
+
+安全限制：
+
+- 不记录 Prompt/Message 文本、Tool 输入或输出、命令、路径、Session/
+  Request/Tool/Terminal/Subagent ID、原始错误、凭据、Token 或 Stack Trace
+- 字符串 Attribute 只保留短的 Code-like 值；未知 SDK Message 不进入日志
+
+主要实现：
+
+- `src/extension/LocalDiagnostics.ts`
+- `src/runtime/runtimeDiagnostics.ts`
+- `src/runtime/FactoryDroidRuntime.ts`
+- `src/extension/extension.ts`
+
+### 11. Workspace 与安全边界
 
 - 没有工作区时阻止 Runtime 启动
 - Workspace 未信任时阻止 Runtime 启动
@@ -153,15 +292,77 @@ DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以
 
 ## 部分完成
 
+### Session Settings、Context 与模型选择
+
+- 读取并显示真实 Interaction Mode、Model、Reasoning Effort 和 Autonomy
+- 更新 Mode、Autonomy、Model 和所选 Model 支持的 Reasoning Effort
+- 使用 `getContextStats()` 读取并校验 SDK 返回字段；当前只把可信范围内的
+  旧 DTO 显示为比例，累计值超过 Model Limit 时不会显示比例
+- Context 对每个公开数值独立执行安全整数和非负校验，不再增加 SDK Schema
+  没有要求的跨字段约束；`estimated` 统计可有舍入差
+- 只有 `used`、`remaining` 和 `limit` 能形成有效窗口比例时才显示百分比；
+  SDK 通过 Schema 但报告值超过 Model Limit 时，UI 显示原始报告量和
+  “Current window unavailable”，不会把累计/压缩相关统计误报为 100%
+- 最新无 Prompt 公开 SDK Probe 进一步证明 `getContextStats().used`、
+  `getContextBreakdown().usedTokens`、`freeTokens` 和 Category Sum 均可能是
+  累计值；正确实现必须使用
+  `inputTokens + cacheReadTokens + (outputTokens ?? 0)`，该和已与
+  `lastCallCompactionTokens` 实测一致，并以 `contextBudget` / `limit` 为分母
+- 正确的 Last-call Meter 仍属于下一实现切片；在接通前不得把当前
+  Unavailable 降级改回累计百分比
+- Context 刷新失败时保留最后一次已确认数值并提供 Retry；加载期间的重复
+  Refresh 会被合并，失败提示指向 `DroidVisX Logs`
+- 使用公开初始化/加载响应及公开 SDK Schema 捕获真实 `availableModels`
+- 只显示 SDK `isCustom` 字段确认的 BYOK Model；不会按 Model ID 猜测
+  Provider 或自定义状态
+- 模型目录缺失、超限、重复、非法或包含未知 Reasoning 值时 fail closed
+- Plus 和 Context 面板按 Composer 宽度显示；Model 使用 228px 设计宽度
+- Model 列表在固定高度内独立纵向滚动，不会把浮层推出 Webview
+- 当前 Model 行在编辑前显示已确认的 Reasoning Effort
+- Reasoning 选项只显示所选 Model 真实声明的值，包括 SDK 的 `xhigh`
+  （Extra High）和 `max`
+- Reasoning 浮层的 “Options” 是不可选择的 `h3` 标题，不再承担返回或关闭
+  操作
+- Plus 面板提供本地动作搜索；Mode/Autonomy 在原卡片内展开选项列表，
+  Skills/MCP 仅显示不可交互的 “None” 状态，不会伪造管理动作或 Runtime 能力
+- Turn 流式运行时仍可打开 Plus、Context 和 Model 面板，并可更新 Mode、
+  Autonomy、Model 和 Reasoning；待处理 Permission/AskUser、重复更新和
+  Session 替换期间仍阻止写入
+- Composer 输入由 assistant-ui `ComposerPrimitive` 提供，输入焦点只显示
+  Composer 外层状态，不再绘制内部矩形边框
+- 长会话只由 assistant-ui Viewport 的 `autoScroll` 和 Initialize/
+  Thread Switch 策略管理跟随；已关闭会在内容增长期间保持意图的
+  `scrollToBottomOnRunStart`，并移除第二套每次 Message 更新都执行
+  `scrollTo(scrollHeight)` 的手工滚动，避免阅读上方内容时被拉回底部
+- Runtime Diagnostic 使用紧凑行展示；同一轮终止
+  `runtime-execution-failed` 会替换之前的错误 Diagnostic
+- Context 失败时只渲染一个 Alert，不再同时显示重复普通错误文本
+- Plan 文本和 AskUser 的问题、选项、自定义输入支持多行换行并在请求卡片内
+  纵向滚动，不再使用固定选项区高度
+- 已移除可见的 `ThreadPrimitive.ScrollToBottom` 控件
+
+主要实现：
+
+- `src/runtime/modelCatalogCaptureTransport.ts`
+- `src/runtime/FactoryDroidRuntime.ts`
+- `src/extension/ChatController.ts`
+- `src/webview/assistant/ComposerControls.tsx`
+- `src/webview/assistant/Thread.tsx`
+
+### 其他部分完成项
+
 | 功能 | 当前实现 | 尚缺内容 |
 | --- | --- | --- |
+| Session Settings 与 Context | Runtime、Host、Bridge v2、Mode/Autonomy/Model/Reasoning 更新、Context 使用进度、固定暖色响应式 UI、测试、VSIX 和安装均已完成 | 用户在真实 Cursor 中最终可见验收 |
 | Retry | 关闭并重新创建或恢复 Runtime | 不会重新发送失败 Prompt，也不是消息级 Regenerate/Reload |
 | CLI/连接诊断 | CLI 不存在、工作区无效、未信任和初始化失败提示 | 实际登录状态、登录操作、版本兼容 UI、账户状态、升级入口 |
 | Session 搜索 | 在最多 50 条本地结果中按标题或 ID 过滤 | daemon 全量搜索、内容搜索、分页、排序和筛选 |
 | Session 生命周期 | List、Refresh、New、Select、Resume | Rename、Archive、Delete、Favorite、Fork、Compact、Rewind |
 | Session 历史 | 文本、Thinking、Tool 生命周期 | 历史 Image、Document 和未知 Block 会被省略并标记为 partial |
-| Tool 展示 | 名称、ID、运行状态 | 参数、输出、结果、耗时、文件变更、Apply/Open 操作 |
-| Spec | ExitSpecMode 计划显示、编辑和审批 | 进入 Spec Mode、模式状态、完整计划生命周期、实施交接 |
+| Tool 展示 | 语义动作、技术 Tool 名、有界进度计数/类别和生命周期；不显示原始 Call ID | 参数、输出、结果、耗时、文件变更、Apply/Open 操作 |
+| 消息操作 | Copy、Reuse in Composer 和双击 Reuse；不会自动发送 | 历史 Edit、Resend、Regenerate、分支和 Rewind |
+| 本地诊断 | SDK Observability、Host 生命周期/耗时、Output Channel、Open Logs、轮换 JSONL | 用户可配置级别、导出诊断包、遥测或远程上传 |
+| Spec | ExitSpecMode 计划显示、编辑和审批；审批后的 `settings_updated` 会触发权威 Mode 回读 | 主动进入 Spec Mode、完整计划生命周期、实施交接 |
 | Mission | Mission 相关确认可以显示为通用权限卡片 | Mission 状态、事件、阶段、Worker、控制和独立 UI |
 | Diff | 权限详情可以显示原始文本或 Patch | 原生 Diff 模型、Hunk 操作、`vscode.diff`、Changes 页面 |
 | Workspace | 使用 `workspaceFolders[0]` | 多根工作区选择 |
@@ -198,11 +399,11 @@ DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以
 - 没有 Webview UI
 - 不会启用任何产品功能
 
-因此以下能力目前仍然只是探测结果或声明：
+Module 1 已直接通过生产 `DroidRuntime` 接通 Live Settings 和 Context
+Stats，并通过公开初始化/加载响应接通模型目录，因此这些能力不再只是
+Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力目前
+仍然只是探测结果或声明：
 
-- Live Settings
-- Mode、Model、Reasoning、Autonomy
-- Context Stats
 - Skills
 - MCP Servers 和 Tools
 - 图片和文档附件能力
@@ -224,19 +425,30 @@ DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以
 
 ### 动态 Composer
 
-- [ ] Auto / Normal / Spec / Mission 模式选择
-- [ ] Autonomy 选择
-- [ ] Model 选择
-- [ ] Reasoning Effort 选择
-- [ ] Context 使用量
-- [ ] Context 明细
-- [ ] `＋` 动作面板
+- [x] Auto / Spec / Mission 模式选择
+- [x] Autonomy 选择
+- [x] Model 选择
+- [x] Reasoning Effort 选择
+- [x] 当前 Model 和 Reasoning Effort 显示
+- [x] Context 安全读取、刷新和不可信比例降级
+- [ ] Last-call Current-window Meter
+- [ ] 经过语义确认的 Context Category 明细
+- [x] `＋` 动作面板中的 Mode 和 Autonomy
+- [x] `＋` 动作面板本地搜索及不可交互的 Skills/MCP 连接状态
 - [ ] `@` 文件和 Symbol 引用
 - [ ] `/` 动态命令
 - [ ] 已附加内容标签
 
-当前 Composer 只有文本输入、Send、Stop 和 Runtime Retry。
-
+当前 Composer 保留 assistant-ui 的 Input、Send、Stop 和 Runtime Retry，
+并增加真实 Mode、Autonomy、Model/Reasoning 和 Context 控件。模型选项
+只来自当前 Session 初始化或加载响应中公开 `availableModels` 的
+`isCustom: true` 子集，不会使用原型数据、旧列表、ID 猜测或人工维护列表。
+如果当前 Session 使用内置 Model，该当前值仍显示在 Trigger 中，但不会被
+加入 BYOK 列表，也不会伪造该 Model 的 Reasoning 选项。Skills/MCP 状态行
+不提供按钮，也不代表 Capability Gate 已接入。普通流式响应期间仍可提交
+Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Settings
+为最终显示值；待处理 Permission/AskUser、重复更新、Session 替换和非法目录值
+仍会阻止更新。
 ### Context 与附件
 
 - [ ] 文件附件
@@ -253,6 +465,8 @@ DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以
 
 ### Edit、Resend 和 Rewind
 
+- [x] Copy 历史用户消息
+- [x] 非破坏性 Reuse in Composer
 - [ ] 编辑历史用户消息
 - [ ] 消息级重新发送
 - [ ] Assistant 消息 Regenerate
@@ -303,7 +517,8 @@ DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以
 - [ ] Marketplaces
 - [ ] Hooks 管理
 - [ ] Automations
-- [ ] Custom Models
+- [ ] Custom Models 的创建、编辑和 Provider 管理（已配置 BYOK Model 的选择
+  已接通）
 - [ ] 组织策略
 - [ ] Account Profile
 - [ ] Account Usage
@@ -322,52 +537,159 @@ DroidVisX 当前完成的是一个可靠的本地 Droid 文本聊天内核，以
 最后核对结果：
 
 - Cursor 已安装：`droidvisx.droidvisx@0.0.0`
-- `dist/droidvisx.vsix` 大小：676,393 字节
-- VSIX 修改时间早于 Capability Gate 源码修改时间
-- 当前已安装包不包含最新 Capability Gate 源码
-- Capability Gate 本身没有接入 Extension/UI，因此即使只重新打包，也不会产生新的可见功能
+- `dist/droidvisx.vsix` 大小：759,316 字节
+- VSIX 修改时间：2026-08-10T16:00:37.1434231Z
+- VSIX SHA-256：
+  `E887775D797954C73067B1782C91DACF536E71BE627323947856BD3E3AEE4E17`
+- VSIX 包含最终 Module 1 Runtime、Host、Bridge v2、隐私安全活动/日志和
+  暖色 Webview Bundle，以及本轮 AskUser 问卷格式、交错内容顺序、
+  Thinking 默认折叠、Context 可靠读取/诊断、Enter 状态说明、Thinking
+  平滑、手动阅读位置保护、持续工作状态、Plan 后 Mode 回读和暖色
+  Markdown Surface 修复
+- `verify:vsix` 已验证 8 个入口和 Bundle 外部依赖
+- 最终 VSIX 已使用 `--force` 成功安装到 Cursor
+- 已安装的 Extension Bundle、Webview JS、CSS 和 Inter WOFF2 哈希均与本次
+  Build 完全一致
+- Extension Bundle SHA-256：
+  `26807CD7EC4EAC5C7AA875C804786D2AFF654BB1D01096D1D7375E23E8562886`
+- Webview JS SHA-256：
+  `FB7F26952DF9EB91CF4A5D383E8B3C80E573D132C8F3B917D7FCC5C009FDB360`
+- Webview CSS SHA-256：
+  `22CFE01FFFCD4734CD42DAD1E77623972D7FC46E71575C1AC7F2FA538A647BAA`
+- 用户尚未在真实 Cursor 中完成最终可见验收
+- 由于版本号仍为 `0.0.0`，现有 Cursor 窗口需要 Reload Window 才会换到
+  新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
 - Capability Contract/Probe 聚焦测试：28/28
-- Extension TypeScript 检查：通过
 - Capability 实机无提示 smoke：通过
-- 完整测试套件：338/338 通过
-- 所有 TypeScript 检查：通过
-- Production Build：通过
+- 最新 Runtime/Composer/Store/Interaction/App 聚焦测试：40/40 通过
+- 最新长会话跟随修正后的 App/Store 聚焦测试：8/8 通过
+- 本轮 Activity/Privacy/Runtime/Host/Webview 聚焦测试：
+  15 files / 273 tests 全部通过
+- 本轮 UI/History/Recovery/Bridge 聚焦测试：
+  10 files / 195 tests 全部通过
+- 本地 JSONL 轮换、SDK/Host 隐私过滤和 Sink Failure：
+  3/3 tests 通过
+- Webview 测试：120/120 通过
+- Runtime 模型目录投影测试包含 SDK `isCustom` BYOK 过滤，以及真实
+  `AutonomyLevel.High` 更新参数验证
+- 本轮 AskUser/Tool/Settings/History 集成聚焦测试：
+  9 files / 207 tests 全部通过
+- 本轮内容顺序/AskUser/Thinking 聚焦测试：
+  3 files / 17 tests 全部通过
+- 本轮 Context/Settings/Composer/Thinking/Scroll/Markdown 修复聚焦测试：
+  8 files / 220 tests 全部通过
+- 最后 Context 诊断分类补丁聚焦测试：1 file / 28 tests 全部通过
+- Context 真实 `out-of-range` 日志修复聚焦测试：
+  4 files / 174 tests 全部通过
+- 最新完整测试套件：29 files / 435 tests 全部通过
+- 本轮按用户要求没有重新运行 435 项完整套件
+- 最新 Extension 与 Webview TypeScript 检查：全部通过
+- Production Build：通过，包含本地 Inter Variable Latin WOFF2
+- 自动化回归已证明 SDK `options: []` 可以穿过 Runtime 和 Bridge 并提交
+  开放文本答案；普通流式响应期间 Webview、Host 和 Runtime 可以完成一次
+  权威 Settings 更新；零 `tool_progress` 只显示生命周期；History 只渲染
+  一个与 `partial` / `truncated` 状态一致的提示
+- 以下浏览器核对记录来自本轮前一个 Module 1 包。当前包按用户要求不再启动
+  浏览器，最终可见验收由用户在 Reload Window 后于真实 Cursor 中完成
+- 720×900 Activity 核对：Tool 主标签为 `Read workspace files`，原始
+  `private-tool-call-id` 不可见；Hover 显示 Copy/Reuse，Root 横向溢出为
+  0px
+- 320×760 Activity 核对：展开详情为 `Read` 和
+  `3 updates · Latest: tool result`；Tool Summary、User Bubble 和 Root
+  横向溢出均为 0px，Composer 右边缘保持在 Viewport 内
+- 双击 Reuse 核对：历史文本进入 Composer，`dvx-prompt` 获得焦点，
+  `aria-live` 报告 “Message added to Composer.”，没有发送 Turn
+- Context Error 核对：可见错误文本和 `[role=alert]` 均只有一个
+- 生产 Shell 全屏核对：900×700 和 320×700 均从 `(0, 0)` 精确填满
+  Viewport，无外层 Padding、圆角或阴影；Figma 的 Header、Composer 和
+  Request 卡片内部规格继续保留
+- BYOK Model 浏览器核对：18 个目录行；196px 列表
+  `overflow-y: auto`，可滚动至 `scrollTop: 538`；面板完全位于 430px
+  Viewport 内
+- 长会话浏览器核对：从顶部发送后流式阶段距底部 `0px`；主动向上滚动后
+  生成结束仍保留 `924px` 距离，没有重新抢回底部
+- Plan 数值核对：430px Viewport 中 Inline Request 为 398px、Card Shell
+  为 368px、正文列为 336px；Markdown 为 12.5px / 20.313px；
+  Action Gap 为 8px，Ghost Button 为 34px，Primary Button 为 32px，
+  Split Button 为 32px 高、Chevron 分段为 32px 宽、图标为 14px
+- 320×760 Plan 核对：Split Button 为 134.17×32px，操作区两行显示，
+  Root、Card 和 Action 区横向溢出均为 0px
+- 320×700 Plan 核对：请求卡片位于 60px Header 下方和 Composer 上方，
+  正文在 300px 高区域内滚动，操作区分为两行且无横向溢出
+- 多行 AskUser 浏览器核对：六个 52px 高选项均无相互重叠，自定义输入与
+  选项区无重叠；长请求卡片在自身内部纵向滚动
+- 紧凑 Diagnostic 浏览器核对：Info、Warning、Error 均为 26px 高；终止
+  Runtime Error 的同轮去重由 Store 测试覆盖
+- 1417×895、DPR 2 浏览器核对：Conversation、History、Settings、
+  Context、Model、Permission、Plan、AskUser、Queued 和 Mission 已捕获
+- 最新 1417×895 浏览器核对：Send 图标中心偏差为 0px；Thinking/Tool
+  Chevron 为 14×14、旋转原点 7px 7px；Plus、Context、Model 浮层与
+  Composer 的可见间隔均为 7px；Model 搜索聚焦时无可见 Outline 或阴影
+- Model 当前行显示 Medium；真实目录声明时 Reasoning 编辑器显示 Low、
+  Medium、High、Extra High 和 Max
+- 420×820 Reasoning 核对：“Options” 暴露为 Level 3 Heading，匹配文本的
+  Button 数量为 0，`user-select: none`，Root 无横向溢出
+- 最新 Settings 浏览器核对：Mode/Autonomy 在原卡片内展开，Mode 的
+  Auto/Spec/Mission 同屏显示；展开后面板仍与 Composer 保持 7px 间隔
+- Session History 的 “All chats” 仅为静态标签，已移除无功能的 Chevron
+- 420×820 History 核对：搜索 Shell 为 388×33px、单一 1px Border；
+  内部 Search Input 为 0px Border/Outline/Shadow，Root 与搜索框均无横向溢出
+- 738×1024 History 核对：Drawer 右边缘与 Viewport 的差值为 0px，
+  `elementFromPoint()` 命中 `dvx-session-drawer` Surface；Root 横向溢出
+  为 0px，内部 Session Nav 使用 `scrollbar-width: none`
+- 当前包 Thinking 改为默认收起；同步展开/收起由组件回归测试覆盖，真实
+  Cursor 可见表现等待用户本轮验收
+- 320×850 窄栏核对：无横向溢出，Conversation 与 AskUser 仍在 Shell 内
+- 最新 320×850 Reasoning 编辑器核对：改为 Model 面板上方显示，完整位于
+  Viewport 内且页面宽度保持 320px
+- 键盘 Focus ring 与 Reduced Motion：通过
+- 第二轮浏览器视觉检查：320px、575px，Plus、Context、Model、Composer
+  焦点和已删除的滚动按钮；面板与 Composer 边框对齐
+- 第一轮浏览器视觉检查：320px、575px、900px，Settings、Context、Model
+  和 Session Drawer
+- VSIX 打包和 `verify:vsix`：通过
+- VS Code 1.108.2 Integration：通过，验证 Focus/Open Logs Command 注册和
+  Extension 激活
+- Cursor CLI 安装：通过
+- 已安装 Extension、Webview JS、CSS 和 Inter Font 的 SHA-256 均与本次
+  Build 一致
+
+本轮已完成完整自动化门禁、VSIX 打包/内容验证和 Cursor CLI 安装，并核对
+安装目录中的 Extension、Webview JS、CSS 和 Inter Font 哈希与 Build 一致。
+按用户要求未对当前包继续启动浏览器；真实 Secondary Sidebar 的最后可见
+检查由用户在现有 Cursor 中 Reload Window 后完成。
 
 ## 仓库状态
 
-当前实现已在提交 `0fb5e5c` 中形成可复现检查点：
+基础聊天实现在提交 `0fb5e5c` 中形成可复现检查点。当前 Module 1 变更仍在
+工作区等待 Cursor 可见验收：
 
 - `src/`、测试、构建配置、依赖锁文件和工程文档已纳入 Git
-- 旧 UI 规格和旧概念图已按用户决定删除
+- Module 1 保留一个经用户确认的主界面视觉参考
 - 旧 `.codex` 多 Agent 工作流已删除
-- 项目只保留使用 BYOK `custom:gpt-5.6-terra` 的
-  `backend-writer` 和 `frontend-writer`
+- 项目专用 `backend-writer`、`frontend-writer` 和委派工作流已删除
+- 仓库默认由当前实现 Agent 独立完成全部层级
 - `artifacts/`、本地 `.factory/skills/`、`.workflow/`、`dist/` 和 `node_modules/` 已忽略
 
 后续交付顺序和完成标准见
 [`delivery-plan.md`](./delivery-plan.md)。
 
-## 建议的下一条真实产品实现链
+## 下一步
 
-下一阶段执行
-[`delivery-plan.md`](./delivery-plan.md)
-中的模块 1“Session Settings 与 Context”：
-
-1. 生产 Runtime 读取 Session Settings 和 Context Stats
-2. 增加严格的 Host 状态与更新接口
-3. 增加双向 Bridge DTO 与敌对输入测试
-4. Composer 显示并修改 Mode、Model、Reasoning 和 Autonomy
-5. 显示 Context 使用量和明细
-6. 运行完整测试、TypeScript 检查和 Production Build
-7. 重新打包 VSIX
-8. 安装后在 Cursor 中执行可见验收
-
-Session Rename、附件、Rewind 和 daemon 主路径迁移不进入模块 1。
+1. 按 [`docs/preflight/00-two-hour-runbook.md`](../preflight/00-two-hour-runbook.md)
+   执行严格两小时垂直切片，不在窗口内继续调研。
+2. 首先接通 Last-call Context Meter；如果公开事件/加载响应无法安全接通，
+   保留 Unavailable 状态，不使用私有 `_client` 或累计 Token 推断。
+3. Webview 改为 Production React 和 Minified Bundle。
+4. 在不泄露 Command、Path、Output、Terminal ID 或 Subagent ID 的前提下，
+   增加 Tool 耗时和更清楚的 Long-running 状态。
+5. 完成自动化、VSIX、Hash、安装和真实 Cursor Secondary Sidebar 可见验收。
+6. Module 2 继续暂停，直到该切片通过全部 Gate。
 
 ## 维护规则
 

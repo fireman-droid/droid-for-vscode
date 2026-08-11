@@ -14,10 +14,12 @@ import {
   type AskUserQuestion,
   type PermissionInteractionRequest,
 } from '../../shared/bridgeMessages';
+import { DroidMarkdownContent } from './MarkdownText';
 import type { PendingInteraction } from './store';
 
 interface InteractionPanelProps {
   readonly requests: readonly PendingInteraction[];
+  readonly presentation?: 'overlay' | 'inline';
   readonly onPermissionRespond: (
     interaction: PendingInteraction,
     selectedOption: string,
@@ -32,6 +34,7 @@ interface InteractionPanelProps {
 
 export const InteractionPanel = memo(function InteractionPanel({
   requests,
+  presentation = 'overlay',
   onPermissionRespond,
   onAskUserRespond,
 }: InteractionPanelProps): React.JSX.Element | null {
@@ -52,7 +55,9 @@ export const InteractionPanel = memo(function InteractionPanel({
   return (
     <aside
       ref={panelRef}
-      className="dvx-interaction-panel"
+      className={`dvx-interaction-panel${
+        presentation === 'inline' ? ' dvx-interaction-panel-inline' : ''
+      } dvx-interaction-panel-${active.request.kind}`}
       aria-label="Droid input request"
       tabIndex={-1}
     >
@@ -102,12 +107,20 @@ export function PermissionRequestCard({
   const [editedSpecContent, setEditedSpecContent] = useState(
     request.editableSpecContent ?? '',
   );
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [awaitingClose, setAwaitingClose] = useState(false);
   const awaitingCloseRef = useRef(false);
   const editOption =
     editOptionIndex === null ? undefined : request.options[editOptionIndex];
+  const requestPresentation = getPermissionPresentation(request);
   const editedSpecTooLong =
     editedSpecContent.length > MAX_EDITED_SPEC_LENGTH;
+  const negativeOptions = request.options
+    .map((option, index) => ({ option, index }))
+    .filter(({ option }) => isNegativePermissionOption(option));
+  const positiveOptions = request.options
+    .map((option, index) => ({ option, index }))
+    .filter(({ option }) => !isNegativePermissionOption(option));
 
   const respond = (
     selectedOption: string,
@@ -123,18 +136,22 @@ export function PermissionRequestCard({
 
   return (
     <section
-      className="dvx-interaction-card dvx-permission"
+      className={`dvx-interaction-card dvx-permission dvx-permission-${requestPresentation.kind}`}
       aria-labelledby={titleId}
       aria-busy={awaitingClose}
     >
       <header className="dvx-interaction-heading">
-        <span className="dvx-interaction-eyebrow">Permission required</span>
-        <h2 id={titleId}>Droid wants to continue</h2>
+        <span className="dvx-interaction-eyebrow">
+          {requestPresentation.eyebrow}
+        </span>
+        <h2 id={titleId}>{requestPresentation.title}</h2>
       </header>
       <div className="dvx-permission-tools">
         {request.tools.map((tool) => (
           <article
-            className="dvx-permission-tool"
+            className={`dvx-permission-tool dvx-permission-tool-${getToolTone(
+              tool.confirmationKind,
+            )}`}
             key={tool.toolUseId}
             aria-label={tool.toolName}
           >
@@ -184,33 +201,224 @@ export function PermissionRequestCard({
             {editOption.label}
           </button>
         </div>
+      ) : requestPresentation.planPreview !== undefined ? (
+        <div className="dvx-plan-preview">
+          <DroidMarkdownContent
+            className="dvx-plan-markdown"
+            text={requestPresentation.planPreview}
+          />
+        </div>
       ) : null}
 
       <div className="dvx-interaction-actions">
-        {request.options.map((option, optionIndex) => (
-          <button
-            className="dvx-button"
-            type="button"
-            key={optionIndex}
-            disabled={awaitingClose}
-            aria-pressed={
-              option.requiresEditedSpec
-                ? editOptionIndex === optionIndex
-                : undefined
-            }
-            onClick={() => {
-              if (option.requiresEditedSpec) {
-                setEditOptionIndex(optionIndex);
-                return;
+        {editOption === undefined &&
+        requestPresentation.kind === 'permission' &&
+        positiveOptions.length > 0 ? (
+          <>
+            {negativeOptions.map(({ option, index }) => (
+              <button
+                className="dvx-button dvx-button-danger"
+                type="button"
+                key={index}
+                disabled={awaitingClose}
+                onClick={() => respond(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+            <PermissionAllowGroup
+              options={positiveOptions}
+              expanded={showMoreOptions}
+              disabled={awaitingClose}
+              onExpandedChange={setShowMoreOptions}
+              onEdit={setEditOptionIndex}
+              onRespond={respond}
+            />
+          </>
+        ) : editOption === undefined &&
+          requestPresentation.kind === 'plan' ? (
+          <>
+            {negativeOptions.map(({ option, index }) => (
+              <button
+                className="dvx-button dvx-button-danger"
+                type="button"
+                key={index}
+                disabled={awaitingClose}
+                onClick={() => respond(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+            {positiveOptions
+              .filter(({ option }) => option.requiresEditedSpec)
+              .map(({ option, index }) => (
+                <button
+                  className="dvx-button"
+                  type="button"
+                  key={index}
+                  disabled={awaitingClose}
+                  onClick={() => setEditOptionIndex(index)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            <PermissionAllowGroup
+              options={positiveOptions.filter(
+                ({ option }) => !option.requiresEditedSpec,
+              )}
+              expanded={showMoreOptions}
+              disabled={awaitingClose}
+              primaryLabel="Approve plan"
+              menuLabel="More plan approval options"
+              onExpandedChange={setShowMoreOptions}
+              onEdit={setEditOptionIndex}
+              onRespond={respond}
+            />
+          </>
+        ) : editOption !== undefined ? (
+          negativeOptions.map(({ option, index }) => (
+            <button
+              className="dvx-button dvx-button-danger"
+              type="button"
+              key={index}
+              disabled={awaitingClose}
+              onClick={() => respond(option.value)}
+            >
+              {option.label}
+            </button>
+          ))
+        ) : (
+          request.options.map((option, optionIndex) =>
+            <button
+              className={`dvx-button${
+                isNegativePermissionOption(option)
+                  ? ' dvx-button-danger'
+                  : option.requiresEditedSpec
+                    ? ''
+                    : ' dvx-button-primary'
+              }`}
+              type="button"
+              key={optionIndex}
+              disabled={awaitingClose}
+              aria-pressed={
+                option.requiresEditedSpec
+                  ? editOptionIndex === optionIndex
+                  : undefined
               }
-              respond(option.value);
-            }}
-          >
-            {option.label}
-          </button>
-        ))}
+              onClick={() => {
+                if (option.requiresEditedSpec) {
+                  setEditOptionIndex(optionIndex);
+                  return;
+                }
+                respond(option.value);
+              }}
+            >
+              {option.label}
+            </button>
+          )
+        )}
       </div>
     </section>
+  );
+}
+
+interface IndexedPermissionOption {
+  readonly option: PermissionInteractionRequest['options'][number];
+  readonly index: number;
+}
+
+function PermissionAllowGroup({
+  options,
+  expanded,
+  disabled,
+  primaryLabel,
+  menuLabel = 'More permission options',
+  onExpandedChange,
+  onEdit,
+  onRespond,
+}: {
+  readonly options: readonly IndexedPermissionOption[];
+  readonly expanded: boolean;
+  readonly disabled: boolean;
+  readonly primaryLabel?: string;
+  readonly menuLabel?: string;
+  readonly onExpandedChange: (expanded: boolean) => void;
+  readonly onEdit: (index: number) => void;
+  readonly onRespond: (value: string) => void;
+}): React.JSX.Element | null {
+  const primary = options[0];
+  if (primary === undefined) {
+    return null;
+  }
+
+  const select = ({ option, index }: IndexedPermissionOption): void => {
+    onExpandedChange(false);
+    if (option.requiresEditedSpec) {
+      onEdit(index);
+      return;
+    }
+    onRespond(option.value);
+  };
+
+  return (
+    <div className="dvx-permission-allow-group">
+      <button
+        className="dvx-button dvx-button-primary dvx-permission-primary"
+        type="button"
+        disabled={disabled}
+        onClick={() => select(primary)}
+      >
+        {primaryLabel ?? primary.option.label}
+      </button>
+      {options.length > 1 ? (
+        <>
+          <button
+            className="dvx-button dvx-button-primary dvx-permission-more"
+            type="button"
+            aria-label={menuLabel}
+            aria-expanded={expanded}
+            disabled={disabled}
+            onClick={() => onExpandedChange(!expanded)}
+          >
+            <PermissionMenuChevron />
+          </button>
+          {expanded ? (
+            <div className="dvx-permission-menu" role="menu">
+              {options.slice(1).map((option) => (
+                <button
+                  type="button"
+                  role="menuitem"
+                  key={option.index}
+                  disabled={disabled}
+                  onClick={() => select(option)}
+                >
+                  {option.option.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function PermissionMenuChevron(): React.JSX.Element {
+  return (
+    <svg
+      className="dvx-permission-chevron"
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="m4.25 8.25 2.75-2.75 2.75 2.75"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -236,9 +444,10 @@ export function AskUserRequestCard({
   );
   const [awaitingClose, setAwaitingClose] = useState(false);
   const awaitingCloseRef = useRef(false);
+  const presentations = request.questions.map(presentAskUserQuestion);
   const resolvedAnswers = request.questions.map((question, position) => ({
     index: question.index,
-    answer: resolveAnswer(question, answers[position]),
+    answer: resolveAnswer(presentations[position], answers[position]),
   }));
   const hasOversizedAnswer = resolvedAnswers.some(
     ({ answer }) => answer.length > MAX_ASK_USER_ANSWER_LENGTH,
@@ -277,27 +486,36 @@ export function AskUserRequestCard({
       aria-busy={awaitingClose}
     >
       <header className="dvx-interaction-heading">
-        <span className="dvx-interaction-eyebrow">
-          Droid has a question
-        </span>
-        <h2 id={titleId}>Choose how to proceed</h2>
+        <span className="dvx-interaction-eyebrow">AskUser</span>
+        <h2 id={titleId}>
+          Droid has {request.questions.length}{' '}
+          {request.questions.length === 1 ? 'question' : 'questions'} for you
+        </h2>
       </header>
       <div className="dvx-ask-questions">
         {request.questions.map((question, position) => {
           const answer = answers[position];
+          const presentation = presentations[position]!;
           const customId = `${inputIdBase}-custom-${position}`;
+          const answerKind =
+            presentation.options.length === 0
+              ? 'open response'
+              : presentation.multiSelect
+                ? 'multiple choice'
+                : 'single choice';
           return (
             <fieldset key={position} disabled={awaitingClose}>
               <legend>
-                {question.topic.length > 0 ? (
-                  <span className="dvx-question-topic">
-                    {question.topic}
-                  </span>
-                ) : null}
-                <span>{question.question}</span>
+                <span className="dvx-question-topic">
+                  {question.topic || `Question ${position + 1}`} ·{' '}
+                  {answerKind}
+                </span>
+                <span className="dvx-question-text">
+                  {presentation.question}
+                </span>
               </legend>
               <div className="dvx-question-options">
-                {question.options.map((option, optionIndex) => {
+                {presentation.options.map((option, optionIndex) => {
                   const inputId =
                     `${inputIdBase}-option-${position}-${optionIndex}`;
                   const checked =
@@ -306,14 +524,16 @@ export function AskUserRequestCard({
                     <label htmlFor={inputId} key={optionIndex}>
                       <input
                         id={inputId}
-                        type={question.multiSelect ? 'checkbox' : 'radio'}
+                        type={
+                          presentation.multiSelect ? 'checkbox' : 'radio'
+                        }
                         name={`${inputIdBase}-question-${position}`}
                         value={option}
                         checked={checked}
                         onChange={() =>
                           updateAnswer(position, (current) => ({
                             ...current,
-                            selected: question.multiSelect
+                            selected: presentation.multiSelect
                               ? checked
                                 ? current.selected.filter(
                                     (value) => value !== optionIndex,
@@ -328,12 +548,20 @@ export function AskUserRequestCard({
                   );
                 })}
               </div>
-              <label className="dvx-custom-label" htmlFor={customId}>
+              <label
+                className="dvx-visually-hidden"
+                htmlFor={customId}
+              >
                 Your own answer
               </label>
               <input
                 id={customId}
                 type="text"
+                placeholder={
+                  presentation.options.length === 0
+                    ? 'Enter your answer…'
+                    : 'Or enter a custom answer…'
+                }
                 value={answer?.custom ?? ''}
                 maxLength={MAX_ASK_USER_ANSWER_LENGTH}
                 onChange={(event) => {
@@ -377,10 +605,10 @@ export function AskUserRequestCard({
 }
 
 function resolveAnswer(
-  question: AskUserQuestion,
+  question: AskUserQuestionPresentation | undefined,
   answer: QuestionAnswer | undefined,
 ): string {
-  if (answer === undefined) {
+  if (question === undefined || answer === undefined) {
     return '';
   }
   const custom = answer.custom.trim();
@@ -401,6 +629,108 @@ function resolveAnswer(
   ].join(', ');
 }
 
+interface AskUserQuestionPresentation {
+  readonly question: string;
+  readonly options: readonly string[];
+  readonly multiSelect: boolean;
+}
+
+function presentAskUserQuestion(
+  question: AskUserQuestion,
+): AskUserQuestionPresentation {
+  const embeddedQuestionnaire = formatEmbeddedQuestionnaire(
+    question.question,
+  );
+  if (embeddedQuestionnaire !== null) {
+    return {
+      question: embeddedQuestionnaire,
+      options: [],
+      multiSelect: false,
+    };
+  }
+  return {
+    question: question.question,
+    options: question.options,
+    multiSelect: question.multiSelect,
+  };
+}
+
+function formatEmbeddedQuestionnaire(text: string): string | null {
+  const decoded = text.replaceAll('\\n', '\n');
+  if (
+    !/\[topic\]/iu.test(decoded) ||
+    !/\[option\]/iu.test(decoded)
+  ) {
+    return null;
+  }
+  return decoded
+    .replace(
+      /(?:^|\n)\s*(\d+\.)?\s*\[question\]\s*/giu,
+      (_, number: string | undefined) =>
+        `\n\n${number === undefined ? '' : `${number} `}`,
+    )
+    .replace(/\s*\[topic\]\s*/giu, '\nTopic: ')
+    .replace(/\s*\[option\]\s*/giu, '\n• ')
+    .replace(/\n{3,}/gu, '\n\n')
+    .trim();
+}
+
 function formatConfirmationKind(value: string): string {
   return value.replaceAll('_', ' ');
+}
+
+function getToolTone(value: string): 'edit' | 'execute' | 'danger' {
+  if (/exec|shell/i.test(value)) {
+    return 'execute';
+  }
+  if (/sandbox|mission/i.test(value)) {
+    return 'danger';
+  }
+  return 'edit';
+}
+
+function isNegativePermissionOption(
+  option: PermissionInteractionRequest['options'][number],
+): boolean {
+  return /cancel|deny|reject/i.test(`${option.value} ${option.label}`);
+}
+
+function getPermissionPresentation(
+  request: PermissionInteractionRequest,
+): {
+  readonly kind: 'permission' | 'plan' | 'mission';
+  readonly eyebrow: string;
+  readonly title: string;
+  readonly planPreview?: string;
+} {
+  const kinds = new Set(request.tools.map((tool) => tool.confirmationKind));
+  if (kinds.has('exit_spec_mode')) {
+    return {
+      kind: 'plan',
+      eyebrow: 'Implementation plan · ExitSpecMode',
+      title: 'Droid has completed planning and is ready to implement',
+      ...(request.editableSpecContent === undefined
+        ? {}
+        : { planPreview: request.editableSpecContent }),
+    };
+  }
+  if (
+    kinds.has('propose_mission') ||
+    kinds.has('start_mission_run')
+  ) {
+    return {
+      kind: 'mission',
+      eyebrow: `Mission · ${formatConfirmationKind(
+        request.tools[0]?.confirmationKind ?? 'confirmation',
+      )}`,
+      title: request.tools[0]?.title ?? 'Mission confirmation',
+    };
+  }
+  return {
+    kind: 'permission',
+    eyebrow: 'Permission request',
+    title: `Droid requests ${request.tools.length} ${
+      request.tools.length === 1 ? 'action' : 'actions'
+    }`,
+  };
 }

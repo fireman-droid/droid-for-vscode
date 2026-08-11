@@ -37,8 +37,6 @@ describe('SessionDrawer', () => {
       <SessionDrawer
         sessions={sessions}
         actionsDisabled={false}
-        onRefresh={vi.fn()}
-        onNewSession={vi.fn()}
         onSelectSession={onSelect}
       />,
     );
@@ -52,6 +50,7 @@ describe('SessionDrawer', () => {
     expect(
       screen.getByRole('button', { name: 'Close session history' }),
     ).toBeTruthy();
+    expect(screen.getByText('All chats').textContent).toBe('All chats');
 
     await user.type(
       screen.getByRole('searchbox', { name: 'Search sessions' }),
@@ -68,29 +67,16 @@ describe('SessionDrawer', () => {
     expect(onSelect).toHaveBeenCalledWith('session-b');
   });
 
-  it('gates every host-backed action and closes with Escape', async () => {
+  it('gates session switching and closes with Escape', async () => {
     const user = userEvent.setup();
-    const onRefresh = vi.fn();
-    const onNew = vi.fn();
     render(
       <SessionDrawer
         sessions={sessions}
         actionsDisabled
-        onRefresh={onRefresh}
-        onNewSession={onNew}
         onSelectSession={vi.fn()}
       />,
     );
     await user.click(screen.getByRole('button', { name: 'Sessions' }));
-    expect(
-      screen.getByRole<HTMLButtonElement>('button', { name: 'Refresh' })
-        .disabled,
-    ).toBe(true);
-    expect(
-      screen.getByRole<HTMLButtonElement>('button', {
-        name: 'New session',
-      }).disabled,
-    ).toBe(true);
     expect(
       screen.getByRole<HTMLButtonElement>('button', {
         name: /Previous refactor/,
@@ -101,7 +87,5 @@ describe('SessionDrawer', () => {
     expect(
       screen.queryByRole('complementary', { name: 'Session history' }),
     ).toBeNull();
-    expect(onRefresh).not.toHaveBeenCalled();
-    expect(onNew).not.toHaveBeenCalled();
   });
 });

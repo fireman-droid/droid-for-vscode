@@ -1,4 +1,5 @@
 import { build } from 'esbuild';
+import { rm } from 'node:fs/promises';
 import { isBuiltin } from 'node:module';
 
 const extensionResult = await build({
@@ -16,6 +17,8 @@ const extensionResult = await build({
   logLevel: 'info',
 });
 
+await rm('dist/webview', { recursive: true, force: true });
+
 const webviewResult = await build({
   entryPoints: ['src/webview/main.tsx'],
   outfile: 'dist/webview/webview.js',
@@ -24,6 +27,10 @@ const webviewResult = await build({
   platform: 'browser',
   format: 'iife',
   target: 'es2022',
+  loader: {
+    '.woff2': 'file',
+  },
+  assetNames: 'assets/[name]',
   sourcemap: false,
   legalComments: 'none',
   metafile: true,

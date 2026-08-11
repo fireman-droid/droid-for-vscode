@@ -37,6 +37,9 @@ describe('readHostMessage', () => {
       connection: { status: 'idle' },
       turn: null,
       sessions: { status: 'idle', items: [] },
+      settings: { status: 'loading', value: null },
+      context: { status: 'loading', value: null },
+      modelCatalog: { status: 'loading', items: [] },
       transcript: [],
       historyStatus: 'unavailable',
       truncated: false,
@@ -51,6 +54,21 @@ describe('readHostMessage', () => {
         status: 'error',
         items: [],
         message: 'Session history is temporarily unavailable.',
+      },
+      settings: {
+        status: 'error',
+        value: null,
+        message: 'Settings unavailable.',
+      },
+      context: {
+        status: 'error',
+        value: null,
+        message: 'Context unavailable.',
+      },
+      modelCatalog: {
+        status: 'unsupported',
+        items: [],
+        message: 'Model discovery is unavailable.',
       },
       transcript: [],
       historyStatus: 'unavailable',
@@ -74,6 +92,9 @@ describe('readHostMessage', () => {
           },
         ],
       },
+      settings: readySettings(),
+      context: readyContext(),
+      modelCatalog: readyModelCatalog(),
       transcript: [
         { id: 'user-1', kind: 'user', text: 'Implement sessions.' },
         {
@@ -97,7 +118,10 @@ describe('readHostMessage', () => {
           turnId: 'turn-1',
           toolUseId: 'tool-use-1',
           toolName: 'Read',
+          action: 'Read workspace files',
           status: 'completed',
+          progressCount: 2,
+          latestUpdateKind: 'status',
         },
         {
           id: 'diagnostic-1',
@@ -116,6 +140,24 @@ describe('readHostMessage', () => {
       sequence: 1,
       sessionId: 'session-1',
       connection: { status: 'connected' },
+    },
+    {
+      type: 'session.settings',
+      sequence: 1,
+      sessionId: 'session-1',
+      settings: readySettings(),
+    },
+    {
+      type: 'session.context',
+      sequence: 1,
+      sessionId: 'session-1',
+      context: readyContext(),
+    },
+    {
+      type: 'session.model-catalog',
+      sequence: 1,
+      sessionId: 'session-1',
+      modelCatalog: readyModelCatalog(),
     },
     {
       type: 'assistant.delta',
@@ -146,7 +188,10 @@ describe('readHostMessage', () => {
       turnId: 'turn-1',
       toolUseId: 'tool-1',
       toolName: 'Read',
+      action: 'Read workspace files',
       status: 'running',
+      progressCount: 0,
+      latestUpdateKind: null,
     },
     {
       type: 'tool.activity',
@@ -155,7 +200,10 @@ describe('readHostMessage', () => {
       turnId: 'turn-1',
       toolUseId: 'tool-1',
       toolName: 'Read',
+      action: 'Read workspace files',
       status: 'completed',
+      progressCount: 1,
+      latestUpdateKind: 'tool-result',
     },
     {
       type: 'tool.activity',
@@ -164,7 +212,10 @@ describe('readHostMessage', () => {
       turnId: 'turn-1',
       toolUseId: 'tool-1',
       toolName: 'Read',
+      action: 'Read workspace files',
       status: 'failed',
+      progressCount: 1,
+      latestUpdateKind: 'error',
     },
     {
       type: 'runtime.diagnostic',
@@ -248,6 +299,260 @@ describe('readHostMessage', () => {
     },
   ])('accepts a valid $type host message', (message) => {
     expect(readHostMessage(message)).toEqual(message);
+  });
+
+  it('rejects inconsistent tool progress metadata', () => {
+    expect(
+      readHostMessage({
+        type: 'tool.activity',
+        sequence: 1,
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        toolUseId: 'tool-1',
+        toolName: 'Read',
+        action: 'Read workspace files',
+        status: 'completed',
+        progressCount: 0,
+        latestUpdateKind: 'tool-result',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('accepts preserved loading, updating, error, and unsupported metadata', () => {
+    expect(
+      readHostMessage({
+        type: 'session.settings',
+        sequence: 1,
+        sessionId: 'session-1',
+        settings: {
+          status: 'updating',
+          value: readySettings().value,
+        },
+      }),
+    ).toBeDefined();
+    expect(
+      readHostMessage({
+        type: 'session.context',
+        sequence: 2,
+        sessionId: 'session-1',
+        context: {
+          status: 'error',
+          value: readyContext().value,
+          message: 'Refresh failed.',
+        },
+      }),
+    ).toBeDefined();
+    expect(
+      readHostMessage({
+        type: 'session.context',
+        sequence: 2,
+        sessionId: 'session-1',
+        context: {
+          status: 'ready',
+          value: {
+            used: 130,
+            remaining: 169,
+            limit: 100,
+            accuracy: 'estimated',
+          },
+        },
+      }),
+    ).toBeDefined();
+    expect(
+      readHostMessage({
+        type: 'session.context',
+        sequence: 2,
+        sessionId: 'session-1',
+        context: {
+          status: 'ready',
+          value: {
+            used: 0,
+            remaining: 0,
+            limit: 0,
+            accuracy: 'estimated',
+          },
+        },
+      }),
+    ).toBeDefined();
+    expect(
+      readHostMessage({
+        type: 'session.model-catalog',
+        sequence: 3,
+        sessionId: 'session-1',
+        modelCatalog: {
+          status: 'unsupported',
+          items: [],
+          message: 'Discovery is unsupported.',
+        },
+      }),
+    ).toBeDefined();
+  });
+
+  it.each([
+    {
+      type: 'session.settings',
+      sequence: 1,
+      sessionId: 'session-1',
+      settings: {
+        status: 'ready',
+        value: { ...readySettings().value, interactionMode: 'agi' },
+      },
+    },
+    {
+      type: 'session.context',
+      sequence: 1,
+      sessionId: 'session-1',
+      context: {
+        status: 'ready',
+        value: {
+          used: -1,
+          remaining: 1,
+          limit: 1,
+          accuracy: 'estimated',
+        },
+      },
+    },
+    {
+      type: 'session.context',
+      sequence: 1,
+      sessionId: 'session-1',
+      context: {
+        status: 'ready',
+        value: {
+          used: 0.25,
+          remaining: 0.75,
+          limit: 1,
+          accuracy: 'estimated',
+        },
+      },
+    },
+    {
+      type: 'session.context',
+      sequence: 1,
+      sessionId: 'session-1',
+      context: {
+        status: 'ready',
+        value: {
+          used: Number.POSITIVE_INFINITY,
+          remaining: 0,
+          limit: Number.POSITIVE_INFINITY,
+          accuracy: 'estimated',
+        },
+      },
+    },
+    {
+      type: 'session.model-catalog',
+      sequence: 1,
+      sessionId: 'session-1',
+      modelCatalog: {
+        status: 'ready',
+        items: [
+          ...readyModelCatalog().items,
+          ...readyModelCatalog().items,
+        ],
+      },
+    },
+    {
+      type: 'session.model-catalog',
+      sequence: 1,
+      sessionId: 'session-1',
+      modelCatalog: {
+        status: 'ready',
+        items: [
+          {
+            ...readyModelCatalog().items[0],
+            supportedReasoningEfforts: ['high', 'high'],
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.model-catalog',
+      sequence: 1,
+      sessionId: 'session-1',
+      modelCatalog: {
+        status: 'ready',
+        items: [
+          {
+            id: ' model-a',
+            displayName: 'Model A',
+            supportedReasoningEfforts: ['high'],
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.model-catalog',
+      sequence: 1,
+      sessionId: 'session-1',
+      modelCatalog: {
+        status: 'ready',
+        items: [
+          {
+            id: 'model-a',
+            displayName: 'Model\u0000A',
+            supportedReasoningEfforts: ['high'],
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.model-catalog',
+      sequence: 1,
+      sessionId: 'session-1',
+      modelCatalog: {
+        status: 'ready',
+        items: [
+          {
+            id: 'model-a',
+            displayName: 'Model A',
+            supportedReasoningEfforts: [],
+          },
+        ],
+      },
+    },
+  ])('rejects malformed protocol-v2 metadata %#', (message) => {
+    expect(readHostMessage(message)).toBeUndefined();
+  });
+
+  it('rejects hostile metadata nesting without invoking accessors', () => {
+    let calls = 0;
+    const settings = {
+      status: 'ready',
+      get value() {
+        calls += 1;
+        return readySettings().value;
+      },
+    };
+    const catalog = {
+      status: 'ready',
+      items: [
+        {
+          id: 'model-a',
+          displayName: 'Model A',
+          supportedReasoningEfforts: ['high'],
+          [Symbol('extra')]: true,
+        },
+      ],
+    };
+
+    expect(
+      readHostMessage({
+        type: 'session.settings',
+        sequence: 1,
+        sessionId: 'session-1',
+        settings,
+      }),
+    ).toBeUndefined();
+    expect(calls).toBe(0);
+    expect(
+      readHostMessage({
+        type: 'session.model-catalog',
+        sequence: 2,
+        sessionId: 'session-1',
+        modelCatalog: catalog,
+      }),
+    ).toBeUndefined();
   });
 
   it.each([
@@ -517,7 +822,10 @@ describe('readHostMessage', () => {
         turnId: 'turn-1',
         toolUseId: 'i'.repeat(MAX_BRIDGE_ID_LENGTH),
         toolName: 'n'.repeat(MAX_TOOL_NAME_LENGTH),
+        action: 'Read workspace files',
         status: 'running',
+        progressCount: 100,
+        latestUpdateKind: 'message',
       }),
     ).toBeDefined();
   });
@@ -552,6 +860,9 @@ describe('readHostMessage', () => {
       connection: { status: 'connected' },
       turn: null,
       sessions: { status: 'ready', items: sessions, message: '' },
+      settings: readySettings(),
+      context: readyContext(),
+      modelCatalog: readyModelCatalog(),
       transcript,
       historyStatus: 'complete',
       truncated: true,
@@ -658,6 +969,17 @@ describe('readHostMessage', () => {
         ),
       }),
     },
+    {
+      name: 'oversized transcript text budget',
+      mutate: (snapshot: ReturnType<typeof createSessionSnapshot>) => ({
+        ...snapshot,
+        transcript: Array.from({ length: 6 }, (_, index) => ({
+          id: `message-${index}`,
+          kind: 'user',
+          text: 'x'.repeat(MAX_TURN_TEXT_LENGTH),
+        })),
+      }),
+    },
   ])('rejects invalid session snapshot $name', ({ mutate }) => {
     expect(readHostMessage(mutate(createSessionSnapshot()))).toBeUndefined();
   });
@@ -696,7 +1018,10 @@ describe('readHostMessage', () => {
       turnId: 'turn-1',
       toolUseId: 'tool-use-1',
       toolName: 'Execute',
+      action: 'Ran a local command',
       status: 'completed',
+      progressCount: 1,
+      latestUpdateKind: 'tool-result',
     };
 
     for (const transcript of [
@@ -1000,6 +1325,15 @@ describe('readHostMessage', () => {
       },
     };
 
+    expect(
+      readHostMessage({
+        ...askUser,
+        request: {
+          ...askUser.request,
+          questions: [{ ...question, options: [] }],
+        },
+      }),
+    ).toBeDefined();
     expect(
       readHostMessage({
         ...permission,
@@ -1325,8 +1659,48 @@ function createSessionSnapshot(): Extract<
         },
       ],
     },
+    settings: readySettings(),
+    context: readyContext(),
+    modelCatalog: readyModelCatalog(),
     transcript: [{ id: 'user-1', kind: 'user', text: 'Prompt' }],
     historyStatus: 'complete',
     truncated: false,
+  };
+}
+
+function readySettings() {
+  return {
+    status: 'ready' as const,
+    value: {
+      interactionMode: 'auto' as const,
+      modelId: 'factory/gpt-5.6-sol',
+      reasoningEffort: 'high' as const,
+      autonomyLevel: 'medium' as const,
+    },
+  };
+}
+
+function readyContext() {
+  return {
+    status: 'ready' as const,
+    value: {
+      used: 25_000,
+      remaining: 175_000,
+      limit: 200_000,
+      accuracy: 'exact' as const,
+    },
+  };
+}
+
+function readyModelCatalog() {
+  return {
+    status: 'ready' as const,
+    items: [
+      {
+        id: 'factory/gpt-5.6-sol',
+        displayName: 'GPT-5.6 Sol',
+        supportedReasoningEfforts: ['medium', 'high'] as const,
+      },
+    ],
   };
 }

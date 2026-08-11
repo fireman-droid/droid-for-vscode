@@ -2,7 +2,9 @@ import {
   MAX_ASSISTANT_TEXT_LENGTH,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
+  MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
   type ToolActivityStatus,
+  type ToolActivityUpdateKind,
 } from '../shared/bridgeMessages';
 import type { RuntimeEvent } from '../runtime/runtimeEvents';
 
@@ -24,7 +26,16 @@ export interface AssistantDeltaProjection {
 export interface ToolActivityProjection {
   readonly toolUseId: string;
   readonly toolName: string;
+  readonly action: string;
   readonly status: ToolActivityStatus;
+  readonly progressCount: number;
+  readonly latestUpdateKind: ToolActivityUpdateKind | null;
+}
+
+interface ToolActivityEntry {
+  readonly status: ToolActivityStatus;
+  readonly progressCount: number;
+  readonly latestUpdateKind: ToolActivityUpdateKind | null;
 }
 
 export interface TurnActivityState {
@@ -32,7 +43,7 @@ export interface TurnActivityState {
   readonly assistantTruncated: boolean;
   readonly thinkingTextLength: number;
   readonly thinkingTruncated: boolean;
-  readonly tools: ReadonlyMap<string, ToolActivityStatus>;
+  readonly tools: ReadonlyMap<string, ToolActivityEntry>;
 }
 
 export interface ActivityProjectionResult<Projection> {
@@ -104,20 +115,49 @@ export function projectToolEvent(
   event: ToolEvent,
 ): ActivityProjectionResult<ToolActivityProjection> {
   const existing = state.tools.get(event.toolUseId);
-  if (existing) {
-    if (existing !== 'running' || event.type !== 'tool-result') {
+  if (existing !== undefined) {
+    if (existing.status !== 'running') {
       return { state, projection: null };
     }
 
-    const status = event.isError ? 'failed' : 'completed';
+    if (event.type === 'tool-progress') {
+      if (existing.progressCount >= MAX_TOOL_PROGRESS_UPDATES_PER_TOOL) {
+        return { state, projection: null };
+      }
+      const entry: ToolActivityEntry = {
+        status: 'running',
+        progressCount: existing.progressCount + 1,
+        latestUpdateKind: event.updateKind,
+      };
+      const tools = new Map(state.tools);
+      tools.set(event.toolUseId, entry);
+      return {
+        state: { ...state, tools },
+        projection: {
+          toolUseId: event.toolUseId,
+          toolName: event.toolName,
+          action: event.action,
+          ...entry,
+        },
+      };
+    }
+
+    if (event.type !== 'tool-result') {
+      return { state, projection: null };
+    }
+    const entry: ToolActivityEntry = {
+      ...existing,
+      status: event.isError ? 'failed' : 'completed',
+    };
     const tools = new Map(state.tools);
-    tools.set(event.toolUseId, status);
+    tools.set(event.toolUseId, entry);
     return {
       state: { ...state, tools },
       projection: {
         toolUseId: event.toolUseId,
         toolName: event.toolName,
-        status,
+        action: event.action,
+        ...entry,
       },
     };
   }
@@ -132,14 +172,21 @@ export function projectToolEvent(
         ? 'failed'
         : 'completed'
       : 'running';
+  const entry: ToolActivityEntry = {
+    status,
+    progressCount: event.type === 'tool-progress' ? 1 : 0,
+    latestUpdateKind:
+      event.type === 'tool-progress' ? event.updateKind : null,
+  };
   const tools = new Map(state.tools);
-  tools.set(event.toolUseId, status);
+  tools.set(event.toolUseId, entry);
   return {
     state: { ...state, tools },
     projection: {
       toolUseId: event.toolUseId,
       toolName: event.toolName,
-      status,
+      action: event.action,
+      ...entry,
     },
   };
 }

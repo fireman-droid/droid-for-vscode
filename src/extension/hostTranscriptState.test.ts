@@ -54,7 +54,10 @@ describe('hostTranscriptState', () => {
       turnId: 'turn-1',
       toolUseId: 'tool-1',
       toolName: 'Read',
+      action: 'Read workspace files',
       status: 'running',
+      progressCount: 0,
+      latestUpdateKind: null,
     });
     state = project(state, {
       type: 'tool.activity',
@@ -62,7 +65,10 @@ describe('hostTranscriptState', () => {
       turnId: 'turn-1',
       toolUseId: 'tool-1',
       toolName: 'Read',
+      action: 'Read workspace files',
       status: 'completed',
+      progressCount: 2,
+      latestUpdateKind: 'status',
     });
     state = project(state, {
       type: 'runtime.diagnostic',
@@ -103,7 +109,10 @@ describe('hostTranscriptState', () => {
           turnId: 'turn-1',
           toolUseId: 'tool-1',
           toolName: 'Read',
+          action: 'Read workspace files',
           status: 'completed',
+          progressCount: 2,
+          latestUpdateKind: 'status',
         },
         expect.objectContaining({
           kind: 'diagnostic',
@@ -117,6 +126,73 @@ describe('hostTranscriptState', () => {
     expect(
       stableTranscriptId('assistant', 'turn-1'),
     ).toBe(stableTranscriptId('assistant', 'turn-1'));
+  });
+
+  it('preserves alternating Thinking, Tool, and assistant chronology', () => {
+    let state = createHostTranscriptState('complete');
+    state = project(state, {
+      type: 'thinking.delta',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      delta: 'First thought',
+      truncated: false,
+    });
+    state = project(state, {
+      type: 'assistant.delta',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      delta: 'First answer',
+    });
+    state = project(state, {
+      type: 'thinking.delta',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      delta: 'Second thought',
+      truncated: false,
+    });
+    state = project(state, {
+      type: 'tool.activity',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolUseId: 'tool-1',
+      toolName: 'Read',
+      action: 'Read workspace files',
+      status: 'completed',
+      progressCount: 0,
+      latestUpdateKind: null,
+    });
+    state = project(state, {
+      type: 'assistant.delta',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      delta: 'Final answer',
+    });
+    state = project(state, {
+      type: 'thinking.complete',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      durationMs: 50,
+    });
+
+    expect(
+      state.transcript.map((item) =>
+        item.kind === 'tool' ? item.action : 'text' in item ? item.text : '',
+      ),
+    ).toEqual([
+      'First thought',
+      'First answer',
+      'Second thought',
+      'Read workspace files',
+      'Final answer',
+    ]);
+    expect(
+      state.transcript
+        .filter((item) => item.kind === 'thinking')
+        .map((item) => item.status),
+    ).toEqual(['complete', 'complete']);
+    expect(new Set(state.transcript.map((item) => item.id)).size).toBe(
+      state.transcript.length,
+    );
   });
 
   it('moves unavailable history to partial after observing UI items', () => {
@@ -270,7 +346,10 @@ describe('hostTranscriptState', () => {
       turnId: 'turn-1',
       toolUseId: 'tool-1',
       toolName: 'Write',
+      action: 'Updated workspace files',
       status: 'running',
+      progressCount: 0,
+      latestUpdateKind: null,
     });
     const stopping = project(state, {
       type: 'turn.state',
@@ -304,7 +383,10 @@ describe('hostTranscriptState', () => {
       turnId: 'turn-1',
       toolUseId: 'tool-1',
       toolName: 'Edit',
+      action: 'Updated workspace files',
       status: 'running',
+      progressCount: 0,
+      latestUpdateKind: null,
       input: { secret: 'raw-input' },
       result: { secret: 'raw-result' },
       progress: 'raw-progress',

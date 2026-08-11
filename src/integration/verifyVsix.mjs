@@ -7,6 +7,7 @@ const expectedEntries = [
   '[Content_Types].xml',
   'extension.vsixmanifest',
   'extension/dist/extension/extension.cjs',
+  'extension/dist/webview/assets/inter-latin-wght-normal.woff2',
   'extension/dist/webview/webview.css',
   'extension/dist/webview/webview.js',
   'extension/package.json',
@@ -30,6 +31,11 @@ assert.equal(manifest.main, './dist/extension/extension.cjs');
 assert.ok(
   manifest.contributes.commands.some(
     (entry) => entry.command === 'droidvisx.focusView',
+  ),
+);
+assert.ok(
+  manifest.contributes.commands.some(
+    (entry) => entry.command === 'droidvisx.openLogs',
   ),
 );
 assert.ok(

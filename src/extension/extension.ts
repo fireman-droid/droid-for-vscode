@@ -5,15 +5,25 @@ import { FactorySessionCatalog } from '../runtime/FactorySessionCatalog';
 import { FactorySessionHistoryLoader } from '../runtime/history/FactorySessionHistoryLoader';
 import { ChatController } from './ChatController';
 import { DroidViewProvider } from './DroidViewProvider';
+import { LocalDiagnostics } from './LocalDiagnostics';
 import {
   SessionRecoveryStore,
   type SessionRecoveryPersistence,
 } from './SessionRecoveryStore';
 
 const focusViewCommand = 'droidvisx.focusView';
+const openLogsCommand = 'droidvisx.openLogs';
 let activeController: ChatController | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
+  const diagnostics = new LocalDiagnostics({
+    directory: context.logUri.fsPath,
+    output: vscode.window.createOutputChannel('DroidVisX Logs'),
+  });
+  diagnostics.record({
+    level: 'info',
+    name: 'extension.activated',
+  });
   const persistence: SessionRecoveryPersistence = {
     get: <T>(key: string) => context.workspaceState.get<T>(key),
     update: (key: string, value: unknown) =>
@@ -21,7 +31,11 @@ export function activate(context: vscode.ExtensionContext): void {
   };
   const controller = new ChatController(
     (interactionHandler) =>
-      new FactoryDroidRuntime({ interactionHandler }),
+      new FactoryDroidRuntime({
+        interactionHandler,
+        diagnostics,
+        observability: diagnostics.observability,
+      }),
     () => ({
       cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
       trusted: vscode.workspace.isTrusted,
@@ -39,6 +53,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     controller,
     provider,
+    diagnostics,
     vscode.window.registerWebviewViewProvider(
       DroidViewProvider.viewType,
       provider,
@@ -53,6 +68,13 @@ export function activate(context: vscode.ExtensionContext): void {
       await vscode.commands.executeCommand(
         `${DroidViewProvider.viewType}.focus`,
       );
+    }),
+    vscode.commands.registerCommand(openLogsCommand, () => {
+      diagnostics.record({
+        level: 'info',
+        name: 'diagnostics.opened',
+      });
+      diagnostics.show();
     }),
   );
 }

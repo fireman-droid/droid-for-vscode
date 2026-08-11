@@ -1,18 +1,35 @@
 import type {
   ConnectionState,
+  ConfirmedSessionSettings,
   HostToWebviewMessage,
+  ModelCatalogState,
   SessionCatalogState,
+  SessionContextState,
+  SessionContextStats,
+  SessionSettingUpdateMessage,
+  SessionSettingsState,
   SessionSummary,
   TurnStatus,
   WebviewToHostMessage,
 } from '../shared/bridgeMessages';
 import {
   MAX_BRIDGE_ID_LENGTH,
+  MAX_MODEL_CATALOG_ITEMS,
+  MAX_MODEL_DISPLAY_NAME_LENGTH,
+  MAX_MODEL_ID_LENGTH,
   MAX_SESSION_CATALOG_ITEMS as SESSION_CATALOG_LIMIT,
   MAX_SESSION_TITLE_LENGTH as SESSION_TITLE_LIMIT,
+  SESSION_AUTONOMY_LEVELS,
+  SESSION_INTERACTION_MODES,
+  SESSION_REASONING_EFFORTS,
 } from '../shared/bridgeMessages';
-import type { DroidRuntime } from '../runtime/DroidRuntime';
 import type {
+  DroidRuntime,
+  RuntimeContextStats,
+  RuntimeModelCatalog,
+  RuntimeModelCatalogItem,
+  RuntimeSessionSettings,
+  RuntimeSessionSettingUpdate,
   RuntimeSessionTarget,
 } from '../runtime/DroidRuntime';
 import type {
@@ -49,6 +66,7 @@ import {
   type HostTranscriptProjectionMessage,
   type HostTranscriptState,
 } from './hostTranscriptState';
+import { reconcileSessionHistory } from './reconcileSessionHistory';
 
 export type DroidRuntimeFactory = (
   interactionHandler: RuntimeInteractionHandler,
@@ -101,6 +119,20 @@ const SESSION_NEW_FAILED_MESSAGE =
   'A new Droid session could not be created.';
 const WORKSPACE_CHANGED_MESSAGE =
   'The workspace changed before the Droid session could be opened.';
+const SETTINGS_READ_FAILED_MESSAGE =
+  'Droid session settings could not be loaded.';
+const SETTINGS_UPDATE_FAILED_MESSAGE =
+  'Droid session settings could not be updated.';
+const SETTINGS_UPDATE_BLOCKED_MESSAGE =
+  'Finish the current interaction or setting update before changing settings.';
+const SETTINGS_UPDATE_UNSUPPORTED_MESSAGE =
+  'This setting is not available for the current Droid session.';
+const CONTEXT_READ_FAILED_MESSAGE =
+  'Droid did not return context usage. Retry, then open DroidVisX Logs if this continues.';
+const MODEL_CATALOG_UNSUPPORTED_MESSAGE =
+  'Model selection is unavailable in this Droid runtime.';
+const MODEL_CATALOG_FAILED_MESSAGE =
+  'Droid models could not be loaded.';
 
 export class ChatController {
   private readonly listeners = new Set<ChatControllerListener>();
@@ -115,9 +147,23 @@ export class ChatController {
     createHostTranscriptState('unavailable');
   private sessionId: string | null = null;
   private turn: CurrentTurn | null = null;
+  private settings: SessionSettingsState = {
+    status: 'loading',
+    value: null,
+  };
+  private context: SessionContextState = {
+    status: 'loading',
+    value: null,
+  };
+  private modelCatalog: ModelCatalogState = {
+    status: 'loading',
+    items: [],
+  };
   private sequence = -1;
   private runtimeGeneration = 0;
   private turnGeneration = 0;
+  private contextGeneration = 0;
+  private settingsUpdate: symbol | null = null;
   private catalogGeneration = 0;
   private catalogCwd: string | null = null;
   private activeRuntimeCwd: string | null = null;
@@ -234,6 +280,12 @@ export class ChatController {
       case 'session.new':
         this.handleSessionNew();
         return;
+      case 'session.context.refresh':
+        this.handleContextRefresh(message.sessionId);
+        return;
+      case 'session.setting.update':
+        this.handleSettingUpdate(message);
+        return;
     }
   }
 
@@ -255,6 +307,7 @@ export class ChatController {
     const staleRuntimes = [...this.managedRuntimes];
     this.runtimeGeneration += 1;
     this.turnGeneration += 1;
+    this.resetSessionMetadata();
     if (
       this.recoveryCheckpointTimer !== null ||
       this.pendingRecoveryCheckpoint !== null
@@ -289,6 +342,8 @@ export class ChatController {
     this.disposed = true;
     this.runtimeGeneration += 1;
     this.turnGeneration += 1;
+    this.contextGeneration += 1;
+    this.settingsUpdate = null;
     this.listeners.clear();
     const runtimes = [...this.managedRuntimes];
     this.runtime = null;
@@ -390,7 +445,8 @@ export class ChatController {
       text.trim().length === 0 ||
       this.turn?.turnId === turnId ||
       isTurnActive(this.turn) ||
-      this.sessionOperationInProgress
+      this.sessionOperationInProgress ||
+      this.settingsUpdate !== null
     ) {
       return;
     }
@@ -580,6 +636,9 @@ export class ChatController {
           this.startStreaming(sessionId, turnId);
         }
         return;
+      case 'settings-updated':
+        this.refreshSettingsAfterRuntimeEvent(sessionId);
+        return;
       case 'error':
         this.emit({
           type: 'runtime.diagnostic',
@@ -603,10 +662,12 @@ export class ChatController {
       case 'success':
         this.setTurnStatus(sessionId, turnId, 'completed');
         void this.flushRecoveryCheckpoint();
+        this.refreshContextAfterTurn(sessionId);
         return;
       case 'interrupted':
         this.setTurnStatus(sessionId, turnId, 'interrupted');
         void this.flushRecoveryCheckpoint();
+        this.refreshContextAfterTurn(sessionId);
         return;
       case 'error_during_execution':
         this.failTurn(sessionId, turnId, 'runtime-execution-failed');
@@ -804,6 +865,147 @@ export class ChatController {
     this.startCatalogRefresh(workspace.cwd);
   }
 
+  private handleContextRefresh(sessionId: string): void {
+    if (
+      sessionId !== this.sessionId ||
+      this.runtime === null ||
+      this.connection.status !== 'connected' ||
+      this.sessionOperationInProgress ||
+      this.context.status === 'loading' ||
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+
+    this.refreshContext(
+      this.runtime,
+      this.runtimeGeneration,
+      sessionId,
+      this.activeRuntimeCwd!,
+    );
+  }
+
+  private handleSettingUpdate(
+    message: SessionSettingUpdateMessage,
+  ): void {
+    const runtime = this.runtime;
+    const cwd = this.activeRuntimeCwd;
+    if (
+      runtime === null ||
+      cwd === null ||
+      message.sessionId !== this.sessionId ||
+      this.connection.status !== 'connected' ||
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    if (
+      this.interactions.hasPending() ||
+      this.sessionOperationInProgress ||
+      this.settingsUpdate !== null ||
+      this.settings.status === 'loading' ||
+      this.settings.status === 'updating' ||
+      this.settings.value === null
+    ) {
+      this.emitSessionDiagnostic(
+        'settings-update-blocked',
+        SETTINGS_UPDATE_BLOCKED_MESSAGE,
+      );
+      return;
+    }
+    if (!this.isSettingUpdateSupported(message)) {
+      this.emitSessionDiagnostic(
+        'settings-update-unsupported',
+        SETTINGS_UPDATE_UNSUPPORTED_MESSAGE,
+      );
+      return;
+    }
+
+    const operation = Symbol('settings-update');
+    const generation = this.runtimeGeneration;
+    const confirmed = this.settings.value;
+    this.settingsUpdate = operation;
+    this.settings = { status: 'updating', value: confirmed };
+    this.emitSettings(message.sessionId);
+    const update: RuntimeSessionSettingUpdate = {
+      field: message.field,
+      value: message.value,
+    } as RuntimeSessionSettingUpdate;
+    void runtime
+      .updateSessionSetting(update)
+      .then((result) => {
+        if (
+          !this.isCurrentSettingsUpdate(
+            runtime,
+            generation,
+            message.sessionId,
+            cwd,
+            operation,
+          )
+        ) {
+          return;
+        }
+        this.settings = {
+          status: 'ready',
+          value: projectConfirmedSettings(result),
+        };
+        this.emitSettings(message.sessionId);
+      })
+      .catch(() => {
+        if (
+          !this.isCurrentSettingsUpdate(
+            runtime,
+            generation,
+            message.sessionId,
+            cwd,
+            operation,
+          )
+        ) {
+          return;
+        }
+        this.settings = {
+          status: 'error',
+          value: confirmed,
+          message: SETTINGS_UPDATE_FAILED_MESSAGE,
+        };
+        this.emitSettings(message.sessionId);
+      })
+      .finally(() => {
+        if (this.settingsUpdate === operation) {
+          this.settingsUpdate = null;
+        }
+      });
+  }
+
+  private isSettingUpdateSupported(
+    message: SessionSettingUpdateMessage,
+  ): boolean {
+    if (
+      message.field === 'interactionMode' ||
+      message.field === 'autonomyLevel'
+    ) {
+      return true;
+    }
+    const settings = this.settings.value;
+    if (
+      this.modelCatalog.status !== 'ready' ||
+      settings === null
+    ) {
+      return false;
+    }
+    if (message.field === 'modelId') {
+      return this.modelCatalog.items.some(
+        ({ id }) => id === message.value,
+      );
+    }
+    const model = this.modelCatalog.items.find(
+      ({ id }) => id === settings.modelId,
+    );
+    return (
+      model?.supportedReasoningEfforts.includes(message.value) ?? false
+    );
+  }
+
   private startCatalogRefresh(cwd: string): void {
     const previousActive = this.activeSessionSummary();
     const catalogRequest = this.beginCatalogLoad(cwd);
@@ -852,7 +1054,8 @@ export class ChatController {
       this.interactions.hasPending() ||
       this.connection.status === 'connecting' ||
       this.sessionOperationInProgress ||
-      this.refreshInProgress
+      this.refreshInProgress ||
+      this.settingsUpdate !== null
     ) {
       this.emitSessionDiagnostic(
         'session-operation-blocked',
@@ -877,6 +1080,7 @@ export class ChatController {
   ): Promise<void> {
     const generation = ++this.runtimeGeneration;
     this.turnGeneration += 1;
+    this.resetSessionMetadata();
     this.interactions.cancelAll();
     await this.flushRecoveryCheckpoint();
     if (!this.isCurrentRuntimeGeneration(generation)) {
@@ -1061,6 +1265,7 @@ export class ChatController {
       return createHostTranscriptState('complete');
     }
 
+    const recovered = this.recoveryStore.readSession(target.sessionId);
     let loaded;
     try {
       loaded = await this.sessionHistory.loadHistory({
@@ -1077,12 +1282,9 @@ export class ChatController {
       return null;
     }
     if (loaded?.status === 'available') {
-      return loaded.state;
+      return reconcileSessionHistory(loaded.state, recovered);
     }
-    return (
-      this.recoveryStore.readSession(target.sessionId) ??
-      createHostTranscriptState('unavailable')
-    );
+    return recovered ?? createHostTranscriptState('unavailable');
   }
 
   private async createInitializedRuntime(
@@ -1225,6 +1427,149 @@ export class ChatController {
     this.recoveryStore.selectSession(sessionId);
     void this.recoveryStore.flush();
     this.emitSnapshot();
+    this.loadSessionMetadata(
+      runtime,
+      generation,
+      sessionId,
+      target.cwd,
+    );
+  }
+
+  private loadSessionMetadata(
+    runtime: DroidRuntime,
+    generation: number,
+    sessionId: string,
+    cwd: string,
+  ): void {
+    void runtime
+      .readSessionSettings()
+      .then((result) => {
+        if (
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        this.settings = {
+          status: 'ready',
+          value: projectConfirmedSettings(result),
+        };
+        this.emitSettings(sessionId);
+      })
+      .catch(() => {
+        if (
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        this.settings = {
+          status: 'error',
+          value: null,
+          message: SETTINGS_READ_FAILED_MESSAGE,
+        };
+        this.emitSettings(sessionId);
+      });
+
+    void runtime
+      .readModelCatalog()
+      .then((result) => {
+        if (
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        this.modelCatalog = projectModelCatalog(result);
+        this.emitModelCatalog(sessionId);
+      })
+      .catch(() => {
+        if (
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        this.modelCatalog = {
+          status: 'error',
+          items: [],
+          message: MODEL_CATALOG_FAILED_MESSAGE,
+        };
+        this.emitModelCatalog(sessionId);
+      });
+
+    this.refreshContext(runtime, generation, sessionId, cwd);
+  }
+
+  private refreshContext(
+    runtime: DroidRuntime,
+    generation: number,
+    sessionId: string,
+    cwd: string,
+  ): void {
+    const request = ++this.contextGeneration;
+    const confirmed =
+      this.context.status === 'ready' ||
+      this.context.status === 'error'
+        ? this.context.value
+        : null;
+    this.context = { status: 'loading', value: confirmed };
+    this.emitContext(sessionId);
+    void runtime
+      .readContextStats()
+      .then((result) => {
+        if (
+          request !== this.contextGeneration ||
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        this.context = {
+          status: 'ready',
+          value: projectContextStats(result),
+        };
+        this.emitContext(sessionId);
+      })
+      .catch(() => {
+        if (
+          request !== this.contextGeneration ||
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        this.context = {
+          status: 'error',
+          value: confirmed,
+          message: CONTEXT_READ_FAILED_MESSAGE,
+        };
+        this.emitContext(sessionId);
+      });
   }
 
   private async loadCatalog(cwd: string): Promise<SessionCatalogState> {
@@ -1273,6 +1618,7 @@ export class ChatController {
     });
     this.emitTurnState(sessionId, turnId, 'failed');
     void this.flushRecoveryCheckpoint();
+    this.refreshContextAfterTurn(sessionId);
   }
 
   private setTurnStatus(
@@ -1311,6 +1657,9 @@ export class ChatController {
                 : { error: this.turn.error }),
             },
       sessions,
+      settings: this.settings,
+      context: this.context,
+      modelCatalog: this.modelCatalog,
       transcript: this.transcript.transcript,
       historyStatus: this.transcript.historyStatus,
       truncated: this.transcript.truncated,
@@ -1328,6 +1677,98 @@ export class ChatController {
       turnId,
       status,
     });
+  }
+
+  private emitSettings(sessionId: string): void {
+    this.emit({
+      type: 'session.settings',
+      sessionId,
+      settings: this.settings,
+    });
+  }
+
+  private emitContext(sessionId: string): void {
+    this.emit({
+      type: 'session.context',
+      sessionId,
+      context: this.context,
+    });
+  }
+
+  private emitModelCatalog(sessionId: string): void {
+    this.emit({
+      type: 'session.model-catalog',
+      sessionId,
+      modelCatalog: this.modelCatalog,
+    });
+  }
+
+  private refreshContextAfterTurn(sessionId: string): void {
+    if (
+      this.runtime !== null &&
+      this.activeRuntimeCwd !== null &&
+      this.sessionId === sessionId &&
+      this.connection.status === 'connected'
+    ) {
+      this.refreshContext(
+        this.runtime,
+        this.runtimeGeneration,
+        sessionId,
+        this.activeRuntimeCwd,
+      );
+    }
+  }
+
+  private refreshSettingsAfterRuntimeEvent(sessionId: string): void {
+    const runtime = this.runtime;
+    const cwd = this.activeRuntimeCwd;
+    if (
+      runtime === null ||
+      cwd === null ||
+      this.sessionId !== sessionId ||
+      this.connection.status !== 'connected'
+    ) {
+      return;
+    }
+    const generation = this.runtimeGeneration;
+    const confirmed = this.settings.value;
+    void runtime
+      .readSessionSettings()
+      .then((result) => {
+        if (
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        this.settings = {
+          status: 'ready',
+          value: projectConfirmedSettings(result),
+        };
+        this.emitSettings(sessionId);
+      })
+      .catch(() => {
+        if (
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        this.settings = {
+          status: 'error',
+          value: confirmed,
+          message: SETTINGS_READ_FAILED_MESSAGE,
+        };
+        this.emitSettings(sessionId);
+      });
   }
 
   private emit(
@@ -1660,6 +2101,46 @@ export class ChatController {
     );
   }
 
+  private isCurrentSessionOperation(
+    runtime: DroidRuntime,
+    generation: number,
+    sessionId: string,
+    cwd: string,
+  ): boolean {
+    return (
+      this.isCurrentRuntime(runtime, generation) &&
+      this.sessionId === sessionId &&
+      this.activeRuntimeCwd === cwd &&
+      this.isTargetWorkspaceCurrent(cwd)
+    );
+  }
+
+  private isCurrentSettingsUpdate(
+    runtime: DroidRuntime,
+    generation: number,
+    sessionId: string,
+    cwd: string,
+    operation: symbol,
+  ): boolean {
+    return (
+      this.settingsUpdate === operation &&
+      this.isCurrentSessionOperation(
+        runtime,
+        generation,
+        sessionId,
+        cwd,
+      )
+    );
+  }
+
+  private resetSessionMetadata(): void {
+    this.contextGeneration += 1;
+    this.settingsUpdate = null;
+    this.settings = { status: 'loading', value: null };
+    this.context = { status: 'loading', value: null };
+    this.modelCatalog = { status: 'loading', items: [] };
+  }
+
   private isCurrentRuntimeGeneration(generation: number): boolean {
     return !this.disposed && this.runtimeGeneration === generation;
   }
@@ -1863,6 +2344,96 @@ function projectCatalogEntries(
   return items;
 }
 
+function projectConfirmedSettings(
+  settings: RuntimeSessionSettings,
+): ConfirmedSessionSettings {
+  if (
+    !isEnumValue(settings.interactionMode, SESSION_INTERACTION_MODES) ||
+    !isSafeModelId(settings.modelId) ||
+    !isEnumValue(settings.reasoningEffort, SESSION_REASONING_EFFORTS) ||
+    !isEnumValue(settings.autonomyLevel, SESSION_AUTONOMY_LEVELS)
+  ) {
+    throw new Error('Invalid runtime session settings.');
+  }
+  return {
+    interactionMode: settings.interactionMode,
+    modelId: settings.modelId,
+    reasoningEffort: settings.reasoningEffort,
+    autonomyLevel: settings.autonomyLevel,
+  };
+}
+
+function projectContextStats(
+  context: RuntimeContextStats,
+): SessionContextStats {
+  if (
+    !isSafeContextNumber(context.used) ||
+    !isSafeContextNumber(context.remaining) ||
+    !isSafeContextNumber(context.limit) ||
+    (context.accuracy !== 'exact' &&
+      context.accuracy !== 'estimated')
+  ) {
+    throw new Error('Invalid runtime context statistics.');
+  }
+  return {
+    used: context.used,
+    remaining: context.remaining,
+    limit: context.limit,
+    accuracy: context.accuracy,
+  };
+}
+
+function projectModelCatalog(
+  catalog: RuntimeModelCatalog,
+): ModelCatalogState {
+  if (catalog.status === 'unavailable') {
+    return {
+      status: 'unsupported',
+      items: [],
+      message: MODEL_CATALOG_UNSUPPORTED_MESSAGE,
+    };
+  }
+  if (
+    catalog.status !== 'available' ||
+    !Array.isArray(catalog.items) ||
+    catalog.items.length > MAX_MODEL_CATALOG_ITEMS
+  ) {
+    throw new Error('Invalid runtime model catalog.');
+  }
+
+  const ids = new Set<string>();
+  const items = catalog.items.map((item: RuntimeModelCatalogItem) => {
+    if (
+      !isSafeModelId(item.id) ||
+      ids.has(item.id) ||
+      !isSafeDisplayName(item.displayName) ||
+      !Array.isArray(item.supportedReasoningEfforts) ||
+      item.supportedReasoningEfforts.length === 0 ||
+      item.supportedReasoningEfforts.length >
+        SESSION_REASONING_EFFORTS.length
+    ) {
+      throw new Error('Invalid runtime model catalog item.');
+    }
+    const efforts = new Set(item.supportedReasoningEfforts);
+    if (
+      efforts.size !== item.supportedReasoningEfforts.length ||
+      item.supportedReasoningEfforts.some(
+        (effort) =>
+          !isEnumValue(effort, SESSION_REASONING_EFFORTS),
+      )
+    ) {
+      throw new Error('Invalid runtime model reasoning efforts.');
+    }
+    ids.add(item.id);
+    return {
+      id: item.id,
+      displayName: item.displayName,
+      supportedReasoningEfforts: [...item.supportedReasoningEfforts],
+    };
+  });
+  return { status: 'ready', items };
+}
+
 function sanitizeSessionTitle(title: string): string {
   if (typeof title !== 'string') {
     return 'Untitled session';
@@ -1874,6 +2445,40 @@ function sanitizeSessionTitle(title: string): string {
     .slice(0, SESSION_TITLE_LIMIT)
     .trim();
   return safe || 'Untitled session';
+}
+
+function isSafeModelId(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_MODEL_ID_LENGTH &&
+    value.trim() === value &&
+    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
+  );
+}
+
+function isSafeDisplayName(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_MODEL_DISPLAY_NAME_LENGTH &&
+    value.trim() === value &&
+    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
+  );
+}
+
+function isEnumValue<const Values extends readonly string[]>(
+  value: unknown,
+  values: Values,
+): value is Values[number] {
+  return (
+    typeof value === 'string' &&
+    (values as readonly string[]).includes(value)
+  );
+}
+
+function isSafeContextNumber(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
 function isSafeBridgeId(value: string): boolean {

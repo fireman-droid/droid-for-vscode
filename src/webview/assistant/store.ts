@@ -1,11 +1,14 @@
 import {
-  MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_TOOL_ACTIVITIES_PER_TURN,
   type HostToWebviewMessage,
   type InteractionRequest,
+  type ModelCatalogState,
+  type SessionContextState,
+  type SessionSettingsState,
   type SessionTranscriptItem,
   type TurnStatus,
 } from '../../shared/bridgeMessages';
+import { trimTranscriptToLimits } from '../../shared/transcriptLimits';
 
 export interface AssistantTurn {
   readonly turnId: string;
@@ -32,6 +35,9 @@ export interface AssistantWebviewState {
     HostToWebviewMessage,
     { type: 'host.snapshot' }
   >['sessions'];
+  readonly settings: SessionSettingsState;
+  readonly context: SessionContextState;
+  readonly modelCatalog: ModelCatalogState;
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: Extract<
     HostToWebviewMessage,
@@ -60,6 +66,9 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   connection: { status: 'idle' },
   turn: null,
   sessions: { status: 'idle', items: [] },
+  settings: { status: 'loading', value: null },
+  context: { status: 'loading', value: null },
+  modelCatalog: { status: 'loading', items: [] },
   transcript: [],
   historyStatus: null,
   truncated: false,
@@ -130,6 +139,9 @@ export function assistantWebviewReducer(
                   : { error: event.turn.error }),
               },
         sessions: event.sessions,
+        settings: event.settings,
+        context: event.context,
+        modelCatalog: event.modelCatalog,
         transcript: event.transcript,
         historyStatus: event.historyStatus,
         truncated: event.truncated,
@@ -152,12 +164,39 @@ export function assistantWebviewReducer(
               transcript: [],
               historyStatus: null,
               truncated: false,
+              settings: { status: 'loading', value: null },
+              context: { status: 'loading', value: null },
+              modelCatalog: { status: 'loading', items: [] },
               interactions: [],
               terminalTurnId: null,
             }
           : {}),
       };
     }
+    case 'session.settings':
+      return event.sessionId === state.sessionId
+        ? {
+            ...state,
+            sequence: event.sequence,
+            settings: event.settings,
+          }
+        : advance(state, event.sequence);
+    case 'session.context':
+      return event.sessionId === state.sessionId
+        ? {
+            ...state,
+            sequence: event.sequence,
+            context: event.context,
+          }
+        : advance(state, event.sequence);
+    case 'session.model-catalog':
+      return event.sessionId === state.sessionId
+        ? {
+            ...state,
+            sequence: event.sequence,
+            modelCatalog: event.modelCatalog,
+          }
+        : advance(state, event.sequence);
     case 'assistant.delta':
       if (!acceptsActiveTurn(state, event.sessionId, event.turnId)) {
         return advance(state, event.sequence);
@@ -393,12 +432,13 @@ function boundTranscript(
   state: AssistantWebviewState,
   transcript: readonly SessionTranscriptItem[],
 ): AssistantWebviewState {
-  if (transcript.length <= MAX_SESSION_TRANSCRIPT_ITEMS) {
+  const bounded = trimTranscriptToLimits(transcript);
+  if (!bounded.trimmed) {
     return { ...state, transcript };
   }
   return {
     ...state,
-    transcript: transcript.slice(-MAX_SESSION_TRANSCRIPT_ITEMS),
+    transcript: bounded.transcript,
     historyStatus: 'partial',
     truncated: true,
   };
@@ -549,7 +589,14 @@ function upsertTool(
       ) {
         return item;
       }
-      return { ...item, toolName: event.toolName, status: event.status };
+      return {
+        ...item,
+        toolName: event.toolName,
+        action: event.action,
+        status: event.status,
+        progressCount: event.progressCount,
+        latestUpdateKind: event.latestUpdateKind,
+      };
     });
   }
   const count = transcript.filter(
@@ -566,7 +613,10 @@ function upsertTool(
       turnId: event.turnId,
       toolUseId: event.toolUseId,
       toolName: event.toolName,
+      action: event.action,
       status: event.status,
+      progressCount: event.progressCount,
+      latestUpdateKind: event.latestUpdateKind,
     },
   ];
 }
@@ -631,18 +681,27 @@ function appendDiagnostic(
   transcript: readonly SessionTranscriptItem[],
   next: Extract<SessionTranscriptItem, { kind: 'diagnostic' }>,
 ): readonly SessionTranscriptItem[] {
-  const count = transcript.filter(
+  const current =
+    next.code === 'runtime-execution-failed' && next.turnId !== null
+      ? transcript.filter(
+          (item) =>
+            item.kind !== 'diagnostic' ||
+            item.turnId !== next.turnId ||
+            item.severity !== 'error',
+        )
+      : transcript;
+  const count = current.filter(
     (item) => item.kind === 'diagnostic',
   ).length;
   if (count < MAX_DIAGNOSTICS) {
-    return [...transcript, next];
+    return [...current, next];
   }
-  const oldest = transcript.findIndex(
+  const oldest = current.findIndex(
     (item) => item.kind === 'diagnostic',
   );
   return [
-    ...transcript.slice(0, oldest),
-    ...transcript.slice(oldest + 1),
+    ...current.slice(0, oldest),
+    ...current.slice(oldest + 1),
     next,
   ];
 }

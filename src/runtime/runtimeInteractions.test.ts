@@ -718,6 +718,48 @@ describe('runtime AskUser interactions', () => {
     });
   });
 
+  it('accepts SDK open-response questions without preset options', async () => {
+    const askUser = vi.fn(async () => ({
+      answers: [{ index: 0, answer: 'A warm vector illustration' }],
+    }));
+    const callbacks = createRuntimeInteractionCallbacks(
+      createHandler({ askUser }),
+    );
+    const request: AskUserRequestParams = {
+      toolCallId: 'open-response',
+      questions: [
+        {
+          index: 0,
+          topic: 'Style',
+          question: 'What kind of graphic would you like?',
+          options: [],
+        },
+      ],
+    };
+
+    await expect(callbacks.askUserHandler(request)).resolves.toEqual({
+      answers: [
+        {
+          index: 0,
+          question: 'What kind of graphic would you like?',
+          answer: 'A warm vector illustration',
+        },
+      ],
+    });
+    expect(askUser).toHaveBeenCalledWith({
+      toolCallId: 'open-response',
+      questions: [
+        {
+          index: 0,
+          topic: 'Style',
+          question: 'What kind of graphic would you like?',
+          options: [],
+          multiSelect: false,
+        },
+      ],
+    });
+  });
+
   it('rejects empty, over-count, and invalid-index AskUser projections before the host', async () => {
     const askUser = vi.fn();
     const callbacks = createRuntimeInteractionCallbacks(
@@ -740,10 +782,6 @@ describe('runtime AskUser interactions', () => {
       {
         toolCallId: 'tool-call',
         questions: [{ ...questionParams(0), question: '' }],
-      },
-      {
-        toolCallId: 'tool-call',
-        questions: [{ ...questionParams(0), options: [] }],
       },
       {
         toolCallId: 'tool-call',

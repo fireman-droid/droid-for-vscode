@@ -4,6 +4,7 @@ const vscode = require('vscode');
 
 const EXTENSION_ID = 'droidvisx.droidvisx';
 const FOCUS_COMMAND = 'droidvisx.focusView';
+const OPEN_LOGS_COMMAND = 'droidvisx.openLogs';
 const VIEW_ID = 'droidvisx.chat';
 
 async function run() {
@@ -19,12 +20,19 @@ async function run() {
   assert.deepEqual(extension.packageJSON.activationEvents, [
     `onView:${VIEW_ID}`,
     `onCommand:${FOCUS_COMMAND}`,
+    `onCommand:${OPEN_LOGS_COMMAND}`,
   ]);
   assert.ok(
     extension.packageJSON.contributes.commands.some(
       (entry) => entry.command === FOCUS_COMMAND,
     ),
     'Expected focus command contribution',
+  );
+  assert.ok(
+    extension.packageJSON.contributes.commands.some(
+      (entry) => entry.command === OPEN_LOGS_COMMAND,
+    ),
+    'Expected Open Logs command contribution',
   );
   assert.ok(
     extension.packageJSON.contributes.views.droidvisx.some(
@@ -38,6 +46,10 @@ async function run() {
 
   const commands = await vscode.commands.getCommands(true);
   assert.ok(commands.includes(FOCUS_COMMAND), 'Focus command was not registered');
+  assert.ok(
+    commands.includes(OPEN_LOGS_COMMAND),
+    'Open Logs command was not registered',
+  );
   assert.ok(
     commands.includes(`${VIEW_ID}.focus`),
     'Contributed view focus command was not registered',

@@ -112,23 +112,61 @@ describe('normalizeSdkEvent', () => {
       type: 'tool-start',
       toolName: 'Read',
       toolUseId: 'tool-1',
+      action: 'Read workspace files',
     });
     expect(normalizeSdkEvent(toolCallDelta)).toEqual({
       type: 'tool-start',
       toolName: 'Execute',
       toolUseId: 'tool-2',
+      action: 'Ran a local command',
     });
-    expect(normalizeSdkEvent(toolProgress)).toEqual({
+    const projectedProgress = normalizeSdkEvent(toolProgress);
+    expect(projectedProgress).toEqual({
       type: 'tool-progress',
       toolName: 'Search',
       toolUseId: 'tool-3',
+      action: 'Used Search',
+      updateKind: 'message',
     });
     expect(normalizeSdkEvent(toolResult)).toEqual({
       type: 'tool-result',
       toolName: 'Read',
       toolUseId: 'tool-4',
+      action: 'Read workspace files',
       isError: true,
     });
+    const serialized = JSON.stringify([
+      normalizeSdkEvent(toolCall),
+      normalizeSdkEvent(toolCallDelta),
+      projectedProgress,
+      normalizeSdkEvent(toolResult),
+    ]);
+    for (const prohibited of [
+      'sensitive-path',
+      'sensitive command',
+      'sensitive-signature',
+      'sensitive progress content',
+      'sensitive progress update',
+      'sensitive file contents',
+    ]) {
+      expect(serialized).not.toContain(prohibited);
+    }
+  });
+
+  it('rejects unknown progress shapes instead of projecting details', () => {
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_progress', {
+          toolName: 'Read',
+          toolUseId: 'tool-unknown-progress',
+          content: 'sensitive',
+          update: {
+            type: 'future-progress-kind',
+            fullOutput: 'sensitive output',
+          },
+        }),
+      ),
+    ).toBeUndefined();
   });
 
   it('bounds tool labels and falls back when no safe label remains', () => {
@@ -146,6 +184,7 @@ describe('normalizeSdkEvent', () => {
       type: 'tool-start',
       toolName: 'x'.repeat(80),
       toolUseId: 'tool-1',
+      action: `Used ${'x'.repeat(80)}`,
     });
     expect(
       normalizeSdkEvent(
@@ -153,13 +192,15 @@ describe('normalizeSdkEvent', () => {
           toolName: '\u0000\u0007  ',
           toolUseId: 'tool-2',
           content: 'sensitive',
-          update: {},
+          update: { type: 'status', status: 'sensitive' },
         }),
       ),
     ).toEqual({
       type: 'tool-progress',
       toolName: 'Tool',
       toolUseId: 'tool-2',
+      action: 'Used Tool',
+      updateKind: 'status',
     });
   });
 
@@ -208,6 +249,7 @@ describe('normalizeSdkEvent', () => {
       type: 'tool-start',
       toolName: 'Read',
       toolUseId,
+      action: 'Read workspace files',
     });
   });
 
@@ -239,6 +281,20 @@ describe('normalizeSdkEvent', () => {
     expect(normalizeSdkEvent(error)).toEqual({
       type: 'error',
     });
+  });
+
+  it('projects settings changes as a payload-free authoritative refresh signal', () => {
+    const projected = normalizeSdkEvent(
+      sdkEvent('settings_updated', {
+        settings: {
+          interactionMode: 'auto',
+          sensitiveFutureField: 'must not escape',
+        },
+      }),
+    );
+
+    expect(projected).toEqual({ type: 'settings-updated' });
+    expect(JSON.stringify(projected)).not.toContain('sensitiveFutureField');
   });
 
   it('normalizes a terminal result without retaining its message payloads', () => {
@@ -274,7 +330,6 @@ describe('normalizeSdkEvent', () => {
     'assistant',
     'token_usage_update',
     'permission_resolved',
-    'settings_updated',
     'session_title_updated',
     'session_working_directory_changed',
     'mcp_status_changed',

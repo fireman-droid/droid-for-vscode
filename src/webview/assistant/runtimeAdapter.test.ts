@@ -74,7 +74,10 @@ describe('Droid external-store adapter', () => {
           turnId: 'turn-a',
           toolUseId: 'tool-use-a',
           toolName: 'Read',
+          action: 'Read workspace files',
           status: 'running',
+          progressCount: 3,
+          latestUpdateKind: 'status',
         },
         {
           id: 'assistant-a',
@@ -107,7 +110,12 @@ describe('Droid external-store adapter', () => {
         args: {},
         argsText: '',
         providerMetadata: {
-          droidvisx: { status: 'running' },
+          droidvisx: {
+            action: 'Read workspace files',
+            status: 'running',
+            progressCount: 3,
+            latestUpdateKind: 'status',
+          },
         },
       },
       { type: 'text', text: 'Found it.' },

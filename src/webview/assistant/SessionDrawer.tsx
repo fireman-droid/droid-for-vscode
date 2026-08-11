@@ -14,8 +14,6 @@ import type {
 interface SessionDrawerProps {
   readonly sessions: SessionCatalogState;
   readonly actionsDisabled: boolean;
-  readonly onRefresh: () => void;
-  readonly onNewSession: () => void;
   readonly onSelectSession: (sessionId: string) => void;
 }
 
@@ -27,15 +25,12 @@ const MODIFIED_TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
 export const SessionDrawer = memo(function SessionDrawer({
   sessions,
   actionsDisabled,
-  onRefresh,
-  onNewSession,
   onSelectSession,
 }: SessionDrawerProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [pendingAction, setPendingAction] = useState(false);
   const pendingActionRef = useRef(false);
-  const searchRef = useRef<HTMLInputElement>(null);
   const previousSessionsRef = useRef(sessions);
 
   useEffect(() => {
@@ -47,9 +42,17 @@ export const SessionDrawer = memo(function SessionDrawer({
   }, [sessions]);
 
   useEffect(() => {
-    if (open) {
-      searchRef.current?.focus({ preventScroll: true });
+    if (!open) {
+      return;
     }
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open]);
 
   const normalizedQuery = query.trim().toLowerCase();
@@ -91,72 +94,46 @@ export const SessionDrawer = memo(function SessionDrawer({
       </button>
       {open ? (
         <>
-          <button
-            type="button"
-            className="dvx-drawer-backdrop"
-            aria-label="Close session history"
-            onClick={() => setOpen(false)}
-          />
           <aside
             id="dvx-session-drawer"
             className="dvx-session-drawer"
             aria-label="Session history"
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                event.preventDefault();
-                setOpen(false);
-              }
-            }}
           >
-            <header className="dvx-drawer-header">
-              <div>
-                <span className="dvx-kicker">Local history</span>
-                <h2>Sessions</h2>
-              </div>
-              <button
-                className="dvx-icon-button"
-                type="button"
-                aria-label="Close sessions"
-                onClick={() => setOpen(false)}
-              >
-                ×
-              </button>
-            </header>
             <label className="dvx-visually-hidden" htmlFor="dvx-session-search">
               Search sessions
             </label>
-            <input
-              ref={searchRef}
-              id="dvx-session-search"
-              className="dvx-session-search"
-              type="search"
-              value={query}
-              placeholder="Search sessions"
-              autoComplete="off"
-              onChange={(event) => setQuery(event.currentTarget.value)}
-            />
-            <div className="dvx-session-actions">
+            <div className="dvx-session-search-shell">
+              <span aria-hidden="true" className="dvx-session-search-icon">
+                <SearchIcon />
+              </span>
+              <input
+                id="dvx-session-search"
+                className="dvx-session-search"
+                type="search"
+                value={query}
+                placeholder="Search recent chats"
+                autoComplete="off"
+                onChange={(event) => setQuery(event.currentTarget.value)}
+              />
+            </div>
+            <div className="dvx-session-filter-row">
+              <span>All chats</span>
               <button
                 type="button"
-                className="dvx-button"
-                disabled={disabled}
-                onClick={() => runOnce(onRefresh)}
+                className="dvx-session-close"
+                aria-label="Close session history"
+                onClick={() => setOpen(false)}
               >
-                Refresh
-              </button>
-              <button
-                type="button"
-                className="dvx-button dvx-button-primary"
-                disabled={disabled}
-                onClick={() => runOnce(onNewSession)}
-              >
-                New session
+                <CloseHistoryIcon />
               </button>
             </div>
 
             <CatalogStatus sessions={sessions} pending={pendingAction} />
             {filteredSessions.length > 0 ? (
-              <nav aria-label="Session history">
+              <nav
+                className="dvx-session-nav"
+                aria-label="Session history"
+              >
                 <ul className="dvx-session-list">
                   {filteredSessions.map((session) => (
                     <SessionRow
@@ -233,16 +210,9 @@ function SessionRow({
         onClick={() => onSelect(session.id)}
       >
         <span className="dvx-session-row-title">{session.title}</span>
-        <code>{session.id}</code>
-        <span className="dvx-session-row-meta">
-          <span>
-            {session.messageCount.toLocaleString()}{' '}
-            {session.messageCount === 1 ? 'message' : 'messages'}
-          </span>
-          <time dateTime={session.modifiedTime}>
-            {formatModifiedTime(session.modifiedTime)}
-          </time>
-        </span>
+        <time dateTime={session.modifiedTime}>
+          {formatModifiedTime(session.modifiedTime)}
+        </time>
       </button>
     </li>
   );
@@ -265,10 +235,66 @@ function SessionIcon(): React.JSX.Element {
       aria-hidden="true"
     >
       <path
-        d="M3 3.5h10M3 8h10M3 12.5h7"
+        d="M2 2v3.333h3.333M2.033 8.667a6 6 0 1 0 1.967-5.134l-2 1.8M8 4.667V8l2.333 1.333"
         stroke="currentColor"
-        strokeWidth="1.4"
+        strokeWidth="1.2"
         strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SearchIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle
+        cx="7"
+        cy="7"
+        r="3.75"
+        stroke="currentColor"
+        strokeWidth="1.25"
+      />
+      <path
+        d="m9.8 9.8 3 3"
+        stroke="currentColor"
+        strokeWidth="1.25"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function CloseHistoryIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="2.5"
+        y="2.75"
+        width="11"
+        height="10.5"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <path
+        d="M9.5 2.75v10.5M7.25 6 5.25 8l2 2"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );

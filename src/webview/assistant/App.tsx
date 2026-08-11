@@ -24,6 +24,7 @@ import {
   restoreDraft,
 } from '../bridge/vscode';
 import { InteractionPanel } from './Interactions';
+import type { SessionSettingSelection } from './ComposerControls';
 import {
   canSendMessage,
   useDroidExternalStoreRuntime,
@@ -31,7 +32,6 @@ import {
 import { SessionDrawer } from './SessionDrawer';
 import {
   assistantWebviewReducer,
-  hasTurnContent,
   initialAssistantWebviewState,
   isTurnActive,
   type PendingInteraction,
@@ -49,6 +49,11 @@ export function App(): React.JSX.Element {
   );
   const [draft, setDraft] = useState(() => restoreDraft(vscode));
   const [initialDraft] = useState(draft);
+  const draftCommandIdRef = useRef(0);
+  const [draftCommand, setDraftCommand] = useState(() => ({
+    id: draftCommandIdRef.current,
+    text: initialDraft,
+  }));
   const sendPendingRef = useRef(false);
 
   useEffect(() => {
@@ -150,15 +155,25 @@ export function App(): React.JSX.Element {
     },
     [vscode],
   );
+  const handleReuseMessage = useCallback(
+    (text: string): void => {
+      const nextDraft = text.slice(0, MAX_TURN_TEXT_LENGTH);
+      setDraft(nextDraft);
+      persistDraft(vscode, nextDraft);
+      draftCommandIdRef.current += 1;
+      setDraftCommand({
+        id: draftCommandIdRef.current,
+        text: nextDraft,
+      });
+    },
+    [vscode],
+  );
   const handleRetry = useCallback((): void => {
     post(vscode, {
       type: 'runtime.retry',
       sessionId: state.sessionId,
     });
   }, [state.sessionId, vscode]);
-  const handleRefreshSessions = useCallback((): void => {
-    post(vscode, { type: 'sessions.refresh' });
-  }, [vscode]);
   const handleNewSession = useCallback((): void => {
     post(vscode, { type: 'session.new' });
   }, [vscode]);
@@ -170,6 +185,28 @@ export function App(): React.JSX.Element {
       });
     },
     [vscode],
+  );
+  const handleContextRefresh = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, {
+      type: 'session.context.refresh',
+      sessionId,
+    });
+  }, [sessionId, vscode]);
+  const handleSettingUpdate = useCallback(
+    (update: SessionSettingSelection): void => {
+      if (sessionId === null) {
+        return;
+      }
+      post(vscode, {
+        type: 'session.setting.update',
+        sessionId,
+        ...update,
+      });
+    },
+    [sessionId, vscode],
   );
   const handlePermissionRespond = useCallback(
     (
@@ -202,19 +239,24 @@ export function App(): React.JSX.Element {
   );
   const sessionActionsDisabled =
     state.connection.status !== 'connected' || active || hasInteraction;
-  const showPending =
-    active &&
-    state.turn !== null &&
-    !hasTurnContent(state.transcript, state.turn.turnId);
+  const showPending = active && !hasInteraction;
+  const inlineInteraction =
+    state.interactions[0]?.request.kind === 'permission' ? (
+      <InteractionPanel
+        requests={state.interactions}
+        presentation="inline"
+        onPermissionRespond={handlePermissionRespond}
+        onAskUserRespond={handleAskUserRespond}
+      />
+    ) : null;
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <DraftRestorer draft={initialDraft} />
+      <DraftSynchronizer command={draftCommand} />
       <div className="dvx-shell">
         <Header
           state={state}
           sessionActionsDisabled={sessionActionsDisabled}
-          onRefresh={handleRefreshSessions}
           onNewSession={handleNewSession}
           onSelectSession={handleSelectSession}
         />
@@ -230,14 +272,30 @@ export function App(): React.JSX.Element {
           }
           running={active}
           stopping={state.turn?.status === 'stopping'}
+          interactionPending={hasInteraction}
+          controlsDisabled={
+            state.connection.status !== 'connected' ||
+            state.sessionId === null ||
+            hasInteraction
+          }
+          settingUpdatesDisabled={hasInteraction}
+          settings={state.settings}
+          context={state.context}
+          modelCatalog={state.modelCatalog}
           onRetry={handleRetry}
+          onContextRefresh={handleContextRefresh}
+          onSettingUpdate={handleSettingUpdate}
           onDraftChange={handleDraftChange}
+          onReuseMessage={handleReuseMessage}
+          inlineInteraction={inlineInteraction}
         />
-        <InteractionPanel
-          requests={state.interactions}
-          onPermissionRespond={handlePermissionRespond}
-          onAskUserRespond={handleAskUserRespond}
-        />
+        {inlineInteraction === null ? (
+          <InteractionPanel
+            requests={state.interactions}
+            onPermissionRespond={handlePermissionRespond}
+            onAskUserRespond={handleAskUserRespond}
+          />
+        ) : null}
       </div>
     </AssistantRuntimeProvider>
   );
@@ -246,25 +304,18 @@ export function App(): React.JSX.Element {
 function Header({
   state,
   sessionActionsDisabled,
-  onRefresh,
   onNewSession,
   onSelectSession,
 }: {
   readonly state: typeof initialAssistantWebviewState;
   readonly sessionActionsDisabled: boolean;
-  readonly onRefresh: () => void;
   readonly onNewSession: () => void;
   readonly onSelectSession: (sessionId: string) => void;
 }): React.JSX.Element {
-  const activeSession = state.sessions.items.find((session) => session.active);
   const connectionLabel = formatConnectionStatus(state.connection.status);
   return (
     <header className="dvx-header">
       <div className="dvx-brand">
-        <span
-          className={`dvx-status-seam dvx-status-${state.connection.status}`}
-          aria-hidden="true"
-        />
         <div>
           <div className="dvx-title">DroidVisX</div>
           <div
@@ -274,41 +325,69 @@ function Header({
             }
           >
             <span>{connectionLabel}</span>
-            {activeSession !== undefined ? (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="dvx-session-title">
-                  {activeSession.title || activeSession.id}
-                </span>
-              </>
-            ) : null}
           </div>
         </div>
       </div>
-      <SessionDrawer
-        sessions={state.sessions}
-        actionsDisabled={sessionActionsDisabled}
-        onRefresh={onRefresh}
-        onNewSession={onNewSession}
-        onSelectSession={onSelectSession}
-      />
+      <div className="dvx-header-actions">
+        <button
+          className="dvx-icon-button dvx-header-new"
+          type="button"
+          aria-label="New session"
+          disabled={sessionActionsDisabled}
+          onClick={onNewSession}
+        >
+          <NewSessionIcon />
+        </button>
+        <SessionDrawer
+          sessions={state.sessions}
+          actionsDisabled={sessionActionsDisabled}
+          onSelectSession={onSelectSession}
+        />
+      </div>
     </header>
   );
 }
 
-function DraftRestorer({
-  draft,
+function NewSessionIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M8 3.333v9.334M3.333 8h9.334"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function DraftSynchronizer({
+  command,
 }: {
-  readonly draft: string;
+  readonly command: {
+    readonly id: number;
+    readonly text: string;
+  };
 }): React.JSX.Element | null {
   const aui = useAui();
-  const restoredRef = useRef(false);
+  const appliedCommandRef = useRef(-1);
   useEffect(() => {
-    if (!restoredRef.current) {
-      restoredRef.current = true;
-      aui.thread.composer().setText(draft);
+    if (appliedCommandRef.current !== command.id) {
+      appliedCommandRef.current = command.id;
+      aui.thread.composer().setText(command.text);
+      if (command.id > 0) {
+        document
+          .getElementById('dvx-prompt')
+          ?.focus({ preventScroll: true });
+      }
     }
-  }, [aui, draft]);
+  }, [aui, command]);
   return null;
 }
 
@@ -316,9 +395,6 @@ function getStatusMessage(
   state: typeof initialAssistantWebviewState,
   draft: string,
 ): string | undefined {
-  if (state.interactions.length > 0) {
-    return 'Droid needs your input.';
-  }
   if (state.turn?.error !== undefined) {
     return state.turn.error;
   }

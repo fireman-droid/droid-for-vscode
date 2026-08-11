@@ -7,6 +7,10 @@ import {
   MAX_BRIDGE_ID_LENGTH,
   MAX_TOOL_NAME_LENGTH,
 } from '../shared/bridgeMessages';
+import {
+  summarizeToolAction,
+  type ToolActivityUpdateKind,
+} from '../shared/toolActivity';
 import type { RuntimeEvent } from './runtimeEvents';
 
 export function normalizeSdkEvent(
@@ -47,12 +51,17 @@ export function normalizeSdkEvent(
         event.toolUse.id,
       );
 
-    case 'tool_progress':
-      return normalizeToolActivity(
+    case 'tool_progress': {
+      const activity = normalizeToolActivity(
         'tool-progress',
         event.toolName,
         event.toolUseId,
       );
+      const updateKind = normalizeToolUpdateKind(event.update?.type);
+      return activity === undefined || updateKind === undefined
+        ? undefined
+        : { ...activity, updateKind };
+    }
 
     case 'tool_result': {
       const activity = normalizeToolActivity(
@@ -72,6 +81,11 @@ export function normalizeSdkEvent(
       return {
         type: 'working-state',
         isWorking: event.state !== DroidWorkingState.Idle,
+      };
+
+    case 'settings_updated':
+      return {
+        type: 'settings-updated',
       };
 
     case 'error':
@@ -101,6 +115,7 @@ function normalizeToolActivity<
       type: Type;
       toolName: string;
       toolUseId: string;
+      action: string;
     }
   | undefined {
   if (
@@ -111,10 +126,12 @@ function normalizeToolActivity<
     return undefined;
   }
 
+  const normalizedToolName = normalizeToolName(toolName);
   return {
     type,
-    toolName: normalizeToolName(toolName),
+    toolName: normalizedToolName,
     toolUseId,
+    action: summarizeToolAction(normalizedToolName),
   };
 }
 
@@ -133,4 +150,21 @@ function normalizeDuration(value: unknown): number | null {
     value >= 0
     ? value
     : null;
+}
+
+function normalizeToolUpdateKind(
+  value: unknown,
+): ToolActivityUpdateKind | undefined {
+  switch (value) {
+    case 'tool_call':
+      return 'tool-call';
+    case 'tool_result':
+      return 'tool-result';
+    case 'error':
+    case 'status':
+    case 'message':
+      return value;
+    default:
+      return undefined;
+  }
 }

@@ -1,11 +1,19 @@
 import {
+  AutonomyLevel,
   ConnectionError,
+  ContextStatsAccuracy,
+  DroidInteractionMode,
   InvalidSessionCwdError,
+  ModelProvider,
+  ReasoningEffort,
   ToolConfirmationOutcome,
   ToolConfirmationType,
+  type AvailableModelConfig,
   type ClientAskUserHandler,
   type ClientPermissionHandler,
   type DroidStreamEvent,
+  type DroidObservability,
+  type SessionSettings,
 } from '@factory/droid-sdk/node';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -62,6 +70,43 @@ describe('FactoryDroidRuntime', () => {
     ]);
   });
 
+  it('records bounded lifecycle timings without prompt content', async () => {
+    const session = createMockSession(async function* () {
+      yield textDelta('hello');
+      yield successfulResult();
+    });
+    const diagnostics = { record: vi.fn() };
+    const runtime = new FactoryDroidRuntime({
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      createSdkSession: async () => session,
+      diagnostics,
+    });
+
+    await runtime.initialize('C:\\workspace');
+    await collect(runtime.sendTurn('private prompt content'));
+
+    expect(diagnostics.record).toHaveBeenCalledWith({
+      level: 'info',
+      name: 'runtime.turn.started',
+      attributes: { textLength: 22 },
+    });
+    expect(diagnostics.record).toHaveBeenCalledWith({
+      level: 'info',
+      name: 'runtime.turn.finished',
+      attributes: {
+        durationMs: expect.any(Number),
+        outcome: 'success',
+        projectedEventCount: 2,
+        toolStartCount: 0,
+        toolProgressCount: 0,
+        toolResultCount: 0,
+      },
+    });
+    expect(JSON.stringify(diagnostics.record.mock.calls)).not.toContain(
+      'private prompt content',
+    );
+  });
+
   it('initializes an explicit resumed session target once', async () => {
     const session = createMockSession(async function* () {});
     const createSession = vi.fn(async () => session);
@@ -85,6 +130,223 @@ describe('FactoryDroidRuntime', () => {
       target,
       interactionHandler: cancellingRuntimeInteractionHandler,
     });
+  });
+
+  it('projects settings and context through runtime-owned DTOs', async () => {
+    const session = createMockSession(async function* () {});
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    await expect(runtime.readSessionSettings()).resolves.toEqual({
+      interactionMode: 'auto',
+      modelId: 'model-1',
+      reasoningEffort: 'high',
+      autonomyLevel: 'medium',
+    });
+    await expect(runtime.readContextStats()).resolves.toEqual({
+      used: 40,
+      remaining: 60,
+      limit: 100,
+      accuracy: 'exact',
+    });
+    await expect(runtime.readModelCatalog()).resolves.toEqual({
+      status: 'unavailable',
+    });
+  });
+
+  it('accepts SDK-valid context values without inventing cross-field constraints', async () => {
+    const session = createMockSession(async function* () {});
+    session.getContextStats.mockResolvedValue({
+      used: 101,
+      remaining: 108,
+      limit: 100,
+      accuracy: ContextStatsAccuracy.Estimated,
+      updatedAt: new Date().toISOString(),
+    });
+    const diagnostics = { record: vi.fn() };
+    const runtime = new FactoryDroidRuntime({
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      createSdkSession: async () => session,
+      diagnostics,
+    });
+    await runtime.initialize('C:\\workspace');
+
+    await expect(runtime.readContextStats()).resolves.toEqual({
+      used: 101,
+      remaining: 108,
+      limit: 100,
+      accuracy: 'estimated',
+    });
+    expect(diagnostics.record).toHaveBeenCalledWith({
+      level: 'info',
+      name: 'runtime.context.finished',
+      attributes: {
+        durationMs: expect.any(Number),
+        outcome: 'success',
+        accuracy: 'estimated',
+        arithmeticDelta: 109,
+      },
+    });
+  });
+
+  it('projects only BYOK models from the real startup catalog', async () => {
+    const session = createMockSession(async function* () {});
+    session.availableModels = [
+      availableModel('model-sol', 'Model Sol', [
+        ReasoningEffort.Low,
+        ReasoningEffort.Medium,
+        ReasoningEffort.High,
+      ]),
+      availableModel('custom:model-pro', 'Model Pro', [
+        ReasoningEffort.None,
+      ]),
+    ];
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    await expect(runtime.readModelCatalog()).resolves.toEqual({
+      status: 'available',
+      items: [
+        {
+          id: 'custom:model-pro',
+          displayName: 'Model Pro',
+          supportedReasoningEfforts: ['none'],
+        },
+      ],
+    });
+  });
+
+  it('fails closed when the captured model catalog is invalid', async () => {
+    const session = createMockSession(async function* () {});
+    session.availableModels = [
+      availableModel('duplicate', 'Model One', [ReasoningEffort.Medium]),
+      availableModel('duplicate', 'Model Two', [ReasoningEffort.High]),
+    ];
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    await expect(runtime.readModelCatalog()).rejects.toThrow(
+      'Droid returned an invalid model catalog.',
+    );
+  });
+
+  it('updates one setting and rereads authoritative session settings', async () => {
+    const session = createMockSession(async function* () {});
+    session.updateSettings.mockImplementation(async (params) => {
+      expect(params).toEqual({
+        interactionMode: DroidInteractionMode.Spec,
+      });
+      session.settings.interactionMode = DroidInteractionMode.Mission;
+    });
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    await expect(
+      runtime.updateSessionSetting({
+        field: 'interactionMode',
+        value: 'spec',
+      }),
+    ).resolves.toMatchObject({ interactionMode: 'mission' });
+    expect(session.updateSettings).toHaveBeenCalledOnce();
+  });
+
+  it('projects autonomy updates to the Droid SDK session', async () => {
+    const session = createMockSession(async function* () {});
+    session.updateSettings.mockImplementation(async (params) => {
+      expect(params).toEqual({
+        autonomyLevel: AutonomyLevel.High,
+      });
+      session.settings.autonomyLevel = AutonomyLevel.High;
+    });
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    await expect(
+      runtime.updateSessionSetting({
+        field: 'autonomyLevel',
+        value: 'high',
+      }),
+    ).resolves.toMatchObject({ autonomyLevel: 'high' });
+    expect(session.updateSettings).toHaveBeenCalledOnce();
+  });
+
+  it('rejects malformed SDK settings, context, and update values safely', async () => {
+    const session = createMockSession(async function* () {});
+    const diagnostics = { record: vi.fn() };
+    const runtime = new FactoryDroidRuntime({
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      createSdkSession: async () => session,
+      diagnostics,
+    });
+    await runtime.initialize('C:\\workspace');
+
+    session.settings.interactionMode = DroidInteractionMode.AGI;
+    await expect(runtime.readSessionSettings()).rejects.toThrow(
+      'Droid returned invalid session settings.',
+    );
+    session.settings.interactionMode = DroidInteractionMode.Auto;
+    session.getContextStats.mockResolvedValue({
+      used: -1,
+      remaining: 0,
+      limit: 100,
+      accuracy: ContextStatsAccuracy.Estimated,
+      updatedAt: new Date().toISOString(),
+    });
+    await expect(runtime.readContextStats()).rejects.toThrow(
+      'Droid context statistics could not be read.',
+    );
+    expect(diagnostics.record).toHaveBeenCalledWith({
+      level: 'error',
+      name: 'runtime.context.finished',
+      attributes: {
+        durationMs: expect.any(Number),
+        outcome: 'invalid-stats',
+        reason: 'negative',
+      },
+    });
+    await expect(
+      runtime.updateSessionSetting({
+        field: 'modelId',
+        value: 'x'.repeat(257),
+      }),
+    ).rejects.toThrow('Invalid session setting update.');
+    await expect(
+      runtime.updateSessionSetting(
+        new Proxy(
+          { field: 'autonomyLevel', value: 'high' },
+          {
+            ownKeys() {
+              throw new Error('sensitive hostile trap');
+            },
+          },
+        ) as never,
+      ),
+    ).rejects.toThrow('Invalid session setting update.');
+    expect(session.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it('replaces SDK read and update errors with generic runtime failures', async () => {
+    const session = createMockSession(async function* () {});
+    session.getContextStats.mockRejectedValue(
+      new Error('sensitive context failure'),
+    );
+    session.updateSettings.mockRejectedValue(
+      new Error('sensitive settings failure'),
+    );
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    await expect(runtime.readContextStats()).rejects.toThrow(
+      'Droid context statistics could not be read.',
+    );
+    await expect(
+      runtime.updateSessionSetting({
+        field: 'autonomyLevel',
+        value: 'high',
+      }),
+    ).rejects.toThrow(
+      'Droid session settings could not be updated.',
+    );
   });
 
   it('yields only defined semantic events from the SDK stream', async () => {
@@ -123,6 +385,8 @@ describe('FactoryDroidRuntime', () => {
         type: 'tool-progress',
         toolUseId: 'tool-1',
         toolName: 'Read',
+        action: 'Read workspace files',
+        updateKind: 'message',
       },
     ]);
   });
@@ -190,6 +454,42 @@ describe('FactoryDroidRuntime', () => {
     await expect(collect(runtime.sendTurn('Third turn'))).resolves.toHaveLength(
       2,
     );
+  });
+
+  it('updates authoritative session settings during an active stream', async () => {
+    const release = deferred<void>();
+    const session = createMockSession(async function* () {
+      yield textDelta('first');
+      await release.promise;
+      yield successfulResult();
+    });
+    session.updateSettings.mockImplementation(async (params) => {
+      expect(params).toEqual({ autonomyLevel: AutonomyLevel.High });
+      session.settings.autonomyLevel = AutonomyLevel.High;
+      return {};
+    });
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+    const turn = runtime.sendTurn('Keep working')[Symbol.asyncIterator]();
+    await expect(turn.next()).resolves.toMatchObject({
+      done: false,
+      value: { type: 'text-delta', text: 'first' },
+    });
+
+    await expect(
+      runtime.updateSessionSetting({
+        field: 'autonomyLevel',
+        value: 'high',
+      }),
+    ).resolves.toMatchObject({ autonomyLevel: 'high' });
+    expect(session.updateSettings).toHaveBeenCalledOnce();
+
+    release.resolve();
+    await expect(turn.next()).resolves.toMatchObject({
+      done: false,
+      value: { type: 'turn-complete', outcome: 'success' },
+    });
+    await expect(turn.next()).resolves.toMatchObject({ done: true });
   });
 
   it('drops late stream events and disposes an active session once', async () => {
@@ -358,12 +658,18 @@ describe('createLocalDroidSession', () => {
     });
     const createSession = vi.fn(async (options) => {
       calls.push('createSession');
-      expect(options).toEqual({
+      expect(options).toMatchObject({
         cwd: 'C:\\workspace',
-        transport,
+        transport: {
+          send: expect.any(Function),
+          onMessage: expect.any(Function),
+          onError: expect.any(Function),
+          close: expect.any(Function),
+        },
         permissionHandler: expect.any(Function),
         askUserHandler: expect.any(Function),
       });
+      expect(options.transport).not.toBe(transport);
       expect(options).not.toHaveProperty('apiKey');
       return session;
     });
@@ -386,6 +692,38 @@ describe('createLocalDroidSession', () => {
     expect(createTransport).toHaveBeenCalledWith({ cwd: 'C:\\workspace' });
     expect(calls).toEqual(['connect', 'createSession']);
     expect(transport.close).not.toHaveBeenCalled();
+  });
+
+  it('injects one observability bundle into transport and session', async () => {
+    const session = createMockSession(async function* () {});
+    const transport = createMockTransport();
+    const observability: DroidObservability = {
+      logger: { log: vi.fn() },
+      metrics: { record: vi.fn() },
+    };
+    const createTransport = vi.fn(() => transport);
+    const createSession = vi.fn(async () => session);
+
+    await createLocalDroidSession(
+      {
+        target: { kind: 'new', cwd: 'C:\\workspace' },
+        interactionHandler: cancellingRuntimeInteractionHandler,
+        observability,
+      },
+      {
+        createTransport,
+        createSession,
+        resumeSession: vi.fn(),
+      },
+    );
+
+    expect(createTransport).toHaveBeenCalledWith({
+      cwd: 'C:\\workspace',
+      observability,
+    });
+    expect(createSession).toHaveBeenCalledWith(
+      expect.objectContaining({ observability }),
+    );
   });
 
   it('wires the runtime interaction handler into SDK session callbacks', async () => {
@@ -491,11 +829,17 @@ describe('createLocalDroidSession', () => {
     const resumeSession = vi.fn(async (sessionId, options) => {
       calls.push('resumeSession');
       expect(sessionId).toBe('saved-session');
-      expect(options).toEqual({
-        transport,
+      expect(options).toMatchObject({
+        transport: {
+          send: expect.any(Function),
+          onMessage: expect.any(Function),
+          onError: expect.any(Function),
+          close: expect.any(Function),
+        },
         permissionHandler: expect.any(Function),
         askUserHandler: expect.any(Function),
       });
+      expect(options.transport).not.toBe(transport);
       expect(options).not.toHaveProperty('cwd');
       permissionHandler = options.permissionHandler;
       askUserHandler = options.askUserHandler;
@@ -650,11 +994,16 @@ describe('createLocalDroidSession', () => {
       ),
     ).rejects.toBe(failure);
 
-    expect(resumeSession).toHaveBeenCalledWith('saved-session', {
-      transport,
-      permissionHandler: expect.any(Function),
-      askUserHandler: expect.any(Function),
-    });
+    expect(resumeSession).toHaveBeenCalledWith(
+      'saved-session',
+      expect.objectContaining({
+        transport: expect.objectContaining({
+          send: expect.any(Function),
+        }),
+        permissionHandler: expect.any(Function),
+        askUserHandler: expect.any(Function),
+      }),
+    );
     expect(transport.close).toHaveBeenCalledOnce();
   });
 });
@@ -674,9 +1023,45 @@ function createMockSession(
 ) {
   return {
     id: 'session-1',
+    availableModels: undefined as readonly AvailableModelConfig[] | undefined,
+    settings: {
+      modelId: 'model-1',
+      reasoningEffort: ReasoningEffort.High,
+      interactionMode: DroidInteractionMode.Auto,
+      autonomyLevel: AutonomyLevel.Medium,
+    } as SessionSettings,
     stream: vi.fn(streamImplementation),
     interrupt: vi.fn(async () => {}),
+    updateSettings: vi.fn<FactoryDroidSession['updateSettings']>(
+      async () => ({}),
+    ),
+    getContextStats: vi.fn<FactoryDroidSession['getContextStats']>(
+      async () => ({
+        used: 40,
+        remaining: 60,
+        limit: 100,
+        accuracy: ContextStatsAccuracy.Exact,
+        updatedAt: new Date().toISOString(),
+      }),
+    ),
     close: vi.fn(async () => {}),
+  };
+}
+
+function availableModel(
+  id: string,
+  displayName: string,
+  supportedReasoningEfforts: readonly ReasoningEffort[],
+): AvailableModelConfig {
+  return {
+    id,
+    displayName,
+    shortDisplayName: displayName,
+    modelProvider: ModelProvider.FACTORY,
+    supportedReasoningEfforts: [...supportedReasoningEfforts],
+    defaultReasoningEffort:
+      supportedReasoningEfforts[0] ?? ReasoningEffort.Medium,
+    isCustom: id.startsWith('custom:'),
   };
 }
 

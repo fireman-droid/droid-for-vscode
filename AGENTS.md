@@ -1,8 +1,7 @@
 # Project Instructions
 
-This repository uses one primary agent plus dedicated backend and frontend
-code-writing subagents. Avoid broader multi-agent orchestration unless the
-user explicitly asks for it.
+This repository uses one implementation agent. Do not delegate repository
+work to subagents unless the user explicitly asks for delegation.
 
 ## Current phase
 
@@ -13,50 +12,36 @@ is production-wired, partial, probe-only, or not implemented. Follow
 `docs/product/delivery-plan.md` for module order, execution boundaries, and
 completion criteria.
 
-The Cursor Secondary Sidebar is the primary chat surface. The previous UI
-specification and concept images are obsolete and must not be restored or used
-as implementation requirements. Do not invent unsupported Droid capabilities
-or turn visual sample data into an implicit runtime contract.
+The Cursor Secondary Sidebar is the primary chat surface. The retained Module
+1 main-chat prototype is the visual reference for the warm DroidVisX shell,
+responsive spacing, activity rows, and Composer. It is not a Runtime contract,
+and visual sample data must not be treated as real Droid capability data. Do
+not invent unsupported Droid capabilities.
 
 ## Execution model
 
-- The primary agent owns requirements, repository inspection, planning,
-  architecture, integration, validation, review, status tracking, and the
-  final answer.
-- Delegate Runtime, Extension Host, shared Bridge contract, and related test
-  implementation to `backend-writer`.
-- Delegate Webview, assistant-ui, styling, accessibility, and related test
-  implementation to `frontend-writer`.
-- Both writers use the configured BYOK `custom:gpt-5.6-terra` model.
-- The primary agent defines one bounded vertical slice, explicit file
-  ownership, acceptance criteria, and the integration boundary for both
-  writers.
-- `backend-writer` owns `src/runtime/**`, `src/extension/**`, and
-  `src/shared/**` by default. `frontend-writer` owns `src/webview/**` by
-  default.
-- Stabilize and review the shared Bridge contract before frontend
-  implementation consumes it.
-- Run the two writers in parallel only when the shared contract is already
-  frozen and their file ownership is disjoint. Otherwise run backend first,
-  then frontend.
-- Do not invoke planner, explorer, tester, reviewer, or research subagents as a
-  routine workflow. Use another subagent only when the user explicitly asks.
-- Never let the writers edit the same file or silently change each other's
-  contracts.
+- The active agent owns requirements, repository inspection, planning,
+  architecture, implementation, integration, validation, review, status
+  tracking, and the final answer.
+- Define one bounded vertical slice with an observable completion criterion.
+- Stabilize shared Bridge contracts before changing their consumers.
+- Preserve explicit boundaries between Runtime, Extension Host, shared Bridge,
+  and Webview code even though one agent implements all layers.
+- Do not invoke planner, explorer, writer, tester, reviewer, or research
+  subagents unless the user explicitly requests them.
 
 ## Delivery loop
 
-1. The primary agent inspects only the code needed for the requested feature.
+1. The active agent inspects only the code needed for the requested feature.
 2. Define one user-visible vertical slice and an observable completion
    criterion.
-3. Delegate Runtime, Host, Bridge contract, and backend tests to
-   `backend-writer`.
-4. After the Bridge contract is frozen, delegate Webview and frontend tests to
-   `frontend-writer`.
-5. The primary agent reviews and integrates both results, then runs focused
-   validation.
+3. Implement the smallest required Runtime, Host, Bridge, and Webview changes
+   in dependency order.
+4. Run focused validation while implementing.
+5. Review the integrated result and fix correctness, accessibility,
+   responsiveness, and visual issues.
 6. Run broad tests, type checks, and builds once at the end when justified.
-7. Package and perform visible Cursor verification when the requested slice
+7. Package and perform visible browser and Cursor verification when the slice
    affects the extension UI.
 8. Update `docs/product/implementation-status.md` in the same change.
 

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  BRIDGE_PROTOCOL_VERSION,
   MAX_ASSISTANT_TEXT_LENGTH,
   MAX_THINKING_TEXT_LENGTH,
   type HostToWebviewMessage,
@@ -162,28 +163,34 @@ describe('ChatController', () => {
     );
   });
 
-  it('enters streaming before a tool-first activity and coalesces duplicates', async () => {
+  it('enters streaming before tool activity and projects safe progress', async () => {
     const runtime = createMockRuntime(async function* () {
       yield {
         type: 'tool-start',
         toolName: 'Read',
         toolUseId: 'tool-1',
+        action: 'Read workspace files',
       };
       yield {
         type: 'tool-progress',
         toolName: 'Read',
         toolUseId: 'tool-1',
+        action: 'Read workspace files',
+        updateKind: 'status',
       };
       yield {
         type: 'tool-result',
         toolName: 'Read',
         toolUseId: 'tool-1',
+        action: 'Read workspace files',
         isError: false,
       };
       yield {
         type: 'tool-progress',
         toolName: 'Read',
         toolUseId: 'tool-1',
+        action: 'Read workspace files',
+        updateKind: 'message',
       };
       yield successfulTurn();
     });
@@ -201,12 +208,26 @@ describe('ChatController', () => {
       expect.objectContaining({
         toolUseId: 'tool-1',
         toolName: 'Read',
+        action: 'Read workspace files',
         status: 'running',
+        progressCount: 0,
+        latestUpdateKind: null,
       }),
       expect.objectContaining({
         toolUseId: 'tool-1',
         toolName: 'Read',
+        action: 'Read workspace files',
+        status: 'running',
+        progressCount: 1,
+        latestUpdateKind: 'status',
+      }),
+      expect.objectContaining({
+        toolUseId: 'tool-1',
+        toolName: 'Read',
+        action: 'Read workspace files',
         status: 'completed',
+        progressCount: 1,
+        latestUpdateKind: 'status',
       }),
     ]);
     expect(
@@ -385,6 +406,7 @@ describe('ChatController', () => {
         type: 'tool-start',
         toolName: 'LateSensitiveTool',
         toolUseId: 'late-sensitive-id',
+        action: 'Used Late Sensitive Tool',
       };
       yield { type: 'working-state', isWorking: true };
       yield { type: 'error' };
@@ -1008,7 +1030,7 @@ describe('ChatController', () => {
     });
   });
 
-  it('hydrates and persists public old-session history before activation commit', async () => {
+  it('reconciles and persists public history with locally recovered content before activation commit', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
     seed.writeSession(
@@ -1069,19 +1091,33 @@ describe('ChatController', () => {
     });
     expect(snapshots(messages).at(-1)).toMatchObject({
       sessionId: 'saved-session',
-      historyStatus: 'complete',
+      historyStatus: 'partial',
       truncated: false,
       transcript: [
         { kind: 'user', text: 'Loaded old prompt' },
         { kind: 'assistant', text: 'Loaded old answer' },
+        { kind: 'user', text: 'Cached fallback' },
       ],
     });
-    expect(JSON.stringify(messages)).not.toContain('Cached fallback');
     expect(writeSession).toHaveBeenCalledWith(
       'saved-session',
-      historyState,
+      expect.objectContaining({
+        historyStatus: 'partial',
+        truncated: false,
+        transcript: [
+          ...historyState.transcript,
+          expect.objectContaining({ text: 'Cached fallback' }),
+        ],
+      }),
     );
-    expect(recovery.readSession('saved-session')).toEqual(historyState);
+    expect(recovery.readSession('saved-session')).toMatchObject({
+      historyStatus: 'partial',
+      truncated: false,
+      transcript: [
+        ...historyState.transcript,
+        expect.objectContaining({ text: 'Cached fallback' }),
+      ],
+    });
   });
 
   it('falls back to recovery when public old-session history is unavailable', async () => {
@@ -1417,6 +1453,9 @@ describe('ChatController', () => {
       request: { kind: 'ask-user' },
     });
     release.resolve();
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
   });
 
   it('marks an uncached external session unavailable then partial after an observed turn', async () => {
@@ -2446,6 +2485,470 @@ describe('ChatController', () => {
     );
   });
 
+  it('loads settings, context, and the fail-closed model catalog after activation and snapshots them on reload', async () => {
+    const runtime = createMockRuntime();
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(
+        lastMessage(messages, 'session.settings'),
+      ).toMatchObject({
+        settings: {
+          status: 'ready',
+          value: {
+            modelId: 'model-1',
+            interactionMode: 'auto',
+          },
+        },
+      });
+      expect(
+        lastMessage(messages, 'session.context'),
+      ).toMatchObject({
+        context: {
+          status: 'ready',
+          value: { used: 40, remaining: 60, limit: 100 },
+        },
+      });
+      expect(
+        lastMessage(messages, 'session.model-catalog'),
+      ).toMatchObject({
+        modelCatalog: { status: 'unsupported', items: [] },
+      });
+    });
+
+    ready(controller);
+    await vi.waitFor(() => {
+      expect(snapshots(messages).at(-1)).toMatchObject({
+        settings: { status: 'ready' },
+        context: { status: 'ready' },
+        modelCatalog: { status: 'unsupported', items: [] },
+      });
+    });
+  });
+
+  it('updates stable settings from the authoritative reread and refuses model updates without a catalog', async () => {
+    const runtime = createMockRuntime();
+    runtime.updateSessionSetting.mockResolvedValue({
+      interactionMode: 'mission',
+      modelId: 'model-1',
+      reasoningEffort: 'high',
+      autonomyLevel: 'medium',
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(runtime.readSessionSettings).toHaveBeenCalledOnce();
+    });
+
+    controller.handleMessage({
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'modelId',
+      value: 'unverified-model',
+    });
+    expect(runtime.updateSessionSetting).not.toHaveBeenCalled();
+    expect(messages.at(-1)).toMatchObject({
+      type: 'runtime.diagnostic',
+      code: 'settings-update-unsupported',
+    });
+
+    controller.handleMessage({
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'interactionMode',
+      value: 'spec',
+    });
+    await vi.waitFor(() => {
+      expect(runtime.updateSessionSetting).toHaveBeenCalledWith({
+        field: 'interactionMode',
+        value: 'spec',
+      });
+      expect(
+        lastMessage(messages, 'session.settings'),
+      ).toMatchObject({
+        settings: {
+          status: 'ready',
+          value: { interactionMode: 'mission' },
+        },
+      });
+    });
+  });
+
+  it('allows model and reasoning updates only from the projected Droid catalog', async () => {
+    const runtime = createMockRuntime();
+    runtime.readModelCatalog.mockResolvedValue({
+      status: 'available',
+      items: [
+        {
+          id: 'model-1',
+          displayName: 'Model One',
+          supportedReasoningEfforts: ['high'],
+        },
+        {
+          id: 'model-2',
+          displayName: 'Model Two',
+          supportedReasoningEfforts: ['low', 'medium'],
+        },
+      ],
+    });
+    runtime.updateSessionSetting
+      .mockResolvedValueOnce({
+        interactionMode: 'auto',
+        modelId: 'model-2',
+        reasoningEffort: 'medium',
+        autonomyLevel: 'medium',
+      })
+      .mockResolvedValueOnce({
+        interactionMode: 'auto',
+        modelId: 'model-2',
+        reasoningEffort: 'low',
+        autonomyLevel: 'medium',
+      });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(
+        lastMessage(messages, 'session.model-catalog'),
+      ).toMatchObject({
+        modelCatalog: {
+          status: 'ready',
+          items: [
+            { id: 'model-1', displayName: 'Model One' },
+            { id: 'model-2', displayName: 'Model Two' },
+          ],
+        },
+      });
+    });
+
+    controller.handleMessage({
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'modelId',
+      value: 'model-2',
+    });
+    await vi.waitFor(() => {
+      expect(runtime.updateSessionSetting).toHaveBeenNthCalledWith(1, {
+        field: 'modelId',
+        value: 'model-2',
+      });
+      expect(
+        lastMessage(messages, 'session.settings'),
+      ).toMatchObject({
+        settings: {
+          status: 'ready',
+          value: { modelId: 'model-2', reasoningEffort: 'medium' },
+        },
+      });
+    });
+    controller.handleMessage({
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'reasoningEffort',
+      value: 'low',
+    });
+    await vi.waitFor(() => {
+      expect(runtime.updateSessionSetting).toHaveBeenNthCalledWith(2, {
+        field: 'reasoningEffort',
+        value: 'low',
+      });
+      expect(
+        lastMessage(messages, 'session.settings'),
+      ).toMatchObject({
+        settings: {
+          status: 'ready',
+          value: { modelId: 'model-2', reasoningEffort: 'low' },
+        },
+      });
+    });
+
+    controller.handleMessage({
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'reasoningEffort',
+      value: 'max',
+    });
+    expect(runtime.updateSessionSetting).toHaveBeenCalledTimes(2);
+    expect(messages.at(-1)).toMatchObject({
+      type: 'runtime.diagnostic',
+      code: 'settings-update-unsupported',
+    });
+  });
+
+  it('rejects wrong-session and duplicate setting updates and retains confirmed values on failure', async () => {
+    const update = deferred<never>();
+    const runtime = createMockRuntime();
+    runtime.updateSessionSetting.mockReturnValue(update.promise);
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(runtime.readSessionSettings).toHaveBeenCalledOnce();
+    });
+
+    controller.handleMessage({
+      type: 'session.setting.update',
+      sessionId: 'wrong-session',
+      field: 'autonomyLevel',
+      value: 'high',
+    });
+    expect(runtime.updateSessionSetting).not.toHaveBeenCalled();
+
+    controller.handleMessage({
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'autonomyLevel',
+      value: 'high',
+    });
+    controller.handleMessage({
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'interactionMode',
+      value: 'spec',
+    });
+    expect(runtime.updateSessionSetting).toHaveBeenCalledOnce();
+    expect(messages.at(-1)).toMatchObject({
+      type: 'runtime.diagnostic',
+      code: 'settings-update-blocked',
+    });
+
+    update.reject(new Error('sensitive SDK failure'));
+    await vi.waitFor(() => {
+      expect(
+        lastMessage(messages, 'session.settings'),
+      ).toMatchObject({
+        settings: {
+          status: 'error',
+          value: { autonomyLevel: 'medium' },
+          message: 'Droid session settings could not be updated.',
+        },
+      });
+    });
+  });
+
+  it('applies an authoritative setting update while a turn is active', async () => {
+    const release = deferred<void>();
+    const runtime = createMockRuntime(async function* () {
+      await release.promise;
+      yield successfulTurn();
+    });
+    runtime.updateSessionSetting.mockResolvedValue({
+      interactionMode: 'auto',
+      modelId: 'model-1',
+      reasoningEffort: 'high',
+      autonomyLevel: 'high',
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(runtime.readSessionSettings).toHaveBeenCalledOnce();
+    });
+
+    send(controller, 'session-1', 'active-turn', 'Keep working');
+    await vi.waitFor(() => {
+      expect(runtime.sendTurn).toHaveBeenCalledOnce();
+    });
+    controller.handleMessage({
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'autonomyLevel',
+      value: 'high',
+    });
+
+    await vi.waitFor(() => {
+      expect(runtime.updateSessionSetting).toHaveBeenCalledWith({
+        field: 'autonomyLevel',
+        value: 'high',
+      });
+      expect(lastMessage(messages, 'session.settings')).toMatchObject({
+        settings: {
+          status: 'ready',
+          value: { autonomyLevel: 'high' },
+        },
+      });
+    });
+    release.resolve();
+  });
+
+  it('rereads authoritative settings when the SDK reports a settings change', async () => {
+    const runtime = createMockRuntime(async function* () {
+      yield { type: 'settings-updated' };
+      yield successfulTurn();
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(runtime.readSessionSettings).toHaveBeenCalledOnce();
+    });
+    runtime.readSessionSettings.mockResolvedValue({
+      interactionMode: 'auto',
+      modelId: 'model-1',
+      reasoningEffort: 'high',
+      autonomyLevel: 'medium',
+    });
+
+    send(controller, 'session-1', 'settings-event', 'Implement the plan');
+
+    await vi.waitFor(() => {
+      expect(runtime.readSessionSettings).toHaveBeenCalledTimes(2);
+      expect(lastMessage(messages, 'session.settings')).toMatchObject({
+        settings: {
+          status: 'ready',
+          value: { interactionMode: 'auto' },
+        },
+      });
+    });
+  });
+
+  it('refreshes context on activation, explicit refresh, and terminal turn completion', async () => {
+    const runtime = createMockRuntime();
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(runtime.readContextStats).toHaveBeenCalledTimes(1);
+    });
+
+    controller.handleMessage({
+      type: 'session.context.refresh',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(runtime.readContextStats).toHaveBeenCalledTimes(2);
+    });
+
+    send(controller, 'session-1', 'turn-context', 'Continue');
+    await vi.waitFor(() => {
+      expect(runtime.readContextStats).toHaveBeenCalledTimes(3);
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
+  });
+
+  it('retains confirmed context across a failed refresh and retries once', async () => {
+    const runtime = createMockRuntime();
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'session.context')).toMatchObject({
+        context: {
+          status: 'ready',
+          value: { used: 40, remaining: 60, limit: 100 },
+        },
+      });
+    });
+    runtime.readContextStats.mockRejectedValueOnce(
+      new Error('sensitive SDK failure'),
+    );
+
+    controller.handleMessage({
+      type: 'session.context.refresh',
+      sessionId: 'session-1',
+    });
+    controller.handleMessage({
+      type: 'session.context.refresh',
+      sessionId: 'session-1',
+    });
+
+    await vi.waitFor(() => {
+      expect(runtime.readContextStats).toHaveBeenCalledTimes(2);
+      expect(lastMessage(messages, 'session.context')).toMatchObject({
+        context: {
+          status: 'error',
+          value: { used: 40, remaining: 60, limit: 100 },
+          message: expect.stringContaining('DroidVisX Logs'),
+        },
+      });
+    });
+    runtime.readContextStats.mockResolvedValueOnce({
+      used: 145,
+      remaining: 154,
+      limit: 100,
+      accuracy: 'estimated',
+    });
+    controller.handleMessage({
+      type: 'session.context.refresh',
+      sessionId: 'session-1',
+    });
+
+    await vi.waitFor(() => {
+      expect(runtime.readContextStats).toHaveBeenCalledTimes(3);
+      expect(lastMessage(messages, 'session.context')).toMatchObject({
+        context: {
+          status: 'ready',
+          value: {
+            used: 145,
+            remaining: 154,
+            limit: 100,
+            accuracy: 'estimated',
+          },
+        },
+      });
+    });
+  });
+
+  it('discards a stale setting update after a workspace generation change', async () => {
+    const workspace = {
+      cwd: 'C:\\workspace-a' as string | null,
+      trusted: true,
+    };
+    const update = deferred<{
+      interactionMode: 'mission';
+      modelId: 'stale-model';
+      reasoningEffort: 'max';
+      autonomyLevel: 'high';
+    }>();
+    const runtime = createMockRuntime();
+    runtime.updateSessionSetting.mockReturnValue(update.promise);
+    const { controller, messages } = createController(
+      () => runtime,
+      workspace,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(runtime.readSessionSettings).toHaveBeenCalledOnce();
+    });
+
+    controller.handleMessage({
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'interactionMode',
+      value: 'mission',
+    });
+    await vi.waitFor(() => {
+      expect(runtime.updateSessionSetting).toHaveBeenCalledOnce();
+    });
+    const changedAt = messages.length;
+    workspace.trusted = false;
+    controller.handleWorkspaceContextChanged();
+    update.resolve({
+      interactionMode: 'mission',
+      modelId: 'stale-model',
+      reasoningEffort: 'max',
+      autonomyLevel: 'high',
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(
+      messages.slice(changedAt).some(
+        (message) =>
+          message.type === 'session.settings' &&
+          message.settings.status === 'ready' &&
+          message.settings.value.modelId === 'stale-model',
+      ),
+    ).toBe(false);
+    expect(snapshots(messages).at(-1)?.settings).toEqual({
+      status: 'loading',
+      value: null,
+    });
+  });
+
   it('flushes and disposes recovery state with the runtime exactly once', async () => {
     const recovery = new SessionRecoveryStore(
       createMemoryPersistence(),
@@ -2485,6 +2988,18 @@ interface MockRuntime extends DroidRuntime {
   sendTurn: ReturnType<
     typeof vi.fn<(text: string) => AsyncIterable<RuntimeEvent>>
   >;
+  readSessionSettings: ReturnType<
+    typeof vi.fn<DroidRuntime['readSessionSettings']>
+  >;
+  readContextStats: ReturnType<
+    typeof vi.fn<DroidRuntime['readContextStats']>
+  >;
+  readModelCatalog: ReturnType<
+    typeof vi.fn<DroidRuntime['readModelCatalog']>
+  >;
+  updateSessionSetting: ReturnType<
+    typeof vi.fn<DroidRuntime['updateSessionSetting']>
+  >;
   interrupt: ReturnType<typeof vi.fn<() => Promise<void>>>;
   dispose: ReturnType<typeof vi.fn<() => Promise<void>>>;
 }
@@ -2496,6 +3011,27 @@ function createMockRuntime(
 ): MockRuntime {
   return {
     initialize: vi.fn(async () => available()),
+    readSessionSettings: vi.fn(async () => ({
+      interactionMode: 'auto',
+      modelId: 'model-1',
+      reasoningEffort: 'high',
+      autonomyLevel: 'medium',
+    })),
+    readContextStats: vi.fn(async () => ({
+      used: 40,
+      remaining: 60,
+      limit: 100,
+      accuracy: 'exact',
+    })),
+    readModelCatalog: vi.fn(async () => ({
+      status: 'unavailable',
+    })),
+    updateSessionSetting: vi.fn(async () => ({
+      interactionMode: 'auto',
+      modelId: 'model-1',
+      reasoningEffort: 'high',
+      autonomyLevel: 'medium',
+    })),
     sendTurn: vi.fn(stream),
     interrupt: vi.fn(async () => {}),
     dispose: vi.fn(async () => {}),
@@ -2532,7 +3068,7 @@ function createController(
 function ready(controller: ChatController): void {
   controller.handleMessage({
     type: 'webview.ready',
-    protocolVersion: 1,
+    protocolVersion: BRIDGE_PROTOCOL_VERSION,
   });
 }
 
@@ -2653,6 +3189,24 @@ function snapshots(messages: readonly HostToWebviewMessage[]) {
   );
 }
 
+function lastMessage<
+  Type extends HostToWebviewMessage['type'],
+>(
+  messages: readonly HostToWebviewMessage[],
+  type: Type,
+): Extract<HostToWebviewMessage, { type: Type }> | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.type === type) {
+      return message as Extract<
+        HostToWebviewMessage,
+        { type: Type }
+      >;
+    }
+  }
+  return undefined;
+}
+
 function turnStates(messages: readonly HostToWebviewMessage[]) {
   return messages.filter(
     (
@@ -2722,8 +3276,10 @@ async function waitForConnected(
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
-  const promise = new Promise<T>((resolvePromise) => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }

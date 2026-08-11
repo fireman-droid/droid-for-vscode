@@ -15,15 +15,28 @@ describe('HistoryNotice', () => {
     );
   });
 
-  it('shows partial and truncation notices independently', () => {
+  it('combines partial history and local trimming into one truthful notice', () => {
     render(<HistoryNotice historyStatus="partial" truncated />);
     const notices = screen.getAllByRole('note');
-    expect(notices).toHaveLength(2);
+    expect(notices).toHaveLength(1);
     expect(notices[0]!.textContent).toContain(
-      'Some earlier session content is not shown',
+      'Some earlier session content is unavailable',
     );
-    expect(notices[1]!.textContent).toContain(
-      'Older messages are not shown',
+    expect(notices[0]!.textContent).toContain('were trimmed');
+  });
+
+  it('distinguishes partial public history from local trimming', () => {
+    const first = render(
+      <HistoryNotice historyStatus="partial" truncated={false} />,
+    );
+    expect(screen.getByRole('note').textContent).toContain(
+      'public Droid history',
+    );
+    first.unmount();
+
+    render(<HistoryNotice historyStatus="complete" truncated />);
+    expect(screen.getByRole('note').textContent).toContain(
+      'local display',
     );
   });
 });

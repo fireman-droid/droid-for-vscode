@@ -9,7 +9,16 @@ import {
   waitFor,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import type {
   HostToWebviewMessage,
@@ -43,8 +52,17 @@ beforeAll(() => {
   });
 });
 
+beforeEach(() => {
+  persistedState = { draft: 'Restored draft' };
+  posted.length = 0;
+  vscode.getState.mockClear();
+  vscode.setState.mockClear();
+  vscode.postMessage.mockClear();
+});
+
+afterEach(cleanup);
+
 afterAll(() => {
-  cleanup();
   Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
   vi.unstubAllGlobals();
 });
@@ -80,6 +98,29 @@ function snapshot(
         },
       ],
     },
+    settings: {
+      status: 'ready',
+      value: {
+        interactionMode: 'auto',
+        modelId: 'factory/gpt-5.6-sol',
+        reasoningEffort: 'high',
+        autonomyLevel: 'medium',
+      },
+    },
+    context: {
+      status: 'ready',
+      value: {
+        used: 20_000,
+        remaining: 180_000,
+        limit: 200_000,
+        accuracy: 'exact',
+      },
+    },
+    modelCatalog: {
+      status: 'unsupported',
+      items: [],
+      message: 'Model discovery is unavailable.',
+    },
     transcript: [],
     historyStatus: 'complete',
     truncated: false,
@@ -92,13 +133,37 @@ describe('assistant-ui App bridge commands', () => {
     render(<App />);
     expect(posted[0]).toEqual({
       type: 'webview.ready',
-      protocolVersion: 1,
+      protocolVersion: 2,
     });
     const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
     await waitFor(() => expect(input.value).toBe('Restored draft'));
 
     host(snapshot(0));
+    await user.click(screen.getByRole('button', { name: 'Session controls' }));
+    await user.click(screen.getByText('Mode').closest('button')!);
+    await user.click(screen.getByRole('radio', { name: /Spec/ }));
+    expect(posted).toContainEqual({
+      type: 'session.setting.update',
+      sessionId: 'session-a',
+      field: 'interactionMode',
+      value: 'spec',
+    });
+    await user.click(screen.getByLabelText(/Context used/));
+    await user.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(posted).toContainEqual({
+      type: 'session.context.refresh',
+      sessionId: 'session-a',
+    });
+
     fireEvent.change(input, { target: { value: 'Inspect this file' } });
+    fireEvent.keyDown(input, {
+      key: 'Enter',
+      code: 'Enter',
+      shiftKey: true,
+    });
+    expect(
+      posted.filter((message) => message.type === 'turn.send'),
+    ).toHaveLength(0);
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
     await waitFor(() =>
       expect(
@@ -116,6 +181,18 @@ describe('assistant-ui App bridge commands', () => {
       text: 'Inspect this file',
     });
     expect(persistedState).toEqual({ draft: '' });
+    expect(
+      screen.getByText(
+        'Droid is active · Stop before sending another message',
+      ),
+    ).toBeDefined();
+    expect(screen.getByText('Droid is responding')).toBeDefined();
+
+    fireEvent.change(input, { target: { value: 'Queue this' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    expect(
+      posted.filter((message) => message.type === 'turn.send'),
+    ).toHaveLength(1);
 
     await user.click(screen.getByRole('button', { name: 'Stop' }));
     expect(posted).toContainEqual({
@@ -215,5 +292,196 @@ describe('assistant-ui App bridge commands', () => {
       cancelled: true,
       answers: [],
     });
+  });
+
+  it('keeps Thinking synchronized and allows setting changes while streaming', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() =>
+      expect(posted[0]).toEqual({
+        type: 'webview.ready',
+        protocolVersion: 2,
+      }),
+    );
+    host({
+      ...snapshot(0, { turnId: 'turn-2', status: 'streaming' }),
+      modelCatalog: {
+        status: 'ready',
+        items: [
+          {
+            id: 'factory/gpt-5.6-sol',
+            displayName: 'Sol',
+            supportedReasoningEfforts: ['high'],
+          },
+          {
+            id: 'factory/model-next',
+            displayName: 'Next',
+            supportedReasoningEfforts: ['medium'],
+          },
+        ],
+      },
+      transcript: [
+        {
+          id: 'thinking-1',
+          kind: 'thinking',
+          turnId: 'turn-1',
+          text: 'First thought',
+          status: 'complete',
+          truncated: false,
+        },
+        {
+          id: 'assistant-1',
+          kind: 'assistant',
+          turnId: 'turn-1',
+          text: 'First answer',
+        },
+        {
+          id: 'thinking-2',
+          kind: 'thinking',
+          turnId: 'turn-2',
+          text: 'Second thought',
+          status: 'active',
+          truncated: false,
+        },
+      ],
+    });
+
+    const thinkingLabels = await screen.findAllByText('Thinking');
+    const thinkingRows = thinkingLabels.map((label) =>
+      label.closest('details'),
+    );
+    expect(thinkingRows).toHaveLength(2);
+    expect(thinkingRows.every((row) => row?.open === false)).toBe(true);
+
+    await user.click(thinkingLabels[0]!.closest('summary')!);
+    await waitFor(() =>
+      expect(thinkingRows.every((row) => row?.open)).toBe(true),
+    );
+    await user.click(thinkingLabels[1]!.closest('summary')!);
+    await waitFor(() =>
+      expect(thinkingRows.every((row) => row?.open === false)).toBe(true),
+    );
+
+    const sessionControls = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Session controls',
+    });
+    const context = screen.getByRole<HTMLButtonElement>('button', {
+      name: /Context used/,
+    });
+    const model = screen.getByRole<HTMLButtonElement>('button', {
+      name: /Model:/,
+    });
+    expect(sessionControls.disabled).toBe(false);
+    expect(context.disabled).toBe(false);
+    expect(model.disabled).toBe(false);
+
+    await user.click(sessionControls);
+    await user.click(screen.getByText('Mode').closest('button')!);
+    expect(
+      screen
+        .getAllByRole<HTMLButtonElement>('radio')
+        .every((option) => option.disabled),
+    ).toBe(false);
+    await user.click(screen.getByRole('radio', { name: /Spec/ }));
+    expect(posted).toContainEqual({
+      type: 'session.setting.update',
+      sessionId: 'session-a',
+      field: 'interactionMode',
+      value: 'spec',
+    });
+
+    await user.click(sessionControls);
+    await user.click(model);
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Next, factory/model-next',
+      }),
+    );
+    expect(posted).toContainEqual({
+      type: 'session.setting.update',
+      sessionId: 'session-a',
+      field: 'modelId',
+      value: 'factory/model-next',
+    });
+  });
+
+  it('shows semantic tool activity and supports Copy and draft-only Reuse', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText<HTMLTextAreaElement>('Message Droid').value,
+      ).toBe('Restored draft'),
+    );
+    host({
+      ...snapshot(0),
+      transcript: [
+        {
+          id: 'user-1',
+          kind: 'user',
+          text: 'Inspect the active file',
+        },
+        {
+          id: 'tool-1',
+          kind: 'tool',
+          turnId: 'turn-1',
+          toolUseId: 'private-tool-call-id',
+          toolName: 'Read',
+          action: 'Read workspace files',
+          status: 'completed',
+          progressCount: 2,
+          latestUpdateKind: 'tool-result',
+        },
+        {
+          id: 'tool-2',
+          kind: 'tool',
+          turnId: 'turn-1',
+          toolUseId: 'private-ask-user-id',
+          toolName: 'AskUser',
+          action: 'Requested your input',
+          status: 'failed',
+          progressCount: 0,
+          latestUpdateKind: null,
+        },
+      ],
+    });
+
+    expect(await screen.findByText('Read workspace files')).toBeDefined();
+    expect(screen.queryByText('private-tool-call-id')).toBeNull();
+    expect(
+      screen.getByText('2 progress updates · Latest: tool result'),
+    ).toBeDefined();
+    expect(screen.getByText('Lifecycle: Failed')).toBeDefined();
+    expect(screen.queryByText('No progress updates reported')).toBeNull();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Copy message' }),
+    );
+    expect(await navigator.clipboard.readText()).toBe(
+      'Inspect the active file',
+    );
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Reuse message in Composer',
+      }),
+    );
+    const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+    await waitFor(() =>
+      expect(input.value).toBe('Inspect the active file'),
+    );
+    expect(persistedState).toEqual({ draft: 'Inspect the active file' });
+    expect(
+      posted.filter((message) => message.type === 'turn.send'),
+    ).toEqual([]);
+
+    fireEvent.change(input, { target: { value: 'Different draft' } });
+    await user.dblClick(screen.getByText('Inspect the active file'));
+    await waitFor(() =>
+      expect(input.value).toBe('Inspect the active file'),
+    );
+    expect(
+      posted.filter((message) => message.type === 'turn.send'),
+    ).toEqual([]);
   });
 });

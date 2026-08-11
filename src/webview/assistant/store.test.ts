@@ -28,6 +28,29 @@ function snapshot(
         },
       ],
     },
+    settings: {
+      status: 'ready',
+      value: {
+        interactionMode: 'auto',
+        modelId: 'model-a',
+        reasoningEffort: 'medium',
+        autonomyLevel: 'low',
+      },
+    },
+    context: {
+      status: 'ready',
+      value: {
+        used: 10,
+        remaining: 90,
+        limit: 100,
+        accuracy: 'exact',
+      },
+    },
+    modelCatalog: {
+      status: 'unsupported',
+      items: [],
+      message: 'Unavailable',
+    },
     transcript: [],
     historyStatus: 'complete',
     truncated: false,
@@ -35,6 +58,67 @@ function snapshot(
 }
 
 describe('assistantWebviewReducer', () => {
+  it('isolates sequenced settings, context, and catalogs by session', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    const confirmed = state;
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.settings',
+        sequence: 1,
+        sessionId: 'session-other',
+        settings: {
+          status: 'ready',
+          value: {
+            interactionMode: 'mission',
+            modelId: 'must-not-leak',
+            reasoningEffort: 'max',
+            autonomyLevel: 'high',
+          },
+        },
+      },
+    });
+    expect(state.sequence).toBe(1);
+    expect(state.settings).toBe(confirmed.settings);
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.context',
+        sequence: 2,
+        sessionId: 'session-a',
+        context: {
+          status: 'ready',
+          value: {
+            used: 25,
+            remaining: 75,
+            limit: 100,
+            accuracy: 'estimated',
+          },
+        },
+      },
+    });
+    expect(state.context.value).toMatchObject({ used: 25 });
+
+    const accepted = state;
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.model-catalog',
+        sequence: 2,
+        sessionId: 'session-a',
+        modelCatalog: {
+          status: 'ready',
+          items: [],
+        },
+      },
+    });
+    expect(state).toBe(accepted);
+  });
+
   it('rejects stale sequences and advances past wrong-session deltas', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',
@@ -100,7 +184,10 @@ describe('assistantWebviewReducer', () => {
         turnId: 'turn-a',
         toolUseId: 'tool-a',
         toolName: 'Read',
+        action: 'Read workspace files',
         status: 'running',
+        progressCount: 0,
+        latestUpdateKind: null,
       },
     });
     state = assistantWebviewReducer(state, { type: 'turn.stop' });
@@ -223,7 +310,10 @@ describe('assistantWebviewReducer', () => {
             turnId: 'turn-a',
             toolUseId: 'tool-a',
             toolName: 'Read',
+            action: 'Read workspace files',
             status: 'running',
+            progressCount: 0,
+            latestUpdateKind: null,
           },
         ],
       },
@@ -258,7 +348,10 @@ describe('assistantWebviewReducer', () => {
             turnId: 'turn-a',
             toolUseId: 'tool-a',
             toolName: 'Read',
+            action: 'Read workspace files',
             status: 'running',
+            progressCount: 0,
+            latestUpdateKind: null,
           },
         ],
       },
@@ -272,7 +365,10 @@ describe('assistantWebviewReducer', () => {
         turnId: 'turn-a',
         toolUseId: 'tool-a',
         toolName: 'Read',
+        action: 'Read workspace files',
         status: 'failed',
+        progressCount: 1,
+        latestUpdateKind: 'error',
       },
     });
 
@@ -289,6 +385,48 @@ describe('assistantWebviewReducer', () => {
 
     expect(state.transcript).toMatchObject([
       { kind: 'tool', status: 'failed' },
+    ]);
+  });
+
+  it('replaces earlier same-turn errors with the terminal runtime failure', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: {
+        ...snapshot(),
+        turn: { turnId: 'turn-a', status: 'streaming' },
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'runtime.diagnostic',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        severity: 'error',
+        code: 'sdk-stream-error',
+        message: 'The Droid SDK stream failed.',
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'runtime.diagnostic',
+        sequence: 2,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        severity: 'error',
+        code: 'runtime-execution-failed',
+        message: 'Droid could not complete this turn.',
+      },
+    });
+
+    expect(state.transcript).toMatchObject([
+      {
+        kind: 'diagnostic',
+        code: 'runtime-execution-failed',
+        turnId: 'turn-a',
+      },
     ]);
   });
 });

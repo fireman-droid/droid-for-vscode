@@ -4,14 +4,20 @@ import {
   MAX_ASK_USER_ANSWER_LENGTH,
   MAX_BRIDGE_ID_LENGTH,
   MAX_EDITED_SPEC_LENGTH,
+  MAX_MODEL_ID_LENGTH,
   MAX_PERMISSION_OPTION_VALUE_LENGTH,
   MAX_TURN_TEXT_LENGTH,
+  SESSION_AUTONOMY_LEVELS,
+  SESSION_INTERACTION_MODES,
+  SESSION_REASONING_EFFORTS,
   type AskUserAnswer,
   type AskUserRespondMessage,
   type PermissionRespondMessage,
   type RuntimeRetryMessage,
+  type SessionContextRefreshMessage,
   type SessionNewMessage,
   type SessionSelectMessage,
+  type SessionSettingUpdateMessage,
   type SessionsRefreshMessage,
   type TurnSendMessage,
   type TurnStopMessage,
@@ -52,6 +58,10 @@ export function parseWebviewMessage(
         return parseSessionSelect(value);
       case 'session.new':
         return parseSessionNew(value);
+      case 'session.context.refresh':
+        return parseSessionContextRefresh(value);
+      case 'session.setting.update':
+        return parseSessionSettingUpdate(value);
       default:
         return undefined;
     }
@@ -265,11 +275,97 @@ function parseSessionNew(
   return { type: 'session.new' };
 }
 
+function parseSessionContextRefresh(
+  value: UnknownRecord,
+): SessionContextRefreshMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'session.context.refresh',
+    sessionId: value.sessionId,
+  };
+}
+
+function parseSessionSettingUpdate(
+  value: UnknownRecord,
+): SessionSettingUpdateMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'field', 'value']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  switch (value.field) {
+    case 'interactionMode':
+      return isEnumValue(value.value, SESSION_INTERACTION_MODES)
+        ? {
+            type: 'session.setting.update',
+            sessionId: value.sessionId,
+            field: 'interactionMode',
+            value: value.value,
+          }
+        : undefined;
+    case 'modelId':
+      return isSafeModelId(value.value)
+        ? {
+            type: 'session.setting.update',
+            sessionId: value.sessionId,
+            field: 'modelId',
+            value: value.value,
+          }
+        : undefined;
+    case 'reasoningEffort':
+      return isEnumValue(value.value, SESSION_REASONING_EFFORTS)
+        ? {
+            type: 'session.setting.update',
+            sessionId: value.sessionId,
+            field: 'reasoningEffort',
+            value: value.value,
+          }
+        : undefined;
+    case 'autonomyLevel':
+      return isEnumValue(value.value, SESSION_AUTONOMY_LEVELS)
+        ? {
+            type: 'session.setting.update',
+            sessionId: value.sessionId,
+            field: 'autonomyLevel',
+            value: value.value,
+          }
+        : undefined;
+    default:
+      return undefined;
+  }
+}
+
 function isId(value: unknown): value is string {
   return (
     typeof value === 'string' &&
     value.length > 0 &&
     value.length <= MAX_BRIDGE_ID_LENGTH
+  );
+}
+
+function isSafeModelId(value: unknown): value is string {
+  return (
+    isNonEmptyBoundedString(value, MAX_MODEL_ID_LENGTH) &&
+    value.trim() === value &&
+    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
+  );
+}
+
+function isEnumValue<const Values extends readonly string[]>(
+  value: unknown,
+  values: Values,
+): value is Values[number] {
+  return (
+    typeof value === 'string' &&
+    (values as readonly string[]).includes(value)
   );
 }
 

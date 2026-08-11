@@ -1,3 +1,5 @@
+import type { ToolActivityUpdateKind } from '../shared/toolActivity';
+
 export type RuntimeAvailability =
   | {
       status: 'available';
@@ -35,21 +37,28 @@ export type RuntimeEvent =
       type: 'tool-start';
       toolName: string;
       toolUseId: string;
+      action: string;
     }
   | {
       type: 'tool-progress';
       toolName: string;
       toolUseId: string;
+      action: string;
+      updateKind: ToolActivityUpdateKind;
     }
   | {
       type: 'tool-result';
       toolName: string;
       toolUseId: string;
+      action: string;
       isError: boolean;
     }
   | {
       type: 'working-state';
       isWorking: boolean;
+    }
+  | {
+      type: 'settings-updated';
     }
   | {
       type: 'error';

@@ -35,6 +35,9 @@ describe('getWebviewHtml', () => {
     expect(html).toContain(
       'style-src vscode-webview://test-source',
     );
+    expect(html).toContain(
+      'font-src vscode-webview://test-source',
+    );
     expect(html).toContain("connect-src 'none'");
     expect(html).not.toContain("'unsafe-inline'");
     expect(html).not.toContain("'unsafe-eval'");

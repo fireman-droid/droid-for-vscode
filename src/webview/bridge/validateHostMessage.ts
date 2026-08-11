@@ -11,6 +11,9 @@ import {
   MAX_EDITED_SPEC_LENGTH,
   MAX_INTERACTION_DETAIL_LENGTH,
   MAX_INTERACTION_TITLE_LENGTH,
+  MAX_MODEL_CATALOG_ITEMS,
+  MAX_MODEL_DISPLAY_NAME_LENGTH,
+  MAX_MODEL_ID_LENGTH,
   MAX_PERMISSION_OPTIONS,
   MAX_PERMISSION_OPTION_LABEL_LENGTH,
   MAX_PERMISSION_OPTION_VALUE_LENGTH,
@@ -21,12 +24,18 @@ import {
   MAX_SESSION_TITLE_LENGTH,
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_THINKING_TEXT_LENGTH,
+  MAX_TOOL_ACTION_SUMMARY_LENGTH,
   MAX_TOOL_NAME_LENGTH,
+  MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
   MAX_TURN_TEXT_LENGTH,
   PERMISSION_CONFIRMATION_KINDS,
+  SESSION_AUTONOMY_LEVELS,
   SESSION_CATALOG_STATUSES,
   SESSION_HISTORY_STATUSES,
+  SESSION_INTERACTION_MODES,
+  SESSION_REASONING_EFFORTS,
   TOOL_ACTIVITY_STATUSES,
+  TOOL_ACTIVITY_UPDATE_KINDS,
   TRANSCRIPT_THINKING_STATUSES,
   TRANSCRIPT_TOOL_STATUSES,
   TURN_STATUSES,
@@ -40,12 +49,20 @@ import {
   type PermissionInteractionRequest,
   type PermissionOption,
   type PermissionToolSummary,
+  type ModelCatalogItem,
+  type ModelCatalogState,
+  type SessionAutonomyLevel,
   type SessionCatalogState,
   type SessionCatalogStatus,
+  type SessionContextState,
+  type SessionInteractionMode,
+  type SessionReasoningEffort,
+  type SessionSettingsState,
   type SessionHistoryStatus,
   type SessionSummary,
   type SessionTranscriptItem,
   type ToolActivityMessage,
+  type ToolActivityUpdateKind,
   type TranscriptThinkingStatus,
   type TranscriptToolStatus,
   type TurnStatus,
@@ -56,6 +73,10 @@ import {
   isStrictRecord,
   type UnknownRecord,
 } from '../../shared/strictValidation';
+import {
+  MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
+  transcriptTextUnits,
+} from '../../shared/transcriptLimits';
 
 const MAX_STRING_LENGTH = MAX_TURN_TEXT_LENGTH;
 const CONNECTION_STATUS_SET = new Set<ConnectionState['status']>(
@@ -64,6 +85,9 @@ const CONNECTION_STATUS_SET = new Set<ConnectionState['status']>(
 const TURN_STATUS_SET = new Set<TurnStatus>(TURN_STATUSES);
 const TOOL_ACTIVITY_STATUS_SET = new Set<ToolActivityMessage['status']>(
   TOOL_ACTIVITY_STATUSES,
+);
+const TOOL_ACTIVITY_UPDATE_KIND_SET = new Set<ToolActivityUpdateKind>(
+  TOOL_ACTIVITY_UPDATE_KINDS,
 );
 const DIAGNOSTIC_SEVERITY_SET = new Set<DiagnosticSeverity>(
   DIAGNOSTIC_SEVERITIES,
@@ -82,20 +106,39 @@ const TRANSCRIPT_TOOL_STATUS_SET = new Set<TranscriptToolStatus>(
 );
 const PERMISSION_CONFIRMATION_KIND_SET =
   new Set<PermissionConfirmationKind>(PERMISSION_CONFIRMATION_KINDS);
+const SESSION_INTERACTION_MODE_SET = new Set<SessionInteractionMode>(
+  SESSION_INTERACTION_MODES,
+);
+const SESSION_AUTONOMY_LEVEL_SET = new Set<SessionAutonomyLevel>(
+  SESSION_AUTONOMY_LEVELS,
+);
+const SESSION_REASONING_EFFORT_SET = new Set<SessionReasoningEffort>(
+  SESSION_REASONING_EFFORTS,
+);
 
 export function readHostMessage(
   value: unknown,
 ): HostToWebviewMessage | undefined {
   try {
-    if (!isStrictRecord(value) || typeof value.type !== 'string') {
+    if (!isStrictRecord(value)) {
+      return undefined;
+    }
+    const type = readStringDataProperty(value, 'type');
+    if (type === undefined) {
       return undefined;
     }
 
-    switch (value.type) {
+    switch (type) {
       case 'host.snapshot':
         return parseHostSnapshot(value);
       case 'host.connection':
         return parseHostConnection(value);
+      case 'session.settings':
+        return parseSessionSettingsMessage(value);
+      case 'session.context':
+        return parseSessionContextMessage(value);
+      case 'session.model-catalog':
+        return parseModelCatalogMessage(value);
       case 'assistant.delta':
         return parseAssistantDelta(value);
       case 'thinking.delta':
@@ -133,6 +176,9 @@ function parseHostSnapshot(
       'connection',
       'turn',
       'sessions',
+      'settings',
+      'context',
+      'modelCatalog',
       'transcript',
       'historyStatus',
       'truncated',
@@ -148,11 +194,17 @@ function parseHostSnapshot(
   const connection = parseConnection(value.connection);
   const turn = parseSnapshotTurn(value.turn);
   const sessions = parseSessionCatalog(value.sessions, value.sessionId);
+  const settings = parseSessionSettings(value.settings);
+  const context = parseSessionContext(value.context);
+  const modelCatalog = parseModelCatalog(value.modelCatalog);
   const transcript = parseSessionTranscript(value.transcript);
   if (
     connection === undefined ||
     turn === undefined ||
     sessions === undefined ||
+    settings === undefined ||
+    context === undefined ||
+    modelCatalog === undefined ||
     transcript === undefined ||
     (value.sessionId === null &&
       (turn !== null ||
@@ -171,10 +223,84 @@ function parseHostSnapshot(
     connection,
     turn,
     sessions,
+    settings,
+    context,
+    modelCatalog,
     transcript,
     historyStatus: value.historyStatus,
     truncated: value.truncated,
   };
+}
+
+function parseSessionSettingsMessage(
+  value: UnknownRecord,
+): Extract<HostToWebviewMessage, { type: 'session.settings' }> | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sequence', 'sessionId', 'settings']) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+  const settings = parseSessionSettings(value.settings);
+  return settings === undefined
+    ? undefined
+    : {
+        type: 'session.settings',
+        sequence: value.sequence,
+        sessionId: value.sessionId,
+        settings,
+      };
+}
+
+function parseSessionContextMessage(
+  value: UnknownRecord,
+): Extract<HostToWebviewMessage, { type: 'session.context' }> | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sequence', 'sessionId', 'context']) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+  const context = parseSessionContext(value.context);
+  return context === undefined
+    ? undefined
+    : {
+        type: 'session.context',
+        sequence: value.sequence,
+        sessionId: value.sessionId,
+        context,
+      };
+}
+
+function parseModelCatalogMessage(
+  value: UnknownRecord,
+): Extract<
+  HostToWebviewMessage,
+  { type: 'session.model-catalog' }
+> | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sequence',
+      'sessionId',
+      'modelCatalog',
+    ]) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+  const modelCatalog = parseModelCatalog(value.modelCatalog);
+  return modelCatalog === undefined
+    ? undefined
+    : {
+        type: 'session.model-catalog',
+        sequence: value.sequence,
+        sessionId: value.sessionId,
+        modelCatalog,
+      };
 }
 
 function parseHostConnection(
@@ -293,12 +419,25 @@ function parseToolActivity(
       'turnId',
       'toolUseId',
       'toolName',
+      'action',
       'status',
+      'progressCount',
+      'latestUpdateKind',
     ]) ||
     !hasTurnIdentity(value) ||
     !isId(value.toolUseId) ||
     !isNonEmptyBoundedString(value.toolName, MAX_TOOL_NAME_LENGTH) ||
-    !isToolActivityStatus(value.status)
+    !isNonEmptyBoundedString(
+      value.action,
+      MAX_TOOL_ACTION_SUMMARY_LENGTH,
+    ) ||
+    !isToolActivityStatus(value.status) ||
+    !isBoundedToolProgressCount(value.progressCount) ||
+    !isNullableToolActivityUpdateKind(value.latestUpdateKind) ||
+    !hasConsistentToolProgress(
+      value.progressCount,
+      value.latestUpdateKind,
+    )
   ) {
     return undefined;
   }
@@ -310,7 +449,10 @@ function parseToolActivity(
     turnId: value.turnId,
     toolUseId: value.toolUseId,
     toolName: value.toolName,
+    action: value.action,
     status: value.status,
+    progressCount: value.progressCount,
+    latestUpdateKind: value.latestUpdateKind,
   };
 }
 
@@ -672,7 +814,7 @@ function parseAskUserQuestion(
       value.question,
       MAX_ASK_USER_QUESTION_LENGTH,
     ) ||
-    !isExactArray(value.options, 1, MAX_ASK_USER_OPTIONS) ||
+    !isExactArray(value.options, 0, MAX_ASK_USER_OPTIONS) ||
     typeof value.multiSelect !== 'boolean' ||
     !value.options.every((option) =>
       isNonEmptyBoundedString(option, MAX_ASK_USER_OPTION_LENGTH),
@@ -687,6 +829,252 @@ function parseAskUserQuestion(
     question: value.question,
     options: [...value.options],
     multiSelect: value.multiSelect,
+  };
+}
+
+function parseSessionSettings(
+  value: unknown,
+): SessionSettingsState | undefined {
+  if (!isStrictRecord(value)) {
+    return undefined;
+  }
+  const status = readStringDataProperty(value, 'status');
+  if (status === undefined) {
+    return undefined;
+  }
+
+  if (status === 'error') {
+    if (
+      !hasExactKeys(value, ['status', 'value', 'message']) ||
+      !isBoundedString(value.message, MAX_STRING_LENGTH)
+    ) {
+      return undefined;
+    }
+    const confirmed =
+      value.value === null ? null : parseConfirmedSettings(value.value);
+    return confirmed === undefined
+      ? undefined
+      : {
+          status: 'error',
+          value: confirmed,
+          message: value.message,
+        };
+  }
+
+  if (
+    (status !== 'loading' &&
+      status !== 'ready' &&
+      status !== 'updating') ||
+    !hasExactKeys(value, ['status', 'value'])
+  ) {
+    return undefined;
+  }
+  const confirmed =
+    value.value === null ? null : parseConfirmedSettings(value.value);
+  if (
+    confirmed === undefined ||
+    ((status === 'ready' || status === 'updating') &&
+      confirmed === null)
+  ) {
+    return undefined;
+  }
+  if (status === 'loading') {
+    return { status: 'loading', value: confirmed };
+  }
+  if (confirmed === null) {
+    return undefined;
+  }
+  return status === 'ready'
+    ? { status: 'ready', value: confirmed }
+    : { status: 'updating', value: confirmed };
+}
+
+function parseConfirmedSettings(
+  value: unknown,
+): Exclude<SessionSettingsState['value'], null> | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, [
+      'interactionMode',
+      'modelId',
+      'reasoningEffort',
+      'autonomyLevel',
+    ]) ||
+    !isSessionInteractionMode(value.interactionMode) ||
+    !isSafeModelId(value.modelId) ||
+    !isSessionReasoningEffort(value.reasoningEffort) ||
+    !isSessionAutonomyLevel(value.autonomyLevel)
+  ) {
+    return undefined;
+  }
+  return {
+    interactionMode: value.interactionMode,
+    modelId: value.modelId,
+    reasoningEffort: value.reasoningEffort,
+    autonomyLevel: value.autonomyLevel,
+  };
+}
+
+function parseSessionContext(
+  value: unknown,
+): SessionContextState | undefined {
+  if (!isStrictRecord(value)) {
+    return undefined;
+  }
+  const status = readStringDataProperty(value, 'status');
+  if (status === undefined) {
+    return undefined;
+  }
+
+  if (status === 'error') {
+    if (
+      !hasExactKeys(value, ['status', 'value', 'message']) ||
+      !isBoundedString(value.message, MAX_STRING_LENGTH)
+    ) {
+      return undefined;
+    }
+    const context =
+      value.value === null ? null : parseContextStats(value.value);
+    return context === undefined
+      ? undefined
+      : { status: 'error', value: context, message: value.message };
+  }
+  if (
+    (status !== 'loading' && status !== 'ready') ||
+    !hasExactKeys(value, ['status', 'value'])
+  ) {
+    return undefined;
+  }
+  const context =
+    value.value === null ? null : parseContextStats(value.value);
+  if (
+    context === undefined ||
+    (status === 'ready' && context === null)
+  ) {
+    return undefined;
+  }
+  if (status === 'loading') {
+    return { status: 'loading', value: context };
+  }
+  return context === null
+    ? undefined
+    : { status: 'ready', value: context };
+}
+
+function parseContextStats(
+  value: unknown,
+): Exclude<SessionContextState['value'], null> | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, ['used', 'remaining', 'limit', 'accuracy']) ||
+    !isContextNumber(value.used) ||
+    !isContextNumber(value.remaining) ||
+    !isContextNumber(value.limit) ||
+    (value.accuracy !== 'exact' && value.accuracy !== 'estimated')
+  ) {
+    return undefined;
+  }
+  return {
+    used: value.used,
+    remaining: value.remaining,
+    limit: value.limit,
+    accuracy: value.accuracy,
+  };
+}
+
+function parseModelCatalog(value: unknown): ModelCatalogState | undefined {
+  if (!isStrictRecord(value)) {
+    return undefined;
+  }
+  const status = readStringDataProperty(value, 'status');
+  if (status === undefined) {
+    return undefined;
+  }
+
+  if (status === 'ready') {
+    if (
+      !hasExactKeys(value, ['status', 'items']) ||
+      !isExactArray(value.items, 0, MAX_MODEL_CATALOG_ITEMS)
+    ) {
+      return undefined;
+    }
+    const items: ModelCatalogItem[] = [];
+    const ids = new Set<string>();
+    for (const itemValue of value.items) {
+      const item = parseModelCatalogItem(itemValue);
+      if (item === undefined || ids.has(item.id)) {
+        return undefined;
+      }
+      ids.add(item.id);
+      items.push(item);
+    }
+    return { status: 'ready', items };
+  }
+
+  if (
+    status !== 'loading' &&
+    status !== 'error' &&
+    status !== 'unsupported'
+  ) {
+    return undefined;
+  }
+  const expectsMessage =
+    status === 'error' || status === 'unsupported';
+  if (
+    !hasExactKeys(
+      value,
+      expectsMessage ? ['status', 'items', 'message'] : ['status', 'items'],
+    ) ||
+    !isExactArray(value.items, 0, 0) ||
+    (expectsMessage &&
+      !isBoundedString(value.message, MAX_STRING_LENGTH))
+  ) {
+    return undefined;
+  }
+  return status === 'loading'
+    ? { status: 'loading', items: [] }
+    : status === 'error'
+      ? { status: 'error', items: [], message: value.message as string }
+      : {
+          status: 'unsupported',
+          items: [],
+          message: value.message as string,
+        };
+}
+
+function parseModelCatalogItem(
+  value: unknown,
+): ModelCatalogItem | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, [
+      'id',
+      'displayName',
+      'supportedReasoningEfforts',
+    ]) ||
+    !isSafeModelId(value.id) ||
+    !isSafeDisplayName(value.displayName) ||
+    !isExactArray(
+      value.supportedReasoningEfforts,
+      1,
+      SESSION_REASONING_EFFORTS.length,
+    )
+  ) {
+    return undefined;
+  }
+  const efforts: SessionReasoningEffort[] = [];
+  const seen = new Set<SessionReasoningEffort>();
+  for (const effort of value.supportedReasoningEfforts) {
+    if (!isSessionReasoningEffort(effort) || seen.has(effort)) {
+      return undefined;
+    }
+    seen.add(effort);
+    efforts.push(effort);
+  }
+  return {
+    id: value.id,
+    displayName: value.displayName,
+    supportedReasoningEfforts: efforts,
   };
 }
 
@@ -779,7 +1167,10 @@ function parseSessionTranscript(
     ids.add(item.id);
     items.push(item);
   }
-  return items;
+  return transcriptTextUnits(items) <=
+    MAX_SESSION_TRANSCRIPT_TEXT_UNITS
+    ? items
+    : undefined;
 }
 
 function parseSessionTranscriptItem(
@@ -890,13 +1281,26 @@ function parseToolTranscriptItem(
       'turnId',
       'toolUseId',
       'toolName',
+      'action',
       'status',
+      'progressCount',
+      'latestUpdateKind',
     ]) ||
     !isId(value.id) ||
     !isId(value.turnId) ||
     !isId(value.toolUseId) ||
     !isNonEmptyBoundedString(value.toolName, MAX_TOOL_NAME_LENGTH) ||
-    !isTranscriptToolStatus(value.status)
+    !isNonEmptyBoundedString(
+      value.action,
+      MAX_TOOL_ACTION_SUMMARY_LENGTH,
+    ) ||
+    !isTranscriptToolStatus(value.status) ||
+    !isBoundedToolProgressCount(value.progressCount) ||
+    !isNullableToolActivityUpdateKind(value.latestUpdateKind) ||
+    !hasConsistentToolProgress(
+      value.progressCount,
+      value.latestUpdateKind,
+    )
   ) {
     return undefined;
   }
@@ -907,7 +1311,10 @@ function parseToolTranscriptItem(
     turnId: value.turnId,
     toolUseId: value.toolUseId,
     toolName: value.toolName,
+    action: value.action,
     status: value.status,
+    progressCount: value.progressCount,
+    latestUpdateKind: value.latestUpdateKind,
   };
 }
 
@@ -1005,6 +1412,38 @@ function isSequence(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
+function readStringDataProperty(
+  value: UnknownRecord,
+  key: string,
+): string | undefined {
+  const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+  return descriptor !== undefined &&
+    'value' in descriptor &&
+    typeof descriptor.value === 'string'
+    ? descriptor.value
+    : undefined;
+}
+
+function isContextNumber(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+function isSafeModelId(value: unknown): value is string {
+  return (
+    isNonEmptyBoundedString(value, MAX_MODEL_ID_LENGTH) &&
+    value.trim() === value &&
+    !hasControlCharacter(value)
+  );
+}
+
+function isSafeDisplayName(value: unknown): value is string {
+  return (
+    isNonEmptyBoundedString(value, MAX_MODEL_DISPLAY_NAME_LENGTH) &&
+    value.trim() === value &&
+    !hasControlCharacter(value)
+  );
+}
+
 function isNullableId(value: unknown): value is string | null {
   return value === null || isId(value);
 }
@@ -1055,6 +1494,37 @@ function isToolActivityStatus(
   );
 }
 
+function isBoundedToolProgressCount(value: unknown): value is number {
+  return (
+    isSequence(value) &&
+    value <= MAX_TOOL_PROGRESS_UPDATES_PER_TOOL
+  );
+}
+
+function isNullableToolActivityUpdateKind(
+  value: unknown,
+): value is ToolActivityUpdateKind | null {
+  return (
+    value === null ||
+    (typeof value === 'string' &&
+      TOOL_ACTIVITY_UPDATE_KIND_SET.has(
+        value as ToolActivityUpdateKind,
+      ))
+  );
+}
+
+function hasConsistentToolProgress(
+  progressCount: unknown,
+  latestUpdateKind: unknown,
+): boolean {
+  return (
+    (progressCount === 0 && latestUpdateKind === null) ||
+    (typeof progressCount === 'number' &&
+      progressCount > 0 &&
+      latestUpdateKind !== null)
+  );
+}
+
 function isDiagnosticSeverity(
   value: unknown,
 ): value is DiagnosticSeverity {
@@ -1072,6 +1542,33 @@ function isPermissionConfirmationKind(
     PERMISSION_CONFIRMATION_KIND_SET.has(
       value as PermissionConfirmationKind,
     )
+  );
+}
+
+function isSessionInteractionMode(
+  value: unknown,
+): value is SessionInteractionMode {
+  return (
+    typeof value === 'string' &&
+    SESSION_INTERACTION_MODE_SET.has(value as SessionInteractionMode)
+  );
+}
+
+function isSessionAutonomyLevel(
+  value: unknown,
+): value is SessionAutonomyLevel {
+  return (
+    typeof value === 'string' &&
+    SESSION_AUTONOMY_LEVEL_SET.has(value as SessionAutonomyLevel)
+  );
+}
+
+function isSessionReasoningEffort(
+  value: unknown,
+): value is SessionReasoningEffort {
+  return (
+    typeof value === 'string' &&
+    SESSION_REASONING_EFFORT_SET.has(value as SessionReasoningEffort)
   );
 }
 

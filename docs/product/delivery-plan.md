@@ -44,35 +44,23 @@ Droid 真实能力
 1. 基于当前实际 UI 制作该模块的少量原型。
 2. 用户确认布局、状态和主要交互。
 3. 固定模块目标、非目标和验收标准。
-4. 交给 BYOK Terra `backend-writer` 实现 Runtime、Host、Bridge 和测试。
-5. 主 Agent 检查并冻结共享 Bridge Contract。
-6. 交给 BYOK Terra `frontend-writer` 实现 Webview、样式和测试。
-7. 主 Agent 集成、验证、打包和汇报。
+4. 当前实现 Agent 按 Runtime、Host、Bridge、Webview 的依赖顺序完成实现。
+5. 先检查并冻结共享 Bridge Contract，再更新对应消费者。
+6. 运行聚焦验证并检查真实浏览器中的窄、宽布局。
+7. 集成、完整验证、打包并交由用户在 Cursor 中完成可见验收。
 
 原型只定义视觉和交互，不得凭空定义 Droid Runtime 能力。
 
-### 3. 前后端角色边界
+### 3. 单 Agent 实施边界
 
-默认文件所有权：
+仓库默认由当前实现 Agent 独立完成，不配置或调用专用 Backend、Frontend
+Writer。单 Agent 仍需保持层级边界：
 
-```text
-backend-writer
-├─ src/runtime/**
-├─ src/extension/**
-└─ src/shared/**
-
-frontend-writer
-└─ src/webview/**
-```
-
-两个角色都使用 `custom:gpt-5.6-terra`。
-
-- Backend 负责定义和验证严格 Bridge Contract。
-- Frontend 只消费已经冻结的 Contract，不增加假字段或前端专用后门。
-- Contract 未冻结时默认先 Backend、后 Frontend。
-- Contract 已冻结且文件完全不重叠时，才允许两个角色并行。
-- 两个角色不得同时编辑同一文件。
-- `package.json` 等跨层文件由主 Agent 明确分配单一所有者。
+- Runtime 与 Extension Host 负责消费真实 Droid 能力。
+- 共享 Bridge 负责严格、版本化和有界的信任边界。
+- Webview 只消费已经验证的 Contract，不增加假字段或前端专用后门。
+- Contract 变更必须先定义和验证，再更新 Host 与 Webview 消费者。
+- 不得因为由一个 Agent 实施而混合 Runtime、Host 和 UI 职责。
 
 ### 4. 一个模块一次正式验证
 
@@ -94,7 +82,7 @@ SDK 声明、Capability Contract、Probe 或 Smoke 只能证明能力证据，�
 
 | 顺序 | 模块 | 用户结果 | 当前状态 |
 | --- | --- | --- | --- |
-| 1 | Session Settings 与 Context | 查看并安全修改 Session 设置，查看 Context 使用量 | **下一模块** |
+| 1 | Session Settings 与 Context | 查看并安全修改 Session 设置，查看 Context 使用量 | **待 Cursor 可见验收** |
 | 2 | Context Sources 与附件 | 向 Droid 添加文件、编辑器、选区、问题、Git 和附件上下文 | 未开始 |
 | 3 | Session 管理 | Rename、Archive、Delete、Favorite、搜索和分页 | 未开始 |
 | 4 | Edit、Resend 与 Rewind | 编辑旧消息，安全回退并重新发送 | 未开始 |
@@ -120,6 +108,10 @@ daemon、Terminal、Git/PR、Worktree 和远程环境在对应模块需要时进
 - 查看 Context 已使用、剩余、上限和准确度。
 - 修改 Droid 真实支持且具有稳定选项来源的设置。
 - 在 Session 切换、Runtime 重建或设置更新后看到最新状态。
+- 通过语义 Tool 动作、生命周期和有界进度了解 Droid 正在做什么，而不暴露
+  命令、路径、参数或输出。
+- Copy 用户消息，或把历史 Prompt 非破坏性 Reuse 到当前 Composer。
+- 通过本地轮换 JSONL 和 `DroidVisX: Open Logs` 调查不可见错误和耗时。
 
 ### 已确认的 Droid 能力
 
@@ -128,6 +120,8 @@ daemon、Terminal、Git/PR、Worktree 和远程环境在对应模块需要时进
 - `session.settings`：实时只读 Session 设置。
 - `session.updateSettings(...)`：更新 Session 设置。
 - `session.getContextStats()`：读取 Context 使用量。
+- 公开低层 `DroidClient.initializeSession()` / `loadSession()` 响应中的
+  `availableModels`：当前 Session 可用模型和对应 Reasoning 选项。
 
 本模块使用的公开设置字段：
 
@@ -148,12 +142,14 @@ Context 使用公开字段：
 SDK 将 Model ID 定义为运行时发现的字符串，不允许把模型列表硬编码为
 封闭枚举。
 
-实施时必须先确认当前生产路径中稳定、公开的模型目录来源：
+当前生产路径已经确认可信来源：使用公开
+`InitializeSessionResponseSchema` / `LoadSessionResponseSchema` 和对应 Result
+Schema，从同一个 Session 初始化或加载响应中保留 `availableModels`，再通过
+Runtime 和 Host 投影给 Webview。UI 可以提供 Model 选择并通过
+`updateSettings()` 写回。
 
-- 如果存在可信来源，UI 可以提供 Model 选择并通过
-  `updateSettings()` 写回。
-- 如果不存在可信来源，UI 只显示当前 `modelId`，Model 编辑保持禁用，
-  并在状态文档中明确记录限制。
+如果响应不包含目录或目录无法通过有界投影，UI 必须保持 fail closed，
+只显示当前 `modelId`，不得退回硬编码列表。
 
 不得使用原型中的示例模型、旧模型列表或人工维护列表冒充 Droid 数据。
 
@@ -177,7 +173,11 @@ SDK 将 Model ID 定义为运行时发现的字符串，不允许把模型列表
 - 为支持的字段增加最小 Settings 更新接口。
 - 使用实际 `DroidSession.settings`、`updateSettings()` 和
   `getContextStats()`。
+- 在公开 String-Framed Transport 边界按公开 SDK Schema 保留初始化/加载
+  响应中的模型目录，不读取 Session 私有字段或私有持久化文件。
 - 不把原始 SDK 对象或错误消息直接暴露给 Webview。
+- 把同一个隐私安全 SDK Observability Bundle 注入 Transport 和 Session，
+  并只记录有界的初始化/Turn 结果、计数和耗时。
 
 #### Extension Host
 
@@ -186,6 +186,8 @@ SDK 将 Model ID 定义为运行时发现的字符串，不允许把模型列表
 - 拒绝旧 Session 或旧 Runtime 的迟到结果。
 - 更新期间提供明确状态，并在失败后恢复最后一次确认值。
 - 设置更新成功后重新读取权威 Session 状态，不依赖乐观值作为最终值。
+- 本地诊断 Sink 失败必须被隔离；JSONL 当前文件上限 512 KiB，并只保留两个
+  轮换备份。
 
 #### Bridge
 
@@ -193,16 +195,24 @@ SDK 将 Model ID 定义为运行时发现的字符串，不允许把模型列表
 - Webview 到 Host 只允许白名单字段和合法枚举值。
 - Host 到 Webview 不发送 SDK 对象、未知字段或原始异常。
 - 为额外字段、Getter、Proxy、超长字符串和非法数值补充敌对输入测试。
+- Tool 活动只允许语义动作、生命周期、有界进度计数和通用更新类别；不得
+  传递命令、路径、参数、输出、原始错误或 Terminal/Subagent ID。
 
 #### Webview
 
 - 在 Composer 附近显示紧凑状态摘要。
 - Settings 和 Context 使用可关闭的展开面板。
-- 使用当前 assistant-ui、VS Code 主题变量和现有响应式样式。
+- 保留当前 assistant-ui Runtime 和 Primitives。
+- 主界面使用固定的 DroidVisX 暖色 Token，不让 Cursor 主题覆盖产品配色。
+- Cursor 变量只用于焦点、高对比度和必要的平台集成兜底。
 - Loading、Updating、Failed、Unsupported 必须可区分。
 - 更新进行中时避免重复提交。
 - 窄侧边栏中不产生横向滚动。
 - 不支持或无法发现选项的控件必须隐藏或禁用，而不是使用假数据。
+- Tool 行以语义动作作为主内容，不以 Call ID 作为可见内容。
+- 用户消息提供 Copy 和 Reuse；双击等价于 Reuse in Composer，不自动发送，
+  也不声称历史 Edit、Resend、分支或 Rewind。
+- Context 失败只显示一个可访问的 Alert。
 
 ### 非目标
 
@@ -216,18 +226,22 @@ SDK 将 Model ID 定义为运行时发现的字符串，不允许把模型列表
 - Skills、Commands 或 MCP
 - 完整 Spec 或 Mission
 - daemon 主路径迁移
-- 全产品视觉重做
+- Module 1 之外的全产品信息架构重做
 
 ### 测试要求
 
 #### 聚焦测试
 
 - Runtime Settings 读取、更新和 Context 读取。
+- 公开初始化/加载响应中的模型目录捕获、投影和非法目录 fail-closed。
 - Settings 更新失败和读取失败。
 - Session 切换与迟到结果隔离。
 - Bridge 双向合法和敌对输入。
 - Webview 默认、展开、Updating、Failed 和 Unsupported 状态。
 - 窄布局关键行为。
+- SDK Progress 隐私投影、Tool 进度上限和 Bridge/Recovery 一致性。
+- Copy、Reuse、双击 Draft 同步、单一 Context Error。
+- 本地日志轮换、Sink Failure 隔离和禁止字段缺失证明。
 
 #### 模块完成验证
 
@@ -248,6 +262,10 @@ pnpm run verify:vsix
 5. Context 数值来自当前 Session。
 6. 不支持的字段不会显示假选项。
 7. 窄 Secondary Sidebar 可正常操作。
+8. Tool 行能说明安全语义活动且不显示原始 Call ID。
+9. Copy/Reuse 不会自动发送，双击 Reuse 后 Composer 获得焦点。
+10. `DroidVisX: Open Logs` 能打开本地 Output Channel，日志不包含 Prompt、
+    路径、命令、Payload、原始错误或 Stack Trace。
 
 ### 完成标准
 
@@ -263,7 +281,8 @@ pnpm run verify:vsix
 
 ## 后续模块进入规则
 
-只有模块 1 完成后才开始模块 2。每个后续模块开始前，只补充该模块需要的
+Module 2 当前按用户要求保持暂停。只有用户确认本轮 Module 1 体验、完整验证
+和 Cursor 可见检查后才开始 Module 2。每个后续模块开始前，只补充该模块需要的
 原型状态、Droid 能力证据、非目标和验收标准，不提前扩写所有内部接口。
 
 如果实现过程中发现某项能力没有稳定公开来源，应缩小当前模块范围并在状态

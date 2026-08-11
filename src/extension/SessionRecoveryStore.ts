@@ -4,11 +4,14 @@ import {
   MAX_BRIDGE_ID_LENGTH,
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_THINKING_TEXT_LENGTH,
+  MAX_TOOL_ACTION_SUMMARY_LENGTH,
   MAX_TOOL_NAME_LENGTH,
+  MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
   MAX_TURN_TEXT_LENGTH,
   SESSION_HISTORY_STATUSES,
   TRANSCRIPT_THINKING_STATUSES,
   TRANSCRIPT_TOOL_STATUSES,
+  TOOL_ACTIVITY_UPDATE_KINDS,
   type SessionHistoryStatus,
   type SessionTranscriptItem,
 } from '../shared/bridgeMessages';
@@ -19,15 +22,24 @@ import {
   type UnknownRecord,
 } from '../shared/strictValidation';
 import {
+  MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
+  transcriptItemTextUnits,
+} from '../shared/transcriptLimits';
+import {
   hydrateHostTranscriptState,
   type HostTranscriptState,
 } from './hostTranscriptState';
+import {
+  summarizeToolAction,
+  type ToolActivityUpdateKind,
+} from '../shared/toolActivity';
 
 export const SESSION_RECOVERY_VERSION = 1;
 export const SESSION_RECOVERY_STORAGE_KEY =
   'droidvisx.sessionRecovery';
 export const MAX_RECOVERY_SESSIONS = 8;
-export const MAX_RECOVERY_TEXT_UNITS = 1_000_000;
+export const MAX_RECOVERY_TEXT_UNITS =
+  MAX_SESSION_TRANSCRIPT_TEXT_UNITS;
 export const SESSION_RECOVERY_DEBOUNCE_MS = 250;
 
 export interface SessionRecoveryPersistence {
@@ -566,35 +578,64 @@ function parseThinking(
 function parseTool(
   value: UnknownRecord,
 ): Extract<SessionTranscriptItem, { kind: 'tool' }> | undefined {
-  if (
-    !hasExactKeys(value, [
-      'id',
-      'kind',
-      'turnId',
-      'toolUseId',
-      'toolName',
-      'status',
-    ])
-  ) {
+  const legacyKeys = [
+    'id',
+    'kind',
+    'turnId',
+    'toolUseId',
+    'toolName',
+    'status',
+  ] as const;
+  const currentKeys = [
+    ...legacyKeys,
+    'action',
+    'progressCount',
+    'latestUpdateKind',
+  ] as const;
+  const legacy = hasExactKeys(value, legacyKeys);
+  if (!legacy && !hasExactKeys(value, currentKeys)) {
     return undefined;
   }
   const id = dataValue(value, 'id');
   const turnId = dataValue(value, 'turnId');
   const toolUseId = dataValue(value, 'toolUseId');
   const toolName = dataValue(value, 'toolName');
+  const action = legacy
+    ? typeof toolName === 'string'
+      ? summarizeToolAction(toolName)
+      : undefined
+    : dataValue(value, 'action');
   const status = dataValue(value, 'status');
+  const progressCount = legacy
+    ? 0
+    : dataValue(value, 'progressCount');
+  const latestUpdateKind = legacy
+    ? null
+    : dataValue(value, 'latestUpdateKind');
   return isId(id) &&
     isId(turnId) &&
     isId(toolUseId) &&
     isNonEmptyBoundedString(toolName, MAX_TOOL_NAME_LENGTH) &&
-    isOneOf(status, TRANSCRIPT_TOOL_STATUSES)
+    isNonEmptyBoundedString(action, MAX_TOOL_ACTION_SUMMARY_LENGTH) &&
+    isOneOf(status, TRANSCRIPT_TOOL_STATUSES) &&
+    Number.isSafeInteger(progressCount) &&
+    (progressCount as number) >= 0 &&
+    (progressCount as number) <= MAX_TOOL_PROGRESS_UPDATES_PER_TOOL &&
+    (latestUpdateKind === null ||
+      isOneOf(latestUpdateKind, TOOL_ACTIVITY_UPDATE_KINDS)) &&
+    ((progressCount === 0 && latestUpdateKind === null) ||
+      ((progressCount as number) > 0 && latestUpdateKind !== null))
     ? {
         id,
         kind: 'tool',
         turnId,
         toolUseId,
         toolName,
+        action,
         status,
+        progressCount: progressCount as number,
+        latestUpdateKind:
+          latestUpdateKind as ToolActivityUpdateKind | null,
       }
     : undefined;
 }
@@ -694,46 +735,6 @@ function sessionTextUnits(
       0,
     )
   );
-}
-
-function transcriptItemTextUnits(item: SessionTranscriptItem): number {
-  switch (item.kind) {
-    case 'user':
-      return item.id.length + item.kind.length + item.text.length;
-    case 'assistant':
-      return (
-        item.id.length +
-        item.kind.length +
-        item.turnId.length +
-        item.text.length
-      );
-    case 'thinking':
-      return (
-        item.id.length +
-        item.kind.length +
-        item.turnId.length +
-        item.text.length +
-        item.status.length
-      );
-    case 'tool':
-      return (
-        item.id.length +
-        item.kind.length +
-        item.turnId.length +
-        item.toolUseId.length +
-        item.toolName.length +
-        item.status.length
-      );
-    case 'diagnostic':
-      return (
-        item.id.length +
-        item.kind.length +
-        (item.turnId?.length ?? 0) +
-        item.severity.length +
-        item.code.length +
-        item.message.length
-      );
-  }
 }
 
 function cloneCache(cache: SessionRecoveryCache): SessionRecoveryCache {

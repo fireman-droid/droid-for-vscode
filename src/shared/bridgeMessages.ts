@@ -3,6 +3,13 @@ import {
   MAX_PERMISSION_TOOL_NAME_LENGTH,
   type PermissionConfirmationKind,
 } from './interactionProtocol';
+import {
+  MAX_TOOL_ACTION_SUMMARY_LENGTH,
+  MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
+  TOOL_ACTIVITY_UPDATE_KINDS,
+  type ToolActivityUpdateKind,
+} from './toolActivity';
+import { MAX_SESSION_TRANSCRIPT_ITEMS } from './transcriptLimits';
 
 export {
   MAX_ASK_USER_ANSWERS,
@@ -25,8 +32,18 @@ export {
   PERMISSION_CONFIRMATION_KINDS,
   type PermissionConfirmationKind,
 } from './interactionProtocol';
+export {
+  MAX_TOOL_ACTION_SUMMARY_LENGTH,
+  MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
+  TOOL_ACTIVITY_UPDATE_KINDS,
+  type ToolActivityUpdateKind,
+} from './toolActivity';
+export {
+  MAX_SESSION_TRANSCRIPT_ITEMS,
+  MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
+} from './transcriptLimits';
 
-export const BRIDGE_PROTOCOL_VERSION = 1 as const;
+export const BRIDGE_PROTOCOL_VERSION = 2 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_TEXT_LENGTH = 32_000;
@@ -34,8 +51,10 @@ export const MAX_TOOL_NAME_LENGTH = MAX_PERMISSION_TOOL_NAME_LENGTH;
 export const MAX_TOOL_ACTIVITIES_PER_TURN = 100;
 export const MAX_INTERACTION_TEXT_LENGTH = MAX_INTERACTION_DETAIL_LENGTH;
 export const MAX_SESSION_CATALOG_ITEMS = 50;
-export const MAX_SESSION_TRANSCRIPT_ITEMS = 200;
 export const MAX_SESSION_TITLE_LENGTH = 256;
+export const MAX_MODEL_ID_LENGTH = 256;
+export const MAX_MODEL_DISPLAY_NAME_LENGTH = 128;
+export const MAX_MODEL_CATALOG_ITEMS = 100;
 
 export const CONNECTION_STATUSES = [
   'idle',
@@ -106,6 +125,39 @@ export const TRANSCRIPT_TOOL_STATUSES = [
 export type TranscriptToolStatus =
   (typeof TRANSCRIPT_TOOL_STATUSES)[number];
 
+export const SESSION_INTERACTION_MODES = [
+  'auto',
+  'spec',
+  'mission',
+] as const;
+export type SessionInteractionMode =
+  (typeof SESSION_INTERACTION_MODES)[number];
+
+export const SESSION_AUTONOMY_LEVELS = [
+  'off',
+  'low',
+  'medium',
+  'high',
+] as const;
+export type SessionAutonomyLevel =
+  (typeof SESSION_AUTONOMY_LEVELS)[number];
+
+export const SESSION_REASONING_EFFORTS = [
+  'none',
+  'dynamic',
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
+export type SessionReasoningEffort =
+  (typeof SESSION_REASONING_EFFORTS)[number];
+
+export type SessionContextAccuracy = 'exact' | 'estimated';
+
 export interface WebviewReadyMessage {
   readonly type: 'webview.ready';
   readonly protocolVersion: typeof BRIDGE_PROTOCOL_VERSION;
@@ -165,6 +217,37 @@ export interface SessionNewMessage {
   readonly type: 'session.new';
 }
 
+export interface SessionContextRefreshMessage {
+  readonly type: 'session.context.refresh';
+  readonly sessionId: string;
+}
+
+export type SessionSettingUpdateMessage =
+  | {
+      readonly type: 'session.setting.update';
+      readonly sessionId: string;
+      readonly field: 'interactionMode';
+      readonly value: SessionInteractionMode;
+    }
+  | {
+      readonly type: 'session.setting.update';
+      readonly sessionId: string;
+      readonly field: 'modelId';
+      readonly value: string;
+    }
+  | {
+      readonly type: 'session.setting.update';
+      readonly sessionId: string;
+      readonly field: 'reasoningEffort';
+      readonly value: SessionReasoningEffort;
+    }
+  | {
+      readonly type: 'session.setting.update';
+      readonly sessionId: string;
+      readonly field: 'autonomyLevel';
+      readonly value: SessionAutonomyLevel;
+    };
+
 export type WebviewToHostMessage =
   | WebviewReadyMessage
   | TurnSendMessage
@@ -174,7 +257,9 @@ export type WebviewToHostMessage =
   | AskUserRespondMessage
   | SessionsRefreshMessage
   | SessionSelectMessage
-  | SessionNewMessage;
+  | SessionNewMessage
+  | SessionContextRefreshMessage
+  | SessionSettingUpdateMessage;
 
 export interface ConnectionState {
   readonly status: ConnectionStatus;
@@ -194,6 +279,80 @@ export interface SessionCatalogState {
   readonly items: readonly SessionSummary[];
   readonly message?: string;
 }
+
+export interface ConfirmedSessionSettings {
+  readonly interactionMode: SessionInteractionMode;
+  readonly modelId: string;
+  readonly reasoningEffort: SessionReasoningEffort;
+  readonly autonomyLevel: SessionAutonomyLevel;
+}
+
+export type SessionSettingsState =
+  | {
+      readonly status: 'loading';
+      readonly value: ConfirmedSessionSettings | null;
+    }
+  | {
+      readonly status: 'ready';
+      readonly value: ConfirmedSessionSettings;
+    }
+  | {
+      readonly status: 'updating';
+      readonly value: ConfirmedSessionSettings;
+    }
+  | {
+      readonly status: 'error';
+      readonly value: ConfirmedSessionSettings | null;
+      readonly message: string;
+    };
+
+export interface SessionContextStats {
+  readonly used: number;
+  readonly remaining: number;
+  readonly limit: number;
+  readonly accuracy: SessionContextAccuracy;
+}
+
+export type SessionContextState =
+  | {
+      readonly status: 'loading';
+      readonly value: SessionContextStats | null;
+    }
+  | {
+      readonly status: 'ready';
+      readonly value: SessionContextStats;
+    }
+  | {
+      readonly status: 'error';
+      readonly value: SessionContextStats | null;
+      readonly message: string;
+    };
+
+export interface ModelCatalogItem {
+  readonly id: string;
+  readonly displayName: string;
+  readonly supportedReasoningEfforts: readonly SessionReasoningEffort[];
+}
+
+export type ModelCatalogState =
+  | {
+      readonly status: 'loading';
+      readonly items: readonly [];
+    }
+  | {
+      readonly status: 'ready';
+      readonly items: readonly ModelCatalogItem[];
+    }
+  | {
+      readonly status: 'error';
+      readonly items: readonly [];
+      readonly message: string;
+    }
+  | {
+      readonly status: 'unsupported';
+      readonly items: readonly [];
+      readonly message: string;
+    };
 
 export interface UserTranscriptItem {
   readonly id: string;
@@ -224,7 +383,10 @@ export interface ToolTranscriptItem {
   readonly turnId: string;
   readonly toolUseId: string;
   readonly toolName: string;
+  readonly action: string;
   readonly status: TranscriptToolStatus;
+  readonly progressCount: number;
+  readonly latestUpdateKind: ToolActivityUpdateKind | null;
 }
 
 export interface DiagnosticTranscriptItem {
@@ -254,6 +416,9 @@ export interface HostSnapshotMessage {
     readonly error?: string;
   } | null;
   readonly sessions: SessionCatalogState;
+  readonly settings: SessionSettingsState;
+  readonly context: SessionContextState;
+  readonly modelCatalog: ModelCatalogState;
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: SessionHistoryStatus;
   readonly truncated: boolean;
@@ -264,6 +429,27 @@ export interface HostConnectionMessage {
   readonly sequence: number;
   readonly sessionId: string | null;
   readonly connection: ConnectionState;
+}
+
+export interface SessionSettingsStateMessage {
+  readonly type: 'session.settings';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly settings: SessionSettingsState;
+}
+
+export interface SessionContextStateMessage {
+  readonly type: 'session.context';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly context: SessionContextState;
+}
+
+export interface ModelCatalogStateMessage {
+  readonly type: 'session.model-catalog';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly modelCatalog: ModelCatalogState;
 }
 
 export interface AssistantDeltaMessage {
@@ -298,7 +484,10 @@ export interface ToolActivityMessage {
   readonly turnId: string;
   readonly toolUseId: string;
   readonly toolName: string;
+  readonly action: string;
   readonly status: ToolActivityStatus;
+  readonly progressCount: number;
+  readonly latestUpdateKind: ToolActivityUpdateKind | null;
 }
 
 export interface RuntimeDiagnosticMessage {
@@ -390,6 +579,9 @@ export interface InteractionClosedMessage {
 export type HostToWebviewMessage =
   | HostSnapshotMessage
   | HostConnectionMessage
+  | SessionSettingsStateMessage
+  | SessionContextStateMessage
+  | ModelCatalogStateMessage
   | AssistantDeltaMessage
   | ThinkingDeltaMessage
   | ThinkingCompleteMessage

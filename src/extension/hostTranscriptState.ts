@@ -1,7 +1,7 @@
 import {
   MAX_ASSISTANT_TEXT_LENGTH,
-  MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_THINKING_TEXT_LENGTH,
+  MAX_TOOL_ACTION_SUMMARY_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
   MAX_TOOL_NAME_LENGTH,
   MAX_TURN_TEXT_LENGTH,
@@ -14,6 +14,7 @@ import {
   type ToolActivityMessage,
   type TurnStateMessage,
 } from '../shared/bridgeMessages';
+import { trimTranscriptToLimits } from '../shared/transcriptLimits';
 import {
   stableTranscriptId,
   type HostTranscriptState,
@@ -147,16 +148,17 @@ function projectAssistantDelta(
   state: HostTranscriptState,
   message: AssistantDeltaMessage,
 ): HostTranscriptState {
-  const id = stableTranscriptId('assistant', message.turnId);
-  const existingIndex = state.transcript.findIndex(
-    (item) => item.id === id && item.kind === 'assistant',
+  const existingIndex = findLastTurnItemIndex(
+    state.transcript,
+    message.turnId,
   );
-  if (existingIndex < 0) {
+  const existing = state.transcript[existingIndex];
+  if (existing?.kind !== 'assistant') {
     const text = message.delta.slice(0, MAX_ASSISTANT_TEXT_LENGTH);
     return appendItem(
       state,
       {
-        id,
+        id: nextTurnSegmentId(state, 'assistant', message.turnId),
         kind: 'assistant',
         turnId: message.turnId,
         text,
@@ -165,10 +167,6 @@ function projectAssistantDelta(
     );
   }
 
-  const existing = state.transcript[existingIndex] as Extract<
-    SessionTranscriptItem,
-    { kind: 'assistant' }
-  >;
   const text = `${existing.text}${message.delta}`.slice(
     0,
     MAX_ASSISTANT_TEXT_LENGTH,
@@ -185,16 +183,17 @@ function projectThinkingDelta(
   state: HostTranscriptState,
   message: ThinkingDeltaMessage,
 ): HostTranscriptState {
-  const id = stableTranscriptId('thinking', message.turnId);
-  const existingIndex = state.transcript.findIndex(
-    (item) => item.id === id && item.kind === 'thinking',
+  const existingIndex = findLastTurnItemIndex(
+    state.transcript,
+    message.turnId,
   );
-  if (existingIndex < 0) {
+  const existing = state.transcript[existingIndex];
+  if (existing?.kind !== 'thinking' || existing.status !== 'active') {
     const text = message.delta.slice(0, MAX_THINKING_TEXT_LENGTH);
     return appendItem(
       state,
       {
-        id,
+        id: nextTurnSegmentId(state, 'thinking', message.turnId),
         kind: 'thinking',
         turnId: message.turnId,
         text,
@@ -206,10 +205,6 @@ function projectThinkingDelta(
     );
   }
 
-  const existing = state.transcript[existingIndex] as Extract<
-    SessionTranscriptItem,
-    { kind: 'thinking' }
-  >;
   const text = `${existing.text}${message.delta}`.slice(
     0,
     MAX_THINKING_TEXT_LENGTH,
@@ -233,15 +228,16 @@ function projectThinkingComplete(
   state: HostTranscriptState,
   message: ThinkingCompleteMessage,
 ): HostTranscriptState {
-  const id = stableTranscriptId('thinking', message.turnId);
-  const existingIndex = state.transcript.findIndex(
-    (item) => item.id === id && item.kind === 'thinking',
+  const thinkingIndices = state.transcript.flatMap((item, index) =>
+    item.kind === 'thinking' && item.turnId === message.turnId
+      ? [index]
+      : [],
   );
   const duration =
     message.durationMs === null ? {} : { durationMs: message.durationMs };
-  if (existingIndex < 0) {
+  if (thinkingIndices.length === 0) {
     return appendItem(state, {
-      id,
+      id: nextTurnSegmentId(state, 'thinking', message.turnId),
       kind: 'thinking',
       turnId: message.turnId,
       text: '',
@@ -251,15 +247,29 @@ function projectThinkingComplete(
     });
   }
 
-  const existing = state.transcript[existingIndex] as Extract<
-    SessionTranscriptItem,
-    { kind: 'thinking' }
-  >;
-  return replaceItem(state, existingIndex, {
-    ...existing,
-    status: 'complete',
-    ...duration,
+  const lastThinkingIndex = thinkingIndices.at(-1);
+  let changed = false;
+  const transcript = state.transcript.map((item, index) => {
+    if (
+      item.kind !== 'thinking' ||
+      item.turnId !== message.turnId
+    ) {
+      return item;
+    }
+    const next = {
+      ...item,
+      status: 'complete' as const,
+      ...(index === lastThinkingIndex ? duration : {}),
+    };
+    changed =
+      changed ||
+      item.status !== next.status ||
+      (index === lastThinkingIndex &&
+        message.durationMs !== null &&
+        item.durationMs !== message.durationMs);
+    return next;
   });
+  return changed ? { ...state, transcript } : state;
 }
 
 function projectToolActivity(
@@ -275,7 +285,8 @@ function projectToolActivity(
     (item) => item.id === id && item.kind === 'tool',
   );
   const toolName = message.toolName.slice(0, MAX_TOOL_NAME_LENGTH);
-  if (toolName.length === 0) {
+  const action = message.action.slice(0, MAX_TOOL_ACTION_SUMMARY_LENGTH);
+  if (toolName.length === 0 || action.length === 0) {
     return state;
   }
   if (existingIndex >= 0) {
@@ -286,7 +297,10 @@ function projectToolActivity(
     return replaceItem(state, existingIndex, {
       ...existing,
       toolName,
+      action,
       status: message.status,
+      progressCount: message.progressCount,
+      latestUpdateKind: message.latestUpdateKind,
     });
   }
 
@@ -304,8 +318,41 @@ function projectToolActivity(
     turnId: message.turnId,
     toolUseId: message.toolUseId,
     toolName,
+    action,
     status: message.status,
+    progressCount: message.progressCount,
+    latestUpdateKind: message.latestUpdateKind,
   });
+}
+
+function findLastTurnItemIndex(
+  transcript: readonly SessionTranscriptItem[],
+  turnId: string,
+): number {
+  for (let index = transcript.length - 1; index >= 0; index -= 1) {
+    const item = transcript[index];
+    if (
+      item !== undefined &&
+      'turnId' in item &&
+      item.turnId === turnId
+    ) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function nextTurnSegmentId(
+  state: HostTranscriptState,
+  kind: 'assistant' | 'thinking',
+  turnId: string,
+): string {
+  const segmentCount = state.transcript.filter(
+    (item) => item.kind === kind && item.turnId === turnId,
+  ).length;
+  return segmentCount === 0
+    ? stableTranscriptId(kind, turnId)
+    : stableTranscriptId(kind, turnId, String(segmentCount));
 }
 
 function updateTurnActivityStatuses(
@@ -411,21 +458,14 @@ function boundState(state: HostTranscriptState): HostTranscriptState {
         return false;
       })
     : state.transcript;
-  if (
-    transcript.length <= MAX_SESSION_TRANSCRIPT_ITEMS &&
-    !diagnosticsEvicted &&
-    !state.truncated
-  ) {
+  const bounded = trimTranscriptToLimits(transcript);
+  if (!bounded.trimmed && !diagnosticsEvicted && !state.truncated) {
     return state;
   }
 
-  const transcriptItemsEvicted =
-    transcript.length > MAX_SESSION_TRANSCRIPT_ITEMS;
-  transcript = transcriptItemsEvicted
-    ? transcript.slice(-MAX_SESSION_TRANSCRIPT_ITEMS)
-    : transcript;
+  transcript = [...bounded.transcript];
   const truncated =
-    state.truncated || diagnosticsEvicted || transcriptItemsEvicted;
+    state.truncated || diagnosticsEvicted || bounded.trimmed;
   return {
     transcript,
     historyStatus: truncated ? 'partial' : state.historyStatus,

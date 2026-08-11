@@ -388,6 +388,33 @@ describe('projectSessionHistory', () => {
     expect(JSON.stringify(result)).not.toContain('raw input');
   });
 
+  it('retains ordinary histories beyond the former 200-item window', () => {
+    const result = projectSessionHistory(
+      response(
+        Array.from({ length: 250 }, (_, index) =>
+          message(`message-${index}`, 'user', [
+            { type: 'text', text: `Prompt ${index}` },
+          ]),
+        ),
+      ),
+    );
+
+    expect(result).toMatchObject({
+      status: 'available',
+      state: {
+        historyStatus: 'complete',
+        truncated: false,
+      },
+    });
+    if (result.status !== 'available') {
+      throw new Error('Expected projected history.');
+    }
+    expect(result.state.transcript).toHaveLength(250);
+    expect(result.state.transcript[0]).toMatchObject({
+      text: 'Prompt 0',
+    });
+  });
+
   it('fails closed when the public load response is malformed', () => {
     const result = projectSessionHistory({
       result: { session: { messages: 'not-an-array' } },
