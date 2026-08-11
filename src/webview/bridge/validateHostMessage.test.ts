@@ -215,6 +215,57 @@ describe('readHostMessage', () => {
       },
     },
     {
+      type: 'session.commands',
+      sequence: 1,
+      sessionId: 'session-1',
+      commands: {
+        status: 'ready',
+        items: [
+          {
+            name: 'deploy',
+            description: 'Deploys the current branch.',
+            argumentHint: '<environment>',
+            isExecutable: false,
+          },
+          {
+            name: 'triage',
+            description: null,
+            argumentHint: null,
+            isExecutable: true,
+          },
+        ],
+        recent: ['deploy'],
+      },
+    },
+    {
+      type: 'session.commands',
+      sequence: 1,
+      sessionId: 'session-1',
+      commands: { status: 'loading', items: [], recent: [] },
+    },
+    {
+      type: 'session.commands',
+      sequence: 1,
+      sessionId: 'session-1',
+      commands: {
+        status: 'error',
+        items: [],
+        recent: [],
+        message: 'Commands could not be loaded.',
+      },
+    },
+    {
+      type: 'session.commands',
+      sequence: 1,
+      sessionId: 'session-1',
+      commands: {
+        status: 'unsupported',
+        items: [],
+        recent: [],
+        message: 'Commands are unsupported.',
+      },
+    },
+    {
       type: 'session.mcp',
       sequence: 1,
       sessionId: 'session-1',
@@ -801,6 +852,90 @@ describe('readHostMessage', () => {
       sequence: 1,
       sessionId: 'session-1',
       skills: { status: 'unsupported', items: [] },
+    },
+    {
+      type: 'session.commands',
+      sequence: 1,
+      sessionId: 'session-1',
+      commands: {
+        status: 'ready',
+        items: [
+          {
+            name: 'bad name',
+            description: null,
+            argumentHint: null,
+            isExecutable: false,
+          },
+        ],
+        recent: [],
+      },
+    },
+    {
+      type: 'session.commands',
+      sequence: 1,
+      sessionId: 'session-1',
+      commands: {
+        status: 'ready',
+        items: [
+          {
+            name: 'dup',
+            description: null,
+            argumentHint: null,
+            isExecutable: false,
+          },
+          {
+            name: 'dup',
+            description: 'Duplicate name.',
+            argumentHint: null,
+            isExecutable: false,
+          },
+        ],
+        recent: [],
+      },
+    },
+    {
+      type: 'session.commands',
+      sequence: 1,
+      sessionId: 'session-1',
+      commands: {
+        status: 'ready',
+        items: [
+          {
+            name: 'deploy',
+            description: null,
+            argumentHint: null,
+            isExecutable: false,
+            filePath: 'C:/secret/deploy.md',
+          },
+        ],
+        recent: [],
+      },
+    },
+    {
+      type: 'session.commands',
+      sequence: 1,
+      sessionId: 'session-1',
+      commands: {
+        status: 'ready',
+        items: [],
+        recent: ['bad name'],
+      },
+    },
+    {
+      type: 'session.commands',
+      sequence: 1,
+      sessionId: 'session-1',
+      commands: { status: 'ready', items: [] },
+    },
+    {
+      type: 'session.commands',
+      sequence: 1,
+      sessionId: 'session-1',
+      commands: {
+        status: 'unsupported',
+        items: [],
+        recent: [],
+      },
     },
     {
       type: 'session.mcp',

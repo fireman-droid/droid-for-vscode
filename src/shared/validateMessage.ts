@@ -12,6 +12,7 @@ import {
   MAX_MCP_NAME_LENGTH,
   MAX_MCP_URL_LENGTH,
   MCP_SERVER_TYPES,
+  MAX_COMMAND_NAME_LENGTH,
   MAX_SESSION_TITLE_LENGTH,
   MAX_SKILL_NAME_LENGTH,
   MAX_TOOL_FILE_PATH_LENGTH,
@@ -47,6 +48,7 @@ import {
   type SessionSelectMessage,
   type SessionSettingUpdateMessage,
   type SessionsRefreshMessage,
+  type CommandsRefreshMessage,
   type SkillToggleMessage,
   type SkillsRefreshMessage,
   type TurnEditResendMessage,
@@ -114,6 +116,8 @@ export function parseWebviewMessage(
         return parseSkillsRefresh(value);
       case 'skill.toggle':
         return parseSkillToggle(value);
+      case 'commands.refresh':
+        return parseCommandsRefresh(value);
       case 'mcp.refresh':
         return parseMcpRefresh(value);
       case 'mcp.server.toggle':
@@ -562,6 +566,19 @@ function parseSkillToggle(
   };
 }
 
+function parseCommandsRefresh(
+  value: UnknownRecord,
+): CommandsRefreshMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'commands.refresh', sessionId: value.sessionId };
+}
+
 function parseMcpRefresh(
   value: UnknownRecord,
 ): McpRefreshMessage | undefined {
@@ -918,4 +935,18 @@ function isNonEmptyBoundedString(
   maximumLength: number,
 ): value is string {
   return isBoundedString(value, maximumLength) && value.length > 0;
+}
+
+/**
+ * True when `value` is a plausible custom command slug: bounded,
+ * non-empty, and free of whitespace, separators, and control
+ * characters.
+ */
+export function isSafeCommandName(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_COMMAND_NAME_LENGTH &&
+    !/[\s@/\u0000-\u001f\u007f]/.test(value)
+  );
 }

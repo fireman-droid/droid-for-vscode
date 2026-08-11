@@ -767,4 +767,73 @@ describe('assistantWebviewReducer', () => {
       },
     ]);
   });
+
+  it('tracks the command catalog and resets it on session change', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    expect(state.commands.status).toBe('idle');
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.commands',
+        sequence: 1,
+        sessionId: 'session-a',
+        commands: {
+          status: 'ready',
+          items: [
+            {
+              name: 'deploy',
+              description: null,
+              argumentHint: null,
+              isExecutable: false,
+            },
+          ],
+          recent: [],
+        },
+      },
+    });
+    expect(state.commands).toMatchObject({
+      status: 'ready',
+      items: [{ name: 'deploy' }],
+    });
+
+    // An empty in-flight refresh keeps the current items visible but
+    // adopts the fresh recent list.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.commands',
+        sequence: 2,
+        sessionId: 'session-a',
+        commands: { status: 'loading', items: [], recent: ['deploy'] },
+      },
+    });
+    expect(state.commands).toMatchObject({
+      status: 'loading',
+      items: [{ name: 'deploy' }],
+      recent: ['deploy'],
+    });
+
+    // Messages for another session only advance the sequence.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.commands',
+        sequence: 3,
+        sessionId: 'session-b',
+        commands: { status: 'ready', items: [], recent: [] },
+      },
+    });
+    expect(state.commands.status).toBe('loading');
+
+    // A snapshot for a different session resets the catalog to idle.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(4, 'session-b'),
+    });
+    expect(state.commands).toMatchObject({ status: 'idle', items: [] });
+  });
 });

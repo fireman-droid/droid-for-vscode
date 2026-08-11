@@ -3852,3 +3852,45 @@ body {
 .dvx-fatal-reload:hover {
   background: var(--dvx-hover, var(--vscode-list-hoverBackground));
 }
+
+/* `/` command popup: reuses the mention popup shell with stacked
+   name + hint + description rows. */
+.dvx-command-popup .dvx-mention-item {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+}
+
+.dvx-command-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dvx-command-name {
+  flex: none;
+  font-weight: 600;
+}
+
+.dvx-command-hint {
+  overflow: hidden;
+  color: #8a8a8a;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-command-desc {
+  overflow: hidden;
+  color: #8a8a8a;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-command-status {
+  padding: 6px 8px;
+  color: #8a8a8a;
+  font-size: 12px;
+}

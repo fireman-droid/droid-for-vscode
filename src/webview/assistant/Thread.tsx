@@ -19,9 +19,12 @@ import {
 } from 'react';
 
 import {
+  MAX_COMMAND_NAME_LENGTH,
   MAX_FILE_SEARCH_QUERY_LENGTH,
   MAX_TURN_TEXT_LENGTH,
+  type CommandSummary,
   type ModelCatalogState,
+  type SessionCommandsState,
   type SessionHistoryStatus,
   type AttachmentSummary,
   type SessionContextState,
@@ -51,6 +54,15 @@ export interface FileSearchResult {
   readonly requestId: string;
   readonly files: readonly string[];
 }
+
+/** Command catalog for the `/` popup; 'idle' means not requested yet. */
+export type SlashCommandsState =
+  | SessionCommandsState
+  | {
+      readonly status: 'idle';
+      readonly items: readonly [];
+      readonly recent: readonly [];
+    };
 
 /** How rewinding to one user message would affect workspace files. */
 export interface RewindFileInfo {
@@ -103,6 +115,8 @@ interface DroidThreadProps {
   readonly attachments: readonly AttachmentSummary[];
   readonly fileSearch: FileSearchResult | null;
   readonly onFileSearch: (requestId: string, query: string) => void;
+  readonly commands: SlashCommandsState;
+  readonly onCommandsRefresh: () => void;
   readonly onAttachPath: (path: string) => void;
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
@@ -159,6 +173,8 @@ export const DroidThread = memo(function DroidThread({
   attachments,
   fileSearch,
   onFileSearch,
+  commands,
+  onCommandsRefresh,
   onAttachPath,
   onAttachFiles,
   onAttachEditor,
@@ -268,6 +284,8 @@ export const DroidThread = memo(function DroidThread({
             attachments={attachments}
             fileSearch={fileSearch}
             onFileSearch={onFileSearch}
+            commands={commands}
+            onCommandsRefresh={onCommandsRefresh}
             onAttachPath={onAttachPath}
             onAttachFiles={onAttachFiles}
             onAttachEditor={onAttachEditor}
@@ -803,6 +821,8 @@ function Composer({
   attachments,
   fileSearch,
   onFileSearch,
+  commands,
+  onCommandsRefresh,
   onAttachPath,
   onAttachFiles,
   onAttachEditor,
@@ -839,6 +859,8 @@ function Composer({
   readonly attachments: readonly AttachmentSummary[];
   readonly fileSearch: FileSearchResult | null;
   readonly onFileSearch: (requestId: string, query: string) => void;
+  readonly commands: SlashCommandsState;
+  readonly onCommandsRefresh: () => void;
   readonly onAttachPath: (path: string) => void;
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
@@ -856,6 +878,48 @@ function Composer({
     null,
   );
   const searchCounterRef = useRef(0);
+  const [slash, setSlash] = useState<SlashToken | null>(null);
+  const [slashIndex, setSlashIndex] = useState(0);
+
+  // Load the command catalog lazily when the `/` popup first opens;
+  // reopening after an error retries the fetch.
+  const slashOpen = slash !== null;
+  const commandsStatus = commands.status;
+  useEffect(() => {
+    if (
+      slashOpen &&
+      (commandsStatus === 'idle' || commandsStatus === 'error')
+    ) {
+      onCommandsRefresh();
+    }
+    // Only the open/close transition should trigger a fetch.
+  }, [slashOpen]);
+
+  const commandMatches =
+    slash !== null ? filterSlashCommands(commands, slash.query) : [];
+  const slashVisible =
+    slashOpen &&
+    commandsStatus !== 'idle' &&
+    commandsStatus !== 'unsupported' &&
+    (commandsStatus !== 'ready' ||
+      commands.items.some((item) => !item.isExecutable));
+
+  const closeSlash = (): void => {
+    setSlash(null);
+    setSlashIndex(0);
+  };
+
+  /** Completes the draft to `/name ` without sending. */
+  const selectCommand = (name: string): void => {
+    if (slash === null) {
+      return;
+    }
+    const next = `/${name} ` + draftRef.current.slice(slash.end);
+    draftRef.current = next;
+    aui.thread.composer().setText(next);
+    onDraftChange(next);
+    closeSlash();
+  };
 
   // Debounce host searches while the user types the mention query.
   useEffect(() => {
@@ -927,6 +991,56 @@ function Composer({
             <label className="dvx-visually-hidden" htmlFor="dvx-prompt">
               Message Droid
             </label>
+            {slashVisible ? (
+              <div
+                className="dvx-mention-popup dvx-command-popup"
+                role="listbox"
+                aria-label="Droid commands"
+              >
+                {commandMatches.map((command, index) => (
+                  <button
+                    key={command.name}
+                    type="button"
+                    role="option"
+                    aria-selected={index === slashIndex}
+                    className={`dvx-mention-item${
+                      index === slashIndex ? ' dvx-mention-active' : ''
+                    }`}
+                    onMouseDown={(event) => {
+                      // Keep focus in the textarea while selecting.
+                      event.preventDefault();
+                      selectCommand(command.name);
+                    }}
+                    onMouseEnter={() => setSlashIndex(index)}
+                  >
+                    <span className="dvx-command-title">
+                      <span className="dvx-command-name">
+                        /{command.name}
+                      </span>
+                      {command.argumentHint !== null ? (
+                        <span className="dvx-command-hint">
+                          {command.argumentHint}
+                        </span>
+                      ) : null}
+                    </span>
+                    {command.description !== null ? (
+                      <span className="dvx-command-desc">
+                        {command.description}
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+                {commandMatches.length === 0 ? (
+                  <div className="dvx-command-status" role="status">
+                    {commands.status === 'loading'
+                      ? 'Loading commands…'
+                      : commands.status === 'error'
+                        ? commands.message
+                        : 'No matching commands'}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {mention !== null && results.length > 0 ? (
               <div
                 className="dvx-mention-popup"
@@ -974,8 +1088,43 @@ function Composer({
                 const nextMention = findMentionToken(value, caret);
                 setMention(nextMention);
                 setActiveIndex(0);
+                setSlash(findSlashToken(value, caret));
+                setSlashIndex(0);
               }}
               onKeyDown={(event) => {
+                if (slashVisible) {
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeSlash();
+                    return;
+                  }
+                  if (commandMatches.length > 0) {
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      setSlashIndex(
+                        (index) => (index + 1) % commandMatches.length,
+                      );
+                      return;
+                    }
+                    if (event.key === 'ArrowUp') {
+                      event.preventDefault();
+                      setSlashIndex(
+                        (index) =>
+                          (index - 1 + commandMatches.length) %
+                          commandMatches.length,
+                      );
+                      return;
+                    }
+                    if (event.key === 'Enter' || event.key === 'Tab') {
+                      event.preventDefault();
+                      const command = commandMatches[slashIndex];
+                      if (command !== undefined) {
+                        selectCommand(command.name);
+                      }
+                      return;
+                    }
+                  }
+                }
                 if (mention === null) {
                   return;
                 }
@@ -1113,6 +1262,61 @@ function findMentionToken(
     return null;
   }
   return { start: at, end: caret, query };
+}
+
+interface SlashToken {
+  /** Caret position; the token spans 0..end. */
+  readonly end: number;
+  readonly query: string;
+}
+
+/**
+ * Finds a `/command` token when the draft starts with `/` and the
+ * caret is still inside the command slug (no whitespace typed yet).
+ */
+export function findSlashToken(
+  value: string,
+  caret: number,
+): SlashToken | null {
+  if (!value.startsWith('/') || caret < 1) {
+    return null;
+  }
+  const query = value.slice(1, caret);
+  if (
+    /[\s/@]/.test(query) ||
+    query.length > MAX_COMMAND_NAME_LENGTH
+  ) {
+    return null;
+  }
+  return { end: caret, query };
+}
+
+/**
+ * Filters the catalog to non-executable commands matching the typed
+ * query, recent commands first, the rest alphabetical.
+ */
+export function filterSlashCommands(
+  commands: SlashCommandsState,
+  query: string,
+): readonly CommandSummary[] {
+  const lowered = query.toLowerCase();
+  const matches = commands.items.filter(
+    (item) =>
+      !item.isExecutable &&
+      (lowered.length === 0 ||
+        item.name.toLowerCase().includes(lowered)),
+  );
+  const recentRank = new Map(
+    commands.recent.map((name, index) => [name, index]),
+  );
+  return [...matches].sort((a, b) => {
+    const rankA = recentRank.get(a.name) ?? Number.POSITIVE_INFINITY;
+    const rankB = recentRank.get(b.name) ?? Number.POSITIVE_INFINITY;
+    if (rankA !== rankB) {
+      return rankA - rankB;
+    }
+    return a.name.localeCompare(b.name);
+  });
 }
 
 const ATTACHMENT_KIND_LABELS: Record<AttachmentSummary['kind'], string> = {

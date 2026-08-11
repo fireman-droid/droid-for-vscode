@@ -10,6 +10,7 @@ import {
   SessionRecoveryStore,
   type SessionRecoveryPersistence,
 } from './SessionRecoveryStore';
+import { RecentCommandsStore } from './RecentCommandsStore';
 import { createGitChangeStatsReader } from './changeStats';
 import { createVscodeAttachmentSources } from './vscodeAttachmentSources';
 import { createVscodeExternalUrlOpener } from './vscodeExternalUrlOpener';
@@ -54,6 +55,7 @@ export function activate(context: vscode.ExtensionContext): void {
       () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
     ),
     createVscodeExternalUrlOpener(),
+    new RecentCommandsStore(persistence),
   );
   const provider = new DroidViewProvider(
     context.extensionUri,

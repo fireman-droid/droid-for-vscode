@@ -5,6 +5,7 @@ import {
   type InteractionRequest,
   type McpAuthPhase,
   type ModelCatalogState,
+  type SessionCommandsState,
   type SessionContextState,
   type SessionMcpState,
   type SessionSettingsState,
@@ -47,6 +48,10 @@ export interface AssistantWebviewState {
   readonly skills: SessionSkillsState | { status: 'idle'; items: readonly [] };
   /** MCP servers load lazily; 'idle' means not requested yet. */
   readonly mcp: SessionMcpState | { status: 'idle'; items: readonly [] };
+  /** Custom slash commands load lazily on the first `/` trigger. */
+  readonly commands:
+    | SessionCommandsState
+    | { status: 'idle'; items: readonly []; recent: readonly [] };
   /** Progress of the one in-flight MCP browser authentication flow. */
   readonly mcpAuth: {
     readonly serverName: string;
@@ -99,6 +104,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   modelCatalog: { status: 'loading', items: [] },
   skills: { status: 'idle', items: [] },
   mcp: { status: 'idle', items: [] },
+  commands: { status: 'idle', items: [], recent: [] },
   mcpAuth: null,
   attachments: [],
   fileSearch: null,
@@ -185,6 +191,10 @@ export function assistantWebviewReducer(
           event.sessionId === state.sessionId
             ? state.mcp
             : { status: 'idle', items: [] },
+        commands:
+          event.sessionId === state.sessionId
+            ? state.commands
+            : { status: 'idle', items: [], recent: [] },
         mcpAuth:
           event.sessionId === state.sessionId ? state.mcpAuth : null,
         attachments:
@@ -219,6 +229,7 @@ export function assistantWebviewReducer(
               modelCatalog: { status: 'loading', items: [] },
               skills: { status: 'idle', items: [] },
               mcp: { status: 'idle', items: [] },
+              commands: { status: 'idle', items: [], recent: [] },
               mcpAuth: null,
               attachments: [],
               interactions: [],
@@ -276,6 +287,24 @@ export function assistantWebviewReducer(
           ? { status: 'loading' as const, items: state.mcp.items }
           : event.mcp;
       return { ...state, sequence: event.sequence, mcp };
+    }
+    case 'session.commands': {
+      if (event.sessionId !== state.sessionId) {
+        return advance(state, event.sequence);
+      }
+      // A refresh in flight sends 'loading' with no items; keep showing
+      // the current list until the fresh one arrives.
+      const commands =
+        event.commands.status === 'loading' &&
+        event.commands.items.length === 0 &&
+        state.commands.items.length > 0
+          ? {
+              status: 'loading' as const,
+              items: state.commands.items,
+              recent: event.commands.recent,
+            }
+          : event.commands;
+      return { ...state, sequence: event.sequence, commands };
     }
     case 'mcp.auth':
       return event.sessionId === state.sessionId

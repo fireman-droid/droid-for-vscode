@@ -58,6 +58,11 @@ export const MAX_MODEL_CATALOG_ITEMS = 100;
 export const MAX_SKILL_ITEMS = 200;
 export const MAX_SKILL_NAME_LENGTH = 128;
 export const MAX_SKILL_DESCRIPTION_LENGTH = 512;
+export const MAX_COMMAND_ITEMS = 200;
+export const MAX_COMMAND_NAME_LENGTH = 64;
+export const MAX_COMMAND_DESCRIPTION_LENGTH = 512;
+export const MAX_COMMAND_ARGUMENT_HINT_LENGTH = 128;
+export const MAX_RECENT_COMMANDS = 8;
 export const MAX_TOOL_FILE_PATH_LENGTH = 512;
 export const MAX_TOOL_DETAIL_LENGTH = 4_000;
 
@@ -345,6 +350,12 @@ export interface SkillToggleMessage {
   readonly disabled: boolean;
 }
 
+/** Requests the custom Droid command catalog for the session. */
+export interface CommandsRefreshMessage {
+  readonly type: 'commands.refresh';
+  readonly sessionId: string;
+}
+
 /**
  * Asks the host to open a native file picker and stage the chosen
  * files as pending attachments for the next prompt.
@@ -506,6 +517,7 @@ export type WebviewToHostMessage =
   | FileOpenDiffMessage
   | SkillsRefreshMessage
   | SkillToggleMessage
+  | CommandsRefreshMessage
   | McpRefreshMessage
   | McpServerToggleMessage
   | McpServerAddMessage
@@ -648,6 +660,42 @@ export type SessionSkillsState =
   | {
       readonly status: 'unsupported';
       readonly items: readonly [];
+      readonly message: string;
+    };
+
+/**
+ * One custom slash command discovered from `.factory/commands`.
+ * Names are file-slug identifiers; hints and descriptions come from
+ * the command file's frontmatter.
+ */
+export interface CommandSummary {
+  readonly name: string;
+  readonly description: string | null;
+  readonly argumentHint: string | null;
+  readonly isExecutable: boolean;
+}
+
+export type SessionCommandsState =
+  | {
+      readonly status: 'loading';
+      readonly items: readonly CommandSummary[];
+      readonly recent: readonly string[];
+    }
+  | {
+      readonly status: 'ready';
+      readonly items: readonly CommandSummary[];
+      readonly recent: readonly string[];
+    }
+  | {
+      readonly status: 'error';
+      readonly items: readonly CommandSummary[];
+      readonly recent: readonly string[];
+      readonly message: string;
+    }
+  | {
+      readonly status: 'unsupported';
+      readonly items: readonly [];
+      readonly recent: readonly [];
       readonly message: string;
     };
 
@@ -879,6 +927,13 @@ export interface SessionMcpStateMessage {
   readonly mcp: SessionMcpState;
 }
 
+export interface SessionCommandsStateMessage {
+  readonly type: 'session.commands';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly commands: SessionCommandsState;
+}
+
 /** Current staged attachments for the active session. */
 export interface SessionAttachmentsStateMessage {
   readonly type: 'session.attachments';
@@ -1086,6 +1141,7 @@ export type HostToWebviewMessage =
   | ModelCatalogStateMessage
   | SessionSkillsStateMessage
   | SessionMcpStateMessage
+  | SessionCommandsStateMessage
   | McpAuthStateMessage
   | SessionAttachmentsStateMessage
   | WorkspaceFilesMessage

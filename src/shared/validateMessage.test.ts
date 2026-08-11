@@ -105,6 +105,10 @@ describe('parseWebviewMessage', () => {
       disabled: true,
     },
     {
+      type: 'commands.refresh',
+      sessionId: 'session-1',
+    },
+    {
       type: 'mcp.refresh',
       sessionId: 'session-1',
     },
@@ -455,6 +459,9 @@ describe('parseWebviewMessage', () => {
       sessionId: 'session-1',
       name: 'code-review',
     },
+    { type: 'commands.refresh', sessionId: '' },
+    { type: 'commands.refresh', sessionId: 'session-1', extra: true },
+    { type: 'commands.refresh' },
     { type: 'mcp.refresh', sessionId: '' },
     { type: 'mcp.refresh', sessionId: 'session-1', extra: true },
     { type: 'attachment.pick', sessionId: '' },

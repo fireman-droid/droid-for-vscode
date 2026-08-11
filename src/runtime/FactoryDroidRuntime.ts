@@ -60,9 +60,11 @@ import {
   type RuntimeMcpServerAddParams,
   type RuntimeMcpServerStatus,
   type RuntimeMcpTool,
+  type RuntimeCommand,
   type RuntimeSkill,
   type RuntimeSkillLocation,
 } from './DroidRuntime';
+import { loadSessionCommands } from './commands/FactoryCommandCatalog';
 import { normalizeSdkEvent } from './normalizeSdkEvent';
 import { createModelCatalogCaptureTransport } from './modelCatalogCaptureTransport';
 import type { RuntimeAvailability, RuntimeEvent } from './runtimeEvents';
@@ -172,12 +174,18 @@ export interface FactoryDroidRuntimeOptions {
   readonly createSdkSession?: FactoryDroidSessionFactory;
   readonly diagnostics?: RuntimeDiagnosticSink;
   readonly observability?: DroidObservability;
+  /**
+   * Lists custom slash commands for a session. Injectable for tests;
+   * defaults to the short-lived public-client catalog loader.
+   */
+  readonly loadSessionCommands?: typeof loadSessionCommands;
 }
 
 export class FactoryDroidRuntime implements DroidRuntime {
   private readonly createSdkSession: FactoryDroidSessionFactory;
   private readonly interactionHandler: RuntimeInteractionHandler;
   private readonly diagnostics: RuntimeDiagnosticSink | undefined;
+  private readonly loadSessionCommands: typeof loadSessionCommands;
   private session: FactoryDroidSession | null = null;
   private sessionTarget: RuntimeSessionTarget | null = null;
   private initialization:
@@ -193,6 +201,8 @@ export class FactoryDroidRuntime implements DroidRuntime {
   constructor(options: FactoryDroidRuntimeOptions) {
     this.interactionHandler = options.interactionHandler;
     this.diagnostics = options.diagnostics;
+    this.loadSessionCommands =
+      options.loadSessionCommands ?? loadSessionCommands;
     this.createSdkSession =
       options.createSdkSession ??
       ((sessionOptions) =>
@@ -732,6 +742,43 @@ export class FactoryDroidRuntime implements DroidRuntime {
     if (result.success !== true) {
       throw new Error('Droid refused to update the skill.');
     }
+  }
+
+  async listCommands(): Promise<readonly RuntimeCommand[]> {
+    const session = this.requireSession();
+    const target = this.sessionTarget;
+    if (target === null) {
+      throw new Error('Droid runtime is not initialized.');
+    }
+
+    const startedAt = performance.now();
+    let commands: readonly RuntimeCommand[];
+    try {
+      commands = await this.loadSessionCommands({
+        cwd: target.cwd,
+        sessionId: session.id,
+      });
+    } catch (error) {
+      this.recordDiagnostic({
+        level: 'error',
+        name: 'runtime.commands.finished',
+        attributes: {
+          durationMs: Math.round(performance.now() - startedAt),
+          outcome: 'sdk-error',
+        },
+      });
+      throw error;
+    }
+    this.recordDiagnostic({
+      level: 'info',
+      name: 'runtime.commands.finished',
+      attributes: {
+        durationMs: Math.round(performance.now() - startedAt),
+        outcome: 'success',
+        commandCount: commands.length,
+      },
+    });
+    return commands;
   }
 
   async listMcpServers(): Promise<readonly RuntimeMcpServer[]> {

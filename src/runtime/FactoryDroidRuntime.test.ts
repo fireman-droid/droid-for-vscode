@@ -433,6 +433,49 @@ describe('FactoryDroidRuntime', () => {
     );
   });
 
+  it('lists commands through the injected catalog loader', async () => {
+    const loadSessionCommands = vi.fn(async () => [
+      {
+        name: 'deploy',
+        description: 'Deploys the branch.',
+        argumentHint: '<env>',
+        isExecutable: false,
+      },
+    ]);
+    const runtime = new FactoryDroidRuntime({
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      createSdkSession: async () =>
+        createMockSession(async function* () {}),
+      loadSessionCommands,
+    });
+    await runtime.initialize('C:\\workspace');
+
+    const commands = await runtime.listCommands();
+    expect(loadSessionCommands).toHaveBeenCalledWith({
+      cwd: 'C:\\workspace',
+      sessionId: 'session-1',
+    });
+    expect(commands).toEqual([
+      {
+        name: 'deploy',
+        description: 'Deploys the branch.',
+        argumentHint: '<env>',
+        isExecutable: false,
+      },
+    ]);
+
+    const failing = new FactoryDroidRuntime({
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      createSdkSession: async () =>
+        createMockSession(async function* () {}),
+      loadSessionCommands: vi.fn(async () => {
+        throw new Error('list failed');
+      }),
+    });
+    await failing.initialize('C:\\workspace');
+    await expect(failing.listCommands()).rejects.toThrow('list failed');
+  });
+
   it('projects safe MCP servers with grouped tools and enforces toggle success', async () => {
     const session = Object.assign(
       createMockSession(async function* () {}),

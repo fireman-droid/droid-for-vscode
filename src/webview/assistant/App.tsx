@@ -368,6 +368,12 @@ export function App(): React.JSX.Element {
     }
     post(vscode, { type: 'skills.refresh', sessionId });
   }, [sessionId, vscode]);
+  const handleCommandsRefresh = useCallback((): void => {
+    if (sessionId === null || connectionStatus !== 'connected') {
+      return;
+    }
+    post(vscode, { type: 'commands.refresh', sessionId });
+  }, [connectionStatus, sessionId, vscode]);
   const handleSkillToggle = useCallback(
     (name: string, disabled: boolean): void => {
       if (sessionId === null) {
@@ -614,6 +620,8 @@ export function App(): React.JSX.Element {
           attachments={state.attachments}
           fileSearch={state.fileSearch}
           onFileSearch={handleFileSearch}
+          commands={state.commands}
+          onCommandsRefresh={handleCommandsRefresh}
           onAttachPath={handleAttachPath}
           onAttachFiles={handleAttachFiles}
           onAttachEditor={handleAttachEditor}

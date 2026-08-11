@@ -150,7 +150,7 @@ Schema 中最新 Provider Call 的 `lastCallTokenUsage` /
 Skills 浏览与启停、MCP Server 浏览与启停、消息附件（文件/编辑器/
 选区/Problems/Git changes）、文件修改类 Tool 的路径 chip 与原生
 Diff 入口已生产接通。
-Changes 页面/增删行统计、daemon 主运行路径、Commands、
+Changes 页面、daemon 主运行路径、
 Mission 和 Manage Droid 等主要功能仍未实现。
 
 同日追加三个消息与 Composer 切片：（1）Assistant 消息 Regenerate——
@@ -665,7 +665,9 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
 - [x] `@` 文件引用（Composer 输入 `@` 触发工作区文件搜索弹窗，
       键盘/鼠标选择后按路径附加为附件；Symbol 引用未实现）
 - [ ] `@` Symbol 引用
-- [ ] `/` 动态命令
+- [x] `/` 动态命令（行首 `/` 弹出自定义 Droid Commands 列表，本地
+      过滤、最近使用优先、选中补全 `/name ` 不自动发送；执行由 CLI
+      后端展开，已实测验证）
 
 当前 Composer 保留 assistant-ui 的 Input、Send、Stop 和 Runtime Retry，
 并增加真实 Mode、Autonomy、Model/Reasoning 和 Context 控件。模型选项
@@ -729,9 +731,11 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 ## V1 未完成
 
 - [x] Skills 列表浏览与启停（`+` 面板 Skills 视图）
-- [ ] Droid Commands 列表
-- [ ] 动态 Slash Commands
-- [ ] 最近使用命令
+- [x] Droid Commands 列表（Composer `/` 弹窗，SDK `droid.list_commands`
+      自定义命令；`isExecutable` shell 命令与内置命令不暴露）
+- [x] 动态 Slash Commands（选中补全 `/name `，发送后 CLI 后端展开
+      模板与 `$ARGUMENTS`，已用真实 turn 验证）
+- [x] 最近使用命令（`workspaceState` 持久化上限 8 个，弹窗置顶）
 - [x] MCP Server 列表（`+` 面板 MCP servers 视图，状态与 needs auth 徽标）
 - [x] MCP Tool 浏览（服务器行内展开，read-only/off 徽标）
 - [x] MCP Server 启用与禁用（SDK `toggleMcpServer`，user 级设置）
@@ -805,6 +809,12 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - 2026-08-11 晚间已重新打包并安装含 webview 启动信标的构建
   （`droidvisx-0.0.0.vsix`，512.43 KB）；因怀疑 webview service worker
   缓存陈旧，本次验收要求完整退出并重启 Cursor，而非仅 Reload Window
+- 2026-08-11 深夜再次打包并安装含 `/` 动态命令切片的构建：
+  `dist/droidvisx.vsix` 528,379 字节，修改时间
+  2026-08-11T14:22:43Z，SHA-256
+  `9AE18D5EBAD326F2C01A53A25414A7619A5FACB5F0D380B435ED3247C577DEF5`，
+  `cursor --install-extension --force` 安装成功；版本号仍为
+  `0.0.0`，现有窗口需 Reload Window（或完整重启）后加载新 Bundle
 
 ## 验证状态
 
@@ -905,6 +915,18 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - Cursor CLI 安装：通过
 - 已安装 Extension、Webview JS、CSS 和 Inter Font 的 SHA-256 均与本次
   Build 一致
+- `/` 动态命令切片（2026-08-11 深夜）：执行假设验证——真实 turn 发送
+  `/dvx-probe purple-elephant-42`（临时 `.factory/commands/dvx-probe.md`）
+  经 SDK `session.stream` 完成，助手返回
+  `EXPANDED-OK purple-elephant-42`，证明 stream-jsonrpc 后端在服务端
+  展开自定义命令与 `$ARGUMENTS`（探测后已删除临时命令文件与探测
+  会话）；`pnpm run typecheck` 三个 tsconfig 全部通过；
+  `pnpm run test` 33 files / 693 tests 全部通过（含本切片新增的
+  Bridge 双向校验、FactoryCommandCatalog 投影、FactoryDroidRuntime
+  listCommands、ChatController refresh/recents、RecentCommandsStore、
+  Webview store reducer 与 findSlashToken/filterSlashCommands 测试）；
+  `pnpm run build`、`vsce package --no-dependencies` 与
+  `cursor --install-extension` 均成功
 
 本轮已完成完整自动化门禁、VSIX 打包/内容验证和 Cursor CLI 安装，并核对
 安装目录中的 Extension、Webview JS、CSS 和 Inter Font 哈希与 Build 一致。
@@ -962,6 +984,30 @@ assistant-ui 渲染时抛异常导致整棵 React 树卸载（即"白屏"）。�
 经生产代码路径复验：修复前 10+ 处重复、崩溃 id 出现 2 次；修复后
 重复为 0。遗留问题（另行排期）：该会话重叠匹配完全失败导致对话内容
 重复展示（72+78 直接拼接），需改进 reconcile 的内容匹配。
+
+2026-08-11 晚间完成第二档第一切片 `/` 动态命令（Droid Commands 列表）：
+Composer 草稿以 `/` 开头且光标仍在命令名内时弹出命令列表（复用 `@`
+提及弹窗骨架，↑/↓/Enter/Tab/Escape 键盘导航、鼠标选择），选中后把
+草稿补全为 `/name ` 并保持焦点，不自动发送。目录懒加载：首次触发
+发送 `commands.refresh`，Host 经 Runtime `listCommands()` 调用 SDK
+`droid.list_commands`（`FactoryCommandCatalog` 以短生命周期公开
+`DroidClient` + `ProcessTransport` loadSession 后查询，同会话历史
+加载器同一公开通道），投影安全字段（name ≤64 slug 校验、
+description ≤512、argumentHint ≤128 折叠空白截断、isExecutable），
+Host 按会话缓存并以 `session.commands` 回发
+loading/ready/error/unsupported（loading/error 保留缓存列表；
+error 文案提示重开弹窗重试）。`isExecutable: true` 的 shell 类命令
+本切片不在弹窗中暴露。过滤在 Webview 本地按名称子串完成；最近使用
+（`workspaceState` 持久化，上限 8 个）排在最前，其余按字母序。发送
+以 `/名称` 开头且命中缓存目录的消息时（大小写不敏感）记录最近使用
+并即时重排。执行语义已用真实 turn 验证：CLI 后端（stream-jsonrpc）
+在服务端展开自定义命令——发送 `/dvx-probe purple-elephant-42` 后
+助手准确返回模板要求的 `EXPANDED-OK purple-elephant-42`，因此发送
+路径保持普通 `turn.send` 文本，无 Host 侧展开回退。已知边界：
+`list_commands` 只返回自定义命令（`.factory/commands`），内置
+命令（/model /compact 等）不出现在弹窗中（GUI 已有等价物）；
+CLI 持久化历史把该轮用户行记为 `/name is running`，重载会话后
+显示该文案而非原始输入（实时乐观消息不受影响）。
 
 每个切片保持完整测试、打包、安装和 Cursor 可见验收。
 

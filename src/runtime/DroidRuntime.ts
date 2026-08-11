@@ -120,6 +120,23 @@ export interface RuntimeSkill {
   readonly userInvocable: boolean;
 }
 
+export const MAX_RUNTIME_COMMAND_ITEMS = 200;
+export const MAX_RUNTIME_COMMAND_NAME_LENGTH = 64;
+export const MAX_RUNTIME_COMMAND_DESCRIPTION_LENGTH = 512;
+export const MAX_RUNTIME_COMMAND_ARGUMENT_HINT_LENGTH = 128;
+
+/**
+ * One custom slash command discovered by Droid from the workspace or
+ * personal `.factory/commands` directories, projected to safe display
+ * fields.
+ */
+export interface RuntimeCommand {
+  readonly name: string;
+  readonly description: string | null;
+  readonly argumentHint: string | null;
+  readonly isExecutable: boolean;
+}
+
 export const MAX_RUNTIME_MCP_SERVERS = 100;
 export const MAX_RUNTIME_MCP_TOOLS_PER_SERVER = 200;
 export const MAX_RUNTIME_MCP_NAME_LENGTH = 128;
@@ -307,6 +324,12 @@ export interface DroidRuntime {
    * unsupported.
    */
   setSkillDisabled?(name: string, disabled: boolean): Promise<void>;
+  /**
+   * Lists the custom slash commands visible to the active session,
+   * projected to safe display fields. Optional: absent when
+   * unsupported.
+   */
+  listCommands?(): Promise<readonly RuntimeCommand[]>;
   /**
    * Lists MCP servers with their tools, projected to safe display
    * fields. Optional: absent when unsupported.

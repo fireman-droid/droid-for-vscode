@@ -1788,6 +1788,109 @@ describe('ChatController', () => {
     );
   });
 
+  it('lists custom commands on request and records recents on send', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      listCommands: vi.fn(async () => [
+        {
+          name: 'deploy',
+          description: 'Deploys the branch.',
+          argumentHint: '<env>',
+          isExecutable: false,
+        },
+        {
+          name: 'triage',
+          description: null,
+          argumentHint: null,
+          isExecutable: true,
+        },
+      ]),
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'commands.refresh',
+      sessionId: 'session-1',
+    });
+    expect(commandsMessages(messages)[0]?.commands).toMatchObject({
+      status: 'loading',
+      items: [],
+      recent: [],
+    });
+    await vi.waitFor(() => {
+      expect(commandsMessages(messages).at(-1)?.commands).toMatchObject({
+        status: 'ready',
+        items: [{ name: 'deploy' }, { name: 'triage' }],
+        recent: [],
+      });
+    });
+
+    // Sending a cached command (case-insensitively) records the
+    // canonical name and re-broadcasts the catalog.
+    send(controller, 'session-1', 'turn-1', '/Deploy prod');
+    const afterSend = commandsMessages(messages).at(-1)?.commands;
+    expect(afterSend).toMatchObject({
+      status: 'ready',
+      recent: ['deploy'],
+    });
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
+
+    // Unknown commands and plain text do not touch the recent list.
+    const count = commandsMessages(messages).length;
+    send(controller, 'session-1', 'turn-2', '/nope now');
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
+    send(controller, 'session-1', 'turn-3', 'plain text');
+    expect(commandsMessages(messages)).toHaveLength(count);
+
+    // Wrong session id is ignored entirely.
+    controller.handleMessage({
+      type: 'commands.refresh',
+      sessionId: 'session-other',
+    });
+    expect(commandsMessages(messages)).toHaveLength(count);
+    expect(runtime.listCommands).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports unsupported and failed command loads safely', async () => {
+    const unsupported = createController(() => createMockRuntime());
+    ready(unsupported.controller);
+    await waitForConnected(unsupported.messages);
+    unsupported.controller.handleMessage({
+      type: 'commands.refresh',
+      sessionId: 'session-1',
+    });
+    expect(
+      commandsMessages(unsupported.messages).at(-1)?.commands,
+    ).toMatchObject({ status: 'unsupported' });
+
+    const failing = Object.assign(createMockRuntime(), {
+      listCommands: vi.fn(async () => {
+        throw new Error('private command failure');
+      }),
+    });
+    const { controller, messages } = createController(() => failing);
+    ready(controller);
+    await waitForConnected(messages);
+    controller.handleMessage({
+      type: 'commands.refresh',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(commandsMessages(messages).at(-1)?.commands).toMatchObject({
+        status: 'error',
+        items: [],
+      });
+    });
+    expect(JSON.stringify(messages)).not.toContain(
+      'private command failure',
+    );
+  });
+
   it('lists MCP servers on request and re-lists after a toggle', async () => {
     const runtime = Object.assign(createMockRuntime(), {
       listMcpServers: vi
@@ -4487,6 +4590,17 @@ function skillsMessages(
       HostToWebviewMessage,
       { type: 'session.skills' }
     > => message.type === 'session.skills',
+  );
+}
+
+function commandsMessages(
+  messages: readonly HostToWebviewMessage[],
+): Extract<HostToWebviewMessage, { type: 'session.commands' }>[] {
+  return messages.filter(
+    (message): message is Extract<
+      HostToWebviewMessage,
+      { type: 'session.commands' }
+    > => message.type === 'session.commands',
   );
 }
 

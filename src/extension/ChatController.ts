@@ -1,11 +1,13 @@
 import type {
   AttachmentKind,
   AttachmentSummary,
+  CommandSummary,
   ConnectionState,
   ConfirmedSessionSettings,
   HostToWebviewMessage,
   ModelCatalogState,
   SessionCatalogState,
+  SessionCommandsState,
   SessionContextState,
   SessionContextStats,
   McpAuthPhase,
@@ -37,6 +39,7 @@ import {
 import type {
   DroidRuntime,
   RuntimeAttachment,
+  RuntimeCommand,
   RuntimeContextStats,
   RuntimeModelCatalog,
   RuntimeModelCatalogItem,
@@ -103,6 +106,7 @@ import {
   createUnavailableExternalUrlOpener,
   type ExternalUrlOpener,
 } from './externalUrlOpener';
+import { RecentCommandsStore } from './RecentCommandsStore';
 
 export type DroidRuntimeFactory = (
   interactionHandler: RuntimeInteractionHandler,
@@ -185,6 +189,10 @@ const SKILLS_UNSUPPORTED_MESSAGE =
   'This Droid runtime does not expose skills.';
 const SKILLS_LOAD_FAILED_MESSAGE =
   'Droid did not return the skill list. Retry from the skills panel.';
+const COMMANDS_UNSUPPORTED_MESSAGE =
+  'This Droid runtime does not expose custom commands.';
+const COMMANDS_LOAD_FAILED_MESSAGE =
+  'Droid did not return the command list. Type / again to retry.';
 const SKILL_TOGGLE_FAILED_MESSAGE =
   'Droid could not update that skill. The list may be stale; refresh it.';
 const COMPACT_BLOCKED_MESSAGE =
@@ -305,6 +313,11 @@ export class ChatController {
     null;
   private mcpAuthServerName: string | null = null;
   private mcpAuthTimer: ReturnType<typeof setTimeout> | null = null;
+  private commandsCache: {
+    readonly sessionId: string;
+    readonly items: readonly CommandSummary[];
+  } | null = null;
+  private commandsRefreshInProgress = false;
 
   constructor(
     private readonly createRuntime: DroidRuntimeFactory,
@@ -323,6 +336,8 @@ export class ChatController {
       createUnavailableChangeStatsReader(),
     private readonly externalUrl: ExternalUrlOpener =
       createUnavailableExternalUrlOpener(),
+    private readonly recentCommands: RecentCommandsStore =
+      new RecentCommandsStore(),
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
@@ -435,6 +450,9 @@ export class ChatController {
         return;
       case 'skills.refresh':
         this.handleSkillsRefresh(message.sessionId);
+        return;
+      case 'commands.refresh':
+        this.handleCommandsRefresh(message.sessionId);
         return;
       case 'skill.toggle':
         this.handleSkillToggle(
@@ -683,6 +701,7 @@ export class ChatController {
     );
     this.scheduleRecoveryCheckpoint();
     this.touchActiveSession();
+    this.recordRecentCommand(sessionId, text);
     this.emitTurnState(sessionId, turnId, 'submitting');
     void this.consumeTurn(
       runtime,
@@ -1902,6 +1921,129 @@ export class ChatController {
       type: 'session.skills',
       sessionId,
       skills,
+    });
+  }
+
+  private handleCommandsRefresh(sessionId: string): void {
+    const runtime = this.runtime;
+    if (
+      sessionId !== this.sessionId ||
+      runtime === null ||
+      this.connection.status !== 'connected' ||
+      this.sessionOperationInProgress ||
+      this.commandsRefreshInProgress ||
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    if (typeof runtime.listCommands !== 'function') {
+      this.emitCommands(sessionId, {
+        status: 'unsupported',
+        items: [],
+        recent: [],
+        message: COMMANDS_UNSUPPORTED_MESSAGE,
+      });
+      return;
+    }
+
+    const cachedItems = this.cachedCommandItems(sessionId);
+    this.emitCommands(sessionId, {
+      status: 'loading',
+      items: cachedItems,
+      recent: this.recentCommands.read(),
+    });
+    this.commandsRefreshInProgress = true;
+    const generation = this.runtimeGeneration;
+    const cwd = this.activeRuntimeCwd!;
+    void runtime.listCommands().then(
+      (commands) => {
+        this.commandsRefreshInProgress = false;
+        if (
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        const items = commands.map(projectCommandSummary);
+        this.commandsCache = { sessionId, items };
+        this.emitCommands(sessionId, {
+          status: 'ready',
+          items,
+          recent: this.recentCommands.read(),
+        });
+      },
+      () => {
+        this.commandsRefreshInProgress = false;
+        if (
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        this.emitCommands(sessionId, {
+          status: 'error',
+          items: this.cachedCommandItems(sessionId),
+          recent: this.recentCommands.read(),
+          message: COMMANDS_LOAD_FAILED_MESSAGE,
+        });
+      },
+    );
+  }
+
+  private cachedCommandItems(
+    sessionId: string,
+  ): readonly CommandSummary[] {
+    return this.commandsCache?.sessionId === sessionId
+      ? this.commandsCache.items
+      : [];
+  }
+
+  /**
+   * Records a `/command` invocation in the recent list when the sent
+   * text starts with a known custom command, then re-broadcasts the
+   * catalog so the popup reorders immediately.
+   */
+  private recordRecentCommand(sessionId: string, text: string): void {
+    if (
+      !text.startsWith('/') ||
+      this.commandsCache?.sessionId !== sessionId
+    ) {
+      return;
+    }
+    const slug = text
+      .slice(1)
+      .split(/\s/, 1)[0]!
+      .toLowerCase();
+    const match = this.commandsCache.items.find(
+      (item) => item.name.toLowerCase() === slug,
+    );
+    if (match === undefined) {
+      return;
+    }
+    const recent = this.recentCommands.record(match.name);
+    this.emitCommands(sessionId, {
+      status: 'ready',
+      items: this.commandsCache.items,
+      recent,
+    });
+  }
+
+  private emitCommands(
+    sessionId: string,
+    commands: SessionCommandsState,
+  ): void {
+    this.emit({
+      type: 'session.commands',
+      sessionId,
+      commands,
     });
   }
 
@@ -4187,6 +4329,15 @@ function projectSkillSummary(skill: RuntimeSkill): SkillSummary {
     location: skill.location,
     enabled: skill.enabled,
     userInvocable: skill.userInvocable,
+  };
+}
+
+function projectCommandSummary(command: RuntimeCommand): CommandSummary {
+  return {
+    name: command.name,
+    description: command.description,
+    argumentHint: command.argumentHint,
+    isExecutable: command.isExecutable,
   };
 }
 
