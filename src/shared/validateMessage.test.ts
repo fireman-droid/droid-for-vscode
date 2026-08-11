@@ -115,6 +115,10 @@ describe('parseWebviewMessage', () => {
       enabled: false,
     },
     {
+      type: 'session.compact',
+      sessionId: 'session-1',
+    },
+    {
       type: 'session.context.refresh',
       sessionId: 'session-1',
     },
@@ -257,6 +261,8 @@ describe('parseWebviewMessage', () => {
     },
     { type: 'session.rename', sessionId: '', title: 'Renamed' },
     { type: 'session.context.refresh', sessionId: '' },
+    { type: 'session.compact', sessionId: '' },
+    { type: 'session.compact', sessionId: 'session-1', extra: true },
     { type: 'skills.refresh', sessionId: '' },
     { type: 'skills.refresh', sessionId: 'session-1', extra: true },
     { type: 'skill.toggle', sessionId: 'session-1', name: '', disabled: true },

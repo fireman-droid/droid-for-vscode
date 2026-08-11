@@ -159,6 +159,11 @@ export interface RuntimeRewindResult {
   readonly sessionId: string;
 }
 
+export interface RuntimeCompactResult {
+  readonly sessionId: string;
+  readonly removedCount: number;
+}
+
 export interface DroidRuntime {
   initialize(
     target: RuntimeSessionTarget | string,
@@ -177,6 +182,12 @@ export interface DroidRuntime {
    * runtime cannot rewind.
    */
   rewind?(params: RuntimeRewindParams): Promise<RuntimeRewindResult>;
+  /**
+   * Compacts the active session's context: Droid summarizes older
+   * messages into a continuation session that this runtime then
+   * targets. Optional: absent when the runtime cannot compact.
+   */
+  compact?(): Promise<RuntimeCompactResult>;
   /**
    * Renames the active session. Optional: absent when the runtime
    * cannot rename sessions.

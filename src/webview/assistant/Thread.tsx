@@ -86,6 +86,7 @@ interface DroidThreadProps {
   readonly mcp: McpPanelState;
   readonly onRetry: () => void;
   readonly onContextRefresh: () => void;
+  readonly onCompact: () => void;
   readonly onSettingUpdate: (update: SessionSettingSelection) => void;
   readonly onSkillsRefresh: () => void;
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
@@ -119,6 +120,7 @@ export const DroidThread = memo(function DroidThread({
   mcp,
   onRetry,
   onContextRefresh,
+  onCompact,
   onSettingUpdate,
   onSkillsRefresh,
   onSkillToggle,
@@ -205,6 +207,7 @@ export const DroidThread = memo(function DroidThread({
             mcp={mcp}
             onRetry={onRetry}
             onContextRefresh={onContextRefresh}
+            onCompact={onCompact}
             onSettingUpdate={onSettingUpdate}
             onSkillsRefresh={onSkillsRefresh}
             onSkillToggle={onSkillToggle}
@@ -514,6 +517,7 @@ function Composer({
   mcp,
   onRetry,
   onContextRefresh,
+  onCompact,
   onSettingUpdate,
   onSkillsRefresh,
   onSkillToggle,
@@ -535,6 +539,7 @@ function Composer({
   readonly mcp: McpPanelState;
   readonly onRetry: () => void;
   readonly onContextRefresh: () => void;
+  readonly onCompact: () => void;
   readonly onSettingUpdate: (update: SessionSettingSelection) => void;
   readonly onSkillsRefresh: () => void;
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
@@ -582,6 +587,7 @@ function Composer({
             disabled={controlsDisabled}
             settingUpdatesDisabled={settingUpdatesDisabled}
             onContextRefresh={onContextRefresh}
+            onCompact={onCompact}
             onSettingUpdate={onSettingUpdate}
             onSkillsRefresh={onSkillsRefresh}
             onSkillToggle={onSkillToggle}

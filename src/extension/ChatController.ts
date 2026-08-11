@@ -154,6 +154,12 @@ const SKILLS_LOAD_FAILED_MESSAGE =
   'Droid did not return the skill list. Retry from the skills panel.';
 const SKILL_TOGGLE_FAILED_MESSAGE =
   'Droid could not update that skill. The list may be stale; refresh it.';
+const COMPACT_BLOCKED_MESSAGE =
+  'Droid cannot compact right now. Wait for the current activity to finish.';
+const COMPACT_UNSUPPORTED_MESSAGE =
+  'This Droid runtime does not support context compaction.';
+const COMPACT_FAILED_MESSAGE =
+  'Droid could not compact the conversation.';
 const MCP_UNSUPPORTED_MESSAGE =
   'This Droid runtime does not expose MCP servers.';
 const MCP_LOAD_FAILED_MESSAGE =
@@ -326,6 +332,9 @@ export class ChatController {
         return;
       case 'session.context.refresh':
         this.handleContextRefresh(message.sessionId);
+        return;
+      case 'session.compact':
+        this.handleSessionCompact(message.sessionId);
         return;
       case 'skills.refresh':
         this.handleSkillsRefresh(message.sessionId);
@@ -941,6 +950,165 @@ export class ChatController {
     this.recoveryStore.selectSession(forkedSessionId);
     void this.recoveryStore.flush();
     return forkedSessionId;
+  }
+
+  private handleSessionCompact(sessionId: string): void {
+    const runtime = this.runtime;
+    if (
+      runtime !== null &&
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    if (
+      runtime === null ||
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    if (
+      isTurnActive(this.turn) ||
+      this.interactions.hasPending() ||
+      this.sessionOperationInProgress ||
+      this.refreshInProgress ||
+      this.settingsUpdate !== null
+    ) {
+      this.emitSessionDiagnostic(
+        'session-compact-blocked',
+        COMPACT_BLOCKED_MESSAGE,
+      );
+      return;
+    }
+    if (typeof runtime.compact !== 'function') {
+      this.emitSessionDiagnostic(
+        'session-compact-unsupported',
+        COMPACT_UNSUPPORTED_MESSAGE,
+      );
+      return;
+    }
+
+    this.sessionOperationInProgress = true;
+    void this.performCompact(runtime, sessionId).finally(() => {
+      this.sessionOperationInProgress = false;
+    });
+  }
+
+  /**
+   * Compacts the active session and adopts the continuation session
+   * that Droid returns, reloading its summarized transcript.
+   */
+  private async performCompact(
+    runtime: DroidRuntime,
+    sessionId: string,
+  ): Promise<void> {
+    const generation = this.runtimeGeneration;
+    const cwd = this.activeRuntimeCwd;
+    if (cwd === null) {
+      return;
+    }
+
+    let compactedSessionId: string;
+    let removedCount: number;
+    try {
+      const result = await runtime.compact!();
+      compactedSessionId = result.sessionId;
+      removedCount = result.removedCount;
+    } catch {
+      if (
+        this.isCurrentSessionOperation(
+          runtime,
+          generation,
+          sessionId,
+          cwd,
+        )
+      ) {
+        this.emitSessionDiagnostic(
+          'session-compact-failed',
+          COMPACT_FAILED_MESSAGE,
+        );
+      }
+      return;
+    }
+    if (
+      !this.isCurrentSessionOperation(
+        runtime,
+        generation,
+        sessionId,
+        cwd,
+      )
+    ) {
+      return;
+    }
+    if (!isSafeBridgeId(compactedSessionId)) {
+      this.emitSessionDiagnostic(
+        'session-compact-failed',
+        COMPACT_FAILED_MESSAGE,
+      );
+      return;
+    }
+
+    const previousTitle =
+      this.activeSessionSummary()?.title ?? 'Current session';
+    // The continuation session supersedes the compacted one, so the
+    // superseded entry leaves the catalog instead of lingering as a
+    // second row.
+    this.sessions = {
+      ...this.sessions,
+      items: this.sessions.items.filter(({ id }) => id !== sessionId),
+    };
+    this.sessionId = compactedSessionId;
+    this.turn = null;
+    this.sessions = this.withActiveSession(this.sessions, {
+      id: compactedSessionId,
+      title: previousTitle,
+      messageCount: 0,
+      modifiedTime: new Date().toISOString(),
+      active: true,
+    });
+
+    let transcript: HostTranscriptState | null = null;
+    try {
+      const loaded = await this.sessionHistory.loadHistory({
+        cwd,
+        sessionId: compactedSessionId,
+      });
+      if (loaded.status === 'available') {
+        transcript = loaded.state;
+      }
+    } catch {
+      transcript = null;
+    }
+    if (
+      !this.isCurrentSessionOperation(
+        runtime,
+        generation,
+        compactedSessionId,
+        cwd,
+      )
+    ) {
+      return;
+    }
+    // If the summarized history cannot be read, keep the previous
+    // transcript visible; the runtime context is compacted either way.
+    this.transcript =
+      transcript ?? { ...this.transcript, historyStatus: 'partial' };
+    this.recoveryStore.writeSession(compactedSessionId, this.transcript);
+    this.recoveryStore.selectSession(compactedSessionId);
+    void this.recoveryStore.flush();
+    this.emitSnapshot();
+    this.emit({
+      type: 'runtime.diagnostic',
+      sessionId: compactedSessionId,
+      turnId: null,
+      severity: 'info',
+      code: 'session-compacted',
+      message:
+        removedCount > 0
+          ? `Conversation compacted: ${removedCount} earlier messages summarized.`
+          : 'Conversation compacted.',
+    });
+    this.refreshContextAfterTurn(compactedSessionId);
   }
 
   private handleRetry(sessionId: string | null): void {

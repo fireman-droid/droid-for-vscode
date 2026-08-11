@@ -1890,6 +1890,117 @@ describe('ChatController', () => {
     expect(JSON.stringify(messages)).not.toContain('private mcp failure');
   });
 
+  it('compacts the session, adopts the continuation, and reloads its transcript', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      compact: vi.fn(async () => ({
+        sessionId: 'session-compacted',
+        removedCount: 5,
+      })),
+    });
+    const history: SessionHistoryLoader = {
+      loadHistory: vi.fn(async ({ sessionId }) =>
+        sessionId === 'session-compacted'
+          ? {
+              status: 'available' as const,
+              state: {
+                transcript: [
+                  {
+                    id: 'summary-1',
+                    kind: 'assistant' as const,
+                    turnId: 'summary-turn',
+                    text: 'Summary of earlier work',
+                  },
+                ],
+                historyStatus: 'complete' as const,
+                truncated: false,
+              },
+            }
+          : {
+              status: 'unavailable' as const,
+              reason: 'history-failed' as const,
+              message:
+                'Saved Droid session history could not be loaded.' as const,
+            },
+      ),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      history,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'session.compact',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(snapshots(messages).at(-1)).toMatchObject({
+        sessionId: 'session-compacted',
+        transcript: [{ kind: 'assistant', text: 'Summary of earlier work' }],
+      });
+    });
+    expect(runtime.compact).toHaveBeenCalledOnce();
+    expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+      severity: 'info',
+      code: 'session-compacted',
+      message: expect.stringContaining('5'),
+    });
+    // The superseded session no longer appears next to the continuation.
+    const sessions = snapshots(messages).at(-1)!.sessions;
+    expect(
+      sessions.items.filter(({ id }) => id === 'session-1'),
+    ).toHaveLength(0);
+    expect(sessions.items.at(-1)).toMatchObject({
+      id: 'session-compacted',
+      active: true,
+    });
+
+    // Wrong session id is ignored entirely.
+    controller.handleMessage({
+      type: 'session.compact',
+      sessionId: 'session-other',
+    });
+    expect(runtime.compact).toHaveBeenCalledOnce();
+  });
+
+  it('reports unsupported and failed compaction safely', async () => {
+    const unsupported = createController(() => createMockRuntime());
+    ready(unsupported.controller);
+    await waitForConnected(unsupported.messages);
+    unsupported.controller.handleMessage({
+      type: 'session.compact',
+      sessionId: 'session-1',
+    });
+    expect(
+      lastMessage(unsupported.messages, 'runtime.diagnostic'),
+    ).toMatchObject({ code: 'session-compact-unsupported' });
+
+    const failing = Object.assign(createMockRuntime(), {
+      compact: vi.fn(async () => {
+        throw new Error('private compaction failure');
+      }),
+    });
+    const { controller, messages } = createController(() => failing);
+    ready(controller);
+    await waitForConnected(messages);
+    controller.handleMessage({
+      type: 'session.compact',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+        code: 'session-compact-failed',
+      });
+    });
+    expect(JSON.stringify(messages)).not.toContain(
+      'private compaction failure',
+    );
+  });
+
   it('clears stale catalog rows before loading a changed workspace', async () => {
     const workspace = {
       cwd: 'C:\\workspace-a',

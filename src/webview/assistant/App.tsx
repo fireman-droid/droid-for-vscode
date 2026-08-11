@@ -275,6 +275,12 @@ export function App(): React.JSX.Element {
     },
     [sessionId, vscode],
   );
+  const handleCompact = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, { type: 'session.compact', sessionId });
+  }, [sessionId, vscode]);
   const handleMcpRefresh = useCallback((): void => {
     if (sessionId === null) {
       return;
@@ -387,6 +393,7 @@ export function App(): React.JSX.Element {
           mcp={state.mcp}
           onRetry={handleRetry}
           onContextRefresh={handleContextRefresh}
+          onCompact={handleCompact}
           onSettingUpdate={handleSettingUpdate}
           onSkillsRefresh={handleSkillsRefresh}
           onSkillToggle={handleSkillToggle}

@@ -72,6 +72,15 @@ SDK `toggleMcpServer`（settingsLevel: user）后重新 list 回发。UI 显示
 状态圆点（connected/connecting/failed/disabled）、needs auth 徽标，
 Tool 列表可展开并带 read-only/off 徽标。MCP 认证流程（OAuth URL 跳转）
 无安全公开渠道，保持未实现。
+
+同日追加 Session Compact：Context 浮层新增 “Compact conversation”
+动作（`session.compact` Bridge 消息）。Runtime 经 SDK `session.compact()`
+让 Droid 把较早消息总结进一个延续 Session 并就地收养（与 Rewind 相同的
+Session 替换机制，保留 BYOK 目录视图）。Host 校验新 Session ID、把被
+替代的 Session 从目录中移除、重新加载延续 Session 的摘要转录（读取失败
+时保留原转录并降级 historyStatus 为 partial）、写入恢复存储、发出
+info 级 `session-compacted` 诊断（含被总结的消息数）并自动刷新 Context
+用量。运行中的 Turn、待处理交互或其他 Session 操作期间会拒绝压缩。
 下一轮严格两小时实现窗口的证据、范围、执行顺序、验收和回滚已经固化到
 `docs/preflight/`。该预研确认 Context 的累计 `used`、Breakdown
 `usedTokens`、`freeTokens` 和 Category Sum 都不能表示当前窗口；只有公开
@@ -466,7 +475,7 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
 仍然只是探测结果或声明：
 
 - 图片和文档附件能力（Skills 与 MCP 浏览启停已生产接通）
-- Session Archive、显式 Fork、Compact（Rename 和编辑重问 Rewind
+- Session Archive、显式 Fork（Rename、编辑重问 Rewind 和 Compact
   已生产接通）
 - Mission Mode 和 Events
 - Worktree Session Creation
@@ -568,7 +577,8 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [ ] Session Delete
 - [ ] Session Favorite
 - [ ] Session Fork
-- [ ] Session Compact
+- [x] Session Compact（Context 浮层 “Compact conversation”，SDK
+      `session.compact()`，收养延续 Session 并重载摘要转录）
 - [x] Session Rewind（经编辑重问触发，建立分支 Session）
 - [ ] Session 分支关系
 - [ ] 完整 Spec Mode

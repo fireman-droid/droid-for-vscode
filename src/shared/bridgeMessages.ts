@@ -249,6 +249,15 @@ export interface SessionContextRefreshMessage {
   readonly sessionId: string;
 }
 
+/**
+ * Compacts the active session's context: Droid summarizes older
+ * messages into a continuation session and the host adopts it.
+ */
+export interface SessionCompactMessage {
+  readonly type: 'session.compact';
+  readonly sessionId: string;
+}
+
 /** Requests the current Droid skill catalog for the session. */
 export interface SkillsRefreshMessage {
   readonly type: 'skills.refresh';
@@ -316,6 +325,7 @@ export type WebviewToHostMessage =
   | SessionNewMessage
   | SessionRenameMessage
   | SessionContextRefreshMessage
+  | SessionCompactMessage
   | SkillsRefreshMessage
   | SkillToggleMessage
   | McpRefreshMessage

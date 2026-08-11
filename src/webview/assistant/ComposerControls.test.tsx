@@ -47,6 +47,7 @@ describe('ComposerControls', () => {
         disabled={false}
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
         onSettingUpdate={vi.fn()}
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
@@ -77,6 +78,7 @@ describe('ComposerControls', () => {
         disabled={false}
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
         onSettingUpdate={vi.fn()}
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
@@ -123,6 +125,7 @@ describe('ComposerControls', () => {
         disabled={false}
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
         onSettingUpdate={vi.fn()}
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
@@ -171,6 +174,7 @@ describe('ComposerControls', () => {
         disabled={false}
         settingUpdatesDisabled={false}
         onContextRefresh={onContextRefresh}
+        onCompact={vi.fn()}
         onSettingUpdate={onSettingUpdate}
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
@@ -269,6 +273,7 @@ describe('ComposerControls', () => {
         disabled={false}
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
         onSettingUpdate={onSettingUpdate}
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
@@ -332,6 +337,7 @@ describe('ComposerControls', () => {
         disabled={false}
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
         onSettingUpdate={vi.fn()}
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
@@ -362,6 +368,7 @@ describe('ComposerControls', () => {
         disabled={false}
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
         onSettingUpdate={vi.fn()}
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
@@ -392,6 +399,7 @@ describe('ComposerControls', () => {
         disabled={false}
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
         onSettingUpdate={vi.fn()}
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={onSkillsRefresh}
@@ -420,6 +428,7 @@ describe('ComposerControls', () => {
         disabled={false}
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
         onSettingUpdate={vi.fn()}
         skills={{
           status: 'ready',
@@ -490,6 +499,7 @@ describe('ComposerControls', () => {
         disabled={false}
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
         onSettingUpdate={vi.fn()}
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
@@ -518,6 +528,7 @@ describe('ComposerControls', () => {
         disabled={false}
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
         onSettingUpdate={vi.fn()}
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
@@ -592,6 +603,40 @@ describe('ComposerControls', () => {
     expect(screen.getByText('1/2 on')).toBeDefined();
   });
 
+  it('offers compaction from the context popover', async () => {
+    const user = userEvent.setup();
+    const onCompact = vi.fn();
+    render(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={onCompact}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByLabelText(/Context used 25 of 100/));
+    const compactButton = screen.getByRole('button', {
+      name: 'Compact conversation',
+    });
+    await user.click(compactButton);
+    expect(onCompact).toHaveBeenCalledOnce();
+  });
+
   it('reports a Context error once', async () => {
     const user = userEvent.setup();
     render(
@@ -610,6 +655,7 @@ describe('ComposerControls', () => {
         disabled={false}
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
         onSettingUpdate={vi.fn()}
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}

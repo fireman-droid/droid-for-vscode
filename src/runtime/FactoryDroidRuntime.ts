@@ -34,6 +34,7 @@ import {
   RUNTIME_REASONING_EFFORTS,
   RUNTIME_SKILL_LOCATIONS,
   type DroidRuntime,
+  type RuntimeCompactResult,
   type RuntimeRewindParams,
   type RuntimeRewindResult,
   type RuntimeContextAccuracy,
@@ -86,6 +87,9 @@ export interface FactoryDroidSession {
   rewind?(
     params: FactoryDroidSessionRewindParams,
   ): Promise<{ session: FactoryDroidSession }>;
+  compact?(params?: {
+    customInstructions?: string;
+  }): Promise<{ session: FactoryDroidSession; removedCount: number }>;
   rename?(params: { title: string }): Promise<void>;
   listSkills?(): Promise<{ skills: unknown[] }>;
   setSkillDisabled?(params: {
@@ -428,6 +432,69 @@ export class FactoryDroidRuntime implements DroidRuntime {
       },
     });
     return { sessionId: nextSession.id };
+  }
+
+  async compact(): Promise<RuntimeCompactResult> {
+    const session = this.requireSession();
+    if (this.activeTurn) {
+      throw new Error(
+        'Droid runtime cannot compact while a turn is active.',
+      );
+    }
+    if (typeof session.compact !== 'function') {
+      throw new Error('The Droid session does not support compaction.');
+    }
+
+    const startedAt = performance.now();
+    this.recordDiagnostic({
+      level: 'info',
+      name: 'runtime.compact.started',
+    });
+
+    let nextSession: FactoryDroidSession;
+    let removedCount: number;
+    try {
+      const outcome = await session.compact();
+      nextSession = outcome.session;
+      removedCount = Number.isSafeInteger(outcome.removedCount)
+        ? outcome.removedCount
+        : 0;
+    } catch (error) {
+      this.recordDiagnostic({
+        level: 'error',
+        name: 'runtime.compact.finished',
+        attributes: {
+          durationMs: Math.round(performance.now() - startedAt),
+          outcome: 'sdk-error',
+        },
+      });
+      throw error;
+    }
+
+    // Compaction continues in a new session; re-apply the captured
+    // model catalog view so `availableModels` survives the swap.
+    const availableModels = session.availableModels;
+    this.session =
+      availableModels === undefined
+        ? nextSession
+        : createCatalogSessionView(nextSession, availableModels);
+    if (this.sessionTarget) {
+      this.sessionTarget = {
+        kind: 'resume',
+        cwd: this.sessionTarget.cwd,
+        sessionId: nextSession.id,
+      };
+    }
+
+    this.recordDiagnostic({
+      level: 'info',
+      name: 'runtime.compact.finished',
+      attributes: {
+        durationMs: Math.round(performance.now() - startedAt),
+        outcome: 'success',
+      },
+    });
+    return { sessionId: nextSession.id, removedCount };
   }
 
   async rename(title: string): Promise<void> {
@@ -1123,6 +1190,9 @@ function createCatalogSessionView(
   };
   if (typeof session.rewind === 'function') {
     view.rewind = (params) => session.rewind!(params);
+  }
+  if (typeof session.compact === 'function') {
+    view.compact = (params) => session.compact!(params);
   }
   if (typeof session.rename === 'function') {
     view.rename = (params) => session.rename!(params);

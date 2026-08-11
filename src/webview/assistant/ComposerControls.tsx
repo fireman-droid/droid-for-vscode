@@ -42,6 +42,7 @@ interface ComposerControlsProps {
   readonly disabled: boolean;
   readonly settingUpdatesDisabled: boolean;
   readonly onContextRefresh: () => void;
+  readonly onCompact: () => void;
   readonly onSettingUpdate: (update: SessionSettingSelection) => void;
   readonly onSkillsRefresh: () => void;
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
@@ -114,6 +115,7 @@ export function ComposerControls({
   disabled,
   settingUpdatesDisabled,
   onContextRefresh,
+  onCompact,
   onSettingUpdate,
   onSkillsRefresh,
   onSkillToggle,
@@ -270,6 +272,7 @@ export function ComposerControls({
           context={context}
           disabled={disabled || context.status === 'loading'}
           onRefresh={onContextRefresh}
+          onCompact={onCompact}
         />
       ) : null}
       {openPanel === 'mode' && confirmed !== null ? (
@@ -1051,11 +1054,13 @@ function ContextPopover({
   context,
   disabled,
   onRefresh,
+  onCompact,
 }: {
   readonly id: string;
   readonly context: SessionContextState;
   readonly disabled: boolean;
   readonly onRefresh: () => void;
+  readonly onCompact: () => void;
 }): React.JSX.Element {
   return (
     <div
@@ -1089,6 +1094,19 @@ function ContextPopover({
           {context.message}
         </p>
       ) : null}
+      <div className="dvx-context-compact">
+        <button
+          type="button"
+          className="dvx-context-compact-button"
+          disabled={disabled}
+          onClick={onCompact}
+        >
+          Compact conversation
+        </button>
+        <p className="dvx-context-compact-note">
+          Summarizes earlier messages to free up context.
+        </p>
+      </div>
     </div>
   );
 }

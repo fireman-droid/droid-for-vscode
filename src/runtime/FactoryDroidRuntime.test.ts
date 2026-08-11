@@ -183,6 +183,51 @@ describe('FactoryDroidRuntime', () => {
     ).rejects.toThrow('does not support rewind');
   });
 
+  it('compacts the session and adopts the continuation session', async () => {
+    const continuation = {
+      ...createMockSession(async function* () {
+        yield textDelta('after compaction');
+        yield successfulResult();
+      }),
+      id: 'session-compacted',
+    };
+    const session = Object.assign(
+      createMockSession(async function* () {}),
+      {
+        compact: vi.fn(async () => ({
+          session: continuation,
+          removedCount: 12,
+        })),
+      },
+    );
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    const result = await runtime.compact();
+    expect(result).toEqual({
+      sessionId: 'session-compacted',
+      removedCount: 12,
+    });
+
+    const events = await collect(runtime.sendTurn('next'));
+    expect(continuation.stream).toHaveBeenCalledWith('next', {
+      includePartialMessages: true,
+    });
+    expect(session.stream).not.toHaveBeenCalled();
+    expect(events).toEqual([
+      { type: 'text-delta', text: 'after compaction' },
+      { type: 'turn-complete', outcome: 'success' },
+    ]);
+
+    const bare = createRuntime(async () =>
+      createMockSession(async function* () {}),
+    );
+    await bare.initialize('C:\\workspace');
+    await expect(bare.compact()).rejects.toThrow(
+      'does not support compaction',
+    );
+  });
+
   it('projects only safe skill fields and enforces toggle success', async () => {
     const session = Object.assign(
       createMockSession(async function* () {}),

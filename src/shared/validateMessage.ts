@@ -19,6 +19,7 @@ import {
   type McpServerToggleMessage,
   type PermissionRespondMessage,
   type RuntimeRetryMessage,
+  type SessionCompactMessage,
   type SessionContextRefreshMessage,
   type SessionNewMessage,
   type SessionRenameMessage,
@@ -73,6 +74,8 @@ export function parseWebviewMessage(
         return parseSessionRename(value);
       case 'session.context.refresh':
         return parseSessionContextRefresh(value);
+      case 'session.compact':
+        return parseSessionCompact(value);
       case 'skills.refresh':
         return parseSkillsRefresh(value);
       case 'skill.toggle':
@@ -359,6 +362,19 @@ function parseSessionContextRefresh(
     type: 'session.context.refresh',
     sessionId: value.sessionId,
   };
+}
+
+function parseSessionCompact(
+  value: UnknownRecord,
+): SessionCompactMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'session.compact', sessionId: value.sessionId };
 }
 
 function parseSkillsRefresh(

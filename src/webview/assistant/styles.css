@@ -2570,6 +2570,44 @@ body {
   font-weight: 500;
 }
 
+.dvx-context-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--dvx-border);
+}
+
+.dvx-context-compact-button {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dvx-ink);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.dvx-context-compact-button:hover:not(:disabled) {
+  border-color: var(--dvx-accent);
+  color: var(--dvx-accent);
+}
+
+.dvx-context-compact-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.dvx-context-compact-note {
+  margin: 0;
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
 /* Interactions render as a flat inline block inside the conversation flow:
    one surface, hairline separators, no stacked cards. */
 .dvx-interaction-panel {
