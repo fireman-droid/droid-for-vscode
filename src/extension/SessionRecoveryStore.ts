@@ -6,6 +6,7 @@ import {
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
+  MAX_TOOL_DETAIL_LENGTH,
   MAX_TOOL_NAME_LENGTH,
   MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
   MAX_TURN_TEXT_LENGTH,
@@ -13,9 +14,11 @@ import {
   TRANSCRIPT_THINKING_STATUSES,
   TRANSCRIPT_TOOL_STATUSES,
   TOOL_ACTIVITY_UPDATE_KINDS,
+  TOOL_DETAIL_KINDS,
   type ChangedFileSummary,
   type SessionHistoryStatus,
   type SessionTranscriptItem,
+  type ToolDetailKind,
 } from '../shared/bridgeMessages';
 import {
   hasExactKeys,
@@ -610,7 +613,12 @@ function parseTool(
   const legacy = hasExactKeys(value, legacyKeys);
   if (
     !legacy &&
-    !hasExactKeys(value, currentKeys, ['durationMs', 'filePath'])
+    !hasExactKeys(value, currentKeys, [
+      'durationMs',
+      'filePath',
+      'detailKind',
+      'detail',
+    ])
   ) {
     return undefined;
   }
@@ -619,6 +627,8 @@ function parseTool(
   const toolUseId = dataValue(value, 'toolUseId');
   const toolName = dataValue(value, 'toolName');
   const filePath = legacy ? undefined : dataValue(value, 'filePath');
+  const detailKind = legacy ? undefined : dataValue(value, 'detailKind');
+  const detail = legacy ? undefined : dataValue(value, 'detail');
   const action = legacy
     ? typeof toolName === 'string'
       ? summarizeToolAction(toolName)
@@ -647,7 +657,10 @@ function parseTool(
       ((progressCount as number) > 0 && latestUpdateKind !== null)) &&
     (durationMs === undefined ||
       (Number.isSafeInteger(durationMs) && (durationMs as number) >= 0)) &&
-    (filePath === undefined || isSafeWorkspaceRelativePath(filePath))
+    (filePath === undefined || isSafeWorkspaceRelativePath(filePath)) &&
+    ((detailKind === undefined && detail === undefined) ||
+      (isOneOf(detailKind, TOOL_DETAIL_KINDS) &&
+        isNonEmptyBoundedString(detail, MAX_TOOL_DETAIL_LENGTH)))
     ? {
         id,
         kind: 'tool',
@@ -665,6 +678,12 @@ function parseTool(
         ...(filePath === undefined
           ? {}
           : { filePath: filePath as string }),
+        ...(detailKind === undefined
+          ? {}
+          : {
+              detailKind: detailKind as ToolDetailKind,
+              detail: detail as string,
+            }),
       }
     : undefined;
 }

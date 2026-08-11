@@ -33,7 +33,8 @@ export function transcriptItemTextUnits(
         item.toolName.length +
         item.action.length +
         item.status.length +
-        (item.latestUpdateKind?.length ?? 0)
+        (item.latestUpdateKind?.length ?? 0) +
+        (item.detail?.length ?? 0)
       );
     case 'changes':
       return (

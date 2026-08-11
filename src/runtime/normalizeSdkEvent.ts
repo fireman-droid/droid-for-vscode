@@ -11,6 +11,7 @@ import {
   summarizeToolAction,
   type ToolActivityUpdateKind,
 } from '../shared/toolActivity';
+import { extractToolDetail } from './toolDetail';
 import {
   extractToolFilePath,
   toWorkspaceRelativePath,
@@ -51,14 +52,11 @@ export function normalizeSdkEvent(
       if (activity === undefined) {
         return undefined;
       }
-      const filePath = normalizeToolFilePath(
-        activity.toolName,
+      return withToolInputContext(
+        activity,
         event.input,
         workspaceRoot,
       );
-      return filePath === undefined
-        ? activity
-        : { ...activity, filePath };
     }
 
     case 'tool_call_delta': {
@@ -70,14 +68,11 @@ export function normalizeSdkEvent(
       if (activity === undefined) {
         return undefined;
       }
-      const filePath = normalizeToolFilePath(
-        activity.toolName,
+      return withToolInputContext(
+        activity,
         event.toolUse.input,
         workspaceRoot,
       );
-      return filePath === undefined
-        ? activity
-        : { ...activity, filePath };
     }
 
     case 'tool_progress': {
@@ -180,6 +175,26 @@ function normalizeToolActivity<
     toolName: normalizedToolName,
     toolUseId,
     action: summarizeToolAction(normalizedToolName),
+  };
+}
+
+function withToolInputContext(
+  activity: Extract<RuntimeEvent, { type: 'tool-start' }>,
+  input: unknown,
+  workspaceRoot: string | undefined,
+): RuntimeEvent {
+  const filePath = normalizeToolFilePath(
+    activity.toolName,
+    input,
+    workspaceRoot,
+  );
+  const detail = extractToolDetail(activity.toolName, input);
+  return {
+    ...activity,
+    ...(filePath === undefined ? {} : { filePath }),
+    ...(detail === undefined
+      ? {}
+      : { detailKind: detail.kind, detail: detail.text }),
   };
 }
 

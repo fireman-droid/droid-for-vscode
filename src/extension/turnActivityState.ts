@@ -5,6 +5,7 @@ import {
   MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
   type ToolActivityStatus,
   type ToolActivityUpdateKind,
+  type ToolDetailKind,
 } from '../shared/bridgeMessages';
 import type { RuntimeEvent } from '../runtime/runtimeEvents';
 
@@ -32,6 +33,8 @@ export interface ToolActivityProjection {
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
   readonly durationMs?: number;
   readonly filePath?: string;
+  readonly detailKind?: ToolDetailKind;
+  readonly detail?: string;
 }
 
 interface ToolActivityEntry {
@@ -40,6 +43,8 @@ interface ToolActivityEntry {
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
   readonly startedAtMs?: number;
   readonly filePath?: string;
+  readonly detailKind?: ToolDetailKind;
+  readonly detail?: string;
 }
 
 export interface TurnActivityState {
@@ -148,15 +153,10 @@ export function projectToolEvent(
         return { state, projection: null };
       }
       const entry: ToolActivityEntry = {
+        ...existing,
         status: 'running',
         progressCount: existing.progressCount + 1,
         latestUpdateKind: event.updateKind,
-        ...(existing.startedAtMs === undefined
-          ? {}
-          : { startedAtMs: existing.startedAtMs }),
-        ...(existing.filePath === undefined
-          ? {}
-          : { filePath: existing.filePath }),
       };
       const tools = new Map(state.tools);
       tools.set(event.toolUseId, entry);
@@ -168,22 +168,28 @@ export function projectToolEvent(
 
     if (event.type !== 'tool-result') {
       // A later tool-start can complete a streamed tool call's input,
-      // e.g. the file path arriving only with the full call.
-      if (
-        event.type === 'tool-start' &&
-        event.filePath !== undefined &&
-        existing.filePath === undefined
-      ) {
-        const entry: ToolActivityEntry = {
-          ...existing,
-          filePath: event.filePath,
-        };
-        const tools = new Map(state.tools);
-        tools.set(event.toolUseId, entry);
-        return {
-          state: { ...state, tools },
-          projection: projectEntry(event, entry),
-        };
+      // e.g. the file path or command arriving only with the full call.
+      if (event.type === 'tool-start') {
+        const addsFilePath =
+          event.filePath !== undefined &&
+          existing.filePath === undefined;
+        const addsDetail =
+          event.detail !== undefined && existing.detail === undefined;
+        if (addsFilePath || addsDetail) {
+          const entry: ToolActivityEntry = {
+            ...existing,
+            ...(addsFilePath ? { filePath: event.filePath } : {}),
+            ...(addsDetail
+              ? { detailKind: event.detailKind, detail: event.detail }
+              : {}),
+          };
+          const tools = new Map(state.tools);
+          tools.set(event.toolUseId, entry);
+          return {
+            state: { ...state, tools },
+            projection: projectEntry(event, entry),
+          };
+        }
       }
       return { state, projection: null };
     }
@@ -218,6 +224,9 @@ export function projectToolEvent(
     ...(event.type === 'tool-start' && event.filePath !== undefined
       ? { filePath: event.filePath }
       : {}),
+    ...(event.type === 'tool-start' && event.detail !== undefined
+      ? { detailKind: event.detailKind, detail: event.detail }
+      : {}),
   };
   const tools = new Map(state.tools);
   tools.set(event.toolUseId, entry);
@@ -249,5 +258,8 @@ function projectEntry(
     ...(entry.filePath === undefined
       ? {}
       : { filePath: entry.filePath }),
+    ...(entry.detail === undefined || entry.detailKind === undefined
+      ? {}
+      : { detailKind: entry.detailKind, detail: entry.detail }),
   };
 }

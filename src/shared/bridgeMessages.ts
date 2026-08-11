@@ -59,6 +59,14 @@ export const MAX_SKILL_ITEMS = 200;
 export const MAX_SKILL_NAME_LENGTH = 128;
 export const MAX_SKILL_DESCRIPTION_LENGTH = 512;
 export const MAX_TOOL_FILE_PATH_LENGTH = 512;
+export const MAX_TOOL_DETAIL_LENGTH = 4_000;
+
+/**
+ * Extra human-readable context for a tool activity: the shell command
+ * an execute tool ran, or the plan text a task-plan tool wrote.
+ */
+export const TOOL_DETAIL_KINDS = ['command', 'plan'] as const;
+export type ToolDetailKind = (typeof TOOL_DETAIL_KINDS)[number];
 export const MAX_MCP_SERVERS = 100;
 export const MAX_MCP_TOOLS_PER_SERVER = 200;
 export const MAX_MCP_NAME_LENGTH = 128;
@@ -743,6 +751,10 @@ export interface ToolTranscriptItem {
    * inside the workspace.
    */
   readonly filePath?: string;
+  /** Present together with `detail`; says how to render it. */
+  readonly detailKind?: ToolDetailKind;
+  /** Command text or plan text extracted from the tool input. */
+  readonly detail?: string;
 }
 
 export interface DiagnosticTranscriptItem {
@@ -932,6 +944,8 @@ export interface ToolActivityMessage {
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
   readonly durationMs?: number;
   readonly filePath?: string;
+  readonly detailKind?: ToolDetailKind;
+  readonly detail?: string;
 }
 
 /** Announces the changed-files summary for a finished turn. */

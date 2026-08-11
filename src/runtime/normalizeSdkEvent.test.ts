@@ -121,6 +121,8 @@ describe('normalizeSdkEvent', () => {
       toolName: 'Execute',
       toolUseId: 'tool-2',
       action: 'Ran a local command',
+      detailKind: 'command',
+      detail: 'sensitive command',
     });
     const projectedProgress = normalizeSdkEvent(toolProgress);
     expect(projectedProgress).toEqual({
@@ -143,9 +145,10 @@ describe('normalizeSdkEvent', () => {
       projectedProgress,
       normalizeSdkEvent(toolResult),
     ]);
+    // The execute command is intentionally surfaced so the UI can show
+    // what ran, mirroring Cursor. Other tool content stays excluded.
     for (const prohibited of [
       'sensitive-path',
-      'sensitive command',
       'sensitive-signature',
       'sensitive progress content',
       'sensitive progress update',

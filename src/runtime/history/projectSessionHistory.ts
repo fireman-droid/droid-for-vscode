@@ -19,6 +19,7 @@ import {
   transcriptItemTextUnits,
 } from '../../shared/transcriptLimits';
 import { summarizeToolAction } from '../../shared/toolActivity';
+import { extractToolDetail } from '../toolDetail';
 import {
   extractToolFilePath,
   toWorkspaceRelativePath,
@@ -465,6 +466,7 @@ function appendTool(
     toolUseId,
   );
   const filePath = historyToolFilePath(projection, toolName, block.input);
+  const detail = extractToolDetail(toolName, block.input);
   appendTranscriptItem(projection, {
     id: transcriptId,
     kind: 'tool',
@@ -476,6 +478,9 @@ function appendTool(
     progressCount: 0,
     latestUpdateKind: null,
     ...(filePath === undefined ? {} : { filePath }),
+    ...(detail === undefined
+      ? {}
+      : { detailKind: detail.kind, detail: detail.text }),
   });
   projection.toolCounts.set(
     turnId,

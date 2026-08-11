@@ -4,6 +4,7 @@ import {
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
+  MAX_TOOL_DETAIL_LENGTH,
   MAX_TOOL_FILE_PATH_LENGTH,
   MAX_TOOL_NAME_LENGTH,
   MAX_TURN_TEXT_LENGTH,
@@ -364,6 +365,10 @@ function projectToolActivity(
     0,
     MAX_TOOL_FILE_PATH_LENGTH,
   );
+  const detail =
+    message.detailKind === undefined
+      ? undefined
+      : message.detail?.slice(0, MAX_TOOL_DETAIL_LENGTH);
   if (existingIndex >= 0) {
     const existing = state.transcript[existingIndex] as Extract<
       SessionTranscriptItem,
@@ -380,6 +385,9 @@ function projectToolActivity(
         ? {}
         : { durationMs: message.durationMs }),
       ...(filePath === undefined ? {} : { filePath }),
+      ...(detail === undefined
+        ? {}
+        : { detailKind: message.detailKind, detail }),
     });
   }
 
@@ -405,6 +413,9 @@ function projectToolActivity(
       ? {}
       : { durationMs: message.durationMs }),
     ...(filePath === undefined ? {} : { filePath }),
+    ...(detail === undefined
+      ? {}
+      : { detailKind: message.detailKind, detail }),
   });
 }
 

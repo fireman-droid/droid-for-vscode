@@ -198,6 +198,25 @@ Remove/Confirm remove 按钮（4 秒未确认自动复位），经
 既有捕获流程暂存为文本附件（≤256K 字符截断），无诊断或无未提交
 变更时发出 warning 诊断说明，无 git/无工作区时按读取失败处理。
 
+同日追加活动可观测性打磨（“看得见在干活”）：（1）运行中 Tool 与
+Thinking 行的动作文字带从左到右的 shimmer 动画，收起/展开的详情
+体带 220ms 淡入位移过渡，`prefers-reduced-motion` 下全部退化为静态。
+（2）execute 类 Tool 在行内以 code chip 显示命令首行，展开显示完整
+命令；task-plan 类 Tool（TodoWrite）把计划文本解析为带进度
+（`已完成/总数`）的清单，含 pending/in_progress/completed 三态标记与
+完成项删除线，plan 行默认展开。命令与计划文本经 Runtime
+`extractToolDetail` 有界提取（≤4000 字符，保留换行/制表符），随
+`tool.activity` 与 Tool transcript 项（新增 `detailKind`/`detail`
+字段，双向校验）下发，历史投影与恢复存储同样解析。（3）Runtime 流
+循环为每个 tool-start / tool-result / stream error 追加带时间戳的
+结构化诊断（`runtime.tool.started` / `runtime.tool.finished` /
+`runtime.stream.error`），在 DroidVisX Logs 输出通道形成实时步骤
+时间线；遵循诊断脱敏边界，不记录命令/路径等自由文本。Tool 行的
+`<details>` 改为受控 open 状态（每行 `useState`，plan 默认开），
+修复复用 DOM 节点时 `open` 残留的 React 非受控 details 缺陷。
+（4）修复 Context 弹层中 Compact 区块相对其余内容左缩进不齐
+（补齐 16px 水平内边距）。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件

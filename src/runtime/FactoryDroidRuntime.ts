@@ -293,12 +293,31 @@ export class FactoryDroidRuntime implements DroidRuntime {
           switch (event.type) {
             case 'tool-start':
               toolStartCount += 1;
+              // The action text is intentionally omitted: the
+              // diagnostics sink redacts free-text values, so the
+              // safe, useful signal is the timestamped event itself,
+              // which surfaces a live play-by-play of tool activity.
+              this.recordDiagnostic({
+                level: 'debug',
+                name: 'runtime.tool.started',
+              });
               break;
             case 'tool-progress':
               toolProgressCount += 1;
               break;
             case 'tool-result':
               toolResultCount += 1;
+              this.recordDiagnostic({
+                level: event.isError ? 'warn' : 'debug',
+                name: 'runtime.tool.finished',
+                attributes: { isError: event.isError },
+              });
+              break;
+            case 'error':
+              this.recordDiagnostic({
+                level: 'error',
+                name: 'runtime.stream.error',
+              });
               break;
           }
           if (event.type === 'turn-complete') {

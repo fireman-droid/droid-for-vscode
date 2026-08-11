@@ -1208,6 +1208,155 @@ html, body, #root {
   white-space: nowrap;
 }
 
+/* Running activity rows shimmer left-to-right so it is obvious Droid
+   is still working, mirroring the Cursor progress affordance. */
+@keyframes dvx-activity-shimmer {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+
+.dvx-activity-running .dvx-tool-action {
+  background-image: linear-gradient(
+    100deg,
+    #6b6259 0%,
+    #6b6259 38%,
+    #c9a15a 50%,
+    #6b6259 62%,
+    #6b6259 100%
+  );
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: dvx-activity-shimmer 1.6s linear infinite;
+}
+
+.dvx-tool-command-inline {
+  min-width: 0;
+  max-width: 52%;
+  overflow: hidden;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 5%);
+  color: var(--dvx-muted);
+  font-family: var(--dvx-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-tool-command {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border-radius: 7px;
+  background: var(--dvx-code, rgb(0 0 0 / 4%));
+  color: #37312c;
+  font-family: var(--dvx-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dvx-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 2px;
+}
+
+.dvx-plan-progress {
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+}
+
+.dvx-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+
+.dvx-plan-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--dvx-text);
+  font-size: 12.5px;
+  line-height: 18px;
+}
+
+.dvx-plan-marker {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border-radius: 50%;
+  border: 1.5px solid var(--dvx-border);
+  background: transparent;
+}
+
+.dvx-plan-step-in_progress .dvx-plan-marker {
+  border-color: var(--dvx-accent);
+  background:
+    radial-gradient(
+      circle at center,
+      var(--dvx-accent) 0 45%,
+      transparent 46%
+    );
+  animation: dvx-plan-pulse 1.4s ease-in-out infinite;
+}
+
+.dvx-plan-step-completed .dvx-plan-marker {
+  border-color: var(--dvx-diff-add, #1a7f37);
+  background: var(--dvx-diff-add, #1a7f37);
+}
+
+.dvx-plan-step-completed .dvx-plan-text {
+  color: var(--dvx-muted);
+  text-decoration: line-through;
+  text-decoration-color: rgb(0 0 0 / 25%);
+}
+
+.dvx-plan-step-in_progress .dvx-plan-text {
+  font-weight: 550;
+}
+
+.dvx-plan-text {
+  min-width: 0;
+  word-break: break-word;
+}
+
+@keyframes dvx-plan-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Disclosure bodies ease open instead of snapping, so expanding the
+   thinking log or a tool detail reads as a smooth reveal. */
+.dvx-activity-row[open] > .dvx-thinking-content,
+.dvx-activity-row[open] > .dvx-tool-summary,
+.dvx-activity-row[open] > .dvx-tool-command,
+.dvx-activity-row[open] > .dvx-plan {
+  animation: dvx-disclose-in 220ms ease-out;
+}
+
 @media (hover: none) {
   .dvx-user-actions {
     opacity: 0.78;
@@ -3025,9 +3174,10 @@ body {
 .dvx-context-compact {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 10px;
-  padding-top: 10px;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 12px 16px 14px;
   border-top: 1px solid var(--dvx-border);
 }
 
@@ -3601,6 +3751,14 @@ body {
   }
 
   .dvx-composer-popover, .dvx-session-drawer, .dvx-interaction-panel, .dvx-permission-menu, .dvx-activity-row[open] pre, .dvx-activity-row[open] .dvx-tool-identity {
+    animation: none;
+  }
+
+  .dvx-activity-running .dvx-tool-action {
+    background-image: none;
+    background-clip: border-box;
+    -webkit-background-clip: border-box;
+    color: #6b6259;
     animation: none;
   }
 }

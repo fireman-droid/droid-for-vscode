@@ -360,6 +360,8 @@ function mapItemToPart(
             latestUpdateKind: item.latestUpdateKind,
             durationMs: item.durationMs ?? null,
             filePath: item.filePath ?? null,
+            detailKind: item.detailKind ?? null,
+            detail: item.detail ?? null,
           },
         },
       };

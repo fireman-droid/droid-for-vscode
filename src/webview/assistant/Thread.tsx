@@ -547,33 +547,13 @@ const AssistantMessage = memo(function AssistantMessage():
                   durationMs={readReasoningDuration(part)}
                 />
               );
-            case 'tool-call': {
-              const activity = readToolActivity(part);
+            case 'tool-call':
               return (
-                <details className="dvx-activity-row">
-                  <summary>
-                    <span className="dvx-activity-indicator" />
-                    <span className="dvx-tool-action">
-                      {activity.action}
-                    </span>
-                    {activity.filePath === null ? null : (
-                      <ToolFilePath path={activity.filePath} />
-                    )}
-                    <span className="dvx-activity-state">
-                      {formatToolLifecycle(activity.status)}
-                      {activity.durationMs === null
-                        ? ''
-                        : ` · ${formatDuration(activity.durationMs)}`}
-                    </span>
-                    <ActivityChevron />
-                  </summary>
-                  <div className="dvx-tool-summary">
-                    <code>{part.toolName}</code>
-                    <span>{formatToolProgress(activity)}</span>
-                  </div>
-                </details>
+                <ToolActivityRow
+                  activity={readToolActivity(part)}
+                  toolName={part.toolName}
+                />
               );
-            }
             case 'data':
               if (part.name === 'droid-diagnostic') {
                 return <Diagnostic data={part.data} />;
@@ -1374,6 +1354,8 @@ interface ToolActivityPresentation {
   readonly latestUpdateKind: string | null;
   readonly durationMs: number | null;
   readonly filePath: string | null;
+  readonly detailKind: 'command' | 'plan' | null;
+  readonly detail: string | null;
 }
 
 function readToolActivity(part: unknown): ToolActivityPresentation {
@@ -1384,6 +1366,8 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
     latestUpdateKind: null,
     durationMs: null,
     filePath: null,
+    detailKind: null,
+    detail: null,
   };
   const metadata = readDroidvisxMetadata(part);
   if (
@@ -1398,10 +1382,15 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
     (metadata.latestUpdateKind === null ||
       typeof metadata.latestUpdateKind === 'string')
   ) {
+    const detailKind =
+      metadata['detailKind'] === 'command' ||
+      metadata['detailKind'] === 'plan'
+        ? metadata['detailKind']
+        : null;
     return {
       ...(metadata as Omit<
         ToolActivityPresentation,
-        'durationMs' | 'filePath'
+        'durationMs' | 'filePath' | 'detailKind' | 'detail'
       >),
       durationMs: readMetadataDuration(metadata),
       filePath:
@@ -1409,9 +1398,134 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
         metadata['filePath'].length > 0
           ? metadata['filePath']
           : null,
+      detailKind,
+      detail:
+        detailKind !== null &&
+        typeof metadata['detail'] === 'string' &&
+        metadata['detail'].length > 0
+          ? metadata['detail']
+          : null,
     };
   }
   return fallback;
+}
+
+interface PlanStep {
+  readonly status: 'pending' | 'in_progress' | 'completed';
+  readonly text: string;
+}
+
+/**
+ * Parses the free-form todo text a task-plan tool wrote. The SDK sends
+ * it as a numbered list where each line looks like
+ * "1. [in_progress] Do the thing".
+ */
+function parsePlanSteps(detail: string): readonly PlanStep[] {
+  const steps: PlanStep[] = [];
+  for (const rawLine of detail.split('\n')) {
+    const line = rawLine.trim();
+    if (line.length === 0) {
+      continue;
+    }
+    const match = /^(?:\d+[.)]\s*)?\[([^\]]*)\]\s*(.*)$/u.exec(line);
+    const label = match?.[1]?.toLowerCase().replace(/[\s_-]/gu, '') ?? '';
+    const text = (match?.[2] ?? line.replace(/^\d+[.)]\s*/u, '')).trim();
+    if (text.length === 0) {
+      continue;
+    }
+    const status: PlanStep['status'] =
+      label.includes('progress') || label === 'active' || label === 'doing'
+        ? 'in_progress'
+        : label.includes('complete') ||
+            label.includes('done') ||
+            label === 'x' ||
+            label === 'checked'
+          ? 'completed'
+          : 'pending';
+    steps.push({ status, text });
+  }
+  return steps;
+}
+
+function ToolActivityRow({
+  activity,
+  toolName,
+}: {
+  readonly activity: ToolActivityPresentation;
+  readonly toolName: string;
+}): React.JSX.Element {
+  // Plan rows default to open so the checklist is visible; every row
+  // stays user-toggleable. `open` is always a defined boolean so React
+  // never leaves a stale `open` attribute on a reused <details> node.
+  const [open, setOpen] = useState(activity.detailKind === 'plan');
+  const running = activity.status === 'running';
+  return (
+    <details
+      className={`dvx-activity-row${
+        running ? ' dvx-activity-running' : ''
+      }`}
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>
+        <span className="dvx-activity-indicator" />
+        <span className="dvx-tool-action">{activity.action}</span>
+        {activity.detailKind === 'command' && activity.detail !== null ? (
+          <code className="dvx-tool-command-inline">
+            {firstLine(activity.detail)}
+          </code>
+        ) : null}
+        {activity.filePath === null ? null : (
+          <ToolFilePath path={activity.filePath} />
+        )}
+        <span className="dvx-activity-state">
+          {formatToolLifecycle(activity.status)}
+          {activity.durationMs === null
+            ? ''
+            : ` · ${formatDuration(activity.durationMs)}`}
+        </span>
+        <ActivityChevron />
+      </summary>
+      {activity.detailKind === 'plan' && activity.detail !== null ? (
+        <TaskPlan detail={activity.detail} />
+      ) : activity.detailKind === 'command' && activity.detail !== null ? (
+        <pre className="dvx-tool-command">{activity.detail}</pre>
+      ) : (
+        <div className="dvx-tool-summary">
+          <code>{toolName}</code>
+          <span>{formatToolProgress(activity)}</span>
+        </div>
+      )}
+    </details>
+  );
+}
+
+function TaskPlan({ detail }: { readonly detail: string }): React.JSX.Element {
+  const steps = parsePlanSteps(detail);
+  if (steps.length === 0) {
+    return <pre className="dvx-tool-command">{detail}</pre>;
+  }
+  const completed = steps.filter(
+    (step) => step.status === 'completed',
+  ).length;
+  return (
+    <div className="dvx-plan">
+      <div className="dvx-plan-progress">
+        {completed}/{steps.length} done
+      </div>
+      <ol className="dvx-plan-list">
+        {steps.map((step, index) => (
+          <li
+            key={index}
+            className={`dvx-plan-step dvx-plan-step-${step.status}`}
+          >
+            <span className="dvx-plan-marker" aria-hidden="true" />
+            <span className="dvx-plan-text">{step.text}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
 }
 
 function readDroidvisxMetadata(
@@ -1445,6 +1559,11 @@ function readMetadataDuration(
 function readReasoningDuration(part: unknown): number | null {
   const metadata = readDroidvisxMetadata(part);
   return metadata === null ? null : readMetadataDuration(metadata);
+}
+
+function firstLine(text: string): string {
+  const line = text.split('\n', 1)[0] ?? text;
+  return line.length > 120 ? `${line.slice(0, 119)}…` : line;
 }
 
 function formatDuration(durationMs: number): string {

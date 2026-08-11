@@ -783,6 +783,9 @@ function upsertTool(
         ...(event.filePath === undefined
           ? {}
           : { filePath: event.filePath }),
+        ...(event.detailKind === undefined || event.detail === undefined
+          ? {}
+          : { detailKind: event.detailKind, detail: event.detail }),
       };
     });
   }
@@ -810,6 +813,9 @@ function upsertTool(
       ...(event.filePath === undefined
         ? {}
         : { filePath: event.filePath }),
+      ...(event.detailKind === undefined || event.detail === undefined
+        ? {}
+        : { detailKind: event.detailKind, detail: event.detail }),
     },
   ];
 }

@@ -1,3 +1,4 @@
+import type { ToolDetailKind } from '../shared/bridgeMessages';
 import type { ToolActivityUpdateKind } from '../shared/toolActivity';
 
 export type RuntimeAvailability =
@@ -40,6 +41,10 @@ export type RuntimeEvent =
       action: string;
       /** Workspace-relative path changed by file-modifying tools. */
       filePath?: string;
+      /** Present together with `detail`. */
+      detailKind?: ToolDetailKind;
+      /** Command or plan text extracted from the tool input. */
+      detail?: string;
     }
   | {
       type: 'tool-progress';

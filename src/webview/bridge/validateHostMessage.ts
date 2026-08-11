@@ -35,8 +35,10 @@ import {
   MCP_SERVER_STATUSES,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
+  MAX_TOOL_DETAIL_LENGTH,
   MAX_TOOL_NAME_LENGTH,
   MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
+  TOOL_DETAIL_KINDS,
   MAX_TURN_TEXT_LENGTH,
   PERMISSION_CONFIRMATION_KINDS,
   SESSION_AUTONOMY_LEVELS,
@@ -90,6 +92,7 @@ import {
   type SessionTranscriptItem,
   type ToolActivityMessage,
   type ToolActivityUpdateKind,
+  type ToolDetailKind,
   type TranscriptThinkingStatus,
   type TranscriptToolStatus,
   type TurnStatus,
@@ -470,7 +473,7 @@ function parseToolActivity(
         'progressCount',
         'latestUpdateKind',
       ],
-      ['durationMs', 'filePath'],
+      ['durationMs', 'filePath', 'detailKind', 'detail'],
     ) ||
     !hasTurnIdentity(value) ||
     !isId(value.toolUseId) ||
@@ -488,7 +491,8 @@ function parseToolActivity(
     ) ||
     (value.durationMs !== undefined && !isSequence(value.durationMs)) ||
     (value.filePath !== undefined &&
-      !isSafeWorkspaceRelativePath(value.filePath))
+      !isSafeWorkspaceRelativePath(value.filePath)) ||
+    !hasValidToolDetail(value)
   ) {
     return undefined;
   }
@@ -510,6 +514,12 @@ function parseToolActivity(
     ...(value.filePath === undefined
       ? {}
       : { filePath: value.filePath }),
+    ...(value.detailKind === undefined
+      ? {}
+      : {
+          detailKind: value.detailKind as ToolDetailKind,
+          detail: value.detail as string,
+        }),
   };
 }
 
@@ -1913,7 +1923,7 @@ function parseToolTranscriptItem(
         'progressCount',
         'latestUpdateKind',
       ],
-      ['durationMs', 'filePath'],
+      ['durationMs', 'filePath', 'detailKind', 'detail'],
     ) ||
     !isId(value.id) ||
     !isId(value.turnId) ||
@@ -1932,7 +1942,8 @@ function parseToolTranscriptItem(
     ) ||
     (value.durationMs !== undefined && !isSequence(value.durationMs)) ||
     (value.filePath !== undefined &&
-      !isSafeWorkspaceRelativePath(value.filePath))
+      !isSafeWorkspaceRelativePath(value.filePath)) ||
+    !hasValidToolDetail(value)
   ) {
     return undefined;
   }
@@ -1953,6 +1964,12 @@ function parseToolTranscriptItem(
     ...(value.filePath === undefined
       ? {}
       : { filePath: value.filePath }),
+    ...(value.detailKind === undefined
+      ? {}
+      : {
+          detailKind: value.detailKind as ToolDetailKind,
+          detail: value.detail as string,
+        }),
   };
 }
 
@@ -2129,6 +2146,23 @@ function isToolActivityStatus(
     TOOL_ACTIVITY_STATUS_SET.has(
       value as ToolActivityMessage['status'],
     )
+  );
+}
+
+/**
+ * A tool detail is valid when absent entirely or when the kind and the
+ * bounded non-empty text are both present.
+ */
+function hasValidToolDetail(value: UnknownRecord): boolean {
+  const detailKind = value['detailKind'];
+  const detail = value['detail'];
+  if (detailKind === undefined && detail === undefined) {
+    return true;
+  }
+  return (
+    typeof detailKind === 'string' &&
+    (TOOL_DETAIL_KINDS as readonly string[]).includes(detailKind) &&
+    isNonEmptyBoundedString(detail, MAX_TOOL_DETAIL_LENGTH)
   );
 }
 
