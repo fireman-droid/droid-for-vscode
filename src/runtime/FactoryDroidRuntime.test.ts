@@ -226,6 +226,48 @@ describe('FactoryDroidRuntime', () => {
     ]);
   });
 
+  it('reports rewind file info and restores files when asked', async () => {
+    const forked = {
+      ...createMockSession(async function* () {}),
+      id: 'session-fork',
+    };
+    const info = {
+      availableFiles: [
+        { filePath: 'src/app.ts', contentHash: 'abc', size: 10 },
+      ],
+      createdFiles: [{ filePath: 'docs/new.md' }],
+      evictedFiles: [],
+    };
+    const session = Object.assign(
+      createMockSession(async function* () {}),
+      {
+        rewind: vi.fn(async () => ({ session: forked })),
+        getRewindInfo: vi.fn(async () => info),
+      },
+    );
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    await expect(
+      runtime.getRewindInfo('sdk-msg-1'),
+    ).resolves.toEqual({ restorableCount: 1, createdCount: 1 });
+    expect(session.getRewindInfo).toHaveBeenCalledWith({
+      messageId: 'sdk-msg-1',
+    });
+
+    await runtime.rewind({
+      messageId: 'sdk-msg-1',
+      forkTitle: 'Edited prompt',
+      restoreFiles: true,
+    });
+    expect(session.rewind).toHaveBeenCalledWith({
+      messageId: 'sdk-msg-1',
+      filesToRestore: info.availableFiles,
+      filesToDelete: info.createdFiles,
+      forkTitle: 'Edited prompt',
+    });
+  });
+
   it('refuses to rewind without session support or during a turn', async () => {
     const session = createMockSession(async function* () {});
     const runtime = createRuntime(async () => session);

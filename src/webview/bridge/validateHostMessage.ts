@@ -172,6 +172,8 @@ export function readHostMessage(
         return parseSessionAttachmentsMessage(value);
       case 'workspace.files':
         return parseWorkspaceFiles(value);
+      case 'rewind.info':
+        return parseRewindInfo(value);
       case 'assistant.delta':
         return parseAssistantDelta(value);
       case 'thinking.delta':
@@ -1254,6 +1256,38 @@ function parseWorkspaceFiles(
     sessionId: value.sessionId,
     requestId: value.requestId,
     files,
+  };
+}
+
+function parseRewindInfo(
+  value: UnknownRecord,
+):
+  | Extract<HostToWebviewMessage, { type: 'rewind.info' }>
+  | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sequence',
+      'sessionId',
+      'messageId',
+      'restorableCount',
+      'createdCount',
+    ]) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId) ||
+    !isId(value.messageId) ||
+    !isCount(value.restorableCount) ||
+    !isCount(value.createdCount)
+  ) {
+    return undefined;
+  }
+  return {
+    type: 'rewind.info',
+    sequence: value.sequence,
+    sessionId: value.sessionId,
+    messageId: value.messageId,
+    restorableCount: value.restorableCount,
+    createdCount: value.createdCount,
   };
 }
 

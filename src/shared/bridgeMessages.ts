@@ -195,6 +195,21 @@ export interface TurnEditResendMessage {
   readonly turnId: string;
   readonly messageId: string;
   readonly text: string;
+  /**
+   * When true, the rewind also restores files Droid changed after the
+   * anchor message and deletes files it created since then.
+   */
+  readonly restoreFiles?: boolean;
+}
+
+/**
+ * Asks how rewinding to `messageId` would affect workspace files.
+ * The host answers with a `rewind.info` message carrying counts.
+ */
+export interface RewindInfoRequestMessage {
+  readonly type: 'rewind.info';
+  readonly sessionId: string;
+  readonly messageId: string;
 }
 
 export interface RuntimeRetryMessage {
@@ -414,6 +429,7 @@ export type WebviewToHostMessage =
   | AttachmentRemoveMessage
   | AttachmentAddPathMessage
   | WorkspaceSearchFilesMessage
+  | RewindInfoRequestMessage
   | SessionSettingUpdateMessage;
 
 export interface ConnectionState {
@@ -765,6 +781,21 @@ export interface SessionAttachmentsStateMessage {
 }
 
 /**
+ * How rewinding to `messageId` would affect workspace files, as
+ * counts only. Answers a webview `rewind.info` request.
+ */
+export interface RewindInfoStateMessage {
+  readonly type: 'rewind.info';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly messageId: string;
+  /** Files Droid changed after the anchor that a rewind can restore. */
+  readonly restorableCount: number;
+  /** Files Droid created after the anchor that a rewind can delete. */
+  readonly createdCount: number;
+}
+
+/**
  * Workspace files matching one `workspace.searchFiles` request. Paths
  * are workspace-relative with forward slashes.
  */
@@ -933,6 +964,7 @@ export type HostToWebviewMessage =
   | SessionMcpStateMessage
   | SessionAttachmentsStateMessage
   | WorkspaceFilesMessage
+  | RewindInfoStateMessage
   | AssistantDeltaMessage
   | ThinkingDeltaMessage
   | ThinkingCompleteMessage

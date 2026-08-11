@@ -53,6 +53,12 @@ export interface AssistantWebviewState {
     readonly requestId: string;
     readonly files: readonly string[];
   } | null;
+  /** Latest rewind file-impact info for the edit-resend editor. */
+  readonly rewindInfo: {
+    readonly messageId: string;
+    readonly restorableCount: number;
+    readonly createdCount: number;
+  } | null;
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: Extract<
     HostToWebviewMessage,
@@ -88,6 +94,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   mcp: { status: 'idle', items: [] },
   attachments: [],
   fileSearch: null,
+  rewindInfo: null,
   transcript: [],
   historyStatus: null,
   truncated: false,
@@ -174,6 +181,7 @@ export function assistantWebviewReducer(
           event.sessionId === state.sessionId ? state.attachments : [],
         fileSearch:
           event.sessionId === state.sessionId ? state.fileSearch : null,
+        rewindInfo: null,
         transcript: event.transcript,
         historyStatus: event.historyStatus,
         truncated: event.truncated,
@@ -274,6 +282,18 @@ export function assistantWebviewReducer(
             fileSearch: {
               requestId: event.requestId,
               files: event.files,
+            },
+          }
+        : advance(state, event.sequence);
+    case 'rewind.info':
+      return event.sessionId === state.sessionId
+        ? {
+            ...state,
+            sequence: event.sequence,
+            rewindInfo: {
+              messageId: event.messageId,
+              restorableCount: event.restorableCount,
+              createdCount: event.createdCount,
             },
           }
         : advance(state, event.sequence);

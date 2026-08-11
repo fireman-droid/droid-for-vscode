@@ -46,6 +46,13 @@ export interface FileSearchResult {
   readonly files: readonly string[];
 }
 
+/** How rewinding to one user message would affect workspace files. */
+export interface RewindFileInfo {
+  readonly messageId: string;
+  readonly restorableCount: number;
+  readonly createdCount: number;
+}
+
 interface ThinkingExpansion {
   readonly expanded: boolean;
   readonly setExpanded: (expanded: boolean) => void;
@@ -123,7 +130,13 @@ interface DroidThreadProps {
   readonly onAttachmentRemove: (attachmentId: string) => void;
   readonly onDraftChange: (draft: string) => void;
   readonly onReuseMessage: (text: string) => void;
-  readonly onEditResend: (messageId: string, text: string) => void;
+  readonly onEditResend: (
+    messageId: string,
+    text: string,
+    restoreFiles?: boolean,
+  ) => void;
+  readonly rewindInfo: RewindFileInfo | null;
+  readonly onRequestRewindInfo: (messageId: string) => void;
   readonly onRegenerate: (() => void) | null;
   readonly onOpenFileDiff: (path: string) => void;
   readonly editResendEnabled: boolean;
@@ -168,6 +181,8 @@ export const DroidThread = memo(function DroidThread({
   onDraftChange,
   onReuseMessage,
   onEditResend,
+  rewindInfo,
+  onRequestRewindInfo,
   onRegenerate,
   onOpenFileDiff,
   editResendEnabled,
@@ -222,6 +237,8 @@ export const DroidThread = memo(function DroidThread({
                     text={readMessageText(message.content)}
                     messageId={readUserMessageId(message.metadata)}
                     editResendEnabled={editResendEnabled}
+                    rewindInfo={rewindInfo}
+                    onRequestRewindInfo={onRequestRewindInfo}
                     onReuse={onReuseMessage}
                     onEditResend={onEditResend}
                   />
@@ -278,18 +295,27 @@ function UserMessage({
   text,
   messageId,
   editResendEnabled,
+  rewindInfo,
+  onRequestRewindInfo,
   onReuse,
   onEditResend,
 }: {
   readonly text: string;
   readonly messageId: string | null;
   readonly editResendEnabled: boolean;
+  readonly rewindInfo: RewindFileInfo | null;
+  readonly onRequestRewindInfo: (messageId: string) => void;
   readonly onReuse: (text: string) => void;
-  readonly onEditResend: (messageId: string, text: string) => void;
+  readonly onEditResend: (
+    messageId: string,
+    text: string,
+    restoreFiles?: boolean,
+  ) => void;
 }): React.JSX.Element {
   const [reused, setReused] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(text);
+  const [restoreFiles, setRestoreFiles] = useState(false);
   const [resending, setResending] = useState(false);
   const resendResetRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -309,8 +335,20 @@ function UserMessage({
   };
   const openEditor = (): void => {
     setEditText(text);
+    setRestoreFiles(false);
     setEditing(true);
+    if (messageId !== null) {
+      onRequestRewindInfo(messageId);
+    }
   };
+  const fileImpact =
+    editing && messageId !== null && rewindInfo?.messageId === messageId
+      ? rewindInfo
+      : null;
+  const affectedFiles =
+    fileImpact === null
+      ? 0
+      : fileImpact.restorableCount + fileImpact.createdCount;
   const submitEdit = (): void => {
     if (
       messageId === null ||
@@ -321,7 +359,7 @@ function UserMessage({
     }
     setEditing(false);
     setResending(true);
-    onEditResend(messageId, editText);
+    onEditResend(messageId, editText, restoreFiles && affectedFiles > 0);
     // On success this component unmounts with the forked snapshot. If the
     // host declines the resend it only emits a diagnostic, so recover the
     // normal presentation after a grace period instead of sticking.
@@ -364,6 +402,22 @@ function UserMessage({
               Resending starts a new conversation branch from this
               message.
             </div>
+            {affectedFiles > 0 ? (
+              <label className="dvx-user-edit-restore">
+                <input
+                  type="checkbox"
+                  checked={restoreFiles}
+                  onChange={(event) =>
+                    setRestoreFiles(event.currentTarget.checked)
+                  }
+                />
+                <span>
+                  Also restore {affectedFiles}{' '}
+                  {affectedFiles === 1 ? 'file' : 'files'} Droid changed
+                  after this message
+                </span>
+              </label>
+            ) : null}
             <div className="dvx-user-edit-actions">
               <button
                 className="dvx-message-action"

@@ -1462,6 +1462,21 @@ body {
   line-height: 16px;
 }
 
+.dvx-user-edit-restore {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dvx-text);
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.dvx-user-edit-restore input {
+  margin: 0;
+  accent-color: var(--dvx-accent, #c96442);
+}
+
 .dvx-user-edit-actions {
   display: flex;
   justify-content: flex-end;

@@ -26,6 +26,7 @@ import {
   type McpRefreshMessage,
   type McpServerToggleMessage,
   type PermissionRespondMessage,
+  type RewindInfoRequestMessage,
   type RuntimeRetryMessage,
   type SessionCompactMessage,
   type SessionContextRefreshMessage,
@@ -68,6 +69,8 @@ export function parseWebviewMessage(
         return parseTurnStop(value);
       case 'turn.editResend':
         return parseTurnEditResend(value);
+      case 'rewind.info':
+        return parseRewindInfoRequest(value);
       case 'runtime.retry':
         return parseRuntimeRetry(value);
       case 'permission.respond':
@@ -182,19 +185,19 @@ function parseTurnEditResend(
   value: UnknownRecord,
 ): TurnEditResendMessage | undefined {
   if (
-    !hasExactKeys(value, [
-      'type',
-      'sessionId',
-      'turnId',
-      'messageId',
-      'text',
-    ]) ||
+    !hasExactKeys(
+      value,
+      ['type', 'sessionId', 'turnId', 'messageId', 'text'],
+      ['restoreFiles'],
+    ) ||
     !isId(value.sessionId) ||
     !isId(value.turnId) ||
     !isId(value.messageId) ||
     typeof value.text !== 'string' ||
     value.text.length === 0 ||
-    value.text.length > MAX_TURN_TEXT_LENGTH
+    value.text.length > MAX_TURN_TEXT_LENGTH ||
+    (value.restoreFiles !== undefined &&
+      typeof value.restoreFiles !== 'boolean')
   ) {
     return undefined;
   }
@@ -205,6 +208,27 @@ function parseTurnEditResend(
     turnId: value.turnId,
     messageId: value.messageId,
     text: value.text,
+    ...(value.restoreFiles === undefined
+      ? {}
+      : { restoreFiles: value.restoreFiles }),
+  };
+}
+
+function parseRewindInfoRequest(
+  value: UnknownRecord,
+): RewindInfoRequestMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'messageId']) ||
+    !isId(value.sessionId) ||
+    !isId(value.messageId)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'rewind.info',
+    sessionId: value.sessionId,
+    messageId: value.messageId,
   };
 }
 

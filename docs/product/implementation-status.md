@@ -152,6 +152,20 @@ Skills 浏览与启停、MCP Server 浏览与启停、消息附件（文件/编�
 Changes 页面/增删行统计、daemon 主运行路径、Commands、
 Mission 和 Manage Droid 等主要功能仍未实现。
 
+同日追加三个消息与 Composer 切片：（1）Assistant 消息 Regenerate——
+最后一条回答的操作栏新增 Regenerate 按钮，锚定其前一条带 SDK
+Message ID 的用户消息，复用编辑重问的 Rewind 分支机制按原文重发；
+（2）Composer `@` 文件提及——输入 `@` 触发防抖的
+`workspace.searchFiles` 搜索（VS Code `findFiles`，排除
+node_modules/.git/dist/out，结果限量），弹出可键盘导航
+（↑/↓/Enter/Tab/Escape）的文件列表，选中后经 `attachment.addPath`
+把该文件按工作区相对路径暂存为附件并在文本中保留 `@相对路径`；
+（3）Rewind 文件安全检查——打开内联编辑器时经 `rewind.info` 调用
+SDK `getRewindInfo`，有受影响文件时编辑器内显示恢复勾选项
+（默认保留当前工作区），勾选后 Rewind 以 SDK 报告的
+`filesToRestore`/`filesToDelete` 恢复文件。三个切片均已通过
+typecheck 与全量 615 项测试。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
@@ -252,11 +266,15 @@ Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限�
   编辑后的文本重新提问
 - 没有 SDK Message ID 的用户消息（例如刚发送、Host 尚未回传
   `user.message-meta` 的乐观消息）双击仍执行非破坏性 Reuse
-- Resend 会在有活跃 Turn 或待处理交互时被拒绝；Rewind 不恢复或删除
-  工作区文件（`filesToRestore`/`filesToDelete` 恒为空）
+- Resend 会在有活跃 Turn 或待处理交互时被拒绝
+- 打开内联编辑器时经 Bridge `rewind.info` 向 SDK `getRewindInfo`
+  查询文件影响；有受影响文件时编辑器内显示 “Restore N files
+  changed after this message” 勾选项（默认不勾选）。勾选后 Rewind
+  以 SDK 报告的 `filesToRestore`/`filesToDelete` 恢复文件，否则
+  保持当前工作区文件不变
+- 最后一条 Assistant 回答提供 Regenerate 按钮，锚定其前一条带
+  SDK Message ID 的用户消息经同一 Rewind 分支按原文重发
 - Copy 和 Reuse 不会自动发送、修改历史、回退文件或创建分支
-
-Assistant 消息 Regenerate 与文件级 Rewind 安全检查仍未实现。
 
 ### 4. 权限请求
 
@@ -485,7 +503,7 @@ Assistant 消息 Regenerate 与文件级 Rewind 安全检查仍未实现。
 | Session 生命周期            | List、Refresh、New、Select、Resume、活跃 Session Rename、编辑重问触发的 Rewind Fork、显式 Fork、Compact                      | Archive、Delete、Favorite（无公开 SDK 渠道）                     |
 | Session 历史                | 文本、Thinking、Tool 生命周期                                                                                                | 历史 Image、Document 和未知 Block 会被省略并标记为 partial       |
 | Tool 展示                   | 语义动作、技术 Tool 名、有界进度计数/类别、生命周期和实时观察到的真实耗时、文件修改类 Tool 的工作区相对路径 chip（点击打开原生 Diff）；不显示原始 Call ID | 参数、输出、结果、增删行统计、Apply/Open 操作                    |
-| 消息操作                    | Copy、Reuse in Composer、双击内联编辑并从该消息 Rewind 重问                                                                  | Assistant Regenerate、`getRewindInfo` 文件安全检查、文件恢复选择 |
+| 消息操作                    | Copy、Reuse in Composer、双击内联编辑并从该消息 Rewind 重问、最后一条回答 Regenerate、编辑器内 `getRewindInfo` 文件影响提示与可选文件恢复 | Rewind 冲突检测、Turn Envelope                                   |
 | 本地诊断                    | SDK Observability、Host 生命周期/耗时、Output Channel、Open Logs、轮换 JSONL                                                 | 用户可配置级别、导出诊断包、遥测或远程上传                       |
 | Spec                        | ExitSpecMode 计划显示、编辑和审批；审批后的 `settings_updated` 会触发权威 Mode 回读                                          | 主动进入 Spec Mode、完整计划生命周期、实施交接                   |
 | Mission                     | Mission 相关确认可以显示为通用权限卡片                                                                                       | Mission 状态、事件、阶段、Worker、控制和独立 UI                  |
@@ -606,9 +624,10 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [x] Assistant 消息 Regenerate（仅最后一条回答，锚定其前一条用户
       消息经同一 Rewind 分支原文重发）
 - [ ] Turn Envelope
-- [ ] `getRewindInfo`
-- [ ] 文件变化安全检查
-- [ ] 保留当前工作区或恢复文件的选择
+- [x] `getRewindInfo`（打开内联编辑器时经 `rewind.info` 查询）
+- [x] 文件变化安全检查（编辑器内显示受影响/新建文件计数提示）
+- [x] 保留当前工作区或恢复文件的选择（默认保留，勾选后 Rewind 以
+      SDK 报告的 `filesToRestore`/`filesToDelete` 恢复）
 - [ ] 冲突检测
 - [x] Rewind 后建立分支 Session（Fork 自动接管为当前 Session）
 

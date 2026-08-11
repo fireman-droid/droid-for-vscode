@@ -187,10 +187,24 @@ export type RuntimeAttachment =
 export interface RuntimeRewindParams {
   readonly messageId: string;
   readonly forkTitle: string;
+  /**
+   * When true, restores files Droid changed after the anchor message
+   * and deletes files it created, returning the workspace to that
+   * point. Defaults to keeping the current workspace untouched.
+   */
+  readonly restoreFiles?: boolean;
 }
 
 export interface RuntimeRewindResult {
   readonly sessionId: string;
+}
+
+/** How a rewind would affect workspace files, as counts only. */
+export interface RuntimeRewindInfo {
+  /** Files Droid changed after the anchor that a rewind can restore. */
+  readonly restorableCount: number;
+  /** Files Droid created after the anchor that a rewind can delete. */
+  readonly createdCount: number;
 }
 
 export interface RuntimeCompactResult {
@@ -223,6 +237,11 @@ export interface DroidRuntime {
    * runtime cannot rewind.
    */
   rewind?(params: RuntimeRewindParams): Promise<RuntimeRewindResult>;
+  /**
+   * Reports how rewinding to the given user message would affect
+   * workspace files. Optional: absent when the runtime cannot rewind.
+   */
+  getRewindInfo?(messageId: string): Promise<RuntimeRewindInfo>;
   /**
    * Compacts the active session's context: Droid summarizes older
    * messages into a continuation session that this runtime then

@@ -134,6 +134,19 @@ describe('parseWebviewMessage', () => {
       query: 'Thread',
     },
     {
+      type: 'rewind.info',
+      sessionId: 'session-1',
+      messageId: 'message-1',
+    },
+    {
+      type: 'turn.editResend',
+      sessionId: 'session-1',
+      turnId: 'turn-2',
+      messageId: 'message-1',
+      text: 'try again',
+      restoreFiles: true,
+    },
+    {
       type: 'attachment.addPath',
       sessionId: 'session-1',
       path: 'src/webview/assistant/Thread.tsx',
@@ -342,6 +355,21 @@ describe('parseWebviewMessage', () => {
       requestId: 'r-1',
       query: 'q',
       extra: true,
+    },
+    { type: 'rewind.info', sessionId: 'session-1', messageId: '' },
+    {
+      type: 'rewind.info',
+      sessionId: 'session-1',
+      messageId: 'message-1',
+      extra: true,
+    },
+    {
+      type: 'turn.editResend',
+      sessionId: 'session-1',
+      turnId: 'turn-2',
+      messageId: 'message-1',
+      text: 'try again',
+      restoreFiles: 'yes',
     },
     { type: 'attachment.addPath', sessionId: 'session-1', path: '' },
     {

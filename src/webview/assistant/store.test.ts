@@ -251,6 +251,50 @@ describe('assistantWebviewReducer', () => {
     expect(state.fileSearch).toBeNull();
   });
 
+  it('tracks rewind file info for the active session only', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'rewind.info',
+        sequence: 1,
+        sessionId: 'session-a',
+        messageId: 'message-1',
+        restorableCount: 2,
+        createdCount: 1,
+      },
+    });
+    expect(state.rewindInfo).toEqual({
+      messageId: 'message-1',
+      restorableCount: 2,
+      createdCount: 1,
+    });
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'rewind.info',
+        sequence: 2,
+        sessionId: 'session-other',
+        messageId: 'message-9',
+        restorableCount: 0,
+        createdCount: 0,
+      },
+    });
+    expect(state.rewindInfo?.messageId).toBe('message-1');
+
+    // Any snapshot (e.g. after the rewind forks) clears stale info.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(3),
+    });
+    expect(state.rewindInfo).toBeNull();
+  });
+
   it('isolates sequenced settings, context, and catalogs by session', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',

@@ -173,7 +173,7 @@ export function App(): React.JSX.Element {
     [vscode],
   );
   const handleEditResend = useCallback(
-    (messageId: string, text: string): void => {
+    (messageId: string, text: string, restoreFiles = false): void => {
       const trimmed = text.trim();
       if (
         sessionId === null ||
@@ -191,6 +191,7 @@ export function App(): React.JSX.Element {
         turnId: createTurnId(),
         messageId,
         text,
+        ...(restoreFiles ? { restoreFiles: true } : {}),
       });
     },
     [
@@ -200,6 +201,18 @@ export function App(): React.JSX.Element {
       state.turn,
       vscode,
     ],
+  );
+  const handleRequestRewindInfo = useCallback(
+    (messageId: string): void => {
+      if (sessionId !== null && connectionStatus === 'connected') {
+        post(vscode, {
+          type: 'rewind.info',
+          sessionId,
+          messageId,
+        });
+      }
+    },
+    [connectionStatus, sessionId, vscode],
   );
   // Anchor for Regenerate: the last user message that can start a
   // rewind. Regenerating resends its unchanged text from that point.
@@ -506,6 +519,8 @@ export function App(): React.JSX.Element {
           onDraftChange={handleDraftChange}
           onReuseMessage={handleReuseMessage}
           onEditResend={handleEditResend}
+          rewindInfo={state.rewindInfo}
+          onRequestRewindInfo={handleRequestRewindInfo}
           onRegenerate={
             connectionStatus === 'connected' &&
             !active &&

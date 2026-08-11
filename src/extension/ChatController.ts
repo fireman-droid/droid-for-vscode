@@ -356,7 +356,11 @@ export class ChatController {
           message.turnId,
           message.messageId,
           message.text,
+          message.restoreFiles === true,
         );
+        return;
+      case 'rewind.info':
+        this.handleRewindInfo(message.sessionId, message.messageId);
         return;
       case 'runtime.retry':
         this.handleRetry(message.sessionId);
@@ -940,11 +944,40 @@ export class ChatController {
     });
   }
 
+  private handleRewindInfo(sessionId: string, messageId: string): void {
+    const runtime = this.runtime;
+    if (
+      runtime === null ||
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId ||
+      typeof runtime.getRewindInfo !== 'function'
+    ) {
+      return;
+    }
+    void runtime.getRewindInfo(messageId).then(
+      (info) => {
+        if (sessionId === this.sessionId) {
+          this.emit({
+            type: 'rewind.info',
+            sessionId,
+            messageId,
+            restorableCount: info.restorableCount,
+            createdCount: info.createdCount,
+          });
+        }
+      },
+      () => {
+        // File info is advisory; the editor simply omits the option.
+      },
+    );
+  }
+
   private handleEditResend(
     sessionId: string,
     turnId: string,
     messageId: string,
     text: string,
+    restoreFiles: boolean,
   ): void {
     const runtime = this.runtime;
     if (
@@ -1001,6 +1034,7 @@ export class ChatController {
       messageId,
       text,
       truncated,
+      restoreFiles,
     ).then((forkedSessionId) => {
       this.sessionOperationInProgress = false;
       if (forkedSessionId === null) {
@@ -1026,6 +1060,7 @@ export class ChatController {
     messageId: string,
     text: string,
     truncated: HostTranscriptState,
+    restoreFiles: boolean,
   ): Promise<string | null> {
     const generation = this.runtimeGeneration;
     const cwd = this.activeRuntimeCwd;
@@ -1038,6 +1073,7 @@ export class ChatController {
       const result = await runtime.rewind!({
         messageId,
         forkTitle: forkTitleFromText(text),
+        restoreFiles,
       });
       forkedSessionId = result.sessionId;
     } catch {

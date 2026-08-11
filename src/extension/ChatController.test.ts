@@ -2367,6 +2367,40 @@ describe('ChatController', () => {
     expect(JSON.stringify(messages)).not.toContain('aW1n');
   });
 
+  it('answers rewind info requests with file-impact counts', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      getRewindInfo: vi.fn(async () => ({
+        restorableCount: 2,
+        createdCount: 1,
+      })),
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'rewind.info',
+      sessionId: 'session-1',
+      messageId: 'sdk-msg-1',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'rewind.info')).toMatchObject({
+        sessionId: 'session-1',
+        messageId: 'sdk-msg-1',
+        restorableCount: 2,
+        createdCount: 1,
+      });
+    });
+
+    // Requests for another session are ignored.
+    controller.handleMessage({
+      type: 'rewind.info',
+      sessionId: 'session-other',
+      messageId: 'sdk-msg-1',
+    });
+    expect(runtime.getRewindInfo).toHaveBeenCalledTimes(1);
+  });
+
   it('answers workspace file searches and stages @-mentioned files', async () => {
     const runtime = createMockRuntime();
     const sources: AttachmentSources = {

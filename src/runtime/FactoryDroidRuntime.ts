@@ -43,6 +43,7 @@ import {
   type RuntimeAttachment,
   type RuntimeCompactResult,
   type RuntimeForkResult,
+  type RuntimeRewindInfo,
   type RuntimeRewindParams,
   type RuntimeRewindResult,
   type RuntimeContextAccuracy,
@@ -79,6 +80,16 @@ export interface FactoryDroidSessionRewindParams {
   readonly forkTitle: string;
 }
 
+export interface FactoryDroidSessionRewindInfo {
+  readonly availableFiles: Array<{
+    filePath: string;
+    contentHash: string;
+    size: number;
+  }>;
+  readonly createdFiles: Array<{ filePath: string }>;
+  readonly evictedFiles: Array<{ filePath: string; reason: string }>;
+}
+
 export interface FactoryDroidSession {
   readonly id: string;
   readonly settings: Readonly<SessionSettings>;
@@ -99,6 +110,9 @@ export interface FactoryDroidSession {
   rewind?(
     params: FactoryDroidSessionRewindParams,
   ): Promise<{ session: FactoryDroidSession }>;
+  getRewindInfo?(params: {
+    messageId: string;
+  }): Promise<FactoryDroidSessionRewindInfo>;
   compact?(params?: {
     customInstructions?: string;
   }): Promise<{ session: FactoryDroidSession; removedCount: number }>;
@@ -412,10 +426,24 @@ export class FactoryDroidRuntime implements DroidRuntime {
 
     let nextSession: FactoryDroidSession;
     try {
+      let filesToRestore: FactoryDroidSessionRewindParams['filesToRestore'] =
+        [];
+      let filesToDelete: FactoryDroidSessionRewindParams['filesToDelete'] =
+        [];
+      if (
+        params.restoreFiles === true &&
+        typeof session.getRewindInfo === 'function'
+      ) {
+        const info = await session.getRewindInfo({
+          messageId: params.messageId,
+        });
+        filesToRestore = info.availableFiles;
+        filesToDelete = info.createdFiles;
+      }
       const outcome = await session.rewind({
         messageId: params.messageId,
-        filesToRestore: [],
-        filesToDelete: [],
+        filesToRestore,
+        filesToDelete,
         forkTitle: params.forkTitle,
       });
       nextSession = outcome.session;
@@ -455,6 +483,20 @@ export class FactoryDroidRuntime implements DroidRuntime {
       },
     });
     return { sessionId: nextSession.id };
+  }
+
+  async getRewindInfo(messageId: string): Promise<RuntimeRewindInfo> {
+    const session = this.requireSession();
+    if (typeof session.getRewindInfo !== 'function') {
+      throw new Error(
+        'The Droid session does not report rewind file info.',
+      );
+    }
+    const info = await session.getRewindInfo({ messageId });
+    return {
+      restorableCount: info.availableFiles.length,
+      createdCount: info.createdFiles.length,
+    };
   }
 
   async compact(): Promise<RuntimeCompactResult> {
@@ -1271,6 +1313,9 @@ function createCatalogSessionView(
   };
   if (typeof session.rewind === 'function') {
     view.rewind = (params) => session.rewind!(params);
+  }
+  if (typeof session.getRewindInfo === 'function') {
+    view.getRewindInfo = (params) => session.getRewindInfo!(params);
   }
   if (typeof session.compact === 'function') {
     view.compact = (params) => session.compact!(params);
