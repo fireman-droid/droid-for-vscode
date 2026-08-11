@@ -435,8 +435,11 @@ Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限�
 - Webview 刷新后恢复快照
 - 恢复未处理的权限交互
 - Host 重启后把未完成活动归一为停止状态
-- 恢复旧 Session 时对公开 SDK 历史与本地安全缓存做顺序重叠核对；若 SDK
-  只返回已压缩的后缀，保留本地已观察到的较早前缀，而不是用较短结果覆盖
+- 恢复旧 Session 时对公开 SDK 历史与本地安全缓存按 user 消息锚点
+  （SDK `messageId` 优先，唯一文本兜底）分段对齐：loaded 为权威主体，
+  本地缓存仅补 SDK 不再返回的前缀（rewind 分支/压缩）与 CLI 未持久化
+  的尾段，中段差异（thinking 漂移、合成 changes 行）一律以 loaded 为准
+  不再拼接重复；无共同锚点时退回顺序重叠核对
 - 公开历史或合并后的时间线不完整时独立标记 `partial`；只有来源或本地安全
   预算确实裁剪了内容时才标记 `truncated`，不把本地缓存冒充 Droid 的完整
   权威历史
@@ -815,6 +818,12 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `9AE18D5EBAD326F2C01A53A25414A7619A5FACB5F0D380B435ED3247C577DEF5`，
   `cursor --install-extension --force` 安装成功；版本号仍为
   `0.0.0`，现有窗口需 Reload Window（或完整重启）后加载新 Bundle
+- 2026-08-11 深夜再次打包并安装含历史对齐修复切片（user messageId
+  锚点分段对齐）的构建：`droidvisx-0.0.0.vsix` 528,156 字节，修改
+  时间 2026-08-11T14:38:53Z，SHA-256
+  `0D1166F6EF9054E9485ABAC83FC440FC8EEEC92919F16E7160BAEDD685F11CEF`，
+  `cursor --install-extension --force` 安装成功；版本号仍为 `0.0.0`，
+  现有窗口需 Reload Window（或完整重启）后加载新 Bundle
 
 ## 验证状态
 
@@ -927,6 +936,18 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   Webview store reducer 与 findSlashToken/filterSlashCommands 测试）；
   `pnpm run build`、`vsce package --no-dependencies` 与
   `cursor --install-extension` 均成功
+- 历史对齐修复切片（2026-08-11 深夜）：真实崩溃会话
+  `40ebe83d…`（recovered 检查点 72 条）经生产 `reconcileSessionHistory`
+  复验——对崩溃当时形态（loaded 78 条）输出 80 条（loaded 主体 + 2 条
+  分支前缀，修复前为 150 条整段拼接），对今日增长形态（loaded 128 条）
+  输出 130 条；两种形态下 user `messageId` 与 `toolUseId` 均无重复
+  （`artifacts/probe-reconcile-verify.mts` 实测输出 +
+  `src/extension/probeRealSession.test.ts` 断言，后者在真实数据文件
+  缺失的机器上自动跳过）；`pnpm run typecheck` 三个 tsconfig 全部
+  通过；`pnpm run test` 34 files / 703 tests 全部通过（含本切片新增的
+  锚点对齐用例与脱敏 72/78 回归 fixture）；`pnpm run build`、
+  `npx vsce package --no-dependencies` 与
+  `cursor --install-extension --force` 均成功
 
 本轮已完成完整自动化门禁、VSIX 打包/内容验证和 Cursor CLI 安装，并核对
 安装目录中的 Extension、Webview JS、CSS 和 Inter Font 哈希与 Build 一致。
@@ -982,8 +1003,25 @@ assistant-ui 渲染时抛异常导致整棵 React 树卸载（即"白屏"）。�
 
 已用真实崩溃会话（recovered 72 + loaded 78 → reconciled 150 条）
 经生产代码路径复验：修复前 10+ 处重复、崩溃 id 出现 2 次；修复后
-重复为 0。遗留问题（另行排期）：该会话重叠匹配完全失败导致对话内容
-重复展示（72+78 直接拼接），需改进 reconcile 的内容匹配。
+重复为 0。当时遗留的"重叠匹配完全失败导致对话内容重复展示（72+78
+直接拼接）"问题已在同日深夜的历史对齐切片修复（见下）。
+
+2026-08-11 深夜完成历史对齐重复显示修复（设计见
+`session-management-design.md` §3）：`reconcileSessionHistory` 的匹配
+核心改为 user 消息锚点分段对齐——锚点主键为 SDK `messageId`，无
+messageId 的锚点退化为两侧唯一的 `text.trim()`（重复文本不作锚），
+按顺序单调匹配。存在共同锚点时 loaded 为唯一权威主体：recovered 仅
+前置第一个共同锚点之前的段（rewind 分支/压缩丢失的前缀）、必要时
+追加 CLI 未持久化的尾段（崩溃发生在持久化前），中段整体丢弃（重复
+显示的根治点）；前置/追加段按"相邻 loaded 区域内容键"过滤重发残留。
+无共同锚点时维持原 suffix/prefix 重叠逻辑。`toolUseId`/`id` 去重与
+`trimTranscriptToLimits` 收尾保持不变。真实崩溃会话复验：崩溃形态
+72+78 由 150 条降为 80 条（loaded 78 + 2 条分支前缀），今日形态
+72+128 输出 130 条，均无重复 `messageId`/`toolUseId`。回归防线：
+脱敏 72/78 fixture（`src/extension/__fixtures__/reconcileRealSession.ts`，
+由 `artifacts/gen-reconcile-fixture.mjs` 从真实数据等价脱敏生成）+
+8 个锚点对齐用例；真实数据探针 `src/extension/probeRealSession.test.ts`
+在本机数据存在时额外复验。
 
 2026-08-11 晚间完成第二档第一切片 `/` 动态命令（Droid Commands 列表）：
 Composer 草稿以 `/` 开头且光标仍在命令名内时弹出命令列表（复用 `@`

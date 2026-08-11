@@ -2,10 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import type { SessionTranscriptItem } from '../shared/bridgeMessages';
 import type { HostTranscriptState } from '../shared/hostTranscriptState';
+import {
+  realShapeLoaded,
+  realShapeRecovered,
+} from './__fixtures__/reconcileRealSession';
 import { reconcileSessionHistory } from './reconcileSessionHistory';
 
 describe('reconcileSessionHistory', () => {
   it('keeps a recovered prefix when public SDK history is a compacted suffix', () => {
+    // 'Recent prompt' is a unique-text anchor on both sides, so the
+    // anchored path applies: loaded is the authoritative body and the
+    // recovered-only prefix is prepended in front of it.
     const recovered = state([
       user('cached-a', 'Old prompt'),
       assistant('cached-b', 'Old answer'),
@@ -18,7 +25,11 @@ describe('reconcileSessionHistory', () => {
     ]);
 
     expect(reconcileSessionHistory(loaded, recovered)).toEqual({
-      transcript: recovered.transcript,
+      transcript: [
+        recovered.transcript[0],
+        recovered.transcript[1],
+        ...loaded.transcript,
+      ],
       historyStatus: 'partial',
       truncated: false,
     });
@@ -100,6 +111,204 @@ describe('reconcileSessionHistory', () => {
       truncated: true,
     });
   });
+
+  describe('user messageId anchor alignment', () => {
+    it('returns loaded as-is when all anchors match and loaded has synthesized inserts', () => {
+      const recovered = state([
+        anchored('r-u1', 'Question one', 'mid-1'),
+        thinking('r-t1', 'turn-1', 'Streamed thinking, cut short'),
+        assistant('r-a1', 'Answer one'),
+        anchored('r-u2', 'Question two', 'mid-2'),
+        assistant('r-a2', 'Answer two'),
+      ]);
+      const loaded = state([
+        anchored('l-u1', 'Question one', 'mid-1'),
+        thinking('l-t1', 'turn-1', 'Streamed thinking, cut short plus a persisted tail'),
+        changes('l-c1', 'turn-1', ['src/app.ts']),
+        assistant('l-a1', 'Answer one'),
+        anchored('l-u2', 'Question two', 'mid-2'),
+        thinking('l-t2', 'turn-2', 'Post-permission follow-up thinking'),
+        assistant('l-a2', 'Answer two'),
+      ]);
+
+      const result = reconcileSessionHistory(loaded, recovered);
+      expect(result).toBe(loaded);
+      expect(result.historyStatus).toBe('complete');
+    });
+
+    it('prepends the recovered rewind-branch prefix ahead of the loaded body', () => {
+      const recovered = state([
+        anchored('r-u0', 'Original question', 'mid-0'),
+        assistant('r-a0', 'Original answer'),
+        anchored('r-u1', 'Resent question', 'mid-1'),
+        assistant('r-a1', 'Branch answer'),
+      ]);
+      const loaded = state([
+        anchored('l-u1', 'Resent question', 'mid-1'),
+        assistant('l-a1', 'Branch answer'),
+        anchored('l-u2', 'Follow-up', 'mid-2'),
+        assistant('l-a2', 'Follow-up answer'),
+      ]);
+
+      expect(reconcileSessionHistory(loaded, recovered)).toEqual({
+        transcript: [
+          recovered.transcript[0],
+          recovered.transcript[1],
+          ...loaded.transcript,
+        ],
+        historyStatus: 'partial',
+        truncated: false,
+      });
+    });
+
+    it('drops the unmatched resend residue that repeats the first loaded anchor text', () => {
+      const recovered = state([
+        anchored('r-dup', 'Tell me a story', 'mid-stale'),
+        anchored('r-u1', 'Tell me a story', 'mid-1'),
+        assistant('r-a1', 'Story answer'),
+      ]);
+      const loaded = state([
+        anchored('l-u1', 'Tell me a story', 'mid-1'),
+        assistant('l-a1', 'Story answer'),
+      ]);
+
+      expect(reconcileSessionHistory(loaded, recovered)).toBe(loaded);
+    });
+
+    it('shows drifted thinking text once, preferring the loaded version', () => {
+      const recovered = state([
+        anchored('r-u1', 'Question', 'mid-1'),
+        thinking('r-t1', 'turn-1', 'T'.repeat(29_534)),
+        assistant('r-a1', 'Answer'),
+      ]);
+      const loaded = state([
+        anchored('l-u1', 'Question', 'mid-1'),
+        thinking('l-t1', 'turn-1', 'T'.repeat(31_421)),
+        assistant('l-a1', 'Answer'),
+      ]);
+
+      const result = reconcileSessionHistory(loaded, recovered);
+      expect(result).toBe(loaded);
+      expect(
+        result.transcript.filter((item) => item.kind === 'thinking'),
+      ).toHaveLength(1);
+    });
+
+    it('appends the recovered turn the CLI never persisted', () => {
+      const recovered = state([
+        anchored('r-u1', 'Question one', 'mid-1'),
+        assistant('r-a1', 'Answer one'),
+        anchored('r-u2', 'Question two', 'mid-2'),
+        assistant('r-a2', 'Answer streamed before the crash'),
+      ]);
+      const loaded = state([
+        anchored('l-u1', 'Question one', 'mid-1'),
+        assistant('l-a1', 'Answer one'),
+        anchored('l-u2', 'Question two', 'mid-2'),
+      ]);
+
+      expect(reconcileSessionHistory(loaded, recovered)).toEqual({
+        transcript: [...loaded.transcript, recovered.transcript[3]],
+        historyStatus: 'partial',
+        truncated: false,
+      });
+    });
+
+    it('appends recovered whole turns missing from the persisted history', () => {
+      const recovered = state([
+        anchored('r-u1', 'Question one', 'mid-1'),
+        assistant('r-a1', 'Answer one'),
+        anchored('r-u2', 'Question two', 'mid-2'),
+        assistant('r-a2', 'Answer two'),
+      ]);
+      const loaded = state([
+        anchored('l-u1', 'Question one', 'mid-1'),
+        assistant('l-a1', 'Answer one'),
+      ]);
+
+      expect(reconcileSessionHistory(loaded, recovered)).toEqual({
+        transcript: [
+          ...loaded.transcript,
+          recovered.transcript[2],
+          recovered.transcript[3],
+        ],
+        historyStatus: 'partial',
+        truncated: false,
+      });
+    });
+
+    it('drops the stale recovered tail when loaded already has newer turns', () => {
+      const recovered = state([
+        anchored('r-u1', 'Question one', 'mid-1'),
+        assistant('r-a1', 'Answer one'),
+        anchored('r-u2', 'Question never persisted', 'mid-stale'),
+        assistant('r-a2', 'Stale streamed answer'),
+      ]);
+      const loaded = state([
+        anchored('l-u1', 'Question one', 'mid-1'),
+        assistant('l-a1', 'Answer one'),
+        anchored('l-u2', 'Newer question', 'mid-2'),
+        assistant('l-a2', 'Newer answer'),
+      ]);
+
+      expect(reconcileSessionHistory(loaded, recovered)).toBe(loaded);
+    });
+
+    it('does not anchor on duplicated text when messageIds are absent', () => {
+      // Two identical user texts on the recovered side disqualify the
+      // text fallback, so the legacy overlap path applies.
+      const recovered = state([
+        user('r-u1', 'Same question'),
+        user('r-u2', 'Same question'),
+      ]);
+      const loaded = state([
+        user('l-u1', 'Same question'),
+        assistant('l-a1', 'Answer'),
+      ]);
+
+      expect(reconcileSessionHistory(loaded, recovered)).toEqual({
+        transcript: [
+          recovered.transcript[0],
+          recovered.transcript[1],
+          loaded.transcript[1],
+        ],
+        historyStatus: 'partial',
+        truncated: false,
+      });
+    });
+
+    it('reconciles the real crash-shape fixture without duplicating content', () => {
+      // Sanitized 72/78 fixture of session 40ebe83d: the legacy
+      // overlap match returned 0 and concatenated both sides into 150
+      // items, repeating the whole conversation.
+      const recovered = state(realShapeRecovered);
+      const loaded = state(realShapeLoaded);
+
+      const result = reconcileSessionHistory(loaded, recovered);
+
+      // Loaded body plus the two-item rewind-branch prefix the SDK no
+      // longer returns; the duplicate resend residue is dropped.
+      expect(result.transcript).toHaveLength(realShapeLoaded.length + 2);
+      expect(result.historyStatus).toBe('partial');
+
+      const messageIds = result.transcript
+        .filter((item) => item.kind === 'user')
+        .map((item) => (item as { messageId?: string }).messageId)
+        .filter((id): id is string => id !== undefined);
+      expect(new Set(messageIds).size).toBe(messageIds.length);
+
+      const toolUseIds = result.transcript
+        .filter((item) => item.kind === 'tool')
+        .map((item) => (item as { toolUseId: string }).toolUseId);
+      expect(new Set(toolUseIds).size).toBe(toolUseIds.length);
+
+      // The body is the loaded history unchanged; only the recovered
+      // rewind-branch prefix sits in front of it.
+      expect(result.transcript.slice(2)).toEqual(realShapeLoaded);
+      expect(result.transcript[0]).toEqual(realShapeRecovered[0]);
+      expect(result.transcript[1]).toEqual(realShapeRecovered[1]);
+    });
+  });
 });
 
 function state(
@@ -117,6 +326,46 @@ function user(
   text: string,
 ): Extract<SessionTranscriptItem, { kind: 'user' }> {
   return { id, kind: 'user', text };
+}
+
+function anchored(
+  id: string,
+  text: string,
+  messageId: string,
+): Extract<SessionTranscriptItem, { kind: 'user' }> {
+  return { id, kind: 'user', text, messageId };
+}
+
+function thinking(
+  id: string,
+  turnId: string,
+  text: string,
+): Extract<SessionTranscriptItem, { kind: 'thinking' }> {
+  return {
+    id,
+    kind: 'thinking',
+    turnId,
+    text,
+    status: 'stopped',
+    truncated: false,
+  };
+}
+
+function changes(
+  id: string,
+  turnId: string,
+  paths: readonly string[],
+): Extract<SessionTranscriptItem, { kind: 'changes' }> {
+  return {
+    id,
+    kind: 'changes',
+    turnId,
+    files: paths.map((path) => ({
+      path,
+      additions: 1,
+      deletions: 0,
+    })),
+  };
 }
 
 function assistant(
