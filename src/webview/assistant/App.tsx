@@ -201,6 +201,27 @@ export function App(): React.JSX.Element {
       vscode,
     ],
   );
+  // Anchor for Regenerate: the last user message that can start a
+  // rewind. Regenerating resends its unchanged text from that point.
+  const regenerateAnchor = useMemo(() => {
+    for (let i = state.transcript.length - 1; i >= 0; i -= 1) {
+      const item = state.transcript[i];
+      if (item !== undefined && item.kind === 'user') {
+        return item.messageId === undefined
+          ? null
+          : { messageId: item.messageId, text: item.text };
+      }
+    }
+    return null;
+  }, [state.transcript]);
+  const handleRegenerate = useCallback((): void => {
+    if (regenerateAnchor !== null) {
+      handleEditResend(
+        regenerateAnchor.messageId,
+        regenerateAnchor.text,
+      );
+    }
+  }, [handleEditResend, regenerateAnchor]);
   const handleReuseMessage = useCallback(
     (text: string): void => {
       const nextDraft = text.slice(0, MAX_TURN_TEXT_LENGTH);
@@ -457,6 +478,14 @@ export function App(): React.JSX.Element {
           onDraftChange={handleDraftChange}
           onReuseMessage={handleReuseMessage}
           onEditResend={handleEditResend}
+          onRegenerate={
+            connectionStatus === 'connected' &&
+            !active &&
+            !hasInteraction &&
+            regenerateAnchor !== null
+              ? handleRegenerate
+              : null
+          }
           onOpenFileDiff={handleOpenFileDiff}
           editResendEnabled={
             connectionStatus === 'connected' &&

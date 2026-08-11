@@ -74,6 +74,10 @@ const FileDiffContext = createContext<(path: string) => void>(
   () => undefined,
 );
 
+// Regenerating rewinds to the last user message and resends it. Null
+// means the action is currently unavailable (no anchor or turn active).
+const RegenerateContext = createContext<(() => void) | null>(null);
+
 interface DroidThreadProps {
   readonly pending: boolean;
   readonly activity?: 'working' | 'responding';
@@ -109,6 +113,7 @@ interface DroidThreadProps {
   readonly onDraftChange: (draft: string) => void;
   readonly onReuseMessage: (text: string) => void;
   readonly onEditResend: (messageId: string, text: string) => void;
+  readonly onRegenerate: (() => void) | null;
   readonly onOpenFileDiff: (path: string) => void;
   readonly editResendEnabled: boolean;
   readonly inlineInteraction?: ReactNode;
@@ -149,6 +154,7 @@ export const DroidThread = memo(function DroidThread({
   onDraftChange,
   onReuseMessage,
   onEditResend,
+  onRegenerate,
   onOpenFileDiff,
   editResendEnabled,
   inlineInteraction,
@@ -169,6 +175,7 @@ export const DroidThread = memo(function DroidThread({
         scrollToBottomOnThreadSwitch
       >
         <FileDiffContext.Provider value={onOpenFileDiff}>
+        <RegenerateContext.Provider value={onRegenerate}>
         <ThinkingExpansionProvider>
           <div className="dvx-reading-column">
             <HistoryNotice
@@ -213,6 +220,7 @@ export const DroidThread = memo(function DroidThread({
             {inlineInteraction}
           </div>
         </ThinkingExpansionProvider>
+        </RegenerateContext.Provider>
         </FileDiffContext.Provider>
         <ThreadPrimitive.ViewportFooter className="dvx-thread-footer">
           <Composer
@@ -496,10 +504,54 @@ const AssistantMessage = memo(function AssistantMessage():
         >
           <CopyActionContent />
         </ActionBarPrimitive.Copy>
+        <MessagePrimitive.If last>
+          <RegenerateAction />
+        </MessagePrimitive.If>
       </ActionBarPrimitive.Root>
     </MessagePrimitive.Root>
   );
 });
+
+function RegenerateAction(): React.JSX.Element | null {
+  const regenerate = useContext(RegenerateContext);
+  const [busy, setBusy] = useState(false);
+  const busyResetRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  useEffect(
+    () => () => {
+      if (busyResetRef.current !== null) {
+        clearTimeout(busyResetRef.current);
+      }
+    },
+    [],
+  );
+  if (regenerate === null) {
+    return null;
+  }
+  return (
+    <button
+      className="dvx-message-action"
+      type="button"
+      aria-label="Regenerate response"
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        regenerate();
+        // The forked snapshot replaces this thread on success; if the
+        // host declines it only emits a diagnostic, so recover the
+        // button after a grace period.
+        if (busyResetRef.current !== null) {
+          clearTimeout(busyResetRef.current);
+        }
+        busyResetRef.current = setTimeout(() => setBusy(false), 8000);
+      }}
+    >
+      <RegenerateIcon />
+      <span>{busy ? 'Regenerating…' : 'Regenerate'}</span>
+    </button>
+  );
+}
 
 function ToolFilePath({
   path,
@@ -962,6 +1014,19 @@ function EditIcon(): React.JSX.Element {
     <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
       <path
         d="m9.6 2.2 2.2 2.2-6.6 6.6-2.7.5.5-2.7 6.6-6.6Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function RegenerateIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path
+        d="M11.5 7a4.5 4.5 0 1 1-1.32-3.18M11.5 2.5v2.75h-2.75"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"

@@ -600,7 +600,8 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [x] 非破坏性 Reuse in Composer
 - [x] 编辑历史用户消息（双击内联编辑器）
 - [x] 消息级重新发送（经 SDK Rewind 分支）
-- [ ] Assistant 消息 Regenerate
+- [x] Assistant 消息 Regenerate（仅最后一条回答，锚定其前一条用户
+      消息经同一 Rewind 分支原文重发）
 - [ ] Turn Envelope
 - [ ] `getRewindInfo`
 - [ ] 文件变化安全检查
