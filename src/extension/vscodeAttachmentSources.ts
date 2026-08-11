@@ -1,4 +1,4 @@
-import { basename, extname } from 'node:path';
+import { basename, extname, isAbsolute, join, relative } from 'node:path';
 
 import * as vscode from 'vscode';
 
@@ -116,6 +116,77 @@ export function createVscodeAttachmentSources(): AttachmentSources & {
           text,
         ),
       });
+    },
+
+    async searchWorkspaceFiles(
+      query,
+      maxResults,
+    ): Promise<readonly string[]> {
+      const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+      if (root === undefined) {
+        return [];
+      }
+      // Escape glob-special characters so the query matches literally.
+      const literal = query.replace(/[[\]{}()*?!]/g, '');
+      if (literal.length === 0) {
+        return [];
+      }
+      let uris: readonly vscode.Uri[];
+      try {
+        uris = await vscode.workspace.findFiles(
+          `**/*${literal}*`,
+          '{**/node_modules/**,**/.git/**,**/dist/**,**/out/**}',
+          maxResults * 2,
+        );
+      } catch {
+        return [];
+      }
+      const paths: string[] = [];
+      for (const uri of uris) {
+        const relativePath = relative(root.fsPath, uri.fsPath)
+          .replaceAll('\\', '/');
+        if (
+          relativePath.length > 0 &&
+          !relativePath.startsWith('..') &&
+          !isAbsolute(relativePath)
+        ) {
+          paths.push(relativePath);
+        }
+        if (paths.length >= maxResults) {
+          break;
+        }
+      }
+      return paths.sort(
+        (a, b) => a.length - b.length || a.localeCompare(b),
+      );
+    },
+
+    async readWorkspaceFile(
+      relativePath,
+    ): Promise<AttachmentPickOutcome> {
+      const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+      if (root === undefined) {
+        return { status: 'failed' };
+      }
+      const absolute = join(root.fsPath, relativePath);
+      const containment = relative(root.fsPath, absolute);
+      if (
+        containment.length === 0 ||
+        containment.startsWith('..') ||
+        isAbsolute(containment)
+      ) {
+        return { status: 'failed' };
+      }
+      let payload: AttachmentPayload | 'too-large' | 'unsupported-type';
+      try {
+        payload = await readFilePayload(vscode.Uri.file(absolute));
+      } catch {
+        return { status: 'failed' };
+      }
+      if (payload === 'too-large' || payload === 'unsupported-type') {
+        return { status: 'rejected', reason: payload };
+      }
+      return { status: 'picked', items: [payload] };
     },
 
     dispose(): void {

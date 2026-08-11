@@ -564,7 +564,9 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
 - [x] `＋` 动作面板本地搜索、Skills 列表浏览与启停、MCP Server 浏览与启停
 - [x] `＋` 面板附件入口（文件对话框、活动编辑器、编辑器选区）
 - [x] 已附加内容标签（Composer 附件 chips，含种类/截断徽标与移除）
-- [ ] `@` 文件和 Symbol 引用
+- [x] `@` 文件引用（Composer 输入 `@` 触发工作区文件搜索弹窗，
+      键盘/鼠标选择后按路径附加为附件；Symbol 引用未实现）
+- [ ] `@` Symbol 引用
 - [ ] `/` 动态命令
 
 当前 Composer 保留 assistant-ui 的 Input、Send、Stop 和 Runtime Retry，
@@ -591,7 +593,8 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [ ] Problems
 - [ ] Git Changes
 - [ ] Terminal Output
-- [ ] 项目文件选择
+- [x] 项目文件选择（Composer `@` 提及经 `workspace.searchFiles`
+      搜索工作区文件并按相对路径附加）
 - [ ] Symbol 引用
 
 ### Edit、Resend 和 Rewind

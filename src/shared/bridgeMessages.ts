@@ -321,6 +321,33 @@ export interface AttachmentRemoveMessage {
   readonly attachmentId: string;
 }
 
+/** Longest accepted workspace file search query. */
+export const MAX_FILE_SEARCH_QUERY_LENGTH = 128;
+/** Most file paths returned for one workspace search. */
+export const MAX_FILE_SEARCH_RESULTS = 20;
+
+/**
+ * Asks the host to match workspace files against a Composer `@`
+ * mention query. Results return via `workspace.files` with the same
+ * request id.
+ */
+export interface WorkspaceSearchFilesMessage {
+  readonly type: 'workspace.searchFiles';
+  readonly sessionId: string;
+  readonly requestId: string;
+  readonly query: string;
+}
+
+/**
+ * Stages one workspace file, named by its validated relative path, as
+ * a pending attachment for the next prompt.
+ */
+export interface AttachmentAddPathMessage {
+  readonly type: 'attachment.addPath';
+  readonly sessionId: string;
+  readonly path: string;
+}
+
 /** Requests the current MCP server and tool catalog for the session. */
 export interface McpRefreshMessage {
   readonly type: 'mcp.refresh';
@@ -385,6 +412,8 @@ export type WebviewToHostMessage =
   | AttachmentAddEditorMessage
   | AttachmentAddSelectionMessage
   | AttachmentRemoveMessage
+  | AttachmentAddPathMessage
+  | WorkspaceSearchFilesMessage
   | SessionSettingUpdateMessage;
 
 export interface ConnectionState {
@@ -735,6 +764,18 @@ export interface SessionAttachmentsStateMessage {
   readonly attachments: readonly AttachmentSummary[];
 }
 
+/**
+ * Workspace files matching one `workspace.searchFiles` request. Paths
+ * are workspace-relative with forward slashes.
+ */
+export interface WorkspaceFilesMessage {
+  readonly type: 'workspace.files';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly requestId: string;
+  readonly files: readonly string[];
+}
+
 export interface AssistantDeltaMessage {
   readonly type: 'assistant.delta';
   readonly sequence: number;
@@ -891,6 +932,7 @@ export type HostToWebviewMessage =
   | SessionSkillsStateMessage
   | SessionMcpStateMessage
   | SessionAttachmentsStateMessage
+  | WorkspaceFilesMessage
   | AssistantDeltaMessage
   | ThinkingDeltaMessage
   | ThinkingCompleteMessage

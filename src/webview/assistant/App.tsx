@@ -235,6 +235,31 @@ export function App(): React.JSX.Element {
     },
     [vscode],
   );
+  const handleFileSearch = useCallback(
+    (requestId: string, query: string): void => {
+      if (sessionId !== null && connectionStatus === 'connected') {
+        post(vscode, {
+          type: 'workspace.searchFiles',
+          sessionId,
+          requestId,
+          query,
+        });
+      }
+    },
+    [connectionStatus, sessionId, vscode],
+  );
+  const handleAttachPath = useCallback(
+    (path: string): void => {
+      if (sessionId !== null && connectionStatus === 'connected') {
+        post(vscode, {
+          type: 'attachment.addPath',
+          sessionId,
+          path,
+        });
+      }
+    },
+    [connectionStatus, sessionId, vscode],
+  );
   const handleRetry = useCallback((): void => {
     post(vscode, {
       type: 'runtime.retry',
@@ -471,6 +496,9 @@ export function App(): React.JSX.Element {
           onMcpRefresh={handleMcpRefresh}
           onMcpServerToggle={handleMcpServerToggle}
           attachments={state.attachments}
+          fileSearch={state.fileSearch}
+          onFileSearch={handleFileSearch}
+          onAttachPath={handleAttachPath}
           onAttachFiles={handleAttachFiles}
           onAttachEditor={handleAttachEditor}
           onAttachSelection={handleAttachSelection}

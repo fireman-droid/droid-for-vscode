@@ -2312,6 +2312,10 @@ describe('ChatController', () => {
       readActiveSelection: vi.fn(async () => ({
         status: 'empty' as const,
       })),
+      searchWorkspaceFiles: vi.fn(async () => []),
+      readWorkspaceFile: vi.fn(async () => ({
+        status: 'failed' as const,
+      })),
     };
     const { controller, messages } = createController(
       () => runtime,
@@ -2363,6 +2367,89 @@ describe('ChatController', () => {
     expect(JSON.stringify(messages)).not.toContain('aW1n');
   });
 
+  it('answers workspace file searches and stages @-mentioned files', async () => {
+    const runtime = createMockRuntime();
+    const sources: AttachmentSources = {
+      pickFiles: vi.fn(async () => ({ status: 'cancelled' as const })),
+      readActiveEditor: vi.fn(async () => ({ status: 'empty' as const })),
+      readActiveSelection: vi.fn(async () => ({
+        status: 'empty' as const,
+      })),
+      searchWorkspaceFiles: vi.fn(async () => [
+        'src/webview/assistant/Thread.tsx',
+        'src/webview/assistant/Thread.test.tsx',
+      ]),
+      readWorkspaceFile: vi.fn(async (path: string) => ({
+        status: 'picked' as const,
+        items: [
+          {
+            kind: 'text' as const,
+            name: path.split('/').at(-1) ?? path,
+            data: 'contents',
+            sizeBytes: 8,
+            truncated: false,
+          },
+        ],
+      })),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      sources,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'workspace.searchFiles',
+      sessionId: 'session-1',
+      requestId: 'file-search-1',
+      query: 'Thread',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'workspace.files')).toMatchObject({
+        requestId: 'file-search-1',
+        files: [
+          'src/webview/assistant/Thread.tsx',
+          'src/webview/assistant/Thread.test.tsx',
+        ],
+      });
+    });
+    expect(sources.searchWorkspaceFiles).toHaveBeenCalledWith(
+      'Thread',
+      20,
+    );
+
+    // Blank queries answer immediately without touching the sources.
+    controller.handleMessage({
+      type: 'workspace.searchFiles',
+      sessionId: 'session-1',
+      requestId: 'file-search-2',
+      query: '   ',
+    });
+    expect(lastMessage(messages, 'workspace.files')).toMatchObject({
+      requestId: 'file-search-2',
+      files: [],
+    });
+
+    controller.handleMessage({
+      type: 'attachment.addPath',
+      sessionId: 'session-1',
+      path: 'src/webview/assistant/Thread.tsx',
+    });
+    await vi.waitFor(() => {
+      expect(
+        attachmentsMessages(messages).at(-1)?.attachments,
+      ).toMatchObject([{ kind: 'text', name: 'Thread.tsx' }]);
+    });
+    expect(sources.readWorkspaceFile).toHaveBeenCalledWith(
+      'src/webview/assistant/Thread.tsx',
+    );
+  });
+
   it('labels editor captures and reports empty selections', async () => {
     const runtime = createMockRuntime();
     const sources: AttachmentSources = {
@@ -2379,6 +2466,10 @@ describe('ChatController', () => {
       })),
       readActiveSelection: vi.fn(async () => ({
         status: 'empty' as const,
+      })),
+      searchWorkspaceFiles: vi.fn(async () => []),
+      readWorkspaceFile: vi.fn(async () => ({
+        status: 'failed' as const,
       })),
     };
     const { controller, messages } = createController(

@@ -45,6 +45,18 @@ export interface AttachmentSources {
   pickFiles(maxCount: number): Promise<AttachmentPickOutcome>;
   readActiveEditor(): Promise<AttachmentCaptureOutcome>;
   readActiveSelection(): Promise<AttachmentCaptureOutcome>;
+  /**
+   * Matches workspace files by name fragment for `@` mentions.
+   * Returns bounded workspace-relative forward-slash paths.
+   */
+  searchWorkspaceFiles(
+    query: string,
+    maxResults: number,
+  ): Promise<readonly string[]>;
+  /** Reads one workspace file by validated relative path. */
+  readWorkspaceFile(
+    relativePath: string,
+  ): Promise<AttachmentPickOutcome>;
 }
 
 export function createUnavailableAttachmentSources(): AttachmentSources {
@@ -52,5 +64,7 @@ export function createUnavailableAttachmentSources(): AttachmentSources {
     pickFiles: () => Promise.resolve({ status: 'failed' }),
     readActiveEditor: () => Promise.resolve({ status: 'failed' }),
     readActiveSelection: () => Promise.resolve({ status: 'failed' }),
+    searchWorkspaceFiles: () => Promise.resolve([]),
+    readWorkspaceFile: () => Promise.resolve({ status: 'failed' }),
   };
 }

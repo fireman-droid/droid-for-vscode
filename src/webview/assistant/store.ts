@@ -48,6 +48,11 @@ export interface AssistantWebviewState {
   readonly mcp: SessionMcpState | { status: 'idle'; items: readonly [] };
   /** Attachments staged on the host for the next prompt. */
   readonly attachments: readonly AttachmentSummary[];
+  /** Latest workspace file search result for the `@` mention popup. */
+  readonly fileSearch: {
+    readonly requestId: string;
+    readonly files: readonly string[];
+  } | null;
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: Extract<
     HostToWebviewMessage,
@@ -82,6 +87,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   skills: { status: 'idle', items: [] },
   mcp: { status: 'idle', items: [] },
   attachments: [],
+  fileSearch: null,
   transcript: [],
   historyStatus: null,
   truncated: false,
@@ -166,6 +172,8 @@ export function assistantWebviewReducer(
             : { status: 'idle', items: [] },
         attachments:
           event.sessionId === state.sessionId ? state.attachments : [],
+        fileSearch:
+          event.sessionId === state.sessionId ? state.fileSearch : null,
         transcript: event.transcript,
         historyStatus: event.historyStatus,
         truncated: event.truncated,
@@ -256,6 +264,17 @@ export function assistantWebviewReducer(
             ...state,
             sequence: event.sequence,
             attachments: event.attachments,
+          }
+        : advance(state, event.sequence);
+    case 'workspace.files':
+      return event.sessionId === state.sessionId
+        ? {
+            ...state,
+            sequence: event.sequence,
+            fileSearch: {
+              requestId: event.requestId,
+              files: event.files,
+            },
           }
         : advance(state, event.sequence);
     case 'assistant.delta':

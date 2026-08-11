@@ -21,6 +21,7 @@ import type {
 import {
   MAX_ATTACHMENT_NAME_LENGTH,
   MAX_BRIDGE_ID_LENGTH,
+  MAX_FILE_SEARCH_RESULTS,
   MAX_MODEL_CATALOG_ITEMS,
   MAX_PENDING_ATTACHMENTS,
   MAX_MODEL_DISPLAY_NAME_LENGTH,
@@ -86,6 +87,7 @@ import {
   type ChangeStatsReader,
 } from './changeStats';
 import { reconcileSessionHistory } from './reconcileSessionHistory';
+import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
 import {
   createUnavailableAttachmentSources,
   type AttachmentPayload,
@@ -423,6 +425,16 @@ export class ChatController {
         return;
       case 'attachment.addSelection':
         this.handleAttachmentCapture(message.sessionId, 'selection');
+        return;
+      case 'attachment.addPath':
+        this.handleAttachmentAddPath(message.sessionId, message.path);
+        return;
+      case 'workspace.searchFiles':
+        this.handleWorkspaceSearchFiles(
+          message.sessionId,
+          message.requestId,
+          message.query,
+        );
         return;
       case 'attachment.remove':
         this.handleAttachmentRemove(
@@ -2060,6 +2072,111 @@ export class ChatController {
         }
       },
     );
+  }
+
+  private handleAttachmentAddPath(
+    sessionId: string,
+    path: string,
+  ): void {
+    if (!this.canStageAttachments(sessionId)) {
+      return;
+    }
+    if (this.pendingAttachments.length >= MAX_PENDING_ATTACHMENTS) {
+      this.emitSessionDiagnostic(
+        'attachment-limit',
+        ATTACHMENT_LIMIT_MESSAGE,
+      );
+      return;
+    }
+    this.attachmentOperationInProgress = true;
+    void this.attachmentSources.readWorkspaceFile(path).then(
+      (outcome) => {
+        this.attachmentOperationInProgress = false;
+        if (sessionId !== this.sessionId) {
+          return;
+        }
+        switch (outcome.status) {
+          case 'picked':
+            this.stageAttachmentPayloads(outcome.items);
+            return;
+          case 'cancelled':
+            return;
+          case 'rejected':
+            this.emitSessionDiagnostic(
+              'attachment-rejected',
+              outcome.reason === 'too-large'
+                ? ATTACHMENT_TOO_LARGE_MESSAGE
+                : ATTACHMENT_UNSUPPORTED_TYPE_MESSAGE,
+            );
+            return;
+          case 'failed':
+            this.emitSessionDiagnostic(
+              'attachment-read-failed',
+              ATTACHMENT_READ_FAILED_MESSAGE,
+            );
+            return;
+        }
+      },
+      () => {
+        this.attachmentOperationInProgress = false;
+        if (sessionId === this.sessionId) {
+          this.emitSessionDiagnostic(
+            'attachment-read-failed',
+            ATTACHMENT_READ_FAILED_MESSAGE,
+          );
+        }
+      },
+    );
+  }
+
+  private handleWorkspaceSearchFiles(
+    sessionId: string,
+    requestId: string,
+    query: string,
+  ): void {
+    if (
+      sessionId !== this.sessionId ||
+      this.connection.status !== 'connected'
+    ) {
+      return;
+    }
+    if (query.trim().length === 0) {
+      this.emitWorkspaceFiles(sessionId, requestId, []);
+      return;
+    }
+    void this.attachmentSources
+      .searchWorkspaceFiles(query.trim(), MAX_FILE_SEARCH_RESULTS)
+      .then(
+        (files) => {
+          if (sessionId === this.sessionId) {
+            this.emitWorkspaceFiles(
+              sessionId,
+              requestId,
+              files
+                .filter((file) => isSafeWorkspaceRelativePath(file))
+                .slice(0, MAX_FILE_SEARCH_RESULTS),
+            );
+          }
+        },
+        () => {
+          if (sessionId === this.sessionId) {
+            this.emitWorkspaceFiles(sessionId, requestId, []);
+          }
+        },
+      );
+  }
+
+  private emitWorkspaceFiles(
+    sessionId: string,
+    requestId: string,
+    files: readonly string[],
+  ): void {
+    this.emit({
+      type: 'workspace.files',
+      sessionId,
+      requestId,
+      files,
+    });
   }
 
   private handleAttachmentRemove(

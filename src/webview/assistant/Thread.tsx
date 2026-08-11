@@ -4,6 +4,7 @@ import {
   MessagePartPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
+  useAui,
 } from '@assistant-ui/react';
 import {
   createContext,
@@ -17,6 +18,7 @@ import {
 } from 'react';
 
 import {
+  MAX_FILE_SEARCH_QUERY_LENGTH,
   MAX_TURN_TEXT_LENGTH,
   type ModelCatalogState,
   type SessionHistoryStatus,
@@ -37,6 +39,12 @@ const THINKING_SMOOTH_OPTIONS = {
   maxCharsPerFrame: 12,
   minCommitMs: 48,
 } as const;
+
+/** Latest workspace search result delivered by the host. */
+export interface FileSearchResult {
+  readonly requestId: string;
+  readonly files: readonly string[];
+}
 
 interface ThinkingExpansion {
   readonly expanded: boolean;
@@ -106,6 +114,9 @@ interface DroidThreadProps {
   readonly onMcpRefresh: () => void;
   readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
   readonly attachments: readonly AttachmentSummary[];
+  readonly fileSearch: FileSearchResult | null;
+  readonly onFileSearch: (requestId: string, query: string) => void;
+  readonly onAttachPath: (path: string) => void;
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
   readonly onAttachSelection: () => void;
@@ -147,6 +158,9 @@ export const DroidThread = memo(function DroidThread({
   onMcpRefresh,
   onMcpServerToggle,
   attachments,
+  fileSearch,
+  onFileSearch,
+  onAttachPath,
   onAttachFiles,
   onAttachEditor,
   onAttachSelection,
@@ -245,6 +259,9 @@ export const DroidThread = memo(function DroidThread({
             onMcpRefresh={onMcpRefresh}
             onMcpServerToggle={onMcpServerToggle}
             attachments={attachments}
+            fileSearch={fileSearch}
+            onFileSearch={onFileSearch}
+            onAttachPath={onAttachPath}
             onAttachFiles={onAttachFiles}
             onAttachEditor={onAttachEditor}
             onAttachSelection={onAttachSelection}
@@ -751,6 +768,9 @@ function Composer({
   onMcpRefresh,
   onMcpServerToggle,
   attachments,
+  fileSearch,
+  onFileSearch,
+  onAttachPath,
   onAttachFiles,
   onAttachEditor,
   onAttachSelection,
@@ -778,12 +798,67 @@ function Composer({
   readonly onMcpRefresh: () => void;
   readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
   readonly attachments: readonly AttachmentSummary[];
+  readonly fileSearch: FileSearchResult | null;
+  readonly onFileSearch: (requestId: string, query: string) => void;
+  readonly onAttachPath: (path: string) => void;
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
   readonly onAttachSelection: () => void;
   readonly onAttachmentRemove: (attachmentId: string) => void;
   readonly onDraftChange: (draft: string) => void;
 }): React.JSX.Element {
+  const aui = useAui();
+  const draftRef = useRef('');
+  const [mention, setMention] = useState<MentionToken | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(
+    null,
+  );
+  const searchCounterRef = useRef(0);
+
+  // Debounce host searches while the user types the mention query.
+  useEffect(() => {
+    if (mention === null || mention.query.length === 0) {
+      setActiveRequestId(null);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      searchCounterRef.current += 1;
+      const requestId = `file-search-${searchCounterRef.current}`;
+      setActiveRequestId(requestId);
+      onFileSearch(requestId, mention.query);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [mention, onFileSearch]);
+
+  const results =
+    mention !== null &&
+    activeRequestId !== null &&
+    fileSearch !== null &&
+    fileSearch.requestId === activeRequestId
+      ? fileSearch.files
+      : [];
+
+  const closeMention = (): void => {
+    setMention(null);
+    setActiveRequestId(null);
+    setActiveIndex(0);
+  };
+
+  const selectMention = (path: string): void => {
+    if (mention === null) {
+      return;
+    }
+    onAttachPath(path);
+    const draft = draftRef.current;
+    const next =
+      draft.slice(0, mention.start) + draft.slice(mention.end);
+    draftRef.current = next;
+    aui.thread.composer().setText(next);
+    onDraftChange(next);
+    closeMention();
+  };
+
   return (
     <div className="dvx-composer-wrap">
       <div className="dvx-composer-seam" aria-hidden="true" />
@@ -811,6 +886,36 @@ function Composer({
             <label className="dvx-visually-hidden" htmlFor="dvx-prompt">
               Message Droid
             </label>
+            {mention !== null && results.length > 0 ? (
+              <div
+                className="dvx-mention-popup"
+                role="listbox"
+                aria-label="Attach workspace file"
+              >
+                {results.map((path, index) => (
+                  <button
+                    key={path}
+                    type="button"
+                    role="option"
+                    aria-selected={index === activeIndex}
+                    className={`dvx-mention-item${
+                      index === activeIndex ? ' dvx-mention-active' : ''
+                    }`}
+                    onMouseDown={(event) => {
+                      // Keep focus in the textarea while selecting.
+                      event.preventDefault();
+                      selectMention(path);
+                    }}
+                    onMouseEnter={() => setActiveIndex(index)}
+                  >
+                    <span className="dvx-mention-name">
+                      {path.split('/').at(-1)}
+                    </span>
+                    <span className="dvx-mention-path">{path}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <ComposerPrimitive.Input
               id="dvx-prompt"
               className="dvx-composer-input"
@@ -819,7 +924,50 @@ function Composer({
               maxLength={MAX_TURN_TEXT_LENGTH}
               submitMode="enter"
               addAttachmentOnPaste={false}
-              onChange={(event) => onDraftChange(event.currentTarget.value)}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                draftRef.current = value;
+                onDraftChange(value);
+                const caret =
+                  event.currentTarget.selectionStart ?? value.length;
+                const nextMention = findMentionToken(value, caret);
+                setMention(nextMention);
+                setActiveIndex(0);
+              }}
+              onKeyDown={(event) => {
+                if (mention === null) {
+                  return;
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  closeMention();
+                  return;
+                }
+                if (results.length === 0) {
+                  return;
+                }
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  setActiveIndex(
+                    (index) => (index + 1) % results.length,
+                  );
+                } else if (event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  setActiveIndex(
+                    (index) =>
+                      (index - 1 + results.length) % results.length,
+                  );
+                } else if (
+                  event.key === 'Enter' ||
+                  event.key === 'Tab'
+                ) {
+                  event.preventDefault();
+                  const path = results[activeIndex];
+                  if (path !== undefined) {
+                    selectMention(path);
+                  }
+                }
+              }}
             />
           </>
         )}
@@ -882,6 +1030,42 @@ function Composer({
       </div>
     </div>
   );
+}
+
+interface MentionToken {
+  /** Index of the `@` character in the draft. */
+  readonly start: number;
+  /** Caret position; the token spans start..end. */
+  readonly end: number;
+  readonly query: string;
+}
+
+/**
+ * Finds an `@file` mention token ending at the caret. The `@` must be
+ * at the start of the draft or preceded by whitespace, and the query
+ * cannot contain whitespace or another `@`.
+ */
+function findMentionToken(
+  value: string,
+  caret: number,
+): MentionToken | null {
+  const before = value.slice(0, caret);
+  const at = before.lastIndexOf('@');
+  if (at === -1) {
+    return null;
+  }
+  const preceding = before[at - 1];
+  if (preceding !== undefined && !/\s/.test(preceding)) {
+    return null;
+  }
+  const query = before.slice(at + 1);
+  if (
+    /[\s@]/.test(query) ||
+    query.length > MAX_FILE_SEARCH_QUERY_LENGTH
+  ) {
+    return null;
+  }
+  return { start: at, end: caret, query };
 }
 
 const ATTACHMENT_KIND_LABELS: Record<AttachmentSummary['kind'], string> = {

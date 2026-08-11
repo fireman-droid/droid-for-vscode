@@ -47,6 +47,7 @@ import {
   ATTACHMENT_KINDS,
   MAX_ATTACHMENT_NAME_LENGTH,
   MAX_CHANGED_FILES_PER_TURN,
+  MAX_FILE_SEARCH_RESULTS,
   MAX_PENDING_ATTACHMENTS,
   SKILL_LOCATIONS,
   TRANSCRIPT_THINKING_STATUSES,
@@ -169,6 +170,8 @@ export function readHostMessage(
         return parseSessionMcpMessage(value);
       case 'session.attachments':
         return parseSessionAttachmentsMessage(value);
+      case 'workspace.files':
+        return parseWorkspaceFiles(value);
       case 'assistant.delta':
         return parseAssistantDelta(value);
       case 'thinking.delta':
@@ -1213,6 +1216,44 @@ function parseSessionAttachmentsMessage(
     sequence: value.sequence,
     sessionId: value.sessionId,
     attachments,
+  };
+}
+
+function parseWorkspaceFiles(
+  value: UnknownRecord,
+):
+  | Extract<HostToWebviewMessage, { type: 'workspace.files' }>
+  | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sequence',
+      'sessionId',
+      'requestId',
+      'files',
+    ]) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId) ||
+    !isId(value.requestId) ||
+    !isExactArray(value.files, 0, MAX_FILE_SEARCH_RESULTS)
+  ) {
+    return undefined;
+  }
+  const files: string[] = [];
+  const seen = new Set<string>();
+  for (const file of value.files) {
+    if (!isSafeWorkspaceRelativePath(file) || seen.has(file)) {
+      return undefined;
+    }
+    seen.add(file);
+    files.push(file);
+  }
+  return {
+    type: 'workspace.files',
+    sequence: value.sequence,
+    sessionId: value.sessionId,
+    requestId: value.requestId,
+    files,
   };
 }
 

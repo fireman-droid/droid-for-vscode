@@ -128,6 +128,17 @@ describe('parseWebviewMessage', () => {
       path: 'src/webview/assistant/App.tsx',
     },
     {
+      type: 'workspace.searchFiles',
+      sessionId: 'session-1',
+      requestId: 'file-search-1',
+      query: 'Thread',
+    },
+    {
+      type: 'attachment.addPath',
+      sessionId: 'session-1',
+      path: 'src/webview/assistant/Thread.tsx',
+    },
+    {
       type: 'attachment.pick',
       sessionId: 'session-1',
     },
@@ -303,6 +314,48 @@ describe('parseWebviewMessage', () => {
     { type: 'file.openDiff', sessionId: 'session-1' },
     {
       type: 'file.openDiff',
+      sessionId: 'session-1',
+      path: 'src/a.ts',
+      extra: true,
+    },
+    {
+      type: 'workspace.searchFiles',
+      sessionId: 'session-1',
+      requestId: '',
+      query: 'Thread',
+    },
+    {
+      type: 'workspace.searchFiles',
+      sessionId: 'session-1',
+      requestId: 'r-1',
+      query: 'x'.repeat(129),
+    },
+    {
+      type: 'workspace.searchFiles',
+      sessionId: 'session-1',
+      requestId: 'r-1',
+      query: 'bad\u0000query',
+    },
+    {
+      type: 'workspace.searchFiles',
+      sessionId: 'session-1',
+      requestId: 'r-1',
+      query: 'q',
+      extra: true,
+    },
+    { type: 'attachment.addPath', sessionId: 'session-1', path: '' },
+    {
+      type: 'attachment.addPath',
+      sessionId: 'session-1',
+      path: '../outside.ts',
+    },
+    {
+      type: 'attachment.addPath',
+      sessionId: 'session-1',
+      path: 'C:/win.ini',
+    },
+    {
+      type: 'attachment.addPath',
       sessionId: 'session-1',
       path: 'src/a.ts',
       extra: true,

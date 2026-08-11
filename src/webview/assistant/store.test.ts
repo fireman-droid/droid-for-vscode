@@ -208,6 +208,49 @@ describe('assistantWebviewReducer', () => {
     expect(state.attachments).toHaveLength(0);
   });
 
+  it('tracks workspace file search results for the active session only', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'workspace.files',
+        sequence: 1,
+        sessionId: 'session-a',
+        requestId: 'file-search-1',
+        files: ['src/app.ts', 'docs/readme.md'],
+      },
+    });
+    expect(state.fileSearch).toEqual({
+      requestId: 'file-search-1',
+      files: ['src/app.ts', 'docs/readme.md'],
+    });
+
+    // Other-session results advance the sequence only.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'workspace.files',
+        sequence: 2,
+        sessionId: 'session-other',
+        requestId: 'file-search-9',
+        files: [],
+      },
+    });
+    expect(state.sequence).toBe(2);
+    expect(state.fileSearch?.requestId).toBe('file-search-1');
+
+    // Switching sessions drops stale results.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(3, 'session-b'),
+    });
+    expect(state.fileSearch).toBeNull();
+  });
+
   it('isolates sequenced settings, context, and catalogs by session', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',

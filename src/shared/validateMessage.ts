@@ -14,9 +14,11 @@ import {
   SESSION_AUTONOMY_LEVELS,
   SESSION_INTERACTION_MODES,
   SESSION_REASONING_EFFORTS,
+  MAX_FILE_SEARCH_QUERY_LENGTH,
   type AskUserAnswer,
   type AskUserRespondMessage,
   type AttachmentAddEditorMessage,
+  type AttachmentAddPathMessage,
   type AttachmentAddSelectionMessage,
   type AttachmentPickMessage,
   type AttachmentRemoveMessage,
@@ -40,6 +42,7 @@ import {
   type TurnStopMessage,
   type WebviewReadyMessage,
   type WebviewToHostMessage,
+  type WorkspaceSearchFilesMessage,
 } from './bridgeMessages';
 import {
   hasExactKeys,
@@ -103,6 +106,10 @@ export function parseWebviewMessage(
         return parseAttachmentAddSelection(value);
       case 'attachment.remove':
         return parseAttachmentRemove(value);
+      case 'attachment.addPath':
+        return parseAttachmentAddPath(value);
+      case 'workspace.searchFiles':
+        return parseWorkspaceSearchFiles(value);
       case 'session.setting.update':
         return parseSessionSettingUpdate(value);
       default:
@@ -572,6 +579,46 @@ function parseAttachmentRemove(
     type: 'attachment.remove',
     sessionId: value.sessionId,
     attachmentId: value.attachmentId,
+  };
+}
+
+function parseAttachmentAddPath(
+  value: UnknownRecord,
+): AttachmentAddPathMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'path']) ||
+    !isId(value.sessionId) ||
+    !isSafeWorkspaceRelativePath(value.path)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'attachment.addPath',
+    sessionId: value.sessionId,
+    path: value.path,
+  };
+}
+
+function parseWorkspaceSearchFiles(
+  value: UnknownRecord,
+): WorkspaceSearchFilesMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'requestId', 'query']) ||
+    !isId(value.sessionId) ||
+    !isId(value.requestId) ||
+    typeof value.query !== 'string' ||
+    value.query.length > MAX_FILE_SEARCH_QUERY_LENGTH ||
+    /[\u0000-\u001f\u007f]/.test(value.query)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'workspace.searchFiles',
+    sessionId: value.sessionId,
+    requestId: value.requestId,
+    query: value.query,
   };
 }
 
