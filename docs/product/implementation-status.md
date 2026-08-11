@@ -708,9 +708,9 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
 | CLI/连接诊断                | CLI 不存在、工作区无效、未信任和初始化失败提示                                                                               | 实际登录状态、登录操作、版本兼容 UI、账户状态、升级入口          |
 | Session 搜索                | 本地按标题或 ID 过滤；回车触发 daemon 全量内容搜索（≤20 条结果，标题/片段/时间投影，工作区内结果可点击切换）                 | 分页、排序和筛选                                                 |
 | Session 生命周期            | List、Refresh、New、Select、Resume、活跃 Session Rename、编辑重问触发的 Rewind Fork、显式 Fork、Compact、任意行 Favorite（CLI 私有 `.favorites` 文件契约，非官方 API）、非活跃行 Archive/Unarchive（daemon 只读 sidecar） | Delete（无任何 API，fail closed）                                |
-| Session 历史                | 文本、Thinking、Tool 生命周期                                                                                                | 历史 Image、Document 和未知 Block 会被省略并标记为 partial       |
+| Session 历史                | 文本、Thinking、Tool 生命周期、user/assistant/tool_result 三源 Image（有界投影，超预算降级占位行）                           | Document 和未知 Block 会被省略并标记为 partial                   |
 | Tool 展示                   | 语义动作、技术 Tool 名、有界进度计数/类别、生命周期和实时观察到的真实耗时、文件修改类 Tool 的工作区相对路径 chip（点击打开原生 Diff）；不显示原始 Call ID | 参数、输出、结果、增删行统计、Apply/Open 操作                    |
-| 消息操作                    | Copy、Reuse in Composer、双击内联编辑并从该消息 Rewind 重问、最后一条回答 Regenerate、编辑器内 `getRewindInfo` 文件影响提示与可选文件恢复 | Rewind 冲突检测、Turn Envelope                                   |
+| 消息操作                    | Copy、Reuse in Composer、单击卡片（或 Edit 按钮）原地展开编辑卡（文本 + 编辑暂存 chips + 第二实例 ComposerControls + 圆形发送按钮）并从该消息 Rewind 重问、已发送消息回显附件 chips、结构化 `turn.editResendRejected` 拒绝即时回编辑态、最后一条回答 Regenerate、编辑器内 `getRewindInfo` 文件影响提示与可选文件恢复 | Rewind 冲突检测、Turn Envelope、非图片附件的纯 loadSession 历史 chips（不可辨识，如实缺省） |
 | 本地诊断                    | SDK Observability、Host 生命周期/耗时、Output Channel、Open Logs、轮换 JSONL                                                 | 用户可配置级别、导出诊断包、遥测或远程上传                       |
 | Spec                        | ExitSpecMode 计划显示、编辑和审批；审批后的 `settings_updated` 会触发权威 Mode 回读                                          | 主动进入 Spec Mode、完整计划生命周期、实施交接                   |
 | Mission                     | Mission 相关确认可以显示为通用权限卡片                                                                                       | Mission 状态、事件、阶段、Worker、控制和独立 UI                  |
@@ -1051,11 +1051,74 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension dist/droidvisx.vsix --force` 均成功；
   版本号仍为 `0.0.0`，现有窗口需 Reload Window（或完整重启）后
   加载新 Bundle
+- 2026-08-12 凌晨打包并安装含 **切片 3+：消息卡片编辑重发** 的
+  构建：`dist/droidvisx.vsix` 626,797 字节（9 files, 612.11 KB），
+  SHA-256
+  `6F50DE1326BCA76020D388CA7A55F013BB27A2F7278F110622BEBF90BE9E43EE`，
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix` 与
+  `cursor --install-extension dist/droidvisx.vsix --force` 均成功；
+  版本号仍为 `0.0.0`，现有窗口需 Reload Window（或完整重启）后
+  加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- 切片 3+：消息卡片编辑重发（2026-08-12 凌晨，按
+  `docs/product/message-card-design.md` §5 分层实施）：**Bridge**
+  先冻结——`UserTranscriptItem` 扩展有界 `attachments`
+  元数据（`SentAttachmentSummary { kind, name, sizeBytes }`，
+  ≤8 项、名 ≤128、图片不占条目由 image 转录项承担）；七种
+  `attachment.*` W→H 消息加可选 `stage:'edit'` 字面量；新增
+  `editStage.begin/cancel`、`session.editAttachments`
+  （`EditAttachmentSummary.restorable`）与结构化拒绝
+  `turn.editResendRejected`（reason 白名单
+  busy/unsupported/failed）；双侧校验器同一变更补齐 + 敌对输入
+  单测（`validateMessage.test.ts` 187 tests、
+  `validateHostMessage.test.ts` 206 tests，非法 stage、restorable
+  非布尔、reason 越权、chips 超长/带载荷/空名均整条拒绝）。
+  **Host**（`ChatController.ts`）——`handleSend` 在消费暂存时把
+  非图片附件元数据投影进用户转录项；`sentAttachments` 原附件
+  保留区 `Map<messageId, PendingAttachment[]>`（`user.message-meta`
+  到达时入库，总载荷字节 ≤32MB 按插入序驱逐，仅内存不进恢复
+  检查点）；`editStage` 编辑暂存区与 Composer 暂存并存互不读写，
+  `editStage.begin` 从保留区预填（驱逐/重启后由 chips 元数据 +
+  转录中仍带完整 base64 的 user-echo 图片重建，缺载荷者标
+  `restorable:false` 只可删除）；`turn.editResend` 消费编辑暂存中
+  可复原条目经 `handleSend` 附件覆盖入口随 fork 发送，三个拒绝点 +
+  rewind 失败点补发结构化拒绝（失败不清编辑暂存）；
+  `SessionRecoveryStore` 与 `reconcileSessionHistory` 让 chips
+  元数据跨重启存活（锚点匹配时 recovered 侧元数据合并到 loaded
+  权威项）。聚焦单测 +5（chips 回显/编辑暂存/edit 移除/结构化
+  拒绝 busy+unsupported/32MB 驱逐 restorable 降级，
+  `ChatController.test.ts` 96 tests）。**Webview**——
+  `runtimeAdapter.ts` 把 attachments 挂进消息 metadata；
+  `Thread.tsx` `UserMessage` 重做为卡片状态机
+  viewing→editing→resending（单击卡片展开编辑、选中文本不触发、
+  无 messageId 保持双击 Reuse 退化；编辑卡 = textarea + 编辑暂存
+  chips 行（restorable:false 弱化虚线 + "re-add to include"）+
+  restoreFiles 勾选 + 第二实例 `ComposerControls`（attach 类回调
+  注入 `stage:'edit'`，settings 即时提交与底部同源）+ 圆形
+  `dvx-send-action` 发送按钮；旧裸 textarea 编辑分支同变更删除，
+  Enter/Escape/Copy/Reuse 保留）；thread 级 `editingMessageId`
+  单编辑态互斥（切换目标先 `editStage.cancel`）；收到
+  `turn.editResendRejected` 即时回编辑态并显示原因文案、编辑草稿
+  与暂存不丢，8 秒定时器降级为兜底。**无头冒烟**
+  `node artifacts/smoke-edit-resend.mjs`（配
+  `artifacts/edit-resend-harness.html`，mock host 回发编辑暂存与
+  busy 拒绝）：sent chips ×2 渲染 → 单击卡片发出
+  `editStage.begin` → 编辑 chips ×2（1 条 unrestorable）→ 删除
+  发 `attachment.remove stage:'edit'` → 改稿点发送发出
+  `turn.editResend`（文本为改后稿）→ busy 拒绝后编辑器重开、
+  原因行显示、草稿保留，**PASS**。门禁：`pnpm run typecheck`
+  三 tsconfig 全过；`pnpm run test` 42 files / 910 tests 全过
+  （较切片③第二段 +22）；build、
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix`
+  （612.11 KB）、`cursor --install-extension --force` 均成功。
+  设计权衡照 §6 如实接受：编辑态换 Mode/Model 为会话级即时提交
+  （拒绝后不自动回退）；纯 loadSession 重建的旧消息无非图片
+  chips；原附件跨重启显示"需重新添加"。真实 Cursor 可见验收待
+  用户 Reload Window 后进行。
 - V1 切片③第二段：Composer 拖拽/粘贴图片（2026-08-12 凌晨）：预研
   证实设计期望的 `attachment.addBlob` 不存在，按预研新增
   `attachment.addImage { sessionId, name, mediaType, dataBase64 }`

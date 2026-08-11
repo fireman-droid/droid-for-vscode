@@ -2,6 +2,8 @@ import {
   MAX_IMAGES_PER_TURN,
   MAX_TOOL_ACTIVITIES_PER_TURN,
   type AttachmentSummary,
+  type EditAttachmentSummary,
+  type EditResendRejectReason,
   type HostToWebviewMessage,
   type InteractionRequest,
   type McpAuthPhase,
@@ -83,6 +85,20 @@ export interface AssistantWebviewState {
     readonly restorableCount: number;
     readonly createdCount: number;
   } | null;
+  /** Edit staging area contents for the message being edited. */
+  readonly editAttachments: {
+    readonly messageId: string;
+    readonly attachments: readonly EditAttachmentSummary[];
+  } | null;
+  /**
+   * Latest structured edit-resend rejection; `sequence` distinguishes
+   * consecutive rejections of the same message.
+   */
+  readonly editResendRejection: {
+    readonly messageId: string;
+    readonly reason: EditResendRejectReason;
+    readonly sequence: number;
+  } | null;
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: Extract<
     HostToWebviewMessage,
@@ -123,6 +139,8 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   archived: { status: 'idle', items: [] },
   sessionSearch: null,
   rewindInfo: null,
+  editAttachments: null,
+  editResendRejection: null,
   transcript: [],
   historyStatus: null,
   truncated: false,
@@ -220,6 +238,16 @@ export function assistantWebviewReducer(
         archived: state.archived,
         sessionSearch: state.sessionSearch,
         rewindInfo: null,
+        // A snapshot means the session identity may have changed (e.g.
+        // an adopted edit-resend fork); any in-progress edit is stale.
+        editAttachments:
+          event.sessionId === state.sessionId
+            ? state.editAttachments
+            : null,
+        editResendRejection:
+          event.sessionId === state.sessionId
+            ? state.editResendRejection
+            : null,
         transcript: event.transcript,
         historyStatus: event.historyStatus,
         truncated: event.truncated,
@@ -250,6 +278,8 @@ export function assistantWebviewReducer(
               commands: { status: 'idle', items: [], recent: [] },
               mcpAuth: null,
               attachments: [],
+              editAttachments: null,
+              editResendRejection: null,
               interactions: [],
               terminalTurnId: null,
             }
@@ -342,6 +372,29 @@ export function assistantWebviewReducer(
             ...state,
             sequence: event.sequence,
             attachments: event.attachments,
+          }
+        : advance(state, event.sequence);
+    case 'session.editAttachments':
+      return event.sessionId === state.sessionId
+        ? {
+            ...state,
+            sequence: event.sequence,
+            editAttachments: {
+              messageId: event.messageId,
+              attachments: event.attachments,
+            },
+          }
+        : advance(state, event.sequence);
+    case 'turn.editResendRejected':
+      return event.sessionId === state.sessionId
+        ? {
+            ...state,
+            sequence: event.sequence,
+            editResendRejection: {
+              messageId: event.messageId,
+              reason: event.reason,
+              sequence: event.sequence,
+            },
           }
         : advance(state, event.sequence);
     case 'session.archived': {

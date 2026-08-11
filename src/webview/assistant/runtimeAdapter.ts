@@ -9,6 +9,7 @@ import { useMemo, useRef } from 'react';
 
 import {
   MAX_TURN_TEXT_LENGTH,
+  type SentAttachmentSummary,
   type SessionTranscriptItem,
   type TurnStatus,
 } from '../../shared/bridgeMessages';
@@ -25,6 +26,8 @@ export interface SafeRuntimeMessage {
   readonly optimistic?: boolean;
   /** SDK message id for user messages that can anchor a rewind. */
   readonly messageId?: string;
+  /** Chip metadata for the attachments a user message was sent with. */
+  readonly attachments?: readonly SentAttachmentSummary[];
 }
 
 type SafeRuntimePart = Exclude<
@@ -166,6 +169,7 @@ export function convertSafeRuntimeMessage(
       ...(message.optimistic ? { isOptimistic: true } : {}),
       custom: {
         messageId: message.messageId ?? null,
+        attachments: message.attachments ?? null,
       },
     },
   };
@@ -277,6 +281,9 @@ export function mapTranscriptToRuntimeMessages(
         ...(item.messageId === undefined
           ? {}
           : { messageId: item.messageId }),
+        ...(item.attachments === undefined
+          ? {}
+          : { attachments: item.attachments }),
       };
       nextEntries.push([
         item.id,

@@ -1,8 +1,12 @@
 import type {
   ArchivedSessionSummary,
   AttachmentKind,
+  AttachmentStage,
   AttachmentSummary,
   CommandSummary,
+  EditAttachmentSummary,
+  EditResendRejectReason,
+  SentAttachmentSummary,
   ConnectionState,
   ConfirmedSessionSettings,
   HostToWebviewMessage,
@@ -154,6 +158,29 @@ interface PendingAttachment {
   readonly summary: AttachmentSummary;
   readonly runtime: RuntimeAttachment;
 }
+
+/**
+ * One entry of the per-message edit staging area. `runtime` is null
+ * for chips whose original payload is no longer available (evicted
+ * from the retention area or predating this window); those can only
+ * be removed, never resent.
+ */
+interface EditStagedAttachment {
+  readonly summary: EditAttachmentSummary;
+  readonly runtime: RuntimeAttachment | null;
+}
+
+interface EditStage {
+  readonly messageId: string;
+  attachments: readonly EditStagedAttachment[];
+}
+
+/**
+ * Byte budget for retained sent-attachment payloads (memory only):
+ * 8 attachments x 4 MB fits exactly one maximal message, covering
+ * the common "edit the latest message" case.
+ */
+export const MAX_SENT_ATTACHMENT_RETENTION_BYTES = 32 * 1024 * 1024;
 
 interface DisposableSubscription {
   dispose(): void;
@@ -329,6 +356,21 @@ export class ChatController {
   private sessionOperationInProgress = false;
   private refreshInProgress = false;
   private pendingAttachments: PendingAttachment[] = [];
+  private editStage: EditStage | null = null;
+  /**
+   * Payloads of already-sent attachments keyed by SDK message id, so
+   * editing a recent message can resend its attachments without
+   * re-reading them. Memory only; never persisted to checkpoints.
+   */
+  private readonly sentAttachments = new Map<
+    string,
+    readonly PendingAttachment[]
+  >();
+  /** Attachments consumed by the turn still waiting for its message id. */
+  private pendingSentAttachments: {
+    readonly turnId: string;
+    readonly attachments: readonly PendingAttachment[];
+  } | null = null;
   private attachmentOperationInProgress = false;
   private attachmentIdCounter = 0;
   private readonly managedRuntimes = new Set<DroidRuntime>();
@@ -577,22 +619,42 @@ export class ChatController {
         this.handleMcpServerAuthenticate(message.sessionId, message.name);
         return;
       case 'attachment.pick':
-        this.handleAttachmentPick(message.sessionId);
+        this.handleAttachmentPick(message.sessionId, message.stage);
         return;
       case 'attachment.addEditor':
-        this.handleAttachmentCapture(message.sessionId, 'editor');
+        this.handleAttachmentCapture(
+          message.sessionId,
+          'editor',
+          message.stage,
+        );
         return;
       case 'attachment.addSelection':
-        this.handleAttachmentCapture(message.sessionId, 'selection');
+        this.handleAttachmentCapture(
+          message.sessionId,
+          'selection',
+          message.stage,
+        );
         return;
       case 'attachment.addProblems':
-        this.handleAttachmentCapture(message.sessionId, 'problems');
+        this.handleAttachmentCapture(
+          message.sessionId,
+          'problems',
+          message.stage,
+        );
         return;
       case 'attachment.addGitChanges':
-        this.handleAttachmentCapture(message.sessionId, 'git-changes');
+        this.handleAttachmentCapture(
+          message.sessionId,
+          'git-changes',
+          message.stage,
+        );
         return;
       case 'attachment.addPath':
-        this.handleAttachmentAddPath(message.sessionId, message.path);
+        this.handleAttachmentAddPath(
+          message.sessionId,
+          message.path,
+          message.stage,
+        );
         return;
       case 'attachment.addImage':
         this.handleAttachmentAddImage(
@@ -600,7 +662,17 @@ export class ChatController {
           message.name,
           message.mediaType,
           message.dataBase64,
+          message.stage,
         );
+        return;
+      case 'editStage.begin':
+        this.handleEditStageBegin(
+          message.sessionId,
+          message.messageId,
+        );
+        return;
+      case 'editStage.cancel':
+        this.handleEditStageCancel(message.sessionId);
         return;
       case 'workspace.searchFiles':
         this.handleWorkspaceSearchFiles(
@@ -613,6 +685,7 @@ export class ChatController {
         this.handleAttachmentRemove(
           message.sessionId,
           message.attachmentId,
+          message.stage,
         );
         return;
       case 'session.setting.update':
@@ -803,6 +876,7 @@ export class ChatController {
     turnId: string,
     text: string,
     kind: 'send' | 'edit-resend' = 'send',
+    attachmentsOverride?: readonly PendingAttachment[],
   ): void {
     const runtime = this.runtime;
     if (
@@ -844,17 +918,31 @@ export class ChatController {
       activity: createTurnActivityState(),
     };
     this.interactions.beginTurn(sessionId, turnId);
+    // Edit-resend consumes the edit staging area passed in by the
+    // caller; a plain send consumes the composer staging area.
+    const consumed =
+      attachmentsOverride ?? this.takePendingAttachments();
     this.transcript = appendAcceptedUserPrompt(
       this.transcript,
       turnId,
       text,
+      consumed === undefined
+        ? undefined
+        : sentAttachmentSummaries(consumed),
     );
     this.scheduleRecoveryCheckpoint();
     this.touchActiveSession();
     this.recordRecentCommand(sessionId, text);
     this.emitTurnState(sessionId, turnId, 'submitting');
-    const attachments = this.takePendingRuntimeAttachments();
+    const attachments =
+      consumed === undefined || consumed.length === 0
+        ? undefined
+        : consumed.map(({ runtime: attachment }) => attachment);
     this.echoUserImageAttachments(sessionId, turnId, attachments);
+    this.pendingSentAttachments =
+      consumed === undefined || consumed.length === 0
+        ? null
+        : { turnId, attachments: consumed };
     void this.consumeTurn(
       runtime,
       runtimeGeneration,
@@ -1095,6 +1183,7 @@ export class ChatController {
           turnId,
           event.messageId,
         );
+        this.retainSentAttachments(turnId, event.messageId);
         this.scheduleRecoveryCheckpoint();
         this.emit({
           type: 'user.message-meta',
@@ -1299,6 +1388,7 @@ export class ChatController {
         'edit-resend-blocked',
         EDIT_RESEND_BLOCKED_MESSAGE,
       );
+      this.emitEditResendRejected(sessionId, messageId, 'busy');
       return;
     }
     if (typeof runtime.rewind !== 'function') {
@@ -1306,6 +1396,7 @@ export class ChatController {
         'edit-resend-unsupported',
         EDIT_RESEND_UNSUPPORTED_MESSAGE,
       );
+      this.emitEditResendRejected(sessionId, messageId, 'unsupported');
       return;
     }
     const truncated = truncateFromUserMessage(
@@ -1317,8 +1408,31 @@ export class ChatController {
         'edit-resend-unsupported',
         EDIT_RESEND_UNSUPPORTED_MESSAGE,
       );
+      this.emitEditResendRejected(sessionId, messageId, 'unsupported');
       return;
     }
+
+    // Resendable payloads staged for this message: kept originals plus
+    // anything added in edit mode. Non-restorable chips resend nothing.
+    const editAttachments: readonly PendingAttachment[] =
+      this.editStage?.messageId === messageId
+        ? this.editStage.attachments.flatMap(({ summary, runtime: payload }) =>
+            payload === null
+              ? []
+              : [
+                  {
+                    summary: {
+                      id: summary.id,
+                      kind: summary.kind,
+                      name: summary.name,
+                      sizeBytes: summary.sizeBytes,
+                      truncated: summary.truncated,
+                    },
+                    runtime: payload,
+                  },
+                ],
+          )
+        : [];
 
     this.sessionOperationInProgress = true;
     void this.performEditResend(
@@ -1337,8 +1451,27 @@ export class ChatController {
       // forked session id, the truncated transcript with the edited
       // prompt, and the submitting turn, so the webview adopts the fork
       // atomically.
-      this.handleSend(forkedSessionId, turnId, text, 'edit-resend');
+      this.handleSend(
+        forkedSessionId,
+        turnId,
+        text,
+        'edit-resend',
+        editAttachments,
+      );
       this.emitSnapshot();
+    });
+  }
+
+  private emitEditResendRejected(
+    sessionId: string,
+    messageId: string,
+    reason: EditResendRejectReason,
+  ): void {
+    this.emit({
+      type: 'turn.editResendRejected',
+      sessionId,
+      messageId,
+      reason,
     });
   }
 
@@ -1382,6 +1515,7 @@ export class ChatController {
           'edit-resend-failed',
           EDIT_RESEND_FAILED_MESSAGE,
         );
+        this.emitEditResendRejected(sessionId, messageId, 'failed');
       }
       return null;
     }
@@ -1400,6 +1534,7 @@ export class ChatController {
         'edit-resend-failed',
         EDIT_RESEND_FAILED_MESSAGE,
       );
+      this.emitEditResendRejected(sessionId, messageId, 'failed');
       return null;
     }
 
@@ -2996,22 +3131,36 @@ export class ChatController {
     });
   }
 
-  private canStageAttachments(sessionId: string): boolean {
+  private canStageAttachments(
+    sessionId: string,
+    stage?: AttachmentStage,
+  ): boolean {
     return (
       sessionId === this.sessionId &&
       this.runtime !== null &&
       this.connection.status === 'connected' &&
       !this.attachmentOperationInProgress &&
+      (stage !== 'edit' || this.editStage !== null) &&
       this.ensureActiveRuntimeWorkspaceCurrent()
     );
   }
 
-  private handleAttachmentPick(sessionId: string): void {
-    if (!this.canStageAttachments(sessionId)) {
+  /** How many attachments the targeted staging area already holds. */
+  private stagedCount(stage?: AttachmentStage): number {
+    return stage === 'edit'
+      ? (this.editStage?.attachments.length ?? 0)
+      : this.pendingAttachments.length;
+  }
+
+  private handleAttachmentPick(
+    sessionId: string,
+    stage?: AttachmentStage,
+  ): void {
+    if (!this.canStageAttachments(sessionId, stage)) {
       return;
     }
     const remaining =
-      MAX_PENDING_ATTACHMENTS - this.pendingAttachments.length;
+      MAX_PENDING_ATTACHMENTS - this.stagedCount(stage);
     if (remaining <= 0) {
       this.emitSessionDiagnostic(
         'attachment-limit',
@@ -3028,7 +3177,7 @@ export class ChatController {
         }
         switch (outcome.status) {
           case 'picked':
-            this.stageAttachmentPayloads(outcome.items);
+            this.stageAttachmentPayloads(outcome.items, undefined, stage);
             return;
           case 'cancelled':
             return;
@@ -3063,11 +3212,12 @@ export class ChatController {
   private handleAttachmentCapture(
     sessionId: string,
     capture: 'editor' | 'selection' | 'problems' | 'git-changes',
+    stage?: AttachmentStage,
   ): void {
-    if (!this.canStageAttachments(sessionId)) {
+    if (!this.canStageAttachments(sessionId, stage)) {
       return;
     }
-    if (this.pendingAttachments.length >= MAX_PENDING_ATTACHMENTS) {
+    if (this.stagedCount(stage) >= MAX_PENDING_ATTACHMENTS) {
       this.emitSessionDiagnostic(
         'attachment-limit',
         ATTACHMENT_LIMIT_MESSAGE,
@@ -3096,6 +3246,7 @@ export class ChatController {
               capture === 'editor' || capture === 'selection'
                 ? capture
                 : undefined,
+              stage,
             );
             return;
           case 'empty':
@@ -3133,11 +3284,12 @@ export class ChatController {
   private handleAttachmentAddPath(
     sessionId: string,
     path: string,
+    stage?: AttachmentStage,
   ): void {
-    if (!this.canStageAttachments(sessionId)) {
+    if (!this.canStageAttachments(sessionId, stage)) {
       return;
     }
-    if (this.pendingAttachments.length >= MAX_PENDING_ATTACHMENTS) {
+    if (this.stagedCount(stage) >= MAX_PENDING_ATTACHMENTS) {
       this.emitSessionDiagnostic(
         'attachment-limit',
         ATTACHMENT_LIMIT_MESSAGE,
@@ -3153,7 +3305,7 @@ export class ChatController {
         }
         switch (outcome.status) {
           case 'picked':
-            this.stageAttachmentPayloads(outcome.items);
+            this.stageAttachmentPayloads(outcome.items, undefined, stage);
             return;
           case 'cancelled':
             return;
@@ -3196,11 +3348,12 @@ export class ChatController {
     name: string,
     mediaType: ImageMediaType,
     dataBase64: string,
+    stage?: AttachmentStage,
   ): void {
-    if (!this.canStageAttachments(sessionId)) {
+    if (!this.canStageAttachments(sessionId, stage)) {
       return;
     }
-    if (this.pendingAttachments.length >= MAX_PENDING_ATTACHMENTS) {
+    if (this.stagedCount(stage) >= MAX_PENDING_ATTACHMENTS) {
       this.emitSessionDiagnostic(
         'attachment-limit',
         ATTACHMENT_LIMIT_MESSAGE,
@@ -3215,16 +3368,20 @@ export class ChatController {
       );
       return;
     }
-    this.stageAttachmentPayloads([
-      {
-        kind: 'image',
-        name,
-        data: dataBase64,
-        mediaType,
-        sizeBytes,
-        truncated: false,
-      },
-    ]);
+    this.stageAttachmentPayloads(
+      [
+        {
+          kind: 'image',
+          name,
+          data: dataBase64,
+          mediaType,
+          sizeBytes,
+          truncated: false,
+        },
+      ],
+      undefined,
+      stage,
+    );
   }
 
   private handleWorkspaceSearchFiles(
@@ -3280,8 +3437,23 @@ export class ChatController {
   private handleAttachmentRemove(
     sessionId: string,
     attachmentId: string,
+    stage?: AttachmentStage,
   ): void {
     if (sessionId !== this.sessionId) {
+      return;
+    }
+    if (stage === 'edit') {
+      if (this.editStage === null) {
+        return;
+      }
+      const next = this.editStage.attachments.filter(
+        ({ summary }) => summary.id !== attachmentId,
+      );
+      if (next.length === this.editStage.attachments.length) {
+        return;
+      }
+      this.editStage.attachments = next;
+      this.emitEditAttachments();
       return;
     }
     const next = this.pendingAttachments.filter(
@@ -3302,10 +3474,17 @@ export class ChatController {
   private stageAttachmentPayloads(
     payloads: readonly AttachmentPayload[],
     capture?: 'editor' | 'selection',
+    stage?: AttachmentStage,
   ): void {
+    // The edit staging area may have been cancelled while an async
+    // read (file picker, workspace file) was in flight; drop late
+    // results instead of staging them into the composer.
+    if (stage === 'edit' && this.editStage === null) {
+      return;
+    }
     let staged = 0;
     for (const payload of payloads) {
-      if (this.pendingAttachments.length >= MAX_PENDING_ATTACHMENTS) {
+      if (this.stagedCount(stage) >= MAX_PENDING_ATTACHMENTS) {
         this.emitSessionDiagnostic(
           'attachment-limit',
           ATTACHMENT_LIMIT_MESSAGE,
@@ -3318,35 +3497,42 @@ export class ChatController {
       }
       this.attachmentIdCounter += 1;
       const kind: AttachmentKind = capture ?? payload.kind;
-      this.pendingAttachments = [
-        ...this.pendingAttachments,
-        {
-          summary: {
-            id: `attachment-${this.attachmentIdCounter}`,
-            kind,
-            name: boundAttachmentName(payload.name),
-            sizeBytes: payload.sizeBytes,
-            truncated: payload.truncated,
-          },
-          runtime,
-        },
-      ];
+      const summary: AttachmentSummary = {
+        id: `attachment-${this.attachmentIdCounter}`,
+        kind,
+        name: boundAttachmentName(payload.name),
+        sizeBytes: payload.sizeBytes,
+        truncated: payload.truncated,
+      };
+      if (stage === 'edit') {
+        this.editStage!.attachments = [
+          ...this.editStage!.attachments,
+          { summary: { ...summary, restorable: true }, runtime },
+        ];
+      } else {
+        this.pendingAttachments = [
+          ...this.pendingAttachments,
+          { summary, runtime },
+        ];
+      }
       staged += 1;
     }
     if (staged > 0) {
-      this.emitAttachments();
+      if (stage === 'edit') {
+        this.emitEditAttachments();
+      } else {
+        this.emitAttachments();
+      }
     }
   }
 
-  private takePendingRuntimeAttachments():
-    | readonly RuntimeAttachment[]
+  private takePendingAttachments():
+    | readonly PendingAttachment[]
     | undefined {
     if (this.pendingAttachments.length === 0) {
       return undefined;
     }
-    const attachments = this.pendingAttachments.map(
-      ({ runtime }) => runtime,
-    );
+    const attachments = this.pendingAttachments;
     this.pendingAttachments = [];
     this.emitAttachments();
     return attachments;
@@ -3354,6 +3540,39 @@ export class ChatController {
 
   private clearPendingAttachments(): void {
     this.pendingAttachments = [];
+    this.editStage = null;
+    this.pendingSentAttachments = null;
+  }
+
+  /**
+   * Moves the attachments consumed by `turnId` into the retention
+   * area once the SDK reports the message id they were sent under.
+   * Oldest entries are evicted in insertion order when the byte
+   * budget overflows; an entry can evict itself if it alone exceeds
+   * the budget.
+   */
+  private retainSentAttachments(
+    turnId: string,
+    messageId: string,
+  ): void {
+    const pending = this.pendingSentAttachments;
+    if (pending === null || pending.turnId !== turnId) {
+      return;
+    }
+    this.pendingSentAttachments = null;
+    this.sentAttachments.delete(messageId);
+    this.sentAttachments.set(messageId, pending.attachments);
+    let total = 0;
+    for (const entries of this.sentAttachments.values()) {
+      total += retentionBytes(entries);
+    }
+    for (const [key, entries] of this.sentAttachments) {
+      if (total <= MAX_SENT_ATTACHMENT_RETENTION_BYTES) {
+        break;
+      }
+      this.sentAttachments.delete(key);
+      total -= retentionBytes(entries);
+    }
   }
 
   private emitAttachments(): void {
@@ -3367,6 +3586,124 @@ export class ChatController {
         ({ summary }) => summary,
       ),
     });
+  }
+
+  private emitEditAttachments(): void {
+    if (this.sessionId === null || this.editStage === null) {
+      return;
+    }
+    this.emit({
+      type: 'session.editAttachments',
+      sessionId: this.sessionId,
+      messageId: this.editStage.messageId,
+      attachments: this.editStage.attachments.map(
+        ({ summary }) => summary,
+      ),
+    });
+  }
+
+  /**
+   * Enters edit mode for one sent user message: initializes the edit
+   * staging area from the retention area when the payloads are still
+   * held, otherwise from the message's chip metadata (removable-only)
+   * plus user-echo image items whose base64 is still in the transcript.
+   */
+  private handleEditStageBegin(
+    sessionId: string,
+    messageId: string,
+  ): void {
+    if (
+      sessionId !== this.sessionId ||
+      this.connection.status !== 'connected'
+    ) {
+      return;
+    }
+    const index = this.transcript.transcript.findIndex(
+      (item) => item.kind === 'user' && item.messageId === messageId,
+    );
+    if (index < 0) {
+      return;
+    }
+    this.editStage = {
+      messageId,
+      attachments: this.buildEditStageAttachments(messageId, index),
+    };
+    this.emitEditAttachments();
+  }
+
+  private handleEditStageCancel(sessionId: string): void {
+    if (sessionId !== this.sessionId) {
+      return;
+    }
+    this.editStage = null;
+  }
+
+  private buildEditStageAttachments(
+    messageId: string,
+    userItemIndex: number,
+  ): readonly EditStagedAttachment[] {
+    const retained = this.sentAttachments.get(messageId);
+    if (retained !== undefined) {
+      return retained.map(({ summary, runtime }) => ({
+        summary: { ...summary, restorable: true },
+        runtime,
+      }));
+    }
+    const staged: EditStagedAttachment[] = [];
+    const userItem = this.transcript.transcript[userItemIndex];
+    if (userItem?.kind === 'user' && userItem.attachments !== undefined) {
+      for (const meta of userItem.attachments) {
+        this.attachmentIdCounter += 1;
+        staged.push({
+          summary: {
+            id: `attachment-${this.attachmentIdCounter}`,
+            kind: meta.kind,
+            name: meta.name,
+            sizeBytes: meta.sizeBytes,
+            truncated: false,
+            restorable: false,
+          },
+          runtime: null,
+        });
+      }
+    }
+    // User-echo image items directly follow their prompt in both live
+    // and loaded transcripts; ones still carrying full base64 can be
+    // rebuilt into resendable payloads.
+    const transcript = this.transcript.transcript;
+    for (
+      let index = userItemIndex + 1;
+      index < transcript.length && staged.length < MAX_PENDING_ATTACHMENTS;
+      index += 1
+    ) {
+      const item = transcript[index]!;
+      if (item.kind === 'user') {
+        break;
+      }
+      if (item.kind !== 'image' || item.origin !== 'user') {
+        continue;
+      }
+      this.attachmentIdCounter += 1;
+      const restorable = item.data.length > 0;
+      staged.push({
+        summary: {
+          id: `attachment-${this.attachmentIdCounter}`,
+          kind: 'image',
+          name: `image.${item.mediaType.slice('image/'.length)}`,
+          sizeBytes: item.byteLength,
+          truncated: false,
+          restorable,
+        },
+        runtime: restorable
+          ? {
+              kind: 'image',
+              data: item.data,
+              mediaType: item.mediaType,
+            }
+          : null,
+      });
+    }
+    return staged.slice(0, MAX_PENDING_ATTACHMENTS);
   }
 
   private handleSettingUpdate(
@@ -5136,6 +5473,34 @@ function toRuntimeAttachment(
     case 'text':
       return { kind: 'text', data: payload.data, name: payload.name };
   }
+}
+
+/**
+ * Chip metadata for the non-image attachments a prompt was sent with.
+ * Image attachments are represented by their own image transcript
+ * items (user-echo), so they are excluded here.
+ */
+function sentAttachmentSummaries(
+  attachments: readonly PendingAttachment[],
+): readonly SentAttachmentSummary[] | undefined {
+  const summaries = attachments
+    .filter(({ summary }) => summary.kind !== 'image')
+    .map(({ summary }) => ({
+      kind: summary.kind,
+      name: summary.name,
+      sizeBytes: summary.sizeBytes,
+    }));
+  return summaries.length > 0 ? summaries : undefined;
+}
+
+function retentionBytes(
+  attachments: readonly PendingAttachment[],
+): number {
+  let total = 0;
+  for (const { runtime } of attachments) {
+    total += runtime.data.length;
+  }
+  return total;
 }
 
 function boundAttachmentName(name: string): string {

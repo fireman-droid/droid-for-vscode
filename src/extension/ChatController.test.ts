@@ -3155,6 +3155,285 @@ describe('ChatController', () => {
     ).toHaveLength(0);
   });
 
+  it('echoes sent chips, stages edits per message, and resends from the edit stage', async () => {
+    const runtime = Object.assign(
+      createMockRuntime(async function* () {
+        yield { type: 'user-message', messageId: 'sdk-message-1' };
+        yield successfulTurn();
+      }),
+      { rewind: vi.fn(async () => ({ sessionId: 'fork-1' })) },
+    );
+    const sources: AttachmentSources = {
+      pickFiles: vi.fn(async () => ({
+        status: 'picked' as const,
+        items: [
+          {
+            kind: 'image' as const,
+            name: 'shot.png',
+            data: 'aW1n',
+            mediaType: 'image/png' as const,
+            sizeBytes: 3,
+            truncated: false,
+          },
+          {
+            kind: 'text' as const,
+            name: 'notes.md',
+            data: 'hello',
+            sizeBytes: 5,
+            truncated: false,
+          },
+        ],
+      })),
+      readActiveEditor: vi.fn(async () => ({ status: 'empty' as const })),
+      readActiveSelection: vi.fn(async () => ({
+        status: 'empty' as const,
+      })),
+      readProblems: vi.fn(async () => ({ status: 'empty' as const })),
+      readGitChanges: vi.fn(async () => ({ status: 'empty' as const })),
+      searchWorkspaceFiles: vi.fn(async () => []),
+      readWorkspaceFile: vi.fn(async () => ({
+        status: 'failed' as const,
+      })),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      sources,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'attachment.pick',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(attachmentsMessages(messages).at(-1)?.attachments).toHaveLength(
+        2,
+      );
+    });
+    send(controller, 'session-1', 'turn-1', 'first prompt');
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'user.message-meta')).toMatchObject({
+        messageId: 'sdk-message-1',
+      });
+      expect(lastMessage(messages, 'turn.state')?.status).toBe('completed');
+    });
+
+    // The snapshot user item echoes only non-image chips; the image is
+    // its own user-echo transcript item. A repeated ready re-emits the
+    // current snapshot.
+    ready(controller);
+    await vi.waitFor(() => {
+      expect(
+        lastMessage(messages, 'host.snapshot')?.transcript.find(
+          (item) => item.kind === 'user',
+        ),
+      ).toMatchObject({
+        text: 'first prompt',
+        attachments: [{ kind: 'text', name: 'notes.md', sizeBytes: 5 }],
+      });
+    });
+
+    // Entering edit mode prefills the edit stage from the retention
+    // area with restorable payloads.
+    controller.handleMessage({
+      type: 'editStage.begin',
+      sessionId: 'session-1',
+      messageId: 'sdk-message-1',
+    });
+    const editState = lastMessage(messages, 'session.editAttachments')!;
+    expect(editState.messageId).toBe('sdk-message-1');
+    expect(editState.attachments).toMatchObject([
+      { kind: 'image', name: 'shot.png', restorable: true },
+      { kind: 'text', name: 'notes.md', restorable: true },
+    ]);
+
+    // Edit-stage removal targets the edit stage, not the composer.
+    controller.handleMessage({
+      type: 'attachment.remove',
+      sessionId: 'session-1',
+      attachmentId: editState.attachments[1]!.id,
+      stage: 'edit',
+    });
+    expect(
+      lastMessage(messages, 'session.editAttachments')?.attachments,
+    ).toMatchObject([{ kind: 'image', restorable: true }]);
+
+    // Resending consumes the edit stage: kept originals travel with the
+    // forked send while the composer stage stays untouched.
+    controller.handleMessage({
+      type: 'turn.editResend',
+      sessionId: 'session-1',
+      turnId: 'turn-2',
+      messageId: 'sdk-message-1',
+      text: 'edited prompt',
+    });
+    await vi.waitFor(() => {
+      expect(runtime.rewind).toHaveBeenCalledWith(
+        expect.objectContaining({ messageId: 'sdk-message-1' }),
+      );
+      expect(runtime.sendTurn).toHaveBeenLastCalledWith('edited prompt', [
+        { kind: 'image', data: 'aW1n', mediaType: 'image/png' },
+      ]);
+    });
+    const forkSnapshot = lastMessage(messages, 'host.snapshot')!;
+    expect(forkSnapshot.sessionId).toBe('fork-1');
+    expect(
+      forkSnapshot.transcript.find((item) => item.kind === 'user'),
+    ).toMatchObject({ text: 'edited prompt' });
+  });
+
+  it('rejects edit-resend with structured reasons', async () => {
+    // A runtime without rewind: structured 'unsupported'.
+    const unsupported = createController(() => createMockRuntime());
+    ready(unsupported.controller);
+    await waitForConnected(unsupported.messages);
+    unsupported.controller.handleMessage({
+      type: 'turn.editResend',
+      sessionId: 'session-1',
+      turnId: 'turn-2',
+      messageId: 'sdk-message-1',
+      text: 'edited',
+    });
+    expect(
+      lastMessage(unsupported.messages, 'turn.editResendRejected'),
+    ).toMatchObject({
+      messageId: 'sdk-message-1',
+      reason: 'unsupported',
+    });
+
+    // An active turn: structured 'busy'.
+    const hanging = Object.assign(
+      createMockRuntime(async function* () {
+        yield { type: 'user-message', messageId: 'sdk-message-1' };
+        await new Promise(() => {});
+      }),
+      { rewind: vi.fn(async () => ({ sessionId: 'fork-1' })) },
+    );
+    const busy = createController(() => hanging);
+    ready(busy.controller);
+    await waitForConnected(busy.messages);
+    send(busy.controller, 'session-1', 'turn-1', 'first prompt');
+    await vi.waitFor(() => {
+      expect(
+        lastMessage(busy.messages, 'user.message-meta'),
+      ).toMatchObject({ messageId: 'sdk-message-1' });
+    });
+    busy.controller.handleMessage({
+      type: 'turn.editResend',
+      sessionId: 'session-1',
+      turnId: 'turn-2',
+      messageId: 'sdk-message-1',
+      text: 'edited',
+    });
+    expect(
+      lastMessage(busy.messages, 'turn.editResendRejected'),
+    ).toMatchObject({ messageId: 'sdk-message-1', reason: 'busy' });
+    expect(hanging.rewind).not.toHaveBeenCalled();
+  });
+
+  it('evicts retained payloads by byte budget and marks stale chips unrestorable', async () => {
+    let sendIndex = 0;
+    const runtime = Object.assign(
+      createMockRuntime(async function* () {
+        sendIndex += 1;
+        yield {
+          type: 'user-message',
+          messageId: `sdk-message-${sendIndex}`,
+        };
+        yield successfulTurn();
+      }),
+      { rewind: vi.fn(async () => ({ sessionId: 'fork-1' })) },
+    );
+    // Each send carries one ~20 MB text payload, so the second send
+    // pushes the 32 MB retention budget over and evicts the first.
+    const bigData = 'a'.repeat(20 * 1024 * 1024);
+    const sources: AttachmentSources = {
+      pickFiles: vi.fn(async () => ({
+        status: 'picked' as const,
+        items: [
+          {
+            kind: 'text' as const,
+            name: 'big.md',
+            data: bigData,
+            sizeBytes: bigData.length,
+            truncated: false,
+          },
+        ],
+      })),
+      readActiveEditor: vi.fn(async () => ({ status: 'empty' as const })),
+      readActiveSelection: vi.fn(async () => ({
+        status: 'empty' as const,
+      })),
+      readProblems: vi.fn(async () => ({ status: 'empty' as const })),
+      readGitChanges: vi.fn(async () => ({ status: 'empty' as const })),
+      searchWorkspaceFiles: vi.fn(async () => []),
+      readWorkspaceFile: vi.fn(async () => ({
+        status: 'failed' as const,
+      })),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      sources,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    for (const turn of [1, 2]) {
+      controller.handleMessage({
+        type: 'attachment.pick',
+        sessionId: 'session-1',
+      });
+      await vi.waitFor(() => {
+        expect(
+          attachmentsMessages(messages).at(-1)?.attachments,
+        ).toHaveLength(1);
+      });
+      send(controller, 'session-1', `turn-${turn}`, `prompt ${turn}`);
+      await vi.waitFor(() => {
+        expect(
+          lastMessage(messages, 'user.message-meta'),
+        ).toMatchObject({ messageId: `sdk-message-${turn}` });
+        expect(lastMessage(messages, 'turn.state')?.status).toBe(
+          'completed',
+        );
+      });
+    }
+
+    // The first message's payload was evicted: its chip is only
+    // metadata and cannot be resent.
+    controller.handleMessage({
+      type: 'editStage.begin',
+      sessionId: 'session-1',
+      messageId: 'sdk-message-1',
+    });
+    expect(
+      lastMessage(messages, 'session.editAttachments')?.attachments,
+    ).toMatchObject([
+      { kind: 'text', name: 'big.md', restorable: false },
+    ]);
+
+    // The second message's payload is still retained.
+    controller.handleMessage({
+      type: 'editStage.begin',
+      sessionId: 'session-1',
+      messageId: 'sdk-message-2',
+    });
+    expect(
+      lastMessage(messages, 'session.editAttachments')?.attachments,
+    ).toMatchObject([
+      { kind: 'text', name: 'big.md', restorable: true },
+    ]);
+  });
+
   it('runs the MCP browser auth flow and refreshes the list on success', async () => {
     let completed:
       | ((outcome: 'success' | 'cancelled' | 'failed') => void)

@@ -639,6 +639,85 @@ export function App(): React.JSX.Element {
     },
     [sessionId, vscode],
   );
+  const handleEditStageBegin = useCallback(
+    (messageId: string): void => {
+      if (sessionId === null || connectionStatus !== 'connected') {
+        return;
+      }
+      post(vscode, { type: 'editStage.begin', sessionId, messageId });
+    },
+    [connectionStatus, sessionId, vscode],
+  );
+  const handleEditStageCancel = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, { type: 'editStage.cancel', sessionId });
+  }, [sessionId, vscode]);
+  const handleEditAttachFiles = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, {
+      type: 'attachment.pick',
+      sessionId,
+      stage: 'edit',
+    });
+  }, [sessionId, vscode]);
+  const handleEditAttachEditor = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, {
+      type: 'attachment.addEditor',
+      sessionId,
+      stage: 'edit',
+    });
+  }, [sessionId, vscode]);
+  const handleEditAttachSelection = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, {
+      type: 'attachment.addSelection',
+      sessionId,
+      stage: 'edit',
+    });
+  }, [sessionId, vscode]);
+  const handleEditAttachProblems = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, {
+      type: 'attachment.addProblems',
+      sessionId,
+      stage: 'edit',
+    });
+  }, [sessionId, vscode]);
+  const handleEditAttachGitChanges = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, {
+      type: 'attachment.addGitChanges',
+      sessionId,
+      stage: 'edit',
+    });
+  }, [sessionId, vscode]);
+  const handleEditAttachmentRemove = useCallback(
+    (attachmentId: string): void => {
+      if (sessionId === null) {
+        return;
+      }
+      post(vscode, {
+        type: 'attachment.remove',
+        sessionId,
+        attachmentId,
+        stage: 'edit',
+      });
+    },
+    [sessionId, vscode],
+  );
   const handleSettingUpdate = useCallback(
     (update: SessionSettingSelection): void => {
       if (sessionId === null) {
@@ -765,6 +844,16 @@ export function App(): React.JSX.Element {
           onEditResend={handleEditResend}
           rewindInfo={state.rewindInfo}
           onRequestRewindInfo={handleRequestRewindInfo}
+          editStage={state.editAttachments}
+          editResendRejection={state.editResendRejection}
+          onEditStageBegin={handleEditStageBegin}
+          onEditStageCancel={handleEditStageCancel}
+          onEditAttachFiles={handleEditAttachFiles}
+          onEditAttachEditor={handleEditAttachEditor}
+          onEditAttachSelection={handleEditAttachSelection}
+          onEditAttachProblems={handleEditAttachProblems}
+          onEditAttachGitChanges={handleEditAttachGitChanges}
+          onEditAttachmentRemove={handleEditAttachmentRemove}
           onRegenerate={
             connectionStatus === 'connected' &&
             !active &&

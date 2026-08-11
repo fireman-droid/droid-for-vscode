@@ -1,8 +1,11 @@
 import {
+  ATTACHMENT_KINDS,
   DIAGNOSTIC_SEVERITIES,
   IMAGE_MEDIA_TYPES,
   IMAGE_ORIGINS,
   MAX_ASSISTANT_TEXT_LENGTH,
+  MAX_ATTACHMENT_NAME_LENGTH,
+  MAX_PENDING_ATTACHMENTS,
   MAX_BRIDGE_ID_LENGTH,
   MAX_CHANGED_FILES_PER_TURN,
   MAX_IMAGE_DATA_LENGTH,
@@ -18,7 +21,9 @@ import {
   TRANSCRIPT_TOOL_STATUSES,
   TOOL_ACTIVITY_UPDATE_KINDS,
   TOOL_DETAIL_KINDS,
+  type AttachmentKind,
   type ChangedFileSummary,
+  type SentAttachmentSummary,
   type SessionHistoryStatus,
   type SessionTranscriptItem,
   type ToolDetailKind,
@@ -587,20 +592,59 @@ function parseUser(
   const id = dataValue(value, 'id');
   const text = dataValue(value, 'text');
   const messageId = dataValue(value, 'messageId');
+  const attachmentsValue = dataValue(value, 'attachments');
   if (
-    !hasExactKeys(value, ['id', 'kind', 'text'], ['messageId']) ||
+    !hasExactKeys(
+      value,
+      ['id', 'kind', 'text'],
+      ['messageId', 'attachments'],
+    ) ||
     !isId(id) ||
     !isBoundedString(text, MAX_TURN_TEXT_LENGTH) ||
     (messageId !== undefined && !isId(messageId))
   ) {
     return undefined;
   }
+  let attachments: SentAttachmentSummary[] | undefined;
+  if (attachmentsValue !== undefined) {
+    if (!isExactArray(attachmentsValue, 1, MAX_PENDING_ATTACHMENTS)) {
+      return undefined;
+    }
+    attachments = [];
+    for (const entry of attachmentsValue) {
+      const attachment = parseSentAttachment(entry);
+      if (attachment === undefined) {
+        return undefined;
+      }
+      attachments.push(attachment);
+    }
+  }
   return {
     id,
     kind: 'user',
     text,
     ...(messageId === undefined ? {} : { messageId }),
+    ...(attachments === undefined ? {} : { attachments }),
   };
+}
+
+function parseSentAttachment(
+  value: unknown,
+): SentAttachmentSummary | undefined {
+  if (!isStrictRecord(value)) {
+    return undefined;
+  }
+  const kind = dataValue(value, 'kind');
+  const name = dataValue(value, 'name');
+  const sizeBytes = dataValue(value, 'sizeBytes');
+  return hasExactKeys(value, ['kind', 'name', 'sizeBytes']) &&
+    isOneOf(kind, ATTACHMENT_KINDS) &&
+    isNonEmptyBoundedString(name, MAX_ATTACHMENT_NAME_LENGTH) &&
+    typeof sizeBytes === 'number' &&
+    Number.isSafeInteger(sizeBytes) &&
+    sizeBytes >= 0
+    ? { kind: kind as AttachmentKind, name, sizeBytes }
+    : undefined;
 }
 
 function parseAssistant(

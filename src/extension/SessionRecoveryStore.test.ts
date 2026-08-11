@@ -115,6 +115,70 @@ describe('SessionRecoveryStore', () => {
     });
   });
 
+  it('round-trips sent-attachment chip metadata and rejects hostile shapes', async () => {
+    const chips = [
+      { kind: 'text', name: 'notes.md', sizeBytes: 120 },
+      { kind: 'pdf', name: 'spec.pdf', sizeBytes: 2048 },
+    ];
+    const persistence = memoryPersistence({
+      version: SESSION_RECOVERY_VERSION,
+      selectedSessionId: 'session-1',
+      sessions: [
+        storedSession('session-1', 3, [
+          {
+            id: 'user-1',
+            kind: 'user',
+            text: 'With chips',
+            messageId: 'sdk-msg-1',
+            attachments: chips,
+          },
+        ]),
+        // Hostile entries: unknown kind, payload smuggled next to the
+        // metadata, and an empty array all reject the whole item.
+        storedSession('session-2', 2, [
+          {
+            id: 'user-1',
+            kind: 'user',
+            text: 'Bad kind',
+            attachments: [
+              { kind: 'archive', name: 'a.zip', sizeBytes: 1 },
+            ],
+          },
+          {
+            id: 'user-2',
+            kind: 'user',
+            text: 'Payload smuggle',
+            attachments: [
+              { kind: 'text', name: 'a.md', sizeBytes: 1, data: 'raw' },
+            ],
+          },
+          {
+            id: 'user-3',
+            kind: 'user',
+            text: 'Empty list',
+            attachments: [],
+          },
+        ]),
+      ],
+    });
+    const store = new SessionRecoveryStore(persistence);
+
+    await store.load();
+
+    expect(store.readSession('session-1')?.transcript).toEqual([
+      expect.objectContaining({
+        kind: 'user',
+        text: 'With chips',
+        attachments: chips,
+      }),
+    ]);
+    expect(
+      store
+        .readSession('session-2')
+        ?.transcript.filter((item) => item.kind === 'user') ?? [],
+    ).toHaveLength(0);
+  });
+
   it('keeps live image bytes in memory but persists only placeholders', async () => {
     const persistence = memoryPersistence();
     const store = new SessionRecoveryStore(persistence);

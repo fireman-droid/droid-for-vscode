@@ -419,30 +419,41 @@ export interface CommandsRefreshMessage {
 }
 
 /**
+ * Which staging area an attachment operation targets: the composer
+ * staging area (default, field absent) or the per-message edit
+ * staging area opened by `editStage.begin`.
+ */
+export type AttachmentStage = 'edit';
+
+/**
  * Asks the host to open a native file picker and stage the chosen
  * files as pending attachments for the next prompt.
  */
 export interface AttachmentPickMessage {
   readonly type: 'attachment.pick';
   readonly sessionId: string;
+  readonly stage?: AttachmentStage;
 }
 
 /** Stages the active editor document as a pending text attachment. */
 export interface AttachmentAddEditorMessage {
   readonly type: 'attachment.addEditor';
   readonly sessionId: string;
+  readonly stage?: AttachmentStage;
 }
 
 /** Stages the active editor selection as a pending text attachment. */
 export interface AttachmentAddSelectionMessage {
   readonly type: 'attachment.addSelection';
   readonly sessionId: string;
+  readonly stage?: AttachmentStage;
 }
 
 /** Stages current workspace diagnostics as a pending text attachment. */
 export interface AttachmentAddProblemsMessage {
   readonly type: 'attachment.addProblems';
   readonly sessionId: string;
+  readonly stage?: AttachmentStage;
 }
 
 /**
@@ -452,6 +463,7 @@ export interface AttachmentAddProblemsMessage {
 export interface AttachmentAddGitChangesMessage {
   readonly type: 'attachment.addGitChanges';
   readonly sessionId: string;
+  readonly stage?: AttachmentStage;
 }
 
 /**
@@ -473,6 +485,7 @@ export interface AttachmentAddImageMessage {
   readonly name: string;
   readonly mediaType: ImageMediaType;
   readonly dataBase64: string;
+  readonly stage?: AttachmentStage;
 }
 
 /** Removes one staged attachment by its host-assigned id. */
@@ -480,6 +493,7 @@ export interface AttachmentRemoveMessage {
   readonly type: 'attachment.remove';
   readonly sessionId: string;
   readonly attachmentId: string;
+  readonly stage?: AttachmentStage;
 }
 
 /** Longest accepted workspace file search query. */
@@ -507,6 +521,24 @@ export interface AttachmentAddPathMessage {
   readonly type: 'attachment.addPath';
   readonly sessionId: string;
   readonly path: string;
+  readonly stage?: AttachmentStage;
+}
+
+/**
+ * Enters edit mode for one sent user message: the host initializes
+ * the edit staging area, prefilled with the retained payloads of the
+ * attachments that message was sent with.
+ */
+export interface EditStageBeginMessage {
+  readonly type: 'editStage.begin';
+  readonly sessionId: string;
+  readonly messageId: string;
+}
+
+/** Leaves edit mode: the host discards the edit staging area. */
+export interface EditStageCancelMessage {
+  readonly type: 'editStage.cancel';
+  readonly sessionId: string;
 }
 
 /** Requests the current MCP server and tool catalog for the session. */
@@ -619,6 +651,8 @@ export type WebviewToHostMessage =
   | AttachmentAddImageMessage
   | AttachmentRemoveMessage
   | AttachmentAddPathMessage
+  | EditStageBeginMessage
+  | EditStageCancelMessage
   | WorkspaceSearchFilesMessage
   | RewindInfoRequestMessage
   | SessionSettingUpdateMessage;
@@ -915,12 +949,25 @@ export type SessionMcpState =
       readonly message: string;
     };
 
+/**
+ * Metadata about one attachment a sent user message carried. Only
+ * metadata crosses the bridge; image attachments are represented by
+ * their own image transcript items instead of entries here.
+ */
+export interface SentAttachmentSummary {
+  readonly kind: AttachmentKind;
+  readonly name: string;
+  readonly sizeBytes: number;
+}
+
 export interface UserTranscriptItem {
   readonly id: string;
   readonly kind: 'user';
   readonly text: string;
   /** SDK message id; present when this message can anchor a rewind. */
   readonly messageId?: string;
+  /** Attachments this message was sent with; metadata only. */
+  readonly attachments?: readonly SentAttachmentSummary[];
 }
 
 export interface AssistantTranscriptItem {
@@ -1150,6 +1197,47 @@ export interface SessionAttachmentsStateMessage {
 }
 
 /**
+ * One entry of the edit staging area: attachment chip metadata plus
+ * whether the original payload is still available to resend.
+ * `restorable: false` entries (evicted from the retention area or
+ * predating this window) can only be removed, not kept.
+ */
+export interface EditAttachmentSummary extends AttachmentSummary {
+  readonly restorable: boolean;
+}
+
+/** Current edit staging area contents for one message being edited. */
+export interface SessionEditAttachmentsStateMessage {
+  readonly type: 'session.editAttachments';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly messageId: string;
+  readonly attachments: readonly EditAttachmentSummary[];
+}
+
+/** Why the host declined an edit-and-resend request. */
+export const EDIT_RESEND_REJECT_REASONS = [
+  'busy',
+  'unsupported',
+  'failed',
+] as const;
+export type EditResendRejectReason =
+  (typeof EDIT_RESEND_REJECT_REASONS)[number];
+
+/**
+ * Structured rejection of one `turn.editResend` request so the
+ * editing card returns to its edit state deterministically instead
+ * of waiting out a recovery timer.
+ */
+export interface TurnEditResendRejectedMessage {
+  readonly type: 'turn.editResendRejected';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly messageId: string;
+  readonly reason: EditResendRejectReason;
+}
+
+/**
  * Progress of one browser OAuth authentication flow for an MCP
  * server. `started` means the host accepted the request; `browser`
  * means the OAuth URL was opened (or Droid reported none) and the
@@ -1366,6 +1454,8 @@ export type HostToWebviewMessage =
   | SessionArchivedStateMessage
   | SessionSearchStateMessage
   | SessionAttachmentsStateMessage
+  | SessionEditAttachmentsStateMessage
+  | TurnEditResendRejectedMessage
   | WorkspaceFilesMessage
   | RewindInfoStateMessage
   | AssistantDeltaMessage

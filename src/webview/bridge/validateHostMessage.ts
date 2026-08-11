@@ -57,6 +57,7 @@ import {
   TOOL_ACTIVITY_STATUSES,
   TOOL_ACTIVITY_UPDATE_KINDS,
   ATTACHMENT_KINDS,
+  EDIT_RESEND_REJECT_REASONS,
   IMAGE_MEDIA_TYPES,
   IMAGE_ORIGINS,
   MAX_ATTACHMENT_NAME_LENGTH,
@@ -74,6 +75,9 @@ import {
   type AttachmentKind,
   type AttachmentSummary,
   type ChangedFileSummary,
+  type EditAttachmentSummary,
+  type EditResendRejectReason,
+  type SentAttachmentSummary,
   type ConnectionState,
   type DiagnosticSeverity,
   type HostToWebviewMessage,
@@ -209,6 +213,10 @@ export function readHostMessage(
         return parseSessionSearchMessage(value);
       case 'session.attachments':
         return parseSessionAttachmentsMessage(value);
+      case 'session.editAttachments':
+        return parseSessionEditAttachmentsMessage(value);
+      case 'turn.editResendRejected':
+        return parseTurnEditResendRejected(value);
       case 'workspace.files':
         return parseWorkspaceFiles(value);
       case 'rewind.info':
@@ -1355,6 +1363,84 @@ function parseSessionAttachmentsMessage(
   };
 }
 
+function parseSessionEditAttachmentsMessage(
+  value: UnknownRecord,
+):
+  | Extract<HostToWebviewMessage, { type: 'session.editAttachments' }>
+  | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sequence',
+      'sessionId',
+      'messageId',
+      'attachments',
+    ]) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId) ||
+    !isId(value.messageId) ||
+    !isExactArray(value.attachments, 0, MAX_PENDING_ATTACHMENTS)
+  ) {
+    return undefined;
+  }
+  const attachments: EditAttachmentSummary[] = [];
+  const ids = new Set<string>();
+  for (const itemValue of value.attachments) {
+    if (
+      !isStrictRecord(itemValue) ||
+      typeof itemValue.restorable !== 'boolean'
+    ) {
+      return undefined;
+    }
+    const { restorable, ...summaryValue } = itemValue;
+    const item = parseAttachmentSummary(summaryValue);
+    if (item === undefined || ids.has(item.id)) {
+      return undefined;
+    }
+    ids.add(item.id);
+    attachments.push({ ...item, restorable });
+  }
+  return {
+    type: 'session.editAttachments',
+    sequence: value.sequence,
+    sessionId: value.sessionId,
+    messageId: value.messageId,
+    attachments,
+  };
+}
+
+function parseTurnEditResendRejected(
+  value: UnknownRecord,
+):
+  | Extract<HostToWebviewMessage, { type: 'turn.editResendRejected' }>
+  | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sequence',
+      'sessionId',
+      'messageId',
+      'reason',
+    ]) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId) ||
+    !isId(value.messageId) ||
+    typeof value.reason !== 'string' ||
+    !(EDIT_RESEND_REJECT_REASONS as readonly string[]).includes(
+      value.reason,
+    )
+  ) {
+    return undefined;
+  }
+  return {
+    type: 'turn.editResendRejected',
+    sequence: value.sequence,
+    sessionId: value.sessionId,
+    messageId: value.messageId,
+    reason: value.reason as EditResendRejectReason,
+  };
+}
+
 function parseWorkspaceFiles(
   value: UnknownRecord,
 ):
@@ -2287,12 +2373,32 @@ function parseUserTranscriptItem(
   value: UnknownRecord,
 ): Extract<SessionTranscriptItem, { kind: 'user' }> | undefined {
   if (
-    !hasExactKeys(value, ['id', 'kind', 'text'], ['messageId']) ||
+    !hasExactKeys(
+      value,
+      ['id', 'kind', 'text'],
+      ['messageId', 'attachments'],
+    ) ||
     !isId(value.id) ||
     !isBoundedString(value.text, MAX_TURN_TEXT_LENGTH) ||
     (value.messageId !== undefined && !isId(value.messageId))
   ) {
     return undefined;
+  }
+  let attachments: SentAttachmentSummary[] | undefined;
+  if (value.attachments !== undefined) {
+    if (
+      !isExactArray(value.attachments, 0, MAX_PENDING_ATTACHMENTS)
+    ) {
+      return undefined;
+    }
+    attachments = [];
+    for (const itemValue of value.attachments) {
+      const item = parseSentAttachmentSummary(itemValue);
+      if (item === undefined) {
+        return undefined;
+      }
+      attachments.push(item);
+    }
   }
 
   return {
@@ -2302,6 +2408,27 @@ function parseUserTranscriptItem(
     ...(value.messageId === undefined
       ? {}
       : { messageId: value.messageId }),
+    ...(attachments === undefined ? {} : { attachments }),
+  };
+}
+
+function parseSentAttachmentSummary(
+  value: unknown,
+): SentAttachmentSummary | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, ['kind', 'name', 'sizeBytes']) ||
+    typeof value.kind !== 'string' ||
+    !(ATTACHMENT_KINDS as readonly string[]).includes(value.kind) ||
+    !isNonEmptyBoundedString(value.name, MAX_ATTACHMENT_NAME_LENGTH) ||
+    !isCount(value.sizeBytes)
+  ) {
+    return undefined;
+  }
+  return {
+    kind: value.kind as AttachmentKind,
+    name: value.name,
+    sizeBytes: value.sizeBytes,
   };
 }
 

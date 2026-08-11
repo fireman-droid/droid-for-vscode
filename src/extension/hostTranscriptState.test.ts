@@ -488,6 +488,35 @@ describe('hostTranscriptState', () => {
     ]);
   });
 
+  it('carries sent-attachment metadata on the accepted prompt', () => {
+    const attachments = [
+      { kind: 'text' as const, name: 'notes.md', sizeBytes: 120 },
+    ];
+    const state = appendAcceptedUserPrompt(
+      createHostTranscriptState('complete'),
+      'turn-1',
+      'With chips',
+      attachments,
+    );
+    expect(state.transcript).toEqual([
+      {
+        id: stableTranscriptId('user', 'turn-1'),
+        kind: 'user',
+        text: 'With chips',
+        attachments,
+      },
+    ]);
+
+    // Empty metadata omits the field entirely.
+    const bare = appendAcceptedUserPrompt(
+      createHostTranscriptState('complete'),
+      'turn-2',
+      'No chips',
+      [],
+    );
+    expect(bare.transcript[0]).not.toHaveProperty('attachments');
+  });
+
   it('attaches the SDK message id to the accepted prompt of a turn', () => {
     const base = appendAcceptedUserPrompt(
       createHostTranscriptState('complete'),

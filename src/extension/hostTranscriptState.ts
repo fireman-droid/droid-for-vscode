@@ -12,6 +12,7 @@ import {
   type AssistantDeltaMessage,
   type ChangedFileSummary,
   type RuntimeDiagnosticMessage,
+  type SentAttachmentSummary,
   type SessionHistoryStatus,
   type SessionTranscriptItem,
   type ThinkingCompleteMessage,
@@ -84,6 +85,7 @@ export function appendAcceptedUserPrompt(
   state: HostTranscriptState,
   turnId: string,
   text: string,
+  attachments?: readonly SentAttachmentSummary[],
 ): HostTranscriptState {
   const boundedText = text.slice(0, MAX_TURN_TEXT_LENGTH);
   return appendItem(
@@ -92,6 +94,9 @@ export function appendAcceptedUserPrompt(
       id: stableTranscriptId('user', turnId),
       kind: 'user',
       text: boundedText,
+      ...(attachments !== undefined && attachments.length > 0
+        ? { attachments }
+        : {}),
     },
     text.length > boundedText.length,
   );

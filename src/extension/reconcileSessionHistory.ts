@@ -58,6 +58,11 @@ function reconcileByUserAnchors(
     return null;
   }
 
+  // Sent-attachment chip metadata only exists on the recovered side
+  // (loadSession cannot attribute non-image attachment blocks back to
+  // chips), so matched anchors adopt it onto the authoritative items.
+  loaded = withRecoveredAttachments(loaded, recovered.transcript, matches);
+
   // Duplicate filters are scoped to the adjacent loaded region: a
   // prepended head must not repeat what loaded starts with (resend
   // residue), and an appended tail must not repeat how loaded ends.
@@ -88,6 +93,38 @@ function reconcileByUserAnchors(
     recovered,
     true,
   );
+}
+
+/**
+ * Copies `attachments` metadata from matched recovered user anchors
+ * onto the corresponding loaded items that lack it, so chips survive a
+ * restart even though loaded history cannot reconstruct them.
+ */
+function withRecoveredAttachments(
+  loaded: HostTranscriptState,
+  recovered: readonly SessionTranscriptItem[],
+  matches: readonly AnchorMatch[],
+): HostTranscriptState {
+  let transcript: SessionTranscriptItem[] | null = null;
+  for (const match of matches) {
+    const recoveredItem = recovered[match.recoveredIndex];
+    const loadedItem = loaded.transcript[match.loadedIndex];
+    if (
+      recoveredItem?.kind !== 'user' ||
+      loadedItem?.kind !== 'user' ||
+      recoveredItem.attachments === undefined ||
+      recoveredItem.attachments.length === 0 ||
+      loadedItem.attachments !== undefined
+    ) {
+      continue;
+    }
+    transcript ??= [...loaded.transcript];
+    transcript[match.loadedIndex] = {
+      ...loadedItem,
+      attachments: recoveredItem.attachments,
+    };
+  }
+  return transcript === null ? loaded : { ...loaded, transcript };
 }
 
 /**

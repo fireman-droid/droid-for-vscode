@@ -63,6 +63,35 @@ describe('reconcileSessionHistory', () => {
     expect(reconcileSessionHistory(loaded, recovered)).toBe(loaded);
   });
 
+  it('adopts recovered sent-attachment chips onto matched loaded anchors', () => {
+    const chips = [
+      { kind: 'text' as const, name: 'notes.md', sizeBytes: 42 },
+    ];
+    const recovered = state([
+      {
+        ...anchored('cached-a', 'Prompt with chips', 'sdk-msg-1'),
+        attachments: chips,
+      },
+      assistant('cached-b', 'Answer'),
+    ]);
+    // Loaded history cannot reconstruct chip metadata, so the matched
+    // anchor adopts it from the recovered checkpoint.
+    const loaded = state([
+      anchored('sdk-a', 'Prompt with chips', 'sdk-msg-1'),
+      assistant('sdk-b', 'Answer'),
+      user('sdk-c', 'Later prompt'),
+    ]);
+
+    const merged = reconcileSessionHistory(loaded, recovered);
+    expect(merged.transcript[0]).toEqual({
+      ...loaded.transcript[0],
+      attachments: chips,
+    });
+    expect(merged.transcript.slice(1)).toEqual(
+      loaded.transcript.slice(1),
+    );
+  });
+
   it('retains non-overlapping safe content and marks chronology partial', () => {
     const recovered = state([user('cached', 'Locally observed prompt')]);
     const loaded = state([user('sdk', 'Public SDK prompt')]);

@@ -257,6 +257,34 @@ describe('parseWebviewMessage', () => {
       dataBase64: 'aW1hZ2U=',
     },
     {
+      type: 'attachment.pick',
+      sessionId: 'session-1',
+      stage: 'edit',
+    },
+    {
+      type: 'attachment.remove',
+      sessionId: 'session-1',
+      attachmentId: 'attachment-1',
+      stage: 'edit',
+    },
+    {
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'screenshot.png',
+      mediaType: 'image/png',
+      dataBase64: 'aW1hZ2U=',
+      stage: 'edit',
+    },
+    {
+      type: 'editStage.begin',
+      sessionId: 'session-1',
+      messageId: 'message-1',
+    },
+    {
+      type: 'editStage.cancel',
+      sessionId: 'session-1',
+    },
+    {
       type: 'session.context.refresh',
       sessionId: 'session-1',
     },
@@ -576,6 +604,31 @@ describe('parseWebviewMessage', () => {
       name: 'a.png',
       mediaType: 'image/png',
       dataBase64: 'aW1hZ2U=',
+      extra: true,
+    },
+    {
+      // Stage must be the literal 'edit' or absent.
+      type: 'attachment.pick',
+      sessionId: 'session-1',
+      stage: 'composer',
+    },
+    {
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'a.png',
+      mediaType: 'image/png',
+      dataBase64: 'aW1hZ2U=',
+      stage: null,
+    },
+    { type: 'editStage.begin', sessionId: 'session-1' },
+    {
+      type: 'editStage.begin',
+      sessionId: 'session-1',
+      messageId: '',
+    },
+    {
+      type: 'editStage.cancel',
+      sessionId: 'session-1',
       extra: true,
     },
     { type: 'skills.refresh', sessionId: '' },

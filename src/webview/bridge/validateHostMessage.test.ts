@@ -107,6 +107,16 @@ describe('readHostMessage', () => {
           messageId: 'sdk-message-1',
         },
         {
+          id: 'user-3',
+          kind: 'user',
+          text: 'With sent attachments.',
+          messageId: 'sdk-message-2',
+          attachments: [
+            { kind: 'text', name: 'notes.md', sizeBytes: 120 },
+            { kind: 'pdf', name: 'spec.pdf', sizeBytes: 2048 },
+          ],
+        },
+        {
           id: 'assistant-1',
           kind: 'assistant',
           turnId: 'turn-1',
@@ -371,6 +381,37 @@ describe('readHostMessage', () => {
       sequence: 1,
       sessionId: 'session-1',
       attachments: [],
+    },
+    {
+      type: 'session.editAttachments',
+      sequence: 1,
+      sessionId: 'session-1',
+      messageId: 'sdk-message-1',
+      attachments: [
+        {
+          id: 'attachment-1',
+          kind: 'text',
+          name: 'notes.md',
+          sizeBytes: 200,
+          truncated: false,
+          restorable: true,
+        },
+        {
+          id: 'attachment-2',
+          kind: 'pdf',
+          name: 'spec.pdf',
+          sizeBytes: 4096,
+          truncated: false,
+          restorable: false,
+        },
+      ],
+    },
+    {
+      type: 'turn.editResendRejected',
+      sequence: 2,
+      sessionId: 'session-1',
+      messageId: 'sdk-message-1',
+      reason: 'busy',
     },
     {
       type: 'session.archived',
@@ -1168,6 +1209,54 @@ describe('readHostMessage', () => {
           truncated: false,
         },
       ],
+    },
+    {
+      // Edit staging entries must carry a boolean restorable flag.
+      type: 'session.editAttachments',
+      sequence: 1,
+      sessionId: 'session-1',
+      messageId: 'sdk-message-1',
+      attachments: [
+        {
+          id: 'attachment-1',
+          kind: 'text',
+          name: 'notes.md',
+          sizeBytes: 200,
+          truncated: false,
+        },
+      ],
+    },
+    {
+      type: 'session.editAttachments',
+      sequence: 1,
+      sessionId: 'session-1',
+      messageId: 'sdk-message-1',
+      attachments: [
+        {
+          id: 'attachment-1',
+          kind: 'text',
+          name: 'notes.md',
+          sizeBytes: 200,
+          truncated: false,
+          restorable: 'yes',
+        },
+      ],
+    },
+    {
+      // Reject reasons come from the shared whitelist.
+      type: 'turn.editResendRejected',
+      sequence: 2,
+      sessionId: 'session-1',
+      messageId: 'sdk-message-1',
+      reason: 'because',
+    },
+    {
+      type: 'turn.editResendRejected',
+      sequence: 2,
+      sessionId: 'session-1',
+      messageId: 'sdk-message-1',
+      reason: 'busy',
+      extra: true,
     },
     {
       type: 'session.attachments',
@@ -2135,6 +2224,50 @@ describe('readHostMessage', () => {
           severity: 'fatal',
           code: 'unsafe',
           message: 'Unsafe',
+        },
+      ],
+      // Sent-attachment metadata: kind whitelist, exact keys, and
+      // no payload bytes smuggled alongside the summary.
+      [
+        {
+          id: 'user-1',
+          kind: 'user',
+          text: 'Prompt',
+          attachments: [
+            { kind: 'archive', name: 'a.zip', sizeBytes: 1 },
+          ],
+        },
+      ],
+      [
+        {
+          id: 'user-1',
+          kind: 'user',
+          text: 'Prompt',
+          attachments: [
+            { kind: 'text', name: 'a.md', sizeBytes: 1, data: 'raw' },
+          ],
+        },
+      ],
+      [
+        {
+          id: 'user-1',
+          kind: 'user',
+          text: 'Prompt',
+          attachments: [
+            { kind: 'text', name: '', sizeBytes: 1 },
+          ],
+        },
+      ],
+      [
+        {
+          id: 'user-1',
+          kind: 'user',
+          text: 'Prompt',
+          attachments: Array.from({ length: 9 }, (_, index) => ({
+            kind: 'text',
+            name: `file-${index}.md`,
+            sizeBytes: 1,
+          })),
         },
       ],
     ]) {

@@ -25,8 +25,11 @@ import {
   MAX_PENDING_ATTACHMENTS,
   MAX_TURN_TEXT_LENGTH,
   type CommandSummary,
+  type EditAttachmentSummary,
+  type EditResendRejectReason,
   type ImageMediaType,
   type ModelCatalogState,
+  type SentAttachmentSummary,
   type SessionCommandsState,
   type SessionHistoryStatus,
   type AttachmentSummary,
@@ -73,6 +76,51 @@ export interface RewindFileInfo {
   readonly messageId: string;
   readonly restorableCount: number;
   readonly createdCount: number;
+}
+
+/** Edit staging area contents for the message being edited. */
+export interface EditStageState {
+  readonly messageId: string;
+  readonly attachments: readonly EditAttachmentSummary[];
+}
+
+/** Latest structured edit-resend rejection from the host. */
+export interface EditResendRejection {
+  readonly messageId: string;
+  readonly reason: EditResendRejectReason;
+  readonly sequence: number;
+}
+
+/**
+ * Session-scoped controls and edit-scoped attachment callbacks the
+ * in-card message editor needs; grouped so each user message takes a
+ * single prop.
+ */
+export interface UserEditorEnv {
+  readonly settings: SessionSettingsState;
+  readonly context: SessionContextState;
+  readonly modelCatalog: ModelCatalogState;
+  readonly skills: SkillsPanelState;
+  readonly mcp: McpPanelState;
+  readonly mcpAuth: McpAuthProgress | null;
+  readonly controlsDisabled: boolean;
+  readonly settingUpdatesDisabled: boolean;
+  readonly onContextRefresh: () => void;
+  readonly onCompact: () => void;
+  readonly onSettingUpdate: (update: SessionSettingSelection) => void;
+  readonly onSkillsRefresh: () => void;
+  readonly onSkillToggle: (name: string, disabled: boolean) => void;
+  readonly onMcpRefresh: () => void;
+  readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
+  readonly onMcpServerAdd: (params: McpServerAddParams) => void;
+  readonly onMcpServerRemove: (name: string) => void;
+  readonly onMcpServerAuthenticate: (name: string) => void;
+  readonly onAttachFiles: () => void;
+  readonly onAttachEditor: () => void;
+  readonly onAttachSelection: () => void;
+  readonly onAttachProblems: () => void;
+  readonly onAttachGitChanges: () => void;
+  readonly onAttachmentRemove: (attachmentId: string) => void;
 }
 
 // Tool rows deep inside the transcript open native diffs through this
@@ -142,6 +190,16 @@ interface DroidThreadProps {
   ) => void;
   readonly rewindInfo: RewindFileInfo | null;
   readonly onRequestRewindInfo: (messageId: string) => void;
+  readonly editStage: EditStageState | null;
+  readonly editResendRejection: EditResendRejection | null;
+  readonly onEditStageBegin: (messageId: string) => void;
+  readonly onEditStageCancel: () => void;
+  readonly onEditAttachFiles: () => void;
+  readonly onEditAttachEditor: () => void;
+  readonly onEditAttachSelection: () => void;
+  readonly onEditAttachProblems: () => void;
+  readonly onEditAttachGitChanges: () => void;
+  readonly onEditAttachmentRemove: (attachmentId: string) => void;
   readonly onRegenerate: (() => void) | null;
   readonly onOpenFileDiff: (path: string) => void;
   readonly editResendEnabled: boolean;
@@ -197,11 +255,104 @@ export const DroidThread = memo(function DroidThread({
   onEditResend,
   rewindInfo,
   onRequestRewindInfo,
+  editStage,
+  editResendRejection,
+  onEditStageBegin,
+  onEditStageCancel,
+  onEditAttachFiles,
+  onEditAttachEditor,
+  onEditAttachSelection,
+  onEditAttachProblems,
+  onEditAttachGitChanges,
+  onEditAttachmentRemove,
   onRegenerate,
   onOpenFileDiff,
   editResendEnabled,
   inlineInteraction,
 }: DroidThreadProps): React.JSX.Element {
+  // Only one message may be in edit mode at a time. Opening a new
+  // target cancels the previous edit staging area on the host first.
+  const [editingMessageId, setEditingMessageId] = useState<
+    string | null
+  >(null);
+  const beginEditing = (messageId: string): void => {
+    if (editingMessageId === messageId) {
+      return;
+    }
+    if (editingMessageId !== null) {
+      onEditStageCancel();
+    }
+    onEditStageBegin(messageId);
+    setEditingMessageId(messageId);
+  };
+  const cancelEditing = (): void => {
+    if (editingMessageId !== null) {
+      onEditStageCancel();
+    }
+    setEditingMessageId(null);
+  };
+  // Submit keeps the host edit stage alive so the resend can consume
+  // it; a structured rejection reopens the editor with the stage intact.
+  const submitEditing = (): void => {
+    setEditingMessageId(null);
+  };
+  const reopenEditing = (messageId: string): void => {
+    setEditingMessageId(messageId);
+  };
+  const editorEnv = useMemo<UserEditorEnv>(
+    () => ({
+      settings,
+      context,
+      modelCatalog,
+      skills,
+      mcp,
+      mcpAuth,
+      controlsDisabled,
+      settingUpdatesDisabled,
+      onContextRefresh,
+      onCompact,
+      onSettingUpdate,
+      onSkillsRefresh,
+      onSkillToggle,
+      onMcpRefresh,
+      onMcpServerToggle,
+      onMcpServerAdd,
+      onMcpServerRemove,
+      onMcpServerAuthenticate,
+      onAttachFiles: onEditAttachFiles,
+      onAttachEditor: onEditAttachEditor,
+      onAttachSelection: onEditAttachSelection,
+      onAttachProblems: onEditAttachProblems,
+      onAttachGitChanges: onEditAttachGitChanges,
+      onAttachmentRemove: onEditAttachmentRemove,
+    }),
+    [
+      settings,
+      context,
+      modelCatalog,
+      skills,
+      mcp,
+      mcpAuth,
+      controlsDisabled,
+      settingUpdatesDisabled,
+      onContextRefresh,
+      onCompact,
+      onSettingUpdate,
+      onSkillsRefresh,
+      onSkillToggle,
+      onMcpRefresh,
+      onMcpServerToggle,
+      onMcpServerAdd,
+      onMcpServerRemove,
+      onMcpServerAuthenticate,
+      onEditAttachFiles,
+      onEditAttachEditor,
+      onEditAttachSelection,
+      onEditAttachProblems,
+      onEditAttachGitChanges,
+      onEditAttachmentRemove,
+    ],
+  );
   return (
     <ThreadPrimitive.Root
       className={`dvx-thread${
@@ -244,21 +395,35 @@ export const DroidThread = memo(function DroidThread({
               </div>
             </ThreadPrimitive.Empty>
             <ThreadPrimitive.Messages>
-              {({ message }) =>
-                message.role === 'user' ? (
+              {({ message }) => {
+                if (message.role !== 'user') {
+                  return <AssistantMessage />;
+                }
+                const messageId = readUserMessageId(message.metadata);
+                return (
                   <UserMessage
                     text={readMessageText(message.content)}
-                    messageId={readUserMessageId(message.metadata)}
+                    messageId={messageId}
+                    attachments={readUserAttachments(message.metadata)}
+                    editing={
+                      messageId !== null &&
+                      messageId === editingMessageId
+                    }
+                    editStage={editStage}
+                    rejection={editResendRejection}
+                    editorEnv={editorEnv}
                     editResendEnabled={editResendEnabled}
                     rewindInfo={rewindInfo}
                     onRequestRewindInfo={onRequestRewindInfo}
                     onReuse={onReuseMessage}
                     onEditResend={onEditResend}
+                    onBeginEdit={beginEditing}
+                    onCancelEdit={cancelEditing}
+                    onSubmitEdit={submitEditing}
+                    onReopenEdit={reopenEditing}
                   />
-                ) : (
-                  <AssistantMessage />
-                )
-              }
+                );
+              }}
             </ThreadPrimitive.Messages>
             {pending ? <PendingResponse activity={activity} /> : null}
             {inlineInteraction}
@@ -312,17 +477,37 @@ export const DroidThread = memo(function DroidThread({
   );
 });
 
+const EDIT_REJECT_COPY: Record<EditResendRejectReason, string> = {
+  busy: 'Droid is busy — stop or finish the current work, then resend.',
+  unsupported: 'This message can no longer anchor a resend.',
+  failed: 'Rewinding to this message failed. You can try again.',
+};
+
 function UserMessage({
   text,
   messageId,
+  attachments,
+  editing,
+  editStage,
+  rejection,
+  editorEnv,
   editResendEnabled,
   rewindInfo,
   onRequestRewindInfo,
   onReuse,
   onEditResend,
+  onBeginEdit,
+  onCancelEdit,
+  onSubmitEdit,
+  onReopenEdit,
 }: {
   readonly text: string;
   readonly messageId: string | null;
+  readonly attachments: readonly SentAttachmentSummary[];
+  readonly editing: boolean;
+  readonly editStage: EditStageState | null;
+  readonly rejection: EditResendRejection | null;
+  readonly editorEnv: UserEditorEnv;
   readonly editResendEnabled: boolean;
   readonly rewindInfo: RewindFileInfo | null;
   readonly onRequestRewindInfo: (messageId: string) => void;
@@ -332,35 +517,71 @@ function UserMessage({
     text: string,
     restoreFiles?: boolean,
   ) => void;
+  readonly onBeginEdit: (messageId: string) => void;
+  readonly onCancelEdit: () => void;
+  readonly onSubmitEdit: () => void;
+  readonly onReopenEdit: (messageId: string) => void;
 }): React.JSX.Element {
   const [reused, setReused] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(text);
   const [restoreFiles, setRestoreFiles] = useState(false);
   const [resending, setResending] = useState(false);
   const resendResetRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  useEffect(
-    () => () => {
-      if (resendResetRef.current !== null) {
-        clearTimeout(resendResetRef.current);
+  const clearResendTimer = (): void => {
+    if (resendResetRef.current !== null) {
+      clearTimeout(resendResetRef.current);
+      resendResetRef.current = null;
+    }
+  };
+  useEffect(() => clearResendTimer, []);
+  // Opening the editor from viewing resets the draft to the sent text;
+  // reopening after a rejection keeps the user's edited draft.
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (editing && !wasEditing.current) {
+      if (!resending) {
+        setEditText(text);
+        setRestoreFiles(false);
       }
-    },
-    [],
-  );
+      setResending(false);
+      clearResendTimer();
+      if (messageId !== null) {
+        onRequestRewindInfo(messageId);
+      }
+    }
+    wasEditing.current = editing;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
+  // A structured rejection of this card's resend returns it to the
+  // editor deterministically; the 8s timer stays as a fallback only.
+  useEffect(() => {
+    if (
+      rejection !== null &&
+      rejection.messageId === messageId &&
+      resending
+    ) {
+      onReopenEdit(rejection.messageId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rejection]);
   const editable = messageId !== null && !resending;
   const reuse = (): void => {
     onReuse(text);
     setReused(true);
   };
   const openEditor = (): void => {
-    setEditText(text);
-    setRestoreFiles(false);
-    setEditing(true);
     if (messageId !== null) {
-      onRequestRewindInfo(messageId);
+      onBeginEdit(messageId);
     }
+  };
+  const handleCardClick = (): void => {
+    // A click that ends a text selection must not open the editor.
+    if (window.getSelection()?.toString()) {
+      return;
+    }
+    openEditor();
   };
   const fileImpact =
     editing && messageId !== null && rewindInfo?.messageId === messageId
@@ -370,23 +591,30 @@ function UserMessage({
     fileImpact === null
       ? 0
       : fileImpact.restorableCount + fileImpact.createdCount;
+  const stagedAttachments =
+    editing && editStage !== null && editStage.messageId === messageId
+      ? editStage.attachments
+      : [];
+  const rejectionCopy =
+    editing && rejection !== null && rejection.messageId === messageId
+      ? EDIT_REJECT_COPY[rejection.reason]
+      : null;
+  const settingsUpdating = editorEnv.settings.status === 'updating';
+  const sendDisabled =
+    !editResendEnabled ||
+    settingsUpdating ||
+    editText.trim().length === 0;
   const submitEdit = (): void => {
-    if (
-      messageId === null ||
-      !editResendEnabled ||
-      editText.trim().length === 0
-    ) {
+    if (messageId === null || sendDisabled) {
       return;
     }
-    setEditing(false);
+    onSubmitEdit();
     setResending(true);
     onEditResend(messageId, editText, restoreFiles && affectedFiles > 0);
-    // On success this component unmounts with the forked snapshot. If the
-    // host declines the resend it only emits a diagnostic, so recover the
-    // normal presentation after a grace period instead of sticking.
-    if (resendResetRef.current !== null) {
-      clearTimeout(resendResetRef.current);
-    }
+    // On success this component unmounts with the forked snapshot; a
+    // structured rejection reopens the editor. The timer only recovers
+    // the normal presentation if neither ever arrives.
+    clearResendTimer();
     resendResetRef.current = setTimeout(() => setResending(false), 8000);
   };
   return (
@@ -415,10 +643,29 @@ function UserMessage({
                   event.preventDefault();
                   submitEdit();
                 } else if (event.key === 'Escape') {
-                  setEditing(false);
+                  onCancelEdit();
                 }
               }}
             />
+            {stagedAttachments.length > 0 ? (
+              <div
+                className="dvx-user-edit-attachments"
+                aria-label="Attachments to resend"
+              >
+                {stagedAttachments.map((attachment) => (
+                  <EditAttachmentChip
+                    key={attachment.id}
+                    attachment={attachment}
+                    onRemove={editorEnv.onAttachmentRemove}
+                  />
+                ))}
+              </div>
+            ) : null}
+            {rejectionCopy !== null ? (
+              <div className="dvx-user-edit-rejection" role="status">
+                {rejectionCopy}
+              </div>
+            ) : null}
             <div className="dvx-user-edit-hint">
               Resending starts a new conversation branch from this
               message.
@@ -439,25 +686,52 @@ function UserMessage({
                 </span>
               </label>
             ) : null}
-            <div className="dvx-user-edit-actions">
-              <button
-                className="dvx-message-action"
-                type="button"
-                onClick={() => setEditing(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="dvx-message-action dvx-user-edit-send"
-                type="button"
-                disabled={
-                  !editResendEnabled ||
-                  editText.trim().length === 0
+            <div className="dvx-user-edit-footer">
+              <ComposerControls
+                settings={editorEnv.settings}
+                context={editorEnv.context}
+                modelCatalog={editorEnv.modelCatalog}
+                skills={editorEnv.skills}
+                mcp={editorEnv.mcp}
+                disabled={editorEnv.controlsDisabled}
+                settingUpdatesDisabled={editorEnv.settingUpdatesDisabled}
+                onContextRefresh={editorEnv.onContextRefresh}
+                onCompact={editorEnv.onCompact}
+                onSettingUpdate={editorEnv.onSettingUpdate}
+                onSkillsRefresh={editorEnv.onSkillsRefresh}
+                onSkillToggle={editorEnv.onSkillToggle}
+                onMcpRefresh={editorEnv.onMcpRefresh}
+                onMcpServerToggle={editorEnv.onMcpServerToggle}
+                onMcpServerAdd={editorEnv.onMcpServerAdd}
+                onMcpServerRemove={editorEnv.onMcpServerRemove}
+                mcpAuth={editorEnv.mcpAuth}
+                onMcpServerAuthenticate={
+                  editorEnv.onMcpServerAuthenticate
                 }
-                onClick={submitEdit}
-              >
-                Resend
-              </button>
+                onAttachFiles={editorEnv.onAttachFiles}
+                onAttachEditor={editorEnv.onAttachEditor}
+                onAttachSelection={editorEnv.onAttachSelection}
+                onAttachProblems={editorEnv.onAttachProblems}
+                onAttachGitChanges={editorEnv.onAttachGitChanges}
+              />
+              <div className="dvx-user-edit-actions">
+                <button
+                  className="dvx-message-action"
+                  type="button"
+                  onClick={onCancelEdit}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="dvx-composer-action dvx-send-action"
+                  type="button"
+                  aria-label="Resend edited message"
+                  disabled={sendDisabled}
+                  onClick={submitEdit}
+                >
+                  <SendIcon />
+                </button>
+              </div>
             </div>
           </div>
         ) : resending ? (
@@ -469,25 +743,51 @@ function UserMessage({
             </div>
           </div>
         ) : (
-          <MessagePrimitive.Parts>
-            {({ part }) =>
-              part.type === 'data' && part.name === 'droid-image' ? (
-                <TranscriptImage data={part.data} />
-              ) : part.type === 'text' ? (
-                <div
-                  className="dvx-user-bubble"
-                  title={
-                    editable
-                      ? 'Double-click to edit and resend from here'
-                      : 'Double-click to reuse in Composer'
-                  }
-                  onDoubleClick={editable ? openEditor : reuse}
-                >
-                  {part.text}
-                </div>
-              ) : null
+          <div
+            className={`dvx-user-card${
+              editable ? ' dvx-user-card-editable' : ''
+            }`}
+            title={
+              editable
+                ? 'Click to edit and resend from here'
+                : 'Double-click to reuse in Composer'
             }
-          </MessagePrimitive.Parts>
+            onClick={editable ? handleCardClick : undefined}
+            onDoubleClick={editable ? undefined : reuse}
+          >
+            <MessagePrimitive.Parts>
+              {({ part }) =>
+                part.type === 'data' && part.name === 'droid-image' ? (
+                  <TranscriptImage data={part.data} />
+                ) : part.type === 'text' ? (
+                  <div className="dvx-user-bubble">{part.text}</div>
+                ) : null
+              }
+            </MessagePrimitive.Parts>
+            {attachments.length > 0 ? (
+              <div
+                className="dvx-user-sent-attachments"
+                aria-label="Attachments sent with this message"
+              >
+                {attachments.map((attachment, index) => (
+                  <span
+                    key={`${attachment.name}-${index}`}
+                    className="dvx-attachment-chip dvx-attachment-sent"
+                  >
+                    <span className="dvx-attachment-kind">
+                      {ATTACHMENT_KIND_LABELS[attachment.kind]}
+                    </span>
+                    <span
+                      className="dvx-attachment-name"
+                      title={attachment.name}
+                    >
+                      {attachment.name}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
         )}
         {editing || resending ? null : (
           <ActionBarPrimitive.Root className="dvx-user-actions">
@@ -525,6 +825,45 @@ function UserMessage({
         </span>
       </div>
     </MessagePrimitive.Root>
+  );
+}
+
+function EditAttachmentChip({
+  attachment,
+  onRemove,
+}: {
+  readonly attachment: EditAttachmentSummary;
+  readonly onRemove: (attachmentId: string) => void;
+}): React.JSX.Element {
+  return (
+    <span
+      className={`dvx-attachment-chip${
+        attachment.restorable ? '' : ' dvx-attachment-unrestorable'
+      }`}
+    >
+      <span className="dvx-attachment-kind">
+        {ATTACHMENT_KIND_LABELS[attachment.kind]}
+      </span>
+      <span className="dvx-attachment-name" title={attachment.name}>
+        {attachment.name}
+      </span>
+      {attachment.truncated ? (
+        <span className="dvx-attachment-truncated">truncated</span>
+      ) : null}
+      {attachment.restorable ? null : (
+        <span className="dvx-attachment-readd">
+          re-add to include
+        </span>
+      )}
+      <button
+        type="button"
+        className="dvx-attachment-remove"
+        aria-label={`Remove attachment ${attachment.name}`}
+        onClick={() => onRemove(attachment.id)}
+      >
+        ×
+      </button>
+    </span>
   );
 }
 
@@ -1915,6 +2254,23 @@ function readUserMessageId(metadata: unknown): string | null {
     return metadata.custom.messageId;
   }
   return null;
+}
+
+function readUserAttachments(
+  metadata: unknown,
+): readonly SentAttachmentSummary[] {
+  if (
+    typeof metadata === 'object' &&
+    metadata !== null &&
+    'custom' in metadata &&
+    typeof metadata.custom === 'object' &&
+    metadata.custom !== null &&
+    'attachments' in metadata.custom &&
+    Array.isArray(metadata.custom.attachments)
+  ) {
+    return metadata.custom.attachments as readonly SentAttachmentSummary[];
+  }
+  return [];
 }
 
 function readMessageText(content: readonly unknown[]): string {

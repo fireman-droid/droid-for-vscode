@@ -30,6 +30,8 @@ import {
   type AttachmentAddEditorMessage,
   type AttachmentAddGitChangesMessage,
   type AttachmentAddImageMessage,
+  type EditStageBeginMessage,
+  type EditStageCancelMessage,
   type AttachmentAddPathMessage,
   type AttachmentAddProblemsMessage,
   type AttachmentAddSelectionMessage,
@@ -164,6 +166,10 @@ export function parseWebviewMessage(
         return parseAttachmentRemove(value);
       case 'attachment.addPath':
         return parseAttachmentAddPath(value);
+      case 'editStage.begin':
+        return parseEditStageBegin(value);
+      case 'editStage.cancel':
+        return parseEditStageCancel(value);
       case 'workspace.searchFiles':
         return parseWorkspaceSearchFiles(value);
       case 'session.setting.update':
@@ -804,38 +810,63 @@ function parseMcpServerAuthenticate(
   };
 }
 
+/**
+ * Validates the optional `stage` routing field on attachment
+ * messages: absent (composer staging) or the literal 'edit'.
+ */
+function hasValidStage(
+  value: UnknownRecord,
+): value is UnknownRecord & { stage?: 'edit' } {
+  return value.stage === undefined || value.stage === 'edit';
+}
+
+function stageOf(value: { stage?: 'edit' }): { stage?: 'edit' } {
+  return value.stage === undefined ? {} : { stage: value.stage };
+}
+
 function parseAttachmentPick(
   value: UnknownRecord,
 ): AttachmentPickMessage | undefined {
   if (
-    !hasExactKeys(value, ['type', 'sessionId']) ||
-    !isId(value.sessionId)
+    !hasExactKeys(value, ['type', 'sessionId'], ['stage']) ||
+    !isId(value.sessionId) ||
+    !hasValidStage(value)
   ) {
     return undefined;
   }
 
-  return { type: 'attachment.pick', sessionId: value.sessionId };
+  return {
+    type: 'attachment.pick',
+    sessionId: value.sessionId,
+    ...stageOf(value),
+  };
 }
 
 function parseAttachmentAddEditor(
   value: UnknownRecord,
 ): AttachmentAddEditorMessage | undefined {
   if (
-    !hasExactKeys(value, ['type', 'sessionId']) ||
-    !isId(value.sessionId)
+    !hasExactKeys(value, ['type', 'sessionId'], ['stage']) ||
+    !isId(value.sessionId) ||
+    !hasValidStage(value)
   ) {
     return undefined;
   }
 
-  return { type: 'attachment.addEditor', sessionId: value.sessionId };
+  return {
+    type: 'attachment.addEditor',
+    sessionId: value.sessionId,
+    ...stageOf(value),
+  };
 }
 
 function parseAttachmentAddSelection(
   value: UnknownRecord,
 ): AttachmentAddSelectionMessage | undefined {
   if (
-    !hasExactKeys(value, ['type', 'sessionId']) ||
-    !isId(value.sessionId)
+    !hasExactKeys(value, ['type', 'sessionId'], ['stage']) ||
+    !isId(value.sessionId) ||
+    !hasValidStage(value)
   ) {
     return undefined;
   }
@@ -843,6 +874,7 @@ function parseAttachmentAddSelection(
   return {
     type: 'attachment.addSelection',
     sessionId: value.sessionId,
+    ...stageOf(value),
   };
 }
 
@@ -850,21 +882,27 @@ function parseAttachmentAddProblems(
   value: UnknownRecord,
 ): AttachmentAddProblemsMessage | undefined {
   if (
-    !hasExactKeys(value, ['type', 'sessionId']) ||
-    !isId(value.sessionId)
+    !hasExactKeys(value, ['type', 'sessionId'], ['stage']) ||
+    !isId(value.sessionId) ||
+    !hasValidStage(value)
   ) {
     return undefined;
   }
 
-  return { type: 'attachment.addProblems', sessionId: value.sessionId };
+  return {
+    type: 'attachment.addProblems',
+    sessionId: value.sessionId,
+    ...stageOf(value),
+  };
 }
 
 function parseAttachmentAddGitChanges(
   value: UnknownRecord,
 ): AttachmentAddGitChangesMessage | undefined {
   if (
-    !hasExactKeys(value, ['type', 'sessionId']) ||
-    !isId(value.sessionId)
+    !hasExactKeys(value, ['type', 'sessionId'], ['stage']) ||
+    !isId(value.sessionId) ||
+    !hasValidStage(value)
   ) {
     return undefined;
   }
@@ -872,6 +910,7 @@ function parseAttachmentAddGitChanges(
   return {
     type: 'attachment.addGitChanges',
     sessionId: value.sessionId,
+    ...stageOf(value),
   };
 }
 
@@ -892,8 +931,9 @@ function parseAttachmentAddImage(
       'name',
       'mediaType',
       'dataBase64',
-    ]) ||
+    ], ['stage']) ||
     !isId(value.sessionId) ||
+    !hasValidStage(value) ||
     typeof value.name !== 'string' ||
     value.name.length === 0 ||
     value.name.length > MAX_ATTACHMENT_NAME_LENGTH ||
@@ -917,6 +957,7 @@ function parseAttachmentAddImage(
     name: value.name,
     mediaType: value.mediaType as AttachmentAddImageMessage['mediaType'],
     dataBase64: value.dataBase64,
+    ...stageOf(value),
   };
 }
 
@@ -924,9 +965,10 @@ function parseAttachmentRemove(
   value: UnknownRecord,
 ): AttachmentRemoveMessage | undefined {
   if (
-    !hasExactKeys(value, ['type', 'sessionId', 'attachmentId']) ||
+    !hasExactKeys(value, ['type', 'sessionId', 'attachmentId'], ['stage']) ||
     !isId(value.sessionId) ||
-    !isId(value.attachmentId)
+    !isId(value.attachmentId) ||
+    !hasValidStage(value)
   ) {
     return undefined;
   }
@@ -935,6 +977,7 @@ function parseAttachmentRemove(
     type: 'attachment.remove',
     sessionId: value.sessionId,
     attachmentId: value.attachmentId,
+    ...stageOf(value),
   };
 }
 
@@ -942,9 +985,10 @@ function parseAttachmentAddPath(
   value: UnknownRecord,
 ): AttachmentAddPathMessage | undefined {
   if (
-    !hasExactKeys(value, ['type', 'sessionId', 'path']) ||
+    !hasExactKeys(value, ['type', 'sessionId', 'path'], ['stage']) ||
     !isId(value.sessionId) ||
-    !isSafeWorkspaceRelativePath(value.path)
+    !isSafeWorkspaceRelativePath(value.path) ||
+    !hasValidStage(value)
   ) {
     return undefined;
   }
@@ -953,7 +997,39 @@ function parseAttachmentAddPath(
     type: 'attachment.addPath',
     sessionId: value.sessionId,
     path: value.path,
+    ...stageOf(value),
   };
+}
+
+function parseEditStageBegin(
+  value: UnknownRecord,
+): EditStageBeginMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'messageId']) ||
+    !isId(value.sessionId) ||
+    !isId(value.messageId)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'editStage.begin',
+    sessionId: value.sessionId,
+    messageId: value.messageId,
+  };
+}
+
+function parseEditStageCancel(
+  value: UnknownRecord,
+): EditStageCancelMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'editStage.cancel', sessionId: value.sessionId };
 }
 
 function parseWorkspaceSearchFiles(
