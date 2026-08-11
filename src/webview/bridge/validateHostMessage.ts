@@ -20,7 +20,11 @@ import {
   MAX_PERMISSION_RISK_NOTE_LENGTH,
   MAX_PERMISSION_TOOLS,
   MAX_PERMISSION_TOOL_NAME_LENGTH,
+  MAX_ARCHIVED_SESSION_ITEMS,
   MAX_SESSION_CATALOG_ITEMS,
+  MAX_SESSION_SEARCH_QUERY_LENGTH,
+  MAX_SESSION_SEARCH_RESULTS,
+  MAX_SESSION_SEARCH_SNIPPET_LENGTH,
   MAX_SESSION_TITLE_LENGTH,
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_MCP_NAME_LENGTH,
@@ -61,6 +65,7 @@ import {
   TRANSCRIPT_THINKING_STATUSES,
   TRANSCRIPT_TOOL_STATUSES,
   TURN_STATUSES,
+  type ArchivedSessionSummary,
   type AskUserInteractionRequest,
   type AskUserQuestion,
   type AttachmentKind,
@@ -77,8 +82,11 @@ import {
   type ModelCatalogItem,
   type ModelCatalogState,
   type SessionAutonomyLevel,
+  type SessionArchivedState,
   type SessionCatalogState,
   type SessionCatalogStatus,
+  type SessionSearchHit,
+  type SessionSearchState,
   type SessionContextState,
   type SessionInteractionMode,
   type SessionReasoningEffort,
@@ -187,6 +195,10 @@ export function readHostMessage(
         return parseSessionCommandsMessage(value);
       case 'mcp.auth':
         return parseMcpAuth(value);
+      case 'session.archived':
+        return parseSessionArchivedMessage(value);
+      case 'session.searchResults':
+        return parseSessionSearchMessage(value);
       case 'session.attachments':
         return parseSessionAttachmentsMessage(value);
       case 'workspace.files':
@@ -1891,6 +1903,206 @@ function parseSessionSummary(value: unknown): SessionSummary | undefined {
     modifiedTime: value.modifiedTime,
     active: value.active,
     isFavorite: value.isFavorite === true,
+  };
+}
+
+function parseSessionArchivedMessage(
+  value: UnknownRecord,
+):
+  | Extract<HostToWebviewMessage, { type: 'session.archived' }>
+  | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sequence', 'archived']) ||
+    !isSequence(value.sequence)
+  ) {
+    return undefined;
+  }
+  const archived = parseSessionArchivedState(value.archived);
+  return archived === undefined
+    ? undefined
+    : {
+        type: 'session.archived',
+        sequence: value.sequence,
+        archived,
+      };
+}
+
+function parseSessionArchivedState(
+  value: unknown,
+): SessionArchivedState | undefined {
+  if (!isStrictRecord(value)) {
+    return undefined;
+  }
+  const status = readStringDataProperty(value, 'status');
+  if (
+    status !== 'loading' &&
+    status !== 'ready' &&
+    status !== 'error'
+  ) {
+    return undefined;
+  }
+  if (
+    !hasExactKeys(
+      value,
+      status === 'error'
+        ? ['status', 'items', 'message']
+        : ['status', 'items'],
+    ) ||
+    !isExactArray(value.items, 0, MAX_ARCHIVED_SESSION_ITEMS) ||
+    (status === 'error' &&
+      !isBoundedString(value.message, MAX_STRING_LENGTH))
+  ) {
+    return undefined;
+  }
+  const items: ArchivedSessionSummary[] = [];
+  const ids = new Set<string>();
+  for (const itemValue of value.items) {
+    const item = parseArchivedSessionSummary(itemValue);
+    if (item === undefined || ids.has(item.id)) {
+      return undefined;
+    }
+    ids.add(item.id);
+    items.push(item);
+  }
+  return status === 'error'
+    ? { status: 'error', items, message: value.message as string }
+    : status === 'loading'
+      ? { status: 'loading', items }
+      : { status: 'ready', items };
+}
+
+function parseArchivedSessionSummary(
+  value: unknown,
+): ArchivedSessionSummary | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, [
+      'id',
+      'title',
+      'modifiedTime',
+      'archivedTime',
+    ]) ||
+    !isId(value.id) ||
+    !isBoundedString(value.title, MAX_SESSION_TITLE_LENGTH) ||
+    hasControlCharacter(value.title) ||
+    !isIsoDate(value.modifiedTime) ||
+    !isIsoDate(value.archivedTime)
+  ) {
+    return undefined;
+  }
+  return {
+    id: value.id,
+    title: value.title,
+    modifiedTime: value.modifiedTime,
+    archivedTime: value.archivedTime,
+  };
+}
+
+function parseSessionSearchMessage(
+  value: UnknownRecord,
+):
+  | Extract<HostToWebviewMessage, { type: 'session.searchResults' }>
+  | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sequence', 'search']) ||
+    !isSequence(value.sequence)
+  ) {
+    return undefined;
+  }
+  const search = parseSessionSearchState(value.search);
+  return search === undefined
+    ? undefined
+    : {
+        type: 'session.searchResults',
+        sequence: value.sequence,
+        search,
+      };
+}
+
+function parseSessionSearchState(
+  value: unknown,
+): SessionSearchState | undefined {
+  if (!isStrictRecord(value)) {
+    return undefined;
+  }
+  const status = readStringDataProperty(value, 'status');
+  if (status !== 'ready' && status !== 'error') {
+    return undefined;
+  }
+  const query = readStringDataProperty(value, 'query');
+  if (
+    query === undefined ||
+    query.length === 0 ||
+    query.length > MAX_SESSION_SEARCH_QUERY_LENGTH ||
+    hasControlCharacter(query)
+  ) {
+    return undefined;
+  }
+
+  if (status === 'error') {
+    if (
+      !hasExactKeys(value, ['status', 'query', 'items', 'message']) ||
+      !isExactArray(value.items, 0, 0) ||
+      !isBoundedString(value.message, MAX_STRING_LENGTH)
+    ) {
+      return undefined;
+    }
+    return {
+      status: 'error',
+      query,
+      items: [],
+      message: value.message as string,
+    };
+  }
+
+  if (
+    !hasExactKeys(value, ['status', 'query', 'items']) ||
+    !isExactArray(value.items, 0, MAX_SESSION_SEARCH_RESULTS)
+  ) {
+    return undefined;
+  }
+  const items: SessionSearchHit[] = [];
+  const ids = new Set<string>();
+  for (const itemValue of value.items) {
+    const item = parseSessionSearchHit(itemValue);
+    if (item === undefined || ids.has(item.id)) {
+      return undefined;
+    }
+    ids.add(item.id);
+    items.push(item);
+  }
+  return { status: 'ready', query, items };
+}
+
+function parseSessionSearchHit(
+  value: unknown,
+): SessionSearchHit | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, [
+      'id',
+      'title',
+      'modifiedTime',
+      'snippet',
+    ]) ||
+    !isId(value.id) ||
+    !isBoundedString(value.title, MAX_SESSION_TITLE_LENGTH) ||
+    hasControlCharacter(value.title) ||
+    (value.modifiedTime !== null && !isIsoDate(value.modifiedTime)) ||
+    (value.snippet !== null &&
+      (!isNonEmptyBoundedString(
+        value.snippet,
+        MAX_SESSION_SEARCH_SNIPPET_LENGTH,
+      ) ||
+        hasControlCharacter(value.snippet)))
+  ) {
+    return undefined;
+  }
+  return {
+    id: value.id,
+    title: value.title,
+    modifiedTime: value.modifiedTime,
+    snippet: value.snippet,
   };
 }
 

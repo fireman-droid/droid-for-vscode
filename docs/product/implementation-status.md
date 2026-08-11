@@ -2,7 +2,7 @@
 
 > 本文档是 DroidVisX 当前实现范围的持续更新台账，用来区分“已经接入产品的功能”“部分实现”“仅能力声明/探测”以及“尚未实现”。
 >
-> 最后核对日期：2026-08-11
+> 最后核对日期：2026-08-12
 >
 > 核对对象：当前工作区源码、Bridge、Extension Host、Droid Runtime 适配、Webview、测试、VSIX 与 Cursor 安装状态
 
@@ -226,6 +226,25 @@ tool/toolUseId/命令原文，见第 10 节）。Tool 行的
 `SessionSummary` 附带 `isFavorite`，抽屉列表按 Favorites/Recent
 两组渲染（无收藏时不显示组标签）。Session Delete 无任何 API 保持
 不做；Archive 留待 daemon 路径。
+
+2026-08-12 凌晨追加 daemon Phase 1 只读 sidecar（归档/取消归档/
+内容搜索）：Extension 激活后按需懒启动一个私有 `droid daemon`
+（`--parent-pid` 绑定扩展宿主进程、OS 动态分配端口、退出时
+Windows `taskkill /T /F` 结束进程树），凭据只经公开函数
+`readFactoryAccessCredential()` 读取并直接传给 SDK
+`connectToDaemon`，token 不落盘、不进日志、不进 Bridge。新增
+Bridge 消息 `session.archive` / `session.unarchive` /
+`sessions.archivedRefresh` / `session.search`（双侧校验对称，含
+敌对输入用例）与回发状态 `session.archived` /
+`session.searchResults`。会话抽屉：非活跃行新增归档按钮（活跃
+Session 在 Host 侧拒绝归档）、底部新增可折叠 “Archived” 区
+（首次展开懒加载，行内 Restore 按钮取消归档）、搜索框回车触发
+daemon 全量内容搜索（`Content matches` 区显示标题/片段/时间，
+本工作区目录内的结果可点击切换，异工作区结果只读展示）。
+`DaemonSessionCatalog` 客户端按 cwd/repoRoot 过滤归档列表、
+标题与片段经共享 sanitize 有界投影。执行链路完全不变，daemon
+连接失败（未登录/凭据不可读/连接失败）只影响归档与搜索并以
+安全诊断回报。daemon 作为执行路径（Phase 2/3）仍未实现。
 
 同日追加长会话性能与卡死修复（用户反馈"页面一点击就卡死、无法
 发话、恢复对话慢"）：（1）Thinking 行展开从全局共享状态改为每行
@@ -641,8 +660,8 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
 | Session Settings 与 Context | Runtime、Host、Bridge v2、Mode/Autonomy/Model/Reasoning 更新、Context 使用进度、固定暖色响应式 UI、测试、VSIX 和安装均已完成 | 用户在真实 Cursor 中最终可见验收                                 |
 | Retry                       | 关闭并重新创建或恢复 Runtime                                                                                                 | 不会重新发送失败 Prompt，也不是消息级 Regenerate/Reload          |
 | CLI/连接诊断                | CLI 不存在、工作区无效、未信任和初始化失败提示                                                                               | 实际登录状态、登录操作、版本兼容 UI、账户状态、升级入口          |
-| Session 搜索                | 在最多 50 条本地结果中按标题或 ID 过滤                                                                                       | daemon 全量搜索、内容搜索、分页、排序和筛选                      |
-| Session 生命周期            | List、Refresh、New、Select、Resume、活跃 Session Rename、编辑重问触发的 Rewind Fork、显式 Fork、Compact、任意行 Favorite（CLI 私有 `.favorites` 文件契约，非官方 API） | Archive（等 daemon 路径）、Delete（无任何 API，fail closed）     |
+| Session 搜索                | 本地按标题或 ID 过滤；回车触发 daemon 全量内容搜索（≤20 条结果，标题/片段/时间投影，工作区内结果可点击切换）                 | 分页、排序和筛选                                                 |
+| Session 生命周期            | List、Refresh、New、Select、Resume、活跃 Session Rename、编辑重问触发的 Rewind Fork、显式 Fork、Compact、任意行 Favorite（CLI 私有 `.favorites` 文件契约，非官方 API）、非活跃行 Archive/Unarchive（daemon 只读 sidecar） | Delete（无任何 API，fail closed）                                |
 | Session 历史                | 文本、Thinking、Tool 生命周期                                                                                                | 历史 Image、Document 和未知 Block 会被省略并标记为 partial       |
 | Tool 展示                   | 语义动作、技术 Tool 名、有界进度计数/类别、生命周期和实时观察到的真实耗时、文件修改类 Tool 的工作区相对路径 chip（点击打开原生 Diff）；不显示原始 Call ID | 参数、输出、结果、增删行统计、Apply/Open 操作                    |
 | 消息操作                    | Copy、Reuse in Composer、双击内联编辑并从该消息 Rewind 重问、最后一条回答 Regenerate、编辑器内 `getRewindInfo` 文件影响提示与可选文件恢复 | Rewind 冲突检测、Turn Envelope                                   |
@@ -691,8 +710,6 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
 
 - 目录级 Context 源与 `@`/Symbol 引用（图片/PDF/文本附件、编辑器与
   选区附件、Skills 与 MCP 浏览启停已生产接通）
-- Session Archive（Rename、编辑重问 Rewind、显式 Fork 和 Compact
-  已生产接通）
 - Mission Mode 和 Events
 - Worktree Session Creation
 
@@ -700,13 +717,16 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
 
 ### 运行架构
 
-- [ ] daemon 作为主要运行路径
-- [ ] daemon 连接和认证
-- [ ] daemon 生命周期管理
-- [ ] daemon 失败时回退 Node subprocess
+- [ ] daemon 作为主要运行路径（执行链路，Phase 2）
+- [x] daemon 连接和认证（Phase 1 只读 sidecar：`readFactoryAccessCredential()`
+      + SDK `connectToDaemon`，认证失败分类为安全诊断）
+- [x] daemon 生命周期管理（Phase 1 私有模式：`--parent-pid` 绑定、
+      动态端口、deactivate 时结束进程树；Phase 3 脱管存活未实现）
+- [ ] daemon 失败时回退 Node subprocess（执行链路尚未迁移，无需回退）
 - [ ] Capability Gate 接入 Extension 的安全产品门控
 
-当前生产代码只使用 Node SDK `ProcessTransport`。
+当前生产执行链路只使用 Node SDK `ProcessTransport`；daemon 仅作为
+归档/取消归档/内容搜索的只读 sidecar。
 
 ### 动态 Composer
 
@@ -805,7 +825,9 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
       `authenticateMcpServer` + auth 通知，系统浏览器完成 OAuth）
 - [ ] Custom Droids
 - [x] Session Rename（活跃 Session 内联重命名）
-- [ ] Session Archive / Unarchive
+- [x] Session Archive / Unarchive（daemon 只读 sidecar：非活跃行
+      归档按钮 + 抽屉底部 “Archived” 折叠区懒加载与 Restore；
+      活跃 Session 拒绝归档）
 - [ ] Session Delete
 - [x] Session Favorite（任意行星标切换 + Favorites/Recent 分组；
       持久化为 CLI 私有 `~/.factory/sessions/.favorites` JSON 数组，
@@ -919,11 +941,53 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `verify:vsix` 与 `cursor --install-extension --force` 均成功；
   版本号仍为 `0.0.0`，现有窗口需 Reload Window（或完整重启）后
   加载新 Bundle
+- 2026-08-12 凌晨打包并安装含 **daemon Phase 1 只读 sidecar 切片**
+  （归档/取消归档/内容搜索）的构建：`dist/droidvisx.vsix`
+  617,098 字节（9 files, 602.63 KB），SHA-256
+  `9AE097FCB0E185CA544CDC5A7D65A90649DCCBF75CF6A83A9B5EC046FAFD3840`，
+  `npx vsce package --no-dependencies` 与
+  `cursor --install-extension --force` 均成功；Extension Bundle
+  因引入 SDK daemon 客户端增至约 1.0 MB（`ws` 的可选原生加速器
+  `bufferutil` / `utf-8-validate` 保持 external，`ws` 运行时以
+  try/catch 回退 JS 实现）；版本号仍为 `0.0.0`，现有窗口需
+  Reload Window（或完整重启）后加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- daemon Phase 1 只读 sidecar 切片（2026-08-12 凌晨）：Bridge 新增
+  `session.archive` / `session.unarchive` / `sessions.archivedRefresh`
+  / `session.search` 入站消息与 `session.archived` /
+  `session.searchResults` 回发状态（双侧校验对称，查询长度/控制
+  字符/条目上限/ISO 时间敌对输入用例齐备）；Runtime 新增
+  `daemonLifecycle.ts`（注入式 spawn/端口/等待/杀树依赖单测）、
+  `daemonConnection.ts`（not-logged-in / credentials-unreadable /
+  connect-failed 分类、auth 错误回调置 unhealthy、dispose 断连
+  单测）、`DaemonSessionCatalog.ts`（archive/unarchive 委托、
+  listArchived 的 cwd/repoRoot 过滤与标题 sanitize、search 的
+  片段截断与标题兜底单测）；Host `ChatController` 新增四个
+  handler 单测（成功路径、活跃 Session 拒绝归档、目录外
+  Session 拒绝、runtime 不支持、daemon 不可用诊断、错误文案
+  不外泄内部细节）；Webview store reducer 的 archived /
+  sessionSearch 状态跨 host.snapshot 保留用例、SessionDrawer
+  归档/懒加载/恢复/回车搜索/本地目录过滤用例。
+  `pnpm run typecheck` 三个 tsconfig 全部通过；`pnpm run test`
+  39 files / 815 tests 全部通过；`pnpm run build`（esbuild 外部
+  依赖断言更新为允许 `bufferutil` / `utf-8-validate`）、
+  `npx vsce package --no-dependencies`（602.63 KB）、
+  `cursor --install-extension --force` 均成功；无头 Chrome 冒烟
+  `artifacts/smoke-daemon-drawer.mjs`（配
+  `daemon-drawer-harness.html` 假 Host 回应真实 Bundle）实测：
+  展开 “Archived” 首次懒加载发出 1 次 `sessions.archivedRefresh`
+  并渲染 1 条归档行（含 Restore 按钮）；搜索框输入回车发出
+  `{type:'session.search', query:'daemon'}` 并渲染 2 条
+  Content matches（目录内命中为可点击 button、异工作区命中为
+  只读 div 带提示）；点击非活跃行归档按钮发出
+  `{type:'session.archive', sessionId:'session-3'}`，该行从
+  Recent 组消失并出现在 Archived (2) 中；全程无横向溢出，
+  verdict pass。真实 daemon 端到端（真实 CLI 登录态下归档往返）
+  与真实 Cursor 可见验收等待用户 Reload Window 后完成
 - 收藏与分组切片（2026-08-11 深夜，V1 #1）：Bridge 新增
   `session.favorite` 消息（双侧校验对称，含敌对输入用例）与
   `SessionSummary.isFavorite` 字段（缺省安全默认 false）；Runtime 新增
@@ -1160,7 +1224,9 @@ toolCallId 重复白屏修复与 AppErrorBoundary、污染检查点尾段复活�
 
 daemon 化 —— [`daemon-architecture-design.md`](./daemon-architecture-design.md)
 + [`daemon-implementation-plan.md`](./daemon-implementation-plan.md)。
-见 HANDOVER 第 7 节。
+见 HANDOVER 第 7 节。Phase 1（只读 sidecar：归档/取消归档/内容
+搜索）已于 2026-08-12 凌晨完成（见验证状态）；Phase 2（执行链路
+迁移）与 Phase 3（Reload 存活）未开始。
 
 ### 第一档与恢复提速的关系
 

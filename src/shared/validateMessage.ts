@@ -21,6 +21,7 @@ import {
   SESSION_INTERACTION_MODES,
   SESSION_REASONING_EFFORTS,
   MAX_FILE_SEARCH_QUERY_LENGTH,
+  MAX_SESSION_SEARCH_QUERY_LENGTH,
   type AskUserAnswer,
   type AskUserRespondMessage,
   type AttachmentAddEditorMessage,
@@ -40,9 +41,13 @@ import {
   type PermissionRespondMessage,
   type RewindInfoRequestMessage,
   type RuntimeRetryMessage,
+  type SessionArchiveMessage,
   type SessionCompactMessage,
   type SessionContextRefreshMessage,
   type SessionFavoriteMessage,
+  type SessionSearchMessage,
+  type SessionUnarchiveMessage,
+  type SessionsArchivedRefreshMessage,
   type SessionForkMessage,
   type SessionNewMessage,
   type SessionRenameMessage,
@@ -107,6 +112,14 @@ export function parseWebviewMessage(
         return parseSessionRename(value);
       case 'session.favorite':
         return parseSessionFavorite(value);
+      case 'session.archive':
+        return parseSessionArchive(value);
+      case 'session.unarchive':
+        return parseSessionUnarchive(value);
+      case 'sessions.archivedRefresh':
+        return parseSessionsArchivedRefresh(value);
+      case 'session.search':
+        return parseSessionSearch(value);
       case 'session.context.refresh':
         return parseSessionContextRefresh(value);
       case 'session.compact':
@@ -470,6 +483,58 @@ function parseSessionFavorite(
     sessionId: value.sessionId,
     favorite: value.favorite,
   };
+}
+
+function parseSessionArchive(
+  value: UnknownRecord,
+): SessionArchiveMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'session.archive', sessionId: value.sessionId };
+}
+
+function parseSessionUnarchive(
+  value: UnknownRecord,
+): SessionUnarchiveMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'session.unarchive', sessionId: value.sessionId };
+}
+
+function parseSessionsArchivedRefresh(
+  value: UnknownRecord,
+): SessionsArchivedRefreshMessage | undefined {
+  if (!hasExactKeys(value, ['type'])) {
+    return undefined;
+  }
+
+  return { type: 'sessions.archivedRefresh' };
+}
+
+function parseSessionSearch(
+  value: UnknownRecord,
+): SessionSearchMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'query']) ||
+    typeof value.query !== 'string' ||
+    value.query.trim().length === 0 ||
+    value.query.length > MAX_SESSION_SEARCH_QUERY_LENGTH ||
+    /[\u0000-\u001f\u007f]/.test(value.query)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'session.search', query: value.query };
 }
 
 function parseSessionContextRefresh(

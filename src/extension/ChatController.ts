@@ -1,4 +1,5 @@
 import type {
+  ArchivedSessionSummary,
   AttachmentKind,
   AttachmentSummary,
   CommandSummary,
@@ -23,6 +24,7 @@ import type {
   WebviewToHostMessage,
 } from '../shared/bridgeMessages';
 import {
+  MAX_ARCHIVED_SESSION_ITEMS,
   MAX_ATTACHMENT_NAME_LENGTH,
   MAX_BRIDGE_ID_LENGTH,
   MAX_FILE_SEARCH_RESULTS,
@@ -31,6 +33,7 @@ import {
   MAX_MODEL_DISPLAY_NAME_LENGTH,
   MAX_MODEL_ID_LENGTH,
   MAX_SESSION_CATALOG_ITEMS as SESSION_CATALOG_LIMIT,
+  MAX_SESSION_SEARCH_RESULTS,
   MAX_SESSION_TITLE_LENGTH as SESSION_TITLE_LIMIT,
   SESSION_AUTONOMY_LEVELS,
   SESSION_INTERACTION_MODES,
@@ -63,6 +66,8 @@ import type {
   SessionCatalogEntry,
   SessionCatalogResult,
 } from '../runtime/SessionCatalog';
+import { DaemonAvailabilityError } from '../runtime/daemon/daemonConnection';
+import type { DaemonSessionCatalog } from '../runtime/daemon/DaemonSessionCatalog';
 import {
   createUnavailableSessionHistoryLoader,
   type SessionHistoryLoader,
@@ -195,6 +200,19 @@ const FAVORITE_UNSUPPORTED_MESSAGE =
   'Session favorites are not available in this Droid runtime.';
 const FAVORITE_FAILED_MESSAGE =
   'The session favorite could not be saved.';
+const DAEMON_UNSUPPORTED_MESSAGE =
+  'Archive and search are not available in this Droid runtime.';
+const DAEMON_NOT_LOGGED_IN_MESSAGE =
+  'Sign in with the droid CLI to archive and search sessions.';
+const DAEMON_UNAVAILABLE_MESSAGE =
+  'The local droid daemon is unavailable.';
+const ARCHIVE_BLOCKED_MESSAGE =
+  'Wait for the current session operation to finish before archiving.';
+const ARCHIVE_ACTIVE_MESSAGE =
+  'Switch to another session before archiving the active one.';
+const ARCHIVE_FAILED_MESSAGE = 'The session could not be archived.';
+const UNARCHIVE_FAILED_MESSAGE =
+  'The session could not be restored from the archive.';
 const SKILLS_UNSUPPORTED_MESSAGE =
   'This Droid runtime does not expose skills.';
 const SKILLS_LOAD_FAILED_MESSAGE =
@@ -361,6 +379,7 @@ export class ChatController {
     private readonly recentCommands: RecentCommandsStore =
       new RecentCommandsStore(),
     private readonly diagnostics?: RuntimeDiagnosticSink,
+    private readonly daemonSessions?: () => Promise<DaemonSessionCatalog>,
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
@@ -492,6 +511,18 @@ export class ChatController {
           message.sessionId,
           message.favorite,
         );
+        return;
+      case 'session.archive':
+        this.handleSessionArchive(message.sessionId);
+        return;
+      case 'session.unarchive':
+        this.handleSessionUnarchive(message.sessionId);
+        return;
+      case 'sessions.archivedRefresh':
+        this.handleArchivedRefresh();
+        return;
+      case 'session.search':
+        this.handleSessionSearch(message.query);
         return;
       case 'session.context.refresh':
         this.handleContextRefresh(message.sessionId);
@@ -1853,6 +1884,251 @@ export class ChatController {
         };
       }
       this.emitSnapshot();
+    })();
+  }
+
+  /**
+   * Archives a non-active catalog session through the daemon sidecar,
+   * then closes the loop with a catalog re-list (the process-path
+   * `listSessions` skips archived sessions) and an archived-list
+   * refresh.
+   */
+  private handleSessionArchive(sessionId: string): void {
+    const workspace = this.getWorkspaceContext();
+    if (!isUsableWorkspace(workspace)) {
+      return;
+    }
+    if (this.sessionOperationInProgress || this.refreshInProgress) {
+      this.emitSessionDiagnostic(
+        'session-archive-blocked',
+        ARCHIVE_BLOCKED_MESSAGE,
+      );
+      return;
+    }
+    if (
+      this.sessions.status !== 'ready' ||
+      !this.hasCatalogSession(sessionId, workspace.cwd)
+    ) {
+      this.emitSessionDiagnostic(
+        'session-archive-invalid',
+        UNKNOWN_SESSION_MESSAGE,
+      );
+      return;
+    }
+    if (sessionId === this.sessionId) {
+      this.emitSessionDiagnostic(
+        'session-archive-active',
+        ARCHIVE_ACTIVE_MESSAGE,
+      );
+      return;
+    }
+    const daemonSessions = this.daemonSessions;
+    if (daemonSessions === undefined) {
+      this.emitSessionDiagnostic(
+        'session-archive-unsupported',
+        DAEMON_UNSUPPORTED_MESSAGE,
+      );
+      return;
+    }
+
+    this.refreshInProgress = true;
+    void (async () => {
+      let archived = false;
+      let failure = ARCHIVE_FAILED_MESSAGE;
+      try {
+        archived = await (await daemonSessions()).archive(sessionId);
+      } catch (error) {
+        failure = daemonFailureMessage(error, ARCHIVE_FAILED_MESSAGE);
+      }
+      if (this.disposed) {
+        return;
+      }
+      if (!archived) {
+        this.refreshInProgress = false;
+        this.emitSessionDiagnostic('session-archive-failed', failure);
+        return;
+      }
+      await this.reloadCatalogAfterDaemonWrite(workspace.cwd);
+    })();
+  }
+
+  /**
+   * Restores an archived session. The id is not required to be in the
+   * live catalog (archived sessions left it), only shape-validated by
+   * the Bridge.
+   */
+  private handleSessionUnarchive(sessionId: string): void {
+    const workspace = this.getWorkspaceContext();
+    if (!isUsableWorkspace(workspace)) {
+      return;
+    }
+    if (this.sessionOperationInProgress || this.refreshInProgress) {
+      this.emitSessionDiagnostic(
+        'session-unarchive-blocked',
+        ARCHIVE_BLOCKED_MESSAGE,
+      );
+      return;
+    }
+    const daemonSessions = this.daemonSessions;
+    if (daemonSessions === undefined) {
+      this.emitSessionDiagnostic(
+        'session-unarchive-unsupported',
+        DAEMON_UNSUPPORTED_MESSAGE,
+      );
+      return;
+    }
+
+    this.refreshInProgress = true;
+    void (async () => {
+      let restored = false;
+      let failure = UNARCHIVE_FAILED_MESSAGE;
+      try {
+        restored = await (await daemonSessions()).unarchive(sessionId);
+      } catch (error) {
+        failure = daemonFailureMessage(error, UNARCHIVE_FAILED_MESSAGE);
+      }
+      if (this.disposed) {
+        return;
+      }
+      if (!restored) {
+        this.refreshInProgress = false;
+        this.emitSessionDiagnostic('session-unarchive-failed', failure);
+        return;
+      }
+      await this.reloadCatalogAfterDaemonWrite(workspace.cwd);
+    })();
+  }
+
+  /**
+   * Shared readback after a successful daemon archive/unarchive:
+   * re-list the regular catalog, emit the snapshot, then refresh the
+   * archived section. Clears `refreshInProgress`.
+   */
+  private async reloadCatalogAfterDaemonWrite(
+    cwd: string,
+  ): Promise<void> {
+    const previousActive = this.activeSessionSummary();
+    const catalogGeneration = this.catalogGeneration;
+    const result = await this.loadCatalog(cwd);
+    this.refreshInProgress = false;
+    if (this.disposed) {
+      return;
+    }
+    if (
+      this.catalogGeneration === catalogGeneration &&
+      this.catalogCwd === cwd &&
+      this.isTargetWorkspaceCurrent(cwd) &&
+      result.status === 'ready'
+    ) {
+      this.sessions = this.withActiveSession(result, previousActive);
+      this.emitSnapshot();
+    }
+    await this.refreshArchived(cwd);
+  }
+
+  private handleArchivedRefresh(): void {
+    const workspace = this.getWorkspaceContext();
+    if (!isUsableWorkspace(workspace)) {
+      return;
+    }
+    void this.refreshArchived(workspace.cwd);
+  }
+
+  private async refreshArchived(cwd: string): Promise<void> {
+    const daemonSessions = this.daemonSessions;
+    if (daemonSessions === undefined) {
+      this.emit({
+        type: 'session.archived',
+        archived: {
+          status: 'error',
+          items: [],
+          message: DAEMON_UNSUPPORTED_MESSAGE,
+        },
+      });
+      return;
+    }
+    this.emit({
+      type: 'session.archived',
+      archived: { status: 'loading', items: [] },
+    });
+    let items: readonly ArchivedSessionSummary[];
+    try {
+      items = (await (await daemonSessions()).listArchived(cwd)).slice(
+        0,
+        MAX_ARCHIVED_SESSION_ITEMS,
+      );
+    } catch (error) {
+      if (!this.disposed) {
+        this.emit({
+          type: 'session.archived',
+          archived: {
+            status: 'error',
+            items: [],
+            message: daemonFailureMessage(
+              error,
+              DAEMON_UNAVAILABLE_MESSAGE,
+            ),
+          },
+        });
+      }
+      return;
+    }
+    if (this.disposed || !this.isTargetWorkspaceCurrent(cwd)) {
+      return;
+    }
+    this.emit({
+      type: 'session.archived',
+      archived: { status: 'ready', items },
+    });
+  }
+
+  private handleSessionSearch(query: string): void {
+    const workspace = this.getWorkspaceContext();
+    if (!isUsableWorkspace(workspace)) {
+      return;
+    }
+    const daemonSessions = this.daemonSessions;
+    if (daemonSessions === undefined) {
+      this.emit({
+        type: 'session.searchResults',
+        search: {
+          status: 'error',
+          query,
+          items: [],
+          message: DAEMON_UNSUPPORTED_MESSAGE,
+        },
+      });
+      return;
+    }
+    void (async () => {
+      try {
+        const matches = (
+          await (await daemonSessions()).search(query)
+        ).slice(0, MAX_SESSION_SEARCH_RESULTS);
+        if (this.disposed) {
+          return;
+        }
+        this.emit({
+          type: 'session.searchResults',
+          search: { status: 'ready', query, items: matches },
+        });
+      } catch (error) {
+        if (this.disposed) {
+          return;
+        }
+        this.emit({
+          type: 'session.searchResults',
+          search: {
+            status: 'error',
+            query,
+            items: [],
+            message: daemonFailureMessage(
+              error,
+              DAEMON_UNAVAILABLE_MESSAGE,
+            ),
+          },
+        });
+      }
     })();
   }
 
@@ -3975,8 +4251,8 @@ export class ChatController {
   private projectTranscript(message: HostToWebviewMessage): void {
     if (
       this.sessionId === null ||
-      message.sessionId !== this.sessionId ||
-      !isTranscriptProjection(message)
+      !isTranscriptProjection(message) ||
+      message.sessionId !== this.sessionId
     ) {
       return;
     }
@@ -4485,6 +4761,22 @@ function isUsableWorkspace(
   workspace: WorkspaceContext,
 ): workspace is { readonly cwd: string; readonly trusted: true } {
   return workspace.cwd !== null && workspace.trusted;
+}
+
+/**
+ * Maps daemon-path failures to fixed user-facing messages. Raw error
+ * text never crosses to the Bridge: SDK errors may embed payloads.
+ */
+function daemonFailureMessage(
+  error: unknown,
+  fallback: string,
+): string {
+  if (error instanceof DaemonAvailabilityError) {
+    return error.reason === 'not-logged-in'
+      ? DAEMON_NOT_LOGGED_IN_MESSAGE
+      : DAEMON_UNAVAILABLE_MESSAGE;
+  }
+  return fallback;
 }
 
 function isSameWorkspaceContext(

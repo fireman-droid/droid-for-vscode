@@ -2728,6 +2728,79 @@ body {
   cursor: default;
 }
 
+.dvx-session-row-static {
+  cursor: default;
+}
+
+.dvx-session-row-static:hover {
+  background: transparent;
+}
+
+.dvx-session-matches,
+.dvx-session-archived {
+  flex: 0 0 auto;
+  border-top: 1px solid rgb(0 0 0 / 6%);
+}
+
+.dvx-session-match {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+}
+
+.dvx-session-match time {
+  justify-self: start;
+}
+
+.dvx-session-match-remote {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.dvx-session-match-remote:hover {
+  background: transparent;
+}
+
+.dvx-session-match-snippet {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #7c7c7c;
+  font-size: 11px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dvx-session-archived-toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: #a1a1a1;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dvx-session-archived-toggle:hover {
+  color: var(--dvx-ink);
+}
+
+.dvx-session-archived-chevron {
+  display: inline-flex;
+  transition: transform 120ms ease;
+}
+
+.dvx-session-archived-chevron-open {
+  transform: rotate(90deg);
+}
+
 .dvx-session-rename-input {
   width: 100%;
   min-width: 0;

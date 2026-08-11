@@ -25,6 +25,8 @@ import type {
   SessionCatalogResult,
 } from '../runtime/SessionCatalog';
 import type { SessionHistoryLoader } from '../runtime/history/SessionHistory';
+import { DaemonAvailabilityError } from '../runtime/daemon/daemonConnection';
+import type { DaemonSessionCatalog } from '../runtime/daemon/DaemonSessionCatalog';
 import type { AttachmentSources } from './attachmentSources';
 import type {
   FileDiffOpener,
@@ -1812,6 +1814,339 @@ describe('ChatController', () => {
       });
     });
     expect(JSON.stringify(messages)).not.toContain('.favorites');
+  });
+
+  it('archives a session through the daemon and re-lists both catalogs', async () => {
+    let archived = false;
+    const daemon = {
+      archive: vi.fn(async () => {
+        archived = true;
+        return true;
+      }),
+      listArchived: vi.fn(async () =>
+        archived
+          ? [
+              {
+                id: 'session-2',
+                title: 'Session session-2',
+                modifiedTime: '2026-01-02T03:04:05.000Z',
+                archivedTime: '2026-01-03T03:04:05.000Z',
+              },
+            ]
+          : [],
+      ),
+    };
+    const catalog: SessionCatalog = {
+      listSessions: vi.fn(async () => ({
+        status: 'available' as const,
+        sessions: archived
+          ? [catalogEntry('session-1')]
+          : [catalogEntry('session-1'), catalogEntry('session-2')],
+      })),
+    };
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      catalog,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async () => daemon as unknown as DaemonSessionCatalog,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'session.archive',
+      sessionId: 'session-2',
+    });
+
+    await vi.waitFor(() => {
+      const archivedState = messages
+        .filter((message) => message.type === 'session.archived')
+        .at(-1);
+      expect(archivedState).toMatchObject({
+        archived: {
+          status: 'ready',
+          items: [expect.objectContaining({ id: 'session-2' })],
+        },
+      });
+    });
+    expect(daemon.archive).toHaveBeenCalledWith('session-2');
+    const snapshot = messages
+      .filter((message) => message.type === 'host.snapshot')
+      .at(-1);
+    expect(
+      snapshot?.sessions.items.some(({ id }) => id === 'session-2'),
+    ).toBe(false);
+  });
+
+  it('rejects archiving the active or unknown sessions and unsupported runtimes', async () => {
+    const daemon = { archive: vi.fn() };
+    const catalog = createCatalog([
+      catalogEntry('session-1'),
+      catalogEntry('session-2'),
+    ]);
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      catalog,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async () => daemon as unknown as DaemonSessionCatalog,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'session.archive',
+      sessionId: 'session-1',
+    });
+    expect(messages.at(-1)).toMatchObject({
+      type: 'runtime.diagnostic',
+      code: 'session-archive-active',
+    });
+
+    controller.handleMessage({
+      type: 'session.archive',
+      sessionId: 'forged-session',
+    });
+    expect(messages.at(-1)).toMatchObject({
+      type: 'runtime.diagnostic',
+      code: 'session-archive-invalid',
+    });
+    expect(daemon.archive).not.toHaveBeenCalled();
+
+    // Without a daemon provider the feature reports unsupported.
+    const second = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([
+        catalogEntry('session-1'),
+        catalogEntry('session-2'),
+      ]),
+    );
+    ready(second.controller);
+    await waitForConnected(second.messages);
+    second.controller.handleMessage({
+      type: 'session.archive',
+      sessionId: 'session-2',
+    });
+    expect(second.messages.at(-1)).toMatchObject({
+      type: 'runtime.diagnostic',
+      code: 'session-archive-unsupported',
+    });
+  });
+
+  it('maps daemon availability failures to fixed sign-in guidance', async () => {
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([
+        catalogEntry('session-1'),
+        catalogEntry('session-2'),
+      ]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async () => {
+        throw new DaemonAvailabilityError(
+          'not-logged-in',
+          'C:\\Users\\person\\.factory\\auth-detail-must-not-leak',
+        );
+      },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'session.archive',
+      sessionId: 'session-2',
+    });
+    await vi.waitFor(() => {
+      expect(messages.at(-1)).toMatchObject({
+        type: 'runtime.diagnostic',
+        code: 'session-archive-failed',
+        message: expect.stringContaining('Sign in'),
+      });
+    });
+    expect(JSON.stringify(messages)).not.toContain('auth-detail');
+  });
+
+  it('restores an archived session and refreshes the archived list', async () => {
+    let archived = true;
+    const daemon = {
+      unarchive: vi.fn(async () => {
+        archived = false;
+        return true;
+      }),
+      listArchived: vi.fn(async () =>
+        archived
+          ? [
+              {
+                id: 'session-9',
+                title: 'Session session-9',
+                modifiedTime: '2026-01-02T03:04:05.000Z',
+                archivedTime: '2026-01-03T03:04:05.000Z',
+              },
+            ]
+          : [],
+      ),
+    };
+    const catalog: SessionCatalog = {
+      listSessions: vi.fn(async () => ({
+        status: 'available' as const,
+        sessions: archived
+          ? [catalogEntry('session-1')]
+          : [catalogEntry('session-1'), catalogEntry('session-9')],
+      })),
+    };
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      catalog,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async () => daemon as unknown as DaemonSessionCatalog,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'session.unarchive',
+      sessionId: 'session-9',
+    });
+
+    await vi.waitFor(() => {
+      const archivedState = messages
+        .filter((message) => message.type === 'session.archived')
+        .at(-1);
+      expect(archivedState).toMatchObject({
+        archived: { status: 'ready', items: [] },
+      });
+    });
+    expect(daemon.unarchive).toHaveBeenCalledWith('session-9');
+    const snapshot = messages
+      .filter((message) => message.type === 'host.snapshot')
+      .at(-1);
+    expect(
+      snapshot?.sessions.items.some(({ id }) => id === 'session-9'),
+    ).toBe(true);
+  });
+
+  it('answers an archived refresh with loading then ready states', async () => {
+    const daemon = {
+      listArchived: vi.fn(async () => [
+        {
+          id: 'session-8',
+          title: 'Archived eight',
+          modifiedTime: '2026-01-02T03:04:05.000Z',
+          archivedTime: '2026-01-03T03:04:05.000Z',
+        },
+      ]),
+    };
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async () => daemon as unknown as DaemonSessionCatalog,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({ type: 'sessions.archivedRefresh' });
+
+    await vi.waitFor(() => {
+      const states = messages
+        .filter((message) => message.type === 'session.archived')
+        .map((message) => message.archived.status);
+      expect(states).toEqual(['loading', 'ready']);
+    });
+    expect(daemon.listArchived).toHaveBeenCalledWith('C:\\workspace');
+  });
+
+  it('answers content searches and keeps daemon errors generic', async () => {
+    const daemon = {
+      search: vi.fn(async (query: string) => [
+        {
+          id: 'session-1',
+          title: 'Hit one',
+          modifiedTime: '2026-01-02T03:04:05.000Z',
+          snippet: `matched ${query}`,
+        },
+      ]),
+    };
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async () => daemon as unknown as DaemonSessionCatalog,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'session.search',
+      query: 'refactor',
+    });
+    await vi.waitFor(() => {
+      expect(
+        messages
+          .filter((message) => message.type === 'session.searchResults')
+          .at(-1),
+      ).toMatchObject({
+        search: {
+          status: 'ready',
+          query: 'refactor',
+          items: [expect.objectContaining({ id: 'session-1' })],
+        },
+      });
+    });
+
+    // A failing daemon search returns a fixed message, not SDK detail.
+    daemon.search.mockRejectedValueOnce(
+      new Error('ws://127.0.0.1:12345 payload-must-not-leak'),
+    );
+    controller.handleMessage({
+      type: 'session.search',
+      query: 'second',
+    });
+    await vi.waitFor(() => {
+      expect(
+        messages
+          .filter((message) => message.type === 'session.searchResults')
+          .at(-1),
+      ).toMatchObject({
+        search: { status: 'error', query: 'second' },
+      });
+    });
+    expect(JSON.stringify(messages)).not.toContain('payload-must-not-leak');
   });
 
   it('lists skills on request and re-lists after a toggle', async () => {
@@ -4476,6 +4811,7 @@ function createController(
   fileDiff?: FileDiffOpener,
   changeStats?: ChangeStatsReader,
   externalUrl?: ExternalUrlOpener,
+  daemonSessions?: () => Promise<DaemonSessionCatalog>,
 ) {
   const controller = new ChatController(
     createRuntime,
@@ -4491,6 +4827,9 @@ function createController(
     fileDiff,
     changeStats,
     externalUrl,
+    undefined,
+    undefined,
+    daemonSessions,
   );
   const messages: HostToWebviewMessage[] = [];
   controller.subscribe((message) => {

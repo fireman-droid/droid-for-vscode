@@ -6,13 +6,20 @@ import {
   useState,
 } from 'react';
 
-import type {
-  SessionCatalogState,
-  SessionSummary,
+import {
+  MAX_SESSION_SEARCH_QUERY_LENGTH,
+  type SessionArchivedState,
+  type SessionCatalogState,
+  type SessionSearchState,
+  type SessionSummary,
 } from '../../shared/bridgeMessages';
 
 interface SessionDrawerProps {
   readonly sessions: SessionCatalogState;
+  readonly archived:
+    | SessionArchivedState
+    | { readonly status: 'idle'; readonly items: readonly [] };
+  readonly sessionSearch: SessionSearchState | null;
   readonly actionsDisabled: boolean;
   readonly onSelectSession: (sessionId: string) => void;
   readonly onRenameSession: (sessionId: string, title: string) => void;
@@ -21,6 +28,10 @@ interface SessionDrawerProps {
     sessionId: string,
     favorite: boolean,
   ) => void;
+  readonly onArchiveSession: (sessionId: string) => void;
+  readonly onUnarchiveSession: (sessionId: string) => void;
+  readonly onRefreshArchived: () => void;
+  readonly onSearchContent: (query: string) => void;
 }
 
 const MODIFIED_TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
@@ -30,14 +41,21 @@ const MODIFIED_TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
 
 export const SessionDrawer = memo(function SessionDrawer({
   sessions,
+  archived,
+  sessionSearch,
   actionsDisabled,
   onSelectSession,
   onRenameSession,
   onForkSession,
   onToggleFavorite,
+  onArchiveSession,
+  onUnarchiveSession,
+  onRefreshArchived,
+  onSearchContent,
 }: SessionDrawerProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [archivedOpen, setArchivedOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState(false);
   const pendingActionRef = useRef(false);
   const previousSessionsRef = useRef(sessions);
@@ -93,6 +111,30 @@ export const SessionDrawer = memo(function SessionDrawer({
     action();
   };
 
+  const submitContentSearch = (): void => {
+    const trimmed = query.trim();
+    if (
+      trimmed.length === 0 ||
+      trimmed.length > MAX_SESSION_SEARCH_QUERY_LENGTH
+    ) {
+      return;
+    }
+    onSearchContent(trimmed);
+  };
+
+  const toggleArchived = (): void => {
+    const next = !archivedOpen;
+    setArchivedOpen(next);
+    if (next && archived.status === 'idle') {
+      onRefreshArchived();
+    }
+  };
+
+  const catalogIds = useMemo(
+    () => new Set(sessions.items.map(({ id }) => id)),
+    [sessions.items],
+  );
+
   return (
     <>
       <button
@@ -124,9 +166,16 @@ export const SessionDrawer = memo(function SessionDrawer({
                 className="dvx-session-search"
                 type="search"
                 value={query}
-                placeholder="Search recent chats"
+                placeholder="Search chats · Enter searches content"
                 autoComplete="off"
+                maxLength={MAX_SESSION_SEARCH_QUERY_LENGTH}
                 onChange={(event) => setQuery(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    submitContentSearch();
+                  }
+                }}
               />
             </div>
             <div className="dvx-session-filter-row">
@@ -176,6 +225,9 @@ export const SessionDrawer = memo(function SessionDrawer({
                               onToggleFavorite(sessionId, favorite),
                             )
                           }
+                          onArchive={(sessionId) =>
+                            runOnce(() => onArchiveSession(sessionId))
+                          }
                         />
                       ))}
                     </ul>
@@ -193,6 +245,25 @@ export const SessionDrawer = memo(function SessionDrawer({
                     : 'Session history has not loaded yet.'}
               </p>
             ) : null}
+            {sessionSearch !== null ? (
+              <ContentMatches
+                search={sessionSearch}
+                catalogIds={catalogIds}
+                disabled={disabled}
+                onSelect={(sessionId) =>
+                  runOnce(() => onSelectSession(sessionId))
+                }
+              />
+            ) : null}
+            <ArchivedSection
+              archived={archived}
+              open={archivedOpen}
+              disabled={disabled}
+              onToggle={toggleArchived}
+              onUnarchive={(sessionId) =>
+                runOnce(() => onUnarchiveSession(sessionId))
+              }
+            />
           </aside>
         </>
       ) : null}
@@ -228,6 +299,170 @@ function groupSessions(
   return groups;
 }
 
+/**
+ * Daemon content-search results. Rows only navigate when the hit is
+ * part of the current workspace catalog; hits from other workspaces
+ * render as plain text.
+ */
+function ContentMatches({
+  search,
+  catalogIds,
+  disabled,
+  onSelect,
+}: {
+  readonly search: SessionSearchState;
+  readonly catalogIds: ReadonlySet<string>;
+  readonly disabled: boolean;
+  readonly onSelect: (sessionId: string) => void;
+}): React.JSX.Element {
+  return (
+    <section
+      className="dvx-session-group dvx-session-matches"
+      aria-label="Content matches"
+    >
+      <h3 className="dvx-session-group-label">
+        Content matches · “{search.query}”
+      </h3>
+      {search.status === 'error' ? (
+        <p className="dvx-session-status dvx-error-text" role="alert">
+          {search.message}
+        </p>
+      ) : search.items.length === 0 ? (
+        <p className="dvx-session-empty">No content matches.</p>
+      ) : (
+        <ul className="dvx-session-list">
+          {search.items.map((hit) => {
+            const selectable = catalogIds.has(hit.id);
+            const body = (
+              <>
+                <span className="dvx-session-row-title">
+                  {hit.title}
+                </span>
+                {hit.snippet !== null ? (
+                  <span className="dvx-session-match-snippet">
+                    {hit.snippet}
+                  </span>
+                ) : null}
+                {hit.modifiedTime !== null ? (
+                  <time dateTime={hit.modifiedTime}>
+                    {formatModifiedTime(hit.modifiedTime)}
+                  </time>
+                ) : null}
+              </>
+            );
+            return (
+              <li key={hit.id} className="dvx-session-row-shell">
+                {selectable ? (
+                  <button
+                    type="button"
+                    className="dvx-session-row dvx-session-match"
+                    disabled={disabled}
+                    onClick={() => onSelect(hit.id)}
+                  >
+                    {body}
+                  </button>
+                ) : (
+                  <div
+                    className="dvx-session-row dvx-session-match dvx-session-match-remote"
+                    title="This session belongs to another workspace"
+                  >
+                    {body}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** Collapsible list of archived sessions with restore actions. */
+function ArchivedSection({
+  archived,
+  open,
+  disabled,
+  onToggle,
+  onUnarchive,
+}: {
+  readonly archived:
+    | SessionArchivedState
+    | { readonly status: 'idle'; readonly items: readonly [] };
+  readonly open: boolean;
+  readonly disabled: boolean;
+  readonly onToggle: () => void;
+  readonly onUnarchive: (sessionId: string) => void;
+}): React.JSX.Element {
+  return (
+    <section
+      className="dvx-session-group dvx-session-archived"
+      aria-label="Archived sessions"
+    >
+      <button
+        type="button"
+        className="dvx-session-archived-toggle"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <span
+          aria-hidden="true"
+          className={
+            open
+              ? 'dvx-session-archived-chevron dvx-session-archived-chevron-open'
+              : 'dvx-session-archived-chevron'
+          }
+        >
+          <ChevronIcon />
+        </span>
+        Archived
+        {archived.status === 'ready' && archived.items.length > 0
+          ? ` (${archived.items.length})`
+          : ''}
+      </button>
+      {open ? (
+        archived.status === 'error' ? (
+          <p className="dvx-session-status dvx-error-text" role="alert">
+            {archived.message}
+          </p>
+        ) : archived.status === 'loading' ||
+          archived.status === 'idle' ? (
+          <p className="dvx-session-status" role="status">
+            Loading archived sessions…
+          </p>
+        ) : archived.items.length === 0 ? (
+          <p className="dvx-session-empty">No archived sessions.</p>
+        ) : (
+          <ul className="dvx-session-list">
+            {archived.items.map((session) => (
+              <li key={session.id} className="dvx-session-row-shell">
+                <div className="dvx-session-row dvx-session-row-static">
+                  <span className="dvx-session-row-title">
+                    {session.title}
+                  </span>
+                  <time dateTime={session.archivedTime}>
+                    {formatModifiedTime(session.archivedTime)}
+                  </time>
+                </div>
+                <button
+                  type="button"
+                  className="dvx-session-rename"
+                  aria-label={`Restore ${session.title} from the archive`}
+                  title="Restore from archive"
+                  disabled={disabled}
+                  onClick={() => onUnarchive(session.id)}
+                >
+                  <UnarchiveIcon />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
+    </section>
+  );
+}
+
 function CatalogStatus({
   sessions,
   pending,
@@ -261,6 +496,7 @@ function SessionRow({
   onRename,
   onFork,
   onToggleFavorite,
+  onArchive,
 }: {
   readonly session: SessionSummary;
   readonly disabled: boolean;
@@ -271,6 +507,7 @@ function SessionRow({
     sessionId: string,
     favorite: boolean,
   ) => void;
+  readonly onArchive: (sessionId: string) => void;
 }): React.JSX.Element {
   const [renaming, setRenaming] = useState(false);
   const [renameText, setRenameText] = useState(session.title);
@@ -361,6 +598,18 @@ function SessionRow({
       >
         <StarIcon filled={session.isFavorite} />
       </button>
+      {!session.active ? (
+        <button
+          type="button"
+          className="dvx-session-rename"
+          aria-label={`Archive ${session.title}`}
+          title="Archive session"
+          disabled={disabled}
+          onClick={() => onArchive(session.id)}
+        >
+          <ArchiveIcon />
+        </button>
+      ) : null}
       {session.active ? (
         <>
           <button
@@ -451,6 +700,83 @@ function RenameIcon(): React.JSX.Element {
         d="m11.1 2.6 2.3 2.3-7.6 7.6-3 .7.7-3 7.6-7.6Z"
         stroke="currentColor"
         strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ArchiveIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="2.25"
+        y="3"
+        width="11.5"
+        height="3"
+        rx="0.75"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <path
+        d="M3.25 6v6a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1V6M6.5 8.75h3"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function UnarchiveIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="2.25"
+        y="3"
+        width="11.5"
+        height="3"
+        rx="0.75"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <path
+        d="M3.25 6v6a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1V6M8 12v-4m0 0-1.75 1.75M8 8l1.75 1.75"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ChevronIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="m6 4 4 4-4 4"
+        stroke="currentColor"
+        strokeWidth="1.4"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

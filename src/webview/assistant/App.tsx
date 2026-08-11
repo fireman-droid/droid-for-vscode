@@ -481,6 +481,33 @@ export function App(): React.JSX.Element {
     },
     [vscode],
   );
+  const handleArchiveSession = useCallback(
+    (targetSessionId: string): void => {
+      post(vscode, {
+        type: 'session.archive',
+        sessionId: targetSessionId,
+      });
+    },
+    [vscode],
+  );
+  const handleUnarchiveSession = useCallback(
+    (targetSessionId: string): void => {
+      post(vscode, {
+        type: 'session.unarchive',
+        sessionId: targetSessionId,
+      });
+    },
+    [vscode],
+  );
+  const handleRefreshArchived = useCallback((): void => {
+    post(vscode, { type: 'sessions.archivedRefresh' });
+  }, [vscode]);
+  const handleSearchContent = useCallback(
+    (query: string): void => {
+      post(vscode, { type: 'session.search', query });
+    },
+    [vscode],
+  );
   const handleOpenFileDiff = useCallback(
     (path: string): void => {
       if (sessionId === null || connectionStatus !== 'connected') {
@@ -658,6 +685,10 @@ export function App(): React.JSX.Element {
           onRenameSession={handleRenameSession}
           onForkSession={handleForkSession}
           onToggleFavorite={handleToggleFavorite}
+          onArchiveSession={handleArchiveSession}
+          onUnarchiveSession={handleUnarchiveSession}
+          onRefreshArchived={handleRefreshArchived}
+          onSearchContent={handleSearchContent}
         />
         <DroidThread
           pending={showPending}
@@ -742,6 +773,10 @@ function Header({
   onRenameSession,
   onForkSession,
   onToggleFavorite,
+  onArchiveSession,
+  onUnarchiveSession,
+  onRefreshArchived,
+  onSearchContent,
 }: {
   readonly state: typeof initialAssistantWebviewState;
   readonly sessionActionsDisabled: boolean;
@@ -753,6 +788,10 @@ function Header({
     sessionId: string,
     favorite: boolean,
   ) => void;
+  readonly onArchiveSession: (sessionId: string) => void;
+  readonly onUnarchiveSession: (sessionId: string) => void;
+  readonly onRefreshArchived: () => void;
+  readonly onSearchContent: (query: string) => void;
 }): React.JSX.Element {
   const connectionLabel = formatConnectionStatus(state.connection.status);
   return (
@@ -782,11 +821,17 @@ function Header({
         </button>
         <SessionDrawer
           sessions={state.sessions}
+          archived={state.archived}
+          sessionSearch={state.sessionSearch}
           actionsDisabled={sessionActionsDisabled}
           onSelectSession={onSelectSession}
           onRenameSession={onRenameSession}
           onForkSession={onForkSession}
           onToggleFavorite={onToggleFavorite}
+          onArchiveSession={onArchiveSession}
+          onUnarchiveSession={onUnarchiveSession}
+          onRefreshArchived={onRefreshArchived}
+          onSearchContent={onSearchContent}
         />
       </div>
     </header>

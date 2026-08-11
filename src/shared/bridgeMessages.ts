@@ -316,6 +316,52 @@ export interface SessionFavoriteMessage {
   readonly favorite: boolean;
 }
 
+/**
+ * Archives a non-active catalog session through the local droid
+ * daemon (`daemon.archive_session`). Archived sessions leave the
+ * regular catalog and appear in the drawer's Archived section.
+ */
+export interface SessionArchiveMessage {
+  readonly type: 'session.archive';
+  readonly sessionId: string;
+}
+
+/**
+ * Restores an archived session through the local droid daemon
+ * (`daemon.unarchive_session`) so it reappears in the catalog.
+ */
+export interface SessionUnarchiveMessage {
+  readonly type: 'session.unarchive';
+  readonly sessionId: string;
+}
+
+/**
+ * Asks the host for the archived sessions of the current workspace.
+ * The host answers with a `session.archived` state message.
+ */
+export interface SessionsArchivedRefreshMessage {
+  readonly type: 'sessions.archivedRefresh';
+}
+
+/** Longest accepted cross-session content search query. */
+export const MAX_SESSION_SEARCH_QUERY_LENGTH = 256;
+/** Most sessions returned for one content search. */
+export const MAX_SESSION_SEARCH_RESULTS = 20;
+/** Longest snippet excerpt shown for one search hit. */
+export const MAX_SESSION_SEARCH_SNIPPET_LENGTH = 240;
+/** Most archived sessions listed in the drawer. */
+export const MAX_ARCHIVED_SESSION_ITEMS = 50;
+
+/**
+ * Searches message content across local sessions through the daemon
+ * (`daemon.search_sessions`). Results return via a
+ * `session.searchResults` state message.
+ */
+export interface SessionSearchMessage {
+  readonly type: 'session.search';
+  readonly query: string;
+}
+
 export interface SessionContextRefreshMessage {
   readonly type: 'session.context.refresh';
   readonly sessionId: string;
@@ -526,6 +572,10 @@ export type WebviewToHostMessage =
   | SessionNewMessage
   | SessionRenameMessage
   | SessionFavoriteMessage
+  | SessionArchiveMessage
+  | SessionUnarchiveMessage
+  | SessionsArchivedRefreshMessage
+  | SessionSearchMessage
   | SessionContextRefreshMessage
   | SessionCompactMessage
   | SessionForkMessage
@@ -569,6 +619,50 @@ export interface SessionCatalogState {
   readonly items: readonly SessionSummary[];
   readonly message?: string;
 }
+
+/** One archived session as reported by the daemon list. */
+export interface ArchivedSessionSummary {
+  readonly id: string;
+  readonly title: string;
+  readonly modifiedTime: string;
+  readonly archivedTime: string;
+}
+
+export type SessionArchivedState =
+  | {
+      readonly status: 'loading';
+      readonly items: readonly ArchivedSessionSummary[];
+    }
+  | {
+      readonly status: 'ready';
+      readonly items: readonly ArchivedSessionSummary[];
+    }
+  | {
+      readonly status: 'error';
+      readonly items: readonly ArchivedSessionSummary[];
+      readonly message: string;
+    };
+
+/** One session matched by a cross-session content search. */
+export interface SessionSearchHit {
+  readonly id: string;
+  readonly title: string;
+  readonly modifiedTime: string | null;
+  readonly snippet: string | null;
+}
+
+export type SessionSearchState =
+  | {
+      readonly status: 'ready';
+      readonly query: string;
+      readonly items: readonly SessionSearchHit[];
+    }
+  | {
+      readonly status: 'error';
+      readonly query: string;
+      readonly items: readonly [];
+      readonly message: string;
+    };
 
 export interface ConfirmedSessionSettings {
   readonly interactionMode: SessionInteractionMode;
@@ -951,6 +1045,28 @@ export interface SessionCommandsStateMessage {
   readonly commands: SessionCommandsState;
 }
 
+/**
+ * Archived sessions of the current workspace, listed through the
+ * daemon sidecar. Answers a `sessions.archivedRefresh` request and
+ * follows archive/unarchive operations.
+ */
+export interface SessionArchivedStateMessage {
+  readonly type: 'session.archived';
+  readonly sequence: number;
+  readonly archived: SessionArchivedState;
+}
+
+/**
+ * Result of one cross-session content search through the daemon
+ * sidecar. `query` echoes the request so the webview can drop stale
+ * responses.
+ */
+export interface SessionSearchStateMessage {
+  readonly type: 'session.searchResults';
+  readonly sequence: number;
+  readonly search: SessionSearchState;
+}
+
 /** Current staged attachments for the active session. */
 export interface SessionAttachmentsStateMessage {
   readonly type: 'session.attachments';
@@ -1160,6 +1276,8 @@ export type HostToWebviewMessage =
   | SessionMcpStateMessage
   | SessionCommandsStateMessage
   | McpAuthStateMessage
+  | SessionArchivedStateMessage
+  | SessionSearchStateMessage
   | SessionAttachmentsStateMessage
   | WorkspaceFilesMessage
   | RewindInfoStateMessage

@@ -18,6 +18,8 @@ import {
   MAX_PERMISSION_TOOLS,
   MAX_PERMISSION_TOOL_NAME_LENGTH,
   MAX_SESSION_CATALOG_ITEMS,
+  MAX_SESSION_SEARCH_QUERY_LENGTH,
+  MAX_SESSION_SEARCH_SNIPPET_LENGTH,
   MAX_SESSION_TITLE_LENGTH,
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_THINKING_TEXT_LENGTH,
@@ -369,6 +371,67 @@ describe('readHostMessage', () => {
       sequence: 1,
       sessionId: 'session-1',
       attachments: [],
+    },
+    {
+      type: 'session.archived',
+      sequence: 4,
+      archived: { status: 'loading', items: [] },
+    },
+    {
+      type: 'session.archived',
+      sequence: 4,
+      archived: {
+        status: 'ready',
+        items: [
+          {
+            id: 'session-9',
+            title: 'Archived investigation',
+            modifiedTime: '2026-08-01T10:00:00.000Z',
+            archivedTime: '2026-08-02T11:30:00.000Z',
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.archived',
+      sequence: 4,
+      archived: {
+        status: 'error',
+        items: [],
+        message: 'daemon unavailable',
+      },
+    },
+    {
+      type: 'session.searchResults',
+      sequence: 5,
+      search: {
+        status: 'ready',
+        query: 'refactor',
+        items: [
+          {
+            id: 'session-3',
+            title: 'Refactor store',
+            modifiedTime: '2026-08-01T10:00:00.000Z',
+            snippet: 'plan the refactor of the reducer',
+          },
+          {
+            id: 'session-4',
+            title: 'Untitled',
+            modifiedTime: null,
+            snippet: null,
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.searchResults',
+      sequence: 5,
+      search: {
+        status: 'error',
+        query: 'refactor',
+        items: [],
+        message: 'daemon unavailable',
+      },
     },
     {
       type: 'assistant.delta',
@@ -1114,6 +1177,169 @@ describe('readHostMessage', () => {
             id: 'model-a',
             displayName: 'Model A',
             supportedReasoningEfforts: [],
+          },
+        ],
+      },
+    },
+    { type: 'session.archived', sequence: 4 },
+    {
+      type: 'session.archived',
+      sequence: 4,
+      archived: { status: 'pending', items: [] },
+    },
+    {
+      type: 'session.archived',
+      sequence: 4,
+      archived: { status: 'loading', items: [], message: 'extra' },
+    },
+    {
+      type: 'session.archived',
+      sequence: 4,
+      archived: { status: 'error', items: [] },
+    },
+    {
+      type: 'session.archived',
+      sequence: 4,
+      archived: {
+        status: 'ready',
+        items: [
+          {
+            id: '',
+            title: 'Bad id',
+            modifiedTime: '2026-08-01T10:00:00.000Z',
+            archivedTime: '2026-08-02T11:30:00.000Z',
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.archived',
+      sequence: 4,
+      archived: {
+        status: 'ready',
+        items: [
+          {
+            id: 'session-9',
+            title: 'ctrl\u0007title',
+            modifiedTime: '2026-08-01T10:00:00.000Z',
+            archivedTime: '2026-08-02T11:30:00.000Z',
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.archived',
+      sequence: 4,
+      archived: {
+        status: 'ready',
+        items: [
+          {
+            id: 'session-9',
+            title: 'No archive time',
+            modifiedTime: '2026-08-01T10:00:00.000Z',
+            archivedTime: 'yesterday',
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.archived',
+      sequence: 4,
+      archived: {
+        status: 'ready',
+        items: [
+          {
+            id: 'session-9',
+            title: 'Duplicate',
+            modifiedTime: '2026-08-01T10:00:00.000Z',
+            archivedTime: '2026-08-02T11:30:00.000Z',
+          },
+          {
+            id: 'session-9',
+            title: 'Duplicate',
+            modifiedTime: '2026-08-01T10:00:00.000Z',
+            archivedTime: '2026-08-02T11:30:00.000Z',
+          },
+        ],
+      },
+    },
+    { type: 'session.searchResults', sequence: 5 },
+    {
+      type: 'session.searchResults',
+      sequence: 5,
+      search: { status: 'ready', query: '', items: [] },
+    },
+    {
+      type: 'session.searchResults',
+      sequence: 5,
+      search: {
+        status: 'ready',
+        query: 'q'.repeat(MAX_SESSION_SEARCH_QUERY_LENGTH + 1),
+        items: [],
+      },
+    },
+    {
+      type: 'session.searchResults',
+      sequence: 5,
+      search: {
+        status: 'error',
+        query: 'refactor',
+        items: [
+          {
+            id: 'session-3',
+            title: 'Should be empty on error',
+            modifiedTime: null,
+            snippet: null,
+          },
+        ],
+        message: 'daemon unavailable',
+      },
+    },
+    {
+      type: 'session.searchResults',
+      sequence: 5,
+      search: {
+        status: 'ready',
+        query: 'refactor',
+        items: [
+          {
+            id: 'session-3',
+            title: 'Snippet too long',
+            modifiedTime: null,
+            snippet: 's'.repeat(MAX_SESSION_SEARCH_SNIPPET_LENGTH + 1),
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.searchResults',
+      sequence: 5,
+      search: {
+        status: 'ready',
+        query: 'refactor',
+        items: [
+          {
+            id: 'session-3',
+            title: 'Snippet with newline',
+            modifiedTime: null,
+            snippet: 'line\nbreak',
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.searchResults',
+      sequence: 5,
+      search: {
+        status: 'ready',
+        query: 'refactor',
+        items: [
+          {
+            id: 'session-3',
+            title: 'Extra key',
+            modifiedTime: null,
+            snippet: null,
+            token: 'must-not-cross',
           },
         ],
       },

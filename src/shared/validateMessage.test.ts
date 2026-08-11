@@ -8,6 +8,7 @@ import {
   MAX_EDITED_SPEC_LENGTH,
   MAX_MODEL_ID_LENGTH,
   MAX_PERMISSION_OPTION_VALUE_LENGTH,
+  MAX_SESSION_SEARCH_QUERY_LENGTH,
   MAX_SESSION_TITLE_LENGTH,
   MAX_TURN_TEXT_LENGTH,
 } from './bridgeMessages';
@@ -103,6 +104,25 @@ describe('parseWebviewMessage', () => {
       type: 'session.favorite',
       sessionId: 'session-1',
       favorite: false,
+    },
+    {
+      type: 'session.archive',
+      sessionId: 'session-1',
+    },
+    {
+      type: 'session.unarchive',
+      sessionId: 'session-1',
+    },
+    {
+      type: 'sessions.archivedRefresh',
+    },
+    {
+      type: 'session.search',
+      query: 'refactor plan',
+    },
+    {
+      type: 'session.search',
+      query: 'q'.repeat(MAX_SESSION_SEARCH_QUERY_LENGTH),
     },
     {
       type: 'skills.refresh',
@@ -386,6 +406,28 @@ describe('parseWebviewMessage', () => {
       sessionId: 's'.repeat(MAX_BRIDGE_ID_LENGTH + 1),
       favorite: true,
     },
+    { type: 'session.archive', sessionId: '' },
+    { type: 'session.archive' },
+    { type: 'session.archive', sessionId: 'session-1', extra: true },
+    {
+      type: 'session.archive',
+      sessionId: 's'.repeat(MAX_BRIDGE_ID_LENGTH + 1),
+    },
+    { type: 'session.unarchive', sessionId: '' },
+    { type: 'session.unarchive' },
+    { type: 'session.unarchive', sessionId: 'session-1', extra: true },
+    { type: 'sessions.archivedRefresh', extra: true },
+    { type: 'session.search' },
+    { type: 'session.search', query: '' },
+    { type: 'session.search', query: '   ' },
+    {
+      type: 'session.search',
+      query: 'q'.repeat(MAX_SESSION_SEARCH_QUERY_LENGTH + 1),
+    },
+    { type: 'session.search', query: 'line\nbreak' },
+    { type: 'session.search', query: 'nul\u0000byte' },
+    { type: 'session.search', query: 'ok', extra: true },
+    { type: 'session.search', query: 42 },
     { type: 'session.context.refresh', sessionId: '' },
     { type: 'session.compact', sessionId: '' },
     { type: 'session.compact', sessionId: 'session-1', extra: true },

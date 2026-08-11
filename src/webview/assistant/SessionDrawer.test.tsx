@@ -4,7 +4,11 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { SessionCatalogState } from '../../shared/bridgeMessages';
+import type {
+  SessionArchivedState,
+  SessionCatalogState,
+  SessionSearchState,
+} from '../../shared/bridgeMessages';
 import { SessionDrawer } from './SessionDrawer';
 
 afterEach(cleanup);
@@ -31,17 +35,29 @@ const sessions: SessionCatalogState = {
   ],
 };
 
+function baseProps() {
+  return {
+    sessions,
+    archived: { status: 'idle', items: [] } as const,
+    sessionSearch: null,
+    actionsDisabled: false,
+    onSelectSession: vi.fn(),
+    onRenameSession: vi.fn(),
+    onForkSession: vi.fn(),
+    onToggleFavorite: vi.fn(),
+    onArchiveSession: vi.fn(),
+    onUnarchiveSession: vi.fn(),
+    onRefreshArchived: vi.fn(),
+    onSearchContent: vi.fn(),
+  };
+}
+
 describe('SessionDrawer', () => {
   it('uses an overlay affordance and keeps search entirely local', async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     render(
-      <SessionDrawer
-        sessions={sessions}
-        actionsDisabled={false}
-        onSelectSession={onSelect}
-        onRenameSession={vi.fn()}
-      />,
+      <SessionDrawer {...baseProps()} onSelectSession={onSelect} />,
     );
     const toggle = screen.getByRole('button', { name: 'Sessions' });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
@@ -64,7 +80,7 @@ describe('SessionDrawer', () => {
     expect(onSelect).not.toHaveBeenCalled();
 
     await user.click(
-      screen.getByRole('button', { name: /Previous refactor/ }),
+      screen.getByRole('button', { name: /^Previous refactor/ }),
     );
     expect(onSelect).toHaveBeenCalledOnce();
     expect(onSelect).toHaveBeenCalledWith('session-b');
@@ -72,18 +88,11 @@ describe('SessionDrawer', () => {
 
   it('gates session switching and closes with Escape', async () => {
     const user = userEvent.setup();
-    render(
-      <SessionDrawer
-        sessions={sessions}
-        actionsDisabled
-        onSelectSession={vi.fn()}
-        onRenameSession={vi.fn()}
-      />,
-    );
+    render(<SessionDrawer {...baseProps()} actionsDisabled />);
     await user.click(screen.getByRole('button', { name: 'Sessions' }));
     expect(
       screen.getByRole<HTMLButtonElement>('button', {
-        name: /Previous refactor/,
+        name: /^Previous refactor/,
       }).disabled,
     ).toBe(true);
 
@@ -97,12 +106,7 @@ describe('SessionDrawer', () => {
     const user = userEvent.setup();
     const onRename = vi.fn();
     render(
-      <SessionDrawer
-        sessions={sessions}
-        actionsDisabled={false}
-        onSelectSession={vi.fn()}
-        onRenameSession={onRename}
-      />,
+      <SessionDrawer {...baseProps()} onRenameSession={onRename} />,
     );
     await user.click(screen.getByRole('button', { name: 'Sessions' }));
 
@@ -143,11 +147,7 @@ describe('SessionDrawer', () => {
     const onToggleFavorite = vi.fn();
     render(
       <SessionDrawer
-        sessions={sessions}
-        actionsDisabled={false}
-        onSelectSession={vi.fn()}
-        onRenameSession={vi.fn()}
-        onForkSession={vi.fn()}
+        {...baseProps()}
         onToggleFavorite={onToggleFavorite}
       />,
     );
@@ -178,11 +178,8 @@ describe('SessionDrawer', () => {
     };
     render(
       <SessionDrawer
+        {...baseProps()}
         sessions={favorited}
-        actionsDisabled={false}
-        onSelectSession={vi.fn()}
-        onRenameSession={vi.fn()}
-        onForkSession={vi.fn()}
         onToggleFavorite={onToggleFavorite}
       />,
     );
@@ -208,5 +205,150 @@ describe('SessionDrawer', () => {
       }),
     );
     expect(onToggleFavorite).toHaveBeenCalledWith('session-b', false);
+  });
+
+  it('archives only non-active rows', async () => {
+    const user = userEvent.setup();
+    const onArchive = vi.fn();
+    render(
+      <SessionDrawer {...baseProps()} onArchiveSession={onArchive} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+
+    // The active session has no archive affordance.
+    const archives = screen.getAllByRole('button', {
+      name: /^Archive /,
+    });
+    expect(archives).toHaveLength(1);
+    expect(archives[0].getAttribute('aria-label')).toBe(
+      'Archive Previous refactor',
+    );
+
+    await user.click(archives[0]);
+    expect(onArchive).toHaveBeenCalledOnce();
+    expect(onArchive).toHaveBeenCalledWith('session-b');
+  });
+
+  it('loads the archived section lazily and restores from it', async () => {
+    const user = userEvent.setup();
+    const onRefreshArchived = vi.fn();
+    const onUnarchive = vi.fn();
+    const archived: SessionArchivedState = {
+      status: 'ready',
+      items: [
+        {
+          id: 'session-z',
+          title: 'Old spike',
+          modifiedTime: '2026-02-10T10:00:00.000Z',
+          archivedTime: '2026-02-11T10:00:00.000Z',
+        },
+      ],
+    };
+    const idle = render(
+      <SessionDrawer
+        {...baseProps()}
+        onRefreshArchived={onRefreshArchived}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+
+    // Expanding an idle section requests the archived list once.
+    await user.click(screen.getByRole('button', { name: /Archived/ }));
+    expect(onRefreshArchived).toHaveBeenCalledOnce();
+    expect(screen.getByText('Loading archived sessions…')).toBeTruthy();
+    idle.unmount();
+
+    render(
+      <SessionDrawer
+        {...baseProps()}
+        archived={archived}
+        onUnarchiveSession={onUnarchive}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Archived (1)' }),
+    );
+    expect(screen.getByText('Old spike')).toBeTruthy();
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Restore Old spike from the archive',
+      }),
+    );
+    expect(onUnarchive).toHaveBeenCalledOnce();
+    expect(onUnarchive).toHaveBeenCalledWith('session-z');
+  });
+
+  it('submits content searches with Enter and renders matches', async () => {
+    const user = userEvent.setup();
+    const onSearchContent = vi.fn();
+    const onSelect = vi.fn();
+    const sessionSearch: SessionSearchState = {
+      status: 'ready',
+      query: 'refactor',
+      items: [
+        {
+          id: 'session-b',
+          title: 'Previous refactor',
+          modifiedTime: '2026-02-19T09:00:00.000Z',
+          snippet: 'we should refactor the store',
+        },
+        {
+          id: 'session-remote',
+          title: 'Other workspace hit',
+          modifiedTime: null,
+          snippet: null,
+        },
+      ],
+    };
+    render(
+      <SessionDrawer
+        {...baseProps()}
+        sessionSearch={sessionSearch}
+        onSearchContent={onSearchContent}
+        onSelectSession={onSelect}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Search sessions' }),
+      '  refactor  {Enter}',
+    );
+    expect(onSearchContent).toHaveBeenCalledOnce();
+    expect(onSearchContent).toHaveBeenCalledWith('refactor');
+
+    const matches = screen.getByRole('region', {
+      name: 'Content matches',
+    });
+    expect(matches.textContent).toContain(
+      'we should refactor the store',
+    );
+    // Hits outside the current catalog render without a button.
+    expect(matches.textContent).toContain('Other workspace hit');
+    const matchButtons = matches.querySelectorAll('button');
+    expect(matchButtons).toHaveLength(1);
+
+    await user.click(matchButtons[0]);
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(onSelect).toHaveBeenCalledWith('session-b');
+  });
+
+  it('surfaces daemon search errors inside the matches section', async () => {
+    const user = userEvent.setup();
+    const sessionSearch: SessionSearchState = {
+      status: 'error',
+      query: 'refactor',
+      items: [],
+      message: 'The local droid daemon is unavailable.',
+    };
+    render(
+      <SessionDrawer {...baseProps()} sessionSearch={sessionSearch} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+    expect(
+      screen.getByText('The local droid daemon is unavailable.'),
+    ).toBeTruthy();
   });
 });

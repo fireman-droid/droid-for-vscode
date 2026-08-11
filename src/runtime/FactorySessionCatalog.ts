@@ -1,8 +1,8 @@
 import { listSessions } from '@factory/droid-sdk/node';
 
 import {
-  MAX_SESSION_CATALOG_ID_LENGTH,
-  MAX_SESSION_CATALOG_TITLE_LENGTH,
+  isSafeSessionIdentifier,
+  sanitizeSessionTitle,
   type SessionCatalog,
   type SessionCatalogEntry,
   type SessionCatalogResult,
@@ -95,7 +95,7 @@ function projectSessionMetadata(value: unknown): SessionCatalogEntry | null {
 
   const messageCount = value.messageCount;
   if (
-    !isSafeIdentifier(value.id) ||
+    !isSafeSessionIdentifier(value.id) ||
     typeof value.title !== 'string' ||
     typeof messageCount !== 'number' ||
     !Number.isSafeInteger(messageCount) ||
@@ -104,7 +104,7 @@ function projectSessionMetadata(value: unknown): SessionCatalogEntry | null {
     return null;
   }
 
-  const title = sanitizeTitle(value.title);
+  const title = sanitizeSessionTitle(value.title);
   const modifiedTime = projectDate(value.modifiedTime);
   const createdTime = projectDate(value.createdTime);
   if (!modifiedTime || !createdTime) {
@@ -119,27 +119,6 @@ function projectSessionMetadata(value: unknown): SessionCatalogEntry | null {
     createdTime,
     isFavorite: value.isFavorite === true,
   };
-}
-
-function sanitizeTitle(value: string): string {
-  const title = value
-    .replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, MAX_SESSION_CATALOG_TITLE_LENGTH)
-    .trim();
-
-  return title.length > 0 ? title : 'Untitled session';
-}
-
-function isSafeIdentifier(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= MAX_SESSION_CATALOG_ID_LENGTH &&
-    value.trim() === value &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
-  );
 }
 
 function projectDate(value: unknown): string | null {

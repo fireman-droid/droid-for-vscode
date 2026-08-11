@@ -59,6 +59,92 @@ function snapshot(
 }
 
 describe('assistantWebviewReducer', () => {
+  it('keeps archived and content-search state across snapshots', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(0),
+    });
+    expect(state.archived).toEqual({ status: 'idle', items: [] });
+    expect(state.sessionSearch).toBeNull();
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.archived',
+        sequence: 1,
+        archived: {
+          status: 'ready',
+          items: [
+            {
+              id: 'session-z',
+              title: 'Old spike',
+              modifiedTime: '2026-02-10T10:00:00.000Z',
+              archivedTime: '2026-02-11T10:00:00.000Z',
+            },
+          ],
+        },
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.searchResults',
+        sequence: 2,
+        search: {
+          status: 'ready',
+          query: 'spike',
+          items: [
+            {
+              id: 'session-z',
+              title: 'Old spike',
+              modifiedTime: null,
+              snippet: 'spike notes',
+            },
+          ],
+        },
+      },
+    });
+    expect(state.archived.items).toHaveLength(1);
+    expect(state.sessionSearch?.status).toBe('ready');
+
+    // A later snapshot for another session leaves both intact: they
+    // are workspace-level, not session-level.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(3, 'session-b'),
+    });
+    expect(state.archived.items).toHaveLength(1);
+    expect(state.sessionSearch?.query).toBe('spike');
+
+    // An archived refresh in flight keeps the last list visible.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.archived',
+        sequence: 4,
+        archived: { status: 'loading', items: [] },
+      },
+    });
+    expect(state.archived.status).toBe('loading');
+    expect(state.archived.items).toHaveLength(1);
+
+    // An error state replaces the list.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.archived',
+        sequence: 5,
+        archived: {
+          status: 'error',
+          items: [],
+          message: 'The local droid daemon is unavailable.',
+        },
+      },
+    });
+    expect(state.archived.status).toBe('error');
+    expect(state.archived.items).toHaveLength(0);
+  });
+
   it('carries tool file paths and appends one changes summary per turn', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',

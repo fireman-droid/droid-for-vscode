@@ -10,11 +10,17 @@ const buildId = new Date()
   .replace(/[-:]/gu, '')
   .slice(0, 15);
 
+// Optional native WebSocket accelerators referenced by the Droid
+// SDK's bundled `ws` (daemon client). They are not installed; `ws`
+// requires them inside try/catch and falls back to its JS
+// implementation, so leaving them external is safe.
+const optionalWsAddons = ['bufferutil', 'utf-8-validate'];
+
 const extensionResult = await build({
   entryPoints: ['src/extension/extension.ts'],
   outfile: 'dist/extension/extension.cjs',
   bundle: true,
-  external: ['vscode'],
+  external: ['vscode', ...optionalWsAddons],
   packages: 'bundle',
   platform: 'node',
   format: 'cjs',
@@ -56,7 +62,10 @@ const webviewResult = await build({
 
 assertExpectedExternals(extensionResult.metafile, {
   required: new Set(['vscode']),
-  allowed: (path) => path === 'vscode' || isBuiltin(path),
+  allowed: (path) =>
+    path === 'vscode' ||
+    isBuiltin(path) ||
+    optionalWsAddons.includes(path),
 });
 assertExpectedExternals(webviewResult.metafile, {
   required: new Set(),

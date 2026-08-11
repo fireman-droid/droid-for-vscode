@@ -5,9 +5,11 @@ import {
   type InteractionRequest,
   type McpAuthPhase,
   type ModelCatalogState,
+  type SessionArchivedState,
   type SessionCommandsState,
   type SessionContextState,
   type SessionMcpState,
+  type SessionSearchState,
   type SessionSettingsState,
   type SessionSkillsState,
   type SessionTranscriptItem,
@@ -65,6 +67,12 @@ export interface AssistantWebviewState {
     readonly requestId: string;
     readonly files: readonly string[];
   } | null;
+  /** Archived sessions load lazily; 'idle' means not requested yet. */
+  readonly archived:
+    | SessionArchivedState
+    | { readonly status: 'idle'; readonly items: readonly [] };
+  /** Latest daemon content-search result, or null before a search. */
+  readonly sessionSearch: SessionSearchState | null;
   /** Latest rewind file-impact info for the edit-resend editor. */
   readonly rewindInfo: {
     readonly messageId: string;
@@ -108,6 +116,8 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   mcpAuth: null,
   attachments: [],
   fileSearch: null,
+  archived: { status: 'idle', items: [] },
+  sessionSearch: null,
   rewindInfo: null,
   transcript: [],
   historyStatus: null,
@@ -201,6 +211,10 @@ export function assistantWebviewReducer(
           event.sessionId === state.sessionId ? state.attachments : [],
         fileSearch:
           event.sessionId === state.sessionId ? state.fileSearch : null,
+        // Archived list and content search are workspace-level, not
+        // session-level; they survive session switches.
+        archived: state.archived,
+        sessionSearch: state.sessionSearch,
         rewindInfo: null,
         transcript: event.transcript,
         historyStatus: event.historyStatus,
@@ -326,6 +340,22 @@ export function assistantWebviewReducer(
             attachments: event.attachments,
           }
         : advance(state, event.sequence);
+    case 'session.archived': {
+      // A refresh in flight sends 'loading' with no items; keep the
+      // current list visible until the fresh one arrives.
+      const archived =
+        event.archived.status === 'loading' &&
+        state.archived.items.length > 0
+          ? { status: 'loading' as const, items: state.archived.items }
+          : event.archived;
+      return { ...state, sequence: event.sequence, archived };
+    }
+    case 'session.searchResults':
+      return {
+        ...state,
+        sequence: event.sequence,
+        sessionSearch: event.search,
+      };
     case 'workspace.files':
       return event.sessionId === state.sessionId
         ? {
