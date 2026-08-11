@@ -6,6 +6,8 @@ import type {
   SessionCatalogState,
   SessionContextState,
   SessionContextStats,
+  McpServerSummary,
+  SessionMcpState,
   SessionSettingUpdateMessage,
   SessionSettingsState,
   SessionSkillsState,
@@ -31,6 +33,7 @@ import type {
   RuntimeModelCatalog,
   RuntimeModelCatalogItem,
   RuntimeSessionSettings,
+  RuntimeMcpServer,
   RuntimeSessionSettingUpdate,
   RuntimeSessionTarget,
   RuntimeSkill,
@@ -151,6 +154,12 @@ const SKILLS_LOAD_FAILED_MESSAGE =
   'Droid did not return the skill list. Retry from the skills panel.';
 const SKILL_TOGGLE_FAILED_MESSAGE =
   'Droid could not update that skill. The list may be stale; refresh it.';
+const MCP_UNSUPPORTED_MESSAGE =
+  'This Droid runtime does not expose MCP servers.';
+const MCP_LOAD_FAILED_MESSAGE =
+  'Droid did not return the MCP catalog. Retry from the MCP panel.';
+const MCP_TOGGLE_FAILED_MESSAGE =
+  'Droid could not update that MCP server. The list may be stale; refresh it.';
 const CONTEXT_READ_FAILED_MESSAGE =
   'Droid did not return context usage. Retry, then open DroidVisX Logs if this continues.';
 const MODEL_CATALOG_UNSUPPORTED_MESSAGE =
@@ -326,6 +335,16 @@ export class ChatController {
           message.sessionId,
           message.name,
           message.disabled,
+        );
+        return;
+      case 'mcp.refresh':
+        this.handleMcpRefresh(message.sessionId);
+        return;
+      case 'mcp.server.toggle':
+        this.handleMcpServerToggle(
+          message.sessionId,
+          message.name,
+          message.enabled,
         );
         return;
       case 'session.setting.update':
@@ -1312,6 +1331,144 @@ export class ChatController {
       type: 'session.skills',
       sessionId,
       skills,
+    });
+  }
+
+  private handleMcpRefresh(sessionId: string): void {
+    const runtime = this.runtime;
+    if (
+      sessionId !== this.sessionId ||
+      runtime === null ||
+      this.connection.status !== 'connected' ||
+      this.sessionOperationInProgress ||
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    if (typeof runtime.listMcpServers !== 'function') {
+      this.emitMcp(sessionId, {
+        status: 'unsupported',
+        items: [],
+        message: MCP_UNSUPPORTED_MESSAGE,
+      });
+      return;
+    }
+
+    this.emitMcp(sessionId, { status: 'loading', items: [] });
+    const generation = this.runtimeGeneration;
+    const cwd = this.activeRuntimeCwd!;
+    void runtime.listMcpServers().then(
+      (servers) => {
+        if (
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        this.emitMcp(sessionId, {
+          status: 'ready',
+          items: servers.map(projectMcpServerSummary),
+        });
+      },
+      () => {
+        if (
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        this.emitMcp(sessionId, {
+          status: 'error',
+          items: [],
+          message: MCP_LOAD_FAILED_MESSAGE,
+        });
+      },
+    );
+  }
+
+  private handleMcpServerToggle(
+    sessionId: string,
+    name: string,
+    enabled: boolean,
+  ): void {
+    const runtime = this.runtime;
+    if (
+      sessionId !== this.sessionId ||
+      runtime === null ||
+      this.connection.status !== 'connected' ||
+      this.sessionOperationInProgress ||
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    if (
+      typeof runtime.setMcpServerEnabled !== 'function' ||
+      typeof runtime.listMcpServers !== 'function'
+    ) {
+      this.emitMcp(sessionId, {
+        status: 'unsupported',
+        items: [],
+        message: MCP_UNSUPPORTED_MESSAGE,
+      });
+      return;
+    }
+
+    this.emitMcp(sessionId, { status: 'loading', items: [] });
+    const generation = this.runtimeGeneration;
+    const cwd = this.activeRuntimeCwd!;
+    void runtime
+      .setMcpServerEnabled(name, enabled)
+      .then(() => runtime.listMcpServers!())
+      .then(
+        (servers) => {
+          if (
+            !this.isCurrentSessionOperation(
+              runtime,
+              generation,
+              sessionId,
+              cwd,
+            )
+          ) {
+            return;
+          }
+          this.emitMcp(sessionId, {
+            status: 'ready',
+            items: servers.map(projectMcpServerSummary),
+          });
+        },
+        () => {
+          if (
+            !this.isCurrentSessionOperation(
+              runtime,
+              generation,
+              sessionId,
+              cwd,
+            )
+          ) {
+            return;
+          }
+          this.emitMcp(sessionId, {
+            status: 'error',
+            items: [],
+            message: MCP_TOGGLE_FAILED_MESSAGE,
+          });
+        },
+      );
+  }
+
+  private emitMcp(sessionId: string, mcp: SessionMcpState): void {
+    this.emit({
+      type: 'session.mcp',
+      sessionId,
+      mcp,
     });
   }
 
@@ -2871,6 +3028,23 @@ function projectSkillSummary(skill: RuntimeSkill): SkillSummary {
     location: skill.location,
     enabled: skill.enabled,
     userInvocable: skill.userInvocable,
+  };
+}
+
+function projectMcpServerSummary(
+  server: RuntimeMcpServer,
+): McpServerSummary {
+  return {
+    name: server.name,
+    status: server.status,
+    toolCount: server.toolCount,
+    requiresAuth: server.requiresAuth,
+    tools: server.tools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      enabled: tool.enabled,
+      readOnly: tool.readOnly,
+    })),
   };
 }
 

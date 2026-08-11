@@ -105,6 +105,16 @@ describe('parseWebviewMessage', () => {
       disabled: true,
     },
     {
+      type: 'mcp.refresh',
+      sessionId: 'session-1',
+    },
+    {
+      type: 'mcp.server.toggle',
+      sessionId: 'session-1',
+      name: 'linear',
+      enabled: false,
+    },
+    {
       type: 'session.context.refresh',
       sessionId: 'session-1',
     },
@@ -266,6 +276,31 @@ describe('parseWebviewMessage', () => {
       type: 'skill.toggle',
       sessionId: 'session-1',
       name: 'code-review',
+    },
+    { type: 'mcp.refresh', sessionId: '' },
+    { type: 'mcp.refresh', sessionId: 'session-1', extra: true },
+    {
+      type: 'mcp.server.toggle',
+      sessionId: 'session-1',
+      name: '',
+      enabled: true,
+    },
+    {
+      type: 'mcp.server.toggle',
+      sessionId: 'session-1',
+      name: 'l'.repeat(129),
+      enabled: true,
+    },
+    {
+      type: 'mcp.server.toggle',
+      sessionId: 'session-1',
+      name: 'linear',
+      enabled: 'yes',
+    },
+    {
+      type: 'mcp.server.toggle',
+      sessionId: 'session-1',
+      name: 'linear',
     },
     {
       type: 'session.setting.update',

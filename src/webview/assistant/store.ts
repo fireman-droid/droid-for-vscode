@@ -4,6 +4,7 @@ import {
   type InteractionRequest,
   type ModelCatalogState,
   type SessionContextState,
+  type SessionMcpState,
   type SessionSettingsState,
   type SessionSkillsState,
   type SessionTranscriptItem,
@@ -42,6 +43,8 @@ export interface AssistantWebviewState {
   readonly modelCatalog: ModelCatalogState;
   /** Skills load lazily; 'idle' means not requested yet. */
   readonly skills: SessionSkillsState | { status: 'idle'; items: readonly [] };
+  /** MCP servers load lazily; 'idle' means not requested yet. */
+  readonly mcp: SessionMcpState | { status: 'idle'; items: readonly [] };
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: Extract<
     HostToWebviewMessage,
@@ -74,6 +77,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   context: { status: 'loading', value: null },
   modelCatalog: { status: 'loading', items: [] },
   skills: { status: 'idle', items: [] },
+  mcp: { status: 'idle', items: [] },
   transcript: [],
   historyStatus: null,
   truncated: false,
@@ -147,10 +151,14 @@ export function assistantWebviewReducer(
         settings: event.settings,
         context: event.context,
         modelCatalog: event.modelCatalog,
-        // Snapshots do not carry skills; keep them for the same session.
+        // Snapshots do not carry skills/MCP; keep them for the same session.
         skills:
           event.sessionId === state.sessionId
             ? state.skills
+            : { status: 'idle', items: [] },
+        mcp:
+          event.sessionId === state.sessionId
+            ? state.mcp
             : { status: 'idle', items: [] },
         transcript: event.transcript,
         historyStatus: event.historyStatus,
@@ -178,6 +186,7 @@ export function assistantWebviewReducer(
               context: { status: 'loading', value: null },
               modelCatalog: { status: 'loading', items: [] },
               skills: { status: 'idle', items: [] },
+              mcp: { status: 'idle', items: [] },
               interactions: [],
               terminalTurnId: null,
             }
@@ -221,6 +230,18 @@ export function assistantWebviewReducer(
           ? { status: 'loading' as const, items: state.skills.items }
           : event.skills;
       return { ...state, sequence: event.sequence, skills };
+    }
+    case 'session.mcp': {
+      if (event.sessionId !== state.sessionId) {
+        return advance(state, event.sequence);
+      }
+      const mcp =
+        event.mcp.status === 'loading' &&
+        event.mcp.items.length === 0 &&
+        state.mcp.items.length > 0
+          ? { status: 'loading' as const, items: state.mcp.items }
+          : event.mcp;
+      return { ...state, sequence: event.sequence, mcp };
     }
     case 'assistant.delta':
       if (!acceptsActiveTurn(state, event.sessionId, event.turnId)) {

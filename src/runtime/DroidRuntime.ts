@@ -120,6 +120,36 @@ export interface RuntimeSkill {
   readonly userInvocable: boolean;
 }
 
+export const MAX_RUNTIME_MCP_SERVERS = 100;
+export const MAX_RUNTIME_MCP_TOOLS_PER_SERVER = 200;
+export const MAX_RUNTIME_MCP_NAME_LENGTH = 128;
+export const MAX_RUNTIME_MCP_TOOL_DESCRIPTION_LENGTH = 512;
+
+export const RUNTIME_MCP_SERVER_STATUSES = [
+  'connecting',
+  'connected',
+  'disconnected',
+  'failed',
+  'disabled',
+] as const;
+export type RuntimeMcpServerStatus =
+  (typeof RUNTIME_MCP_SERVER_STATUSES)[number];
+
+export interface RuntimeMcpTool {
+  readonly name: string;
+  readonly description: string | null;
+  readonly enabled: boolean;
+  readonly readOnly: boolean;
+}
+
+export interface RuntimeMcpServer {
+  readonly name: string;
+  readonly status: RuntimeMcpServerStatus;
+  readonly toolCount: number | null;
+  readonly requiresAuth: boolean;
+  readonly tools: readonly RuntimeMcpTool[];
+}
+
 export interface RuntimeRewindParams {
   readonly messageId: string;
   readonly forkTitle: string;
@@ -162,5 +192,15 @@ export interface DroidRuntime {
    * unsupported.
    */
   setSkillDisabled?(name: string, disabled: boolean): Promise<void>;
+  /**
+   * Lists MCP servers with their tools, projected to safe display
+   * fields. Optional: absent when unsupported.
+   */
+  listMcpServers?(): Promise<readonly RuntimeMcpServer[]>;
+  /**
+   * Enables or disables an MCP server by name at the user settings
+   * level. Optional: absent when unsupported.
+   */
+  setMcpServerEnabled?(name: string, enabled: boolean): Promise<void>;
   dispose(): Promise<void>;
 }

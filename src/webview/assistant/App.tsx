@@ -275,6 +275,26 @@ export function App(): React.JSX.Element {
     },
     [sessionId, vscode],
   );
+  const handleMcpRefresh = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, { type: 'mcp.refresh', sessionId });
+  }, [sessionId, vscode]);
+  const handleMcpServerToggle = useCallback(
+    (name: string, enabled: boolean): void => {
+      if (sessionId === null) {
+        return;
+      }
+      post(vscode, {
+        type: 'mcp.server.toggle',
+        sessionId,
+        name,
+        enabled,
+      });
+    },
+    [sessionId, vscode],
+  );
   const handleSettingUpdate = useCallback(
     (update: SessionSettingSelection): void => {
       if (sessionId === null) {
@@ -364,11 +384,14 @@ export function App(): React.JSX.Element {
           context={state.context}
           modelCatalog={state.modelCatalog}
           skills={state.skills}
+          mcp={state.mcp}
           onRetry={handleRetry}
           onContextRefresh={handleContextRefresh}
           onSettingUpdate={handleSettingUpdate}
           onSkillsRefresh={handleSkillsRefresh}
           onSkillToggle={handleSkillToggle}
+          onMcpRefresh={handleMcpRefresh}
+          onMcpServerToggle={handleMcpServerToggle}
           onDraftChange={handleDraftChange}
           onReuseMessage={handleReuseMessage}
           onEditResend={handleEditResend}

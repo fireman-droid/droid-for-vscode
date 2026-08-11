@@ -251,6 +251,113 @@ describe('FactoryDroidRuntime', () => {
     );
   });
 
+  it('projects safe MCP servers with grouped tools and enforces toggle success', async () => {
+    const session = Object.assign(
+      createMockSession(async function* () {}),
+      {
+        listMcpServers: vi.fn(async () => ({
+          servers: [
+            {
+              name: 'linear',
+              status: 'connected',
+              toolCount: 2,
+              requiresAuth: false,
+              error: 'SECRET CONNECTION ERROR',
+              authUrl: 'https://secret.example/auth',
+            },
+            {
+              name: 'sentry',
+              status: 'disabled',
+              requiresAuth: true,
+            },
+            { name: 'broken', status: 'on-fire' },
+            { name: '', status: 'connected' },
+            {
+              name: 'linear',
+              status: 'failed',
+            },
+          ],
+        })),
+        listMcpTools: vi.fn(async () => [
+          {
+            serverName: 'linear',
+            name: 'list-issues',
+            description: 'Lists issues.',
+            isEnabled: true,
+            isReadOnly: true,
+            inputSchema: { type: 'object' },
+          },
+          {
+            serverName: 'linear',
+            name: 'create-issue',
+            isEnabled: false,
+          },
+          // Duplicate tool names collapse to the first occurrence.
+          {
+            serverName: 'linear',
+            name: 'list-issues',
+            isEnabled: false,
+          },
+          { serverName: 'unknown-server', name: 'orphan' },
+          { serverName: 'linear', name: '' },
+        ]),
+        toggleMcpServer: vi.fn(async () => ({ success: false })),
+      },
+    );
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    const servers = await runtime.listMcpServers();
+    expect(servers).toEqual([
+      {
+        name: 'linear',
+        status: 'connected',
+        toolCount: 2,
+        requiresAuth: false,
+        tools: [
+          {
+            name: 'list-issues',
+            description: 'Lists issues.',
+            enabled: true,
+            readOnly: true,
+          },
+          {
+            name: 'create-issue',
+            description: null,
+            enabled: false,
+            readOnly: false,
+          },
+        ],
+      },
+      {
+        name: 'sentry',
+        status: 'disabled',
+        toolCount: null,
+        requiresAuth: true,
+        tools: [],
+      },
+    ]);
+    expect(JSON.stringify(servers)).not.toContain('SECRET');
+    expect(JSON.stringify(servers)).not.toContain('secret.example');
+
+    await expect(
+      runtime.setMcpServerEnabled('linear', false),
+    ).rejects.toThrow('refused');
+    expect(session.toggleMcpServer).toHaveBeenCalledWith({
+      serverName: 'linear',
+      enabled: false,
+      settingsLevel: 'user',
+    });
+
+    const bare = createRuntime(async () =>
+      createMockSession(async function* () {}),
+    );
+    await bare.initialize('C:\\workspace');
+    await expect(bare.listMcpServers()).rejects.toThrow(
+      'does not support MCP',
+    );
+  });
+
   it('renames the active session through the SDK', async () => {
     const session = Object.assign(
       createMockSession(async function* () {}),

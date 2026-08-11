@@ -206,6 +206,59 @@ describe('readHostMessage', () => {
       },
     },
     {
+      type: 'session.mcp',
+      sequence: 1,
+      sessionId: 'session-1',
+      mcp: {
+        status: 'ready',
+        items: [
+          {
+            name: 'linear',
+            status: 'connected',
+            toolCount: 2,
+            requiresAuth: false,
+            tools: [
+              {
+                name: 'list-issues',
+                description: 'Lists issues.',
+                enabled: true,
+                readOnly: true,
+              },
+              {
+                name: 'create-issue',
+                description: null,
+                enabled: false,
+                readOnly: false,
+              },
+            ],
+          },
+          {
+            name: 'sentry',
+            status: 'disabled',
+            toolCount: null,
+            requiresAuth: true,
+            tools: [],
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.mcp',
+      sequence: 1,
+      sessionId: 'session-1',
+      mcp: { status: 'loading', items: [] },
+    },
+    {
+      type: 'session.mcp',
+      sequence: 1,
+      sessionId: 'session-1',
+      mcp: {
+        status: 'error',
+        items: [],
+        message: 'MCP listing failed.',
+      },
+    },
+    {
       type: 'assistant.delta',
       sequence: 2,
       sessionId: 'session-1',
@@ -643,6 +696,95 @@ describe('readHostMessage', () => {
       sequence: 1,
       sessionId: 'session-1',
       skills: { status: 'unsupported', items: [] },
+    },
+    {
+      type: 'session.mcp',
+      sequence: 1,
+      sessionId: 'session-1',
+      mcp: {
+        status: 'ready',
+        items: [
+          {
+            name: '',
+            status: 'connected',
+            toolCount: 0,
+            requiresAuth: false,
+            tools: [],
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.mcp',
+      sequence: 1,
+      sessionId: 'session-1',
+      mcp: {
+        status: 'ready',
+        items: [
+          {
+            name: 'linear',
+            status: 'exploded',
+            toolCount: 0,
+            requiresAuth: false,
+            tools: [],
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.mcp',
+      sequence: 1,
+      sessionId: 'session-1',
+      mcp: {
+        status: 'ready',
+        items: [
+          {
+            name: 'linear',
+            status: 'connected',
+            toolCount: 1,
+            requiresAuth: false,
+            tools: [
+              {
+                name: 'list-issues',
+                description: null,
+                enabled: true,
+                readOnly: true,
+                command: 'rm -rf /',
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.mcp',
+      sequence: 1,
+      sessionId: 'session-1',
+      mcp: {
+        status: 'ready',
+        items: [
+          {
+            name: 'dup',
+            status: 'connected',
+            toolCount: 0,
+            requiresAuth: false,
+            tools: [],
+          },
+          {
+            name: 'dup',
+            status: 'disabled',
+            toolCount: 0,
+            requiresAuth: false,
+            tools: [],
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.mcp',
+      sequence: 1,
+      sessionId: 'session-1',
+      mcp: { status: 'error', items: [] },
     },
     {
       type: 'session.model-catalog',

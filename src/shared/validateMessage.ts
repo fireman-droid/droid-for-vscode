@@ -6,6 +6,7 @@ import {
   MAX_EDITED_SPEC_LENGTH,
   MAX_MODEL_ID_LENGTH,
   MAX_PERMISSION_OPTION_VALUE_LENGTH,
+  MAX_MCP_NAME_LENGTH,
   MAX_SESSION_TITLE_LENGTH,
   MAX_SKILL_NAME_LENGTH,
   MAX_TURN_TEXT_LENGTH,
@@ -14,6 +15,8 @@ import {
   SESSION_REASONING_EFFORTS,
   type AskUserAnswer,
   type AskUserRespondMessage,
+  type McpRefreshMessage,
+  type McpServerToggleMessage,
   type PermissionRespondMessage,
   type RuntimeRetryMessage,
   type SessionContextRefreshMessage,
@@ -74,6 +77,10 @@ export function parseWebviewMessage(
         return parseSkillsRefresh(value);
       case 'skill.toggle':
         return parseSkillToggle(value);
+      case 'mcp.refresh':
+        return parseMcpRefresh(value);
+      case 'mcp.server.toggle':
+        return parseMcpServerToggle(value);
       case 'session.setting.update':
         return parseSessionSettingUpdate(value);
       default:
@@ -384,6 +391,39 @@ function parseSkillToggle(
     sessionId: value.sessionId,
     name: value.name,
     disabled: value.disabled,
+  };
+}
+
+function parseMcpRefresh(
+  value: UnknownRecord,
+): McpRefreshMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'mcp.refresh', sessionId: value.sessionId };
+}
+
+function parseMcpServerToggle(
+  value: UnknownRecord,
+): McpServerToggleMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'name', 'enabled']) ||
+    !isId(value.sessionId) ||
+    !isNonEmptyBoundedString(value.name, MAX_MCP_NAME_LENGTH) ||
+    typeof value.enabled !== 'boolean'
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'mcp.server.toggle',
+    sessionId: value.sessionId,
+    name: value.name,
+    enabled: value.enabled,
   };
 }
 

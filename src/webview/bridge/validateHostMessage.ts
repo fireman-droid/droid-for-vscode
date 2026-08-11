@@ -23,9 +23,14 @@ import {
   MAX_SESSION_CATALOG_ITEMS,
   MAX_SESSION_TITLE_LENGTH,
   MAX_SESSION_TRANSCRIPT_ITEMS,
+  MAX_MCP_NAME_LENGTH,
+  MAX_MCP_SERVERS,
+  MAX_MCP_TOOLS_PER_SERVER,
+  MAX_MCP_TOOL_DESCRIPTION_LENGTH,
   MAX_SKILL_DESCRIPTION_LENGTH,
   MAX_SKILL_ITEMS,
   MAX_SKILL_NAME_LENGTH,
+  MCP_SERVER_STATUSES,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
   MAX_TOOL_NAME_LENGTH,
@@ -62,6 +67,10 @@ import {
   type SessionInteractionMode,
   type SessionReasoningEffort,
   type SessionSettingsState,
+  type McpServerStatus,
+  type McpServerSummary,
+  type McpToolSummary,
+  type SessionMcpState,
   type SessionSkillsState,
   type SkillLocation,
   type SkillSummary,
@@ -148,6 +157,8 @@ export function readHostMessage(
         return parseModelCatalogMessage(value);
       case 'session.skills':
         return parseSessionSkillsMessage(value);
+      case 'session.mcp':
+        return parseSessionMcpMessage(value);
       case 'assistant.delta':
         return parseAssistantDelta(value);
       case 'thinking.delta':
@@ -1206,6 +1217,157 @@ function isSkillLocation(value: unknown): value is SkillLocation {
     typeof value === 'string' &&
     (SKILL_LOCATIONS as readonly string[]).includes(value)
   );
+}
+
+function parseSessionMcpMessage(
+  value: UnknownRecord,
+): Extract<HostToWebviewMessage, { type: 'session.mcp' }> | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sequence', 'sessionId', 'mcp']) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+  const mcp = parseSessionMcp(value.mcp);
+  return mcp === undefined
+    ? undefined
+    : {
+        type: 'session.mcp',
+        sequence: value.sequence,
+        sessionId: value.sessionId,
+        mcp,
+      };
+}
+
+function parseSessionMcp(value: unknown): SessionMcpState | undefined {
+  if (!isStrictRecord(value)) {
+    return undefined;
+  }
+  const status = readStringDataProperty(value, 'status');
+  if (status === undefined) {
+    return undefined;
+  }
+
+  if (status === 'unsupported') {
+    if (
+      !hasExactKeys(value, ['status', 'items', 'message']) ||
+      !isExactArray(value.items, 0, 0) ||
+      !isBoundedString(value.message, MAX_STRING_LENGTH)
+    ) {
+      return undefined;
+    }
+    return {
+      status: 'unsupported',
+      items: [],
+      message: value.message as string,
+    };
+  }
+
+  if (status !== 'loading' && status !== 'ready' && status !== 'error') {
+    return undefined;
+  }
+  if (
+    !hasExactKeys(
+      value,
+      status === 'error'
+        ? ['status', 'items', 'message']
+        : ['status', 'items'],
+    ) ||
+    !isExactArray(value.items, 0, MAX_MCP_SERVERS) ||
+    (status === 'error' &&
+      !isBoundedString(value.message, MAX_STRING_LENGTH))
+  ) {
+    return undefined;
+  }
+  const items: McpServerSummary[] = [];
+  const names = new Set<string>();
+  for (const itemValue of value.items) {
+    const item = parseMcpServerSummary(itemValue);
+    if (item === undefined || names.has(item.name)) {
+      return undefined;
+    }
+    names.add(item.name);
+    items.push(item);
+  }
+  return status === 'error'
+    ? { status: 'error', items, message: value.message as string }
+    : status === 'loading'
+      ? { status: 'loading', items }
+      : { status: 'ready', items };
+}
+
+function parseMcpServerSummary(
+  value: unknown,
+): McpServerSummary | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, [
+      'name',
+      'status',
+      'toolCount',
+      'requiresAuth',
+      'tools',
+    ]) ||
+    !isNonEmptyBoundedString(value.name, MAX_MCP_NAME_LENGTH) ||
+    !isMcpServerStatus(value.status) ||
+    (value.toolCount !== null && !isCount(value.toolCount)) ||
+    typeof value.requiresAuth !== 'boolean' ||
+    !isExactArray(value.tools, 0, MAX_MCP_TOOLS_PER_SERVER)
+  ) {
+    return undefined;
+  }
+  const tools: McpToolSummary[] = [];
+  const names = new Set<string>();
+  for (const toolValue of value.tools) {
+    const tool = parseMcpToolSummary(toolValue);
+    if (tool === undefined || names.has(tool.name)) {
+      return undefined;
+    }
+    names.add(tool.name);
+    tools.push(tool);
+  }
+  return {
+    name: value.name,
+    status: value.status,
+    toolCount: value.toolCount,
+    requiresAuth: value.requiresAuth,
+    tools,
+  };
+}
+
+function parseMcpToolSummary(value: unknown): McpToolSummary | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, ['name', 'description', 'enabled', 'readOnly']) ||
+    !isNonEmptyBoundedString(value.name, MAX_MCP_NAME_LENGTH) ||
+    (value.description !== null &&
+      !isNonEmptyBoundedString(
+        value.description,
+        MAX_MCP_TOOL_DESCRIPTION_LENGTH,
+      )) ||
+    typeof value.enabled !== 'boolean' ||
+    typeof value.readOnly !== 'boolean'
+  ) {
+    return undefined;
+  }
+  return {
+    name: value.name,
+    description: value.description,
+    enabled: value.enabled,
+    readOnly: value.readOnly,
+  };
+}
+
+function isMcpServerStatus(value: unknown): value is McpServerStatus {
+  return (
+    typeof value === 'string' &&
+    (MCP_SERVER_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+function isCount(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
 function parseModelCatalogItem(

@@ -1778,6 +1778,118 @@ describe('ChatController', () => {
     );
   });
 
+  it('lists MCP servers on request and re-lists after a toggle', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      listMcpServers: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            name: 'linear',
+            status: 'connected',
+            toolCount: 1,
+            requiresAuth: false,
+            tools: [
+              {
+                name: 'list-issues',
+                description: 'Lists issues.',
+                enabled: true,
+                readOnly: true,
+              },
+            ],
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            name: 'linear',
+            status: 'disabled',
+            toolCount: 1,
+            requiresAuth: false,
+            tools: [],
+          },
+        ]),
+      setMcpServerEnabled: vi.fn(async () => {}),
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'mcp.refresh',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(mcpMessages(messages).at(-1)?.mcp).toMatchObject({
+        status: 'ready',
+        items: [
+          {
+            name: 'linear',
+            status: 'connected',
+            tools: [{ name: 'list-issues', readOnly: true }],
+          },
+        ],
+      });
+    });
+    expect(mcpMessages(messages)[0]?.mcp.status).toBe('loading');
+
+    controller.handleMessage({
+      type: 'mcp.server.toggle',
+      sessionId: 'session-1',
+      name: 'linear',
+      enabled: false,
+    });
+    expect(runtime.setMcpServerEnabled).toHaveBeenCalledWith(
+      'linear',
+      false,
+    );
+    await vi.waitFor(() => {
+      expect(mcpMessages(messages).at(-1)?.mcp).toMatchObject({
+        status: 'ready',
+        items: [{ name: 'linear', status: 'disabled' }],
+      });
+    });
+
+    // Wrong session id is ignored entirely.
+    const before = mcpMessages(messages).length;
+    controller.handleMessage({
+      type: 'mcp.refresh',
+      sessionId: 'session-other',
+    });
+    expect(mcpMessages(messages)).toHaveLength(before);
+  });
+
+  it('reports unsupported and failed MCP operations safely', async () => {
+    const unsupported = createController(() => createMockRuntime());
+    ready(unsupported.controller);
+    await waitForConnected(unsupported.messages);
+    unsupported.controller.handleMessage({
+      type: 'mcp.refresh',
+      sessionId: 'session-1',
+    });
+    expect(mcpMessages(unsupported.messages).at(-1)?.mcp).toMatchObject({
+      status: 'unsupported',
+    });
+
+    const failing = Object.assign(createMockRuntime(), {
+      listMcpServers: vi.fn(async () => {
+        throw new Error('private mcp failure');
+      }),
+      setMcpServerEnabled: vi.fn(async () => {}),
+    });
+    const { controller, messages } = createController(() => failing);
+    ready(controller);
+    await waitForConnected(messages);
+    controller.handleMessage({
+      type: 'mcp.refresh',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(mcpMessages(messages).at(-1)?.mcp).toMatchObject({
+        status: 'error',
+      });
+    });
+    expect(JSON.stringify(messages)).not.toContain('private mcp failure');
+  });
+
   it('clears stale catalog rows before loading a changed workspace', async () => {
     const workspace = {
       cwd: 'C:\\workspace-a',
@@ -3468,6 +3580,17 @@ function skillsMessages(
       HostToWebviewMessage,
       { type: 'session.skills' }
     > => message.type === 'session.skills',
+  );
+}
+
+function mcpMessages(
+  messages: readonly HostToWebviewMessage[],
+): Extract<HostToWebviewMessage, { type: 'session.mcp' }>[] {
+  return messages.filter(
+    (message): message is Extract<
+      HostToWebviewMessage,
+      { type: 'session.mcp' }
+    > => message.type === 'session.mcp',
   );
 }
 

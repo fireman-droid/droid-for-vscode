@@ -58,6 +58,10 @@ export const MAX_MODEL_CATALOG_ITEMS = 100;
 export const MAX_SKILL_ITEMS = 200;
 export const MAX_SKILL_NAME_LENGTH = 128;
 export const MAX_SKILL_DESCRIPTION_LENGTH = 512;
+export const MAX_MCP_SERVERS = 100;
+export const MAX_MCP_TOOLS_PER_SERVER = 200;
+export const MAX_MCP_NAME_LENGTH = 128;
+export const MAX_MCP_TOOL_DESCRIPTION_LENGTH = 512;
 
 export const CONNECTION_STATUSES = [
   'idle',
@@ -259,6 +263,20 @@ export interface SkillToggleMessage {
   readonly disabled: boolean;
 }
 
+/** Requests the current MCP server and tool catalog for the session. */
+export interface McpRefreshMessage {
+  readonly type: 'mcp.refresh';
+  readonly sessionId: string;
+}
+
+/** Enables or disables an MCP server by name. */
+export interface McpServerToggleMessage {
+  readonly type: 'mcp.server.toggle';
+  readonly sessionId: string;
+  readonly name: string;
+  readonly enabled: boolean;
+}
+
 export type SessionSettingUpdateMessage =
   | {
       readonly type: 'session.setting.update';
@@ -300,6 +318,8 @@ export type WebviewToHostMessage =
   | SessionContextRefreshMessage
   | SkillsRefreshMessage
   | SkillToggleMessage
+  | McpRefreshMessage
+  | McpServerToggleMessage
   | SessionSettingUpdateMessage;
 
 export interface ConnectionState {
@@ -431,6 +451,50 @@ export type SessionSkillsState =
       readonly message: string;
     };
 
+export const MCP_SERVER_STATUSES = [
+  'connecting',
+  'connected',
+  'disconnected',
+  'failed',
+  'disabled',
+] as const;
+export type McpServerStatus = (typeof MCP_SERVER_STATUSES)[number];
+
+export interface McpToolSummary {
+  readonly name: string;
+  readonly description: string | null;
+  readonly enabled: boolean;
+  readonly readOnly: boolean;
+}
+
+export interface McpServerSummary {
+  readonly name: string;
+  readonly status: McpServerStatus;
+  readonly toolCount: number | null;
+  readonly requiresAuth: boolean;
+  readonly tools: readonly McpToolSummary[];
+}
+
+export type SessionMcpState =
+  | {
+      readonly status: 'loading';
+      readonly items: readonly McpServerSummary[];
+    }
+  | {
+      readonly status: 'ready';
+      readonly items: readonly McpServerSummary[];
+    }
+  | {
+      readonly status: 'error';
+      readonly items: readonly McpServerSummary[];
+      readonly message: string;
+    }
+  | {
+      readonly status: 'unsupported';
+      readonly items: readonly [];
+      readonly message: string;
+    };
+
 export interface UserTranscriptItem {
   readonly id: string;
   readonly kind: 'user';
@@ -537,6 +601,13 @@ export interface SessionSkillsStateMessage {
   readonly sequence: number;
   readonly sessionId: string;
   readonly skills: SessionSkillsState;
+}
+
+export interface SessionMcpStateMessage {
+  readonly type: 'session.mcp';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly mcp: SessionMcpState;
 }
 
 export interface AssistantDeltaMessage {
@@ -683,6 +754,7 @@ export type HostToWebviewMessage =
   | SessionContextStateMessage
   | ModelCatalogStateMessage
   | SessionSkillsStateMessage
+  | SessionMcpStateMessage
   | AssistantDeltaMessage
   | ThinkingDeltaMessage
   | ThinkingCompleteMessage

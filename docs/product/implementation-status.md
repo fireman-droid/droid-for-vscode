@@ -60,6 +60,18 @@ Session 目录切换、Webview 内联编辑器）。该切片已通过 typecheck
 filePath/content/resources），Host 无状态转发并以 `session.skills`
 消息回发 loading/ready/error/unsupported 状态。切换开关后 Host 重新
 list 并回发；Webview 在 loading 期间保留旧列表并禁用开关。
+
+同日追加 MCP Server 浏览与启停：`+` 面板中的 MCP servers 行进入真实
+服务器列表视图（懒加载，`mcp.refresh` / `mcp.server.toggle` Bridge
+消息）。Runtime 并行调用 SDK `listMcpServers` / `listMcpTools`，按
+serverName 分组并投影安全字段（name、status、toolCount、requiresAuth，
+Tool 的 name、description ≤512、enabled、readOnly；不投影连接错误、
+authUrl、inputSchema、配置来源），服务器与工具均去重限量。Host 以
+`session.mcp` 消息回发 loading/ready/error/unsupported 状态；启停经
+SDK `toggleMcpServer`（settingsLevel: user）后重新 list 回发。UI 显示
+状态圆点（connected/connecting/failed/disabled）、needs auth 徽标，
+Tool 列表可展开并带 read-only/off 徽标。MCP 认证流程（OAuth URL 跳转）
+无安全公开渠道，保持未实现。
 下一轮严格两小时实现窗口的证据、范围、执行顺序、验收和回滚已经固化到
 `docs/preflight/`。该预研确认 Context 的累计 `used`、Breakdown
 `usedTokens`、`freeTokens` 和 Category Sum 都不能表示当前窗口；只有公开
@@ -72,8 +84,9 @@ Schema 中最新 Provider Call 的 `lastCallTokenUsage` /
 `isCustom: true` 的 BYOK Model，Model 和对应 Reasoning 选项可以安全选择；
 目录缺失或非法时仍然 fail closed，不会使用硬编码模型。历史用户消息
 现在支持双击内联编辑并通过 SDK Rewind 从该消息分支重新提问。
-Skills 浏览与启停已生产接通。Changes/Diff、daemon 主运行路径、
-Commands、MCP、Mission 和 Manage Droid 等主要功能仍未实现。
+Skills 浏览与启停、MCP Server 浏览与启停已生产接通。Changes/Diff、
+daemon 主运行路径、Commands、Mission 和 Manage Droid 等主要功能仍未
+实现。
 
 ### 当前 Figma Design 还原边界
 
@@ -105,7 +118,7 @@ Context 和 Model 浮层固定在 Composer 上方约 7px。
 
 - 固定模型清单与 “Add Models”，生产 UI 仅显示 Runtime 返回且 SDK 标记为
   `isCustom: true` 的 BYOK `availableModels`；
-- MCP 管理、文件附件、全局或永久权限（Skills 浏览与启停已生产接通）；
+- 文件附件、全局或永久权限（Skills 与 MCP 浏览启停已生产接通）；
 - 完整 Mission 管理、Worker、阶段和进度界面。
 
 Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限卡片显示和
@@ -371,7 +384,8 @@ Assistant 消息 Regenerate 与文件级 Rewind 安全检查仍未实现。
 - Reasoning 浮层的 “Options” 是不可选择的 `h3` 标题，不再承担返回或关闭
   操作
 - Plus 面板提供本地动作搜索；Mode/Autonomy 在原卡片内展开选项列表，
-  Skills/MCP 仅显示不可交互的 “None” 状态，不会伪造管理动作或 Runtime 能力
+  Skills/MCP 行进入真实的浏览与启停视图，数据只来自已校验的 Bridge，
+  不会伪造管理动作或 Runtime 能力
 - Turn 流式运行时仍可打开 Plus、Context 和 Model 面板，并可更新 Mode、
   Autonomy、Model 和 Reasoning；待处理 Permission/AskUser、重复更新和
   Session 替换期间仍阻止写入
@@ -451,8 +465,7 @@ Stats，并通过公开初始化/加载响应接通模型目录，因此这些�
 Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力目前
 仍然只是探测结果或声明：
 
-- MCP Servers 和 Tools（Skills 浏览与启停已生产接通）
-- 图片和文档附件能力
+- 图片和文档附件能力（Skills 与 MCP 浏览启停已生产接通）
 - Session Archive、显式 Fork、Compact（Rename 和编辑重问 Rewind
   已生产接通）
 - Mission Mode 和 Events
@@ -483,7 +496,7 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
 - [x] `＋` 动作面板中的 Mode 和 Autonomy
 - [x] Composer 常驻 Mode 触发器（Auto/Spec/Mission 一键切换弹层）
 - [x] Context 圆环旁常驻百分比（仅在窗口比例可信时显示）
-- [x] `＋` 动作面板本地搜索、Skills 列表浏览与启停、不可交互的 MCP 状态行
+- [x] `＋` 动作面板本地搜索、Skills 列表浏览与启停、MCP Server 浏览与启停
 - [ ] `@` 文件和 Symbol 引用
 - [ ] `/` 动态命令
 - [ ] 已附加内容标签
@@ -494,8 +507,9 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
 `isCustom: true` 子集，不会使用原型数据、旧列表、ID 猜测或人工维护列表。
 如果当前 Session 使用内置 Model，该当前值仍显示在 Trigger 中，但不会被
 加入 BYOK 列表，也不会伪造该 Model 的 Reasoning 选项。Skills 行进入真实
-技能列表（SDK `listSkills` / `setSkillDisabled`）；MCP 状态行不提供按钮，
-也不代表 Capability Gate 已接入。普通流式响应期间仍可提交
+技能列表（SDK `listSkills` / `setSkillDisabled`）；MCP servers 行进入真实
+服务器列表（SDK `listMcpServers` / `listMcpTools` / `toggleMcpServer`），
+但这不代表 Capability Gate 已接入。普通流式响应期间仍可提交
 Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Settings
 为最终显示值；待处理 Permission/AskUser、重复更新、Session 替换和非法目录值
 仍会阻止更新。
@@ -544,9 +558,10 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [ ] Droid Commands 列表
 - [ ] 动态 Slash Commands
 - [ ] 最近使用命令
-- [ ] MCP Server 列表
-- [ ] MCP Tool 浏览
-- [ ] MCP 启用、禁用和认证
+- [x] MCP Server 列表（`+` 面板 MCP servers 视图，状态与 needs auth 徽标）
+- [x] MCP Tool 浏览（服务器行内展开，read-only/off 徽标）
+- [x] MCP Server 启用与禁用（SDK `toggleMcpServer`，user 级设置）
+- [ ] MCP 认证（OAuth 跳转无安全公开渠道）
 - [ ] Custom Droids
 - [x] Session Rename（活跃 Session 内联重命名）
 - [ ] Session Archive / Unarchive

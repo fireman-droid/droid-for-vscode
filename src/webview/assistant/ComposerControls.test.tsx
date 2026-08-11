@@ -51,6 +51,9 @@ describe('ComposerControls', () => {
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
       />,
     );
 
@@ -78,6 +81,9 @@ describe('ComposerControls', () => {
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
       />,
     );
 
@@ -121,6 +127,9 @@ describe('ComposerControls', () => {
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
       />,
     );
 
@@ -166,6 +175,9 @@ describe('ComposerControls', () => {
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
       />,
     );
 
@@ -173,8 +185,7 @@ describe('ComposerControls', () => {
     expect(screen.getByRole('dialog', { name: 'Session controls' })).toBeDefined();
     expect(screen.getByRole('searchbox', { name: 'Search actions' })).toBeDefined();
     expect(screen.getByText('Skills').closest('button')).not.toBeNull();
-    expect(screen.getByLabelText('MCP servers: None')).toBeDefined();
-    expect(screen.getByText('MCP servers').closest('button')).toBeNull();
+    expect(screen.getByText('MCP servers').closest('button')).not.toBeNull();
     const modeButton = screen.getByText('Mode').closest('button')!;
     expect(modeButton.getAttribute('aria-expanded')).toBe('false');
     await user.click(modeButton);
@@ -262,6 +273,9 @@ describe('ComposerControls', () => {
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
       />,
     );
 
@@ -322,6 +336,9 @@ describe('ComposerControls', () => {
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
       />,
     );
 
@@ -349,6 +366,9 @@ describe('ComposerControls', () => {
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
       />,
     );
     expect(screen.getByRole('alert').textContent).toContain(
@@ -376,6 +396,9 @@ describe('ComposerControls', () => {
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={onSkillsRefresh}
         onSkillToggle={onSkillToggle}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
       />,
     );
 
@@ -419,6 +442,9 @@ describe('ComposerControls', () => {
         }}
         onSkillsRefresh={onSkillsRefresh}
         onSkillToggle={onSkillToggle}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
       />,
     );
 
@@ -439,6 +465,124 @@ describe('ComposerControls', () => {
     expect(onSkillToggle).toHaveBeenCalledWith('docs-writer', false);
 
     // Back returns to the root controls without collapsing the popover.
+    await user.click(
+      screen.getByRole('button', { name: 'Back to session controls' }),
+    );
+    expect(
+      screen.getByRole('dialog', { name: 'Session controls' }),
+    ).toBeDefined();
+    expect(screen.getByText('1/2 on')).toBeDefined();
+  });
+
+  it('browses MCP servers, expands tools, and toggles servers', async () => {
+    const user = userEvent.setup();
+    const onMcpRefresh = vi.fn();
+    const onMcpServerToggle = vi.fn();
+    const { rerender } = render(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={onMcpRefresh}
+        onMcpServerToggle={onMcpServerToggle}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Session controls' }));
+    await user.click(screen.getByText('MCP servers').closest('button')!);
+    expect(onMcpRefresh).toHaveBeenCalledOnce();
+    expect(screen.getByRole('dialog', { name: 'MCP servers' })).toBeDefined();
+    expect(screen.getByText('Loading MCP servers…')).toBeDefined();
+
+    rerender(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{
+          status: 'ready',
+          items: [
+            {
+              name: 'linear',
+              status: 'connected',
+              toolCount: 2,
+              requiresAuth: false,
+              tools: [
+                {
+                  name: 'list-issues',
+                  description: 'Lists issues.',
+                  enabled: true,
+                  readOnly: true,
+                },
+                {
+                  name: 'create-issue',
+                  description: null,
+                  enabled: false,
+                  readOnly: false,
+                },
+              ],
+            },
+            {
+              name: 'sentry',
+              status: 'disabled',
+              toolCount: null,
+              requiresAuth: true,
+              tools: [],
+            },
+          ],
+        }}
+        onMcpRefresh={onMcpRefresh}
+        onMcpServerToggle={onMcpServerToggle}
+      />,
+    );
+
+    expect(screen.getByText('linear')).toBeDefined();
+    expect(screen.getByText('needs auth')).toBeDefined();
+
+    // Tools stay collapsed until expanded, then show read-only and off badges.
+    expect(screen.queryByText('list-issues')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Show 2 tools' }));
+    expect(screen.getByText('list-issues')).toBeDefined();
+    expect(screen.getByText('Lists issues.')).toBeDefined();
+    expect(screen.getByText('read-only')).toBeDefined();
+    expect(screen.getByText('off')).toBeDefined();
+
+    const connectedSwitch = screen.getByRole('switch', {
+      name: 'linear enabled',
+    });
+    expect(connectedSwitch.getAttribute('aria-checked')).toBe('true');
+    await user.click(connectedSwitch);
+    expect(onMcpServerToggle).toHaveBeenCalledWith('linear', false);
+    const disabledSwitch = screen.getByRole('switch', {
+      name: 'sentry enabled',
+    });
+    expect(disabledSwitch.getAttribute('aria-checked')).toBe('false');
+    await user.click(disabledSwitch);
+    expect(onMcpServerToggle).toHaveBeenCalledWith('sentry', true);
+
     await user.click(
       screen.getByRole('button', { name: 'Back to session controls' }),
     );
@@ -470,6 +614,9 @@ describe('ComposerControls', () => {
         skills={{ status: 'idle', items: [] }}
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
       />,
     );
 

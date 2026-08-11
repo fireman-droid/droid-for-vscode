@@ -21,11 +21,16 @@ import {
   MAX_RUNTIME_MODEL_CATALOG_ITEMS,
   MAX_RUNTIME_MODEL_DISPLAY_NAME_LENGTH,
   MAX_RUNTIME_MODEL_ID_LENGTH,
+  MAX_RUNTIME_MCP_NAME_LENGTH,
+  MAX_RUNTIME_MCP_SERVERS,
+  MAX_RUNTIME_MCP_TOOLS_PER_SERVER,
+  MAX_RUNTIME_MCP_TOOL_DESCRIPTION_LENGTH,
   MAX_RUNTIME_SKILL_DESCRIPTION_LENGTH,
   MAX_RUNTIME_SKILL_ITEMS,
   MAX_RUNTIME_SKILL_NAME_LENGTH,
   RUNTIME_AUTONOMY_LEVELS,
   RUNTIME_INTERACTION_MODES,
+  RUNTIME_MCP_SERVER_STATUSES,
   RUNTIME_REASONING_EFFORTS,
   RUNTIME_SKILL_LOCATIONS,
   type DroidRuntime,
@@ -38,6 +43,9 @@ import {
   type RuntimeSessionSettings,
   type RuntimeSessionSettingUpdate,
   type RuntimeSessionTarget,
+  type RuntimeMcpServer,
+  type RuntimeMcpServerStatus,
+  type RuntimeMcpTool,
   type RuntimeSkill,
   type RuntimeSkillLocation,
 } from './DroidRuntime';
@@ -83,6 +91,13 @@ export interface FactoryDroidSession {
   setSkillDisabled?(params: {
     skillName: string;
     disabled: boolean;
+  }): Promise<{ success: boolean }>;
+  listMcpServers?(): Promise<{ servers: unknown[] }>;
+  listMcpTools?(): Promise<unknown[]>;
+  toggleMcpServer?(params: {
+    serverName: string;
+    enabled: boolean;
+    settingsLevel: 'user';
   }): Promise<{ success: boolean }>;
   close(): Promise<void>;
 }
@@ -478,6 +493,79 @@ export class FactoryDroidRuntime implements DroidRuntime {
     });
     if (result.success !== true) {
       throw new Error('Droid refused to update the skill.');
+    }
+  }
+
+  async listMcpServers(): Promise<readonly RuntimeMcpServer[]> {
+    const session = this.requireSession();
+    if (
+      typeof session.listMcpServers !== 'function' ||
+      typeof session.listMcpTools !== 'function'
+    ) {
+      throw new Error('The Droid session does not support MCP.');
+    }
+    const [serversResult, toolsResult] = await Promise.all([
+      session.listMcpServers(),
+      session.listMcpTools(),
+    ]);
+    if (
+      !Array.isArray(serversResult.servers) ||
+      !Array.isArray(toolsResult)
+    ) {
+      throw new Error('Droid returned an invalid MCP catalog.');
+    }
+
+    const toolsByServer = new Map<string, RuntimeMcpTool[]>();
+    const seenToolNames = new Map<string, Set<string>>();
+    for (const raw of toolsResult) {
+      const projected = projectMcpTool(raw);
+      if (projected === null) {
+        continue;
+      }
+      const seen =
+        seenToolNames.get(projected.serverName) ?? new Set<string>();
+      if (seen.has(projected.tool.name)) {
+        continue;
+      }
+      seen.add(projected.tool.name);
+      seenToolNames.set(projected.serverName, seen);
+      const bucket = toolsByServer.get(projected.serverName) ?? [];
+      if (bucket.length < MAX_RUNTIME_MCP_TOOLS_PER_SERVER) {
+        bucket.push(projected.tool);
+        toolsByServer.set(projected.serverName, bucket);
+      }
+    }
+
+    const servers: RuntimeMcpServer[] = [];
+    const seenServerNames = new Set<string>();
+    for (const raw of serversResult.servers.slice(
+      0,
+      MAX_RUNTIME_MCP_SERVERS,
+    )) {
+      const server = projectMcpServer(raw, toolsByServer);
+      if (server !== null && !seenServerNames.has(server.name)) {
+        seenServerNames.add(server.name);
+        servers.push(server);
+      }
+    }
+    return servers;
+  }
+
+  async setMcpServerEnabled(
+    name: string,
+    enabled: boolean,
+  ): Promise<void> {
+    const session = this.requireSession();
+    if (typeof session.toggleMcpServer !== 'function') {
+      throw new Error('The Droid session does not support MCP.');
+    }
+    const result = await session.toggleMcpServer({
+      serverName: name,
+      enabled,
+      settingsLevel: 'user',
+    });
+    if (result.success !== true) {
+      throw new Error('Droid refused to update the MCP server.');
     }
   }
 
@@ -1045,6 +1133,15 @@ function createCatalogSessionView(
   if (typeof session.setSkillDisabled === 'function') {
     view.setSkillDisabled = (params) => session.setSkillDisabled!(params);
   }
+  if (typeof session.listMcpServers === 'function') {
+    view.listMcpServers = () => session.listMcpServers!();
+  }
+  if (typeof session.listMcpTools === 'function') {
+    view.listMcpTools = () => session.listMcpTools!();
+  }
+  if (typeof session.toggleMcpServer === 'function') {
+    view.toggleMcpServer = (params) => session.toggleMcpServer!(params);
+  }
   return view;
 }
 
@@ -1087,5 +1184,88 @@ function isRuntimeSkillLocation(
   return (
     typeof value === 'string' &&
     (RUNTIME_SKILL_LOCATIONS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Projects an SDK MCP server record to safe display fields, dropping
+ * connection errors, auth URLs, and configuration sources.
+ */
+function projectMcpServer(
+  raw: unknown,
+  toolsByServer: ReadonlyMap<string, readonly RuntimeMcpTool[]>,
+): RuntimeMcpServer | null {
+  if (typeof raw !== 'object' || raw === null) {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const name = record.name;
+  const status = record.status;
+  if (
+    typeof name !== 'string' ||
+    name.length === 0 ||
+    name.length > MAX_RUNTIME_MCP_NAME_LENGTH ||
+    !isRuntimeMcpServerStatus(status)
+  ) {
+    return null;
+  }
+  const toolCount =
+    Number.isSafeInteger(record.toolCount) &&
+    (record.toolCount as number) >= 0
+      ? (record.toolCount as number)
+      : null;
+  return {
+    name,
+    status,
+    toolCount,
+    requiresAuth: record.requiresAuth === true,
+    tools: toolsByServer.get(name) ?? [],
+  };
+}
+
+function projectMcpTool(
+  raw: unknown,
+): { serverName: string; tool: RuntimeMcpTool } | null {
+  if (typeof raw !== 'object' || raw === null) {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const serverName = record.serverName;
+  const name = record.name;
+  if (
+    typeof serverName !== 'string' ||
+    serverName.length === 0 ||
+    serverName.length > MAX_RUNTIME_MCP_NAME_LENGTH ||
+    typeof name !== 'string' ||
+    name.length === 0 ||
+    name.length > MAX_RUNTIME_MCP_NAME_LENGTH
+  ) {
+    return null;
+  }
+  const description =
+    typeof record.description === 'string' &&
+    record.description.length > 0
+      ? record.description.slice(
+          0,
+          MAX_RUNTIME_MCP_TOOL_DESCRIPTION_LENGTH,
+        )
+      : null;
+  return {
+    serverName,
+    tool: {
+      name,
+      description,
+      enabled: record.isEnabled !== false,
+      readOnly: record.isReadOnly === true,
+    },
+  };
+}
+
+function isRuntimeMcpServerStatus(
+  value: unknown,
+): value is RuntimeMcpServerStatus {
+  return (
+    typeof value === 'string' &&
+    (RUNTIME_MCP_SERVER_STATUSES as readonly string[]).includes(value)
   );
 }

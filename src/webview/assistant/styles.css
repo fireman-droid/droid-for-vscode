@@ -2507,6 +2507,69 @@ body {
   transform: translateX(12px);
 }
 
+.dvx-mcp-status {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dvx-muted);
+}
+
+.dvx-mcp-status-connected {
+  background: #3f9d5f;
+}
+
+.dvx-mcp-status-failed {
+  background: #c94f3d;
+}
+
+.dvx-mcp-status-connecting {
+  background: #d99a2b;
+}
+
+.dvx-mcp-status-disabled {
+  background: #b8ad9d;
+}
+
+.dvx-mcp-tools-toggle {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dvx-accent);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.dvx-mcp-tools-toggle:hover {
+  text-decoration: underline;
+}
+
+.dvx-mcp-tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 6px 0 0 10px;
+  border-left: 2px solid var(--dvx-border);
+  list-style: none;
+}
+
+.dvx-mcp-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dvx-mcp-tool-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dvx-ink);
+  font-size: 11px;
+  font-weight: 500;
+}
+
 /* Interactions render as a flat inline block inside the conversation flow:
    one surface, hairline separators, no stacked cards. */
 .dvx-interaction-panel {

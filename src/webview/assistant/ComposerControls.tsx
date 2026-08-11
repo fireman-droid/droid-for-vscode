@@ -8,11 +8,13 @@ import {
 
 import type {
   ConfirmedSessionSettings,
+  McpServerSummary,
   ModelCatalogItem,
   ModelCatalogState,
   SessionAutonomyLevel,
   SessionContextState,
   SessionInteractionMode,
+  SessionMcpState,
   SessionReasoningEffort,
   SessionSettingUpdateMessage,
   SessionSettingsState,
@@ -21,10 +23,14 @@ import type {
 } from '../../shared/bridgeMessages';
 
 type OpenPanel = 'settings' | 'context' | 'model' | 'mode' | null;
-type SettingsView = 'root' | 'mode' | 'autonomy' | 'skills';
+type SettingsView = 'root' | 'mode' | 'autonomy' | 'skills' | 'mcp';
 
 export type SkillsPanelState =
   | SessionSkillsState
+  | { readonly status: 'idle'; readonly items: readonly [] };
+
+export type McpPanelState =
+  | SessionMcpState
   | { readonly status: 'idle'; readonly items: readonly [] };
 
 interface ComposerControlsProps {
@@ -32,12 +38,15 @@ interface ComposerControlsProps {
   readonly context: SessionContextState;
   readonly modelCatalog: ModelCatalogState;
   readonly skills: SkillsPanelState;
+  readonly mcp: McpPanelState;
   readonly disabled: boolean;
   readonly settingUpdatesDisabled: boolean;
   readonly onContextRefresh: () => void;
   readonly onSettingUpdate: (update: SessionSettingSelection) => void;
   readonly onSkillsRefresh: () => void;
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
+  readonly onMcpRefresh: () => void;
+  readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
 }
 
 export type SessionSettingSelection =
@@ -101,12 +110,15 @@ export function ComposerControls({
   context,
   modelCatalog,
   skills,
+  mcp,
   disabled,
   settingUpdatesDisabled,
   onContextRefresh,
   onSettingUpdate,
   onSkillsRefresh,
   onSkillToggle,
+  onMcpRefresh,
+  onMcpServerToggle,
 }: ComposerControlsProps): React.JSX.Element {
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
   const [settingsView, setSettingsView] = useState<SettingsView>('root');
@@ -242,11 +254,14 @@ export function ComposerControls({
           view={settingsView}
           settings={settings}
           skills={skills}
+          mcp={mcp}
           disabled={settingControlsDisabled}
           onViewChange={setSettingsView}
           onUpdate={onSettingUpdate}
           onSkillsRefresh={onSkillsRefresh}
           onSkillToggle={onSkillToggle}
+          onMcpRefresh={onMcpRefresh}
+          onMcpServerToggle={onMcpServerToggle}
         />
       ) : null}
       {openPanel === 'context' ? (
@@ -324,16 +339,20 @@ function SettingsPopover({
   view,
   settings,
   skills,
+  mcp,
   disabled,
   onViewChange,
   onUpdate,
   onSkillsRefresh,
   onSkillToggle,
+  onMcpRefresh,
+  onMcpServerToggle,
 }: {
   readonly id: string;
   readonly view: SettingsView;
   readonly settings: SessionSettingsState;
   readonly skills: SkillsPanelState;
+  readonly mcp: McpPanelState;
   readonly disabled: boolean;
   readonly onViewChange: (view: SettingsView) => void;
   readonly onUpdate: (
@@ -344,6 +363,8 @@ function SettingsPopover({
   ) => void;
   readonly onSkillsRefresh: () => void;
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
+  readonly onMcpRefresh: () => void;
+  readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
 }): React.JSX.Element {
   const [query, setQuery] = useState('');
   const confirmed = settings.value;
@@ -391,6 +412,25 @@ function SettingsPopover({
           onBack={() => onViewChange('root')}
           onRefresh={onSkillsRefresh}
           onToggle={onSkillToggle}
+        />
+      </div>
+    );
+  }
+
+  if (view === 'mcp') {
+    return (
+      <div
+        id={id}
+        className="dvx-composer-popover dvx-settings-popover"
+        role="dialog"
+        aria-label="MCP servers"
+      >
+        <McpPanel
+          mcp={mcp}
+          disabled={disabled}
+          onBack={() => onViewChange('root')}
+          onRefresh={onMcpRefresh}
+          onToggle={onMcpServerToggle}
         />
       </div>
     );
@@ -485,7 +525,31 @@ function SettingsPopover({
           <ChevronDownIcon />
         </button>
       ) : null}
-      {showMcp ? <SettingsInfoRow kind="mcp" label="MCP servers" /> : null}
+      {showMcp ? (
+        <button
+          type="button"
+          className="dvx-popover-row dvx-settings-link-row"
+          onClick={() => {
+            if (mcp.status === 'idle' || mcp.status === 'error') {
+              onMcpRefresh();
+            }
+            onViewChange('mcp');
+          }}
+        >
+          <SettingsInfoIcon kind="mcp" />
+          <span className="dvx-popover-row-copy">
+            <strong>MCP servers</strong>
+          </span>
+          <span className="dvx-popover-row-value">
+            {mcp.status === 'ready'
+              ? `${mcp.items.filter(
+                  (server) => server.status !== 'disabled',
+                ).length}/${mcp.items.length} on`
+              : ''}
+          </span>
+          <ChevronDownIcon />
+        </button>
+      ) : null}
       {!showMode && !showAutonomy && !showSkills && !showMcp ? (
         <p className="dvx-popover-message">No matching actions.</p>
       ) : null}
@@ -600,6 +664,161 @@ function SkillRow({
         aria-checked={skill.enabled}
         disabled={disabled}
         onClick={() => onToggle(skill.name, skill.enabled)}
+      >
+        <span className="dvx-skill-switch-thumb" aria-hidden="true" />
+      </button>
+    </li>
+  );
+}
+
+function McpPanel({
+  mcp,
+  disabled,
+  onBack,
+  onRefresh,
+  onToggle,
+}: {
+  readonly mcp: McpPanelState;
+  readonly disabled: boolean;
+  readonly onBack: () => void;
+  readonly onRefresh: () => void;
+  readonly onToggle: (name: string, enabled: boolean) => void;
+}): React.JSX.Element {
+  const busy = mcp.status === 'loading' || mcp.status === 'idle';
+  return (
+    <div className="dvx-skills-panel">
+      <div className="dvx-popover-heading">
+        <button
+          type="button"
+          className="dvx-skills-back"
+          aria-label="Back to session controls"
+          onClick={onBack}
+        >
+          <ChevronLeftIcon />
+          <strong>MCP servers</strong>
+        </button>
+        <button
+          type="button"
+          className="dvx-popover-refresh"
+          disabled={busy}
+          onClick={onRefresh}
+        >
+          Refresh
+        </button>
+      </div>
+      {mcp.status === 'unsupported' || mcp.status === 'error' ? (
+        <p
+          className={`dvx-popover-message ${
+            mcp.status === 'error' ? 'dvx-error-text' : ''
+          }`}
+          role={mcp.status === 'error' ? 'alert' : 'status'}
+        >
+          {mcp.message}
+        </p>
+      ) : null}
+      {busy && mcp.items.length === 0 ? (
+        <p className="dvx-popover-message" role="status">
+          Loading MCP servers…
+        </p>
+      ) : null}
+      {mcp.status === 'ready' && mcp.items.length === 0 ? (
+        <p className="dvx-popover-message" role="status">
+          No MCP servers configured.
+        </p>
+      ) : null}
+      {mcp.items.length > 0 ? (
+        <ul className="dvx-skill-list" aria-label="MCP servers">
+          {mcp.items.map((server) => (
+            <McpServerRow
+              key={server.name}
+              server={server}
+              disabled={disabled || busy}
+              onToggle={onToggle}
+            />
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function McpServerRow({
+  server,
+  disabled,
+  onToggle,
+}: {
+  readonly server: McpServerSummary;
+  readonly disabled: boolean;
+  readonly onToggle: (name: string, enabled: boolean) => void;
+}): React.JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+  const enabled = server.status !== 'disabled';
+  const toolCount = server.toolCount ?? server.tools.length;
+  return (
+    <li className="dvx-skill-row dvx-mcp-row">
+      <div className="dvx-skill-copy">
+        <span className="dvx-skill-name">
+          <span
+            className={`dvx-mcp-status dvx-mcp-status-${server.status}`}
+            title={server.status}
+            aria-hidden="true"
+          />
+          {server.name}
+          <span className="dvx-skill-location">
+            {formatLabel(server.status)}
+          </span>
+          {server.requiresAuth ? (
+            <span className="dvx-skill-location">needs auth</span>
+          ) : null}
+        </span>
+        {server.tools.length > 0 ? (
+          <button
+            type="button"
+            className="dvx-mcp-tools-toggle"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((current) => !current)}
+          >
+            {expanded ? 'Hide tools' : `Show ${toolCount} tools`}
+          </button>
+        ) : (
+          <span className="dvx-skill-description">
+            {toolCount} tools
+          </span>
+        )}
+        {expanded ? (
+          <ul className="dvx-mcp-tool-list" aria-label={`${server.name} tools`}>
+            {server.tools.map((tool) => (
+              <li key={tool.name} className="dvx-mcp-tool">
+                <span className="dvx-mcp-tool-name">
+                  {tool.name}
+                  {tool.readOnly ? (
+                    <span className="dvx-skill-location">read-only</span>
+                  ) : null}
+                  {!tool.enabled ? (
+                    <span className="dvx-skill-location">off</span>
+                  ) : null}
+                </span>
+                {tool.description !== null ? (
+                  <span
+                    className="dvx-skill-description"
+                    title={tool.description}
+                  >
+                    {tool.description}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        className="dvx-skill-switch"
+        aria-label={`${server.name} enabled`}
+        aria-checked={enabled}
+        disabled={disabled}
+        onClick={() => onToggle(server.name, !enabled)}
       >
         <span className="dvx-skill-switch-thumb" aria-hidden="true" />
       </button>
