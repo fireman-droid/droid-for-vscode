@@ -1048,6 +1048,40 @@ html, body, #root {
   flex: 0 0 13px;
 }
 
+.dvx-copy-action:disabled {
+  display: none;
+}
+
+.dvx-copy-action .dvx-copy-idle,
+.dvx-copy-action .dvx-copy-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dvx-copy-action .dvx-copy-done {
+  display: none;
+  color: #2f7d4f;
+}
+
+.dvx-copy-action[data-copied] .dvx-copy-idle {
+  display: none;
+}
+
+.dvx-copy-action[data-copied] .dvx-copy-done {
+  display: inline-flex;
+}
+
+.dvx-copy-action[data-copied] {
+  color: #2f7d4f;
+}
+
+.dvx-message-user:hover .dvx-user-actions:has(.dvx-copy-action[data-copied]),
+.dvx-message-assistant .dvx-assistant-actions:has(.dvx-copy-action[data-copied]) {
+  opacity: 1;
+  transform: none;
+}
+
 .dvx-tool-action {
   min-width: 0;
   overflow: hidden;
@@ -1323,7 +1357,7 @@ body {
   font: inherit;
   font-size: 13px;
   line-height: 21.125px;
-  resize: vertical;
+  resize: none;
 }
 
 .dvx-user-edit-input:focus-visible {
@@ -1356,6 +1390,50 @@ body {
 .dvx-user-edit-send:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.dvx-user-resending {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.dvx-user-resending .dvx-user-bubble {
+  opacity: 0.72;
+}
+
+.dvx-user-resending-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.dvx-user-resending-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vscode-focusBorder, #d2643d);
+  animation: dvx-resending-pulse 1s ease-in-out infinite;
+}
+
+@keyframes dvx-resending-pulse {
+  0%, 100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-user-resending-dot {
+    animation: none;
+  }
 }
 
 .dvx-markdown {

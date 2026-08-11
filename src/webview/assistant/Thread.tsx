@@ -9,7 +9,9 @@ import {
   createContext,
   memo,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -237,7 +239,19 @@ function UserMessage({
   const [reused, setReused] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(text);
-  const editable = messageId !== null;
+  const [resending, setResending] = useState(false);
+  const resendResetRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  useEffect(
+    () => () => {
+      if (resendResetRef.current !== null) {
+        clearTimeout(resendResetRef.current);
+      }
+    },
+    [],
+  );
+  const editable = messageId !== null && !resending;
   const reuse = (): void => {
     onReuse(text);
     setReused(true);
@@ -255,7 +269,15 @@ function UserMessage({
       return;
     }
     setEditing(false);
+    setResending(true);
     onEditResend(messageId, editText);
+    // On success this component unmounts with the forked snapshot. If the
+    // host declines the resend it only emits a diagnostic, so recover the
+    // normal presentation after a grace period instead of sticking.
+    if (resendResetRef.current !== null) {
+      clearTimeout(resendResetRef.current);
+    }
+    resendResetRef.current = setTimeout(() => setResending(false), 8000);
   };
   return (
     <MessagePrimitive.Root
@@ -312,6 +334,14 @@ function UserMessage({
               </button>
             </div>
           </div>
+        ) : resending ? (
+          <div className="dvx-user-resending">
+            <div className="dvx-user-bubble">{editText}</div>
+            <div className="dvx-user-resending-note" role="status">
+              <span className="dvx-user-resending-dot" aria-hidden="true" />
+              Resending from here…
+            </div>
+          </div>
         ) : (
           <MessagePrimitive.Parts>
             {({ part }) =>
@@ -331,14 +361,14 @@ function UserMessage({
             }
           </MessagePrimitive.Parts>
         )}
-        {editing ? null : (
+        {editing || resending ? null : (
           <ActionBarPrimitive.Root className="dvx-user-actions">
             <ActionBarPrimitive.Copy
-              className="dvx-message-action"
+              className="dvx-message-action dvx-copy-action"
               aria-label="Copy message"
+              copiedDuration={1500}
             >
-              <CopyIcon />
-              <span>Copy</span>
+              <CopyActionContent />
             </ActionBarPrimitive.Copy>
             <button
               className="dvx-message-action"
@@ -422,13 +452,16 @@ const AssistantMessage = memo(function AssistantMessage():
           }
         }}
       </MessagePrimitive.Parts>
-      <ActionBarPrimitive.Root className="dvx-assistant-actions">
+      <ActionBarPrimitive.Root
+        className="dvx-assistant-actions"
+        hideWhenRunning
+      >
         <ActionBarPrimitive.Copy
-          className="dvx-message-action"
+          className="dvx-message-action dvx-copy-action"
           aria-label="Copy response"
+          copiedDuration={1500}
         >
-          <CopyIcon />
-          <span>Copy</span>
+          <CopyActionContent />
         </ActionBarPrimitive.Copy>
       </ActionBarPrimitive.Root>
     </MessagePrimitive.Root>
@@ -683,6 +716,35 @@ function CopyIcon(): React.JSX.Element {
         d="M3 9.5H2.75A1.25 1.25 0 0 1 1.5 8.25v-5.5A1.25 1.25 0 0 1 2.75 1.5h5.5A1.25 1.25 0 0 1 9.5 2.75V3"
         stroke="currentColor"
         strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function CopyActionContent(): React.JSX.Element {
+  return (
+    <>
+      <span className="dvx-copy-idle">
+        <CopyIcon />
+        <span>Copy</span>
+      </span>
+      <span className="dvx-copy-done" aria-hidden="true">
+        <CheckIcon />
+        <span>Copied</span>
+      </span>
+    </>
+  );
+}
+
+function CheckIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path
+        d="m3.25 7.25 2.35 2.35L10.75 4.5"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );

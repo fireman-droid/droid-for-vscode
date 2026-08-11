@@ -81,6 +81,15 @@ Session 替换机制，保留 BYOK 目录视图）。Host 校验新 Session ID�
 时保留原转录并降级 historyStatus 为 partial）、写入恢复存储、发出
 info 级 `session-compacted` 诊断（含被总结的消息数）并自动刷新 Context
 用量。运行中的 Turn、待处理交互或其他 Session 操作期间会拒绝压缩。
+
+同日追加消息操作 UI 打磨：消息级 Copy 按钮在 Turn 运行期间整条隐藏
+（`ActionBarPrimitive.Root hideWhenRunning`，不再出现灰色不可点按钮），
+无可复制内容时按钮不渲染；复制成功后 1.5 秒内显示绿色对勾 “Copied”
+（基于 `data-copied` 属性的纯 CSS 切换）。编辑并重问的内联编辑框
+`resize: none` 不可拉伸；点击 Resend 后立即进入乐观 “Resending from
+here…” 状态（气泡淡化 + 脉冲圆点），成功路径由 Fork 快照替换整段转录，
+失败路径（Host 仅回发诊断）8 秒后自动恢复常规展示。已通过浏览器冒烟
+验证以上全部路径。
 下一轮严格两小时实现窗口的证据、范围、执行顺序、验收和回滚已经固化到
 `docs/preflight/`。该预研确认 Context 的累计 `used`、Breakdown
 `usedTokens`、`freeTokens` 和 Category Sum 都不能表示当前窗口；只有公开
