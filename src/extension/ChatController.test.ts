@@ -1968,6 +1968,113 @@ describe('ChatController', () => {
     expect(runtime.compact).toHaveBeenCalledOnce();
   });
 
+  it('forks the session, adopts the copy, and keeps the original in the catalog', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      fork: vi.fn(async () => ({ sessionId: 'session-fork' })),
+    });
+    const history: SessionHistoryLoader = {
+      loadHistory: vi.fn(async ({ sessionId }) =>
+        sessionId === 'session-fork'
+          ? {
+              status: 'available' as const,
+              state: {
+                transcript: [
+                  {
+                    id: 'copied-1',
+                    kind: 'user' as const,
+                    text: 'Original question',
+                  },
+                ],
+                historyStatus: 'complete' as const,
+                truncated: false,
+              },
+            }
+          : {
+              status: 'unavailable' as const,
+              reason: 'history-failed' as const,
+              message:
+                'Saved Droid session history could not be loaded.' as const,
+            },
+      ),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      history,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'session.fork',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(snapshots(messages).at(-1)).toMatchObject({
+        sessionId: 'session-fork',
+        transcript: [{ kind: 'user', text: 'Original question' }],
+      });
+    });
+    expect(runtime.fork).toHaveBeenCalledOnce();
+    expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+      severity: 'info',
+      code: 'session-forked',
+    });
+    // Unlike compaction, the forked-from session stays selectable.
+    const sessions = snapshots(messages).at(-1)!.sessions;
+    expect(
+      sessions.items.filter(({ id }) => id === 'session-1'),
+    ).toHaveLength(1);
+    expect(sessions.items.at(-1)).toMatchObject({
+      id: 'session-fork',
+      active: true,
+      title: expect.stringContaining('(fork)'),
+    });
+
+    // Wrong session id is ignored entirely.
+    controller.handleMessage({
+      type: 'session.fork',
+      sessionId: 'session-other',
+    });
+    expect(runtime.fork).toHaveBeenCalledOnce();
+  });
+
+  it('reports unsupported and failed forking safely', async () => {
+    const unsupported = createController(() => createMockRuntime());
+    ready(unsupported.controller);
+    await waitForConnected(unsupported.messages);
+    unsupported.controller.handleMessage({
+      type: 'session.fork',
+      sessionId: 'session-1',
+    });
+    expect(
+      lastMessage(unsupported.messages, 'runtime.diagnostic'),
+    ).toMatchObject({ code: 'session-fork-unsupported' });
+
+    const failing = Object.assign(createMockRuntime(), {
+      fork: vi.fn(async () => {
+        throw new Error('private fork failure');
+      }),
+    });
+    const { controller, messages } = createController(() => failing);
+    ready(controller);
+    await waitForConnected(messages);
+    controller.handleMessage({
+      type: 'session.fork',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+        code: 'session-fork-failed',
+      });
+    });
+    expect(JSON.stringify(messages)).not.toContain(
+      'private fork failure',
+    );
+  });
+
   it('reports unsupported and failed compaction safely', async () => {
     const unsupported = createController(() => createMockRuntime());
     ready(unsupported.controller);

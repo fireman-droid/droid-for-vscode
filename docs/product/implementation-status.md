@@ -107,6 +107,14 @@ truncated 徽标、移除按钮）。发送时 Host 把暂存附件经
 丢弃暂存附件。限额、空编辑器/空选区、读取失败均以 warning 诊断
 回报。已知边界：已发送消息在转录中暂不回显附件；`droid exec`
 风格的目录级 context 源无公开 SDK 渠道，保持未实现。
+
+同日追加 Session Fork：会话抽屉活跃行新增 Fork 分叉按钮（Bridge
+`session.fork` 消息）。Runtime 经 SDK `session.fork({ title })` 复制
+整段对话为新 Session 并就地收养（与 Compact 相同的 Session 替换机制，
+标题为原标题加 “(fork)” 后缀）。与 Compact 不同的是原 Session 保留在
+目录中可随时切回。Host 重新加载副本转录、写入恢复存储、丢弃暂存附件、
+发出 info 级 `session-forked` 诊断。运行中的 Turn、待处理交互或其他
+Session 操作期间会拒绝分叉。
 下一轮严格两小时实现窗口的证据、范围、执行顺序、验收和回滚已经固化到
 `docs/preflight/`。该预研确认 Context 的累计 `used`、Breakdown
 `usedTokens`、`freeTokens` 和 Category Sum 都不能表示当前窗口；只有公开
@@ -453,7 +461,7 @@ Assistant 消息 Regenerate 与文件级 Rewind 安全检查仍未实现。
 | Retry                       | 关闭并重新创建或恢复 Runtime                                                                                                 | 不会重新发送失败 Prompt，也不是消息级 Regenerate/Reload          |
 | CLI/连接诊断                | CLI 不存在、工作区无效、未信任和初始化失败提示                                                                               | 实际登录状态、登录操作、版本兼容 UI、账户状态、升级入口          |
 | Session 搜索                | 在最多 50 条本地结果中按标题或 ID 过滤                                                                                       | daemon 全量搜索、内容搜索、分页、排序和筛选                      |
-| Session 生命周期            | List、Refresh、New、Select、Resume、活跃 Session Rename、编辑重问触发的 Rewind Fork                                          | Archive、Delete、Favorite、显式 Fork、Compact                    |
+| Session 生命周期            | List、Refresh、New、Select、Resume、活跃 Session Rename、编辑重问触发的 Rewind Fork、显式 Fork、Compact                      | Archive、Delete、Favorite（无公开 SDK 渠道）                     |
 | Session 历史                | 文本、Thinking、Tool 生命周期                                                                                                | 历史 Image、Document 和未知 Block 会被省略并标记为 partial       |
 | Tool 展示                   | 语义动作、技术 Tool 名、有界进度计数/类别、生命周期和实时观察到的真实耗时；不显示原始 Call ID                                | 参数、输出、结果、文件变更、Apply/Open 操作                      |
 | 消息操作                    | Copy、Reuse in Composer、双击内联编辑并从该消息 Rewind 重问                                                                  | Assistant Regenerate、`getRewindInfo` 文件安全检查、文件恢复选择 |
@@ -502,7 +510,7 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
 
 - 目录级 Context 源与 `@`/Symbol 引用（图片/PDF/文本附件、编辑器与
   选区附件、Skills 与 MCP 浏览启停已生产接通）
-- Session Archive、显式 Fork（Rename、编辑重问 Rewind 和 Compact
+- Session Archive（Rename、编辑重问 Rewind、显式 Fork 和 Compact
   已生产接通）
 - Mission Mode 和 Events
 - Worktree Session Creation
@@ -604,7 +612,8 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [ ] Session Archive / Unarchive
 - [ ] Session Delete
 - [ ] Session Favorite
-- [ ] Session Fork
+- [x] Session Fork（会话抽屉活跃行 Fork 按钮，SDK `session.fork()`，
+      收养副本 Session，原 Session 保留在目录中）
 - [x] Session Compact（Context 浮层 “Compact conversation”，SDK
       `session.compact()`，收养延续 Session 并重载摘要转录）
 - [x] Session Rewind（经编辑重问触发，建立分支 Session）

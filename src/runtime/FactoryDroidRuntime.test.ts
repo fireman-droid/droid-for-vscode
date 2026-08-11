@@ -281,6 +281,48 @@ describe('FactoryDroidRuntime', () => {
     );
   });
 
+  it('forks the session and adopts the copy', async () => {
+    const copy = {
+      ...createMockSession(async function* () {
+        yield textDelta('on the fork');
+        yield successfulResult();
+      }),
+      id: 'session-fork',
+    };
+    const session = Object.assign(
+      createMockSession(async function* () {}),
+      {
+        fork: vi.fn(async () => copy),
+      },
+    );
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    const result = await runtime.fork('My session (fork)');
+    expect(result).toEqual({ sessionId: 'session-fork' });
+    expect(session.fork).toHaveBeenCalledWith({
+      title: 'My session (fork)',
+    });
+
+    const events = await collect(runtime.sendTurn('next'));
+    expect(copy.stream).toHaveBeenCalledWith('next', {
+      includePartialMessages: true,
+    });
+    expect(session.stream).not.toHaveBeenCalled();
+    expect(events).toEqual([
+      { type: 'text-delta', text: 'on the fork' },
+      { type: 'turn-complete', outcome: 'success' },
+    ]);
+
+    const bare = createRuntime(async () =>
+      createMockSession(async function* () {}),
+    );
+    await bare.initialize('C:\\workspace');
+    await expect(bare.fork('Title')).rejects.toThrow(
+      'does not support fork',
+    );
+  });
+
   it('projects only safe skill fields and enforces toggle success', async () => {
     const session = Object.assign(
       createMockSession(async function* () {}),

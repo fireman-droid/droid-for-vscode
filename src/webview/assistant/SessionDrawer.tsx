@@ -16,6 +16,7 @@ interface SessionDrawerProps {
   readonly actionsDisabled: boolean;
   readonly onSelectSession: (sessionId: string) => void;
   readonly onRenameSession: (sessionId: string, title: string) => void;
+  readonly onForkSession: (sessionId: string) => void;
 }
 
 const MODIFIED_TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
@@ -28,6 +29,7 @@ export const SessionDrawer = memo(function SessionDrawer({
   actionsDisabled,
   onSelectSession,
   onRenameSession,
+  onForkSession,
 }: SessionDrawerProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -146,6 +148,9 @@ export const SessionDrawer = memo(function SessionDrawer({
                         runOnce(() => onSelectSession(sessionId))
                       }
                       onRename={onRenameSession}
+                      onFork={(sessionId) =>
+                        runOnce(() => onForkSession(sessionId))
+                      }
                     />
                   ))}
                 </ul>
@@ -199,11 +204,13 @@ function SessionRow({
   disabled,
   onSelect,
   onRename,
+  onFork,
 }: {
   readonly session: SessionSummary;
   readonly disabled: boolean;
   readonly onSelect: (sessionId: string) => void;
   readonly onRename: (sessionId: string, title: string) => void;
+  readonly onFork: (sessionId: string) => void;
 }): React.JSX.Element {
   const [renaming, setRenaming] = useState(false);
   const [renameText, setRenameText] = useState(session.title);
@@ -270,21 +277,55 @@ function SessionRow({
         </time>
       </button>
       {session.active ? (
-        <button
-          type="button"
-          className="dvx-session-rename"
-          aria-label="Rename session"
-          title="Rename session"
-          disabled={disabled}
-          onClick={() => {
-            setRenameText(session.title);
-            setRenaming(true);
-          }}
-        >
-          <RenameIcon />
-        </button>
+        <>
+          <button
+            type="button"
+            className="dvx-session-rename"
+            aria-label="Fork session"
+            title="Fork session into a copy"
+            disabled={disabled}
+            onClick={() => onFork(session.id)}
+          >
+            <ForkIcon />
+          </button>
+          <button
+            type="button"
+            className="dvx-session-rename"
+            aria-label="Rename session"
+            title="Rename session"
+            disabled={disabled}
+            onClick={() => {
+              setRenameText(session.title);
+              setRenaming(true);
+            }}
+          >
+            <RenameIcon />
+          </button>
+        </>
       ) : null}
     </li>
+  );
+}
+
+function ForkIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="4.5" cy="3.75" r="1.75" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="11.5" cy="3.75" r="1.75" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="8" cy="12.25" r="1.75" stroke="currentColor" strokeWidth="1.2" />
+      <path
+        d="M4.5 5.5v1a2 2 0 0 0 2 2h3a2 2 0 0 0 2-2v-1M8 8.5v2"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

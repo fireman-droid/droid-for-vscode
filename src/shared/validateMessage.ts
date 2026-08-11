@@ -25,6 +25,7 @@ import {
   type RuntimeRetryMessage,
   type SessionCompactMessage,
   type SessionContextRefreshMessage,
+  type SessionForkMessage,
   type SessionNewMessage,
   type SessionRenameMessage,
   type SessionSelectMessage,
@@ -80,6 +81,8 @@ export function parseWebviewMessage(
         return parseSessionContextRefresh(value);
       case 'session.compact':
         return parseSessionCompact(value);
+      case 'session.fork':
+        return parseSessionFork(value);
       case 'skills.refresh':
         return parseSkillsRefresh(value);
       case 'skill.toggle':
@@ -387,6 +390,19 @@ function parseSessionCompact(
   }
 
   return { type: 'session.compact', sessionId: value.sessionId };
+}
+
+function parseSessionFork(
+  value: UnknownRecord,
+): SessionForkMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'session.fork', sessionId: value.sessionId };
 }
 
 function parseSkillsRefresh(

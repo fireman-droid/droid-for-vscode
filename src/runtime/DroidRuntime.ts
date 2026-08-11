@@ -198,6 +198,10 @@ export interface RuntimeCompactResult {
   readonly removedCount: number;
 }
 
+export interface RuntimeForkResult {
+  readonly sessionId: string;
+}
+
 export interface DroidRuntime {
   initialize(
     target: RuntimeSessionTarget | string,
@@ -225,6 +229,13 @@ export interface DroidRuntime {
    * targets. Optional: absent when the runtime cannot compact.
    */
   compact?(): Promise<RuntimeCompactResult>;
+  /**
+   * Forks the active session: Droid copies the conversation into a
+   * new session that this runtime then targets, while the original
+   * session stays untouched on disk. Optional: absent when the
+   * runtime cannot fork.
+   */
+  fork?(title: string): Promise<RuntimeForkResult>;
   /**
    * Renames the active session. Optional: absent when the runtime
    * cannot rename sessions.

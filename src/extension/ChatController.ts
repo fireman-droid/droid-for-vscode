@@ -175,6 +175,11 @@ const COMPACT_UNSUPPORTED_MESSAGE =
   'This Droid runtime does not support context compaction.';
 const COMPACT_FAILED_MESSAGE =
   'Droid could not compact the conversation.';
+const FORK_BLOCKED_MESSAGE =
+  'Droid cannot fork right now. Wait for the current activity to finish.';
+const FORK_UNSUPPORTED_MESSAGE =
+  'This Droid runtime does not support session forking.';
+const FORK_FAILED_MESSAGE = 'Droid could not fork this session.';
 const MCP_UNSUPPORTED_MESSAGE =
   'This Droid runtime does not expose MCP servers.';
 const MCP_LOAD_FAILED_MESSAGE =
@@ -367,6 +372,9 @@ export class ChatController {
         return;
       case 'session.compact':
         this.handleSessionCompact(message.sessionId);
+        return;
+      case 'session.fork':
+        this.handleSessionFork(message.sessionId);
         return;
       case 'skills.refresh':
         this.handleSkillsRefresh(message.sessionId);
@@ -1160,6 +1168,162 @@ export class ChatController {
           : 'Conversation compacted.',
     });
     this.refreshContextAfterTurn(compactedSessionId);
+  }
+
+  private handleSessionFork(sessionId: string): void {
+    const runtime = this.runtime;
+    if (
+      runtime !== null &&
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    if (
+      runtime === null ||
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    if (
+      isTurnActive(this.turn) ||
+      this.interactions.hasPending() ||
+      this.sessionOperationInProgress ||
+      this.refreshInProgress ||
+      this.settingsUpdate !== null
+    ) {
+      this.emitSessionDiagnostic(
+        'session-fork-blocked',
+        FORK_BLOCKED_MESSAGE,
+      );
+      return;
+    }
+    if (typeof runtime.fork !== 'function') {
+      this.emitSessionDiagnostic(
+        'session-fork-unsupported',
+        FORK_UNSUPPORTED_MESSAGE,
+      );
+      return;
+    }
+
+    this.sessionOperationInProgress = true;
+    void this.performFork(runtime, sessionId).finally(() => {
+      this.sessionOperationInProgress = false;
+    });
+  }
+
+  /**
+   * Forks the active session and adopts the copy that Droid returns.
+   * The original session stays in the catalog so the user can go back
+   * to it; the current transcript carries over unchanged.
+   */
+  private async performFork(
+    runtime: DroidRuntime,
+    sessionId: string,
+  ): Promise<void> {
+    const generation = this.runtimeGeneration;
+    const cwd = this.activeRuntimeCwd;
+    if (cwd === null) {
+      return;
+    }
+
+    const previousTitle =
+      this.activeSessionSummary()?.title ?? 'Current session';
+    const forkTitle = forkTitleFromText(`${previousTitle} (fork)`);
+
+    let forkedSessionId: string;
+    try {
+      const result = await runtime.fork!(forkTitle);
+      forkedSessionId = result.sessionId;
+    } catch {
+      if (
+        this.isCurrentSessionOperation(
+          runtime,
+          generation,
+          sessionId,
+          cwd,
+        )
+      ) {
+        this.emitSessionDiagnostic(
+          'session-fork-failed',
+          FORK_FAILED_MESSAGE,
+        );
+      }
+      return;
+    }
+    if (
+      !this.isCurrentSessionOperation(
+        runtime,
+        generation,
+        sessionId,
+        cwd,
+      )
+    ) {
+      return;
+    }
+    if (
+      !isSafeBridgeId(forkedSessionId) ||
+      forkedSessionId === sessionId
+    ) {
+      this.emitSessionDiagnostic(
+        'session-fork-failed',
+        FORK_FAILED_MESSAGE,
+      );
+      return;
+    }
+
+    // Unlike compaction, the forked-from session remains valid and
+    // stays in the catalog; only the active marker moves to the fork.
+    this.sessionId = forkedSessionId;
+    this.turn = null;
+    this.clearPendingAttachments();
+    this.sessions = this.withActiveSession(this.sessions, {
+      id: forkedSessionId,
+      title: forkTitle,
+      messageCount: 0,
+      modifiedTime: new Date().toISOString(),
+      active: true,
+    });
+
+    // The fork copies the conversation, but message IDs may differ, so
+    // reload its history; keep the current transcript if that fails.
+    let transcript: HostTranscriptState | null = null;
+    try {
+      const loaded = await this.sessionHistory.loadHistory({
+        cwd,
+        sessionId: forkedSessionId,
+      });
+      if (loaded.status === 'available') {
+        transcript = loaded.state;
+      }
+    } catch {
+      transcript = null;
+    }
+    if (
+      !this.isCurrentSessionOperation(
+        runtime,
+        generation,
+        forkedSessionId,
+        cwd,
+      )
+    ) {
+      return;
+    }
+    this.transcript =
+      transcript ?? { ...this.transcript, historyStatus: 'partial' };
+    this.recoveryStore.writeSession(forkedSessionId, this.transcript);
+    this.recoveryStore.selectSession(forkedSessionId);
+    void this.recoveryStore.flush();
+    this.emitSnapshot();
+    this.emit({
+      type: 'runtime.diagnostic',
+      sessionId: forkedSessionId,
+      turnId: null,
+      severity: 'info',
+      code: 'session-forked',
+      message: 'Session forked. You are now on the copy.',
+    });
+    this.refreshContextAfterTurn(forkedSessionId);
   }
 
   private handleRetry(sessionId: string | null): void {

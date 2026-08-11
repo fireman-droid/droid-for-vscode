@@ -119,6 +119,10 @@ describe('parseWebviewMessage', () => {
       sessionId: 'session-1',
     },
     {
+      type: 'session.fork',
+      sessionId: 'session-1',
+    },
+    {
       type: 'attachment.pick',
       sessionId: 'session-1',
     },
@@ -280,6 +284,8 @@ describe('parseWebviewMessage', () => {
     { type: 'session.context.refresh', sessionId: '' },
     { type: 'session.compact', sessionId: '' },
     { type: 'session.compact', sessionId: 'session-1', extra: true },
+    { type: 'session.fork', sessionId: '' },
+    { type: 'session.fork', sessionId: 'session-1', extra: true },
     { type: 'skills.refresh', sessionId: '' },
     { type: 'skills.refresh', sessionId: 'session-1', extra: true },
     { type: 'skill.toggle', sessionId: 'session-1', name: '', disabled: true },

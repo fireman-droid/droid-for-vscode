@@ -258,6 +258,15 @@ export interface SessionCompactMessage {
   readonly sessionId: string;
 }
 
+/**
+ * Forks the active session: Droid copies the conversation into a new
+ * session that the host adopts, leaving the original untouched.
+ */
+export interface SessionForkMessage {
+  readonly type: 'session.fork';
+  readonly sessionId: string;
+}
+
 /** Requests the current Droid skill catalog for the session. */
 export interface SkillsRefreshMessage {
   readonly type: 'skills.refresh';
@@ -354,6 +363,7 @@ export type WebviewToHostMessage =
   | SessionRenameMessage
   | SessionContextRefreshMessage
   | SessionCompactMessage
+  | SessionForkMessage
   | SkillsRefreshMessage
   | SkillToggleMessage
   | McpRefreshMessage

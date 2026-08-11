@@ -42,6 +42,7 @@ import {
   type DroidRuntime,
   type RuntimeAttachment,
   type RuntimeCompactResult,
+  type RuntimeForkResult,
   type RuntimeRewindParams,
   type RuntimeRewindResult,
   type RuntimeContextAccuracy,
@@ -101,6 +102,7 @@ export interface FactoryDroidSession {
   compact?(params?: {
     customInstructions?: string;
   }): Promise<{ session: FactoryDroidSession; removedCount: number }>;
+  fork?(params?: { title?: string }): Promise<FactoryDroidSession>;
   rename?(params: { title: string }): Promise<void>;
   listSkills?(): Promise<{ skills: unknown[] }>;
   setSkillDisabled?(params: {
@@ -513,6 +515,64 @@ export class FactoryDroidRuntime implements DroidRuntime {
       },
     });
     return { sessionId: nextSession.id, removedCount };
+  }
+
+  async fork(title: string): Promise<RuntimeForkResult> {
+    const session = this.requireSession();
+    if (this.activeTurn) {
+      throw new Error(
+        'Droid runtime cannot fork while a turn is active.',
+      );
+    }
+    if (typeof session.fork !== 'function') {
+      throw new Error('The Droid session does not support fork.');
+    }
+
+    const startedAt = performance.now();
+    this.recordDiagnostic({
+      level: 'info',
+      name: 'runtime.fork.started',
+    });
+
+    let nextSession: FactoryDroidSession;
+    try {
+      nextSession = await session.fork({ title });
+    } catch (error) {
+      this.recordDiagnostic({
+        level: 'error',
+        name: 'runtime.fork.finished',
+        attributes: {
+          durationMs: Math.round(performance.now() - startedAt),
+          outcome: 'sdk-error',
+        },
+      });
+      throw error;
+    }
+
+    // Forking replaces the SDK session handle in place; re-apply the
+    // captured model catalog view so `availableModels` survives.
+    const availableModels = session.availableModels;
+    this.session =
+      availableModels === undefined
+        ? nextSession
+        : createCatalogSessionView(nextSession, availableModels);
+    if (this.sessionTarget) {
+      this.sessionTarget = {
+        kind: 'resume',
+        cwd: this.sessionTarget.cwd,
+        sessionId: nextSession.id,
+      };
+    }
+
+    this.recordDiagnostic({
+      level: 'info',
+      name: 'runtime.fork.finished',
+      attributes: {
+        durationMs: Math.round(performance.now() - startedAt),
+        outcome: 'success',
+      },
+    });
+    return { sessionId: nextSession.id };
   }
 
   async rename(title: string): Promise<void> {
@@ -1211,6 +1271,9 @@ function createCatalogSessionView(
   }
   if (typeof session.compact === 'function') {
     view.compact = (params) => session.compact!(params);
+  }
+  if (typeof session.fork === 'function') {
+    view.fork = (params) => session.fork!(params);
   }
   if (typeof session.rename === 'function') {
     view.rename = (params) => session.rename!(params);

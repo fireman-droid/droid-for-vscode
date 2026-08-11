@@ -281,6 +281,15 @@ export function App(): React.JSX.Element {
     }
     post(vscode, { type: 'session.compact', sessionId });
   }, [sessionId, vscode]);
+  const handleForkSession = useCallback(
+    (targetSessionId: string): void => {
+      post(vscode, {
+        type: 'session.fork',
+        sessionId: targetSessionId,
+      });
+    },
+    [vscode],
+  );
   const handleMcpRefresh = useCallback((): void => {
     if (sessionId === null) {
       return;
@@ -396,6 +405,7 @@ export function App(): React.JSX.Element {
           onNewSession={handleNewSession}
           onSelectSession={handleSelectSession}
           onRenameSession={handleRenameSession}
+          onForkSession={handleForkSession}
         />
         <DroidThread
           pending={showPending}
@@ -456,12 +466,14 @@ function Header({
   onNewSession,
   onSelectSession,
   onRenameSession,
+  onForkSession,
 }: {
   readonly state: typeof initialAssistantWebviewState;
   readonly sessionActionsDisabled: boolean;
   readonly onNewSession: () => void;
   readonly onSelectSession: (sessionId: string) => void;
   readonly onRenameSession: (sessionId: string, title: string) => void;
+  readonly onForkSession: (sessionId: string) => void;
 }): React.JSX.Element {
   const connectionLabel = formatConnectionStatus(state.connection.status);
   return (
@@ -494,6 +506,7 @@ function Header({
           actionsDisabled={sessionActionsDisabled}
           onSelectSession={onSelectSession}
           onRenameSession={onRenameSession}
+          onForkSession={onForkSession}
         />
       </div>
     </header>
