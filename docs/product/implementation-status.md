@@ -676,8 +676,8 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [x] 当前编辑器
 - [x] 编辑器选区
 - [ ] Open Editors
-- [ ] Problems
-- [ ] Git Changes
+- [x] Problems（`+` 面板 “Attach problems”，工作区诊断文本，≤200 条）
+- [x] Git Changes（`+` 面板 “Attach git changes”，未提交差异文本）
 - [ ] Terminal Output
 - [x] 项目文件选择（Composer `@` 提及经 `workspace.searchFiles`
       搜索工作区文件并按相对路径附加）
@@ -913,15 +913,14 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 ## 下一步
 
-1. 按 `[docs/preflight/00-two-hour-runbook.md](../preflight/00-two-hour-runbook.md)`
-   执行严格两小时垂直切片，不在窗口内继续调研。
-2. 首先接通 Last-call Context Meter；如果公开事件/加载响应无法安全接通，
-   保留 Unavailable 状态，不使用私有 `_client` 或累计 Token 推断。
-3. Webview 改为 Production React 和 Minified Bundle。
-4. 在不泄露 Command、Path、Output、Terminal ID 或 Subagent ID 的前提下，
-   增加 Tool 耗时和更清楚的 Long-running 状态。
-5. 完成自动化、VSIX、Hash、安装和真实 Cursor Secondary Sidebar 可见验收。
-6. Module 2 继续暂停，直到该切片通过全部 Gate。
+1. 观察性收尾：execute 类 Tool 的流式输出预览（有界、脱敏），以及
+   收起状态下最近一条操作的滚动播报。
+2. `/` 动态命令与 Droid Commands 列表（含最近使用）。
+3. Session 管理补全：Archive / Delete / Favorite 与分支关系展示。
+4. 恢复体验：激活时先渲染本地恢复快照，CLI resume 在后台完成后再
+   对齐（当前 CLI load_session + context stats 约 10s 为主要等待）。
+5. 完整 Spec Mode 与 Mission 启动/阶段展示。
+6. 每个切片保持完整测试、打包、安装和 Cursor 可见验收。
 
 ## 维护规则
 
