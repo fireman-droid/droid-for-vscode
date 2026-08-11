@@ -241,7 +241,10 @@ export class FactoryDroidRuntime implements DroidRuntime {
           return;
         }
 
-        const event = normalizeSdkEvent(sdkEvent);
+        const event = normalizeSdkEvent(
+          sdkEvent,
+          this.sessionTarget?.cwd,
+        );
         if (event) {
           projectedEventCount += 1;
           switch (event.type) {

@@ -94,6 +94,7 @@ import {
   isStrictRecord,
   type UnknownRecord,
 } from '../../shared/strictValidation';
+import { isSafeWorkspaceRelativePath } from '../../shared/validateMessage';
 import {
   MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
   transcriptTextUnits,
@@ -455,7 +456,7 @@ function parseToolActivity(
         'progressCount',
         'latestUpdateKind',
       ],
-      ['durationMs'],
+      ['durationMs', 'filePath'],
     ) ||
     !hasTurnIdentity(value) ||
     !isId(value.toolUseId) ||
@@ -471,7 +472,9 @@ function parseToolActivity(
       value.progressCount,
       value.latestUpdateKind,
     ) ||
-    (value.durationMs !== undefined && !isSequence(value.durationMs))
+    (value.durationMs !== undefined && !isSequence(value.durationMs)) ||
+    (value.filePath !== undefined &&
+      !isSafeWorkspaceRelativePath(value.filePath))
   ) {
     return undefined;
   }
@@ -490,6 +493,9 @@ function parseToolActivity(
     ...(value.durationMs === undefined
       ? {}
       : { durationMs: value.durationMs }),
+    ...(value.filePath === undefined
+      ? {}
+      : { filePath: value.filePath }),
   };
 }
 
@@ -1697,7 +1703,7 @@ function parseToolTranscriptItem(
         'progressCount',
         'latestUpdateKind',
       ],
-      ['durationMs'],
+      ['durationMs', 'filePath'],
     ) ||
     !isId(value.id) ||
     !isId(value.turnId) ||
@@ -1714,7 +1720,9 @@ function parseToolTranscriptItem(
       value.progressCount,
       value.latestUpdateKind,
     ) ||
-    (value.durationMs !== undefined && !isSequence(value.durationMs))
+    (value.durationMs !== undefined && !isSequence(value.durationMs)) ||
+    (value.filePath !== undefined &&
+      !isSafeWorkspaceRelativePath(value.filePath))
   ) {
     return undefined;
   }
@@ -1732,6 +1740,9 @@ function parseToolTranscriptItem(
     ...(value.durationMs === undefined
       ? {}
       : { durationMs: value.durationMs }),
+    ...(value.filePath === undefined
+      ? {}
+      : { filePath: value.filePath }),
   };
 }
 

@@ -1,3 +1,5 @@
+import { join, resolve } from 'node:path';
+
 import {
   DroidErrorType,
   DroidWorkingState,
@@ -151,6 +153,73 @@ describe('normalizeSdkEvent', () => {
     ]) {
       expect(serialized).not.toContain(prohibited);
     }
+  });
+
+  it('projects workspace-relative file paths for file-modifying tools', () => {
+    const root = resolve('workspace-root');
+
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_call', {
+          name: 'Edit',
+          toolUseId: 'tool-edit',
+          input: { file_path: join(root, 'src', 'app.ts') },
+        }),
+        root,
+      ),
+    ).toEqual({
+      type: 'tool-start',
+      toolName: 'Edit',
+      toolUseId: 'tool-edit',
+      action: 'Updated workspace files',
+      filePath: 'src/app.ts',
+    });
+
+    // Relative inputs resolve against the workspace root.
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_call', {
+          name: 'Create',
+          toolUseId: 'tool-create',
+          input: { file_path: 'docs/readme.md' },
+        }),
+        root,
+      ),
+    ).toMatchObject({ filePath: 'docs/readme.md' });
+
+    // Paths escaping the workspace are dropped, not leaked.
+    const escaped = normalizeSdkEvent(
+      sdkEvent('tool_call', {
+        name: 'Edit',
+        toolUseId: 'tool-escape',
+        input: { file_path: join(root, '..', 'outside.ts') },
+      }),
+      root,
+    );
+    expect(escaped).not.toHaveProperty('filePath');
+    expect(JSON.stringify(escaped)).not.toContain('outside');
+
+    // Non-file tools never surface their inputs.
+    const read = normalizeSdkEvent(
+      sdkEvent('tool_call', {
+        name: 'Read',
+        toolUseId: 'tool-read',
+        input: { file_path: join(root, 'src', 'app.ts') },
+      }),
+      root,
+    );
+    expect(read).not.toHaveProperty('filePath');
+
+    // Without a workspace root nothing is extracted.
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_call', {
+          name: 'Edit',
+          toolUseId: 'tool-no-root',
+          input: { file_path: join(root, 'src', 'app.ts') },
+        }),
+      ),
+    ).not.toHaveProperty('filePath');
   });
 
   it('rejects unknown progress shapes instead of projecting details', () => {

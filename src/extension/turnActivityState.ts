@@ -31,6 +31,7 @@ export interface ToolActivityProjection {
   readonly progressCount: number;
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
   readonly durationMs?: number;
+  readonly filePath?: string;
 }
 
 interface ToolActivityEntry {
@@ -38,6 +39,7 @@ interface ToolActivityEntry {
   readonly progressCount: number;
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
   readonly startedAtMs?: number;
+  readonly filePath?: string;
 }
 
 export interface TurnActivityState {
@@ -134,6 +136,9 @@ export function projectToolEvent(
         ...(existing.startedAtMs === undefined
           ? {}
           : { startedAtMs: existing.startedAtMs }),
+        ...(existing.filePath === undefined
+          ? {}
+          : { filePath: existing.filePath }),
       };
       const tools = new Map(state.tools);
       tools.set(event.toolUseId, entry);
@@ -144,6 +149,24 @@ export function projectToolEvent(
     }
 
     if (event.type !== 'tool-result') {
+      // A later tool-start can complete a streamed tool call's input,
+      // e.g. the file path arriving only with the full call.
+      if (
+        event.type === 'tool-start' &&
+        event.filePath !== undefined &&
+        existing.filePath === undefined
+      ) {
+        const entry: ToolActivityEntry = {
+          ...existing,
+          filePath: event.filePath,
+        };
+        const tools = new Map(state.tools);
+        tools.set(event.toolUseId, entry);
+        return {
+          state: { ...state, tools },
+          projection: projectEntry(event, entry),
+        };
+      }
       return { state, projection: null };
     }
     const entry: ToolActivityEntry = {
@@ -174,6 +197,9 @@ export function projectToolEvent(
     latestUpdateKind:
       event.type === 'tool-progress' ? event.updateKind : null,
     ...(status === 'running' ? { startedAtMs: nowMs } : {}),
+    ...(event.type === 'tool-start' && event.filePath !== undefined
+      ? { filePath: event.filePath }
+      : {}),
   };
   const tools = new Map(state.tools);
   tools.set(event.toolUseId, entry);
@@ -202,5 +228,8 @@ function projectEntry(
     progressCount: entry.progressCount,
     latestUpdateKind: entry.latestUpdateKind,
     ...(durationMs === undefined ? {} : { durationMs }),
+    ...(entry.filePath === undefined
+      ? {}
+      : { filePath: entry.filePath }),
   };
 }

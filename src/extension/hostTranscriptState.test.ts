@@ -377,6 +377,43 @@ describe('hostTranscriptState', () => {
     ]);
   });
 
+  it('attaches and preserves a tool file path across activity updates', () => {
+    let state = createHostTranscriptState('complete');
+    state = project(state, {
+      type: 'tool.activity',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolUseId: 'tool-1',
+      toolName: 'Edit',
+      action: 'Updated workspace files',
+      status: 'running',
+      progressCount: 0,
+      latestUpdateKind: null,
+      filePath: 'src/app.ts',
+    });
+    // A later update without the path keeps the recorded one.
+    state = project(state, {
+      type: 'tool.activity',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolUseId: 'tool-1',
+      toolName: 'Edit',
+      action: 'Updated workspace files',
+      status: 'completed',
+      progressCount: 1,
+      latestUpdateKind: 'status',
+      durationMs: 40,
+    });
+
+    expect(state.transcript).toEqual([
+      expect.objectContaining({
+        kind: 'tool',
+        status: 'completed',
+        filePath: 'src/app.ts',
+      }),
+    ]);
+  });
+
   it('never projects interaction or raw tool payload shapes', () => {
     let state = createHostTranscriptState('complete');
     state = project(state, {

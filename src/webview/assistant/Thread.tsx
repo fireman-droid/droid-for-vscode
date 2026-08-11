@@ -68,6 +68,12 @@ function ThinkingExpansionProvider({
   );
 }
 
+// Tool rows deep inside the transcript open native diffs through this
+// context so the memoized message tree stays free of prop drilling.
+const FileDiffContext = createContext<(path: string) => void>(
+  () => undefined,
+);
+
 interface DroidThreadProps {
   readonly pending: boolean;
   readonly activity?: 'working' | 'responding';
@@ -103,6 +109,7 @@ interface DroidThreadProps {
   readonly onDraftChange: (draft: string) => void;
   readonly onReuseMessage: (text: string) => void;
   readonly onEditResend: (messageId: string, text: string) => void;
+  readonly onOpenFileDiff: (path: string) => void;
   readonly editResendEnabled: boolean;
   readonly inlineInteraction?: ReactNode;
 }
@@ -142,6 +149,7 @@ export const DroidThread = memo(function DroidThread({
   onDraftChange,
   onReuseMessage,
   onEditResend,
+  onOpenFileDiff,
   editResendEnabled,
   inlineInteraction,
 }: DroidThreadProps): React.JSX.Element {
@@ -160,6 +168,7 @@ export const DroidThread = memo(function DroidThread({
         scrollToBottomOnInitialize
         scrollToBottomOnThreadSwitch
       >
+        <FileDiffContext.Provider value={onOpenFileDiff}>
         <ThinkingExpansionProvider>
           <div className="dvx-reading-column">
             <HistoryNotice
@@ -204,6 +213,7 @@ export const DroidThread = memo(function DroidThread({
             {inlineInteraction}
           </div>
         </ThinkingExpansionProvider>
+        </FileDiffContext.Provider>
         <ThreadPrimitive.ViewportFooter className="dvx-thread-footer">
           <Composer
             statusMessage={statusMessage}
@@ -444,6 +454,9 @@ const AssistantMessage = memo(function AssistantMessage():
                     <span className="dvx-tool-action">
                       {activity.action}
                     </span>
+                    {activity.filePath === null ? null : (
+                      <ToolFilePath path={activity.filePath} />
+                    )}
                     <span className="dvx-activity-state">
                       {formatToolLifecycle(activity.status)}
                       {activity.durationMs === null
@@ -483,6 +496,30 @@ const AssistantMessage = memo(function AssistantMessage():
     </MessagePrimitive.Root>
   );
 });
+
+function ToolFilePath({
+  path,
+}: {
+  readonly path: string;
+}): React.JSX.Element {
+  const openFileDiff = useContext(FileDiffContext);
+  const fileName = path.split('/').at(-1) ?? path;
+  return (
+    <button
+      type="button"
+      className="dvx-tool-file"
+      title={`Open changes for ${path}`}
+      onClick={(event) => {
+        // Keep the surrounding <details> row from toggling.
+        event.preventDefault();
+        event.stopPropagation();
+        openFileDiff(path);
+      }}
+    >
+      {fileName}
+    </button>
+  );
+}
 
 function ThinkingRow({
   statusType,
@@ -903,6 +940,7 @@ interface ToolActivityPresentation {
   readonly progressCount: number;
   readonly latestUpdateKind: string | null;
   readonly durationMs: number | null;
+  readonly filePath: string | null;
 }
 
 function readToolActivity(part: unknown): ToolActivityPresentation {
@@ -912,6 +950,7 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
     progressCount: 0,
     latestUpdateKind: null,
     durationMs: null,
+    filePath: null,
   };
   const metadata = readDroidvisxMetadata(part);
   if (
@@ -927,8 +966,16 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
       typeof metadata.latestUpdateKind === 'string')
   ) {
     return {
-      ...(metadata as Omit<ToolActivityPresentation, 'durationMs'>),
+      ...(metadata as Omit<
+        ToolActivityPresentation,
+        'durationMs' | 'filePath'
+      >),
       durationMs: readMetadataDuration(metadata),
+      filePath:
+        typeof metadata['filePath'] === 'string' &&
+        metadata['filePath'].length > 0
+          ? metadata['filePath']
+          : null,
     };
   }
   return fallback;

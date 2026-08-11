@@ -3,6 +3,7 @@ import {
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
+  MAX_TOOL_FILE_PATH_LENGTH,
   MAX_TOOL_NAME_LENGTH,
   MAX_TURN_TEXT_LENGTH,
   type AssistantDeltaMessage,
@@ -333,6 +334,10 @@ function projectToolActivity(
   if (toolName.length === 0 || action.length === 0) {
     return state;
   }
+  const filePath = message.filePath?.slice(
+    0,
+    MAX_TOOL_FILE_PATH_LENGTH,
+  );
   if (existingIndex >= 0) {
     const existing = state.transcript[existingIndex] as Extract<
       SessionTranscriptItem,
@@ -348,6 +353,7 @@ function projectToolActivity(
       ...(message.durationMs === undefined
         ? {}
         : { durationMs: message.durationMs }),
+      ...(filePath === undefined ? {} : { filePath }),
     });
   }
 
@@ -372,6 +378,7 @@ function projectToolActivity(
     ...(message.durationMs === undefined
       ? {}
       : { durationMs: message.durationMs }),
+    ...(filePath === undefined ? {} : { filePath }),
   });
 }
 

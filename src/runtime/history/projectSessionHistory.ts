@@ -19,6 +19,10 @@ import {
 } from '../../shared/transcriptLimits';
 import { summarizeToolAction } from '../../shared/toolActivity';
 import {
+  extractToolFilePath,
+  toWorkspaceRelativePath,
+} from '../toolFilePath';
+import {
   type SessionHistoryResult,
   unavailableSessionHistory,
 } from './SessionHistory';
@@ -39,6 +43,7 @@ const SYSTEM_MARKER_TAGS = new Set([
 ]);
 
 interface Projection {
+  readonly workspaceRoot: string | undefined;
   readonly transcript: Array<SessionTranscriptItem | undefined>;
   readonly positions: Map<string, number>;
   readonly ids: Set<string>;
@@ -59,6 +64,7 @@ interface Projection {
 
 export function projectSessionHistory(
   loaded: unknown,
+  options?: { readonly workspaceRoot?: string },
 ): SessionHistoryResult {
   try {
     const messages = readLoadedMessages(loaded);
@@ -67,6 +73,7 @@ export function projectSessionHistory(
     }
 
     const projection: Projection = {
+      workspaceRoot: options?.workspaceRoot,
       transcript: new Array(MAX_SESSION_TRANSCRIPT_ITEMS),
       positions: new Map(),
       ids: new Set(),
@@ -453,6 +460,7 @@ function appendTool(
     turnId,
     toolUseId,
   );
+  const filePath = historyToolFilePath(projection, toolName, block.input);
   appendTranscriptItem(projection, {
     id: transcriptId,
     kind: 'tool',
@@ -463,6 +471,7 @@ function appendTool(
     status: 'stopped',
     progressCount: 0,
     latestUpdateKind: null,
+    ...(filePath === undefined ? {} : { filePath }),
   });
   projection.toolCounts.set(
     turnId,
@@ -472,6 +481,20 @@ function appendTool(
     projection.tools.set(rawToolIdentity, { transcriptId });
     projection.toolIdentities.set(transcriptId, rawToolIdentity);
   }
+}
+
+function historyToolFilePath(
+  projection: Projection,
+  toolName: string,
+  input: unknown,
+): string | undefined {
+  if (projection.workspaceRoot === undefined) {
+    return undefined;
+  }
+  const rawPath = extractToolFilePath(toolName, input);
+  return rawPath === undefined
+    ? undefined
+    : toWorkspaceRelativePath(projection.workspaceRoot, rawPath);
 }
 
 function completeTool(

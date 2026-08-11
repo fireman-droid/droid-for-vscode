@@ -115,6 +115,15 @@ truncated 徽标、移除按钮）。发送时 Host 把暂存附件经
 目录中可随时切回。Host 重新加载副本转录、写入恢复存储、丢弃暂存附件、
 发出 info 级 `session-forked` 诊断。运行中的 Turn、待处理交互或其他
 Session 操作期间会拒绝分叉。
+
+同日追加文件 Diff 入口：文件修改类 Tool（Edit/Create/Write/
+ApplyPatch）的行内新增工作区相对路径 chip。Runtime 从 SDK tool_call
+输入提取 `file_path`/`filePath`/`path`，实时流与历史投影都会把绝对或
+相对路径归一化为有界的正斜杠工作区相对路径（越界、超长或含控制字符的
+路径直接丢弃，不进 Bridge）。Webview 点击 chip 发送 `file.openDiff`
+消息，Host 复验路径包含关系后经 `vscode.diff` 打开 git HEAD ↔ Working
+原生对比，无 git 或无 HEAD 版本时回退为直接打开文件，失败发出 warning
+诊断。原始 Tool 参数与输出仍然不进 Webview。
 下一轮严格两小时实现窗口的证据、范围、执行顺序、验收和回滚已经固化到
 `docs/preflight/`。该预研确认 Context 的累计 `used`、Breakdown
 `usedTokens`、`freeTokens` 和 Category Sum 都不能表示当前窗口；只有公开
@@ -128,7 +137,8 @@ Schema 中最新 Provider Call 的 `lastCallTokenUsage` /
 目录缺失或非法时仍然 fail closed，不会使用硬编码模型。历史用户消息
 现在支持双击内联编辑并通过 SDK Rewind 从该消息分支重新提问。
 Skills 浏览与启停、MCP Server 浏览与启停、消息附件（文件/编辑器/
-选区）已生产接通。Changes/Diff、daemon 主运行路径、Commands、
+选区）、文件修改类 Tool 的路径 chip 与原生 Diff 入口已生产接通。
+Changes 页面/增删行统计、daemon 主运行路径、Commands、
 Mission 和 Manage Droid 等主要功能仍未实现。
 
 ### 当前 Figma Design 还原边界
@@ -463,12 +473,12 @@ Assistant 消息 Regenerate 与文件级 Rewind 安全检查仍未实现。
 | Session 搜索                | 在最多 50 条本地结果中按标题或 ID 过滤                                                                                       | daemon 全量搜索、内容搜索、分页、排序和筛选                      |
 | Session 生命周期            | List、Refresh、New、Select、Resume、活跃 Session Rename、编辑重问触发的 Rewind Fork、显式 Fork、Compact                      | Archive、Delete、Favorite（无公开 SDK 渠道）                     |
 | Session 历史                | 文本、Thinking、Tool 生命周期                                                                                                | 历史 Image、Document 和未知 Block 会被省略并标记为 partial       |
-| Tool 展示                   | 语义动作、技术 Tool 名、有界进度计数/类别、生命周期和实时观察到的真实耗时；不显示原始 Call ID                                | 参数、输出、结果、文件变更、Apply/Open 操作                      |
+| Tool 展示                   | 语义动作、技术 Tool 名、有界进度计数/类别、生命周期和实时观察到的真实耗时、文件修改类 Tool 的工作区相对路径 chip（点击打开原生 Diff）；不显示原始 Call ID | 参数、输出、结果、增删行统计、Apply/Open 操作                    |
 | 消息操作                    | Copy、Reuse in Composer、双击内联编辑并从该消息 Rewind 重问                                                                  | Assistant Regenerate、`getRewindInfo` 文件安全检查、文件恢复选择 |
 | 本地诊断                    | SDK Observability、Host 生命周期/耗时、Output Channel、Open Logs、轮换 JSONL                                                 | 用户可配置级别、导出诊断包、遥测或远程上传                       |
 | Spec                        | ExitSpecMode 计划显示、编辑和审批；审批后的 `settings_updated` 会触发权威 Mode 回读                                          | 主动进入 Spec Mode、完整计划生命周期、实施交接                   |
 | Mission                     | Mission 相关确认可以显示为通用权限卡片                                                                                       | Mission 状态、事件、阶段、Worker、控制和独立 UI                  |
-| Diff                        | 权限详情可以显示原始文本或 Patch                                                                                             | 原生 Diff 模型、Hunk 操作、`vscode.diff`、Changes 页面           |
+| Diff                        | 权限详情可以显示原始文本或 Patch；Tool 行文件 chip 经 `vscode.diff` 打开 HEAD ↔ Working 原生对比（无 HEAD 版本回退打开文件） | Hunk 操作、增删行统计、Changes 页面、每轮 Changes 摘要           |
 | Workspace                   | 使用 `workspaceFolders[0]`                                                                                                   | 多根工作区选择                                                   |
 | Extension 入口              | 当前贡献 Activity Bar Webview                                                                                                | 与“Secondary Sidebar 为主界面”的当前项目要求仍需统一             |
 
@@ -592,7 +602,10 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [ ] 每轮 Changes 摘要
 - [ ] 文件增删行统计
 - [ ] Changes 页面
-- [ ] 使用 `vscode.diff`
+- [x] 使用 `vscode.diff`（Tool 行文件 chip 点击打开 HEAD ↔ Working
+      原生对比，无 git HEAD 版本时回退打开文件）
+- [x] 文件修改类 Tool（Edit/Create/Write/ApplyPatch）行显示工作区
+      相对路径 chip（实时流与历史投影均覆盖，越界路径不显示）
 - [ ] Diff Hunk 操作
 - [ ] 文件恢复确认
 - [ ] SCM 集成

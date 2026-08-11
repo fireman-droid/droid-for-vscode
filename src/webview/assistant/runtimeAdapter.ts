@@ -359,6 +359,7 @@ function mapItemToPart(
             progressCount: item.progressCount,
             latestUpdateKind: item.latestUpdateKind,
             durationMs: item.durationMs ?? null,
+            filePath: item.filePath ?? null,
           },
         },
       };

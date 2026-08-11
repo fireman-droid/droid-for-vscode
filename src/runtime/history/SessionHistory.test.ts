@@ -1,3 +1,5 @@
+import { join, resolve } from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -76,6 +78,56 @@ describe('projectSessionHistory', () => {
     expect(serialized).not.toContain('raw-assistant-id');
     expect(serialized).not.toContain('raw-tool-id');
     expect(serialized).not.toContain('private');
+  });
+
+  it('projects workspace-relative file paths for file-modifying history tools', () => {
+    const root = resolve('workspace-root');
+    const loaded = response([
+      message('assistant-1', 'assistant', [
+        {
+          type: 'tool_use',
+          id: 'tool-edit',
+          name: 'Edit',
+          input: { file_path: join(root, 'src', 'app.ts') },
+        },
+        {
+          type: 'tool_use',
+          id: 'tool-outside',
+          name: 'Edit',
+          input: { file_path: join(root, '..', 'outside.ts') },
+        },
+        {
+          type: 'tool_use',
+          id: 'tool-read',
+          name: 'Read',
+          input: { file_path: join(root, 'src', 'app.ts') },
+        },
+      ]),
+    ]);
+
+    const result = projectSessionHistory(loaded, {
+      workspaceRoot: root,
+    });
+
+    expect(result).toMatchObject({
+      status: 'available',
+      state: {
+        transcript: [
+          { kind: 'tool', toolName: 'Edit', filePath: 'src/app.ts' },
+          { kind: 'tool', toolName: 'Edit' },
+          { kind: 'tool', toolName: 'Read' },
+        ],
+      },
+    });
+    const transcript =
+      result.status === 'available' ? result.state.transcript : [];
+    expect(transcript[1]).not.toHaveProperty('filePath');
+    expect(transcript[2]).not.toHaveProperty('filePath');
+    expect(JSON.stringify(result)).not.toContain('outside');
+
+    // Without a workspace root no paths are projected at all.
+    const rootless = projectSessionHistory(loaded);
+    expect(JSON.stringify(rootless)).not.toContain('app.ts');
   });
 
   it('omits hidden content and marks visible attachment omissions partial', () => {

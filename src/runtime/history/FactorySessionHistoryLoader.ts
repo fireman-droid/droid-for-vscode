@@ -54,7 +54,7 @@ export class FactorySessionHistoryLoader
       return unavailableSessionHistory();
     }
 
-    return projectSessionHistory(loaded);
+    return projectSessionHistory(loaded, { workspaceRoot: cwd });
   }
 }
 

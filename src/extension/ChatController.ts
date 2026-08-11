@@ -85,6 +85,10 @@ import {
   type AttachmentPayload,
   type AttachmentSources,
 } from './attachmentSources';
+import {
+  createUnavailableFileDiffOpener,
+  type FileDiffOpener,
+} from './fileDiffOpener';
 
 export type DroidRuntimeFactory = (
   interactionHandler: RuntimeInteractionHandler,
@@ -180,6 +184,8 @@ const FORK_BLOCKED_MESSAGE =
 const FORK_UNSUPPORTED_MESSAGE =
   'This Droid runtime does not support session forking.';
 const FORK_FAILED_MESSAGE = 'Droid could not fork this session.';
+const FILE_DIFF_FAILED_MESSAGE =
+  'That file could not be opened. It may have been moved or deleted.';
 const MCP_UNSUPPORTED_MESSAGE =
   'This Droid runtime does not expose MCP servers.';
 const MCP_LOAD_FAILED_MESSAGE =
@@ -273,6 +279,8 @@ export class ChatController {
       createUnavailableSessionHistoryLoader(),
     private readonly attachmentSources: AttachmentSources =
       createUnavailableAttachmentSources(),
+    private readonly fileDiff: FileDiffOpener =
+      createUnavailableFileDiffOpener(),
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
@@ -375,6 +383,9 @@ export class ChatController {
         return;
       case 'session.fork':
         this.handleSessionFork(message.sessionId);
+        return;
+      case 'file.openDiff':
+        this.handleFileOpenDiff(message.sessionId, message.path);
         return;
       case 'skills.refresh':
         this.handleSkillsRefresh(message.sessionId);
@@ -1168,6 +1179,23 @@ export class ChatController {
           : 'Conversation compacted.',
     });
     this.refreshContextAfterTurn(compactedSessionId);
+  }
+
+  private handleFileOpenDiff(sessionId: string, path: string): void {
+    if (
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    void this.fileDiff.openDiff(path).then((outcome) => {
+      if (outcome === 'failed') {
+        this.emitSessionDiagnostic(
+          'file-diff-failed',
+          FILE_DIFF_FAILED_MESSAGE,
+        );
+      }
+    });
   }
 
   private handleSessionFork(sessionId: string): void {

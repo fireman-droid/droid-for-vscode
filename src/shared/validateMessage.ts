@@ -9,6 +9,7 @@ import {
   MAX_MCP_NAME_LENGTH,
   MAX_SESSION_TITLE_LENGTH,
   MAX_SKILL_NAME_LENGTH,
+  MAX_TOOL_FILE_PATH_LENGTH,
   MAX_TURN_TEXT_LENGTH,
   SESSION_AUTONOMY_LEVELS,
   SESSION_INTERACTION_MODES,
@@ -19,6 +20,7 @@ import {
   type AttachmentAddSelectionMessage,
   type AttachmentPickMessage,
   type AttachmentRemoveMessage,
+  type FileOpenDiffMessage,
   type McpRefreshMessage,
   type McpServerToggleMessage,
   type PermissionRespondMessage,
@@ -83,6 +85,8 @@ export function parseWebviewMessage(
         return parseSessionCompact(value);
       case 'session.fork':
         return parseSessionFork(value);
+      case 'file.openDiff':
+        return parseFileOpenDiff(value);
       case 'skills.refresh':
         return parseSkillsRefresh(value);
       case 'skill.toggle':
@@ -403,6 +407,46 @@ function parseSessionFork(
   }
 
   return { type: 'session.fork', sessionId: value.sessionId };
+}
+
+function parseFileOpenDiff(
+  value: UnknownRecord,
+): FileOpenDiffMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'path']) ||
+    !isId(value.sessionId) ||
+    !isSafeWorkspaceRelativePath(value.path)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'file.openDiff',
+    sessionId: value.sessionId,
+    path: value.path,
+  };
+}
+
+/**
+ * Accepts only bounded, forward-slash, workspace-relative paths without
+ * traversal segments, drive letters, or control characters.
+ */
+export function isSafeWorkspaceRelativePath(
+  value: unknown,
+): value is string {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > MAX_TOOL_FILE_PATH_LENGTH ||
+    /[\u0000-\u001f\u007f\\]/.test(value) ||
+    value.startsWith('/') ||
+    /^[A-Za-z]:/.test(value)
+  ) {
+    return false;
+  }
+  return value
+    .split('/')
+    .every((segment) => segment.length > 0 && segment !== '..');
 }
 
 function parseSkillsRefresh(

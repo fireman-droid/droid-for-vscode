@@ -290,6 +290,15 @@ export function App(): React.JSX.Element {
     },
     [vscode],
   );
+  const handleOpenFileDiff = useCallback(
+    (path: string): void => {
+      if (sessionId === null || connectionStatus !== 'connected') {
+        return;
+      }
+      post(vscode, { type: 'file.openDiff', sessionId, path });
+    },
+    [sessionId, connectionStatus, vscode],
+  );
   const handleMcpRefresh = useCallback((): void => {
     if (sessionId === null) {
       return;
@@ -448,6 +457,7 @@ export function App(): React.JSX.Element {
           onDraftChange={handleDraftChange}
           onReuseMessage={handleReuseMessage}
           onEditResend={handleEditResend}
+          onOpenFileDiff={handleOpenFileDiff}
           editResendEnabled={
             connectionStatus === 'connected' &&
             !active &&

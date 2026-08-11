@@ -38,6 +38,8 @@ export type RuntimeEvent =
       toolName: string;
       toolUseId: string;
       action: string;
+      /** Workspace-relative path changed by file-modifying tools. */
+      filePath?: string;
     }
   | {
       type: 'tool-progress';

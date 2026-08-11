@@ -26,6 +26,10 @@ import type {
 } from '../runtime/SessionCatalog';
 import type { SessionHistoryLoader } from '../runtime/history/SessionHistory';
 import type { AttachmentSources } from './attachmentSources';
+import type {
+  FileDiffOpener,
+  FileDiffOutcome,
+} from './fileDiffOpener';
 import { ChatController } from './ChatController';
 import {
   SessionRecoveryStore,
@@ -1968,6 +1972,61 @@ describe('ChatController', () => {
     expect(runtime.compact).toHaveBeenCalledOnce();
   });
 
+  it('opens a native diff for validated tool paths and reports failures', async () => {
+    const openDiff = vi.fn(
+      async (): Promise<FileDiffOutcome> => 'opened-diff',
+    );
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      { openDiff },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'file.openDiff',
+      sessionId: 'session-1',
+      path: 'src/app.ts',
+    });
+    await vi.waitFor(() => {
+      expect(openDiff).toHaveBeenCalledWith('src/app.ts');
+    });
+    expect(
+      messages.filter(
+        (message) =>
+          message.type === 'runtime.diagnostic' &&
+          message.code === 'file-diff-failed',
+      ),
+    ).toHaveLength(0);
+
+    // Wrong session requests never reach the opener.
+    controller.handleMessage({
+      type: 'file.openDiff',
+      sessionId: 'session-other',
+      path: 'src/app.ts',
+    });
+    expect(openDiff).toHaveBeenCalledOnce();
+
+    // A failed open surfaces a bounded warning diagnostic.
+    openDiff.mockResolvedValueOnce('failed');
+    controller.handleMessage({
+      type: 'file.openDiff',
+      sessionId: 'session-1',
+      path: 'src/missing.ts',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+        severity: 'warning',
+        code: 'file-diff-failed',
+      });
+    });
+  });
+
   it('forks the session, adopts the copy, and keeps the original in the catalog', async () => {
     const runtime = Object.assign(createMockRuntime(), {
       fork: vi.fn(async () => ({ sessionId: 'session-fork' })),
@@ -3713,6 +3772,7 @@ function createController(
   recovery?: SessionRecoveryStore,
   history?: SessionHistoryLoader,
   attachments?: AttachmentSources,
+  fileDiff?: FileDiffOpener,
 ) {
   const controller = new ChatController(
     createRuntime,
@@ -3725,6 +3785,7 @@ function createController(
     recovery,
     history,
     attachments,
+    fileDiff,
   );
   const messages: HostToWebviewMessage[] = [];
   controller.subscribe((message) => {

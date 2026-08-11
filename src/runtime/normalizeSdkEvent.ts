@@ -11,10 +11,15 @@ import {
   summarizeToolAction,
   type ToolActivityUpdateKind,
 } from '../shared/toolActivity';
+import {
+  extractToolFilePath,
+  toWorkspaceRelativePath,
+} from './toolFilePath';
 import type { RuntimeEvent } from './runtimeEvents';
 
 export function normalizeSdkEvent(
   event: DroidStreamEvent,
+  workspaceRoot?: string,
 ): RuntimeEvent | undefined {
   switch (event.type) {
     case 'assistant_text_delta':
@@ -37,19 +42,43 @@ export function normalizeSdkEvent(
         durationMs: normalizeDuration(event.durationMs),
       };
 
-    case 'tool_call':
-      return normalizeToolActivity(
+    case 'tool_call': {
+      const activity = normalizeToolActivity(
         'tool-start',
         event.name,
         event.toolUseId,
       );
+      if (activity === undefined) {
+        return undefined;
+      }
+      const filePath = normalizeToolFilePath(
+        activity.toolName,
+        event.input,
+        workspaceRoot,
+      );
+      return filePath === undefined
+        ? activity
+        : { ...activity, filePath };
+    }
 
-    case 'tool_call_delta':
-      return normalizeToolActivity(
+    case 'tool_call_delta': {
+      const activity = normalizeToolActivity(
         'tool-start',
         event.toolUse.name,
         event.toolUse.id,
       );
+      if (activity === undefined) {
+        return undefined;
+      }
+      const filePath = normalizeToolFilePath(
+        activity.toolName,
+        event.toolUse.input,
+        workspaceRoot,
+      );
+      return filePath === undefined
+        ? activity
+        : { ...activity, filePath };
+    }
 
     case 'tool_progress': {
       const activity = normalizeToolActivity(
@@ -152,6 +181,20 @@ function normalizeToolActivity<
     toolUseId,
     action: summarizeToolAction(normalizedToolName),
   };
+}
+
+function normalizeToolFilePath(
+  toolName: string,
+  input: unknown,
+  workspaceRoot: string | undefined,
+): string | undefined {
+  if (workspaceRoot === undefined) {
+    return undefined;
+  }
+  const rawPath = extractToolFilePath(toolName, input);
+  return rawPath === undefined
+    ? undefined
+    : toWorkspaceRelativePath(workspaceRoot, rawPath);
 }
 
 function normalizeToolName(value: unknown): string {

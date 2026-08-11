@@ -1089,6 +1089,30 @@ html, body, #root {
   white-space: nowrap;
 }
 
+.dvx-tool-file {
+  min-width: 0;
+  max-width: 40%;
+  overflow: hidden;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 5%);
+  color: var(--dvx-muted);
+  font-family: var(--dvx-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dvx-tool-file:hover,
+.dvx-tool-file:focus-visible {
+  background: rgb(0 0 0 / 9%);
+  color: var(--dvx-text);
+  text-decoration: underline;
+}
+
 .dvx-tool-summary {
   display: flex;
   min-width: 0;

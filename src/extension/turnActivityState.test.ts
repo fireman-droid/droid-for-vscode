@@ -169,6 +169,82 @@ describe('turnActivityState', () => {
     expect(regressed.projection).toBeNull();
   });
 
+  it('carries a tool file path through progress, late fill, and result', () => {
+    const started = projectToolEvent(
+      createTurnActivityState(),
+      {
+        type: 'tool-start',
+        toolName: 'Edit',
+        toolUseId: 'tool-edit',
+        action: 'Updated workspace files',
+        filePath: 'src/app.ts',
+      },
+      1_000,
+    );
+    const progressed = projectToolEvent(
+      started.state,
+      {
+        type: 'tool-progress',
+        toolName: 'Edit',
+        toolUseId: 'tool-edit',
+        action: 'Updated workspace files',
+        updateKind: 'status',
+      },
+      2_000,
+    );
+    const completed = projectToolEvent(
+      progressed.state,
+      {
+        type: 'tool-result',
+        toolName: 'Edit',
+        toolUseId: 'tool-edit',
+        action: 'Updated workspace files',
+        isError: false,
+      },
+      3_000,
+    );
+
+    expect(started.projection).toMatchObject({
+      filePath: 'src/app.ts',
+    });
+    expect(progressed.projection).toMatchObject({
+      filePath: 'src/app.ts',
+    });
+    expect(completed.projection).toMatchObject({
+      status: 'completed',
+      filePath: 'src/app.ts',
+    });
+
+    // A streamed delta can create the row before the full call carries
+    // the path; the later tool-start fills it in exactly once.
+    const bare = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'Create',
+      toolUseId: 'tool-late',
+      action: 'Created workspace files',
+    });
+    expect(bare.projection).not.toHaveProperty('filePath');
+    const filled = projectToolEvent(bare.state, {
+      type: 'tool-start',
+      toolName: 'Create',
+      toolUseId: 'tool-late',
+      action: 'Created workspace files',
+      filePath: 'docs/new.md',
+    });
+    expect(filled.projection).toMatchObject({
+      status: 'running',
+      filePath: 'docs/new.md',
+    });
+    const repeated = projectToolEvent(filled.state, {
+      type: 'tool-start',
+      toolName: 'Create',
+      toolUseId: 'tool-late',
+      action: 'Created workspace files',
+      filePath: 'docs/new.md',
+    });
+    expect(repeated.projection).toBeNull();
+  });
+
   it('creates a terminal tool row when the result arrives first', () => {
     const result = projectToolEvent(createTurnActivityState(), {
       type: 'tool-result',

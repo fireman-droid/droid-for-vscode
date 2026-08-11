@@ -11,6 +11,7 @@ import {
   type SessionRecoveryPersistence,
 } from './SessionRecoveryStore';
 import { createVscodeAttachmentSources } from './vscodeAttachmentSources';
+import { createVscodeFileDiffOpener } from './vscodeFileDiff';
 
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
@@ -46,6 +47,7 @@ export function activate(context: vscode.ExtensionContext): void {
     new SessionRecoveryStore(persistence),
     new FactorySessionHistoryLoader(),
     attachmentSources,
+    createVscodeFileDiffOpener(),
   );
   const provider = new DroidViewProvider(
     context.extensionUri,

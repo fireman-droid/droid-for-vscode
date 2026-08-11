@@ -58,6 +58,7 @@ export const MAX_MODEL_CATALOG_ITEMS = 100;
 export const MAX_SKILL_ITEMS = 200;
 export const MAX_SKILL_NAME_LENGTH = 128;
 export const MAX_SKILL_DESCRIPTION_LENGTH = 512;
+export const MAX_TOOL_FILE_PATH_LENGTH = 512;
 export const MAX_MCP_SERVERS = 100;
 export const MAX_MCP_TOOLS_PER_SERVER = 200;
 export const MAX_MCP_NAME_LENGTH = 128;
@@ -267,6 +268,17 @@ export interface SessionForkMessage {
   readonly sessionId: string;
 }
 
+/**
+ * Asks the host to open a native diff (or the file itself when no
+ * comparison base exists) for a workspace-relative file path that a
+ * tool activity reported.
+ */
+export interface FileOpenDiffMessage {
+  readonly type: 'file.openDiff';
+  readonly sessionId: string;
+  readonly path: string;
+}
+
 /** Requests the current Droid skill catalog for the session. */
 export interface SkillsRefreshMessage {
   readonly type: 'skills.refresh';
@@ -364,6 +376,7 @@ export type WebviewToHostMessage =
   | SessionContextRefreshMessage
   | SessionCompactMessage
   | SessionForkMessage
+  | FileOpenDiffMessage
   | SkillsRefreshMessage
   | SkillToggleMessage
   | McpRefreshMessage
@@ -607,6 +620,12 @@ export interface ToolTranscriptItem {
   readonly progressCount: number;
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
   readonly durationMs?: number;
+  /**
+   * Workspace-relative path (forward slashes) of the file this tool
+   * changed. Only present for file-modifying tools whose target stays
+   * inside the workspace.
+   */
+  readonly filePath?: string;
 }
 
 export interface DiagnosticTranscriptItem {
@@ -731,6 +750,7 @@ export interface ToolActivityMessage {
   readonly progressCount: number;
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
   readonly durationMs?: number;
+  readonly filePath?: string;
 }
 
 export interface RuntimeDiagnosticMessage {
