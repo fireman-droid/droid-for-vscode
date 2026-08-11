@@ -711,13 +711,16 @@ export class ChatController {
 
       this.connection = { status: 'connecting' };
       const catalogRequest = this.beginCatalogLoad(workspace.cwd);
-      const [, catalog] = await Promise.all([
-        recoveryLoaded
-          ? Promise.resolve()
-          : this.recoveryStore.load(),
-        this.loadCatalog(workspace.cwd),
-      ]);
-      recoveryLoaded = true;
+      const catalogPromise = this.loadCatalog(workspace.cwd);
+      if (!recoveryLoaded) {
+        await this.recoveryStore.load();
+        recoveryLoaded = true;
+        if (this.disposed) {
+          return;
+        }
+        this.emitEarlyRecoverySnapshot();
+      }
+      const catalog = await catalogPromise;
       if (this.disposed) {
         return;
       }
@@ -747,6 +750,38 @@ export class ChatController {
         return;
       }
     }
+  }
+
+  /**
+   * Pushes the locally recovered checkpoint transcript to the webview
+   * before the slow catalog/history/runtime activation completes, so a
+   * reopened window paints content immediately. The connection stays
+   * `connecting`, which keeps every mutating handler rejected until the
+   * authoritative activation snapshot replaces this one wholesale.
+   */
+  private emitEarlyRecoverySnapshot(): void {
+    const sessionId = this.recoveryStore.getSelectedSessionId();
+    if (sessionId === null) {
+      return;
+    }
+    const checkpoint = this.recoveryStore.readSession(sessionId);
+    if (
+      checkpoint === undefined ||
+      checkpoint.transcript.length === 0
+    ) {
+      return;
+    }
+    this.sessionId = sessionId;
+    this.transcript = checkpoint;
+    this.recordHost({
+      level: 'info',
+      name: 'host.perf.early-snapshot',
+      attributes: {
+        sessionId,
+        items: checkpoint.transcript.length,
+      },
+    });
+    this.emitSnapshot();
   }
 
   private handleSend(

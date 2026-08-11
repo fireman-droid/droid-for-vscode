@@ -1042,6 +1042,80 @@ describe('ChatController', () => {
     });
   });
 
+  it('emits an early connecting snapshot from the recovery checkpoint before runtime activation completes', async () => {
+    const persistence = createMemoryPersistence();
+    const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
+    seed.writeSession(
+      'saved-session',
+      appendAcceptedUserPrompt(
+        createHostTranscriptState('complete'),
+        'saved-turn',
+        'Recovered prompt',
+      ),
+    );
+    seed.selectSession('saved-session');
+    await seed.flush();
+    const activation = deferred<RuntimeAvailability>();
+    const runtime = createMockRuntime();
+    runtime.initialize.mockImplementation(() => activation.promise);
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('saved-session')]),
+      new SessionRecoveryStore(persistence, 'recovery', 0),
+    );
+
+    ready(controller);
+
+    await vi.waitFor(() => {
+      expect(snapshots(messages).length).toBeGreaterThan(0);
+    });
+    expect(snapshots(messages)[0]).toMatchObject({
+      sessionId: 'saved-session',
+      connection: { status: 'connecting' },
+      transcript: [
+        expect.objectContaining({
+          kind: 'user',
+          text: 'Recovered prompt',
+        }),
+      ],
+    });
+
+    // The early snapshot must not unlock mutating handlers.
+    send(controller, 'saved-session', 'turn-early', 'too soon');
+    expect(turnStates(messages)).toHaveLength(0);
+    expect(runtime.sendTurn).not.toHaveBeenCalled();
+
+    activation.resolve(available('saved-session'));
+    await waitForConnected(messages);
+    expect(snapshots(messages).at(-1)).toMatchObject({
+      sessionId: 'saved-session',
+      connection: { status: 'connected' },
+    });
+  });
+
+  it('does not emit an early snapshot without a recovered checkpoint transcript', async () => {
+    const persistence = createMemoryPersistence();
+    const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
+    seed.selectSession('saved-session');
+    await seed.flush();
+    const runtime = createMockRuntime();
+    runtime.initialize.mockResolvedValue(available('saved-session'));
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('saved-session')]),
+      new SessionRecoveryStore(persistence, 'recovery', 0),
+    );
+
+    ready(controller);
+    await waitForConnected(messages);
+
+    expect(snapshots(messages)[0]).toMatchObject({
+      connection: { status: 'connected' },
+    });
+  });
+
   it('reconciles and persists public history with locally recovered content before activation commit', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);

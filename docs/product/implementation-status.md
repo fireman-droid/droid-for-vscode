@@ -246,6 +246,16 @@ daemon 全量内容搜索（`Content matches` 区显示标题/片段/时间，
 连接失败（未登录/凭据不可读/连接失败）只影响归档与搜索并以
 安全诊断回报。daemon 作为执行路径（Phase 2/3）仍未实现。
 
+2026-08-12 凌晨追加恢复提速（快照先行，V1 #2）：`ChatController.startup()`
+现在在等待会话目录/历史/Runtime 初始化之前，先加载本地
+`SessionRecoveryStore` 检查点并把选中会话的转录立即作为早期
+`host.snapshot` 推给 Webview（连接状态保持 `connecting`，全部
+可变操作 handler 仍被既有守卫拒绝），随后权威激活快照整体替换。
+新增 `host.perf.early-snapshot` 埋点（sessionId/items），应先于
+`runtime.initialize.finished` 出现；P6/P7 既有埋点保留对照。无
+选中会话或检查点为空时跳过早期快照，行为与原先一致。Webview 无
+改动（`connecting` 状态既有处理）。
+
 同日追加长会话性能与卡死修复（用户反馈"页面一点击就卡死、无法
 发话、恢复对话慢"）：（1）Thinking 行展开从全局共享状态改为每行
 独立 `useState`——旧行为点一次会同时展开会话内全部 Thinking 行
@@ -941,6 +951,13 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `verify:vsix` 与 `cursor --install-extension --force` 均成功；
   版本号仍为 `0.0.0`，现有窗口需 Reload Window（或完整重启）后
   加载新 Bundle
+- 2026-08-12 凌晨打包并安装含**恢复提速切片**（快照先行）的构建：
+  `dist/droidvisx.vsix` 617,286 字节（9 files, 602.82 KB），SHA-256
+  `ACCAAF3619A426D27EDDF7F2011AF5ADFCA54A0AA2250BF94A1949FB9E9AD108`，
+  `npx vsce package --no-dependencies --out dist/droidvisx.vsix` 与
+  `cursor --install-extension dist/droidvisx.vsix --force` 均成功；
+  版本号仍为 `0.0.0`，现有窗口需 Reload Window（或完整重启）后
+  加载新 Bundle
 - 2026-08-12 凌晨打包并安装含 **daemon Phase 1 只读 sidecar 切片**
   （归档/取消归档/内容搜索）的构建：`dist/droidvisx.vsix`
   617,098 字节（9 files, 602.63 KB），SHA-256
@@ -956,6 +973,18 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最近记录的验证结果：
 
+- 恢复提速切片（2026-08-12 凌晨，V1 #2）：`ChatController` 新增
+  2 个测试（早期快照在 runtime.initialize 完成前到达且连接为
+  `connecting`、早期快照期间 `turn.send` 被拒绝且不产生
+  turn.state；无检查点时首个快照即为 connected 不发早期快照），
+  聚焦测试 1 file / 92 tests 通过；`pnpm run typecheck` 三个
+  tsconfig 全部通过；`pnpm run test` 39 files / 817 tests 全部
+  通过；`pnpm run build`、`npx vsce package --no-dependencies
+  --out dist/droidvisx.vsix`（9 files, 602.82 KB）、
+  `cursor --install-extension dist/droidvisx.vsix --force` 均
+  成功。真实窗口的"重开秒出内容"由日志验收：Reload 后
+  `host.perf.early-snapshot` 应先于 `runtime.initialize.finished`
+  出现（等待用户 Reload Window 后核对）
 - daemon Phase 1 只读 sidecar 切片（2026-08-12 凌晨）：Bridge 新增
   `session.archive` / `session.unarchive` / `sessions.archivedRefresh`
   / `session.search` 入站消息与 `session.archived` /
@@ -1191,8 +1220,8 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 1. ~~**收藏与分组**~~ — 已完成（2026-08-11 深夜，见验证状态
    「收藏与分组切片」；[`session-management-design.md`](./session-management-design.md) §1）。
-2. **恢复提速** — 快照先行渲染，重开窗口秒出内容
-   （[`tier1-polish-plan.md`](./tier1-polish-plan.md) §3；从第一档提前）。
+2. ~~**恢复提速**~~ — 已完成（2026-08-12 凌晨，见验证状态
+   「恢复提速切片」；[`tier1-polish-plan.md`](./tier1-polish-plan.md) §3；从第一档提前）。
 3. **对话内图片 + Composer 拖拽/粘贴** — 转录显示 AI/历史/工具截图 +
    输入框拖入或粘贴图片为附件
    （[`rich-content-design.md`](./rich-content-design.md) §1、§1.5）。

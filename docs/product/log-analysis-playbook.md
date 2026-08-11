@@ -108,6 +108,7 @@ Get-ChildItem "$env:APPDATA\Cursor\User\globalStorage\droidvisx.droidvisx\logs" 
 | `host.interaction.opened` | info | `kind`: permission / ask-user; `requestId` | 权限/提问卡片弹出 |
 | `host.interaction.closed` | info | `requestId`, `pendingMs` | 卡片关闭；`pendingMs` = 用户思考时长（分析回合耗时先扣它） |
 | `host.bridge.rejected` | warn | `direction: inbound`; `detail` = 原始消息 JSON（≤2048） | Webview→Host 消息未过校验被丢弃（旧版完全静默） |
+| `host.perf.early-snapshot` | info | `sessionId`, `items` | 激活时本地恢复检查点的早期快照已推送（连接仍为 connecting）；它应先于 `runtime.initialize.finished` 出现，是"重开窗口秒出内容"的证据 |
 | `host.perf.snapshot` | debug | `bytes`, `items` | 每次 host.snapshot 的序列化大小（P4） |
 | `host.perf.turn-io` | debug | `bytesOut`, `messagesOut`, `n_<type>` 每消息类型计数 | 回合终态时的出站消息总账（P5） |
 | `host.perf.recovery` | info | `sessionId`, `recovered`, `loaded`, `reconciled`, `reconcileMs` | 恢复对账（P7）。`reconciled ≈ recovered + loaded` 是重复转录/重复 toolUseId 类 bug 的特征（白屏案例根因） |
