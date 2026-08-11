@@ -63,6 +63,29 @@ describe('reconcileSessionHistory', () => {
     });
   });
 
+  it('uniquifies duplicated toolUseIds when both merge sides kept a copy', () => {
+    // A recovered checkpoint persisted from an earlier reconcile carries
+    // the same synthesized toolUseIds as a fresh history projection of
+    // the same session. When overlap matching fails, both copies survive
+    // and duplicate toolCallIds crash the webview renderer.
+    const recovered = state([
+      user('cached-u', 'Different cached prompt'),
+      tool('cached-t', 'turn-x', 'tool-dupe'),
+    ]);
+    const loaded = state([
+      user('sdk-u', 'Different loaded prompt'),
+      tool('sdk-t', 'turn-x', 'tool-dupe'),
+    ]);
+
+    const result = reconcileSessionHistory(loaded, recovered);
+    const toolUseIds = result.transcript
+      .filter((item) => item.kind === 'tool')
+      .map((item) => (item as { toolUseId: string }).toolUseId);
+    expect(toolUseIds).toHaveLength(2);
+    expect(new Set(toolUseIds).size).toBe(2);
+    expect(toolUseIds).toContain('tool-dupe');
+  });
+
   it('preserves an actual source truncation independently from partial history', () => {
     const recovered = {
       ...state([user('cached', 'Locally observed prompt')]),
@@ -105,5 +128,23 @@ function assistant(
     kind: 'assistant',
     turnId: `${id}-turn`,
     text,
+  };
+}
+
+function tool(
+  id: string,
+  turnId: string,
+  toolUseId: string,
+): Extract<SessionTranscriptItem, { kind: 'tool' }> {
+  return {
+    id,
+    kind: 'tool',
+    turnId,
+    toolUseId,
+    toolName: 'Glob',
+    action: 'Inspected workspace structure',
+    status: 'stopped',
+    progressCount: 0,
+    latestUpdateKind: null,
   };
 }

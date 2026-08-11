@@ -142,6 +142,40 @@ describe('Droid external-store adapter', () => {
     ).toHaveLength(4_096);
   });
 
+  it('uniquifies duplicate toolCallIds within one assistant message', () => {
+    // Recovery checkpoints persisted before the reconcile fix can carry
+    // two tool items with the same toolUseId in one turn; assistant-ui
+    // throws on duplicate toolCallIds and blanks the whole panel.
+    const toolItem = (id: string) =>
+      ({
+        id,
+        kind: 'tool',
+        turnId: 'turn-a',
+        toolUseId: 'tool-dupe',
+        toolName: 'Glob',
+        action: 'Inspected workspace structure',
+        status: 'stopped',
+        progressCount: 0,
+        latestUpdateKind: null,
+      }) as const;
+    const messages = mapTranscriptToRuntimeMessages(
+      [toolItem('tool-a'), toolItem('tool-b')],
+      null,
+    );
+
+    expect(messages).toHaveLength(1);
+    const content = messages[0]!.content;
+    if (!Array.isArray(content)) {
+      throw new Error('Expected content array');
+    }
+    const callIds = content
+      .filter((part) => part.type === 'tool-call')
+      .map((part) => (part as { toolCallId: string }).toolCallId);
+    expect(callIds).toHaveLength(2);
+    expect(new Set(callIds).size).toBe(2);
+    expect(callIds[0]).toBe('tool-dupe');
+  });
+
   it('reuses message identities for untouched transcript items', () => {
     const userItem = {
       id: 'user-a',

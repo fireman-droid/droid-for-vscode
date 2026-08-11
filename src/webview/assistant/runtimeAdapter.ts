@@ -289,7 +289,7 @@ export function mapTranscriptToRuntimeMessages(
     const message: SafeRuntimeMessage = {
       id: descriptor.id,
       role: 'assistant',
-      content: descriptor.items.map(mapItemToPart),
+      content: uniqueToolCallIds(descriptor.items.map(mapItemToPart)),
       status,
     };
     nextEntries.push([
@@ -321,6 +321,32 @@ function sameItemIdentities(
     }
   }
   return true;
+}
+
+/**
+ * assistant-ui throws (and React unmounts the whole tree) when two
+ * tool-call parts in one message share a toolCallId. Persisted recovery
+ * checkpoints written before the reconcile fix can still contain such
+ * duplicates, so uniquify defensively at the render boundary.
+ */
+function uniqueToolCallIds(
+  parts: readonly SafeRuntimePart[],
+): readonly SafeRuntimePart[] {
+  const seen = new Set<string>();
+  return parts.map((part) => {
+    if (part.type !== 'tool-call' || part.toolCallId === undefined) {
+      return part;
+    }
+    const base = part.toolCallId;
+    let id = base;
+    let collision = 0;
+    while (seen.has(id)) {
+      collision += 1;
+      id = `${base}#${collision}`;
+    }
+    seen.add(id);
+    return id === base ? part : { ...part, toolCallId: id };
+  });
 }
 
 function mapItemToPart(

@@ -104,31 +104,59 @@ function uniqueTranscriptIds(
   transcript: readonly SessionTranscriptItem[],
 ): readonly SessionTranscriptItem[] {
   const ids = new Set<string>();
+  const toolUseIds = new Set<string>();
   return transcript.map((item, index) => {
-    if (!ids.has(item.id)) {
-      ids.add(item.id);
-      return item;
+    let result = item;
+    if (ids.has(result.id)) {
+      result = { ...result, id: uniqueValue(ids, item, index, item.id) };
     }
-    let collision = 0;
-    let id = stableTranscriptId(
+    ids.add(result.id);
+    // A recovered checkpoint and freshly loaded history of the same
+    // session synthesize identical toolUseIds; if the overlap match
+    // fails and both copies survive the merge, duplicate toolCallIds
+    // crash the webview renderer. Uniquify them the same way as ids.
+    if (result.kind === 'tool') {
+      if (toolUseIds.has(result.toolUseId)) {
+        result = {
+          ...result,
+          toolUseId: uniqueValue(
+            toolUseIds,
+            item,
+            index,
+            result.toolUseId,
+          ),
+        };
+      }
+      toolUseIds.add(result.toolUseId);
+    }
+    return result;
+  });
+}
+
+function uniqueValue(
+  taken: ReadonlySet<string>,
+  item: SessionTranscriptItem,
+  index: number,
+  seed: string,
+): string {
+  let collision = 0;
+  let value = stableTranscriptId(
+    item.kind,
+    seed,
+    transcriptItemKey(item),
+    String(index),
+  );
+  while (taken.has(value)) {
+    collision += 1;
+    value = stableTranscriptId(
       item.kind,
-      item.id,
+      seed,
       transcriptItemKey(item),
       String(index),
+      String(collision),
     );
-    while (ids.has(id)) {
-      collision += 1;
-      id = stableTranscriptId(
-        item.kind,
-        item.id,
-        transcriptItemKey(item),
-        String(index),
-        String(collision),
-      );
-    }
-    ids.add(id);
-    return { ...item, id };
-  });
+  }
+  return value;
 }
 
 function markPartial(state: HostTranscriptState): HostTranscriptState {

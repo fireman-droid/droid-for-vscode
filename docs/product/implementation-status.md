@@ -947,11 +947,21 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 第一档（最后执行）：见 `tier1-polish-plan.md`，顺序为流式输出预览 →
 恢复提速 → 收起播报 → 回复动画。
 
-另有未决线索：用户报告 webview 面板空白"卡死"（Chrome harness 用
-真实恢复数据无法复现，扩展主机日志健康）。已上线 webview 启动信标
-与兜底文案；下次复现时 `DroidVisX Logs` 会给出 boot/render 信标与
-具体错误。主要怀疑长时间运行的 Cursor 主进程在多次 VSIX 重装后
-webview service worker 缓存损坏，需完整重启 Cursor 验证。
+空白"卡死"已定位并修复（2026-08-11 晚）：启动信标捕获到
+`Duplicate key toolCallId-... in useResources`——恢复检查点与重新加载
+的历史对同一会话合成相同的 `toolUseId`，重叠匹配失败后合并保留两份，
+assistant-ui 渲染时抛异常导致整棵 React 树卸载（即"白屏"）。修复：
+
+1. `reconcileSessionHistory` 合并输出对 `toolUseId` 与 `id` 一样去重；
+2. `runtimeAdapter` 在每条 assistant 消息内对 toolCallId 兜底去重
+   （治愈修复前已持久化的脏检查点）；
+3. 新增 `AppErrorBoundary`：任何渲染崩溃显示可读错误 + Try again，
+   并经信标写入日志，不再白屏。
+
+已用真实崩溃会话（recovered 72 + loaded 78 → reconciled 150 条）
+经生产代码路径复验：修复前 10+ 处重复、崩溃 id 出现 2 次；修复后
+重复为 0。遗留问题（另行排期）：该会话重叠匹配完全失败导致对话内容
+重复展示（72+78 直接拼接），需改进 reconcile 的内容匹配。
 
 每个切片保持完整测试、打包、安装和 Cursor 可见验收。
 
