@@ -33,6 +33,10 @@
       {
         "command": "droidvisx.exportDiagnostics",
         "title": "DroidVisX: Export Diagnostics Bundle"
+      },
+      {
+        "command": "droidvisx.shutdownDaemon",
+        "title": "DroidVisX: Shut Down Background Daemon"
       }
     ],
     "viewsContainers": {

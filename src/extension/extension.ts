@@ -5,6 +5,7 @@ import { FactorySessionCatalog } from '../runtime/FactorySessionCatalog';
 import { FactorySessionHistoryLoader } from '../runtime/history/FactorySessionHistoryLoader';
 import {
   ensurePrivateDaemon,
+  startDetachedDaemon,
   stopDaemon,
   type DaemonEndpoint,
 } from '../runtime/daemon/daemonLifecycle';
@@ -13,7 +14,20 @@ import {
   type DaemonConnection,
 } from '../runtime/daemon/daemonConnection';
 import { DaemonSessionCatalog } from '../runtime/daemon/DaemonSessionCatalog';
-import { createDaemonSessionFactory } from '../runtime/daemon/createDaemonDroidSession';
+import {
+  createDaemonSessionFactory,
+  type SessionLeaseHooks,
+} from '../runtime/daemon/createDaemonDroidSession';
+import {
+  defaultDiscoveryFile,
+  ensureSharedDaemon,
+  shutdownSharedDaemon,
+} from '../runtime/daemon/daemonDiscovery';
+import {
+  acquireSessionLease,
+  defaultLeaseFile,
+  releaseSessionLease,
+} from '../runtime/daemon/sessionLease';
 import { ChatController } from './ChatController';
 import { DroidViewProvider } from './DroidViewProvider';
 import { exportDiagnosticsBundle } from './exportDiagnostics';
@@ -31,6 +45,7 @@ import { createVscodeFileDiffOpener } from './vscodeFileDiff';
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
 const exportDiagnosticsCommand = 'droidvisx.exportDiagnostics';
+const shutdownDaemonCommand = 'droidvisx.shutdownDaemon';
 let activeController: ChatController | undefined;
 let disposeDaemonSidecar: (() => Promise<void>) | undefined;
 
@@ -40,19 +55,95 @@ interface DaemonSidecar {
   readonly catalog: DaemonSessionCatalog;
 }
 
-/**
- * Lazy, memoized daemon sidecar for the read-only archive/search
- * path (daemon Phase 1). Nothing is spawned until the first daemon
- * feature is used. The private daemon is parent-pid guarded, so it
- * dies with the extension host even if disposal never runs.
- */
-function createDaemonSidecar(diagnostics: {
+type DiagnosticsSink = {
   record(event: {
     level: 'info' | 'warn';
     name: string;
     attributes?: Record<string, string | number | boolean>;
   }): void;
-}): {
+};
+
+/**
+ * How the daemon sidecar spawns and reaps its daemon.
+ *
+ * - `private`: a per-window `droid daemon` bound to this extension
+ *   host's pid (daemon Phase 1). It dies with the window, so disposal
+ *   reaps it and reconnect failures respawn it.
+ * - `shared`: the detached, discovery-file-registered daemon that
+ *   survives window reloads (daemon Phase 3). Disposal leaves it
+ *   running; only `droidvisx.shutdownDaemon` reaps it.
+ */
+interface DaemonLifecycleStrategy {
+  start(): Promise<DaemonEndpoint>;
+  /** Reap a specific endpoint after a fatal connection failure. */
+  reapOnFailure(endpoint: DaemonEndpoint): Promise<void>;
+  /** Reap on extension deactivation (no-op for the shared daemon). */
+  reapOnDispose(endpoint: DaemonEndpoint): Promise<void>;
+}
+
+function createPrivateDaemonStrategy(): DaemonLifecycleStrategy {
+  return {
+    start: () => ensurePrivateDaemon(),
+    reapOnFailure: (endpoint) => stopDaemon(endpoint),
+    reapOnDispose: (endpoint) => stopDaemon(endpoint),
+  };
+}
+
+function createSharedDaemonStrategy(
+  diagnostics: DiagnosticsSink,
+): DaemonLifecycleStrategy {
+  const discoveryFile = defaultDiscoveryFile();
+  return {
+    start: async () => {
+      const shared = await ensureSharedDaemon(discoveryFile, {
+        startDaemon: () => startDetachedDaemon(),
+        checkHealth: (url) => healthCheckDaemon(url),
+      });
+      diagnostics.record({
+        level: 'info',
+        name: 'daemon.shared.acquired',
+        attributes: {
+          url: shared.url,
+          pid: shared.pid,
+          spawned: shared.spawned,
+          versionMismatch: shared.versionMismatch,
+        },
+      });
+      return { url: shared.url, pid: shared.pid };
+    },
+    // A shared daemon must survive reconnect failures and disposal; a
+    // stale discovery record is cleared by the next `ensureSharedDaemon`
+    // health check, and `droidvisx.shutdownDaemon` handles teardown.
+    reapOnFailure: () => Promise.resolve(),
+    reapOnDispose: () => Promise.resolve(),
+  };
+}
+
+/** Confirms a daemon answers an authenticated read-only RPC. */
+async function healthCheckDaemon(url: string): Promise<boolean> {
+  try {
+    const connection = await openDaemonConnection({ url });
+    try {
+      await connection.droid.sessions.list({ limit: 1 });
+      return connection.status() === 'connected';
+    } finally {
+      connection.dispose();
+    }
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Lazy, memoized daemon sidecar for the read-only archive/search path
+ * (Phase 1) and, in daemon runtime mode, the shared execution daemon
+ * (Phase 3). Nothing is spawned until the first daemon feature is
+ * used.
+ */
+function createDaemonSidecar(
+  diagnostics: DiagnosticsSink,
+  strategy: DaemonLifecycleStrategy,
+): {
   provider: () => Promise<DaemonSessionCatalog>;
   droid: () => Promise<DaemonConnection['droid']>;
   dispose: () => Promise<void>;
@@ -60,7 +151,7 @@ function createDaemonSidecar(diagnostics: {
   let sidecar: Promise<DaemonSidecar> | null = null;
 
   const start = async (): Promise<DaemonSidecar> => {
-    const endpoint = await ensurePrivateDaemon();
+    const endpoint = await strategy.start();
     try {
       const connection = await openDaemonConnection(endpoint);
       diagnostics.record({
@@ -74,7 +165,7 @@ function createDaemonSidecar(diagnostics: {
         catalog: new DaemonSessionCatalog(connection.droid),
       };
     } catch (error) {
-      await stopDaemon(endpoint);
+      await strategy.reapOnFailure(endpoint);
       throw error;
     }
   };
@@ -92,7 +183,7 @@ function createDaemonSidecar(diagnostics: {
     }
     // Token expiry or transport loss: reconnect to the same daemon
     // with a freshly read credential. If that also fails, drop the
-    // sidecar so the next call respawns the daemon.
+    // sidecar so the next call re-acquires the daemon.
     diagnostics.record({
       level: 'warn',
       name: 'daemon.sidecar.reconnecting',
@@ -106,7 +197,7 @@ function createDaemonSidecar(diagnostics: {
       }),
       async (error: unknown) => {
         sidecar = null;
-        await stopDaemon(current.endpoint);
+        await strategy.reapOnFailure(current.endpoint);
         throw error;
       },
     );
@@ -125,10 +216,25 @@ function createDaemonSidecar(diagnostics: {
       try {
         const current = await pending;
         current.connection.dispose();
-        await stopDaemon(current.endpoint);
+        await strategy.reapOnDispose(current.endpoint);
       } catch {
         // Startup already failed; nothing left to clean up.
       }
+    },
+  };
+}
+
+/**
+ * File-backed cross-window session leases (daemon Phase 3). Guards the
+ * shared daemon's uncoordinated replacement operations so two windows
+ * never attach the same session.
+ */
+function createSessionLeaseHooks(): SessionLeaseHooks {
+  const leaseFile = defaultLeaseFile();
+  return {
+    acquire: (sessionId) => acquireSessionLease(leaseFile, sessionId),
+    release: (sessionId) => {
+      releaseSessionLease(leaseFile, sessionId);
     },
   };
 }
@@ -163,8 +269,6 @@ export function activate(context: vscode.ExtensionContext): void {
       context.workspaceState.update(key, value),
   };
   const attachmentSources = createVscodeAttachmentSources();
-  const daemonSidecar = createDaemonSidecar(diagnostics);
-  disposeDaemonSidecar = daemonSidecar.dispose;
   // Read once at activation: switching modes requires a window reload,
   // which also guarantees a clean fallback to process mode.
   const runtimeMode = vscode.workspace
@@ -175,6 +279,16 @@ export function activate(context: vscode.ExtensionContext): void {
     name: 'runtime.mode',
     attributes: { mode: runtimeMode },
   });
+  // Daemon mode needs the shared detached daemon so sessions survive a
+  // window reload (Phase 3); the read-only archive/search sidecar in
+  // process mode keeps the parent-pid private daemon (Phase 1).
+  const daemonSidecar = createDaemonSidecar(
+    diagnostics,
+    runtimeMode === 'daemon'
+      ? createSharedDaemonStrategy(diagnostics)
+      : createPrivateDaemonStrategy(),
+  );
+  disposeDaemonSidecar = daemonSidecar.dispose;
   const controller = new ChatController(
     (interactionHandler) =>
       new FactoryDroidRuntime({
@@ -185,6 +299,7 @@ export function activate(context: vscode.ExtensionContext): void {
           ? {
               createSdkSession: createDaemonSessionFactory(
                 daemonSidecar.droid,
+                createSessionLeaseHooks(),
               ),
             }
           : {}),
@@ -239,6 +354,22 @@ export function activate(context: vscode.ExtensionContext): void {
         name: 'diagnostics.opened',
       });
       diagnostics.show();
+    }),
+    vscode.commands.registerCommand(shutdownDaemonCommand, async () => {
+      // The shared daemon has no shutdown RPC and survives reloads on
+      // purpose, so this terminates the discovered pid directly and
+      // clears the discovery file. Live windows re-spawn on next use.
+      const stopped = await shutdownSharedDaemon(defaultDiscoveryFile());
+      diagnostics.record({
+        level: 'info',
+        name: 'daemon.shutdown.requested',
+        attributes: { stopped },
+      });
+      void vscode.window.showInformationMessage(
+        stopped
+          ? 'DroidVisX daemon stopped. Reload the window to start a fresh one.'
+          : 'No running DroidVisX daemon was found.',
+      );
     }),
     vscode.commands.registerCommand(
       exportDiagnosticsCommand,

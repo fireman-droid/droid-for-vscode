@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   ensurePrivateDaemon,
+  startDetachedDaemon,
   stopDaemon,
   type DaemonSpawnHandle,
 } from './daemonLifecycle';
@@ -100,6 +101,50 @@ describe('ensurePrivateDaemon', () => {
         },
       }),
     ).rejects.toThrow('exited before listening (code 3)');
+  });
+});
+
+describe('startDetachedDaemon', () => {
+  it('spawns a detached daemon with no parent-pid guard', async () => {
+    const spawn = fakeSpawn(6001);
+
+    const endpoint = await startDetachedDaemon(
+      {},
+      {
+        spawnDetachedDaemon: spawn.spawnDaemon,
+        pickFreePort: async () => 45900,
+        waitForPort: async () => undefined,
+      },
+    );
+
+    expect(endpoint).toEqual({
+      url: 'ws://127.0.0.1:45900',
+      pid: 6001,
+      port: 45900,
+    });
+    expect(spawn.calls[0]?.args).toEqual([
+      'daemon',
+      '--port',
+      '45900',
+      '--host',
+      '127.0.0.1',
+    ]);
+    expect(spawn.calls[0]?.args).not.toContain('--parent-pid');
+  });
+
+  it('rejects when the detached daemon fails to spawn', async () => {
+    const spawn = fakeSpawn(undefined);
+
+    await expect(
+      startDetachedDaemon(
+        {},
+        {
+          spawnDetachedDaemon: spawn.spawnDaemon,
+          pickFreePort: async () => 45901,
+          waitForPort: async () => undefined,
+        },
+      ),
+    ).rejects.toThrow('failed to spawn');
   });
 });
 

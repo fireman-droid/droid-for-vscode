@@ -35,32 +35,69 @@ import {
  */
 export function createDaemonSessionFactory(
   getDroid: () => Promise<ConnectedDroid>,
+  lease?: SessionLeaseHooks,
 ): FactoryDroidSessionFactory {
-  return (options) => createDaemonDroidSession({ ...options, getDroid });
+  return (options) =>
+    createDaemonDroidSession({ ...options, getDroid, lease });
+}
+
+/**
+ * Cross-window lease hooks (daemon Phase 3): with a shared daemon,
+ * two windows must not attach the same session, because replacement
+ * operations (rewind/compact/fork) are not coordinated by the daemon.
+ * Absent hooks (Phase 2 private daemon) everything runs unguarded.
+ */
+export interface SessionLeaseHooks {
+  acquire(
+    sessionId: string,
+  ): { acquired: true } | { acquired: false; heldByPid: number };
+  release(sessionId: string): void;
 }
 
 export async function createDaemonDroidSession(options: {
   target: RuntimeSessionTarget;
   interactionHandler: RuntimeInteractionHandler;
   getDroid: () => Promise<ConnectedDroid>;
+  lease?: SessionLeaseHooks;
 }): Promise<FactoryDroidSession> {
   const droid = await options.getDroid();
   const callbacks = createRuntimeInteractionCallbacks(
     options.interactionHandler,
   );
+  const lease = options.lease ?? noopLease;
 
-  const session =
-    options.target.kind === 'resume'
-      ? await droid.sessions.resume(options.target.sessionId, {
-          ...callbacks,
-        })
-      : await droid.sessions.create({
-          cwd: options.target.cwd,
-          ...callbacks,
-        });
+  if (options.target.kind === 'resume') {
+    const outcome = lease.acquire(options.target.sessionId);
+    if (!outcome.acquired) {
+      throw new Error(
+        `Session is open in another window (pid ${String(outcome.heldByPid)}). Close it there or wait for that window to exit.`,
+      );
+    }
+    try {
+      const session = await droid.sessions.resume(options.target.sessionId, {
+        ...callbacks,
+      });
+      return adaptDaemonSession(droid, session, callbacks, lease);
+    } catch (error) {
+      lease.release(options.target.sessionId);
+      throw error;
+    }
+  }
 
-  return adaptDaemonSession(droid, session, callbacks);
+  const session = await droid.sessions.create({
+    cwd: options.target.cwd,
+    ...callbacks,
+  });
+  // A freshly created session id cannot be contested, so the lease is
+  // recorded after the fact purely to mark ownership.
+  lease.acquire(session.id);
+  return adaptDaemonSession(droid, session, callbacks, lease);
 }
+
+const noopLease: SessionLeaseHooks = {
+  acquire: () => ({ acquired: true }),
+  release: () => {},
+};
 
 /** Session-setting fields the daemon accepts and the runtime updates. */
 type SupportedSettingsUpdate = Pick<
@@ -72,6 +109,7 @@ function adaptDaemonSession(
   droid: ConnectedDroid,
   session: ConnectedDroidSession,
   callbacks: RuntimeInteractionCallbacks,
+  lease: SessionLeaseHooks,
 ): FactoryDroidSession {
   // The daemon confirms `updateSettings` before the `settings_updated`
   // notification refreshes the handle's snapshot, so successful updates
@@ -88,11 +126,23 @@ function adaptDaemonSession(
   const attachReplacement = async (
     newSessionId: string,
   ): Promise<FactoryDroidSession> => {
-    const next = await droid.sessions.resume(newSessionId, {
-      ...callbacks,
-    });
+    // The daemon replaces the old session with the new one, so the old
+    // lease implies ownership of the replacement; record it and only
+    // then swap handles.
+    lease.acquire(newSessionId);
+    let next: ConnectedDroidSession;
+    try {
+      next = await droid.sessions.resume(newSessionId, {
+        ...callbacks,
+      });
+    } catch (error) {
+      lease.release(newSessionId);
+      throw error;
+    }
+    const oldSessionId = session.id;
     await session.detach();
-    return adaptDaemonSession(droid, next, callbacks);
+    lease.release(oldSessionId);
+    return adaptDaemonSession(droid, next, callbacks, lease);
   };
 
   return {
@@ -222,10 +272,11 @@ function adaptDaemonSession(
     },
     // `authenticateMcpServer` and `onNotification` are intentionally
     // absent: see the factory doc comment.
-    close() {
-      // Phase 2: releasing the handle keeps the session alive in the
-      // daemon; the private daemon itself is still parent-pid bound.
-      return session.detach();
+    async close() {
+      // Releasing the handle keeps the session alive in the daemon;
+      // Phase 3's shared daemon lets it survive a window reload.
+      await session.detach();
+      lease.release(session.id);
     },
   };
 }

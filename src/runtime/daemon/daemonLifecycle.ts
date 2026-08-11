@@ -33,6 +33,10 @@ export interface DaemonLifecycleDeps {
     droidPath: string,
     args: readonly string[],
   ) => DaemonSpawnHandle;
+  readonly spawnDetachedDaemon: (
+    droidPath: string,
+    args: readonly string[],
+  ) => DaemonSpawnHandle;
   readonly pickFreePort: () => Promise<number>;
   readonly waitForPort: (
     port: number,
@@ -40,6 +44,60 @@ export interface DaemonLifecycleDeps {
     timeoutMs: number,
   ) => Promise<void>;
   readonly killProcessTree: (pid: number) => Promise<void>;
+}
+
+/**
+ * Spawns a shared `droid daemon` that outlives this process (daemon
+ * Phase 3): detached, unref'ed, and deliberately without
+ * `--parent-pid`, so window reloads and extension host exits leave it
+ * running. Callers own discovery-file bookkeeping and shutdown
+ * (`stopDaemon` / the shutdown command); nothing here reaps it.
+ */
+export async function startDetachedDaemon(
+  options: Pick<DaemonLifecycleOptions, 'droidPath' | 'host'> = {},
+  deps: Partial<
+    Pick<
+      DaemonLifecycleDeps,
+      'spawnDetachedDaemon' | 'pickFreePort' | 'waitForPort'
+    >
+  > = {},
+): Promise<DaemonEndpoint & { readonly port: number }> {
+  const droidPath = options.droidPath ?? 'droid';
+  const host = options.host ?? '127.0.0.1';
+  const spawnDetached =
+    deps.spawnDetachedDaemon ?? defaultSpawnDetachedDaemon;
+  const pickFreePort = deps.pickFreePort ?? defaultPickFreePort;
+  const waitForPort = deps.waitForPort ?? defaultWaitForPort;
+
+  const port = await pickFreePort();
+  const child = spawnDetached(droidPath, [
+    'daemon',
+    '--port',
+    String(port),
+    '--host',
+    host,
+  ]);
+  if (child.pid === undefined) {
+    throw new Error('droid daemon process failed to spawn');
+  }
+
+  let exited: number | null | undefined;
+  child.onExit((code) => {
+    exited = code ?? -1;
+  });
+
+  try {
+    await waitForPort(port, host, DAEMON_LISTEN_TIMEOUT_MS);
+  } catch (error) {
+    if (exited !== undefined) {
+      throw new Error(
+        `droid daemon exited before listening (code ${String(exited)})`,
+      );
+    }
+    throw error;
+  }
+
+  return { url: `ws://${host}:${String(port)}`, pid: child.pid, port };
 }
 
 /**
@@ -120,6 +178,25 @@ function defaultSpawnDaemon(
     stdio: ['ignore', 'ignore', 'ignore'],
     windowsHide: true,
   });
+  return {
+    pid: child.pid,
+    onExit: (listener) => {
+      child.once('exit', (code) => listener(code));
+    },
+  };
+}
+
+function defaultSpawnDetachedDaemon(
+  droidPath: string,
+  args: readonly string[],
+): DaemonSpawnHandle {
+  const child = spawn(droidPath, [...args], {
+    shell: true,
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+  child.unref();
   return {
     pid: child.pid,
     onExit: (listener) => {

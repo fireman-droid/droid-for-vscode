@@ -274,6 +274,24 @@ fail closed）：daemon 门面不报 `supportedReasoningEfforts`，
 仍 parent-pid 绑定，Reload 存活属 Phase 3）。切回 `process` 即
 完全回退，默认行为零变化。
 
+2026-08-12 凌晨追加 daemon Phase 3 Reload 存活基础设施（daemon
+模式下生效）：`droidvisx.runtime.mode = daemon` 现在改用**脱管
+共享 daemon**——`startDetachedDaemon`（`detached:true` + `unref()`、
+不带 `--parent-pid`）配合自建服务发现 `~/.droidvisx/daemon.json`
+（`wx` 独占创建处理并发拉起竞争，输家杀掉自己多起的 daemon 改连
+赢家；健康检查 = 连接 + 一次 `sessions.list({limit:1})` 认证探活；
+记录 CLI 版本供漂移提示，值为 unknown 时不误报）。跨窗口会话租约
+`~/.droidvisx/sessions-attached.json`（`{sessionId:{pid,ts}}`，
+死 pid 的租约可抢占）经 `SessionLeaseHooks` 注入 daemon 会话工厂，
+resume 前必须拿到租约（被别的存活窗口占用则拒绝并提示），替换型
+操作把租约从旧会话迁到新会话，`close` 释放租约。新增命令
+`droidvisx.shutdownDaemon`（无 shutdown RPC，直接 taskkill 发现
+文件里的 pid 并删文件）。凭据仍只经 `readFactoryAccessCredential()`，
+发现文件/租约文件均不含 token。进程模式（默认）继续用 parent-pid
+私有 daemon 做归档/搜索 sidecar，不受影响。Webview 重连对账 UI
+（in-flight 回合的活流重接、面板内 pending 权限重弹）尚未接线——
+详见"验证状态"遗留说明。
+
 同日追加长会话性能与卡死修复（用户反馈"页面一点击就卡死、无法
 发话、恢复对话慢"）：（1）Thinking 行展开从全局共享状态改为每行
 独立 `useState`——旧行为点一次会同时展开会话内全部 Thinking 行
@@ -751,10 +769,18 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
       MCP OAuth 在 daemon 模式 fail closed）
 - [x] daemon 连接和认证（Phase 1 只读 sidecar：`readFactoryAccessCredential()`
       + SDK `connectToDaemon`，认证失败分类为安全诊断）
-- [x] daemon 生命周期管理（Phase 1 私有模式：`--parent-pid` 绑定、
-      动态端口、deactivate 时结束进程树；Phase 3 脱管存活未实现）
+- [x] daemon 生命周期管理（Phase 1 私有 `--parent-pid` 模式 +
+      Phase 3 脱管共享模式：`detached`/`unref`、`~/.droidvisx/daemon.json`
+      发现文件 `wx` 竞争、`droidvisx.shutdownDaemon` 手动回收；
+      daemon 模式下会话 reload 存活已由 `probe-reload-survival.mjs`
+      实证）
+- [x] 跨窗口会话租约（Phase 3：`~/.droidvisx/sessions-attached.json`，
+      替换型操作前持租约，死 pid 可抢占）
 - [ ] daemon 失败时回退 Node subprocess（当前为配置级回退：切回
       `process` + Reload Window；无运行时自动回退）
+- [ ] Webview 重连对账 UI（Phase 3 §3.5：in-flight 回合活流重接与
+      面板内 pending 权限重弹尚未接线；daemon 侧存活已实证，见验证
+      状态遗留说明）
 - [ ] Capability Gate 接入 Extension 的安全产品门控
 
 默认（`process`）生产执行链路只使用 Node SDK `ProcessTransport`，
@@ -1000,11 +1026,51 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension dist/droidvisx.vsix --force` 均成功；
   版本号仍为 `0.0.0`，现有窗口需 Reload Window（或完整重启）后
   加载新 Bundle
+- 2026-08-12 凌晨打包并安装含 **daemon Phase 3 Reload 存活基础设施
+  切片**（脱管共享 daemon + 发现文件 + 租约 + shutdown 命令）的
+  构建：`dist/droidvisx.vsix` 620,350 字节（9 files, 605.81 KB），
+  SHA-256
+  `DD706C7A2D97E6900C142839E04728E15689F569B32878B27AC66D393F81BBA1`，
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix` 与
+  `cursor --install-extension dist/droidvisx.vsix --force` 均成功；
+  版本号仍为 `0.0.0`，现有窗口需 Reload Window（或完整重启）后
+  加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- daemon Phase 3 Reload 存活基础设施切片（2026-08-12 凌晨）：
+  Runtime 新增 `startDetachedDaemon`（`detached`/`unref`、无
+  `--parent-pid`，注入式 spawn 单测 2 例）、`daemonDiscovery.ts`
+  （发现文件严格校验、健康复用、版本漂移提示、`wx` 竞争输赢两路、
+  stale 记录替换、shutdown，共 16 单测）、`sessionLease.ts`
+  （获取/抢占死 pid/拒绝存活外来占用/释放/恶意文件降级，12 单测）；
+  daemon 会话工厂新增租约接线（拒绝被占用会话、resume 失败释放、
+  替换迁移租约、close 释放，4 新单测）；Host `extension.ts` 按
+  `runtime.mode` 选择脱管共享或私有 daemon 策略并注册
+  `droidvisx.shutdownDaemon`。`pnpm run typecheck` 三个 tsconfig
+  全过；`pnpm run test` 42 files / 862 tests 全过；`pnpm run build`、
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix`
+  （605.81 KB）、`cursor --install-extension --force` 均成功。
+  **真实两代客户端存活验收**：`npx tsx artifacts/probe-reload-survival.mjs`
+  在真实登录态下跑通——脱管 daemon 起（pid 已知）；gen-A 新进程
+  create 会话、起长回合、见到首个 tool 事件后 `process.exit`；等
+  3 秒后 gen-B 新进程 resume：`survived reconnect: true`、
+  `saw turn running (post-A): true`、`ran to idle after running: true`，
+  **VERDICT: PASS**（回合在 gen-A 死后于 daemon 内继续跑到完成）。
+  探针只输出布尔/计数，token 只经 `readFactoryAccessCredential()`
+  内存读取、不落盘不打印。
+  **遗留（如实标注）**：(1) 探针里 `droid.sessions.getMessages()`
+  两次返回异常（记为 -1），未据此判定；存活/进度证据取自
+  `listOpened().workingState` 的 running→idle 迁移（§3.8(a)/(b)），
+  该路径可靠；getMessages 取数方式待后续核对。(2) Webview 重连对账
+  UI（§3.5：reload 后 in-flight 回合的活流重接与面板内 pending 权限
+  重弹）尚未接线——`FactoryDroidRuntime` 现有 seam 只能新起回合、
+  无法重接已在跑的回合流，属超出本切片 seam 的更大改动；daemon 侧
+  存活已实证，真实 Cursor 手动 reload 面板体验待该 UI 接线后完整。
+  (3) 版本漂移仅记录不强制（`cliVersion` 未探测，值为 unknown 时
+  不提示）。真实 Cursor `Developer: Reload Window` 手动验收留待用户。
 - daemon Phase 2 执行链路迁移切片（2026-08-12 凌晨）：新增
   `src/runtime/daemon/createDaemonDroidSession.test.ts` 11 个
   mock 单测（create 带 cwd 与交互回调 / resume 不带 cwd /
@@ -1306,9 +1372,13 @@ toolCallId 重复白屏修复与 AppErrorBoundary、污染检查点尾段复活�
 daemon 化 —— [`daemon-architecture-design.md`](./daemon-architecture-design.md)
 + [`daemon-implementation-plan.md`](./daemon-implementation-plan.md)。
 见 HANDOVER 第 7 节。Phase 1（只读 sidecar：归档/取消归档/内容
-搜索）与 Phase 2（执行链路迁移，`droidvisx.runtime.mode` 可选
-daemon、默认 process）均已于 2026-08-12 凌晨完成（见验证状态）；
-Phase 3（Reload 存活）未开始。
+搜索）、Phase 2（执行链路迁移，`droidvisx.runtime.mode` 可选
+daemon、默认 process）与 Phase 3（Reload 存活：脱管共享 daemon +
+发现文件 + 跨窗口租约 + shutdown 命令，daemon 侧存活由
+`probe-reload-survival.mjs` 实证 PASS）均已于 2026-08-12 凌晨
+完成（见验证状态）；Phase 3 的 Webview 重连对账 UI（in-flight
+回合活流重接、面板内 pending 权限重弹）尚未接线（见验证状态遗留
+说明）。
 
 ### 第一档与恢复提速的关系
 

@@ -347,6 +347,92 @@ describe('createDaemonDroidSession', () => {
     expect(mock.created.detach).not.toHaveBeenCalled();
   });
 
+  it('refuses to resume a session leased to another live window', async () => {
+    const mock = createDroidMock();
+
+    await expect(
+      createDaemonDroidSession({
+        target: {
+          kind: 'resume',
+          cwd: 'C:\\workspace',
+          sessionId: 'saved-session',
+        },
+        interactionHandler: cancellingRuntimeInteractionHandler,
+        getDroid: async () => mock.droid,
+        lease: {
+          acquire: () => ({ acquired: false, heldByPid: 4242 }),
+          release: vi.fn(),
+        },
+      }),
+    ).rejects.toThrow('open in another window (pid 4242)');
+    expect(mock.sessions.resume).not.toHaveBeenCalled();
+  });
+
+  it('releases the lease when the leased resume fails', async () => {
+    const mock = createDroidMock();
+    mock.sessions.resume.mockRejectedValue(new Error('resume failed'));
+    const lease = {
+      acquire: vi.fn(() => ({ acquired: true }) as const),
+      release: vi.fn(),
+    };
+
+    await expect(
+      createDaemonDroidSession({
+        target: {
+          kind: 'resume',
+          cwd: 'C:\\workspace',
+          sessionId: 'saved-session',
+        },
+        interactionHandler: cancellingRuntimeInteractionHandler,
+        getDroid: async () => mock.droid,
+        lease,
+      }),
+    ).rejects.toThrow('resume failed');
+    expect(lease.acquire).toHaveBeenCalledWith('saved-session');
+    expect(lease.release).toHaveBeenCalledWith('saved-session');
+  });
+
+  it('moves the lease from the source to the replacement on compact', async () => {
+    const mock = createDroidMock();
+    const lease = {
+      acquire: vi.fn((_id: string) => ({ acquired: true }) as const),
+      release: vi.fn(),
+    };
+    const session = await createDaemonDroidSession({
+      target: { kind: 'new', cwd: 'C:\\workspace' },
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      getDroid: async () => mock.droid,
+      lease,
+    });
+
+    await session.compact?.({});
+
+    expect(lease.acquire.mock.calls.map(([id]) => id)).toEqual([
+      'session-1',
+      'session-2',
+    ]);
+    expect(lease.release).toHaveBeenCalledExactlyOnceWith('session-1');
+  });
+
+  it('releases the lease on close', async () => {
+    const mock = createDroidMock();
+    const lease = {
+      acquire: vi.fn(() => ({ acquired: true }) as const),
+      release: vi.fn(),
+    };
+    const session = await createDaemonDroidSession({
+      target: { kind: 'new', cwd: 'C:\\workspace' },
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      getDroid: async () => mock.droid,
+      lease,
+    });
+
+    await session.close();
+
+    expect(mock.created.detach).toHaveBeenCalledOnce();
+    expect(lease.release).toHaveBeenCalledExactlyOnceWith('session-1');
+  });
+
   it('close detaches the handle so the session survives in the daemon', async () => {
     const mock = createDroidMock();
     const session = await createDaemonDroidSession({
