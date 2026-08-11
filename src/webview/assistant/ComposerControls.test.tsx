@@ -48,6 +48,9 @@ describe('ComposerControls', () => {
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
         onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
       />,
     );
 
@@ -72,6 +75,9 @@ describe('ComposerControls', () => {
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
         onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
       />,
     );
 
@@ -112,6 +118,9 @@ describe('ComposerControls', () => {
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
         onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
       />,
     );
 
@@ -154,15 +163,17 @@ describe('ComposerControls', () => {
         settingUpdatesDisabled={false}
         onContextRefresh={onContextRefresh}
         onSettingUpdate={onSettingUpdate}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
       />,
     );
 
     await user.click(screen.getByRole('button', { name: 'Session controls' }));
     expect(screen.getByRole('dialog', { name: 'Session controls' })).toBeDefined();
     expect(screen.getByRole('searchbox', { name: 'Search actions' })).toBeDefined();
-    expect(screen.getByLabelText('Skills: None')).toBeDefined();
+    expect(screen.getByText('Skills').closest('button')).not.toBeNull();
     expect(screen.getByLabelText('MCP servers: None')).toBeDefined();
-    expect(screen.getByText('Skills').closest('button')).toBeNull();
     expect(screen.getByText('MCP servers').closest('button')).toBeNull();
     const modeButton = screen.getByText('Mode').closest('button')!;
     expect(modeButton.getAttribute('aria-expanded')).toBe('false');
@@ -248,6 +259,9 @@ describe('ComposerControls', () => {
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
         onSettingUpdate={onSettingUpdate}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
       />,
     );
 
@@ -305,6 +319,9 @@ describe('ComposerControls', () => {
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
         onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
       />,
     );
 
@@ -329,11 +346,106 @@ describe('ComposerControls', () => {
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
         onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
       />,
     );
     expect(screen.getByRole('alert').textContent).toContain(
       'Mode update failed',
     );
+  });
+
+  it('browses skills and toggles them from the settings popover', async () => {
+    const user = userEvent.setup();
+    const onSkillsRefresh = vi.fn();
+    const onSkillToggle = vi.fn();
+    const { rerender } = render(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={onSkillsRefresh}
+        onSkillToggle={onSkillToggle}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Session controls' }));
+    await user.click(screen.getByText('Skills').closest('button')!);
+    expect(onSkillsRefresh).toHaveBeenCalledOnce();
+    expect(screen.getByRole('dialog', { name: 'Skills' })).toBeDefined();
+    expect(screen.getByText('Loading skills…')).toBeDefined();
+
+    rerender(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{
+          status: 'ready',
+          items: [
+            {
+              name: 'code-review',
+              description: 'Reviews code changes.',
+              location: 'project',
+              enabled: true,
+              userInvocable: true,
+            },
+            {
+              name: 'docs-writer',
+              description: null,
+              location: 'personal',
+              enabled: false,
+              userInvocable: false,
+            },
+          ],
+        }}
+        onSkillsRefresh={onSkillsRefresh}
+        onSkillToggle={onSkillToggle}
+      />,
+    );
+
+    expect(screen.getByText('code-review')).toBeDefined();
+    expect(screen.getByText('Reviews code changes.')).toBeDefined();
+    expect(screen.getByText('project')).toBeDefined();
+    const enabledSwitch = screen.getByRole('switch', {
+      name: 'code-review enabled',
+    });
+    expect(enabledSwitch.getAttribute('aria-checked')).toBe('true');
+    await user.click(enabledSwitch);
+    expect(onSkillToggle).toHaveBeenCalledWith('code-review', true);
+    const disabledSwitch = screen.getByRole('switch', {
+      name: 'docs-writer enabled',
+    });
+    expect(disabledSwitch.getAttribute('aria-checked')).toBe('false');
+    await user.click(disabledSwitch);
+    expect(onSkillToggle).toHaveBeenCalledWith('docs-writer', false);
+
+    // Back returns to the root controls without collapsing the popover.
+    await user.click(
+      screen.getByRole('button', { name: 'Back to session controls' }),
+    );
+    expect(
+      screen.getByRole('dialog', { name: 'Session controls' }),
+    ).toBeDefined();
+    expect(screen.getByText('1/2 on')).toBeDefined();
   });
 
   it('reports a Context error once', async () => {
@@ -355,6 +467,9 @@ describe('ComposerControls', () => {
         settingUpdatesDisabled={false}
         onContextRefresh={vi.fn()}
         onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
       />,
     );
 

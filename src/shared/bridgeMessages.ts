@@ -55,6 +55,9 @@ export const MAX_SESSION_TITLE_LENGTH = 256;
 export const MAX_MODEL_ID_LENGTH = 256;
 export const MAX_MODEL_DISPLAY_NAME_LENGTH = 128;
 export const MAX_MODEL_CATALOG_ITEMS = 100;
+export const MAX_SKILL_ITEMS = 200;
+export const MAX_SKILL_NAME_LENGTH = 128;
+export const MAX_SKILL_DESCRIPTION_LENGTH = 512;
 
 export const CONNECTION_STATUSES = [
   'idle',
@@ -242,6 +245,20 @@ export interface SessionContextRefreshMessage {
   readonly sessionId: string;
 }
 
+/** Requests the current Droid skill catalog for the session. */
+export interface SkillsRefreshMessage {
+  readonly type: 'skills.refresh';
+  readonly sessionId: string;
+}
+
+/** Enables or disables a Droid skill by name. */
+export interface SkillToggleMessage {
+  readonly type: 'skill.toggle';
+  readonly sessionId: string;
+  readonly name: string;
+  readonly disabled: boolean;
+}
+
 export type SessionSettingUpdateMessage =
   | {
       readonly type: 'session.setting.update';
@@ -281,6 +298,8 @@ export type WebviewToHostMessage =
   | SessionNewMessage
   | SessionRenameMessage
   | SessionContextRefreshMessage
+  | SkillsRefreshMessage
+  | SkillToggleMessage
   | SessionSettingUpdateMessage;
 
 export interface ConnectionState {
@@ -368,6 +387,42 @@ export type ModelCatalogState =
   | {
       readonly status: 'error';
       readonly items: readonly [];
+      readonly message: string;
+    }
+  | {
+      readonly status: 'unsupported';
+      readonly items: readonly [];
+      readonly message: string;
+    };
+
+export const SKILL_LOCATIONS = [
+  'project',
+  'personal',
+  'builtin',
+  'automation',
+] as const;
+export type SkillLocation = (typeof SKILL_LOCATIONS)[number];
+
+export interface SkillSummary {
+  readonly name: string;
+  readonly description: string | null;
+  readonly location: SkillLocation;
+  readonly enabled: boolean;
+  readonly userInvocable: boolean;
+}
+
+export type SessionSkillsState =
+  | {
+      readonly status: 'loading';
+      readonly items: readonly SkillSummary[];
+    }
+  | {
+      readonly status: 'ready';
+      readonly items: readonly SkillSummary[];
+    }
+  | {
+      readonly status: 'error';
+      readonly items: readonly SkillSummary[];
       readonly message: string;
     }
   | {
@@ -475,6 +530,13 @@ export interface ModelCatalogStateMessage {
   readonly sequence: number;
   readonly sessionId: string;
   readonly modelCatalog: ModelCatalogState;
+}
+
+export interface SessionSkillsStateMessage {
+  readonly type: 'session.skills';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly skills: SessionSkillsState;
 }
 
 export interface AssistantDeltaMessage {
@@ -620,6 +682,7 @@ export type HostToWebviewMessage =
   | SessionSettingsStateMessage
   | SessionContextStateMessage
   | ModelCatalogStateMessage
+  | SessionSkillsStateMessage
   | AssistantDeltaMessage
   | ThinkingDeltaMessage
   | ThinkingCompleteMessage

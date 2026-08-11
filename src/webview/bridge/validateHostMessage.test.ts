@@ -166,6 +166,46 @@ describe('readHostMessage', () => {
       modelCatalog: readyModelCatalog(),
     },
     {
+      type: 'session.skills',
+      sequence: 1,
+      sessionId: 'session-1',
+      skills: {
+        status: 'ready',
+        items: [
+          {
+            name: 'code-review',
+            description: 'Reviews code changes.',
+            location: 'project',
+            enabled: true,
+            userInvocable: true,
+          },
+          {
+            name: 'docs-writer',
+            description: null,
+            location: 'builtin',
+            enabled: false,
+            userInvocable: false,
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.skills',
+      sequence: 1,
+      sessionId: 'session-1',
+      skills: { status: 'loading', items: [] },
+    },
+    {
+      type: 'session.skills',
+      sequence: 1,
+      sessionId: 'session-1',
+      skills: {
+        status: 'unsupported',
+        items: [],
+        message: 'Skills are unsupported.',
+      },
+    },
+    {
       type: 'assistant.delta',
       sequence: 2,
       sessionId: 'session-1',
@@ -521,6 +561,88 @@ describe('readHostMessage', () => {
           },
         ],
       },
+    },
+    {
+      type: 'session.skills',
+      sequence: 1,
+      sessionId: 'session-1',
+      skills: {
+        status: 'ready',
+        items: [
+          {
+            name: '',
+            description: null,
+            location: 'project',
+            enabled: true,
+            userInvocable: true,
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.skills',
+      sequence: 1,
+      sessionId: 'session-1',
+      skills: {
+        status: 'ready',
+        items: [
+          {
+            name: 'code-review',
+            description: null,
+            location: 'somewhere-else',
+            enabled: true,
+            userInvocable: true,
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.skills',
+      sequence: 1,
+      sessionId: 'session-1',
+      skills: {
+        status: 'ready',
+        items: [
+          {
+            name: 'dup',
+            description: null,
+            location: 'project',
+            enabled: true,
+            userInvocable: true,
+          },
+          {
+            name: 'dup',
+            description: null,
+            location: 'personal',
+            enabled: false,
+            userInvocable: false,
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.skills',
+      sequence: 1,
+      sessionId: 'session-1',
+      skills: {
+        status: 'ready',
+        items: [
+          {
+            name: 'code-review',
+            description: null,
+            location: 'project',
+            enabled: true,
+            userInvocable: true,
+            filePath: 'C:/secret/path/SKILL.md',
+          },
+        ],
+      },
+    },
+    {
+      type: 'session.skills',
+      sequence: 1,
+      sessionId: 'session-1',
+      skills: { status: 'unsupported', items: [] },
     },
     {
       type: 'session.model-catalog',

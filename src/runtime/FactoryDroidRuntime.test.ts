@@ -183,6 +183,74 @@ describe('FactoryDroidRuntime', () => {
     ).rejects.toThrow('does not support rewind');
   });
 
+  it('projects only safe skill fields and enforces toggle success', async () => {
+    const session = Object.assign(
+      createMockSession(async function* () {}),
+      {
+        listSkills: vi.fn(async () => ({
+          skills: [
+            {
+              name: 'code-review',
+              description: 'Reviews code changes.',
+              location: 'project',
+              filePath: 'C:\\secret\\SKILL.md',
+              content: 'SECRET BODY',
+              enabled: true,
+              userInvocable: true,
+            },
+            {
+              name: 'quiet-skill',
+              location: 'builtin',
+              filePath: 'C:\\secret\\other.md',
+              enabled: false,
+            },
+            { name: 'broken', location: 'mars' },
+            { name: '', location: 'project' },
+          ],
+        })),
+        setSkillDisabled: vi.fn(async () => ({ success: false })),
+      },
+    );
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    const skills = await runtime.listSkills();
+    expect(skills).toEqual([
+      {
+        name: 'code-review',
+        description: 'Reviews code changes.',
+        location: 'project',
+        enabled: true,
+        userInvocable: true,
+      },
+      {
+        name: 'quiet-skill',
+        description: null,
+        location: 'builtin',
+        enabled: false,
+        userInvocable: false,
+      },
+    ]);
+    expect(JSON.stringify(skills)).not.toContain('secret');
+    expect(JSON.stringify(skills)).not.toContain('SECRET BODY');
+
+    await expect(
+      runtime.setSkillDisabled('code-review', true),
+    ).rejects.toThrow('refused');
+    expect(session.setSkillDisabled).toHaveBeenCalledWith({
+      skillName: 'code-review',
+      disabled: true,
+    });
+
+    const bare = createRuntime(async () =>
+      createMockSession(async function* () {}),
+    );
+    await bare.initialize('C:\\workspace');
+    await expect(bare.listSkills()).rejects.toThrow(
+      'does not support skills',
+    );
+  });
+
   it('renames the active session through the SDK', async () => {
     const session = Object.assign(
       createMockSession(async function* () {}),

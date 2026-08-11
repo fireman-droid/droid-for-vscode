@@ -255,6 +255,26 @@ export function App(): React.JSX.Element {
       sessionId,
     });
   }, [sessionId, vscode]);
+  const handleSkillsRefresh = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, { type: 'skills.refresh', sessionId });
+  }, [sessionId, vscode]);
+  const handleSkillToggle = useCallback(
+    (name: string, disabled: boolean): void => {
+      if (sessionId === null) {
+        return;
+      }
+      post(vscode, {
+        type: 'skill.toggle',
+        sessionId,
+        name,
+        disabled,
+      });
+    },
+    [sessionId, vscode],
+  );
   const handleSettingUpdate = useCallback(
     (update: SessionSettingSelection): void => {
       if (sessionId === null) {
@@ -343,9 +363,12 @@ export function App(): React.JSX.Element {
           settings={state.settings}
           context={state.context}
           modelCatalog={state.modelCatalog}
+          skills={state.skills}
           onRetry={handleRetry}
           onContextRefresh={handleContextRefresh}
           onSettingUpdate={handleSettingUpdate}
+          onSkillsRefresh={handleSkillsRefresh}
+          onSkillToggle={handleSkillToggle}
           onDraftChange={handleDraftChange}
           onReuseMessage={handleReuseMessage}
           onEditResend={handleEditResend}

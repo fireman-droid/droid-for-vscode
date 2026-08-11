@@ -2373,6 +2373,140 @@ body {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--dvx-accent) 22%, transparent);
 }
 
+.dvx-settings-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dvx-settings-link-row svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.dvx-settings-link-row .dvx-chevron-down {
+  transform: rotate(-90deg);
+}
+
+.dvx-skills-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dvx-skills-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--dvx-ink);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.dvx-skills-back svg {
+  width: 14px;
+  height: 14px;
+}
+
+.dvx-skill-list {
+  max-height: 260px;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.dvx-skill-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--dvx-border);
+}
+
+.dvx-skill-row:last-child {
+  border-bottom: 0;
+}
+
+.dvx-skill-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dvx-skill-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dvx-ink);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.dvx-skill-location {
+  padding: 1px 6px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 999px;
+  color: var(--dvx-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.dvx-skill-description {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--dvx-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.dvx-skill-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--dvx-border);
+  border-radius: 999px;
+  background: #ddd6cc;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.dvx-skill-switch[aria-checked="true"] {
+  border-color: var(--dvx-accent);
+  background: var(--dvx-accent);
+}
+
+.dvx-skill-switch:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.dvx-skill-switch-thumb {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 140ms ease;
+}
+
+.dvx-skill-switch[aria-checked="true"] .dvx-skill-switch-thumb {
+  transform: translateX(12px);
+}
+
 /* Interactions render as a flat inline block inside the conversation flow:
    one surface, hairline separators, no stacked cards. */
 .dvx-interaction-panel {

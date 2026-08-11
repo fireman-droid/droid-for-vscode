@@ -1677,6 +1677,107 @@ describe('ChatController', () => {
     });
   });
 
+  it('lists skills on request and re-lists after a toggle', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      listSkills: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            name: 'code-review',
+            description: 'Reviews code changes.',
+            location: 'project',
+            enabled: true,
+            userInvocable: true,
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            name: 'code-review',
+            description: 'Reviews code changes.',
+            location: 'project',
+            enabled: false,
+            userInvocable: true,
+          },
+        ]),
+      setSkillDisabled: vi.fn(async () => {}),
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'skills.refresh',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(skillsMessages(messages).at(-1)?.skills).toMatchObject({
+        status: 'ready',
+        items: [{ name: 'code-review', enabled: true }],
+      });
+    });
+    expect(skillsMessages(messages)[0]?.skills.status).toBe('loading');
+
+    controller.handleMessage({
+      type: 'skill.toggle',
+      sessionId: 'session-1',
+      name: 'code-review',
+      disabled: true,
+    });
+    expect(runtime.setSkillDisabled).toHaveBeenCalledWith(
+      'code-review',
+      true,
+    );
+    await vi.waitFor(() => {
+      expect(skillsMessages(messages).at(-1)?.skills).toMatchObject({
+        status: 'ready',
+        items: [{ name: 'code-review', enabled: false }],
+      });
+    });
+
+    // Wrong session id is ignored entirely.
+    const before = skillsMessages(messages).length;
+    controller.handleMessage({
+      type: 'skills.refresh',
+      sessionId: 'session-other',
+    });
+    expect(skillsMessages(messages)).toHaveLength(before);
+  });
+
+  it('reports unsupported and failed skill operations safely', async () => {
+    const unsupported = createController(() => createMockRuntime());
+    ready(unsupported.controller);
+    await waitForConnected(unsupported.messages);
+    unsupported.controller.handleMessage({
+      type: 'skills.refresh',
+      sessionId: 'session-1',
+    });
+    expect(
+      skillsMessages(unsupported.messages).at(-1)?.skills,
+    ).toMatchObject({ status: 'unsupported' });
+
+    const failing = Object.assign(createMockRuntime(), {
+      listSkills: vi.fn(async () => {
+        throw new Error('private skill failure');
+      }),
+      setSkillDisabled: vi.fn(async () => {}),
+    });
+    const { controller, messages } = createController(() => failing);
+    ready(controller);
+    await waitForConnected(messages);
+    controller.handleMessage({
+      type: 'skills.refresh',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(skillsMessages(messages).at(-1)?.skills).toMatchObject({
+        status: 'error',
+      });
+    });
+    expect(JSON.stringify(messages)).not.toContain(
+      'private skill failure',
+    );
+  });
+
   it('clears stale catalog rows before loading a changed workspace', async () => {
     const workspace = {
       cwd: 'C:\\workspace-a',
@@ -3357,6 +3458,17 @@ async function waitForInteraction(
     expect(request).toBeDefined();
   });
   return request!;
+}
+
+function skillsMessages(
+  messages: readonly HostToWebviewMessage[],
+): Extract<HostToWebviewMessage, { type: 'session.skills' }>[] {
+  return messages.filter(
+    (message): message is Extract<
+      HostToWebviewMessage,
+      { type: 'session.skills' }
+    > => message.type === 'session.skills',
+  );
 }
 
 async function waitForConnected(

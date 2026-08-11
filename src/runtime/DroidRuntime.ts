@@ -99,6 +99,27 @@ export type RuntimeSessionTarget =
       readonly sessionId: string;
     };
 
+export const MAX_RUNTIME_SKILL_ITEMS = 200;
+export const MAX_RUNTIME_SKILL_NAME_LENGTH = 128;
+export const MAX_RUNTIME_SKILL_DESCRIPTION_LENGTH = 512;
+
+export const RUNTIME_SKILL_LOCATIONS = [
+  'project',
+  'personal',
+  'builtin',
+  'automation',
+] as const;
+export type RuntimeSkillLocation =
+  (typeof RUNTIME_SKILL_LOCATIONS)[number];
+
+export interface RuntimeSkill {
+  readonly name: string;
+  readonly description: string | null;
+  readonly location: RuntimeSkillLocation;
+  readonly enabled: boolean;
+  readonly userInvocable: boolean;
+}
+
 export interface RuntimeRewindParams {
   readonly messageId: string;
   readonly forkTitle: string;
@@ -131,5 +152,15 @@ export interface DroidRuntime {
    * cannot rename sessions.
    */
   rename?(title: string): Promise<void>;
+  /**
+   * Lists the Droid skills visible to the active session, projected to
+   * safe display fields. Optional: absent when unsupported.
+   */
+  listSkills?(): Promise<readonly RuntimeSkill[]>;
+  /**
+   * Enables or disables a skill by name. Optional: absent when
+   * unsupported.
+   */
+  setSkillDisabled?(name: string, disabled: boolean): Promise<void>;
   dispose(): Promise<void>;
 }

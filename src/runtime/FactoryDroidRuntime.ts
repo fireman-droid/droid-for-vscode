@@ -21,9 +21,13 @@ import {
   MAX_RUNTIME_MODEL_CATALOG_ITEMS,
   MAX_RUNTIME_MODEL_DISPLAY_NAME_LENGTH,
   MAX_RUNTIME_MODEL_ID_LENGTH,
+  MAX_RUNTIME_SKILL_DESCRIPTION_LENGTH,
+  MAX_RUNTIME_SKILL_ITEMS,
+  MAX_RUNTIME_SKILL_NAME_LENGTH,
   RUNTIME_AUTONOMY_LEVELS,
   RUNTIME_INTERACTION_MODES,
   RUNTIME_REASONING_EFFORTS,
+  RUNTIME_SKILL_LOCATIONS,
   type DroidRuntime,
   type RuntimeRewindParams,
   type RuntimeRewindResult,
@@ -34,6 +38,8 @@ import {
   type RuntimeSessionSettings,
   type RuntimeSessionSettingUpdate,
   type RuntimeSessionTarget,
+  type RuntimeSkill,
+  type RuntimeSkillLocation,
 } from './DroidRuntime';
 import { normalizeSdkEvent } from './normalizeSdkEvent';
 import { createModelCatalogCaptureTransport } from './modelCatalogCaptureTransport';
@@ -73,6 +79,11 @@ export interface FactoryDroidSession {
     params: FactoryDroidSessionRewindParams,
   ): Promise<{ session: FactoryDroidSession }>;
   rename?(params: { title: string }): Promise<void>;
+  listSkills?(): Promise<{ skills: unknown[] }>;
+  setSkillDisabled?(params: {
+    skillName: string;
+    disabled: boolean;
+  }): Promise<{ success: boolean }>;
   close(): Promise<void>;
 }
 
@@ -432,6 +443,42 @@ export class FactoryDroidRuntime implements DroidRuntime {
         outcome: 'success',
       },
     });
+  }
+
+  async listSkills(): Promise<readonly RuntimeSkill[]> {
+    const session = this.requireSession();
+    if (typeof session.listSkills !== 'function') {
+      throw new Error('The Droid session does not support skills.');
+    }
+    const result = await session.listSkills();
+    if (!Array.isArray(result.skills)) {
+      throw new Error('Droid returned an invalid skill list.');
+    }
+    const skills: RuntimeSkill[] = [];
+    for (const raw of result.skills.slice(0, MAX_RUNTIME_SKILL_ITEMS)) {
+      const skill = projectSkill(raw);
+      if (skill !== null) {
+        skills.push(skill);
+      }
+    }
+    return skills;
+  }
+
+  async setSkillDisabled(
+    name: string,
+    disabled: boolean,
+  ): Promise<void> {
+    const session = this.requireSession();
+    if (typeof session.setSkillDisabled !== 'function') {
+      throw new Error('The Droid session does not support skills.');
+    }
+    const result = await session.setSkillDisabled({
+      skillName: name,
+      disabled,
+    });
+    if (result.success !== true) {
+      throw new Error('Droid refused to update the skill.');
+    }
   }
 
   dispose(): Promise<void> {
@@ -992,5 +1039,53 @@ function createCatalogSessionView(
   if (typeof session.rename === 'function') {
     view.rename = (params) => session.rename!(params);
   }
+  if (typeof session.listSkills === 'function') {
+    view.listSkills = () => session.listSkills!();
+  }
+  if (typeof session.setSkillDisabled === 'function') {
+    view.setSkillDisabled = (params) => session.setSkillDisabled!(params);
+  }
   return view;
+}
+
+/**
+ * Projects an SDK skill record to safe display fields, dropping
+ * filesystem paths, raw content, and resources.
+ */
+function projectSkill(raw: unknown): RuntimeSkill | null {
+  if (typeof raw !== 'object' || raw === null) {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const name = record.name;
+  const location = record.location;
+  if (
+    typeof name !== 'string' ||
+    name.length === 0 ||
+    name.length > MAX_RUNTIME_SKILL_NAME_LENGTH ||
+    !isRuntimeSkillLocation(location)
+  ) {
+    return null;
+  }
+  const description =
+    typeof record.description === 'string' &&
+    record.description.length > 0
+      ? record.description.slice(0, MAX_RUNTIME_SKILL_DESCRIPTION_LENGTH)
+      : null;
+  return {
+    name,
+    description,
+    location,
+    enabled: record.enabled !== false,
+    userInvocable: record.userInvocable === true,
+  };
+}
+
+function isRuntimeSkillLocation(
+  value: unknown,
+): value is RuntimeSkillLocation {
+  return (
+    typeof value === 'string' &&
+    (RUNTIME_SKILL_LOCATIONS as readonly string[]).includes(value)
+  );
 }

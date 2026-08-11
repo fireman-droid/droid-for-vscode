@@ -16,19 +16,28 @@ import type {
   SessionReasoningEffort,
   SessionSettingUpdateMessage,
   SessionSettingsState,
+  SessionSkillsState,
+  SkillSummary,
 } from '../../shared/bridgeMessages';
 
 type OpenPanel = 'settings' | 'context' | 'model' | 'mode' | null;
-type SettingsView = 'root' | 'mode' | 'autonomy';
+type SettingsView = 'root' | 'mode' | 'autonomy' | 'skills';
+
+export type SkillsPanelState =
+  | SessionSkillsState
+  | { readonly status: 'idle'; readonly items: readonly [] };
 
 interface ComposerControlsProps {
   readonly settings: SessionSettingsState;
   readonly context: SessionContextState;
   readonly modelCatalog: ModelCatalogState;
+  readonly skills: SkillsPanelState;
   readonly disabled: boolean;
   readonly settingUpdatesDisabled: boolean;
   readonly onContextRefresh: () => void;
   readonly onSettingUpdate: (update: SessionSettingSelection) => void;
+  readonly onSkillsRefresh: () => void;
+  readonly onSkillToggle: (name: string, disabled: boolean) => void;
 }
 
 export type SessionSettingSelection =
@@ -91,10 +100,13 @@ export function ComposerControls({
   settings,
   context,
   modelCatalog,
+  skills,
   disabled,
   settingUpdatesDisabled,
   onContextRefresh,
   onSettingUpdate,
+  onSkillsRefresh,
+  onSkillToggle,
 }: ComposerControlsProps): React.JSX.Element {
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
   const [settingsView, setSettingsView] = useState<SettingsView>('root');
@@ -229,9 +241,12 @@ export function ComposerControls({
           id={`${panelId}-settings`}
           view={settingsView}
           settings={settings}
+          skills={skills}
           disabled={settingControlsDisabled}
           onViewChange={setSettingsView}
           onUpdate={onSettingUpdate}
+          onSkillsRefresh={onSkillsRefresh}
+          onSkillToggle={onSkillToggle}
         />
       ) : null}
       {openPanel === 'context' ? (
@@ -308,13 +323,17 @@ function SettingsPopover({
   id,
   view,
   settings,
+  skills,
   disabled,
   onViewChange,
   onUpdate,
+  onSkillsRefresh,
+  onSkillToggle,
 }: {
   readonly id: string;
   readonly view: SettingsView;
   readonly settings: SessionSettingsState;
+  readonly skills: SkillsPanelState;
   readonly disabled: boolean;
   readonly onViewChange: (view: SettingsView) => void;
   readonly onUpdate: (
@@ -323,6 +342,8 @@ function SettingsPopover({
       { field: 'interactionMode' | 'autonomyLevel' }
     >,
   ) => void;
+  readonly onSkillsRefresh: () => void;
+  readonly onSkillToggle: (name: string, disabled: boolean) => void;
 }): React.JSX.Element {
   const [query, setQuery] = useState('');
   const confirmed = settings.value;
@@ -355,6 +376,26 @@ function SettingsPopover({
     normalizedQuery.length === 0 || 'skills'.includes(normalizedQuery);
   const showMcp =
     normalizedQuery.length === 0 || 'mcp servers'.includes(normalizedQuery);
+
+  if (view === 'skills') {
+    return (
+      <div
+        id={id}
+        className="dvx-composer-popover dvx-settings-popover"
+        role="dialog"
+        aria-label="Skills"
+      >
+        <SkillsPanel
+          skills={skills}
+          disabled={disabled}
+          onBack={() => onViewChange('root')}
+          onRefresh={onSkillsRefresh}
+          onToggle={onSkillToggle}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       id={id}
@@ -419,7 +460,31 @@ function SettingsPopover({
         />
       ) : null}
       {showSkills || showMcp ? <div className="dvx-settings-divider" /> : null}
-      {showSkills ? <SettingsInfoRow kind="skills" label="Skills" /> : null}
+      {showSkills ? (
+        <button
+          type="button"
+          className="dvx-popover-row dvx-settings-link-row"
+          onClick={() => {
+            if (skills.status === 'idle' || skills.status === 'error') {
+              onSkillsRefresh();
+            }
+            onViewChange('skills');
+          }}
+        >
+          <SettingsInfoIcon kind="skills" />
+          <span className="dvx-popover-row-copy">
+            <strong>Skills</strong>
+          </span>
+          <span className="dvx-popover-row-value">
+            {skills.status === 'ready'
+              ? `${skills.items.filter((skill) => skill.enabled).length}/${
+                  skills.items.length
+                } on`
+              : ''}
+          </span>
+          <ChevronDownIcon />
+        </button>
+      ) : null}
       {showMcp ? <SettingsInfoRow kind="mcp" label="MCP servers" /> : null}
       {!showMode && !showAutonomy && !showSkills && !showMcp ? (
         <p className="dvx-popover-message">No matching actions.</p>
@@ -431,6 +496,133 @@ function SettingsPopover({
         </p>
       ) : null}
     </div>
+  );
+}
+
+function SkillsPanel({
+  skills,
+  disabled,
+  onBack,
+  onRefresh,
+  onToggle,
+}: {
+  readonly skills: SkillsPanelState;
+  readonly disabled: boolean;
+  readonly onBack: () => void;
+  readonly onRefresh: () => void;
+  readonly onToggle: (name: string, disabled: boolean) => void;
+}): React.JSX.Element {
+  const busy = skills.status === 'loading' || skills.status === 'idle';
+  return (
+    <div className="dvx-skills-panel">
+      <div className="dvx-popover-heading">
+        <button
+          type="button"
+          className="dvx-skills-back"
+          aria-label="Back to session controls"
+          onClick={onBack}
+        >
+          <ChevronLeftIcon />
+          <strong>Skills</strong>
+        </button>
+        <button
+          type="button"
+          className="dvx-popover-refresh"
+          disabled={busy}
+          onClick={onRefresh}
+        >
+          Refresh
+        </button>
+      </div>
+      {skills.status === 'unsupported' || skills.status === 'error' ? (
+        <p
+          className={`dvx-popover-message ${
+            skills.status === 'error' ? 'dvx-error-text' : ''
+          }`}
+          role={skills.status === 'error' ? 'alert' : 'status'}
+        >
+          {skills.message}
+        </p>
+      ) : null}
+      {busy && skills.items.length === 0 ? (
+        <p className="dvx-popover-message" role="status">
+          Loading skills…
+        </p>
+      ) : null}
+      {skills.status === 'ready' && skills.items.length === 0 ? (
+        <p className="dvx-popover-message" role="status">
+          No skills found in this workspace.
+        </p>
+      ) : null}
+      {skills.items.length > 0 ? (
+        <ul className="dvx-skill-list" aria-label="Skills">
+          {skills.items.map((skill) => (
+            <SkillRow
+              key={skill.name}
+              skill={skill}
+              disabled={disabled || busy}
+              onToggle={onToggle}
+            />
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function SkillRow({
+  skill,
+  disabled,
+  onToggle,
+}: {
+  readonly skill: SkillSummary;
+  readonly disabled: boolean;
+  readonly onToggle: (name: string, disabled: boolean) => void;
+}): React.JSX.Element {
+  return (
+    <li className="dvx-skill-row">
+      <div className="dvx-skill-copy">
+        <span className="dvx-skill-name">
+          {skill.name}
+          <span className="dvx-skill-location">{skill.location}</span>
+        </span>
+        {skill.description !== null ? (
+          <span className="dvx-skill-description" title={skill.description}>
+            {skill.description}
+          </span>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        className="dvx-skill-switch"
+        aria-label={`${skill.name} enabled`}
+        aria-checked={skill.enabled}
+        disabled={disabled}
+        onClick={() => onToggle(skill.name, skill.enabled)}
+      >
+        <span className="dvx-skill-switch-thumb" aria-hidden="true" />
+      </button>
+    </li>
+  );
+}
+
+function ChevronLeftIcon(): React.JSX.Element {
+  return (
+    <svg
+      className="dvx-chevron-left"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="m9.5 4.5-3.5 3.5 3.5 3.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

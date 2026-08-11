@@ -23,6 +23,9 @@ import {
   MAX_SESSION_CATALOG_ITEMS,
   MAX_SESSION_TITLE_LENGTH,
   MAX_SESSION_TRANSCRIPT_ITEMS,
+  MAX_SKILL_DESCRIPTION_LENGTH,
+  MAX_SKILL_ITEMS,
+  MAX_SKILL_NAME_LENGTH,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
   MAX_TOOL_NAME_LENGTH,
@@ -36,6 +39,7 @@ import {
   SESSION_REASONING_EFFORTS,
   TOOL_ACTIVITY_STATUSES,
   TOOL_ACTIVITY_UPDATE_KINDS,
+  SKILL_LOCATIONS,
   TRANSCRIPT_THINKING_STATUSES,
   TRANSCRIPT_TOOL_STATUSES,
   TURN_STATUSES,
@@ -58,6 +62,9 @@ import {
   type SessionInteractionMode,
   type SessionReasoningEffort,
   type SessionSettingsState,
+  type SessionSkillsState,
+  type SkillLocation,
+  type SkillSummary,
   type SessionHistoryStatus,
   type SessionSummary,
   type SessionTranscriptItem,
@@ -139,6 +146,8 @@ export function readHostMessage(
         return parseSessionContextMessage(value);
       case 'session.model-catalog':
         return parseModelCatalogMessage(value);
+      case 'session.skills':
+        return parseSessionSkillsMessage(value);
       case 'assistant.delta':
         return parseAssistantDelta(value);
       case 'thinking.delta':
@@ -1079,6 +1088,124 @@ function parseModelCatalog(value: unknown): ModelCatalogState | undefined {
           items: [],
           message: value.message as string,
         };
+}
+
+function parseSessionSkillsMessage(
+  value: UnknownRecord,
+): Extract<HostToWebviewMessage, { type: 'session.skills' }> | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sequence', 'sessionId', 'skills']) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+  const skills = parseSessionSkills(value.skills);
+  return skills === undefined
+    ? undefined
+    : {
+        type: 'session.skills',
+        sequence: value.sequence,
+        sessionId: value.sessionId,
+        skills,
+      };
+}
+
+function parseSessionSkills(
+  value: unknown,
+): SessionSkillsState | undefined {
+  if (!isStrictRecord(value)) {
+    return undefined;
+  }
+  const status = readStringDataProperty(value, 'status');
+  if (status === undefined) {
+    return undefined;
+  }
+
+  if (status === 'unsupported') {
+    if (
+      !hasExactKeys(value, ['status', 'items', 'message']) ||
+      !isExactArray(value.items, 0, 0) ||
+      !isBoundedString(value.message, MAX_STRING_LENGTH)
+    ) {
+      return undefined;
+    }
+    return {
+      status: 'unsupported',
+      items: [],
+      message: value.message as string,
+    };
+  }
+
+  if (status !== 'loading' && status !== 'ready' && status !== 'error') {
+    return undefined;
+  }
+  if (
+    !hasExactKeys(
+      value,
+      status === 'error'
+        ? ['status', 'items', 'message']
+        : ['status', 'items'],
+    ) ||
+    !isExactArray(value.items, 0, MAX_SKILL_ITEMS) ||
+    (status === 'error' &&
+      !isBoundedString(value.message, MAX_STRING_LENGTH))
+  ) {
+    return undefined;
+  }
+  const items: SkillSummary[] = [];
+  const names = new Set<string>();
+  for (const itemValue of value.items) {
+    const item = parseSkillSummary(itemValue);
+    if (item === undefined || names.has(item.name)) {
+      return undefined;
+    }
+    names.add(item.name);
+    items.push(item);
+  }
+  return status === 'error'
+    ? { status: 'error', items, message: value.message as string }
+    : status === 'loading'
+      ? { status: 'loading', items }
+      : { status: 'ready', items };
+}
+
+function parseSkillSummary(value: unknown): SkillSummary | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, [
+      'name',
+      'description',
+      'location',
+      'enabled',
+      'userInvocable',
+    ]) ||
+    !isNonEmptyBoundedString(value.name, MAX_SKILL_NAME_LENGTH) ||
+    (value.description !== null &&
+      !isNonEmptyBoundedString(
+        value.description,
+        MAX_SKILL_DESCRIPTION_LENGTH,
+      )) ||
+    !isSkillLocation(value.location) ||
+    typeof value.enabled !== 'boolean' ||
+    typeof value.userInvocable !== 'boolean'
+  ) {
+    return undefined;
+  }
+  return {
+    name: value.name,
+    description: value.description,
+    location: value.location,
+    enabled: value.enabled,
+    userInvocable: value.userInvocable,
+  };
+}
+
+function isSkillLocation(value: unknown): value is SkillLocation {
+  return (
+    typeof value === 'string' &&
+    (SKILL_LOCATIONS as readonly string[]).includes(value)
+  );
 }
 
 function parseModelCatalogItem(

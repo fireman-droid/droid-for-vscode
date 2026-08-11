@@ -8,7 +8,9 @@ import type {
   SessionContextStats,
   SessionSettingUpdateMessage,
   SessionSettingsState,
+  SessionSkillsState,
   SessionSummary,
+  SkillSummary,
   TurnStatus,
   WebviewToHostMessage,
 } from '../shared/bridgeMessages';
@@ -31,6 +33,7 @@ import type {
   RuntimeSessionSettings,
   RuntimeSessionSettingUpdate,
   RuntimeSessionTarget,
+  RuntimeSkill,
 } from '../runtime/DroidRuntime';
 import type {
   RuntimeAvailability,
@@ -142,6 +145,12 @@ const RENAME_UNSUPPORTED_MESSAGE =
   'This session cannot be renamed.';
 const RENAME_FAILED_MESSAGE =
   'Droid could not rename the session.';
+const SKILLS_UNSUPPORTED_MESSAGE =
+  'This Droid runtime does not expose skills.';
+const SKILLS_LOAD_FAILED_MESSAGE =
+  'Droid did not return the skill list. Retry from the skills panel.';
+const SKILL_TOGGLE_FAILED_MESSAGE =
+  'Droid could not update that skill. The list may be stale; refresh it.';
 const CONTEXT_READ_FAILED_MESSAGE =
   'Droid did not return context usage. Retry, then open DroidVisX Logs if this continues.';
 const MODEL_CATALOG_UNSUPPORTED_MESSAGE =
@@ -308,6 +317,16 @@ export class ChatController {
         return;
       case 'session.context.refresh':
         this.handleContextRefresh(message.sessionId);
+        return;
+      case 'skills.refresh':
+        this.handleSkillsRefresh(message.sessionId);
+        return;
+      case 'skill.toggle':
+        this.handleSkillToggle(
+          message.sessionId,
+          message.name,
+          message.disabled,
+        );
         return;
       case 'session.setting.update':
         this.handleSettingUpdate(message);
@@ -1153,6 +1172,147 @@ export class ChatController {
       sessionId,
       this.activeRuntimeCwd!,
     );
+  }
+
+  private handleSkillsRefresh(sessionId: string): void {
+    const runtime = this.runtime;
+    if (
+      sessionId !== this.sessionId ||
+      runtime === null ||
+      this.connection.status !== 'connected' ||
+      this.sessionOperationInProgress ||
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    if (typeof runtime.listSkills !== 'function') {
+      this.emitSkills(sessionId, {
+        status: 'unsupported',
+        items: [],
+        message: SKILLS_UNSUPPORTED_MESSAGE,
+      });
+      return;
+    }
+
+    this.emitSkills(sessionId, { status: 'loading', items: [] });
+    const generation = this.runtimeGeneration;
+    const cwd = this.activeRuntimeCwd!;
+    void runtime.listSkills().then(
+      (skills) => {
+        if (
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        this.emitSkills(sessionId, {
+          status: 'ready',
+          items: skills.map(projectSkillSummary),
+        });
+      },
+      () => {
+        if (
+          !this.isCurrentSessionOperation(
+            runtime,
+            generation,
+            sessionId,
+            cwd,
+          )
+        ) {
+          return;
+        }
+        this.emitSkills(sessionId, {
+          status: 'error',
+          items: [],
+          message: SKILLS_LOAD_FAILED_MESSAGE,
+        });
+      },
+    );
+  }
+
+  private handleSkillToggle(
+    sessionId: string,
+    name: string,
+    disabled: boolean,
+  ): void {
+    const runtime = this.runtime;
+    if (
+      sessionId !== this.sessionId ||
+      runtime === null ||
+      this.connection.status !== 'connected' ||
+      this.sessionOperationInProgress ||
+      !this.ensureActiveRuntimeWorkspaceCurrent()
+    ) {
+      return;
+    }
+    if (
+      typeof runtime.setSkillDisabled !== 'function' ||
+      typeof runtime.listSkills !== 'function'
+    ) {
+      this.emitSkills(sessionId, {
+        status: 'unsupported',
+        items: [],
+        message: SKILLS_UNSUPPORTED_MESSAGE,
+      });
+      return;
+    }
+
+    this.emitSkills(sessionId, { status: 'loading', items: [] });
+    const generation = this.runtimeGeneration;
+    const cwd = this.activeRuntimeCwd!;
+    void runtime
+      .setSkillDisabled(name, disabled)
+      .then(() => runtime.listSkills!())
+      .then(
+        (skills) => {
+          if (
+            !this.isCurrentSessionOperation(
+              runtime,
+              generation,
+              sessionId,
+              cwd,
+            )
+          ) {
+            return;
+          }
+          this.emitSkills(sessionId, {
+            status: 'ready',
+            items: skills.map(projectSkillSummary),
+          });
+        },
+        () => {
+          if (
+            !this.isCurrentSessionOperation(
+              runtime,
+              generation,
+              sessionId,
+              cwd,
+            )
+          ) {
+            return;
+          }
+          this.emitSkills(sessionId, {
+            status: 'error',
+            items: [],
+            message: SKILL_TOGGLE_FAILED_MESSAGE,
+          });
+        },
+      );
+  }
+
+  private emitSkills(
+    sessionId: string,
+    skills: SessionSkillsState,
+  ): void {
+    this.emit({
+      type: 'session.skills',
+      sessionId,
+      skills,
+    });
   }
 
   private handleSettingUpdate(
@@ -2702,6 +2862,16 @@ function projectModelCatalog(
     };
   });
   return { status: 'ready', items };
+}
+
+function projectSkillSummary(skill: RuntimeSkill): SkillSummary {
+  return {
+    name: skill.name,
+    description: skill.description,
+    location: skill.location,
+    enabled: skill.enabled,
+    userInvocable: skill.userInvocable,
+  };
 }
 
 function sanitizeSessionTitle(title: string): string {

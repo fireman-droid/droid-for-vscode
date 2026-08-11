@@ -5,6 +5,7 @@ import {
   type ModelCatalogState,
   type SessionContextState,
   type SessionSettingsState,
+  type SessionSkillsState,
   type SessionTranscriptItem,
   type TurnStatus,
 } from '../../shared/bridgeMessages';
@@ -39,6 +40,8 @@ export interface AssistantWebviewState {
   readonly settings: SessionSettingsState;
   readonly context: SessionContextState;
   readonly modelCatalog: ModelCatalogState;
+  /** Skills load lazily; 'idle' means not requested yet. */
+  readonly skills: SessionSkillsState | { status: 'idle'; items: readonly [] };
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: Extract<
     HostToWebviewMessage,
@@ -70,6 +73,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   settings: { status: 'loading', value: null },
   context: { status: 'loading', value: null },
   modelCatalog: { status: 'loading', items: [] },
+  skills: { status: 'idle', items: [] },
   transcript: [],
   historyStatus: null,
   truncated: false,
@@ -143,6 +147,11 @@ export function assistantWebviewReducer(
         settings: event.settings,
         context: event.context,
         modelCatalog: event.modelCatalog,
+        // Snapshots do not carry skills; keep them for the same session.
+        skills:
+          event.sessionId === state.sessionId
+            ? state.skills
+            : { status: 'idle', items: [] },
         transcript: event.transcript,
         historyStatus: event.historyStatus,
         truncated: event.truncated,
@@ -168,6 +177,7 @@ export function assistantWebviewReducer(
               settings: { status: 'loading', value: null },
               context: { status: 'loading', value: null },
               modelCatalog: { status: 'loading', items: [] },
+              skills: { status: 'idle', items: [] },
               interactions: [],
               terminalTurnId: null,
             }
@@ -198,6 +208,20 @@ export function assistantWebviewReducer(
             modelCatalog: event.modelCatalog,
           }
         : advance(state, event.sequence);
+    case 'session.skills': {
+      if (event.sessionId !== state.sessionId) {
+        return advance(state, event.sequence);
+      }
+      // A toggle/refresh in flight sends 'loading' with no items; keep
+      // showing the current list until the fresh one arrives.
+      const skills =
+        event.skills.status === 'loading' &&
+        event.skills.items.length === 0 &&
+        state.skills.items.length > 0
+          ? { status: 'loading' as const, items: state.skills.items }
+          : event.skills;
+      return { ...state, sequence: event.sequence, skills };
+    }
     case 'assistant.delta':
       if (!acceptsActiveTurn(state, event.sessionId, event.turnId)) {
         return advance(state, event.sequence);

@@ -21,6 +21,7 @@ import {
   type SessionContextState,
   type SessionSettingsState,
 } from '../../shared/bridgeMessages';
+import type { SkillsPanelState } from './ComposerControls';
 import {
   ComposerControls,
   type SessionSettingSelection,
@@ -81,9 +82,12 @@ interface DroidThreadProps {
   readonly settings: SessionSettingsState;
   readonly context: SessionContextState;
   readonly modelCatalog: ModelCatalogState;
+  readonly skills: SkillsPanelState;
   readonly onRetry: () => void;
   readonly onContextRefresh: () => void;
   readonly onSettingUpdate: (update: SessionSettingSelection) => void;
+  readonly onSkillsRefresh: () => void;
+  readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onDraftChange: (draft: string) => void;
   readonly onReuseMessage: (text: string) => void;
   readonly onEditResend: (messageId: string, text: string) => void;
@@ -108,9 +112,12 @@ export const DroidThread = memo(function DroidThread({
   settings,
   context,
   modelCatalog,
+  skills,
   onRetry,
   onContextRefresh,
   onSettingUpdate,
+  onSkillsRefresh,
+  onSkillToggle,
   onDraftChange,
   onReuseMessage,
   onEditResend,
@@ -188,9 +195,12 @@ export const DroidThread = memo(function DroidThread({
             settings={settings}
             context={context}
             modelCatalog={modelCatalog}
+            skills={skills}
             onRetry={onRetry}
             onContextRefresh={onContextRefresh}
             onSettingUpdate={onSettingUpdate}
+            onSkillsRefresh={onSkillsRefresh}
+            onSkillToggle={onSkillToggle}
             onDraftChange={onDraftChange}
           />
         </ThreadPrimitive.ViewportFooter>
@@ -491,9 +501,12 @@ function Composer({
   settings,
   context,
   modelCatalog,
+  skills,
   onRetry,
   onContextRefresh,
   onSettingUpdate,
+  onSkillsRefresh,
+  onSkillToggle,
   onDraftChange,
 }: {
   readonly statusMessage?: string;
@@ -506,9 +519,12 @@ function Composer({
   readonly settings: SessionSettingsState;
   readonly context: SessionContextState;
   readonly modelCatalog: ModelCatalogState;
+  readonly skills: SkillsPanelState;
   readonly onRetry: () => void;
   readonly onContextRefresh: () => void;
   readonly onSettingUpdate: (update: SessionSettingSelection) => void;
+  readonly onSkillsRefresh: () => void;
+  readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onDraftChange: (draft: string) => void;
 }): React.JSX.Element {
   return (
@@ -546,10 +562,13 @@ function Composer({
             settings={settings}
             context={context}
             modelCatalog={modelCatalog}
+            skills={skills}
             disabled={controlsDisabled}
             settingUpdatesDisabled={settingUpdatesDisabled}
             onContextRefresh={onContextRefresh}
             onSettingUpdate={onSettingUpdate}
+            onSkillsRefresh={onSkillsRefresh}
+            onSkillToggle={onSkillToggle}
           />
           {showRetry ? (
             <button

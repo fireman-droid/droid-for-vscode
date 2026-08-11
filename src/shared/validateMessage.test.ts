@@ -95,6 +95,16 @@ describe('parseWebviewMessage', () => {
       title: 'Renamed session',
     },
     {
+      type: 'skills.refresh',
+      sessionId: 'session-1',
+    },
+    {
+      type: 'skill.toggle',
+      sessionId: 'session-1',
+      name: 'code-review',
+      disabled: true,
+    },
+    {
       type: 'session.context.refresh',
       sessionId: 'session-1',
     },
@@ -237,6 +247,26 @@ describe('parseWebviewMessage', () => {
     },
     { type: 'session.rename', sessionId: '', title: 'Renamed' },
     { type: 'session.context.refresh', sessionId: '' },
+    { type: 'skills.refresh', sessionId: '' },
+    { type: 'skills.refresh', sessionId: 'session-1', extra: true },
+    { type: 'skill.toggle', sessionId: 'session-1', name: '', disabled: true },
+    {
+      type: 'skill.toggle',
+      sessionId: 'session-1',
+      name: 's'.repeat(129),
+      disabled: true,
+    },
+    {
+      type: 'skill.toggle',
+      sessionId: 'session-1',
+      name: 'code-review',
+      disabled: 'yes',
+    },
+    {
+      type: 'skill.toggle',
+      sessionId: 'session-1',
+      name: 'code-review',
+    },
     {
       type: 'session.setting.update',
       sessionId: 'session-1',

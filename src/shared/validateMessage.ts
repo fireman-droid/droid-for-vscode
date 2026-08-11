@@ -7,6 +7,7 @@ import {
   MAX_MODEL_ID_LENGTH,
   MAX_PERMISSION_OPTION_VALUE_LENGTH,
   MAX_SESSION_TITLE_LENGTH,
+  MAX_SKILL_NAME_LENGTH,
   MAX_TURN_TEXT_LENGTH,
   SESSION_AUTONOMY_LEVELS,
   SESSION_INTERACTION_MODES,
@@ -21,6 +22,8 @@ import {
   type SessionSelectMessage,
   type SessionSettingUpdateMessage,
   type SessionsRefreshMessage,
+  type SkillToggleMessage,
+  type SkillsRefreshMessage,
   type TurnEditResendMessage,
   type TurnSendMessage,
   type TurnStopMessage,
@@ -67,6 +70,10 @@ export function parseWebviewMessage(
         return parseSessionRename(value);
       case 'session.context.refresh':
         return parseSessionContextRefresh(value);
+      case 'skills.refresh':
+        return parseSkillsRefresh(value);
+      case 'skill.toggle':
+        return parseSkillToggle(value);
       case 'session.setting.update':
         return parseSessionSettingUpdate(value);
       default:
@@ -344,6 +351,39 @@ function parseSessionContextRefresh(
   return {
     type: 'session.context.refresh',
     sessionId: value.sessionId,
+  };
+}
+
+function parseSkillsRefresh(
+  value: UnknownRecord,
+): SkillsRefreshMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'skills.refresh', sessionId: value.sessionId };
+}
+
+function parseSkillToggle(
+  value: UnknownRecord,
+): SkillToggleMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'name', 'disabled']) ||
+    !isId(value.sessionId) ||
+    !isNonEmptyBoundedString(value.name, MAX_SKILL_NAME_LENGTH) ||
+    typeof value.disabled !== 'boolean'
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'skill.toggle',
+    sessionId: value.sessionId,
+    name: value.name,
+    disabled: value.disabled,
   };
 }
 
