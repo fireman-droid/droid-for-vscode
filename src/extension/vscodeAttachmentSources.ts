@@ -1,0 +1,187 @@
+import { basename, extname } from 'node:path';
+
+import * as vscode from 'vscode';
+
+import {
+  MAX_IMAGE_ATTACHMENT_BYTES,
+  MAX_PDF_ATTACHMENT_BYTES,
+  MAX_TEXT_ATTACHMENT_CHARS,
+  type AttachmentCaptureOutcome,
+  type AttachmentPayload,
+  type AttachmentPickOutcome,
+  type AttachmentSources,
+} from './attachmentSources';
+import type { RuntimeImageMediaType } from '../runtime/DroidRuntime';
+
+const IMAGE_MEDIA_TYPES: Record<string, RuntimeImageMediaType> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+};
+
+/**
+ * Reads attachment content with VS Code APIs. Tracks the most recent
+ * text editor because focusing the webview clears
+ * `window.activeTextEditor`.
+ */
+export function createVscodeAttachmentSources(): AttachmentSources & {
+  dispose(): void;
+} {
+  let lastTextEditor: vscode.TextEditor | undefined =
+    vscode.window.activeTextEditor;
+  const subscription = vscode.window.onDidChangeActiveTextEditor(
+    (editor) => {
+      if (editor !== undefined) {
+        lastTextEditor = editor;
+      }
+    },
+  );
+
+  const currentEditor = (): vscode.TextEditor | undefined => {
+    const active = vscode.window.activeTextEditor;
+    if (active !== undefined) {
+      return active;
+    }
+    if (
+      lastTextEditor !== undefined &&
+      !lastTextEditor.document.isClosed
+    ) {
+      return lastTextEditor;
+    }
+    return undefined;
+  };
+
+  return {
+    async pickFiles(maxCount): Promise<AttachmentPickOutcome> {
+      let uris: readonly vscode.Uri[] | undefined;
+      try {
+        uris = await vscode.window.showOpenDialog({
+          canSelectMany: true,
+          openLabel: 'Attach to Droid',
+        });
+      } catch {
+        return { status: 'failed' };
+      }
+      if (uris === undefined || uris.length === 0) {
+        return { status: 'cancelled' };
+      }
+      const items: AttachmentPayload[] = [];
+      for (const uri of uris.slice(0, maxCount)) {
+        let payload: AttachmentPayload | 'too-large' | 'unsupported-type';
+        try {
+          payload = await readFilePayload(uri);
+        } catch {
+          return { status: 'failed' };
+        }
+        if (payload === 'too-large' || payload === 'unsupported-type') {
+          return { status: 'rejected', reason: payload };
+        }
+        items.push(payload);
+      }
+      return { status: 'picked', items };
+    },
+
+    readActiveEditor(): Promise<AttachmentCaptureOutcome> {
+      const editor = currentEditor();
+      if (editor === undefined) {
+        return Promise.resolve({ status: 'empty' });
+      }
+      const text = editor.document.getText();
+      if (text.length === 0) {
+        return Promise.resolve({ status: 'empty' });
+      }
+      return Promise.resolve({
+        status: 'captured',
+        item: textPayload(displayName(editor.document), text),
+      });
+    },
+
+    readActiveSelection(): Promise<AttachmentCaptureOutcome> {
+      const editor = currentEditor();
+      if (editor === undefined || editor.selection.isEmpty) {
+        return Promise.resolve({ status: 'empty' });
+      }
+      const text = editor.document.getText(editor.selection);
+      if (text.trim().length === 0) {
+        return Promise.resolve({ status: 'empty' });
+      }
+      const startLine = editor.selection.start.line + 1;
+      const endLine = editor.selection.end.line + 1;
+      return Promise.resolve({
+        status: 'captured',
+        item: textPayload(
+          `${displayName(editor.document)}:${startLine}-${endLine}`,
+          text,
+        ),
+      });
+    },
+
+    dispose(): void {
+      subscription.dispose();
+    },
+  };
+}
+
+async function readFilePayload(
+  uri: vscode.Uri,
+): Promise<AttachmentPayload | 'too-large' | 'unsupported-type'> {
+  const bytes = await vscode.workspace.fs.readFile(uri);
+  const name = basename(uri.fsPath);
+  const extension = extname(uri.fsPath).toLowerCase();
+
+  const imageMediaType = IMAGE_MEDIA_TYPES[extension];
+  if (imageMediaType !== undefined) {
+    if (bytes.byteLength > MAX_IMAGE_ATTACHMENT_BYTES) {
+      return 'too-large';
+    }
+    return {
+      kind: 'image',
+      name,
+      data: Buffer.from(bytes).toString('base64'),
+      mediaType: imageMediaType,
+      sizeBytes: bytes.byteLength,
+      truncated: false,
+    };
+  }
+
+  if (extension === '.pdf') {
+    if (bytes.byteLength > MAX_PDF_ATTACHMENT_BYTES) {
+      return 'too-large';
+    }
+    return {
+      kind: 'pdf',
+      name,
+      data: Buffer.from(bytes).toString('base64'),
+      sizeBytes: bytes.byteLength,
+      truncated: false,
+    };
+  }
+
+  const text = Buffer.from(bytes).toString('utf8');
+  if (text.includes('\u0000')) {
+    return 'unsupported-type';
+  }
+  return textPayload(name, text);
+}
+
+function textPayload(name: string, text: string): AttachmentPayload {
+  const truncated = text.length > MAX_TEXT_ATTACHMENT_CHARS;
+  const data = truncated
+    ? text.slice(0, MAX_TEXT_ATTACHMENT_CHARS)
+    : text;
+  return {
+    kind: 'text',
+    name,
+    data,
+    sizeBytes: Buffer.byteLength(data, 'utf8'),
+    truncated,
+  };
+}
+
+function displayName(document: vscode.TextDocument): string {
+  return document.isUntitled
+    ? 'Untitled'
+    : basename(document.fileName);
+}

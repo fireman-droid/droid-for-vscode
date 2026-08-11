@@ -88,7 +88,7 @@ describe('FactoryDroidRuntime', () => {
     expect(diagnostics.record).toHaveBeenCalledWith({
       level: 'info',
       name: 'runtime.turn.started',
-      attributes: { textLength: 22 },
+      attributes: { textLength: 22, attachmentCount: 0 },
     });
     expect(diagnostics.record).toHaveBeenCalledWith({
       level: 'info',
@@ -105,6 +105,59 @@ describe('FactoryDroidRuntime', () => {
     expect(JSON.stringify(diagnostics.record.mock.calls)).not.toContain(
       'private prompt content',
     );
+  });
+
+  it('forwards attachments to the SDK stream as images and files', async () => {
+    const session = createMockSession(async function* () {
+      yield textDelta('ok');
+      yield successfulResult();
+    });
+    const runtime = createRuntime(async () => session);
+
+    await runtime.initialize('C:\\workspace');
+    await collect(
+      runtime.sendTurn('describe these', [
+        { kind: 'image', data: 'aW1n', mediaType: 'image/png' },
+        { kind: 'pdf', data: 'cGRm', name: 'paper.pdf' },
+        { kind: 'text', data: 'hello notes', name: 'notes.md' },
+      ]),
+    );
+
+    expect(session.stream).toHaveBeenCalledWith('describe these', {
+      includePartialMessages: true,
+      images: [{ type: 'base64', data: 'aW1n', mediaType: 'image/png' }],
+      files: [
+        {
+          type: 'base64',
+          mediaType: 'application/pdf',
+          data: 'cGRm',
+          name: 'paper.pdf',
+        },
+        {
+          type: 'text',
+          mediaType: 'text/plain',
+          data: 'hello notes',
+          name: 'notes.md',
+        },
+      ],
+    });
+  });
+
+  it('rejects a turn with too many attachments', async () => {
+    const session = createMockSession(async function* () {});
+    const runtime = createRuntime(async () => session);
+
+    await runtime.initialize('C:\\workspace');
+    const oversized = Array.from({ length: 9 }, (_, index) => ({
+      kind: 'text' as const,
+      data: 'x',
+      name: `file-${index}.txt`,
+    }));
+
+    await expect(
+      collect(runtime.sendTurn('too many', oversized)),
+    ).rejects.toThrow('Too many attachments');
+    expect(session.stream).not.toHaveBeenCalled();
   });
 
   it('initializes an explicit resumed session target once', async () => {

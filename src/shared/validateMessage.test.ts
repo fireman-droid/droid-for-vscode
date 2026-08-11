@@ -119,6 +119,23 @@ describe('parseWebviewMessage', () => {
       sessionId: 'session-1',
     },
     {
+      type: 'attachment.pick',
+      sessionId: 'session-1',
+    },
+    {
+      type: 'attachment.addEditor',
+      sessionId: 'session-1',
+    },
+    {
+      type: 'attachment.addSelection',
+      sessionId: 'session-1',
+    },
+    {
+      type: 'attachment.remove',
+      sessionId: 'session-1',
+      attachmentId: 'attachment-1',
+    },
+    {
       type: 'session.context.refresh',
       sessionId: 'session-1',
     },
@@ -285,6 +302,21 @@ describe('parseWebviewMessage', () => {
     },
     { type: 'mcp.refresh', sessionId: '' },
     { type: 'mcp.refresh', sessionId: 'session-1', extra: true },
+    { type: 'attachment.pick', sessionId: '' },
+    { type: 'attachment.pick', sessionId: 'session-1', extra: true },
+    { type: 'attachment.addEditor', sessionId: '' },
+    { type: 'attachment.addSelection', sessionId: '' },
+    { type: 'attachment.remove', sessionId: 'session-1' },
+    {
+      type: 'attachment.remove',
+      sessionId: 'session-1',
+      attachmentId: '',
+    },
+    {
+      type: 'attachment.remove',
+      sessionId: 'session-1',
+      attachmentId: 'a'.repeat(MAX_BRIDGE_ID_LENGTH + 1),
+    },
     {
       type: 'mcp.server.toggle',
       sessionId: 'session-1',

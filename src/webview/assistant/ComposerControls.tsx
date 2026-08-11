@@ -48,6 +48,9 @@ interface ComposerControlsProps {
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onMcpRefresh: () => void;
   readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
+  readonly onAttachFiles: () => void;
+  readonly onAttachEditor: () => void;
+  readonly onAttachSelection: () => void;
 }
 
 export type SessionSettingSelection =
@@ -121,6 +124,9 @@ export function ComposerControls({
   onSkillToggle,
   onMcpRefresh,
   onMcpServerToggle,
+  onAttachFiles,
+  onAttachEditor,
+  onAttachSelection,
 }: ComposerControlsProps): React.JSX.Element {
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
   const [settingsView, setSettingsView] = useState<SettingsView>('root');
@@ -258,12 +264,23 @@ export function ComposerControls({
           skills={skills}
           mcp={mcp}
           disabled={settingControlsDisabled}
+          attachDisabled={disabled}
           onViewChange={setSettingsView}
           onUpdate={onSettingUpdate}
           onSkillsRefresh={onSkillsRefresh}
           onSkillToggle={onSkillToggle}
           onMcpRefresh={onMcpRefresh}
           onMcpServerToggle={onMcpServerToggle}
+          onAttach={(source) => {
+            setOpenPanel(null);
+            if (source === 'files') {
+              onAttachFiles();
+            } else if (source === 'editor') {
+              onAttachEditor();
+            } else {
+              onAttachSelection();
+            }
+          }}
         />
       ) : null}
       {openPanel === 'context' ? (
@@ -337,6 +354,8 @@ export function ComposerControls({
   );
 }
 
+type AttachSource = 'files' | 'editor' | 'selection';
+
 function SettingsPopover({
   id,
   view,
@@ -344,12 +363,14 @@ function SettingsPopover({
   skills,
   mcp,
   disabled,
+  attachDisabled,
   onViewChange,
   onUpdate,
   onSkillsRefresh,
   onSkillToggle,
   onMcpRefresh,
   onMcpServerToggle,
+  onAttach,
 }: {
   readonly id: string;
   readonly view: SettingsView;
@@ -357,6 +378,7 @@ function SettingsPopover({
   readonly skills: SkillsPanelState;
   readonly mcp: McpPanelState;
   readonly disabled: boolean;
+  readonly attachDisabled: boolean;
   readonly onViewChange: (view: SettingsView) => void;
   readonly onUpdate: (
     update: Extract<
@@ -368,6 +390,7 @@ function SettingsPopover({
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onMcpRefresh: () => void;
   readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
+  readonly onAttach: (source: AttachSource) => void;
 }): React.JSX.Element {
   const [query, setQuery] = useState('');
   const confirmed = settings.value;
@@ -379,6 +402,8 @@ function SettingsPopover({
         role="dialog"
         aria-label="Session controls"
       >
+        <AttachRows disabled={attachDisabled} onAttach={onAttach} />
+        <div className="dvx-settings-divider" />
         {settings.status === 'error' ? (
           <p className="dvx-popover-message dvx-error-text" role="alert">
             {settings.message}
@@ -400,6 +425,9 @@ function SettingsPopover({
     normalizedQuery.length === 0 || 'skills'.includes(normalizedQuery);
   const showMcp =
     normalizedQuery.length === 0 || 'mcp servers'.includes(normalizedQuery);
+  const showAttach =
+    normalizedQuery.length === 0 ||
+    'attach files editor selection context'.includes(normalizedQuery);
 
   if (view === 'skills') {
     return (
@@ -464,6 +492,12 @@ function SettingsPopover({
           }}
         />
       </div>
+      {showAttach ? (
+        <>
+          <AttachRows disabled={attachDisabled} onAttach={onAttach} />
+          <div className="dvx-settings-divider" />
+        </>
+      ) : null}
       {showMode ? (
         <SettingsDropdown
           id={`${id}-mode`}
@@ -553,7 +587,11 @@ function SettingsPopover({
           <ChevronDownIcon />
         </button>
       ) : null}
-      {!showMode && !showAutonomy && !showSkills && !showMcp ? (
+      {!showMode &&
+      !showAutonomy &&
+      !showSkills &&
+      !showMcp &&
+      !showAttach ? (
         <p className="dvx-popover-message">No matching actions.</p>
       ) : null}
       <SettingsStatus settings={settings} />
@@ -826,6 +864,120 @@ function McpServerRow({
         <span className="dvx-skill-switch-thumb" aria-hidden="true" />
       </button>
     </li>
+  );
+}
+
+function AttachRows({
+  disabled,
+  onAttach,
+}: {
+  readonly disabled: boolean;
+  readonly onAttach: (source: AttachSource) => void;
+}): React.JSX.Element {
+  return (
+    <div className="dvx-attach-rows">
+      <button
+        type="button"
+        className="dvx-popover-row dvx-attach-row"
+        disabled={disabled}
+        onClick={() => onAttach('files')}
+      >
+        <AttachIcon kind="files" />
+        <span className="dvx-popover-row-copy">
+          <strong>Attach files…</strong>
+          <small>Images, PDFs, or text files</small>
+        </span>
+      </button>
+      <button
+        type="button"
+        className="dvx-popover-row dvx-attach-row"
+        disabled={disabled}
+        onClick={() => onAttach('editor')}
+      >
+        <AttachIcon kind="editor" />
+        <span className="dvx-popover-row-copy">
+          <strong>Attach active editor</strong>
+          <small>Current file contents</small>
+        </span>
+      </button>
+      <button
+        type="button"
+        className="dvx-popover-row dvx-attach-row"
+        disabled={disabled}
+        onClick={() => onAttach('selection')}
+      >
+        <AttachIcon kind="selection" />
+        <span className="dvx-popover-row-copy">
+          <strong>Attach selection</strong>
+          <small>Highlighted editor text</small>
+        </span>
+      </button>
+    </div>
+  );
+}
+
+function AttachIcon({
+  kind,
+}: {
+  readonly kind: AttachSource;
+}): React.JSX.Element {
+  if (kind === 'files') {
+    return (
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path
+          d="M9.5 2.5h-4A1.5 1.5 0 0 0 4 4v8a1.5 1.5 0 0 0 1.5 1.5h5A1.5 1.5 0 0 0 12 12V5l-2.5-2.5Z"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M9.5 2.5V5H12"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  if (kind === 'editor') {
+    return (
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <rect
+          x="2.5"
+          y="3.5"
+          width="11"
+          height="9"
+          rx="1.2"
+          stroke="currentColor"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M5 6.5h6M5 9h4"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M3 5.5h10M3 8h10M3 10.5h5.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+      <rect
+        x="2"
+        y="6.9"
+        width="12"
+        height="2.4"
+        rx=".6"
+        fill="currentColor"
+        opacity=".18"
+      />
+    </svg>
   );
 }
 

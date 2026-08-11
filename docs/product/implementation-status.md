@@ -90,6 +90,23 @@ info 级 `session-compacted` 诊断（含被总结的消息数）并自动刷新
 here…” 状态（气泡淡化 + 脉冲圆点），成功路径由 Fork 快照替换整段转录，
 失败路径（Host 仅回发诊断）8 秒后自动恢复常规展示。已通过浏览器冒烟
 验证以上全部路径。
+
+同日追加 Context 附件（Module 2 切片）：Composer `+` 面板顶部新增
+“Attach files… / Attach active editor / Attach selection” 三个入口
+（Bridge `attachment.pick` / `attachment.addEditor` /
+`attachment.addSelection` / `attachment.remove`，Host 以
+`session.attachments` 回发仅含元数据的暂存列表）。Host 侧
+`AttachmentSources` 抽象由 VS Code 实现提供：文件对话框读取
+图片（jpg/png/gif/webp ≤4MB）、PDF（≤6MB）与文本文件（≤256K 字符，
+超长截断并打 truncated 标记，含 NUL 的二进制拒绝）；活动编辑器与
+选区捕获为文本附件（选区名带行号范围）。暂存上限 8 个，附件内容
+只留在 Host/Runtime，Webview 仅渲染 chips（种类徽标、名称、
+truncated 徽标、移除按钮）。发送时 Host 把暂存附件经
+`sendTurn(text, attachments)` 投影为 SDK MessageOptions 的
+`images` / `files` 并清空暂存；Rewind、Compact 与 Session 切换会
+丢弃暂存附件。限额、空编辑器/空选区、读取失败均以 warning 诊断
+回报。已知边界：已发送消息在转录中暂不回显附件；`droid exec`
+风格的目录级 context 源无公开 SDK 渠道，保持未实现。
 下一轮严格两小时实现窗口的证据、范围、执行顺序、验收和回滚已经固化到
 `docs/preflight/`。该预研确认 Context 的累计 `used`、Breakdown
 `usedTokens`、`freeTokens` 和 Category Sum 都不能表示当前窗口；只有公开
@@ -102,9 +119,9 @@ Schema 中最新 Provider Call 的 `lastCallTokenUsage` /
 `isCustom: true` 的 BYOK Model，Model 和对应 Reasoning 选项可以安全选择；
 目录缺失或非法时仍然 fail closed，不会使用硬编码模型。历史用户消息
 现在支持双击内联编辑并通过 SDK Rewind 从该消息分支重新提问。
-Skills 浏览与启停、MCP Server 浏览与启停已生产接通。Changes/Diff、
-daemon 主运行路径、Commands、Mission 和 Manage Droid 等主要功能仍未
-实现。
+Skills 浏览与启停、MCP Server 浏览与启停、消息附件（文件/编辑器/
+选区）已生产接通。Changes/Diff、daemon 主运行路径、Commands、
+Mission 和 Manage Droid 等主要功能仍未实现。
 
 ### 当前 Figma Design 还原边界
 
@@ -136,7 +153,7 @@ Context 和 Model 浮层固定在 Composer 上方约 7px。
 
 - 固定模型清单与 “Add Models”，生产 UI 仅显示 Runtime 返回且 SDK 标记为
   `isCustom: true` 的 BYOK `availableModels`；
-- 文件附件、全局或永久权限（Skills 与 MCP 浏览启停已生产接通）；
+- 全局或永久权限（文件附件、Skills 与 MCP 浏览启停已生产接通）；
 - 完整 Mission 管理、Worker、阶段和进度界面。
 
 Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限卡片显示和
@@ -483,7 +500,8 @@ Stats，并通过公开初始化/加载响应接通模型目录，因此这些�
 Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力目前
 仍然只是探测结果或声明：
 
-- 图片和文档附件能力（Skills 与 MCP 浏览启停已生产接通）
+- 目录级 Context 源与 `@`/Symbol 引用（图片/PDF/文本附件、编辑器与
+  选区附件、Skills 与 MCP 浏览启停已生产接通）
 - Session Archive、显式 Fork（Rename、编辑重问 Rewind 和 Compact
   已生产接通）
 - Mission Mode 和 Events
@@ -515,9 +533,10 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
 - [x] Composer 常驻 Mode 触发器（Auto/Spec/Mission 一键切换弹层）
 - [x] Context 圆环旁常驻百分比（仅在窗口比例可信时显示）
 - [x] `＋` 动作面板本地搜索、Skills 列表浏览与启停、MCP Server 浏览与启停
+- [x] `＋` 面板附件入口（文件对话框、活动编辑器、编辑器选区）
+- [x] 已附加内容标签（Composer 附件 chips，含种类/截断徽标与移除）
 - [ ] `@` 文件和 Symbol 引用
 - [ ] `/` 动态命令
-- [ ] 已附加内容标签
 
 当前 Composer 保留 assistant-ui 的 Input、Send、Stop 和 Runtime Retry，
 并增加真实 Mode、Autonomy、Model/Reasoning 和 Context 控件。模型选项
@@ -534,11 +553,11 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 ### Context 与附件
 
-- [ ] 文件附件
-- [ ] 图片附件
-- [ ] 文档附件
-- [ ] 当前编辑器
-- [ ] 编辑器选区
+- [x] 文件附件（文本文件 ≤256K 字符，超长截断）
+- [x] 图片附件（jpg/png/gif/webp ≤4MB）
+- [x] 文档附件（PDF ≤6MB）
+- [x] 当前编辑器
+- [x] 编辑器选区
 - [ ] Open Editors
 - [ ] Problems
 - [ ] Git Changes

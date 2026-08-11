@@ -150,6 +150,40 @@ export interface RuntimeMcpServer {
   readonly tools: readonly RuntimeMcpTool[];
 }
 
+export const MAX_RUNTIME_ATTACHMENTS = 8;
+/** Base64 payload cap for one image attachment (~4 MiB decoded). */
+export const MAX_RUNTIME_IMAGE_BASE64_LENGTH = 6 * 1024 * 1024;
+/** Base64 payload cap for one PDF attachment (~6 MiB decoded). */
+export const MAX_RUNTIME_PDF_BASE64_LENGTH = 8 * 1024 * 1024;
+/** Character cap for one text attachment. */
+export const MAX_RUNTIME_TEXT_ATTACHMENT_LENGTH = 256 * 1024;
+
+export const RUNTIME_IMAGE_MEDIA_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+] as const;
+export type RuntimeImageMediaType =
+  (typeof RUNTIME_IMAGE_MEDIA_TYPES)[number];
+
+export type RuntimeAttachment =
+  | {
+      readonly kind: 'image';
+      readonly data: string;
+      readonly mediaType: RuntimeImageMediaType;
+    }
+  | {
+      readonly kind: 'pdf';
+      readonly data: string;
+      readonly name: string;
+    }
+  | {
+      readonly kind: 'text';
+      readonly data: string;
+      readonly name: string;
+    };
+
 export interface RuntimeRewindParams {
   readonly messageId: string;
   readonly forkTitle: string;
@@ -174,7 +208,10 @@ export interface DroidRuntime {
   updateSessionSetting(
     update: RuntimeSessionSettingUpdate,
   ): Promise<RuntimeSessionSettings>;
-  sendTurn(text: string): AsyncIterable<RuntimeEvent>;
+  sendTurn(
+    text: string,
+    attachments?: readonly RuntimeAttachment[],
+  ): AsyncIterable<RuntimeEvent>;
   interrupt(): Promise<void>;
   /**
    * Rewinds the active session to the given user message, forking a new

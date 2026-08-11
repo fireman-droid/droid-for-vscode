@@ -7,6 +7,8 @@ import {
   resumeSession,
   type AvailableModelConfig,
   type AutonomyLevel,
+  type Base64ImageSource,
+  type DocumentSource,
   type DroidSessionUpdateSettingsOptions,
   type DroidInteractionMode,
   type DroidObservability,
@@ -33,7 +35,12 @@ import {
   RUNTIME_MCP_SERVER_STATUSES,
   RUNTIME_REASONING_EFFORTS,
   RUNTIME_SKILL_LOCATIONS,
+  MAX_RUNTIME_ATTACHMENTS,
+  MAX_RUNTIME_IMAGE_BASE64_LENGTH,
+  MAX_RUNTIME_PDF_BASE64_LENGTH,
+  MAX_RUNTIME_TEXT_ATTACHMENT_LENGTH,
   type DroidRuntime,
+  type RuntimeAttachment,
   type RuntimeCompactResult,
   type RuntimeRewindParams,
   type RuntimeRewindResult,
@@ -77,7 +84,11 @@ export interface FactoryDroidSession {
   readonly availableModels?: readonly AvailableModelConfig[];
   stream(
     prompt: string,
-    options: { includePartialMessages: true },
+    options: {
+      includePartialMessages: true;
+      images?: Base64ImageSource[];
+      files?: DocumentSource[];
+    },
   ): AsyncIterable<DroidStreamEvent>;
   interrupt(): Promise<void>;
   updateSettings(
@@ -182,7 +193,10 @@ export class FactoryDroidRuntime implements DroidRuntime {
     return promise;
   }
 
-  async *sendTurn(text: string): AsyncIterable<RuntimeEvent> {
+  async *sendTurn(
+    text: string,
+    attachments?: readonly RuntimeAttachment[],
+  ): AsyncIterable<RuntimeEvent> {
     this.ensureNotDisposed();
 
     if (text.trim().length === 0) {
@@ -209,12 +223,16 @@ export class FactoryDroidRuntime implements DroidRuntime {
     this.recordDiagnostic({
       level: 'info',
       name: 'runtime.turn.started',
-      attributes: { textLength: text.length },
+      attributes: {
+        textLength: text.length,
+        attachmentCount: attachments?.length ?? 0,
+      },
     });
 
     try {
       for await (const sdkEvent of session.stream(text, {
         includePartialMessages: true,
+        ...projectStreamAttachments(attachments),
       })) {
         if (this.disposed || this.activeTurn !== turn) {
           outcome = 'stopped';
@@ -1219,6 +1237,66 @@ function createCatalogSessionView(
  * Projects an SDK skill record to safe display fields, dropping
  * filesystem paths, raw content, and resources.
  */
+/**
+ * Maps validated runtime attachments onto the SDK stream options.
+ * Oversized or excess attachments are rejected here so the SDK only
+ * ever sees bounded payloads.
+ */
+function projectStreamAttachments(
+  attachments: readonly RuntimeAttachment[] | undefined,
+): { images?: Base64ImageSource[]; files?: DocumentSource[] } {
+  if (attachments === undefined || attachments.length === 0) {
+    return {};
+  }
+  if (attachments.length > MAX_RUNTIME_ATTACHMENTS) {
+    throw new Error('Too many attachments for one Droid turn.');
+  }
+  const images: Base64ImageSource[] = [];
+  const files: DocumentSource[] = [];
+  for (const attachment of attachments) {
+    switch (attachment.kind) {
+      case 'image':
+        if (attachment.data.length > MAX_RUNTIME_IMAGE_BASE64_LENGTH) {
+          throw new Error('Image attachment is too large.');
+        }
+        images.push({
+          type: 'base64',
+          data: attachment.data,
+          mediaType: attachment.mediaType,
+        });
+        break;
+      case 'pdf':
+        if (attachment.data.length > MAX_RUNTIME_PDF_BASE64_LENGTH) {
+          throw new Error('PDF attachment is too large.');
+        }
+        files.push({
+          type: 'base64',
+          mediaType: 'application/pdf',
+          data: attachment.data,
+          name: attachment.name,
+        });
+        break;
+      case 'text':
+        if (
+          attachment.data.length > MAX_RUNTIME_TEXT_ATTACHMENT_LENGTH
+        ) {
+          throw new Error('Text attachment is too large.');
+        }
+        files.push({
+          type: 'text',
+          mediaType: 'text/plain',
+          data: attachment.data,
+          name: attachment.name,
+        });
+        break;
+    }
+  }
+  return {
+    ...(images.length > 0 ? { images } : {}),
+    ...(files.length > 0 ? { files } : {}),
+  };
+}
+
 function projectSkill(raw: unknown): RuntimeSkill | null {
   if (typeof raw !== 'object' || raw === null) {
     return null;

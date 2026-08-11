@@ -15,6 +15,10 @@ import {
   SESSION_REASONING_EFFORTS,
   type AskUserAnswer,
   type AskUserRespondMessage,
+  type AttachmentAddEditorMessage,
+  type AttachmentAddSelectionMessage,
+  type AttachmentPickMessage,
+  type AttachmentRemoveMessage,
   type McpRefreshMessage,
   type McpServerToggleMessage,
   type PermissionRespondMessage,
@@ -84,6 +88,14 @@ export function parseWebviewMessage(
         return parseMcpRefresh(value);
       case 'mcp.server.toggle':
         return parseMcpServerToggle(value);
+      case 'attachment.pick':
+        return parseAttachmentPick(value);
+      case 'attachment.addEditor':
+        return parseAttachmentAddEditor(value);
+      case 'attachment.addSelection':
+        return parseAttachmentAddSelection(value);
+      case 'attachment.remove':
+        return parseAttachmentRemove(value);
       case 'session.setting.update':
         return parseSessionSettingUpdate(value);
       default:
@@ -440,6 +452,66 @@ function parseMcpServerToggle(
     sessionId: value.sessionId,
     name: value.name,
     enabled: value.enabled,
+  };
+}
+
+function parseAttachmentPick(
+  value: UnknownRecord,
+): AttachmentPickMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'attachment.pick', sessionId: value.sessionId };
+}
+
+function parseAttachmentAddEditor(
+  value: UnknownRecord,
+): AttachmentAddEditorMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'attachment.addEditor', sessionId: value.sessionId };
+}
+
+function parseAttachmentAddSelection(
+  value: UnknownRecord,
+): AttachmentAddSelectionMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'attachment.addSelection',
+    sessionId: value.sessionId,
+  };
+}
+
+function parseAttachmentRemove(
+  value: UnknownRecord,
+): AttachmentRemoveMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'attachmentId']) ||
+    !isId(value.sessionId) ||
+    !isId(value.attachmentId)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'attachment.remove',
+    sessionId: value.sessionId,
+    attachmentId: value.attachmentId,
   };
 }
 

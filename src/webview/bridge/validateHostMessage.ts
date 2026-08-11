@@ -44,12 +44,17 @@ import {
   SESSION_REASONING_EFFORTS,
   TOOL_ACTIVITY_STATUSES,
   TOOL_ACTIVITY_UPDATE_KINDS,
+  ATTACHMENT_KINDS,
+  MAX_ATTACHMENT_NAME_LENGTH,
+  MAX_PENDING_ATTACHMENTS,
   SKILL_LOCATIONS,
   TRANSCRIPT_THINKING_STATUSES,
   TRANSCRIPT_TOOL_STATUSES,
   TURN_STATUSES,
   type AskUserInteractionRequest,
   type AskUserQuestion,
+  type AttachmentKind,
+  type AttachmentSummary,
   type ConnectionState,
   type DiagnosticSeverity,
   type HostToWebviewMessage,
@@ -159,6 +164,8 @@ export function readHostMessage(
         return parseSessionSkillsMessage(value);
       case 'session.mcp':
         return parseSessionMcpMessage(value);
+      case 'session.attachments':
+        return parseSessionAttachmentsMessage(value);
       case 'assistant.delta':
         return parseAssistantDelta(value);
       case 'thinking.delta':
@@ -1099,6 +1106,72 @@ function parseModelCatalog(value: unknown): ModelCatalogState | undefined {
           items: [],
           message: value.message as string,
         };
+}
+
+function parseSessionAttachmentsMessage(
+  value: UnknownRecord,
+):
+  | Extract<HostToWebviewMessage, { type: 'session.attachments' }>
+  | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sequence',
+      'sessionId',
+      'attachments',
+    ]) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId) ||
+    !isExactArray(value.attachments, 0, MAX_PENDING_ATTACHMENTS)
+  ) {
+    return undefined;
+  }
+  const attachments: AttachmentSummary[] = [];
+  const ids = new Set<string>();
+  for (const itemValue of value.attachments) {
+    const item = parseAttachmentSummary(itemValue);
+    if (item === undefined || ids.has(item.id)) {
+      return undefined;
+    }
+    ids.add(item.id);
+    attachments.push(item);
+  }
+  return {
+    type: 'session.attachments',
+    sequence: value.sequence,
+    sessionId: value.sessionId,
+    attachments,
+  };
+}
+
+function parseAttachmentSummary(
+  value: unknown,
+): AttachmentSummary | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, [
+      'id',
+      'kind',
+      'name',
+      'sizeBytes',
+      'truncated',
+    ]) ||
+    !isId(value.id) ||
+    typeof value.kind !== 'string' ||
+    !(ATTACHMENT_KINDS as readonly string[]).includes(value.kind) ||
+    !isNonEmptyBoundedString(value.name, MAX_ATTACHMENT_NAME_LENGTH) ||
+    !isCount(value.sizeBytes) ||
+    typeof value.truncated !== 'boolean'
+  ) {
+    return undefined;
+  }
+  return {
+    id: value.id,
+    kind: value.kind as AttachmentKind,
+    name: value.name,
+    sizeBytes: value.sizeBytes,
+    truncated: value.truncated,
+  };
 }
 
 function parseSessionSkillsMessage(

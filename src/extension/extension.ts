@@ -10,6 +10,7 @@ import {
   SessionRecoveryStore,
   type SessionRecoveryPersistence,
 } from './SessionRecoveryStore';
+import { createVscodeAttachmentSources } from './vscodeAttachmentSources';
 
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
@@ -29,6 +30,7 @@ export function activate(context: vscode.ExtensionContext): void {
     update: (key: string, value: unknown) =>
       context.workspaceState.update(key, value),
   };
+  const attachmentSources = createVscodeAttachmentSources();
   const controller = new ChatController(
     (interactionHandler) =>
       new FactoryDroidRuntime({
@@ -43,6 +45,7 @@ export function activate(context: vscode.ExtensionContext): void {
     new FactorySessionCatalog(),
     new SessionRecoveryStore(persistence),
     new FactorySessionHistoryLoader(),
+    attachmentSources,
   );
   const provider = new DroidViewProvider(
     context.extensionUri,
@@ -54,6 +57,7 @@ export function activate(context: vscode.ExtensionContext): void {
     controller,
     provider,
     diagnostics,
+    attachmentSources,
     vscode.window.registerWebviewViewProvider(
       DroidViewProvider.viewType,
       provider,

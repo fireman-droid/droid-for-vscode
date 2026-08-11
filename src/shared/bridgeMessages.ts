@@ -272,6 +272,34 @@ export interface SkillToggleMessage {
   readonly disabled: boolean;
 }
 
+/**
+ * Asks the host to open a native file picker and stage the chosen
+ * files as pending attachments for the next prompt.
+ */
+export interface AttachmentPickMessage {
+  readonly type: 'attachment.pick';
+  readonly sessionId: string;
+}
+
+/** Stages the active editor document as a pending text attachment. */
+export interface AttachmentAddEditorMessage {
+  readonly type: 'attachment.addEditor';
+  readonly sessionId: string;
+}
+
+/** Stages the active editor selection as a pending text attachment. */
+export interface AttachmentAddSelectionMessage {
+  readonly type: 'attachment.addSelection';
+  readonly sessionId: string;
+}
+
+/** Removes one staged attachment by its host-assigned id. */
+export interface AttachmentRemoveMessage {
+  readonly type: 'attachment.remove';
+  readonly sessionId: string;
+  readonly attachmentId: string;
+}
+
 /** Requests the current MCP server and tool catalog for the session. */
 export interface McpRefreshMessage {
   readonly type: 'mcp.refresh';
@@ -330,6 +358,10 @@ export type WebviewToHostMessage =
   | SkillToggleMessage
   | McpRefreshMessage
   | McpServerToggleMessage
+  | AttachmentPickMessage
+  | AttachmentAddEditorMessage
+  | AttachmentAddSelectionMessage
+  | AttachmentRemoveMessage
   | SessionSettingUpdateMessage;
 
 export interface ConnectionState {
@@ -460,6 +492,30 @@ export type SessionSkillsState =
       readonly items: readonly [];
       readonly message: string;
     };
+
+export const MAX_PENDING_ATTACHMENTS = 8;
+export const MAX_ATTACHMENT_NAME_LENGTH = 128;
+
+export const ATTACHMENT_KINDS = [
+  'image',
+  'pdf',
+  'text',
+  'editor',
+  'selection',
+] as const;
+export type AttachmentKind = (typeof ATTACHMENT_KINDS)[number];
+
+/**
+ * Safe metadata about one staged attachment. Content bytes stay on the
+ * host; the webview only renders and removes chips.
+ */
+export interface AttachmentSummary {
+  readonly id: string;
+  readonly kind: AttachmentKind;
+  readonly name: string;
+  readonly sizeBytes: number;
+  readonly truncated: boolean;
+}
 
 export const MCP_SERVER_STATUSES = [
   'connecting',
@@ -620,6 +676,14 @@ export interface SessionMcpStateMessage {
   readonly mcp: SessionMcpState;
 }
 
+/** Current staged attachments for the active session. */
+export interface SessionAttachmentsStateMessage {
+  readonly type: 'session.attachments';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly attachments: readonly AttachmentSummary[];
+}
+
 export interface AssistantDeltaMessage {
   readonly type: 'assistant.delta';
   readonly sequence: number;
@@ -765,6 +829,7 @@ export type HostToWebviewMessage =
   | ModelCatalogStateMessage
   | SessionSkillsStateMessage
   | SessionMcpStateMessage
+  | SessionAttachmentsStateMessage
   | AssistantDeltaMessage
   | ThinkingDeltaMessage
   | ThinkingCompleteMessage

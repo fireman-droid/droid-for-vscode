@@ -1,4 +1,6 @@
 import type {
+  AttachmentKind,
+  AttachmentSummary,
   ConnectionState,
   ConfirmedSessionSettings,
   HostToWebviewMessage,
@@ -17,8 +19,10 @@ import type {
   WebviewToHostMessage,
 } from '../shared/bridgeMessages';
 import {
+  MAX_ATTACHMENT_NAME_LENGTH,
   MAX_BRIDGE_ID_LENGTH,
   MAX_MODEL_CATALOG_ITEMS,
+  MAX_PENDING_ATTACHMENTS,
   MAX_MODEL_DISPLAY_NAME_LENGTH,
   MAX_MODEL_ID_LENGTH,
   MAX_SESSION_CATALOG_ITEMS as SESSION_CATALOG_LIMIT,
@@ -29,6 +33,7 @@ import {
 } from '../shared/bridgeMessages';
 import type {
   DroidRuntime,
+  RuntimeAttachment,
   RuntimeContextStats,
   RuntimeModelCatalog,
   RuntimeModelCatalogItem,
@@ -75,6 +80,11 @@ import {
   type HostTranscriptState,
 } from './hostTranscriptState';
 import { reconcileSessionHistory } from './reconcileSessionHistory';
+import {
+  createUnavailableAttachmentSources,
+  type AttachmentPayload,
+  type AttachmentSources,
+} from './attachmentSources';
 
 export type DroidRuntimeFactory = (
   interactionHandler: RuntimeInteractionHandler,
@@ -101,6 +111,11 @@ interface CurrentTurn {
   status: TurnStatus;
   error?: string;
   activity: TurnActivityState;
+}
+
+interface PendingAttachment {
+  readonly summary: AttachmentSummary;
+  readonly runtime: RuntimeAttachment;
 }
 
 interface DisposableSubscription {
@@ -172,6 +187,18 @@ const MODEL_CATALOG_UNSUPPORTED_MESSAGE =
   'Model selection is unavailable in this Droid runtime.';
 const MODEL_CATALOG_FAILED_MESSAGE =
   'Droid models could not be loaded.';
+const ATTACHMENT_LIMIT_MESSAGE =
+  `Up to ${MAX_PENDING_ATTACHMENTS} attachments can be staged for one message.`;
+const ATTACHMENT_TOO_LARGE_MESSAGE =
+  'That file is too large to attach.';
+const ATTACHMENT_UNSUPPORTED_TYPE_MESSAGE =
+  'That file type cannot be attached.';
+const ATTACHMENT_READ_FAILED_MESSAGE =
+  'The selected content could not be read for attachment.';
+const ATTACHMENT_NO_EDITOR_MESSAGE =
+  'Open a text editor first to attach its contents.';
+const ATTACHMENT_NO_SELECTION_MESSAGE =
+  'Select text in an editor first to attach the selection.';
 
 export class ChatController {
   private readonly listeners = new Set<ChatControllerListener>();
@@ -212,6 +239,9 @@ export class ChatController {
   private workspaceTransition: Promise<void> | null = null;
   private sessionOperationInProgress = false;
   private refreshInProgress = false;
+  private pendingAttachments: PendingAttachment[] = [];
+  private attachmentOperationInProgress = false;
+  private attachmentIdCounter = 0;
   private readonly managedRuntimes = new Set<DroidRuntime>();
   private readonly runtimeClosures = new Map<
     DroidRuntime,
@@ -236,6 +266,8 @@ export class ChatController {
       createTransientRecoveryStore(),
     private readonly sessionHistory: SessionHistoryLoader =
       createUnavailableSessionHistoryLoader(),
+    private readonly attachmentSources: AttachmentSources =
+      createUnavailableAttachmentSources(),
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
@@ -354,6 +386,21 @@ export class ChatController {
           message.sessionId,
           message.name,
           message.enabled,
+        );
+        return;
+      case 'attachment.pick':
+        this.handleAttachmentPick(message.sessionId);
+        return;
+      case 'attachment.addEditor':
+        this.handleAttachmentCapture(message.sessionId, 'editor');
+        return;
+      case 'attachment.addSelection':
+        this.handleAttachmentCapture(message.sessionId, 'selection');
+        return;
+      case 'attachment.remove':
+        this.handleAttachmentRemove(
+          message.sessionId,
+          message.attachmentId,
         );
         return;
       case 'session.setting.update':
@@ -547,6 +594,7 @@ export class ChatController {
       sessionId,
       turnId,
       text,
+      this.takePendingRuntimeAttachments(),
     );
   }
 
@@ -557,11 +605,12 @@ export class ChatController {
     sessionId: string,
     turnId: string,
     text: string,
+    attachments?: readonly RuntimeAttachment[],
   ): Promise<void> {
     let terminalEventSeen = false;
 
     try {
-      for await (const event of runtime.sendTurn(text)) {
+      for await (const event of runtime.sendTurn(text, attachments)) {
         if (
           !this.isCurrentTurn(
             runtime,
@@ -939,6 +988,7 @@ export class ChatController {
     this.sessionId = forkedSessionId;
     this.transcript = truncated;
     this.turn = null;
+    this.clearPendingAttachments();
     this.sessions = this.withActiveSession(this.sessions, {
       id: forkedSessionId,
       title: forkTitleFromText(text),
@@ -1059,6 +1109,7 @@ export class ChatController {
     };
     this.sessionId = compactedSessionId;
     this.turn = null;
+    this.clearPendingAttachments();
     this.sessions = this.withActiveSession(this.sessions, {
       id: compactedSessionId,
       title: previousTitle,
@@ -1637,6 +1688,219 @@ export class ChatController {
       type: 'session.mcp',
       sessionId,
       mcp,
+    });
+  }
+
+  private canStageAttachments(sessionId: string): boolean {
+    return (
+      sessionId === this.sessionId &&
+      this.runtime !== null &&
+      this.connection.status === 'connected' &&
+      !this.attachmentOperationInProgress &&
+      this.ensureActiveRuntimeWorkspaceCurrent()
+    );
+  }
+
+  private handleAttachmentPick(sessionId: string): void {
+    if (!this.canStageAttachments(sessionId)) {
+      return;
+    }
+    const remaining =
+      MAX_PENDING_ATTACHMENTS - this.pendingAttachments.length;
+    if (remaining <= 0) {
+      this.emitSessionDiagnostic(
+        'attachment-limit',
+        ATTACHMENT_LIMIT_MESSAGE,
+      );
+      return;
+    }
+    this.attachmentOperationInProgress = true;
+    void this.attachmentSources.pickFiles(remaining).then(
+      (outcome) => {
+        this.attachmentOperationInProgress = false;
+        if (sessionId !== this.sessionId) {
+          return;
+        }
+        switch (outcome.status) {
+          case 'picked':
+            this.stageAttachmentPayloads(outcome.items);
+            return;
+          case 'cancelled':
+            return;
+          case 'rejected':
+            this.emitSessionDiagnostic(
+              'attachment-rejected',
+              outcome.reason === 'too-large'
+                ? ATTACHMENT_TOO_LARGE_MESSAGE
+                : ATTACHMENT_UNSUPPORTED_TYPE_MESSAGE,
+            );
+            return;
+          case 'failed':
+            this.emitSessionDiagnostic(
+              'attachment-read-failed',
+              ATTACHMENT_READ_FAILED_MESSAGE,
+            );
+            return;
+        }
+      },
+      () => {
+        this.attachmentOperationInProgress = false;
+        if (sessionId === this.sessionId) {
+          this.emitSessionDiagnostic(
+            'attachment-read-failed',
+            ATTACHMENT_READ_FAILED_MESSAGE,
+          );
+        }
+      },
+    );
+  }
+
+  private handleAttachmentCapture(
+    sessionId: string,
+    capture: 'editor' | 'selection',
+  ): void {
+    if (!this.canStageAttachments(sessionId)) {
+      return;
+    }
+    if (this.pendingAttachments.length >= MAX_PENDING_ATTACHMENTS) {
+      this.emitSessionDiagnostic(
+        'attachment-limit',
+        ATTACHMENT_LIMIT_MESSAGE,
+      );
+      return;
+    }
+    this.attachmentOperationInProgress = true;
+    const read =
+      capture === 'editor'
+        ? this.attachmentSources.readActiveEditor()
+        : this.attachmentSources.readActiveSelection();
+    void read.then(
+      (outcome) => {
+        this.attachmentOperationInProgress = false;
+        if (sessionId !== this.sessionId) {
+          return;
+        }
+        switch (outcome.status) {
+          case 'captured':
+            this.stageAttachmentPayloads([outcome.item], capture);
+            return;
+          case 'empty':
+            this.emitSessionDiagnostic(
+              'attachment-empty',
+              capture === 'editor'
+                ? ATTACHMENT_NO_EDITOR_MESSAGE
+                : ATTACHMENT_NO_SELECTION_MESSAGE,
+            );
+            return;
+          case 'failed':
+            this.emitSessionDiagnostic(
+              'attachment-read-failed',
+              ATTACHMENT_READ_FAILED_MESSAGE,
+            );
+            return;
+        }
+      },
+      () => {
+        this.attachmentOperationInProgress = false;
+        if (sessionId === this.sessionId) {
+          this.emitSessionDiagnostic(
+            'attachment-read-failed',
+            ATTACHMENT_READ_FAILED_MESSAGE,
+          );
+        }
+      },
+    );
+  }
+
+  private handleAttachmentRemove(
+    sessionId: string,
+    attachmentId: string,
+  ): void {
+    if (sessionId !== this.sessionId) {
+      return;
+    }
+    const next = this.pendingAttachments.filter(
+      ({ summary }) => summary.id !== attachmentId,
+    );
+    if (next.length === this.pendingAttachments.length) {
+      return;
+    }
+    this.pendingAttachments = next;
+    this.emitAttachments();
+  }
+
+  /**
+   * Converts environment payloads into pending attachments. `capture`
+   * overrides the display kind for editor and selection captures so
+   * the chip communicates the source rather than the payload format.
+   */
+  private stageAttachmentPayloads(
+    payloads: readonly AttachmentPayload[],
+    capture?: 'editor' | 'selection',
+  ): void {
+    let staged = 0;
+    for (const payload of payloads) {
+      if (this.pendingAttachments.length >= MAX_PENDING_ATTACHMENTS) {
+        this.emitSessionDiagnostic(
+          'attachment-limit',
+          ATTACHMENT_LIMIT_MESSAGE,
+        );
+        break;
+      }
+      const runtime = toRuntimeAttachment(payload);
+      if (runtime === null) {
+        continue;
+      }
+      this.attachmentIdCounter += 1;
+      const kind: AttachmentKind = capture ?? payload.kind;
+      this.pendingAttachments = [
+        ...this.pendingAttachments,
+        {
+          summary: {
+            id: `attachment-${this.attachmentIdCounter}`,
+            kind,
+            name: boundAttachmentName(payload.name),
+            sizeBytes: payload.sizeBytes,
+            truncated: payload.truncated,
+          },
+          runtime,
+        },
+      ];
+      staged += 1;
+    }
+    if (staged > 0) {
+      this.emitAttachments();
+    }
+  }
+
+  private takePendingRuntimeAttachments():
+    | readonly RuntimeAttachment[]
+    | undefined {
+    if (this.pendingAttachments.length === 0) {
+      return undefined;
+    }
+    const attachments = this.pendingAttachments.map(
+      ({ runtime }) => runtime,
+    );
+    this.pendingAttachments = [];
+    this.emitAttachments();
+    return attachments;
+  }
+
+  private clearPendingAttachments(): void {
+    this.pendingAttachments = [];
+  }
+
+  private emitAttachments(): void {
+    if (this.sessionId === null) {
+      return;
+    }
+    this.emit({
+      type: 'session.attachments',
+      sessionId: this.sessionId,
+      attachments: this.pendingAttachments.map(
+        ({ summary }) => summary,
+      ),
     });
   }
 
@@ -2894,6 +3158,7 @@ export class ChatController {
     this.settings = { status: 'loading', value: null };
     this.context = { status: 'loading', value: null };
     this.modelCatalog = { status: 'loading', items: [] };
+    this.clearPendingAttachments();
   }
 
   private isCurrentRuntimeGeneration(generation: number): boolean {
@@ -3214,6 +3479,33 @@ function projectMcpServerSummary(
       readOnly: tool.readOnly,
     })),
   };
+}
+
+function toRuntimeAttachment(
+  payload: AttachmentPayload,
+): RuntimeAttachment | null {
+  switch (payload.kind) {
+    case 'image':
+      return payload.mediaType === undefined
+        ? null
+        : {
+            kind: 'image',
+            data: payload.data,
+            mediaType: payload.mediaType,
+          };
+    case 'pdf':
+      return { kind: 'pdf', data: payload.data, name: payload.name };
+    case 'text':
+      return { kind: 'text', data: payload.data, name: payload.name };
+  }
+}
+
+function boundAttachmentName(name: string): string {
+  const trimmed = name.trim();
+  const safe = trimmed.length === 0 ? 'attachment' : trimmed;
+  return safe.length > MAX_ATTACHMENT_NAME_LENGTH
+    ? safe.slice(0, MAX_ATTACHMENT_NAME_LENGTH)
+    : safe;
 }
 
 function sanitizeSessionTitle(title: string): string {

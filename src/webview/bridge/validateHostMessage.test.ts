@@ -259,6 +259,33 @@ describe('readHostMessage', () => {
       },
     },
     {
+      type: 'session.attachments',
+      sequence: 1,
+      sessionId: 'session-1',
+      attachments: [
+        {
+          id: 'attachment-1',
+          kind: 'image',
+          name: 'shot.png',
+          sizeBytes: 1024,
+          truncated: false,
+        },
+        {
+          id: 'attachment-2',
+          kind: 'selection',
+          name: 'main.ts:1-10',
+          sizeBytes: 200,
+          truncated: true,
+        },
+      ],
+    },
+    {
+      type: 'session.attachments',
+      sequence: 1,
+      sessionId: 'session-1',
+      attachments: [],
+    },
+    {
       type: 'assistant.delta',
       sequence: 2,
       sessionId: 'session-1',
@@ -785,6 +812,49 @@ describe('readHostMessage', () => {
       sequence: 1,
       sessionId: 'session-1',
       mcp: { status: 'error', items: [] },
+    },
+    {
+      type: 'session.attachments',
+      sequence: 1,
+      sessionId: 'session-1',
+      attachments: [
+        {
+          id: '',
+          kind: 'image',
+          name: 'shot.png',
+          sizeBytes: 1,
+          truncated: false,
+        },
+      ],
+    },
+    {
+      type: 'session.attachments',
+      sequence: 1,
+      sessionId: 'session-1',
+      attachments: [
+        {
+          id: 'attachment-1',
+          kind: 'archive',
+          name: 'shot.zip',
+          sizeBytes: 1,
+          truncated: false,
+        },
+      ],
+    },
+    {
+      type: 'session.attachments',
+      sequence: 1,
+      sessionId: 'session-1',
+      attachments: [
+        {
+          id: 'attachment-1',
+          kind: 'image',
+          name: 'shot.png',
+          sizeBytes: 1,
+          truncated: false,
+          data: 'base64-content-must-not-cross',
+        },
+      ],
     },
     {
       type: 'session.model-catalog',

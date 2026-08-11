@@ -2457,6 +2457,97 @@ body {
   gap: 8px;
 }
 
+.dvx-attach-rows {
+  display: grid;
+}
+
+.dvx-attach-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.dvx-attach-row svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: #737373;
+}
+
+.dvx-attach-row:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.dvx-attach-row .dvx-popover-row-copy small {
+  color: #737373;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.dvx-attachment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px 0;
+}
+
+.dvx-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid rgb(226 220 210 / 90%);
+  border-radius: 7px;
+  background: #f6f2ea;
+  font-size: 11.5px;
+}
+
+.dvx-attachment-kind {
+  color: #8a7a63;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dvx-attachment-name {
+  overflow: hidden;
+  max-width: 180px;
+  color: var(--dvx-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-attachment-truncated {
+  color: #b45309;
+  font-size: 10px;
+}
+
+.dvx-attachment-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  color: #8a7a63;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.dvx-attachment-remove:hover {
+  color: #7a2e1d;
+  background: rgb(0 0 0 / 6%);
+}
+
 .dvx-settings-link-row svg {
   width: 14px;
   height: 14px;

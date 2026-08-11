@@ -58,6 +58,57 @@ function snapshot(
 }
 
 describe('assistantWebviewReducer', () => {
+  it('tracks staged attachments for the active session only', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.attachments',
+        sequence: 1,
+        sessionId: 'session-a',
+        attachments: [
+          {
+            id: 'att-1',
+            kind: 'image',
+            name: 'shot.png',
+            sizeBytes: 12,
+            truncated: false,
+          },
+        ],
+      },
+    });
+    expect(state.attachments).toHaveLength(1);
+
+    // Other-session attachment updates advance the sequence only.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.attachments',
+        sequence: 2,
+        sessionId: 'session-other',
+        attachments: [],
+      },
+    });
+    expect(state.sequence).toBe(2);
+    expect(state.attachments).toHaveLength(1);
+
+    // Same-session snapshots keep staged attachments; new sessions drop them.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(3),
+    });
+    expect(state.attachments).toHaveLength(1);
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(4, 'session-b'),
+    });
+    expect(state.attachments).toHaveLength(0);
+  });
+
   it('isolates sequenced settings, context, and catalogs by session', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',

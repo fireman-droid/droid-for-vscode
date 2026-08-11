@@ -301,6 +301,37 @@ export function App(): React.JSX.Element {
     },
     [sessionId, vscode],
   );
+  const handleAttachFiles = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, { type: 'attachment.pick', sessionId });
+  }, [sessionId, vscode]);
+  const handleAttachEditor = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, { type: 'attachment.addEditor', sessionId });
+  }, [sessionId, vscode]);
+  const handleAttachSelection = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, { type: 'attachment.addSelection', sessionId });
+  }, [sessionId, vscode]);
+  const handleAttachmentRemove = useCallback(
+    (attachmentId: string): void => {
+      if (sessionId === null) {
+        return;
+      }
+      post(vscode, {
+        type: 'attachment.remove',
+        sessionId,
+        attachmentId,
+      });
+    },
+    [sessionId, vscode],
+  );
   const handleSettingUpdate = useCallback(
     (update: SessionSettingSelection): void => {
       if (sessionId === null) {
@@ -399,6 +430,11 @@ export function App(): React.JSX.Element {
           onSkillToggle={handleSkillToggle}
           onMcpRefresh={handleMcpRefresh}
           onMcpServerToggle={handleMcpServerToggle}
+          attachments={state.attachments}
+          onAttachFiles={handleAttachFiles}
+          onAttachEditor={handleAttachEditor}
+          onAttachSelection={handleAttachSelection}
+          onAttachmentRemove={handleAttachmentRemove}
           onDraftChange={handleDraftChange}
           onReuseMessage={handleReuseMessage}
           onEditResend={handleEditResend}

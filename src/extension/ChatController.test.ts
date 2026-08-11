@@ -25,6 +25,7 @@ import type {
   SessionCatalogResult,
 } from '../runtime/SessionCatalog';
 import type { SessionHistoryLoader } from '../runtime/history/SessionHistory';
+import type { AttachmentSources } from './attachmentSources';
 import { ChatController } from './ChatController';
 import {
   SessionRecoveryStore,
@@ -2001,6 +2002,145 @@ describe('ChatController', () => {
     );
   });
 
+  it('stages picked attachments, sends them with the next turn, then clears', async () => {
+    const runtime = createMockRuntime();
+    const sources: AttachmentSources = {
+      pickFiles: vi.fn(async () => ({
+        status: 'picked' as const,
+        items: [
+          {
+            kind: 'image' as const,
+            name: 'shot.png',
+            data: 'aW1n',
+            mediaType: 'image/png' as const,
+            sizeBytes: 3,
+            truncated: false,
+          },
+          {
+            kind: 'text' as const,
+            name: 'notes.md',
+            data: 'hello',
+            sizeBytes: 5,
+            truncated: false,
+          },
+        ],
+      })),
+      readActiveEditor: vi.fn(async () => ({ status: 'empty' as const })),
+      readActiveSelection: vi.fn(async () => ({
+        status: 'empty' as const,
+      })),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      sources,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'attachment.pick',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(
+        attachmentsMessages(messages).at(-1)?.attachments,
+      ).toHaveLength(2);
+    });
+    const staged = attachmentsMessages(messages).at(-1)!.attachments;
+    expect(staged[0]).toMatchObject({
+      kind: 'image',
+      name: 'shot.png',
+      truncated: false,
+    });
+
+    // Removing one staged attachment keeps the other.
+    controller.handleMessage({
+      type: 'attachment.remove',
+      sessionId: 'session-1',
+      attachmentId: staged[1]!.id,
+    });
+    expect(
+      attachmentsMessages(messages).at(-1)?.attachments,
+    ).toEqual([staged[0]]);
+
+    send(controller, 'session-1', 'turn-1', 'describe this');
+    await vi.waitFor(() => {
+      expect(runtime.sendTurn).toHaveBeenCalledWith('describe this', [
+        { kind: 'image', data: 'aW1n', mediaType: 'image/png' },
+      ]);
+    });
+    // Attachments are consumed by the send.
+    expect(
+      attachmentsMessages(messages).at(-1)?.attachments,
+    ).toHaveLength(0);
+    expect(JSON.stringify(messages)).not.toContain('aW1n');
+  });
+
+  it('labels editor captures and reports empty selections', async () => {
+    const runtime = createMockRuntime();
+    const sources: AttachmentSources = {
+      pickFiles: vi.fn(async () => ({ status: 'cancelled' as const })),
+      readActiveEditor: vi.fn(async () => ({
+        status: 'captured' as const,
+        item: {
+          kind: 'text' as const,
+          name: 'main.ts',
+          data: 'const x = 1;',
+          sizeBytes: 12,
+          truncated: false,
+        },
+      })),
+      readActiveSelection: vi.fn(async () => ({
+        status: 'empty' as const,
+      })),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      sources,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'attachment.addEditor',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(
+        attachmentsMessages(messages).at(-1)?.attachments,
+      ).toMatchObject([{ kind: 'editor', name: 'main.ts' }]);
+    });
+
+    controller.handleMessage({
+      type: 'attachment.addSelection',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+        code: 'attachment-empty',
+      });
+    });
+    expect(
+      attachmentsMessages(messages).at(-1)?.attachments,
+    ).toHaveLength(1);
+
+    // Wrong-session attachment requests are ignored.
+    const before = attachmentsMessages(messages).length;
+    controller.handleMessage({
+      type: 'attachment.addEditor',
+      sessionId: 'session-other',
+    });
+    expect(attachmentsMessages(messages)).toHaveLength(before);
+  });
+
   it('clears stale catalog rows before loading a changed workspace', async () => {
     const workspace = {
       cwd: 'C:\\workspace-a',
@@ -3465,6 +3605,7 @@ function createController(
   catalog: SessionCatalog = createCatalog([]),
   recovery?: SessionRecoveryStore,
   history?: SessionHistoryLoader,
+  attachments?: AttachmentSources,
 ) {
   const controller = new ChatController(
     createRuntime,
@@ -3476,6 +3617,7 @@ function createController(
     catalog,
     recovery,
     history,
+    attachments,
   );
   const messages: HostToWebviewMessage[] = [];
   controller.subscribe((message) => {
@@ -3681,6 +3823,17 @@ async function waitForInteraction(
     expect(request).toBeDefined();
   });
   return request!;
+}
+
+function attachmentsMessages(
+  messages: readonly HostToWebviewMessage[],
+): Extract<HostToWebviewMessage, { type: 'session.attachments' }>[] {
+  return messages.filter(
+    (message): message is Extract<
+      HostToWebviewMessage,
+      { type: 'session.attachments' }
+    > => message.type === 'session.attachments',
+  );
 }
 
 function skillsMessages(

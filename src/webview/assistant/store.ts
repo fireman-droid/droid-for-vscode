@@ -1,5 +1,6 @@
 import {
   MAX_TOOL_ACTIVITIES_PER_TURN,
+  type AttachmentSummary,
   type HostToWebviewMessage,
   type InteractionRequest,
   type ModelCatalogState,
@@ -45,6 +46,8 @@ export interface AssistantWebviewState {
   readonly skills: SessionSkillsState | { status: 'idle'; items: readonly [] };
   /** MCP servers load lazily; 'idle' means not requested yet. */
   readonly mcp: SessionMcpState | { status: 'idle'; items: readonly [] };
+  /** Attachments staged on the host for the next prompt. */
+  readonly attachments: readonly AttachmentSummary[];
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: Extract<
     HostToWebviewMessage,
@@ -78,6 +81,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   modelCatalog: { status: 'loading', items: [] },
   skills: { status: 'idle', items: [] },
   mcp: { status: 'idle', items: [] },
+  attachments: [],
   transcript: [],
   historyStatus: null,
   truncated: false,
@@ -160,6 +164,8 @@ export function assistantWebviewReducer(
           event.sessionId === state.sessionId
             ? state.mcp
             : { status: 'idle', items: [] },
+        attachments:
+          event.sessionId === state.sessionId ? state.attachments : [],
         transcript: event.transcript,
         historyStatus: event.historyStatus,
         truncated: event.truncated,
@@ -187,6 +193,7 @@ export function assistantWebviewReducer(
               modelCatalog: { status: 'loading', items: [] },
               skills: { status: 'idle', items: [] },
               mcp: { status: 'idle', items: [] },
+              attachments: [],
               interactions: [],
               terminalTurnId: null,
             }
@@ -243,6 +250,14 @@ export function assistantWebviewReducer(
           : event.mcp;
       return { ...state, sequence: event.sequence, mcp };
     }
+    case 'session.attachments':
+      return event.sessionId === state.sessionId
+        ? {
+            ...state,
+            sequence: event.sequence,
+            attachments: event.attachments,
+          }
+        : advance(state, event.sequence);
     case 'assistant.delta':
       if (!acceptsActiveTurn(state, event.sessionId, event.turnId)) {
         return advance(state, event.sequence);

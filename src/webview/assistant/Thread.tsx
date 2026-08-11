@@ -20,6 +20,7 @@ import {
   MAX_TURN_TEXT_LENGTH,
   type ModelCatalogState,
   type SessionHistoryStatus,
+  type AttachmentSummary,
   type SessionContextState,
   type SessionSettingsState,
 } from '../../shared/bridgeMessages';
@@ -94,6 +95,11 @@ interface DroidThreadProps {
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onMcpRefresh: () => void;
   readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
+  readonly attachments: readonly AttachmentSummary[];
+  readonly onAttachFiles: () => void;
+  readonly onAttachEditor: () => void;
+  readonly onAttachSelection: () => void;
+  readonly onAttachmentRemove: (attachmentId: string) => void;
   readonly onDraftChange: (draft: string) => void;
   readonly onReuseMessage: (text: string) => void;
   readonly onEditResend: (messageId: string, text: string) => void;
@@ -128,6 +134,11 @@ export const DroidThread = memo(function DroidThread({
   onSkillToggle,
   onMcpRefresh,
   onMcpServerToggle,
+  attachments,
+  onAttachFiles,
+  onAttachEditor,
+  onAttachSelection,
+  onAttachmentRemove,
   onDraftChange,
   onReuseMessage,
   onEditResend,
@@ -215,6 +226,11 @@ export const DroidThread = memo(function DroidThread({
             onSkillToggle={onSkillToggle}
             onMcpRefresh={onMcpRefresh}
             onMcpServerToggle={onMcpServerToggle}
+            attachments={attachments}
+            onAttachFiles={onAttachFiles}
+            onAttachEditor={onAttachEditor}
+            onAttachSelection={onAttachSelection}
+            onAttachmentRemove={onAttachmentRemove}
             onDraftChange={onDraftChange}
           />
         </ThreadPrimitive.ViewportFooter>
@@ -556,6 +572,11 @@ function Composer({
   onSkillToggle,
   onMcpRefresh,
   onMcpServerToggle,
+  attachments,
+  onAttachFiles,
+  onAttachEditor,
+  onAttachSelection,
+  onAttachmentRemove,
   onDraftChange,
 }: {
   readonly statusMessage?: string;
@@ -578,6 +599,11 @@ function Composer({
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onMcpRefresh: () => void;
   readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
+  readonly attachments: readonly AttachmentSummary[];
+  readonly onAttachFiles: () => void;
+  readonly onAttachEditor: () => void;
+  readonly onAttachSelection: () => void;
+  readonly onAttachmentRemove: (attachmentId: string) => void;
   readonly onDraftChange: (draft: string) => void;
 }): React.JSX.Element {
   return (
@@ -588,6 +614,20 @@ function Composer({
           interactionPending ? ' dvx-composer-pending' : ''
         }`}
       >
+        {attachments.length > 0 && !interactionPending ? (
+          <div
+            className="dvx-attachment-chips"
+            aria-label="Pending attachments"
+          >
+            {attachments.map((attachment) => (
+              <AttachmentChip
+                key={attachment.id}
+                attachment={attachment}
+                onRemove={onAttachmentRemove}
+              />
+            ))}
+          </div>
+        ) : null}
         {interactionPending ? null : (
           <>
             <label className="dvx-visually-hidden" htmlFor="dvx-prompt">
@@ -626,6 +666,9 @@ function Composer({
             onSkillToggle={onSkillToggle}
             onMcpRefresh={onMcpRefresh}
             onMcpServerToggle={onMcpServerToggle}
+            onAttachFiles={onAttachFiles}
+            onAttachEditor={onAttachEditor}
+            onAttachSelection={onAttachSelection}
           />
           {showRetry ? (
             <button
@@ -660,6 +703,44 @@ function Composer({
           : 'Enter to send · Shift+Enter for a new line'}
       </div>
     </div>
+  );
+}
+
+const ATTACHMENT_KIND_LABELS: Record<AttachmentSummary['kind'], string> = {
+  image: 'Image',
+  pdf: 'PDF',
+  text: 'File',
+  editor: 'Editor',
+  selection: 'Selection',
+};
+
+function AttachmentChip({
+  attachment,
+  onRemove,
+}: {
+  readonly attachment: AttachmentSummary;
+  readonly onRemove: (attachmentId: string) => void;
+}): React.JSX.Element {
+  return (
+    <span className="dvx-attachment-chip">
+      <span className="dvx-attachment-kind">
+        {ATTACHMENT_KIND_LABELS[attachment.kind]}
+      </span>
+      <span className="dvx-attachment-name" title={attachment.name}>
+        {attachment.name}
+      </span>
+      {attachment.truncated ? (
+        <span className="dvx-attachment-truncated">truncated</span>
+      ) : null}
+      <button
+        type="button"
+        className="dvx-attachment-remove"
+        aria-label={`Remove attachment ${attachment.name}`}
+        onClick={() => onRemove(attachment.id)}
+      >
+        ×
+      </button>
+    </span>
   );
 }
 
