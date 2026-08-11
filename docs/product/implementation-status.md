@@ -824,6 +824,11 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `0D1166F6EF9054E9485ABAC83FC440FC8EEEC92919F16E7160BAEDD685F11CEF`，
   `cursor --install-extension --force` 安装成功；版本号仍为 `0.0.0`，
   现有窗口需 Reload Window（或完整重启）后加载新 Bundle
+- 2026-08-11 深夜再次打包并安装含活动 shimmer 打磨切片（单行闪烁、
+  交互挂起停闪、状态文字 shimmer）的构建：`droidvisx-0.0.0.vsix`
+  （8 files, 515.87 KB），`npx vsce package --no-dependencies` 与
+  `cursor --install-extension --force` 均成功；版本号仍为 `0.0.0`，
+  现有窗口需 Reload Window（或完整重启）后加载新 Bundle
 
 ## 验证状态
 
@@ -944,8 +949,19 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   （`artifacts/probe-reconcile-verify.mts` 实测输出 +
   `src/extension/probeRealSession.test.ts` 断言，后者在真实数据文件
   缺失的机器上自动跳过）；`pnpm run typecheck` 三个 tsconfig 全部
-  通过；`pnpm run test` 34 files / 703 tests 全部通过（含本切片新增的
+  通过；  `pnpm run test` 34 files / 703 tests 全部通过（含本切片新增的
   锚点对齐用例与脱敏 72/78 回归 fixture）；`pnpm run build`、
+  `npx vsce package --no-dependencies` 与
+  `cursor --install-extension --force` 均成功
+- 活动 shimmer 打磨切片（2026-08-11 深夜）：`npx vitest run` 34
+  files / 705 tests 全部通过（含本切片新增的 `PendingResponse`
+  shimmer 文案两个用例）；`pnpm run typecheck` 三个 tsconfig 全部
+  通过；`pnpm run build` 成功；`artifacts/smoke-shimmer.mjs` 无头
+  Chrome 冒烟两种模式 + `--force-prefers-reduced-motion` 复跑均
+  pass（running 模式仅最新 running 行与 "Droid is working" 文字
+  animationName 为 `dvx-activity-shimmer`，其余 `none`；permission
+  模式全部 `none` 且根节点带 `dvx-thread-pending`；reduced-motion
+  下全部 `none` 静态色 `#6b6259`）；
   `npx vsce package --no-dependencies` 与
   `cursor --install-extension --force` 均成功
 
@@ -1046,6 +1062,30 @@ error 文案提示重开弹窗重试）。`isExecutable: true` 的 shell 类命�
 命令（/model /compact 等）不出现在弹窗中（GUI 已有等价物）；
 CLI 持久化历史把该轮用户行记为 `/name is running`，重载会话后
 显示该文案而非原始输入（实时乐观消息不受影响）。
+
+2026-08-11 深夜完成活动 shimmer 打磨切片（设计与诊断见
+`activity-shimmer-fix-design.md`）：诊断确认同批多个 `tool_use` 的
+结果由 CLI 整批回传、权限请求按批阻塞（SDK
+`RequestPermissionRequestParamsSchema.toolUses` 为数组；本机真实
+会话 9/9 个多工具 assistant 消息的 `tool_result` 全部落在同一条
+后续 user 消息），因此权限挂起时同批已启动行都停留在 `running`
+是状态机正确行为，修复只在呈现层：（1）同回合最多一行闪烁——
+`.dvx-activity-running:has(~ .dvx-activity-running)` 把非最新的
+running 行退化为静态 `#6b6259` "Working" 文字，仅最新行保留
+shimmer；（2）权限/提问交互挂起时全部停闪——复用线程根节点既有
+`dvx-thread-pending` class 追加同样的静态覆盖；（3）
+"Droid is working / responding" 状态文字加同款渐变 shimmer——
+渐变文字样式抽为共享 `.dvx-shimmer-text`（与
+`.dvx-activity-running .dvx-tool-action` 同一声明块），
+`PendingResponse` 的文案包进该 class 的 span。
+`prefers-reduced-motion` 既有覆盖块同步扩展到 `.dvx-shimmer-text`，
+全部退化为静态。纯 CSS 行为经无头 Chrome 冒烟脚本
+`artifacts/smoke-shimmer.mjs`（配 `artifacts/shimmer-harness.html`，
+真实 Bridge 消息驱动 3 个 running 行 + 可选权限交互）用
+`getComputedStyle().animationName` 实测：running 模式仅最后一行与
+状态文字为 `dvx-activity-shimmer`、其余为 `none`；permission 模式
+全部为 `none` 且根节点带 `dvx-thread-pending`；
+`--force-prefers-reduced-motion` 下全部为 `none`。
 
 每个切片保持完整测试、打包、安装和 Cursor 可见验收。
 

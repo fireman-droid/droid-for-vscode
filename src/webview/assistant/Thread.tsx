@@ -774,7 +774,7 @@ function Diagnostic({ data }: { readonly data: unknown }): React.JSX.Element {
   );
 }
 
-function PendingResponse({
+export function PendingResponse({
   activity,
 }: {
   readonly activity?: 'working' | 'responding';
@@ -786,9 +786,11 @@ function PendingResponse({
       aria-live="polite"
     >
       <span className="dvx-runtime-pulse" aria-hidden="true" />
-      {activity === 'working'
-        ? 'Droid is working'
-        : 'Droid is responding'}
+      <span className="dvx-shimmer-text">
+        {activity === 'working'
+          ? 'Droid is working'
+          : 'Droid is responding'}
+      </span>
     </div>
   );
 }

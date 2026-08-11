@@ -6,11 +6,30 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { CommandSummary } from '../../shared/bridgeMessages';
 import {
   HistoryNotice,
+  PendingResponse,
   filterSlashCommands,
   findSlashToken,
 } from './Thread';
 
 afterEach(cleanup);
+
+describe('PendingResponse', () => {
+  it('renders the working label with the shared shimmer treatment', () => {
+    render(<PendingResponse activity="working" />);
+    const label = screen
+      .getByRole('status')
+      .querySelector('.dvx-shimmer-text');
+    expect(label?.textContent).toBe('Droid is working');
+  });
+
+  it('falls back to the responding label without a working activity', () => {
+    render(<PendingResponse />);
+    const label = screen
+      .getByRole('status')
+      .querySelector('.dvx-shimmer-text');
+    expect(label?.textContent).toBe('Droid is responding');
+  });
+});
 
 describe('HistoryNotice', () => {
   it('states unavailable history without implying completeness', () => {
