@@ -301,6 +301,9 @@ function projectToolActivity(
       status: message.status,
       progressCount: message.progressCount,
       latestUpdateKind: message.latestUpdateKind,
+      ...(message.durationMs === undefined
+        ? {}
+        : { durationMs: message.durationMs }),
     });
   }
 
@@ -322,6 +325,9 @@ function projectToolActivity(
     status: message.status,
     progressCount: message.progressCount,
     latestUpdateKind: message.latestUpdateKind,
+    ...(message.durationMs === undefined
+      ? {}
+      : { durationMs: message.durationMs }),
   });
 }
 

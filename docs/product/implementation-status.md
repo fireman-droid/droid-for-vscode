@@ -27,6 +27,16 @@ Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
 本次 Figma Design 还原已经重新打包、验证并安装 VSIX，但现有 Cursor 窗口
 仍需 Reload Window 才会加载同版本号下的新 Bundle；当前尚未形成完成提交。
+
+2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
+production React）、长会话渲染优化（消息身份缓存、Thinking 展开局部化、
+默认 200 条尾部窗口渲染与 “Show earlier messages”）、styles.css 去重、
+权限/Plan/AskUser 拍平为对话流内的扁平内联交互块（移除底部浮层）、
+Tool/Thinking 行内联真实耗时（Runtime 计时经 Bridge 可选 `durationMs`
+到 UI），以及 Composer 常驻 Mode 触发器与 Context 百分比。该轮已通过
+完整 typecheck、445 项测试、重新打包（`.vscodeignore` 排除
+`.cursor/**`，VSIX 回到 8 个入口）并安装到 Cursor；仍等待用户
+Reload Window 后的最终可见验收。
 下一轮严格两小时实现窗口的证据、范围、执行顺序、验收和回滚已经固化到
 `docs/preflight/`。该预研确认 Context 的累计 `used`、Breakdown
 `usedTokens`、`freeTokens` 和 Category Sum 都不能表示当前窗口；只有公开
@@ -57,9 +67,11 @@ Context 和 Model 浮层固定在 Composer 上方约 7px。
 本轮再次按 Conversation、History、Permission 和 Plan 的节点级结构核对
 生产实现。Webview 使用 Figma 的 `#f5f3ef` Surface、`#262626` Ink、
 `#a1a1a1` Subtle、`#e5e5e5` Border、`#f2612e` Accent 和
-`#ec003f` Danger；权限与 Plan 使用 398px Inline Request、368px Card
-Shell 和 336px 正文列。真实数据超过 Figma 示例时，正文在卡片内滚动，
-长按钮标签换行或在窄栏分行，不扩大 Webview 或产生横向溢出。
+`#ec003f` Danger。2026-08-11 起，权限、Plan 和 AskUser 不再使用 Figma
+演示画布的固定宽度卡片或底部浮层，而是作为对话流内与阅读列同宽的扁平
+内联交互块呈现：单一表面、上下细分隔线、行内动作按钮。真实数据超过
+示例时正文在块内滚动，长按钮标签换行或在窄栏分行，不扩大 Webview 或
+产生横向溢出。
 
 `design/prototypes/Restore Droid for VSCode GUI` 和旧 Make 导出仅保留为历史
 参考。所有真实 Session、Turn、模型、Context、权限和 AskUser 数据仍只
@@ -112,6 +124,10 @@ Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限�
 - Thinking 和 Assistant Markdown 使用 assistant-ui 有界平滑提交，避免
   原始大块文本直接刷新造成的可见分块和不必要布局抖动
 - Tool 开始、运行、完成和失败状态
+- Tool 在同一 Turn 内实时观察到开始与结束时，行内显示真实耗时
+  （Runtime 计时，经 Bridge 可选 `durationMs` 投影）；仅有终态的历史或
+  恢复数据不伪造耗时
+- Thinking 完成后行内显示 SDK 报告的真实思考耗时
 - 以 “Read workspace files”“Ran a local command” 等语义动作作为主标签
 - Droid SDK 的 `tool_progress` 是可选事件；只有真实收到进度事件时才显示
   有界计数和最新通用更新类别，没有进度事件时只显示真实生命周期，不伪造
@@ -140,7 +156,9 @@ Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限�
 
 - 投影 Droid SDK 返回的真实权限选项
 - Edit、Execute、Create、Patch、MCP Tool、Sandbox、Spec 和 Mission 等确认类别
-- 使用 Figma 的安静 Inline Request 层级，不把每个 Tool 再绘制成独立大卡片
+- 权限、Plan 和 AskUser 全部作为对话流内的扁平内联交互块显示（单一表面、
+  细分隔线、行内动作），不再使用底部浮层或嵌套卡片；不把每个 Tool 再绘制
+  成独立大卡片
 - 拒绝操作与主要允许操作始终可见；额外 Session/Always Allow 范围只在
   真实 SDK 选项存在时进入 14px Chevron 的 Split Button 菜单
 - Split Button 使用统一 32px 高按钮体、32px Chevron 分段、单一外轮廓和
@@ -359,7 +377,7 @@ Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限�
 | Session 搜索 | 在最多 50 条本地结果中按标题或 ID 过滤 | daemon 全量搜索、内容搜索、分页、排序和筛选 |
 | Session 生命周期 | List、Refresh、New、Select、Resume | Rename、Archive、Delete、Favorite、Fork、Compact、Rewind |
 | Session 历史 | 文本、Thinking、Tool 生命周期 | 历史 Image、Document 和未知 Block 会被省略并标记为 partial |
-| Tool 展示 | 语义动作、技术 Tool 名、有界进度计数/类别和生命周期；不显示原始 Call ID | 参数、输出、结果、耗时、文件变更、Apply/Open 操作 |
+| Tool 展示 | 语义动作、技术 Tool 名、有界进度计数/类别、生命周期和实时观察到的真实耗时；不显示原始 Call ID | 参数、输出、结果、文件变更、Apply/Open 操作 |
 | 消息操作 | Copy、Reuse in Composer 和双击 Reuse；不会自动发送 | 历史 Edit、Resend、Regenerate、分支和 Rewind |
 | 本地诊断 | SDK Observability、Host 生命周期/耗时、Output Channel、Open Logs、轮换 JSONL | 用户可配置级别、导出诊断包、遥测或远程上传 |
 | Spec | ExitSpecMode 计划显示、编辑和审批；审批后的 `settings_updated` 会触发权威 Mode 回读 | 主动进入 Spec Mode、完整计划生命周期、实施交接 |
@@ -434,6 +452,8 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
 - [ ] Last-call Current-window Meter
 - [ ] 经过语义确认的 Context Category 明细
 - [x] `＋` 动作面板中的 Mode 和 Autonomy
+- [x] Composer 常驻 Mode 触发器（Auto/Spec/Mission 一键切换弹层）
+- [x] Context 圆环旁常驻百分比（仅在窗口比例可信时显示）
 - [x] `＋` 动作面板本地搜索及不可交互的 Skills/MCP 连接状态
 - [ ] `@` 文件和 Symbol 引用
 - [ ] `/` 动态命令
@@ -537,25 +557,25 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 最后核对结果：
 
 - Cursor 已安装：`droidvisx.droidvisx@0.0.0`
-- `dist/droidvisx.vsix` 大小：759,316 字节
-- VSIX 修改时间：2026-08-10T16:00:37.1434231Z
+- `dist/droidvisx.vsix` 大小：462,883 字节（Production Build minify 后，
+  且 `.vscodeignore` 排除 `.cursor/**`）
+- VSIX 修改时间：2026-08-11T04:42:32.5730102Z
 - VSIX SHA-256：
-  `E887775D797954C73067B1782C91DACF536E71BE627323947856BD3E3AEE4E17`
+  `4CA220F64EAE1D580009CFD54402E5BA63D900C6C3032362E56C0CB6E38A1308`
 - VSIX 包含最终 Module 1 Runtime、Host、Bridge v2、隐私安全活动/日志和
-  暖色 Webview Bundle，以及本轮 AskUser 问卷格式、交错内容顺序、
-  Thinking 默认折叠、Context 可靠读取/诊断、Enter 状态说明、Thinking
-  平滑、手动阅读位置保护、持续工作状态、Plan 后 Mode 回读和暖色
-  Markdown Surface 修复
+  暖色 Webview Bundle，以及 2026-08-11 产品化打磨轮：Production Build、
+  长会话渲染优化（消息身份缓存、尾部窗口）、styles.css 去重、扁平内联
+  交互块、Tool/Thinking 内联真实耗时、Composer 常驻 Mode/Context
 - `verify:vsix` 已验证 8 个入口和 Bundle 外部依赖
-- 最终 VSIX 已使用 `--force` 成功安装到 Cursor
-- 已安装的 Extension Bundle、Webview JS、CSS 和 Inter WOFF2 哈希均与本次
-  Build 完全一致
+- 最终 VSIX 已成功安装到 Cursor
+- 已安装的 Extension Bundle、Webview JS 和 CSS 哈希均与本次 Build
+  完全一致
 - Extension Bundle SHA-256：
-  `26807CD7EC4EAC5C7AA875C804786D2AFF654BB1D01096D1D7375E23E8562886`
+  `5CFC52E6CE1AE5CC0853F035918C13834B3DE74FF4D5A83CEFA8EF0CBE26A419`
 - Webview JS SHA-256：
-  `FB7F26952DF9EB91CF4A5D383E8B3C80E573D132C8F3B917D7FCC5C009FDB360`
+  `EF2CEDE32BED60C068518FAAEA85562AF8C7378BD65AA43DE8FAA976BEC24A7A`
 - Webview CSS SHA-256：
-  `22CFE01FFFCD4734CD42DAD1E77623972D7FC46E71575C1AC7F2FA538A647BAA`
+  `72D8781BFF9670E0718140EFCDC9CEF3D31ABE749E1D7C46A15E3A5BF5FC0D3E`
 - 用户尚未在真实 Cursor 中完成最终可见验收
 - 由于版本号仍为 `0.0.0`，现有 Cursor 窗口需要 Reload Window 才会换到
   新 Bundle
@@ -586,9 +606,10 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - 最后 Context 诊断分类补丁聚焦测试：1 file / 28 tests 全部通过
 - Context 真实 `out-of-range` 日志修复聚焦测试：
   4 files / 174 tests 全部通过
-- 最新完整测试套件：29 files / 435 tests 全部通过
-- 本轮按用户要求没有重新运行 435 项完整套件
-- 最新 Extension 与 Webview TypeScript 检查：全部通过
+- 最新完整测试套件（2026-08-11 产品化打磨轮 `package:prepare`）：
+  29 files / 445 tests 全部通过
+- 最新 Extension 与 Webview TypeScript 检查：全部通过（同一
+  `package:prepare` 流水线）
 - Production Build：通过，包含本地 Inter Variable Latin WOFF2
 - 自动化回归已证明 SDK `options: []` 可以穿过 Runtime 和 Bridge 并提交
   开放文本答案；普通流式响应期间 Webview、Host 和 Runtime 可以完成一次

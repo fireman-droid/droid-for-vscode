@@ -27,6 +27,8 @@ import { InteractionPanel } from './Interactions';
 import type { SessionSettingSelection } from './ComposerControls';
 import {
   canSendMessage,
+  DEFAULT_MESSAGE_WINDOW,
+  MESSAGE_WINDOW_STEP,
   useDroidExternalStoreRuntime,
 } from './runtimeAdapter';
 import { SessionDrawer } from './SessionDrawer';
@@ -146,7 +148,22 @@ export function App(): React.JSX.Element {
     }),
     [handleCancel, handleSend, sendDisabled],
   );
-  const runtime = useDroidExternalStoreRuntime(state, callbacks);
+  const [messageWindow, setMessageWindow] = useState(
+    DEFAULT_MESSAGE_WINDOW,
+  );
+  const windowSessionRef = useRef(sessionId);
+  if (windowSessionRef.current !== sessionId) {
+    windowSessionRef.current = sessionId;
+    setMessageWindow(DEFAULT_MESSAGE_WINDOW);
+  }
+  const { runtime, hiddenMessageCount } = useDroidExternalStoreRuntime(
+    state,
+    callbacks,
+    messageWindow,
+  );
+  const handleShowEarlier = useCallback((): void => {
+    setMessageWindow((current) => current + MESSAGE_WINDOW_STEP);
+  }, []);
 
   const handleDraftChange = useCallback(
     (nextDraft: string): void => {
@@ -241,10 +258,9 @@ export function App(): React.JSX.Element {
     state.connection.status !== 'connected' || active || hasInteraction;
   const showPending = active && !hasInteraction;
   const inlineInteraction =
-    state.interactions[0]?.request.kind === 'permission' ? (
+    state.interactions.length > 0 ? (
       <InteractionPanel
         requests={state.interactions}
-        presentation="inline"
         onPermissionRespond={handlePermissionRespond}
         onAskUserRespond={handleAskUserRespond}
       />
@@ -265,6 +281,8 @@ export function App(): React.JSX.Element {
           activity={state.turn?.activity}
           historyStatus={state.historyStatus}
           truncated={state.truncated}
+          hiddenMessageCount={hiddenMessageCount}
+          onShowEarlier={handleShowEarlier}
           statusMessage={getStatusMessage(state, draft)}
           showRetry={
             state.connection.status === 'unavailable' ||
@@ -275,8 +293,7 @@ export function App(): React.JSX.Element {
           interactionPending={hasInteraction}
           controlsDisabled={
             state.connection.status !== 'connected' ||
-            state.sessionId === null ||
-            hasInteraction
+            state.sessionId === null
           }
           settingUpdatesDisabled={hasInteraction}
           settings={state.settings}
@@ -289,13 +306,6 @@ export function App(): React.JSX.Element {
           onReuseMessage={handleReuseMessage}
           inlineInteraction={inlineInteraction}
         />
-        {inlineInteraction === null ? (
-          <InteractionPanel
-            requests={state.interactions}
-            onPermissionRespond={handlePermissionRespond}
-            onAskUserRespond={handleAskUserRespond}
-          />
-        ) : null}
       </div>
     </AssistantRuntimeProvider>
   );

@@ -1,4 +1,5 @@
 .factory/**
+.cursor/**
 .workflow/**
 .codex/**
 .git/**

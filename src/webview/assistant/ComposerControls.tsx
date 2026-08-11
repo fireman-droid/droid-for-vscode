@@ -18,7 +18,7 @@ import type {
   SessionSettingsState,
 } from '../../shared/bridgeMessages';
 
-type OpenPanel = 'settings' | 'context' | 'model' | null;
+type OpenPanel = 'settings' | 'context' | 'model' | 'mode' | null;
 type SettingsView = 'root' | 'mode' | 'autonomy';
 
 interface ComposerControlsProps {
@@ -106,6 +106,12 @@ export function ComposerControls({
     disabled || settingUpdatesDisabled || confirmed === null || updating;
   const modelName = getModelName(confirmed?.modelId, modelCatalog);
   const contextPercent = getContextPercent(context);
+  const showContextPercent =
+    context.value !== null && hasUsableContextRatio(context.value);
+  const modeLabel =
+    MODE_OPTIONS.find(
+      (option) => option.value === confirmed?.interactionMode,
+    )?.label ?? 'Mode';
 
   useEffect(() => {
     if (openPanel === null) {
@@ -181,8 +187,26 @@ export function ComposerControls({
               strokeDasharray={`${contextPercent} 100`}
             />
           </svg>
+          {showContextPercent ? (
+            <span className="dvx-context-percent" aria-hidden="true">
+              {Math.round(contextPercent)}%
+            </span>
+          ) : null}
         </button>
       </div>
+
+      <button
+        type="button"
+        className="dvx-mode-trigger"
+        aria-label={`Mode: ${modeLabel}`}
+        aria-expanded={openPanel === 'mode'}
+        aria-controls={openPanel === 'mode' ? `${panelId}-mode` : undefined}
+        disabled={disabled || confirmed === null}
+        onClick={() => toggle('mode')}
+      >
+        <span>{modeLabel}</span>
+        <ChevronDownIcon />
+      </button>
 
       <button
         type="button"
@@ -217,6 +241,52 @@ export function ComposerControls({
           disabled={disabled || context.status === 'loading'}
           onRefresh={onContextRefresh}
         />
+      ) : null}
+      {openPanel === 'mode' && confirmed !== null ? (
+        <div
+          id={`${panelId}-mode`}
+          className="dvx-composer-popover dvx-mode-popover"
+          role="dialog"
+          aria-label="Mode"
+        >
+          <div
+            className="dvx-option-list"
+            role="radiogroup"
+            aria-label="Mode options"
+          >
+            {MODE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className="dvx-option-row"
+                role="radio"
+                aria-checked={option.value === confirmed.interactionMode}
+                disabled={settingControlsDisabled}
+                onClick={() => {
+                  setOpenPanel(null);
+                  if (option.value !== confirmed.interactionMode) {
+                    onSettingUpdate({
+                      field: 'interactionMode',
+                      value: option.value,
+                    });
+                  }
+                }}
+              >
+                <span className="dvx-option-copy">
+                  <strong>{option.label}</strong>
+                  <span>{option.description}</span>
+                </span>
+                <span className="dvx-radio-mark" aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+          <SettingsStatus settings={settings} />
+          {settingControlsDisabled && settings.status === 'ready' ? (
+            <p className="dvx-popover-message" role="status">
+              Mode can be changed after the current turn.
+            </p>
+          ) : null}
+        </div>
       ) : null}
       {openPanel === 'model' && confirmed !== null ? (
         <ModelPopover

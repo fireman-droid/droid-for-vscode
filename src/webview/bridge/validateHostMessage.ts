@@ -412,18 +412,22 @@ function parseToolActivity(
   value: UnknownRecord,
 ): Extract<HostToWebviewMessage, { type: 'tool.activity' }> | undefined {
   if (
-    !hasExactKeys(value, [
-      'type',
-      'sequence',
-      'sessionId',
-      'turnId',
-      'toolUseId',
-      'toolName',
-      'action',
-      'status',
-      'progressCount',
-      'latestUpdateKind',
-    ]) ||
+    !hasExactKeys(
+      value,
+      [
+        'type',
+        'sequence',
+        'sessionId',
+        'turnId',
+        'toolUseId',
+        'toolName',
+        'action',
+        'status',
+        'progressCount',
+        'latestUpdateKind',
+      ],
+      ['durationMs'],
+    ) ||
     !hasTurnIdentity(value) ||
     !isId(value.toolUseId) ||
     !isNonEmptyBoundedString(value.toolName, MAX_TOOL_NAME_LENGTH) ||
@@ -437,7 +441,8 @@ function parseToolActivity(
     !hasConsistentToolProgress(
       value.progressCount,
       value.latestUpdateKind,
-    )
+    ) ||
+    (value.durationMs !== undefined && !isSequence(value.durationMs))
   ) {
     return undefined;
   }
@@ -453,6 +458,9 @@ function parseToolActivity(
     status: value.status,
     progressCount: value.progressCount,
     latestUpdateKind: value.latestUpdateKind,
+    ...(value.durationMs === undefined
+      ? {}
+      : { durationMs: value.durationMs }),
   };
 }
 
@@ -1275,17 +1283,21 @@ function parseToolTranscriptItem(
   value: UnknownRecord,
 ): Extract<SessionTranscriptItem, { kind: 'tool' }> | undefined {
   if (
-    !hasExactKeys(value, [
-      'id',
-      'kind',
-      'turnId',
-      'toolUseId',
-      'toolName',
-      'action',
-      'status',
-      'progressCount',
-      'latestUpdateKind',
-    ]) ||
+    !hasExactKeys(
+      value,
+      [
+        'id',
+        'kind',
+        'turnId',
+        'toolUseId',
+        'toolName',
+        'action',
+        'status',
+        'progressCount',
+        'latestUpdateKind',
+      ],
+      ['durationMs'],
+    ) ||
     !isId(value.id) ||
     !isId(value.turnId) ||
     !isId(value.toolUseId) ||
@@ -1300,7 +1312,8 @@ function parseToolTranscriptItem(
     !hasConsistentToolProgress(
       value.progressCount,
       value.latestUpdateKind,
-    )
+    ) ||
+    (value.durationMs !== undefined && !isSequence(value.durationMs))
   ) {
     return undefined;
   }
@@ -1315,6 +1328,9 @@ function parseToolTranscriptItem(
     status: value.status,
     progressCount: value.progressCount,
     latestUpdateKind: value.latestUpdateKind,
+    ...(value.durationMs === undefined
+      ? {}
+      : { durationMs: value.durationMs }),
   };
 }
 

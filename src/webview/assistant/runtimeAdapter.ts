@@ -5,7 +5,7 @@ import {
   type ExternalStoreAdapter,
   type ThreadMessageLike,
 } from '@assistant-ui/react';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 
 import {
   MAX_TURN_TEXT_LENGTH,
@@ -34,6 +34,20 @@ export interface RuntimeAdapterCallbacks {
   readonly onSend: (text: string) => Promise<void> | void;
   readonly onCancel: () => Promise<void> | void;
   readonly isSendDisabled?: boolean;
+}
+
+/**
+ * Long sessions mount only the trailing message window by default. Rendering
+ * every message makes assistant-ui's per-update store notifications and the
+ * DOM grow with session length; measured at 2,000 transcript items this cost
+ * ~75ms of main-thread work per streamed delta.
+ */
+export const DEFAULT_MESSAGE_WINDOW = 200;
+export const MESSAGE_WINDOW_STEP = 200;
+
+export interface DroidRuntimeWindow {
+  readonly runtime: AssistantRuntime;
+  readonly hiddenMessageCount: number;
 }
 
 export interface SendEligibility {
@@ -68,16 +82,32 @@ export function canSendMessage(
 export function useDroidExternalStoreRuntime(
   state: AssistantWebviewState,
   callbacks: RuntimeAdapterCallbacks,
-): AssistantRuntime {
-  const messages = useMemo(
-    () => mapTranscriptToRuntimeMessages(state.transcript, state.turn),
-    [state.transcript, state.turn],
-  );
+  messageWindow: number = DEFAULT_MESSAGE_WINDOW,
+): DroidRuntimeWindow {
+  const messageCacheRef = useRef<RuntimeMessageCache>(new Map());
+  const { messages, hiddenMessageCount } = useMemo(() => {
+    const all = mapTranscriptToRuntimeMessages(
+      state.transcript,
+      state.turn,
+      messageCacheRef.current,
+    );
+    if (all.length <= messageWindow) {
+      return { messages: all, hiddenMessageCount: 0 };
+    }
+    return {
+      messages: all.slice(all.length - messageWindow),
+      hiddenMessageCount: all.length - messageWindow,
+    };
+  }, [messageWindow, state.transcript, state.turn]);
   const adapter = useMemo(
     () => createRuntimeAdapter(state, messages, callbacks),
     [callbacks, messages, state],
   );
-  return useExternalStoreRuntime(adapter);
+  const runtime = useExternalStoreRuntime(adapter);
+  return useMemo(
+    () => ({ runtime, hiddenMessageCount }),
+    [hiddenMessageCount, runtime],
+  );
 }
 
 export function createRuntimeAdapter(
@@ -143,68 +173,143 @@ export function extractText(message: AppendMessage): string {
     .join('');
 }
 
+interface RuntimeMessageCacheEntry {
+  readonly message: SafeRuntimeMessage;
+  readonly items: readonly SessionTranscriptItem[];
+  readonly stateKey: string;
+}
+
+export type RuntimeMessageCache = Map<string, RuntimeMessageCacheEntry>;
+
+interface UserMessageDescriptor {
+  readonly kind: 'user';
+  readonly item: Extract<SessionTranscriptItem, { kind: 'user' }>;
+}
+
+interface AssistantGroupDescriptor {
+  readonly kind: 'assistant';
+  readonly id: string;
+  readonly turnId: string;
+  readonly items: SessionTranscriptItem[];
+}
+
 export function mapTranscriptToRuntimeMessages(
   transcript: readonly SessionTranscriptItem[],
   turn: AssistantWebviewState['turn'],
+  cache?: RuntimeMessageCache,
 ): readonly SafeRuntimeMessage[] {
-  const messages: SafeRuntimeMessage[] = [];
-  const groups = new Map<
-    string,
-    {
-      id: string;
-      turnId: string;
-      items: SessionTranscriptItem[];
-    }
-  >();
+  const descriptors: (UserMessageDescriptor | AssistantGroupDescriptor)[] =
+    [];
+  const groups = new Map<string, AssistantGroupDescriptor>();
 
   for (const item of transcript) {
     if (item.kind === 'user') {
-      messages.push({
-        id: item.id,
-        role: 'user',
-        content: [{ type: 'text', text: item.text }],
-        optimistic:
-          item.id.startsWith('user:') &&
-          turn?.turnId === item.id.slice('user:'.length) &&
-          turn.status === 'submitting',
-      });
+      descriptors.push({ kind: 'user', item });
       continue;
     }
-
     const key = item.turnId ?? `diagnostic:${item.id}`;
     let group = groups.get(key);
     if (group === undefined) {
       group = {
+        kind: 'assistant',
         id: `assistant-turn:${key}`,
         turnId: key,
         items: [],
       };
       groups.set(key, group);
-      messages.push({
-        id: group.id,
-        role: 'assistant',
-        content: [],
-      });
+      descriptors.push(group);
     }
     group.items.push(item);
   }
 
-  return messages.map((message) => {
-    if (message.role === 'user') {
+  // Reuse prior message identities when the underlying transcript items and
+  // derived state are unchanged, so assistant-ui's per-message conversion
+  // cache stays warm and untouched messages skip re-rendering during
+  // streaming.
+  const nextEntries: [string, RuntimeMessageCacheEntry][] = [];
+  const messages = descriptors.map((descriptor): SafeRuntimeMessage => {
+    if (descriptor.kind === 'user') {
+      const item = descriptor.item;
+      const optimistic =
+        item.id.startsWith('user:') &&
+        turn?.turnId === item.id.slice('user:'.length) &&
+        turn.status === 'submitting';
+      const stateKey = optimistic ? 'optimistic' : 'sent';
+      const cached = cache?.get(item.id);
+      if (
+        cached !== undefined &&
+        cached.stateKey === stateKey &&
+        cached.items.length === 1 &&
+        cached.items[0] === item
+      ) {
+        nextEntries.push([item.id, cached]);
+        return cached.message;
+      }
+      const message: SafeRuntimeMessage = {
+        id: item.id,
+        role: 'user',
+        content: [{ type: 'text', text: item.text }],
+        optimistic,
+      };
+      nextEntries.push([
+        item.id,
+        { message, items: [item], stateKey },
+      ]);
       return message;
     }
-    const group = groups.get(
-      message.id.slice('assistant-turn:'.length),
+
+    const status = resolveAssistantStatus(
+      descriptor.items,
+      descriptor.turnId,
+      turn,
     );
-    if (group === undefined) {
-      return message;
+    const stateKey = `${status.type}:${
+      'reason' in status ? status.reason : ''
+    }`;
+    const cached = cache?.get(descriptor.id);
+    if (
+      cached !== undefined &&
+      cached.stateKey === stateKey &&
+      sameItemIdentities(cached.items, descriptor.items)
+    ) {
+      nextEntries.push([descriptor.id, cached]);
+      return cached.message;
     }
-    return {
-      ...message,
-      content: group.items.map(mapItemToPart),
-      status: resolveAssistantStatus(group.items, group.turnId, turn),
+    const message: SafeRuntimeMessage = {
+      id: descriptor.id,
+      role: 'assistant',
+      content: descriptor.items.map(mapItemToPart),
+      status,
     };
+    nextEntries.push([
+      descriptor.id,
+      { message, items: descriptor.items, stateKey },
+    ]);
+    return message;
   });
+
+  if (cache !== undefined) {
+    cache.clear();
+    for (const [id, entry] of nextEntries) {
+      cache.set(id, entry);
+    }
+  }
+  return messages;
+}
+
+function sameItemIdentities(
+  a: readonly SessionTranscriptItem[],
+  b: readonly SessionTranscriptItem[],
+): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function mapItemToPart(
@@ -224,6 +329,11 @@ function mapItemToPart(
         type: 'reasoning',
         text: item.text,
         status: mapActivityStatus(item.status),
+        providerMetadata: {
+          droidvisx: {
+            durationMs: item.durationMs ?? null,
+          },
+        },
       };
     case 'tool':
       return {
@@ -238,6 +348,7 @@ function mapItemToPart(
             status: item.status,
             progressCount: item.progressCount,
             latestUpdateKind: item.latestUpdateKind,
+            durationMs: item.durationMs ?? null,
           },
         },
       };

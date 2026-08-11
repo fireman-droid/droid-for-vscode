@@ -5,7 +5,14 @@ import {
   MessagePrimitive,
   ThreadPrimitive,
 } from '@assistant-ui/react';
-import { memo, type ReactNode, useState } from 'react';
+import {
+  createContext,
+  memo,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 
 import {
   MAX_TURN_TEXT_LENGTH,
@@ -27,11 +34,43 @@ const THINKING_SMOOTH_OPTIONS = {
   minCommitMs: 48,
 } as const;
 
+interface ThinkingExpansion {
+  readonly expanded: boolean;
+  readonly setExpanded: (expanded: boolean) => void;
+}
+
+// Holding the shared Thinking expansion in a dedicated provider keeps a
+// toggle from re-rendering the whole transcript: only Thinking rows
+// subscribe to this context.
+const ThinkingExpansionContext = createContext<ThinkingExpansion>({
+  expanded: false,
+  setExpanded: () => undefined,
+});
+
+function ThinkingExpansionProvider({
+  children,
+}: {
+  readonly children: ReactNode;
+}): React.JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+  const value = useMemo(
+    () => ({ expanded, setExpanded }),
+    [expanded],
+  );
+  return (
+    <ThinkingExpansionContext.Provider value={value}>
+      {children}
+    </ThinkingExpansionContext.Provider>
+  );
+}
+
 interface DroidThreadProps {
   readonly pending: boolean;
   readonly activity?: 'working' | 'responding';
   readonly historyStatus: SessionHistoryStatus | null;
   readonly truncated: boolean;
+  readonly hiddenMessageCount: number;
+  readonly onShowEarlier: () => void;
   readonly statusMessage?: string;
   readonly showRetry: boolean;
   readonly running: boolean;
@@ -55,6 +94,8 @@ export const DroidThread = memo(function DroidThread({
   activity,
   historyStatus,
   truncated,
+  hiddenMessageCount,
+  onShowEarlier,
   statusMessage,
   showRetry,
   running,
@@ -72,8 +113,6 @@ export const DroidThread = memo(function DroidThread({
   onReuseMessage,
   inlineInteraction,
 }: DroidThreadProps): React.JSX.Element {
-  const [thinkingExpanded, setThinkingExpanded] = useState(false);
-
   return (
     <ThreadPrimitive.Root
       className={`dvx-thread${
@@ -85,43 +124,51 @@ export const DroidThread = memo(function DroidThread({
         aria-label="Chat transcript"
         autoScroll
         turnAnchor="bottom"
-        scrollToBottomOnRunStart={false}
+        scrollToBottomOnRunStart
         scrollToBottomOnInitialize
         scrollToBottomOnThreadSwitch
       >
-        <div className="dvx-reading-column">
-          <HistoryNotice
-            historyStatus={historyStatus}
-            truncated={truncated}
-          />
-          <ThreadPrimitive.Empty>
-            <div className="dvx-empty-state">
-              <h2>Ready in your workspace</h2>
-              <p>
-                {historyStatus === 'unavailable'
-                  ? 'Start a new message to continue this session.'
-                  : 'Ask Droid to explain, inspect, or change your code.'}
-              </p>
-            </div>
-          </ThreadPrimitive.Empty>
-          <ThreadPrimitive.Messages>
-            {({ message }) =>
-              message.role === 'user' ? (
-                <UserMessage
-                  text={readMessageText(message.content)}
-                  onReuse={onReuseMessage}
-                />
-              ) : (
-                <AssistantMessage
-                  thinkingExpanded={thinkingExpanded}
-                  onThinkingExpandedChange={setThinkingExpanded}
-                />
-              )
-            }
-          </ThreadPrimitive.Messages>
-          {pending ? <PendingResponse activity={activity} /> : null}
-          {inlineInteraction}
-        </div>
+        <ThinkingExpansionProvider>
+          <div className="dvx-reading-column">
+            <HistoryNotice
+              historyStatus={historyStatus}
+              truncated={truncated}
+            />
+            {hiddenMessageCount > 0 ? (
+              <button
+                type="button"
+                className="dvx-show-earlier"
+                onClick={onShowEarlier}
+              >
+                Show earlier messages ({hiddenMessageCount} hidden)
+              </button>
+            ) : null}
+            <ThreadPrimitive.Empty>
+              <div className="dvx-empty-state">
+                <h2>Ready in your workspace</h2>
+                <p>
+                  {historyStatus === 'unavailable'
+                    ? 'Start a new message to continue this session.'
+                    : 'Ask Droid to explain, inspect, or change your code.'}
+                </p>
+              </div>
+            </ThreadPrimitive.Empty>
+            <ThreadPrimitive.Messages>
+              {({ message }) =>
+                message.role === 'user' ? (
+                  <UserMessage
+                    text={readMessageText(message.content)}
+                    onReuse={onReuseMessage}
+                  />
+                ) : (
+                  <AssistantMessage />
+                )
+              }
+            </ThreadPrimitive.Messages>
+            {pending ? <PendingResponse activity={activity} /> : null}
+            {inlineInteraction}
+          </div>
+        </ThinkingExpansionProvider>
         <ThreadPrimitive.ViewportFooter className="dvx-thread-footer">
           <Composer
             statusMessage={statusMessage}
@@ -202,13 +249,8 @@ function UserMessage({
   );
 }
 
-function AssistantMessage({
-  thinkingExpanded,
-  onThinkingExpandedChange,
-}: {
-  readonly thinkingExpanded: boolean;
-  readonly onThinkingExpandedChange: (expanded: boolean) => void;
-}): React.JSX.Element {
+const AssistantMessage = memo(function AssistantMessage():
+  React.JSX.Element {
   return (
     <MessagePrimitive.Root
       className="dvx-message dvx-message-assistant"
@@ -221,27 +263,10 @@ function AssistantMessage({
               return <DroidMarkdownText />;
             case 'reasoning':
               return (
-                <details
-                  className="dvx-activity-row dvx-thinking-row"
-                  open={thinkingExpanded}
-                  onToggle={(event) =>
-                    onThinkingExpandedChange(event.currentTarget.open)
-                  }
-                >
-                  <summary>
-                    <span className="dvx-activity-indicator" />
-                    Thinking
-                    <span className="dvx-activity-state">
-                      {formatPartStatus(part.status?.type)}
-                    </span>
-                    <ActivityChevron />
-                  </summary>
-                  <MessagePartPrimitive.Text
-                    className="dvx-thinking-content"
-                    component="pre"
-                    smooth={THINKING_SMOOTH_OPTIONS}
-                  />
-                </details>
+                <ThinkingRow
+                  statusType={part.status?.type}
+                  durationMs={readReasoningDuration(part)}
+                />
               );
             case 'tool-call': {
               const activity = readToolActivity(part);
@@ -254,6 +279,9 @@ function AssistantMessage({
                     </span>
                     <span className="dvx-activity-state">
                       {formatToolLifecycle(activity.status)}
+                      {activity.durationMs === null
+                        ? ''
+                        : ` · ${formatDuration(activity.durationMs)}`}
                     </span>
                     <ActivityChevron />
                   </summary>
@@ -273,7 +301,50 @@ function AssistantMessage({
           }
         }}
       </MessagePrimitive.Parts>
+      <ActionBarPrimitive.Root className="dvx-assistant-actions">
+        <ActionBarPrimitive.Copy
+          className="dvx-message-action"
+          aria-label="Copy response"
+        >
+          <CopyIcon />
+          <span>Copy</span>
+        </ActionBarPrimitive.Copy>
+      </ActionBarPrimitive.Root>
     </MessagePrimitive.Root>
+  );
+});
+
+function ThinkingRow({
+  statusType,
+  durationMs,
+}: {
+  readonly statusType: string | undefined;
+  readonly durationMs: number | null;
+}): React.JSX.Element {
+  const { expanded, setExpanded } = useContext(ThinkingExpansionContext);
+  return (
+    <details
+      className="dvx-activity-row dvx-thinking-row"
+      open={expanded}
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
+    >
+      <summary>
+        <span className="dvx-activity-indicator" />
+        Thinking
+        <span className="dvx-activity-state">
+          {formatPartStatus(statusType)}
+          {durationMs !== null && statusType !== 'running'
+            ? ` · ${formatDuration(durationMs)}`
+            : ''}
+        </span>
+        <ActivityChevron />
+      </summary>
+      <MessagePartPrimitive.Text
+        className="dvx-thinking-content"
+        component="pre"
+        smooth={THINKING_SMOOTH_OPTIONS}
+      />
+    </details>
   );
 }
 
@@ -533,6 +604,7 @@ interface ToolActivityPresentation {
   readonly status: string;
   readonly progressCount: number;
   readonly latestUpdateKind: string | null;
+  readonly durationMs: number | null;
 }
 
 function readToolActivity(part: unknown): ToolActivityPresentation {
@@ -541,7 +613,32 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
     status: 'completed',
     progressCount: 0,
     latestUpdateKind: null,
+    durationMs: null,
   };
+  const metadata = readDroidvisxMetadata(part);
+  if (
+    metadata !== null &&
+    'action' in metadata &&
+    typeof metadata.action === 'string' &&
+    'status' in metadata &&
+    typeof metadata.status === 'string' &&
+    'progressCount' in metadata &&
+    Number.isSafeInteger(metadata.progressCount) &&
+    'latestUpdateKind' in metadata &&
+    (metadata.latestUpdateKind === null ||
+      typeof metadata.latestUpdateKind === 'string')
+  ) {
+    return {
+      ...(metadata as Omit<ToolActivityPresentation, 'durationMs'>),
+      durationMs: readMetadataDuration(metadata),
+    };
+  }
+  return fallback;
+}
+
+function readDroidvisxMetadata(
+  part: unknown,
+): Record<string, unknown> | null {
   if (
     typeof part === 'object' &&
     part !== null &&
@@ -550,23 +647,41 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
     part.providerMetadata !== null &&
     'droidvisx' in part.providerMetadata &&
     typeof part.providerMetadata.droidvisx === 'object' &&
-    part.providerMetadata.droidvisx !== null &&
-    'action' in part.providerMetadata.droidvisx &&
-    typeof part.providerMetadata.droidvisx.action === 'string' &&
-    'status' in part.providerMetadata.droidvisx &&
-    typeof part.providerMetadata.droidvisx.status === 'string' &&
-    'progressCount' in part.providerMetadata.droidvisx &&
-    Number.isSafeInteger(
-      part.providerMetadata.droidvisx.progressCount,
-    ) &&
-    'latestUpdateKind' in part.providerMetadata.droidvisx &&
-    (part.providerMetadata.droidvisx.latestUpdateKind === null ||
-      typeof part.providerMetadata.droidvisx.latestUpdateKind ===
-        'string')
+    part.providerMetadata.droidvisx !== null
   ) {
-    return part.providerMetadata.droidvisx as ToolActivityPresentation;
+    return part.providerMetadata.droidvisx as Record<string, unknown>;
   }
-  return fallback;
+  return null;
+}
+
+function readMetadataDuration(
+  metadata: Record<string, unknown>,
+): number | null {
+  return typeof metadata['durationMs'] === 'number' &&
+    Number.isFinite(metadata['durationMs']) &&
+    metadata['durationMs'] >= 0
+    ? metadata['durationMs']
+    : null;
+}
+
+function readReasoningDuration(part: unknown): number | null {
+  const metadata = readDroidvisxMetadata(part);
+  return metadata === null ? null : readMetadataDuration(metadata);
+}
+
+function formatDuration(durationMs: number): string {
+  if (durationMs < 1_000) {
+    return `${(durationMs / 1_000).toFixed(1)}s`;
+  }
+  const totalSeconds = durationMs / 1_000;
+  if (totalSeconds < 60) {
+    return totalSeconds < 10
+      ? `${totalSeconds.toFixed(1)}s`
+      : `${Math.round(totalSeconds)}s`;
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.round(totalSeconds % 60);
+  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
 }
 
 function formatToolLifecycle(status: string): string {

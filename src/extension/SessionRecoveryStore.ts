@@ -593,7 +593,7 @@ function parseTool(
     'latestUpdateKind',
   ] as const;
   const legacy = hasExactKeys(value, legacyKeys);
-  if (!legacy && !hasExactKeys(value, currentKeys)) {
+  if (!legacy && !hasExactKeys(value, currentKeys, ['durationMs'])) {
     return undefined;
   }
   const id = dataValue(value, 'id');
@@ -612,6 +612,7 @@ function parseTool(
   const latestUpdateKind = legacy
     ? null
     : dataValue(value, 'latestUpdateKind');
+  const durationMs = legacy ? undefined : dataValue(value, 'durationMs');
   return isId(id) &&
     isId(turnId) &&
     isId(toolUseId) &&
@@ -624,7 +625,9 @@ function parseTool(
     (latestUpdateKind === null ||
       isOneOf(latestUpdateKind, TOOL_ACTIVITY_UPDATE_KINDS)) &&
     ((progressCount === 0 && latestUpdateKind === null) ||
-      ((progressCount as number) > 0 && latestUpdateKind !== null))
+      ((progressCount as number) > 0 && latestUpdateKind !== null)) &&
+    (durationMs === undefined ||
+      (Number.isSafeInteger(durationMs) && (durationMs as number) >= 0))
     ? {
         id,
         kind: 'tool',
@@ -636,6 +639,9 @@ function parseTool(
         progressCount: progressCount as number,
         latestUpdateKind:
           latestUpdateKind as ToolActivityUpdateKind | null,
+        ...(durationMs === undefined
+          ? {}
+          : { durationMs: durationMs as number }),
       }
     : undefined;
 }

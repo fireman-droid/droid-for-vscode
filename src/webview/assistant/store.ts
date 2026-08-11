@@ -596,6 +596,9 @@ function upsertTool(
         status: event.status,
         progressCount: event.progressCount,
         latestUpdateKind: event.latestUpdateKind,
+        ...(event.durationMs === undefined
+          ? {}
+          : { durationMs: event.durationMs }),
       };
     });
   }
@@ -617,6 +620,9 @@ function upsertTool(
       status: event.status,
       progressCount: event.progressCount,
       latestUpdateKind: event.latestUpdateKind,
+      ...(event.durationMs === undefined
+        ? {}
+        : { durationMs: event.durationMs }),
     },
   ];
 }

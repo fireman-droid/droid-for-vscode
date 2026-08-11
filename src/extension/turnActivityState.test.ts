@@ -102,26 +102,38 @@ describe('turnActivityState', () => {
   });
 
   it('coalesces running tool events and prevents terminal regression', () => {
-    const started = projectToolEvent(createTurnActivityState(), {
-      type: 'tool-start',
-      toolName: 'Read',
-      toolUseId: 'tool-1',
-      action: 'Read workspace files',
-    });
-    const duplicate = projectToolEvent(started.state, {
-      type: 'tool-progress',
-      toolName: 'Read',
-      toolUseId: 'tool-1',
-      action: 'Read workspace files',
-      updateKind: 'status',
-    });
-    const completed = projectToolEvent(duplicate.state, {
-      type: 'tool-result',
-      toolName: 'Read safely',
-      toolUseId: 'tool-1',
-      action: 'Read workspace files',
-      isError: false,
-    });
+    const started = projectToolEvent(
+      createTurnActivityState(),
+      {
+        type: 'tool-start',
+        toolName: 'Read',
+        toolUseId: 'tool-1',
+        action: 'Read workspace files',
+      },
+      1_000,
+    );
+    const duplicate = projectToolEvent(
+      started.state,
+      {
+        type: 'tool-progress',
+        toolName: 'Read',
+        toolUseId: 'tool-1',
+        action: 'Read workspace files',
+        updateKind: 'status',
+      },
+      2_000,
+    );
+    const completed = projectToolEvent(
+      duplicate.state,
+      {
+        type: 'tool-result',
+        toolName: 'Read safely',
+        toolUseId: 'tool-1',
+        action: 'Read workspace files',
+        isError: false,
+      },
+      4_500,
+    );
     const regressed = projectToolEvent(completed.state, {
       type: 'tool-start',
       toolName: 'Read',
@@ -152,6 +164,7 @@ describe('turnActivityState', () => {
       status: 'completed',
       progressCount: 1,
       latestUpdateKind: 'status',
+      durationMs: 3_500,
     });
     expect(regressed.projection).toBeNull();
   });

@@ -387,6 +387,7 @@ export interface ToolTranscriptItem {
   readonly status: TranscriptToolStatus;
   readonly progressCount: number;
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
+  readonly durationMs?: number;
 }
 
 export interface DiagnosticTranscriptItem {
@@ -488,6 +489,7 @@ export interface ToolActivityMessage {
   readonly status: ToolActivityStatus;
   readonly progressCount: number;
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
+  readonly durationMs?: number;
 }
 
 export interface RuntimeDiagnosticMessage {

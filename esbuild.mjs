@@ -11,6 +11,10 @@ const extensionResult = await build({
   platform: 'node',
   format: 'cjs',
   target: 'node20',
+  minify: true,
+  // The Droid SDK and host code branch on error/class names at runtime;
+  // keep identifiers stable while still compressing the bundle.
+  keepNames: true,
   sourcemap: false,
   legalComments: 'none',
   metafile: true,
@@ -27,6 +31,10 @@ const webviewResult = await build({
   platform: 'browser',
   format: 'iife',
   target: 'es2022',
+  minify: true,
+  define: {
+    'process.env.NODE_ENV': '"production"',
+  },
   loader: {
     '.woff2': 'file',
   },

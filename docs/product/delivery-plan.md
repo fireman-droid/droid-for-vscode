@@ -279,6 +279,16 @@ pnpm run verify:vsix
 - `implementation-status.md` 已更新。
 - 形成一个独立 Git Commit。
 
+## 当前插入切片：产品化打磨轮（2026-08-11）
+
+在 Module 1 验收与 Module 2 之间，按用户要求插入一轮不新增 Droid 能力的
+产品化打磨，包括：Production Build（minify + production React）、长会话
+渲染性能（消息身份缓存、Thinking 展开局部化、尾部窗口渲染）、styles.css
+去重、权限/Plan/AskUser 拍平为对话流内的扁平内联交互块、Tool/Thinking
+行内联耗时（Runtime 计时 → Bridge 可选 `durationMs` → UI），以及
+Composer 常驻 Mode 触发器与 Context 百分比。该轮完成标准与普通模块相同：
+完整测试、打包、安装和 Cursor 可见验收。
+
 ## 后续模块进入规则
 
 Module 2 当前按用户要求保持暂停。只有用户确认本轮 Module 1 体验、完整验证

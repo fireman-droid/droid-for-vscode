@@ -142,6 +142,66 @@ describe('Droid external-store adapter', () => {
     ).toHaveLength(4_096);
   });
 
+  it('reuses message identities for untouched transcript items', () => {
+    const userItem = {
+      id: 'user-a',
+      kind: 'user',
+      text: 'Inspect it',
+    } as const;
+    const settledAssistant = {
+      id: 'assistant-a',
+      kind: 'assistant',
+      turnId: 'turn-a',
+      text: 'Done.',
+    } as const;
+    const streamingAssistant = {
+      id: 'assistant-b',
+      kind: 'assistant',
+      turnId: 'turn-b',
+      text: 'Working',
+    } as const;
+    const cache = new Map();
+
+    const first = mapTranscriptToRuntimeMessages(
+      [userItem, settledAssistant, streamingAssistant],
+      { turnId: 'turn-b', status: 'streaming' },
+      cache,
+    );
+    const second = mapTranscriptToRuntimeMessages(
+      [
+        userItem,
+        settledAssistant,
+        { ...streamingAssistant, text: 'Working harder' },
+      ],
+      { turnId: 'turn-b', status: 'streaming' },
+      cache,
+    );
+
+    expect(second[0]).toBe(first[0]);
+    expect(second[1]).toBe(first[1]);
+    expect(second[2]).not.toBe(first[2]);
+    expect(second[2]).toMatchObject({
+      role: 'assistant',
+      content: [{ type: 'text', text: 'Working harder' }],
+    });
+
+    const third = mapTranscriptToRuntimeMessages(
+      [
+        userItem,
+        settledAssistant,
+        { ...streamingAssistant, text: 'Working harder' },
+      ],
+      { turnId: 'turn-b', status: 'completed' },
+      cache,
+    );
+    expect(third[1]).toBe(first[1]);
+    expect(third[2]).not.toBe(second[2]);
+    expect(third[2]?.status).toEqual({
+      type: 'complete',
+      reason: 'stop',
+    });
+  });
+
   it('extracts only text and refuses sends while gated', async () => {
     const onSend = vi.fn();
     const append = userAppend([

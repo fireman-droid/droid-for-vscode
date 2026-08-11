@@ -19,7 +19,6 @@ import type { PendingInteraction } from './store';
 
 interface InteractionPanelProps {
   readonly requests: readonly PendingInteraction[];
-  readonly presentation?: 'overlay' | 'inline';
   readonly onPermissionRespond: (
     interaction: PendingInteraction,
     selectedOption: string,
@@ -34,7 +33,6 @@ interface InteractionPanelProps {
 
 export const InteractionPanel = memo(function InteractionPanel({
   requests,
-  presentation = 'overlay',
   onPermissionRespond,
   onAskUserRespond,
 }: InteractionPanelProps): React.JSX.Element | null {
@@ -55,9 +53,7 @@ export const InteractionPanel = memo(function InteractionPanel({
   return (
     <aside
       ref={panelRef}
-      className={`dvx-interaction-panel${
-        presentation === 'inline' ? ' dvx-interaction-panel-inline' : ''
-      } dvx-interaction-panel-${active.request.kind}`}
+      className={`dvx-interaction-panel dvx-interaction-panel-${active.request.kind}`}
       aria-label="Droid input request"
       tabIndex={-1}
     >
@@ -192,14 +188,6 @@ export function PermissionRequestCard({
             {editedSpecContent.length.toLocaleString()} /{' '}
             {MAX_EDITED_SPEC_LENGTH.toLocaleString()}
           </div>
-          <button
-            className="dvx-button dvx-button-primary"
-            type="button"
-            disabled={awaitingClose || editedSpecTooLong}
-            onClick={() => respond(editOption.value, editedSpecContent)}
-          >
-            {editOption.label}
-          </button>
         </div>
       ) : requestPresentation.planPreview !== undefined ? (
         <div className="dvx-plan-preview">
@@ -276,17 +264,27 @@ export function PermissionRequestCard({
             />
           </>
         ) : editOption !== undefined ? (
-          negativeOptions.map(({ option, index }) => (
+          <>
+            {negativeOptions.map(({ option, index }) => (
+              <button
+                className="dvx-button dvx-button-danger"
+                type="button"
+                key={index}
+                disabled={awaitingClose}
+                onClick={() => respond(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
             <button
-              className="dvx-button dvx-button-danger"
+              className="dvx-button dvx-button-primary"
               type="button"
-              key={index}
-              disabled={awaitingClose}
-              onClick={() => respond(option.value)}
+              disabled={awaitingClose || editedSpecTooLong}
+              onClick={() => respond(editOption.value, editedSpecContent)}
             >
-              {option.label}
+              {editOption.label}
             </button>
-          ))
+          </>
         ) : (
           request.options.map((option, optionIndex) =>
             <button
