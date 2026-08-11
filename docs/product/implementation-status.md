@@ -1043,11 +1043,52 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension dist/droidvisx.vsix --force` 均成功；
   版本号仍为 `0.0.0`，现有窗口需 Reload Window（或完整重启）后
   加载新 Bundle
+- 2026-08-12 凌晨打包并安装含 **切片③第二段：Composer 拖拽/粘贴
+  图片** 的构建：`dist/droidvisx.vsix` 623,826 字节（9 files,
+  609.21 KB），SHA-256
+  `49AB4B430594D80039491BAA425D5E18AB44BF2B46814CA56A22BEF089053AC4`，
+  `npx vsce package --no-dependencies` 与
+  `cursor --install-extension dist/droidvisx.vsix --force` 均成功；
+  版本号仍为 `0.0.0`，现有窗口需 Reload Window（或完整重启）后
+  加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- V1 切片③第二段：Composer 拖拽/粘贴图片（2026-08-12 凌晨）：预研
+  证实设计期望的 `attachment.addBlob` 不存在，按预研新增
+  `attachment.addImage { sessionId, name, mediaType, dataBase64 }`
+  Webview→Host 消息（唯一携带二进制内容的上行消息）：
+  `validateMessage.ts` 解析器 exact-keys、mediaType 白名单 4 值、
+  name ≤128 无控制字符、base64 字符集正则 + 补位（len%4==0）+
+  长度 ≤ 5,592,408（4MB 原文件对应的 base64 上限），敌对输入单测
+  8 例（SVG 伪装、data URI 整串、错误补位、空载荷、超限、控制字符
+  名、空名、多余键）加入 `validateMessage.test.ts`（206 tests 过）。
+  Host：`ChatController.handleAttachmentAddImage` 复用
+  `canStageAttachments` / 8 个暂存槽上限 / `stageAttachmentPayloads`
+  管道，解码尺寸二次校验 > 4MB 发 `attachment-rejected` 结构化
+  诊断；发送经既有 `sendTurn(text, attachments)` 投影 `images`，
+  聚焦单测 1 例（暂存→拒绝超限→随回合发送→清空）。Webview：
+  Composer（`Thread.tsx`）在 `ComposerPrimitive.Root` 加
+  onDragOver/onDragLeave/onDrop（仅 Files 拖拽激活
+  `dvx-composer-dragover` 虚线高亮），Input 加 onPaste（仅剪贴板
+  含图片文件时接管，纯文本粘贴不受影响；assistant-ui 内建
+  `addAttachmentOnPaste` 保持关闭）；非图片 MIME 与 >4MB 文件
+  静默跳过，多文件按剩余暂存槽截断；FileReader 读 dataURL 后只取
+  逗号后 base64 段上送。**无头冒烟**
+  `node artifacts/smoke-image-drop.mjs`（配
+  `artifacts/image-drop-harness.html`，mock host 回发
+  session.attachments 元数据）：真实 ClipboardEvent 粘贴 PNG +
+  DragEvent dragover/drop（PNG+txt 混合）实测——2 条
+  `attachment.addImage` 消息 base64 与源文件逐字节一致、txt 被
+  忽略、dragover 高亮出现且 drop 后清除、2 个 chips 渲染，
+  **PASS**。门禁：`pnpm run typecheck` 三 tsconfig 全过；
+  `pnpm run test` 42 files / 888 tests 全过（较第一段 +10）；
+  build、`npx vsce package --no-dependencies`（609.21 KB）、
+  `cursor --install-extension --force` 均成功。真实 Cursor 中
+  拖入 png / Win+Shift+S 截图粘贴的可见验收待用户 Reload Window
+  后进行。
 - V1 切片③第一段：对话内图片显示（2026-08-12 凌晨）：Bridge 新增
   `image` 转录项（媒体类型白名单 jpeg/png/gif/webp、单图 base64
   ≤ 2,796,203 字符≈2MB、每回合/每 tool_result ≤ 8 张、会话级渲染
@@ -1382,10 +1423,9 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
    「收藏与分组切片」；[`session-management-design.md`](./session-management-design.md) §1）。
 2. ~~**恢复提速**~~ — 已完成（2026-08-12 凌晨，见验证状态
    「恢复提速切片」；[`tier1-polish-plan.md`](./tier1-polish-plan.md) §3；从第一档提前）。
-3. **对话内图片 + Composer 拖拽/粘贴** — 第一段（对话内图片显示，
-   §1）已完成（2026-08-12 凌晨，见验证状态「V1 切片③第一段」）；
-   第二段（Composer 拖拽/粘贴图片为附件，§1.5）待做
-   （[`rich-content-design.md`](./rich-content-design.md)）。
+3. ~~**对话内图片 + Composer 拖拽/粘贴**~~ — 两段均已完成
+   （2026-08-12 凌晨，见验证状态「V1 切片③第一段/第二段」；
+   [`rich-content-design.md`](./rich-content-design.md) §1、§1.5）。
 4. **完整 Spec Mode 闭环**
    （[`spec-mission-design.md`](./spec-mission-design.md) §1）。
 5. **Canvas / 原型预览**

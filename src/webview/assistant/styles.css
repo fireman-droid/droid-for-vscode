@@ -1937,6 +1937,13 @@ body {
   box-shadow: 0 1px 1.5px rgb(0 0 0 / 10%), 0 1px 1px rgb(0 0 0 / 10%);
 }
 
+/* Image files dragged over the composer stage as attachments. */
+.dvx-composer-dragover {
+  border-color: var(--dvx-border-strong);
+  border-style: dashed;
+  background: #fdf9f3;
+}
+
 .dvx-composer-input {
   width: 100%;
   resize: none;

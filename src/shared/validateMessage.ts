@@ -22,10 +22,14 @@ import {
   SESSION_REASONING_EFFORTS,
   MAX_FILE_SEARCH_QUERY_LENGTH,
   MAX_SESSION_SEARCH_QUERY_LENGTH,
+  IMAGE_MEDIA_TYPES,
+  MAX_ATTACHMENT_IMAGE_BASE64_LENGTH,
+  MAX_ATTACHMENT_NAME_LENGTH,
   type AskUserAnswer,
   type AskUserRespondMessage,
   type AttachmentAddEditorMessage,
   type AttachmentAddGitChangesMessage,
+  type AttachmentAddImageMessage,
   type AttachmentAddPathMessage,
   type AttachmentAddProblemsMessage,
   type AttachmentAddSelectionMessage,
@@ -154,6 +158,8 @@ export function parseWebviewMessage(
         return parseAttachmentAddProblems(value);
       case 'attachment.addGitChanges':
         return parseAttachmentAddGitChanges(value);
+      case 'attachment.addImage':
+        return parseAttachmentAddImage(value);
       case 'attachment.remove':
         return parseAttachmentRemove(value);
       case 'attachment.addPath':
@@ -866,6 +872,51 @@ function parseAttachmentAddGitChanges(
   return {
     type: 'attachment.addGitChanges',
     sessionId: value.sessionId,
+  };
+}
+
+/**
+ * Base64 with correct padding. Combined with the media type
+ * whitelist and length cap, this is the only shape of binary content
+ * accepted from the webview.
+ */
+const ATTACHMENT_BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
+
+function parseAttachmentAddImage(
+  value: UnknownRecord,
+): AttachmentAddImageMessage | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sessionId',
+      'name',
+      'mediaType',
+      'dataBase64',
+    ]) ||
+    !isId(value.sessionId) ||
+    typeof value.name !== 'string' ||
+    value.name.length === 0 ||
+    value.name.length > MAX_ATTACHMENT_NAME_LENGTH ||
+    /[\u0000-\u001f\u007f]/.test(value.name) ||
+    typeof value.mediaType !== 'string' ||
+    !(IMAGE_MEDIA_TYPES as readonly string[]).includes(
+      value.mediaType,
+    ) ||
+    typeof value.dataBase64 !== 'string' ||
+    value.dataBase64.length === 0 ||
+    value.dataBase64.length % 4 !== 0 ||
+    value.dataBase64.length > MAX_ATTACHMENT_IMAGE_BASE64_LENGTH ||
+    !ATTACHMENT_BASE64_PATTERN.test(value.dataBase64)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'attachment.addImage',
+    sessionId: value.sessionId,
+    name: value.name,
+    mediaType: value.mediaType as AttachmentAddImageMessage['mediaType'],
+    dataBase64: value.dataBase64,
   };
 }
 

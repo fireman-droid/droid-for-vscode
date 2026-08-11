@@ -19,10 +19,13 @@ import {
 } from 'react';
 
 import {
+  IMAGE_MEDIA_TYPES,
   MAX_COMMAND_NAME_LENGTH,
   MAX_FILE_SEARCH_QUERY_LENGTH,
+  MAX_PENDING_ATTACHMENTS,
   MAX_TURN_TEXT_LENGTH,
   type CommandSummary,
+  type ImageMediaType,
   type ModelCatalogState,
   type SessionCommandsState,
   type SessionHistoryStatus,
@@ -124,6 +127,11 @@ interface DroidThreadProps {
   readonly onAttachSelection: () => void;
   readonly onAttachProblems: () => void;
   readonly onAttachGitChanges: () => void;
+  readonly onAttachImage: (
+    name: string,
+    mediaType: ImageMediaType,
+    dataBase64: string,
+  ) => void;
   readonly onAttachmentRemove: (attachmentId: string) => void;
   readonly onDraftChange: (draft: string) => void;
   readonly onReuseMessage: (text: string) => void;
@@ -182,6 +190,7 @@ export const DroidThread = memo(function DroidThread({
   onAttachSelection,
   onAttachProblems,
   onAttachGitChanges,
+  onAttachImage,
   onAttachmentRemove,
   onDraftChange,
   onReuseMessage,
@@ -293,6 +302,7 @@ export const DroidThread = memo(function DroidThread({
             onAttachSelection={onAttachSelection}
             onAttachProblems={onAttachProblems}
             onAttachGitChanges={onAttachGitChanges}
+            onAttachImage={onAttachImage}
             onAttachmentRemove={onAttachmentRemove}
             onDraftChange={onDraftChange}
           />
@@ -837,6 +847,7 @@ function Composer({
   onAttachSelection,
   onAttachProblems,
   onAttachGitChanges,
+  onAttachImage,
   onAttachmentRemove,
   onDraftChange,
 }: {
@@ -875,6 +886,11 @@ function Composer({
   readonly onAttachSelection: () => void;
   readonly onAttachProblems: () => void;
   readonly onAttachGitChanges: () => void;
+  readonly onAttachImage: (
+    name: string,
+    mediaType: ImageMediaType,
+    dataBase64: string,
+  ) => void;
   readonly onAttachmentRemove: (attachmentId: string) => void;
   readonly onDraftChange: (draft: string) => void;
 }): React.JSX.Element {
@@ -888,6 +904,35 @@ function Composer({
   const searchCounterRef = useRef(0);
   const [slash, setSlash] = useState<SlashToken | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
+  const [dragActive, setDragActive] = useState(false);
+
+  /**
+   * Stages dropped or pasted image files through the host attachment
+   * pipeline. Non-image and oversized files are skipped; the file
+   * list is truncated to the remaining staging slots so the host
+   * limit diagnostic never fires from a single multi-file drop.
+   */
+  const stageImageFiles = (files: readonly File[]): void => {
+    const remaining = MAX_PENDING_ATTACHMENTS - attachments.length;
+    const images = files
+      .filter(
+        (file) =>
+          isImageMediaType(file.type) &&
+          file.size > 0 &&
+          file.size <= MAX_ATTACHMENT_IMAGE_BYTES,
+      )
+      .slice(0, Math.max(remaining, 0));
+    for (const file of images) {
+      const mediaType = file.type as ImageMediaType;
+      const name =
+        file.name.trim().length > 0 ? file.name : 'pasted-image';
+      void readFileAsBase64(file).then((dataBase64) => {
+        if (dataBase64 !== null) {
+          onAttachImage(name, mediaType, dataBase64);
+        }
+      });
+    }
+  };
 
   // Load the command catalog lazily when the `/` popup first opens;
   // reopening after an error retries the fetch. `controlsDisabled`
@@ -982,7 +1027,30 @@ function Composer({
       <ComposerPrimitive.Root
         className={`dvx-composer${
           interactionPending ? ' dvx-composer-pending' : ''
-        }`}
+        }${dragActive ? ' dvx-composer-dragover' : ''}`}
+        onDragOver={(event) => {
+          if (event.dataTransfer.types.includes('Files')) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'copy';
+            setDragActive(true);
+          }
+        }}
+        onDragLeave={(event) => {
+          if (
+            !(event.relatedTarget instanceof Node) ||
+            !event.currentTarget.contains(event.relatedTarget)
+          ) {
+            setDragActive(false);
+          }
+        }}
+        onDrop={(event) => {
+          setDragActive(false);
+          const files = Array.from(event.dataTransfer.files);
+          if (files.length > 0) {
+            event.preventDefault();
+            stageImageFiles(files);
+          }
+        }}
       >
         {attachments.length > 0 && !interactionPending ? (
           <div
@@ -1091,6 +1159,18 @@ function Composer({
               maxLength={MAX_TURN_TEXT_LENGTH}
               submitMode="enter"
               addAttachmentOnPaste={false}
+              onPaste={(event) => {
+                // Screenshots and copied image files stage as
+                // attachments; plain-text pastes keep default
+                // behavior.
+                const files = Array.from(
+                  event.clipboardData?.files ?? [],
+                ).filter((file) => isImageMediaType(file.type));
+                if (files.length > 0) {
+                  event.preventDefault();
+                  stageImageFiles(files);
+                }
+              }}
               onChange={(event) => {
                 const value = event.currentTarget.value;
                 draftRef.current = value;
@@ -1885,4 +1965,33 @@ function readDiagnostic(data: unknown): {
     code: 'DIAGNOSTIC_UNAVAILABLE',
     message: 'Diagnostic details are unavailable.',
   };
+}
+
+/** Original file-size cap for one image attachment (host mirror). */
+const MAX_ATTACHMENT_IMAGE_BYTES = 4 * 1024 * 1024;
+
+function isImageMediaType(value: string): value is ImageMediaType {
+  return (IMAGE_MEDIA_TYPES as readonly string[]).includes(value);
+}
+
+/**
+ * Reads one image file into raw base64 for the `attachment.addImage`
+ * bridge message. Returns null when the read fails or the result is
+ * not the expected data-URI shape.
+ */
+function readFileAsBase64(file: File): Promise<string | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve(null);
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        resolve(null);
+        return;
+      }
+      const separator = result.indexOf(',');
+      resolve(separator === -1 ? null : result.slice(separator + 1));
+    };
+    reader.readAsDataURL(file);
+  });
 }

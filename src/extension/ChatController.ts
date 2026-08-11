@@ -6,6 +6,7 @@ import type {
   ConnectionState,
   ConfirmedSessionSettings,
   HostToWebviewMessage,
+  ImageMediaType,
   ImageTranscriptItem,
   ModelCatalogState,
   SessionCatalogState,
@@ -108,6 +109,7 @@ import { reconcileSessionHistory } from './reconcileSessionHistory';
 import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
 import {
   createUnavailableAttachmentSources,
+  MAX_IMAGE_ATTACHMENT_BYTES,
   type AttachmentPayload,
   type AttachmentSources,
 } from './attachmentSources';
@@ -591,6 +593,14 @@ export class ChatController {
         return;
       case 'attachment.addPath':
         this.handleAttachmentAddPath(message.sessionId, message.path);
+        return;
+      case 'attachment.addImage':
+        this.handleAttachmentAddImage(
+          message.sessionId,
+          message.name,
+          message.mediaType,
+          message.dataBase64,
+        );
         return;
       case 'workspace.searchFiles':
         this.handleWorkspaceSearchFiles(
@@ -3173,6 +3183,48 @@ export class ChatController {
         }
       },
     );
+  }
+
+  /**
+   * Stages one image dropped or pasted into the composer. The base64
+   * payload already passed the bridge validator (media type
+   * whitelist, base64 shape, 4 MB cap); the decoded-size check here
+   * keeps this path bound by the same rule as the file picker.
+   */
+  private handleAttachmentAddImage(
+    sessionId: string,
+    name: string,
+    mediaType: ImageMediaType,
+    dataBase64: string,
+  ): void {
+    if (!this.canStageAttachments(sessionId)) {
+      return;
+    }
+    if (this.pendingAttachments.length >= MAX_PENDING_ATTACHMENTS) {
+      this.emitSessionDiagnostic(
+        'attachment-limit',
+        ATTACHMENT_LIMIT_MESSAGE,
+      );
+      return;
+    }
+    const sizeBytes = base64ByteLength(dataBase64);
+    if (sizeBytes > MAX_IMAGE_ATTACHMENT_BYTES) {
+      this.emitSessionDiagnostic(
+        'attachment-rejected',
+        ATTACHMENT_TOO_LARGE_MESSAGE,
+      );
+      return;
+    }
+    this.stageAttachmentPayloads([
+      {
+        kind: 'image',
+        name,
+        data: dataBase64,
+        mediaType,
+        sizeBytes,
+        truncated: false,
+      },
+    ]);
   }
 
   private handleWorkspaceSearchFiles(

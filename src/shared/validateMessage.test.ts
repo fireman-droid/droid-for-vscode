@@ -250,6 +250,13 @@ describe('parseWebviewMessage', () => {
       attachmentId: 'attachment-1',
     },
     {
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'screenshot.png',
+      mediaType: 'image/png',
+      dataBase64: 'aW1hZ2U=',
+    },
+    {
       type: 'session.context.refresh',
       sessionId: 'session-1',
     },
@@ -504,6 +511,71 @@ describe('parseWebviewMessage', () => {
       type: 'attachment.addPath',
       sessionId: 'session-1',
       path: 'src/a.ts',
+      extra: true,
+    },
+    {
+      // Media type outside the whitelist.
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'evil.svg',
+      mediaType: 'image/svg+xml',
+      dataBase64: 'aW1hZ2U=',
+    },
+    {
+      // Data URI instead of raw base64.
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'a.png',
+      mediaType: 'image/png',
+      dataBase64: 'data:image/png;base64,aW1hZ2U=',
+    },
+    {
+      // Mispadded base64 (length % 4 !== 0).
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'a.png',
+      mediaType: 'image/png',
+      dataBase64: 'aW1hZ2U',
+    },
+    {
+      // Empty payload.
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'a.png',
+      mediaType: 'image/png',
+      dataBase64: '',
+    },
+    {
+      // Payload above the 4 MB base64 cap.
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'a.png',
+      mediaType: 'image/png',
+      dataBase64: 'A'.repeat(5_592_412),
+    },
+    {
+      // Control character in the display name.
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'a\u0000.png',
+      mediaType: 'image/png',
+      dataBase64: 'aW1hZ2U=',
+    },
+    {
+      // Empty name.
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: '',
+      mediaType: 'image/png',
+      dataBase64: 'aW1hZ2U=',
+    },
+    {
+      // Unexpected extra key.
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'a.png',
+      mediaType: 'image/png',
+      dataBase64: 'aW1hZ2U=',
       extra: true,
     },
     { type: 'skills.refresh', sessionId: '' },

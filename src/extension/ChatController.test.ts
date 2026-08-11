@@ -3105,6 +3105,56 @@ describe('ChatController', () => {
     ).not.toContain('aW1n');
   });
 
+  it('stages dropped/pasted images via attachment.addImage and rejects oversized ones', async () => {
+    const runtime = createMockRuntime();
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'pasted-image.png',
+      mediaType: 'image/png',
+      dataBase64: 'aW1n',
+    });
+    const staged = attachmentsMessages(messages).at(-1)!.attachments;
+    expect(staged).toHaveLength(1);
+    expect(staged[0]).toMatchObject({
+      kind: 'image',
+      name: 'pasted-image.png',
+      sizeBytes: 3,
+      truncated: false,
+    });
+
+    // An image decoding above the 4 MB cap is rejected with a
+    // structured diagnostic and stages nothing.
+    controller.handleMessage({
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'huge.png',
+      mediaType: 'image/png',
+      dataBase64: 'A'.repeat(5_592_408),
+    });
+    expect(attachmentsMessages(messages).at(-1)?.attachments).toEqual(
+      staged,
+    );
+    const diagnostics = messages.filter(
+      (message) => message.type === 'runtime.diagnostic',
+    );
+    expect(JSON.stringify(diagnostics.at(-1))).toContain('too large');
+
+    send(controller, 'session-1', 'turn-1', 'what is this?');
+    await vi.waitFor(() => {
+      expect(runtime.sendTurn).toHaveBeenCalledWith('what is this?', [
+        { kind: 'image', data: 'aW1n', mediaType: 'image/png' },
+      ]);
+    });
+    expect(
+      attachmentsMessages(messages).at(-1)?.attachments,
+    ).toHaveLength(0);
+  });
+
   it('runs the MCP browser auth flow and refreshes the list on success', async () => {
     let completed:
       | ((outcome: 'success' | 'cancelled' | 'failed') => void)

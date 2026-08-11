@@ -14,6 +14,7 @@ import {
 import {
   MAX_TURN_TEXT_LENGTH,
   type AskUserAnswer,
+  type ImageMediaType,
   type WebviewToHostMessage,
 } from '../../shared/bridgeMessages';
 import {
@@ -606,6 +607,25 @@ export function App(): React.JSX.Element {
     }
     post(vscode, { type: 'attachment.addGitChanges', sessionId });
   }, [sessionId, vscode]);
+  const handleAttachImage = useCallback(
+    (
+      name: string,
+      mediaType: ImageMediaType,
+      dataBase64: string,
+    ): void => {
+      if (sessionId === null || connectionStatus !== 'connected') {
+        return;
+      }
+      post(vscode, {
+        type: 'attachment.addImage',
+        sessionId,
+        name,
+        mediaType,
+        dataBase64,
+      });
+    },
+    [connectionStatus, sessionId, vscode],
+  );
   const handleAttachmentRemove = useCallback(
     (attachmentId: string): void => {
       if (sessionId === null) {
@@ -738,6 +758,7 @@ export function App(): React.JSX.Element {
           onAttachSelection={handleAttachSelection}
           onAttachProblems={handleAttachProblems}
           onAttachGitChanges={handleAttachGitChanges}
+          onAttachImage={handleAttachImage}
           onAttachmentRemove={handleAttachmentRemove}
           onDraftChange={handleDraftChange}
           onReuseMessage={handleReuseMessage}

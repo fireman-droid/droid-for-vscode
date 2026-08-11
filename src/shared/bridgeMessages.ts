@@ -454,6 +454,27 @@ export interface AttachmentAddGitChangesMessage {
   readonly sessionId: string;
 }
 
+/**
+ * Longest accepted base64 payload for one dropped or pasted image:
+ * the base64 encoding of the 4 MB original-file cap shared with the
+ * host file picker (`MAX_IMAGE_ATTACHMENT_BYTES`).
+ */
+export const MAX_ATTACHMENT_IMAGE_BASE64_LENGTH = 5_592_408;
+
+/**
+ * Stages one image dropped or pasted into the composer as a pending
+ * attachment. This is the only webview-to-host message carrying
+ * binary content; both validators bound its media type, name, and
+ * base64 length.
+ */
+export interface AttachmentAddImageMessage {
+  readonly type: 'attachment.addImage';
+  readonly sessionId: string;
+  readonly name: string;
+  readonly mediaType: ImageMediaType;
+  readonly dataBase64: string;
+}
+
 /** Removes one staged attachment by its host-assigned id. */
 export interface AttachmentRemoveMessage {
   readonly type: 'attachment.remove';
@@ -595,6 +616,7 @@ export type WebviewToHostMessage =
   | AttachmentAddSelectionMessage
   | AttachmentAddProblemsMessage
   | AttachmentAddGitChangesMessage
+  | AttachmentAddImageMessage
   | AttachmentRemoveMessage
   | AttachmentAddPathMessage
   | WorkspaceSearchFilesMessage
