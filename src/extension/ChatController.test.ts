@@ -2313,6 +2313,8 @@ describe('ChatController', () => {
       readActiveSelection: vi.fn(async () => ({
         status: 'empty' as const,
       })),
+      readProblems: vi.fn(async () => ({ status: 'empty' as const })),
+      readGitChanges: vi.fn(async () => ({ status: 'empty' as const })),
       searchWorkspaceFiles: vi.fn(async () => []),
       readWorkspaceFile: vi.fn(async () => ({
         status: 'failed' as const,
@@ -2498,6 +2500,8 @@ describe('ChatController', () => {
       readActiveSelection: vi.fn(async () => ({
         status: 'empty' as const,
       })),
+      readProblems: vi.fn(async () => ({ status: 'empty' as const })),
+      readGitChanges: vi.fn(async () => ({ status: 'empty' as const })),
       searchWorkspaceFiles: vi.fn(async () => [
         'src/webview/assistant/Thread.tsx',
         'src/webview/assistant/Thread.test.tsx',
@@ -2590,6 +2594,8 @@ describe('ChatController', () => {
       readActiveSelection: vi.fn(async () => ({
         status: 'empty' as const,
       })),
+      readProblems: vi.fn(async () => ({ status: 'empty' as const })),
+      readGitChanges: vi.fn(async () => ({ status: 'empty' as const })),
       searchWorkspaceFiles: vi.fn(async () => []),
       readWorkspaceFile: vi.fn(async () => ({
         status: 'failed' as const,
@@ -2636,6 +2642,66 @@ describe('ChatController', () => {
       sessionId: 'session-other',
     });
     expect(attachmentsMessages(messages)).toHaveLength(before);
+  });
+
+  it('stages problems as text and reports empty git changes', async () => {
+    const runtime = createMockRuntime();
+    const sources: AttachmentSources = {
+      pickFiles: vi.fn(async () => ({ status: 'cancelled' as const })),
+      readActiveEditor: vi.fn(async () => ({ status: 'empty' as const })),
+      readActiveSelection: vi.fn(async () => ({
+        status: 'empty' as const,
+      })),
+      readProblems: vi.fn(async () => ({
+        status: 'captured' as const,
+        item: {
+          kind: 'text' as const,
+          name: 'Problems',
+          data: 'src/a.ts:3 [error] Unexpected token',
+          sizeBytes: 35,
+          truncated: false,
+        },
+      })),
+      readGitChanges: vi.fn(async () => ({ status: 'empty' as const })),
+      searchWorkspaceFiles: vi.fn(async () => []),
+      readWorkspaceFile: vi.fn(async () => ({
+        status: 'failed' as const,
+      })),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      sources,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'attachment.addProblems',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(
+        attachmentsMessages(messages).at(-1)?.attachments,
+      ).toMatchObject([{ kind: 'text', name: 'Problems' }]);
+    });
+
+    controller.handleMessage({
+      type: 'attachment.addGitChanges',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+        code: 'attachment-empty',
+        message: 'There are no uncommitted git changes to attach.',
+      });
+    });
+    expect(
+      attachmentsMessages(messages).at(-1)?.attachments,
+    ).toHaveLength(1);
   });
 
   it('clears stale catalog rows before loading a changed workspace', async () => {

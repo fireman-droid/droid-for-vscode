@@ -235,6 +235,10 @@ const ATTACHMENT_READ_FAILED_MESSAGE =
   'The selected content could not be read for attachment.';
 const ATTACHMENT_NO_EDITOR_MESSAGE =
   'Open a text editor first to attach its contents.';
+const ATTACHMENT_NO_PROBLEMS_MESSAGE =
+  'There are no problems to attach.';
+const ATTACHMENT_NO_GIT_CHANGES_MESSAGE =
+  'There are no uncommitted git changes to attach.';
 const ATTACHMENT_NO_SELECTION_MESSAGE =
   'Select text in an editor first to attach the selection.';
 
@@ -455,6 +459,12 @@ export class ChatController {
         return;
       case 'attachment.addSelection':
         this.handleAttachmentCapture(message.sessionId, 'selection');
+        return;
+      case 'attachment.addProblems':
+        this.handleAttachmentCapture(message.sessionId, 'problems');
+        return;
+      case 'attachment.addGitChanges':
+        this.handleAttachmentCapture(message.sessionId, 'git-changes');
         return;
       case 'attachment.addPath':
         this.handleAttachmentAddPath(message.sessionId, message.path);
@@ -2227,7 +2237,7 @@ export class ChatController {
 
   private handleAttachmentCapture(
     sessionId: string,
-    capture: 'editor' | 'selection',
+    capture: 'editor' | 'selection' | 'problems' | 'git-changes',
   ): void {
     if (!this.canStageAttachments(sessionId)) {
       return;
@@ -2243,7 +2253,11 @@ export class ChatController {
     const read =
       capture === 'editor'
         ? this.attachmentSources.readActiveEditor()
-        : this.attachmentSources.readActiveSelection();
+        : capture === 'selection'
+          ? this.attachmentSources.readActiveSelection()
+          : capture === 'problems'
+            ? this.attachmentSources.readProblems()
+            : this.attachmentSources.readGitChanges();
     void read.then(
       (outcome) => {
         this.attachmentOperationInProgress = false;
@@ -2252,14 +2266,23 @@ export class ChatController {
         }
         switch (outcome.status) {
           case 'captured':
-            this.stageAttachmentPayloads([outcome.item], capture);
+            this.stageAttachmentPayloads(
+              [outcome.item],
+              capture === 'editor' || capture === 'selection'
+                ? capture
+                : undefined,
+            );
             return;
           case 'empty':
             this.emitSessionDiagnostic(
               'attachment-empty',
               capture === 'editor'
                 ? ATTACHMENT_NO_EDITOR_MESSAGE
-                : ATTACHMENT_NO_SELECTION_MESSAGE,
+                : capture === 'selection'
+                  ? ATTACHMENT_NO_SELECTION_MESSAGE
+                  : capture === 'problems'
+                    ? ATTACHMENT_NO_PROBLEMS_MESSAGE
+                    : ATTACHMENT_NO_GIT_CHANGES_MESSAGE,
             );
             return;
           case 'failed':

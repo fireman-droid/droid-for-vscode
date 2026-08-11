@@ -169,6 +169,14 @@ describe('parseWebviewMessage', () => {
       sessionId: 'session-1',
     },
     {
+      type: 'attachment.addProblems',
+      sessionId: 'session-1',
+    },
+    {
+      type: 'attachment.addGitChanges',
+      sessionId: 'session-1',
+    },
+    {
       type: 'attachment.remove',
       sessionId: 'session-1',
       attachmentId: 'attachment-1',
@@ -419,6 +427,18 @@ describe('parseWebviewMessage', () => {
     { type: 'attachment.pick', sessionId: 'session-1', extra: true },
     { type: 'attachment.addEditor', sessionId: '' },
     { type: 'attachment.addSelection', sessionId: '' },
+    { type: 'attachment.addProblems', sessionId: '' },
+    {
+      type: 'attachment.addProblems',
+      sessionId: 'session-1',
+      extra: true,
+    },
+    { type: 'attachment.addGitChanges', sessionId: '' },
+    {
+      type: 'attachment.addGitChanges',
+      sessionId: 'session-1',
+      extra: true,
+    },
     { type: 'attachment.remove', sessionId: 'session-1' },
     {
       type: 'attachment.remove',

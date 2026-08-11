@@ -409,6 +409,18 @@ export function App(): React.JSX.Element {
     }
     post(vscode, { type: 'attachment.addSelection', sessionId });
   }, [sessionId, vscode]);
+  const handleAttachProblems = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, { type: 'attachment.addProblems', sessionId });
+  }, [sessionId, vscode]);
+  const handleAttachGitChanges = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, { type: 'attachment.addGitChanges', sessionId });
+  }, [sessionId, vscode]);
   const handleAttachmentRemove = useCallback(
     (attachmentId: string): void => {
       if (sessionId === null) {
@@ -530,6 +542,8 @@ export function App(): React.JSX.Element {
           onAttachFiles={handleAttachFiles}
           onAttachEditor={handleAttachEditor}
           onAttachSelection={handleAttachSelection}
+          onAttachProblems={handleAttachProblems}
+          onAttachGitChanges={handleAttachGitChanges}
           onAttachmentRemove={handleAttachmentRemove}
           onDraftChange={handleDraftChange}
           onReuseMessage={handleReuseMessage}

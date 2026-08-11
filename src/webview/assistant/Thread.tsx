@@ -133,6 +133,8 @@ interface DroidThreadProps {
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
   readonly onAttachSelection: () => void;
+  readonly onAttachProblems: () => void;
+  readonly onAttachGitChanges: () => void;
   readonly onAttachmentRemove: (attachmentId: string) => void;
   readonly onDraftChange: (draft: string) => void;
   readonly onReuseMessage: (text: string) => void;
@@ -185,6 +187,8 @@ export const DroidThread = memo(function DroidThread({
   onAttachFiles,
   onAttachEditor,
   onAttachSelection,
+  onAttachProblems,
+  onAttachGitChanges,
   onAttachmentRemove,
   onDraftChange,
   onReuseMessage,
@@ -292,6 +296,8 @@ export const DroidThread = memo(function DroidThread({
             onAttachFiles={onAttachFiles}
             onAttachEditor={onAttachEditor}
             onAttachSelection={onAttachSelection}
+            onAttachProblems={onAttachProblems}
+            onAttachGitChanges={onAttachGitChanges}
             onAttachmentRemove={onAttachmentRemove}
             onDraftChange={onDraftChange}
           />
@@ -840,6 +846,8 @@ function Composer({
   onAttachFiles,
   onAttachEditor,
   onAttachSelection,
+  onAttachProblems,
+  onAttachGitChanges,
   onAttachmentRemove,
   onDraftChange,
 }: {
@@ -872,6 +880,8 @@ function Composer({
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
   readonly onAttachSelection: () => void;
+  readonly onAttachProblems: () => void;
+  readonly onAttachGitChanges: () => void;
   readonly onAttachmentRemove: (attachmentId: string) => void;
   readonly onDraftChange: (draft: string) => void;
 }): React.JSX.Element {
@@ -1065,6 +1075,8 @@ function Composer({
             onAttachFiles={onAttachFiles}
             onAttachEditor={onAttachEditor}
             onAttachSelection={onAttachSelection}
+            onAttachProblems={onAttachProblems}
+            onAttachGitChanges={onAttachGitChanges}
           />
           {showRetry ? (
             <button

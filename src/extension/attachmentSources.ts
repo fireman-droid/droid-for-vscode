@@ -57,6 +57,13 @@ export interface AttachmentSources {
   readWorkspaceFile(
     relativePath: string,
   ): Promise<AttachmentPickOutcome>;
+  /** Captures current workspace diagnostics as a text attachment. */
+  readProblems(): Promise<AttachmentCaptureOutcome>;
+  /**
+   * Captures uncommitted git changes (working tree vs HEAD) as a text
+   * attachment.
+   */
+  readGitChanges(): Promise<AttachmentCaptureOutcome>;
 }
 
 export function createUnavailableAttachmentSources(): AttachmentSources {
@@ -66,5 +73,7 @@ export function createUnavailableAttachmentSources(): AttachmentSources {
     readActiveSelection: () => Promise.resolve({ status: 'failed' }),
     searchWorkspaceFiles: () => Promise.resolve([]),
     readWorkspaceFile: () => Promise.resolve({ status: 'failed' }),
+    readProblems: () => Promise.resolve({ status: 'failed' }),
+    readGitChanges: () => Promise.resolve({ status: 'failed' }),
   };
 }

@@ -61,6 +61,8 @@ interface ComposerControlsProps {
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
   readonly onAttachSelection: () => void;
+  readonly onAttachProblems: () => void;
+  readonly onAttachGitChanges: () => void;
 }
 
 export type SessionSettingSelection =
@@ -139,6 +141,8 @@ export function ComposerControls({
   onAttachFiles,
   onAttachEditor,
   onAttachSelection,
+  onAttachProblems,
+  onAttachGitChanges,
 }: ComposerControlsProps): React.JSX.Element {
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
   const [settingsView, setSettingsView] = useState<SettingsView>('root');
@@ -291,8 +295,12 @@ export function ComposerControls({
               onAttachFiles();
             } else if (source === 'editor') {
               onAttachEditor();
-            } else {
+            } else if (source === 'selection') {
               onAttachSelection();
+            } else if (source === 'problems') {
+              onAttachProblems();
+            } else {
+              onAttachGitChanges();
             }
           }}
         />
@@ -368,7 +376,12 @@ export function ComposerControls({
   );
 }
 
-type AttachSource = 'files' | 'editor' | 'selection';
+type AttachSource =
+  | 'files'
+  | 'editor'
+  | 'selection'
+  | 'problems'
+  | 'git-changes';
 
 function SettingsPopover({
   id,
@@ -987,6 +1000,30 @@ function AttachRows({
           <small>Highlighted editor text</small>
         </span>
       </button>
+      <button
+        type="button"
+        className="dvx-popover-row dvx-attach-row"
+        disabled={disabled}
+        onClick={() => onAttach('problems')}
+      >
+        <AttachIcon kind="problems" />
+        <span className="dvx-popover-row-copy">
+          <strong>Attach problems</strong>
+          <small>Workspace errors and warnings</small>
+        </span>
+      </button>
+      <button
+        type="button"
+        className="dvx-popover-row dvx-attach-row"
+        disabled={disabled}
+        onClick={() => onAttach('git-changes')}
+      >
+        <AttachIcon kind="git-changes" />
+        <span className="dvx-popover-row-copy">
+          <strong>Attach git changes</strong>
+          <small>Uncommitted diff vs HEAD</small>
+        </span>
+      </button>
     </div>
   );
 }
@@ -1028,6 +1065,58 @@ function AttachIcon({
         />
         <path
           d="M5 6.5h6M5 9h4"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  if (kind === 'problems') {
+    return (
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path
+          d="M8 2.8 14 12.6H2L8 2.8Z"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M8 6.7v2.6"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
+        <circle cx="8" cy="11" r=".7" fill="currentColor" />
+      </svg>
+    );
+  }
+  if (kind === 'git-changes') {
+    return (
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle
+          cx="4.5"
+          cy="4"
+          r="1.5"
+          stroke="currentColor"
+          strokeWidth="1.2"
+        />
+        <circle
+          cx="4.5"
+          cy="12"
+          r="1.5"
+          stroke="currentColor"
+          strokeWidth="1.2"
+        />
+        <circle
+          cx="11.5"
+          cy="7"
+          r="1.5"
+          stroke="currentColor"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M4.5 5.5v5M11.5 8.5c0 2-2 2.5-4 2.7"
           stroke="currentColor"
           strokeWidth="1.2"
           strokeLinecap="round"

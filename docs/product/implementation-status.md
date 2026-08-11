@@ -148,7 +148,8 @@ Schema 中最新 Provider Call 的 `lastCallTokenUsage` /
 目录缺失或非法时仍然 fail closed，不会使用硬编码模型。历史用户消息
 现在支持双击内联编辑并通过 SDK Rewind 从该消息分支重新提问。
 Skills 浏览与启停、MCP Server 浏览与启停、消息附件（文件/编辑器/
-选区）、文件修改类 Tool 的路径 chip 与原生 Diff 入口已生产接通。
+选区/Problems/Git changes）、文件修改类 Tool 的路径 chip 与原生
+Diff 入口已生产接通。
 Changes 页面/增删行统计、daemon 主运行路径、Commands、
 Mission 和 Manage Droid 等主要功能仍未实现。
 
@@ -177,6 +178,14 @@ started/browser/终态阶段广播 `mcp.auth`、同一时间只允许一个认�
 10 分钟无结果则以超时错误收尾；success 后自动重新拉取 MCP 目录。
 Webview 在服务器行内显示按钮、进行中状态与结果文案。OAuth URL 只在
 Host/Runtime 流转，不进 Webview。
+
+同日追加 Problems / Git changes 附件源：Composer `+` 面板新增
+“Attach problems”（工作区诊断，`路径:行 [严重级] (来源) 消息` 文本，
+上限 200 条超出截断）与 “Attach git changes”（`git diff HEAD
+--no-color --no-ext-diff` 未提交差异）两个入口（Bridge
+`attachment.addProblems` / `attachment.addGitChanges`）。两者复用
+既有捕获流程暂存为文本附件（≤256K 字符截断），无诊断或无未提交
+变更时发出 warning 诊断说明，无 git/无工作区时按读取失败处理。
 
 ### 当前 Figma Design 还原边界
 

@@ -329,6 +329,21 @@ export interface AttachmentAddSelectionMessage {
   readonly sessionId: string;
 }
 
+/** Stages current workspace diagnostics as a pending text attachment. */
+export interface AttachmentAddProblemsMessage {
+  readonly type: 'attachment.addProblems';
+  readonly sessionId: string;
+}
+
+/**
+ * Stages uncommitted git changes (working tree vs HEAD) as a pending
+ * text attachment.
+ */
+export interface AttachmentAddGitChangesMessage {
+  readonly type: 'attachment.addGitChanges';
+  readonly sessionId: string;
+}
+
 /** Removes one staged attachment by its host-assigned id. */
 export interface AttachmentRemoveMessage {
   readonly type: 'attachment.remove';
@@ -437,6 +452,8 @@ export type WebviewToHostMessage =
   | AttachmentPickMessage
   | AttachmentAddEditorMessage
   | AttachmentAddSelectionMessage
+  | AttachmentAddProblemsMessage
+  | AttachmentAddGitChangesMessage
   | AttachmentRemoveMessage
   | AttachmentAddPathMessage
   | WorkspaceSearchFilesMessage

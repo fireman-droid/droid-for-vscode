@@ -18,7 +18,9 @@ import {
   type AskUserAnswer,
   type AskUserRespondMessage,
   type AttachmentAddEditorMessage,
+  type AttachmentAddGitChangesMessage,
   type AttachmentAddPathMessage,
+  type AttachmentAddProblemsMessage,
   type AttachmentAddSelectionMessage,
   type AttachmentPickMessage,
   type AttachmentRemoveMessage,
@@ -110,6 +112,10 @@ export function parseWebviewMessage(
         return parseAttachmentAddEditor(value);
       case 'attachment.addSelection':
         return parseAttachmentAddSelection(value);
+      case 'attachment.addProblems':
+        return parseAttachmentAddProblems(value);
+      case 'attachment.addGitChanges':
+        return parseAttachmentAddGitChanges(value);
       case 'attachment.remove':
         return parseAttachmentRemove(value);
       case 'attachment.addPath':
@@ -605,6 +611,35 @@ function parseAttachmentAddSelection(
 
   return {
     type: 'attachment.addSelection',
+    sessionId: value.sessionId,
+  };
+}
+
+function parseAttachmentAddProblems(
+  value: UnknownRecord,
+): AttachmentAddProblemsMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'attachment.addProblems', sessionId: value.sessionId };
+}
+
+function parseAttachmentAddGitChanges(
+  value: UnknownRecord,
+): AttachmentAddGitChangesMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'attachment.addGitChanges',
     sessionId: value.sessionId,
   };
 }

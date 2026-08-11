@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process';
 import { basename, extname, isAbsolute, join, relative } from 'node:path';
 
 import * as vscode from 'vscode';
@@ -189,10 +190,111 @@ export function createVscodeAttachmentSources(): AttachmentSources & {
       return { status: 'picked', items: [payload] };
     },
 
+    readProblems(): Promise<AttachmentCaptureOutcome> {
+      const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+      const lines: string[] = [];
+      let count = 0;
+      try {
+        for (const [uri, diagnostics] of vscode.languages.getDiagnostics()) {
+          if (diagnostics.length === 0) {
+            continue;
+          }
+          const path =
+            root === undefined
+              ? uri.fsPath
+              : relative(root.fsPath, uri.fsPath).replaceAll('\\', '/');
+          for (const diagnostic of diagnostics) {
+            if (count >= MAX_PROBLEM_ITEMS) {
+              break;
+            }
+            count += 1;
+            const line = diagnostic.range.start.line + 1;
+            const severity = severityLabel(diagnostic.severity);
+            const source =
+              diagnostic.source === undefined
+                ? ''
+                : ` (${diagnostic.source})`;
+            lines.push(
+              `${path}:${line} [${severity}]${source} ${diagnostic.message}`,
+            );
+          }
+          if (count >= MAX_PROBLEM_ITEMS) {
+            lines.push('… more problems omitted');
+            break;
+          }
+        }
+      } catch {
+        return Promise.resolve({ status: 'failed' });
+      }
+      if (lines.length === 0) {
+        return Promise.resolve({ status: 'empty' });
+      }
+      return Promise.resolve({
+        status: 'captured',
+        item: textPayload('Problems', lines.join('\n')),
+      });
+    },
+
+    async readGitChanges(): Promise<AttachmentCaptureOutcome> {
+      const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+      if (root === undefined) {
+        return { status: 'empty' };
+      }
+      let stdout: string;
+      try {
+        stdout = await runGit(
+          ['diff', 'HEAD', '--no-color', '--no-ext-diff'],
+          root.fsPath,
+        );
+      } catch {
+        return { status: 'failed' };
+      }
+      if (stdout.trim().length === 0) {
+        return { status: 'empty' };
+      }
+      return {
+        status: 'captured',
+        item: textPayload('Git changes', stdout),
+      };
+    },
+
     dispose(): void {
       subscription.dispose();
     },
   };
+}
+
+/** Most diagnostics included in one Problems attachment. */
+const MAX_PROBLEM_ITEMS = 200;
+
+function severityLabel(severity: vscode.DiagnosticSeverity): string {
+  switch (severity) {
+    case vscode.DiagnosticSeverity.Error:
+      return 'error';
+    case vscode.DiagnosticSeverity.Warning:
+      return 'warning';
+    case vscode.DiagnosticSeverity.Information:
+      return 'info';
+    case vscode.DiagnosticSeverity.Hint:
+      return 'hint';
+  }
+}
+
+function runGit(args: readonly string[], cwd: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      'git',
+      [...args],
+      { cwd, maxBuffer: 4 * 1024 * 1024, windowsHide: true },
+      (error, stdout) => {
+        if (error !== null) {
+          reject(error);
+          return;
+        }
+        resolve(stdout);
+      },
+    );
+  });
 }
 
 async function readFilePayload(
