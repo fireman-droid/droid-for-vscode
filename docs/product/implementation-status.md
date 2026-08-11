@@ -1035,11 +1035,53 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension dist/droidvisx.vsix --force` 均成功；
   版本号仍为 `0.0.0`，现有窗口需 Reload Window（或完整重启）后
   加载新 Bundle
+- 2026-08-12 凌晨打包并安装含 **切片③第一段：对话内图片显示** 的
+  构建：`dist/droidvisx.vsix` 623,042 字节（9 files, 608.44 KB），
+  SHA-256
+  `7F5D77613812AE90826758DF88545F3BE2AFBA76C2E4360204E0DBF855C823FC`，
+  `npx vsce package --no-dependencies` 与
+  `cursor --install-extension dist/droidvisx.vsix --force` 均成功；
+  版本号仍为 `0.0.0`，现有窗口需 Reload Window（或完整重启）后
+  加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- V1 切片③第一段：对话内图片显示（2026-08-12 凌晨）：Bridge 新增
+  `image` 转录项（媒体类型白名单 jpeg/png/gif/webp、单图 base64
+  ≤ 2,796,203 字符≈2MB、每回合/每 tool_result ≤ 8 张、会话级渲染
+  预算 300 张 / 24M base64 单位超限降级为占位行保留元数据）与
+  `transcript.image` 宿主消息，双侧校验器同一变更补齐并含敌对输入
+  单测（`validateHostMessage.test.ts` +9、`bridgeMessages` 侧由
+  `hostTranscriptState.test.ts`/`store.test.ts` 覆盖）。Runtime：
+  `normalizeSdkEvent.ts` 新增两条实时图片通道——`assistant` 完成
+  消息的 image block（含 `generated` 标记）与 `tool_result` 内容数组
+  中的 image（截图类），各自 8 张/事件上限；`projectSessionHistory.ts`
+  历史投影 user/assistant/tool_result 三源图片为有界转录项，超预算
+  仅置空 `data` 保留占位（不再把图片计入 partial 省略）。Host：
+  `hostTranscriptState.ts` 消费 `transcript.image` 并执行会话图片
+  预算；`ChatController.ts` 发送后回显用户附件图片（超限发占位）；
+  恢复存储 `SessionRecoveryStore` 检查点仅存图片元数据+空 data
+  占位。Webview：`TranscriptImage.tsx` 渲染缩略图（高度有界）+
+  点开面板内 lightbox（Escape/点击关闭）+ Generated 徽标 + 占位行，
+  data URI 仅由白名单 mediaType + 校验过的 base64 在渲染边界拼装；
+  CSP 最小改动：`img-src` 追加 `data:`（`webviewHtml.ts` 一处）。
+  **真实会话只读冒烟** `npx tsx artifacts/smoke-image-history.mts`：
+  会话 `4e6de24c`（预研锚点）loadSession 3455ms、投影 4ms、
+  `historyStatus: complete`、`truncated: false`、图片 14 张
+  （user 5 + tool-result 9）全部渲染无占位，与预研磁盘统计完全一致。
+  **决策记录**：(1) 历史 tool_result 图片按 `turnId#tool-result:块序`
+  计数（镜像实时流按事件计数），否则同一 tool 消息携带 9 个单图
+  tool_result 会被整回合 8 张上限误伤；(2) 297 图样本会话
+  `3d2ac816` 经原始 RPC 探针证实 `loadSession()` 只返回尾部 100 条
+  消息且该窗口内无图片块（0 图非投影丢失，是 SDK RPC 窗口行为），
+  性能上限证据改为锚点会话投影 4ms + 预算单测。门禁：
+  `pnpm run typecheck` 三 tsconfig 全过；`pnpm run test` 42 files /
+  878 tests 全过（较基线 +16）；build、`npx vsce package
+  --no-dependencies`（608.44 KB）、`cursor --install-extension
+  --force` 均成功。真实 Cursor 中图片会话的可见验收待用户 Reload
+  Window 后进行。
 - daemon Phase 3 Reload 存活基础设施切片（2026-08-12 凌晨）：
   Runtime 新增 `startDetachedDaemon`（`detached`/`unref`、无
   `--parent-pid`，注入式 spawn 单测 2 例）、`daemonDiscovery.ts`
@@ -1340,9 +1382,10 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
    「收藏与分组切片」；[`session-management-design.md`](./session-management-design.md) §1）。
 2. ~~**恢复提速**~~ — 已完成（2026-08-12 凌晨，见验证状态
    「恢复提速切片」；[`tier1-polish-plan.md`](./tier1-polish-plan.md) §3；从第一档提前）。
-3. **对话内图片 + Composer 拖拽/粘贴** — 转录显示 AI/历史/工具截图 +
-   输入框拖入或粘贴图片为附件
-   （[`rich-content-design.md`](./rich-content-design.md) §1、§1.5）。
+3. **对话内图片 + Composer 拖拽/粘贴** — 第一段（对话内图片显示，
+   §1）已完成（2026-08-12 凌晨，见验证状态「V1 切片③第一段」）；
+   第二段（Composer 拖拽/粘贴图片为附件，§1.5）待做
+   （[`rich-content-design.md`](./rich-content-design.md)）。
 4. **完整 Spec Mode 闭环**
    （[`spec-mission-design.md`](./spec-mission-design.md) §1）。
 5. **Canvas / 原型预览**

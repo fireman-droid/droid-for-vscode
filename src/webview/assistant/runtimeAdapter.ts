@@ -192,6 +192,8 @@ export type RuntimeMessageCache = Map<string, RuntimeMessageCacheEntry>;
 interface UserMessageDescriptor {
   readonly kind: 'user';
   readonly item: Extract<SessionTranscriptItem, { kind: 'user' }>;
+  /** User-origin images sent with this prompt, rendered in the bubble. */
+  readonly images: Extract<SessionTranscriptItem, { kind: 'image' }>[];
 }
 
 interface AssistantGroupDescriptor {
@@ -212,8 +214,19 @@ export function mapTranscriptToRuntimeMessages(
 
   for (const item of transcript) {
     if (item.kind === 'user') {
-      descriptors.push({ kind: 'user', item });
+      descriptors.push({ kind: 'user', item, images: [] });
       continue;
+    }
+    // A user-origin image belongs to the prompt it was sent with; both
+    // the live echo and history projection emit it directly after the
+    // user text item. Without a preceding user message it falls through
+    // to the assistant turn group and renders standalone.
+    if (item.kind === 'image' && item.origin === 'user') {
+      const last = descriptors[descriptors.length - 1];
+      if (last?.kind === 'user') {
+        last.images.push(item);
+        continue;
+      }
     }
     const key = item.turnId ?? `diagnostic:${item.id}`;
     let group = groups.get(key);
@@ -243,12 +256,12 @@ export function mapTranscriptToRuntimeMessages(
         turn?.turnId === item.id.slice('user:'.length) &&
         turn.status === 'submitting';
       const stateKey = optimistic ? 'optimistic' : 'sent';
+      const identityItems = [item, ...descriptor.images];
       const cached = cache?.get(item.id);
       if (
         cached !== undefined &&
         cached.stateKey === stateKey &&
-        cached.items.length === 1 &&
-        cached.items[0] === item
+        sameItemIdentities(cached.items, identityItems)
       ) {
         nextEntries.push([item.id, cached]);
         return cached.message;
@@ -256,7 +269,10 @@ export function mapTranscriptToRuntimeMessages(
       const message: SafeRuntimeMessage = {
         id: item.id,
         role: 'user',
-        content: [{ type: 'text', text: item.text }],
+        content: [
+          { type: 'text', text: item.text },
+          ...descriptor.images.map(mapItemToPart),
+        ],
         optimistic,
         ...(item.messageId === undefined
           ? {}
@@ -264,7 +280,7 @@ export function mapTranscriptToRuntimeMessages(
       };
       nextEntries.push([
         item.id,
-        { message, items: [item], stateKey },
+        { message, items: identityItems, stateKey },
       ]);
       return message;
     }
@@ -414,6 +430,18 @@ function mapItemToPart(
           severity: item.severity,
           code: item.code.slice(0, 256),
           message: item.message.slice(0, 4_096),
+        },
+      };
+    case 'image':
+      return {
+        type: 'data',
+        name: 'droid-image',
+        data: {
+          origin: item.origin,
+          mediaType: item.mediaType,
+          data: item.data,
+          generated: item.generated,
+          byteLength: item.byteLength,
         },
       };
     case 'user':

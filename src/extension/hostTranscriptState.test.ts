@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_ASSISTANT_TEXT_LENGTH,
   MAX_CHANGED_FILES_PER_TURN,
+  MAX_IMAGES_PER_TURN,
   MAX_SESSION_TRANSCRIPT_ITEMS,
   type SessionTranscriptItem,
 } from '../shared/bridgeMessages';
+import { MAX_SESSION_IMAGE_DATA_UNITS } from '../shared/transcriptLimits';
 import {
   appendAcceptedUserPrompt,
   appendTurnChanges,
@@ -509,6 +511,91 @@ describe('hostTranscriptState', () => {
     expect(attachUserMessageId(base, 'turn-unknown', 'sdk-msg-1')).toBe(
       base,
     );
+  });
+
+  it('appends image items once, capped per turn, and evicts old bytes', () => {
+    const imageMessage = (id: string, data: string) =>
+      ({
+        type: 'transcript.image',
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        item: {
+          id,
+          kind: 'image',
+          turnId: 'turn-1',
+          origin: 'tool-result',
+          mediaType: 'image/png',
+          data,
+          generated: false,
+          byteLength: Math.floor((data.length * 3) / 4),
+        },
+      }) as const;
+
+    let state = appendAcceptedUserPrompt(
+      createHostTranscriptState('complete'),
+      'turn-1',
+      'Take screenshots',
+    );
+    state = project(state, imageMessage('image-1', 'aGVsbG8='));
+    // Same id is idempotent; mismatched turn ids are dropped.
+    state = project(state, imageMessage('image-1', 'aGVsbG8='));
+    state = project(state, {
+      ...imageMessage('image-mismatch', 'aGVsbG8='),
+      turnId: 'turn-2',
+    });
+    expect(
+      state.transcript.filter((item) => item.kind === 'image'),
+    ).toHaveLength(1);
+    expect(state.truncated).toBe(false);
+
+    for (let index = 2; index <= MAX_IMAGES_PER_TURN + 2; index += 1) {
+      state = project(state, imageMessage(`image-${index}`, 'aGVsbG8='));
+    }
+    expect(
+      state.transcript.filter((item) => item.kind === 'image'),
+    ).toHaveLength(MAX_IMAGES_PER_TURN);
+    expect(state.truncated).toBe(true);
+    expect(state.historyStatus).toBe('partial');
+  });
+
+  it('drops the oldest image bytes when the session image budget overflows', () => {
+    const bigData = 'A'.repeat(2_800_000);
+    let state = createHostTranscriptState('complete');
+    const turns = Math.ceil(MAX_SESSION_IMAGE_DATA_UNITS / bigData.length) + 1;
+    for (let turn = 1; turn <= turns; turn += 1) {
+      state = appendAcceptedUserPrompt(
+        state,
+        `turn-${turn}`,
+        `Screenshot ${turn}`,
+      );
+      state = project(state, {
+        type: 'transcript.image',
+        sessionId: 'session-1',
+        turnId: `turn-${turn}`,
+        item: {
+          id: `image-${turn}`,
+          kind: 'image',
+          turnId: `turn-${turn}`,
+          origin: 'tool-result',
+          mediaType: 'image/png',
+          data: bigData,
+          generated: false,
+          byteLength: 2_100_000,
+        },
+      });
+    }
+
+    const images = state.transcript.filter(
+      (item): item is Extract<SessionTranscriptItem, { kind: 'image' }> =>
+        item.kind === 'image',
+    );
+    expect(images).toHaveLength(turns);
+    expect(images[0]?.data).toBe('');
+    expect(images[0]?.byteLength).toBe(2_100_000);
+    expect(images.at(-1)?.data).toBe(bigData);
+    // Byte eviction alone leaves the history complete: the rows remain.
+    expect(state.historyStatus).toBe('complete');
+    expect(state.truncated).toBe(false);
   });
 
   it('truncates the transcript from a rewound user message', () => {

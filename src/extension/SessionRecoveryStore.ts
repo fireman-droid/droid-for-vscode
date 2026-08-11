@@ -1,8 +1,11 @@
 import {
   DIAGNOSTIC_SEVERITIES,
+  IMAGE_MEDIA_TYPES,
+  IMAGE_ORIGINS,
   MAX_ASSISTANT_TEXT_LENGTH,
   MAX_BRIDGE_ID_LENGTH,
   MAX_CHANGED_FILES_PER_TURN,
+  MAX_IMAGE_DATA_LENGTH,
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
@@ -342,7 +345,15 @@ export class SessionRecoveryStore {
       sessions: this.sortedSessions().map((session) => ({
         sessionId: session.sessionId,
         lastAccess: session.lastAccess,
-        transcript: cloneTranscript(session.cache.transcript),
+        // Image bytes never reach persistent storage: checkpoints keep
+        // placeholder rows (metadata + byteLength) and the loadSession
+        // reload path re-projects the full images.
+        transcript: cloneTranscript(session.cache.transcript).map(
+          (item) =>
+            item.kind === 'image' && item.data.length > 0
+              ? { ...item, data: '' }
+              : item,
+        ),
         historyStatus: session.cache.historyStatus,
         truncated: session.cache.truncated,
       })),
@@ -510,9 +521,64 @@ function parseTranscriptItem(
       return parseChanges(value);
     case 'diagnostic':
       return parseDiagnostic(value);
+    case 'image':
+      return parseImage(value);
     default:
       return undefined;
   }
+}
+
+const IMAGE_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/**
+ * Accepts image items with live bytes so in-memory cache updates keep
+ * rendering; `serialize()` strips the bytes before anything reaches
+ * persistent storage, so stored checkpoints only ever hold placeholders.
+ */
+function parseImage(
+  value: UnknownRecord,
+): Extract<SessionTranscriptItem, { kind: 'image' }> | undefined {
+  if (
+    !hasExactKeys(value, [
+      'id',
+      'kind',
+      'turnId',
+      'origin',
+      'mediaType',
+      'data',
+      'generated',
+      'byteLength',
+    ])
+  ) {
+    return undefined;
+  }
+  const id = dataValue(value, 'id');
+  const turnId = dataValue(value, 'turnId');
+  const origin = dataValue(value, 'origin');
+  const mediaType = dataValue(value, 'mediaType');
+  const data = dataValue(value, 'data');
+  const generated = dataValue(value, 'generated');
+  const byteLength = dataValue(value, 'byteLength');
+  return isId(id) &&
+    isId(turnId) &&
+    isOneOf(origin, IMAGE_ORIGINS) &&
+    isOneOf(mediaType, IMAGE_MEDIA_TYPES) &&
+    isBoundedString(data, MAX_IMAGE_DATA_LENGTH) &&
+    IMAGE_BASE64_PATTERN.test(data as string) &&
+    typeof generated === 'boolean' &&
+    Number.isSafeInteger(byteLength) &&
+    (byteLength as number) >= 0
+    ? {
+        id,
+        kind: 'image',
+        turnId,
+        origin,
+        mediaType,
+        data,
+        generated,
+        byteLength: byteLength as number,
+      }
+    : undefined;
 }
 
 function parseUser(

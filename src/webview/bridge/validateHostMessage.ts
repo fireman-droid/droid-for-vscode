@@ -57,8 +57,11 @@ import {
   TOOL_ACTIVITY_STATUSES,
   TOOL_ACTIVITY_UPDATE_KINDS,
   ATTACHMENT_KINDS,
+  IMAGE_MEDIA_TYPES,
+  IMAGE_ORIGINS,
   MAX_ATTACHMENT_NAME_LENGTH,
   MAX_CHANGED_FILES_PER_TURN,
+  MAX_IMAGE_DATA_LENGTH,
   MAX_FILE_SEARCH_RESULTS,
   MAX_PENDING_ATTACHMENTS,
   SKILL_LOCATIONS,
@@ -74,6 +77,9 @@ import {
   type ConnectionState,
   type DiagnosticSeverity,
   type HostToWebviewMessage,
+  type ImageMediaType,
+  type ImageOrigin,
+  type ImageTranscriptItem,
   type InteractionRequest,
   type PermissionConfirmationKind,
   type PermissionInteractionRequest,
@@ -122,7 +128,9 @@ import {
   isSafeWorkspaceRelativePath,
 } from '../../shared/validateMessage';
 import {
+  MAX_SESSION_IMAGE_DATA_UNITS,
   MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
+  transcriptImageDataUnits,
   transcriptTextUnits,
 } from '../../shared/transcriptLimits';
 
@@ -213,6 +221,8 @@ export function readHostMessage(
         return parseThinkingComplete(value);
       case 'tool.activity':
         return parseToolActivity(value);
+      case 'transcript.image':
+        return parseTranscriptImage(value);
       case 'turn.changes':
         return parseTurnChanges(value);
       case 'runtime.diagnostic':
@@ -544,6 +554,92 @@ function parseToolActivity(
           detail: value.detail as string,
         }),
   };
+}
+
+function parseTranscriptImage(
+  value: UnknownRecord,
+):
+  | Extract<HostToWebviewMessage, { type: 'transcript.image' }>
+  | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sequence',
+      'sessionId',
+      'turnId',
+      'item',
+    ]) ||
+    !hasTurnIdentity(value)
+  ) {
+    return undefined;
+  }
+  const item = parseImageTranscriptItem(value.item);
+  if (item === undefined || item.turnId !== value.turnId) {
+    return undefined;
+  }
+  return {
+    type: 'transcript.image',
+    sequence: value.sequence,
+    sessionId: value.sessionId,
+    turnId: value.turnId,
+    item,
+  };
+}
+
+const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
+
+function parseImageTranscriptItem(
+  value: unknown,
+): ImageTranscriptItem | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, [
+      'id',
+      'kind',
+      'turnId',
+      'origin',
+      'mediaType',
+      'data',
+      'generated',
+      'byteLength',
+    ]) ||
+    value.kind !== 'image' ||
+    !isId(value.id) ||
+    !isId(value.turnId) ||
+    !isImageOrigin(value.origin) ||
+    !isImageMediaType(value.mediaType) ||
+    typeof value.data !== 'string' ||
+    value.data.length > MAX_IMAGE_DATA_LENGTH ||
+    !BASE64_PATTERN.test(value.data) ||
+    typeof value.generated !== 'boolean' ||
+    !isCount(value.byteLength)
+  ) {
+    return undefined;
+  }
+  return {
+    id: value.id,
+    kind: 'image',
+    turnId: value.turnId,
+    origin: value.origin,
+    mediaType: value.mediaType,
+    data: value.data,
+    generated: value.generated,
+    byteLength: value.byteLength,
+  };
+}
+
+function isImageOrigin(value: unknown): value is ImageOrigin {
+  return (
+    typeof value === 'string' &&
+    (IMAGE_ORIGINS as readonly string[]).includes(value)
+  );
+}
+
+function isImageMediaType(value: unknown): value is ImageMediaType {
+  return (
+    typeof value === 'string' &&
+    (IMAGE_MEDIA_TYPES as readonly string[]).includes(value)
+  );
 }
 
 function parseTurnChanges(
@@ -2124,7 +2220,8 @@ function parseSessionTranscript(
     items.push(item);
   }
   return transcriptTextUnits(items) <=
-    MAX_SESSION_TRANSCRIPT_TEXT_UNITS
+    MAX_SESSION_TRANSCRIPT_TEXT_UNITS &&
+    transcriptImageDataUnits(items) <= MAX_SESSION_IMAGE_DATA_UNITS
     ? items
     : undefined;
 }
@@ -2158,6 +2255,8 @@ function parseSessionTranscriptItem(
       return parseChangesTranscriptItem(value);
     case 'diagnostic':
       return parseDiagnosticTranscriptItem(value);
+    case 'image':
+      return parseImageTranscriptItem(value);
     default:
       return undefined;
   }

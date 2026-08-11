@@ -4,13 +4,19 @@ import {
 } from '@factory/droid-sdk/node';
 
 import {
+  IMAGE_MEDIA_TYPES,
   MAX_BRIDGE_ID_LENGTH,
+  MAX_IMAGE_DATA_LENGTH,
+  MAX_IMAGES_PER_TURN,
   MAX_TOOL_NAME_LENGTH,
+  type ImageMediaType,
+  type ImageOrigin,
 } from '../shared/bridgeMessages';
 import {
   summarizeToolAction,
   type ToolActivityUpdateKind,
 } from '../shared/toolActivity';
+import { base64ByteLength } from '../shared/transcriptLimits';
 import { extractToolDetail } from './toolDetail';
 import {
   extractToolFilePath,
@@ -129,6 +135,122 @@ export function normalizeSdkEvent(
     default:
       return undefined;
   }
+}
+
+/**
+ * Extracts bounded image-block events from one SDK stream event.
+ * Two live channels carry images: the completed `assistant` message
+ * content (the public stream member; `create_message` is internal to
+ * the SDK and never reaches `DroidStreamEvent`) and `tool_result`
+ * content arrays (screenshots). User-attached images do not come from
+ * the stream; the host echoes them from its own staging area.
+ */
+export function normalizeSdkEventImages(
+  event: DroidStreamEvent,
+): RuntimeEvent[] {
+  switch (event.type) {
+    case 'assistant':
+      return extractImageBlocks(
+        event.message.content,
+        'assistant',
+        typeof event.message.id === 'string' &&
+          event.message.id.length > 0
+          ? event.message.id
+          : 'assistant-message',
+      );
+    case 'tool_result':
+      return typeof event.toolUseId === 'string' &&
+        event.toolUseId.length > 0
+        ? extractImageBlocks(
+            event.content,
+            'tool-result',
+            event.toolUseId,
+          )
+        : [];
+    default:
+      return [];
+  }
+}
+
+function extractImageBlocks(
+  content: unknown,
+  origin: ImageOrigin,
+  sourceId: string,
+): RuntimeEvent[] {
+  if (!Array.isArray(content)) {
+    return [];
+  }
+  const events: RuntimeEvent[] = [];
+  for (
+    let blockIndex = 0;
+    blockIndex < content.length && events.length < MAX_IMAGES_PER_TURN;
+    blockIndex += 1
+  ) {
+    const image = readSdkImageBlock(content[blockIndex]);
+    if (image === undefined) {
+      continue;
+    }
+    const oversized = image.data.length > MAX_IMAGE_DATA_LENGTH;
+    events.push({
+      type: 'image-block',
+      origin,
+      mediaType: image.mediaType,
+      data: oversized ? '' : image.data,
+      generated: image.generated,
+      byteLength: base64ByteLength(image.data),
+      sourceId: sourceId.slice(0, MAX_BRIDGE_ID_LENGTH),
+      blockIndex,
+    });
+  }
+  return events;
+}
+
+/**
+ * Shape guard for one SDK image block (`{ type: 'image', source:
+ * { type: 'base64', data, mediaType } }`). The loadSession RPC and
+ * the live stream both deliver this camelCase shape, so the history
+ * projection reuses this guard.
+ */
+export function readSdkImageBlock(block: unknown):
+  | {
+      data: string;
+      mediaType: ImageMediaType;
+      /** SDK `ImageBlock.generated` pass-through (model-created image). */
+      generated: boolean;
+    }
+  | undefined {
+  if (
+    typeof block !== 'object' ||
+    block === null ||
+    !('type' in block) ||
+    block.type !== 'image' ||
+    !('source' in block)
+  ) {
+    return undefined;
+  }
+  const source = block.source;
+  if (
+    typeof source !== 'object' ||
+    source === null ||
+    !('type' in source) ||
+    source.type !== 'base64' ||
+    !('data' in source) ||
+    typeof source.data !== 'string' ||
+    source.data.length === 0 ||
+    !('mediaType' in source) ||
+    typeof source.mediaType !== 'string' ||
+    !(IMAGE_MEDIA_TYPES as readonly string[]).includes(
+      source.mediaType,
+    )
+  ) {
+    return undefined;
+  }
+  return {
+    data: source.data,
+    mediaType: source.mediaType as ImageMediaType,
+    generated:
+      'generated' in block && block.generated === true,
+  };
 }
 
 function normalizeUserMessage(

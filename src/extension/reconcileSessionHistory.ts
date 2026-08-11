@@ -453,5 +453,16 @@ function transcriptItemKey(item: SessionTranscriptItem): string {
         item.code,
         item.message,
       ]);
+    // `data` is deliberately excluded: a recovered checkpoint holds a
+    // placeholder (empty data) for the same image the loaded history
+    // carries in full, and the two must merge as one item.
+    case 'image':
+      return JSON.stringify([
+        item.kind,
+        item.origin,
+        item.mediaType,
+        item.byteLength,
+        item.generated,
+      ]);
   }
 }

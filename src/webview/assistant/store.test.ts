@@ -575,6 +575,57 @@ describe('assistantWebviewReducer', () => {
     ]);
   });
 
+  it('appends live image items once per id and caps them per turn', () => {
+    const imageMessage = (id: string, sequence: number) =>
+      ({
+        type: 'host.message',
+        message: {
+          type: 'transcript.image',
+          sequence,
+          sessionId: 'session-a',
+          turnId: 'turn-a',
+          item: {
+            id,
+            kind: 'image',
+            turnId: 'turn-a',
+            origin: 'tool-result',
+            mediaType: 'image/png',
+            data: 'aGVsbG8=',
+            generated: false,
+            byteLength: 5,
+          },
+        },
+      }) as const;
+
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'turn.send',
+      turnId: 'turn-a',
+      text: 'Screenshot please',
+    });
+    state = assistantWebviewReducer(state, imageMessage('image-1', 1));
+    state = assistantWebviewReducer(state, imageMessage('image-1', 2));
+    for (let index = 2; index <= 12; index += 1) {
+      state = assistantWebviewReducer(
+        state,
+        imageMessage(`image-${index}`, index + 1),
+      );
+    }
+
+    const images = state.transcript.filter(
+      (item) => item.kind === 'image',
+    );
+    expect(images).toHaveLength(8);
+    expect(images[0]).toMatchObject({
+      id: 'image-1',
+      data: 'aGVsbG8=',
+    });
+    expect(state.sequence).toBe(13);
+  });
+
   it('attaches the SDK message id to the matching user prompt', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',

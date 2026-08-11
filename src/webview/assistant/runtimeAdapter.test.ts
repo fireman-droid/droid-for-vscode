@@ -142,6 +142,74 @@ describe('Droid external-store adapter', () => {
     ).toHaveLength(4_096);
   });
 
+  it('attaches user images to their prompt and maps others to data parts', () => {
+    const image = (
+      id: string,
+      origin: 'user' | 'assistant' | 'tool-result',
+      generated = false,
+    ) =>
+      ({
+        id,
+        kind: 'image',
+        turnId: 'turn-a',
+        origin,
+        mediaType: 'image/png',
+        data: 'aGVsbG8=',
+        generated,
+        byteLength: 5,
+      }) as const;
+    const messages = mapTranscriptToRuntimeMessages(
+      [
+        { id: 'user-a', kind: 'user', text: 'What is this?' },
+        image('image-user', 'user'),
+        {
+          id: 'assistant-a',
+          kind: 'assistant',
+          turnId: 'turn-a',
+          text: 'A diagram.',
+        },
+        image('image-tool', 'tool-result'),
+        image('image-gen', 'assistant', true),
+      ],
+      null,
+    );
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toMatchObject({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'What is this?' },
+        {
+          type: 'data',
+          name: 'droid-image',
+          data: {
+            origin: 'user',
+            mediaType: 'image/png',
+            data: 'aGVsbG8=',
+            generated: false,
+            byteLength: 5,
+          },
+        },
+      ],
+    });
+    expect(messages[1]).toMatchObject({
+      role: 'assistant',
+      content: [
+        { type: 'text', text: 'A diagram.' },
+        {
+          type: 'data',
+          name: 'droid-image',
+          data: { origin: 'tool-result' },
+        },
+        {
+          type: 'data',
+          name: 'droid-image',
+          data: { origin: 'assistant', generated: true },
+        },
+      ],
+    });
+  });
+
   it('uniquifies duplicate toolCallIds within one assistant message', () => {
     // Recovery checkpoints persisted before the reconcile fix can carry
     // two tool items with the same toolUseId in one turn; assistant-ui

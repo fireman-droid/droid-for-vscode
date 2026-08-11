@@ -1,4 +1,5 @@
 import {
+  MAX_IMAGES_PER_TURN,
   MAX_TOOL_ACTIVITIES_PER_TURN,
   type AttachmentSummary,
   type HostToWebviewMessage,
@@ -15,7 +16,10 @@ import {
   type SessionTranscriptItem,
   type TurnStatus,
 } from '../../shared/bridgeMessages';
-import { trimTranscriptToLimits } from '../../shared/transcriptLimits';
+import {
+  enforceTranscriptImageBudget,
+  trimTranscriptToLimits,
+} from '../../shared/transcriptLimits';
 import { stableTranscriptId } from '../../shared/hostTranscriptState';
 
 export interface AssistantTurn {
@@ -455,6 +459,24 @@ export function assistantWebviewReducer(
         },
         upsertTool(state.transcript, event),
       );
+    case 'transcript.image': {
+      if (!acceptsActiveTurn(state, event.sessionId, event.turnId)) {
+        return advance(state, event.sequence);
+      }
+      if (
+        state.transcript.some((item) => item.id === event.item.id) ||
+        state.transcript.filter(
+          (item) =>
+            item.kind === 'image' && item.turnId === event.turnId,
+        ).length >= MAX_IMAGES_PER_TURN
+      ) {
+        return advance(state, event.sequence);
+      }
+      return boundTranscript(
+        { ...state, sequence: event.sequence },
+        [...state.transcript, event.item],
+      );
+    }
     case 'turn.changes': {
       if (event.sessionId !== state.sessionId) {
         return advance(state, event.sequence);
@@ -673,12 +695,15 @@ function boundTranscript(
   transcript: readonly SessionTranscriptItem[],
 ): AssistantWebviewState {
   const bounded = trimTranscriptToLimits(transcript);
+  // Image byte eviction degrades old images to placeholder rows; it
+  // does not make the history partial.
+  const imageBudget = enforceTranscriptImageBudget(bounded.transcript);
   if (!bounded.trimmed) {
-    return { ...state, transcript };
+    return { ...state, transcript: imageBudget.transcript };
   }
   return {
     ...state,
-    transcript: bounded.transcript,
+    transcript: imageBudget.transcript,
     historyStatus: 'partial',
     truncated: true,
   };

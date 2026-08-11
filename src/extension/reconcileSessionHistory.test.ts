@@ -97,6 +97,28 @@ describe('reconcileSessionHistory', () => {
     expect(toolUseIds).toContain('tool-dupe');
   });
 
+  it('merges a recovered image placeholder with its fully loaded copy', () => {
+    // The checkpoint persists images as placeholders (empty data); the
+    // loaded history carries the bytes. Their merge keys ignore `data`,
+    // so the trailing placeholder is recognized as the same image and
+    // only the loaded copy survives.
+    const recovered = state([
+      anchored('r-u1', 'Take a screenshot', 'mid-1'),
+      image('r-i1', 'turn-1', ''),
+    ]);
+    const loaded = state([
+      anchored('l-u1', 'Take a screenshot', 'mid-1'),
+      image('l-i1', 'turn-1', 'c2NyZWVu'),
+    ]);
+
+    const result = reconcileSessionHistory(loaded, recovered);
+    expect(result).toBe(loaded);
+    expect(
+      result.transcript.filter((item) => item.kind === 'image'),
+    ).toHaveLength(1);
+    expect(result.transcript[1]).toMatchObject({ data: 'c2NyZWVu' });
+  });
+
   it('preserves an actual source truncation independently from partial history', () => {
     const recovered = {
       ...state([user('cached', 'Locally observed prompt')]),
@@ -468,6 +490,23 @@ function assistant(
     kind: 'assistant',
     turnId: `${id}-turn`,
     text,
+  };
+}
+
+function image(
+  id: string,
+  turnId: string,
+  data: string,
+): Extract<SessionTranscriptItem, { kind: 'image' }> {
+  return {
+    id,
+    kind: 'image',
+    turnId,
+    origin: 'tool-result',
+    mediaType: 'image/png',
+    data,
+    generated: false,
+    byteLength: 6,
   };
 }
 

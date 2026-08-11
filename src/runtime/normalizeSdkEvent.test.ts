@@ -7,8 +7,15 @@ import {
 } from '@factory/droid-sdk/node';
 import { describe, expect, it } from 'vitest';
 
-import { MAX_BRIDGE_ID_LENGTH } from '../shared/bridgeMessages';
-import { normalizeSdkEvent } from './normalizeSdkEvent';
+import {
+  MAX_BRIDGE_ID_LENGTH,
+  MAX_IMAGE_DATA_LENGTH,
+  MAX_IMAGES_PER_TURN,
+} from '../shared/bridgeMessages';
+import {
+  normalizeSdkEvent,
+  normalizeSdkEventImages,
+} from './normalizeSdkEvent';
 
 describe('normalizeSdkEvent', () => {
   it('normalizes streamed text deltas', () => {
@@ -463,6 +470,150 @@ describe('normalizeSdkEvent', () => {
         }),
       ),
     ).toBeUndefined();
+  });
+});
+
+describe('normalizeSdkEventImages', () => {
+  const imageBlock = (data: string, extra: Record<string, unknown> = {}) => ({
+    type: 'image',
+    source: { type: 'base64', data, mediaType: 'image/png' },
+    ...extra,
+  });
+
+  it('projects image blocks from completed assistant messages', () => {
+    const events = normalizeSdkEventImages(
+      sdkEvent('assistant', {
+        message: {
+          id: 'message-1',
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'Here you go' },
+            imageBlock('aGVsbG8=', { generated: true }),
+            imageBlock('d29ybGQ='),
+          ],
+        },
+        text: 'Here you go',
+      }),
+    );
+
+    expect(events).toEqual([
+      {
+        type: 'image-block',
+        origin: 'assistant',
+        mediaType: 'image/png',
+        data: 'aGVsbG8=',
+        generated: true,
+        byteLength: 5,
+        sourceId: 'message-1',
+        blockIndex: 1,
+      },
+      {
+        type: 'image-block',
+        origin: 'assistant',
+        mediaType: 'image/png',
+        data: 'd29ybGQ=',
+        generated: false,
+        byteLength: 5,
+        sourceId: 'message-1',
+        blockIndex: 2,
+      },
+    ]);
+  });
+
+  it('projects tool-result images and skips malformed entries', () => {
+    const events = normalizeSdkEventImages(
+      sdkEvent('tool_result', {
+        toolUseId: 'tool-1',
+        toolName: 'Screenshot',
+        isError: false,
+        content: [
+          { type: 'text', text: 'screenshot taken' },
+          imageBlock('c2NyZWVu'),
+          { type: 'image', source: { type: 'url', url: 'https://x' } },
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              data: 'PHNjcmlwdD4=',
+              mediaType: 'image/svg+xml',
+            },
+          },
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              data: '',
+              mediaType: 'image/png',
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(events).toEqual([
+      {
+        type: 'image-block',
+        origin: 'tool-result',
+        mediaType: 'image/png',
+        data: 'c2NyZWVu',
+        generated: false,
+        byteLength: 6,
+        sourceId: 'tool-1',
+        blockIndex: 1,
+      },
+    ]);
+  });
+
+  it('degrades oversized images to placeholders and caps per event', () => {
+    const oversized = 'A'.repeat(MAX_IMAGE_DATA_LENGTH + 4);
+    const capped = normalizeSdkEventImages(
+      sdkEvent('assistant', {
+        message: {
+          id: 'message-1',
+          role: 'assistant',
+          content: [
+            imageBlock(oversized),
+            ...Array.from({ length: 12 }, () => imageBlock('aGVsbG8=')),
+          ],
+        },
+        text: '',
+      }),
+    );
+
+    expect(capped).toHaveLength(MAX_IMAGES_PER_TURN);
+    expect(capped[0]).toMatchObject({
+      data: '',
+      byteLength: Math.floor((oversized.length * 3) / 4),
+    });
+  });
+
+  it('yields nothing for user, string tool content, and other events', () => {
+    expect(
+      normalizeSdkEventImages(
+        sdkEvent('user', {
+          message: {
+            id: 'message-1',
+            role: 'user',
+            content: [imageBlock('dXNlcg==')],
+          },
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      normalizeSdkEventImages(
+        sdkEvent('tool_result', {
+          toolUseId: 'tool-1',
+          toolName: 'Read',
+          isError: false,
+          content: 'plain text result',
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      normalizeSdkEventImages(
+        sdkEvent('assistant_text_delta', { text: 'hi' }),
+      ),
+    ).toEqual([]);
   });
 });
 

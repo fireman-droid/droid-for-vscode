@@ -3080,7 +3080,29 @@ describe('ChatController', () => {
     expect(
       attachmentsMessages(messages).at(-1)?.attachments,
     ).toHaveLength(0);
-    expect(JSON.stringify(messages)).not.toContain('aW1n');
+    // The image bytes cross the Bridge exactly once: as the bounded
+    // user-origin transcript echo, never inside attachment metadata.
+    const imageEchoes = messages.filter(
+      (message) => message.type === 'transcript.image',
+    );
+    expect(imageEchoes).toHaveLength(1);
+    expect(imageEchoes[0]).toMatchObject({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      item: {
+        kind: 'image',
+        origin: 'user',
+        mediaType: 'image/png',
+        data: 'aW1n',
+        generated: false,
+        byteLength: 3,
+      },
+    });
+    expect(
+      JSON.stringify(
+        messages.filter((message) => message.type !== 'transcript.image'),
+      ),
+    ).not.toContain('aW1n');
   });
 
   it('runs the MCP browser auth flow and refreshes the list on success', async () => {

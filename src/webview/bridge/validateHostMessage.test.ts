@@ -528,6 +528,38 @@ describe('readHostMessage', () => {
       ],
     },
     {
+      type: 'transcript.image',
+      sequence: 7,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      item: {
+        id: 'image-1',
+        kind: 'image',
+        turnId: 'turn-1',
+        origin: 'tool-result',
+        mediaType: 'image/png',
+        data: 'aGVsbG8=',
+        generated: false,
+        byteLength: 5,
+      },
+    },
+    {
+      type: 'transcript.image',
+      sequence: 8,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      item: {
+        id: 'image-2',
+        kind: 'image',
+        turnId: 'turn-1',
+        origin: 'assistant',
+        mediaType: 'image/webp',
+        data: '',
+        generated: true,
+        byteLength: 4_000_000,
+      },
+    },
+    {
       type: 'workspace.files',
       sequence: 8,
       sessionId: 'session-1',
@@ -2108,6 +2140,76 @@ describe('readHostMessage', () => {
     ]) {
       expect(readHostMessage({ ...snapshot, transcript })).toBeUndefined();
     }
+  });
+
+  it('rejects hostile image items and image messages', () => {
+    const item = {
+      id: 'image-1',
+      kind: 'image',
+      turnId: 'turn-1',
+      origin: 'tool-result',
+      mediaType: 'image/png',
+      data: 'aGVsbG8=',
+      generated: false,
+      byteLength: 5,
+    };
+    const message = {
+      type: 'transcript.image',
+      sequence: 7,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      item,
+    };
+
+    expect(readHostMessage(message)).toEqual(message);
+    for (const hostileItem of [
+      // Media type smuggling: only the four raster types may build a
+      // data URI, never text/html or svg.
+      { ...item, mediaType: 'text/html' },
+      { ...item, mediaType: 'image/svg+xml' },
+      { ...item, mediaType: 'IMAGE/PNG' },
+      // Payload must be pure base64, not a full data URI or script.
+      { ...item, data: 'data:text/html;base64,aGVsbG8=' },
+      { ...item, data: '<script>alert(1)</script>' },
+      { ...item, data: 'aGVsbG8='.repeat(400_000) },
+      { ...item, origin: 'system' },
+      { ...item, generated: 'yes' },
+      { ...item, byteLength: -1 },
+      { ...item, byteLength: 5.5 },
+      { ...item, turnId: 'turn-2' },
+      { ...item, extra: true },
+      { ...item, kind: 'document' },
+    ]) {
+      expect(
+        readHostMessage({ ...message, item: hostileItem }),
+      ).toBeUndefined();
+    }
+
+    // Snapshot transcripts reject image items the same way and cap the
+    // total image payload budget.
+    const snapshot = createSessionSnapshot();
+    expect(
+      readHostMessage({
+        ...snapshot,
+        transcript: [{ ...item, mediaType: 'text/html' }],
+      }),
+    ).toBeUndefined();
+    const oneMegaChars = 'A'.repeat(2_000_000);
+    const overBudget = Array.from({ length: 9 }, (_, index) => ({
+      ...item,
+      id: `image-${index}`,
+      data: oneMegaChars,
+      byteLength: 1_500_000,
+    }));
+    expect(
+      readHostMessage({ ...snapshot, transcript: overBudget }),
+    ).toBeUndefined();
+    expect(
+      readHostMessage({
+        ...snapshot,
+        transcript: overBudget.slice(0, 8),
+      }),
+    ).toBeDefined();
   });
 
   it('rejects hostile session snapshot nesting without throwing', () => {

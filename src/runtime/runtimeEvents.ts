@@ -1,4 +1,8 @@
-import type { ToolDetailKind } from '../shared/bridgeMessages';
+import type {
+  ImageMediaType,
+  ImageOrigin,
+  ToolDetailKind,
+} from '../shared/bridgeMessages';
 import type { ToolActivityUpdateKind } from '../shared/toolActivity';
 
 export type RuntimeAvailability =
@@ -63,6 +67,23 @@ export type RuntimeEvent =
   | {
       type: 'user-message';
       messageId: string;
+    }
+  | {
+      /**
+       * One bounded image block from the live stream: an assistant
+       * `create_message` image or an image embedded in a tool result.
+       * `data` is pure base64; empty means the image exceeded
+       * `MAX_IMAGE_DATA_LENGTH` and only `byteLength` survives.
+       */
+      type: 'image-block';
+      origin: ImageOrigin;
+      mediaType: ImageMediaType;
+      data: string;
+      generated: boolean;
+      byteLength: number;
+      /** Message id or toolUseId anchoring the block. */
+      sourceId: string;
+      blockIndex: number;
     }
   | {
       type: 'working-state';

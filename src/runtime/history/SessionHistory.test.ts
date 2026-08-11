@@ -253,6 +253,107 @@ describe('projectSessionHistory', () => {
     expect(JSON.stringify(result)).not.toContain('secret');
   });
 
+  it('projects user, assistant, and tool-result images as bounded items', () => {
+    const image = (data: string, extra: Record<string, unknown> = {}) => ({
+      type: 'image',
+      source: { type: 'base64', data, mediaType: 'image/png' },
+      ...extra,
+    });
+    const loaded = response([
+      message('user-1', 'user', [
+        { type: 'text', text: 'What is on this screenshot?' },
+        image('dXNlcg=='),
+      ]),
+      message('assistant-1', 'assistant', [
+        { type: 'text', text: 'A chart.' },
+        image('Z2VuZXJhdGVk', { generated: true }),
+      ]),
+      message('tool-1', 'tool', [
+        {
+          type: 'tool_result',
+          toolUseId: 'raw-tool-id',
+          isError: false,
+          content: [
+            { type: 'text', text: 'took screenshot' },
+            image('c2NyZWVu'),
+          ],
+        },
+      ]),
+    ]);
+
+    const result = projectSessionHistory(loaded);
+
+    expect(result).toMatchObject({
+      status: 'available',
+      state: {
+        // Valid images no longer degrade the history to partial.
+        historyStatus: 'complete',
+        truncated: false,
+        transcript: [
+          { kind: 'user', text: 'What is on this screenshot?' },
+          {
+            kind: 'image',
+            origin: 'user',
+            mediaType: 'image/png',
+            data: 'dXNlcg==',
+            generated: false,
+            byteLength: 4,
+          },
+          { kind: 'assistant', text: 'A chart.' },
+          {
+            kind: 'image',
+            origin: 'assistant',
+            data: 'Z2VuZXJhdGVk',
+            generated: true,
+          },
+          {
+            kind: 'image',
+            origin: 'tool-result',
+            data: 'c2NyZWVu',
+            generated: false,
+          },
+        ],
+      },
+    });
+  });
+
+  it('degrades oversized history images to placeholders without partial', () => {
+    const oversized = 'A'.repeat(2_800_001);
+    const result = projectSessionHistory(
+      response([
+        message('user-1', 'user', [
+          { type: 'text', text: 'Huge image' },
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              data: oversized,
+              mediaType: 'image/jpeg',
+            },
+          },
+        ]),
+      ]),
+    );
+
+    expect(result).toMatchObject({
+      status: 'available',
+      state: {
+        historyStatus: 'complete',
+        truncated: false,
+        transcript: [
+          { kind: 'user', text: 'Huge image' },
+          {
+            kind: 'image',
+            origin: 'user',
+            mediaType: 'image/jpeg',
+            data: '',
+            byteLength: Math.floor((oversized.length * 3) / 4),
+          },
+        ],
+      },
+    });
+  });
+
   it('removes every balanced system marker span from user text', () => {
     const result = projectSessionHistory(
       response([

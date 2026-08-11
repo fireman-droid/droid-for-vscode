@@ -115,6 +115,85 @@ describe('SessionRecoveryStore', () => {
     });
   });
 
+  it('keeps live image bytes in memory but persists only placeholders', async () => {
+    const persistence = memoryPersistence();
+    const store = new SessionRecoveryStore(persistence);
+    await store.load();
+    const image = {
+      id: 'image-1',
+      kind: 'image',
+      turnId: 'turn-1',
+      origin: 'tool-result',
+      mediaType: 'image/png',
+      data: 'aGVsbG8=',
+      generated: false,
+      byteLength: 5,
+    } as const;
+
+    store.updateSession('session-1', () =>
+      cache([user('user-1', 'Take a screenshot'), image]),
+    );
+    // The live cache keeps the bytes so the webview can render them.
+    expect(store.readSession('session-1')?.transcript[1]).toMatchObject({
+      kind: 'image',
+      data: 'aGVsbG8=',
+    });
+
+    await store.flush();
+    expect(JSON.stringify(persistence.value)).not.toContain('aGVsbG8=');
+    expect(persistence.value).toMatchObject({
+      sessions: [
+        expect.objectContaining({
+          transcript: [
+            expect.objectContaining({ kind: 'user' }),
+            expect.objectContaining({
+              kind: 'image',
+              data: '',
+              byteLength: 5,
+              mediaType: 'image/png',
+            }),
+          ],
+        }),
+      ],
+    });
+
+    // A persisted placeholder loads back as-is.
+    const reloaded = new SessionRecoveryStore(persistence);
+    await reloaded.load();
+    expect(
+      reloaded.readSession('session-1')?.transcript[1],
+    ).toMatchObject({ kind: 'image', data: '', byteLength: 5 });
+  });
+
+  it('rejects hostile persisted image items', async () => {
+    const image = {
+      id: 'image-1',
+      kind: 'image',
+      turnId: 'turn-1',
+      origin: 'tool-result',
+      mediaType: 'image/png',
+      data: '',
+      generated: false,
+      byteLength: 5,
+    };
+    for (const hostile of [
+      { ...image, mediaType: 'text/html' },
+      { ...image, origin: 'system' },
+      { ...image, data: 'not base64!!' },
+      { ...image, byteLength: -1 },
+      { ...image, extra: true },
+    ]) {
+      const persistence = memoryPersistence({
+        version: SESSION_RECOVERY_VERSION,
+        selectedSessionId: null,
+        sessions: [storedSession('session-1', 1, [hostile])],
+      });
+      const store = new SessionRecoveryStore(persistence);
+      await store.load();
+      expect(store.readSession('session-1')).toBeUndefined();
+    }
+  });
+
   it('rejects unsafe persisted file paths and change summaries', async () => {
     for (const items of [
       [

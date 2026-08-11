@@ -65,7 +65,10 @@ import {
   type RuntimeSkillLocation,
 } from './DroidRuntime';
 import { loadSessionCommands } from './commands/FactoryCommandCatalog';
-import { normalizeSdkEvent } from './normalizeSdkEvent';
+import {
+  normalizeSdkEvent,
+  normalizeSdkEventImages,
+} from './normalizeSdkEvent';
 import { createModelCatalogCaptureTransport } from './modelCatalogCaptureTransport';
 import type { RuntimeAvailability, RuntimeEvent } from './runtimeEvents';
 import {
@@ -355,6 +358,14 @@ export class FactoryDroidRuntime implements DroidRuntime {
             outcome = event.outcome;
           }
           yield event;
+        }
+
+        // Image blocks travel on events whose main projection is a
+        // lifecycle update (tool_result) or a duplicate of streamed
+        // text (assistant), so they surface as separate events.
+        for (const imageEvent of normalizeSdkEventImages(sdkEvent)) {
+          projectedEventCount += 1;
+          yield imageEvent;
         }
       }
     } catch (error) {

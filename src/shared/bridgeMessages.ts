@@ -39,6 +39,8 @@ export {
   type ToolActivityUpdateKind,
 } from './toolActivity';
 export {
+  MAX_RENDERED_SESSION_IMAGES,
+  MAX_SESSION_IMAGE_DATA_UNITS,
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
 } from './transcriptLimits';
@@ -951,6 +953,55 @@ export interface DiagnosticTranscriptItem {
 export const MAX_CHANGED_FILES_PER_TURN = 24;
 
 /**
+ * Media types an image transcript item may carry. Mirrors the SDK's
+ * `Base64ImageSource` enum; the webview builds `data:` URIs only from
+ * these whitelisted values, never from transported strings.
+ */
+export const IMAGE_MEDIA_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+] as const;
+export type ImageMediaType = (typeof IMAGE_MEDIA_TYPES)[number];
+
+/** Who produced an image: the user's prompt, the assistant, or a tool. */
+export const IMAGE_ORIGINS = [
+  'user',
+  'assistant',
+  'tool-result',
+] as const;
+export type ImageOrigin = (typeof IMAGE_ORIGINS)[number];
+
+/**
+ * Longest base64 payload one image transcript item may carry
+ * (~2.1 MB binary). Larger images cross the Bridge as placeholder
+ * rows with `data: ''` and their true `byteLength`.
+ */
+export const MAX_IMAGE_DATA_LENGTH = 2_800_000;
+/** Most image items projected for one turn. */
+export const MAX_IMAGES_PER_TURN = 8;
+
+/**
+ * One image rendered inline in the transcript. `data` is the pure
+ * base64 payload (no data-URI prefix); an empty string marks a
+ * placeholder whose bytes were dropped (oversized or evicted by the
+ * session image budget) while `byteLength` keeps the original size.
+ */
+export interface ImageTranscriptItem {
+  readonly id: string;
+  readonly kind: 'image';
+  readonly turnId: string;
+  readonly origin: ImageOrigin;
+  readonly mediaType: ImageMediaType;
+  readonly data: string;
+  /** True for images the assistant generated (shows a badge). */
+  readonly generated: boolean;
+  /** Decoded binary size in bytes; kept for placeholder rows. */
+  readonly byteLength: number;
+}
+
+/**
  * One workspace-relative file a turn changed. Line counts are measured
  * against git HEAD when the turn completes; null when unavailable
  * (no git, binary file, or untracked file).
@@ -975,7 +1026,8 @@ export type SessionTranscriptItem =
   | ThinkingTranscriptItem
   | ToolTranscriptItem
   | ChangesTranscriptItem
-  | DiagnosticTranscriptItem;
+  | DiagnosticTranscriptItem
+  | ImageTranscriptItem;
 
 export interface HostSnapshotMessage {
   readonly type: 'host.snapshot';
@@ -1159,6 +1211,19 @@ export interface ToolActivityMessage {
   readonly detail?: string;
 }
 
+/**
+ * Appends one image transcript item during a live turn: an image the
+ * user attached to the prompt, an image block the assistant created,
+ * or an image embedded in a tool result.
+ */
+export interface TranscriptImageMessage {
+  readonly type: 'transcript.image';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly item: ImageTranscriptItem;
+}
+
 /** Announces the changed-files summary for a finished turn. */
 export interface TurnChangesMessage {
   readonly type: 'turn.changes';
@@ -1285,6 +1350,7 @@ export type HostToWebviewMessage =
   | ThinkingDeltaMessage
   | ThinkingCompleteMessage
   | ToolActivityMessage
+  | TranscriptImageMessage
   | TurnChangesMessage
   | RuntimeDiagnosticMessage
   | TurnStateMessage

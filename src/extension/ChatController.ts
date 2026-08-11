@@ -6,6 +6,7 @@ import type {
   ConnectionState,
   ConfirmedSessionSettings,
   HostToWebviewMessage,
+  ImageTranscriptItem,
   ModelCatalogState,
   SessionCatalogState,
   SessionCommandsState,
@@ -28,6 +29,7 @@ import {
   MAX_ATTACHMENT_NAME_LENGTH,
   MAX_BRIDGE_ID_LENGTH,
   MAX_FILE_SEARCH_RESULTS,
+  MAX_IMAGE_DATA_LENGTH,
   MAX_MODEL_CATALOG_ITEMS,
   MAX_PENDING_ATTACHMENTS,
   MAX_MODEL_DISPLAY_NAME_LENGTH,
@@ -92,6 +94,7 @@ import {
   attachUserMessageId,
   createHostTranscriptState,
   projectHostTranscriptMessage,
+  stableTranscriptId,
   truncateFromUserMessage,
   type HostTranscriptProjectionMessage,
   type HostTranscriptState,
@@ -100,6 +103,7 @@ import {
   createUnavailableChangeStatsReader,
   type ChangeStatsReader,
 } from './changeStats';
+import { base64ByteLength } from '../shared/transcriptLimits';
 import { reconcileSessionHistory } from './reconcileSessionHistory';
 import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
 import {
@@ -839,6 +843,8 @@ export class ChatController {
     this.touchActiveSession();
     this.recordRecentCommand(sessionId, text);
     this.emitTurnState(sessionId, turnId, 'submitting');
+    const attachments = this.takePendingRuntimeAttachments();
+    this.echoUserImageAttachments(sessionId, turnId, attachments);
     void this.consumeTurn(
       runtime,
       runtimeGeneration,
@@ -846,8 +852,52 @@ export class ChatController {
       sessionId,
       turnId,
       text,
-      this.takePendingRuntimeAttachments(),
+      attachments,
     );
+  }
+
+  /**
+   * Projects the image attachments of an accepted prompt as user-origin
+   * image transcript items right after the prompt text. The stream does
+   * not echo user images back, so this is their only live projection.
+   */
+  private echoUserImageAttachments(
+    sessionId: string,
+    turnId: string,
+    attachments: readonly RuntimeAttachment[] | undefined,
+  ): void {
+    if (attachments === undefined) {
+      return;
+    }
+    let index = 0;
+    for (const attachment of attachments) {
+      if (attachment.kind !== 'image') {
+        continue;
+      }
+      const oversized = attachment.data.length > MAX_IMAGE_DATA_LENGTH;
+      const item: ImageTranscriptItem = {
+        id: stableTranscriptId(
+          'image',
+          turnId,
+          'user-echo',
+          String(index),
+        ),
+        kind: 'image',
+        turnId,
+        origin: 'user',
+        mediaType: attachment.mediaType,
+        data: oversized ? '' : attachment.data,
+        generated: false,
+        byteLength: base64ByteLength(attachment.data),
+      };
+      this.emit({
+        type: 'transcript.image',
+        sessionId,
+        turnId,
+        item,
+      });
+      index += 1;
+    }
   }
 
   private async consumeTurn(
@@ -1003,6 +1053,30 @@ export class ChatController {
             ...result.projection,
           });
         }
+        return;
+      }
+      case 'image-block': {
+        this.startStreaming(sessionId, turnId);
+        this.emit({
+          type: 'transcript.image',
+          sessionId,
+          turnId,
+          item: {
+            id: stableTranscriptId(
+              'image',
+              turnId,
+              event.sourceId,
+              String(event.blockIndex),
+            ),
+            kind: 'image',
+            turnId,
+            origin: event.origin,
+            mediaType: event.mediaType,
+            data: event.data,
+            generated: event.generated,
+            byteLength: event.byteLength,
+          },
+        });
         return;
       }
       case 'user-message':
@@ -4829,6 +4903,7 @@ function isTranscriptProjection(
     message.type === 'thinking.delta' ||
     message.type === 'thinking.complete' ||
     message.type === 'tool.activity' ||
+    message.type === 'transcript.image' ||
     message.type === 'runtime.diagnostic' ||
     message.type === 'turn.state'
   );

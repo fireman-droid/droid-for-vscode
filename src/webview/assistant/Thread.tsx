@@ -41,6 +41,7 @@ import {
   type SessionSettingSelection,
 } from './ComposerControls';
 import { DroidMarkdownText } from './MarkdownText';
+import { TranscriptImage } from './TranscriptImage';
 
 const THINKING_SMOOTH_OPTIONS = {
   drainMs: 480,
@@ -460,7 +461,9 @@ function UserMessage({
         ) : (
           <MessagePrimitive.Parts>
             {({ part }) =>
-              part.type === 'text' ? (
+              part.type === 'data' && part.name === 'droid-image' ? (
+                <TranscriptImage data={part.data} />
+              ) : part.type === 'text' ? (
                 <div
                   className="dvx-user-bubble"
                   title={
@@ -547,6 +550,9 @@ const AssistantMessage = memo(function AssistantMessage():
               }
               if (part.name === 'droid-changes') {
                 return <ChangesSummary data={part.data} />;
+              }
+              if (part.name === 'droid-image') {
+                return <TranscriptImage data={part.data} />;
               }
               return null;
             default:

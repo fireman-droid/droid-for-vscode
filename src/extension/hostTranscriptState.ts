@@ -1,6 +1,7 @@
 import {
   MAX_ASSISTANT_TEXT_LENGTH,
   MAX_CHANGED_FILES_PER_TURN,
+  MAX_IMAGES_PER_TURN,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
@@ -16,9 +17,13 @@ import {
   type ThinkingCompleteMessage,
   type ThinkingDeltaMessage,
   type ToolActivityMessage,
+  type TranscriptImageMessage,
   type TurnStateMessage,
 } from '../shared/bridgeMessages';
-import { trimTranscriptToLimits } from '../shared/transcriptLimits';
+import {
+  enforceTranscriptImageBudget,
+  trimTranscriptToLimits,
+} from '../shared/transcriptLimits';
 import {
   stableTranscriptId,
   type HostTranscriptState,
@@ -36,6 +41,7 @@ export type HostTranscriptProjectionMessage =
   | ThinkingDeltaMessage
   | ThinkingCompleteMessage
   | ToolActivityMessage
+  | TranscriptImageMessage
   | RuntimeDiagnosticMessage
   | TurnStateMessage;
 
@@ -172,6 +178,8 @@ export function projectHostTranscriptMessage(
       return projectThinkingComplete(state, message);
     case 'tool.activity':
       return projectToolActivity(state, message);
+    case 'transcript.image':
+      return projectTranscriptImage(state, message);
     case 'runtime.diagnostic': {
       const code = message.code.slice(0, MAX_TURN_TEXT_LENGTH);
       const diagnosticMessage = message.message.slice(
@@ -419,6 +427,27 @@ function projectToolActivity(
   });
 }
 
+function projectTranscriptImage(
+  state: HostTranscriptState,
+  message: TranscriptImageMessage,
+): HostTranscriptState {
+  const item = message.item;
+  if (
+    item.turnId !== message.turnId ||
+    state.transcript.some((existing) => existing.id === item.id)
+  ) {
+    return state;
+  }
+  const imageCount = state.transcript.filter(
+    (existing) =>
+      existing.kind === 'image' && existing.turnId === message.turnId,
+  ).length;
+  if (imageCount >= MAX_IMAGES_PER_TURN) {
+    return markTruncated(state);
+  }
+  return appendItem(state, item);
+}
+
 function findLastTurnItemIndex(
   transcript: readonly SessionTranscriptItem[],
   turnId: string,
@@ -553,11 +582,19 @@ function boundState(state: HostTranscriptState): HostTranscriptState {
       })
     : state.transcript;
   const bounded = trimTranscriptToLimits(transcript);
-  if (!bounded.trimmed && !diagnosticsEvicted && !state.truncated) {
+  // Image byte eviction keeps placeholder rows in place, so it does
+  // not mark the transcript truncated or partial by itself.
+  const imageBudget = enforceTranscriptImageBudget(bounded.transcript);
+  if (
+    !bounded.trimmed &&
+    !diagnosticsEvicted &&
+    !imageBudget.evicted &&
+    !state.truncated
+  ) {
     return state;
   }
 
-  transcript = [...bounded.transcript];
+  transcript = [...imageBudget.transcript];
   const truncated =
     state.truncated || diagnosticsEvicted || bounded.trimmed;
   return {

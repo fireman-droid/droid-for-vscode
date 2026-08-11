@@ -329,6 +329,95 @@ html, body, #root {
   color: var(--dvx-danger);
 }
 
+.dvx-transcript-image {
+  position: relative;
+  display: inline-flex;
+  margin: 5px 0;
+  max-width: 100%;
+}
+
+.dvx-image-thumb-button {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--dvx-border);
+  border-radius: 6px;
+  background: var(--dvx-code);
+  cursor: zoom-in;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.dvx-image-thumb-button:focus-visible {
+  outline: 2px solid var(--dvx-accent);
+  outline-offset: 1px;
+}
+
+.dvx-image-thumb {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+}
+
+.dvx-image-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--dvx-accent-strong);
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  pointer-events: none;
+}
+
+.dvx-image-placeholder {
+  display: block;
+  margin: 5px 0;
+  padding: 4px 8px;
+  border-left: 2px solid var(--dvx-muted);
+  border-radius: 3px;
+  background: rgb(255 255 255 / 35%);
+  color: var(--dvx-muted);
+  font-size: 11.5px;
+  line-height: 18px;
+}
+
+.dvx-image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 65%);
+  cursor: zoom-out;
+}
+
+.dvx-image-full {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  cursor: default;
+}
+
+.dvx-image-lightbox-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 13px;
+  line-height: 28px;
+  cursor: pointer;
+}
+
 .dvx-pending {
   display: flex;
   align-items: center;

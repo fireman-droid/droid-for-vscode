@@ -2,11 +2,14 @@ import {
   MAX_ASSISTANT_TEXT_LENGTH,
   MAX_BRIDGE_ID_LENGTH,
   MAX_CHANGED_FILES_PER_TURN,
+  MAX_IMAGE_DATA_LENGTH,
+  MAX_IMAGES_PER_TURN,
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
   MAX_TOOL_NAME_LENGTH,
   MAX_TURN_TEXT_LENGTH,
+  type ImageOrigin,
   type SessionTranscriptItem,
 } from '../../shared/bridgeMessages';
 import {
@@ -16,9 +19,12 @@ import {
 import { isStrictRecord } from '../../shared/strictValidation';
 import {
   MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
+  base64ByteLength,
+  enforceTranscriptImageBudget,
   transcriptItemTextUnits,
 } from '../../shared/transcriptLimits';
 import { summarizeToolAction } from '../../shared/toolActivity';
+import { readSdkImageBlock } from '../normalizeSdkEvent';
 import { extractToolDetail } from '../toolDetail';
 import {
   extractToolFilePath,
@@ -57,6 +63,7 @@ interface Projection {
   >;
   readonly toolIdentities: Map<string, string>;
   readonly toolCounts: Map<string, number>;
+  readonly imageCounts: Map<string, number>;
   transcriptHead: number;
   transcriptSize: number;
   transcriptTextUnits: number;
@@ -82,6 +89,7 @@ export function projectSessionHistory(
       tools: new Map(),
       toolIdentities: new Map(),
       toolCounts: new Map(),
+      imageCounts: new Map(),
       transcriptHead: 0,
       transcriptSize: 0,
       transcriptTextUnits: 0,
@@ -101,11 +109,16 @@ export function projectSessionHistory(
     }
 
     const truncated = projection.partial;
-    const state: HostTranscriptState = {
-      transcript: appendHistoryTurnChanges(
+    // Image byte eviction keeps placeholder rows in place, so it does
+    // not flip the history to partial by itself.
+    const imageBudget = enforceTranscriptImageBudget(
+      appendHistoryTurnChanges(
         readTranscript(projection),
         projection.transcriptTextUnits,
       ),
+    );
+    const state: HostTranscriptState = {
+      transcript: [...imageBudget.transcript],
       historyStatus: truncated ? 'partial' : 'complete',
       truncated,
     };
@@ -264,8 +277,28 @@ function projectBlock(
       return;
     case 'tool_result':
       completeTool(projection, block);
+      appendToolResultImages(
+        projection,
+        block,
+        messageIdentity,
+        turnId,
+        messageIndex,
+        blockIndex,
+      );
       return;
     case 'image':
+      if (role === 'user' || role === 'assistant') {
+        appendImage(
+          projection,
+          role,
+          block,
+          messageIdentity,
+          turnId,
+          messageIndex,
+          blockIndex,
+        );
+      }
+      return;
     case 'document':
       if (role === 'user' || role === 'assistant') {
         projection.partial = true;
@@ -422,6 +455,92 @@ function appendThinking(
     ...durationMs,
     truncated,
   });
+}
+
+function appendImage(
+  projection: Projection,
+  origin: ImageOrigin,
+  block: Record<string, unknown>,
+  messageIdentity: string,
+  turnId: string,
+  messageIndex: number,
+  blockIndex: number,
+  countKey: string = turnId,
+): void {
+  const image = readSdkImageBlock(block);
+  if (image === undefined) {
+    projection.partial = true;
+    return;
+  }
+  const imageCount = projection.imageCounts.get(countKey) ?? 0;
+  if (imageCount >= MAX_IMAGES_PER_TURN) {
+    projection.partial = true;
+    return;
+  }
+  const oversized = image.data.length > MAX_IMAGE_DATA_LENGTH;
+  appendTranscriptItem(projection, {
+    id: uniqueTranscriptId(
+      projection,
+      'image',
+      messageIdentity,
+      String(messageIndex),
+      String(blockIndex),
+    ),
+    kind: 'image',
+    turnId,
+    origin,
+    mediaType: image.mediaType,
+    data: oversized ? '' : image.data,
+    generated: image.generated,
+    byteLength: base64ByteLength(image.data),
+  });
+  projection.imageCounts.set(countKey, imageCount + 1);
+}
+
+/**
+ * Projects image blocks embedded in a tool result's weakly typed
+ * `content` array as `origin: 'tool-result'` image items (e.g. a
+ * browser screenshot). Non-image entries stay untouched.
+ */
+function appendToolResultImages(
+  projection: Projection,
+  block: Record<string, unknown>,
+  messageIdentity: string,
+  turnId: string,
+  messageIndex: number,
+  blockIndex: number,
+): void {
+  const content = block.content;
+  if (!Array.isArray(content)) {
+    return;
+  }
+  for (
+    let contentIndex = 0;
+    contentIndex < content.length;
+    contentIndex += 1
+  ) {
+    const entry: unknown = content[contentIndex];
+    if (
+      !isStrictRecord(entry) ||
+      entry.type !== 'image' ||
+      readSdkImageBlock(entry) === undefined
+    ) {
+      continue;
+    }
+    appendImage(
+      projection,
+      'tool-result',
+      entry,
+      messageIdentity,
+      turnId,
+      messageIndex,
+      blockIndex * MAX_RAW_BLOCKS_PER_MESSAGE + contentIndex,
+      // The live stream caps images per tool_result event; mirror that
+      // here per tool_result block instead of per whole tool message,
+      // which can legitimately carry many single-image results.
+      `${turnId}#tool-result:${blockIndex}`,
+    );
+  }
 }
 
 function appendTool(
@@ -651,6 +770,9 @@ function evictTranscriptItem(
   projection.transcriptTextUnits -= transcriptItemTextUnits(item);
   projection.ids.delete(item.id);
   projection.positions.delete(item.id);
+  // Image counts stay monotonic per counting key: they bound how many
+  // images one turn/tool-result may project in total, independent of
+  // later ring-buffer eviction.
   if (item.kind !== 'tool') {
     return;
   }
