@@ -285,6 +285,18 @@ messageId 与 loaded 逐字相等**；不相等的 2 条恰好就是 loaded 真�
    - recovered 中**位于最后一个共同锚点之后**、且 loaded 在该锚点后
      没有任何内容的段，**追加**到尾部（覆盖"崩溃发生在 CLI 持久化前"
      的场景；本例不触发，因为 loaded 尾部更长）；
+   - **尾段防污染规则（2026-08-11 深夜补充，真实事故
+     `4adeb11f…` recovered:151/loaded:75 → 修复前 reconciled:134）**：
+     被旧"整段拼接"合并污染过的检查点把对话重复了两份，重复副本的
+     user 锚点在单调匹配中因 `candidate <= lastLoadedAnchor` 被跳过，
+     却会被尾段扫描当成"CLI 未持久化的新回合"整段追加。因此尾段起点
+     扫描跳过所有 **loaded 已认识其锚点**（messageId 命中
+     `loadedByMessageId`，或无 messageId 时 trim 文本命中 loaded 侧
+     唯一文本表）的 user 回合——这些是陈旧副本而非新内容；从第一个
+     loaded 不认识的 user 锚点起才算真正的尾段。真实数据复验：该
+     检查点（现持久化为 134 条、29 个 user 仅 15 个唯一 messageId）
+     对 loaded 75 条 reconcile 输出恰为 75 条，messageId/toolUseId
+     均无重复（`artifacts/probe-reconcile-poisoned.mts`）；
    - recovered 的其余段（锚点已匹配的中段）直接丢弃——这就是重复显示
      的根治点；
    - 仍经 `uniqueTranscriptIds` + `trimTranscriptToLimits` 收尾（保留
@@ -293,6 +305,14 @@ messageId 与 loaded 逐字相等**；不相等的 2 条恰好就是 loaded 真�
    拼接标 partial），保证既有 5 个测试场景语义不变——现测试用例均无
    messageId，自动落入该路径。
 5. `changes` / `diagnostic` 项不参与任何匹配（本地/合成产物）。
+
+已知边界（接受，不改代码）：loaded 在最后共同锚点后已有任意更新的
+user 回合时，recovered 的整个尾段按陈旧处理丢弃。若 recovered 中
+存在一个"比 loaded 更新且未持久化"的回合，且它对应的中间回合恰好
+同时缺 messageId、文本又在两侧非唯一（锚点匹配失败），该回合会被
+误丢。触发需要三个低概率条件叠加（检查点无 messageId + 文本重复 +
+崩溃恰在该回合），且丢弃侧只是本地未持久化的流式残段，接受为已知
+边界。
 
 不选的替代方案：
 - 「宽松 key（thinking 取前缀哈希、忽略 changes）+ 原 suffix/prefix」：

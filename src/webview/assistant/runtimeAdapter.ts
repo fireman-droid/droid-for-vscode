@@ -334,6 +334,8 @@ function uniqueToolCallIds(
 ): readonly SafeRuntimePart[] {
   const seen = new Set<string>();
   return parts.map((part) => {
+    // toolCallId is optional on the library part type; our
+    // mapItemToPart always sets it, but the narrowing is type-mandated.
     if (part.type !== 'tool-call' || part.toolCallId === undefined) {
       return part;
     }

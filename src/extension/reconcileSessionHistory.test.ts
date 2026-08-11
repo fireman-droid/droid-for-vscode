@@ -254,6 +254,75 @@ describe('reconcileSessionHistory', () => {
       expect(reconcileSessionHistory(loaded, recovered)).toBe(loaded);
     });
 
+    it('skips stale duplicate trailing turns but keeps the genuinely new one', () => {
+      // A checkpoint written while the old concatenating merge was
+      // active repeats already-loaded turns after the last anchor; the
+      // crash turn that follows them must still be appended.
+      const recovered = state([
+        anchored('r-u1', 'Question one', 'mid-1'),
+        assistant('r-a1', 'Answer one'),
+        anchored('r-u2', 'Question two', 'mid-2'),
+        assistant('r-a2', 'Answer two'),
+        anchored('r-dup-u1', 'Question one', 'mid-1'),
+        assistant('r-dup-a1', 'Answer one'),
+        anchored('r-u3', 'Question never persisted', 'mid-3'),
+        assistant('r-a3', 'Answer streamed before the crash'),
+      ]);
+      const loaded = state([
+        anchored('l-u1', 'Question one', 'mid-1'),
+        assistant('l-a1', 'Answer one'),
+        anchored('l-u2', 'Question two', 'mid-2'),
+        assistant('l-a2', 'Answer two'),
+      ]);
+
+      expect(reconcileSessionHistory(loaded, recovered)).toEqual({
+        transcript: [
+          ...loaded.transcript,
+          recovered.transcript[6],
+          recovered.transcript[7],
+        ],
+        historyStatus: 'partial',
+        truncated: false,
+      });
+    });
+
+    it('does not resurrect a checkpoint poisoned by the old concatenating merge', () => {
+      // Real recovery shape from the diagnostics log (recovered:151,
+      // loaded:75, reconciled:134 before this fix): the checkpoint
+      // carries a rewind-branch prefix plus the whole conversation
+      // twice because it was persisted from a doubled merge result.
+      // Everything after the last matched anchor repeats known
+      // anchors, so only the prefix may survive.
+      const loadedBody = poisonedShapeTurns('l');
+      const loaded = state(loadedBody);
+      const recovered = state([
+        anchored('r-branch-u', 'Rewound branch question', 'mid-branch'),
+        assistant('r-branch-a', 'Rewound branch answer'),
+        ...poisonedShapeTurns('r-one'),
+        ...poisonedShapeTurns('r-two').slice(0, -1),
+      ]);
+      expect(loaded.transcript).toHaveLength(75);
+      expect(recovered.transcript).toHaveLength(151);
+
+      const result = reconcileSessionHistory(loaded, recovered);
+
+      // Loaded body plus the two-item rewind-branch prefix only.
+      expect(result.transcript).toHaveLength(77);
+      expect(result.transcript.slice(2)).toEqual(loadedBody);
+      expect(result.historyStatus).toBe('partial');
+
+      const messageIds = result.transcript
+        .filter((item) => item.kind === 'user')
+        .map((item) => (item as { messageId?: string }).messageId)
+        .filter((id): id is string => id !== undefined);
+      expect(new Set(messageIds).size).toBe(messageIds.length);
+
+      const toolUseIds = result.transcript
+        .filter((item) => item.kind === 'tool')
+        .map((item) => (item as { toolUseId: string }).toolUseId);
+      expect(new Set(toolUseIds).size).toBe(toolUseIds.length);
+    });
+
     it('does not anchor on duplicated text when messageIds are absent', () => {
       // Two identical user texts on the recovered side disqualify the
       // text fallback, so the legacy overlap path applies.
@@ -310,6 +379,28 @@ describe('reconcileSessionHistory', () => {
     });
   });
 });
+
+/**
+ * Fifteen five-item turns (user, thinking, tool, assistant, changes)
+ * mirroring the sanitized shape of the poisoned real checkpoint. Ids
+ * vary per copy; messageIds and toolUseIds are the session-stable
+ * values shared by every copy of the conversation.
+ */
+function poisonedShapeTurns(
+  idPrefix: string,
+): readonly SessionTranscriptItem[] {
+  const items: SessionTranscriptItem[] = [];
+  for (let turn = 1; turn <= 15; turn += 1) {
+    items.push(
+      anchored(`${idPrefix}-u${turn}`, `Prompt ${turn}`, `mid-${turn}`),
+      thinking(`${idPrefix}-th${turn}`, `turn-${turn}`, `Thinking ${turn}`),
+      tool(`${idPrefix}-t${turn}`, `turn-${turn}`, `tool-use-${turn}`),
+      assistant(`${idPrefix}-a${turn}`, `Answer ${turn}`),
+      changes(`${idPrefix}-c${turn}`, `turn-${turn}`, [`src/file${turn}.ts`]),
+    );
+  }
+  return items;
+}
 
 function state(
   transcript: readonly SessionTranscriptItem[],

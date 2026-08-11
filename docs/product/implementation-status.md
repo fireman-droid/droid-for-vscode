@@ -888,11 +888,32 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   位置 `%APPDATA%\Cursor\User\globalStorage\droidvisx.droidvisx\logs\droidvisx-20260811.jsonl`
   确认真实激活记录落盘（含 `act`/`workspace`/全保真 attributes、
   `bootMs`、`runtime.history.finished`、`host.perf.recovery`）
+- 2026-08-11 深夜再次打包并安装含**静态复查修复轮**（P1 污染检查点
+  尾段复活 + `/` 目录 in-flight 世代化 + boot 看门狗残留清理 +
+  `/` 弹窗断连重试）的构建：`droidvisx-0.0.0.vsix` 546,249 字节
+  （9 files），修改时间 2026-08-11T15:45:35Z，SHA-256
+  `36D4CD99D9777C89A30ED2F9E0AC6CD018E4258A252A1A2C43874559B4BFDD99`，
+  `cursor --install-extension --force` 安装成功；版本号仍为
+  `0.0.0`，现有窗口需 Reload Window（或完整重启）后加载新 Bundle；
+  受影响的 ai-drawing 会话在重载后应显示 75 条而非 134 条
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- 静态复查修复轮（2026-08-11 深夜，P1 污染检查点 + 3×P2）：
+  `reconcileSessionHistory` 新增 2 个回归用例（陈旧重复尾回合跳过、
+  151/75 污染形态 fixture）；聚焦测试 4 files / 113 tests 通过；
+  全量 `vitest` 34 files / 716 tests 全部通过；三个 tsconfig
+  `typecheck` 通过（曾实证 assistant-ui tool-call part 的
+  `toolCallId` 为可选，故保留 undefined 收窄）；build +
+  `npx vsce package --no-dependencies` + `cursor --install-extension
+  --force` 成功；真实数据复验两条：污染会话 `4adeb11f…`
+  （checkpoint 134 条、15/29 唯一 messageId）reconcile 输出 75 条
+  （= loaded，零重复，修复前日志实录 134 条），旧崩溃会话
+  `40ebe83d…` 维持 80/130 条不变
+  （`artifacts/probe-reconcile-poisoned.mts` /
+  `probe-reconcile-verify.mts`）
 - 全保真日志改造切片（2026-08-11 深夜）：`LocalDiagnostics` 单测
   重写为 8 tests（全保真字段/turn 作用域、SDK 透传、凭据扫除、
   按日分文件、200MB 最旧整天清理、Sink Failure 隔离、
@@ -1106,6 +1127,39 @@ messageId 的锚点退化为两侧唯一的 `text.trim()`（重复文本不作�
 由 `artifacts/gen-reconcile-fixture.mjs` 从真实数据等价脱敏生成）+
 8 个锚点对齐用例；真实数据探针 `src/extension/probeRealSession.test.ts`
 在本机数据存在时额外复验。
+
+2026-08-11 深夜静态复查修复轮（P1 + 3×P2 + 1 处防御清理）：
+
+1. **P1 污染检查点尾段复活**：旧"整段拼接"合并期间持久化的检查点把
+   对话重复了两份；锚点对齐的尾段扫描把重复副本当成"CLI 未持久化的
+   新回合"整段追加（新日志实锤：真实会话 `4adeb11f…` 恢复对账
+   recovered:151 / loaded:75 → reconciled:134）。修复：尾段起点扫描
+   跳过所有 loaded 已认识其锚点（messageId 或 loaded 侧唯一文本）的
+   user 回合（`reconcileSessionHistory.ts` `trailingRecoveredItems`
+   + `loadedKnowsAnchor`）。真实数据复验
+   （`artifacts/probe-reconcile-poisoned.mts`）：该污染检查点（现
+   持久化为 134 条、29 个 user 仅 15 个唯一 messageId）reconcile
+   输出恰为 loaded 的 75 条且 `complete`，messageId/toolUseId 零
+   重复；旧崩溃会话 `40ebe83d…` 复验输出维持 80/130 条不变。回归
+   测试新增 2 个：陈旧重复尾回合跳过 + 真正新回合保留、151/75 污染
+   形态 fixture（15 回合 ×2 副本 + 分支前缀 → 输出 77 条）。
+2. **P2 `/` 命令目录 in-flight 标志**：布尔标志改为记录发起时的
+   `runtimeGeneration`（`commandsRefreshGeneration`），短生命周期
+   目录进程挂起时切换会话/工作区即自动失效，不再永久卡死目录加载。
+3. **P2 boot 看门狗残留竞态**：`main.tsx` 挂载前 `replaceChildren()`
+   清空看门狗可能已写入的兜底文案并立即置位 `__dvxBooted`，>10s 的
+   慢启动不再出现兜底文字与真实 UI 并存或误报 `boot-timeout`。
+4. **P2 `/` 弹窗断连重试**：目录懒加载 effect 依赖加入
+   `controlsDisabled`（与 Host 侧吞掉 refresh 的守卫同源），连接
+   恢复且弹窗仍开着时自动补发 `commands.refresh`。
+5. `runtimeAdapter.uniqueToolCallIds` 的 `toolCallId === undefined`
+   检查复核后**保留**：assistant-ui `ThreadMessageLike` 的 tool-call
+   part 类型将 `toolCallId` 声明为可选（typecheck 实证，删除即
+   TS2345），该收窄是类型边界要求而非撒防御；补充注释说明。
+
+恢复尾段的窄边界丢弃（loaded 有更新回合时整尾段按陈旧丢弃、极端
+三条件叠加下可能误丢一个未持久化回合）按复查结论接受为已知边界，
+记录于 `session-management-design.md` §3.2，不改代码。
 
 2026-08-11 晚间完成第二档第一切片 `/` 动态命令（Droid Commands 列表）：
 Composer 草稿以 `/` 开头且光标仍在命令名内时弹出命令列表（复用 `@`

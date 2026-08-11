@@ -884,18 +884,22 @@ function Composer({
   const [slashIndex, setSlashIndex] = useState(0);
 
   // Load the command catalog lazily when the `/` popup first opens;
-  // reopening after an error retries the fetch.
+  // reopening after an error retries the fetch. `controlsDisabled`
+  // mirrors the host guard that swallows the refresh while the bridge
+  // is not connected, so a popup opened early re-requests the catalog
+  // once the connection comes up.
   const slashOpen = slash !== null;
   const commandsStatus = commands.status;
   useEffect(() => {
     if (
       slashOpen &&
+      !controlsDisabled &&
       (commandsStatus === 'idle' || commandsStatus === 'error')
     ) {
       onCommandsRefresh();
     }
-    // Only the open/close transition should trigger a fetch.
-  }, [slashOpen]);
+    // Refetch only on open/close and connection transitions.
+  }, [slashOpen, controlsDisabled]);
 
   const commandMatches =
     slash !== null ? filterSlashCommands(commands, slash.query) : [];

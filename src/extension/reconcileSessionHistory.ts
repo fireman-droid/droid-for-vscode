@@ -47,10 +47,11 @@ function reconcileByUserAnchors(
   loaded: HostTranscriptState,
   recovered: HostTranscriptState,
 ): HostTranscriptState | null {
-  const matches = matchUserAnchors(
+  const alignment = matchUserAnchors(
     recovered.transcript,
     loaded.transcript,
   );
+  const { matches } = alignment;
   const firstMatch = matches[0];
   const lastMatch = matches[matches.length - 1];
   if (firstMatch === undefined || lastMatch === undefined) {
@@ -75,6 +76,7 @@ function reconcileByUserAnchors(
     loaded.transcript,
     recovered.transcript,
     lastMatch,
+    alignment.loadedKnowsAnchor,
   ).filter((item) => !tailRegionKeys.has(transcriptItemKey(item)));
 
   if (head.length === 0 && tail.length === 0) {
@@ -90,31 +92,60 @@ function reconcileByUserAnchors(
 
 /**
  * Recovered items past the last common anchor that loaded is missing:
- * either the rest of the final shared turn when loaded persisted
- * nothing after its anchor, or whole turns the CLI never persisted.
- * When loaded itself has newer turns past the anchor, the recovered
- * tail is a stale duplicate and is dropped.
+ * the rest of the final shared turn when loaded persisted nothing
+ * after its anchor, plus whole turns the CLI never persisted. Trailing
+ * turns whose user anchor loaded already contains are stale duplicate
+ * copies — checkpoints written while the old concatenating merge was
+ * active carry the conversation twice — and are skipped. When loaded
+ * itself has newer turns past the anchor, the whole recovered turn
+ * tail is stale and is dropped.
  */
 function trailingRecoveredItems(
   loaded: readonly SessionTranscriptItem[],
   recovered: readonly SessionTranscriptItem[],
   lastMatch: AnchorMatch,
+  loadedKnowsAnchor: (item: SessionTranscriptItem) => boolean,
 ): readonly SessionTranscriptItem[] {
-  if (lastMatch.loadedIndex === loaded.length - 1) {
-    return recovered.slice(lastMatch.recoveredIndex + 1);
-  }
-  const trailingUser = recovered.findIndex(
-    (item, index) =>
-      index > lastMatch.recoveredIndex && item.kind === 'user',
+  const firstTrailingUser = nextUserIndex(
+    recovered,
+    lastMatch.recoveredIndex,
   );
-  if (trailingUser === -1) {
-    return [];
+  const sameTurnRemainder =
+    lastMatch.loadedIndex === loaded.length - 1
+      ? recovered.slice(
+          lastMatch.recoveredIndex + 1,
+          firstTrailingUser === -1 ? recovered.length : firstTrailingUser,
+        )
+      : [];
+  if (firstTrailingUser === -1) {
+    return sameTurnRemainder;
   }
   const loadedHasNewerTurn = loaded.some(
     (item, index) =>
       index > lastMatch.loadedIndex && item.kind === 'user',
   );
-  return loadedHasNewerTurn ? [] : recovered.slice(trailingUser);
+  if (loadedHasNewerTurn) {
+    return sameTurnRemainder;
+  }
+  let start = firstTrailingUser;
+  while (start !== -1 && loadedKnowsAnchor(recovered[start]!)) {
+    start = nextUserIndex(recovered, start);
+  }
+  return start === -1
+    ? sameTurnRemainder
+    : [...sameTurnRemainder, ...recovered.slice(start)];
+}
+
+function nextUserIndex(
+  transcript: readonly SessionTranscriptItem[],
+  after: number,
+): number {
+  for (let index = after + 1; index < transcript.length; index += 1) {
+    if (transcript[index]!.kind === 'user') {
+      return index;
+    }
+  }
+  return -1;
 }
 
 function keySet(
@@ -130,10 +161,21 @@ interface UserAnchor {
   readonly text: string;
 }
 
+interface AnchorAlignment {
+  readonly matches: readonly AnchorMatch[];
+  /**
+   * True when loaded already contains this user item's anchor
+   * (`messageId`, or loaded-unique trimmed text for items without
+   * one). Trailing recovered turns with a known anchor are stale
+   * duplicates, not turns the CLI failed to persist.
+   */
+  readonly loadedKnowsAnchor: (item: SessionTranscriptItem) => boolean;
+}
+
 function matchUserAnchors(
   recovered: readonly SessionTranscriptItem[],
   loaded: readonly SessionTranscriptItem[],
-): readonly AnchorMatch[] {
+): AnchorAlignment {
   const recoveredAnchors = userAnchors(recovered);
   const loadedAnchors = userAnchors(loaded);
   const loadedByMessageId = new Map<string, number>();
@@ -174,7 +216,14 @@ function matchUserAnchors(
     });
     lastLoadedAnchor = candidate;
   }
-  return matches;
+  return {
+    matches,
+    loadedKnowsAnchor: (item) =>
+      item.kind === 'user' &&
+      (item.messageId !== undefined
+        ? loadedByMessageId.has(item.messageId)
+        : loadedByUniqueText.has(item.text.trim())),
+  };
 }
 
 function userAnchors(

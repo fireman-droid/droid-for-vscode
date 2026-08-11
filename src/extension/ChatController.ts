@@ -321,7 +321,13 @@ export class ChatController {
     readonly sessionId: string;
     readonly items: readonly CommandSummary[];
   } | null = null;
-  private commandsRefreshInProgress = false;
+  /**
+   * Runtime generation of the in-flight command-catalog load, or null
+   * when none. Tied to the generation instead of a boolean so a hung
+   * short-lived catalog process stops blocking refreshes as soon as
+   * the session or workspace binding changes.
+   */
+  private commandsRefreshGeneration: number | null = null;
   private readonly interactionOpenedAt = new Map<string, number>();
   /** Outbound Bridge message accounting for the active turn (P5). */
   private turnIo: {
@@ -1976,7 +1982,7 @@ export class ChatController {
       runtime === null ||
       this.connection.status !== 'connected' ||
       this.sessionOperationInProgress ||
-      this.commandsRefreshInProgress ||
+      this.commandsRefreshGeneration === this.runtimeGeneration ||
       !this.ensureActiveRuntimeWorkspaceCurrent()
     ) {
       return;
@@ -1997,12 +2003,14 @@ export class ChatController {
       items: cachedItems,
       recent: this.recentCommands.read(),
     });
-    this.commandsRefreshInProgress = true;
     const generation = this.runtimeGeneration;
+    this.commandsRefreshGeneration = generation;
     const cwd = this.activeRuntimeCwd!;
     void runtime.listCommands().then(
       (commands) => {
-        this.commandsRefreshInProgress = false;
+        if (this.commandsRefreshGeneration === generation) {
+          this.commandsRefreshGeneration = null;
+        }
         if (
           !this.isCurrentSessionOperation(
             runtime,
@@ -2022,7 +2030,9 @@ export class ChatController {
         });
       },
       () => {
-        this.commandsRefreshInProgress = false;
+        if (this.commandsRefreshGeneration === generation) {
+          this.commandsRefreshGeneration = null;
+        }
         if (
           !this.isCurrentSessionOperation(
             runtime,
