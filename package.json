@@ -52,6 +52,24 @@
           "type": "webview"
         }
       ]
+    },
+    "configuration": {
+      "title": "DroidVisX",
+      "properties": {
+        "droidvisx.runtime.mode": {
+          "type": "string",
+          "enum": [
+            "process",
+            "daemon"
+          ],
+          "enumDescriptions": [
+            "Each window runs its own droid subprocess (default).",
+            "Sessions run over a persistent local droid daemon connection (experimental)."
+          ],
+          "default": "process",
+          "description": "How DroidVisX executes Droid sessions. Changing this requires a window reload."
+        }
+      }
     }
   },
   "packageManager": "pnpm@10.2.0",

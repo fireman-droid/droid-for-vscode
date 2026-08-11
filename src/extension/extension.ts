@@ -13,6 +13,7 @@ import {
   type DaemonConnection,
 } from '../runtime/daemon/daemonConnection';
 import { DaemonSessionCatalog } from '../runtime/daemon/DaemonSessionCatalog';
+import { createDaemonSessionFactory } from '../runtime/daemon/createDaemonDroidSession';
 import { ChatController } from './ChatController';
 import { DroidViewProvider } from './DroidViewProvider';
 import { exportDiagnosticsBundle } from './exportDiagnostics';
@@ -53,6 +54,7 @@ function createDaemonSidecar(diagnostics: {
   }): void;
 }): {
   provider: () => Promise<DaemonSessionCatalog>;
+  droid: () => Promise<DaemonConnection['droid']>;
   dispose: () => Promise<void>;
 } {
   let sidecar: Promise<DaemonSidecar> | null = null;
@@ -77,40 +79,43 @@ function createDaemonSidecar(diagnostics: {
     }
   };
 
-  return {
-    provider: async () => {
-      if (sidecar === null) {
-        sidecar = start().catch((error: unknown) => {
-          sidecar = null;
-          throw error;
-        });
-      }
-      const current = await sidecar;
-      if (current.connection.status() === 'connected') {
-        return current.catalog;
-      }
-      // Token expiry or transport loss: reconnect to the same daemon
-      // with a freshly read credential. If that also fails, drop the
-      // sidecar so the next call respawns the daemon.
-      diagnostics.record({
-        level: 'warn',
-        name: 'daemon.sidecar.reconnecting',
+  const acquire = async (): Promise<DaemonSidecar> => {
+    if (sidecar === null) {
+      sidecar = start().catch((error: unknown) => {
+        sidecar = null;
+        throw error;
       });
-      current.connection.dispose();
-      sidecar = openDaemonConnection(current.endpoint).then(
-        (connection) => ({
-          endpoint: current.endpoint,
-          connection,
-          catalog: new DaemonSessionCatalog(connection.droid),
-        }),
-        async (error: unknown) => {
-          sidecar = null;
-          await stopDaemon(current.endpoint);
-          throw error;
-        },
-      );
-      return (await sidecar).catalog;
-    },
+    }
+    const current = await sidecar;
+    if (current.connection.status() === 'connected') {
+      return current;
+    }
+    // Token expiry or transport loss: reconnect to the same daemon
+    // with a freshly read credential. If that also fails, drop the
+    // sidecar so the next call respawns the daemon.
+    diagnostics.record({
+      level: 'warn',
+      name: 'daemon.sidecar.reconnecting',
+    });
+    current.connection.dispose();
+    sidecar = openDaemonConnection(current.endpoint).then(
+      (connection) => ({
+        endpoint: current.endpoint,
+        connection,
+        catalog: new DaemonSessionCatalog(connection.droid),
+      }),
+      async (error: unknown) => {
+        sidecar = null;
+        await stopDaemon(current.endpoint);
+        throw error;
+      },
+    );
+    return sidecar;
+  };
+
+  return {
+    provider: async () => (await acquire()).catalog,
+    droid: async () => (await acquire()).connection.droid,
     dispose: async () => {
       const pending = sidecar;
       sidecar = null;
@@ -160,12 +165,29 @@ export function activate(context: vscode.ExtensionContext): void {
   const attachmentSources = createVscodeAttachmentSources();
   const daemonSidecar = createDaemonSidecar(diagnostics);
   disposeDaemonSidecar = daemonSidecar.dispose;
+  // Read once at activation: switching modes requires a window reload,
+  // which also guarantees a clean fallback to process mode.
+  const runtimeMode = vscode.workspace
+    .getConfiguration('droidvisx')
+    .get<'process' | 'daemon'>('runtime.mode', 'process');
+  diagnostics.record({
+    level: 'info',
+    name: 'runtime.mode',
+    attributes: { mode: runtimeMode },
+  });
   const controller = new ChatController(
     (interactionHandler) =>
       new FactoryDroidRuntime({
         interactionHandler,
         diagnostics,
         observability: diagnostics.observability,
+        ...(runtimeMode === 'daemon'
+          ? {
+              createSdkSession: createDaemonSessionFactory(
+                daemonSidecar.droid,
+              ),
+            }
+          : {}),
       }),
     () => ({
       cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,

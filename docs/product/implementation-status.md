@@ -256,6 +256,24 @@ daemon 全量内容搜索（`Content matches` 区显示标题/片段/时间，
 选中会话或检查点为空时跳过早期快照，行为与原先一致。Webview 无
 改动（`connecting` 状态既有处理）。
 
+2026-08-12 凌晨追加 daemon Phase 2 执行链路迁移（可选、默认关闭）：
+新增 `src/runtime/daemon/createDaemonDroidSession.ts`，通过
+`FactoryDroidRuntime` 既有的 `createSdkSession` 注入 seam 提供
+daemon 版会话工厂——会话在共享的持久 daemon 连接上
+create/resume，`FactoryDroidRuntime` 及其上层完全不变。新增
+`package.json` 配置 `droidvisx.runtime.mode`（enum
+`process`|`daemon`，默认 `process`），激活时读取一次并记
+`runtime.mode` 诊断；daemon 模式复用 Phase 1 sidecar 的懒启动
+私有 daemon 与断线重连，凭据路径不变。已知 Phase 2 差异（均
+fail closed）：daemon 门面不报 `supportedReasoningEfforts`，
+模型目录保持 `unavailable`（下拉降级为只显示当前模型）；无会话
+通知订阅，浏览器 MCP OAuth（`mcp.auth`）不可用（列表/启停/增删
+正常）。替换型操作（rewind/compact/fork）按 §2.2 语义 resume
+`newSessionId` 后 detach 旧句柄，失败时保留旧句柄；
+`close()` 映射为 `detach()`（会话在 daemon 中存活，daemon 本身
+仍 parent-pid 绑定，Reload 存活属 Phase 3）。切回 `process` 即
+完全回退，默认行为零变化。
+
 同日追加长会话性能与卡死修复（用户反馈"页面一点击就卡死、无法
 发话、恢复对话慢"）：（1）Thinking 行展开从全局共享状态改为每行
 独立 `useState`——旧行为点一次会同时展开会话内全部 Thinking 行
@@ -727,16 +745,22 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
 
 ### 运行架构
 
-- [ ] daemon 作为主要运行路径（执行链路，Phase 2）
+- [x] daemon 作为可选运行路径（执行链路，Phase 2：
+      `droidvisx.runtime.mode = daemon` 时经 `createSdkSession` seam
+      注入 daemon 会话工厂；默认 `process` 不变；模型目录与浏览器
+      MCP OAuth 在 daemon 模式 fail closed）
 - [x] daemon 连接和认证（Phase 1 只读 sidecar：`readFactoryAccessCredential()`
       + SDK `connectToDaemon`，认证失败分类为安全诊断）
 - [x] daemon 生命周期管理（Phase 1 私有模式：`--parent-pid` 绑定、
       动态端口、deactivate 时结束进程树；Phase 3 脱管存活未实现）
-- [ ] daemon 失败时回退 Node subprocess（执行链路尚未迁移，无需回退）
+- [ ] daemon 失败时回退 Node subprocess（当前为配置级回退：切回
+      `process` + Reload Window；无运行时自动回退）
 - [ ] Capability Gate 接入 Extension 的安全产品门控
 
-当前生产执行链路只使用 Node SDK `ProcessTransport`；daemon 仅作为
-归档/取消归档/内容搜索的只读 sidecar。
+默认（`process`）生产执行链路只使用 Node SDK `ProcessTransport`，
+daemon 作为归档/取消归档/内容搜索的只读 sidecar；设置
+`droidvisx.runtime.mode = daemon` 后执行链路整体走同一 daemon
+连接（实验性，默认关闭）。
 
 ### 动态 Composer
 
@@ -968,11 +992,39 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `bufferutil` / `utf-8-validate` 保持 external，`ws` 运行时以
   try/catch 回退 JS 实现）；版本号仍为 `0.0.0`，现有窗口需
   Reload Window（或完整重启）后加载新 Bundle
+- 2026-08-12 凌晨打包并安装含 **daemon Phase 2 执行链路迁移切片**
+  （可选 `droidvisx.runtime.mode` 配置）的构建：`dist/droidvisx.vsix`
+  618,248 字节（9 files, 603.76 KB），SHA-256
+  `9DDBBE0CB826E2560091D7542FD538F32F6157EAED9582FB6A85B81F6A849726`，
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix` 与
+  `cursor --install-extension dist/droidvisx.vsix --force` 均成功；
+  版本号仍为 `0.0.0`，现有窗口需 Reload Window（或完整重启）后
+  加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- daemon Phase 2 执行链路迁移切片（2026-08-12 凌晨）：新增
+  `src/runtime/daemon/createDaemonDroidSession.test.ts` 11 个
+  mock 单测（create 带 cwd 与交互回调 / resume 不带 cwd /
+  permission+askUser 回调接线 / 经 `FactoryDroidRuntime` +
+  daemon 工厂流式跑通一轮 / skills+MCP 能力方法带 sessionId
+  资源化委托 / `getContextBreakdown` 推导 estimated 上下文
+  统计 / updateSettings 本地 overlay 至快照追平 / compact 与
+  rewind 替换会话后 detach 旧句柄 / fork 替换 resume 失败时保留
+  旧句柄 / close 映射 detach），聚焦运行 1 file / 11 tests 通过；
+  daemon 模式下 fail closed 断言：`availableModels` /
+  `onNotification` / `authenticateMcpServer` 均为 undefined。
+  `pnpm run typecheck` 三个 tsconfig 全部通过；`pnpm run test`
+  40 files / 828 tests 全部通过（含既有 `FactoryDroidRuntime`
+  33 测试不改动通过，即 process 工厂行为不变）；
+  `pnpm run build`、`npx vsce package --no-dependencies -o
+  dist/droidvisx.vsix`（9 files, 603.76 KB）、
+  `cursor --install-extension dist/droidvisx.vsix --force` 均
+  成功。真实 daemon 模式端到端（设置 `droidvisx.runtime.mode =
+  daemon` 后发消息/权限弹窗/rewind）等待用户 Reload Window 后
+  手动验收
 - 恢复提速切片（2026-08-12 凌晨，V1 #2）：`ChatController` 新增
   2 个测试（早期快照在 runtime.initialize 完成前到达且连接为
   `connecting`、早期快照期间 `turn.send` 被拒绝且不产生
@@ -1254,8 +1306,9 @@ toolCallId 重复白屏修复与 AppErrorBoundary、污染检查点尾段复活�
 daemon 化 —— [`daemon-architecture-design.md`](./daemon-architecture-design.md)
 + [`daemon-implementation-plan.md`](./daemon-implementation-plan.md)。
 见 HANDOVER 第 7 节。Phase 1（只读 sidecar：归档/取消归档/内容
-搜索）已于 2026-08-12 凌晨完成（见验证状态）；Phase 2（执行链路
-迁移）与 Phase 3（Reload 存活）未开始。
+搜索）与 Phase 2（执行链路迁移，`droidvisx.runtime.mode` 可选
+daemon、默认 process）均已于 2026-08-12 凌晨完成（见验证状态）；
+Phase 3（Reload 存活）未开始。
 
 ### 第一档与恢复提速的关系
 
