@@ -1,0 +1,485 @@
+.dvx-settings-popover {
+  display: grid;
+  gap: 4px;
+}
+
+/* Drilling into Skills/MCP remounts the keyed view wrapper, sliding
+   the incoming panel from the right; Back arrives from the left. */
+.dvx-settings-view {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+@keyframes dvx-view-slide-forward {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes dvx-view-slide-back {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.dvx-settings-view[data-direction='forward'] {
+  animation: dvx-view-slide-forward var(--dvx-duration-normal)
+    var(--dvx-easing-out-strong);
+}
+
+.dvx-settings-view[data-direction='back'] {
+  animation: dvx-view-slide-back var(--dvx-duration-normal)
+    var(--dvx-easing-out-strong);
+}
+
+.dvx-settings-select {
+  overflow: hidden;
+  border: 1px solid rgb(229 229 229 / 80%);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.dvx-popover-row {
+  display: grid;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  cursor: pointer;
+  grid-template-columns: minmax(0, 1fr) auto 16px;
+  gap: 6px;
+  min-height: 37px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.dvx-settings-select[data-expanded="true"] .dvx-popover-row {
+  border-bottom: 1px solid rgb(229 229 229 / 80%);
+}
+
+.dvx-popover-row-icon, .dvx-popover-row-copy span {
+  display: none;
+}
+
+.dvx-popover-row-copy strong {
+  color: #404040;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.dvx-popover-row-value {
+  color: #737373;
+  font-size: 12px;
+}
+
+.dvx-chevron-down {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: #a1a1a1;
+}
+
+.dvx-popover-row > .dvx-chevron-down {
+  color: #a1a1a1;
+  transition: transform 160ms ease;
+}
+
+.dvx-popover-row[aria-expanded="true"] > .dvx-chevron-down {
+  transform: rotate(180deg);
+}
+
+.dvx-settings-select-options {
+  display: grid;
+  padding: 4px 0;
+}
+
+.dvx-settings-select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 12px;
+  border: 0;
+  background: transparent;
+  color: #525252;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dvx-settings-select-option:hover:not(:disabled) {
+  background: rgb(0 0 0 / 3%);
+}
+
+.dvx-shell .dvx-settings-select-option:disabled, .dvx-shell .dvx-option-row:disabled, .dvx-shell .dvx-model-choice:disabled, .dvx-shell .dvx-model-edit:disabled {
+  opacity: 1;
+}
+
+.dvx-check-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  color: var(--dvx-accent);
+}
+
+.dvx-settings-search-shell {
+  position: relative;
+  color: #a1a1a1;
+}
+
+.dvx-settings-search-shell .dvx-search-icon {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 11px;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.dvx-settings-search {
+  width: 100%;
+  height: 35px;
+  padding: 7px 11px 7px 34px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 8px;
+  background: #fff;
+  color: #525252;
+  font-size: 11.5px;
+}
+
+.dvx-settings-search::placeholder {
+  color: #a1a1a1;
+}
+
+.dvx-settings-divider {
+  height: 1px;
+  margin: 5px 2px;
+  background: rgb(229 229 229 / 80%);
+}
+
+.dvx-settings-info-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 32px;
+  gap: 8px;
+  padding: 6px 8px;
+  color: #525252;
+  font-size: 12.5px;
+}
+
+.dvx-settings-info-row > svg {
+  width: 16px;
+  height: 16px;
+  color: #737373;
+}
+
+.dvx-settings-info-value {
+  color: #a1a1a1;
+  font-size: 11.5px;
+}
+
+.dvx-context-popover {
+  min-height: 167px;
+  padding: 0;
+}
+
+.dvx-popover-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 33px;
+  padding: 13px 16px 0;
+  border-bottom: 0;
+}
+
+.dvx-popover-heading strong {
+  color: #404040;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 17px;
+}
+
+.dvx-popover-refresh {
+  color: #737373;
+  font-size: 11px;
+}
+
+/* Shared panel head: back arrow + section-weight title on the left,
+   right-aligned quiet action group, hairline divider below. Used by
+   the Skills / MCP panels and the Context usage card. */
+.dvx-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid rgb(229 229 229 / 60%);
+}
+
+/* Inside the padded settings popover the head bleeds to the card
+   edges so its divider runs full width. */
+.dvx-skills-panel .dvx-panel-head {
+  margin: -10px -10px 0;
+  padding: 8px 12px 7px;
+}
+
+.dvx-panel-title {
+  color: var(--dvx-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: -0.01em;
+}
+
+.dvx-panel-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: -6px;
+  padding: 3px 8px 3px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dvx-ink);
+  cursor: pointer;
+  transition: background-color 130ms ease;
+}
+
+.dvx-panel-back:hover {
+  background: rgb(0 0 0 / 4%);
+}
+
+.dvx-panel-back svg {
+  width: 15px;
+  height: 15px;
+  color: var(--dvx-muted);
+}
+
+.dvx-panel-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dvx-panel-action {
+  padding: 3px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #737373;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  transition: background-color 130ms ease, color 130ms ease;
+}
+
+.dvx-panel-action:hover:not(:disabled) {
+  color: var(--dvx-ink);
+  background: rgb(0 0 0 / 5%);
+}
+
+.dvx-panel-action:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.dvx-context-usage {
+  padding: 12px 16px 0;
+}
+
+.dvx-context-usage-summary strong {
+  color: #171717;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 30.5px;
+  letter-spacing: -0.04em;
+}
+
+.dvx-context-usage-summary span {
+  color: #737373;
+  font-size: 11px;
+}
+
+.dvx-context-usage-unavailable .dvx-context-usage-summary strong {
+  max-width: 58%;
+  font-size: 17px;
+  line-height: 22px;
+  letter-spacing: -0.02em;
+}
+
+.dvx-context-usage-note {
+  margin: 10px 0 14px;
+  color: #737373;
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.dvx-context-progress {
+  overflow: hidden;
+  height: 8px;
+  margin: 10px 0 14px;
+  border-radius: 999px;
+  background: var(--dvx-border);
+}
+
+.dvx-context-progress span {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  transition: width 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f2612e, #ff8b60);
+}
+
+/* Degraded over-limit bar: pinned full with a softer wash and an
+   overflow tick past the right end, so the card keeps its shape
+   while reading as an estimate rather than a live percentage. */
+.dvx-context-progress-over {
+  position: relative;
+  overflow: visible;
+}
+
+.dvx-context-progress-over > span:first-child {
+  border-radius: 999px 2px 2px 999px;
+  background: linear-gradient(
+    90deg,
+    rgb(242 97 46 / 55%),
+    rgb(255 139 96 / 75%)
+  );
+}
+
+.dvx-context-overflow-tick {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  right: -6px;
+  width: 2.5px;
+  border-radius: 2px;
+  background: #d2643d;
+}
+
+/* Quiet estimate badge hugging the over-limit heading; margin-right
+   auto keeps the token count pushed to the row's far right. */
+.dvx-context-usage-summary .dvx-context-estimated {
+  flex: none;
+  margin-right: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 999px;
+  color: var(--dvx-muted);
+  font-size: 9.5px;
+  font-weight: 550;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.dvx-context-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-top: 10px;
+  gap: 0;
+  margin-inline: -15px;
+  margin: 0 -16px;
+  padding: 0;
+  border-top: 1px solid rgb(229 229 229 / 60%);
+}
+
+.dvx-context-details div {
+  min-width: 0;
+  min-height: 58px;
+  padding: 10px 16px;
+}
+
+.dvx-context-details div + div {
+  padding-left: 16px;
+  border-left: 1px solid rgb(229 229 229 / 60%);
+}
+
+.dvx-context-details dt {
+  color: #a1a1a1;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.dvx-context-details dd {
+  margin: 2px 0 0;
+  font-weight: 650;
+  color: #525252;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+/* Token-usage ledger: quiet per-turn/session breakdown sharing the
+   context popover's hairline and muted-label language. Tabular
+   numerals keep the columns readable without any chart chrome. */
+.dvx-token-usage {
+  padding: 10px 16px 2px;
+  border-top: 1px solid rgb(229 229 229 / 60%);
+}
+
+.dvx-token-usage-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dvx-token-usage-table th,
+.dvx-token-usage-table td {
+  padding: 2px 0;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+  text-align: right;
+}
+
+.dvx-token-usage-table thead th {
+  padding-bottom: 5px;
+  color: #a1a1a1;
+}
+
+.dvx-token-usage-table thead th:first-child {
+  color: #404040;
+  font-weight: 500;
+  text-align: left;
+}
+
+.dvx-token-usage-table th[scope="row"] {
+  color: #737373;
+  text-align: left;
+}
+
+.dvx-token-usage-table td {
+  min-width: 62px;
+  padding-left: 12px;
+  color: #525252;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+
+.dvx-token-usage-note {
+  margin: 7px 0 0;
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+

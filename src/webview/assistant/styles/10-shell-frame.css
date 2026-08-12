@@ -1,0 +1,212 @@
+body {
+  overflow: clip;
+  background: #f5f3ef;
+}
+
+#root {
+  box-sizing: border-box;
+  display: block;
+  padding: 0;
+  background: #f5f3ef;
+}
+
+.dvx-shell {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  color-scheme: light;
+
+  /* Motion tokens (streaming-experience-design): every new animation
+     references these; legacy animations migrate opportunistically. */
+  --dvx-duration-instant: 50ms;   /* hover yield, instant feedback */
+  --dvx-duration-fast: 100ms;     /* fades */
+  --dvx-duration-normal: 150ms;   /* collapse/expand, chevron */
+  --dvx-duration-slow: 200ms;     /* per-item fade-in, block entry */
+  --dvx-duration-slower: 300ms;   /* large block entry ceiling */
+  --dvx-easing-out-strong: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --dvx-accent-soft: #fff0ea;
+  --dvx-code: #f7f5f1;
+  --dvx-accent: #f2612e;
+  --dvx-accent-strong: #df5020;
+  --dvx-ink: #262626;
+  --dvx-muted: #737373;
+  --dvx-subtle: #a1a1a1;
+  --dvx-border: #e5e5e5;
+  --dvx-border-strong: #d4d4d4;
+  --dvx-soft: rgb(0 0 0 / 4%);
+  --dvx-user: rgb(229 229 229 / 70%);
+  --dvx-surface: #f5f3ef;
+  --dvx-raised: #fff;
+  /* Calm crimson: reads as danger without the neon-pink plastic
+     sting of the old #ec003f (visual-bar decision, 2026-08-12). */
+  --dvx-danger: #c93a4a;
+  --dvx-warning: rgb(187 77 0 / 90%);
+  --dvx-shadow: 0 16px 40px -14px rgb(0 0 0 / 28%);
+  grid-template-rows: 60px minmax(0, 1fr);
+  width: 100%;
+  height: 100vh;
+  border-radius: 0;
+  overflow: hidden;
+  color: var(--dvx-ink);
+  background: var(--dvx-surface);
+  box-shadow: none;
+  font-family: "Inter Variable", var(--vscode-font-family, "Segoe UI"), "Microsoft YaHei UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.625;
+}
+
+.dvx-header {
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  border-bottom-color: var(--dvx-border);
+  min-height: 60px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgb(229 229 229 / 80%);
+  background: var(--dvx-surface);
+  box-shadow: none;
+}
+
+.dvx-brand {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0;
+}
+
+.dvx-title {
+  color: #171717;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 17.5px;
+  letter-spacing: 0;
+}
+
+.dvx-runtime-status {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 5px;
+  margin-top: 0;
+  color: var(--dvx-muted);
+  font-size: 11px;
+  line-height: 16.5px;
+}
+
+.dvx-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dvx-icon-button {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  border-color: var(--dvx-border);
+  border-radius: 50%;
+  color: #737373;
+  background: #fff;
+  box-shadow: none;
+}
+
+.dvx-shell .dvx-header-new {
+  color: #737373;
+}
+
+.dvx-thread {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+/* Column layout: the reading column flexes to fill the space above
+   the sticky footer, so an empty or short transcript never fabricates
+   scrollable overflow (no hardcoded min-height offsets). */
+.dvx-thread-viewport {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  height: 100%;
+  background: var(--dvx-surface);
+  scrollbar-width: none;
+}
+
+.dvx-thread-viewport::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.dvx-thread-viewport:focus-visible, .dvx-shell .dvx-interaction-panel:focus-visible {
+  outline: none;
+}
+
+.dvx-reading-column {
+  display: flex;
+  margin: 0 auto;
+  width: 100%;
+  flex: 1 1 auto;
+  flex-direction: column;
+  padding: 20px 16px 40px;
+}
+
+.dvx-message {
+  width: 100%;
+  margin-bottom: 27px;
+  margin: 0 0 20px;
+  color: #262626;
+  font-size: 13px;
+  line-height: 21.125px;
+}
+
+/* Continuation segments of one reply run (split by interactions or
+   plan approvals) render no action bar and keep the compact body
+   rhythm instead of a full inter-message gap (user report batch 2
+   §6). */
+.dvx-message-assistant.dvx-message-cont {
+  margin-bottom: 12px;
+}
+
+/* User messages are Cursor-style full-width blocks that stick to the
+   viewport top while their answer scrolls; the coordinator in
+   Thread.tsx marks the active one with data-pinned, translates it up
+   when the next user message reaches it (push-out hand-off), and
+   hides the stuck ones it covers (data-covered). */
+.dvx-message-user {
+  position: sticky;
+  top: 0;
+  padding-left: 0;
+}
+
+/* Above plain user rows so the popovers of a pinned edit card are
+   never painted under later sticky siblings (sticky always creates a
+   stacking context). Still below the footer (z-index 4). */
+.dvx-message-user[data-pinned] {
+  z-index: 3;
+  background: var(--dvx-surface);
+  box-shadow: 0 6px 12px -8px rgb(0 0 0 / 25%);
+  will-change: transform;
+}
+
+.dvx-message-user[data-covered] {
+  visibility: hidden;
+}
+
+.dvx-message-assistant {
+  padding-right: 4px;
+}
+
+/* assistant-ui mounts the optimistic assistant message before any
+   part arrives; at zero height its slot margin still pushed the
+   "Droid is responding" row a double gap below the question. Hide
+   the root until real content exists. */
+.dvx-message-assistant:empty {
+  display: none;
+}
+

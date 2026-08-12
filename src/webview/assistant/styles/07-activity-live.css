@@ -1,0 +1,274 @@
+.dvx-tool-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 0 0;
+  color: var(--dvx-subtle);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+/* Failure excerpt from the tool_result, revealed on expand. Muted
+   error tint, no banner chrome, wraps long CLI messages. */
+.dvx-tool-error {
+  margin: 6px 0 0;
+  color: var(--dvx-danger);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* Delegated subagent summary: a quiet sub-row hanging one level under
+   its Task row, separated by the same hairline language as the rest
+   of the shell. The parent row owns any live shimmer; this stays
+   static. */
+.dvx-activity-row-delegating,
+.dvx-activity-row-background {
+  margin-bottom: 4px;
+}
+
+/* Quiet one-line note under an execute row the CLI backgrounded
+   (background-process design §3.2): plain subtle text, no icon, no
+   color chrome. The GUI holds no process handle (kill fail-closed),
+   so the line only informs. */
+.dvx-tool-background-hint {
+  margin: 0 0 12px 20px;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.dvx-subagent-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 1px;
+  margin: 0 0 12px 20px;
+  padding-left: 10px;
+  border-left: 1px solid var(--dvx-border);
+  color: var(--dvx-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.dvx-subagent-label {
+  min-width: 0;
+  overflow: hidden;
+  color: #4d4842;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-subagent-description {
+  display: -webkit-box;
+  overflow: hidden;
+  flex-basis: 100%;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--dvx-muted);
+}
+
+.dvx-tool-summary code {
+  flex: 0 0 auto;
+  padding: 1px 4px;
+  border-radius: 4px;
+  color: var(--dvx-muted);
+  background: var(--dvx-code);
+  font-family: var(--vscode-editor-font-family, "SFMono-Regular"), Consolas, monospace;
+  font-size: 11px;
+}
+
+.dvx-tool-summary span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Running activity rows and the pending-status label shimmer
+   left-to-right so it is obvious Droid is still working, mirroring
+   the Cursor progress affordance. */
+@keyframes dvx-activity-shimmer {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+
+.dvx-activity-running .dvx-tool-action,
+.dvx-shimmer-text {
+  background-image: linear-gradient(
+    100deg,
+    #6b6259 0%,
+    #6b6259 38%,
+    #c9a15a 50%,
+    #6b6259 62%,
+    #6b6259 100%
+  );
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: dvx-activity-shimmer 1.6s linear infinite;
+}
+
+/* Keep the turn calm: when several tools of one batch are still
+   running only the newest row animates, and while a permission or
+   question interaction waits on the user every shimmer pauses
+   (including the running Thinking label). The static rows keep
+   their "Working" state text. */
+.dvx-activity-running:has(~ .dvx-activity-running) .dvx-tool-action,
+.dvx-thread-pending .dvx-activity-running .dvx-tool-action,
+.dvx-thread-pending .dvx-thinking-row .dvx-shimmer-text {
+  background-image: none;
+  background-clip: border-box;
+  -webkit-background-clip: border-box;
+  color: #6b6259;
+  animation: none;
+}
+
+.dvx-tool-command-inline {
+  min-width: 0;
+  max-width: 52%;
+  overflow: hidden;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 5%);
+  color: var(--dvx-muted);
+  font-family: var(--dvx-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-tool-command {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border-radius: 7px;
+  background: var(--dvx-code, rgb(0 0 0 / 4%));
+  color: #37312c;
+  font-family: var(--dvx-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Live command output tail (tier1 §1): a quiet recessed window on the
+   shell's warm code surface, sitting a step below the body text in the
+   hierarchy — background information, not the protagonist. The frame
+   carries the finish (token background, 1px border, soft inset); the
+   inner pre scrolls with the tail pinned to the bottom while the
+   command runs, and freezes in place after completion. */
+.dvx-activity-row .dvx-tool-output-frame {
+  margin: 8px 0 2px;
+  overflow: hidden;
+  border: 1px solid var(--dvx-border);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgb(38 33 27 / 2.5%), transparent 26px),
+    var(--dvx-code);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 3%);
+}
+
+/* Scoped under .dvx-activity-row to out-rank the later
+   `.dvx-activity-row pre` flattening rule. The top mask lets the
+   scrolled-away tail dissolve instead of hard-cutting at the border. */
+.dvx-activity-row .dvx-tool-output {
+  margin: 0;
+  padding: 9px 12px 10px;
+  max-height: 148px;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--dvx-muted);
+  font-family: var(--vscode-editor-font-family, "SFMono-Regular"), Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: none;
+  mask-image: linear-gradient(180deg, transparent, #000 16px);
+  user-select: text;
+}
+
+/* Terminal mirror entry (native-terminal slice A): a quiet text
+   action under the live output preview — plain subtle text, accent
+   only on hover. */
+.dvx-terminal-mirror-entry {
+  display: inline-block;
+  margin: 4px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dvx-subtle);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 18px;
+  transition: color var(--dvx-duration-fast) ease;
+}
+
+.dvx-terminal-mirror-entry:hover,
+.dvx-terminal-mirror-entry:focus-visible {
+  color: var(--dvx-accent-strong);
+}
+
+/* ---- Command card (terminal-card redesign, 2026-08-12) ------------
+   Execute rows graduate from quiet text rows to a finished card:
+   warm-white header (title + command-name chips + "…" menu + chevron)
+   over a warm-dark terminal well ($-prefixed tinted command line,
+   output tail below a hairline). Collapsed state is the header row
+   alone. The <details> element and every behavior (auto-open while
+   running, reader override, tail pinning, mirror entry, background
+   hint) are unchanged — this is skin and information architecture. */
+/* Doubled class (plus :not for the title) out-ranks the later
+   Claude-style flattening pass (`.dvx-activity-row { border: 0; … }`,
+   `.dvx-activity-row summary { padding: 0; … }`) without !important. */
+.dvx-activity-row.dvx-command-card {
+  overflow: visible;
+  border: 1px solid var(--dvx-border);
+  border-radius: 10px;
+  background: var(--dvx-raised);
+  box-shadow:
+    0 1px 2px rgb(38 33 27 / 4%),
+    0 6px 18px -12px rgb(38 33 27 / 14%);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.dvx-activity-row.dvx-command-card:hover {
+  border-color: var(--dvx-border-strong);
+}
+
+.dvx-activity-row.dvx-command-card > summary {
+  min-height: 24px;
+  padding: 7px 10px 7px 12px;
+  border-radius: 9px;
+}
+
+.dvx-activity-row.dvx-command-card[open] > summary {
+  border-radius: 9px 9px 0 0;
+}
+
+/* Scoped to settled rows so the running shimmer (which paints the
+   title via background-clip text) keeps winning while live. */
+.dvx-activity-row.dvx-command-card:not(.dvx-activity-running)
+  .dvx-tool-action {
+  flex: 0 1 auto;
+  color: #33302b;
+  font-weight: 560;
+}
+
+.dvx-activity-row.dvx-command-card.dvx-activity-running .dvx-tool-action {
+  flex: 0 1 auto;
+  font-weight: 560;
+}
+

@@ -1,0 +1,703 @@
+/* Two-end footer row: action on the left, quiet explainer filling
+   the right side of the same line. */
+.dvx-context-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--dvx-border);
+}
+
+/* Accent-outline action: quiet white base, warm accent stroke and
+   ink; hover deepens into the soft accent wash. */
+.dvx-context-compact-button {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--dvx-accent) 42%, #fff);
+  border-radius: 6px;
+  background: var(--dvx-raised);
+  color: var(--dvx-accent-strong);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 550;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+  transition: border-color 130ms ease, background-color 130ms ease;
+}
+
+.dvx-context-compact-button:hover:not(:disabled) {
+  border-color: var(--dvx-accent);
+  background: var(--dvx-accent-soft);
+}
+
+.dvx-context-compact-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.dvx-context-compact-button[aria-busy="true"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dvx-compact-spinner {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--dvx-border-strong, #d5cdc4);
+  border-radius: 50%;
+  border-top-color: var(--dvx-accent);
+  animation: dvx-spin 700ms linear infinite;
+}
+
+@keyframes dvx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-compact-spinner {
+    animation-duration: 1.6s;
+  }
+}
+
+.dvx-context-compact-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+/* Interactions render as a flat inline block inside the conversation flow:
+   one surface, hairline separators, no stacked cards. */
+.dvx-interaction-panel {
+  position: static;
+  width: 100%;
+  margin: 20px 0 0;
+  padding: 12px 0 2px;
+  overflow: visible;
+  border-top: 1px solid var(--dvx-border);
+  border-bottom: 1px solid var(--dvx-border);
+  color: var(--dvx-ink);
+  background: transparent;
+  animation: dvx-rise-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dvx-interaction-queue {
+  border-bottom: 1px solid var(--dvx-border);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: #a1a1a1;
+  font-size: 11px;
+  line-height: 17.875px;
+}
+
+.dvx-interaction-card {
+  padding: 8px 0 0;
+}
+
+.dvx-interaction-heading {
+  margin: 0;
+  padding: 0;
+}
+
+.dvx-interaction-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #a1a1a1;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 17.875px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.dvx-interaction-eyebrow::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dvx-accent);
+  content: "";
+}
+
+.dvx-interaction-heading h2 {
+  margin-top: 4px;
+  color: #171717;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 21.938px;
+  letter-spacing: 0;
+}
+
+.dvx-permission-tools, .dvx-ask-questions {
+  display: grid;
+  gap: 0;
+  margin-top: 8px;
+  padding: 0;
+}
+
+.dvx-permission-tool {
+  border-left: 3px solid var(--dvx-warning);
+  border-radius: 0;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid rgb(229 229 229 / 60%);
+  background: transparent;
+}
+
+.dvx-permission-tool:first-child {
+  padding-top: 0;
+}
+
+.dvx-permission-tool-meta {
+  display: flex;
+  text-transform: capitalize;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: #a1a1a1;
+  font-size: 11px;
+}
+
+.dvx-permission-tool-meta code {
+  color: #155dfc;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.dvx-permission-tool-execute .dvx-permission-tool-meta code {
+  color: #e17100;
+}
+
+.dvx-permission-tool-danger .dvx-permission-tool-meta code {
+  color: var(--dvx-danger);
+}
+
+.dvx-permission-tool strong {
+  display: block;
+  color: #262626;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 20.313px;
+}
+
+.dvx-permission-tool pre {
+  margin: 2px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #737373;
+  font-size: 11.5px;
+  line-height: 18.688px;
+}
+
+.dvx-permission-risk {
+  margin: 4px 0 0;
+  color: var(--dvx-warning);
+  font-size: 11.5px;
+  line-height: 18.688px;
+}
+
+.dvx-plan-preview {
+  border-radius: 8px;
+  color: #55514b;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+  max-height: 333px;
+  margin: 8px 0 0;
+  padding: 0 2px 4px 0;
+  overflow: auto;
+  border: 0;
+  background: transparent;
+  white-space: normal;
+}
+
+.dvx-plan-markdown {
+  color: #525252;
+  font-size: 12.5px;
+  line-height: 20.313px;
+  overflow-wrap: anywhere;
+}
+
+.dvx-plan-markdown h1, .dvx-plan-markdown h2, .dvx-plan-markdown h3, .dvx-plan-markdown h4, .dvx-plan-markdown h5, .dvx-plan-markdown h6 {
+  margin: 14px 0 4px;
+  color: #404040;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 20.313px;
+}
+
+.dvx-plan-markdown > :first-child {
+  margin-top: 0;
+}
+
+.dvx-plan-markdown p {
+  margin: 0 0 8px;
+}
+
+.dvx-plan-markdown ul, .dvx-plan-markdown ol {
+  margin: 2px 0 10px;
+  padding-left: 20px;
+}
+
+.dvx-plan-markdown li + li {
+  margin-top: 2px;
+}
+
+.dvx-plan-markdown pre, .dvx-plan-markdown blockquote {
+  margin: 6px 0 10px;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid rgb(229 229 229 / 80%);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 65%);
+}
+
+.dvx-plan-markdown code {
+  font-family: var(--vscode-editor-font-family, Consolas, monospace);
+  font-size: 0.94em;
+}
+
+.dvx-permission-plan .dvx-permission-tools {
+  display: none;
+}
+
+.dvx-plan-preview-expanded {
+  max-height: none;
+  overflow: visible;
+}
+
+.dvx-plan-expand {
+  justify-self: start;
+  margin: 4px 0 0;
+  padding: 3px 8px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 999px;
+  color: var(--dvx-muted);
+  background: var(--dvx-raised);
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.dvx-plan-expand:hover {
+  color: var(--dvx-ink);
+  border-color: var(--dvx-border-strong);
+}
+
+.dvx-permission-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dvx-editor-view-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 7px;
+  background: var(--dvx-surface);
+}
+
+.dvx-editor-view-toggle button {
+  padding: 2px 10px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--dvx-muted);
+  background: transparent;
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.dvx-editor-view-toggle button[aria-selected='true'] {
+  color: var(--dvx-ink);
+  background: var(--dvx-raised);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+
+.dvx-plan-edit-preview {
+  min-height: 224px;
+  max-height: 333px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.dvx-permission-mission .dvx-permission-tool-meta, .dvx-permission-mission .dvx-permission-tool > strong {
+  display: none;
+}
+
+.dvx-permission-mission .dvx-permission-tool {
+  padding-block: 0 10px;
+}
+
+.dvx-permission-mission .dvx-permission-tool pre {
+  margin-top: 0;
+  color: #525252;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 20.313px;
+  white-space: pre-wrap;
+}
+
+.dvx-permission-editor {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+
+.dvx-permission-editor textarea {
+  resize: none;
+  min-height: 224px;
+  padding: 10px;
+  border-color: var(--dvx-border);
+  border-radius: 8px;
+  background: #fff;
+  font-family: var(--vscode-editor-font-family, Consolas, monospace);
+  font-size: 12px;
+}
+
+.dvx-interaction-actions {
+  display: flex;
+  flex-wrap: wrap;
+  position: relative;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 0 10px;
+}
+
+.dvx-shell .dvx-button {
+  min-height: 32px;
+  padding: 6px 12px;
+  border-color: #d4d4d4;
+  border-radius: 6px;
+  color: #404040;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.dvx-shell .dvx-button-primary {
+  border: 0;
+  color: #fff;
+  background: var(--dvx-accent);
+}
+
+.dvx-shell .dvx-button-danger {
+  border-color: color-mix(in srgb, var(--dvx-danger) 26%, #fff);
+  color: var(--dvx-danger);
+  background: #fff;
+}
+
+.dvx-shell .dvx-button-danger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--dvx-danger) 42%, #fff);
+  background: color-mix(in srgb, var(--dvx-danger) 4%, #fff);
+}
+
+.dvx-permission-allow-group {
+  position: relative;
+  display: flex;
+  height: 32px;
+  align-items: stretch;
+  border-radius: 7px;
+  background: var(--dvx-accent);
+  box-shadow: 0 1px 1px rgb(0 0 0 / 8%), 0 1px 2px rgb(0 0 0 / 10%);
+}
+
+.dvx-shell .dvx-permission-primary {
+  min-height: 32px;
+  padding: 0 13px;
+  border-radius: 7px 0 0 7px;
+  box-shadow: none;
+}
+
+.dvx-shell .dvx-permission-primary:only-child {
+  border-radius: 7px;
+}
+
+.dvx-shell .dvx-permission-more {
+  display: inline-grid;
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  place-items: center;
+  padding: 0;
+  border-left: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 0 7px 7px 0;
+  box-shadow: none;
+  line-height: 0;
+}
+
+.dvx-shell .dvx-permission-primary:hover:not(:disabled), .dvx-shell .dvx-permission-more:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dvx-accent) 90%, #000);
+}
+
+.dvx-permission-chevron {
+  display: block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.dvx-permission-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 2;
+  min-width: 174px;
+  max-width: min(340px, 86vw);
+  overflow: hidden;
+  padding: 5px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 2px 6px -3px rgb(0 0 0 / 10%), 0 16px 40px -14px rgb(0 0 0 / 25%);
+  animation: dvx-rise-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dvx-permission-menu button {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  color: #404040;
+  background: transparent;
+  font-size: 12px;
+  line-height: 17px;
+  text-align: left;
+  transition: background-color var(--dvx-duration-fast) ease, color var(--dvx-duration-fast) ease;
+}
+
+.dvx-permission-menu button:hover:not(:disabled) {
+  color: var(--dvx-ink);
+  background: color-mix(in srgb, var(--dvx-accent) 7%, #fff);
+}
+
+.dvx-ask-user .dvx-interaction-heading, .dvx-ask-user .dvx-ask-questions {
+  padding-inline: 0;
+}
+
+.dvx-ask-user .dvx-interaction-heading {
+  padding-top: 0;
+}
+
+.dvx-ask-user .dvx-interaction-eyebrow {
+  line-height: 16.5px;
+}
+
+.dvx-ask-user .dvx-interaction-heading h2 {
+  min-height: 25px;
+  margin-top: 0;
+  padding-top: 4px;
+  line-height: 20.25px;
+}
+
+.dvx-interaction-panel-ask-user .dvx-interaction-queue {
+  line-height: 16.5px;
+}
+
+.dvx-ask-user .dvx-ask-questions {
+  margin-top: 0;
+  padding-top: 8px;
+}
+
+.dvx-ask-user fieldset {
+  min-width: 0;
+  border-radius: 0;
+  margin: 0;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid rgb(229 229 229 / 60%);
+}
+
+.dvx-ask-user fieldset:first-child {
+  padding-top: 0;
+}
+
+.dvx-ask-user legend {
+  display: grid;
+  max-width: 100%;
+  width: 100%;
+  gap: 4px;
+  padding: 0;
+  color: #262626;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 20.313px;
+}
+
+.dvx-question-topic {
+  color: #a1a1a1;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 17.875px;
+  letter-spacing: 0.025em;
+  text-transform: none;
+}
+
+.dvx-question-options {
+  display: grid;
+  height: auto;
+  gap: 4px;
+  margin: 0;
+  padding: 6px 0 2px;
+}
+
+.dvx-question-options label {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: start;
+  min-height: 32px;
+  gap: 8px;
+  padding: 6px 8px 7px;
+  border-radius: 6px;
+  color: #525252;
+  font-size: 12px;
+  line-height: 19.5px;
+}
+
+.dvx-question-options input {
+  width: 14px;
+  height: 14px;
+  margin: 3px 0 0;
+  accent-color: var(--dvx-accent);
+}
+
+.dvx-question-options label > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dvx-ask-user input[type="text"] {
+  width: 100%;
+  height: 34px;
+  margin-top: 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 6px;
+  background: #fff;
+  color: #525252;
+  font-size: 12px;
+}
+
+.dvx-ask-user .dvx-interaction-actions {
+  height: 44px;
+  min-height: 44px;
+  padding: 12px 0 0;
+}
+
+.dvx-ask-user .dvx-button-primary:disabled {
+  opacity: 0.4;
+}
+
+@media (max-width: 462px) {
+  .dvx-reading-column {
+    padding-inline: 16px;
+  }
+
+  .dvx-thread-footer {
+    padding-inline: 16px;
+  }
+}
+
+@media (max-width: 420px) {
+  .dvx-session-title {
+    max-width: 120px;
+  }
+
+  .dvx-composer {
+    min-height: 132px;
+    padding-inline: 12px 10px;
+  }
+
+  .dvx-model-trigger {
+    max-width: 42%;
+  }
+
+  .dvx-header {
+    padding-inline: 11px;
+  }
+
+  .dvx-reading-column {
+    padding: 24px 10px 34px;
+    padding-inline: 14px;
+  }
+
+  .dvx-thread-footer {
+    padding-inline: 12px;
+  }
+
+  .dvx-interaction-panel {
+    margin-bottom: 24px;
+  }
+
+  .dvx-reasoning-flyout {
+    right: 0;
+    bottom: calc(100% + 6px);
+  }
+}
+
+@media (max-width: 350px) {
+  .dvx-reading-column, .dvx-thread-footer {
+    padding-inline: 10px;
+  }
+
+  .dvx-permission-plan .dvx-plan-preview {
+    max-height: min(333px, calc(100vh - 400px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-shell *, .dvx-shell *::before, .dvx-shell *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .dvx-composer-popover, .dvx-settings-view, .dvx-session-drawer, .dvx-drawer-backdrop, .dvx-interaction-panel, .dvx-activity-row[open] pre, .dvx-activity-row[open] .dvx-tool-output-frame, .dvx-activity-row[open] .dvx-tool-identity {
+    animation: none;
+  }
+
+  .dvx-composer-popover, .dvx-session-drawer, .dvx-interaction-panel, .dvx-permission-menu, .dvx-activity-row[open] pre, .dvx-activity-row[open] .dvx-tool-identity {
+    animation: none;
+  }
+
+  .dvx-activity-running .dvx-tool-action,
+  .dvx-shimmer-text {
+    background-image: none;
+    background-clip: border-box;
+    -webkit-background-clip: border-box;
+    color: #6b6259;
+    animation: none;
+  }
+
+  .dvx-activity-group-details {
+    transition-property: none;
+  }
+}
+

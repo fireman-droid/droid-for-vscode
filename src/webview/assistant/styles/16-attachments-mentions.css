@@ -1,0 +1,207 @@
+.dvx-settings-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dvx-attach-rows {
+  display: grid;
+}
+
+.dvx-attach-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.dvx-attach-row svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: #737373;
+}
+
+.dvx-attach-row:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.dvx-attach-row .dvx-popover-row-copy small {
+  color: #737373;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* Pending-attachment row: sits inside the composer card above the
+   input, relying on the card's own padding for alignment. */
+.dvx-attachment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 8px;
+}
+
+/* Image attachments staged from the webview render as thumbnails. */
+.dvx-attachment-thumb {
+  position: relative;
+  display: inline-flex;
+  overflow: visible;
+}
+
+.dvx-attachment-thumb-image {
+  display: block;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 7px;
+  object-fit: cover;
+  background: #f6f2ea;
+}
+
+.dvx-attachment-thumb-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--dvx-border);
+  border-radius: 50%;
+  color: #6b5d49;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 15%);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.dvx-attachment-thumb:hover .dvx-attachment-thumb-remove,
+.dvx-attachment-thumb-remove:focus-visible {
+  opacity: 1;
+}
+
+.dvx-attachment-thumb-remove:hover {
+  color: #7a2e1d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-attachment-thumb-remove {
+    transition: none;
+  }
+}
+
+.dvx-mention-popup {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: calc(100% + 6px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  overflow-y: auto;
+  /* Boundary wheel events are also cancelled in JS; this contains
+     scroll chaining for the in-range case. */
+  overscroll-behavior: contain;
+  padding: 4px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 12%);
+}
+
+.dvx-mention-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dvx-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dvx-mention-item.dvx-mention-active {
+  background: var(--dvx-accent-soft, #f3ede7);
+}
+
+.dvx-mention-name {
+  flex: none;
+  font-weight: 500;
+}
+
+.dvx-mention-path {
+  overflow: hidden;
+  color: #8a8a8a;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid rgb(226 220 210 / 90%);
+  border-radius: 7px;
+  background: #f6f2ea;
+  font-size: 11.5px;
+}
+
+.dvx-attachment-kind {
+  color: #8a7a63;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dvx-attachment-name {
+  overflow: hidden;
+  max-width: 180px;
+  color: var(--dvx-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-attachment-truncated {
+  color: #b45309;
+  font-size: 10px;
+}
+
+.dvx-attachment-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  color: #8a7a63;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.dvx-attachment-remove:hover {
+  color: #7a2e1d;
+  background: rgb(0 0 0 / 6%);
+}
+

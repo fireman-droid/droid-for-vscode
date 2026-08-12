@@ -1,0 +1,563 @@
+.dvx-composer-seam {
+  display: none;
+}
+
+.dvx-composer-input:focus-visible {
+  outline: none;
+}
+
+.dvx-send-action:hover:not(:disabled) {
+  background: var(--dvx-accent-strong);
+}
+
+.dvx-stop-action {
+  border-color: #d9afa9;
+  color: var(--dvx-danger);
+  background: #fff8f6;
+}
+
+.dvx-composer-tool-button:hover:not(:disabled), .dvx-model-trigger:hover:not(:disabled), .dvx-popover-back:hover:not(:disabled), .dvx-popover-refresh:hover:not(:disabled), .dvx-model-edit:hover:not(:disabled) {
+  color: var(--dvx-ink);
+  background: var(--dvx-soft);
+}
+
+.dvx-popover-row-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+}
+
+.dvx-popover-row-icon .dvx-setting-icon-fill {
+  fill: currentColor;
+  stroke: none;
+}
+
+.dvx-popover-row-copy, .dvx-option-copy, .dvx-model-choice {
+  display: grid;
+  min-width: 0;
+}
+
+.dvx-popover-row-copy strong, .dvx-option-copy strong, .dvx-model-choice strong {
+  color: var(--dvx-ink);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.dvx-popover-row-copy span, .dvx-option-copy span, .dvx-model-choice span {
+  color: var(--dvx-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.dvx-popover-back, .dvx-popover-refresh, .dvx-model-edit {
+  border: 0;
+  border-radius: 6px;
+  color: var(--dvx-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.dvx-popover-back {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 7px;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  text-align: left;
+}
+
+.dvx-option-list {
+  display: grid;
+  gap: 2px;
+}
+
+.dvx-radio-mark {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  border: 1px solid var(--dvx-muted);
+  border-radius: 50%;
+}
+
+.dvx-option-row[aria-checked="true"] .dvx-radio-mark {
+  border: 3px solid var(--dvx-accent);
+}
+
+.dvx-popover-refresh, .dvx-model-edit {
+  padding: 5px 8px;
+  font-size: 11.5px;
+}
+
+.dvx-current-model {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+
+.dvx-current-model div {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 7px;
+}
+
+.dvx-current-model dt {
+  color: var(--dvx-muted);
+  font-size: 11px;
+}
+
+.dvx-current-model dd {
+  margin: 2px 0 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+}
+
+.dvx-context-usage-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dvx-popover-message {
+  margin: 5px;
+  color: var(--dvx-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.dvx-model-heading {
+  padding-bottom: 7px;
+}
+
+.dvx-model-heading span {
+  color: var(--dvx-muted);
+  font-size: 11px;
+}
+
+.dvx-model-choice {
+  min-width: 0;
+  flex: 1;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dvx-model-choice:disabled {
+  opacity: 1;
+}
+
+.dvx-model-selected {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--dvx-accent-strong);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.dvx-reasoning-option {
+  min-height: 34px;
+}
+
+.dvx-kicker, .dvx-interaction-eyebrow {
+  display: block;
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.dvx-drawer-header h2, .dvx-interaction-heading h2 {
+  margin: 2px 0 0;
+  font-size: 16px;
+  font-weight: 680;
+}
+
+.dvx-permission-editor textarea, .dvx-ask-user input[type="text"] {
+  width: 100%;
+  border: 1px solid var(--dvx-border);
+  border-radius: 8px;
+  color: var(--dvx-ink);
+  background: #fbf8f4;
+}
+
+.dvx-error-text {
+  color: var(--dvx-danger);
+}
+
+.dvx-session-row:hover:not(:disabled) {
+  background: var(--dvx-soft);
+}
+
+.dvx-session-row[aria-current="true"]:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.dvx-session-row code {
+  overflow: hidden;
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-session-row-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+}
+
+.dvx-permission-risk, .dvx-form-error {
+  margin: 6px 0 0;
+  color: var(--dvx-danger);
+  font-size: 12px;
+}
+
+.dvx-permission-editor label, .dvx-custom-label {
+  color: var(--dvx-muted);
+  font-size: 12px;
+}
+
+.dvx-field-counter {
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  text-align: right;
+}
+
+.dvx-question-text {
+  white-space: pre-wrap;
+}
+
+.dvx-question-options label:hover {
+  background: var(--dvx-soft);
+}
+
+@keyframes dvx-seam-pulse {
+  0%,
+  100% {
+  opacity: 0.45;
+  }
+  50% {
+  opacity: 1;
+  }
+}
+
+@media (min-width: 720px) {
+  .dvx-session-drawer {
+    width: 350px;
+  }
+}
+
+.dvx-shell button, .dvx-shell input, .dvx-shell textarea {
+  font-family: inherit;
+}
+
+.dvx-status-seam {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 33px;
+  border-radius: 999px;
+  background: #dbd7d0;
+}
+
+.dvx-status-connected {
+  background: var(--dvx-accent);
+  box-shadow: none;
+}
+
+.dvx-header-new {
+  font-size: 21px;
+  font-weight: 330;
+  line-height: 1;
+}
+
+.dvx-session-toggle {
+  border-radius: 50%;
+}
+
+.dvx-activity-row summary::before {
+  flex: 0 0 auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  content: "";
+  transform: rotate(-45deg);
+  width: 6px;
+  height: 6px;
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dvx-activity-row[open] pre, .dvx-activity-row[open] .dvx-tool-identity {
+  animation: dvx-disclose-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dvx-context-button:hover:not(:disabled) .dvx-context-ring {
+  transform: rotate(20deg);
+}
+
+.dvx-context-ring-value {
+  stroke-linecap: round;
+  stroke: var(--dvx-accent);
+}
+
+.dvx-model-trigger {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  max-width: min(52%, 240px);
+  padding: 5px 4px;
+  color: #33312d;
+  font-size: 12px;
+  font-weight: 590;
+}
+
+.dvx-model-trigger[aria-expanded="true"]::after {
+  transform: rotate(180deg);
+}
+
+.dvx-send-action {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  color: white;
+  line-height: 1;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border-radius: 9px;
+  background: var(--dvx-accent);
+  box-shadow: 0 5px 12px rgb(222 84 36 / 20%);
+  font-size: 19px;
+  transition: background-color 130ms ease, filter 130ms ease, transform 130ms ease;
+}
+
+.dvx-send-action:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.dvx-popover-row-icon {
+  display: grid;
+  place-items: center;
+  border: 1px solid #e4c6b8;
+  border-radius: 8px;
+  color: var(--dvx-accent);
+  font-size: 12px;
+  font-weight: 700;
+  width: 26px;
+  height: 26px;
+  border-color: #ead2c6;
+  background: #fffaf8;
+}
+
+.dvx-option-row, .dvx-model-row {
+  border-radius: 6px;
+}
+
+.dvx-option-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  padding: 8px;
+}
+
+.dvx-popover-row:hover, .dvx-option-row:hover:not(:disabled), .dvx-model-row:hover {
+  background: rgb(0 0 0 / 3%);
+}
+
+.dvx-model-search, .dvx-permission-editor textarea, .dvx-ask-user input[type="text"] {
+  border-color: var(--dvx-border);
+  background: #fff;
+}
+
+.dvx-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  border: 0;
+  cursor: default;
+  z-index: 20;
+  background: rgb(31 31 29 / 10%);
+  animation: dvx-fade-in 180ms ease-out;
+}
+
+.dvx-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.dvx-session-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+
+.dvx-session-row[aria-current="true"] {
+  border-left-color: transparent;
+  background: #ece8e1;
+}
+
+.dvx-permission-editor textarea:focus-visible, .dvx-ask-user input[type="text"]:focus-visible {
+  outline: none;
+  border-color: var(--dvx-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dvx-accent) 22%, transparent);
+}
+
+.dvx-button {
+  min-height: 31px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.dvx-button-primary {
+  color: #fff;
+  border-color: var(--dvx-accent);
+  background: var(--dvx-accent);
+}
+
+@keyframes dvx-rise-in {
+  from {
+  opacity: 0;
+  transform: translateY(6px) scale(0.985);
+  }
+  to {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dvx-fade-in {
+  from {
+  opacity: 0;
+  }
+  to {
+  opacity: 1;
+  }
+}
+
+@keyframes dvx-disclose-in {
+  from {
+  opacity: 0;
+  transform: translateY(-3px);
+  }
+  to {
+  opacity: 1;
+  transform: translateY(0);
+  }
+}
+
+@media (max-width: 320px) {
+  .dvx-runtime-status {
+    max-width: 175px;
+  }
+
+  .dvx-session-context {
+    display: none;
+  }
+
+  .dvx-composer-controls {
+    gap: 3px;
+  }
+
+  .dvx-composer-control-left {
+    gap: 1px;
+  }
+
+  .dvx-model-trigger {
+    max-width: 38%;
+  }
+
+  .dvx-interaction-actions {
+    justify-content: stretch;
+  }
+
+  .dvx-interaction-actions .dvx-button {
+    flex: 1 1 auto;
+  }
+
+  .dvx-header {
+    min-height: 58px;
+    padding-inline: 8px;
+  }
+
+  .dvx-status-seam {
+    height: 28px;
+  }
+
+  .dvx-header-actions {
+    gap: 3px;
+  }
+
+  .dvx-icon-button {
+    width: 30px;
+    height: 30px;
+  }
+
+  .dvx-thread-footer {
+    padding-inline: 8px;
+  }
+
+  .dvx-reading-column {
+    padding-inline: 10px;
+  }
+
+  .dvx-composer {
+    padding-inline: 10px 8px;
+    min-height: 116px;
+  }
+
+  .dvx-composer-hint {
+    display: none;
+  }
+}
+
+@media (min-width: 900px) {
+  .dvx-reading-column {
+    padding-inline: 22px;
+  }
+
+  .dvx-thread-footer {
+    padding-inline: 22px;
+  }
+
+  .dvx-reading-column, .dvx-composer-wrap {
+    max-width: 860px;
+  }
+}
+

@@ -1,0 +1,275 @@
+/* Plan anchor card: the plan's Cursor-style "Created Plan" card at
+   its creation position in the transcript (superseding the Composer
+   pin; user decision 2026-08-12 evening). A normal flow member — it
+   scrolls with the conversation and renders identically in live
+   turns and history replay. Later todowrites update it in place. */
+.dvx-plan-anchor {
+  overflow: hidden;
+  margin: 10px 0;
+  padding: 11px 12px 9px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fffefc, #fbf8f3);
+  box-shadow:
+    0 1px 2px rgb(31 24 16 / 5%),
+    0 10px 26px -18px rgb(31 24 16 / 28%);
+}
+
+/* Entry is gated like every other live-turn animation (streaming
+   design item D): only a connected live turn animates; history
+   restores and session switches mount silently. */
+.dvx-anim-live .dvx-message-live .dvx-plan-anchor {
+  animation: dvx-todo-fade-in var(--dvx-duration-slow) ease-out;
+}
+
+/* Quiet eyebrow from the uppercase card-label family. */
+.dvx-plan-anchor-eyebrow {
+  margin: 0 0 4px;
+  color: var(--dvx-subtle);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.dvx-plan-anchor-title {
+  margin: 0;
+  overflow: hidden;
+  color: var(--dvx-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-plan-anchor-summary {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--dvx-muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-plan-anchor-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Quiet text entry, link-weight on hover only. */
+.dvx-plan-anchor-view {
+  margin-left: -4px;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  color: var(--dvx-muted);
+  font-size: 12px;
+  line-height: 18px;
+  transition: background var(--dvx-duration-instant) ease,
+    color var(--dvx-duration-instant) ease;
+}
+
+.dvx-plan-anchor-view:hover {
+  background: var(--dvx-soft);
+  color: var(--dvx-ink);
+}
+
+/* Right status control: a quiet count at rest, a warm accent chip
+   while the turn is building the plan, a settled grey-check state
+   once every step is done. Always also a disclosure toggle. */
+.dvx-plan-anchor-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px 3px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+  color: var(--dvx-subtle);
+  font-size: 11.5px;
+  font-weight: 550;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
+  transition: background var(--dvx-duration-instant) ease,
+    border-color var(--dvx-duration-instant) ease,
+    color var(--dvx-duration-instant) ease;
+}
+
+.dvx-plan-anchor-status:hover {
+  background: var(--dvx-soft);
+}
+
+.dvx-plan-anchor-status-building {
+  border-color: color-mix(in srgb, var(--dvx-accent) 32%, transparent);
+  background: color-mix(in srgb, var(--dvx-accent) 10%, transparent);
+  color: color-mix(in srgb, var(--dvx-accent) 82%, var(--dvx-ink));
+}
+
+.dvx-plan-anchor-status-building:hover {
+  background: color-mix(in srgb, var(--dvx-accent) 16%, transparent);
+}
+
+.dvx-plan-anchor-done .dvx-plan-anchor-status {
+  color: var(--dvx-muted);
+}
+
+.dvx-plan-anchor-status .dvx-plan-anchor-check {
+  color: var(--dvx-subtle);
+}
+
+.dvx-plan-anchor-chevron {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  color: currentcolor;
+  opacity: 0.8;
+  transform: rotate(0deg);
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  transition: transform var(--dvx-duration-normal)
+    var(--dvx-easing-out-strong);
+}
+
+.dvx-plan-anchor-chevron[data-open="true"] {
+  transform: rotate(180deg);
+}
+
+/* The checklist stays mounted so both directions animate: the body
+   grid transitions 0fr↔1fr and the inner wrapper clips. */
+.dvx-plan-anchor-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dvx-duration-slower)
+    var(--dvx-easing-out-strong);
+}
+
+.dvx-plan-anchor-body[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.dvx-plan-anchor-body-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dvx-plan-anchor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 0 2px;
+  list-style: none;
+  border-top: 1px solid color-mix(in srgb, var(--dvx-border) 62%, transparent);
+  margin-top: 8px;
+}
+
+.dvx-plan-anchor-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  color: var(--dvx-ink);
+  font-size: 12.5px;
+  line-height: 19px;
+  animation: dvx-todo-fade-in var(--dvx-duration-slow) ease-out;
+}
+
+.dvx-plan-anchor-marker {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  margin-top: 3.5px;
+  border-radius: 50%;
+  border: 1.5px solid var(--dvx-border-strong);
+  background: transparent;
+}
+
+/* The current step reads through placement, a warm dot and a faint
+   highlight — never through bold text. */
+.dvx-plan-anchor-step-in_progress {
+  background: color-mix(in srgb, var(--dvx-accent) 6%, transparent);
+}
+
+.dvx-plan-anchor-step-in_progress .dvx-plan-anchor-marker {
+  border-color: var(--dvx-accent);
+  background:
+    radial-gradient(
+      circle at center,
+      var(--dvx-accent) 0 45%,
+      transparent 46%
+    );
+  animation: dvx-plan-pulse 1.4s ease-in-out infinite;
+}
+
+.dvx-plan-anchor-step-in_progress .dvx-plan-anchor-text {
+  font-weight: 500;
+}
+
+/* Done steps recede on transparency alone — no strikethrough, which
+   turns CJK lines into visual noise (user decision, batch 2 §3). */
+.dvx-plan-anchor-step-completed {
+  opacity: 0.62;
+}
+
+.dvx-plan-anchor-step-completed .dvx-plan-anchor-text {
+  color: var(--dvx-muted);
+}
+
+.dvx-plan-anchor-step-completed .dvx-plan-anchor-check {
+  color: var(--dvx-subtle);
+}
+
+.dvx-plan-anchor-text {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.dvx-plan-anchor-check {
+  display: block;
+  flex: 0 0 12px;
+  width: 12px;
+  height: 12px;
+  color: var(--dvx-diff-add, #1a7f37);
+}
+
+.dvx-plan-anchor-step .dvx-plan-anchor-check {
+  margin-top: 3.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-plan-anchor-view,
+  .dvx-plan-anchor-status,
+  .dvx-plan-anchor-chevron,
+  .dvx-plan-anchor-body {
+    transition: none;
+  }
+
+  .dvx-anim-live .dvx-message-live .dvx-plan-anchor,
+  .dvx-plan-anchor-step,
+  .dvx-plan-anchor-step-in_progress .dvx-plan-anchor-marker {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .dvx-plan-anchor {
+    border: 1px solid CanvasText;
+  }
+
+  .dvx-plan-anchor-status-building {
+    border-color: CanvasText;
+  }
+}
+
+/* ---- N Working badge + subagent activity popup ------------------- */
+

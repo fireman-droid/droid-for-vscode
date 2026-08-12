@@ -1,0 +1,217 @@
+/* Git commit flow (slice A). The entry is a quiet action chip at the
+   changes-card tail — same rest/hover language as .dvx-preview-chip
+   (hairline border, whisper fill; warm accent only on hover) so it
+   reads as an action without shouting. The expanded panel is a soft
+   raised card in the shell's finish: warm neutral, 1px border, small
+   shadow. */
+.dvx-commit-entry {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 2px 9px;
+  border: 1px solid rgb(0 0 0 / 8%);
+  border-radius: 6px;
+  background: rgb(0 0 0 / 3%);
+  color: var(--dvx-muted);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 18px;
+  transition:
+    border-color var(--dvx-duration-fast) ease,
+    background var(--dvx-duration-fast) ease,
+    color var(--dvx-duration-fast) ease;
+}
+
+.dvx-commit-entry:hover,
+.dvx-commit-entry:focus-visible {
+  border-color: var(--dvx-accent-strong);
+  background: var(--dvx-accent-soft);
+  color: var(--dvx-accent-strong);
+}
+
+.dvx-commit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 10px;
+  background: var(--dvx-raised);
+  box-shadow: 0 6px 18px -12px rgb(0 0 0 / 22%);
+}
+
+.dvx-commit-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.dvx-commit-title {
+  color: var(--dvx-ink);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.dvx-commit-branch {
+  overflow: hidden;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-commit-hint {
+  color: var(--dvx-subtle);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.dvx-commit-files {
+  display: flex;
+  max-height: 168px;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.dvx-commit-file {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--dvx-duration-instant) ease;
+}
+
+.dvx-commit-file:hover {
+  background: var(--dvx-soft);
+}
+
+.dvx-commit-file input {
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--dvx-accent);
+}
+
+.dvx-commit-file-path {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--dvx-ink);
+  font-family: var(--dvx-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.dvx-commit-file-meta {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.dvx-commit-message {
+  min-height: 54px;
+  padding: 6px 8px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 8px;
+  background: var(--dvx-surface);
+  color: var(--dvx-ink);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  resize: none;
+}
+
+.dvx-commit-message:focus-visible {
+  border-color: var(--dvx-accent);
+  outline: none;
+}
+
+.dvx-commit-error {
+  color: var(--dvx-danger);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* Dialog-standard placement: actions sit at the panel's lower right,
+   Cancel before the primary Commit. */
+.dvx-commit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.dvx-commit-submit {
+  padding: 4px 14px;
+  border: 1px solid var(--dvx-accent);
+  border-radius: 999px;
+  background: var(--dvx-accent);
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition:
+    border-color var(--dvx-duration-fast) ease,
+    background var(--dvx-duration-fast) ease;
+}
+
+.dvx-commit-submit:hover:not(:disabled) {
+  border-color: var(--dvx-accent-strong);
+  background: var(--dvx-accent-strong);
+}
+
+.dvx-commit-submit:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.dvx-commit-cancel {
+  padding: 4px 12px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dvx-muted);
+  cursor: pointer;
+  font-size: 11px;
+  transition:
+    border-color var(--dvx-duration-fast) ease,
+    color var(--dvx-duration-fast) ease;
+}
+
+.dvx-commit-cancel:hover {
+  border-color: var(--dvx-border-strong);
+  color: var(--dvx-ink);
+}
+
+/* Success echo replaces the entry: short hash in mono, quiet tone. */
+.dvx-commit-result {
+  align-self: flex-start;
+  margin-top: 2px;
+  color: var(--dvx-muted);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-commit-entry,
+  .dvx-commit-file,
+  .dvx-commit-submit,
+  .dvx-commit-cancel {
+    transition: none;
+  }
+}
+

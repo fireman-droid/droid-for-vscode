@@ -1,0 +1,572 @@
+.dvx-model-popover {
+  right: 10px;
+  left: auto;
+  width: 228px;
+  padding: 0;
+  overflow: visible;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dvx-model-panel, .dvx-reasoning-flyout {
+  overflow: hidden;
+  border: 1px solid var(--dvx-border);
+  border-radius: 8px;
+  background: #f5f3ef;
+  box-shadow: 0 18px 44px -14px rgb(0 0 0 / 25%);
+}
+
+.dvx-model-panel {
+  width: 228px;
+}
+
+.dvx-reasoning-flyout {
+  position: absolute;
+  right: 236px;
+  bottom: 0;
+  width: 144px;
+  padding: 4px 0;
+}
+
+.dvx-model-search {
+  width: 100%;
+  height: 34px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--dvx-border);
+  border-radius: 0;
+  background: transparent;
+  color: #525252;
+  font-size: 11.5px;
+}
+
+.dvx-model-scope {
+  display: flex;
+  gap: 2px;
+  margin: 6px 6px 2px;
+  padding: 2px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 7px;
+  background: var(--dvx-surface);
+}
+
+.dvx-model-scope-option {
+  flex: 1;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--dvx-muted);
+  background: transparent;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dvx-model-scope-option[aria-checked='true'] {
+  color: var(--dvx-ink);
+  background: var(--dvx-raised);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+
+.dvx-model-spec-default {
+  margin: 4px 6px 0;
+  padding: 4px 8px;
+  border: 1px dashed var(--dvx-border-strong);
+  border-radius: 6px;
+  color: var(--dvx-muted);
+  background: transparent;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dvx-model-spec-default:hover:not(:disabled) {
+  color: var(--dvx-ink);
+  background: var(--dvx-soft);
+}
+
+/* Selected state stays unfilled: solid accent-tinted stroke and
+   accent ink are the only cues (UI restraint, no filled pills).
+   Full opacity: this is a selected marker, not an unavailable
+   control, so the global disabled fade must not wash it out. */
+.dvx-shell .dvx-model-spec-default:disabled {
+  border-style: solid;
+  color: var(--dvx-accent-strong);
+  border-color: color-mix(in srgb, var(--dvx-accent) 34%, #fff);
+  background: transparent;
+  cursor: default;
+  opacity: 1;
+}
+
+.dvx-shell .dvx-model-search:focus-visible {
+  border-bottom-color: var(--dvx-border);
+  outline: none;
+  box-shadow: none;
+}
+
+.dvx-shell .dvx-settings-search:focus-visible {
+  border-color: #d5d1ca;
+  outline: none;
+  box-shadow: 0 0 0 1px rgb(64 64 64 / 8%);
+}
+
+.dvx-model-list {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+  max-height: 196px;
+  overflow-y: auto;
+  padding: 2px 0;
+  overscroll-behavior: contain;
+}
+
+.dvx-model-row {
+  display: grid;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 25px;
+  padding: 4px 12px;
+  border-radius: 0;
+}
+
+.dvx-model-row[aria-current="true"] {
+  background: rgb(0 0 0 / 4%);
+}
+
+.dvx-model-choice strong {
+  color: #404040;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.dvx-model-choice span {
+  display: none;
+}
+
+.dvx-model-current-controls {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dvx-model-reasoning-level {
+  color: #737373;
+  font-size: 10.5px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.dvx-model-edit {
+  display: grid;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0;
+  color: #a1a1a1;
+}
+
+.dvx-pencil-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+.dvx-reasoning-heading {
+  min-height: 28px;
+  margin: 0;
+  padding: 6px 12px;
+  color: #a1a1a1;
+  font-size: 11px;
+  line-height: 16px;
+  user-select: none;
+}
+
+.dvx-reasoning-flyout .dvx-option-row {
+  min-height: 26px;
+  padding: 4px 12px;
+  border-radius: 0;
+}
+
+.dvx-reasoning-flyout .dvx-option-copy strong {
+  color: #404040;
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.dvx-reasoning-flyout .dvx-radio-mark {
+  border-color: var(--dvx-accent);
+}
+
+.dvx-session-drawer {
+  overflow-y: auto;
+  color: var(--dvx-ink);
+  position: absolute;
+  border-left: 0;
+  z-index: 21;
+  top: 60px;
+  right: 0;
+  bottom: 126px;
+  left: 0;
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 8px 0;
+  overflow: hidden;
+  border: 0;
+  background: var(--dvx-surface);
+  box-shadow: none;
+  animation: dvx-fade-in 180ms ease-out;
+}
+
+.dvx-session-search-shell {
+  display: flex;
+  align-items: center;
+  height: 33px;
+  margin: 0 8px;
+  padding: 0 10px;
+  border: 1px solid #d8d5cf;
+  border-radius: 8px;
+  background: #fff;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.dvx-session-search-shell:focus-within {
+  border-color: #c7c3bc;
+  box-shadow: 0 0 0 2px rgb(64 64 64 / 6%);
+}
+
+.dvx-session-search-icon {
+  display: grid;
+  place-items: center;
+  color: #a1a1a1;
+}
+
+.dvx-session-search {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: 31px;
+  padding: 7px 8px;
+  appearance: none;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #525252;
+  font-size: 11.5px;
+}
+
+.dvx-shell .dvx-session-search:focus, .dvx-shell .dvx-session-search:focus-visible {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+
+.dvx-session-search::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.dvx-session-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 35px;
+  padding: 8px 4px 8px 12px;
+  color: #525252;
+  font-size: 12px;
+}
+
+.dvx-session-close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  color: #a1a1a1;
+  background: transparent;
+}
+
+.dvx-session-status, .dvx-session-empty {
+  margin: 8px;
+  color: #a1a1a1;
+  font-size: 11px;
+}
+
+.dvx-session-list {
+  display: grid;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  gap: 0;
+}
+
+.dvx-session-nav {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.dvx-session-nav::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.dvx-session-row {
+  width: 100%;
+  min-width: 0;
+  gap: 3px;
+  border-left: 2px solid transparent;
+  text-align: left;
+  cursor: pointer;
+  border-left-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 35.5px;
+  padding: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.dvx-session-row:hover:not(:disabled), .dvx-session-row[aria-current="true"] {
+  background: rgb(0 0 0 / 4%);
+}
+
+.dvx-session-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #404040;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* Quiet running ring on a drawer row whose detached daemon turn is
+   still in flight. Same muted treatment as the transcript sub-row
+   spinner: compositor-only rotation, inline so the 8px ring never
+   changes the row height. */
+.dvx-session-run-spinner {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border: 1.25px solid var(--dvx-border-strong, #d5cdc4);
+  border-radius: 50%;
+  border-top-color: var(--dvx-subtle, #a1a1a1);
+  vertical-align: 0;
+  animation: dvx-spin 900ms linear infinite;
+}
+
+.dvx-session-row time {
+  /* Pinned so a second content line (worktree annotation) wraps under
+     the title while the timestamp keeps its top-right position. */
+  grid-row: 1;
+  grid-column: 2;
+  color: #a1a1a1;
+  font-size: 11px;
+}
+
+/* Quiet secondary line under the title: `worktree · <branch>`.
+   Same typographic register as the content-match snippet; the full
+   path lives in the tooltip only. */
+.dvx-session-row-worktree {
+  grid-column: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #7c7c7c;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* Quiet text option below the filter row; mirrors the session-row
+   hover treatment instead of introducing a styled button. */
+.dvx-session-worktree-new {
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: #525252;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.dvx-session-worktree-new:hover:not(:disabled) {
+  background: rgb(0 0 0 / 4%);
+  color: var(--dvx-ink);
+}
+
+.dvx-session-worktree-new:disabled {
+  color: #a1a1a1;
+  cursor: default;
+}
+
+.dvx-session-row-shell {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.dvx-session-row-shell .dvx-session-row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dvx-session-rename,
+.dvx-session-star {
+  display: none;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dvx-muted);
+  cursor: pointer;
+}
+
+.dvx-session-row-shell:hover .dvx-session-rename,
+.dvx-session-rename:focus-visible,
+.dvx-session-row-shell:hover .dvx-session-star,
+.dvx-session-star:focus-visible,
+.dvx-session-star-active {
+  display: inline-flex;
+}
+
+.dvx-session-rename:hover:not(:disabled),
+.dvx-session-star:hover:not(:disabled) {
+  color: var(--dvx-ink);
+  background: rgb(0 0 0 / 6%);
+}
+
+.dvx-session-star-active {
+  color: var(--dvx-accent);
+}
+
+.dvx-session-star-active:hover:not(:disabled) {
+  color: var(--dvx-accent);
+}
+
+.dvx-session-group-label {
+  margin: 0;
+  padding: 8px 12px 2px;
+  color: #a1a1a1;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.dvx-session-row-renaming {
+  display: flex;
+  cursor: default;
+}
+
+.dvx-session-row-static {
+  cursor: default;
+}
+
+.dvx-session-row-static:hover {
+  background: transparent;
+}
+
+.dvx-session-matches,
+.dvx-session-archived {
+  flex: 0 0 auto;
+  border-top: 1px solid rgb(0 0 0 / 6%);
+}
+
+.dvx-session-match {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+}
+
+.dvx-session-match time {
+  justify-self: start;
+}
+
+.dvx-session-match-remote {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.dvx-session-match-remote:hover {
+  background: transparent;
+}
+
+.dvx-session-match-snippet {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #7c7c7c;
+  font-size: 11px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dvx-session-archived-toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: #a1a1a1;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dvx-session-archived-toggle:hover {
+  color: var(--dvx-ink);
+}
+
+.dvx-session-archived-chevron {
+  display: inline-flex;
+  transition: transform 120ms ease;
+}
+
+.dvx-session-archived-chevron-open {
+  transform: rotate(90deg);
+}
+
+.dvx-session-rename-input {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--dvx-accent);
+  border-radius: 5px;
+  background: var(--dvx-surface, #fff);
+  color: #404040;
+  font: inherit;
+  font-size: 12px;
+}
+
+.dvx-session-rename-input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dvx-accent) 22%, transparent);
+}
+

@@ -1,0 +1,236 @@
+.dvx-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 2px;
+}
+
+.dvx-plan-progress {
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+}
+
+.dvx-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+
+.dvx-plan-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--dvx-text);
+  font-size: 12.5px;
+  line-height: 18px;
+}
+
+.dvx-plan-marker {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border-radius: 50%;
+  border: 1.5px solid var(--dvx-border);
+  background: transparent;
+}
+
+.dvx-plan-step-in_progress .dvx-plan-marker {
+  border-color: var(--dvx-accent);
+  background:
+    radial-gradient(
+      circle at center,
+      var(--dvx-accent) 0 45%,
+      transparent 46%
+    );
+  animation: dvx-plan-pulse 1.4s ease-in-out infinite;
+}
+
+.dvx-plan-step-completed .dvx-plan-marker {
+  border-color: var(--dvx-diff-add, #1a7f37);
+  background: var(--dvx-diff-add, #1a7f37);
+}
+
+.dvx-plan-step-completed .dvx-plan-text {
+  color: var(--dvx-muted);
+  text-decoration: line-through;
+  text-decoration-color: rgb(0 0 0 / 25%);
+}
+
+.dvx-plan-step-in_progress .dvx-plan-text {
+  font-weight: 550;
+}
+
+.dvx-plan-text {
+  min-width: 0;
+  word-break: break-word;
+}
+
+@keyframes dvx-plan-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Disclosure bodies ease open instead of snapping, so expanding the
+   thinking log or a tool detail reads as a smooth reveal. */
+.dvx-activity-row[open] > .dvx-thinking-content,
+.dvx-activity-row[open] > .dvx-tool-summary,
+.dvx-activity-row[open] > .dvx-tool-command,
+.dvx-activity-row[open] > .dvx-tool-output-frame {
+  animation: dvx-disclose-in 220ms ease-out;
+}
+
+/* Plans open with a bounded height sweep plus a faster opacity ramp
+   (streaming design item E), sharing the collapse easing of the
+   exploration groups. */
+@keyframes dvx-plan-open {
+  from {
+    max-height: 0;
+  }
+
+  to {
+    max-height: 500px;
+  }
+}
+
+.dvx-activity-row[open] > .dvx-plan {
+  overflow: hidden;
+  animation:
+    dvx-plan-open var(--dvx-duration-slower)
+      var(--dvx-easing-out-strong),
+    dvx-entry-fade var(--dvx-duration-slow) ease-out;
+}
+
+/* Steps keep their index as React key, so plan updates reuse the
+   existing nodes and only newly appended items replay the fade. */
+@keyframes dvx-todo-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dvx-plan-step {
+  animation: dvx-todo-fade-in var(--dvx-duration-slow) ease-out;
+}
+
+.dvx-plan-summary {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dvx-muted);
+  font-weight: 400;
+}
+
+/* Entry animations (streaming design item D). Double-gated:
+   dvx-anim-live sits on the shell only while a connected session has
+   an active turn, and dvx-message-live marks the one streaming
+   message — so restored snapshots, session switches, reconcile
+   replacements, Show earlier, and turn starts over existing history
+   all mount silently. */
+@keyframes dvx-entry-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dvx-entry-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.dvx-anim-live .dvx-message-live .dvx-markdown {
+  animation: dvx-entry-rise var(--dvx-duration-slow) ease-out;
+}
+
+.dvx-anim-live .dvx-message-live .dvx-activity-row,
+.dvx-anim-live .dvx-message-live .dvx-activity-group {
+  animation: dvx-entry-fade var(--dvx-duration-fast) ease-out;
+}
+
+/* The action bar mounts after streaming ends (hideWhenRunning), so
+   it fades on its own message-was-live gate rather than the root
+   class, which may already be gone by then. */
+.dvx-actions-entry {
+  animation: dvx-entry-fade var(--dvx-duration-normal) ease-out;
+}
+
+@media (hover: none) {
+  .dvx-user-actions {
+    opacity: 0.78;
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .dvx-shell {
+    color: CanvasText;
+    background: Canvas;
+    forced-color-adjust: auto;
+  }
+
+  .dvx-status-seam, .dvx-composer-seam, .dvx-runtime-pulse {
+    background: Highlight;
+  }
+
+  .dvx-user-block, .dvx-activity-row, .dvx-composer, .dvx-composer-popover, .dvx-plus-button, .dvx-interaction-panel, .dvx-permission-tool {
+    border: 1px solid CanvasText;
+  }
+
+  .dvx-context-ring-track, .dvx-context-ring-value {
+    stroke: Highlight;
+  }
+
+  .dvx-context-progress span {
+    background: Highlight;
+  }
+
+  .dvx-drawer-backdrop {
+    background: transparent;
+  }
+
+  .dvx-message-action:focus-visible {
+    outline: 1px solid Highlight;
+    box-shadow: none;
+  }
+
+  .dvx-tool-summary code {
+    border: 1px solid CanvasText;
+  }
+
+  /* The light theme marks inline code with a translucent wash, which
+     forced colors strips; restore a visible boundary here. */
+  .dvx-markdown :not(pre) > code {
+    border: 1px solid CanvasText;
+  }
+}
+

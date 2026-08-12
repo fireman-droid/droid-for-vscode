@@ -1,0 +1,350 @@
+.dvx-composer-wrap {
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+  max-width: none;
+}
+
+.dvx-composer {
+  position: relative;
+  display: grid;
+  border-color: var(--dvx-border);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  min-height: 87px;
+  padding: 10px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 1.5px rgb(0 0 0 / 10%), 0 1px 1px rgb(0 0 0 / 10%);
+}
+
+.dvx-composer-pending {
+  min-height: 60px;
+  grid-template-rows: 38px;
+}
+
+.dvx-composer-pending .dvx-composer-footer {
+  padding-top: 6px;
+}
+
+.dvx-composer-pending button:disabled {
+  opacity: 1;
+}
+
+.dvx-composer:focus-within {
+  border-color: var(--dvx-border-strong);
+  box-shadow: 0 1px 1.5px rgb(0 0 0 / 10%), 0 1px 1px rgb(0 0 0 / 10%);
+}
+
+/* Files dragged over the composer stage as attachments. */
+.dvx-composer-dragover {
+  border-color: var(--dvx-border-strong);
+  border-style: dashed;
+  background: #fdf9f3;
+}
+
+.dvx-composer-input {
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  min-height: 27px;
+  max-height: 168px;
+  padding: 0 2px;
+  color: #262626;
+  font-size: 13px;
+  line-height: 21.125px;
+}
+
+.dvx-composer-input::placeholder {
+  color: #a1a1a1;
+}
+
+.dvx-composer-status {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  margin-top: 2px;
+  color: #a1a1a1;
+  font-size: 11px;
+}
+
+/* Transient feedback for drops that could not be staged. */
+.dvx-composer-notice {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  margin-top: 2px;
+  color: #b45309;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.dvx-composer-footer {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 38px;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.dvx-composer-controls {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  gap: 8px;
+}
+
+.dvx-composer-control-left {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.dvx-composer-tool-button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  color: var(--dvx-muted);
+  background: transparent;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+.dvx-plus-button {
+  font-weight: 360;
+  border-color: var(--dvx-border);
+  border: 1px solid var(--dvx-border);
+  background: #fff;
+  font-size: 19px;
+}
+
+.dvx-context-ring {
+  overflow: visible;
+  transform: rotate(-90deg);
+  transition: transform 150ms ease;
+  width: 20px;
+  height: 20px;
+}
+
+.dvx-context-ring-track, .dvx-context-ring-value {
+  fill: none;
+  stroke-width: 3;
+}
+
+.dvx-context-ring-track {
+  stroke: var(--dvx-border);
+}
+
+/* Repeated here because this shared block once overrode the accent
+   stroke declared earlier; the used-context arc must stay accent. */
+.dvx-context-ring-value {
+  stroke: var(--dvx-accent);
+}
+
+.dvx-shell .dvx-context-button {
+  display: flex;
+  align-items: center;
+  width: auto;
+  gap: 3px;
+  padding: 0 3px;
+}
+
+.dvx-context-percent {
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.dvx-shell .dvx-mode-trigger {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-left: auto;
+  gap: 3px;
+  padding: 5px 4px;
+  border: 0;
+  border-radius: 6px;
+  color: #525252;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* Spec state on the mode trigger is text color only: same quiet
+   bare-text trigger as Auto/model, accent ink as the single cue
+   (UI-restraint decision, 2026-08-12: no fills, no badges). */
+.dvx-shell .dvx-mode-trigger-spec {
+  color: var(--dvx-accent-strong);
+  font-weight: 500;
+}
+
+.dvx-shell .dvx-mode-trigger:hover:not(:disabled) {
+  color: var(--dvx-ink);
+  background: var(--dvx-soft);
+}
+
+.dvx-shell .dvx-mode-trigger-spec:hover:not(:disabled) {
+  color: var(--dvx-accent-strong);
+}
+
+.dvx-mode-trigger .dvx-chevron-down {
+  transition: transform 160ms ease;
+}
+
+.dvx-mode-trigger[aria-expanded="true"] .dvx-chevron-down {
+  transform: rotate(180deg);
+}
+
+.dvx-shell .dvx-mode-popover {
+  left: auto;
+  width: 260px;
+  max-width: calc(100% - 8px);
+}
+
+.dvx-shell .dvx-model-trigger {
+  max-width: 174px;
+  margin-left: 8px;
+  padding: 0;
+  color: #525252;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.dvx-model-trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dvx-model-trigger .dvx-chevron-down {
+  transition: transform 160ms ease;
+}
+
+.dvx-model-trigger[aria-expanded="true"] .dvx-chevron-down {
+  transform: rotate(180deg);
+}
+
+.dvx-model-trigger::after {
+  margin-left: 5px;
+  color: #a29d95;
+  font-size: 13px;
+  line-height: 1;
+  transition: transform 160ms ease;
+  display: none;
+  content: none;
+}
+
+.dvx-composer-action {
+  color: var(--dvx-ink);
+  background: var(--dvx-raised);
+  min-width: auto;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.dvx-shell .dvx-send-action {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 8px;
+  background: var(--dvx-accent);
+  box-shadow: 0 1px 1.5px rgb(0 0 0 / 10%), 0 1px 1px rgb(0 0 0 / 10%);
+  font-size: 18px;
+}
+
+.dvx-send-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.dvx-shell .dvx-send-action:disabled {
+  color: #fff;
+  opacity: 1;
+}
+
+.dvx-composer-hint {
+  text-align: center;
+  padding-top: 7px;
+  min-height: 25px;
+  padding: 8px 0 0;
+  color: #a1a1a1;
+  font-size: 11px;
+  line-height: 16.5px;
+}
+
+.dvx-composer-popover {
+  position: absolute;
+  z-index: 12;
+  max-width: none;
+  overflow: auto;
+  color: var(--dvx-ink);
+  border-color: var(--dvx-border);
+  animation: dvx-rise-in var(--dvx-duration-slow)
+    var(--dvx-easing-out-strong);
+  transform-origin: bottom center;
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: auto;
+  max-height: 520px;
+  padding: 10px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 12px;
+  background: #faf9f6;
+  box-shadow: 0 18px 44px -16px rgb(0 0 0 / 25%);
+}
+
+/* Near the viewport top (pinned edit card) popovers flip downward so
+   they stay on screen; ComposerControls toggles the class from the
+   measured space around the control row. */
+.dvx-controls-down .dvx-composer-popover {
+  top: calc(100% + 8px);
+  bottom: auto;
+  transform-origin: top center;
+}
+
+/* Dismissal mirrors the entry: ComposerControls keeps the closing
+   popover mounted briefly (POPOVER_EXIT_MS) while this plays; the
+   fill keeps it hidden if unmount lags, and pointer events stop at
+   once so the fading surface cannot swallow clicks. */
+@keyframes dvx-rise-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+[data-popover-closing] .dvx-composer-popover {
+  pointer-events: none;
+  animation: dvx-rise-out var(--dvx-duration-normal)
+    var(--dvx-easing-out-strong) forwards;
+}
+

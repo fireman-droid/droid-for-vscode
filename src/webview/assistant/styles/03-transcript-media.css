@@ -1,0 +1,447 @@
+.dvx-activity-row summary::-webkit-details-marker {
+  display: none;
+}
+
+.dvx-activity-row[open] summary::before {
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.dvx-activity-indicator {
+  display: none;
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.65;
+}
+
+.dvx-activity-state::before {
+  margin-right: 5px;
+  color: var(--dvx-subtle);
+  content: "·";
+}
+
+/* Compaction record: a quiet centered divider (hairline + small
+   label), not a notice bar. */
+.dvx-compact-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  user-select: none;
+}
+
+.dvx-compact-divider::before, .dvx-compact-divider::after {
+  height: 1px;
+  flex: 1 1 auto;
+  background: var(--dvx-border);
+  content: "";
+}
+
+.dvx-compact-divider-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  color: var(--dvx-muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 16px;
+}
+
+.dvx-compact-divider-icon {
+  width: 11px;
+  height: 11px;
+  color: var(--dvx-accent);
+  opacity: 0.85;
+}
+
+/* Quiet jump to the pre-compaction session; same muted weight as the
+   divider label, underline only on hover. */
+.dvx-compact-divider-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dvx-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.dvx-compact-divider-link:hover {
+  color: var(--dvx-accent);
+  text-decoration: underline;
+}
+
+/* Transient host notices: a content-fit finished card in the shell's
+   register — layered warm-white gradient over 1px border, doubled
+   soft shadow, and a halo-ringed severity dot. Severity tints the
+   border, wash, and ink together but stays in the warm muted range;
+   no flat alert strips. */
+.dvx-diagnostic {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 8px 0;
+  padding: 7px 13px 7px 12px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 9px;
+  background: linear-gradient(180deg, #fffdfb, var(--dvx-raised));
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 3%),
+    0 8px 18px -14px rgb(0 0 0 / 16%);
+  color: var(--dvx-muted);
+  font-size: 11.5px;
+  line-height: 17px;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+}
+
+.dvx-diagnostic::before {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  /* Centers the dot on the first 17px text line. */
+  margin-top: 5.5px;
+  border-radius: 999px;
+  background: var(--dvx-subtle);
+  box-shadow: 0 0 0 3px rgb(0 0 0 / 4%);
+  content: "";
+}
+
+.dvx-diagnostic code {
+  display: none;
+}
+
+.dvx-diagnostic-warning {
+  border-color: color-mix(in srgb, var(--dvx-warning) 18%, var(--dvx-border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--dvx-warning) 3%, #fff),
+      var(--dvx-raised)
+    );
+  color: color-mix(in srgb, var(--dvx-warning) 52%, var(--dvx-muted));
+}
+
+.dvx-diagnostic-warning::before {
+  background: var(--dvx-warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dvx-warning) 13%, transparent);
+}
+
+.dvx-diagnostic-error {
+  border-color: color-mix(in srgb, var(--dvx-danger) 20%, var(--dvx-border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--dvx-danger) 3%, #fff),
+      var(--dvx-raised)
+    );
+  color: color-mix(in srgb, var(--dvx-danger) 78%, #4a3b3b);
+}
+
+.dvx-diagnostic-error::before {
+  background: var(--dvx-danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dvx-danger) 12%, transparent);
+}
+
+.dvx-transcript-image {
+  position: relative;
+  display: inline-flex;
+  margin: 5px 0;
+  max-width: 100%;
+}
+
+.dvx-image-thumb-button {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--dvx-border);
+  border-radius: 6px;
+  background: var(--dvx-code);
+  cursor: zoom-in;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.dvx-image-thumb-button:focus-visible {
+  outline: 2px solid var(--dvx-accent);
+  outline-offset: 1px;
+}
+
+.dvx-image-thumb {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+}
+
+.dvx-image-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--dvx-accent-strong);
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  pointer-events: none;
+}
+
+.dvx-image-placeholder {
+  display: block;
+  margin: 5px 0;
+  padding: 4px 8px;
+  border-left: 2px solid var(--dvx-muted);
+  border-radius: 3px;
+  background: rgb(255 255 255 / 35%);
+  color: var(--dvx-muted);
+  font-size: 11.5px;
+  line-height: 18px;
+}
+
+.dvx-markdown-image {
+  display: block;
+  margin: 5px 0;
+  max-width: 100%;
+  max-height: 240px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.dvx-markdown-image-pending,
+.dvx-markdown-image-fallback {
+  color: var(--dvx-muted);
+  font-size: 12px;
+}
+
+.dvx-image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: hidden;
+  background: rgb(0 0 0 / 65%);
+  cursor: zoom-out;
+  touch-action: none;
+}
+
+/* Sized to its natural resolution on load and centered via negative
+   margins; zoom and pan ride the transform alone. */
+.dvx-image-full {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  max-height: none;
+  border-radius: 4px;
+  cursor: default;
+  transform-origin: center;
+  will-change: transform;
+  user-select: none;
+}
+
+.dvx-image-animate {
+  transition: transform 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-image-animate {
+    transition: none;
+  }
+}
+
+.dvx-image-grab {
+  cursor: grab;
+}
+
+.dvx-image-grabbing {
+  cursor: grabbing;
+}
+
+.dvx-image-zoom-indicator {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 55%);
+  color: rgb(255 255 255 / 85%);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Viewer chrome: Reset / 1:1 / close grouped top-right over the
+   backdrop, sharing the dark translucent pill language. */
+.dvx-image-lightbox-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dvx-image-lightbox-action {
+  height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 55%);
+  color: rgb(255 255 255 / 92%);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dvx-image-lightbox-action:hover {
+  background: rgb(0 0 0 / 75%);
+}
+
+.dvx-image-lightbox-close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 13px;
+  line-height: 28px;
+  cursor: pointer;
+}
+
+.dvx-image-lightbox-close:hover {
+  background: rgb(0 0 0 / 75%);
+}
+
+/* Media fills the natural-size stage; SVG diagrams keep a white
+   card surface so warm-themed strokes read on the dark backdrop. */
+.dvx-lightbox-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  user-select: none;
+}
+
+.dvx-lightbox-diagram {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 30%);
+}
+
+.dvx-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dvx-muted);
+  font-size: 13px;
+}
+
+.dvx-runtime-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dvx-accent);
+  animation: dvx-seam-pulse 1.4s ease-in-out infinite;
+}
+
+/* While an activity row carries the live shimmer, the pending status
+   row keeps its place but stops animating entirely. */
+.dvx-pending-label {
+  color: #6b6259;
+}
+
+.dvx-pending-quiet .dvx-runtime-pulse {
+  animation: none;
+}
+
+.dvx-empty-state {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  place-content: center;
+  justify-items: center;
+  padding: 30px 12px;
+  text-align: center;
+}
+
+.dvx-empty-mark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  margin-bottom: 14px;
+  border-left: 2px solid var(--dvx-accent);
+  color: var(--dvx-muted);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dvx-empty-state h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 680;
+}
+
+.dvx-empty-state p {
+  max-width: 300px;
+  margin: 6px 0 0;
+  color: var(--dvx-muted);
+  font-size: 13px;
+}
+
+.dvx-history-notices {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 14px;
+}
+
+/* Handshake fallback row between header and thread: a stale in-memory
+   host after a VSIX overwrite install never answers webview.ready, so
+   the shell grows a quiet third row borrowing the history-notice
+   language (UI restraint: no new prominent element). */
+.dvx-shell-stalled {
+  grid-template-rows: 60px auto minmax(0, 1fr);
+}
+
+.dvx-handshake-notice {
+  margin: 10px 16px 0;
+}
+
+.dvx-history-notice {
+  padding: 8px 10px;
+  border-left: 2px solid var(--dvx-accent);
+  color: var(--dvx-muted);
+  font-size: 12px;
+}
+
+.dvx-show-earlier {
+  display: block;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 7px 10px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dvx-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dvx-show-earlier:hover {
+  color: var(--dvx-text);
+  border-color: var(--dvx-accent);
+}
+

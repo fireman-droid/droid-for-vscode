@@ -1,0 +1,50 @@
+/* Selection governance (VS Code/Cursor semantics): UI chrome is not
+   selectable, content is. Chrome is disabled at container level and
+   content re-enabled by whitelist, so a page-wide Ctrl+A highlights
+   only message text, code, and tool details. */
+.dvx-shell button {
+  user-select: none;
+}
+
+.dvx-header,
+.dvx-thread-footer,
+.dvx-session-drawer,
+.dvx-drawer-backdrop,
+.dvx-empty-state,
+.dvx-pending,
+.dvx-history-notice,
+.dvx-show-earlier,
+.dvx-assistant-actions,
+.dvx-composer-popover,
+.dvx-command-popup,
+.dvx-mention-popup,
+.dvx-reasoning-flyout,
+.dvx-user-edit-rejection,
+.dvx-user-edit-footer,
+.dvx-user-edit-attachments,
+.dvx-user-sent-attachments,
+.dvx-user-resending-note,
+.dvx-activity-row summary,
+.dvx-thinking-row summary,
+.dvx-activity-group-header,
+.dvx-activity-group-summary,
+.dvx-plan-summary,
+.dvx-plan-marker,
+.dvx-changes,
+.dvx-interaction-eyebrow,
+.dvx-interaction-queue,
+.dvx-interaction-actions,
+.dvx-permission-menu,
+.dvx-permission-tool-meta,
+.dvx-diagnostic code {
+  user-select: none;
+}
+
+/* Content whitelisted back inside chrome containers: the composer
+   and edit textareas, and command/path details on tool rows. */
+.dvx-composer-input,
+.dvx-user-edit-input,
+.dvx-tool-command-inline {
+  user-select: text;
+}
+

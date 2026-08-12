@@ -1,0 +1,315 @@
+.dvx-markdown {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #262626;
+  font-size: 13px;
+  line-height: 21.125px;
+}
+
+.dvx-markdown p, .dvx-markdown ul, .dvx-markdown ol, .dvx-markdown pre, .dvx-markdown blockquote, .dvx-markdown table, .dvx-markdown .dvx-code-block {
+  margin: 0 0 12px;
+}
+
+.dvx-markdown .dvx-code-block pre {
+  margin: 0;
+}
+
+.dvx-markdown > :first-child {
+  margin-top: 0;
+}
+
+.dvx-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.dvx-markdown ul, .dvx-markdown ol {
+  padding-left: 24px;
+}
+
+.dvx-markdown li + li {
+  margin-top: 8px;
+}
+
+.dvx-activity-row {
+  overflow: hidden;
+  color: #4d4842;
+  border-color: var(--dvx-border);
+  transition: border-color 160ms ease, background-color 160ms ease;
+  margin: 0 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+}
+
+.dvx-activity-row summary::before, .dvx-activity-indicator {
+  display: none;
+}
+
+.dvx-activity-chevron {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  color: #a1a1a1;
+  transform: rotate(0deg);
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  transition: transform var(--dvx-duration-normal)
+    var(--dvx-easing-out-strong);
+}
+
+.dvx-activity-row:not([open]) .dvx-activity-chevron {
+  transform: rotate(-90deg);
+}
+
+.dvx-activity-state {
+  margin-left: auto;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: inherit;
+  font-size: inherit;
+}
+
+.dvx-activity-row[open] {
+  border-color: #dcd6ce;
+  border: 0;
+  background: transparent;
+}
+
+.dvx-activity-row pre, .dvx-tool-identity {
+  border-color: #ebe7e0;
+  border-radius: 7px;
+  margin: 6px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #a1a1a1;
+  font-size: 12.5px;
+  line-height: 20.313px;
+}
+
+.dvx-activity-row pre {
+  font-family: inherit;
+}
+
+/* Exploration groups (streaming-experience design item A): while the
+   run is live the group shows a shimmering "Exploring" header over a
+   bounded auto-scrolling preview; finished runs collapse to an
+   "Explored 3 files, 2 searches" summary that expands on click. */
+.dvx-activity-group {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #4d4842;
+}
+
+.dvx-activity-group .dvx-activity-row {
+  margin-bottom: 4px;
+}
+
+.dvx-activity-group .dvx-activity-row:last-child {
+  margin-bottom: 0;
+}
+
+.dvx-activity-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 21px;
+  color: #404040;
+  font-weight: 500;
+  line-height: 21.125px;
+}
+
+/* Running collapsed group: a one-row viewport under the header; the
+   track slides up one row height when the active member advances
+   (vertical ticker, user report batch 2 §1). Transient status only,
+   so it takes no clicks. */
+.dvx-activity-ticker {
+  --dvx-ticker-row: 22px;
+
+  height: var(--dvx-ticker-row);
+  overflow: hidden;
+  margin-top: 2px;
+  padding-left: 12px;
+  pointer-events: none;
+}
+
+.dvx-ticker-track {
+  display: flex;
+  flex-direction: column;
+}
+
+.dvx-ticker-track.dvx-ticker-slide {
+  transform: translateY(calc(-1 * var(--dvx-ticker-row, 22px)));
+  transition: transform 240ms var(--dvx-easing-out-strong);
+}
+
+.dvx-ticker-item {
+  height: var(--dvx-ticker-row);
+  overflow: hidden;
+}
+
+.dvx-ticker-item .dvx-activity-row {
+  margin: 0;
+}
+
+.dvx-ticker-item .dvx-activity-row summary {
+  min-height: var(--dvx-ticker-row);
+  line-height: var(--dvx-ticker-row);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-ticker-track.dvx-ticker-slide {
+    transition: none;
+  }
+}
+
+/* Only the group header shimmers while the run is live; member rows
+   inside the ticker stay static so each turn keeps at most one
+   shimmer (activity-shimmer-fix invariant). */
+.dvx-activity-ticker .dvx-activity-running .dvx-tool-action,
+.dvx-activity-ticker .dvx-shimmer-text,
+.dvx-thread-pending .dvx-activity-group-header .dvx-shimmer-text {
+  background-image: none;
+  background-clip: border-box;
+  -webkit-background-clip: border-box;
+  color: #6b6259;
+  animation: none;
+}
+
+.dvx-activity-group-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  min-height: 21px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #404040;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 500;
+  line-height: 21.125px;
+  text-align: left;
+}
+
+.dvx-activity-group-summary[aria-expanded='false']
+  .dvx-activity-chevron {
+  transform: rotate(-90deg);
+}
+
+.dvx-activity-state-failed {
+  color: #b3401f;
+}
+
+.dvx-activity-group-details {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dvx-duration-normal)
+    var(--dvx-easing-out-strong);
+}
+
+.dvx-activity-group-details-open {
+  grid-template-rows: 1fr;
+}
+
+.dvx-activity-group-details-inner {
+  overflow: hidden;
+  min-height: 0;
+  padding-left: 12px;
+}
+
+.dvx-activity-group-details-open .dvx-activity-group-details-inner {
+  padding-top: 6px;
+}
+
+.dvx-thread-footer {
+  position: sticky;
+  z-index: 4;
+  width: 100%;
+  flex: 0 0 auto;
+  bottom: 0;
+  padding: 4px 16px 10px;
+  background: var(--dvx-surface);
+}
+
+/* Scroll-to-bottom: a round affordance floating above the Composer
+   while the transcript is away from the bottom. Fade plus a small
+   lift; the hidden state leaves hit-testing and the tab order, and
+   the short appear delay keeps one-shot replay scrolls from
+   flashing it. */
+.dvx-scroll-bottom-dock {
+  position: absolute;
+  z-index: 3;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 10px;
+  pointer-events: none;
+}
+
+.dvx-scroll-bottom {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--dvx-border);
+  border-radius: 50%;
+  color: var(--dvx-muted);
+  background: var(--dvx-raised);
+  box-shadow: 0 2px 8px rgb(48 42 36 / 12%), 0 1px 2px rgb(48 42 36 / 8%);
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    border-color 130ms ease,
+    color 130ms ease,
+    visibility 0s linear 160ms;
+}
+
+.dvx-scroll-bottom svg {
+  width: 14px;
+  height: 14px;
+}
+
+.dvx-scroll-bottom-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition:
+    opacity 160ms ease 60ms,
+    transform 160ms ease 60ms,
+    border-color 130ms ease,
+    color 130ms ease,
+    visibility 0s linear 60ms;
+}
+
+.dvx-scroll-bottom:hover, .dvx-scroll-bottom:focus-visible {
+  color: var(--dvx-ink);
+  border-color: var(--dvx-border-strong);
+  outline: none;
+}
+
+.dvx-scroll-bottom:focus-visible {
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder, #d2643d), 0 2px 8px rgb(48 42 36 / 12%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-scroll-bottom {
+    transition: none;
+  }
+}
+
