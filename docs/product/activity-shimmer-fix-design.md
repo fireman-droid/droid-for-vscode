@@ -1,7 +1,9 @@
 # Activity Shimmer Fix — Design
 
-Status: design only, not implemented. Diagnosed 2026-08-11 against the
-current working tree; line numbers reference that state.
+Status: **implemented, archived**（活动 shimmer 打磨已于 2026-08-11
+落地，见 `implementation-status.md`「V1 前已完成」）. Diagnosed
+2026-08-11 against the working tree of that day; line numbers
+reference that state.
 
 ## Problem
 

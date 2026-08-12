@@ -1,5 +1,12 @@
 # Session 域调研与设计：管理补全、跨项目列表、历史对齐修复
 
+> 状态（2026-08-12 更新）：**已实现，仅存档**——§1 收藏/分组
+> （2026-08-11 深夜）与归档/取消归档（daemon Phase 1 只读 sidecar）
+> 已落地；§2 列表按工作区过滤已落地；§3 历史对齐已落地。
+> Session Delete 无任何 API，维持 fail-closed——§1.1 证据表仍是该
+> 判定与 Favorite 私有文件契约的权威出处。进度见
+> `implementation-status.md`。
+>
 > 调研日期：2026-08-11。
 > 本文档只做调研结论与设计，不包含实现。所有 SDK 证据来自
 > `node_modules/@factory/droid-sdk@0.7.0` 的公开类型定义

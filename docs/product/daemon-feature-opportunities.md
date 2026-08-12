@@ -1,5 +1,9 @@
 # Daemon 架构落地后的功能机会盘点
 
+> 状态：现行调研结论。排期指针已合入 `HANDOVER.md` §3；§B3 的
+> fail-closed 判定已被 `mcp-permission-persistence-research.md` 推翻
+> （见 §B3 勘误注与 §3 表第 10 行）。
+>
 > 调研日期：2026-08-12。只读调研产物，未改动任何生产代码。
 >
 > 证据基线：
@@ -358,6 +362,15 @@ fail-closed 表：「MCP 持久权限管理——公开 SDK/daemon 均无对应 
 证据 `index-D_SzTnFR.d.ts` DaemonDroidMethod 枚举」）。如确有需求，
 另立"私有文件契约"调研由用户拍板。**
 
+> **勘误（2026-08-12，后续调研推翻本节结论）**：本节只核对了
+> SDK/daemon RPC 面（该结论仍成立），但漏查了 CLI 命令面。
+> [`mcp-permission-persistence-research.md`](./mcp-permission-persistence-research.md)
+> 证实存在**官方渠道** `droid mcp permissions list/revoke/clear`
+> （docs.factory.ai/harness/mcp 明文记载，本机实测可用），
+> fail-closed 判定不成立。可做"只读列表（fail-soft 解析
+> settings.json）+ 撤销走官方 CLI 命令"的切片。综合优先级表
+> 第 10 行同此勘误。
+
 ### B4. 会话搜索/归档的增强空间
 
 Phase 1 只用了 daemon 搜索能力的最小面。**未消费的公开参数**
@@ -419,7 +432,8 @@ L58031–58057）：
 ## 3. 综合优先级建议
 
 结合已知用户决策（Turn 排队 = 主线发版前最后一步；MCP 权限 = 可以有
-（调研后判 fail-closed）；tags/工具开关 = 计划末尾低优先级）：
+——本文原判 fail-closed，后续调研推翻，见 §B3 勘误；tags/工具开关 =
+计划末尾低优先级）：
 
 | 序 | 项 | 判定 | 一句话理由 |
 | --- | --- | --- | --- |
@@ -432,7 +446,7 @@ L58031–58057）：
 | 7 | **A5 多项目会话路由** | **建议缓** | daemon 只解决"看见"，真正成本在 Host 多根工作区模型与安全边界重写 |
 | 8 | **A4 完整档（逐 token 活流重接）/ A1 方案乙 / A2 跨窗口共享** | **建议不做（近期）** | 三者共享同一昂贵前置（控制器级观察通道），且各自独立价值都不足以单独立项；A2 另有 SDK 多客户端语义无承诺的风险 |
 | 9 | **B1 收藏 daemon 化** | **建议不做** | daemon 无 favorite RPC、列表行无 isFavorite；私有文件契约已是正确形态 |
-| 10 | **B3 MCP 持久权限管理** | **建议不做（判 fail-closed）** | daemon 协议全枚举核对无对应 RPC；按用户决策写入 HANDOVER fail-closed 表 |
+| 10 | **B3 MCP 持久权限管理** | ~~建议不做（判 fail-closed）~~ **可做，排发版后 backlog**（2026-08-12 勘误） | daemon RPC 面无对应方法的核对仍成立，但漏查了 CLI 命令面——[`mcp-permission-persistence-research.md`](./mcp-permission-persistence-research.md) 证实有官方渠道 `droid mcp permissions`，切片方案见该文档；排期见 HANDOVER §3 优先级 2 |
 
 **一条主线读法**：daemon 化的下一步不是再加新面，而是（A1 发版）→
 （A4 基础档 + 转正门槛补齐，让 `runtime.mode = daemon` 敢做默认）→

@@ -159,9 +159,12 @@ permissions" 节（2026-08-12 抓取）。原文要点：
   已 fail-soft；撤销走官方命令不受影响。CLI 未来若提供 `--json` 输出，
   读侧应迁移过去。
 
-## 对既有文档的修正建议（本文档不代改）
+## 对既有文档的修正建议（已于 2026-08-12 文档整理时全部应用）
 
-- `docs/product/daemon-feature-opportunities.md` §B3 与 §结论表第 10 行
-  的"判 fail-closed"应更新为"有官方 CLI 渠道，建议排期"。
-- `docs/HANDOVER.md`：不要把本项写入 fail-closed 表；在 backlog 中把
-  优先级 2 该项的状态改为"调研完成，可排期"，并引用本文档。
+- ~~`docs/product/daemon-feature-opportunities.md` §B3 与 §结论表第 10 行
+  的"判 fail-closed"应更新为"有官方 CLI 渠道，建议排期"~~
+  ——已应用（§B3 勘误注 + §3 表第 10 行已更新）。
+- ~~`docs/HANDOVER.md`：不要把本项写入 fail-closed 表；在 backlog 中把
+  优先级 2 该项的状态改为"调研完成，可排期"，并引用本文档~~
+  ——已应用（HANDOVER §3 优先级 2 行已引用本文档，fail-closed 表未
+  写入本项）。
