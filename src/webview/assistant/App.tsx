@@ -33,9 +33,14 @@ import { InteractionPanel } from './Interactions';
 import { LocalImageContext, OpenPathContext } from './MarkdownText';
 import type { PathLink } from './pathLink';
 import type {
+  ComposerNavRequest,
   McpServerAddParams,
   SessionSettingSelection,
 } from './ComposerControls';
+import {
+  resolveBuiltinSlash,
+  type SlashNavTarget,
+} from './slashBuiltins';
 import {
   canSendMessage,
   DEFAULT_MESSAGE_WINDOW,
@@ -86,6 +91,24 @@ export function App(): React.JSX.Element {
   // any open user-message edit card when it changes (a new message is
   // an explicit signal the user abandoned that edit).
   const [sendSignal, setSendSignal] = useState(0);
+  // Slash-command navigation (S2): `/model` `/mcp` `/skills`
+  // `/context` open composer popovers; `/sessions` opens the history
+  // drawer. Monotonic ids let the same target fire repeatedly.
+  const [composerNav, setComposerNav] =
+    useState<ComposerNavRequest | null>(null);
+  const composerNavCounterRef = useRef(0);
+  const [sessionsOpenSignal, setSessionsOpenSignal] = useState(0);
+  const handleSlashNavigate = useCallback(
+    (target: SlashNavTarget): void => {
+      if (target === 'sessions') {
+        setSessionsOpenSignal((value) => value + 1);
+        return;
+      }
+      composerNavCounterRef.current += 1;
+      setComposerNav({ id: composerNavCounterRef.current, target });
+    },
+    [],
+  );
 
   useEffect(() => {
     // Host messages are coalesced into one dispatch batch per animation
@@ -305,21 +328,21 @@ export function App(): React.JSX.Element {
 
   const handleSend = useCallback(
     async (text: string): Promise<void> => {
-      // /compact typed in the composer is otherwise forwarded to the
-      // Droid CLI as prompt text, which acknowledges without running
-      // our compaction pipeline (no continuation-session adoption, no
-      // context refresh). Route it through the same RPC as the
-      // Compact button so both paths behave identically (10b).
-      if (/^\/compact$/i.test(text.trim())) {
-        handleCompact();
-        setDraft('');
-        persistDraft(vscode, '');
-        return;
-      }
-      // /new is a GUI built-in like /compact: start a fresh session
-      // instead of sending the literal text to the CLI.
-      if (/^\/new$/i.test(text.trim())) {
-        post(vscode, { type: 'session.new' });
+      // GUI built-in slash commands typed in the composer would
+      // otherwise be forwarded to the Droid CLI as prompt text (the
+      // CLI acknowledges without running the real pipeline). Route
+      // them — including the CLI's own names/aliases like /compress,
+      // /handoff and /clear — onto the existing pipelines, and map
+      // navigation commands onto their panels (slash-parity S2).
+      const builtin = resolveBuiltinSlash(text, { btwEnabled: false });
+      if (builtin !== null) {
+        if (builtin.kind === 'compact') {
+          handleCompact();
+        } else if (builtin.kind === 'new') {
+          post(vscode, { type: 'session.new' });
+        } else if (builtin.kind === 'navigate') {
+          handleSlashNavigate(builtin.target);
+        }
         setDraft('');
         persistDraft(vscode, '');
         return;
@@ -355,6 +378,7 @@ export function App(): React.JSX.Element {
     [
       connectionStatus,
       handleCompact,
+      handleSlashNavigate,
       interactionCount,
       sessionId,
       turnStatus,
@@ -644,6 +668,14 @@ export function App(): React.JSX.Element {
     },
     [vscode],
   );
+  // "Fork chat" on the last assistant message branches the current
+  // session from its present state (the SDK has no per-message fork
+  // anchor, so the action lives only on the newest reply).
+  const handleForkCurrentSession = useCallback((): void => {
+    if (sessionId !== null) {
+      handleForkSession(sessionId);
+    }
+  }, [handleForkSession, sessionId]);
   const handleToggleFavorite = useCallback(
     (targetSessionId: string, favorite: boolean): void => {
       post(vscode, {
@@ -742,6 +774,12 @@ export function App(): React.JSX.Element {
       return;
     }
     post(vscode, { type: 'mcp.refresh', sessionId });
+  }, [sessionId, vscode]);
+  const handlePluginsRefresh = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    post(vscode, { type: 'plugins.refresh', sessionId });
   }, [sessionId, vscode]);
   const handleMcpServerToggle = useCallback(
     (name: string, enabled: boolean): void => {
@@ -1055,6 +1093,7 @@ export function App(): React.JSX.Element {
         <Header
           state={state}
           sessionActionsDisabled={sessionActionsDisabled}
+          sessionsOpenSignal={sessionsOpenSignal}
           onNewSession={handleNewSession}
           onCreateWorktreeSession={handleCreateWorktreeSession}
           onSelectSession={handleSelectSession}
@@ -1102,6 +1141,7 @@ export function App(): React.JSX.Element {
           modelCatalog={state.modelCatalog}
           skills={state.skills}
           mcp={state.mcp}
+          plugins={state.plugins}
           onRetry={handleRetry}
           onContextRefresh={handleContextRefresh}
           compactPending={compactPending}
@@ -1115,6 +1155,7 @@ export function App(): React.JSX.Element {
           onMcpServerRemove={handleMcpServerRemove}
           mcpAuth={state.mcpAuth}
           onMcpServerAuthenticate={handleMcpServerAuthenticate}
+          onPluginsRefresh={handlePluginsRefresh}
           onNewSession={handleNewSession}
           onSelectSession={handleSelectSession}
           attachments={state.attachments}
@@ -1122,6 +1163,8 @@ export function App(): React.JSX.Element {
           onFileSearch={handleFileSearch}
           commands={state.commands}
           onCommandsRefresh={handleCommandsRefresh}
+          navSignal={composerNav}
+          onSlashNavigate={handleSlashNavigate}
           onAttachPath={handleAttachPath}
           onAttachFiles={handleAttachFiles}
           onAttachEditor={handleAttachEditor}
@@ -1155,6 +1198,14 @@ export function App(): React.JSX.Element {
               ? handleRegenerate
               : null
           }
+          onForkSession={
+            connectionStatus === 'connected' &&
+            !active &&
+            !hasInteraction &&
+            sessionId !== null
+              ? handleForkCurrentSession
+              : null
+          }
           onOpenFileDiff={handleOpenFileDiff}
           onPreviewFile={handlePreviewFile}
           onPreviewInlineHtml={handlePreviewInlineHtml}
@@ -1183,6 +1234,7 @@ export function App(): React.JSX.Element {
 function Header({
   state,
   sessionActionsDisabled,
+  sessionsOpenSignal,
   onNewSession,
   onCreateWorktreeSession,
   onSelectSession,
@@ -1196,6 +1248,8 @@ function Header({
 }: {
   readonly state: typeof initialAssistantWebviewState;
   readonly sessionActionsDisabled: boolean;
+  /** `/sessions` navigation counter; a change opens the drawer. */
+  readonly sessionsOpenSignal: number;
   readonly onNewSession: () => void;
   readonly onCreateWorktreeSession: () => void;
   readonly onSelectSession: (sessionId: string) => void;
@@ -1246,6 +1300,7 @@ function Header({
           archived={state.archived}
           sessionSearch={state.sessionSearch}
           actionsDisabled={sessionActionsDisabled}
+          openSignal={sessionsOpenSignal}
           worktreeCreateAvailable={state.worktreeCreateAvailable}
           onCreateWorktreeSession={onCreateWorktreeSession}
           onSelectSession={onSelectSession}

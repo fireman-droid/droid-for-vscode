@@ -25,6 +25,8 @@ export interface SafeRuntimeMessage {
   readonly messageId?: string;
   /** Chip metadata for the attachments a user message was sent with. */
   readonly attachments?: readonly SentAttachmentSummary[];
+  /** Epoch ms when this assistant reply was seen finishing, if known. */
+  readonly completedAt?: number;
 }
 
 type SafeRuntimePart = Exclude<ThreadMessageLike["content"], string>[number];
@@ -85,11 +87,13 @@ export function useDroidExternalStoreRuntime(
   messageWindow: number = DEFAULT_MESSAGE_WINDOW,
 ): DroidRuntimeWindow {
   const messageCacheRef = useRef<RuntimeMessageCache>(new Map());
+  const completionClockRef = useRef<CompletionClock>(new Map());
   const { messages, hiddenMessageCount } = useMemo(() => {
     const all = mapTranscriptToRuntimeMessages(
       state.transcript,
       state.turn,
       messageCacheRef.current,
+      completionClockRef.current,
     );
     if (all.length <= messageWindow) {
       return { messages: all, hiddenMessageCount: 0 };
@@ -163,6 +167,7 @@ export function convertSafeRuntimeMessage(
       custom: {
         messageId: message.messageId ?? null,
         attachments: message.attachments ?? null,
+        completedAt: message.completedAt ?? null,
       },
     },
   };
@@ -186,6 +191,39 @@ interface RuntimeMessageCacheEntry {
 
 export type RuntimeMessageCache = Map<string, RuntimeMessageCacheEntry>;
 
+/**
+ * Completion times observed inside this webview. An assistant message
+ * first seen streaming is marked "streaming" and stamped with the wall
+ * clock when it settles; one first seen already settled (history,
+ * recovery) is marked "settled" and never receives a fabricated time.
+ * The bridge does not carry completion times yet, so stamps live only
+ * as long as the webview does — the action bar simply omits the age
+ * where none is known.
+ */
+export type CompletionClock = Map<string, number | "streaming" | "settled">;
+
+function observeCompletion(
+  clock: CompletionClock,
+  id: string,
+  running: boolean,
+): number | undefined {
+  const prior = clock.get(id);
+  if (typeof prior === "number") {
+    return prior;
+  }
+  if (running) {
+    clock.set(id, "streaming");
+    return undefined;
+  }
+  if (prior === "streaming") {
+    const stamped = Date.now();
+    clock.set(id, stamped);
+    return stamped;
+  }
+  clock.set(id, "settled");
+  return undefined;
+}
+
 interface UserMessageDescriptor {
   readonly kind: "user";
   readonly item: Extract<SessionTranscriptItem, { kind: "user" }>;
@@ -204,6 +242,7 @@ export function mapTranscriptToRuntimeMessages(
   transcript: readonly SessionTranscriptItem[],
   turn: AssistantWebviewState["turn"],
   cache?: RuntimeMessageCache,
+  completionClock?: CompletionClock,
 ): readonly SafeRuntimeMessage[] {
   const descriptors: (UserMessageDescriptor | AssistantGroupDescriptor)[] = [];
   const groups = new Map<string, AssistantGroupDescriptor>();
@@ -284,6 +323,18 @@ export function mapTranscriptToRuntimeMessages(
       descriptor.turnId,
       turn,
     );
+    // The clock must observe every pass (even cache hits) so the
+    // streaming → settled transition is stamped exactly once; the
+    // transition also changes stateKey, rebuilding the message with
+    // the stamp in the same pass.
+    const completedAt =
+      completionClock === undefined
+        ? undefined
+        : observeCompletion(
+            completionClock,
+            descriptor.id,
+            status.type === "running",
+          );
     const stateKey = `${status.type}:${
       "reason" in status ? status.reason : ""
     }`;
@@ -301,6 +352,7 @@ export function mapTranscriptToRuntimeMessages(
       role: "assistant",
       content: uniqueToolCallIds(descriptor.items.map(mapItemToPart)),
       status,
+      ...(completedAt === undefined ? {} : { completedAt }),
     };
     nextEntries.push([
       descriptor.id,
@@ -313,6 +365,14 @@ export function mapTranscriptToRuntimeMessages(
     cache.clear();
     for (const [id, entry] of nextEntries) {
       cache.set(id, entry);
+    }
+  }
+  if (completionClock !== undefined) {
+    const liveIds = new Set(messages.map((message) => message.id));
+    for (const key of [...completionClock.keys()]) {
+      if (!liveIds.has(key)) {
+        completionClock.delete(key);
+      }
     }
   }
   return messages;

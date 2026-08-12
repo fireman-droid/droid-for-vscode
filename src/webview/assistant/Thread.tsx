@@ -43,9 +43,11 @@ import {
 import type { SessionTokenUsageState } from "../../shared/tokenUsage";
 import { isPreviewableFilePath } from "../../shared/validateMessage";
 import type {
+  ComposerNavRequest,
   McpAuthProgress,
   McpPanelState,
   McpServerAddParams,
+  PluginsPanelState,
   SkillsPanelState,
 } from "./ComposerControls";
 import {
@@ -53,6 +55,10 @@ import {
   type SessionSettingSelection,
 } from "./ComposerControls";
 import { ComposerPopup } from "./ComposerPopup";
+import {
+  SLASH_NAV_COMMANDS,
+  type SlashNavTarget,
+} from "./slashBuiltins";
 import {
   ACTIVITY_GROUP_KEY,
   activityGroupBy,
@@ -64,6 +70,7 @@ import {
   InlineHtmlPreviewContext,
 } from "./MarkdownText";
 import { ChangesCommitEntry } from "./GitCommitPanel";
+import { MessageTimestamp } from "./MessageTimestamp";
 import { TranscriptImage } from "./TranscriptImage";
 import { getImagePreview, rememberImagePreview } from "./imagePreviewCache";
 
@@ -122,6 +129,7 @@ export interface UserEditorEnv {
   readonly modelCatalog: ModelCatalogState;
   readonly skills: SkillsPanelState;
   readonly mcp: McpPanelState;
+  readonly plugins: PluginsPanelState;
   readonly mcpAuth: McpAuthProgress | null;
   readonly controlsDisabled: boolean;
   readonly settingUpdatesDisabled: boolean;
@@ -135,6 +143,7 @@ export interface UserEditorEnv {
   readonly onMcpServerAdd: (params: McpServerAddParams) => void;
   readonly onMcpServerRemove: (name: string) => void;
   readonly onMcpServerAuthenticate: (name: string) => void;
+  readonly onPluginsRefresh: () => void;
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
   readonly onAttachSelection: () => void;
@@ -165,6 +174,12 @@ export const TerminalMirrorContext = createContext<(() => void) | null>(
 // Regenerating rewinds to the last user message and resends it. Null
 // means the action is currently unavailable (no anchor or turn active).
 const RegenerateContext = createContext<(() => void) | null>(null);
+
+// Forking branches a new session from the current session state. The
+// SDK forks only the present state (no per-message anchor), so the
+// action appears solely on the last assistant message; null means it
+// is unavailable (disconnected or a turn is active).
+const ForkContext = createContext<(() => void) | null>(null);
 
 // The compaction divider offers a jump to the pre-compaction session
 // through this context, keeping the memoized message tree free of
@@ -197,6 +212,7 @@ interface DroidThreadProps {
   readonly modelCatalog: ModelCatalogState;
   readonly skills: SkillsPanelState;
   readonly mcp: McpPanelState;
+  readonly plugins: PluginsPanelState;
   readonly onRetry: () => void;
   readonly onContextRefresh: () => void;
   readonly compactPending: boolean;
@@ -210,6 +226,7 @@ interface DroidThreadProps {
   readonly onMcpServerRemove: (name: string) => void;
   readonly mcpAuth: McpAuthProgress | null;
   readonly onMcpServerAuthenticate: (name: string) => void;
+  readonly onPluginsRefresh: () => void;
   /** Starts a fresh session (skill changes apply at session start). */
   readonly onNewSession: () => void;
   readonly attachments: readonly AttachmentSummary[];
@@ -217,6 +234,10 @@ interface DroidThreadProps {
   readonly onFileSearch: (requestId: string, query: string) => void;
   readonly commands: SlashCommandsState;
   readonly onCommandsRefresh: () => void;
+  /** Latest `/command` panel-navigation request (ComposerControls). */
+  readonly navSignal?: ComposerNavRequest | null;
+  /** Opens the panel behind one `/` popup navigation row. */
+  readonly onSlashNavigate?: (target: SlashNavTarget) => void;
   readonly onAttachPath: (path: string) => void;
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
@@ -260,6 +281,8 @@ interface DroidThreadProps {
   readonly onEditAttachGitChanges: () => void;
   readonly onEditAttachmentRemove: (attachmentId: string) => void;
   readonly onRegenerate: (() => void) | null;
+  /** Forks a new session from the current state (last message only). */
+  readonly onForkSession: (() => void) | null;
   readonly onOpenFileDiff: (path: string) => void;
   readonly onPreviewFile: (path: string) => void;
   /** Renders an assistant HTML code block in the sandbox panel. */
@@ -292,6 +315,7 @@ export const DroidThread = memo(function DroidThread({
   modelCatalog,
   skills,
   mcp,
+  plugins,
   onRetry,
   onContextRefresh,
   compactPending,
@@ -305,12 +329,15 @@ export const DroidThread = memo(function DroidThread({
   onMcpServerRemove,
   mcpAuth,
   onMcpServerAuthenticate,
+  onPluginsRefresh,
   onNewSession,
   attachments,
   fileSearch,
   onFileSearch,
   commands,
   onCommandsRefresh,
+  navSignal = null,
+  onSlashNavigate,
   onAttachPath,
   onAttachFiles,
   onAttachEditor,
@@ -337,6 +364,7 @@ export const DroidThread = memo(function DroidThread({
   onEditAttachGitChanges,
   onEditAttachmentRemove,
   onRegenerate,
+  onForkSession,
   onOpenFileDiff,
   onPreviewFile,
   onPreviewInlineHtml,
@@ -542,6 +570,7 @@ export const DroidThread = memo(function DroidThread({
       modelCatalog,
       skills,
       mcp,
+      plugins,
       mcpAuth,
       controlsDisabled,
       settingUpdatesDisabled,
@@ -555,6 +584,7 @@ export const DroidThread = memo(function DroidThread({
       onMcpServerAdd,
       onMcpServerRemove,
       onMcpServerAuthenticate,
+      onPluginsRefresh,
       onAttachFiles: onEditAttachFiles,
       onAttachEditor: onEditAttachEditor,
       onAttachSelection: onEditAttachSelection,
@@ -568,6 +598,7 @@ export const DroidThread = memo(function DroidThread({
       modelCatalog,
       skills,
       mcp,
+      plugins,
       mcpAuth,
       controlsDisabled,
       settingUpdatesDisabled,
@@ -581,6 +612,7 @@ export const DroidThread = memo(function DroidThread({
       onMcpServerAdd,
       onMcpServerRemove,
       onMcpServerAuthenticate,
+      onPluginsRefresh,
       onEditAttachFiles,
       onEditAttachEditor,
       onEditAttachSelection,
@@ -610,6 +642,7 @@ export const DroidThread = memo(function DroidThread({
           <InlineHtmlPreviewContext.Provider value={onPreviewInlineHtml}>
           <TerminalMirrorContext.Provider value={onOpenTerminalMirror}>
           <RegenerateContext.Provider value={onRegenerate}>
+          <ForkContext.Provider value={onForkSession}>
             <SelectSessionContext.Provider value={onSelectSession}>
             <div className="dvx-reading-column" ref={readingColumnRef}>
               <HistoryNotice
@@ -673,6 +706,7 @@ export const DroidThread = memo(function DroidThread({
               {inlineInteraction}
             </div>
             </SelectSessionContext.Provider>
+          </ForkContext.Provider>
           </RegenerateContext.Provider>
           </TerminalMirrorContext.Provider>
           </InlineHtmlPreviewContext.Provider>
@@ -709,6 +743,7 @@ export const DroidThread = memo(function DroidThread({
             modelCatalog={modelCatalog}
             skills={skills}
             mcp={mcp}
+            plugins={plugins}
             onRetry={onRetry}
             onContextRefresh={onContextRefresh}
             compactPending={compactPending}
@@ -722,12 +757,15 @@ export const DroidThread = memo(function DroidThread({
             onMcpServerRemove={onMcpServerRemove}
             mcpAuth={mcpAuth}
             onMcpServerAuthenticate={onMcpServerAuthenticate}
+            onPluginsRefresh={onPluginsRefresh}
             onNewSession={onNewSession}
             attachments={attachments}
             fileSearch={fileSearch}
             onFileSearch={onFileSearch}
             commands={commands}
             onCommandsRefresh={onCommandsRefresh}
+            navSignal={navSignal}
+            onSlashNavigate={onSlashNavigate}
             onAttachPath={onAttachPath}
             onAttachFiles={onAttachFiles}
             onAttachEditor={onAttachEditor}
@@ -827,6 +865,40 @@ function UserMessage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rejection]);
   const editable = messageId !== null && !resending;
+  // Clicking anywhere outside the edit card cancels the edit without
+  // a confirmation (Cursor's light dismissal; Escape does the same
+  // from the textarea). A popover open inside the card (mode/model
+  // picker) consumes the first outside click to dismiss itself; the
+  // editor only closes once no popover remains.
+  const editCardRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!editing) {
+      return undefined;
+    }
+    const cancelOnOutsidePointerDown = (event: PointerEvent): void => {
+      const card = editCardRef.current;
+      if (
+        card === null ||
+        !(event.target instanceof Node) ||
+        card.contains(event.target)
+      ) {
+        return;
+      }
+      if (
+        card.querySelector(".dvx-composer-popover") !== null &&
+        card.querySelector("[data-popover-closing]") === null
+      ) {
+        return;
+      }
+      onCancelEdit();
+    };
+    document.addEventListener("pointerdown", cancelOnOutsidePointerDown);
+    return () =>
+      document.removeEventListener(
+        "pointerdown",
+        cancelOnOutsidePointerDown,
+      );
+  }, [editing, onCancelEdit]);
   const openEditor = (): void => {
     if (messageId !== null) {
       onBeginEdit(messageId);
@@ -880,7 +952,7 @@ function UserMessage({
     >
       <div className="dvx-user-message-content">
         {editing ? (
-          <div className="dvx-user-edit">
+          <div className="dvx-user-edit" ref={editCardRef}>
             <div className="dvx-user-edit-card">
               <textarea
                 className="dvx-user-edit-input"
@@ -959,6 +1031,7 @@ function UserMessage({
                   modelCatalog={editorEnv.modelCatalog}
                   skills={editorEnv.skills}
                   mcp={editorEnv.mcp}
+                  plugins={editorEnv.plugins}
                   disabled={editorEnv.controlsDisabled}
                   settingUpdatesDisabled={editorEnv.settingUpdatesDisabled}
                   onContextRefresh={editorEnv.onContextRefresh}
@@ -972,6 +1045,7 @@ function UserMessage({
                   onMcpServerRemove={editorEnv.onMcpServerRemove}
                   mcpAuth={editorEnv.mcpAuth}
                   onMcpServerAuthenticate={editorEnv.onMcpServerAuthenticate}
+                  onPluginsRefresh={editorEnv.onPluginsRefresh}
                   onAttachFiles={editorEnv.onAttachFiles}
                   onAttachEditor={editorEnv.onAttachEditor}
                   onAttachSelection={editorEnv.onAttachSelection}
@@ -979,13 +1053,6 @@ function UserMessage({
                   onAttachGitChanges={editorEnv.onAttachGitChanges}
                 />
                 <div className="dvx-user-edit-actions">
-                  <button
-                    className="dvx-message-action"
-                    type="button"
-                    onClick={onCancelEdit}
-                  >
-                    Cancel
-                  </button>
                   <button
                     className="dvx-composer-action dvx-send-action"
                     type="button"
@@ -1119,6 +1186,16 @@ const AssistantMessage = memo(function AssistantMessage(): React.JSX.Element {
   // ends, so its fade keys off "was live in this mount" instead —
   // recovered history can never satisfy that.
   const running = useAuiState((s) => s.message.status?.type === "running");
+  // The newest reply keeps its action bar quietly visible
+  // (dvx-message-last); earlier ones reveal it on hover.
+  const isLast = useAuiState((s) => s.message.isLast);
+  // Completion time stamped when the host/webview saw the turn end;
+  // messages rebuilt from public CLI history carry none, and their
+  // bar simply shows no age.
+  const completedAt = useAuiState((s) => {
+    const value = s.message.metadata.custom?.completedAt;
+    return typeof value === "number" ? value : null;
+  });
   const wasRunningRef = useRef(false);
   if (running) {
     wasRunningRef.current = true;
@@ -1127,7 +1204,7 @@ const AssistantMessage = memo(function AssistantMessage(): React.JSX.Element {
     <MessagePrimitive.Root
       className={`dvx-message dvx-message-assistant${
         running ? " dvx-message-live" : ""
-      }`}
+      }${isLast ? " dvx-message-last" : ""}`}
       aria-label="Droid"
     >
       <MessagePrimitive.GroupedParts
@@ -1178,6 +1255,7 @@ const AssistantMessage = memo(function AssistantMessage(): React.JSX.Element {
         }`}
         hideWhenRunning
       >
+        <MessageTimestamp completedAt={completedAt} />
         <ActionBarPrimitive.Copy
           className="dvx-message-action dvx-copy-action"
           aria-label="Copy response"
@@ -1187,6 +1265,7 @@ const AssistantMessage = memo(function AssistantMessage(): React.JSX.Element {
         </ActionBarPrimitive.Copy>
         <MessagePrimitive.If last>
           <RegenerateAction />
+          <ForkAction />
         </MessagePrimitive.If>
       </ActionBarPrimitive.Root>
     </MessagePrimitive.Root>
@@ -1228,6 +1307,46 @@ function RegenerateAction(): React.JSX.Element | null {
     >
       <RegenerateIcon />
       <span>{busy ? "Regenerating…" : "Regenerate"}</span>
+    </button>
+  );
+}
+
+function ForkAction(): React.JSX.Element | null {
+  const fork = useContext(ForkContext);
+  const [busy, setBusy] = useState(false);
+  const busyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (busyResetRef.current !== null) {
+        clearTimeout(busyResetRef.current);
+      }
+    },
+    [],
+  );
+  if (fork === null) {
+    return null;
+  }
+  return (
+    <button
+      className="dvx-message-action"
+      type="button"
+      aria-label="Fork chat"
+      title="Branch a new session from this point"
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        fork();
+        // The host adopts the forked session on success; if it
+        // declines it only emits a diagnostic, so recover the button
+        // after a grace period (same pattern as Regenerate).
+        if (busyResetRef.current !== null) {
+          clearTimeout(busyResetRef.current);
+        }
+        busyResetRef.current = setTimeout(() => setBusy(false), 8000);
+      }}
+    >
+      <ForkIcon />
+      <span>{busy ? "Forking…" : "Fork chat"}</span>
     </button>
   );
 }
@@ -1535,6 +1654,7 @@ function Composer({
   modelCatalog,
   skills,
   mcp,
+  plugins,
   onRetry,
   onContextRefresh,
   compactPending,
@@ -1548,12 +1668,15 @@ function Composer({
   onMcpServerRemove,
   mcpAuth,
   onMcpServerAuthenticate,
+  onPluginsRefresh,
   onNewSession,
   attachments,
   fileSearch,
   onFileSearch,
   commands,
   onCommandsRefresh,
+  navSignal = null,
+  onSlashNavigate,
   onAttachPath,
   onAttachFiles,
   onAttachEditor,
@@ -1579,6 +1702,7 @@ function Composer({
   readonly modelCatalog: ModelCatalogState;
   readonly skills: SkillsPanelState;
   readonly mcp: McpPanelState;
+  readonly plugins: PluginsPanelState;
   readonly onRetry: () => void;
   readonly onContextRefresh: () => void;
   readonly compactPending: boolean;
@@ -1592,6 +1716,7 @@ function Composer({
   readonly onMcpServerRemove: (name: string) => void;
   readonly mcpAuth: McpAuthProgress | null;
   readonly onMcpServerAuthenticate: (name: string) => void;
+  readonly onPluginsRefresh: () => void;
   /** Starts a fresh session (skill changes apply at session start). */
   readonly onNewSession: () => void;
   readonly attachments: readonly AttachmentSummary[];
@@ -1599,6 +1724,8 @@ function Composer({
   readonly onFileSearch: (requestId: string, query: string) => void;
   readonly commands: SlashCommandsState;
   readonly onCommandsRefresh: () => void;
+  readonly navSignal?: ComposerNavRequest | null;
+  readonly onSlashNavigate?: (target: SlashNavTarget) => void;
   readonly onAttachPath: (path: string) => void;
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
@@ -1793,6 +1920,14 @@ function Composer({
           command.name.startsWith(slash.query.toLocaleLowerCase()),
         )
       : [];
+  // Navigation rows open existing panels instead of completing text;
+  // they render inside the same Built-in group (slash-parity S2).
+  const navMatches =
+    slash !== null && onSlashNavigate !== undefined
+      ? SLASH_NAV_COMMANDS.filter((command) =>
+          command.name.startsWith(slash.query.toLocaleLowerCase()),
+        )
+      : [];
   // Enabled skills surface here as prompt helpers: Droid has no
   // native skill-invocation RPC (`userInvocable` exists on SkillInfo
   // but no channel executes it), so selecting one inserts guiding
@@ -1814,6 +1949,7 @@ function Composer({
     ...builtInMatches.map(
       (command): SlashEntry => ({ kind: "builtin", ...command }),
     ),
+    ...navMatches.map((command): SlashEntry => ({ kind: "nav", ...command })),
     ...commandMatches.map(
       (command): SlashEntry => ({ kind: "command", command }),
     ),
@@ -1901,9 +2037,24 @@ function Composer({
     closeSlash();
   };
 
+  /** Clears the `/` token and opens the target panel directly. */
+  const selectSlashNav = (target: SlashNavTarget): void => {
+    if (slash === null) {
+      return;
+    }
+    const next = draftRef.current.slice(slash.end);
+    draftRef.current = next;
+    aui.thread.composer().setText(next);
+    onDraftChange(next);
+    closeSlash();
+    onSlashNavigate?.(target);
+  };
+
   const selectSlashEntry = (entry: SlashEntry): void => {
     if (entry.kind === "skill") {
       selectSkillGuide(entry.name);
+    } else if (entry.kind === "nav") {
+      selectSlashNav(entry.name);
     } else {
       selectCommand(
         entry.kind === "command" ? entry.command.name : entry.name,
@@ -2026,7 +2177,7 @@ function Composer({
                 onDismiss={closeSlash}
                 popupRef={slashPopupRef}
               >
-                {builtInMatches.length > 0 ? (
+                {builtInMatches.length + navMatches.length > 0 ? (
                   <div className="dvx-command-section" role="presentation">
                     Built-in
                   </div>
@@ -2053,14 +2204,9 @@ function Composer({
                     </span>
                   </button>
                 ))}
-                {commandMatches.length > 0 ? (
-                  <div className="dvx-command-section" role="presentation">
-                    Commands (.factory/commands)
-                  </div>
-                ) : null}
-                {commandMatches.map((command, index) => (
+                {navMatches.map((command, index) => (
                   <button
-                    key={command.name}
+                    key={`nav:${command.name}`}
                     type="button"
                     role="option"
                     aria-selected={
@@ -2074,10 +2220,47 @@ function Composer({
                     onMouseDown={(event) => {
                       // Keep focus in the textarea while selecting.
                       event.preventDefault();
-                      selectCommand(command.name);
+                      selectSlashNav(command.name);
                     }}
                     onMouseEnter={() =>
                       setSlashIndex(builtInMatches.length + index)
+                    }
+                  >
+                    <span className="dvx-command-name">/{command.name}</span>
+                    <span className="dvx-command-desc">
+                      {command.description}
+                    </span>
+                  </button>
+                ))}
+                {commandMatches.length > 0 ? (
+                  <div className="dvx-command-section" role="presentation">
+                    Commands (.factory/commands)
+                  </div>
+                ) : null}
+                {commandMatches.map((command, index) => (
+                  <button
+                    key={command.name}
+                    type="button"
+                    role="option"
+                    aria-selected={
+                      builtInMatches.length + navMatches.length + index ===
+                      slashIndex
+                    }
+                    className={`dvx-mention-item${
+                      builtInMatches.length + navMatches.length + index ===
+                      slashIndex
+                        ? " dvx-mention-active"
+                        : ""
+                    }`}
+                    onMouseDown={(event) => {
+                      // Keep focus in the textarea while selecting.
+                      event.preventDefault();
+                      selectCommand(command.name);
+                    }}
+                    onMouseEnter={() =>
+                      setSlashIndex(
+                        builtInMatches.length + navMatches.length + index,
+                      )
                     }
                   >
                     <span className="dvx-command-name">/{command.name}</span>
@@ -2115,11 +2298,17 @@ function Composer({
                     type="button"
                     role="option"
                     aria-selected={
-                      builtInMatches.length + commandMatches.length + index ===
+                      builtInMatches.length +
+                        navMatches.length +
+                        commandMatches.length +
+                        index ===
                       slashIndex
                     }
                     className={`dvx-mention-item${
-                      builtInMatches.length + commandMatches.length + index ===
+                      builtInMatches.length +
+                        navMatches.length +
+                        commandMatches.length +
+                        index ===
                       slashIndex
                         ? " dvx-mention-active"
                         : ""
@@ -2131,7 +2320,10 @@ function Composer({
                     }}
                     onMouseEnter={() =>
                       setSlashIndex(
-                        builtInMatches.length + commandMatches.length + index,
+                        builtInMatches.length +
+                          navMatches.length +
+                          commandMatches.length +
+                          index,
                       )
                     }
                   >
@@ -2335,6 +2527,7 @@ function Composer({
             modelCatalog={modelCatalog}
             skills={skills}
             mcp={mcp}
+            plugins={plugins}
             disabled={controlsDisabled}
             settingUpdatesDisabled={settingUpdatesDisabled}
             onContextRefresh={onContextRefresh}
@@ -2349,6 +2542,7 @@ function Composer({
             onMcpServerRemove={onMcpServerRemove}
             mcpAuth={mcpAuth}
             onMcpServerAuthenticate={onMcpServerAuthenticate}
+            onPluginsRefresh={onPluginsRefresh}
             onNewSession={onNewSession}
             onAttachFiles={onAttachFiles}
             onAttachEditor={onAttachEditor}
@@ -2467,9 +2661,14 @@ export const BUILT_IN_COMMANDS = [
 /** Most enabled skills offered in the `/` popup Skills section. */
 const MAX_SLASH_SKILL_MATCHES = 5;
 
-/** One selectable row in the `/` popup, across all three sections. */
+/** One selectable row in the `/` popup, across all sections. */
 type SlashEntry =
   | { readonly kind: "builtin"; readonly name: string; readonly description: string }
+  | {
+      readonly kind: "nav";
+      readonly name: SlashNavTarget;
+      readonly description: string;
+    }
   | { readonly kind: "command"; readonly command: CommandSummary }
   | {
       readonly kind: "skill";
@@ -2686,6 +2885,20 @@ function RegenerateIcon(): React.JSX.Element {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+function ForkIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path
+        d="M4 3.5v3.25a2.5 2.5 0 0 0 2.5 2.5H10m0 0-1.9-1.9M10 9.25l-1.9 1.9"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="4" cy="2.75" r="1.25" stroke="currentColor" />
     </svg>
   );
 }
