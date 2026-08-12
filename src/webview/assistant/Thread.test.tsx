@@ -36,12 +36,12 @@ import {
   formatCompactDividerLabel,
   formatPlanSummary,
   formatSubagentSummary,
-  formatThinkingLabel,
   readDroppedFileUris,
   splitMentionPath,
   BackgroundProcessHint,
   SubagentSummaryRow,
 } from './Thread';
+import { formatThinkingLabel } from './thread/readers';
 
 afterEach(() => {
   cleanup();
