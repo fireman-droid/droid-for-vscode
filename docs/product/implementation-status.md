@@ -1465,8 +1465,8 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
 均按第一切片定义交付。
 
 - **S1 行为**：`/` 弹窗 Built-in 组末尾出现 `/btw` 行（仅当 Host 在
-  快照上广播 `btwAvailable`，process 模式 only；daemon 模式
-  fail-closed 隐藏全部入口，`/btw` 文本按普通 prompt 发给模型）；
+  快照上广播 `btwAvailable`；本切片时为 process 模式 only、daemon
+  fail-closed 隐藏，§21 已移植 daemon 后该门变为模式无关）；
   选中行或直接发送 `/btw <问题>` 打开 Composer 上方 Side chat 卡片
   （复用 ComposerPopup 壳、窄栏适配，`/btw <问题>` 同时立即提问）；
   卡片内提问 → 流式答案（Markdown 渲染）→ 同卡连续追问；主 turn
@@ -1688,6 +1688,73 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
   开新谱系/标题摘要派生）、`PlanAnchorCard.test.tsx`（四态 +
   双控件展开收起）
 
+### 21. 双模式归一：/btw 进 daemon + 默认 daemon + 能力×模式审计（2026-08-12 深夜）
+
+目标（用户拍板）：**用户不再感知 process/daemon 模式差异**。三个
+交付物均落地；本切片不打包（随统一修复包）。
+
+- **交付物 1：/btw 移植进 daemon 模式**。探针
+  `artifacts/probe-btw-daemon.mjs` 实证 daemon `sessions.fork`
+  RPC 具备完整 btw 语义：ATTACHED 主会话上 fork 带 `btw-fork`
+  tag → `newSessionId` 返回、fork jsonl 落 `sessions/<proj>/btw/`、
+  `sessions.resume(forkId)` **不**触发 promote（不泄进磁盘目录）、
+  fork 点 `lastCompletedTurn` 上下文继承、流式 delta、不进
+  `sessions.list`、`close_session` 后 daemon 健康、主会话中途
+  fork+ask（/btw 卖点）单连接可行。实现：
+  `src/runtime/btw/DaemonBtwSidecar.ts`（`ConnectedDroid`
+  fork→resume→stream，deny-all permissionHandler + askUser
+  取消，投影复用 `BtwAnswerEvent` 契约），`extension.ts` 按
+  `daemonSessionsActive()` 每次开卡时选 Daemon/Process sidecar
+  工厂，Host `btwAvailable` 门从此模式无关（§18 的
+  "process only" 限制已解除）
+  - 已知残差（探针 `probe-btw-daemon2.mjs` 实证）：daemon 路径
+    下主/fork 会话 autonomy 均为 low 时，工作区内文件创建仍
+    **不触发**权限请求（process 路径会触发）——deny-all 引导
+    文案只在 daemon 真的发请求时出现。语义仍 fail-safe（fork
+    是隐藏分支、弃卡即弃），但与 process 的权限表现存在上游
+    差异，记录待上游确认
+- **交付物 2：默认模式切 daemon + 自动无感回退**。
+  `package.json` 默认值 `process`→`daemon`；`extension.ts` 经
+  `inspect('runtime.mode')` 区分显式设置与默认——显式选择永不
+  回退，默认路径经
+  `src/runtime/daemon/daemonFirstSessionFactory.ts`：首次建会话
+  时 daemon 获取失败 → 记一条 `runtime.mode.fallback` 本地诊断
+  （quiet，不打断用户）→ 粘性回退 process 工厂（不再重试
+  daemon）。会话级错误（如跨窗口租约冲突）原样上抛不触发回退
+- **交付物 3：能力×模式实测表**（探针/测试/真机冒烟佐证）：
+
+  | 能力 | 门 | process（显式） | daemon（默认/显式） | 回退后（默认→process） |
+  | --- | --- | --- | --- | --- |
+  | 聊天/会话创建/恢复 | 无 | ✓ ProcessTransport | ✓ daemon 工厂 | ✓ process 工厂（`smoke-mode-fallback-live.mts` 6/6） |
+  | 任务跨 Reload 存活 + 活流重连（A4） | 模式本身 | ✗（子进程随窗口死） | ✓（共享 daemon，`probe-reload-survival.mjs` + A4 真机） | ✗（回退即失去，符合预期） |
+  | /btw 侧聊 | `btwAvailable` | ✓ `BtwSidecar`（`probe-btw-sidecar.mjs`） | ✓ `DaemonBtwSidecar`（`smoke-btw-daemon-live.mts` 9/9） | ✓ 开卡时动态回落 `BtwSidecar` |
+  | 归档/取消归档/归档列表 + 内容搜索 | `daemonSessions` sidecar | ✓（Phase 1 私有只读 daemon） | ✓（同一共享连接） | 按需报错态（daemon 起不来时 `DAEMON_UNAVAILABLE` 诊断，与既有 process 失败路径一致，无假可用入口） |
+  | Worktree 会话创建 | `worktreeCreateAvailable` | ✗（门恒 false） | ✓（daemon 原生 create 通道） | ✗（`withDaemonGate` 每次读时重估，fail closed） |
+  | Plugins 面板（只读） | daemon sidecar | ✓（私有 daemon RPC） | ✓ | 按需报错态（同归档） |
+  | 模型目录（BYOK reasoning） | 会话能力 | ✓ | ✗（daemon facade 无 `supportedReasoningEfforts`，显示 unavailable） | ✓ |
+  | 浏览器 MCP OAuth（`authenticateMcpServer`） | 会话能力 | ✓ | ✗（daemon facade 无 `onNotification` 通道，fail closed；list/toggle/add/remove 均可用） | ✓ |
+  | Spec 交接/子代理 started 通知 | `onNotification` | ✓ | ✗（同上，静默无害降级） | ✓ |
+  | 终端镜像 / 权限 / AskUser / 队列 / rewind / compact | 无 | ✓ | ✓ | ✓ |
+
+  process 独有能力盘点（供后续移植评估，不在本切片做）：模型
+  目录、浏览器 MCP OAuth、spec 交接与子代理通知——三者同根
+  （daemon facade 缺会话通知订阅与完整模型元数据），移植成本
+  在上游 SDK/daemon 面，扩展侧无解法
+- 真机冒烟（生产模块直驱，非 mock）：
+  `artifacts/smoke-btw-daemon-live.mts` **9/9 PASS**（production
+  daemon 生命周期 + `BtwSideChat` Host 驱动 + 真模型：开卡
+  forking→ready、流式答、追问同 fork、fork 落 btw/、弃卡不
+  promote、双列表零泄漏、主会话全程无恙）；
+  `artifacts/smoke-mode-fallback-live.mts` **6/6 PASS**（坏
+  daemon 二进制走真实 spawn/端口等待/换端口重试 → 回退记录
+  恰一次 → process 会话真答 → 第二会话粘性不再碰 daemon）。
+  注意：daemon 起不来时端口等待 + 一次重试合计约 64s，首个
+  会话建立会慢这一拍，之后恢复正常
+- 测试：`DaemonBtwSidecar.test.ts`（fork 参数/attach/流式/
+  权限拒答文案/追问/dispose/无效 fork 响应）、
+  `daemonFirstSessionFactory.test.ts`（daemon 正常路径/获取失败
+  粘性回退/会话级错误不回退/回退观察者抛错不伤会话）
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -1833,10 +1900,11 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
 
 ### 运行架构
 
-- [x] daemon 作为可选运行路径（执行链路，Phase 2：
-      `droidvisx.runtime.mode = daemon` 时经 `createSdkSession` seam
-      注入 daemon 会话工厂；默认 `process` 不变；模型目录与浏览器
-      MCP OAuth 在 daemon 模式 fail closed）
+- [x] daemon 作为默认运行路径（执行链路，Phase 2 + §21：
+      `droidvisx.runtime.mode` 默认 `daemon`，经 `createSdkSession`
+      seam 注入 daemon 会话工厂；显式设 `process` 仍走
+      ProcessTransport；模型目录与浏览器 MCP OAuth 在 daemon 模式
+      fail closed）
 - [x] daemon 连接和认证（Phase 1 只读 sidecar：`readFactoryAccessCredential()`
       + SDK `connectToDaemon`，认证失败分类为安全诊断）
 - [x] daemon 生命周期管理（Phase 1 私有 `--parent-pid` 模式 +
@@ -1846,18 +1914,22 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
       实证）
 - [x] 跨窗口会话租约（Phase 3：`~/.droidvisx/sessions-attached.json`，
       替换型操作前持租约，死 pid 可抢占）
-- [ ] daemon 失败时回退 Node subprocess（当前为配置级回退：切回
-      `process` + Reload Window；无运行时自动回退）
+- [x] daemon 失败时回退 Node subprocess（§21：默认模式下首次建
+      会话 daemon 获取失败 → `runtime.mode.fallback` quiet 诊断 +
+      粘性回退 process 工厂；显式设置不回退；daemon 依赖门
+      （worktree 创建等）回退后 fail closed；
+      `smoke-mode-fallback-live.mts` 6/6 实证）
 - [x] Webview 重连对账基础档（A4，2026-08-12 晚：Reload 后 in-flight
       回合生成中占位 + 完成后历史重载替换 + pending 权限重弹，生产
       Host 栈两代进程真机 PASS，见验证状态「活流重连基础档（A4）」；
       逐 token 续流不做，SDK 无断点续流通道）
 - [ ] Capability Gate 接入 Extension 的安全产品门控
 
-默认（`process`）生产执行链路只使用 Node SDK `ProcessTransport`，
-daemon 作为归档/取消归档/内容搜索的只读 sidecar；设置
-`droidvisx.runtime.mode = daemon` 后执行链路整体走同一 daemon
-连接（实验性，默认关闭）。
+默认（`daemon`，§21 起）生产执行链路走共享 daemon 连接，任务跨
+Reload 存活；daemon 起不来时默认路径自动无感回退
+`ProcessTransport`（显式设置除外）。显式设 `process` 时执行链路
+只使用 Node SDK `ProcessTransport`，daemon 降为归档/取消归档/
+内容搜索的只读 sidecar。
 
 ### 动态 Composer
 
@@ -3543,7 +3615,8 @@ daemon、默认 process）与 Phase 3（Reload 存活：脱管共享 daemon +
 `probe-reload-survival.mjs` 实证 PASS）均已于 2026-08-12 凌晨
 完成（见验证状态）；Phase 3 的 Webview 重连对账 UI（in-flight
 回合活流重接、面板内 pending 权限重弹）尚未接线（见验证状态遗留
-说明）。
+说明）。2026-08-12 深夜 §21 完成双模式归一：默认切 daemon +
+自动回退、/btw 移植 daemon、能力×模式实测表（见 §21）。
 
 ### 第一档与恢复提速的关系
 
