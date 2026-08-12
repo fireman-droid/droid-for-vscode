@@ -5,10 +5,13 @@ import {
   MAX_SUBAGENT_TYPE_LENGTH,
 } from '../shared/bridgeMessages';
 import {
+  createSubagentQueues,
   readSubagentInvocations,
+  readTaskDelegation,
   sanitizeSubagentDescription,
   sanitizeSubagentType,
   subagentIdentityKey,
+  takeSubagentSummary,
 } from './subagentSummary';
 
 describe('sanitizeSubagentType', () => {
@@ -180,5 +183,57 @@ describe('readSubagentInvocations', () => {
     expect(readSubagentInvocations({ result: null })).toEqual([]);
     expect(readSubagentInvocations(envelope(undefined))).toEqual([]);
     expect(readSubagentInvocations(envelope('nope'))).toEqual([]);
+  });
+});
+
+describe('readTaskDelegation', () => {
+  it('reads the sanitized identity from a Task tool input', () => {
+    expect(
+      readTaskDelegation('Task', {
+        subagent_type: ' worker\u0000 ',
+        description: 'Review\n the bridge',
+        prompt: 'long prompt that stays out of the identity',
+        complexity: 'medium',
+      }),
+    ).toEqual({ type: 'worker', description: 'Review the bridge' });
+  });
+
+  it('treats a missing description as empty', () => {
+    expect(
+      readTaskDelegation('Task', { subagent_type: 'explore' }),
+    ).toEqual({ type: 'explore', description: '' });
+  });
+
+  it('returns null for other tools and unusable inputs', () => {
+    expect(
+      readTaskDelegation('Execute', { subagent_type: 'worker' }),
+    ).toBeNull();
+    expect(readTaskDelegation('Task', undefined)).toBeNull();
+    expect(readTaskDelegation('Task', { subagent_type: '' })).toBeNull();
+    expect(readTaskDelegation('Task', {})).toBeNull();
+  });
+});
+
+describe('subagent summary queues', () => {
+  it('pairs repeated identical delegations with ledger entries in order', () => {
+    const queues = createSubagentQueues([
+      { type: 'worker', description: 'same', status: 'completed', toolUseCount: 1 },
+      { type: 'worker', description: 'same', status: 'failed', toolUseCount: 2 },
+      { type: 'explore', description: 'other', status: 'running' },
+    ]);
+
+    expect(
+      takeSubagentSummary(queues, 'worker', 'same')?.toolUseCount,
+    ).toBe(1);
+    expect(
+      takeSubagentSummary(queues, 'worker', 'same')?.toolUseCount,
+    ).toBe(2);
+    expect(takeSubagentSummary(queues, 'worker', 'same')).toBeUndefined();
+    expect(takeSubagentSummary(queues, 'explore', 'other')?.status).toBe(
+      'running',
+    );
+    expect(
+      takeSubagentSummary(queues, 'explore', 'unrelated'),
+    ).toBeUndefined();
   });
 });

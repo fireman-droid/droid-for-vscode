@@ -127,3 +127,71 @@ function readCount(value: unknown): number | undefined {
   const rounded = Math.round(value);
   return Number.isSafeInteger(rounded) ? rounded : undefined;
 }
+
+/**
+ * The delegation identity a Task tool call carries in its own input
+ * (`subagent_type` + `description`), sanitized exactly like ledger
+ * entries so the two sides key identically. Null for non-Task tools
+ * and unusable inputs.
+ */
+export function readTaskDelegation(
+  toolName: string,
+  input: unknown,
+): { readonly type: string; readonly description: string } | null {
+  const normalized = toolName
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .toLocaleLowerCase();
+  if (normalized !== 'task' || !isStrictRecord(input)) {
+    return null;
+  }
+  const type = sanitizeSubagentType(input.subagent_type);
+  if (type === null) {
+    return null;
+  }
+  return {
+    type,
+    description: sanitizeSubagentDescription(input.description),
+  };
+}
+
+/**
+ * FIFO queues of ledger summaries keyed by delegation identity. The
+ * public ledger omits the parent tool-use id, so repeated identical
+ * delegations pair with ledger entries in order of appearance.
+ */
+export type SubagentSummaryQueues = Map<string, ToolSubagentSummary[]>;
+
+export function createSubagentQueues(
+  invocations: readonly ToolSubagentSummary[],
+): SubagentSummaryQueues {
+  const queues: SubagentSummaryQueues = new Map();
+  for (const invocation of invocations) {
+    const key = subagentIdentityKey(
+      invocation.type,
+      invocation.description,
+    );
+    const queue = queues.get(key);
+    if (queue === undefined) {
+      queues.set(key, [invocation]);
+    } else {
+      queue.push(invocation);
+    }
+  }
+  return queues;
+}
+
+/**
+ * Takes the oldest unconsumed ledger summary matching one delegation
+ * identity, or undefined when the ledger has no entry for it.
+ */
+export function takeSubagentSummary(
+  queues: SubagentSummaryQueues,
+  type: string,
+  description: string,
+): ToolSubagentSummary | undefined {
+  const queue = queues.get(subagentIdentityKey(type, description));
+  if (queue === undefined || queue.length === 0) {
+    return undefined;
+  }
+  return queue.shift();
+}
