@@ -1005,7 +1005,18 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [ ] Git Commit / Push / Pull Request
 - [ ] 原生 Terminal 工作流
 - [ ] Background Processes
-- [ ] Worktree 生命周期
+- [x] Worktree 并行任务第一切片（SessionDrawer「New session in a
+      worktree…」入口 → daemon `sessions.create({ worktree: true })` →
+      会话行 `worktree · <branch>` 标注 + 完整路径 tooltip。仅
+      daemon 模式且 git 工作区时入口可见；process 模式入口隐藏、
+      请求 fail-closed 返回诊断。探针实证
+      `artifacts/probe-worktree-create.out.json`：分支名由 daemon
+      自主命名（`<branch>-wt`），SDK facade 只回 `session.cwd`，
+      分支由 Host 用 git 反查；worktree 会话不进主工作区目录的
+      catalog，由 Host 注册表（Memento）增补列出。已提交待随包
+      验证）
+- [ ] Worktree 生命周期（清理 `git worktree remove`、脏检查防呆，
+      第一切片未含）
 - [ ] 远程环境
 - [ ] 跨设备 Session
 - [ ] Help 和 Feedback
