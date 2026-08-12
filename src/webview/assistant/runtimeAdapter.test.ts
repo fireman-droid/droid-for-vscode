@@ -396,7 +396,6 @@ describe('Droid external-store adapter', () => {
     expect(messages[0]).toMatchObject({
       role: 'user',
       content: [
-        { type: 'text', text: 'What is this?' },
         {
           type: 'data',
           name: 'droid-image',
@@ -408,6 +407,7 @@ describe('Droid external-store adapter', () => {
             byteLength: 5,
           },
         },
+        { type: 'text', text: 'What is this?' },
       ],
     });
     expect(messages[1]).toMatchObject({
@@ -426,6 +426,75 @@ describe('Droid external-store adapter', () => {
         },
       ],
     });
+  });
+
+  it('adopts user images that precede their prompt (history order)', () => {
+    // History projection walks the raw message's content blocks, where
+    // the CLI stores image blocks BEFORE the text block — the reverse
+    // of the live echo order. Both must land in the user bubble.
+    const image = (id: string) =>
+      ({
+        id,
+        kind: 'image',
+        turnId: 'turn-a',
+        origin: 'user',
+        mediaType: 'image/png',
+        data: 'aGVsbG8=',
+        generated: false,
+        byteLength: 5,
+      }) as const;
+    const messages = mapTranscriptToRuntimeMessages(
+      [
+        image('image-1'),
+        image('image-2'),
+        { id: 'user-a', kind: 'user', text: 'What is this?' },
+        {
+          id: 'assistant-a',
+          kind: 'assistant',
+          turnId: 'turn-a',
+          text: 'A chart.',
+        },
+      ],
+      null,
+    );
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toMatchObject({
+      role: 'user',
+      content: [
+        { type: 'data', name: 'droid-image' },
+        { type: 'data', name: 'droid-image' },
+        { type: 'text', text: 'What is this?' },
+      ],
+    });
+    expect(messages[1]).toMatchObject({ role: 'assistant' });
+    // A dangling user image with no adjacent prompt still renders
+    // standalone inside its turn group.
+    const dangling = mapTranscriptToRuntimeMessages(
+      [
+        { id: 'user-a', kind: 'user', text: 'Prompt' },
+        {
+          id: 'assistant-a',
+          kind: 'assistant',
+          turnId: 'turn-a',
+          text: 'Reply.',
+        },
+        image('image-late'),
+        {
+          id: 'assistant-b',
+          kind: 'assistant',
+          turnId: 'turn-a',
+          text: 'More.',
+        },
+      ],
+      null,
+    );
+    expect(dangling).toHaveLength(2);
+    expect(dangling[1]!.content).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'data', name: 'droid-image' }),
+      ]),
+    );
   });
 
   it('uniquifies duplicate toolCallIds within one assistant message', () => {

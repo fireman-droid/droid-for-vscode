@@ -285,22 +285,7 @@ export function mapTranscriptToRuntimeMessages(
   const descriptors: (UserMessageDescriptor | AssistantGroupDescriptor)[] = [];
   const groups = new Map<string, AssistantGroupDescriptor>();
 
-  for (const item of transcript) {
-    if (item.kind === "user") {
-      descriptors.push({ kind: "user", item, images: [] });
-      continue;
-    }
-    // A user-origin image belongs to the prompt it was sent with; both
-    // the live echo and history projection emit it directly after the
-    // user text item. Without a preceding user message it falls through
-    // to the assistant turn group and renders standalone.
-    if (item.kind === "image" && item.origin === "user") {
-      const last = descriptors[descriptors.length - 1];
-      if (last?.kind === "user") {
-        last.images.push(item);
-        continue;
-      }
-    }
+  const appendToGroup = (item: SessionTranscriptItem): void => {
     const key = item.turnId ?? `diagnostic:${item.id}`;
     let group = groups.get(key);
     if (group === undefined) {
@@ -314,7 +299,46 @@ export function mapTranscriptToRuntimeMessages(
       descriptors.push(group);
     }
     group.items.push(item);
+  };
+
+  // A user-origin image belongs to the prompt it was sent with, but the
+  // two projections order them differently: the live echo emits images
+  // right AFTER the user text, while history projection walks the raw
+  // message's content blocks, where the CLI stores images BEFORE the
+  // text (measured over real session files: always `image,…,text`).
+  // Leading images are buffered here until their adjacent user item
+  // adopts them; only an image with no prompt on either side falls
+  // through to the turn group and renders standalone.
+  let pendingUserImages: Extract<
+    SessionTranscriptItem,
+    { kind: "image" }
+  >[] = [];
+  const flushPendingUserImages = (): void => {
+    for (const image of pendingUserImages) {
+      appendToGroup(image);
+    }
+    pendingUserImages = [];
+  };
+
+  for (const item of transcript) {
+    if (item.kind === "user") {
+      descriptors.push({ kind: "user", item, images: pendingUserImages });
+      pendingUserImages = [];
+      continue;
+    }
+    if (item.kind === "image" && item.origin === "user") {
+      const last = descriptors[descriptors.length - 1];
+      if (last?.kind === "user") {
+        last.images.push(item);
+      } else {
+        pendingUserImages.push(item);
+      }
+      continue;
+    }
+    flushPendingUserImages();
+    appendToGroup(item);
   }
+  flushPendingUserImages();
 
   // Reply runs: maximal stretches of consecutive assistant descriptors
   // (user messages break them; AskUser/plan approvals split one visible
@@ -386,9 +410,11 @@ export function mapTranscriptToRuntimeMessages(
       const message: SafeRuntimeMessage = {
         id: item.id,
         role: "user",
+        // Thumbs above the prompt text, matching the composer's
+        // pending-attachment layout.
         content: [
-          { type: "text", text: item.text },
           ...descriptor.images.map(mapItemToPart),
+          { type: "text", text: item.text },
         ],
         optimistic,
         ...(item.messageId === undefined ? {} : { messageId: item.messageId }),
