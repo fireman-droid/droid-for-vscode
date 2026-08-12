@@ -383,7 +383,16 @@ Mission 只读展示（控制面不做）：header 连接状态旁追加静字
 （`artifacts/subagent-harness.html` + `run-smoke-subagent.mjs`）：
 历史回放四种终态 + 无台账 Task 行不出子行 + 抽屉角色注记、流式
 升级→台账结算、120 回合 stress（默认 60 消息窗口 + Show earlier
-两次点开全量 124 子行）。门禁与包验证数字见本条目尾注。
+两次点开全量 124 子行）。stress 首测发现窗口内 29 条已结算子行会把
+新消息 append 长任务推到 53–92ms（对照组 plain/plainpad 均为 0），
+`SubagentSummaryRow` 改原始值 props + `memo` 后连续三轮复测流式期间
+50ms+ 长任务为 0。门禁：typecheck 三项目全净、vitest 64 文件
+1494 项全过、build 过（webview.js 908.7KB）、
+`vsce package` 出 `dist/droidvisx.vsix`（10 文件 1.54MB，SHA256
+`8283338286f62c3ccda670eeff44da15bd82d8d72b7c0713e4775d6c24191610`）、
+`verify:vsix` 过、`cursor --install-extension --force` 安装成功。
+注：打包时工作区含并行代理未提交的 Mermaid/TranscriptImage 等
+在制品（typecheck 与全量测试均绿）。
 
 2026-08-12 下午追加 V2 切片「会话/回合 token 明细」：Context 浮层内
 新增一段 quiet「Token usage」账目（复用既有 hairline 分隔与细字标签
