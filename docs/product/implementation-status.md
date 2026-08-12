@@ -696,6 +696,42 @@ ChatController/ComposerControls/ComposerPopup），待随下一批次包一
 48px 缩略图；进行中任务钉条应为独立暖卡面带 hairline 进度；全局
 滚动条应为 6px 细样式。
 
+2026-08-12 晚追加「P0：MCP Add server 死机修复 + 弹窗键盘跟滚」
+（用户 v0.1.0 实测报告，提交 adf12c2 / fde72b3 / 50aef0f）。
+真根因（headless Chrome 逐层事件跟踪实证，非猜测）：Add server
+内联表单是嵌在 assistant-ui Composer `<form>` 里的**嵌套
+`<form>`**，Chromium 不会让内层表单的 submit 事件传播越过外层
+form 元素，挂在 React 根上的委托 `onSubmit`（及其
+`preventDefault`）从未执行，任意一次点击（不只空表单）都触发浏
+览器原生 GET 提交 → webview 整页导航 → 永久白屏（用户所称"死
+机"）；jsdom 不模拟该截断，故既有测试一直全绿。修复：① 卡片改
+`role="form"` 容器（不再有嵌套 form），提交走按钮 click + 输入框
+Enter（`preventDefault` 同时挡住外层 Composer 的隐式提交，否则
+Enter 会把草稿消息发出去）；名称与命令/URL 形状合法前 Add server
+按钮禁用（沿用既有 `:disabled` 灰态），URL 非空但形状错时显示唯
+一一条 quiet 提示，空提交兜底直接忽略。② Host 侧 fail-closed：
+`withMcpTimeout`（30s）包住全部 MCP 目录读取与增删启停
+RPC——stdio 命令可 spawn 但握手永不完成时，daemon RPC 原本永不
+resolve，面板会卡 'loading' 全禁用；现在超时走既有失败路径（error
+态 + 重拉目录 + retry 文案），面板保持可交互；Remove/Toggle/
+Refresh 同 helper 一次覆盖。③ 同族修复：`/` 斜杠与 `@` 提及弹窗
+键盘导航高亮滚出可视区不跟随——共享壳 `ComposerPopup` 以
+MutationObserver 监听 `aria-selected` 移动并对高亮行
+`scrollIntoView({ block: 'nearest' })`，环绕跳转与过滤重排一并跟
+随，一处修生效于全部列表弹窗（模型弹层无键盘导航，不在此列）；
+jsdom 无 scrollIntoView，vitest setup 补惰性桩。门禁：typecheck
+三段全过；全量 vitest 80 文件 1825 全过（新增：嵌套表单回归断言 +
+空/非法表单禁用与 Enter 用例、Host 挂起超时回错误态用例、弹窗高
+亮跟滚用例）；headless Chrome 回归（`artifacts/smoke-mcp-add.mjs`
++ `mcp-add-harness.html`，真实 bundle）pass：空表单按钮禁用且点
+击后页面未导航、消息零发送；非法提交显示 quiet 错误后 Add/
+Refresh 立即可用；120px 限高下按住 ArrowDown/ArrowUp 走 30 步高
+亮全程可见含环绕。**本批次未打包，随下一修复包一起真机验收**：
+MCP 面板空表单点 Add server 应点不动（灰态）无任何反应；填一个
+不存在的命令提交应在面板内看到 "Droid could not add that MCP
+server..." 且面板可继续操作（≤30s）；`/` 弹窗按住向下键走到列表
+底部之外高亮行应始终可见。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
