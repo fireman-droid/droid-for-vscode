@@ -1,7 +1,17 @@
 # Project Instructions
 
-This repository uses one implementation agent. Do not delegate repository
-work to subagents unless the user explicitly asks for delegation.
+Delegation and parallel agents are allowed: anything the Cursor agent
+platform supports (background subagents, parallel workers, worktrees) may be
+used freely (user decision, 2026-08-12). The only remaining constraints are
+physical resource conflicts, not policy:
+
+- Two agents must not concurrently edit the same files in the same working
+  directory.
+- `pnpm run build`, `vsce package`, and `cursor --install-extension` share
+  `dist/` and the global extension install location; only one agent may run
+  them at a time.
+- Concurrent editors of `docs/product/implementation-status.md` must merge,
+  not overwrite, each other's entries.
 
 ## Current phase
 
@@ -27,8 +37,9 @@ not invent unsupported Droid capabilities.
 - Stabilize shared Bridge contracts before changing their consumers.
 - Preserve explicit boundaries between Runtime, Extension Host, shared Bridge,
   and Webview code even though one agent implements all layers.
-- Do not invoke planner, explorer, writer, tester, reviewer, or research
-  subagents unless the user explicitly requests them.
+- Subagents of any kind (planner, explorer, writer, tester, reviewer,
+  research) may be used whenever they help; respect the physical resource
+  constraints listed at the top of this file.
 
 ## Delivery loop
 
@@ -43,7 +54,16 @@ not invent unsupported Droid capabilities.
 6. Run broad tests, type checks, and builds once at the end when justified.
 7. Package and perform visible browser and Cursor verification when the slice
    affects the extension UI.
-8. Update `docs/product/implementation-status.md` in the same change.
+8. Mandatory self-acceptance (user decision, 2026-08-12): before reporting a
+   UI slice as done, the implementing agent must verify it visually itself —
+   render the real built webview (harness page or a disposable test chat
+   session; a scratch session does not disturb other files), drive the actual
+   interaction being shipped, capture screenshots into `artifacts/`, and check
+   them against the agreed spec. Walk the adjacent states too (empty, running,
+   error, hover, collapsed/expanded, session switch). Finding your own bugs is
+   part of the slice; do not leave discovery to the user. Include the
+   screenshots in the final report.
+9. Update `docs/product/implementation-status.md` in the same change.
 
 Capability research and probes must support an active product slice. Do not
 expand them into standalone projects without explicit user approval.
@@ -52,6 +72,18 @@ expand them into standalone projects without explicit user approval.
 
 - Preserve existing user changes and unrelated files.
 - Follow repository-local conventions discovered from the codebase.
+- UI restraint (user decision, 2026-08-12): when adding UI, reuse the
+  existing quiet visual language (subtle text, existing trigger/hint
+  patterns). Do NOT introduce new prominent styled elements (banners,
+  filled pills, badges, colored bars) without the user seeing and
+  approving the visual first. When in doubt, ship the most minimal
+  indication possible.
+- Visual bar (user decision, 2026-08-12): the target aesthetic is
+  understated luxury ("轻奢") at Cursor's level of finish. Never ship
+  plasticky flat colors or bare, undecorated cards. Every surface needs
+  the full finish treatment consistent with the existing shell: layered
+  warm neutrals, 1px borders, soft shadows, refined typography, precise
+  spacing, subtle hover/transition feedback.
 - Prefer small, coherent changes over broad rewrites.
 - Keep modules narrow, dependencies explicit, and control flow easy to trace.
 - Prefer functions and composition over managers, wrappers, inheritance, or
