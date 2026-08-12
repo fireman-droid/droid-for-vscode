@@ -52,6 +52,7 @@ export class DroidViewProvider
 
   private messageListener: vscode.Disposable | undefined;
   private viewDisposalListener: vscode.Disposable | undefined;
+  private visibilityListener: vscode.Disposable | undefined;
   private controllerSubscription: vscode.Disposable | undefined;
   private webviewView: vscode.WebviewView | undefined;
   private disposed = false;
@@ -152,6 +153,31 @@ export class DroidViewProvider
       this.disposeViewSubscriptions();
       this.webviewView = undefined;
     });
+    // With retainContextWhenHidden the view survives tab switches
+    // (no reboot, no re-resolve), so hide/show becomes a visibility
+    // flip. The visibility log is the observable proof that a
+    // switch-back happened without a webview.boot-ok. The ready
+    // resync on re-show is defensive: an initialized controller
+    // treats a repeated ready as "re-emit the snapshot and replay
+    // pending interactions", both of which the webview handles
+    // idempotently, so any message the suspended webview might have
+    // missed while hidden is reconciled wholesale.
+    this.visibilityListener = webviewView.onDidChangeVisibility(() => {
+      if (this.webviewView !== webviewView) {
+        return;
+      }
+      this.diagnostics?.record({
+        level: 'info',
+        name: 'host.view.visibility',
+        attributes: { visible: webviewView.visible },
+      });
+      if (webviewView.visible) {
+        this.controller.handleMessage({
+          type: 'webview.ready',
+          protocolVersion: BRIDGE_PROTOCOL_VERSION,
+        });
+      }
+    });
   }
 
   dispose(): void {
@@ -169,6 +195,8 @@ export class DroidViewProvider
     this.messageListener = undefined;
     this.viewDisposalListener?.dispose();
     this.viewDisposalListener = undefined;
+    this.visibilityListener?.dispose();
+    this.visibilityListener = undefined;
     this.controllerSubscription?.dispose();
     this.controllerSubscription = undefined;
   }
