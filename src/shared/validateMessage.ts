@@ -98,6 +98,13 @@ import {
   parseBtwDismissMessage,
 } from './btwProtocol';
 import {
+  parseQueueAddMessage,
+  parseQueueClearMessage,
+  parseQueueRemoveMessage,
+  parseQueueResumeMessage,
+  parseQueueUpdateMessage,
+} from './queueProtocol';
+import {
   MAX_GIT_COMMIT_MESSAGE_LENGTH,
   MAX_GIT_COMMIT_PATHS,
 } from './gitCommitFlow';
@@ -227,6 +234,16 @@ export function parseWebviewMessage(
         return parseBtwAskMessage(value) ?? undefined;
       case 'btw.dismiss':
         return parseBtwDismissMessage(value) ?? undefined;
+      case 'queue.add':
+        return parseQueueAddMessage(value) ?? undefined;
+      case 'queue.update':
+        return parseQueueUpdateMessage(value) ?? undefined;
+      case 'queue.remove':
+        return parseQueueRemoveMessage(value) ?? undefined;
+      case 'queue.resume':
+        return parseQueueResumeMessage(value) ?? undefined;
+      case 'queue.clear':
+        return parseQueueClearMessage(value) ?? undefined;
       default:
         return undefined;
     }

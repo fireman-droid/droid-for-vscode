@@ -1678,4 +1678,90 @@ describe('parseWebviewMessage', () => {
       }),
     ).toBeUndefined();
   });
+
+  it('routes queue.* messages through the shared parser', () => {
+    expect(
+      parseWebviewMessage({
+        type: 'queue.add',
+        sessionId: 'session-1',
+        queueId: 'queue-1',
+        text: 'Next: also update the tests.',
+      }),
+    ).toEqual({
+      type: 'queue.add',
+      sessionId: 'session-1',
+      queueId: 'queue-1',
+      text: 'Next: also update the tests.',
+    });
+    expect(
+      parseWebviewMessage({
+        type: 'queue.update',
+        sessionId: 'session-1',
+        queueId: 'queue-1',
+        text: 'Edited follow-up.',
+      }),
+    ).toEqual({
+      type: 'queue.update',
+      sessionId: 'session-1',
+      queueId: 'queue-1',
+      text: 'Edited follow-up.',
+    });
+    expect(
+      parseWebviewMessage({
+        type: 'queue.remove',
+        sessionId: 'session-1',
+        queueId: 'queue-1',
+      }),
+    ).toEqual({
+      type: 'queue.remove',
+      sessionId: 'session-1',
+      queueId: 'queue-1',
+    });
+    expect(
+      parseWebviewMessage({ type: 'queue.resume', sessionId: 'session-1' }),
+    ).toEqual({ type: 'queue.resume', sessionId: 'session-1' });
+    expect(
+      parseWebviewMessage({ type: 'queue.clear', sessionId: 'session-1' }),
+    ).toEqual({ type: 'queue.clear', sessionId: 'session-1' });
+
+    // Shape violations fall back to undefined like every channel.
+    expect(
+      parseWebviewMessage({
+        type: 'queue.add',
+        sessionId: 'session-1',
+        queueId: 'queue-1',
+        text: '',
+      }),
+    ).toBeUndefined();
+    expect(
+      parseWebviewMessage({
+        type: 'queue.add',
+        sessionId: 'session-1',
+        queueId: 'queue-1',
+        text: 'q'.repeat(MAX_TURN_TEXT_LENGTH + 1),
+      }),
+    ).toBeUndefined();
+    expect(
+      parseWebviewMessage({
+        type: 'queue.update',
+        sessionId: 'session-1',
+        queueId: '',
+        text: 'Edited follow-up.',
+      }),
+    ).toBeUndefined();
+    expect(
+      parseWebviewMessage({
+        type: 'queue.remove',
+        sessionId: 'session-1',
+        queueId: 'queue-1',
+        extra: true,
+      }),
+    ).toBeUndefined();
+    expect(
+      parseWebviewMessage({ type: 'queue.resume' }),
+    ).toBeUndefined();
+    expect(
+      parseWebviewMessage({ type: 'queue.clear', sessionId: 42 }),
+    ).toBeUndefined();
+  });
 });

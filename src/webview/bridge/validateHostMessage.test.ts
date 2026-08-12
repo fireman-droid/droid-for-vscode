@@ -2864,6 +2864,129 @@ describe('readHostMessage', () => {
     },
   );
 
+  it('accepts queue state on snapshots and as a queue.state message', () => {
+    const snapshot = createSessionSnapshot();
+    const queue = {
+      items: [
+        {
+          queueId: 'queue-1',
+          text: 'Follow-up prompt.',
+          attachments: [
+            { kind: 'text', name: 'notes.md', sizeBytes: 120 },
+          ],
+        },
+        { queueId: 'queue-2', text: 'Another one.', attachments: [] },
+      ],
+      paused: 'stopped',
+    };
+    expect(readHostMessage({ ...snapshot, queue })).toEqual({
+      ...snapshot,
+      queue,
+    });
+
+    const message = {
+      type: 'queue.state',
+      sequence: 5,
+      sessionId: 'session-1',
+      items: queue.items,
+      paused: null,
+    };
+    expect(readHostMessage(message)).toEqual(message);
+    expect(
+      readHostMessage({ ...message, sequence: -1 }),
+    ).toBeUndefined();
+  });
+
+  it.each([
+    { name: 'non-record state', queue: 'later' },
+    { name: 'missing paused member', queue: { items: [] } },
+    {
+      name: 'unknown paused reason',
+      queue: {
+        items: [{ queueId: 'queue-1', text: 't', attachments: [] }],
+        paused: 'sleepy',
+      },
+    },
+    {
+      name: 'paused but empty',
+      queue: { items: [], paused: 'stopped' },
+    },
+    {
+      name: 'duplicate queue ids',
+      queue: {
+        items: [
+          { queueId: 'queue-1', text: 'a', attachments: [] },
+          { queueId: 'queue-1', text: 'b', attachments: [] },
+        ],
+        paused: null,
+      },
+    },
+    {
+      name: 'over the queue cap',
+      queue: {
+        items: Array.from({ length: 11 }, (_, index) => ({
+          queueId: `queue-${index}`,
+          text: 't',
+          attachments: [],
+        })),
+        paused: null,
+      },
+    },
+    {
+      name: 'blank item text',
+      queue: {
+        items: [{ queueId: 'queue-1', text: '', attachments: [] }],
+        paused: null,
+      },
+    },
+    {
+      name: 'extra item keys',
+      queue: {
+        items: [
+          {
+            queueId: 'queue-1',
+            text: 't',
+            attachments: [],
+            position: 0,
+          },
+        ],
+        paused: null,
+      },
+    },
+    {
+      name: 'malformed attachment',
+      queue: {
+        items: [
+          {
+            queueId: 'queue-1',
+            text: 't',
+            attachments: [{ kind: 'binary', name: 'x', sizeBytes: 1 }],
+          },
+        ],
+        paused: null,
+      },
+    },
+  ])(
+    'rejects malformed queue state on snapshots and messages ($name)',
+    ({ queue }) => {
+      const snapshot = createSessionSnapshot();
+      expect(readHostMessage({ ...snapshot, queue })).toBeUndefined();
+      // Cases with both members also cover the flattened message
+      // shape; the structural cases only exist on the snapshot field.
+      if (typeof queue === 'object' && 'paused' in queue) {
+        expect(
+          readHostMessage({
+            type: 'queue.state',
+            sequence: 5,
+            sessionId: 'session-1',
+            items: queue.items,
+            paused: queue.paused,
+          }),
+        ).toBeUndefined();
+      }
+    },
+  );
+
   it('defaults a missing favorite flag to false', () => {
     const snapshot = createSessionSnapshot();
     const { isFavorite: _omitted, ...summaryWithoutFavorite } =

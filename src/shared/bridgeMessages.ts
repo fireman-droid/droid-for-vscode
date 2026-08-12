@@ -16,6 +16,15 @@ import type {
   BtwDismissMessage,
   SessionBtwMessage,
 } from './btwProtocol';
+import type {
+  QueueAddMessage,
+  QueueClearMessage,
+  QueueRemoveMessage,
+  QueueResumeMessage,
+  QueueStateMessage,
+  QueueUpdateMessage,
+  SessionQueueState,
+} from './queueProtocol';
 
 export {
   MAX_ASK_USER_ANSWERS,
@@ -67,6 +76,20 @@ export {
   type SessionBtwMessage,
   type SessionBtwState,
 } from './btwProtocol';
+// Type-only re-exports: `queueProtocol` imports runtime bounds from
+// this module, so runtime constants and parsers (MAX_QUEUED_MESSAGES,
+// parse*) must be imported from './queueProtocol' directly.
+export type {
+  QueueAddMessage,
+  QueueClearMessage,
+  QueuedMessageSummary,
+  QueuePausedReason,
+  QueueRemoveMessage,
+  QueueResumeMessage,
+  QueueStateMessage,
+  QueueUpdateMessage,
+  SessionQueueState,
+} from './queueProtocol';
 export { MAX_TOOL_OUTPUT_TAIL_LENGTH } from './toolOutput';
 export {
   GIT_FILE_STATUSES,
@@ -93,7 +116,9 @@ import type {
 // interleaved thinking segments render as separate transcript rows.
 // Version 5: read-only plugins panel messages (plugins.refresh W→H,
 // session.plugins H→W).
-export const BRIDGE_PROTOCOL_VERSION = 5 as const;
+// Version 6: queued-messages contract (queue.add/update/remove/
+// resume/clear W→H, queue.state H→W, snapshot `queue` field).
+export const BRIDGE_PROTOCOL_VERSION = 6 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_TEXT_LENGTH = 32_000;
@@ -1006,7 +1031,12 @@ export type WebviewToHostMessage =
   | RewindInfoRequestMessage
   | SessionSettingUpdateMessage
   | BtwAskMessage
-  | BtwDismissMessage;
+  | BtwDismissMessage
+  | QueueAddMessage
+  | QueueUpdateMessage
+  | QueueRemoveMessage
+  | QueueResumeMessage
+  | QueueClearMessage;
 
 export interface ConnectionState {
   readonly status: ConnectionStatus;
@@ -1584,6 +1614,12 @@ export interface HostSnapshotMessage {
    * section must not render).
    */
   readonly tokenUsage?: SessionTokenUsageState;
+  /**
+   * Queued prompts of the active session (queued-messages design).
+   * Absent when the queue is empty, which the webview treats as the
+   * empty state; queue state also streams via `queue.state`.
+   */
+  readonly queue?: SessionQueueState;
 }
 
 export interface HostConnectionMessage {
@@ -2065,4 +2101,5 @@ export type HostToWebviewMessage =
   | TurnErrorMessage
   | InteractionRequestMessage
   | InteractionClosedMessage
-  | SessionBtwMessage;
+  | SessionBtwMessage
+  | QueueStateMessage;

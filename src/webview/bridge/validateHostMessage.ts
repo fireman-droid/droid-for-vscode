@@ -167,6 +167,12 @@ import {
   type SessionBtwMessage,
 } from '../../shared/btwProtocol';
 import {
+  parseQueueStateMessage,
+  parseSessionQueueState,
+  type QueueStateMessage,
+  type SessionQueueState,
+} from '../../shared/queueProtocol';
+import {
   hasExactKeys,
   isExactArray,
   isStrictRecord,
@@ -311,6 +317,8 @@ export function readHostMessage(
         return parseInteractionClosed(value);
       case 'session.btw':
         return parseSessionBtw(value);
+      case 'queue.state':
+        return parseQueueState(value);
       default:
         return undefined;
     }
@@ -345,6 +353,7 @@ function parseHostSnapshot(
         'btwAvailable',
         'tokenUsage',
         'workspaceRoot',
+        'queue',
       ],
     ) ||
     !isSequence(value.sequence) ||
@@ -382,6 +391,17 @@ function parseHostSnapshot(
     (value.tokenUsage !== undefined && tokenUsage === undefined) ||
     // Usage describes the active session only.
     (tokenUsage !== undefined && value.sessionId === null)
+  ) {
+    return undefined;
+  }
+  const queue: SessionQueueState | undefined =
+    value.queue === undefined
+      ? undefined
+      : (parseSessionQueueState(value.queue) ?? undefined);
+  if (
+    (value.queue !== undefined && queue === undefined) ||
+    // A queue describes the active session only.
+    (queue !== undefined && value.sessionId === null)
   ) {
     return undefined;
   }
@@ -441,6 +461,7 @@ function parseHostSnapshot(
       : { worktreeCreateAvailable: true }),
     ...(value.btwAvailable === undefined ? {} : { btwAvailable: true }),
     ...(tokenUsage === undefined ? {} : { tokenUsage }),
+    ...(queue === undefined ? {} : { queue }),
     ...(value.workspaceRoot === undefined
       ? {}
       : { workspaceRoot: value.workspaceRoot }),
@@ -1424,6 +1445,17 @@ function parseSessionBtw(
   // The shared parser owns the shape and content bounds; the
   // non-negative safe-integer sequence contract is this module's.
   const message = parseSessionBtwMessage(value);
+  return message !== null && isSequence(message.sequence)
+    ? message
+    : undefined;
+}
+
+function parseQueueState(
+  value: UnknownRecord,
+): QueueStateMessage | undefined {
+  // The shared parser owns the shape and content bounds; the
+  // non-negative safe-integer sequence contract is this module's.
+  const message = parseQueueStateMessage(value);
   return message !== null && isSequence(message.sequence)
     ? message
     : undefined;
