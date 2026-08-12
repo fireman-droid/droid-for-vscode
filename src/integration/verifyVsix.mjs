@@ -6,6 +6,8 @@ const vsixPath = path.resolve(process.argv[2] ?? 'dist/droidvisx.vsix');
 const expectedEntries = [
   '[Content_Types].xml',
   'extension.vsixmanifest',
+  // Shown as the Changelog tab on the extension details page.
+  'extension/CHANGELOG.md',
   'extension/dist/extension/extension.cjs',
   'extension/dist/webview/assets/inter-latin-wght-normal.woff2',
   // Lazily injected mermaid bundle; ships alongside webview.js but is
