@@ -18,19 +18,21 @@ import {
 } from './imagePreviewCache';
 import {
   AttachmentChip,
-  ChangesSummary,
   TerminalMirrorContext,
   FOLLOW_REJOIN_PX,
-  HistoryNotice,
-  PendingResponse,
   PreviewContext,
   applyFollowScroll,
   computePinnedUserIndex,
   computeStickyLayout,
   createFollowState,
-  formatCompactDividerLabel,
   readDroppedFileUris,
 } from './Thread';
+import {
+  ChangesSummary,
+  HistoryNotice,
+  PendingResponse,
+  formatCompactDividerLabel,
+} from './thread/transcriptRows';
 import {
   BackgroundProcessHint,
   SubagentSummaryRow,

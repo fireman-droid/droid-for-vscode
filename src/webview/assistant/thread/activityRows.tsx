@@ -24,7 +24,8 @@ import {
 import { commandCardTitle, commandChips } from "../commandCard";
 import { parsePlanSteps } from "../planAnchor";
 import { PlanAnchorCard } from "../PlanAnchorCard";
-import { PlanAnchorContext, PreviewChip, ToolFilePath } from "../Thread";
+import { PlanAnchorContext } from "../Thread";
+import { PreviewChip, ToolFilePath } from "./transcriptRows";
 import {
   CommandCardMenu,
   CommandWellLine,
