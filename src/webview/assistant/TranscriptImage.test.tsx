@@ -19,13 +19,18 @@ const imageData = {
 };
 
 /** Opens the lightbox and simulates the image finishing its load at a
- * given natural resolution inside a given viewport. */
+ * given natural resolution inside a given viewport. The zoom/pan
+ * transform rides the stage element wrapping the image. */
 async function openLightbox(options: {
   naturalWidth: number;
   naturalHeight: number;
   viewportWidth: number;
   viewportHeight: number;
-}): Promise<{ dialog: HTMLElement; img: HTMLImageElement }> {
+}): Promise<{
+  dialog: HTMLElement;
+  stage: HTMLElement;
+  img: HTMLImageElement;
+}> {
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: /Enlarge image/ }));
   const dialog = screen.getByRole('dialog', { name: 'Image preview' });
@@ -36,6 +41,7 @@ async function openLightbox(options: {
     value: options.viewportHeight,
   });
   const img = screen.getByAltText('Full size image') as HTMLImageElement;
+  const stage = img.parentElement as HTMLElement;
   Object.defineProperty(img, 'naturalWidth', {
     value: options.naturalWidth,
   });
@@ -43,10 +49,10 @@ async function openLightbox(options: {
     value: options.naturalHeight,
   });
   // jsdom has no pointer capture; the pan handlers call these.
-  img.setPointerCapture = () => undefined;
-  img.releasePointerCapture = () => undefined;
+  stage.setPointerCapture = () => undefined;
+  stage.releasePointerCapture = () => undefined;
   fireEvent.load(img);
-  return { dialog, img };
+  return { dialog, stage, img };
 }
 
 function nextFrame(): Promise<void> {
@@ -146,45 +152,65 @@ describe('TranscriptImage', () => {
 
   it('double-click toggles between fit and 100% and back', async () => {
     render(<TranscriptImage data={imageData} />);
-    const { img } = await openLightbox({
+    const { stage } = await openLightbox({
       naturalWidth: 2000,
       naturalHeight: 1000,
       viewportWidth: 800,
       viewportHeight: 600,
     });
-    fireEvent.doubleClick(img, { clientX: 400, clientY: 300 });
+    fireEvent.doubleClick(stage, { clientX: 400, clientY: 300 });
     expect(screen.getByText('100%')).toBeDefined();
-    fireEvent.doubleClick(img, { clientX: 400, clientY: 300 });
+    fireEvent.doubleClick(stage, { clientX: 400, clientY: 300 });
     expect(screen.getByText('38%')).toBeDefined();
+  });
+
+  it('offers explicit Reset and 1:1 controls next to close', async () => {
+    render(<TranscriptImage data={imageData} />);
+    await openLightbox({
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      viewportWidth: 800,
+      viewportHeight: 600,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom to 100%' }));
+    expect(screen.getByText('100%')).toBeDefined();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Reset zoom to fit' }),
+    );
+    expect(screen.getByText('38%')).toBeDefined();
+    // Neither control closes the viewer.
+    expect(
+      screen.getByRole('dialog', { name: 'Image preview' }),
+    ).toBeDefined();
   });
 
   it('pans by dragging once magnified past fit', async () => {
     render(<TranscriptImage data={imageData} />);
-    const { img } = await openLightbox({
+    const { stage } = await openLightbox({
       naturalWidth: 2000,
       naturalHeight: 1000,
       viewportWidth: 800,
       viewportHeight: 600,
     });
-    fireEvent.doubleClick(img, { clientX: 400, clientY: 300 });
-    expect(img.className).toContain('dvx-image-grab');
-    fireEvent.pointerDown(img, {
+    fireEvent.doubleClick(stage, { clientX: 400, clientY: 300 });
+    expect(stage.className).toContain('dvx-image-grab');
+    fireEvent.pointerDown(stage, {
       button: 0,
       pointerId: 1,
       clientX: 400,
       clientY: 300,
     });
-    expect(img.className).toContain('dvx-image-grabbing');
-    fireEvent.pointerMove(img, {
+    expect(stage.className).toContain('dvx-image-grabbing');
+    fireEvent.pointerMove(stage, {
       pointerId: 1,
       clientX: 440,
       clientY: 320,
     });
-    fireEvent.pointerUp(img, { pointerId: 1 });
-    expect(img.className).not.toContain('dvx-image-grabbing');
+    fireEvent.pointerUp(stage, { pointerId: 1 });
+    expect(stage.className).not.toContain('dvx-image-grabbing');
     await nextFrame();
-    expect(img.style.transform).toContain('translate(');
-    expect(img.style.transform).not.toContain('translate(0px, 0px)');
+    expect(stage.style.transform).toContain('translate(');
+    expect(stage.style.transform).not.toContain('translate(0px, 0px)');
   });
 
   it('renders a placeholder row when the image bytes were dropped', () => {

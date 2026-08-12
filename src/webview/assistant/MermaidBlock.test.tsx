@@ -165,6 +165,33 @@ describe('MermaidBlockView', () => {
   );
 
   it(
+    'opens the shared diagram viewer from a click on the figure',
+    async () => {
+      renderMermaidMock.mockResolvedValue(OK_OUTCOME);
+      render(
+        <MermaidBlockView
+          code="graph TD; A-->B"
+          components={components}
+          running={false}
+        />,
+      );
+      const zoom = await screen.findByRole(
+        'button',
+        { name: 'Enlarge diagram' },
+        WAIT_OPTIONS,
+      );
+      fireEvent.click(zoom);
+      const dialog = screen.getByRole('dialog', {
+        name: 'Diagram preview',
+      });
+      expect(dialog.querySelector('svg')).not.toBeNull();
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).toBeNull();
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
     'toggles between the diagram and its source',
     async () => {
       renderMermaidMock.mockResolvedValue(OK_OUTCOME);

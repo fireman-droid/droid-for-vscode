@@ -1,13 +1,6 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent,
-  type ReactElement,
-} from 'react';
-import { createPortal } from 'react-dom';
+import { useState, type ReactElement } from 'react';
 
+import { MediaLightbox, type MediaSize } from './Lightbox';
 import {
   IMAGE_MEDIA_TYPES,
   MAX_IMAGE_DATA_LENGTH,
@@ -79,20 +72,6 @@ export function TranscriptImage({
   readonly data: unknown;
 }): ReactElement | null {
   const [expanded, setExpanded] = useState(false);
-  const close = useCallback(() => setExpanded(false), []);
-  useEffect(() => {
-    if (!expanded) {
-      return;
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        close();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [expanded, close]);
 
   const image = readTranscriptImage(data);
   if (image === undefined) {
@@ -130,34 +109,17 @@ export function TranscriptImage({
       {image.generated ? (
         <span className="dvx-image-badge">Generated</span>
       ) : null}
-      {expanded ? <ImageLightbox src={src} onClose={close} /> : null}
+      {expanded ? (
+        <ImageLightbox src={src} onClose={() => setExpanded(false)} />
+      ) : null}
     </span>
   );
 }
 
-const MIN_ZOOM = 0.25;
-const MAX_ZOOM = 8;
-/** Breathing room around the fitted image, in px per side. */
-const FIT_PADDING = 24;
-
-interface ViewState {
-  scale: number;
-  tx: number;
-  ty: number;
-  /** Scale that fits the image inside the viewport (never upscales). */
-  fit: number;
-}
-
-function clampZoom(scale: number): number {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
-}
-
 /**
- * Full-viewport image viewer: wheel (and touchpad pinch via
- * ctrl+wheel) zooms anchored at the cursor, dragging pans once
- * magnified past fit, double-click toggles fit and 100% (2x for
- * images smaller than the viewport). Transform math lives outside
- * React state; frames are written through requestAnimationFrame.
+ * Full-viewport image preview on the shared media lightbox; the image
+ * reports its natural resolution on load so `scale` reads directly as
+ * a zoom percentage.
  */
 function ImageLightbox({
   src,
@@ -166,202 +128,28 @@ function ImageLightbox({
   readonly src: string;
   readonly onClose: () => void;
 }): ReactElement {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
-  const viewRef = useRef<ViewState>({ scale: 1, tx: 0, ty: 0, fit: 1 });
-  const frameRef = useRef<number | null>(null);
-  const dragRef = useRef<{ x: number; y: number } | null>(null);
-  const [zoomPercent, setZoomPercent] = useState<number | null>(null);
-  const [pannable, setPannable] = useState(false);
-  const [dragging, setDragging] = useState(false);
-
-  const applyView = useCallback((animate = false): void => {
-    const img = imgRef.current;
-    if (img === null) {
-      return;
-    }
-    const view = viewRef.current;
-    // The reduced-motion media query zeroes this transition in CSS.
-    img.classList.toggle('dvx-image-animate', animate);
-    if (frameRef.current !== null) {
-      cancelAnimationFrame(frameRef.current);
-    }
-    frameRef.current = requestAnimationFrame(() => {
-      frameRef.current = null;
-      img.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`;
-    });
-    setZoomPercent(Math.round(view.scale * 100));
-    setPannable(view.scale > view.fit + 0.001);
-  }, []);
-
-  useEffect(
-    () => () => {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-      }
-    },
-    [],
-  );
-
-  // Sizes the image at its natural resolution centered in the
-  // viewport, so `scale` reads directly as a zoom percentage.
-  const handleLoad = useCallback((): void => {
-    const container = containerRef.current;
-    const img = imgRef.current;
-    if (container === null || img === null) {
-      return;
-    }
-    const width = img.naturalWidth;
-    const height = img.naturalHeight;
-    if (width === 0 || height === 0) {
-      return;
-    }
-    img.style.width = `${width}px`;
-    img.style.height = `${height}px`;
-    img.style.marginLeft = `${-width / 2}px`;
-    img.style.marginTop = `${-height / 2}px`;
-    const fit = Math.min(
-      1,
-      (container.clientWidth - FIT_PADDING * 2) / width,
-      (container.clientHeight - FIT_PADDING * 2) / height,
-    );
-    viewRef.current = { scale: fit, tx: 0, ty: 0, fit };
-    applyView();
-  }, [applyView]);
-
-  // React registers wheel listeners passively, so the zoom handler
-  // attaches natively to be able to preventDefault page scrolling.
-  useEffect(() => {
-    const container = containerRef.current;
-    if (container === null) {
-      return;
-    }
-    const onWheel = (event: WheelEvent): void => {
-      event.preventDefault();
-      const view = viewRef.current;
-      // Touchpad pinch arrives as ctrl+wheel with small deltas; give
-      // it a stronger response so the gesture feels 1:1.
-      const factor = Math.exp(
-        -event.deltaY * (event.ctrlKey ? 0.01 : 0.002),
-      );
-      const next = clampZoom(view.scale * factor);
-      if (next === view.scale) {
-        return;
-      }
-      const rect = container.getBoundingClientRect();
-      const px = event.clientX - rect.left - rect.width / 2;
-      const py = event.clientY - rect.top - rect.height / 2;
-      const ratio = next / view.scale;
-      view.tx = px - ratio * (px - view.tx);
-      view.ty = py - ratio * (py - view.ty);
-      view.scale = next;
-      applyView();
-    };
-    container.addEventListener('wheel', onWheel, { passive: false });
-    return () => container.removeEventListener('wheel', onWheel);
-  }, [applyView]);
-
-  const handleDoubleClick = useCallback(
-    (event: ReactMouseEvent): void => {
-      const container = containerRef.current;
-      if (container === null) {
-        return;
-      }
-      const view = viewRef.current;
-      const atFit = Math.abs(view.scale - view.fit) < 0.01;
-      if (atFit) {
-        // 100% for images larger than the viewport, 2x for smaller.
-        const target = clampZoom(view.fit < 1 ? 1 : view.fit * 2);
-        const rect = container.getBoundingClientRect();
-        const px = event.clientX - rect.left - rect.width / 2;
-        const py = event.clientY - rect.top - rect.height / 2;
-        const ratio = target / view.scale;
-        view.tx = px - ratio * (px - view.tx);
-        view.ty = py - ratio * (py - view.ty);
-        view.scale = target;
-      } else {
-        view.scale = view.fit;
-        view.tx = 0;
-        view.ty = 0;
-      }
-      applyView(true);
-    },
-    [applyView],
-  );
-
-  // A portal keeps the fixed-position overlay out of the transcript
-  // tree: an ancestor with a CSS transform would otherwise become the
-  // containing block and could clip the close button off-screen.
-  return createPortal(
-    <div
-      ref={containerRef}
-      className="dvx-image-lightbox"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Image preview"
-      onClick={onClose}
+  const [size, setSize] = useState<MediaSize | null>(null);
+  return (
+    <MediaLightbox
+      label="Image preview"
+      contentSize={size}
+      onClose={onClose}
     >
       <img
-        ref={imgRef}
-        className={`dvx-image-full${
-          pannable ? (dragging ? ' dvx-image-grabbing' : ' dvx-image-grab') : ''
-        }`}
+        className="dvx-lightbox-image"
         src={src}
         alt="Full size image"
         draggable={false}
-        onLoad={handleLoad}
-        onClick={(event) => event.stopPropagation()}
-        onDoubleClick={handleDoubleClick}
-        onPointerDown={(event) => {
-          if (!pannable || event.button !== 0) {
-            return;
+        onLoad={(event) => {
+          const img = event.currentTarget;
+          if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+            setSize({
+              width: img.naturalWidth,
+              height: img.naturalHeight,
+            });
           }
-          event.preventDefault();
-          event.currentTarget.setPointerCapture(event.pointerId);
-          dragRef.current = { x: event.clientX, y: event.clientY };
-          setDragging(true);
-        }}
-        onPointerMove={(event) => {
-          const last = dragRef.current;
-          if (last === null) {
-            return;
-          }
-          const view = viewRef.current;
-          view.tx += event.clientX - last.x;
-          view.ty += event.clientY - last.y;
-          dragRef.current = { x: event.clientX, y: event.clientY };
-          applyView();
-        }}
-        onPointerUp={(event) => {
-          if (dragRef.current === null) {
-            return;
-          }
-          event.currentTarget.releasePointerCapture(event.pointerId);
-          dragRef.current = null;
-          setDragging(false);
-        }}
-        onPointerCancel={() => {
-          dragRef.current = null;
-          setDragging(false);
         }}
       />
-      {zoomPercent !== null ? (
-        <span className="dvx-image-zoom-indicator" aria-live="polite">
-          {zoomPercent}%
-        </span>
-      ) : null}
-      <button
-        type="button"
-        className="dvx-image-lightbox-close"
-        aria-label="Close image preview"
-        onClick={(event) => {
-          event.stopPropagation();
-          onClose();
-        }}
-      >
-        ✕
-      </button>
-    </div>,
-    document.body,
+    </MediaLightbox>
   );
 }

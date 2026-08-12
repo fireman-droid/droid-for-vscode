@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 
+import { DiagramLightbox } from './Lightbox';
 import {
   adoptDiagramStyles,
   reapplyInlineStyles,
@@ -65,6 +66,7 @@ export function MermaidBlockView({
   );
   const [outcome, setOutcome] = useState<MermaidOutcome | null>(null);
   const [showSource, setShowSource] = useState(false);
+  const [enlarged, setEnlarged] = useState(false);
 
   useEffect(() => {
     if (running) {
@@ -105,7 +107,15 @@ export function MermaidBlockView({
         {showSource ? (
           sourceBlock
         ) : (
-          <MermaidFigure svg={outcome.svg} css={outcome.css} />
+          <button
+            type="button"
+            className="dvx-mermaid-zoom"
+            title="Click to enlarge"
+            aria-label="Enlarge diagram"
+            onClick={() => setEnlarged(true)}
+          >
+            <MermaidFigure svg={outcome.svg} css={outcome.css} />
+          </button>
         )}
         <div className="dvx-mermaid-footer">
           <button
@@ -116,6 +126,13 @@ export function MermaidBlockView({
             {showSource ? 'Hide source' : 'View source'}
           </button>
         </div>
+        {enlarged && !showSource ? (
+          <DiagramLightbox
+            svg={outcome.svg}
+            css={outcome.css}
+            onClose={() => setEnlarged(false)}
+          />
+        ) : null}
       </div>
     );
   }
