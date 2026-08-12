@@ -253,6 +253,16 @@ describe('parseWebviewMessage', () => {
       query: 'Thread',
     },
     {
+      type: 'workspace.readImage',
+      sessionId: 'session-1',
+      path: 'out/plot.png',
+    },
+    {
+      type: 'workspace.readImage',
+      sessionId: 'session-1',
+      path: 'D:\\reports\\latest chart.png',
+    },
+    {
       type: 'rewind.info',
       sessionId: 'session-1',
       messageId: 'message-1',
@@ -709,6 +719,23 @@ describe('parseWebviewMessage', () => {
       sessionId: 'session-1',
       requestId: 'r-1',
       query: 'q',
+      extra: true,
+    },
+    { type: 'workspace.readImage', sessionId: 'session-1', path: '' },
+    {
+      type: 'workspace.readImage',
+      sessionId: 'session-1',
+      path: `${'x'.repeat(1025)}.png`,
+    },
+    {
+      type: 'workspace.readImage',
+      sessionId: 'session-1',
+      path: 'bad\u0000name.png',
+    },
+    {
+      type: 'workspace.readImage',
+      sessionId: 'session-1',
+      path: 'a.png',
       extra: true,
     },
     { type: 'rewind.info', sessionId: 'session-1', messageId: '' },

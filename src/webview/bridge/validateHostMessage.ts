@@ -45,8 +45,14 @@ import {
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
   MAX_TOOL_DETAIL_LENGTH,
+  MAX_TOOL_ERROR_MESSAGE_LENGTH,
   MAX_TOOL_NAME_LENGTH,
   MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
+  MAX_SUBAGENT_DESCRIPTION_LENGTH,
+  MAX_SUBAGENT_TYPE_LENGTH,
+  MISSION_SESSION_ROLES,
+  MISSION_STATES,
+  SUBAGENT_STATUSES,
   TOOL_DETAIL_KINDS,
   MAX_TURN_TEXT_LENGTH,
   PERMISSION_CONFIRMATION_KINDS,
@@ -69,6 +75,9 @@ import {
   SKILL_LOCATIONS,
   WORKSPACE_FILES_STATUSES,
   type WorkspaceFilesStatus,
+  MAX_IMAGE_PATH_LENGTH,
+  WORKSPACE_IMAGE_STATUSES,
+  type WorkspaceImageStatus,
   TRANSCRIPT_THINKING_STATUSES,
   TRANSCRIPT_TOOL_STATUSES,
   TURN_STATUSES,
@@ -115,8 +124,13 @@ import {
   type CommandSummary,
   type SessionCommandsState,
   type SessionHistoryStatus,
+  type SessionMissionSummary,
+  type MissionSessionRole,
+  type MissionState,
   type SessionSummary,
   type SessionTranscriptItem,
+  type SubagentStatus,
+  type ToolSubagentSummary,
   type ToolActivityMessage,
   type ToolActivityUpdateKind,
   type ToolDetailKind,
@@ -178,6 +192,11 @@ const SESSION_AUTONOMY_LEVEL_SET = new Set<SessionAutonomyLevel>(
 const SESSION_REASONING_EFFORT_SET = new Set<SessionReasoningEffort>(
   SESSION_REASONING_EFFORTS,
 );
+const SUBAGENT_STATUS_SET = new Set<SubagentStatus>(SUBAGENT_STATUSES);
+const MISSION_STATE_SET = new Set<MissionState>(MISSION_STATES);
+const MISSION_SESSION_ROLE_SET = new Set<MissionSessionRole>(
+  MISSION_SESSION_ROLES,
+);
 
 export function readHostMessage(
   value: unknown,
@@ -222,6 +241,8 @@ export function readHostMessage(
         return parseTurnEditResendRejected(value);
       case 'workspace.files':
         return parseWorkspaceFiles(value);
+      case 'workspace.imageData':
+        return parseWorkspaceImageData(value);
       case 'rewind.info':
         return parseRewindInfo(value);
       case 'assistant.delta':
@@ -260,25 +281,40 @@ function parseHostSnapshot(
   value: UnknownRecord,
 ): Extract<HostToWebviewMessage, { type: 'host.snapshot' }> | undefined {
   if (
-    !hasExactKeys(value, [
-      'type',
-      'sequence',
-      'sessionId',
-      'connection',
-      'turn',
-      'sessions',
-      'settings',
-      'context',
-      'modelCatalog',
-      'transcript',
-      'historyStatus',
-      'truncated',
-    ]) ||
+    !hasExactKeys(
+      value,
+      [
+        'type',
+        'sequence',
+        'sessionId',
+        'connection',
+        'turn',
+        'sessions',
+        'settings',
+        'context',
+        'modelCatalog',
+        'transcript',
+        'historyStatus',
+        'truncated',
+      ],
+      ['mission'],
+    ) ||
     !isSequence(value.sequence) ||
     !isNullableId(value.sessionId) ||
     !isSessionHistoryStatus(value.historyStatus) ||
     typeof value.truncated !== 'boolean'
   ) {
+    return undefined;
+  }
+  const mission =
+    value.mission === undefined
+      ? undefined
+      : parseSessionMission(value.mission);
+  if (value.mission !== undefined && mission === undefined) {
+    return undefined;
+  }
+  // A mission summary describes the active session only.
+  if (mission !== undefined && value.sessionId === null) {
     return undefined;
   }
 
@@ -320,7 +356,41 @@ function parseHostSnapshot(
     transcript,
     historyStatus: value.historyStatus,
     truncated: value.truncated,
+    ...(mission === undefined ? {} : { mission }),
   };
+}
+
+function parseSessionMission(
+  value: unknown,
+): SessionMissionSummary | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, ['state', 'role']) ||
+    (value.state !== null && !isMissionState(value.state)) ||
+    (value.role !== null && !isMissionSessionRole(value.role)) ||
+    // An all-null summary carries no information; the host omits the
+    // field instead.
+    (value.state === null && value.role === null)
+  ) {
+    return undefined;
+  }
+  return { state: value.state, role: value.role };
+}
+
+function isMissionState(value: unknown): value is MissionState {
+  return (
+    typeof value === 'string' &&
+    MISSION_STATE_SET.has(value as MissionState)
+  );
+}
+
+function isMissionSessionRole(
+  value: unknown,
+): value is MissionSessionRole {
+  return (
+    typeof value === 'string' &&
+    MISSION_SESSION_ROLE_SET.has(value as MissionSessionRole)
+  );
 }
 
 function parseSessionSettingsMessage(
@@ -517,7 +587,14 @@ function parseToolActivity(
         'progressCount',
         'latestUpdateKind',
       ],
-      ['durationMs', 'filePath', 'detailKind', 'detail'],
+      [
+        'durationMs',
+        'filePath',
+        'detailKind',
+        'detail',
+        'errorMessage',
+        'subagent',
+      ],
     ) ||
     !hasTurnIdentity(value) ||
     !isId(value.toolUseId) ||
@@ -536,8 +613,16 @@ function parseToolActivity(
     (value.durationMs !== undefined && !isSequence(value.durationMs)) ||
     (value.filePath !== undefined &&
       !isSafeWorkspaceRelativePath(value.filePath)) ||
-    !hasValidToolDetail(value)
+    !hasValidToolDetail(value) ||
+    !hasValidToolErrorMessage(value)
   ) {
+    return undefined;
+  }
+  const subagent =
+    value.subagent === undefined
+      ? undefined
+      : parseToolSubagent(value.subagent);
+  if (value.subagent !== undefined && subagent === undefined) {
     return undefined;
   }
 
@@ -564,7 +649,54 @@ function parseToolActivity(
           detailKind: value.detailKind as ToolDetailKind,
           detail: value.detail as string,
         }),
+    ...(value.errorMessage === undefined
+      ? {}
+      : { errorMessage: value.errorMessage as string }),
+    ...(subagent === undefined ? {} : { subagent }),
   };
+}
+
+function parseToolSubagent(
+  value: unknown,
+): ToolSubagentSummary | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(
+      value,
+      ['type', 'description'],
+      ['status', 'toolUseCount', 'durationMs'],
+    ) ||
+    !isNonEmptyBoundedString(value.type, MAX_SUBAGENT_TYPE_LENGTH) ||
+    hasControlCharacter(value.type) ||
+    !isBoundedString(
+      value.description,
+      MAX_SUBAGENT_DESCRIPTION_LENGTH,
+    ) ||
+    hasControlCharacter(value.description) ||
+    (value.status !== undefined && !isSubagentStatus(value.status)) ||
+    (value.toolUseCount !== undefined && !isCount(value.toolUseCount)) ||
+    (value.durationMs !== undefined && !isCount(value.durationMs))
+  ) {
+    return undefined;
+  }
+  return {
+    type: value.type,
+    description: value.description,
+    ...(value.status === undefined ? {} : { status: value.status }),
+    ...(value.toolUseCount === undefined
+      ? {}
+      : { toolUseCount: value.toolUseCount }),
+    ...(value.durationMs === undefined
+      ? {}
+      : { durationMs: value.durationMs }),
+  };
+}
+
+function isSubagentStatus(value: unknown): value is SubagentStatus {
+  return (
+    typeof value === 'string' &&
+    SUBAGENT_STATUS_SET.has(value as SubagentStatus)
+  );
 }
 
 function parseTranscriptImage(
@@ -1518,6 +1650,65 @@ function isWorkspaceFilesStatus(
   );
 }
 
+function parseWorkspaceImageData(
+  value: UnknownRecord,
+):
+  | Extract<HostToWebviewMessage, { type: 'workspace.imageData' }>
+  | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sequence',
+      'sessionId',
+      'path',
+      'status',
+      'mediaType',
+      'data',
+    ]) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId) ||
+    typeof value.path !== 'string' ||
+    value.path.length === 0 ||
+    value.path.length > MAX_IMAGE_PATH_LENGTH ||
+    typeof value.status !== 'string' ||
+    !(WORKSPACE_IMAGE_STATUSES as readonly string[]).includes(
+      value.status,
+    ) ||
+    typeof value.data !== 'string' ||
+    value.data.length > MAX_IMAGE_DATA_LENGTH ||
+    !BASE64_PATTERN.test(value.data)
+  ) {
+    return undefined;
+  }
+  const mediaType = value.mediaType;
+  if (
+    mediaType !== null &&
+    (typeof mediaType !== 'string' ||
+      !(IMAGE_MEDIA_TYPES as readonly string[]).includes(mediaType))
+  ) {
+    return undefined;
+  }
+  // Bytes require an ok status with a concrete media type.
+  if (
+    value.status === 'ok' &&
+    (mediaType === null || value.data.length === 0)
+  ) {
+    return undefined;
+  }
+  if (value.status !== 'ok' && value.data.length > 0) {
+    return undefined;
+  }
+  return {
+    type: 'workspace.imageData',
+    sequence: value.sequence,
+    sessionId: value.sessionId,
+    path: value.path,
+    status: value.status as WorkspaceImageStatus,
+    mediaType: mediaType as ImageMediaType | null,
+    data: value.data,
+  };
+}
+
 function parseRewindInfo(
   value: UnknownRecord,
 ):
@@ -2106,7 +2297,7 @@ function parseSessionSummary(value: unknown): SessionSummary | undefined {
     !hasExactKeys(
       value,
       ['id', 'title', 'messageCount', 'modifiedTime', 'active'],
-      ['isFavorite'],
+      ['isFavorite', 'missionRole'],
     ) ||
     !isId(value.id) ||
     !isBoundedString(value.title, MAX_SESSION_TITLE_LENGTH) ||
@@ -2115,7 +2306,9 @@ function parseSessionSummary(value: unknown): SessionSummary | undefined {
     !isIsoDate(value.modifiedTime) ||
     typeof value.active !== 'boolean' ||
     (value.isFavorite !== undefined &&
-      typeof value.isFavorite !== 'boolean')
+      typeof value.isFavorite !== 'boolean') ||
+    (value.missionRole !== undefined &&
+      !isMissionSessionRole(value.missionRole))
   ) {
     return undefined;
   }
@@ -2127,6 +2320,9 @@ function parseSessionSummary(value: unknown): SessionSummary | undefined {
     modifiedTime: value.modifiedTime,
     active: value.active,
     isFavorite: value.isFavorite === true,
+    ...(value.missionRole === undefined
+      ? {}
+      : { missionRole: value.missionRole }),
   };
 }
 
@@ -2543,7 +2739,14 @@ function parseToolTranscriptItem(
         'progressCount',
         'latestUpdateKind',
       ],
-      ['durationMs', 'filePath', 'detailKind', 'detail'],
+      [
+        'durationMs',
+        'filePath',
+        'detailKind',
+        'detail',
+        'errorMessage',
+        'subagent',
+      ],
     ) ||
     !isId(value.id) ||
     !isId(value.turnId) ||
@@ -2563,8 +2766,16 @@ function parseToolTranscriptItem(
     (value.durationMs !== undefined && !isSequence(value.durationMs)) ||
     (value.filePath !== undefined &&
       !isSafeWorkspaceRelativePath(value.filePath)) ||
-    !hasValidToolDetail(value)
+    !hasValidToolDetail(value) ||
+    !hasValidToolErrorMessage(value)
   ) {
+    return undefined;
+  }
+  const subagent =
+    value.subagent === undefined
+      ? undefined
+      : parseToolSubagent(value.subagent);
+  if (value.subagent !== undefined && subagent === undefined) {
     return undefined;
   }
 
@@ -2590,6 +2801,10 @@ function parseToolTranscriptItem(
           detailKind: value.detailKind as ToolDetailKind,
           detail: value.detail as string,
         }),
+    ...(value.errorMessage === undefined
+      ? {}
+      : { errorMessage: value.errorMessage as string }),
+    ...(subagent === undefined ? {} : { subagent }),
   };
 }
 
@@ -2785,6 +3000,17 @@ function hasValidToolDetail(value: UnknownRecord): boolean {
     typeof detailKind === 'string' &&
     (TOOL_DETAIL_KINDS as readonly string[]).includes(detailKind) &&
     isNonEmptyBoundedString(detail, MAX_TOOL_DETAIL_LENGTH)
+  );
+}
+
+/** Optional failed tool_result excerpt; bounded non-empty when set. */
+function hasValidToolErrorMessage(value: UnknownRecord): boolean {
+  return (
+    value['errorMessage'] === undefined ||
+    isNonEmptyBoundedString(
+      value['errorMessage'],
+      MAX_TOOL_ERROR_MESSAGE_LENGTH,
+    )
   );
 }
 

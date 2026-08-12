@@ -23,7 +23,10 @@ import {
   MAX_SESSION_TITLE_LENGTH,
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_SPEC_PLAN_LENGTH,
+  MAX_SUBAGENT_DESCRIPTION_LENGTH,
+  MAX_SUBAGENT_TYPE_LENGTH,
   MAX_THINKING_TEXT_LENGTH,
+  MAX_TOOL_ERROR_MESSAGE_LENGTH,
   MAX_TOOL_NAME_LENGTH,
   MAX_TURN_TEXT_LENGTH,
   PERMISSION_CONFIRMATION_KINDS,
@@ -618,6 +621,24 @@ describe('readHostMessage', () => {
       requestId: 'file-search-2',
       status: 'no-workspace',
       files: [],
+    },
+    {
+      type: 'workspace.imageData',
+      sequence: 9,
+      sessionId: 'session-1',
+      path: 'out/plot.png',
+      status: 'ok',
+      mediaType: 'image/png',
+      data: 'aGk=',
+    },
+    {
+      type: 'workspace.imageData',
+      sequence: 9,
+      sessionId: 'session-1',
+      path: 'missing.png',
+      status: 'not-found',
+      mediaType: null,
+      data: '',
     },
     {
       type: 'rewind.info',
@@ -1783,6 +1804,52 @@ describe('readHostMessage', () => {
       requestId: 'r-1',
       files: ['src/app.ts'],
       extra: true,
+    },
+    // Bytes without an ok status (and vice versa) are incoherent.
+    {
+      type: 'workspace.imageData',
+      sequence: 5,
+      sessionId: 'session-1',
+      path: 'out/plot.png',
+      status: 'ok',
+      mediaType: 'image/png',
+      data: '',
+    },
+    {
+      type: 'workspace.imageData',
+      sequence: 5,
+      sessionId: 'session-1',
+      path: 'out/plot.png',
+      status: 'ok',
+      mediaType: null,
+      data: 'aGk=',
+    },
+    {
+      type: 'workspace.imageData',
+      sequence: 5,
+      sessionId: 'session-1',
+      path: 'out/plot.png',
+      status: 'too-large',
+      mediaType: null,
+      data: 'aGk=',
+    },
+    {
+      type: 'workspace.imageData',
+      sequence: 5,
+      sessionId: 'session-1',
+      path: 'out/plot.png',
+      status: 'ok',
+      mediaType: 'image/svg+xml',
+      data: 'aGk=',
+    },
+    {
+      type: 'workspace.imageData',
+      sequence: 5,
+      sessionId: 'session-1',
+      path: '',
+      status: 'not-found',
+      mediaType: null,
+      data: '',
     },
     {
       type: 'turn.changes',
@@ -2981,6 +3048,273 @@ describe('readHostMessage', () => {
     expect(readHostMessage(message(accessor))).toBeUndefined();
     expect(() => readHostMessage(message(proxy))).not.toThrow();
     expect(readHostMessage(message(proxy))).toBeUndefined();
+  });
+
+  it('accepts a bounded failure excerpt on tool rows and rejects abuse', () => {
+    const failed = {
+      type: 'tool.activity',
+      sequence: 5,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolUseId: 'tool-1',
+      toolName: 'ApplyPatch',
+      action: 'Updated workspace files',
+      status: 'failed',
+      progressCount: 0,
+      latestUpdateKind: null,
+      errorMessage: 'Tool execution cancelled by user',
+    };
+    expect(readHostMessage(failed)).toEqual(failed);
+
+    // Over the cap or empty: the whole message is rejected.
+    expect(
+      readHostMessage({
+        ...failed,
+        errorMessage: 'x'.repeat(MAX_TOOL_ERROR_MESSAGE_LENGTH + 1),
+      }),
+    ).toBeUndefined();
+    expect(
+      readHostMessage({ ...failed, errorMessage: '' }),
+    ).toBeUndefined();
+    expect(
+      readHostMessage({ ...failed, errorMessage: 42 }),
+    ).toBeUndefined();
+
+    // Snapshot transcript items accept the same optional field.
+    const snapshot = createSessionSnapshot();
+    const replayed = {
+      ...snapshot,
+      transcript: [
+        {
+          id: 'tool-1',
+          kind: 'tool',
+          turnId: 'turn-1',
+          toolUseId: 'tool-use-1',
+          toolName: 'ApplyPatch',
+          action: 'Updated workspace files',
+          status: 'failed',
+          progressCount: 0,
+          latestUpdateKind: null,
+          errorMessage: 'Tool execution cancelled by user',
+        },
+      ],
+    };
+    expect(readHostMessage(replayed)).toEqual(replayed);
+  });
+
+  it('accepts delegated subagent summaries on tool rows', () => {
+    const activity = {
+      type: 'tool.activity',
+      sequence: 5,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolUseId: 'tool-1',
+      toolName: 'Task',
+      action: 'Delegated to a subagent',
+      status: 'running',
+      progressCount: 0,
+      latestUpdateKind: null,
+      subagent: {
+        type: 'code-reviewer',
+        description: 'Review the bridge validation changes',
+        status: 'running',
+      },
+    };
+    expect(readHostMessage(activity)).toEqual(activity);
+
+    const completed = {
+      ...activity,
+      status: 'completed',
+      subagent: {
+        type: 'code-reviewer',
+        description: 'Review the bridge validation changes',
+        status: 'completed',
+        toolUseCount: 12,
+        durationMs: 48_500,
+      },
+    };
+    expect(readHostMessage(completed)).toEqual(completed);
+
+    // Status, counters, and duration stay optional until the SDK
+    // reports them.
+    const bare = {
+      ...activity,
+      subagent: { type: 'explorer', description: '' },
+    };
+    expect(readHostMessage(bare)).toEqual(bare);
+
+    const snapshot = createSessionSnapshot();
+    const replayed = {
+      ...snapshot,
+      transcript: [
+        {
+          id: 'tool-1',
+          kind: 'tool',
+          turnId: 'turn-1',
+          toolUseId: 'tool-use-1',
+          toolName: 'Task',
+          action: 'Delegated to a subagent',
+          status: 'completed',
+          progressCount: 1,
+          latestUpdateKind: 'tool-result',
+          subagent: {
+            type: 'explorer',
+            description: 'Find the session catalog wiring',
+            status: 'completed',
+            toolUseCount: 4,
+            durationMs: 9_000,
+          },
+        },
+      ],
+    };
+    expect(readHostMessage(replayed)).toEqual(replayed);
+
+    const boundary = {
+      ...activity,
+      subagent: {
+        type: 't'.repeat(MAX_SUBAGENT_TYPE_LENGTH),
+        description: 'd'.repeat(MAX_SUBAGENT_DESCRIPTION_LENGTH),
+        status: 'pending',
+        toolUseCount: 0,
+        durationMs: 0,
+      },
+    };
+    expect(readHostMessage(boundary)).toEqual(boundary);
+  });
+
+  it.each([
+    { type: '', description: 'Valid' },
+    { type: 't'.repeat(MAX_SUBAGENT_TYPE_LENGTH + 1), description: '' },
+    { type: 'ctrl\u0000type', description: '' },
+    {
+      type: 'explorer',
+      description: 'd'.repeat(MAX_SUBAGENT_DESCRIPTION_LENGTH + 1),
+    },
+    { type: 'explorer', description: 'line\nbreak' },
+    { type: 'explorer', description: '', status: 'exploded' },
+    { type: 'explorer', description: '', toolUseCount: -1 },
+    { type: 'explorer', description: '', toolUseCount: 1.5 },
+    { type: 'explorer', description: '', durationMs: -1 },
+    { type: 'explorer', description: '', childSessionId: 'leak' },
+    { type: 'explorer' },
+  ])('rejects malformed subagent summaries %#', (subagent) => {
+    expect(
+      readHostMessage({
+        type: 'tool.activity',
+        sequence: 5,
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        toolUseId: 'tool-1',
+        toolName: 'Task',
+        action: 'Delegated to a subagent',
+        status: 'running',
+        progressCount: 0,
+        latestUpdateKind: null,
+        subagent,
+      }),
+    ).toBeUndefined();
+    const snapshot = createSessionSnapshot();
+    expect(
+      readHostMessage({
+        ...snapshot,
+        transcript: [
+          {
+            id: 'tool-1',
+            kind: 'tool',
+            turnId: 'turn-1',
+            toolUseId: 'tool-use-1',
+            toolName: 'Task',
+            action: 'Delegated to a subagent',
+            status: 'completed',
+            progressCount: 0,
+            latestUpdateKind: null,
+            subagent,
+          },
+        ],
+      }),
+    ).toBeUndefined();
+  });
+
+  it('accepts read-only mission identity on snapshots and catalogs', () => {
+    const snapshot = createSessionSnapshot();
+    const orchestrator = {
+      ...snapshot,
+      mission: { state: 'running', role: 'orchestrator' },
+    };
+    expect(readHostMessage(orchestrator)).toEqual(orchestrator);
+
+    // Either half may be unknown as long as one is present.
+    const stateOnly = {
+      ...snapshot,
+      mission: { state: 'paused', role: null },
+    };
+    expect(readHostMessage(stateOnly)).toEqual(stateOnly);
+    const roleOnly = {
+      ...snapshot,
+      mission: { state: null, role: 'worker' },
+    };
+    expect(readHostMessage(roleOnly)).toEqual(roleOnly);
+
+    const withRole = {
+      ...snapshot,
+      sessions: {
+        ...snapshot.sessions,
+        items: [
+          {
+            ...snapshot.sessions.items[0],
+            missionRole: 'worker' as const,
+          },
+        ],
+      },
+    };
+    expect(readHostMessage(withRole)).toEqual(withRole);
+  });
+
+  it.each([
+    { state: 'exploded', role: null },
+    { state: null, role: 'bystander' },
+    { state: null, role: null },
+    { state: 'running' },
+    { state: 'running', role: null, extra: true },
+  ])('rejects malformed mission summaries %#', (mission) => {
+    expect(
+      readHostMessage({ ...createSessionSnapshot(), mission }),
+    ).toBeUndefined();
+  });
+
+  it('rejects mission identity without an active session', () => {
+    expect(
+      readHostMessage({
+        type: 'host.snapshot',
+        sequence: 0,
+        sessionId: null,
+        connection: { status: 'idle' },
+        turn: null,
+        sessions: { status: 'idle', items: [] },
+        settings: { status: 'loading', value: null },
+        context: { status: 'loading', value: null },
+        modelCatalog: { status: 'loading', items: [] },
+        transcript: [],
+        historyStatus: 'unavailable',
+        truncated: false,
+        mission: { state: 'running', role: 'orchestrator' },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('rejects invalid catalog mission roles', () => {
+    const snapshot = createSessionSnapshot();
+    for (const missionRole of ['manager', '', 0, null]) {
+      expect(
+        readHostMessage({
+          ...snapshot,
+          sessions: {
+            ...snapshot.sessions,
+            items: [{ ...snapshot.sessions.items[0], missionRole }],
+          },
+        }),
+      ).toBeUndefined();
+    }
   });
 });
 
