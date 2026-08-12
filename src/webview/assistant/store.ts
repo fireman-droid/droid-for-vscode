@@ -1110,6 +1110,12 @@ function upsertTool(
         ...(event.errorMessage === undefined
           ? {}
           : { errorMessage: event.errorMessage }),
+        ...(event.outputTail === undefined
+          ? {}
+          : { outputTail: event.outputTail }),
+        ...(event.backgroundHint === undefined
+          ? {}
+          : { backgroundHint: event.backgroundHint }),
         ...(event.subagent === undefined
           ? {}
           : { subagent: event.subagent }),
@@ -1146,6 +1152,12 @@ function upsertTool(
       ...(event.errorMessage === undefined
         ? {}
         : { errorMessage: event.errorMessage }),
+      ...(event.outputTail === undefined
+        ? {}
+        : { outputTail: event.outputTail }),
+      ...(event.backgroundHint === undefined
+        ? {}
+        : { backgroundHint: event.backgroundHint }),
       ...(event.subagent === undefined
         ? {}
         : { subagent: event.subagent }),

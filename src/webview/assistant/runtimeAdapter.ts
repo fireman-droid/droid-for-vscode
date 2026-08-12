@@ -4,25 +4,22 @@ import {
   type AssistantRuntime,
   type ExternalStoreAdapter,
   type ThreadMessageLike,
-} from '@assistant-ui/react';
-import { useMemo, useRef } from 'react';
+} from "@assistant-ui/react";
+import { useMemo, useRef } from "react";
 
 import {
   MAX_TURN_TEXT_LENGTH,
   type SentAttachmentSummary,
   type SessionTranscriptItem,
   type TurnStatus,
-} from '../../shared/bridgeMessages';
-import {
-  type AssistantWebviewState,
-  isTurnActive,
-} from './store';
+} from "../../shared/bridgeMessages";
+import { type AssistantWebviewState, isTurnActive } from "./store";
 
 export interface SafeRuntimeMessage {
   readonly id: string;
-  readonly role: 'user' | 'assistant';
-  readonly content: ThreadMessageLike['content'];
-  readonly status?: ThreadMessageLike['status'];
+  readonly role: "user" | "assistant";
+  readonly content: ThreadMessageLike["content"];
+  readonly status?: ThreadMessageLike["status"];
   readonly optimistic?: boolean;
   /** SDK message id for user messages that can anchor a rewind. */
   readonly messageId?: string;
@@ -30,10 +27,7 @@ export interface SafeRuntimeMessage {
   readonly attachments?: readonly SentAttachmentSummary[];
 }
 
-type SafeRuntimePart = Exclude<
-  ThreadMessageLike['content'],
-  string
->[number];
+type SafeRuntimePart = Exclude<ThreadMessageLike["content"], string>[number];
 
 export interface RuntimeAdapterCallbacks {
   readonly onSend: (text: string) => Promise<void> | void;
@@ -57,7 +51,7 @@ export interface DroidRuntimeWindow {
 }
 
 export interface SendEligibility {
-  readonly connectionStatus: AssistantWebviewState['connection']['status'];
+  readonly connectionStatus: AssistantWebviewState["connection"]["status"];
   readonly sessionId: string | null;
   readonly turnStatus: TurnStatus | null;
   readonly interactionCount: number;
@@ -69,11 +63,11 @@ export function canSendMessage(
   additionallyDisabled = false,
 ): eligibility is SendEligibility & { readonly sessionId: string } {
   if (
-    eligibility.connectionStatus !== 'connected' ||
+    eligibility.connectionStatus !== "connected" ||
     eligibility.sessionId === null ||
-    eligibility.turnStatus === 'submitting' ||
-    eligibility.turnStatus === 'streaming' ||
-    eligibility.turnStatus === 'stopping' ||
+    eligibility.turnStatus === "submitting" ||
+    eligibility.turnStatus === "streaming" ||
+    eligibility.turnStatus === "stopping" ||
     eligibility.interactionCount > 0 ||
     additionallyDisabled
   ) {
@@ -150,8 +144,7 @@ export function createRuntimeAdapter(
       await callbacks.onSend(text);
     },
     ...(state.turn !== null &&
-    (state.turn.status === 'submitting' ||
-      state.turn.status === 'streaming')
+    (state.turn.status === "submitting" || state.turn.status === "streaming")
       ? { onCancel: async () => callbacks.onCancel() }
       : {}),
   };
@@ -178,11 +171,11 @@ export function convertSafeRuntimeMessage(
 export function extractText(message: AppendMessage): string {
   return message.content
     .filter(
-      (part): part is Extract<typeof part, { type: 'text' }> =>
-        part.type === 'text',
+      (part): part is Extract<typeof part, { type: "text" }> =>
+        part.type === "text",
     )
     .map(({ text }) => text)
-    .join('');
+    .join("");
 }
 
 interface RuntimeMessageCacheEntry {
@@ -194,14 +187,14 @@ interface RuntimeMessageCacheEntry {
 export type RuntimeMessageCache = Map<string, RuntimeMessageCacheEntry>;
 
 interface UserMessageDescriptor {
-  readonly kind: 'user';
-  readonly item: Extract<SessionTranscriptItem, { kind: 'user' }>;
+  readonly kind: "user";
+  readonly item: Extract<SessionTranscriptItem, { kind: "user" }>;
   /** User-origin images sent with this prompt, rendered in the bubble. */
-  readonly images: Extract<SessionTranscriptItem, { kind: 'image' }>[];
+  readonly images: Extract<SessionTranscriptItem, { kind: "image" }>[];
 }
 
 interface AssistantGroupDescriptor {
-  readonly kind: 'assistant';
+  readonly kind: "assistant";
   readonly id: string;
   readonly turnId: string;
   readonly items: SessionTranscriptItem[];
@@ -209,25 +202,24 @@ interface AssistantGroupDescriptor {
 
 export function mapTranscriptToRuntimeMessages(
   transcript: readonly SessionTranscriptItem[],
-  turn: AssistantWebviewState['turn'],
+  turn: AssistantWebviewState["turn"],
   cache?: RuntimeMessageCache,
 ): readonly SafeRuntimeMessage[] {
-  const descriptors: (UserMessageDescriptor | AssistantGroupDescriptor)[] =
-    [];
+  const descriptors: (UserMessageDescriptor | AssistantGroupDescriptor)[] = [];
   const groups = new Map<string, AssistantGroupDescriptor>();
 
   for (const item of transcript) {
-    if (item.kind === 'user') {
-      descriptors.push({ kind: 'user', item, images: [] });
+    if (item.kind === "user") {
+      descriptors.push({ kind: "user", item, images: [] });
       continue;
     }
     // A user-origin image belongs to the prompt it was sent with; both
     // the live echo and history projection emit it directly after the
     // user text item. Without a preceding user message it falls through
     // to the assistant turn group and renders standalone.
-    if (item.kind === 'image' && item.origin === 'user') {
+    if (item.kind === "image" && item.origin === "user") {
       const last = descriptors[descriptors.length - 1];
-      if (last?.kind === 'user') {
+      if (last?.kind === "user") {
         last.images.push(item);
         continue;
       }
@@ -236,7 +228,7 @@ export function mapTranscriptToRuntimeMessages(
     let group = groups.get(key);
     if (group === undefined) {
       group = {
-        kind: 'assistant',
+        kind: "assistant",
         id: `assistant-turn:${key}`,
         turnId: key,
         items: [],
@@ -253,13 +245,13 @@ export function mapTranscriptToRuntimeMessages(
   // streaming.
   const nextEntries: [string, RuntimeMessageCacheEntry][] = [];
   const messages = descriptors.map((descriptor): SafeRuntimeMessage => {
-    if (descriptor.kind === 'user') {
+    if (descriptor.kind === "user") {
       const item = descriptor.item;
       const optimistic =
-        item.id.startsWith('user:') &&
-        turn?.turnId === item.id.slice('user:'.length) &&
-        turn.status === 'submitting';
-      const stateKey = optimistic ? 'optimistic' : 'sent';
+        item.id.startsWith("user:") &&
+        turn?.turnId === item.id.slice("user:".length) &&
+        turn.status === "submitting";
+      const stateKey = optimistic ? "optimistic" : "sent";
       const identityItems = [item, ...descriptor.images];
       const cached = cache?.get(item.id);
       if (
@@ -272,23 +264,18 @@ export function mapTranscriptToRuntimeMessages(
       }
       const message: SafeRuntimeMessage = {
         id: item.id,
-        role: 'user',
+        role: "user",
         content: [
-          { type: 'text', text: item.text },
+          { type: "text", text: item.text },
           ...descriptor.images.map(mapItemToPart),
         ],
         optimistic,
-        ...(item.messageId === undefined
-          ? {}
-          : { messageId: item.messageId }),
+        ...(item.messageId === undefined ? {} : { messageId: item.messageId }),
         ...(item.attachments === undefined
           ? {}
           : { attachments: item.attachments }),
       };
-      nextEntries.push([
-        item.id,
-        { message, items: identityItems, stateKey },
-      ]);
+      nextEntries.push([item.id, { message, items: identityItems, stateKey }]);
       return message;
     }
 
@@ -298,7 +285,7 @@ export function mapTranscriptToRuntimeMessages(
       turn,
     );
     const stateKey = `${status.type}:${
-      'reason' in status ? status.reason : ''
+      "reason" in status ? status.reason : ""
     }`;
     const cached = cache?.get(descriptor.id);
     if (
@@ -311,7 +298,7 @@ export function mapTranscriptToRuntimeMessages(
     }
     const message: SafeRuntimeMessage = {
       id: descriptor.id,
-      role: 'assistant',
+      role: "assistant",
       content: uniqueToolCallIds(descriptor.items.map(mapItemToPart)),
       status,
     };
@@ -359,7 +346,7 @@ function uniqueToolCallIds(
   return parts.map((part) => {
     // toolCallId is optional on the library part type; our
     // mapItemToPart always sets it, but the narrowing is type-mandated.
-    if (part.type !== 'tool-call' || part.toolCallId === undefined) {
+    if (part.type !== "tool-call" || part.toolCallId === undefined) {
       return part;
     }
     const base = part.toolCallId;
@@ -374,21 +361,17 @@ function uniqueToolCallIds(
   });
 }
 
-function mapItemToPart(
-  item: SessionTranscriptItem,
-): SafeRuntimePart {
+function mapItemToPart(item: SessionTranscriptItem): SafeRuntimePart {
   switch (item.kind) {
-    case 'assistant':
+    case "assistant":
       return {
-        type: 'text',
+        type: "text",
         text: item.text,
-        status: item.text.length === 0
-          ? { type: 'running' }
-          : undefined,
+        status: item.text.length === 0 ? { type: "running" } : undefined,
       };
-    case 'thinking':
+    case "thinking":
       return {
-        type: 'reasoning',
+        type: "reasoning",
         text: item.text,
         status: mapActivityStatus(item.status),
         providerMetadata: {
@@ -397,13 +380,13 @@ function mapItemToPart(
           },
         },
       };
-    case 'tool':
+    case "tool":
       return {
-        type: 'tool-call',
+        type: "tool-call",
         toolCallId: item.toolUseId,
         toolName: item.toolName,
         args: {},
-        argsText: '',
+        argsText: "",
         providerMetadata: {
           droidvisx: {
             action: item.action,
@@ -415,13 +398,14 @@ function mapItemToPart(
             detailKind: item.detailKind ?? null,
             detail: item.detail ?? null,
             errorMessage: item.errorMessage ?? null,
+            backgroundHint: item.backgroundHint ?? null,
           },
         },
       };
-    case 'changes':
+    case "changes":
       return {
-        type: 'data',
-        name: 'droid-changes',
+        type: "data",
+        name: "droid-changes",
         data: {
           turnId: item.turnId,
           files: item.files.map((file) => ({
@@ -431,10 +415,10 @@ function mapItemToPart(
           })),
         },
       };
-    case 'diagnostic':
+    case "diagnostic":
       return {
-        type: 'data',
-        name: 'droid-diagnostic',
+        type: "data",
+        name: "droid-diagnostic",
         data: {
           severity: item.severity,
           code: item.code.slice(0, 256),
@@ -444,10 +428,10 @@ function mapItemToPart(
             : { relatedSessionId: item.relatedSessionId }),
         },
       };
-    case 'image':
+    case "image":
       return {
-        type: 'data',
-        name: 'droid-image',
+        type: "data",
+        name: "droid-image",
         data: {
           origin: item.origin,
           mediaType: item.mediaType,
@@ -456,79 +440,79 @@ function mapItemToPart(
           byteLength: item.byteLength,
         },
       };
-    case 'user':
-      return { type: 'text', text: item.text };
+    case "user":
+      return { type: "text", text: item.text };
   }
 }
 
 function mapActivityStatus(
-  status: Extract<
-    SessionTranscriptItem,
-    { kind: 'thinking' }
-  >['status'],
-): { type: 'running' } | { type: 'complete' } | {
-  type: 'incomplete';
-  reason: 'cancelled';
-} {
-  if (status === 'active' || status === 'stopping') {
-    return { type: 'running' };
+  status: Extract<SessionTranscriptItem, { kind: "thinking" }>["status"],
+):
+  | { type: "running" }
+  | { type: "complete" }
+  | {
+      type: "incomplete";
+      reason: "cancelled";
+    } {
+  if (status === "active" || status === "stopping") {
+    return { type: "running" };
   }
-  if (status === 'stopped') {
-    return { type: 'incomplete', reason: 'cancelled' };
+  if (status === "stopped") {
+    return { type: "incomplete", reason: "cancelled" };
   }
-  return { type: 'complete' };
+  return { type: "complete" };
 }
 
 function resolveAssistantStatus(
   items: readonly SessionTranscriptItem[],
   turnId: string,
-  turn: AssistantWebviewState['turn'],
-): NonNullable<ThreadMessageLike['status']> {
+  turn: AssistantWebviewState["turn"],
+): NonNullable<ThreadMessageLike["status"]> {
   if (turn?.turnId === turnId) {
     return mapTurnStatus(turn.status);
   }
   const hasRunning = items.some(
     (item) =>
-      item.kind === 'thinking' &&
-        (item.status === 'active' || item.status === 'stopping') ||
-      item.kind === 'tool' &&
-        (item.status === 'running' || item.status === 'stopping'),
+      (item.kind === "thinking" &&
+        (item.status === "active" || item.status === "stopping")) ||
+      (item.kind === "tool" &&
+        (item.status === "running" || item.status === "stopping")),
   );
   if (hasRunning) {
-    return { type: 'running' };
+    return { type: "running" };
   }
   const hasFailure = items.some(
     (item) =>
-      item.kind === 'tool' && item.status === 'failed' ||
-      item.kind === 'diagnostic' && item.severity === 'error',
+      (item.kind === "tool" && item.status === "failed") ||
+      (item.kind === "diagnostic" && item.severity === "error"),
   );
   if (hasFailure) {
-    return { type: 'incomplete', reason: 'error' };
+    return { type: "incomplete", reason: "error" };
   }
   const wasStopped = items.some(
     (item) =>
-      item.kind === 'tool' && item.status === 'stopped' ||
-      item.kind === 'thinking' && item.status === 'stopped',
+      (item.kind === "tool" && item.status === "stopped") ||
+      (item.kind === "thinking" && item.status === "stopped"),
   );
   return wasStopped
-    ? { type: 'incomplete', reason: 'cancelled' }
-    : { type: 'complete', reason: 'stop' };
+    ? { type: "incomplete", reason: "cancelled" }
+    : { type: "complete", reason: "stop" };
 }
 
 function mapTurnStatus(
   status: TurnStatus,
-): NonNullable<ThreadMessageLike['status']> {
+): NonNullable<ThreadMessageLike["status"]> {
   switch (status) {
-    case 'submitting':
-    case 'streaming':
-    case 'stopping':
-      return { type: 'running' };
-    case 'interrupted':
-      return { type: 'incomplete', reason: 'cancelled' };
-    case 'failed':
-      return { type: 'incomplete', reason: 'error' };
-    case 'idle':
-    case 'completed':
-      return { type: 'complete', reason: 'stop' };
+    case "submitting":
+    case "streaming":
+    case "stopping":
+      return { type: "running" };
+    case "interrupted":
+      return { type: "incomplete", reason: "cancelled" };
+    case "failed":
+      return { type: "incomplete", reason: "error" };
+    case "idle":
+    case "completed":
+      return { type: "complete", reason: "stop" };
   }
 }

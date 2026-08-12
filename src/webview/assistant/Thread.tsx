@@ -2555,6 +2555,12 @@ interface ToolActivityPresentation {
   readonly detail: string | null;
   /** Error excerpt from a failed tool_result, shown when expanded. */
   readonly errorMessage: string | null;
+  /**
+   * Live trailing output of an execute-class tool (tier1 §1). Present
+   * only in live sessions — history and recovery replays never carry
+   * it — so playback stays previewless by construction.
+   */
+  readonly outputTail: string | null;
 }
 
 function readToolActivity(part: unknown): ToolActivityPresentation {
@@ -2568,6 +2574,7 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
     detailKind: null,
     detail: null,
     errorMessage: null,
+    outputTail: null,
   };
   const metadata = readDroidvisxMetadata(part);
   if (
@@ -2589,7 +2596,12 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
     return {
       ...(metadata as Omit<
         ToolActivityPresentation,
-        "durationMs" | "filePath" | "detailKind" | "detail" | "errorMessage"
+        | "durationMs"
+        | "filePath"
+        | "detailKind"
+        | "detail"
+        | "errorMessage"
+        | "outputTail"
       >),
       durationMs: readMetadataDuration(metadata),
       filePath:
@@ -2608,6 +2620,11 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
         typeof metadata["errorMessage"] === "string" &&
         metadata["errorMessage"].length > 0
           ? metadata["errorMessage"]
+          : null,
+      outputTail:
+        typeof metadata["outputTail"] === "string" &&
+        metadata["outputTail"].length > 0
+          ? metadata["outputTail"]
           : null,
     };
   }
@@ -2649,6 +2666,44 @@ function parsePlanSteps(detail: string): readonly PlanStep[] {
     steps.push({ status, text });
   }
   return steps;
+}
+
+/**
+ * Terminal-style tail of a running execute command (tier1 §1). Pinned
+ * to the bottom like a terminal; scrolling up unpins until the reader
+ * returns to the bottom. Completion freezes the final tail in place.
+ */
+function ToolOutputPreview({
+  text,
+  running,
+  open,
+}: {
+  readonly text: string;
+  readonly running: boolean;
+  readonly open: boolean;
+}): React.JSX.Element {
+  const preRef = useRef<HTMLPreElement | null>(null);
+  const pinnedRef = useRef(true);
+  // `open` re-pins after a closed row (zero scrollHeight) reopens.
+  useEffect(() => {
+    const pre = preRef.current;
+    if (running && open && pinnedRef.current && pre !== null) {
+      pre.scrollTop = pre.scrollHeight;
+    }
+  }, [text, running, open]);
+  return (
+    <pre
+      ref={preRef}
+      className="dvx-tool-output"
+      onScroll={(event) => {
+        const pre = event.currentTarget;
+        pinnedRef.current =
+          pre.scrollHeight - pre.scrollTop - pre.clientHeight < 8;
+      }}
+    >
+      {text}
+    </pre>
+  );
 }
 
 function ToolActivityRow({
@@ -2718,6 +2773,13 @@ function ToolActivityRow({
           <code>{toolName}</code>
           <span>{formatToolProgress(activity)}</span>
         </div>
+      )}
+      {activity.outputTail === null ? null : (
+        <ToolOutputPreview
+          text={activity.outputTail}
+          running={running}
+          open={open}
+        />
       )}
       {activity.status === "failed" && activity.errorMessage !== null ? (
         <p className="dvx-tool-error">{activity.errorMessage}</p>

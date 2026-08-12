@@ -215,6 +215,115 @@ describe('assistantWebviewReducer', () => {
     });
   });
 
+  it('streams the execute output tail and keeps it across silent updates', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'turn.send',
+      turnId: 'turn-a',
+      text: 'Run the build',
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'tool.activity',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'tool-a',
+        toolName: 'Execute',
+        action: 'Ran a local command',
+        status: 'running',
+        progressCount: 1,
+        latestUpdateKind: 'status',
+        outputTail: 'line-1\nline-2',
+      },
+    });
+    expect(state.transcript.at(-1)).toMatchObject({
+      kind: 'tool',
+      status: 'running',
+      outputTail: 'line-1\nline-2',
+    });
+
+    // A completing update without the field keeps the final tail.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'tool.activity',
+        sequence: 2,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'tool-a',
+        toolName: 'Execute',
+        action: 'Ran a local command',
+        status: 'completed',
+        progressCount: 1,
+        latestUpdateKind: 'status',
+      },
+    });
+    expect(state.transcript.at(-1)).toMatchObject({
+      kind: 'tool',
+      status: 'completed',
+      outputTail: 'line-1\nline-2',
+    });
+  });
+
+  it('keeps the background hint on upserted execute rows', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'turn.send',
+      turnId: 'turn-a',
+      text: 'Start the dev server',
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'tool.activity',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'tool-a',
+        toolName: 'Execute',
+        action: 'Ran a local command',
+        status: 'running',
+        progressCount: 0,
+        latestUpdateKind: null,
+        backgroundHint: { fireAndForget: true },
+      },
+    });
+    expect(state.transcript.at(-1)).toMatchObject({
+      kind: 'tool',
+      backgroundHint: { fireAndForget: true },
+    });
+
+    // The completing update without the hint keeps the stored one.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'tool.activity',
+        sequence: 2,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'tool-a',
+        toolName: 'Execute',
+        action: 'Ran a local command',
+        status: 'completed',
+        progressCount: 0,
+        latestUpdateKind: null,
+      },
+    });
+    expect(state.transcript.at(-1)).toMatchObject({
+      kind: 'tool',
+      status: 'completed',
+      backgroundHint: { fireAndForget: true },
+    });
+  });
+
   it('tracks the snapshot-borne mission identity per session', () => {
     expect(initialAssistantWebviewState.mission).toBeNull();
 
