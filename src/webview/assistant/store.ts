@@ -1240,18 +1240,6 @@ export function isTurnActive(turn: AssistantTurn | null): boolean {
   );
 }
 
-export function hasTurnContent(
-  transcript: readonly SessionTranscriptItem[],
-  turnId: string,
-): boolean {
-  return transcript.some(
-    (item) =>
-      item.kind !== 'user' &&
-      item.turnId === turnId &&
-      item.kind !== 'diagnostic',
-  );
-}
-
 function advance(
   state: AssistantWebviewState,
   sequence: number,

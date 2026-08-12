@@ -36,7 +36,7 @@ import type {
  * 8 attachments x 4 MB fits exactly one maximal message, covering
  * the common "edit the latest message" case.
  */
-export const MAX_SENT_ATTACHMENT_RETENTION_BYTES = 32 * 1024 * 1024;
+const MAX_SENT_ATTACHMENT_RETENTION_BYTES = 32 * 1024 * 1024;
 
 export const ATTACHMENT_LIMIT_MESSAGE =
   `Up to ${MAX_PENDING_ATTACHMENTS} attachments can be staged for one message.`;

@@ -126,7 +126,6 @@ export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_TEXT_LENGTH = 32_000;
 export const MAX_TOOL_NAME_LENGTH = MAX_PERMISSION_TOOL_NAME_LENGTH;
 export const MAX_TOOL_ACTIVITIES_PER_TURN = 100;
-export const MAX_INTERACTION_TEXT_LENGTH = MAX_INTERACTION_DETAIL_LENGTH;
 export const MAX_SESSION_CATALOG_ITEMS = 50;
 export const MAX_SESSION_TITLE_LENGTH = 256;
 /** Bounds for the worktree annotation on catalog session rows. */
