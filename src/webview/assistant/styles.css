@@ -2069,6 +2069,11 @@ html, body, #root {
 
 .dvx-tool-output::-webkit-scrollbar {
   width: 8px;
+  background: transparent;
+}
+
+.dvx-tool-output::-webkit-scrollbar-button {
+  display: none;
 }
 
 .dvx-tool-output::-webkit-scrollbar-thumb {
