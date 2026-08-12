@@ -1467,6 +1467,14 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- 2026-08-12 傍晚 Plugins 只读第一切片已提交（`c7d3911` Bridge 契约 +
+  `d8a9826` Host/Runtime + `7db8664` Webview；Thread/App 接线部分随
+  并行代理并入 `4ae602f`），门禁全绿（typecheck 三段 + vitest
+  74 files/1701 全过），并已 `vsce package`（dist/droidvisx.vsix，
+  1.55 MB）+ `cursor --install-extension` 安装。注意该包含打包时
+  工作区内其他并行切片的未提交改动（btw/side-chat 等在途文件），
+  面板可见冒烟（真实 `core@factory-plugins` 行 + 杀 daemon 后
+  error 态）待用户 Reload Window 后核对。
 - 2026-08-12 傍晚「三项体验补全」切片（回到底部箭头 / 待答空隙修复 /
   代码块 Preview，§14）已全部提交（`8739fd2` `cae4890` `cd7a74f`
   `3c8570f`，Bridge/CSS 部分随并行代理并入 `3e7da6b`/`62b6f1b`），
