@@ -2051,7 +2051,13 @@ Webview 接线经 React context（`OpenPathContext`，App 根部提供），
 `MarkdownText.tsx` 以 `InsidePreContext` 区分行内/块级代码。新增
 测试：detectPathLink 33 例、校验器正反 20 例、MarkdownText 渲染与
 点击 5 例、ChatController 端到端 1 例（行列透传、错会话拦截、失败
-诊断）。
+诊断）。可见验证经无头 Chrome 冒烟
+`artifacts/smoke-path-link.mjs`（配 `artifacts/path-link-harness.html`
+驱动真实 webview bundle）实测通过：中文/空格 Windows 绝对路径与
+`App.tsx:42:7` 各成一个 `.dvx-path-link`（dotted underline +
+pointer），`pnpm run build` 与围栏代码块不受影响，点击产生的两条
+`workspace.openPath` 载荷逐字段匹配；截图
+`artifacts/path-link-verify.png`。
 
 每个切片保持完整测试、打包、安装和 Cursor 可见验收。
 
