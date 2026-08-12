@@ -49,7 +49,9 @@ import {
   type FilePreviewMessage,
   type GitCommitRequestMessage,
   type GitRequestStatusMessage,
+  MAX_INLINE_PREVIEW_HTML_LENGTH,
   PREVIEWABLE_FILE_EXTENSIONS,
+  type PreviewInlineHtmlMessage,
   type McpRefreshMessage,
   type McpServerAddMessage,
   type McpServerAuthenticateMessage,
@@ -76,6 +78,7 @@ import {
   type CommandsRefreshMessage,
   type SkillToggleMessage,
   type SkillsRefreshMessage,
+  type TerminalOpenMirrorMessage,
   type TurnEditResendMessage,
   type TurnSendMessage,
   type TurnStopMessage,
@@ -157,10 +160,14 @@ export function parseWebviewMessage(
         return parseFileOpenDiff(value);
       case 'file.preview':
         return parseFilePreview(value);
+      case 'preview.inlineHtml':
+        return parsePreviewInlineHtml(value);
       case 'git.requestStatus':
         return parseGitRequestStatus(value);
       case 'git.commit':
         return parseGitCommitRequest(value);
+      case 'terminal.openMirror':
+        return parseTerminalOpenMirror(value);
       case 'workspace.openPath':
         return parseWorkspaceOpenPath(value);
       case 'skills.refresh':
@@ -764,6 +771,26 @@ function parseFilePreview(
   };
 }
 
+function parsePreviewInlineHtml(
+  value: UnknownRecord,
+): PreviewInlineHtmlMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'html']) ||
+    !isId(value.sessionId) ||
+    typeof value.html !== 'string' ||
+    value.html.length === 0 ||
+    value.html.length > MAX_INLINE_PREVIEW_HTML_LENGTH
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'preview.inlineHtml',
+    sessionId: value.sessionId,
+    html: value.html,
+  };
+}
+
 function parseGitRequestStatus(
   value: UnknownRecord,
 ): GitRequestStatusMessage | undefined {
@@ -775,6 +802,19 @@ function parseGitRequestStatus(
   }
 
   return { type: 'git.requestStatus', sessionId: value.sessionId };
+}
+
+function parseTerminalOpenMirror(
+  value: UnknownRecord,
+): TerminalOpenMirrorMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'terminal.openMirror', sessionId: value.sessionId };
 }
 
 function parseGitCommitRequest(

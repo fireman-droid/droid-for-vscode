@@ -308,6 +308,7 @@ export const WEBVIEW_DIAGNOSTIC_KINDS = [
   'boot-ok',
   'render-ok',
   'boot-timeout',
+  'handshake-timeout',
   'error',
   'unhandledrejection',
   'perf-longtask',
@@ -544,6 +545,26 @@ export interface FilePreviewMessage {
 }
 
 /**
+ * Largest inline HTML payload (UTF-16 code units, 512 KB) accepted on
+ * a `preview.inlineHtml` message. Both sides enforce it: the webview
+ * disables the code-block Preview entry above the limit and the
+ * bridge parser rejects oversized payloads outright.
+ */
+export const MAX_INLINE_PREVIEW_HTML_LENGTH = 512 * 1024;
+
+/**
+ * Asks the host to render an assistant-authored HTML code block from
+ * the transcript in the sandboxed prototype preview panel. The source
+ * travels by value (there is no backing file); the host revalidates
+ * the size before inlining it into the srcdoc sandbox.
+ */
+export interface PreviewInlineHtmlMessage {
+  readonly type: 'preview.inlineHtml';
+  readonly sessionId: string;
+  readonly html: string;
+}
+
+/**
  * Asks the host for the repository's commit status (branch plus
  * working-tree/index change list) behind the changes-card commit
  * entry. The host answers with `git.status`.
@@ -564,6 +585,19 @@ export interface GitCommitRequestMessage {
   readonly sessionId: string;
   readonly paths: readonly string[];
   readonly message: string;
+}
+
+/**
+ * Asks the host to reveal the read-only terminal mirror of the
+ * active session's execute-command output (native-terminal design
+ * slice A), creating the terminal lazily on first use. The mirrored
+ * output itself never crosses the bridge: the host feeds the
+ * pseudoterminal straight from runtime events, so no H→W reply
+ * exists for this message.
+ */
+export interface TerminalOpenMirrorMessage {
+  readonly type: 'terminal.openMirror';
+  readonly sessionId: string;
 }
 
 /** Longest accepted path in a `workspace.openPath` request. */
@@ -892,8 +926,10 @@ export type WebviewToHostMessage =
   | SessionForkMessage
   | FileOpenDiffMessage
   | FilePreviewMessage
+  | PreviewInlineHtmlMessage
   | GitRequestStatusMessage
   | GitCommitRequestMessage
+  | TerminalOpenMirrorMessage
   | WorkspaceOpenPathMessage
   | SkillsRefreshMessage
   | SkillToggleMessage

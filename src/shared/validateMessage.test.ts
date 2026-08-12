@@ -222,6 +222,16 @@ describe('parseWebviewMessage', () => {
       path: 'design/Landing.HTML',
     },
     {
+      type: 'preview.inlineHtml',
+      sessionId: 'session-1',
+      html: '<!DOCTYPE html><html><body><h1>Demo</h1></body></html>',
+    },
+    {
+      type: 'preview.inlineHtml',
+      sessionId: 'session-1',
+      html: '<html>'.padEnd(512 * 1024, 'x'),
+    },
+    {
       type: 'git.requestStatus',
       sessionId: 'session-1',
     },
@@ -236,6 +246,10 @@ describe('parseWebviewMessage', () => {
       sessionId: 'session-1',
       paths: ['src/app.ts'],
       message: 'x'.repeat(5000),
+    },
+    {
+      type: 'terminal.openMirror',
+      sessionId: 'session-1',
     },
     {
       type: 'workspace.openPath',
@@ -654,9 +668,28 @@ describe('parseWebviewMessage', () => {
       path: 'proto.html',
       extra: true,
     },
+    { type: 'preview.inlineHtml', sessionId: 'session-1', html: '' },
+    { type: 'preview.inlineHtml', sessionId: '', html: '<html></html>' },
+    { type: 'preview.inlineHtml', sessionId: 'session-1' },
+    { type: 'preview.inlineHtml', sessionId: 'session-1', html: 42 },
+    {
+      type: 'preview.inlineHtml',
+      sessionId: 'session-1',
+      html: 'x'.repeat(512 * 1024 + 1),
+    },
+    {
+      type: 'preview.inlineHtml',
+      sessionId: 'session-1',
+      html: '<html></html>',
+      extra: true,
+    },
     { type: 'git.requestStatus', sessionId: '' },
     { type: 'git.requestStatus' },
     { type: 'git.requestStatus', sessionId: 'session-1', extra: true },
+    { type: 'terminal.openMirror' },
+    { type: 'terminal.openMirror', sessionId: '' },
+    { type: 'terminal.openMirror', sessionId: 42 },
+    { type: 'terminal.openMirror', sessionId: 'session-1', extra: true },
     {
       type: 'git.commit',
       sessionId: 'session-1',
