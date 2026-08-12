@@ -795,6 +795,43 @@ Chrome 冒烟 `artifacts/smoke-session-drawer.mjs` 全过：运行行
 「Earlier CLI messages…」通知与搜索框轻微叠压为既有形态问题，
 与本切片无关。
 
+2026-08-12 深夜追加「终端命令卡重做（对标 Cursor 档次）」：Execute
+工具行升级为命令卡（提交 c7f9245）。① 卡头一行式：标题优先用
+Execute 输入自带的 `summary`（Runtime `extractExecuteSummary` 消毒
+限长后经既有 `action` 字段透传，live `normalizeSdkEvent` 与历史回
+放 `projectSessionHistory` 双路等价；模型没写 summary 就用规则标题
+——`commandCard.ts` 分词器取首个非 `cd/pushd/Set-Location` 前导的
+命令名 + 至多两个裸词参数，上限 64 字符，绝不发明数据）；标题右侧
+muted 等宽芯片列出解析出的命令名（去重、最多 4 个、逗号分隔、空间
+不足先于标题让位省略）；右端 "…" 溢出菜单（仅 Copy Command——
+Cursor 的 Auto-Run/Allowlist 属其权限体系不抄；点击复制显示
+"Copied" 900ms 后自收，菜单开合不触发卡片折叠）+ 既有 chevron。
+② 展开命令区：暖暗琥珀终端井（#262019，色温与暖白壳一致，非
+Cursor 冷蓝），`$` 前缀 + 规则分词语法高亮（command 杏色加粗 /
+flag 沙 / string 橄榄 / path 米白 / variable 陶土 / operator 暖灰 /
+comment 斜体；token 逐字拼接即原命令），软换行 hanging indent
+（`$` 列自持首列）。③ 输出区：等宽、贴井下方深一档色 + 暖发丝线
+分隔，沿用既有 outputTail 截断、pinned 滚动与顶端渐隐；行号放弃
+——outputTail 是滑动窗口无稳定行结构，不做假行号。④ 面板：白底
+1px 边框圆角软阴影与消息流卡片家族一致，折叠态只剩卡头一行；运行
+中沿用 shimmer/auto-open 不加新动画。CSS 用
+`.dvx-activity-row.dvx-command-card` 双类压过后段扁平化层，标题色
+限 `:not(.dvx-activity-running)` 保运行 shimmer。既有功能全通路保
+留：流式追加、stop、后台命令提示行、终端镜像入口、Preview chip。
+门禁：typecheck 三段过；聚焦 vitest（toolDetail /
+normalizeSdkEvent / Thread / commandCard）过；全量 86 文件 1915
+全过。自验收（Delivery loop 第 8 步）：真实构建 dist + 装置页
+`artifacts/command-card-harness.html` + 无头 Chrome 冒烟
+`artifacts/smoke-command-card.mjs`（gallery + running 两模式断言全
+过：卡片家族外观、chips、暖暗井、$ 分色命令、长输出截断渐隐、菜单
+复制、失败退出码摘录、后台提示、360px 无横向溢出、直播 tail 钉底、
+完成自收）。截图：`artifacts/command-card-collapsed.png`、
+`-expanded-short.png`、`-long-truncated.png`、`-menu.png`、
+`-failed.png`、`-running.png`、`-narrow.png`。**未打包，随下一批次
+包验收**。遗留：极窄宽度卡头芯片省略截断（by design）；无
+summary 的链式命令规则标题取首个实义命令名（如 `Write-Output`），
+不如模型 summary 可读，属数据上限而非缺陷。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
