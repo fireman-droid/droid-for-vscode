@@ -123,6 +123,7 @@ import { handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath,
 import { handleSettingUpdate, emitSettings, refreshSettingsAfterRuntimeEvent, projectConfirmedSettings, SETTINGS_READ_FAILED_MESSAGE } from './chat/settings';
 import { handleFileOpenDiff, handleFilePreview, handleInlineHtmlPreview, handleTerminalOpenMirror, handleGitRequestStatus, handleGitCommit, handleWorkspaceOpenPath, handleWorkspaceSearchFiles, handleWorkspaceReadImage } from './chat/workspaceActions';
 import { handleRewindInfo, handleEditResend, handleEditStageBegin, handleEditStageCancel } from './chat/editResend';
+import { stampRunningFlags, setSessionRunning, ensureBackgroundRunningPoll, seedBackgroundRunning } from './chat/sessionRunning';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
 import {
   clearPrompts,
@@ -282,30 +283,6 @@ const ASSISTANT_OUTPUT_TRUNCATED_MESSAGE =
   'Assistant output exceeded the display limit and was truncated.';
 const CATALOG_ERROR_MESSAGE =
   'Saved Droid sessions could not be loaded.';
-/**
- * Cadence of the daemon opened-session registry poll that watches
- * detached background turns. One cheap in-memory RPC per tick; the
- * loop only runs while a background flag is set.
- */
-const BACKGROUND_RUNNING_POLL_MS = 1_000;
-/**
- * Consecutive failed daemon reads before the background flags fail
- * closed. Better no indicator than a spinner nobody can verify.
- */
-const BACKGROUND_RUNNING_MAX_FAILURES = 3;
-/**
- * Daemon opened-session working states that mean a turn is in
- * flight. Closed set (SDK `DroidWorkingState` minus Idle);
- * unrecognized future states fail closed to "not running" so the
- * indicator never spins on guesswork.
- */
-const LIVE_DAEMON_WORKING_STATES = new Set([
-  'thinking',
-  'streaming_assistant_message',
-  'waiting_for_tool_confirmation',
-  'executing_tool',
-  'compacting_conversation',
-]);
 const SESSION_OPERATION_BLOCKED_MESSAGE =
   'Finish the current Droid activity before changing sessions.';
 const UNKNOWN_SESSION_MESSAGE =
@@ -1047,7 +1024,7 @@ export class ChatController {
         continue;
       }
       this.sessions = catalog;
-      this.seedBackgroundRunning(workspace.cwd);
+      seedBackgroundRunning(this, workspace.cwd);
 
       const selectedSessionId =
         this.recoveryStore.getSelectedSessionId();
@@ -2095,7 +2072,7 @@ export class ChatController {
       return;
     }
     this.sessions = catalog;
-    this.seedBackgroundRunning(cwd);
+    seedBackgroundRunning(this, cwd);
     const selectedSessionId =
       this.recoveryStore.getSelectedSessionId();
     await this.replaceRuntime(
@@ -2306,7 +2283,7 @@ export class ChatController {
       }
       if (result.status === 'ready') {
         this.sessions = this.withActiveSession(result, previousActive);
-        this.seedBackgroundRunning(workspace.cwd);
+        seedBackgroundRunning(this, workspace.cwd);
       } else {
         // The write succeeded but the re-list failed; reflect the
         // write locally so the toggle does not look ignored.
@@ -2457,7 +2434,7 @@ export class ChatController {
       result.status === 'ready'
     ) {
       this.sessions = this.withActiveSession(result, previousActive);
-      this.seedBackgroundRunning(cwd);
+      seedBackgroundRunning(this, cwd);
       this.emitSnapshot();
     }
     await this.refreshArchived(cwd);
@@ -2676,7 +2653,7 @@ export class ChatController {
         result,
         previousActive,
       );
-      this.seedBackgroundRunning(cwd);
+      seedBackgroundRunning(this, cwd);
     }
     this.emitSnapshot();
   }
@@ -2781,8 +2758,8 @@ export class ChatController {
         // end) and flag the row for the background watcher.
         this.turn = null;
         this.diagnostics?.endTurnScope?.();
-        this.setSessionRunning(detachedSessionId, true);
-        this.ensureBackgroundRunningPoll();
+        setSessionRunning(this, detachedSessionId, true);
+        ensureBackgroundRunningPoll(this);
       }
       if (!this.isTargetWorkspaceCurrent(target.cwd)) {
         this.reportWorkspaceChanged(generation);
@@ -3312,7 +3289,7 @@ export class ChatController {
       });
       // The re-adopted turn owns the running flag again (it may have
       // been set while the session ran detached).
-      this.setSessionRunning(sessionId, true);
+      setSessionRunning(this, sessionId, true);
       // The webview adopts a turn from its own send or from a
       // snapshot; the recovery turn exists only host-side, so a
       // snapshot (not a bare turn.state) announces it.
@@ -3680,7 +3657,7 @@ export class ChatController {
       // turn.state, so close the scope here.
       this.diagnostics?.endTurnScope?.();
     }
-    const sessions = this.stampRunningFlags(
+    const sessions = stampRunningFlags(this, 
       this.withActiveSession(this.sessions),
     );
     const workspaceRoot = this.getWorkspaceContext().cwd;
@@ -3775,9 +3752,9 @@ export class ChatController {
       this.diagnostics?.endTurnScope?.();
       settleQueueAfterTurn(this, sessionId, status);
       // Every terminal outcome clears the running indicator at once.
-      this.setSessionRunning(sessionId, false);
+      setSessionRunning(this, sessionId, false);
     } else {
-      this.setSessionRunning(sessionId, true);
+      setSessionRunning(this, sessionId, true);
     }
   }
 
@@ -4251,168 +4228,6 @@ export class ChatController {
       status: this.sessions.status,
       items,
     }).items;
-  }
-
-  /** Projects the running registry onto catalog rows (`running`). */
-  private stampRunningFlags(
-    sessions: SessionCatalogState,
-  ): SessionCatalogState {
-    if (this.runningSessionIds.size === 0) {
-      return sessions;
-    }
-    return {
-      ...sessions,
-      items: sessions.items.map((item) =>
-        this.runningSessionIds.has(item.id)
-          ? { ...item, running: true }
-          : item,
-      ),
-    };
-  }
-
-  /**
-   * Tracks one session's running flag and streams the change as an
-   * incremental `session.running` message. No-op when unchanged, so
-   * repeated turn.state pushes and poll ticks stay quiet.
-   */
-  private setSessionRunning(sessionId: string, running: boolean): void {
-    if (this.runningSessionIds.has(sessionId) === running) {
-      return;
-    }
-    if (running) {
-      this.runningSessionIds.add(sessionId);
-    } else {
-      this.runningSessionIds.delete(sessionId);
-    }
-    this.emit({ type: 'session.running', sessionId, running });
-  }
-
-  /**
-   * True when a flagged session is not covered by local turn state —
-   * a detached daemon turn whose only truth source is the daemon's
-   * opened-session registry, so a poll must watch it.
-   */
-  private hasBackgroundRunning(): boolean {
-    for (const id of this.runningSessionIds) {
-      if (!(id === this.sessionId && isTurnActive(this.turn))) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** Drops every flag not owned by the local turn (fail closed). */
-  private clearBackgroundRunning(): void {
-    for (const id of [...this.runningSessionIds]) {
-      if (!(id === this.sessionId && isTurnActive(this.turn))) {
-        this.setSessionRunning(id, false);
-      }
-    }
-  }
-
-  /**
-   * Watches detached running sessions through the daemon's
-   * opened-session registry and clears each flag when its session
-   * stops reporting a live working state. One cheap registry RPC per
-   * tick; the loop ends itself when nothing is left to watch.
-   */
-  private ensureBackgroundRunningPoll(): void {
-    const daemonSessions = this.daemonSessions;
-    if (
-      this.backgroundRunningPoll !== null ||
-      daemonSessions === undefined ||
-      !this.hasBackgroundRunning()
-    ) {
-      return;
-    }
-    const poll = (async () => {
-      let failures = 0;
-      while (!this.disposed && this.hasBackgroundRunning()) {
-        await delay(BACKGROUND_RUNNING_POLL_MS);
-        if (this.disposed || !this.hasBackgroundRunning()) {
-          return;
-        }
-        let states: ReadonlyMap<string, string>;
-        try {
-          states = await (
-            await daemonSessions()
-          ).readOpenedWorkingStates();
-        } catch {
-          failures += 1;
-          if (failures >= BACKGROUND_RUNNING_MAX_FAILURES) {
-            this.clearBackgroundRunning();
-            return;
-          }
-          continue;
-        }
-        failures = 0;
-        if (this.disposed) {
-          return;
-        }
-        for (const id of [...this.runningSessionIds]) {
-          // The active session's flag is owned by local turn state.
-          if (id === this.sessionId && isTurnActive(this.turn)) {
-            continue;
-          }
-          if (!LIVE_DAEMON_WORKING_STATES.has(states.get(id) ?? '')) {
-            this.setSessionRunning(id, false);
-          }
-        }
-      }
-    })().finally(() => {
-      this.backgroundRunningPoll = null;
-      // A flag added while the loop was exiting still gets a watcher.
-      if (!this.disposed && this.hasBackgroundRunning()) {
-        this.ensureBackgroundRunningPoll();
-      }
-    });
-    this.backgroundRunningPoll = poll;
-  }
-
-  /**
-   * Reconciles the running registry against the daemon's
-   * opened-session registry after a catalog load: rows with a live
-   * daemon turn (detached from here, another window, or the CLI)
-   * gain the flag, stale flags drop. Quiet on failure — the
-   * indicator stays as-is until the next refresh.
-   */
-  private seedBackgroundRunning(cwd: string): void {
-    const daemonSessions = this.daemonSessions;
-    if (daemonSessions === undefined) {
-      return;
-    }
-    void (async () => {
-      let states: ReadonlyMap<string, string>;
-      try {
-        states = await (
-          await daemonSessions()
-        ).readOpenedWorkingStates();
-      } catch {
-        return;
-      }
-      if (this.disposed || this.catalogCwd !== cwd) {
-        return;
-      }
-      const known = new Set<string>();
-      for (const item of this.sessions.items) {
-        known.add(item.id);
-        // The active session's flag is owned by local turn state.
-        if (item.id === this.sessionId) {
-          continue;
-        }
-        this.setSessionRunning(
-          item.id,
-          LIVE_DAEMON_WORKING_STATES.has(states.get(item.id) ?? ''),
-        );
-      }
-      // Prune flags of rows that left the catalog (archived away).
-      for (const id of [...this.runningSessionIds]) {
-        if (id !== this.sessionId && !known.has(id)) {
-          this.setSessionRunning(id, false);
-        }
-      }
-      this.ensureBackgroundRunningPoll();
-    })();
   }
 
   private touchActiveSession(): void {
