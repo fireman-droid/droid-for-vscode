@@ -171,7 +171,6 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 | 个人体验基线 | 首次引导、任务完成通知、设置页、快捷键等 onboarding |
 | 账号用量 | Factory 账户 token 消耗/额度展示 |
 | 内置模型全目录切换 | GUI 维持只显示 BYOK 模型的现行设计（用户 2026-08-12 决定，见上方"CLI 覆盖度缺口判定"；出处 cli-coverage-assessment §3 #1） |
-| Mission Control / Worker 详情 | 控制面 SDK 无 RPC，fail-closed（出处 spec-mission-design 结论速览）；只读展示已入 V1 #5，剩余控制面做不了（用户 2026-08-12 裁剪 V2） |
 | 组织策略 / Account Profile | 账户与组织侧能力，与上面"账号用量"同类（用户 2026-08-12 裁剪 V2） |
 | 远程环境 | 非本地运行环境，与本地 GUI 定位不符（用户 2026-08-12 裁剪 V2） |
 | Help / Feedback | 帮助与反馈入口，价值过低（用户 2026-08-12 裁剪 V2） |
@@ -187,7 +186,9 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 在各设计文档与 status 的 V2 节。
 
 > **2026-08-12 用户裁剪：15 项 → 8 项**，砍掉项见上方「用户明确
-> 排除」表。另有「Custom Models 管理」一项不是排除，而是与 backlog
+> 排除」表（其中「Mission Control / Worker 详情」已转为本表之后的
+> "待定项"，见表后说明，2026-08-12 追加决定）。另有「Custom Models
+> 管理」一项不是排除，而是与 backlog
 > 的 BYOK「Add model」设计重复，按重复清理删除，由上方"其他
 > backlog"的
 > [`byok-add-model-design.md`](./product/byok-add-model-design.md)
@@ -199,10 +200,15 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 | 原生 Terminal 工作流 | 命令跑在 VS Code 真终端，可看可接管 | 待补（设计中） |
 | 后台进程管理 | dev server 等进程的列表/停止 | 待补（设计中） |
 | worktree 并行任务 | 独立目录改分支，不动眼前代码 | 待补（设计中） |
-| 会话导出 Markdown | 对话导出成文档（正在实现中，落地后由实现代理勾销本行） | — |
+| 会话导出 Markdown | 对话导出成文档——已实现（2026-08-12，提交 1f2df16，命令 `DroidVisX: Export Session as Markdown`），待随下一批次 VSIX 装机验证 | — |
 | Mermaid 图渲染 | 转录里的流程图直接画出来 | — |
 | 成本 / token 明细可视化 | context 条之外的细分用量 | — |
 | Plugins / Marketplaces / Hooks / Automations | CLI 能力，GUI 未接（用户明确：放最后） | — |
+
+**待定项（不排期也不排除）**：Mission Control 控制面——公开 SDK 无
+start/pause/resume RPC（证据 spec-mission-design 结论速览）；用户已
+安排外部攻关实现可行性（2026-08-12，方向是公开面之外的通道），结论
+出来前不排期、不排除。只读展示不受影响，已在 V1 #5 实现中。
 
 ### SDK 边界内做不了的（不要尝试实现，fail closed）
 
