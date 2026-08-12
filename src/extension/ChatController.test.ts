@@ -3155,6 +3155,106 @@ describe('ChatController', () => {
     ).toHaveLength(0);
   });
 
+  it('stages dropped file URIs inside the workspace and reports outside ones', async () => {
+    const runtime = createMockRuntime();
+    const sources: AttachmentSources = {
+      pickFiles: vi.fn(async () => ({ status: 'cancelled' as const })),
+      readActiveEditor: vi.fn(async () => ({
+        status: 'empty' as const,
+      })),
+      readActiveSelection: vi.fn(async () => ({
+        status: 'empty' as const,
+      })),
+      readProblems: vi.fn(async () => ({ status: 'empty' as const })),
+      readGitChanges: vi.fn(async () => ({ status: 'empty' as const })),
+      searchWorkspaceFiles: vi.fn(async () => []),
+      readWorkspaceFile: vi.fn(async (path: string) => ({
+        status: 'picked' as const,
+        items: [
+          {
+            kind: 'text' as const,
+            name: path.split('/').at(-1) ?? path,
+            data: 'file body',
+            sizeBytes: 9,
+            truncated: false,
+          },
+        ],
+      })),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      sources,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'attachment.addUris',
+      sessionId: 'session-1',
+      uris: [
+        'file:///C:/workspace/src/a.ts',
+        'file:///C:/elsewhere/outside.ts',
+      ],
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        attachmentsMessages(messages).at(-1)?.attachments,
+      ).toMatchObject([{ kind: 'text', name: 'a.ts' }]);
+    });
+    expect(sources.readWorkspaceFile).toHaveBeenCalledOnce();
+    expect(sources.readWorkspaceFile).toHaveBeenCalledWith('src/a.ts');
+    const diagnostics = messages.filter(
+      (message) => message.type === 'runtime.diagnostic',
+    );
+    expect(JSON.stringify(diagnostics)).toContain(
+      'inside the current workspace',
+    );
+  });
+
+  it('stages dropped text files with webview-read content', async () => {
+    const runtime = createMockRuntime();
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'attachment.addTextFile',
+      sessionId: 'session-1',
+      name: 'notes.txt',
+      text: 'dropped body',
+      truncated: true,
+    });
+
+    const staged = attachmentsMessages(messages).at(-1)!.attachments;
+    expect(staged).toMatchObject([
+      {
+        kind: 'text',
+        name: 'notes.txt',
+        sizeBytes: 12,
+        truncated: true,
+      },
+    ]);
+
+    send(controller, 'session-1', 'turn-1', 'summarize the file');
+    await vi.waitFor(() => {
+      expect(runtime.sendTurn).toHaveBeenCalledWith(
+        'summarize the file',
+        [
+          expect.objectContaining({
+            kind: 'text',
+            name: 'notes.txt',
+            data: 'dropped body',
+          }),
+        ],
+      );
+    });
+  });
+
   it('echoes sent chips, stages edits per message, and resends from the edit stage', async () => {
     const runtime = Object.assign(
       createMockRuntime(async function* () {

@@ -58,9 +58,10 @@ export function App(): React.JSX.Element {
   );
   const [draft, setDraft] = useState(() => restoreDraft(vscode));
   const [initialDraft] = useState(draft);
-  const draftCommandIdRef = useRef(0);
-  const [draftCommand, setDraftCommand] = useState(() => ({
-    id: draftCommandIdRef.current,
+  // Pushes the restored draft into the composer once on boot; nothing
+  // rewrites the draft programmatically after that.
+  const [draftCommand] = useState(() => ({
+    id: 0,
     text: initialDraft,
   }));
   const sendPendingRef = useRef(false);
@@ -352,19 +353,6 @@ export function App(): React.JSX.Element {
       );
     }
   }, [handleEditResend, regenerateAnchor]);
-  const handleReuseMessage = useCallback(
-    (text: string): void => {
-      const nextDraft = text.slice(0, MAX_TURN_TEXT_LENGTH);
-      setDraft(nextDraft);
-      persistDraft(vscode, nextDraft);
-      draftCommandIdRef.current += 1;
-      setDraftCommand({
-        id: draftCommandIdRef.current,
-        text: nextDraft,
-      });
-    },
-    [vscode],
-  );
   const handleFileSearch = useCallback(
     (requestId: string, query: string): void => {
       if (sessionId !== null && connectionStatus === 'connected') {
@@ -626,6 +614,38 @@ export function App(): React.JSX.Element {
     },
     [connectionStatus, sessionId, vscode],
   );
+  const handleAttachUris = useCallback(
+    (uris: readonly string[]): void => {
+      if (
+        sessionId === null ||
+        connectionStatus !== 'connected' ||
+        uris.length === 0
+      ) {
+        return;
+      }
+      post(vscode, {
+        type: 'attachment.addUris',
+        sessionId,
+        uris,
+      });
+    },
+    [connectionStatus, sessionId, vscode],
+  );
+  const handleAttachTextFile = useCallback(
+    (name: string, text: string, truncated: boolean): void => {
+      if (sessionId === null || connectionStatus !== 'connected') {
+        return;
+      }
+      post(vscode, {
+        type: 'attachment.addTextFile',
+        sessionId,
+        name,
+        text,
+        truncated,
+      });
+    },
+    [connectionStatus, sessionId, vscode],
+  );
   const handleAttachmentRemove = useCallback(
     (attachmentId: string): void => {
       if (sessionId === null) {
@@ -763,6 +783,18 @@ export function App(): React.JSX.Element {
   const sessionActionsDisabled =
     state.connection.status !== 'connected' || active || hasInteraction;
   const showPending = active && !hasInteraction;
+  // A running tool row or streaming thinking block already carries the
+  // live shimmer; the pending status row then stays static so each
+  // turn keeps exactly one animated indicator.
+  const activityLive = useMemo(
+    () =>
+      state.transcript.some(
+        (item) =>
+          (item.kind === 'tool' && item.status === 'running') ||
+          (item.kind === 'thinking' && item.status === 'active'),
+      ),
+    [state.transcript],
+  );
   const inlineInteraction =
     state.interactions.length > 0 ? (
       <InteractionPanel
@@ -802,6 +834,7 @@ export function App(): React.JSX.Element {
         <DroidThread
           pending={showPending}
           activity={state.turn?.activity}
+          activityLive={activityLive}
           historyStatus={state.historyStatus}
           truncated={state.truncated}
           hiddenMessageCount={hiddenMessageCount}
@@ -848,9 +881,10 @@ export function App(): React.JSX.Element {
           onAttachProblems={handleAttachProblems}
           onAttachGitChanges={handleAttachGitChanges}
           onAttachImage={handleAttachImage}
+          onAttachUris={handleAttachUris}
+          onAttachTextFile={handleAttachTextFile}
           onAttachmentRemove={handleAttachmentRemove}
           onDraftChange={handleDraftChange}
-          onReuseMessage={handleReuseMessage}
           onEditResend={handleEditResend}
           rewindInfo={state.rewindInfo}
           onRequestRewindInfo={handleRequestRewindInfo}

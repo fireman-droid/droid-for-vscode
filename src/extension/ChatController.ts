@@ -1,3 +1,6 @@
+import { isAbsolute, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import type {
   ArchivedSessionSummary,
   AttachmentKind,
@@ -115,6 +118,7 @@ import {
   createUnavailableAttachmentSources,
   MAX_IMAGE_ATTACHMENT_BYTES,
   type AttachmentPayload,
+  type AttachmentPickOutcome,
   type AttachmentSources,
 } from './attachmentSources';
 import {
@@ -307,6 +311,8 @@ const ATTACHMENT_UNSUPPORTED_TYPE_MESSAGE =
   'That file type cannot be attached.';
 const ATTACHMENT_READ_FAILED_MESSAGE =
   'The selected content could not be read for attachment.';
+const ATTACHMENT_OUTSIDE_WORKSPACE_MESSAGE =
+  'Dropped files must be inside the current workspace.';
 const ATTACHMENT_NO_EDITOR_MESSAGE =
   'Open a text editor first to attach its contents.';
 const ATTACHMENT_NO_PROBLEMS_MESSAGE =
@@ -662,6 +668,22 @@ export class ChatController {
           message.name,
           message.mediaType,
           message.dataBase64,
+          message.stage,
+        );
+        return;
+      case 'attachment.addUris':
+        this.handleAttachmentAddUris(
+          message.sessionId,
+          message.uris,
+          message.stage,
+        );
+        return;
+      case 'attachment.addTextFile':
+        this.handleAttachmentAddTextFile(
+          message.sessionId,
+          message.name,
+          message.text,
+          message.truncated,
           message.stage,
         );
         return;
@@ -3377,6 +3399,159 @@ export class ChatController {
           mediaType,
           sizeBytes,
           truncated: false,
+        },
+      ],
+      undefined,
+      stage,
+    );
+  }
+
+  /**
+   * Stages files dropped onto the composer as `file://` URIs (editor
+   * explorer drags). URIs resolving outside the active workspace are
+   * reported once as a diagnostic; the rest go through the same
+   * workspace file reader as `attachment.addPath`.
+   */
+  private handleAttachmentAddUris(
+    sessionId: string,
+    uris: readonly string[],
+    stage?: AttachmentStage,
+  ): void {
+    if (!this.canStageAttachments(sessionId, stage)) {
+      return;
+    }
+    const cwd = this.activeRuntimeCwd;
+    if (cwd === null) {
+      return;
+    }
+    const relativePaths: string[] = [];
+    let outsideWorkspace = false;
+    for (const uri of uris) {
+      let absolute: string;
+      try {
+        absolute = fileURLToPath(uri);
+      } catch {
+        outsideWorkspace = true;
+        continue;
+      }
+      const relativePath = relative(cwd, absolute).replaceAll(
+        '\\',
+        '/',
+      );
+      if (
+        relativePath.length === 0 ||
+        relativePath.startsWith('..') ||
+        isAbsolute(relativePath) ||
+        !isSafeWorkspaceRelativePath(relativePath)
+      ) {
+        outsideWorkspace = true;
+        continue;
+      }
+      relativePaths.push(relativePath);
+    }
+    if (outsideWorkspace) {
+      this.emitSessionDiagnostic(
+        'attachment-outside-workspace',
+        ATTACHMENT_OUTSIDE_WORKSPACE_MESSAGE,
+      );
+    }
+    if (relativePaths.length === 0) {
+      return;
+    }
+    const remaining =
+      MAX_PENDING_ATTACHMENTS - this.stagedCount(stage);
+    if (remaining <= 0) {
+      this.emitSessionDiagnostic(
+        'attachment-limit',
+        ATTACHMENT_LIMIT_MESSAGE,
+      );
+      return;
+    }
+    this.attachmentOperationInProgress = true;
+    void (async () => {
+      const payloads: AttachmentPayload[] = [];
+      let rejectedReason: 'too-large' | 'unsupported-type' | null =
+        null;
+      let failed = false;
+      for (const relativePath of relativePaths.slice(0, remaining)) {
+        let outcome: AttachmentPickOutcome;
+        try {
+          outcome =
+            await this.attachmentSources.readWorkspaceFile(
+              relativePath,
+            );
+        } catch {
+          failed = true;
+          continue;
+        }
+        switch (outcome.status) {
+          case 'picked':
+            payloads.push(...outcome.items);
+            break;
+          case 'rejected':
+            rejectedReason = outcome.reason;
+            break;
+          case 'failed':
+            failed = true;
+            break;
+          case 'cancelled':
+            break;
+        }
+      }
+      this.attachmentOperationInProgress = false;
+      if (sessionId !== this.sessionId) {
+        return;
+      }
+      if (payloads.length > 0) {
+        this.stageAttachmentPayloads(payloads, undefined, stage);
+      }
+      if (rejectedReason !== null) {
+        this.emitSessionDiagnostic(
+          'attachment-rejected',
+          rejectedReason === 'too-large'
+            ? ATTACHMENT_TOO_LARGE_MESSAGE
+            : ATTACHMENT_UNSUPPORTED_TYPE_MESSAGE,
+        );
+      }
+      if (failed) {
+        this.emitSessionDiagnostic(
+          'attachment-read-failed',
+          ATTACHMENT_READ_FAILED_MESSAGE,
+        );
+      }
+    })();
+  }
+
+  /**
+   * Stages one non-image file dropped onto the composer whose text
+   * content the webview already read and bounded. The bridge validator
+   * enforced the character cap and rejected binary content.
+   */
+  private handleAttachmentAddTextFile(
+    sessionId: string,
+    name: string,
+    text: string,
+    truncated: boolean,
+    stage?: AttachmentStage,
+  ): void {
+    if (!this.canStageAttachments(sessionId, stage)) {
+      return;
+    }
+    if (this.stagedCount(stage) >= MAX_PENDING_ATTACHMENTS) {
+      this.emitSessionDiagnostic(
+        'attachment-limit',
+        ATTACHMENT_LIMIT_MESSAGE,
+      );
+      return;
+    }
+    this.stageAttachmentPayloads(
+      [
+        {
+          kind: 'text',
+          name,
+          data: text,
+          sizeBytes: Buffer.byteLength(text, 'utf8'),
+          truncated,
         },
       ],
       undefined,

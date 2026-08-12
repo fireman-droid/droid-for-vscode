@@ -20,6 +20,9 @@ import {
 
 import {
   IMAGE_MEDIA_TYPES,
+  MAX_ATTACHMENT_TEXT_FILE_CHARS,
+  MAX_ATTACHMENT_URI_COUNT,
+  MAX_ATTACHMENT_URI_LENGTH,
   MAX_COMMAND_NAME_LENGTH,
   MAX_FILE_SEARCH_QUERY_LENGTH,
   MAX_PENDING_ATTACHMENTS,
@@ -54,6 +57,10 @@ import {
 } from './activityGrouping';
 import { DroidMarkdownText } from './MarkdownText';
 import { TranscriptImage } from './TranscriptImage';
+import {
+  getImagePreview,
+  rememberImagePreview,
+} from './imagePreviewCache';
 
 const THINKING_SMOOTH_OPTIONS = {
   drainMs: 480,
@@ -142,6 +149,8 @@ const RegenerateContext = createContext<(() => void) | null>(null);
 interface DroidThreadProps {
   readonly pending: boolean;
   readonly activity?: 'working' | 'responding';
+  /** True while a transcript activity row is live (see PendingResponse). */
+  readonly activityLive: boolean;
   readonly historyStatus: SessionHistoryStatus | null;
   readonly truncated: boolean;
   readonly hiddenMessageCount: number;
@@ -186,9 +195,14 @@ interface DroidThreadProps {
     mediaType: ImageMediaType,
     dataBase64: string,
   ) => void;
+  readonly onAttachUris: (uris: readonly string[]) => void;
+  readonly onAttachTextFile: (
+    name: string,
+    text: string,
+    truncated: boolean,
+  ) => void;
   readonly onAttachmentRemove: (attachmentId: string) => void;
   readonly onDraftChange: (draft: string) => void;
-  readonly onReuseMessage: (text: string) => void;
   readonly onEditResend: (
     messageId: string,
     text: string,
@@ -215,6 +229,7 @@ interface DroidThreadProps {
 export const DroidThread = memo(function DroidThread({
   pending,
   activity,
+  activityLive,
   historyStatus,
   truncated,
   hiddenMessageCount,
@@ -255,9 +270,10 @@ export const DroidThread = memo(function DroidThread({
   onAttachProblems,
   onAttachGitChanges,
   onAttachImage,
+  onAttachUris,
+  onAttachTextFile,
   onAttachmentRemove,
   onDraftChange,
-  onReuseMessage,
   onEditResend,
   rewindInfo,
   onRequestRewindInfo,
@@ -305,6 +321,70 @@ export const DroidThread = memo(function DroidThread({
   const reopenEditing = (messageId: string): void => {
     setEditingMessageId(messageId);
   };
+  // Cursor-style pinned questions: every user message is CSS-sticky at
+  // the viewport top; this coordinator marks the last stuck one as
+  // `data-pinned` (opaque backdrop, separator) and hides the stuck
+  // messages it covered so pinned questions never pile up visually.
+  const readingColumnRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const column = readingColumnRef.current;
+    if (column === null) {
+      return undefined;
+    }
+    const scroller = column.closest('.dvx-thread-viewport');
+    if (!(scroller instanceof HTMLElement)) {
+      return undefined;
+    }
+    let frame = 0;
+    const update = (): void => {
+      frame = 0;
+      const viewportTop = scroller.getBoundingClientRect().top;
+      const messages = [
+        ...column.querySelectorAll<HTMLElement>('.dvx-message-user'),
+      ];
+      const tops = messages.map(
+        (element) => element.getBoundingClientRect().top,
+      );
+      const pinnedIndex = computePinnedUserIndex(tops, viewportTop);
+      messages.forEach((element, index) => {
+        toggleDataAttribute(
+          element,
+          'data-pinned',
+          index === pinnedIndex,
+        );
+        toggleDataAttribute(
+          element,
+          'data-covered',
+          index < pinnedIndex && tops[index]! <= viewportTop + 1,
+        );
+      });
+    };
+    const schedule = (): void => {
+      if (frame === 0) {
+        frame = requestAnimationFrame(update);
+      }
+    };
+    scroller.addEventListener('scroll', schedule, { passive: true });
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(schedule);
+    resizeObserver?.observe(column);
+    const mutationObserver =
+      typeof MutationObserver === 'undefined'
+        ? null
+        : new MutationObserver(schedule);
+    mutationObserver?.observe(column, { childList: true });
+    update();
+    return () => {
+      scroller.removeEventListener('scroll', schedule);
+      resizeObserver?.disconnect();
+      mutationObserver?.disconnect();
+      if (frame !== 0) {
+        cancelAnimationFrame(frame);
+      }
+    };
+  }, []);
   const editorEnv = useMemo<UserEditorEnv>(
     () => ({
       settings,
@@ -376,7 +456,7 @@ export const DroidThread = memo(function DroidThread({
       >
         <FileDiffContext.Provider value={onOpenFileDiff}>
         <RegenerateContext.Provider value={onRegenerate}>
-          <div className="dvx-reading-column">
+          <div className="dvx-reading-column" ref={readingColumnRef}>
             <HistoryNotice
               historyStatus={historyStatus}
               truncated={truncated}
@@ -421,7 +501,6 @@ export const DroidThread = memo(function DroidThread({
                     editResendEnabled={editResendEnabled}
                     rewindInfo={rewindInfo}
                     onRequestRewindInfo={onRequestRewindInfo}
-                    onReuse={onReuseMessage}
                     onEditResend={onEditResend}
                     onBeginEdit={beginEditing}
                     onCancelEdit={cancelEditing}
@@ -431,7 +510,12 @@ export const DroidThread = memo(function DroidThread({
                 );
               }}
             </ThreadPrimitive.Messages>
-            {pending ? <PendingResponse activity={activity} /> : null}
+            {pending ? (
+              <PendingResponse
+                activity={activity}
+                activityLive={activityLive}
+              />
+            ) : null}
             {inlineInteraction}
           </div>
         </RegenerateContext.Provider>
@@ -474,6 +558,8 @@ export const DroidThread = memo(function DroidThread({
             onAttachProblems={onAttachProblems}
             onAttachGitChanges={onAttachGitChanges}
             onAttachImage={onAttachImage}
+            onAttachUris={onAttachUris}
+            onAttachTextFile={onAttachTextFile}
             onAttachmentRemove={onAttachmentRemove}
             onDraftChange={onDraftChange}
           />
@@ -500,7 +586,6 @@ function UserMessage({
   editResendEnabled,
   rewindInfo,
   onRequestRewindInfo,
-  onReuse,
   onEditResend,
   onBeginEdit,
   onCancelEdit,
@@ -517,7 +602,6 @@ function UserMessage({
   readonly editResendEnabled: boolean;
   readonly rewindInfo: RewindFileInfo | null;
   readonly onRequestRewindInfo: (messageId: string) => void;
-  readonly onReuse: (text: string) => void;
   readonly onEditResend: (
     messageId: string,
     text: string,
@@ -528,7 +612,6 @@ function UserMessage({
   readonly onSubmitEdit: () => void;
   readonly onReopenEdit: (messageId: string) => void;
 }): React.JSX.Element {
-  const [reused, setReused] = useState(false);
   const [editText, setEditText] = useState(text);
   const [restoreFiles, setRestoreFiles] = useState(false);
   const [resending, setResending] = useState(false);
@@ -573,10 +656,6 @@ function UserMessage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rejection]);
   const editable = messageId !== null && !resending;
-  const reuse = (): void => {
-    onReuse(text);
-    setReused(true);
-  };
   const openEditor = (): void => {
     if (messageId !== null) {
       onBeginEdit(messageId);
@@ -744,7 +823,9 @@ function UserMessage({
           </div>
         ) : resending ? (
           <div className="dvx-user-resending">
-            <div className="dvx-user-bubble">{editText}</div>
+            <div className="dvx-user-block">
+              <div className="dvx-user-text">{editText}</div>
+            </div>
             <div className="dvx-user-resending-note" role="status">
               <span className="dvx-user-resending-dot" aria-hidden="true" />
               Resending from here…
@@ -752,23 +833,42 @@ function UserMessage({
           </div>
         ) : (
           <div
-            className={`dvx-user-card${
-              editable ? ' dvx-user-card-editable' : ''
+            className={`dvx-user-block${
+              editable ? ' dvx-user-block-editable' : ''
             }`}
             title={
               editable
                 ? 'Click to edit and resend from here'
-                : 'Double-click to reuse in Composer'
+                : undefined
+            }
+            role={editable ? 'button' : undefined}
+            tabIndex={editable ? 0 : undefined}
+            aria-label={
+              editable
+                ? 'Edit message and resend from here'
+                : undefined
             }
             onClick={editable ? handleCardClick : undefined}
-            onDoubleClick={editable ? undefined : reuse}
+            onKeyDown={
+              editable
+                ? (event) => {
+                    if (
+                      event.target === event.currentTarget &&
+                      (event.key === 'Enter' || event.key === ' ')
+                    ) {
+                      event.preventDefault();
+                      openEditor();
+                    }
+                  }
+                : undefined
+            }
           >
             <MessagePrimitive.Parts>
               {({ part }) =>
                 part.type === 'data' && part.name === 'droid-image' ? (
                   <TranscriptImage data={part.data} />
                 ) : part.type === 'text' ? (
-                  <div className="dvx-user-bubble">{part.text}</div>
+                  <div className="dvx-user-text">{part.text}</div>
                 ) : null
               }
             </MessagePrimitive.Parts>
@@ -797,40 +897,6 @@ function UserMessage({
             ) : null}
           </div>
         )}
-        {editing || resending ? null : (
-          <ActionBarPrimitive.Root className="dvx-user-actions">
-            <ActionBarPrimitive.Copy
-              className="dvx-message-action dvx-copy-action"
-              aria-label="Copy message"
-              copiedDuration={1500}
-            >
-              <CopyActionContent />
-            </ActionBarPrimitive.Copy>
-            <button
-              className="dvx-message-action"
-              type="button"
-              aria-label="Reuse message in Composer"
-              onClick={reuse}
-            >
-              <ReuseIcon />
-              <span>Reuse</span>
-            </button>
-            {editable ? (
-              <button
-                className="dvx-message-action"
-                type="button"
-                aria-label="Edit message and resend from here"
-                onClick={openEditor}
-              >
-                <EditIcon />
-                <span>Edit</span>
-              </button>
-            ) : null}
-          </ActionBarPrimitive.Root>
-        )}
-        <span className="dvx-visually-hidden" aria-live="polite">
-          {reused ? 'Message added to Composer.' : ''}
-        </span>
       </div>
     </MessagePrimitive.Root>
   );
@@ -1163,17 +1229,30 @@ function Diagnostic({ data }: { readonly data: unknown }): React.JSX.Element {
 
 export function PendingResponse({
   activity,
+  activityLive = false,
 }: {
   readonly activity?: 'working' | 'responding';
+  /**
+   * True while some transcript activity row (running tool, streaming
+   * thinking) is already shimmering; the pending row then renders
+   * statically so each turn keeps a single live indicator.
+   */
+  readonly activityLive?: boolean;
 }): React.JSX.Element {
   return (
     <div
-      className="dvx-message dvx-message-assistant dvx-pending"
+      className={`dvx-message dvx-message-assistant dvx-pending${
+        activityLive ? ' dvx-pending-quiet' : ''
+      }`}
       role="status"
       aria-live="polite"
     >
       <span className="dvx-runtime-pulse" aria-hidden="true" />
-      <span className="dvx-shimmer-text">
+      <span
+        className={
+          activityLive ? 'dvx-pending-label' : 'dvx-shimmer-text'
+        }
+      >
         {activity === 'working'
           ? 'Droid is working'
           : 'Droid is responding'}
@@ -1219,6 +1298,8 @@ function Composer({
   onAttachProblems,
   onAttachGitChanges,
   onAttachImage,
+  onAttachUris,
+  onAttachTextFile,
   onAttachmentRemove,
   onDraftChange,
 }: {
@@ -1262,6 +1343,12 @@ function Composer({
     mediaType: ImageMediaType,
     dataBase64: string,
   ) => void;
+  readonly onAttachUris: (uris: readonly string[]) => void;
+  readonly onAttachTextFile: (
+    name: string,
+    text: string,
+    truncated: boolean,
+  ) => void;
   readonly onAttachmentRemove: (attachmentId: string) => void;
   readonly onDraftChange: (draft: string) => void;
 }): React.JSX.Element {
@@ -1276,33 +1363,149 @@ function Composer({
   const [slash, setSlash] = useState<SlashToken | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
   const [dragActive, setDragActive] = useState(false);
+  // Transient user-visible feedback for drops that stage nothing
+  // (binary files, oversized images, staging area full).
+  const [dropNotice, setDropNotice] = useState<string | null>(null);
+  const dropNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  useEffect(
+    () => () => {
+      if (dropNoticeTimer.current !== null) {
+        clearTimeout(dropNoticeTimer.current);
+      }
+    },
+    [],
+  );
+  const showDropNotice = (message: string): void => {
+    setDropNotice(message);
+    if (dropNoticeTimer.current !== null) {
+      clearTimeout(dropNoticeTimer.current);
+    }
+    dropNoticeTimer.current = setTimeout(
+      () => setDropNotice(null),
+      5000,
+    );
+  };
 
   /**
-   * Stages dropped or pasted image files through the host attachment
-   * pipeline. Non-image and oversized files are skipped; the file
-   * list is truncated to the remaining staging slots so the host
-   * limit diagnostic never fires from a single multi-file drop.
+   * Stages one image file through the host attachment pipeline and
+   * remembers its data URL locally so the pending chip can render a
+   * thumbnail without the bytes crossing the bridge again.
    */
-  const stageImageFiles = (files: readonly File[]): void => {
-    const remaining = MAX_PENDING_ATTACHMENTS - attachments.length;
-    const images = files
-      .filter(
-        (file) =>
-          isImageMediaType(file.type) &&
-          file.size > 0 &&
-          file.size <= MAX_ATTACHMENT_IMAGE_BYTES,
-      )
-      .slice(0, Math.max(remaining, 0));
-    for (const file of images) {
-      const mediaType = file.type as ImageMediaType;
-      const name =
-        file.name.trim().length > 0 ? file.name : 'pasted-image';
-      void readFileAsBase64(file).then((dataBase64) => {
-        if (dataBase64 !== null) {
-          onAttachImage(name, mediaType, dataBase64);
-        }
-      });
+  const stageImageFile = (file: File): void => {
+    if (file.size === 0 || file.size > MAX_ATTACHMENT_IMAGE_BYTES) {
+      showDropNotice(
+        `${file.name || 'Image'} is too large to attach (4 MB max).`,
+      );
+      return;
     }
+    const mediaType = file.type as ImageMediaType;
+    const name =
+      file.name.trim().length > 0 ? file.name : 'pasted-image';
+    void readFileAsBase64(file).then((dataBase64) => {
+      if (dataBase64 !== null) {
+        rememberImagePreview(
+          name,
+          file.size,
+          `data:${mediaType};base64,${dataBase64}`,
+        );
+        onAttachImage(name, mediaType, dataBase64);
+      }
+    });
+  };
+
+  /**
+   * Stages one non-image dropped file as a text attachment. The bytes
+   * never leave the webview unless they decode as NUL-free text within
+   * the shared character cap; binary or unreadable files produce a
+   * visible notice instead.
+   */
+  const stageDroppedTextFile = async (file: File): Promise<void> => {
+    if (file.size === 0) {
+      showDropNotice(`${file.name} is empty and was not attached.`);
+      return;
+    }
+    // UTF-16 length ≤ UTF-8 byte length, so 4× the character cap is
+    // always enough bytes to fill the cap; larger files are cut here
+    // to avoid decoding unbounded content in the webview.
+    const byteCap = MAX_ATTACHMENT_TEXT_FILE_CHARS * 4;
+    const blob = file.size > byteCap ? file.slice(0, byteCap) : file;
+    let raw: string;
+    try {
+      raw = await blob.text();
+    } catch {
+      showDropNotice(`${file.name} could not be read.`);
+      return;
+    }
+    if (raw.includes('\u0000')) {
+      showDropNotice(
+        `${file.name} is not a text file. Use “+” → Attach files instead.`,
+      );
+      return;
+    }
+    const truncated =
+      file.size > byteCap ||
+      raw.length > MAX_ATTACHMENT_TEXT_FILE_CHARS;
+    const text = truncated
+      ? raw.slice(0, MAX_ATTACHMENT_TEXT_FILE_CHARS)
+      : raw;
+    onAttachTextFile(file.name, text, truncated);
+  };
+
+  /**
+   * Stages dropped or pasted files: images through the base64 image
+   * path, everything else as decoded text files. The list is truncated
+   * to the remaining staging slots so the host limit diagnostic never
+   * fires from a single multi-file drop.
+   */
+  const stageDroppedFiles = (files: readonly File[]): void => {
+    const remaining = MAX_PENDING_ATTACHMENTS - attachments.length;
+    if (files.length > remaining) {
+      showDropNotice(
+        `Up to ${MAX_PENDING_ATTACHMENTS} attachments can be staged for one message.`,
+      );
+    }
+    for (const file of files.slice(0, Math.max(remaining, 0))) {
+      if (isImageMediaType(file.type)) {
+        stageImageFile(file);
+      } else {
+        void stageDroppedTextFile(file);
+      }
+    }
+  };
+
+  /**
+   * Routes one composer drop. Editor explorer drags carry `file://`
+   * URIs that the host resolves against the workspace; system file
+   * manager drags carry the file bytes directly.
+   */
+  const handleComposerDrop = (dataTransfer: DataTransfer): boolean => {
+    const uris = readDroppedFileUris(dataTransfer);
+    if (uris.length > 0) {
+      const remaining = MAX_PENDING_ATTACHMENTS - attachments.length;
+      if (remaining <= 0) {
+        showDropNotice(
+          `Up to ${MAX_PENDING_ATTACHMENTS} attachments can be staged for one message.`,
+        );
+        return true;
+      }
+      if (uris.length > remaining) {
+        showDropNotice(
+          `Up to ${MAX_PENDING_ATTACHMENTS} attachments can be staged for one message.`,
+        );
+      }
+      onAttachUris(
+        uris.slice(0, Math.min(remaining, MAX_ATTACHMENT_URI_COUNT)),
+      );
+      return true;
+    }
+    const files = Array.from(dataTransfer.files);
+    if (files.length > 0) {
+      stageDroppedFiles(files);
+      return true;
+    }
+    return false;
   };
 
   // Load the command catalog lazily when the `/` popup first opens;
@@ -1325,12 +1528,12 @@ function Composer({
 
   const commandMatches =
     slash !== null ? filterSlashCommands(commands, slash.query) : [];
+  // An empty ready catalog still shows the popup: the empty-state row
+  // is the only visible feedback when `.factory/commands` is absent.
   const slashVisible =
     slashOpen &&
     commandsStatus !== 'idle' &&
-    commandsStatus !== 'unsupported' &&
-    (commandsStatus !== 'ready' ||
-      commands.items.some((item) => !item.isExecutable));
+    commandsStatus !== 'unsupported';
 
   const closeSlash = (): void => {
     setSlash(null);
@@ -1371,6 +1574,14 @@ function Composer({
     fileSearch.requestId === activeRequestId
       ? fileSearch.files
       : [];
+  // True from the first typed query character until the host answers
+  // the active search request (covers the debounce window too).
+  const searchPending =
+    mention !== null &&
+    mention.query.length > 0 &&
+    (activeRequestId === null ||
+      fileSearch === null ||
+      fileSearch.requestId !== activeRequestId);
 
   const closeMention = (): void => {
     setMention(null);
@@ -1400,7 +1611,12 @@ function Composer({
           interactionPending ? ' dvx-composer-pending' : ''
         }${dragActive ? ' dvx-composer-dragover' : ''}`}
         onDragOver={(event) => {
-          if (event.dataTransfer.types.includes('Files')) {
+          const types = event.dataTransfer.types;
+          if (
+            types.includes('Files') ||
+            types.includes('text/uri-list') ||
+            types.includes('application/vnd.code.uri-list')
+          ) {
             event.preventDefault();
             event.dataTransfer.dropEffect = 'copy';
             setDragActive(true);
@@ -1416,10 +1632,8 @@ function Composer({
         }}
         onDrop={(event) => {
           setDragActive(false);
-          const files = Array.from(event.dataTransfer.files);
-          if (files.length > 0) {
+          if (handleComposerDrop(event.dataTransfer)) {
             event.preventDefault();
-            stageImageFiles(files);
           }
         }}
       >
@@ -1487,12 +1701,14 @@ function Composer({
                       ? 'Loading commands…'
                       : commands.status === 'error'
                         ? commands.message
-                        : 'No matching commands'}
+                        : slash !== null && slash.query.length === 0
+                          ? 'No custom commands (.factory/commands)'
+                          : 'No matching commands'}
                   </div>
                 ) : null}
               </div>
             ) : null}
-            {mention !== null && results.length > 0 ? (
+            {mention !== null && mention.query.length > 0 ? (
               <div
                 className="dvx-mention-popup"
                 role="listbox"
@@ -1520,6 +1736,13 @@ function Composer({
                     <span className="dvx-mention-path">{path}</span>
                   </button>
                 ))}
+                {results.length === 0 ? (
+                  <div className="dvx-command-status" role="status">
+                    {searchPending
+                      ? 'Searching files…'
+                      : 'No matching files'}
+                  </div>
+                ) : null}
               </div>
             ) : null}
             <ComposerPrimitive.Input
@@ -1539,7 +1762,7 @@ function Composer({
                 ).filter((file) => isImageMediaType(file.type));
                 if (files.length > 0) {
                   event.preventDefault();
-                  stageImageFiles(files);
+                  stageDroppedFiles(files);
                 }
               }}
               onChange={(event) => {
@@ -1624,6 +1847,11 @@ function Composer({
             />
           </>
         )}
+        {dropNotice !== null && !interactionPending ? (
+          <div className="dvx-composer-notice" role="status">
+            {dropNotice}
+          </div>
+        ) : null}
         {statusMessage !== undefined && !interactionPending ? (
           <div className="dvx-composer-status" aria-live="polite">
             {statusMessage}
@@ -1700,11 +1928,12 @@ interface MentionToken {
 }
 
 /**
- * Finds an `@file` mention token ending at the caret. The `@` must be
- * at the start of the draft or preceded by whitespace, and the query
- * cannot contain whitespace or another `@`.
+ * Finds an `@file` mention token ending at the caret. The `@` must
+ * not directly follow an ASCII word character, `@`, or the email-like
+ * `.`/`-` (so `user@host` never triggers); anything else — start of
+ * draft, whitespace, CJK text, punctuation — allows the mention.
  */
-function findMentionToken(
+export function findMentionToken(
   value: string,
   caret: number,
 ): MentionToken | null {
@@ -1714,7 +1943,7 @@ function findMentionToken(
     return null;
   }
   const preceding = before[at - 1];
-  if (preceding !== undefined && !/\s/.test(preceding)) {
+  if (preceding !== undefined && /[A-Za-z0-9_@.-]/.test(preceding)) {
     return null;
   }
   const query = before.slice(at + 1);
@@ -1790,13 +2019,36 @@ const ATTACHMENT_KIND_LABELS: Record<AttachmentSummary['kind'], string> = {
   selection: 'Selection',
 };
 
-function AttachmentChip({
+export function AttachmentChip({
   attachment,
   onRemove,
 }: {
   readonly attachment: AttachmentSummary;
   readonly onRemove: (attachmentId: string) => void;
 }): React.JSX.Element {
+  const preview =
+    attachment.kind === 'image'
+      ? getImagePreview(attachment.name, attachment.sizeBytes)
+      : undefined;
+  if (preview !== undefined) {
+    return (
+      <span className="dvx-attachment-thumb" title={attachment.name}>
+        <img
+          className="dvx-attachment-thumb-image"
+          src={preview}
+          alt={attachment.name}
+        />
+        <button
+          type="button"
+          className="dvx-attachment-thumb-remove"
+          aria-label={`Remove attachment ${attachment.name}`}
+          onClick={() => onRemove(attachment.id)}
+        >
+          ×
+        </button>
+      </span>
+    );
+  }
   return (
     <span className="dvx-attachment-chip">
       <span className="dvx-attachment-kind">
@@ -1907,37 +2159,11 @@ function CheckIcon(): React.JSX.Element {
   );
 }
 
-function EditIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <path
-        d="m9.6 2.2 2.2 2.2-6.6 6.6-2.7.5.5-2.7 6.6-6.6Z"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function RegenerateIcon(): React.JSX.Element {
   return (
     <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
       <path
         d="M11.5 7a4.5 4.5 0 1 1-1.32-3.18M11.5 2.5v2.75h-2.75"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function ReuseIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <path
-        d="M3 4.25h5.25a2.75 2.75 0 0 1 0 5.5H6.5M3 4.25l2-2m-2 2 2 2"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -2520,6 +2746,80 @@ const MAX_ATTACHMENT_IMAGE_BYTES = 4 * 1024 * 1024;
 
 function isImageMediaType(value: string): value is ImageMediaType {
   return (IMAGE_MEDIA_TYPES as readonly string[]).includes(value);
+}
+
+/**
+ * Extracts bounded `file://` URIs from a drop. Editor explorer drags
+ * populate `text/uri-list` (newline separated, `#` comments) and
+ * sometimes `application/vnd.code.uri-list` (JSON array); anything
+ * that is not a file URI is dropped here before crossing the bridge.
+ */
+export function readDroppedFileUris(
+  dataTransfer: Pick<DataTransfer, 'getData'>,
+): readonly string[] {
+  const plain = dataTransfer.getData('text/uri-list');
+  let entries = plain
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'));
+  if (entries.length === 0) {
+    const code = dataTransfer.getData(
+      'application/vnd.code.uri-list',
+    );
+    if (code.length > 0) {
+      try {
+        const parsed: unknown = JSON.parse(code);
+        entries = Array.isArray(parsed)
+          ? parsed.filter(
+              (entry): entry is string => typeof entry === 'string',
+            )
+          : [];
+      } catch {
+        entries = code
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+      }
+    }
+  }
+  return entries.filter(
+    (uri) =>
+      uri.startsWith('file://') &&
+      uri.length <= MAX_ATTACHMENT_URI_LENGTH,
+  );
+}
+
+/**
+ * Index of the user message currently pinned to the viewport top: the
+ * last one whose rendered top edge sits at or above the viewport top
+ * (CSS sticky keeps every passed message there). -1 when none is
+ * pinned.
+ */
+export function computePinnedUserIndex(
+  tops: readonly number[],
+  viewportTop: number,
+): number {
+  let pinned = -1;
+  tops.forEach((top, index) => {
+    if (top <= viewportTop + 1) {
+      pinned = index;
+    }
+  });
+  return pinned;
+}
+
+function toggleDataAttribute(
+  element: HTMLElement,
+  name: string,
+  on: boolean,
+): void {
+  if (on) {
+    if (!element.hasAttribute(name)) {
+      element.setAttribute(name, '');
+    }
+  } else if (element.hasAttribute(name)) {
+    element.removeAttribute(name);
+  }
 }
 
 /**

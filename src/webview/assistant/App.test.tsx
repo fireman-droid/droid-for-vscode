@@ -425,7 +425,7 @@ describe('assistant-ui App bridge commands', () => {
     });
   });
 
-  it('shows semantic tool activity and supports Copy and draft-only Reuse', async () => {
+  it('shows semantic tool activity and opens click-to-edit on user messages', async () => {
     const user = userEvent.setup();
     render(<App />);
     await waitFor(() =>
@@ -440,6 +440,7 @@ describe('assistant-ui App bridge commands', () => {
           id: 'user-1',
           kind: 'user',
           text: 'Inspect the active file',
+          messageId: 'sdk-user-1',
         },
         {
           id: 'tool-1',
@@ -474,34 +475,113 @@ describe('assistant-ui App bridge commands', () => {
     expect(screen.getByText('Lifecycle: Failed')).toBeDefined();
     expect(screen.queryByText('No progress updates reported')).toBeNull();
 
-    await user.click(
-      screen.getByRole('button', { name: 'Copy message' }),
-    );
-    expect(await navigator.clipboard.readText()).toBe(
-      'Inspect the active file',
-    );
+    // The Copy/Reuse/Edit action bar is gone; the full-width block
+    // itself is the only edit entry point.
+    expect(
+      screen.queryByRole('button', { name: 'Copy message' }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', {
+        name: 'Reuse message in Composer',
+      }),
+    ).toBeNull();
 
     await user.click(
       screen.getByRole('button', {
-        name: 'Reuse message in Composer',
+        name: 'Edit message and resend from here',
       }),
     );
-    const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
-    await waitFor(() =>
-      expect(input.value).toBe('Inspect the active file'),
-    );
-    expect(persistedState).toEqual({ draft: 'Inspect the active file' });
+    expect(posted).toContainEqual({
+      type: 'editStage.begin',
+      sessionId: 'session-a',
+      messageId: 'sdk-user-1',
+    });
     expect(
       posted.filter((message) => message.type === 'turn.send'),
     ).toEqual([]);
+  });
 
-    fireEvent.change(input, { target: { value: 'Different draft' } });
-    await user.dblClick(screen.getByText('Inspect the active file'));
-    await waitFor(() =>
-      expect(input.value).toBe('Inspect the active file'),
-    );
+  it('shows slash and mention popup states instead of staying silent', async () => {
+    render(<App />);
+    const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+    await waitFor(() => expect(input.value).toBe('Restored draft'));
+    host(snapshot(0));
+    host({
+      type: 'session.commands',
+      sequence: 1,
+      sessionId: 'session-a',
+      commands: { status: 'ready', items: [], recent: [] },
+    });
+
+    // A ready-but-empty catalog keeps the popup visible with the
+    // documented empty state (no .factory/commands directory).
+    fireEvent.change(input, { target: { value: '/' } });
     expect(
-      posted.filter((message) => message.type === 'turn.send'),
-    ).toEqual([]);
+      await screen.findByText('No custom commands (.factory/commands)'),
+    ).toBeDefined();
+
+    // `@` directly after CJK text still opens the mention flow: the
+    // popup reports the pending search, then the empty result.
+    fireEvent.change(input, { target: { value: '帮我看看@nomatch' } });
+    expect(await screen.findByText('Searching files…')).toBeDefined();
+    const search = await waitFor(() => {
+      const message = posted.find(
+        (
+          candidate,
+        ): candidate is Extract<
+          WebviewToHostMessage,
+          { type: 'workspace.searchFiles' }
+        > => candidate.type === 'workspace.searchFiles',
+      );
+      expect(message).toBeDefined();
+      return message!;
+    });
+    expect(search.query).toBe('nomatch');
+    host({
+      type: 'workspace.files',
+      sequence: 2,
+      sessionId: 'session-a',
+      requestId: search.requestId,
+      files: [],
+    });
+    expect(await screen.findByText('No matching files')).toBeDefined();
+  });
+
+  it('keeps one live indicator: the working row is static behind a running tool', async () => {
+    render(<App />);
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText<HTMLTextAreaElement>('Message Droid').value,
+      ).toBe('Restored draft'),
+    );
+    const toolRow = {
+      id: 'tool-1',
+      kind: 'tool' as const,
+      turnId: 'turn-1',
+      toolUseId: 'tool-use-1',
+      toolName: 'Create',
+      action: 'Created workspace files',
+      status: 'running' as const,
+      progressCount: 0,
+      latestUpdateKind: null,
+    };
+    host({
+      ...snapshot(0, { turnId: 'turn-1', status: 'streaming' }),
+      transcript: [toolRow],
+    });
+
+    const label = await screen.findByText('Droid is responding');
+    expect(label.className).toContain('dvx-pending-label');
+    expect(label.className).not.toContain('dvx-shimmer-text');
+
+    host({
+      ...snapshot(1, { turnId: 'turn-1', status: 'streaming' }),
+      transcript: [{ ...toolRow, status: 'completed' as const }],
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByText('Droid is responding').className,
+      ).toContain('dvx-shimmer-text');
+    });
   });
 });

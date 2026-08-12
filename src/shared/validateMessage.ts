@@ -25,11 +25,16 @@ import {
   IMAGE_MEDIA_TYPES,
   MAX_ATTACHMENT_IMAGE_BASE64_LENGTH,
   MAX_ATTACHMENT_NAME_LENGTH,
+  MAX_ATTACHMENT_TEXT_FILE_CHARS,
+  MAX_ATTACHMENT_URI_COUNT,
+  MAX_ATTACHMENT_URI_LENGTH,
   type AskUserAnswer,
   type AskUserRespondMessage,
   type AttachmentAddEditorMessage,
   type AttachmentAddGitChangesMessage,
   type AttachmentAddImageMessage,
+  type AttachmentAddTextFileMessage,
+  type AttachmentAddUrisMessage,
   type EditStageBeginMessage,
   type EditStageCancelMessage,
   type AttachmentAddPathMessage,
@@ -162,6 +167,10 @@ export function parseWebviewMessage(
         return parseAttachmentAddGitChanges(value);
       case 'attachment.addImage':
         return parseAttachmentAddImage(value);
+      case 'attachment.addUris':
+        return parseAttachmentAddUris(value);
+      case 'attachment.addTextFile':
+        return parseAttachmentAddTextFile(value);
       case 'attachment.remove':
         return parseAttachmentRemove(value);
       case 'attachment.addPath':
@@ -957,6 +966,69 @@ function parseAttachmentAddImage(
     name: value.name,
     mediaType: value.mediaType as AttachmentAddImageMessage['mediaType'],
     dataBase64: value.dataBase64,
+    ...stageOf(value),
+  };
+}
+
+function parseAttachmentAddUris(
+  value: UnknownRecord,
+): AttachmentAddUrisMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'uris'], ['stage']) ||
+    !isId(value.sessionId) ||
+    !hasValidStage(value) ||
+    !Array.isArray(value.uris) ||
+    value.uris.length === 0 ||
+    value.uris.length > MAX_ATTACHMENT_URI_COUNT ||
+    !value.uris.every(
+      (uri) =>
+        typeof uri === 'string' &&
+        uri.startsWith('file://') &&
+        uri.length <= MAX_ATTACHMENT_URI_LENGTH &&
+        !/[\u0000-\u001f\u007f]/.test(uri),
+    )
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'attachment.addUris',
+    sessionId: value.sessionId,
+    uris: [...(value.uris as readonly string[])],
+    ...stageOf(value),
+  };
+}
+
+function parseAttachmentAddTextFile(
+  value: UnknownRecord,
+): AttachmentAddTextFileMessage | undefined {
+  if (
+    !hasExactKeys(
+      value,
+      ['type', 'sessionId', 'name', 'text', 'truncated'],
+      ['stage'],
+    ) ||
+    !isId(value.sessionId) ||
+    !hasValidStage(value) ||
+    typeof value.name !== 'string' ||
+    value.name.length === 0 ||
+    value.name.length > MAX_ATTACHMENT_NAME_LENGTH ||
+    /[\u0000-\u001f\u007f]/.test(value.name) ||
+    typeof value.text !== 'string' ||
+    value.text.length === 0 ||
+    value.text.length > MAX_ATTACHMENT_TEXT_FILE_CHARS ||
+    value.text.includes('\u0000') ||
+    typeof value.truncated !== 'boolean'
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'attachment.addTextFile',
+    sessionId: value.sessionId,
+    name: value.name,
+    text: value.text,
+    truncated: value.truncated,
     ...stageOf(value),
   };
 }

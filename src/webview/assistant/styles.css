@@ -434,6 +434,16 @@ html, body, #root {
   animation: dvx-seam-pulse 1.4s ease-in-out infinite;
 }
 
+/* While an activity row carries the live shimmer, the pending status
+   row keeps its place but stops animating entirely. */
+.dvx-pending-label {
+  color: #6b6259;
+}
+
+.dvx-pending-quiet .dvx-runtime-pulse {
+  animation: none;
+}
+
 .dvx-empty-state {
   display: grid;
   min-height: min(52vh, 360px);
@@ -994,10 +1004,6 @@ html, body, #root {
     display: none;
   }
 
-  .dvx-message-user {
-    padding-left: 9%;
-  }
-
   .dvx-composer-controls {
     gap: 3px;
   }
@@ -1070,24 +1076,9 @@ html, body, #root {
 
 .dvx-user-message-content {
   display: flex;
-  max-width: 100%;
+  width: 100%;
   flex-direction: column;
-  align-items: flex-end;
-}
-
-.dvx-user-actions {
-  display: flex;
-  min-height: 24px;
-  gap: 2px;
-  margin-top: 3px;
-  opacity: 0;
-  transform: translateY(-2px);
-  transition: opacity 120ms ease, transform 120ms ease;
-}
-
-.dvx-message-user:hover .dvx-user-actions, .dvx-message-user:focus-within .dvx-user-actions {
-  opacity: 1;
-  transform: translateY(0);
+  align-items: stretch;
 }
 
 .dvx-assistant-actions {
@@ -1165,7 +1156,6 @@ html, body, #root {
   color: #2f7d4f;
 }
 
-.dvx-message-user:hover .dvx-user-actions:has(.dvx-copy-action[data-copied]),
 .dvx-message-assistant .dvx-assistant-actions:has(.dvx-copy-action[data-copied]) {
   opacity: 1;
   transform: none;
@@ -1573,7 +1563,7 @@ html, body, #root {
     background: Highlight;
   }
 
-  .dvx-user-bubble, .dvx-activity-row, .dvx-composer, .dvx-composer-popover, .dvx-plus-button, .dvx-interaction-panel, .dvx-permission-tool {
+  .dvx-user-block, .dvx-activity-row, .dvx-composer, .dvx-composer-popover, .dvx-plus-button, .dvx-interaction-panel, .dvx-permission-tool {
     border: 1px solid CanvasText;
   }
 
@@ -1762,24 +1752,23 @@ body {
   line-height: 21.125px;
 }
 
+/* User messages are Cursor-style full-width blocks that stick to the
+   viewport top while their answer scrolls; the coordinator in
+   Thread.tsx marks the active one with data-pinned and hides the
+   stuck ones it covers (data-covered). */
 .dvx-message-user {
-  display: flex;
-  justify-content: flex-end;
+  position: sticky;
+  top: 0;
   padding-left: 0;
 }
 
-.dvx-user-bubble {
-  max-width: 100%;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--dvx-user);
-  color: #262626;
-  font-size: 13px;
-  line-height: 21.125px;
-  box-shadow: none;
+.dvx-message-user[data-pinned] {
+  background: var(--dvx-surface);
+  box-shadow: 0 6px 12px -8px rgb(0 0 0 / 25%);
+}
+
+.dvx-message-user[data-covered] {
+  visibility: hidden;
 }
 
 .dvx-message-assistant {
@@ -1875,29 +1864,54 @@ body {
   cursor: not-allowed;
 }
 
-.dvx-user-card {
+/* Full-width user block: reading-column wide, left-aligned, with a
+   light tint that separates it from assistant prose. */
+.dvx-user-block {
   display: flex;
-  max-width: 100%;
+  box-sizing: border-box;
+  width: 100%;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  border-radius: 12px;
+  align-items: stretch;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: var(--dvx-user);
+  color: #262626;
+  text-align: left;
 }
 
-.dvx-user-card-editable {
+.dvx-user-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 21.125px;
+}
+
+/* Long questions stay a few lines tall so a pinned block never eats
+   half the viewport; opening the editor shows the full text. */
+.dvx-user-block .dvx-user-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+}
+
+.dvx-user-block-editable {
   cursor: pointer;
-}
-
-.dvx-user-card-editable .dvx-user-bubble {
   transition: box-shadow 120ms ease;
 }
 
-.dvx-user-card-editable:hover .dvx-user-bubble {
+.dvx-user-block-editable:hover, .dvx-user-block-editable:focus-visible {
   box-shadow: 0 2px 10px rgb(0 0 0 / 10%);
 }
 
+.dvx-user-block-editable:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, #d2643d);
+  outline-offset: 1px;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .dvx-user-card-editable .dvx-user-bubble {
+  .dvx-user-block-editable {
     transition: none;
   }
 }
@@ -1905,7 +1919,7 @@ body {
 .dvx-user-sent-attachments {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 6px;
 }
 
@@ -1945,13 +1959,18 @@ body {
 
 .dvx-user-resending {
   display: flex;
+  width: 100%;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: stretch;
   gap: 4px;
 }
 
-.dvx-user-resending .dvx-user-bubble {
+.dvx-user-resending .dvx-user-block {
   opacity: 0.72;
+}
+
+.dvx-user-resending .dvx-user-resending-note {
+  align-self: flex-start;
 }
 
 .dvx-user-resending-note {
@@ -2238,7 +2257,7 @@ body {
   box-shadow: 0 1px 1.5px rgb(0 0 0 / 10%), 0 1px 1px rgb(0 0 0 / 10%);
 }
 
-/* Image files dragged over the composer stage as attachments. */
+/* Files dragged over the composer stage as attachments. */
 .dvx-composer-dragover {
   border-color: var(--dvx-border-strong);
   border-style: dashed;
@@ -2270,6 +2289,16 @@ body {
   margin-top: 2px;
   color: #a1a1a1;
   font-size: 11px;
+}
+
+/* Transient feedback for drops that could not be staged. */
+.dvx-composer-notice {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  margin-top: 2px;
+  color: #b45309;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .dvx-composer-footer {
@@ -3250,11 +3279,68 @@ body {
   line-height: 1.35;
 }
 
+/* Pending-attachment row: sits inside the composer card above the
+   input, relying on the card's own padding for alignment. */
 .dvx-attachment-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 12px 0;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 8px;
+}
+
+/* Image attachments staged from the webview render as thumbnails. */
+.dvx-attachment-thumb {
+  position: relative;
+  display: inline-flex;
+  overflow: visible;
+}
+
+.dvx-attachment-thumb-image {
+  display: block;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 7px;
+  object-fit: cover;
+  background: #f6f2ea;
+}
+
+.dvx-attachment-thumb-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--dvx-border);
+  border-radius: 50%;
+  color: #6b5d49;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 15%);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.dvx-attachment-thumb:hover .dvx-attachment-thumb-remove,
+.dvx-attachment-thumb-remove:focus-visible {
+  opacity: 1;
+}
+
+.dvx-attachment-thumb-remove:hover {
+  color: #7a2e1d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-attachment-thumb-remove {
+    transition: none;
+  }
 }
 
 .dvx-mention-popup {
@@ -4198,10 +4284,6 @@ body {
 }
 
 @media (max-width: 420px) {
-  .dvx-message-user {
-    padding-left: 12%;
-  }
-
   .dvx-session-title {
     max-width: 120px;
   }

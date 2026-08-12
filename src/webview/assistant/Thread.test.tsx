@@ -1,19 +1,31 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { CommandSummary } from '../../shared/bridgeMessages';
 import {
+  clearImagePreviews,
+  getImagePreview,
+  rememberImagePreview,
+} from './imagePreviewCache';
+import {
+  AttachmentChip,
   HistoryNotice,
   PendingResponse,
+  computePinnedUserIndex,
   filterSlashCommands,
+  findMentionToken,
   findSlashToken,
   formatPlanSummary,
   formatThinkingLabel,
+  readDroppedFileUris,
 } from './Thread';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  clearImagePreviews();
+});
 
 describe('PendingResponse', () => {
   it('renders the working label with the shared shimmer treatment', () => {
@@ -30,6 +42,16 @@ describe('PendingResponse', () => {
       .getByRole('status')
       .querySelector('.dvx-shimmer-text');
     expect(label?.textContent).toBe('Droid is responding');
+  });
+
+  it('stays static while a transcript activity row is live', () => {
+    render(<PendingResponse activity="working" activityLive />);
+    const status = screen.getByRole('status');
+    expect(status.querySelector('.dvx-shimmer-text')).toBeNull();
+    expect(
+      status.querySelector('.dvx-pending-label')?.textContent,
+    ).toBe('Droid is working');
+    expect(status.className).toContain('dvx-pending-quiet');
   });
 });
 
@@ -198,5 +220,162 @@ describe('filterSlashCommands', () => {
     expect(
       filterSlashCommands(commands, '').map((item) => item.name),
     ).toEqual(['gamma', 'beta', 'alpha']);
+  });
+});
+
+describe('findMentionToken', () => {
+  it('triggers at the start of the draft and after whitespace', () => {
+    expect(findMentionToken('@src', 4)).toEqual({
+      start: 0,
+      end: 4,
+      query: 'src',
+    });
+    expect(findMentionToken('look at @Thr', 12)).toEqual({
+      start: 8,
+      end: 12,
+      query: 'Thr',
+    });
+  });
+
+  it('triggers directly after CJK text and punctuation', () => {
+    expect(findMentionToken('帮我看看@src', 8)).toEqual({
+      start: 4,
+      end: 8,
+      query: 'src',
+    });
+    expect(findMentionToken('（见@a', 4)).toEqual({
+      start: 2,
+      end: 4,
+      query: 'a',
+    });
+  });
+
+  it('never triggers inside email-like or doubled-@ text', () => {
+    expect(findMentionToken('user@host', 9)).toBeNull();
+    expect(findMentionToken('a.b@c', 5)).toBeNull();
+    expect(findMentionToken('x-y@z', 5)).toBeNull();
+    expect(findMentionToken('@@src', 5)).toBeNull();
+  });
+
+  it('ends the token at whitespace or a second @', () => {
+    expect(findMentionToken('@src file', 9)).toBeNull();
+    expect(findMentionToken('no mention here', 15)).toBeNull();
+  });
+});
+
+describe('readDroppedFileUris', () => {
+  const transfer = (
+    data: Readonly<Record<string, string>>,
+  ): Pick<DataTransfer, 'getData'> => ({
+    getData: (type: string) => data[type] ?? '',
+  });
+
+  it('parses text/uri-list with CRLF lines and comments', () => {
+    expect(
+      readDroppedFileUris(
+        transfer({
+          'text/uri-list':
+            '# dragged files\r\nfile:///C:/repo/a.ts\r\n\r\nfile:///C:/repo/b.md\n',
+        }),
+      ),
+    ).toEqual(['file:///C:/repo/a.ts', 'file:///C:/repo/b.md']);
+  });
+
+  it('falls back to the vs code JSON uri list', () => {
+    expect(
+      readDroppedFileUris(
+        transfer({
+          'application/vnd.code.uri-list': JSON.stringify([
+            'file:///C:/repo/a.ts',
+          ]),
+        }),
+      ),
+    ).toEqual(['file:///C:/repo/a.ts']);
+  });
+
+  it('drops non-file and overlong URIs', () => {
+    expect(
+      readDroppedFileUris(
+        transfer({
+          'text/uri-list': [
+            'https://example.com/a.ts',
+            'untitled:Untitled-1',
+            `file:///${'a'.repeat(2100)}`,
+            'file:///C:/repo/kept.ts',
+          ].join('\n'),
+        }),
+      ),
+    ).toEqual(['file:///C:/repo/kept.ts']);
+  });
+
+  it('returns nothing for an empty transfer', () => {
+    expect(readDroppedFileUris(transfer({}))).toEqual([]);
+  });
+});
+
+describe('computePinnedUserIndex', () => {
+  it('picks the last message whose top reached the viewport top', () => {
+    expect(computePinnedUserIndex([-200, 0, 150], 0)).toBe(1);
+    expect(computePinnedUserIndex([-200, -50, 150], 0)).toBe(1);
+    expect(computePinnedUserIndex([-200, -50, -10], 0)).toBe(2);
+  });
+
+  it('reports none pinned while every message sits below the top', () => {
+    expect(computePinnedUserIndex([120, 400], 0)).toBe(-1);
+    expect(computePinnedUserIndex([], 0)).toBe(-1);
+  });
+});
+
+describe('AttachmentChip', () => {
+  const summary = {
+    id: 'attachment-1',
+    kind: 'image' as const,
+    name: 'shot.png',
+    sizeBytes: 3,
+    truncated: false,
+  };
+
+  it('renders a thumbnail when the webview staged the image bytes', () => {
+    rememberImagePreview(
+      'shot.png',
+      3,
+      'data:image/png;base64,aW1n',
+    );
+    const onRemove = vi.fn();
+    render(<AttachmentChip attachment={summary} onRemove={onRemove} />);
+    const image = screen.getByRole('img', { name: 'shot.png' });
+    expect(image.getAttribute('src')).toBe(
+      'data:image/png;base64,aW1n',
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Remove attachment shot.png',
+      }),
+    );
+    expect(onRemove).toHaveBeenCalledWith('attachment-1');
+  });
+
+  it('falls back to the labeled chip without cached bytes', () => {
+    render(<AttachmentChip attachment={summary} onRemove={vi.fn()} />);
+    expect(screen.queryByRole('img')).toBeNull();
+    expect(screen.getByText('Image')).toBeDefined();
+    expect(screen.getByText('shot.png')).toBeDefined();
+  });
+});
+
+describe('imagePreviewCache', () => {
+  it('keys previews by name and size together', () => {
+    rememberImagePreview('a.png', 3, 'data:a');
+    expect(getImagePreview('a.png', 3)).toBe('data:a');
+    expect(getImagePreview('a.png', 4)).toBeUndefined();
+    expect(getImagePreview('b.png', 3)).toBeUndefined();
+  });
+
+  it('evicts the least recently stored entries beyond the cap', () => {
+    for (let index = 0; index < 25; index += 1) {
+      rememberImagePreview(`file-${index}.png`, index, `data:${index}`);
+    }
+    expect(getImagePreview('file-0.png', 0)).toBeUndefined();
+    expect(getImagePreview('file-24.png', 24)).toBe('data:24');
   });
 });

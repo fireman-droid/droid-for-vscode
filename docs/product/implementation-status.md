@@ -1090,11 +1090,93 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension dist/droidvisx.vsix --force`
   （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
   需 Reload Window（或完整重启）后加载新 Bundle
+- 2026-08-12 上午打包并安装含 **用户消息全宽块 + 吸顶 + 附件体验
+  三项 + slash/mention 反馈 + 单一活跃指示** 的构建：
+  `dist/droidvisx.vsix` 631,024 字节（9 files, 616.23 KB），SHA-256
+  `7CEFD87B4802EAF2155F9DADE2CC9B0F08ABE243A968A15453C43942C7D0C0B2`，
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix` 与
+  `cursor --install-extension dist/droidvisx.vsix --force`
+  （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
+  需 Reload Window（或完整重启）后加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- slash/mention 弹窗可见性修复 + 活跃指示去重（2026-08-12 上午，
+  用户实测 `/` 与 `@` "完全没反应"、"Droid is working" 与活跃工具
+  行双重 shimmer；只读调查确认 Bridge/Host/Runtime 链路健在，
+  问题全在 `Thread.tsx` UI 判定）：① `/` 弹窗在 ready 且目录为空
+  时不再整体隐藏——`slashVisible` 只要求状态非 idle/unsupported，
+  空列表显示单行空态 "No custom commands (.factory/commands)"
+  （query 非空时为 "No matching commands"，loading 时为
+  "Loading commands…"，与 slash-commands-design.md §3 一致）；
+  ② `findMentionToken` 放宽 preceding 判定为"前一字符非
+  `[A-Za-z0-9_@.-]` 即可触发"，中文句子后直接 `@`（如
+  "帮我看看@src"）正常出 token，email（`user@host`）与 `@@`
+  仍不触发；③ `@` 弹窗补 "Searching files…"（从首个查询字符到
+  host 应答，覆盖 150ms 防抖窗口）与 "No matching files" 空态；
+  ④ 活跃指示去重——`App.tsx` 由转录派生 `activityLive`（存在
+  running 工具行或 active thinking 块），传入 `PendingResponse`：
+  活跃行在 shimmer 时底部状态行静态显示（`.dvx-pending-label`
+  纯色文字 + 圆点停止脉动），无活跃行时恢复 shimmer，保证每回合
+  最多一个活跃指示。单测：CJK/email/`@@` mention 触发用例、
+  PendingResponse 静态/发光两态、App 集成（slash 空态、mention
+  搜索中→无匹配、running 工具行时状态行不带 shimmer 类、完成后
+  恢复）。门禁：typecheck 三 tsconfig 全过、vitest 43 files /
+  969 tests 全绿、build + package + install 成功（与下条同批）
+- 用户消息 Cursor 式全宽块 + 吸顶 + 附件体验三项（2026-08-12
+  上午，用户验收规格：静止态改为撑满阅读列、左对齐、浅底色的
+  全宽块，点击整块进入编辑，Copy/Reuse/Edit 动作条删除；滚动时
+  用户消息吸附在转录视口顶部；附件 chip 排布自然化、图片缩略图
+  预览、非图片文件可拖入）：**全宽三态**——静止态
+  `.dvx-user-block`（width 100%、`--dvx-user` 底色、8px 圆角、
+  左对齐，可编辑时 role=button + hover/focus-visible affordance，
+  点击/Enter/Space 进入编辑；文本 `.dvx-user-text` 非编辑态
+  line-clamp 6 行防超长吸顶占半屏）；编辑态沿用全宽白卡
+  `.dvx-user-edit-card`（与底部 Composer 同规格同宽）；resending
+  态同为全宽块 + 卡外左下 "Resending from here…" note。旧的
+  `.dvx-user-bubble` 靠右气泡 CSS（`align-items: flex-end`、
+  `max-width` 85%、`padding-left` 9%/12%）与 `.dvx-user-actions`
+  动作条（Copy/Reuse/Edit 按钮、双击复用逻辑）全部移除。
+  **吸顶**——`.dvx-message-user` 挂 `position: sticky; top: 0`
+  （滚动容器 `.dvx-thread-viewport` 是唯一 overflow 链，入场动画
+  transform 挂在内层消息块不破坏 sticky）；`Thread.tsx` 吸顶
+  协调器（rAF 节流 scroll/resize + ResizeObserver +
+  MutationObserver）按 `computePinnedUserIndex`（最后一条 top 达
+  视口顶的用户消息）给吸顶行挂 `data-pinned`（不透明底色 +
+  底部细阴影盖住下方滚动正文）、被顶走的行挂 `data-covered`
+  （visibility hidden 防层叠堆积）。**附件三项**——① chips 行
+  移入输入区上方独立行（8px gap、卡内边距对齐 Cursor 排布）；
+  ② 图片缩略图：新模块 `imagePreviewCache.ts`（Webview 端
+  LRU≤24，键 name+size；drop/paste 时暂存 dataUrl，不过 Bridge）
+  供 `AttachmentChip` 渲染 44px 圆角缩略图 + hover × 移除，
+  host 侧 file picker 来源无字节则回退文字 chip；③ 文件拖入：
+  Composer drop 按 `text/uri-list`/`application/vnd.code.uri-list`
+  （编辑器资源管理器拖拽，走新 Bridge 消息 `attachment.addUris`，
+  host 端 `fileURLToPath` + 工作区内校验后复用
+  `readWorkspaceFile` staging 链，工作区外 URI 发
+  attachment-outside-workspace 诊断）与 `DataTransfer.files`
+  （系统资源管理器拖拽：图片走既有 addImage，非图片 Webview 端
+  读文本、null 字节判二进制、262,144 字符截断后走新 Bridge 消息
+  `attachment.addTextFile`）分流；不支持类型/超限/暂存区满均有
+  `.dvx-composer-notice` 短暂提示（4s），不再无声无息。Bridge
+  两条新消息双向校验齐备（uris ≤8 条、≤2048 字符、仅 file://、
+  控制字符拒收；text ≤262,144 字符、拒 null 字节，validator
+  正反用例 +17）。测试：App.test 动作条测试改写为"点击块发
+  editStage.begin"、readDroppedFileUris（CRLF/注释/JSON 回退/
+  过滤非 file 与超长）、computePinnedUserIndex、AttachmentChip
+  缩略图/回退/移除、imagePreviewCache 键与 LRU 驱逐、
+  ChatController addUris 工作区内外分流与 addTextFile staging→
+  sendTurn 透传。门禁：typecheck 三 tsconfig 全过；vitest 43
+  files / 969 tests 全绿（933→969，+36）；build 成功；
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix`
+  631,024 字节（9 files, 616.23 KB）SHA-256
+  `7CEFD87B4802EAF2155F9DADE2CC9B0F08ABE243A968A15453C43942C7D0C0B2`；
+  `cursor --install-extension dist/droidvisx.vsix --force`
+  successfully installed。遗留：吸顶行为的 120 回合 stress 长任务
+  复测未单独跑（协调器为 rAF 节流只读测量，风险低）；编辑态吸顶
+  的视觉细节以 Cursor 内实际打开验证为准
 - 消息卡片编辑态白卡片化（2026-08-12 上午，用户验收反馈：编辑态
   应与底部 Composer 同为白卡片而非灰气泡）：纯 Webview 视觉修正，
   零 Bridge 改动。`Thread.tsx` 编辑态 JSX 加 `.dvx-user-edit-card`

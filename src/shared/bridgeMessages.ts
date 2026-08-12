@@ -488,6 +488,44 @@ export interface AttachmentAddImageMessage {
   readonly stage?: AttachmentStage;
 }
 
+/** Longest accepted `file://` URI in a composer drop. */
+export const MAX_ATTACHMENT_URI_LENGTH = 2048;
+
+/**
+ * Stages files dropped onto the composer from an editor explorer drag
+ * (`text/uri-list`). The host resolves each `file://` URI, keeps only
+ * files inside the workspace, and reads them through the same reader
+ * as the attach-files picker.
+ */
+export interface AttachmentAddUrisMessage {
+  readonly type: 'attachment.addUris';
+  readonly sessionId: string;
+  readonly uris: readonly string[];
+  readonly stage?: AttachmentStage;
+}
+
+/**
+ * Character cap for one dropped text file, mirroring the host picker's
+ * text-attachment truncation limit.
+ */
+export const MAX_ATTACHMENT_TEXT_FILE_CHARS = 262_144;
+
+/**
+ * Stages one non-image file dropped onto the composer from outside the
+ * editor (for example a system file manager). The webview reads and
+ * decodes the dropped bytes itself, so the message carries the bounded
+ * text content instead of a path.
+ */
+export interface AttachmentAddTextFileMessage {
+  readonly type: 'attachment.addTextFile';
+  readonly sessionId: string;
+  readonly name: string;
+  readonly text: string;
+  /** True when the webview cut the content at the character cap. */
+  readonly truncated: boolean;
+  readonly stage?: AttachmentStage;
+}
+
 /** Removes one staged attachment by its host-assigned id. */
 export interface AttachmentRemoveMessage {
   readonly type: 'attachment.remove';
@@ -649,6 +687,8 @@ export type WebviewToHostMessage =
   | AttachmentAddProblemsMessage
   | AttachmentAddGitChangesMessage
   | AttachmentAddImageMessage
+  | AttachmentAddUrisMessage
+  | AttachmentAddTextFileMessage
   | AttachmentRemoveMessage
   | AttachmentAddPathMessage
   | EditStageBeginMessage
@@ -869,6 +909,8 @@ export type SessionCommandsState =
     };
 
 export const MAX_PENDING_ATTACHMENTS = 8;
+/** Most file URIs accepted from one drop onto the composer. */
+export const MAX_ATTACHMENT_URI_COUNT = MAX_PENDING_ATTACHMENTS;
 export const MAX_ATTACHMENT_NAME_LENGTH = 128;
 
 export const ATTACHMENT_KINDS = [

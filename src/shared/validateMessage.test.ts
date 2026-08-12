@@ -4,6 +4,7 @@ import {
   BRIDGE_PROTOCOL_VERSION,
   MAX_ASK_USER_ANSWERS,
   MAX_ASK_USER_ANSWER_LENGTH,
+  MAX_ATTACHMENT_TEXT_FILE_CHARS,
   MAX_BRIDGE_ID_LENGTH,
   MAX_EDITED_SPEC_LENGTH,
   MAX_MODEL_ID_LENGTH,
@@ -273,6 +274,32 @@ describe('parseWebviewMessage', () => {
       name: 'screenshot.png',
       mediaType: 'image/png',
       dataBase64: 'aW1hZ2U=',
+      stage: 'edit',
+    },
+    {
+      type: 'attachment.addUris',
+      sessionId: 'session-1',
+      uris: ['file:///d%3A/repo/src/a.ts', 'file:///d%3A/repo/b.md'],
+    },
+    {
+      type: 'attachment.addUris',
+      sessionId: 'session-1',
+      uris: ['file:///d%3A/repo/src/a.ts'],
+      stage: 'edit',
+    },
+    {
+      type: 'attachment.addTextFile',
+      sessionId: 'session-1',
+      name: 'notes.txt',
+      text: 'dropped file body',
+      truncated: false,
+    },
+    {
+      type: 'attachment.addTextFile',
+      sessionId: 'session-1',
+      name: 'big.log',
+      text: 'partial body',
+      truncated: true,
       stage: 'edit',
     },
     {
@@ -619,6 +646,101 @@ describe('parseWebviewMessage', () => {
       mediaType: 'image/png',
       dataBase64: 'aW1hZ2U=',
       stage: null,
+    },
+    {
+      // URI list must not be empty.
+      type: 'attachment.addUris',
+      sessionId: 'session-1',
+      uris: [],
+    },
+    {
+      // Only file:// URIs are accepted.
+      type: 'attachment.addUris',
+      sessionId: 'session-1',
+      uris: ['https://example.com/a.ts'],
+    },
+    {
+      // One bad entry rejects the whole batch.
+      type: 'attachment.addUris',
+      sessionId: 'session-1',
+      uris: ['file:///d%3A/repo/a.ts', 'vscode://b.ts'],
+    },
+    {
+      // Above the per-message URI count cap.
+      type: 'attachment.addUris',
+      sessionId: 'session-1',
+      uris: Array.from(
+        { length: 9 },
+        (_, index) => `file:///d%3A/repo/file-${index}.ts`,
+      ),
+    },
+    {
+      // Overlong URI.
+      type: 'attachment.addUris',
+      sessionId: 'session-1',
+      uris: [`file:///${'a'.repeat(2049)}`],
+    },
+    {
+      // Control character in a URI.
+      type: 'attachment.addUris',
+      sessionId: 'session-1',
+      uris: ['file:///d%3A/repo/a\u0000.ts'],
+    },
+    {
+      // Unexpected extra key.
+      type: 'attachment.addUris',
+      sessionId: 'session-1',
+      uris: ['file:///d%3A/repo/a.ts'],
+      extra: true,
+    },
+    {
+      // Empty text body.
+      type: 'attachment.addTextFile',
+      sessionId: 'session-1',
+      name: 'notes.txt',
+      text: '',
+      truncated: false,
+    },
+    {
+      // Null byte in the text body.
+      type: 'attachment.addTextFile',
+      sessionId: 'session-1',
+      name: 'notes.txt',
+      text: 'a\u0000b',
+      truncated: false,
+    },
+    {
+      // Text above the char cap.
+      type: 'attachment.addTextFile',
+      sessionId: 'session-1',
+      name: 'notes.txt',
+      text: 'a'.repeat(MAX_ATTACHMENT_TEXT_FILE_CHARS + 1),
+      truncated: true,
+    },
+    {
+      // Empty name.
+      type: 'attachment.addTextFile',
+      sessionId: 'session-1',
+      name: '',
+      text: 'body',
+      truncated: false,
+    },
+    {
+      // Truncated flag must be a boolean.
+      type: 'attachment.addTextFile',
+      sessionId: 'session-1',
+      name: 'notes.txt',
+      text: 'body',
+      truncated: 'yes',
+    },
+    {
+      // Unexpected extra key.
+      type: 'attachment.addTextFile',
+      sessionId: 'session-1',
+      name: 'notes.txt',
+      text: 'body',
+      truncated: false,
+      extra: true,
     },
     { type: 'editStage.begin', sessionId: 'session-1' },
     {
