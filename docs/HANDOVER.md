@@ -204,7 +204,7 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 | 会话导出 Markdown | 对话导出成文档——已实现（2026-08-12，提交 1f2df16，命令 `DroidVisX: Export Session as Markdown`），待随下一批次 VSIX 装机验证 | — |
 | Mermaid 图渲染 | 转录里的流程图直接画出来 | — |
 | 成本 / token 明细可视化 | context 条之外的细分用量 | — |
-| Plugins / Marketplaces / Hooks / Automations | CLI 能力，GUI 未接（用户明确：放最后） | — |
+| Plugins / Marketplaces / Hooks / Automations | 取证+设计已完成（2026-08-12）：Plugins/Marketplaces 可做（stable daemon RPC，读面经只读探针实证，现有 sidecar 即可供数据）；Hooks 只读可做、写 fail-closed（SDK 明示无管理 RPC）；Automations 只读受限（本机 Factory 后端不可达，list 报 Network error）。第一切片 = 设置弹层 Plugins 只读分区（用户明确：放最后） | [`plugins-hooks-design.md`](./product/plugins-hooks-design.md) |
 
 **待定项（不排期也不排除）**：Mission Control 控制面——公开 SDK 无
 start/pause/resume RPC（证据 spec-mission-design 结论速览）；用户已
