@@ -720,6 +720,60 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
 - `src/extension/webviewHtml.ts`
 - `esbuild.mjs`
 
+### 12. Canvas / 原型预览（2026-08-12 下午切片⑤，V1 #7）
+
+- 转录里 Droid 产出的 `.html` / `.htm` 原型可在扩展内独立
+  `WebviewPanel`（`ViewColumn.Beside`，单实例复用）中安全预览
+- 预览入口是既有安静视觉语言里的克制 “Preview” 文字 chip：出现在
+  Changes 卡的可预览文件行与工具活动行（仅 `completed` 且路径经
+  `isPreviewableFilePath` 判定为可预览时），未新造横幅/填充徽标/彩条
+- 工具栏提供 **Reload**（重读磁盘、重渲染）与 **Open in editor**
+  （在编辑器打开原文件）两枚控制，均为暖中性描边按钮
+- 安全模型（预研风险项逐条落实，Chromium 实证）：
+  - **方案偏移（预研结论优先于设计推测）**：VS Code 自 1.56 起嵌套
+    iframe 无法导航到 `asWebviewUri` 资源（microsoft/vscode#121479、
+    #123766，官方 as-designed），故不采用设计文档推测的
+    `asWebviewUri` 载入，改为 Host 侧读取原型 HTML 内联进
+    `sandbox="allow-scripts"` 的 `srcdoc` iframe；面板
+    `localResourceRoots: []`（零本地文件可读，比原计划父目录根更紧）
+  - **R1 网络出口**：Shell 文档 CSP + 注入原型的 `<meta>` CSP 双点
+    执行，`default-src 'none'`、`connect-src 'none'`、`img-src`
+    仅 `data: blob:`——fetch/XHR/WebSocket、CDN 脚本、外链图片全部
+    构造性阻断（Chromium 探针 fetch→TypeError、websocket→error、
+    图片信标→blocked，ALL-PASS）
+  - **同源逃逸 / vscode API / 存储**：`allow-scripts` 不带
+    `allow-same-origin` ⇒ 原型为 opaque origin；探针实证父
+    `contentDocument` 读取为 `null`、`contentWindow` 属性读取抛
+    `SecurityError`、`acquireVsCodeApi` 不存在、`localStorage` 拒绝
+    （ALL-PASS）
+  - **原型→Host 通道**：Shell 不注册任何 `window` message 监听；
+    沙箱子帧向 `parent.postMessage` 无消费者。Shell 工具栏只向 Host
+    发两条固定、无 payload 的命令（`preview.reload` /
+    `preview.openInEditor`）
+  - **CSP 收紧的有意偏移**：Shell 脚本不加 nonce（nonce/hash 会让
+    浏览器忽略 `'unsafe-inline'`，而 srcdoc 继承策略需要它跑原型内联
+    脚本）；`'unsafe-eval'` 在 opaque origin 且零出口下不引入新面，
+    保留以兼容 eval 型原型。Shell 模板每处插值均 HTML 转义
+- **fail-closed 记录**：同目录相对资源（外链 CSS/JS/图片）在 opaque
+  origin + 无 service worker 下不可加载，工具栏如实标注
+  “Sandboxed · inline code only · no network”；仅自包含 HTML 可完整
+  渲染。文件缺失/被移动/超 4MB（`MAX_PREVIEW_SOURCE_BYTES`）时面板内
+  显示克制 notice 并回报 `preview-failed` 诊断，不静默
+- Bridge 新增 `file.preview` 消息（`PREVIEWABLE_FILE_EXTENSIONS`
+  白名单 + `isSafeWorkspaceRelativePath` 双侧校验，拒空/错扩展/越界/
+  路径穿越/绝对路径/控制字符/超长）
+
+主要实现：
+
+- `src/shared/bridgeMessages.ts`、`src/shared/validateMessage.ts`
+  （Bridge 契约 + 校验，`e8a0a37`）
+- `src/extension/previewHtml.ts`、`src/extension/PreviewPanelController.ts`、
+  `src/extension/prototypePreview.ts`（Host 面板与沙箱 shell，`baab0dc`）
+- `src/extension/ChatController.ts`、`src/extension/extension.ts`
+  （路由与注入，`6e8fad3`）
+- `src/webview/assistant/Thread.tsx`、`src/webview/assistant/App.tsx`、
+  `src/webview/assistant/styles.css`（Preview chip 与样式，`6369e96`）
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -1261,6 +1315,42 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最近记录的验证结果：
 
+- V1 切片⑤「Canvas / 原型预览」（2026-08-12 下午，V1 #7）：
+  ① **契约**：Bridge 新增 `file.preview`（`PREVIEWABLE_FILE_EXTENSIONS`
+  白名单 + `isSafeWorkspaceRelativePath` 双侧校验），
+  `validateMessage.test.ts` 覆盖合法 `.html/.htm` 与敌意路径
+  （空/错扩展/越界/路径穿越/绝对路径/控制字符/超长）反例。
+  ② **Host 沙箱面板**：`previewHtml.ts` 生成 `srcdoc` 内联 shell，
+  `previewHtml.test.ts` 断言 CSP 精确串（`connect-src 'none'`、
+  无 nonce、允许 `unsafe-inline`）、`sandbox="allow-scripts"` 且无
+  `allow-same-origin`、CSP `<meta>` 注入点与 HTML 转义、shell 不注册
+  message 监听；`PreviewPanelController.test.ts` 覆盖开/复用面板、
+  路径重校验、缺失/超 4MB 降级 notice、Reload、Open in editor、
+  工具栏命令严格校验。
+  ③ **路由**：`ChatController.test.ts` 断言 `file.preview` 仅在
+  connected + 匹配 sessionId 时经注入的 `PrototypePreviewOpener`
+  执行，失败回报 `preview-failed` 诊断。
+  ④ **Webview**：`Thread.test.tsx` 覆盖 Changes 卡可预览文件行的
+  Preview chip 条件渲染与点击。
+  **Chromium 冒烟**（`artifacts/preview-harness/`，从生产
+  `previewHtml.ts` 生成，headless `--dump-dom` 实证）：sandbox 隔离
+  探针 ALL-PASS（`prototype.contentDocument`=null、`contentWindow`
+  读取抛 `SecurityError`、sandbox 恰为 `allow-scripts`）；网络 CSP
+  探针 ALL-PASS（fetch→TypeError、websocket→error、图片信标→blocked）；
+  shell 结构冒烟：Reload/Open-in-editor 按钮、沙箱帧、注入 CSP 均在。
+  **fail-closed**：预研方案 b 的 `asWebviewUri` 载入因
+  microsoft/vscode#121479 嵌套 iframe 限制不可行，偏移为 `srcdoc`
+  内联沙箱并如实标注“inline code only · no network”（同目录外链资源
+  不可加载）。
+  门禁：typecheck 三 tsconfig 全过；全量 vitest 1395 passed /
+  1 skipped / 1 failed（唯一失败为另一代理 mermaid 切片的
+  `MermaidBlock.test.tsx` fake-timers 超时，与本切片无关，本切片
+  5 个测试文件 494/494 全绿）；build（禁运入断言保持）+ vsce package
+  + cursor --install-extension --force 成功（见安装包状态）。遗留：
+  真实 Cursor 中打开真实原型的可见验收待用户完成；`verify:vsix`
+  因 mermaid 切片新增 `dist/webview/mermaid.js` 未同步更新
+  `verifyVsix.mjs` 期望清单而失败，与本切片无关（本切片不新增打包
+  文件）。
 - MCP/Skills/Composer 调查修复批次 + P0 权限截断（2026-08-12 下午，
   依据 `mcp-skills-panel-findings.md` 6 项 + 横向诊断日志、
   `composer-transcript-findings.md` 4 项、用户追加的图片查看器/
@@ -2159,8 +2249,11 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 4. ~~**完整 Spec Mode 闭环**~~ — 已完成（2026-08-12 中午，见验证
    状态「V1 切片④」与生产已接通 §6；
    [`spec-mission-design.md`](./spec-mission-design.md) §1）。
-5. **Canvas / 原型预览**
-   （[`rich-content-design.md`](./rich-content-design.md) §2）。
+5. ~~**Canvas / 原型预览**~~ — 已完成（2026-08-12 下午，见验证状态
+   「V1 切片⑤ Canvas / 原型预览」与生产已接通 §12；预研方案 b 因
+   VS Code 嵌套 iframe 限制偏移为 `srcdoc` 内联沙箱，网络出口/同源
+   逃逸经 Chromium 探针实证阻断；[`rich-content-design.md`](./rich-content-design.md) §2、
+   [`slice-prep-canvas.md`](./slice-prep-canvas.md)）。
 6. **子代理摘要层级 + Mission 只读展示**
    （[`spec-mission-design.md`](./spec-mission-design.md) §3、§2）。
 7. **第一档打磨剩余** — 流式命令输出预览 → 收起播报 → 回复动画
