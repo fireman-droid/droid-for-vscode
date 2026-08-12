@@ -1179,6 +1179,68 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
   形状拒收）、`store.test.ts`（快照留存/缺席回落 null）、
   `ChatController.test.ts`（快照携带 root、rootless 省略）
 
+### 17. 任务计划钉条：Composer 上方固定当前计划（2026-08-12 傍晚）
+
+- **行为**（对齐 Cursor 双呈现：转录内计划渲染原样保留）：会话
+  存在活跃任务计划（有未完成项）时 Composer 上方出现钉条。收起态
+  一行 = 状态圆点（脉动）+ 当前 in-progress 项文本（无 in-progress
+  回退首个 pending，ellipsis 截断）+ `完成数/总数` 计数 + 上向
+  chevron；点击向上展开完整清单（已完成绿勾 + 删除线、进行中实心
+  橙点脉动 + 加粗、待办空圈），再点/外部 pointerdown/Escape 收起。
+  流式期间计划更新实时跟随（逐项 `dvx-todo-fade-in` 过渡）；全部
+  完成→绿勾 "Plan complete" 完成态停留 1.6s 后 320ms 淡出。无
+  活跃计划、纯历史回放已完成计划、切到无计划会话不显示；恢复
+  会话若计划仍有未完成项则恢复显示（收起态）
+- **数据链路零新增**：纯 Webview 投影。`planPin.ts` 从
+  `Thread.tsx` 抽出 `parsePlanSteps` 作为转录清单与钉条共用的
+  规范解析器；`selectTaskPlanPin` 从转录尾部扫最新
+  `detailKind: 'plan'` 工具行（后写覆盖先写），产出
+  `TaskPlanPinState`（sessionKey/planKey/steps/计数/当前项/
+  allCompleted）。**live 完成 vs 回放的判别按会话记忆**：Droid 把
+  最终全完成更新写成新 todowrite 调用（新 toolUseId），故组件以
+  sessionKey 维度记住"本会话曾见过未完成计划"，live 完成庆祝后
+  淡出，历史/跨会话已完成计划永不挂载
+- **与回到底部箭头共存**（§14 切片先落）：钉条是
+  `ViewportFooter` 内 Composer 上方的常规流内容；箭头
+  `.dvx-scroll-bottom` 绝对定位 `bottom: 100%` 锚在 footer 上缘，
+  钉条长高只会把箭头一起上推，冒烟实证两者矩形零重叠
+- **视觉**：暖白卡语言（`--dvx-raised` 白底、`--dvx-border` 1px、
+  12px 圆角、双层软阴影）；收起条细字低对比（`--dvx-muted`，
+  计数 `--dvx-subtle` tabular-nums）；展开头退为 11px 节标签；
+  入场动画仅 live 回合（复用 `dvx-anim-live` 门控），
+  reduced-motion 全部动画/过渡关停，forced-colors 补 CanvasText
+  边框
+- 门禁：钉条单测 24 个全绿；HEAD 干净检出独立 worktree
+  （`dvx-plan-pin-gate`）全量 vitest 76 files / 1760 tests 全绿 +
+  build 绿；typecheck 卡在既有 `store.ts` TS2366（`9bc7a13`
+  /btw 半切片遗留，其在途工作树改动已修，非本切片文件）。headless
+  Chrome harness 冒烟（`artifacts/plan-pin-harness.html` +
+  `smoke-plan-pin.mjs`，对真实 dist 产物）四场景 PASS：
+  replay-open 恢复显示（2/3 + 当前项 + Composer 上方）、
+  replay-done 不显示、stream 全链（出现 1/3→更新 2/3 与当前项
+  切换→展开三项状态图标各就位→外点收起→完成态 3/3→leaving→
+  淡出→回合结束不复活）、arrow 共存（箭头存在且零重叠）
+- **打包**：完成时主工作树载有并行代理（/btw + 消息队列切片）
+  大量在途未提交改动，HEAD typecheck 又因 `9bc7a13` 为红，打包
+  会把半成品装进用户扩展——按约定**标注随下包**
+- 遗留：`App.tsx` 的 `selectTaskPlanPin(state.transcript)` 待补
+  第二实参 `state.sessionId`（selector 暂以默认 null 兼容）；
+  文件被 /btw 切片占用中，释放后一行补齐。影响面：单会话行为
+  不变，仅"跨会话切到已完成计划"场景的不显示判定依赖该实参
+- 提交：`fab92da`（chore：钉条模块 + Thread/App 接线随
+  `7a8e33a` 落地）、`5d2c2cb`（fix：完成淡出改为会话感知）
+
+主要实现：
+
+- `src/webview/assistant/planPin.ts`（`parsePlanSteps` 抽出 +
+  `selectTaskPlanPin` 投影）、`TaskPlanPin.tsx`（收起/展开/完成
+  淡出组件）、`Thread.tsx`（`taskPlanPin` prop + ViewportFooter
+  挂载）、`App.tsx`（selector 接线）、`styles.css`
+  （`dvx-plan-pin*` 样式族）
+- 测试：`planPin.test.ts`（解析 + 投影 + 会话戳）、
+  `TaskPlanPin.test.tsx`（展开收起/外点/Escape/live 完成淡出/
+  新 todowrite 完成淡出/跨会话不庆祝/回放不挂载）
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
