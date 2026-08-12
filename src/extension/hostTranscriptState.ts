@@ -193,6 +193,16 @@ export function projectHostTranscriptMessage(
         0,
         MAX_TURN_TEXT_LENGTH,
       );
+      if (
+        hasTrailingDiagnostic(state.transcript, {
+          turnId: message.turnId,
+          severity: message.severity,
+          code,
+          message: diagnosticMessage,
+        })
+      ) {
+        return state;
+      }
       return appendItem(
         state,
         {
@@ -232,6 +242,38 @@ export function projectHostTranscriptMessage(
       }
       return state;
   }
+}
+
+/**
+ * Whether the transcript's trailing run of diagnostics already holds
+ * an identical entry. Repeats with nothing in between (e.g. clicking
+ * a dead file chip six times) collapse into the one visible card;
+ * the same diagnostic after other content still appends.
+ */
+function hasTrailingDiagnostic(
+  transcript: readonly SessionTranscriptItem[],
+  next: {
+    readonly turnId: string | null;
+    readonly severity: string;
+    readonly code: string;
+    readonly message: string;
+  },
+): boolean {
+  for (let index = transcript.length - 1; index >= 0; index -= 1) {
+    const item = transcript[index];
+    if (item === undefined || item.kind !== 'diagnostic') {
+      return false;
+    }
+    if (
+      item.turnId === next.turnId &&
+      item.severity === next.severity &&
+      item.code === next.code &&
+      item.message === next.message
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function projectAssistantDelta(

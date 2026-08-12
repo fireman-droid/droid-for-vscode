@@ -355,6 +355,54 @@ describe('hostTranscriptState', () => {
     });
   });
 
+  it('collapses identical back-to-back diagnostics into one card', () => {
+    let state = createHostTranscriptState('complete');
+    const failedOpen = {
+      type: 'runtime.diagnostic' as const,
+      sessionId: 'session-1',
+      turnId: null,
+      severity: 'warning' as const,
+      code: 'file-diff-failed',
+      message: 'That file could not be opened.',
+    };
+    for (let sequence = 0; sequence < 6; sequence += 1) {
+      state = projectHostTranscriptMessage(state, {
+        ...failedOpen,
+        sequence,
+      });
+    }
+    expect(
+      state.transcript.filter((item) => item.kind === 'diagnostic'),
+    ).toHaveLength(1);
+
+    // A different diagnostic still appends, but the repeat matches
+    // anywhere in the stacked trailing run and stays collapsed.
+    state = projectHostTranscriptMessage(state, {
+      ...failedOpen,
+      code: 'preview-failed',
+      message: 'That prototype could not be previewed.',
+      sequence: 6,
+    });
+    state = projectHostTranscriptMessage(state, {
+      ...failedOpen,
+      sequence: 7,
+    });
+    expect(
+      state.transcript.filter((item) => item.kind === 'diagnostic'),
+    ).toHaveLength(2);
+
+    // Conversation content between repeats breaks the run, so the
+    // diagnostic may reappear where it is relevant again.
+    state = appendAcceptedUserPrompt(state, 'turn-2', 'Next prompt');
+    state = projectHostTranscriptMessage(state, {
+      ...failedOpen,
+      sequence: 8,
+    });
+    expect(
+      state.transcript.filter((item) => item.kind === 'diagnostic'),
+    ).toHaveLength(3);
+  });
+
   it('downgrades complete history when item or text bounds evict data', () => {
     let items = createHostTranscriptState('complete');
     for (
