@@ -456,10 +456,26 @@ describe('ChatController', () => {
 
     send(controller, 'session-1', 'turn-1', 'Delegate the survey');
 
+    // The turn-end settlement arrives on the out-of-band channel: a
+    // live webview drops tool.activity once the turn is terminal, so
+    // only subagent.update can land the ledger's verdict.
     await vi.waitFor(() => {
       expect(
-        toolActivities(messages).at(-1)?.subagent?.status,
-      ).toBe('completed');
+        messages.find(
+          (message) => message.type === 'subagent.update',
+        ),
+      ).toMatchObject({
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        toolUseId: 'task-1',
+        subagent: {
+          type: 'explore',
+          description: 'Survey the auth module',
+          status: 'completed',
+          toolUseCount: 7,
+          durationMs: 4200,
+        },
+      });
     });
     expect(history.loadSubagentSummaries).toHaveBeenCalledWith({
       cwd: 'C:\\workspace',
@@ -489,17 +505,6 @@ describe('ChatController', () => {
           status: 'running',
         },
       }),
-      expect.objectContaining({
-        toolUseId: 'task-1',
-        status: 'completed',
-        subagent: {
-          type: 'explore',
-          description: 'Survey the auth module',
-          status: 'completed',
-          toolUseCount: 7,
-          durationMs: 4200,
-        },
-      }),
     ]);
     // The settlement lands after the terminal turn state.
     expect(
@@ -510,11 +515,119 @@ describe('ChatController', () => {
       ),
     ).toBeLessThan(
       messages.findIndex(
-        (message) =>
-          message.type === 'tool.activity' &&
-          message.subagent?.status === 'completed',
+        (message) => message.type === 'subagent.update',
       ),
     );
+  });
+
+  it('keeps reconciling a background delegation after the turn ended', async () => {
+    const runtime = createMockRuntime(async function* () {
+      yield {
+        type: 'tool-start',
+        toolName: 'Task',
+        toolUseId: 'task-bg',
+        action: 'Delegated focused work',
+      };
+      yield {
+        type: 'subagent-started',
+        toolUseId: 'task-bg',
+        subagentType: 'explore',
+        description: 'Background research',
+      };
+      yield {
+        type: 'tool-result',
+        toolName: 'Task',
+        toolUseId: 'task-bg',
+        action: 'Delegated focused work',
+        isError: false,
+      };
+      yield successfulTurn();
+    });
+    // The ledger keeps reporting `running` at turn end (probed
+    // 2026-08-12: background children settle minutes later with no
+    // notification) and flips to `completed` on a later poll.
+    const running = {
+      type: 'explore',
+      description: 'Background research',
+      status: 'running' as const,
+    };
+    const completed = {
+      type: 'explore',
+      description: 'Background research',
+      status: 'completed' as const,
+      toolUseCount: 9,
+      durationMs: 123_000,
+    };
+    let settledInLedger = false;
+    const history: SessionHistoryLoader = {
+      loadHistory: vi.fn(async () => unavailableSessionHistory()),
+      loadSubagentSummaries: vi.fn(async () => [
+        settledInLedger ? completed : running,
+      ]),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      history,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    const settlements = () =>
+      messages.filter(
+        (message) => message.type === 'subagent.update',
+      ) as Array<
+        Extract<HostToWebviewMessage, { type: 'subagent.update' }>
+      >;
+    // Fake timers must own the watch's interval from birth, so the
+    // whole turn runs under them (the mock stream is microtask-only).
+    vi.useFakeTimers();
+    try {
+      send(controller, 'session-1', 'turn-1', 'Delegate in the background');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(history.loadSubagentSummaries).toHaveBeenCalledTimes(1);
+
+      // While the ledger still says running, polls settle nothing.
+      await vi.advanceTimersByTimeAsync(5_100);
+      expect(settlements()).toHaveLength(0);
+
+      settledInLedger = true;
+      await vi.advanceTimersByTimeAsync(5_100);
+      expect(settlements()).toEqual([
+        expect.objectContaining({
+          type: 'subagent.update',
+          sessionId: 'session-1',
+          turnId: 'turn-1',
+          toolUseId: 'task-bg',
+          subagent: completed,
+        }),
+      ]);
+
+      // The watch cleared itself: no further polling.
+      const loads = (
+        history.loadSubagentSummaries as ReturnType<typeof vi.fn>
+      ).mock.calls.length;
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(
+        (history.loadSubagentSummaries as ReturnType<typeof vi.fn>)
+          .mock.calls.length,
+      ).toBe(loads);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    // The settlement also landed in the host transcript, so a
+    // reloading webview snapshots the settled row.
+    ready(controller);
+    await vi.waitFor(() => {
+      expect(
+        lastMessage(messages, 'host.snapshot')?.transcript.find(
+          (item) => item.kind === 'tool' && item.toolUseId === 'task-bg',
+        ),
+      ).toMatchObject({ subagent: completed });
+    });
   });
 
   it('never loads the invocation ledger for turns without delegation', async () => {

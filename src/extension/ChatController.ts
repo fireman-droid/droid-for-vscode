@@ -99,6 +99,8 @@ import {
   type SessionHistoryLoader,
 } from '../runtime/history/SessionHistory';
 import {
+  applySubagentSettlement,
+  collectRunningSubagentRows,
   collectToolFilePaths,
   createTurnActivityState,
   hasSubagentRows,
@@ -108,7 +110,9 @@ import {
   projectThinkingDelta,
   projectToolEvent,
   reconcileSubagentSummaries,
+  settleZombieSubagents,
   thinkingSegmentKey,
+  type PendingSubagentRow,
   type TurnActivityState,
 } from './turnActivityState';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
@@ -267,6 +271,18 @@ const TURN_FAILURE_MESSAGE =
  * replacement snappy without measurable cost.
  */
 const RECOVERED_TURN_POLL_MS = 500;
+/**
+ * Poll cadence of the post-turn zombie-subagent reconcile. Each tick
+ * is one session-file load; the probed settle latency of the ledger
+ * is seconds-coarse, so 5s keeps the row honest without I/O churn.
+ */
+const ZOMBIE_SUBAGENT_POLL_MS = 5_000;
+/**
+ * Upper bound on the post-turn reconcile window. Rows that outlive
+ * it stay "running in background" in the UI until the next session
+ * load re-reads the ledger.
+ */
+const ZOMBIE_SUBAGENT_WATCH_MAX_MS = 10 * 60_000;
 /**
  * Consecutive `unknown` working-state reads tolerated before a
  * recovered turn fails. `unknown` means the daemon stopped attributing
@@ -563,6 +579,22 @@ export class ChatController {
     null;
   private mcpAuthServerName: string | null = null;
   private mcpAuthTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Post-turn ledger reconcile for background delegations that
+   * outlived their turn ("zombie" rows). Probed 2026-08-12: no
+   * session notification announces the child's terminal state after
+   * the parent turn ends, so the invocation ledger is polled until
+   * every watched row settles, the session changes, or the bounded
+   * window closes.
+   */
+  private zombieSubagentWatch: {
+    readonly sessionId: string;
+    rows: readonly PendingSubagentRow[];
+    readonly deadlineAt: number;
+    readonly timer: ReturnType<typeof setInterval>;
+    /** Serializes ticks so a slow ledger read never overlaps. */
+    ticking: boolean;
+  } | null = null;
   private commandsCache: {
     readonly sessionId: string;
     readonly items: readonly CommandSummary[];
@@ -1043,6 +1075,7 @@ export class ChatController {
       this.mcpAuthTimer = null;
     }
     this.mcpAuthServerName = null;
+    this.clearZombieSubagentWatch();
     this.disposed = true;
     this.runtimeGeneration += 1;
     this.turnGeneration += 1;
@@ -6641,27 +6674,165 @@ export class ChatController {
     void loadSummaries({ cwd, sessionId }).then((summaries) => {
       const turn = this.turn;
       if (
-        summaries === null ||
         this.disposed ||
         this.sessionId !== sessionId ||
         turn?.turnId !== turnId
       ) {
         return;
       }
-      const result = reconcileSubagentSummaries(
-        turn.activity,
-        summaries,
-      );
-      turn.activity = result.state;
-      for (const projection of result.projections) {
-        this.emit({
-          type: 'tool.activity',
-          sessionId,
-          turnId,
-          ...projection,
-        });
+      if (summaries !== null) {
+        const result = reconcileSubagentSummaries(
+          turn.activity,
+          summaries,
+        );
+        turn.activity = result.state;
+        for (const projection of result.projections) {
+          // The turn already reached its terminal state, so a live
+          // webview drops tool.activity (acceptsActiveTurn). Only
+          // subagent.update lands after the turn — without it the
+          // rows stay "running" on screen until a full reload.
+          if (projection.subagent !== undefined) {
+            this.emit({
+              type: 'subagent.update',
+              sessionId,
+              turnId,
+              toolUseId: projection.toolUseId,
+              subagent: projection.subagent,
+            });
+          }
+        }
       }
+      // Background delegations the ledger still reports as running
+      // outlive the turn; keep reconciling them out of band.
+      this.armZombieSubagentWatch(
+        sessionId,
+        cwd,
+        loadSummaries,
+        collectRunningSubagentRows(turn.activity, turnId),
+      );
     });
+  }
+
+  /**
+   * Starts (or extends) the post-turn ledger poll for delegations
+   * still running after their turn settled. Rows from an earlier
+   * turn of the same session stay watched when a newer turn adds
+   * its own zombies.
+   */
+  private armZombieSubagentWatch(
+    sessionId: string,
+    cwd: string,
+    loadSummaries: NonNullable<
+      SessionHistoryLoader['loadSubagentSummaries']
+    >,
+    rows: readonly PendingSubagentRow[],
+  ): void {
+    const existing = this.zombieSubagentWatch;
+    if (existing !== null && existing.sessionId !== sessionId) {
+      this.clearZombieSubagentWatch();
+    }
+    if (rows.length === 0) {
+      return;
+    }
+    const current = this.zombieSubagentWatch;
+    if (current !== null) {
+      const known = new Set(
+        current.rows.map((row) => `${row.turnId}:${row.toolUseId}`),
+      );
+      current.rows = [
+        ...current.rows,
+        ...rows.filter(
+          (row) => !known.has(`${row.turnId}:${row.toolUseId}`),
+        ),
+      ];
+      return;
+    }
+    const watch = {
+      sessionId,
+      rows,
+      deadlineAt: Date.now() + ZOMBIE_SUBAGENT_WATCH_MAX_MS,
+      ticking: false,
+      timer: setInterval(() => {
+        void this.tickZombieSubagentWatch(cwd, loadSummaries);
+      }, ZOMBIE_SUBAGENT_POLL_MS),
+    };
+    this.zombieSubagentWatch = watch;
+    this.recordHost({
+      level: 'info',
+      name: 'host.subagent.zombie-watch-armed',
+      attributes: { rows: rows.length },
+    });
+  }
+
+  private clearZombieSubagentWatch(): void {
+    const watch = this.zombieSubagentWatch;
+    if (watch === null) {
+      return;
+    }
+    this.zombieSubagentWatch = null;
+    clearInterval(watch.timer);
+  }
+
+  private async tickZombieSubagentWatch(
+    cwd: string,
+    loadSummaries: NonNullable<
+      SessionHistoryLoader['loadSubagentSummaries']
+    >,
+  ): Promise<void> {
+    const watch = this.zombieSubagentWatch;
+    if (watch === null || watch.ticking) {
+      return;
+    }
+    if (
+      this.disposed ||
+      this.sessionId !== watch.sessionId ||
+      Date.now() > watch.deadlineAt
+    ) {
+      this.clearZombieSubagentWatch();
+      return;
+    }
+    watch.ticking = true;
+    const summaries = await loadSummaries({
+      cwd,
+      sessionId: watch.sessionId,
+    }).catch(() => null);
+    watch.ticking = false;
+    if (
+      summaries === null ||
+      this.zombieSubagentWatch !== watch ||
+      this.disposed ||
+      this.sessionId !== watch.sessionId
+    ) {
+      return;
+    }
+    const { settled, pending } = settleZombieSubagents(
+      watch.rows,
+      summaries,
+    );
+    if (settled.length === 0) {
+      return;
+    }
+    for (const { row, subagent } of settled) {
+      if (this.turn?.turnId === row.turnId) {
+        this.turn.activity = applySubagentSettlement(
+          this.turn.activity,
+          row.toolUseId,
+          subagent,
+        );
+      }
+      this.emit({
+        type: 'subagent.update',
+        sessionId: watch.sessionId,
+        turnId: row.turnId,
+        toolUseId: row.toolUseId,
+        subagent,
+      });
+    }
+    if (pending.length === 0) {
+      this.clearZombieSubagentWatch();
+    } else {
+      watch.rows = pending;
+    }
   }
 
   private refreshContextAfterTurn(sessionId: string): void {
@@ -7462,6 +7633,7 @@ function isTranscriptProjection(
     message.type === 'thinking.delta' ||
     message.type === 'thinking.complete' ||
     message.type === 'tool.activity' ||
+    message.type === 'subagent.update' ||
     message.type === 'transcript.image' ||
     message.type === 'runtime.diagnostic' ||
     message.type === 'turn.state'

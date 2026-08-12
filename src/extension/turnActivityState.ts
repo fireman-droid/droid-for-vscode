@@ -14,6 +14,7 @@ import { toolNameCandidates } from '../shared/toolActivity';
 import type { RuntimeEvent } from '../runtime/runtimeEvents';
 import {
   createSubagentQueues,
+  subagentIdentityKey,
   takeSubagentSummaryLast,
 } from '../runtime/subagentSummary';
 
@@ -556,6 +557,151 @@ export function reconcileSubagentSummaries(
     projections.push(projectEntryStandalone(toolUseId, entry));
   }
   return { state: { ...state, tools }, projections };
+}
+
+/**
+ * One delegation the turn left running when it ended: the identity
+ * the post-turn zombie reconcile needs to keep pairing this row with
+ * ledger entries after `turn.activity` has moved on to a newer turn.
+ */
+export interface PendingSubagentRow {
+  readonly turnId: string;
+  readonly toolUseId: string;
+  readonly type: string;
+  readonly description: string;
+}
+
+/**
+ * Collects the turn's delegations whose subagent is still `running`
+ * after settlement — background Task dispatches that outlive the
+ * parent turn (probed 2026-08-12: the ledger keeps them `running`
+ * until the child actually finishes, minutes after the turn ends).
+ */
+export function collectRunningSubagentRows(
+  state: TurnActivityState,
+  turnId: string,
+): readonly PendingSubagentRow[] {
+  const rows: PendingSubagentRow[] = [];
+  for (const [toolUseId, entry] of state.tools) {
+    if (entry.subagent?.status !== 'running') {
+      continue;
+    }
+    rows.push({
+      turnId,
+      toolUseId,
+      type: entry.subagent.type,
+      description: entry.subagent.description,
+    });
+  }
+  return rows;
+}
+
+/**
+ * Pairs still-running delegation rows with ledger entries that have
+ * since reached a terminal state. Same identity discipline as
+ * `reconcileSubagentSummaries` (sanitized type+description, newest
+ * entry first), operating on detached row identities so the
+ * reconcile keeps working after new turns replaced `turn.activity`.
+ *
+ * The whole-session ledger may hold old terminal invocations of the
+ * same identity from earlier turns, which must not settle a row that
+ * is genuinely still running. Per identity, rows only settle while
+ * the ledger reports fewer live (`running`/`pending`) entries than
+ * rows are waiting: each drop in the live count releases one row,
+ * newest row first, paired with the newest terminal entry.
+ */
+export function settleZombieSubagents(
+  rows: readonly PendingSubagentRow[],
+  summaries: readonly ToolSubagentSummary[],
+): {
+  readonly settled: ReadonlyArray<{
+    readonly row: PendingSubagentRow;
+    readonly subagent: ToolSubagentSummary;
+  }>;
+  readonly pending: readonly PendingSubagentRow[];
+} {
+  if (rows.length === 0) {
+    return { settled: [], pending: rows };
+  }
+  const liveCounts = new Map<string, number>();
+  const terminal: ToolSubagentSummary[] = [];
+  for (const summary of summaries) {
+    if (
+      summary.status === 'completed' ||
+      summary.status === 'failed' ||
+      summary.status === 'cancelled'
+    ) {
+      terminal.push(summary);
+    } else {
+      const key = subagentIdentityKey(
+        summary.type,
+        summary.description,
+      );
+      liveCounts.set(key, (liveCounts.get(key) ?? 0) + 1);
+    }
+  }
+  const queues = createSubagentQueues(terminal);
+  const waitingCounts = new Map<string, number>();
+  for (const row of rows) {
+    const key = subagentIdentityKey(row.type, row.description);
+    waitingCounts.set(key, (waitingCounts.get(key) ?? 0) + 1);
+  }
+
+  const settled: Array<{
+    row: PendingSubagentRow;
+    subagent: ToolSubagentSummary;
+  }> = [];
+  const pending: PendingSubagentRow[] = [];
+  // Newest rows claim the newest ledger entries, mirroring the
+  // turn-end reconcile.
+  for (const row of [...rows].reverse()) {
+    const key = subagentIdentityKey(row.type, row.description);
+    const waiting = waitingCounts.get(key) ?? 0;
+    const live = liveCounts.get(key) ?? 0;
+    if (live >= waiting) {
+      // As many ledger entries still run as rows wait: this row is
+      // one of them, keep it pending.
+      pending.push(row);
+      liveCounts.set(key, live - 1);
+      waitingCounts.set(key, waiting - 1);
+      continue;
+    }
+    waitingCounts.set(key, waiting - 1);
+    const subagent = takeSubagentSummaryLast(
+      queues,
+      row.type,
+      row.description,
+    );
+    if (subagent === undefined) {
+      pending.push(row);
+    } else {
+      settled.push({ row, subagent });
+    }
+  }
+  return {
+    settled: settled.reverse(),
+    pending: pending.reverse(),
+  };
+}
+
+/**
+ * Applies one zombie settlement to the activity state when the row's
+ * turn is still current, so recovery checkpoints and later reloads
+ * carry the settled status. A missing row (e.g. the state already
+ * belongs to a newer turn) is a no-op.
+ */
+export function applySubagentSettlement(
+  state: TurnActivityState,
+  toolUseId: string,
+  subagent: ToolSubagentSummary,
+): TurnActivityState {
+  const entry = state.tools.get(toolUseId);
+  if (entry === undefined || entry.subagent === undefined) {
+    return state;
+  }
+  const tools = new Map(state.tools);
+  tools.set(toolUseId, { ...entry, subagent });
+  return { ...state, tools };
 }
 
 /**

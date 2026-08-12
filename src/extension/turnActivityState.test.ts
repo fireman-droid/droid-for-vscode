@@ -8,6 +8,8 @@ import {
   MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
 } from '../shared/bridgeMessages';
 import {
+  applySubagentSettlement,
+  collectRunningSubagentRows,
   collectToolFilePaths,
   createTurnActivityState,
   hasSubagentRows,
@@ -17,6 +19,8 @@ import {
   projectThinkingDelta,
   projectToolEvent,
   reconcileSubagentSummaries,
+  settleZombieSubagents,
+  type TurnActivityState,
 } from './turnActivityState';
 
 describe('turnActivityState', () => {
@@ -999,5 +1003,242 @@ describe('turnActivityState', () => {
 
     expect(running.projections).toHaveLength(0);
     expect(unmatched.projections).toHaveLength(0);
+  });
+});
+
+describe('zombie subagent settlement', () => {
+  /** A settled Task row whose delegation is still running. */
+  function delegatedState(
+    toolUseId: string,
+    description: string,
+  ): TurnActivityState {
+    let state = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'Task',
+      toolUseId,
+      action: 'Delegated focused work',
+    }).state;
+    state = projectSubagentStarted(state, {
+      toolUseId,
+      subagentType: 'explore',
+      description,
+    }).state;
+    return projectToolEvent(state, {
+      type: 'tool-result',
+      toolName: 'Task',
+      toolUseId,
+      action: 'Delegated focused work',
+      isError: false,
+    }).state;
+  }
+
+  it('collects still-running delegations with their identity', () => {
+    let state = delegatedState('task-bg', 'Background research');
+    state = projectToolEvent(state, {
+      type: 'tool-start',
+      toolName: 'Read',
+      toolUseId: 'read-1',
+      action: 'Read workspace files',
+    }).state;
+
+    expect(collectRunningSubagentRows(state, 'turn-9')).toEqual([
+      {
+        turnId: 'turn-9',
+        toolUseId: 'task-bg',
+        type: 'explore',
+        description: 'Background research',
+      },
+    ]);
+
+    const settled = reconcileSubagentSummaries(state, [
+      {
+        type: 'explore',
+        description: 'Background research',
+        status: 'completed',
+        toolUseCount: 4,
+        durationMs: 9_000,
+      },
+    ]).state;
+    expect(collectRunningSubagentRows(settled, 'turn-9')).toEqual([]);
+  });
+
+  it('settles rows only with terminal ledger entries', () => {
+    const rows = [
+      {
+        turnId: 'turn-1',
+        toolUseId: 'task-a',
+        type: 'explore',
+        description: 'Background research',
+      },
+      {
+        turnId: 'turn-1',
+        toolUseId: 'task-b',
+        type: 'worker',
+        description: 'Still running work',
+      },
+    ];
+    const result = settleZombieSubagents(rows, [
+      {
+        type: 'explore',
+        description: 'Background research',
+        status: 'completed',
+        toolUseCount: 7,
+        durationMs: 123_000,
+      },
+      {
+        type: 'worker',
+        description: 'Still running work',
+        status: 'running',
+      },
+    ]);
+
+    expect(result.settled).toEqual([
+      {
+        row: rows[0],
+        subagent: {
+          type: 'explore',
+          description: 'Background research',
+          status: 'completed',
+          toolUseCount: 7,
+          durationMs: 123_000,
+        },
+      },
+    ]);
+    expect(result.pending).toEqual([rows[1]]);
+  });
+
+  it('pairs repeated identities newest-first like the turn-end reconcile', () => {
+    const rows = ['task-1', 'task-2'].map((toolUseId) => ({
+      turnId: 'turn-1',
+      toolUseId,
+      type: 'worker',
+      description: 'Same delegation',
+    }));
+    const result = settleZombieSubagents(rows, [
+      {
+        type: 'worker',
+        description: 'Same delegation',
+        status: 'failed',
+      },
+      {
+        type: 'worker',
+        description: 'Same delegation',
+        status: 'completed',
+        toolUseCount: 2,
+        durationMs: 8_000,
+      },
+    ]);
+
+    // The newest row takes the newest ledger entry.
+    expect(
+      result.settled.map(({ row, subagent }) => [
+        row.toolUseId,
+        subagent.status,
+      ]),
+    ).toEqual([
+      ['task-1', 'failed'],
+      ['task-2', 'completed'],
+    ]);
+    expect(result.pending).toEqual([]);
+  });
+
+  it('never settles a running row with an older terminal entry of the same identity', () => {
+    // The whole-session ledger: an old completed delegation from an
+    // earlier turn plus the current one, still running. The live
+    // entry accounts for the waiting row, so nothing settles.
+    const rows = [
+      {
+        turnId: 'turn-2',
+        toolUseId: 'task-now',
+        type: 'explore',
+        description: 'Repeated delegation',
+      },
+    ];
+    const ledger = [
+      {
+        type: 'explore',
+        description: 'Repeated delegation',
+        status: 'completed' as const,
+        toolUseCount: 3,
+        durationMs: 60_000,
+      },
+      {
+        type: 'explore',
+        description: 'Repeated delegation',
+        status: 'running' as const,
+      },
+    ];
+    expect(settleZombieSubagents(rows, ledger)).toEqual({
+      settled: [],
+      pending: rows,
+    });
+
+    // Once the live entry reaches a terminal state, the row settles
+    // with the newest terminal entry.
+    const done = settleZombieSubagents(rows, [
+      ledger[0]!,
+      {
+        type: 'explore',
+        description: 'Repeated delegation',
+        status: 'failed' as const,
+      },
+    ]);
+    expect(done.settled).toEqual([
+      {
+        row: rows[0],
+        subagent: {
+          type: 'explore',
+          description: 'Repeated delegation',
+          status: 'failed',
+        },
+      },
+    ]);
+    expect(done.pending).toEqual([]);
+  });
+
+  it('keeps every row pending on an empty or non-matching ledger', () => {
+    const rows = [
+      {
+        turnId: 'turn-1',
+        toolUseId: 'task-a',
+        type: 'explore',
+        description: 'Background research',
+      },
+    ];
+    expect(settleZombieSubagents(rows, [])).toEqual({
+      settled: [],
+      pending: rows,
+    });
+    expect(
+      settleZombieSubagents(rows, [
+        {
+          type: 'other',
+          description: 'Unrelated',
+          status: 'completed',
+        },
+      ]),
+    ).toEqual({ settled: [], pending: rows });
+  });
+
+  it('applies a settlement to the current activity state', () => {
+    const state = delegatedState('task-bg', 'Background research');
+    const settled = applySubagentSettlement(state, 'task-bg', {
+      type: 'explore',
+      description: 'Background research',
+      status: 'completed',
+      toolUseCount: 4,
+      durationMs: 130_000,
+    });
+    expect(settled.tools.get('task-bg')?.subagent?.status).toBe(
+      'completed',
+    );
+    // Unknown rows and rows without a delegation are no-ops.
+    expect(
+      applySubagentSettlement(state, 'missing', {
+        type: 'explore',
+        description: '',
+        status: 'completed',
+      }),
+    ).toBe(state);
   });
 });

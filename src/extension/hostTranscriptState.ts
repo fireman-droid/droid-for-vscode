@@ -17,6 +17,7 @@ import {
   type SentAttachmentSummary,
   type SessionHistoryStatus,
   type SessionTranscriptItem,
+  type SubagentUpdateMessage,
   type ThinkingCompleteMessage,
   type ThinkingDeltaMessage,
   type ToolActivityMessage,
@@ -44,6 +45,7 @@ export type HostTranscriptProjectionMessage =
   | ThinkingDeltaMessage
   | ThinkingCompleteMessage
   | ToolActivityMessage
+  | SubagentUpdateMessage
   | TranscriptImageMessage
   | RuntimeDiagnosticMessage
   | TurnStateMessage;
@@ -185,6 +187,8 @@ export function projectHostTranscriptMessage(
       return projectThinkingComplete(state, message);
     case 'tool.activity':
       return projectToolActivity(state, message);
+    case 'subagent.update':
+      return projectSubagentUpdate(state, message);
     case 'transcript.image':
       return projectTranscriptImage(state, message);
     case 'runtime.diagnostic': {
@@ -475,6 +479,38 @@ function projectToolActivity(
     ...(message.subagent === undefined
       ? {}
       : { subagent: message.subagent }),
+  });
+}
+
+/**
+ * Applies an out-of-band subagent settlement to the stored tool row
+ * so snapshots and recovery checkpoints stay consistent with what
+ * the webview shows. Never appends: a settlement addresses a row
+ * that already exists, and never touches anything but `subagent`.
+ */
+function projectSubagentUpdate(
+  state: HostTranscriptState,
+  message: SubagentUpdateMessage,
+): HostTranscriptState {
+  const id = stableTranscriptId(
+    'tool',
+    message.turnId,
+    message.toolUseId,
+  );
+  const existingIndex = state.transcript.findIndex(
+    (item) => item.id === id && item.kind === 'tool',
+  );
+  const existing = state.transcript[existingIndex];
+  if (
+    existing === undefined ||
+    existing.kind !== 'tool' ||
+    existing.subagent === undefined
+  ) {
+    return state;
+  }
+  return replaceItem(state, existingIndex, {
+    ...existing,
+    subagent: message.subagent,
   });
 }
 
