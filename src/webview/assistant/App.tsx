@@ -61,7 +61,7 @@ import {
   type GitCommitFlowContextValue,
 } from './GitCommitPanel';
 import { findLatestChangesContext } from './gitCommitDraft';
-import { selectTaskPlanPin } from './planPin';
+import { selectPlanAnchors } from './planAnchor';
 import { QueuedMessages } from './QueuedMessages';
 import { SideChatSheet } from './SideChatSheet';
 import { MAX_BTW_TEXT_LENGTH } from '../../shared/btwProtocol';
@@ -683,13 +683,13 @@ export function App(): React.JSX.Element {
     () => findLatestChangesContext(state.transcript),
     [state.transcript],
   );
-  // Current task plan for the pin above the Composer: a pure
-  // projection of the transcript's latest todowrite (no new bridge
-  // data). The session id stamps the pin so the component can tell a
-  // live finish from a finished plan restored in another session.
-  const taskPlanPin = useMemo(
-    () => selectTaskPlanPin(state.transcript, state.sessionId),
-    [state.transcript, state.sessionId],
+  // Plan anchor cards: pure projections of the transcript's
+  // todowrites (no new bridge data) —
+  // one anchor card per plan lineage, rendered at the creation row's
+  // transcript position and updated in place by later todowrites.
+  const planAnchors = useMemo(
+    () => selectPlanAnchors(state.transcript),
+    [state.transcript],
   );
   const gitFlow = useMemo<GitCommitFlowContextValue>(
     () => ({
@@ -1343,7 +1343,7 @@ export function App(): React.JSX.Element {
             !hasInteraction
           }
           inlineInteraction={inlineInteraction}
-          taskPlanPin={taskPlanPin}
+          planAnchors={planAnchors}
           queuedMessages={
             state.queue.items.length === 0 ? null : (
               <QueuedMessages

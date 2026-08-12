@@ -6362,123 +6362,140 @@ body {
   transform: scale(0.94);
 }
 
-/* Task plan pin: the session's current plan pinned above the
-   Composer. Collapsed it is one quiet low-contrast line; expanded it
-   opens the full checklist upward. Lives inside .dvx-thread-footer
-   above .dvx-composer-wrap; anything floating over the footer (the
-   scroll-to-bottom arrow) anchors to the footer's top edge and so
-   stays above the pin however tall it grows. */
-
-/* Redesigned as its own "conversation state" layer (user report
-   batch 2 §3): a warm layered surface with a floatier shadow and a
-   wider gap so it never reads as part of the Composer card below. */
-.dvx-plan-pin {
+/* Plan anchor card: the plan's Cursor-style "Created Plan" card at
+   its creation position in the transcript (superseding the Composer
+   pin; user decision 2026-08-12 evening). A normal flow member — it
+   scrolls with the conversation and renders identically in live
+   turns and history replay. Later todowrites update it in place. */
+.dvx-plan-anchor {
   overflow: hidden;
-  margin: 0 0 10px;
+  margin: 10px 0;
+  padding: 11px 12px 9px;
   border: 1px solid var(--dvx-border);
   border-radius: 12px;
   background: linear-gradient(180deg, #fffefc, #fbf8f3);
   box-shadow:
     0 1px 2px rgb(31 24 16 / 5%),
     0 10px 26px -18px rgb(31 24 16 / 28%);
-  user-select: none;
-  transition: opacity var(--dvx-duration-slower) ease;
 }
 
 /* Entry is gated like every other live-turn animation (streaming
    design item D): only a connected live turn animates; history
    restores and session switches mount silently. */
-.dvx-anim-live .dvx-plan-pin {
+.dvx-anim-live .dvx-message-live .dvx-plan-anchor {
   animation: dvx-todo-fade-in var(--dvx-duration-slow) ease-out;
 }
 
-.dvx-plan-pin-leaving {
-  opacity: 0;
-}
-
-.dvx-plan-pin-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
-  padding: 8px 10px 8px 12px;
-  border: 0;
-  background: none;
-  cursor: pointer;
-  color: var(--dvx-muted);
-  font-size: 12px;
-  line-height: 19px;
-  text-align: left;
-  transition: background var(--dvx-duration-instant) ease;
-}
-
-.dvx-plan-pin-toggle:hover {
-  background: var(--dvx-soft);
-}
-
-.dvx-plan-pin-current {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 400;
-}
-
-/* Expanded header joins the card-label family (.dvx-btw-title). */
-.dvx-plan-pin-open .dvx-plan-pin-current {
-  color: var(--dvx-muted);
+/* Quiet eyebrow from the uppercase card-label family. */
+.dvx-plan-anchor-eyebrow {
+  margin: 0 0 4px;
+  color: var(--dvx-subtle);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
 }
 
-/* Quiet hairline progress track next to the fraction. */
-.dvx-plan-pin-progress {
-  flex: 0 0 36px;
-  height: 3px;
+.dvx-plan-anchor-title {
+  margin: 0;
   overflow: hidden;
+  color: var(--dvx-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-plan-anchor-summary {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--dvx-muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-plan-anchor-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Quiet text entry, link-weight on hover only. */
+.dvx-plan-anchor-view {
+  margin-left: -4px;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  color: var(--dvx-muted);
+  font-size: 12px;
+  line-height: 18px;
+  transition: background var(--dvx-duration-instant) ease,
+    color var(--dvx-duration-instant) ease;
+}
+
+.dvx-plan-anchor-view:hover {
+  background: var(--dvx-soft);
+  color: var(--dvx-ink);
+}
+
+/* Right status control: a quiet count at rest, a warm accent chip
+   while the turn is building the plan, a settled grey-check state
+   once every step is done. Always also a disclosure toggle. */
+.dvx-plan-anchor-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px 3px 9px;
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: rgb(38 33 27 / 8%);
-}
-
-.dvx-plan-pin-progress-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: color-mix(in srgb, var(--dvx-accent) 72%, #fff);
-  transition: width var(--dvx-duration-slower) var(--dvx-easing-out-strong);
-}
-
-.dvx-plan-pin-done .dvx-plan-pin-progress-fill {
-  background: var(--dvx-diff-add, #1a7f37);
-}
-
-.dvx-plan-pin-count {
-  flex: 0 0 auto;
+  background: none;
+  cursor: pointer;
   color: var(--dvx-subtle);
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 550;
+  line-height: 17px;
   font-variant-numeric: tabular-nums;
+  transition: background var(--dvx-duration-instant) ease,
+    border-color var(--dvx-duration-instant) ease,
+    color var(--dvx-duration-instant) ease;
 }
 
-.dvx-plan-pin-dot {
-  flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--dvx-accent);
-  animation: dvx-plan-pulse 1.4s ease-in-out infinite;
+.dvx-plan-anchor-status:hover {
+  background: var(--dvx-soft);
 }
 
-.dvx-plan-pin-chevron {
+.dvx-plan-anchor-status-building {
+  border-color: color-mix(in srgb, var(--dvx-accent) 32%, transparent);
+  background: color-mix(in srgb, var(--dvx-accent) 10%, transparent);
+  color: color-mix(in srgb, var(--dvx-accent) 82%, var(--dvx-ink));
+}
+
+.dvx-plan-anchor-status-building:hover {
+  background: color-mix(in srgb, var(--dvx-accent) 16%, transparent);
+}
+
+.dvx-plan-anchor-done .dvx-plan-anchor-status {
+  color: var(--dvx-muted);
+}
+
+.dvx-plan-anchor-status .dvx-plan-anchor-check {
+  color: var(--dvx-subtle);
+}
+
+.dvx-plan-anchor-chevron {
   display: block;
   width: 14px;
   height: 14px;
   flex: 0 0 14px;
-  color: var(--dvx-subtle);
+  color: currentcolor;
+  opacity: 0.8;
   transform: rotate(0deg);
   transform-box: fill-box;
   transform-origin: 50% 50%;
@@ -6486,39 +6503,40 @@ body {
     var(--dvx-easing-out-strong);
 }
 
-/* Collapsed points up: the checklist opens upward from the Composer. */
-.dvx-plan-pin-toggle[aria-expanded="false"] .dvx-plan-pin-chevron {
+.dvx-plan-anchor-chevron[data-open="true"] {
   transform: rotate(180deg);
 }
 
 /* The checklist stays mounted so both directions animate: the body
    grid transitions 0fr↔1fr and the inner wrapper clips. */
-.dvx-plan-pin-body {
+.dvx-plan-anchor-body {
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows var(--dvx-duration-slower)
     var(--dvx-easing-out-strong);
 }
 
-.dvx-plan-pin-body[data-open="true"] {
+.dvx-plan-anchor-body[data-open="true"] {
   grid-template-rows: 1fr;
 }
 
-.dvx-plan-pin-body-inner {
+.dvx-plan-anchor-body-inner {
   min-height: 0;
   overflow: hidden;
 }
 
-.dvx-plan-pin-list {
+.dvx-plan-anchor-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
   margin: 0;
-  padding: 2px 6px 10px;
+  padding: 8px 0 2px;
   list-style: none;
+  border-top: 1px solid color-mix(in srgb, var(--dvx-border) 62%, transparent);
+  margin-top: 8px;
 }
 
-.dvx-plan-pin-step {
+.dvx-plan-anchor-step {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -6530,7 +6548,7 @@ body {
   animation: dvx-todo-fade-in var(--dvx-duration-slow) ease-out;
 }
 
-.dvx-plan-pin-marker {
+.dvx-plan-anchor-marker {
   flex: 0 0 auto;
   width: 12px;
   height: 12px;
@@ -6542,11 +6560,11 @@ body {
 
 /* The current step reads through placement, a warm dot and a faint
    highlight — never through bold text. */
-.dvx-plan-pin-step-in_progress {
+.dvx-plan-anchor-step-in_progress {
   background: color-mix(in srgb, var(--dvx-accent) 6%, transparent);
 }
 
-.dvx-plan-pin-step-in_progress .dvx-plan-pin-marker {
+.dvx-plan-anchor-step-in_progress .dvx-plan-anchor-marker {
   border-color: var(--dvx-accent);
   background:
     radial-gradient(
@@ -6557,30 +6575,30 @@ body {
   animation: dvx-plan-pulse 1.4s ease-in-out infinite;
 }
 
-.dvx-plan-pin-step-in_progress .dvx-plan-pin-text {
+.dvx-plan-anchor-step-in_progress .dvx-plan-anchor-text {
   font-weight: 500;
 }
 
 /* Done steps recede on transparency alone — no strikethrough, which
    turns CJK lines into visual noise (user decision, batch 2 §3). */
-.dvx-plan-pin-step-completed {
+.dvx-plan-anchor-step-completed {
   opacity: 0.62;
 }
 
-.dvx-plan-pin-step-completed .dvx-plan-pin-text {
+.dvx-plan-anchor-step-completed .dvx-plan-anchor-text {
   color: var(--dvx-muted);
 }
 
-.dvx-plan-pin-step-completed .dvx-plan-pin-check {
+.dvx-plan-anchor-step-completed .dvx-plan-anchor-check {
   color: var(--dvx-subtle);
 }
 
-.dvx-plan-pin-text {
+.dvx-plan-anchor-text {
   min-width: 0;
   word-break: break-word;
 }
 
-.dvx-plan-pin-check {
+.dvx-plan-anchor-check {
   display: block;
   flex: 0 0 12px;
   width: 12px;
@@ -6588,29 +6606,31 @@ body {
   color: var(--dvx-diff-add, #1a7f37);
 }
 
-.dvx-plan-pin-step .dvx-plan-pin-check {
+.dvx-plan-anchor-step .dvx-plan-anchor-check {
   margin-top: 3.5px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dvx-plan-pin,
-  .dvx-plan-pin-toggle,
-  .dvx-plan-pin-chevron,
-  .dvx-plan-pin-body,
-  .dvx-plan-pin-progress-fill {
+  .dvx-plan-anchor-view,
+  .dvx-plan-anchor-status,
+  .dvx-plan-anchor-chevron,
+  .dvx-plan-anchor-body {
     transition: none;
   }
 
-  .dvx-anim-live .dvx-plan-pin,
-  .dvx-plan-pin-step,
-  .dvx-plan-pin-dot,
-  .dvx-plan-pin-step-in_progress .dvx-plan-pin-marker {
+  .dvx-anim-live .dvx-message-live .dvx-plan-anchor,
+  .dvx-plan-anchor-step,
+  .dvx-plan-anchor-step-in_progress .dvx-plan-anchor-marker {
     animation: none;
   }
 }
 
 @media (forced-colors: active) {
-  .dvx-plan-pin {
+  .dvx-plan-anchor {
     border: 1px solid CanvasText;
+  }
+
+  .dvx-plan-anchor-status-building {
+    border-color: CanvasText;
   }
 }

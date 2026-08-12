@@ -79,8 +79,8 @@ import {
 } from "./MarkdownText";
 import { ChangesCommitEntry } from "./GitCommitPanel";
 import { MessageTimestamp } from "./MessageTimestamp";
-import { parsePlanSteps, type TaskPlanPinState } from "./planPin";
-import { TaskPlanPin } from "./TaskPlanPin";
+import { parsePlanSteps, type PlanAnchorState } from "./planAnchor";
+import { PlanAnchorCard } from "./PlanAnchorCard";
 import { TranscriptImage } from "./TranscriptImage";
 import { getImagePreview, rememberImagePreview } from "./imagePreviewCache";
 
@@ -180,6 +180,15 @@ export const PreviewContext = createContext<(path: string) => void>(
 export const TerminalMirrorContext = createContext<(() => void) | null>(
   null,
 );
+
+// Plan anchor cards for the transcript: the map keys creation
+// todowrite toolUseIds to the plan's latest projected state, and
+// `running` drives the card's warm "Building…" status while the turn
+// streams. Exported for focused slot tests.
+export const PlanAnchorContext = createContext<{
+  readonly anchors: ReadonlyMap<string, PlanAnchorState> | null;
+  readonly running: boolean;
+}>({ anchors: null, running: false });
 
 // Regenerating rewinds to the last user message and resends it. Null
 // means the action is currently unavailable (no anchor or turn active).
@@ -317,10 +326,12 @@ interface DroidThreadProps {
   readonly editResendEnabled: boolean;
   readonly inlineInteraction?: ReactNode;
   /**
-   * The session's current task plan, pinned above the Composer while
-   * it has open steps (projected in App from transcript todowrites).
+   * Plan anchor cards keyed by the creation todowrite's toolUseId
+   * (projected in App from transcript todowrites). Each plan renders
+   * one Cursor-style "Created Plan" card at its creation position in
+   * the transcript, updated in place by later todowrites.
    */
-  readonly taskPlanPin: TaskPlanPinState | null;
+  readonly planAnchors?: ReadonlyMap<string, PlanAnchorState> | null;
   /**
    * Queued-prompt cards rendered at the transcript tail, above the
    * Composer; null while the queue is empty. Built in App so the
@@ -412,7 +423,7 @@ export const DroidThread = memo(function DroidThread({
   onOpenTerminalMirror,
   editResendEnabled,
   inlineInteraction,
-  taskPlanPin,
+  planAnchors = null,
   queuedMessages = null,
   queuedCount = 0,
 }: DroidThreadProps): React.JSX.Element {
@@ -669,6 +680,10 @@ export const DroidThread = memo(function DroidThread({
     () => ({ workspaceRoot, previewFile: onPreviewFile }),
     [workspaceRoot, onPreviewFile],
   );
+  const planAnchorValue = useMemo(
+    () => ({ anchors: planAnchors, running }),
+    [planAnchors, running],
+  );
   return (
     <ThreadPrimitive.Root
       className={`dvx-thread${interactionPending ? " dvx-thread-pending" : ""}`}
@@ -690,6 +705,7 @@ export const DroidThread = memo(function DroidThread({
           <PathPreviewContext.Provider value={pathPreviewWiring}>
           <InlineHtmlPreviewContext.Provider value={onPreviewInlineHtml}>
           <TerminalMirrorContext.Provider value={onOpenTerminalMirror}>
+          <PlanAnchorContext.Provider value={planAnchorValue}>
           <RegenerateContext.Provider value={onRegenerate}>
           <ForkContext.Provider value={onForkSession}>
             <SelectSessionContext.Provider value={onSelectSession}>
@@ -758,6 +774,7 @@ export const DroidThread = memo(function DroidThread({
             </SelectSessionContext.Provider>
           </ForkContext.Provider>
           </RegenerateContext.Provider>
+          </PlanAnchorContext.Provider>
           </TerminalMirrorContext.Provider>
           </InlineHtmlPreviewContext.Provider>
           </PathPreviewContext.Provider>
@@ -780,11 +797,6 @@ export const DroidThread = memo(function DroidThread({
               <ScrollToBottomIcon />
             </button>
           </div>
-          {/* In normal flow at the footer's top: the absolute dock
-              above (bottom: 100%) rides the footer's top edge, so the
-              arrow always floats clear of the pin however tall the
-              expanded checklist grows. */}
-          <TaskPlanPin pin={taskPlanPin} />
           <Composer
             statusMessage={statusMessage}
             showRetry={showRetry}
@@ -1299,10 +1311,13 @@ const AssistantMessage = memo(function AssistantMessage(): React.JSX.Element {
               );
             case "tool-call":
               return (
-                <ToolActivityRow
-                  activity={readToolActivity(part)}
-                  toolName={part.toolName}
-                />
+                <>
+                  <PlanAnchorSlot toolCallId={part.toolCallId} />
+                  <ToolActivityRow
+                    activity={readToolActivity(part)}
+                    toolName={part.toolName}
+                  />
+                </>
               );
             case "data":
               if (part.name === "droid-diagnostic") {
@@ -3345,6 +3360,28 @@ export function ExecuteMirrorEntry({
       在终端中查看
     </button>
   );
+}
+
+/**
+ * Renders the plan's anchor card directly above the todowrite row
+ * that created the plan (Cursor-style "Created Plan" in the flow).
+ * Later todowrite rows render nothing here — they update the anchored
+ * card's projection instead. Rendering through the ordinary tool-part
+ * path keeps live turns and history replay isomorphic by
+ * construction.
+ */
+export function PlanAnchorSlot({
+  toolCallId,
+}: {
+  readonly toolCallId: string | undefined;
+}): React.JSX.Element | null {
+  const { anchors, running } = useContext(PlanAnchorContext);
+  const anchor =
+    toolCallId === undefined ? undefined : anchors?.get(toolCallId);
+  if (anchor === undefined) {
+    return null;
+  }
+  return <PlanAnchorCard anchor={anchor} running={running} />;
 }
 
 function ToolActivityRow({
