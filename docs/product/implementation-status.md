@@ -1512,6 +1512,27 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
   `activityGrouping` 助手（18 测试绿）落地保 HEAD 可编译，跑马灯
   切片仍归原代理。**本次重做未打包，随下一个修复包**（当前安装包
   仍是旧卡片形态）
+- **形态二次纠正（2026-08-12 晚，用户拍板，提交 `62e0e1c`）**：
+  `aaaca96` 的右缘抽屉 + 遮罩被用户对照 Claude Code 截图再次否决
+  ——"btw 并不是抽屉组件，他就是右边分了一块区域给 btw，它是共生
+  的"。布局模型改为**双栏分栏**：打开时 shell 加
+  `dvx-shell-split`（`grid-template-columns: minmax(0,1fr)
+  auto`），Header/握手提示/`.dvx-thread` 显式放第 1 列，
+  `.dvx-btw-panel` 占第 2 列跨全高（含 Header 行）；右栏宽
+  `min(max(42vw, 200px), 420px, calc(100vw - 110px))`，左缘 1px
+  分隔线，去掉遮罩、去投影、去"点外面关闭"（关闭只剩 ×/Esc/会话
+  切换），两栏同时可交互、各自独立滚动，开合改为宽度 0↔稳态的
+  200ms 展开/收合（子元素 min-width 锁稳态宽防中途换行，
+  reduced-motion 禁用），窄视口分栏不回退浮层（320px 实测右栏
+  200px/主栏 120px）。面板结构、空态、隐藏 fork 语义零改动。
+  设计文档 §4.2 追加第二条决策记录。门禁：全量 vitest 80 files /
+  1826 tests 全绿、build 绿；冒烟升级为八场景（narrow 改为分栏断
+  言 + × 关闭，新增 mid 420px 分栏 + 主 Composer 可编辑断言）全
+  PASS；三档截图目检（全宽 520 / 420 / 320）通过。typecheck：
+  extension 段与 root webview 段绿；第三段 `typecheck:webview`
+  在 HEAD 上红——来自并行图片代理的 `f7f9b24`（runtimeAdapter 用
+  `item.turnId` 而 `UserTranscriptItem` 无此字段），与本切片无关，
+  已留后台轮询待其转绿。**未打包，随下一个修复包**
 
 ### 19. Turn 运行中排队消息（2026-08-12 晚，V1 主线收官切片）
 

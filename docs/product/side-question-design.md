@@ -27,9 +27,10 @@ fork 时 CLI 会把它**升格**为正式会话（`promoteBtwSessionIfNeeded`）
 核心），主会话（含正在跑的 turn）零打扰。Host 侧不动 ChatController
 的单会话绑定，新增一个独立的 **btw sidecar**（沿用
 `FactoryCommandCatalog` / `FactorySessionHistoryLoader` 已验证的
-短生命周期公开 client 模式）。UI 是**右缘滑入的全高 "Side
-question" 面板**（Claude Code 同形态；用户拍板 2026-08-12 晚，
-推翻首版 Composer 上方卡片，见 §4.2 决策记录）。
+短生命周期公开 client 模式）。UI 是**与主对话并排共生的全高
+"Side question" 分栏**（Claude Code 同形态；用户两次拍板
+2026-08-12 晚，先推翻首版 Composer 上方卡片、再推翻二版右缘
+抽屉，见 §4.2 决策记录）。
 
 ## 1. 参考形态与需求
 
@@ -178,25 +179,41 @@ sidecar 里做（§5）。
 - 不加 `+` 菜单入口、不加常驻按钮（UI restraint：斜杠入口已够，
   等真实使用反馈再说）。
 
-### 4.2 形态：右缘滑入的全高 "Side question" 面板
+### 4.2 形态：与主对话并排共生的 "Side question" 分栏
 
-**决策记录（2026-08-12 晚，用户拍板）**：首版按下方原候选 A
-（Composer 上方卡片，复用 `ComposerPopup` 壳）交付后，用户对照
-真机判定形态做错——"我都说做成 claude 那样，右边出现一个 side
-question"。展现层重做为 Claude Code 同款右侧面板（提交
-`aaaca96`），隐藏 fork / deny-all 权限 / 关闭即弃 / 会话切换清理 /
-Bridge 契约全部不动。原候选讨论保留在 git 历史（d4a4fbc 版本）。
+**决策记录（2026-08-12 晚，用户两次拍板）**：
+
+1. 首版按下方原候选 A（Composer 上方卡片，复用 `ComposerPopup`
+   壳）交付后，用户对照真机判定形态做错——"我都说做成 claude
+   那样，右边出现一个 side question"。展现层重做为右缘滑入的全高
+   面板 + 遮罩（提交 `aaaca96`）。原候选讨论保留在 git 历史
+   （d4a4fbc 版本）。
+2. 用户对照 Claude Code 截图再次纠正：**"btw 并不是抽屉组件，他
+   就是右边分了一块区域给 btw，它是共生的"**——不是浮层，是
+   split-pane。提交 `62e0e1c` 把 overlay/遮罩模型改为双栏网格：
+   两栏同时可交互，主对话不被盖住也不缩成窄边。两轮重做中隐藏
+   fork / deny-all 权限 / 关闭即弃 / 会话切换清理 / Bridge 契约
+   全部不动。
 
 最终形态（`SideChatSheet.tsx`，App 根级挂载，不再走 Composer 的
 `sideChat` 槽）：
 
-- **全高右缘面板**：`position: fixed` overlay（z-index 55，低于
-  图片 lightbox 60），面板宽 `min(420px, 82%)`——窄 Secondary
-  Sidebar（320px）下约 262px，左侧留一条主对话可见的窄边 + 半透明
-  暖色遮罩（`rgb(38 33 27 / 18%)`），点遮罩即关。左缘 1px 边框 +
-  双层柔和左投影；滑入 220ms / 滑出 200ms（遮罩同步淡入淡出），
-  `prefers-reduced-motion` 全部禁用。
-- **面板结构**（自上而下）：
+- **双栏网格**：`/btw` 打开时 shell 加 `dvx-shell-split`，
+  `grid-template-columns: minmax(0, 1fr) auto`——Header、
+  握手提示、`.dvx-thread` 显式放第 1 列，`.dvx-btw-panel` 占第 2
+  列并跨全部行（含 Header 行，同 Claude）。**没有遮罩、没有"点
+  外面关闭"**（分栏没有"外面"）；主对话（转录、Composer、发消息、
+  流式、吸顶、钉条、滚动箭头）在变窄的左栏内照常工作，两栏各自
+  独立滚动。
+- **右栏宽度**：`min(max(42vw, 200px), 420px, calc(100vw -
+  110px))`——常规宽约 42%，下限 200px，极窄时让出主栏至少约
+  110px（320px 视口实测右栏 200px / 主栏 120px），**永不回退成
+  浮层**。左缘 1px 分隔线，面板保持 raised 白渐变卡面（去掉了
+  抽屉时代的左投影——共面元素不该悬浮）。
+- **开合动画**：宽度从 0 展开 200ms / 收合 200ms（子元素
+  `min-width` 锁定在稳态宽度避免动画中途换行，`overflow: hidden`
+  裁切）；`prefers-reduced-motion` 禁用。
+- **面板结构**（自上而下，不变）：
   1. 安静标题行：`Side question`（12px/650）+ 右上 `×`；
   2. muted 斜体提示语（对照 Claude 原文）："Ask a quick side
      question below without interrupting the conversation."；
@@ -207,9 +224,10 @@ Bridge 契约全部不动。原候选讨论保留在 git 历史（d4a4fbc 版本
      accent 聚焦环）+ 自带 accent 发送按钮（↑，空文本禁用），
      Enter 或点击发送。
 - 空态 = 标题 + 提示语 + 底部输入框（对照 Claude 截图二）。
-- 关闭路径：`×`、遮罩、Esc、会话切换——语义仍是关卡即弃 fork。
+- 关闭路径：`×`、Esc、会话切换——语义仍是关卡即弃 fork。
 
-主 Composer、主转录完全不动；主 turn 的流式渲染不受影响。
+主 Composer、主转录完全不动；主 turn 的流式渲染不受影响，且
+分栏打开时主 Composer 仍可编辑、发送（冒烟有断言）。
 
 ### 4.3 生命周期
 
