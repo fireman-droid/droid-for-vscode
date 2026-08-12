@@ -756,6 +756,45 @@ blockquote-current/-a/-b/-final）。**未打包，随下一批次包验收**：
 重开带图历史会话应见 48px 横排缩略图在消息文本上方，点击开
 Lightbox；含 `>` 引用的回复应为灰线灰字安静形态。
 
+2026-08-12 深夜追加「会话抽屉运行指示 + 点击记录即回聊天」：①
+先核实真实行为：daemon 模式关会话走 `session.detach()`，后端回合
+继续跑（切回时经既有 `reconcileDaemonTurn` 收养）；进程模式
+dispose 会 `interrupt()` 杀回合——指示器因此只覆盖 daemon 路径，
+进程模式切换仍被 `canReplaceSession` 阻塞，行为差异以此为准。
+Runtime 新增可选能力 `supportsBackgroundTurns()`（daemon true、
+进程 false）与 `dispose({ preserveBackendTurn })`（daemon 只
+detach 不 interrupt）；`DaemonSessionCatalog.readOpenedWorkingStates()`
+读 daemon opened-session registry 的 workingState。Bridge：
+`SessionSummary` 增可选 `running`；新增增量消息 `session.running`
+（sessionId + running，状态变化才推，不整表刷新）；`host.snapshot`
+增可选 `backgroundTurnsAvailable`（省略即 false），双侧校验闭合。
+Host：`ChatController` 维护 running 注册表——活跃 daemon 回合切走
+时 detach 并保旗；目录加载（启动/刷新/收藏与归档回读）后从 daemon
+registry 播种，另一窗口或 CLI 占用的会话同样亮旗；1s 轮询 daemon
+报 idle 即清旗（连续 3 次读失败 fail closed 全清）；本地回合终态
+（完成/中断/出错）即时清旗；`canReplaceSession` 对可后台的 daemon
+回合放开切换。Webview：抽屉行标题前 muted 色 1px 描边小圆环
+（`dvx-spin` CSS 动画，不改行高，"Turn still running." 进可访问
+名），`session.running` 增量进 store；App 在
+`backgroundTurnsAvailable` 时不再因回合运行禁用会话行。② 点击
+会话记录（含内容搜索命中）选中即关抽屉直接回聊天视图（Cursor
+行为）；归档区展开、收藏、改名、归档等行内操作不关抽屉。门禁：
+typecheck 三段过；聚焦 vitest 6 文件 580 全过。自验收（Delivery
+loop 第 8 步）：scratch esbuild
+（`artifacts/build-session-drawer-dist.mjs`，镜像 esbuild.mjs 的
+webview 段、产物进 `artifacts/session-drawer-dist/`，不碰共享
+dist/）+ 装置页 `artifacts/session-drawer-harness.html` + 无头
+Chrome 冒烟 `artifacts/smoke-session-drawer.mjs` 全过：运行行
+转圈（dvx-spin、muted、行高 35.5px 与普通行一致、悬停不变形）、
+点第三条记录抽屉关闭且恰发一条 `session.select`、
+`session.running:false` 后转圈原位消失、空列表安静文案、归档区
+展开不关抽屉。截图：`artifacts/session-drawer-running.png`、
+`-running-hover.png`、`-select-closes.png`、`-running-cleared.png`、
+`-empty.png`、`-archived.png`。**未打包，随下一批次包验收**。遗留：
+后台旗轮询仅在有旗时运转（无旗零开销）；空列表装置图中
+「Earlier CLI messages…」通知与搜索框轻微叠压为既有形态问题，
+与本切片无关。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
