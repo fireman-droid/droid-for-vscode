@@ -47,7 +47,7 @@ describe('VS Code webview bridge', () => {
 
     expect(api.postMessage).toHaveBeenCalledWith({
       type: 'webview.ready',
-      protocolVersion: 2,
+      protocolVersion: 3,
     });
   });
 });

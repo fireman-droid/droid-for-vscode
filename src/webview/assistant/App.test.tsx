@@ -165,7 +165,7 @@ describe('assistant-ui App bridge commands', () => {
     // be posted exactly once.
     expect(posted).toContainEqual({
       type: 'webview.ready',
-      protocolVersion: 2,
+      protocolVersion: 3,
     });
     expect(posted).toContainEqual({
       type: 'webview.diagnostic',
@@ -343,7 +343,7 @@ describe('assistant-ui App bridge commands', () => {
     await waitFor(() =>
       expect(posted).toContainEqual({
         type: 'webview.ready',
-        protocolVersion: 2,
+        protocolVersion: 3,
       }),
     );
     host({
