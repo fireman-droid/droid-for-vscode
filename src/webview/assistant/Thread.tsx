@@ -2875,7 +2875,13 @@ function ToolActivityRow({
       {row}
       {activity.background ? <BackgroundProcessHint /> : null}
       {activity.subagent === null ? null : (
-        <SubagentSummaryRow subagent={activity.subagent} />
+        <SubagentSummaryRow
+          type={activity.subagent.type}
+          description={activity.subagent.description}
+          status={activity.subagent.status}
+          toolUseCount={activity.subagent.toolUseCount}
+          durationMs={activity.subagent.durationMs}
+        />
       )}
     </>
   );
@@ -2895,30 +2901,36 @@ export function BackgroundProcessHint(): React.JSX.Element {
   );
 }
 
-/** One quiet indented summary row for a delegated subagent. */
-export function SubagentSummaryRow({
-  subagent,
-}: {
-  readonly subagent: NonNullable<ToolActivityPresentation["subagent"]>;
-}): React.JSX.Element {
+/**
+ * One quiet indented summary row for a delegated subagent. Props are
+ * primitives so the memo holds even though the parent rebuilds its
+ * presentation object every render: with a window full of settled
+ * delegations, re-rendering each sub-row on message append measurably
+ * lengthened the append task (120-turn stress).
+ */
+export const SubagentSummaryRow = memo(function SubagentSummaryRow({
+  type,
+  description,
+  status,
+  toolUseCount,
+  durationMs,
+}: NonNullable<ToolActivityPresentation["subagent"]>): React.JSX.Element {
   return (
     <div className="dvx-subagent-row">
       <span className="dvx-subagent-label">
-        {`Delegated to ${subagent.type} subagent`}
+        {`Delegated to ${type} subagent`}
       </span>
-      {subagent.status === null ? null : (
+      {status === null ? null : (
         <span className="dvx-activity-state">
-          {formatSubagentSummary(subagent)}
+          {formatSubagentSummary({ status, toolUseCount, durationMs })}
         </span>
       )}
-      {subagent.description.length > 0 ? (
-        <span className="dvx-subagent-description">
-          {subagent.description}
-        </span>
+      {description.length > 0 ? (
+        <span className="dvx-subagent-description">{description}</span>
       ) : null}
     </div>
   );
-}
+});
 
 /**
  * "running" / "completed · 7 tool uses · 4.2s"; counters only appear

@@ -146,13 +146,11 @@ describe('SubagentSummaryRow', () => {
   it('names the delegation with its ledger summary', () => {
     render(
       createElement(SubagentSummaryRow, {
-        subagent: {
-          type: 'explore',
-          description: 'Map the payment flow',
-          status: 'completed',
-          toolUseCount: 7,
-          durationMs: 4_200,
-        },
+        type: 'explore',
+        description: 'Map the payment flow',
+        status: 'completed',
+        toolUseCount: 7,
+        durationMs: 4_200,
       }),
     );
     screen.getByText('Delegated to explore subagent');
@@ -163,13 +161,11 @@ describe('SubagentSummaryRow', () => {
   it('stays quiet while running without counters', () => {
     render(
       createElement(SubagentSummaryRow, {
-        subagent: {
-          type: 'generalPurpose',
-          description: '',
-          status: 'running',
-          toolUseCount: null,
-          durationMs: null,
-        },
+        type: 'generalPurpose',
+        description: '',
+        status: 'running',
+        toolUseCount: null,
+        durationMs: null,
       }),
     );
     screen.getByText('running');
