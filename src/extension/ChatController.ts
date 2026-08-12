@@ -580,7 +580,7 @@ export class ChatController {
     counts: Map<string, number>;
     bytes: number;
   } | null = null;
-  /** Hidden-fork side chat; null outside process mode. */
+  /** Hidden-fork side chat; null when no sidecar factory is wired. */
   private readonly btwSideChat: BtwSideChat | null;
 
   constructor(
@@ -618,9 +618,10 @@ export class ChatController {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
     };
-    // Process-mode only (side-question-design.md §6): without a
-    // factory the snapshot never advertises btwAvailable, so the
-    // webview entry stays hidden (fail closed in daemon mode).
+    // Mode-agnostic since the daemon port (side-question-design.md
+    // §5.2, probe-btw-daemon.mjs): without a factory the snapshot
+    // never advertises btwAvailable, so the webview entry stays
+    // hidden (fail closed).
     this.btwSideChat =
       btwSidecarFactory === undefined
         ? null

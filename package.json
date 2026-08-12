@@ -71,11 +71,11 @@
             "daemon"
           ],
           "enumDescriptions": [
-            "Each window runs its own droid subprocess (default).",
-            "Sessions run over a persistent local droid daemon connection (experimental)."
+            "Each window runs its own droid subprocess.",
+            "Sessions run over a persistent local droid daemon connection, so tasks survive window reloads (default)."
           ],
-          "default": "process",
-          "description": "How DroidVisX executes Droid sessions. Changing this requires a window reload."
+          "default": "daemon",
+          "description": "How DroidVisX executes Droid sessions. Changing this requires a window reload. When unset, DroidVisX uses the daemon and silently falls back to per-window subprocesses if the daemon cannot start; an explicit choice is always kept."
         }
       }
     }

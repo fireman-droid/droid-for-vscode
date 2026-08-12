@@ -1,7 +1,11 @@
 import * as vscode from 'vscode';
 
-import { FactoryDroidRuntime } from '../runtime/FactoryDroidRuntime';
+import {
+  createLocalDroidSession,
+  FactoryDroidRuntime,
+} from '../runtime/FactoryDroidRuntime';
 import { createBtwSidecar } from '../runtime/btw/BtwSidecar';
+import { createDaemonBtwSidecar } from '../runtime/btw/DaemonBtwSidecar';
 import { FactorySessionCatalog } from '../runtime/FactorySessionCatalog';
 import { FactorySessionHistoryLoader } from '../runtime/history/FactorySessionHistoryLoader';
 import {
@@ -20,6 +24,7 @@ import {
   createDaemonSessionFactory,
   type SessionLeaseHooks,
 } from '../runtime/daemon/createDaemonDroidSession';
+import { createDaemonFirstSessionFactory } from '../runtime/daemon/daemonFirstSessionFactory';
 import {
   defaultDiscoveryFile,
   ensureSharedDaemon,
@@ -51,7 +56,10 @@ import { createVscodeFileDiffOpener } from './vscodeFileDiff';
 import { createVscodePathOpener } from './vscodePathOpener';
 import { PreviewPanelController } from './PreviewPanelController';
 import { createVscodeGitWorkflow } from './vscodeGitWorkflow';
-import { createWorktreeSessionsFeature } from './worktreeSessions';
+import {
+  createWorktreeSessionsFeature,
+  type WorktreeSessionsFeature,
+} from './worktreeSessions';
 import { createTerminalMirror } from './terminalMirror';
 
 const focusViewCommand = 'droidvisx.focusView';
@@ -270,6 +278,25 @@ function createDaemonSidecar(
  * shared daemon's uncoordinated replacement operations so two windows
  * never attach the same session.
  */
+/**
+ * Re-evaluates a worktree feature's daemon dependency on every read:
+ * after a daemon-to-process fallback the drawer entry and the create
+ * guard both fail closed instead of advertising a dead capability.
+ */
+function withDaemonGate(
+  feature: WorktreeSessionsFeature,
+  daemonSessionsActive: () => boolean,
+): WorktreeSessionsFeature {
+  return {
+    get enabled() {
+      return feature.enabled && daemonSessionsActive();
+    },
+    store: feature.store,
+    isGitWorkspace: (cwd) => feature.isGitWorkspace(cwd),
+    resolveBranch: (worktreePath) => feature.resolveBranch(worktreePath),
+  };
+}
+
 function createSessionLeaseHooks(): SessionLeaseHooks {
   const leaseFile = defaultLeaseFile();
   return {
@@ -310,15 +337,27 @@ export function activate(context: vscode.ExtensionContext): void {
       context.workspaceState.update(key, value),
   };
   const attachmentSources = createVscodeAttachmentSources();
-  // Read once at activation: switching modes requires a window reload,
-  // which also guarantees a clean fallback to process mode.
-  const runtimeMode = vscode.workspace
-    .getConfiguration('droidvisx')
-    .get<'process' | 'daemon'>('runtime.mode', 'process');
+  // Read once at activation: switching modes requires a window reload.
+  // Daemon is the default; a user who explicitly sets a mode keeps it
+  // (no fallback), while the default gets a silent process fallback
+  // when the daemon cannot start (see createDaemonFirstSessionFactory).
+  const modeConfiguration = vscode.workspace.getConfiguration('droidvisx');
+  const runtimeMode = modeConfiguration.get<'process' | 'daemon'>(
+    'runtime.mode',
+    'daemon',
+  );
+  const modeInspection = modeConfiguration.inspect('runtime.mode');
+  const modeExplicit =
+    modeInspection?.globalValue !== undefined ||
+    modeInspection?.workspaceValue !== undefined ||
+    modeInspection?.workspaceFolderValue !== undefined;
   diagnostics.record({
     level: 'info',
     name: 'runtime.mode',
-    attributes: { mode: runtimeMode },
+    attributes: {
+      mode: runtimeMode,
+      source: modeExplicit ? 'settings' : 'default',
+    },
   });
   // Daemon mode needs the shared detached daemon so sessions survive a
   // window reload (Phase 3); the read-only archive/search sidecar in
@@ -330,6 +369,45 @@ export function activate(context: vscode.ExtensionContext): void {
       : createPrivateDaemonStrategy(),
   );
   disposeDaemonSidecar = daemonSidecar.dispose;
+  // Daemon-mode session creation. Explicitly configured daemon users
+  // keep hard failures; the default gets the silent process fallback,
+  // recorded once as `runtime.mode.fallback` (quiet local log only —
+  // the whole point is that the user never has to notice the mode).
+  const daemonSessions =
+    runtimeMode !== 'daemon'
+      ? null
+      : modeExplicit
+        ? {
+            factory: createDaemonSessionFactory(
+              daemonSidecar.droid,
+              createSessionLeaseHooks(),
+            ),
+            didFallBack: () => false,
+          }
+        : createDaemonFirstSessionFactory({
+            acquireDaemon: daemonSidecar.droid,
+            daemonFactory: createDaemonSessionFactory(
+              daemonSidecar.droid,
+              createSessionLeaseHooks(),
+            ),
+            processFactory: (options) =>
+              createLocalDroidSession({
+                ...options,
+                observability: diagnostics.observability,
+              }),
+            onFallback: (error) => {
+              diagnostics.record({
+                level: 'warn',
+                name: 'runtime.mode.fallback',
+                attributes: { from: 'daemon', to: 'process' },
+                detail:
+                  error instanceof Error ? error.message : String(error),
+              });
+            },
+          });
+  /** True while this window's sessions actually run over the daemon. */
+  const daemonSessionsActive = (): boolean =>
+    daemonSessions !== null && !daemonSessions.didFallBack();
   // Shared with the export command, which reads the same recovery
   // store, catalog, and history loader the controller uses.
   const recoveryStore = new SessionRecoveryStore(persistence);
@@ -348,14 +426,9 @@ export function activate(context: vscode.ExtensionContext): void {
         interactionHandler,
         diagnostics,
         observability: diagnostics.observability,
-        ...(runtimeMode === 'daemon'
-          ? {
-              createSdkSession: createDaemonSessionFactory(
-                daemonSidecar.droid,
-                createSessionLeaseHooks(),
-              ),
-            }
-          : {}),
+        ...(daemonSessions === null
+          ? {}
+          : { createSdkSession: daemonSessions.factory }),
       }),
     () => ({
       cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
@@ -377,20 +450,28 @@ export function activate(context: vscode.ExtensionContext): void {
     previewController,
     createVscodeGitWorkflow(),
     // Worktree sessions ride the daemon's native create channel; in
-    // process mode the feature stays disabled and the drawer entry
-    // never renders.
-    createWorktreeSessionsFeature({
-      enabled: runtimeMode === 'daemon',
-      persistence,
-    }),
+    // process mode (including a fallback from the daemon default) the
+    // gate reads false and worktree entry points fail closed.
+    withDaemonGate(
+      createWorktreeSessionsFeature({
+        enabled: runtimeMode === 'daemon',
+        persistence,
+      }),
+      daemonSessionsActive,
+    ),
     terminalMirror,
     daemonSidecar.plugins,
-    // `/btw` side chat rides a short-lived private CLI client and only
-    // works against on-disk process-mode sessions; in daemon mode the
-    // factory is withheld so the entry fails closed.
-    runtimeMode === 'process'
-      ? (cwd, mainSessionId) => createBtwSidecar({ cwd, mainSessionId })
-      : undefined,
+    // `/btw` side chat: hidden fork over the daemon connection in
+    // daemon mode (probe: artifacts/probe-btw-daemon.mjs), over a
+    // short-lived private CLI client in process mode — including
+    // after a daemon-to-process fallback, when sessions are on disk.
+    (cwd, mainSessionId) =>
+      daemonSessionsActive()
+        ? createDaemonBtwSidecar({
+            mainSessionId,
+            getDroid: daemonSidecar.droid,
+          })
+        : createBtwSidecar({ cwd, mainSessionId }),
   );
   const provider = new DroidViewProvider(
     context.extensionUri,

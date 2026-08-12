@@ -1605,10 +1605,10 @@ export interface HostSnapshotMessage {
    */
   readonly worktreeCreateAvailable?: boolean;
   /**
-   * True when `/btw` side chat is available: process runtime mode
-   * (the hidden fork rides a public process client). Absent means
-   * unavailable and every `/btw` entry point must stay hidden
-   * (fail closed in daemon mode).
+   * True when `/btw` side chat is available (both runtime modes: the
+   * hidden fork rides a public process client in process mode and the
+   * shared daemon connection in daemon mode). Absent means unavailable
+   * and every `/btw` entry point must stay hidden (fail closed).
    */
   readonly btwAvailable?: boolean;
   /**

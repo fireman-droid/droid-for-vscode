@@ -2718,8 +2718,8 @@ describe('ChatController', () => {
       true,
     );
 
-    // Daemon mode wires no factory; the flag is omitted (fail closed)
-    // and stray asks drop without side effects.
+    // Without a wired factory the flag is omitted (fail closed) and
+    // stray asks drop without side effects.
     const without = createController(
       () => createMockRuntime(),
       undefined,
