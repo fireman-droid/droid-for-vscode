@@ -631,113 +631,115 @@ function UserMessage({
       <div className="dvx-user-message-content">
         {editing ? (
           <div className="dvx-user-edit">
-            <textarea
-              className="dvx-user-edit-input"
-              aria-label="Edit message and resend"
-              value={editText}
-              maxLength={MAX_TURN_TEXT_LENGTH}
-              rows={Math.min(
-                8,
-                Math.max(2, editText.split('\n').length),
-              )}
-              autoFocus
-              onChange={(event) =>
-                setEditText(event.currentTarget.value)
-              }
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault();
-                  submitEdit();
-                } else if (event.key === 'Escape') {
-                  onCancelEdit();
+            <div className="dvx-user-edit-card">
+              <textarea
+                className="dvx-user-edit-input"
+                aria-label="Edit message and resend"
+                value={editText}
+                maxLength={MAX_TURN_TEXT_LENGTH}
+                rows={Math.min(
+                  8,
+                  Math.max(2, editText.split('\n').length),
+                )}
+                autoFocus
+                onChange={(event) =>
+                  setEditText(event.currentTarget.value)
                 }
-              }}
-            />
-            {stagedAttachments.length > 0 ? (
-              <div
-                className="dvx-user-edit-attachments"
-                aria-label="Attachments to resend"
-              >
-                {stagedAttachments.map((attachment) => (
-                  <EditAttachmentChip
-                    key={attachment.id}
-                    attachment={attachment}
-                    onRemove={editorEnv.onAttachmentRemove}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    submitEdit();
+                  } else if (event.key === 'Escape') {
+                    onCancelEdit();
+                  }
+                }}
+              />
+              {stagedAttachments.length > 0 ? (
+                <div
+                  className="dvx-user-edit-attachments"
+                  aria-label="Attachments to resend"
+                >
+                  {stagedAttachments.map((attachment) => (
+                    <EditAttachmentChip
+                      key={attachment.id}
+                      attachment={attachment}
+                      onRemove={editorEnv.onAttachmentRemove}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              {rejectionCopy !== null ? (
+                <div className="dvx-user-edit-rejection" role="status">
+                  {rejectionCopy}
+                </div>
+              ) : null}
+              {affectedFiles > 0 ? (
+                <label className="dvx-user-edit-restore">
+                  <input
+                    type="checkbox"
+                    checked={restoreFiles}
+                    onChange={(event) =>
+                      setRestoreFiles(event.currentTarget.checked)
+                    }
                   />
-                ))}
+                  <span>
+                    Also restore {affectedFiles}{' '}
+                    {affectedFiles === 1 ? 'file' : 'files'} Droid changed
+                    after this message
+                  </span>
+                </label>
+              ) : null}
+              <div className="dvx-user-edit-footer">
+                <ComposerControls
+                  settings={editorEnv.settings}
+                  context={editorEnv.context}
+                  modelCatalog={editorEnv.modelCatalog}
+                  skills={editorEnv.skills}
+                  mcp={editorEnv.mcp}
+                  disabled={editorEnv.controlsDisabled}
+                  settingUpdatesDisabled={editorEnv.settingUpdatesDisabled}
+                  onContextRefresh={editorEnv.onContextRefresh}
+                  onCompact={editorEnv.onCompact}
+                  onSettingUpdate={editorEnv.onSettingUpdate}
+                  onSkillsRefresh={editorEnv.onSkillsRefresh}
+                  onSkillToggle={editorEnv.onSkillToggle}
+                  onMcpRefresh={editorEnv.onMcpRefresh}
+                  onMcpServerToggle={editorEnv.onMcpServerToggle}
+                  onMcpServerAdd={editorEnv.onMcpServerAdd}
+                  onMcpServerRemove={editorEnv.onMcpServerRemove}
+                  mcpAuth={editorEnv.mcpAuth}
+                  onMcpServerAuthenticate={
+                    editorEnv.onMcpServerAuthenticate
+                  }
+                  onAttachFiles={editorEnv.onAttachFiles}
+                  onAttachEditor={editorEnv.onAttachEditor}
+                  onAttachSelection={editorEnv.onAttachSelection}
+                  onAttachProblems={editorEnv.onAttachProblems}
+                  onAttachGitChanges={editorEnv.onAttachGitChanges}
+                />
+                <div className="dvx-user-edit-actions">
+                  <button
+                    className="dvx-message-action"
+                    type="button"
+                    onClick={onCancelEdit}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="dvx-composer-action dvx-send-action"
+                    type="button"
+                    aria-label="Resend edited message"
+                    disabled={sendDisabled}
+                    onClick={submitEdit}
+                  >
+                    <SendIcon />
+                  </button>
+                </div>
               </div>
-            ) : null}
-            {rejectionCopy !== null ? (
-              <div className="dvx-user-edit-rejection" role="status">
-                {rejectionCopy}
-              </div>
-            ) : null}
+            </div>
             <div className="dvx-user-edit-hint">
               Resending starts a new conversation branch from this
               message.
-            </div>
-            {affectedFiles > 0 ? (
-              <label className="dvx-user-edit-restore">
-                <input
-                  type="checkbox"
-                  checked={restoreFiles}
-                  onChange={(event) =>
-                    setRestoreFiles(event.currentTarget.checked)
-                  }
-                />
-                <span>
-                  Also restore {affectedFiles}{' '}
-                  {affectedFiles === 1 ? 'file' : 'files'} Droid changed
-                  after this message
-                </span>
-              </label>
-            ) : null}
-            <div className="dvx-user-edit-footer">
-              <ComposerControls
-                settings={editorEnv.settings}
-                context={editorEnv.context}
-                modelCatalog={editorEnv.modelCatalog}
-                skills={editorEnv.skills}
-                mcp={editorEnv.mcp}
-                disabled={editorEnv.controlsDisabled}
-                settingUpdatesDisabled={editorEnv.settingUpdatesDisabled}
-                onContextRefresh={editorEnv.onContextRefresh}
-                onCompact={editorEnv.onCompact}
-                onSettingUpdate={editorEnv.onSettingUpdate}
-                onSkillsRefresh={editorEnv.onSkillsRefresh}
-                onSkillToggle={editorEnv.onSkillToggle}
-                onMcpRefresh={editorEnv.onMcpRefresh}
-                onMcpServerToggle={editorEnv.onMcpServerToggle}
-                onMcpServerAdd={editorEnv.onMcpServerAdd}
-                onMcpServerRemove={editorEnv.onMcpServerRemove}
-                mcpAuth={editorEnv.mcpAuth}
-                onMcpServerAuthenticate={
-                  editorEnv.onMcpServerAuthenticate
-                }
-                onAttachFiles={editorEnv.onAttachFiles}
-                onAttachEditor={editorEnv.onAttachEditor}
-                onAttachSelection={editorEnv.onAttachSelection}
-                onAttachProblems={editorEnv.onAttachProblems}
-                onAttachGitChanges={editorEnv.onAttachGitChanges}
-              />
-              <div className="dvx-user-edit-actions">
-                <button
-                  className="dvx-message-action"
-                  type="button"
-                  onClick={onCancelEdit}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="dvx-composer-action dvx-send-action"
-                  type="button"
-                  aria-label="Resend edited message"
-                  disabled={sendDisabled}
-                  onClick={submitEdit}
-                >
-                  <SendIcon />
-                </button>
-              </div>
             </div>
           </div>
         ) : resending ? (

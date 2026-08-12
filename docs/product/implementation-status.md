@@ -1083,11 +1083,30 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension dist/droidvisx.vsix --force`
   （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
   需 Reload Window（或完整重启）后加载新 Bundle
+- 2026-08-12 上午打包并安装含 **消息卡片编辑态白卡片化** 的构建：
+  `dist/droidvisx.vsix` 629,099 字节（9 files, 614.35 KB），SHA-256
+  `08A690D33279BF7607ADD7F8AEEBAC9674A487386D2A048F92335B3EE69316BF`，
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix` 与
+  `cursor --install-extension dist/droidvisx.vsix --force`
+  （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
+  需 Reload Window（或完整重启）后加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- 消息卡片编辑态白卡片化（2026-08-12 上午，用户验收反馈：编辑态
+  应与底部 Composer 同为白卡片而非灰气泡）：纯 Webview 视觉修正，
+  零 Bridge 改动。`Thread.tsx` 编辑态 JSX 加 `.dvx-user-edit-card`
+  卡片壳（textarea、附件 chips、拒绝提示、restore 勾选、
+  ComposerControls + Cancel/Send footer 全部收进卡内），
+  "Resending starts a new conversation branch" 提示移到卡片外
+  下方（对应底部 Composer 的 "Enter to send" 提示位置，居中
+  灰字）。`styles.css` 中卡片壳复用 `.dvx-composer` 同规格
+  （白底 / `--dvx-border` 1px 边框 / 12px 圆角 / 同款阴影 /
+  10px 内边距 / focus-within 边框加深），textarea 改为卡内
+  无边框透明输入区。门禁：typecheck 三 tsconfig 全过、vitest
+  43 files / 933 tests 全绿、build + package + install 成功
 - Streaming 体验批次三：入场动画 + 回放静默 + Todo 折叠摘要
   （2026-08-12 上午，按 `docs/product/streaming-experience-design.md`
   D 项与 E 项，纯 Webview 零 Bridge 改动；本条为前任代理中断工作

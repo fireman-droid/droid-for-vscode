@@ -1790,16 +1790,35 @@ body {
   display: flex;
   width: 100%;
   flex-direction: column;
+}
+
+/* Same card shell as the bottom Composer so editing feels like the
+   Composer moved up into the transcript. */
+.dvx-user-edit-card {
+  position: relative;
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  flex-direction: column;
   gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 1.5px rgb(0 0 0 / 10%), 0 1px 1px rgb(0 0 0 / 10%);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.dvx-user-edit-card:focus-within {
+  border-color: var(--dvx-border-strong);
 }
 
 .dvx-user-edit-input {
   box-sizing: border-box;
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--dvx-line);
-  border-radius: 12px;
-  background: var(--dvx-user);
+  padding: 2px 2px 4px;
+  border: none;
+  background: transparent;
   color: #262626;
   font: inherit;
   font-size: 13px;
@@ -1808,14 +1827,16 @@ body {
 }
 
 .dvx-user-edit-input:focus-visible {
-  border-color: var(--vscode-focusBorder, #d2643d);
   outline: none;
 }
 
 .dvx-user-edit-hint {
-  color: var(--dvx-subtle);
+  width: 100%;
+  padding-top: 6px;
+  color: #a1a1a1;
   font-size: 11px;
-  line-height: 16px;
+  line-height: 16.5px;
+  text-align: center;
 }
 
 .dvx-user-edit-restore {
