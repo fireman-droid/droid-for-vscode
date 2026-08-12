@@ -1977,6 +1977,25 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-12 晚修复版发版 v0.1.1**：版本号 `0.1.0 → 0.1.1`，
+  `CHANGELOG.md` 顶部新增 0.1.1 小节 13 条（Fixed 12 / Changed 1），
+  覆盖 v0.1.0 后四批修复：验收批次一（中文路径流式截断 fba6523、
+  错误卡叠加去重、提交面板计数与按钮、Preview 顶栏成品化）、验收
+  批次二（跑马灯、钉条重做、细滚动条、图片缩略图、运行行自动展开、
+  操作条唯一化 d9bf2b9…f93f5df）、/btw 右侧全高面板重做（aaaca96，
+  Changed）、MCP 添加表单死机 + 守护进程超时 + 弹窗键盘跟滚
+  （adf12c2/fde72b3/50aef0f）。`verifyVsix.mjs` 期望无需变动（v0.1.0
+  已含 changelog 条目）。发版提交 `9c44d7c`（仅 CHANGELOG.md +
+  package.json），本地 tag `v0.1.1 -> 9c44d7c`（无远端，未 push）。
+  门禁在临时干净 worktree（detached HEAD @9c44d7c，用后已删）跑通：
+  typecheck 三段 + 全量 vitest 80 files（79 过/1 跳过）/ 1825 tests
+  （1824 过/1 跳过）+ build + `vsce package` + `verify:vsix` 11 条目
+  校验全绿。主工作区（打包时 `src/` 无未提交改动）产出
+  `dist/droidvisx-0.1.1.vsix` 1,642,331 字节（11 files, 1.57 MB），
+  SHA-256
+  `35F9D251CD9ACEF8A62B5B641957CA2E5095C6C867A4E56AEB9D31AB331FB52B`，
+  `verify:vsix` 复验通过，`cursor --install-extension --force`
+  successfully installed。现有窗口 Reload Window 即加载 0.1.1 Bundle
 - **2026-08-12 晚首个正式发版 v0.1.0**：版本号 `0.0.0 → 0.1.0`，新增
   能力级 `CHANGELOG.md`（34 条：Added 22 / Fixed 8 / Changed 4，覆盖
   自 2026-08-11 20:00 起 178 个提交）并随包发布（vsce 在包内规范化为
