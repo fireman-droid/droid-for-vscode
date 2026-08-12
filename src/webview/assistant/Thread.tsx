@@ -59,7 +59,10 @@ import {
   summarizeActivityGroup,
   type GroupCandidatePart,
 } from "./activityGrouping";
-import { DroidMarkdownText } from "./MarkdownText";
+import {
+  DroidMarkdownText,
+  InlineHtmlPreviewContext,
+} from "./MarkdownText";
 import { ChangesCommitEntry } from "./GitCommitPanel";
 import { TranscriptImage } from "./TranscriptImage";
 import { getImagePreview, rememberImagePreview } from "./imagePreviewCache";
@@ -259,6 +262,8 @@ interface DroidThreadProps {
   readonly onRegenerate: (() => void) | null;
   readonly onOpenFileDiff: (path: string) => void;
   readonly onPreviewFile: (path: string) => void;
+  /** Renders an assistant HTML code block in the sandbox panel. */
+  readonly onPreviewInlineHtml: (html: string) => void;
   /** Reveals the read-only terminal mirror of execute output. */
   readonly onOpenTerminalMirror: () => void;
   readonly editResendEnabled: boolean;
@@ -334,6 +339,7 @@ export const DroidThread = memo(function DroidThread({
   onRegenerate,
   onOpenFileDiff,
   onPreviewFile,
+  onPreviewInlineHtml,
   onOpenTerminalMirror,
   editResendEnabled,
   inlineInteraction,
@@ -389,7 +395,14 @@ export const DroidThread = memo(function DroidThread({
   // The same effect owns stick-to-bottom (the primitive's autoScroll
   // is disabled: its isAtBottom latch loses a race between async
   // scroll events and fast streaming growth, see applyFollowScroll).
+  //
+  // The scroll-to-bottom arrow shares the coordinator's rAF pass so
+  // its visibility can never disagree with the follow state, and its
+  // click re-latches `follow.following` rather than owning any
+  // scroll state of its own.
   const readingColumnRef = useRef<HTMLDivElement | null>(null);
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
+  const scrollToBottomRef = useRef<() => void>(() => {});
   useEffect(() => {
     const column = readingColumnRef.current;
     if (column === null) {
@@ -438,6 +451,10 @@ export const DroidThread = memo(function DroidThread({
           element.style.transform = transform;
         }
       });
+      setAwayFromBottom(
+        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight >
+          SCROLL_BOTTOM_SHOW_PX,
+      );
     };
     const schedule = (): void => {
       if (frame === 0) {
@@ -472,6 +489,22 @@ export const DroidThread = memo(function DroidThread({
       if (event.deltaY < 0) {
         follow.following = false;
       }
+    };
+    // The arrow's click: re-latch the follow state first so any
+    // streaming growth during the (possibly smooth) descent keeps
+    // gluing, and mark the write as programmatic for the latch.
+    scrollToBottomRef.current = () => {
+      follow.following = true;
+      const maxTop = scroller.scrollHeight - scroller.clientHeight;
+      follow.pendingProgrammaticTop = maxTop;
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      scroller.scrollTo({
+        top: maxTop,
+        behavior: reduceMotion ? "auto" : "smooth",
+      });
+      schedule();
     };
     scroller.addEventListener("scroll", onScroll, { passive: true });
     scroller.addEventListener("wheel", onWheel, { passive: true });
@@ -574,6 +607,7 @@ export const DroidThread = memo(function DroidThread({
       >
         <FileDiffContext.Provider value={onOpenFileDiff}>
           <PreviewContext.Provider value={onPreviewFile}>
+          <InlineHtmlPreviewContext.Provider value={onPreviewInlineHtml}>
           <TerminalMirrorContext.Provider value={onOpenTerminalMirror}>
           <RegenerateContext.Provider value={onRegenerate}>
             <SelectSessionContext.Provider value={onSelectSession}>
@@ -641,9 +675,26 @@ export const DroidThread = memo(function DroidThread({
             </SelectSessionContext.Provider>
           </RegenerateContext.Provider>
           </TerminalMirrorContext.Provider>
+          </InlineHtmlPreviewContext.Provider>
           </PreviewContext.Provider>
         </FileDiffContext.Provider>
         <ThreadPrimitive.ViewportFooter className="dvx-thread-footer">
+          <div className="dvx-scroll-bottom-dock">
+            <button
+              type="button"
+              className={
+                awayFromBottom
+                  ? "dvx-scroll-bottom dvx-scroll-bottom-visible"
+                  : "dvx-scroll-bottom"
+              }
+              aria-label="Scroll to bottom"
+              aria-hidden={!awayFromBottom}
+              tabIndex={awayFromBottom ? 0 : -1}
+              onClick={() => scrollToBottomRef.current()}
+            >
+              <ScrollToBottomIcon />
+            </button>
+          </div>
           <Composer
             statusMessage={statusMessage}
             showRetry={showRetry}
@@ -2570,6 +2621,20 @@ function SendIcon(): React.JSX.Element {
   );
 }
 
+function ScrollToBottomIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M8 3.5v9M4.25 8.75 8 12.5l3.75-3.75"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function CopyIcon(): React.JSX.Element {
   return (
     <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -3581,6 +3646,12 @@ export function computeStickyLayout(
 /** A viewport is "at bottom" within this tolerance (fractional
  * scrollTop under display scaling never lands exactly on 0). */
 export const FOLLOW_REJOIN_PX = 4;
+
+/** The scroll-to-bottom arrow shows past this distance from the
+ * bottom: far enough that the streaming glue's transient frame or two
+ * of lag never flashes it, close enough to appear on any real
+ * upward scroll. */
+export const SCROLL_BOTTOM_SHOW_PX = 48;
 
 /** One viewport scroll sample fed to the follow latch. */
 export interface FollowScrollSample {

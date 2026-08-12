@@ -12,6 +12,7 @@ import {
 } from 'react';
 
 import {
+  MAX_INLINE_PREVIEW_HTML_LENGTH,
   MAX_TURN_TEXT_LENGTH,
   type AskUserAnswer,
   type ImageMediaType,
@@ -704,6 +705,23 @@ export function App(): React.JSX.Element {
     }
     post(vscode, { type: 'terminal.openMirror', sessionId });
   }, [sessionId, connectionStatus, vscode]);
+  // Webview side of the dual-side limit: the code-block entry is
+  // already disabled above MAX_INLINE_PREVIEW_HTML_LENGTH, so this
+  // guard only drops payloads a stale DOM could still submit.
+  const handlePreviewInlineHtml = useCallback(
+    (html: string): void => {
+      if (
+        sessionId === null ||
+        connectionStatus !== 'connected' ||
+        html.length === 0 ||
+        html.length > MAX_INLINE_PREVIEW_HTML_LENGTH
+      ) {
+        return;
+      }
+      post(vscode, { type: 'preview.inlineHtml', sessionId, html });
+    },
+    [sessionId, connectionStatus, vscode],
+  );
   const handleOpenPath = useCallback(
     (link: PathLink): void => {
       if (sessionId === null || connectionStatus !== 'connected') {
@@ -1139,6 +1157,7 @@ export function App(): React.JSX.Element {
           }
           onOpenFileDiff={handleOpenFileDiff}
           onPreviewFile={handlePreviewFile}
+          onPreviewInlineHtml={handlePreviewInlineHtml}
           onOpenTerminalMirror={handleOpenTerminalMirror}
           editResendEnabled={
             connectionStatus === 'connected' &&
