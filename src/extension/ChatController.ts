@@ -126,6 +126,10 @@ import {
   type FileDiffOpener,
 } from './fileDiffOpener';
 import {
+  createUnavailablePathOpener,
+  type PathOpener,
+} from './pathOpener';
+import {
   createUnavailableExternalUrlOpener,
   type ExternalUrlOpener,
 } from './externalUrlOpener';
@@ -273,6 +277,8 @@ const FORK_UNSUPPORTED_MESSAGE =
 const FORK_FAILED_MESSAGE = 'Droid could not fork this session.';
 const FILE_DIFF_FAILED_MESSAGE =
   'That file could not be opened. It may have been moved or deleted.';
+const OPEN_PATH_FAILED_MESSAGE =
+  'That path could not be opened. It may have been moved or deleted.';
 const MCP_UNSUPPORTED_MESSAGE =
   'This Droid runtime does not expose MCP servers.';
 const MCP_LOAD_FAILED_MESSAGE =
@@ -434,6 +440,8 @@ export class ChatController {
       new RecentCommandsStore(),
     private readonly diagnostics?: RuntimeDiagnosticSink,
     private readonly daemonSessions?: () => Promise<DaemonSessionCatalog>,
+    private readonly pathOpener: PathOpener =
+      createUnavailablePathOpener(),
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
@@ -589,6 +597,14 @@ export class ChatController {
         return;
       case 'file.openDiff':
         this.handleFileOpenDiff(message.sessionId, message.path);
+        return;
+      case 'workspace.openPath':
+        this.handleWorkspaceOpenPath(
+          message.sessionId,
+          message.path,
+          message.line,
+          message.column,
+        );
         return;
       case 'skills.refresh':
         this.handleSkillsRefresh(message.sessionId);
@@ -1749,6 +1765,28 @@ export class ChatController {
         this.emitSessionDiagnostic(
           'file-diff-failed',
           FILE_DIFF_FAILED_MESSAGE,
+        );
+      }
+    });
+  }
+
+  private handleWorkspaceOpenPath(
+    sessionId: string,
+    path: string,
+    line?: number,
+    column?: number,
+  ): void {
+    if (
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    void this.pathOpener.openPath(path, line, column).then((outcome) => {
+      if (outcome === 'failed') {
+        this.emitSessionDiagnostic(
+          'open-path-failed',
+          OPEN_PATH_FAILED_MESSAGE,
         );
       }
     });

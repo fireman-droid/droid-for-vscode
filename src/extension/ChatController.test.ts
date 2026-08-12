@@ -33,6 +33,10 @@ import type {
   FileDiffOutcome,
 } from './fileDiffOpener';
 import type {
+  OpenPathOutcome,
+  PathOpener,
+} from './pathOpener';
+import type {
   ChangeStatsReader,
   FileChangeStat,
 } from './changeStats';
@@ -2745,6 +2749,85 @@ describe('ChatController', () => {
     });
   });
 
+  it('opens clicked transcript paths and reports failures', async () => {
+    const openPath = vi.fn(
+      async (): Promise<OpenPathOutcome> => 'opened',
+    );
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { openPath },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'workspace.openPath',
+      sessionId: 'session-1',
+      path: 'D:\\E\\artifacts\\简历.pdf',
+    });
+    await vi.waitFor(() => {
+      expect(openPath).toHaveBeenCalledWith(
+        'D:\\E\\artifacts\\简历.pdf',
+        undefined,
+        undefined,
+      );
+    });
+    expect(
+      messages.filter(
+        (message) =>
+          message.type === 'runtime.diagnostic' &&
+          message.code === 'open-path-failed',
+      ),
+    ).toHaveLength(0);
+
+    // Line and column ride along for text targets.
+    controller.handleMessage({
+      type: 'workspace.openPath',
+      sessionId: 'session-1',
+      path: 'src/extension/ChatController.ts',
+      line: 12,
+      column: 3,
+    });
+    await vi.waitFor(() => {
+      expect(openPath).toHaveBeenCalledWith(
+        'src/extension/ChatController.ts',
+        12,
+        3,
+      );
+    });
+
+    // Wrong session requests never reach the opener.
+    controller.handleMessage({
+      type: 'workspace.openPath',
+      sessionId: 'session-other',
+      path: 'src/app.ts',
+    });
+    expect(openPath).toHaveBeenCalledTimes(2);
+
+    // A failed open surfaces a bounded warning diagnostic.
+    openPath.mockResolvedValueOnce('failed');
+    controller.handleMessage({
+      type: 'workspace.openPath',
+      sessionId: 'session-1',
+      path: 'D:\\missing\\file.txt',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+        severity: 'warning',
+        code: 'open-path-failed',
+      });
+    });
+  });
+
   it('publishes a per-turn changes summary with git line stats', async () => {
     const runtime = createMockRuntime(async function* () {
       yield {
@@ -5337,6 +5420,7 @@ function createController(
   changeStats?: ChangeStatsReader,
   externalUrl?: ExternalUrlOpener,
   daemonSessions?: () => Promise<DaemonSessionCatalog>,
+  pathOpener?: PathOpener,
 ) {
   const controller = new ChatController(
     createRuntime,
@@ -5355,6 +5439,7 @@ function createController(
     undefined,
     undefined,
     daemonSessions,
+    pathOpener,
   );
   const messages: HostToWebviewMessage[] = [];
   controller.subscribe((message) => {

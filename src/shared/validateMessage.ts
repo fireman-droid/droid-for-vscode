@@ -21,6 +21,8 @@ import {
   SESSION_INTERACTION_MODES,
   SESSION_REASONING_EFFORTS,
   MAX_FILE_SEARCH_QUERY_LENGTH,
+  MAX_OPEN_PATH_LENGTH,
+  MAX_OPEN_PATH_POSITION,
   MAX_SESSION_SEARCH_QUERY_LENGTH,
   IMAGE_MEDIA_TYPES,
   MAX_ATTACHMENT_IMAGE_BASE64_LENGTH,
@@ -77,6 +79,7 @@ import {
   type WebviewDiagnosticMessage,
   type WebviewReadyMessage,
   type WebviewToHostMessage,
+  type WorkspaceOpenPathMessage,
   type WorkspaceSearchFilesMessage,
 } from './bridgeMessages';
 import {
@@ -139,6 +142,8 @@ export function parseWebviewMessage(
         return parseSessionFork(value);
       case 'file.openDiff':
         return parseFileOpenDiff(value);
+      case 'workspace.openPath':
+        return parseWorkspaceOpenPath(value);
       case 'skills.refresh':
         return parseSkillsRefresh(value);
       case 'skill.toggle':
@@ -616,6 +621,61 @@ function parseFileOpenDiff(
     sessionId: value.sessionId,
     path: value.path,
   };
+}
+
+function parseWorkspaceOpenPath(
+  value: UnknownRecord,
+): WorkspaceOpenPathMessage | undefined {
+  if (
+    !hasExactKeys(
+      value,
+      ['type', 'sessionId', 'path'],
+      ['line', 'column'],
+    ) ||
+    !isId(value.sessionId) ||
+    !isSafeOpenPath(value.path) ||
+    (value.line !== undefined && !isPathPosition(value.line)) ||
+    (value.column !== undefined &&
+      (value.line === undefined || !isPathPosition(value.column)))
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'workspace.openPath',
+    sessionId: value.sessionId,
+    path: value.path,
+    ...(value.line === undefined ? {} : { line: value.line }),
+    ...(value.column === undefined ? {} : { column: value.column }),
+  };
+}
+
+/**
+ * Accepts bounded absolute (drive-letter or POSIX) and relative paths
+ * without control characters or `..` traversal segments. Existence and
+ * file-versus-directory checks stay on the host, which resolves the
+ * path against the workspace root when it is relative.
+ */
+export function isSafeOpenPath(value: unknown): value is string {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > MAX_OPEN_PATH_LENGTH ||
+    /[\u0000-\u001f\u007f]/.test(value)
+  ) {
+    return false;
+  }
+  return value
+    .split(/[\\/]/)
+    .every((segment) => segment !== '..');
+}
+
+function isPathPosition(value: unknown): value is number {
+  return (
+    Number.isSafeInteger(value) &&
+    (value as number) >= 1 &&
+    (value as number) <= MAX_OPEN_PATH_POSITION
+  );
 }
 
 /**

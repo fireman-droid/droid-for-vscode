@@ -398,6 +398,27 @@ export interface FileOpenDiffMessage {
   readonly path: string;
 }
 
+/** Longest accepted path in a `workspace.openPath` request. */
+export const MAX_OPEN_PATH_LENGTH = 1024;
+/** Largest accepted 1-based line or column in an open request. */
+export const MAX_OPEN_PATH_POSITION = 1_000_000;
+
+/**
+ * Asks the host to open a path the user clicked in transcript
+ * markdown. Absolute paths outside the workspace are allowed because
+ * only an explicit user click produces this message; the host still
+ * verifies the path exists before opening it.
+ */
+export interface WorkspaceOpenPathMessage {
+  readonly type: 'workspace.openPath';
+  readonly sessionId: string;
+  readonly path: string;
+  /** 1-based line to reveal when the target opens as text. */
+  readonly line?: number;
+  /** 1-based column; only accepted together with `line`. */
+  readonly column?: number;
+}
+
 /** Requests the current Droid skill catalog for the session. */
 export interface SkillsRefreshMessage {
   readonly type: 'skills.refresh';
@@ -673,6 +694,7 @@ export type WebviewToHostMessage =
   | SessionCompactMessage
   | SessionForkMessage
   | FileOpenDiffMessage
+  | WorkspaceOpenPathMessage
   | SkillsRefreshMessage
   | SkillToggleMessage
   | CommandsRefreshMessage

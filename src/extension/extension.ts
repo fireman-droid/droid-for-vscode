@@ -41,6 +41,7 @@ import { createGitChangeStatsReader } from './changeStats';
 import { createVscodeAttachmentSources } from './vscodeAttachmentSources';
 import { createVscodeExternalUrlOpener } from './vscodeExternalUrlOpener';
 import { createVscodeFileDiffOpener } from './vscodeFileDiff';
+import { createVscodePathOpener } from './vscodePathOpener';
 
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
@@ -320,6 +321,7 @@ export function activate(context: vscode.ExtensionContext): void {
     new RecentCommandsStore(persistence),
     diagnostics,
     daemonSidecar.provider,
+    createVscodePathOpener(),
   );
   const provider = new DroidViewProvider(
     context.extensionUri,
