@@ -56,7 +56,12 @@ describe('FactoryDroidRuntime', () => {
         kind: 'new',
         cwd: 'C:\\workspace',
       },
-      interactionHandler: cancellingRuntimeInteractionHandler,
+      // The runtime wraps the handler to observe spec approvals, so the
+      // session receives a delegating handler rather than the original.
+      interactionHandler: expect.objectContaining({
+        requestPermission: expect.any(Function),
+        askUser: expect.any(Function),
+      }),
     });
     expect(session.stream).toHaveBeenCalledWith('Say hello', {
       includePartialMessages: true,
@@ -222,7 +227,10 @@ describe('FactoryDroidRuntime', () => {
     expect(createSession).toHaveBeenCalledOnce();
     expect(createSession).toHaveBeenCalledWith({
       target,
-      interactionHandler: cancellingRuntimeInteractionHandler,
+      interactionHandler: expect.objectContaining({
+        requestPermission: expect.any(Function),
+        askUser: expect.any(Function),
+      }),
     });
   });
 
@@ -821,6 +829,8 @@ describe('FactoryDroidRuntime', () => {
       modelId: 'model-1',
       reasoningEffort: 'high',
       autonomyLevel: 'medium',
+      specModeModelId: null,
+      specModeReasoningEffort: null,
     });
     await expect(runtime.readContextStats()).resolves.toEqual({
       used: 40,
@@ -1169,6 +1179,227 @@ describe('FactoryDroidRuntime', () => {
       value: { type: 'turn-complete', outcome: 'success' },
     });
     await expect(turn.next()).resolves.toMatchObject({ done: true });
+  });
+
+  it('projects spec drafting overrides and null resets to the SDK', async () => {
+    const session = createMockSession(async function* () {});
+    session.updateSettings.mockImplementation(async (params) => {
+      const update = params as Record<string, unknown>;
+      const settings = session.settings as Record<string, unknown>;
+      // Droid stores a null reset as an absent field.
+      for (const [key, value] of Object.entries(update)) {
+        if (value === null) {
+          delete settings[key];
+        } else {
+          settings[key] = value;
+        }
+      }
+      return {};
+    });
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    await expect(
+      runtime.updateSessionSetting({
+        field: 'specModeModelId',
+        value: 'model-2',
+      }),
+    ).resolves.toMatchObject({
+      specModeModelId: 'model-2',
+      specModeReasoningEffort: null,
+    });
+    expect(session.updateSettings).toHaveBeenCalledWith({
+      specModeModelId: 'model-2',
+    });
+
+    await expect(
+      runtime.updateSessionSetting({
+        field: 'specModeReasoningEffort',
+        value: 'medium',
+      }),
+    ).resolves.toMatchObject({ specModeReasoningEffort: 'medium' });
+    expect(session.updateSettings).toHaveBeenCalledWith({
+      specModeReasoningEffort: 'medium',
+    });
+
+    await expect(
+      runtime.updateSessionSetting({
+        field: 'specModeModelId',
+        value: null,
+      }),
+    ).resolves.toMatchObject({ specModeModelId: null });
+    expect(session.updateSettings).toHaveBeenCalledWith({
+      specModeModelId: null,
+    });
+
+    await expect(
+      runtime.updateSessionSetting({
+        field: 'specModeReasoningEffort',
+        value: null,
+      }),
+    ).resolves.toMatchObject({ specModeReasoningEffort: null });
+
+    await expect(
+      runtime.updateSessionSetting({
+        field: 'specModeModelId',
+        value: 'x'.repeat(257),
+      }),
+    ).rejects.toThrow('Invalid session setting update.');
+  });
+
+  it('emits spec-handoff before turn completion after a ProceedNewSession approval', async () => {
+    type Listener = (notification: Record<string, unknown>) => void;
+    const listeners: Listener[] = [];
+    const notify = (
+      sessionId: string,
+      type: string,
+      reason?: string,
+    ) => {
+      for (const listener of [...listeners]) {
+        listener({
+          method: 'droid.session_notification',
+          params: {
+            sessionId,
+            notification: {
+              type,
+              ...(reason === undefined ? {} : { reason }),
+            },
+          },
+        });
+      }
+    };
+    let sessionHandler:
+      | Parameters<FactoryDroidSessionFactory>[0]['interactionHandler']
+      | undefined;
+    const session = Object.assign(
+      createMockSession(async function* () {
+        yield textDelta('drafting the plan');
+        const result = await sessionHandler!.requestPermission({
+          options: [
+            {
+              label: 'Approve',
+              value: 'proceed_new_session',
+              requiresEditedSpec: false,
+            },
+          ],
+          toolUses: [
+            {
+              toolUseId: 'tool-1',
+              toolName: 'ExitSpecMode',
+              confirmationKind: 'exit_spec_mode',
+              title: 'Ready to build',
+              detail: 'The plan',
+              editableSpecContent: 'The plan',
+            },
+          ],
+        });
+        expect(result.selectedOption).toBe('proceed_new_session');
+        // Same-session notifications and unrelated types never trigger
+        // a handoff on their own.
+        notify('session-1', 'agent_turn_completed', 'completed');
+        notify('session-2', 'agent_turn_completed', 'spec_handoff');
+        yield textDelta('implementing');
+        yield successfulResult();
+      }),
+      {
+        onNotification: vi.fn((listener: Listener) => {
+          listeners.push(listener);
+          return () => {
+            const index = listeners.indexOf(listener);
+            if (index !== -1) {
+              listeners.splice(index, 1);
+            }
+          };
+        }),
+      },
+    );
+    const runtime = new FactoryDroidRuntime({
+      interactionHandler: {
+        requestPermission: async () => ({
+          selectedOption: 'proceed_new_session',
+        }),
+        askUser: async () => ({ cancelled: true, answers: [] }),
+      },
+      createSdkSession: async (options) => {
+        sessionHandler = options.interactionHandler;
+        return session;
+      },
+    });
+    await runtime.initialize('C:\\workspace');
+
+    const events = await collect(runtime.sendTurn('draft a plan'));
+    const handoffIndex = events.findIndex(
+      (event) => event.type === 'spec-handoff',
+    );
+    const completeIndex = events.findIndex(
+      (event) => event.type === 'turn-complete',
+    );
+    expect(events[handoffIndex]).toEqual({
+      type: 'spec-handoff',
+      implementationSessionId: 'session-2',
+    });
+    expect(handoffIndex).toBeGreaterThan(-1);
+    expect(handoffIndex).toBeLessThan(completeIndex);
+    // The notification watch is released once the turn finishes.
+    expect(listeners).toHaveLength(0);
+  });
+
+  it('does not emit spec-handoff for a plain approval or same-session notifications', async () => {
+    type Listener = (notification: Record<string, unknown>) => void;
+    const listeners: Listener[] = [];
+    let sessionHandler:
+      | Parameters<FactoryDroidSessionFactory>[0]['interactionHandler']
+      | undefined;
+    const session = Object.assign(
+      createMockSession(async function* () {
+        const result = await sessionHandler!.requestPermission({
+          options: [
+            {
+              label: 'Approve',
+              value: 'proceed_once',
+              requiresEditedSpec: false,
+            },
+          ],
+          toolUses: [
+            {
+              toolUseId: 'tool-1',
+              toolName: 'ExitSpecMode',
+              confirmationKind: 'exit_spec_mode',
+              title: 'Ready to build',
+              detail: 'The plan',
+            },
+          ],
+        });
+        expect(result.selectedOption).toBe('proceed_once');
+        yield successfulResult();
+      }),
+      {
+        onNotification: vi.fn((listener: Listener) => {
+          listeners.push(listener);
+          return () => {};
+        }),
+      },
+    );
+    const runtime = new FactoryDroidRuntime({
+      interactionHandler: {
+        requestPermission: async () => ({
+          selectedOption: 'proceed_once',
+        }),
+        askUser: async () => ({ cancelled: true, answers: [] }),
+      },
+      createSdkSession: async (options) => {
+        sessionHandler = options.interactionHandler;
+        return session;
+      },
+    });
+    await runtime.initialize('C:\\workspace');
+
+    const events = await collect(runtime.sendTurn('draft a plan'));
+    expect(
+      events.some((event) => event.type === 'spec-handoff'),
+    ).toBe(false);
+    // No watch is armed without a proceed_new_session approval.
+    expect(session.onNotification).not.toHaveBeenCalled();
   });
 
   it('drops late stream events and disposes an active session once', async () => {

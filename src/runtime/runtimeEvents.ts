@@ -93,6 +93,15 @@ export type RuntimeEvent =
       type: 'settings-updated';
     }
   | {
+      /**
+       * A ProceedNewSession* spec approval handed implementation off to
+       * a fresh Droid session. Emitted before `turn-complete` so the
+       * host can adopt the implementation session once the turn ends.
+       */
+      type: 'spec-handoff';
+      implementationSessionId: string;
+    }
+  | {
       type: 'error';
     }
   | {

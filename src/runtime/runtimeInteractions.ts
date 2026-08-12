@@ -25,6 +25,7 @@ import {
   MAX_PERMISSION_RISK_NOTE_LENGTH,
   MAX_PERMISSION_TOOLS,
   MAX_PERMISSION_TOOL_NAME_LENGTH,
+  MAX_SPEC_PLAN_LENGTH,
   PERMISSION_CONFIRMATION_KINDS,
   type PermissionConfirmationKind,
 } from '../shared/interactionProtocol';
@@ -36,6 +37,7 @@ export const MAX_RUNTIME_ASK_USER_OPTIONS = MAX_ASK_USER_OPTIONS;
 export const MAX_RUNTIME_IDENTIFIER_LENGTH = MAX_BRIDGE_ID_LENGTH;
 export const MAX_RUNTIME_TITLE_LENGTH = MAX_INTERACTION_TITLE_LENGTH;
 export const MAX_RUNTIME_DETAIL_LENGTH = MAX_INTERACTION_DETAIL_LENGTH;
+export const MAX_RUNTIME_SPEC_PLAN_LENGTH = MAX_SPEC_PLAN_LENGTH;
 export const MAX_RUNTIME_RISK_NOTE_LENGTH =
   MAX_PERMISSION_RISK_NOTE_LENGTH;
 export const MAX_RUNTIME_ANSWER_LENGTH = MAX_ASK_USER_ANSWER_LENGTH;
@@ -384,14 +386,24 @@ function projectPermissionTool(
           : undefined,
       );
 
-    case ToolConfirmationType.ExitSpecMode:
+    case ToolConfirmationType.ExitSpecMode: {
+      // Plans get their own generous cap; anything beyond it is
+      // truncated for display and editing instead of cancelling the
+      // approval, because approving does not send the plan back and a
+      // silent cancel would drop the interaction without a trace.
+      const plan =
+        typeof details.plan === 'string'
+          ? details.plan.slice(0, MAX_RUNTIME_SPEC_PLAN_LENGTH)
+          : details.plan;
       return summary(
         'exit_spec_mode',
         details.title ?? 'Exit spec mode',
-        details.plan,
+        plan,
         undefined,
-        details.plan,
+        plan,
+        MAX_RUNTIME_SPEC_PLAN_LENGTH,
       );
+    }
 
     case ToolConfirmationType.ProposeMission:
       return summary(
@@ -533,17 +545,18 @@ function summary(
   projectedDetail?: string | null,
   riskNote?: string | null,
   editableSpecContent?: string,
+  detailLengthLimit: number = MAX_RUNTIME_DETAIL_LENGTH,
 ): Omit<RuntimePermissionToolSummary, 'toolUseId' | 'toolName'> | null {
   if (
     !isNonEmptyBoundedString(title, MAX_RUNTIME_TITLE_LENGTH) ||
     projectedDetail === null ||
     (projectedDetail !== undefined &&
-      !isBoundedString(projectedDetail, MAX_RUNTIME_DETAIL_LENGTH)) ||
+      !isBoundedString(projectedDetail, detailLengthLimit)) ||
     riskNote === null ||
     (riskNote !== undefined &&
       !isBoundedString(riskNote, MAX_RUNTIME_RISK_NOTE_LENGTH)) ||
     (editableSpecContent !== undefined &&
-      !isBoundedString(editableSpecContent, MAX_RUNTIME_DETAIL_LENGTH))
+      !isBoundedString(editableSpecContent, detailLengthLimit))
   ) {
     return null;
   }

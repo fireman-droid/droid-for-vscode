@@ -19,6 +19,7 @@ import {
   MAX_PERMISSION_OPTION_LABEL_LENGTH,
   MAX_PERMISSION_OPTION_VALUE_LENGTH,
   MAX_PERMISSION_TOOL_NAME_LENGTH,
+  MAX_SPEC_PLAN_LENGTH,
 } from '../shared/interactionProtocol';
 import {
   MAX_RUNTIME_DETAIL_LENGTH,
@@ -487,6 +488,55 @@ describe('runtime permission interactions', () => {
       ).resolves.toBe(ToolConfirmationOutcome.Cancel);
     }
     expect(requestPermission).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards ExitSpecMode plans beyond the generic detail cap instead of cancelling', async () => {
+    // Regression for the 32K silent-cancel bug: a long plan used to fail
+    // the generic detail bound and cancel the approval before the host
+    // ever saw it. Plans now get a dedicated cap and truncate visibly.
+    let projected: RuntimePermissionRequest | undefined;
+    const requestPermission = vi.fn(
+      async (request: RuntimePermissionRequest) => {
+        projected = request;
+        return { selectedOption: ToolConfirmationOutcome.Cancel };
+      },
+    );
+    const callbacks = createRuntimeInteractionCallbacks(
+      createHandler({ requestPermission }),
+    );
+
+    const longPlan = 'p'.repeat(MAX_RUNTIME_DETAIL_LENGTH * 2);
+    await callbacks.permissionHandler(
+      permissionRequest([
+        details('exit_spec_mode', {
+          title: 'Implementation plan',
+          plan: longPlan,
+        }),
+      ]),
+    );
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+    expect(projected?.toolUses[0]).toMatchObject({
+      confirmationKind: 'exit_spec_mode',
+      detail: longPlan,
+      editableSpecContent: longPlan,
+    });
+
+    const oversized = 'q'.repeat(MAX_SPEC_PLAN_LENGTH + 1024);
+    await callbacks.permissionHandler(
+      permissionRequest([
+        details('exit_spec_mode', {
+          title: 'Implementation plan',
+          plan: oversized,
+        }),
+      ]),
+    );
+    expect(requestPermission).toHaveBeenCalledTimes(2);
+    expect(projected?.toolUses[0]?.detail).toHaveLength(
+      MAX_SPEC_PLAN_LENGTH,
+    );
+    expect(projected?.toolUses[0]?.editableSpecContent).toHaveLength(
+      MAX_SPEC_PLAN_LENGTH,
+    );
   });
 
   it('rejects ProceedEdit before the host without editable ExitSpecMode content', async () => {

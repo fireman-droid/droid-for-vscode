@@ -4903,6 +4903,8 @@ describe('ChatController', () => {
       modelId: 'model-1',
       reasoningEffort: 'high',
       autonomyLevel: 'medium',
+      specModeModelId: null,
+      specModeReasoningEffort: null,
     });
     const { controller, messages } = createController(() => runtime);
     ready(controller);
@@ -4968,12 +4970,16 @@ describe('ChatController', () => {
         modelId: 'model-2',
         reasoningEffort: 'medium',
         autonomyLevel: 'medium',
+        specModeModelId: null,
+        specModeReasoningEffort: null,
       })
       .mockResolvedValueOnce({
         interactionMode: 'auto',
         modelId: 'model-2',
         reasoningEffort: 'low',
         autonomyLevel: 'medium',
+        specModeModelId: null,
+        specModeReasoningEffort: null,
       });
     const { controller, messages } = createController(() => runtime);
     ready(controller);
@@ -5046,6 +5052,269 @@ describe('ChatController', () => {
     });
   });
 
+  it('applies spec drafting overrides from the catalog and accepts null resets', async () => {
+    const runtime = createMockRuntime();
+    runtime.readModelCatalog.mockResolvedValue({
+      status: 'available',
+      items: [
+        {
+          id: 'model-1',
+          displayName: 'Model One',
+          supportedReasoningEfforts: ['high'],
+        },
+        {
+          id: 'model-2',
+          displayName: 'Model Two',
+          supportedReasoningEfforts: ['low', 'medium'],
+        },
+      ],
+    });
+    runtime.updateSessionSetting
+      .mockResolvedValueOnce({
+        interactionMode: 'auto',
+        modelId: 'model-1',
+        reasoningEffort: 'high',
+        autonomyLevel: 'medium',
+        specModeModelId: 'model-2',
+        specModeReasoningEffort: null,
+      })
+      .mockResolvedValueOnce({
+        interactionMode: 'auto',
+        modelId: 'model-1',
+        reasoningEffort: 'high',
+        autonomyLevel: 'medium',
+        specModeModelId: 'model-2',
+        specModeReasoningEffort: 'low',
+      })
+      .mockResolvedValueOnce({
+        interactionMode: 'auto',
+        modelId: 'model-1',
+        reasoningEffort: 'high',
+        autonomyLevel: 'medium',
+        specModeModelId: null,
+        specModeReasoningEffort: null,
+      });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(
+        lastMessage(messages, 'session.model-catalog'),
+      ).toMatchObject({ modelCatalog: { status: 'ready' } });
+    });
+
+    // Unknown drafting models are refused before the runtime.
+    controller.handleMessage({
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'specModeModelId',
+      value: 'unverified-model',
+    });
+    expect(runtime.updateSessionSetting).not.toHaveBeenCalled();
+    expect(messages.at(-1)).toMatchObject({
+      type: 'runtime.diagnostic',
+      code: 'settings-update-unsupported',
+    });
+
+    controller.handleMessage({
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'specModeModelId',
+      value: 'model-2',
+    });
+    await vi.waitFor(() => {
+      expect(runtime.updateSessionSetting).toHaveBeenNthCalledWith(1, {
+        field: 'specModeModelId',
+        value: 'model-2',
+      });
+      expect(
+        lastMessage(messages, 'session.settings'),
+      ).toMatchObject({
+        settings: {
+          status: 'ready',
+          value: { specModeModelId: 'model-2' },
+        },
+      });
+    });
+
+    // Spec reasoning effort is validated against the drafting model,
+    // not the session model.
+    controller.handleMessage({
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'specModeReasoningEffort',
+      value: 'low',
+    });
+    await vi.waitFor(() => {
+      expect(runtime.updateSessionSetting).toHaveBeenNthCalledWith(2, {
+        field: 'specModeReasoningEffort',
+        value: 'low',
+      });
+      expect(
+        lastMessage(messages, 'session.settings'),
+      ).toMatchObject({
+        settings: {
+          status: 'ready',
+          value: { specModeReasoningEffort: 'low' },
+        },
+      });
+    });
+
+    // A null reset needs no catalog knowledge.
+    controller.handleMessage({
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'specModeModelId',
+      value: null,
+    });
+    await vi.waitFor(() => {
+      expect(runtime.updateSessionSetting).toHaveBeenNthCalledWith(3, {
+        field: 'specModeModelId',
+        value: null,
+      });
+      expect(
+        lastMessage(messages, 'session.settings'),
+      ).toMatchObject({
+        settings: {
+          status: 'ready',
+          value: { specModeModelId: null },
+        },
+      });
+    });
+  });
+
+  it('adopts the implementation session after an approved spec handoff turn completes', async () => {
+    let interactionHandler!: RuntimeInteractionHandler;
+    const planning = createMockRuntime(async function* () {
+      const result = await interactionHandler.requestPermission({
+        options: [
+          {
+            label: 'Approve and start',
+            value: 'proceed_new_session',
+            requiresEditedSpec: false,
+          },
+        ],
+        toolUses: [
+          {
+            toolUseId: 'tool-1',
+            toolName: 'ExitSpecMode',
+            confirmationKind: 'exit_spec_mode',
+            title: 'Ready to build',
+            detail: '# Plan',
+            editableSpecContent: '# Plan',
+          },
+        ],
+      });
+      expect(result.selectedOption).toBe('proceed_new_session');
+      yield {
+        type: 'spec-handoff' as const,
+        implementationSessionId: 'session-impl',
+      };
+      yield successfulTurn();
+    });
+    const implementation = createMockRuntime();
+    implementation.initialize.mockResolvedValue(
+      available('session-impl'),
+    );
+    const createRuntime = vi.fn(
+      (handler: RuntimeInteractionHandler) => {
+        interactionHandler = handler;
+        return createRuntime.mock.calls.length === 1
+          ? planning
+          : implementation;
+      },
+    );
+    const { controller, messages } = createController(createRuntime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Draft a plan');
+    const permission = await waitForInteraction(messages, 'permission');
+    controller.handleMessage({
+      type: 'permission.respond',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      requestId: permission.request.requestId,
+      selectedOption: 'proceed_new_session',
+    });
+
+    await vi.waitFor(() => {
+      expect(snapshots(messages).at(-1)?.sessionId).toBe(
+        'session-impl',
+      );
+    });
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'runtime.diagnostic',
+          severity: 'info',
+          code: 'spec-handoff-detected',
+        }),
+      ]),
+    );
+    expect(planning.dispose).toHaveBeenCalledOnce();
+    expect(implementation.initialize).toHaveBeenCalledWith({
+      kind: 'resume',
+      cwd: 'C:\\workspace',
+      sessionId: 'session-impl',
+    });
+  });
+
+  it('warns visibly when an approved spec handoff never identifies the implementation session', async () => {
+    let interactionHandler!: RuntimeInteractionHandler;
+    const runtime = createMockRuntime(async function* () {
+      await interactionHandler.requestPermission({
+        options: [
+          {
+            label: 'Approve and start',
+            value: 'proceed_new_session_high',
+            requiresEditedSpec: false,
+          },
+        ],
+        toolUses: [
+          {
+            toolUseId: 'tool-1',
+            toolName: 'ExitSpecMode',
+            confirmationKind: 'exit_spec_mode',
+            title: 'Ready to build',
+            detail: '# Plan',
+          },
+        ],
+      });
+      yield successfulTurn();
+    });
+    const createRuntime = vi.fn(
+      (handler: RuntimeInteractionHandler) => {
+        interactionHandler = handler;
+        return runtime;
+      },
+    );
+    const { controller, messages } = createController(createRuntime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Draft a plan');
+    const permission = await waitForInteraction(messages, 'permission');
+    controller.handleMessage({
+      type: 'permission.respond',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      requestId: permission.request.requestId,
+      selectedOption: 'proceed_new_session_high',
+    });
+
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
+    await vi.waitFor(() => {
+      expect(
+        lastMessage(messages, 'runtime.diagnostic'),
+      ).toMatchObject({ code: 'spec-handoff-not-detected' });
+    });
+    // No replacement happens without an identified session.
+    expect(createRuntime).toHaveBeenCalledOnce();
+  });
+
   it('rejects wrong-session and duplicate setting updates and retains confirmed values on failure', async () => {
     const update = deferred<never>();
     const runtime = createMockRuntime();
@@ -5108,6 +5377,8 @@ describe('ChatController', () => {
       modelId: 'model-1',
       reasoningEffort: 'high',
       autonomyLevel: 'high',
+      specModeModelId: null,
+      specModeReasoningEffort: null,
     });
     const { controller, messages } = createController(() => runtime);
     ready(controller);
@@ -5158,6 +5429,8 @@ describe('ChatController', () => {
       modelId: 'model-1',
       reasoningEffort: 'high',
       autonomyLevel: 'medium',
+      specModeModelId: null,
+      specModeReasoningEffort: null,
     });
 
     send(controller, 'session-1', 'settings-event', 'Implement the plan');
@@ -5270,6 +5543,8 @@ describe('ChatController', () => {
       modelId: 'stale-model';
       reasoningEffort: 'max';
       autonomyLevel: 'high';
+      specModeModelId: null;
+      specModeReasoningEffort: null;
     }>();
     const runtime = createMockRuntime();
     runtime.updateSessionSetting.mockReturnValue(update.promise);
@@ -5300,6 +5575,8 @@ describe('ChatController', () => {
       modelId: 'stale-model',
       reasoningEffort: 'max',
       autonomyLevel: 'high',
+      specModeModelId: null,
+      specModeReasoningEffort: null,
     });
     await Promise.resolve();
     await Promise.resolve();
@@ -5385,6 +5662,8 @@ function createMockRuntime(
       modelId: 'model-1',
       reasoningEffort: 'high',
       autonomyLevel: 'medium',
+      specModeModelId: null,
+      specModeReasoningEffort: null,
     })),
     readContextStats: vi.fn(async () => ({
       used: 40,
@@ -5400,6 +5679,8 @@ function createMockRuntime(
       modelId: 'model-1',
       reasoningEffort: 'high',
       autonomyLevel: 'medium',
+      specModeModelId: null,
+      specModeReasoningEffort: null,
     })),
     sendTurn: vi.fn(stream),
     interrupt: vi.fn(async () => {}),

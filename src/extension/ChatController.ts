@@ -275,6 +275,12 @@ const FORK_BLOCKED_MESSAGE =
 const FORK_UNSUPPORTED_MESSAGE =
   'This Droid runtime does not support session forking.';
 const FORK_FAILED_MESSAGE = 'Droid could not fork this session.';
+const SPEC_HANDOFF_DETECTED_MESSAGE =
+  'Plan approved. Droid is implementing in a new session; the chat switches there when this turn finishes.';
+const SPEC_HANDOFF_NOT_DETECTED_MESSAGE =
+  'Droid moved implementation to a new session, but it could not be identified automatically. Refresh History to open it.';
+const SPEC_HANDOFF_BLOCKED_MESSAGE =
+  'The implementation session could not be opened automatically. Select it from History.';
 const FILE_DIFF_FAILED_MESSAGE =
   'That file could not be opened. It may have been moved or deleted.';
 const OPEN_PATH_FAILED_MESSAGE =
@@ -367,6 +373,20 @@ export class ChatController {
   private workspaceTransition: Promise<void> | null = null;
   private sessionOperationInProgress = false;
   private refreshInProgress = false;
+  /**
+   * Spec-handoff state of the active turn: `expected` right after the
+   * user approves an ExitSpecMode plan into a new session, `detected`
+   * once the runtime reports the implementation session id. Adoption
+   * happens when the turn completes.
+   */
+  private specHandoff:
+    | { readonly turnId: string; readonly status: 'expected' }
+    | {
+        readonly turnId: string;
+        readonly status: 'detected';
+        readonly implementationSessionId: string;
+      }
+    | null = null;
   private pendingAttachments: PendingAttachment[] = [];
   private editStage: EditStage | null = null;
   /**
@@ -548,7 +568,20 @@ export class ChatController {
         if (!this.ensureActiveRuntimeWorkspaceCurrent()) {
           return;
         }
-        this.interactions.respondPermission(message);
+        if (
+          this.interactions.respondPermission(message) &&
+          message.selectedOption.startsWith('proceed_new_session') &&
+          message.sessionId === this.sessionId &&
+          this.turn?.turnId === message.turnId
+        ) {
+          // A ProceedNewSession* approval only exists on ExitSpecMode
+          // requests; remember it so a missing handoff signal degrades
+          // to a visible warning instead of silence.
+          this.specHandoff = {
+            turnId: message.turnId,
+            status: 'expected',
+          };
+        }
         return;
       case 'ask-user.respond':
         if (!this.ensureActiveRuntimeWorkspaceCurrent()) {
@@ -1238,6 +1271,27 @@ export class ChatController {
       case 'settings-updated':
         this.refreshSettingsAfterRuntimeEvent(sessionId);
         return;
+      case 'spec-handoff':
+        if (
+          isSafeBridgeId(event.implementationSessionId) &&
+          event.implementationSessionId !== sessionId &&
+          this.sessionId === sessionId
+        ) {
+          this.specHandoff = {
+            turnId,
+            status: 'detected',
+            implementationSessionId: event.implementationSessionId,
+          };
+          this.emit({
+            type: 'runtime.diagnostic',
+            sessionId,
+            turnId,
+            severity: 'info',
+            code: 'spec-handoff-detected',
+            message: SPEC_HANDOFF_DETECTED_MESSAGE,
+          });
+        }
+        return;
       case 'error':
         this.emit({
           type: 'runtime.diagnostic',
@@ -1263,20 +1317,76 @@ export class ChatController {
         this.setTurnStatus(sessionId, turnId, 'completed');
         void this.flushRecoveryCheckpoint();
         this.refreshContextAfterTurn(sessionId);
+        this.finishSpecHandoff(sessionId, turnId);
         return;
       case 'interrupted':
         this.publishTurnChanges(sessionId, turnId);
         this.setTurnStatus(sessionId, turnId, 'interrupted');
         void this.flushRecoveryCheckpoint();
         this.refreshContextAfterTurn(sessionId);
+        this.finishSpecHandoff(sessionId, turnId);
         return;
       case 'error_during_execution':
+        this.specHandoff = null;
         this.failTurn(sessionId, turnId, 'runtime-execution-failed');
         return;
       case 'error_structured_output':
+        this.specHandoff = null;
         this.failTurn(sessionId, turnId, 'runtime-structured-output-failed');
         return;
     }
+  }
+
+  /**
+   * Ends the spec-handoff arc of a finished turn: adopts the detected
+   * implementation session (same replacement path as selecting it from
+   * History), or degrades to a visible warning when the handoff signal
+   * never arrived or adoption is currently blocked.
+   */
+  private finishSpecHandoff(sessionId: string, turnId: string): void {
+    const handoff = this.specHandoff;
+    if (handoff === null || handoff.turnId !== turnId) {
+      return;
+    }
+    this.specHandoff = null;
+    const cwd = this.activeRuntimeCwd;
+    if (this.sessionId !== sessionId || cwd === null) {
+      return;
+    }
+    if (handoff.status !== 'detected') {
+      this.emitSessionDiagnostic(
+        'spec-handoff-not-detected',
+        SPEC_HANDOFF_NOT_DETECTED_MESSAGE,
+      );
+      return;
+    }
+    if (
+      isTurnActive(this.turn) ||
+      this.interactions.hasPending() ||
+      this.connection.status === 'connecting' ||
+      this.sessionOperationInProgress ||
+      this.refreshInProgress ||
+      this.settingsUpdate !== null
+    ) {
+      this.emitSessionDiagnostic(
+        'spec-handoff-blocked',
+        SPEC_HANDOFF_BLOCKED_MESSAGE,
+      );
+      return;
+    }
+    this.recordHost({
+      level: 'info',
+      name: 'host.spec.handoff-adopted',
+      attributes: {
+        planningSessionId: sessionId,
+        implementationSessionId: handoff.implementationSessionId,
+      },
+    });
+    this.startReplacement({
+      kind: 'resume',
+      cwd,
+      sessionId: handoff.implementationSessionId,
+    });
   }
 
   /**
@@ -4020,6 +4130,14 @@ export class ChatController {
     ) {
       return true;
     }
+    if (
+      (message.field === 'specModeModelId' ||
+        message.field === 'specModeReasoningEffort') &&
+      message.value === null
+    ) {
+      // Resetting a spec override needs no catalog knowledge.
+      return true;
+    }
     const settings = this.settings.value;
     if (
       this.modelCatalog.status !== 'ready' ||
@@ -4027,16 +4145,28 @@ export class ChatController {
     ) {
       return false;
     }
-    if (message.field === 'modelId') {
+    if (
+      message.field === 'modelId' ||
+      message.field === 'specModeModelId'
+    ) {
       return this.modelCatalog.items.some(
         ({ id }) => id === message.value,
       );
     }
+    // Reasoning effort must be supported by the model it applies to:
+    // the spec drafting model for spec efforts (falling back to the
+    // session model when no spec model is set).
+    const targetModelId =
+      message.field === 'specModeReasoningEffort'
+        ? (settings.specModeModelId ?? settings.modelId)
+        : settings.modelId;
     const model = this.modelCatalog.items.find(
-      ({ id }) => id === settings.modelId,
+      ({ id }) => id === targetModelId,
     );
     return (
-      model?.supportedReasoningEfforts.includes(message.value) ?? false
+      model !== undefined &&
+      message.value !== null &&
+      model.supportedReasoningEfforts.includes(message.value)
     );
   }
 
@@ -4701,6 +4831,9 @@ export class ChatController {
       return;
     }
 
+    if (this.specHandoff?.turnId === turnId) {
+      this.specHandoff = null;
+    }
     this.interactions.endTurn(sessionId, turnId);
     this.turn.status = 'failed';
     this.turn.error = TURN_FAILURE_MESSAGE;
@@ -5315,6 +5448,7 @@ export class ChatController {
 
   private resetSessionMetadata(): void {
     this.contextGeneration += 1;
+    this.specHandoff = null;
     this.settingsUpdate = null;
     this.settings = { status: 'loading', value: null };
     this.context = { status: 'loading', value: null };
@@ -5550,7 +5684,14 @@ function projectConfirmedSettings(
     !isEnumValue(settings.interactionMode, SESSION_INTERACTION_MODES) ||
     !isSafeModelId(settings.modelId) ||
     !isEnumValue(settings.reasoningEffort, SESSION_REASONING_EFFORTS) ||
-    !isEnumValue(settings.autonomyLevel, SESSION_AUTONOMY_LEVELS)
+    !isEnumValue(settings.autonomyLevel, SESSION_AUTONOMY_LEVELS) ||
+    (settings.specModeModelId !== null &&
+      !isSafeModelId(settings.specModeModelId)) ||
+    (settings.specModeReasoningEffort !== null &&
+      !isEnumValue(
+        settings.specModeReasoningEffort,
+        SESSION_REASONING_EFFORTS,
+      ))
   ) {
     throw new Error('Invalid runtime session settings.');
   }
@@ -5559,6 +5700,8 @@ function projectConfirmedSettings(
     modelId: settings.modelId,
     reasoningEffort: settings.reasoningEffort,
     autonomyLevel: settings.autonomyLevel,
+    specModeModelId: settings.specModeModelId,
+    specModeReasoningEffort: settings.specModeReasoningEffort,
   };
 }
 

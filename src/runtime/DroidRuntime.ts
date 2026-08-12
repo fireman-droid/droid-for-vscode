@@ -40,6 +40,10 @@ export interface RuntimeSessionSettings {
   readonly modelId: string;
   readonly reasoningEffort: RuntimeReasoningEffort;
   readonly autonomyLevel: RuntimeAutonomyLevel;
+  /** Spec-mode drafting model; null when unset (session model is used). */
+  readonly specModeModelId: string | null;
+  /** Spec-mode reasoning effort; null when unset (model default is used). */
+  readonly specModeReasoningEffort: RuntimeReasoningEffort | null;
 }
 
 export type RuntimeSessionSettingUpdate =
@@ -58,6 +62,16 @@ export type RuntimeSessionSettingUpdate =
   | {
       readonly field: 'autonomyLevel';
       readonly value: RuntimeAutonomyLevel;
+    }
+  | {
+      /** null resets Spec drafting to the session model. */
+      readonly field: 'specModeModelId';
+      readonly value: string | null;
+    }
+  | {
+      /** null resets Spec drafting to the model's default effort. */
+      readonly field: 'specModeReasoningEffort';
+      readonly value: RuntimeReasoningEffort | null;
     };
 
 export type RuntimeContextAccuracy = 'exact' | 'estimated';

@@ -172,6 +172,12 @@ export type FactoryDroidSessionFactory = (options: {
   interactionHandler: RuntimeInteractionHandler;
 }) => Promise<FactoryDroidSession>;
 
+interface SpecHandoffWatch {
+  reasonSeen: boolean;
+  candidateSessionId: string | null;
+  unsubscribe: () => void;
+}
+
 export interface FactoryDroidRuntimeOptions {
   readonly interactionHandler: RuntimeInteractionHandler;
   readonly createSdkSession?: FactoryDroidSessionFactory;
@@ -200,9 +206,28 @@ export class FactoryDroidRuntime implements DroidRuntime {
   private activeTurn: symbol | null = null;
   private disposed = false;
   private disposal: Promise<void> | null = null;
+  /**
+   * Armed after the user approves an ExitSpecMode plan with a
+   * `proceed_new_session*` outcome: watches session notifications for
+   * the dual handoff signal (an `agent_turn_completed` notification
+   * with reason `spec_handoff`, plus a notification envelope scoped to
+   * a different session id, which is the SDK's documented proxy for
+   * the implementation session).
+   */
+  private specHandoffWatch: SpecHandoffWatch | null = null;
+  /** Runtime events queued for the active turn's stream to yield. */
+  private pendingTurnEvents: RuntimeEvent[] = [];
 
   constructor(options: FactoryDroidRuntimeOptions) {
-    this.interactionHandler = options.interactionHandler;
+    const handler = options.interactionHandler;
+    this.interactionHandler = {
+      requestPermission: async (request) => {
+        const result = await handler.requestPermission(request);
+        this.observePermissionResult(request, result);
+        return result;
+      },
+      askUser: (request) => handler.askUser(request),
+    };
     this.diagnostics = options.diagnostics;
     this.loadSessionCommands =
       options.loadSessionCommands ?? loadSessionCommands;
@@ -300,6 +325,14 @@ export class FactoryDroidRuntime implements DroidRuntime {
           return;
         }
 
+        // Out-of-band runtime events (spec handoff) surface ahead of
+        // the current stream event so they always precede turn-complete.
+        while (this.pendingTurnEvents.length > 0) {
+          const pending = this.pendingTurnEvents.shift()!;
+          projectedEventCount += 1;
+          yield pending;
+        }
+
         const event = normalizeSdkEvent(
           sdkEvent,
           this.sessionTarget?.cwd,
@@ -394,6 +427,8 @@ export class FactoryDroidRuntime implements DroidRuntime {
           ? {}
           : { detail: failureDetail }),
       });
+      this.disarmSpecHandoffWatch();
+      this.pendingTurnEvents = [];
       if (this.activeTurn === turn) {
         this.activeTurn = null;
       }
@@ -1034,12 +1069,97 @@ export class FactoryDroidRuntime implements DroidRuntime {
     }
   }
 
+  private observePermissionResult(
+    request: Parameters<RuntimeInteractionHandler['requestPermission']>[0],
+    result: Awaited<
+      ReturnType<RuntimeInteractionHandler['requestPermission']>
+    >,
+  ): void {
+    if (
+      typeof result?.selectedOption === 'string' &&
+      result.selectedOption.startsWith('proceed_new_session') &&
+      request.toolUses.some(
+        ({ confirmationKind }) => confirmationKind === 'exit_spec_mode',
+      )
+    ) {
+      this.armSpecHandoffWatch();
+    }
+  }
+
+  private armSpecHandoffWatch(): void {
+    const session = this.session;
+    if (
+      this.disposed ||
+      this.specHandoffWatch !== null ||
+      session === null ||
+      typeof session.onNotification !== 'function'
+    ) {
+      return;
+    }
+    const planningSessionId = session.id;
+    const watch: SpecHandoffWatch = {
+      reasonSeen: false,
+      candidateSessionId: null,
+      unsubscribe: () => {},
+    };
+    watch.unsubscribe = session.onNotification((notification) => {
+      if (this.specHandoffWatch !== watch) {
+        return;
+      }
+      const envelope = readSessionNotificationEnvelope(notification);
+      if (envelope === null) {
+        return;
+      }
+      if (
+        envelope.type === 'agent_turn_completed' &&
+        envelope.reason === 'spec_handoff'
+      ) {
+        watch.reasonSeen = true;
+      }
+      if (
+        watch.candidateSessionId === null &&
+        envelope.sessionId !== undefined &&
+        envelope.sessionId !== planningSessionId &&
+        isSafeSessionId(envelope.sessionId)
+      ) {
+        watch.candidateSessionId = envelope.sessionId;
+      }
+      if (watch.reasonSeen && watch.candidateSessionId !== null) {
+        const implementationSessionId = watch.candidateSessionId;
+        this.disarmSpecHandoffWatch();
+        this.pendingTurnEvents.push({
+          type: 'spec-handoff',
+          implementationSessionId,
+        });
+        this.recordDiagnostic({
+          level: 'info',
+          name: 'runtime.spec.handoff',
+          attributes: {
+            planningSessionId,
+            implementationSessionId,
+          },
+        });
+      }
+    });
+    this.specHandoffWatch = watch;
+  }
+
+  private disarmSpecHandoffWatch(): void {
+    const watch = this.specHandoffWatch;
+    if (watch === null) {
+      return;
+    }
+    this.specHandoffWatch = null;
+    watch.unsubscribe();
+  }
+
   dispose(): Promise<void> {
     if (this.disposal) {
       return this.disposal;
     }
 
     this.disposed = true;
+    this.disarmSpecHandoffWatch();
     const disposal = this.disposeOwnedSession().catch((error) => {
       if (this.disposal === disposal) {
         this.disposal = null;
@@ -1375,11 +1495,23 @@ function projectSessionSettings(
     settings.reasoningEffort,
     RUNTIME_REASONING_EFFORTS,
   );
+  // Droid reports a reset spec field as absent (never null), so
+  // undefined projects to null ("unset") here.
+  const specModeModelId = settings.specModeModelId;
+  const specModeReasoningEffort =
+    settings.specModeReasoningEffort === undefined
+      ? null
+      : projectEnum(
+          settings.specModeReasoningEffort,
+          RUNTIME_REASONING_EFFORTS,
+        );
   if (
     interactionMode === undefined ||
     autonomyLevel === undefined ||
     reasoningEffort === undefined ||
-    !isSafeModelId(settings.modelId)
+    !isSafeModelId(settings.modelId) ||
+    (specModeModelId !== undefined && !isSafeModelId(specModeModelId)) ||
+    specModeReasoningEffort === undefined
   ) {
     throw new Error('Invalid session settings.');
   }
@@ -1389,6 +1521,8 @@ function projectSessionSettings(
     modelId: settings.modelId,
     reasoningEffort,
     autonomyLevel,
+    specModeModelId: specModeModelId ?? null,
+    specModeReasoningEffort,
   };
 }
 
@@ -1503,6 +1637,22 @@ function projectSettingsUpdate(
       return {
         autonomyLevel: update.value as AutonomyLevel,
       };
+    case 'specModeModelId':
+      // null resets Droid to drafting with the session model.
+      if (update.value !== null && !isSafeModelId(update.value)) {
+        break;
+      }
+      return { specModeModelId: update.value };
+    case 'specModeReasoningEffort':
+      if (
+        update.value !== null &&
+        !isEnumValue(update.value, RUNTIME_REASONING_EFFORTS)
+      ) {
+        break;
+      }
+      return {
+        specModeReasoningEffort: update.value as ReasoningEffort | null,
+      };
   }
 
   throw new Error('Invalid session setting update.');
@@ -1532,6 +1682,48 @@ function isSafeModelId(value: unknown): value is string {
     value.trim() === value &&
     !/[\u0000-\u001f\u007f-\u009f]/.test(value)
   );
+}
+
+/** Longest session id accepted from a notification envelope. */
+const MAX_SESSION_ID_LENGTH = 256;
+
+function isSafeSessionId(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_SESSION_ID_LENGTH &&
+    value.trim() === value &&
+    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
+  );
+}
+
+/**
+ * Reads the fields of a `droid.session_notification` JSON-RPC envelope
+ * (`params.sessionId` plus `params.notification.type`/`reason`) that
+ * spec-handoff detection needs. Mirrors the SDK's own
+ * `SessionNotificationSchema` shape without pulling in zod.
+ */
+function readSessionNotificationEnvelope(
+  raw: Record<string, unknown>,
+): {
+  sessionId?: string;
+  type?: string;
+  reason?: string;
+} | null {
+  const params = raw['params'];
+  if (typeof params !== 'object' || params === null) {
+    return null;
+  }
+  const { sessionId, notification } = params as Record<string, unknown>;
+  if (typeof notification !== 'object' || notification === null) {
+    return null;
+  }
+  const { type, reason } = notification as Record<string, unknown>;
+  return {
+    ...(typeof sessionId === 'string' ? { sessionId } : {}),
+    ...(typeof type === 'string' ? { type } : {}),
+    ...(typeof reason === 'string' ? { reason } : {}),
+  };
 }
 
 function isSafeModelDisplayName(value: unknown): value is string {
