@@ -66,6 +66,14 @@ export interface DisposableSubscription {
   dispose(): void;
 }
 
+export function isTurnActive(turn: CurrentTurn | null): boolean {
+  return (
+    turn?.status === 'submitting' ||
+    turn?.status === 'streaming' ||
+    turn?.status === 'stopping'
+  );
+}
+
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
