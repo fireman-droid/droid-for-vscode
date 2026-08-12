@@ -9,7 +9,10 @@ import { useEffect, useRef } from 'react';
  *   `overscroll-behavior: contain` companion covers momentum flings);
  * - light dismissal: any pointer press outside the card and Escape
  *   pressed anywhere close the popup. Persistent cards (the `/btw`
- *   side chat) opt out of the outside-press part and keep Escape.
+ *   side chat) opt out of the outside-press part and keep Escape;
+ * - highlight follow: keyboard navigation moves an `aria-selected`
+ *   mark between option rows, and the card scrolls to keep the
+ *   marked row visible.
  */
 export function ComposerPopup({
   className,
@@ -59,6 +62,32 @@ export function ComposerPopup({
     };
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);
+  }, []);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (element === null) {
+      return undefined;
+    }
+    // Keep the keyboard-highlighted row visible: whenever the
+    // aria-selected mark moves (arrow keys, wrap-around jumps) or the
+    // filtered list re-renders under it, scroll the marked row into
+    // view. Observing the DOM keeps this in one place for every list
+    // popup instead of threading each caller's highlight index here;
+    // 'nearest' never scrolls when the row is already fully visible.
+    const followHighlight = (): void => {
+      element
+        .querySelector('[aria-selected="true"]')
+        ?.scrollIntoView({ block: 'nearest' });
+    };
+    followHighlight();
+    const observer = new MutationObserver(followHighlight);
+    observer.observe(element, {
+      subtree: true,
+      childList: true,
+      attributeFilter: ['aria-selected'],
+    });
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
