@@ -153,8 +153,11 @@ function parseBtwEntry(
   ) {
     return null;
   }
+  // Hosts serialize the shared state shape directly, so a message-less
+  // entry arrives as an explicit null; both spellings mean "none".
   if (
     value.message !== undefined &&
+    value.message !== null &&
     !isNonEmptyBoundedString(value.message, MAX_BTW_MESSAGE_LENGTH)
   ) {
     return null;
@@ -165,7 +168,7 @@ function parseBtwEntry(
     question: value.question,
     answer: value.answer,
     state: value.state as BtwEntryState,
-    message: value.message === undefined ? null : value.message,
+    message: value.message ?? null,
   };
 }
 
@@ -194,6 +197,7 @@ export function parseSessionBtwMessage(
   }
   if (
     btw.message !== undefined &&
+    btw.message !== null &&
     !isNonEmptyBoundedString(btw.message, MAX_BTW_MESSAGE_LENGTH)
   ) {
     return null;
@@ -214,7 +218,7 @@ export function parseSessionBtwMessage(
     btw: {
       status: btw.status as BtwStatus,
       entries,
-      message: btw.message === undefined ? null : btw.message,
+      message: btw.message ?? null,
     },
   };
 }

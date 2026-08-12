@@ -113,6 +113,23 @@ describe('parseSessionBtwMessage', () => {
     );
   });
 
+  it('accepts explicit null messages (hosts serialize the state shape)', () => {
+    const message = validMessage();
+    (message.btw as Record<string, unknown>).message = null;
+    (message.btw as Record<string, unknown>).entries = [
+      {
+        id: 'entry-1',
+        question: 'q',
+        answer: 'a',
+        state: 'done',
+        message: null,
+      },
+    ];
+    const parsed = parseSessionBtwMessage(message);
+    expect(parsed?.btw.message).toBeNull();
+    expect(parsed?.btw.entries[0]?.message).toBeNull();
+  });
+
   it('accepts an empty answer on a streaming entry', () => {
     const message = validMessage();
     (message.btw as Record<string, unknown>).entries = [
