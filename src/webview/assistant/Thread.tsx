@@ -3204,18 +3204,23 @@ function ToolOutputPreview({
       pre.scrollTop = pre.scrollHeight;
     }
   }, [text, running, open]);
+  // The frame carries the finished surface (border, warm background)
+  // while the inner pre scrolls under a top fade mask, so the tail
+  // truncation dissolves instead of hard-cutting at the frame edge.
   return (
-    <pre
-      ref={preRef}
-      className="dvx-tool-output"
-      onScroll={(event) => {
-        const pre = event.currentTarget;
-        pinnedRef.current =
-          pre.scrollHeight - pre.scrollTop - pre.clientHeight < 8;
-      }}
-    >
-      {text}
-    </pre>
+    <div className="dvx-tool-output-frame">
+      <pre
+        ref={preRef}
+        className="dvx-tool-output"
+        onScroll={(event) => {
+          const pre = event.currentTarget;
+          pinnedRef.current =
+            pre.scrollHeight - pre.scrollTop - pre.clientHeight < 8;
+        }}
+      >
+        {text}
+      </pre>
+    </div>
   );
 }
 
