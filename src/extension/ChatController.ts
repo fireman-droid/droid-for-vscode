@@ -118,6 +118,7 @@ import {
 } from './turnActivityState';
 import { handleQueueAdd, handleQueueUpdate, handleQueueRemove, handleQueueResume, handleQueuePromote, handleQueueClear, settleQueueAfterTurn, projectQueueState, discardQueuedPrompts } from './chat/queue';
 import { handleMcpRefresh, pushMcp, handleMcpServerToggle, handleMcpServerAdd, handleMcpServerRemove, handleMcpServerAuthenticate } from './chat/mcp';
+import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRefresh, pushSkills, handleSkillToggle, handlePluginsRefresh, handleCommandsRefresh, recordRecentCommand, emitModelCatalog, projectModelCatalog, isSafeModelId, MODEL_CATALOG_FAILED_MESSAGE } from './chat/capabilityPanels';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
 import {
   clearPrompts,
@@ -201,9 +202,13 @@ import {
 import { RecentCommandsStore } from './RecentCommandsStore';
 import {
   createEmptySessionCatalog,
+  DAEMON_NOT_LOGGED_IN_MESSAGE,
+  DAEMON_UNAVAILABLE_MESSAGE,
   createTransientRecoveryStore,
   delay,
   formatUnknownError,
+  daemonFailureMessage,
+  isEnumValue,
   isSafeBridgeId,
   isTranscriptProjection,
   isTurnActive,
@@ -348,10 +353,6 @@ const FAVORITE_FAILED_MESSAGE =
   'The session favorite could not be saved.';
 const DAEMON_UNSUPPORTED_MESSAGE =
   'Archive and search are not available in this Droid runtime.';
-const DAEMON_NOT_LOGGED_IN_MESSAGE =
-  'Sign in with the droid CLI to archive and search sessions.';
-const DAEMON_UNAVAILABLE_MESSAGE =
-  'The local droid daemon is unavailable.';
 const ARCHIVE_BLOCKED_MESSAGE =
   'Wait for the current session operation to finish before archiving.';
 const ARCHIVE_ACTIVE_MESSAGE =
@@ -359,22 +360,6 @@ const ARCHIVE_ACTIVE_MESSAGE =
 const ARCHIVE_FAILED_MESSAGE = 'The session could not be archived.';
 const UNARCHIVE_FAILED_MESSAGE =
   'The session could not be restored from the archive.';
-const SKILLS_UNSUPPORTED_MESSAGE =
-  'This Droid runtime does not expose skills.';
-const SKILLS_LOAD_FAILED_MESSAGE =
-  'Droid did not return the skill list. Retry from the skills panel.';
-const COMMANDS_UNSUPPORTED_MESSAGE =
-  'This Droid runtime does not expose custom commands.';
-const COMMANDS_LOAD_FAILED_MESSAGE =
-  'Droid did not return the command list. Type / again to retry.';
-const SKILL_TOGGLE_FAILED_MESSAGE =
-  'Droid could not update that skill. The list may be stale; refresh it.';
-const PLUGINS_UNSUPPORTED_MESSAGE =
-  'Plugins are not available in this Droid runtime.';
-const PLUGINS_LOAD_FAILED_MESSAGE =
-  'Droid did not return the plugin list. Retry from the plugins panel.';
-const PLUGINS_NOT_LOGGED_IN_MESSAGE =
-  'Sign in with the droid CLI to view plugins.';
 const COMPACT_BLOCKED_MESSAGE =
   'Droid cannot compact right now. Wait for the current activity to finish.';
 const COMPACT_UNSUPPORTED_MESSAGE =
@@ -400,14 +385,6 @@ const PREVIEW_FAILED_MESSAGE =
   'That prototype could not be previewed. It may have been moved, deleted, or is too large.';
 const OPEN_PATH_FAILED_MESSAGE =
   'That path could not be opened. It may have been moved or deleted.';
-const SKILL_REQUEST_DROPPED_MESSAGE =
-  'Droid could not accept that skill change right now. Retry in a moment.';
-const CONTEXT_READ_FAILED_MESSAGE =
-  'Droid did not return context usage. Retry, then open DroidVisX Logs if this continues.';
-const MODEL_CATALOG_UNSUPPORTED_MESSAGE =
-  'Model selection is unavailable in this Droid runtime.';
-const MODEL_CATALOG_FAILED_MESSAGE =
-  'Droid models could not be loaded.';
 const ATTACHMENT_LIMIT_MESSAGE =
   `Up to ${MAX_PENDING_ATTACHMENTS} attachments can be staged for one message.`;
 const ATTACHMENT_TOO_LARGE_MESSAGE =
@@ -815,7 +792,7 @@ export class ChatController {
         this.handleSessionSearch(message.query);
         return;
       case 'session.context.refresh':
-        this.handleContextRefresh(message.sessionId);
+        handleContextRefresh(this, message.sessionId);
         return;
       case 'session.compact':
         this.handleSessionCompact(message.sessionId);
@@ -847,16 +824,16 @@ export class ChatController {
         );
         return;
       case 'skills.refresh':
-        this.handleSkillsRefresh(message.sessionId);
+        handleSkillsRefresh(this, message.sessionId);
         return;
       case 'plugins.refresh':
-        this.handlePluginsRefresh(message.sessionId);
+        handlePluginsRefresh(this, message.sessionId);
         return;
       case 'commands.refresh':
-        this.handleCommandsRefresh(message.sessionId);
+        handleCommandsRefresh(this, message.sessionId);
         return;
       case 'skill.toggle':
-        this.handleSkillToggle(
+        handleSkillToggle(this, 
           message.sessionId,
           message.name,
           message.disabled,
@@ -1232,7 +1209,7 @@ export class ChatController {
     );
     this.scheduleRecoveryCheckpoint();
     this.touchActiveSession();
-    this.recordRecentCommand(sessionId, text);
+    recordRecentCommand(this, sessionId, text);
     this.emitTurnState(sessionId, turnId, 'submitting');
     const attachments =
       consumed === undefined || consumed.length === 0
@@ -1555,7 +1532,7 @@ export class ChatController {
       case 'token-usage':
         // Live cumulative totals are authoritative over any history
         // seed; the CLI pushes a few per turn.
-        this.updateTokenUsage(sessionId, {
+        updateTokenUsage(this, sessionId, {
           cumulative: event.cumulative,
         });
         return;
@@ -1647,7 +1624,7 @@ export class ChatController {
     if (event.turnUsage !== undefined) {
       // Per-turn consumption regardless of outcome; interrupted and
       // failed turns still burned tokens.
-      this.updateTokenUsage(sessionId, { lastTurn: event.turnUsage });
+      updateTokenUsage(this, sessionId, { lastTurn: event.turnUsage });
     }
     switch (event.outcome) {
       case 'success':
@@ -3201,419 +3178,6 @@ export class ChatController {
     }
 
     this.startCatalogRefresh(workspace.cwd);
-  }
-
-  private handleContextRefresh(sessionId: string): void {
-    if (
-      sessionId !== this.sessionId ||
-      this.runtime === null ||
-      this.connection.status !== 'connected' ||
-      this.sessionOperationInProgress ||
-      this.context.status === 'loading' ||
-      !this.ensureActiveRuntimeWorkspaceCurrent()
-    ) {
-      return;
-    }
-
-    this.refreshContext(
-      this.runtime,
-      this.runtimeGeneration,
-      sessionId,
-      this.activeRuntimeCwd!,
-    );
-  }
-
-  private handleSkillsRefresh(sessionId: string): void {
-    const runtime = this.runtime;
-    const dropReason = this.sessionRequestDropReason(sessionId);
-    if (dropReason !== null || runtime === null) {
-      this.recordDroppedPanelRequest(
-        'skills.refresh',
-        dropReason ?? 'no-runtime',
-      );
-      return;
-    }
-    this.pushSkills(
-      runtime,
-      this.runtimeGeneration,
-      sessionId,
-      this.activeRuntimeCwd!,
-    );
-  }
-
-  /**
-   * Loads and emits the skills catalog. Called from the user-request
-   * guard chain and directly from session activation
-   * (`loadSessionMetadata`), where `sessionOperationInProgress` is
-   * still set and the request guard would wrongly drop the push.
-   */
-  private pushSkills(
-    runtime: DroidRuntime,
-    generation: number,
-    sessionId: string,
-    cwd: string,
-  ): void {
-    if (typeof runtime.listSkills !== 'function') {
-      this.emitSkills(sessionId, {
-        status: 'unsupported',
-        items: [],
-        message: SKILLS_UNSUPPORTED_MESSAGE,
-      });
-      return;
-    }
-
-    this.emitSkills(sessionId, { status: 'loading', items: [] });
-    void runtime.listSkills().then(
-      (skills) => {
-        if (
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        this.emitSkills(sessionId, {
-          status: 'ready',
-          items: skills.map(projectSkillSummary),
-        });
-      },
-      (error) => {
-        if (
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        this.recordPanelFailure(
-          'skills-load-failed',
-          formatUnknownError(error),
-        );
-        this.emitSkills(sessionId, {
-          status: 'error',
-          items: [],
-          message: SKILLS_LOAD_FAILED_MESSAGE,
-        });
-      },
-    );
-  }
-
-  private handleSkillToggle(
-    sessionId: string,
-    name: string,
-    disabled: boolean,
-  ): void {
-    const runtime = this.runtime;
-    const dropReason = this.sessionRequestDropReason(sessionId);
-    if (dropReason !== null || runtime === null) {
-      const reason = dropReason ?? 'no-runtime';
-      this.recordDroppedPanelRequest('skill.toggle', reason);
-      if (
-        reason !== 'session-mismatch' &&
-        sessionId === this.sessionId
-      ) {
-        this.emitSkills(sessionId, {
-          status: 'error',
-          items: [],
-          message: SKILL_REQUEST_DROPPED_MESSAGE,
-        });
-      }
-      return;
-    }
-    if (
-      typeof runtime.setSkillDisabled !== 'function' ||
-      typeof runtime.listSkills !== 'function'
-    ) {
-      this.emitSkills(sessionId, {
-        status: 'unsupported',
-        items: [],
-        message: SKILLS_UNSUPPORTED_MESSAGE,
-      });
-      return;
-    }
-
-    this.emitSkills(sessionId, { status: 'loading', items: [] });
-    const generation = this.runtimeGeneration;
-    const cwd = this.activeRuntimeCwd!;
-    void runtime
-      .setSkillDisabled(name, disabled)
-      .then(() => runtime.listSkills!())
-      .then(
-        (skills) => {
-          if (
-            !this.isCurrentSessionOperation(
-              runtime,
-              generation,
-              sessionId,
-              cwd,
-            )
-          ) {
-            return;
-          }
-          this.emitSkills(sessionId, {
-            status: 'ready',
-            items: skills.map(projectSkillSummary),
-          });
-        },
-        (error) => {
-          if (
-            !this.isCurrentSessionOperation(
-              runtime,
-              generation,
-              sessionId,
-              cwd,
-            )
-          ) {
-            return;
-          }
-          this.recordPanelFailure(
-            'skill-toggle-failed',
-            formatUnknownError(error),
-          );
-          this.emitSkills(sessionId, {
-            status: 'error',
-            items: [],
-            message: SKILL_TOGGLE_FAILED_MESSAGE,
-          });
-        },
-      );
-  }
-
-  private emitSkills(
-    sessionId: string,
-    skills: SessionSkillsState,
-  ): void {
-    this.emit({
-      type: 'session.skills',
-      sessionId,
-      skills,
-    });
-  }
-
-  /**
-   * Serves the read-only plugins panel through the daemon sidecar:
-   * `plugins.listInstalled` and `marketplaces.list` run concurrently
-   * against the active session id (the daemon accepts any on-disk
-   * session id for these RPCs — probe evidence in
-   * docs/product/plugins-hooks-design.md §2.1). Daemon failures
-   * surface as an explicit error state, never a silent empty list.
-   */
-  private handlePluginsRefresh(sessionId: string): void {
-    const runtime = this.runtime;
-    const dropReason = this.sessionRequestDropReason(sessionId);
-    if (dropReason !== null || runtime === null) {
-      this.recordDroppedPanelRequest(
-        'plugins.refresh',
-        dropReason ?? 'no-runtime',
-      );
-      return;
-    }
-    const daemonPlugins = this.daemonPlugins;
-    if (daemonPlugins === undefined) {
-      this.emitPlugins(sessionId, {
-        status: 'unsupported',
-        items: [],
-        message: PLUGINS_UNSUPPORTED_MESSAGE,
-      });
-      return;
-    }
-
-    this.emitPlugins(sessionId, { status: 'loading', items: [] });
-    const generation = this.runtimeGeneration;
-    const cwd = this.activeRuntimeCwd!;
-    void daemonPlugins()
-      .then((catalog) => catalog.snapshot(sessionId))
-      .then(
-        (snapshot) => {
-          if (
-            !this.isCurrentSessionOperation(
-              runtime,
-              generation,
-              sessionId,
-              cwd,
-            )
-          ) {
-            return;
-          }
-          this.emitPlugins(sessionId, {
-            status: 'ready',
-            items: projectPluginSummaries(snapshot.plugins),
-            marketplaceCount: Math.min(
-              snapshot.marketplaceCount,
-              MAX_PLUGIN_MARKETPLACE_COUNT,
-            ),
-          });
-        },
-        (error) => {
-          if (
-            !this.isCurrentSessionOperation(
-              runtime,
-              generation,
-              sessionId,
-              cwd,
-            )
-          ) {
-            return;
-          }
-          this.recordPanelFailure(
-            'plugins-load-failed',
-            formatUnknownError(error),
-          );
-          this.emitPlugins(sessionId, {
-            status: 'error',
-            items: [],
-            message: daemonFailureMessage(
-              error,
-              PLUGINS_LOAD_FAILED_MESSAGE,
-              PLUGINS_NOT_LOGGED_IN_MESSAGE,
-            ),
-          });
-        },
-      );
-  }
-
-  private emitPlugins(
-    sessionId: string,
-    plugins: SessionPluginsState,
-  ): void {
-    this.emit({
-      type: 'session.plugins',
-      sessionId,
-      plugins,
-    });
-  }
-
-  private handleCommandsRefresh(sessionId: string): void {
-    const runtime = this.runtime;
-    if (
-      sessionId !== this.sessionId ||
-      runtime === null ||
-      this.connection.status !== 'connected' ||
-      this.sessionOperationInProgress ||
-      this.commandsRefreshGeneration === this.runtimeGeneration ||
-      !this.ensureActiveRuntimeWorkspaceCurrent()
-    ) {
-      return;
-    }
-    if (typeof runtime.listCommands !== 'function') {
-      this.emitCommands(sessionId, {
-        status: 'unsupported',
-        items: [],
-        recent: [],
-        message: COMMANDS_UNSUPPORTED_MESSAGE,
-      });
-      return;
-    }
-
-    const cachedItems = this.cachedCommandItems(sessionId);
-    this.emitCommands(sessionId, {
-      status: 'loading',
-      items: cachedItems,
-      recent: this.recentCommands.read(),
-    });
-    const generation = this.runtimeGeneration;
-    this.commandsRefreshGeneration = generation;
-    const cwd = this.activeRuntimeCwd!;
-    void runtime.listCommands().then(
-      (commands) => {
-        if (this.commandsRefreshGeneration === generation) {
-          this.commandsRefreshGeneration = null;
-        }
-        if (
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        const items = commands.map(projectCommandSummary);
-        this.commandsCache = { sessionId, items };
-        this.emitCommands(sessionId, {
-          status: 'ready',
-          items,
-          recent: this.recentCommands.read(),
-        });
-      },
-      () => {
-        if (this.commandsRefreshGeneration === generation) {
-          this.commandsRefreshGeneration = null;
-        }
-        if (
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        this.emitCommands(sessionId, {
-          status: 'error',
-          items: this.cachedCommandItems(sessionId),
-          recent: this.recentCommands.read(),
-          message: COMMANDS_LOAD_FAILED_MESSAGE,
-        });
-      },
-    );
-  }
-
-  private cachedCommandItems(
-    sessionId: string,
-  ): readonly CommandSummary[] {
-    return this.commandsCache?.sessionId === sessionId
-      ? this.commandsCache.items
-      : [];
-  }
-
-  /**
-   * Records a `/command` invocation in the recent list when the sent
-   * text starts with a known custom command, then re-broadcasts the
-   * catalog so the popup reorders immediately.
-   */
-  private recordRecentCommand(sessionId: string, text: string): void {
-    if (
-      !text.startsWith('/') ||
-      this.commandsCache?.sessionId !== sessionId
-    ) {
-      return;
-    }
-    const slug = text
-      .slice(1)
-      .split(/\s/, 1)[0]!
-      .toLowerCase();
-    const match = this.commandsCache.items.find(
-      (item) => item.name.toLowerCase() === slug,
-    );
-    if (match === undefined) {
-      return;
-    }
-    const recent = this.recentCommands.record(match.name);
-    this.emitCommands(sessionId, {
-      status: 'ready',
-      items: this.commandsCache.items,
-      recent,
-    });
-  }
-
-  private emitCommands(
-    sessionId: string,
-    commands: SessionCommandsState,
-  ): void {
-    this.emit({
-      type: 'session.commands',
-      sessionId,
-      commands,
-    });
   }
 
   private canStageAttachments(
@@ -5544,7 +5108,7 @@ export class ChatController {
           return;
         }
         this.modelCatalog = projectModelCatalog(result);
-        this.emitModelCatalog(sessionId);
+        emitModelCatalog(this, sessionId);
       })
       .catch(() => {
         if (
@@ -5562,71 +5126,16 @@ export class ChatController {
           items: [],
           message: MODEL_CATALOG_FAILED_MESSAGE,
         };
-        this.emitModelCatalog(sessionId);
+        emitModelCatalog(this, sessionId);
       });
 
-    this.refreshContext(runtime, generation, sessionId, cwd);
+    refreshContext(this, runtime, generation, sessionId, cwd);
     // Server-side backstop for the skills/MCP panels: a session switch
     // resets the webview catalogs to 'idle', and a panel-issued
     // re-request can be dropped mid-switch. Pushing fresh state on
     // activation converges an open panel without user action.
-    this.pushSkills(runtime, generation, sessionId, cwd);
+    pushSkills(this, runtime, generation, sessionId, cwd);
     pushMcp(this, runtime, generation, sessionId, cwd);
-  }
-
-  private refreshContext(
-    runtime: DroidRuntime,
-    generation: number,
-    sessionId: string,
-    cwd: string,
-  ): void {
-    const request = ++this.contextGeneration;
-    const confirmed =
-      this.context.status === 'ready' ||
-      this.context.status === 'error'
-        ? this.context.value
-        : null;
-    this.context = { status: 'loading', value: confirmed };
-    this.emitContext(sessionId);
-    void runtime
-      .readContextStats()
-      .then((result) => {
-        if (
-          request !== this.contextGeneration ||
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        this.context = {
-          status: 'ready',
-          value: projectContextStats(result),
-        };
-        this.emitContext(sessionId);
-      })
-      .catch(() => {
-        if (
-          request !== this.contextGeneration ||
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        this.context = {
-          status: 'error',
-          value: confirmed,
-          message: CONTEXT_READ_FAILED_MESSAGE,
-        };
-        this.emitContext(sessionId);
-      });
   }
 
   private async loadCatalog(cwd: string): Promise<SessionCatalogState> {
@@ -5864,40 +5373,6 @@ export class ChatController {
     });
   }
 
-  private emitContext(sessionId: string): void {
-    this.emit({
-      type: 'session.context',
-      sessionId,
-      context: this.context,
-    });
-  }
-
-  private updateTokenUsage(
-    sessionId: string,
-    update: Partial<{
-      cumulative: TokenUsageBreakdown;
-      lastTurn: TokenUsageBreakdown;
-    }>,
-  ): void {
-    if (this.sessionId !== sessionId) {
-      return;
-    }
-    this.tokenUsage = { ...this.tokenUsage, ...update };
-    this.emit({
-      type: 'session.tokenUsage',
-      sessionId,
-      tokenUsage: this.tokenUsage,
-    });
-  }
-
-  private emitModelCatalog(sessionId: string): void {
-    this.emit({
-      type: 'session.model-catalog',
-      sessionId,
-      modelCatalog: this.modelCatalog,
-    });
-  }
-
   /**
    * Settles the finished turn's subagent rows with the CLI's durable
    * invocation ledger (`loadSession().subagentInvocations`). The
@@ -6089,7 +5564,7 @@ export class ChatController {
       this.sessionId === sessionId &&
       this.connection.status === 'connected'
     ) {
-      this.refreshContext(
+      refreshContext(this, 
         this.runtime,
         this.runtimeGeneration,
         sessionId,
@@ -6895,7 +6370,7 @@ export class ChatController {
     );
   }
 
-  private ensureActiveRuntimeWorkspaceCurrent(): boolean {
+  ensureActiveRuntimeWorkspaceCurrent(): boolean {
     if (
       this.runtime === null ||
       (this.activeRuntimeCwd !== null &&
@@ -6979,23 +6454,6 @@ function isUsableWorkspace(
   return workspace.cwd !== null && workspace.trusted;
 }
 
-/**
- * Maps daemon-path failures to fixed user-facing messages. Raw error
- * text never crosses to the Bridge: SDK errors may embed payloads.
- */
-function daemonFailureMessage(
-  error: unknown,
-  fallback: string,
-  notLoggedIn: string = DAEMON_NOT_LOGGED_IN_MESSAGE,
-): string {
-  if (error instanceof DaemonAvailabilityError) {
-    return error.reason === 'not-logged-in'
-      ? notLoggedIn
-      : DAEMON_UNAVAILABLE_MESSAGE;
-  }
-  return fallback;
-}
-
 function isSameWorkspaceContext(
   left: WorkspaceContext,
   right: WorkspaceContext,
@@ -7066,135 +6524,6 @@ function projectConfirmedSettings(
   };
 }
 
-function projectContextStats(
-  context: RuntimeContextStats,
-): SessionContextStats {
-  if (
-    !isSafeContextNumber(context.used) ||
-    !isSafeContextNumber(context.remaining) ||
-    !isSafeContextNumber(context.limit) ||
-    (context.accuracy !== 'exact' &&
-      context.accuracy !== 'estimated')
-  ) {
-    throw new Error('Invalid runtime context statistics.');
-  }
-  return {
-    used: context.used,
-    remaining: context.remaining,
-    limit: context.limit,
-    accuracy: context.accuracy,
-  };
-}
-
-function projectModelCatalog(
-  catalog: RuntimeModelCatalog,
-): ModelCatalogState {
-  if (catalog.status === 'unavailable') {
-    return {
-      status: 'unsupported',
-      items: [],
-      message: MODEL_CATALOG_UNSUPPORTED_MESSAGE,
-    };
-  }
-  if (
-    catalog.status !== 'available' ||
-    !Array.isArray(catalog.items) ||
-    catalog.items.length > MAX_MODEL_CATALOG_ITEMS
-  ) {
-    throw new Error('Invalid runtime model catalog.');
-  }
-
-  const ids = new Set<string>();
-  const items = catalog.items.map((item: RuntimeModelCatalogItem) => {
-    if (
-      !isSafeModelId(item.id) ||
-      ids.has(item.id) ||
-      !isSafeDisplayName(item.displayName) ||
-      !Array.isArray(item.supportedReasoningEfforts) ||
-      item.supportedReasoningEfforts.length === 0 ||
-      item.supportedReasoningEfforts.length >
-        SESSION_REASONING_EFFORTS.length
-    ) {
-      throw new Error('Invalid runtime model catalog item.');
-    }
-    const efforts = new Set(item.supportedReasoningEfforts);
-    if (
-      efforts.size !== item.supportedReasoningEfforts.length ||
-      item.supportedReasoningEfforts.some(
-        (effort) =>
-          !isEnumValue(effort, SESSION_REASONING_EFFORTS),
-      )
-    ) {
-      throw new Error('Invalid runtime model reasoning efforts.');
-    }
-    ids.add(item.id);
-    return {
-      id: item.id,
-      displayName: item.displayName,
-      supportedReasoningEfforts: [...item.supportedReasoningEfforts],
-    };
-  });
-  return { status: 'ready', items };
-}
-
-function projectSkillSummary(skill: RuntimeSkill): SkillSummary {
-  return {
-    name: skill.name,
-    description: skill.description,
-    location: skill.location,
-    enabled: skill.enabled,
-    userInvocable: skill.userInvocable,
-  };
-}
-
-/**
- * Projects daemon plugin rows into bounded Bridge summaries. Rows
- * that violate the contract — oversized or control-character ids,
- * duplicate ids, or a scope outside the user/project whitelist — are
- * dropped (fail closed) rather than displayed with invented values.
- */
-function projectPluginSummaries(
-  entries: readonly InstalledPluginEntry[],
-): PluginSummary[] {
-  const items: PluginSummary[] = [];
-  const ids = new Set<string>();
-  for (const entry of entries) {
-    if (
-      items.length >= MAX_PLUGIN_ITEMS ||
-      entry.id.length === 0 ||
-      entry.id.length > MAX_PLUGIN_ID_LENGTH ||
-      /[\u0000-\u001f\u007f-\u009f]/.test(entry.id) ||
-      ids.has(entry.id) ||
-      !isPluginScope(entry.scope)
-    ) {
-      continue;
-    }
-    ids.add(entry.id);
-    items.push({
-      id: entry.id,
-      scope: entry.scope,
-      version: entry.version
-        .replace(/[\u0000-\u001f\u007f-\u009f]+/g, '')
-        .slice(0, MAX_PLUGIN_VERSION_LENGTH),
-      active: entry.active,
-    });
-  }
-  return items;
-}
-
-function isPluginScope(value: string): value is PluginScope {
-  return (PLUGIN_SCOPES as readonly string[]).includes(value);
-}
-
-function projectCommandSummary(command: RuntimeCommand): CommandSummary {
-  return {
-    name: command.name,
-    description: command.description,
-    argumentHint: command.argumentHint,
-    isExecutable: command.isExecutable,
-  };
-}
-
 function toRuntimeAttachment(
   payload: AttachmentPayload,
 ): RuntimeAttachment | null {
@@ -7261,40 +6590,6 @@ function sanitizeSessionTitle(title: string): string {
     .slice(0, SESSION_TITLE_LIMIT)
     .trim();
   return safe || 'Untitled session';
-}
-
-function isSafeModelId(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= MAX_MODEL_ID_LENGTH &&
-    value.trim() === value &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
-  );
-}
-
-function isSafeDisplayName(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= MAX_MODEL_DISPLAY_NAME_LENGTH &&
-    value.trim() === value &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
-  );
-}
-
-function isEnumValue<const Values extends readonly string[]>(
-  value: unknown,
-  values: Values,
-): value is Values[number] {
-  return (
-    typeof value === 'string' &&
-    (values as readonly string[]).includes(value)
-  );
-}
-
-function isSafeContextNumber(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
 function forkTitleFromText(text: string): string {

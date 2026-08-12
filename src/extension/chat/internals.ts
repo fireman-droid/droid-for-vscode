@@ -17,6 +17,7 @@ import {
   SessionRecoveryStore,
   type SessionRecoveryPersistence,
 } from '../SessionRecoveryStore';
+import { DaemonAvailabilityError } from '../../runtime/daemon/daemonConnection';
 import type { ChatController } from '../ChatController';
 
 /**
@@ -64,6 +65,38 @@ export interface EditStage {
 
 export interface DisposableSubscription {
   dispose(): void;
+}
+
+export const DAEMON_NOT_LOGGED_IN_MESSAGE =
+  'Sign in with the droid CLI to archive and search sessions.';
+export const DAEMON_UNAVAILABLE_MESSAGE =
+  'The local droid daemon is unavailable.';
+
+/**
+ * Maps daemon-path failures to fixed user-facing messages. Raw error
+ * text never crosses to the Bridge: SDK errors may embed payloads.
+ */
+export function daemonFailureMessage(
+  error: unknown,
+  fallback: string,
+  notLoggedIn: string = DAEMON_NOT_LOGGED_IN_MESSAGE,
+): string {
+  if (error instanceof DaemonAvailabilityError) {
+    return error.reason === 'not-logged-in'
+      ? notLoggedIn
+      : DAEMON_UNAVAILABLE_MESSAGE;
+  }
+  return fallback;
+}
+
+export function isEnumValue<const Values extends readonly string[]>(
+  value: unknown,
+  values: Values,
+): value is Values[number] {
+  return (
+    typeof value === 'string' &&
+    (values as readonly string[]).includes(value)
+  );
 }
 
 export function isTurnActive(turn: CurrentTurn | null): boolean {
