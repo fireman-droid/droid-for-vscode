@@ -13,6 +13,7 @@ import {
   updatePromptText,
 } from '../queuedPromptsState';
 import type { SessionQueueState } from '../../shared/queueProtocol';
+import { emitAttachments } from './attachments';
 import { isTurnActive, type ChatControllerInternals } from './internals';
 
 export const QUEUE_DISPATCH_BLOCKED_MESSAGE =
@@ -52,13 +53,13 @@ export function handleQueueAdd(
       });
       // Re-sync the chips too: the optimistic add already moved the
       // staged attachments into the webview's queued card.
-      ctl.emitAttachments();
+      emitAttachments(ctl);
       emitQueueState(ctl);
       return;
     }
     if (ctl.pendingAttachments.length > 0) {
       ctl.pendingAttachments = [];
-      ctl.emitAttachments();
+      emitAttachments(ctl);
     }
     ctl.queuedPrompts = result.state;
     ctl.recordHost({
