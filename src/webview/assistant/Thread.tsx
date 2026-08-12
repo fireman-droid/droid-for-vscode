@@ -10,6 +10,8 @@ import {
 import {
   Children,
   createContext,
+  Fragment,
+  isValidElement,
   memo,
   useContext,
   useEffect,
@@ -3587,6 +3589,21 @@ const TICKER_SLIDE_FALLBACK_MS = 320;
  * prefers-reduced-motion degrades to a direct swap via CSS (the
  * transition is disabled, the fallback timer commits).
  */
+/**
+ * GroupedParts hands a group's rendered members as ONE Fragment
+ * element; unwrap it so the ticker can index individual member rows
+ * (member order is preserved — the mapped nodes are always elements,
+ * so toArray drops nothing).
+ */
+function tickerChildArray(children: ReactNode): ReturnType<typeof Children.toArray> {
+  if (isValidElement(children) && children.type === Fragment) {
+    return Children.toArray(
+      (children.props as { children?: ReactNode }).children,
+    );
+  }
+  return Children.toArray(children);
+}
+
 function ActivityTicker({
   activeIndex,
   children,
@@ -3594,7 +3611,7 @@ function ActivityTicker({
   readonly activeIndex: number;
   readonly children: ReactNode;
 }): React.JSX.Element {
-  const childArray = Children.toArray(children);
+  const childArray = tickerChildArray(children);
   const [trail, setTrail] = useState<readonly number[]>([activeIndex]);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const current = trail[trail.length - 1];
