@@ -1528,11 +1528,11 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
   设计文档 §4.2 追加第二条决策记录。门禁：全量 vitest 80 files /
   1826 tests 全绿、build 绿；冒烟升级为八场景（narrow 改为分栏断
   言 + × 关闭，新增 mid 420px 分栏 + 主 Composer 可编辑断言）全
-  PASS；三档截图目检（全宽 520 / 420 / 320）通过。typecheck：
-  extension 段与 root webview 段绿；第三段 `typecheck:webview`
-  在 HEAD 上红——来自并行图片代理的 `f7f9b24`（runtimeAdapter 用
-  `item.turnId` 而 `UserTranscriptItem` 无此字段），与本切片无关，
-  已留后台轮询待其转绿。**未打包，随下一个修复包**
+  PASS；三档截图目检（全宽 520 / 420 / 320）通过。typecheck 三段
+  全绿（开发中曾撞上并行图片代理在途提交的 `typecheck:webview`
+  瞬态红——runtimeAdapter 用 `item.turnId` 而 `UserTranscriptItem`
+  无此字段；对方收回该提交后在 HEAD `e3d3ac5` 复验全绿）。
+  **未打包，随下一个修复包**
 
 ### 19. Turn 运行中排队消息（2026-08-12 晚，V1 主线收官切片）
 
