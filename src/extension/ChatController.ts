@@ -197,6 +197,19 @@ import {
   type ExternalUrlOpener,
 } from './externalUrlOpener';
 import { RecentCommandsStore } from './RecentCommandsStore';
+import {
+  createEmptySessionCatalog,
+  createTransientRecoveryStore,
+  delay,
+  formatUnknownError,
+  isSafeBridgeId,
+  isTranscriptProjection,
+  type CurrentTurn,
+  type DisposableSubscription,
+  type EditStage,
+  type EditStagedAttachment,
+  type PendingAttachment,
+} from './chat/internals';
 
 export type DroidRuntimeFactory = (
   interactionHandler: RuntimeInteractionHandler,
@@ -218,50 +231,12 @@ type UnsequencedHostMessage =
       : never
     : never;
 
-interface CurrentTurn {
-  readonly turnId: string;
-  status: TurnStatus;
-  error?: string;
-  activity: TurnActivityState;
-  /**
-   * Marks a turn synthesized by reload reconciliation: the agent loop
-   * runs daemon-side with no local stream, so completion comes from
-   * working-state polling and Stop must use `interruptSession()`.
-   */
-  readonly recovery?: true;
-}
-
-interface PendingAttachment {
-  readonly summary: AttachmentSummary;
-  readonly runtime: RuntimeAttachment;
-}
-
-/**
- * One entry of the per-message edit staging area. `runtime` is null
- * for chips whose original payload is no longer available (evicted
- * from the retention area or predating this window); those can only
- * be removed, never resent.
- */
-interface EditStagedAttachment {
-  readonly summary: EditAttachmentSummary;
-  readonly runtime: RuntimeAttachment | null;
-}
-
-interface EditStage {
-  readonly messageId: string;
-  attachments: readonly EditStagedAttachment[];
-}
-
 /**
  * Byte budget for retained sent-attachment payloads (memory only):
  * 8 attachments x 4 MB fits exactly one maximal message, covering
  * the common "edit the latest message" case.
  */
 export const MAX_SENT_ATTACHMENT_RETENTION_BYTES = 32 * 1024 * 1024;
-
-interface DisposableSubscription {
-  dispose(): void;
-}
 
 const TURN_FAILURE_MESSAGE =
   'Droid could not complete this turn. Retry to start a fresh session.';
@@ -491,64 +466,64 @@ const ATTACHMENT_NO_SELECTION_MESSAGE =
   'Select text in an editor first to attach the selection.';
 
 export class ChatController {
-  private readonly listeners = new Set<ChatControllerListener>();
-  private readonly interactions: PendingInteractionCoordinator;
-  private runtime: DroidRuntime | null = null;
-  private connection: ConnectionState = { status: 'idle' };
-  private sessions: SessionCatalogState = {
+  readonly listeners = new Set<ChatControllerListener>();
+  readonly interactions: PendingInteractionCoordinator;
+  runtime: DroidRuntime | null = null;
+  connection: ConnectionState = { status: 'idle' };
+  sessions: SessionCatalogState = {
     status: 'idle',
     items: [],
   };
-  private transcript: HostTranscriptState =
+  transcript: HostTranscriptState =
     createHostTranscriptState('unavailable');
-  private sessionId: string | null = null;
+  sessionId: string | null = null;
   /**
    * Read-only mission identity of the active session, from the last
    * successful history load; null for sessions outside a mission.
    */
-  private mission: SessionMissionSummary | null = null;
+  mission: SessionMissionSummary | null = null;
   /**
    * Token-usage breakdown of the active session: cumulative totals
    * seeded from history and overwritten by live `token-usage`
    * events; `lastTurn` set by each completed turn in this window.
    */
-  private tokenUsage: SessionTokenUsageState = EMPTY_SESSION_TOKEN_USAGE;
-  private turn: CurrentTurn | null = null;
-  private settings: SessionSettingsState = {
+  tokenUsage: SessionTokenUsageState = EMPTY_SESSION_TOKEN_USAGE;
+  turn: CurrentTurn | null = null;
+  settings: SessionSettingsState = {
     status: 'loading',
     value: null,
   };
-  private context: SessionContextState = {
+  context: SessionContextState = {
     status: 'loading',
     value: null,
   };
-  private modelCatalog: ModelCatalogState = {
+  modelCatalog: ModelCatalogState = {
     status: 'loading',
     items: [],
   };
-  private sequence = -1;
-  private runtimeGeneration = 0;
-  private turnGeneration = 0;
-  private contextGeneration = 0;
-  private settingsUpdate: symbol | null = null;
-  private catalogGeneration = 0;
-  private catalogCwd: string | null = null;
+  sequence = -1;
+  runtimeGeneration = 0;
+  turnGeneration = 0;
+  contextGeneration = 0;
+  settingsUpdate: symbol | null = null;
+  catalogGeneration = 0;
+  catalogCwd: string | null = null;
   /**
    * True when the current workspace may create worktree sessions:
    * daemon runtime mode (worktreeSessions.enabled) and a git
    * workspace. Recomputed per catalog cwd binding; snapshots only
    * advertise it while true (fail closed).
    */
-  private worktreeCreateAvailable = false;
+  worktreeCreateAvailable = false;
   /** Workspace cwd the availability check was computed for. */
-  private worktreeAvailabilityCwd: string | null = null;
-  private activeRuntimeCwd: string | null = null;
-  private initialization: Promise<void> | null = null;
-  private workspaceContext: WorkspaceContext;
-  private workspaceContextGeneration = 0;
-  private workspaceTransition: Promise<void> | null = null;
-  private sessionOperationInProgress = false;
-  private refreshInProgress = false;
+  worktreeAvailabilityCwd: string | null = null;
+  activeRuntimeCwd: string | null = null;
+  initialization: Promise<void> | null = null;
+  workspaceContext: WorkspaceContext;
+  workspaceContextGeneration = 0;
+  workspaceTransition: Promise<void> | null = null;
+  sessionOperationInProgress = false;
+  refreshInProgress = false;
   /**
    * Catalog sessions whose turn is running (`SessionSummary.running`).
    * The active session's entry follows local turn state; the rest are
@@ -556,16 +531,16 @@ export class ChatController {
    * window, or the CLI), watched through the opened-session registry
    * poll. Changes stream as incremental `session.running` messages.
    */
-  private readonly runningSessionIds = new Set<string>();
+  readonly runningSessionIds = new Set<string>();
   /** Single watcher for detached running flags; null while idle. */
-  private backgroundRunningPoll: Promise<void> | null = null;
+  backgroundRunningPoll: Promise<void> | null = null;
   /**
    * Spec-handoff state of the active turn: `expected` right after the
    * user approves an ExitSpecMode plan into a new session, `detected`
    * once the runtime reports the implementation session id. Adoption
    * happens when the turn completes.
    */
-  private specHandoff:
+  specHandoff:
     | { readonly turnId: string; readonly status: 'expected' }
     | {
         readonly turnId: string;
@@ -573,47 +548,47 @@ export class ChatController {
         readonly implementationSessionId: string;
       }
     | null = null;
-  private pendingAttachments: PendingAttachment[] = [];
+  pendingAttachments: PendingAttachment[] = [];
   /**
    * Prompts queued while a turn runs (queued-messages-design.md
    * §4.1). Host memory only — the queue dies with the session line
    * (reload, session switch, fork, compact, workspace change).
    */
-  private queuedPrompts: QueuedPromptsState<PendingAttachment> =
+  queuedPrompts: QueuedPromptsState<PendingAttachment> =
     emptyQueuedPromptsState();
-  private editStage: EditStage | null = null;
+  editStage: EditStage | null = null;
   /**
    * Payloads of already-sent attachments keyed by SDK message id, so
    * editing a recent message can resend its attachments without
    * re-reading them. Memory only; never persisted to checkpoints.
    */
-  private readonly sentAttachments = new Map<
+  readonly sentAttachments = new Map<
     string,
     readonly PendingAttachment[]
   >();
   /** Attachments consumed by the turn still waiting for its message id. */
-  private pendingSentAttachments: {
+  pendingSentAttachments: {
     readonly turnId: string;
     readonly attachments: readonly PendingAttachment[];
   } | null = null;
-  private attachmentOperationInProgress = false;
-  private attachmentIdCounter = 0;
-  private readonly managedRuntimes = new Set<DroidRuntime>();
-  private readonly runtimeClosures = new Map<
+  attachmentOperationInProgress = false;
+  attachmentIdCounter = 0;
+  readonly managedRuntimes = new Set<DroidRuntime>();
+  readonly runtimeClosures = new Map<
     DroidRuntime,
     Promise<void>
   >();
-  private readonly closedRuntimes = new WeakSet<DroidRuntime>();
-  private disposed = false;
-  private disposal: Promise<void> | null = null;
-  private pendingRecoveryCheckpoint: {
+  readonly closedRuntimes = new WeakSet<DroidRuntime>();
+  disposed = false;
+  disposal: Promise<void> | null = null;
+  pendingRecoveryCheckpoint: {
     readonly sessionId: string;
     readonly cache: HostTranscriptState;
   } | null = null;
-  private recoveryCheckpointTimer: ReturnType<typeof setTimeout> | null =
+  recoveryCheckpointTimer: ReturnType<typeof setTimeout> | null =
     null;
-  private mcpAuthServerName: string | null = null;
-  private mcpAuthTimer: ReturnType<typeof setTimeout> | null = null;
+  mcpAuthServerName: string | null = null;
+  mcpAuthTimer: ReturnType<typeof setTimeout> | null = null;
   /**
    * Post-turn ledger reconcile for background delegations that
    * outlived their turn ("zombie" rows). Probed 2026-08-12: no
@@ -622,7 +597,7 @@ export class ChatController {
    * every watched row settles, the session changes, or the bounded
    * window closes.
    */
-  private zombieSubagentWatch: {
+  zombieSubagentWatch: {
     readonly sessionId: string;
     rows: readonly PendingSubagentRow[];
     readonly deadlineAt: number;
@@ -630,7 +605,7 @@ export class ChatController {
     /** Serializes ticks so a slow ledger read never overlaps. */
     ticking: boolean;
   } | null = null;
-  private commandsCache: {
+  commandsCache: {
     readonly sessionId: string;
     readonly items: readonly CommandSummary[];
   } | null = null;
@@ -640,46 +615,46 @@ export class ChatController {
    * short-lived catalog process stops blocking refreshes as soon as
    * the session or workspace binding changes.
    */
-  private commandsRefreshGeneration: number | null = null;
-  private readonly interactionOpenedAt = new Map<string, number>();
+  commandsRefreshGeneration: number | null = null;
+  readonly interactionOpenedAt = new Map<string, number>();
   /** Outbound Bridge message accounting for the active turn (P5). */
-  private turnIo: {
+  turnIo: {
     counts: Map<string, number>;
     bytes: number;
   } | null = null;
   /** Hidden-fork side chat; null when no sidecar factory is wired. */
-  private readonly btwSideChat: BtwSideChat | null;
+  readonly btwSideChat: BtwSideChat | null;
 
   constructor(
-    private readonly createRuntime: DroidRuntimeFactory,
-    private readonly getWorkspaceContext: WorkspaceContextProvider,
-    private readonly sessionCatalog: SessionCatalog =
+    readonly createRuntime: DroidRuntimeFactory,
+    readonly getWorkspaceContext: WorkspaceContextProvider,
+    readonly sessionCatalog: SessionCatalog =
       createEmptySessionCatalog(),
-    private readonly recoveryStore: SessionRecoveryStore =
+    readonly recoveryStore: SessionRecoveryStore =
       createTransientRecoveryStore(),
-    private readonly sessionHistory: SessionHistoryLoader =
+    readonly sessionHistory: SessionHistoryLoader =
       createUnavailableSessionHistoryLoader(),
-    private readonly attachmentSources: AttachmentSources =
+    readonly attachmentSources: AttachmentSources =
       createUnavailableAttachmentSources(),
-    private readonly fileDiff: FileDiffOpener =
+    readonly fileDiff: FileDiffOpener =
       createUnavailableFileDiffOpener(),
-    private readonly changeStats: ChangeStatsReader =
+    readonly changeStats: ChangeStatsReader =
       createUnavailableChangeStatsReader(),
-    private readonly externalUrl: ExternalUrlOpener =
+    readonly externalUrl: ExternalUrlOpener =
       createUnavailableExternalUrlOpener(),
-    private readonly recentCommands: RecentCommandsStore =
+    readonly recentCommands: RecentCommandsStore =
       new RecentCommandsStore(),
-    private readonly diagnostics?: RuntimeDiagnosticSink,
-    private readonly daemonSessions?: () => Promise<DaemonSessionCatalog>,
-    private readonly pathOpener: PathOpener =
+    readonly diagnostics?: RuntimeDiagnosticSink,
+    readonly daemonSessions?: () => Promise<DaemonSessionCatalog>,
+    readonly pathOpener: PathOpener =
       createUnavailablePathOpener(),
-    private readonly prototypePreview: PrototypePreviewOpener =
+    readonly prototypePreview: PrototypePreviewOpener =
       createUnavailablePrototypePreviewOpener(),
-    private readonly gitWorkflow: GitWorkflow =
+    readonly gitWorkflow: GitWorkflow =
       createUnavailableGitWorkflow(),
-    private readonly worktreeSessions?: WorktreeSessionsFeature,
-    private readonly terminalMirror?: TerminalMirror,
-    private readonly daemonPlugins?: () => Promise<DaemonPluginCatalog>,
+    readonly worktreeSessions?: WorktreeSessionsFeature,
+    readonly terminalMirror?: TerminalMirror,
+    readonly daemonPlugins?: () => Promise<DaemonPluginCatalog>,
     btwSidecarFactory?: BtwSidecarFactory,
   ) {
     this.workspaceContext = {
@@ -7824,10 +7799,6 @@ function recoveryTurnId(generation: number): string {
   return `recovery-${generation}`;
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
  * Rejects when an MCP daemon round-trip outlives
  * `MCP_OPERATION_TIMEOUT_MS`, so a hung add/remove/toggle/list RPC
@@ -7908,21 +7879,6 @@ function isSameWorkspaceContext(
   right: WorkspaceContext,
 ): boolean {
   return left.cwd === right.cwd && left.trusted === right.trusted;
-}
-
-function isTranscriptProjection(
-  message: HostToWebviewMessage,
-): message is HostTranscriptProjectionMessage {
-  return (
-    message.type === 'assistant.delta' ||
-    message.type === 'thinking.delta' ||
-    message.type === 'thinking.complete' ||
-    message.type === 'tool.activity' ||
-    message.type === 'subagent.update' ||
-    message.type === 'transcript.image' ||
-    message.type === 'runtime.diagnostic' ||
-    message.type === 'turn.state'
-  );
 }
 
 function projectCatalogEntries(
@@ -8244,44 +8200,3 @@ function forkTitleFromText(text: string): string {
     : `${collapsed.slice(0, MAX_FORK_TITLE_LENGTH - 1)}…`;
 }
 
-function isSafeBridgeId(value: string): boolean {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= MAX_BRIDGE_ID_LENGTH &&
-    value.trim() === value &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
-  );
-}
-
-function createEmptySessionCatalog(): SessionCatalog {
-  return {
-    async listSessions() {
-      return { status: 'available', sessions: [] };
-    },
-  };
-}
-
-function formatUnknownError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.stack ?? `${error.name}: ${error.message}`;
-  }
-  try {
-    return JSON.stringify(error) ?? String(error);
-  } catch {
-    return String(error);
-  }
-}
-
-function createTransientRecoveryStore(): SessionRecoveryStore {
-  const values = new Map<string, unknown>();
-  const persistence: SessionRecoveryPersistence = {
-    get<T>(key: string): T | undefined {
-      return values.get(key) as T | undefined;
-    },
-    async update(key: string, value: unknown): Promise<void> {
-      values.set(key, value);
-    },
-  };
-  return new SessionRecoveryStore(persistence);
-}
