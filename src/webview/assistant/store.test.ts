@@ -1664,6 +1664,95 @@ describe('assistantWebviewReducer', () => {
     expect(state.commands).toMatchObject({ status: 'idle', items: [] });
   });
 
+  it('tracks the plugins panel state and resets it on session change', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    expect(state.plugins).toEqual({ status: 'idle', items: [] });
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.plugins',
+        sequence: 1,
+        sessionId: 'session-a',
+        plugins: {
+          status: 'ready',
+          items: [
+            {
+              id: 'core@factory-plugins',
+              scope: 'user',
+              version: 'e3ff29f752fb',
+              active: true,
+            },
+          ],
+          marketplaceCount: 1,
+        },
+      },
+    });
+    expect(state.plugins).toMatchObject({
+      status: 'ready',
+      items: [{ id: 'core@factory-plugins' }],
+      marketplaceCount: 1,
+    });
+
+    // An empty in-flight refresh keeps the current items visible.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.plugins',
+        sequence: 2,
+        sessionId: 'session-a',
+        plugins: { status: 'loading', items: [] },
+      },
+    });
+    expect(state.plugins).toMatchObject({
+      status: 'loading',
+      items: [{ id: 'core@factory-plugins' }],
+    });
+
+    // A failed refresh keeps the last list but surfaces the message.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.plugins',
+        sequence: 3,
+        sessionId: 'session-a',
+        plugins: {
+          status: 'error',
+          items: [],
+          message: 'The local droid daemon is unavailable.',
+        },
+      },
+    });
+    expect(state.plugins).toMatchObject({
+      status: 'error',
+      items: [{ id: 'core@factory-plugins' }],
+      message: 'The local droid daemon is unavailable.',
+    });
+
+    // Messages for another session only advance the sequence.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.plugins',
+        sequence: 4,
+        sessionId: 'session-b',
+        plugins: { status: 'ready', items: [], marketplaceCount: 0 },
+      },
+    });
+    expect(state.plugins.status).toBe('error');
+
+    // A snapshot for a different session resets the panel to idle so
+    // the next open triggers a fresh request instead of a stale list.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(5, 'session-b'),
+    });
+    expect(state.plugins).toEqual({ status: 'idle', items: [] });
+  });
+
   it('tracks the git commit flow through status, commit, and result', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',

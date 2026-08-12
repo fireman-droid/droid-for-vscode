@@ -13,6 +13,7 @@ import {
   type SessionContextState,
   type SessionMcpState,
   type SessionMissionSummary,
+  type SessionPluginsState,
   type SessionSearchState,
   type SessionSettingsState,
   type SessionSkillsState,
@@ -104,6 +105,10 @@ export interface AssistantWebviewState {
   readonly skills: SessionSkillsState | { status: 'idle'; items: readonly [] };
   /** MCP servers load lazily; 'idle' means not requested yet. */
   readonly mcp: SessionMcpState | { status: 'idle'; items: readonly [] };
+  /** Installed plugins load lazily; 'idle' means not requested yet. */
+  readonly plugins:
+    | SessionPluginsState
+    | { status: 'idle'; items: readonly [] };
   /** Custom slash commands load lazily on the first `/` trigger. */
   readonly commands:
     | SessionCommandsState
@@ -209,6 +214,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   modelCatalog: { status: 'loading', items: [] },
   skills: { status: 'idle', items: [] },
   mcp: { status: 'idle', items: [] },
+  plugins: { status: 'idle', items: [] },
   commands: { status: 'idle', items: [], recent: [] },
   mcpAuth: null,
   attachments: [],
@@ -327,6 +333,10 @@ export function assistantWebviewReducer(
           event.sessionId === state.sessionId
             ? state.mcp
             : { status: 'idle', items: [] },
+        plugins:
+          event.sessionId === state.sessionId
+            ? state.plugins
+            : { status: 'idle', items: [] },
         commands:
           event.sessionId === state.sessionId
             ? state.commands
@@ -391,6 +401,7 @@ export function assistantWebviewReducer(
               modelCatalog: { status: 'loading', items: [] },
               skills: { status: 'idle', items: [] },
               mcp: { status: 'idle', items: [] },
+              plugins: { status: 'idle', items: [] },
               commands: { status: 'idle', items: [], recent: [] },
               mcpAuth: null,
               attachments: [],
@@ -456,6 +467,29 @@ export function assistantWebviewReducer(
               }
             : event.skills;
       return { ...state, sequence: event.sequence, skills };
+    }
+    case 'session.plugins': {
+      if (event.sessionId !== state.sessionId) {
+        return advance(state, event.sequence);
+      }
+      // A refresh in flight sends 'loading' with no items, and a failed
+      // refresh arrives with an empty payload; keep showing the current
+      // list in both cases instead of blanking it.
+      const plugins =
+        event.plugins.status === 'loading' &&
+        event.plugins.items.length === 0 &&
+        state.plugins.items.length > 0
+          ? { status: 'loading' as const, items: state.plugins.items }
+          : event.plugins.status === 'error' &&
+              event.plugins.items.length === 0 &&
+              state.plugins.items.length > 0
+            ? {
+                status: 'error' as const,
+                items: state.plugins.items,
+                message: event.plugins.message,
+              }
+            : event.plugins;
+      return { ...state, sequence: event.sequence, plugins };
     }
     case 'session.mcp': {
       if (event.sessionId !== state.sessionId) {

@@ -18,10 +18,12 @@ import type {
   SessionContextState,
   SessionInteractionMode,
   SessionMcpState,
+  SessionPluginsState,
   SessionReasoningEffort,
   SessionSettingUpdateMessage,
   SessionSettingsState,
   SessionSkillsState,
+  PluginSummary,
   SkillSummary,
 } from '../../shared/bridgeMessages';
 import type {
@@ -30,7 +32,13 @@ import type {
 } from '../../shared/tokenUsage';
 
 type OpenPanel = 'settings' | 'context' | 'model' | 'mode' | null;
-type SettingsView = 'root' | 'mode' | 'autonomy' | 'skills' | 'mcp';
+type SettingsView =
+  | 'root'
+  | 'mode'
+  | 'autonomy'
+  | 'skills'
+  | 'mcp'
+  | 'plugins';
 
 export type SkillsPanelState =
   | SessionSkillsState
@@ -38,6 +46,10 @@ export type SkillsPanelState =
 
 export type McpPanelState =
   | SessionMcpState
+  | { readonly status: 'idle'; readonly items: readonly [] };
+
+export type PluginsPanelState =
+  | SessionPluginsState
   | { readonly status: 'idle'; readonly items: readonly [] };
 
 /** Progress of the one in-flight MCP browser authentication flow. */
@@ -56,6 +68,16 @@ export interface McpServerAddParams {
   readonly url?: string;
 }
 
+/**
+ * One slash-command navigation request targeting a composer panel
+ * (`/model` `/context` `/mcp` `/skills`). The monotonic id lets the
+ * same target fire again after the user closed the panel.
+ */
+export interface ComposerNavRequest {
+  readonly id: number;
+  readonly target: 'model' | 'context' | 'mcp' | 'skills';
+}
+
 interface ComposerControlsProps {
   readonly settings: SessionSettingsState;
   readonly context: SessionContextState;
@@ -68,6 +90,7 @@ interface ComposerControlsProps {
   readonly modelCatalog: ModelCatalogState;
   readonly skills: SkillsPanelState;
   readonly mcp: McpPanelState;
+  readonly plugins: PluginsPanelState;
   readonly disabled: boolean;
   readonly settingUpdatesDisabled: boolean;
   /** Hides the context ring + popover (the edit card omits them). */
@@ -86,6 +109,9 @@ interface ComposerControlsProps {
   readonly onMcpServerRemove: (name: string) => void;
   readonly mcpAuth: McpAuthProgress | null;
   readonly onMcpServerAuthenticate: (name: string) => void;
+  readonly onPluginsRefresh: () => void;
+  /** Latest slash-command navigation request; null before the first. */
+  readonly navSignal?: ComposerNavRequest | null;
   /** Starts a fresh session (skills apply at session start). */
   readonly onNewSession?: () => void;
   readonly onAttachFiles: () => void;
@@ -182,6 +208,7 @@ export function ComposerControls({
   modelCatalog,
   skills,
   mcp,
+  plugins,
   disabled,
   settingUpdatesDisabled,
   showContext = true,
@@ -197,6 +224,8 @@ export function ComposerControls({
   onMcpServerRemove,
   mcpAuth,
   onMcpServerAuthenticate,
+  onPluginsRefresh,
+  navSignal = null,
   onNewSession,
   onAttachFiles,
   onAttachEditor,
@@ -282,11 +311,7 @@ export function ComposerControls({
   // state) even when it reopens while the previous instance is still
   // mounted playing its exit animation.
   const [openSeq, setOpenSeq] = useState(0);
-  const toggle = (panel: Exclude<OpenPanel, null>): void => {
-    if (openPanel === panel) {
-      close();
-      return;
-    }
+  const open = (panel: Exclude<OpenPanel, null>): void => {
     if (closeTimerRef.current !== null) {
       window.clearTimeout(closeTimerRef.current);
       closeTimerRef.current = null;
@@ -305,6 +330,51 @@ export function ComposerControls({
       );
     }
   };
+  const toggle = (panel: Exclude<OpenPanel, null>): void => {
+    if (openPanel === panel) {
+      close();
+      return;
+    }
+    open(panel);
+  };
+
+  // `/model` `/context` `/mcp` `/skills` (typed or picked in the `/`
+  // popup) open the same popovers the control buttons do, under the
+  // same availability guards as those buttons.
+  const lastNavIdRef = useRef(0);
+  useEffect(() => {
+    if (navSignal === null || navSignal.id === lastNavIdRef.current) {
+      return;
+    }
+    lastNavIdRef.current = navSignal.id;
+    if (disabled) {
+      return;
+    }
+    if (navSignal.target === 'model') {
+      if (confirmed !== null) {
+        open('model');
+      }
+      return;
+    }
+    if (navSignal.target === 'context') {
+      if (showContext) {
+        open('context');
+      }
+      return;
+    }
+    // Skills / MCP live as views inside the `+` settings popover;
+    // entering re-reads the catalog like the in-panel links do.
+    open('settings');
+    if (navSignal.target === 'skills') {
+      onSkillsRefresh();
+    } else {
+      onMcpRefresh();
+    }
+    setSettingsView(navSignal.target);
+    // Reacts to new nav requests only; the handlers and guards it
+    // reads are stable within one render of that request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navSignal]);
   const renderedPanel = openPanel ?? closingPanel;
 
   return (
@@ -413,6 +483,7 @@ export function ComposerControls({
           settings={settings}
           skills={skills}
           mcp={mcp}
+          plugins={plugins}
           disabled={settingControlsDisabled}
           attachDisabled={disabled}
           onViewChange={setSettingsView}
@@ -425,6 +496,7 @@ export function ComposerControls({
           onMcpServerRemove={onMcpServerRemove}
           mcpAuth={mcpAuth}
           onMcpServerAuthenticate={onMcpServerAuthenticate}
+          onPluginsRefresh={onPluginsRefresh}
           onNewSession={onNewSession}
           onAttach={(source) => {
             close();
@@ -530,6 +602,7 @@ function SettingsPopover({
   settings,
   skills,
   mcp,
+  plugins,
   disabled,
   attachDisabled,
   onViewChange,
@@ -542,6 +615,7 @@ function SettingsPopover({
   onMcpServerRemove,
   mcpAuth,
   onMcpServerAuthenticate,
+  onPluginsRefresh,
   onNewSession,
   onAttach,
 }: {
@@ -550,6 +624,7 @@ function SettingsPopover({
   readonly settings: SessionSettingsState;
   readonly skills: SkillsPanelState;
   readonly mcp: McpPanelState;
+  readonly plugins: PluginsPanelState;
   readonly disabled: boolean;
   readonly attachDisabled: boolean;
   readonly onViewChange: (view: SettingsView) => void;
@@ -567,19 +642,22 @@ function SettingsPopover({
   readonly onMcpServerRemove: (name: string) => void;
   readonly mcpAuth: McpAuthProgress | null;
   readonly onMcpServerAuthenticate: (name: string) => void;
+  readonly onPluginsRefresh: () => void;
   readonly onNewSession?: () => void;
   readonly onAttach: (source: AttachSource) => void;
 }): React.JSX.Element {
   const [query, setQuery] = useState('');
   const confirmed = settings.value;
-  // The popover stacks three views: the root list and the Skills/MCP
+  // The popover stacks the root list and the Skills/MCP/Plugins
   // drill-ins ('mode'/'autonomy' are inline expansions of root).
   // Changing views remounts the keyed wrapper below, which plays a
   // short directional slide: drilling in arrives from the right,
   // going back from the left. The first mount plays neither — the
   // popover itself already animates in.
-  const group: 'root' | 'skills' | 'mcp' =
-    view === 'skills' || view === 'mcp' ? view : 'root';
+  const group: 'root' | 'skills' | 'mcp' | 'plugins' =
+    view === 'skills' || view === 'mcp' || view === 'plugins'
+      ? view
+      : 'root';
   const previousGroupRef = useRef(group);
   const directionRef = useRef<'forward' | 'back' | null>(null);
   if (previousGroupRef.current !== group) {
@@ -632,6 +710,8 @@ function SettingsPopover({
     normalizedQuery.length === 0 || 'skills'.includes(normalizedQuery);
   const showMcp =
     normalizedQuery.length === 0 || 'mcp servers'.includes(normalizedQuery);
+  const showPlugins =
+    normalizedQuery.length === 0 || 'plugins'.includes(normalizedQuery);
   const showAttach =
     normalizedQuery.length === 0 ||
     'attach files editor selection context'.includes(normalizedQuery);
@@ -686,6 +766,17 @@ function SettingsPopover({
         onAdd={onMcpServerAdd}
         onRemove={onMcpServerRemove}
         onAuthenticate={onMcpServerAuthenticate}
+      />,
+    );
+  }
+
+  if (view === 'plugins') {
+    return shell(
+      'Plugins',
+      <PluginsPanel
+        plugins={plugins}
+        onBack={() => onViewChange('root')}
+        onRefresh={onPluginsRefresh}
       />,
     );
   }
@@ -814,6 +905,29 @@ function SettingsPopover({
           <ChevronDownIcon />
         </button>
       ) : null}
+      {showPlugins ? (
+        <button
+          type="button"
+          className="dvx-popover-row dvx-settings-link-row"
+          onClick={() => {
+            // Always re-read on entry so the panel reflects installs
+            // made with the droid CLI while this popover was closed.
+            onPluginsRefresh();
+            onViewChange('plugins');
+          }}
+        >
+          <SettingsInfoIcon kind="plugins" />
+          <span className="dvx-popover-row-copy">
+            <strong>Plugins</strong>
+          </span>
+          <span className="dvx-popover-row-value">
+            {plugins.status === 'ready'
+              ? `${plugins.items.length} installed`
+              : ''}
+          </span>
+          <ChevronDownIcon />
+        </button>
+      ) : null}
       {matchedSkills.length > 0 || matchedServers.length > 0 ? (
         <>
           <div className="dvx-settings-divider" />
@@ -860,6 +974,7 @@ function SettingsPopover({
       !showAutonomy &&
       !showSkills &&
       !showMcp &&
+      !showPlugins &&
       !showAttach &&
       matchedSkills.length === 0 &&
       matchedServers.length === 0 ? (
@@ -1478,6 +1593,116 @@ function McpServerRow({
   );
 }
 
+/**
+ * Read-only view of the installed plugin catalog. Install, remove,
+ * and enable live in the droid CLI for now; this panel only answers
+ * "what is installed and active for new sessions".
+ */
+function PluginsPanel({
+  plugins,
+  onBack,
+  onRefresh,
+}: {
+  readonly plugins: PluginsPanelState;
+  readonly onBack: () => void;
+  readonly onRefresh: () => void;
+}): React.JSX.Element {
+  const busy = plugins.status === 'loading' || plugins.status === 'idle';
+  // Same session-switch recovery as the skills panel: an idle catalog
+  // under a visible panel means nobody re-queried after the reset, so
+  // re-request instead of sitting on the loading message forever.
+  useEffect(() => {
+    if (plugins.status === 'idle') {
+      onRefresh();
+    }
+  }, [plugins.status, onRefresh]);
+  return (
+    <div className="dvx-skills-panel">
+      <div className="dvx-panel-head">
+        <button
+          type="button"
+          className="dvx-panel-back"
+          aria-label="Back to session controls"
+          onClick={onBack}
+        >
+          <ChevronLeftIcon />
+          <span className="dvx-panel-title">Plugins</span>
+        </button>
+        <div className="dvx-panel-actions">
+          <button
+            type="button"
+            className="dvx-panel-action"
+            disabled={plugins.status === 'loading'}
+            onClick={onRefresh}
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
+      {plugins.status === 'unsupported' || plugins.status === 'error' ? (
+        <p
+          className={`dvx-popover-message ${
+            plugins.status === 'error' ? 'dvx-error-text' : ''
+          }`}
+          role={plugins.status === 'error' ? 'alert' : 'status'}
+        >
+          {plugins.message}
+        </p>
+      ) : null}
+      {busy && plugins.items.length === 0 ? (
+        <p className="dvx-popover-message" role="status">
+          Loading plugins…
+        </p>
+      ) : null}
+      {plugins.status === 'ready' && plugins.items.length === 0 ? (
+        <p className="dvx-popover-message" role="status">
+          No plugins installed.
+        </p>
+      ) : null}
+      {plugins.items.length > 0 ? (
+        <ul className="dvx-skill-list" aria-label="Plugins">
+          {plugins.items.map((plugin) => (
+            <PluginRow key={plugin.id} plugin={plugin} />
+          ))}
+        </ul>
+      ) : null}
+      <p className="dvx-popover-message dvx-skills-session-note">
+        {plugins.status === 'ready'
+          ? `${plugins.marketplaceCount} ${
+              plugins.marketplaceCount === 1
+                ? 'marketplace'
+                : 'marketplaces'
+            } registered. `
+          : ''}
+        Manage plugins with the droid CLI.
+      </p>
+    </div>
+  );
+}
+
+function PluginRow({
+  plugin,
+}: {
+  readonly plugin: PluginSummary;
+}): React.JSX.Element {
+  return (
+    <li className="dvx-skill-row">
+      <div className="dvx-skill-copy">
+        <span className="dvx-skill-name">
+          {plugin.id}
+          <span className="dvx-skill-location">{plugin.scope}</span>
+        </span>
+        <span className="dvx-skill-description" title={plugin.version}>
+          {plugin.version}
+        </span>
+      </div>
+      <span className="dvx-popover-row-value">
+        {plugin.active ? 'Active' : 'Off'}
+      </span>
+    </li>
+  );
+}
+
 function AttachRows({
   disabled,
   onAttach,
@@ -1779,18 +2004,34 @@ function SettingsInfoRow({
 function SettingsInfoIcon({
   kind,
 }: {
-  readonly kind: 'skills' | 'mcp';
+  readonly kind: 'skills' | 'mcp' | 'plugins';
 }): React.JSX.Element {
-  return kind === 'skills' ? (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M3.5 5h9M3.5 8h6.5M3.5 11h4"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  ) : (
+  if (kind === 'skills') {
+    return (
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path
+          d="M3.5 5h9M3.5 8h6.5M3.5 11h4"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  if (kind === 'plugins') {
+    return (
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path
+          d="M6 3v2.5M10 3v2.5M4.75 5.5h6.5a.75.75 0 0 1 .75.75V8a4 4 0 0 1-8 0V6.25a.75.75 0 0 1 .75-.75ZM8 12v1.5"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <rect
         x="3.5"

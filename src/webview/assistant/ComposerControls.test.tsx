@@ -106,10 +106,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -139,10 +141,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -188,10 +192,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -244,10 +250,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -333,10 +341,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -419,10 +429,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -503,10 +515,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />
     );
     const { rerender } = render(renderControls(settings.value));
@@ -603,10 +617,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -636,10 +652,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
     expect(screen.getByRole('alert').textContent).toContain(
@@ -669,10 +687,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={onSkillsRefresh}
         onSkillToggle={onSkillToggle}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -720,10 +740,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={onSkillsRefresh}
         onSkillToggle={onSkillToggle}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -788,10 +810,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={onSkillsRefresh}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />
     );
     const { rerender } = render(renderControls(readySkills));
@@ -849,10 +873,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={mcp}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={onMcpRefresh}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />
     );
     const { rerender } = render(renderControls(readyMcp));
@@ -870,6 +896,123 @@ describe('ComposerControls', () => {
     expect(refresh.disabled).toBe(false);
     await user.click(refresh);
     expect(onMcpRefresh).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the read-only plugins panel and recovers from an idle reset', async () => {
+    const user = userEvent.setup();
+    const onPluginsRefresh = vi.fn();
+    const readyPlugins = {
+      status: 'ready' as const,
+      items: [
+        {
+          id: 'core@factory-plugins',
+          scope: 'user' as const,
+          version: 'e3ff29f752fb',
+          active: true,
+        },
+        {
+          id: 'docs@factory-plugins',
+          scope: 'project' as const,
+          version: '0b1d2c3d4e5f',
+          active: false,
+        },
+      ],
+      marketplaceCount: 1,
+    };
+    const renderControls = (
+      plugins: typeof readyPlugins | { status: 'idle'; items: readonly [] },
+    ): React.JSX.Element => (
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        plugins={plugins}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={onPluginsRefresh}
+      />
+    );
+    const { rerender } = render(renderControls(readyPlugins));
+
+    await user.click(screen.getByRole('button', { name: 'Session controls' }));
+    const pluginsRow = screen.getByText('Plugins').closest('button')!;
+    expect(pluginsRow.textContent).toContain('2 installed');
+    await user.click(pluginsRow);
+    // Entering re-reads the catalog like the Skills/MCP links do.
+    expect(onPluginsRefresh).toHaveBeenCalledTimes(1);
+
+    expect(screen.getByRole('dialog', { name: 'Plugins' })).toBeDefined();
+    expect(screen.getByText('core@factory-plugins')).toBeDefined();
+    expect(screen.getByText('user')).toBeDefined();
+    expect(screen.getByText('e3ff29f752fb')).toBeDefined();
+    expect(screen.getByText('Active')).toBeDefined();
+    expect(screen.getByText('Off')).toBeDefined();
+    expect(screen.getByText(/1 marketplace registered/)).toBeDefined();
+    // Read-only slice: no toggle, add, or remove affordances.
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull();
+
+    // A session switch resets the catalog to idle; the visible panel
+    // re-requests instead of deadlocking on the loading message.
+    onPluginsRefresh.mockClear();
+    rerender(renderControls({ status: 'idle', items: [] }));
+    expect(onPluginsRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces plugin daemon failures as an explicit error state', async () => {
+    const user = userEvent.setup();
+    render(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        plugins={{
+          status: 'error',
+          items: [],
+          message: 'The local droid daemon is unavailable.',
+        }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Session controls' }));
+    await user.click(screen.getByText('Plugins').closest('button')!);
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toBe('The local droid daemon is unavailable.');
+    expect(screen.queryByText('Loading plugins…')).toBeNull();
   });
 
   it('returns to the root controls when starting a new session from the skills panel', async () => {
@@ -904,10 +1047,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
         onNewSession={onNewSession}
       />,
     );
@@ -950,10 +1095,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={onMcpRefresh}
         onMcpServerToggle={onMcpServerToggle}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -1014,10 +1161,12 @@ describe('ComposerControls', () => {
             },
           ],
         }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={onMcpRefresh}
         onMcpServerToggle={onMcpServerToggle}
         mcpAuth={null}
         onMcpServerAuthenticate={onMcpServerAuthenticate}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -1094,12 +1243,14 @@ describe('ComposerControls', () => {
             },
           ],
         }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         onMcpServerAdd={onMcpServerAdd}
         onMcpServerRemove={onMcpServerRemove}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -1163,10 +1314,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -1200,10 +1353,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -1253,10 +1408,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -1308,10 +1465,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -1348,10 +1507,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -1380,10 +1541,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
@@ -1419,10 +1582,12 @@ describe('ComposerControls', () => {
         onSkillsRefresh={vi.fn()}
         onSkillToggle={vi.fn()}
         mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
         onMcpRefresh={vi.fn()}
         onMcpServerToggle={vi.fn()}
         mcpAuth={null}
         onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
       />,
     );
 
