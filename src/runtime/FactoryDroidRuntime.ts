@@ -42,6 +42,7 @@ import {
   MAX_RUNTIME_TEXT_ATTACHMENT_LENGTH,
   type DroidRuntime,
   type RuntimeAttachment,
+  type RuntimeDisposeOptions,
   type RuntimeCompactResult,
   type RuntimeForkResult,
   type RuntimeRewindInfo,
@@ -596,6 +597,14 @@ export class FactoryDroidRuntime implements DroidRuntime {
       );
     }
     return projectWorkingState(await session.readWorkingState());
+  }
+
+  supportsBackgroundTurns(): boolean {
+    return (
+      !this.disposed &&
+      this.session !== null &&
+      typeof this.session.readWorkingState === 'function'
+    );
   }
 
   async rewind(
@@ -1289,7 +1298,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
     unsubscribe();
   }
 
-  dispose(): Promise<void> {
+  dispose(options?: RuntimeDisposeOptions): Promise<void> {
     if (this.disposal) {
       return this.disposal;
     }
@@ -1297,7 +1306,9 @@ export class FactoryDroidRuntime implements DroidRuntime {
     this.disposed = true;
     this.disarmSpecHandoffWatch();
     this.disarmSubagentWatch();
-    const disposal = this.disposeOwnedSession().catch((error) => {
+    const disposal = this.disposeOwnedSession(
+      options?.preserveBackendTurn === true,
+    ).catch((error) => {
       if (this.disposal === disposal) {
         this.disposal = null;
       }
@@ -1384,7 +1395,9 @@ export class FactoryDroidRuntime implements DroidRuntime {
     return this.available(session);
   }
 
-  private async disposeOwnedSession(): Promise<void> {
+  private async disposeOwnedSession(
+    preserveBackendTurn = false,
+  ): Promise<void> {
     await this.initialization?.promise;
 
     const session = this.session;
@@ -1392,8 +1405,15 @@ export class FactoryDroidRuntime implements DroidRuntime {
       return;
     }
 
+    // Detached continuation: a daemon-backed session keeps its turn
+    // running after close() (which only detaches), so skip the
+    // interrupt when the caller asked to preserve it. Process
+    // sessions cannot continue detached; they interrupt as before.
+    const preserve =
+      preserveBackendTurn &&
+      typeof session.readWorkingState === 'function';
     let interruptError: unknown;
-    if (this.activeTurn) {
+    if (this.activeTurn && !preserve) {
       try {
         await session.interrupt();
       } catch (error) {

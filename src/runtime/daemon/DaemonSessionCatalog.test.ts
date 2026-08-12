@@ -120,6 +120,23 @@ describe('DaemonSessionCatalog', () => {
     );
   });
 
+  it('maps opened working states by safe session id', async () => {
+    const listOpened = vi.fn(async () => [
+      { id: 'running-1', workingState: 'working' },
+      { id: 'idle-1', workingState: 'idle' },
+      { id: ' bad id', workingState: 'working' },
+    ]);
+    const catalog = new DaemonSessionCatalog(droidWith({ listOpened }));
+
+    const states = await catalog.readOpenedWorkingStates();
+
+    expect(states.get('running-1')).toBe('working');
+    expect(states.get('idle-1')).toBe('idle');
+    // Unsafe ids never enter the map; sessions the daemon does not
+    // list as open are simply absent.
+    expect(states.size).toBe(2);
+  });
+
   it('projects bounded single-line search matches', async () => {
     const search = vi.fn(async () => ({
       query: 'refactor',

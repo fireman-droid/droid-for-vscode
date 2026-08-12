@@ -1695,6 +1695,71 @@ describe('FactoryDroidRuntime', () => {
     await expect(iterator.next()).resolves.toMatchObject({ done: true });
   });
 
+  it('reports background-turn support only for daemon-backed sessions', async () => {
+    const processRuntime = createRuntime(async () =>
+      createMockSession(async function* () {}),
+    );
+    expect(processRuntime.supportsBackgroundTurns()).toBe(false);
+    await processRuntime.initialize('C:\\workspace');
+    expect(processRuntime.supportsBackgroundTurns()).toBe(false);
+
+    const daemonSession = {
+      ...createMockSession(async function* () {}),
+      readWorkingState: vi.fn(async () => 'working'),
+    };
+    const daemonRuntime = createRuntime(async () => daemonSession);
+    await daemonRuntime.initialize('C:\\workspace');
+    expect(daemonRuntime.supportsBackgroundTurns()).toBe(true);
+
+    await daemonRuntime.dispose();
+    expect(daemonRuntime.supportsBackgroundTurns()).toBe(false);
+  });
+
+  it('preserves a daemon turn on dispose when asked to', async () => {
+    const waiting = deferred<void>();
+    const session = {
+      ...createMockSession(async function* () {
+        yield textDelta('active');
+        await waiting.promise;
+      }),
+      readWorkingState: vi.fn(async () => 'working'),
+    };
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+    const iterator = runtime.sendTurn('Keep going')[Symbol.asyncIterator]();
+    await iterator.next();
+
+    await runtime.dispose({ preserveBackendTurn: true });
+
+    // The daemon keeps the detached turn alive, so disposal must not
+    // interrupt it; closing the handle only detaches.
+    expect(session.interrupt).not.toHaveBeenCalled();
+    expect(session.close).toHaveBeenCalledOnce();
+    waiting.resolve();
+    await expect(iterator.next()).resolves.toMatchObject({ done: true });
+  });
+
+  it('ignores preserveBackendTurn for process sessions', async () => {
+    const waiting = deferred<void>();
+    const session = createMockSession(async function* () {
+      yield textDelta('active');
+      await waiting.promise;
+    });
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+    const iterator = runtime.sendTurn('Keep going')[Symbol.asyncIterator]();
+    await iterator.next();
+
+    await runtime.dispose({ preserveBackendTurn: true });
+
+    // A process session cannot continue detached; leaving the turn
+    // uninterrupted would leak it, so the option must be ignored.
+    expect(session.interrupt).toHaveBeenCalledOnce();
+    expect(session.close).toHaveBeenCalledOnce();
+    waiting.resolve();
+    await expect(iterator.next()).resolves.toMatchObject({ done: true });
+  });
+
   it('closes a session that arrives after disposal starts', async () => {
     const created = deferred<FactoryDroidSession>();
     const session = createMockSession(async function* () {});

@@ -353,6 +353,14 @@ export interface DroidRuntime {
    */
   interruptSession?(): Promise<void>;
   /**
+   * True when the active session's backend keeps an in-flight turn
+   * running after this client detaches (daemon-backed sessions).
+   * Absent or false means disposing the runtime ends the turn
+   * (process mode), so callers must not offer switching away from a
+   * running turn.
+   */
+  supportsBackgroundTurns?(): boolean;
+  /**
    * Rewinds the active session to the given user message, forking a new
    * session that this runtime then targets. Optional: absent when the
    * runtime cannot rewind.
@@ -427,5 +435,16 @@ export interface DroidRuntime {
     name: string,
     onCompleted: (outcome: RuntimeMcpAuthOutcome) => void,
   ): Promise<RuntimeMcpAuthStart>;
-  dispose(): Promise<void>;
+  dispose(options?: RuntimeDisposeOptions): Promise<void>;
+}
+
+export interface RuntimeDisposeOptions {
+  /**
+   * Leave a live backend-side turn running instead of interrupting it
+   * before the session handle closes. Only honored for sessions whose
+   * backend actually keeps detached turns alive (see
+   * `supportsBackgroundTurns`); everywhere else disposal interrupts
+   * as before.
+   */
+  readonly preserveBackendTurn?: boolean;
 }

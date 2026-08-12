@@ -95,6 +95,23 @@ export class DaemonSessionCatalog {
   }
 
   /**
+   * Working states of every session the daemon currently tracks as
+   * open, keyed by session id. Sessions missing from the map are not
+   * open on the daemon (their turns cannot be running). The read is
+   * an in-memory registry RPC — cheap enough to poll.
+   */
+  async readOpenedWorkingStates(): Promise<ReadonlyMap<string, string>> {
+    const rows = await this.droid.sessions.listOpened();
+    const states = new Map<string, string>();
+    for (const row of rows) {
+      if (isSafeSessionIdentifier(row.id)) {
+        states.set(row.id, String(row.workingState));
+      }
+    }
+    return states;
+  }
+
+  /**
    * Searches message content across all local sessions. Results are
    * not workspace-filtered; the daemon index is global and hits from
    * other workspaces are still useful to surface.
