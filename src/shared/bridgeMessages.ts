@@ -213,6 +213,19 @@ export const MAX_SUBAGENT_TYPE_LENGTH = 64;
 export const MAX_SUBAGENT_DESCRIPTION_LENGTH = 512;
 
 /**
+ * Marks an Execute tool call the CLI launched as a detached
+ * background process (`fireAndForget: true` in the tool input;
+ * probed on CLI 0.193.0). Read fail-soft: the field is absent from
+ * the SDK type surface, so a missing or malformed value simply means
+ * no hint. The GUI never gets a process handle — this is display
+ * metadata only (background-process design §2.3 keeps kill
+ * fail-closed).
+ */
+export interface ToolBackgroundHint {
+  readonly fireAndForget: boolean;
+}
+
+/**
  * Summary of the subagent one Task tool call delegated to. Data
  * comes from the `child_session_available` notification (live) and
  * `loadSession().subagentInvocations` (final/history); the child
@@ -1297,6 +1310,8 @@ export interface ToolTranscriptItem {
    * outputless, and the text never enters diagnostics logs.
    */
   readonly outputTail?: string;
+  /** Present when the CLI backgrounded this Execute call. */
+  readonly backgroundHint?: ToolBackgroundHint;
   /** Present when this Task tool call delegated to a subagent. */
   readonly subagent?: ToolSubagentSummary;
 }
@@ -1662,6 +1677,8 @@ export interface ToolActivityMessage {
   readonly errorMessage?: string;
   /** See `ToolTranscriptItem.outputTail`. */
   readonly outputTail?: string;
+  /** Present when the CLI backgrounded this Execute call. */
+  readonly backgroundHint?: ToolBackgroundHint;
   /** Present when this Task tool call delegated to a subagent. */
   readonly subagent?: ToolSubagentSummary;
 }

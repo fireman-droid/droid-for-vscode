@@ -144,6 +144,7 @@ import {
   type SessionWorktreeInfo,
   type SessionTranscriptItem,
   type SubagentStatus,
+  type ToolBackgroundHint,
   type ToolSubagentSummary,
   type ToolActivityMessage,
   type ToolActivityUpdateKind,
@@ -618,6 +619,7 @@ function parseToolActivity(
         'detail',
         'errorMessage',
         'outputTail',
+        'backgroundHint',
         'subagent',
       ],
     ) ||
@@ -642,6 +644,13 @@ function parseToolActivity(
     !hasValidToolErrorMessage(value) ||
     !hasValidToolOutputTail(value)
   ) {
+    return undefined;
+  }
+  const backgroundHint =
+    value.backgroundHint === undefined
+      ? undefined
+      : parseToolBackgroundHint(value.backgroundHint);
+  if (value.backgroundHint !== undefined && backgroundHint === undefined) {
     return undefined;
   }
   const subagent =
@@ -681,8 +690,23 @@ function parseToolActivity(
     ...(value.outputTail === undefined
       ? {}
       : { outputTail: value.outputTail as string }),
+    ...(backgroundHint === undefined ? {} : { backgroundHint }),
     ...(subagent === undefined ? {} : { subagent }),
   };
+}
+
+/** Exactly `{ fireAndForget: boolean }`; anything else is rejected. */
+function parseToolBackgroundHint(
+  value: unknown,
+): ToolBackgroundHint | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, ['fireAndForget']) ||
+    typeof value.fireAndForget !== 'boolean'
+  ) {
+    return undefined;
+  }
+  return { fireAndForget: value.fireAndForget };
 }
 
 function parseToolSubagent(
@@ -2962,6 +2986,7 @@ function parseToolTranscriptItem(
         'detail',
         'errorMessage',
         'outputTail',
+        'backgroundHint',
         'subagent',
       ],
     ) ||
@@ -2987,6 +3012,13 @@ function parseToolTranscriptItem(
     !hasValidToolErrorMessage(value) ||
     !hasValidToolOutputTail(value)
   ) {
+    return undefined;
+  }
+  const backgroundHint =
+    value.backgroundHint === undefined
+      ? undefined
+      : parseToolBackgroundHint(value.backgroundHint);
+  if (value.backgroundHint !== undefined && backgroundHint === undefined) {
     return undefined;
   }
   const subagent =
@@ -3025,6 +3057,7 @@ function parseToolTranscriptItem(
     ...(value.outputTail === undefined
       ? {}
       : { outputTail: value.outputTail as string }),
+    ...(backgroundHint === undefined ? {} : { backgroundHint }),
     ...(subagent === undefined ? {} : { subagent }),
   };
 }
