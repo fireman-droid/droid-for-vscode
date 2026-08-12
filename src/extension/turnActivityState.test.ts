@@ -306,6 +306,67 @@ describe('turnActivityState', () => {
     });
   });
 
+  it('carries the failure excerpt onto the failed projection only', () => {
+    const started = projectToolEvent(
+      createTurnActivityState(),
+      {
+        type: 'tool-start',
+        toolName: 'ApplyPatch',
+        toolUseId: 'tool-patch',
+        action: 'Updated workspace files',
+      },
+      1_000,
+    );
+    const failed = projectToolEvent(
+      started.state,
+      {
+        type: 'tool-result',
+        toolName: 'ApplyPatch',
+        toolUseId: 'tool-patch',
+        action: 'Updated workspace files',
+        isError: true,
+        errorText: 'Tool execution cancelled by user',
+      },
+      2_000,
+    );
+    expect(failed.projection).toMatchObject({
+      status: 'failed',
+      errorMessage: 'Tool execution cancelled by user',
+    });
+
+    // A successful result never projects an errorMessage, even if the
+    // event carried stray text.
+    const okStart = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'Read',
+      toolUseId: 'tool-ok',
+      action: 'Read workspace files',
+    });
+    const ok = projectToolEvent(okStart.state, {
+      type: 'tool-result',
+      toolName: 'Read',
+      toolUseId: 'tool-ok',
+      action: 'Read workspace files',
+      isError: false,
+      errorText: 'should be ignored',
+    });
+    expect(ok.projection).not.toHaveProperty('errorMessage');
+
+    // Result-first failures carry the excerpt too.
+    const resultFirst = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-result',
+      toolName: 'Execute',
+      toolUseId: 'tool-first',
+      action: 'Ran a local command',
+      isError: true,
+      errorText: 'command exited with 1',
+    });
+    expect(resultFirst.projection).toMatchObject({
+      status: 'failed',
+      errorMessage: 'command exited with 1',
+    });
+  });
+
   it('caps unique tools while continuing to update tracked tools', () => {
     let state = createTurnActivityState();
     for (let index = 0; index < MAX_TOOL_ACTIVITIES_PER_TURN; index += 1) {

@@ -3907,6 +3907,93 @@ describe('ChatController', () => {
     );
   });
 
+  it('serves markdown-referenced workspace images and refuses escapes', async () => {
+    const runtime = createMockRuntime();
+    const sources: AttachmentSources = {
+      pickFiles: vi.fn(async () => ({ status: 'cancelled' as const })),
+      readActiveEditor: vi.fn(async () => ({ status: 'empty' as const })),
+      readActiveSelection: vi.fn(async () => ({
+        status: 'empty' as const,
+      })),
+      readProblems: vi.fn(async () => ({ status: 'empty' as const })),
+      readGitChanges: vi.fn(async () => ({ status: 'empty' as const })),
+      searchWorkspaceFiles: vi.fn(async () => []),
+      readWorkspaceFile: vi.fn(async () => ({
+        status: 'picked' as const,
+        items: [
+          {
+            kind: 'image' as const,
+            name: 'plot.png',
+            data: 'aGk=',
+            mediaType: 'image/png' as const,
+            sizeBytes: 2,
+            truncated: false,
+          },
+        ],
+      })),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      sources,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'workspace.readImage',
+      sessionId: 'session-1',
+      path: 'out/plot.png',
+    });
+    await vi.waitFor(() => {
+      expect(
+        lastMessage(messages, 'workspace.imageData'),
+      ).toMatchObject({
+        path: 'out/plot.png',
+        status: 'ok',
+        mediaType: 'image/png',
+        data: 'aGk=',
+      });
+    });
+    expect(sources.readWorkspaceFile).toHaveBeenCalledWith(
+      'out/plot.png',
+    );
+
+    // Absolute references inside the workspace rebase to relative
+    // reads; the reply still carries the path as written.
+    controller.handleMessage({
+      type: 'workspace.readImage',
+      sessionId: 'session-1',
+      path: 'C:\\workspace\\out\\chart.png',
+    });
+    await vi.waitFor(() => {
+      expect(
+        lastMessage(messages, 'workspace.imageData'),
+      ).toMatchObject({
+        path: 'C:\\workspace\\out\\chart.png',
+        status: 'ok',
+      });
+    });
+    expect(sources.readWorkspaceFile).toHaveBeenLastCalledWith(
+      'out/chart.png',
+    );
+
+    // Escaping the workspace answers not-found without touching disk.
+    controller.handleMessage({
+      type: 'workspace.readImage',
+      sessionId: 'session-1',
+      path: 'C:\\elsewhere\\secret.png',
+    });
+    expect(lastMessage(messages, 'workspace.imageData')).toMatchObject({
+      path: 'C:\\elsewhere\\secret.png',
+      status: 'not-found',
+    });
+    expect(sources.readWorkspaceFile).toHaveBeenCalledTimes(2);
+  });
+
   it('labels editor captures and reports empty selections', async () => {
     const runtime = createMockRuntime();
     const sources: AttachmentSources = {

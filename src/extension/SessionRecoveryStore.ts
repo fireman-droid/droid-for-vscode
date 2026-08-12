@@ -13,6 +13,7 @@ import {
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
   MAX_TOOL_DETAIL_LENGTH,
+  MAX_TOOL_ERROR_MESSAGE_LENGTH,
   MAX_TOOL_NAME_LENGTH,
   MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
   MAX_TURN_TEXT_LENGTH,
@@ -728,6 +729,7 @@ function parseTool(
       'filePath',
       'detailKind',
       'detail',
+      'errorMessage',
     ])
   ) {
     return undefined;
@@ -739,6 +741,9 @@ function parseTool(
   const filePath = legacy ? undefined : dataValue(value, 'filePath');
   const detailKind = legacy ? undefined : dataValue(value, 'detailKind');
   const detail = legacy ? undefined : dataValue(value, 'detail');
+  const errorMessage = legacy
+    ? undefined
+    : dataValue(value, 'errorMessage');
   const action = legacy
     ? typeof toolName === 'string'
       ? summarizeToolAction(toolName)
@@ -770,7 +775,12 @@ function parseTool(
     (filePath === undefined || isSafeWorkspaceRelativePath(filePath)) &&
     ((detailKind === undefined && detail === undefined) ||
       (isOneOf(detailKind, TOOL_DETAIL_KINDS) &&
-        isNonEmptyBoundedString(detail, MAX_TOOL_DETAIL_LENGTH)))
+        isNonEmptyBoundedString(detail, MAX_TOOL_DETAIL_LENGTH))) &&
+    (errorMessage === undefined ||
+      isNonEmptyBoundedString(
+        errorMessage,
+        MAX_TOOL_ERROR_MESSAGE_LENGTH,
+      ))
     ? {
         id,
         kind: 'tool',
@@ -794,6 +804,9 @@ function parseTool(
               detailKind: detailKind as ToolDetailKind,
               detail: detail as string,
             }),
+        ...(errorMessage === undefined
+          ? {}
+          : { errorMessage: errorMessage as string }),
       }
     : undefined;
 }

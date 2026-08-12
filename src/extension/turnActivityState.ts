@@ -35,6 +35,7 @@ export interface ToolActivityProjection {
   readonly filePath?: string;
   readonly detailKind?: ToolDetailKind;
   readonly detail?: string;
+  readonly errorMessage?: string;
 }
 
 interface ToolActivityEntry {
@@ -45,6 +46,7 @@ interface ToolActivityEntry {
   readonly filePath?: string;
   readonly detailKind?: ToolDetailKind;
   readonly detail?: string;
+  readonly errorMessage?: string;
 }
 
 export interface TurnActivityState {
@@ -196,6 +198,9 @@ export function projectToolEvent(
     const entry: ToolActivityEntry = {
       ...existing,
       status: event.isError ? 'failed' : 'completed',
+      ...(event.isError && event.errorText !== undefined
+        ? { errorMessage: event.errorText }
+        : {}),
     };
     const tools = new Map(state.tools);
     tools.set(event.toolUseId, entry);
@@ -221,6 +226,11 @@ export function projectToolEvent(
     latestUpdateKind:
       event.type === 'tool-progress' ? event.updateKind : null,
     ...(status === 'running' ? { startedAtMs: nowMs } : {}),
+    ...(event.type === 'tool-result' &&
+    event.isError &&
+    event.errorText !== undefined
+      ? { errorMessage: event.errorText }
+      : {}),
     ...(event.type === 'tool-start' && event.filePath !== undefined
       ? { filePath: event.filePath }
       : {}),
@@ -261,5 +271,8 @@ function projectEntry(
     ...(entry.detail === undefined || entry.detailKind === undefined
       ? {}
       : { detailKind: entry.detailKind, detail: entry.detail }),
+    ...(entry.errorMessage === undefined
+      ? {}
+      : { errorMessage: entry.errorMessage }),
   };
 }

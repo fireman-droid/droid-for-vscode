@@ -32,6 +32,7 @@ import type {
   TurnStatus,
   WebviewToHostMessage,
   WorkspaceFilesStatus,
+  WorkspaceImageStatus,
 } from '../shared/bridgeMessages';
 import {
   MAX_ARCHIVED_SESSION_ITEMS,
@@ -761,6 +762,9 @@ export class ChatController {
           message.requestId,
           message.query,
         );
+        return;
+      case 'workspace.readImage':
+        this.handleWorkspaceReadImage(message.sessionId, message.path);
         return;
       case 'attachment.remove':
         this.handleAttachmentRemove(
@@ -3884,6 +3888,85 @@ export class ChatController {
       attributes: { queryLength: query.length, ...rest },
       ...(detail === undefined ? {} : { detail }),
     });
+  }
+
+  /**
+   * Reads a workspace-local image referenced by transcript markdown.
+   * Reuses the attachment reader, which enforces workspace
+   * containment and per-kind size caps; anything that is not a
+   * displayable image degrades to a non-ok status so the webview can
+   * fall back to a clickable path link.
+   */
+  private handleWorkspaceReadImage(
+    sessionId: string,
+    path: string,
+  ): void {
+    if (sessionId !== this.sessionId) {
+      return;
+    }
+    const respond = (
+      status: WorkspaceImageStatus,
+      mediaType: ImageMediaType | null = null,
+      data = '',
+    ): void => {
+      if (sessionId !== this.sessionId) {
+        return;
+      }
+      this.emit({
+        type: 'workspace.imageData',
+        sessionId,
+        path,
+        status,
+        mediaType,
+        data,
+      });
+    };
+    const cwd = this.getWorkspaceContext().cwd;
+    if (cwd === null) {
+      respond('not-found');
+      return;
+    }
+    // Markdown may reference the file absolutely; the reader only
+    // accepts workspace-relative paths, so rebase inside-root
+    // absolutes and refuse everything else.
+    const relativePath = isAbsolute(path) ? relative(cwd, path) : path;
+    if (
+      relativePath.length === 0 ||
+      relativePath.startsWith('..') ||
+      isAbsolute(relativePath)
+    ) {
+      respond('not-found');
+      return;
+    }
+    void this.attachmentSources
+      .readWorkspaceFile(relativePath.replaceAll('\\', '/'))
+      .then(
+        (outcome) => {
+          switch (outcome.status) {
+            case 'picked': {
+              const item = outcome.items[0];
+              if (item === undefined || item.kind !== 'image') {
+                respond('unsupported');
+              } else if (item.data.length > MAX_IMAGE_DATA_LENGTH) {
+                respond('too-large');
+              } else {
+                respond('ok', item.mediaType, item.data);
+              }
+              return;
+            }
+            case 'rejected':
+              respond(
+                outcome.reason === 'too-large'
+                  ? 'too-large'
+                  : 'unsupported',
+              );
+              return;
+            default:
+              respond('not-found');
+          }
+        },
+        () => respond('not-found'),
+      );
   }
 
   private emitWorkspaceFiles(
