@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   MAX_ASSISTANT_TEXT_LENGTH,
+  MAX_CHANGED_FILES_PER_TURN,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
   MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
@@ -427,6 +428,15 @@ describe('turnActivityState', () => {
         action: 'Updated workspace files',
         filePath: 'src/b.ts',
       },
+      // Multi-file ApplyPatch rows contribute every path.
+      {
+        type: 'tool-start' as const,
+        toolName: 'ApplyPatch',
+        toolUseId: 'tool-5',
+        action: 'Updated workspace files',
+        filePath: 'src/a.ts',
+        filePaths: ['src/a.ts', 'src/c.ts'],
+      },
     ];
     for (const event of events) {
       state = projectToolEvent(state, event).state;
@@ -434,8 +444,27 @@ describe('turnActivityState', () => {
     expect(collectToolFilePaths(state)).toEqual([
       'src/b.ts',
       'src/a.ts',
+      'src/c.ts',
     ]);
     expect(collectToolFilePaths(createTurnActivityState())).toEqual([]);
+  });
+
+  it('clips collected file paths to the changed-files bound', () => {
+    let state = createTurnActivityState();
+    state = projectToolEvent(state, {
+      type: 'tool-start',
+      toolName: 'ApplyPatch',
+      toolUseId: 'tool-wide',
+      action: 'Updated workspace files',
+      filePath: 'src/file-0.ts',
+      filePaths: Array.from(
+        { length: MAX_CHANGED_FILES_PER_TURN + 5 },
+        (_, index) => `src/file-${index}.ts`,
+      ),
+    }).state;
+    expect(collectToolFilePaths(state)).toHaveLength(
+      MAX_CHANGED_FILES_PER_TURN,
+    );
   });
 
   it('creates a terminal tool row when the result arrives first', () => {

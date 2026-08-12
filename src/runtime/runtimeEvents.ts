@@ -56,6 +56,12 @@ export type RuntimeEvent =
       action: string;
       /** Workspace-relative path changed by file-modifying tools. */
       filePath?: string;
+      /**
+       * Every changed workspace-relative path when one call names
+       * several files (multi-file ApplyPatch). Present only with two
+       * or more paths; `filePath` stays the first of them.
+       */
+      filePaths?: readonly string[];
       /** Present together with `detail`. */
       detailKind?: ToolDetailKind;
       /** Command or plan text extracted from the tool input. */

@@ -26,7 +26,7 @@ import { readTokenUsageBreakdown } from '../shared/tokenUsage';
 import { extractToolBackgroundHint } from './toolBackgroundHint';
 import { extractToolDetail } from './toolDetail';
 import {
-  extractToolFilePath,
+  extractToolFilePaths,
   toWorkspaceRelativePath,
 } from './toolFilePath';
 import type { RuntimeEvent } from './runtimeEvents';
@@ -416,7 +416,7 @@ function withToolInputContext(
   input: unknown,
   workspaceRoot: string | undefined,
 ): RuntimeEvent {
-  const filePath = normalizeToolFilePath(
+  const filePaths = normalizeToolFilePaths(
     activity.toolName,
     input,
     workspaceRoot,
@@ -428,7 +428,8 @@ function withToolInputContext(
   );
   return {
     ...activity,
-    ...(filePath === undefined ? {} : { filePath }),
+    ...(filePaths.length === 0 ? {} : { filePath: filePaths[0] }),
+    ...(filePaths.length <= 1 ? {} : { filePaths }),
     ...(detail === undefined
       ? {}
       : { detailKind: detail.kind, detail: detail.text }),
@@ -436,18 +437,24 @@ function withToolInputContext(
   };
 }
 
-function normalizeToolFilePath(
+function normalizeToolFilePaths(
   toolName: string,
   input: unknown,
   workspaceRoot: string | undefined,
-): string | undefined {
+): readonly string[] {
   if (workspaceRoot === undefined) {
-    return undefined;
+    return [];
   }
-  const rawPath = extractToolFilePath(toolName, input);
-  return rawPath === undefined
-    ? undefined
-    : toWorkspaceRelativePath(workspaceRoot, rawPath);
+  const paths: string[] = [];
+  const seen = new Set<string>();
+  for (const rawPath of extractToolFilePaths(toolName, input)) {
+    const relativePath = toWorkspaceRelativePath(workspaceRoot, rawPath);
+    if (relativePath !== undefined && !seen.has(relativePath)) {
+      seen.add(relativePath);
+      paths.push(relativePath);
+    }
+  }
+  return paths;
 }
 
 function normalizeToolName(value: unknown): string {

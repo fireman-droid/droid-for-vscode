@@ -402,6 +402,74 @@ describe('normalizeSdkEvent', () => {
     ).not.toHaveProperty('filePath');
   });
 
+  it('reads ApplyPatch paths out of the patch text input', () => {
+    const root = resolve('workspace-root');
+
+    // Single-file patches carry only the singular path.
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_call', {
+          name: 'ApplyPatch',
+          toolUseId: 'tool-patch-single',
+          input: {
+            input: [
+              '*** Begin Patch',
+              `*** Delete File: ${join(root, 'src', 'page.html')}`,
+              `*** Add File: ${join(root, 'src', 'page.html')}`,
+              '+rewritten',
+              '*** End Patch',
+            ].join('\n'),
+          },
+        }),
+        root,
+      ),
+    ).toEqual({
+      type: 'tool-start',
+      toolName: 'ApplyPatch',
+      toolUseId: 'tool-patch-single',
+      action: 'Updated workspace files',
+      filePath: 'src/page.html',
+    });
+
+    // Multi-file patches surface every path; `filePath` is the first.
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_call', {
+          name: 'ApplyPatch',
+          toolUseId: 'tool-patch-multi',
+          input: {
+            input: [
+              '*** Begin Patch',
+              `*** Update File: ${join(root, 'src', 'a.ts')}`,
+              '+x',
+              `*** Add File: ${join(root, 'src', 'b.ts')}`,
+              '+y',
+              `*** Update File: ${join(root, '..', 'outside.ts')}`,
+              '+escapes the workspace',
+              '*** End Patch',
+            ].join('\n'),
+          },
+        }),
+        root,
+      ),
+    ).toMatchObject({
+      filePath: 'src/a.ts',
+      filePaths: ['src/a.ts', 'src/b.ts'],
+    });
+
+    // Malformed patch text projects no path fields at all.
+    const malformed = normalizeSdkEvent(
+      sdkEvent('tool_call', {
+        name: 'ApplyPatch',
+        toolUseId: 'tool-patch-bad',
+        input: { input: { not: 'a string' } },
+      }),
+      root,
+    );
+    expect(malformed).not.toHaveProperty('filePath');
+    expect(malformed).not.toHaveProperty('filePaths');
+  });
+
   it('rejects unknown progress shapes instead of projecting details', () => {
     expect(
       normalizeSdkEvent(

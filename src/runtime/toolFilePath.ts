@@ -1,6 +1,9 @@
 import { isAbsolute, relative, resolve } from 'node:path';
 
-import { MAX_TOOL_FILE_PATH_LENGTH } from '../shared/bridgeMessages';
+import {
+  MAX_CHANGED_FILES_PER_TURN,
+  MAX_TOOL_FILE_PATH_LENGTH,
+} from '../shared/bridgeMessages';
 import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
 
 /** Tools whose input names a file they create or modify. */
@@ -14,35 +17,83 @@ const FILE_MODIFYING_TOOLS = new Set([
 const PATH_INPUT_KEYS = ['file_path', 'filePath', 'path'] as const;
 
 /**
- * Reads the target file path out of a file-modifying tool's raw input.
- * Returns undefined for other tools and for inputs without a usable
- * bounded string path.
+ * File headers of the CLI's ApplyPatch `input` patch text. Only Add
+ * and Update name files the turn changed; a Delete-only path would
+ * surface a dead Preview chip, and real rewrites emit Delete+Add
+ * pairs for the same path, so the Add header already covers them.
  */
-export function extractToolFilePath(
+const PATCH_FILE_HEADER = /^\*{3} (?:Add|Update) File: (.+)$/gm;
+
+/**
+ * Reads every target file path out of a file-modifying tool's raw
+ * input, deduplicated in patch order and bounded to the changed-files
+ * display cap. Returns an empty list for other tools and for inputs
+ * without a usable bounded string path. ApplyPatch carries a single
+ * `input` key holding the whole patch text, so its paths come from
+ * the `*** Add/Update File:` headers instead of a path key.
+ */
+export function extractToolFilePaths(
   toolName: string,
   input: unknown,
-): string | undefined {
+): readonly string[] {
   const normalized = toolName
     .replace(/[^\p{L}\p{N}]/gu, '')
     .toLocaleLowerCase();
   if (!FILE_MODIFYING_TOOLS.has(normalized)) {
-    return undefined;
+    return [];
   }
   if (typeof input !== 'object' || input === null) {
-    return undefined;
+    return [];
   }
   for (const key of PATH_INPUT_KEYS) {
     const value = (input as Record<string, unknown>)[key];
     if (
       typeof value === 'string' &&
       value.trim().length > 0 &&
-      value.length <= MAX_TOOL_FILE_PATH_LENGTH * 4 &&
-      !/[\u0000-\u001f\u007f]/.test(value)
+      isUsablePathValue(value)
     ) {
-      return value.trim();
+      return [value.trim()];
     }
   }
-  return undefined;
+  if (normalized === 'applypatch') {
+    return extractPatchFilePaths(
+      (input as Record<string, unknown>).input,
+    );
+  }
+  return [];
+}
+
+function extractPatchFilePaths(patchText: unknown): readonly string[] {
+  if (typeof patchText !== 'string') {
+    return [];
+  }
+  const paths: string[] = [];
+  const seen = new Set<string>();
+  for (const match of patchText.matchAll(PATCH_FILE_HEADER)) {
+    // `.` excludes `\n` but not `\r`; trim strips CRLF remainders.
+    const value = match[1]?.trim();
+    if (
+      value === undefined ||
+      !isUsablePathValue(value) ||
+      seen.has(value)
+    ) {
+      continue;
+    }
+    seen.add(value);
+    paths.push(value);
+    if (paths.length >= MAX_CHANGED_FILES_PER_TURN) {
+      break;
+    }
+  }
+  return paths;
+}
+
+function isUsablePathValue(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= MAX_TOOL_FILE_PATH_LENGTH * 4 &&
+    !/[\u0000-\u001f\u007f]/.test(value)
+  );
 }
 
 /**

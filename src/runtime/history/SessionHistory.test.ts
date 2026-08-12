@@ -241,6 +241,56 @@ describe('projectSessionHistory', () => {
     });
   });
 
+  it('lists every file of a multi-file ApplyPatch in the changes summary', () => {
+    const root = resolve('workspace-root');
+    const loaded = response([
+      message('assistant-1', 'assistant', [
+        {
+          type: 'tool_use',
+          id: 'tool-patch',
+          name: 'ApplyPatch',
+          input: {
+            input: [
+              '*** Begin Patch',
+              `*** Delete File: ${join(root, 'src', 'page.html')}`,
+              `*** Add File: ${join(root, 'src', 'page.html')}`,
+              '+rewritten',
+              `*** Update File: ${join(root, 'src', 'style.css')}`,
+              '+tweaked',
+              '*** End Patch',
+            ].join('\n'),
+          },
+        },
+        { type: 'text', text: 'Patched.' },
+      ]),
+    ]);
+
+    const result = projectSessionHistory(loaded, {
+      workspaceRoot: root,
+    });
+
+    expect(result).toMatchObject({
+      status: 'available',
+      state: {
+        transcript: [
+          {
+            kind: 'tool',
+            toolName: 'ApplyPatch',
+            filePath: 'src/page.html',
+          },
+          { kind: 'assistant' },
+          {
+            kind: 'changes',
+            files: [
+              { path: 'src/page.html', additions: null, deletions: null },
+              { path: 'src/style.css', additions: null, deletions: null },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
   it('omits hidden content and marks visible attachment omissions partial', () => {
     const loaded = response([
       {

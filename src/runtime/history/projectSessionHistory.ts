@@ -40,7 +40,7 @@ import {
 import { extractToolBackgroundHint } from '../toolBackgroundHint';
 import { extractToolDetail } from '../toolDetail';
 import {
-  extractToolFilePath,
+  extractToolFilePaths,
   toWorkspaceRelativePath,
 } from '../toolFilePath';
 import {
@@ -76,6 +76,12 @@ interface Projection {
     }
   >;
   readonly toolIdentities: Map<string, string>;
+  /**
+   * Transcript ids of tool items whose call changed several files
+   * (multi-file ApplyPatch); the item itself carries only the first
+   * path, the changes synthesis needs them all.
+   */
+  readonly multiFileTools: Map<string, readonly string[]>;
   readonly toolCounts: Map<string, number>;
   readonly imageCounts: Map<string, number>;
   /** Unconsumed subagent ledger entries, keyed by delegation identity. */
@@ -104,6 +110,7 @@ export function projectSessionHistory(
       ids: new Set(),
       tools: new Map(),
       toolIdentities: new Map(),
+      multiFileTools: new Map(),
       toolCounts: new Map(),
       imageCounts: new Map(),
       subagentQueues: createSubagentQueues(
@@ -134,6 +141,7 @@ export function projectSessionHistory(
       appendHistoryTurnChanges(
         readTranscript(projection),
         projection.transcriptTextUnits,
+        projection.multiFileTools,
       ),
     );
     const state: HostTranscriptState = {
@@ -623,7 +631,14 @@ function appendTool(
     turnId,
     toolUseId,
   );
-  const filePath = historyToolFilePath(projection, toolName, block.input);
+  const filePaths = historyToolFilePaths(
+    projection,
+    toolName,
+    block.input,
+  );
+  if (filePaths.length > 1) {
+    projection.multiFileTools.set(transcriptId, filePaths);
+  }
   const detail = extractToolDetail(toolName, block.input);
   const backgroundHint = extractToolBackgroundHint(
     toolName,
@@ -640,7 +655,7 @@ function appendTool(
     status: 'stopped',
     progressCount: 0,
     latestUpdateKind: null,
-    ...(filePath === undefined ? {} : { filePath }),
+    ...(filePaths.length === 0 ? {} : { filePath: filePaths[0] }),
     ...(detail === undefined
       ? {}
       : { detailKind: detail.kind, detail: detail.text }),
@@ -657,18 +672,25 @@ function appendTool(
   }
 }
 
-function historyToolFilePath(
+function historyToolFilePaths(
   projection: Projection,
   toolName: string,
   input: unknown,
-): string | undefined {
-  if (projection.workspaceRoot === undefined) {
-    return undefined;
+): readonly string[] {
+  const root = projection.workspaceRoot;
+  if (root === undefined) {
+    return [];
   }
-  const rawPath = extractToolFilePath(toolName, input);
-  return rawPath === undefined
-    ? undefined
-    : toWorkspaceRelativePath(projection.workspaceRoot, rawPath);
+  const paths: string[] = [];
+  const seen = new Set<string>();
+  for (const rawPath of extractToolFilePaths(toolName, input)) {
+    const relativePath = toWorkspaceRelativePath(root, rawPath);
+    if (relativePath !== undefined && !seen.has(relativePath)) {
+      seen.add(relativePath);
+      paths.push(relativePath);
+    }
+  }
+  return paths;
 }
 
 /**
@@ -896,18 +918,22 @@ function readTranscript(
 function appendHistoryTurnChanges(
   transcript: readonly SessionTranscriptItem[],
   usedTextUnits: number,
+  multiFileTools: ReadonlyMap<string, readonly string[]>,
 ): SessionTranscriptItem[] {
   const filesByTurn = new Map<string, string[]>();
   for (const item of transcript) {
     if (item.kind !== 'tool' || item.filePath === undefined) {
       continue;
     }
+    const itemPaths = multiFileTools.get(item.id) ?? [item.filePath];
     const files = filesByTurn.get(item.turnId) ?? [];
-    if (
-      !files.includes(item.filePath) &&
-      files.length < MAX_CHANGED_FILES_PER_TURN
-    ) {
-      files.push(item.filePath);
+    for (const path of itemPaths) {
+      if (
+        !files.includes(path) &&
+        files.length < MAX_CHANGED_FILES_PER_TURN
+      ) {
+        files.push(path);
+      }
     }
     filesByTurn.set(item.turnId, files);
   }

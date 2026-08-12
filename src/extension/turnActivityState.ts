@@ -1,5 +1,6 @@
 import {
   MAX_ASSISTANT_TEXT_LENGTH,
+  MAX_CHANGED_FILES_PER_TURN,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
   MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
@@ -61,6 +62,8 @@ interface ToolActivityEntry {
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
   readonly startedAtMs?: number;
   readonly filePath?: string;
+  /** All changed paths of a multi-file call; `filePath` is the first. */
+  readonly filePaths?: readonly string[];
   readonly detailKind?: ToolDetailKind;
   readonly detail?: string;
   readonly errorMessage?: string;
@@ -112,7 +115,8 @@ export function thinkingSegmentKey(event: {
 
 /**
  * Unique workspace-relative file paths the turn's tools changed, in
- * first-observed order.
+ * first-observed order, clipped to the bridge's changed-files bound
+ * so the published summary always validates.
  */
 export function collectToolFilePaths(
   state: TurnActivityState,
@@ -120,9 +124,18 @@ export function collectToolFilePaths(
   const paths: string[] = [];
   const seen = new Set<string>();
   for (const entry of state.tools.values()) {
-    if (entry.filePath !== undefined && !seen.has(entry.filePath)) {
-      seen.add(entry.filePath);
-      paths.push(entry.filePath);
+    const entryPaths =
+      entry.filePaths ??
+      (entry.filePath === undefined ? [] : [entry.filePath]);
+    for (const path of entryPaths) {
+      if (seen.has(path)) {
+        continue;
+      }
+      if (paths.length >= MAX_CHANGED_FILES_PER_TURN) {
+        return paths;
+      }
+      seen.add(path);
+      paths.push(path);
     }
   }
   return paths;
@@ -265,6 +278,9 @@ export function projectToolEvent(
         const addsFilePath =
           event.filePath !== undefined &&
           existing.filePath === undefined;
+        const addsFilePaths =
+          event.filePaths !== undefined &&
+          existing.filePaths === undefined;
         const addsDetail =
           event.detail !== undefined && existing.detail === undefined;
         // Monotonic: once a streamed input showed fireAndForget the
@@ -272,10 +288,16 @@ export function projectToolEvent(
         const addsBackgroundHint =
           event.backgroundHint !== undefined &&
           existing.backgroundHint === undefined;
-        if (addsFilePath || addsDetail || addsBackgroundHint) {
+        if (
+          addsFilePath ||
+          addsFilePaths ||
+          addsDetail ||
+          addsBackgroundHint
+        ) {
           const entry: ToolActivityEntry = {
             ...existing,
             ...(addsFilePath ? { filePath: event.filePath } : {}),
+            ...(addsFilePaths ? { filePaths: event.filePaths } : {}),
             ...(addsDetail
               ? { detailKind: event.detailKind, detail: event.detail }
               : {}),
@@ -333,6 +355,9 @@ export function projectToolEvent(
       : {}),
     ...(event.type === 'tool-start' && event.filePath !== undefined
       ? { filePath: event.filePath }
+      : {}),
+    ...(event.type === 'tool-start' && event.filePaths !== undefined
+      ? { filePaths: event.filePaths }
       : {}),
     ...(event.type === 'tool-start' && event.detail !== undefined
       ? { detailKind: event.detailKind, detail: event.detail }
