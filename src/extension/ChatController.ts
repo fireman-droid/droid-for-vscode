@@ -2913,6 +2913,12 @@ export class ChatController {
         MAX_ARCHIVED_SESSION_ITEMS,
       );
     } catch (error) {
+      // The unavailable copy renders only inside the drawer; without
+      // this record a failed daemon acquire leaves no local-log trace.
+      this.recordPanelFailure(
+        'archived-load-failed',
+        formatUnknownError(error),
+      );
       if (!this.disposed) {
         this.emit({
           type: 'session.archived',
@@ -3080,6 +3086,26 @@ export class ChatController {
       );
       return;
     }
+    this.pushSkills(
+      runtime,
+      this.runtimeGeneration,
+      sessionId,
+      this.activeRuntimeCwd!,
+    );
+  }
+
+  /**
+   * Loads and emits the skills catalog. Called from the user-request
+   * guard chain and directly from session activation
+   * (`loadSessionMetadata`), where `sessionOperationInProgress` is
+   * still set and the request guard would wrongly drop the push.
+   */
+  private pushSkills(
+    runtime: DroidRuntime,
+    generation: number,
+    sessionId: string,
+    cwd: string,
+  ): void {
     if (typeof runtime.listSkills !== 'function') {
       this.emitSkills(sessionId, {
         status: 'unsupported',
@@ -3090,8 +3116,6 @@ export class ChatController {
     }
 
     this.emitSkills(sessionId, { status: 'loading', items: [] });
-    const generation = this.runtimeGeneration;
-    const cwd = this.activeRuntimeCwd!;
     void runtime.listSkills().then(
       (skills) => {
         if (
@@ -3455,6 +3479,25 @@ export class ChatController {
       );
       return;
     }
+    this.pushMcp(
+      runtime,
+      this.runtimeGeneration,
+      sessionId,
+      this.activeRuntimeCwd!,
+    );
+  }
+
+  /**
+   * Loads and emits the MCP server catalog. Shares the activation
+   * push path with `pushSkills`; see that method for why this skips
+   * the user-request guard chain.
+   */
+  private pushMcp(
+    runtime: DroidRuntime,
+    generation: number,
+    sessionId: string,
+    cwd: string,
+  ): void {
     if (typeof runtime.listMcpServers !== 'function') {
       this.emitMcp(sessionId, {
         status: 'unsupported',
@@ -3465,8 +3508,6 @@ export class ChatController {
     }
 
     this.emitMcp(sessionId, { status: 'loading', items: [] });
-    const generation = this.runtimeGeneration;
-    const cwd = this.activeRuntimeCwd!;
     void runtime.listMcpServers().then(
       (servers) => {
         if (
@@ -5791,6 +5832,12 @@ export class ChatController {
       });
 
     this.refreshContext(runtime, generation, sessionId, cwd);
+    // Server-side backstop for the skills/MCP panels: a session switch
+    // resets the webview catalogs to 'idle', and a panel-issued
+    // re-request can be dropped mid-switch. Pushing fresh state on
+    // activation converges an open panel without user action.
+    this.pushSkills(runtime, generation, sessionId, cwd);
+    this.pushMcp(runtime, generation, sessionId, cwd);
   }
 
   private refreshContext(

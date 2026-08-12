@@ -3271,8 +3271,20 @@ describe('ChatController', () => {
 
   it('lists skills on request and re-lists after a toggle', async () => {
     const runtime = Object.assign(createMockRuntime(), {
+      // First read is consumed by the activation-time catalog push,
+      // the second by the explicit refresh, the third by the toggle
+      // re-list.
       listSkills: vi
         .fn()
+        .mockResolvedValueOnce([
+          {
+            name: 'code-review',
+            description: 'Reviews code changes.',
+            location: 'project',
+            enabled: true,
+            userInvocable: true,
+          },
+        ])
         .mockResolvedValueOnce([
           {
             name: 'code-review',
@@ -3629,8 +3641,27 @@ describe('ChatController', () => {
 
   it('lists MCP servers on request and re-lists after a toggle', async () => {
     const runtime = Object.assign(createMockRuntime(), {
+      // First read is consumed by the activation-time catalog push,
+      // the second by the explicit refresh, the third by the toggle
+      // re-list.
       listMcpServers: vi
         .fn()
+        .mockResolvedValueOnce([
+          {
+            name: 'linear',
+            status: 'connected',
+            toolCount: 1,
+            requiresAuth: false,
+            tools: [
+              {
+                name: 'list-issues',
+                description: 'Lists issues.',
+                enabled: true,
+                readOnly: true,
+              },
+            ],
+          },
+        ])
         .mockResolvedValueOnce([
           {
             name: 'linear',
@@ -3741,8 +3772,11 @@ describe('ChatController', () => {
 
   it('adds and removes MCP servers, then rebroadcasts the catalog', async () => {
     const runtime = Object.assign(createMockRuntime(), {
+      // The activation-time catalog push reads the pre-add catalog;
+      // the add and remove re-lists follow.
       listMcpServers: vi
         .fn()
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([
           {
             name: 'local-tools',
@@ -3823,6 +3857,93 @@ describe('ChatController', () => {
       });
     });
     expect(JSON.stringify(messages)).not.toContain('private add failure');
+  });
+
+  it('pushes skills and MCP catalogs once a session becomes available', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      listSkills: vi.fn(async () => [
+        {
+          name: 'code-review',
+          description: 'Reviews code changes.',
+          location: 'project',
+          enabled: true,
+          userInvocable: true,
+        },
+      ]),
+      listMcpServers: vi.fn(async () => [
+        {
+          name: 'linear',
+          status: 'connected',
+          toolCount: 0,
+          requiresAuth: false,
+          tools: [],
+        },
+      ]),
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    // No panel request was issued: activation itself must push both
+    // catalogs so a panel left open across a session switch converges
+    // even when its own idle re-request was dropped mid-switch.
+    await vi.waitFor(() => {
+      expect(skillsMessages(messages).at(-1)?.skills).toMatchObject({
+        status: 'ready',
+        items: [{ name: 'code-review' }],
+      });
+      expect(mcpMessages(messages).at(-1)?.mcp).toMatchObject({
+        status: 'ready',
+        items: [{ name: 'linear' }],
+      });
+    });
+    expect(runtime.listSkills).toHaveBeenCalledTimes(1);
+    expect(runtime.listMcpServers).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs a local diagnostic when the archived list load fails', async () => {
+    const record = vi.fn();
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async () => {
+        throw new Error('daemon spawn lost the port race');
+      },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { record } as unknown as RuntimeDiagnosticSink,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({ type: 'sessions.archivedRefresh' });
+
+    await vi.waitFor(() => {
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'host.ui.diagnostic',
+          attributes: expect.objectContaining({
+            code: 'archived-load-failed',
+          }),
+        }),
+      );
+    });
+    // The webview keeps the generic unavailable copy; the failure
+    // detail lives only in the local log.
+    const states = messages.filter(
+      (message) => message.type === 'session.archived',
+    );
+    expect(states.at(-1)?.archived.status).toBe('error');
   });
 
   it('fast-fails MCP auth without an OAuth URL and frees the flow', async () => {
