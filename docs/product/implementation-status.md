@@ -454,18 +454,43 @@ Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限�
 - Submit 和 Cancel
 - 按原问题索引精确返回答案
 
-### 6. Exit Spec 审批子集
+### 6. 完整 Spec Mode 闭环（2026-08-12 中午切片④）
 
 - 显示 `ExitSpecMode` 返回的计划
 - 通过安全 GFM Markdown 显示标题、列表和代码，不暴露原始 `####` 标记
-- 在 SDK 提供可编辑选项时编辑计划
+- 在 SDK 提供可编辑选项时编辑计划；编辑器带 Edit/Preview 双视图
+  （Preview 用同一 Markdown 渲染器实时预览草稿）
 - 可见操作遵循 Figma 的 Deny、Edit、Approve 层级；额外审批范围进入
   Split Button 菜单
 - 返回 Droid SDK 提供的审批结果
 - SDK 发出 `settings_updated` 后，Host 重新读取当前 Session 的权威
   Settings；ExitSpec 审批继续执行时 Mode 不再停留在旧的 Spec 显示
+- **32K 静默取消 bug 已修**：ExitSpec 计划文本改用专属上限
+  `MAX_SPEC_PLAN_LENGTH = 262,144`（Bridge 双向校验按
+  `confirmationKind` 区分），超限计划在 Runtime 截断显示而非取消
+  整个审批；回归测试构造超 32K 与超 256K 计划过桥
+  （`runtimeInteractions.test.ts`、`validateHostMessage.test.ts`）
+- 长计划卡默认折叠预览 + “View full spec” 展开/收起（阈值
+  1,200 字符或 24 行）
+- Spec 模式可视化：Composer 上方 “Spec mode · planning” 徽标，
+  Mode 触发器 Spec 态高亮
+- Spec 起草模型/推理力度覆盖：Model 弹窗在 Spec 模式下出现
+  Session / Spec drafting 双 Scope，Spec Scope 可选独立起草模型与
+  推理力度，或重置回 Session 模型 / 模型默认（Bridge
+  `specModeModelId` / `specModeReasoningEffort`，null 表示重置；
+  SDK `UpdateSessionSettings` 同名字段）
+- `proceed_new_session*` 批准后 Runtime 监听 session 通知
+  （`agent_turn_completed` reason `spec_handoff` + 不同 sessionId
+  的通知信封双信号），在 `turn-complete` 前发出 `spec-handoff`
+  Runtime 事件；Host 在回合结束时按 Compact/Fork 同款替换机制收养
+  实现 Session。信号缺失时降级为可见 warning（提示从 History 打开），
+  不静默
+- 历史加载/恢复回放：Spec 起草文本走 assistant 转录、ExitSpecMode
+  工具记录走既有 reconcile 管线（真实会话 fixture 已含该工具），
+  无需新增路径
 
-这只是 Exit Spec 权限交互，不代表完整 Spec Mode 已实现。
+Spec 起草期间的流式渲染与普通回合共享既有 `assistant.delta` 链路；
+“动画只属于正在发生的事”约定不变。
 
 ### 7. 基础 Session 导航
 
@@ -898,7 +923,9 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
       `session.compact()`，收养延续 Session 并重载摘要转录）
 - [x] Session Rewind（经编辑重问触发，建立分支 Session）
 - [ ] Session 分支关系
-- [ ] 完整 Spec Mode
+- [x] 完整 Spec Mode（切片④：32K 计划修复 + 长计划卡 + Spec 起草
+      模型覆盖 + `proceed_new_session*` 实现 Session 收养；见
+      「生产已接通 §6」）
 - [ ] Mission 启动
 - [ ] Mission 阶段和 Worker 摘要
 
@@ -934,15 +961,15 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 最后核对结果：
 
 - Cursor 已安装：`droidvisx.droidvisx@0.0.0`
-- `dist/droidvisx.vsix` 大小：634,337 字节
-- VSIX 修改时间：2026-08-12T12:00（本地）
+- `dist/droidvisx.vsix` 大小：636,573 字节（9 files, 621.65 KB）
+- VSIX 修改时间：2026-08-12T13:04（本地）
 - VSIX SHA-256：
-  `FCC70EB2CF5D6812FCFFE8655EDA175CFD82D9A37FFE3D352445FF648913B416`
-- VSIX 在此前功能之上追加 2026-08-12 中午的验收后续三项修复批次
-  （编辑卡随新消息自动关闭、行内代码样式调轻、编辑态吸顶豁免
-  推挤）
+  `6CCE471DDBBA7595B72E2FE2ACC382F746D83BCFBFDD8765F2D45E735015629E`
+- VSIX 在此前功能之上追加 2026-08-12 中午的 V1 切片④「完整 Spec
+  Mode 闭环」（32K 计划静默取消修复、长计划卡、Spec 徽标、Spec
+  起草模型覆盖、`proceed_new_session*` 实现 Session 收养）
 - 本轮门禁按仓库惯例分步执行：typecheck + 全量 vitest（44 files /
-  1050 通过，基线 1045 +5）+ Production Build + vsce package +
+  1067 通过，基线 1050 +17）+ Production Build + vsce package +
   cursor --install-extension
 - 最终 VSIX 已成功安装到 Cursor
 - 已安装的 Extension Bundle、Webview JS 和 CSS 哈希均与本次 Build
@@ -1115,10 +1142,43 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension dist/droidvisx.vsix --force`
   （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
   需 Reload Window（或完整重启）后加载新 Bundle
+- 2026-08-12 中午打包并安装含 **V1 切片④：完整 Spec Mode 闭环**
+  的构建：`dist/droidvisx.vsix` 636,573 字节（9 files,
+  621.65 KB），SHA-256
+  `6CCE471DDBBA7595B72E2FE2ACC382F746D83BCFBFDD8765F2D45E735015629E`，
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix` 与
+  `cursor --install-extension dist/droidvisx.vsix --force`
+  （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
+  需 Reload Window（或完整重启）后加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
+
+- V1 切片④「完整 Spec Mode 闭环」（2026-08-12 中午）：
+  ① **32K 静默取消修复**：`ExitSpecMode` 计划改用
+  `MAX_SPEC_PLAN_LENGTH = 262,144` 专属上限，Runtime 对超限计划
+  截断显示而非取消审批；`runtimeInteractions.test.ts` 回归构造
+  65K 与超 256K 计划、`validateHostMessage.test.ts` 回归构造超
+  32K 计划过桥且按 kind 区分上限。② **Spec 起草覆盖**：
+  Bridge/Runtime/Host/Webview 全链路 `specModeModelId` /
+  `specModeReasoningEffort`（null 重置），Host 按起草模型（而非
+  Session 模型）校验 Spec 推理力度（`ChatController.test.ts`）。
+  ③ **实现 Session 收养**：`proceed_new_session*` 批准后 Runtime
+  监听通知双信号发 `spec-handoff` 事件，Host 回合结束按替换机制
+  收养实现 Session；信号缺失降级可见 warning
+  （`spec-handoff-not-detected`），两条路径均有 Host 测试。
+  ④ **headless 冒烟**（`artifacts/smoke-spec-flow.mjs` +
+  `spec-flow-harness.html`，pass=true）：Spec 徽标可见 → 发送起草
+  提示 → 流式 Markdown 渲染 → 34,002 字符计划卡渲染（未被吞）→
+  View full spec 展开可见第 299 节 → Approve plan 发出
+  `permission.respond proceed_new_session` → 卡片关闭 +
+  `spec-handoff-detected` info 诊断入流。⑤ **120 回合 stress 复测**
+  （`run-stress-batch3.mjs`，stress-harness 补齐新 settings 字段）：
+  快照后流式期间 0 个 50ms+ 长任务（仅初始 paint 3 个，与基线
+  一致）。⑥ 门禁：typecheck 通过、44 files / 1067 tests 通过
+  （+17）、build/package/install 成功；截图
+  `artifacts/spec-flow-card.png`。
 
 - 验收后续三项修复批次（2026-08-12 中午，用户验收报告的编辑卡不
   自动关闭、灰色方框观感、吸顶块被顶出屏幕三项，一批修复）：
@@ -1925,8 +1985,9 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 3. ~~**对话内图片 + Composer 拖拽/粘贴**~~ — 两段均已完成
    （2026-08-12 凌晨，见验证状态「V1 切片③第一段/第二段」；
    [`rich-content-design.md`](./rich-content-design.md) §1、§1.5）。
-4. **完整 Spec Mode 闭环**
-   （[`spec-mission-design.md`](./spec-mission-design.md) §1）。
+4. ~~**完整 Spec Mode 闭环**~~ — 已完成（2026-08-12 中午，见验证
+   状态「V1 切片④」与生产已接通 §6；
+   [`spec-mission-design.md`](./spec-mission-design.md) §1）。
 5. **Canvas / 原型预览**
    （[`rich-content-design.md`](./rich-content-design.md) §2）。
 6. **子代理摘要层级 + Mission 只读展示**
