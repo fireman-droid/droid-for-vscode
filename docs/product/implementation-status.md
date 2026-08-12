@@ -544,6 +544,42 @@ session → 新会话可用后面板自动重查、脱离 Loading；另覆盖会
 推、archived 失败落日志）；build 过。**本批次未打包安装（完成时工作
 区含并行代理未提交在制品），待随下一批次包一起可见验证**。
 
+2026-08-12 晚追加「日志实证两项修复：ApplyPatch 路径提取 + Webview
+首屏闪白」（提交 5e601d8 / 94c9451）：① ApplyPatch 文件路径
+（Runtime+Host，P0）：真实 CLI 的 ApplyPatch 输入只有一个 `input`
+键，值为整段 patch 文本，而路径提取只认 `file_path`/`filePath`/
+`path` 三个键——`filePath` 恒 undefined → `collectToolFilePaths`
+恒空 → Changes 卡、Preview chip、卡尾 Git 提交入口、±行数统计对
+真实使用全部死路（两日日志 ApplyPatch 68 次、Create/Edit/Write
+0 次）。现 `extractToolFilePaths`（复数化）在标准键缺失时解析
+patch 文本的 `*** Add/Update File:` 头：多文件全部提取、去重、
+上限 24（`MAX_CHANGED_FILES_PER_TURN`）、畸形头/超长行/控制字符/
+非字符串 input 一律安静返回空。**取舍：Delete File 头不提取**——
+真实 CLI 重写文件固定发 Delete+Add 同路径对（Add 头已覆盖），纯
+删除文件的 Preview chip 会指向不存在的文件；纯删除回合因此不出
+Changes 卡，接受此边界。多文件经 tool-start 运行时事件新增的可选
+`filePaths` 流入 Host 活动状态；单数 `filePath` 保持首路径语义，
+工具行 chip 与 Bridge 契约形状不变（未触碰 bridgeMessages）。历史
+重载走同一提取器，多文件 patch 的历史 Changes 摘要列出全部文件。
+顺带把 `collectToolFilePaths` 按 24 上限截断（此前多工具可超出
+Bridge 校验上限导致 `turn.changes` 整条被拒的潜在缺陷）。
+② Webview 首屏闪白（Extension，小）：模板 head 只有外链
+stylesheet，CSS 加载 + React 挂载前（~1s）裸露默认白底。现 head 在
+stylesheet 前注入 nonce 内联 `<style>` 钉住 `html,body` 背景
+`#f5f3ef`（与 styles.css 根底色核对一致），CSP `style-src` 追加
+`'nonce-…'`（复用既有 script nonce）。门禁：修改文件所在的
+extension typecheck 干净（工作区 webview typecheck 此刻被并行在制
+品压红，非本切片文件）；因主工作区含并行在制品，全量验证在 HEAD
+临时 worktree + 仅本批次文件上执行：typecheck extension 段过、全量
+vitest 74 文件 1731 过 1 跳过 0 败（验证后 worktree 已删）。聚焦
+测试新增：`toolFilePath.test.ts`（真实形状单文件/多文件/Delete+Add
+同文件/畸形头/敌对输入/上限）、normalizeSdkEvent ApplyPatch 三态、
+turnActivityState 多路径收集与截断、SessionHistory 多文件摘要、
+webviewHtml 首屏背景与 CSP。**本批次未打包安装（dist 锁被并行占
+用），待随下一批次包一起真机验收：让 Droid 用 ApplyPatch 改一个
+html → 应出现 Changes 卡 + Preview chip + 卡尾 Git 提交入口；重开
+窗口闪白应显著减轻**。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
@@ -1302,6 +1338,75 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
   接线与 `store.btw.test.ts` 在热点文件并发下随 `7a8e33a`/
   `7f95587` 入库（工作树内容一致、门禁全绿）
 
+### 19. Turn 运行中排队消息（2026-08-12 晚，V1 主线收官切片）
+
+设计权威 [`queued-messages-design.md`](./queued-messages-design.md)，
+三切片（Bridge+Host 状态机 / Webview 路由 / 队列卡 UI）一次交付。
+
+- **行为**：回合运行中 Composer 不再禁用——Enter 直接把消息送进
+  Host 层 FIFO 队列（上限 10 条，满时 Composer hint 提示且发送键
+  禁用）；排队消息以 quiet 虚线卡显示在转录尾部 / Composer 上方，
+  单条可删、点击文本可就地编辑（Enter 保存 / Escape 放弃）；当前
+  回合 **completed → 队首自动派发**为下一回合（turnId 即 queueId，
+  附件在入队时从暂存区取走、随派发回合发送）；**Stop 或回合
+  failed → 队列转暂停态**（横幅 + Send now / Clear，绝不自动派发，
+  queue.resume 后恢复自动链式排空）；派发被 handleSend 残余守卫
+  拒绝时转 `dispatch-blocked` 暂停而非丢消息。**边界**（照设计
+  §5）：队列驻留 Host 内存，Reload 即失（卡上有细字注明）；换会话
+  /新会话/fork/compact 丢弃队列并出 info 诊断；有排队消息时
+  edit-resend 被阻断（互斥，诊断提示先清队）
+- **Bridge**（协议 v6）：`queue.add/update/remove/resume/clear`
+  （W→H）+ `queue.state`（H→W，权威快照）+ `host.snapshot` 可选
+  `queue` 字段；`queueProtocol.ts` sidecar 模块双侧共用解析器，
+  exact-key/长度/枚举/一致性（paused 非空队列）全量校验
+- **Host**：`queuedPromptsState.ts` 纯函数状态机（入队去重/上限/
+  编辑/删除/清空/暂停/恢复/派发决策 `evaluateQueueDispatch` 七守卫
+  （turnActive/connected/runtime/session/pendingInteractions/
+  sessionOp/settingsUpdate 任一不满足即 wait））；ChatController
+  在 turn.state 终态处 settle：completed 微任务派发、interrupted/
+  failed 暂停；**修复（`531049a`，真机冒烟揪出）**：完成 settle
+  原在 runtime 流循环体内排微任务，抢在生成器 finally 释放
+  active-turn 槽之前调 sendTurn，队首派发即刻 failed——改为先
+  break 关闭流再 settle，回归测试用带真实槽语义的 mock 复现（旧序
+  必红）
+- **Webview**：store 乐观入队/编辑/删除 + `queue.state`/snapshot
+  权威回填；`shouldQueueMessage`（回合活跃或暂停队列非空即入队）；
+  Thread 的 Composer Input 自定义 onKeyDown 在 running 时把 Enter
+  路由到 send（assistant-ui 对无原生 queue 能力的外部 store 默认
+  吞掉该键）；重入闩仅锁直发路径，连发入队不受限；Composer hint
+  随状态切换（Enter queues for after this turn / Queue is full…）
+- **与 A4 恢复回合共存**：恢复占位（`recovery-*`）期间
+  `isTurnActive` 为真→照常入队不派发；占位收口走同一 turn.state
+  终态 settle 按状态机派发/暂停
+- 门禁：typecheck 三段过；全量 vitest **80 files / 1805 tests**
+  全绿（队列状态机全路径：入队/满/去重/派发/暂停/恢复/删除/编辑/
+  互斥/会话丢弃/dispatch-blocked/流关闭时序回归）；build 过；
+  `package:vsix` + `cursor --install-extension --force` 成功
+- **真机验收**（`artifacts/probe-queue-smoke.mjs`，真实 CLI 登录 +
+  生产 ChatController + FactoryDroidRuntime process transport，
+  Bridge 消息流实测）：长回合流式中连发 3 条入队（FIFO 序确认）→
+  completed 自动派发队首（turnId=queueId，队列 3→2）→ 派发回合
+  Stop → interrupted + `paused=stopped`（2 条保留，6 秒无自动
+  派发）→ `queue.resume` 派发队首 → 完成后队尾自动跟上 → 排空
+  `items=0, paused=null`，**VERDICT: PASS**（输出仅布尔/计数，
+  结果 `artifacts/probe-queue-smoke.out.json`）。面板内可视核对
+  （排队卡样式/编辑交互）待用户 Reload Window 后验收
+- 提交：`df8e5e2`（Bridge 契约）、`9de41ec`（Host 状态机）、
+  `7f95587`（Webview 路由 + 队列卡 UI，含共居文件里 /btw 切片的
+  store/App 接线一并落地）、`531049a`（派发时序修复）
+
+主要实现：
+
+- `src/shared/queueProtocol.ts`（契约 + 双侧解析）、
+  `src/extension/queuedPromptsState.ts`（纯状态机）、
+  `ChatController.ts`（queue.* 路由 + settle + 派发 + 丢弃点）、
+  `store.ts`/`runtimeAdapter.ts`/`App.tsx`/`Thread.tsx`（乐观入队 +
+  权威回填 + Enter 路由）、`QueuedMessages.tsx` + `queuedMessages.css`
+  （队列卡/暂停横幅/就地编辑）
+- 测试：`queueProtocol.test.ts`、`queuedPromptsState.test.ts`、
+  `ChatController.test.ts`（队列 11 例 + 时序回归）、`store.test.ts`、
+  `runtimeAdapter.test.ts`、`App.test.tsx`
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -1382,6 +1487,27 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
 | Extension 入口              | 当前贡献 Activity Bar Webview                                                                                                | 与“Secondary Sidebar 为主界面”的当前项目要求仍需统一             |
 
 ## 仅探测/声明，没有接入产品
+
+### 子代理转录只读回放（2026-08-12 探针，未接入产品）
+
+调研 + 探针任务，零 `src/` 改动。探针
+`artifacts/probe-child-observer.mjs`（私有 sidecar daemon + 真实
+委派回合，结果 `artifacts/probe-child-observer.out.json`）实证：
+
+- **观察者连接不通**：第二条连接可 `load_session`/`resume` 附加到
+  运行中的子会话且父回合不受扰，附加到父会话能收全量细粒度事件，
+  但 daemon 内部驱动的子会话零 `create_message`/delta 广播——
+  观察者连接做不了转录直播。
+- **文件尾随可行**：子会话 JSONL 边跑边写、整行 flush、并发读
+  0 错误 0 半行（落盘滞后台账 ~4s）。
+- **终态读取零适配**：子会话信封原样过生产 `projectSessionHistory`
+  投影成功；格式与主会话仅差 `session_start` 的
+  `callingSessionId`/`callingToolUseId`。
+- **抽屉泄漏属实**：`listSessions` 返回子会话；`.settings.json` 带
+  `subagent` 标签，SDK `hasSubagentSessionTag` 可判别。
+
+分档设计与第一切片（保底档终态回放 + 抽屉过滤）见
+[`subagent-transcript-playback-design.md`](./subagent-transcript-playback-design.md)。
 
 ### Capability Gate 0.1
 
@@ -1675,6 +1801,15 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- 2026-08-12 晚「Turn 运行中排队消息」收官切片打包并安装：
+  `pnpm run package:vsix`（内含 typecheck 三段 + 全量 vitest
+  80 files / 1805 tests 全绿 + build）产出 `dist/droidvisx.vsix`
+  1,635,958 字节（10 files, 1.56 MB），SHA-256
+  `CFFC497861819AF48EDB695A71383EF75403CB5C47FA537EE11C4B2245C2F118`，
+  `cursor --install-extension --force` successfully installed。该包
+  同时携带此前"随下包"的各切片（任务计划钉条、ApplyPatch 路径修复、
+  首屏闪白修复、/btw 侧聊 S1+S2 等——打包时点工作树除文档外干净，
+  全部为已提交内容）。现有窗口需 Reload Window 后加载新 Bundle
 - 2026-08-12 傍晚 Plugins 只读第一切片已提交（`c7d3911` Bridge 契约 +
   `d8a9826` Host/Runtime + `7db8664` Webview；Thread/App 接线部分随
   并行代理并入 `4ae602f`），门禁全绿（typecheck 三段 + vitest
@@ -1925,11 +2060,21 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   取代同日稍早的计划钉条包，现有窗口需 Reload Window 后加载新
   Bundle
 
-
 ## 验证状态
 
 最近记录的验证结果：
 
+- Turn 运行中排队消息（2026-08-12 晚，V1 主线收官）：真机冒烟
+  `artifacts/probe-queue-smoke.mjs`（真实 CLI 登录 + 生产
+  `ChatController` + `FactoryDroidRuntime` process transport）全链
+  **VERDICT: PASS**——流式回合中连发 3 条入队（FIFO）→ completed
+  自动派发队首 → 派发回合 Stop → `paused=stopped` 两条保留且 6 秒
+  无自动派发 → `queue.resume` → 链式排空 `items=0`。该冒烟第一轮
+  即揪出真实缺陷：完成 settle 的派发微任务抢在 runtime 生成器
+  finally 释放 active-turn 槽前调 `sendTurn`，队首派发即刻
+  failed + 队列误转 `turn-failed` 暂停（单测 mock 无槽语义故漏
+  网）；修复 `531049a` 先 break 关流再 settle，回归测试带真实槽
+  语义。面板内排队卡可视核对待用户 Reload Window
 - 活流重连基础档 A4（2026-08-12 晚，V1 主线）：daemon 模式 Reload
   后，绑定会话若有 in-flight 回合，重连即显示生成中占位、重弹
   pending 权限，回合完成后以持久化历史整体替换占位；process 模式
@@ -3027,6 +3172,32 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 7. **第一档打磨剩余** — 流式命令输出预览 → 收起播报 → 回复动画
    （[`tier1-polish-plan.md`](./tier1-polish-plan.md) §1、§2、§4）。
 8. **发版卫生** — 版本号脱离 0.0.0、CHANGELOG、正式 VSIX（做前与用户确认）。
+
+### 设计调研完成、未排期（2026-08-12 傍晚，零生产代码改动）
+
+- **会话小地图（minimap scrubber）** —
+  [`conversation-minimap-design.md`](./conversation-minimap-design.md)。
+  Grok 式右缘刻度栏：offsetTop 归一化定位、接入现有滚动协调器 rAF、
+  未挂载消息用"更早区"帽子表示。第一切片估 1–1.5 天，用户明确
+  "不急着做"。
+- **主题切换（暗色主题）** —
+  [`theme-switching-design.md`](./theme-switching-design.md)。
+  用户决策（2026-08-12 晚）：只做暗色；暖白 = 现状即 light 基准；
+  暗色盘 = 黑白灰参考 Cursor（`#1a1a1a`~`#252526` 层次、半透明白
+  边框），品牌橙退场（发送键改浅色填充深色图标）；开关三态
+  Light/Dark/Auto。styles.css 现存 259 处 hex + 95 处 rgba 硬编码
+  待收敛进 `--dvx-*` token 层（约 2.5–3.5 天，收敛占大头且冲突面
+  大，需独占 styles.css 窗口）。实施基准原型图：
+  `artifacts/theme-proto-dark.png`（v2 灰阶版；
+  `theme-proto-light.png` 为暖白留档，配
+  `theme-proto-*.html` + `theme-proto-shot.mjs`）。
+- **结构债重构计划（三巨型文件拆分 + 重复实现合并）** —
+  [`refactor-plan.md`](../engineering/refactor-plan.md)（2026-08-12 晚，
+  规划产物、零生产代码改动）。四批次：① styles.css 拆 18 文件 +
+  token 收敛（与暗色主题地基捆绑，用户已拍板）② ChatController 拆
+  薄路由 + 12 个 chat/ 模块（含 148 用例测试同步拆）③ Thread.tsx 拆
+  9 个 thread/ 子组件 ④ isSafeModelId 等重复实现合并 + 孤儿导出清理。
+  双代理并行约 4 个窗口；含成员级映射表、行为等价门禁与行数护栏方案。
 
 ### 用户明确排除（近期不做）
 
