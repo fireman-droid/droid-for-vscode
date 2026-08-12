@@ -113,6 +113,20 @@ import {
 } from './turnActivityState';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
 import {
+  clearPrompts,
+  dropDispatchedPrompt,
+  emptyQueuedPromptsState,
+  enqueuePrompt,
+  evaluateQueueDispatch,
+  markDispatchBlocked,
+  pauseAfterTerminal,
+  removePrompt,
+  resumeQueue,
+  updatePromptText,
+  type QueuedPromptsState,
+} from './queuedPromptsState';
+import type { SessionQueueState } from '../shared/queueProtocol';
+import {
   SESSION_RECOVERY_DEBOUNCE_MS,
   SessionRecoveryStore,
   type SessionRecoveryPersistence,
@@ -293,6 +307,10 @@ const SETTINGS_UPDATE_UNSUPPORTED_MESSAGE =
   'This setting is not available for the current Droid session.';
 const EDIT_RESEND_BLOCKED_MESSAGE =
   'Finish the current Droid activity before editing an earlier message.';
+const EDIT_RESEND_QUEUE_BLOCKED_MESSAGE =
+  'Clear the queued messages before editing an earlier message.';
+const QUEUE_DISPATCH_BLOCKED_MESSAGE =
+  'Droid is busy, so the queued messages are paused. Use "Send now" once it settles.';
 const EDIT_RESEND_UNSUPPORTED_MESSAGE =
   'This message cannot be edited and resent.';
 const EDIT_RESEND_FAILED_MESSAGE =
@@ -494,6 +512,13 @@ export class ChatController {
       }
     | null = null;
   private pendingAttachments: PendingAttachment[] = [];
+  /**
+   * Prompts queued while a turn runs (queued-messages-design.md
+   * §4.1). Host memory only — the queue dies with the session line
+   * (reload, session switch, fork, compact, workspace change).
+   */
+  private queuedPrompts: QueuedPromptsState<PendingAttachment> =
+    emptyQueuedPromptsState();
   private editStage: EditStage | null = null;
   /**
    * Payloads of already-sent attachments keyed by SDK message id, so
@@ -682,6 +707,29 @@ export class ChatController {
           message.text,
           message.restoreFiles === true,
         );
+        return;
+      case 'queue.add':
+        this.handleQueueAdd(
+          message.sessionId,
+          message.queueId,
+          message.text,
+        );
+        return;
+      case 'queue.update':
+        this.handleQueueUpdate(
+          message.sessionId,
+          message.queueId,
+          message.text,
+        );
+        return;
+      case 'queue.remove':
+        this.handleQueueRemove(message.sessionId, message.queueId);
+        return;
+      case 'queue.resume':
+        this.handleQueueResume(message.sessionId);
+        return;
+      case 'queue.clear':
+        this.handleQueueClear(message.sessionId);
         return;
       case 'rewind.info':
         this.handleRewindInfo(message.sessionId, message.messageId);
@@ -1106,7 +1154,7 @@ export class ChatController {
     sessionId: string,
     turnId: string,
     text: string,
-    kind: 'send' | 'edit-resend' = 'send',
+    kind: 'send' | 'edit-resend' | 'queued' = 'send',
     attachmentsOverride?: readonly PendingAttachment[],
   ): void {
     const runtime = this.runtime;
@@ -1730,6 +1778,305 @@ export class ChatController {
     });
   }
 
+  /**
+   * Queued-messages intake (queued-messages-design.md §4.2). The
+   * webview enqueues optimistically, so every request — accepted or
+   * not — is answered with an authoritative `queue.state` echo that
+   * confirms or rewinds the optimistic card. Rejections are silent
+   * beyond a debug log; the composer already prevents them locally.
+   */
+  private handleQueueAdd(
+    sessionId: string,
+    queueId: string,
+    text: string,
+  ): void {
+    if (
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    // The composer staging area rides along with the queued prompt;
+    // consume it only when the enqueue is accepted.
+    const result = enqueuePrompt(this.queuedPrompts, {
+      queueId,
+      text,
+      attachments: this.pendingAttachments,
+    });
+    if (!result.accepted) {
+      this.recordHost({
+        level: 'debug',
+        name: 'host.queue.rejected',
+        attributes: { op: 'add', reason: result.reason },
+      });
+      // Re-sync the chips too: the optimistic add already moved the
+      // staged attachments into the webview's queued card.
+      this.emitAttachments();
+      this.emitQueueState();
+      return;
+    }
+    if (this.pendingAttachments.length > 0) {
+      this.pendingAttachments = [];
+      this.emitAttachments();
+    }
+    this.queuedPrompts = result.state;
+    this.recordHost({
+      level: 'info',
+      name: 'host.queue.added',
+      attributes: {
+        textLength: text.length,
+        depth: this.queuedPrompts.items.length,
+      },
+      detail: text,
+    });
+    this.emitQueueState();
+    // The turn may have settled while the enqueue was in flight;
+    // dispatch now instead of stranding the prompt until the next
+    // terminal turn (design §4.3 race note).
+    this.maybeDispatchQueue();
+  }
+
+  private handleQueueUpdate(
+    sessionId: string,
+    queueId: string,
+    text: string,
+  ): void {
+    if (
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    const result = updatePromptText(this.queuedPrompts, queueId, text);
+    if (!result.updated) {
+      // Most likely dispatched while the edit was in flight; the
+      // echo below rewinds the optimistic webview edit.
+      this.recordHost({
+        level: 'debug',
+        name: 'host.queue.rejected',
+        attributes: { op: 'update' },
+      });
+    }
+    this.queuedPrompts = result.state;
+    this.emitQueueState();
+  }
+
+  private handleQueueRemove(sessionId: string, queueId: string): void {
+    if (
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    const result = removePrompt(this.queuedPrompts, queueId);
+    if (!result.removed) {
+      this.recordHost({
+        level: 'debug',
+        name: 'host.queue.rejected',
+        attributes: { op: 'remove' },
+      });
+    }
+    this.queuedPrompts = result.state;
+    this.emitQueueState();
+  }
+
+  private handleQueueResume(sessionId: string): void {
+    if (
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    this.queuedPrompts = resumeQueue(this.queuedPrompts);
+    this.emitQueueState();
+    this.maybeDispatchQueue();
+  }
+
+  private handleQueueClear(sessionId: string): void {
+    if (
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    if (this.queuedPrompts.items.length > 0) {
+      this.recordHost({
+        level: 'info',
+        name: 'host.queue.cleared',
+        attributes: { count: this.queuedPrompts.items.length },
+      });
+    }
+    this.queuedPrompts = clearPrompts();
+    this.emitQueueState();
+  }
+
+  /**
+   * Runs the dispatch decision (queued-messages-design.md §4.3).
+   * Triggered by a completed turn, an accepted enqueue, and an
+   * explicit resume. `handleSend` keeps its own guards, so a veto
+   * there downgrades the queue to the paused `dispatch-blocked`
+   * state instead of silently losing the prompt.
+   */
+  private maybeDispatchQueue(): void {
+    const decision = evaluateQueueDispatch(this.queuedPrompts, {
+      turnActive: isTurnActive(this.turn),
+      connected: this.connection.status === 'connected',
+      hasRuntime: this.runtime !== null,
+      hasSession: this.sessionId !== null,
+      hasPendingInteractions: this.interactions.hasPending(),
+      sessionOperationInProgress: this.sessionOperationInProgress,
+      settingsUpdateInProgress: this.settingsUpdate !== null,
+    });
+    if (decision.kind === 'idle' || decision.kind === 'wait') {
+      return;
+    }
+    if (decision.kind === 'blocked') {
+      this.pauseQueueAsBlocked();
+      return;
+    }
+    const sessionId = this.sessionId;
+    if (sessionId === null) {
+      return;
+    }
+    const { prompt } = decision;
+    // The generation only advances when handleSend accepts, so it
+    // separates a real dispatch from a veto — matching turn ids
+    // cannot (a stale completed turn may share the queued id).
+    const generationBefore = this.turnGeneration;
+    this.handleSend(
+      sessionId,
+      prompt.queueId,
+      prompt.text,
+      'queued',
+      prompt.attachments,
+    );
+    if (
+      this.turnGeneration === generationBefore ||
+      this.turn?.turnId !== prompt.queueId
+    ) {
+      // A residual handleSend guard (workspace drift, duplicate turn
+      // id) vetoed the send; keep the prompt and pause so the queue
+      // does not spin against a send path that keeps refusing.
+      this.pauseQueueAsBlocked();
+      return;
+    }
+    this.queuedPrompts = dropDispatchedPrompt(
+      this.queuedPrompts,
+      prompt.queueId,
+    );
+    this.recordHost({
+      level: 'info',
+      name: 'host.queue.dispatched',
+      attributes: { remaining: this.queuedPrompts.items.length },
+    });
+    this.emitQueueState();
+    this.emitSnapshot();
+  }
+
+  private pauseQueueAsBlocked(): void {
+    if (this.queuedPrompts.paused === 'dispatch-blocked') {
+      return;
+    }
+    this.queuedPrompts = markDispatchBlocked(this.queuedPrompts);
+    this.emitSessionDiagnostic(
+      'queue-dispatch-blocked',
+      QUEUE_DISPATCH_BLOCKED_MESSAGE,
+    );
+    this.emitQueueState();
+  }
+
+  /**
+   * Applies the queue policy at a terminal turn boundary
+   * (queued-messages-design.md §4.3/§4.4): `completed` attempts a
+   * dispatch on a microtask (off the turn.state emission stack) so
+   * completion side effects land first; Stop and failure park the
+   * queue in a paused state that only `queue.resume`, emptying the
+   * queue, or a session change leaves.
+   */
+  private settleQueueAfterTurn(
+    sessionId: string,
+    status: 'completed' | 'interrupted' | 'failed',
+  ): void {
+    if (sessionId !== this.sessionId) {
+      return;
+    }
+    if (status === 'completed') {
+      queueMicrotask(() => {
+        if (!this.disposed) {
+          this.maybeDispatchQueue();
+        }
+      });
+      return;
+    }
+    const paused = pauseAfterTerminal(this.queuedPrompts, status);
+    if (paused !== this.queuedPrompts) {
+      this.queuedPrompts = paused;
+      this.emitQueueState();
+    }
+  }
+
+  /** Bounded queue projection shared by `queue.state` and snapshots. */
+  private projectQueueState(): SessionQueueState {
+    return {
+      items: this.queuedPrompts.items.map((item) => ({
+        queueId: item.queueId,
+        text: item.text,
+        attachments: item.attachments.map(({ summary }) => ({
+          kind: summary.kind,
+          name: summary.name,
+          sizeBytes: summary.sizeBytes,
+        })),
+      })),
+      paused: this.queuedPrompts.paused,
+    };
+  }
+
+  private emitQueueState(): void {
+    if (this.sessionId === null) {
+      return;
+    }
+    const { items, paused } = this.projectQueueState();
+    this.emit({
+      type: 'queue.state',
+      sessionId: this.sessionId,
+      items,
+      paused,
+    });
+  }
+
+  /**
+   * Queue lifetime is bound to the session line
+   * (queued-messages-design.md §4.5): any rebind — select, new
+   * session, fork, compact, edit-resend adoption, workspace change —
+   * discards the queued prompts with a visible info diagnostic.
+   */
+  private discardQueuedPrompts(): void {
+    const count = this.queuedPrompts.items.length;
+    if (count === 0) {
+      return;
+    }
+    this.queuedPrompts = clearPrompts();
+    this.recordHost({
+      level: 'info',
+      name: 'host.queue.discarded',
+      attributes: { count },
+    });
+    if (this.sessionId !== null) {
+      this.emit({
+        type: 'runtime.diagnostic',
+        sessionId: this.sessionId,
+        turnId: null,
+        severity: 'info',
+        code: 'queued-messages-discarded',
+        message:
+          count === 1
+            ? '1 queued message was discarded because the session changed.'
+            : `${count} queued messages were discarded because the session changed.`,
+      });
+      this.emitQueueState();
+    }
+  }
+
   private handleRewindInfo(sessionId: string, messageId: string): void {
     const runtime = this.runtime;
     if (
@@ -1791,6 +2138,16 @@ export class ChatController {
       this.emitSessionDiagnostic(
         'edit-resend-blocked',
         EDIT_RESEND_BLOCKED_MESSAGE,
+      );
+      this.emitEditResendRejected(sessionId, messageId, 'busy');
+      return;
+    }
+    // Edit-resend forks the session, which would silently discard the
+    // queue (design §4.6): make the user resolve the queue first.
+    if (this.queuedPrompts.items.length > 0) {
+      this.emitSessionDiagnostic(
+        'edit-resend-blocked',
+        EDIT_RESEND_QUEUE_BLOCKED_MESSAGE,
       );
       this.emitEditResendRejected(sessionId, messageId, 'busy');
       return;
@@ -6045,6 +6402,12 @@ export class ChatController {
         this.tokenUsage.lastTurn === null)
         ? {}
         : { tokenUsage: this.tokenUsage }),
+      // Omitted while empty: an absent field and an empty queue are
+      // the same state on the webview side.
+      ...(this.sessionId === null ||
+      this.queuedPrompts.items.length === 0
+        ? {}
+        : { queue: this.projectQueueState() }),
       // Lets the webview rebase absolute transcript paths (the
       // path-link Preview entry); omitted without a usable workspace
       // so rebase-dependent affordances fail closed.
@@ -6088,6 +6451,7 @@ export class ChatController {
     ) {
       this.flushTurnIo();
       this.diagnostics?.endTurnScope?.();
+      this.settleQueueAfterTurn(sessionId, status);
     }
   }
 
@@ -6721,6 +7085,9 @@ export class ChatController {
     this.context = { status: 'loading', value: null };
     this.modelCatalog = { status: 'loading', items: [] };
     this.clearPendingAttachments();
+    // Runs while sessionId still names the old session, so the
+    // discard diagnostic lands on the session that owned the queue.
+    this.discardQueuedPrompts();
     // Discard-on-close: any session rebind abandons the hidden fork.
     this.btwSideChat?.reset();
   }
