@@ -113,25 +113,22 @@ describe('WorkingBadge', () => {
     expect(container.querySelector('.dvx-working-popup')).toBeNull();
   });
 
-  it('disables Stop All outside an active turn with an honest note', () => {
+  it('renders no stop control at all outside an active turn', () => {
     // Probed 2026-08-12: out of turn, session.interrupt() does not
-    // cancel a background child, so no fake control is offered.
-    const onStopAll = vi.fn();
+    // cancel a background child. Unstoppable work gets no control —
+    // not a disabled one (user decision 2026-08-12); the rows just
+    // show their state.
     const { container } = render(
       <WorkingBadge
         rows={makeRows(1)}
         turnActive={false}
-        onStopAll={onStopAll}
+        onStopAll={() => {}}
       />,
     );
     fireEvent.click(container.querySelector('.dvx-working-badge')!);
-    const stop = container.querySelector('.dvx-working-stop-all');
-    expect(stop?.hasAttribute('disabled')).toBe(true);
-    fireEvent.click(stop!);
-    expect(onStopAll).not.toHaveBeenCalled();
-    expect(
-      container.querySelector('.dvx-working-popup-note')?.textContent,
-    ).toContain('Running in background');
+    expect(container.querySelector('.dvx-working-popup')).not.toBeNull();
+    expect(container.querySelector('.dvx-working-stop-all')).toBeNull();
+    expect(container.querySelector('.dvx-working-popup-note')).toBeNull();
   });
 
   it('offers no per-row stop button or View entry in this slice', () => {

@@ -18,9 +18,11 @@ import {
  * Stop All reuses the existing turn-stop channel and therefore only
  * works while a turn is active. Out of turn there is no kill switch:
  * `session.interrupt()` resolves but demonstrably does not cancel a
- * background child (probe-zombie-subagent.out.json, phase B), so the
- * button disables with an honest note instead of faking a control.
- * Per-row stop buttons are omitted for the same reason.
+ * background child (probe-zombie-subagent.out.json, phase B), so no
+ * stop control renders at all — the rows just show their state
+ * (user decision 2026-08-12: unstoppable work gets no control, not
+ * a disabled one). Per-row stop buttons are omitted for the same
+ * reason.
  */
 export function WorkingBadge({
   rows,
@@ -89,17 +91,18 @@ export function WorkingBadge({
               <span className="dvx-working-popup-title">
                 {rows.length} Working
               </span>
-              <button
-                type="button"
-                className="dvx-working-stop-all"
-                disabled={!turnActive}
-                onClick={() => {
-                  onStopAll();
-                  setOpen(false);
-                }}
-              >
-                Stop All
-              </button>
+              {turnActive ? (
+                <button
+                  type="button"
+                  className="dvx-working-stop-all"
+                  onClick={() => {
+                    onStopAll();
+                    setOpen(false);
+                  }}
+                >
+                  Stop All
+                </button>
+              ) : null}
             </div>
             <ul className="dvx-working-list">
               {rows.map((row) => (
@@ -135,11 +138,6 @@ export function WorkingBadge({
                 </li>
               ))}
             </ul>
-            {turnActive ? null : (
-              <div className="dvx-working-popup-note">
-                Running in background — cannot be stopped from here.
-              </div>
-            )}
           </ComposerPopup>
         ) : null}
         <button
