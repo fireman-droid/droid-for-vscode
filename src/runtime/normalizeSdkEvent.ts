@@ -23,6 +23,7 @@ import {
 } from '../shared/toolOutput';
 import { base64ByteLength } from '../shared/transcriptLimits';
 import { readTokenUsageBreakdown } from '../shared/tokenUsage';
+import { readTaskDelegation } from './subagentSummary';
 import { extractToolBackgroundHint } from './toolBackgroundHint';
 import { extractToolDetail } from './toolDetail';
 import {
@@ -426,6 +427,7 @@ function withToolInputContext(
     activity.toolName,
     input,
   );
+  const subagent = readTaskDelegation(activity.toolName, input);
   return {
     ...activity,
     ...(filePaths.length === 0 ? {} : { filePath: filePaths[0] }),
@@ -434,6 +436,7 @@ function withToolInputContext(
       ? {}
       : { detailKind: detail.kind, detail: detail.text }),
     ...(backgroundHint === undefined ? {} : { backgroundHint }),
+    ...(subagent === null ? {} : { subagent }),
   };
 }
 

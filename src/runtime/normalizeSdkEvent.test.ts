@@ -268,6 +268,50 @@ describe('normalizeSdkEvent', () => {
     ).not.toHaveProperty('errorText');
   });
 
+  it('surfaces the Task delegation identity from the tool-start input', () => {
+    // The child_session_available notification arrives ~40s after
+    // tool_call on the process transport (probed 2026-08-13), so the
+    // delegation identity must come from the Task input immediately.
+    const delegated = normalizeSdkEvent(
+      sdkEvent('tool_call', {
+        name: 'Task',
+        toolUseId: 'task-1',
+        input: {
+          subagent_type: 'explore',
+          description: 'Survey the auth module',
+          prompt: 'sensitive delegated prompt body',
+        },
+      }),
+    );
+    expect(delegated).toMatchObject({
+      type: 'tool-start',
+      toolName: 'Task',
+      subagent: {
+        type: 'explore',
+        description: 'Survey the auth module',
+      },
+    });
+    // Identity only — lifecycle status stays notification authority,
+    // and the prompt body never crosses the bridge.
+    expect(
+      (delegated as { subagent: { status?: string } }).subagent,
+    ).not.toHaveProperty('status');
+    expect(JSON.stringify(delegated)).not.toContain(
+      'sensitive delegated prompt body',
+    );
+
+    // Non-Task tools ignore delegation-shaped inputs.
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_call', {
+          name: 'Read',
+          toolUseId: 'read-1',
+          input: { subagent_type: 'explore', description: 'x' },
+        }),
+      ),
+    ).not.toHaveProperty('subagent');
+  });
+
   it('reads the execute fireAndForget flag fail-soft', () => {
     // Strong signal: the CLI backgrounded the command (probed on
     // CLI 0.193.0; see artifacts/probe-fire-and-forget-conclusions.md).
