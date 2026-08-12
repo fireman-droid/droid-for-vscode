@@ -399,6 +399,26 @@ export interface FileOpenDiffMessage {
   readonly path: string;
 }
 
+/**
+ * File extensions eligible for the sandboxed prototype preview panel.
+ * Only self-contained HTML documents are previewable; build-dependent
+ * sources (.tsx/.jsx/.vue) are deliberately excluded so the UI never
+ * offers a preview it cannot render.
+ */
+export const PREVIEWABLE_FILE_EXTENSIONS = ['.html', '.htm'] as const;
+
+/**
+ * Asks the host to open the sandboxed prototype preview panel for a
+ * workspace-relative `.html`/`.htm` file that a tool activity or turn
+ * changes summary reported. The host re-validates containment and the
+ * extension whitelist before rendering.
+ */
+export interface FilePreviewMessage {
+  readonly type: 'file.preview';
+  readonly sessionId: string;
+  readonly path: string;
+}
+
 /** Longest accepted path in a `workspace.openPath` request. */
 export const MAX_OPEN_PATH_LENGTH = 1024;
 /** Largest accepted 1-based line or column in an open request. */
@@ -573,6 +593,20 @@ export interface WorkspaceSearchFilesMessage {
   readonly query: string;
 }
 
+/** Longest accepted local image path in a markdown reference. */
+export const MAX_IMAGE_PATH_LENGTH = 1024;
+
+/**
+ * Asks the host to read a workspace-local image referenced by
+ * transcript markdown so the webview can display it. The reply is a
+ * `workspace.imageData` message keyed by the same path.
+ */
+export interface WorkspaceReadImageMessage {
+  readonly type: 'workspace.readImage';
+  readonly sessionId: string;
+  readonly path: string;
+}
+
 /**
  * Stages one workspace file, named by its validated relative path, as
  * a pending attachment for the next prompt.
@@ -709,6 +743,7 @@ export type WebviewToHostMessage =
   | SessionCompactMessage
   | SessionForkMessage
   | FileOpenDiffMessage
+  | FilePreviewMessage
   | WorkspaceOpenPathMessage
   | SkillsRefreshMessage
   | SkillToggleMessage
@@ -731,6 +766,7 @@ export type WebviewToHostMessage =
   | EditStageBeginMessage
   | EditStageCancelMessage
   | WorkspaceSearchFilesMessage
+  | WorkspaceReadImageMessage
   | RewindInfoRequestMessage
   | SessionSettingUpdateMessage;
 
@@ -1381,6 +1417,31 @@ export interface WorkspaceFilesMessage {
   readonly files: readonly string[];
 }
 
+export const WORKSPACE_IMAGE_STATUSES = [
+  'ok',
+  'not-found',
+  'too-large',
+  'unsupported',
+] as const;
+export type WorkspaceImageStatus =
+  (typeof WORKSPACE_IMAGE_STATUSES)[number];
+
+/**
+ * Bytes for one `workspace.readImage` request. `data` is the pure
+ * base64 payload (no data-URI prefix) and is empty unless `status` is
+ * `ok`; non-ok statuses let the markdown renderer degrade to a
+ * clickable path link with an accurate reason.
+ */
+export interface WorkspaceImageDataMessage {
+  readonly type: 'workspace.imageData';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly path: string;
+  readonly status: WorkspaceImageStatus;
+  readonly mediaType: ImageMediaType | null;
+  readonly data: string;
+}
+
 export interface AssistantDeltaMessage {
   readonly type: 'assistant.delta';
   readonly sequence: number;
@@ -1565,6 +1626,7 @@ export type HostToWebviewMessage =
   | SessionEditAttachmentsStateMessage
   | TurnEditResendRejectedMessage
   | WorkspaceFilesMessage
+  | WorkspaceImageDataMessage
   | RewindInfoStateMessage
   | AssistantDeltaMessage
   | ThinkingDeltaMessage

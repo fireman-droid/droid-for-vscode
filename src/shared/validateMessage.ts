@@ -21,6 +21,7 @@ import {
   SESSION_INTERACTION_MODES,
   SESSION_REASONING_EFFORTS,
   MAX_FILE_SEARCH_QUERY_LENGTH,
+  MAX_IMAGE_PATH_LENGTH,
   MAX_OPEN_PATH_LENGTH,
   MAX_OPEN_PATH_POSITION,
   MAX_SESSION_SEARCH_QUERY_LENGTH,
@@ -45,6 +46,8 @@ import {
   type AttachmentPickMessage,
   type AttachmentRemoveMessage,
   type FileOpenDiffMessage,
+  type FilePreviewMessage,
+  PREVIEWABLE_FILE_EXTENSIONS,
   type McpRefreshMessage,
   type McpServerAddMessage,
   type McpServerAuthenticateMessage,
@@ -80,6 +83,7 @@ import {
   type WebviewReadyMessage,
   type WebviewToHostMessage,
   type WorkspaceOpenPathMessage,
+  type WorkspaceReadImageMessage,
   type WorkspaceSearchFilesMessage,
 } from './bridgeMessages';
 import {
@@ -142,6 +146,8 @@ export function parseWebviewMessage(
         return parseSessionFork(value);
       case 'file.openDiff':
         return parseFileOpenDiff(value);
+      case 'file.preview':
+        return parseFilePreview(value);
       case 'workspace.openPath':
         return parseWorkspaceOpenPath(value);
       case 'skills.refresh':
@@ -186,6 +192,8 @@ export function parseWebviewMessage(
         return parseEditStageCancel(value);
       case 'workspace.searchFiles':
         return parseWorkspaceSearchFiles(value);
+      case 'workspace.readImage':
+        return parseWorkspaceReadImage(value);
       case 'session.setting.update':
         return parseSessionSettingUpdate(value);
       default:
@@ -700,6 +708,39 @@ export function isSafeWorkspaceRelativePath(
     .every((segment) => segment.length > 0 && segment !== '..');
 }
 
+/**
+ * True when a workspace-relative path names a file the sandboxed
+ * prototype preview can render. Both sides use this one predicate: the
+ * webview to decide whether a Preview chip appears, the bridge parser
+ * and the host to reject `file.preview` requests for anything else.
+ */
+export function isPreviewableFilePath(value: string): boolean {
+  const lower = value.toLowerCase();
+  return PREVIEWABLE_FILE_EXTENSIONS.some(
+    (extension) =>
+      lower.endsWith(extension) && lower.length > extension.length,
+  );
+}
+
+function parseFilePreview(
+  value: UnknownRecord,
+): FilePreviewMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'path']) ||
+    !isId(value.sessionId) ||
+    !isSafeWorkspaceRelativePath(value.path) ||
+    !isPreviewableFilePath(value.path)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'file.preview',
+    sessionId: value.sessionId,
+    path: value.path,
+  };
+}
+
 function parseSkillsRefresh(
   value: UnknownRecord,
 ): SkillsRefreshMessage | undefined {
@@ -1183,6 +1224,27 @@ function parseWorkspaceSearchFiles(
     sessionId: value.sessionId,
     requestId: value.requestId,
     query: value.query,
+  };
+}
+
+function parseWorkspaceReadImage(
+  value: UnknownRecord,
+): WorkspaceReadImageMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'path']) ||
+    !isId(value.sessionId) ||
+    typeof value.path !== 'string' ||
+    value.path.length === 0 ||
+    value.path.length > MAX_IMAGE_PATH_LENGTH ||
+    /[\u0000-\u001f\u007f]/.test(value.path)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'workspace.readImage',
+    sessionId: value.sessionId,
+    path: value.path,
   };
 }
 
