@@ -1036,6 +1036,7 @@ export function App(): React.JSX.Element {
           settingUpdatesDisabled={hasInteraction}
           settings={state.settings}
           context={state.context}
+          tokenUsage={state.tokenUsage}
           modelCatalog={state.modelCatalog}
           skills={state.skills}
           mcp={state.mcp}

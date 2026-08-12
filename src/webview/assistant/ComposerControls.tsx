@@ -24,6 +24,10 @@ import type {
   SessionSkillsState,
   SkillSummary,
 } from '../../shared/bridgeMessages';
+import type {
+  SessionTokenUsageState,
+  TokenUsageBreakdown,
+} from '../../shared/tokenUsage';
 
 type OpenPanel = 'settings' | 'context' | 'model' | 'mode' | null;
 type SettingsView = 'root' | 'mode' | 'autonomy' | 'skills' | 'mcp';
@@ -55,6 +59,12 @@ export interface McpServerAddParams {
 interface ComposerControlsProps {
   readonly settings: SessionSettingsState;
   readonly context: SessionContextState;
+  /**
+   * Session/turn token breakdown for the context popover. Optional:
+   * the edit card omits the context surface entirely, and when both
+   * scopes are null the popover section does not render (fail quiet).
+   */
+  readonly tokenUsage?: SessionTokenUsageState;
   readonly modelCatalog: ModelCatalogState;
   readonly skills: SkillsPanelState;
   readonly mcp: McpPanelState;
@@ -162,6 +172,7 @@ const AUTONOMY_OPTIONS: readonly {
 export function ComposerControls({
   settings,
   context,
+  tokenUsage,
   modelCatalog,
   skills,
   mcp,
@@ -381,6 +392,7 @@ export function ComposerControls({
         <ContextPopover
           id={`${panelId}-context`}
           context={context}
+          tokenUsage={tokenUsage}
           disabled={disabled || context.status === 'loading'}
           compactPending={compactPending}
           onRefresh={onContextRefresh}
@@ -1765,6 +1777,7 @@ function PencilIcon(): React.JSX.Element {
 function ContextPopover({
   id,
   context,
+  tokenUsage,
   disabled,
   compactPending,
   onRefresh,
@@ -1772,6 +1785,7 @@ function ContextPopover({
 }: {
   readonly id: string;
   readonly context: SessionContextState;
+  readonly tokenUsage: SessionTokenUsageState | undefined;
   readonly disabled: boolean;
   readonly compactPending: boolean;
   readonly onRefresh: () => void;
@@ -1809,6 +1823,9 @@ function ContextPopover({
           {context.message}
         </p>
       ) : null}
+      {tokenUsage === undefined ? null : (
+        <TokenUsageSection usage={tokenUsage} />
+      )}
       <div className="dvx-context-compact">
         <button
           type="button"
@@ -1904,6 +1921,94 @@ function Stat({
       <dd>{value}</dd>
     </div>
   );
+}
+
+const TOKEN_USAGE_ROWS: readonly {
+  readonly field: Exclude<keyof TokenUsageBreakdown, 'factoryCredits'>;
+  readonly label: string;
+}[] = [
+  { field: 'inputTokens', label: 'Input' },
+  { field: 'outputTokens', label: 'Output' },
+  { field: 'cacheReadTokens', label: 'Cache read' },
+  { field: 'cacheCreationTokens', label: 'Cache write' },
+  { field: 'thinkingTokens', label: 'Thinking' },
+];
+
+/**
+ * SDK-reported token breakdown as a quiet two-scope ledger (see
+ * docs/product/token-usage-design.md). Only scopes the SDK actually
+ * reported become columns; before any usage arrives the section
+ * renders nothing at all. The SDK exposes no USD cost, so none is
+ * shown; the Credits row is the SDK's own `factoryCredits` field and
+ * appears only when a scope reports a positive value.
+ */
+function TokenUsageSection({
+  usage,
+}: {
+  readonly usage: SessionTokenUsageState;
+}): React.JSX.Element | null {
+  const columns = [
+    ...(usage.lastTurn === null
+      ? []
+      : [{ header: 'Last turn', breakdown: usage.lastTurn }]),
+    ...(usage.cumulative === null
+      ? []
+      : [{ header: 'Session', breakdown: usage.cumulative }]),
+  ];
+  if (columns.length === 0) {
+    return null;
+  }
+  const showCredits = columns.some(
+    ({ breakdown }) => (breakdown.factoryCredits ?? 0) > 0,
+  );
+  return (
+    <div className="dvx-token-usage">
+      <table className="dvx-token-usage-table">
+        <thead>
+          <tr>
+            <th scope="col">Token usage</th>
+            {columns.map(({ header }) => (
+              <th key={header} scope="col">
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {TOKEN_USAGE_ROWS.map(({ field, label }) => (
+            <tr key={field}>
+              <th scope="row">{label}</th>
+              {columns.map(({ header, breakdown }) => (
+                <td key={header}>{formatCount(breakdown[field])}</td>
+              ))}
+            </tr>
+          ))}
+          {showCredits ? (
+            <tr>
+              <th scope="row">Credits</th>
+              {columns.map(({ header, breakdown }) => (
+                <td key={header}>
+                  {breakdown.factoryCredits === undefined
+                    ? '—'
+                    : formatCredits(breakdown.factoryCredits)}
+                </td>
+              ))}
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+      {usage.lastTurn === null ? (
+        <p className="dvx-token-usage-note">
+          Per-turn detail appears after the next completed turn.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Factory credits may be fractional; token counts never are. */
+function formatCredits(value: number): string {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 3 });
 }
 
 function ModelPopover({

@@ -365,6 +365,64 @@ describe('assistantWebviewReducer', () => {
     expect(state.mission).toBeNull();
   });
 
+  it('tracks token usage for the active session and resets on switch', () => {
+    // Live values from artifacts/probe-token-usage.out.json.
+    const breakdown = {
+      inputTokens: 2565,
+      outputTokens: 81,
+      cacheReadTokens: 23552,
+      cacheCreationTokens: 0,
+      thinkingTokens: 62,
+    };
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    // A snapshot without the field means "no usage", not "keep".
+    expect(state.tokenUsage).toEqual({ cumulative: null, lastTurn: null });
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.tokenUsage',
+        sequence: 1,
+        sessionId: 'session-a',
+        tokenUsage: { cumulative: breakdown, lastTurn: null },
+      },
+    });
+    expect(state.tokenUsage).toEqual({
+      cumulative: breakdown,
+      lastTurn: null,
+    });
+
+    // Wrong-session updates advance the sequence but never leak in.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.tokenUsage',
+        sequence: 2,
+        sessionId: 'session-other',
+        tokenUsage: {
+          cumulative: { ...breakdown, inputTokens: 999999 },
+          lastTurn: null,
+        },
+      },
+    });
+    expect(state.sequence).toBe(2);
+    expect(state.tokenUsage.cumulative).toEqual(breakdown);
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'host.connection',
+        sequence: 3,
+        sessionId: 'session-b',
+        connection: { status: 'connecting' },
+      },
+    });
+    expect(state.tokenUsage).toEqual({ cumulative: null, lastTurn: null });
+  });
+
   it('upgrades a Task row with a subagent summary and settles it', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',

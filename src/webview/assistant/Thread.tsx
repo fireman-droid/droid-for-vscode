@@ -39,6 +39,7 @@ import {
   type SessionContextState,
   type SessionSettingsState,
 } from "../../shared/bridgeMessages";
+import type { SessionTokenUsageState } from "../../shared/tokenUsage";
 import { isPreviewableFilePath } from "../../shared/validateMessage";
 import type {
   McpAuthProgress,
@@ -180,6 +181,7 @@ interface DroidThreadProps {
   readonly settingUpdatesDisabled: boolean;
   readonly settings: SessionSettingsState;
   readonly context: SessionContextState;
+  readonly tokenUsage: SessionTokenUsageState;
   readonly modelCatalog: ModelCatalogState;
   readonly skills: SkillsPanelState;
   readonly mcp: McpPanelState;
@@ -270,6 +272,7 @@ export const DroidThread = memo(function DroidThread({
   settingUpdatesDisabled,
   settings,
   context,
+  tokenUsage,
   modelCatalog,
   skills,
   mcp,
@@ -637,6 +640,7 @@ export const DroidThread = memo(function DroidThread({
             settingUpdatesDisabled={settingUpdatesDisabled}
             settings={settings}
             context={context}
+            tokenUsage={tokenUsage}
             modelCatalog={modelCatalog}
             skills={skills}
             mcp={mcp}
@@ -1462,6 +1466,7 @@ function Composer({
   settingUpdatesDisabled,
   settings,
   context,
+  tokenUsage,
   modelCatalog,
   skills,
   mcp,
@@ -1505,6 +1510,7 @@ function Composer({
   readonly settingUpdatesDisabled: boolean;
   readonly settings: SessionSettingsState;
   readonly context: SessionContextState;
+  readonly tokenUsage: SessionTokenUsageState;
   readonly modelCatalog: ModelCatalogState;
   readonly skills: SkillsPanelState;
   readonly mcp: McpPanelState;
@@ -2190,6 +2196,7 @@ function Composer({
           <ComposerControls
             settings={settings}
             context={context}
+            tokenUsage={tokenUsage}
             modelCatalog={modelCatalog}
             skills={skills}
             mcp={mcp}

@@ -29,6 +29,10 @@ import {
   trimTranscriptToLimits,
 } from '../../shared/transcriptLimits';
 import { stableTranscriptId } from '../../shared/hostTranscriptState';
+import {
+  EMPTY_SESSION_TOKEN_USAGE,
+  type SessionTokenUsageState,
+} from '../../shared/tokenUsage';
 
 export interface AssistantTurn {
   readonly turnId: string;
@@ -160,6 +164,11 @@ export interface AssistantWebviewState {
    * decomposition role); null outside mission decompositions.
    */
   readonly mission: SessionMissionSummary | null;
+  /**
+   * Token-usage breakdown of the active session (cumulative totals +
+   * last completed turn); empty members until the host reports data.
+   */
+  readonly tokenUsage: SessionTokenUsageState;
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: Extract<
     HostToWebviewMessage,
@@ -212,6 +221,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   editResendRejection: null,
   worktreeCreateAvailable: false,
   mission: null,
+  tokenUsage: EMPTY_SESSION_TOKEN_USAGE,
   transcript: [],
   historyStatus: null,
   truncated: false,
@@ -346,6 +356,7 @@ export function assistantWebviewReducer(
             : null,
         worktreeCreateAvailable: event.worktreeCreateAvailable === true,
         mission: event.mission ?? null,
+        tokenUsage: event.tokenUsage ?? EMPTY_SESSION_TOKEN_USAGE,
         transcript: event.transcript,
         historyStatus: event.historyStatus,
         truncated: event.truncated,
@@ -371,6 +382,7 @@ export function assistantWebviewReducer(
           ? {
               turn: null,
               mission: null,
+              tokenUsage: EMPTY_SESSION_TOKEN_USAGE,
               transcript: [],
               historyStatus: null,
               truncated: false,
@@ -404,6 +416,14 @@ export function assistantWebviewReducer(
             ...state,
             sequence: event.sequence,
             context: event.context,
+          }
+        : advance(state, event.sequence);
+    case 'session.tokenUsage':
+      return event.sessionId === state.sessionId
+        ? {
+            ...state,
+            sequence: event.sequence,
+            tokenUsage: event.tokenUsage,
           }
         : advance(state, event.sequence);
     case 'session.model-catalog':

@@ -925,6 +925,151 @@ describe('ComposerControls', () => {
     expect(onCompact).not.toHaveBeenCalled();
   });
 
+  it('shows the SDK token breakdown for both scopes without inventing cost', async () => {
+    const user = userEvent.setup();
+    render(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        tokenUsage={{
+          // Live values from artifacts/probe-token-usage.out.json.
+          cumulative: {
+            inputTokens: 2565,
+            outputTokens: 81,
+            cacheReadTokens: 23552,
+            cacheCreationTokens: 0,
+            thinkingTokens: 62,
+          },
+          lastTurn: {
+            inputTokens: 1719,
+            outputTokens: 76,
+            cacheReadTokens: 11776,
+            cacheCreationTokens: 0,
+            thinkingTokens: 40,
+            factoryCredits: 0,
+          },
+        }}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByLabelText(/Context used 25 of 100/));
+    expect(
+      screen.getByRole('columnheader', { name: 'Last turn' }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole('columnheader', { name: 'Session' }),
+    ).toBeDefined();
+    const input = screen.getByRole('row', { name: /^Input/ });
+    expect(input.textContent).toContain('1,719');
+    expect(input.textContent).toContain('2,565');
+    // Zero credits reported: no Credits row, and never a money amount.
+    expect(screen.queryByRole('row', { name: /Credits/ })).toBeNull();
+    expect(screen.queryByText(/\$/)).toBeNull();
+    // Per-turn data exists, so no missing-detail note.
+    expect(screen.queryByText(/Per-turn detail/)).toBeNull();
+  });
+
+  it('marks history sessions as cumulative-only and surfaces credits', async () => {
+    const user = userEvent.setup();
+    render(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        tokenUsage={{
+          cumulative: {
+            inputTokens: 2565,
+            outputTokens: 81,
+            cacheReadTokens: 23552,
+            cacheCreationTokens: 0,
+            thinkingTokens: 62,
+            factoryCredits: 1.25,
+          },
+          lastTurn: null,
+        }}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByLabelText(/Context used 25 of 100/));
+    expect(
+      screen.queryByRole('columnheader', { name: 'Last turn' }),
+    ).toBeNull();
+    expect(
+      screen.getByRole('row', { name: /Credits/ }).textContent,
+    ).toContain('1.25');
+    expect(
+      screen.getByText('Per-turn detail appears after the next completed turn.'),
+    ).toBeDefined();
+  });
+
+  it('renders no token usage section before the SDK reports any', async () => {
+    const user = userEvent.setup();
+    render(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        tokenUsage={{ cumulative: null, lastTurn: null }}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByLabelText(/Context used 25 of 100/));
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.queryByText('Token usage')).toBeNull();
+  });
+
   it('omits the context ring entirely when showContext is off', () => {
     render(
       <ComposerControls

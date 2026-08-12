@@ -3474,6 +3474,59 @@ body {
   line-height: 20px;
 }
 
+/* Token-usage ledger: quiet per-turn/session breakdown sharing the
+   context popover's hairline and muted-label language. Tabular
+   numerals keep the columns readable without any chart chrome. */
+.dvx-token-usage {
+  padding: 10px 16px 2px;
+  border-top: 1px solid rgb(229 229 229 / 60%);
+}
+
+.dvx-token-usage-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dvx-token-usage-table th,
+.dvx-token-usage-table td {
+  padding: 2px 0;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+  text-align: right;
+}
+
+.dvx-token-usage-table thead th {
+  padding-bottom: 5px;
+  color: #a1a1a1;
+}
+
+.dvx-token-usage-table thead th:first-child {
+  color: #404040;
+  font-weight: 500;
+  text-align: left;
+}
+
+.dvx-token-usage-table th[scope="row"] {
+  color: #737373;
+  text-align: left;
+}
+
+.dvx-token-usage-table td {
+  min-width: 62px;
+  padding-left: 12px;
+  color: #525252;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+
+.dvx-token-usage-note {
+  margin: 7px 0 0;
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
 .dvx-model-popover {
   right: 10px;
   left: auto;
