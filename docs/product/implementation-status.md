@@ -2770,6 +2770,48 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最近记录的验证结果：
 
+- 大文件分解重构（2026-08-13 凌晨，`refactor-plan.md` 批次①–④全量
+  落地，31 个 commit：`c339cba`…`645eba6`，纯结构移动、行为零变化）：
+  **①** `styles.css` 7148 行拆为 `@import` 索引 + `styles/` 23 段
+  （字节级守恒比对全等），色彩 token 集中进 `styles/00-tokens.css`
+  且逐值相等（`scripts/styleAudit.mjs` headless-Chrome 计算样式
+  前后 diff 为空；唯一例外是 `html/body/#root` 处于 `.dvx-shell`
+  作用域外，按 theme 文档 §2.1 保持字面量）。**②**
+  `ChatController.ts` 8287→1122 行，拆出 `chat/` 14 模块
+  （internals/queue/mcp/capabilityPanels/attachments/settings/
+  workspaceActions/editResend/sessionRunning/subagentWatch/
+  recovery/sessionDirectory/runtimeLifecycle/turnFlow，自由函数 +
+  `ChatControllerInternals` 接口模式）；`ChatController.test.ts`
+  9125 行拆为共享 `controllerTestHarness.ts` + 10 个主题文件，
+  用例名集合守恒（157 个一个不少），套件耗时 27s→10s。**③**
+  `Thread.tsx` 4499→1020 行，拆出 `thread/` 9 模块（readers/
+  composerCommands/icons/commandCard/activityRows/transcriptRows/
+  Composer/UserMessage/AssistantMessage），Context 与滚动/粘性族
+  留根，`Thread.test.tsx` 直接改 import、不留重导出。**④** 去重：
+  `isSafeModelId` ×4、`isSafeDisplayName` ×2 合并入
+  `shared/validateMessage.ts`；`sanitizeSessionTitle` ×2 合并为
+  shared 单实现（调用方各自保留 200/256 信任边界上限传参）；删除
+  零引用的 `store.ts hasTurnContent`、`MAX_INTERACTION_TEXT_LENGTH`
+  别名；`MAX_SENT_ATTACHMENT_RETENTION_BYTES` 去 export。防回潮：
+  `scripts/checkFileBudgets.mjs` + `pnpm run lint:budgets` 上线
+  （TS/TSX 900、CSS 800、测试 2000 行；20 个存量超标文件按现行数
+  +2% 棘轮登记，只降不升），挂入 `package:prepare` 与 HANDOVER
+  完成门禁。**门禁**（全部在最终 HEAD 真实执行）：typecheck 三段
+  PASS、`vitest --maxWorkers=4` 全量 95 文件 / 1922 用例 PASS、
+  `pnpm run build` PASS、`lint:budgets` PASS。**冒烟**（build 后
+  跑 `artifacts/` 25 个无头脚本）：11 个 PASS（plan-anchor、
+  queue-bar、queued-bar、working-badge、command-card、
+  session-drawer、subagent、btw、message-polish、output-preview、
+  mermaid，截图已存 `artifacts/`，目检正常）；其余 14 个在重构前
+  基线 `dbe484d` 上重建实测**同样失败**（脚本过期，非重构回归，
+  已按"仅基线 PASS 才算门禁"规则排除）。verify:vsix 未跑（重构
+  窗口禁止 `vsce package`）。为后续波次留的接口位：深色主题——
+  全部颜色已收敛为 `00-tokens.css` 单文件 `--dvx-*` 变量（含
+  hljs 语法色），换肤即换 token 块；BYOK——模型目录/设置域已
+  隔离在 `chat/capabilityPanels.ts` + `chat/settings.ts`，模型
+  校验唯一实现在 `shared/validateMessage.ts`；Add to Chat——
+  附件域已隔离在 `chat/attachments.ts`（Host）与
+  `thread/Composer.tsx`（UI），staging 入口互不纠缠
 - Turn 运行中排队消息（2026-08-12 晚，V1 主线收官）：真机冒烟
   `artifacts/probe-queue-smoke.mjs`（真实 CLI 登录 + 生产
   `ChatController` + `FactoryDroidRuntime` process transport）全链
