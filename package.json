@@ -102,6 +102,7 @@
     "@factory/droid-sdk": "0.7.0",
     "@fontsource-variable/inter": "^5.3.0",
     "highlight.js": "^11.11.1",
+    "mermaid": "^11.16.1",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-markdown": "10.1.0",

@@ -326,6 +326,39 @@ Session ID / 创建与导出时间 / 工作区，并声明导出约定：Thinkin
 typecheck、shared+extension 485 项测试与 build；**本切片未打包
 安装，已提交待随下一批次包一起可见验证**。
 
+2026-08-12 下午追加 V2 切片「Mermaid 图渲染」：助手 Markdown 中的
+```` ```mermaid ```` 代码块渲染为图形。行为：流式期间保持代码块形态
+（不解析、不加载库），该消息回合完成并等 180ms 平滑排空后再渲染；
+历史回放直接出图、无动画；解析失败安静回退为普通代码块 + 一行细字
+提示（`.dvx-mermaid-note`）；图容器沿用卡片语言（1px 边框、圆角、
+软阴影），超宽时容器内横向滚动，不撑破阅读列；提供"View source /
+Hide source"细字切换。懒加载路线（关键决策）：Webview CSP 为
+nonce-only `script-src` + 无 `unsafe-inline` 的 `style-src`，原生动态
+`import()` 的 module chunk 无法带 nonce，会被 CSP 拦截，故 esbuild
+产出独立 IIFE 包 `dist/webview/mermaid.js`（3.3MB，minified），主包
+首次需要渲染时注入 `<script>` 并复制页面 nonce（`mermaidRenderer.ts`
+`createMermaidScript`），通过 `window.__dvxMermaid` 交接；mermaid SVG
+内嵌的 `<style>` 抽出后经 Constructable Stylesheets 采纳、行内
+`style=""` 经 CSSOM `cssText` 程序化重放（两者均豁免于 CSP）。主包
+首屏增量仅 3,442 字节（MermaidBlock 1,448 + mermaidRenderer 1,994，
+metafile 实测），`esbuild.mjs` 新增 `assertMermaidStaysLazy` 断言防止
+未来把 mermaid 静态打进主包。`securityLevel: 'strict'`、
+`startOnLoad: false`、警温色主题变量（base theme + `#f7f5f1` 节点填充
+等项目色板）。新增 `src/webview/mermaidGlobal.ts` /
+`src/webview/mermaidRuntime.ts` / `assistant/mermaidRenderer.ts`(+7 测)
+/ `assistant/MermaidBlock.tsx`(+6 测)，`MarkdownText.tsx` 经
+`componentsByLanguage` 接入（仅生产转录渲染器；`DroidMarkdownContent`
+预览保持普通代码块），`styles.css` 增 `.dvx-mermaid*` 卡片样式（已随
+早前批次提交）。门禁：webview 项目 tsc 干净；全量 vitest 1355 过 /
+3 失败（均为并行批次 protocolVersion 2→3 的既有断言滞后，与本切片
+无关；聚焦 13/13 过）；build 过（webview.js 898.8KB、mermaid.js
+3.3MB）；`artifacts/smoke-mermaid.mjs` headless Chrome 冒烟（生产等价
+严格 CSP）全过：回放两图直出无动画、失败块回退带细字提示、节点填充
+`#f7f5f1` 证明样式在无 `unsafe-inline` 下存活、流式中保持代码块且
+mermaid.js 未加载、完成后出图且脚本经 nonce 注入成功、浅色主题同样
+通过、图不超阅读列宽、无横向溢出。**本切片未打包安装，待随下一批次
+包一起可见验证**。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
@@ -980,6 +1013,9 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [x] 会话导出 Markdown（`DroidVisX: Export Session as Markdown`，
       Host 层 `sessionExporter.ts` 复用历史管线与凭据扫除；
       已提交待随包验证）
+- [x] Mermaid 图渲染（```mermaid 代码块流式完成后渲染为图，独立
+      3.3MB 懒加载 bundle 经 nonce 脚本注入，首屏仅 +3.4KB，
+      失败安静回退；已提交待随包验证）
 - [ ] 更新管理
 
 ## 当前安装包状态

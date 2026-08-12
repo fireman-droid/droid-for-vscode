@@ -60,6 +60,28 @@ const webviewResult = await build({
   logLevel: 'info',
 });
 
+// Separate lazily loaded bundle: the webview injects it on demand the
+// first time a completed ```mermaid block needs rendering (script tag
+// carrying the page nonce), keeping mermaid out of the first-screen
+// bundle. iife because the nonce-only CSP rules out module chunks.
+const mermaidResult = await build({
+  entryPoints: ['src/webview/mermaidRuntime.ts'],
+  outfile: 'dist/webview/mermaid.js',
+  bundle: true,
+  packages: 'bundle',
+  platform: 'browser',
+  format: 'iife',
+  target: 'es2022',
+  minify: true,
+  define: {
+    'process.env.NODE_ENV': '"production"',
+  },
+  sourcemap: false,
+  legalComments: 'none',
+  metafile: true,
+  logLevel: 'info',
+});
+
 assertExpectedExternals(extensionResult.metafile, {
   required: new Set(['vscode']),
   allowed: (path) =>
@@ -71,7 +93,31 @@ assertExpectedExternals(webviewResult.metafile, {
   required: new Set(),
   allowed: () => false,
 });
+assertExpectedExternals(mermaidResult.metafile, {
+  required: new Set(),
+  allowed: () => false,
+});
 assertNoForbiddenWebviewInputs(webviewResult.metafile);
+assertNoForbiddenWebviewInputs(mermaidResult.metafile);
+assertMermaidStaysLazy(webviewResult.metafile);
+
+// The whole point of the separate bundle is boot performance; fail the
+// build if a future refactor statically imports mermaid into the
+// first-screen bundle.
+function assertMermaidStaysLazy(metafile) {
+  for (const output of Object.values(metafile.outputs)) {
+    for (const [input, contribution] of Object.entries(output.inputs)) {
+      if (
+        contribution.bytesInOutput > 0 &&
+        input.replaceAll('\\', '/').includes('node_modules/mermaid/')
+      ) {
+        throw new Error(
+          'mermaid was bundled into the main webview bundle; it must stay in dist/webview/mermaid.js.',
+        );
+      }
+    }
+  }
+}
 
 function assertExpectedExternals(metafile, expectation) {
   const actual = new Set();

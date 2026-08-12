@@ -18,6 +18,7 @@ import remarkGfm from 'remark-gfm';
 
 import { MAX_IMAGE_PATH_LENGTH } from '../../shared/bridgeMessages';
 import { highlightCode } from './highlightCode';
+import { MermaidBlock } from './MermaidBlock';
 import { detectPathLink, type PathLink } from './pathLink';
 import type { LocalImageEntry } from './store';
 import { TranscriptImage } from './TranscriptImage';
@@ -408,6 +409,13 @@ const COMPONENTS = {
   img: MarkdownImage,
 };
 
+// ```mermaid fences render as diagrams once their message finishes
+// streaming (MermaidBlock lazy-loads the separate mermaid bundle).
+// Transcript-only: DroidMarkdownContent keeps plain code blocks.
+const COMPONENTS_BY_LANGUAGE = {
+  mermaid: { SyntaxHighlighter: MermaidBlock },
+};
+
 export const DroidMarkdownContent = memo(function DroidMarkdownContent({
   text,
   className = 'dvx-markdown',
@@ -436,6 +444,7 @@ export const DroidMarkdownText = memo(function DroidMarkdownText():
       className="dvx-markdown"
       remarkPlugins={REMARK_PLUGINS}
       components={COMPONENTS}
+      componentsByLanguage={COMPONENTS_BY_LANGUAGE}
       skipHtml
       urlTransform={markdownUrlTransform}
       smooth={TEXT_SMOOTH_OPTIONS}
