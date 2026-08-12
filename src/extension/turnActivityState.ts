@@ -5,6 +5,7 @@ import {
   MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
   type ToolActivityStatus,
   type ToolActivityUpdateKind,
+  type ToolBackgroundHint,
   type ToolDetailKind,
   type ToolSubagentSummary,
 } from '../shared/bridgeMessages';
@@ -44,6 +45,8 @@ export interface ToolActivityProjection {
   readonly errorMessage?: string;
   /** Trailing execute output; sticks so completion keeps the tail. */
   readonly outputTail?: string;
+  /** Sticks once seen: the CLI backgrounded this execute call. */
+  readonly backgroundHint?: ToolBackgroundHint;
   readonly subagent?: ToolSubagentSummary;
 }
 
@@ -60,6 +63,7 @@ interface ToolActivityEntry {
   readonly detail?: string;
   readonly errorMessage?: string;
   readonly outputTail?: string;
+  readonly backgroundHint?: ToolBackgroundHint;
   readonly subagent?: ToolSubagentSummary;
 }
 
@@ -213,12 +217,20 @@ export function projectToolEvent(
           existing.filePath === undefined;
         const addsDetail =
           event.detail !== undefined && existing.detail === undefined;
-        if (addsFilePath || addsDetail) {
+        // Monotonic: once a streamed input showed fireAndForget the
+        // row stays marked even if later events omit the field.
+        const addsBackgroundHint =
+          event.backgroundHint !== undefined &&
+          existing.backgroundHint === undefined;
+        if (addsFilePath || addsDetail || addsBackgroundHint) {
           const entry: ToolActivityEntry = {
             ...existing,
             ...(addsFilePath ? { filePath: event.filePath } : {}),
             ...(addsDetail
               ? { detailKind: event.detailKind, detail: event.detail }
+              : {}),
+            ...(addsBackgroundHint
+              ? { backgroundHint: event.backgroundHint }
               : {}),
           };
           const tools = new Map(state.tools);
@@ -275,6 +287,10 @@ export function projectToolEvent(
     ...(event.type === 'tool-start' && event.detail !== undefined
       ? { detailKind: event.detailKind, detail: event.detail }
       : {}),
+    ...(event.type === 'tool-start' &&
+    event.backgroundHint !== undefined
+      ? { backgroundHint: event.backgroundHint }
+      : {}),
     ...(event.type === 'tool-progress' &&
     event.outputTail !== undefined
       ? { outputTail: event.outputTail }
@@ -319,6 +335,9 @@ function projectEntry(
     ...(entry.outputTail === undefined
       ? {}
       : { outputTail: entry.outputTail }),
+    ...(entry.backgroundHint === undefined
+      ? {}
+      : { backgroundHint: entry.backgroundHint }),
     ...(entry.subagent === undefined
       ? {}
       : { subagent: entry.subagent }),
@@ -474,6 +493,9 @@ function projectEntryStandalone(
     ...(entry.outputTail === undefined
       ? {}
       : { outputTail: entry.outputTail }),
+    ...(entry.backgroundHint === undefined
+      ? {}
+      : { backgroundHint: entry.backgroundHint }),
     ...(entry.subagent === undefined
       ? {}
       : { subagent: entry.subagent }),

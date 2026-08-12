@@ -416,6 +416,9 @@ function projectToolActivity(
         : { detailKind: message.detailKind, detail }),
       ...(errorMessage === undefined ? {} : { errorMessage }),
       ...(outputTail === undefined ? {} : { outputTail }),
+      ...(message.backgroundHint === undefined
+        ? {}
+        : { backgroundHint: message.backgroundHint }),
       ...(message.subagent === undefined
         ? {}
         : { subagent: message.subagent }),
@@ -449,6 +452,9 @@ function projectToolActivity(
       : { detailKind: message.detailKind, detail }),
     ...(errorMessage === undefined ? {} : { errorMessage }),
     ...(outputTail === undefined ? {} : { outputTail }),
+    ...(message.backgroundHint === undefined
+      ? {}
+      : { backgroundHint: message.backgroundHint }),
     ...(message.subagent === undefined
       ? {}
       : { subagent: message.subagent }),

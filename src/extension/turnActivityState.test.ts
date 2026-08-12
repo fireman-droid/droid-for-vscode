@@ -249,6 +249,71 @@ describe('turnActivityState', () => {
     expect(repeated.projection).toBeNull();
   });
 
+  it('keeps the background hint monotonic across the tool lifecycle', () => {
+    // A backgrounded execute row carries the hint from the start and
+    // keeps it through completion even though tool-result events never
+    // repeat the input flag.
+    const started = projectToolEvent(
+      createTurnActivityState(),
+      {
+        type: 'tool-start',
+        toolName: 'Execute',
+        toolUseId: 'tool-bg',
+        action: 'Ran a local command',
+        backgroundHint: { fireAndForget: true },
+      },
+      1_000,
+    );
+    expect(started.projection).toMatchObject({
+      backgroundHint: { fireAndForget: true },
+    });
+    const completed = projectToolEvent(
+      started.state,
+      {
+        type: 'tool-result',
+        toolName: 'Execute',
+        toolUseId: 'tool-bg',
+        action: 'Ran a local command',
+        isError: false,
+      },
+      2_000,
+    );
+    expect(completed.projection).toMatchObject({
+      status: 'completed',
+      backgroundHint: { fireAndForget: true },
+    });
+
+    // A streamed delta may create the row before the accumulating
+    // input carries the flag; the later tool-start locks it in.
+    const bare = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'Execute',
+      toolUseId: 'tool-late-bg',
+      action: 'Ran a local command',
+    });
+    expect(bare.projection).not.toHaveProperty('backgroundHint');
+    const marked = projectToolEvent(bare.state, {
+      type: 'tool-start',
+      toolName: 'Execute',
+      toolUseId: 'tool-late-bg',
+      action: 'Ran a local command',
+      backgroundHint: { fireAndForget: true },
+    });
+    expect(marked.projection).toMatchObject({
+      status: 'running',
+      backgroundHint: { fireAndForget: true },
+    });
+    // Repeating the same hint projects nothing new.
+    const repeatedHint = projectToolEvent(marked.state, {
+      type: 'tool-start',
+      toolName: 'Execute',
+      toolUseId: 'tool-late-bg',
+      action: 'Ran a local command',
+      backgroundHint: { fireAndForget: true },
+    });
+    expect(repeatedHint.projection).toBeNull();
+  });
+
   it('collects unique tool file paths in first-observed order', () => {
     let state = createTurnActivityState();
     const events = [

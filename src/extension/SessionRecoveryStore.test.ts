@@ -463,6 +463,75 @@ describe('SessionRecoveryStore', () => {
     }
   });
 
+  it('round-trips background hints on persisted tool rows', async () => {
+    const persistence = memoryPersistence({
+      version: SESSION_RECOVERY_VERSION,
+      selectedSessionId: 'session-1',
+      sessions: [
+        storedSession('session-1', 1, [
+          {
+            id: 'tool-1',
+            kind: 'tool',
+            turnId: 'turn-1',
+            toolUseId: 'use-1',
+            toolName: 'Execute',
+            action: 'Ran a local command',
+            status: 'completed',
+            progressCount: 0,
+            latestUpdateKind: null,
+            backgroundHint: { fireAndForget: true },
+          },
+        ]),
+      ],
+    });
+    const store = new SessionRecoveryStore(persistence);
+
+    await store.load();
+
+    expect(store.readSession('session-1')).toMatchObject({
+      transcript: [
+        expect.objectContaining({
+          kind: 'tool',
+          backgroundHint: { fireAndForget: true },
+        }),
+      ],
+    });
+  });
+
+  it('rejects malformed persisted background hints', async () => {
+    for (const backgroundHint of [
+      {},
+      { fireAndForget: 'true' },
+      { fireAndForget: true, pid: 12468 },
+      'fireAndForget',
+      42,
+    ]) {
+      const persistence = memoryPersistence({
+        version: SESSION_RECOVERY_VERSION,
+        selectedSessionId: 'session-1',
+        sessions: [
+          storedSession('session-1', 1, [
+            {
+              id: 'tool-1',
+              kind: 'tool',
+              turnId: 'turn-1',
+              toolUseId: 'use-1',
+              toolName: 'Execute',
+              action: 'Ran a local command',
+              status: 'completed',
+              progressCount: 0,
+              latestUpdateKind: null,
+              backgroundHint,
+            } as unknown as SessionTranscriptItem,
+          ]),
+        ],
+      });
+      const store = new SessionRecoveryStore(persistence);
+      await store.load();
+      expect(store.readSession('session-1')).toBeUndefined();
+    }
+  });
+
   it('keeps live complete caches and downgrades empty complete caches only after restart', async () => {
     const persistence = memoryPersistence();
     const live = new SessionRecoveryStore(persistence);

@@ -30,6 +30,7 @@ import {
   type SentAttachmentSummary,
   type SessionHistoryStatus,
   type SessionTranscriptItem,
+  type ToolBackgroundHint,
   type ToolDetailKind,
   type ToolSubagentSummary,
 } from '../shared/bridgeMessages';
@@ -739,6 +740,7 @@ function parseTool(
       'detail',
       'errorMessage',
       'outputTail',
+      'backgroundHint',
       'subagent',
     ])
   ) {
@@ -758,6 +760,16 @@ function parseTool(
   const subagent =
     rawSubagent === undefined ? undefined : parseSubagent(rawSubagent);
   if (rawSubagent !== undefined && subagent === undefined) {
+    return undefined;
+  }
+  const rawBackgroundHint = legacy
+    ? undefined
+    : dataValue(value, 'backgroundHint');
+  const backgroundHint =
+    rawBackgroundHint === undefined
+      ? undefined
+      : parseBackgroundHint(rawBackgroundHint);
+  if (rawBackgroundHint !== undefined && backgroundHint === undefined) {
     return undefined;
   }
   const action = legacy
@@ -823,8 +835,25 @@ function parseTool(
         ...(errorMessage === undefined
           ? {}
           : { errorMessage: errorMessage as string }),
+        ...(backgroundHint === undefined ? {} : { backgroundHint }),
         ...(subagent === undefined ? {} : { subagent }),
       }
+    : undefined;
+}
+
+/** Mirrors the webview-side `parseToolBackgroundHint` rules. */
+function parseBackgroundHint(
+  value: unknown,
+): ToolBackgroundHint | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, ['fireAndForget'])
+  ) {
+    return undefined;
+  }
+  const fireAndForget = dataValue(value, 'fireAndForget');
+  return typeof fireAndForget === 'boolean'
+    ? { fireAndForget }
     : undefined;
 }
 
