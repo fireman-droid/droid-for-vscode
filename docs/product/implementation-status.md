@@ -301,9 +301,10 @@ resume 前必须拿到租约（被别的存活窗口占用则拒绝并提示）�
 `droidvisx.shutdownDaemon`（无 shutdown RPC，直接 taskkill 发现
 文件里的 pid 并删文件）。凭据仍只经 `readFactoryAccessCredential()`，
 发现文件/租约文件均不含 token。进程模式（默认）继续用 parent-pid
-私有 daemon 做归档/搜索 sidecar，不受影响。Webview 重连对账 UI
-（in-flight 回合的活流重接、面板内 pending 权限重弹）尚未接线——
-详见"验证状态"遗留说明。
+私有 daemon 做归档/搜索 sidecar，不受影响。重连对账 UI（A4 基础档：
+in-flight 回合的生成中占位 + 完成后历史重载替换 + pending 权限重弹）
+已于 2026-08-12 晚接线，见"验证状态"「活流重连基础档（A4）」条目；
+逐 token 续流仍未做（超出基础档，SDK 无断点续流通道）。
 
 同日追加长会话性能与卡死修复（用户反馈"页面一点击就卡死、无法
 发话、恢复对话慢"）：（1）Thinking 行展开从全局共享状态改为每行
@@ -1135,9 +1136,10 @@ Capability Probe。Capability Gate 本身仍未接入 Extension。以下能力�
       替换型操作前持租约，死 pid 可抢占）
 - [ ] daemon 失败时回退 Node subprocess（当前为配置级回退：切回
       `process` + Reload Window；无运行时自动回退）
-- [ ] Webview 重连对账 UI（Phase 3 §3.5：in-flight 回合活流重接与
-      面板内 pending 权限重弹尚未接线；daemon 侧存活已实证，见验证
-      状态遗留说明）
+- [x] Webview 重连对账基础档（A4，2026-08-12 晚：Reload 后 in-flight
+      回合生成中占位 + 完成后历史重载替换 + pending 权限重弹，生产
+      Host 栈两代进程真机 PASS，见验证状态「活流重连基础档（A4）」；
+      逐 token 续流不做，SDK 无断点续流通道）
 - [ ] Capability Gate 接入 Extension 的安全产品门控
 
 默认（`process`）生产执行链路只使用 Node SDK `ProcessTransport`，
@@ -1355,6 +1357,16 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- 2026-08-12 傍晚「三项体验补全」切片（回到底部箭头 / 待答空隙修复 /
+  代码块 Preview，§14）已全部提交（`8739fd2` `cae4890` `cd7a74f`
+  `3c8570f`，Bridge/CSS 部分随并行代理并入 `3e7da6b`/`62b6f1b`），
+  切片自身门禁全绿（typecheck 三段 + vitest 68 files/1586 +
+  build + headless 冒烟三组）。完成时 vsce/dist 锁空闲，但共享工作
+  树与 HEAD 均因另一代理进行中的 plugins/thinking-segment 契约改造
+  （`ChatController.ts` 已提交一半、`turnActivityState.ts`/
+  `bridgeMessages.ts` 依赖未提交）过不了 `package:prepare`，等待
+  25 分钟未释放，按约定**标注随下包**：下一个打包代理的 VSIX 将自动
+  携带本切片，可见验证随包补做
 - Cursor 已安装：`droidvisx.droidvisx@0.0.0`
 - `dist/droidvisx.vsix` 大小：636,573 字节（9 files, 621.65 KB）
 - VSIX 修改时间：2026-08-12T13:04（本地）
@@ -1571,6 +1583,58 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最近记录的验证结果：
 
+- 活流重连基础档 A4（2026-08-12 晚，V1 主线）：daemon 模式 Reload
+  后，绑定会话若有 in-flight 回合，重连即显示生成中占位、重弹
+  pending 权限，回合完成后以持久化历史整体替换占位；process 模式
+  行为不变。**前置探针**（`artifacts/probe-get-messages.mjs`，
+  真实登录 + 私有 daemon）：`sessions.getMessages` 的 -1 异常实为
+  客户端 Zod `limit ≤ 100` 拒绝（`limit:200` 必抛、默认/100 正常、
+  窗口锚定列表首端），门面还剥离 `hasMore`/`nextCursor`（裸
+  DaemonClient 可见），不适合长会话全量取数——占位替换取数走
+  既有 `FactorySessionHistoryLoader`；两代客户端实证 gen-a 死后
+  权限在 daemon 侧保持 pending，gen-b resume 时经 SDK 自动补投，
+  `listOpened().workingState` 阻塞期为
+  `waiting_for_tool_confirmation`。**Runtime 层**（提交 4bd30ad）：
+  `DroidRuntime` 新增可选 `readSessionWorkingState()`（投影
+  `idle`/`running`/`waiting-for-user`/`unknown`，未列出/未知态
+  fail closed 到 `unknown`）与 `interruptSession()`（无本地流式
+  回合也可打断 daemon 侧回合）；daemon 会话从 `listOpened()` 注
+  册表读原始态，process 会话读取即抛（行为不变）。**Host 层**
+  （提交 dd81d92）：`createInitializedRuntime` 对 resume 目标在
+  `initialize()` 前 `interactions.beginTurn(合成 recovery-<gen>
+  回合)`，SDK 补投的权限被持有而非被自动取消，失败路径逐一释放；
+  `activateRuntime` 尾部对 resume 目标启动 `reconcileDaemonTurn`：
+  探测工作态，`running`/`waiting-for-user`（或 `unknown` 且有补投
+  交互）投影为 `streaming` 恢复回合（快照公告，webview 复用既有
+  生成中指示语言与权限卡，零新 UI 元素），`replayPending` 重发
+  交互卡，500ms 轮询至 `idle` 后 `FactorySessionHistoryLoader`
+  重载历史、`reconcileSessionHistory` 对账覆盖占位并终态
+  completed（Stop 中按下则 interrupted）；连续 3 次 `unknown` 以
+  `recovered-turn-lost` fail closed；恢复回合的 Stop 走
+  `interruptSession()`。不做（基础档边界）：逐 token 续流、跨窗口
+  多客户端仲裁（租约现状）。**测试**：`ChatController.test.ts`
+  新增 5 个（占位出现与完成替换、权限补投重弹且可应答、Stop 走
+  interruptSession、process 读态抛错零变化、连续 unknown 判失败），
+  全文件 129/129；runtime 侧 `FactoryDroidRuntime.test.ts` +
+  `createDaemonDroidSession.test.ts` + 协调器共 80/80。**门禁**
+  （等两批并行代理落地后全仓绿再跑）：`pnpm run typecheck` 三个
+  tsconfig 全过；`pnpm test` 73 files / 1691 tests 全过；
+  `pnpm run build` 成功；`vsce package` 10 files / 1.55 MB，
+  SHA256 `AD096E127C4FC7042D6B5EE8349D7B18759DD3126600FF2BFC79B41DB80FB18D`，
+  `cursor --install-extension --force` 成功。**真机验收**
+  （`artifacts/probe-a4-reload-controller.mjs`，真实登录 + 真实
+  daemon + 生产 Host 栈两代进程）：gen-a 起回合、权限 pending 时
+  硬退（模拟 Reload 窗口死亡）；gen-b 用生产
+  `ChatController`+`FactoryDroidRuntime`+daemon 工厂+
+  `FactorySessionHistoryLoader` 走正常启动 resume，Bridge 消息流
+  实测 `connected:true → 占位快照 turn={recovery-1, streaming} →
+  interaction.request 权限重弹（turnId 与占位一致）→ 应答
+  proceed_once → turn.state completed → 终快照转录 5 项
+  （user/thinking/tool/assistant）`，**VERDICT: PASS**；探针只输出
+  布尔/计数，token 仅经 `readFactoryAccessCredential()` 内存读取。
+  面板内的字面 `Developer: Reload Window` 手动复核留待用户（代理
+  无法在不杀死自身会话的情况下重载本窗口；webview 占位/权限卡
+  渲染路径为既有行为，有 App/store 单测覆盖）。
 - Tab 切换驻留（2026-08-12 下午，续启动/切换性能批次）：
   **根因**——`extension.ts` 的 `registerWebviewViewProvider` 未传
   options，VS Code 默认在视图隐藏时销毁 webview iframe、重新显示
