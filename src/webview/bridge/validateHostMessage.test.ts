@@ -22,6 +22,7 @@ import {
   MAX_SESSION_SEARCH_SNIPPET_LENGTH,
   MAX_SESSION_TITLE_LENGTH,
   MAX_SESSION_TRANSCRIPT_ITEMS,
+  MAX_SPEC_PLAN_LENGTH,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_NAME_LENGTH,
   MAX_TURN_TEXT_LENGTH,
@@ -2569,6 +2570,42 @@ describe('readHostMessage', () => {
     expect(readHostMessage(askUser)).toBeDefined();
   });
 
+  it('accepts an ExitSpecMode plan far beyond the generic detail cap', () => {
+    // Regression: plans over 32K used to be rejected here, which the
+    // host surfaced as a silent cancellation of the whole approval.
+    const plan = '# Plan\n'.repeat(1 + MAX_INTERACTION_DETAIL_LENGTH / 7);
+    expect(plan.length).toBeGreaterThan(MAX_INTERACTION_DETAIL_LENGTH);
+    expect(plan.length).toBeLessThanOrEqual(MAX_SPEC_PLAN_LENGTH);
+    const message = readHostMessage({
+      type: 'interaction.request',
+      sequence: 0,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      request: {
+        requestId: 'request-1',
+        kind: 'permission',
+        tools: [
+          {
+            toolUseId: 'tool-1',
+            toolName: 'ExitSpecMode',
+            confirmationKind: 'exit_spec_mode',
+            title: 'Ready to build',
+            detail: plan,
+          },
+        ],
+        options: [
+          {
+            label: 'Approve',
+            value: 'proceed_new_session',
+            requiresEditedSpec: false,
+          },
+        ],
+        editableSpecContent: plan,
+      },
+    });
+    expect(message).toBeDefined();
+  });
+
   it('rejects over-limit interaction arrays and strings', () => {
     const permissionTool = {
       toolUseId: 'tool-1',
@@ -2643,7 +2680,15 @@ describe('readHostMessage', () => {
       [
         {
           ...permissionTool,
+          // The generic detail cap applies to non-spec kinds only.
+          confirmationKind: 'exec',
           detail: 'd'.repeat(MAX_INTERACTION_DETAIL_LENGTH + 1),
+        },
+      ],
+      [
+        {
+          ...permissionTool,
+          detail: 'p'.repeat(MAX_SPEC_PLAN_LENGTH + 1),
         },
       ],
       [
@@ -2965,6 +3010,8 @@ function readySettings() {
       modelId: 'factory/gpt-5.6-sol',
       reasoningEffort: 'high' as const,
       autonomyLevel: 'medium' as const,
+      specModeModelId: null,
+      specModeReasoningEffort: null,
     },
   };
 }

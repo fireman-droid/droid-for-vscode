@@ -369,6 +369,30 @@ describe('parseWebviewMessage', () => {
       field: 'autonomyLevel',
       value: 'high',
     },
+    {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'specModeModelId',
+      value: 'model-2',
+    },
+    {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'specModeModelId',
+      value: null,
+    },
+    {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'specModeReasoningEffort',
+      value: 'low',
+    },
+    {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'specModeReasoningEffort',
+      value: null,
+    },
   ])('accepts $type', (message) => {
     expect(parseWebviewMessage(message)).toEqual(message);
     expect(isWebviewToHostMessage(message)).toBe(true);
@@ -1021,6 +1045,18 @@ describe('parseWebviewMessage', () => {
       sessionId: 'session-1',
       field: 'unknown',
       value: 'high',
+    },
+    {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'specModeModelId',
+      value: 42,
+    },
+    {
+      type: 'session.setting.update',
+      sessionId: 'session-1',
+      field: 'specModeReasoningEffort',
+      value: 'agi',
     },
   ])('rejects malformed input %#', (message) => {
     expect(parseWebviewMessage(message)).toBeUndefined();

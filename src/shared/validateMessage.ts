@@ -1233,6 +1233,25 @@ function parseSessionSettingUpdate(
             value: value.value,
           }
         : undefined;
+    case 'specModeModelId':
+      return value.value === null || isSafeModelId(value.value)
+        ? {
+            type: 'session.setting.update',
+            sessionId: value.sessionId,
+            field: 'specModeModelId',
+            value: value.value,
+          }
+        : undefined;
+    case 'specModeReasoningEffort':
+      return value.value === null ||
+        isEnumValue(value.value, SESSION_REASONING_EFFORTS)
+        ? {
+            type: 'session.setting.update',
+            sessionId: value.sessionId,
+            field: 'specModeReasoningEffort',
+            value: value.value,
+          }
+        : undefined;
     default:
       return undefined;
   }

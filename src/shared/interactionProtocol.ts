@@ -8,7 +8,14 @@ export const MAX_ASK_USER_QUESTION_LENGTH =
   MAX_INTERACTION_DETAIL_LENGTH;
 export const MAX_ASK_USER_OPTION_LENGTH = MAX_INTERACTION_DETAIL_LENGTH;
 export const MAX_ASK_USER_ANSWER_LENGTH = MAX_INTERACTION_DETAIL_LENGTH;
-export const MAX_EDITED_SPEC_LENGTH = MAX_INTERACTION_DETAIL_LENGTH;
+/**
+ * Dedicated cap for ExitSpecMode plan text: real spec documents are
+ * multi-chapter Markdown that regularly exceeds the generic 32K detail
+ * cap, and an over-limit plan must degrade visibly (truncation) rather
+ * than silently cancelling the whole approval.
+ */
+export const MAX_SPEC_PLAN_LENGTH = 262_144;
+export const MAX_EDITED_SPEC_LENGTH = MAX_SPEC_PLAN_LENGTH;
 export const MAX_PERMISSION_RISK_NOTE_LENGTH = 4_096;
 export const MAX_PERMISSION_OPTION_VALUE_LENGTH = 512;
 export const MAX_PERMISSION_TOOLS = 32;

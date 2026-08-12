@@ -10,6 +10,7 @@ import {
   MAX_BRIDGE_ID_LENGTH,
   MAX_EDITED_SPEC_LENGTH,
   MAX_INTERACTION_DETAIL_LENGTH,
+  MAX_SPEC_PLAN_LENGTH,
   MAX_INTERACTION_TITLE_LENGTH,
   MAX_MODEL_CATALOG_ITEMS,
   MAX_MODEL_DISPLAY_NAME_LENGTH,
@@ -998,8 +999,15 @@ function parsePermissionTool(
     ) ||
     !isPermissionConfirmationKind(value.confirmationKind) ||
     !isNonEmptyBoundedString(value.title, MAX_INTERACTION_TITLE_LENGTH) ||
+    // ExitSpecMode carries the full plan as its detail, which routinely
+    // exceeds the generic detail cap; it gets the dedicated plan cap.
     (value.detail !== undefined &&
-      !isBoundedString(value.detail, MAX_INTERACTION_DETAIL_LENGTH)) ||
+      !isBoundedString(
+        value.detail,
+        value.confirmationKind === 'exit_spec_mode'
+          ? MAX_SPEC_PLAN_LENGTH
+          : MAX_INTERACTION_DETAIL_LENGTH,
+      )) ||
     (value.riskNote !== undefined &&
       !isBoundedString(
         value.riskNote,
@@ -1184,11 +1192,17 @@ function parseConfirmedSettings(
       'modelId',
       'reasoningEffort',
       'autonomyLevel',
+      'specModeModelId',
+      'specModeReasoningEffort',
     ]) ||
     !isSessionInteractionMode(value.interactionMode) ||
     !isSafeModelId(value.modelId) ||
     !isSessionReasoningEffort(value.reasoningEffort) ||
-    !isSessionAutonomyLevel(value.autonomyLevel)
+    !isSessionAutonomyLevel(value.autonomyLevel) ||
+    (value.specModeModelId !== null &&
+      !isSafeModelId(value.specModeModelId)) ||
+    (value.specModeReasoningEffort !== null &&
+      !isSessionReasoningEffort(value.specModeReasoningEffort))
   ) {
     return undefined;
   }
@@ -1197,6 +1211,8 @@ function parseConfirmedSettings(
     modelId: value.modelId,
     reasoningEffort: value.reasoningEffort,
     autonomyLevel: value.autonomyLevel,
+    specModeModelId: value.specModeModelId,
+    specModeReasoningEffort: value.specModeReasoningEffort,
   };
 }
 

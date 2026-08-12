@@ -29,6 +29,7 @@ export {
   MAX_PERMISSION_RISK_NOTE_LENGTH,
   MAX_PERMISSION_TOOLS,
   MAX_PERMISSION_TOOL_NAME_LENGTH,
+  MAX_SPEC_PLAN_LENGTH,
   PERMISSION_CONFIRMATION_KINDS,
   type PermissionConfirmationKind,
 } from './interactionProtocol';
@@ -670,6 +671,20 @@ export type SessionSettingUpdateMessage =
       readonly sessionId: string;
       readonly field: 'autonomyLevel';
       readonly value: SessionAutonomyLevel;
+    }
+  | {
+      readonly type: 'session.setting.update';
+      readonly sessionId: string;
+      /** Model used while drafting in Spec mode; null resets to the session model. */
+      readonly field: 'specModeModelId';
+      readonly value: string | null;
+    }
+  | {
+      readonly type: 'session.setting.update';
+      readonly sessionId: string;
+      /** Reasoning effort while drafting in Spec mode; null resets to the model default. */
+      readonly field: 'specModeReasoningEffort';
+      readonly value: SessionReasoningEffort | null;
     };
 
 export type WebviewToHostMessage =
@@ -789,6 +804,10 @@ export interface ConfirmedSessionSettings {
   readonly modelId: string;
   readonly reasoningEffort: SessionReasoningEffort;
   readonly autonomyLevel: SessionAutonomyLevel;
+  /** Spec-mode drafting model; null when the session model is used. */
+  readonly specModeModelId: string | null;
+  /** Spec-mode reasoning effort; null when the model default is used. */
+  readonly specModeReasoningEffort: SessionReasoningEffort | null;
 }
 
 export type SessionSettingsState =
