@@ -6210,13 +6210,18 @@ body {
    scroll-to-bottom arrow) anchors to the footer's top edge and so
    stays above the pin however tall it grows. */
 
+/* Redesigned as its own "conversation state" layer (user report
+   batch 2 §3): a warm layered surface with a floatier shadow and a
+   wider gap so it never reads as part of the Composer card below. */
 .dvx-plan-pin {
   overflow: hidden;
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   border: 1px solid var(--dvx-border);
   border-radius: 12px;
-  background: var(--dvx-raised);
-  box-shadow: 0 1px 1.5px rgb(0 0 0 / 8%), 0 1px 1px rgb(0 0 0 / 6%);
+  background: linear-gradient(180deg, #fffefc, #fbf8f3);
+  box-shadow:
+    0 1px 2px rgb(31 24 16 / 5%),
+    0 10px 26px -18px rgb(31 24 16 / 28%);
   user-select: none;
   transition: opacity var(--dvx-duration-slower) ease;
 }
@@ -6238,13 +6243,13 @@ body {
   gap: 8px;
   width: 100%;
   min-width: 0;
-  padding: 7px 10px 7px 12px;
+  padding: 8px 10px 8px 12px;
   border: 0;
   background: none;
   cursor: pointer;
   color: var(--dvx-muted);
   font-size: 12px;
-  line-height: 18px;
+  line-height: 19px;
   text-align: left;
   transition: background var(--dvx-duration-instant) ease;
 }
@@ -6262,12 +6267,34 @@ body {
   font-weight: 400;
 }
 
-/* Expanded header reads as a quiet section label over the list. */
+/* Expanded header joins the card-label family (.dvx-btw-title). */
 .dvx-plan-pin-open .dvx-plan-pin-current {
-  color: var(--dvx-subtle);
-  font-size: 11px;
-  font-weight: 550;
-  letter-spacing: 0.01em;
+  color: var(--dvx-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+/* Quiet hairline progress track next to the fraction. */
+.dvx-plan-pin-progress {
+  flex: 0 0 36px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(38 33 27 / 8%);
+}
+
+.dvx-plan-pin-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--dvx-accent) 72%, #fff);
+  transition: width var(--dvx-duration-slower) var(--dvx-easing-out-strong);
+}
+
+.dvx-plan-pin-done .dvx-plan-pin-progress-fill {
+  background: var(--dvx-diff-add, #1a7f37);
 }
 
 .dvx-plan-pin-count {
@@ -6305,27 +6332,42 @@ body {
   transform: rotate(180deg);
 }
 
+/* The checklist stays mounted so both directions animate: the body
+   grid transitions 0fr↔1fr and the inner wrapper clips. */
+.dvx-plan-pin-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dvx-duration-slower)
+    var(--dvx-easing-out-strong);
+}
+
+.dvx-plan-pin-body[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.dvx-plan-pin-body-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .dvx-plan-pin-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
-  padding: 2px 12px 10px;
+  padding: 2px 6px 10px;
   list-style: none;
-  overflow: hidden;
-  animation:
-    dvx-plan-open var(--dvx-duration-slower)
-      var(--dvx-easing-out-strong),
-    dvx-entry-fade var(--dvx-duration-slow) ease-out;
 }
 
 .dvx-plan-pin-step {
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  padding: 3px 6px;
+  border-radius: 6px;
   color: var(--dvx-ink);
   font-size: 12.5px;
-  line-height: 18px;
+  line-height: 19px;
   animation: dvx-todo-fade-in var(--dvx-duration-slow) ease-out;
 }
 
@@ -6333,10 +6375,16 @@ body {
   flex: 0 0 auto;
   width: 12px;
   height: 12px;
-  margin-top: 3px;
+  margin-top: 3.5px;
   border-radius: 50%;
   border: 1.5px solid var(--dvx-border-strong);
   background: transparent;
+}
+
+/* The current step reads through placement, a warm dot and a faint
+   highlight — never through bold text. */
+.dvx-plan-pin-step-in_progress {
+  background: color-mix(in srgb, var(--dvx-accent) 6%, transparent);
 }
 
 .dvx-plan-pin-step-in_progress .dvx-plan-pin-marker {
@@ -6351,13 +6399,21 @@ body {
 }
 
 .dvx-plan-pin-step-in_progress .dvx-plan-pin-text {
-  font-weight: 550;
+  font-weight: 500;
+}
+
+/* Done steps recede on transparency alone — no strikethrough, which
+   turns CJK lines into visual noise (user decision, batch 2 §3). */
+.dvx-plan-pin-step-completed {
+  opacity: 0.62;
 }
 
 .dvx-plan-pin-step-completed .dvx-plan-pin-text {
   color: var(--dvx-muted);
-  text-decoration: line-through;
-  text-decoration-color: rgb(0 0 0 / 25%);
+}
+
+.dvx-plan-pin-step-completed .dvx-plan-pin-check {
+  color: var(--dvx-subtle);
 }
 
 .dvx-plan-pin-text {
@@ -6374,18 +6430,19 @@ body {
 }
 
 .dvx-plan-pin-step .dvx-plan-pin-check {
-  margin-top: 3px;
+  margin-top: 3.5px;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .dvx-plan-pin,
   .dvx-plan-pin-toggle,
-  .dvx-plan-pin-chevron {
+  .dvx-plan-pin-chevron,
+  .dvx-plan-pin-body,
+  .dvx-plan-pin-progress-fill {
     transition: none;
   }
 
   .dvx-anim-live .dvx-plan-pin,
-  .dvx-plan-pin-list,
   .dvx-plan-pin-step,
   .dvx-plan-pin-dot,
   .dvx-plan-pin-step-in_progress .dvx-plan-pin-marker {

@@ -51,6 +51,13 @@ function toggle(): HTMLElement {
   return screen.getByRole('button', { name: /Task plan/ });
 }
 
+/** The checklist stays mounted for the collapse animation; visibility
+ * is carried by the body's open state. */
+function checklistOpen(): boolean {
+  const body = document.querySelector('.dvx-plan-pin-body');
+  return body?.getAttribute('data-open') === 'true';
+}
+
 describe('TaskPlanPin', () => {
   it('renders nothing without a plan', () => {
     const { container } = render(<TaskPlanPin pin={null} />);
@@ -63,7 +70,7 @@ describe('TaskPlanPin', () => {
     expect(bar.getAttribute('aria-expanded')).toBe('false');
     expect(bar.textContent).toContain('Wire the selector');
     expect(bar.textContent).toContain('1/3');
-    expect(document.querySelector('.dvx-plan-pin-list')).toBeNull();
+    expect(checklistOpen()).toBe(false);
   });
 
   it('expands to the full checklist and collapses on a second click', () => {
@@ -80,7 +87,7 @@ describe('TaskPlanPin', () => {
     expect(steps[1]?.className).toContain('dvx-plan-pin-step-in_progress');
     expect(steps[2]?.className).toContain('dvx-plan-pin-step-pending');
     fireEvent.click(toggle());
-    expect(document.querySelector('.dvx-plan-pin-list')).toBeNull();
+    expect(checklistOpen()).toBe(false);
   });
 
   it('collapses on a pointer press outside and on Escape', () => {
@@ -92,17 +99,17 @@ describe('TaskPlanPin', () => {
     );
     fireEvent.click(toggle());
     fireEvent.pointerDown(screen.getByRole('button', { name: 'outside' }));
-    expect(document.querySelector('.dvx-plan-pin-list')).toBeNull();
+    expect(checklistOpen()).toBe(false);
     fireEvent.click(toggle());
     fireEvent.keyDown(document.body, { key: 'Escape' });
-    expect(document.querySelector('.dvx-plan-pin-list')).toBeNull();
+    expect(checklistOpen()).toBe(false);
   });
 
   it('stays open on a pointer press inside the card', () => {
     render(<TaskPlanPin pin={makePin()} />);
     fireEvent.click(toggle());
     fireEvent.pointerDown(toggle());
-    expect(document.querySelector('.dvx-plan-pin-list')).not.toBeNull();
+    expect(checklistOpen()).toBe(true);
   });
 
   it('follows plan updates in place', () => {
@@ -145,7 +152,7 @@ describe('TaskPlanPin', () => {
     const { rerender } = render(<TaskPlanPin pin={makePin()} />);
     fireEvent.click(toggle());
     rerender(<TaskPlanPin pin={donePin()} />);
-    expect(document.querySelector('.dvx-plan-pin-list')).toBeNull();
+    expect(checklistOpen()).toBe(false);
   });
 
   it('never mounts a plan that was already finished (history replay)', () => {
@@ -177,7 +184,7 @@ describe('TaskPlanPin', () => {
     );
     const bar = toggle();
     expect(bar.getAttribute('aria-expanded')).toBe('false');
-    expect(document.querySelector('.dvx-plan-pin-list')).toBeNull();
+    expect(checklistOpen()).toBe(false);
   });
 
   it('fades out a finish that arrives as a fresh todowrite call', () => {

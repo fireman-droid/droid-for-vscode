@@ -111,6 +111,10 @@ export function TaskPlanPin({
   const headline = pin.allCompleted
     ? 'Plan complete'
     : (pin.currentText ?? 'Task plan');
+  const progressPercent =
+    pin.totalCount === 0
+      ? 0
+      : Math.round((pin.completedCount / pin.totalCount) * 100);
   return (
     <div
       ref={containerRef}
@@ -133,28 +137,43 @@ export function TaskPlanPin({
         <span className="dvx-plan-pin-current">
           {expanded ? 'Task plan' : headline}
         </span>
+        <span className="dvx-plan-pin-progress" aria-hidden="true">
+          <span
+            className="dvx-plan-pin-progress-fill"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </span>
         <span className="dvx-plan-pin-count">
           {pin.completedCount}/{pin.totalCount}
         </span>
         <PinChevron />
       </button>
-      {expanded ? (
-        <ol className="dvx-plan-pin-list">
-          {pin.steps.map((step, index) => (
-            <li
-              key={index}
-              className={`dvx-plan-pin-step dvx-plan-pin-step-${step.status}`}
-            >
-              {step.status === 'completed' ? (
-                <PinCheckIcon />
-              ) : (
-                <span className="dvx-plan-pin-marker" aria-hidden="true" />
-              )}
-              <span className="dvx-plan-pin-text">{step.text}</span>
-            </li>
-          ))}
-        </ol>
-      ) : null}
+      {/* Always mounted so collapse can animate (grid-rows 0fr↔1fr);
+          aria-hidden + inert keep the closed checklist out of the
+          accessibility tree and tab order. */}
+      <div
+        className="dvx-plan-pin-body"
+        data-open={expanded ? 'true' : 'false'}
+        aria-hidden={!expanded}
+      >
+        <div className="dvx-plan-pin-body-inner">
+          <ol className="dvx-plan-pin-list">
+            {pin.steps.map((step, index) => (
+              <li
+                key={index}
+                className={`dvx-plan-pin-step dvx-plan-pin-step-${step.status}`}
+              >
+                {step.status === 'completed' ? (
+                  <PinCheckIcon />
+                ) : (
+                  <span className="dvx-plan-pin-marker" aria-hidden="true" />
+                )}
+                <span className="dvx-plan-pin-text">{step.text}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
     </div>
   );
 }
