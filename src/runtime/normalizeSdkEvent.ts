@@ -23,6 +23,7 @@ import {
 } from '../shared/toolOutput';
 import { base64ByteLength } from '../shared/transcriptLimits';
 import { readTokenUsageBreakdown } from '../shared/tokenUsage';
+import { readTaskDelegation } from './subagentSummary';
 import { extractToolBackgroundHint } from './toolBackgroundHint';
 import {
   extractExecuteSummary,
@@ -432,6 +433,7 @@ function withToolInputContext(
   // An Execute call's own `summary` beats the generic verb phrase as
   // the row action; the command card shows it as its title.
   const summary = extractExecuteSummary(activity.toolName, input);
+  const subagent = readTaskDelegation(activity.toolName, input);
   return {
     ...activity,
     ...(summary === undefined ? {} : { action: summary }),
@@ -441,6 +443,7 @@ function withToolInputContext(
       ? {}
       : { detailKind: detail.kind, detail: detail.text }),
     ...(backgroundHint === undefined ? {} : { backgroundHint }),
+    ...(subagent === null ? {} : { subagent }),
   };
 }
 

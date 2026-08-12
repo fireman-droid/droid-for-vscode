@@ -3,6 +3,7 @@ import type {
   ImageOrigin,
   ToolBackgroundHint,
   ToolDetailKind,
+  ToolSubagentSummary,
 } from '../shared/bridgeMessages';
 import type { ToolActivityUpdateKind } from '../shared/toolActivity';
 import type { TokenUsageBreakdown } from '../shared/tokenUsage';
@@ -71,6 +72,17 @@ export type RuntimeEvent =
        * the CLI detached the command as a background process.
        */
       backgroundHint?: ToolBackgroundHint;
+      /**
+       * Delegation identity read from a Task tool call's own input
+       * (`subagent_type` + `description`), never carrying a lifecycle
+       * status — that stays notification/ledger authority. Present
+       * from the first tool_call event so the UI can say what was
+       * delegated immediately: the `child_session_available`
+       * notification only surfaces with the next stream event, which
+       * on the process transport is the Task's own tool_result
+       * (probed 2026-08-13, 39s after tool-start).
+       */
+      subagent?: ToolSubagentSummary;
     }
   | {
       type: 'tool-progress';

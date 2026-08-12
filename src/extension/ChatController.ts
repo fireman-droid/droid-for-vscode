@@ -102,6 +102,7 @@ import {
   applySubagentSettlement,
   collectRunningSubagentRows,
   collectToolFilePaths,
+  collectTranscriptSubagentRows,
   createTurnActivityState,
   hasSubagentRows,
   projectAssistantDelta,
@@ -6063,7 +6064,36 @@ export class ChatController {
     );
     if (target.kind === 'resume') {
       this.reconcileDaemonTurn(runtime, generation, sessionId, target.cwd);
+      // Replayed rows the ledger still reported live at load time
+      // need the same post-turn ledger poll a live turn would have
+      // armed — a reload otherwise freezes them at "running".
+      this.armReplayedSubagentWatch(sessionId, target.cwd, transcript);
     }
+  }
+
+  /**
+   * Re-arms the zombie-delegation ledger poll from a replayed
+   * transcript (Reload Window / session switch), covering rows whose
+   * delegation outlived the turn that dispatched it. The existing
+   * watch merge keeps rows from a live turn-end reconcile intact.
+   */
+  private armReplayedSubagentWatch(
+    sessionId: string,
+    cwd: string,
+    transcript: HostTranscriptState,
+  ): void {
+    const loadSummaries = this.sessionHistory.loadSubagentSummaries?.bind(
+      this.sessionHistory,
+    );
+    if (loadSummaries === undefined) {
+      return;
+    }
+    this.armZombieSubagentWatch(
+      sessionId,
+      cwd,
+      loadSummaries,
+      collectTranscriptSubagentRows(transcript.transcript),
+    );
   }
 
   /**

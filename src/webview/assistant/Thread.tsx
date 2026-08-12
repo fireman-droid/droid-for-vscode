@@ -3717,6 +3717,7 @@ function ToolActivityRow({
             activity.status === "completed" ||
             activity.status === "failed"
           }
+          parentRunning={running}
         />
       )}
     </>
@@ -3751,17 +3752,28 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
   toolUseCount,
   durationMs,
   parentSettled = false,
+  parentRunning = false,
 }: NonNullable<ToolActivityPresentation["subagent"]> & {
   /** The parent Task row reached a terminal state. */
   readonly parentSettled?: boolean;
+  /** The parent Task row is still streaming. */
+  readonly parentRunning?: boolean;
 }): React.JSX.Element {
+  // The delegation identity arrives with the Task input long before
+  // the SDK reports a lifecycle status (probed 2026-08-13: the
+  // child_session_available notification only surfaces with the
+  // Task's own tool_result). A statusless row under a running Task
+  // is live work by construction, so it spins and says so instead of
+  // sitting inert for the whole visible run.
+  const effectiveStatus =
+    status ?? (parentRunning ? "running" : null);
   const label =
-    parentSettled && status === "running"
+    parentSettled && effectiveStatus === "running"
       ? "running in background"
-      : status;
+      : effectiveStatus;
   return (
     <div className="dvx-subagent-row">
-      {status === "running" ? (
+      {effectiveStatus === "running" ? (
         <span className="dvx-subagent-spinner" aria-hidden="true" />
       ) : null}
       <span className="dvx-subagent-label">

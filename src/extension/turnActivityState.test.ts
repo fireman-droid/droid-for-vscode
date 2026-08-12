@@ -6,11 +6,13 @@ import {
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
   MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
+  type SessionTranscriptItem,
 } from '../shared/bridgeMessages';
 import {
   applySubagentSettlement,
   collectRunningSubagentRows,
   collectToolFilePaths,
+  collectTranscriptSubagentRows,
   createTurnActivityState,
   hasSubagentRows,
   projectAssistantDelta,
@@ -878,6 +880,72 @@ describe('turnActivityState', () => {
     expect(noTarget.state.tools.size).toBe(0);
   });
 
+  it('adopts the delegation identity tool-start carries, then upgrades it', () => {
+    // The Task input names the delegation ~40s before the SDK's
+    // child_session_available notification (probed 2026-08-13), so
+    // tool-start identity must render immediately, statusless.
+    const started = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'Task',
+      toolUseId: 'task-early',
+      action: 'Delegated to a subagent',
+      subagent: { type: 'explore', description: 'Early identity' },
+    });
+    expect(started.projection).toMatchObject({
+      subagent: { type: 'explore', description: 'Early identity' },
+    });
+    expect(started.projection?.subagent?.status).toBeUndefined();
+    expect(hasSubagentRows(started.state)).toBe(true);
+
+    // The notification stays the identity + lifecycle authority: its
+    // (possibly different) identity replaces the input's guess.
+    const upgraded = projectSubagentStarted(started.state, {
+      toolUseId: 'task-early',
+      subagentType: 'explorer',
+      description: 'Ledger identity',
+    });
+    expect(upgraded.projection).toMatchObject({
+      subagent: {
+        type: 'explorer',
+        description: 'Ledger identity',
+        status: 'running',
+      },
+    });
+  });
+
+  it('skips rows that already hold a status when resolving the fallback', () => {
+    let state = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'Task',
+      toolUseId: 'task-first',
+      action: 'Delegated to a subagent',
+    }).state;
+    state = projectSubagentStarted(state, {
+      toolUseId: 'task-first',
+      subagentType: 'explore',
+      description: 'Already running',
+    }).state;
+    state = projectToolEvent(state, {
+      type: 'tool-start',
+      toolName: 'Task',
+      toolUseId: 'task-second',
+      action: 'Delegated to a subagent',
+      subagent: { type: 'explore', description: 'Identity only' },
+    }).state;
+
+    // The id-less notification must land on the identity-only row,
+    // not re-claim the row that already holds a lifecycle status.
+    const upgraded = projectSubagentStarted(state, {
+      toolUseId: null,
+      subagentType: 'explore',
+      description: 'Identity only',
+    });
+    expect(upgraded.projection).toMatchObject({
+      toolUseId: 'task-second',
+      subagent: { status: 'running' },
+    });
+  });
+
   it('settles terminal subagent rows from the ledger newest-first', () => {
     let state = createTurnActivityState();
     for (const toolUseId of ['task-1', 'task-2']) {
@@ -1060,6 +1128,73 @@ describe('zombie subagent settlement', () => {
       },
     ]).state;
     expect(collectRunningSubagentRows(settled, 'turn-9')).toEqual([]);
+  });
+
+  it('collects live delegations from a replayed transcript', () => {
+    const tool = (
+      overrides: Partial<
+        Extract<SessionTranscriptItem, { kind: 'tool' }>
+      > &
+        Pick<
+          Extract<SessionTranscriptItem, { kind: 'tool' }>,
+          'toolUseId'
+        >,
+    ): SessionTranscriptItem => ({
+      id: `id-${overrides.toolUseId}`,
+      kind: 'tool',
+      turnId: 'turn-1',
+      toolName: 'Task',
+      action: 'Delegated to a subagent',
+      status: 'completed',
+      progressCount: 0,
+      latestUpdateKind: null,
+      ...overrides,
+    });
+    const transcript: SessionTranscriptItem[] = [
+      { id: 'id-user', kind: 'user', text: 'Delegate research' },
+      tool({
+        toolUseId: 'task-live',
+        subagent: {
+          type: 'explore',
+          description: 'Outlived the reload',
+          status: 'running',
+        },
+      }),
+      tool({
+        toolUseId: 'task-queued',
+        turnId: 'turn-2',
+        subagent: {
+          type: 'worker',
+          description: 'Never started',
+          status: 'pending',
+        },
+      }),
+      tool({
+        toolUseId: 'task-done',
+        subagent: {
+          type: 'explore',
+          description: 'Already settled',
+          status: 'completed',
+        },
+      }),
+      tool({ toolUseId: 'read-1', toolName: 'Read' }),
+    ];
+
+    expect(collectTranscriptSubagentRows(transcript)).toEqual([
+      {
+        turnId: 'turn-1',
+        toolUseId: 'task-live',
+        type: 'explore',
+        description: 'Outlived the reload',
+      },
+      {
+        turnId: 'turn-2',
+        toolUseId: 'task-queued',
+        type: 'worker',
+        description: 'Never started',
+      },
+    ]);
+    expect(collectTranscriptSubagentRows([])).toEqual([]);
   });
 
   it('settles rows only with terminal ledger entries', () => {

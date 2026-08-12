@@ -630,6 +630,93 @@ describe('ChatController', () => {
     });
   });
 
+  it('re-arms the ledger poll for a replayed running delegation', async () => {
+    // Reload Window while a background delegation is still running:
+    // the replayed transcript row says "running", the watch that was
+    // polling the ledger died with the old window, and the ledger has
+    // no push channel. Resume must arm a fresh poll or the row stays
+    // running on screen forever.
+    const persistence = createMemoryPersistence();
+    const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
+    seed.selectSession('replay-session');
+    await seed.flush();
+    const completed = {
+      type: 'explore',
+      description: 'Outlived the reload',
+      status: 'completed' as const,
+      toolUseCount: 5,
+      durationMs: 60_000,
+    };
+    const history: SessionHistoryLoader = {
+      loadHistory: vi.fn(async () => ({
+        status: 'available' as const,
+        state: {
+          transcript: [
+            {
+              id: 'replayed-tool',
+              kind: 'tool' as const,
+              turnId: 'turn-old',
+              toolUseId: 'task-live',
+              toolName: 'Task',
+              action: 'Delegated focused work',
+              status: 'completed' as const,
+              progressCount: 0,
+              latestUpdateKind: null,
+              subagent: {
+                type: 'explore',
+                description: 'Outlived the reload',
+                status: 'running' as const,
+              },
+            },
+          ],
+          historyStatus: 'complete' as const,
+          truncated: false,
+        },
+      })),
+      loadSubagentSummaries: vi.fn(async () => [completed]),
+    };
+    const runtime = createMockRuntime();
+    runtime.initialize.mockResolvedValue(available('replay-session'));
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('replay-session')]),
+      new SessionRecoveryStore(persistence, 'recovery', 0),
+      history,
+    );
+
+    vi.useFakeTimers();
+    try {
+      ready(controller);
+      // Flush the resume activation, then cross one poll interval.
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(5_100);
+      expect(
+        messages.filter(
+          (message) => message.type === 'subagent.update',
+        ),
+      ).toEqual([
+        expect.objectContaining({
+          sessionId: 'replay-session',
+          turnId: 'turn-old',
+          toolUseId: 'task-live',
+          subagent: completed,
+        }),
+      ]);
+      // Settled: the watch cleared itself and stops polling.
+      const loads = (
+        history.loadSubagentSummaries as ReturnType<typeof vi.fn>
+      ).mock.calls.length;
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(
+        (history.loadSubagentSummaries as ReturnType<typeof vi.fn>)
+          .mock.calls.length,
+      ).toBe(loads);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('never loads the invocation ledger for turns without delegation', async () => {
     const runtime = createMockRuntime(async function* () {
       yield {

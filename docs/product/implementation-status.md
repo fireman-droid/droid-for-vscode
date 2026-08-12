@@ -2000,6 +2000,61 @@ UI 描述见 §22 重做记录。
   转圈、"running in background" 降级）、`styles.css`（dock/药丸/
   弹层/转圈全套 + reduced-motion/forced-colors）
 
+### 24. 子代理体验审计：派发身份直出 + Reload 后僵尸 watch 重挂 + 子行即时动效（2026-08-13 凌晨）
+
+- **背景（端到端审计两根因）**：真实会话探针（2026-08-13，process
+  传输）证实 `child_session_available` 通知直到 Task 自己的
+  tool_result 才随流面世（实测滞后 39s）——整个可见运行期用户只看到
+  一条裸 "Delegated focused work · Working" 行，不知道派了什么、
+  子行转圈（§23）实际从不出现在直播期；且 Reload Window 后
+  `zombieSubagentWatch` 随旧窗口死亡、resume 不重挂，回放出的
+  running 子行永远冻结（台账无推送通道）——即用户报的"刷新之后
+  子代理没了/僵住"。另：通知身份与 Task input 可不一致（input
+  `explore`，通知报 `explorer`），通知保持权威
+- **修复 1（Runtime）**：`normalizeSdkEvent` 在 tool_call 即用
+  `readTaskDelegation` 从 Task input（`subagent_type` +
+  `description`）读出委派身份，挂 `tool-start.subagent`（无
+  status——生命周期仍归通知/台账权威；prompt 正文不过桥）
+- **修复 2（Host）**：`turnActivityState.projectToolEvent` 首次投影
+  即带身份；`projectSubagentStarted` 改"无 status 才升级"（通知
+  身份覆盖 input 猜测），fallback 目标解析同步放宽到"无 status 的
+  Task 行"。回放路径：`collectTranscriptSubagentRows` 从回放转录
+  收 running/pending 委派行，`activateRuntime` 的 resume 分支经
+  `armReplayedSubagentWatch` 重挂同一台账轮询（5s/10min 上限），
+  结清走既有 `subagent.update`（Host 转录同步投影，快照一致）
+- **修复 3（Webview）**：`SubagentSummaryRow` 新增 `parentRunning`；
+  父 Task 行 running 而子行尚无 status 时按构造即"活干"——转圈 +
+  "running"，通知到达后同视觉无缝接续，不再整个直播期呆滞
+- 点击死区核实（今晚只核实不实现）：子行为纯 div，无 cursor/hover
+  可点击暗示，无假 affordance；父行 `<details>` 展开正常。子代理
+  转录细节回放仍在明日 backlog
+- 门禁：extension/webview tsconfig typecheck 过；全量 vitest
+  **85 files / 1893 tests 全绿**（--maxWorkers=4 末尾单跑一次；
+  新增 normalizeSdkEvent 委派身份例、turnActivityState 身份升级/
+  fallback/转录收集 3 例、ChatController 回放重挂轮询例、Thread
+  identity-phase 转圈 2 例）；worktree dist headless 冒烟
+  `run-smoke-subagent.mjs`（harness 步骤与断言已更新为新 emit
+  次序：identityPhase===1 时子行已在场转圈）replay/stream/stress
+  三场景 PASS（stress streamingLongTasks 为零）；
+  `shot-journey.mjs` 前后对比截图：`subagent-before-dispatch.png`
+  （修前直播期裸行）vs `subagent-smoke-streaming.png`（修后身份+
+  转圈直出）、`subagent-reload-before-settle.png`（"running in
+  background"）vs `subagent-reload-after-settle.png`（台账结清
+  "completed · 9 tool uses · 2m 3s"）
+- 边界（不修，上游/后续）：回合外实时事件不存在（台账轮询是唯一
+  通道）；回合外 Stop 不可行（§23 决策：不画控件）；回放会话不出
+  "N Working" 徽标（liveTurnIds 设计保留，行内状态仍会被重挂的
+  watch 结清）；子行点击看细节 = 明日转录回放切片
+
+主要实现：
+
+- `src/runtime/runtimeEvents.ts` + `normalizeSdkEvent.ts`
+  （tool-start 委派身份直出）
+- `src/extension/turnActivityState.ts`（身份投影/升级 +
+  `collectTranscriptSubagentRows`）、`ChatController.ts`
+  （`armReplayedSubagentWatch` resume 重挂）
+- `src/webview/assistant/Thread.tsx`（`parentRunning` 即时动效）
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
