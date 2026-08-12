@@ -337,6 +337,65 @@ describe('assistant-ui App bridge commands', () => {
     });
   });
 
+  it('shows a quiet reload hint when no host message arrives after webview.ready', () => {
+    vi.useFakeTimers();
+    try {
+      render(<App />);
+      expect(posted).toContainEqual({
+        type: 'webview.ready',
+        protocolVersion: 3,
+      });
+      expect(screen.queryByRole('alert')).toBeNull();
+
+      // A stale in-memory host (protocol mismatch after a VSIX
+      // overwrite install) drops the ready and never answers.
+      act(() => {
+        vi.advanceTimersByTime(5_000);
+      });
+      expect(screen.getByRole('alert').textContent).toContain(
+        'Reload Window',
+      );
+      expect(posted).toContainEqual({
+        type: 'webview.diagnostic',
+        kind: 'handshake-timeout',
+        detail: expect.stringContaining('webview.ready'),
+      });
+
+      // A live host answering late clears the hint.
+      host(snapshot(0));
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(screen.queryByRole('alert')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not show the reload hint once a host snapshot arrived', () => {
+    vi.useFakeTimers();
+    try {
+      render(<App />);
+      host(snapshot(0));
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      act(() => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(
+        posted.filter(
+          (message) =>
+            message.type === 'webview.diagnostic' &&
+            message.kind === 'handshake-timeout',
+        ),
+      ).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps Thinking synchronized and allows setting changes while streaming', async () => {
     const user = userEvent.setup();
     render(<App />);

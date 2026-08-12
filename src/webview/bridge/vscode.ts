@@ -77,6 +77,25 @@ export function postPerfBeacon(
   });
 }
 
+/**
+ * Reports that no host message at all arrived within the handshake
+ * window after `webview.ready` — the signature of a stale in-memory
+ * host rejecting a newer bundle's protocol version after a VSIX
+ * overwrite install (`host.bridge.protocol-mismatch` on the host
+ * side). Best effort: a stale host also rejects this beacon, but it
+ * still surfaces in its `host.bridge.rejected` log.
+ */
+export function announceHandshakeTimeout(
+  vscode: VsCodeApi,
+  waitedMs: number,
+): void {
+  vscode.postMessage({
+    type: 'webview.diagnostic',
+    kind: 'handshake-timeout',
+    detail: `no host message within ${waitedMs}ms of webview.ready (protocol ${BRIDGE_PROTOCOL_VERSION})`,
+  });
+}
+
 export function restoreDraft(vscode: VsCodeApi): string {
   const state = vscode.getState();
   if (!isStrictRecord(state) || typeof state.draft !== 'string') {
