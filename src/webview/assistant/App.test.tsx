@@ -337,6 +337,152 @@ describe('assistant-ui App bridge commands', () => {
     });
   });
 
+  it('recovers the skills panel across a panel-initiated new session', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    host(snapshot(0));
+    const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+    await waitFor(() => expect(input.value).toBe('Restored draft'));
+
+    // Entering the skills panel requests the catalog for the session.
+    await user.click(screen.getByRole('button', { name: 'Session controls' }));
+    await user.click(screen.getByText('Skills').closest('button')!);
+    await waitFor(() =>
+      expect(posted).toContainEqual({
+        type: 'skills.refresh',
+        sessionId: 'session-a',
+      }),
+    );
+    host({
+      type: 'session.skills',
+      sequence: 1,
+      sessionId: 'session-a',
+      skills: {
+        status: 'ready',
+        items: [
+          {
+            name: 'code-review',
+            description: null,
+            location: 'project',
+            enabled: true,
+            userInvocable: true,
+          },
+        ],
+      },
+    });
+
+    // The reported deadlock path: toggle a skill, then start a new
+    // session from inside the panel.
+    await user.click(
+      await screen.findByRole('switch', { name: 'code-review enabled' }),
+    );
+    expect(posted).toContainEqual({
+      type: 'skill.toggle',
+      sessionId: 'session-a',
+      name: 'code-review',
+      disabled: true,
+    });
+    await user.click(
+      await screen.findByRole('button', { name: 'Start a new session' }),
+    );
+    expect(posted).toContainEqual({ type: 'session.new' });
+    // The popover returns to the root controls instead of pinning the
+    // old session's skills list.
+    expect(
+      screen.getByRole('dialog', { name: 'Session controls' }),
+    ).toBeDefined();
+
+    // The host answers with the new session and (as on any session
+    // activation) pushes its settings. Nothing may be stuck on
+    // "Loading skills…" and re-entering the panel re-queries the new
+    // session.
+    host({
+      type: 'host.connection',
+      sequence: 2,
+      sessionId: 'session-b',
+      connection: { status: 'connected' },
+    });
+    host({
+      type: 'session.settings',
+      sequence: 3,
+      sessionId: 'session-b',
+      settings: snapshot(0).settings,
+    });
+    // Wait for the switched session's settings to render the root rows.
+    await waitFor(() =>
+      expect(screen.queryByText('Loading session settings…')).toBeNull(),
+    );
+    expect(screen.queryByText('Loading skills…')).toBeNull();
+    await user.click(screen.getByText('Skills').closest('button')!);
+    await waitFor(() =>
+      expect(posted).toContainEqual({
+        type: 'skills.refresh',
+        sessionId: 'session-b',
+      }),
+    );
+  });
+
+  it('auto-refreshes an open skills panel after a session switch', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    host(snapshot(0));
+    const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+    await waitFor(() => expect(input.value).toBe('Restored draft'));
+
+    await user.click(screen.getByRole('button', { name: 'Session controls' }));
+    await user.click(screen.getByText('Skills').closest('button')!);
+    host({
+      type: 'session.skills',
+      sequence: 1,
+      sessionId: 'session-a',
+      skills: {
+        status: 'ready',
+        items: [
+          {
+            name: 'code-review',
+            description: null,
+            location: 'project',
+            enabled: true,
+            userInvocable: true,
+          },
+        ],
+      },
+    });
+    await screen.findByRole('switch', { name: 'code-review enabled' });
+
+    // A session switch resets the catalog to 'idle' while the panel
+    // stays open; once the new session's settings arrive the panel
+    // must re-request the catalog instead of deadlocking behind a
+    // disabled Refresh button.
+    host({
+      type: 'host.connection',
+      sequence: 2,
+      sessionId: 'session-b',
+      connection: { status: 'connected' },
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('switch', { name: 'code-review enabled' }),
+      ).toBeNull(),
+    );
+    host({
+      type: 'session.settings',
+      sequence: 3,
+      sessionId: 'session-b',
+      settings: snapshot(0).settings,
+    });
+    await waitFor(() =>
+      expect(posted).toContainEqual({
+        type: 'skills.refresh',
+        sessionId: 'session-b',
+      }),
+    );
+    const refresh = screen.getByRole('button', {
+      name: 'Refresh',
+    }) as HTMLButtonElement;
+    expect(refresh.disabled).toBe(false);
+  });
+
   it('shows a quiet reload hint when no host message arrives after webview.ready', () => {
     vi.useFakeTimers();
     try {
