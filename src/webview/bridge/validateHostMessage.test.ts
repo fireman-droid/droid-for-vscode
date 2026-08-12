@@ -20,6 +20,7 @@ import {
   MAX_SESSION_CATALOG_ITEMS,
   MAX_SESSION_SEARCH_QUERY_LENGTH,
   MAX_SESSION_SEARCH_SNIPPET_LENGTH,
+  MAX_OPEN_PATH_LENGTH,
   MAX_SESSION_TITLE_LENGTH,
   MAX_WORKTREE_BRANCH_LENGTH,
   MAX_WORKTREE_PATH_LENGTH,
@@ -2667,6 +2668,35 @@ describe('readHostMessage', () => {
     ).toBeUndefined();
     expect(
       readHostMessage({ ...snapshot, worktreeCreateAvailable: 'yes' }),
+    ).toBeUndefined();
+  });
+
+  it('accepts an absolute workspace root on snapshots', () => {
+    const snapshot = createSessionSnapshot();
+    const message = {
+      ...snapshot,
+      workspaceRoot: 'd:\\E\\前端好玩的东西\\droidvisx',
+    };
+    expect(readHostMessage(message)).toEqual(message);
+    // Hosts omit the root without a usable workspace.
+    expect(readHostMessage(snapshot)).toEqual(snapshot);
+  });
+
+  it.each([
+    { name: 'empty root', workspaceRoot: '' },
+    { name: 'non-string root', workspaceRoot: 42 },
+    {
+      name: 'oversized root',
+      workspaceRoot: `D:\\${'r'.repeat(MAX_OPEN_PATH_LENGTH)}`,
+    },
+    {
+      name: 'control character in root',
+      workspaceRoot: 'D:\\repo\u0000root',
+    },
+  ])('rejects hostile workspace roots ($name)', ({ workspaceRoot }) => {
+    const snapshot = createSessionSnapshot();
+    expect(
+      readHostMessage({ ...snapshot, workspaceRoot }),
     ).toBeUndefined();
   });
 

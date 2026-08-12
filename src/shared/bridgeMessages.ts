@@ -1530,6 +1530,14 @@ export interface HostSnapshotMessage {
   readonly historyStatus: SessionHistoryStatus;
   readonly truncated: boolean;
   /**
+   * Absolute workspace folder the host is bound to. The webview uses
+   * it to rebase absolute transcript paths into workspace-relative
+   * ones (e.g. the path-link Preview entry); absent when no usable
+   * workspace exists, which fail-closes every rebase-dependent
+   * affordance.
+   */
+  readonly workspaceRoot?: string;
+  /**
    * Read-only mission identity of the active session; absent when
    * the session is not part of a mission decomposition.
    */

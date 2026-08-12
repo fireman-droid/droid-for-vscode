@@ -15,6 +15,7 @@ import {
   MAX_MODEL_CATALOG_ITEMS,
   MAX_MODEL_DISPLAY_NAME_LENGTH,
   MAX_MODEL_ID_LENGTH,
+  MAX_OPEN_PATH_LENGTH,
   MAX_PERMISSION_OPTIONS,
   MAX_PERMISSION_OPTION_LABEL_LENGTH,
   MAX_PERMISSION_OPTION_VALUE_LENGTH,
@@ -332,7 +333,12 @@ function parseHostSnapshot(
         'historyStatus',
         'truncated',
       ],
-      ['mission', 'worktreeCreateAvailable', 'tokenUsage'],
+      [
+        'mission',
+        'worktreeCreateAvailable',
+        'tokenUsage',
+        'workspaceRoot',
+      ],
     ) ||
     !isSequence(value.sequence) ||
     !isNullableId(value.sessionId) ||
@@ -340,7 +346,11 @@ function parseHostSnapshot(
     typeof value.truncated !== 'boolean' ||
     // Hosts omit the flag when unavailable instead of sending false.
     (value.worktreeCreateAvailable !== undefined &&
-      value.worktreeCreateAvailable !== true)
+      value.worktreeCreateAvailable !== true) ||
+    // Hosts omit the root when no usable workspace exists.
+    (value.workspaceRoot !== undefined &&
+      (!isNonEmptyBoundedString(value.workspaceRoot, MAX_OPEN_PATH_LENGTH) ||
+        /[\u0000-\u001f\u007f]/.test(value.workspaceRoot)))
   ) {
     return undefined;
   }
@@ -421,6 +431,9 @@ function parseHostSnapshot(
       ? {}
       : { worktreeCreateAvailable: true }),
     ...(tokenUsage === undefined ? {} : { tokenUsage }),
+    ...(value.workspaceRoot === undefined
+      ? {}
+      : { workspaceRoot: value.workspaceRoot }),
   };
 }
 
