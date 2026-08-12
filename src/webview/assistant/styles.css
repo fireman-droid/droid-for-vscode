@@ -6096,3 +6096,199 @@ body {
 .dvx-btw-input:disabled {
   color: var(--dvx-muted, #737373);
 }
+
+/* Task plan pin: the session's current plan pinned above the
+   Composer. Collapsed it is one quiet low-contrast line; expanded it
+   opens the full checklist upward. Lives inside .dvx-thread-footer
+   above .dvx-composer-wrap; anything floating over the footer (the
+   scroll-to-bottom arrow) anchors to the footer's top edge and so
+   stays above the pin however tall it grows. */
+
+.dvx-plan-pin {
+  overflow: hidden;
+  margin: 0 0 8px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 12px;
+  background: var(--dvx-raised);
+  box-shadow: 0 1px 1.5px rgb(0 0 0 / 8%), 0 1px 1px rgb(0 0 0 / 6%);
+  user-select: none;
+  transition: opacity var(--dvx-duration-slower) ease;
+}
+
+/* Entry is gated like every other live-turn animation (streaming
+   design item D): only a connected live turn animates; history
+   restores and session switches mount silently. */
+.dvx-anim-live .dvx-plan-pin {
+  animation: dvx-todo-fade-in var(--dvx-duration-slow) ease-out;
+}
+
+.dvx-plan-pin-leaving {
+  opacity: 0;
+}
+
+.dvx-plan-pin-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 10px 7px 12px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--dvx-muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  transition: background var(--dvx-duration-instant) ease;
+}
+
+.dvx-plan-pin-toggle:hover {
+  background: var(--dvx-soft);
+}
+
+.dvx-plan-pin-current {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+}
+
+/* Expanded header reads as a quiet section label over the list. */
+.dvx-plan-pin-open .dvx-plan-pin-current {
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+}
+
+.dvx-plan-pin-count {
+  flex: 0 0 auto;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+
+.dvx-plan-pin-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dvx-accent);
+  animation: dvx-plan-pulse 1.4s ease-in-out infinite;
+}
+
+.dvx-plan-pin-chevron {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  color: var(--dvx-subtle);
+  transform: rotate(0deg);
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  transition: transform var(--dvx-duration-normal)
+    var(--dvx-easing-out-strong);
+}
+
+/* Collapsed points up: the checklist opens upward from the Composer. */
+.dvx-plan-pin-toggle[aria-expanded="false"] .dvx-plan-pin-chevron {
+  transform: rotate(180deg);
+}
+
+.dvx-plan-pin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 2px 12px 10px;
+  list-style: none;
+  overflow: hidden;
+  animation:
+    dvx-plan-open var(--dvx-duration-slower)
+      var(--dvx-easing-out-strong),
+    dvx-entry-fade var(--dvx-duration-slow) ease-out;
+}
+
+.dvx-plan-pin-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--dvx-ink);
+  font-size: 12.5px;
+  line-height: 18px;
+  animation: dvx-todo-fade-in var(--dvx-duration-slow) ease-out;
+}
+
+.dvx-plan-pin-marker {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border-radius: 50%;
+  border: 1.5px solid var(--dvx-border-strong);
+  background: transparent;
+}
+
+.dvx-plan-pin-step-in_progress .dvx-plan-pin-marker {
+  border-color: var(--dvx-accent);
+  background:
+    radial-gradient(
+      circle at center,
+      var(--dvx-accent) 0 45%,
+      transparent 46%
+    );
+  animation: dvx-plan-pulse 1.4s ease-in-out infinite;
+}
+
+.dvx-plan-pin-step-in_progress .dvx-plan-pin-text {
+  font-weight: 550;
+}
+
+.dvx-plan-pin-step-completed .dvx-plan-pin-text {
+  color: var(--dvx-muted);
+  text-decoration: line-through;
+  text-decoration-color: rgb(0 0 0 / 25%);
+}
+
+.dvx-plan-pin-text {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.dvx-plan-pin-check {
+  display: block;
+  flex: 0 0 12px;
+  width: 12px;
+  height: 12px;
+  color: var(--dvx-diff-add, #1a7f37);
+}
+
+.dvx-plan-pin-step .dvx-plan-pin-check {
+  margin-top: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-plan-pin,
+  .dvx-plan-pin-toggle,
+  .dvx-plan-pin-chevron {
+    transition: none;
+  }
+
+  .dvx-anim-live .dvx-plan-pin,
+  .dvx-plan-pin-list,
+  .dvx-plan-pin-step,
+  .dvx-plan-pin-dot,
+  .dvx-plan-pin-step-in_progress .dvx-plan-pin-marker {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .dvx-plan-pin {
+    border: 1px solid CanvasText;
+  }
+}
