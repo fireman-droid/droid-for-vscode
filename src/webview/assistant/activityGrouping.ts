@@ -194,6 +194,32 @@ const CATEGORY_NOUNS: Readonly<
   skill: ['skill', 'skills'],
 };
 
+/**
+ * Which member the running-group ticker shows: the last member still
+ * reporting a running/stopping status, falling back to the newest
+ * member while the group waits between tool calls (user report
+ * batch 2 §1).
+ */
+export function activeTickerIndex(
+  parts: readonly GroupCandidatePart[],
+): number {
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index]!;
+    if (part.type === 'tool-call') {
+      const status = readMemberMetadata(part).status;
+      if (status === 'running' || status === 'stopping') {
+        return index;
+      }
+    } else if (
+      part.type === 'reasoning' &&
+      part.status?.type === 'running'
+    ) {
+      return index;
+    }
+  }
+  return parts.length - 1;
+}
+
 export function summarizeActivityGroup(
   parts: readonly GroupCandidatePart[],
 ): GroupSummary {

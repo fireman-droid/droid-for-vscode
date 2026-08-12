@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ACTIVITY_GROUP_KEY,
+  activeTickerIndex,
   activityGroupBy,
   classifyExploreTool,
   isSwallowableReasoning,
@@ -219,5 +220,40 @@ describe('summarizeActivityGroup', () => {
       tool('Grep'),
     ]);
     expect(summary.countsLabel).toBe('2 files, 1 search');
+  });
+});
+
+describe('activeTickerIndex', () => {
+  it('points at the last running tool member', () => {
+    expect(
+      activeTickerIndex([
+        tool('Read'),
+        tool('Grep', { status: 'running' }),
+        tool('Read'),
+      ]),
+    ).toBe(1);
+    expect(
+      activeTickerIndex([
+        tool('Read', { status: 'running' }),
+        tool('Grep', { status: 'stopping' }),
+        tool('Read'),
+      ]),
+    ).toBe(1);
+  });
+
+  it('counts running swallowed reasoning as the active member', () => {
+    expect(
+      activeTickerIndex([
+        tool('Read'),
+        tool('Grep'),
+        reasoning('Checking imports.', 'running'),
+      ]),
+    ).toBe(2);
+  });
+
+  it('falls back to the newest member between tool calls', () => {
+    expect(
+      activeTickerIndex([tool('Read'), tool('Grep'), tool('LS')]),
+    ).toBe(2);
   });
 });
