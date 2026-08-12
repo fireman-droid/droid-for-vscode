@@ -1876,6 +1876,20 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-12 晚首个正式发版 v0.1.0**：版本号 `0.0.0 → 0.1.0`，新增
+  能力级 `CHANGELOG.md`（34 条：Added 22 / Fixed 8 / Changed 4，覆盖
+  自 2026-08-11 20:00 起 178 个提交）并随包发布（vsce 在包内规范化为
+  `extension/changelog.md`，`verifyVsix.mjs` 期望已同步，VSIX 变为
+  11 条目）。发版提交 `eed2df0` + 大小写修正 `f82ce46`，本地 tag
+  `v0.1.0 -> f82ce46`（无远端，未 push）。门禁在临时干净 worktree
+  （detached HEAD，用后已删）跑通：typecheck 三段 + 全量 vitest
+  80 files（79 过/1 跳过）/ 1810 tests（1809 过/1 跳过）+ build +
+  `vsce package` + `verify:vsix` 11 条目校验全绿。主工作区（打包时
+  `src/` 无未提交改动）产出 `dist/droidvisx-0.1.0.vsix` 1,639,449
+  字节（11 files, 1.56 MB），SHA-256
+  `8BB63972BDE4F332556FC9446511CAA3195BD8DBD1B9DB04E57DFE69C65733E9`，
+  `cursor --install-extension --force` successfully installed。首次
+  脱离 0.0.0，现有窗口 Reload Window 即加载 0.1.0 Bundle
 - 2026-08-12 晚「Turn 运行中排队消息」收官切片打包并安装：
   `pnpm run package:vsix`（内含 typecheck 三段 + 全量 vitest
   80 files / 1805 tests 全绿 + build）产出 `dist/droidvisx.vsix`
@@ -3247,7 +3261,10 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
    （[`spec-mission-design.md`](./spec-mission-design.md) §3、§2）。
 7. **第一档打磨剩余** — 流式命令输出预览 → 收起播报 → 回复动画
    （[`tier1-polish-plan.md`](./tier1-polish-plan.md) §1、§2、§4）。
-8. **发版卫生** — 版本号脱离 0.0.0、CHANGELOG、正式 VSIX（做前与用户确认）。
+8. ~~**发版卫生**~~ — 已完成（2026-08-12 晚，v0.1.0：版本号脱离
+   0.0.0、`CHANGELOG.md` 随包发布、tag `v0.1.0`、正式 VSIX
+   `dist/droidvisx-0.1.0.vsix` 已安装；门禁与包指纹见「当前安装包
+   状态」首条）。
 
 ### 设计调研完成、未排期（2026-08-12 傍晚，零生产代码改动）
 
