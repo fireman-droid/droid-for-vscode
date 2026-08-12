@@ -120,6 +120,7 @@ import { handleQueueAdd, handleQueueUpdate, handleQueueRemove, handleQueueResume
 import { handleMcpRefresh, pushMcp, handleMcpServerToggle, handleMcpServerAdd, handleMcpServerRemove, handleMcpServerAuthenticate } from './chat/mcp';
 import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRefresh, pushSkills, handleSkillToggle, handlePluginsRefresh, handleCommandsRefresh, recordRecentCommand, emitModelCatalog, projectModelCatalog, isSafeModelId, MODEL_CATALOG_FAILED_MESSAGE } from './chat/capabilityPanels';
 import { handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddImage, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
+import { handleSettingUpdate, emitSettings, refreshSettingsAfterRuntimeEvent, projectConfirmedSettings, SETTINGS_READ_FAILED_MESSAGE } from './chat/settings';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
 import {
   clearPrompts,
@@ -316,14 +317,6 @@ const WORKTREE_CREATE_UNAVAILABLE_MESSAGE =
   'Worktree sessions need the daemon runtime mode and a git workspace.';
 const WORKSPACE_CHANGED_MESSAGE =
   'The workspace changed before the Droid session could be opened.';
-const SETTINGS_READ_FAILED_MESSAGE =
-  'Droid session settings could not be loaded.';
-const SETTINGS_UPDATE_FAILED_MESSAGE =
-  'Droid session settings could not be updated.';
-const SETTINGS_UPDATE_BLOCKED_MESSAGE =
-  'Finish the current interaction or setting update before changing settings.';
-const SETTINGS_UPDATE_UNSUPPORTED_MESSAGE =
-  'This setting is not available for the current Droid session.';
 const EDIT_RESEND_BLOCKED_MESSAGE =
   'Finish the current Droid activity before editing an earlier message.';
 const EDIT_RESEND_QUEUE_BLOCKED_MESSAGE =
@@ -926,7 +919,7 @@ export class ChatController {
         );
         return;
       case 'session.setting.update':
-        this.handleSettingUpdate(message);
+        handleSettingUpdate(this, message);
         return;
       case 'git.requestStatus':
         this.handleGitRequestStatus(message.sessionId);
@@ -1469,7 +1462,7 @@ export class ChatController {
         });
         return;
       case 'settings-updated':
-        this.refreshSettingsAfterRuntimeEvent(sessionId);
+        refreshSettingsAfterRuntimeEvent(this, sessionId);
         return;
       case 'spec-handoff':
         if (
@@ -3407,147 +3400,6 @@ export class ChatController {
     return staged.slice(0, MAX_PENDING_ATTACHMENTS);
   }
 
-  private handleSettingUpdate(
-    message: SessionSettingUpdateMessage,
-  ): void {
-    const runtime = this.runtime;
-    const cwd = this.activeRuntimeCwd;
-    if (
-      runtime === null ||
-      cwd === null ||
-      message.sessionId !== this.sessionId ||
-      this.connection.status !== 'connected' ||
-      !this.ensureActiveRuntimeWorkspaceCurrent()
-    ) {
-      return;
-    }
-    if (
-      this.interactions.hasPending() ||
-      this.sessionOperationInProgress ||
-      this.settingsUpdate !== null ||
-      this.settings.status === 'loading' ||
-      this.settings.status === 'updating' ||
-      this.settings.value === null
-    ) {
-      this.emitSessionDiagnostic(
-        'settings-update-blocked',
-        SETTINGS_UPDATE_BLOCKED_MESSAGE,
-      );
-      return;
-    }
-    if (!this.isSettingUpdateSupported(message)) {
-      this.emitSessionDiagnostic(
-        'settings-update-unsupported',
-        SETTINGS_UPDATE_UNSUPPORTED_MESSAGE,
-      );
-      return;
-    }
-
-    const operation = Symbol('settings-update');
-    const generation = this.runtimeGeneration;
-    const confirmed = this.settings.value;
-    this.settingsUpdate = operation;
-    this.settings = { status: 'updating', value: confirmed };
-    this.emitSettings(message.sessionId);
-    const update: RuntimeSessionSettingUpdate = {
-      field: message.field,
-      value: message.value,
-    } as RuntimeSessionSettingUpdate;
-    void runtime
-      .updateSessionSetting(update)
-      .then((result) => {
-        if (
-          !this.isCurrentSettingsUpdate(
-            runtime,
-            generation,
-            message.sessionId,
-            cwd,
-            operation,
-          )
-        ) {
-          return;
-        }
-        this.settings = {
-          status: 'ready',
-          value: projectConfirmedSettings(result),
-        };
-        this.emitSettings(message.sessionId);
-      })
-      .catch(() => {
-        if (
-          !this.isCurrentSettingsUpdate(
-            runtime,
-            generation,
-            message.sessionId,
-            cwd,
-            operation,
-          )
-        ) {
-          return;
-        }
-        this.settings = {
-          status: 'error',
-          value: confirmed,
-          message: SETTINGS_UPDATE_FAILED_MESSAGE,
-        };
-        this.emitSettings(message.sessionId);
-      })
-      .finally(() => {
-        if (this.settingsUpdate === operation) {
-          this.settingsUpdate = null;
-        }
-      });
-  }
-
-  private isSettingUpdateSupported(
-    message: SessionSettingUpdateMessage,
-  ): boolean {
-    if (
-      message.field === 'interactionMode' ||
-      message.field === 'autonomyLevel'
-    ) {
-      return true;
-    }
-    if (
-      (message.field === 'specModeModelId' ||
-        message.field === 'specModeReasoningEffort') &&
-      message.value === null
-    ) {
-      // Resetting a spec override needs no catalog knowledge.
-      return true;
-    }
-    const settings = this.settings.value;
-    if (
-      this.modelCatalog.status !== 'ready' ||
-      settings === null
-    ) {
-      return false;
-    }
-    if (
-      message.field === 'modelId' ||
-      message.field === 'specModeModelId'
-    ) {
-      return this.modelCatalog.items.some(
-        ({ id }) => id === message.value,
-      );
-    }
-    // Reasoning effort must be supported by the model it applies to:
-    // the spec drafting model for spec efforts (falling back to the
-    // session model when no spec model is set).
-    const targetModelId =
-      message.field === 'specModeReasoningEffort'
-        ? (settings.specModeModelId ?? settings.modelId)
-        : settings.modelId;
-    const model = this.modelCatalog.items.find(
-      ({ id }) => id === targetModelId,
-    );
-    return (
-      model !== undefined &&
-      message.value !== null &&
-      model.supportedReasoningEfforts.includes(message.value)
-    );
-  }
-
   private startCatalogRefresh(cwd: string): void {
     const previousActive = this.activeSessionSummary();
     const catalogRequest = this.beginCatalogLoad(cwd);
@@ -4431,7 +4283,7 @@ export class ChatController {
           status: 'ready',
           value: projectConfirmedSettings(result),
         };
-        this.emitSettings(sessionId);
+        emitSettings(this, sessionId);
       })
       .catch(() => {
         if (
@@ -4449,7 +4301,7 @@ export class ChatController {
           value: null,
           message: SETTINGS_READ_FAILED_MESSAGE,
         };
-        this.emitSettings(sessionId);
+        emitSettings(this, sessionId);
       });
 
     void runtime
@@ -4723,14 +4575,6 @@ export class ChatController {
     }
   }
 
-  private emitSettings(sessionId: string): void {
-    this.emit({
-      type: 'session.settings',
-      sessionId,
-      settings: this.settings,
-    });
-  }
-
   /**
    * Settles the finished turn's subagent rows with the CLI's durable
    * invocation ledger (`loadSession().subagentInvocations`). The
@@ -4929,58 +4773,6 @@ export class ChatController {
         this.activeRuntimeCwd,
       );
     }
-  }
-
-  private refreshSettingsAfterRuntimeEvent(sessionId: string): void {
-    const runtime = this.runtime;
-    const cwd = this.activeRuntimeCwd;
-    if (
-      runtime === null ||
-      cwd === null ||
-      this.sessionId !== sessionId ||
-      this.connection.status !== 'connected'
-    ) {
-      return;
-    }
-    const generation = this.runtimeGeneration;
-    const confirmed = this.settings.value;
-    void runtime
-      .readSessionSettings()
-      .then((result) => {
-        if (
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        this.settings = {
-          status: 'ready',
-          value: projectConfirmedSettings(result),
-        };
-        this.emitSettings(sessionId);
-      })
-      .catch(() => {
-        if (
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        this.settings = {
-          status: 'error',
-          value: confirmed,
-          message: SETTINGS_READ_FAILED_MESSAGE,
-        };
-        this.emitSettings(sessionId);
-      });
   }
 
   emit(
@@ -5568,24 +5360,6 @@ export class ChatController {
     );
   }
 
-  private isCurrentSettingsUpdate(
-    runtime: DroidRuntime,
-    generation: number,
-    sessionId: string,
-    cwd: string,
-    operation: symbol,
-  ): boolean {
-    return (
-      this.settingsUpdate === operation &&
-      this.isCurrentSessionOperation(
-        runtime,
-        generation,
-        sessionId,
-        cwd,
-      )
-    );
-  }
-
   private resetSessionMetadata(): void {
     this.contextGeneration += 1;
     this.specHandoff = null;
@@ -5852,34 +5626,6 @@ function projectCatalogEntries(
     });
   }
   return items;
-}
-
-function projectConfirmedSettings(
-  settings: RuntimeSessionSettings,
-): ConfirmedSessionSettings {
-  if (
-    !isEnumValue(settings.interactionMode, SESSION_INTERACTION_MODES) ||
-    !isSafeModelId(settings.modelId) ||
-    !isEnumValue(settings.reasoningEffort, SESSION_REASONING_EFFORTS) ||
-    !isEnumValue(settings.autonomyLevel, SESSION_AUTONOMY_LEVELS) ||
-    (settings.specModeModelId !== null &&
-      !isSafeModelId(settings.specModeModelId)) ||
-    (settings.specModeReasoningEffort !== null &&
-      !isEnumValue(
-        settings.specModeReasoningEffort,
-        SESSION_REASONING_EFFORTS,
-      ))
-  ) {
-    throw new Error('Invalid runtime session settings.');
-  }
-  return {
-    interactionMode: settings.interactionMode,
-    modelId: settings.modelId,
-    reasoningEffort: settings.reasoningEffort,
-    autonomyLevel: settings.autonomyLevel,
-    specModeModelId: settings.specModeModelId,
-    specModeReasoningEffort: settings.specModeReasoningEffort,
-  };
 }
 
 function sanitizeSessionTitle(title: string): string {
