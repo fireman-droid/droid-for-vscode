@@ -1877,9 +1877,11 @@ UI 描述见 §22 重做记录。
   不与队列条/锚卡堆叠），小转圈 + "N Working"；点开
   `ComposerPopup` 壳弹层：每行 类型 + 描述（单行截断）+ 实时走秒
   时长（弹层开着才走 interval），右上 Stop All = 现有
-  `turn.stop` 通道（无二次确认）；回合外 Stop All 禁用 + 注脚
-  "Running in background — cannot be stopped from here."；每行留
-  View 挂点注释（回放切片 §6.1 接入，本切片不渲染）
+  `turn.stop` 通道（无二次确认）；~~回合外 Stop All 禁用 + 注脚~~
+  （**决策修正 2026-08-12 深夜**，用户拍板"停不掉的就不画控件"：
+  回合外无可停条目时 Stop All 与注脚整个不渲染——不是禁用，是不
+  存在，状态本身已说明一切）；每行留 View 挂点注释（回放切片
+  §6.1 接入，本切片不渲染）
 - **子行动效与诚实降级**：running 子行加 8px CSS 转圈
   （`dvx-spin`，compositor-only，reduced-motion 静止、
   forced-colors 适配）；父 Task 行已终态而子行仍 running 时状态字
@@ -1895,8 +1897,8 @@ UI 描述见 §22 重做记录。
   场景 PASS：live——徽标 "2 Working" 转圈 → 弹层两行走秒 +
   Stop All 可用 → Stop All 后弹层与徽标齐退、子行 cancelled；
   zombie——回合终态后徽标仍在、子行 "running in background" 带
-  转圈、Stop All 禁用 + muted 注脚、`subagent.update` 逐条结算
-  徽标 2→1→消失。四张截图：`artifacts/working-badge-active.png` /
+  转圈、无任何 Stop 控件与注脚（决策修正后复验重截）、
+  `subagent.update` 逐条结算徽标 2→1→消失。四张截图：`artifacts/working-badge-active.png` /
   `-popup.png` / `-stopped.png` / `-zombie.png`。120 回合 stress
   （`run-smoke-subagent.mjs` 更新断言后）复跑三次，两次
   streamingLongTasks 为零（首次一条 74ms 属启动噪声，复跑均绿），
