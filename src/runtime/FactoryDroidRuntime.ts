@@ -54,6 +54,7 @@ import {
   type RuntimeSessionSettings,
   type RuntimeSessionSettingUpdate,
   type RuntimeSessionTarget,
+  type RuntimeSessionWorkingState,
   type RuntimeMcpAuthOutcome,
   type RuntimeMcpAuthStart,
   type RuntimeMcpServer,
@@ -136,6 +137,13 @@ export interface FactoryDroidSession {
     },
   ): AsyncIterable<DroidStreamEvent>;
   interrupt(): Promise<void>;
+  /**
+   * Raw backend working-state string for this session, or null when
+   * the backend no longer lists the session. Daemon sessions implement
+   * it from the daemon's opened-session registry; process sessions
+   * omit it (their turns cannot outlive the window).
+   */
+  readWorkingState?(): Promise<string | null>;
   updateSettings(
     params: DroidSessionUpdateSettingsOptions,
   ): Promise<unknown>;
@@ -570,6 +578,24 @@ export class FactoryDroidRuntime implements DroidRuntime {
     }
 
     await this.session.interrupt();
+  }
+
+  async interruptSession(): Promise<void> {
+    if (this.disposed || !this.session) {
+      return;
+    }
+
+    await this.session.interrupt();
+  }
+
+  async readSessionWorkingState(): Promise<RuntimeSessionWorkingState> {
+    const session = this.requireSession();
+    if (typeof session.readWorkingState !== 'function') {
+      throw new Error(
+        'The Droid session does not report a working state.',
+      );
+    }
+    return projectWorkingState(await session.readWorkingState());
   }
 
   async rewind(
@@ -1895,6 +1921,30 @@ function isContextNumber(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
+/**
+ * Projects the SDK's `DroidWorkingState` string onto the runtime enum.
+ * Null (session no longer listed by the backend) and unrecognized
+ * values both project to `unknown` so callers never mistake a lost
+ * session or a new SDK state for an idle one.
+ */
+function projectWorkingState(
+  raw: string | null,
+): RuntimeSessionWorkingState {
+  switch (raw) {
+    case 'idle':
+      return 'idle';
+    case 'waiting_for_tool_confirmation':
+      return 'waiting-for-user';
+    case 'thinking':
+    case 'streaming_assistant_message':
+    case 'executing_tool':
+    case 'compacting_conversation':
+      return 'running';
+    default:
+      return 'unknown';
+  }
+}
+
 function classifyInvalidContextStats(
   stats: GetContextStatsResult,
 ): string {
@@ -1945,6 +1995,9 @@ function createCatalogSessionView(
       return session.close();
     },
   };
+  if (typeof session.readWorkingState === 'function') {
+    view.readWorkingState = () => session.readWorkingState!();
+  }
   if (typeof session.rewind === 'function') {
     view.rewind = (params) => session.rewind!(params);
   }

@@ -175,6 +175,15 @@ function adaptDaemonSession(
     interrupt() {
       return session.interrupt();
     },
+    async readWorkingState() {
+      // The daemon's opened-session registry is the authoritative view
+      // of a session that kept running while no window was attached
+      // (probe: artifacts/probe-get-messages.mjs phase 2). A missing
+      // row means the daemon no longer tracks the session as open.
+      const opened = await droid.sessions.listOpened();
+      const row = opened.find((entry) => entry.id === session.id);
+      return row === undefined ? null : String(row.workingState);
+    },
     async updateSettings(params) {
       const update: SupportedSettingsUpdate = {
         ...(params.interactionMode === undefined

@@ -467,6 +467,87 @@ describe('createDaemonDroidSession', () => {
     expect(lease.release).toHaveBeenCalledExactlyOnceWith('session-1');
   });
 
+  it('reads the working state from the daemon opened-session registry', async () => {
+    const mock = createDroidMock();
+    mock.sessions.listOpened.mockResolvedValue([
+      { id: 'other-session', workingState: 'idle' },
+      { id: 'session-1', workingState: 'waiting_for_tool_confirmation' },
+    ]);
+    const session = await createDaemonDroidSession({
+      target: { kind: 'new', cwd: 'C:\\workspace' },
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      getDroid: async () => mock.droid,
+    });
+
+    await expect(session.readWorkingState?.()).resolves.toBe(
+      'waiting_for_tool_confirmation',
+    );
+
+    // A session the daemon no longer lists as open has no state.
+    mock.sessions.listOpened.mockResolvedValue([
+      { id: 'other-session', workingState: 'idle' },
+    ]);
+    await expect(session.readWorkingState?.()).resolves.toBeNull();
+  });
+
+  it('projects the daemon working state through the runtime', async () => {
+    const mock = createDroidMock();
+    const runtime = new FactoryDroidRuntime({
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      createSdkSession: createDaemonSessionFactory(
+        async () => mock.droid,
+      ),
+    });
+    await runtime.initialize('C:\\workspace');
+
+    const expectProjection = async (
+      workingState: string,
+      projected: string,
+    ) => {
+      mock.sessions.listOpened.mockResolvedValue([
+        { id: 'session-1', workingState },
+      ]);
+      await expect(runtime.readSessionWorkingState()).resolves.toBe(
+        projected,
+      );
+    };
+    await expectProjection('idle', 'idle');
+    await expectProjection(
+      'waiting_for_tool_confirmation',
+      'waiting-for-user',
+    );
+    await expectProjection('thinking', 'running');
+    await expectProjection('streaming_assistant_message', 'running');
+    await expectProjection('executing_tool', 'running');
+    await expectProjection('compacting_conversation', 'running');
+    // Unrecognized states and unlisted sessions both fail closed to
+    // `unknown` instead of reading as idle.
+    await expectProjection('some_future_state', 'unknown');
+    mock.sessions.listOpened.mockResolvedValue([]);
+    await expect(runtime.readSessionWorkingState()).resolves.toBe(
+      'unknown',
+    );
+  });
+
+  it('interruptSession interrupts the daemon turn without a local turn', async () => {
+    const mock = createDroidMock();
+    const runtime = new FactoryDroidRuntime({
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      createSdkSession: createDaemonSessionFactory(
+        async () => mock.droid,
+      ),
+    });
+    await runtime.initialize('C:\\workspace');
+
+    // `interrupt()` requires a locally streaming turn; a reloaded
+    // window observing a daemon-side turn has none.
+    await runtime.interrupt();
+    expect(mock.created.interrupt).not.toHaveBeenCalled();
+
+    await runtime.interruptSession();
+    expect(mock.created.interrupt).toHaveBeenCalledOnce();
+  });
+
   it('close detaches the handle so the session survives in the daemon', async () => {
     const mock = createDroidMock();
     const session = await createDaemonDroidSession({
@@ -532,6 +613,9 @@ function createDroidMock(
     ),
     resume: vi.fn(async (sessionId: string) =>
       createDaemonSessionMock(sessionId),
+    ),
+    listOpened: vi.fn(
+      async (): Promise<{ id: string; workingState: string }[]> => [],
     ),
     updateSettings: vi.fn(async () => ({})),
     getContextBreakdown: vi.fn(async () => ({

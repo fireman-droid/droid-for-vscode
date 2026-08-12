@@ -91,6 +91,31 @@ describe('FactoryDroidRuntime', () => {
     expect(runtime.getSessionCwd()).toBe('C:\\workspace-wt-main-wt');
   });
 
+  it('fails closed on working state and skips interruptSession in process mode', async () => {
+    const session = createMockSession(async function* () {});
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    // Process sessions do not implement readWorkingState (their turns
+    // cannot outlive the window), so the read must throw rather than
+    // report a made-up idle state.
+    await expect(runtime.readSessionWorkingState()).rejects.toThrow(
+      'does not report a working state',
+    );
+
+    // interruptSession still forwards to the session handle: unlike
+    // interrupt(), it must not require a locally streaming turn.
+    await runtime.interruptSession();
+    expect(session.interrupt).toHaveBeenCalledOnce();
+  });
+
+  it('interruptSession is a no-op before initialization', async () => {
+    const runtime = createRuntime(async () =>
+      createMockSession(async function* () {}),
+    );
+    await expect(runtime.interruptSession()).resolves.toBeUndefined();
+  });
+
   it('treats worktree and plain targets as different sessions', async () => {
     const factory = vi.fn(async () =>
       createMockSession(async function* () {}),

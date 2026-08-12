@@ -74,6 +74,24 @@ export type RuntimeSessionSettingUpdate =
       readonly value: RuntimeReasoningEffort | null;
     };
 
+/**
+ * Backend-side working state of the active session, independent of any
+ * turn this runtime is streaming locally. Daemon sessions keep running
+ * across a window reload, so after a resume the session may already be
+ * `running` (agent loop active) or `waiting-for-user` (a pending
+ * permission/ask-user blocks the loop). `unknown` means the backend
+ * could not attribute a state to the session (fail closed: callers must
+ * not treat it as idle).
+ */
+export const RUNTIME_SESSION_WORKING_STATES = [
+  'idle',
+  'running',
+  'waiting-for-user',
+  'unknown',
+] as const;
+export type RuntimeSessionWorkingState =
+  (typeof RUNTIME_SESSION_WORKING_STATES)[number];
+
 export type RuntimeContextAccuracy = 'exact' | 'estimated';
 
 export interface RuntimeContextStats {
@@ -319,6 +337,21 @@ export interface DroidRuntime {
     attachments?: readonly RuntimeAttachment[],
   ): AsyncIterable<RuntimeEvent>;
   interrupt(): Promise<void>;
+  /**
+   * Reads the backend-side working state of the active session (see
+   * `RuntimeSessionWorkingState`). Throws when the session backend
+   * cannot report one (process mode, where a turn can only run inside
+   * this window). Reload reconciliation polls this to know when a
+   * daemon-side in-flight turn has finished.
+   */
+  readSessionWorkingState?(): Promise<RuntimeSessionWorkingState>;
+  /**
+   * Interrupts the session's backend-side turn even when this runtime
+   * has no locally streaming turn. `interrupt()` deliberately no-ops
+   * without an active local turn; this is the Stop entry point for a
+   * daemon-side turn recovered after a reload.
+   */
+  interruptSession?(): Promise<void>;
   /**
    * Rewinds the active session to the given user message, forking a new
    * session that this runtime then targets. Optional: absent when the
