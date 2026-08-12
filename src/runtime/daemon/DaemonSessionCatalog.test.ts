@@ -4,6 +4,7 @@ import type { ConnectedDroid } from '@factory/droid-sdk';
 
 import {
   DAEMON_ARCHIVED_LIST_LIMIT,
+  DAEMON_LIST_FETCH_LIMIT,
   DAEMON_SEARCH_SESSION_LIMIT,
   DAEMON_SEARCH_SNIPPET_LIMIT,
   DaemonSessionCatalog,
@@ -95,8 +96,21 @@ describe('DaemonSessionCatalog', () => {
     ]);
     expect(list).toHaveBeenCalledWith({
       includeArchived: true,
-      limit: 200,
+      limit: DAEMON_LIST_FETCH_LIMIT,
     });
+  });
+
+  it('keeps the fetch limit within the daemon schema cap', () => {
+    // The daemon client's Zod schema rejects `limit > 100` before the
+    // request is sent; a 200-row fetch made every listArchived call
+    // fail with a ZodError (field logs: repeated archived-load-failed
+    // on v0.1.1). Guard the cap so the archived drawer never goes
+    // silently dark again.
+    expect(DAEMON_LIST_FETCH_LIMIT).toBeLessThanOrEqual(100);
+    // The workspace filter needs headroom over the projected cap.
+    expect(DAEMON_LIST_FETCH_LIMIT).toBeGreaterThanOrEqual(
+      DAEMON_ARCHIVED_LIST_LIMIT,
+    );
   });
 
   it('caps the archived projection', async () => {

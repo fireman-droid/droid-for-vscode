@@ -10,8 +10,17 @@ import {
 
 /** Most archived sessions projected for the drawer. */
 export const DAEMON_ARCHIVED_LIST_LIMIT = 50;
-/** How many rows we ask the daemon for before workspace filtering. */
-const DAEMON_LIST_FETCH_LIMIT = 200;
+/**
+ * How many rows we ask the daemon for before workspace filtering.
+ * The daemon client rejects `limit > 100` with a ZodError before the
+ * request leaves the process (same schema cap `probe-get-messages.mjs`
+ * hit on `sessions.getMessages`); the previous value of 200 made
+ * every `listArchived` call fail silently (field logs: repeated
+ * `archived-load-failed`). Archived sessions older than the newest
+ * 100 rows stay invisible — an accepted boundary until the facade
+ * exposes list pagination.
+ */
+export const DAEMON_LIST_FETCH_LIMIT = 100;
 /** Most sessions returned by one content search. */
 export const DAEMON_SEARCH_SESSION_LIMIT = 20;
 /** Longest single-line snippet kept per search hit. */
