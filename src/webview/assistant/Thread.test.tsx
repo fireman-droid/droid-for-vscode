@@ -228,6 +228,42 @@ describe('SubagentSummaryRow', () => {
     ).not.toBeNull();
   });
 
+  it('treats a statusless row under a running Task as live work', () => {
+    // Identity comes from the Task input ~40s before the SDK's
+    // lifecycle notification; under a running parent the delegation
+    // is live by construction, so the row spins instead of sitting
+    // inert for the whole visible run.
+    render(
+      createElement(SubagentSummaryRow, {
+        type: 'explore',
+        description: 'Early identity',
+        status: null,
+        toolUseCount: null,
+        durationMs: null,
+        parentRunning: true,
+      }),
+    );
+    screen.getByText('running');
+    expect(
+      document.querySelector('.dvx-subagent-spinner'),
+    ).not.toBeNull();
+  });
+
+  it('stays statusless when neither the SDK nor the parent is live', () => {
+    render(
+      createElement(SubagentSummaryRow, {
+        type: 'explore',
+        description: 'Identity only',
+        status: null,
+        toolUseCount: null,
+        durationMs: null,
+      }),
+    );
+    screen.getByText('Delegated to explore subagent');
+    expect(screen.queryByText('running')).toBeNull();
+    expect(document.querySelector('.dvx-subagent-spinner')).toBeNull();
+  });
+
   it('drops the spinner once the delegation settled', () => {
     render(
       createElement(SubagentSummaryRow, {
