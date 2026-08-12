@@ -1120,6 +1120,65 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
   活动回合隐藏 Fork、时间戳只落亲见完成的回合）、
   `MessageTimestamp.test.tsx`、`relativeTime.test.ts`
 
+### 16. 消息文本路径链接的 Preview 入口（2026-08-12 傍晚）
+
+- **场景**：Droid 前一回合把 HTML 写盘，后一回合只在消息文本里以
+  内联代码路径提到它（写盘回合的 Changes 卡不在视野）。现在路径
+  链接（`dvx-path-link`）后紧跟一个 quiet 的 Preview chip（复用
+  `dvx-preview-chip` 视觉 + `dvx-path-preview-chip` 行内微调），
+  点击走现有 `file.preview` 消息打开 srcdoc 沙箱面板
+- **工作区折算是前提**：webview 原本不知道工作区根，无法把
+  `D:\...\烟花.html` 折算成 `file.preview` 要求的工作区相对路径。
+  本切片给 `host.snapshot` 增加可选 `workspaceRoot`（Host 侧取
+  `getWorkspaceContext().cwd`，无可用工作区时省略；webview 校验
+  有界 + 控制字符拒收，整条快照 fail closed）。`file.preview` 的
+  严格相对路径契约**零改动**
+- **折算逻辑**：`pathLink.ts` 新增 `toWorkspaceRelativePath`
+  （镜像 Host `handleWorkspaceReadImage` 的 inside-root rebase：
+  相对路径归一化直通、盘符根大小写不敏感前缀匹配、POSIX 根大小写
+  敏感、越界/等于根返回 null）；`MarkdownText.tsx` 的
+  `previewablePathOf` 再叠 `isSafeWorkspaceRelativePath` +
+  `isPreviewableFilePath`（与 Bridge 解析器、Host 同一套谓词）。
+  **工作区外路径不出入口**（安全边界不破），非 .html/.htm 不出，
+  无 root（rootless 工作区/独立渲染）不出；历史回放纯由
+  转录 + 快照 root 渲染，天然可用
+- 门禁：typecheck 绿（含 HEAD 干净检出的独立 worktree 复验）；
+  全量 vitest 76 files / 1740 tests 全绿；build 正常；headless
+  Chrome harness 冒烟（`artifacts/tmp/pathpreview-harness.html` +
+  `probe-pathpreview.mjs`）：同一消息里工作区内路径恰好 1 个
+  Preview chip、工作区外路径 0 个、两个路径链接都在、点击恰好发
+  一条 `file.preview` 且 path 为 `artifacts/烟花.html`
+- **打包**：本切片完成时点树绿、锁空闲，`package:vsix` 已启动，
+  但流水线跑到 typecheck 时并行代理恰好落下 `9bc7a13`
+  （/btw Bridge 契约半切片：新消息类型入 union、store reducer
+  尚未消费 → TS2366），树转红打包中止。按约定**标注随下包**；
+  等 /btw 切片补齐 store 消费后由下一个打包代理携带
+- 并发说明：`7a8e33a` 提交时不慎并入并行代理在途的 /btw 弹层
+  样式与 Thread/App 的 btw/计划钉条接线（工作树内容一致、门禁
+  全绿）；其引用的 `planPin.ts`/`TaskPlanPin.tsx` 以
+  `fab92da`（chore）落地保持 HEAD 干净检出可编译，SideChatSheet
+  仍未被 HEAD 引用、留给原代理提交
+
+主要实现：
+
+- `src/shared/bridgeMessages.ts`、`src/webview/bridge/
+  validateHostMessage.ts`（快照 `workspaceRoot` 可选字段 + 有界
+  校验，`6196007`）
+- `src/extension/ChatController.ts`（`emitSnapshot` 携带
+  cwd、rootless 省略，`cf343a9`）
+- `src/webview/assistant/pathLink.ts`
+  （`toWorkspaceRelativePath`）、`MarkdownText.tsx`
+  （`PathPreviewContext`/`previewablePathOf`/行内 chip）、
+  `Thread.tsx`（`workspaceRoot` prop + provider）、`App.tsx`
+  （`state.workspaceRoot` 接线）、`store.ts`（快照留存）、
+  `styles.css`（`dvx-path-preview-chip`），`7a8e33a`
+- 测试：`pathLink.test.ts`（折算 10 例：CJK/大小写/尾分隔符/
+  前缀陷阱/POSIX/越界）、`MarkdownText.test.tsx`（chip 出现/点击
+  发相对路径/编辑器链接不受影响/工作区外与非 HTML 不出/无 root
+  不出）、`validateHostMessage.test.ts`（root 收发 + 4 类敌意
+  形状拒收）、`store.test.ts`（快照留存/缺席回落 null）、
+  `ChatController.test.ts`（快照携带 root、rootless 省略）
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -1501,6 +1560,13 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   工作区内其他并行切片的未提交改动（btw/side-chat 等在途文件），
   面板可见冒烟（真实 `core@factory-plugins` 行 + 杀 daemon 后
   error 态）待用户 Reload Window 后核对。
+- 2026-08-12 傍晚「消息文本路径链接 Preview 入口」切片（§16）已全部
+  提交（`6196007` Bridge + `cf343a9` Host + `7a8e33a` Webview +
+  `fab92da` chore），门禁全绿（typecheck 三段 + vitest 76 files/
+  1740 + build + headless 冒烟 + HEAD 干净检出复验）。完成时点锁
+  空闲即启动 `package:vsix`，流水线中并行代理落下 `9bc7a13`
+  （/btw 契约半切片，store reducer 未消费新消息类型）树转红，
+  打包中止，**随下包**
 - 2026-08-12 傍晚「三项体验补全」切片（回到底部箭头 / 待答空隙修复 /
   代码块 Preview，§14）已全部提交（`8739fd2` `cae4890` `cd7a74f`
   `3c8570f`，Bridge/CSS 部分随并行代理并入 `3e7da6b`/`62b6f1b`），
