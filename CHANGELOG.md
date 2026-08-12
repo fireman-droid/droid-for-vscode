@@ -4,6 +4,69 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-08-13
+
+Feature release: the daemon becomes the default backend so turns survive
+window reloads and session switches, subagent delegations get an honest
+live surface (Working badge, identity on dispatch, zombie settlement),
+and prompts queued during a turn gain Cursor-style management.
+
+### Added
+
+- **Working badge** — a quiet "N Working" pill at the Composer's left
+  edge while subagent delegations run (including after the parent turn
+  finished), with an activity popup listing each delegation's type,
+  description, and live elapsed time. Stop All rides the existing
+  turn-stop channel while the turn is active; when background
+  delegations demonstrably cannot be stopped, no control is drawn at
+  all rather than a fake one.
+- **Queued-messages bar** — prompts queued during a running turn fold
+  into a single Cursor-style line above the Composer ("N Queued · ⏎ to
+  Send"); expanding it offers per-prompt editing through the Composer
+  (Edit Queued chip), send-now promotion, and removal, and the paused
+  state surfaces Send now / Clear inline.
+- **Created Plan card** — the task plan anchors as a card at its
+  creation point in the conversation, building live and settling to
+  Completed, replacing the Composer-pinned plan surface.
+- **Session drawer running indicator** — sessions with an in-flight
+  turn wear a quiet inline ring that clears in place when the turn
+  ends, and daemon-backed sessions can be switched away from while
+  their turn keeps running in the background.
+
+### Changed
+
+- **Daemon by default** — sessions ride the shared local daemon
+  (turns survive window reloads) with a silent per-window fallback to
+  the subprocess runtime when the daemon cannot start; an explicit
+  mode setting is always honored, and `/btw` works in both modes.
+- **`/btw` split pane** — the side question surface becomes a
+  full-height split-pane column beside the conversation instead of a
+  right-edge overlay panel.
+- **Command card** — the Execute row grows into a Cursor-grade command
+  card with the call's own summary as its title.
+- **Session drawer closes on selection** — picking a session returns
+  straight to the chat instead of leaving the drawer open.
+
+### Fixed
+
+- **Archived list dead on arrival** — the drawer's Archived section
+  failed silently on every load: the 200-row fetch exceeded the daemon
+  client's limit-100 schema cap and was rejected before the request
+  was sent. The fetch now stays inside the cap.
+- **Subagent rows without an identity** — a Task delegation row now
+  shows its type and description the moment it is dispatched instead
+  of sitting on a bare "subagent" placeholder until the first status
+  event, and a statusless row still spins while its parent Task runs.
+- **Zombie running subagents** — delegation rows (and the Working
+  badge) no longer spin forever when a background child outlives the
+  turn: the host reconciles the delegation ledger after the turn ends
+  and re-arms that watch after a window reload re-attaches the
+  session.
+- **Sent image order** — user images sent before their prompt text
+  adopt into the same history message instead of drifting apart.
+- **Exploration group integrity** — the running-group append helper no
+  longer swallows user rows into a collapsed exploration group.
+
 ## [0.1.1] - 2026-08-12
 
 Fix release for the first round of v0.1.0 field reports: streaming
