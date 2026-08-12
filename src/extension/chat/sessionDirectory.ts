@@ -26,6 +26,7 @@ import {
   recordCreatedWorktreeSession,
 } from '../worktreeSessions';
 import { seedBackgroundRunning } from './sessionRunning';
+import { refreshContextAfterTurn } from './turnFlow';
 import {
   canReplaceSession,
   emitWorkspaceUnavailable,
@@ -799,7 +800,7 @@ export async function performFork(
       code: 'session-forked',
       message: 'Session forked. You are now on the copy.',
     });
-    ctl.refreshContextAfterTurn(forkedSessionId);
+    refreshContextAfterTurn(ctl, forkedSessionId);
 }
 
 export function startCatalogRefresh(

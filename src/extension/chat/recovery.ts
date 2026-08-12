@@ -9,6 +9,12 @@ import { reconcileSessionHistory } from '../reconcileSessionHistory';
 import { SESSION_RECOVERY_DEBOUNCE_MS } from '../SessionRecoveryStore';
 import { setSessionRunning } from './sessionRunning';
 import { loadHistoryTimed } from './runtimeLifecycle';
+import {
+  failTurn,
+  isCurrentTurn,
+  refreshContextAfterTurn,
+  setTurnStatus,
+} from './turnFlow';
 import { delay, type ChatControllerInternals } from './internals';
 
 export /**
@@ -175,7 +181,7 @@ export async function pollRecoveredTurn(
     while (true) {
       await delay(RECOVERED_TURN_POLL_MS);
       if (
-        !ctl.isCurrentTurn(
+        !isCurrentTurn(ctl, 
           runtime,
           runtimeGeneration,
           turnGeneration,
@@ -192,7 +198,7 @@ export async function pollRecoveredTurn(
         state = 'unknown';
       }
       if (
-        !ctl.isCurrentTurn(
+        !isCurrentTurn(ctl, 
           runtime,
           runtimeGeneration,
           turnGeneration,
@@ -205,7 +211,7 @@ export async function pollRecoveredTurn(
       if (state === 'unknown') {
         unknownReads += 1;
         if (unknownReads >= RECOVERED_TURN_MAX_UNKNOWN_READS) {
-          ctl.failTurn(sessionId, turnId, 'recovered-turn-lost');
+          failTurn(ctl, sessionId, turnId, 'recovered-turn-lost');
           return;
         }
         continue;
@@ -242,7 +248,7 @@ export async function finishRecoveredTurn(
   ): Promise<void> {
     const loaded = await loadHistoryTimed(ctl, cwd, sessionId);
     if (
-      !ctl.isCurrentTurn(
+      !isCurrentTurn(ctl, 
         runtime,
         runtimeGeneration,
         turnGeneration,
@@ -271,14 +277,14 @@ export async function finishRecoveredTurn(
         RECOVERED_HISTORY_FAILED_MESSAGE,
       );
     }
-    ctl.setTurnStatus(
+    setTurnStatus(ctl, 
       sessionId,
       turnId,
       interrupted ? 'interrupted' : 'completed',
     );
     ctl.emitSnapshot();
     void flushRecoveryCheckpoint(ctl);
-    ctl.refreshContextAfterTurn(sessionId);
+    refreshContextAfterTurn(ctl, sessionId);
 }
 
 export function scheduleRecoveryCheckpoint(ctl: ChatControllerInternals): void {

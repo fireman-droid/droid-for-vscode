@@ -10,6 +10,7 @@ import {
 import { clearPendingAttachments, emitEditAttachments } from './attachments';
 import { withActiveSession } from './sessionDirectory';
 import { ensureActiveRuntimeWorkspaceCurrent } from './runtimeLifecycle';
+import { handleSend } from './turnFlow';
 import {
   forkTitleFromText,
   isSafeBridgeId,
@@ -169,7 +170,7 @@ export function handleEditResend(
       // forked session id, the truncated transcript with the edited
       // prompt, and the submitting turn, so the webview adopts the fork
       // atomically.
-      ctl.handleSend(
+      handleSend(ctl, 
         forkedSessionId,
         turnId,
         text,

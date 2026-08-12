@@ -14,6 +14,7 @@ import {
 } from '../queuedPromptsState';
 import type { SessionQueueState } from '../../shared/queueProtocol';
 import { emitAttachments } from './attachments';
+import { handleSend } from './turnFlow';
 import { isTurnActive, type ChatControllerInternals } from './internals';
 
 export const QUEUE_DISPATCH_BLOCKED_MESSAGE =
@@ -223,7 +224,7 @@ export function maybeDispatchQueue(ctl: ChatControllerInternals): void {
     // separates a real dispatch from a veto — matching turn ids
     // cannot (a stale completed turn may share the queued id).
     const generationBefore = ctl.turnGeneration;
-    ctl.handleSend(
+    handleSend(ctl, 
       sessionId,
       prompt.queueId,
       prompt.text,
