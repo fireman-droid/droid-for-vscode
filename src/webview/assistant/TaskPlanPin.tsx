@@ -26,10 +26,21 @@ export function TaskPlanPin({
     'none',
   );
   const containerRef = useRef<HTMLDivElement | null>(null);
-  // The plan key last observed with unfinished steps: distinguishes a
-  // live finish (celebrate, then fade) from mounting an already
-  // finished plan (never show).
-  const seenUnfinishedRef = useRef<string | null>(null);
+  // Whether this session was earlier observed with open steps. That
+  // observation separates a live finish (celebrate, then fade) from
+  // mounting an already finished plan (history replay: never show).
+  // It is per session, not per plan row, because Droid writes the
+  // final all-completed update as a fresh todowrite tool call.
+  const sawOpenPlanRef = useRef(false);
+  const sessionRef = useRef<string | null>(null);
+  const sessionKey = pin?.sessionKey ?? null;
+  if (sessionRef.current !== sessionKey) {
+    sessionRef.current = sessionKey;
+    sawOpenPlanRef.current = false;
+  }
+  if (pin !== null && !pin.allCompleted) {
+    sawOpenPlanRef.current = true;
+  }
 
   // Reset the UI when the plan identity changes (new plan written,
   // session switched); adjusting state during render lets the reset
@@ -41,13 +52,8 @@ export function TaskPlanPin({
     setExpanded(false);
     setExitPhase('none');
   }
-  if (pin !== null && !pin.allCompleted) {
-    seenUnfinishedRef.current = pin.planKey;
-  }
   const finishedLive =
-    pin !== null &&
-    pin.allCompleted &&
-    seenUnfinishedRef.current === pin.planKey;
+    pin !== null && pin.allCompleted && sawOpenPlanRef.current;
 
   useEffect(() => {
     if (!finishedLive) {

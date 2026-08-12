@@ -11,6 +11,12 @@ export interface PlanStep {
  * (detailKind 'plan'); no new bridge data is involved.
  */
 export interface TaskPlanPinState {
+  /**
+   * Identity of the owning session. The pin's live-vs-replay
+   * observation resets across sessions: a finished plan fades out
+   * only when *this* session was earlier seen with open steps.
+   */
+  readonly sessionKey: string;
   /** Stable identity of the plan row (`turnId:toolUseId`). */
   readonly planKey: string;
   readonly steps: readonly PlanStep[];
@@ -68,6 +74,7 @@ export function parsePlanSteps(detail: string): readonly PlanStep[] {
  */
 export function selectTaskPlanPin(
   transcript: readonly SessionTranscriptItem[],
+  sessionId: string | null = null,
 ): TaskPlanPinState | null {
   for (let index = transcript.length - 1; index >= 0; index -= 1) {
     const item = transcript[index];
@@ -90,6 +97,7 @@ export function selectTaskPlanPin(
       steps.find((step) => step.status === 'in_progress') ??
       steps.find((step) => step.status === 'pending');
     return {
+      sessionKey: sessionId ?? '',
       planKey: `${item.turnId}:${item.toolUseId}`,
       steps,
       completedCount,

@@ -18,6 +18,7 @@ function makePin(
   overrides: Partial<TaskPlanPinState> = {},
 ): TaskPlanPinState {
   return {
+    sessionKey: 'session-1',
     planKey: 'turn-1:use-1',
     steps: [
       { status: 'completed', text: 'Read the config' },
@@ -177,8 +178,36 @@ describe('TaskPlanPin', () => {
     const bar = toggle();
     expect(bar.getAttribute('aria-expanded')).toBe('false');
     expect(document.querySelector('.dvx-plan-pin-list')).toBeNull();
-    // An already-finished *new* plan key never shows (replayed switch).
-    rerender(<TaskPlanPin pin={donePin('turn-3:use-1')} />);
+  });
+
+  it('fades out a finish that arrives as a fresh todowrite call', () => {
+    // Droid writes the final all-completed update as a *new* tool
+    // call; having seen this session with open steps is what marks
+    // the finish as live, not the plan row identity.
+    vi.useFakeTimers();
+    const { rerender, container } = render(<TaskPlanPin pin={makePin()} />);
+    rerender(<TaskPlanPin pin={donePin('turn-2:use-7')} />);
+    const pin = container.querySelector('.dvx-plan-pin');
+    expect(pin?.className).toContain('dvx-plan-pin-done');
+    expect(pin?.textContent).toContain('Plan complete');
+    act(() =>
+      vi.advanceTimersByTime(TASK_PLAN_PIN_SETTLE_MS + TASK_PLAN_PIN_FADE_MS),
+    );
+    expect(container.querySelector('.dvx-plan-pin')).toBeNull();
+  });
+
+  it('never celebrates a finished plan from another session', () => {
+    // Switching from a session with open steps to one whose restored
+    // plan is already complete must not flash a celebration.
+    const { rerender, container } = render(<TaskPlanPin pin={makePin()} />);
+    rerender(
+      <TaskPlanPin
+        pin={{
+          ...donePin('turn-9:use-1'),
+          sessionKey: 'session-2',
+        }}
+      />,
+    );
     expect(container.querySelector('.dvx-plan-pin')).toBeNull();
   });
 

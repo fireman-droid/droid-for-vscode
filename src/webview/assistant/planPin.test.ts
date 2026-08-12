@@ -71,16 +71,23 @@ describe('parsePlanSteps', () => {
 describe('selectTaskPlanPin', () => {
   it('returns null when the transcript has no plan', () => {
     expect(
-      selectTaskPlanPin([
-        { id: 'u1', kind: 'user', text: 'hello' },
-        otherTool('turn-1', 'use-1'),
-      ]),
+      selectTaskPlanPin(
+        [
+          { id: 'u1', kind: 'user', text: 'hello' },
+          otherTool('turn-1', 'use-1'),
+        ],
+        'session-1',
+      ),
     ).toBeNull();
   });
 
   it('projects the plan with counts and the in-progress headline', () => {
-    const pin = selectTaskPlanPin([planTool('turn-1', 'use-1', ACTIVE_PLAN)]);
+    const pin = selectTaskPlanPin(
+      [planTool('turn-1', 'use-1', ACTIVE_PLAN)],
+      'session-1',
+    );
     expect(pin).toEqual({
+      sessionKey: 'session-1',
       planKey: 'turn-1:use-1',
       steps: [
         { status: 'completed', text: 'Read the config' },
@@ -95,40 +102,58 @@ describe('selectTaskPlanPin', () => {
   });
 
   it('falls back to the next pending step when nothing is in progress', () => {
-    const pin = selectTaskPlanPin([
-      planTool(
-        'turn-1',
-        'use-1',
-        '1. [completed] Done thing\n2. [pending] Next thing',
-      ),
-    ]);
+    const pin = selectTaskPlanPin(
+      [
+        planTool(
+          'turn-1',
+          'use-1',
+          '1. [completed] Done thing\n2. [pending] Next thing',
+        ),
+      ],
+      'session-1',
+    );
     expect(pin?.currentText).toBe('Next thing');
   });
 
   it('reports a fully completed plan with a null headline', () => {
-    const pin = selectTaskPlanPin([
-      planTool('turn-1', 'use-1', '1. [completed] Only thing'),
-    ]);
+    const pin = selectTaskPlanPin(
+      [planTool('turn-1', 'use-1', '1. [completed] Only thing')],
+      'session-1',
+    );
     expect(pin?.allCompleted).toBe(true);
     expect(pin?.currentText).toBeNull();
     expect(pin?.completedCount).toBe(1);
   });
 
   it('picks the latest plan when several were written', () => {
-    const pin = selectTaskPlanPin([
-      planTool('turn-1', 'use-1', '1. [pending] Old plan item'),
-      otherTool('turn-2', 'use-2'),
-      planTool('turn-2', 'use-3', '1. [in_progress] New plan item'),
-    ]);
+    const pin = selectTaskPlanPin(
+      [
+        planTool('turn-1', 'use-1', '1. [pending] Old plan item'),
+        otherTool('turn-2', 'use-2'),
+        planTool('turn-2', 'use-3', '1. [in_progress] New plan item'),
+      ],
+      'session-1',
+    );
     expect(pin?.planKey).toBe('turn-2:use-3');
     expect(pin?.currentText).toBe('New plan item');
   });
 
   it('skips plan rows whose detail parses to no steps', () => {
-    const pin = selectTaskPlanPin([
-      planTool('turn-1', 'use-1', ACTIVE_PLAN),
-      planTool('turn-2', 'use-2', '   '),
-    ]);
+    const pin = selectTaskPlanPin(
+      [
+        planTool('turn-1', 'use-1', ACTIVE_PLAN),
+        planTool('turn-2', 'use-2', '   '),
+      ],
+      'session-1',
+    );
     expect(pin?.planKey).toBe('turn-1:use-1');
+  });
+
+  it('stamps a null session id as an empty session key', () => {
+    const pin = selectTaskPlanPin(
+      [planTool('turn-1', 'use-1', ACTIVE_PLAN)],
+      null,
+    );
+    expect(pin?.sessionKey).toBe('');
   });
 });
