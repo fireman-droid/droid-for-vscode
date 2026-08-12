@@ -413,6 +413,14 @@ const MCP_AUTH_TIMEOUT_MESSAGE =
 const MCP_AUTH_WAIT_TIMEOUT_MS = 2 * 60_000;
 const MCP_REQUEST_DROPPED_MESSAGE =
   'Droid could not accept that MCP change right now. Retry in a moment.';
+/**
+ * Ceiling for one MCP catalog read or mutation round-trip. Adding a
+ * stdio server spawns its command and waits for the MCP handshake,
+ * so a spawnable-but-wrong command (`node` with no script) otherwise
+ * hangs the daemon RPC forever and pins the panel in 'loading' with
+ * every control disabled. Fail closed to an error state instead.
+ */
+const MCP_OPERATION_TIMEOUT_MS = 30_000;
 const SKILL_REQUEST_DROPPED_MESSAGE =
   'Droid could not accept that skill change right now. Retry in a moment.';
 const CONTEXT_READ_FAILED_MESSAGE =
@@ -3932,7 +3940,7 @@ export class ChatController {
     }
 
     this.emitMcp(sessionId, { status: 'loading', items: [] });
-    void runtime.listMcpServers().then(
+    void withMcpTimeout(runtime.listMcpServers()).then(
       (servers) => {
         if (
           !this.isCurrentSessionOperation(
@@ -4111,7 +4119,7 @@ export class ChatController {
     this.emitMcp(sessionId, { status: 'loading', items: [] });
     const generation = this.runtimeGeneration;
     const cwd = this.activeRuntimeCwd!;
-    void mutation().then(
+    void withMcpTimeout(mutation()).then(
       () =>
         this.finishMcpMutation(
           sessionId,
@@ -4147,7 +4155,7 @@ export class ChatController {
   ): Promise<void> {
     let items: McpServerSummary[] | null = null;
     try {
-      items = (await runtime.listMcpServers!()).map(
+      items = (await withMcpTimeout(runtime.listMcpServers!())).map(
         projectMcpServerSummary,
       );
     } catch (error) {
@@ -7328,6 +7336,34 @@ function recoveryTurnId(generation: number): string {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Rejects when an MCP daemon round-trip outlives
+ * `MCP_OPERATION_TIMEOUT_MS`, so a hung add/remove/toggle/list RPC
+ * degrades into the normal failure path (error state + fresh
+ * catalog read) instead of freezing the MCP panel in 'loading'.
+ */
+function withMcpTimeout<T>(operation: Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        new Error(
+          `MCP operation timed out after ${MCP_OPERATION_TIMEOUT_MS}ms`,
+        ),
+      );
+    }, MCP_OPERATION_TIMEOUT_MS);
+    operation.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  });
 }
 
 function isTurnActive(turn: CurrentTurn | null): boolean {

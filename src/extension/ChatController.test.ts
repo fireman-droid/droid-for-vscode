@@ -4052,6 +4052,49 @@ describe('ChatController', () => {
     expect(JSON.stringify(messages)).not.toContain('private add failure');
   });
 
+  it('fails a hung MCP add back to an interactive error state', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      listMcpServers: vi.fn(async () => []),
+      // The daemon RPC never resolves (a spawnable-but-wrong stdio
+      // command waits on an MCP handshake that never happens).
+      addMcpServer: vi.fn(() => new Promise<void>(() => {})),
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    vi.useFakeTimers();
+    try {
+      controller.handleMessage({
+        type: 'mcp.server.add',
+        sessionId: 'session-1',
+        name: 'hung',
+        serverType: 'stdio',
+        command: 'node',
+      });
+      expect(mcpMessages(messages).at(-1)?.mcp).toMatchObject({
+        status: 'loading',
+      });
+      // The timeout fails the mutation closed: the panel leaves
+      // 'loading', carries the retry message, and stays interactive.
+      await vi.advanceTimersByTimeAsync(30_001);
+    } finally {
+      vi.useRealTimers();
+    }
+    await vi.waitFor(() => {
+      expect(mcpMessages(messages).at(-1)?.mcp).toMatchObject({
+        status: 'error',
+        items: [],
+      });
+    });
+    const finalMcp = mcpMessages(messages).at(-1)?.mcp;
+    expect(
+      finalMcp !== undefined && 'message' in finalMcp
+        ? finalMcp.message
+        : '',
+    ).toContain('could not add');
+  });
+
   it('pushes skills and MCP catalogs once a session becomes available', async () => {
     const runtime = Object.assign(createMockRuntime(), {
       listSkills: vi.fn(async () => [
