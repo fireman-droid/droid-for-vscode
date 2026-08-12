@@ -118,7 +118,7 @@ import {
 import { handleQueueAdd, handleQueueUpdate, handleQueueRemove, handleQueueResume, handleQueuePromote, handleQueueClear, settleQueueAfterTurn, projectQueueState, discardQueuedPrompts } from './chat/queue';
 import { handleMcpRefresh, pushMcp, handleMcpServerToggle, handleMcpServerAdd, handleMcpServerRemove, handleMcpServerAuthenticate } from './chat/mcp';
 import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRefresh, pushSkills, handleSkillToggle, handlePluginsRefresh, handleCommandsRefresh, recordRecentCommand, emitModelCatalog, projectModelCatalog, MODEL_CATALOG_FAILED_MESSAGE } from './chat/capabilityPanels';
-import { handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddImage, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
+import { canStageAttachments, handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddImage, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
 import { handleSettingUpdate, emitSettings, refreshSettingsAfterRuntimeEvent, projectConfirmedSettings, SETTINGS_READ_FAILED_MESSAGE } from './chat/settings';
 import { handleFileOpenDiff, handleFilePreview, handleInlineHtmlPreview, handleTerminalOpenMirror, handleGitRequestStatus, handleGitCommit, handleWorkspaceOpenPath, handleWorkspaceSearchFiles, handleWorkspaceReadImage } from './chat/workspaceActions';
 import { handleRewindInfo, handleEditResend, handleEditStageBegin, handleEditStageCancel } from './chat/editResend';
@@ -856,6 +856,25 @@ export class ChatController {
       emitWorkspaceUnavailable(this, workspace);
     }
     queueWorkspaceTransition(this, generation, staleRuntimes);
+  }
+
+  /**
+   * Editor-side entry for `droidvisx.addSelectionToChat`: stages the
+   * active editor selection through the same capture pipeline as the
+   * webview `+` menu (mutual exclusion, staging limit, and diagnostic
+   * semantics included). Returns false while no connected session can
+   * stage attachments yet, so the command can retry after revealing
+   * the view.
+   */
+  addEditorSelectionToChat(): boolean {
+    if (this.disposed || this.sessionId === null) {
+      return false;
+    }
+    if (!canStageAttachments(this, this.sessionId)) {
+      return false;
+    }
+    handleAttachmentCapture(this, this.sessionId, 'selection');
+    return true;
   }
 
   dispose(): Promise<void> {

@@ -7,6 +7,7 @@ import {
   MAX_IMAGE_ATTACHMENT_BYTES,
   MAX_PDF_ATTACHMENT_BYTES,
   MAX_TEXT_ATTACHMENT_CHARS,
+  selectionAttachmentPayload,
   type AttachmentCaptureOutcome,
   type AttachmentPayload,
   type AttachmentPickOutcome,
@@ -109,14 +110,23 @@ export function createVscodeAttachmentSources(): AttachmentSources & {
       if (text.trim().length === 0) {
         return Promise.resolve({ status: 'empty' });
       }
-      const startLine = editor.selection.start.line + 1;
-      const endLine = editor.selection.end.line + 1;
+      const { start, end } = editor.selection;
+      const startLine = start.line + 1;
+      // A selection ending at column 0 highlights nothing on that
+      // line, so the range reports the previous line instead.
+      const endLine =
+        end.character === 0 && end.line > start.line
+          ? end.line
+          : end.line + 1;
       return Promise.resolve({
         status: 'captured',
-        item: textPayload(
-          `${displayName(editor.document)}:${startLine}-${endLine}`,
+        item: selectionAttachmentPayload({
+          displayName: displayName(editor.document),
+          relativePath: workspaceRelativePath(editor.document),
+          startLine,
+          endLine,
           text,
-        ),
+        }),
       });
     },
 
@@ -381,4 +391,18 @@ function displayName(document: vscode.TextDocument): string {
   return document.isUntitled
     ? 'Untitled'
     : basename(document.fileName);
+}
+
+/**
+ * Workspace-relative forward-slash path for the selection header;
+ * documents outside the workspace keep their full path so the
+ * excerpt stays locatable.
+ */
+function workspaceRelativePath(document: vscode.TextDocument): string {
+  if (document.isUntitled) {
+    return displayName(document);
+  }
+  return vscode.workspace
+    .asRelativePath(document.uri, false)
+    .replaceAll('\\', '/');
 }

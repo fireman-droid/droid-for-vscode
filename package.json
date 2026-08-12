@@ -18,7 +18,8 @@
     "onView:droidvisx.chat",
     "onCommand:droidvisx.focusView",
     "onCommand:droidvisx.openLogs",
-    "onCommand:droidvisx.exportDiagnostics"
+    "onCommand:droidvisx.exportDiagnostics",
+    "onCommand:droidvisx.addSelectionToChat"
   ],
   "contributes": {
     "commands": [
@@ -41,8 +42,21 @@
       {
         "command": "droidvisx.exportSessionMarkdown",
         "title": "DroidVisX: Export Session as Markdown"
+      },
+      {
+        "command": "droidvisx.addSelectionToChat",
+        "title": "DroidVisX: Add Selection to Chat"
       }
     ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "droidvisx.addSelectionToChat",
+          "when": "editorHasSelection",
+          "group": "droidvisx"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {

@@ -998,4 +998,65 @@ describe('ChatController', () => {
       attachmentsMessages(messages).at(-1)?.attachments,
     ).toHaveLength(1);
   });
+
+  it('stages the editor selection via the command entry and sends it', async () => {
+    const runtime = createMockRuntime();
+    const selectionData =
+      '```12:34:src/webview/assistant/store.ts\nconst a = 1;\n```';
+    const sources: AttachmentSources = {
+      pickFiles: vi.fn(async () => ({ status: 'cancelled' as const })),
+      readActiveEditor: vi.fn(async () => ({ status: 'empty' as const })),
+      readActiveSelection: vi.fn(async () => ({
+        status: 'captured' as const,
+        item: {
+          kind: 'text' as const,
+          name: 'store.ts:12-34',
+          data: selectionData,
+          sizeBytes: selectionData.length,
+          truncated: false,
+        },
+      })),
+      readProblems: vi.fn(async () => ({ status: 'empty' as const })),
+      readGitChanges: vi.fn(async () => ({ status: 'empty' as const })),
+      searchWorkspaceFiles: vi.fn(async () => []),
+      readWorkspaceFile: vi.fn(async () => ({
+        status: 'failed' as const,
+      })),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      sources,
+    );
+
+    // Before the webview connects there is no session to stage into;
+    // the command entry reports that so its caller can retry.
+    expect(controller.addEditorSelectionToChat()).toBe(false);
+
+    ready(controller);
+    await waitForConnected(messages);
+
+    expect(controller.addEditorSelectionToChat()).toBe(true);
+    await vi.waitFor(() => {
+      expect(
+        attachmentsMessages(messages).at(-1)?.attachments,
+      ).toMatchObject([
+        { kind: 'selection', name: 'store.ts:12-34', truncated: false },
+      ]);
+    });
+
+    send(controller, 'session-1', 'turn-1', 'explain this selection');
+    await vi.waitFor(() => {
+      expect(runtime.sendTurn).toHaveBeenCalledWith(
+        'explain this selection',
+        [{ kind: 'text', data: selectionData, name: 'store.ts:12-34' }],
+      );
+    });
+    expect(
+      attachmentsMessages(messages).at(-1)?.attachments,
+    ).toHaveLength(0);
+  });
 });

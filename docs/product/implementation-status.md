@@ -2055,6 +2055,49 @@ UI 描述见 §22 重做记录。
   （`armReplayedSubagentWatch` resume 重挂）
 - `src/webview/assistant/Thread.tsx`（`parentRunning` 即时动效）
 
+### 25. Add Selection to Chat：编辑器右键选区入 Composer（2026-08-13 凌晨）
+
+- **切片范围**（[`add-to-chat-design.md`](./add-to-chat-design.md)
+  入口 a；入口 b/c 未做）：编辑器选中文本后经右键菜单项或命令面板
+  "DroidVisX: Add Selection to Chat"（`droidvisx.addSelectionToChat`，
+  菜单 `when: editorHasSelection`）把选区作为 selection 附件送入
+  Composer 暂存 chips。**Bridge/Webview 零改动**：走既有
+  `attachment.*` 暂存管线与 `session.attachments` 广播，chip 家族
+  （SELECTION 标签 + 名称 + truncated 标记 + × 移除）现成。
+- **Host**：`ChatController.addEditorSelectionToChat()` 公开入口复用
+  `handleAttachmentCapture('selection')`（互斥、8 条上限、diagnostic
+  语义全继承）；`extension.ts` 命令先 focusView reveal 再暂存，视图
+  首次打开未连接时 250ms×20 重试，超时记
+  `attachment.add-selection-command.dropped` 诊断（安静降级，
+  无新错误面）。
+- **选区 payload 升级**（`selectionAttachmentPayload`，
+  `attachmentSources.ts` 纯函数；webview `+` 菜单 Attach selection
+  同步受益）：内容从裸文本变为带 `起:迄:相对路径` 头的 fenced
+  代码块（围栏长度超过选区内最长反引号串），chip 名保持
+  `<basename>:<起>-<迄>`；包装与截断注明
+  `[selection truncated at the attachment size limit]` 一并计入
+  256K 字符上限，不会触发 runtime 侧文本附件超限抛错；选区终点在
+  行首（列 0）时行号回退一行，与编辑器高亮一致。
+- **门禁与自验收**：聚焦 vitest 2 文件 17 用例过（payload 三态 +
+  命令入口暂存/发送全链，`attachmentSources.test.ts` +
+  `ChatController.attachments.test.ts`）；全量 vitest 96/97 文件
+  1943/1950 过——7 败全在并行主题代理在制品
+  `DroidViewProvider.test.ts`；typecheck 3 错、lint:budgets 1 超限
+  同为并行在制品（`UiThemeMessage` / `App.tsx`），本切片文件全绿；
+  build 过。活体探针 `artifacts/probe-add-selection.ts`（生产
+  payload 函数 + 真实 FactoryDroidRuntime + BYOK
+  `custom:GPT-5.6-Luna-0`）：真实回答准确引用
+  `src/extension/chat/attachments.ts` 与 746–754 行号，15.5s，
+  turn success，录制 `add-selection-probe-data.js`。视觉自验收
+  `artifacts/add-selection-harness.html`（真实 dist bundle 回放
+  探针真实数据）三态截图：`add-selection-chip.png`（暂存 chip，
+  含相邻 truncated 态）、`add-selection-sent.png`（发送后 sent
+  chip）、`add-selection-answer.png`（真实 Luna 应答）。
+- **遗留**：真实 Cursor 里右键菜单行与命令注册未做真机验证（本
+  切片按纪律不打包安装，待下次打包随包验收）；`ctrl+alt+l`
+  快捷键待真机冲突验证后另行贡献；入口 b（文件右键）/入口 c
+  （转录选中引用）未实现。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -2273,7 +2316,9 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [x] 图片附件（jpg/png/gif/webp ≤4MB）
 - [x] 文档附件（PDF ≤6MB）
 - [x] 当前编辑器
-- [x] 编辑器选区
+- [x] 编辑器选区（`+` 面板与编辑器右键/命令面板
+      `droidvisx.addSelectionToChat` 双入口；payload 为带
+      `起:迄:相对路径` 头的代码块，见生产已接通 §25）
 - [ ] Open Editors
 - [x] Problems（`+` 面板 “Attach problems”，工作区诊断文本，≤200 条）
 - [x] Git Changes（`+` 面板 “Attach git changes”，未提交差异文本）

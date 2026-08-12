@@ -67,6 +67,7 @@ const openLogsCommand = 'droidvisx.openLogs';
 const exportDiagnosticsCommand = 'droidvisx.exportDiagnostics';
 const shutdownDaemonCommand = 'droidvisx.shutdownDaemon';
 const exportSessionCommand = 'droidvisx.exportSessionMarkdown';
+const addSelectionToChatCommand = 'droidvisx.addSelectionToChat';
 let activeController: ChatController | undefined;
 let disposeDaemonSidecar: (() => Promise<void>) | undefined;
 
@@ -509,6 +510,26 @@ export function activate(context: vscode.ExtensionContext): void {
       await vscode.commands.executeCommand(
         `${DroidViewProvider.viewType}.focus`,
       );
+    }),
+    vscode.commands.registerCommand(addSelectionToChatCommand, async () => {
+      // Reveal the view first so the staged chip is visible; the
+      // attachment sources' last-editor fallback keeps the selection
+      // readable after focus moves to the webview.
+      await vscode.commands.executeCommand(
+        `${DroidViewProvider.viewType}.focus`,
+      );
+      // A first-time reveal is still connecting the session, so retry
+      // briefly instead of dropping the capture.
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        if (controller.addEditorSelectionToChat()) {
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      diagnostics.record({
+        level: 'warn',
+        name: 'attachment.add-selection-command.dropped',
+      });
     }),
     vscode.commands.registerCommand(openLogsCommand, () => {
       diagnostics.record({

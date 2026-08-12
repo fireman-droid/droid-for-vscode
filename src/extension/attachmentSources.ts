@@ -23,6 +23,61 @@ export interface AttachmentPayload {
   readonly truncated: boolean;
 }
 
+/**
+ * Notice appended inside the payload when a selection is cut at the
+ * text-attachment cap, so the model knows the excerpt is partial.
+ */
+export const SELECTION_TRUNCATION_NOTICE =
+  '\n[selection truncated at the attachment size limit]';
+
+/**
+ * Formats one editor selection as a self-describing text attachment:
+ * a fenced code block headed `startLine:endLine:relativePath` (the
+ * citation form models already know) so Droid can locate the excerpt
+ * without the file itself. The fence grows past any backtick run in
+ * the selection, and the wrapper plus truncation notice count against
+ * `MAX_TEXT_ATTACHMENT_CHARS` so the payload never exceeds the
+ * runtime text-attachment cap.
+ */
+export function selectionAttachmentPayload(args: {
+  readonly displayName: string;
+  readonly relativePath: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly text: string;
+}): AttachmentPayload {
+  const { displayName, relativePath, startLine, endLine, text } = args;
+  let fenceLength = 3;
+  for (const run of text.matchAll(/`{3,}/g)) {
+    fenceLength = Math.max(fenceLength, run[0].length + 1);
+  }
+  const fence = '`'.repeat(fenceLength);
+  const open = `${fence}${startLine}:${endLine}:${relativePath}\n`;
+  const close = `\n${fence}`;
+  const truncated =
+    open.length + text.length + close.length >
+    MAX_TEXT_ATTACHMENT_CHARS;
+  const body = truncated
+    ? text.slice(
+        0,
+        MAX_TEXT_ATTACHMENT_CHARS -
+          open.length -
+          close.length -
+          SELECTION_TRUNCATION_NOTICE.length,
+      )
+    : text;
+  const data = truncated
+    ? `${open}${body}${close}${SELECTION_TRUNCATION_NOTICE}`
+    : `${open}${body}${close}`;
+  return {
+    kind: 'text',
+    name: `${displayName}:${startLine}-${endLine}`,
+    data,
+    sizeBytes: Buffer.byteLength(data, 'utf8'),
+    truncated,
+  };
+}
+
 export type AttachmentPickOutcome =
   | { readonly status: 'picked'; readonly items: readonly AttachmentPayload[] }
   | { readonly status: 'cancelled' }
