@@ -1987,8 +1987,9 @@ html, body, #root {
 /* Live command output tail (tier1 §1): a quiet warm-dark terminal
    window under the command text. Bounded height with the tail pinned
    to the bottom while the command runs; the final tail stays static
-   after completion. */
-.dvx-tool-output {
+   after completion. Scoped under .dvx-activity-row to out-rank the
+   later `.dvx-activity-row pre` flattening rule. */
+.dvx-activity-row .dvx-tool-output {
   margin: 6px 0 0;
   padding: 8px 10px;
   max-height: 158px;
