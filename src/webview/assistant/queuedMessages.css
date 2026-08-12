@@ -1,0 +1,195 @@
+/* Queued prompts waiting behind the running turn (queued-messages
+   design §4.7). Quiet echoes of the user bubble: same geometry as
+   .dvx-user-block but dashed, slightly translucent, and unshadowed —
+   "about to become part of the conversation", not yet part of it. */
+
+.dvx-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.dvx-queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dvx-queue-item {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 7px 12px 9px;
+  border: 1px dashed var(--dvx-border-strong, #d5cdc4);
+  border-radius: 8px;
+  background: color-mix(in srgb, #fff 62%, transparent);
+  color: #262626;
+  text-align: left;
+  transition: border-color 130ms ease, background-color 130ms ease;
+}
+
+.dvx-queue-item:hover {
+  border-color: color-mix(in srgb, var(--dvx-accent) 45%, var(--dvx-border-strong));
+  background: #fff;
+}
+
+.dvx-queue-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dvx-queue-badge {
+  color: var(--dvx-subtle);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dvx-queue-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dvx-subtle);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 130ms ease, background-color 130ms ease;
+}
+
+.dvx-queue-remove:hover {
+  color: var(--dvx-danger);
+  background: rgb(69 54 37 / 7%);
+}
+
+/* The card body doubles as the edit trigger; it must read as text,
+   not as a button. */
+.dvx-queue-text {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  line-height: 21.125px;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+}
+
+.dvx-queue-text:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, #d2643d);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.dvx-queue-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dvx-queue-edit-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 6px;
+  background: #fff;
+  color: #262626;
+  font: inherit;
+  font-size: 13px;
+  line-height: 21.125px;
+  resize: vertical;
+}
+
+.dvx-queue-edit-input:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, #d2643d);
+  outline-offset: -1px;
+}
+
+.dvx-queue-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.dvx-queue-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+/* Paused notice: a quiet row in the queue area, not a banner. */
+.dvx-queue-paused {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0 2px;
+  color: var(--dvx-muted);
+  font-size: 12px;
+}
+
+.dvx-queue-paused-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.dvx-queue-action {
+  padding: 2px 8px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dvx-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: border-color 130ms ease, color 130ms ease, background-color 130ms ease;
+}
+
+.dvx-queue-action:hover:not(:disabled) {
+  border-color: var(--dvx-accent);
+  color: var(--dvx-ink);
+  background: var(--dvx-soft);
+}
+
+.dvx-queue-action-save:not(:disabled) {
+  color: var(--dvx-ink);
+}
+
+.dvx-queue-note {
+  margin: 0;
+  padding: 0 2px;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-queue-item,
+  .dvx-queue-remove,
+  .dvx-queue-action {
+    transition: none;
+  }
+}

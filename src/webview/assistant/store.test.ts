@@ -1897,4 +1897,192 @@ describe('assistantWebviewReducer', () => {
     });
     expect(state.git.availability).toBe('unknown');
   });
+
+  it('enqueues optimistically, consuming the staged attachments', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.attachments',
+        sequence: 1,
+        sessionId: 'session-a',
+        attachments: [
+          {
+            id: 'attachment-1',
+            kind: 'text',
+            name: 'notes.md',
+            sizeBytes: 64,
+            truncated: false,
+          },
+        ],
+      },
+    });
+
+    state = assistantWebviewReducer(state, {
+      type: 'queue.add',
+      queueId: 'queue-1',
+      text: 'Follow-up one.',
+    });
+    expect(state.queue.items).toEqual([
+      {
+        queueId: 'queue-1',
+        text: 'Follow-up one.',
+        attachments: [{ kind: 'text', name: 'notes.md', sizeBytes: 64 }],
+      },
+    ]);
+    // The host consumes the staging area at enqueue time.
+    expect(state.attachments).toEqual([]);
+
+    // Duplicate ids and repeats past the cap are ignored.
+    state = assistantWebviewReducer(state, {
+      type: 'queue.add',
+      queueId: 'queue-1',
+      text: 'Duplicate.',
+    });
+    expect(state.queue.items).toHaveLength(1);
+    for (let index = 2; index <= 12; index += 1) {
+      state = assistantWebviewReducer(state, {
+        type: 'queue.add',
+        queueId: `queue-${index}`,
+        text: `Follow-up ${index}.`,
+      });
+    }
+    expect(state.queue.items).toHaveLength(10);
+  });
+
+  it('edits, removes, resumes, and clears the queue optimistically', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'queue.add',
+      queueId: 'queue-1',
+      text: 'One.',
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'queue.add',
+      queueId: 'queue-2',
+      text: 'Two.',
+    });
+
+    state = assistantWebviewReducer(state, {
+      type: 'queue.update',
+      queueId: 'queue-2',
+      text: 'Two, edited.',
+    });
+    expect(state.queue.items[1]).toMatchObject({ text: 'Two, edited.' });
+
+    // The authoritative echo can mark the queue paused; removing the
+    // last item clears the pause locally too.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'queue.state',
+        sequence: 1,
+        sessionId: 'session-a',
+        items: state.queue.items,
+        paused: 'stopped',
+      },
+    });
+    expect(state.queue.paused).toBe('stopped');
+
+    state = assistantWebviewReducer(state, {
+      type: 'queue.remove',
+      queueId: 'queue-1',
+    });
+    expect(state.queue).toMatchObject({ paused: 'stopped' });
+    expect(state.queue.items).toHaveLength(1);
+    state = assistantWebviewReducer(state, {
+      type: 'queue.remove',
+      queueId: 'queue-2',
+    });
+    expect(state.queue).toEqual({ items: [], paused: null });
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'queue.state',
+        sequence: 2,
+        sessionId: 'session-a',
+        items: [{ queueId: 'queue-3', text: 'Three.', attachments: [] }],
+        paused: 'turn-failed',
+      },
+    });
+    state = assistantWebviewReducer(state, { type: 'queue.resume' });
+    expect(state.queue.paused).toBeNull();
+
+    state = assistantWebviewReducer(state, { type: 'queue.clear' });
+    expect(state.queue).toEqual({ items: [], paused: null });
+  });
+
+  it('reconciles queue state from the host and scopes it per session', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'queue.add',
+      queueId: 'queue-optimistic',
+      text: 'Optimistic.',
+    });
+
+    // The authoritative echo replaces the optimistic view entirely.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'queue.state',
+        sequence: 1,
+        sessionId: 'session-a',
+        items: [
+          { queueId: 'queue-real', text: 'Real.', attachments: [] },
+        ],
+        paused: null,
+      },
+    });
+    expect(state.queue.items.map(({ queueId }) => queueId)).toEqual([
+      'queue-real',
+    ]);
+
+    // Echoes for another session only advance the sequence.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'queue.state',
+        sequence: 2,
+        sessionId: 'session-b',
+        items: [],
+        paused: null,
+      },
+    });
+    expect(state.queue.items).toHaveLength(1);
+
+    // A snapshot carrying a queue field is authoritative...
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        ...snapshot(3),
+        queue: {
+          items: [
+            { queueId: 'queue-snap', text: 'Snap.', attachments: [] },
+          ],
+          paused: 'dispatch-blocked',
+        },
+      },
+    });
+    expect(state.queue).toMatchObject({
+      items: [{ queueId: 'queue-snap' }],
+      paused: 'dispatch-blocked',
+    });
+
+    // ...and an absent field means empty, not "keep the previous".
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(4),
+    });
+    expect(state.queue).toEqual({ items: [], paused: null });
+  });
 });

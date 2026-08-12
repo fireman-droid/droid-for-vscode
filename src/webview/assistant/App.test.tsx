@@ -221,16 +221,35 @@ describe('assistant-ui App bridge commands', () => {
     expect(persistedState).toEqual({ draft: '' });
     expect(
       screen.getByText(
-        'Droid is active · Stop before sending another message',
+        'Droid is active · Enter queues for after this turn',
       ),
     ).toBeDefined();
     expect(screen.getByText('Droid is responding')).toBeDefined();
 
+    // Sending during the running turn queues instead of a second send.
     fireEvent.change(input, { target: { value: 'Queue this' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    await waitFor(() =>
+      expect(
+        posted.some((message) => message.type === 'queue.add'),
+      ).toBe(true),
+    );
     expect(
       posted.filter((message) => message.type === 'turn.send'),
     ).toHaveLength(1);
+    const queued = posted.find((message) => message.type === 'queue.add');
+    if (queued?.type !== 'queue.add') {
+      throw new Error('Expected queue.add');
+    }
+    expect(queued).toEqual({
+      type: 'queue.add',
+      sessionId: 'session-a',
+      queueId: queued.queueId,
+      text: 'Queue this',
+    });
+    await waitFor(() =>
+      expect(screen.getByText('Queue this')).toBeDefined(),
+    );
 
     await user.click(screen.getByRole('button', { name: 'Stop' }));
     expect(posted).toContainEqual({

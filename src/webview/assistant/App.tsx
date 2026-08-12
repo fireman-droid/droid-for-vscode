@@ -45,6 +45,7 @@ import {
   canSendMessage,
   DEFAULT_MESSAGE_WINDOW,
   MESSAGE_WINDOW_STEP,
+  shouldQueueMessage,
   useDroidExternalStoreRuntime,
 } from './runtimeAdapter';
 import { SessionDrawer } from './SessionDrawer';
@@ -61,6 +62,9 @@ import {
 } from './GitCommitPanel';
 import { findLatestChangesContext } from './gitCommitDraft';
 import { selectTaskPlanPin } from './planPin';
+import { QueuedMessages } from './QueuedMessages';
+import { SideChatSheet } from './SideChatSheet';
+import { MAX_BTW_TEXT_LENGTH } from '../../shared/btwProtocol';
 import './styles.css';
 
 /**
@@ -259,15 +263,45 @@ export function App(): React.JSX.Element {
   const hasInteraction = state.interactions.length > 0;
   const connectionStatus = state.connection.status;
   const sessionId = state.sessionId;
+  // `/btw` side chat (S1): the card's open flag is webview-local; the
+  // host owns the hidden fork and its projected contents (state.btw).
+  // Closing the card or switching sessions discards the fork.
+  const btwAvailable = state.btwAvailable;
+  const [btwOpen, setBtwOpen] = useState(false);
+  const btwSessionRef = useRef(sessionId);
+  if (btwSessionRef.current !== sessionId) {
+    btwSessionRef.current = sessionId;
+    setBtwOpen(false);
+  }
+  const handleBtwOpen = useCallback((): void => {
+    setBtwOpen(true);
+  }, []);
+  const handleBtwAsk = useCallback(
+    (text: string): void => {
+      const question = text.trim().slice(0, MAX_BTW_TEXT_LENGTH);
+      if (sessionId !== null && question.length > 0) {
+        post(vscode, { type: 'btw.ask', sessionId, text: question });
+      }
+    },
+    [sessionId, vscode],
+  );
+  const handleBtwDismiss = useCallback((): void => {
+    setBtwOpen(false);
+    if (sessionId !== null) {
+      post(vscode, { type: 'btw.dismiss', sessionId });
+    }
+  }, [sessionId, vscode]);
   const turnId = state.turn?.turnId ?? null;
   const turnStatus = state.turn?.status ?? null;
   const interactionCount = state.interactions.length;
+  const queuedCount = state.queue.items.length;
   const sendDisabled = !canSendMessage(
     {
       connectionStatus,
       sessionId,
       turnStatus,
       interactionCount,
+      queuedCount,
     },
     draft,
   );
@@ -335,7 +369,9 @@ export function App(): React.JSX.Element {
       // them — including the CLI's own names/aliases like /compress,
       // /handoff and /clear — onto the existing pipelines, and map
       // navigation commands onto their panels (slash-parity S2).
-      const builtin = resolveBuiltinSlash(text, { btwEnabled: false });
+      const builtin = resolveBuiltinSlash(text, {
+        btwEnabled: btwAvailable,
+      });
       if (builtin !== null) {
         if (builtin.kind === 'compact') {
           handleCompact();
@@ -343,6 +379,13 @@ export function App(): React.JSX.Element {
           post(vscode, { type: 'session.new' });
         } else if (builtin.kind === 'navigate') {
           handleSlashNavigate(builtin.target);
+        } else {
+          // `/btw` opens the side chat card; a trailing question is
+          // asked immediately, a bare `/btw` just opens it.
+          setBtwOpen(true);
+          if (builtin.question.length > 0) {
+            handleBtwAsk(builtin.question);
+          }
         }
         setDraft('');
         persistDraft(vscode, '');
@@ -353,39 +396,101 @@ export function App(): React.JSX.Element {
         sessionId,
         turnStatus,
         interactionCount,
+        queuedCount,
       };
+      // The re-entrancy latch protects the turn pipeline only. Queue
+      // adds are safe to rapid-fire: each press gets a fresh queueId
+      // and the optimistic reducer advances queuedCount synchronously.
+      const queueRoute = shouldQueueMessage(eligibility);
       if (
         !canSendMessage(
           eligibility,
           text,
-          sendPendingRef.current,
+          !queueRoute && sendPendingRef.current,
         )
       ) {
         return;
       }
-      sendPendingRef.current = true;
-      const nextTurnId = createTurnId();
-      dispatch({ type: 'turn.send', turnId: nextTurnId, text });
-      post(vscode, {
-        type: 'turn.send',
-        sessionId: eligibility.sessionId,
-        turnId: nextTurnId,
-        text,
-      });
+      if (queueRoute) {
+        // A turn is running (or a paused queue holds earlier
+        // prompts): enqueue on the host instead of starting a turn.
+        // The optimistic card shows immediately; the host's
+        // `queue.state` echo reconciles.
+        const queueId = createTurnId();
+        dispatch({ type: 'queue.add', queueId, text });
+        post(vscode, {
+          type: 'queue.add',
+          sessionId: eligibility.sessionId,
+          queueId,
+          text,
+        });
+      } else {
+        sendPendingRef.current = true;
+        const nextTurnId = createTurnId();
+        dispatch({ type: 'turn.send', turnId: nextTurnId, text });
+        post(vscode, {
+          type: 'turn.send',
+          sessionId: eligibility.sessionId,
+          turnId: nextTurnId,
+          text,
+        });
+      }
       setSendSignal((value) => value + 1);
       setDraft('');
       persistDraft(vscode, '');
     },
     [
+      btwAvailable,
       connectionStatus,
+      handleBtwAsk,
       handleCompact,
       handleSlashNavigate,
       interactionCount,
+      queuedCount,
       sessionId,
       turnStatus,
       vscode,
     ],
   );
+  const handleQueueUpdate = useCallback(
+    (queueId: string, text: string): void => {
+      const trimmed = text.trim();
+      if (
+        sessionId === null ||
+        trimmed.length === 0 ||
+        text.length > MAX_TURN_TEXT_LENGTH
+      ) {
+        return;
+      }
+      dispatch({ type: 'queue.update', queueId, text });
+      post(vscode, { type: 'queue.update', sessionId, queueId, text });
+    },
+    [sessionId, vscode],
+  );
+  const handleQueueRemove = useCallback(
+    (queueId: string): void => {
+      if (sessionId === null) {
+        return;
+      }
+      dispatch({ type: 'queue.remove', queueId });
+      post(vscode, { type: 'queue.remove', sessionId, queueId });
+    },
+    [sessionId, vscode],
+  );
+  const handleQueueResume = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    dispatch({ type: 'queue.resume' });
+    post(vscode, { type: 'queue.resume', sessionId });
+  }, [sessionId, vscode]);
+  const handleQueueClear = useCallback((): void => {
+    if (sessionId === null) {
+      return;
+    }
+    dispatch({ type: 'queue.clear' });
+    post(vscode, { type: 'queue.clear', sessionId });
+  }, [sessionId, vscode]);
   const handleCancel = useCallback(async (): Promise<void> => {
     if (
       sessionId === null ||
@@ -403,11 +508,14 @@ export function App(): React.JSX.Element {
   }, [sessionId, turnId, turnStatus, vscode]);
   const callbacks = useMemo(
     () => ({
-      isSendDisabled: sendDisabled || sendPendingRef.current,
+      isSendDisabled:
+        sendDisabled ||
+        (!shouldQueueMessage({ turnStatus, queuedCount }) &&
+          sendPendingRef.current),
       onSend: handleSend,
       onCancel: handleCancel,
     }),
-    [handleCancel, handleSend, sendDisabled],
+    [handleCancel, handleSend, queuedCount, sendDisabled, turnStatus],
   );
   const [messageWindow, setMessageWindow] = useState(
     DEFAULT_MESSAGE_WINDOW,
@@ -1173,6 +1281,17 @@ export function App(): React.JSX.Element {
           onCommandsRefresh={handleCommandsRefresh}
           navSignal={composerNav}
           onSlashNavigate={handleSlashNavigate}
+          btwAvailable={btwAvailable}
+          onBtwOpen={handleBtwOpen}
+          sideChat={
+            btwOpen && btwAvailable && sessionId !== null ? (
+              <SideChatSheet
+                btw={state.btw}
+                onAsk={handleBtwAsk}
+                onDismiss={handleBtwDismiss}
+              />
+            ) : null
+          }
           onAttachPath={handleAttachPath}
           onAttachFiles={handleAttachFiles}
           onAttachEditor={handleAttachEditor}
@@ -1226,6 +1345,18 @@ export function App(): React.JSX.Element {
           }
           inlineInteraction={inlineInteraction}
           taskPlanPin={taskPlanPin}
+          queuedMessages={
+            state.queue.items.length === 0 ? null : (
+              <QueuedMessages
+                queue={state.queue}
+                onUpdate={handleQueueUpdate}
+                onRemove={handleQueueRemove}
+                onResume={handleQueueResume}
+                onClear={handleQueueClear}
+              />
+            )
+          }
+          queuedCount={queuedCount}
         />
       </div>
     </AssistantRuntimeProvider>

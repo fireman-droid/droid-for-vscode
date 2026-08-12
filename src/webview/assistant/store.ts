@@ -26,10 +26,19 @@ import {
   type GitUnavailableReason,
 } from '../../shared/bridgeMessages';
 import {
+  EMPTY_SESSION_QUEUE_STATE,
+  MAX_QUEUED_MESSAGES,
+  type SessionQueueState,
+} from '../../shared/queueProtocol';
+import {
   enforceTranscriptImageBudget,
   trimTranscriptToLimits,
 } from '../../shared/transcriptLimits';
 import { stableTranscriptId } from '../../shared/hostTranscriptState';
+import {
+  EMPTY_SESSION_BTW_STATE,
+  type SessionBtwState,
+} from '../../shared/btwProtocol';
 import {
   EMPTY_SESSION_TOKEN_USAGE,
   type SessionTokenUsageState,
@@ -165,6 +174,13 @@ export interface AssistantWebviewState {
    */
   readonly worktreeCreateAvailable: boolean;
   /**
+   * Host-advertised `/btw` side-chat capability (process runtime
+   * only); false hides every entry point (fail closed).
+   */
+  readonly btwAvailable: boolean;
+  /** Host-projected side-chat card contents (session.btw). */
+  readonly btw: SessionBtwState;
+  /**
    * Absolute workspace folder from the host snapshot; rebases
    * absolute transcript paths (path-link Preview entry). Null until a
    * snapshot carries it, which hides rebase-dependent affordances.
@@ -180,6 +196,11 @@ export interface AssistantWebviewState {
    * last completed turn); empty members until the host reports data.
    */
   readonly tokenUsage: SessionTokenUsageState;
+  /**
+   * Prompts queued behind the running turn. Mutations apply
+   * optimistically and the host's `queue.state` echo reconciles.
+   */
+  readonly queue: SessionQueueState;
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: Extract<
     HostToWebviewMessage,
@@ -207,7 +228,20 @@ export type AssistantWebviewAction =
   | {
       readonly type: 'git.commitRequested';
       readonly turnId: string;
-    };
+    }
+  | {
+      readonly type: 'queue.add';
+      readonly queueId: string;
+      readonly text: string;
+    }
+  | {
+      readonly type: 'queue.update';
+      readonly queueId: string;
+      readonly text: string;
+    }
+  | { readonly type: 'queue.remove'; readonly queueId: string }
+  | { readonly type: 'queue.resume' }
+  | { readonly type: 'queue.clear' };
 
 export const initialAssistantWebviewState: AssistantWebviewState = {
   sequence: -1,
@@ -232,9 +266,12 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   editAttachments: null,
   editResendRejection: null,
   worktreeCreateAvailable: false,
+  btwAvailable: false,
+  btw: EMPTY_SESSION_BTW_STATE,
   workspaceRoot: null,
   mission: null,
   tokenUsage: EMPTY_SESSION_TOKEN_USAGE,
+  queue: EMPTY_SESSION_QUEUE_STATE,
   transcript: [],
   historyStatus: null,
   truncated: false,
@@ -290,6 +327,70 @@ export function assistantWebviewReducer(
         lastResult: null,
       },
     };
+  }
+
+  if (action.type === 'queue.add') {
+    if (
+      state.sessionId === null ||
+      state.queue.items.length >= MAX_QUEUED_MESSAGES ||
+      state.queue.items.some((item) => item.queueId === action.queueId)
+    ) {
+      return state;
+    }
+    return {
+      ...state,
+      queue: {
+        ...state.queue,
+        items: [
+          ...state.queue.items,
+          {
+            queueId: action.queueId,
+            text: action.text,
+            // The host consumes the staged attachments at enqueue
+            // time; mirror that projection optimistically.
+            attachments: state.attachments.map(
+              ({ kind, name, sizeBytes }) => ({ kind, name, sizeBytes }),
+            ),
+          },
+        ],
+      },
+      attachments: [],
+    };
+  }
+
+  if (action.type === 'queue.update') {
+    return {
+      ...state,
+      queue: {
+        ...state.queue,
+        items: state.queue.items.map((item) =>
+          item.queueId === action.queueId
+            ? { ...item, text: action.text }
+            : item,
+        ),
+      },
+    };
+  }
+
+  if (action.type === 'queue.remove') {
+    const items = state.queue.items.filter(
+      (item) => item.queueId !== action.queueId,
+    );
+    return {
+      ...state,
+      queue: {
+        items,
+        paused: items.length === 0 ? null : state.queue.paused,
+      },
+    };
+  }
+
+  if (action.type === 'queue.resume') {
+    return { ...state, queue: { ...state.queue, paused: null } };
+  }
+
+  if (action.type === 'queue.clear') {
+    return { ...state, queue: EMPTY_SESSION_QUEUE_STATE };
   }
 
   if (action.type === 'turn.stop') {
@@ -372,9 +473,15 @@ export function assistantWebviewReducer(
             ? state.editResendRejection
             : null,
         worktreeCreateAvailable: event.worktreeCreateAvailable === true,
+        btwAvailable: event.btwAvailable === true,
+        btw:
+          event.sessionId === state.sessionId
+            ? state.btw
+            : EMPTY_SESSION_BTW_STATE,
         workspaceRoot: event.workspaceRoot ?? null,
         mission: event.mission ?? null,
         tokenUsage: event.tokenUsage ?? EMPTY_SESSION_TOKEN_USAGE,
+        queue: event.queue ?? EMPTY_SESSION_QUEUE_STATE,
         transcript: event.transcript,
         historyStatus: event.historyStatus,
         truncated: event.truncated,
@@ -400,7 +507,9 @@ export function assistantWebviewReducer(
           ? {
               turn: null,
               mission: null,
+              btw: EMPTY_SESSION_BTW_STATE,
               tokenUsage: EMPTY_SESSION_TOKEN_USAGE,
+              queue: EMPTY_SESSION_QUEUE_STATE,
               transcript: [],
               historyStatus: null,
               truncated: false,
@@ -443,6 +552,14 @@ export function assistantWebviewReducer(
             ...state,
             sequence: event.sequence,
             tokenUsage: event.tokenUsage,
+          }
+        : advance(state, event.sequence);
+    case 'session.btw':
+      return event.sessionId === state.sessionId
+        ? {
+            ...state,
+            sequence: event.sequence,
+            btw: event.btw,
           }
         : advance(state, event.sequence);
     case 'session.model-catalog':
@@ -961,6 +1078,14 @@ export function assistantWebviewReducer(
             : { ok: false, error: event.error },
         },
       };
+    case 'queue.state':
+      return event.sessionId === state.sessionId
+        ? {
+            ...state,
+            sequence: event.sequence,
+            queue: { items: event.items, paused: event.paused },
+          }
+        : advance(state, event.sequence);
   }
 }
 

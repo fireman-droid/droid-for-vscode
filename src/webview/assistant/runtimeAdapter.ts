@@ -13,6 +13,7 @@ import {
   type SessionTranscriptItem,
   type TurnStatus,
 } from "../../shared/bridgeMessages";
+import { MAX_QUEUED_MESSAGES } from "../../shared/queueProtocol";
 import { type AssistantWebviewState, isTurnActive } from "./store";
 
 export interface SafeRuntimeMessage {
@@ -57,6 +58,24 @@ export interface SendEligibility {
   readonly sessionId: string | null;
   readonly turnStatus: TurnStatus | null;
   readonly interactionCount: number;
+  /** Prompts already queued behind the running turn. */
+  readonly queuedCount: number;
+}
+
+/**
+ * Whether a committed send routes to `queue.add` instead of
+ * `turn.send`: while a turn runs, and while the queue is non-empty
+ * (a paused queue must stay ordered — no overtaking by direct send).
+ */
+export function shouldQueueMessage(
+  eligibility: Pick<SendEligibility, "turnStatus" | "queuedCount">,
+): boolean {
+  return (
+    eligibility.turnStatus === "submitting" ||
+    eligibility.turnStatus === "streaming" ||
+    eligibility.turnStatus === "stopping" ||
+    eligibility.queuedCount > 0
+  );
 }
 
 export function canSendMessage(
@@ -67,12 +86,17 @@ export function canSendMessage(
   if (
     eligibility.connectionStatus !== "connected" ||
     eligibility.sessionId === null ||
-    eligibility.turnStatus === "submitting" ||
-    eligibility.turnStatus === "streaming" ||
-    eligibility.turnStatus === "stopping" ||
-    eligibility.interactionCount > 0 ||
     additionallyDisabled
   ) {
+    return false;
+  }
+  if (shouldQueueMessage(eligibility)) {
+    // The queue route stays open during interactions (queueing does
+    // not touch the running turn); only a full queue closes it.
+    if (eligibility.queuedCount >= MAX_QUEUED_MESSAGES) {
+      return false;
+    }
+  } else if (eligibility.interactionCount > 0) {
     return false;
   }
   return (
@@ -124,6 +148,7 @@ export function createRuntimeAdapter(
     sessionId: state.sessionId,
     turnStatus: state.turn?.status ?? null,
     interactionCount: state.interactions.length,
+    queuedCount: state.queue.items.length,
   };
   return {
     messages,

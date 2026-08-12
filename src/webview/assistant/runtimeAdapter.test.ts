@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AppendMessage } from '@assistant-ui/react';
 import { MAX_TURN_TEXT_LENGTH } from '../../shared/bridgeMessages';
+import { MAX_QUEUED_MESSAGES } from '../../shared/queueProtocol';
 import {
   canSendMessage,
   createRuntimeAdapter,
   extractText,
   mapTranscriptToRuntimeMessages,
+  shouldQueueMessage,
 } from './runtimeAdapter';
 import {
   initialAssistantWebviewState,
@@ -43,6 +45,7 @@ describe('Droid external-store adapter', () => {
       sessionId: 'session-a',
       turnStatus: null,
       interactionCount: 0,
+      queuedCount: 0,
     };
 
     expect(canSendMessage(eligible, 'Ship it')).toBe(true);
@@ -50,10 +53,41 @@ describe('Droid external-store adapter', () => {
     expect(
       canSendMessage(eligible, 'x'.repeat(MAX_TURN_TEXT_LENGTH + 1)),
     ).toBe(false);
+    // A running turn keeps the composer open: the send routes to the
+    // queue instead of a direct turn.send.
     expect(
       canSendMessage({ ...eligible, turnStatus: 'stopping' }, 'Ship it'),
+    ).toBe(true);
+    expect(
+      canSendMessage(
+        {
+          ...eligible,
+          turnStatus: 'streaming',
+          queuedCount: MAX_QUEUED_MESSAGES,
+        },
+        'Ship it',
+      ),
     ).toBe(false);
     expect(canSendMessage(eligible, 'Ship it', true)).toBe(false);
+  });
+
+  it('routes sends to the queue while a turn runs or prompts wait', () => {
+    expect(
+      shouldQueueMessage({ turnStatus: null, queuedCount: 0 }),
+    ).toBe(false);
+    expect(
+      shouldQueueMessage({ turnStatus: 'streaming', queuedCount: 0 }),
+    ).toBe(true);
+    expect(
+      shouldQueueMessage({ turnStatus: 'stopping', queuedCount: 0 }),
+    ).toBe(true);
+    // A paused, non-empty queue keeps ordering: no overtaking sends.
+    expect(
+      shouldQueueMessage({ turnStatus: null, queuedCount: 2 }),
+    ).toBe(true);
+    expect(
+      shouldQueueMessage({ turnStatus: 'completed', queuedCount: 0 }),
+    ).toBe(false);
   });
 
   it('groups assistant parts by turn without exposing tool payloads', () => {

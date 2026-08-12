@@ -40,6 +40,7 @@ import {
   type SessionContextState,
   type SessionSettingsState,
 } from "../../shared/bridgeMessages";
+import { MAX_QUEUED_MESSAGES } from "../../shared/queueProtocol";
 import type { SessionTokenUsageState } from "../../shared/tokenUsage";
 import { isPreviewableFilePath } from "../../shared/validateMessage";
 import type {
@@ -321,6 +322,14 @@ interface DroidThreadProps {
    * it has open steps (projected in App from transcript todowrites).
    */
   readonly taskPlanPin: TaskPlanPinState | null;
+  /**
+   * Queued-prompt cards rendered at the transcript tail, above the
+   * Composer; null while the queue is empty. Built in App (like
+   * `sideChat`) so the thread stays free of queue state.
+   */
+  readonly queuedMessages?: ReactNode;
+  /** Prompts queued behind the running turn (Composer hint). */
+  readonly queuedCount?: number;
 }
 
 export const DroidThread = memo(function DroidThread({
@@ -406,6 +415,8 @@ export const DroidThread = memo(function DroidThread({
   editResendEnabled,
   inlineInteraction,
   taskPlanPin,
+  queuedMessages = null,
+  queuedCount = 0,
 }: DroidThreadProps): React.JSX.Element {
   // Only one message may be in edit mode at a time. Opening a new
   // target cancels the previous edit staging area on the host first.
@@ -744,6 +755,7 @@ export const DroidThread = memo(function DroidThread({
                 />
               ) : null}
               {inlineInteraction}
+              {queuedMessages}
             </div>
             </SelectSessionContext.Provider>
           </ForkContext.Provider>
@@ -826,6 +838,7 @@ export const DroidThread = memo(function DroidThread({
             onAttachTextFile={onAttachTextFile}
             onAttachmentRemove={onAttachmentRemove}
             onDraftChange={onDraftChange}
+            queuedCount={queuedCount}
           />
         </ThreadPrimitive.ViewportFooter>
       </ThreadPrimitive.Viewport>
@@ -1740,6 +1753,7 @@ function Composer({
   onAttachTextFile,
   onAttachmentRemove,
   onDraftChange,
+  queuedCount = 0,
 }: {
   readonly statusMessage?: string;
   readonly showRetry: boolean;
@@ -1803,6 +1817,8 @@ function Composer({
   ) => void;
   readonly onAttachmentRemove: (attachmentId: string) => void;
   readonly onDraftChange: (draft: string) => void;
+  /** Prompts queued behind the running turn (hint copy). */
+  readonly queuedCount?: number;
 }): React.JSX.Element {
   const aui = useAui();
   const draftRef = useRef("");
@@ -2564,6 +2580,24 @@ function Composer({
                     }
                   }
                 }
+                // assistant-ui's input swallows Enter while the
+                // thread is running (its built-in queue capability is
+                // off for external-store runtimes), so route the
+                // enqueue through the composer send pipeline here.
+                // The full-queue guard keeps the draft in place when
+                // nothing can be queued.
+                if (
+                  mention === null &&
+                  event.key === "Enter" &&
+                  !event.shiftKey &&
+                  !event.nativeEvent.isComposing &&
+                  (running || stopping || queuedCount > 0) &&
+                  queuedCount < MAX_QUEUED_MESSAGES
+                ) {
+                  event.preventDefault();
+                  aui.thread.composer().send();
+                  return;
+                }
                 if (mention === null) {
                   return;
                 }
@@ -2628,6 +2662,7 @@ function Composer({
             mcpAuth={mcpAuth}
             onMcpServerAuthenticate={onMcpServerAuthenticate}
             onPluginsRefresh={onPluginsRefresh}
+            navSignal={navSignal}
             onNewSession={onNewSession}
             onAttachFiles={onAttachFiles}
             onAttachEditor={onAttachEditor}
@@ -2661,11 +2696,15 @@ function Composer({
         </div>
       </ComposerPrimitive.Root>
       <div className="dvx-composer-hint">
-        {interactionPending
-          ? "Pending request · Complete the action above"
-          : running
-            ? "Droid is active · Stop before sending another message"
-            : "Enter to send · Shift+Enter for a new line"}
+        {queuedCount >= MAX_QUEUED_MESSAGES
+          ? `Queue is full (${MAX_QUEUED_MESSAGES}) · Remove a queued message to add another`
+          : interactionPending
+            ? "Pending request · Complete the action above"
+            : running
+              ? "Droid is active · Enter queues for after this turn"
+              : queuedCount > 0
+                ? "Enter adds to the queue · Shift+Enter for a new line"
+                : "Enter to send · Shift+Enter for a new line"}
       </div>
     </div>
   );
