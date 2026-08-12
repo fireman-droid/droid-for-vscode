@@ -1,141 +1,54 @@
+import { ThreadPrimitive } from "@assistant-ui/react";
 import {
-  ActionBarPrimitive,
-  ComposerPrimitive,
-  MessagePartPrimitive,
-  MessagePrimitive,
-  ThreadPrimitive,
-  useAui,
-  useAuiState,
-} from "@assistant-ui/react";
-import {
-  Children,
   createContext,
-  Fragment,
-  isValidElement,
   memo,
-  useContext,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
 
-import {
-  IMAGE_MEDIA_TYPES,
-  MAX_ATTACHMENT_TEXT_FILE_CHARS,
-  MAX_ATTACHMENT_URI_COUNT,
-  MAX_ATTACHMENT_URI_LENGTH,
-  MAX_COMMAND_NAME_LENGTH,
-  MAX_FILE_SEARCH_QUERY_LENGTH,
-  MAX_PENDING_ATTACHMENTS,
-  MAX_TURN_TEXT_LENGTH,
-  type CommandSummary,
-  type EditAttachmentSummary,
-  type EditResendRejectReason,
-  type ImageMediaType,
-  type ModelCatalogState,
-  type SentAttachmentSummary,
-  type SessionCommandsState,
-  type SessionHistoryStatus,
-  type AttachmentSummary,
-  type SessionContextState,
-  type SessionSettingsState,
+import type {
+  EditAttachmentSummary,
+  EditResendRejectReason,
+  ImageMediaType,
+  ModelCatalogState,
+  SessionCommandsState,
+  SessionHistoryStatus,
+  AttachmentSummary,
+  SessionContextState,
+  SessionSettingsState,
 } from "../../shared/bridgeMessages";
-import { MAX_QUEUED_MESSAGES } from "../../shared/queueProtocol";
 import type { SessionTokenUsageState } from "../../shared/tokenUsage";
-import { isPreviewableFilePath } from "../../shared/validateMessage";
 import type {
   ComposerNavRequest,
   McpAuthProgress,
   McpPanelState,
   McpServerAddParams,
   PluginsPanelState,
+  SessionSettingSelection,
   SkillsPanelState,
 } from "./ComposerControls";
+import type { SlashNavTarget } from "./slashBuiltins";
 import {
-  ComposerControls,
-  type SessionSettingSelection,
-} from "./ComposerControls";
-import { ComposerPopup } from "./ComposerPopup";
-import {
-  SLASH_NAV_COMMANDS,
-  type SlashNavTarget,
-} from "./slashBuiltins";
-import {
-  ACTIVITY_GROUP_KEY,
-  activeTickerIndex,
-  activityGroupBy,
-  summarizeActivityGroup,
-  type GroupCandidatePart,
-} from "./activityGrouping";
-import {
-  DroidMarkdownText,
   InlineHtmlPreviewContext,
   PathPreviewContext,
   type PathPreviewWiring,
 } from "./MarkdownText";
-import { ChangesCommitEntry } from "./GitCommitPanel";
-import { MessageTimestamp } from "./MessageTimestamp";
-import { parsePlanSteps, type PlanAnchorState } from "./planAnchor";
-import { PlanAnchorCard } from "./PlanAnchorCard";
-import { TranscriptImage } from "./TranscriptImage";
-import { getImagePreview, rememberImagePreview } from "./imagePreviewCache";
-import {
-  commandCardTitle,
-  commandChips,
-  tokenizeCommand,
-} from "./commandCard";
-import {
-  ActivityGroup,
-  PlanAnchorSlot,
-  ToolActivityRow,
-} from "./thread/activityRows";
+import type { PlanAnchorState } from "./planAnchor";
 import { AssistantMessage } from "./thread/AssistantMessage";
 import { Composer } from "./thread/Composer";
 import { UserMessage } from "./thread/UserMessage";
+import { ScrollToBottomIcon } from "./thread/icons";
 import {
-  ActivityChevron,
-  CopyActionContent,
-  ForkIcon,
-  RegenerateIcon,
-  ScrollToBottomIcon,
-  SendIcon,
-} from "./thread/icons";
-import {
-  BTW_COMMAND,
-  BUILT_IN_COMMANDS,
-  MAX_SLASH_SKILL_MATCHES,
-  filterSlashCommands,
-  findMentionToken,
-  findSlashToken,
-  splitMentionPath,
-  type MentionToken,
-  type SlashEntry,
-  type SlashToken,
-} from "./thread/composerCommands";
-import {
-  ChangesSummary,
-  Diagnostic,
   HistoryNotice,
   PendingResponse,
-  ThinkingRow,
 } from "./thread/transcriptRows";
 import {
-  firstLine,
-  formatDuration,
-  formatThinkingLabel,
-  formatToolLifecycle,
-  formatToolProgress,
-  readDiagnostic,
   readMessageText,
-  readReasoningDuration,
-  readToolActivity,
   readUserAttachments,
   readUserMessageId,
-  type ToolActivityPresentation,
 } from "./thread/readers";
 
 /** Latest workspace search result delivered by the host. */
