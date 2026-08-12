@@ -8,6 +8,9 @@ const expectedEntries = [
   'extension.vsixmanifest',
   'extension/dist/extension/extension.cjs',
   'extension/dist/webview/assets/inter-latin-wght-normal.woff2',
+  // Lazily injected mermaid bundle; ships alongside webview.js but is
+  // only loaded when a completed ```mermaid block needs rendering.
+  'extension/dist/webview/mermaid.js',
   'extension/dist/webview/webview.css',
   'extension/dist/webview/webview.js',
   // Shipped so "Export Diagnostics Bundle" can include the AI playbook.
