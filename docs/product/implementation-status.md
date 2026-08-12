@@ -1178,8 +1178,10 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
 
 - Task 委派行下挂一级缩进安静子行：「Delegated to `<type>` subagent」
   + description 副行 + 状态字；终态且 SDK 报告时行内
-  「N tool uses · 时长」。只做一层；子行永远静态（父行 shimmer 为
-  回合唯一动画）；`childSessionId` 不进 Webview
+  「N tool uses · 时长」。只做一层；~~子行永远静态（父行 shimmer 为
+  回合唯一动画）~~（**决策变更 2026-08-12 深夜**：用户真机遇到委派
+  跑出回合外后全界面无动效、无法判断是否还活着，拍板 running 子行
+  加安静小转圈；见 §23）；`childSessionId` 不进 Webview
 - 流式：Runtime 会话级 `onNotification('child_session_available')`
   → `subagent-started` 事件（仅活跃回合；`toolUseId` 缺失时回落到
   最近运行中的 Task 行）→ Host `projectSubagentStarted` 行升级
@@ -1836,6 +1838,89 @@ UI 描述见 §22 重做记录。
   两例）、`store.test.ts`（promote/编辑态两例）、
   `QueuedMessages.test.tsx`（新建 7 例）、`App.test.tsx`（编辑
   全流程集成）、`runtimeAdapter.test.ts`（满队编辑豁免）
+
+### 23. 子代理 "N Working" 徽标 + 活动弹层 + 僵尸 running 治理（2026-08-12 深夜）
+
+- **背景（用户真机缺陷）**：Droid 异步派发子代理后父回合先结束，
+  子行僵在 "· running" 且全界面无动效（"我都不知道是不是结束了"）。
+  对照 Cursor 形态拍板本切片：Composer 上方左侧 "N Working" 药丸 +
+  点开活动列表 + Stop All；running 子行加安静转圈（推翻 §13
+  "子行永远静态" 决策，原句已划改）
+- **探针结论**（`artifacts/probe-zombie-subagent.mjs`，两问两答）：
+  - **回合外事件不到达**：父回合终态后，子会话状态/终态不再产生
+    任何会话订阅通知（facade `onNotification` 与 raw observer 均
+    无 task 身份事件，仅一条无身份的父级 token_usage 变更）；但
+    `task-invocations` 台账持续如实更新，轮询 `loadSubagentSummaries`
+    可在终态后 2–10s 读到
+  - **回合外 Stop 不可行**：无活跃回合时 `session.interrupt()`
+    正常 resolve 但**不会**终止后台子代理（台账保持 running 直到
+    子代理自然完成）——弹层对回合外条目禁用 Stop All 并给 muted
+    说明，不做假控件
+- **僵尸治理（Host）**：既有回合末结算保持；结算后仍 running 的
+  行进入 `zombieSubagentWatch`（5s 轮询台账、10min 上限、会话切换
+  /dispose 即撤；同会话新回合的僵尸行并入同一 watch）。身份配对
+  按（type, description）计数防误配：台账中同身份 live 条目数 ≥
+  待结算行数时不结算（防旧终态条目吞掉真 running 行），live 减少
+  才最新行配最新终态条目。结算走新 Bridge 消息
+  **`subagent.update`**（exact-key 双侧校验；Host 转录同步投影，
+  快照/恢复一致）
+- **顺带修复的既有缺口**：回合末结算原走 `tool.activity`，但该
+  消息在回合终态后被 Webview `acceptsActiveTurn` 丢弃——正是真机
+  截图里"台账已终态、界面仍 running 直到重载"的直接原因；现改发
+  `subagent.update`（`ChatController.test.ts` 断言已更新为新通道）
+- **徽标 + 弹层（Webview 纯推导，无新增数据消息）**：
+  `selectWorkingSubagents(transcript, liveTurnIds)` 数 running 委派
+  行；`liveTurnIds` 为本连接在 `state.turn` 上见过的回合 id（App
+  累积、切会话清空）——历史回放永远不出徽标，回合结束后委派仍
+  running 时徽标持续（正是用户最需要它的时刻），全部终态即消失。
+  药丸悬浮 Composer 左上缘（`dvx-working-dock` 0 高锚 + 绝对定位，
+  不与队列条/锚卡堆叠），小转圈 + "N Working"；点开
+  `ComposerPopup` 壳弹层：每行 类型 + 描述（单行截断）+ 实时走秒
+  时长（弹层开着才走 interval），右上 Stop All = 现有
+  `turn.stop` 通道（无二次确认）；回合外 Stop All 禁用 + 注脚
+  "Running in background — cannot be stopped from here."；每行留
+  View 挂点注释（回放切片 §6.1 接入，本切片不渲染）
+- **子行动效与诚实降级**：running 子行加 8px CSS 转圈
+  （`dvx-spin`，compositor-only，reduced-motion 静止、
+  forced-colors 适配）；父 Task 行已终态而子行仍 running 时状态字
+  降级为 **"running in background"**（真机缺陷形态的诚实表达）
+- 门禁：typecheck 三 tsconfig 全过；全量 vitest **85 files /
+  1887 tests 全绿**（新增 `subagentWorking.test.ts` 选择/走秒、
+  `WorkingBadge.test.tsx` 徽标/弹层/Stop All/回合外禁用 9 例、
+  store `subagent.update` 两例、`turnActivityState` 僵尸配对 5 例、
+  `ChatController` 后台委派持续结算 + 转录快照落地、Thread 子行
+  转圈/降级 3 例、validateHostMessage 校验例）；build 绿。
+  headless Chrome harness（`artifacts/working-badge-harness.html` +
+  `run-smoke-working-badge.mjs`，对 dist 产物）live + zombie 双
+  场景 PASS：live——徽标 "2 Working" 转圈 → 弹层两行走秒 +
+  Stop All 可用 → Stop All 后弹层与徽标齐退、子行 cancelled；
+  zombie——回合终态后徽标仍在、子行 "running in background" 带
+  转圈、Stop All 禁用 + muted 注脚、`subagent.update` 逐条结算
+  徽标 2→1→消失。四张截图：`artifacts/working-badge-active.png` /
+  `-popup.png` / `-stopped.png` / `-zombie.png`。120 回合 stress
+  （`run-smoke-subagent.mjs` 更新断言后）复跑三次，两次
+  streamingLongTasks 为零（首次一条 74ms 属启动噪声，复跑均绿），
+  子行断言已随决策变更更新（running 行恰一个 `dvx-spin`、僵尸行
+  "running in background"）
+- **打包**：按用户指示不打包，随下个修复包；真机可视验收待下个
+  包安装后进行
+- 提交：`e115754`（Bridge subagent.update）、`a8e6eb9`（Host 僵尸
+  结算 + 轮询 watch）、`f6ed385`（store 接收结算）、`60e0b6e`
+  （徽标/弹层/转圈/降级）
+
+主要实现：
+
+- `src/shared/bridgeMessages.ts` + `src/webview/bridge/validateHostMessage.ts`
+  （`subagent.update` 消息 + 双侧校验）
+- `src/extension/turnActivityState.ts`（`collectRunningSubagentRows` /
+  `settleZombieSubagents` 计数配对 / `applySubagentSettlement`）、
+  `ChatController.ts`（`zombieSubagentWatch` 轮询 + 回合末结算改道
+  `subagent.update`）、`hostTranscriptState.ts`（转录投影）
+- `src/webview/assistant/subagentWorking.ts`（running 委派选择 +
+  走秒格式）、`WorkingBadge.tsx`（药丸 + 弹层）、`App.tsx`
+  （liveTurnIds 累积 + 接线）、`Thread.tsx`（footer 插槽、子行
+  转圈、"running in background" 降级）、`styles.css`（dock/药丸/
+  弹层/转圈全套 + reduced-motion/forced-colors）
 
 ## 部分完成
 
