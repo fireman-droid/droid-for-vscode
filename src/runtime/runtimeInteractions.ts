@@ -95,11 +95,28 @@ export interface RuntimeAskUserResult {
   readonly answers: readonly RuntimeAskUserAnswer[];
 }
 
+/**
+ * Fired when a permission or AskUser request is auto-answered with a
+ * cancel instead of reaching the user. These fallbacks used to be
+ * silent, which made a cancelled ApplyPatch approval indistinguishable
+ * from a user action in the logs.
+ */
+export interface RuntimeInteractionAutoCancel {
+  readonly interaction: 'permission' | 'ask_user';
+  readonly reason:
+    | 'projection-error'
+    | 'invalid-request'
+    | 'invalid-result'
+    | 'handler-error';
+}
+
 export interface RuntimeInteractionHandler {
   requestPermission(
     request: RuntimePermissionRequest,
   ): Promise<RuntimePermissionResult>;
   askUser(request: RuntimeAskUserRequest): Promise<RuntimeAskUserResult>;
+  /** Optional observer for auto-cancelled interactions (logging only). */
+  onAutoCancelled?(event: RuntimeInteractionAutoCancel): void;
 }
 
 export interface RuntimeInteractionCallbacks {
@@ -132,18 +149,37 @@ export function permissionOptionRequiresEditedSpec(
   return value === ToolConfirmationOutcome.ProceedEdit;
 }
 
+function reportAutoCancel(
+  handler: RuntimeInteractionHandler,
+  interaction: RuntimeInteractionAutoCancel['interaction'],
+  reason: RuntimeInteractionAutoCancel['reason'],
+): void {
+  try {
+    handler.onAutoCancelled?.({ interaction, reason });
+  } catch {
+    // Observability must never alter interaction behavior.
+  }
+}
+
 async function handlePermissionRequest(
   handler: RuntimeInteractionHandler,
   params: RequestPermissionRequestParams,
 ): Promise<RequestPermissionHandlerResult> {
+  const cancel = (
+    reason: RuntimeInteractionAutoCancel['reason'],
+  ): RequestPermissionHandlerResult => {
+    reportAutoCancel(handler, 'permission', reason);
+    return ToolConfirmationOutcome.Cancel;
+  };
+
   let request: RuntimePermissionRequest | null;
   try {
     request = projectPermissionRequest(params);
   } catch {
-    return ToolConfirmationOutcome.Cancel;
+    return cancel('projection-error');
   }
   if (!request) {
-    return ToolConfirmationOutcome.Cancel;
+    return cancel('invalid-request');
   }
 
   const suppliedOptions = new Map(
@@ -157,7 +193,7 @@ async function handlePermissionRequest(
       typeof result.selectedOption !== 'string' ||
       !suppliedOptions.has(result.selectedOption)
     ) {
-      return ToolConfirmationOutcome.Cancel;
+      return cancel('invalid-result');
     }
 
     const selectedOption = suppliedOptions.get(result.selectedOption);
@@ -171,7 +207,7 @@ async function handlePermissionRequest(
         MAX_EDITED_SPEC_LENGTH,
       )
     ) {
-      return ToolConfirmationOutcome.Cancel;
+      return cancel('invalid-result');
     }
 
     return {
@@ -179,7 +215,7 @@ async function handlePermissionRequest(
       editedSpecContent: result.editedSpecContent,
     };
   } catch {
-    return ToolConfirmationOutcome.Cancel;
+    return cancel('handler-error');
   }
 }
 
@@ -191,9 +227,11 @@ async function handleAskUserRequest(
   try {
     request = projectAskUserRequest(params);
   } catch {
+    reportAutoCancel(handler, 'ask_user', 'projection-error');
     return cancelledAskUserResult();
   }
   if (!request) {
+    reportAutoCancel(handler, 'ask_user', 'invalid-request');
     return cancelledAskUserResult();
   }
 
@@ -330,7 +368,7 @@ function projectPermissionTool(
     case ToolConfirmationType.Edit:
       return summary(
         'edit',
-        prefixed('Edit ', details.fileName, MAX_INTERACTION_TITLE_LENGTH),
+        prefixed('Edit ', details.fileName),
         boundedDetail([
           prefixed('Path: ', details.filePath),
           optionalSection('Current content', details.oldContent),
@@ -341,7 +379,7 @@ function projectPermissionTool(
     case ToolConfirmationType.Execute:
       return summary(
         'exec',
-        prefixed('Run ', details.command, MAX_INTERACTION_TITLE_LENGTH),
+        prefixed('Run ', details.command),
         boundedDetail([
           details.fullCommand,
           optionalList('Extracted commands', details.extractedCommands),
@@ -358,7 +396,7 @@ function projectPermissionTool(
     case ToolConfirmationType.Create:
       return summary(
         'create',
-        prefixed('Create ', details.fileName, MAX_INTERACTION_TITLE_LENGTH),
+        prefixed('Create ', details.fileName),
         boundedDetail([
           prefixed('Path: ', details.filePath),
           prefixed('Content:\n', details.content),
@@ -425,11 +463,7 @@ function projectPermissionTool(
     case ToolConfirmationType.ApplyPatch:
       return summary(
         'apply_patch',
-        prefixed(
-          'Apply patch to ',
-          details.fileName,
-          MAX_INTERACTION_TITLE_LENGTH,
-        ),
+        prefixed('Apply patch to ', details.fileName),
         boundedDetail([
           prefixed('Path: ', details.filePath),
           prefixed('Patch:\n', details.patchContent),
@@ -441,11 +475,7 @@ function projectPermissionTool(
     case ToolConfirmationType.McpTool:
       return summary(
         'mcp_tool',
-        prefixed(
-          'Run MCP tool ',
-          details.toolName,
-          MAX_INTERACTION_TITLE_LENGTH,
-        ),
+        prefixed('Run MCP tool ', details.toolName),
         boundedDetail([
           optionalLine('Server', details.serverName),
           optionalLine('Tool', details.actualToolName),
@@ -462,7 +492,6 @@ function projectPermissionTool(
         prefixed(
           'Allow sandbox exception for ',
           details.violatingToolName,
-          MAX_INTERACTION_TITLE_LENGTH,
         ),
         boundedDetail([
           prefixed('Operation: ', details.operationType),
@@ -539,6 +568,31 @@ function projectAskUserRequest(
   return { toolCallId: params.toolCallId, questions };
 }
 
+/**
+ * Marks display text that was cut at a projection cap. Details, titles,
+ * and risk notes are display-only (approving never sends them back), so
+ * over-length values must degrade to visible truncation instead of
+ * cancelling the whole approval. The 1m26s "ApplyPatch failed" incident
+ * was a 35.8K patch detail silently auto-cancelling the permission card.
+ */
+const DETAIL_TRUNCATION_MARKER = '… (truncated)';
+
+function truncateForDisplay(
+  value: string,
+  maximumLength: number,
+): string {
+  if (value.length <= maximumLength) {
+    return value;
+  }
+  if (maximumLength <= DETAIL_TRUNCATION_MARKER.length + 1) {
+    return value.slice(0, maximumLength);
+  }
+  return `${value.slice(
+    0,
+    maximumLength - DETAIL_TRUNCATION_MARKER.length - 1,
+  )}\n${DETAIL_TRUNCATION_MARKER}`;
+}
+
 function summary(
   confirmationKind: RuntimeConfirmationKind,
   title: string | null,
@@ -547,26 +601,47 @@ function summary(
   editableSpecContent?: string,
   detailLengthLimit: number = MAX_RUNTIME_DETAIL_LENGTH,
 ): Omit<RuntimePermissionToolSummary, 'toolUseId' | 'toolName'> | null {
+  // Null marks a type-level violation (a non-string where the SDK
+  // promises a string) and still fails closed; over-length display
+  // strings truncate instead.
   if (
-    !isNonEmptyBoundedString(title, MAX_RUNTIME_TITLE_LENGTH) ||
+    typeof title !== 'string' ||
+    title.length === 0 ||
     projectedDetail === null ||
     (projectedDetail !== undefined &&
-      !isBoundedString(projectedDetail, detailLengthLimit)) ||
+      typeof projectedDetail !== 'string') ||
     riskNote === null ||
-    (riskNote !== undefined &&
-      !isBoundedString(riskNote, MAX_RUNTIME_RISK_NOTE_LENGTH)) ||
+    (riskNote !== undefined && typeof riskNote !== 'string') ||
     (editableSpecContent !== undefined &&
-      !isBoundedString(editableSpecContent, detailLengthLimit))
+      typeof editableSpecContent !== 'string')
   ) {
     return null;
   }
+  const boundedTitle =
+    title.length <= MAX_RUNTIME_TITLE_LENGTH
+      ? title
+      : `${title.slice(0, MAX_RUNTIME_TITLE_LENGTH - 1)}…`;
+  const detail =
+    projectedDetail === undefined
+      ? undefined
+      : truncateForDisplay(projectedDetail, detailLengthLimit);
+  const boundedRiskNote =
+    riskNote === undefined
+      ? undefined
+      : truncateForDisplay(riskNote, MAX_RUNTIME_RISK_NOTE_LENGTH);
+  const boundedSpecContent =
+    editableSpecContent === undefined
+      ? undefined
+      : editableSpecContent.slice(0, detailLengthLimit);
 
   return {
     confirmationKind,
-    title,
-    ...(projectedDetail ? { detail: projectedDetail } : {}),
-    ...(riskNote ? { riskNote } : {}),
-    ...(editableSpecContent !== undefined ? { editableSpecContent } : {}),
+    title: boundedTitle,
+    ...(detail ? { detail } : {}),
+    ...(boundedRiskNote ? { riskNote: boundedRiskNote } : {}),
+    ...(boundedSpecContent !== undefined
+      ? { editableSpecContent: boundedSpecContent }
+      : {}),
   };
 }
 
@@ -575,23 +650,16 @@ function boundedDetail(
   maximumLength = MAX_RUNTIME_DETAIL_LENGTH,
 ): string | null | undefined {
   const present: string[] = [];
-  let length = 0;
   for (const value of values) {
     if (value === undefined) {
       continue;
     }
-    if (value === null || !isBoundedString(value, maximumLength)) {
+    if (value === null || typeof value !== 'string') {
       return null;
     }
     if (value.length === 0) {
       continue;
     }
-
-    const separatorLength = present.length === 0 ? 0 : 2;
-    if (length + separatorLength + value.length > maximumLength) {
-      return null;
-    }
-    length += separatorLength + value.length;
     present.push(value);
   }
 
@@ -599,21 +667,11 @@ function boundedDetail(
     return undefined;
   }
 
-  return present.join('\n\n');
+  return truncateForDisplay(present.join('\n\n'), maximumLength);
 }
 
-function prefixed(
-  prefix: string,
-  value: string,
-  maximumLength = MAX_RUNTIME_DETAIL_LENGTH,
-): string | null {
-  if (
-    !isBoundedString(value, maximumLength) ||
-    prefix.length + value.length > maximumLength
-  ) {
-    return null;
-  }
-  return `${prefix}${value}`;
+function prefixed(prefix: string, value: string): string | null {
+  return typeof value === 'string' ? `${prefix}${value}` : null;
 }
 
 function optionalLine(
@@ -637,22 +695,16 @@ function optionalList(
   if (values === undefined) {
     return undefined;
   }
-  if (values.length > MAX_PERMISSION_TOOLS) {
-    return null;
-  }
 
-  const heading = `${label}:`;
-  const parts = [heading];
-  let length = heading.length;
-  for (const value of values) {
-    if (
-      !isBoundedString(value, MAX_RUNTIME_DETAIL_LENGTH) ||
-      length + 1 + value.length > MAX_RUNTIME_DETAIL_LENGTH
-    ) {
+  const parts = [`${label}:`];
+  for (const value of values.slice(0, MAX_PERMISSION_TOOLS)) {
+    if (typeof value !== 'string') {
       return null;
     }
-    length += 1 + value.length;
     parts.push(value);
+  }
+  if (values.length > MAX_PERMISSION_TOOLS) {
+    parts.push(DETAIL_TRUNCATION_MARKER);
   }
   return parts.join('\n');
 }

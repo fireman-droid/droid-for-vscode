@@ -344,33 +344,31 @@ describe('runtime permission interactions', () => {
     ).resolves.toBe(ToolConfirmationOutcome.Cancel);
   });
 
-  it('fails closed for handler rejection, unsafe projection, and future confirmation types', async () => {
+  it('fails closed for handler rejection and future confirmation types, reporting each auto-cancel', async () => {
+    const rejectedAutoCancels = vi.fn();
     const rejectingHandler = createHandler({
       requestPermission: async () => {
         throw new Error('sensitive host failure');
       },
+      onAutoCancelled: rejectedAutoCancels,
     });
     const rejectingCallbacks =
       createRuntimeInteractionCallbacks(rejectingHandler);
     await expect(
       rejectingCallbacks.permissionHandler(basicPermissionRequest()),
     ).resolves.toBe(ToolConfirmationOutcome.Cancel);
+    expect(rejectedAutoCancels).toHaveBeenCalledWith({
+      interaction: 'permission',
+      reason: 'handler-error',
+    });
 
+    const onAutoCancelled = vi.fn();
     const requestPermission = vi.fn(async () => ({
       selectedOption: ToolConfirmationOutcome.Cancel,
     }));
     const callbacks = createRuntimeInteractionCallbacks(
-      createHandler({ requestPermission }),
+      createHandler({ requestPermission, onAutoCancelled }),
     );
-    const oversized = basicPermissionRequest();
-    oversized.toolUses[0]!.details = {
-      ...oversized.toolUses[0]!.details,
-      content: 'x'.repeat(MAX_RUNTIME_DETAIL_LENGTH + 1),
-    } as never;
-    await expect(callbacks.permissionHandler(oversized)).resolves.toBe(
-      ToolConfirmationOutcome.Cancel,
-    );
-
     const future = basicPermissionRequest();
     future.toolUses[0]!.confirmationType = 'future_type' as never;
     future.toolUses[0]!.details = { type: 'future_type' } as never;
@@ -378,6 +376,81 @@ describe('runtime permission interactions', () => {
       ToolConfirmationOutcome.Cancel,
     );
     expect(requestPermission).not.toHaveBeenCalled();
+    expect(onAutoCancelled).toHaveBeenCalledWith({
+      interaction: 'permission',
+      reason: 'invalid-request',
+    });
+  });
+
+  it('projects an oversized ApplyPatch request as a truncated card instead of cancelling', async () => {
+    // Regression for the "ApplyPatch Failed 1m26s" incident: a ~35.8K
+    // patch detail failed the generic 32K display bound, nulled the
+    // whole projection, and auto-cancelled the approval without the
+    // permission card ever opening. Display details now truncate.
+    let projected: RuntimePermissionRequest | undefined;
+    const onAutoCancelled = vi.fn();
+    const requestPermission = vi.fn(
+      async (request: RuntimePermissionRequest) => {
+        projected = request;
+        return { selectedOption: ToolConfirmationOutcome.ProceedOnce };
+      },
+    );
+    const callbacks = createRuntimeInteractionCallbacks(
+      createHandler({ requestPermission, onAutoCancelled }),
+    );
+
+    await expect(
+      callbacks.permissionHandler(
+        permissionRequest([
+          details('apply_patch', {
+            filePath: 'C:\\workspace\\file.ts',
+            fileName: 'file.ts',
+            patchContent: '@'.repeat(18_000),
+            oldContent: 'o'.repeat(9_000),
+            newContent: 'n'.repeat(9_000),
+          }),
+        ]),
+      ),
+    ).resolves.toBe(ToolConfirmationOutcome.ProceedOnce);
+
+    expect(onAutoCancelled).not.toHaveBeenCalled();
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+    const toolUse = projected?.toolUses[0];
+    expect(toolUse).toMatchObject({ confirmationKind: 'apply_patch' });
+    expect(toolUse?.detail).toHaveLength(MAX_RUNTIME_DETAIL_LENGTH);
+    expect(
+      toolUse?.detail?.startsWith('Path: C:\\workspace\\file.ts'),
+    ).toBe(true);
+    expect(toolUse?.detail?.endsWith('… (truncated)')).toBe(true);
+  });
+
+  it('truncates oversized Create content and over-long titles instead of cancelling', async () => {
+    let projected: RuntimePermissionRequest | undefined;
+    const requestPermission = vi.fn(
+      async (request: RuntimePermissionRequest) => {
+        projected = request;
+        return { selectedOption: ToolConfirmationOutcome.Cancel };
+      },
+    );
+    const callbacks = createRuntimeInteractionCallbacks(
+      createHandler({ requestPermission }),
+    );
+
+    const oversized = basicPermissionRequest();
+    oversized.toolUses[0]!.details = {
+      ...oversized.toolUses[0]!.details,
+      fileName: 'f'.repeat(MAX_INTERACTION_TITLE_LENGTH),
+      content: 'x'.repeat(MAX_RUNTIME_DETAIL_LENGTH + 1),
+    } as never;
+    await expect(callbacks.permissionHandler(oversized)).resolves.toBe(
+      ToolConfirmationOutcome.Cancel,
+    );
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+    const toolUse = projected?.toolUses[0];
+    expect(toolUse?.title).toHaveLength(MAX_INTERACTION_TITLE_LENGTH);
+    expect(toolUse?.title?.endsWith('…')).toBe(true);
+    expect(toolUse?.detail).toHaveLength(MAX_RUNTIME_DETAIL_LENGTH);
+    expect(toolUse?.detail?.endsWith('… (truncated)')).toBe(true);
   });
 
   it('awaits an independent handler promise for each permission callback', async () => {
@@ -459,13 +532,6 @@ describe('runtime permission interactions', () => {
       (request) => {
         (request.options[0]! as { value: string }).value =
           'v'.repeat(MAX_PERMISSION_OPTION_VALUE_LENGTH + 1);
-      },
-      (request) => {
-        (
-          request.toolUses[0]!.details as {
-            fileName: string;
-          }
-        ).fileName = 't'.repeat(MAX_INTERACTION_TITLE_LENGTH);
       },
       (request) => {
         request.options.push(

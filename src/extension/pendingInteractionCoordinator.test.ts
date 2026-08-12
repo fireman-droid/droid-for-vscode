@@ -410,22 +410,45 @@ describe('PendingInteractionCoordinator', () => {
     ).toBe(true);
     await expect(pending).resolves.toBe(ToolConfirmationOutcome.Cancel);
 
+    // Over-long display titles truncate to the cap instead of
+    // cancelling the approval, and the truncated projection still
+    // passes the host validator.
     const overTitle = maximumPermissionRequest();
     (
       overTitle.toolUses[0]!.details as {
         title: string;
       }
     ).title = 'x'.repeat(MAX_INTERACTION_TITLE_LENGTH + 1);
-    await expect(
-      callbacks.permissionHandler(overTitle),
-    ).resolves.toBe(ToolConfirmationOutcome.Cancel);
+    const overTitlePending = callbacks.permissionHandler(overTitle);
+    expect(requests).toHaveLength(2);
+    const truncated = requests[1]!;
+    expect(truncated.request.kind).toBe('permission');
+    expect(
+      readHostMessage({
+        type: 'interaction.request',
+        sequence: 0,
+        ...truncated,
+      }),
+    ).toBeDefined();
+    expect(
+      coordinator.respondPermission({
+        type: 'permission.respond',
+        sessionId: truncated.sessionId,
+        turnId: truncated.turnId,
+        requestId: truncated.request.requestId,
+        selectedOption: ToolConfirmationOutcome.Cancel,
+      }),
+    ).toBe(true);
+    await expect(overTitlePending).resolves.toBe(
+      ToolConfirmationOutcome.Cancel,
+    );
 
     const overCount = maximumPermissionRequest();
     overCount.toolUses.push(overCount.toolUses[0]!);
     await expect(
       callbacks.permissionHandler(overCount),
     ).resolves.toBe(ToolConfirmationOutcome.Cancel);
-    expect(requests).toHaveLength(1);
+    expect(requests).toHaveLength(2);
   });
 });
 
