@@ -3637,10 +3637,13 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
    VS Code 嵌套 iframe 限制偏移为 `srcdoc` 内联沙箱，网络出口/同源
    逃逸经 Chromium 探针实证阻断；[`rich-content-design.md`](./rich-content-design.md) §2、
    [`slice-prep-canvas.md`](./slice-prep-canvas.md)）。
-6. **子代理摘要层级 + Mission 只读展示**
-   （[`spec-mission-design.md`](./spec-mission-design.md) §3、§2）。
-7. **第一档打磨剩余** — 流式命令输出预览 → 收起播报 → 回复动画
-   （[`tier1-polish-plan.md`](./tier1-polish-plan.md) §1、§2、§4）。
+6. ~~**子代理摘要层级 + Mission 只读展示**~~ — 已完成（2026-08-12
+   下午，见生产已接通 §13 与验证状态对应条目；
+   [`spec-mission-design.md`](./spec-mission-design.md) §3、§2）。
+7. ~~**第一档打磨剩余**~~ — 已完成（收起播报与回复动画由
+   streaming-experience 三批落地并入 V1 #6；流式命令输出预览
+   2026-08-12 晚落地，见验证状态「流式命令输出预览」；
+   [`tier1-polish-plan.md`](./tier1-polish-plan.md) §1、§2、§4）。
 8. ~~**发版卫生**~~ — 已完成（2026-08-12 晚，v0.1.0：版本号脱离
    0.0.0、`CHANGELOG.md` 随包发布、tag `v0.1.0`、正式 VSIX
    `dist/droidvisx-0.1.0.vsix` 已安装；门禁与包指纹见「当前安装包
