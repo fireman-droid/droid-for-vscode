@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { BRIDGE_PROTOCOL_VERSION } from '../../shared/bridgeMessages';
 import { announceReady, persistDraft, restoreDraft } from './vscode';
 
 describe('VS Code webview bridge', () => {
@@ -47,7 +48,7 @@ describe('VS Code webview bridge', () => {
 
     expect(api.postMessage).toHaveBeenCalledWith({
       type: 'webview.ready',
-      protocolVersion: 3,
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
     });
   });
 });

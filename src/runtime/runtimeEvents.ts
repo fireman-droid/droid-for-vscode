@@ -35,10 +35,19 @@ export type RuntimeEvent =
   | {
       type: 'thinking-delta';
       text: string;
+      /**
+       * SDK message id anchoring this thinking segment (probed
+       * 2026-08-12: one messageId per think→tool→think segment).
+       */
+      messageId: string;
+      /** Block index of the thinking block inside its message. */
+      blockIndex: number;
     }
   | {
       type: 'thinking-complete';
       durationMs: number | null;
+      messageId: string;
+      blockIndex: number;
     }
   | {
       type: 'tool-start';

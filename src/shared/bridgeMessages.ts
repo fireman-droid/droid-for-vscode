@@ -68,7 +68,11 @@ import type {
 
 // Version 3: git commit flow messages (git.requestStatus/git.commit
 // W→H, git.status/git.commitResult H→W).
-export const BRIDGE_PROTOCOL_VERSION = 3 as const;
+// Version 4: thinking.delta/thinking.complete carry segmentIndex so
+// interleaved thinking segments render as separate transcript rows.
+// Version 5: read-only plugins panel messages (plugins.refresh W→H,
+// session.plugins H→W).
+export const BRIDGE_PROTOCOL_VERSION = 5 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_TEXT_LENGTH = 32_000;
@@ -1704,6 +1708,13 @@ export interface ThinkingDeltaMessage {
   readonly turnId: string;
   readonly delta: string;
   readonly truncated: boolean;
+  /**
+   * 0-based thinking segment ordinal within the turn (monotonic;
+   * think→tool→think turns produce segments 0 and 1). The webview
+   * keys transcript items per segment so interleaved thinking keeps
+   * its timeline position.
+   */
+  readonly segmentIndex: number;
 }
 
 export interface ThinkingCompleteMessage {
@@ -1712,6 +1723,8 @@ export interface ThinkingCompleteMessage {
   readonly sessionId: string;
   readonly turnId: string;
   readonly durationMs: number | null;
+  /** Segment this completion targets; other segments stay intact. */
+  readonly segmentIndex: number;
 }
 
 export interface ToolActivityMessage {

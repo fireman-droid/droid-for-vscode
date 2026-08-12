@@ -12,6 +12,7 @@ import {
   hasSubagentRows,
   projectAssistantDelta,
   projectSubagentStarted,
+  projectThinkingComplete,
   projectThinkingDelta,
   projectToolEvent,
   reconcileSubagentSummaries,
@@ -66,9 +67,18 @@ describe('turnActivityState', () => {
     const first = projectThinkingDelta(
       createTurnActivityState(),
       'a'.repeat(MAX_THINKING_TEXT_LENGTH - 1),
+      'message-1:0',
     );
-    const clipped = projectThinkingDelta(first.state, 'bc');
-    const suppressed = projectThinkingDelta(clipped.state, 'later');
+    const clipped = projectThinkingDelta(
+      first.state,
+      'bc',
+      'message-1:0',
+    );
+    const suppressed = projectThinkingDelta(
+      clipped.state,
+      'later',
+      'message-1:0',
+    );
 
     expect(first.projection).toMatchObject({
       truncated: false,
@@ -76,6 +86,7 @@ describe('turnActivityState', () => {
     expect(clipped.projection).toEqual({
       delta: 'b',
       truncated: true,
+      segmentIndex: 0,
     });
     expect(suppressed.projection).toBeNull();
     expect(clipped.state.thinkingTextLength).toBe(
@@ -87,10 +98,19 @@ describe('turnActivityState', () => {
     const filled = projectThinkingDelta(
       createTurnActivityState(),
       'a'.repeat(MAX_THINKING_TEXT_LENGTH),
+      'message-1:0',
     );
-    const empty = projectThinkingDelta(filled.state, '');
-    const marker = projectThinkingDelta(empty.state, 'later');
-    const suppressed = projectThinkingDelta(marker.state, 'again');
+    const empty = projectThinkingDelta(filled.state, '', 'message-1:0');
+    const marker = projectThinkingDelta(
+      empty.state,
+      'later',
+      'message-2:0',
+    );
+    const suppressed = projectThinkingDelta(
+      marker.state,
+      'again',
+      'message-2:0',
+    );
 
     expect(filled.projection).toMatchObject({
       delta: 'a'.repeat(MAX_THINKING_TEXT_LENGTH),
@@ -98,11 +118,74 @@ describe('turnActivityState', () => {
     });
     expect(empty.projection).toBeNull();
     expect(empty.state).toBe(filled.state);
+    // The bare truncation marker pins to the last segment that showed
+    // text instead of opening an empty row for the clipped segment.
     expect(marker.projection).toEqual({
       delta: '',
       truncated: true,
+      segmentIndex: 0,
     });
+    expect(marker.state.thinkingSegmentKey).toBe('message-1:0');
     expect(suppressed.projection).toBeNull();
+    // The fully clipped segment never completes: its key never
+    // registered, so the completion projects nothing.
+    expect(
+      projectThinkingComplete(marker.state, 'message-2:0'),
+    ).toBeNull();
+    expect(
+      projectThinkingComplete(marker.state, 'message-1:0'),
+    ).toEqual({ segmentIndex: 0 });
+  });
+
+  it('opens a new segment per messageId:blockIndex key', () => {
+    const first = projectThinkingDelta(
+      createTurnActivityState(),
+      'First thought',
+      'message-1:0',
+    );
+    const more = projectThinkingDelta(
+      first.state,
+      ' continues',
+      'message-1:0',
+    );
+    const second = projectThinkingDelta(
+      more.state,
+      'Second thought',
+      'message-2:0',
+    );
+
+    expect(first.projection).toMatchObject({ segmentIndex: 0 });
+    expect(more.projection).toMatchObject({ segmentIndex: 0 });
+    expect(second.projection).toMatchObject({ segmentIndex: 1 });
+    expect(second.state.thinkingSegmentIndex).toBe(1);
+    expect(second.state.thinkingSegmentKey).toBe('message-2:0');
+  });
+
+  it('completes only the segment that projected text', () => {
+    const initial = createTurnActivityState();
+    // Empty segment (probed: complete-only, zero deltas) stays silent.
+    expect(projectThinkingComplete(initial, 'message-0:0')).toBeNull();
+
+    const first = projectThinkingDelta(
+      initial,
+      'First',
+      'message-1:0',
+    );
+    expect(
+      projectThinkingComplete(first.state, 'message-1:0'),
+    ).toEqual({ segmentIndex: 0 });
+    expect(
+      projectThinkingComplete(first.state, 'message-9:0'),
+    ).toBeNull();
+
+    const second = projectThinkingDelta(
+      first.state,
+      'Second',
+      'message-2:0',
+    );
+    expect(
+      projectThinkingComplete(second.state, 'message-2:0'),
+    ).toEqual({ segmentIndex: 1 });
   });
 
   it('coalesces running tool events and prevents terminal regression', () => {

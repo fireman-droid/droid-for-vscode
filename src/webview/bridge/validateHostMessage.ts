@@ -678,10 +678,12 @@ function parseThinkingDelta(
       'turnId',
       'delta',
       'truncated',
+      'segmentIndex',
     ]) ||
     !hasTurnIdentity(value) ||
     !isBoundedString(value.delta, MAX_THINKING_TEXT_LENGTH) ||
-    typeof value.truncated !== 'boolean'
+    typeof value.truncated !== 'boolean' ||
+    !isSequence(value.segmentIndex)
   ) {
     return undefined;
   }
@@ -693,6 +695,7 @@ function parseThinkingDelta(
     turnId: value.turnId,
     delta: value.delta,
     truncated: value.truncated,
+    segmentIndex: value.segmentIndex,
   };
 }
 
@@ -706,9 +709,11 @@ function parseThinkingComplete(
       'sessionId',
       'turnId',
       'durationMs',
+      'segmentIndex',
     ]) ||
     !hasTurnIdentity(value) ||
-    (value.durationMs !== null && !isSequence(value.durationMs))
+    (value.durationMs !== null && !isSequence(value.durationMs)) ||
+    !isSequence(value.segmentIndex)
   ) {
     return undefined;
   }
@@ -719,6 +724,7 @@ function parseThinkingComplete(
     sessionId: value.sessionId,
     turnId: value.turnId,
     durationMs: value.durationMs,
+    segmentIndex: value.segmentIndex,
   };
 }
 

@@ -24,6 +24,8 @@ type ToolEvent = Extract<
 export interface ThinkingDeltaProjection {
   readonly delta: string;
   readonly truncated: boolean;
+  /** 0-based thinking segment ordinal within the turn. */
+  readonly segmentIndex: number;
 }
 
 export interface AssistantDeltaProjection {
@@ -72,6 +74,14 @@ export interface TurnActivityState {
   readonly assistantTruncated: boolean;
   readonly thinkingTextLength: number;
   readonly thinkingTruncated: boolean;
+  /**
+   * `messageId:blockIndex` of the last thinking segment that
+   * projected visible text; completes only surface for this key so
+   * empty segments (probed: complete-only, zero deltas) stay silent.
+   */
+  readonly thinkingSegmentKey: string | null;
+  /** 0-based ordinal of that segment; -1 before any segment opens. */
+  readonly thinkingSegmentIndex: number;
   readonly tools: ReadonlyMap<string, ToolActivityEntry>;
 }
 
@@ -86,8 +96,18 @@ export function createTurnActivityState(): TurnActivityState {
     assistantTruncated: false,
     thinkingTextLength: 0,
     thinkingTruncated: false,
+    thinkingSegmentKey: null,
+    thinkingSegmentIndex: -1,
     tools: new Map(),
   };
+}
+
+/** Segment identity key of one runtime thinking event. */
+export function thinkingSegmentKey(event: {
+  readonly messageId: string;
+  readonly blockIndex: number;
+}): string {
+  return `${event.messageId}:${event.blockIndex}`;
 }
 
 /**
@@ -134,6 +154,7 @@ export function projectAssistantDelta(
 export function projectThinkingDelta(
   state: TurnActivityState,
   text: string,
+  segmentKey: string,
 ): ActivityProjectionResult<ThinkingDeltaProjection> {
   if (state.thinkingTruncated) {
     return { state, projection: null };
@@ -146,15 +167,44 @@ export function projectThinkingDelta(
     MAX_THINKING_TEXT_LENGTH - state.thinkingTextLength;
   const delta = text.slice(0, Math.max(0, remaining));
   const truncated = text.length > remaining;
+  // A segment only opens with visible text: the bare truncation
+  // marker after an exact fill stays pinned to the last real segment
+  // so no empty row appears past the cumulative cap.
+  const opensSegment =
+    delta.length > 0 && segmentKey !== state.thinkingSegmentKey;
+  const segmentIndex = opensSegment
+    ? state.thinkingSegmentIndex + 1
+    : state.thinkingSegmentIndex;
 
   return {
     state: {
       ...state,
       thinkingTextLength: state.thinkingTextLength + delta.length,
       thinkingTruncated: truncated,
+      ...(delta.length > 0
+        ? {
+            thinkingSegmentKey: segmentKey,
+            thinkingSegmentIndex: segmentIndex,
+          }
+        : {}),
     },
-    projection: { delta, truncated },
+    projection: { delta, truncated, segmentIndex },
   };
+}
+
+/**
+ * Resolves which segment a thinking completion targets. Only the
+ * segment that last projected visible text completes; completions
+ * for unknown keys (empty or fully clipped segments) project
+ * nothing so no empty Thinking row ever appears.
+ */
+export function projectThinkingComplete(
+  state: TurnActivityState,
+  segmentKey: string,
+): { readonly segmentIndex: number } | null {
+  return state.thinkingSegmentKey === segmentKey
+    ? { segmentIndex: state.thinkingSegmentIndex }
+    : null;
 }
 
 export function projectToolEvent(

@@ -1156,6 +1156,8 @@ describe('FactoryDroidRuntime', () => {
       {
         type: 'thinking-delta',
         text: 'Considering',
+        messageId: 'message-1',
+        blockIndex: 0,
       },
       {
         type: 'tool-progress',

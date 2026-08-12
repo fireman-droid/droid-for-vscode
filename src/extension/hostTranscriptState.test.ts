@@ -47,12 +47,14 @@ describe('hostTranscriptState', () => {
       turnId: 'turn-1',
       delta: 'Check files',
       truncated: false,
+      segmentIndex: 0,
     });
     state = project(state, {
       type: 'thinking.complete',
       sessionId: 'session-1',
       turnId: 'turn-1',
       durationMs: 25,
+      segmentIndex: 0,
     });
     state = project(state, {
       type: 'tool.activity',
@@ -144,6 +146,14 @@ describe('hostTranscriptState', () => {
       turnId: 'turn-1',
       delta: 'First thought',
       truncated: false,
+      segmentIndex: 0,
+    });
+    state = project(state, {
+      type: 'thinking.complete',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      durationMs: 40,
+      segmentIndex: 0,
     });
     state = project(state, {
       type: 'assistant.delta',
@@ -157,6 +167,7 @@ describe('hostTranscriptState', () => {
       turnId: 'turn-1',
       delta: 'Second thought',
       truncated: false,
+      segmentIndex: 1,
     });
     state = project(state, {
       type: 'tool.activity',
@@ -180,6 +191,7 @@ describe('hostTranscriptState', () => {
       sessionId: 'session-1',
       turnId: 'turn-1',
       durationMs: 50,
+      segmentIndex: 1,
     });
 
     expect(
@@ -193,14 +205,68 @@ describe('hostTranscriptState', () => {
       'Read workspace files',
       'Final answer',
     ]);
+    // Each segment keeps its own completion: no cross-segment
+    // status sweep, no durationMs overwrite by the last segment.
     expect(
       state.transcript
         .filter((item) => item.kind === 'thinking')
-        .map((item) => item.status),
-    ).toEqual(['complete', 'complete']);
+        .map((item) => ({ status: item.status, durationMs: item.durationMs })),
+    ).toEqual([
+      { status: 'complete', durationMs: 40 },
+      { status: 'complete', durationMs: 50 },
+    ]);
     expect(new Set(state.transcript.map((item) => item.id)).size).toBe(
       state.transcript.length,
     );
+  });
+
+  it('routes segment deltas past interleaved rows and drops unknown completions', () => {
+    let state = createHostTranscriptState('complete');
+    state = project(state, {
+      type: 'thinking.delta',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      delta: 'First',
+      truncated: false,
+      segmentIndex: 0,
+    });
+    state = project(state, {
+      type: 'tool.activity',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolUseId: 'tool-1',
+      toolName: 'Read',
+      action: 'Read workspace files',
+      status: 'completed',
+      progressCount: 0,
+      latestUpdateKind: null,
+    });
+    // A late delta for segment 0 keeps appending to its own row even
+    // though a tool row landed after it.
+    state = project(state, {
+      type: 'thinking.delta',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      delta: ' thought',
+      truncated: false,
+      segmentIndex: 0,
+    });
+    // A completion for a segment that never projected text does not
+    // fabricate an empty Thinking row.
+    const unknownComplete = project(state, {
+      type: 'thinking.complete',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      durationMs: 12,
+      segmentIndex: 5,
+    });
+
+    expect(
+      state.transcript.map((item) =>
+        item.kind === 'tool' ? item.action : 'text' in item ? item.text : '',
+      ),
+    ).toEqual(['First thought', 'Read workspace files']);
+    expect(unknownComplete).toBe(state);
   });
 
   it('moves unavailable history to partial after observing UI items', () => {
@@ -314,6 +380,7 @@ describe('hostTranscriptState', () => {
       turnId: 'turn-1',
       delta: '',
       truncated: true,
+      segmentIndex: 0,
     });
 
     expect(items.transcript).toHaveLength(
@@ -347,6 +414,7 @@ describe('hostTranscriptState', () => {
       turnId: 'turn-1',
       delta: 'Working',
       truncated: false,
+      segmentIndex: 0,
     });
     state = project(state, {
       type: 'tool.activity',

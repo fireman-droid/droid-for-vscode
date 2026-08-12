@@ -20,9 +20,10 @@ import {
   vi,
 } from 'vitest';
 
-import type {
-  HostToWebviewMessage,
-  WebviewToHostMessage,
+import {
+  BRIDGE_PROTOCOL_VERSION,
+  type HostToWebviewMessage,
+  type WebviewToHostMessage,
 } from '../../shared/bridgeMessages';
 import { App } from './App';
 
@@ -165,7 +166,7 @@ describe('assistant-ui App bridge commands', () => {
     // be posted exactly once.
     expect(posted).toContainEqual({
       type: 'webview.ready',
-      protocolVersion: 3,
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
     });
     expect(posted).toContainEqual({
       type: 'webview.diagnostic',
@@ -489,7 +490,7 @@ describe('assistant-ui App bridge commands', () => {
       render(<App />);
       expect(posted).toContainEqual({
         type: 'webview.ready',
-        protocolVersion: 3,
+        protocolVersion: BRIDGE_PROTOCOL_VERSION,
       });
       expect(screen.queryByRole('alert')).toBeNull();
 
@@ -548,7 +549,7 @@ describe('assistant-ui App bridge commands', () => {
     await waitFor(() =>
       expect(posted).toContainEqual({
         type: 'webview.ready',
-        protocolVersion: 3,
+        protocolVersion: BRIDGE_PROTOCOL_VERSION,
       }),
     );
     host({

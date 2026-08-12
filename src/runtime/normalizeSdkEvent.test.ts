@@ -48,7 +48,7 @@ describe('normalizeSdkEvent', () => {
     expect(
       normalizeSdkEvent(
         sdkEvent('thinking_text_delta', {
-          messageId: 'sensitive-message-id',
+          messageId: 'message-a',
           blockIndex: 7,
           text: 'Considering',
           thoughtSignature: 'sensitive-signature',
@@ -57,11 +57,13 @@ describe('normalizeSdkEvent', () => {
     ).toEqual({
       type: 'thinking-delta',
       text: 'Considering',
+      messageId: 'message-a',
+      blockIndex: 7,
     });
     expect(
       normalizeSdkEvent(
         sdkEvent('thinking_text_complete', {
-          messageId: 'sensitive-message-id',
+          messageId: 'message-a',
           blockIndex: 7,
           durationMs: 42,
           internal: 'sensitive',
@@ -70,6 +72,8 @@ describe('normalizeSdkEvent', () => {
     ).toEqual({
       type: 'thinking-complete',
       durationMs: 42,
+      messageId: 'message-a',
+      blockIndex: 7,
     });
     expect(
       normalizeSdkEvent(
@@ -81,7 +85,49 @@ describe('normalizeSdkEvent', () => {
     ).toEqual({
       type: 'thinking-complete',
       durationMs: null,
+      messageId: 'message-1',
+      blockIndex: 0,
     });
+  });
+
+  it('bounds thinking segment identity and drops malformed ones whole', () => {
+    const longId = 'm'.repeat(MAX_BRIDGE_ID_LENGTH + 20);
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('thinking_text_delta', {
+          messageId: longId,
+          blockIndex: 0,
+          text: 'Considering',
+        }),
+      ),
+    ).toMatchObject({
+      messageId: longId.slice(0, MAX_BRIDGE_ID_LENGTH),
+    });
+    for (const invalid of [
+      { messageId: '', blockIndex: 0 },
+      { messageId: 42, blockIndex: 0 },
+      { messageId: 'message-1', blockIndex: -1 },
+      { messageId: 'message-1', blockIndex: 1.5 },
+      { messageId: 'message-1', blockIndex: '0' },
+      { messageId: 'message-1' },
+    ]) {
+      expect(
+        normalizeSdkEvent(
+          sdkEvent('thinking_text_delta', {
+            ...invalid,
+            text: 'dropped whole',
+          }),
+        ),
+      ).toBeUndefined();
+      expect(
+        normalizeSdkEvent(
+          sdkEvent('thinking_text_complete', {
+            ...invalid,
+            durationMs: 10,
+          }),
+        ),
+      ).toBeUndefined();
+    }
   });
 
   it('keeps only safe metadata from every tool event shape', () => {

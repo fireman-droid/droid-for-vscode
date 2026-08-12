@@ -273,17 +273,17 @@ function projectThinkingDelta(
   state: HostTranscriptState,
   message: ThinkingDeltaMessage,
 ): HostTranscriptState {
-  const existingIndex = findLastTurnItemIndex(
-    state.transcript,
-    message.turnId,
+  const id = thinkingSegmentId(message.turnId, message.segmentIndex);
+  const existingIndex = state.transcript.findIndex(
+    (item) => item.id === id,
   );
   const existing = state.transcript[existingIndex];
-  if (existing?.kind !== 'thinking' || existing.status !== 'active') {
+  if (existing?.kind !== 'thinking') {
     const text = message.delta.slice(0, MAX_THINKING_TEXT_LENGTH);
     return appendItem(
       state,
       {
-        id: nextTurnSegmentId(state, 'thinking', message.turnId),
+        id,
         kind: 'thinking',
         turnId: message.turnId,
         text,
@@ -307,7 +307,6 @@ function projectThinkingDelta(
     {
       ...existing,
       text,
-      status: 'active',
       truncated: existing.truncated || message.truncated || clipped,
     },
     message.truncated || clipped,
@@ -318,48 +317,24 @@ function projectThinkingComplete(
   state: HostTranscriptState,
   message: ThinkingCompleteMessage,
 ): HostTranscriptState {
-  const thinkingIndices = state.transcript.flatMap((item, index) =>
-    item.kind === 'thinking' && item.turnId === message.turnId
-      ? [index]
-      : [],
-  );
-  const duration =
-    message.durationMs === null ? {} : { durationMs: message.durationMs };
-  if (thinkingIndices.length === 0) {
-    return appendItem(state, {
-      id: nextTurnSegmentId(state, 'thinking', message.turnId),
-      kind: 'thinking',
-      turnId: message.turnId,
-      text: '',
-      status: 'complete',
-      ...duration,
-      truncated: false,
-    });
+  const id = thinkingSegmentId(message.turnId, message.segmentIndex);
+  const index = state.transcript.findIndex((item) => item.id === id);
+  const existing = state.transcript[index];
+  if (existing?.kind !== 'thinking') {
+    // The host only completes segments that projected text, so an
+    // unknown segment never fabricates an empty Thinking row.
+    return state;
   }
-
-  const lastThinkingIndex = thinkingIndices.at(-1);
-  let changed = false;
-  const transcript = state.transcript.map((item, index) => {
-    if (
-      item.kind !== 'thinking' ||
-      item.turnId !== message.turnId
-    ) {
-      return item;
-    }
-    const next = {
-      ...item,
-      status: 'complete' as const,
-      ...(index === lastThinkingIndex ? duration : {}),
-    };
-    changed =
-      changed ||
-      item.status !== next.status ||
-      (index === lastThinkingIndex &&
-        message.durationMs !== null &&
-        item.durationMs !== message.durationMs);
-    return next;
+  const durationMs =
+    message.durationMs === null ? existing.durationMs : message.durationMs;
+  if (existing.status === 'complete' && existing.durationMs === durationMs) {
+    return state;
+  }
+  return replaceItem(state, index, {
+    ...existing,
+    status: 'complete',
+    ...(durationMs === undefined ? {} : { durationMs }),
   });
-  return changed ? { ...state, transcript } : state;
 }
 
 function projectToolActivity(
@@ -510,6 +485,20 @@ function nextTurnSegmentId(
   return segmentCount === 0
     ? stableTranscriptId(kind, turnId)
     : stableTranscriptId(kind, turnId, String(segmentCount));
+}
+
+/**
+ * Stable per-segment thinking id derived from the bridge
+ * segmentIndex. Segment 0 keeps the historical single-block id so
+ * recovered checkpoints written before segmentation keep matching.
+ */
+function thinkingSegmentId(
+  turnId: string,
+  segmentIndex: number,
+): string {
+  return segmentIndex === 0
+    ? stableTranscriptId('thinking', turnId)
+    : stableTranscriptId('thinking', turnId, String(segmentIndex));
 }
 
 function updateTurnActivityStatuses(

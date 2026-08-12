@@ -997,6 +997,7 @@ describe('assistantWebviewReducer', () => {
         turnId: 'turn-a',
         delta: 'Checking',
         truncated: false,
+        segmentIndex: 0,
       },
     });
     state = assistantWebviewReducer(state, {
@@ -1025,6 +1026,240 @@ describe('assistantWebviewReducer', () => {
         toolUseId: 'tool-a',
         toolName: 'Read',
         status: 'stopping',
+      },
+    ]);
+  });
+
+  it('renders interleaved thinking segments as separate rows in arrival order', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'turn.send',
+      turnId: 'turn-a',
+      text: 'Think twice',
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'thinking.delta',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        delta: 'First thought',
+        truncated: false,
+        segmentIndex: 0,
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'thinking.complete',
+        sequence: 2,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        durationMs: 154,
+        segmentIndex: 0,
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'tool.activity',
+        sequence: 3,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'tool-a',
+        toolName: 'Read',
+        action: 'Read workspace files',
+        status: 'completed',
+        progressCount: 0,
+        latestUpdateKind: null,
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'thinking.delta',
+        sequence: 4,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        delta: 'Second thought',
+        truncated: false,
+        segmentIndex: 1,
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'thinking.complete',
+        sequence: 5,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        durationMs: 168,
+        segmentIndex: 1,
+      },
+    });
+
+    // Each segment is its own transcript row at its arrival position
+    // (before/after the tool row), with its own durationMs: the last
+    // segment's completion no longer overwrites earlier labels.
+    expect(state.transcript).toMatchObject([
+      { kind: 'user', text: 'Think twice' },
+      {
+        id: 'thinking:turn-a:0',
+        kind: 'thinking',
+        text: 'First thought',
+        status: 'complete',
+        durationMs: 154,
+      },
+      { kind: 'tool', toolUseId: 'tool-a' },
+      {
+        id: 'thinking:turn-a:1',
+        kind: 'thinking',
+        text: 'Second thought',
+        status: 'complete',
+        durationMs: 168,
+      },
+    ]);
+  });
+
+  it('keeps completed thinking segments frozen while a later segment streams', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: {
+        ...snapshot(),
+        turn: { turnId: 'turn-a', status: 'streaming' },
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'thinking.delta',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        delta: 'First thought',
+        truncated: false,
+        segmentIndex: 0,
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'thinking.complete',
+        sequence: 2,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        durationMs: 154,
+        segmentIndex: 0,
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'thinking.delta',
+        sequence: 3,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        delta: 'Second ',
+        truncated: false,
+        segmentIndex: 1,
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'thinking.delta',
+        sequence: 4,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        delta: 'thought',
+        truncated: false,
+        segmentIndex: 1,
+      },
+    });
+
+    // Regression: later-segment deltas used to append into the
+    // already-completed row, growing a static row with no shimmer.
+    expect(state.transcript).toMatchObject([
+      {
+        id: 'thinking:turn-a:0',
+        kind: 'thinking',
+        text: 'First thought',
+        status: 'complete',
+        durationMs: 154,
+      },
+      {
+        id: 'thinking:turn-a:1',
+        kind: 'thinking',
+        text: 'Second thought',
+        status: 'active',
+      },
+    ]);
+  });
+
+  it('appends new segments after a legacy single-block checkpoint item without collision', () => {
+    // Checkpoints written before segmentation hold one merged item
+    // per turn under the legacy `thinking:${turnId}` id; a reconnect
+    // that keeps streaming the same turn must not touch it.
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: {
+        ...snapshot(),
+        turn: { turnId: 'turn-a', status: 'streaming' },
+        transcript: [
+          {
+            id: 'thinking:turn-a',
+            kind: 'thinking',
+            turnId: 'turn-a',
+            text: 'Merged legacy thinking',
+            status: 'complete',
+            durationMs: 99,
+            truncated: false,
+          },
+        ],
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'thinking.delta',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        delta: 'Fresh segment',
+        truncated: false,
+        segmentIndex: 1,
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'thinking.complete',
+        sequence: 2,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        durationMs: 20,
+        segmentIndex: 1,
+      },
+    });
+
+    expect(state.transcript).toMatchObject([
+      {
+        id: 'thinking:turn-a',
+        kind: 'thinking',
+        text: 'Merged legacy thinking',
+        status: 'complete',
+        durationMs: 99,
+      },
+      {
+        id: 'thinking:turn-a:1',
+        kind: 'thinking',
+        text: 'Fresh segment',
+        status: 'complete',
+        durationMs: 20,
       },
     ]);
   });

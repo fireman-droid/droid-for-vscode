@@ -497,6 +497,7 @@ describe('readHostMessage', () => {
       turnId: 'turn-1',
       delta: 'Considering',
       truncated: false,
+      segmentIndex: 0,
     },
     {
       type: 'thinking.complete',
@@ -504,6 +505,7 @@ describe('readHostMessage', () => {
       sessionId: 'session-1',
       turnId: 'turn-1',
       durationMs: null,
+      segmentIndex: 1,
     },
     {
       type: 'tool.activity',
@@ -1658,6 +1660,7 @@ describe('readHostMessage', () => {
       turnId: 'turn-1',
       delta: 'x'.repeat(MAX_THINKING_TEXT_LENGTH + 1),
       truncated: false,
+      segmentIndex: 0,
     },
     {
       type: 'thinking.delta',
@@ -1666,6 +1669,33 @@ describe('readHostMessage', () => {
       turnId: 'turn-1',
       delta: 'Considering',
       truncated: 'no',
+      segmentIndex: 0,
+    },
+    {
+      type: 'thinking.delta',
+      sequence: 2,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      delta: 'Considering',
+      truncated: false,
+    },
+    {
+      type: 'thinking.delta',
+      sequence: 2,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      delta: 'Considering',
+      truncated: false,
+      segmentIndex: -1,
+    },
+    {
+      type: 'thinking.delta',
+      sequence: 2,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      delta: 'Considering',
+      truncated: false,
+      segmentIndex: 1.5,
     },
     {
       type: 'thinking.complete',
@@ -1673,6 +1703,7 @@ describe('readHostMessage', () => {
       sessionId: 'session-1',
       turnId: 'turn-1',
       durationMs: -1,
+      segmentIndex: 0,
     },
     {
       type: 'thinking.complete',
@@ -1680,6 +1711,7 @@ describe('readHostMessage', () => {
       sessionId: 'session-1',
       turnId: 'turn-1',
       durationMs: 1.5,
+      segmentIndex: 0,
     },
     {
       type: 'thinking.complete',
@@ -1687,6 +1719,22 @@ describe('readHostMessage', () => {
       sessionId: 'session-1',
       turnId: 'turn-1',
       durationMs: Number.MAX_SAFE_INTEGER + 1,
+      segmentIndex: 0,
+    },
+    {
+      type: 'thinking.complete',
+      sequence: 3,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      durationMs: 10,
+    },
+    {
+      type: 'thinking.complete',
+      sequence: 3,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      durationMs: 10,
+      segmentIndex: '0',
     },
     {
       type: 'tool.activity',
@@ -2288,6 +2336,7 @@ describe('readHostMessage', () => {
         turnId: 't'.repeat(MAX_BRIDGE_ID_LENGTH),
         delta: 'x'.repeat(MAX_THINKING_TEXT_LENGTH),
         truncated: true,
+        segmentIndex: Number.MAX_SAFE_INTEGER,
       }),
     ).toBeDefined();
     expect(
@@ -2306,6 +2355,7 @@ describe('readHostMessage', () => {
         sessionId: 'session-1',
         turnId: 'turn-1',
         durationMs: Number.MAX_SAFE_INTEGER,
+        segmentIndex: 0,
       }),
     ).toBeDefined();
     expect(
@@ -3000,6 +3050,7 @@ describe('readHostMessage', () => {
       sessionId: 'session-1',
       turnId: 'turn-1',
       truncated: false,
+      segmentIndex: 0,
       get delta() {
         throw new Error('hostile getter');
       },

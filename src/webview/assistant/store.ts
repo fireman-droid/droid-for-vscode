@@ -643,6 +643,7 @@ export function assistantWebviewReducer(
           event.turnId,
           event.delta,
           event.truncated,
+          event.segmentIndex,
         ),
       );
     case 'thinking.complete':
@@ -652,7 +653,8 @@ export function assistantWebviewReducer(
       return boundTranscript(
         { ...state, sequence: event.sequence },
         state.transcript.map((item) =>
-          item.kind === 'thinking' && item.turnId === event.turnId
+          item.kind === 'thinking' &&
+          item.id === thinkingSegmentItemId(event.turnId, event.segmentIndex)
             ? {
                 ...item,
                 status: 'complete',
@@ -1055,20 +1057,33 @@ function appendAssistantDelta(
   ];
 }
 
+/**
+ * Per-segment thinking item id. Segments key by their bridge
+ * segmentIndex so interleaved thinking renders one row per segment
+ * at its arrival position; legacy single-block `thinking:${turnId}`
+ * ids from old recovery checkpoints never collide with these.
+ */
+function thinkingSegmentItemId(
+  turnId: string,
+  segmentIndex: number,
+): string {
+  return `thinking:${turnId}:${segmentIndex}`;
+}
+
 function appendThinkingDelta(
   transcript: readonly SessionTranscriptItem[],
   turnId: string,
   delta: string,
   truncated: boolean,
+  segmentIndex: number,
 ): readonly SessionTranscriptItem[] {
-  const index = transcript.findIndex(
-    (item) => item.kind === 'thinking' && item.turnId === turnId,
-  );
+  const id = thinkingSegmentItemId(turnId, segmentIndex);
+  const index = transcript.findIndex((item) => item.id === id);
   if (index === -1) {
     return [
       ...transcript,
       {
-        id: `thinking:${turnId}`,
+        id,
         kind: 'thinking',
         turnId,
         text: delta,

@@ -44,17 +44,33 @@ export function normalizeSdkEvent(
             text: event.text,
           };
 
-    case 'thinking_text_delta':
-      return {
-        type: 'thinking-delta',
-        text: event.text,
-      };
+    case 'thinking_text_delta': {
+      const segment = normalizeThinkingSegment(
+        event.messageId,
+        event.blockIndex,
+      );
+      return segment === undefined
+        ? undefined
+        : {
+            type: 'thinking-delta',
+            text: event.text,
+            ...segment,
+          };
+    }
 
-    case 'thinking_text_complete':
-      return {
-        type: 'thinking-complete',
-        durationMs: normalizeDuration(event.durationMs),
-      };
+    case 'thinking_text_complete': {
+      const segment = normalizeThinkingSegment(
+        event.messageId,
+        event.blockIndex,
+      );
+      return segment === undefined
+        ? undefined
+        : {
+            type: 'thinking-complete',
+            durationMs: normalizeDuration(event.durationMs),
+            ...segment,
+          };
+    }
 
     case 'tool_call': {
       const activity = normalizeToolActivity(
@@ -441,6 +457,30 @@ function normalizeToolName(value: unknown): string {
 
   const sanitized = value.replace(/\p{Cc}/gu, '').trim();
   return sanitized.slice(0, MAX_TOOL_NAME_LENGTH) || 'Tool';
+}
+
+/**
+ * Segment identity of one thinking block. A malformed identity drops
+ * the whole event (fail closed) so downstream layers can never merge
+ * segments under a fabricated key.
+ */
+function normalizeThinkingSegment(
+  messageId: unknown,
+  blockIndex: unknown,
+): { messageId: string; blockIndex: number } | undefined {
+  if (
+    typeof messageId !== 'string' ||
+    messageId.length === 0 ||
+    typeof blockIndex !== 'number' ||
+    !Number.isSafeInteger(blockIndex) ||
+    blockIndex < 0
+  ) {
+    return undefined;
+  }
+  return {
+    messageId: messageId.slice(0, MAX_BRIDGE_ID_LENGTH),
+    blockIndex,
+  };
 }
 
 function normalizeDuration(value: unknown): number | null {
