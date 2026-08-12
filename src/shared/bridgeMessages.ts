@@ -1065,6 +1065,14 @@ export interface SessionSummary {
    * shows the worktree marker without a branch name.
    */
   readonly worktree?: SessionWorktreeInfo;
+  /**
+   * True when a turn of this session is still running on the daemon
+   * (detached from this window, driven by another window, or by the
+   * CLI). Hosts omit the flag instead of sending false; the drawer
+   * row shows a quiet spinner while it is true. Updates stream via
+   * `session.running`.
+   */
+  readonly running?: boolean;
 }
 
 /** Worktree binding of a catalog session (host-recovered from git). */
@@ -1623,6 +1631,13 @@ export interface HostSnapshotMessage {
    * empty state; queue state also streams via `queue.state`.
    */
   readonly queue?: SessionQueueState;
+  /**
+   * True when the active runtime keeps detached turns running in the
+   * background (daemon mode), so the drawer may allow switching away
+   * from a running turn. Absent means unavailable (process mode) and
+   * switching stays blocked while a turn runs (fail closed).
+   */
+  readonly backgroundTurnsAvailable?: boolean;
 }
 
 export interface HostConnectionMessage {
@@ -1708,6 +1723,19 @@ export interface SessionArchivedStateMessage {
   readonly type: 'session.archived';
   readonly sequence: number;
   readonly archived: SessionArchivedState;
+}
+
+/**
+ * Incremental update of one catalog session's background running
+ * flag (`SessionSummary.running`). Emitted when a detached daemon
+ * turn starts being tracked or stops running, so the drawer spinner
+ * appears and disappears without a full catalog refresh.
+ */
+export interface SessionRunningStateMessage {
+  readonly type: 'session.running';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly running: boolean;
 }
 
 /**
@@ -2103,6 +2131,7 @@ export type HostToWebviewMessage =
   | SessionCommandsStateMessage
   | McpAuthStateMessage
   | SessionArchivedStateMessage
+  | SessionRunningStateMessage
   | SessionSearchStateMessage
   | SessionAttachmentsStateMessage
   | SessionEditAttachmentsStateMessage

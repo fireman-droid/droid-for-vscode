@@ -273,6 +273,8 @@ export function readHostMessage(
         return parseMcpAuth(value);
       case 'session.archived':
         return parseSessionArchivedMessage(value);
+      case 'session.running':
+        return parseSessionRunningMessage(value);
       case 'session.searchResults':
         return parseSessionSearchMessage(value);
       case 'session.attachments':
@@ -353,6 +355,7 @@ function parseHostSnapshot(
         'mission',
         'worktreeCreateAvailable',
         'btwAvailable',
+        'backgroundTurnsAvailable',
         'tokenUsage',
         'workspaceRoot',
         'queue',
@@ -367,6 +370,9 @@ function parseHostSnapshot(
       value.worktreeCreateAvailable !== true) ||
     // Same omit-when-unavailable contract as worktreeCreateAvailable.
     (value.btwAvailable !== undefined && value.btwAvailable !== true) ||
+    // Same omit-when-unavailable contract (daemon-backed switching).
+    (value.backgroundTurnsAvailable !== undefined &&
+      value.backgroundTurnsAvailable !== true) ||
     // Hosts omit the root when no usable workspace exists.
     (value.workspaceRoot !== undefined &&
       (!isNonEmptyBoundedString(value.workspaceRoot, MAX_OPEN_PATH_LENGTH) ||
@@ -462,6 +468,9 @@ function parseHostSnapshot(
       ? {}
       : { worktreeCreateAvailable: true }),
     ...(value.btwAvailable === undefined ? {} : { btwAvailable: true }),
+    ...(value.backgroundTurnsAvailable === undefined
+      ? {}
+      : { backgroundTurnsAvailable: true }),
     ...(tokenUsage === undefined ? {} : { tokenUsage }),
     ...(queue === undefined ? {} : { queue }),
     ...(value.workspaceRoot === undefined
@@ -2888,7 +2897,7 @@ function parseSessionSummary(value: unknown): SessionSummary | undefined {
     !hasExactKeys(
       value,
       ['id', 'title', 'messageCount', 'modifiedTime', 'active'],
-      ['isFavorite', 'missionRole', 'worktree'],
+      ['isFavorite', 'missionRole', 'worktree', 'running'],
     ) ||
     !isId(value.id) ||
     !isBoundedString(value.title, MAX_SESSION_TITLE_LENGTH) ||
@@ -2899,7 +2908,9 @@ function parseSessionSummary(value: unknown): SessionSummary | undefined {
     (value.isFavorite !== undefined &&
       typeof value.isFavorite !== 'boolean') ||
     (value.missionRole !== undefined &&
-      !isMissionSessionRole(value.missionRole))
+      !isMissionSessionRole(value.missionRole)) ||
+    // Hosts omit the flag instead of sending false.
+    (value.running !== undefined && value.running !== true)
   ) {
     return undefined;
   }
@@ -2922,6 +2933,7 @@ function parseSessionSummary(value: unknown): SessionSummary | undefined {
       ? {}
       : { missionRole: value.missionRole }),
     ...(worktree === undefined ? {} : { worktree }),
+    ...(value.running === true ? { running: true } : {}),
   };
 }
 
@@ -2962,6 +2974,32 @@ function parseSessionArchivedMessage(
         sequence: value.sequence,
         archived,
       };
+}
+
+function parseSessionRunningMessage(
+  value: UnknownRecord,
+):
+  | Extract<HostToWebviewMessage, { type: 'session.running' }>
+  | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sequence',
+      'sessionId',
+      'running',
+    ]) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId) ||
+    typeof value.running !== 'boolean'
+  ) {
+    return undefined;
+  }
+  return {
+    type: 'session.running',
+    sequence: value.sequence,
+    sessionId: value.sessionId,
+    running: value.running,
+  };
 }
 
 function parseSessionArchivedState(

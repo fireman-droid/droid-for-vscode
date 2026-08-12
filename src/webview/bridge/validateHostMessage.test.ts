@@ -2684,6 +2684,63 @@ describe('readHostMessage', () => {
     ).toBeUndefined();
   });
 
+  it('accepts the background-turns flag and per-row running markers', () => {
+    const snapshot = createSessionSnapshot();
+    expect(
+      readHostMessage({ ...snapshot, backgroundTurnsAvailable: true }),
+    ).toEqual({ ...snapshot, backgroundTurnsAvailable: true });
+    // Omit-when-false contract, like the other capability flags.
+    expect(
+      readHostMessage({ ...snapshot, backgroundTurnsAvailable: false }),
+    ).toBeUndefined();
+
+    const running = {
+      ...snapshot,
+      sessions: {
+        ...snapshot.sessions,
+        items: [{ ...snapshot.sessions.items[0], running: true }],
+      },
+    };
+    expect(readHostMessage(running)).toEqual(running);
+    // Rows omit the flag instead of sending false.
+    expect(
+      readHostMessage({
+        ...snapshot,
+        sessions: {
+          ...snapshot.sessions,
+          items: [{ ...snapshot.sessions.items[0], running: false }],
+        },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('parses session.running updates and rejects malformed ones', () => {
+    const message = {
+      type: 'session.running',
+      sequence: 7,
+      sessionId: 'session-1',
+      running: true,
+    };
+    expect(readHostMessage(message)).toEqual(message);
+    // Clearing is an explicit false, not an omission: the webview
+    // must stop the row animation immediately.
+    const cleared = { ...message, sequence: 8, running: false };
+    expect(readHostMessage(cleared)).toEqual(cleared);
+
+    expect(
+      readHostMessage({ ...message, sequence: -1 }),
+    ).toBeUndefined();
+    expect(
+      readHostMessage({ ...message, sessionId: '' }),
+    ).toBeUndefined();
+    expect(
+      readHostMessage({ ...message, running: 'yes' }),
+    ).toBeUndefined();
+    expect(
+      readHostMessage({ ...message, extra: true }),
+    ).toBeUndefined();
+  });
+
   it('accepts session.btw card states and rejects malformed ones', () => {
     const message = {
       type: 'session.btw',
