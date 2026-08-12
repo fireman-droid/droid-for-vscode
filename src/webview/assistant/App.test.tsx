@@ -455,7 +455,7 @@ describe('assistant-ui App bridge commands', () => {
     });
   });
 
-  it('shows the spec planning badge only while the session is in Spec mode', async () => {
+  it('swaps the composer placeholder while the session is in Spec mode', async () => {
     render(<App />);
     await waitFor(() =>
       expect(
@@ -478,12 +478,18 @@ describe('assistant-ui App bridge commands', () => {
       },
     });
     await waitFor(() =>
-      expect(screen.getByText('Spec mode · planning')).toBeDefined(),
+      expect(
+        screen.getByLabelText<HTMLTextAreaElement>('Message Droid')
+          .placeholder,
+      ).toBe('Describe what to plan…'),
     );
 
     host(snapshot(1));
     await waitFor(() =>
-      expect(screen.queryByText('Spec mode · planning')).toBeNull(),
+      expect(
+        screen.getByLabelText<HTMLTextAreaElement>('Message Droid')
+          .placeholder,
+      ).toBe('Ask Droid about your workspace'),
     );
   });
 

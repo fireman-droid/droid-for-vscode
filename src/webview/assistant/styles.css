@@ -368,18 +368,37 @@ html, body, #root {
   opacity: 0.85;
 }
 
+/* Transient host notices: a content-fit finished card (1px border,
+   soft radius and shadow, leading severity dot) instead of a
+   full-width edge-barred strip; severity tints stay in the warm
+   muted range. */
 .dvx-diagnostic {
-  display: block;
-  margin: 5px 0;
-  padding: 4px 8px;
-  border: 0;
-  border-left: 2px solid var(--dvx-muted);
-  border-radius: 3px;
-  background: rgb(255 255 255 / 35%);
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 5px 11px 5px 10px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 7px;
+  background: var(--dvx-raised);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
   color: var(--dvx-muted);
   font-size: 11.5px;
-  line-height: 18px;
+  line-height: 17px;
   overflow-wrap: anywhere;
+}
+
+.dvx-diagnostic::before {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  /* Centers the dot on the first 17px text line. */
+  margin-top: 6px;
+  border-radius: 999px;
+  background: var(--dvx-subtle);
+  content: "";
 }
 
 .dvx-diagnostic code {
@@ -387,12 +406,20 @@ html, body, #root {
 }
 
 .dvx-diagnostic-warning {
-  border-left-color: var(--dvx-warning);
+  border-color: color-mix(in srgb, var(--dvx-warning) 22%, #fff);
+}
+
+.dvx-diagnostic-warning::before {
+  background: var(--dvx-warning);
 }
 
 .dvx-diagnostic-error {
-  border-left-color: var(--dvx-danger);
-  color: var(--dvx-danger);
+  border-color: color-mix(in srgb, var(--dvx-danger) 24%, #fff);
+  color: color-mix(in srgb, var(--dvx-danger) 82%, #4a3b3b);
+}
+
+.dvx-diagnostic-error::before {
+  background: var(--dvx-danger);
 }
 
 .dvx-transcript-image {
@@ -1701,7 +1728,9 @@ body {
   --dvx-user: rgb(229 229 229 / 70%);
   --dvx-surface: #f5f3ef;
   --dvx-raised: #fff;
-  --dvx-danger: #ec003f;
+  /* Calm crimson: reads as danger without the neon-pink plastic
+     sting of the old #ec003f (visual-bar decision, 2026-08-12). */
+  --dvx-danger: #c93a4a;
   --dvx-warning: rgb(187 77 0 / 90%);
   --dvx-shadow: 0 16px 40px -14px rgb(0 0 0 / 28%);
   grid-template-rows: 60px minmax(0, 1fr);
@@ -2547,40 +2576,21 @@ body {
   cursor: pointer;
 }
 
+/* Spec state on the mode trigger is text color only: same quiet
+   bare-text trigger as Auto/model, accent ink as the single cue
+   (UI-restraint decision, 2026-08-12: no fills, no badges). */
 .dvx-shell .dvx-mode-trigger-spec {
   color: var(--dvx-accent-strong);
-  background: var(--dvx-accent-soft);
   font-weight: 500;
-}
-
-.dvx-spec-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  align-self: center;
-  margin: 0 0 6px;
-  padding: 2px 10px;
-  border: 1px solid rgb(242 97 46 / 24%);
-  border-radius: 999px;
-  color: var(--dvx-accent-strong);
-  background: var(--dvx-accent-soft);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 18px;
-  white-space: nowrap;
-}
-
-.dvx-spec-badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--dvx-accent);
 }
 
 .dvx-shell .dvx-mode-trigger:hover:not(:disabled) {
   color: var(--dvx-ink);
   background: var(--dvx-soft);
+}
+
+.dvx-shell .dvx-mode-trigger-spec:hover:not(:disabled) {
+  color: var(--dvx-accent-strong);
 }
 
 .dvx-mode-trigger .dvx-chevron-down {
@@ -3068,12 +3078,17 @@ body {
   background: var(--dvx-soft);
 }
 
-.dvx-model-spec-default:disabled {
+/* Selected state stays unfilled: solid accent-tinted stroke and
+   accent ink are the only cues (UI restraint, no filled pills).
+   Full opacity: this is a selected marker, not an unavailable
+   control, so the global disabled fade must not wash it out. */
+.dvx-shell .dvx-model-spec-default:disabled {
   border-style: solid;
   color: var(--dvx-accent-strong);
-  border-color: rgb(242 97 46 / 24%);
-  background: var(--dvx-accent-soft);
+  border-color: color-mix(in srgb, var(--dvx-accent) 34%, #fff);
+  background: transparent;
   cursor: default;
+  opacity: 1;
 }
 
 .dvx-shell .dvx-model-search:focus-visible {
@@ -4021,21 +4036,25 @@ body {
   border-top: 1px solid var(--dvx-border);
 }
 
+/* Accent-outline action: quiet white base, warm accent stroke and
+   ink; hover deepens into the soft accent wash. */
 .dvx-context-compact-button {
   align-self: flex-start;
   padding: 4px 10px;
-  border: 1px solid var(--dvx-border);
+  border: 1px solid color-mix(in srgb, var(--dvx-accent) 42%, #fff);
   border-radius: 6px;
-  background: transparent;
-  color: var(--dvx-ink);
+  background: var(--dvx-raised);
+  color: var(--dvx-accent-strong);
   cursor: pointer;
   font-size: 11px;
   font-weight: 550;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+  transition: border-color 130ms ease, background-color 130ms ease;
 }
 
 .dvx-context-compact-button:hover:not(:disabled) {
   border-color: var(--dvx-accent);
-  color: var(--dvx-accent);
+  background: var(--dvx-accent-soft);
 }
 
 .dvx-context-compact-button:disabled {
@@ -4409,9 +4428,14 @@ body {
 }
 
 .dvx-shell .dvx-button-danger {
-  border-color: #ffccd3;
+  border-color: color-mix(in srgb, var(--dvx-danger) 26%, #fff);
   color: var(--dvx-danger);
   background: #fff;
+}
+
+.dvx-shell .dvx-button-danger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--dvx-danger) 42%, #fff);
+  background: color-mix(in srgb, var(--dvx-danger) 4%, #fff);
 }
 
 .dvx-permission-allow-group {
@@ -4468,29 +4492,33 @@ body {
   bottom: calc(100% + 6px);
   z-index: 2;
   min-width: 174px;
+  max-width: min(340px, 86vw);
   overflow: hidden;
-  padding: 4px 0;
+  padding: 5px;
   border: 1px solid var(--dvx-border);
-  border-radius: 8px;
+  border-radius: 9px;
   background: #fff;
-  box-shadow: 0 16px 40px -14px rgb(0 0 0 / 28%);
+  box-shadow: 0 2px 6px -3px rgb(0 0 0 / 10%), 0 16px 40px -14px rgb(0 0 0 / 25%);
   animation: dvx-rise-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .dvx-permission-menu button {
   display: block;
   width: 100%;
-  padding: 6px 12px;
+  padding: 7px 10px;
   border: 0;
+  border-radius: 6px;
   color: #404040;
   background: transparent;
   font-size: 12px;
+  line-height: 17px;
   text-align: left;
-  white-space: nowrap;
+  transition: background-color var(--dvx-duration-fast) ease, color var(--dvx-duration-fast) ease;
 }
 
 .dvx-permission-menu button:hover:not(:disabled) {
-  background: rgb(0 0 0 / 4%);
+  color: var(--dvx-ink);
+  background: color-mix(in srgb, var(--dvx-accent) 7%, #fff);
 }
 
 .dvx-ask-user .dvx-interaction-heading, .dvx-ask-user .dvx-ask-questions {

@@ -1774,12 +1774,6 @@ function Composer({
   return (
     <div className="dvx-composer-wrap">
       <div className="dvx-composer-seam" aria-hidden="true" />
-      {settings.value?.interactionMode === 'spec' ? (
-        <div className="dvx-spec-badge" role="status">
-          <span className="dvx-spec-badge-dot" aria-hidden="true" />
-          Spec mode · planning
-        </div>
-      ) : null}
       <ComposerPrimitive.Root
         className={`dvx-composer${
           interactionPending ? ' dvx-composer-pending' : ''
@@ -1922,7 +1916,11 @@ function Composer({
             <ComposerPrimitive.Input
               id="dvx-prompt"
               className="dvx-composer-input"
-              placeholder="Ask Droid about your workspace"
+              placeholder={
+                settings.value?.interactionMode === 'spec'
+                  ? 'Describe what to plan…'
+                  : 'Ask Droid about your workspace'
+              }
               rows={1}
               maxLength={MAX_TURN_TEXT_LENGTH}
               submitMode="enter"

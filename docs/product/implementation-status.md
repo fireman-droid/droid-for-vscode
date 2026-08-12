@@ -472,8 +472,14 @@ Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限�
   （`runtimeInteractions.test.ts`、`validateHostMessage.test.ts`）
 - 长计划卡默认折叠预览 + “View full spec” 展开/收起（阈值
   1,200 字符或 24 行）
-- Spec 模式可视化：Composer 上方 “Spec mode · planning” 徽标，
-  Mode 触发器 Spec 态高亮
+- Spec 模式可视化（2026-08-12 下午按 UI restraint / Visual bar 收敛）：
+  Composer 上方徽标横幅已删除，Spec 态改由 Composer placeholder
+  （“Describe what to plan…”）与 Mode 触发器纯文字强调色（无填充底）
+  表达；同批次收敛：Spec 起草 “Use session model” 选中态去填充改
+  描边、Compact conversation 按钮恢复暖色描边+强调字、Approve plan
+  上拉菜单与危险按钮按轻奢基准打磨（柔和阴影/暖色 hover/克制红
+  `--dvx-danger: #c93a4a`）、转录诊断提示改为随内容自适应的精致浅底卡
+  （1px 边框+severity 圆点，替代通栏橙线条）
 - Spec 起草模型/推理力度覆盖：Model 弹窗在 Spec 模式下出现
   Session / Spec drafting 双 Scope，Spec Scope 可选独立起草模型与
   推理力度，或重置回 Session 模型 / 模型默认（Bridge
@@ -1150,6 +1156,16 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension dist/droidvisx.vsix --force`
   （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
   需 Reload Window（或完整重启）后加载新 Bundle
+- 2026-08-12 下午打包并安装含 **Spec/Compact/审批菜单/诊断卡样式
+  收敛批次**（UI restraint + Visual bar 落地，见上文切片④可视化
+  条目）的构建：`dist/droidvisx.vsix` 636,689 字节（9 files,
+  621.77 KB），SHA-256
+  `7A19D43D7D5408DBA103D8EE671E8AE57DBCCD8BACDAAFE6A049D011ACF7B9BD`，
+  typecheck 三 tsconfig 全过、vitest 44 files / 1067 tests 全绿，
+  `pnpm run package:vsix` 与
+  `cursor --install-extension dist/droidvisx.vsix --force`
+  （successfully installed）均成功；现有窗口需 Reload Window 后
+  加载新 Bundle
 
 ## 验证状态
 
