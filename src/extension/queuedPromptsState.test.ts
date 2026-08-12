@@ -9,6 +9,7 @@ import {
   evaluateQueueDispatch,
   markDispatchBlocked,
   pauseAfterTerminal,
+  promotePrompt,
   removePrompt,
   resumeQueue,
   updatePromptText,
@@ -112,6 +113,37 @@ describe('queuedPromptsState', () => {
 
     state = clearPrompts();
     expect(state).toEqual({ items: [], paused: null });
+  });
+
+  it('promotes a prompt to the head and reports unknown ids', () => {
+    const state = filled('queue-1', 'queue-2', 'queue-3');
+
+    const promoted = promotePrompt(state, 'queue-3');
+    expect(promoted.promoted).toBe(true);
+    expect(promoted.state.items.map(({ queueId }) => queueId)).toEqual([
+      'queue-3',
+      'queue-1',
+      'queue-2',
+    ]);
+
+    // Promoting the head is a no-op that still reports success.
+    const head = promotePrompt(promoted.state, 'queue-3');
+    expect(head.promoted).toBe(true);
+    expect(head.state).toBe(promoted.state);
+
+    // Unknown ids leave the state untouched (already dispatched).
+    const ghost = promotePrompt(state, 'ghost');
+    expect(ghost.promoted).toBe(false);
+    expect(ghost.state).toBe(state);
+
+    // The pause flag survives a pure promotion; resuming is the
+    // caller's decision.
+    const paused = pauseAfterTerminal(state, 'interrupted');
+    const pausedPromote = promotePrompt(paused, 'queue-2');
+    expect(pausedPromote.state.paused).toBe('stopped');
+    expect(
+      pausedPromote.state.items.map(({ queueId }) => queueId),
+    ).toEqual(['queue-2', 'queue-1', 'queue-3']);
   });
 
   it('pauses after Stop and failure but never on an empty queue', () => {

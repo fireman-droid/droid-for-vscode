@@ -124,6 +124,42 @@ export function clearPrompts<Attachment>(): QueuedPromptsState<Attachment> {
   return { items: [], paused: null };
 }
 
+/**
+ * Moves one queued prompt to the head ("send now",
+ * queued-messages-design.md §4.8). Pure reorder: the caller decides
+ * whether the promotion also resumes a paused queue and re-evaluates
+ * dispatch. Unknown ids are reported, not thrown, mirroring
+ * `updatePromptText`.
+ */
+export function promotePrompt<Attachment>(
+  state: QueuedPromptsState<Attachment>,
+  queueId: string,
+): {
+  readonly state: QueuedPromptsState<Attachment>;
+  readonly promoted: boolean;
+} {
+  const index = state.items.findIndex(
+    (item) => item.queueId === queueId,
+  );
+  const item = state.items[index];
+  if (item === undefined) {
+    return { state, promoted: false };
+  }
+  if (index === 0) {
+    return { state, promoted: true };
+  }
+  return {
+    state: {
+      ...state,
+      items: [
+        item,
+        ...state.items.filter((entry) => entry.queueId !== queueId),
+      ],
+    },
+    promoted: true,
+  };
+}
+
 export function resumeQueue<Attachment>(
   state: QueuedPromptsState<Attachment>,
 ): QueuedPromptsState<Attachment> {

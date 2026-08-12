@@ -19,6 +19,7 @@ import type {
 import type {
   QueueAddMessage,
   QueueClearMessage,
+  QueuePromoteMessage,
   QueueRemoveMessage,
   QueueResumeMessage,
   QueueStateMessage,
@@ -84,6 +85,7 @@ export type {
   QueueClearMessage,
   QueuedMessageSummary,
   QueuePausedReason,
+  QueuePromoteMessage,
   QueueRemoveMessage,
   QueueResumeMessage,
   QueueStateMessage,
@@ -118,7 +120,7 @@ import type {
 // session.plugins H→W).
 // Version 6: queued-messages contract (queue.add/update/remove/
 // resume/clear W→H, queue.state H→W, snapshot `queue` field).
-export const BRIDGE_PROTOCOL_VERSION = 6 as const;
+export const BRIDGE_PROTOCOL_VERSION = 7 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_TEXT_LENGTH = 32_000;
@@ -1035,6 +1037,7 @@ export type WebviewToHostMessage =
   | QueueAddMessage
   | QueueUpdateMessage
   | QueueRemoveMessage
+  | QueuePromoteMessage
   | QueueResumeMessage
   | QueueClearMessage;
 

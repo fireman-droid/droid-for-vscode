@@ -1708,6 +1708,23 @@ describe('parseWebviewMessage', () => {
     });
     expect(
       parseWebviewMessage({
+        type: 'queue.promote',
+        sessionId: 'session-1',
+        queueId: 'queue-1',
+      }),
+    ).toEqual({
+      type: 'queue.promote',
+      sessionId: 'session-1',
+      queueId: 'queue-1',
+    });
+    expect(
+      parseWebviewMessage({
+        type: 'queue.promote',
+        sessionId: 'session-1',
+      }),
+    ).toBeUndefined();
+    expect(
+      parseWebviewMessage({
         type: 'queue.remove',
         sessionId: 'session-1',
         queueId: 'queue-1',

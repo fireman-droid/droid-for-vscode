@@ -120,6 +120,7 @@ import {
   evaluateQueueDispatch,
   markDispatchBlocked,
   pauseAfterTerminal,
+  promotePrompt,
   removePrompt,
   resumeQueue,
   updatePromptText,
@@ -734,6 +735,9 @@ export class ChatController {
         return;
       case 'queue.remove':
         this.handleQueueRemove(message.sessionId, message.queueId);
+        return;
+      case 'queue.promote':
+        this.handleQueuePromote(message.sessionId, message.queueId);
         return;
       case 'queue.resume':
         this.handleQueueResume(message.sessionId);
@@ -1921,6 +1925,35 @@ export class ChatController {
       return;
     }
     this.queuedPrompts = resumeQueue(this.queuedPrompts);
+    this.emitQueueState();
+    this.maybeDispatchQueue();
+  }
+
+  /**
+   * "Send now" on one queued prompt (design §4.8): move it to the
+   * head and dispatch as soon as the state machine allows. A running
+   * turn is never interrupted — the promotion just decides what goes
+   * next — and on a paused queue the explicit send intent doubles as
+   * a resume.
+   */
+  private handleQueuePromote(sessionId: string, queueId: string): void {
+    if (
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    const result = promotePrompt(this.queuedPrompts, queueId);
+    if (!result.promoted) {
+      this.recordHost({
+        level: 'debug',
+        name: 'host.queue.rejected',
+        attributes: { op: 'promote' },
+      });
+      this.emitQueueState();
+      return;
+    }
+    this.queuedPrompts = resumeQueue(result.state);
     this.emitQueueState();
     this.maybeDispatchQueue();
   }

@@ -90,6 +90,18 @@ export interface QueueRemoveMessage {
   readonly queueId: string;
 }
 
+/**
+ * Webview → Host: "send now" — move one queued prompt to the head
+ * and dispatch it as soon as the state machine allows. While a turn
+ * is running this is a pure reorder (no mid-turn interruption); on a
+ * paused queue it also resumes automatic dispatch.
+ */
+export interface QueuePromoteMessage {
+  readonly type: 'queue.promote';
+  readonly sessionId: string;
+  readonly queueId: string;
+}
+
 /** Webview → Host: leave the paused state and dispatch if possible. */
 export interface QueueResumeMessage {
   readonly type: 'queue.resume';
@@ -187,6 +199,25 @@ export function parseQueueRemoveMessage(
   }
   return {
     type: 'queue.remove',
+    sessionId: value.sessionId,
+    queueId: value.queueId,
+  };
+}
+
+export function parseQueuePromoteMessage(
+  value: unknown,
+): QueuePromoteMessage | null {
+  if (
+    !isRecord(value) ||
+    value.type !== 'queue.promote' ||
+    !hasExactKeys(value, ['type', 'sessionId', 'queueId']) ||
+    !isId(value.sessionId) ||
+    !isId(value.queueId)
+  ) {
+    return null;
+  }
+  return {
+    type: 'queue.promote',
     sessionId: value.sessionId,
     queueId: value.queueId,
   };

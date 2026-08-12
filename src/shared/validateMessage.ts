@@ -100,6 +100,7 @@ import {
 import {
   parseQueueAddMessage,
   parseQueueClearMessage,
+  parseQueuePromoteMessage,
   parseQueueRemoveMessage,
   parseQueueResumeMessage,
   parseQueueUpdateMessage,
@@ -240,6 +241,8 @@ export function parseWebviewMessage(
         return parseQueueUpdateMessage(value) ?? undefined;
       case 'queue.remove':
         return parseQueueRemoveMessage(value) ?? undefined;
+      case 'queue.promote':
+        return parseQueuePromoteMessage(value) ?? undefined;
       case 'queue.resume':
         return parseQueueResumeMessage(value) ?? undefined;
       case 'queue.clear':

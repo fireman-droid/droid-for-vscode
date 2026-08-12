@@ -7848,6 +7848,110 @@ describe('ChatController queued messages', () => {
     });
   });
 
+  it('promotes a prompt to the head during a turn and dispatches it first', async () => {
+    const release = deferred<void>();
+    const runtime = createMockRuntime(async function* (text) {
+      if (text === 'Long turn') {
+        await release.promise;
+      }
+      yield successfulTurn();
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Long turn');
+    queueAdd(controller, 'session-1', 'queued-1', 'First queued');
+    queueAdd(controller, 'session-1', 'queued-2', 'Second queued');
+    queueAdd(controller, 'session-1', 'queued-3', 'Third queued');
+
+    // Send now while the turn runs: a pure reorder, no interruption.
+    controller.handleMessage({
+      type: 'queue.promote',
+      sessionId: 'session-1',
+      queueId: 'queued-3',
+    });
+    expect(queueStates(messages).at(-1)).toMatchObject({
+      items: [
+        { queueId: 'queued-3' },
+        { queueId: 'queued-1' },
+        { queueId: 'queued-2' },
+      ],
+      paused: null,
+    });
+    expect(runtime.sendTurn).toHaveBeenCalledOnce();
+
+    // Unknown ids answer with a corrective echo and change nothing.
+    controller.handleMessage({
+      type: 'queue.promote',
+      sessionId: 'session-1',
+      queueId: 'ghost',
+    });
+    expect(queueStates(messages).at(-1)).toMatchObject({
+      items: [
+        { queueId: 'queued-3' },
+        { queueId: 'queued-1' },
+        { queueId: 'queued-2' },
+      ],
+    });
+
+    release.resolve();
+    await vi.waitFor(() => {
+      expect(runtime.sendTurn).toHaveBeenCalledTimes(4);
+    });
+    expect(
+      runtime.sendTurn.mock.calls.map(([text]) => text),
+    ).toEqual([
+      'Long turn',
+      'Third queued',
+      'First queued',
+      'Second queued',
+    ]);
+  });
+
+  it('resumes a paused queue when a prompt is promoted', async () => {
+    const release = deferred<void>();
+    const runtime = createMockRuntime(async function* (text) {
+      if (text === 'Long turn') {
+        yield { type: 'text-delta', text: 'working' };
+        await release.promise;
+        yield { ...successfulTurn(), outcome: 'interrupted' };
+        return;
+      }
+      yield successfulTurn();
+    });
+    runtime.interrupt.mockImplementation(async () => release.resolve());
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Long turn');
+    queueAdd(controller, 'session-1', 'queued-1', 'First queued');
+    queueAdd(controller, 'session-1', 'queued-2', 'Second queued');
+    stop(controller, 'session-1', 'turn-1');
+    await vi.waitFor(() => {
+      expect(queueStates(messages).at(-1)?.paused).toBe('stopped');
+    });
+
+    // Send now on the second prompt: explicit send intent doubles as
+    // a resume, so it dispatches immediately and the rest chains.
+    controller.handleMessage({
+      type: 'queue.promote',
+      sessionId: 'session-1',
+      queueId: 'queued-2',
+    });
+    await vi.waitFor(() => {
+      expect(runtime.sendTurn).toHaveBeenCalledTimes(3);
+    });
+    expect(
+      runtime.sendTurn.mock.calls.map(([text]) => text),
+    ).toEqual(['Long turn', 'Second queued', 'First queued']);
+    expect(queueStates(messages).at(-1)).toMatchObject({
+      items: [],
+      paused: null,
+    });
+  });
+
   it('pauses the queue after a failed turn and clears it on queue.clear', async () => {
     const release = deferred<void>();
     const runtime = createMockRuntime(async function* () {

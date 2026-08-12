@@ -8,6 +8,7 @@ import {
   MAX_QUEUED_MESSAGES,
   parseQueueAddMessage,
   parseQueueClearMessage,
+  parseQueuePromoteMessage,
   parseQueueRemoveMessage,
   parseQueueResumeMessage,
   parseQueueStateMessage,
@@ -128,6 +129,42 @@ describe('queueProtocol webview messages', () => {
     ).toBeNull();
     expect(
       parseQueueClearMessage({ type: 'queue.clear', sessionId: '' }),
+    ).toBeNull();
+  });
+
+  it('parses queue.promote with exact keys only', () => {
+    expect(
+      parseQueuePromoteMessage({
+        type: 'queue.promote',
+        sessionId: 'session-1',
+        queueId: 'queue-2',
+      }),
+    ).toEqual({
+      type: 'queue.promote',
+      sessionId: 'session-1',
+      queueId: 'queue-2',
+    });
+
+    expect(
+      parseQueuePromoteMessage({
+        type: 'queue.promote',
+        sessionId: 'session-1',
+      }),
+    ).toBeNull();
+    expect(
+      parseQueuePromoteMessage({
+        type: 'queue.promote',
+        sessionId: 'session-1',
+        queueId: 'queue-2',
+        extra: true,
+      }),
+    ).toBeNull();
+    expect(
+      parseQueuePromoteMessage({
+        type: 'queue.promote',
+        sessionId: '',
+        queueId: 'queue-2',
+      }),
     ).toBeNull();
   });
 });
