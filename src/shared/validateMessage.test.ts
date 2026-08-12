@@ -94,6 +94,9 @@ describe('parseWebviewMessage', () => {
       type: 'session.new',
     },
     {
+      type: 'worktree.createSession',
+    },
+    {
       type: 'session.rename',
       sessionId: 'session-1',
       title: 'Renamed session',
@@ -534,6 +537,10 @@ describe('parseWebviewMessage', () => {
       sessionId: 's'.repeat(MAX_BRIDGE_ID_LENGTH + 1),
     },
     { type: 'session.new', sessionId: 'session-1' },
+    // The worktree contract deliberately carries no branch name (the
+    // daemon owns naming); any payload keys are hostile.
+    { type: 'worktree.createSession', branch: 'droid/2026-08-12-1' },
+    { type: 'worktree.createSession', sessionId: 'session-1' },
     { type: 'session.rename', sessionId: 'session-1', title: '' },
     { type: 'session.rename', sessionId: 'session-1', title: '   ' },
     {
