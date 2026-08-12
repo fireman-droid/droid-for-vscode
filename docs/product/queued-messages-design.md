@@ -232,24 +232,53 @@ Stop 中断当前回合（既有 `handleStop` → interrupted 终态）→ 队�
   负载不持久化，恢复后的条目附件降级为"仅元数据、不随发"并在卡片
   上标注。
 
-### 4.7 队列 UI（参照 Cursor 排队体验，保留 DroidVisX 暖色体系）
+### 4.7 队列 UI（收纳条形态，用户拍板 2026-08-12 晚，替代首版摊开卡）
 
-- **位置**：转录尾部之后、Composer 上方，随对话滚动（Cursor 的排队
-  消息同位）。视觉上是"即将成为对话一部分"的延伸区。
-- **卡片样式**：弱化的用户气泡（降低不透明度/虚线边框，具体 token
-  沿用 `--dvx-*` 体系，`src/webview/assistant/styles.css`），左上角
-  "Queued" 徽标，正文文本 + 附件 chips（元数据渲染，同已发送消息的
-  chip 组件），右上角删除按钮（切片 3）。
-- **编辑**（切片 3）：点击卡片原地展开为多行 textarea（Enter 保存 →
-  `queue.update`，Escape 取消）；第一版编辑只改文本，不改附件
-  （附件负载在 Host，改附件需要另一套暂存语义，登记为后续增强）。
-- **暂停 banner**：队列区顶部，文案按 `QueuePausedReason` 区分，
-  动作 Send now / Clear。
-- **Composer**：turn 活跃时不再禁用输入；hint 从"Stop before
-  sending"改为"Will send after the current turn finishes"；发送按钮
-  保持可用（图标可加排队暗示）。Stop 按钮行为不变。
-- **可访问性**：队列区 `role="list"` + 卡片 `role="listitem"`；
-  入队/派发/暂停经 `aria-live="polite"` 播报；删除/编辑可键盘触达。
+首版"转录尾部虚线排队卡"在真机上与 Composer 上方的其他状态层叠加
+显得杂乱，用户拍板改为 Cursor 式收纳条。队列语义、Host 状态机、
+入队/派发协议不变，仅展现层与编辑交互重做：
+
+- **位置**：`ThreadPrimitive.ViewportFooter` 内、Composer 正上方的
+  独立条（`QueuedMessages.tsx` + `queuedMessages.css`），与计划卡
+  （plan-era 钉条→Created Plan 卡）同一暖卡语言：1px
+  `--dvx-border`、12px 圆角、`#fffefc→#fbf8f3` 渐变、双层软阴影、
+  ≥900px 与 Composer 同宽（860px 上限）。原先要求与 Task Plan 钉条
+  兄弟堆叠；钉条在 5f9ed5c 中改为对话流内的 Created Plan 卡后，
+  footer 只剩队列条一层，堆叠次序问题自然消解。
+- **收起态（默认）**：一行头部 "N Queued · ⏎ to Send" + 右侧
+  chevron（收起时朝上）。数量实时更新；暂停时头部换为
+  "N Queued · paused after stop / paused after a failed turn /
+  sending is blocked right now"；队列满时换为 "N Queued · queue
+  full"（原 Composer hint 的满员文案保留作补充）。
+- **展开态**：点击头部展开（grid-rows 0fr↔1fr 过渡，
+  reduced-motion 直落）；每行一条排队消息，单行截断，附件压成
+  "[image]"/"[pdf]" 类小标记。展开区底部一行注脚：常态是持久化
+  说明，暂停态换为 "Automatic sending is paused" + Send now /
+  Clear 两个 quiet 动作（不再用大 banner）；新进入暂停态时自动
+  展开一次，让动作可见。外点/Escape 收起（与计划卡同一消失语言）。
+- **行内三键**（hover 显影、常驻 0.45 透明度）：铅笔（编辑）、
+  ↑（立即发送）、垃圾桶（删除）。
+- **立即发送 = `queue.promote`**：把该条提到队首；turn 运行中只
+  重排（**不打断当前回合**，完成后优先派发——运行时协议没有
+  mid-turn 注入，这是如实取舍）；暂停态下显式的"发送"意图兼作
+  resume，空闲时立即派发该条（后续按既有链式规则继续）。
+- **编辑 = 回到 Composer（Edit Queued 模式）**：点铅笔 → 文本装回
+  Composer 并全选定位，Composer footer 出现 "Edit Queued ×" quiet
+  chip，hint 换为 "Editing a queued message · Enter saves · Esc
+  cancels"；队列行原位保留、动作三键隐去、右侧显示斜体
+  "Editing"。Enter 发送 = `queue.update` 原位替换（保持队列位置，
+  满队不阻塞——替换不是新增）；× 或 Escape 取消 = Composer 清空
+  复原、行退出 Editing。编辑期间该条被派发/删除（权威回声对账）
+  则编辑态自动结束，Composer 里的文字保留为普通草稿不销毁。
+- **附件边界（V1 取舍）**：排队行内附件只显示小标记；编辑时附件
+  **留在队列条目上不随文本回 Composer**——附件负载在 Host、Webview
+  只有元数据投影，负载回传需要新的暂存契约，登记为后续增强。保存
+  只替换文本，附件原样保留。
+- **Composer**：turn 活跃时不禁用输入，hint 语义不变；Stop 行为
+  不变。
+- **可访问性**：头部是 `aria-expanded` 切换按钮；收起的列表保持
+  挂载（动画需要）但 `aria-hidden` + tab 隔离；入队/暂停/满员经
+  `aria-live="polite"` 播报；三键均有 aria-label 且键盘可达。
 
 ### 4.8 与编辑重发（edit-resend）的互斥
 
@@ -265,6 +294,10 @@ Stop 中断当前回合（既有 `handleStop` → interrupted 终态）→ 队�
   暂存。
 - 反向：队列派发不检查 editStage——派发启动新回合后，用户在编辑卡
   上点重发会被 busy 拒绝，这与现状"turn 活跃时编辑重发被拒"一致。
+- **与 Edit Queued（§4.7）的互斥**（2026-08-12 晚新增）：两种编辑
+  一次只开一个，新意图胜出——进入 Edit Queued 会关闭打开中的
+  edit-resend 卡（复用 sendSignal 关卡机制），打开 edit-resend 卡
+  会取消进行中的 Edit Queued（Composer 清空复原）。
 
 ## 5. 分层改动面
 
@@ -293,6 +326,10 @@ interface QueueUpdateMessage {
 }
 interface QueueRemoveMessage {
   type: 'queue.remove'; sessionId: string; queueId: string;
+}
+// 2026-08-12 晚增补（协议 v7）：行内"立即发送"，提队首 + 兼作 resume
+interface QueuePromoteMessage {
+  type: 'queue.promote'; sessionId: string; queueId: string;
 }
 interface QueueResumeMessage {
   type: 'queue.resume'; sessionId: string;

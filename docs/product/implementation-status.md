@@ -1562,10 +1562,12 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
   无此字段；对方收回该提交后在 HEAD `e3d3ac5` 复验全绿）。
   **未打包，随下一个修复包**
 
-### 19. Turn 运行中排队消息（2026-08-12 晚，V1 主线收官切片）
+### 19. Turn 运行中排队消息（2026-08-12 晚，V1 主线收官切片；UI 展现层已被 §22 收纳条取代）
 
 设计权威 [`queued-messages-design.md`](./queued-messages-design.md)，
 三切片（Bridge+Host 状态机 / Webview 路由 / 队列卡 UI）一次交付。
+队列语义/状态机/协议至今有效；quiet 虚线卡、就地编辑、暂停横幅等
+UI 描述见 §22 重做记录。
 
 - **行为**：回合运行中 Composer 不再禁用——Enter 直接把消息送进
   Host 层 FIFO 队列（上限 10 条，满时 Composer hint 提示且发送键
@@ -1754,6 +1756,86 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
   权限拒答文案/追问/dispose/无效 fork 响应）、
   `daemonFirstSessionFactory.test.ts`（daemon 正常路径/获取失败
   粘性回退/会话级错误不回退/回退观察者抛错不伤会话）
+
+### 22. 排队收纳条：队列折叠 + 行内三键 + Edit Queued 回 Composer（2026-08-12 深夜，重做 §19 展现层）
+
+- **用户拍板**（真机用过 §19 摊开卡后，附 Cursor 截图两轮）：
+  排队消息改为 Cursor 式收纳条 + 行内动作 + "编辑回 Composer"。
+  队列语义、Host 状态机、入队/派发协议不动，§19 的行为与真机
+  验收仍有效；本节取代其 UI 描述（quiet 虚线卡/就地编辑/暂停
+  横幅均撤下）。设计权威已同步（`queued-messages-design.md`
+  §4.7/§4.8/§5.1）
+- **形态**：`ViewportFooter` 内 Composer 正上方一条收纳条，暖卡
+  语言与 §20 计划锚卡同族（1px 边框 + 12px 圆角 + 暖渐变 + 双层
+  软阴影，≥900px 与 Composer 同宽 860px）。收起态一行
+  "N Queued · ⏎ to Send" + chevron（数量实时）；暂停/满员语义
+  折进头部行（"paused after stop / paused after a failed turn /
+  sending is blocked right now / queue full"）。点击展开
+  （grid-rows 0fr↔1fr，reduced-motion 直落；外点/Escape 收起）：
+  每行单行截断 + 附件 "[image]" 类小标记 + hover 显影的行内三键
+  （铅笔=编辑、↑=立即发送、垃圾桶=删除，常驻 0.45 透明度）；
+  展开区底部注脚常态为持久化说明，暂停态换 "Automatic sending
+  is paused" + Send now / Clear quiet 动作，新进入暂停态自动
+  展开一次。原与 Task Plan 钉条的兄弟堆叠需求因 §20 撤钉条
+  自然消解——footer 只剩队列条一层，与流内计划卡同框呈现
+- **立即发送 = `queue.promote`**（Bridge 协议 v6→**v7**，W→H 第
+  6 条消息）：状态机 `promotePrompt` 纯重排提队首；控制器语义
+  ——turn 运行中**只重排不打断**（运行时协议无 mid-turn 注入，
+  完成后优先派发，如实取舍）；暂停态下显式发送意图兼作
+  resume，空闲立即派发该条后按既有链式规则继续
+- **Edit Queued（编辑回 Composer，替代就地 textarea）**：点铅笔
+  → 文本装回 Composer（`DraftSynchronizer` 命令通道复用）、
+  Composer footer 出 "Edit Queued ×" quiet chip、hint 换
+  "Editing a queued message · Enter saves · Esc cancels"；队列行
+  原位保留、三键隐去、右侧斜体 "Editing"。Enter = `queue.update`
+  原位替换（**满队不阻塞**——`SendEligibility.queueEditing` 豁免
+  full-queue 守卫，替换不是新增）；×/Escape 取消 = Composer 清空
+  复原；编辑期间该条被派发/删除（权威回声）→ 编辑态自动结束、
+  Composer 文字保留为普通草稿。**与 edit-resend 互斥双向**：进
+  Edit Queued 关闭打开中的编辑卡（sendSignal 关卡），打开编辑卡
+  取消 Edit Queued。store 新增 `queueEditing` 状态（begin/end +
+  promote 乐观重排 + snapshot/echo/会话切换对账清理）
+- **附件边界（V1 取舍，如实记录）**：附件负载在 Host、Webview 仅
+  元数据投影，无法随文本回 Composer 暂存区——编辑时附件留在队列
+  条目上原样保留，保存只替换文本；负载回传暂存契约登记为后续
+  增强
+- 门禁：typecheck 三 tsconfig 全过；全量 vitest **85 files /
+  1865 tests 全绿**（新增 promote 状态机/协议/控制器派发序 +
+  store 编辑态/promote + `QueuedMessages.test.tsx` 组件 7 例 +
+  App 集成编辑全流程；一并首跑中 `Thread.test.tsx` 计时器伪钟
+  用例偶发红 2 例，复跑两次全绿，与本切片无关）；build 绿。
+  headless Chrome harness（`artifacts/queued-bar-harness.html` +
+  `smoke-queued-bar.mjs`，对 dist 产物）全链 PASS：空队不渲染 →
+  收起态（footer 内、Composer 上方、头部文案）→ 展开三行三键 +
+  [image] 标记 → 编辑态（Composer 预填 + chip + hint + 行
+  Editing + 该行三键禁用）→ Enter 保存 `queue.update` 原位替换 +
+  chip 退场 + Composer 清空 → Stop 转暂停（头部 paused 文案 +
+  自动展开 + foot Send now/Clear）→ foot Send now 发
+  `queue.resume`、行内 ↑ 发 `queue.promote`。五张截图：
+  `artifacts/queued-bar-collapsed.png` / `-expanded.png` /
+  `-with-plan.png`（与计划锚卡同框）/ `-paused.png` /
+  `-editing.png`（Composer 带 Edit Queued 徽标 + 行 Editing）
+- **打包**：按用户指示不打包，随下个修复包；真机可视验收待下个
+  包安装后进行
+- 提交：`aedbb64`（Bridge/Host promote）、`d478925`（store 编辑
+  态）、`afb30bb`（收纳条 + Composer 编辑路由）
+
+主要实现：
+
+- `src/shared/queueProtocol.ts` + `bridgeMessages.ts` +
+  `validateMessage.ts`（`queue.promote`、协议 v7）、
+  `queuedPromptsState.ts`（`promotePrompt`）、`ChatController.ts`
+  （promote 路由：重排 + resume + maybeDispatchQueue）、
+  `store.ts`（`queueEditing` + promote 乐观）、
+  `runtimeAdapter.ts`（`SendEligibility.queueEditing` 豁免）、
+  `App.tsx`（编辑路由/预填/取消 + promote 接线）、`Thread.tsx`
+  （队列条入 footer、Edit Queued chip、Enter/Escape 路由、互斥）、
+  `QueuedMessages.tsx` + `queuedMessages.css`（收纳条重写）
+- 测试：`queuedPromptsState.test.ts`、`queueProtocol.test.ts`、
+  `validateMessage.test.ts`、`ChatController.test.ts`（promote
+  两例）、`store.test.ts`（promote/编辑态两例）、
+  `QueuedMessages.test.tsx`（新建 7 例）、`App.test.tsx`（编辑
+  全流程集成）、`runtimeAdapter.test.ts`（满队编辑豁免）
 
 ## 部分完成
 
