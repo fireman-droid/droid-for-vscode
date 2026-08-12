@@ -69,6 +69,16 @@ import {
   IMAGE_ORIGINS,
   MAX_ATTACHMENT_NAME_LENGTH,
   MAX_CHANGED_FILES_PER_TURN,
+  GIT_FILE_STATUSES,
+  GIT_UNAVAILABLE_REASONS,
+  MAX_GIT_BRANCH_LENGTH,
+  MAX_GIT_COMMIT_ERROR_LENGTH,
+  MAX_GIT_COMMIT_SUBJECT_LENGTH,
+  MAX_GIT_STATUS_FILES,
+  isGitCommitHashEcho,
+  type GitFileStatus,
+  type GitStatusFile,
+  type GitUnavailableReason,
   MAX_IMAGE_DATA_LENGTH,
   MAX_FILE_SEARCH_RESULTS,
   MAX_PENDING_ATTACHMENTS,
@@ -257,6 +267,10 @@ export function readHostMessage(
         return parseTranscriptImage(value);
       case 'turn.changes':
         return parseTurnChanges(value);
+      case 'git.status':
+        return parseGitStatus(value);
+      case 'git.commitResult':
+        return parseGitCommitResult(value);
       case 'runtime.diagnostic':
         return parseRuntimeDiagnostic(value);
       case 'turn.state':
@@ -845,6 +859,167 @@ function parseChangedFiles(
 
 function isNullableCount(value: unknown): value is number | null {
   return value === null || isCount(value);
+}
+
+const GIT_FILE_STATUS_SET = new Set<string>(GIT_FILE_STATUSES);
+
+function isGitFileStatus(value: unknown): value is GitFileStatus {
+  return (
+    typeof value === 'string' && GIT_FILE_STATUS_SET.has(value)
+  );
+}
+
+const GIT_UNAVAILABLE_REASON_SET = new Set<string>(
+  GIT_UNAVAILABLE_REASONS,
+);
+
+function isGitUnavailableReason(
+  value: unknown,
+): value is GitUnavailableReason {
+  return (
+    typeof value === 'string' &&
+    GIT_UNAVAILABLE_REASON_SET.has(value)
+  );
+}
+
+function parseGitStatus(
+  value: UnknownRecord,
+): Extract<HostToWebviewMessage, { type: 'git.status' }> | undefined {
+  if (
+    !hasExactKeys(
+      value,
+      ['type', 'sequence', 'sessionId', 'branch', 'files'],
+      ['unavailableReason'],
+    ) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+  const branch = value.branch;
+  if (
+    branch !== null &&
+    !isNonEmptyBoundedString(branch, MAX_GIT_BRANCH_LENGTH)
+  ) {
+    return undefined;
+  }
+  const reason = value.unavailableReason;
+  if (reason !== undefined && !isGitUnavailableReason(reason)) {
+    return undefined;
+  }
+  const files = parseGitStatusFiles(value.files);
+  // An unavailable report must not smuggle repository data.
+  if (
+    files === undefined ||
+    (reason !== undefined && (files.length > 0 || branch !== null))
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'git.status',
+    sequence: value.sequence,
+    sessionId: value.sessionId,
+    branch,
+    files,
+    ...(reason === undefined ? {} : { unavailableReason: reason }),
+  };
+}
+
+function parseGitStatusFiles(
+  value: unknown,
+): GitStatusFile[] | undefined {
+  if (!isExactArray(value, 0, MAX_GIT_STATUS_FILES)) {
+    return undefined;
+  }
+  const files: GitStatusFile[] = [];
+  const paths = new Set<string>();
+  for (const fileValue of value) {
+    if (
+      !isStrictRecord(fileValue) ||
+      !hasExactKeys(fileValue, [
+        'path',
+        'status',
+        'staged',
+        'inTurn',
+      ]) ||
+      !isSafeWorkspaceRelativePath(fileValue.path) ||
+      paths.has(fileValue.path) ||
+      !isGitFileStatus(fileValue.status) ||
+      typeof fileValue.staged !== 'boolean' ||
+      typeof fileValue.inTurn !== 'boolean'
+    ) {
+      return undefined;
+    }
+    paths.add(fileValue.path);
+    files.push({
+      path: fileValue.path,
+      status: fileValue.status,
+      staged: fileValue.staged,
+      inTurn: fileValue.inTurn,
+    });
+  }
+  return files;
+}
+
+function parseGitCommitResult(
+  value: UnknownRecord,
+):
+  | Extract<HostToWebviewMessage, { type: 'git.commitResult' }>
+  | undefined {
+  if (value.ok === true) {
+    if (
+      !hasExactKeys(value, [
+        'type',
+        'sequence',
+        'sessionId',
+        'ok',
+        'hash',
+        'subject',
+      ]) ||
+      !isSequence(value.sequence) ||
+      !isId(value.sessionId) ||
+      !isGitCommitHashEcho(value.hash) ||
+      !isBoundedString(value.subject, MAX_GIT_COMMIT_SUBJECT_LENGTH)
+    ) {
+      return undefined;
+    }
+    return {
+      type: 'git.commitResult',
+      sequence: value.sequence,
+      sessionId: value.sessionId,
+      ok: true,
+      hash: value.hash,
+      subject: value.subject,
+    };
+  }
+  if (value.ok === false) {
+    if (
+      !hasExactKeys(value, [
+        'type',
+        'sequence',
+        'sessionId',
+        'ok',
+        'error',
+      ]) ||
+      !isSequence(value.sequence) ||
+      !isId(value.sessionId) ||
+      !isNonEmptyBoundedString(
+        value.error,
+        MAX_GIT_COMMIT_ERROR_LENGTH,
+      )
+    ) {
+      return undefined;
+    }
+    return {
+      type: 'git.commitResult',
+      sequence: value.sequence,
+      sessionId: value.sessionId,
+      ok: false,
+      error: value.error,
+    };
+  }
+  return undefined;
 }
 
 function parseRuntimeDiagnostic(

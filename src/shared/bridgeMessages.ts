@@ -45,8 +45,28 @@ export {
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
 } from './transcriptLimits';
+export {
+  GIT_FILE_STATUSES,
+  GIT_UNAVAILABLE_REASONS,
+  MAX_GIT_BRANCH_LENGTH,
+  MAX_GIT_COMMIT_ERROR_LENGTH,
+  MAX_GIT_COMMIT_MESSAGE_LENGTH,
+  MAX_GIT_COMMIT_PATHS,
+  MAX_GIT_COMMIT_SUBJECT_LENGTH,
+  MAX_GIT_STATUS_FILES,
+  isGitCommitHashEcho,
+  type GitFileStatus,
+  type GitStatusFile,
+  type GitUnavailableReason,
+} from './gitCommitFlow';
+import type {
+  GitStatusFile,
+  GitUnavailableReason,
+} from './gitCommitFlow';
 
-export const BRIDGE_PROTOCOL_VERSION = 2 as const;
+// Version 3: git commit flow messages (git.requestStatus/git.commit
+// W→H, git.status/git.commitResult H→W).
+export const BRIDGE_PROTOCOL_VERSION = 3 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_TEXT_LENGTH = 32_000;
@@ -508,6 +528,29 @@ export interface FilePreviewMessage {
   readonly path: string;
 }
 
+/**
+ * Asks the host for the repository's commit status (branch plus
+ * working-tree/index change list) behind the changes-card commit
+ * entry. The host answers with `git.status`.
+ */
+export interface GitRequestStatusMessage {
+  readonly type: 'git.requestStatus';
+  readonly sessionId: string;
+}
+
+/**
+ * Asks the host to stage exactly these workspace-relative paths and
+ * commit them with the given message (`repository.add` +
+ * `repository.commit` on the built-in vscode.git extension). The
+ * host answers with `git.commitResult`.
+ */
+export interface GitCommitRequestMessage {
+  readonly type: 'git.commit';
+  readonly sessionId: string;
+  readonly paths: readonly string[];
+  readonly message: string;
+}
+
 /** Longest accepted path in a `workspace.openPath` request. */
 export const MAX_OPEN_PATH_LENGTH = 1024;
 /** Largest accepted 1-based line or column in an open request. */
@@ -834,6 +877,8 @@ export type WebviewToHostMessage =
   | SessionForkMessage
   | FileOpenDiffMessage
   | FilePreviewMessage
+  | GitRequestStatusMessage
+  | GitCommitRequestMessage
   | WorkspaceOpenPathMessage
   | SkillsRefreshMessage
   | SkillToggleMessage
@@ -1632,6 +1677,44 @@ export interface TurnChangesMessage {
   readonly files: readonly ChangedFileSummary[];
 }
 
+/**
+ * Repository status for the inline commit panel. A present
+ * `unavailableReason` means git cannot serve the panel (the entry
+ * hides); branch is then null and files empty. Files list in-turn
+ * rows first, capped at `MAX_GIT_STATUS_FILES`.
+ */
+export interface GitStatusMessage {
+  readonly type: 'git.status';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly branch: string | null;
+  readonly files: readonly GitStatusFile[];
+  readonly unavailableReason?: GitUnavailableReason;
+}
+
+/**
+ * Outcome of one `git.commit` request: the short-hash echo (possibly
+ * empty when unreadable after an otherwise successful commit) and the
+ * message subject on success, or git's own error text (hook output
+ * included) on failure.
+ */
+export type GitCommitResultMessage =
+  | {
+      readonly type: 'git.commitResult';
+      readonly sequence: number;
+      readonly sessionId: string;
+      readonly ok: true;
+      readonly hash: string;
+      readonly subject: string;
+    }
+  | {
+      readonly type: 'git.commitResult';
+      readonly sequence: number;
+      readonly sessionId: string;
+      readonly ok: false;
+      readonly error: string;
+    };
+
 export interface RuntimeDiagnosticMessage {
   readonly type: 'runtime.diagnostic';
   readonly sequence: number;
@@ -1760,6 +1843,8 @@ export type HostToWebviewMessage =
   | ToolActivityMessage
   | TranscriptImageMessage
   | TurnChangesMessage
+  | GitStatusMessage
+  | GitCommitResultMessage
   | RuntimeDiagnosticMessage
   | TurnStateMessage
   | UserMessageMetaMessage

@@ -47,6 +47,8 @@ import {
   type AttachmentRemoveMessage,
   type FileOpenDiffMessage,
   type FilePreviewMessage,
+  type GitCommitRequestMessage,
+  type GitRequestStatusMessage,
   PREVIEWABLE_FILE_EXTENSIONS,
   type McpRefreshMessage,
   type McpServerAddMessage,
@@ -87,6 +89,10 @@ import {
   type WorkspaceReadImageMessage,
   type WorkspaceSearchFilesMessage,
 } from './bridgeMessages';
+import {
+  MAX_GIT_COMMIT_MESSAGE_LENGTH,
+  MAX_GIT_COMMIT_PATHS,
+} from './gitCommitFlow';
 import {
   hasExactKeys,
   isExactArray,
@@ -151,6 +157,10 @@ export function parseWebviewMessage(
         return parseFileOpenDiff(value);
       case 'file.preview':
         return parseFilePreview(value);
+      case 'git.requestStatus':
+        return parseGitRequestStatus(value);
+      case 'git.commit':
+        return parseGitCommitRequest(value);
       case 'workspace.openPath':
         return parseWorkspaceOpenPath(value);
       case 'skills.refresh':
@@ -751,6 +761,53 @@ function parseFilePreview(
     type: 'file.preview',
     sessionId: value.sessionId,
     path: value.path,
+  };
+}
+
+function parseGitRequestStatus(
+  value: UnknownRecord,
+): GitRequestStatusMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'git.requestStatus', sessionId: value.sessionId };
+}
+
+function parseGitCommitRequest(
+  value: UnknownRecord,
+): GitCommitRequestMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId', 'paths', 'message']) ||
+    !isId(value.sessionId) ||
+    !isExactArray(value.paths, 1, MAX_GIT_COMMIT_PATHS) ||
+    typeof value.message !== 'string' ||
+    value.message.trim().length === 0 ||
+    value.message.length > MAX_GIT_COMMIT_MESSAGE_LENGTH
+  ) {
+    return undefined;
+  }
+  const paths: string[] = [];
+  const seen = new Set<string>();
+  for (const pathValue of value.paths) {
+    if (
+      !isSafeWorkspaceRelativePath(pathValue) ||
+      seen.has(pathValue)
+    ) {
+      return undefined;
+    }
+    seen.add(pathValue);
+    paths.push(pathValue);
+  }
+
+  return {
+    type: 'git.commit',
+    sessionId: value.sessionId,
+    paths,
+    message: value.message,
   };
 }
 
