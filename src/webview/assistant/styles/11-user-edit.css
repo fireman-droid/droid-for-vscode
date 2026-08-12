@@ -124,7 +124,7 @@
 
 .dvx-user-edit-send {
   color: var(--dvx-raised);
-  background: var(--vscode-focusBorder, #d2643d);
+  background: var(--dvx-focus);
 }
 
 .dvx-user-edit-send:hover:not(:disabled), .dvx-user-edit-send:focus-visible {
@@ -215,7 +215,7 @@
 }
 
 .dvx-user-block-editable:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder, #d2643d);
+  outline: 1px solid var(--dvx-focus);
   outline-offset: 1px;
 }
 
@@ -296,7 +296,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--vscode-focusBorder, #d2643d);
+  background: var(--dvx-focus);
   animation: dvx-resending-pulse 1s ease-in-out infinite;
 }
 

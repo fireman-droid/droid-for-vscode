@@ -82,7 +82,7 @@ html, body, #root {
 }
 
 .dvx-shell button:focus-visible, .dvx-shell input:focus-visible, .dvx-shell select:focus-visible, .dvx-shell summary:focus-visible, .dvx-shell [tabindex]:focus-visible {
-  outline: 2px solid var(--vscode-focusBorder, #c75f3e);
+  outline: 2px solid var(--dvx-focus);
   outline-offset: 2px;
 }
 

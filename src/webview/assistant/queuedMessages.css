@@ -47,7 +47,7 @@
 }
 
 .dvx-queue-toggle:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder, #d2643d);
+  outline: 1px solid var(--dvx-focus);
   outline-offset: -2px;
   border-radius: 11px;
 }
@@ -201,7 +201,7 @@
 }
 
 .dvx-queue-row-action:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder, #d2643d);
+  outline: 1px solid var(--dvx-focus);
   outline-offset: 1px;
 }
 

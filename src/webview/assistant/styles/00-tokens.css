@@ -2,10 +2,17 @@
    .dvx-shell rule in 10-shell-frame.css; custom properties have one
    definition in the whole sheet, so hoisting them into this earlier
    file cannot change the cascade). The light values below ARE the
-   product's warm-white baseline; a future dark theme overrides only
-   this file's values via `.dvx-shell[data-theme="dark"]`
-   (docs/product/theme-switching-design.md §2.1). */
-.dvx-shell {
+   product's warm-white baseline; the dark theme overrides only token
+   values via `.dvx-shell[data-theme="dark"]`
+   (docs/product/theme-switching-design.md §2.1), plus the literal
+   dark skin in 24-theme-dark.css.
+
+   The lightbox and the slash tooltip portal to <body>, outside
+   .dvx-shell — they must sit in the token scope explicitly or their
+   var() references never resolve. */
+.dvx-shell,
+.dvx-image-lightbox,
+.dvx-slash-tooltip {
   /* Motion tokens (streaming-experience-design): every new animation
      references these; legacy animations migrate opportunistically. */
   --dvx-duration-instant: 50ms;   /* hover yield, instant feedback */
@@ -45,6 +52,9 @@
   --dvx-warning: rgb(187 77 0 / 90%);
   --dvx-diff-add: #1a7f37;
   --dvx-diff-del: #cf222e;
+  /* Focus ring: owned by the shell, not the editor theme (theme doc
+     §1.3 — a VS Code-blue ring on the warm panel read as foreign). */
+  --dvx-focus: #d2643d;
 
   /* Elevation */
   --dvx-shadow: 0 16px 40px -14px rgb(0 0 0 / 28%);
@@ -52,7 +62,7 @@
   /* Type */
   --dvx-mono: ui-monospace, monospace;
 
-  /* Syntax highlighting (One-Light derived; a dark theme swaps the
+  /* Syntax highlighting (One-Light derived; the dark theme swaps the
      whole group) */
   --dvx-hl-comment: #918a80;
   --dvx-hl-keyword: #a626a4;
@@ -63,4 +73,66 @@
   --dvx-hl-attr: #986801;
   --dvx-hl-deletion: #c03d33;
   --dvx-hl-meta: #7a6a56;
+}
+
+/* ==== Dark theme (charcoal v2, user-approved prototype
+   artifacts/theme-proto-dark.png, 2026-08-12) ========================
+   Grayscale ladder referencing Cursor's dark (#1a1a1a–#252526), not a
+   simple inversion: elevation direction flips (lighter = more
+   raised), borders become translucent white hairlines, shadows get
+   shorter and deeper, and the brand orange leaves entirely — accent
+   consumers collapse to light grays (send button reads as a light
+   fill with dark glyph via the raised/ink swap). Body text #e8e8e8 on
+   #1a1a1a ≈ 13.6:1; muted #9a9a9a ≈ 5.5:1 (≥ 4.5:1 for reading text).
+   Rules that still carry warm-light literals are re-skinned in
+   24-theme-dark.css. */
+.dvx-shell[data-theme='dark'],
+html[data-dvx-theme='dark'] .dvx-image-lightbox,
+html[data-dvx-theme='dark'] .dvx-slash-tooltip {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --dvx-surface: #1a1a1a;
+  --dvx-raised: #242425;
+  --dvx-code: #1e1e1f;
+
+  /* Text */
+  --dvx-ink: #e8e8e8;
+  --dvx-text-strong: #d6d6d6;
+  --dvx-text-secondary: #bdbdbd;
+  --dvx-muted: #9a9a9a;
+  --dvx-subtle: #6f6f6f;
+
+  /* Lines and washes (translucent white; hover = brighter) */
+  --dvx-border: rgb(255 255 255 / 9%);
+  --dvx-border-strong: rgb(255 255 255 / 16%);
+  --dvx-soft: rgb(255 255 255 / 6%);
+
+  /* Brand: orange retired — accent consumers go light-gray, so the
+     one solid element (send) becomes a light fill with dark glyph. */
+  --dvx-accent: #d4d4d4;
+  --dvx-accent-strong: #e8e8e8;
+  --dvx-accent-deep: #bdbdbd;
+  --dvx-accent-soft: rgb(255 255 255 / 10%);
+
+  /* Semantics (lifted for dark ground) */
+  --dvx-danger: #e5484d;
+  --dvx-warning: rgb(220 180 120 / 90%);
+  --dvx-diff-add: #57ab5a;
+  --dvx-diff-del: #f47067;
+  --dvx-focus: rgb(255 255 255 / 42%);
+
+  /* Elevation: shorter throw, deeper ink */
+  --dvx-shadow: 0 12px 28px -12px rgb(0 0 0 / 55%);
+
+  /* Syntax highlighting (VS Code Dark+ derived) */
+  --dvx-hl-comment: #6a9955;
+  --dvx-hl-keyword: #c586c0;
+  --dvx-hl-string: #ce9178;
+  --dvx-hl-number: #b5cea8;
+  --dvx-hl-title: #dcdcaa;
+  --dvx-hl-type: #4ec9b0;
+  --dvx-hl-attr: #9cdcfe;
+  --dvx-hl-deletion: #d16969;
+  --dvx-hl-meta: #a0937d;
 }

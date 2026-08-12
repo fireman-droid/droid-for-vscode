@@ -136,7 +136,7 @@
 }
 
 .dvx-code-block-copy:focus-visible {
-  box-shadow: 0 0 0 1px var(--vscode-focusBorder, #d2643d);
+  box-shadow: 0 0 0 1px var(--dvx-focus);
 }
 
 .dvx-code-block-copy svg {
@@ -216,7 +216,7 @@
 
 .dvx-mermaid-zoom:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 1px var(--vscode-focusBorder, #d2643d);
+  box-shadow: 0 0 0 1px var(--dvx-focus);
 }
 
 .dvx-mermaid-footer {
@@ -244,7 +244,7 @@
 
 .dvx-mermaid-toggle:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 1px var(--vscode-focusBorder, #d2643d);
+  box-shadow: 0 0 0 1px var(--dvx-focus);
 }
 
 .dvx-mermaid-note {

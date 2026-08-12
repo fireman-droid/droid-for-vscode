@@ -64,7 +64,7 @@
 }
 
 .dvx-message-action:focus-visible {
-  box-shadow: 0 0 0 1px var(--vscode-focusBorder, #d2643d);
+  box-shadow: 0 0 0 1px var(--dvx-focus);
 }
 
 .dvx-message-action svg {

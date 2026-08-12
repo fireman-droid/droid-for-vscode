@@ -304,7 +304,7 @@
 }
 
 .dvx-scroll-bottom:focus-visible {
-  box-shadow: 0 0 0 1px var(--vscode-focusBorder, #d2643d), 0 2px 8px rgb(48 42 36 / 12%);
+  box-shadow: 0 0 0 1px var(--dvx-focus), 0 2px 8px rgb(48 42 36 / 12%);
 }
 
 @media (prefers-reduced-motion: reduce) {

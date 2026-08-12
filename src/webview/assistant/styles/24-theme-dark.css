@@ -1,0 +1,598 @@
+/* ==== Dark skin (charcoal v2) =======================================
+   Companion to the dark token block in 00-tokens.css: every rule here
+   re-skins a declaration that still carries a warm-light literal in
+   its home file (the convergence debt list, theme design doc §1.1).
+   Ordered by source file so each override is easy to trace back.
+   Imported last on purpose — with the [data-theme] prefix these
+   selectors out-rank their light originals without !important (the
+   two !important cases mirror equally-important light rules in
+   19-system-overlays.css). */
+
+/* ---- page grounds (01-base / 10-shell-frame; outside .dvx-shell,
+   keyed off the <html> attribute the boot HTML and App maintain) --- */
+html[data-dvx-theme='dark'],
+html[data-dvx-theme='dark'] body,
+html[data-dvx-theme='dark'] #root {
+  background: #1a1a1a;
+}
+
+/* ---- 01-base: scrollbars flip to translucent white --------------- */
+html[data-dvx-theme='dark'] * {
+  scrollbar-color: rgb(255 255 255 / 20%) transparent;
+}
+
+html[data-dvx-theme='dark'] *::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 16%);
+}
+
+html[data-dvx-theme='dark'] *::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 255 255 / 30%);
+}
+
+/* ---- 02-markdown -------------------------------------------------- */
+.dvx-shell[data-theme='dark'] .dvx-markdown h1,
+.dvx-shell[data-theme='dark'] .dvx-markdown h2,
+.dvx-shell[data-theme='dark'] .dvx-markdown h3,
+.dvx-shell[data-theme='dark'] .dvx-markdown h4 {
+  color: var(--dvx-ink);
+}
+
+/* Links keep the warm copper family, lifted and desaturated for the
+   dark ground (quiet, not the retired accent orange). */
+.dvx-shell[data-theme='dark'] .dvx-markdown a {
+  color: #c79b84;
+  text-decoration-color: rgb(199 155 132 / 42%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-markdown :not(pre) > code {
+  background: rgb(255 255 255 / 8%);
+  color: #d6d6d6;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-path-link {
+  text-decoration-color: rgb(199 155 132 / 45%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-path-link:hover {
+  color: #c79b84;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-path-link:focus-visible {
+  outline-color: var(--dvx-focus);
+}
+
+/* Mirrors the !important light rule in 19-system-overlays.css. */
+.dvx-shell[data-theme='dark'] .dvx-markdown pre,
+.dvx-shell[data-theme='dark'] .dvx-activity-row pre,
+.dvx-shell[data-theme='dark'] .dvx-permission-tool pre {
+  color: #d4d4d4 !important;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-code-block-header {
+  border-bottom-color: rgb(255 255 255 / 8%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-code-block-copy:hover,
+.dvx-shell[data-theme='dark'] .dvx-code-block-copy:focus-visible,
+.dvx-shell[data-theme='dark'] .dvx-mermaid-toggle:hover,
+.dvx-shell[data-theme='dark'] .dvx-mermaid-toggle:focus-visible {
+  background: rgb(255 255 255 / 8%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-markdown blockquote {
+  border-left-color: rgb(255 255 255 / 18%);
+  color: var(--dvx-muted);
+}
+
+/* ---- 03-transcript-media ------------------------------------------ */
+.dvx-shell[data-theme='dark'] .dvx-diagnostic {
+  background: linear-gradient(180deg, #2a2a2b, var(--dvx-raised));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-diagnostic-error {
+  color: color-mix(in srgb, var(--dvx-danger) 70%, #e8e8e8);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-image-placeholder {
+  background: rgb(255 255 255 / 6%);
+}
+
+/* Lightbox chrome stays white-on-scrim in both themes; the dark
+   token scope would otherwise turn the close glyph raised-dark. */
+html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
+  color: rgb(255 255 255 / 92%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-pending-label {
+  color: var(--dvx-muted);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-show-earlier:hover {
+  color: var(--dvx-ink);
+}
+
+/* ---- 04-chrome-popovers ------------------------------------------- */
+.dvx-shell[data-theme='dark'] .dvx-stop-action {
+  border-color: rgb(229 72 77 / 42%);
+  background: rgb(229 72 77 / 10%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-status-seam {
+  background: rgb(255 255 255 / 14%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-model-trigger {
+  color: var(--dvx-text-secondary);
+}
+
+/* The one solid element: light fill, dark glyph (prototype's
+   btn-primary swap). Covers the base rule's `color: white`. */
+.dvx-shell[data-theme='dark'] .dvx-send-action {
+  color: #1a1a1a;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 35%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-popover-row-icon {
+  border-color: rgb(255 255 255 / 14%);
+  background: rgb(255 255 255 / 6%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-popover-row:hover,
+.dvx-shell[data-theme='dark'] .dvx-option-row:hover:not(:disabled),
+.dvx-shell[data-theme='dark'] .dvx-model-row:hover {
+  background: rgb(255 255 255 / 5%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-drawer-backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-session-row[aria-current='true'] {
+  background: rgb(255 255 255 / 8%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-permission-editor textarea,
+.dvx-shell[data-theme='dark'] .dvx-ask-user input[type='text'] {
+  background: var(--dvx-code);
+}
+
+/* ---- 05-message-cards --------------------------------------------- */
+.dvx-shell[data-theme='dark'] .dvx-copy-action .dvx-copy-done,
+.dvx-shell[data-theme='dark'] .dvx-copy-action[data-copied] {
+  color: #52a678;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-tool-file {
+  background: rgb(255 255 255 / 7%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-tool-file:hover,
+.dvx-shell[data-theme='dark'] .dvx-tool-file:focus-visible {
+  background: rgb(255 255 255 / 12%);
+  color: var(--dvx-ink);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-changes-file,
+.dvx-shell[data-theme='dark'] .dvx-preview-chip,
+.dvx-shell[data-theme='dark'] .dvx-commit-entry {
+  border-color: rgb(255 255 255 / 12%);
+  background: rgb(255 255 255 / 5%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-changes-file:hover,
+.dvx-shell[data-theme='dark'] .dvx-changes-file:focus-visible {
+  border-color: rgb(255 255 255 / 20%);
+  background: rgb(255 255 255 / 9%);
+  color: var(--dvx-ink);
+}
+
+/* ---- 07-activity-live --------------------------------------------- */
+.dvx-shell[data-theme='dark'] .dvx-subagent-label {
+  color: var(--dvx-text-secondary);
+}
+
+/* Shimmer: gray base with the same warm-gold glint, lifted. */
+.dvx-shell[data-theme='dark'] .dvx-activity-running .dvx-tool-action,
+.dvx-shell[data-theme='dark'] .dvx-shimmer-text {
+  background-image: linear-gradient(
+    100deg,
+    #8f8f8f 0%,
+    #8f8f8f 38%,
+    #d4c08e 50%,
+    #8f8f8f 62%,
+    #8f8f8f 100%
+  );
+}
+
+/* Paused/static shimmer text (07, 12 and the reduced-motion block in
+   18 all settle on the warm #6b6259 literal). */
+.dvx-shell[data-theme='dark']
+  .dvx-activity-running:has(~ .dvx-activity-running)
+  .dvx-tool-action,
+.dvx-shell[data-theme='dark']
+  .dvx-thread-pending
+  .dvx-activity-running
+  .dvx-tool-action,
+.dvx-shell[data-theme='dark']
+  .dvx-thread-pending
+  .dvx-thinking-row
+  .dvx-shimmer-text,
+.dvx-shell[data-theme='dark']
+  .dvx-activity-ticker
+  .dvx-activity-running
+  .dvx-tool-action,
+.dvx-shell[data-theme='dark'] .dvx-activity-ticker .dvx-shimmer-text,
+.dvx-shell[data-theme='dark']
+  .dvx-thread-pending
+  .dvx-activity-group-header
+  .dvx-shimmer-text {
+  color: #9a9a9a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-shell[data-theme='dark'] .dvx-activity-running .dvx-tool-action,
+  .dvx-shell[data-theme='dark'] .dvx-shimmer-text {
+    background-image: none;
+    color: #9a9a9a;
+  }
+}
+
+.dvx-shell[data-theme='dark'] .dvx-tool-command-inline {
+  background: rgb(255 255 255 / 7%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-tool-command {
+  color: #d4d4d4;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-activity-row .dvx-tool-output-frame {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 2.5%), transparent 26px),
+    var(--dvx-code);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 30%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-activity-row.dvx-command-card {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+}
+
+.dvx-shell[data-theme='dark']
+  .dvx-activity-row.dvx-command-card:not(.dvx-activity-running)
+  .dvx-tool-action {
+  color: var(--dvx-ink);
+}
+
+/* ---- 08-command-card: the warm terminal well recalibrated ---------
+   In light the amber well (#262019) reads as a deep terminal inside a
+   white card. Against the dark raised card (#242425) the same value
+   goes muddy — push the well a step darker than the card so the
+   "recessed terminal" hierarchy survives; the warm command tints on
+   top keep their identity. */
+.dvx-shell[data-theme='dark'] .dvx-command-card .dvx-command-well {
+  background: #16120e linear-gradient(180deg, #1c1712, #16120e 42%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-command-card .dvx-tool-output-frame {
+  border-top-color: rgb(255 244 230 / 7%);
+  background:
+    #16120e
+    linear-gradient(180deg, rgb(0 0 0 / 22%), rgb(0 0 0 / 22%));
+  box-shadow: none;
+}
+
+/* ---- 09-plan-todo-anim -------------------------------------------- */
+.dvx-shell[data-theme='dark'] .dvx-plan-step-completed .dvx-plan-text {
+  text-decoration-color: rgb(255 255 255 / 30%);
+}
+
+/* ---- 10-shell-frame ------------------------------------------------ */
+.dvx-shell[data-theme='dark'] .dvx-header {
+  border-bottom-color: var(--dvx-border);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-title {
+  color: var(--dvx-ink);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-message-user[data-pinned] {
+  box-shadow: 0 6px 12px -8px rgb(0 0 0 / 60%);
+}
+
+/* ---- 11-user-edit --------------------------------------------------
+   The send fill was the focus orange; dark keeps the light-fill/
+   dark-glyph pattern of the main send button. */
+.dvx-shell[data-theme='dark'] .dvx-user-edit-send {
+  color: #1a1a1a;
+  background: var(--dvx-accent);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-user-edit-send:hover:not(:disabled),
+.dvx-shell[data-theme='dark'] .dvx-user-edit-send:focus-visible {
+  color: #1a1a1a;
+  background: var(--dvx-accent-strong);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-user-edit-restore:hover {
+  background: rgb(255 255 255 / 5%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-user-block .dvx-image-thumb {
+  background: rgb(255 255 255 / 8%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-attachment-readd {
+  color: var(--dvx-warning);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-user-edit-rejection {
+  color: var(--dvx-danger);
+}
+
+/* ---- 12-exploration-ticker ----------------------------------------- */
+.dvx-shell[data-theme='dark'] .dvx-activity-row,
+.dvx-shell[data-theme='dark'] .dvx-activity-group {
+  color: var(--dvx-text-secondary);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-activity-state-failed {
+  color: var(--dvx-danger);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-scroll-bottom {
+  box-shadow: 0 2px 8px rgb(0 0 0 / 40%), 0 1px 2px rgb(0 0 0 / 30%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-scroll-bottom:focus-visible {
+  box-shadow: 0 0 0 1px var(--dvx-focus), 0 2px 8px rgb(0 0 0 / 40%);
+}
+
+/* ---- 13-composer ---------------------------------------------------- */
+.dvx-shell[data-theme='dark'] .dvx-composer-dragover {
+  background: #2a2a2b;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-composer-notice {
+  color: var(--dvx-warning);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-composer-popover {
+  background: var(--dvx-raised);
+}
+
+/* ---- 14-settings-popover -------------------------------------------- */
+.dvx-shell[data-theme='dark'] .dvx-settings-select {
+  border-color: var(--dvx-border);
+}
+
+.dvx-shell[data-theme='dark']
+  .dvx-settings-select[data-expanded='true']
+  .dvx-popover-row {
+  border-bottom-color: var(--dvx-border);
+}
+
+.dvx-shell[data-theme='dark']
+  .dvx-settings-select-option:hover:not(:disabled) {
+  background: rgb(255 255 255 / 5%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-settings-divider {
+  background: var(--dvx-border);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-panel-head {
+  border-bottom-color: var(--dvx-border);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-panel-action:hover:not(:disabled) {
+  background: rgb(255 255 255 / 7%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-context-usage-summary strong {
+  color: var(--dvx-ink);
+}
+
+/* Context bar goes grayscale with the rest of the accent family. */
+.dvx-shell[data-theme='dark'] .dvx-context-progress span {
+  background: linear-gradient(90deg, #c9c9c9, #e8e8e8);
+}
+
+.dvx-shell[data-theme='dark']
+  .dvx-context-progress-over
+  > span:first-child {
+  background: linear-gradient(
+    90deg,
+    rgb(232 232 232 / 55%),
+    rgb(212 212 212 / 75%)
+  );
+}
+
+.dvx-shell[data-theme='dark'] .dvx-context-overflow-tick {
+  background: #e8e8e8;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-context-details,
+.dvx-shell[data-theme='dark'] .dvx-context-details div + div,
+.dvx-shell[data-theme='dark'] .dvx-token-usage {
+  border-color: var(--dvx-border);
+}
+
+/* ---- 15-model-sessions ----------------------------------------------- */
+.dvx-shell[data-theme='dark'] .dvx-settings-search:focus-visible {
+  border-color: var(--dvx-border-strong);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 10%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-session-search-shell {
+  border-color: var(--dvx-border-strong);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-session-search-shell:focus-within {
+  border-color: rgb(255 255 255 / 24%);
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 7%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-session-row-worktree,
+.dvx-shell[data-theme='dark'] .dvx-session-match-snippet {
+  color: var(--dvx-muted);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-session-rename:hover:not(:disabled),
+.dvx-shell[data-theme='dark'] .dvx-session-star:hover:not(:disabled) {
+  background: rgb(255 255 255 / 8%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-session-matches,
+.dvx-shell[data-theme='dark'] .dvx-session-archived {
+  border-top-color: rgb(255 255 255 / 8%);
+}
+
+/* ---- 16-attachments-mentions ------------------------------------------ */
+.dvx-shell[data-theme='dark'] .dvx-attachment-thumb-image {
+  background: rgb(255 255 255 / 8%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-attachment-thumb-remove {
+  color: var(--dvx-muted);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-attachment-thumb-remove:hover {
+  color: var(--dvx-danger);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-mention-path {
+  color: var(--dvx-muted);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-attachment-chip {
+  border-color: var(--dvx-border);
+  background: rgb(255 255 255 / 7%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-attachment-kind,
+.dvx-shell[data-theme='dark'] .dvx-attachment-remove {
+  color: var(--dvx-muted);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-attachment-truncated {
+  color: var(--dvx-warning);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-attachment-remove:hover {
+  color: var(--dvx-danger);
+  background: rgb(255 255 255 / 8%);
+}
+
+/* ---- 17-skills-mcp ------------------------------------------------------ */
+.dvx-shell[data-theme='dark'] .dvx-skill-switch {
+  background: rgb(255 255 255 / 16%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-mcp-status-connected {
+  background: #52a678;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-mcp-status-failed {
+  background: var(--dvx-danger);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-mcp-status-connecting {
+  background: #dcb474;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-mcp-status-disabled {
+  background: #6f6f6f;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-mcp-remove:hover:not(:disabled),
+.dvx-shell[data-theme='dark'] .dvx-mcp-remove-confirm {
+  color: var(--dvx-danger);
+}
+
+/* --dvx-bg is an undefined legacy token; give the field a real
+   recessed surface here. */
+.dvx-shell[data-theme='dark'] .dvx-mcp-add-input {
+  background: var(--dvx-code);
+}
+
+/* ---- 18-interactions ------------------------------------------------------ */
+.dvx-shell[data-theme='dark'] .dvx-permission-tool {
+  border-bottom-color: var(--dvx-border);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-interaction-heading h2 {
+  color: var(--dvx-ink);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-permission-tool-meta code {
+  color: #6cb6ff;
+}
+
+.dvx-shell[data-theme='dark']
+  .dvx-permission-tool-execute
+  .dvx-permission-tool-meta
+  code {
+  color: #e0a563;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-plan-preview {
+  color: var(--dvx-text-secondary);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-plan-markdown pre,
+.dvx-shell[data-theme='dark'] .dvx-plan-markdown blockquote {
+  border-color: var(--dvx-border);
+  background: rgb(255 255 255 / 5%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-permission-more {
+  border-left-color: rgb(0 0 0 / 25%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-ask-user fieldset {
+  border-bottom-color: var(--dvx-border);
+}
+
+/* ---- 19-system-overlays ---------------------------------------------------- */
+.dvx-shell[data-theme='dark'] .dvx-command-desc,
+.dvx-shell[data-theme='dark'] .dvx-command-status {
+  color: var(--dvx-muted);
+}
+
+/* ---- 21-btw ------------------------------------------------------------------ */
+.dvx-shell[data-theme='dark'] .dvx-btw-panel {
+  background: linear-gradient(180deg, var(--dvx-raised) 0%, #202021 100%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-btw-send {
+  color: #1a1a1a;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 35%);
+}
+
+/* ---- 22-plan-anchor / queuedMessages: the warm state-card family ---- */
+.dvx-shell[data-theme='dark'] .dvx-plan-anchor,
+.dvx-shell[data-theme='dark'] .dvx-queue {
+  background: linear-gradient(180deg, #29292a, var(--dvx-raised));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-queue-toggle:hover {
+  background: rgb(255 255 255 / 5%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-queue-row:hover {
+  background: rgb(255 255 255 / 6%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-queue-row-text {
+  color: var(--dvx-ink);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-queue-row-action:hover {
+  color: var(--dvx-ink);
+  background: rgb(255 255 255 / 9%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-queue-edit-chip-cancel:hover {
+  background: rgb(255 255 255 / 9%);
+}
