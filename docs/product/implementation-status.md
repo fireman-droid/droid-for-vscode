@@ -580,6 +580,39 @@ webviewHtml 首屏背景与 CSP。**本批次未打包安装（dist 锁被并行
 html → 应出现 Changes 卡 + Preview chip + 卡尾 Git 提交入口；重开
 窗口闪白应显著减轻**。
 
+2026-08-12 晚追加 V1 主线切片「流式命令输出预览」（tier1 §1，V1 #6
+最后遗留项，生产已接通并随包安装）：Execute/Bash 类工具运行中，
+activity 展开区命令行下方出现实时输出预览窗——尾部有界快照、自动
+钉底滚动，读者上滚即解钉、回到底部重新钉住；完成后预览定格为最终
+尾部；回放/历史与恢复检查点从不携带（`SessionRecoveryStore` 读入
+即丢弃 `outputTail`，敏感命令输出不落盘不重播）。数据源探针实证
+（`artifacts/probe-tool-progress-output.mjs` +
+`probe-tool-progress-raw.mjs`）：`tool_progress` 仅在
+`includePartialMessages: true` 时从 `session.stream()` 可见，
+`fullOutput` 为单调累积快照而非增量块。共享层
+`src/shared/toolOutput.ts` 统一 ANSI 剥离、行尾归一、`\r` 原地重
+写、凭据扫除与 8K 尾部截断（行边界保尾）；Runtime
+`normalizeSdkEvent` 透传 `outputTail`，与只读终端镜像共用同一条
+Runtime 透传（一份数据源两个视图）。Bridge `tool.activity` 与
+transcript tool 项新增可选 `outputTail` 双侧校验；Host
+`turnActivityState` 在 `progressCount` 封顶后仍继续更新尾部（长
+命令不断流）。视觉按用户反馈整改为轻奢窗：`--dvx-code` 暖面 +
+顶部微渐层、1px `--dvx-border`、8px 圆角、极轻内阴影、9–12px 内
+边距、编辑器 mono 栈 11px/1.65 行距、muted 前景低于正文层级、顶
+部渐隐 mask 消解尾部截断、thin 标准滚动条（帧容器承载边框故 mask
+只裁内容）。门禁（干净 worktree @7f95587）：typecheck 三项目全
+过；全量 vitest 80 文件 1803 过 1 跳过；build 过；`vsce package
+-o dist/droidvisx.vsix`（1.56 MB / 1,635,961 字节，SHA256
+`a4602cb7…30df7ed`）+ `cursor --install-extension --force` 成功。
+冒烟 `artifacts/smoke-output-preview.mjs` 三场景（running 钉底/
+解钉/重钉/完成定格 + 视觉断言暖面/边框/mono/渐隐，completed 定
+格尾部，replay 零预览节点）全 PASS，截图
+`artifacts/output-preview-visual.png`；120 回合 stress
+（`artifacts/run-stress-output.mjs`）流式期间 50ms+ 长任务 0 个。
+真机验收：让 Droid 跑一条长输出命令（如 `npm install`），展开该
+活动行应见暖色预览窗实时滚动，完成后定格；重开窗口回放同一会话
+不应出现预览窗。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
@@ -1791,7 +1824,8 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [ ] 诊断导出
 - [x] 会话导出 Markdown（`DroidVisX: Export Session as Markdown`，
       Host 层 `sessionExporter.ts` 复用历史管线与凭据扫除；
-      已提交待随包验证）
+      已随 2026-08-12 晚流式输出预览批次包（@7f95587，SHA256
+      `a4602cb7…30df7ed`）安装）
 - [x] Mermaid 图渲染（```mermaid 代码块流式完成后渲染为图，独立
       3.3MB 懒加载 bundle 经 nonce 脚本注入，首屏仅 +3.4KB，
       失败安静回退；已提交待随包验证）
@@ -2642,7 +2676,8 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   （successfully installed）均成功。已知边界（照设计如实记录）：
   reconcile 恰在活跃 turn 中途整体替换转录时，running 消息的新块
   会重播一次入场动画，V1 接受。streaming-experience-design 三批
-  至此全部落地；tier1 §1（流式命令输出预览）为独立保留项未开工。
+  至此全部落地；tier1 §1（流式命令输出预览）已于 2026-08-12 晚
+  作为独立切片落地随包安装（见前文日期条目）。
 - Streaming 体验批次二：工具活动聚合（2026-08-12 凌晨，按
   `docs/product/streaming-experience-design.md` A 项与
   `activity-aggregation-research.md` 证据，纯 Webview 零 Bridge
