@@ -201,6 +201,17 @@ export interface AssistantWebviewState {
    * optimistically and the host's `queue.state` echo reconciles.
    */
   readonly queue: SessionQueueState;
+  /**
+   * The queued prompt currently loaded into the Composer ("Edit
+   * Queued" mode). `seq` distinguishes consecutive edit sessions so
+   * the Composer re-prefills when the same prompt is edited again.
+   * Cleared whenever the prompt leaves the queue (dispatched,
+   * removed, session change).
+   */
+  readonly queueEditing: {
+    readonly queueId: string;
+    readonly seq: number;
+  } | null;
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: Extract<
     HostToWebviewMessage,
@@ -240,8 +251,11 @@ export type AssistantWebviewAction =
       readonly text: string;
     }
   | { readonly type: 'queue.remove'; readonly queueId: string }
+  | { readonly type: 'queue.promote'; readonly queueId: string }
   | { readonly type: 'queue.resume' }
-  | { readonly type: 'queue.clear' };
+  | { readonly type: 'queue.clear' }
+  | { readonly type: 'queue.editBegin'; readonly queueId: string }
+  | { readonly type: 'queue.editEnd' };
 
 export const initialAssistantWebviewState: AssistantWebviewState = {
   sequence: -1,
@@ -272,6 +286,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   mission: null,
   tokenUsage: EMPTY_SESSION_TOKEN_USAGE,
   queue: EMPTY_SESSION_QUEUE_STATE,
+  queueEditing: null,
   transcript: [],
   historyStatus: null,
   truncated: false,
@@ -382,6 +397,33 @@ export function assistantWebviewReducer(
         items,
         paused: items.length === 0 ? null : state.queue.paused,
       },
+      queueEditing:
+        state.queueEditing?.queueId === action.queueId
+          ? null
+          : state.queueEditing,
+    };
+  }
+
+  if (action.type === 'queue.promote') {
+    const item = state.queue.items.find(
+      (entry) => entry.queueId === action.queueId,
+    );
+    if (item === undefined) {
+      return state;
+    }
+    // Mirrors the host: send-now reorders to the head and doubles as
+    // a resume on a paused queue.
+    return {
+      ...state,
+      queue: {
+        items: [
+          item,
+          ...state.queue.items.filter(
+            (entry) => entry.queueId !== action.queueId,
+          ),
+        ],
+        paused: null,
+      },
     };
   }
 
@@ -390,7 +432,34 @@ export function assistantWebviewReducer(
   }
 
   if (action.type === 'queue.clear') {
-    return { ...state, queue: EMPTY_SESSION_QUEUE_STATE };
+    return {
+      ...state,
+      queue: EMPTY_SESSION_QUEUE_STATE,
+      queueEditing: null,
+    };
+  }
+
+  if (action.type === 'queue.editBegin') {
+    if (
+      !state.queue.items.some(
+        (item) => item.queueId === action.queueId,
+      )
+    ) {
+      return state;
+    }
+    return {
+      ...state,
+      queueEditing: {
+        queueId: action.queueId,
+        seq: (state.queueEditing?.seq ?? 0) + 1,
+      },
+    };
+  }
+
+  if (action.type === 'queue.editEnd') {
+    return state.queueEditing === null
+      ? state
+      : { ...state, queueEditing: null };
   }
 
   if (action.type === 'turn.stop') {
@@ -482,6 +551,10 @@ export function assistantWebviewReducer(
         mission: event.mission ?? null,
         tokenUsage: event.tokenUsage ?? EMPTY_SESSION_TOKEN_USAGE,
         queue: event.queue ?? EMPTY_SESSION_QUEUE_STATE,
+        queueEditing: reconcileQueueEditing(
+          state.queueEditing,
+          event.queue ?? EMPTY_SESSION_QUEUE_STATE,
+        ),
         transcript: event.transcript,
         historyStatus: event.historyStatus,
         truncated: event.truncated,
@@ -510,6 +583,7 @@ export function assistantWebviewReducer(
               btw: EMPTY_SESSION_BTW_STATE,
               tokenUsage: EMPTY_SESSION_TOKEN_USAGE,
               queue: EMPTY_SESSION_QUEUE_STATE,
+              queueEditing: null,
               transcript: [],
               historyStatus: null,
               truncated: false,
@@ -1084,9 +1158,30 @@ export function assistantWebviewReducer(
             ...state,
             sequence: event.sequence,
             queue: { items: event.items, paused: event.paused },
+            queueEditing: reconcileQueueEditing(state.queueEditing, {
+              items: event.items,
+              paused: event.paused,
+            }),
           }
         : advance(state, event.sequence);
   }
+}
+
+/**
+ * An edit session only makes sense while its prompt is still queued;
+ * authoritative echoes that drop the prompt (dispatched, removed in
+ * another view) end the edit.
+ */
+function reconcileQueueEditing(
+  editing: AssistantWebviewState['queueEditing'],
+  queue: SessionQueueState,
+): AssistantWebviewState['queueEditing'] {
+  if (editing === null) {
+    return null;
+  }
+  return queue.items.some((item) => item.queueId === editing.queueId)
+    ? editing
+    : null;
 }
 
 export function isTurnActive(turn: AssistantTurn | null): boolean {

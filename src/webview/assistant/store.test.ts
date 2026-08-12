@@ -2064,6 +2064,122 @@ describe('assistantWebviewReducer', () => {
     expect(state.queue).toEqual({ items: [], paused: null });
   });
 
+  it('promotes a queued prompt to the head and clears the pause', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    for (const [queueId, text] of [
+      ['queue-1', 'One.'],
+      ['queue-2', 'Two.'],
+      ['queue-3', 'Three.'],
+    ] as const) {
+      state = assistantWebviewReducer(state, {
+        type: 'queue.add',
+        queueId,
+        text,
+      });
+    }
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'queue.state',
+        sequence: 1,
+        sessionId: 'session-a',
+        items: state.queue.items,
+        paused: 'stopped',
+      },
+    });
+
+    state = assistantWebviewReducer(state, {
+      type: 'queue.promote',
+      queueId: 'queue-3',
+    });
+    expect(state.queue.items.map(({ queueId }) => queueId)).toEqual([
+      'queue-3',
+      'queue-1',
+      'queue-2',
+    ]);
+    expect(state.queue.paused).toBeNull();
+
+    // Unknown ids are ignored (already dispatched).
+    const unchanged = assistantWebviewReducer(state, {
+      type: 'queue.promote',
+      queueId: 'ghost',
+    });
+    expect(unchanged).toBe(state);
+  });
+
+  it('tracks the queued prompt being edited in the Composer', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'queue.add',
+      queueId: 'queue-1',
+      text: 'One.',
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'queue.add',
+      queueId: 'queue-2',
+      text: 'Two.',
+    });
+
+    // Begin requires a live prompt; unknown ids do nothing.
+    const ghost = assistantWebviewReducer(state, {
+      type: 'queue.editBegin',
+      queueId: 'ghost',
+    });
+    expect(ghost.queueEditing).toBeNull();
+
+    state = assistantWebviewReducer(state, {
+      type: 'queue.editBegin',
+      queueId: 'queue-2',
+    });
+    expect(state.queueEditing).toEqual({ queueId: 'queue-2', seq: 1 });
+
+    // Re-editing bumps the sequence so the Composer re-prefills.
+    state = assistantWebviewReducer(state, { type: 'queue.editEnd' });
+    expect(state.queueEditing).toBeNull();
+    state = assistantWebviewReducer(state, {
+      type: 'queue.editBegin',
+      queueId: 'queue-2',
+    });
+    expect(state.queueEditing).toEqual({ queueId: 'queue-2', seq: 1 });
+
+    // Removing the edited prompt ends the edit; removing another
+    // prompt keeps it.
+    let branch = assistantWebviewReducer(state, {
+      type: 'queue.remove',
+      queueId: 'queue-1',
+    });
+    expect(branch.queueEditing).toEqual({ queueId: 'queue-2', seq: 1 });
+    branch = assistantWebviewReducer(branch, {
+      type: 'queue.remove',
+      queueId: 'queue-2',
+    });
+    expect(branch.queueEditing).toBeNull();
+
+    // The authoritative echo dropping the prompt (dispatched) ends
+    // the edit too.
+    branch = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'queue.state',
+        sequence: 5,
+        sessionId: 'session-a',
+        items: [{ queueId: 'queue-1', text: 'One.', attachments: [] }],
+        paused: null,
+      },
+    });
+    expect(branch.queueEditing).toBeNull();
+
+    // Clearing the queue ends the edit.
+    branch = assistantWebviewReducer(state, { type: 'queue.clear' });
+    expect(branch.queueEditing).toBeNull();
+  });
+
   it('reconciles queue state from the host and scopes it per session', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',
