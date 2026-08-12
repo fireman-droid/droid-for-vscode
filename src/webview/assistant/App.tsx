@@ -1158,6 +1158,11 @@ function Header({
             }
           >
             <span>{connectionLabel}</span>
+            {/* Quiet read-only mission identity; same muted style as
+                the connection label (UI restraint: no new element). */}
+            {state.mission !== null ? (
+              <span>{`· ${formatMissionIdentity(state.mission)}`}</span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1309,5 +1314,31 @@ function formatConnectionStatus(
       return 'Local runtime unavailable';
     case 'idle':
       return 'Local runtime idle';
+  }
+}
+
+/** "Mission · running" / "Mission worker" read-only identity text. */
+function formatMissionIdentity(
+  mission: NonNullable<typeof initialAssistantWebviewState.mission>,
+): string {
+  const label =
+    mission.role === 'worker' ? 'Mission worker' : 'Mission';
+  return mission.state === null
+    ? label
+    : `${label} · ${formatMissionState(mission.state)}`;
+}
+
+function formatMissionState(
+  state: NonNullable<
+    NonNullable<typeof initialAssistantWebviewState.mission>['state']
+  >,
+): string {
+  switch (state) {
+    case 'awaiting_input':
+      return 'awaiting input';
+    case 'orchestrator_turn':
+      return 'orchestrating';
+    default:
+      return state;
   }
 }

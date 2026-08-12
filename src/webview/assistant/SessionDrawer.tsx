@@ -607,6 +607,14 @@ function SessionRow({
               : 'worktree'}
           </span>
         ) : null}
+        {session.missionRole !== undefined ? (
+          // Same quiet secondary style as the worktree annotation.
+          <span className="dvx-session-row-worktree">
+            {session.missionRole === 'worker'
+              ? 'mission · worker'
+              : 'mission'}
+          </span>
+        ) : null}
         <time dateTime={session.modifiedTime}>
           {formatModifiedTime(session.modifiedTime)}
         </time>
