@@ -1427,6 +1427,23 @@ function appendDiagnostic(
   transcript: readonly SessionTranscriptItem[],
   next: Extract<SessionTranscriptItem, { kind: 'diagnostic' }>,
 ): readonly SessionTranscriptItem[] {
+  // Repeats with nothing in between (e.g. clicking a dead file chip
+  // six times) collapse into the one visible card; the same
+  // diagnostic recurring after other content still appends.
+  for (let index = transcript.length - 1; index >= 0; index -= 1) {
+    const item = transcript[index];
+    if (item === undefined || item.kind !== 'diagnostic') {
+      break;
+    }
+    if (
+      item.turnId === next.turnId &&
+      item.severity === next.severity &&
+      item.code === next.code &&
+      item.message === next.message
+    ) {
+      return transcript;
+    }
+  }
   const current =
     next.code === 'runtime-execution-failed' && next.turnId !== null
       ? transcript.filter(

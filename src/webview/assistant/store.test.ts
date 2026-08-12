@@ -1616,6 +1616,51 @@ describe('assistantWebviewReducer', () => {
     ]);
   });
 
+  it('collapses identical back-to-back diagnostics into one card', () => {
+    const failedOpen = {
+      type: 'runtime.diagnostic' as const,
+      sessionId: 'session-a',
+      turnId: null,
+      severity: 'warning' as const,
+      code: 'file-diff-failed',
+      message: 'That file could not be opened.',
+    };
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    for (let sequence = 1; sequence <= 6; sequence += 1) {
+      state = assistantWebviewReducer(state, {
+        type: 'host.message',
+        message: { ...failedOpen, sequence },
+      });
+    }
+    expect(
+      state.transcript.filter((item) => item.kind === 'diagnostic'),
+    ).toHaveLength(1);
+    // The dropped repeats still advance the sequence cursor.
+    expect(state.sequence).toBe(6);
+
+    // A different diagnostic appends; a repeat matching anywhere in
+    // the stacked trailing run stays collapsed.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        ...failedOpen,
+        code: 'preview-failed',
+        message: 'That prototype could not be previewed.',
+        sequence: 7,
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: { ...failedOpen, sequence: 8 },
+    });
+    expect(
+      state.transcript.filter((item) => item.kind === 'diagnostic'),
+    ).toHaveLength(2);
+  });
+
   it('tracks the command catalog and resets it on session change', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',
