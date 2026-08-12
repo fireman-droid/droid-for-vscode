@@ -57,6 +57,7 @@ import {
   type GroupCandidatePart,
 } from "./activityGrouping";
 import { DroidMarkdownText } from "./MarkdownText";
+import { ChangesCommitEntry } from "./GitCommitPanel";
 import { TranscriptImage } from "./TranscriptImage";
 import { getImagePreview, rememberImagePreview } from "./imagePreviewCache";
 
@@ -1275,6 +1276,14 @@ function readChangedFiles(data: unknown): readonly ChangedFileEntry[] {
   return files;
 }
 
+function readChangesTurnId(data: unknown): string | null {
+  if (typeof data !== "object" || data === null) {
+    return null;
+  }
+  const turnId = (data as { turnId?: unknown }).turnId;
+  return typeof turnId === "string" && turnId !== "" ? turnId : null;
+}
+
 export function ChangesSummary({
   data,
 }: {
@@ -1282,6 +1291,7 @@ export function ChangesSummary({
 }): React.JSX.Element | null {
   const openFileDiff = useContext(FileDiffContext);
   const files = readChangedFiles(data);
+  const turnId = readChangesTurnId(data);
   if (files.length === 0) {
     return null;
   }
@@ -1319,6 +1329,7 @@ export function ChangesSummary({
           </span>
         ))}
       </div>
+      <ChangesCommitEntry turnId={turnId} />
     </div>
   );
 }
