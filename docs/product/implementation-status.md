@@ -2098,6 +2098,76 @@ UI 描述见 §22 重做记录。
   快捷键待真机冲突验证后另行贡献；入口 b（文件右键）/入口 c
   （转录选中引用）未实现。
 
+### 26. 主题切换：炭黑暗色主题 + Auto 跟随（2026-08-13 凌晨）
+
+- **切片范围**（[`theme-switching-design.md`](./theme-switching-design.md)
+  §0 用户拍板方向；实施基准 `artifacts/theme-proto-dark.png` v2
+  灰阶原型）：`droidvisx.theme` 三态设置项（auto/light/dark，默认
+  auto），切换即时生效不需 Reload；暗色盘 = Cursor 灰阶
+  （surface `#1a1a1a` / raised `#242425` / code `#1e1e1f`、半透明白
+  边框 9%/16%、正文 `#e8e8e8`≈13.6:1、muted `#9a9a9a`≈5.5:1），
+  品牌橙全退场（accent 族在暗色落到浅灰，发送键 = 浅色填充
+  `#1a1a1a` 图标），hljs 整组换 VS Code Dark+ 系。
+- **机制**：Bridge 协议 v7→v8，新增 `ui.theme.set`（W→H）/
+  `ui.theme`（H→W，**刻意无 sequence**——它是 DroidViewProvider 直发
+  的视图层推送，不过 ChatController 的 sequence 戳章器，也不进
+  webview store；为此收窄 `ControllerHostMessage` /
+  `StoreHostMessage` 两个类型口）。Host 侧偏好 = VS Code 用户设置
+  （`ConfigurationTarget.Global`），`onDidChangeConfiguration` 与每次
+  `webview.ready` 重推；Auto 由 webview 侧 MutationObserver 盯 body
+  的 `vscode-dark`/`vscode-high-contrast(-light)` class，零轮询零
+  Bridge 流量。防白闪：`getWebviewHtml` 按启动主题给内联首帧背景
+  （light `#f5f3ef` / dark `#1a1a1a`）并在 `<html>` 上印
+  `data-dvx-theme` + `data-dvx-theme-preference`，App 启动时读回，
+  首条 `ui.theme` 到达前不会误翻转。
+- **样式层**：`00-tokens.css` 增 `.dvx-shell[data-theme='dark']`
+  token 块（含 color-scheme: dark、暗色阴影、语义色提亮
+  diff-add/del、`--dvx-focus` 新 token——焦点环按 theme 文档 §1.3 与
+  编辑器解耦，光标橙/暗色半透明白）；token 作用域并入两个 body
+  portal 根（`.dvx-image-lightbox`、`.dvx-slash-tooltip`，顺带修复
+  slash tooltip 在 shell 外 var() 失效的隐性 bug）。新增
+  `24-theme-dark.css`（约 460 行，import 链末位）逐条覆写各分区
+  残留暖白字面量：页面底色/滚动条（`html[data-dvx-theme='dark']`
+  键）、markdown 链接换亮铜色、命令卡暖琥珀井重校准
+  （`#262019`→`#16120e`，比暗色卡面再暗一档保住"凹陷终端"层级，
+  暖色命令高亮原样保留）、计划锚卡/排队条暗色渐变卡面、shimmer
+  灰底金闪等。Mermaid 增暗色 themeVariables 组，主题切换时
+  re-initialize 并重渲已挂载图表。
+- **入口 UI**：设置弹层 Mode/Autonomy 之后一行 Theme 三态下拉
+  （复用 `SettingsDropdown` 行样式，UI 零新样式元素；不随 turn
+  禁用）；经 `ThemeContext` 注入（App 提供，`useThemeController`
+  hook 承载全部接线，守住 App.tsx 行数棘轮）。
+- **门禁**：聚焦 vitest（webviewHtml/DroidViewProvider/双向校验器/
+  theme 单元/App 主题/弹层行/Mermaid）全绿后，全量 vitest 一次
+  `--maxWorkers=4`：**100 文件 1993 用例全过**；`lint:budgets` 绿
+  （ChatController/App 棘轮内）；`tsc -p tsconfig.webview.json` 绿，
+  全量 typecheck 剩余 4 错**全部在并行 BYOK 代理未跟踪在制品**
+  （`chat/customModels.ts`、`ChatController.customModels.test.ts`、
+  `CustomModelsPanel.tsx`——其 `customModels.*` 联合类型成员尚未
+  落进 bridgeMessages），本切片文件全绿；build 过（webview.css
+  125.7kb）。
+- **视觉自验收**（真实 dist bundle，`artifacts/shot.mjs` +
+  visual/command-card/queue-bar 装置，截图存 `artifacts/`）：
+  `theme-light-conversation.png`（暖白基准零回归）、
+  `theme-dark-conversation.png`、`theme-auto-follow-dark.png`
+  （body class 翻转即跟随）、`theme-dark-markdown-top.png`
+  （Dark+ 语法色/内联码/引用块/链接）、`theme-dark-plan-anchor.png`
+  （锚卡渐变 + 运行中命令卡暗井 + 历史通知）、
+  `theme-dark-command-card-open.png`（井重校准 + 输出尾）、
+  `theme-dark-queue-bar.png`（排队条 + Stop 危险态）、
+  `theme-dark-session-drawer.png`、`theme-dark-settings-popover.png`
+  / `theme-light-settings-popover.png`（Theme 行两主题）、
+  `theme-dark-permission.png`（Deny 红 / Approve 浅填充）、
+  `theme-dark-empty.png`、`theme-dark-lightbox.png`。逐面核对与
+  `theme-proto-dark.png` 基调一致：黑灰层次、无橙、更亮 = 更浮起。
+- **遗留**：① 未打包未装真机（按纪律不动 dist 安装位；VS Code
+  设置 UI 改 `droidvisx.theme` 的活体路径待随包验收）；② 文件/HTML
+  预览面板（`previewHtml.ts`）是独立 webview，仍暖白固定，未纳入
+  本切片；③ forced-colors 高对比分支未随暗色回归截图（规则未动，
+  理论不受影响）；④ 设计文档 §2.2 曾建议 globalState 持久化，实施
+  改走 VS Code 设置项（用户任务书点名 `droidvisx.theme`），文档
+  该节未回写。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3980,17 +4050,12 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   Grok 式右缘刻度栏：offsetTop 归一化定位、接入现有滚动协调器 rAF、
   未挂载消息用"更早区"帽子表示。第一切片估 1–1.5 天，用户明确
   "不急着做"。
-- **主题切换（暗色主题）** —
-  [`theme-switching-design.md`](./theme-switching-design.md)。
-  用户决策（2026-08-12 晚）：只做暗色；暖白 = 现状即 light 基准；
-  暗色盘 = 黑白灰参考 Cursor（`#1a1a1a`~`#252526` 层次、半透明白
-  边框），品牌橙退场（发送键改浅色填充深色图标）；开关三态
-  Light/Dark/Auto。styles.css 现存 259 处 hex + 95 处 rgba 硬编码
-  待收敛进 `--dvx-*` token 层（约 2.5–3.5 天，收敛占大头且冲突面
-  大，需独占 styles.css 窗口）。实施基准原型图：
-  `artifacts/theme-proto-dark.png`（v2 灰阶版；
-  `theme-proto-light.png` 为暖白留档，配
-  `theme-proto-*.html` + `theme-proto-shot.mjs`）。
+- **主题切换（暗色主题）** — **已实施（2026-08-13，见「生产已
+  接通」§26）**。[`theme-switching-design.md`](./theme-switching-design.md)
+  为设计底稿；实施走 token 暗色块 + `24-theme-dark.css` 暗色皮肤
+  覆写残留字面量（全量硬编码收敛未做完，皮肤文件即覆写清单），
+  持久化按用户任务书走 `droidvisx.theme` 设置项而非文档 §2.2 的
+  globalState。
 - **结构债重构计划（三巨型文件拆分 + 重复实现合并）** —
   [`refactor-plan.md`](../engineering/refactor-plan.md)（2026-08-12 晚，
   规划产物、零生产代码改动）。四批次：① styles.css 拆 18 文件 +
