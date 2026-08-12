@@ -410,6 +410,9 @@ function projectToolActivity(
         ? {}
         : { detailKind: message.detailKind, detail }),
       ...(errorMessage === undefined ? {} : { errorMessage }),
+      ...(message.subagent === undefined
+        ? {}
+        : { subagent: message.subagent }),
     });
   }
 
@@ -439,6 +442,9 @@ function projectToolActivity(
       ? {}
       : { detailKind: message.detailKind, detail }),
     ...(errorMessage === undefined ? {} : { errorMessage }),
+    ...(message.subagent === undefined
+      ? {}
+      : { subagent: message.subagent }),
   });
 }
 

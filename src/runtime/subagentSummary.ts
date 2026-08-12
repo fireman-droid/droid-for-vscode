@@ -182,7 +182,8 @@ export function createSubagentQueues(
 
 /**
  * Takes the oldest unconsumed ledger summary matching one delegation
- * identity, or undefined when the ledger has no entry for it.
+ * identity, or undefined when the ledger has no entry for it. Used
+ * when the whole session is replayed front to back.
  */
 export function takeSubagentSummary(
   queues: SubagentSummaryQueues,
@@ -194,4 +195,21 @@ export function takeSubagentSummary(
     return undefined;
   }
   return queue.shift();
+}
+
+/**
+ * Takes the newest unconsumed ledger summary for one delegation
+ * identity. Used at turn end, where the whole-session ledger may
+ * also contain older invocations from earlier turns.
+ */
+export function takeSubagentSummaryLast(
+  queues: SubagentSummaryQueues,
+  type: string,
+  description: string,
+): ToolSubagentSummary | undefined {
+  const queue = queues.get(subagentIdentityKey(type, description));
+  if (queue === undefined || queue.length === 0) {
+    return undefined;
+  }
+  return queue.pop();
 }

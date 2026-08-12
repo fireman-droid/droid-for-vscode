@@ -352,6 +352,84 @@ describe('SessionRecoveryStore', () => {
     expect(store.readSession('session-1')).toBeUndefined();
   });
 
+  it('round-trips subagent summaries on persisted tool rows', async () => {
+    const subagent = {
+      type: 'explore',
+      description: 'Survey the auth module',
+      status: 'completed',
+      toolUseCount: 7,
+      durationMs: 4_200,
+    } as const;
+    const persistence = memoryPersistence({
+      version: SESSION_RECOVERY_VERSION,
+      selectedSessionId: 'session-1',
+      sessions: [
+        storedSession('session-1', 1, [
+          {
+            id: 'tool-1',
+            kind: 'tool',
+            turnId: 'turn-1',
+            toolUseId: 'use-1',
+            toolName: 'Task',
+            action: 'Delegated to a subagent',
+            status: 'completed',
+            progressCount: 0,
+            latestUpdateKind: null,
+            subagent,
+          },
+        ]),
+      ],
+    });
+    const store = new SessionRecoveryStore(persistence);
+
+    await store.load();
+
+    expect(store.readSession('session-1')).toMatchObject({
+      transcript: [
+        expect.objectContaining({ kind: 'tool', subagent }),
+      ],
+    });
+  });
+
+  it('rejects malformed persisted subagent summaries', async () => {
+    for (const subagent of [
+      { type: '', description: 'Empty type' },
+      { type: 'explore', description: 'Bad status', status: 'busy' },
+      {
+        type: 'explore',
+        description: 'Ledger leak',
+        childSessionId: 'child-1',
+      },
+      { type: 'explore', description: 'Bad count', toolUseCount: -1 },
+      { type: 'explore', description: 'Control\u0000char' },
+      'not-a-record',
+    ]) {
+      const persistence = memoryPersistence({
+        version: SESSION_RECOVERY_VERSION,
+        selectedSessionId: 'session-1',
+        sessions: [
+          storedSession('session-1', 1, [
+            {
+              id: 'tool-1',
+              kind: 'tool',
+              turnId: 'turn-1',
+              toolUseId: 'use-1',
+              toolName: 'Task',
+              action: 'Delegated to a subagent',
+              status: 'completed',
+              progressCount: 0,
+              latestUpdateKind: null,
+              subagent,
+            } as unknown as SessionTranscriptItem,
+          ]),
+        ],
+      });
+      const store = new SessionRecoveryStore(persistence);
+      await store.load();
+      expect(store.readSession('session-1')).toBeUndefined();
+    }
+  });
+
   it('keeps live complete caches and downgrades empty complete caches only after restart', async () => {
     const persistence = memoryPersistence();
     const live = new SessionRecoveryStore(persistence);

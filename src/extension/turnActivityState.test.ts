@@ -9,9 +9,12 @@ import {
 import {
   collectToolFilePaths,
   createTurnActivityState,
+  hasSubagentRows,
   projectAssistantDelta,
+  projectSubagentStarted,
   projectThinkingDelta,
   projectToolEvent,
+  reconcileSubagentSummaries,
 } from './turnActivityState';
 
 describe('turnActivityState', () => {
@@ -434,5 +437,212 @@ describe('turnActivityState', () => {
       progressCount: MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
       latestUpdateKind: 'status',
     });
+  });
+
+  it('upgrades the Task row named by the notification to a subagent row', () => {
+    const started = projectToolEvent(
+      createTurnActivityState(),
+      {
+        type: 'tool-start',
+        toolName: 'Task',
+        toolUseId: 'task-1',
+        action: 'Delegated to a subagent',
+      },
+      1_000,
+    );
+    const upgraded = projectSubagentStarted(started.state, {
+      toolUseId: 'task-1',
+      subagentType: 'explore',
+      description: 'Survey the auth module',
+    });
+    const duplicate = projectSubagentStarted(upgraded.state, {
+      toolUseId: 'task-1',
+      subagentType: 'explore',
+      description: 'Survey the auth module',
+    });
+
+    expect(upgraded.projection).toEqual({
+      toolUseId: 'task-1',
+      toolName: 'Task',
+      action: 'Delegated to a subagent',
+      status: 'running',
+      progressCount: 0,
+      latestUpdateKind: null,
+      subagent: {
+        type: 'explore',
+        description: 'Survey the auth module',
+        status: 'running',
+      },
+    });
+    expect(hasSubagentRows(started.state)).toBe(false);
+    expect(hasSubagentRows(upgraded.state)).toBe(true);
+    expect(duplicate.projection).toBeNull();
+    expect(duplicate.state).toBe(upgraded.state);
+  });
+
+  it('falls back to the newest running Task row when the id is missing', () => {
+    let state = createTurnActivityState();
+    for (const toolUseId of ['task-a', 'task-b']) {
+      state = projectToolEvent(state, {
+        type: 'tool-start',
+        toolName: 'Task',
+        toolUseId,
+        action: 'Delegated to a subagent',
+      }).state;
+    }
+    state = projectToolEvent(state, {
+      type: 'tool-start',
+      toolName: 'Read',
+      toolUseId: 'read-1',
+      action: 'Read workspace files',
+    }).state;
+
+    const upgraded = projectSubagentStarted(state, {
+      toolUseId: null,
+      subagentType: 'explore',
+      description: '',
+    });
+    const noTarget = projectSubagentStarted(
+      createTurnActivityState(),
+      {
+        toolUseId: 'task-unknown',
+        subagentType: 'explore',
+        description: '',
+      },
+    );
+
+    expect(upgraded.projection).toMatchObject({
+      toolUseId: 'task-b',
+      subagent: { type: 'explore', description: '', status: 'running' },
+    });
+    expect(noTarget.projection).toBeNull();
+    expect(noTarget.state.tools.size).toBe(0);
+  });
+
+  it('settles terminal subagent rows from the ledger newest-first', () => {
+    let state = createTurnActivityState();
+    for (const toolUseId of ['task-1', 'task-2']) {
+      state = projectToolEvent(state, {
+        type: 'tool-start',
+        toolName: 'Task',
+        toolUseId,
+        action: 'Delegated to a subagent',
+      }).state;
+      state = projectSubagentStarted(state, {
+        toolUseId,
+        subagentType: 'explore',
+        description: 'Same delegation',
+      }).state;
+      state = projectToolEvent(state, {
+        type: 'tool-result',
+        toolName: 'Task',
+        toolUseId,
+        action: 'Delegated to a subagent',
+        isError: false,
+      }).state;
+    }
+
+    const settled = reconcileSubagentSummaries(state, [
+      {
+        type: 'explore',
+        description: 'Same delegation',
+        status: 'completed',
+        toolUseCount: 4,
+        durationMs: 1_200,
+      },
+      {
+        type: 'explore',
+        description: 'Same delegation',
+        status: 'completed',
+        toolUseCount: 9,
+        durationMs: 5_000,
+      },
+    ]);
+
+    expect(settled.projections).toHaveLength(2);
+    expect(settled.projections[0]).toMatchObject({
+      toolUseId: 'task-1',
+      status: 'completed',
+      subagent: {
+        status: 'completed',
+        toolUseCount: 4,
+        durationMs: 1_200,
+      },
+    });
+    expect(settled.projections[1]).toMatchObject({
+      toolUseId: 'task-2',
+      status: 'completed',
+      subagent: {
+        status: 'completed',
+        toolUseCount: 9,
+        durationMs: 5_000,
+      },
+    });
+  });
+
+  it('never settles rows the stream left running and tolerates an empty ledger', () => {
+    let state = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'Task',
+      toolUseId: 'task-broken',
+      action: 'Delegated to a subagent',
+    }).state;
+    state = projectSubagentStarted(state, {
+      toolUseId: 'task-broken',
+      subagentType: 'explore',
+      description: 'Interrupted delegation',
+    }).state;
+
+    const skipped = reconcileSubagentSummaries(state, [
+      {
+        type: 'explore',
+        description: 'Interrupted delegation',
+        status: 'cancelled',
+      },
+    ]);
+    const empty = reconcileSubagentSummaries(state, []);
+
+    expect(skipped.projections).toHaveLength(0);
+    expect(skipped.state).toBe(state);
+    expect(empty.projections).toHaveLength(0);
+    expect(empty.state).toBe(state);
+  });
+
+  it('leaves rows alone when the ledger repeats the streamed status', () => {
+    let state = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'Task',
+      toolUseId: 'task-1',
+      action: 'Delegated to a subagent',
+    }).state;
+    state = projectSubagentStarted(state, {
+      toolUseId: 'task-1',
+      subagentType: 'explore',
+      description: 'Steady delegation',
+    }).state;
+    state = projectToolEvent(state, {
+      type: 'tool-result',
+      toolName: 'Task',
+      toolUseId: 'task-1',
+      action: 'Delegated to a subagent',
+      isError: false,
+    }).state;
+    const running = reconcileSubagentSummaries(state, [
+      {
+        type: 'explore',
+        description: 'Steady delegation',
+        status: 'running',
+      },
+    ]);
+    const unmatched = reconcileSubagentSummaries(state, [
+      {
+        type: 'other-type',
+        description: 'Different delegation',
+        status: 'completed',
+      },
+    ]);
+
+    expect(running.projections).toHaveLength(0);
+    expect(unmatched.projections).toHaveLength(0);
   });
 });

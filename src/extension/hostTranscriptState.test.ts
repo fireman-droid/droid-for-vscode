@@ -420,6 +420,83 @@ describe('hostTranscriptState', () => {
     ]);
   });
 
+  it('carries and settles a subagent summary across activity updates', () => {
+    let state = createHostTranscriptState('complete');
+    state = project(state, {
+      type: 'tool.activity',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolUseId: 'task-1',
+      toolName: 'Task',
+      action: 'Delegated to a subagent',
+      status: 'running',
+      progressCount: 0,
+      latestUpdateKind: null,
+      subagent: {
+        type: 'explore',
+        description: 'Survey the auth module',
+        status: 'running',
+      },
+    });
+    // An update without the field keeps the recorded summary.
+    state = project(state, {
+      type: 'tool.activity',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolUseId: 'task-1',
+      toolName: 'Task',
+      action: 'Delegated to a subagent',
+      status: 'completed',
+      progressCount: 0,
+      latestUpdateKind: null,
+    });
+    const kept = state.transcript[0];
+    // Turn-end reconciliation replaces it with the ledger summary.
+    state = project(state, {
+      type: 'tool.activity',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolUseId: 'task-1',
+      toolName: 'Task',
+      action: 'Delegated to a subagent',
+      status: 'completed',
+      progressCount: 0,
+      latestUpdateKind: null,
+      subagent: {
+        type: 'explore',
+        description: 'Survey the auth module',
+        status: 'completed',
+        toolUseCount: 7,
+        durationMs: 4_200,
+      },
+    });
+
+    expect(kept).toEqual(
+      expect.objectContaining({
+        kind: 'tool',
+        status: 'completed',
+        subagent: {
+          type: 'explore',
+          description: 'Survey the auth module',
+          status: 'running',
+        },
+      }),
+    );
+    expect(state.transcript).toEqual([
+      expect.objectContaining({
+        kind: 'tool',
+        status: 'completed',
+        subagent: {
+          type: 'explore',
+          description: 'Survey the auth module',
+          status: 'completed',
+          toolUseCount: 7,
+          durationMs: 4_200,
+        },
+      }),
+    ]);
+  });
+
   it('appends a bounded per-turn changes summary exactly once', () => {
     let state = appendAcceptedUserPrompt(
       createHostTranscriptState('complete'),

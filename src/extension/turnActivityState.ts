@@ -6,8 +6,14 @@ import {
   type ToolActivityStatus,
   type ToolActivityUpdateKind,
   type ToolDetailKind,
+  type ToolSubagentSummary,
 } from '../shared/bridgeMessages';
+import { toolNameCandidates } from '../shared/toolActivity';
 import type { RuntimeEvent } from '../runtime/runtimeEvents';
+import {
+  createSubagentQueues,
+  takeSubagentSummaryLast,
+} from '../runtime/subagentSummary';
 
 type ToolEvent = Extract<
   RuntimeEvent,
@@ -36,9 +42,13 @@ export interface ToolActivityProjection {
   readonly detailKind?: ToolDetailKind;
   readonly detail?: string;
   readonly errorMessage?: string;
+  readonly subagent?: ToolSubagentSummary;
 }
 
 interface ToolActivityEntry {
+  /** Stored so out-of-band projections can re-emit the full row. */
+  readonly toolName: string;
+  readonly action: string;
   readonly status: ToolActivityStatus;
   readonly progressCount: number;
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
@@ -47,6 +57,7 @@ interface ToolActivityEntry {
   readonly detailKind?: ToolDetailKind;
   readonly detail?: string;
   readonly errorMessage?: string;
+  readonly subagent?: ToolSubagentSummary;
 }
 
 export interface TurnActivityState {
@@ -221,6 +232,8 @@ export function projectToolEvent(
         : 'completed'
       : 'running';
   const entry: ToolActivityEntry = {
+    toolName: event.toolName,
+    action: event.action,
     status,
     progressCount: event.type === 'tool-progress' ? 1 : 0,
     latestUpdateKind:
@@ -274,5 +287,160 @@ function projectEntry(
     ...(entry.errorMessage === undefined
       ? {}
       : { errorMessage: entry.errorMessage }),
+    ...(entry.subagent === undefined
+      ? {}
+      : { subagent: entry.subagent }),
+  };
+}
+
+/**
+ * Upgrades one Task tool row to a subagent row when the runtime saw a
+ * `child_session_available` notification. The row is resolved by the
+ * notification's parent tool-use id, falling back to the most recent
+ * running Task tool without a subagent (older CLIs omit the id). A
+ * turn with no matching Task row projects nothing.
+ */
+export function projectSubagentStarted(
+  state: TurnActivityState,
+  started: {
+    readonly toolUseId: string | null;
+    readonly subagentType: string;
+    readonly description: string;
+  },
+): ActivityProjectionResult<ToolActivityProjection> {
+  const toolUseId = resolveSubagentTarget(state, started.toolUseId);
+  if (toolUseId === null) {
+    return { state, projection: null };
+  }
+  const existing = state.tools.get(toolUseId)!;
+  if (existing.subagent !== undefined) {
+    return { state, projection: null };
+  }
+  const entry: ToolActivityEntry = {
+    ...existing,
+    subagent: {
+      type: started.subagentType,
+      description: started.description,
+      status: 'running',
+    },
+  };
+  const tools = new Map(state.tools);
+  tools.set(toolUseId, entry);
+  return {
+    state: { ...state, tools },
+    projection: projectEntryStandalone(toolUseId, entry),
+  };
+}
+
+function resolveSubagentTarget(
+  state: TurnActivityState,
+  toolUseId: string | null,
+): string | null {
+  if (toolUseId !== null && state.tools.has(toolUseId)) {
+    return toolUseId;
+  }
+  let fallback: string | null = null;
+  for (const [id, entry] of state.tools) {
+    if (
+      entry.status === 'running' &&
+      entry.subagent === undefined &&
+      toolNameCandidates(entry.toolName).includes('task')
+    ) {
+      fallback = id;
+    }
+  }
+  return fallback;
+}
+
+/** Whether any tool row of the turn was upgraded to a subagent row. */
+export function hasSubagentRows(state: TurnActivityState): boolean {
+  for (const entry of state.tools.values()) {
+    if (entry.subagent !== undefined) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Settles the turn's subagent rows with the session ledger's final
+ * summaries after the turn ends. Only rows whose Task tool already
+ * reached a terminal status settle: a still-`running` row means the
+ * turn broke off mid-delegation, and re-emitting it would resurrect a
+ * live status on a stopped transcript row (history reload shows the
+ * ledger truth for those). The whole-session ledger may contain older
+ * invocations of the same identity from earlier turns, so rows pair
+ * with entries newest-first.
+ */
+export function reconcileSubagentSummaries(
+  state: TurnActivityState,
+  summaries: readonly ToolSubagentSummary[],
+): {
+  readonly state: TurnActivityState;
+  readonly projections: readonly ToolActivityProjection[];
+} {
+  if (summaries.length === 0) {
+    return { state, projections: [] };
+  }
+
+  const queues = createSubagentQueues(summaries);
+  const rows = [...state.tools].filter(
+    ([, entry]) =>
+      entry.subagent !== undefined && entry.status !== 'running',
+  );
+  const updates: Array<[string, ToolActivityEntry]> = [];
+  for (const [toolUseId, entry] of rows.reverse()) {
+    const subagent = entry.subagent!;
+    const settled = takeSubagentSummaryLast(
+      queues,
+      subagent.type,
+      subagent.description,
+    );
+    if (settled === undefined || settled.status === subagent.status) {
+      continue;
+    }
+    updates.push([toolUseId, { ...entry, subagent: settled }]);
+  }
+  if (updates.length === 0) {
+    return { state, projections: [] };
+  }
+
+  const tools = new Map(state.tools);
+  const projections: ToolActivityProjection[] = [];
+  // Re-reverse so emitted updates follow row order.
+  for (const [toolUseId, entry] of updates.reverse()) {
+    tools.set(toolUseId, entry);
+    projections.push(projectEntryStandalone(toolUseId, entry));
+  }
+  return { state: { ...state, tools }, projections };
+}
+
+/**
+ * Projects an entry without a driving tool event, using the stored
+ * tool identity instead of event fields.
+ */
+function projectEntryStandalone(
+  toolUseId: string,
+  entry: ToolActivityEntry,
+): ToolActivityProjection {
+  return {
+    toolUseId,
+    toolName: entry.toolName,
+    action: entry.action,
+    status: entry.status,
+    progressCount: entry.progressCount,
+    latestUpdateKind: entry.latestUpdateKind,
+    ...(entry.filePath === undefined
+      ? {}
+      : { filePath: entry.filePath }),
+    ...(entry.detail === undefined || entry.detailKind === undefined
+      ? {}
+      : { detailKind: entry.detailKind, detail: entry.detail }),
+    ...(entry.errorMessage === undefined
+      ? {}
+      : { errorMessage: entry.errorMessage }),
+    ...(entry.subagent === undefined
+      ? {}
+      : { subagent: entry.subagent }),
   };
 }

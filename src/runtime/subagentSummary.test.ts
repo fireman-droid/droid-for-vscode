@@ -12,6 +12,7 @@ import {
   sanitizeSubagentType,
   subagentIdentityKey,
   takeSubagentSummary,
+  takeSubagentSummaryLast,
 } from './subagentSummary';
 
 describe('sanitizeSubagentType', () => {
@@ -234,6 +235,26 @@ describe('subagent summary queues', () => {
     );
     expect(
       takeSubagentSummary(queues, 'explore', 'unrelated'),
+    ).toBeUndefined();
+  });
+
+  it('takes the newest entry first for turn-end settlement', () => {
+    const queues = createSubagentQueues([
+      { type: 'worker', description: 'same', status: 'completed', toolUseCount: 1 },
+      { type: 'worker', description: 'same', status: 'failed', toolUseCount: 2 },
+    ]);
+
+    expect(
+      takeSubagentSummaryLast(queues, 'worker', 'same')?.toolUseCount,
+    ).toBe(2);
+    expect(
+      takeSubagentSummaryLast(queues, 'worker', 'same')?.toolUseCount,
+    ).toBe(1);
+    expect(
+      takeSubagentSummaryLast(queues, 'worker', 'same'),
+    ).toBeUndefined();
+    expect(
+      takeSubagentSummaryLast(queues, 'worker', 'unrelated'),
     ).toBeUndefined();
   });
 });

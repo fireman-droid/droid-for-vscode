@@ -14,10 +14,13 @@ import {
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
   MAX_TOOL_DETAIL_LENGTH,
   MAX_TOOL_ERROR_MESSAGE_LENGTH,
+  MAX_SUBAGENT_DESCRIPTION_LENGTH,
+  MAX_SUBAGENT_TYPE_LENGTH,
   MAX_TOOL_NAME_LENGTH,
   MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
   MAX_TURN_TEXT_LENGTH,
   SESSION_HISTORY_STATUSES,
+  SUBAGENT_STATUSES,
   TRANSCRIPT_THINKING_STATUSES,
   TRANSCRIPT_TOOL_STATUSES,
   TOOL_ACTIVITY_UPDATE_KINDS,
@@ -28,6 +31,7 @@ import {
   type SessionHistoryStatus,
   type SessionTranscriptItem,
   type ToolDetailKind,
+  type ToolSubagentSummary,
 } from '../shared/bridgeMessages';
 import {
   hasExactKeys,
@@ -730,6 +734,7 @@ function parseTool(
       'detailKind',
       'detail',
       'errorMessage',
+      'subagent',
     ])
   ) {
     return undefined;
@@ -744,6 +749,12 @@ function parseTool(
   const errorMessage = legacy
     ? undefined
     : dataValue(value, 'errorMessage');
+  const rawSubagent = legacy ? undefined : dataValue(value, 'subagent');
+  const subagent =
+    rawSubagent === undefined ? undefined : parseSubagent(rawSubagent);
+  if (rawSubagent !== undefined && subagent === undefined) {
+    return undefined;
+  }
   const action = legacy
     ? typeof toolName === 'string'
       ? summarizeToolAction(toolName)
@@ -807,8 +818,56 @@ function parseTool(
         ...(errorMessage === undefined
           ? {}
           : { errorMessage: errorMessage as string }),
+        ...(subagent === undefined ? {} : { subagent }),
       }
     : undefined;
+}
+
+/** Mirrors the webview-side `parseToolSubagent` validation rules. */
+function parseSubagent(
+  value: unknown,
+): ToolSubagentSummary | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(
+      value,
+      ['type', 'description'],
+      ['status', 'toolUseCount', 'durationMs'],
+    )
+  ) {
+    return undefined;
+  }
+  const type = dataValue(value, 'type');
+  const description = dataValue(value, 'description');
+  const status = dataValue(value, 'status');
+  const toolUseCount = dataValue(value, 'toolUseCount');
+  const durationMs = dataValue(value, 'durationMs');
+  return isNonEmptyBoundedString(type, MAX_SUBAGENT_TYPE_LENGTH) &&
+    !hasControlCharacter(type) &&
+    isBoundedString(description, MAX_SUBAGENT_DESCRIPTION_LENGTH) &&
+    !hasControlCharacter(description) &&
+    (status === undefined || isOneOf(status, SUBAGENT_STATUSES)) &&
+    (toolUseCount === undefined ||
+      (Number.isSafeInteger(toolUseCount) &&
+        (toolUseCount as number) >= 0)) &&
+    (durationMs === undefined ||
+      (Number.isSafeInteger(durationMs) && (durationMs as number) >= 0))
+    ? {
+        type,
+        description,
+        ...(status === undefined ? {} : { status }),
+        ...(toolUseCount === undefined
+          ? {}
+          : { toolUseCount: toolUseCount as number }),
+        ...(durationMs === undefined
+          ? {}
+          : { durationMs: durationMs as number }),
+      }
+    : undefined;
+}
+
+function hasControlCharacter(value: string): boolean {
+  return /[\u0000-\u001f\u007f-\u009f]/u.test(value);
 }
 
 function parseChanges(
