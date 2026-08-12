@@ -24,7 +24,10 @@ import {
 import { base64ByteLength } from '../shared/transcriptLimits';
 import { readTokenUsageBreakdown } from '../shared/tokenUsage';
 import { extractToolBackgroundHint } from './toolBackgroundHint';
-import { extractToolDetail } from './toolDetail';
+import {
+  extractExecuteSummary,
+  extractToolDetail,
+} from './toolDetail';
 import {
   extractToolFilePaths,
   toWorkspaceRelativePath,
@@ -426,8 +429,12 @@ function withToolInputContext(
     activity.toolName,
     input,
   );
+  // An Execute call's own `summary` beats the generic verb phrase as
+  // the row action; the command card shows it as its title.
+  const summary = extractExecuteSummary(activity.toolName, input);
   return {
     ...activity,
+    ...(summary === undefined ? {} : { action: summary }),
     ...(filePaths.length === 0 ? {} : { filePath: filePaths[0] }),
     ...(filePaths.length <= 1 ? {} : { filePaths }),
     ...(detail === undefined

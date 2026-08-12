@@ -83,6 +83,11 @@ import { parsePlanSteps, type PlanAnchorState } from "./planAnchor";
 import { PlanAnchorCard } from "./PlanAnchorCard";
 import { TranscriptImage } from "./TranscriptImage";
 import { getImagePreview, rememberImagePreview } from "./imagePreviewCache";
+import {
+  commandCardTitle,
+  commandChips,
+  tokenizeCommand,
+} from "./commandCard";
 
 const THINKING_SMOOTH_OPTIONS = {
   drainMs: 480,
@@ -3384,6 +3389,134 @@ function ToolOutputPreview({
 }
 
 /**
+ * The command card's `$`-prefixed command line. Tokens carry warm
+ * syntax tints (command / flag / string / path); joining them
+ * reproduces the command byte for byte, so nothing is invented.
+ */
+function CommandWellLine({
+  command,
+}: {
+  readonly command: string;
+}): React.JSX.Element {
+  const tokens = useMemo(() => tokenizeCommand(command), [command]);
+  return (
+    <div className="dvx-command-line">
+      <span className="dvx-command-prompt" aria-hidden="true">
+        $
+      </span>
+      <code className="dvx-command-code">
+        {tokens.map((token, index) =>
+          token.kind === "text" ? (
+            token.text
+          ) : (
+            <span key={index} className={`dvx-cmd-${token.kind}`}>
+              {token.text}
+            </span>
+          ),
+        )}
+      </code>
+    </div>
+  );
+}
+
+/**
+ * "…" overflow menu on the command card header. Copy Command only:
+ * Cursor's Auto-Run/Allowlist entries belong to its permission
+ * system, which we do not imitate. Exported for focused tests.
+ */
+export function CommandCardMenu({
+  command,
+}: {
+  readonly command: string;
+}): React.JSX.Element {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const rootRef = useRef<HTMLSpanElement | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+    const onPointerDown = (event: PointerEvent): void => {
+      if (
+        rootRef.current !== null &&
+        event.target instanceof Node &&
+        !rootRef.current.contains(event.target)
+      ) {
+        setMenuOpen(false);
+        setCopied(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        setCopied(false);
+      }
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current !== null) {
+        clearTimeout(closeTimerRef.current);
+      }
+    },
+    [],
+  );
+  return (
+    <span className="dvx-command-menu-root" ref={rootRef}>
+      <button
+        type="button"
+        className="dvx-command-menu-trigger"
+        aria-label="Command actions"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setMenuOpen((value) => !value);
+        }}
+      >
+        <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="3" cy="8" r="1.4" fill="currentColor" />
+          <circle cx="8" cy="8" r="1.4" fill="currentColor" />
+          <circle cx="13" cy="8" r="1.4" fill="currentColor" />
+        </svg>
+      </button>
+      {menuOpen ? (
+        <div className="dvx-command-menu" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void navigator.clipboard?.writeText(command);
+              setCopied(true);
+              if (closeTimerRef.current !== null) {
+                clearTimeout(closeTimerRef.current);
+              }
+              // A beat of "Copied" feedback, then the menu retires.
+              closeTimerRef.current = setTimeout(() => {
+                setMenuOpen(false);
+                setCopied(false);
+              }, 900);
+            }}
+          >
+            {copied ? "Copied" : "Copy Command"}
+          </button>
+        </div>
+      ) : null}
+    </span>
+  );
+}
+
+/**
  * Quiet expanded-area action on a live execute row: reveal the
  * read-only terminal mirror (native-terminal design slice A). Only
  * running rows qualify — history and replay rows are never
@@ -3472,11 +3605,19 @@ function ToolActivityRow({
     !open && activity.detailKind === "plan" && activity.detail !== null
       ? formatPlanSummary(activity.detail)
       : null;
+  // Command rows render as a command card (terminal-card redesign):
+  // rule-derived title + command-name chips in the header, the raw
+  // command in a $-prefixed syntax-tinted well when expanded.
+  const isCommand =
+    activity.detailKind === "command" && activity.detail !== null;
+  const chips = isCommand ? commandChips(activity.detail ?? "") : [];
   const row = (
     <details
       className={`dvx-activity-row${running ? " dvx-activity-running" : ""}${
         activity.subagent !== null ? " dvx-activity-row-delegating" : ""
-      }${activity.background ? " dvx-activity-row-background" : ""}`}
+      }${activity.background ? " dvx-activity-row-background" : ""}${
+        isCommand ? " dvx-command-card" : ""
+      }`}
       open={open}
       onToggle={(event) => {
         // Prop-driven toggles arrive already matching the rendered
@@ -3489,15 +3630,17 @@ function ToolActivityRow({
     >
       <summary>
         <span className="dvx-activity-indicator" />
-        <span className="dvx-tool-action">{activity.action}</span>
+        <span className="dvx-tool-action">
+          {isCommand
+            ? commandCardTitle(activity.action, toolName, activity.detail)
+            : activity.action}
+        </span>
         {planSummary === null ? null : (
           <span className="dvx-plan-summary">{planSummary}</span>
         )}
-        {activity.detailKind === "command" && activity.detail !== null ? (
-          <code className="dvx-tool-command-inline">
-            {firstLine(activity.detail)}
-          </code>
-        ) : null}
+        {chips.length === 0 ? null : (
+          <span className="dvx-command-chips">{chips.join(", ")}</span>
+        )}
         {activity.filePath === null ? null : (
           <ToolFilePath path={activity.filePath} />
         )}
@@ -3512,12 +3655,17 @@ function ToolActivityRow({
             ? ""
             : ` · ${formatDuration(activity.durationMs)}`}
         </span>
+        {isCommand ? (
+          <CommandCardMenu command={activity.detail ?? ""} />
+        ) : null}
         <ActivityChevron />
       </summary>
       {activity.detailKind === "plan" && activity.detail !== null ? (
         <TaskPlan detail={activity.detail} />
-      ) : activity.detailKind === "command" && activity.detail !== null ? (
-        <pre className="dvx-tool-command">{activity.detail}</pre>
+      ) : isCommand ? (
+        <div className="dvx-command-well">
+          <CommandWellLine command={activity.detail ?? ""} />
+        </div>
       ) : (
         <div className="dvx-tool-summary">
           <code>{toolName}</code>

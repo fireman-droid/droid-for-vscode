@@ -2,6 +2,7 @@ import {
   MAX_TOOL_DETAIL_LENGTH,
   type ToolDetailKind,
 } from '../shared/bridgeMessages';
+import { MAX_TOOL_ACTION_SUMMARY_LENGTH } from '../shared/toolActivity';
 
 export interface ToolDetail {
   readonly kind: ToolDetailKind;
@@ -33,6 +34,39 @@ export function extractToolDetail(
     return text === undefined ? undefined : { kind: 'plan', text };
   }
   return undefined;
+}
+
+/**
+ * The Execute tool's optional natural-language `summary` input,
+ * usable as a command card title. Only what the model actually wrote
+ * is surfaced — no title is invented for calls without one.
+ */
+export function extractExecuteSummary(
+  toolName: string,
+  input: unknown,
+): string | undefined {
+  const normalized = toolName
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .toLocaleLowerCase();
+  if (
+    normalized !== 'execute' ||
+    typeof input !== 'object' ||
+    input === null
+  ) {
+    return undefined;
+  }
+  const value = (input as Record<string, unknown>)['summary'];
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const sanitized = value
+    .replace(/\p{Cc}/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  if (sanitized.length === 0) {
+    return undefined;
+  }
+  return sanitized.slice(0, MAX_TOOL_ACTION_SUMMARY_LENGTH);
 }
 
 /**

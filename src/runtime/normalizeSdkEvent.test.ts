@@ -214,6 +214,36 @@ describe('normalizeSdkEvent', () => {
     }
   });
 
+  it('prefers the Execute summary input as the tool-start action', () => {
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_call', {
+          name: 'Execute',
+          toolUseId: 'tool-summary',
+          input: {
+            command: 'rg -n foo src/',
+            summary: 'Search for foo in src',
+          },
+        }),
+      ),
+    ).toMatchObject({
+      type: 'tool-start',
+      action: 'Search for foo in src',
+      detailKind: 'command',
+      detail: 'rg -n foo src/',
+    });
+    // Without a summary the generic verb phrase stands.
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_call', {
+          name: 'Execute',
+          toolUseId: 'tool-plain',
+          input: { command: 'git status' },
+        }),
+      ),
+    ).toMatchObject({ action: 'Ran a local command' });
+  });
+
   it('bounds and shapes the failed tool_result error excerpt', () => {
     // Successful results never carry an excerpt.
     expect(

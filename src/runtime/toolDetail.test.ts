@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractToolDetail } from './toolDetail';
+import { MAX_TOOL_ACTION_SUMMARY_LENGTH } from '../shared/toolActivity';
+import { extractExecuteSummary, extractToolDetail } from './toolDetail';
 
 describe('extractToolDetail', () => {
   it('captures the command for execute tools', () => {
@@ -40,5 +41,37 @@ describe('extractToolDetail', () => {
     const long = 'a'.repeat(5_000);
     const detail = extractToolDetail('Execute', { command: long });
     expect(detail?.text.length).toBe(4_000);
+  });
+});
+
+describe('extractExecuteSummary', () => {
+  it('extracts the summary only for execute tools', () => {
+    expect(
+      extractExecuteSummary('Execute', { summary: 'List repo files' }),
+    ).toBe('List repo files');
+    expect(
+      extractExecuteSummary('Read', { summary: 'List repo files' }),
+    ).toBeUndefined();
+  });
+
+  it('collapses control characters and whitespace runs', () => {
+    expect(
+      extractExecuteSummary('Execute', {
+        summary: ' Check\u0007 the \n\n build ',
+      }),
+    ).toBe('Check the build');
+  });
+
+  it('rejects empty and non-string summaries', () => {
+    expect(extractExecuteSummary('Execute', { summary: '   ' })).toBeUndefined();
+    expect(extractExecuteSummary('Execute', { summary: 42 })).toBeUndefined();
+    expect(extractExecuteSummary('Execute', null)).toBeUndefined();
+  });
+
+  it('clips overlong summaries to the action budget', () => {
+    const summary = extractExecuteSummary('Execute', {
+      summary: 'x'.repeat(500),
+    });
+    expect(summary?.length).toBe(MAX_TOOL_ACTION_SUMMARY_LENGTH);
   });
 });

@@ -38,7 +38,10 @@ import {
   type SubagentSummaryQueues,
 } from '../subagentSummary';
 import { extractToolBackgroundHint } from '../toolBackgroundHint';
-import { extractToolDetail } from '../toolDetail';
+import {
+  extractExecuteSummary,
+  extractToolDetail,
+} from '../toolDetail';
 import {
   extractToolFilePaths,
   toWorkspaceRelativePath,
@@ -651,7 +654,9 @@ function appendTool(
     turnId,
     toolUseId,
     toolName,
-    action: summarizeToolAction(toolName),
+    action:
+      extractExecuteSummary(toolName, block.input) ??
+      summarizeToolAction(toolName),
     status: 'stopped',
     progressCount: 0,
     latestUpdateKind: null,

@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { CommandSummary } from '../../shared/bridgeMessages';
@@ -13,6 +19,7 @@ import {
 import {
   AttachmentChip,
   ChangesSummary,
+  CommandCardMenu,
   ExecuteMirrorEntry,
   TerminalMirrorContext,
   FOLLOW_REJOIN_PX,
@@ -186,6 +193,64 @@ describe('ExecuteMirrorEntry', () => {
       screen.getByRole('button', { name: '在终端中查看' }),
     );
     expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CommandCardMenu', () => {
+  it('copies the command and reports Copied, then retires the menu', async () => {
+    vi.useFakeTimers();
+    try {
+      const writeText = vi.fn(() => Promise.resolve());
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText },
+      });
+      render(createElement(CommandCardMenu, { command: 'pnpm test' }));
+      const trigger = screen.getByRole('button', {
+        name: 'Command actions',
+      });
+      fireEvent.click(trigger);
+      const item = screen.getByRole('menuitem', {
+        name: 'Copy Command',
+      });
+      fireEvent.click(item);
+      expect(writeText).toHaveBeenCalledWith('pnpm test');
+      expect(item.textContent).toBe('Copied');
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(screen.queryByRole('menu')).toBeNull();
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('prevents the summary default so the details row never toggles', () => {
+    render(createElement(CommandCardMenu, { command: 'git status' }));
+    // fireEvent returns false when a handler called preventDefault —
+    // the same cancellation that stops <summary> from toggling.
+    expect(
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Command actions' }),
+      ),
+    ).toBe(false);
+  });
+
+  it('closes on Escape and on pointer-down outside', () => {
+    render(createElement(CommandCardMenu, { command: 'git status' }));
+    const trigger = screen.getByRole('button', {
+      name: 'Command actions',
+    });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('menu')).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+
+    fireEvent.click(trigger);
+    expect(screen.getByRole('menu')).toBeTruthy();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 });
 
