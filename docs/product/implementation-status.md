@@ -1391,7 +1391,11 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
   形状拒收）、`store.test.ts`（快照留存/缺席回落 null）、
   `ChatController.test.ts`（快照携带 root、rootless 省略）
 
-### 17. 任务计划钉条：Composer 上方固定当前计划（2026-08-12 傍晚）
+### 17. 任务计划钉条：Composer 上方固定当前计划（2026-08-12 傍晚；已被 §20 计划锚卡取代）
+
+> 用户真机使用后拍板（2026-08-12 深夜）：钉条撤下，计划改为
+> Cursor 式 "Created Plan" 锚卡进消息流（见 §20），底部空间让给
+> 排队收纳条。本节保留为历史记录。
 
 - **行为**（对齐 Cursor 双呈现：转录内计划渲染原样保留）：会话
   存在活跃任务计划（有未完成项）时 Composer 上方出现钉条。收起态
@@ -1626,6 +1630,63 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
 - 测试：`queueProtocol.test.ts`、`queuedPromptsState.test.ts`、
   `ChatController.test.ts`（队列 11 例 + 时序回归）、`store.test.ts`、
   `runtimeAdapter.test.ts`、`App.test.tsx`
+
+### 20. 计划锚卡：Created Plan 卡锚进消息流（2026-08-12 深夜，取代 §17 钉条）
+
+- **用户拍板**（真机用过 §17 钉条后，2026-08-12 深夜）：任务计划
+  改成 Cursor 模式——计划锚进消息流，撤掉 Composer 上方的
+  TaskPlanPin，把底部空间让给返工中的排队收纳条。§17 保留为
+  历史记录，其行为/组件/样式均已被本节取代
+- **形态**：计划创建的转录位置渲染一张 "Created Plan" 锚卡——
+  安静眉标（uppercase 10px）+ 计划标题 + 一行摘要；卡底左侧
+  "View Plan"/"Hide Plan" 文字入口，右侧状态控件：运行中暖色
+  胶囊 "Building… n/m"（accent 混色边框/底/字 + chevron），
+  回合结束未完成退为安静 "n/m"，全部完成转 "✓ Completed n/n"
+  （灰勾，不淡出、不消失——与钉条语义不同，锚卡是转录的永久
+  成员）。两个控件都在卡内展开/收起完整步骤清单（grid-rows
+  0fr↔1fr 动画；步骤行沿用 5a89586 轻奢语言：完成灰勾退淡、
+  当前步暖点 + 微高亮、待办空圈）。**数据边界**：Droid 的
+  TodoWrite 只有 `todos` 步骤文本、没有 Cursor 那种计划标题/
+  描述字段，故标题=创建版首步（静态）、摘要=最新当前步（与
+  标题重复时退为 "n steps"），不发明 Droid 能力
+- **计划更新原地改卡**：`selectPlanAnchors` 把 todowrite 按
+  "步骤文本有交集=同一计划谱系" 聚为 lineage，每条谱系的最新
+  状态投影到其创建行（完全不相交的新清单开新谱系、出新卡）；
+  转录里原有 "Updated the task plan" 流水行原样保留（历史演化
+  记录，Cursor 同款双呈现）。渲染走普通 tool-part 路径
+  （`PlanAnchorSlot` 按 toolUseId 命中创建行），live 与历史
+  回放天然同构；锚卡是普通流成员跟随滚动（用户明确不要吸底）
+- **撤钉条**：`TaskPlanPin.tsx`/`planPin.ts` 及其测试删除，
+  Thread/App 钉条状态清理干净（`taskPlanPin` prop →
+  `planAnchors` map），`dvx-plan-pin*` 样式族整体替换为
+  `dvx-plan-anchor*`
+- 门禁（HEAD `5f9ed5c` 干净 worktree）：typecheck 三 tsconfig
+  全过；全量 vitest 80 files / 1825 tests（1824 passed +
+  1 skipped）；build 绿；120 回合 stress
+  `run-stress-batch3.mjs` PASS（流式期间零 ≥50ms 长任务）。
+  headless Chrome harness（`artifacts/plan-anchor-harness.html`
+  + `smoke-plan-anchor.mjs`，对 dist 产物）三场景 PASS：
+  replay-open（单卡、创建位在工具行正上方、安静 1/3、不
+  Building）、replay-done（同位 "Completed 3/3" 终态）、stream
+  全链（首个 todowrite 出卡 Building… 0/3 → 更新原地改卡
+  2/3 且不出第二张 → View Plan 展开三态步骤 → 收起 → 全完成 +
+  回合结束转 Completed 3/3 且不消失）。四态截图：
+  `artifacts/plan-anchor-collapsed.png` / `-expanded.png` /
+  `-building.png` / `-completed.png`
+- **打包**：按用户指示不打包，随下个修复包
+- 提交：`5f9ed5c`（feat：锚卡替代钉条，单提交含删钉条）
+
+主要实现：
+
+- `src/webview/assistant/planAnchor.ts`（`parsePlanSteps` 规范
+  解析器迁入 + `selectPlanAnchors` 谱系投影）、
+  `PlanAnchorCard.tsx`（卡组件）、`Thread.tsx`
+  （`PlanAnchorContext` + `PlanAnchorSlot` 挂载、撤钉条）、
+  `App.tsx`（selector 接线）、`styles.css`（`dvx-plan-anchor*`
+  样式族）
+- 测试：`planAnchor.test.ts`（解析 + 谱系锚定/原地更新/不相交
+  开新谱系/标题摘要派生）、`PlanAnchorCard.test.tsx`（四态 +
+  双控件展开收起）
 
 ## 部分完成
 
