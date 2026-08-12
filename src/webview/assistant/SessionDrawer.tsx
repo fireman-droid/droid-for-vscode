@@ -28,6 +28,11 @@ interface SessionDrawerProps {
    * (fail closed, no half-available hint).
    */
   readonly worktreeCreateAvailable?: boolean;
+  /**
+   * Monotonic `/sessions` navigation counter; each increment opens
+   * the drawer (slash-parity S2 navigation rows).
+   */
+  readonly openSignal?: number;
   readonly onCreateWorktreeSession?: () => void;
   readonly onSelectSession: (sessionId: string) => void;
   readonly onRenameSession: (sessionId: string, title: string) => void;
@@ -53,6 +58,7 @@ export const SessionDrawer = memo(function SessionDrawer({
   sessionSearch,
   actionsDisabled,
   worktreeCreateAvailable,
+  openSignal = 0,
   onCreateWorktreeSession,
   onSelectSession,
   onRenameSession,
@@ -77,6 +83,14 @@ export const SessionDrawer = memo(function SessionDrawer({
       setPendingAction(false);
     }
   }, [sessions]);
+
+  const lastOpenSignalRef = useRef(openSignal);
+  useEffect(() => {
+    if (openSignal !== lastOpenSignalRef.current) {
+      lastOpenSignalRef.current = openSignal;
+      setOpen(true);
+    }
+  }, [openSignal]);
 
   useEffect(() => {
     if (!open) {
