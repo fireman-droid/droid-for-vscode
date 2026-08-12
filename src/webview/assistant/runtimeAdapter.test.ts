@@ -46,6 +46,7 @@ describe('Droid external-store adapter', () => {
       turnStatus: null,
       interactionCount: 0,
       queuedCount: 0,
+      queueEditing: false,
     };
 
     expect(canSendMessage(eligible, 'Ship it')).toBe(true);
@@ -68,6 +69,19 @@ describe('Droid external-store adapter', () => {
         'Ship it',
       ),
     ).toBe(false);
+    // "Edit Queued" replaces an existing prompt, so a full queue
+    // does not close the send path.
+    expect(
+      canSendMessage(
+        {
+          ...eligible,
+          turnStatus: 'streaming',
+          queuedCount: MAX_QUEUED_MESSAGES,
+          queueEditing: true,
+        },
+        'Ship it',
+      ),
+    ).toBe(true);
     expect(canSendMessage(eligible, 'Ship it', true)).toBe(false);
   });
 

@@ -357,6 +357,106 @@ describe('assistant-ui App bridge commands', () => {
     });
   });
 
+  it('edits a queued prompt through the Composer and replaces it in place', async () => {
+    render(<App />);
+    host(snapshot(0));
+    const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+    await waitFor(() => expect(input.value).toBe('Restored draft'));
+    host({
+      type: 'queue.state',
+      sequence: 1,
+      sessionId: 'session-a',
+      items: [
+        { queueId: 'queue-1', text: 'First follow-up', attachments: [] },
+        { queueId: 'queue-2', text: 'Second follow-up', attachments: [] },
+      ],
+      paused: null,
+    });
+
+    // Expand the queue bar and load the second prompt into the
+    // Composer ("Edit Queued" mode).
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^2 queued messages/ }),
+    );
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Edit queued message' })[1]!,
+    );
+    await waitFor(() => expect(input.value).toBe('Second follow-up'));
+    expect(screen.getByText('Edit Queued')).toBeDefined();
+    expect(screen.getByText('Editing')).toBeDefined();
+    expect(
+      screen.getByText('Editing a queued message · Enter saves · Esc cancels'),
+    ).toBeDefined();
+    // The edited row's action triad is replaced by the Editing tag.
+    expect(
+      screen.getAllByRole('button', { name: 'Edit queued message' }),
+    ).toHaveLength(1);
+
+    // Saving posts queue.update for the same queueId — never a new
+    // queue.add or turn.send.
+    fireEvent.change(input, {
+      target: { value: 'Second follow-up, revised' },
+    });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    await waitFor(() =>
+      expect(
+        posted.some((message) => message.type === 'queue.update'),
+      ).toBe(true),
+    );
+    expect(
+      posted.filter((message) => message.type === 'queue.update'),
+    ).toEqual([
+      {
+        type: 'queue.update',
+        sessionId: 'session-a',
+        queueId: 'queue-2',
+        text: 'Second follow-up, revised',
+      },
+    ]);
+    expect(
+      posted.filter(
+        (message) =>
+          message.type === 'queue.add' || message.type === 'turn.send',
+      ),
+    ).toHaveLength(0);
+    // Edit mode ends: chip gone, composer cleared, text replaced in
+    // the still-ordered list.
+    await waitFor(() => expect(input.value).toBe(''));
+    expect(screen.queryByText('Edit Queued')).toBeNull();
+    expect(
+      screen.getByText('Second follow-up, revised'),
+    ).toBeDefined();
+
+    // Cancelling via the chip restores the idle composer without a
+    // queue.update.
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Edit queued message' })[0]!,
+    );
+    await waitFor(() => expect(input.value).toBe('First follow-up'));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Cancel editing the queued message',
+      }),
+    );
+    await waitFor(() => expect(input.value).toBe(''));
+    expect(screen.queryByText('Edit Queued')).toBeNull();
+    expect(
+      posted.filter((message) => message.type === 'queue.update'),
+    ).toHaveLength(1);
+
+    // Send-now promotes the prompt to the head on the host.
+    fireEvent.click(
+      screen.getAllByRole('button', {
+        name: 'Send queued message now',
+      })[1]!,
+    );
+    expect(posted).toContainEqual({
+      type: 'queue.promote',
+      sessionId: 'session-a',
+      queueId: 'queue-2',
+    });
+  });
+
   it('recovers the skills panel across a panel-initiated new session', async () => {
     const user = userEvent.setup();
     render(<App />);

@@ -69,6 +69,12 @@ export interface SendEligibility {
   readonly interactionCount: number;
   /** Prompts already queued behind the running turn. */
   readonly queuedCount: number;
+  /**
+   * A queued prompt is loaded into the Composer ("Edit Queued").
+   * Saving replaces that prompt in place, so the full-queue guard
+   * does not apply to it.
+   */
+  readonly queueEditing: boolean;
 }
 
 /**
@@ -101,8 +107,12 @@ export function canSendMessage(
   }
   if (shouldQueueMessage(eligibility)) {
     // The queue route stays open during interactions (queueing does
-    // not touch the running turn); only a full queue closes it.
-    if (eligibility.queuedCount >= MAX_QUEUED_MESSAGES) {
+    // not touch the running turn); only a full queue closes it —
+    // unless the send replaces a prompt already in the queue.
+    if (
+      eligibility.queuedCount >= MAX_QUEUED_MESSAGES &&
+      !eligibility.queueEditing
+    ) {
       return false;
     }
   } else if (eligibility.interactionCount > 0) {
@@ -158,6 +168,7 @@ export function createRuntimeAdapter(
     turnStatus: state.turn?.status ?? null,
     interactionCount: state.interactions.length,
     queuedCount: state.queue.items.length,
+    queueEditing: state.queueEditing !== null,
   };
   return {
     messages,

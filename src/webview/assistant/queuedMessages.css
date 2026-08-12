@@ -1,163 +1,239 @@
-/* Queued prompts waiting behind the running turn (queued-messages
-   design §4.7). Quiet echoes of the user bubble: same geometry as
-   .dvx-user-block but dashed, slightly translucent, and unshadowed —
-   "about to become part of the conversation", not yet part of it. */
+/* Queued prompts folded into a Cursor-style bar directly above the
+   Composer (queued-messages design §4.7, collapsed form per user
+   decision 2026-08-12 晚). Wears the same warm layered card language
+   as the plan-era pins so the conversation-state bars above the
+   Composer read as one family. */
 
 .dvx-queue {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0 auto 8px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fffefc, #fbf8f3);
+  box-shadow:
+    0 1px 2px rgb(31 24 16 / 5%),
+    0 10px 26px -18px rgb(31 24 16 / 28%);
+  overflow: hidden;
+}
+
+@media (min-width: 900px) {
+  .dvx-queue {
+    max-width: 860px;
+  }
+}
+
+/* Collapsed header: one quiet line, the whole row toggles. */
+.dvx-queue-toggle {
   display: flex;
-  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  align-items: baseline;
   gap: 8px;
-  margin-top: 14px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--dvx-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 130ms ease;
+}
+
+.dvx-queue-toggle:hover {
+  background: rgb(69 54 37 / 4%);
+}
+
+.dvx-queue-toggle:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, #d2643d);
+  outline-offset: -2px;
+  border-radius: 11px;
+}
+
+.dvx-queue-count {
+  flex: none;
+  color: var(--dvx-ink);
+  font-weight: 550;
+}
+
+.dvx-queue-meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dvx-subtle);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-queue-meta::before {
+  content: "· ";
+}
+
+.dvx-queue-meta-warn {
+  color: var(--dvx-muted);
+}
+
+.dvx-queue-chevron {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  align-self: center;
+  color: var(--dvx-subtle);
+  transition: transform var(--dvx-duration-normal, 180ms)
+    var(--dvx-easing-out-strong, ease);
+}
+
+/* Collapsed points up: the list opens upward from the Composer. */
+.dvx-queue-toggle[aria-expanded="false"] .dvx-queue-chevron {
+  transform: rotate(180deg);
+}
+
+/* Expanded body animates through grid-rows (matches the plan-card
+   pattern); the list stays mounted so both directions transition. */
+.dvx-queue-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dvx-duration-slower, 260ms)
+    var(--dvx-easing-out-strong, ease);
+}
+
+.dvx-queue-body[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.dvx-queue-body-inner {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .dvx-queue-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 1px;
   margin: 0;
-  padding: 0;
+  padding: 2px 6px 4px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--dvx-border) 55%, transparent);
   list-style: none;
 }
 
-.dvx-queue-item {
-  display: flex;
-  box-sizing: border-box;
-  width: 100%;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
-  padding: 7px 12px 9px;
-  border: 1px dashed var(--dvx-border-strong, #d5cdc4);
-  border-radius: 8px;
-  background: color-mix(in srgb, #fff 62%, transparent);
-  color: #262626;
-  text-align: left;
-  transition: border-color 130ms ease, background-color 130ms ease;
-}
-
-.dvx-queue-item:hover {
-  border-color: color-mix(in srgb, var(--dvx-accent) 45%, var(--dvx-border-strong));
-  background: #fff;
-}
-
-.dvx-queue-item-head {
+/* One truncated line per prompt; the quiet action triad rides the
+   right edge at low opacity until the row is hovered or focused. */
+.dvx-queue-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
+  padding: 4px 6px;
+  border-radius: 7px;
+  transition: background-color 130ms ease;
 }
 
-.dvx-queue-badge {
+.dvx-queue-row:hover {
+  background: rgb(69 54 37 / 5%);
+}
+
+.dvx-queue-row-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #262626;
+  font-size: 12.5px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-queue-row-editing .dvx-queue-row-text {
   color: var(--dvx-subtle);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
-.dvx-queue-remove {
+/* Attachments compress to small bracket markers ("[image]"). */
+.dvx-queue-row-attachment {
+  margin-right: 6px;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.dvx-queue-row-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  opacity: 0.45;
+  transition: opacity 130ms ease;
+}
+
+.dvx-queue-row:hover .dvx-queue-row-actions,
+.dvx-queue-row:focus-within .dvx-queue-row-actions {
+  opacity: 1;
+}
+
+.dvx-queue-row-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--dvx-subtle);
-  font-size: 14px;
-  line-height: 1;
+  color: var(--dvx-muted);
   cursor: pointer;
   transition: color 130ms ease, background-color 130ms ease;
 }
 
-.dvx-queue-remove:hover {
+.dvx-queue-row-action svg {
+  width: 13px;
+  height: 13px;
+}
+
+.dvx-queue-row-action:hover {
+  color: var(--dvx-ink);
+  background: rgb(69 54 37 / 8%);
+}
+
+.dvx-queue-row-action-danger:hover {
   color: var(--dvx-danger);
-  background: rgb(69 54 37 / 7%);
 }
 
-/* The card body doubles as the edit trigger; it must read as text,
-   not as a button. */
-.dvx-queue-text {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 13px;
-  line-height: 21.125px;
-  text-align: left;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 6;
-}
-
-.dvx-queue-text:focus-visible {
+.dvx-queue-row-action:focus-visible {
   outline: 1px solid var(--vscode-focusBorder, #d2643d);
-  outline-offset: 2px;
-  border-radius: 4px;
+  outline-offset: 1px;
 }
 
-.dvx-queue-edit {
+/* The row whose prompt is loaded into the Composer. */
+.dvx-queue-row-state {
+  flex: none;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  font-style: italic;
+}
+
+/* Footer line inside the expanded body: the persistence note, or the
+   paused explanation with its quiet actions. */
+.dvx-queue-foot {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 8px;
 }
 
-.dvx-queue-edit-input {
-  box-sizing: border-box;
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid var(--dvx-border);
-  border-radius: 6px;
-  background: #fff;
-  color: #262626;
-  font: inherit;
-  font-size: 13px;
-  line-height: 21.125px;
-  resize: vertical;
-}
-
-.dvx-queue-edit-input:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder, #d2643d);
-  outline-offset: -1px;
-}
-
-.dvx-queue-edit-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-.dvx-queue-attachments {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  gap: 6px;
-}
-
-/* Paused notice: a quiet row in the queue area, not a banner. */
-.dvx-queue-paused {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 0 2px;
-  color: var(--dvx-muted);
-  font-size: 12px;
-}
-
-.dvx-queue-paused-text {
+.dvx-queue-note {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dvx-queue-action {
+  flex: none;
   padding: 2px 8px;
   border: 1px solid var(--dvx-border);
   border-radius: 6px;
@@ -166,30 +242,74 @@
   font: inherit;
   font-size: 11.5px;
   cursor: pointer;
-  transition: border-color 130ms ease, color 130ms ease, background-color 130ms ease;
+  transition: border-color 130ms ease, color 130ms ease,
+    background-color 130ms ease;
 }
 
-.dvx-queue-action:hover:not(:disabled) {
+.dvx-queue-action:hover {
   border-color: var(--dvx-accent);
   color: var(--dvx-ink);
   background: var(--dvx-soft);
 }
 
-.dvx-queue-action-save:not(:disabled) {
-  color: var(--dvx-ink);
+/* "Edit Queued ×" mode chip in the Composer footer, from the quiet
+   chip family. */
+.dvx-queue-edit-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 999px;
+  background: var(--dvx-soft, rgb(69 54 37 / 5%));
+  color: var(--dvx-muted);
+  font-size: 11.5px;
+  line-height: 18px;
+  white-space: nowrap;
 }
 
-.dvx-queue-note {
-  margin: 0;
-  padding: 0 2px;
+.dvx-queue-edit-chip-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
   color: var(--dvx-subtle);
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 130ms ease, background-color 130ms ease;
+}
+
+.dvx-queue-edit-chip-cancel:hover {
+  color: var(--dvx-ink);
+  background: rgb(69 54 37 / 8%);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dvx-queue-item,
-  .dvx-queue-remove,
-  .dvx-queue-action {
+  .dvx-queue-body,
+  .dvx-queue-chevron,
+  .dvx-queue-toggle,
+  .dvx-queue-row,
+  .dvx-queue-row-actions,
+  .dvx-queue-row-action,
+  .dvx-queue-action,
+  .dvx-queue-edit-chip-cancel {
     transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .dvx-queue {
+    border: 1px solid CanvasText;
+  }
+
+  .dvx-queue-row-actions {
+    opacity: 1;
   }
 }

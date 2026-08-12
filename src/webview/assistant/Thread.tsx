@@ -333,13 +333,17 @@ interface DroidThreadProps {
    */
   readonly planAnchors?: ReadonlyMap<string, PlanAnchorState> | null;
   /**
-   * Queued-prompt cards rendered at the transcript tail, above the
-   * Composer; null while the queue is empty. Built in App so the
-   * thread stays free of queue state.
+   * The queued-prompts bar stacked directly above the Composer in
+   * the viewport footer; null while the queue is empty. Built in App
+   * so the thread stays free of queue state.
    */
   readonly queuedMessages?: ReactNode;
   /** Prompts queued behind the running turn (Composer hint). */
   readonly queuedCount?: number;
+  /** A queued prompt is loaded into the Composer ("Edit Queued"). */
+  readonly queueEditing?: boolean;
+  /** Leaves "Edit Queued" mode, clearing the Composer draft. */
+  readonly onQueueEditCancel?: () => void;
 }
 
 export const DroidThread = memo(function DroidThread({
@@ -426,6 +430,8 @@ export const DroidThread = memo(function DroidThread({
   planAnchors = null,
   queuedMessages = null,
   queuedCount = 0,
+  queueEditing = false,
+  onQueueEditCancel,
 }: DroidThreadProps): React.JSX.Element {
   // Only one message may be in edit mode at a time. Opening a new
   // target cancels the previous edit staging area on the host first.
@@ -436,6 +442,11 @@ export const DroidThread = memo(function DroidThread({
     }
     if (editingMessageId !== null) {
       onEditStageCancel();
+    }
+    // Editing a sent message and editing a queued prompt are
+    // mutually exclusive; the newer intent wins.
+    if (queueEditing) {
+      onQueueEditCancel?.();
     }
     onEditStageBegin(messageId);
     setEditingMessageId(messageId);
@@ -769,7 +780,6 @@ export const DroidThread = memo(function DroidThread({
                 />
               ) : null}
               {inlineInteraction}
-              {queuedMessages}
             </div>
             </SelectSessionContext.Provider>
           </ForkContext.Provider>
@@ -797,6 +807,10 @@ export const DroidThread = memo(function DroidThread({
               <ScrollToBottomIcon />
             </button>
           </div>
+          {/* Conversation-state bar family: the queue bar sits
+              directly above the Composer, sharing the warm card
+              language of the plan-era pins. */}
+          {queuedMessages}
           <Composer
             statusMessage={statusMessage}
             showRetry={showRetry}
@@ -848,6 +862,8 @@ export const DroidThread = memo(function DroidThread({
             onAttachmentRemove={onAttachmentRemove}
             onDraftChange={onDraftChange}
             queuedCount={queuedCount}
+            queueEditing={queueEditing}
+            onQueueEditCancel={onQueueEditCancel}
           />
         </ThreadPrimitive.ViewportFooter>
       </ThreadPrimitive.Viewport>
@@ -1824,6 +1840,8 @@ function Composer({
   onAttachmentRemove,
   onDraftChange,
   queuedCount = 0,
+  queueEditing = false,
+  onQueueEditCancel,
 }: {
   readonly statusMessage?: string;
   readonly showRetry: boolean;
@@ -1887,6 +1905,10 @@ function Composer({
   readonly onDraftChange: (draft: string) => void;
   /** Prompts queued behind the running turn (hint copy). */
   readonly queuedCount?: number;
+  /** A queued prompt is loaded into the Composer ("Edit Queued"). */
+  readonly queueEditing?: boolean;
+  /** Leaves "Edit Queued" mode, clearing the Composer draft. */
+  readonly onQueueEditCancel?: () => void;
 }): React.JSX.Element {
   const aui = useAui();
   const draftRef = useRef("");
@@ -2650,20 +2672,26 @@ function Composer({
                 // off for external-store runtimes), so route the
                 // enqueue through the composer send pipeline here.
                 // The full-queue guard keeps the draft in place when
-                // nothing can be queued.
+                // nothing can be queued — except in "Edit Queued"
+                // mode, where the send replaces an existing prompt.
                 if (
                   mention === null &&
                   event.key === "Enter" &&
                   !event.shiftKey &&
                   !event.nativeEvent.isComposing &&
-                  (running || stopping || queuedCount > 0) &&
-                  queuedCount < MAX_QUEUED_MESSAGES
+                  (queueEditing ||
+                    ((running || stopping || queuedCount > 0) &&
+                      queuedCount < MAX_QUEUED_MESSAGES))
                 ) {
                   event.preventDefault();
                   aui.thread.composer().send();
                   return;
                 }
                 if (mention === null) {
+                  if (queueEditing && event.key === "Escape") {
+                    event.preventDefault();
+                    onQueueEditCancel?.();
+                  }
                   return;
                 }
                 if (event.key === "Escape") {
@@ -2704,6 +2732,20 @@ function Composer({
           </div>
         ) : null}
         <div className="dvx-composer-footer">
+          {queueEditing ? (
+            <span className="dvx-queue-edit-chip">
+              Edit Queued
+              <button
+                type="button"
+                className="dvx-queue-edit-chip-cancel"
+                aria-label="Cancel editing the queued message"
+                title="Cancel edit"
+                onClick={onQueueEditCancel}
+              >
+                ×
+              </button>
+            </span>
+          ) : null}
           <ComposerControls
             settings={settings}
             context={context}
@@ -2761,15 +2803,17 @@ function Composer({
         </div>
       </ComposerPrimitive.Root>
       <div className="dvx-composer-hint">
-        {queuedCount >= MAX_QUEUED_MESSAGES
-          ? `Queue is full (${MAX_QUEUED_MESSAGES}) · Remove a queued message to add another`
-          : interactionPending
-            ? "Pending request · Complete the action above"
-            : running
-              ? "Droid is active · Enter queues for after this turn"
-              : queuedCount > 0
-                ? "Enter adds to the queue · Shift+Enter for a new line"
-                : "Enter to send · Shift+Enter for a new line"}
+        {queueEditing
+          ? "Editing a queued message · Enter saves · Esc cancels"
+          : queuedCount >= MAX_QUEUED_MESSAGES
+            ? `Queue is full (${MAX_QUEUED_MESSAGES}) · Remove a queued message to add another`
+            : interactionPending
+              ? "Pending request · Complete the action above"
+              : running
+                ? "Droid is active · Enter queues for after this turn"
+                : queuedCount > 0
+                  ? "Enter adds to the queue · Shift+Enter for a new line"
+                  : "Enter to send · Shift+Enter for a new line"}
       </div>
     </div>
   );

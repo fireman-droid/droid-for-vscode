@@ -85,9 +85,10 @@ export function App(): React.JSX.Element {
   );
   const [draft, setDraft] = useState(() => restoreDraft(vscode));
   const [initialDraft] = useState(draft);
-  // Pushes the restored draft into the composer once on boot; nothing
-  // rewrites the draft programmatically after that.
-  const [draftCommand] = useState(() => ({
+  // Rewrites the composer draft programmatically: once on boot with
+  // the restored draft, then on queued-prompt edit begin/cancel
+  // ("Edit Queued" loads the prompt text, cancel clears it).
+  const [draftCommand, setDraftCommand] = useState(() => ({
     id: 0,
     text: initialDraft,
   }));
@@ -295,6 +296,7 @@ export function App(): React.JSX.Element {
   const turnStatus = state.turn?.status ?? null;
   const interactionCount = state.interactions.length;
   const queuedCount = state.queue.items.length;
+  const queueEditingId = state.queueEditing?.queueId ?? null;
   const sendDisabled = !canSendMessage(
     {
       connectionStatus,
@@ -302,6 +304,7 @@ export function App(): React.JSX.Element {
       turnStatus,
       interactionCount,
       queuedCount,
+      queueEditing: queueEditingId !== null,
     },
     draft,
   );
@@ -363,6 +366,28 @@ export function App(): React.JSX.Element {
 
   const handleSend = useCallback(
     async (text: string): Promise<void> => {
+      // "Edit Queued" mode: the send replaces the queued prompt in
+      // place (same queue position) instead of starting or queueing
+      // a turn. Text is treated literally — no slash routing.
+      if (queueEditingId !== null) {
+        if (
+          sessionId !== null &&
+          text.trim().length > 0 &&
+          text.length <= MAX_TURN_TEXT_LENGTH
+        ) {
+          dispatch({ type: 'queue.update', queueId: queueEditingId, text });
+          post(vscode, {
+            type: 'queue.update',
+            sessionId,
+            queueId: queueEditingId,
+            text,
+          });
+        }
+        dispatch({ type: 'queue.editEnd' });
+        setDraft('');
+        persistDraft(vscode, '');
+        return;
+      }
       // GUI built-in slash commands typed in the composer would
       // otherwise be forwarded to the Droid CLI as prompt text (the
       // CLI acknowledges without running the real pipeline). Route
@@ -397,6 +422,7 @@ export function App(): React.JSX.Element {
         turnStatus,
         interactionCount,
         queuedCount,
+        queueEditing: false,
       };
       // The re-entrancy latch protects the turn pipeline only. Queue
       // adds are safe to rapid-fire: each press gets a fresh queueId
@@ -447,26 +473,53 @@ export function App(): React.JSX.Element {
       handleSlashNavigate,
       interactionCount,
       queuedCount,
+      queueEditingId,
       sessionId,
       turnStatus,
       vscode,
     ],
   );
-  const handleQueueUpdate = useCallback(
-    (queueId: string, text: string): void => {
-      const trimmed = text.trim();
-      if (
-        sessionId === null ||
-        trimmed.length === 0 ||
-        text.length > MAX_TURN_TEXT_LENGTH
-      ) {
+  const handleQueuePromote = useCallback(
+    (queueId: string): void => {
+      if (sessionId === null) {
         return;
       }
-      dispatch({ type: 'queue.update', queueId, text });
-      post(vscode, { type: 'queue.update', sessionId, queueId, text });
+      dispatch({ type: 'queue.promote', queueId });
+      post(vscode, { type: 'queue.promote', sessionId, queueId });
     },
     [sessionId, vscode],
   );
+  const handleQueueEditBegin = useCallback(
+    (queueId: string): void => {
+      const item = state.queue.items.find(
+        (entry) => entry.queueId === queueId,
+      );
+      if (sessionId === null || item === undefined) {
+        return;
+      }
+      dispatch({ type: 'queue.editBegin', queueId });
+      // Loading the prompt into the Composer closes any open
+      // edit-resend card (the two edit modes are mutually
+      // exclusive) and replaces the draft.
+      setSendSignal((value) => value + 1);
+      setDraftCommand((command) => ({
+        id: command.id + 1,
+        text: item.text,
+      }));
+      setDraft(item.text);
+      persistDraft(vscode, item.text);
+    },
+    [sessionId, state.queue.items, vscode],
+  );
+  const handleQueueEditCancel = useCallback((): void => {
+    if (queueEditingId === null) {
+      return;
+    }
+    dispatch({ type: 'queue.editEnd' });
+    setDraftCommand((command) => ({ id: command.id + 1, text: '' }));
+    setDraft('');
+    persistDraft(vscode, '');
+  }, [queueEditingId, vscode]);
   const handleQueueRemove = useCallback(
     (queueId: string): void => {
       if (sessionId === null) {
@@ -1348,7 +1401,9 @@ export function App(): React.JSX.Element {
             state.queue.items.length === 0 ? null : (
               <QueuedMessages
                 queue={state.queue}
-                onUpdate={handleQueueUpdate}
+                editingId={queueEditingId}
+                onEditBegin={handleQueueEditBegin}
+                onPromote={handleQueuePromote}
                 onRemove={handleQueueRemove}
                 onResume={handleQueueResume}
                 onClear={handleQueueClear}
@@ -1356,6 +1411,8 @@ export function App(): React.JSX.Element {
             )
           }
           queuedCount={queuedCount}
+          queueEditing={queueEditingId !== null}
+          onQueueEditCancel={handleQueueEditCancel}
         />
         {/* Full-height side question pane living in the shell's
             second grid column beside the main conversation (Claude
