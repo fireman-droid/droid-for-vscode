@@ -275,6 +275,28 @@ html, body, #root {
   margin: 0 auto;
 }
 
+/* Click-to-enlarge wrapper around the rendered figure; the figure
+   keeps its own card chrome, the button stays invisible. */
+.dvx-mermaid-zoom {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  cursor: zoom-in;
+  text-align: inherit;
+}
+
+.dvx-mermaid-zoom:hover .dvx-mermaid-figure {
+  border-color: var(--dvx-border-strong, #d5cdc4);
+}
+
+.dvx-mermaid-zoom:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder, #d2643d);
+}
+
 .dvx-mermaid-footer {
   display: flex;
   justify-content: flex-end;
@@ -634,10 +656,34 @@ html, body, #root {
   pointer-events: none;
 }
 
-.dvx-image-lightbox-close {
+/* Viewer chrome: Reset / 1:1 / close grouped top-right over the
+   backdrop, sharing the dark translucent pill language. */
+.dvx-image-lightbox-actions {
   position: absolute;
   top: 12px;
   right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dvx-image-lightbox-action {
+  height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 55%);
+  color: rgb(255 255 255 / 92%);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dvx-image-lightbox-action:hover {
+  background: rgb(0 0 0 / 75%);
+}
+
+.dvx-image-lightbox-close {
   width: 28px;
   height: 28px;
   border: 0;
@@ -651,6 +697,24 @@ html, body, #root {
 
 .dvx-image-lightbox-close:hover {
   background: rgb(0 0 0 / 75%);
+}
+
+/* Media fills the natural-size stage; SVG diagrams keep a white
+   card surface so warm-themed strokes read on the dark backdrop. */
+.dvx-lightbox-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  user-select: none;
+}
+
+.dvx-lightbox-diagram {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 30%);
 }
 
 .dvx-pending {
@@ -719,6 +783,18 @@ html, body, #root {
   display: grid;
   gap: 5px;
   margin-bottom: 14px;
+}
+
+/* Handshake fallback row between header and thread: a stale in-memory
+   host after a VSIX overwrite install never answers webview.ready, so
+   the shell grows a quiet third row borrowing the history-notice
+   language (UI restraint: no new prominent element). */
+.dvx-shell-stalled {
+  grid-template-rows: 60px auto minmax(0, 1fr);
+}
+
+.dvx-handshake-notice {
+  margin: 10px 16px 0;
 }
 
 .dvx-history-notice {
@@ -1946,6 +2022,27 @@ html, body, #root {
 
 .dvx-tool-output::-webkit-scrollbar-thumb:hover {
   background: rgb(217 208 195 / 40%) padding-box;
+}
+
+/* Terminal mirror entry (native-terminal slice A): a quiet text
+   action under the live output preview, same subtle register as
+   .dvx-commit-entry — plain subtle text, accent only on hover. */
+.dvx-terminal-mirror-entry {
+  display: inline-block;
+  margin: 4px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dvx-subtle);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 18px;
+  transition: color var(--dvx-duration-fast) ease;
+}
+
+.dvx-terminal-mirror-entry:hover,
+.dvx-terminal-mirror-entry:focus-visible {
+  color: var(--dvx-accent-strong);
 }
 
 .dvx-plan {
@@ -3390,6 +3487,86 @@ body {
   font-size: 11px;
 }
 
+/* Shared panel head: back arrow + section-weight title on the left,
+   right-aligned quiet action group, hairline divider below. Used by
+   the Skills / MCP panels and the Context usage card. */
+.dvx-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid rgb(229 229 229 / 60%);
+}
+
+/* Inside the padded settings popover the head bleeds to the card
+   edges so its divider runs full width. */
+.dvx-skills-panel .dvx-panel-head {
+  margin: -10px -10px 0;
+  padding: 8px 12px 7px;
+}
+
+.dvx-panel-title {
+  color: var(--dvx-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: -0.01em;
+}
+
+.dvx-panel-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: -6px;
+  padding: 3px 8px 3px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dvx-ink);
+  cursor: pointer;
+  transition: background-color 130ms ease;
+}
+
+.dvx-panel-back:hover {
+  background: rgb(0 0 0 / 4%);
+}
+
+.dvx-panel-back svg {
+  width: 15px;
+  height: 15px;
+  color: var(--dvx-muted);
+}
+
+.dvx-panel-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dvx-panel-action {
+  padding: 3px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #737373;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  transition: background-color 130ms ease, color 130ms ease;
+}
+
+.dvx-panel-action:hover:not(:disabled) {
+  color: var(--dvx-ink);
+  background: rgb(0 0 0 / 5%);
+}
+
+.dvx-panel-action:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
 .dvx-context-usage {
   padding: 12px 16px 0;
 }
@@ -3436,6 +3613,48 @@ body {
   transition: width 280ms cubic-bezier(0.22, 1, 0.36, 1);
   border-radius: inherit;
   background: linear-gradient(90deg, #f2612e, #ff8b60);
+}
+
+/* Degraded over-limit bar: pinned full with a softer wash and an
+   overflow tick past the right end, so the card keeps its shape
+   while reading as an estimate rather than a live percentage. */
+.dvx-context-progress-over {
+  position: relative;
+  overflow: visible;
+}
+
+.dvx-context-progress-over > span:first-child {
+  border-radius: 999px 2px 2px 999px;
+  background: linear-gradient(
+    90deg,
+    rgb(242 97 46 / 55%),
+    rgb(255 139 96 / 75%)
+  );
+}
+
+.dvx-context-overflow-tick {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  right: -6px;
+  width: 2.5px;
+  border-radius: 2px;
+  background: #d2643d;
+}
+
+/* Quiet estimate badge hugging the over-limit heading; margin-right
+   auto keeps the token count pushed to the row's far right. */
+.dvx-context-usage-summary .dvx-context-estimated {
+  flex: none;
+  margin-right: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 999px;
+  color: var(--dvx-muted);
+  font-size: 9.5px;
+  font-weight: 550;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
 }
 
 .dvx-context-details {
@@ -4193,6 +4412,9 @@ body {
   flex-direction: column;
   max-height: 240px;
   overflow-y: auto;
+  /* Boundary wheel events are also cancelled in JS; this contains
+     scroll chaining for the in-range case. */
+  overscroll-behavior: contain;
   padding: 4px;
   border: 1px solid var(--dvx-border);
   border-radius: 10px;
@@ -4222,7 +4444,7 @@ body {
 
 .dvx-mention-name {
   flex: none;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .dvx-mention-path {
@@ -4303,23 +4525,6 @@ body {
   min-height: 0;
   flex-direction: column;
   gap: 6px;
-}
-
-.dvx-skills-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 4px 2px 0;
-  border: 0;
-  background: transparent;
-  color: var(--dvx-ink);
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.dvx-skills-back svg {
-  width: 14px;
-  height: 14px;
 }
 
 .dvx-skill-list {
@@ -4625,11 +4830,13 @@ body {
   font-weight: 500;
 }
 
+/* Two-end footer row: action on the left, quiet explainer filling
+   the right side of the same line. */
 .dvx-context-compact {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
   margin-top: 12px;
   padding: 12px 16px 14px;
   border-top: 1px solid var(--dvx-border);
@@ -4638,7 +4845,7 @@ body {
 /* Accent-outline action: quiet white base, warm accent stroke and
    ink; hover deepens into the soft accent wash. */
 .dvx-context-compact-button {
-  align-self: flex-start;
+  flex: none;
   padding: 4px 10px;
   border: 1px solid color-mix(in srgb, var(--dvx-accent) 42%, #fff);
   border-radius: 6px;
@@ -4691,10 +4898,13 @@ body {
 }
 
 .dvx-context-compact-note {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   color: var(--dvx-muted);
   font-size: 10.5px;
   line-height: 1.35;
+  text-align: right;
 }
 
 /* Interactions render as a flat inline block inside the conversation flow:
@@ -5415,35 +5625,27 @@ body {
   background: var(--dvx-hover, var(--vscode-list-hoverBackground));
 }
 
-/* `/` command popup: reuses the mention popup shell with stacked
-   name + hint + description rows. */
-.dvx-command-popup .dvx-mention-item {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 1px;
-}
-
-.dvx-command-title {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-
+/* `/` command popup rows: one clean line per entry — regular-weight
+   name leading, dimmed truncated hint/description trailing on the
+   same baseline (Cursor's command-list language). */
 .dvx-command-name {
   flex: none;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .dvx-command-hint {
+  flex: none;
   overflow: hidden;
-  color: #8a8a8a;
+  max-width: 32%;
+  color: #a1a1a1;
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .dvx-command-desc {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   color: #8a8a8a;
   font-size: 11px;
@@ -5471,6 +5673,48 @@ body {
   margin-top: 3px;
   border-top: 1px solid var(--dvx-border);
   padding-top: 6px;
+}
+
+/* Full description of the highlighted skill row: a quiet warm card
+   floating above the popup (portal-anchored to its viewport box).
+   Portaled to <body>, outside .dvx-shell — literal colors only, the
+   dvx custom properties are not visible here. */
+.dvx-slash-tooltip {
+  position: fixed;
+  z-index: 40;
+  box-sizing: border-box;
+  padding: 9px 12px 10px;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+  font-family: var(--vscode-font-family, sans-serif);
+  pointer-events: none;
+}
+
+.dvx-slash-tooltip strong {
+  margin-right: 8px;
+  color: #262626;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dvx-slash-tooltip-kind {
+  color: #737373;
+  font-size: 10px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.dvx-slash-tooltip p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  margin: 4px 0 0;
+  color: #737373;
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 /* Selection governance (VS Code/Cursor semantics): UI chrome is not
