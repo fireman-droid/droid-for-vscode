@@ -81,6 +81,72 @@ describe('assistantWebviewReducer', () => {
     expect(state.worktreeCreateAvailable).toBe(false);
   });
 
+  it('tracks the snapshot-borne background-turns capability', () => {
+    expect(
+      initialAssistantWebviewState.backgroundTurnsAvailable,
+    ).toBe(false);
+
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: { ...snapshot(0), backgroundTurnsAvailable: true },
+    });
+    expect(state.backgroundTurnsAvailable).toBe(true);
+
+    // Absent flag means process mode, not "keep the previous value":
+    // a daemon fallback may have removed the capability.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(1),
+    });
+    expect(state.backgroundTurnsAvailable).toBe(false);
+  });
+
+  it('flips one catalog row on session.running without a refresh', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(0),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.running',
+        sequence: 1,
+        sessionId: 'session-a',
+        running: true,
+      },
+    });
+    expect(state.sessions.items[0]).toMatchObject({
+      id: 'session-a',
+      running: true,
+    });
+
+    // Clearing drops the key entirely so the row matches a fresh
+    // catalog load and the spinner disappears at once.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.running',
+        sequence: 2,
+        sessionId: 'session-a',
+        running: false,
+      },
+    });
+    expect('running' in state.sessions.items[0]).toBe(false);
+
+    // Unknown ids never invent rows.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'session.running',
+        sequence: 3,
+        sessionId: 'session-missing',
+        running: true,
+      },
+    });
+    expect(state.sessions.items).toHaveLength(1);
+    expect(state.sequence).toBe(3);
+  });
+
   it('tracks the snapshot-borne workspace root', () => {
     expect(initialAssistantWebviewState.workspaceRoot).toBeNull();
 

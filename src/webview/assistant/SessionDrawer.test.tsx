@@ -414,6 +414,46 @@ describe('SessionDrawer', () => {
     ).toBeNull();
   });
 
+  it('shows the quiet running spinner only on running rows', async () => {
+    const user = userEvent.setup();
+    const catalog: SessionCatalogState = {
+      status: 'ready',
+      items: [
+        sessions.items[0],
+        { ...sessions.items[1], running: true },
+      ],
+    };
+    const { rerender } = render(
+      <SessionDrawer {...baseProps()} sessions={catalog} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+
+    // The hidden text carries the accessible signal; the ring itself
+    // stays decorative.
+    const runningRow = screen.getByRole('button', {
+      name: /^Turn still running\./,
+    });
+    expect(runningRow.textContent).toContain('Previous refactor');
+    expect(
+      runningRow.querySelectorAll('.dvx-session-run-spinner'),
+    ).toHaveLength(1);
+    const idleRow = screen.getByRole('button', {
+      name: /^Current work/,
+    });
+    expect(
+      idleRow.querySelectorAll('.dvx-session-run-spinner'),
+    ).toHaveLength(0);
+
+    // Clearing the flag removes the spinner immediately.
+    rerender(<SessionDrawer {...baseProps()} sessions={sessions} />);
+    expect(
+      screen.queryByRole('button', { name: /^Turn still running\./ }),
+    ).toBeNull();
+    expect(
+      document.querySelector('.dvx-session-run-spinner'),
+    ).toBeNull();
+  });
+
   it('surfaces daemon search errors inside the matches section', async () => {
     const user = userEvent.setup();
     const sessionSearch: SessionSearchState = {

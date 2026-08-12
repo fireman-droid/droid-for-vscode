@@ -4442,6 +4442,23 @@ body {
   font-weight: 400;
 }
 
+/* Quiet running ring on a drawer row whose detached daemon turn is
+   still in flight. Same muted treatment as the transcript sub-row
+   spinner: compositor-only rotation, inline so the 8px ring never
+   changes the row height. */
+.dvx-session-run-spinner {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border: 1.25px solid var(--dvx-border-strong, #d5cdc4);
+  border-radius: 50%;
+  border-top-color: var(--dvx-subtle, #a1a1a1);
+  vertical-align: 0;
+  animation: dvx-spin 900ms linear infinite;
+}
+
 .dvx-session-row time {
   /* Pinned so a second content line (worktree annotation) wraps under
      the title while the timestamp keeps its top-right position. */
@@ -6847,7 +6864,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .dvx-working-spinner,
-  .dvx-subagent-spinner {
+  .dvx-subagent-spinner,
+  .dvx-session-run-spinner {
     animation: none;
     border-top-color: var(--dvx-accent);
   }
@@ -6865,7 +6883,8 @@ body {
   }
 
   .dvx-working-spinner,
-  .dvx-subagent-spinner {
+  .dvx-subagent-spinner,
+  .dvx-session-run-spinner {
     border-color: CanvasText;
     border-top-color: Highlight;
   }

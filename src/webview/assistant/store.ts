@@ -178,6 +178,13 @@ export interface AssistantWebviewState {
    * only); false hides every entry point (fail closed).
    */
   readonly btwAvailable: boolean;
+  /**
+   * Host-advertised daemon-backed background turns: switching away
+   * from a running turn detaches it instead of killing it. False
+   * keeps session switching blocked while a turn runs (fail closed,
+   * process mode).
+   */
+  readonly backgroundTurnsAvailable: boolean;
   /** Host-projected side-chat card contents (session.btw). */
   readonly btw: SessionBtwState;
   /**
@@ -281,6 +288,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   editResendRejection: null,
   worktreeCreateAvailable: false,
   btwAvailable: false,
+  backgroundTurnsAvailable: false,
   btw: EMPTY_SESSION_BTW_STATE,
   workspaceRoot: null,
   mission: null,
@@ -543,6 +551,8 @@ export function assistantWebviewReducer(
             : null,
         worktreeCreateAvailable: event.worktreeCreateAvailable === true,
         btwAvailable: event.btwAvailable === true,
+        backgroundTurnsAvailable:
+          event.backgroundTurnsAvailable === true,
         btw:
           event.sessionId === state.sessionId
             ? state.btw
@@ -771,6 +781,25 @@ export function assistantWebviewReducer(
             },
           }
         : advance(state, event.sequence);
+    case 'session.running': {
+      // Incremental running flag of one catalog row (detached daemon
+      // turn); flips the drawer spinner without a catalog refresh.
+      if (state.sessions.status !== 'ready') {
+        return advance(state, event.sequence);
+      }
+      const items = state.sessions.items.map((item) =>
+        item.id === event.sessionId
+          ? event.running
+            ? { ...item, running: true }
+            : (({ running: _running, ...rest }) => rest)(item)
+          : item,
+      );
+      return {
+        ...state,
+        sequence: event.sequence,
+        sessions: { ...state.sessions, items },
+      };
+    }
     case 'session.archived': {
       // A refresh in flight sends 'loading' with no items; keep the
       // current list visible until the fresh one arrives.

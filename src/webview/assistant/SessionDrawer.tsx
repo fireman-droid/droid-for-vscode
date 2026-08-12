@@ -618,7 +618,23 @@ function SessionRow({
         disabled={disabled || session.active}
         onClick={() => onSelect(session.id)}
       >
-        <span className="dvx-session-row-title">{session.title}</span>
+        <span className="dvx-session-row-title">
+          {session.running === true ? (
+            // Quiet inline spinner: a detached daemon turn is still
+            // running in the background. Decorative ring; the
+            // accessible signal is the hidden text.
+            <>
+              <span
+                className="dvx-session-run-spinner"
+                aria-hidden="true"
+              />
+              <span className="dvx-visually-hidden">
+                {'Turn still running. '}
+              </span>
+            </>
+          ) : null}
+          {session.title}
+        </span>
         {session.worktree !== undefined ? (
           // Quiet secondary line; the full worktree path only surfaces
           // as a tooltip (UI restraint: no new prominent element).

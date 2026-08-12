@@ -1240,8 +1240,14 @@ export function App(): React.JSX.Element {
     },
     [vscode],
   );
+  // With daemon-backed background turns, switching away from a
+  // running turn detaches it instead of killing it, so an active turn
+  // no longer blocks session actions. Pending interactions still do:
+  // an unanswered permission/plan request must be settled first.
   const sessionActionsDisabled =
-    state.connection.status !== 'connected' || active || hasInteraction;
+    state.connection.status !== 'connected' ||
+    (active && !state.backgroundTurnsAvailable) ||
+    hasInteraction;
   const showPending = active && !hasInteraction;
   // A running tool row or streaming thinking block already carries the
   // live shimmer; the pending status row then stays static so each
