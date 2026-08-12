@@ -17,6 +17,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
   IMAGE_MEDIA_TYPES,
@@ -51,6 +52,7 @@ import {
   ComposerControls,
   type SessionSettingSelection,
 } from "./ComposerControls";
+import { ComposerPopup } from "./ComposerPopup";
 import {
   ACTIVITY_GROUP_KEY,
   activityGroupBy,
@@ -1765,6 +1767,47 @@ function Composer({
   // loading/error/empty feedback rows.
   const slashVisible = slashOpen;
 
+  // The active skill row surfaces its full description in a quiet
+  // card above the popup (rows keep one line each). The card anchors
+  // to the popup's viewport box through a portal, so no transformed
+  // ancestor or the popup's own scroll clipping can displace it.
+  const slashPopupRef = useRef<HTMLDivElement | null>(null);
+  const activeSlashEntry = slashEntries[slashIndex];
+  const slashTip =
+    slashVisible &&
+    activeSlashEntry !== undefined &&
+    activeSlashEntry.kind === "skill" &&
+    activeSlashEntry.description !== null &&
+    activeSlashEntry.description.length > 0
+      ? {
+          name: activeSlashEntry.name,
+          description: activeSlashEntry.description,
+        }
+      : null;
+  const [slashTipBox, setSlashTipBox] = useState<{
+    left: number;
+    width: number;
+    bottom: number;
+  } | null>(null);
+  const slashTipName = slashTip?.name;
+  useEffect(() => {
+    if (slashTipName === undefined) {
+      setSlashTipBox(null);
+      return;
+    }
+    const popup = slashPopupRef.current;
+    if (popup === null) {
+      setSlashTipBox(null);
+      return;
+    }
+    const rect = popup.getBoundingClientRect();
+    setSlashTipBox({
+      left: rect.left,
+      width: rect.width,
+      bottom: window.innerHeight - rect.top + 8,
+    });
+  }, [slashTipName]);
+
   const closeSlash = (): void => {
     setSlash(null);
     setSlashIndex(0);
@@ -1806,17 +1849,23 @@ function Composer({
   };
 
   // Debounce host searches while the user types the mention query.
+  // An empty query still asks the host: it answers with the open
+  // editor tabs so a bare `@` lists them immediately (no debounce).
   useEffect(() => {
-    if (mention === null || mention.query.length === 0) {
+    if (mention === null) {
       setActiveRequestId(null);
       return undefined;
     }
-    const timer = setTimeout(() => {
-      searchCounterRef.current += 1;
-      const requestId = `file-search-${searchCounterRef.current}`;
-      setActiveRequestId(requestId);
-      onFileSearch(requestId, mention.query);
-    }, 150);
+    const query = mention.query;
+    const timer = setTimeout(
+      () => {
+        searchCounterRef.current += 1;
+        const requestId = `file-search-${searchCounterRef.current}`;
+        setActiveRequestId(requestId);
+        onFileSearch(requestId, query);
+      },
+      query.length === 0 ? 0 : 150,
+    );
     return () => clearTimeout(timer);
   }, [mention, onFileSearch]);
 
@@ -1827,11 +1876,10 @@ function Composer({
     fileSearch.requestId === activeRequestId
       ? fileSearch.files
       : [];
-  // True from the first typed query character until the host answers
-  // the active search request (covers the debounce window too).
+  // True from popup open until the host answers the active search
+  // request (covers the debounce window too).
   const searchPending =
     mention !== null &&
-    mention.query.length > 0 &&
     (activeRequestId === null ||
       fileSearch === null ||
       fileSearch.requestId !== activeRequestId);
@@ -1909,10 +1957,11 @@ function Composer({
               Message Droid
             </label>
             {slashVisible ? (
-              <div
+              <ComposerPopup
                 className="dvx-mention-popup dvx-command-popup"
-                role="listbox"
-                aria-label="Droid commands"
+                label="Droid commands"
+                onDismiss={closeSlash}
+                popupRef={slashPopupRef}
               >
                 {builtInMatches.length > 0 ? (
                   <div className="dvx-command-section" role="presentation">
@@ -1935,9 +1984,7 @@ function Composer({
                     }}
                     onMouseEnter={() => setSlashIndex(index)}
                   >
-                    <span className="dvx-command-title">
-                      <span className="dvx-command-name">/{command.name}</span>
-                    </span>
+                    <span className="dvx-command-name">/{command.name}</span>
                     <span className="dvx-command-desc">
                       {command.description}
                     </span>
@@ -1970,14 +2017,12 @@ function Composer({
                       setSlashIndex(builtInMatches.length + index)
                     }
                   >
-                    <span className="dvx-command-title">
-                      <span className="dvx-command-name">/{command.name}</span>
-                      {command.argumentHint !== null ? (
-                        <span className="dvx-command-hint">
-                          {command.argumentHint}
-                        </span>
-                      ) : null}
-                    </span>
+                    <span className="dvx-command-name">/{command.name}</span>
+                    {command.argumentHint !== null ? (
+                      <span className="dvx-command-hint">
+                        {command.argumentHint}
+                      </span>
+                    ) : null}
                     {command.description !== null ? (
                       <span className="dvx-command-desc">
                         {command.description}
@@ -2027,9 +2072,7 @@ function Composer({
                       )
                     }
                   >
-                    <span className="dvx-command-title">
-                      <span className="dvx-command-name">{skill.name}</span>
-                    </span>
+                    <span className="dvx-command-name">{skill.name}</span>
                     {skill.description !== null ? (
                       <span className="dvx-command-desc">
                         {skill.description}
@@ -2037,50 +2080,79 @@ function Composer({
                     ) : null}
                   </button>
                 ))}
-              </div>
+              </ComposerPopup>
             ) : null}
-            {mention !== null ? (
-              <div
-                className="dvx-mention-popup"
-                role="listbox"
-                aria-label="Attach workspace file"
-              >
-                {results.map((path, index) => (
-                  <button
-                    key={path}
-                    type="button"
-                    role="option"
-                    aria-selected={index === activeIndex}
-                    className={`dvx-mention-item${
-                      index === activeIndex ? " dvx-mention-active" : ""
-                    }`}
-                    onMouseDown={(event) => {
-                      // Keep focus in the textarea while selecting.
-                      event.preventDefault();
-                      selectMention(path);
+            {slashTip !== null && slashTipBox !== null
+              ? createPortal(
+                  <div
+                    className="dvx-slash-tooltip"
+                    role="tooltip"
+                    style={{
+                      left: slashTipBox.left,
+                      width: slashTipBox.width,
+                      bottom: slashTipBox.bottom,
                     }}
-                    onMouseEnter={() => setActiveIndex(index)}
                   >
-                    <span className="dvx-mention-name">
-                      {path.split("/").at(-1)}
+                    <strong>{slashTip.name}</strong>
+                    <span className="dvx-slash-tooltip-kind">
+                      Skill · inserts a prompt
                     </span>
-                    <span className="dvx-mention-path">{path}</span>
-                  </button>
-                ))}
+                    <p>{slashTip.description}</p>
+                  </div>,
+                  document.body,
+                )
+              : null}
+            {mention !== null ? (
+              <ComposerPopup
+                className="dvx-mention-popup"
+                label="Attach workspace file"
+                onDismiss={closeMention}
+              >
+                {mention.query.length === 0 && results.length > 0 ? (
+                  <div className="dvx-command-section" role="presentation">
+                    Open editors
+                  </div>
+                ) : null}
+                {results.map((path, index) => {
+                  const { name, directory } = splitMentionPath(path);
+                  return (
+                    <button
+                      key={path}
+                      type="button"
+                      role="option"
+                      aria-selected={index === activeIndex}
+                      className={`dvx-mention-item${
+                        index === activeIndex ? " dvx-mention-active" : ""
+                      }`}
+                      title={path}
+                      onMouseDown={(event) => {
+                        // Keep focus in the textarea while selecting.
+                        event.preventDefault();
+                        selectMention(path);
+                      }}
+                      onMouseEnter={() => setActiveIndex(index)}
+                    >
+                      <span className="dvx-mention-name">{name}</span>
+                      {directory.length > 0 ? (
+                        <span className="dvx-mention-path">{directory}</span>
+                      ) : null}
+                    </button>
+                  );
+                })}
                 {results.length === 0 ? (
                   <div className="dvx-command-status" role="status">
-                    {mention.query.length === 0
-                      ? "Type to search workspace files"
-                      : searchPending
-                        ? "Searching files…"
-                        : activeRequestId !== null &&
-                            fileSearch?.requestId === activeRequestId &&
-                            fileSearch.status === "no-workspace"
-                          ? "No folder is open in this window."
+                    {searchPending
+                      ? "Searching files…"
+                      : activeRequestId !== null &&
+                          fileSearch?.requestId === activeRequestId &&
+                          fileSearch.status === "no-workspace"
+                        ? "No folder is open in this window."
+                        : mention.query.length === 0
+                          ? "No open editors — type to search files"
                           : "No matching files"}
                   </div>
                 ) : null}
-              </div>
+              </ComposerPopup>
             ) : null}
             <ComposerPrimitive.Input
               id="dvx-prompt"
@@ -2263,6 +2335,25 @@ interface MentionToken {
   /** Caret position; the token spans start..end. */
   readonly end: number;
   readonly query: string;
+}
+
+/**
+ * Splits a forward-slash relative path into the file name and its
+ * containing directory for the two-part mention row (name leads,
+ * dimmed directory follows).
+ */
+export function splitMentionPath(path: string): {
+  readonly name: string;
+  readonly directory: string;
+} {
+  const separator = path.lastIndexOf("/");
+  if (separator < 0) {
+    return { name: path, directory: "" };
+  }
+  return {
+    name: path.slice(separator + 1),
+    directory: path.slice(0, separator),
+  };
 }
 
 /**

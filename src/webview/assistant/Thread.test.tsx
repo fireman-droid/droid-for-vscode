@@ -29,6 +29,7 @@ import {
   formatSubagentSummary,
   formatThinkingLabel,
   readDroppedFileUris,
+  splitMentionPath,
   BackgroundProcessHint,
   SubagentSummaryRow,
 } from './Thread';
@@ -387,6 +388,22 @@ describe('findMentionToken', () => {
   it('ends the token at whitespace or a second @', () => {
     expect(findMentionToken('@src file', 9)).toBeNull();
     expect(findMentionToken('no mention here', 15)).toBeNull();
+  });
+});
+
+describe('splitMentionPath', () => {
+  it('splits the file name from its directory', () => {
+    expect(splitMentionPath('src/webview/assistant/Thread.tsx')).toEqual({
+      name: 'Thread.tsx',
+      directory: 'src/webview/assistant',
+    });
+  });
+
+  it('leaves root-level files without a directory', () => {
+    expect(splitMentionPath('package.json')).toEqual({
+      name: 'package.json',
+      directory: '',
+    });
   });
 });
 
