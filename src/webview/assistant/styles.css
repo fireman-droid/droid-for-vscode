@@ -26,6 +26,14 @@ html, body, #root {
   font: inherit;
 }
 
+/* No drag-resizable text fields anywhere in the shell (user decision,
+   2026-08-12, second report): heights are owned by the layout. Keep
+   this the single source of truth — never reintroduce a per-element
+   `resize` override. */
+.dvx-shell textarea {
+  resize: none;
+}
+
 .dvx-shell button, .dvx-shell summary, .dvx-shell label {
   -webkit-tap-highlight-color: transparent;
 }
@@ -489,36 +497,41 @@ html, body, #root {
   text-decoration: underline;
 }
 
-/* Transient host notices: a content-fit finished card (1px border,
-   soft radius and shadow, leading severity dot) instead of a
-   full-width edge-barred strip; severity tints stay in the warm
-   muted range. */
+/* Transient host notices: a content-fit finished card in the shell's
+   register — layered warm-white gradient over 1px border, doubled
+   soft shadow, and a halo-ringed severity dot. Severity tints the
+   border, wash, and ink together but stays in the warm muted range;
+   no flat alert strips. */
 .dvx-diagnostic {
   display: flex;
   width: fit-content;
   max-width: 100%;
   align-items: flex-start;
-  gap: 8px;
-  margin: 6px 0;
-  padding: 5px 11px 5px 10px;
+  gap: 9px;
+  margin: 8px 0;
+  padding: 7px 13px 7px 12px;
   border: 1px solid var(--dvx-border);
-  border-radius: 7px;
-  background: var(--dvx-raised);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+  border-radius: 9px;
+  background: linear-gradient(180deg, #fffdfb, var(--dvx-raised));
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 3%),
+    0 8px 18px -14px rgb(0 0 0 / 16%);
   color: var(--dvx-muted);
   font-size: 11.5px;
   line-height: 17px;
+  letter-spacing: 0.01em;
   overflow-wrap: anywhere;
 }
 
 .dvx-diagnostic::before {
   flex: none;
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   /* Centers the dot on the first 17px text line. */
-  margin-top: 6px;
+  margin-top: 5.5px;
   border-radius: 999px;
   background: var(--dvx-subtle);
+  box-shadow: 0 0 0 3px rgb(0 0 0 / 4%);
   content: "";
 }
 
@@ -527,20 +540,35 @@ html, body, #root {
 }
 
 .dvx-diagnostic-warning {
-  border-color: color-mix(in srgb, var(--dvx-warning) 22%, #fff);
+  border-color: color-mix(in srgb, var(--dvx-warning) 18%, var(--dvx-border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--dvx-warning) 3%, #fff),
+      var(--dvx-raised)
+    );
+  color: color-mix(in srgb, var(--dvx-warning) 52%, var(--dvx-muted));
 }
 
 .dvx-diagnostic-warning::before {
   background: var(--dvx-warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dvx-warning) 13%, transparent);
 }
 
 .dvx-diagnostic-error {
-  border-color: color-mix(in srgb, var(--dvx-danger) 24%, #fff);
-  color: color-mix(in srgb, var(--dvx-danger) 82%, #4a3b3b);
+  border-color: color-mix(in srgb, var(--dvx-danger) 20%, var(--dvx-border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--dvx-danger) 3%, #fff),
+      var(--dvx-raised)
+    );
+  color: color-mix(in srgb, var(--dvx-danger) 78%, #4a3b3b);
 }
 
 .dvx-diagnostic-error::before {
   background: var(--dvx-danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dvx-danger) 12%, transparent);
 }
 
 .dvx-transcript-image {
@@ -1659,25 +1687,33 @@ html, body, #root {
   vertical-align: 1px;
 }
 
-/* Git commit flow (slice A). The entry is a quiet text action at the
-   changes-card tail — same subtle register as .dvx-changes-label, an
-   accent only on hover. The expanded panel is a soft raised card in
-   the shell's finish: warm neutral, 1px border, small shadow. */
+/* Git commit flow (slice A). The entry is a quiet action chip at the
+   changes-card tail — same rest/hover language as .dvx-preview-chip
+   (hairline border, whisper fill; warm accent only on hover) so it
+   reads as an action without shouting. The expanded panel is a soft
+   raised card in the shell's finish: warm neutral, 1px border, small
+   shadow. */
 .dvx-commit-entry {
   align-self: flex-start;
-  margin-top: 2px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--dvx-subtle);
+  margin-top: 6px;
+  padding: 2px 9px;
+  border: 1px solid rgb(0 0 0 / 8%);
+  border-radius: 6px;
+  background: rgb(0 0 0 / 3%);
+  color: var(--dvx-muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 18px;
-  transition: color var(--dvx-duration-fast) ease;
+  transition:
+    border-color var(--dvx-duration-fast) ease,
+    background var(--dvx-duration-fast) ease,
+    color var(--dvx-duration-fast) ease;
 }
 
 .dvx-commit-entry:hover,
 .dvx-commit-entry:focus-visible {
+  border-color: var(--dvx-accent-strong);
+  background: var(--dvx-accent-soft);
   color: var(--dvx-accent-strong);
 }
 
@@ -1781,7 +1817,7 @@ html, body, #root {
   font-family: inherit;
   font-size: 12px;
   line-height: 18px;
-  resize: vertical;
+  resize: none;
 }
 
 .dvx-commit-message:focus-visible {
@@ -1797,10 +1833,14 @@ html, body, #root {
   white-space: pre-wrap;
 }
 
+/* Dialog-standard placement: actions sit at the panel's lower right,
+   Cancel before the primary Commit. */
 .dvx-commit-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+  margin-top: 2px;
 }
 
 .dvx-commit-submit {
@@ -2071,8 +2111,8 @@ html, body, #root {
 }
 
 /* Terminal mirror entry (native-terminal slice A): a quiet text
-   action under the live output preview, same subtle register as
-   .dvx-commit-entry — plain subtle text, accent only on hover. */
+   action under the live output preview — plain subtle text, accent
+   only on hover. */
 .dvx-terminal-mirror-entry {
   display: inline-block;
   margin: 4px 0 0;
@@ -5391,7 +5431,7 @@ body {
 }
 
 .dvx-permission-editor textarea {
-  resize: vertical;
+  resize: none;
   min-height: 224px;
   padding: 10px;
   border-color: var(--dvx-border);
