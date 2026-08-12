@@ -458,6 +458,36 @@ typecheck 三项目干净；全量 vitest 68 文件 1578 项全过（新增 pty 
 校验、controller 转发与门禁、入口可见性）；build 过。**本切片未打包
 安装，待随下一批次包一起可见验证**。
 
+2026-08-12 下午追加「用户验收反馈十项 UI 打磨批次」（提交
+07be2c3 / 79c83c6 / 8b2a4ed / ace39c0 / 87d88a0）：① @ 与 / 弹窗滚动
+不再外泄到转录（新共享组件 `ComposerPopup.tsx`：
+`overscroll-behavior: contain` + wheel 边界拦截）；② / 弹窗 Skills 行
+重做为 Cursor 式单行（名称常规字重 + 同行暗色截断描述、统一行高、
+小字大写分组头），激活行描述以 portal 锚定的暖白 tooltip 卡展示
+（1px 边框 + 软阴影，portal 在 `.dvx-shell` 变量作用域外故用字面色
+值）；③ @ 空查询列出打开的编辑器标签页（复用 `workspace.searchFiles`
+通道空查询语义，Host `vscode.window.tabGroups` 经新纯函数
+`openEditorTabs.ts` 去重限 20 条，行样式改为文件名主体 + 同行暗色目
+录后缀，删除 hover 目录树）；④ 弹窗点击卡片外任意处关闭 + Esc 关闭
+（`ComposerPopup` 统一光销毁）；⑤ Context 卡重排：`Context usage`
+升节标题层级（13px + 分隔线），tokens 超上限时保留满格进度条 + 右端
+溢出记号 + Estimated 徽标（不再空掉），底部 Compact 按钮左、灰字说
+明右两端同行；与并行落地的 token 明细账目共存；⑥⑦ Skills 与 MCP 共
+用新面板头规范 `.dvx-panel-head`（返回箭头 + 13px 标题 + 右侧动作组
++ 1px 分隔线），MCP 的 Add 从居中移入头部右侧动作组；⑧ 设置搜索砍
+掉 description 全文匹配（对齐 Cursor：搜 figma 不再出 agent-browser），
+`rankNameMatches` 名称前缀命中排子串命中前；⑨ 顶部标题 DroidVisX →
+Droid（仅 UI 文案，扩展 ID/包名/命令不动）；⑩ Mermaid 图点击进全屏
+查看器（`Lightbox.tsx` 通用 `MediaLightbox`/`DiagramLightbox`，SVG 缩
+放拖拽），图片查看器补右上角 Reset 与 1:1 显式控件（双击复位保留）。
+门禁：typecheck 三项目干净；HEAD 干净 worktree 全量 vitest 64 文件
+1532 项中 1530 过 1 跳过、唯一失败（MermaidBlock drain 假时钟超时）
+为 worktree node_modules junction 环境伪影，主工作区同文件 7/7 全
+过；十项冒烟 `artifacts/ui-polish-harness.html` +
+`artifacts/smoke-ui-polish.mjs` 全部 PASS（截图
+`artifacts/shots/ui-polish-*.png`）。**本批次未打包安装（完成时工作
+区含并行代理未提交在制品），待随下一批次包一起可见验证**。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
