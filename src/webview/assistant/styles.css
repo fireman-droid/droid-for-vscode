@@ -2065,25 +2065,9 @@ html, body, #root {
   box-shadow: none;
   mask-image: linear-gradient(180deg, transparent, #000 16px);
   user-select: text;
-}
-
-.dvx-tool-output::-webkit-scrollbar {
-  width: 8px;
-  background: transparent;
-}
-
-.dvx-tool-output::-webkit-scrollbar-button {
-  display: none;
-}
-
-.dvx-tool-output::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 8px;
-  background: rgb(38 33 27 / 14%) padding-box;
-}
-
-.dvx-tool-output::-webkit-scrollbar-thumb:hover {
-  background: rgb(38 33 27 / 24%) padding-box;
+  /* Thin buttonless scrollbar, matching .dvx-model-list/.dvx-plan-preview. */
+  scrollbar-width: thin;
+  scrollbar-color: rgb(38 33 27 / 22%) transparent;
 }
 
 /* Terminal mirror entry (native-terminal slice A): a quiet text
