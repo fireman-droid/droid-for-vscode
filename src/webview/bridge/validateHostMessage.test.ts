@@ -29,6 +29,7 @@ import {
   MAX_SUBAGENT_TYPE_LENGTH,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ERROR_MESSAGE_LENGTH,
+  MAX_TOOL_OUTPUT_TAIL_LENGTH,
   MAX_TOOL_NAME_LENGTH,
   MAX_TURN_TEXT_LENGTH,
   PERMISSION_CONFIRMATION_KINDS,
@@ -3456,6 +3457,72 @@ describe('readHostMessage', () => {
       ],
     };
     expect(readHostMessage(replayed)).toEqual(replayed);
+  });
+
+  it('accepts a bounded execute output tail and rejects abuse', () => {
+    const running = {
+      type: 'tool.activity',
+      sequence: 6,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolUseId: 'tool-1',
+      toolName: 'Execute',
+      action: 'Ran a local command',
+      status: 'running',
+      progressCount: 3,
+      latestUpdateKind: 'status',
+      detailKind: 'command',
+      detail: 'pnpm test',
+      outputTail: 'line-1\nline-2\nline-3',
+    };
+    expect(readHostMessage(running)).toEqual(running);
+
+    // Over the cap or empty: the whole message is rejected.
+    expect(
+      readHostMessage({
+        ...running,
+        outputTail: 'x'.repeat(MAX_TOOL_OUTPUT_TAIL_LENGTH + 1),
+      }),
+    ).toBeUndefined();
+    expect(
+      readHostMessage({ ...running, outputTail: '' }),
+    ).toBeUndefined();
+    expect(
+      readHostMessage({ ...running, outputTail: 42 }),
+    ).toBeUndefined();
+
+    // Snapshot transcript items accept the same optional field, so a
+    // completed execute row keeps its final tail across re-renders.
+    const snapshot = createSessionSnapshot();
+    const replayed = {
+      ...snapshot,
+      transcript: [
+        {
+          id: 'tool-1',
+          kind: 'tool',
+          turnId: 'turn-1',
+          toolUseId: 'tool-use-1',
+          toolName: 'Execute',
+          action: 'Ran a local command',
+          status: 'completed',
+          progressCount: 4,
+          latestUpdateKind: 'status',
+          outputTail: 'final output line',
+        },
+      ],
+    };
+    expect(readHostMessage(replayed)).toEqual(replayed);
+    expect(
+      readHostMessage({
+        ...snapshot,
+        transcript: [
+          {
+            ...replayed.transcript[0],
+            outputTail: 'x'.repeat(MAX_TOOL_OUTPUT_TAIL_LENGTH + 1),
+          },
+        ],
+      }),
+    ).toBeUndefined();
   });
 
   it('accepts delegated subagent summaries on tool rows', () => {

@@ -49,6 +49,7 @@ import {
   MAX_TOOL_DETAIL_LENGTH,
   MAX_TOOL_ERROR_MESSAGE_LENGTH,
   MAX_TOOL_NAME_LENGTH,
+  MAX_TOOL_OUTPUT_TAIL_LENGTH,
   MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
   MAX_SUBAGENT_DESCRIPTION_LENGTH,
   MAX_SUBAGENT_TYPE_LENGTH,
@@ -616,6 +617,7 @@ function parseToolActivity(
         'detailKind',
         'detail',
         'errorMessage',
+        'outputTail',
         'subagent',
       ],
     ) ||
@@ -637,7 +639,8 @@ function parseToolActivity(
     (value.filePath !== undefined &&
       !isSafeWorkspaceRelativePath(value.filePath)) ||
     !hasValidToolDetail(value) ||
-    !hasValidToolErrorMessage(value)
+    !hasValidToolErrorMessage(value) ||
+    !hasValidToolOutputTail(value)
   ) {
     return undefined;
   }
@@ -675,6 +678,9 @@ function parseToolActivity(
     ...(value.errorMessage === undefined
       ? {}
       : { errorMessage: value.errorMessage as string }),
+    ...(value.outputTail === undefined
+      ? {}
+      : { outputTail: value.outputTail as string }),
     ...(subagent === undefined ? {} : { subagent }),
   };
 }
@@ -2955,6 +2961,7 @@ function parseToolTranscriptItem(
         'detailKind',
         'detail',
         'errorMessage',
+        'outputTail',
         'subagent',
       ],
     ) ||
@@ -2977,7 +2984,8 @@ function parseToolTranscriptItem(
     (value.filePath !== undefined &&
       !isSafeWorkspaceRelativePath(value.filePath)) ||
     !hasValidToolDetail(value) ||
-    !hasValidToolErrorMessage(value)
+    !hasValidToolErrorMessage(value) ||
+    !hasValidToolOutputTail(value)
   ) {
     return undefined;
   }
@@ -3014,6 +3022,9 @@ function parseToolTranscriptItem(
     ...(value.errorMessage === undefined
       ? {}
       : { errorMessage: value.errorMessage as string }),
+    ...(value.outputTail === undefined
+      ? {}
+      : { outputTail: value.outputTail as string }),
     ...(subagent === undefined ? {} : { subagent }),
   };
 }
@@ -3220,6 +3231,17 @@ function hasValidToolErrorMessage(value: UnknownRecord): boolean {
     isNonEmptyBoundedString(
       value['errorMessage'],
       MAX_TOOL_ERROR_MESSAGE_LENGTH,
+    )
+  );
+}
+
+/** Optional execute output tail; bounded non-empty when set. */
+function hasValidToolOutputTail(value: UnknownRecord): boolean {
+  return (
+    value['outputTail'] === undefined ||
+    isNonEmptyBoundedString(
+      value['outputTail'],
+      MAX_TOOL_OUTPUT_TAIL_LENGTH,
     )
   );
 }

@@ -45,6 +45,7 @@ export {
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
 } from './transcriptLimits';
+export { MAX_TOOL_OUTPUT_TAIL_LENGTH } from './toolOutput';
 export {
   GIT_FILE_STATUSES,
   GIT_UNAVAILABLE_REASONS,
@@ -1288,6 +1289,14 @@ export interface ToolTranscriptItem {
   readonly detail?: string;
   /** Error excerpt from a failed tool_result, for the expanded row. */
   readonly errorMessage?: string;
+  /**
+   * Trailing command output of an execute-class tool (sanitized,
+   * ≤ `MAX_TOOL_OUTPUT_TAIL_LENGTH` chars, line-bounded). Streams
+   * while the tool runs and keeps the final tail on completion.
+   * Live-session display only: history and recovery replays stay
+   * outputless, and the text never enters diagnostics logs.
+   */
+  readonly outputTail?: string;
   /** Present when this Task tool call delegated to a subagent. */
   readonly subagent?: ToolSubagentSummary;
 }
@@ -1651,6 +1660,8 @@ export interface ToolActivityMessage {
   readonly detail?: string;
   /** Error excerpt from a failed tool_result, for the expanded row. */
   readonly errorMessage?: string;
+  /** See `ToolTranscriptItem.outputTail`. */
+  readonly outputTail?: string;
   /** Present when this Task tool call delegated to a subagent. */
   readonly subagent?: ToolSubagentSummary;
 }

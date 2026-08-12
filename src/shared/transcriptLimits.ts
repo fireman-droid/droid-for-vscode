@@ -48,6 +48,7 @@ export function transcriptItemTextUnits(
         item.status.length +
         (item.latestUpdateKind?.length ?? 0) +
         (item.detail?.length ?? 0) +
+        (item.outputTail?.length ?? 0) +
         (item.subagent === undefined
           ? 0
           : item.subagent.type.length +
