@@ -434,6 +434,30 @@ turn-complete 写 lastTurn、compact/fork/切换重置）；Webview store +
 （webview.js 910.5KB）。**本切片未打包安装，待随下一批次包一起
 可见验证**。
 
+2026-08-12 下午追加 V2 切片「原生 Terminal 第一切片（只读终端镜像）」
+（设计 `native-terminal-design.md`，接管路线已判 fail-closed，本切片
+只做镜像）：运行中的 Execute 工具 activity 展开区出现 quiet 细字入口
+「在终端中查看」（沿用 commit-entry 触发语言，无图标无色块；历史/
+回放命令不出现）→ 打开 VS Code 真终端面板的只读镜像终端
+「DroidVisX: 命令输出」，实时追加命令输出；键盘输入丢弃并一次性提示
+「只读镜像：输入已忽略」；命令结束后终端保留输出可回看；重复点击
+复用同一终端不重开，终端被用户关闭后下次点击重建。数据源与 V1 #6
+「流式命令输出预览」共用同一 Runtime 透传（`tool-progress` 的
+`outputTail`，凭据扫除与 ANSI 剥离已在共享层完成，Host 不再实现第二
+条透传）：`outputTail` 是有界尾部快照而非增量块，Host 侧
+`computeTailDelta` 以后缀重叠探测把快照序列还原为追加流，`\r` 进度行
+原地重写，输出超出快照窗口时插入一行「…（部分输出未捕获）」缺口
+注记；无输出命令结算时补「（无输出）」。分层：Host 新增
+`terminalMirror.ts`（依赖注入 `createTerminal`，懒建 pty、打开前缓冲
++ 512K 背压丢弃注记、会话/工具调用绑定、turn 结束 settleAll）；
+Bridge 新增 `terminal.openMirror`（仅 sessionId，exact-key 校验）；
+`ChatController` 只对已连接活跃会话转发 execute 三事件与打开请求；
+Webview `ExecuteMirrorEntry` 仅 running + command 详情时渲染。门禁：
+typecheck 三项目干净；全量 vitest 68 文件 1578 项全过（新增 pty 输入
+丢弃、输出追加/重叠拼接/缺口、终端复用与重建、缓冲上限、Bridge 双侧
+校验、controller 转发与门禁、入口可见性）；build 过。**本切片未打包
+安装，待随下一批次包一起可见验证**。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
@@ -1192,7 +1216,12 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
       （`artifacts/git-commit-harness.html` +
       `artifacts/smoke-git-commit.mjs`）；已提交待随包验证
 - [ ] Git 分支创建 / Push / Pull Request（切片 B/C 未开工）
-- [ ] 原生 Terminal 工作流
+- [x] 原生 Terminal 第一切片（只读终端镜像：运行中 Execute 行
+      「在终端中查看」→ createTerminal({pty}) 只读镜像实时追加
+      `outputTail`（与流式预览共用 Runtime 透传），输入丢弃、
+      结束保留、重复点击复用；已提交待随包验证）
+- [ ] 原生 Terminal 后续（接管/双向交互已判 fail-closed，除非
+      SDK 提供外部执行契约）
 - [x] Background Processes 第一切片（切片 A，设计
       `background-process-design.md` §3.1/§3.2 强信号检测 + 转录
       quiet 提示行）：探针实证 CLI 0.193.0 真实发出
