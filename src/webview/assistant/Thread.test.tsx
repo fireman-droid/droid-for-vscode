@@ -9,6 +9,7 @@ import {
   PendingResponse,
   filterSlashCommands,
   findSlashToken,
+  formatPlanSummary,
   formatThinkingLabel,
 } from './Thread';
 
@@ -93,6 +94,47 @@ describe('formatThinkingLabel', () => {
     expect(formatThinkingLabel('incomplete', 3_000)).toBe(
       'Thinking stopped',
     );
+  });
+});
+
+describe('formatPlanSummary', () => {
+  it('pairs the completed count with the in-progress item', () => {
+    expect(
+      formatPlanSummary(
+        '1. [completed] Survey the modules\n' +
+          '2. [in_progress] Design the API\n' +
+          '3. [pending] Write the tests',
+      ),
+    ).toBe('1/3 · Design the API');
+  });
+
+  it('falls back to the next pending item after an advance', () => {
+    expect(
+      formatPlanSummary(
+        '1. [completed] Survey the modules\n' +
+          '2. [pending] Write the tests',
+      ),
+    ).toBe('1/2 · Write the tests');
+  });
+
+  it('shows the count alone once every item is complete', () => {
+    expect(
+      formatPlanSummary(
+        '1. [completed] Survey the modules\n2. [done] Ship it',
+      ),
+    ).toBe('2/2');
+  });
+
+  it('truncates a long current item like other summary lines', () => {
+    const summary = formatPlanSummary(
+      `1. [in_progress] ${'x'.repeat(150)}`,
+    );
+    expect(summary).toBe(`0/1 · ${'x'.repeat(119)}…`);
+  });
+
+  it('returns null when no steps parse', () => {
+    expect(formatPlanSummary('')).toBeNull();
+    expect(formatPlanSummary('   \n  ')).toBeNull();
   });
 });
 

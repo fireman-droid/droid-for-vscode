@@ -875,9 +875,24 @@ function EditAttachmentChip({
 
 const AssistantMessage = memo(function AssistantMessage():
   React.JSX.Element {
+  // Entry animations are double-gated: the shell needs dvx-anim-live
+  // (connected + active turn) and the message itself must be the one
+  // streaming, so attaching the root class at turn start never
+  // replays history rows. The action bar mounts after streaming
+  // ends, so its fade keys off "was live in this mount" instead —
+  // recovered history can never satisfy that.
+  const running = useAuiState(
+    (s) => s.message.status?.type === 'running',
+  );
+  const wasRunningRef = useRef(false);
+  if (running) {
+    wasRunningRef.current = true;
+  }
   return (
     <MessagePrimitive.Root
-      className="dvx-message dvx-message-assistant"
+      className={`dvx-message dvx-message-assistant${
+        running ? ' dvx-message-live' : ''
+      }`}
       aria-label="Droid"
     >
       <MessagePrimitive.GroupedParts
@@ -925,7 +940,9 @@ const AssistantMessage = memo(function AssistantMessage():
         }}
       </MessagePrimitive.GroupedParts>
       <ActionBarPrimitive.Root
-        className="dvx-assistant-actions"
+        className={`dvx-assistant-actions${
+          !running && wasRunningRef.current ? ' dvx-actions-entry' : ''
+        }`}
         hideWhenRunning
       >
         <ActionBarPrimitive.Copy
@@ -2075,6 +2092,12 @@ function ToolActivityRow({
     activity.detailKind === 'plan' && messageRunning,
   );
   const running = activity.status === 'running';
+  // Collapsed plans keep their position visible: "3/7 · current item"
+  // replaces scanning a full checklist (streaming design item E).
+  const planSummary =
+    !open && activity.detailKind === 'plan' && activity.detail !== null
+      ? formatPlanSummary(activity.detail)
+      : null;
   return (
     <details
       className={`dvx-activity-row${
@@ -2086,6 +2109,9 @@ function ToolActivityRow({
       <summary>
         <span className="dvx-activity-indicator" />
         <span className="dvx-tool-action">{activity.action}</span>
+        {planSummary === null ? null : (
+          <span className="dvx-plan-summary">{planSummary}</span>
+        )}
         {activity.detailKind === 'command' && activity.detail !== null ? (
           <code className="dvx-tool-command-inline">
             {firstLine(activity.detail)}
@@ -2224,6 +2250,28 @@ function ActivityGroup({
       </div>
     </div>
   );
+}
+
+/**
+ * Collapsed-plan position line: `3/7 · <current item>`. The current
+ * item is the in-progress step, falling back to the next pending one
+ * so a just-advanced plan still reads usefully; fully completed plans
+ * show the count alone.
+ */
+export function formatPlanSummary(detail: string): string | null {
+  const steps = parsePlanSteps(detail);
+  if (steps.length === 0) {
+    return null;
+  }
+  const completed = steps.filter(
+    (step) => step.status === 'completed',
+  ).length;
+  const current =
+    steps.find((step) => step.status === 'in_progress') ??
+    steps.find((step) => step.status === 'pending');
+  return current === undefined
+    ? `${completed}/${steps.length}`
+    : `${completed}/${steps.length} · ${firstLine(current.text)}`;
 }
 
 function TaskPlan({ detail }: { readonly detail: string }): React.JSX.Element {

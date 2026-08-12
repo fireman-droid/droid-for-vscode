@@ -1075,11 +1075,72 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension dist/droidvisx.vsix --force`
   （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
   需 Reload Window（或完整重启）后加载新 Bundle
+- 2026-08-12 上午打包并安装含 **Streaming 批次三：入场动画 +
+  Todo 折叠** 的构建：`dist/droidvisx.vsix` 629,047 字节
+  （9 files, 614.3 KB），SHA-256
+  `01E62CB849D9AFCBDA38055D062D389E9321A0683FC6D94F6DB2E21F5486C9C0`，
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix` 与
+  `cursor --install-extension dist/droidvisx.vsix --force`
+  （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
+  需 Reload Window（或完整重启）后加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- Streaming 体验批次三：入场动画 + 回放静默 + Todo 折叠摘要
+  （2026-08-12 上午，按 `docs/product/streaming-experience-design.md`
+  D 项与 E 项，纯 Webview 零 Bridge 改动；本条为前任代理中断工作
+  的收尾——其 4 个未提交 src 改动经评估结构完整、直接续用，本轮
+  补齐 `formatPlanSummary` 单测并跑通全部门禁）：**D 入场动画**
+  双重门控——`App.tsx` 仅当 `connection.status === 'connected'`
+  且 `isTurnActive(state.turn)` 时在 `.dvx-shell` 挂根类
+  `dvx-anim-live`（opt-in，等价 Cursor no-entry-animations 反相
+  开关）；`AssistantMessage` 以 `useAuiState` 的
+  `message.status?.type === 'running'` 给唯一流式消息挂
+  `dvx-message-live`，入场 CSS 全部要求两类同时命中：正文块
+  `dvx-entry-rise`（淡入 + 4px 上移，200ms ease-out）、工具行/
+  聚合组 `dvx-entry-fade`（100ms）。恢复快照（connecting 不挂
+  类）、权威快照替换与 reconcile（无活跃 turn）、会话切换 /
+  Show earlier、以及活跃 turn 中挂类瞬间的既有历史（无
+  message-live）一律静默。action bar（hideWhenRunning，挂载时
+  根类可能已摘除）改用消息级 `wasRunningRef`"本次挂载曾流式"
+  门控淡入 `dvx-actions-entry`（150ms），历史恢复永不满足。
+  **E Todo 折叠**——task-plan 行收起态 summary 追加
+  `formatPlanSummary`：`3/7 · <当前 in_progress 项>`（无
+  in_progress 时退到首个 pending，全完成只显计数，firstLine
+  120 字符截断，`.dvx-plan-summary` ellipsis）；展开由
+  `dvx-disclose-in` 改为 `dvx-plan-open`（max-height 0→500px
+  300ms strong-out + opacity 200ms）；`.dvx-plan-step` 挂
+  `dvx-todo-fade-in`（淡入 + 2px 上移 200ms），key 沿用 index，
+  计划更新仅新增尾项重播。新增动效全为 animation，被既有
+  reduced-motion 全局 kill（`animation-duration: 0.001ms`）
+  覆盖，无新增 transition 故无需 `transition-property` 补丁。
+  单测 +5（`formatPlanSummary`：进行中项、pending 回退、全完成、
+  120 字符截断、空输入 null）。**无头冒烟**
+  `node artifacts/smoke-entry-anim.mjs`（配
+  `artifacts/entry-anim-harness.html`，双回合转录：turn-1 历史
+  含计划行，turn-2 流式；`#idle` 变体同转录 turn: null）：live
+  态 shell 挂 `dvx-anim-live`、流式消息正文 animationName
+  `dvx-entry-rise`、工具行 `dvx-entry-fade`，历史消息两者均
+  `none`；历史计划行收起摘要 `1/3 · Design the API`，展开后
+  animationName 含 `dvx-plan-open` + 步骤 `dvx-todo-fade-in` 且
+  摘要消失；`window.__completeTurn()` 后根类摘除、action bar
+  `dvx-entry-fade`；reduced-motion 仿真步骤 animationDuration
+  1e-06s（=0.001ms，冒烟脚本原断言字符串 `0.001ms` 与 Chrome
+  序列化不符，改为数值比较）；`#idle` 变体根类不挂、零
+  live 消息、正文 `none`，**PASS**。**长会话性能红线复测**
+  `node artifacts/run-stress-batch3.mjs`（stress-harness
+  ?turns=120 流式 8 秒）：流式期间 50ms+ 长任务 0 个（仅初始
+  bundle 解析与首屏快照绘制各 1 次，为既有行为），**PASS**。
+  门禁：typecheck 三 tsconfig 全过；test 43 files / 933 tests
+  全绿；build、`npx vsce package --no-dependencies -o
+  dist/droidvisx.vsix`（614.3 KB）、
+  `cursor --install-extension dist/droidvisx.vsix --force`
+  （successfully installed）均成功。已知边界（照设计如实记录）：
+  reconcile 恰在活跃 turn 中途整体替换转录时，running 消息的新块
+  会重播一次入场动画，V1 接受。streaming-experience-design 三批
+  至此全部落地；tier1 §1（流式命令输出预览）为独立保留项未开工。
 - Streaming 体验批次二：工具活动聚合（2026-08-12 凌晨，按
   `docs/product/streaming-experience-design.md` A 项与
   `activity-aggregation-research.md` 证据，纯 Webview 零 Bridge
@@ -1134,7 +1195,7 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   43 files / 928 tests 全绿；build、`npx vsce package`
   （613.93 KB）、`cursor --install-extension --force`
   （successfully installed）均成功。批次三（入场动画 + Todo
-  折叠）见下一条目。
+  折叠）见上方条目。
 - Streaming 体验批次一：Thinking shimmer + 过去式文案 + 动效
   token（2026-08-12 凌晨，按
   `docs/product/streaming-experience-design.md` §2-B 与统一前置

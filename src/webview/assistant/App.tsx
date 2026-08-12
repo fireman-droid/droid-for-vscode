@@ -775,7 +775,17 @@ export function App(): React.JSX.Element {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <DraftSynchronizer command={draftCommand} />
-      <div className="dvx-shell">
+      {/* Entry animations are opt-in per streaming design item D:
+          only a live turn on a connected session animates; recovered
+          snapshots, session switches, reconcile replacements and
+          Show earlier all mount without the class and stay silent. */}
+      <div
+        className={`dvx-shell${
+          connectionStatus === 'connected' && active
+            ? ' dvx-anim-live'
+            : ''
+        }`}
+      >
         <Header
           state={state}
           sessionActionsDisabled={sessionActionsDisabled}
