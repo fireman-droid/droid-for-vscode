@@ -9,6 +9,7 @@ import {
 import type {
   DroidRuntime,
   RuntimeSessionTarget,
+  RuntimeSessionWorkingState,
 } from '../runtime/DroidRuntime';
 import type {
   RuntimeAvailability,
@@ -154,8 +155,18 @@ describe('ChatController', () => {
   it('maps semantic runtime events to safe bridge messages', async () => {
     const runtime = createMockRuntime(async function* () {
       yield { type: 'text-delta', text: 'Hello' };
-      yield { type: 'thinking-delta', text: 'Safe plan' };
-      yield { type: 'thinking-complete', durationMs: null };
+      yield {
+        type: 'thinking-delta',
+        text: 'Safe plan',
+        messageId: 'message-1',
+        blockIndex: 0,
+      };
+      yield {
+        type: 'thinking-complete',
+        durationMs: null,
+        messageId: 'message-1',
+        blockIndex: 0,
+      };
       yield { type: 'error' };
       yield successfulTurn();
     });
@@ -180,10 +191,12 @@ describe('ChatController', () => {
           type: 'thinking.delta',
           delta: 'Safe plan',
           truncated: false,
+          segmentIndex: 0,
         }),
         expect.objectContaining({
           type: 'thinking.complete',
           durationMs: null,
+          segmentIndex: 0,
         }),
         expect.objectContaining({
           type: 'runtime.diagnostic',
@@ -718,8 +731,15 @@ describe('ChatController', () => {
       yield {
         type: 'thinking-delta',
         text: 'a'.repeat(MAX_THINKING_TEXT_LENGTH),
+        messageId: 'message-1',
+        blockIndex: 0,
       };
-      yield { type: 'thinking-delta', text: 'secret overflow' };
+      yield {
+        type: 'thinking-delta',
+        text: 'secret overflow',
+        messageId: 'message-2',
+        blockIndex: 0,
+      };
       yield successfulTurn();
     });
     const { controller, messages } = createController(() => runtime);
@@ -738,12 +758,139 @@ describe('ChatController', () => {
     expect(thinking[0]).toMatchObject({
       delta: 'a'.repeat(MAX_THINKING_TEXT_LENGTH),
       truncated: false,
+      segmentIndex: 0,
     });
+    // The truncation marker pins to the segment that showed text
+    // instead of opening an empty row for the clipped-away segment.
     expect(thinking[1]).toMatchObject({
       delta: '',
       truncated: true,
+      segmentIndex: 0,
     });
     expect(JSON.stringify(messages)).not.toContain('secret overflow');
+  });
+
+  it('numbers interleaved thinking segments and completes each in place', async () => {
+    // Probed shape (artifacts/probe-interleaved-thinking.out.json):
+    // think→tool→think arrives as two delta→complete sequences with
+    // distinct messageIds strictly interleaved with the tool events.
+    const runtime = createMockRuntime(async function* () {
+      yield {
+        type: 'thinking-delta',
+        text: 'First thought',
+        messageId: 'message-1',
+        blockIndex: 0,
+      };
+      yield {
+        type: 'thinking-complete',
+        durationMs: 154,
+        messageId: 'message-1',
+        blockIndex: 0,
+      };
+      yield {
+        type: 'tool-start',
+        toolName: 'Read',
+        toolUseId: 'tool-1',
+        action: 'Read workspace files',
+      };
+      yield {
+        type: 'tool-result',
+        toolName: 'Read',
+        toolUseId: 'tool-1',
+        action: 'Read workspace files',
+        isError: false,
+      };
+      yield {
+        type: 'thinking-delta',
+        text: 'Second thought',
+        messageId: 'message-2',
+        blockIndex: 0,
+      };
+      yield {
+        type: 'thinking-complete',
+        durationMs: 168,
+        messageId: 'message-2',
+        blockIndex: 0,
+      };
+      yield successfulTurn();
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Think twice');
+
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
+    const thinking = messages.filter(
+      (message) =>
+        message.type === 'thinking.delta' ||
+        message.type === 'thinking.complete',
+    );
+    expect(thinking).toEqual([
+      expect.objectContaining({
+        type: 'thinking.delta',
+        delta: 'First thought',
+        segmentIndex: 0,
+      }),
+      expect.objectContaining({
+        type: 'thinking.complete',
+        durationMs: 154,
+        segmentIndex: 0,
+      }),
+      expect.objectContaining({
+        type: 'thinking.delta',
+        delta: 'Second thought',
+        segmentIndex: 1,
+      }),
+      expect.objectContaining({
+        type: 'thinking.complete',
+        durationMs: 168,
+        segmentIndex: 1,
+      }),
+    ]);
+  });
+
+  it('suppresses completions for thinking segments without deltas', async () => {
+    // Probed: the auto-routed model can emit complete-only segments
+    // (zero deltas); those must not surface an empty Thinking row.
+    const runtime = createMockRuntime(async function* () {
+      yield {
+        type: 'thinking-complete',
+        durationMs: 12,
+        messageId: 'message-empty',
+        blockIndex: 0,
+      };
+      yield {
+        type: 'thinking-delta',
+        text: 'Visible thought',
+        messageId: 'message-1',
+        blockIndex: 0,
+      };
+      yield {
+        type: 'thinking-complete',
+        durationMs: 34,
+        messageId: 'message-1',
+        blockIndex: 0,
+      };
+      yield successfulTurn();
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Think');
+
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
+    const completes = messages.filter(
+      (message) => message.type === 'thinking.complete',
+    );
+    expect(completes).toEqual([
+      expect.objectContaining({ durationMs: 34, segmentIndex: 0 }),
+    ]);
   });
 
   it('uses non-idle working state to enter streaming and keeps idle silent', async () => {
@@ -831,6 +978,8 @@ describe('ChatController', () => {
       yield {
         type: 'thinking-delta',
         text: 'late sensitive thinking',
+        messageId: 'message-late',
+        blockIndex: 0,
       };
       yield {
         type: 'tool-start',
@@ -1622,6 +1771,252 @@ describe('ChatController', () => {
         expect.objectContaining({ text: 'Cached fallback' }),
       ],
     });
+  });
+
+  it('projects an in-flight daemon turn as a recovery placeholder and replaces it with the completed result', async () => {
+    const recovery = await seededRecoveryStore('saved-session');
+    // First load happens during activation (turn still running); the
+    // reload after the daemon goes idle sees the completed answer.
+    const history: SessionHistoryLoader = {
+      loadHistory: vi
+        .fn<SessionHistoryLoader['loadHistory']>()
+        .mockResolvedValueOnce({
+          status: 'available',
+          state: {
+            transcript: [
+              { id: 'user-1', kind: 'user', text: 'Long task' },
+            ],
+            historyStatus: 'complete',
+            truncated: false,
+          },
+        })
+        .mockResolvedValue({
+          status: 'available',
+          state: {
+            transcript: [
+              { id: 'user-1', kind: 'user', text: 'Long task' },
+              {
+                id: 'assistant-1',
+                kind: 'assistant',
+                turnId: 'daemon-turn',
+                text: 'Finished in the background',
+              },
+            ],
+            historyStatus: 'complete',
+            truncated: false,
+          },
+        }),
+    };
+    const runtime = createMockRuntime();
+    runtime.initialize.mockResolvedValue(available('saved-session'));
+    runtime.readSessionWorkingState = vi
+      .fn<() => Promise<RuntimeSessionWorkingState>>()
+      .mockResolvedValueOnce('running')
+      .mockResolvedValue('idle');
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('saved-session')]),
+      recovery,
+      history,
+    );
+
+    ready(controller);
+    await waitForConnected(messages);
+
+    // The placeholder turn arrives via a snapshot (the webview adopts
+    // turns from snapshots, not bare turn.state messages).
+    await vi.waitFor(() => {
+      expect(snapshots(messages).at(-1)?.turn).toMatchObject({
+        turnId: expect.stringMatching(/^recovery-/),
+        status: 'streaming',
+      });
+    });
+    expect(runtime.sendTurn).not.toHaveBeenCalled();
+
+    await vi.waitFor(
+      () => {
+        expect(turnStates(messages).at(-1)?.status).toBe('completed');
+      },
+      { timeout: 5000 },
+    );
+    expect(snapshots(messages).at(-1)).toMatchObject({
+      sessionId: 'saved-session',
+      turn: expect.objectContaining({ status: 'completed' }),
+      transcript: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'assistant',
+          text: 'Finished in the background',
+        }),
+      ]),
+    });
+  });
+
+  it('re-emits a permission replayed during a daemon resume and keeps it answerable', async () => {
+    const recovery = await seededRecoveryStore('saved-session');
+    let workingState: RuntimeSessionWorkingState = 'waiting-for-user';
+    let permission: Promise<RuntimePermissionResult> | null = null;
+    const runtime = createMockRuntime();
+    runtime.readSessionWorkingState = vi.fn(async () => workingState);
+    // The SDK replays a daemon-side pending permission while resume()
+    // runs, before the controller has any active turn.
+    runtime.initialize.mockImplementation(async () => {
+      permission = interactionHandler.requestPermission({
+        options: [
+          {
+            label: 'Proceed',
+            value: 'proceed',
+            requiresEditedSpec: false,
+          },
+        ],
+        toolUses: [
+          {
+            toolUseId: 'tool-1',
+            toolName: 'Execute',
+            confirmationKind: 'exec',
+            title: 'Run command',
+          },
+        ],
+      });
+      return available('saved-session');
+    });
+    let interactionHandler!: RuntimeInteractionHandler;
+    const { controller, messages } = createController(
+      (handler) => {
+        interactionHandler = handler;
+        return runtime;
+      },
+      undefined,
+      createCatalog([catalogEntry('saved-session')]),
+      recovery,
+    );
+
+    ready(controller);
+    await waitForConnected(messages);
+    const request = await waitForInteraction(messages, 'permission');
+
+    // The replayed permission is held by the synthesized recovery
+    // turn instead of being auto-cancelled.
+    expect(request.turnId).toMatch(/^recovery-/);
+    let settled = false;
+    void permission!.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    controller.handleMessage({
+      type: 'permission.respond',
+      sessionId: 'saved-session',
+      turnId: request.turnId,
+      requestId: request.request.requestId,
+      selectedOption: 'proceed',
+    });
+    await expect(permission).resolves.toEqual({
+      selectedOption: 'proceed',
+    });
+    workingState = 'idle';
+    await vi.waitFor(
+      () => {
+        expect(turnStates(messages).at(-1)?.status).toBe('completed');
+      },
+      { timeout: 5000 },
+    );
+  });
+
+  it('stops a recovered daemon turn through interruptSession', async () => {
+    const recovery = await seededRecoveryStore('saved-session');
+    let workingState: RuntimeSessionWorkingState = 'running';
+    const runtime = createMockRuntime();
+    runtime.initialize.mockResolvedValue(available('saved-session'));
+    runtime.readSessionWorkingState = vi.fn(async () => workingState);
+    runtime.interruptSession = vi.fn(async () => {
+      workingState = 'idle';
+    });
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('saved-session')]),
+      recovery,
+    );
+
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(snapshots(messages).at(-1)?.turn?.status).toBe('streaming');
+    });
+    const turnId = snapshots(messages).at(-1)!.turn!.turnId;
+
+    stop(controller, 'saved-session', turnId);
+
+    await vi.waitFor(
+      () => {
+        expect(turnStates(messages).at(-1)?.status).toBe('interrupted');
+      },
+      { timeout: 5000 },
+    );
+    expect(runtime.interruptSession).toHaveBeenCalledOnce();
+    expect(runtime.interrupt).not.toHaveBeenCalled();
+  });
+
+  it('keeps process-mode resume unchanged when the working state read throws', async () => {
+    const recovery = await seededRecoveryStore('saved-session');
+    const runtime = createMockRuntime();
+    runtime.initialize.mockResolvedValue(available('saved-session'));
+    runtime.readSessionWorkingState = vi.fn(async () => {
+      throw new Error('does not report a working state');
+    });
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('saved-session')]),
+      recovery,
+    );
+
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(runtime.readSessionWorkingState).toHaveBeenCalled();
+    });
+
+    expect(snapshots(messages).at(-1)?.turn).toBeNull();
+    expect(turnStates(messages)).toHaveLength(0);
+  });
+
+  it('fails a recovered turn when the daemon stops reporting the session', async () => {
+    const recovery = await seededRecoveryStore('saved-session');
+    const runtime = createMockRuntime();
+    runtime.initialize.mockResolvedValue(available('saved-session'));
+    runtime.readSessionWorkingState = vi
+      .fn<() => Promise<RuntimeSessionWorkingState>>()
+      .mockResolvedValueOnce('running')
+      .mockResolvedValue('unknown');
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('saved-session')]),
+      recovery,
+    );
+
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(snapshots(messages).at(-1)?.turn?.status).toBe('streaming');
+    });
+
+    await vi.waitFor(
+      () => {
+        expect(
+          messages.find(
+            (message) =>
+              message.type === 'turn.error' &&
+              message.code === 'recovered-turn-lost',
+          ),
+        ).toBeDefined();
+      },
+      { timeout: 8000 },
+    );
+    expect(turnStates(messages).at(-1)?.status).toBe('failed');
   });
 
   it('falls back to recovery when public old-session history is unavailable', async () => {
@@ -6940,6 +7335,28 @@ function worktreeFeature(options: {
         : `${options.branch}\n`,
     ) as GitExec,
   });
+}
+
+/**
+ * Recovery store with a selected session and a cached prompt, as left
+ * behind by a window that reloaded mid-turn.
+ */
+async function seededRecoveryStore(
+  sessionId: string,
+): Promise<SessionRecoveryStore> {
+  const persistence = createMemoryPersistence();
+  const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
+  seed.writeSession(
+    sessionId,
+    appendAcceptedUserPrompt(
+      createHostTranscriptState('complete'),
+      'saved-turn',
+      'Recovered prompt',
+    ),
+  );
+  seed.selectSession(sessionId);
+  await seed.flush();
+  return new SessionRecoveryStore(persistence, 'recovery', 0);
 }
 
 function createMemoryPersistence(): SessionRecoveryPersistence {

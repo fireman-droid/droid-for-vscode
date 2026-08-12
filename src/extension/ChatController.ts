@@ -25,6 +25,9 @@ import type {
   McpServerSummary,
   SessionMcpState,
   SessionMissionSummary,
+  PluginScope,
+  PluginSummary,
+  SessionPluginsState,
   SessionSettingUpdateMessage,
   SessionSettingsState,
   SessionSkillsState,
@@ -45,6 +48,11 @@ import {
   MAX_PENDING_ATTACHMENTS,
   MAX_MODEL_DISPLAY_NAME_LENGTH,
   MAX_MODEL_ID_LENGTH,
+  MAX_PLUGIN_ID_LENGTH,
+  MAX_PLUGIN_ITEMS,
+  MAX_PLUGIN_MARKETPLACE_COUNT,
+  MAX_PLUGIN_VERSION_LENGTH,
+  PLUGIN_SCOPES,
   MAX_SESSION_CATALOG_ITEMS as SESSION_CATALOG_LIMIT,
   MAX_SESSION_SEARCH_RESULTS,
   MAX_SESSION_TITLE_LENGTH as SESSION_TITLE_LIMIT,
@@ -63,6 +71,7 @@ import type {
   RuntimeMcpServer,
   RuntimeSessionSettingUpdate,
   RuntimeSessionTarget,
+  RuntimeSessionWorkingState,
   RuntimeSkill,
 } from '../runtime/DroidRuntime';
 import type {
@@ -80,6 +89,10 @@ import type {
   SessionCatalogResult,
 } from '../runtime/SessionCatalog';
 import { DaemonAvailabilityError } from '../runtime/daemon/daemonConnection';
+import type {
+  DaemonPluginCatalog,
+  InstalledPluginEntry,
+} from '../runtime/daemon/DaemonPluginCatalog';
 import type { DaemonSessionCatalog } from '../runtime/daemon/DaemonSessionCatalog';
 import {
   createUnavailableSessionHistoryLoader,
@@ -91,9 +104,11 @@ import {
   hasSubagentRows,
   projectAssistantDelta,
   projectSubagentStarted,
+  projectThinkingComplete,
   projectThinkingDelta,
   projectToolEvent,
   reconcileSubagentSummaries,
+  thinkingSegmentKey,
   type TurnActivityState,
 } from './turnActivityState';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
@@ -187,6 +202,12 @@ interface CurrentTurn {
   status: TurnStatus;
   error?: string;
   activity: TurnActivityState;
+  /**
+   * Marks a turn synthesized by reload reconciliation: the agent loop
+   * runs daemon-side with no local stream, so completion comes from
+   * working-state polling and Stop must use `interruptSession()`.
+   */
+  readonly recovery?: true;
 }
 
 interface PendingAttachment {
@@ -223,6 +244,24 @@ interface DisposableSubscription {
 
 const TURN_FAILURE_MESSAGE =
   'Droid could not complete this turn. Retry to start a fresh session.';
+/**
+ * Poll cadence for a daemon-side turn recovered after a reload. The
+ * read is one in-memory registry RPC over the persistent daemon
+ * connection, so a sub-second cadence keeps the completed-result
+ * replacement snappy without measurable cost.
+ */
+const RECOVERED_TURN_POLL_MS = 500;
+/**
+ * Consecutive `unknown` working-state reads tolerated before a
+ * recovered turn fails. `unknown` means the daemon stopped attributing
+ * a state to the session (connection loss, registry eviction) — never
+ * a clean idle — so persisting it must surface as a failure, not a
+ * silent completion.
+ */
+const RECOVERED_TURN_MAX_UNKNOWN_READS = 3;
+const RECOVERED_HISTORY_FAILED_MESSAGE =
+  'The turn finished in the background, but its result could not be ' +
+  'reloaded. Open the session again from History to see it.';
 const RUNTIME_EVENT_ERROR_MESSAGE =
   'Droid reported a runtime error while processing this turn.';
 const ASSISTANT_OUTPUT_TRUNCATED_MESSAGE =
@@ -293,6 +332,12 @@ const COMMANDS_LOAD_FAILED_MESSAGE =
   'Droid did not return the command list. Type / again to retry.';
 const SKILL_TOGGLE_FAILED_MESSAGE =
   'Droid could not update that skill. The list may be stale; refresh it.';
+const PLUGINS_UNSUPPORTED_MESSAGE =
+  'Plugins are not available in this Droid runtime.';
+const PLUGINS_LOAD_FAILED_MESSAGE =
+  'Droid did not return the plugin list. Retry from the plugins panel.';
+const PLUGINS_NOT_LOGGED_IN_MESSAGE =
+  'Sign in with the droid CLI to view plugins.';
 const COMPACT_BLOCKED_MESSAGE =
   'Droid cannot compact right now. Wait for the current activity to finish.';
 const COMPACT_UNSUPPORTED_MESSAGE =
@@ -528,6 +573,7 @@ export class ChatController {
       createUnavailableGitWorkflow(),
     private readonly worktreeSessions?: WorktreeSessionsFeature,
     private readonly terminalMirror?: TerminalMirror,
+    private readonly daemonPlugins?: () => Promise<DaemonPluginCatalog>,
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
@@ -716,6 +762,9 @@ export class ChatController {
         return;
       case 'skills.refresh':
         this.handleSkillsRefresh(message.sessionId);
+        return;
+      case 'plugins.refresh':
+        this.handlePluginsRefresh(message.sessionId);
         return;
       case 'commands.refresh':
         this.handleCommandsRefresh(message.sessionId);
@@ -1275,6 +1324,7 @@ export class ChatController {
         const result = projectThinkingDelta(
           turn.activity,
           event.text,
+          thinkingSegmentKey(event),
         );
         turn.activity = result.state;
         if (result.projection !== null) {
@@ -1287,14 +1337,26 @@ export class ChatController {
         }
         return;
       }
-      case 'thinking-complete':
-        this.emit({
-          type: 'thinking.complete',
-          sessionId,
-          turnId,
-          durationMs: event.durationMs,
-        });
+      case 'thinking-complete': {
+        const turn = this.turn;
+        if (turn === null) {
+          return;
+        }
+        const projection = projectThinkingComplete(
+          turn.activity,
+          thinkingSegmentKey(event),
+        );
+        if (projection !== null) {
+          this.emit({
+            type: 'thinking.complete',
+            sessionId,
+            turnId,
+            durationMs: event.durationMs,
+            segmentIndex: projection.segmentIndex,
+          });
+        }
         return;
+      }
       case 'tool-start':
       case 'tool-progress':
       case 'tool-result': {
@@ -1621,11 +1683,19 @@ export class ChatController {
       return;
     }
 
+    // A recovery turn runs daemon-side with no locally streaming turn;
+    // interrupt() would no-op there, interruptSession() reaches the
+    // daemon. The poll loop then observes idle and settles the turn.
+    const interruptTurn =
+      this.turn.recovery === true &&
+      typeof runtime.interruptSession === 'function'
+        ? () => runtime.interruptSession!()
+        : () => runtime.interrupt();
     this.interactions.endTurn(sessionId, turnId);
     this.setTurnStatus(sessionId, turnId, 'stopping');
     const runtimeGeneration = this.runtimeGeneration;
     const turnGeneration = this.turnGeneration;
-    void runtime.interrupt().catch(() => {
+    void interruptTurn().catch(() => {
       if (
         this.isCurrentTurn(
           runtime,
@@ -3152,6 +3222,99 @@ export class ChatController {
       type: 'session.skills',
       sessionId,
       skills,
+    });
+  }
+
+  /**
+   * Serves the read-only plugins panel through the daemon sidecar:
+   * `plugins.listInstalled` and `marketplaces.list` run concurrently
+   * against the active session id (the daemon accepts any on-disk
+   * session id for these RPCs — probe evidence in
+   * docs/product/plugins-hooks-design.md §2.1). Daemon failures
+   * surface as an explicit error state, never a silent empty list.
+   */
+  private handlePluginsRefresh(sessionId: string): void {
+    const runtime = this.runtime;
+    const dropReason = this.sessionRequestDropReason(sessionId);
+    if (dropReason !== null || runtime === null) {
+      this.recordDroppedPanelRequest(
+        'plugins.refresh',
+        dropReason ?? 'no-runtime',
+      );
+      return;
+    }
+    const daemonPlugins = this.daemonPlugins;
+    if (daemonPlugins === undefined) {
+      this.emitPlugins(sessionId, {
+        status: 'unsupported',
+        items: [],
+        message: PLUGINS_UNSUPPORTED_MESSAGE,
+      });
+      return;
+    }
+
+    this.emitPlugins(sessionId, { status: 'loading', items: [] });
+    const generation = this.runtimeGeneration;
+    const cwd = this.activeRuntimeCwd!;
+    void daemonPlugins()
+      .then((catalog) => catalog.snapshot(sessionId))
+      .then(
+        (snapshot) => {
+          if (
+            !this.isCurrentSessionOperation(
+              runtime,
+              generation,
+              sessionId,
+              cwd,
+            )
+          ) {
+            return;
+          }
+          this.emitPlugins(sessionId, {
+            status: 'ready',
+            items: projectPluginSummaries(snapshot.plugins),
+            marketplaceCount: Math.min(
+              snapshot.marketplaceCount,
+              MAX_PLUGIN_MARKETPLACE_COUNT,
+            ),
+          });
+        },
+        (error) => {
+          if (
+            !this.isCurrentSessionOperation(
+              runtime,
+              generation,
+              sessionId,
+              cwd,
+            )
+          ) {
+            return;
+          }
+          this.recordPanelFailure(
+            'plugins-load-failed',
+            formatUnknownError(error),
+          );
+          this.emitPlugins(sessionId, {
+            status: 'error',
+            items: [],
+            message: daemonFailureMessage(
+              error,
+              PLUGINS_LOAD_FAILED_MESSAGE,
+              PLUGINS_NOT_LOGGED_IN_MESSAGE,
+            ),
+          });
+        },
+      );
+  }
+
+  private emitPlugins(
+    sessionId: string,
+    plugins: SessionPluginsState,
+  ): void {
+    this.emit({
+      type: 'session.plugins',
+      sessionId,
+      plugins,
     });
   }
 
@@ -5135,11 +5298,32 @@ export class ChatController {
       };
     }
     this.managedRuntimes.add(runtime);
+    // A daemon resume replays permission/ask-user requests that were
+    // pending when the previous window died. Without an active
+    // interaction context the coordinator would answer them with an
+    // automatic cancel, killing the daemon-side turn. The synthesized
+    // recovery turn holds them until reload reconciliation
+    // (reconcileDaemonTurn) decides whether the turn is still live.
+    const releaseRecoveryContext = (): void => {
+      if (target.kind === 'resume') {
+        this.interactions.endTurn(
+          target.sessionId,
+          recoveryTurnId(generation),
+        );
+      }
+    };
+    if (target.kind === 'resume') {
+      this.interactions.beginTurn(
+        target.sessionId,
+        recoveryTurnId(generation),
+      );
+    }
 
     let availability: RuntimeAvailability;
     try {
       availability = await runtime.initialize(target);
     } catch {
+      releaseRecoveryContext();
       await this.closeRuntime(runtime).catch(() => undefined);
       return this.isCurrentRuntimeGeneration(generation) &&
         this.isTargetWorkspaceCurrent(target.cwd)
@@ -5154,6 +5338,7 @@ export class ChatController {
       !this.isCurrentRuntimeGeneration(generation) ||
       !this.isTargetWorkspaceCurrent(target.cwd)
     ) {
+      releaseRecoveryContext();
       await this.closeRuntime(runtime).catch(() => undefined);
       return null;
     }
@@ -5163,6 +5348,7 @@ export class ChatController {
       (target.kind === 'resume' &&
         availability.sessionId !== target.sessionId)
     ) {
+      releaseRecoveryContext();
       await this.closeRuntime(runtime).catch(() => undefined);
       if (
         !this.isCurrentRuntimeGeneration(generation) ||
@@ -5266,6 +5452,220 @@ export class ChatController {
       sessionId,
       target.cwd,
     );
+    if (target.kind === 'resume') {
+      this.reconcileDaemonTurn(runtime, generation, sessionId, target.cwd);
+    }
+  }
+
+  /**
+   * Reload reconciliation for a resumed daemon session (A4 basic
+   * tier). A daemon-side turn keeps running while the window reloads;
+   * this probes the daemon's working state after activation and, when
+   * the turn is still live, projects it as a synthesized recovery
+   * turn: the transcript tail shows the existing generating indicator
+   * and permissions the SDK replayed during resume surface again. The
+   * poll loop closes the turn once the daemon goes idle by reloading
+   * the session history (full-result replacement; the basic tier does
+   * not re-stream tokens). Process sessions cannot report a working
+   * state — the probe throws there — so process-mode recovery is
+   * unchanged.
+   */
+  private reconcileDaemonTurn(
+    runtime: DroidRuntime,
+    generation: number,
+    sessionId: string,
+    cwd: string,
+  ): void {
+    const turnId = recoveryTurnId(generation);
+    if (typeof runtime.readSessionWorkingState !== 'function') {
+      this.interactions.endTurn(sessionId, turnId);
+      return;
+    }
+    void (async () => {
+      let state: RuntimeSessionWorkingState;
+      try {
+        state = await runtime.readSessionWorkingState!();
+      } catch {
+        this.interactions.endTurn(sessionId, turnId);
+        return;
+      }
+      if (
+        !this.isCurrentSessionOperation(
+          runtime,
+          generation,
+          sessionId,
+          cwd,
+        ) ||
+        this.turn !== null
+      ) {
+        return;
+      }
+      // `unknown` with a replayed interaction still means a live turn
+      // (the daemon blocked on it before the state read went stale);
+      // `unknown` without one has nothing to project, so stay quiet.
+      const live =
+        state === 'running' ||
+        state === 'waiting-for-user' ||
+        (state === 'unknown' && this.interactions.hasPending());
+      if (!live) {
+        this.interactions.endTurn(sessionId, turnId);
+        return;
+      }
+
+      const turnGeneration = ++this.turnGeneration;
+      this.diagnostics?.beginTurnScope?.(turnId);
+      this.turnIo = { counts: new Map(), bytes: 0 };
+      this.turn = {
+        turnId,
+        status: 'streaming',
+        activity: createTurnActivityState(),
+        recovery: true,
+      };
+      this.recordHost({
+        level: 'info',
+        name: 'host.reload.turn-recovered',
+        attributes: { sessionId, workingState: state },
+      });
+      // The webview adopts a turn from its own send or from a
+      // snapshot; the recovery turn exists only host-side, so a
+      // snapshot (not a bare turn.state) announces it.
+      this.emitSnapshot();
+      // Interactions replayed during resume were published before the
+      // webview knew the recovery turn; publish them again now.
+      this.interactions.replayPending();
+
+      await this.pollRecoveredTurn(
+        runtime,
+        generation,
+        turnGeneration,
+        sessionId,
+        cwd,
+        turnId,
+      );
+    })();
+  }
+
+  /**
+   * Watches a recovered daemon-side turn until the daemon reports the
+   * session idle, then swaps the placeholder for the persisted result.
+   * Repeated `unknown` reads fail the turn (fail closed: the daemon
+   * lost track of the session, so the result may never arrive).
+   */
+  private async pollRecoveredTurn(
+    runtime: DroidRuntime,
+    runtimeGeneration: number,
+    turnGeneration: number,
+    sessionId: string,
+    cwd: string,
+    turnId: string,
+  ): Promise<void> {
+    let unknownReads = 0;
+    while (true) {
+      await delay(RECOVERED_TURN_POLL_MS);
+      if (
+        !this.isCurrentTurn(
+          runtime,
+          runtimeGeneration,
+          turnGeneration,
+          sessionId,
+          turnId,
+        )
+      ) {
+        return;
+      }
+      let state: RuntimeSessionWorkingState;
+      try {
+        state = await runtime.readSessionWorkingState!();
+      } catch {
+        state = 'unknown';
+      }
+      if (
+        !this.isCurrentTurn(
+          runtime,
+          runtimeGeneration,
+          turnGeneration,
+          sessionId,
+          turnId,
+        )
+      ) {
+        return;
+      }
+      if (state === 'unknown') {
+        unknownReads += 1;
+        if (unknownReads >= RECOVERED_TURN_MAX_UNKNOWN_READS) {
+          this.failTurn(sessionId, turnId, 'recovered-turn-lost');
+          return;
+        }
+        continue;
+      }
+      unknownReads = 0;
+      if (state === 'idle') {
+        await this.finishRecoveredTurn(
+          runtime,
+          runtimeGeneration,
+          turnGeneration,
+          sessionId,
+          cwd,
+          turnId,
+        );
+        return;
+      }
+    }
+  }
+
+  /**
+   * Terminal step of a recovered turn: the daemon went idle, so the
+   * completed content now lives in the session file. Reload it and
+   * reconcile against the live transcript so the generating
+   * placeholder is replaced by the full result in one snapshot.
+   */
+  private async finishRecoveredTurn(
+    runtime: DroidRuntime,
+    runtimeGeneration: number,
+    turnGeneration: number,
+    sessionId: string,
+    cwd: string,
+    turnId: string,
+  ): Promise<void> {
+    const loaded = await this.loadHistoryTimed(cwd, sessionId);
+    if (
+      !this.isCurrentTurn(
+        runtime,
+        runtimeGeneration,
+        turnGeneration,
+        sessionId,
+        turnId,
+      )
+    ) {
+      return;
+    }
+    // Stop pressed while the history loaded still ends as interrupted.
+    const interrupted = this.turn?.status === 'stopping';
+    this.interactions.endTurn(sessionId, turnId);
+    if (loaded?.status === 'available') {
+      this.mission = loaded.mission ?? null;
+      this.tokenUsage = {
+        cumulative: loaded.tokenUsage ?? this.tokenUsage.cumulative,
+        lastTurn: this.tokenUsage.lastTurn,
+      };
+      this.transcript = reconcileSessionHistory(
+        loaded.state,
+        this.transcript,
+      );
+    } else {
+      this.emitSessionDiagnostic(
+        'recovered-turn-history-failed',
+        RECOVERED_HISTORY_FAILED_MESSAGE,
+      );
+    }
+    this.setTurnStatus(
+      sessionId,
+      turnId,
+      interrupted ? 'interrupted' : 'completed',
+    );
+    this.emitSnapshot();
+    void this.flushRecoveryCheckpoint();
+    this.refreshContextAfterTurn(sessionId);
   }
 
   /**
@@ -6408,6 +6808,19 @@ export class ChatController {
 function commitSubject(message: string): string {
   const firstLine = message.split('\n', 1)[0] ?? '';
   return firstLine.trim().slice(0, MAX_GIT_COMMIT_SUBJECT_LENGTH);
+}
+
+/**
+ * Turn id synthesized for a daemon turn recovered after a reload. The
+ * runtime generation is unique per activation, so recovery turns never
+ * collide with each other or with webview-generated turn ids.
+ */
+function recoveryTurnId(generation: number): string {
+  return `recovery-${generation}`;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function isTurnActive(turn: CurrentTurn | null): boolean {
