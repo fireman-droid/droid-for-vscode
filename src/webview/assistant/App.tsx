@@ -1190,6 +1190,11 @@ export function App(): React.JSX.Element {
       />
     ) : null;
 
+  // Split-pane /btw: while the side question pane is mounted the
+  // shell gains a second grid column so both conversations stay live
+  // side by side (Claude Code form factor, user decision 2026-08-12).
+  const btwSplit = btwOpen && btwAvailable && sessionId !== null;
+
   // Rendered once here so transcript markdown (deep inside
   // assistant-ui's message tree) can open clicked file paths without
   // prop drilling.
@@ -1205,7 +1210,9 @@ export function App(): React.JSX.Element {
           connectionStatus === 'connected' && active
             ? ' dvx-anim-live'
             : ''
-        }${showHandshakeNotice ? ' dvx-shell-stalled' : ''}`}
+        }${showHandshakeNotice ? ' dvx-shell-stalled' : ''}${
+          btwSplit ? ' dvx-shell-split' : ''
+        }`}
       >
         <Header
           state={state}
@@ -1350,9 +1357,10 @@ export function App(): React.JSX.Element {
           }
           queuedCount={queuedCount}
         />
-        {/* Full-height side question panel sliding over the thread
-            from the right edge (Claude Code form factor). */}
-        {btwOpen && btwAvailable && sessionId !== null ? (
+        {/* Full-height side question pane living in the shell's
+            second grid column beside the main conversation (Claude
+            Code split-pane form factor). */}
+        {btwSplit ? (
           <SideChatSheet
             btw={state.btw}
             onAsk={handleBtwAsk}

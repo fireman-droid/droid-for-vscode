@@ -6,15 +6,17 @@ import {
 } from '../../shared/btwProtocol';
 import { DroidMarkdownContent } from './MarkdownText';
 
-/** Matches the slide-out duration in styles.css (dvx-btw-slide-out). */
+/** Matches the collapse duration in styles.css (dvx-btw-collapse). */
 const LEAVE_MS = 200;
 
 /**
- * The `/btw` side question panel: a full-height sheet sliding in from
- * the webview's right edge over a scrim (side-question-design.md §4.2,
- * Claude Code form factor per user decision 2026-08-12). It closes on
- * the `×` button, the scrim, Escape, or session changes — closing
- * discards the hidden fork on the host side.
+ * The `/btw` side question pane: a full-height split-pane column
+ * living beside the main conversation (side-question-design.md §4.2,
+ * Claude Code form factor per user decision 2026-08-12 — "它是共生
+ * 的", not a drawer). Both panes stay interactive at once; there is
+ * no scrim and no outside-press close. It closes on the `×` button,
+ * Escape, or session changes — closing discards the hidden fork on
+ * the host side.
  */
 export function SideChatSheet({
   btw,
@@ -51,8 +53,8 @@ export function SideChatSheet({
     inputRef.current?.focus();
   }, []);
 
-  // Play the slide-out before unmounting; the timeout doubles as the
-  // reduced-motion path where the animation is disabled.
+  // Play the width collapse before unmounting; the timeout doubles as
+  // the reduced-motion path where the animation is disabled.
   useEffect(() => {
     if (!leaving) {
       return undefined;
@@ -92,107 +94,97 @@ export function SideChatSheet({
   };
 
   return (
-    <div
-      className={`dvx-btw-overlay${leaving ? ' dvx-btw-leaving' : ''}`}
-      role="presentation"
+    <aside
+      className={`dvx-btw-panel${leaving ? ' dvx-btw-leaving' : ''}`}
+      role="complementary"
+      aria-label="Side question"
     >
-      <div
-        className="dvx-btw-scrim"
-        aria-hidden="true"
-        onClick={close}
-      />
-      <aside
-        className="dvx-btw-panel"
-        role="dialog"
-        aria-label="Side question"
-      >
-        <header className="dvx-btw-header">
-          <span className="dvx-btw-title">Side question</span>
-          <button
-            type="button"
-            className="dvx-btw-close"
-            aria-label="Close side chat"
-            onClick={close}
-          >
-            ×
-          </button>
-        </header>
-        <p className="dvx-btw-hint">
-          Ask a quick side question below without interrupting the
-          conversation.
-        </p>
-        <div className="dvx-btw-entries" ref={entriesRef}>
-          {btw.entries.map((entry) => (
-            <div className="dvx-btw-entry" key={entry.id}>
-              <div className="dvx-btw-question">{entry.question}</div>
-              {entry.answer.length > 0 ? (
-                <DroidMarkdownContent
-                  text={entry.answer}
-                  className="dvx-markdown dvx-btw-answer"
-                />
-              ) : null}
-              {entry.state === 'streaming' &&
-              entry.answer.length === 0 ? (
-                <div className="dvx-btw-status" role="status">
-                  <span className="dvx-shimmer-text">Answering…</span>
-                </div>
-              ) : null}
-              {entry.state === 'error' ? (
-                <div className="dvx-btw-error" role="status">
-                  {entry.message ??
-                    'Droid could not answer this side question.'}
-                </div>
-              ) : null}
-            </div>
-          ))}
-          {btw.status === 'forking' ? (
-            <div className="dvx-btw-status" role="status">
-              <span className="dvx-shimmer-text">
-                Starting side chat…
-              </span>
-            </div>
-          ) : null}
-          {unavailable ? (
-            <div className="dvx-btw-error" role="alert">
-              {btw.message ?? 'Side chat is unavailable.'}
-            </div>
-          ) : null}
-        </div>
-        <div className="dvx-btw-input-row">
-          <label className="dvx-visually-hidden" htmlFor="dvx-btw-input">
-            Ask a side question
-          </label>
-          <input
-            id="dvx-btw-input"
-            ref={inputRef}
-            className="dvx-btw-input"
-            type="text"
-            value={text}
-            placeholder={
-              streaming ? 'Answering…' : 'Ask a side question…'
+      <header className="dvx-btw-header">
+        <span className="dvx-btw-title">Side question</span>
+        <button
+          type="button"
+          className="dvx-btw-close"
+          aria-label="Close side chat"
+          onClick={close}
+        >
+          ×
+        </button>
+      </header>
+      <p className="dvx-btw-hint">
+        Ask a quick side question below without interrupting the
+        conversation.
+      </p>
+      <div className="dvx-btw-entries" ref={entriesRef}>
+        {btw.entries.map((entry) => (
+          <div className="dvx-btw-entry" key={entry.id}>
+            <div className="dvx-btw-question">{entry.question}</div>
+            {entry.answer.length > 0 ? (
+              <DroidMarkdownContent
+                text={entry.answer}
+                className="dvx-markdown dvx-btw-answer"
+              />
+            ) : null}
+            {entry.state === 'streaming' &&
+            entry.answer.length === 0 ? (
+              <div className="dvx-btw-status" role="status">
+                <span className="dvx-shimmer-text">Answering…</span>
+              </div>
+            ) : null}
+            {entry.state === 'error' ? (
+              <div className="dvx-btw-error" role="status">
+                {entry.message ??
+                  'Droid could not answer this side question.'}
+              </div>
+            ) : null}
+          </div>
+        ))}
+        {btw.status === 'forking' ? (
+          <div className="dvx-btw-status" role="status">
+            <span className="dvx-shimmer-text">
+              Starting side chat…
+            </span>
+          </div>
+        ) : null}
+        {unavailable ? (
+          <div className="dvx-btw-error" role="alert">
+            {btw.message ?? 'Side chat is unavailable.'}
+          </div>
+        ) : null}
+      </div>
+      <div className="dvx-btw-input-row">
+        <label className="dvx-visually-hidden" htmlFor="dvx-btw-input">
+          Ask a side question
+        </label>
+        <input
+          id="dvx-btw-input"
+          ref={inputRef}
+          className="dvx-btw-input"
+          type="text"
+          value={text}
+          placeholder={
+            streaming ? 'Answering…' : 'Ask a side question…'
+          }
+          autoComplete="off"
+          maxLength={MAX_BTW_TEXT_LENGTH}
+          disabled={inputDisabled}
+          onChange={(event) => setText(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              submit();
             }
-            autoComplete="off"
-            maxLength={MAX_BTW_TEXT_LENGTH}
-            disabled={inputDisabled}
-            onChange={(event) => setText(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                submit();
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="dvx-btw-send"
-            aria-label="Send side question"
-            disabled={inputDisabled || text.trim().length === 0}
-            onClick={submit}
-          >
-            ↑
-          </button>
-        </div>
-      </aside>
-    </div>
+          }}
+        />
+        <button
+          type="button"
+          className="dvx-btw-send"
+          aria-label="Send side question"
+          disabled={inputDisabled || text.trim().length === 0}
+          onClick={submit}
+        >
+          ↑
+        </button>
+      </div>
+    </aside>
   );
 }

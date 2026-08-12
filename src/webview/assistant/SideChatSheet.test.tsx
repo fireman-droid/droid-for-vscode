@@ -25,7 +25,9 @@ describe('SideChatSheet', () => {
     render(
       <SideChatSheet btw={readyState} onAsk={vi.fn()} onDismiss={vi.fn()} />,
     );
-    expect(screen.getByRole('dialog', { name: 'Side question' })).toBeTruthy();
+    expect(
+      screen.getByRole('complementary', { name: 'Side question' }),
+    ).toBeTruthy();
     expect(screen.getByText('Side question')).toBeTruthy();
     expect(
       screen.getByText(
@@ -177,7 +179,7 @@ describe('SideChatSheet', () => {
     await waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
   });
 
-  it('closes via the scrim but not via presses inside the panel', async () => {
+  it('renders no scrim and ignores presses inside the pane (split-pane)', async () => {
     const user = userEvent.setup();
     const onDismiss = vi.fn();
     const { container } = render(
@@ -187,12 +189,10 @@ describe('SideChatSheet', () => {
         onDismiss={onDismiss}
       />,
     );
+    expect(container.querySelector('.dvx-btw-scrim')).toBeNull();
+    expect(container.querySelector('.dvx-btw-overlay')).toBeNull();
     await user.click(screen.getByText('Side question'));
     expect(onDismiss).not.toHaveBeenCalled();
-    const scrim = container.querySelector('.dvx-btw-scrim');
-    expect(scrim).not.toBeNull();
-    await user.click(scrim as Element);
-    await waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
   });
 
   it('closes on Escape', async () => {
