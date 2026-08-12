@@ -11,6 +11,7 @@ import {
   MAX_BRIDGE_ID_LENGTH,
   MAX_IMAGE_DATA_LENGTH,
   MAX_IMAGES_PER_TURN,
+  MAX_TOOL_ERROR_MESSAGE_LENGTH,
 } from '../shared/bridgeMessages';
 import {
   normalizeSdkEvent,
@@ -139,12 +140,15 @@ describe('normalizeSdkEvent', () => {
       action: 'Used Search',
       updateKind: 'message',
     });
+    // A failed tool_result deliberately surfaces its text as the
+    // error excerpt so the UI can show why the tool failed.
     expect(normalizeSdkEvent(toolResult)).toEqual({
       type: 'tool-result',
       toolName: 'Read',
       toolUseId: 'tool-4',
       action: 'Read workspace files',
       isError: true,
+      errorText: 'sensitive file contents',
     });
     const serialized = JSON.stringify([
       normalizeSdkEvent(toolCall),
@@ -159,10 +163,63 @@ describe('normalizeSdkEvent', () => {
       'sensitive-signature',
       'sensitive progress content',
       'sensitive progress update',
-      'sensitive file contents',
     ]) {
       expect(serialized).not.toContain(prohibited);
     }
+  });
+
+  it('bounds and shapes the failed tool_result error excerpt', () => {
+    // Successful results never carry an excerpt.
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_result', {
+          toolUseId: 'tool-ok',
+          toolName: 'Read',
+          content: 'file contents',
+          isError: false,
+        }),
+      ),
+    ).not.toHaveProperty('errorText');
+    // Block arrays surface their text blocks only.
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_result', {
+          toolUseId: 'tool-blocks',
+          toolName: 'Execute',
+          isError: true,
+          content: [
+            { type: 'text', text: 'Tool execution cancelled by user' },
+            { type: 'image', source: { type: 'base64', data: 'aGk=' } },
+          ],
+        }),
+      ),
+    ).toMatchObject({
+      errorText: 'Tool execution cancelled by user',
+    });
+    // Long excerpts are truncated at the bridge cap with an ellipsis.
+    const long = normalizeSdkEvent(
+      sdkEvent('tool_result', {
+        toolUseId: 'tool-long',
+        toolName: 'Execute',
+        isError: true,
+        content: 'x'.repeat(MAX_TOOL_ERROR_MESSAGE_LENGTH + 100),
+      }),
+    );
+    expect(long).toMatchObject({ isError: true });
+    const errorText = (long as { errorText: string }).errorText;
+    expect(errorText.length).toBe(MAX_TOOL_ERROR_MESSAGE_LENGTH);
+    expect(errorText.endsWith('…')).toBe(true);
+    // Whitespace-only content yields no excerpt.
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_result', {
+          toolUseId: 'tool-blank',
+          toolName: 'Execute',
+          isError: true,
+          content: '   \n  ',
+        }),
+      ),
+    ).not.toHaveProperty('errorText');
   });
 
   it('projects workspace-relative file paths for file-modifying tools', () => {

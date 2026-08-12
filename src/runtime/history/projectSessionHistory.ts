@@ -24,7 +24,10 @@ import {
   transcriptItemTextUnits,
 } from '../../shared/transcriptLimits';
 import { summarizeToolAction } from '../../shared/toolActivity';
-import { readSdkImageBlock } from '../normalizeSdkEvent';
+import {
+  extractToolResultText,
+  readSdkImageBlock,
+} from '../normalizeSdkEvent';
 import { extractToolDetail } from '../toolDetail';
 import {
   extractToolFilePath,
@@ -653,9 +656,14 @@ function completeTool(
   if (existing?.kind !== 'tool') {
     return;
   }
+  const errorMessage =
+    block.isError === true
+      ? extractToolResultText(block.content)
+      : undefined;
   const updated: SessionTranscriptItem = {
     ...existing,
     status: block.isError === true ? 'failed' : 'completed',
+    ...(errorMessage === undefined ? {} : { errorMessage }),
   };
   projection.transcript[index] = updated;
   projection.transcriptTextUnits +=

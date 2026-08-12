@@ -8,6 +8,7 @@ import {
   MAX_BRIDGE_ID_LENGTH,
   MAX_IMAGE_DATA_LENGTH,
   MAX_IMAGES_PER_TURN,
+  MAX_TOOL_ERROR_MESSAGE_LENGTH,
   MAX_TOOL_NAME_LENGTH,
   type ImageMediaType,
   type ImageOrigin,
@@ -99,12 +100,17 @@ export function normalizeSdkEvent(
         event.toolName,
         event.toolUseId,
       );
-      return activity
-        ? {
-            ...activity,
-            isError: event.isError,
-          }
+      if (activity === undefined) {
+        return undefined;
+      }
+      const errorText = event.isError
+        ? extractToolResultText(event.content)
         : undefined;
+      return {
+        ...activity,
+        isError: event.isError,
+        ...(errorText === undefined ? {} : { errorText }),
+      };
     }
 
     case 'user':
@@ -203,6 +209,41 @@ function extractImageBlocks(
     });
   }
   return events;
+}
+
+/**
+ * Text excerpt from one tool_result's content: a plain string or the
+ * text blocks of a block array, bounded to the bridge error-message
+ * cap. Used only for failed results so the UI can show why the tool
+ * failed (the history projection reuses this).
+ */
+export function extractToolResultText(
+  content: unknown,
+): string | undefined {
+  const text =
+    typeof content === 'string'
+      ? content
+      : Array.isArray(content)
+        ? content
+            .filter(
+              (block): block is { type: 'text'; text: string } =>
+                typeof block === 'object' &&
+                block !== null &&
+                'type' in block &&
+                block.type === 'text' &&
+                'text' in block &&
+                typeof block.text === 'string',
+            )
+            .map((block) => block.text)
+            .join('\n')
+        : '';
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  return trimmed.length > MAX_TOOL_ERROR_MESSAGE_LENGTH
+    ? `${trimmed.slice(0, MAX_TOOL_ERROR_MESSAGE_LENGTH - 1)}…`
+    : trimmed;
 }
 
 /**
