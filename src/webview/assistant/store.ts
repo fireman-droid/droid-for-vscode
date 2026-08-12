@@ -914,6 +914,25 @@ export function assistantWebviewReducer(
         },
         upsertTool(state.transcript, event),
       );
+    case 'subagent.update':
+      // Out-of-band settlement of a background delegation: lands
+      // after its turn reached a terminal state, so it deliberately
+      // bypasses acceptsActiveTurn. Only the addressed row's
+      // subagent field may change; everything else is immutable.
+      if (event.sessionId !== state.sessionId) {
+        return advance(state, event.sequence);
+      }
+      return {
+        ...advance(state, event.sequence),
+        transcript: state.transcript.map((item) =>
+          item.kind === 'tool' &&
+          item.turnId === event.turnId &&
+          item.toolUseId === event.toolUseId &&
+          item.subagent !== undefined
+            ? { ...item, subagent: event.subagent }
+            : item,
+        ),
+      };
     case 'transcript.image': {
       if (!acceptsActiveTurn(state, event.sessionId, event.turnId)) {
         return advance(state, event.sequence);

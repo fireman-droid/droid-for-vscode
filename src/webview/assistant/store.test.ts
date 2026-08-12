@@ -553,6 +553,127 @@ describe('assistantWebviewReducer', () => {
     });
   });
 
+  it('settles a background delegation after the turn ended', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'turn.send',
+      turnId: 'turn-a',
+      text: 'Delegate in the background',
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'tool.activity',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'task-bg',
+        toolName: 'Task',
+        action: 'Delegated focused work',
+        status: 'completed',
+        progressCount: 0,
+        latestUpdateKind: null,
+        subagent: {
+          type: 'explore',
+          description: 'Background research',
+          status: 'running',
+        },
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'turn.state',
+        sequence: 2,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        status: 'completed',
+      },
+    });
+
+    // The delegation outlived the turn; tool.activity would be
+    // dropped now, but the out-of-band settlement lands.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'subagent.update',
+        sequence: 3,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'task-bg',
+        subagent: {
+          type: 'explore',
+          description: 'Background research',
+          status: 'completed',
+          toolUseCount: 7,
+          durationMs: 123_000,
+        },
+      },
+    });
+    expect(state.sequence).toBe(3);
+    expect(state.transcript.at(-1)).toMatchObject({
+      kind: 'tool',
+      status: 'completed',
+      subagent: {
+        status: 'completed',
+        toolUseCount: 7,
+        durationMs: 123_000,
+      },
+    });
+  });
+
+  it('drops subagent settlements for other sessions and plain rows', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: {
+        ...snapshot(),
+        transcript: [
+          {
+            id: 'tool-plain',
+            kind: 'tool',
+            turnId: 'turn-a',
+            toolUseId: 'read-1',
+            toolName: 'Read',
+            action: 'Read workspace files',
+            status: 'completed',
+            progressCount: 0,
+            latestUpdateKind: null,
+          },
+        ],
+      },
+    });
+    const settlement = {
+      type: 'subagent.update' as const,
+      sequence: 2,
+      sessionId: 'session-b',
+      turnId: 'turn-a',
+      toolUseId: 'read-1',
+      subagent: {
+        type: 'explore',
+        description: '',
+        status: 'completed' as const,
+      },
+    };
+    // Wrong session: sequence advances, transcript untouched.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: settlement,
+    });
+    expect(state.sequence).toBe(2);
+    expect(state.transcript[0]).not.toHaveProperty('subagent');
+
+    // Right session but the row never delegated: still a no-op, a
+    // settlement can never invent a subagent on a plain tool row.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: { ...settlement, sequence: 3, sessionId: 'session-a' },
+    });
+    expect(state.transcript[0]).not.toHaveProperty('subagent');
+  });
+
   it('carries tool file paths and appends one changes summary per turn', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',
