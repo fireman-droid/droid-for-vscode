@@ -1210,25 +1210,26 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
   入场动画仅 live 回合（复用 `dvx-anim-live` 门控），
   reduced-motion 全部动画/过渡关停，forced-colors 补 CanvasText
   边框
-- 门禁：钉条单测 24 个全绿；HEAD 干净检出独立 worktree
-  （`dvx-plan-pin-gate`）全量 vitest 76 files / 1760 tests 全绿 +
-  build 绿；typecheck 卡在既有 `store.ts` TS2366（`9bc7a13`
-  /btw 半切片遗留，其在途工作树改动已修，非本切片文件）。headless
-  Chrome harness 冒烟（`artifacts/plan-pin-harness.html` +
-  `smoke-plan-pin.mjs`，对真实 dist 产物）四场景 PASS：
-  replay-open 恢复显示（2/3 + 当前项 + Composer 上方）、
-  replay-done 不显示、stream 全链（出现 1/3→更新 2/3 与当前项
-  切换→展开三项状态图标各就位→外点收起→完成态 3/3→leaving→
-  淡出→回合结束不复活）、arrow 共存（箭头存在且零重叠）
-- **打包**：完成时主工作树载有并行代理（/btw + 消息队列切片）
-  大量在途未提交改动，HEAD typecheck 又因 `9bc7a13` 为红，打包
-  会把半成品装进用户扩展——按约定**标注随下包**
-- 遗留：`App.tsx` 的 `selectTaskPlanPin(state.transcript)` 待补
-  第二实参 `state.sessionId`（selector 暂以默认 null 兼容）；
-  文件被 /btw 切片占用中，释放后一行补齐。影响面：单会话行为
-  不变，仅"跨会话切到已完成计划"场景的不显示判定依赖该实参
+- 门禁：钉条单测 24 个全绿；中途基线（HEAD 干净检出独立
+  worktree `dvx-plan-pin-gate`）vitest 76 files / 1760 tests +
+  build 绿；队列/btw 切片落地后主树终态（`8e6f989`）typecheck
+  三 tsconfig 全过、全量 vitest 80 files / 1804 tests 全绿、
+  build 绿。headless Chrome harness 冒烟
+  （`artifacts/plan-pin-harness.html` + `smoke-plan-pin.mjs`，
+  对最终 dist 产物复跑）四场景 PASS：replay-open 恢复显示
+  （2/3 + 当前项 + Composer 上方）、replay-done 不显示、stream
+  全链（出现 1/3→更新 2/3 与当前项切换→展开三项状态图标各就位→
+  外点收起→完成态 3/3→leaving→淡出→回合结束不复活）、arrow
+  共存（箭头存在且零重叠）
+- **打包**：完成时点等到队列/btw 切片全部落地、树绿锁空闲，
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix`
+  （10 files, 1.56 MB，含队列卡 + btw 修复 + 本切片）、
+  `cursor --install-extension dist/droidvisx.vsix --force`
+  successfully installed；待用户 Reload 后真机验收
 - 提交：`fab92da`（chore：钉条模块 + Thread/App 接线随
-  `7a8e33a` 落地）、`5d2c2cb`（fix：完成淡出改为会话感知）
+  `7a8e33a` 落地）、`5d2c2cb`（fix：完成淡出改为会话感知）、
+  `8e6f989`（fix：App 传入 session id 实参，selector 撤掉
+  过渡默认值）
 
 主要实现：
 
