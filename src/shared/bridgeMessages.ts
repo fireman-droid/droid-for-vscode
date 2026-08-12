@@ -9,6 +9,7 @@ import {
   TOOL_ACTIVITY_UPDATE_KINDS,
   type ToolActivityUpdateKind,
 } from './toolActivity';
+import type { SessionTokenUsageState } from './tokenUsage';
 import { MAX_SESSION_TRANSCRIPT_ITEMS } from './transcriptLimits';
 
 export {
@@ -1434,6 +1435,12 @@ export interface HostSnapshotMessage {
    * unavailable and the entry must not render (fail closed).
    */
   readonly worktreeCreateAvailable?: boolean;
+  /**
+   * Session/turn token-usage breakdown. Absent when the host has no
+   * usage data for the active session (fail quiet; the popover
+   * section must not render).
+   */
+  readonly tokenUsage?: SessionTokenUsageState;
 }
 
 export interface HostConnectionMessage {
@@ -1455,6 +1462,19 @@ export interface SessionContextStateMessage {
   readonly sequence: number;
   readonly sessionId: string;
   readonly context: SessionContextState;
+}
+
+/**
+ * Token-usage breakdown of the active session: cumulative totals
+ * (live `token_usage_update` stream or `loadSession` history seed)
+ * plus the last turn completed in this window. Tokens only — the
+ * Droid SDK exposes no USD cost (docs/product/token-usage-design.md).
+ */
+export interface SessionTokenUsageStateMessage {
+  readonly type: 'session.tokenUsage';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly tokenUsage: SessionTokenUsageState;
 }
 
 export interface ModelCatalogStateMessage {
@@ -1852,6 +1872,7 @@ export type HostToWebviewMessage =
   | HostConnectionMessage
   | SessionSettingsStateMessage
   | SessionContextStateMessage
+  | SessionTokenUsageStateMessage
   | ModelCatalogStateMessage
   | SessionSkillsStateMessage
   | SessionMcpStateMessage

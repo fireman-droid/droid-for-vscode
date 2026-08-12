@@ -2460,6 +2460,101 @@ describe('readHostMessage', () => {
     ).toBeUndefined();
   });
 
+  it('accepts session token usage on snapshots and as a state message', () => {
+    const snapshot = createSessionSnapshot();
+    const withUsage = {
+      ...snapshot,
+      tokenUsage: {
+        cumulative: tokenUsageFixture(),
+        lastTurn: { ...tokenUsageFixture(), factoryCredits: 0.5 },
+      },
+    };
+    expect(readHostMessage(withUsage)).toEqual(withUsage);
+
+    const seedOnly = {
+      ...snapshot,
+      tokenUsage: { cumulative: tokenUsageFixture(), lastTurn: null },
+    };
+    expect(readHostMessage(seedOnly)).toEqual(seedOnly);
+
+    const message = {
+      type: 'session.tokenUsage',
+      sequence: 4,
+      sessionId: 'session-1',
+      tokenUsage: {
+        cumulative: tokenUsageFixture(),
+        lastTurn: null,
+      },
+    };
+    expect(readHostMessage(message)).toEqual(message);
+  });
+
+  it.each([
+    { name: 'non-record state', tokenUsage: 'lots' },
+    {
+      name: 'missing lastTurn member',
+      tokenUsage: { cumulative: null },
+    },
+    {
+      name: 'extra state keys',
+      tokenUsage: { cumulative: null, lastTurn: null, costUsd: 1 },
+    },
+    {
+      name: 'negative token count',
+      tokenUsage: {
+        cumulative: { ...tokenUsageFixture(), inputTokens: -1 },
+        lastTurn: null,
+      },
+    },
+    {
+      name: 'fractional token count',
+      tokenUsage: {
+        cumulative: { ...tokenUsageFixture(), outputTokens: 1.5 },
+        lastTurn: null,
+      },
+    },
+    {
+      name: 'missing breakdown field',
+      tokenUsage: {
+        cumulative: (() => {
+          const { thinkingTokens: _omitted, ...rest } = tokenUsageFixture();
+          return rest;
+        })(),
+        lastTurn: null,
+      },
+    },
+    {
+      name: 'extra breakdown keys',
+      tokenUsage: {
+        cumulative: { ...tokenUsageFixture(), totalCost: 3 },
+        lastTurn: null,
+      },
+    },
+    {
+      name: 'negative factoryCredits',
+      tokenUsage: {
+        cumulative: { ...tokenUsageFixture(), factoryCredits: -1 },
+        lastTurn: null,
+      },
+    },
+  ])(
+    'rejects malformed token usage on snapshots and messages ($name)',
+    ({ tokenUsage }) => {
+      const snapshot = createSessionSnapshot();
+      expect(
+        readHostMessage({ ...snapshot, tokenUsage }),
+      ).toBeUndefined();
+      expect(
+        readHostMessage({
+          type: 'session.tokenUsage',
+          sequence: 4,
+          sessionId: 'session-1',
+          tokenUsage,
+        }),
+      ).toBeUndefined();
+    },
+  );
+
   it('defaults a missing favorite flag to false', () => {
     const snapshot = createSessionSnapshot();
     const { isFavorite: _omitted, ...summaryWithoutFavorite } =
@@ -3854,6 +3949,17 @@ function createSessionSnapshot(): Extract<
     transcript: [{ id: 'user-1', kind: 'user', text: 'Prompt' }],
     historyStatus: 'complete',
     truncated: false,
+  };
+}
+
+function tokenUsageFixture() {
+  // Live values from artifacts/probe-token-usage.out.json.
+  return {
+    inputTokens: 2565,
+    outputTokens: 81,
+    cacheReadTokens: 23552,
+    cacheCreationTokens: 0,
+    thinkingTokens: 62,
   };
 }
 

@@ -159,6 +159,10 @@ import {
   isStrictRecord,
   type UnknownRecord,
 } from '../../shared/strictValidation';
+import type {
+  SessionTokenUsageState,
+  TokenUsageBreakdown,
+} from '../../shared/tokenUsage';
 import {
   isSafeCommandName,
   isSafeWorkspaceRelativePath,
@@ -234,6 +238,8 @@ export function readHostMessage(
         return parseSessionSettingsMessage(value);
       case 'session.context':
         return parseSessionContextMessage(value);
+      case 'session.tokenUsage':
+        return parseSessionTokenUsageMessage(value);
       case 'session.model-catalog':
         return parseModelCatalogMessage(value);
       case 'session.skills':
@@ -316,7 +322,7 @@ function parseHostSnapshot(
         'historyStatus',
         'truncated',
       ],
-      ['mission', 'worktreeCreateAvailable'],
+      ['mission', 'worktreeCreateAvailable', 'tokenUsage'],
     ) ||
     !isSequence(value.sequence) ||
     !isNullableId(value.sessionId) ||
@@ -337,6 +343,17 @@ function parseHostSnapshot(
   }
   // A mission summary describes the active session only.
   if (mission !== undefined && value.sessionId === null) {
+    return undefined;
+  }
+  const tokenUsage =
+    value.tokenUsage === undefined
+      ? undefined
+      : parseSessionTokenUsageState(value.tokenUsage);
+  if (
+    (value.tokenUsage !== undefined && tokenUsage === undefined) ||
+    // Usage describes the active session only.
+    (tokenUsage !== undefined && value.sessionId === null)
+  ) {
     return undefined;
   }
 
@@ -382,6 +399,7 @@ function parseHostSnapshot(
     ...(value.worktreeCreateAvailable === undefined
       ? {}
       : { worktreeCreateAvailable: true }),
+    ...(tokenUsage === undefined ? {} : { tokenUsage }),
   };
 }
 
@@ -458,6 +476,105 @@ function parseSessionContextMessage(
         sessionId: value.sessionId,
         context,
       };
+}
+
+function parseSessionTokenUsageMessage(
+  value: UnknownRecord,
+):
+  | Extract<HostToWebviewMessage, { type: 'session.tokenUsage' }>
+  | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sequence',
+      'sessionId',
+      'tokenUsage',
+    ]) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+  const tokenUsage = parseSessionTokenUsageState(value.tokenUsage);
+  return tokenUsage === undefined
+    ? undefined
+    : {
+        type: 'session.tokenUsage',
+        sequence: value.sequence,
+        sessionId: value.sessionId,
+        tokenUsage,
+      };
+}
+
+function parseSessionTokenUsageState(
+  value: unknown,
+): SessionTokenUsageState | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, ['cumulative', 'lastTurn'])
+  ) {
+    return undefined;
+  }
+  const cumulative =
+    value.cumulative === null
+      ? null
+      : parseTokenUsageBreakdown(value.cumulative);
+  const lastTurn =
+    value.lastTurn === null
+      ? null
+      : parseTokenUsageBreakdown(value.lastTurn);
+  if (cumulative === undefined || lastTurn === undefined) {
+    return undefined;
+  }
+  return { cumulative, lastTurn };
+}
+
+function parseTokenUsageBreakdown(
+  value: unknown,
+): TokenUsageBreakdown | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(
+      value,
+      [
+        'inputTokens',
+        'outputTokens',
+        'cacheReadTokens',
+        'cacheCreationTokens',
+        'thinkingTokens',
+      ],
+      ['factoryCredits'],
+    ) ||
+    !isTokenCount(value.inputTokens) ||
+    !isTokenCount(value.outputTokens) ||
+    !isTokenCount(value.cacheReadTokens) ||
+    !isTokenCount(value.cacheCreationTokens) ||
+    !isTokenCount(value.thinkingTokens) ||
+    (value.factoryCredits !== undefined &&
+      (typeof value.factoryCredits !== 'number' ||
+        !Number.isFinite(value.factoryCredits) ||
+        value.factoryCredits < 0))
+  ) {
+    return undefined;
+  }
+  return {
+    inputTokens: value.inputTokens,
+    outputTokens: value.outputTokens,
+    cacheReadTokens: value.cacheReadTokens,
+    cacheCreationTokens: value.cacheCreationTokens,
+    thinkingTokens: value.thinkingTokens,
+    ...(value.factoryCredits === undefined
+      ? {}
+      : { factoryCredits: value.factoryCredits }),
+  };
+}
+
+function isTokenCount(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isSafeInteger(value) &&
+    value >= 0
+  );
 }
 
 function parseModelCatalogMessage(
