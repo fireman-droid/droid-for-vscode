@@ -230,6 +230,13 @@ function GitCommitPanel({
         <div className="dvx-commit-actions">
           <button
             type="button"
+            className="dvx-commit-cancel"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
             className="dvx-commit-submit"
             disabled={!canCommit}
             onClick={() => {
@@ -237,13 +244,6 @@ function GitCommitPanel({
             }}
           >
             {state.commitPending ? "Committing…" : "Commit"}
-          </button>
-          <button
-            type="button"
-            className="dvx-commit-cancel"
-            onClick={onClose}
-          >
-            Cancel
           </button>
         </div>
       </>

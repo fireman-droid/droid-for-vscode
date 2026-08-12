@@ -178,6 +178,16 @@ describe('ChangesCommitEntry', () => {
     expect(text).toBe('feat: everything');
   });
 
+  it('orders the actions Cancel-then-Commit for right-corner placement', async () => {
+    await expandPanel();
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    const commit = screen.getByRole('button', { name: 'Commit' });
+    expect(
+      cancel.compareDocumentPosition(commit) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('shows the committing state while a commit is pending', async () => {
     await expandPanel({ commitPending: true, commitTurnId: 'turn-1' });
     const button = screen.getByRole('button', {
