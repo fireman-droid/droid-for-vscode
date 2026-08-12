@@ -941,6 +941,61 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
   `runtimeAdapter.ts`、`Thread.tsx`、`styles.css`（子行渲染与
   mission 静字，`4dcee12` `d1011f7` `9788c20`）
 
+### 14. 三项体验补全：回到底部箭头 / 待答空隙 / 代码块 Preview（2026-08-12 傍晚）
+
+- **回到底部箭头**：转录距底部超过 48px（`SCROLL_BOTTOM_SHOW_PX`）
+  时，Composer 上方水平居中浮现圆形箭头（暖白底 `--dvx-raised`、
+  1px `--dvx-border`、软阴影、hover 微反馈；160ms fade+4px lift，
+  60ms 出现延迟吞掉一次性回放滚动的闪现帧；`prefers-reduced-motion`
+  下无过渡）。可见性在滚动协调器同一 rAF pass（`updatePins`）里计
+  算，与跟随态永不脱节；点击先置 `follow.following = true` 并标记
+  `pendingProgrammaticTop` 再 `scrollTo`（平滑，reduced-motion 降
+  级瞬时）——流式期间点击即恢复自动跟随，上滑断开为既有行为。隐藏
+  态 `visibility: hidden` + `tabIndex -1` + `aria-hidden`，不占
+  hit-test 与焦点序
+- **待答空隙修复**：根因是 assistant-ui 发送后即挂载的乐观 assistant
+  消息——空根元素零高度但仍消费 `.dvx-message` 的 20px 槽位 margin，
+  与用户消息自身 20px 叠成 40px 假空隙，把 “Droid is responding”
+  推远（截图 image-7446de06）。修复为 `.dvx-message-assistant:empty
+  { display: none; }`，首个 part 到达该规则自然失效；headless 实测
+  行距回到标准 20px。指示行本就在内容流内（无底部锚定 flex 规则），
+  内容超一屏行为不变
+- **代码块 Preview**：转录内 ```` ```html ```` 或以 `<!DOCTYPE` /
+  `<html` 开头的代码块（宽松启发 `isInlineHtmlPreviewCandidate`），
+  工具条 Copy 旁出现同视觉语言的安静 “Preview” 入口。消息仍在流式
+  （aui `message.status.type === 'running'`，MermaidBlock 同款判定，
+  transcript-only 的 `TranscriptCodeBlock` 包装）时不显示；超过
+  `MAX_INLINE_PREVIEW_HTML_LENGTH`（512K UTF-16 单元）时入口禁用并
+  带 tooltip 说明（转录侧 `MAX_ASSISTANT_TEXT_LENGTH` 200K 实际到不
+  了上限，双侧校验属纵深防御）。点击经新 Bridge 消息
+  `preview.inlineHtml`（exact-key + 空串/超限拒绝，双侧校验）到
+  Host，`PreviewPanelController.openInlineHtml` 复用 Canvas 切片的
+  `srcdoc` 沙箱路径（`sandbox="allow-scripts"` 无 same-origin、双点
+  CSP 零网络原样），面板标题标注 “inline” 来源，Reload 对内联内容
+  = 重渲染同一份存储的 HTML，Open in editor 对无背景文件的内联内容
+  隐藏；单面板实例在文件/内联来源间复用
+- 门禁（本切片完成时点）：typecheck 三段全绿；全量 vitest 68 files
+  / 1586 通过；build 正常；headless Chromium harness 冒烟全绿
+  （箭头：底部隐藏不闪现→上滑出现→未跟随时增长不动视口→点击回底部
+  并恢复跟随→增长重新贴底；空隙：20px + 空根隐藏；Preview：入口在
+  Copy 旁、点击恰好发一条 `preview.inlineHtml` 且 payload 与围栏源
+  码逐字一致）
+
+主要实现：
+
+- `src/shared/bridgeMessages.ts`、`src/shared/validateMessage.ts`
+  （`preview.inlineHtml` 契约 + 512K 上限 + 双侧校验；随并行代理提
+  交并入 `3e7da6b`/`62b6f1b`）
+- `src/extension/PreviewPanelController.ts`、`previewHtml.ts`、
+  `prototypePreview.ts`（内联 srcdoc 渲染、inline 标题、Reload 语
+  义、Open-in-editor 隐藏，`8739fd2`）；`src/extension/
+  ChatController.ts` 路由（随 `3e7da6b` 并入）
+- `src/webview/assistant/MarkdownText.tsx`（启发判定、流式门、超限
+  禁用、`InlineHtmlPreviewContext`，`cae4890`）
+- `src/webview/assistant/Thread.tsx`、`App.tsx`（协调器接线的箭头、
+  webview 侧尺寸守卫与 `preview.inlineHtml` 发送，`cd7a74f`）；
+  `styles.css`（箭头/空隙/工具条动作组样式，随 `62b6f1b` 并入）
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
