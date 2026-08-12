@@ -997,6 +997,71 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
   webview 侧尺寸守卫与 `preview.inlineHtml` 发送，`cd7a74f`）；
   `styles.css`（箭头/空隙/工具条动作组样式，随 `62b6f1b` 并入）
 
+### 15. 三项消息区/Composer 打磨：编辑卡免 Cancel / 悬浮操作条 + Fork / + 菜单过渡（2026-08-12 傍晚）
+
+- **编辑卡去掉 Cancel 按钮**：用户消息编辑态的控制条只剩圆形发送
+  按钮；点击卡外任意空白（document 级 `pointerdown`，卡内 ref 包含
+  判定）或 Escape 即静默取消（`editStage.cancel`，无确认弹窗）。
+  卡内弹出层（Mode/Model 选择）打开时，第一次外点只收弹出层
+  （识别 `.dvx-composer-popover` 存在且未带 `data-popover-closing`）
+  ，编辑器保持；下一次外点才收编辑器
+- **Assistant 消息悬浮操作条（学 Cursor，无拇指）**：常驻
+  “Copy Regenerate” 行改为 quiet 操作条——细字相对时间（“just
+  now”/“2m ago”，hover title 显示绝对时间）+ Copy + Regenerate +
+  Fork chat。较早消息 hover/focus-within 淡入（120ms），最后一条
+  常显（`dvx-message-last`），流式中 `hideWhenRunning` 不显示、回
+  合结束后出现。**Fork 能力如实边界**：SDK `forkSession` 只支持从
+  会话当前态分叉（无逐消息锚点，见
+  `docs/product/session-management-design.md`），因此 Fork chat 只
+  出现在最后一条助手消息上，且仅连接态、无活动回合、无待答交互时
+  可用（复用 Session 列表的 `session.fork` → Host 采纳 fork 会话
+  路径）；不伪造“从任意消息分叉”
+- **相对时间的如实边界**：完成时间由 webview 侧
+  `runtimeAdapter` 的 completion clock 落章——只有本 webview 亲见
+  从 streaming 转入终态的回合才有时间戳；历史/恢复重建的消息不伪
+  造时间（操作条不显示年龄）。Bridge/Host 传输 `completedAt`（含
+  恢复持久化）因 `bridgeMessages.ts`/`validateHostMessage.ts`/
+  `hostTranscriptState.ts`/`store.ts` 被并行代理占用而**未接入**，
+  随后续切片补；补齐前时间戳不跨 webview 重载存活（Tab 切换保留
+  webview 后已可跨切换存活）
+- **+ 菜单过渡动画**：+ 弹出层入场改用动效 token
+  （`dvx-rise-in` + `--dvx-duration-slow`/`--dvx-easing-out-strong`
+  ），退场新增 `dvx-rise-out`（`data-popover-closing` 期间延迟卸载
+  播放，`pointer-events: none` 防吞点击）；Skills/MCP 钻入/返回经
+  keyed `dvx-settings-view` 包装做方向性滑动
+  （`data-direction='forward'/'back'`，12px + 淡入）。
+  `prefers-reduced-motion` 全部豁免。TSX 侧逻辑
+  （closingPanel/openSeq/方向 ref）随并行代理提交并入 `cdbbec8`
+- 门禁（本切片完成时点）：typecheck 仅剩并行代理在途 `store.ts`
+  一处错误（非本切片文件）；全量 vitest 73 files / 1691 tests，
+  1678 通过、13 失败——全部源于并行代理在途的 ComposerControls
+  plugins 切片（`SettingsPopover` 读未传入的 `plugins` prop 崩
+  溃），与本切片无关；本切片聚焦测试 25/25 通过
+  （messageActions 4 + MessageTimestamp/relativeTime 13 +
+  runtimeAdapter 8）；build 正常；headless Chrome harness 冒烟三
+  场景全绿（replay：早期消息 hover 淡入/最后一条常显/无伪造时间/
+  Fork 仅最后一条且发 `session.fork`/编辑卡无 Cancel/卡内点击不
+  关/弹出层外点两段式/Escape；stream：流式中无操作条、回合完成后
+  “just now”；menu：入场 keyframe/方向属性/closing 态/卸载）
+- **打包**：未打包。当前 `dist/` 含并行代理半落地的 plugins 切片
+  （装入会使 + 菜单崩溃），本切片随下一个安全包一并安装
+
+主要实现（`4ae602f`）：
+
+- `src/webview/assistant/Thread.tsx`（外点取消 + 弹出层守卫、
+  `ForkContext`/`ForkAction`/`ForkIcon`、`dvx-message-last`、
+  时间戳接线）；`App.tsx`（`handleForkCurrentSession` 门控接线）
+- `src/webview/assistant/runtimeAdapter.ts`（completion clock：
+  streaming→settled 落章、首见即终态标记 settled 永不伪造、随
+  转录修剪）
+- `src/webview/assistant/relativeTime.ts`、`MessageTimestamp.tsx`
+  （“just now/2m ago/3h ago/2d ago/日期”分级 + 按粒度自刷新）
+- `src/webview/assistant/styles.css`（操作条 hover/常显/时间细字、
+  `dvx-rise-out`、`dvx-settings-view` 方向滑动）
+- 测试：`messageActions.test.tsx`（外点取消、Fork 仅最后一条、
+  活动回合隐藏 Fork、时间戳只落亲见完成的回合）、
+  `MessageTimestamp.test.tsx`、`relativeTime.test.ts`
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
