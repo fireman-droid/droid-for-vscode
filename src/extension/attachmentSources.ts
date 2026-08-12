@@ -53,6 +53,12 @@ export interface AttachmentSources {
     query: string,
     maxResults: number,
   ): Promise<readonly string[]>;
+  /**
+   * Lists files open in editor tabs for the empty `@` query, as
+   * deduplicated workspace-relative forward-slash paths in tab order.
+   * Optional: hosts without a tab UI simply have no open editors.
+   */
+  listOpenEditorFiles?(maxResults: number): readonly string[];
   /** Reads one workspace file by validated relative path. */
   readWorkspaceFile(
     relativePath: string,
@@ -72,6 +78,7 @@ export function createUnavailableAttachmentSources(): AttachmentSources {
     readActiveEditor: () => Promise.resolve({ status: 'failed' }),
     readActiveSelection: () => Promise.resolve({ status: 'failed' }),
     searchWorkspaceFiles: () => Promise.resolve([]),
+    listOpenEditorFiles: () => [],
     readWorkspaceFile: () => Promise.resolve({ status: 'failed' }),
     readProblems: () => Promise.resolve({ status: 'failed' }),
     readGitChanges: () => Promise.resolve({ status: 'failed' }),

@@ -12,6 +12,7 @@ import {
   type AttachmentPickOutcome,
   type AttachmentSources,
 } from './attachmentSources';
+import { toOpenEditorRelativePaths } from './openEditorTabs';
 import type { RuntimeImageMediaType } from '../runtime/DroidRuntime';
 
 const IMAGE_MEDIA_TYPES: Record<string, RuntimeImageMediaType> = {
@@ -160,6 +161,29 @@ export function createVscodeAttachmentSources(): AttachmentSources & {
       return paths.sort(
         (a, b) => a.length - b.length || a.localeCompare(b),
       );
+    },
+
+    listOpenEditorFiles(maxResults): readonly string[] {
+      const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+      if (root === undefined) {
+        return [];
+      }
+      const tabFsPaths: string[] = [];
+      for (const group of vscode.window.tabGroups.all) {
+        for (const tab of group.tabs) {
+          const input = tab.input;
+          if (
+            input instanceof vscode.TabInputText ||
+            input instanceof vscode.TabInputCustom ||
+            input instanceof vscode.TabInputNotebook
+          ) {
+            if (input.uri.scheme === 'file') {
+              tabFsPaths.push(input.uri.fsPath);
+            }
+          }
+        }
+      }
+      return toOpenEditorRelativePaths(root.fsPath, tabFsPaths, maxResults);
     },
 
     async readWorkspaceFile(
