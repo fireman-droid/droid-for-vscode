@@ -68,9 +68,11 @@ interface DaemonSidecar {
 
 type DiagnosticsSink = {
   record(event: {
-    level: 'info' | 'warn';
+    level: 'info' | 'warn' | 'error';
     name: string;
     attributes?: Record<string, string | number | boolean>;
+    /** Free text; the sink credential-scrubs it before persisting. */
+    detail?: string;
   }): void;
 };
 
@@ -162,7 +164,20 @@ function createDaemonSidecar(
   let sidecar: Promise<DaemonSidecar> | null = null;
 
   const start = async (): Promise<DaemonSidecar> => {
-    const endpoint = await strategy.start();
+    // Both failure phases are logged: a silent start failure used to
+    // surface only as "unavailable" copy with zero log evidence.
+    let endpoint: DaemonEndpoint;
+    try {
+      endpoint = await strategy.start();
+    } catch (error) {
+      diagnostics.record({
+        level: 'error',
+        name: 'daemon.sidecar.start-failed',
+        attributes: { phase: 'spawn' },
+        detail: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
     try {
       const connection = await openDaemonConnection(endpoint);
       diagnostics.record({
@@ -176,6 +191,16 @@ function createDaemonSidecar(
         catalog: new DaemonSessionCatalog(connection.droid),
       };
     } catch (error) {
+      diagnostics.record({
+        level: 'error',
+        name: 'daemon.sidecar.start-failed',
+        attributes: {
+          phase: 'connect',
+          url: endpoint.url,
+          pid: endpoint.pid,
+        },
+        detail: error instanceof Error ? error.message : String(error),
+      });
       await strategy.reapOnFailure(endpoint);
       throw error;
     }
@@ -372,6 +397,14 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.registerWebviewViewProvider(
       DroidViewProvider.viewType,
       provider,
+      // Keep the chat iframe alive across tab switches: without
+      // retention every switch-back pays a full webview reboot
+      // (boot ~1.1s + re-render ~1.2s measured), which is why the
+      // sidebar felt heavy next to instant chat surfaces. The chat
+      // state (transcript, composer, scroll) cannot be quickly
+      // saved and restored, which is the documented case for
+      // retainContextWhenHidden's memory cost.
+      { webviewOptions: { retainContextWhenHidden: true } },
     ),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       controller.handleWorkspaceContextChanged();
