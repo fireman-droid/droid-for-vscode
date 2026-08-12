@@ -122,6 +122,7 @@ import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRef
 import { handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddImage, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
 import { handleSettingUpdate, emitSettings, refreshSettingsAfterRuntimeEvent, projectConfirmedSettings, SETTINGS_READ_FAILED_MESSAGE } from './chat/settings';
 import { handleFileOpenDiff, handleFilePreview, handleInlineHtmlPreview, handleTerminalOpenMirror, handleGitRequestStatus, handleGitCommit, handleWorkspaceOpenPath, handleWorkspaceSearchFiles, handleWorkspaceReadImage } from './chat/workspaceActions';
+import { handleRewindInfo, handleEditResend, handleEditStageBegin, handleEditStageCancel } from './chat/editResend';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
 import {
   clearPrompts,
@@ -209,6 +210,7 @@ import {
   DAEMON_UNAVAILABLE_MESSAGE,
   createTransientRecoveryStore,
   delay,
+  forkTitleFromText,
   formatUnknownError,
   daemonFailureMessage,
   isEnumValue,
@@ -318,15 +320,6 @@ const WORKTREE_CREATE_UNAVAILABLE_MESSAGE =
   'Worktree sessions need the daemon runtime mode and a git workspace.';
 const WORKSPACE_CHANGED_MESSAGE =
   'The workspace changed before the Droid session could be opened.';
-const EDIT_RESEND_BLOCKED_MESSAGE =
-  'Finish the current Droid activity before editing an earlier message.';
-const EDIT_RESEND_QUEUE_BLOCKED_MESSAGE =
-  'Clear the queued messages before editing an earlier message.';
-const EDIT_RESEND_UNSUPPORTED_MESSAGE =
-  'This message cannot be edited and resent.';
-const EDIT_RESEND_FAILED_MESSAGE =
-  'Droid could not rewind the session to that message.';
-const MAX_FORK_TITLE_LENGTH = 60;
 const RENAME_BLOCKED_MESSAGE =
   'Wait for the current session operation to finish before renaming.';
 const RENAME_UNSUPPORTED_MESSAGE =
@@ -655,7 +648,7 @@ export class ChatController {
         this.handleStop(message.sessionId, message.turnId);
         return;
       case 'turn.editResend':
-        this.handleEditResend(
+        handleEditResend(this, 
           message.sessionId,
           message.turnId,
           message.messageId,
@@ -690,7 +683,7 @@ export class ChatController {
         handleQueueClear(this, message.sessionId);
         return;
       case 'rewind.info':
-        this.handleRewindInfo(message.sessionId, message.messageId);
+        handleRewindInfo(this, message.sessionId, message.messageId);
         return;
       case 'runtime.retry':
         this.handleRetry(message.sessionId);
@@ -886,13 +879,13 @@ export class ChatController {
         );
         return;
       case 'editStage.begin':
-        this.handleEditStageBegin(
+        handleEditStageBegin(this, 
           message.sessionId,
           message.messageId,
         );
         return;
       case 'editStage.cancel':
-        this.handleEditStageCancel(message.sessionId);
+        handleEditStageCancel(this, message.sessionId);
         return;
       case 'workspace.searchFiles':
         handleWorkspaceSearchFiles(this, 
@@ -1715,246 +1708,6 @@ export class ChatController {
         this.failTurn(sessionId, turnId, 'runtime-interrupt-failed');
       }
     });
-  }
-
-  private handleRewindInfo(sessionId: string, messageId: string): void {
-    const runtime = this.runtime;
-    if (
-      runtime === null ||
-      this.connection.status !== 'connected' ||
-      sessionId !== this.sessionId ||
-      typeof runtime.getRewindInfo !== 'function'
-    ) {
-      return;
-    }
-    void runtime.getRewindInfo(messageId).then(
-      (info) => {
-        if (sessionId === this.sessionId) {
-          this.emit({
-            type: 'rewind.info',
-            sessionId,
-            messageId,
-            restorableCount: info.restorableCount,
-            createdCount: info.createdCount,
-          });
-        }
-      },
-      () => {
-        // File info is advisory; the editor simply omits the option.
-      },
-    );
-  }
-
-  private handleEditResend(
-    sessionId: string,
-    turnId: string,
-    messageId: string,
-    text: string,
-    restoreFiles: boolean,
-  ): void {
-    const runtime = this.runtime;
-    if (
-      runtime !== null &&
-      !this.ensureActiveRuntimeWorkspaceCurrent()
-    ) {
-      return;
-    }
-    if (
-      runtime === null ||
-      this.connection.status !== 'connected' ||
-      sessionId !== this.sessionId ||
-      text.trim().length === 0 ||
-      this.turn?.turnId === turnId
-    ) {
-      return;
-    }
-    if (
-      isTurnActive(this.turn) ||
-      this.interactions.hasPending() ||
-      this.sessionOperationInProgress ||
-      this.refreshInProgress ||
-      this.settingsUpdate !== null
-    ) {
-      this.emitSessionDiagnostic(
-        'edit-resend-blocked',
-        EDIT_RESEND_BLOCKED_MESSAGE,
-      );
-      this.emitEditResendRejected(sessionId, messageId, 'busy');
-      return;
-    }
-    // Edit-resend forks the session, which would silently discard the
-    // queue (design §4.6): make the user resolve the queue first.
-    if (this.queuedPrompts.items.length > 0) {
-      this.emitSessionDiagnostic(
-        'edit-resend-blocked',
-        EDIT_RESEND_QUEUE_BLOCKED_MESSAGE,
-      );
-      this.emitEditResendRejected(sessionId, messageId, 'busy');
-      return;
-    }
-    if (typeof runtime.rewind !== 'function') {
-      this.emitSessionDiagnostic(
-        'edit-resend-unsupported',
-        EDIT_RESEND_UNSUPPORTED_MESSAGE,
-      );
-      this.emitEditResendRejected(sessionId, messageId, 'unsupported');
-      return;
-    }
-    const truncated = truncateFromUserMessage(
-      this.transcript,
-      messageId,
-    );
-    if (truncated === null) {
-      this.emitSessionDiagnostic(
-        'edit-resend-unsupported',
-        EDIT_RESEND_UNSUPPORTED_MESSAGE,
-      );
-      this.emitEditResendRejected(sessionId, messageId, 'unsupported');
-      return;
-    }
-
-    // Resendable payloads staged for this message: kept originals plus
-    // anything added in edit mode. Non-restorable chips resend nothing.
-    const editAttachments: readonly PendingAttachment[] =
-      this.editStage?.messageId === messageId
-        ? this.editStage.attachments.flatMap(({ summary, runtime: payload }) =>
-            payload === null
-              ? []
-              : [
-                  {
-                    summary: {
-                      id: summary.id,
-                      kind: summary.kind,
-                      name: summary.name,
-                      sizeBytes: summary.sizeBytes,
-                      truncated: summary.truncated,
-                    },
-                    runtime: payload,
-                  },
-                ],
-          )
-        : [];
-
-    this.sessionOperationInProgress = true;
-    void this.performEditResend(
-      runtime,
-      sessionId,
-      messageId,
-      text,
-      truncated,
-      restoreFiles,
-    ).then((forkedSessionId) => {
-      this.sessionOperationInProgress = false;
-      if (forkedSessionId === null) {
-        return;
-      }
-      // Send first, then snapshot: the single snapshot then carries the
-      // forked session id, the truncated transcript with the edited
-      // prompt, and the submitting turn, so the webview adopts the fork
-      // atomically.
-      this.handleSend(
-        forkedSessionId,
-        turnId,
-        text,
-        'edit-resend',
-        editAttachments,
-      );
-      this.emitSnapshot();
-    });
-  }
-
-  private emitEditResendRejected(
-    sessionId: string,
-    messageId: string,
-    reason: EditResendRejectReason,
-  ): void {
-    this.emit({
-      type: 'turn.editResendRejected',
-      sessionId,
-      messageId,
-      reason,
-    });
-  }
-
-  /**
-   * Rewinds the runtime to `messageId` and adopts the forked session.
-   * Returns the forked session id when the controller should resend the
-   * edited prompt, or null when the operation failed or became stale.
-   */
-  private async performEditResend(
-    runtime: DroidRuntime,
-    sessionId: string,
-    messageId: string,
-    text: string,
-    truncated: HostTranscriptState,
-    restoreFiles: boolean,
-  ): Promise<string | null> {
-    const generation = this.runtimeGeneration;
-    const cwd = this.activeRuntimeCwd;
-    if (cwd === null) {
-      return null;
-    }
-
-    let forkedSessionId: string;
-    try {
-      const result = await runtime.rewind!({
-        messageId,
-        forkTitle: forkTitleFromText(text),
-        restoreFiles,
-      });
-      forkedSessionId = result.sessionId;
-    } catch {
-      if (
-        this.isCurrentSessionOperation(
-          runtime,
-          generation,
-          sessionId,
-          cwd,
-        )
-      ) {
-        this.emitSessionDiagnostic(
-          'edit-resend-failed',
-          EDIT_RESEND_FAILED_MESSAGE,
-        );
-        this.emitEditResendRejected(sessionId, messageId, 'failed');
-      }
-      return null;
-    }
-    if (
-      !this.isCurrentSessionOperation(
-        runtime,
-        generation,
-        sessionId,
-        cwd,
-      )
-    ) {
-      return null;
-    }
-    if (!isSafeBridgeId(forkedSessionId)) {
-      this.emitSessionDiagnostic(
-        'edit-resend-failed',
-        EDIT_RESEND_FAILED_MESSAGE,
-      );
-      this.emitEditResendRejected(sessionId, messageId, 'failed');
-      return null;
-    }
-
-    this.sessionId = forkedSessionId;
-    this.transcript = truncated;
-    this.turn = null;
-    clearPendingAttachments(this);
-    this.sessions = this.withActiveSession(this.sessions, {
-      id: forkedSessionId,
-      title: forkTitleFromText(text),
-      messageCount: 0,
-      modifiedTime: new Date().toISOString(),
-      active: true,
-      isFavorite: false,
-    });
-    this.recoveryStore.writeSession(forkedSessionId, truncated);
-    this.recoveryStore.selectSession(forkedSessionId);
-    void this.recoveryStore.flush();
-    return forkedSessionId;
   }
 
   private handleSessionCompact(sessionId: string): void {
@@ -2883,110 +2636,6 @@ export class ChatController {
     }
 
     this.startCatalogRefresh(workspace.cwd);
-  }
-
-  /**
-   * Enters edit mode for one sent user message: initializes the edit
-   * staging area from the retention area when the payloads are still
-   * held, otherwise from the message's chip metadata (removable-only)
-   * plus user-echo image items whose base64 is still in the transcript.
-   */
-  private handleEditStageBegin(
-    sessionId: string,
-    messageId: string,
-  ): void {
-    if (
-      sessionId !== this.sessionId ||
-      this.connection.status !== 'connected'
-    ) {
-      return;
-    }
-    const index = this.transcript.transcript.findIndex(
-      (item) => item.kind === 'user' && item.messageId === messageId,
-    );
-    if (index < 0) {
-      return;
-    }
-    this.editStage = {
-      messageId,
-      attachments: this.buildEditStageAttachments(messageId, index),
-    };
-    emitEditAttachments(this);
-  }
-
-  private handleEditStageCancel(sessionId: string): void {
-    if (sessionId !== this.sessionId) {
-      return;
-    }
-    this.editStage = null;
-  }
-
-  private buildEditStageAttachments(
-    messageId: string,
-    userItemIndex: number,
-  ): readonly EditStagedAttachment[] {
-    const retained = this.sentAttachments.get(messageId);
-    if (retained !== undefined) {
-      return retained.map(({ summary, runtime }) => ({
-        summary: { ...summary, restorable: true },
-        runtime,
-      }));
-    }
-    const staged: EditStagedAttachment[] = [];
-    const userItem = this.transcript.transcript[userItemIndex];
-    if (userItem?.kind === 'user' && userItem.attachments !== undefined) {
-      for (const meta of userItem.attachments) {
-        this.attachmentIdCounter += 1;
-        staged.push({
-          summary: {
-            id: `attachment-${this.attachmentIdCounter}`,
-            kind: meta.kind,
-            name: meta.name,
-            sizeBytes: meta.sizeBytes,
-            truncated: false,
-            restorable: false,
-          },
-          runtime: null,
-        });
-      }
-    }
-    // User-echo image items directly follow their prompt in both live
-    // and loaded transcripts; ones still carrying full base64 can be
-    // rebuilt into resendable payloads.
-    const transcript = this.transcript.transcript;
-    for (
-      let index = userItemIndex + 1;
-      index < transcript.length && staged.length < MAX_PENDING_ATTACHMENTS;
-      index += 1
-    ) {
-      const item = transcript[index]!;
-      if (item.kind === 'user') {
-        break;
-      }
-      if (item.kind !== 'image' || item.origin !== 'user') {
-        continue;
-      }
-      this.attachmentIdCounter += 1;
-      const restorable = item.data.length > 0;
-      staged.push({
-        summary: {
-          id: `attachment-${this.attachmentIdCounter}`,
-          kind: 'image',
-          name: `image.${item.mediaType.slice('image/'.length)}`,
-          sizeBytes: item.byteLength,
-          truncated: false,
-          restorable,
-        },
-        runtime: restorable
-          ? {
-              kind: 'image',
-              data: item.data,
-              mediaType: item.mediaType,
-            }
-          : null,
-      });
-    }
-    return staged.slice(0, MAX_PENDING_ATTACHMENTS);
   }
 
   private startCatalogRefresh(cwd: string): void {
@@ -4554,7 +4203,7 @@ export class ChatController {
       : this.sessions.items.find(({ id }) => id === this.sessionId);
   }
 
-  private withActiveSession(
+  withActiveSession(
     sessions: SessionCatalogState,
     fallback?: SessionSummary,
   ): SessionCatalogState {
@@ -5222,12 +4871,5 @@ function sanitizeSessionTitle(title: string): string {
     .slice(0, SESSION_TITLE_LIMIT)
     .trim();
   return safe || 'Untitled session';
-}
-
-function forkTitleFromText(text: string): string {
-  const collapsed = text.replace(/\s+/g, ' ').trim();
-  return collapsed.length <= MAX_FORK_TITLE_LENGTH
-    ? collapsed
-    : `${collapsed.slice(0, MAX_FORK_TITLE_LENGTH - 1)}…`;
 }
 

@@ -99,6 +99,15 @@ export function isEnumValue<const Values extends readonly string[]>(
   );
 }
 
+const MAX_FORK_TITLE_LENGTH = 60;
+
+export function forkTitleFromText(text: string): string {
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  return collapsed.length <= MAX_FORK_TITLE_LENGTH
+    ? collapsed
+    : `${collapsed.slice(0, MAX_FORK_TITLE_LENGTH - 1)}…`;
+}
+
 export function isTurnActive(turn: CurrentTurn | null): boolean {
   return (
     turn?.status === 'submitting' ||
