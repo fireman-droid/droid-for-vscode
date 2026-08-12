@@ -60,6 +60,24 @@ describe('getWebviewHtml', () => {
     expect(html).toContain('<div id="root"></div>');
   });
 
+  it('boots on the requested theme: first-frame background and attributes', () => {
+    const light = getWebviewHtml(webview, assets, nonce, {
+      preference: 'auto',
+      resolved: 'light',
+    });
+    expect(light).toContain('html,body{background:#f5f3ef}');
+    expect(light).toContain('data-dvx-theme="light"');
+    expect(light).toContain('data-dvx-theme-preference="auto"');
+
+    const dark = getWebviewHtml(webview, assets, nonce, {
+      preference: 'dark',
+      resolved: 'dark',
+    });
+    expect(dark).toContain('html,body{background:#1a1a1a}');
+    expect(dark).toContain('data-dvx-theme="dark"');
+    expect(dark).toContain('data-dvx-theme-preference="dark"');
+  });
+
   it('paints the shell background before the stylesheet loads', () => {
     const html = getWebviewHtml(webview, assets, nonce);
     const styleTags = [...html.matchAll(/<style\b[^>]*>[^<]*<\/style>/g)].map(

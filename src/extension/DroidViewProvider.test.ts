@@ -7,18 +7,73 @@ import {
 } from '../shared/bridgeMessages';
 import type { ChatController } from './ChatController';
 
-const vscodeMock = vi.hoisted(() => ({
-  Uri: {
-    joinPath(base: FakeUri, ...parts: string[]): FakeUri {
-      const path = [base.path, ...parts].join('/');
-      return {
-        path,
-        fsPath: path,
-        toString: () => path,
-      };
+const vscodeMock = vi.hoisted(() => {
+  const state = {
+    theme: 'auto' as string,
+    colorThemeKind: 1,
+    configListeners: new Set<
+      (event: { affectsConfiguration(section: string): boolean }) => void
+    >(),
+  };
+  const configUpdate = vi.fn(async (key: string, value: unknown) => {
+    if (key === 'theme') {
+      state.theme = value as string;
+    }
+    for (const listener of state.configListeners) {
+      listener({
+        affectsConfiguration: (section: string) =>
+          section === 'droidvisx.theme',
+      });
+    }
+  });
+  return {
+    state,
+    configUpdate,
+    Uri: {
+      joinPath(base: FakeUri, ...parts: string[]): FakeUri {
+        const path = [base.path, ...parts].join('/');
+        return {
+          path,
+          fsPath: path,
+          toString: () => path,
+        };
+      },
     },
-  },
-}));
+    ColorThemeKind: {
+      Light: 1,
+      Dark: 2,
+      HighContrast: 3,
+      HighContrastLight: 4,
+    },
+    ConfigurationTarget: { Global: 1, Workspace: 2 },
+    window: {
+      get activeColorTheme() {
+        return { kind: state.colorThemeKind };
+      },
+    },
+    workspace: {
+      getConfiguration: (section: string) => ({
+        get: (key: string, fallback: unknown) =>
+          section === 'droidvisx' && key === 'theme'
+            ? state.theme
+            : fallback,
+        update: configUpdate,
+      }),
+      onDidChangeConfiguration: (
+        listener: (event: {
+          affectsConfiguration(section: string): boolean;
+        }) => void,
+      ) => {
+        state.configListeners.add(listener);
+        return {
+          dispose: () => {
+            state.configListeners.delete(listener);
+          },
+        };
+      },
+    },
+  };
+});
 
 vi.mock('vscode', () => vscodeMock);
 
@@ -27,6 +82,9 @@ import { DroidViewProvider } from './DroidViewProvider';
 describe('DroidViewProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vscodeMock.state.theme = 'auto';
+    vscodeMock.state.colorThemeKind = 1;
+    vscodeMock.state.configListeners.clear();
   });
 
   it('uses restricted local roots and routes validated bridge messages', () => {
@@ -306,6 +364,123 @@ describe('DroidViewProvider', () => {
     expect(controller.handleMessage).toHaveBeenCalledExactlyOnceWith({
       type: 'webview.ready',
       protocolVersion: BRIDGE_PROTOCOL_VERSION,
+    });
+  });
+
+  it('boots the webview HTML on the resolved theme', () => {
+    const controller = createController();
+    const provider = new DroidViewProvider(
+      uri('extension'),
+      controller.value,
+    );
+    vscodeMock.state.theme = 'auto';
+    vscodeMock.state.colorThemeKind = vscodeMock.ColorThemeKind.Dark;
+    const view = createView();
+    provider.resolveWebviewView(
+      view.value,
+      {} as vscodeTypes.WebviewViewResolveContext,
+      {} as vscodeTypes.CancellationToken,
+    );
+    expect(view.webview.html).toContain('data-dvx-theme="dark"');
+    expect(view.webview.html).toContain(
+      'data-dvx-theme-preference="auto"',
+    );
+    expect(view.webview.html).toContain(
+      'html,body{background:#1a1a1a}',
+    );
+
+    // An explicit preference overrides the editor theme kind.
+    vscodeMock.state.theme = 'light';
+    const second = createView();
+    provider.resolveWebviewView(
+      second.value,
+      {} as vscodeTypes.WebviewViewResolveContext,
+      {} as vscodeTypes.CancellationToken,
+    );
+    expect(second.webview.html).toContain('data-dvx-theme="light"');
+    expect(second.webview.html).toContain(
+      'html,body{background:#f5f3ef}',
+    );
+  });
+
+  it('persists ui.theme.set as the user setting and echoes ui.theme', () => {
+    const controller = createController();
+    const provider = new DroidViewProvider(
+      uri('extension'),
+      controller.value,
+    );
+    const view = createView();
+    provider.resolveWebviewView(
+      view.value,
+      {} as vscodeTypes.WebviewViewResolveContext,
+      {} as vscodeTypes.CancellationToken,
+    );
+
+    view.receive({ type: 'ui.theme.set', preference: 'dark' });
+    // A view concern: never forwarded to the session controller.
+    expect(controller.handleMessage).not.toHaveBeenCalled();
+    expect(vscodeMock.configUpdate).toHaveBeenCalledWith(
+      'theme',
+      'dark',
+      vscodeMock.ConfigurationTarget.Global,
+    );
+    // The config write triggers the change listener, which echoes the
+    // new preference back to the webview.
+    expect(view.webview.postMessage).toHaveBeenCalledWith({
+      type: 'ui.theme',
+      preference: 'dark',
+    });
+  });
+
+  it('resyncs the theme preference on every webview.ready', () => {
+    const controller = createController();
+    const provider = new DroidViewProvider(
+      uri('extension'),
+      controller.value,
+    );
+    vscodeMock.state.theme = 'light';
+    const view = createView();
+    provider.resolveWebviewView(
+      view.value,
+      {} as vscodeTypes.WebviewViewResolveContext,
+      {} as vscodeTypes.CancellationToken,
+    );
+
+    view.receive({
+      type: 'webview.ready',
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
+    });
+    expect(controller.handleMessage).toHaveBeenCalledOnce();
+    expect(view.webview.postMessage).toHaveBeenCalledWith({
+      type: 'ui.theme',
+      preference: 'light',
+    });
+  });
+
+  it('stops pushing theme changes once the view is replaced', () => {
+    const controller = createController();
+    const provider = new DroidViewProvider(
+      uri('extension'),
+      controller.value,
+    );
+    const first = createView();
+    const second = createView();
+    provider.resolveWebviewView(
+      first.value,
+      {} as vscodeTypes.WebviewViewResolveContext,
+      {} as vscodeTypes.CancellationToken,
+    );
+    provider.resolveWebviewView(
+      second.value,
+      {} as vscodeTypes.WebviewViewResolveContext,
+      {} as vscodeTypes.CancellationToken,
+    );
+
+    second.receive({ type: 'ui.theme.set', preference: 'dark' });
+    expect(first.webview.postMessage).not.toHaveBeenCalled();
+    expect(second.webview.postMessage).toHaveBeenCalledWith({
+      type: 'ui.theme',
+      preference: 'dark',
     });
   });
 

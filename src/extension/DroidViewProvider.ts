@@ -1,11 +1,14 @@
 import * as vscode from 'vscode';
 
 import type { RuntimeDiagnosticSink } from '../runtime/runtimeDiagnostics';
-import { BRIDGE_PROTOCOL_VERSION } from '../shared/bridgeMessages';
+import {
+  BRIDGE_PROTOCOL_VERSION,
+  type ThemePreference,
+} from '../shared/bridgeMessages';
 import { isStrictRecord } from '../shared/strictValidation';
 import { parseWebviewMessage } from '../shared/validateMessage';
 import type { ChatController } from './ChatController';
-import { getWebviewHtml } from './webviewHtml';
+import { getWebviewHtml, type WebviewBootTheme } from './webviewHtml';
 
 const BEACON_ERROR_KINDS: ReadonlySet<string> = new Set([
   'boot-timeout',
@@ -45,6 +48,34 @@ function readReadyProtocolMismatch(
     : safeStringify(value.protocolVersion).slice(0, 64);
 }
 
+/** The persisted `droidvisx.theme` user setting (fail to 'auto'). */
+function readThemePreference(): ThemePreference {
+  const value = vscode.workspace
+    .getConfiguration('droidvisx')
+    .get<string>('theme', 'auto');
+  return value === 'light' || value === 'dark' ? value : 'auto';
+}
+
+/**
+ * The theme the webview HTML boots with, so the anti-flash inline
+ * background and the first styled frame already match. 'auto' maps
+ * the editor's active color theme kind; runtime changes are handled
+ * inside the webview (body class observer + `ui.theme` pushes).
+ */
+function bootTheme(): WebviewBootTheme {
+  const preference = readThemePreference();
+  if (preference !== 'auto') {
+    return { preference, resolved: preference };
+  }
+  const kind = vscode.window.activeColorTheme.kind;
+  const resolved =
+    kind === vscode.ColorThemeKind.Dark ||
+    kind === vscode.ColorThemeKind.HighContrast
+      ? 'dark'
+      : 'light';
+  return { preference, resolved };
+}
+
 export class DroidViewProvider
   implements vscode.WebviewViewProvider, vscode.Disposable
 {
@@ -53,6 +84,7 @@ export class DroidViewProvider
   private messageListener: vscode.Disposable | undefined;
   private viewDisposalListener: vscode.Disposable | undefined;
   private visibilityListener: vscode.Disposable | undefined;
+  private configurationListener: vscode.Disposable | undefined;
   private controllerSubscription: vscode.Disposable | undefined;
   private webviewView: vscode.WebviewView | undefined;
   private disposed = false;
@@ -94,7 +126,33 @@ export class DroidViewProvider
         script: vscode.Uri.joinPath(webviewDistUri, 'webview.js'),
         style: vscode.Uri.joinPath(webviewDistUri, 'webview.css'),
       },
+      undefined,
+      bootTheme(),
     );
+
+    const postTheme = (): void => {
+      void webviewView.webview
+        .postMessage({
+          type: 'ui.theme',
+          preference: readThemePreference(),
+        })
+        .then(
+          () => undefined,
+          () => undefined,
+        );
+    };
+    // Settings-UI edits of droidvisx.theme reach the shell without a
+    // reload; the webview's own ui.theme.set writes echo back through
+    // the same listener (the shell applies them idempotently).
+    this.configurationListener =
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (
+          this.webviewView === webviewView &&
+          event.affectsConfiguration('droidvisx.theme')
+        ) {
+          postTheme();
+        }
+      });
 
     this.controllerSubscription = this.controller.subscribe((message) => {
       if (this.webviewView !== webviewView) {
@@ -141,6 +199,36 @@ export class DroidViewProvider
             detail: message.detail,
           });
           return;
+        }
+
+        // Theme preference is a view concern, not a session concern:
+        // persist it as the user setting and stop here. The write
+        // triggers onDidChangeConfiguration, which echoes ui.theme.
+        if (message.type === 'ui.theme.set') {
+          void vscode.workspace
+            .getConfiguration('droidvisx')
+            .update(
+              'theme',
+              message.preference,
+              vscode.ConfigurationTarget.Global,
+            )
+            .then(
+              () => undefined,
+              () => {
+                this.diagnostics?.record({
+                  level: 'warn',
+                  name: 'host.theme.persist-failed',
+                  attributes: { preference: message.preference },
+                });
+              },
+            );
+          return;
+        }
+
+        // The ready resync (boot or re-show) also refreshes the theme
+        // preference the retained webview may have missed while hidden.
+        if (message.type === 'webview.ready') {
+          postTheme();
         }
 
         this.controller.handleMessage(message);
@@ -197,6 +285,8 @@ export class DroidViewProvider
     this.viewDisposalListener = undefined;
     this.visibilityListener?.dispose();
     this.visibilityListener = undefined;
+    this.configurationListener?.dispose();
+    this.configurationListener = undefined;
     this.controllerSubscription?.dispose();
     this.controllerSubscription = undefined;
   }

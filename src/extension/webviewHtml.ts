@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
+import type { ThemePreference } from '../shared/bridgeMessages';
+
 export interface WebviewSecurityContext {
   readonly cspSource: string;
   asWebviewUri(uri: WebviewResourceUri): WebviewResourceUri;
@@ -17,15 +19,39 @@ export interface WebviewAssets {
 /**
  * Painted by an inline nonce'd style before the external stylesheet
  * and the React bundle load, so the panel never flashes the default
- * white. Must match the `html, body` background in the webview's
- * `styles.css`.
+ * white (or, under the dark theme, warm white). Must match the
+ * per-theme `html, body` backgrounds in the webview's stylesheet
+ * (light: 10-shell-frame.css, dark: 24-theme-dark.css).
  */
-const INITIAL_BACKGROUND = '#f5f3ef';
+const INITIAL_BACKGROUNDS = {
+  light: '#f5f3ef',
+  dark: '#1a1a1a',
+} as const;
+
+export type WebviewInitialTheme = keyof typeof INITIAL_BACKGROUNDS;
+
+/**
+ * Theme the HTML boots with: `resolved` paints the first frame (the
+ * host already mapped 'auto' to the editor's theme kind), while
+ * `preference` seeds the shell's own theme state so it does not
+ * misresolve before the first `ui.theme` push arrives. Both values
+ * are closed enums, so interpolating them into attributes is safe.
+ */
+export interface WebviewBootTheme {
+  readonly preference: ThemePreference;
+  readonly resolved: WebviewInitialTheme;
+}
+
+const DEFAULT_BOOT_THEME: WebviewBootTheme = {
+  preference: 'auto',
+  resolved: 'light',
+};
 
 export function getWebviewHtml(
   webview: WebviewSecurityContext,
   assets: WebviewAssets,
   nonce = createNonce(),
+  theme: WebviewBootTheme = DEFAULT_BOOT_THEME,
 ): string {
   if (!/^[A-Za-z0-9_-]+$/.test(nonce)) {
     throw new Error('Webview nonce contains unsupported characters.');
@@ -38,8 +64,12 @@ export function getWebviewHtml(
     webview.asWebviewUri(assets.style).toString(),
   );
 
+  // The data-dvx-theme attribute lets the stylesheet's page-ground
+  // rules apply from the first styled frame (before React mounts and
+  // takes over the attribute); the inline style covers the window
+  // between HTML parse and stylesheet load.
   return /* html */ `<!doctype html>
-<html lang="en">
+<html lang="en" data-dvx-theme="${theme.resolved}" data-dvx-theme-preference="${theme.preference}">
 <head>
   <meta charset="UTF-8">
   <meta
@@ -48,7 +78,7 @@ export function getWebviewHtml(
   >
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DroidVisX</title>
-  <style nonce="${nonce}">html,body{background:${INITIAL_BACKGROUND}}</style>
+  <style nonce="${nonce}">html,body{background:${INITIAL_BACKGROUNDS[theme.resolved]}}</style>
   <link rel="stylesheet" href="${styleUri}">
 </head>
 <body>

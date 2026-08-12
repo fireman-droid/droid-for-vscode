@@ -90,6 +90,21 @@
           ],
           "default": "daemon",
           "description": "How DroidVisX executes Droid sessions. Changing this requires a window reload. When unset, DroidVisX uses the daemon and silently falls back to per-window subprocesses if the daemon cannot start; an explicit choice is always kept."
+        },
+        "droidvisx.theme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "light",
+            "dark"
+          ],
+          "enumDescriptions": [
+            "Follow the editor's color theme (default).",
+            "Always use the warm light theme.",
+            "Always use the dark theme."
+          ],
+          "default": "auto",
+          "description": "Color theme for the DroidVisX panel. Takes effect immediately."
         }
       }
     }
