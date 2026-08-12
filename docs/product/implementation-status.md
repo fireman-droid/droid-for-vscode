@@ -1002,7 +1002,19 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [ ] 组织策略
 - [ ] Account Profile
 - [ ] Account Usage
-- [ ] Git Commit / Push / Pull Request
+- [x] Git 提交闭环（Git/PR 工作流切片 A，设计
+      `git-pr-workflow-design.md` §3.1/§4）：changes 卡片尾部 quiet
+      入口「Commit these changes…」→ 内联提交区（分支名、勾选文件
+      默认本回合、prompt 首行本地拼草稿不调 LLM）→ Host 经
+      `vscode.git` `repository.add + commit` → 回显短哈希 + subject，
+      失败原样显示 git 错误。Bridge 协议 v3 新增
+      `git.requestStatus` / `git.status` / `git.commit` /
+      `git.commitResult` 双侧校验；`vscode.git` 缺失、无仓库或多根
+      工作区 fail-soft 隐藏入口。浏览器 harness 冒烟三场景
+      （成功回显 / hook 失败 / git 不可用）通过
+      （`artifacts/git-commit-harness.html` +
+      `artifacts/smoke-git-commit.mjs`）；已提交待随包验证
+- [ ] Git 分支创建 / Push / Pull Request（切片 B/C 未开工）
 - [ ] 原生 Terminal 工作流
 - [ ] Background Processes
 - [x] Worktree 并行任务第一切片（SessionDrawer「New session in a
