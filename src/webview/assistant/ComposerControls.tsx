@@ -307,7 +307,11 @@ export function ComposerControls({
 
       <button
         type="button"
-        className="dvx-mode-trigger"
+        className={`dvx-mode-trigger${
+          confirmed?.interactionMode === 'spec'
+            ? ' dvx-mode-trigger-spec'
+            : ''
+        }`}
         aria-label={`Mode: ${modeLabel}`}
         aria-expanded={openPanel === 'mode'}
         aria-controls={openPanel === 'mode' ? `${panelId}-mode` : undefined}
@@ -1738,17 +1742,37 @@ function ModelPopover({
   readonly onUpdate: (
     update: Extract<
       SessionSettingSelection,
-      { field: 'modelId' | 'reasoningEffort' }
+      {
+        field:
+          | 'modelId'
+          | 'reasoningEffort'
+          | 'specModeModelId'
+          | 'specModeReasoningEffort';
+      }
     >,
   ) => void;
 }): React.JSX.Element {
   const [query, setQuery] = useState('');
   const [editingReasoning, setEditingReasoning] = useState(false);
+  const [scope, setScope] = useState<'session' | 'spec'>('session');
   const confirmed = settings.value;
+  // The spec drafting scope only exists while the session is in Spec
+  // mode; leaving Spec mode snaps the popover back to the session scope.
+  const specScopeAvailable = confirmed?.interactionMode === 'spec';
+  const activeScope = specScopeAvailable ? scope : 'session';
+  // In the spec scope an unset drafting model means "session model".
+  const scopedModelId =
+    activeScope === 'spec'
+      ? (confirmed?.specModeModelId ?? confirmed?.modelId)
+      : confirmed?.modelId;
+  const scopedReasoning =
+    activeScope === 'spec'
+      ? (confirmed?.specModeReasoningEffort ?? undefined)
+      : confirmed?.reasoningEffort;
   const selected =
     confirmed === null || modelCatalog.status !== 'ready'
       ? undefined
-      : modelCatalog.items.find((item) => item.id === confirmed.modelId);
+      : modelCatalog.items.find((item) => item.id === scopedModelId);
   const filtered = useMemo(() => {
     if (modelCatalog.status !== 'ready') {
       return [];
@@ -1777,15 +1801,76 @@ function ModelPopover({
             <div className="dvx-reasoning-flyout">
               <ReasoningEditor
                 model={selected}
-                current={confirmed?.reasoningEffort}
+                current={scopedReasoning}
                 disabled={disabled}
+                defaultOptionLabel={
+                  activeScope === 'spec' ? 'Model default' : undefined
+                }
                 onSelect={(effort) =>
-                  onUpdate({ field: 'reasoningEffort', value: effort })
+                  activeScope === 'spec'
+                    ? onUpdate({
+                        field: 'specModeReasoningEffort',
+                        value: effort,
+                      })
+                    : effort !== null &&
+                      onUpdate({
+                        field: 'reasoningEffort',
+                        value: effort,
+                      })
                 }
               />
             </div>
           ) : null}
           <div className="dvx-model-panel">
+            {specScopeAvailable ? (
+              <div
+                className="dvx-model-scope"
+                role="radiogroup"
+                aria-label="Model scope"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={activeScope === 'session'}
+                  className="dvx-model-scope-option"
+                  onClick={() => {
+                    setScope('session');
+                    setEditingReasoning(false);
+                  }}
+                >
+                  Session
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={activeScope === 'spec'}
+                  className="dvx-model-scope-option"
+                  onClick={() => {
+                    setScope('spec');
+                    setEditingReasoning(false);
+                  }}
+                >
+                  Spec drafting
+                </button>
+              </div>
+            ) : null}
+            {activeScope === 'spec' ? (
+              <button
+                type="button"
+                className="dvx-model-spec-default"
+                aria-pressed={confirmed?.specModeModelId === null}
+                disabled={
+                  disabled || confirmed?.specModeModelId === null
+                }
+                onClick={() =>
+                  onUpdate({ field: 'specModeModelId', value: null })
+                }
+              >
+                {confirmed?.specModeModelId === null
+                  ? 'Drafting with the session model'
+                  : 'Use session model'}
+              </button>
+            ) : null}
             <label className="dvx-visually-hidden" htmlFor={`${id}-search`}>
               Search BYOK models
             </label>
@@ -1804,7 +1889,7 @@ function ModelPopover({
               aria-label="BYOK models"
             >
               {filtered.map((model) => {
-                const isSelected = model.id === confirmed?.modelId;
+                const isSelected = model.id === scopedModelId;
                 const modelLabel = formatRawModelId(model.id);
                 return (
                   <div
@@ -1819,9 +1904,17 @@ function ModelPopover({
                       aria-label={`${model.displayName}, ${model.id}`}
                       disabled={disabled}
                       onClick={() => {
-                        if (!isSelected) {
-                          onUpdate({ field: 'modelId', value: model.id });
+                        if (isSelected) {
+                          return;
                         }
+                        onUpdate(
+                          activeScope === 'spec'
+                            ? {
+                                field: 'specModeModelId',
+                                value: model.id,
+                              }
+                            : { field: 'modelId', value: model.id },
+                        );
                       }}
                     >
                       <strong>{modelLabel}</strong>
@@ -1829,7 +1922,10 @@ function ModelPopover({
                     {isSelected ? (
                       <div className="dvx-model-current-controls">
                         <span className="dvx-model-reasoning-level">
-                          {formatReasoningLabel(confirmed?.reasoningEffort)}
+                          {activeScope === 'spec' &&
+                          scopedReasoning === undefined
+                            ? 'Default'
+                            : formatReasoningLabel(scopedReasoning)}
                         </span>
                         <button
                           type="button"
@@ -1878,12 +1974,15 @@ function ReasoningEditor({
   model,
   current,
   disabled,
+  defaultOptionLabel,
   onSelect,
 }: {
   readonly model: ModelCatalogItem;
   readonly current?: SessionReasoningEffort;
   readonly disabled: boolean;
-  readonly onSelect: (effort: SessionReasoningEffort) => void;
+  /** When set, offers a null reset row (used by the spec scope). */
+  readonly defaultOptionLabel?: string;
+  readonly onSelect: (effort: SessionReasoningEffort | null) => void;
 }): React.JSX.Element {
   return (
     <>
@@ -1891,6 +1990,21 @@ function ReasoningEditor({
         Options
       </h3>
       <div className="dvx-option-list" role="radiogroup" aria-label="Reasoning">
+        {defaultOptionLabel !== undefined ? (
+          <button
+            type="button"
+            className="dvx-option-row dvx-reasoning-option"
+            role="radio"
+            aria-checked={current === undefined}
+            disabled={disabled}
+            onClick={() => onSelect(null)}
+          >
+            <span className="dvx-option-copy">
+              <strong>{defaultOptionLabel}</strong>
+            </span>
+            <span className="dvx-radio-mark" aria-hidden="true" />
+          </button>
+        ) : null}
         {model.supportedReasoningEfforts.map((effort) => (
           <button
             key={effort}

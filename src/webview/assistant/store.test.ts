@@ -36,6 +36,8 @@ function snapshot(
         modelId: 'model-a',
         reasoningEffort: 'medium',
         autonomyLevel: 'low',
+        specModeModelId: null,
+        specModeReasoningEffort: null,
       },
     },
     context: {
@@ -447,6 +449,8 @@ describe('assistantWebviewReducer', () => {
             modelId: 'must-not-leak',
             reasoningEffort: 'max',
             autonomyLevel: 'high',
+            specModeModelId: null,
+            specModeReasoningEffort: null,
           },
         },
       },

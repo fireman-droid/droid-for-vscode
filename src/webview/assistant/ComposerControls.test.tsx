@@ -18,6 +18,8 @@ const settings = {
     modelId: 'model-sol',
     reasoningEffort: 'medium' as const,
     autonomyLevel: 'low' as const,
+    specModeModelId: null,
+    specModeReasoningEffort: null,
   },
 };
 const context = {
@@ -348,6 +350,124 @@ describe('ComposerControls', () => {
     expect(onSettingUpdate).toHaveBeenCalledWith({
       field: 'reasoningEffort',
       value: 'max',
+    });
+  });
+
+  it('offers spec drafting overrides only while the session is in Spec mode', async () => {
+    const user = userEvent.setup();
+    const onSettingUpdate = vi.fn();
+    const catalog = {
+      status: 'ready' as const,
+      items: [
+        {
+          id: 'model-sol',
+          displayName: 'Sol',
+          supportedReasoningEfforts: [
+            'low' as const,
+            'medium' as const,
+            'high' as const,
+          ],
+        },
+        {
+          id: 'model-pro',
+          displayName: 'Pro',
+          supportedReasoningEfforts: ['none' as const],
+        },
+      ],
+    };
+    const renderControls = (
+      value: NonNullable<typeof settings.value>,
+    ): React.JSX.Element => (
+      <ComposerControls
+        settings={{ status: 'ready', value }}
+        context={context}
+        modelCatalog={catalog}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={onSettingUpdate}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+      />
+    );
+    const { rerender } = render(renderControls(settings.value));
+
+    // Outside Spec mode the model popover has no scope toggle.
+    await user.click(
+      screen.getByRole('button', { name: 'Model: model-sol' }),
+    );
+    expect(
+      screen.queryByRole('radiogroup', { name: 'Model scope' }),
+    ).toBeNull();
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    const specValue = {
+      ...settings.value,
+      interactionMode: 'spec' as const,
+    };
+    rerender(renderControls(specValue));
+    expect(
+      screen.getByRole('button', { name: 'Mode: Spec' }).className,
+    ).toContain('dvx-mode-trigger-spec');
+
+    // Selecting a model in the Spec drafting scope posts the spec field.
+    await user.click(
+      screen.getByRole('button', { name: 'Model: model-sol' }),
+    );
+    await user.click(screen.getByRole('radio', { name: 'Spec drafting' }));
+    expect(
+      screen.getByRole('button', {
+        name: 'Drafting with the session model',
+      }),
+    ).toBeDefined();
+    await user.click(
+      screen.getByRole('button', { name: 'Pro, model-pro' }),
+    );
+    expect(onSettingUpdate).toHaveBeenCalledWith({
+      field: 'specModeModelId',
+      value: 'model-pro',
+    });
+
+    // With an override set, the drafting model can be reset to the
+    // session model and its reasoning to the model default.
+    rerender(
+      renderControls({ ...specValue, specModeModelId: 'model-pro' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Model: model-sol' }),
+    );
+    await user.click(screen.getByRole('radio', { name: 'Spec drafting' }));
+    expect(screen.getByText('Default')).toBeDefined();
+    await user.click(
+      screen.getByRole('button', { name: 'Edit reasoning for model-pro' }),
+    );
+    const defaultOption = screen.getByRole('radio', {
+      name: 'Model default',
+    });
+    expect(defaultOption.getAttribute('aria-checked')).toBe('true');
+    await user.click(screen.getByRole('radio', { name: 'None' }));
+    expect(onSettingUpdate).toHaveBeenCalledWith({
+      field: 'specModeReasoningEffort',
+      value: 'none',
+    });
+
+    await user.click(
+      screen.getByRole('button', { name: 'Model: model-sol' }),
+    );
+    await user.click(screen.getByRole('radio', { name: 'Spec drafting' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Use session model' }),
+    );
+    expect(onSettingUpdate).toHaveBeenCalledWith({
+      field: 'specModeModelId',
+      value: null,
     });
   });
 

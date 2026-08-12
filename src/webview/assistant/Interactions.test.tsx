@@ -170,6 +170,71 @@ describe('assistant interaction cards', () => {
     expect(onRespond).toHaveBeenCalledWith('proceed-safe', undefined);
   });
 
+  it('expands long plans and previews edited specs inside the card', async () => {
+    const user = userEvent.setup();
+    const onRespond = vi.fn();
+
+    // Short plans fit the collapsed preview, so no toggle appears.
+    const short = render(
+      <PermissionRequestCard
+        request={permission}
+        onRespond={onRespond}
+      />,
+    );
+    expect(
+      screen.queryByRole('button', { name: 'View full spec' }),
+    ).toBeNull();
+    short.unmount();
+
+    const longPlan = Array.from(
+      { length: 40 },
+      (_, index) => `## Section ${index}\n\nStep detail ${index}.`,
+    ).join('\n\n');
+    const { container } = render(
+      <PermissionRequestCard
+        request={{ ...permission, editableSpecContent: longPlan }}
+        onRespond={onRespond}
+      />,
+    );
+
+    expect(
+      container.querySelector('.dvx-plan-preview-expanded'),
+    ).toBeNull();
+    await user.click(
+      screen.getByRole('button', { name: 'View full spec' }),
+    );
+    expect(
+      container.querySelector('.dvx-plan-preview-expanded'),
+    ).not.toBeNull();
+    await user.click(
+      screen.getByRole('button', { name: 'Collapse spec' }),
+    );
+    expect(
+      container.querySelector('.dvx-plan-preview-expanded'),
+    ).toBeNull();
+
+    // The edit view previews the current draft with the same renderer.
+    await user.click(
+      screen.getByRole('button', { name: 'Edit and allow' }),
+    );
+    const editor = screen.getByRole<HTMLTextAreaElement>('textbox', {
+      name: 'Edit and allow',
+    });
+    await user.clear(editor);
+    await user.type(editor, '# Revised heading');
+    await user.click(screen.getByRole('tab', { name: 'Preview' }));
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(
+      screen.getByRole('heading', { name: 'Revised heading' }),
+    ).toBeDefined();
+    await user.click(screen.getByRole('tab', { name: 'Edit' }));
+    expect(
+      screen.getByRole<HTMLTextAreaElement>('textbox', {
+        name: 'Edit and allow',
+      }).value,
+    ).toBe('# Revised heading');
+  });
+
   it('preserves indexed single, multi, custom, and cancel answers', async () => {
     const user = userEvent.setup();
     const onRespond = vi.fn();

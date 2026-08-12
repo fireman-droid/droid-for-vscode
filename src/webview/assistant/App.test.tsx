@@ -105,6 +105,8 @@ function snapshot(
         modelId: 'factory/gpt-5.6-sol',
         reasoningEffort: 'high',
         autonomyLevel: 'medium',
+        specModeModelId: null,
+        specModeReasoningEffort: null,
       },
     },
     context: {
@@ -451,6 +453,38 @@ describe('assistant-ui App bridge commands', () => {
       field: 'modelId',
       value: 'factory/model-next',
     });
+  });
+
+  it('shows the spec planning badge only while the session is in Spec mode', async () => {
+    render(<App />);
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText<HTMLTextAreaElement>('Message Droid').value,
+      ).toBe('Restored draft'),
+    );
+    const base = snapshot(0);
+    host({
+      ...base,
+      settings: {
+        status: 'ready',
+        value: {
+          interactionMode: 'spec',
+          modelId: 'factory/gpt-5.6-sol',
+          reasoningEffort: 'high',
+          autonomyLevel: 'medium',
+          specModeModelId: null,
+          specModeReasoningEffort: null,
+        },
+      },
+    });
+    await waitFor(() =>
+      expect(screen.getByText('Spec mode · planning')).toBeDefined(),
+    );
+
+    host(snapshot(1));
+    await waitFor(() =>
+      expect(screen.queryByText('Spec mode · planning')).toBeNull(),
+    );
   });
 
   it('shows semantic tool activity and opens click-to-edit on user messages', async () => {

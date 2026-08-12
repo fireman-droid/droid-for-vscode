@@ -103,6 +103,8 @@ export function PermissionRequestCard({
   const [editedSpecContent, setEditedSpecContent] = useState(
     request.editableSpecContent ?? '',
   );
+  const [planExpanded, setPlanExpanded] = useState(false);
+  const [editPreview, setEditPreview] = useState(false);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [awaitingClose, setAwaitingClose] = useState(false);
   const awaitingCloseRef = useRef(false);
@@ -168,17 +170,52 @@ export function PermissionRequestCard({
 
       {editOption !== undefined ? (
         <div className="dvx-permission-editor">
-          <label htmlFor={editorId}>{editOption.label}</label>
-          <textarea
-            id={editorId}
-            value={editedSpecContent}
-            rows={7}
-            autoFocus
-            disabled={awaitingClose}
-            onChange={(event) =>
-              setEditedSpecContent(event.currentTarget.value)
-            }
-          />
+          <div className="dvx-permission-editor-heading">
+            <label htmlFor={editorId}>{editOption.label}</label>
+            <div
+              className="dvx-editor-view-toggle"
+              role="tablist"
+              aria-label="Spec editor view"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={!editPreview}
+                disabled={awaitingClose}
+                onClick={() => setEditPreview(false)}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={editPreview}
+                disabled={awaitingClose}
+                onClick={() => setEditPreview(true)}
+              >
+                Preview
+              </button>
+            </div>
+          </div>
+          {editPreview ? (
+            <div className="dvx-plan-preview dvx-plan-edit-preview">
+              <DroidMarkdownContent
+                className="dvx-plan-markdown"
+                text={editedSpecContent}
+              />
+            </div>
+          ) : (
+            <textarea
+              id={editorId}
+              value={editedSpecContent}
+              rows={7}
+              autoFocus
+              disabled={awaitingClose}
+              onChange={(event) =>
+                setEditedSpecContent(event.currentTarget.value)
+              }
+            />
+          )}
           <div
             className={`dvx-field-counter${
               editedSpecTooLong ? ' dvx-error-text' : ''
@@ -190,12 +227,28 @@ export function PermissionRequestCard({
           </div>
         </div>
       ) : requestPresentation.planPreview !== undefined ? (
-        <div className="dvx-plan-preview">
-          <DroidMarkdownContent
-            className="dvx-plan-markdown"
-            text={requestPresentation.planPreview}
-          />
-        </div>
+        <>
+          <div
+            className={`dvx-plan-preview${
+              planExpanded ? ' dvx-plan-preview-expanded' : ''
+            }`}
+          >
+            <DroidMarkdownContent
+              className="dvx-plan-markdown"
+              text={requestPresentation.planPreview}
+            />
+          </div>
+          {isLongPlan(requestPresentation.planPreview) ? (
+            <button
+              type="button"
+              className="dvx-plan-expand"
+              aria-expanded={planExpanded}
+              onClick={() => setPlanExpanded((value) => !value)}
+            >
+              {planExpanded ? 'Collapse spec' : 'View full spec'}
+            </button>
+          ) : null}
+        </>
       ) : null}
 
       <div className="dvx-interaction-actions">
@@ -671,6 +724,18 @@ function formatEmbeddedQuestionnaire(text: string): string | null {
     .replace(/\s*\[option\]\s*/giu, '\n• ')
     .replace(/\n{3,}/gu, '\n\n')
     .trim();
+}
+
+/**
+ * Threshold below which the plan already fits the collapsed preview,
+ * so the expand toggle would do nothing visible.
+ */
+const LONG_PLAN_CHARACTERS = 1200;
+
+function isLongPlan(plan: string): boolean {
+  return (
+    plan.length > LONG_PLAN_CHARACTERS || plan.split('\n').length > 24
+  );
 }
 
 function formatConfirmationKind(value: string): string {
