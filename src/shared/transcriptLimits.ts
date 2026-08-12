@@ -47,7 +47,13 @@ export function transcriptItemTextUnits(
         item.action.length +
         item.status.length +
         (item.latestUpdateKind?.length ?? 0) +
-        (item.detail?.length ?? 0)
+        (item.detail?.length ?? 0) +
+        (item.subagent === undefined
+          ? 0
+          : item.subagent.type.length +
+            item.subagent.description.length +
+            (item.subagent.status?.length ?? 0) +
+            16)
       );
     case 'changes':
       return (

@@ -68,6 +68,12 @@ export const MAX_COMMAND_ARGUMENT_HINT_LENGTH = 128;
 export const MAX_RECENT_COMMANDS = 8;
 export const MAX_TOOL_FILE_PATH_LENGTH = 512;
 export const MAX_TOOL_DETAIL_LENGTH = 4_000;
+/**
+ * Longest tool_result error excerpt carried on a failed tool row so
+ * the user can see why the tool failed (e.g. "Tool execution
+ * cancelled by user").
+ */
+export const MAX_TOOL_ERROR_MESSAGE_LENGTH = 1_000;
 
 /**
  * Extra human-readable context for a tool activity: the shell command
@@ -163,6 +169,72 @@ export const SESSION_INTERACTION_MODES = [
 ] as const;
 export type SessionInteractionMode =
   (typeof SESSION_INTERACTION_MODES)[number];
+
+/**
+ * Lifecycle of one Task-delegated subagent, mirroring the SDK's
+ * durable invocation ledger (`TaskInvocationStatus`).
+ */
+export const SUBAGENT_STATUSES = [
+  'pending',
+  'running',
+  'completed',
+  'failed',
+  'cancelled',
+] as const;
+export type SubagentStatus = (typeof SUBAGENT_STATUSES)[number];
+
+/** Longest subagent type name shown on a delegated Task row. */
+export const MAX_SUBAGENT_TYPE_LENGTH = 64;
+/** Longest subagent description shown under a delegated Task row. */
+export const MAX_SUBAGENT_DESCRIPTION_LENGTH = 512;
+
+/**
+ * Summary of the subagent one Task tool call delegated to. Data
+ * comes from the `child_session_available` notification (live) and
+ * `loadSession().subagentInvocations` (final/history); the child
+ * session id stays in the host and never crosses the bridge.
+ */
+export interface ToolSubagentSummary {
+  readonly type: string;
+  readonly description: string;
+  /** Absent until the SDK reports a lifecycle status. */
+  readonly status?: SubagentStatus;
+  /** Tools the subagent used; only when the SDK reported it. */
+  readonly toolUseCount?: number;
+  /** Subagent run duration; only when the SDK reported it. */
+  readonly durationMs?: number;
+}
+
+/** Mission lifecycle states, mirroring the SDK `MissionState` enum. */
+export const MISSION_STATES = [
+  'planning',
+  'awaiting_input',
+  'initializing',
+  'running',
+  'paused',
+  'orchestrator_turn',
+  'completed',
+] as const;
+export type MissionState = (typeof MISSION_STATES)[number];
+
+/** Role of a session in a mission decomposition. */
+export const MISSION_SESSION_ROLES = [
+  'orchestrator',
+  'worker',
+] as const;
+export type MissionSessionRole =
+  (typeof MISSION_SESSION_ROLES)[number];
+
+/**
+ * Read-only mission identity of the active session, projected once
+ * per history load from `loadSession()` (`mission.state`,
+ * `decompSessionType`). Display only: the public SDK exposes no
+ * mission control surface (no pause/resume/start RPC).
+ */
+export interface SessionMissionSummary {
+  readonly state: MissionState | null;
+  readonly role: MissionSessionRole | null;
+}
 
 export const SESSION_AUTONOMY_LEVELS = [
   'off',
@@ -783,6 +855,11 @@ export interface SessionSummary {
   readonly active: boolean;
   /** True when the CLI's `.favorites` file lists this session. */
   readonly isFavorite: boolean;
+  /**
+   * Present when the session catalog marks this session as part of a
+   * mission decomposition (`decompSessionType`).
+   */
+  readonly missionRole?: MissionSessionRole;
 }
 
 export interface SessionCatalogState {
@@ -1134,6 +1211,10 @@ export interface ToolTranscriptItem {
   readonly detailKind?: ToolDetailKind;
   /** Command text or plan text extracted from the tool input. */
   readonly detail?: string;
+  /** Error excerpt from a failed tool_result, for the expanded row. */
+  readonly errorMessage?: string;
+  /** Present when this Task tool call delegated to a subagent. */
+  readonly subagent?: ToolSubagentSummary;
 }
 
 export interface DiagnosticTranscriptItem {
@@ -1243,6 +1324,11 @@ export interface HostSnapshotMessage {
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: SessionHistoryStatus;
   readonly truncated: boolean;
+  /**
+   * Read-only mission identity of the active session; absent when
+   * the session is not part of a mission decomposition.
+   */
+  readonly mission?: SessionMissionSummary;
 }
 
 export interface HostConnectionMessage {
@@ -1482,6 +1568,10 @@ export interface ToolActivityMessage {
   readonly filePath?: string;
   readonly detailKind?: ToolDetailKind;
   readonly detail?: string;
+  /** Error excerpt from a failed tool_result, for the expanded row. */
+  readonly errorMessage?: string;
+  /** Present when this Task tool call delegated to a subagent. */
+  readonly subagent?: ToolSubagentSummary;
 }
 
 /**
