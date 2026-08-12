@@ -76,6 +76,7 @@ import {
   type SessionSettingUpdateMessage,
   type SessionsRefreshMessage,
   type CommandsRefreshMessage,
+  type PluginsRefreshMessage,
   type SkillToggleMessage,
   type SkillsRefreshMessage,
   type TerminalOpenMirrorMessage,
@@ -174,6 +175,8 @@ export function parseWebviewMessage(
         return parseSkillsRefresh(value);
       case 'skill.toggle':
         return parseSkillToggle(value);
+      case 'plugins.refresh':
+        return parsePluginsRefresh(value);
       case 'commands.refresh':
         return parseCommandsRefresh(value);
       case 'mcp.refresh':
@@ -862,6 +865,19 @@ function parseSkillsRefresh(
   }
 
   return { type: 'skills.refresh', sessionId: value.sessionId };
+}
+
+function parsePluginsRefresh(
+  value: UnknownRecord,
+): PluginsRefreshMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+
+  return { type: 'plugins.refresh', sessionId: value.sessionId };
 }
 
 function parseSkillToggle(

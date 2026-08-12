@@ -235,6 +235,55 @@ describe('readHostMessage', () => {
       },
     },
     {
+      type: 'session.plugins',
+      sequence: 1,
+      sessionId: 'session-1',
+      plugins: {
+        status: 'ready',
+        items: [
+          {
+            id: 'core@factory-plugins',
+            scope: 'user',
+            version: 'e3ff29f752fb',
+            active: true,
+          },
+          {
+            id: 'linter@acme',
+            scope: 'project',
+            version: '',
+            active: false,
+          },
+        ],
+        marketplaceCount: 0,
+      },
+    },
+    {
+      type: 'session.plugins',
+      sequence: 1,
+      sessionId: 'session-1',
+      plugins: { status: 'loading', items: [] },
+    },
+    {
+      type: 'session.plugins',
+      sequence: 1,
+      sessionId: 'session-1',
+      plugins: {
+        status: 'error',
+        items: [],
+        message: 'The local droid daemon is unavailable.',
+      },
+    },
+    {
+      type: 'session.plugins',
+      sequence: 1,
+      sessionId: 'session-1',
+      plugins: {
+        status: 'unsupported',
+        items: [],
+        message: 'Plugins are unsupported.',
+      },
+    },
+    {
       type: 'session.commands',
       sequence: 1,
       sessionId: 'session-1',
@@ -1088,6 +1137,117 @@ describe('readHostMessage', () => {
       sequence: 1,
       sessionId: 'session-1',
       skills: { status: 'unsupported', items: [] },
+    },
+    {
+      // Ready without the marketplace count is malformed.
+      type: 'session.plugins',
+      sequence: 1,
+      sessionId: 'session-1',
+      plugins: {
+        status: 'ready',
+        items: [],
+      },
+    },
+    {
+      // Scope outside the user/project whitelist.
+      type: 'session.plugins',
+      sequence: 1,
+      sessionId: 'session-1',
+      plugins: {
+        status: 'ready',
+        items: [
+          {
+            id: 'core@factory-plugins',
+            scope: 'enterprise',
+            version: 'e3ff29f752fb',
+            active: true,
+          },
+        ],
+        marketplaceCount: 0,
+      },
+    },
+    {
+      // Install paths must never cross the bridge.
+      type: 'session.plugins',
+      sequence: 1,
+      sessionId: 'session-1',
+      plugins: {
+        status: 'ready',
+        items: [
+          {
+            id: 'core@factory-plugins',
+            scope: 'user',
+            version: 'e3ff29f752fb',
+            active: true,
+            installPath: 'C:/secret/path',
+          },
+        ],
+        marketplaceCount: 0,
+      },
+    },
+    {
+      // Duplicate plugin ids.
+      type: 'session.plugins',
+      sequence: 1,
+      sessionId: 'session-1',
+      plugins: {
+        status: 'ready',
+        items: [
+          { id: 'dup@m', scope: 'user', version: 'a', active: true },
+          { id: 'dup@m', scope: 'project', version: 'b', active: false },
+        ],
+        marketplaceCount: 0,
+      },
+    },
+    {
+      // Empty id.
+      type: 'session.plugins',
+      sequence: 1,
+      sessionId: 'session-1',
+      plugins: {
+        status: 'ready',
+        items: [{ id: '', scope: 'user', version: 'a', active: true }],
+        marketplaceCount: 0,
+      },
+    },
+    {
+      // Negative marketplace count.
+      type: 'session.plugins',
+      sequence: 1,
+      sessionId: 'session-1',
+      plugins: { status: 'ready', items: [], marketplaceCount: -1 },
+    },
+    {
+      // Marketplace count beyond the shared bound.
+      type: 'session.plugins',
+      sequence: 1,
+      sessionId: 'session-1',
+      plugins: { status: 'ready', items: [], marketplaceCount: 1001 },
+    },
+    {
+      // Loading must not carry a marketplace count.
+      type: 'session.plugins',
+      sequence: 1,
+      sessionId: 'session-1',
+      plugins: { status: 'loading', items: [], marketplaceCount: 0 },
+    },
+    {
+      // Error without a message.
+      type: 'session.plugins',
+      sequence: 1,
+      sessionId: 'session-1',
+      plugins: { status: 'error', items: [] },
+    },
+    {
+      // Unsupported must not carry items.
+      type: 'session.plugins',
+      sequence: 1,
+      sessionId: 'session-1',
+      plugins: {
+        status: 'unsupported',
+        items: [{ id: 'x@m', scope: 'user', version: 'a', active: true }],
+        message: 'Plugins are unsupported.',
+      },
     },
     {
       type: 'session.commands',

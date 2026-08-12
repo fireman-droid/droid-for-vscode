@@ -34,6 +34,11 @@ import {
   MAX_MCP_SERVERS,
   MAX_MCP_TOOLS_PER_SERVER,
   MAX_MCP_TOOL_DESCRIPTION_LENGTH,
+  MAX_PLUGIN_ID_LENGTH,
+  MAX_PLUGIN_ITEMS,
+  MAX_PLUGIN_MARKETPLACE_COUNT,
+  MAX_PLUGIN_VERSION_LENGTH,
+  PLUGIN_SCOPES,
   MAX_SKILL_DESCRIPTION_LENGTH,
   MAX_SKILL_ITEMS,
   MAX_SKILL_NAME_LENGTH,
@@ -131,6 +136,9 @@ import {
   type McpServerSummary,
   type McpToolSummary,
   type SessionMcpState,
+  type SessionPluginsState,
+  type PluginScope,
+  type PluginSummary,
   type SessionSkillsState,
   type SkillLocation,
   type SkillSummary,
@@ -244,6 +252,8 @@ export function readHostMessage(
         return parseModelCatalogMessage(value);
       case 'session.skills':
         return parseSessionSkillsMessage(value);
+      case 'session.plugins':
+        return parseSessionPluginsMessage(value);
       case 'session.mcp':
         return parseSessionMcpMessage(value);
       case 'session.commands':
@@ -2234,6 +2244,126 @@ function isSkillLocation(value: unknown): value is SkillLocation {
   return (
     typeof value === 'string' &&
     (SKILL_LOCATIONS as readonly string[]).includes(value)
+  );
+}
+
+function parseSessionPluginsMessage(
+  value: UnknownRecord,
+):
+  | Extract<HostToWebviewMessage, { type: 'session.plugins' }>
+  | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'sequence', 'sessionId', 'plugins']) ||
+    !isSequence(value.sequence) ||
+    !isId(value.sessionId)
+  ) {
+    return undefined;
+  }
+  const plugins = parseSessionPlugins(value.plugins);
+  return plugins === undefined
+    ? undefined
+    : {
+        type: 'session.plugins',
+        sequence: value.sequence,
+        sessionId: value.sessionId,
+        plugins,
+      };
+}
+
+function parseSessionPlugins(
+  value: unknown,
+): SessionPluginsState | undefined {
+  if (!isStrictRecord(value)) {
+    return undefined;
+  }
+  const status = readStringDataProperty(value, 'status');
+  if (status === undefined) {
+    return undefined;
+  }
+
+  if (status === 'unsupported') {
+    if (
+      !hasExactKeys(value, ['status', 'items', 'message']) ||
+      !isExactArray(value.items, 0, 0) ||
+      !isBoundedString(value.message, MAX_STRING_LENGTH)
+    ) {
+      return undefined;
+    }
+    return {
+      status: 'unsupported',
+      items: [],
+      message: value.message as string,
+    };
+  }
+
+  if (status !== 'loading' && status !== 'ready' && status !== 'error') {
+    return undefined;
+  }
+  if (
+    !hasExactKeys(
+      value,
+      status === 'error'
+        ? ['status', 'items', 'message']
+        : status === 'ready'
+          ? ['status', 'items', 'marketplaceCount']
+          : ['status', 'items'],
+    ) ||
+    !isExactArray(value.items, 0, MAX_PLUGIN_ITEMS) ||
+    (status === 'error' &&
+      !isBoundedString(value.message, MAX_STRING_LENGTH)) ||
+    (status === 'ready' &&
+      (!isCount(value.marketplaceCount) ||
+        (value.marketplaceCount as number) >
+          MAX_PLUGIN_MARKETPLACE_COUNT))
+  ) {
+    return undefined;
+  }
+  const items: PluginSummary[] = [];
+  const ids = new Set<string>();
+  for (const itemValue of value.items) {
+    const item = parsePluginSummary(itemValue);
+    if (item === undefined || ids.has(item.id)) {
+      return undefined;
+    }
+    ids.add(item.id);
+    items.push(item);
+  }
+  return status === 'error'
+    ? { status: 'error', items, message: value.message as string }
+    : status === 'loading'
+      ? { status: 'loading', items }
+      : {
+          status: 'ready',
+          items,
+          marketplaceCount: value.marketplaceCount as number,
+        };
+}
+
+function parsePluginSummary(value: unknown): PluginSummary | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, ['id', 'scope', 'version', 'active']) ||
+    !isNonEmptyBoundedString(value.id, MAX_PLUGIN_ID_LENGTH) ||
+    hasControlCharacter(value.id) ||
+    !isPluginScope(value.scope) ||
+    !isBoundedString(value.version, MAX_PLUGIN_VERSION_LENGTH) ||
+    hasControlCharacter(value.version) ||
+    typeof value.active !== 'boolean'
+  ) {
+    return undefined;
+  }
+  return {
+    id: value.id,
+    scope: value.scope,
+    version: value.version as string,
+    active: value.active,
+  };
+}
+
+function isPluginScope(value: unknown): value is PluginScope {
+  return (
+    typeof value === 'string' &&
+    (PLUGIN_SCOPES as readonly string[]).includes(value)
   );
 }
 

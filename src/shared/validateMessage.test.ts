@@ -141,6 +141,10 @@ describe('parseWebviewMessage', () => {
       disabled: true,
     },
     {
+      type: 'plugins.refresh',
+      sessionId: 'session-1',
+    },
+    {
       type: 'commands.refresh',
       sessionId: 'session-1',
     },
@@ -1109,6 +1113,9 @@ describe('parseWebviewMessage', () => {
       sessionId: 'session-1',
       name: 'code-review',
     },
+    { type: 'plugins.refresh', sessionId: '' },
+    { type: 'plugins.refresh', sessionId: 'session-1', extra: true },
+    { type: 'plugins.refresh' },
     { type: 'commands.refresh', sessionId: '' },
     { type: 'commands.refresh', sessionId: 'session-1', extra: true },
     { type: 'commands.refresh' },

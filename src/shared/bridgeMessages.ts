@@ -122,6 +122,20 @@ export const MAX_MCP_ARG_LENGTH = 512;
 export const MCP_SERVER_TYPES = ['stdio', 'http', 'sse'] as const;
 export type McpServerType = (typeof MCP_SERVER_TYPES)[number];
 
+export const MAX_PLUGIN_ITEMS = 100;
+export const MAX_PLUGIN_ID_LENGTH = 128;
+export const MAX_PLUGIN_VERSION_LENGTH = 64;
+/** Upper bound accepted for the daemon-reported marketplace count. */
+export const MAX_PLUGIN_MARKETPLACE_COUNT = 1_000;
+
+/**
+ * Install scopes the panel displays. Mirrors the droid CLI's
+ * `plugin install --scope user|project` surface; rows with any other
+ * scope string are dropped at projection (fail closed).
+ */
+export const PLUGIN_SCOPES = ['user', 'project'] as const;
+export type PluginScope = (typeof PLUGIN_SCOPES)[number];
+
 export const CONNECTION_STATUSES = [
   'idle',
   'connecting',
@@ -631,6 +645,16 @@ export interface SkillsRefreshMessage {
   readonly sessionId: string;
 }
 
+/**
+ * Requests the installed Droid plugin list and marketplace count for
+ * the session. Served by the host's daemon sidecar (`plugins` and
+ * `marketplaces` are daemon-only resources), not the session runtime.
+ */
+export interface PluginsRefreshMessage {
+  readonly type: 'plugins.refresh';
+  readonly sessionId: string;
+}
+
 /** Enables or disables a Droid skill by name. */
 export interface SkillToggleMessage {
   readonly type: 'skill.toggle';
@@ -937,6 +961,7 @@ export type WebviewToHostMessage =
   | WorkspaceOpenPathMessage
   | SkillsRefreshMessage
   | SkillToggleMessage
+  | PluginsRefreshMessage
   | CommandsRefreshMessage
   | McpRefreshMessage
   | McpServerToggleMessage
@@ -1148,6 +1173,46 @@ export type SessionSkillsState =
   | {
       readonly status: 'error';
       readonly items: readonly SkillSummary[];
+      readonly message: string;
+    }
+  | {
+      readonly status: 'unsupported';
+      readonly items: readonly [];
+      readonly message: string;
+    };
+
+/**
+ * One installed Droid plugin, projected from the daemon's
+ * `plugins.listInstalled` RPC. Display metadata only: install paths
+ * and timestamps stay on the host.
+ */
+export interface PluginSummary {
+  readonly id: string;
+  readonly scope: PluginScope;
+  /** Short content hash of the installed plugin version. */
+  readonly version: string;
+  /** Whether the plugin is currently enabled for new sessions. */
+  readonly active: boolean;
+}
+
+/**
+ * Read-only plugins panel state. `marketplaceCount` is the number of
+ * registered plugin marketplaces (`marketplaces.list`); it only
+ * exists on `ready` because the two RPCs resolve together.
+ */
+export type SessionPluginsState =
+  | {
+      readonly status: 'loading';
+      readonly items: readonly PluginSummary[];
+    }
+  | {
+      readonly status: 'ready';
+      readonly items: readonly PluginSummary[];
+      readonly marketplaceCount: number;
+    }
+  | {
+      readonly status: 'error';
+      readonly items: readonly PluginSummary[];
       readonly message: string;
     }
   | {
@@ -1529,6 +1594,18 @@ export interface SessionSkillsStateMessage {
   readonly sequence: number;
   readonly sessionId: string;
   readonly skills: SessionSkillsState;
+}
+
+/**
+ * Installed plugins and marketplace count of the active session,
+ * answered through the daemon sidecar for a `plugins.refresh`
+ * request.
+ */
+export interface SessionPluginsStateMessage {
+  readonly type: 'session.plugins';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly plugins: SessionPluginsState;
 }
 
 export interface SessionMcpStateMessage {
@@ -1924,6 +2001,7 @@ export type HostToWebviewMessage =
   | SessionTokenUsageStateMessage
   | ModelCatalogStateMessage
   | SessionSkillsStateMessage
+  | SessionPluginsStateMessage
   | SessionMcpStateMessage
   | SessionCommandsStateMessage
   | McpAuthStateMessage
