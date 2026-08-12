@@ -4748,6 +4748,11 @@ describe('ChatController', () => {
         'src/webview/assistant/Thread.tsx',
         'src/webview/assistant/Thread.test.tsx',
       ]),
+      listOpenEditorFiles: vi.fn(() => [
+        'src/extension/ChatController.ts',
+        '../outside/escape.ts',
+        'docs/HANDOVER.md',
+      ]),
       readWorkspaceFile: vi.fn(async (path: string) => ({
         status: 'picked' as const,
         items: [
@@ -4792,7 +4797,8 @@ describe('ChatController', () => {
       20,
     );
 
-    // Blank queries answer immediately without touching the sources.
+    // Blank queries answer immediately with the open editor tabs
+    // (unsafe paths filtered) instead of running a search.
     controller.handleMessage({
       type: 'workspace.searchFiles',
       sessionId: 'session-1',
@@ -4802,8 +4808,13 @@ describe('ChatController', () => {
     expect(lastMessage(messages, 'workspace.files')).toMatchObject({
       requestId: 'file-search-2',
       status: 'ok',
-      files: [],
+      files: [
+        'src/extension/ChatController.ts',
+        'docs/HANDOVER.md',
+      ],
     });
+    expect(sources.listOpenEditorFiles).toHaveBeenCalledWith(20);
+    expect(sources.searchWorkspaceFiles).toHaveBeenCalledTimes(1);
 
     // Guarded requests still settle with an explicit empty reply so
     // the mention popup never hangs on "Searching...".

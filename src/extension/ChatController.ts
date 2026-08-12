@@ -4172,7 +4172,13 @@ export class ChatController {
       return;
     }
     if (query.trim().length === 0) {
-      this.emitWorkspaceFiles(sessionId, requestId, [], 'ok');
+      // A bare `@` lists the open editor tabs instead of nothing.
+      const openFiles = (
+        this.attachmentSources.listOpenEditorFiles?.(
+          MAX_FILE_SEARCH_RESULTS,
+        ) ?? []
+      ).filter((file) => isSafeWorkspaceRelativePath(file));
+      this.emitWorkspaceFiles(sessionId, requestId, openFiles, 'ok');
       return;
     }
     const startedAt = performance.now();
