@@ -205,7 +205,7 @@ describe('SubagentSummaryRow', () => {
     screen.getByText('completed · 7 tool uses · 4.2s');
   });
 
-  it('stays quiet while running without counters', () => {
+  it('spins quietly while running without counters', () => {
     render(
       createElement(SubagentSummaryRow, {
         type: 'generalPurpose',
@@ -221,10 +221,42 @@ describe('SubagentSummaryRow', () => {
     expect(
       document.querySelector('.dvx-subagent-description'),
     ).toBeNull();
-    // The sub-row never animates: the parent Task row owns the
-    // turn's live treatment.
-    expect(document.querySelector('.dvx-subagent-row [class*="shimmer"]'))
-      .toBeNull();
+    // Decision change 2026-08-12: a running delegation carries its
+    // own CSS spinner (it can outlive the parent turn's shimmer).
+    expect(
+      document.querySelector('.dvx-subagent-spinner'),
+    ).not.toBeNull();
+  });
+
+  it('drops the spinner once the delegation settled', () => {
+    render(
+      createElement(SubagentSummaryRow, {
+        type: 'explore',
+        description: '',
+        status: 'completed',
+        toolUseCount: null,
+        durationMs: null,
+      }),
+    );
+    expect(document.querySelector('.dvx-subagent-spinner')).toBeNull();
+  });
+
+  it('labels a delegation that outlived its settled parent row', () => {
+    render(
+      createElement(SubagentSummaryRow, {
+        type: 'explore',
+        description: 'Long research',
+        status: 'running',
+        toolUseCount: null,
+        durationMs: null,
+        parentSettled: true,
+      }),
+    );
+    screen.getByText('running in background');
+    // Still live work, so the spinner stays.
+    expect(
+      document.querySelector('.dvx-subagent-spinner'),
+    ).not.toBeNull();
   });
 });
 

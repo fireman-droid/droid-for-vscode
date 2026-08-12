@@ -338,6 +338,12 @@ interface DroidThreadProps {
    * so the thread stays free of queue state.
    */
   readonly queuedMessages?: ReactNode;
+  /**
+   * The floating "N Working" subagent pill hovering over the
+   * Composer's left edge; null while no delegation is running. Built
+   * in App from the transcript's subagent rows.
+   */
+  readonly workingBadge?: ReactNode;
   /** Prompts queued behind the running turn (Composer hint). */
   readonly queuedCount?: number;
   /** A queued prompt is loaded into the Composer ("Edit Queued"). */
@@ -429,6 +435,7 @@ export const DroidThread = memo(function DroidThread({
   inlineInteraction,
   planAnchors = null,
   queuedMessages = null,
+  workingBadge = null,
   queuedCount = 0,
   queueEditing = false,
   onQueueEditCancel,
@@ -807,6 +814,10 @@ export const DroidThread = memo(function DroidThread({
               <ScrollToBottomIcon />
             </button>
           </div>
+          {/* Independent floating pill at the Composer's left edge
+              (Cursor form factor) — not part of the stacked
+              conversation-state bars below. */}
+          {workingBadge}
           {/* Conversation-state bar family: the queue bar sits
               directly above the Composer, sharing the warm card
               language of the plan-era pins. */}
@@ -3534,11 +3545,12 @@ function ToolActivityRow({
   }
   // The delegated subagent hangs one level under its Task row. One
   // level only: child sessions never stream their internals into the
-  // parent transcript, so no deeper hierarchy is fabricated. The
-  // parent running row owns the turn's shimmer; the sub-row stays
-  // static (animations only belong to what is happening now). A
-  // backgrounded execute row gets the same treatment: one quiet
-  // informational line, since the GUI cannot stop the process.
+  // parent transcript, so no deeper hierarchy is fabricated. A
+  // running sub-row carries its own quiet spinner (decision change
+  // 2026-08-12: delegations can outlive their turn, so the shimmer
+  // alone left live work invisible). A backgrounded execute row gets
+  // one quiet informational line, since the GUI cannot stop the
+  // process.
   return (
     <>
       {row}
@@ -3550,6 +3562,13 @@ function ToolActivityRow({
           status={activity.subagent.status}
           toolUseCount={activity.subagent.toolUseCount}
           durationMs={activity.subagent.durationMs}
+          // Parent Task row settled while the delegation still runs:
+          // the honest label is "running in background" (the ledger
+          // has no push channel; the post-turn reconcile polls it).
+          parentSettled={
+            activity.status === "completed" ||
+            activity.status === "failed"
+          }
         />
       )}
     </>
@@ -3583,15 +3602,30 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
   status,
   toolUseCount,
   durationMs,
-}: NonNullable<ToolActivityPresentation["subagent"]>): React.JSX.Element {
+  parentSettled = false,
+}: NonNullable<ToolActivityPresentation["subagent"]> & {
+  /** The parent Task row reached a terminal state. */
+  readonly parentSettled?: boolean;
+}): React.JSX.Element {
+  const label =
+    parentSettled && status === "running"
+      ? "running in background"
+      : status;
   return (
     <div className="dvx-subagent-row">
+      {status === "running" ? (
+        <span className="dvx-subagent-spinner" aria-hidden="true" />
+      ) : null}
       <span className="dvx-subagent-label">
         {`Delegated to ${type} subagent`}
       </span>
-      {status === null ? null : (
+      {label === null ? null : (
         <span className="dvx-activity-state">
-          {formatSubagentSummary({ status, toolUseCount, durationMs })}
+          {formatSubagentSummary({
+            status: label,
+            toolUseCount,
+            durationMs,
+          })}
         </span>
       )}
       {description.length > 0 ? (

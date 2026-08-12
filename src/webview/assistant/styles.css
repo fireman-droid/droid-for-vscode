@@ -6634,3 +6634,239 @@ body {
     border-color: CanvasText;
   }
 }
+
+/* ---- N Working badge + subagent activity popup ------------------- */
+
+/* Zero-height flow anchor above the Composer: the pill and popup
+   hang from it without consuming footer space, centered on the same
+   column as the composer wrap. */
+.dvx-working-dock {
+  position: relative;
+  z-index: 6;
+  height: 0;
+  margin-inline: auto;
+  width: 100%;
+}
+
+.dvx-working-anchor {
+  position: absolute;
+  bottom: 10px;
+  left: 2px;
+}
+
+.dvx-working-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    var(--dvx-raised, #fffdfa),
+    var(--dvx-surface, #f5f3ef)
+  );
+  box-shadow: 0 2px 8px -3px rgb(0 0 0 / 14%);
+  color: var(--dvx-muted);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 18px;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    border-color var(--dvx-duration-fast, 120ms) ease,
+    color var(--dvx-duration-fast, 120ms) ease;
+}
+
+.dvx-working-badge:hover {
+  border-color: var(--dvx-border-strong);
+  color: var(--dvx-ink);
+}
+
+.dvx-working-badge:focus-visible {
+  outline: 1px solid var(--dvx-accent);
+  outline-offset: 2px;
+}
+
+/* The quiet spinner: shared by the pill, the popup rows and the
+   transcript's running sub-rows. Pure CSS animation (stress gate:
+   compositor-only rotation, no JS ticks). */
+.dvx-working-spinner {
+  display: inline-block;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--dvx-border-strong, #d5cdc4);
+  border-radius: 50%;
+  border-top-color: var(--dvx-accent);
+  animation: dvx-spin 700ms linear infinite;
+}
+
+.dvx-working-popup {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: min(400px, calc(100vw - 40px));
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--dvx-border);
+  border-radius: 12px;
+  background: linear-gradient(
+    180deg,
+    var(--dvx-raised, #fffefb),
+    var(--dvx-surface, #faf8f4)
+  );
+  box-shadow: var(--dvx-shadow);
+  animation: dvx-rise-in var(--dvx-duration-normal, 180ms) ease;
+}
+
+.dvx-working-popup-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px 8px;
+  border-bottom: 1px solid var(--dvx-border);
+  background: inherit;
+}
+
+.dvx-working-popup-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dvx-ink);
+}
+
+.dvx-working-stop-all {
+  border: 1px solid var(--dvx-border);
+  border-radius: 7px;
+  background: var(--dvx-raised, #fff);
+  padding: 2px 9px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--dvx-muted);
+  cursor: pointer;
+  transition:
+    border-color var(--dvx-duration-fast, 120ms) ease,
+    color var(--dvx-duration-fast, 120ms) ease;
+}
+
+.dvx-working-stop-all:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--dvx-accent) 40%, var(--dvx-border));
+  color: var(--dvx-accent-deep, #b5451f);
+}
+
+.dvx-working-stop-all:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dvx-working-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dvx-working-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  padding: 8px 12px;
+}
+
+.dvx-working-row + .dvx-working-row {
+  border-top: 1px solid
+    color-mix(in srgb, var(--dvx-border) 55%, transparent);
+}
+
+.dvx-working-row .dvx-working-spinner {
+  grid-row: 1 / span 2;
+}
+
+.dvx-working-row-type {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dvx-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-working-row-desc {
+  grid-column: 2;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dvx-muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-working-row-elapsed {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dvx-working-popup-note {
+  padding: 6px 12px 8px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--dvx-border) 55%, transparent);
+  color: var(--dvx-subtle);
+  font-size: 10.5px;
+}
+
+/* Transcript sub-row spinner: smaller and quieter than the pill's,
+   sitting before the running status text. */
+.dvx-subagent-spinner {
+  /* Lives in the flex .dvx-subagent-row; its 6px column-gap provides
+     the spacing. */
+  display: inline-block;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border: 1.25px solid var(--dvx-border-strong, #d5cdc4);
+  border-radius: 50%;
+  border-top-color: var(--dvx-subtle);
+  animation: dvx-spin 900ms linear infinite;
+}
+
+@media (min-width: 900px) {
+  .dvx-working-dock {
+    max-width: 860px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-working-spinner,
+  .dvx-subagent-spinner {
+    animation: none;
+    border-top-color: var(--dvx-accent);
+  }
+
+  .dvx-working-popup {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .dvx-working-badge,
+  .dvx-working-popup,
+  .dvx-working-stop-all {
+    border: 1px solid CanvasText;
+  }
+
+  .dvx-working-spinner,
+  .dvx-subagent-spinner {
+    border-color: CanvasText;
+    border-top-color: Highlight;
+  }
+}

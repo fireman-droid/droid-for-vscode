@@ -64,6 +64,8 @@ import { findLatestChangesContext } from './gitCommitDraft';
 import { selectPlanAnchors } from './planAnchor';
 import { QueuedMessages } from './QueuedMessages';
 import { SideChatSheet } from './SideChatSheet';
+import { selectWorkingSubagents } from './subagentWorking';
+import { WorkingBadge } from './WorkingBadge';
 import { MAX_BTW_TEXT_LENGTH } from '../../shared/btwProtocol';
 import './styles.css';
 
@@ -294,6 +296,25 @@ export function App(): React.JSX.Element {
   }, [sessionId, vscode]);
   const turnId = state.turn?.turnId ?? null;
   const turnStatus = state.turn?.status ?? null;
+  // Turn ids this connection has actually seen live on state.turn.
+  // History replay never lands here, so its rows can't raise the
+  // Working badge; rows of finished live turns keep counting while
+  // their delegation runs in the background.
+  const liveTurnIdsRef = useRef(new Set<string>());
+  const liveTurnSessionRef = useRef(state.sessionId);
+  if (liveTurnSessionRef.current !== state.sessionId) {
+    liveTurnSessionRef.current = state.sessionId;
+    liveTurnIdsRef.current = new Set();
+  }
+  if (turnId !== null) {
+    liveTurnIdsRef.current.add(turnId);
+  }
+  const workingSubagents = useMemo(
+    () =>
+      selectWorkingSubagents(state.transcript, liveTurnIdsRef.current),
+    // turnId covers set growth; the set itself is a stable ref.
+    [state.transcript, turnId],
+  );
   const interactionCount = state.interactions.length;
   const queuedCount = state.queue.items.length;
   const queueEditingId = state.queueEditing?.queueId ?? null;
@@ -1397,6 +1418,20 @@ export function App(): React.JSX.Element {
           }
           inlineInteraction={inlineInteraction}
           planAnchors={planAnchors}
+          workingBadge={
+            workingSubagents.length === 0 ? null : (
+              <WorkingBadge
+                rows={workingSubagents}
+                turnActive={
+                  turnStatus === 'submitting' ||
+                  turnStatus === 'streaming'
+                }
+                onStopAll={() => {
+                  void handleCancel();
+                }}
+              />
+            )
+          }
           queuedMessages={
             state.queue.items.length === 0 ? null : (
               <QueuedMessages
