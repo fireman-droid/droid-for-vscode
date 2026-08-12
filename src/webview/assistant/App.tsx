@@ -499,6 +499,9 @@ export function App(): React.JSX.Element {
   const handleNewSession = useCallback((): void => {
     post(vscode, { type: 'session.new' });
   }, [vscode]);
+  const handleCreateWorktreeSession = useCallback((): void => {
+    post(vscode, { type: 'worktree.createSession' });
+  }, [vscode]);
   const handleSelectSession = useCallback(
     (nextSessionId: string): void => {
       post(vscode, {
@@ -609,6 +612,15 @@ export function App(): React.JSX.Element {
         return;
       }
       post(vscode, { type: 'file.openDiff', sessionId, path });
+    },
+    [sessionId, connectionStatus, vscode],
+  );
+  const handlePreviewFile = useCallback(
+    (path: string): void => {
+      if (sessionId === null || connectionStatus !== 'connected') {
+        return;
+      }
+      post(vscode, { type: 'file.preview', sessionId, path });
     },
     [sessionId, connectionStatus, vscode],
   );
@@ -946,6 +958,7 @@ export function App(): React.JSX.Element {
           state={state}
           sessionActionsDisabled={sessionActionsDisabled}
           onNewSession={handleNewSession}
+          onCreateWorktreeSession={handleCreateWorktreeSession}
           onSelectSession={handleSelectSession}
           onRenameSession={handleRenameSession}
           onForkSession={handleForkSession}
@@ -1035,6 +1048,7 @@ export function App(): React.JSX.Element {
               : null
           }
           onOpenFileDiff={handleOpenFileDiff}
+          onPreviewFile={handlePreviewFile}
           editResendEnabled={
             connectionStatus === 'connected' &&
             !active &&
@@ -1058,6 +1072,7 @@ function Header({
   state,
   sessionActionsDisabled,
   onNewSession,
+  onCreateWorktreeSession,
   onSelectSession,
   onRenameSession,
   onForkSession,
@@ -1070,6 +1085,7 @@ function Header({
   readonly state: typeof initialAssistantWebviewState;
   readonly sessionActionsDisabled: boolean;
   readonly onNewSession: () => void;
+  readonly onCreateWorktreeSession: () => void;
   readonly onSelectSession: (sessionId: string) => void;
   readonly onRenameSession: (sessionId: string, title: string) => void;
   readonly onForkSession: (sessionId: string) => void;
@@ -1113,6 +1129,8 @@ function Header({
           archived={state.archived}
           sessionSearch={state.sessionSearch}
           actionsDisabled={sessionActionsDisabled}
+          worktreeCreateAvailable={state.worktreeCreateAvailable}
+          onCreateWorktreeSession={onCreateWorktreeSession}
           onSelectSession={onSelectSession}
           onRenameSession={onRenameSession}
           onForkSession={onForkSession}

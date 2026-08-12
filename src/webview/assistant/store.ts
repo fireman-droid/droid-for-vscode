@@ -20,6 +20,8 @@ import {
   type WorkspaceFilesStatus,
   type ImageMediaType,
   type WorkspaceImageStatus,
+  type GitStatusFile,
+  type GitUnavailableReason,
 } from '../../shared/bridgeMessages';
 import {
   enforceTranscriptImageBudget,
@@ -39,6 +41,36 @@ export interface PendingInteraction {
   readonly turnId: string;
   readonly request: InteractionRequest;
 }
+
+export type GitAvailability = 'unknown' | 'available' | 'unavailable';
+
+export type GitCommitResultState =
+  | { readonly ok: true; readonly hash: string; readonly subject: string }
+  | { readonly ok: false; readonly error: string };
+
+/** Inline commit panel state (git/PR workflow slice A). */
+export interface GitCommitFlowState {
+  readonly availability: GitAvailability;
+  readonly unavailableReason: GitUnavailableReason | null;
+  readonly statusPending: boolean;
+  readonly branch: string | null;
+  readonly files: readonly GitStatusFile[];
+  readonly commitPending: boolean;
+  /** Changes-card turn whose panel submitted the last commit. */
+  readonly commitTurnId: string | null;
+  readonly lastResult: GitCommitResultState | null;
+}
+
+export const initialGitCommitFlowState: GitCommitFlowState = {
+  availability: 'unknown',
+  unavailableReason: null,
+  statusPending: false,
+  branch: null,
+  files: [],
+  commitPending: false,
+  commitTurnId: null,
+  lastResult: null,
+};
 
 /** One resolved markdown image reference. */
 export interface LocalImageEntry {
@@ -116,6 +148,12 @@ export interface AssistantWebviewState {
     readonly reason: EditResendRejectReason;
     readonly sequence: number;
   } | null;
+  /**
+   * Host-advertised capability to create sessions in a daemon-managed
+   * git worktree. Workspace-level and snapshot-borne; false hides the
+   * drawer entry entirely (fail closed).
+   */
+  readonly worktreeCreateAvailable: boolean;
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: Extract<
     HostToWebviewMessage,
@@ -124,6 +162,8 @@ export interface AssistantWebviewState {
   readonly truncated: boolean;
   readonly interactions: readonly PendingInteraction[];
   readonly terminalTurnId: string | null;
+  /** Inline commit panel state behind the changes-card entry. */
+  readonly git: GitCommitFlowState;
 }
 
 export type AssistantWebviewAction =
@@ -136,7 +176,12 @@ export type AssistantWebviewAction =
       readonly turnId: string;
       readonly text: string;
     }
-  | { readonly type: 'turn.stop' };
+  | { readonly type: 'turn.stop' }
+  | { readonly type: 'git.statusRequested' }
+  | {
+      readonly type: 'git.commitRequested';
+      readonly turnId: string;
+    };
 
 export const initialAssistantWebviewState: AssistantWebviewState = {
   sequence: -1,
@@ -159,11 +204,13 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   rewindInfo: null,
   editAttachments: null,
   editResendRejection: null,
+  worktreeCreateAvailable: false,
   transcript: [],
   historyStatus: null,
   truncated: false,
   interactions: [],
   terminalTurnId: null,
+  git: initialGitCommitFlowState,
 };
 
 const MAX_DIAGNOSTICS = 50;
@@ -194,6 +241,25 @@ export function assistantWebviewReducer(
         },
       ],
     );
+  }
+
+  if (action.type === 'git.statusRequested') {
+    return {
+      ...state,
+      git: { ...state.git, statusPending: true },
+    };
+  }
+
+  if (action.type === 'git.commitRequested') {
+    return {
+      ...state,
+      git: {
+        ...state.git,
+        commitPending: true,
+        commitTurnId: action.turnId,
+        lastResult: null,
+      },
+    };
   }
 
   if (action.type === 'turn.stop') {
@@ -271,6 +337,7 @@ export function assistantWebviewReducer(
           event.sessionId === state.sessionId
             ? state.editResendRejection
             : null,
+        worktreeCreateAvailable: event.worktreeCreateAvailable === true,
         transcript: event.transcript,
         historyStatus: event.historyStatus,
         truncated: event.truncated,
@@ -279,6 +346,11 @@ export function assistantWebviewReducer(
           event.turn !== null && isTerminalStatus(event.turn.status)
             ? event.turn.turnId
             : null,
+        // Git status is workspace-level; a fresh status arrives on demand.
+        git:
+          event.sessionId === state.sessionId
+            ? state.git
+            : initialGitCommitFlowState,
       };
     case 'host.connection': {
       const changed = event.sessionId !== state.sessionId;
@@ -781,6 +853,37 @@ export function assistantWebviewReducer(
         interactions: state.interactions.filter(
           ({ request }) => request.requestId !== event.requestId,
         ),
+      };
+    case 'git.status':
+      if (event.sessionId !== state.sessionId) {
+        return advance(state, event.sequence);
+      }
+      return {
+        ...state,
+        sequence: event.sequence,
+        git: {
+          ...state.git,
+          availability: event.available ? 'available' : 'unavailable',
+          unavailableReason: event.unavailableReason ?? null,
+          statusPending: false,
+          branch: event.branch,
+          files: event.files,
+        },
+      };
+    case 'git.commitResult':
+      if (event.sessionId !== state.sessionId) {
+        return advance(state, event.sequence);
+      }
+      return {
+        ...state,
+        sequence: event.sequence,
+        git: {
+          ...state.git,
+          commitPending: false,
+          lastResult: event.ok
+            ? { ok: true, hash: event.hash, subject: event.subject }
+            : { ok: false, error: event.error },
+        },
       };
   }
 }

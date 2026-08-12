@@ -61,6 +61,26 @@ function snapshot(
 }
 
 describe('assistantWebviewReducer', () => {
+  it('tracks the snapshot-borne worktree-create capability', () => {
+    expect(initialAssistantWebviewState.worktreeCreateAvailable).toBe(
+      false,
+    );
+
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: { ...snapshot(0), worktreeCreateAvailable: true },
+    });
+    expect(state.worktreeCreateAvailable).toBe(true);
+
+    // Absent flag means unavailable, not "keep the previous value":
+    // a workspace switch may have removed the capability.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(1),
+    });
+    expect(state.worktreeCreateAvailable).toBe(false);
+  });
+
   it('keeps archived and content-search state across snapshots', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',
