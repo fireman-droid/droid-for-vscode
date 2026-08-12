@@ -22,7 +22,6 @@ import {
 import {
   MAX_RUNTIME_MODEL_CATALOG_ITEMS,
   MAX_RUNTIME_MODEL_DISPLAY_NAME_LENGTH,
-  MAX_RUNTIME_MODEL_ID_LENGTH,
   MAX_RUNTIME_MCP_AUTH_URL_LENGTH,
   MAX_RUNTIME_MCP_NAME_LENGTH,
   MAX_RUNTIME_MCP_SERVERS,
@@ -66,6 +65,7 @@ import {
   type RuntimeSkill,
   type RuntimeSkillLocation,
 } from './DroidRuntime';
+import { isSafeModelId } from '../shared/validateMessage';
 import { loadSessionCommands } from './commands/FactoryCommandCatalog';
 import {
   normalizeSdkEvent,
@@ -1840,16 +1840,6 @@ function isEnumValue(
   values: readonly string[],
 ): value is string {
   return typeof value === 'string' && values.includes(value);
-}
-
-function isSafeModelId(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= MAX_RUNTIME_MODEL_ID_LENGTH &&
-    value.trim() === value &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
-  );
 }
 
 /** Longest session id accepted from a notification envelope. */

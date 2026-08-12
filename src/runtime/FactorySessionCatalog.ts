@@ -1,8 +1,9 @@
 import { listSessions } from '@factory/droid-sdk/node';
 
+import { sanitizeSessionTitle } from '../shared/validateMessage';
 import {
   isSafeSessionIdentifier,
-  sanitizeSessionTitle,
+  MAX_SESSION_CATALOG_TITLE_LENGTH,
   type SessionCatalog,
   type SessionCatalogEntry,
   type SessionCatalogResult,
@@ -104,7 +105,10 @@ function projectSessionMetadata(value: unknown): SessionCatalogEntry | null {
     return null;
   }
 
-  const title = sanitizeSessionTitle(value.title);
+  const title = sanitizeSessionTitle(
+    value.title,
+    MAX_SESSION_CATALOG_TITLE_LENGTH,
+  );
   const modifiedTime = projectDate(value.modifiedTime);
   const createdTime = projectDate(value.createdTime);
   if (!modifiedTime || !createdTime) {

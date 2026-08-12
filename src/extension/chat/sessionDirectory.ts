@@ -16,6 +16,7 @@ import {
   MAX_SESSION_SEARCH_RESULTS,
   MAX_SESSION_TITLE_LENGTH as SESSION_TITLE_LIMIT,
 } from '../../shared/bridgeMessages';
+import { sanitizeSessionTitle } from '../../shared/validateMessage';
 import type {
   SessionCatalogEntry,
   SessionCatalogResult,
@@ -1092,7 +1093,7 @@ export function projectCatalogEntries(
     ids.add(entry.id);
     items.push({
       id: entry.id,
-      title: sanitizeSessionTitle(entry.title),
+      title: sanitizeSessionTitle(entry.title, SESSION_TITLE_LIMIT),
       messageCount: entry.messageCount,
       modifiedTime: modified.toISOString(),
       active: false,
@@ -1103,17 +1104,4 @@ export function projectCatalogEntries(
     });
   }
   return items;
-}
-
-export function sanitizeSessionTitle(title: string): string {
-  if (typeof title !== 'string') {
-    return 'Untitled session';
-  }
-  const safe = title
-    .replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, SESSION_TITLE_LIMIT)
-    .trim();
-  return safe || 'Untitled session';
 }

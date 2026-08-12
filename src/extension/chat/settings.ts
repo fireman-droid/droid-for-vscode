@@ -14,7 +14,7 @@ import type {
   RuntimeSessionSettings,
   RuntimeSessionSettingUpdate,
 } from '../../runtime/DroidRuntime';
-import { isSafeModelId } from './capabilityPanels';
+import { isSafeModelId } from '../../shared/validateMessage';
 import { ensureActiveRuntimeWorkspaceCurrent } from './runtimeLifecycle';
 import { isEnumValue, type ChatControllerInternals } from './internals';
 

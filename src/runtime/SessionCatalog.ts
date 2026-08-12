@@ -38,22 +38,6 @@ export interface SessionCatalog {
   writeFavorite?(sessionId: string, favorite: boolean): Promise<boolean>;
 }
 
-/**
- * Collapses control characters and whitespace runs, trims, and bounds
- * an externally sourced session title. Falls back to a readable
- * placeholder for empty titles.
- */
-export function sanitizeSessionTitle(value: string): string {
-  const title = value
-    .replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, MAX_SESSION_CATALOG_TITLE_LENGTH)
-    .trim();
-
-  return title.length > 0 ? title : 'Untitled session';
-}
-
 /** Accepts externally sourced session ids without control characters. */
 export function isSafeSessionIdentifier(value: unknown): value is string {
   return (

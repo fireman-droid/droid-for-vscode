@@ -55,7 +55,6 @@ import {
   PLUGIN_SCOPES,
   MAX_SESSION_CATALOG_ITEMS as SESSION_CATALOG_LIMIT,
   MAX_SESSION_SEARCH_RESULTS,
-  MAX_SESSION_TITLE_LENGTH as SESSION_TITLE_LIMIT,
   SESSION_AUTONOMY_LEVELS,
   SESSION_INTERACTION_MODES,
   SESSION_REASONING_EFFORTS,
@@ -118,7 +117,7 @@ import {
 } from './turnActivityState';
 import { handleQueueAdd, handleQueueUpdate, handleQueueRemove, handleQueueResume, handleQueuePromote, handleQueueClear, settleQueueAfterTurn, projectQueueState, discardQueuedPrompts } from './chat/queue';
 import { handleMcpRefresh, pushMcp, handleMcpServerToggle, handleMcpServerAdd, handleMcpServerRemove, handleMcpServerAuthenticate } from './chat/mcp';
-import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRefresh, pushSkills, handleSkillToggle, handlePluginsRefresh, handleCommandsRefresh, recordRecentCommand, emitModelCatalog, projectModelCatalog, isSafeModelId, MODEL_CATALOG_FAILED_MESSAGE } from './chat/capabilityPanels';
+import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRefresh, pushSkills, handleSkillToggle, handlePluginsRefresh, handleCommandsRefresh, recordRecentCommand, emitModelCatalog, projectModelCatalog, MODEL_CATALOG_FAILED_MESSAGE } from './chat/capabilityPanels';
 import { handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddImage, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
 import { handleSettingUpdate, emitSettings, refreshSettingsAfterRuntimeEvent, projectConfirmedSettings, SETTINGS_READ_FAILED_MESSAGE } from './chat/settings';
 import { handleFileOpenDiff, handleFilePreview, handleInlineHtmlPreview, handleTerminalOpenMirror, handleGitRequestStatus, handleGitCommit, handleWorkspaceOpenPath, handleWorkspaceSearchFiles, handleWorkspaceReadImage } from './chat/workspaceActions';

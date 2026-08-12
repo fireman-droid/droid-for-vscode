@@ -13,8 +13,6 @@ import {
   MAX_SPEC_PLAN_LENGTH,
   MAX_INTERACTION_TITLE_LENGTH,
   MAX_MODEL_CATALOG_ITEMS,
-  MAX_MODEL_DISPLAY_NAME_LENGTH,
-  MAX_MODEL_ID_LENGTH,
   MAX_OPEN_PATH_LENGTH,
   MAX_PERMISSION_OPTIONS,
   MAX_PERMISSION_OPTION_LABEL_LENGTH,
@@ -184,6 +182,8 @@ import type {
 } from '../../shared/tokenUsage';
 import {
   isSafeCommandName,
+  isSafeDisplayName,
+  isSafeModelId,
   isSafeWorkspaceRelativePath,
 } from '../../shared/validateMessage';
 import {
@@ -3587,22 +3587,6 @@ function readStringDataProperty(
 
 function isContextNumber(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
-}
-
-function isSafeModelId(value: unknown): value is string {
-  return (
-    isNonEmptyBoundedString(value, MAX_MODEL_ID_LENGTH) &&
-    value.trim() === value &&
-    !hasControlCharacter(value)
-  );
-}
-
-function isSafeDisplayName(value: unknown): value is string {
-  return (
-    isNonEmptyBoundedString(value, MAX_MODEL_DISPLAY_NAME_LENGTH) &&
-    value.trim() === value &&
-    !hasControlCharacter(value)
-  );
 }
 
 function isNullableId(value: unknown): value is string | null {

@@ -13,8 +13,6 @@ import type {
 } from '../../shared/bridgeMessages';
 import {
   MAX_MODEL_CATALOG_ITEMS,
-  MAX_MODEL_DISPLAY_NAME_LENGTH,
-  MAX_MODEL_ID_LENGTH,
   MAX_PLUGIN_ID_LENGTH,
   MAX_PLUGIN_ITEMS,
   MAX_PLUGIN_MARKETPLACE_COUNT,
@@ -32,6 +30,10 @@ import type {
 } from '../../runtime/DroidRuntime';
 import type { InstalledPluginEntry } from '../../runtime/daemon/DaemonPluginCatalog';
 import type { TokenUsageBreakdown } from '../../shared/tokenUsage';
+import {
+  isSafeDisplayName,
+  isSafeModelId,
+} from '../../shared/validateMessage';
 import { ensureActiveRuntimeWorkspaceCurrent } from './runtimeLifecycle';
 import {
   daemonFailureMessage,
@@ -727,26 +729,6 @@ export function projectCommandSummary(command: RuntimeCommand): CommandSummary {
     argumentHint: command.argumentHint,
     isExecutable: command.isExecutable,
   };
-}
-
-export function isSafeModelId(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= MAX_MODEL_ID_LENGTH &&
-    value.trim() === value &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
-  );
-}
-
-export function isSafeDisplayName(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= MAX_MODEL_DISPLAY_NAME_LENGTH &&
-    value.trim() === value &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
-  );
 }
 
 export function isSafeContextNumber(value: unknown): value is number {

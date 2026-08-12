@@ -4,6 +4,7 @@ import {
   MAX_ASK_USER_ANSWER_LENGTH,
   MAX_BRIDGE_ID_LENGTH,
   MAX_EDITED_SPEC_LENGTH,
+  MAX_MODEL_DISPLAY_NAME_LENGTH,
   MAX_MODEL_ID_LENGTH,
   MAX_PERMISSION_OPTION_VALUE_LENGTH,
   MAX_MCP_ARG_LENGTH,
@@ -1481,12 +1482,39 @@ function isId(value: unknown): value is string {
   );
 }
 
-function isSafeModelId(value: unknown): value is string {
+export function isSafeModelId(value: unknown): value is string {
   return (
     isNonEmptyBoundedString(value, MAX_MODEL_ID_LENGTH) &&
     value.trim() === value &&
     !/[\u0000-\u001f\u007f-\u009f]/.test(value)
   );
+}
+
+export function isSafeDisplayName(value: unknown): value is string {
+  return (
+    isNonEmptyBoundedString(value, MAX_MODEL_DISPLAY_NAME_LENGTH) &&
+    value.trim() === value &&
+    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
+  );
+}
+
+/**
+ * Collapses control characters and whitespace runs, trims, and bounds
+ * an externally sourced session title. Falls back to a readable
+ * placeholder for empty titles. Callers pass their own trust-boundary
+ * length limit (catalog 200, Bridge contract 256).
+ */
+export function sanitizeSessionTitle(value: string, maxLength: number): string {
+  if (typeof value !== 'string') {
+    return 'Untitled session';
+  }
+  const title = value
+    .replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLength)
+    .trim();
+  return title.length > 0 ? title : 'Untitled session';
 }
 
 function isEnumValue<const Values extends readonly string[]>(

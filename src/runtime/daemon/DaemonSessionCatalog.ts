@@ -3,9 +3,10 @@ import process from 'node:process';
 
 import type { ConnectedDroid } from '@factory/droid-sdk';
 
+import { sanitizeSessionTitle } from '../../shared/validateMessage';
 import {
   isSafeSessionIdentifier,
-  sanitizeSessionTitle,
+  MAX_SESSION_CATALOG_TITLE_LENGTH,
 } from '../SessionCatalog';
 
 /** Most archived sessions projected for the drawer. */
@@ -92,7 +93,10 @@ export class DaemonSessionCatalog {
       }
       entries.push({
         id: row.id,
-        title: sanitizeSessionTitle(row.title ?? ''),
+        title: sanitizeSessionTitle(
+          row.title ?? '',
+          MAX_SESSION_CATALOG_TITLE_LENGTH,
+        ),
         modifiedTime,
         archivedTime,
       });
@@ -139,7 +143,10 @@ export class DaemonSessionCatalog {
       }
       matches.push({
         id: row.id,
-        title: sanitizeSessionTitle(row.title ?? ''),
+        title: sanitizeSessionTitle(
+          row.title ?? '',
+          MAX_SESSION_CATALOG_TITLE_LENGTH,
+        ),
         modifiedTime: projectDate(row.modifiedTime),
         snippet: projectSnippet(row.hits),
       });
