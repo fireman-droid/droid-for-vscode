@@ -102,6 +102,87 @@ describe('ensurePrivateDaemon', () => {
       }),
     ).rejects.toThrow('exited before listening (code 3)');
   });
+
+  it('retries once on a fresh port after a lost port race', async () => {
+    const spawn = fakeSpawn(88);
+    const ports = [40010, 40011];
+    const waitForPort = vi.fn((port: number) => {
+      if (port === 40010) {
+        spawn.exit(1);
+        return Promise.reject(new Error('port timeout'));
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const endpoint = await ensurePrivateDaemon(undefined, {
+      spawnDaemon: spawn.spawnDaemon,
+      pickFreePort: async () => ports.shift() ?? 0,
+      waitForPort,
+    });
+
+    expect(endpoint).toEqual({ url: 'ws://127.0.0.1:40011', pid: 88 });
+    expect(spawn.calls).toHaveLength(2);
+    expect(spawn.calls[0]?.args).toContain('40010');
+    expect(spawn.calls[1]?.args).toContain('40011');
+  });
+
+  it('gives up after a single retry and reports both attempts', async () => {
+    const spawn = fakeSpawn(89);
+    const ports = [40020, 40021];
+
+    await expect(
+      ensurePrivateDaemon(undefined, {
+        spawnDaemon: spawn.spawnDaemon,
+        pickFreePort: async () => ports.shift() ?? 0,
+        waitForPort: (port: number) => {
+          spawn.exit(port === 40020 ? 2 : 3);
+          return Promise.reject(new Error('port timeout'));
+        },
+      }),
+    ).rejects.toThrow(
+      'droid daemon failed to start after a port retry: ' +
+        'droid daemon exited before listening (code 3) ' +
+        '(first attempt: droid daemon exited before listening (code 2))',
+    );
+    expect(spawn.calls).toHaveLength(2);
+  });
+
+  it('includes the captured stderr tail in start failures', async () => {
+    const spawnDaemon = (): DaemonSpawnHandle => ({
+      pid: 90,
+      stderrTail: () => 'EADDRINUSE: port already bound\n',
+      onExit: (listener) => {
+        listener(1);
+      },
+    });
+
+    await expect(
+      ensurePrivateDaemon(undefined, {
+        spawnDaemon,
+        pickFreePort: async () => 40030,
+        waitForPort: () => Promise.reject(new Error('port timeout')),
+      }),
+    ).rejects.toThrow('stderr: EADDRINUSE: port already bound');
+  });
+
+  it('reaps a child that never listens before retrying', async () => {
+    const spawn = fakeSpawn(91);
+    const killProcessTree = vi.fn(async () => undefined);
+    const ports = [40040, 40041];
+
+    await ensurePrivateDaemon(undefined, {
+      spawnDaemon: spawn.spawnDaemon,
+      pickFreePort: async () => ports.shift() ?? 0,
+      waitForPort: (port: number) =>
+        port === 40040
+          ? Promise.reject(new Error('port timeout'))
+          : Promise.resolve(undefined),
+      killProcessTree,
+    });
+
+    expect(killProcessTree).toHaveBeenCalledTimes(1);
+    expect(killProcessTree).toHaveBeenCalledWith(91);
+  });
 });
 
 describe('startDetachedDaemon', () => {

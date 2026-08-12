@@ -5,6 +5,8 @@ import process from 'node:process';
 /** How long we wait for a freshly spawned daemon to start listening. */
 const DAEMON_LISTEN_TIMEOUT_MS = 30_000;
 const PORT_POLL_INTERVAL_MS = 500;
+/** Last stretch of daemon stderr kept for start-failure reports. */
+const STDERR_TAIL_MAX_CHARS = 2048;
 
 export interface DaemonEndpoint {
   readonly url: string;
@@ -25,6 +27,8 @@ export interface DaemonLifecycleOptions {
 export interface DaemonSpawnHandle {
   readonly pid: number | undefined;
   onExit(listener: (code: number | null) => void): void;
+  /** Rolling tail of the child's stderr, when captured. */
+  stderrTail?(): string;
 }
 
 /** Injectable process/network seams for unit tests. */
@@ -117,38 +121,73 @@ export async function ensurePrivateDaemon(
   const spawnDaemon = deps.spawnDaemon ?? defaultSpawnDaemon;
   const pickFreePort = deps.pickFreePort ?? defaultPickFreePort;
   const waitForPort = deps.waitForPort ?? defaultWaitForPort;
+  const killProcessTree = deps.killProcessTree ?? defaultKillProcessTree;
 
-  const port = await pickFreePort();
-  const child = spawnDaemon(droidPath, [
-    'daemon',
-    '--port',
-    String(port),
-    '--host',
-    host,
-    '--parent-pid',
-    String(parentPid),
-  ]);
-  if (child.pid === undefined) {
-    throw new Error('droid daemon process failed to spawn');
-  }
+  const attempt = async (): Promise<DaemonEndpoint> => {
+    const port = await pickFreePort();
+    const child = spawnDaemon(droidPath, [
+      'daemon',
+      '--port',
+      String(port),
+      '--host',
+      host,
+      '--parent-pid',
+      String(parentPid),
+    ]);
+    if (child.pid === undefined) {
+      throw new Error('droid daemon process failed to spawn');
+    }
 
-  let exited: number | null | undefined;
-  child.onExit((code) => {
-    exited = code ?? -1;
-  });
+    let exited: number | null | undefined;
+    child.onExit((code) => {
+      exited = code ?? -1;
+    });
 
+    try {
+      await waitForPort(port, host, DAEMON_LISTEN_TIMEOUT_MS);
+    } catch (error) {
+      const tail = child.stderrTail?.().trim() ?? '';
+      const stderrSuffix = tail === '' ? '' : `; stderr: ${tail}`;
+      if (exited !== undefined) {
+        throw new Error(
+          `droid daemon exited before listening (code ${String(exited)})${stderrSuffix}`,
+        );
+      }
+      // The child is still alive but never started listening; reap it
+      // so the port retry cannot stack a second daemon behind it.
+      try {
+        await killProcessTree(child.pid);
+      } catch {
+        // Already gone; nothing to reap.
+      }
+      throw new Error(`${errorText(error)}${stderrSuffix}`);
+    }
+
+    return { url: `ws://${host}:${String(port)}`, pid: child.pid };
+  };
+
+  // pickFreePort closes its probe socket before the daemon binds, so
+  // another process can steal the port in between (TOCTOU). One retry
+  // on a fresh port absorbs that race instead of surfacing it.
   try {
-    await waitForPort(port, host, DAEMON_LISTEN_TIMEOUT_MS);
-  } catch (error) {
-    if (exited !== undefined) {
+    return await attempt();
+  } catch (firstError) {
+    let retried: DaemonEndpoint;
+    try {
+      retried = await attempt();
+    } catch (retryError) {
       throw new Error(
-        `droid daemon exited before listening (code ${String(exited)})`,
+        `droid daemon failed to start after a port retry: ${errorText(
+          retryError,
+        )} (first attempt: ${errorText(firstError)})`,
       );
     }
-    throw error;
+    return retried;
   }
+}
 
-  return { url: `ws://${host}:${String(port)}`, pid: child.pid };
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -175,11 +214,19 @@ function defaultSpawnDaemon(
   // shell: true because `droid` resolves to droid.cmd on Windows.
   const child = spawn(droidPath, [...args], {
     shell: true,
-    stdio: ['ignore', 'ignore', 'ignore'],
+    stdio: ['ignore', 'ignore', 'pipe'],
     windowsHide: true,
+  });
+  // Keep only a stderr tail: enough to explain a failed start without
+  // buffering a long-lived daemon's full output.
+  let stderrTail = '';
+  child.stderr?.setEncoding('utf8');
+  child.stderr?.on('data', (chunk: string) => {
+    stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX_CHARS);
   });
   return {
     pid: child.pid,
+    stderrTail: () => stderrTail,
     onExit: (listener) => {
       child.once('exit', (code) => listener(code));
     },
