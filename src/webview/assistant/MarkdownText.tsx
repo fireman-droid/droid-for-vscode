@@ -1,3 +1,4 @@
+import { useAuiState } from '@assistant-ui/react';
 import { MarkdownTextPrimitive } from '@assistant-ui/react-markdown';
 import {
   createContext,
@@ -16,7 +17,10 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-import { MAX_IMAGE_PATH_LENGTH } from '../../shared/bridgeMessages';
+import {
+  MAX_IMAGE_PATH_LENGTH,
+  MAX_INLINE_PREVIEW_HTML_LENGTH,
+} from '../../shared/bridgeMessages';
 import { highlightCode } from './highlightCode';
 import { MermaidBlock } from './MermaidBlock';
 import { detectPathLink, type PathLink } from './pathLink';
@@ -38,6 +42,35 @@ export const OpenPathContext =
  * through the same `code` component.
  */
 const InsidePreContext = createContext(false);
+
+/**
+ * Receives the HTML source of a code block whose Preview entry the
+ * user clicked. The app provides it once at the root; a null default
+ * keeps standalone markdown renders (tests, interaction panels)
+ * without the entry.
+ */
+export type InlineHtmlPreviewHandler = (html: string) => void;
+export const InlineHtmlPreviewContext =
+  createContext<InlineHtmlPreviewHandler | null>(null);
+
+/**
+ * Loose heuristic for "this fence is a previewable HTML document":
+ * either the author tagged it ```html or the content opens like a
+ * document (<!DOCTYPE / <html). Deliberately not a parser.
+ */
+export function isInlineHtmlPreviewCandidate(
+  language: string | null,
+  text: string,
+): boolean {
+  if (text.trim().length === 0) {
+    return false;
+  }
+  if (language?.toLowerCase() === 'html') {
+    return true;
+  }
+  const head = text.trimStart().slice(0, 15).toLowerCase();
+  return head.startsWith('<!doctype') || head.startsWith('<html');
+}
 
 const REMARK_PLUGINS = [remarkGfm];
 const SAFE_HTTP_URL = /^https?:\/\//iu;
@@ -267,10 +300,13 @@ function readNodeText(node: ReactNode): string {
   return '';
 }
 
-function CodeBlock({
+export function CodeBlock({
+  streaming = false,
   children,
   ...props
-}: HTMLAttributes<HTMLPreElement>): React.JSX.Element {
+}: HTMLAttributes<HTMLPreElement> & {
+  readonly streaming?: boolean;
+}): React.JSX.Element {
   const preRef = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -282,6 +318,22 @@ function CodeBlock({
       ),
     );
   });
+  const previewInlineHtml = useContext(InlineHtmlPreviewContext);
+  // Only settled (non-streaming) blocks offer Preview; the source is
+  // read from the markdown tree, not the highlighted DOM.
+  const previewText = useMemo(
+    () =>
+      previewInlineHtml === null || streaming
+        ? null
+        : readNodeText(children),
+    [children, previewInlineHtml, streaming],
+  );
+  const previewable =
+    previewText !== null &&
+    previewInlineHtml !== null &&
+    isInlineHtmlPreviewCandidate(language, previewText);
+  const previewTooLarge =
+    previewable && previewText.length > MAX_INLINE_PREVIEW_HTML_LENGTH;
   const copy = (): void => {
     const text = preRef.current?.innerText ?? '';
     void navigator.clipboard.writeText(text).then(() => {
@@ -296,15 +348,36 @@ function CodeBlock({
     <div className="dvx-code-block">
       <div className="dvx-code-block-header">
         <span className="dvx-code-block-language">{language ?? 'text'}</span>
-        <button
-          type="button"
-          className="dvx-code-block-copy"
-          aria-label={copied ? 'Copied' : 'Copy code'}
-          onClick={copy}
-        >
-          {copied ? <CodeCheckIcon /> : <CodeCopyIcon />}
-          <span>{copied ? 'Copied' : 'Copy'}</span>
-        </button>
+        <span className="dvx-code-block-actions">
+          {previewable ? (
+            <button
+              type="button"
+              className="dvx-code-block-copy"
+              disabled={previewTooLarge}
+              aria-label="Preview HTML"
+              title={
+                previewTooLarge
+                  ? `Too large to preview (limit ${String(
+                      MAX_INLINE_PREVIEW_HTML_LENGTH / 1024,
+                    )} KB)`
+                  : 'Preview in a sandboxed panel'
+              }
+              onClick={() => previewInlineHtml(previewText)}
+            >
+              <CodePreviewIcon />
+              <span>Preview</span>
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="dvx-code-block-copy"
+            aria-label={copied ? 'Copied' : 'Copy code'}
+            onClick={copy}
+          >
+            {copied ? <CodeCheckIcon /> : <CodeCopyIcon />}
+            <span>{copied ? 'Copied' : 'Copy'}</span>
+          </button>
+        </span>
       </div>
       <pre ref={preRef} {...props}>
         <InsidePreContext.Provider value={true}>
@@ -313,6 +386,18 @@ function CodeBlock({
       </pre>
     </div>
   );
+}
+
+// Transcript-only wrapper: aui message state exists there (same
+// constraint as MermaidBlock) and gates the Preview entry until the
+// message stops streaming.
+function TranscriptCodeBlock(
+  props: HTMLAttributes<HTMLPreElement>,
+): React.JSX.Element {
+  const running = useAuiState(
+    (state) => state.message.status?.type === 'running',
+  );
+  return <CodeBlock {...props} streaming={running} />;
 }
 
 function HighlightedCode({
@@ -402,11 +487,41 @@ function CodeCheckIcon(): React.JSX.Element {
   );
 }
 
+function CodePreviewIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <rect
+        x="1.5"
+        y="2.5"
+        width="11"
+        height="9"
+        rx="1.25"
+        stroke="currentColor"
+      />
+      <path d="M1.5 5h11" stroke="currentColor" />
+      <path
+        d="m6.1 7.1 2.2 1.4-2.2 1.4z"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="0.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 const COMPONENTS = {
   a: SafeLink,
   pre: CodeBlock,
   code: HighlightedCode,
   img: MarkdownImage,
+};
+
+// Transcript variant: the pre component additionally reads aui
+// message state to hold back the HTML Preview entry while streaming.
+const TRANSCRIPT_COMPONENTS = {
+  ...COMPONENTS,
+  pre: TranscriptCodeBlock,
 };
 
 // ```mermaid fences render as diagrams once their message finishes
@@ -443,7 +558,7 @@ export const DroidMarkdownText = memo(function DroidMarkdownText():
     <MarkdownTextPrimitive
       className="dvx-markdown"
       remarkPlugins={REMARK_PLUGINS}
-      components={COMPONENTS}
+      components={TRANSCRIPT_COMPONENTS}
       componentsByLanguage={COMPONENTS_BY_LANGUAGE}
       skipHtml
       urlTransform={markdownUrlTransform}

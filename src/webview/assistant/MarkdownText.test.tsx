@@ -3,8 +3,12 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { MAX_INLINE_PREVIEW_HTML_LENGTH } from '../../shared/bridgeMessages';
 import {
+  CodeBlock,
   DroidMarkdownContent,
+  InlineHtmlPreviewContext,
+  isInlineHtmlPreviewCandidate,
   isLocalImagePath,
   isSafeMarkdownUrl,
   LocalImageContext,
@@ -201,5 +205,104 @@ describe('markdown images', () => {
     render(<DroidMarkdownContent text={'![plot](out/plot.png)'} />);
     expect(screen.getByText('out/plot.png').tagName).toBe('CODE');
     expect(screen.queryByRole('img')).toBeNull();
+  });
+});
+
+describe('HTML code block preview', () => {
+  const HTML_FENCE =
+    '```html\n<!DOCTYPE html>\n<html><body><p>hi</p></body></html>\n```';
+
+  it('classifies HTML documents with the loose heuristic', () => {
+    expect(isInlineHtmlPreviewCandidate('html', '<div>x</div>')).toBe(true);
+    expect(isInlineHtmlPreviewCandidate('HTML', '<div>x</div>')).toBe(true);
+    expect(
+      isInlineHtmlPreviewCandidate(null, '  <!doctype html><p>x</p>'),
+    ).toBe(true);
+    expect(
+      isInlineHtmlPreviewCandidate(null, '<html lang="en"></html>'),
+    ).toBe(true);
+    expect(isInlineHtmlPreviewCandidate(null, '<div>x</div>')).toBe(false);
+    expect(isInlineHtmlPreviewCandidate('js', 'const a = 1;')).toBe(false);
+    expect(isInlineHtmlPreviewCandidate('html', '   \n')).toBe(false);
+  });
+
+  it('offers Preview next to Copy and sends the fence source', () => {
+    const onPreview = vi.fn();
+    render(
+      <InlineHtmlPreviewContext.Provider value={onPreview}>
+        <DroidMarkdownContent text={HTML_FENCE} />
+      </InlineHtmlPreviewContext.Provider>,
+    );
+    const button = screen.getByRole('button', { name: 'Preview HTML' });
+    expect(
+      button.parentElement?.querySelector('[aria-label="Copy code"]'),
+    ).not.toBeNull();
+    fireEvent.click(button);
+    expect(onPreview).toHaveBeenCalledExactlyOnceWith(
+      '<!DOCTYPE html>\n<html><body><p>hi</p></body></html>\n',
+    );
+  });
+
+  it('skips non-HTML fences and unwired renders', () => {
+    const onPreview = vi.fn();
+    render(
+      <InlineHtmlPreviewContext.Provider value={onPreview}>
+        <DroidMarkdownContent text={'```js\nconst a = 1;\n```'} />
+      </InlineHtmlPreviewContext.Provider>,
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Preview HTML' }),
+    ).toBeNull();
+    cleanup();
+    render(<DroidMarkdownContent text={HTML_FENCE} />);
+    expect(
+      screen.queryByRole('button', { name: 'Preview HTML' }),
+    ).toBeNull();
+  });
+
+  it('disables the entry with an explanation when over the limit', () => {
+    const onPreview = vi.fn();
+    const big = `<!DOCTYPE html>${'a'.repeat(
+      MAX_INLINE_PREVIEW_HTML_LENGTH,
+    )}`;
+    render(
+      <InlineHtmlPreviewContext.Provider value={onPreview}>
+        <CodeBlock>
+          <code>{big}</code>
+        </CodeBlock>
+      </InlineHtmlPreviewContext.Provider>,
+    );
+    const button = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Preview HTML',
+    });
+    expect(button.disabled).toBe(true);
+    expect(button.title).toBe('Too large to preview (limit 512 KB)');
+    fireEvent.click(button);
+    expect(onPreview).not.toHaveBeenCalled();
+  });
+
+  it('holds the entry back while the message streams', () => {
+    const onPreview = vi.fn();
+    const { rerender } = render(
+      <InlineHtmlPreviewContext.Provider value={onPreview}>
+        <CodeBlock streaming>
+          <code>{'<!DOCTYPE html><p>hi</p>'}</code>
+        </CodeBlock>
+      </InlineHtmlPreviewContext.Provider>,
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Preview HTML' }),
+    ).toBeNull();
+    rerender(
+      <InlineHtmlPreviewContext.Provider value={onPreview}>
+        <CodeBlock streaming={false}>
+          <code>{'<!DOCTYPE html><p>hi</p>'}</code>
+        </CodeBlock>
+      </InlineHtmlPreviewContext.Provider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Preview HTML' }));
+    expect(onPreview).toHaveBeenCalledExactlyOnceWith(
+      '<!DOCTYPE html><p>hi</p>',
+    );
   });
 });
