@@ -23,7 +23,7 @@
 | 项目 | 结论 | SDK 支持度 |
 | --- | --- | --- |
 | 完整 Spec Mode 闭环 | **可行**。进入/退出/审批/编辑/新会话交接全部有公开 SDK 渠道；唯一缺口是“起草过程无专用增量事件”（起草即普通流式文本）和“specs 目录无公开 API” | 高 |
-| Mission 启动与阶段展示 | **只读展示可行，控制面不可行**。协议层（通知、确认、历史投影）完整；但公开 SDK 没有 pause/resume/start mission 的 RPC，暂停恢复只能等 SDK | 中（只读子集） |
+| Mission 启动与阶段展示 | **只读展示可行，控制面不可行**。协议层（通知、确认、历史投影）完整；公开 SDK 无 pause/resume/start 专用 RPC。2026-08-12 外部攻关一度改判「可经公开通道实现」，随后实机验证推翻（mission 本身无法经 SDK 启动），用户拍板维持「等 SDK 暴露接口」——全程见 [`mission-control-feasibility.md`](./mission-control-feasibility.md)（以其 §0 为准） | 中（只读子集） |
 | 子代理活动层级展示 | **摘要级可行，逐事件层级不可行**。`child_session_available` 通知 + `loadSession().subagentInvocations` 提供子会话身份与终态摘要；子会话内部事件不进父会话流 | 中（摘要子集） |
 
 推荐实现顺序：**Spec 闭环 → 子代理摘要层级 → Mission 只读展示**（理由见末节）。
@@ -278,6 +278,15 @@ true })`（`FactoryDroidRuntime.ts` 第 288 行），所以这些事件已经在
   mission 没有对应项），mission 在 CLI 内是交互式触发。
 
 ### 2.2 结论
+
+> **2026-08-12 攻关注记**：本节原判「Pause / Resume 不可行，只能等
+> SDK」当日一度被外部攻关的静态调研推翻（称暂停/恢复可经公开
+> `interrupt_session` + 既有 `start_mission_run` 确认实现），随后
+> 实机验证再次推翻该乐观结论：mission 本身无法经 SDK 启动（mission
+> 工具不被装配给模型），控制面无对象可控。用户拍板：**现阶段做不了，
+> 等待 SDK 暴露接口后再议。**攻关全记录见
+> [`mission-control-feasibility.md`](./mission-control-feasibility.md)
+> （以其 §0 为准）。本节原判维持有效。
 
 - **可行（公开 SDK 支持）**：切换 Mission 模式、配置 missionSettings、
   审批 ProposeMission / StartMissionRun（即“启动”）、实时消费六种

@@ -50,6 +50,7 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 | [`message-card-design.md`](./product/message-card-design.md) | 用户消息卡片编辑重发（切片 3+）：附件回显、内嵌控制条编辑态 | 已实现记录 |
 | [`spec-mission-design.md`](./product/spec-mission-design.md) | 完整 Spec Mode 闭环（§1）、Mission 只读展示（§2）、子代理层级摘要（§3）；含"做不了的"清单 | 设计待实现（§1 = V1 #4；§3+§2 = V1 #5） |
 | [`slice-prep-spec-mode.md`](./product/slice-prep-spec-mode.md) | Spec 闭环开工预研：SDK 核实、缺口清单 G1–G7、超长 plan 风险 R1 | 设计待实现的预研（服务 V1 #4，开工时与 spec-mission §1 同读） |
+| [`mission-control-feasibility.md`](./product/mission-control-feasibility.md) | Mission **控制面**外部攻关记录（2026-08-12）：静态协议面盘点（§1–§6，乐观结论已作废）+ 四次实机探针验证（§0、§7：mission 无法经 SDK 启动，mission 工具不被装配） | 攻关存档（最终结论：控制面现阶段做不了，等待 SDK 暴露接口，2026-08-12 用户拍板；权威判定见本文件第 3 节 fail-closed 表） |
 | [`queued-messages-design.md`](./product/queued-messages-design.md) | Turn 运行中排队消息完整设计：Host 层 FIFO、派发守卫、三切片交付 | 设计待实现（V1 #7+，发版前最后一步） |
 | [`streaming-experience-design.md`](./product/streaming-experience-design.md) | Cursor 风格流式体验实施设计：工具聚合、Thinking shimmer、入场动画与回放静默、Todo 折叠 | 已实现记录（三批全部落地，落位 V1 #6） |
 | [`cursor-streaming-ux-research.md`](./product/cursor-streaming-ux-research.md) | Cursor 流式呈现调研：动效 token、WordStreamer、shimmer 参数一手证据 | 参考（已经由 streaming-experience-design 落地，仅证据存档） |
@@ -187,8 +188,9 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 在各设计文档与 status 的 V2 节。
 
 > **2026-08-12 用户裁剪：15 项 → 8 项**，砍掉项见上方「用户明确
-> 排除」表（其中「Mission Control / Worker 详情」已转为本表之后的
-> "待定项"，见表后说明，2026-08-12 追加决定）。另有「Custom Models
+> 排除」表（其中「Mission Control / Worker 详情」曾短暂转为"待定——
+> 外部攻关中"，攻关结论当日出炉：现阶段做不了，已记入本表之后的
+> "SDK 边界内做不了的"表，2026-08-12 追加决定）。另有「Custom Models
 > 管理」一项不是排除，而是与 backlog
 > 的 BYOK「Add model」设计重复，按重复清理删除，由上方"其他
 > backlog"的
@@ -206,17 +208,12 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 | 成本 / token 明细可视化 | context 条之外的细分用量 | — |
 | Plugins / Marketplaces / Hooks / Automations | 取证+设计已完成（2026-08-12）：Plugins/Marketplaces 可做（stable daemon RPC，读面经只读探针实证，现有 sidecar 即可供数据）；Hooks 只读可做、写 fail-closed（SDK 明示无管理 RPC）；Automations 只读受限（本机 Factory 后端不可达，list 报 Network error）。第一切片 = 设置弹层 Plugins 只读分区（用户明确：放最后） | [`plugins-hooks-design.md`](./product/plugins-hooks-design.md) |
 
-**待定项（不排期也不排除）**：Mission Control 控制面——公开 SDK 无
-start/pause/resume RPC（证据 spec-mission-design 结论速览）；用户已
-安排外部攻关实现可行性（2026-08-12，方向是公开面之外的通道），结论
-出来前不排期、不排除。只读展示不受影响，已在 V1 #5 实现中。
-
 ### SDK 边界内做不了的（不要尝试实现，fail closed）
 
 | 项 | 原因 | 证据 |
 | --- | --- | --- |
 | Session Delete | 子进程 / daemon / 磁盘三条路径都没有删除 API | session-management-design §1.1 |
-| Mission 控制面（start/pause/resume） | 公开 SDK 无对应 RPC，只能只读展示 | spec-mission-design 结论速览 |
+| Mission 控制面（start/pause/resume/worker 控制） | 2026-08-12 外部攻关结论：现阶段无可用控制通道——协议面无专用 RPC，且实机验证证明 mission 本身无法经 SDK 启动（process 与 daemon 四次探针一致：mission 工具不被装配给模型），等待 SDK 暴露接口后再议；只读展示已随 V1 #5 落地；攻关记录见 mission-control-feasibility.md | mission-control-feasibility §0、§7 |
 | Spec 起草过程实时渲染 | 起草即普通流式文本，无专用增量事件；specs 目录无公开 API | spec-mission-design §1 |
 | Favorite 官方写入 | 写入是 CLI 私有 `.favorites` 文件行为；只能按"私有文件契约"实现并如实标注 | session-management-design §1.2 |
 
