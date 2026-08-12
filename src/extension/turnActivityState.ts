@@ -272,33 +272,39 @@ export function projectToolEvent(
     }
 
     if (event.type !== 'tool-result') {
-      // A later tool-start can complete a streamed tool call's input,
-      // e.g. the file path or command arriving only with the full call.
+      // A later tool-start can complete a streamed tool call's input:
+      // the CLI re-emits tool_call_delta as the input JSON
+      // accumulates, and a partial parse can close a string value
+      // mid-way (observed 2026-08-12: a Create path truncated to
+      // "Canvas-API-学习" until the full call carried
+      // "Canvas-API-学习文档.md"). Later events always hold an
+      // equal-or-more-complete input, so input-derived fields take
+      // the latest value instead of pinning the first one.
       if (event.type === 'tool-start') {
-        const addsFilePath =
+        const updatesFilePath =
           event.filePath !== undefined &&
-          existing.filePath === undefined;
-        const addsFilePaths =
+          existing.filePath !== event.filePath;
+        const updatesFilePaths =
           event.filePaths !== undefined &&
-          existing.filePaths === undefined;
-        const addsDetail =
-          event.detail !== undefined && existing.detail === undefined;
+          !sameFilePaths(existing.filePaths, event.filePaths);
+        const updatesDetail =
+          event.detail !== undefined && existing.detail !== event.detail;
         // Monotonic: once a streamed input showed fireAndForget the
         // row stays marked even if later events omit the field.
         const addsBackgroundHint =
           event.backgroundHint !== undefined &&
           existing.backgroundHint === undefined;
         if (
-          addsFilePath ||
-          addsFilePaths ||
-          addsDetail ||
+          updatesFilePath ||
+          updatesFilePaths ||
+          updatesDetail ||
           addsBackgroundHint
         ) {
           const entry: ToolActivityEntry = {
             ...existing,
-            ...(addsFilePath ? { filePath: event.filePath } : {}),
-            ...(addsFilePaths ? { filePaths: event.filePaths } : {}),
-            ...(addsDetail
+            ...(updatesFilePath ? { filePath: event.filePath } : {}),
+            ...(updatesFilePaths ? { filePaths: event.filePaths } : {}),
+            ...(updatesDetail
               ? { detailKind: event.detailKind, detail: event.detail }
               : {}),
             ...(addsBackgroundHint
@@ -377,6 +383,17 @@ export function projectToolEvent(
     state: { ...state, tools },
     projection: projectEntry(event, entry, nowMs),
   };
+}
+
+function sameFilePaths(
+  existing: readonly string[] | undefined,
+  incoming: readonly string[],
+): boolean {
+  return (
+    existing !== undefined &&
+    existing.length === incoming.length &&
+    existing.every((path, index) => path === incoming[index])
+  );
 }
 
 function projectEntry(

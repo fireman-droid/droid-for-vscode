@@ -333,6 +333,89 @@ describe('turnActivityState', () => {
     expect(repeated.projection).toBeNull();
   });
 
+  it('replaces a truncated streamed file path with the complete one', () => {
+    // A partial input parse can close a string mid-way (observed
+    // 2026-08-12: a Create path stuck at "Canvas-API-学习" while the
+    // real file was "Canvas-API-学习文档.md"). The full call's path
+    // must win, and the corrected path must reach the changed-files
+    // summary.
+    const partial = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'Create',
+      toolUseId: 'tool-cjk',
+      action: 'Created workspace files',
+      filePath: 'Canvas-API-学习',
+    });
+    expect(partial.projection).toMatchObject({
+      filePath: 'Canvas-API-学习',
+    });
+    const complete = projectToolEvent(partial.state, {
+      type: 'tool-start',
+      toolName: 'Create',
+      toolUseId: 'tool-cjk',
+      action: 'Created workspace files',
+      filePath: 'Canvas-API-学习文档.md',
+    });
+    expect(complete.projection).toMatchObject({
+      status: 'running',
+      filePath: 'Canvas-API-学习文档.md',
+    });
+    expect(collectToolFilePaths(complete.state)).toEqual([
+      'Canvas-API-学习文档.md',
+    ]);
+
+    // Multi-path calls (ApplyPatch) follow the same last-wins rule.
+    const partialPatch = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'ApplyPatch',
+      toolUseId: 'tool-patch',
+      action: 'Updated workspace files',
+      filePaths: ['src/a.ts', 'src/工具'],
+    });
+    const completePatch = projectToolEvent(partialPatch.state, {
+      type: 'tool-start',
+      toolName: 'ApplyPatch',
+      toolUseId: 'tool-patch',
+      action: 'Updated workspace files',
+      filePaths: ['src/a.ts', 'src/工具集.ts'],
+    });
+    expect(completePatch.projection).not.toBeNull();
+    expect(collectToolFilePaths(completePatch.state)).toEqual([
+      'src/a.ts',
+      'src/工具集.ts',
+    ]);
+    const repeatedPatch = projectToolEvent(completePatch.state, {
+      type: 'tool-start',
+      toolName: 'ApplyPatch',
+      toolUseId: 'tool-patch',
+      action: 'Updated workspace files',
+      filePaths: ['src/a.ts', 'src/工具集.ts'],
+    });
+    expect(repeatedPatch.projection).toBeNull();
+
+    // Streamed command details follow the same rule.
+    const partialDetail = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'Execute',
+      toolUseId: 'tool-cmd',
+      action: 'Ran a local command',
+      detailKind: 'command',
+      detail: 'pnpm run ty',
+    });
+    const completeDetail = projectToolEvent(partialDetail.state, {
+      type: 'tool-start',
+      toolName: 'Execute',
+      toolUseId: 'tool-cmd',
+      action: 'Ran a local command',
+      detailKind: 'command',
+      detail: 'pnpm run typecheck',
+    });
+    expect(completeDetail.projection).toMatchObject({
+      detailKind: 'command',
+      detail: 'pnpm run typecheck',
+    });
+  });
+
   it('keeps the background hint monotonic across the tool lifecycle', () => {
     // A backgrounded execute row carries the hint from the start and
     // keeps it through completion even though tool-result events never
