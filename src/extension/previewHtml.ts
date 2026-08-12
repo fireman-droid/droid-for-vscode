@@ -196,6 +196,9 @@ const TOOLBAR_SCRIPT = /* js */ `
  * Quiet warm-neutral finish matching the chat shell tokens
  * (src/webview/assistant/styles.css); the panel cannot load that
  * stylesheet because it deliberately has no local resource roots.
+ * The toolbar mirrors the shell header: warm surface, hairline
+ * bottom border, ink file name, hairline-divided muted status note,
+ * and quiet raised buttons in the .dvx-icon-button language.
  */
 const SHELL_STYLE = /* css */ `
   :root { color-scheme: light; }
@@ -208,28 +211,34 @@ const SHELL_STYLE = /* css */ `
     background: #f5f3ef;
     color: #262626;
     font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto,
-      "Helvetica Neue", Arial, sans-serif;
+      "Helvetica Neue", Arial, "Microsoft YaHei UI", sans-serif;
     font-size: 12.5px;
   }
   .dvx-preview-toolbar {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 7px 12px;
-    border-bottom: 1px solid #e5e5e5;
-    background: #fff;
-    box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
+    padding: 9px 14px;
+    border-bottom: 1px solid rgb(229 229 229 / 80%);
+    background: linear-gradient(180deg, #f7f5f1, #f5f3ef);
     white-space: nowrap;
     overflow: hidden;
   }
   .dvx-preview-file {
+    color: #171717;
+    font-size: 12.5px;
     font-weight: 600;
     letter-spacing: 0.01em;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .dvx-preview-note {
+    padding-left: 10px;
+    border-left: 1px solid rgb(0 0 0 / 8%);
     color: #a1a1a1;
+    font-size: 11px;
+    line-height: 16px;
+    letter-spacing: 0.015em;
     overflow: hidden;
     text-overflow: ellipsis;
     cursor: default;
@@ -238,19 +247,23 @@ const SHELL_STYLE = /* css */ `
   .dvx-preview-toolbar button {
     appearance: none;
     font: inherit;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 16px;
     color: #737373;
     background: #fff;
     border: 1px solid #e5e5e5;
-    border-radius: 6px;
-    padding: 3px 10px;
+    border-radius: 9px;
+    padding: 3px 11px;
     cursor: pointer;
-    transition: border-color 100ms ease, background 100ms ease,
-      color 100ms ease;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
+    transition: border-color 130ms ease, background-color 130ms ease,
+      color 130ms ease;
   }
   .dvx-preview-toolbar button:hover {
     color: #262626;
     border-color: #d4d4d4;
-    background: rgb(0 0 0 / 4%);
+    background: #f0ede8;
   }
   .dvx-preview-toolbar button:focus-visible {
     outline: 2px solid #f2612e;
