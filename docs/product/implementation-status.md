@@ -1186,11 +1186,87 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension dist/droidvisx.vsix --force`
   （successfully installed）均成功；现有窗口需 Reload Window 后
   加载新 Bundle
+- 2026-08-12 下午打包并安装含 **MCP/Skills 面板与 Composer 调查
+  修复批次 + P0 权限截断修复 + 图片查看器/本地图片渲染 + 工具失败
+  原因透出** 的构建：仓库根 `droidvisx.vsix` 1,600,188 字节
+  （10 files, 1.53 MB；VSIX 含另一代理同期落地的 mermaid.js
+  bundle），SHA-256
+  `13404868CF74A0159E72B5FB8B933AB79289F06D9BB2EA603861EBA22E8CAB8A`，
+  typecheck 三 tsconfig 全过、vitest 56 files / 1276 tests 全绿，
+  `pnpm exec vsce package --no-dependencies` 与
+  `cursor --install-extension droidvisx.vsix`
+  （successfully installed）均成功；现有窗口需 Reload Window 后
+  加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- MCP/Skills/Composer 调查修复批次 + P0 权限截断（2026-08-12 下午，
+  依据 `mcp-skills-panel-findings.md` 6 项 + 横向诊断日志、
+  `composer-transcript-findings.md` 4 项、用户追加的图片查看器/
+  本地图片渲染/ApplyPatch 静默取消三项）：
+  **P0 Runtime 权限截断修复（第 15 项，用户等待的答案）**——
+  `runtimeInteractions.ts` 的 `boundedDetail` 语义由"超长返回
+  null → 整个投影判空 → 自动 Cancel"改为**截断显示**
+  （`truncateForDisplay` + `… (truncated)` 标注，选项与工具身份
+  校验保持严格）；ExitSpecMode 的 262,144 专用上限保持；
+  `handlePermissionRequest` 两个 Cancel 兜底路径现在必发
+  `runtime.permission.auto-cancelled` 诊断（带 reason 字段，经
+  `FactoryDroidRuntime.onAutoCancelled` 落日志）。回归测试构造
+  >32K ApplyPatch 权限请求断言正常投影出卡片且 detail 带截断
+  标注、`onAutoCancelled` 不触发（`runtimeInteractions.test.ts`）。
+  **Bridge/Runtime/Host（另见各 findings 项）**——
+  `McpServerSummary.hasAuthTokens`（认证徽标条件）、
+  `workspace.files` 带 `status: ok|no-workspace`、诊断消息可选
+  `relatedSessionId`；`setMcpServerEnabled` 自设超时、MCP 认证
+  快速失败 + 超时降 2 分钟 + 认证流日志；mutation 失败不清列表 +
+  成功后主动刷新，add/remove/toggle 守卫与失败补
+  `host.ui.diagnostic`；`workspace.searchFiles` 无工作区回
+  no-workspace 空包；`performCompact` 不再从目录过滤原会话，
+  `session-compacted` 诊断带 `relatedSessionId`。
+  **Webview**——MCP 行级 pending（Enabling…/Disabling…/
+  Removing…）+ needs auth / authenticated 徽标；面板打开必刷新、
+  error 保留列表、Add 表单显式校验提示；Skills 行级 pending +
+  "changes take effect in new sessions" 注记 + 变更后
+  "Start a new session" 快捷动作；`+` 菜单搜索接入真实
+  skills/MCP 条目；裸 `@` 即弹弹窗（"Type to search workspace
+  files"，无工作区显示 "No folder is open in this window."）；
+  `/` 弹窗新增 Built-in 节（/compact、/new，GUI 拦截执行）与
+  Skills 分组（选中插入引导提示文本，不直接执行——SDK 无
+  斜杠执行技能的原生通道，`userInvocable` 仅为列表元数据）、
+  统一键盘导航；`handleSend` 拦截 `/new`；编辑卡提示行删除；
+  CompactDivider 追加 "View full history" 链接（经
+  `relatedSessionId` 切回压缩前会话）。
+  **图片查看器（第 13 项）**——lightbox 重做：可见 × 关闭按钮
+  （Esc 直接关）、滚轮缩放 0.25×–8×（鼠标锚定、ctrl+wheel 触控板
+  捏合同路）、放大后拖拽平移（grab/grabbing 光标）、双击在
+  适配/100% 间切换、缩放百分比指示；纯 Webview CSS transform +
+  rAF，reduced-motion 关过渡；`createPortal` 到 body 防裁剪
+  （`TranscriptImage.test.tsx` 8 例交互测试）。
+  **Markdown 本地图片（第 14 项）**——新 Bridge 往返
+  `workspace.readImage` / `workspace.imageData`（路径长度/控制
+  字符/base64/状态一致性双侧校验），Host 复用
+  `readWorkspaceFile` 安全读取（绝对路径 rebase 工作区内、越界
+  拒绝、非图片 unsupported、超限 too-large），Webview
+  `LocalImageContext` 请求去重 + store LRU 缓存，成功渲染为
+  `TranscriptImage`（进 lightbox），失败降级为可点击路径链接。
+  **工具失败原因透出（第 15 项 GUI 部分）**——失败 tool_result
+  的文本摘录（≤1000 字符截断）经全链路新字段 `errorMessage`
+  （RuntimeEvent errorText → turnActivityState → `tool.activity`
+  / Tool transcript 项 → 恢复存储 → 历史投影 → runtimeAdapter
+  metadata）在工具行展开详情内以克制的 `--dvx-danger` 小字
+  段落显示（如 "Tool execution cancelled by user"）；成功结果
+  永不携带摘录，隐私测试相应更新为"失败摘录属有意透出"。
+  门禁：typecheck 三 tsconfig 全过（顺手修复另一代理
+  `mermaidRenderer.ts` 的 NodeList 迭代 TS2488，一行
+  `Array.from`）；vitest 56 files / 1276 tests 全绿（含本批次
+  新增的 normalizeSdkEvent 错误摘录 4 例、turnActivityState
+  投影 3 例、validateHostMessage 正反例、store 持久化例、
+  TranscriptImage 8 例、MarkdownText 本地图片 5 例、
+  ChatController readImage 端到端）；build + vsce package +
+  cursor --install-extension 成功（见安装包状态）。遗留：真实
+  Cursor Reload 后的可见验收待用户完成。
 - V1 切片④「完整 Spec Mode 闭环」（2026-08-12 中午）：
   ① **32K 静默取消修复**：`ExitSpecMode` 计划改用
   `MAX_SPEC_PLAN_LENGTH = 262,144` 专属上限，Runtime 对超限计划
