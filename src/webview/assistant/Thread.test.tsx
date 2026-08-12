@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { createElement } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,9 +12,11 @@ import {
 } from './imagePreviewCache';
 import {
   AttachmentChip,
+  ChangesSummary,
   FOLLOW_REJOIN_PX,
   HistoryNotice,
   PendingResponse,
+  PreviewContext,
   applyFollowScroll,
   computePinnedUserIndex,
   computeStickyLayout,
@@ -91,6 +94,48 @@ describe('HistoryNotice', () => {
     expect(screen.getByRole('note').textContent).toContain(
       'local display',
     );
+  });
+});
+
+describe('ChangesSummary preview chip', () => {
+  const changesData = {
+    files: [
+      { path: 'prototypes/dashboard.html', additions: 12, deletions: 0 },
+      { path: 'demo/legacy.htm', additions: null, deletions: null },
+      { path: 'src/app.tsx', additions: 3, deletions: 1 },
+    ],
+  };
+
+  function renderChanges(onPreview: (path: string) => void) {
+    return render(
+      createElement(
+        PreviewContext.Provider,
+        { value: onPreview },
+        createElement(ChangesSummary, { data: changesData }),
+      ),
+    );
+  }
+
+  it('shows a Preview chip only for html prototypes', () => {
+    renderChanges(() => undefined);
+    const previews = screen.getAllByRole('button', { name: /Preview/ });
+    // Exactly the .html and .htm rows, not the .tsx row.
+    expect(previews).toHaveLength(2);
+    expect(
+      previews.every((button) =>
+        button.className.includes('dvx-preview-chip'),
+      ),
+    ).toBe(true);
+  });
+
+  it('opens the previewed path on click', () => {
+    const onPreview = vi.fn();
+    renderChanges(onPreview);
+    const preview = screen.getByTitle(
+      /Preview prototypes\/dashboard\.html/,
+    );
+    fireEvent.click(preview);
+    expect(onPreview).toHaveBeenCalledWith('prototypes/dashboard.html');
   });
 });
 

@@ -1495,6 +1495,50 @@ html, body, #root {
   color: var(--dvx-diff-del, #cf222e);
 }
 
+/* Groups a changed-file chip with its optional Preview action so both
+   wrap together as one unit. */
+.dvx-changes-file-row {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Quiet sibling of the file chips (same family), reserved for opening
+   an .html/.htm prototype in the sandboxed preview panel. Understated
+   at rest; a warm accent tint appears only on hover/focus to mark it
+   as an action rather than a label. */
+.dvx-preview-chip {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border: 1px solid rgb(0 0 0 / 8%);
+  border-radius: 6px;
+  background: rgb(0 0 0 / 3%);
+  color: var(--dvx-muted);
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color var(--dvx-duration-fast) ease,
+    background var(--dvx-duration-fast) ease,
+    color var(--dvx-duration-fast) ease;
+}
+
+.dvx-preview-chip:hover,
+.dvx-preview-chip:focus-visible {
+  border-color: var(--dvx-accent-strong);
+  background: var(--dvx-accent-soft);
+  color: var(--dvx-accent-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-preview-chip {
+    transition: none;
+  }
+}
+
 .dvx-tool-summary {
   display: flex;
   min-width: 0;

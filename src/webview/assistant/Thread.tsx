@@ -39,6 +39,7 @@ import {
   type SessionContextState,
   type SessionSettingsState,
 } from "../../shared/bridgeMessages";
+import { isPreviewableFilePath } from "../../shared/validateMessage";
 import type {
   McpAuthProgress,
   McpPanelState,
@@ -139,6 +140,14 @@ export interface UserEditorEnv {
 // context so the memoized message tree stays free of prop drilling.
 const FileDiffContext = createContext<(path: string) => void>(() => undefined);
 
+// Previewing an .html/.htm prototype opens the sandboxed preview panel
+// through this context, matching the FileDiffContext pattern so deep
+// Changes/Tool rows stay free of prop drilling. Exported for focused
+// tests that assert chip visibility and wiring.
+export const PreviewContext = createContext<(path: string) => void>(
+  () => undefined,
+);
+
 // Regenerating rewinds to the last user message and resends it. Null
 // means the action is currently unavailable (no anchor or turn active).
 const RegenerateContext = createContext<(() => void) | null>(null);
@@ -237,6 +246,7 @@ interface DroidThreadProps {
   readonly onEditAttachmentRemove: (attachmentId: string) => void;
   readonly onRegenerate: (() => void) | null;
   readonly onOpenFileDiff: (path: string) => void;
+  readonly onPreviewFile: (path: string) => void;
   readonly editResendEnabled: boolean;
   readonly inlineInteraction?: ReactNode;
 }
@@ -308,6 +318,7 @@ export const DroidThread = memo(function DroidThread({
   onEditAttachmentRemove,
   onRegenerate,
   onOpenFileDiff,
+  onPreviewFile,
   editResendEnabled,
   inlineInteraction,
 }: DroidThreadProps): React.JSX.Element {
@@ -546,6 +557,7 @@ export const DroidThread = memo(function DroidThread({
         scrollToBottomOnThreadSwitch
       >
         <FileDiffContext.Provider value={onOpenFileDiff}>
+          <PreviewContext.Provider value={onPreviewFile}>
           <RegenerateContext.Provider value={onRegenerate}>
             <SelectSessionContext.Provider value={onSelectSession}>
             <div className="dvx-reading-column" ref={readingColumnRef}>
@@ -611,6 +623,7 @@ export const DroidThread = memo(function DroidThread({
             </div>
             </SelectSessionContext.Provider>
           </RegenerateContext.Provider>
+          </PreviewContext.Provider>
         </FileDiffContext.Provider>
         <ThreadPrimitive.ViewportFooter className="dvx-thread-footer">
           <Composer
@@ -1169,6 +1182,27 @@ function ToolFilePath({ path }: { readonly path: string }): React.JSX.Element {
   );
 }
 
+// Quiet sibling chip that opens the sandboxed preview panel. Only shown
+// for self-contained .html/.htm prototypes, so the UI never offers a
+// preview the host cannot render.
+function PreviewChip({ path }: { readonly path: string }): React.JSX.Element {
+  const openPreview = useContext(PreviewContext);
+  return (
+    <button
+      type="button"
+      className="dvx-preview-chip"
+      title={`Preview ${path} in a sandboxed panel`}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openPreview(path);
+      }}
+    >
+      Preview
+    </button>
+  );
+}
+
 function ThinkingRow({
   statusType,
   durationMs,
@@ -1241,7 +1275,7 @@ function readChangedFiles(data: unknown): readonly ChangedFileEntry[] {
   return files;
 }
 
-function ChangesSummary({
+export function ChangesSummary({
   data,
 }: {
   readonly data: unknown;
@@ -1258,27 +1292,31 @@ function ChangesSummary({
       </span>
       <div className="dvx-changes-files">
         {files.map((file) => (
-          <button
-            key={file.path}
-            type="button"
-            className="dvx-changes-file"
-            title={`Open changes for ${file.path}`}
-            onClick={() => openFileDiff(file.path)}
-          >
-            <span className="dvx-changes-name">
-              {file.path.split("/").at(-1) ?? file.path}
-            </span>
-            {file.additions !== null || file.deletions !== null ? (
-              <span className="dvx-changes-stats">
-                {file.additions !== null ? (
-                  <span className="dvx-changes-add">+{file.additions}</span>
-                ) : null}
-                {file.deletions !== null ? (
-                  <span className="dvx-changes-del">−{file.deletions}</span>
-                ) : null}
+          <span key={file.path} className="dvx-changes-file-row">
+            <button
+              type="button"
+              className="dvx-changes-file"
+              title={`Open changes for ${file.path}`}
+              onClick={() => openFileDiff(file.path)}
+            >
+              <span className="dvx-changes-name">
+                {file.path.split("/").at(-1) ?? file.path}
               </span>
+              {file.additions !== null || file.deletions !== null ? (
+                <span className="dvx-changes-stats">
+                  {file.additions !== null ? (
+                    <span className="dvx-changes-add">+{file.additions}</span>
+                  ) : null}
+                  {file.deletions !== null ? (
+                    <span className="dvx-changes-del">−{file.deletions}</span>
+                  ) : null}
+                </span>
+              ) : null}
+            </button>
+            {isPreviewableFilePath(file.path) ? (
+              <PreviewChip path={file.path} />
             ) : null}
-          </button>
+          </span>
         ))}
       </div>
     </div>
@@ -2647,6 +2685,11 @@ function ToolActivityRow({
         {activity.filePath === null ? null : (
           <ToolFilePath path={activity.filePath} />
         )}
+        {activity.filePath !== null &&
+        activity.status === "completed" &&
+        isPreviewableFilePath(activity.filePath) ? (
+          <PreviewChip path={activity.filePath} />
+        ) : null}
         <span className="dvx-activity-state">
           {formatToolLifecycle(activity.status)}
           {activity.durationMs === null
