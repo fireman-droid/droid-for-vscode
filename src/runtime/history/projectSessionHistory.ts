@@ -25,6 +25,7 @@ import {
   transcriptItemTextUnits,
 } from '../../shared/transcriptLimits';
 import { summarizeToolAction } from '../../shared/toolActivity';
+import { readTokenUsageBreakdown } from '../../shared/tokenUsage';
 import {
   extractToolResultText,
   readSdkImageBlock,
@@ -141,10 +142,12 @@ export function projectSessionHistory(
       truncated,
     };
     const mission = readSessionMission(loaded);
+    const tokenUsage = readSessionTokenUsage(loaded);
     return {
       status: 'available',
       state,
       ...(mission === null ? {} : { mission }),
+      ...(tokenUsage === undefined ? {} : { tokenUsage }),
     };
   } catch {
     return unavailableSessionHistory();
@@ -164,6 +167,19 @@ function readLoadedMessages(value: unknown): readonly unknown[] | null {
     return null;
   }
   return session.messages;
+}
+
+/**
+ * Cumulative session token totals from the envelope's top-level
+ * `result.tokenUsage` (optional in `LoadSessionResult`; confirmed
+ * populated by probe-token-usage-load.mjs, 2026-08-12). Absent or
+ * malformed values fail soft to `undefined`.
+ */
+function readSessionTokenUsage(value: unknown) {
+  if (!isStrictRecord(value) || !isStrictRecord(value.result)) {
+    return undefined;
+  }
+  return readTokenUsageBreakdown(value.result.tokenUsage);
 }
 
 function projectMessage(

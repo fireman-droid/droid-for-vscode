@@ -22,6 +22,7 @@ import {
   toToolOutputTail,
 } from '../shared/toolOutput';
 import { base64ByteLength } from '../shared/transcriptLimits';
+import { readTokenUsageBreakdown } from '../shared/tokenUsage';
 import { extractToolBackgroundHint } from './toolBackgroundHint';
 import { extractToolDetail } from './toolDetail';
 import {
@@ -146,11 +147,26 @@ export function normalizeSdkEvent(
         type: 'error',
       };
 
-    case 'result':
+    case 'token_usage_update': {
+      // Cumulative session totals (probed 2026-08-12; see
+      // docs/product/token-usage-design.md). Malformed payloads are
+      // dropped whole so the UI never regresses to bogus counters.
+      const cumulative = readTokenUsageBreakdown(event);
+      return cumulative === undefined
+        ? undefined
+        : { type: 'token-usage', cumulative };
+    }
+
+    case 'result': {
+      // `result.tokenUsage` is this turn's own consumption, not the
+      // session total, and the SDK documents it may be null.
+      const turnUsage = readTokenUsageBreakdown(event.tokenUsage);
       return {
         type: 'turn-complete',
         outcome: event.subtype,
+        ...(turnUsage === undefined ? {} : { turnUsage }),
       };
+    }
 
     default:
       return undefined;

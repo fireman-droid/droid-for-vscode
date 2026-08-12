@@ -5,6 +5,7 @@ import type {
   ToolDetailKind,
 } from '../shared/bridgeMessages';
 import type { ToolActivityUpdateKind } from '../shared/toolActivity';
+import type { TokenUsageBreakdown } from '../shared/tokenUsage';
 
 export type RuntimeAvailability =
   | {
@@ -130,6 +131,16 @@ export type RuntimeEvent =
       description: string;
     }
   | {
+      /**
+       * Cumulative session token totals from one `token_usage_update`
+       * stream event (the CLI pushes 2-4 per turn; probed 2026-08-12,
+       * docs/product/token-usage-design.md). The stream conversion
+       * drops `factoryCredits`, so it is never present here.
+       */
+      type: 'token-usage';
+      cumulative: TokenUsageBreakdown;
+    }
+  | {
       type: 'error';
     }
   | {
@@ -139,4 +150,10 @@ export type RuntimeEvent =
         | 'interrupted'
         | 'error_during_execution'
         | 'error_structured_output';
+      /**
+       * This turn's own consumption from `result.tokenUsage`
+       * (per-turn, not cumulative). Absent when the SDK reported
+       * `null` or an invalid shape.
+       */
+      turnUsage?: TokenUsageBreakdown;
     };

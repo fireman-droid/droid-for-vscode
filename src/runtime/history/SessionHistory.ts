@@ -3,6 +3,7 @@ import type {
   ToolSubagentSummary,
 } from '../../shared/bridgeMessages';
 import type { HostTranscriptState } from '../../shared/hostTranscriptState';
+import type { TokenUsageBreakdown } from '../../shared/tokenUsage';
 
 export const SESSION_HISTORY_UNAVAILABLE_MESSAGE =
   'Saved Droid session history could not be loaded.';
@@ -22,6 +23,13 @@ export type SessionHistoryResult =
        * session is not part of a mission decomposition.
        */
       readonly mission?: SessionMissionSummary;
+      /**
+       * Cumulative session token totals from the `loadSession()`
+       * envelope's top-level `tokenUsage`; absent when the CLI did
+       * not persist usage for this session. History carries no
+       * per-turn usage (probed 2026-08-12).
+       */
+      readonly tokenUsage?: TokenUsageBreakdown;
     }
   | {
       readonly status: 'unavailable';

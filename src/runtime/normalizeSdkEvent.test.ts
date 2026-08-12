@@ -585,10 +585,85 @@ describe('normalizeSdkEvent', () => {
       error: null,
     };
 
-    expect(normalizeSdkEvent(event)).toEqual({
+    const projected = normalizeSdkEvent(event);
+    expect(projected).toEqual({
       type: 'turn-complete',
       outcome: 'success',
+      turnUsage: {
+        inputTokens: 10,
+        outputTokens: 4,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        thinkingTokens: 0,
+      },
     });
+    expect(JSON.stringify(projected)).not.toContain('sensitive');
+  });
+
+  it('omits turnUsage when the result reports null or invalid usage', () => {
+    const base = {
+      type: 'result' as const,
+      subtype: 'success' as const,
+      sessionId: 'session-1',
+      durationMs: 25,
+      messages: [],
+      text: '',
+      turnCount: 1,
+      success: true as const,
+      interrupted: false as const,
+      error: null,
+    };
+
+    expect(
+      normalizeSdkEvent({ ...base, tokenUsage: null }),
+    ).toEqual({ type: 'turn-complete', outcome: 'success' });
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('result', {
+          ...base,
+          tokenUsage: { inputTokens: -1 },
+        }),
+      ),
+    ).toEqual({ type: 'turn-complete', outcome: 'success' });
+  });
+
+  it('projects cumulative token usage updates and drops malformed ones', () => {
+    // Live shape probed 2026-08-12: cumulative totals, no factoryCredits.
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('token_usage_update', {
+          inputTokens: 2565,
+          outputTokens: 81,
+          cacheReadTokens: 23552,
+          cacheCreationTokens: 0,
+          thinkingTokens: 62,
+        }),
+      ),
+    ).toEqual({
+      type: 'token-usage',
+      cumulative: {
+        inputTokens: 2565,
+        outputTokens: 81,
+        cacheReadTokens: 23552,
+        cacheCreationTokens: 0,
+        thinkingTokens: 62,
+      },
+    });
+
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('token_usage_update', {
+          inputTokens: Number.NaN,
+          outputTokens: 81,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+          thinkingTokens: 0,
+        }),
+      ),
+    ).toBeUndefined();
+    expect(
+      normalizeSdkEvent(sdkEvent('token_usage_update', {})),
+    ).toBeUndefined();
   });
 
   it('projects only the SDK user message id as a rewind anchor', () => {

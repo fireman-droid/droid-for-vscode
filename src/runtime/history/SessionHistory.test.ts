@@ -913,6 +913,33 @@ describe('projectSessionHistory', () => {
       plain.status === 'available' && 'mission' in plain,
     ).toBe(false);
   });
+
+  it('projects the cumulative session token usage from the load envelope', () => {
+    // Envelope shape confirmed by artifacts/probe-token-usage-load.mjs.
+    const usage = {
+      inputTokens: 2565,
+      outputTokens: 81,
+      cacheReadTokens: 23552,
+      cacheCreationTokens: 0,
+      thinkingTokens: 62,
+      factoryCredits: 0,
+    };
+    expect(
+      projectSessionHistory(responseWith([], { tokenUsage: usage })),
+    ).toMatchObject({ status: 'available', tokenUsage: usage });
+
+    const withoutUsage = projectSessionHistory(response([]));
+    expect(
+      withoutUsage.status === 'available' && 'tokenUsage' in withoutUsage,
+    ).toBe(false);
+
+    const malformed = projectSessionHistory(
+      responseWith([], { tokenUsage: { inputTokens: 'many' } }),
+    );
+    expect(
+      malformed.status === 'available' && 'tokenUsage' in malformed,
+    ).toBe(false);
+  });
 });
 
 describe('FactorySessionHistoryLoader', () => {
