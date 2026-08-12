@@ -59,6 +59,10 @@ import {
 } from './worktreeSessions';
 import type { ExternalUrlOpener } from './externalUrlOpener';
 import type { TerminalMirror } from './terminalMirror';
+import type {
+  BtwSidecarFactory,
+  BtwSideChatSidecar,
+} from './btwSideChat';
 import { ChatController } from './ChatController';
 import {
   SessionRecoveryStore,
@@ -2684,6 +2688,169 @@ describe('ChatController', () => {
     expect(messages.at(-1)).toMatchObject({
       type: 'runtime.diagnostic',
       code: 'worktree-create-unavailable',
+    });
+  });
+
+  it('advertises the btw capability only when a sidecar factory is wired', async () => {
+    const withFactory = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async () => createBtwSidecarStub().sidecar,
+    );
+    ready(withFactory.controller);
+    await waitForConnected(withFactory.messages);
+    expect(snapshots(withFactory.messages).at(-1)?.btwAvailable).toBe(
+      true,
+    );
+
+    // Daemon mode wires no factory; the flag is omitted (fail closed)
+    // and stray asks drop without side effects.
+    const without = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+    );
+    ready(without.controller);
+    await waitForConnected(without.messages);
+    expect(
+      snapshots(without.messages).at(-1)?.btwAvailable,
+    ).toBeUndefined();
+    without.controller.handleMessage({
+      type: 'btw.ask',
+      sessionId: 'session-1',
+      text: 'Anything?',
+    });
+    expect(
+      without.messages.some((message) => message.type === 'session.btw'),
+    ).toBe(false);
+  });
+
+  it('streams a side question into session.btw without touching the transcript', async () => {
+    const stub = createBtwSidecarStub(['An ', 'answer.']);
+    const factory = vi.fn<BtwSidecarFactory>(async () => stub.sidecar);
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      factory,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+    const transcriptBefore =
+      snapshots(messages).at(-1)?.transcript ?? [];
+
+    controller.handleMessage({
+      type: 'btw.ask',
+      sessionId: 'session-1',
+      text: 'What is a fork?',
+    });
+    await vi.waitFor(() => {
+      const card = messages
+        .filter((message) => message.type === 'session.btw')
+        .at(-1);
+      expect(card?.btw.entries).toMatchObject([
+        {
+          question: 'What is a fork?',
+          answer: 'An answer.',
+          state: 'done',
+        },
+      ]);
+    });
+    expect(factory).toHaveBeenCalledExactlyOnceWith(
+      'C:\\workspace',
+      'session-1',
+    );
+
+    // Card traffic rides its own channel: the main transcript and the
+    // session catalog never see the hidden fork.
+    expect(snapshots(messages).at(-1)?.transcript ?? []).toEqual(
+      transcriptBefore,
+    );
+
+    // Asks for a session other than the bound one are stale and drop.
+    controller.handleMessage({
+      type: 'btw.ask',
+      sessionId: 'other-session',
+      text: 'Stale?',
+    });
+    await Promise.resolve();
+    expect(stub.asks).toEqual(['What is a fork?']);
+
+    // Closing the card discards the fork.
+    controller.handleMessage({
+      type: 'btw.dismiss',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(stub.dispose).toHaveBeenCalled();
+    });
+  });
+
+  it('discards the btw fork when the session binding changes', async () => {
+    const stub = createBtwSidecarStub();
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async () => stub.sidecar,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+    controller.handleMessage({
+      type: 'btw.ask',
+      sessionId: 'session-1',
+      text: 'Before the switch?',
+    });
+    await vi.waitFor(() => {
+      expect(stub.asks).toEqual(['Before the switch?']);
+    });
+
+    controller.handleMessage({ type: 'session.new' });
+    await vi.waitFor(() => {
+      expect(stub.dispose).toHaveBeenCalled();
     });
   });
 
@@ -7514,6 +7681,7 @@ function createController(
   terminalMirror?: TerminalMirror,
   diagnostics?: RuntimeDiagnosticSink,
   daemonPlugins?: () => Promise<DaemonPluginCatalog>,
+  btwSidecarFactory?: BtwSidecarFactory,
 ) {
   const controller = new ChatController(
     createRuntime,
@@ -7538,6 +7706,7 @@ function createController(
     worktreeSessions,
     terminalMirror,
     daemonPlugins,
+    btwSidecarFactory,
   );
   const messages: HostToWebviewMessage[] = [];
   controller.subscribe((message) => {
@@ -7622,6 +7791,28 @@ function createCatalogResult(
   return {
     listSessions: vi.fn(async () => result),
   };
+}
+
+function createBtwSidecarStub(
+  deltas: readonly string[] = ['An answer.'],
+): {
+  sidecar: BtwSideChatSidecar;
+  asks: string[];
+  dispose: ReturnType<typeof vi.fn>;
+} {
+  const asks: string[] = [];
+  const dispose = vi.fn(async () => {});
+  const sidecar: BtwSideChatSidecar = {
+    async *ask(text: string) {
+      asks.push(text);
+      for (const delta of deltas) {
+        yield { kind: 'delta' as const, text: delta };
+      }
+      yield { kind: 'done' as const };
+    },
+    dispose,
+  };
+  return { sidecar, asks, dispose };
 }
 
 function worktreeFeature(options: {

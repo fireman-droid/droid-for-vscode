@@ -139,6 +139,7 @@ import {
   type TokenUsageBreakdown,
 } from '../shared/tokenUsage';
 import { reconcileSessionHistory } from './reconcileSessionHistory';
+import { BtwSideChat, type BtwSidecarFactory } from './btwSideChat';
 import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
 import { isExecuteToolName } from '../shared/toolOutput';
 import type { TerminalMirror } from './terminalMirror';
@@ -543,6 +544,8 @@ export class ChatController {
     counts: Map<string, number>;
     bytes: number;
   } | null = null;
+  /** Hidden-fork side chat; null outside process mode. */
+  private readonly btwSideChat: BtwSideChat | null;
 
   constructor(
     private readonly createRuntime: DroidRuntimeFactory,
@@ -574,10 +577,20 @@ export class ChatController {
     private readonly worktreeSessions?: WorktreeSessionsFeature,
     private readonly terminalMirror?: TerminalMirror,
     private readonly daemonPlugins?: () => Promise<DaemonPluginCatalog>,
+    btwSidecarFactory?: BtwSidecarFactory,
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
     };
+    // Process-mode only (side-question-design.md §6): without a
+    // factory the snapshot never advertises btwAvailable, so the
+    // webview entry stays hidden (fail closed in daemon mode).
+    this.btwSideChat =
+      btwSidecarFactory === undefined
+        ? null
+        : new BtwSideChat(btwSidecarFactory, (sessionId, btw) => {
+            this.emit({ type: 'session.btw', sessionId, btw });
+          });
     this.interactions = new PendingInteractionCoordinator(
       ({ sessionId, turnId, request }) => {
         if (!this.ensureActiveRuntimeWorkspaceCurrent()) {
@@ -742,6 +755,12 @@ export class ChatController {
         return;
       case 'session.fork':
         this.handleSessionFork(message.sessionId);
+        return;
+      case 'btw.ask':
+        this.handleBtwAsk(message.sessionId, message.text);
+        return;
+      case 'btw.dismiss':
+        this.btwSideChat?.handleDismiss(message.sessionId);
         return;
       case 'file.openDiff':
         this.handleFileOpenDiff(message.sessionId, message.path);
@@ -955,6 +974,7 @@ export class ChatController {
 
     this.checkpointRecoveryTranscript();
     this.interactions.cancelAll();
+    this.btwSideChat?.reset();
     if (this.mcpAuthTimer !== null) {
       clearTimeout(this.mcpAuthTimer);
       this.mcpAuthTimer = null;
@@ -6018,6 +6038,7 @@ export class ChatController {
       ...(this.worktreeCreateAvailable
         ? { worktreeCreateAvailable: true }
         : {}),
+      ...(this.btwSideChat === null ? {} : { btwAvailable: true }),
       // Omitted when the session has no usage data yet (fail quiet).
       ...(this.sessionId === null ||
       (this.tokenUsage.cumulative === null &&
@@ -6700,6 +6721,26 @@ export class ChatController {
     this.context = { status: 'loading', value: null };
     this.modelCatalog = { status: 'loading', items: [] };
     this.clearPendingAttachments();
+    // Discard-on-close: any session rebind abandons the hidden fork.
+    this.btwSideChat?.reset();
+  }
+
+  /**
+   * Routes one side question into the hidden-fork side chat
+   * (side-question-design.md §5.3). The ask must target the bound
+   * session in the current workspace; the fork itself never surfaces
+   * in catalogs or the transcript, so nothing else here changes.
+   */
+  private handleBtwAsk(sessionId: string, text: string): void {
+    const sideChat = this.btwSideChat;
+    if (sideChat === null || sessionId !== this.sessionId) {
+      return;
+    }
+    const cwd = this.activeRuntimeCwd;
+    if (cwd === null || !this.isTargetWorkspaceCurrent(cwd)) {
+      return;
+    }
+    void sideChat.handleAsk(cwd, sessionId, text);
   }
 
   private isCurrentRuntimeGeneration(generation: number): boolean {

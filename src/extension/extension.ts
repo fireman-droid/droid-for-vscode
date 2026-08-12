@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { FactoryDroidRuntime } from '../runtime/FactoryDroidRuntime';
+import { createBtwSidecar } from '../runtime/btw/BtwSidecar';
 import { FactorySessionCatalog } from '../runtime/FactorySessionCatalog';
 import { FactorySessionHistoryLoader } from '../runtime/history/FactorySessionHistoryLoader';
 import {
@@ -384,6 +385,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     terminalMirror,
     daemonSidecar.plugins,
+    // `/btw` side chat rides a short-lived private CLI client and only
+    // works against on-disk process-mode sessions; in daemon mode the
+    // factory is withheld so the entry fails closed.
+    runtimeMode === 'process'
+      ? (cwd, mainSessionId) => createBtwSidecar({ cwd, mainSessionId })
+      : undefined,
   );
   const provider = new DroidViewProvider(
     context.extensionUri,
