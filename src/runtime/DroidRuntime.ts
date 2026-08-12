@@ -178,6 +178,8 @@ export interface RuntimeMcpServer {
   readonly status: RuntimeMcpServerStatus;
   readonly toolCount: number | null;
   readonly requiresAuth: boolean;
+  /** True when Droid already holds OAuth tokens for this server. */
+  readonly hasAuthTokens: boolean;
   readonly tools: readonly RuntimeMcpTool[];
 }
 

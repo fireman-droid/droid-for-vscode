@@ -204,6 +204,9 @@ export function projectHostTranscriptMessage(
           severity: message.severity,
           code,
           message: diagnosticMessage,
+          ...(message.relatedSessionId === undefined
+            ? {}
+            : { relatedSessionId: message.relatedSessionId }),
         },
         message.code === 'assistant-output-truncated' ||
           code.length < message.code.length ||

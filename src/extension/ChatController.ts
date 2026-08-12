@@ -31,6 +31,7 @@ import type {
   SkillSummary,
   TurnStatus,
   WebviewToHostMessage,
+  WorkspaceFilesStatus,
 } from '../shared/bridgeMessages';
 import {
   MAX_ARCHIVED_SESSION_ITEMS,
@@ -302,13 +303,22 @@ const MCP_AUTH_START_FAILED_MESSAGE =
 const MCP_AUTH_BROWSER_MESSAGE =
   'Complete the sign-in in your browser.';
 const MCP_AUTH_NO_URL_MESSAGE =
-  'Waiting for Droid to finish authentication.';
+  'Droid did not start a browser sign-in. The server may already be authenticated; refresh the MCP list to check.';
 const MCP_AUTH_BROWSER_FAILED_MESSAGE =
   'The sign-in page could not be opened in a browser.';
 const MCP_AUTH_TIMEOUT_MESSAGE =
   'Stopped waiting for browser authentication. Refresh the MCP list to check the result.';
-/** How long the host waits for an MCP auth outcome before giving up. */
-const MCP_AUTH_WAIT_TIMEOUT_MS = 10 * 60_000;
+/**
+ * How long the host waits for an MCP auth outcome before giving up.
+ * Kept short: a browser OAuth round-trip either completes within a
+ * couple of minutes or the user has abandoned it, and the previous
+ * 10-minute wait outlived every real session.
+ */
+const MCP_AUTH_WAIT_TIMEOUT_MS = 2 * 60_000;
+const MCP_REQUEST_DROPPED_MESSAGE =
+  'Droid could not accept that MCP change right now. Retry in a moment.';
+const SKILL_REQUEST_DROPPED_MESSAGE =
+  'Droid could not accept that skill change right now. Retry in a moment.';
 const CONTEXT_READ_FAILED_MESSAGE =
   'Droid did not return context usage. Retry, then open DroidVisX Logs if this continues.';
 const MODEL_CATALOG_UNSUPPORTED_MESSAGE =
@@ -1802,13 +1812,9 @@ export class ChatController {
 
     const previousTitle =
       this.activeSessionSummary()?.title ?? 'Current session';
-    // The continuation session supersedes the compacted one, so the
-    // superseded entry leaves the catalog instead of lingering as a
-    // second row.
-    this.sessions = {
-      ...this.sessions,
-      items: this.sessions.items.filter(({ id }) => id !== sessionId),
-    };
+    // The compacted session stays in the catalog: its file remains on
+    // disk with the full pre-compaction history, and the compaction
+    // divider's "View full history" jump needs it selectable.
     this.sessionId = compactedSessionId;
     this.turn = null;
     this.clearPendingAttachments();
@@ -1859,6 +1865,9 @@ export class ChatController {
         removedCount > 0
           ? `Conversation compacted: ${removedCount} earlier messages summarized.`
           : 'Conversation compacted.',
+      // The pre-compaction session backs the divider's
+      // "View full history" jump.
+      relatedSessionId: sessionId,
     });
     this.refreshContextAfterTurn(compactedSessionId);
   }
@@ -2641,13 +2650,12 @@ export class ChatController {
 
   private handleSkillsRefresh(sessionId: string): void {
     const runtime = this.runtime;
-    if (
-      sessionId !== this.sessionId ||
-      runtime === null ||
-      this.connection.status !== 'connected' ||
-      this.sessionOperationInProgress ||
-      !this.ensureActiveRuntimeWorkspaceCurrent()
-    ) {
+    const dropReason = this.sessionRequestDropReason(sessionId);
+    if (dropReason !== null || runtime === null) {
+      this.recordDroppedPanelRequest(
+        'skills.refresh',
+        dropReason ?? 'no-runtime',
+      );
       return;
     }
     if (typeof runtime.listSkills !== 'function') {
@@ -2679,7 +2687,7 @@ export class ChatController {
           items: skills.map(projectSkillSummary),
         });
       },
-      () => {
+      (error) => {
         if (
           !this.isCurrentSessionOperation(
             runtime,
@@ -2690,6 +2698,10 @@ export class ChatController {
         ) {
           return;
         }
+        this.recordPanelFailure(
+          'skills-load-failed',
+          formatUnknownError(error),
+        );
         this.emitSkills(sessionId, {
           status: 'error',
           items: [],
@@ -2705,13 +2717,20 @@ export class ChatController {
     disabled: boolean,
   ): void {
     const runtime = this.runtime;
-    if (
-      sessionId !== this.sessionId ||
-      runtime === null ||
-      this.connection.status !== 'connected' ||
-      this.sessionOperationInProgress ||
-      !this.ensureActiveRuntimeWorkspaceCurrent()
-    ) {
+    const dropReason = this.sessionRequestDropReason(sessionId);
+    if (dropReason !== null || runtime === null) {
+      const reason = dropReason ?? 'no-runtime';
+      this.recordDroppedPanelRequest('skill.toggle', reason);
+      if (
+        reason !== 'session-mismatch' &&
+        sessionId === this.sessionId
+      ) {
+        this.emitSkills(sessionId, {
+          status: 'error',
+          items: [],
+          message: SKILL_REQUEST_DROPPED_MESSAGE,
+        });
+      }
       return;
     }
     if (
@@ -2749,7 +2768,7 @@ export class ChatController {
             items: skills.map(projectSkillSummary),
           });
         },
-        () => {
+        (error) => {
           if (
             !this.isCurrentSessionOperation(
               runtime,
@@ -2760,6 +2779,10 @@ export class ChatController {
           ) {
             return;
           }
+          this.recordPanelFailure(
+            'skill-toggle-failed',
+            formatUnknownError(error),
+          );
           this.emitSkills(sessionId, {
             status: 'error',
             items: [],
@@ -2909,13 +2932,12 @@ export class ChatController {
 
   private handleMcpRefresh(sessionId: string): void {
     const runtime = this.runtime;
-    if (
-      sessionId !== this.sessionId ||
-      runtime === null ||
-      this.connection.status !== 'connected' ||
-      this.sessionOperationInProgress ||
-      !this.ensureActiveRuntimeWorkspaceCurrent()
-    ) {
+    const dropReason = this.sessionRequestDropReason(sessionId);
+    if (dropReason !== null || runtime === null) {
+      this.recordDroppedPanelRequest(
+        'mcp.refresh',
+        dropReason ?? 'no-runtime',
+      );
       return;
     }
     if (typeof runtime.listMcpServers !== 'function') {
@@ -2947,7 +2969,7 @@ export class ChatController {
           items: servers.map(projectMcpServerSummary),
         });
       },
-      () => {
+      (error) => {
         if (
           !this.isCurrentSessionOperation(
             runtime,
@@ -2958,6 +2980,10 @@ export class ChatController {
         ) {
           return;
         }
+        this.recordPanelFailure(
+          'mcp-load-failed',
+          formatUnknownError(error),
+        );
         this.emitMcp(sessionId, {
           status: 'error',
           items: [],
@@ -2973,13 +2999,13 @@ export class ChatController {
     enabled: boolean,
   ): void {
     const runtime = this.runtime;
-    if (
-      sessionId !== this.sessionId ||
-      runtime === null ||
-      this.connection.status !== 'connected' ||
-      this.sessionOperationInProgress ||
-      !this.ensureActiveRuntimeWorkspaceCurrent()
-    ) {
+    const dropReason = this.sessionRequestDropReason(sessionId);
+    if (dropReason !== null || runtime === null) {
+      this.reportDroppedMcpMutation(
+        'mcp.server.toggle',
+        sessionId,
+        dropReason ?? 'no-runtime',
+      );
       return;
     }
     if (
@@ -2993,48 +3019,13 @@ export class ChatController {
       });
       return;
     }
-
-    this.emitMcp(sessionId, { status: 'loading', items: [] });
-    const generation = this.runtimeGeneration;
-    const cwd = this.activeRuntimeCwd!;
-    void runtime
-      .setMcpServerEnabled(name, enabled)
-      .then(() => runtime.listMcpServers!())
-      .then(
-        (servers) => {
-          if (
-            !this.isCurrentSessionOperation(
-              runtime,
-              generation,
-              sessionId,
-              cwd,
-            )
-          ) {
-            return;
-          }
-          this.emitMcp(sessionId, {
-            status: 'ready',
-            items: servers.map(projectMcpServerSummary),
-          });
-        },
-        () => {
-          if (
-            !this.isCurrentSessionOperation(
-              runtime,
-              generation,
-              sessionId,
-              cwd,
-            )
-          ) {
-            return;
-          }
-          this.emitMcp(sessionId, {
-            status: 'error',
-            items: [],
-            message: MCP_TOGGLE_FAILED_MESSAGE,
-          });
-        },
-      );
+    this.applyMcpMutation(
+      sessionId,
+      runtime,
+      'toggle',
+      () => runtime.setMcpServerEnabled!(name, enabled),
+      MCP_TOGGLE_FAILED_MESSAGE,
+    );
   }
 
   private handleMcpServerAdd(
@@ -3042,13 +3033,13 @@ export class ChatController {
     params: Omit<McpServerAddMessage, 'type' | 'sessionId'>,
   ): void {
     const runtime = this.runtime;
-    if (
-      sessionId !== this.sessionId ||
-      runtime === null ||
-      this.connection.status !== 'connected' ||
-      this.sessionOperationInProgress ||
-      !this.ensureActiveRuntimeWorkspaceCurrent()
-    ) {
+    const dropReason = this.sessionRequestDropReason(sessionId);
+    if (dropReason !== null || runtime === null) {
+      this.reportDroppedMcpMutation(
+        'mcp.server.add',
+        sessionId,
+        dropReason ?? 'no-runtime',
+      );
       return;
     }
     if (
@@ -3065,6 +3056,7 @@ export class ChatController {
     this.applyMcpMutation(
       sessionId,
       runtime,
+      'add',
       () => runtime.addMcpServer!(params),
       MCP_ADD_FAILED_MESSAGE,
     );
@@ -3072,13 +3064,13 @@ export class ChatController {
 
   private handleMcpServerRemove(sessionId: string, name: string): void {
     const runtime = this.runtime;
-    if (
-      sessionId !== this.sessionId ||
-      runtime === null ||
-      this.connection.status !== 'connected' ||
-      this.sessionOperationInProgress ||
-      !this.ensureActiveRuntimeWorkspaceCurrent()
-    ) {
+    const dropReason = this.sessionRequestDropReason(sessionId);
+    if (dropReason !== null || runtime === null) {
+      this.reportDroppedMcpMutation(
+        'mcp.server.remove',
+        sessionId,
+        dropReason ?? 'no-runtime',
+      );
       return;
     }
     if (
@@ -3095,61 +3087,116 @@ export class ChatController {
     this.applyMcpMutation(
       sessionId,
       runtime,
+      'remove',
       () => runtime.removeMcpServer!(name),
       MCP_REMOVE_FAILED_MESSAGE,
     );
   }
 
   /**
+   * Logs a dropped MCP mutation and, when the request came from the
+   * panel the user is looking at, surfaces a visible retry hint. A
+   * dropped Add/Remove/Toggle must never look like a success.
+   */
+  private reportDroppedMcpMutation(
+    op: string,
+    sessionId: string,
+    reason: string,
+  ): void {
+    this.recordDroppedPanelRequest(op, reason);
+    if (reason !== 'session-mismatch' && sessionId === this.sessionId) {
+      this.emitMcp(sessionId, {
+        status: 'error',
+        items: [],
+        message: MCP_REQUEST_DROPPED_MESSAGE,
+      });
+    }
+  }
+
+  /**
    * Runs one MCP catalog mutation, then re-reads and broadcasts the
    * catalog. The caller must have verified `listMcpServers` support.
+   * Failures still re-read the catalog: the mutation may have half
+   * landed (Droid writes config before connecting), so the fresh
+   * status badges are the trustworthy signal and the error message
+   * rides along instead of blanking the list.
    */
   private applyMcpMutation(
     sessionId: string,
     runtime: DroidRuntime,
+    op: string,
     mutation: () => Promise<void>,
     failureMessage: string,
   ): void {
     this.emitMcp(sessionId, { status: 'loading', items: [] });
     const generation = this.runtimeGeneration;
     const cwd = this.activeRuntimeCwd!;
-    void mutation()
-      .then(() => runtime.listMcpServers!())
-      .then(
-        (servers) => {
-          if (
-            !this.isCurrentSessionOperation(
-              runtime,
-              generation,
-              sessionId,
-              cwd,
-            )
-          ) {
-            return;
-          }
-          this.emitMcp(sessionId, {
-            status: 'ready',
-            items: servers.map(projectMcpServerSummary),
-          });
-        },
-        () => {
-          if (
-            !this.isCurrentSessionOperation(
-              runtime,
-              generation,
-              sessionId,
-              cwd,
-            )
-          ) {
-            return;
-          }
-          this.emitMcp(sessionId, {
-            status: 'error',
-            items: [],
-            message: failureMessage,
-          });
-        },
+    void mutation().then(
+      () =>
+        this.finishMcpMutation(
+          sessionId,
+          runtime,
+          generation,
+          cwd,
+          null,
+        ),
+      (error) => {
+        this.recordPanelFailure(
+          `mcp-${op}-failed`,
+          formatUnknownError(error),
+        );
+        return this.finishMcpMutation(
+          sessionId,
+          runtime,
+          generation,
+          cwd,
+          failureMessage,
+        );
+      },
+    );
+  }
+
+  /** Re-reads the MCP catalog after a mutation attempt and broadcasts
+   * it, attaching `failureMessage` when the mutation failed. */
+  private async finishMcpMutation(
+    sessionId: string,
+    runtime: DroidRuntime,
+    generation: number,
+    cwd: string,
+    failureMessage: string | null,
+  ): Promise<void> {
+    let items: McpServerSummary[] | null = null;
+    try {
+      items = (await runtime.listMcpServers!()).map(
+        projectMcpServerSummary,
       );
+    } catch (error) {
+      this.recordPanelFailure(
+        'mcp-load-failed',
+        formatUnknownError(error),
+      );
+    }
+    if (
+      !this.isCurrentSessionOperation(runtime, generation, sessionId, cwd)
+    ) {
+      return;
+    }
+    if (items === null) {
+      // The webview store keeps the previous list on error states, so
+      // an empty error payload degrades to "old list + message".
+      this.emitMcp(sessionId, {
+        status: 'error',
+        items: [],
+        message: failureMessage ?? MCP_LOAD_FAILED_MESSAGE,
+      });
+      return;
+    }
+    this.emitMcp(
+      sessionId,
+      failureMessage === null
+        ? { status: 'ready', items }
+        : { status: 'error', items, message: failureMessage },
+    );
   }
 
   private handleMcpServerAuthenticate(
@@ -3157,17 +3204,22 @@ export class ChatController {
     name: string,
   ): void {
     const runtime = this.runtime;
-    if (
-      sessionId !== this.sessionId ||
-      runtime === null ||
-      this.connection.status !== 'connected' ||
-      this.sessionOperationInProgress ||
-      this.mcpAuthServerName !== null ||
-      !this.ensureActiveRuntimeWorkspaceCurrent()
-    ) {
+    const dropReason =
+      this.mcpAuthServerName !== null
+        ? 'auth-in-flight'
+        : this.sessionRequestDropReason(sessionId);
+    if (dropReason !== null || runtime === null) {
+      this.recordDroppedPanelRequest(
+        'mcp.server.authenticate',
+        dropReason ?? 'no-runtime',
+      );
       return;
     }
     if (typeof runtime.authenticateMcpServer !== 'function') {
+      this.recordPanelFailure(
+        'mcp-auth-unsupported',
+        MCP_AUTH_UNSUPPORTED_MESSAGE,
+      );
       this.emitMcpAuth(
         sessionId,
         name,
@@ -3178,6 +3230,11 @@ export class ChatController {
     }
 
     this.mcpAuthServerName = name;
+    this.recordHost({
+      level: 'info',
+      name: 'host.mcp.auth',
+      attributes: { phase: 'started', serverName: name },
+    });
     this.emitMcpAuth(sessionId, name, 'started', null);
     const generation = this.runtimeGeneration;
     const cwd = this.activeRuntimeCwd!;
@@ -3196,6 +3253,10 @@ export class ChatController {
         return;
       }
       finishFlow();
+      this.recordPanelFailure(
+        'mcp-auth-timeout',
+        `${name}: ${MCP_AUTH_TIMEOUT_MESSAGE}`,
+      );
       if (
         this.isCurrentSessionOperation(runtime, generation, sessionId, cwd)
       ) {
@@ -3220,6 +3281,11 @@ export class ChatController {
           cwd,
         );
         finishFlow();
+        this.recordHost({
+          level: outcome === 'success' ? 'info' : 'warn',
+          name: 'host.mcp.auth',
+          attributes: { phase: outcome, serverName: name },
+        });
         if (!current) {
           return;
         }
@@ -3234,18 +3300,36 @@ export class ChatController {
             return;
           }
           if (authUrl === null) {
+            // Droid accepted the request but never announced an OAuth
+            // URL - typical for a server that is already signed in.
+            // End the flow now instead of waiting minutes for a
+            // completion notification that will not arrive.
+            finishFlow();
+            this.recordPanelFailure(
+              'mcp-auth-no-url',
+              `${name}: ${MCP_AUTH_NO_URL_MESSAGE}`,
+            );
             this.emitMcpAuth(
               sessionId,
               name,
-              'browser',
+              'error',
               MCP_AUTH_NO_URL_MESSAGE,
             );
+            this.handleMcpRefresh(sessionId);
             return;
           }
           const opened = await this.externalUrl.openExternal(authUrl);
           if (!isCurrentFlow()) {
             return;
           }
+          this.recordHost({
+            level: opened ? 'info' : 'warn',
+            name: 'host.mcp.auth',
+            attributes: {
+              phase: opened ? 'browser-opened' : 'browser-failed',
+              serverName: name,
+            },
+          });
           this.emitMcpAuth(
             sessionId,
             name,
@@ -3266,6 +3350,10 @@ export class ChatController {
             cwd,
           );
           finishFlow();
+          this.recordPanelFailure(
+            'mcp-auth-start-failed',
+            `${name}: ${MCP_AUTH_START_FAILED_MESSAGE}`,
+          );
           if (current) {
             this.emitMcpAuth(
               sessionId,
@@ -3716,43 +3804,99 @@ export class ChatController {
       sessionId !== this.sessionId ||
       this.connection.status !== 'connected'
     ) {
+      // Always answer with the original request id: a silently dropped
+      // request left the mention popup on "Searching files..." forever.
+      const status =
+        this.getWorkspaceContext().cwd === null ? 'no-workspace' : 'ok';
+      this.emitWorkspaceFiles(sessionId, requestId, [], status);
+      this.recordWorkspaceSearch(query, {
+        outcome: 'dropped',
+        reason:
+          sessionId !== this.sessionId
+            ? 'session-mismatch'
+            : 'not-connected',
+        status,
+      });
       return;
     }
     if (query.trim().length === 0) {
-      this.emitWorkspaceFiles(sessionId, requestId, []);
+      this.emitWorkspaceFiles(sessionId, requestId, [], 'ok');
       return;
     }
+    const startedAt = performance.now();
     void this.attachmentSources
       .searchWorkspaceFiles(query.trim(), MAX_FILE_SEARCH_RESULTS)
       .then(
         (files) => {
+          const safeFiles = files
+            .filter((file) => isSafeWorkspaceRelativePath(file))
+            .slice(0, MAX_FILE_SEARCH_RESULTS);
+          const status =
+            safeFiles.length === 0 &&
+            this.getWorkspaceContext().cwd === null
+              ? 'no-workspace'
+              : 'ok';
+          this.recordWorkspaceSearch(query, {
+            outcome: 'ok',
+            resultCount: safeFiles.length,
+            durationMs: Math.round(performance.now() - startedAt),
+            status,
+          });
           if (sessionId === this.sessionId) {
             this.emitWorkspaceFiles(
               sessionId,
               requestId,
-              files
-                .filter((file) => isSafeWorkspaceRelativePath(file))
-                .slice(0, MAX_FILE_SEARCH_RESULTS),
+              safeFiles,
+              status,
             );
           }
         },
-        () => {
+        (error) => {
+          this.recordWorkspaceSearch(query, {
+            outcome: 'failed',
+            durationMs: Math.round(performance.now() - startedAt),
+            detail: formatUnknownError(error),
+          });
           if (sessionId === this.sessionId) {
-            this.emitWorkspaceFiles(sessionId, requestId, []);
+            this.emitWorkspaceFiles(sessionId, requestId, [], 'ok');
           }
         },
       );
+  }
+
+  /** Structured record for one `@` mention file search (P0 gap: the
+   * search round-trip previously produced zero log events). */
+  private recordWorkspaceSearch(
+    query: string,
+    attributes: {
+      outcome: 'ok' | 'failed' | 'dropped';
+      resultCount?: number;
+      durationMs?: number;
+      reason?: string;
+      status?: string;
+      detail?: string;
+    },
+  ): void {
+    const { detail, ...rest } = attributes;
+    this.recordHost({
+      level: attributes.outcome === 'ok' ? 'info' : 'warn',
+      name: 'host.workspace.search',
+      attributes: { queryLength: query.length, ...rest },
+      ...(detail === undefined ? {} : { detail }),
+    });
   }
 
   private emitWorkspaceFiles(
     sessionId: string,
     requestId: string,
     files: readonly string[],
+    status: WorkspaceFilesStatus,
   ): void {
     this.emit({
       type: 'workspace.files',
       sessionId,
       requestId,
+      status,
       files,
     });
   }
@@ -5151,6 +5295,58 @@ export class ChatController {
     return this.recoveryStore.flush();
   }
 
+  /**
+   * Names the first guard that would drop a webview panel request for
+   * the given session, or null when the request may proceed. Mirrors
+   * the guard chain the MCP/Skills handlers share; the caller must
+   * treat a non-null reason as a hard stop.
+   */
+  private sessionRequestDropReason(sessionId: string): string | null {
+    if (sessionId !== this.sessionId) {
+      return 'session-mismatch';
+    }
+    if (this.runtime === null) {
+      return 'no-runtime';
+    }
+    if (this.connection.status !== 'connected') {
+      return 'not-connected';
+    }
+    if (this.sessionOperationInProgress) {
+      return 'operation-in-progress';
+    }
+    if (!this.ensureActiveRuntimeWorkspaceCurrent()) {
+      return 'workspace-changed';
+    }
+    return null;
+  }
+
+  /**
+   * Logs a panel request the guard chain dropped. These drops used to
+   * be fully silent, which made a swallowed "Add MCP server" request
+   * indistinguishable from a successful one.
+   */
+  private recordDroppedPanelRequest(op: string, reason: string): void {
+    this.recordHost({
+      level: 'warn',
+      name: 'host.ui.request-dropped',
+      attributes: { op, reason },
+    });
+  }
+
+  /**
+   * Mirrors a panel-level business failure into the local log. Panel
+   * failures render only inside the Skills/MCP popovers, so without
+   * this they leave no trace once the popover closes.
+   */
+  private recordPanelFailure(code: string, detail: string): void {
+    this.recordHost({
+      level: 'warn',
+      name: 'host.ui.diagnostic',
+      attributes: { code },
+      detail,
+    });
+  }
+
   private emitSessionDiagnostic(
     code: string,
     message: string,
@@ -5803,6 +5999,7 @@ function projectMcpServerSummary(
     status: server.status,
     toolCount: server.toolCount,
     requiresAuth: server.requiresAuth,
+    hasAuthTokens: server.hasAuthTokens,
     tools: server.tools.map((tool) => ({
       name: tool.name,
       description: tool.description,

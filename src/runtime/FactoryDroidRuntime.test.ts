@@ -543,6 +543,7 @@ describe('FactoryDroidRuntime', () => {
               name: 'sentry',
               status: 'disabled',
               requiresAuth: true,
+              hasAuthTokens: true,
             },
             { name: 'broken', status: 'on-fire' },
             { name: '', status: 'connected' },
@@ -588,6 +589,7 @@ describe('FactoryDroidRuntime', () => {
         status: 'connected',
         toolCount: 2,
         requiresAuth: false,
+        hasAuthTokens: false,
         tools: [
           {
             name: 'list-issues',
@@ -608,6 +610,7 @@ describe('FactoryDroidRuntime', () => {
         status: 'disabled',
         toolCount: null,
         requiresAuth: true,
+        hasAuthTokens: true,
         tools: [],
       },
     ]);
@@ -630,6 +633,32 @@ describe('FactoryDroidRuntime', () => {
     await expect(bare.listMcpServers()).rejects.toThrow(
       'does not support MCP',
     );
+  });
+
+  it('caps a hung MCP toggle with its own timeout', async () => {
+    // Droid only answers a toggle after its connect attempt gives up,
+    // which used to leave the panel waiting on the SDK's generic 30s
+    // timeout (or longer) for a failing server.
+    vi.useFakeTimers();
+    try {
+      const session = Object.assign(
+        createMockSession(async function* () {}),
+        {
+          toggleMcpServer: vi.fn(() => new Promise<never>(() => {})),
+        },
+      );
+      const runtime = createRuntime(async () => session);
+      await runtime.initialize('C:\\workspace');
+
+      const toggle = runtime.setMcpServerEnabled('linear', true);
+      const outcome = expect(toggle).rejects.toThrow(
+        'did not finish starting within 12s',
+      );
+      await vi.advanceTimersByTimeAsync(12_000);
+      await outcome;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('adds and removes MCP servers through the SDK session', async () => {

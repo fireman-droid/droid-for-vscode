@@ -67,6 +67,8 @@ import {
   MAX_FILE_SEARCH_RESULTS,
   MAX_PENDING_ATTACHMENTS,
   SKILL_LOCATIONS,
+  WORKSPACE_FILES_STATUSES,
+  type WorkspaceFilesStatus,
   TRANSCRIPT_THINKING_STATUSES,
   TRANSCRIPT_TOOL_STATUSES,
   TURN_STATUSES,
@@ -717,21 +719,27 @@ function parseRuntimeDiagnostic(
   value: UnknownRecord,
 ): Extract<HostToWebviewMessage, { type: 'runtime.diagnostic' }> | undefined {
   if (
-    !hasExactKeys(value, [
-      'type',
-      'sequence',
-      'sessionId',
-      'turnId',
-      'severity',
-      'code',
-      'message',
-    ]) ||
+    !hasExactKeys(
+      value,
+      [
+        'type',
+        'sequence',
+        'sessionId',
+        'turnId',
+        'severity',
+        'code',
+        'message',
+      ],
+      ['relatedSessionId'],
+    ) ||
     !isSequence(value.sequence) ||
     !isNullableId(value.sessionId) ||
     !isNullableId(value.turnId) ||
     !isDiagnosticSeverity(value.severity) ||
     !isBoundedString(value.code, MAX_STRING_LENGTH) ||
-    !isBoundedString(value.message, MAX_STRING_LENGTH)
+    !isBoundedString(value.message, MAX_STRING_LENGTH) ||
+    (value.relatedSessionId !== undefined &&
+      !isId(value.relatedSessionId))
   ) {
     return undefined;
   }
@@ -744,6 +752,9 @@ function parseRuntimeDiagnostic(
     severity: value.severity,
     code: value.code,
     message: value.message,
+    ...(value.relatedSessionId === undefined
+      ? {}
+      : { relatedSessionId: value.relatedSessionId }),
   };
 }
 
@@ -1468,11 +1479,13 @@ function parseWorkspaceFiles(
       'sequence',
       'sessionId',
       'requestId',
+      'status',
       'files',
     ]) ||
     !isSequence(value.sequence) ||
     !isId(value.sessionId) ||
     !isId(value.requestId) ||
+    !isWorkspaceFilesStatus(value.status) ||
     !isExactArray(value.files, 0, MAX_FILE_SEARCH_RESULTS)
   ) {
     return undefined;
@@ -1491,8 +1504,18 @@ function parseWorkspaceFiles(
     sequence: value.sequence,
     sessionId: value.sessionId,
     requestId: value.requestId,
+    status: value.status,
     files,
   };
+}
+
+function isWorkspaceFilesStatus(
+  value: unknown,
+): value is WorkspaceFilesStatus {
+  return (
+    typeof value === 'string' &&
+    (WORKSPACE_FILES_STATUSES as readonly string[]).includes(value)
+  );
 }
 
 function parseRewindInfo(
@@ -1891,12 +1914,14 @@ function parseMcpServerSummary(
       'status',
       'toolCount',
       'requiresAuth',
+      'hasAuthTokens',
       'tools',
     ]) ||
     !isNonEmptyBoundedString(value.name, MAX_MCP_NAME_LENGTH) ||
     !isMcpServerStatus(value.status) ||
     (value.toolCount !== null && !isCount(value.toolCount)) ||
     typeof value.requiresAuth !== 'boolean' ||
+    typeof value.hasAuthTokens !== 'boolean' ||
     !isExactArray(value.tools, 0, MAX_MCP_TOOLS_PER_SERVER)
   ) {
     return undefined;
@@ -1916,6 +1941,7 @@ function parseMcpServerSummary(
     status: value.status,
     toolCount: value.toolCount,
     requiresAuth: value.requiresAuth,
+    hasAuthTokens: value.hasAuthTokens,
     tools,
   };
 }
@@ -2571,19 +2597,18 @@ function parseDiagnosticTranscriptItem(
   value: UnknownRecord,
 ): Extract<SessionTranscriptItem, { kind: 'diagnostic' }> | undefined {
   if (
-    !hasExactKeys(value, [
-      'id',
-      'kind',
-      'turnId',
-      'severity',
-      'code',
-      'message',
-    ]) ||
+    !hasExactKeys(
+      value,
+      ['id', 'kind', 'turnId', 'severity', 'code', 'message'],
+      ['relatedSessionId'],
+    ) ||
     !isId(value.id) ||
     !isNullableId(value.turnId) ||
     !isDiagnosticSeverity(value.severity) ||
     !isBoundedString(value.code, MAX_STRING_LENGTH) ||
-    !isBoundedString(value.message, MAX_STRING_LENGTH)
+    !isBoundedString(value.message, MAX_STRING_LENGTH) ||
+    (value.relatedSessionId !== undefined &&
+      !isId(value.relatedSessionId))
   ) {
     return undefined;
   }
@@ -2595,6 +2620,9 @@ function parseDiagnosticTranscriptItem(
     severity: value.severity,
     code: value.code,
     message: value.message,
+    ...(value.relatedSessionId === undefined
+      ? {}
+      : { relatedSessionId: value.relatedSessionId }),
   };
 }
 

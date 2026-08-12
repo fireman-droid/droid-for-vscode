@@ -665,6 +665,7 @@ describe('assistant-ui App bridge commands', () => {
       sequence: 2,
       sessionId: 'session-a',
       requestId: search.requestId,
+      status: 'ok',
       files: [],
     });
     expect(await screen.findByText('No matching files')).toBeDefined();

@@ -83,6 +83,7 @@ describe('hostTranscriptState', () => {
       severity: 'warning',
       code: 'safe-code',
       message: 'Safe explanation',
+      relatedSessionId: 'session-0',
     });
 
     expect(state).toEqual({
@@ -126,6 +127,7 @@ describe('hostTranscriptState', () => {
           severity: 'warning',
           code: 'safe-code',
           message: 'Safe explanation',
+          relatedSessionId: 'session-0',
         }),
       ],
     });

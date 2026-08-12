@@ -291,6 +291,7 @@ describe('readHostMessage', () => {
             status: 'connected',
             toolCount: 2,
             requiresAuth: false,
+            hasAuthTokens: false,
             tools: [
               {
                 name: 'list-issues',
@@ -311,6 +312,7 @@ describe('readHostMessage', () => {
             status: 'disabled',
             toolCount: null,
             requiresAuth: true,
+            hasAuthTokens: true,
             tools: [],
           },
         ],
@@ -606,6 +608,7 @@ describe('readHostMessage', () => {
       sequence: 8,
       sessionId: 'session-1',
       requestId: 'file-search-1',
+      status: 'ok',
       files: ['src/app.ts', 'docs/readme.md'],
     },
     {
@@ -613,6 +616,7 @@ describe('readHostMessage', () => {
       sequence: 9,
       sessionId: 'session-1',
       requestId: 'file-search-2',
+      status: 'no-workspace',
       files: [],
     },
     {
@@ -631,6 +635,16 @@ describe('readHostMessage', () => {
       severity: 'warning',
       code: 'diagnostic-code',
       message: 'Safe diagnostic',
+    },
+    {
+      type: 'runtime.diagnostic',
+      sequence: 9,
+      sessionId: 'session-2',
+      turnId: null,
+      severity: 'info',
+      code: 'session-compacted',
+      message: 'Conversation compacted.',
+      relatedSessionId: 'session-1',
     },
     {
       type: 'turn.state',

@@ -856,14 +856,11 @@ function parseDiagnostic(
   { kind: 'diagnostic' }
 > | undefined {
   if (
-    !hasExactKeys(value, [
-      'id',
-      'kind',
-      'turnId',
-      'severity',
-      'code',
-      'message',
-    ])
+    !hasExactKeys(
+      value,
+      ['id', 'kind', 'turnId', 'severity', 'code', 'message'],
+      ['relatedSessionId'],
+    )
   ) {
     return undefined;
   }
@@ -872,11 +869,13 @@ function parseDiagnostic(
   const severity = dataValue(value, 'severity');
   const code = dataValue(value, 'code');
   const message = dataValue(value, 'message');
+  const relatedSessionId = dataValue(value, 'relatedSessionId');
   return isId(id) &&
     (turnId === null || isId(turnId)) &&
     isOneOf(severity, DIAGNOSTIC_SEVERITIES) &&
     isBoundedString(code, MAX_TURN_TEXT_LENGTH) &&
-    isBoundedString(message, MAX_TURN_TEXT_LENGTH)
+    isBoundedString(message, MAX_TURN_TEXT_LENGTH) &&
+    (relatedSessionId === undefined || isId(relatedSessionId))
     ? {
         id,
         kind: 'diagnostic',
@@ -884,6 +883,9 @@ function parseDiagnostic(
         severity,
         code,
         message,
+        ...(relatedSessionId === undefined
+          ? {}
+          : { relatedSessionId }),
       }
     : undefined;
 }

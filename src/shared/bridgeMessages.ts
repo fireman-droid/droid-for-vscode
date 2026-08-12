@@ -996,6 +996,13 @@ export interface McpServerSummary {
   readonly status: McpServerStatus;
   readonly toolCount: number | null;
   readonly requiresAuth: boolean;
+  /**
+   * True when Droid already holds OAuth tokens for this server. A
+   * server needs authentication only when `requiresAuth` is true and
+   * this is false; dropping this field made signed-in servers render
+   * a misleading "needs auth" badge.
+   */
+  readonly hasAuthTokens: boolean;
   readonly tools: readonly McpToolSummary[];
 }
 
@@ -1100,6 +1107,8 @@ export interface DiagnosticTranscriptItem {
   readonly severity: DiagnosticSeverity;
   readonly code: string;
   readonly message: string;
+  /** See `RuntimeDiagnosticMessage.relatedSessionId`. */
+  readonly relatedSessionId?: string;
 }
 
 export const MAX_CHANGED_FILES_PER_TURN = 24;
@@ -1350,15 +1359,25 @@ export interface RewindInfoStateMessage {
   readonly createdCount: number;
 }
 
+export const WORKSPACE_FILES_STATUSES = [
+  'ok',
+  'no-workspace',
+] as const;
+export type WorkspaceFilesStatus =
+  (typeof WORKSPACE_FILES_STATUSES)[number];
+
 /**
  * Workspace files matching one `workspace.searchFiles` request. Paths
- * are workspace-relative with forward slashes.
+ * are workspace-relative with forward slashes. `no-workspace` marks an
+ * empty result caused by no folder being open, so the mention popup
+ * can say so instead of showing a misleading "no matching files".
  */
 export interface WorkspaceFilesMessage {
   readonly type: 'workspace.files';
   readonly sequence: number;
   readonly sessionId: string;
   readonly requestId: string;
+  readonly status: WorkspaceFilesStatus;
   readonly files: readonly string[];
 }
 
@@ -1434,6 +1453,12 @@ export interface RuntimeDiagnosticMessage {
   readonly severity: DiagnosticSeverity;
   readonly code: string;
   readonly message: string;
+  /**
+   * Another session this diagnostic points at. Currently used by
+   * `session-compacted` to carry the pre-compaction session id, which
+   * the webview offers as a "View full history" jump.
+   */
+  readonly relatedSessionId?: string;
 }
 
 export interface TurnStateMessage {

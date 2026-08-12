@@ -2598,10 +2598,21 @@ describe('ChatController', () => {
       });
     });
 
-    // A failing add surfaces as a safe error state.
+    // A failing add surfaces as a safe error state that still carries
+    // the freshly re-read catalog instead of blanking the list.
     runtime.addMcpServer.mockRejectedValueOnce(
       new Error('private add failure'),
     );
+    runtime.listMcpServers.mockResolvedValueOnce([
+      {
+        name: 'survivor',
+        status: 'connected',
+        toolCount: 0,
+        requiresAuth: false,
+        hasAuthTokens: false,
+        tools: [],
+      },
+    ]);
     controller.handleMessage({
       type: 'mcp.server.add',
       sessionId: 'session-1',
@@ -2612,9 +2623,62 @@ describe('ChatController', () => {
     await vi.waitFor(() => {
       expect(mcpMessages(messages).at(-1)?.mcp).toMatchObject({
         status: 'error',
+        items: [{ name: 'survivor' }],
       });
     });
     expect(JSON.stringify(messages)).not.toContain('private add failure');
+  });
+
+  it('fast-fails MCP auth without an OAuth URL and frees the flow', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      listMcpServers: vi.fn(async () => []),
+      authenticateMcpServer: vi.fn(async () => ({ authUrl: null })),
+    });
+    const opened: string[] = [];
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        openExternal: async (url) => {
+          opened.push(url);
+          return true;
+        },
+      },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'mcp.server.authenticate',
+      sessionId: 'session-1',
+      name: 'sentry',
+    });
+    await vi.waitFor(() => {
+      expect(mcpAuthMessages(messages).map(({ phase }) => phase)).toEqual([
+        'started',
+        'error',
+      ]);
+    });
+    expect(mcpAuthMessages(messages).at(-1)?.message).toContain(
+      'already be authenticated',
+    );
+    expect(opened).toEqual([]);
+    // The flow ended, so the list refreshes and a new attempt is accepted.
+    await vi.waitFor(() => {
+      expect(runtime.listMcpServers).toHaveBeenCalled();
+    });
+    controller.handleMessage({
+      type: 'mcp.server.authenticate',
+      sessionId: 'session-1',
+      name: 'sentry',
+    });
+    expect(runtime.authenticateMcpServer).toHaveBeenCalledTimes(2);
   });
 
   it('compacts the session, adopts the continuation, and reloads its transcript', async () => {
@@ -2675,12 +2739,15 @@ describe('ChatController', () => {
       severity: 'info',
       code: 'session-compacted',
       message: expect.stringContaining('5'),
+      // The pre-compaction session backs "View full history".
+      relatedSessionId: 'session-1',
     });
-    // The superseded session no longer appears next to the continuation.
+    // The compacted session stays selectable next to the continuation:
+    // its file keeps the full pre-compaction history on disk.
     const sessions = snapshots(messages).at(-1)!.sessions;
     expect(
       sessions.items.filter(({ id }) => id === 'session-1'),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
     expect(sessions.items.at(-1)).toMatchObject({
       id: 'session-compacted',
       active: true,
@@ -3806,6 +3873,22 @@ describe('ChatController', () => {
     });
     expect(lastMessage(messages, 'workspace.files')).toMatchObject({
       requestId: 'file-search-2',
+      status: 'ok',
+      files: [],
+    });
+
+    // Guarded requests still settle with an explicit empty reply so
+    // the mention popup never hangs on "Searching...".
+    controller.handleMessage({
+      type: 'workspace.searchFiles',
+      sessionId: 'session-other',
+      requestId: 'file-search-3',
+      query: 'Thread',
+    });
+    expect(lastMessage(messages, 'workspace.files')).toMatchObject({
+      sessionId: 'session-other',
+      requestId: 'file-search-3',
+      status: 'ok',
       files: [],
     });
 

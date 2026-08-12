@@ -310,6 +310,7 @@ describe('assistantWebviewReducer', () => {
         sequence: 1,
         sessionId: 'session-a',
         requestId: 'file-search-1',
+        status: 'ok',
         files: ['src/app.ts', 'docs/readme.md'],
       },
     });
@@ -326,6 +327,7 @@ describe('assistantWebviewReducer', () => {
         sequence: 2,
         sessionId: 'session-other',
         requestId: 'file-search-9',
+        status: 'ok',
         files: [],
       },
     });

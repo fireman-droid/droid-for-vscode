@@ -84,6 +84,13 @@ const MCP_AUTH_URL_WAIT_MS = 15_000;
 /** How long the one-shot MCP auth completion subscription stays alive
  * before it is dropped without an outcome. */
 const MCP_AUTH_COMPLETION_SUBSCRIPTION_MS = 10 * 60_000;
+/**
+ * Self-imposed cap on one MCP server toggle. Droid writes the config
+ * immediately but only replies after its internal connect attempt
+ * gives up, which rides the SDK's generic 30s request timeout; a
+ * failing server otherwise leaves the panel waiting 30-60s.
+ */
+const MCP_TOGGLE_TIMEOUT_MS = 12_000;
 
 export interface FactoryDroidSessionRewindParams {
   readonly messageId: string;
@@ -227,6 +234,15 @@ export class FactoryDroidRuntime implements DroidRuntime {
         return result;
       },
       askUser: (request) => handler.askUser(request),
+      // Auto-cancelled interactions used to leave zero trace, which
+      // made a projection failure look like a user cancel to the CLI.
+      onAutoCancelled: ({ interaction, reason }) => {
+        this.recordDiagnostic({
+          level: 'warn',
+          name: 'runtime.permission.auto-cancelled',
+          attributes: { interaction, reason },
+        });
+      },
     };
     this.diagnostics = options.diagnostics;
     this.loadSessionCommands =
@@ -916,13 +932,37 @@ export class FactoryDroidRuntime implements DroidRuntime {
     if (typeof session.toggleMcpServer !== 'function') {
       throw new Error('The Droid session does not support MCP.');
     }
-    const result = await session.toggleMcpServer({
-      serverName: name,
-      enabled,
-      settingsLevel: 'user',
+    // The config write lands before Droid's connect attempt resolves,
+    // so a timeout here must be followed by a fresh list: the server's
+    // own status badge (connecting/failed) is the reliable signal.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(
+          new Error(
+            `The MCP server did not finish ${
+              enabled ? 'starting' : 'stopping'
+            } within ${Math.round(MCP_TOGGLE_TIMEOUT_MS / 1000)}s.`,
+          ),
+        );
+      }, MCP_TOGGLE_TIMEOUT_MS);
     });
-    if (result.success !== true) {
-      throw new Error('Droid refused to update the MCP server.');
+    try {
+      const result = await Promise.race([
+        session.toggleMcpServer({
+          serverName: name,
+          enabled,
+          settingsLevel: 'user',
+        }),
+        timeout,
+      ]);
+      if (result.success !== true) {
+        throw new Error('Droid refused to update the MCP server.');
+      }
+    } finally {
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
     }
   }
 
@@ -1971,6 +2011,7 @@ function projectMcpServer(
     status,
     toolCount,
     requiresAuth: record.requiresAuth === true,
+    hasAuthTokens: record.hasAuthTokens === true,
     tools: toolsByServer.get(name) ?? [],
   };
 }
