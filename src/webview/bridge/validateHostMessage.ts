@@ -358,14 +358,25 @@ function parseHostSnapshot(
   }
 
   const connection = parseConnection(value.connection);
+  if (connection === undefined) {
+    return undefined;
+  }
   const turn = parseSnapshotTurn(value.turn);
-  const sessions = parseSessionCatalog(value.sessions, value.sessionId);
+  const sessions = parseSessionCatalog(
+    value.sessions,
+    value.sessionId,
+    // The host marks a catalog row active only once a runtime owns the
+    // session. Early recovery snapshots ('connecting') and failed
+    // activations ('unavailable') legitimately carry a sessionId with
+    // no active row yet; rejecting them silently killed recovery
+    // speed-up (the whole snapshot was dropped).
+    connection.status !== 'connected',
+  );
   const settings = parseSessionSettings(value.settings);
   const context = parseSessionContext(value.context);
   const modelCatalog = parseModelCatalog(value.modelCatalog);
   const transcript = parseSessionTranscript(value.transcript);
   if (
-    connection === undefined ||
     turn === undefined ||
     sessions === undefined ||
     settings === undefined ||
@@ -2582,6 +2593,7 @@ function parseModelCatalogItem(
 function parseSessionCatalog(
   value: unknown,
   activeSessionId: string | null,
+  allowPendingActive: boolean,
 ): SessionCatalogState | undefined {
   if (
     !isStrictRecord(value) ||
@@ -2613,7 +2625,14 @@ function parseSessionCatalog(
     items.push(item);
   }
 
-  if (activeItemId !== activeSessionId) {
+  if (
+    activeItemId !== activeSessionId &&
+    !(
+      allowPendingActive &&
+      activeItemId === null &&
+      activeSessionId !== null
+    )
+  ) {
     return undefined;
   }
 

@@ -2718,6 +2718,49 @@ describe('readHostMessage', () => {
     ).toBeUndefined();
   });
 
+  // Early recovery snapshots go out while the catalog is still loading
+  // and no runtime owns the session; the catalog then has no active
+  // row even though sessionId is set. These used to be rejected
+  // wholesale, which silently disabled recovery speed-up.
+  it('accepts a connecting recovery snapshot whose catalog has no active row yet', () => {
+    const early = {
+      ...createSessionSnapshot(),
+      connection: { status: 'connecting' as const },
+      sessions: { status: 'loading' as const, items: [] },
+    };
+    expect(readHostMessage(early)).toEqual(early);
+  });
+
+  it('accepts an unavailable failed-activation snapshot without an active row', () => {
+    const snapshot = createSessionSnapshot();
+    const failed = {
+      ...snapshot,
+      connection: {
+        status: 'unavailable' as const,
+        message: 'The selected session could not be resumed.',
+      },
+      sessions: {
+        ...snapshot.sessions,
+        items: [{ ...snapshot.sessions.items[0], active: false }],
+      },
+    };
+    expect(readHostMessage(failed)).toEqual(failed);
+  });
+
+  it('rejects a connecting snapshot whose active row contradicts the session id', () => {
+    const snapshot = createSessionSnapshot();
+    expect(
+      readHostMessage({
+        ...snapshot,
+        connection: { status: 'connecting' },
+        sessions: {
+          ...snapshot.sessions,
+          items: [{ ...snapshot.sessions.items[0], id: 'session-2' }],
+        },
+      }),
+    ).toBeUndefined();
+  });
+
   it('rejects unsafe or malformed transcript projections', () => {
     const snapshot = createSessionSnapshot();
     const tool = {
