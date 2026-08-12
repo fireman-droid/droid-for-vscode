@@ -47,6 +47,7 @@ import { createVscodeAttachmentSources } from './vscodeAttachmentSources';
 import { createVscodeExternalUrlOpener } from './vscodeExternalUrlOpener';
 import { createVscodeFileDiffOpener } from './vscodeFileDiff';
 import { createVscodePathOpener } from './vscodePathOpener';
+import { PreviewPanelController } from './PreviewPanelController';
 
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
@@ -301,6 +302,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const recoveryStore = new SessionRecoveryStore(persistence);
   const sessionCatalog = new FactorySessionCatalog();
   const historyLoader = new FactorySessionHistoryLoader();
+  const previewController = new PreviewPanelController(diagnostics);
   const controller = new ChatController(
     (interactionHandler) =>
       new FactoryDroidRuntime({
@@ -333,6 +335,7 @@ export function activate(context: vscode.ExtensionContext): void {
     diagnostics,
     daemonSidecar.provider,
     createVscodePathOpener(),
+    previewController,
   );
   const provider = new DroidViewProvider(
     context.extensionUri,
@@ -344,6 +347,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     controller,
     provider,
+    previewController,
     diagnostics,
     attachmentSources,
     vscode.window.registerWebviewViewProvider(

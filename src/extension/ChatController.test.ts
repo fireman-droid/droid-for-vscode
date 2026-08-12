@@ -37,6 +37,10 @@ import type {
   PathOpener,
 } from './pathOpener';
 import type {
+  PrototypePreviewOpener,
+  PrototypePreviewOutcome,
+} from './prototypePreview';
+import type {
   ChangeStatsReader,
   FileChangeStat,
 } from './changeStats';
@@ -2812,6 +2816,66 @@ describe('ChatController', () => {
       expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
         severity: 'warning',
         code: 'file-diff-failed',
+      });
+    });
+  });
+
+  it('previews validated prototype paths and reports failures', async () => {
+    const openPreview = vi.fn(
+      async (): Promise<PrototypePreviewOutcome> => 'opened',
+    );
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { openPreview },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'file.preview',
+      sessionId: 'session-1',
+      path: 'prototypes/dashboard.html',
+    });
+    await vi.waitFor(() => {
+      expect(openPreview).toHaveBeenCalledWith('prototypes/dashboard.html');
+    });
+    expect(
+      messages.filter(
+        (message) =>
+          message.type === 'runtime.diagnostic' &&
+          message.code === 'preview-failed',
+      ),
+    ).toHaveLength(0);
+
+    // Wrong session requests never reach the opener.
+    controller.handleMessage({
+      type: 'file.preview',
+      sessionId: 'session-other',
+      path: 'prototypes/dashboard.html',
+    });
+    expect(openPreview).toHaveBeenCalledOnce();
+
+    // A failed preview surfaces a bounded warning diagnostic.
+    openPreview.mockResolvedValueOnce('failed');
+    controller.handleMessage({
+      type: 'file.preview',
+      sessionId: 'session-1',
+      path: 'prototypes/missing.html',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+        severity: 'warning',
+        code: 'preview-failed',
       });
     });
   });
@@ -5872,6 +5936,7 @@ function createController(
   externalUrl?: ExternalUrlOpener,
   daemonSessions?: () => Promise<DaemonSessionCatalog>,
   pathOpener?: PathOpener,
+  prototypePreview?: PrototypePreviewOpener,
 ) {
   const controller = new ChatController(
     createRuntime,
@@ -5891,6 +5956,7 @@ function createController(
     undefined,
     daemonSessions,
     pathOpener,
+    prototypePreview,
   );
   const messages: HostToWebviewMessage[] = [];
   controller.subscribe((message) => {

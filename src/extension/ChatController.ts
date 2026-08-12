@@ -132,6 +132,10 @@ import {
   type PathOpener,
 } from './pathOpener';
 import {
+  createUnavailablePrototypePreviewOpener,
+  type PrototypePreviewOpener,
+} from './prototypePreview';
+import {
   createUnavailableExternalUrlOpener,
   type ExternalUrlOpener,
 } from './externalUrlOpener';
@@ -285,6 +289,8 @@ const SPEC_HANDOFF_BLOCKED_MESSAGE =
   'The implementation session could not be opened automatically. Select it from History.';
 const FILE_DIFF_FAILED_MESSAGE =
   'That file could not be opened. It may have been moved or deleted.';
+const PREVIEW_FAILED_MESSAGE =
+  'That prototype could not be previewed. It may have been moved, deleted, or is too large.';
 const OPEN_PATH_FAILED_MESSAGE =
   'That path could not be opened. It may have been moved or deleted.';
 const MCP_UNSUPPORTED_MESSAGE =
@@ -473,6 +479,8 @@ export class ChatController {
     private readonly daemonSessions?: () => Promise<DaemonSessionCatalog>,
     private readonly pathOpener: PathOpener =
       createUnavailablePathOpener(),
+    private readonly prototypePreview: PrototypePreviewOpener =
+      createUnavailablePrototypePreviewOpener(),
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
@@ -641,6 +649,9 @@ export class ChatController {
         return;
       case 'file.openDiff':
         this.handleFileOpenDiff(message.sessionId, message.path);
+        return;
+      case 'file.preview':
+        this.handleFilePreview(message.sessionId, message.path);
         return;
       case 'workspace.openPath':
         this.handleWorkspaceOpenPath(
@@ -1888,6 +1899,23 @@ export class ChatController {
         this.emitSessionDiagnostic(
           'file-diff-failed',
           FILE_DIFF_FAILED_MESSAGE,
+        );
+      }
+    });
+  }
+
+  private handleFilePreview(sessionId: string, path: string): void {
+    if (
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    void this.prototypePreview.openPreview(path).then((outcome) => {
+      if (outcome === 'failed') {
+        this.emitSessionDiagnostic(
+          'preview-failed',
+          PREVIEW_FAILED_MESSAGE,
         );
       }
     });
