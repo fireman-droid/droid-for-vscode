@@ -44,6 +44,12 @@ import type {
   ChangeStatsReader,
   FileChangeStat,
 } from './changeStats';
+import type { GitWorkflow } from './gitWorkflow';
+import {
+  createWorktreeSessionsFeature,
+  type GitExec,
+  type WorktreeSessionsFeature,
+} from './worktreeSessions';
 import type { ExternalUrlOpener } from './externalUrlOpener';
 import { ChatController } from './ChatController';
 import {
@@ -1676,6 +1682,176 @@ describe('ChatController', () => {
     expect(createRuntime).toHaveBeenCalledOnce();
   });
 
+  it('creates a worktree session through the daemon and annotates the row', async () => {
+    const initial = createMockRuntime();
+    const replacement = Object.assign(createMockRuntime(), {
+      // The daemon runs the session in the worktree, not the
+      // requested workspace cwd.
+      getSessionCwd: vi.fn(() => 'C:\\workspace-wt-main-wt'),
+    });
+    replacement.initialize.mockResolvedValue(available('wt-session'));
+    const createRuntime = vi
+      .fn<() => MockRuntime>()
+      .mockReturnValueOnce(initial)
+      .mockReturnValueOnce(replacement);
+    const { controller, messages } = createController(
+      createRuntime,
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      worktreeFeature({ branch: 'main-wt' }),
+    );
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(
+        snapshots(messages).at(-1)?.worktreeCreateAvailable,
+      ).toBe(true);
+    });
+
+    controller.handleMessage({ type: 'worktree.createSession' });
+
+    await vi.waitFor(() => {
+      expect(replacement.initialize).toHaveBeenCalledWith({
+        kind: 'new',
+        cwd: 'C:\\workspace',
+        worktree: true,
+      });
+    });
+    await vi.waitFor(() => {
+      expect(snapshots(messages).at(-1)?.sessions.items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'wt-session',
+            active: true,
+            worktree: {
+              branch: 'main-wt',
+              path: 'C:\\workspace-wt-main-wt',
+            },
+          }),
+        ]),
+      );
+    });
+  });
+
+  it('fails worktree creation closed without the daemon feature', async () => {
+    const runtime = createMockRuntime();
+    const createRuntime = vi.fn(() => runtime);
+    const { controller, messages } = createController(
+      createRuntime,
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    // Process mode: no capability advertised, request answered with a
+    // diagnostic instead of a silent plain session.
+    expect(
+      snapshots(messages).at(-1)?.worktreeCreateAvailable,
+    ).toBeUndefined();
+    controller.handleMessage({ type: 'worktree.createSession' });
+
+    expect(messages.at(-1)).toMatchObject({
+      type: 'runtime.diagnostic',
+      code: 'worktree-create-unavailable',
+    });
+    expect(createRuntime).toHaveBeenCalledOnce();
+  });
+
+  it('withholds the worktree capability in non-git workspaces', async () => {
+    const runtime = createMockRuntime();
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      worktreeFeature({ branch: 'main-wt', isGit: false }),
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    expect(
+      snapshots(messages).at(-1)?.worktreeCreateAvailable,
+    ).toBeUndefined();
+    controller.handleMessage({ type: 'worktree.createSession' });
+    expect(messages.at(-1)).toMatchObject({
+      type: 'runtime.diagnostic',
+      code: 'worktree-create-unavailable',
+    });
+  });
+
+  it('lists registered worktree sessions from their worktree cwd', async () => {
+    const feature = worktreeFeature({ branch: 'wt-branch' });
+    await feature.store.record('C:\\workspace', 'wt-session', {
+      branch: 'wt-branch',
+      path: 'C:\\workspace-wt',
+    });
+    // The workspace catalog never returns worktree sessions; they
+    // only list under their worktree cwd.
+    const catalog: SessionCatalog = {
+      listSessions: vi.fn(
+        async (cwd: string): Promise<SessionCatalogResult> => ({
+          status: 'available',
+          sessions:
+            cwd === 'C:\\workspace-wt'
+              ? [catalogEntry('wt-session')]
+              : [catalogEntry('session-1')],
+        }),
+      ),
+    };
+    const runtime = createMockRuntime();
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      catalog,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      feature,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    expect(catalog.listSessions).toHaveBeenCalledWith(
+      'C:\\workspace-wt',
+    );
+    expect(snapshots(messages).at(-1)?.sessions.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'session-1' }),
+        expect.objectContaining({
+          id: 'wt-session',
+          worktree: { branch: 'wt-branch', path: 'C:\\workspace-wt' },
+        }),
+      ]),
+    );
+  });
+
   it('renames the active session through the runtime and retitles the catalog', async () => {
     const runtime = Object.assign(createMockRuntime(), {
       rename: vi.fn(async () => {}),
@@ -2876,6 +3052,161 @@ describe('ChatController', () => {
       expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
         severity: 'warning',
         code: 'preview-failed',
+      });
+    });
+  });
+
+  it('answers git.requestStatus and routes git.commit through the workflow', async () => {
+    const files = [
+      {
+        path: 'src/app.ts',
+        status: 'modified',
+        staged: false,
+        inTurn: false,
+      },
+    ] as const;
+    const status = vi.fn(
+      async (): Promise<
+        Awaited<ReturnType<GitWorkflow['status']>>
+      > => ({ available: true, branch: 'main', files }),
+    );
+    const commit = vi.fn(
+      async (): Promise<
+        Awaited<ReturnType<GitWorkflow['commit']>>
+      > => ({ ok: true, hash: 'abc1234' }),
+    );
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { status, commit },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'git.requestStatus',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'git.status')).toMatchObject({
+        sessionId: 'session-1',
+        branch: 'main',
+        files: [expect.objectContaining({ path: 'src/app.ts' })],
+      });
+    });
+    expect(status).toHaveBeenCalledWith('C:\\workspace', new Set());
+    expect(
+      lastMessage(messages, 'git.status'),
+    ).not.toHaveProperty('unavailableReason');
+
+    // Wrong session requests never reach the workflow.
+    controller.handleMessage({
+      type: 'git.requestStatus',
+      sessionId: 'session-other',
+    });
+    expect(status).toHaveBeenCalledOnce();
+
+    controller.handleMessage({
+      type: 'git.commit',
+      sessionId: 'session-1',
+      paths: ['src/app.ts'],
+      message: 'feat: add app\n\nBody detail.',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'git.commitResult')).toMatchObject({
+        sessionId: 'session-1',
+        ok: true,
+        hash: 'abc1234',
+        subject: 'feat: add app',
+      });
+    });
+    expect(commit).toHaveBeenCalledWith(
+      'C:\\workspace',
+      ['src/app.ts'],
+      'feat: add app\n\nBody detail.',
+    );
+  });
+
+  it('reports git unavailability and commit failures', async () => {
+    const status = vi.fn(
+      async (): Promise<
+        Awaited<ReturnType<GitWorkflow['status']>>
+      > => ({ available: false, reason: 'no-repository' }),
+    );
+    const commit = vi.fn(
+      async (): Promise<
+        Awaited<ReturnType<GitWorkflow['commit']>>
+      > => ({ ok: false, error: 'pre-commit hook rejected the commit' }),
+    );
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { status, commit },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'git.requestStatus',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'git.status')).toMatchObject({
+        sessionId: 'session-1',
+        branch: null,
+        files: [],
+        unavailableReason: 'no-repository',
+      });
+    });
+
+    controller.handleMessage({
+      type: 'git.commit',
+      sessionId: 'session-1',
+      paths: ['src/app.ts'],
+      message: 'feat: add app',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'git.commitResult')).toMatchObject({
+        ok: false,
+        error: 'pre-commit hook rejected the commit',
+      });
+    });
+  });
+
+  it('degrades git requests to unavailable without an injected workflow', async () => {
+    const { controller, messages } = createController(() =>
+      createMockRuntime(),
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'git.requestStatus',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'git.status')).toMatchObject({
+        unavailableReason: 'no-git-extension',
       });
     });
   });
@@ -5937,6 +6268,8 @@ function createController(
   daemonSessions?: () => Promise<DaemonSessionCatalog>,
   pathOpener?: PathOpener,
   prototypePreview?: PrototypePreviewOpener,
+  gitWorkflow?: GitWorkflow,
+  worktreeSessions?: WorktreeSessionsFeature,
 ) {
   const controller = new ChatController(
     createRuntime,
@@ -5957,6 +6290,8 @@ function createController(
     daemonSessions,
     pathOpener,
     prototypePreview,
+    gitWorkflow,
+    worktreeSessions,
   );
   const messages: HostToWebviewMessage[] = [];
   controller.subscribe((message) => {
@@ -6041,6 +6376,23 @@ function createCatalogResult(
   return {
     listSessions: vi.fn(async () => result),
   };
+}
+
+function worktreeFeature(options: {
+  readonly branch: string;
+  readonly isGit?: boolean;
+}): WorktreeSessionsFeature {
+  return createWorktreeSessionsFeature({
+    enabled: true,
+    persistence: createMemoryPersistence(),
+    exec: vi.fn(async (args: readonly string[]) =>
+      args[1] === '--is-inside-work-tree'
+        ? options.isGit === false
+          ? 'false\n'
+          : 'true\n'
+        : `${options.branch}\n`,
+    ) as GitExec,
+  });
 }
 
 function createMemoryPersistence(): SessionRecoveryPersistence {

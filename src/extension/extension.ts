@@ -48,6 +48,8 @@ import { createVscodeExternalUrlOpener } from './vscodeExternalUrlOpener';
 import { createVscodeFileDiffOpener } from './vscodeFileDiff';
 import { createVscodePathOpener } from './vscodePathOpener';
 import { PreviewPanelController } from './PreviewPanelController';
+import { createVscodeGitWorkflow } from './vscodeGitWorkflow';
+import { createWorktreeSessionsFeature } from './worktreeSessions';
 
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
@@ -336,6 +338,14 @@ export function activate(context: vscode.ExtensionContext): void {
     daemonSidecar.provider,
     createVscodePathOpener(),
     previewController,
+    createVscodeGitWorkflow(),
+    // Worktree sessions ride the daemon's native create channel; in
+    // process mode the feature stays disabled and the drawer entry
+    // never renders.
+    createWorktreeSessionsFeature({
+      enabled: runtimeMode === 'daemon',
+      persistence,
+    }),
   );
   const provider = new DroidViewProvider(
     context.extensionUri,

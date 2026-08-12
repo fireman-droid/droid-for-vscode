@@ -24,6 +24,7 @@ import type {
   McpServerAddMessage,
   McpServerSummary,
   SessionMcpState,
+  SessionMissionSummary,
   SessionSettingUpdateMessage,
   SessionSettingsState,
   SessionSkillsState,
@@ -87,9 +88,12 @@ import {
 import {
   collectToolFilePaths,
   createTurnActivityState,
+  hasSubagentRows,
   projectAssistantDelta,
+  projectSubagentStarted,
   projectThinkingDelta,
   projectToolEvent,
+  reconcileSubagentSummaries,
   type TurnActivityState,
 } from './turnActivityState';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
@@ -135,6 +139,16 @@ import {
   createUnavailablePrototypePreviewOpener,
   type PrototypePreviewOpener,
 } from './prototypePreview';
+import {
+  createUnavailableGitWorkflow,
+  type GitWorkflow,
+} from './gitWorkflow';
+import {
+  appendWorktreeSessions,
+  recordCreatedWorktreeSession,
+  type WorktreeSessionsFeature,
+} from './worktreeSessions';
+import { MAX_GIT_COMMIT_SUBJECT_LENGTH } from '../shared/gitCommitFlow';
 import {
   createUnavailableExternalUrlOpener,
   type ExternalUrlOpener,
@@ -218,6 +232,8 @@ const SESSION_RESUME_FAILED_MESSAGE =
   'The selected Droid session could not be opened.';
 const SESSION_NEW_FAILED_MESSAGE =
   'A new Droid session could not be created.';
+const WORKTREE_CREATE_UNAVAILABLE_MESSAGE =
+  'Worktree sessions need the daemon runtime mode and a git workspace.';
 const WORKSPACE_CHANGED_MESSAGE =
   'The workspace changed before the Droid session could be opened.';
 const SETTINGS_READ_FAILED_MESSAGE =
@@ -363,6 +379,11 @@ export class ChatController {
   private transcript: HostTranscriptState =
     createHostTranscriptState('unavailable');
   private sessionId: string | null = null;
+  /**
+   * Read-only mission identity of the active session, from the last
+   * successful history load; null for sessions outside a mission.
+   */
+  private mission: SessionMissionSummary | null = null;
   private turn: CurrentTurn | null = null;
   private settings: SessionSettingsState = {
     status: 'loading',
@@ -383,6 +404,15 @@ export class ChatController {
   private settingsUpdate: symbol | null = null;
   private catalogGeneration = 0;
   private catalogCwd: string | null = null;
+  /**
+   * True when the current workspace may create worktree sessions:
+   * daemon runtime mode (worktreeSessions.enabled) and a git
+   * workspace. Recomputed per catalog cwd binding; snapshots only
+   * advertise it while true (fail closed).
+   */
+  private worktreeCreateAvailable = false;
+  /** Workspace cwd the availability check was computed for. */
+  private worktreeAvailabilityCwd: string | null = null;
   private activeRuntimeCwd: string | null = null;
   private initialization: Promise<void> | null = null;
   private workspaceContext: WorkspaceContext;
@@ -481,6 +511,9 @@ export class ChatController {
       createUnavailablePathOpener(),
     private readonly prototypePreview: PrototypePreviewOpener =
       createUnavailablePrototypePreviewOpener(),
+    private readonly gitWorkflow: GitWorkflow =
+      createUnavailableGitWorkflow(),
+    private readonly worktreeSessions?: WorktreeSessionsFeature,
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
@@ -616,6 +649,9 @@ export class ChatController {
         return;
       case 'session.new':
         this.handleSessionNew();
+        return;
+      case 'worktree.createSession':
+        this.handleWorktreeCreateSession();
         return;
       case 'session.rename':
         this.handleSessionRename(message.sessionId, message.title);
@@ -786,6 +822,16 @@ export class ChatController {
         return;
       case 'session.setting.update':
         this.handleSettingUpdate(message);
+        return;
+      case 'git.requestStatus':
+        this.handleGitRequestStatus(message.sessionId);
+        return;
+      case 'git.commit':
+        this.handleGitCommit(
+          message.sessionId,
+          message.paths,
+          message.message,
+        );
         return;
     }
   }
@@ -1288,6 +1334,24 @@ export class ChatController {
           messageId: event.messageId,
         });
         return;
+      case 'subagent-started': {
+        this.startStreaming(sessionId, turnId);
+        const turn = this.turn;
+        if (turn === null) {
+          return;
+        }
+        const result = projectSubagentStarted(turn.activity, event);
+        turn.activity = result.state;
+        if (result.projection !== null) {
+          this.emit({
+            type: 'tool.activity',
+            sessionId,
+            turnId,
+            ...result.projection,
+          });
+        }
+        return;
+      }
       case 'working-state':
         if (event.isWorking) {
           this.startStreaming(sessionId, turnId);
@@ -1341,6 +1405,7 @@ export class ChatController {
         this.publishTurnChanges(sessionId, turnId);
         this.setTurnStatus(sessionId, turnId, 'completed');
         void this.flushRecoveryCheckpoint();
+        this.settleTurnSubagents(sessionId, turnId);
         this.refreshContextAfterTurn(sessionId);
         this.finishSpecHandoff(sessionId, turnId);
         return;
@@ -1348,6 +1413,7 @@ export class ChatController {
         this.publishTurnChanges(sessionId, turnId);
         this.setTurnStatus(sessionId, turnId, 'interrupted');
         void this.flushRecoveryCheckpoint();
+        this.settleTurnSubagents(sessionId, turnId);
         this.refreshContextAfterTurn(sessionId);
         this.finishSpecHandoff(sessionId, turnId);
         return;
@@ -1843,6 +1909,7 @@ export class ChatController {
     });
 
     let transcript: HostTranscriptState | null = null;
+    let mission: SessionMissionSummary | null = null;
     {
       const loaded = await this.loadHistoryTimed(
         cwd,
@@ -1850,6 +1917,7 @@ export class ChatController {
       );
       if (loaded?.status === 'available') {
         transcript = loaded.state;
+        mission = loaded.mission ?? null;
       }
     }
     if (
@@ -1862,6 +1930,7 @@ export class ChatController {
     ) {
       return;
     }
+    this.mission = mission;
     // If the summarized history cannot be read, keep the previous
     // transcript visible; the runtime context is compacted either way.
     this.transcript =
@@ -1919,6 +1988,112 @@ export class ChatController {
         );
       }
     });
+  }
+
+  /**
+   * Paths of the newest changes card, which drive the commit panel's
+   * default selection (`inTurn`); normalized to forward slashes to
+   * match `GitStatusFile` paths.
+   */
+  private latestTurnChangePaths(): ReadonlySet<string> {
+    const items = this.transcript.transcript;
+    for (let i = items.length - 1; i >= 0; i -= 1) {
+      const item = items[i];
+      if (item !== undefined && item.kind === 'changes') {
+        return new Set(
+          item.files.map((file) => file.path.replaceAll('\\', '/')),
+        );
+      }
+    }
+    return new Set();
+  }
+
+  private handleGitRequestStatus(sessionId: string): void {
+    if (
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    const root = this.activeRuntimeCwd;
+    if (root === null) {
+      this.emit({
+        type: 'git.status',
+        sessionId,
+        branch: null,
+        files: [],
+        unavailableReason: 'unsupported-workspace',
+      });
+      return;
+    }
+    const inTurn = this.latestTurnChangePaths();
+    void this.gitWorkflow.status(root, inTurn).then((status) => {
+      if (this.disposed || this.sessionId !== sessionId) {
+        return;
+      }
+      this.emit(
+        status.available
+          ? {
+              type: 'git.status',
+              sessionId,
+              branch: status.branch,
+              files: status.files,
+            }
+          : {
+              type: 'git.status',
+              sessionId,
+              branch: null,
+              files: [],
+              unavailableReason: status.reason,
+            },
+      );
+    });
+  }
+
+  private handleGitCommit(
+    sessionId: string,
+    paths: readonly string[],
+    message: string,
+  ): void {
+    if (
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    const root = this.activeRuntimeCwd;
+    if (root === null) {
+      this.emit({
+        type: 'git.commitResult',
+        sessionId,
+        ok: false,
+        error: 'Git is unavailable (unsupported-workspace).',
+      });
+      return;
+    }
+    void this.gitWorkflow
+      .commit(root, paths, message)
+      .then((outcome) => {
+        if (this.disposed || this.sessionId !== sessionId) {
+          return;
+        }
+        this.emit(
+          outcome.ok
+            ? {
+                type: 'git.commitResult',
+                sessionId,
+                ok: true,
+                hash: outcome.hash,
+                subject: commitSubject(message),
+              }
+            : {
+                type: 'git.commitResult',
+                sessionId,
+                ok: false,
+                error: outcome.error,
+              },
+        );
+      });
   }
 
   private handleWorkspaceOpenPath(
@@ -2062,10 +2237,12 @@ export class ChatController {
     // The fork copies the conversation, but message IDs may differ, so
     // reload its history; keep the current transcript if that fails.
     let transcript: HostTranscriptState | null = null;
+    let mission: SessionMissionSummary | null = null;
     {
       const loaded = await this.loadHistoryTimed(cwd, forkedSessionId);
       if (loaded?.status === 'available') {
         transcript = loaded.state;
+        mission = loaded.mission ?? null;
       }
     }
     if (
@@ -2078,6 +2255,7 @@ export class ChatController {
     ) {
       return;
     }
+    this.mission = mission;
     this.transcript =
       transcript ?? { ...this.transcript, historyStatus: 'partial' };
     this.recoveryStore.writeSession(forkedSessionId, this.transcript);
@@ -2180,6 +2358,36 @@ export class ChatController {
     }
     this.bindCatalogViewToWorkspace(workspace.cwd);
     this.startReplacement({ kind: 'new', cwd: workspace.cwd });
+  }
+
+  private handleWorktreeCreateSession(): void {
+    const workspace = this.getWorkspaceContext();
+    if (!this.canReplaceSession() || !isUsableWorkspace(workspace)) {
+      if (!isUsableWorkspace(workspace)) {
+        this.emitWorkspaceUnavailable(workspace);
+      }
+      return;
+    }
+    // The drawer entry never renders without the advertised
+    // capability, so a request without it is stale or hostile. Fail
+    // closed with a diagnostic instead of degrading to a plain
+    // in-workspace session.
+    if (
+      this.worktreeSessions?.enabled !== true ||
+      !this.worktreeCreateAvailable
+    ) {
+      this.emitSessionDiagnostic(
+        'worktree-create-unavailable',
+        WORKTREE_CREATE_UNAVAILABLE_MESSAGE,
+      );
+      return;
+    }
+    this.bindCatalogViewToWorkspace(workspace.cwd);
+    this.startReplacement({
+      kind: 'new',
+      cwd: workspace.cwd,
+      worktree: true,
+    });
   }
 
   private handleSessionRename(sessionId: string, title: string): void {
@@ -4654,6 +4862,7 @@ export class ChatController {
         this.sessions = this.withActiveSession(this.sessions);
       } else {
         this.sessionId = null;
+        this.mission = null;
         this.transcript = createHostTranscriptState('unavailable');
       }
       this.connection = {
@@ -4681,6 +4890,7 @@ export class ChatController {
     generation: number,
   ): Promise<HostTranscriptState | null> {
     if (target.kind === 'new') {
+      this.mission = null;
       return createHostTranscriptState('complete');
     }
 
@@ -4695,6 +4905,8 @@ export class ChatController {
     ) {
       return null;
     }
+    this.mission =
+      loaded?.status === 'available' ? (loaded.mission ?? null) : null;
     if (loaded?.status === 'available') {
       const reconcileStart = performance.now();
       const reconciled = reconcileSessionHistory(
@@ -4908,12 +5120,63 @@ export class ChatController {
     this.recoveryStore.selectSession(sessionId);
     void this.recoveryStore.flush();
     this.emitSnapshot();
+    if (target.kind === 'new' && target.worktree === true) {
+      this.bindWorktreeSessionMetadata(
+        runtime,
+        generation,
+        sessionId,
+        target.cwd,
+      );
+    }
     this.loadSessionMetadata(
       runtime,
       generation,
       sessionId,
       target.cwd,
     );
+  }
+
+  /**
+   * Binds a freshly created worktree session to its worktree
+   * directory (registry + git branch recovery) and annotates the
+   * interim catalog row. Fail-soft: a missing binding leaves the row
+   * unannotated while the session itself stays live.
+   */
+  private bindWorktreeSessionMetadata(
+    runtime: DroidRuntime,
+    generation: number,
+    sessionId: string,
+    workspaceCwd: string,
+  ): void {
+    const feature = this.worktreeSessions;
+    if (feature === undefined) {
+      return;
+    }
+    void recordCreatedWorktreeSession({
+      workspaceCwd,
+      sessionId,
+      sessionCwd: runtime.getSessionCwd?.() ?? null,
+      feature,
+    }).then((info) => {
+      if (
+        info === null ||
+        !this.isCurrentSessionOperation(
+          runtime,
+          generation,
+          sessionId,
+          workspaceCwd,
+        )
+      ) {
+        return;
+      }
+      this.sessions = {
+        ...this.sessions,
+        items: this.sessions.items.map((item) =>
+          item.id === sessionId ? { ...item, worktree: info } : item,
+        ),
+      };
+      this.emitSnapshot();
+    });
   }
 
   private loadSessionMetadata(
@@ -5071,9 +5334,24 @@ export class ChatController {
         message: CATALOG_ERROR_MESSAGE,
       };
     }
+    const items = projectCatalogEntries(result.sessions);
+    const feature = this.worktreeSessions;
+    if (feature?.enabled !== true) {
+      return { status: 'ready', items };
+    }
+    // Worktree sessions list under their worktree cwd, never under the
+    // workspace cwd (probe: artifacts/probe-worktree-catalog.mjs), so
+    // the registry re-attaches them here.
     return {
       status: 'ready',
-      items: projectCatalogEntries(result.sessions),
+      items: await appendWorktreeSessions({
+        cwd,
+        items,
+        store: feature.store,
+        listSessions: (worktreeCwd) =>
+          this.sessionCatalog.listSessions(worktreeCwd),
+        project: projectCatalogEntries,
+      }),
     };
   }
 
@@ -5153,6 +5431,12 @@ export class ChatController {
       transcript: this.transcript.transcript,
       historyStatus: this.transcript.historyStatus,
       truncated: this.transcript.truncated,
+      ...(this.mission === null || this.sessionId === null
+        ? {}
+        : { mission: this.mission }),
+      ...(this.worktreeCreateAvailable
+        ? { worktreeCreateAvailable: true }
+        : {}),
     } satisfies UnsequencedHostMessage;
     try {
       this.recordHost({
@@ -5248,6 +5532,52 @@ export class ChatController {
       type: 'session.model-catalog',
       sessionId,
       modelCatalog: this.modelCatalog,
+    });
+  }
+
+  /**
+   * Settles the finished turn's subagent rows with the CLI's durable
+   * invocation ledger (`loadSession().subagentInvocations`). The
+   * session file is loaded only when the turn actually delegated, and
+   * the result applies only while the same turn is still current.
+   */
+  private settleTurnSubagents(sessionId: string, turnId: string): void {
+    const cwd = this.activeRuntimeCwd;
+    const loadSummaries = this.sessionHistory.loadSubagentSummaries?.bind(
+      this.sessionHistory,
+    );
+    if (
+      cwd === null ||
+      loadSummaries === undefined ||
+      this.sessionId !== sessionId ||
+      this.turn?.turnId !== turnId ||
+      !hasSubagentRows(this.turn.activity)
+    ) {
+      return;
+    }
+    void loadSummaries({ cwd, sessionId }).then((summaries) => {
+      const turn = this.turn;
+      if (
+        summaries === null ||
+        this.disposed ||
+        this.sessionId !== sessionId ||
+        turn?.turnId !== turnId
+      ) {
+        return;
+      }
+      const result = reconcileSubagentSummaries(
+        turn.activity,
+        summaries,
+      );
+      turn.activity = result.state;
+      for (const projection of result.projections) {
+        this.emit({
+          type: 'tool.activity',
+          sessionId,
+          turnId,
+          ...projection,
+        });
+      }
     });
   }
 
@@ -5771,6 +6101,7 @@ export class ChatController {
     const generation = ++this.catalogGeneration;
     this.catalogCwd = cwd;
     this.sessions = { status: 'loading', items: [] };
+    this.refreshWorktreeAvailability(cwd);
     return generation;
   }
 
@@ -5781,12 +6112,43 @@ export class ChatController {
     this.catalogGeneration += 1;
     this.catalogCwd = cwd;
     this.sessions = { status: 'idle', items: [] };
+    this.refreshWorktreeAvailability(cwd);
   }
 
   private clearCatalog(): void {
     this.catalogGeneration += 1;
     this.catalogCwd = null;
     this.sessions = { status: 'idle', items: [] };
+    this.worktreeAvailabilityCwd = null;
+    this.worktreeCreateAvailable = false;
+  }
+
+  /**
+   * Recomputes the worktree-create capability for a workspace binding.
+   * One git check per cwd: the async result only lands while the
+   * binding is unchanged, and a later snapshot broadcasts it.
+   */
+  private refreshWorktreeAvailability(cwd: string): void {
+    const feature = this.worktreeSessions;
+    if (
+      feature?.enabled !== true ||
+      this.worktreeAvailabilityCwd === cwd
+    ) {
+      return;
+    }
+    this.worktreeAvailabilityCwd = cwd;
+    this.worktreeCreateAvailable = false;
+    void feature.isGitWorkspace(cwd).then((isGit) => {
+      if (
+        this.disposed ||
+        this.worktreeAvailabilityCwd !== cwd ||
+        !isGit
+      ) {
+        return;
+      }
+      this.worktreeCreateAvailable = true;
+      this.emitSnapshot();
+    });
   }
 
   private isCurrentCatalogRequest(
@@ -5885,6 +6247,12 @@ export class ChatController {
   }
 }
 
+/** Display subject of a commit: first line, trimmed and capped. */
+function commitSubject(message: string): string {
+  const firstLine = message.split('\n', 1)[0] ?? '';
+  return firstLine.trim().slice(0, MAX_GIT_COMMIT_SUBJECT_LENGTH);
+}
+
 function isTurnActive(turn: CurrentTurn | null): boolean {
   return (
     turn?.status === 'submitting' ||
@@ -5979,6 +6347,9 @@ function projectCatalogEntries(
       modifiedTime: modified.toISOString(),
       active: false,
       isFavorite: entry.isFavorite === true,
+      ...(entry.missionRole === undefined
+        ? {}
+        : { missionRole: entry.missionRole }),
     });
   }
   return items;
