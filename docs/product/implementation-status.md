@@ -1174,9 +1174,16 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   631,024 字节（9 files, 616.23 KB）SHA-256
   `7CEFD87B4802EAF2155F9DADE2CC9B0F08ABE243A968A15453C43942C7D0C0B2`；
   `cursor --install-extension dist/droidvisx.vsix --force`
-  successfully installed。遗留：吸顶行为的 120 回合 stress 长任务
-  复测未单独跑（协调器为 rAF 节流只读测量，风险低）；编辑态吸顶
-  的视觉细节以 Cursor 内实际打开验证为准
+  successfully installed。吸顶后长任务复测（2026-08-12，
+  `artifacts/run-stress-sticky.mjs`，headless Chrome 对 7c37acc
+  构建跑 ?turns=120）：流式 8 秒期间 50ms+ 长任务 0 个（仅首屏
+  bundle 解析/快照绘制既有 3 个，同批次三基线）；吸顶特有滚动
+  场景（scrollTop 程序化扫全转录 2 个来回 ×800 帧，默认 60 条
+  窗口 30 条用户消息与 Show earlier 全量展开 120 条各跑一遍）
+  长任务均为 0，协调器单次测量成本 0.04–0.18ms——红线守住。
+  附带观察：Show earlier 展开点击本身有 309/404ms 两个渲染长
+  任务，属既有窗口展开挂载成本，与吸顶协调器无关。遗留：编辑态
+  吸顶的视觉细节以 Cursor 内实际打开验证为准
 - 消息卡片编辑态白卡片化（2026-08-12 上午，用户验收反馈：编辑态
   应与底部 Composer 同为白卡片而非灰气泡）：纯 Webview 视觉修正，
   零 Bridge 改动。`Thread.tsx` 编辑态 JSX 加 `.dvx-user-edit-card`
