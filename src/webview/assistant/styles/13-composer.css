@@ -14,7 +14,7 @@
   padding: 10px;
   border: 1px solid var(--dvx-border);
   border-radius: 12px;
-  background: #fff;
+  background: var(--dvx-raised);
   box-shadow: 0 1px 1.5px rgb(0 0 0 / 10%), 0 1px 1px rgb(0 0 0 / 10%);
 }
 
@@ -52,13 +52,13 @@
   min-height: 27px;
   max-height: 168px;
   padding: 0 2px;
-  color: #262626;
+  color: var(--dvx-ink);
   font-size: 13px;
   line-height: 21.125px;
 }
 
 .dvx-composer-input::placeholder {
-  color: #a1a1a1;
+  color: var(--dvx-subtle);
 }
 
 .dvx-composer-status {
@@ -66,7 +66,7 @@
   overflow-wrap: anywhere;
   line-height: 1.35;
   margin-top: 2px;
-  color: #a1a1a1;
+  color: var(--dvx-subtle);
   font-size: 11px;
 }
 
@@ -121,7 +121,7 @@
   font-weight: 360;
   border-color: var(--dvx-border);
   border: 1px solid var(--dvx-border);
-  background: #fff;
+  background: var(--dvx-raised);
   font-size: 19px;
 }
 
@@ -172,7 +172,7 @@
   padding: 5px 4px;
   border: 0;
   border-radius: 6px;
-  color: #525252;
+  color: var(--dvx-text-secondary);
   background: transparent;
   font-size: 12px;
   font-weight: 400;
@@ -216,7 +216,7 @@
   max-width: 174px;
   margin-left: 8px;
   padding: 0;
-  color: #525252;
+  color: var(--dvx-text-secondary);
   font-size: 12px;
   font-weight: 400;
   line-height: 18px;
@@ -281,7 +281,7 @@
 }
 
 .dvx-shell .dvx-send-action:disabled {
-  color: #fff;
+  color: var(--dvx-raised);
   opacity: 1;
 }
 
@@ -290,7 +290,7 @@
   padding-top: 7px;
   min-height: 25px;
   padding: 8px 0 0;
-  color: #a1a1a1;
+  color: var(--dvx-subtle);
   font-size: 11px;
   line-height: 16.5px;
 }

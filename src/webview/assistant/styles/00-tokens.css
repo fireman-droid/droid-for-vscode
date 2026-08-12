@@ -1,0 +1,66 @@
+/* Design tokens — single definition site (moved verbatim from the
+   .dvx-shell rule in 10-shell-frame.css; custom properties have one
+   definition in the whole sheet, so hoisting them into this earlier
+   file cannot change the cascade). The light values below ARE the
+   product's warm-white baseline; a future dark theme overrides only
+   this file's values via `.dvx-shell[data-theme="dark"]`
+   (docs/product/theme-switching-design.md §2.1). */
+.dvx-shell {
+  /* Motion tokens (streaming-experience-design): every new animation
+     references these; legacy animations migrate opportunistically. */
+  --dvx-duration-instant: 50ms;   /* hover yield, instant feedback */
+  --dvx-duration-fast: 100ms;     /* fades */
+  --dvx-duration-normal: 150ms;   /* collapse/expand, chevron */
+  --dvx-duration-slow: 200ms;     /* per-item fade-in, block entry */
+  --dvx-duration-slower: 300ms;   /* large block entry ceiling */
+  --dvx-easing-out-strong: cubic-bezier(0.215, 0.61, 0.355, 1);
+
+  /* Surfaces */
+  --dvx-surface: #f5f3ef;
+  --dvx-raised: #fff;
+  --dvx-code: #f7f5f1;
+
+  /* Text (ink → text-secondary → muted → subtle, darkest first) */
+  --dvx-ink: #262626;
+  --dvx-text-strong: #404040;
+  --dvx-text-secondary: #525252;
+  --dvx-muted: #737373;
+  --dvx-subtle: #a1a1a1;
+
+  /* Lines and washes */
+  --dvx-border: #e5e5e5;
+  --dvx-border-strong: #d4d4d4;
+  --dvx-soft: rgb(0 0 0 / 4%);
+
+  /* Brand */
+  --dvx-accent: #f2612e;
+  --dvx-accent-strong: #df5020;
+  --dvx-accent-deep: #b5451f;
+  --dvx-accent-soft: #fff0ea;
+
+  /* Semantics */
+  /* Calm crimson: reads as danger without the neon-pink plastic
+     sting of the old #ec003f (visual-bar decision, 2026-08-12). */
+  --dvx-danger: #c93a4a;
+  --dvx-warning: rgb(187 77 0 / 90%);
+  --dvx-diff-add: #1a7f37;
+  --dvx-diff-del: #cf222e;
+
+  /* Elevation */
+  --dvx-shadow: 0 16px 40px -14px rgb(0 0 0 / 28%);
+
+  /* Type */
+  --dvx-mono: ui-monospace, monospace;
+
+  /* Syntax highlighting (One-Light derived; a dark theme swaps the
+     whole group) */
+  --dvx-hl-comment: #918a80;
+  --dvx-hl-keyword: #a626a4;
+  --dvx-hl-string: #50a14f;
+  --dvx-hl-number: #b25a00;
+  --dvx-hl-title: #4078f2;
+  --dvx-hl-type: #c18401;
+  --dvx-hl-attr: #986801;
+  --dvx-hl-deletion: #c03d33;
+  --dvx-hl-meta: #7a6a56;
+}

@@ -19,7 +19,7 @@
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
-  color: #737373;
+  color: var(--dvx-muted);
 }
 
 .dvx-attach-row:disabled {
@@ -28,7 +28,7 @@
 }
 
 .dvx-attach-row .dvx-popover-row-copy small {
-  color: #737373;
+  color: var(--dvx-muted);
   font-size: 11px;
   line-height: 1.35;
 }
@@ -73,7 +73,7 @@
   border: 1px solid var(--dvx-border);
   border-radius: 50%;
   color: #6b5d49;
-  background: #fff;
+  background: var(--dvx-raised);
   box-shadow: 0 1px 3px rgb(0 0 0 / 15%);
   cursor: pointer;
   font-size: 12px;
@@ -113,7 +113,7 @@
   padding: 4px;
   border: 1px solid var(--dvx-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--dvx-raised);
   box-shadow: 0 6px 18px rgb(0 0 0 / 12%);
 }
 

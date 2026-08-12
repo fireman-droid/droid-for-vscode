@@ -400,7 +400,7 @@
 
 .dvx-model-search, .dvx-permission-editor textarea, .dvx-ask-user input[type="text"] {
   border-color: var(--dvx-border);
-  background: #fff;
+  background: var(--dvx-raised);
 }
 
 .dvx-drawer-backdrop {
@@ -446,7 +446,7 @@
 }
 
 .dvx-button-primary {
-  color: #fff;
+  color: var(--dvx-raised);
   border-color: var(--dvx-accent);
   background: var(--dvx-accent);
 }

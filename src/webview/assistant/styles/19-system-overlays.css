@@ -7,7 +7,7 @@
   max-width: 100%;
   gap: 6px;
   padding: 0;
-  color: #404040;
+  color: var(--dvx-text-strong);
   font-size: 13px;
   font-weight: 500;
   line-height: 21.125px;
@@ -100,7 +100,7 @@
   flex: none;
   overflow: hidden;
   max-width: 32%;
-  color: #a1a1a1;
+  color: var(--dvx-subtle);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -147,9 +147,9 @@
   z-index: 40;
   box-sizing: border-box;
   padding: 9px 12px 10px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--dvx-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--dvx-raised);
   box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
   font-family: var(--vscode-font-family, sans-serif);
   pointer-events: none;
@@ -157,13 +157,13 @@
 
 .dvx-slash-tooltip strong {
   margin-right: 8px;
-  color: #262626;
+  color: var(--dvx-ink);
   font-size: 12px;
   font-weight: 600;
 }
 
 .dvx-slash-tooltip-kind {
-  color: #737373;
+  color: var(--dvx-muted);
   font-size: 10px;
   letter-spacing: 0.3px;
   text-transform: uppercase;
@@ -175,7 +175,7 @@
   -webkit-line-clamp: 4;
   overflow: hidden;
   margin: 4px 0 0;
-  color: #737373;
+  color: var(--dvx-muted);
   font-size: 11px;
   line-height: 1.45;
 }

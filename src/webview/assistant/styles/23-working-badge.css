@@ -25,7 +25,7 @@
   background: linear-gradient(
     180deg,
     var(--dvx-raised, #fffdfa),
-    var(--dvx-surface, #f5f3ef)
+    var(--dvx-surface, var(--dvx-surface))
   );
   box-shadow: 0 2px 8px -3px rgb(0 0 0 / 14%);
   color: var(--dvx-muted);
@@ -104,7 +104,7 @@
 .dvx-working-stop-all {
   border: 1px solid var(--dvx-border);
   border-radius: 7px;
-  background: var(--dvx-raised, #fff);
+  background: var(--dvx-raised, var(--dvx-raised));
   padding: 2px 9px;
   font-family: inherit;
   font-size: 11px;

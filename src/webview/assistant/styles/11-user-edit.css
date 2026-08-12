@@ -16,7 +16,7 @@
   padding: 10px;
   border: 1px solid var(--dvx-border);
   border-radius: 12px;
-  background: #fff;
+  background: var(--dvx-raised);
   box-shadow: 0 1px 1.5px rgb(0 0 0 / 10%), 0 1px 1px rgb(0 0 0 / 10%);
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
@@ -31,7 +31,7 @@
   padding: 2px 2px 4px;
   border: none;
   background: transparent;
-  color: #262626;
+  color: var(--dvx-ink);
   font: inherit;
   font-size: 13px;
   line-height: 21.125px;
@@ -86,7 +86,7 @@
   border: 1px solid var(--dvx-border-strong, #d5cdc4);
   border-radius: 4px;
   color: transparent;
-  background: #fff;
+  background: var(--dvx-raised);
   transition: border-color 120ms ease, background-color 120ms ease;
 }
 
@@ -101,7 +101,7 @@
 
 .dvx-restore-input:checked + .dvx-restore-box {
   border-color: var(--dvx-accent);
-  color: #fff;
+  color: var(--dvx-raised);
   background: var(--dvx-accent);
 }
 
@@ -123,12 +123,12 @@
 }
 
 .dvx-user-edit-send {
-  color: #fff;
+  color: var(--dvx-raised);
   background: var(--vscode-focusBorder, #d2643d);
 }
 
 .dvx-user-edit-send:hover:not(:disabled), .dvx-user-edit-send:focus-visible {
-  color: #fff;
+  color: var(--dvx-raised);
   background: #b8532f;
 }
 
@@ -155,8 +155,8 @@
   padding: 8px 12px;
   border: 1px solid var(--dvx-border);
   border-radius: 8px;
-  background: #fff;
-  color: #262626;
+  background: var(--dvx-raised);
+  color: var(--dvx-ink);
   text-align: left;
 }
 

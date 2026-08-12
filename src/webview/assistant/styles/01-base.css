@@ -14,6 +14,9 @@ html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
+  /* Outside .dvx-shell scope: tokens do not resolve here. Must stay
+     a literal equal to --dvx-surface (theme doc §2.1: these three
+     page-ground colors get synced by the boot script when theming). */
   background: #f5f3ef;
 }
 

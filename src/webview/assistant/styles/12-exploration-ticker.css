@@ -1,7 +1,7 @@
 .dvx-markdown {
   min-width: 0;
   overflow-wrap: anywhere;
-  color: #262626;
+  color: var(--dvx-ink);
   font-size: 13px;
   line-height: 21.125px;
 }
@@ -51,7 +51,7 @@
   width: 14px;
   height: 14px;
   flex: 0 0 14px;
-  color: #a1a1a1;
+  color: var(--dvx-subtle);
   transform: rotate(0deg);
   transform-box: fill-box;
   transform-origin: 50% 50%;
@@ -85,7 +85,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: #a1a1a1;
+  color: var(--dvx-subtle);
   font-size: 12.5px;
   line-height: 20.313px;
 }
@@ -117,7 +117,7 @@
   align-items: center;
   gap: 6px;
   min-height: 21px;
-  color: #404040;
+  color: var(--dvx-text-strong);
   font-weight: 500;
   line-height: 21.125px;
 }
@@ -190,7 +190,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: #404040;
+  color: var(--dvx-text-strong);
   cursor: pointer;
   font: inherit;
   font-weight: 500;

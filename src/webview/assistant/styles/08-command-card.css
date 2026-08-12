@@ -59,7 +59,7 @@
   padding: 5px;
   border: 1px solid var(--dvx-border);
   border-radius: 9px;
-  background: #fff;
+  background: var(--dvx-raised);
   box-shadow:
     0 2px 6px -3px rgb(0 0 0 / 10%),
     0 16px 40px -14px rgb(0 0 0 / 25%);
@@ -73,7 +73,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #404040;
+  color: var(--dvx-text-strong);
   cursor: pointer;
   font-size: 12px;
   line-height: 17px;
@@ -85,7 +85,7 @@
 
 .dvx-command-menu button:hover {
   color: var(--dvx-ink);
-  background: color-mix(in srgb, var(--dvx-accent) 7%, #fff);
+  background: color-mix(in srgb, var(--dvx-accent) 7%, var(--dvx-raised));
 }
 
 /* The terminal well: a deep warm-umber panel (the shell stays warm

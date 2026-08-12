@@ -1,3 +1,5 @@
+/* Outside .dvx-shell scope: tokens do not resolve on body/#root;
+   keep literals equal to --dvx-surface (see 01-base.css note). */
 body {
   overflow: clip;
   background: #f5f3ef;
@@ -15,33 +17,7 @@ body {
   display: grid;
   min-width: 0;
   color-scheme: light;
-
-  /* Motion tokens (streaming-experience-design): every new animation
-     references these; legacy animations migrate opportunistically. */
-  --dvx-duration-instant: 50ms;   /* hover yield, instant feedback */
-  --dvx-duration-fast: 100ms;     /* fades */
-  --dvx-duration-normal: 150ms;   /* collapse/expand, chevron */
-  --dvx-duration-slow: 200ms;     /* per-item fade-in, block entry */
-  --dvx-duration-slower: 300ms;   /* large block entry ceiling */
-  --dvx-easing-out-strong: cubic-bezier(0.215, 0.61, 0.355, 1);
-  --dvx-accent-soft: #fff0ea;
-  --dvx-code: #f7f5f1;
-  --dvx-accent: #f2612e;
-  --dvx-accent-strong: #df5020;
-  --dvx-ink: #262626;
-  --dvx-muted: #737373;
-  --dvx-subtle: #a1a1a1;
-  --dvx-border: #e5e5e5;
-  --dvx-border-strong: #d4d4d4;
-  --dvx-soft: rgb(0 0 0 / 4%);
-  --dvx-user: rgb(229 229 229 / 70%);
-  --dvx-surface: #f5f3ef;
-  --dvx-raised: #fff;
-  /* Calm crimson: reads as danger without the neon-pink plastic
-     sting of the old #ec003f (visual-bar decision, 2026-08-12). */
-  --dvx-danger: #c93a4a;
-  --dvx-warning: rgb(187 77 0 / 90%);
-  --dvx-shadow: 0 16px 40px -14px rgb(0 0 0 / 28%);
+  /* Design tokens live in 00-tokens.css (imported first). */
   grid-template-rows: 60px minmax(0, 1fr);
   width: 100%;
   height: 100vh;
@@ -109,13 +85,13 @@ body {
   height: 32px;
   border-color: var(--dvx-border);
   border-radius: 50%;
-  color: #737373;
-  background: #fff;
+  color: var(--dvx-muted);
+  background: var(--dvx-raised);
   box-shadow: none;
 }
 
 .dvx-shell .dvx-header-new {
-  color: #737373;
+  color: var(--dvx-muted);
 }
 
 .dvx-thread {
@@ -160,7 +136,7 @@ body {
   width: 100%;
   margin-bottom: 27px;
   margin: 0 0 20px;
-  color: #262626;
+  color: var(--dvx-ink);
   font-size: 13px;
   line-height: 21.125px;
 }
