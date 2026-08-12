@@ -8,18 +8,25 @@ import { useEffect, useRef } from 'react';
  *   transcript, including at the top/bottom boundary (the CSS
  *   `overscroll-behavior: contain` companion covers momentum flings);
  * - light dismissal: any pointer press outside the card and Escape
- *   pressed anywhere close the popup.
+ *   pressed anywhere close the popup. Persistent cards (the `/btw`
+ *   side chat) opt out of the outside-press part and keep Escape.
  */
 export function ComposerPopup({
   className,
   label,
+  role = 'listbox',
   onDismiss,
+  dismissOnOutsidePress = true,
   popupRef,
   children,
 }: {
   readonly className: string;
   readonly label: string;
+  /** Default 'listbox' (option pickers); the side chat uses 'dialog'. */
+  readonly role?: 'listbox' | 'dialog';
   readonly onDismiss: () => void;
+  /** Default true; false keeps the card open across outside presses. */
+  readonly dismissOnOutsidePress?: boolean;
   /** Optional external handle to the card (tooltip anchoring). */
   readonly popupRef?: React.MutableRefObject<HTMLDivElement | null>;
   readonly children: React.ReactNode;
@@ -69,13 +76,17 @@ export function ComposerPopup({
         dismissRef.current();
       }
     };
-    document.addEventListener('pointerdown', onPointerDown, true);
+    if (dismissOnOutsidePress) {
+      document.addEventListener('pointerdown', onPointerDown, true);
+    }
     document.addEventListener('keydown', onKeyDown, true);
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown, true);
+      if (dismissOnOutsidePress) {
+        document.removeEventListener('pointerdown', onPointerDown, true);
+      }
       document.removeEventListener('keydown', onKeyDown, true);
     };
-  }, []);
+  }, [dismissOnOutsidePress]);
 
   return (
     <div
@@ -86,7 +97,7 @@ export function ComposerPopup({
         }
       }}
       className={className}
-      role="listbox"
+      role={role}
       aria-label={label}
     >
       {children}
