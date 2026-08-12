@@ -85,6 +85,10 @@ expand them into standalone projects without explicit user approval.
   warm neutrals, 1px borders, soft shadows, refined typography, precise
   spacing, subtle hover/transition feedback.
 - Prefer small, coherent changes over broad rewrites.
+- File line budgets are enforced by `pnpm run lint:budgets`
+ (TS/TSX 900, CSS 800, tests 2000): new files must stay within budget,
+ and over-budget work must be split before it lands. Existing offenders
+ are ratcheted in `scripts/checkFileBudgets.mjs` and may only shrink.
 - Keep modules narrow, dependencies explicit, and control flow easy to trace.
 - Prefer functions and composition over managers, wrappers, inheritance, or
   speculative abstraction layers.

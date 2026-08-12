@@ -245,6 +245,7 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
    ```powershell
    pnpm run typecheck          # 三个 tsconfig：extension / webview(build) / webview(src)
    pnpm run test               # vitest 全量
+   pnpm run lint:budgets       # 文件行数门禁（scripts/checkFileBudgets.mjs，棘轮 allowlist）
    pnpm run build              # node esbuild.mjs（含 Webview 禁运入检查）
    npx vsce package --no-dependencies   # 产出 VSIX（或 pnpm run package:vsix 一条龙 + verify:vsix）
    cursor --install-extension <vsix路径> --force

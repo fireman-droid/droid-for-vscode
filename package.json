@@ -91,7 +91,8 @@
     "test": "vitest run",
     "typecheck:webview": "tsc -p src/webview/tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.extension.json --noEmit && tsc -p tsconfig.webview.json --noEmit && pnpm run typecheck:webview",
-    "package:prepare": "pnpm run typecheck && pnpm run test && pnpm run build",
+    "lint:budgets": "node scripts/checkFileBudgets.mjs",
+    "package:prepare": "pnpm run typecheck && pnpm run test && pnpm run lint:budgets && pnpm run build",
     "package:vsix": "pnpm run package:prepare && vsce package --no-dependencies --out dist/droidvisx.vsix",
     "verify:vsix": "node src/integration/verifyVsix.mjs dist/droidvisx.vsix",
     "vscode:prepublish": "pnpm run build"
