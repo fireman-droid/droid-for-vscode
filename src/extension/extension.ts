@@ -13,6 +13,7 @@ import {
   openDaemonConnection,
   type DaemonConnection,
 } from '../runtime/daemon/daemonConnection';
+import { DaemonPluginCatalog } from '../runtime/daemon/DaemonPluginCatalog';
 import { DaemonSessionCatalog } from '../runtime/daemon/DaemonSessionCatalog';
 import {
   createDaemonSessionFactory,
@@ -159,6 +160,7 @@ function createDaemonSidecar(
 ): {
   provider: () => Promise<DaemonSessionCatalog>;
   droid: () => Promise<DaemonConnection['droid']>;
+  plugins: () => Promise<DaemonPluginCatalog>;
   dispose: () => Promise<void>;
 } {
   let sidecar: Promise<DaemonSidecar> | null = null;
@@ -243,6 +245,8 @@ function createDaemonSidecar(
   return {
     provider: async () => (await acquire()).catalog,
     droid: async () => (await acquire()).connection.droid,
+    plugins: async () =>
+      new DaemonPluginCatalog((await acquire()).connection.droid),
     dispose: async () => {
       const pending = sidecar;
       sidecar = null;
@@ -379,6 +383,7 @@ export function activate(context: vscode.ExtensionContext): void {
       persistence,
     }),
     terminalMirror,
+    daemonSidecar.plugins,
   );
   const provider = new DroidViewProvider(
     context.extensionUri,

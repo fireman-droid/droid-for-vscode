@@ -6860,10 +6860,11 @@ function isUsableWorkspace(
 function daemonFailureMessage(
   error: unknown,
   fallback: string,
+  notLoggedIn: string = DAEMON_NOT_LOGGED_IN_MESSAGE,
 ): string {
   if (error instanceof DaemonAvailabilityError) {
     return error.reason === 'not-logged-in'
-      ? DAEMON_NOT_LOGGED_IN_MESSAGE
+      ? notLoggedIn
       : DAEMON_UNAVAILABLE_MESSAGE;
   }
   return fallback;
@@ -7032,6 +7033,45 @@ function projectSkillSummary(skill: RuntimeSkill): SkillSummary {
     enabled: skill.enabled,
     userInvocable: skill.userInvocable,
   };
+}
+
+/**
+ * Projects daemon plugin rows into bounded Bridge summaries. Rows
+ * that violate the contract — oversized or control-character ids,
+ * duplicate ids, or a scope outside the user/project whitelist — are
+ * dropped (fail closed) rather than displayed with invented values.
+ */
+function projectPluginSummaries(
+  entries: readonly InstalledPluginEntry[],
+): PluginSummary[] {
+  const items: PluginSummary[] = [];
+  const ids = new Set<string>();
+  for (const entry of entries) {
+    if (
+      items.length >= MAX_PLUGIN_ITEMS ||
+      entry.id.length === 0 ||
+      entry.id.length > MAX_PLUGIN_ID_LENGTH ||
+      /[\u0000-\u001f\u007f-\u009f]/.test(entry.id) ||
+      ids.has(entry.id) ||
+      !isPluginScope(entry.scope)
+    ) {
+      continue;
+    }
+    ids.add(entry.id);
+    items.push({
+      id: entry.id,
+      scope: entry.scope,
+      version: entry.version
+        .replace(/[\u0000-\u001f\u007f-\u009f]+/g, '')
+        .slice(0, MAX_PLUGIN_VERSION_LENGTH),
+      active: entry.active,
+    });
+  }
+  return items;
+}
+
+function isPluginScope(value: string): value is PluginScope {
+  return (PLUGIN_SCOPES as readonly string[]).includes(value);
 }
 
 function projectCommandSummary(command: RuntimeCommand): CommandSummary {

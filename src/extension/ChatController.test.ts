@@ -32,6 +32,7 @@ import {
 } from '../runtime/history/SessionHistory';
 import type { TokenUsageBreakdown } from '../shared/tokenUsage';
 import { DaemonAvailabilityError } from '../runtime/daemon/daemonConnection';
+import type { DaemonPluginCatalog } from '../runtime/daemon/DaemonPluginCatalog';
 import type { DaemonSessionCatalog } from '../runtime/daemon/DaemonSessionCatalog';
 import type { AttachmentSources } from './attachmentSources';
 import type {
@@ -3367,6 +3368,160 @@ describe('ChatController', () => {
     expect(JSON.stringify(messages)).not.toContain(
       'private skill failure',
     );
+  });
+
+  it('lists installed plugins with the marketplace count via the daemon sidecar', async () => {
+    const snapshot = vi.fn(async () => ({
+      plugins: [
+        {
+          id: 'core@factory-plugins',
+          scope: 'user',
+          version: 'e3ff29f752fb',
+          active: true,
+        },
+        // Unknown scope and duplicate id must be dropped at projection.
+        { id: 'rogue@m', scope: 'global', version: '1', active: true },
+        {
+          id: 'core@factory-plugins',
+          scope: 'project',
+          version: '2',
+          active: false,
+        },
+      ],
+      marketplaceCount: 2,
+    }));
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async () => ({ snapshot }) as unknown as DaemonPluginCatalog,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'plugins.refresh',
+      sessionId: 'session-1',
+    });
+    expect(pluginsMessages(messages)[0]?.plugins).toMatchObject({
+      status: 'loading',
+      items: [],
+    });
+    await vi.waitFor(() => {
+      expect(pluginsMessages(messages).at(-1)?.plugins).toMatchObject({
+        status: 'ready',
+        items: [
+          {
+            id: 'core@factory-plugins',
+            scope: 'user',
+            version: 'e3ff29f752fb',
+            active: true,
+          },
+        ],
+        marketplaceCount: 2,
+      });
+    });
+    expect(snapshot).toHaveBeenCalledWith('session-1');
+
+    // Wrong session id is dropped entirely.
+    const before = pluginsMessages(messages).length;
+    controller.handleMessage({
+      type: 'plugins.refresh',
+      sessionId: 'session-other',
+    });
+    expect(pluginsMessages(messages)).toHaveLength(before);
+  });
+
+  it('reports plugins unsupported without a daemon sidecar', async () => {
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+    );
+    ready(controller);
+    await waitForConnected(messages);
+    controller.handleMessage({
+      type: 'plugins.refresh',
+      sessionId: 'session-1',
+    });
+    expect(pluginsMessages(messages).at(-1)?.plugins).toMatchObject({
+      status: 'unsupported',
+      items: [],
+      message: 'Plugins are not available in this Droid runtime.',
+    });
+  });
+
+  it('maps plugin daemon failures to fixed messages without leaking details', async () => {
+    const failures: readonly (readonly [unknown, string])[] = [
+      [
+        new DaemonAvailabilityError(
+          'not-logged-in',
+          'C:\\Users\\person\\.factory\\auth-detail-must-not-leak',
+        ),
+        'Sign in with the droid CLI to view plugins.',
+      ],
+      [
+        new DaemonAvailabilityError(
+          'connect-failed',
+          'pipe path auth-detail-must-not-leak',
+        ),
+        'The local droid daemon is unavailable.',
+      ],
+      [
+        new Error('private rpc auth-detail-must-not-leak'),
+        'Droid did not return the plugin list. Retry from the plugins panel.',
+      ],
+    ];
+    for (const [error, expected] of failures) {
+      const { controller, messages } = createController(
+        () => createMockRuntime(),
+        undefined,
+        createCatalog([]),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        async () => {
+          throw error;
+        },
+      );
+      ready(controller);
+      await waitForConnected(messages);
+      controller.handleMessage({
+        type: 'plugins.refresh',
+        sessionId: 'session-1',
+      });
+      await vi.waitFor(() => {
+        expect(pluginsMessages(messages).at(-1)?.plugins).toMatchObject({
+          status: 'error',
+          items: [],
+          message: expected,
+        });
+      });
+      expect(JSON.stringify(messages)).not.toContain(
+        'auth-detail-must-not-leak',
+      );
+    }
   });
 
   it('lists custom commands on request and records recents on send', async () => {
@@ -7211,6 +7366,7 @@ function createController(
   worktreeSessions?: WorktreeSessionsFeature,
   terminalMirror?: TerminalMirror,
   diagnostics?: RuntimeDiagnosticSink,
+  daemonPlugins?: () => Promise<DaemonPluginCatalog>,
 ) {
   const controller = new ChatController(
     createRuntime,
@@ -7234,6 +7390,7 @@ function createController(
     gitWorkflow,
     worktreeSessions,
     terminalMirror,
+    daemonPlugins,
   );
   const messages: HostToWebviewMessage[] = [];
   controller.subscribe((message) => {
@@ -7535,6 +7692,17 @@ function skillsMessages(
       HostToWebviewMessage,
       { type: 'session.skills' }
     > => message.type === 'session.skills',
+  );
+}
+
+function pluginsMessages(
+  messages: readonly HostToWebviewMessage[],
+): Extract<HostToWebviewMessage, { type: 'session.plugins' }>[] {
+  return messages.filter(
+    (message): message is Extract<
+      HostToWebviewMessage,
+      { type: 'session.plugins' }
+    > => message.type === 'session.plugins',
   );
 }
 
