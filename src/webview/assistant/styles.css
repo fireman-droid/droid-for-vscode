@@ -127,6 +127,31 @@ html, body, #root {
   font-size: 0.92em;
 }
 
+/* Inline code recognized as an openable file path. Keeps the code
+   chip look; a quiet dotted underline marks it clickable. */
+.dvx-path-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted rgb(168 79 52 / 45%);
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+
+.dvx-path-link:hover {
+  color: #a84f34;
+  text-decoration-color: currentcolor;
+}
+
+.dvx-path-link:focus-visible {
+  border-radius: 3px;
+  outline: 1px solid #a84f34;
+  outline-offset: 1px;
+}
+
 .dvx-markdown pre, .dvx-activity-row pre, .dvx-permission-tool pre {
   max-width: 100%;
   overflow: auto;

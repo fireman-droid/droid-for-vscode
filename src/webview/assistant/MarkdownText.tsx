@@ -1,7 +1,9 @@
 import { MarkdownTextPrimitive } from '@assistant-ui/react-markdown';
 import {
+  createContext,
   isValidElement,
   memo,
+  useContext,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -14,6 +16,23 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { highlightCode } from './highlightCode';
+import { detectPathLink, type PathLink } from './pathLink';
+
+/**
+ * Receives the path the user clicked in transcript inline code. The
+ * app provides it once at the root; a null default keeps standalone
+ * markdown renders (tests, panels without wiring) inert.
+ */
+export type OpenPathHandler = (link: PathLink) => void;
+export const OpenPathContext =
+  createContext<OpenPathHandler | null>(null);
+
+/**
+ * True inside a fenced code block. Distinguishes inline code (path
+ * links allowed) from block code, which react-markdown renders
+ * through the same `code` component.
+ */
+const InsidePreContext = createContext(false);
 
 const REMARK_PLUGINS = [remarkGfm];
 const SAFE_HTTP_URL = /^https?:\/\//iu;
@@ -118,7 +137,9 @@ function CodeBlock({
         </button>
       </div>
       <pre ref={preRef} {...props}>
-        {children}
+        <InsidePreContext.Provider value={true}>
+          {children}
+        </InsidePreContext.Provider>
       </pre>
     </div>
   );
@@ -129,6 +150,8 @@ function HighlightedCode({
   children,
   ...props
 }: HTMLAttributes<HTMLElement>): React.JSX.Element {
+  const insidePre = useContext(InsidePreContext);
+  const openPath = useContext(OpenPathContext);
   const language = readCodeLanguage(className);
   const text = useMemo(
     () => (language === null ? '' : readNodeText(children)),
@@ -142,6 +165,24 @@ function HighlightedCode({
     [language, text],
   );
   if (html === null) {
+    const pathLink =
+      insidePre || language !== null || openPath === null
+        ? null
+        : detectPathLink(readNodeText(children));
+    if (pathLink !== null && openPath !== null) {
+      return (
+        <code className={className} {...props}>
+          <button
+            type="button"
+            className="dvx-path-link"
+            title={`Open ${pathLink.path}`}
+            onClick={() => openPath(pathLink)}
+          >
+            {children}
+          </button>
+        </code>
+      );
+    }
     return (
       <code className={className} {...props}>
         {children}

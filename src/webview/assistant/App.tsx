@@ -28,6 +28,8 @@ import {
   restoreDraft,
 } from '../bridge/vscode';
 import { InteractionPanel } from './Interactions';
+import { OpenPathContext } from './MarkdownText';
+import type { PathLink } from './pathLink';
 import type {
   McpServerAddParams,
   SessionSettingSelection,
@@ -568,6 +570,21 @@ export function App(): React.JSX.Element {
     },
     [sessionId, connectionStatus, vscode],
   );
+  const handleOpenPath = useCallback(
+    (link: PathLink): void => {
+      if (sessionId === null || connectionStatus !== 'connected') {
+        return;
+      }
+      post(vscode, {
+        type: 'workspace.openPath',
+        sessionId,
+        path: link.path,
+        ...(link.line === undefined ? {} : { line: link.line }),
+        ...(link.column === undefined ? {} : { column: link.column }),
+      });
+    },
+    [sessionId, connectionStatus, vscode],
+  );
   const handleMcpRefresh = useCallback((): void => {
     if (sessionId === null) {
       return;
@@ -866,7 +883,10 @@ export function App(): React.JSX.Element {
       />
     ) : null;
 
-  return (
+  // Rendered once here so transcript markdown (deep inside
+  // assistant-ui's message tree) can open clicked file paths without
+  // prop drilling.
+  const app = (
     <AssistantRuntimeProvider runtime={runtime}>
       <DraftSynchronizer command={draftCommand} />
       {/* Entry animations are opt-in per streaming design item D:
@@ -979,6 +999,11 @@ export function App(): React.JSX.Element {
         />
       </div>
     </AssistantRuntimeProvider>
+  );
+  return (
+    <OpenPathContext.Provider value={handleOpenPath}>
+      {app}
+    </OpenPathContext.Provider>
   );
 }
 

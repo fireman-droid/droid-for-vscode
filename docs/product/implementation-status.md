@@ -934,16 +934,15 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 最后核对结果：
 
 - Cursor 已安装：`droidvisx.droidvisx@0.0.0`
-- `dist/droidvisx.vsix` 大小：462,883 字节（Production Build minify 后，
-  且 `.vscodeignore` 排除 `.cursor/**`）
-- VSIX 修改时间：2026-08-11T04:42:32.5730102Z
+- `dist/droidvisx.vsix` 大小：634,136 字节
+- VSIX 修改时间：2026-08-12T11:41（本地）
 - VSIX SHA-256：
-  `4CA220F64EAE1D580009CFD54402E5BA63D900C6C3032362E56C0CB6E38A1308`
-- VSIX 包含最终 Module 1 Runtime、Host、Bridge v2、隐私安全活动/日志和
-  暖色 Webview Bundle，以及 2026-08-11 产品化打磨轮：Production Build、
-  长会话渲染优化（消息身份缓存、尾部窗口）、styles.css 去重、扁平内联
-  交互块、Tool/Thinking 内联真实耗时、Composer 常驻 Mode/Context
-- `verify:vsix` 已验证 8 个入口和 Bundle 外部依赖
+  `8ECDD6D0561CF3F38C79C9A78678D021BB6A0C9F20D9F87426751F114A7BFAE9`
+- VSIX 在此前功能之上追加 2026-08-12 的 webview 修复轮（滚动跟随、
+  sticky 推出、编辑卡片、user-select、compact 批处理）与转录路径
+  点击跳转切片（`workspace.openPath`）
+- 打包链 `package:vsix` 内含 typecheck + 全量 vitest（1045 通过）+
+  Production Build
 - 最终 VSIX 已成功安装到 Cursor
 - 已安装的 Extension Bundle、Webview JS 和 CSS 哈希均与本次 Build
   完全一致
@@ -2028,6 +2027,31 @@ shimmer；（2）权限/提问交互挂起时全部停闪——复用线程根�
 状态文字为 `dvx-activity-shimmer`、其余为 `none`；permission 模式
 全部为 `none` 且根节点带 `dvx-thread-pending`；
 `--force-prefers-reduced-motion` 下全部为 `none`。
+
+2026-08-12 完成转录路径点击跳转切片（生产已接通）：assistant 消息
+Markdown 的行内代码内容若是一条路径，渲染为保留代码样式的可点击按钮
+（`.dvx-path-link`，虚线下划线 + hover 主题色），点击发送新 Bridge
+消息 `workspace.openPath { sessionId, path(≤1024), line?, column? }`。
+识别规则第一版求稳，仅行内代码、整串匹配（`pathLink.ts`
+`detectPathLink`）：Windows 绝对路径（盘符开头，允许空格/中文，拒绝
+`<>"|?*`、控制字符与 `..` 段）；带文件扩展名且含分隔符的工作区相对
+路径（存在性由 Host 判定）；裸文件名仅在带 `:line[:col]` 后缀（如
+`foo.ts:12:3`）时识别，行列上限 1e6。围栏代码块内、普通代码、URL、
+POSIX 绝对路径一律不识别。识别纯在渲染层，历史消息同样可点。双向
+校验照 closed enum 模式：`parseWorkspaceOpenPath` 拒绝控制字符、
+`..` 段、越界行列（column 必须伴随 line）。Host 新增 `PathOpener`
+端口（`vscodePathOpener.ts`，经 ChatController 构造注入）：相对路径
+对工作区根解析；绝对路径放行工作区外（仅用户显式点击可触发）；
+`fs.stat` 复验存在后目录经 `revealFileInOS` 在系统文件管理器定位，
+已知非文本扩展名（pdf/图片/压缩/Office 等）直接 `vscode.open` 交给
+关联编辑器，其余先 `showTextDocument`（带行列则定位光标）、编辑器
+拒绝二进制时回退 `vscode.open`；失败经既有 `emitSessionDiagnostic`
+发 `open-path-failed` warning。未连接或会话 id 不匹配时忽略。
+Webview 接线经 React context（`OpenPathContext`，App 根部提供），
+`MarkdownText.tsx` 以 `InsidePreContext` 区分行内/块级代码。新增
+测试：detectPathLink 33 例、校验器正反 20 例、MarkdownText 渲染与
+点击 5 例、ChatController 端到端 1 例（行列透传、错会话拦截、失败
+诊断）。
 
 每个切片保持完整测试、打包、安装和 Cursor 可见验收。
 
