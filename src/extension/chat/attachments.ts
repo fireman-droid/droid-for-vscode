@@ -25,6 +25,7 @@ import {
   type AttachmentPayload,
   type AttachmentPickOutcome,
 } from '../attachmentSources';
+import { ensureActiveRuntimeWorkspaceCurrent } from './runtimeLifecycle';
 import type {
   ChatControllerInternals,
   PendingAttachment,
@@ -75,7 +76,7 @@ export function canStageAttachments(
       ctl.connection.status === 'connected' &&
       !ctl.attachmentOperationInProgress &&
       (stage !== 'edit' || ctl.editStage !== null) &&
-      ctl.ensureActiveRuntimeWorkspaceCurrent()
+      ensureActiveRuntimeWorkspaceCurrent(ctl)
     );
 }
 

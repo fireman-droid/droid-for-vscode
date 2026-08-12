@@ -32,6 +32,7 @@ import type {
 } from '../../runtime/DroidRuntime';
 import type { InstalledPluginEntry } from '../../runtime/daemon/DaemonPluginCatalog';
 import type { TokenUsageBreakdown } from '../../shared/tokenUsage';
+import { ensureActiveRuntimeWorkspaceCurrent } from './runtimeLifecycle';
 import {
   daemonFailureMessage,
   formatUnknownError,
@@ -84,7 +85,7 @@ export function handleContextRefresh(
       ctl.connection.status !== 'connected' ||
       ctl.sessionOperationInProgress ||
       ctl.context.status === 'loading' ||
-      !ctl.ensureActiveRuntimeWorkspaceCurrent()
+      !ensureActiveRuntimeWorkspaceCurrent(ctl)
     ) {
       return;
     }
@@ -466,7 +467,7 @@ export function handleCommandsRefresh(
       ctl.connection.status !== 'connected' ||
       ctl.sessionOperationInProgress ||
       ctl.commandsRefreshGeneration === ctl.runtimeGeneration ||
-      !ctl.ensureActiveRuntimeWorkspaceCurrent()
+      !ensureActiveRuntimeWorkspaceCurrent(ctl)
     ) {
       return;
     }

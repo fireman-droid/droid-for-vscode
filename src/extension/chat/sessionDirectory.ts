@@ -27,6 +27,14 @@ import {
 } from '../worktreeSessions';
 import { seedBackgroundRunning } from './sessionRunning';
 import {
+  canReplaceSession,
+  emitWorkspaceUnavailable,
+  ensureActiveRuntimeWorkspaceCurrent,
+  isTargetWorkspaceCurrent,
+  loadHistoryTimed,
+  startReplacement,
+} from './runtimeLifecycle';
+import {
   daemonFailureMessage,
   DAEMON_UNAVAILABLE_MESSAGE,
   forkTitleFromText,
@@ -92,21 +100,21 @@ export const FORK_FAILED_MESSAGE = 'Droid could not fork this session.';
 
 export function handleSessionNew(ctl: ChatControllerInternals): void {
     const workspace = ctl.getWorkspaceContext();
-    if (!ctl.canReplaceSession() || !isUsableWorkspace(workspace)) {
+    if (!canReplaceSession(ctl) || !isUsableWorkspace(workspace)) {
       if (!isUsableWorkspace(workspace)) {
-        ctl.emitWorkspaceUnavailable(workspace);
+        emitWorkspaceUnavailable(ctl, workspace);
       }
       return;
     }
     bindCatalogViewToWorkspace(ctl, workspace.cwd);
-    ctl.startReplacement({ kind: 'new', cwd: workspace.cwd });
+    startReplacement(ctl, { kind: 'new', cwd: workspace.cwd });
 }
 
 export function handleWorktreeCreateSession(ctl: ChatControllerInternals): void {
     const workspace = ctl.getWorkspaceContext();
-    if (!ctl.canReplaceSession() || !isUsableWorkspace(workspace)) {
+    if (!canReplaceSession(ctl) || !isUsableWorkspace(workspace)) {
       if (!isUsableWorkspace(workspace)) {
-        ctl.emitWorkspaceUnavailable(workspace);
+        emitWorkspaceUnavailable(ctl, workspace);
       }
       return;
     }
@@ -125,7 +133,7 @@ export function handleWorktreeCreateSession(ctl: ChatControllerInternals): void 
       return;
     }
     bindCatalogViewToWorkspace(ctl, workspace.cwd);
-    ctl.startReplacement({
+    startReplacement(ctl, {
       kind: 'new',
       cwd: workspace.cwd,
       worktree: true,
@@ -138,7 +146,7 @@ export function handleSessionRename(
     const runtime = ctl.runtime;
     if (
       runtime !== null &&
-      !ctl.ensureActiveRuntimeWorkspaceCurrent()
+      !ensureActiveRuntimeWorkspaceCurrent(ctl)
     ) {
       return;
     }
@@ -283,7 +291,7 @@ export function handleSessionFavorite(
         ctl.disposed ||
         ctl.catalogGeneration !== catalogGeneration ||
         ctl.catalogCwd !== workspace.cwd ||
-        !ctl.isTargetWorkspaceCurrent(workspace.cwd)
+        !isTargetWorkspaceCurrent(ctl, workspace.cwd)
       ) {
         return;
       }
@@ -441,7 +449,7 @@ export async function reloadCatalogAfterDaemonWrite(
     if (
       ctl.catalogGeneration === catalogGeneration &&
       ctl.catalogCwd === cwd &&
-      ctl.isTargetWorkspaceCurrent(cwd) &&
+      isTargetWorkspaceCurrent(ctl, cwd) &&
       result.status === 'ready'
     ) {
       ctl.sessions = withActiveSession(ctl, result, previousActive);
@@ -506,7 +514,7 @@ export async function refreshArchived(
       }
       return;
     }
-    if (ctl.disposed || !ctl.isTargetWorkspaceCurrent(cwd)) {
+    if (ctl.disposed || !isTargetWorkspaceCurrent(ctl, cwd)) {
       return;
     }
     ctl.emit({
@@ -573,10 +581,10 @@ export function handleSessionSelect(
     const workspace = ctl.getWorkspaceContext();
     if (!isUsableWorkspace(workspace)) {
       clearCatalog(ctl);
-      ctl.emitWorkspaceUnavailable(workspace);
+      emitWorkspaceUnavailable(ctl, workspace);
       return;
     }
-    if (!ctl.canReplaceSession()) {
+    if (!canReplaceSession(ctl)) {
       return;
     }
     if (ctl.catalogCwd !== workspace.cwd) {
@@ -604,7 +612,7 @@ export function handleSessionSelect(
       ctl.emitSnapshot();
       return;
     }
-    ctl.startReplacement({
+    startReplacement(ctl, {
       kind: 'resume',
       cwd: workspace.cwd,
       sessionId,
@@ -625,7 +633,7 @@ export function handleRefresh(ctl: ChatControllerInternals): void {
     }
     const workspace = ctl.getWorkspaceContext();
     if (!isUsableWorkspace(workspace)) {
-      ctl.emitWorkspaceUnavailable(workspace);
+      emitWorkspaceUnavailable(ctl, workspace);
       return;
     }
 
@@ -638,7 +646,7 @@ export function handleSessionFork(
     const runtime = ctl.runtime;
     if (
       runtime !== null &&
-      !ctl.ensureActiveRuntimeWorkspaceCurrent()
+      !ensureActiveRuntimeWorkspaceCurrent(ctl)
     ) {
       return;
     }
@@ -757,7 +765,7 @@ export async function performFork(
     let mission: SessionMissionSummary | null = null;
     let tokenUsage: TokenUsageBreakdown | null = null;
     {
-      const loaded = await ctl.loadHistoryTimed(cwd, forkedSessionId);
+      const loaded = await loadHistoryTimed(ctl, cwd, forkedSessionId);
       if (loaded?.status === 'available') {
         transcript = loaded.state;
         mission = loaded.mission ?? null;
@@ -1020,7 +1028,7 @@ export function isCurrentCatalogRequest(
       !ctl.disposed &&
       ctl.catalogGeneration === generation &&
       ctl.catalogCwd === cwd &&
-      ctl.isTargetWorkspaceCurrent(cwd)
+      isTargetWorkspaceCurrent(ctl, cwd)
     );
 }
 
@@ -1042,7 +1050,7 @@ export function discardCatalogRequest(
     if (isUsableWorkspace(workspace)) {
       ctl.emitSnapshot();
     } else {
-      ctl.emitWorkspaceUnavailable(workspace);
+      emitWorkspaceUnavailable(ctl, workspace);
     }
 }
 

@@ -9,6 +9,7 @@ import {
 } from '../hostTranscriptState';
 import { clearPendingAttachments, emitEditAttachments } from './attachments';
 import { withActiveSession } from './sessionDirectory';
+import { ensureActiveRuntimeWorkspaceCurrent } from './runtimeLifecycle';
 import {
   forkTitleFromText,
   isSafeBridgeId,
@@ -71,7 +72,7 @@ export function handleEditResend(
     const runtime = ctl.runtime;
     if (
       runtime !== null &&
-      !ctl.ensureActiveRuntimeWorkspaceCurrent()
+      !ensureActiveRuntimeWorkspaceCurrent(ctl)
     ) {
       return;
     }

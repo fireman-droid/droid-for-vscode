@@ -127,6 +127,7 @@ import { stampRunningFlags, setSessionRunning, ensureBackgroundRunningPoll, seed
 import { settleTurnSubagents, clearZombieSubagentWatch, armReplayedSubagentWatch } from './chat/subagentWatch';
 import { emitEarlyRecoverySnapshot, reconcileDaemonTurn, scheduleRecoveryCheckpoint, checkpointRecoveryTranscript, flushRecoveryCheckpoint, recoveryTurnId } from './chat/recovery';
 import { handleSessionNew, handleWorktreeCreateSession, handleSessionRename, handleSessionFavorite, handleSessionArchive, handleSessionUnarchive, handleArchivedRefresh, handleSessionSearch, handleSessionSelect, handleRefresh, handleSessionFork, loadCatalog, hasCatalogSession, activeSessionSummary, withActiveSession, beginCatalogLoad, bindCatalogViewToWorkspace, clearCatalog, isCurrentCatalogRequest, discardCatalogRequest, touchActiveSession, SESSION_NEW_FAILED_MESSAGE } from './chat/sessionDirectory';
+import { handleReady, startReplacement, replaceRuntime, loadHistoryTimed, resetSessionMetadata, closeRuntime, queueWorkspaceTransition, isCurrentRuntime, ensureActiveRuntimeWorkspaceCurrent, isTargetWorkspaceCurrent, emitWorkspaceUnavailable, isSameWorkspaceContext, WORKSPACE_CHANGED_MESSAGE } from './chat/runtimeLifecycle';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
 import {
   clearPrompts,
@@ -256,12 +257,6 @@ const RUNTIME_EVENT_ERROR_MESSAGE =
   'Droid reported a runtime error while processing this turn.';
 const ASSISTANT_OUTPUT_TRUNCATED_MESSAGE =
   'Assistant output exceeded the display limit and was truncated.';
-const SESSION_CLOSE_FAILED_MESSAGE =
-  'The current Droid session could not be closed.';
-const SESSION_RESUME_FAILED_MESSAGE =
-  'The selected Droid session could not be opened.';
-const WORKSPACE_CHANGED_MESSAGE =
-  'The workspace changed before the Droid session could be opened.';
 const COMPACT_BLOCKED_MESSAGE =
   'Droid cannot compact right now. Wait for the current activity to finish.';
 const COMPACT_UNSUPPORTED_MESSAGE =
@@ -482,7 +477,7 @@ export class ChatController {
           });
     this.interactions = new PendingInteractionCoordinator(
       ({ sessionId, turnId, request }) => {
-        if (!this.ensureActiveRuntimeWorkspaceCurrent()) {
+        if (!ensureActiveRuntimeWorkspaceCurrent(this)) {
           return;
         }
         this.interactionOpenedAt.set(
@@ -551,7 +546,7 @@ export class ChatController {
 
     switch (message.type) {
       case 'webview.ready':
-        void this.handleReady();
+        void handleReady(this);
         return;
       case 'turn.send':
         this.handleSend(
@@ -605,7 +600,7 @@ export class ChatController {
         this.handleRetry(message.sessionId);
         return;
       case 'permission.respond':
-        if (!this.ensureActiveRuntimeWorkspaceCurrent()) {
+        if (!ensureActiveRuntimeWorkspaceCurrent(this)) {
           return;
         }
         if (
@@ -624,7 +619,7 @@ export class ChatController {
         }
         return;
       case 'ask-user.respond':
-        if (!this.ensureActiveRuntimeWorkspaceCurrent()) {
+        if (!ensureActiveRuntimeWorkspaceCurrent(this)) {
           return;
         }
         this.interactions.respondAskUser(message);
@@ -857,7 +852,7 @@ export class ChatController {
     const staleRuntimes = [...this.managedRuntimes];
     this.runtimeGeneration += 1;
     this.turnGeneration += 1;
-    this.resetSessionMetadata();
+    resetSessionMetadata(this);
     if (
       this.recoveryCheckpointTimer !== null ||
       this.pendingRecoveryCheckpoint !== null
@@ -877,9 +872,9 @@ export class ChatController {
       this.emitSnapshot();
     } else {
       clearCatalog(this);
-      this.emitWorkspaceUnavailable(workspace);
+      emitWorkspaceUnavailable(this, workspace);
     }
-    this.queueWorkspaceTransition(generation, staleRuntimes);
+    queueWorkspaceTransition(this, generation, staleRuntimes);
   }
 
   dispose(): Promise<void> {
@@ -906,85 +901,12 @@ export class ChatController {
     this.runtime = null;
     this.disposal = (async () => {
       await Promise.allSettled([
-        ...runtimes.map((runtime) => this.closeRuntime(runtime)),
+        ...runtimes.map((runtime) => closeRuntime(this, runtime)),
         this.recoveryStore.flush(),
       ]);
       await this.recoveryStore.dispose();
     })();
     return this.disposal;
-  }
-
-  private async handleReady(): Promise<void> {
-    if (this.initialization) {
-      await this.initialization;
-      await this.waitForWorkspaceTransition();
-      if (this.disposed) {
-        return;
-      }
-      if (!this.ensureActiveRuntimeWorkspaceCurrent()) {
-        return;
-      }
-      this.emitSnapshot();
-      this.interactions.replayPending();
-      return;
-    }
-
-    this.initialization = this.startup();
-    await this.initialization;
-  }
-
-  private async startup(): Promise<void> {
-    let recoveryLoaded = false;
-    while (!this.disposed) {
-      const workspace = this.getWorkspaceContext();
-      if (!isUsableWorkspace(workspace)) {
-        clearCatalog(this);
-        this.emitWorkspaceUnavailable(workspace);
-        return;
-      }
-
-      this.connection = { status: 'connecting' };
-      const catalogRequest = beginCatalogLoad(this, workspace.cwd);
-      const catalogPromise = loadCatalog(this, workspace.cwd);
-      if (!recoveryLoaded) {
-        await this.recoveryStore.load();
-        recoveryLoaded = true;
-        if (this.disposed) {
-          return;
-        }
-        emitEarlyRecoverySnapshot(this);
-      }
-      const catalog = await catalogPromise;
-      if (this.disposed) {
-        return;
-      }
-      if (!isCurrentCatalogRequest(this, catalogRequest, workspace.cwd)) {
-        discardCatalogRequest(this, catalogRequest);
-        continue;
-      }
-      this.sessions = catalog;
-      seedBackgroundRunning(this, workspace.cwd);
-
-      const selectedSessionId =
-        this.recoveryStore.getSelectedSessionId();
-      const resumable =
-        selectedSessionId !== null &&
-        hasCatalogSession(this, selectedSessionId, workspace.cwd);
-      const target: RuntimeSessionTarget = resumable
-        ? {
-            kind: 'resume',
-            cwd: workspace.cwd,
-            sessionId: selectedSessionId,
-          }
-        : { kind: 'new', cwd: workspace.cwd };
-      await this.activateInitialRuntime(
-        target,
-        resumable ? selectedSessionId : null,
-      );
-      if (this.isTargetWorkspaceCurrent(workspace.cwd)) {
-        return;
-      }
-    }
   }
 
   handleSend(
@@ -997,7 +919,7 @@ export class ChatController {
     const runtime = this.runtime;
     if (
       runtime !== null &&
-      !this.ensureActiveRuntimeWorkspaceCurrent()
+      !ensureActiveRuntimeWorkspaceCurrent(this)
     ) {
       return;
     }
@@ -1494,7 +1416,7 @@ export class ChatController {
         implementationSessionId: handoff.implementationSessionId,
       },
     });
-    this.startReplacement({
+    startReplacement(this, {
       kind: 'resume',
       cwd,
       sessionId: handoff.implementationSessionId,
@@ -1553,7 +1475,7 @@ export class ChatController {
     const runtime = this.runtime;
     if (
       runtime !== null &&
-      !this.ensureActiveRuntimeWorkspaceCurrent()
+      !ensureActiveRuntimeWorkspaceCurrent(this)
     ) {
       return;
     }
@@ -1598,7 +1520,7 @@ export class ChatController {
     const runtime = this.runtime;
     if (
       runtime !== null &&
-      !this.ensureActiveRuntimeWorkspaceCurrent()
+      !ensureActiveRuntimeWorkspaceCurrent(this)
     ) {
       return;
     }
@@ -1711,7 +1633,7 @@ export class ChatController {
     let mission: SessionMissionSummary | null = null;
     let tokenUsage: TokenUsageBreakdown | null = null;
     {
-      const loaded = await this.loadHistoryTimed(
+      const loaded = await loadHistoryTimed(this, 
         cwd,
         compactedSessionId,
       );
@@ -1772,7 +1694,7 @@ export class ChatController {
 
     const workspace = this.getWorkspaceContext();
     if (!isUsableWorkspace(workspace)) {
-      this.emitWorkspaceUnavailable(workspace);
+      emitWorkspaceUnavailable(this, workspace);
       return;
     }
     if (
@@ -1792,7 +1714,7 @@ export class ChatController {
       hasCatalogSession(this, this.sessionId, workspace.cwd)
         ? this.sessionId
         : null;
-    this.startReplacement(
+    startReplacement(this, 
       resumableId === null
         ? { kind: 'new', cwd: workspace.cwd }
         : {
@@ -1823,7 +1745,7 @@ export class ChatController {
     seedBackgroundRunning(this, cwd);
     const selectedSessionId =
       this.recoveryStore.getSelectedSessionId();
-    await this.replaceRuntime(
+    await replaceRuntime(this, 
       selectedSessionId !== null &&
         hasCatalogSession(this, selectedSessionId, cwd)
         ? {
@@ -1833,672 +1755,6 @@ export class ChatController {
           }
         : { kind: 'new', cwd },
     );
-  }
-
-  canReplaceSession(): boolean {
-    // A running daemon-backed turn no longer blocks switching:
-    // replaceRuntime detaches it and the turn continues on the daemon
-    // (the drawer row then carries the quiet running indicator). A
-    // process-mode turn still blocks — disposal would kill it. An
-    // unanswered interaction always blocks: it must be settled first.
-    const turnBlocks =
-      isTurnActive(this.turn) &&
-      this.runtime?.supportsBackgroundTurns?.() !== true;
-    if (
-      turnBlocks ||
-      this.interactions.hasPending() ||
-      this.connection.status === 'connecting' ||
-      this.sessionOperationInProgress ||
-      this.refreshInProgress ||
-      this.settingsUpdate !== null
-    ) {
-      this.emitSessionDiagnostic(
-        'session-operation-blocked',
-        SESSION_OPERATION_BLOCKED_MESSAGE,
-      );
-      return false;
-    }
-    return true;
-  }
-
-  startReplacement(target: RuntimeSessionTarget): void {
-    this.sessionOperationInProgress = true;
-    this.connection = { status: 'connecting' };
-    this.emitSnapshot();
-    void this.replaceRuntime(target).finally(() => {
-      this.sessionOperationInProgress = false;
-    });
-  }
-
-  private async replaceRuntime(
-    target: RuntimeSessionTarget,
-  ): Promise<void> {
-    const switchStartedAt = performance.now();
-    // Captured before any state reset: a live daemon-backed turn
-    // survives the switch. Disposal then detaches instead of
-    // interrupting, and the old session's drawer row keeps a running
-    // indicator until the daemon reports it idle.
-    const detachedSessionId =
-      this.runtime !== null &&
-      isTurnActive(this.turn) &&
-      this.runtime.supportsBackgroundTurns?.() === true
-        ? this.sessionId
-        : null;
-    const generation = ++this.runtimeGeneration;
-    this.turnGeneration += 1;
-    this.resetSessionMetadata();
-    this.interactions.cancelAll();
-    await flushRecoveryCheckpoint(this);
-    if (!this.isCurrentRuntimeGeneration(generation)) {
-      return;
-    }
-    if (!this.isTargetWorkspaceCurrent(target.cwd)) {
-      this.reportWorkspaceChanged(generation);
-      return;
-    }
-
-    const previousRuntime = this.runtime;
-    if (previousRuntime) {
-      try {
-        await this.closeRuntime(
-          previousRuntime,
-          detachedSessionId !== null,
-        );
-      } catch {
-        if (
-          this.isCurrentRuntimeGeneration(generation) &&
-          this.isTargetWorkspaceCurrent(target.cwd)
-        ) {
-          this.connection = {
-            status: 'unavailable',
-            message: SESSION_CLOSE_FAILED_MESSAGE,
-          };
-          this.emitSessionDiagnostic(
-            'session-close-failed',
-            SESSION_CLOSE_FAILED_MESSAGE,
-          );
-          this.emitSnapshot();
-        } else if (this.isCurrentRuntimeGeneration(generation)) {
-          this.reportWorkspaceChanged(generation);
-        }
-        return;
-      }
-      if (!this.isCurrentRuntimeGeneration(generation)) {
-        return;
-      }
-      if (this.runtime === previousRuntime) {
-        this.runtime = null;
-      }
-      if (detachedSessionId !== null) {
-        // The turn now runs unattended on the daemon: drop the local
-        // projection without a terminal turn.state (the turn did not
-        // end) and flag the row for the background watcher.
-        this.turn = null;
-        this.diagnostics?.endTurnScope?.();
-        setSessionRunning(this, detachedSessionId, true);
-        ensureBackgroundRunningPoll(this);
-      }
-      if (!this.isTargetWorkspaceCurrent(target.cwd)) {
-        this.reportWorkspaceChanged(generation);
-        return;
-      }
-    }
-
-    // The transcript projection and the runtime resume each spawn their
-    // own droid CLI process and stay independent until activateRuntime
-    // consumes both; running them serially doubled session-switch
-    // latency (9-12s observed). Neither branch throws: both funnel
-    // failures into their return values.
-    const [transcript, activation] = await Promise.all([
-      this.prepareActivationTranscript(target, generation),
-      this.createInitializedRuntime(target, generation),
-    ]);
-    if (
-      transcript === null ||
-      !this.isCurrentRuntimeGeneration(generation) ||
-      !this.isTargetWorkspaceCurrent(target.cwd)
-    ) {
-      // A stale switch can still hold a live runtime when the
-      // invalidation landed after createInitializedRuntime's own
-      // staleness checks had already passed.
-      if (activation !== null && activation.status === 'available') {
-        await this.closeRuntime(activation.runtime).catch(
-          () => undefined,
-        );
-      }
-      if (
-        this.isCurrentRuntimeGeneration(generation) &&
-        !this.isTargetWorkspaceCurrent(target.cwd)
-      ) {
-        this.reportWorkspaceChanged(generation);
-      }
-      return;
-    }
-    if (activation === null) {
-      return;
-    }
-    if (activation.status === 'failed') {
-      this.connection = {
-        status: 'unavailable',
-        message:
-          target.kind === 'resume'
-            ? SESSION_RESUME_FAILED_MESSAGE
-            : SESSION_NEW_FAILED_MESSAGE,
-      };
-      this.emitSessionDiagnostic(
-        target.kind === 'resume'
-          ? 'session-resume-failed'
-          : 'session-new-failed',
-        this.connection.message!,
-      );
-      this.emitSnapshot();
-      return;
-    }
-
-    if (!this.isTargetWorkspaceCurrent(target.cwd)) {
-      await this.closeRuntime(activation.runtime).catch(() => undefined);
-      this.reportWorkspaceChanged(generation);
-      return;
-    }
-    await this.activateRuntime(
-      target,
-      activation.runtime,
-      activation.id,
-      generation,
-      transcript,
-    );
-    // End-to-end switch latency, from the replace request to the
-    // activated runtime — the number the parallel activation above is
-    // meant to shrink (verification for the serial 9-12s baseline).
-    this.recordHost({
-      level: 'info',
-      name: 'host.perf.session-switch',
-      attributes: {
-        kind: target.kind,
-        durationMs: Math.round(performance.now() - switchStartedAt),
-      },
-    });
-  }
-
-  private async activateInitialRuntime(
-    target: RuntimeSessionTarget,
-    failedResumeId: string | null,
-  ): Promise<void> {
-    const generation = ++this.runtimeGeneration;
-    // Same parallel activation as replaceRuntime: history projection
-    // and runtime resume are independent droid CLI processes.
-    const [transcript, activation] = await Promise.all([
-      this.prepareActivationTranscript(target, generation),
-      this.createInitializedRuntime(target, generation),
-    ]);
-    if (
-      transcript === null ||
-      !this.isCurrentRuntimeGeneration(generation) ||
-      !this.isTargetWorkspaceCurrent(target.cwd)
-    ) {
-      if (activation !== null && activation.status === 'available') {
-        await this.closeRuntime(activation.runtime).catch(
-          () => undefined,
-        );
-      }
-      return;
-    }
-    if (activation === null) {
-      return;
-    }
-    if (activation.status === 'failed') {
-      if (failedResumeId) {
-        this.sessionId = failedResumeId;
-        this.transcript =
-          this.recoveryStore.readSession(failedResumeId) ??
-          createHostTranscriptState('unavailable');
-        this.sessions = withActiveSession(this, this.sessions);
-      } else {
-        this.sessionId = null;
-        this.mission = null;
-        this.tokenUsage = EMPTY_SESSION_TOKEN_USAGE;
-        this.transcript = createHostTranscriptState('unavailable');
-      }
-      this.connection = {
-        status: 'unavailable',
-        message: activation.message,
-      };
-      this.emitSnapshot();
-      return;
-    }
-    if (!this.isTargetWorkspaceCurrent(target.cwd)) {
-      await this.closeRuntime(activation.runtime).catch(() => undefined);
-      return;
-    }
-    await this.activateRuntime(
-      target,
-      activation.runtime,
-      activation.id,
-      generation,
-      transcript,
-    );
-  }
-
-  private async prepareActivationTranscript(
-    target: RuntimeSessionTarget,
-    generation: number,
-  ): Promise<HostTranscriptState | null> {
-    if (target.kind === 'new') {
-      this.mission = null;
-      this.tokenUsage = EMPTY_SESSION_TOKEN_USAGE;
-      return createHostTranscriptState('complete');
-    }
-
-    const recovered = this.recoveryStore.readSession(target.sessionId);
-    const loaded = await this.loadHistoryTimed(
-      target.cwd,
-      target.sessionId,
-    );
-    if (
-      !this.isCurrentRuntimeGeneration(generation) ||
-      !this.isTargetWorkspaceCurrent(target.cwd)
-    ) {
-      return null;
-    }
-    this.mission =
-      loaded?.status === 'available' ? (loaded.mission ?? null) : null;
-    // Cumulative usage persists in the session file; `lastTurn` does
-    // not (history carries no per-turn usage), so it starts null.
-    this.tokenUsage = {
-      cumulative:
-        loaded?.status === 'available'
-          ? (loaded.tokenUsage ?? null)
-          : null,
-      lastTurn: null,
-    };
-    if (loaded?.status === 'available') {
-      const reconcileStart = performance.now();
-      const reconciled = reconcileSessionHistory(
-        loaded.state,
-        recovered,
-      );
-      // Recovery reconciliation accounting (P7): a merge that degrades
-      // to concatenation (reconciled ≈ recovered + loaded) is the
-      // signature of the duplicate-transcript / duplicate-toolUseId
-      // class of bugs.
-      this.recordHost({
-        level: 'info',
-        name: 'host.perf.recovery',
-        attributes: {
-          sessionId: target.sessionId,
-          recovered: recovered?.transcript.length ?? 0,
-          loaded: loaded.state.transcript.length,
-          reconciled: reconciled.transcript.length,
-          reconcileMs: Math.round(
-            performance.now() - reconcileStart,
-          ),
-        },
-      });
-      return reconciled;
-    }
-    return recovered ?? createHostTranscriptState('unavailable');
-  }
-
-  /** Timed history load with a structured log record (P6). */
-  async loadHistoryTimed(
-    cwd: string,
-    sessionId: string,
-  ): Promise<Awaited<
-    ReturnType<SessionHistoryLoader['loadHistory']>
-  > | null> {
-    const startedAt = performance.now();
-    try {
-      const loaded = await this.sessionHistory.loadHistory({
-        cwd,
-        sessionId,
-      });
-      this.recordHost({
-        level: 'info',
-        name: 'runtime.history.finished',
-        attributes: {
-          durationMs: Math.round(performance.now() - startedAt),
-          outcome: loaded.status,
-          sessionId,
-          ...(loaded.status === 'available'
-            ? {
-                items: loaded.state.transcript.length,
-                historyStatus: loaded.state.historyStatus,
-              }
-            : {}),
-        },
-      });
-      return loaded;
-    } catch (error) {
-      this.recordHost({
-        level: 'error',
-        name: 'runtime.history.finished',
-        attributes: {
-          durationMs: Math.round(performance.now() - startedAt),
-          outcome: 'failed',
-          sessionId,
-        },
-        detail: formatUnknownError(error),
-      });
-      return null;
-    }
-  }
-
-  private async createInitializedRuntime(
-    target: RuntimeSessionTarget,
-    generation: number,
-  ): Promise<
-    | {
-        readonly status: 'available';
-        readonly runtime: DroidRuntime;
-        readonly id: string;
-      }
-    | { readonly status: 'failed'; readonly message: string }
-    | null
-  > {
-    let runtime: DroidRuntime;
-    try {
-      runtime = this.createRuntime(
-        this.interactions.createRuntimeHandler(),
-      );
-    } catch {
-      return {
-        status: 'failed',
-        message: 'The local Droid runtime could not be created.',
-      };
-    }
-    this.managedRuntimes.add(runtime);
-    // A daemon resume replays permission/ask-user requests that were
-    // pending when the previous window died. Without an active
-    // interaction context the coordinator would answer them with an
-    // automatic cancel, killing the daemon-side turn. The synthesized
-    // recovery turn holds them until reload reconciliation
-    // (reconcileDaemonTurn) decides whether the turn is still live.
-    const releaseRecoveryContext = (): void => {
-      if (target.kind === 'resume') {
-        this.interactions.endTurn(
-          target.sessionId,
-          recoveryTurnId(generation),
-        );
-      }
-    };
-    if (target.kind === 'resume') {
-      this.interactions.beginTurn(
-        target.sessionId,
-        recoveryTurnId(generation),
-      );
-    }
-
-    let availability: RuntimeAvailability;
-    try {
-      availability = await runtime.initialize(target);
-    } catch {
-      releaseRecoveryContext();
-      await this.closeRuntime(runtime).catch(() => undefined);
-      return this.isCurrentRuntimeGeneration(generation) &&
-        this.isTargetWorkspaceCurrent(target.cwd)
-        ? {
-            status: 'failed',
-            message: 'The local Droid runtime could not be initialized.',
-          }
-        : null;
-    }
-
-    if (
-      !this.isCurrentRuntimeGeneration(generation) ||
-      !this.isTargetWorkspaceCurrent(target.cwd)
-    ) {
-      releaseRecoveryContext();
-      await this.closeRuntime(runtime).catch(() => undefined);
-      return null;
-    }
-    if (
-      availability.status === 'unavailable' ||
-      !isSafeBridgeId(availability.sessionId) ||
-      (target.kind === 'resume' &&
-        availability.sessionId !== target.sessionId)
-    ) {
-      releaseRecoveryContext();
-      await this.closeRuntime(runtime).catch(() => undefined);
-      if (
-        !this.isCurrentRuntimeGeneration(generation) ||
-        !this.isTargetWorkspaceCurrent(target.cwd)
-      ) {
-        return null;
-      }
-      return {
-        status: 'failed',
-        message:
-          availability.status === 'unavailable'
-            ? unavailableMessage(availability.reason)
-            : target.kind === 'resume'
-              ? SESSION_RESUME_FAILED_MESSAGE
-              : SESSION_NEW_FAILED_MESSAGE,
-      };
-    }
-
-    return {
-      status: 'available',
-      runtime,
-      id: availability.sessionId,
-    };
-  }
-
-  private async activateRuntime(
-    target: RuntimeSessionTarget,
-    runtime: DroidRuntime,
-    sessionId: string,
-    generation: number,
-    transcript: HostTranscriptState,
-  ): Promise<void> {
-    if (
-      !this.isActivationCandidateCurrent(
-        runtime,
-        generation,
-        target.cwd,
-      )
-    ) {
-      await this.closeRuntime(runtime).catch(() => undefined);
-      if (
-        this.isCurrentRuntimeGeneration(generation) &&
-        !this.isTargetWorkspaceCurrent(target.cwd)
-      ) {
-        this.reportWorkspaceChanged(generation);
-      }
-      return;
-    }
-    this.recoveryStore.writeSession(sessionId, transcript);
-    await this.recoveryStore.flush();
-    if (
-      !this.isActivationCandidateCurrent(
-        runtime,
-        generation,
-        target.cwd,
-      )
-    ) {
-      await this.closeRuntime(runtime).catch(() => undefined);
-      if (
-        this.isCurrentRuntimeGeneration(generation) &&
-        !this.isTargetWorkspaceCurrent(target.cwd)
-      ) {
-        this.reportWorkspaceChanged(generation);
-      }
-      return;
-    }
-
-    this.runtime = runtime;
-    this.activeRuntimeCwd = target.cwd;
-    this.sessionId = sessionId;
-    this.turn = null;
-    this.transcript = transcript;
-    this.sessions = withActiveSession(this, 
-      this.sessions,
-      target.kind === 'new'
-        ? {
-            id: sessionId,
-            title: 'New session',
-            messageCount: 0,
-            modifiedTime: new Date().toISOString(),
-            active: true,
-            isFavorite: false,
-          }
-        : undefined,
-    );
-    this.connection = { status: 'connected' };
-    this.recoveryStore.selectSession(sessionId);
-    void this.recoveryStore.flush();
-    this.emitSnapshot();
-    if (target.kind === 'new' && target.worktree === true) {
-      this.bindWorktreeSessionMetadata(
-        runtime,
-        generation,
-        sessionId,
-        target.cwd,
-      );
-    }
-    this.loadSessionMetadata(
-      runtime,
-      generation,
-      sessionId,
-      target.cwd,
-    );
-    if (target.kind === 'resume') {
-      reconcileDaemonTurn(this, runtime, generation, sessionId, target.cwd);
-      // Replayed rows the ledger still reported live at load time
-      // need the same post-turn ledger poll a live turn would have
-      // armed — a reload otherwise freezes them at "running".
-      armReplayedSubagentWatch(this, sessionId, target.cwd, transcript);
-    }
-  }
-
-  /**
-   * Binds a freshly created worktree session to its worktree
-   * directory (registry + git branch recovery) and annotates the
-   * interim catalog row. Fail-soft: a missing binding leaves the row
-   * unannotated while the session itself stays live.
-   */
-  private bindWorktreeSessionMetadata(
-    runtime: DroidRuntime,
-    generation: number,
-    sessionId: string,
-    workspaceCwd: string,
-  ): void {
-    const feature = this.worktreeSessions;
-    if (feature === undefined) {
-      return;
-    }
-    void recordCreatedWorktreeSession({
-      workspaceCwd,
-      sessionId,
-      sessionCwd: runtime.getSessionCwd?.() ?? null,
-      feature,
-    }).then((info) => {
-      if (
-        info === null ||
-        !this.isCurrentSessionOperation(
-          runtime,
-          generation,
-          sessionId,
-          workspaceCwd,
-        )
-      ) {
-        return;
-      }
-      this.sessions = {
-        ...this.sessions,
-        items: this.sessions.items.map((item) =>
-          item.id === sessionId ? { ...item, worktree: info } : item,
-        ),
-      };
-      this.emitSnapshot();
-    });
-  }
-
-  private loadSessionMetadata(
-    runtime: DroidRuntime,
-    generation: number,
-    sessionId: string,
-    cwd: string,
-  ): void {
-    void runtime
-      .readSessionSettings()
-      .then((result) => {
-        if (
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        this.settings = {
-          status: 'ready',
-          value: projectConfirmedSettings(result),
-        };
-        emitSettings(this, sessionId);
-      })
-      .catch(() => {
-        if (
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        this.settings = {
-          status: 'error',
-          value: null,
-          message: SETTINGS_READ_FAILED_MESSAGE,
-        };
-        emitSettings(this, sessionId);
-      });
-
-    void runtime
-      .readModelCatalog()
-      .then((result) => {
-        if (
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        this.modelCatalog = projectModelCatalog(result);
-        emitModelCatalog(this, sessionId);
-      })
-      .catch(() => {
-        if (
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        this.modelCatalog = {
-          status: 'error',
-          items: [],
-          message: MODEL_CATALOG_FAILED_MESSAGE,
-        };
-        emitModelCatalog(this, sessionId);
-      });
-
-    refreshContext(this, runtime, generation, sessionId, cwd);
-    // Server-side backstop for the skills/MCP panels: a session switch
-    // resets the webview catalogs to 'idle', and a panel-issued
-    // re-request can be dropped mid-switch. Pushing fresh state on
-    // activation converges an open panel without user action.
-    pushSkills(this, runtime, generation, sessionId, cwd);
-    pushMcp(this, runtime, generation, sessionId, cwd);
   }
 
   failTurn(
@@ -2767,7 +2023,7 @@ export class ChatController {
     if (this.sessionOperationInProgress) {
       return 'operation-in-progress';
     }
-    if (!this.ensureActiveRuntimeWorkspaceCurrent()) {
+    if (!ensureActiveRuntimeWorkspaceCurrent(this)) {
       return 'workspace-changed';
     }
     return null;
@@ -2822,173 +2078,12 @@ export class ChatController {
     });
   }
 
-  emitWorkspaceUnavailable(workspace: WorkspaceContext): void {
-    this.connection =
-      workspace.cwd === null
-        ? {
-            status: 'unavailable',
-            message: 'Open a workspace folder to use DroidVisX.',
-          }
-        : {
-            status: 'unavailable',
-            message:
-              'Trust this workspace to start the local Droid runtime.',
-          };
-    this.emitSnapshot();
-  }
-
-  private closeRuntime(
-    runtime: DroidRuntime,
-    preserveBackendTurn = false,
-  ): Promise<void> {
-    if (this.closedRuntimes.has(runtime)) {
-      return Promise.resolve();
-    }
-    const existing = this.runtimeClosures.get(runtime);
-    if (existing) {
-      return existing;
-    }
-    const closure = Promise.resolve()
-      .then(() =>
-        runtime.dispose(
-          preserveBackendTurn ? { preserveBackendTurn: true } : undefined,
-        ),
-      )
-      .then(() => {
-        this.closedRuntimes.add(runtime);
-        this.managedRuntimes.delete(runtime);
-      })
-      .finally(() => {
-        if (this.runtimeClosures.get(runtime) === closure) {
-          this.runtimeClosures.delete(runtime);
-        }
-      });
-    this.runtimeClosures.set(runtime, closure);
-    return closure;
-  }
-
-  private queueWorkspaceTransition(
-    generation: number,
-    staleRuntimes: readonly DroidRuntime[],
-  ): void {
-    const previous =
-      this.workspaceTransition ?? Promise.resolve();
-    const transition = previous
-      .catch(() => undefined)
-      .then(() =>
-        this.reconcileWorkspaceContext(
-          generation,
-          staleRuntimes,
-        ),
-      )
-      .catch(() => {
-        if (
-          this.disposed ||
-          generation !== this.workspaceContextGeneration
-        ) {
-          return;
-        }
-        this.connection = {
-          status: 'unavailable',
-          message: WORKSPACE_CHANGED_MESSAGE,
-        };
-        this.emitSnapshot();
-      });
-    this.workspaceTransition = transition;
-    void transition.finally(() => {
-      if (this.workspaceTransition === transition) {
-        this.workspaceTransition = null;
-      }
-    });
-  }
-
-  private async reconcileWorkspaceContext(
-    generation: number,
-    staleRuntimes: readonly DroidRuntime[],
-  ): Promise<void> {
-    const results = await Promise.allSettled([
-      this.recoveryStore.flush(),
-      ...staleRuntimes.map((runtime) => this.closeRuntime(runtime)),
-    ]);
-    if (
-      this.disposed ||
-      generation !== this.workspaceContextGeneration
-    ) {
-      return;
-    }
-    if (results.slice(1).some((result) => result.status === 'rejected')) {
-      this.connection = {
-        status: 'unavailable',
-        message: SESSION_CLOSE_FAILED_MESSAGE,
-      };
-      this.emitSessionDiagnostic(
-        'session-close-failed',
-        SESSION_CLOSE_FAILED_MESSAGE,
-      );
-      this.emitSnapshot();
-      return;
-    }
-
-    const workspace = this.getWorkspaceContext();
-    if (!isSameWorkspaceContext(this.workspaceContext, workspace)) {
-      this.handleWorkspaceContextChanged();
-      return;
-    }
-    if (!isUsableWorkspace(workspace)) {
-      return;
-    }
-    if (
-      this.runtime !== null &&
-      this.activeRuntimeCwd === workspace.cwd
-    ) {
-      return;
-    }
-
-    const initialStartup = this.initialization;
-    if (initialStartup !== null) {
-      await initialStartup;
-    }
-    if (
-      this.disposed ||
-      generation !== this.workspaceContextGeneration
-    ) {
-      return;
-    }
-    if (
-      this.runtime !== null &&
-      this.activeRuntimeCwd === workspace.cwd
-    ) {
-      return;
-    }
-    if (!this.isTargetWorkspaceCurrent(workspace.cwd)) {
-      this.handleWorkspaceContextChanged();
-      return;
-    }
-    await this.startup();
-  }
-
-  private async waitForWorkspaceTransition(): Promise<void> {
-    while (this.workspaceTransition !== null) {
-      await this.workspaceTransition;
-    }
-  }
-
   private nextSequence(): number {
     if (this.sequence >= Number.MAX_SAFE_INTEGER) {
       throw new Error('DroidVisX host message sequence was exhausted.');
     }
     this.sequence += 1;
     return this.sequence;
-  }
-
-  private isCurrentRuntime(
-    runtime: DroidRuntime,
-    generation: number,
-  ): boolean {
-    return (
-      this.isCurrentRuntimeGeneration(generation) &&
-      this.runtime === runtime
-    );
   }
 
   isCurrentSessionOperation(
@@ -2998,26 +2093,11 @@ export class ChatController {
     cwd: string,
   ): boolean {
     return (
-      this.isCurrentRuntime(runtime, generation) &&
+      isCurrentRuntime(this, runtime, generation) &&
       this.sessionId === sessionId &&
       this.activeRuntimeCwd === cwd &&
-      this.isTargetWorkspaceCurrent(cwd)
+      isTargetWorkspaceCurrent(this, cwd)
     );
-  }
-
-  private resetSessionMetadata(): void {
-    this.contextGeneration += 1;
-    this.specHandoff = null;
-    this.settingsUpdate = null;
-    this.settings = { status: 'loading', value: null };
-    this.context = { status: 'loading', value: null };
-    this.modelCatalog = { status: 'loading', items: [] };
-    clearPendingAttachments(this);
-    // Runs while sessionId still names the old session, so the
-    // discard diagnostic lands on the session that owned the queue.
-    discardQueuedPrompts(this);
-    // Discard-on-close: any session rebind abandons the hidden fork.
-    this.btwSideChat?.reset();
   }
 
   /**
@@ -3032,58 +2112,10 @@ export class ChatController {
       return;
     }
     const cwd = this.activeRuntimeCwd;
-    if (cwd === null || !this.isTargetWorkspaceCurrent(cwd)) {
+    if (cwd === null || !isTargetWorkspaceCurrent(this, cwd)) {
       return;
     }
     void sideChat.handleAsk(cwd, sessionId, text);
-  }
-
-  private isCurrentRuntimeGeneration(generation: number): boolean {
-    return !this.disposed && this.runtimeGeneration === generation;
-  }
-
-  isTargetWorkspaceCurrent(cwd: string): boolean {
-    const workspace = this.getWorkspaceContext();
-    return isUsableWorkspace(workspace) && workspace.cwd === cwd;
-  }
-
-  private isActivationCandidateCurrent(
-    runtime: DroidRuntime,
-    generation: number,
-    cwd: string,
-  ): boolean {
-    return (
-      this.isCurrentRuntimeGeneration(generation) &&
-      this.managedRuntimes.has(runtime) &&
-      this.isTargetWorkspaceCurrent(cwd)
-    );
-  }
-
-  ensureActiveRuntimeWorkspaceCurrent(): boolean {
-    if (
-      this.runtime === null ||
-      (this.activeRuntimeCwd !== null &&
-        this.isTargetWorkspaceCurrent(this.activeRuntimeCwd))
-    ) {
-      return true;
-    }
-    this.handleWorkspaceContextChanged();
-    return false;
-  }
-
-  private reportWorkspaceChanged(generation: number): void {
-    if (!this.isCurrentRuntimeGeneration(generation)) {
-      return;
-    }
-    this.connection = {
-      status: 'unavailable',
-      message: WORKSPACE_CHANGED_MESSAGE,
-    };
-    this.emitSessionDiagnostic(
-      'workspace-changed',
-      WORKSPACE_CHANGED_MESSAGE,
-    );
-    this.emitSnapshot();
   }
 
   isCurrentTurn(
@@ -3094,38 +2126,15 @@ export class ChatController {
     turnId: string,
   ): boolean {
     if (
-      this.isCurrentRuntime(runtime, runtimeGeneration) &&
+      isCurrentRuntime(this, runtime, runtimeGeneration) &&
       this.turnGeneration === turnGeneration &&
       this.sessionId === sessionId &&
       this.turn?.turnId === turnId &&
       isTurnActive(this.turn)
     ) {
-      return this.ensureActiveRuntimeWorkspaceCurrent();
+      return ensureActiveRuntimeWorkspaceCurrent(this);
     }
     return false;
   }
-}
-
-function unavailableMessage(
-  reason: Extract<
-    RuntimeAvailability,
-    { status: 'unavailable' }
-  >['reason'],
-): string {
-  switch (reason) {
-    case 'cli-not-found':
-      return 'Install the Droid CLI and sign in before using DroidVisX.';
-    case 'invalid-cwd':
-      return 'Droid could not use the selected workspace folder.';
-    case 'initialization-failed':
-      return 'The local Droid runtime could not be initialized.';
-  }
-}
-
-function isSameWorkspaceContext(
-  left: WorkspaceContext,
-  right: WorkspaceContext,
-): boolean {
-  return left.cwd === right.cwd && left.trusted === right.trusted;
 }
 

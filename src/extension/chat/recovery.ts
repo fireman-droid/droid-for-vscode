@@ -8,6 +8,7 @@ import { createTurnActivityState } from '../turnActivityState';
 import { reconcileSessionHistory } from '../reconcileSessionHistory';
 import { SESSION_RECOVERY_DEBOUNCE_MS } from '../SessionRecoveryStore';
 import { setSessionRunning } from './sessionRunning';
+import { loadHistoryTimed } from './runtimeLifecycle';
 import { delay, type ChatControllerInternals } from './internals';
 
 export /**
@@ -239,7 +240,7 @@ export async function finishRecoveredTurn(
     cwd: string,
     turnId: string,
   ): Promise<void> {
-    const loaded = await ctl.loadHistoryTimed(cwd, sessionId);
+    const loaded = await loadHistoryTimed(ctl, cwd, sessionId);
     if (
       !ctl.isCurrentTurn(
         runtime,

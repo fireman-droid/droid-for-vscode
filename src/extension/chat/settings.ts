@@ -15,6 +15,7 @@ import type {
   RuntimeSessionSettingUpdate,
 } from '../../runtime/DroidRuntime';
 import { isSafeModelId } from './capabilityPanels';
+import { ensureActiveRuntimeWorkspaceCurrent } from './runtimeLifecycle';
 import { isEnumValue, type ChatControllerInternals } from './internals';
 
 export const SETTINGS_READ_FAILED_MESSAGE =
@@ -40,7 +41,7 @@ export function handleSettingUpdate(
       cwd === null ||
       message.sessionId !== ctl.sessionId ||
       ctl.connection.status !== 'connected' ||
-      !ctl.ensureActiveRuntimeWorkspaceCurrent()
+      !ensureActiveRuntimeWorkspaceCurrent(ctl)
     ) {
       return;
     }
