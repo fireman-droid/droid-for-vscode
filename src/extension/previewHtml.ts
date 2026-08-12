@@ -79,6 +79,13 @@ export interface PreviewShellOptions {
   readonly fileName: string;
   readonly relativePath: string;
   readonly content: PreviewShellContent;
+  /**
+   * `inline` marks chat-authored HTML with no backing file: the
+   * toolbar drops "Open in editor" (nothing to open) and the note
+   * names the transcript as the source. Reload stays available and
+   * re-renders the identical content. Defaults to `file`.
+   */
+  readonly source?: 'file' | 'inline';
 }
 
 /**
@@ -106,6 +113,7 @@ export function injectPrototypeCsp(html: string): string {
 export function buildPreviewShellHtml(
   options: PreviewShellOptions,
 ): string {
+  const inline = options.source === 'inline';
   const fileName = escapeHtml(options.fileName);
   const relativePath = escapeHtml(options.relativePath);
   const body =
@@ -119,6 +127,17 @@ export function buildPreviewShellHtml(
       : `<p class="dvx-preview-notice" role="status">${escapeHtml(
           options.content.message,
         )}</p>`;
+  const note = inline
+    ? 'From chat · sandboxed · no network'
+    : 'Sandboxed · inline code only · no network';
+  const noteTitle = inline
+    ? 'This HTML comes from a code block in the chat transcript and ' +
+      'runs in a sandboxed frame with an opaque origin. Network ' +
+      'requests, workspace files, and linked assets are unavailable; ' +
+      'only inline HTML, CSS, and JavaScript execute.'
+    : 'The prototype runs in a sandboxed frame with an opaque origin. ' +
+      'Network requests, workspace files, and linked assets are ' +
+      'unavailable; only inline HTML, CSS, and JavaScript execute.';
 
   return /* html */ `<!doctype html>
 <html lang="en">
@@ -137,11 +156,11 @@ export function buildPreviewShellHtml(
     <span class="dvx-preview-file" title="${relativePath}">${fileName}</span>
     <span
       class="dvx-preview-note"
-      title="The prototype runs in a sandboxed frame with an opaque origin. Network requests, workspace files, and linked assets are unavailable; only inline HTML, CSS, and JavaScript execute."
-    >Sandboxed · inline code only · no network</span>
+      title="${escapeHtml(noteTitle)}"
+    >${escapeHtml(note)}</span>
     <span class="dvx-preview-spacer"></span>
     <button id="dvx-preview-reload" type="button">Reload</button>
-    <button id="dvx-preview-open" type="button">Open in editor</button>
+    ${inline ? '' : '<button id="dvx-preview-open" type="button">Open in editor</button>'}
   </header>
   <main class="dvx-preview-stage">${body}</main>
   <script>${TOOLBAR_SCRIPT}</script>

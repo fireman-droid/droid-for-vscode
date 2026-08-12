@@ -3,6 +3,7 @@ import { isAbsolute, join, relative } from 'node:path';
 import * as vscode from 'vscode';
 
 import type { RuntimeDiagnosticSink } from '../runtime/runtimeDiagnostics';
+import { MAX_INLINE_PREVIEW_HTML_LENGTH } from '../shared/bridgeMessages';
 import {
   isPreviewableFilePath,
   isSafeWorkspaceRelativePath,
@@ -32,6 +33,18 @@ type PrototypeRead =
   | { readonly kind: 'error'; readonly reason: PreviewFailure };
 
 /**
+ * What the panel is currently showing: a workspace prototype file
+ * (re-read from disk on Reload) or an inline chat snippet (kept in
+ * memory; Reload re-renders the identical content).
+ */
+type PreviewSource =
+  | { readonly kind: 'file'; readonly path: string }
+  | { readonly kind: 'inline'; readonly html: string };
+
+const INLINE_FILE_NAME = 'Chat snippet';
+const INLINE_SOURCE_LABEL = 'Inline HTML from the chat transcript';
+
+/**
  * Single-instance "Preview" WebviewPanel for Droid-written HTML
  * prototypes. The panel is a strict-CSP shell around a sandboxed
  * `srcdoc` iframe (see previewHtml.ts for the full security model);
@@ -43,7 +56,7 @@ export class PreviewPanelController
   implements PrototypePreviewOpener, vscode.Disposable
 {
   private panel: vscode.WebviewPanel | undefined;
-  private currentPath: string | undefined;
+  private current: PreviewSource | undefined;
   private disposed = false;
 
   constructor(private readonly diagnostics?: RuntimeDiagnosticSink) {}
@@ -69,8 +82,8 @@ export class PreviewPanelController
       return 'failed';
     }
 
-    this.currentPath = relativePath;
-    this.render(relativePath, {
+    this.current = { kind: 'file', path: relativePath };
+    this.renderFile(relativePath, {
       kind: 'document',
       html: read.html,
     });
@@ -82,30 +95,68 @@ export class PreviewPanelController
     return 'opened';
   }
 
+  /**
+   * Renders bridge-validated inline HTML from the transcript. The
+   * size limit is re-enforced here (defense in depth against a
+   * non-bridge caller); the source is kept in memory so the toolbar's
+   * Reload re-renders the identical content.
+   */
+  async openInlineHtml(html: string): Promise<PrototypePreviewOutcome> {
+    if (this.disposed) {
+      return 'failed';
+    }
+    if (html.length === 0 || html.length > MAX_INLINE_PREVIEW_HTML_LENGTH) {
+      this.recordFailure('host.preview.failed', 'inline', 'too-large');
+      return 'failed';
+    }
+    this.current = { kind: 'inline', html };
+    this.renderInline(html);
+    this.diagnostics?.record({
+      level: 'info',
+      name: 'host.preview.opened',
+      attributes: { path: 'inline', bytes: Buffer.byteLength(html, 'utf8') },
+    });
+    return 'opened';
+  }
+
   dispose(): void {
     this.disposed = true;
     this.panel?.dispose();
     this.panel = undefined;
-    this.currentPath = undefined;
+    this.current = undefined;
   }
 
   /**
-   * Re-reads the current prototype from disk and rebuilds the shell. A
-   * missing or unreadable file degrades to an in-panel notice (with
-   * Reload still available) instead of a broken frame.
+   * Rebuilds the shell for the current source. Files are re-read from
+   * disk (a missing or unreadable file degrades to an in-panel notice
+   * with Reload still available); inline snippets re-render the same
+   * in-memory content, which restarts their scripts from scratch.
    */
   private async reload(): Promise<void> {
-    const relativePath = this.currentPath;
-    if (this.disposed || relativePath === undefined) {
+    const current = this.current;
+    if (this.disposed || current === undefined) {
       return;
     }
+    if (current.kind === 'inline') {
+      this.renderInline(current.html);
+      this.diagnostics?.record({
+        level: 'info',
+        name: 'host.preview.reloaded',
+        attributes: {
+          path: 'inline',
+          bytes: Buffer.byteLength(current.html, 'utf8'),
+        },
+      });
+      return;
+    }
+    const relativePath = current.path;
     const target = this.resolveTarget(relativePath);
     const read =
       typeof target === 'string'
         ? ({ kind: 'error', reason: target } as const)
         : await readPrototype(target);
     if (read.kind === 'error') {
-      this.render(relativePath, {
+      this.renderFile(relativePath, {
         kind: 'notice',
         message: noticeFor(relativePath, read.reason),
       });
@@ -116,7 +167,7 @@ export class PreviewPanelController
       );
       return;
     }
-    this.render(relativePath, { kind: 'document', html: read.html });
+    this.renderFile(relativePath, { kind: 'document', html: read.html });
     this.diagnostics?.record({
       level: 'info',
       name: 'host.preview.reloaded',
@@ -125,10 +176,13 @@ export class PreviewPanelController
   }
 
   private async openInEditor(): Promise<void> {
-    const relativePath = this.currentPath;
-    if (this.disposed || relativePath === undefined) {
+    const current = this.current;
+    // Inline snippets render no "Open in editor" button; a forged
+    // message for them is dropped here.
+    if (this.disposed || current === undefined || current.kind !== 'file') {
       return;
     }
+    const relativePath = current.path;
     const target = this.resolveTarget(relativePath);
     if (typeof target === 'string') {
       this.recordFailure(
@@ -149,20 +203,36 @@ export class PreviewPanelController
     }
   }
 
-  private render(
+  private renderFile(
     relativePath: string,
     content:
       | { readonly kind: 'document'; readonly html: string }
       | { readonly kind: 'notice'; readonly message: string },
   ): void {
     const fileName = relativePath.split('/').at(-1) ?? relativePath;
-    const panel = this.ensurePanel();
-    panel.title = `Preview · ${fileName}`;
-    panel.webview.html = buildPreviewShellHtml({
+    this.renderShell(fileName, {
       fileName,
       relativePath,
       content,
     });
+  }
+
+  private renderInline(html: string): void {
+    this.renderShell(INLINE_FILE_NAME, {
+      fileName: INLINE_FILE_NAME,
+      relativePath: INLINE_SOURCE_LABEL,
+      content: { kind: 'document', html },
+      source: 'inline',
+    });
+  }
+
+  private renderShell(
+    fileName: string,
+    options: Parameters<typeof buildPreviewShellHtml>[0],
+  ): void {
+    const panel = this.ensurePanel();
+    panel.title = `Preview · ${fileName}`;
+    panel.webview.html = buildPreviewShellHtml(options);
     panel.reveal(undefined, false);
   }
 
@@ -209,7 +279,7 @@ export class PreviewPanelController
     panel.onDidDispose(() => {
       if (this.panel === panel) {
         this.panel = undefined;
-        this.currentPath = undefined;
+        this.current = undefined;
       }
     });
     this.panel = panel;

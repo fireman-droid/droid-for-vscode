@@ -177,6 +177,22 @@ describe('buildPreviewShellHtml', () => {
   it('caps prototypes at 4 MB', () => {
     expect(MAX_PREVIEW_SOURCE_BYTES).toBe(4 * 1024 * 1024);
   });
+
+  it('drops "Open in editor" and names the chat source for inline HTML', () => {
+    const shell = buildPreviewShellHtml({
+      fileName: 'Chat snippet',
+      relativePath: 'Inline HTML from the chat transcript',
+      content: { kind: 'document', html: '<p>hi</p>' },
+      source: 'inline',
+    });
+    expect(shell).not.toContain('>Open in editor<');
+    expect(shell).toContain('>Reload<');
+    expect(shell).toContain('From chat');
+    // Identical sandbox and CSP posture as file previews.
+    expect(shell).toContain('sandbox="allow-scripts"');
+    expect(shell).not.toContain('allow-same-origin');
+    expect(shell).toContain(`content="${PREVIEW_CONTENT_CSP}"`);
+  });
 });
 
 function escapeForAttribute(value: string): string {

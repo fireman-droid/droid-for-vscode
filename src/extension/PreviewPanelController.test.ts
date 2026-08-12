@@ -225,6 +225,85 @@ describe('PreviewPanelController.openPreview', () => {
   });
 });
 
+describe('PreviewPanelController.openInlineHtml', () => {
+  it('renders inline chat HTML in the sandboxed panel with an inline title', async () => {
+    const { sink, records } = createDiagnostics();
+    const controller = new PreviewPanelController(sink);
+
+    const outcome = await controller.openInlineHtml(
+      '<!DOCTYPE html><html><body><script>go()</script></body></html>',
+    );
+
+    expect(outcome).toBe('opened');
+    const panel = lastPanel();
+    expect(panel?.title).toBe('Preview · Chat snippet');
+    expect(panel?.webview.html).toContain('sandbox="allow-scripts"');
+    expect(panel?.webview.html).not.toContain('allow-same-origin');
+    expect(panel?.webview.html).toContain('&lt;script&gt;go()&lt;/script&gt;');
+    expect(panel?.webview.html).not.toContain('>Open in editor<');
+    expect(
+      records.find((record) => record.name === 'host.preview.opened')
+        ?.attributes?.path,
+    ).toBe('inline');
+  });
+
+  it('works without any workspace folder', async () => {
+    state.workspaceRoot = undefined;
+    const controller = new PreviewPanelController();
+    const outcome = await controller.openInlineHtml('<p>standalone</p>');
+    expect(outcome).toBe('opened');
+  });
+
+  it('fails closed for empty or oversized inline sources', async () => {
+    const { sink, records } = createDiagnostics();
+    const controller = new PreviewPanelController(sink);
+
+    expect(await controller.openInlineHtml('')).toBe('failed');
+    expect(
+      await controller.openInlineHtml('x'.repeat(512 * 1024 + 1)),
+    ).toBe('failed');
+    expect(vscodeMock.window.createWebviewPanel).not.toHaveBeenCalled();
+    expect(
+      records.filter((record) => record.name === 'host.preview.failed'),
+    ).toHaveLength(2);
+  });
+
+  it('reloads by re-rendering the identical inline content', async () => {
+    const controller = new PreviewPanelController();
+    await controller.openInlineHtml('<p>inline-v1</p>');
+    const panel = lastPanel();
+
+    panel!.webview.html = '';
+    panel?.webview.receive({ type: 'preview.reload' });
+    await flush();
+    expect(panel?.webview.html).toContain('inline-v1');
+  });
+
+  it('ignores forged openInEditor messages for inline content', async () => {
+    const controller = new PreviewPanelController();
+    await controller.openInlineHtml('<p>inline</p>');
+    lastPanel()?.webview.receive({ type: 'preview.openInEditor' });
+    await flush();
+    expect(vscodeMock.__showTextDocument).not.toHaveBeenCalled();
+  });
+
+  it('reuses the single panel across file and inline previews', async () => {
+    state.files.set('/repo/a.html', '<p>a</p>');
+    const controller = new PreviewPanelController();
+    await controller.openPreview('a.html');
+    await controller.openInlineHtml('<p>inline</p>');
+    expect(vscodeMock.window.createWebviewPanel).toHaveBeenCalledTimes(1);
+    expect(lastPanel()?.title).toBe('Preview · Chat snippet');
+
+    // Reload after the switch re-renders the inline source, not the file.
+    lastPanel()!.webview.html = '';
+    lastPanel()?.webview.receive({ type: 'preview.reload' });
+    await flush();
+    expect(lastPanel()?.webview.html).toContain('inline');
+    expect(lastPanel()?.webview.html).not.toContain('<p>a</p>');
+  });
+});
+
 describe('PreviewPanelController toolbar commands', () => {
   it('reloads current prototype and degrades to a notice when deleted', async () => {
     state.files.set('/repo/proto.html', '<p>v1</p>');
