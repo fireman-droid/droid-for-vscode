@@ -36,6 +36,7 @@ import {
   takeSubagentSummary,
   type SubagentSummaryQueues,
 } from '../subagentSummary';
+import { extractToolBackgroundHint } from '../toolBackgroundHint';
 import { extractToolDetail } from '../toolDetail';
 import {
   extractToolFilePath,
@@ -608,6 +609,10 @@ function appendTool(
   );
   const filePath = historyToolFilePath(projection, toolName, block.input);
   const detail = extractToolDetail(toolName, block.input);
+  const backgroundHint = extractToolBackgroundHint(
+    toolName,
+    block.input,
+  );
   const subagent = historyToolSubagent(projection, toolName, block.input);
   appendTranscriptItem(projection, {
     id: transcriptId,
@@ -623,6 +628,7 @@ function appendTool(
     ...(detail === undefined
       ? {}
       : { detailKind: detail.kind, detail: detail.text }),
+    ...(backgroundHint === undefined ? {} : { backgroundHint }),
     ...(subagent === undefined ? {} : { subagent }),
   });
   projection.toolCounts.set(

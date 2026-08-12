@@ -1,6 +1,7 @@
 import type {
   ImageMediaType,
   ImageOrigin,
+  ToolBackgroundHint,
   ToolDetailKind,
 } from '../shared/bridgeMessages';
 import type { ToolActivityUpdateKind } from '../shared/toolActivity';
@@ -49,6 +50,11 @@ export type RuntimeEvent =
       detailKind?: ToolDetailKind;
       /** Command or plan text extracted from the tool input. */
       detail?: string;
+      /**
+       * Fail-soft `fireAndForget` read from an Execute tool input:
+       * the CLI detached the command as a background process.
+       */
+      backgroundHint?: ToolBackgroundHint;
     }
   | {
       type: 'tool-progress';

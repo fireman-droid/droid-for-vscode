@@ -222,6 +222,73 @@ describe('normalizeSdkEvent', () => {
     ).not.toHaveProperty('errorText');
   });
 
+  it('reads the execute fireAndForget flag fail-soft', () => {
+    // Strong signal: the CLI backgrounded the command (probed on
+    // CLI 0.193.0; see artifacts/probe-fire-and-forget-conclusions.md).
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_call', {
+          name: 'Execute',
+          toolUseId: 'tool-bg',
+          input: {
+            command: 'node artifacts/tmp/dvx-long-runner.mjs',
+            fireAndForget: true,
+          },
+        }),
+      ),
+    ).toMatchObject({
+      type: 'tool-start',
+      backgroundHint: { fireAndForget: true },
+    });
+
+    // Streamed tool_call_delta inputs carry the flag the same way.
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_call_delta', {
+          toolUse: {
+            type: 'tool_use',
+            id: 'tool-bg-delta',
+            name: 'Execute',
+            input: { command: 'pnpm dev', fireAndForget: true },
+          },
+        }),
+      ),
+    ).toMatchObject({ backgroundHint: { fireAndForget: true } });
+
+    // Missing field (the foreground norm) adds no key at all.
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_call', {
+          name: 'Execute',
+          toolUseId: 'tool-fg',
+          input: { command: 'git status' },
+        }),
+      ),
+    ).not.toHaveProperty('backgroundHint');
+
+    // Malformed values stay fail-soft instead of erroring.
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_call', {
+          name: 'Execute',
+          toolUseId: 'tool-bad',
+          input: { command: 'ls', fireAndForget: 'true' },
+        }),
+      ),
+    ).not.toHaveProperty('backgroundHint');
+
+    // Non-execute tools never surface the flag.
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_call', {
+          name: 'Read',
+          toolUseId: 'tool-read-bg',
+          input: { file_path: 'x.ts', fireAndForget: true },
+        }),
+      ),
+    ).not.toHaveProperty('backgroundHint');
+  });
+
   it('projects workspace-relative file paths for file-modifying tools', () => {
     const root = resolve('workspace-root');
 

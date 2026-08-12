@@ -136,6 +136,52 @@ describe('projectSessionHistory', () => {
     expect(JSON.stringify(rootless)).not.toContain('app.ts');
   });
 
+  it('carries the execute background hint fail-soft on history rows', () => {
+    const loaded = response([
+      message('assistant-1', 'assistant', [
+        {
+          type: 'tool_use',
+          id: 'tool-bg',
+          name: 'Execute',
+          input: { command: 'pnpm dev', fireAndForget: true },
+        },
+        {
+          type: 'tool_use',
+          id: 'tool-fg',
+          name: 'Execute',
+          input: { command: 'git status' },
+        },
+        {
+          type: 'tool_use',
+          id: 'tool-bad',
+          name: 'Execute',
+          input: { command: 'ls', fireAndForget: 'true' },
+        },
+      ]),
+    ]);
+
+    const result = projectSessionHistory(loaded);
+
+    expect(result).toMatchObject({
+      status: 'available',
+      state: {
+        transcript: [
+          {
+            kind: 'tool',
+            toolName: 'Execute',
+            backgroundHint: { fireAndForget: true },
+          },
+          { kind: 'tool', toolName: 'Execute' },
+          { kind: 'tool', toolName: 'Execute' },
+        ],
+      },
+    });
+    const transcript =
+      result.status === 'available' ? result.state.transcript : [];
+    expect(transcript[1]).not.toHaveProperty('backgroundHint');
+    expect(transcript[2]).not.toHaveProperty('backgroundHint');
+  });
+
   it('synthesizes one changes summary per history turn after its last item', () => {
     const root = resolve('workspace-root');
     const loaded = response([

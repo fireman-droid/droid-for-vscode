@@ -22,6 +22,7 @@ import {
   toToolOutputTail,
 } from '../shared/toolOutput';
 import { base64ByteLength } from '../shared/transcriptLimits';
+import { extractToolBackgroundHint } from './toolBackgroundHint';
 import { extractToolDetail } from './toolDetail';
 import {
   extractToolFilePath,
@@ -389,12 +390,17 @@ function withToolInputContext(
     workspaceRoot,
   );
   const detail = extractToolDetail(activity.toolName, input);
+  const backgroundHint = extractToolBackgroundHint(
+    activity.toolName,
+    input,
+  );
   return {
     ...activity,
     ...(filePath === undefined ? {} : { filePath }),
     ...(detail === undefined
       ? {}
       : { detailKind: detail.kind, detail: detail.text }),
+    ...(backgroundHint === undefined ? {} : { backgroundHint }),
   };
 }
 
