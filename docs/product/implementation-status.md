@@ -489,6 +489,35 @@ Droid（仅 UI 文案，扩展 ID/包名/命令不动）；⑩ Mermaid 图点击
 `artifacts/shots/ui-polish-*.png`）。**本批次未打包安装（完成时工作
 区含并行代理未提交在制品），待随下一批次包一起可见验证**。
 
+2026-08-12 傍晚追加「Thinking 穿插渲染第一切片」（设计
+`interleaved-thinking-design.md`，提交 9e57203）：think→tool→think
+回合现在渲染为工具行前后**两个独立 Thinking 行**，各自显示自己的
+"Thought for Xs"，live 流式与历史回放一致。端到端段身份透传：
+Runtime `normalizeSdkEvent` 转发 SDK `thinking_text_delta/complete`
+的 `messageId`/`blockIndex`（畸形段身份丢弃）→ Host
+`turnActivityState` 把 `messageId:blockIndex` 折算为回合内单调
+`segmentIndex`（空段——只有 complete 没有可见文本——继续抑制，32k
+累计上限语义不变），`hostTranscriptState` 快照按段拆 Thinking 项
+（段 0 沿用旧 id 形状，旧检查点单块项兼容、形状不变）→ Bridge
+`thinking.delta`/`thinking.complete` 新增 `segmentIndex` 字段（webview
+侧校验安全非负整数）→ store 拆键 `thinking:${turnId}:${segmentIndex}`
+且 complete 只定向命中自己的段。顺带钉死设计文档记录的两个现状
+bug 的回归测试：已 complete 的 Thinking 项不再被后续 delta 增长、
+`durationMs` 不再被末段覆写。**协议版本 3→5**：版本 4 为本切片
+segmentIndex 字段；版本 5 为并行 plugins 面板切片（共用同一常量、
+随本提交一起 bump，plugins 消息随其批次落地）；全仓硬编码
+`protocolVersion: 3` 断言（`App.test.tsx`、`vscode.test.ts`）改用
+`BRIDGE_PROTOCOL_VERSION` 常量。门禁：主工作区全量 vitest 75 文件
+1707 项全过；build 过；120 回合 stress 复测（harness live 流新增
+8 段穿插 thinking delta/complete）流式窗口 0 个 50ms+ 长任务；
+`artifacts/verify-interleaved.mjs` headless Chrome 可见验证：live 回合
+渲染 8 个独立 Thinking 行、各带独立耗时标签。提交树 typecheck 此刻
+被并行批次半扫入的 plugins 接线（dd81d92 带入 `ChatController.ts`
+的用点而契约未落）与未入库的 `slashBuiltins.ts`（HEAD `App.tsx`/
+`Thread.tsx` 已引用）压红，均非本切片文件，待其批次落地转绿。
+**本切片未打包安装（完成时工作区含并行代理未提交在制品），待随
+下一批次包一起可见验证 think→tool→think 分段渲染**。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
@@ -557,6 +586,9 @@ Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限�
   中的全部 Thinking 同步展开或收起
 - 同一 Turn 内交错到达的 Thinking、Tool 和 Assistant Text 保留真实事件
   顺序，不再把后续正文合并回最早的 Assistant Text 段
+- think→tool→think 回合按 SDK 段身份（`messageId:blockIndex` 折算
+  回合内 `segmentIndex`）渲染为多个独立 Thinking 行，各自显示自己的
+  真实思考耗时；已完成的段不再被后续 delta 增长
 - Thinking 正文使用 Figma 的 Inter 12.5px / 20.313px 和
   `#a1a1a1`，Chevron 使用 14×14 SVG
 - Thinking 和 Assistant Markdown 使用 assistant-ui 有界平滑提交，避免
@@ -1341,7 +1373,20 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 - [ ] Mission Control
 - [ ] Worker 详情
-- [ ] Plugins
+- [x] Plugins 只读第一切片（设计 `plugins-hooks-design.md` 切片 1）：
+      Composer 设置弹层新增 Plugins 只读分区（Skills/MCP 同族面板），
+      `plugins.refresh` → Host 经 daemon sidecar 并发
+      `plugins.listInstalled` + `marketplaces.list`（探针实证免活跃
+      会话可查，`artifacts/probe-plugins-daemon.mjs`；process 运行
+      模式同样可用）→ Bridge 协议 v5 `session.plugins` 四态
+      （loading/ready/error/unsupported）双侧校验（上限、scope 白名单、
+      重复 id 丢弃）→ 面板行展示插件 id + scope 徽记 + 版本哈希 +
+      Active/Off 只读状态，尾注 marketplace 计数与「Manage plugins
+      with the droid CLI」。daemon 不可用/未登录显式 error 态
+      （sign-in 指引，不静默空列表）；会话切换重置 idle 并由可见
+      面板自动重查（沿用 Skills 死锁修复约定）。install/uninstall/
+      enable 写操作与 Marketplaces 管理为后续切片
+- [ ] Plugins 后续切片（install/uninstall/enable 写操作）
 - [ ] Marketplaces
 - [ ] Hooks 管理
 - [ ] Automations
