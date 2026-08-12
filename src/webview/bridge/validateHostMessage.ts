@@ -28,6 +28,8 @@ import {
   MAX_SESSION_SEARCH_SNIPPET_LENGTH,
   MAX_SESSION_TITLE_LENGTH,
   MAX_SESSION_TRANSCRIPT_ITEMS,
+  MAX_WORKTREE_BRANCH_LENGTH,
+  MAX_WORKTREE_PATH_LENGTH,
   MAX_MCP_NAME_LENGTH,
   MAX_MCP_SERVERS,
   MAX_MCP_TOOLS_PER_SERVER,
@@ -138,6 +140,7 @@ import {
   type MissionSessionRole,
   type MissionState,
   type SessionSummary,
+  type SessionWorktreeInfo,
   type SessionTranscriptItem,
   type SubagentStatus,
   type ToolSubagentSummary,
@@ -311,12 +314,15 @@ function parseHostSnapshot(
         'historyStatus',
         'truncated',
       ],
-      ['mission'],
+      ['mission', 'worktreeCreateAvailable'],
     ) ||
     !isSequence(value.sequence) ||
     !isNullableId(value.sessionId) ||
     !isSessionHistoryStatus(value.historyStatus) ||
-    typeof value.truncated !== 'boolean'
+    typeof value.truncated !== 'boolean' ||
+    // Hosts omit the flag when unavailable instead of sending false.
+    (value.worktreeCreateAvailable !== undefined &&
+      value.worktreeCreateAvailable !== true)
   ) {
     return undefined;
   }
@@ -371,6 +377,9 @@ function parseHostSnapshot(
     historyStatus: value.historyStatus,
     truncated: value.truncated,
     ...(mission === undefined ? {} : { mission }),
+    ...(value.worktreeCreateAvailable === undefined
+      ? {}
+      : { worktreeCreateAvailable: true }),
   };
 }
 
@@ -2472,7 +2481,7 @@ function parseSessionSummary(value: unknown): SessionSummary | undefined {
     !hasExactKeys(
       value,
       ['id', 'title', 'messageCount', 'modifiedTime', 'active'],
-      ['isFavorite', 'missionRole'],
+      ['isFavorite', 'missionRole', 'worktree'],
     ) ||
     !isId(value.id) ||
     !isBoundedString(value.title, MAX_SESSION_TITLE_LENGTH) ||
@@ -2487,6 +2496,13 @@ function parseSessionSummary(value: unknown): SessionSummary | undefined {
   ) {
     return undefined;
   }
+  const worktree =
+    value.worktree === undefined
+      ? undefined
+      : parseSessionWorktree(value.worktree);
+  if (value.worktree !== undefined && worktree === undefined) {
+    return undefined;
+  }
 
   return {
     id: value.id,
@@ -2498,7 +2514,26 @@ function parseSessionSummary(value: unknown): SessionSummary | undefined {
     ...(value.missionRole === undefined
       ? {}
       : { missionRole: value.missionRole }),
+    ...(worktree === undefined ? {} : { worktree }),
   };
+}
+
+function parseSessionWorktree(
+  value: unknown,
+): SessionWorktreeInfo | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, ['branch', 'path']) ||
+    // Branch may be '' (host-side git recovery failed); the path is
+    // the worktree identity and must be present.
+    !isBoundedString(value.branch, MAX_WORKTREE_BRANCH_LENGTH) ||
+    hasControlCharacter(value.branch) ||
+    !isNonEmptyBoundedString(value.path, MAX_WORKTREE_PATH_LENGTH) ||
+    hasControlCharacter(value.path)
+  ) {
+    return undefined;
+  }
+  return { branch: value.branch, path: value.path };
 }
 
 function parseSessionArchivedMessage(

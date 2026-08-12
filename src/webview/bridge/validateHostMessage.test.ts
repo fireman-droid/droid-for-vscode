@@ -21,6 +21,8 @@ import {
   MAX_SESSION_SEARCH_QUERY_LENGTH,
   MAX_SESSION_SEARCH_SNIPPET_LENGTH,
   MAX_SESSION_TITLE_LENGTH,
+  MAX_WORKTREE_BRANCH_LENGTH,
+  MAX_WORKTREE_PATH_LENGTH,
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_SPEC_PLAN_LENGTH,
   MAX_SUBAGENT_DESCRIPTION_LENGTH,
@@ -2361,6 +2363,100 @@ describe('readHostMessage', () => {
     };
 
     expect(readHostMessage(message)).toEqual(message);
+  });
+
+  it('accepts worktree annotations and the create-capability flag', () => {
+    const snapshot = createSessionSnapshot();
+    const message = {
+      ...snapshot,
+      worktreeCreateAvailable: true,
+      sessions: {
+        ...snapshot.sessions,
+        items: [
+          {
+            ...snapshot.sessions.items[0],
+            worktree: {
+              branch: 'main-wt',
+              path: 'D:\\repo-wt-main-wt',
+            },
+          },
+        ],
+      },
+    };
+    expect(readHostMessage(message)).toEqual(message);
+
+    // '' branch means host-side git recovery failed; still renderable.
+    const emptyBranch = {
+      ...snapshot,
+      sessions: {
+        ...snapshot.sessions,
+        items: [
+          {
+            ...snapshot.sessions.items[0],
+            worktree: { branch: '', path: 'D:\\repo-wt-main-wt' },
+          },
+        ],
+      },
+    };
+    expect(readHostMessage(emptyBranch)).toEqual(emptyBranch);
+  });
+
+  it.each([
+    { name: 'non-record worktree', worktree: 'main-wt' },
+    { name: 'missing path', worktree: { branch: 'main-wt' } },
+    {
+      name: 'empty path',
+      worktree: { branch: 'main-wt', path: '' },
+    },
+    {
+      name: 'oversized branch',
+      worktree: {
+        branch: 'b'.repeat(MAX_WORKTREE_BRANCH_LENGTH + 1),
+        path: 'D:\\repo-wt',
+      },
+    },
+    {
+      name: 'oversized path',
+      worktree: {
+        branch: 'main-wt',
+        path: 'p'.repeat(MAX_WORKTREE_PATH_LENGTH + 1),
+      },
+    },
+    {
+      name: 'control character in path',
+      worktree: { branch: 'main-wt', path: 'D:\\repo\u0000wt' },
+    },
+    {
+      name: 'extra keys',
+      worktree: {
+        branch: 'main-wt',
+        path: 'D:\\repo-wt',
+        isNewlyCreated: true,
+      },
+    },
+  ])('rejects hostile session worktree shapes ($name)', ({ worktree }) => {
+    const snapshot = createSessionSnapshot();
+    expect(
+      readHostMessage({
+        ...snapshot,
+        sessions: {
+          ...snapshot.sessions,
+          items: [{ ...snapshot.sessions.items[0], worktree }],
+        },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('rejects non-true worktree capability flags', () => {
+    const snapshot = createSessionSnapshot();
+    // Hosts omit the flag instead of sending false; anything but
+    // `true` is malformed.
+    expect(
+      readHostMessage({ ...snapshot, worktreeCreateAvailable: false }),
+    ).toBeUndefined();
+    expect(
+      readHostMessage({ ...snapshot, worktreeCreateAvailable: 'yes' }),
+    ).toBeUndefined();
   });
 
   it('defaults a missing favorite flag to false', () => {
