@@ -414,6 +414,7 @@ function mapItemToPart(
             filePath: item.filePath ?? null,
             detailKind: item.detailKind ?? null,
             detail: item.detail ?? null,
+            errorMessage: item.errorMessage ?? null,
           },
         },
       };
@@ -437,6 +438,9 @@ function mapItemToPart(
           severity: item.severity,
           code: item.code.slice(0, 256),
           message: item.message.slice(0, 4_096),
+          ...(item.relatedSessionId === undefined
+            ? {}
+            : { relatedSessionId: item.relatedSessionId }),
         },
       };
     case 'image':

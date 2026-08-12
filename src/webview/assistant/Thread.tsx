@@ -6,7 +6,7 @@ import {
   ThreadPrimitive,
   useAui,
   useAuiState,
-} from '@assistant-ui/react';
+} from "@assistant-ui/react";
 import {
   createContext,
   memo,
@@ -16,7 +16,7 @@ import {
   useRef,
   useState,
   type ReactNode,
-} from 'react';
+} from "react";
 
 import {
   IMAGE_MEDIA_TYPES,
@@ -38,29 +38,26 @@ import {
   type AttachmentSummary,
   type SessionContextState,
   type SessionSettingsState,
-} from '../../shared/bridgeMessages';
+} from "../../shared/bridgeMessages";
 import type {
   McpAuthProgress,
   McpPanelState,
   McpServerAddParams,
   SkillsPanelState,
-} from './ComposerControls';
+} from "./ComposerControls";
 import {
   ComposerControls,
   type SessionSettingSelection,
-} from './ComposerControls';
+} from "./ComposerControls";
 import {
   ACTIVITY_GROUP_KEY,
   activityGroupBy,
   summarizeActivityGroup,
   type GroupCandidatePart,
-} from './activityGrouping';
-import { DroidMarkdownText } from './MarkdownText';
-import { TranscriptImage } from './TranscriptImage';
-import {
-  getImagePreview,
-  rememberImagePreview,
-} from './imagePreviewCache';
+} from "./activityGrouping";
+import { DroidMarkdownText } from "./MarkdownText";
+import { TranscriptImage } from "./TranscriptImage";
+import { getImagePreview, rememberImagePreview } from "./imagePreviewCache";
 
 const THINKING_SMOOTH_OPTIONS = {
   drainMs: 480,
@@ -72,6 +69,8 @@ const THINKING_SMOOTH_OPTIONS = {
 /** Latest workspace search result delivered by the host. */
 export interface FileSearchResult {
   readonly requestId: string;
+  /** 'no-workspace' means no folder is open, so search cannot run. */
+  readonly status: "ok" | "no-workspace";
   readonly files: readonly string[];
 }
 
@@ -79,7 +78,7 @@ export interface FileSearchResult {
 export type SlashCommandsState =
   | SessionCommandsState
   | {
-      readonly status: 'idle';
+      readonly status: "idle";
       readonly items: readonly [];
       readonly recent: readonly [];
     };
@@ -138,23 +137,30 @@ export interface UserEditorEnv {
 
 // Tool rows deep inside the transcript open native diffs through this
 // context so the memoized message tree stays free of prop drilling.
-const FileDiffContext = createContext<(path: string) => void>(
-  () => undefined,
-);
+const FileDiffContext = createContext<(path: string) => void>(() => undefined);
 
 // Regenerating rewinds to the last user message and resends it. Null
 // means the action is currently unavailable (no anchor or turn active).
 const RegenerateContext = createContext<(() => void) | null>(null);
 
+// The compaction divider offers a jump to the pre-compaction session
+// through this context, keeping the memoized message tree free of
+// prop drilling (same pattern as FileDiffContext).
+const SelectSessionContext = createContext<
+  ((sessionId: string) => void) | null
+>(null);
+
 interface DroidThreadProps {
   readonly pending: boolean;
-  readonly activity?: 'working' | 'responding';
+  readonly activity?: "working" | "responding";
   /** True while a transcript activity row is live (see PendingResponse). */
   readonly activityLive: boolean;
   readonly historyStatus: SessionHistoryStatus | null;
   readonly truncated: boolean;
   readonly hiddenMessageCount: number;
   readonly onShowEarlier: () => void;
+  /** Switches to another session (compact divider history jump). */
+  readonly onSelectSession: (sessionId: string) => void;
   readonly statusMessage?: string;
   readonly showRetry: boolean;
   readonly running: boolean;
@@ -180,6 +186,8 @@ interface DroidThreadProps {
   readonly onMcpServerRemove: (name: string) => void;
   readonly mcpAuth: McpAuthProgress | null;
   readonly onMcpServerAuthenticate: (name: string) => void;
+  /** Starts a fresh session (skill changes apply at session start). */
+  readonly onNewSession: () => void;
   readonly attachments: readonly AttachmentSummary[];
   readonly fileSearch: FileSearchResult | null;
   readonly onFileSearch: (requestId: string, query: string) => void;
@@ -241,6 +249,7 @@ export const DroidThread = memo(function DroidThread({
   truncated,
   hiddenMessageCount,
   onShowEarlier,
+  onSelectSession,
   statusMessage,
   showRetry,
   running,
@@ -266,6 +275,7 @@ export const DroidThread = memo(function DroidThread({
   onMcpServerRemove,
   mcpAuth,
   onMcpServerAuthenticate,
+  onNewSession,
   attachments,
   fileSearch,
   onFileSearch,
@@ -303,9 +313,7 @@ export const DroidThread = memo(function DroidThread({
 }: DroidThreadProps): React.JSX.Element {
   // Only one message may be in edit mode at a time. Opening a new
   // target cancels the previous edit staging area on the host first.
-  const [editingMessageId, setEditingMessageId] = useState<
-    string | null
-  >(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const beginEditing = (messageId: string): void => {
     if (editingMessageId === messageId) {
       return;
@@ -360,7 +368,7 @@ export const DroidThread = memo(function DroidThread({
     if (column === null) {
       return undefined;
     }
-    const scroller = column.closest('.dvx-thread-viewport');
+    const scroller = column.closest(".dvx-thread-viewport");
     if (!(scroller instanceof HTMLElement)) {
       return undefined;
     }
@@ -370,15 +378,13 @@ export const DroidThread = memo(function DroidThread({
       frame = 0;
       const viewportTop = scroller.getBoundingClientRect().top;
       const messages = [
-        ...column.querySelectorAll<HTMLElement>('.dvx-message-user'),
+        ...column.querySelectorAll<HTMLElement>(".dvx-message-user"),
       ];
-      const rects = messages.map((element) =>
-        element.getBoundingClientRect(),
-      );
+      const rects = messages.map((element) => element.getBoundingClientRect());
       // An open edit card is exempt from the push-out hand-off (see
       // computeStickyLayout): it stays fully visible while pinned.
       const editingIndex = messages.findIndex((element) =>
-        element.classList.contains('dvx-message-editing'),
+        element.classList.contains("dvx-message-editing"),
       );
       const layout = computeStickyLayout(
         rects.map((rect) => rect.top),
@@ -389,18 +395,18 @@ export const DroidThread = memo(function DroidThread({
       messages.forEach((element, index) => {
         toggleDataAttribute(
           element,
-          'data-pinned',
+          "data-pinned",
           index === layout.pinnedIndex,
         );
         toggleDataAttribute(
           element,
-          'data-covered',
+          "data-covered",
           layout.covered[index] === true,
         );
         const transform =
           index === layout.pinnedIndex && layout.pushPx > 0
             ? `translateY(${-layout.pushPx}px)`
-            : '';
+            : "";
         if (element.style.transform !== transform) {
           element.style.transform = transform;
         }
@@ -440,28 +446,28 @@ export const DroidThread = memo(function DroidThread({
         follow.following = false;
       }
     };
-    scroller.addEventListener('scroll', onScroll, { passive: true });
-    scroller.addEventListener('wheel', onWheel, { passive: true });
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    scroller.addEventListener("wheel", onWheel, { passive: true });
     const resizeObserver =
-      typeof ResizeObserver === 'undefined'
+      typeof ResizeObserver === "undefined"
         ? null
         : new ResizeObserver(followBottom);
     resizeObserver?.observe(column);
     // The sticky footer (composer) lives inside the same scroller, so
     // its growth also moves the bottom edge.
-    const footer = scroller.querySelector('.dvx-thread-footer');
+    const footer = scroller.querySelector(".dvx-thread-footer");
     if (footer instanceof HTMLElement) {
       resizeObserver?.observe(footer);
     }
     const mutationObserver =
-      typeof MutationObserver === 'undefined'
+      typeof MutationObserver === "undefined"
         ? null
         : new MutationObserver(schedule);
     mutationObserver?.observe(column, { childList: true });
     updatePins();
     return () => {
-      scroller.removeEventListener('scroll', onScroll);
-      scroller.removeEventListener('wheel', onWheel);
+      scroller.removeEventListener("scroll", onScroll);
+      scroller.removeEventListener("wheel", onWheel);
       resizeObserver?.disconnect();
       mutationObserver?.disconnect();
       if (frame !== 0) {
@@ -525,9 +531,7 @@ export const DroidThread = memo(function DroidThread({
   );
   return (
     <ThreadPrimitive.Root
-      className={`dvx-thread${
-        interactionPending ? ' dvx-thread-pending' : ''
-      }`}
+      className={`dvx-thread${interactionPending ? " dvx-thread-pending" : ""}`}
     >
       <ThreadPrimitive.Viewport
         className="dvx-thread-viewport"
@@ -542,70 +546,71 @@ export const DroidThread = memo(function DroidThread({
         scrollToBottomOnThreadSwitch
       >
         <FileDiffContext.Provider value={onOpenFileDiff}>
-        <RegenerateContext.Provider value={onRegenerate}>
-          <div className="dvx-reading-column" ref={readingColumnRef}>
-            <HistoryNotice
-              historyStatus={historyStatus}
-              truncated={truncated}
-            />
-            {hiddenMessageCount > 0 ? (
-              <button
-                type="button"
-                className="dvx-show-earlier"
-                onClick={onShowEarlier}
-              >
-                Show earlier messages ({hiddenMessageCount} hidden)
-              </button>
-            ) : null}
-            <ThreadPrimitive.Empty>
-              <div className="dvx-empty-state">
-                <h2>Ready in your workspace</h2>
-                <p>
-                  {historyStatus === 'unavailable'
-                    ? 'Start a new message to continue this session.'
-                    : 'Ask Droid to explain, inspect, or change your code.'}
-                </p>
-              </div>
-            </ThreadPrimitive.Empty>
-            <ThreadPrimitive.Messages>
-              {({ message }) => {
-                if (message.role !== 'user') {
-                  return <AssistantMessage />;
-                }
-                const messageId = readUserMessageId(message.metadata);
-                return (
-                  <UserMessage
-                    text={readMessageText(message.content)}
-                    messageId={messageId}
-                    attachments={readUserAttachments(message.metadata)}
-                    editing={
-                      messageId !== null &&
-                      messageId === editingMessageId
-                    }
-                    editStage={editStage}
-                    rejection={editResendRejection}
-                    editorEnv={editorEnv}
-                    editResendEnabled={editResendEnabled}
-                    rewindInfo={rewindInfo}
-                    onRequestRewindInfo={onRequestRewindInfo}
-                    onEditResend={onEditResend}
-                    onBeginEdit={beginEditing}
-                    onCancelEdit={cancelEditing}
-                    onSubmitEdit={submitEditing}
-                    onReopenEdit={reopenEditing}
-                  />
-                );
-              }}
-            </ThreadPrimitive.Messages>
-            {pending ? (
-              <PendingResponse
-                activity={activity}
-                activityLive={activityLive}
+          <RegenerateContext.Provider value={onRegenerate}>
+            <SelectSessionContext.Provider value={onSelectSession}>
+            <div className="dvx-reading-column" ref={readingColumnRef}>
+              <HistoryNotice
+                historyStatus={historyStatus}
+                truncated={truncated}
               />
-            ) : null}
-            {inlineInteraction}
-          </div>
-        </RegenerateContext.Provider>
+              {hiddenMessageCount > 0 ? (
+                <button
+                  type="button"
+                  className="dvx-show-earlier"
+                  onClick={onShowEarlier}
+                >
+                  Show earlier messages ({hiddenMessageCount} hidden)
+                </button>
+              ) : null}
+              <ThreadPrimitive.Empty>
+                <div className="dvx-empty-state">
+                  <h2>Ready in your workspace</h2>
+                  <p>
+                    {historyStatus === "unavailable"
+                      ? "Start a new message to continue this session."
+                      : "Ask Droid to explain, inspect, or change your code."}
+                  </p>
+                </div>
+              </ThreadPrimitive.Empty>
+              <ThreadPrimitive.Messages>
+                {({ message }) => {
+                  if (message.role !== "user") {
+                    return <AssistantMessage />;
+                  }
+                  const messageId = readUserMessageId(message.metadata);
+                  return (
+                    <UserMessage
+                      text={readMessageText(message.content)}
+                      messageId={messageId}
+                      attachments={readUserAttachments(message.metadata)}
+                      editing={
+                        messageId !== null && messageId === editingMessageId
+                      }
+                      editStage={editStage}
+                      rejection={editResendRejection}
+                      editorEnv={editorEnv}
+                      editResendEnabled={editResendEnabled}
+                      rewindInfo={rewindInfo}
+                      onRequestRewindInfo={onRequestRewindInfo}
+                      onEditResend={onEditResend}
+                      onBeginEdit={beginEditing}
+                      onCancelEdit={cancelEditing}
+                      onSubmitEdit={submitEditing}
+                      onReopenEdit={reopenEditing}
+                    />
+                  );
+                }}
+              </ThreadPrimitive.Messages>
+              {pending ? (
+                <PendingResponse
+                  activity={activity}
+                  activityLive={activityLive}
+                />
+              ) : null}
+              {inlineInteraction}
+            </div>
+            </SelectSessionContext.Provider>
+          </RegenerateContext.Provider>
         </FileDiffContext.Provider>
         <ThreadPrimitive.ViewportFooter className="dvx-thread-footer">
           <Composer
@@ -634,6 +639,7 @@ export const DroidThread = memo(function DroidThread({
             onMcpServerRemove={onMcpServerRemove}
             mcpAuth={mcpAuth}
             onMcpServerAuthenticate={onMcpServerAuthenticate}
+            onNewSession={onNewSession}
             attachments={attachments}
             fileSearch={fileSearch}
             onFileSearch={onFileSearch}
@@ -658,9 +664,9 @@ export const DroidThread = memo(function DroidThread({
 });
 
 const EDIT_REJECT_COPY: Record<EditResendRejectReason, string> = {
-  busy: 'Droid is busy — stop or finish the current work, then resend.',
-  unsupported: 'This message can no longer anchor a resend.',
-  failed: 'Rewinding to this message failed. You can try again.',
+  busy: "Droid is busy — stop or finish the current work, then resend.",
+  unsupported: "This message can no longer anchor a resend.",
+  failed: "Rewinding to this message failed. You can try again.",
 };
 
 function UserMessage({
@@ -703,9 +709,7 @@ function UserMessage({
   const [editText, setEditText] = useState(text);
   const [restoreFiles, setRestoreFiles] = useState(false);
   const [resending, setResending] = useState(false);
-  const resendResetRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const resendResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearResendTimer = (): void => {
     if (resendResetRef.current !== null) {
       clearTimeout(resendResetRef.current);
@@ -734,11 +738,7 @@ function UserMessage({
   // A structured rejection of this card's resend returns it to the
   // editor deterministically; the 8s timer stays as a fallback only.
   useEffect(() => {
-    if (
-      rejection !== null &&
-      rejection.messageId === messageId &&
-      resending
-    ) {
+    if (rejection !== null && rejection.messageId === messageId && resending) {
       onReopenEdit(rejection.messageId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -772,11 +772,9 @@ function UserMessage({
     editing && rejection !== null && rejection.messageId === messageId
       ? EDIT_REJECT_COPY[rejection.reason]
       : null;
-  const settingsUpdating = editorEnv.settings.status === 'updating';
+  const settingsUpdating = editorEnv.settings.status === "updating";
   const sendDisabled =
-    !editResendEnabled ||
-    settingsUpdating ||
-    editText.trim().length === 0;
+    !editResendEnabled || settingsUpdating || editText.trim().length === 0;
   const submitEdit = (): void => {
     if (messageId === null || sendDisabled) {
       return;
@@ -793,7 +791,7 @@ function UserMessage({
   return (
     <MessagePrimitive.Root
       className={`dvx-message dvx-message-user${
-        editing ? ' dvx-message-editing' : ''
+        editing ? " dvx-message-editing" : ""
       }`}
       aria-label="You"
     >
@@ -806,19 +804,14 @@ function UserMessage({
                 aria-label="Edit message and resend"
                 value={editText}
                 maxLength={MAX_TURN_TEXT_LENGTH}
-                rows={Math.min(
-                  8,
-                  Math.max(2, editText.split('\n').length),
-                )}
+                rows={Math.min(8, Math.max(2, editText.split("\n").length))}
                 autoFocus
-                onChange={(event) =>
-                  setEditText(event.currentTarget.value)
-                }
+                onChange={(event) => setEditText(event.currentTarget.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
+                  if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     submitEdit();
-                  } else if (event.key === 'Escape') {
+                  } else if (event.key === "Escape") {
                     onCancelEdit();
                   }
                 }}
@@ -846,7 +839,7 @@ function UserMessage({
                 <label
                   className="dvx-user-edit-restore"
                   title={`Resending rewinds the conversation to this message. Also restore the ${affectedFiles} workspace ${
-                    affectedFiles === 1 ? 'file' : 'files'
+                    affectedFiles === 1 ? "file" : "files"
                   } Droid changed after it.`}
                 >
                   <input
@@ -869,9 +862,9 @@ function UserMessage({
                     </svg>
                   </span>
                   <span className="dvx-restore-copy">
-                    Restore {affectedFiles}{' '}
-                    {affectedFiles === 1 ? 'file' : 'files'} changed after
-                    this point
+                    Restore {affectedFiles}{" "}
+                    {affectedFiles === 1 ? "file" : "files"} changed after this
+                    point
                   </span>
                 </label>
               ) : null}
@@ -895,9 +888,7 @@ function UserMessage({
                   onMcpServerAdd={editorEnv.onMcpServerAdd}
                   onMcpServerRemove={editorEnv.onMcpServerRemove}
                   mcpAuth={editorEnv.mcpAuth}
-                  onMcpServerAuthenticate={
-                    editorEnv.onMcpServerAuthenticate
-                  }
+                  onMcpServerAuthenticate={editorEnv.onMcpServerAuthenticate}
                   onAttachFiles={editorEnv.onAttachFiles}
                   onAttachEditor={editorEnv.onAttachEditor}
                   onAttachSelection={editorEnv.onAttachSelection}
@@ -924,10 +915,6 @@ function UserMessage({
                 </div>
               </div>
             </div>
-            <div className="dvx-user-edit-hint">
-              Resending starts a new conversation branch from this
-              message.
-            </div>
           </div>
         ) : resending ? (
           <div className="dvx-user-resending">
@@ -942,19 +929,13 @@ function UserMessage({
         ) : (
           <div
             className={`dvx-user-block${
-              editable ? ' dvx-user-block-editable' : ''
+              editable ? " dvx-user-block-editable" : ""
             }`}
-            title={
-              editable
-                ? 'Click to edit and resend from here'
-                : undefined
-            }
-            role={editable ? 'button' : undefined}
+            title={editable ? "Click to edit and resend from here" : undefined}
+            role={editable ? "button" : undefined}
             tabIndex={editable ? 0 : undefined}
             aria-label={
-              editable
-                ? 'Edit message and resend from here'
-                : undefined
+              editable ? "Edit message and resend from here" : undefined
             }
             onClick={editable ? handleCardClick : undefined}
             onKeyDown={
@@ -962,7 +943,7 @@ function UserMessage({
                 ? (event) => {
                     if (
                       event.target === event.currentTarget &&
-                      (event.key === 'Enter' || event.key === ' ')
+                      (event.key === "Enter" || event.key === " ")
                     ) {
                       event.preventDefault();
                       openEditor();
@@ -973,9 +954,9 @@ function UserMessage({
           >
             <MessagePrimitive.Parts>
               {({ part }) =>
-                part.type === 'data' && part.name === 'droid-image' ? (
+                part.type === "data" && part.name === "droid-image" ? (
                   <TranscriptImage data={part.data} />
-                ) : part.type === 'text' ? (
+                ) : part.type === "text" ? (
                   <div className="dvx-user-text">{part.text}</div>
                 ) : null
               }
@@ -1020,7 +1001,7 @@ function EditAttachmentChip({
   return (
     <span
       className={`dvx-attachment-chip${
-        attachment.restorable ? '' : ' dvx-attachment-unrestorable'
+        attachment.restorable ? "" : " dvx-attachment-unrestorable"
       }`}
     >
       <span className="dvx-attachment-kind">
@@ -1033,9 +1014,7 @@ function EditAttachmentChip({
         <span className="dvx-attachment-truncated">truncated</span>
       ) : null}
       {attachment.restorable ? null : (
-        <span className="dvx-attachment-readd">
-          re-add to include
-        </span>
+        <span className="dvx-attachment-readd">re-add to include</span>
       )}
       <button
         type="button"
@@ -1049,17 +1028,14 @@ function EditAttachmentChip({
   );
 }
 
-const AssistantMessage = memo(function AssistantMessage():
-  React.JSX.Element {
+const AssistantMessage = memo(function AssistantMessage(): React.JSX.Element {
   // Entry animations are double-gated: the shell needs dvx-anim-live
   // (connected + active turn) and the message itself must be the one
   // streaming, so attaching the root class at turn start never
   // replays history rows. The action bar mounts after streaming
   // ends, so its fade keys off "was live in this mount" instead —
   // recovered history can never satisfy that.
-  const running = useAuiState(
-    (s) => s.message.status?.type === 'running',
-  );
+  const running = useAuiState((s) => s.message.status?.type === "running");
   const wasRunningRef = useRef(false);
   if (running) {
     wasRunningRef.current = true;
@@ -1067,7 +1043,7 @@ const AssistantMessage = memo(function AssistantMessage():
   return (
     <MessagePrimitive.Root
       className={`dvx-message dvx-message-assistant${
-        running ? ' dvx-message-live' : ''
+        running ? " dvx-message-live" : ""
       }`}
       aria-label="Droid"
     >
@@ -1079,34 +1055,32 @@ const AssistantMessage = memo(function AssistantMessage():
           switch (part.type) {
             case ACTIVITY_GROUP_KEY:
               return (
-                <ActivityGroup indices={part.indices}>
-                  {children}
-                </ActivityGroup>
+                <ActivityGroup indices={part.indices}>{children}</ActivityGroup>
               );
-            case 'text':
+            case "text":
               return <DroidMarkdownText />;
-            case 'reasoning':
+            case "reasoning":
               return (
                 <ThinkingRow
                   statusType={part.status?.type}
                   durationMs={readReasoningDuration(part)}
                 />
               );
-            case 'tool-call':
+            case "tool-call":
               return (
                 <ToolActivityRow
                   activity={readToolActivity(part)}
                   toolName={part.toolName}
                 />
               );
-            case 'data':
-              if (part.name === 'droid-diagnostic') {
+            case "data":
+              if (part.name === "droid-diagnostic") {
                 return <Diagnostic data={part.data} />;
               }
-              if (part.name === 'droid-changes') {
+              if (part.name === "droid-changes") {
                 return <ChangesSummary data={part.data} />;
               }
-              if (part.name === 'droid-image') {
+              if (part.name === "droid-image") {
                 return <TranscriptImage data={part.data} />;
               }
               return null;
@@ -1117,7 +1091,7 @@ const AssistantMessage = memo(function AssistantMessage():
       </MessagePrimitive.GroupedParts>
       <ActionBarPrimitive.Root
         className={`dvx-assistant-actions${
-          !running && wasRunningRef.current ? ' dvx-actions-entry' : ''
+          !running && wasRunningRef.current ? " dvx-actions-entry" : ""
         }`}
         hideWhenRunning
       >
@@ -1139,9 +1113,7 @@ const AssistantMessage = memo(function AssistantMessage():
 function RegenerateAction(): React.JSX.Element | null {
   const regenerate = useContext(RegenerateContext);
   const [busy, setBusy] = useState(false);
-  const busyResetRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const busyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
       if (busyResetRef.current !== null) {
@@ -1172,18 +1144,14 @@ function RegenerateAction(): React.JSX.Element | null {
       }}
     >
       <RegenerateIcon />
-      <span>{busy ? 'Regenerating…' : 'Regenerate'}</span>
+      <span>{busy ? "Regenerating…" : "Regenerate"}</span>
     </button>
   );
 }
 
-function ToolFilePath({
-  path,
-}: {
-  readonly path: string;
-}): React.JSX.Element {
+function ToolFilePath({ path }: { readonly path: string }): React.JSX.Element {
   const openFileDiff = useContext(FileDiffContext);
-  const fileName = path.split('/').at(-1) ?? path;
+  const fileName = path.split("/").at(-1) ?? path;
   return (
     <button
       type="button"
@@ -1220,7 +1188,7 @@ function ThinkingRow({
     >
       <summary>
         <span className="dvx-activity-indicator" />
-        {statusType === 'running' ? (
+        {statusType === "running" ? (
           <span className="dvx-shimmer-text">Thinking</span>
         ) : (
           formatThinkingLabel(statusType, durationMs)
@@ -1244,7 +1212,7 @@ interface ChangedFileEntry {
 
 function readChangedFiles(data: unknown): readonly ChangedFileEntry[] {
   if (
-    typeof data !== 'object' ||
+    typeof data !== "object" ||
     data === null ||
     !Array.isArray((data as { files?: unknown }).files)
   ) {
@@ -1253,9 +1221,9 @@ function readChangedFiles(data: unknown): readonly ChangedFileEntry[] {
   const files: ChangedFileEntry[] = [];
   for (const entry of (data as { files: unknown[] }).files) {
     if (
-      typeof entry !== 'object' ||
+      typeof entry !== "object" ||
       entry === null ||
-      typeof (entry as { path?: unknown }).path !== 'string'
+      typeof (entry as { path?: unknown }).path !== "string"
     ) {
       continue;
     }
@@ -1266,8 +1234,8 @@ function readChangedFiles(data: unknown): readonly ChangedFileEntry[] {
     };
     files.push({
       path,
-      additions: typeof additions === 'number' ? additions : null,
-      deletions: typeof deletions === 'number' ? deletions : null,
+      additions: typeof additions === "number" ? additions : null,
+      deletions: typeof deletions === "number" ? deletions : null,
     });
   }
   return files;
@@ -1286,7 +1254,7 @@ function ChangesSummary({
   return (
     <div className="dvx-changes" role="group" aria-label="Changed files">
       <span className="dvx-changes-label">
-        Changes · {files.length} {files.length === 1 ? 'file' : 'files'}
+        Changes · {files.length} {files.length === 1 ? "file" : "files"}
       </span>
       <div className="dvx-changes-files">
         {files.map((file) => (
@@ -1298,19 +1266,15 @@ function ChangesSummary({
             onClick={() => openFileDiff(file.path)}
           >
             <span className="dvx-changes-name">
-              {file.path.split('/').at(-1) ?? file.path}
+              {file.path.split("/").at(-1) ?? file.path}
             </span>
             {file.additions !== null || file.deletions !== null ? (
               <span className="dvx-changes-stats">
                 {file.additions !== null ? (
-                  <span className="dvx-changes-add">
-                    +{file.additions}
-                  </span>
+                  <span className="dvx-changes-add">+{file.additions}</span>
                 ) : null}
                 {file.deletions !== null ? (
-                  <span className="dvx-changes-del">
-                    −{file.deletions}
-                  </span>
+                  <span className="dvx-changes-del">−{file.deletions}</span>
                 ) : null}
               </span>
             ) : null}
@@ -1323,13 +1287,18 @@ function ChangesSummary({
 
 function Diagnostic({ data }: { readonly data: unknown }): React.JSX.Element {
   const diagnostic = readDiagnostic(data);
-  if (diagnostic.code === 'session-compacted') {
-    return <CompactDivider message={diagnostic.message} />;
+  if (diagnostic.code === "session-compacted") {
+    return (
+      <CompactDivider
+        message={diagnostic.message}
+        previousSessionId={diagnostic.relatedSessionId}
+      />
+    );
   }
   return (
     <div
       className={`dvx-diagnostic dvx-diagnostic-${diagnostic.severity}`}
-      role={diagnostic.severity === 'error' ? 'alert' : 'status'}
+      role={diagnostic.severity === "error" ? "alert" : "status"}
       title={`${diagnostic.code}: ${diagnostic.message}`}
     >
       <code aria-hidden="true">{diagnostic.code}</code>
@@ -1346,12 +1315,10 @@ function Diagnostic({ data }: { readonly data: unknown }): React.JSX.Element {
 export function formatCompactDividerLabel(message: string): string {
   const match = /(\d+) earlier message/.exec(message);
   if (match === null) {
-    return 'Conversation summarized';
+    return "Conversation summarized";
   }
   const count = Number(match[1]);
-  return `Summarized ${count} earlier ${
-    count === 1 ? 'message' : 'messages'
-  }`;
+  return `Summarized ${count} earlier ${count === 1 ? "message" : "messages"}`;
 }
 
 /**
@@ -1361,9 +1328,12 @@ export function formatCompactDividerLabel(message: string): string {
  */
 function CompactDivider({
   message,
+  previousSessionId,
 }: {
   readonly message: string;
+  readonly previousSessionId: string | null;
 }): React.JSX.Element {
+  const selectSession = useContext(SelectSessionContext);
   return (
     <div className="dvx-compact-divider" role="status" title={message}>
       <span className="dvx-compact-divider-label">
@@ -1388,6 +1358,18 @@ function CompactDivider({
           />
         </svg>
         {formatCompactDividerLabel(message)}
+        {previousSessionId !== null && selectSession !== null ? (
+          <>
+            {" · "}
+            <button
+              type="button"
+              className="dvx-compact-divider-link"
+              onClick={() => selectSession(previousSessionId)}
+            >
+              View full history
+            </button>
+          </>
+        ) : null}
       </span>
     </div>
   );
@@ -1397,7 +1379,7 @@ export function PendingResponse({
   activity,
   activityLive = false,
 }: {
-  readonly activity?: 'working' | 'responding';
+  readonly activity?: "working" | "responding";
   /**
    * True while some transcript activity row (running tool, streaming
    * thinking) is already shimmering; the pending row then renders
@@ -1408,20 +1390,14 @@ export function PendingResponse({
   return (
     <div
       className={`dvx-message dvx-message-assistant dvx-pending${
-        activityLive ? ' dvx-pending-quiet' : ''
+        activityLive ? " dvx-pending-quiet" : ""
       }`}
       role="status"
       aria-live="polite"
     >
       <span className="dvx-runtime-pulse" aria-hidden="true" />
-      <span
-        className={
-          activityLive ? 'dvx-pending-label' : 'dvx-shimmer-text'
-        }
-      >
-        {activity === 'working'
-          ? 'Droid is working'
-          : 'Droid is responding'}
+      <span className={activityLive ? "dvx-pending-label" : "dvx-shimmer-text"}>
+        {activity === "working" ? "Droid is working" : "Droid is responding"}
       </span>
     </div>
   );
@@ -1453,6 +1429,7 @@ function Composer({
   onMcpServerRemove,
   mcpAuth,
   onMcpServerAuthenticate,
+  onNewSession,
   attachments,
   fileSearch,
   onFileSearch,
@@ -1495,6 +1472,8 @@ function Composer({
   readonly onMcpServerRemove: (name: string) => void;
   readonly mcpAuth: McpAuthProgress | null;
   readonly onMcpServerAuthenticate: (name: string) => void;
+  /** Starts a fresh session (skill changes apply at session start). */
+  readonly onNewSession: () => void;
   readonly attachments: readonly AttachmentSummary[];
   readonly fileSearch: FileSearchResult | null;
   readonly onFileSearch: (requestId: string, query: string) => void;
@@ -1521,12 +1500,10 @@ function Composer({
   readonly onDraftChange: (draft: string) => void;
 }): React.JSX.Element {
   const aui = useAui();
-  const draftRef = useRef('');
+  const draftRef = useRef("");
   const [mention, setMention] = useState<MentionToken | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [activeRequestId, setActiveRequestId] = useState<string | null>(
-    null,
-  );
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const searchCounterRef = useRef(0);
   const [slash, setSlash] = useState<SlashToken | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
@@ -1534,9 +1511,7 @@ function Composer({
   // Transient user-visible feedback for drops that stage nothing
   // (binary files, oversized images, staging area full).
   const [dropNotice, setDropNotice] = useState<string | null>(null);
-  const dropNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const dropNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
       if (dropNoticeTimer.current !== null) {
@@ -1550,10 +1525,7 @@ function Composer({
     if (dropNoticeTimer.current !== null) {
       clearTimeout(dropNoticeTimer.current);
     }
-    dropNoticeTimer.current = setTimeout(
-      () => setDropNotice(null),
-      5000,
-    );
+    dropNoticeTimer.current = setTimeout(() => setDropNotice(null), 5000);
   };
 
   /**
@@ -1564,13 +1536,12 @@ function Composer({
   const stageImageFile = (file: File): void => {
     if (file.size === 0 || file.size > MAX_ATTACHMENT_IMAGE_BYTES) {
       showDropNotice(
-        `${file.name || 'Image'} is too large to attach (4 MB max).`,
+        `${file.name || "Image"} is too large to attach (4 MB max).`,
       );
       return;
     }
     const mediaType = file.type as ImageMediaType;
-    const name =
-      file.name.trim().length > 0 ? file.name : 'pasted-image';
+    const name = file.name.trim().length > 0 ? file.name : "pasted-image";
     void readFileAsBase64(file).then((dataBase64) => {
       if (dataBase64 !== null) {
         rememberImagePreview(
@@ -1606,18 +1577,15 @@ function Composer({
       showDropNotice(`${file.name} could not be read.`);
       return;
     }
-    if (raw.includes('\u0000')) {
+    if (raw.includes("\u0000")) {
       showDropNotice(
         `${file.name} is not a text file. Use “+” → Attach files instead.`,
       );
       return;
     }
     const truncated =
-      file.size > byteCap ||
-      raw.length > MAX_ATTACHMENT_TEXT_FILE_CHARS;
-    const text = truncated
-      ? raw.slice(0, MAX_ATTACHMENT_TEXT_FILE_CHARS)
-      : raw;
+      file.size > byteCap || raw.length > MAX_ATTACHMENT_TEXT_FILE_CHARS;
+    const text = truncated ? raw.slice(0, MAX_ATTACHMENT_TEXT_FILE_CHARS) : raw;
     onAttachTextFile(file.name, text, truncated);
   };
 
@@ -1680,28 +1648,67 @@ function Composer({
   // reopening after an error retries the fetch. `controlsDisabled`
   // mirrors the host guard that swallows the refresh while the bridge
   // is not connected, so a popup opened early re-requests the catalog
-  // once the connection comes up.
+  // once the connection comes up. Enabled skills fill the popup's
+  // Skills section, so they load on the same trigger.
   const slashOpen = slash !== null;
   const commandsStatus = commands.status;
+  const skillsStatus = skills.status;
   useEffect(() => {
-    if (
-      slashOpen &&
-      !controlsDisabled &&
-      (commandsStatus === 'idle' || commandsStatus === 'error')
-    ) {
-      onCommandsRefresh();
+    if (slashOpen && !controlsDisabled) {
+      if (commandsStatus === "idle" || commandsStatus === "error") {
+        onCommandsRefresh();
+      }
+      if (skillsStatus === "idle") {
+        onSkillsRefresh();
+      }
     }
     // Refetch only on open/close and connection transitions.
   }, [slashOpen, controlsDisabled]);
 
   const commandMatches =
     slash !== null ? filterSlashCommands(commands, slash.query) : [];
-  // An empty ready catalog still shows the popup: the empty-state row
-  // is the only visible feedback when `.factory/commands` is absent.
-  const slashVisible =
-    slashOpen &&
-    commandsStatus !== 'idle' &&
-    commandsStatus !== 'unsupported';
+  const builtInMatches =
+    slash !== null
+      ? BUILT_IN_COMMANDS.filter((command) =>
+          command.name.startsWith(slash.query.toLocaleLowerCase()),
+        )
+      : [];
+  // Enabled skills surface here as prompt helpers: Droid has no
+  // native skill-invocation RPC (`userInvocable` exists on SkillInfo
+  // but no channel executes it), so selecting one inserts guiding
+  // text instead of pretending to run the skill.
+  const skillMatches =
+    slash !== null
+      ? skills.items
+          .filter(
+            (skill) =>
+              skill.enabled &&
+              skill.name
+                .toLocaleLowerCase()
+                .startsWith(slash.query.toLocaleLowerCase()),
+          )
+          .slice(0, MAX_SLASH_SKILL_MATCHES)
+      : [];
+  // One flat list drives keyboard navigation across the sections.
+  const slashEntries: readonly SlashEntry[] = [
+    ...builtInMatches.map(
+      (command): SlashEntry => ({ kind: "builtin", ...command }),
+    ),
+    ...commandMatches.map(
+      (command): SlashEntry => ({ kind: "command", command }),
+    ),
+    ...skillMatches.map(
+      (skill): SlashEntry => ({
+        kind: "skill",
+        name: skill.name,
+        description: skill.description,
+      }),
+    ),
+  ];
+  // Built-ins are always available, so the popup shows whenever a
+  // `/` token is active; the custom section keeps its own
+  // loading/error/empty feedback rows.
+  const slashVisible = slashOpen;
 
   const closeSlash = (): void => {
     setSlash(null);
@@ -1718,6 +1725,29 @@ function Composer({
     aui.thread.composer().setText(next);
     onDraftChange(next);
     closeSlash();
+  };
+
+  /** Replaces the `/` token with guiding text for one skill. */
+  const selectSkillGuide = (name: string): void => {
+    if (slash === null) {
+      return;
+    }
+    const next =
+      `Use the "${name}" skill: ` + draftRef.current.slice(slash.end);
+    draftRef.current = next;
+    aui.thread.composer().setText(next);
+    onDraftChange(next);
+    closeSlash();
+  };
+
+  const selectSlashEntry = (entry: SlashEntry): void => {
+    if (entry.kind === "skill") {
+      selectSkillGuide(entry.name);
+    } else {
+      selectCommand(
+        entry.kind === "command" ? entry.command.name : entry.name,
+      );
+    }
   };
 
   // Debounce host searches while the user types the mention query.
@@ -1763,8 +1793,7 @@ function Composer({
     }
     onAttachPath(path);
     const draft = draftRef.current;
-    const next =
-      draft.slice(0, mention.start) + draft.slice(mention.end);
+    const next = draft.slice(0, mention.start) + draft.slice(mention.end);
     draftRef.current = next;
     aui.thread.composer().setText(next);
     onDraftChange(next);
@@ -1776,17 +1805,17 @@ function Composer({
       <div className="dvx-composer-seam" aria-hidden="true" />
       <ComposerPrimitive.Root
         className={`dvx-composer${
-          interactionPending ? ' dvx-composer-pending' : ''
-        }${dragActive ? ' dvx-composer-dragover' : ''}`}
+          interactionPending ? " dvx-composer-pending" : ""
+        }${dragActive ? " dvx-composer-dragover" : ""}`}
         onDragOver={(event) => {
           const types = event.dataTransfer.types;
           if (
-            types.includes('Files') ||
-            types.includes('text/uri-list') ||
-            types.includes('application/vnd.code.uri-list')
+            types.includes("Files") ||
+            types.includes("text/uri-list") ||
+            types.includes("application/vnd.code.uri-list")
           ) {
             event.preventDefault();
-            event.dataTransfer.dropEffect = 'copy';
+            event.dataTransfer.dropEffect = "copy";
             setDragActive(true);
           }
         }}
@@ -1830,14 +1859,19 @@ function Composer({
                 role="listbox"
                 aria-label="Droid commands"
               >
-                {commandMatches.map((command, index) => (
+                {builtInMatches.length > 0 ? (
+                  <div className="dvx-command-section" role="presentation">
+                    Built-in
+                  </div>
+                ) : null}
+                {builtInMatches.map((command, index) => (
                   <button
-                    key={command.name}
+                    key={`builtin:${command.name}`}
                     type="button"
                     role="option"
                     aria-selected={index === slashIndex}
                     className={`dvx-mention-item${
-                      index === slashIndex ? ' dvx-mention-active' : ''
+                      index === slashIndex ? " dvx-mention-active" : ""
                     }`}
                     onMouseDown={(event) => {
                       // Keep focus in the textarea while selecting.
@@ -1847,9 +1881,42 @@ function Composer({
                     onMouseEnter={() => setSlashIndex(index)}
                   >
                     <span className="dvx-command-title">
-                      <span className="dvx-command-name">
-                        /{command.name}
-                      </span>
+                      <span className="dvx-command-name">/{command.name}</span>
+                    </span>
+                    <span className="dvx-command-desc">
+                      {command.description}
+                    </span>
+                  </button>
+                ))}
+                {commandMatches.length > 0 ? (
+                  <div className="dvx-command-section" role="presentation">
+                    Commands (.factory/commands)
+                  </div>
+                ) : null}
+                {commandMatches.map((command, index) => (
+                  <button
+                    key={command.name}
+                    type="button"
+                    role="option"
+                    aria-selected={
+                      builtInMatches.length + index === slashIndex
+                    }
+                    className={`dvx-mention-item${
+                      builtInMatches.length + index === slashIndex
+                        ? " dvx-mention-active"
+                        : ""
+                    }`}
+                    onMouseDown={(event) => {
+                      // Keep focus in the textarea while selecting.
+                      event.preventDefault();
+                      selectCommand(command.name);
+                    }}
+                    onMouseEnter={() =>
+                      setSlashIndex(builtInMatches.length + index)
+                    }
+                  >
+                    <span className="dvx-command-title">
+                      <span className="dvx-command-name">/{command.name}</span>
                       {command.argumentHint !== null ? (
                         <span className="dvx-command-hint">
                           {command.argumentHint}
@@ -1865,18 +1932,59 @@ function Composer({
                 ))}
                 {commandMatches.length === 0 ? (
                   <div className="dvx-command-status" role="status">
-                    {commands.status === 'loading'
-                      ? 'Loading commands…'
-                      : commands.status === 'error'
+                    {commands.status === "loading"
+                      ? "Loading commands…"
+                      : commands.status === "error"
                         ? commands.message
                         : slash !== null && slash.query.length === 0
-                          ? 'No custom commands (.factory/commands)'
-                          : 'No matching commands'}
+                          ? "No custom commands (.factory/commands)"
+                          : "No matching commands"}
                   </div>
                 ) : null}
+                {skillMatches.length > 0 ? (
+                  <div className="dvx-command-section" role="presentation">
+                    Skills (inserts a prompt)
+                  </div>
+                ) : null}
+                {skillMatches.map((skill, index) => (
+                  <button
+                    key={`skill:${skill.name}`}
+                    type="button"
+                    role="option"
+                    aria-selected={
+                      builtInMatches.length + commandMatches.length + index ===
+                      slashIndex
+                    }
+                    className={`dvx-mention-item${
+                      builtInMatches.length + commandMatches.length + index ===
+                      slashIndex
+                        ? " dvx-mention-active"
+                        : ""
+                    }`}
+                    onMouseDown={(event) => {
+                      // Keep focus in the textarea while selecting.
+                      event.preventDefault();
+                      selectSkillGuide(skill.name);
+                    }}
+                    onMouseEnter={() =>
+                      setSlashIndex(
+                        builtInMatches.length + commandMatches.length + index,
+                      )
+                    }
+                  >
+                    <span className="dvx-command-title">
+                      <span className="dvx-command-name">{skill.name}</span>
+                    </span>
+                    {skill.description !== null ? (
+                      <span className="dvx-command-desc">
+                        {skill.description}
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
               </div>
             ) : null}
-            {mention !== null && mention.query.length > 0 ? (
+            {mention !== null ? (
               <div
                 className="dvx-mention-popup"
                 role="listbox"
@@ -1889,7 +1997,7 @@ function Composer({
                     role="option"
                     aria-selected={index === activeIndex}
                     className={`dvx-mention-item${
-                      index === activeIndex ? ' dvx-mention-active' : ''
+                      index === activeIndex ? " dvx-mention-active" : ""
                     }`}
                     onMouseDown={(event) => {
                       // Keep focus in the textarea while selecting.
@@ -1899,16 +2007,22 @@ function Composer({
                     onMouseEnter={() => setActiveIndex(index)}
                   >
                     <span className="dvx-mention-name">
-                      {path.split('/').at(-1)}
+                      {path.split("/").at(-1)}
                     </span>
                     <span className="dvx-mention-path">{path}</span>
                   </button>
                 ))}
                 {results.length === 0 ? (
                   <div className="dvx-command-status" role="status">
-                    {searchPending
-                      ? 'Searching files…'
-                      : 'No matching files'}
+                    {mention.query.length === 0
+                      ? "Type to search workspace files"
+                      : searchPending
+                        ? "Searching files…"
+                        : activeRequestId !== null &&
+                            fileSearch?.requestId === activeRequestId &&
+                            fileSearch.status === "no-workspace"
+                          ? "No folder is open in this window."
+                          : "No matching files"}
                   </div>
                 ) : null}
               </div>
@@ -1917,9 +2031,9 @@ function Composer({
               id="dvx-prompt"
               className="dvx-composer-input"
               placeholder={
-                settings.value?.interactionMode === 'spec'
-                  ? 'Describe what to plan…'
-                  : 'Ask Droid about your workspace'
+                settings.value?.interactionMode === "spec"
+                  ? "Describe what to plan…"
+                  : "Ask Droid about your workspace"
               }
               rows={1}
               maxLength={MAX_TURN_TEXT_LENGTH}
@@ -1951,33 +2065,33 @@ function Composer({
               }}
               onKeyDown={(event) => {
                 if (slashVisible) {
-                  if (event.key === 'Escape') {
+                  if (event.key === "Escape") {
                     event.preventDefault();
                     closeSlash();
                     return;
                   }
-                  if (commandMatches.length > 0) {
-                    if (event.key === 'ArrowDown') {
+                  if (slashEntries.length > 0) {
+                    if (event.key === "ArrowDown") {
                       event.preventDefault();
                       setSlashIndex(
-                        (index) => (index + 1) % commandMatches.length,
+                        (index) => (index + 1) % slashEntries.length,
                       );
                       return;
                     }
-                    if (event.key === 'ArrowUp') {
+                    if (event.key === "ArrowUp") {
                       event.preventDefault();
                       setSlashIndex(
                         (index) =>
-                          (index - 1 + commandMatches.length) %
-                          commandMatches.length,
+                          (index - 1 + slashEntries.length) %
+                          slashEntries.length,
                       );
                       return;
                     }
-                    if (event.key === 'Enter' || event.key === 'Tab') {
+                    if (event.key === "Enter" || event.key === "Tab") {
                       event.preventDefault();
-                      const command = commandMatches[slashIndex];
-                      if (command !== undefined) {
-                        selectCommand(command.name);
+                      const entry = slashEntries[slashIndex];
+                      if (entry !== undefined) {
+                        selectSlashEntry(entry);
                       }
                       return;
                     }
@@ -1986,7 +2100,7 @@ function Composer({
                 if (mention === null) {
                   return;
                 }
-                if (event.key === 'Escape') {
+                if (event.key === "Escape") {
                   event.preventDefault();
                   closeMention();
                   return;
@@ -1994,21 +2108,15 @@ function Composer({
                 if (results.length === 0) {
                   return;
                 }
-                if (event.key === 'ArrowDown') {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setActiveIndex((index) => (index + 1) % results.length);
+                } else if (event.key === "ArrowUp") {
                   event.preventDefault();
                   setActiveIndex(
-                    (index) => (index + 1) % results.length,
+                    (index) => (index - 1 + results.length) % results.length,
                   );
-                } else if (event.key === 'ArrowUp') {
-                  event.preventDefault();
-                  setActiveIndex(
-                    (index) =>
-                      (index - 1 + results.length) % results.length,
-                  );
-                } else if (
-                  event.key === 'Enter' ||
-                  event.key === 'Tab'
-                ) {
+                } else if (event.key === "Enter" || event.key === "Tab") {
                   event.preventDefault();
                   const path = results[activeIndex];
                   if (path !== undefined) {
@@ -2050,6 +2158,7 @@ function Composer({
             onMcpServerRemove={onMcpServerRemove}
             mcpAuth={mcpAuth}
             onMcpServerAuthenticate={onMcpServerAuthenticate}
+            onNewSession={onNewSession}
             onAttachFiles={onAttachFiles}
             onAttachEditor={onAttachEditor}
             onAttachSelection={onAttachSelection}
@@ -2083,10 +2192,10 @@ function Composer({
       </ComposerPrimitive.Root>
       <div className="dvx-composer-hint">
         {interactionPending
-          ? 'Pending request · Complete the action above'
+          ? "Pending request · Complete the action above"
           : running
-            ? 'Droid is active · Stop before sending another message'
-          : 'Enter to send · Shift+Enter for a new line'}
+            ? "Droid is active · Stop before sending another message"
+            : "Enter to send · Shift+Enter for a new line"}
       </div>
     </div>
   );
@@ -2111,7 +2220,7 @@ export function findMentionToken(
   caret: number,
 ): MentionToken | null {
   const before = value.slice(0, caret);
-  const at = before.lastIndexOf('@');
+  const at = before.lastIndexOf("@");
   if (at === -1) {
     return null;
   }
@@ -2120,10 +2229,7 @@ export function findMentionToken(
     return null;
   }
   const query = before.slice(at + 1);
-  if (
-    /[\s@]/.test(query) ||
-    query.length > MAX_FILE_SEARCH_QUERY_LENGTH
-  ) {
+  if (/[\s@]/.test(query) || query.length > MAX_FILE_SEARCH_QUERY_LENGTH) {
     return null;
   }
   return { start: at, end: caret, query };
@@ -2136,6 +2242,32 @@ interface SlashToken {
 }
 
 /**
+ * GUI-provided slash commands. Both route through existing bridge
+ * channels (`session.compact`, `session.new`) via the `handleSend`
+ * interception in App.tsx — no invented Droid capabilities.
+ */
+export const BUILT_IN_COMMANDS = [
+  {
+    name: "compact",
+    description: "Summarize earlier messages to free context",
+  },
+  { name: "new", description: "Start a new session" },
+] as const;
+
+/** Most enabled skills offered in the `/` popup Skills section. */
+const MAX_SLASH_SKILL_MATCHES = 5;
+
+/** One selectable row in the `/` popup, across all three sections. */
+type SlashEntry =
+  | { readonly kind: "builtin"; readonly name: string; readonly description: string }
+  | { readonly kind: "command"; readonly command: CommandSummary }
+  | {
+      readonly kind: "skill";
+      readonly name: string;
+      readonly description: string | null;
+    };
+
+/**
  * Finds a `/command` token when the draft starts with `/` and the
  * caret is still inside the command slug (no whitespace typed yet).
  */
@@ -2143,14 +2275,11 @@ export function findSlashToken(
   value: string,
   caret: number,
 ): SlashToken | null {
-  if (!value.startsWith('/') || caret < 1) {
+  if (!value.startsWith("/") || caret < 1) {
     return null;
   }
   const query = value.slice(1, caret);
-  if (
-    /[\s/@]/.test(query) ||
-    query.length > MAX_COMMAND_NAME_LENGTH
-  ) {
+  if (/[\s/@]/.test(query) || query.length > MAX_COMMAND_NAME_LENGTH) {
     return null;
   }
   return { end: caret, query };
@@ -2168,8 +2297,7 @@ export function filterSlashCommands(
   const matches = commands.items.filter(
     (item) =>
       !item.isExecutable &&
-      (lowered.length === 0 ||
-        item.name.toLowerCase().includes(lowered)),
+      (lowered.length === 0 || item.name.toLowerCase().includes(lowered)),
   );
   const recentRank = new Map(
     commands.recent.map((name, index) => [name, index]),
@@ -2184,12 +2312,12 @@ export function filterSlashCommands(
   });
 }
 
-const ATTACHMENT_KIND_LABELS: Record<AttachmentSummary['kind'], string> = {
-  image: 'Image',
-  pdf: 'PDF',
-  text: 'File',
-  editor: 'Editor',
-  selection: 'Selection',
+const ATTACHMENT_KIND_LABELS: Record<AttachmentSummary["kind"], string> = {
+  image: "Image",
+  pdf: "PDF",
+  text: "File",
+  editor: "Editor",
+  selection: "Selection",
 };
 
 export function AttachmentChip({
@@ -2200,7 +2328,7 @@ export function AttachmentChip({
   readonly onRemove: (attachmentId: string) => void;
 }): React.JSX.Element {
   const preview =
-    attachment.kind === 'image'
+    attachment.kind === "image"
       ? getImagePreview(attachment.name, attachment.sizeBytes)
       : undefined;
   if (preview !== undefined) {
@@ -2286,14 +2414,7 @@ function SendIcon(): React.JSX.Element {
 function CopyIcon(): React.JSX.Element {
   return (
     <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <rect
-        x="4.5"
-        y="4.5"
-        width="6"
-        height="6"
-        rx="1"
-        stroke="currentColor"
-      />
+      <rect x="4.5" y="4.5" width="6" height="6" rx="1" stroke="currentColor" />
       <path
         d="M3 9.5H2.75A1.25 1.25 0 0 1 1.5 8.25v-5.5A1.25 1.25 0 0 1 2.75 1.5h5.5A1.25 1.25 0 0 1 9.5 2.75V3"
         stroke="currentColor"
@@ -2352,7 +2473,7 @@ export function HistoryNotice({
   readonly historyStatus: SessionHistoryStatus | null;
   readonly truncated: boolean;
 }): React.JSX.Element | null {
-  if (historyStatus === 'unavailable') {
+  if (historyStatus === "unavailable") {
     return (
       <aside className="dvx-history-notice" role="note">
         Earlier CLI messages are unavailable here. You can continue this
@@ -2360,14 +2481,14 @@ export function HistoryNotice({
       </aside>
     );
   }
-  if (historyStatus === 'partial' || truncated) {
+  if (historyStatus === "partial" || truncated) {
     return (
       <aside className="dvx-history-notice" role="note">
-        {historyStatus === 'partial' && truncated
-          ? 'Some earlier session content is unavailable, and older locally retained messages were trimmed.'
-          : historyStatus === 'partial'
-            ? 'Some earlier session content is unavailable through the public Droid history.'
-            : 'Older messages were trimmed from the local display.'}
+        {historyStatus === "partial" && truncated
+          ? "Some earlier session content is unavailable, and older locally retained messages were trimmed."
+          : historyStatus === "partial"
+            ? "Some earlier session content is unavailable through the public Droid history."
+            : "Older messages were trimmed from the local display."}
       </aside>
     );
   }
@@ -2381,56 +2502,63 @@ interface ToolActivityPresentation {
   readonly latestUpdateKind: string | null;
   readonly durationMs: number | null;
   readonly filePath: string | null;
-  readonly detailKind: 'command' | 'plan' | null;
+  readonly detailKind: "command" | "plan" | null;
   readonly detail: string | null;
+  /** Error excerpt from a failed tool_result, shown when expanded. */
+  readonly errorMessage: string | null;
 }
 
 function readToolActivity(part: unknown): ToolActivityPresentation {
   const fallback: ToolActivityPresentation = {
-    action: 'Used a workspace tool',
-    status: 'completed',
+    action: "Used a workspace tool",
+    status: "completed",
     progressCount: 0,
     latestUpdateKind: null,
     durationMs: null,
     filePath: null,
     detailKind: null,
     detail: null,
+    errorMessage: null,
   };
   const metadata = readDroidvisxMetadata(part);
   if (
     metadata !== null &&
-    'action' in metadata &&
-    typeof metadata.action === 'string' &&
-    'status' in metadata &&
-    typeof metadata.status === 'string' &&
-    'progressCount' in metadata &&
+    "action" in metadata &&
+    typeof metadata.action === "string" &&
+    "status" in metadata &&
+    typeof metadata.status === "string" &&
+    "progressCount" in metadata &&
     Number.isSafeInteger(metadata.progressCount) &&
-    'latestUpdateKind' in metadata &&
+    "latestUpdateKind" in metadata &&
     (metadata.latestUpdateKind === null ||
-      typeof metadata.latestUpdateKind === 'string')
+      typeof metadata.latestUpdateKind === "string")
   ) {
     const detailKind =
-      metadata['detailKind'] === 'command' ||
-      metadata['detailKind'] === 'plan'
-        ? metadata['detailKind']
+      metadata["detailKind"] === "command" || metadata["detailKind"] === "plan"
+        ? metadata["detailKind"]
         : null;
     return {
       ...(metadata as Omit<
         ToolActivityPresentation,
-        'durationMs' | 'filePath' | 'detailKind' | 'detail'
+        "durationMs" | "filePath" | "detailKind" | "detail" | "errorMessage"
       >),
       durationMs: readMetadataDuration(metadata),
       filePath:
-        typeof metadata['filePath'] === 'string' &&
-        metadata['filePath'].length > 0
-          ? metadata['filePath']
+        typeof metadata["filePath"] === "string" &&
+        metadata["filePath"].length > 0
+          ? metadata["filePath"]
           : null,
       detailKind,
       detail:
         detailKind !== null &&
-        typeof metadata['detail'] === 'string' &&
-        metadata['detail'].length > 0
-          ? metadata['detail']
+        typeof metadata["detail"] === "string" &&
+        metadata["detail"].length > 0
+          ? metadata["detail"]
+          : null,
+      errorMessage:
+        typeof metadata["errorMessage"] === "string" &&
+        metadata["errorMessage"].length > 0
+          ? metadata["errorMessage"]
           : null,
     };
   }
@@ -2438,7 +2566,7 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
 }
 
 interface PlanStep {
-  readonly status: 'pending' | 'in_progress' | 'completed';
+  readonly status: "pending" | "in_progress" | "completed";
   readonly text: string;
 }
 
@@ -2449,26 +2577,26 @@ interface PlanStep {
  */
 function parsePlanSteps(detail: string): readonly PlanStep[] {
   const steps: PlanStep[] = [];
-  for (const rawLine of detail.split('\n')) {
+  for (const rawLine of detail.split("\n")) {
     const line = rawLine.trim();
     if (line.length === 0) {
       continue;
     }
     const match = /^(?:\d+[.)]\s*)?\[([^\]]*)\]\s*(.*)$/u.exec(line);
-    const label = match?.[1]?.toLowerCase().replace(/[\s_-]/gu, '') ?? '';
-    const text = (match?.[2] ?? line.replace(/^\d+[.)]\s*/u, '')).trim();
+    const label = match?.[1]?.toLowerCase().replace(/[\s_-]/gu, "") ?? "";
+    const text = (match?.[2] ?? line.replace(/^\d+[.)]\s*/u, "")).trim();
     if (text.length === 0) {
       continue;
     }
-    const status: PlanStep['status'] =
-      label.includes('progress') || label === 'active' || label === 'doing'
-        ? 'in_progress'
-        : label.includes('complete') ||
-            label.includes('done') ||
-            label === 'x' ||
-            label === 'checked'
-          ? 'completed'
-          : 'pending';
+    const status: PlanStep["status"] =
+      label.includes("progress") || label === "active" || label === "doing"
+        ? "in_progress"
+        : label.includes("complete") ||
+            label.includes("done") ||
+            label === "x" ||
+            label === "checked"
+          ? "completed"
+          : "pending";
     steps.push({ status, text });
   }
   return steps;
@@ -2487,23 +2615,21 @@ function ToolActivityRow({
   // always a defined boolean so React never leaves a stale `open`
   // attribute on a reused <details> node.
   const messageRunning = useAuiState(
-    (s) => s.message.status?.type === 'running',
+    (s) => s.message.status?.type === "running",
   );
   const [open, setOpen] = useState(
-    activity.detailKind === 'plan' && messageRunning,
+    activity.detailKind === "plan" && messageRunning,
   );
-  const running = activity.status === 'running';
+  const running = activity.status === "running";
   // Collapsed plans keep their position visible: "3/7 · current item"
   // replaces scanning a full checklist (streaming design item E).
   const planSummary =
-    !open && activity.detailKind === 'plan' && activity.detail !== null
+    !open && activity.detailKind === "plan" && activity.detail !== null
       ? formatPlanSummary(activity.detail)
       : null;
   return (
     <details
-      className={`dvx-activity-row${
-        running ? ' dvx-activity-running' : ''
-      }`}
+      className={`dvx-activity-row${running ? " dvx-activity-running" : ""}`}
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
@@ -2513,7 +2639,7 @@ function ToolActivityRow({
         {planSummary === null ? null : (
           <span className="dvx-plan-summary">{planSummary}</span>
         )}
-        {activity.detailKind === 'command' && activity.detail !== null ? (
+        {activity.detailKind === "command" && activity.detail !== null ? (
           <code className="dvx-tool-command-inline">
             {firstLine(activity.detail)}
           </code>
@@ -2524,14 +2650,14 @@ function ToolActivityRow({
         <span className="dvx-activity-state">
           {formatToolLifecycle(activity.status)}
           {activity.durationMs === null
-            ? ''
+            ? ""
             : ` · ${formatDuration(activity.durationMs)}`}
         </span>
         <ActivityChevron />
       </summary>
-      {activity.detailKind === 'plan' && activity.detail !== null ? (
+      {activity.detailKind === "plan" && activity.detail !== null ? (
         <TaskPlan detail={activity.detail} />
-      ) : activity.detailKind === 'command' && activity.detail !== null ? (
+      ) : activity.detailKind === "command" && activity.detail !== null ? (
         <pre className="dvx-tool-command">{activity.detail}</pre>
       ) : (
         <div className="dvx-tool-summary">
@@ -2539,6 +2665,9 @@ function ToolActivityRow({
           <span>{formatToolProgress(activity)}</span>
         </div>
       )}
+      {activity.status === "failed" && activity.errorMessage !== null ? (
+        <p className="dvx-tool-error">{activity.errorMessage}</p>
+      ) : null}
     </details>
   );
 }
@@ -2605,12 +2734,10 @@ function ActivityGroup({
 
   const stateBits: string[] = [];
   if (summary.failedCount > 0) {
-    stateBits.push(
-      `${summary.failedCount} failed`,
-    );
+    stateBits.push(`${summary.failedCount} failed`);
   }
   if (summary.stoppedCount > 0) {
-    stateBits.push('stopped');
+    stateBits.push("stopped");
   }
   if (summary.durationMs !== null) {
     stateBits.push(formatDuration(summary.durationMs));
@@ -2624,30 +2751,24 @@ function ActivityGroup({
         onClick={() => setExpanded((value) => !value)}
       >
         <span className="dvx-activity-indicator" />
-        <span className="dvx-tool-action">
-          Explored {summary.countsLabel}
-        </span>
+        <span className="dvx-tool-action">Explored {summary.countsLabel}</span>
         {stateBits.length > 0 ? (
           <span
             className={`dvx-activity-state${
-              summary.failedCount > 0
-                ? ' dvx-activity-state-failed'
-                : ''
+              summary.failedCount > 0 ? " dvx-activity-state-failed" : ""
             }`}
           >
-            {stateBits.join(' · ')}
+            {stateBits.join(" · ")}
           </span>
         ) : null}
         <ActivityChevron />
       </button>
       <div
         className={`dvx-activity-group-details${
-          expanded ? ' dvx-activity-group-details-open' : ''
+          expanded ? " dvx-activity-group-details-open" : ""
         }`}
       >
-        <div className="dvx-activity-group-details-inner">
-          {children}
-        </div>
+        <div className="dvx-activity-group-details-inner">{children}</div>
       </div>
     </div>
   );
@@ -2664,12 +2785,10 @@ export function formatPlanSummary(detail: string): string | null {
   if (steps.length === 0) {
     return null;
   }
-  const completed = steps.filter(
-    (step) => step.status === 'completed',
-  ).length;
+  const completed = steps.filter((step) => step.status === "completed").length;
   const current =
-    steps.find((step) => step.status === 'in_progress') ??
-    steps.find((step) => step.status === 'pending');
+    steps.find((step) => step.status === "in_progress") ??
+    steps.find((step) => step.status === "pending");
   return current === undefined
     ? `${completed}/${steps.length}`
     : `${completed}/${steps.length} · ${firstLine(current.text)}`;
@@ -2680,9 +2799,7 @@ function TaskPlan({ detail }: { readonly detail: string }): React.JSX.Element {
   if (steps.length === 0) {
     return <pre className="dvx-tool-command">{detail}</pre>;
   }
-  const completed = steps.filter(
-    (step) => step.status === 'completed',
-  ).length;
+  const completed = steps.filter((step) => step.status === "completed").length;
   return (
     <div className="dvx-plan">
       <div className="dvx-plan-progress">
@@ -2703,17 +2820,15 @@ function TaskPlan({ detail }: { readonly detail: string }): React.JSX.Element {
   );
 }
 
-function readDroidvisxMetadata(
-  part: unknown,
-): Record<string, unknown> | null {
+function readDroidvisxMetadata(part: unknown): Record<string, unknown> | null {
   if (
-    typeof part === 'object' &&
+    typeof part === "object" &&
     part !== null &&
-    'providerMetadata' in part &&
-    typeof part.providerMetadata === 'object' &&
+    "providerMetadata" in part &&
+    typeof part.providerMetadata === "object" &&
     part.providerMetadata !== null &&
-    'droidvisx' in part.providerMetadata &&
-    typeof part.providerMetadata.droidvisx === 'object' &&
+    "droidvisx" in part.providerMetadata &&
+    typeof part.providerMetadata.droidvisx === "object" &&
     part.providerMetadata.droidvisx !== null
   ) {
     return part.providerMetadata.droidvisx as Record<string, unknown>;
@@ -2724,10 +2839,10 @@ function readDroidvisxMetadata(
 function readMetadataDuration(
   metadata: Record<string, unknown>,
 ): number | null {
-  return typeof metadata['durationMs'] === 'number' &&
-    Number.isFinite(metadata['durationMs']) &&
-    metadata['durationMs'] >= 0
-    ? metadata['durationMs']
+  return typeof metadata["durationMs"] === "number" &&
+    Number.isFinite(metadata["durationMs"]) &&
+    metadata["durationMs"] >= 0
+    ? metadata["durationMs"]
     : null;
 }
 
@@ -2737,7 +2852,7 @@ function readReasoningDuration(part: unknown): number | null {
 }
 
 function firstLine(text: string): string {
-  const line = text.split('\n', 1)[0] ?? text;
+  const line = text.split("\n", 1)[0] ?? text;
   return line.length > 120 ? `${line.slice(0, 119)}…` : line;
 }
 
@@ -2748,14 +2863,14 @@ export function formatThinkingLabel(
   statusType: string | undefined,
   durationMs: number | null,
 ): string {
-  if (statusType === 'incomplete') {
-    return 'Thinking stopped';
+  if (statusType === "incomplete") {
+    return "Thinking stopped";
   }
   if (durationMs === null) {
-    return 'Thought';
+    return "Thought";
   }
   if (durationMs < 500) {
-    return 'Thought briefly';
+    return "Thought briefly";
   }
   if (durationMs < 1_000) {
     return `Thought for ${(durationMs / 1_000).toFixed(1)}s`;
@@ -2788,58 +2903,51 @@ function formatDuration(durationMs: number): string {
 
 function formatToolLifecycle(status: string): string {
   switch (status) {
-    case 'running':
-      return 'Working';
-    case 'failed':
-      return 'Failed';
-    case 'stopped':
-      return 'Stopped';
+    case "running":
+      return "Working";
+    case "failed":
+      return "Failed";
+    case "stopped":
+      return "Stopped";
     default:
-      return 'Completed';
+      return "Completed";
   }
 }
 
-function formatToolProgress(
-  activity: ToolActivityPresentation,
-): string {
-  if (
-    activity.progressCount === 0 ||
-    activity.latestUpdateKind === null
-  ) {
+function formatToolProgress(activity: ToolActivityPresentation): string {
+  if (activity.progressCount === 0 || activity.latestUpdateKind === null) {
     return `Lifecycle: ${formatToolLifecycle(activity.status)}`;
   }
   const count = `${activity.progressCount} progress ${
-    activity.progressCount === 1 ? 'update' : 'updates'
+    activity.progressCount === 1 ? "update" : "updates"
   }`;
-  return `${count} · Latest: ${formatUpdateKind(
-    activity.latestUpdateKind,
-  )}`;
+  return `${count} · Latest: ${formatUpdateKind(activity.latestUpdateKind)}`;
 }
 
 function formatUpdateKind(kind: string): string {
   switch (kind) {
-    case 'tool-call':
-      return 'tool started';
-    case 'tool-result':
-      return 'tool result';
-    case 'error':
-      return 'error';
-    case 'status':
-      return 'status';
+    case "tool-call":
+      return "tool started";
+    case "tool-result":
+      return "tool result";
+    case "error":
+      return "error";
+    case "status":
+      return "status";
     default:
-      return 'message';
+      return "message";
   }
 }
 
 function readUserMessageId(metadata: unknown): string | null {
   if (
-    typeof metadata === 'object' &&
+    typeof metadata === "object" &&
     metadata !== null &&
-    'custom' in metadata &&
-    typeof metadata.custom === 'object' &&
+    "custom" in metadata &&
+    typeof metadata.custom === "object" &&
     metadata.custom !== null &&
-    'messageId' in metadata.custom &&
-    typeof metadata.custom.messageId === 'string' &&
+    "messageId" in metadata.custom &&
+    typeof metadata.custom.messageId === "string" &&
     metadata.custom.messageId.length > 0
   ) {
     return metadata.custom.messageId;
@@ -2851,12 +2959,12 @@ function readUserAttachments(
   metadata: unknown,
 ): readonly SentAttachmentSummary[] {
   if (
-    typeof metadata === 'object' &&
+    typeof metadata === "object" &&
     metadata !== null &&
-    'custom' in metadata &&
-    typeof metadata.custom === 'object' &&
+    "custom" in metadata &&
+    typeof metadata.custom === "object" &&
     metadata.custom !== null &&
-    'attachments' in metadata.custom &&
+    "attachments" in metadata.custom &&
     Array.isArray(metadata.custom.attachments)
   ) {
     return metadata.custom.attachments as readonly SentAttachmentSummary[];
@@ -2870,47 +2978,56 @@ function readMessageText(content: readonly unknown[]): string {
       (
         part,
       ): part is {
-        readonly type: 'text';
+        readonly type: "text";
         readonly text: string;
       } =>
-        typeof part === 'object' &&
+        typeof part === "object" &&
         part !== null &&
-        'type' in part &&
-        part.type === 'text' &&
-        'text' in part &&
-        typeof part.text === 'string',
+        "type" in part &&
+        part.type === "text" &&
+        "text" in part &&
+        typeof part.text === "string",
     )
     .map((part) => part.text)
-    .join('');
+    .join("");
 }
 
 function readDiagnostic(data: unknown): {
-  readonly severity: 'info' | 'warning' | 'error';
+  readonly severity: "info" | "warning" | "error";
   readonly code: string;
   readonly message: string;
+  readonly relatedSessionId: string | null;
 } {
   if (
-    typeof data === 'object' &&
+    typeof data === "object" &&
     data !== null &&
-    'severity' in data &&
-    (data.severity === 'info' ||
-      data.severity === 'warning' ||
-      data.severity === 'error') &&
-    'code' in data &&
-    typeof data.code === 'string' &&
-    'message' in data &&
-    typeof data.message === 'string'
+    "severity" in data &&
+    (data.severity === "info" ||
+      data.severity === "warning" ||
+      data.severity === "error") &&
+    "code" in data &&
+    typeof data.code === "string" &&
+    "message" in data &&
+    typeof data.message === "string"
   ) {
-    return data as {
-      severity: 'info' | 'warning' | 'error';
-      code: string;
-      message: string;
+    const relatedSessionId =
+      "relatedSessionId" in data &&
+      typeof data.relatedSessionId === "string" &&
+      data.relatedSessionId.length > 0
+        ? data.relatedSessionId
+        : null;
+    return {
+      severity: data.severity,
+      code: data.code,
+      message: data.message,
+      relatedSessionId,
     };
   }
   return {
-    severity: 'warning',
-    code: 'DIAGNOSTIC_UNAVAILABLE',
-    message: 'Diagnostic details are unavailable.',
+    severity: "warning",
+    code: "DIAGNOSTIC_UNAVAILABLE",
+    message: "Diagnostic details are unavailable.",
+    relatedSessionId: null,
   };
 }
 
@@ -2928,24 +3045,20 @@ function isImageMediaType(value: string): value is ImageMediaType {
  * that is not a file URI is dropped here before crossing the bridge.
  */
 export function readDroppedFileUris(
-  dataTransfer: Pick<DataTransfer, 'getData'>,
+  dataTransfer: Pick<DataTransfer, "getData">,
 ): readonly string[] {
-  const plain = dataTransfer.getData('text/uri-list');
+  const plain = dataTransfer.getData("text/uri-list");
   let entries = plain
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith('#'));
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
   if (entries.length === 0) {
-    const code = dataTransfer.getData(
-      'application/vnd.code.uri-list',
-    );
+    const code = dataTransfer.getData("application/vnd.code.uri-list");
     if (code.length > 0) {
       try {
         const parsed: unknown = JSON.parse(code);
         entries = Array.isArray(parsed)
-          ? parsed.filter(
-              (entry): entry is string => typeof entry === 'string',
-            )
+          ? parsed.filter((entry): entry is string => typeof entry === "string")
           : [];
       } catch {
         entries = code
@@ -2957,8 +3070,7 @@ export function readDroppedFileUris(
   }
   return entries.filter(
     (uri) =>
-      uri.startsWith('file://') &&
-      uri.length <= MAX_ATTACHMENT_URI_LENGTH,
+      uri.startsWith("file://") && uri.length <= MAX_ATTACHMENT_URI_LENGTH,
   );
 }
 
@@ -3020,8 +3132,7 @@ export function computeStickyLayout(
     return {
       pinnedIndex: editingIndex,
       covered: tops.map(
-        (top, index) =>
-          index !== editingIndex && top <= viewportTop + 1,
+        (top, index) => index !== editingIndex && top <= viewportTop + 1,
       ),
       pushPx: 0,
     };
@@ -3088,8 +3199,7 @@ export function applyFollowScroll(
   state: FollowState,
   sample: FollowScrollSample,
 ): void {
-  const distance =
-    sample.scrollHeight - sample.scrollTop - sample.clientHeight;
+  const distance = sample.scrollHeight - sample.scrollTop - sample.clientHeight;
   const programmatic =
     state.pendingProgrammaticTop !== null &&
     Math.abs(sample.scrollTop - state.pendingProgrammaticTop) <= 1;
@@ -3106,12 +3216,10 @@ export function applyFollowScroll(
     // a return-to-bottom even when streaming grew the content between
     // the user's gesture and this event (the live distance is then
     // whatever just streamed in, not user intent).
-    const previousMaxTop =
-      state.lastScrollHeight - sample.clientHeight;
+    const previousMaxTop = state.lastScrollHeight - sample.clientHeight;
     if (
       distance <= FOLLOW_REJOIN_PX ||
-      (scrolledDown &&
-        sample.scrollTop >= previousMaxTop - FOLLOW_REJOIN_PX)
+      (scrolledDown && sample.scrollTop >= previousMaxTop - FOLLOW_REJOIN_PX)
     ) {
       state.following = true;
     }
@@ -3127,7 +3235,7 @@ function toggleDataAttribute(
 ): void {
   if (on) {
     if (!element.hasAttribute(name)) {
-      element.setAttribute(name, '');
+      element.setAttribute(name, "");
     }
   } else if (element.hasAttribute(name)) {
     element.removeAttribute(name);
@@ -3145,11 +3253,11 @@ function readFileAsBase64(file: File): Promise<string | null> {
     reader.onerror = () => resolve(null);
     reader.onload = () => {
       const result = reader.result;
-      if (typeof result !== 'string') {
+      if (typeof result !== "string") {
         resolve(null);
         return;
       }
-      const separator = result.indexOf(',');
+      const separator = result.indexOf(",");
       resolve(separator === -1 ? null : result.slice(separator + 1));
     };
     reader.readAsDataURL(file);

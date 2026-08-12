@@ -147,6 +147,54 @@ describe('assistantWebviewReducer', () => {
     expect(state.archived.items).toHaveLength(0);
   });
 
+  it('stores the failure excerpt on the failed tool row', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'turn.send',
+      turnId: 'turn-a',
+      text: 'Patch the file',
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'tool.activity',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'tool-a',
+        toolName: 'ApplyPatch',
+        action: 'Updated workspace files',
+        status: 'running',
+        progressCount: 0,
+        latestUpdateKind: null,
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'tool.activity',
+        sequence: 2,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'tool-a',
+        toolName: 'ApplyPatch',
+        action: 'Updated workspace files',
+        status: 'failed',
+        progressCount: 0,
+        latestUpdateKind: null,
+        errorMessage: 'Tool execution cancelled by user',
+      },
+    });
+    expect(state.transcript.at(-1)).toMatchObject({
+      kind: 'tool',
+      status: 'failed',
+      errorMessage: 'Tool execution cancelled by user',
+    });
+  });
+
   it('carries tool file paths and appends one changes summary per turn', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',
@@ -316,6 +364,7 @@ describe('assistantWebviewReducer', () => {
     });
     expect(state.fileSearch).toEqual({
       requestId: 'file-search-1',
+      status: 'ok',
       files: ['src/app.ts', 'docs/readme.md'],
     });
 
@@ -340,6 +389,68 @@ describe('assistantWebviewReducer', () => {
       message: snapshot(3, 'session-b'),
     });
     expect(state.fileSearch).toBeNull();
+  });
+
+  it('stores markdown image bytes keyed by path for the active session only', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'workspace.imageData',
+        sequence: 1,
+        sessionId: 'session-a',
+        path: 'out/plot.png',
+        status: 'ok',
+        mediaType: 'image/png',
+        data: 'aGk=',
+      },
+    });
+    expect(state.localImages['out/plot.png']).toEqual({
+      status: 'ok',
+      mediaType: 'image/png',
+      data: 'aGk=',
+    });
+
+    // Other-session bytes advance the sequence only.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'workspace.imageData',
+        sequence: 2,
+        sessionId: 'session-other',
+        path: 'other.png',
+        status: 'ok',
+        mediaType: 'image/png',
+        data: 'aGk=',
+      },
+    });
+    expect(state.localImages['other.png']).toBeUndefined();
+
+    // Non-ok statuses persist so the renderer can explain the miss.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'workspace.imageData',
+        sequence: 3,
+        sessionId: 'session-a',
+        path: 'missing.png',
+        status: 'not-found',
+        mediaType: null,
+        data: '',
+      },
+    });
+    expect(state.localImages['missing.png']?.status).toBe('not-found');
+
+    // Switching sessions drops the cache.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(4, 'session-b'),
+    });
+    expect(Object.keys(state.localImages)).toHaveLength(0);
   });
 
   it('tracks rewind file info for the active session only', () => {

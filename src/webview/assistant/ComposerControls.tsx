@@ -76,6 +76,8 @@ interface ComposerControlsProps {
   readonly onMcpServerRemove: (name: string) => void;
   readonly mcpAuth: McpAuthProgress | null;
   readonly onMcpServerAuthenticate: (name: string) => void;
+  /** Starts a fresh session (skills apply at session start). */
+  readonly onNewSession?: () => void;
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
   readonly onAttachSelection: () => void;
@@ -178,6 +180,7 @@ export function ComposerControls({
   onMcpServerRemove,
   mcpAuth,
   onMcpServerAuthenticate,
+  onNewSession,
   onAttachFiles,
   onAttachEditor,
   onAttachSelection,
@@ -357,6 +360,7 @@ export function ComposerControls({
           onMcpServerRemove={onMcpServerRemove}
           mcpAuth={mcpAuth}
           onMcpServerAuthenticate={onMcpServerAuthenticate}
+          onNewSession={onNewSession}
           onAttach={(source) => {
             setOpenPanel(null);
             if (source === 'files') {
@@ -470,6 +474,7 @@ function SettingsPopover({
   onMcpServerRemove,
   mcpAuth,
   onMcpServerAuthenticate,
+  onNewSession,
   onAttach,
 }: {
   readonly id: string;
@@ -494,6 +499,7 @@ function SettingsPopover({
   readonly onMcpServerRemove: (name: string) => void;
   readonly mcpAuth: McpAuthProgress | null;
   readonly onMcpServerAuthenticate: (name: string) => void;
+  readonly onNewSession?: () => void;
   readonly onAttach: (source: AttachSource) => void;
 }): React.JSX.Element {
   const [query, setQuery] = useState('');
@@ -532,6 +538,28 @@ function SettingsPopover({
   const showAttach =
     normalizedQuery.length === 0 ||
     'attach files editor selection context'.includes(normalizedQuery);
+  // Real catalog entries also answer the search, so typing a skill or
+  // server name surfaces it directly instead of only the static rows.
+  const matchedSkills =
+    normalizedQuery.length === 0
+      ? []
+      : skills.items
+          .filter(
+            (skill) =>
+              skill.name.toLocaleLowerCase().includes(normalizedQuery) ||
+              (skill.description ?? '')
+                .toLocaleLowerCase()
+                .includes(normalizedQuery),
+          )
+          .slice(0, 5);
+  const matchedServers =
+    normalizedQuery.length === 0
+      ? []
+      : mcp.items
+          .filter((server) =>
+            server.name.toLocaleLowerCase().includes(normalizedQuery),
+          )
+          .slice(0, 5);
 
   if (view === 'skills') {
     return (
@@ -547,6 +575,7 @@ function SettingsPopover({
           onBack={() => onViewChange('root')}
           onRefresh={onSkillsRefresh}
           onToggle={onSkillToggle}
+          onNewSession={onNewSession}
         />
       </div>
     );
@@ -595,8 +624,18 @@ function SettingsPopover({
           placeholder="Search actions, skills, MCP…"
           autoComplete="off"
           onChange={(event) => {
-            setQuery(event.currentTarget.value);
+            const next = event.currentTarget.value;
+            setQuery(next);
             onViewChange('root');
+            // Load the real catalogs the first time a search needs them.
+            if (next.trim().length > 0) {
+              if (skills.status === 'idle') {
+                onSkillsRefresh();
+              }
+              if (mcp.status === 'idle') {
+                onMcpRefresh();
+              }
+            }
           }}
         />
       </div>
@@ -650,9 +689,9 @@ function SettingsPopover({
           type="button"
           className="dvx-popover-row dvx-settings-link-row"
           onClick={() => {
-            if (skills.status === 'idle' || skills.status === 'error') {
-              onSkillsRefresh();
-            }
+            // Always re-read on entry so the panel reflects config
+            // changes made outside this popover.
+            onSkillsRefresh();
             onViewChange('skills');
           }}
         >
@@ -675,9 +714,7 @@ function SettingsPopover({
           type="button"
           className="dvx-popover-row dvx-settings-link-row"
           onClick={() => {
-            if (mcp.status === 'idle' || mcp.status === 'error') {
-              onMcpRefresh();
-            }
+            onMcpRefresh();
             onViewChange('mcp');
           }}
         >
@@ -695,11 +732,55 @@ function SettingsPopover({
           <ChevronDownIcon />
         </button>
       ) : null}
+      {matchedSkills.length > 0 || matchedServers.length > 0 ? (
+        <>
+          <div className="dvx-settings-divider" />
+          {matchedSkills.map((skill) => (
+            <button
+              key={`skill:${skill.name}`}
+              type="button"
+              className="dvx-popover-row dvx-settings-link-row"
+              onClick={() => {
+                onSkillsRefresh();
+                onViewChange('skills');
+              }}
+            >
+              <SettingsInfoIcon kind="skills" />
+              <span className="dvx-popover-row-copy">
+                <strong>{skill.name}</strong>
+                {skill.description !== null ? (
+                  <span>{skill.description}</span>
+                ) : null}
+              </span>
+              <span className="dvx-popover-row-value">Skill</span>
+            </button>
+          ))}
+          {matchedServers.map((server) => (
+            <button
+              key={`mcp:${server.name}`}
+              type="button"
+              className="dvx-popover-row dvx-settings-link-row"
+              onClick={() => {
+                onMcpRefresh();
+                onViewChange('mcp');
+              }}
+            >
+              <SettingsInfoIcon kind="mcp" />
+              <span className="dvx-popover-row-copy">
+                <strong>{server.name}</strong>
+              </span>
+              <span className="dvx-popover-row-value">MCP</span>
+            </button>
+          ))}
+        </>
+      ) : null}
       {!showMode &&
       !showAutonomy &&
       !showSkills &&
       !showMcp &&
-      !showAttach ? (
+      !showAttach &&
+      matchedSkills.length === 0 &&
+      matchedServers.length === 0 ? (
         <p className="dvx-popover-message">No matching actions.</p>
       ) : null}
       <SettingsStatus settings={settings} />
@@ -718,14 +799,25 @@ function SkillsPanel({
   onBack,
   onRefresh,
   onToggle,
+  onNewSession,
 }: {
   readonly skills: SkillsPanelState;
   readonly disabled: boolean;
   readonly onBack: () => void;
   readonly onRefresh: () => void;
   readonly onToggle: (name: string, disabled: boolean) => void;
+  readonly onNewSession?: () => void;
 }): React.JSX.Element {
   const busy = skills.status === 'loading' || skills.status === 'idle';
+  // Row-level pending: only the toggled row waits for the round-trip,
+  // the rest of the panel stays interactive.
+  const [pendingSkill, setPendingSkill] = useState<string | null>(null);
+  const [changed, setChanged] = useState(false);
+  useEffect(() => {
+    if (skills.status !== 'loading') {
+      setPendingSkill(null);
+    }
+  }, [skills.status]);
   return (
     <div className="dvx-skills-panel">
       <div className="dvx-popover-heading">
@@ -773,12 +865,32 @@ function SkillsPanel({
             <SkillRow
               key={skill.name}
               skill={skill}
-              disabled={disabled || busy}
-              onToggle={onToggle}
+              disabled={disabled}
+              pending={pendingSkill === skill.name}
+              onToggle={(name, nextDisabled) => {
+                setPendingSkill(name);
+                setChanged(true);
+                onToggle(name, nextDisabled);
+              }}
             />
           ))}
         </ul>
       ) : null}
+      <p className="dvx-popover-message dvx-skills-session-note">
+        Skill changes take effect in new sessions.
+        {changed && onNewSession !== undefined ? (
+          <>
+            {' '}
+            <button
+              type="button"
+              className="dvx-skills-apply-new"
+              onClick={onNewSession}
+            >
+              Start a new session
+            </button>
+          </>
+        ) : null}
+      </p>
     </div>
   );
 }
@@ -786,10 +898,12 @@ function SkillsPanel({
 function SkillRow({
   skill,
   disabled,
+  pending,
   onToggle,
 }: {
   readonly skill: SkillSummary;
   readonly disabled: boolean;
+  readonly pending: boolean;
   readonly onToggle: (name: string, disabled: boolean) => void;
 }): React.JSX.Element {
   return (
@@ -798,6 +912,11 @@ function SkillRow({
         <span className="dvx-skill-name">
           {skill.name}
           <span className="dvx-skill-location">{skill.location}</span>
+          {pending ? (
+            <span className="dvx-skill-location" role="status">
+              {skill.enabled ? 'Disabling…' : 'Enabling…'}
+            </span>
+          ) : null}
         </span>
         {skill.description !== null ? (
           <span className="dvx-skill-description" title={skill.description}>
@@ -811,7 +930,7 @@ function SkillRow({
         className="dvx-skill-switch"
         aria-label={`${skill.name} enabled`}
         aria-checked={skill.enabled}
-        disabled={disabled}
+        disabled={disabled || pending}
         onClick={() => onToggle(skill.name, skill.enabled)}
       >
         <span className="dvx-skill-switch-thumb" aria-hidden="true" />
@@ -843,6 +962,16 @@ function McpPanel({
 }): React.JSX.Element {
   const [adding, setAdding] = useState(false);
   const busy = mcp.status === 'loading' || mcp.status === 'idle';
+  // Row-level pending: only the mutated row waits for the round-trip.
+  const [pending, setPending] = useState<{
+    readonly name: string;
+    readonly op: 'enable' | 'disable' | 'remove';
+  } | null>(null);
+  useEffect(() => {
+    if (mcp.status !== 'loading') {
+      setPending(null);
+    }
+  }, [mcp.status]);
   const authPending =
     auth !== null &&
     (auth.phase === 'started' || auth.phase === 'browser');
@@ -912,10 +1041,22 @@ function McpPanel({
               key={server.name}
               server={server}
               auth={auth?.serverName === server.name ? auth : null}
-              disabled={disabled || busy}
+              disabled={disabled}
+              pendingOp={
+                pending?.name === server.name ? pending.op : null
+              }
               authDisabled={disabled || busy || authPending}
-              onToggle={onToggle}
-              onRemove={onRemove}
+              onToggle={(name, enabled) => {
+                setPending({
+                  name,
+                  op: enabled ? 'enable' : 'disable',
+                });
+                onToggle(name, enabled);
+              }}
+              onRemove={(name) => {
+                setPending({ name, op: 'remove' });
+                onRemove(name);
+              }}
               onAuthenticate={onAuthenticate}
             />
           ))}
@@ -935,18 +1076,28 @@ function McpAddServerForm({
   const [name, setName] = useState('');
   const [serverType, setServerType] = useState<McpServerType>('stdio');
   const [target, setTarget] = useState('');
+  const [showValidation, setShowValidation] = useState(false);
   const trimmedName = name.trim();
   const trimmedTarget = target.trim();
   const targetValid =
     serverType === 'stdio'
       ? trimmedTarget.length > 0
       : /^https?:\/\//.test(trimmedTarget);
-  const canSubmit =
-    !disabled && trimmedName.length > 0 && targetValid;
+  const validationMessage =
+    trimmedName.length === 0
+      ? 'Enter a server name.'
+      : !targetValid
+        ? serverType === 'stdio'
+          ? 'Enter the launch command.'
+          : 'Enter a URL starting with http:// or https://.'
+        : null;
+  const canSubmit = !disabled && validationMessage === null;
   const submit = (): void => {
     if (!canSubmit) {
+      setShowValidation(true);
       return;
     }
+    setShowValidation(false);
     if (serverType === 'stdio') {
       const [command = '', ...args] = trimmedTarget.split(/\s+/);
       onSubmit({
@@ -1004,10 +1155,15 @@ function McpAddServerForm({
         maxLength={1024}
         onChange={(event) => setTarget(event.currentTarget.value)}
       />
+      {showValidation && validationMessage !== null ? (
+        <p className="dvx-popover-message dvx-error-text" role="alert">
+          {validationMessage}
+        </p>
+      ) : null}
       <button
         type="submit"
         className="dvx-mcp-add-submit"
-        disabled={!canSubmit}
+        disabled={disabled}
       >
         Add server
       </button>
@@ -1019,6 +1175,7 @@ function McpServerRow({
   server,
   auth,
   disabled,
+  pendingOp,
   authDisabled,
   onToggle,
   onRemove,
@@ -1027,6 +1184,8 @@ function McpServerRow({
   readonly server: McpServerSummary;
   readonly auth: McpAuthProgress | null;
   readonly disabled: boolean;
+  /** Mutation in flight for this row, if any. */
+  readonly pendingOp: 'enable' | 'disable' | 'remove' | null;
   readonly authDisabled: boolean;
   readonly onToggle: (name: string, enabled: boolean) => void;
   readonly onRemove: (name: string) => void;
@@ -1044,6 +1203,18 @@ function McpServerRow({
   }, [confirmingRemove]);
   const enabled = server.status !== 'disabled';
   const toolCount = server.toolCount ?? server.tools.length;
+  const rowDisabled = disabled || pendingOp !== null;
+  // A server needs authentication only while Droid holds no OAuth
+  // tokens for it; a signed-in server shows the quiet opposite badge.
+  const needsAuth = server.requiresAuth && !server.hasAuthTokens;
+  const pendingText =
+    pendingOp === 'enable'
+      ? 'Enabling…'
+      : pendingOp === 'disable'
+        ? 'Disabling…'
+        : pendingOp === 'remove'
+          ? 'Removing…'
+          : null;
   const authPending =
     auth !== null &&
     (auth.phase === 'started' || auth.phase === 'browser');
@@ -1073,11 +1244,18 @@ function McpServerRow({
           <span className="dvx-skill-location">
             {formatLabel(server.status)}
           </span>
-          {server.requiresAuth ? (
+          {needsAuth ? (
             <span className="dvx-skill-location">needs auth</span>
+          ) : server.requiresAuth ? (
+            <span className="dvx-skill-location">authenticated</span>
+          ) : null}
+          {pendingText !== null ? (
+            <span className="dvx-skill-location" role="status">
+              {pendingText}
+            </span>
           ) : null}
         </span>
-        {server.requiresAuth ? (
+        {needsAuth ? (
           <button
             type="button"
             className="dvx-mcp-auth-button"
@@ -1120,7 +1298,7 @@ function McpServerRow({
             className={`dvx-mcp-remove${
               confirmingRemove ? ' dvx-mcp-remove-confirm' : ''
             }`}
-            disabled={disabled}
+            disabled={rowDisabled}
             onClick={() => {
               if (confirmingRemove) {
                 setConfirmingRemove(false);
@@ -1165,7 +1343,7 @@ function McpServerRow({
         className="dvx-skill-switch"
         aria-label={`${server.name} enabled`}
         aria-checked={enabled}
-        disabled={disabled}
+        disabled={rowDisabled}
         onClick={() => onToggle(server.name, !enabled)}
       >
         <span className="dvx-skill-switch-thumb" aria-hidden="true" />

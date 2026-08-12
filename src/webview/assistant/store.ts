@@ -17,6 +17,9 @@ import {
   type SessionSkillsState,
   type SessionTranscriptItem,
   type TurnStatus,
+  type WorkspaceFilesStatus,
+  type ImageMediaType,
+  type WorkspaceImageStatus,
 } from '../../shared/bridgeMessages';
 import {
   enforceTranscriptImageBudget,
@@ -35,6 +38,14 @@ export interface PendingInteraction {
   readonly sessionId: string;
   readonly turnId: string;
   readonly request: InteractionRequest;
+}
+
+/** One resolved markdown image reference. */
+export interface LocalImageEntry {
+  readonly status: WorkspaceImageStatus;
+  readonly mediaType: ImageMediaType | null;
+  /** Pure base64 payload; empty unless status is 'ok'. */
+  readonly data: string;
 }
 
 export interface AssistantWebviewState {
@@ -71,8 +82,14 @@ export interface AssistantWebviewState {
   /** Latest workspace file search result for the `@` mention popup. */
   readonly fileSearch: {
     readonly requestId: string;
+    readonly status: WorkspaceFilesStatus;
     readonly files: readonly string[];
   } | null;
+  /**
+   * Workspace-local images resolved for markdown references, keyed
+   * by the path exactly as written in the markdown source.
+   */
+  readonly localImages: Readonly<Record<string, LocalImageEntry>>;
   /** Archived sessions load lazily; 'idle' means not requested yet. */
   readonly archived:
     | SessionArchivedState
@@ -136,6 +153,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   mcpAuth: null,
   attachments: [],
   fileSearch: null,
+  localImages: {},
   archived: { status: 'idle', items: [] },
   sessionSearch: null,
   rewindInfo: null,
@@ -149,6 +167,9 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
 };
 
 const MAX_DIAGNOSTICS = 50;
+
+/** Most markdown-referenced images kept decoded in webview state. */
+const MAX_LOCAL_IMAGE_ENTRIES = 24;
 
 export function assistantWebviewReducer(
   state: AssistantWebviewState,
@@ -233,6 +254,8 @@ export function assistantWebviewReducer(
           event.sessionId === state.sessionId ? state.attachments : [],
         fileSearch:
           event.sessionId === state.sessionId ? state.fileSearch : null,
+        localImages:
+          event.sessionId === state.sessionId ? state.localImages : {},
         // Archived list and content search are workspace-level, not
         // session-level; they survive session switches.
         archived: state.archived,
@@ -314,14 +337,23 @@ export function assistantWebviewReducer(
       if (event.sessionId !== state.sessionId) {
         return advance(state, event.sequence);
       }
-      // A toggle/refresh in flight sends 'loading' with no items; keep
-      // showing the current list until the fresh one arrives.
+      // A toggle/refresh in flight sends 'loading' with no items, and a
+      // failed operation may arrive with an empty error payload; keep
+      // showing the current list in both cases instead of blanking it.
       const skills =
         event.skills.status === 'loading' &&
         event.skills.items.length === 0 &&
         state.skills.items.length > 0
           ? { status: 'loading' as const, items: state.skills.items }
-          : event.skills;
+          : event.skills.status === 'error' &&
+              event.skills.items.length === 0 &&
+              state.skills.items.length > 0
+            ? {
+                status: 'error' as const,
+                items: state.skills.items,
+                message: event.skills.message,
+              }
+            : event.skills;
       return { ...state, sequence: event.sequence, skills };
     }
     case 'session.mcp': {
@@ -333,7 +365,15 @@ export function assistantWebviewReducer(
         event.mcp.items.length === 0 &&
         state.mcp.items.length > 0
           ? { status: 'loading' as const, items: state.mcp.items }
-          : event.mcp;
+          : event.mcp.status === 'error' &&
+              event.mcp.items.length === 0 &&
+              state.mcp.items.length > 0
+            ? {
+                status: 'error' as const,
+                items: state.mcp.items,
+                message: event.mcp.message,
+              }
+            : event.mcp;
       return { ...state, sequence: event.sequence, mcp };
     }
     case 'session.commands': {
@@ -420,10 +460,36 @@ export function assistantWebviewReducer(
             sequence: event.sequence,
             fileSearch: {
               requestId: event.requestId,
+              status: event.status,
               files: event.files,
             },
           }
         : advance(state, event.sequence);
+    case 'workspace.imageData': {
+      if (event.sessionId !== state.sessionId) {
+        return advance(state, event.sequence);
+      }
+      const entries = Object.entries(state.localImages).filter(
+        ([path]) => path !== event.path,
+      );
+      // Insertion order doubles as recency for the byte budget.
+      entries.push([
+        event.path,
+        {
+          status: event.status,
+          mediaType: event.mediaType,
+          data: event.data,
+        },
+      ]);
+      while (entries.length > MAX_LOCAL_IMAGE_ENTRIES) {
+        entries.shift();
+      }
+      return {
+        ...state,
+        sequence: event.sequence,
+        localImages: Object.fromEntries(entries),
+      };
+    }
     case 'rewind.info':
       return event.sessionId === state.sessionId
         ? {
@@ -570,6 +636,9 @@ export function assistantWebviewReducer(
           severity: event.severity,
           code: event.code,
           message: event.message,
+          ...(event.relatedSessionId === undefined
+            ? {}
+            : { relatedSessionId: event.relatedSessionId }),
         }),
       );
     case 'user.message-meta': {
@@ -923,6 +992,9 @@ function upsertTool(
         ...(event.detailKind === undefined || event.detail === undefined
           ? {}
           : { detailKind: event.detailKind, detail: event.detail }),
+        ...(event.errorMessage === undefined
+          ? {}
+          : { errorMessage: event.errorMessage }),
       };
     });
   }
@@ -953,6 +1025,9 @@ function upsertTool(
       ...(event.detailKind === undefined || event.detail === undefined
         ? {}
         : { detailKind: event.detailKind, detail: event.detail }),
+      ...(event.errorMessage === undefined
+        ? {}
+        : { errorMessage: event.errorMessage }),
     },
   ];
 }

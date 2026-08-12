@@ -28,7 +28,7 @@ import {
   restoreDraft,
 } from '../bridge/vscode';
 import { InteractionPanel } from './Interactions';
-import { OpenPathContext } from './MarkdownText';
+import { LocalImageContext, OpenPathContext } from './MarkdownText';
 import type { PathLink } from './pathLink';
 import type {
   McpServerAddParams,
@@ -281,6 +281,14 @@ export function App(): React.JSX.Element {
         persistDraft(vscode, '');
         return;
       }
+      // /new is a GUI built-in like /compact: start a fresh session
+      // instead of sending the literal text to the CLI.
+      if (/^\/new$/i.test(text.trim())) {
+        post(vscode, { type: 'session.new' });
+        setDraft('');
+        persistDraft(vscode, '');
+        return;
+      }
       const eligibility = {
         connectionStatus,
         sessionId,
@@ -452,6 +460,35 @@ export function App(): React.JSX.Element {
       }
     },
     [connectionStatus, sessionId, vscode],
+  );
+  // Markdown image resolution: one in-flight request per path; the
+  // reply lands in `state.localImages` and re-renders the reference.
+  const requestedImagesRef = useRef<Set<string>>(new Set());
+  const requestedImagesSessionRef = useRef(sessionId);
+  if (requestedImagesSessionRef.current !== sessionId) {
+    requestedImagesSessionRef.current = sessionId;
+    requestedImagesRef.current.clear();
+  }
+  const requestLocalImage = useCallback(
+    (path: string): void => {
+      if (
+        sessionId === null ||
+        connectionStatus !== 'connected' ||
+        requestedImagesRef.current.has(path)
+      ) {
+        return;
+      }
+      requestedImagesRef.current.add(path);
+      post(vscode, { type: 'workspace.readImage', sessionId, path });
+    },
+    [connectionStatus, sessionId, vscode],
+  );
+  const localImageSource = useMemo(
+    () => ({
+      entries: state.localImages,
+      request: requestLocalImage,
+    }),
+    [state.localImages, requestLocalImage],
   );
   const handleRetry = useCallback((): void => {
     post(vscode, {
@@ -957,6 +994,8 @@ export function App(): React.JSX.Element {
           onMcpServerRemove={handleMcpServerRemove}
           mcpAuth={state.mcpAuth}
           onMcpServerAuthenticate={handleMcpServerAuthenticate}
+          onNewSession={handleNewSession}
+          onSelectSession={handleSelectSession}
           attachments={state.attachments}
           fileSearch={state.fileSearch}
           onFileSearch={handleFileSearch}
@@ -1008,7 +1047,9 @@ export function App(): React.JSX.Element {
   );
   return (
     <OpenPathContext.Provider value={handleOpenPath}>
-      {app}
+      <LocalImageContext.Provider value={localImageSource}>
+        {app}
+      </LocalImageContext.Provider>
     </OpenPathContext.Provider>
   );
 }

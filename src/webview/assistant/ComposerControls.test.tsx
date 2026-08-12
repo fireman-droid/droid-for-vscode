@@ -820,8 +820,13 @@ describe('ComposerControls', () => {
     await user.click(screen.getByRole('button', { name: 'Add' }));
     const form = screen.getByRole('form', { name: 'Add MCP server' });
     expect(form).toBeDefined();
-    const submit = screen.getByRole('button', { name: 'Add server' });
-    expect((submit as HTMLButtonElement).disabled).toBe(true);
+    // Submitting an incomplete form explains what is missing instead
+    // of silently disabling the button.
+    await user.click(screen.getByRole('button', { name: 'Add server' }));
+    expect(onMcpServerAdd).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Enter a server name.',
+    );
     await user.type(
       screen.getByRole('textbox', { name: 'Server name' }),
       'remote',

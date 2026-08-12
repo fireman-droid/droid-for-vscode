@@ -4,6 +4,7 @@ import {
   isValidElement,
   memo,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -15,8 +16,11 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import { MAX_IMAGE_PATH_LENGTH } from '../../shared/bridgeMessages';
 import { highlightCode } from './highlightCode';
 import { detectPathLink, type PathLink } from './pathLink';
+import type { LocalImageEntry } from './store';
+import { TranscriptImage } from './TranscriptImage';
 
 /**
  * Receives the path the user clicked in transcript inline code. The
@@ -49,6 +53,171 @@ export function isSafeMarkdownUrl(url: string | undefined): url is string {
 
 export function safeMarkdownUrlTransform(url: string): string {
   return isSafeMarkdownUrl(url) ? url : '';
+}
+
+/**
+ * Workspace-local images resolved over the Bridge, keyed by the path
+ * exactly as written in the markdown source. The app provides it at
+ * the root; a null default keeps standalone renders (tests, panels
+ * without wiring) on the plain path-link fallback.
+ */
+export interface LocalImageSource {
+  readonly entries: Readonly<Record<string, LocalImageEntry>>;
+  readonly request: (path: string) => void;
+}
+export const LocalImageContext =
+  createContext<LocalImageSource | null>(null);
+
+const LOCAL_IMAGE_EXTENSION = /\.(?:png|jpe?g|gif|webp)$/iu;
+const URL_SCHEME = /^[a-z][a-z0-9+.-]*:/iu;
+const WINDOWS_DRIVE = /^[a-z]:[\\/]/iu;
+
+/**
+ * True for plausible file-system references to a displayable image.
+ * Everything with a real URL scheme is excluded (a Windows drive
+ * prefix like `d:\` is not a scheme); the string is only ever used
+ * as a lookup key and Bridge payload, never as a URI.
+ */
+export function isLocalImagePath(value: string): boolean {
+  if (value.length === 0 || value.length > MAX_IMAGE_PATH_LENGTH) {
+    return false;
+  }
+  if (URL_SCHEME.test(value) && !WINDOWS_DRIVE.test(value)) {
+    return false;
+  }
+  return LOCAL_IMAGE_EXTENSION.test(value);
+}
+
+/**
+ * Keeps http(s) URLs everywhere and additionally lets local image
+ * paths through for `src`, where the img component resolves them via
+ * the host instead of using them as a URI.
+ */
+export function markdownUrlTransform(url: string, key: string): string {
+  if (key === 'src' && isLocalImagePath(url)) {
+    return url;
+  }
+  return safeMarkdownUrlTransform(url);
+}
+
+/** Markdown percent-encodes spaces and CJK in URLs; file paths on
+ * disk are not encoded, so decode before asking the host. */
+function decodeImagePath(src: string): string {
+  let path = src;
+  try {
+    path = decodeURIComponent(src);
+  } catch {
+    // Keep the raw string when it is not valid percent-encoding.
+  }
+  return path.startsWith('./') ? path.slice(2) : path;
+}
+
+function MarkdownImage({
+  src,
+  alt,
+}: {
+  readonly src?: string | Blob;
+  readonly alt?: string;
+}): React.JSX.Element | null {
+  if (typeof src !== 'string' || src.length === 0) {
+    return null;
+  }
+  if (isSafeMarkdownUrl(src)) {
+    return (
+      <img
+        className="dvx-markdown-image"
+        src={src}
+        alt={alt ?? ''}
+        loading="lazy"
+      />
+    );
+  }
+  return <LocalMarkdownImage path={decodeImagePath(src)} alt={alt} />;
+}
+
+function LocalMarkdownImage({
+  path,
+  alt,
+}: {
+  readonly path: string;
+  readonly alt?: string;
+}): React.JSX.Element {
+  const source = useContext(LocalImageContext);
+  const entry = source?.entries[path];
+  const request = source?.request;
+  useEffect(() => {
+    if (request !== undefined && entry === undefined) {
+      request(path);
+    }
+  }, [request, entry, path]);
+  if (entry?.status === 'ok' && entry.mediaType !== null) {
+    // Reuse the transcript image presentation: bounded thumbnail plus
+    // the zoom/pan lightbox.
+    return (
+      <TranscriptImage
+        data={{
+          mediaType: entry.mediaType,
+          data: entry.data,
+          generated: false,
+          byteLength: Math.floor((entry.data.length * 3) / 4),
+        }}
+      />
+    );
+  }
+  if (source !== null && entry === undefined) {
+    return (
+      <span className="dvx-markdown-image-pending" role="status">
+        Loading image…
+      </span>
+    );
+  }
+  // The bytes are unavailable (no workspace wiring, missing file,
+  // oversized, or not an image after all): degrade to the same
+  // clickable path affordance used for inline code.
+  return <MarkdownImageFallback path={path} alt={alt} entry={entry} />;
+}
+
+function MarkdownImageFallback({
+  path,
+  alt,
+  entry,
+}: {
+  readonly path: string;
+  readonly alt?: string;
+  readonly entry: LocalImageEntry | undefined;
+}): React.JSX.Element {
+  const openPath = useContext(OpenPathContext);
+  const label = alt !== undefined && alt.length > 0 ? `${alt} — ` : '';
+  const reason =
+    entry?.status === 'too-large'
+      ? ' (too large to preview)'
+      : entry?.status === 'unsupported'
+        ? ' (not a previewable image)'
+        : '';
+  const pathLink = detectPathLink(path);
+  if (openPath !== null && pathLink !== null) {
+    return (
+      <span className="dvx-markdown-image-fallback">
+        {label}
+        <button
+          type="button"
+          className="dvx-path-link"
+          title={`Open ${pathLink.path}`}
+          onClick={() => openPath(pathLink)}
+        >
+          {path}
+        </button>
+        {reason}
+      </span>
+    );
+  }
+  return (
+    <span className="dvx-markdown-image-fallback">
+      {label}
+      <code>{path}</code>
+      {reason}
+    </span>
+  );
 }
 
 export function SafeLink({
@@ -236,6 +405,7 @@ const COMPONENTS = {
   a: SafeLink,
   pre: CodeBlock,
   code: HighlightedCode,
+  img: MarkdownImage,
 };
 
 export const DroidMarkdownContent = memo(function DroidMarkdownContent({
@@ -251,7 +421,7 @@ export const DroidMarkdownContent = memo(function DroidMarkdownContent({
         remarkPlugins={REMARK_PLUGINS}
         components={COMPONENTS}
         skipHtml
-        urlTransform={safeMarkdownUrlTransform}
+        urlTransform={markdownUrlTransform}
       >
         {text}
       </ReactMarkdown>
@@ -267,7 +437,7 @@ export const DroidMarkdownText = memo(function DroidMarkdownText():
       remarkPlugins={REMARK_PLUGINS}
       components={COMPONENTS}
       skipHtml
-      urlTransform={safeMarkdownUrlTransform}
+      urlTransform={markdownUrlTransform}
       smooth={TEXT_SMOOTH_OPTIONS}
       defer
     />
