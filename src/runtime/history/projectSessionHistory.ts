@@ -11,6 +11,7 @@ import {
   MAX_TURN_TEXT_LENGTH,
   type ImageOrigin,
   type SessionTranscriptItem,
+  type ToolSubagentSummary,
 } from '../../shared/bridgeMessages';
 import {
   stableTranscriptId,
@@ -28,6 +29,13 @@ import {
   extractToolResultText,
   readSdkImageBlock,
 } from '../normalizeSdkEvent';
+import {
+  createSubagentQueues,
+  readSubagentInvocations,
+  readTaskDelegation,
+  takeSubagentSummary,
+  type SubagentSummaryQueues,
+} from '../subagentSummary';
 import { extractToolDetail } from '../toolDetail';
 import {
   extractToolFilePath,
@@ -37,6 +45,7 @@ import {
   type SessionHistoryResult,
   unavailableSessionHistory,
 } from './SessionHistory';
+import { readSessionMission } from './sessionMission';
 
 const MAX_RAW_MESSAGES_TO_PROJECT = 10_000;
 const MAX_RAW_BLOCKS_PER_MESSAGE = 1_000;
@@ -67,6 +76,8 @@ interface Projection {
   readonly toolIdentities: Map<string, string>;
   readonly toolCounts: Map<string, number>;
   readonly imageCounts: Map<string, number>;
+  /** Unconsumed subagent ledger entries, keyed by delegation identity. */
+  readonly subagentQueues: SubagentSummaryQueues;
   transcriptHead: number;
   transcriptSize: number;
   transcriptTextUnits: number;
@@ -93,6 +104,9 @@ export function projectSessionHistory(
       toolIdentities: new Map(),
       toolCounts: new Map(),
       imageCounts: new Map(),
+      subagentQueues: createSubagentQueues(
+        readSubagentInvocations(loaded),
+      ),
       transcriptHead: 0,
       transcriptSize: 0,
       transcriptTextUnits: 0,
@@ -125,7 +139,12 @@ export function projectSessionHistory(
       historyStatus: truncated ? 'partial' : 'complete',
       truncated,
     };
-    return { status: 'available', state };
+    const mission = readSessionMission(loaded);
+    return {
+      status: 'available',
+      state,
+      ...(mission === null ? {} : { mission }),
+    };
   } catch {
     return unavailableSessionHistory();
   }
@@ -589,6 +608,7 @@ function appendTool(
   );
   const filePath = historyToolFilePath(projection, toolName, block.input);
   const detail = extractToolDetail(toolName, block.input);
+  const subagent = historyToolSubagent(projection, toolName, block.input);
   appendTranscriptItem(projection, {
     id: transcriptId,
     kind: 'tool',
@@ -603,6 +623,7 @@ function appendTool(
     ...(detail === undefined
       ? {}
       : { detailKind: detail.kind, detail: detail.text }),
+    ...(subagent === undefined ? {} : { subagent }),
   });
   projection.toolCounts.set(
     turnId,
@@ -626,6 +647,31 @@ function historyToolFilePath(
   return rawPath === undefined
     ? undefined
     : toWorkspaceRelativePath(projection.workspaceRoot, rawPath);
+}
+
+/**
+ * The subagent summary for one Task tool call: the delegation
+ * identity from the call's own input, settled with the oldest
+ * unconsumed matching ledger entry (status, tool uses, duration).
+ * A Task row without a ledger match keeps its identity but reports
+ * no status instead of inventing one.
+ */
+function historyToolSubagent(
+  projection: Projection,
+  toolName: string,
+  input: unknown,
+): ToolSubagentSummary | undefined {
+  const delegation = readTaskDelegation(toolName, input);
+  if (delegation === null) {
+    return undefined;
+  }
+  return (
+    takeSubagentSummary(
+      projection.subagentQueues,
+      delegation.type,
+      delegation.description,
+    ) ?? delegation
+  );
 }
 
 function completeTool(

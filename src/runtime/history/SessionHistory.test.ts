@@ -730,6 +730,143 @@ describe('projectSessionHistory', () => {
       truncated: true,
     });
   });
+
+  it('settles Task rows with ledger summaries by delegation identity in order', () => {
+    const task = (id: string, type: string, description: string) => ({
+      type: 'tool_use',
+      id,
+      name: 'Task',
+      input: {
+        subagent_type: type,
+        description,
+        prompt: 'private prompt that stays out of the transcript',
+      },
+    });
+    const loaded = responseWith(
+      [
+        message('assistant-1', 'assistant', [
+          task('task-1', 'worker', 'same job'),
+          task('task-2', 'worker', 'same job'),
+          task('task-3', 'explore', 'find the consumers'),
+          task('task-4', 'worker', 'never reached the ledger'),
+          { type: 'tool_use', id: 'read-1', name: 'Read', input: {} },
+        ]),
+      ],
+      {
+        subagentInvocations: [
+          {
+            childSessionId: 'child-1',
+            subagentType: 'worker',
+            description: 'same job',
+            status: 'completed',
+            toolUseCount: 12,
+            durationMs: 377050,
+          },
+          {
+            childSessionId: 'child-2',
+            subagentType: 'worker',
+            description: 'same job',
+            status: 'failed',
+          },
+          {
+            childSessionId: 'child-3',
+            subagentType: 'explore',
+            description: 'find the consumers',
+            status: 'running',
+          },
+        ],
+      },
+    );
+
+    const result = projectSessionHistory(loaded);
+
+    expect(result.status).toBe('available');
+    if (result.status !== 'available') {
+      throw new Error('Expected projected history.');
+    }
+    expect(
+      result.state.transcript.filter((item) => item.kind === 'tool'),
+    ).toMatchObject([
+      {
+        toolName: 'Task',
+        subagent: {
+          type: 'worker',
+          description: 'same job',
+          status: 'completed',
+          toolUseCount: 12,
+          durationMs: 377050,
+        },
+      },
+      {
+        toolName: 'Task',
+        subagent: {
+          type: 'worker',
+          description: 'same job',
+          status: 'failed',
+        },
+      },
+      {
+        toolName: 'Task',
+        subagent: {
+          type: 'explore',
+          description: 'find the consumers',
+          status: 'running',
+        },
+      },
+      // A Task without a ledger match keeps its identity and reports
+      // no status instead of inventing one.
+      {
+        toolName: 'Task',
+        subagent: {
+          type: 'worker',
+          description: 'never reached the ledger',
+        },
+      },
+      { toolName: 'Read' },
+    ]);
+    const tools = result.state.transcript.filter(
+      (item) => item.kind === 'tool',
+    );
+    expect(
+      tools[3] !== undefined &&
+        'subagent' in tools[3] &&
+        tools[3].subagent !== undefined &&
+        'status' in tools[3].subagent,
+    ).toBe(false);
+    expect(tools[4] !== undefined && 'subagent' in tools[4]).toBe(false);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain('child-1');
+    expect(serialized).not.toContain('child-2');
+    expect(serialized).not.toContain('child-3');
+    expect(serialized).not.toContain('private prompt');
+  });
+
+  it('projects the read-only mission identity from the load envelope', () => {
+    const withMission = projectSessionHistory(
+      responseWith([], {
+        mission: { state: 'running' },
+        decompSessionType: 'orchestrator',
+      }),
+    );
+    expect(withMission).toMatchObject({
+      status: 'available',
+      mission: { state: 'running', role: 'orchestrator' },
+    });
+
+    const workerOnly = projectSessionHistory(
+      responseWith([], { decompSessionType: 'worker' }),
+    );
+    expect(workerOnly).toMatchObject({
+      status: 'available',
+      mission: { state: null, role: 'worker' },
+    });
+
+    const plain = projectSessionHistory(response([]));
+    expect(plain.status).toBe('available');
+    expect(
+      plain.status === 'available' && 'mission' in plain,
+    ).toBe(false);
+  });
 });
 
 describe('FactorySessionHistoryLoader', () => {
@@ -823,6 +960,13 @@ describe('FactorySessionHistoryLoader', () => {
 
 function response(messages: readonly unknown[]): unknown {
   return { result: { session: { messages } } };
+}
+
+function responseWith(
+  messages: readonly unknown[],
+  extra: Record<string, unknown>,
+): unknown {
+  return { result: { session: { messages }, ...extra } };
 }
 
 function message(
