@@ -2455,6 +2455,25 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-13 凌晨功能发版 v0.2.0**：版本号 `0.1.1 → 0.2.0`，
+  `CHANGELOG.md` 顶部新增 0.2.0 小节（发布提交 `1076241`，仅动
+  版本号与 CHANGELOG），覆盖今晚全部切片：daemon 默认运行 + 静默
+  回退 + 回合跨 Reload 存活、Working 徽标与子代理弹层（含"停不掉
+  不画控件"决策）、派发身份直出 / Reload 结清 / 无 status 子行转
+  圈（dvx/subagent-audit 四提交）、排队收纳条（queue.promote、
+  Edit Queued、协议 v6→v7）、计划锚点卡、/btw 双模式、终端命令卡
+  （c7f9245）、会话抽屉运行转圈与点击直返、归档 limit schema 上限
+  修复（4f2c1c3）。产出 `dist/droidvisx.vsix` 1,651,586 字节
+  （2026-08-13 01:01），SHA-256
+  `1A50CDCDE34148D37AC5E279C8E1AB504CAB6B6321172A743A8BF060E1723B24`，
+  `cursor --install-extension --force` 安装成功，
+  `cursor --list-extensions --show-versions` 确认
+  `droidvisx.droidvisx@0.2.0`。收官回归（01:45）在包内
+  `dist/webview` 上复跑 harness 冒烟七套（plan-anchor / queue-bar
+  / queued-bar / working-badge / command-card / session-drawer /
+  subagent）**全 PASS**，截图刷新进 `artifacts/`。验收入口：
+  `docs/product/acceptance-checklist-v0.2.md`（含 Bridge v7 需
+  Reload 提醒、已知残留风险、明确不在本版清单）
 - **2026-08-12 晚修复版发版 v0.1.1**：版本号 `0.1.0 → 0.1.1`，
   `CHANGELOG.md` 顶部新增 0.1.1 小节 13 条（Fixed 12 / Changed 1），
   覆盖 v0.1.0 后四批修复：验收批次一（中文路径流式截断 fba6523、
