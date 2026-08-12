@@ -2750,11 +2750,16 @@ body {
 /* Full-width user block: reading-column wide, left-aligned, on the
    same white card base as the bottom Composer (a border keeps it
    separated from assistant prose and stays opaque while pinned). */
+/* Row-wrap so image parts sit side by side while text and the
+   attachment-chip row each claim a full line (user report batch 2 §5:
+   sent images render as composer-style thumbs, not letterboxed
+   blocks). Parts mount without wrapper elements, so the flex children
+   are the part nodes themselves. */
 .dvx-user-block {
   display: flex;
   box-sizing: border-box;
   width: 100%;
-  flex-direction: column;
+  flex-flow: row wrap;
   align-items: stretch;
   gap: 8px;
   padding: 8px 12px;
@@ -2763,6 +2768,34 @@ body {
   background: #fff;
   color: #262626;
   text-align: left;
+}
+
+.dvx-user-block > .dvx-user-text,
+.dvx-user-block > .dvx-user-sent-attachments {
+  flex: 1 1 100%;
+}
+
+/* Same form as the composer's pending thumbs
+   (.dvx-attachment-thumb-image): 48px cover crop, 7px radius; the
+   existing click-to-lightbox affordance stays. */
+.dvx-user-block .dvx-transcript-image {
+  margin: 0;
+}
+
+.dvx-user-block .dvx-image-thumb-button {
+  border-radius: 7px;
+  transition: border-color 120ms ease;
+}
+
+.dvx-user-block .dvx-image-thumb-button:hover {
+  border-color: var(--dvx-border-strong);
+}
+
+.dvx-user-block .dvx-image-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  background: #f6f2ea;
 }
 
 .dvx-user-text {
@@ -2797,7 +2830,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dvx-user-block-editable {
+  .dvx-user-block-editable,
+  .dvx-user-block .dvx-image-thumb-button {
     transition: none;
   }
 }
