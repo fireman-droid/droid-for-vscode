@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -299,7 +305,81 @@ describe('ComposerControls', () => {
       screen.queryByRole('list', { name: 'BYOK models' }),
     ).toBeNull();
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.queryByRole('dialog', { name: 'Model' })).toBeNull();
+    // Dismissal keeps the popover mounted briefly (inert to pointer
+    // events) so its exit animation can play, then unmounts it.
+    expect(document.querySelector('[data-popover-closing]')).not.toBeNull();
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Model' })).toBeNull(),
+    );
+  });
+
+  it('marks view swaps with a direction and closes through an exit state', async () => {
+    const user = userEvent.setup();
+    render(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Session controls' }));
+    // The first mount plays no view animation — the popover itself
+    // already animates in.
+    expect(
+      screen
+        .getByRole('dialog', { name: 'Session controls' })
+        .querySelector('.dvx-settings-view')
+        ?.getAttribute('data-direction'),
+    ).toBeNull();
+
+    await user.click(screen.getByText('Skills').closest('button')!);
+    expect(
+      screen
+        .getByRole('dialog', { name: 'Skills' })
+        .querySelector('.dvx-settings-view')
+        ?.getAttribute('data-direction'),
+    ).toBe('forward');
+
+    await user.click(
+      screen.getByRole('button', { name: 'Back to session controls' }),
+    );
+    expect(
+      screen
+        .getByRole('dialog', { name: 'Session controls' })
+        .querySelector('.dvx-settings-view')
+        ?.getAttribute('data-direction'),
+    ).toBe('back');
+
+    // Toggling the + button closed keeps the popover mounted in the
+    // closing state for its exit animation, then unmounts it.
+    await user.click(screen.getByRole('button', { name: 'Session controls' }));
+    expect(document.querySelector('[data-popover-closing]')).not.toBeNull();
+    expect(
+      screen.getByRole('dialog', { name: 'Session controls' }),
+    ).toBeDefined();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Session controls' }),
+      ).toBeNull(),
+    );
   });
 
   it('uses only dynamic catalog rows and selected-model reasoning options', async () => {
@@ -598,7 +678,9 @@ describe('ComposerControls', () => {
 
     await user.click(screen.getByRole('button', { name: 'Session controls' }));
     await user.click(screen.getByText('Skills').closest('button')!);
-    expect(onSkillsRefresh).toHaveBeenCalledOnce();
+    // Once from the row click, once from the visible panel's idle
+    // catalog recovery effect.
+    expect(onSkillsRefresh).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('dialog', { name: 'Skills' })).toBeDefined();
     expect(screen.getByText('Loading skills…')).toBeDefined();
 
@@ -671,6 +753,180 @@ describe('ComposerControls', () => {
     expect(screen.getByText('1/2 on')).toBeDefined();
   });
 
+  it('recovers the skills panel after a session switch resets the catalog to idle', async () => {
+    const user = userEvent.setup();
+    const onSkillsRefresh = vi.fn();
+    const readySkills = {
+      status: 'ready' as const,
+      items: [
+        {
+          name: 'code-review',
+          description: null,
+          location: 'project',
+          enabled: true,
+          userInvocable: true,
+        },
+      ],
+    };
+    const renderControls = (
+      skills: typeof readySkills | { status: 'idle'; items: readonly [] },
+    ): React.JSX.Element => (
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={skills}
+        onSkillsRefresh={onSkillsRefresh}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+      />
+    );
+    const { rerender } = render(renderControls(readySkills));
+
+    await user.click(screen.getByRole('button', { name: 'Session controls' }));
+    await user.click(screen.getByText('Skills').closest('button')!);
+    expect(screen.getByText('code-review')).toBeDefined();
+    onSkillsRefresh.mockClear();
+
+    // A session switch resets the store to 'idle' with no re-query;
+    // the visible panel must trigger its own refresh and keep the
+    // Refresh button usable instead of deadlocking on "Loading…".
+    rerender(renderControls({ status: 'idle', items: [] }));
+    expect(onSkillsRefresh).toHaveBeenCalledTimes(1);
+    const refresh = screen.getByRole('button', {
+      name: 'Refresh',
+    }) as HTMLButtonElement;
+    expect(refresh.disabled).toBe(false);
+    await user.click(refresh);
+    expect(onSkillsRefresh).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers the MCP panel after a session switch resets the catalog to idle', async () => {
+    const user = userEvent.setup();
+    const onMcpRefresh = vi.fn();
+    const readyMcp = {
+      status: 'ready' as const,
+      items: [
+        {
+          name: 'linear',
+          status: 'connected' as const,
+          toolCount: 0,
+          requiresAuth: false,
+          tools: [],
+        },
+      ],
+    };
+    const renderControls = (
+      mcp: typeof readyMcp | { status: 'idle'; items: readonly [] },
+    ): React.JSX.Element => (
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={mcp}
+        onMcpRefresh={onMcpRefresh}
+        onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+      />
+    );
+    const { rerender } = render(renderControls(readyMcp));
+
+    await user.click(screen.getByRole('button', { name: 'Session controls' }));
+    await user.click(screen.getByText('MCP servers').closest('button')!);
+    expect(screen.getByText('linear')).toBeDefined();
+    onMcpRefresh.mockClear();
+
+    rerender(renderControls({ status: 'idle', items: [] }));
+    expect(onMcpRefresh).toHaveBeenCalledTimes(1);
+    const refresh = screen.getByRole('button', {
+      name: 'Refresh',
+    }) as HTMLButtonElement;
+    expect(refresh.disabled).toBe(false);
+    await user.click(refresh);
+    expect(onMcpRefresh).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns to the root controls when starting a new session from the skills panel', async () => {
+    const user = userEvent.setup();
+    const onNewSession = vi.fn();
+    render(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{
+          status: 'ready',
+          items: [
+            {
+              name: 'code-review',
+              description: null,
+              location: 'project',
+              enabled: true,
+              userInvocable: true,
+            },
+          ],
+        }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+        onNewSession={onNewSession}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Session controls' }));
+    await user.click(screen.getByText('Skills').closest('button')!);
+    // The apply-in-new-session hint appears once a toggle changed.
+    await user.click(
+      screen.getByRole('switch', { name: 'code-review enabled' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Start a new session' }),
+    );
+    expect(onNewSession).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole('dialog', { name: 'Session controls' }),
+    ).toBeDefined();
+  });
+
   it('browses MCP servers, expands tools, and toggles servers', async () => {
     const user = userEvent.setup();
     const onMcpRefresh = vi.fn();
@@ -703,7 +959,9 @@ describe('ComposerControls', () => {
 
     await user.click(screen.getByRole('button', { name: 'Session controls' }));
     await user.click(screen.getByText('MCP servers').closest('button')!);
-    expect(onMcpRefresh).toHaveBeenCalledOnce();
+    // Once from the row click, once from the visible panel's idle
+    // catalog recovery effect.
+    expect(onMcpRefresh).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('dialog', { name: 'MCP servers' })).toBeDefined();
     expect(screen.getByText('Loading MCP servers…')).toBeDefined();
 

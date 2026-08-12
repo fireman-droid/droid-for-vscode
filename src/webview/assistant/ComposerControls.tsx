@@ -102,6 +102,12 @@ interface ComposerControlsProps {
 const POPOVER_SPACE_PX = 340;
 
 /**
+ * How long a dismissed popover stays mounted so its dvx-rise-out
+ * exit (--dvx-duration-normal, 150ms) finishes before unmount.
+ */
+const POPOVER_EXIT_MS = 190;
+
+/**
  * Whether control-row popovers should open downward: the space above
  * cannot fit a popover and there is more room below. The bottom
  * composer keeps its upward default; a pinned edit card flips down.
@@ -215,6 +221,35 @@ export function ComposerControls({
       (option) => option.value === confirmed?.interactionMode,
     )?.label ?? 'Mode';
 
+  // A dismissed popover stays mounted as closingPanel while its exit
+  // animation plays; the view resets to root only after unmount so
+  // the fading panel does not visibly swap content.
+  const [closingPanel, setClosingPanel] = useState<OpenPanel>(null);
+  const closeTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+      }
+    },
+    [],
+  );
+  const close = (): void => {
+    if (openPanel === null) {
+      return;
+    }
+    setClosingPanel(openPanel);
+    setOpenPanel(null);
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+    }
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      setClosingPanel(null);
+      setSettingsView('root');
+    }, POPOVER_EXIT_MS);
+  };
+
   useEffect(() => {
     if (openPanel === null) {
       return;
@@ -224,14 +259,12 @@ export function ComposerControls({
         event.target instanceof Node &&
         !controlsRef.current?.contains(event.target)
       ) {
-        setOpenPanel(null);
-        setSettingsView('root');
+        close();
       }
     };
     const closeOnEscape = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
-        setOpenPanel(null);
-        setSettingsView('root');
+        close();
       }
     };
     document.addEventListener('pointerdown', closeOnPointerDown);
@@ -240,11 +273,27 @@ export function ComposerControls({
       document.removeEventListener('pointerdown', closeOnPointerDown);
       document.removeEventListener('keydown', closeOnEscape);
     };
+    // close only reads openPanel, which is already a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openPanel]);
 
   const [openDown, setOpenDown] = useState(false);
+  // Each open remounts the popover component (fresh search/view
+  // state) even when it reopens while the previous instance is still
+  // mounted playing its exit animation.
+  const [openSeq, setOpenSeq] = useState(0);
   const toggle = (panel: Exclude<OpenPanel, null>): void => {
-    setOpenPanel((current) => (current === panel ? null : panel));
+    if (openPanel === panel) {
+      close();
+      return;
+    }
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setClosingPanel(null);
+    setOpenPanel(panel);
+    setOpenSeq((sequence) => sequence + 1);
     setSettingsView('root');
     // Popovers default to opening upward (bottom composer); when the
     // controls sit near the viewport top (pinned edit card) that would
@@ -256,12 +305,16 @@ export function ComposerControls({
       );
     }
   };
+  const renderedPanel = openPanel ?? closingPanel;
 
   return (
     <div
       className={`dvx-composer-controls${
         openDown ? ' dvx-controls-down' : ''
       }`}
+      data-popover-closing={
+        openPanel === null && closingPanel !== null ? '' : undefined
+      }
       ref={controlsRef}
     >
       <div className="dvx-composer-control-left">
@@ -352,8 +405,9 @@ export function ComposerControls({
         <ChevronDownIcon />
       </button>
 
-      {openPanel === 'settings' ? (
+      {renderedPanel === 'settings' ? (
         <SettingsPopover
+          key={openSeq}
           id={`${panelId}-settings`}
           view={settingsView}
           settings={settings}
@@ -373,7 +427,7 @@ export function ComposerControls({
           onMcpServerAuthenticate={onMcpServerAuthenticate}
           onNewSession={onNewSession}
           onAttach={(source) => {
-            setOpenPanel(null);
+            close();
             if (source === 'files') {
               onAttachFiles();
             } else if (source === 'editor') {
@@ -388,8 +442,9 @@ export function ComposerControls({
           }}
         />
       ) : null}
-      {openPanel === 'context' ? (
+      {renderedPanel === 'context' ? (
         <ContextPopover
+          key={openSeq}
           id={`${panelId}-context`}
           context={context}
           tokenUsage={tokenUsage}
@@ -399,7 +454,7 @@ export function ComposerControls({
           onCompact={onCompact}
         />
       ) : null}
-      {openPanel === 'mode' && confirmed !== null ? (
+      {renderedPanel === 'mode' && confirmed !== null ? (
         <div
           id={`${panelId}-mode`}
           className="dvx-composer-popover dvx-mode-popover"
@@ -420,7 +475,7 @@ export function ComposerControls({
                 aria-checked={option.value === confirmed.interactionMode}
                 disabled={settingControlsDisabled}
                 onClick={() => {
-                  setOpenPanel(null);
+                  close();
                   if (option.value !== confirmed.interactionMode) {
                     onSettingUpdate({
                       field: 'interactionMode',
@@ -445,15 +500,16 @@ export function ComposerControls({
           ) : null}
         </div>
       ) : null}
-      {openPanel === 'model' && confirmed !== null ? (
+      {renderedPanel === 'model' && confirmed !== null ? (
         <ModelPopover
+          key={openSeq}
           id={`${panelId}-model`}
           settings={settings}
           modelCatalog={modelCatalog}
           disabled={settingControlsDisabled}
           onUpdate={(update) => {
             onSettingUpdate(update);
-            setOpenPanel(null);
+            close();
           }}
         />
       ) : null}
@@ -516,14 +572,43 @@ function SettingsPopover({
 }): React.JSX.Element {
   const [query, setQuery] = useState('');
   const confirmed = settings.value;
-  if (confirmed === null) {
-    return (
+  // The popover stacks three views: the root list and the Skills/MCP
+  // drill-ins ('mode'/'autonomy' are inline expansions of root).
+  // Changing views remounts the keyed wrapper below, which plays a
+  // short directional slide: drilling in arrives from the right,
+  // going back from the left. The first mount plays neither — the
+  // popover itself already animates in.
+  const group: 'root' | 'skills' | 'mcp' =
+    view === 'skills' || view === 'mcp' ? view : 'root';
+  const previousGroupRef = useRef(group);
+  const directionRef = useRef<'forward' | 'back' | null>(null);
+  if (previousGroupRef.current !== group) {
+    directionRef.current = group === 'root' ? 'back' : 'forward';
+    previousGroupRef.current = group;
+  }
+  const shell = (
+    label: string,
+    content: React.JSX.Element,
+  ): React.JSX.Element => (
+    <div
+      id={id}
+      className="dvx-composer-popover dvx-settings-popover"
+      role="dialog"
+      aria-label={label}
+    >
       <div
-        id={id}
-        className="dvx-composer-popover dvx-settings-popover"
-        role="dialog"
-        aria-label="Session controls"
+        key={group}
+        className="dvx-settings-view"
+        data-direction={directionRef.current ?? undefined}
       >
+        {content}
+      </div>
+    </div>
+  );
+  if (confirmed === null) {
+    return shell(
+      'Session controls',
+      <>
         <AttachRows disabled={attachDisabled} onAttach={onAttach} />
         <div className="dvx-settings-divider" />
         {settings.status === 'error' ? (
@@ -535,7 +620,7 @@ function SettingsPopover({
             Loading session settings…
           </p>
         )}
-      </div>
+      </>,
     );
   }
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -565,55 +650,49 @@ function SettingsPopover({
       : rankNameMatches(mcp.items, normalizedQuery, 5);
 
   if (view === 'skills') {
-    return (
-      <div
-        id={id}
-        className="dvx-composer-popover dvx-settings-popover"
-        role="dialog"
-        aria-label="Skills"
-      >
+    return shell(
+      'Skills',
         <SkillsPanel
           skills={skills}
           disabled={disabled}
           onBack={() => onViewChange('root')}
           onRefresh={onSkillsRefresh}
           onToggle={onSkillToggle}
-          onNewSession={onNewSession}
-        />
-      </div>
+          // Starting a new session leaves the old catalog behind;
+          // return to the root controls so the popover tracks the new
+          // session instead of a stale skills list.
+          onNewSession={
+            onNewSession === undefined
+              ? undefined
+              : () => {
+                  onNewSession();
+                  onViewChange('root');
+                }
+          }
+        />,
     );
   }
 
   if (view === 'mcp') {
-    return (
-      <div
-        id={id}
-        className="dvx-composer-popover dvx-settings-popover"
-        role="dialog"
-        aria-label="MCP servers"
-      >
-        <McpPanel
-          mcp={mcp}
-          auth={mcpAuth}
-          disabled={disabled}
-          onBack={() => onViewChange('root')}
-          onRefresh={onMcpRefresh}
-          onToggle={onMcpServerToggle}
-          onAdd={onMcpServerAdd}
-          onRemove={onMcpServerRemove}
-          onAuthenticate={onMcpServerAuthenticate}
-        />
-      </div>
+    return shell(
+      'MCP servers',
+      <McpPanel
+        mcp={mcp}
+        auth={mcpAuth}
+        disabled={disabled}
+        onBack={() => onViewChange('root')}
+        onRefresh={onMcpRefresh}
+        onToggle={onMcpServerToggle}
+        onAdd={onMcpServerAdd}
+        onRemove={onMcpServerRemove}
+        onAuthenticate={onMcpServerAuthenticate}
+      />,
     );
   }
 
-  return (
-    <div
-      id={id}
-      className="dvx-composer-popover dvx-settings-popover"
-      role="dialog"
-      aria-label="Session controls"
-    >
+  return shell(
+    'Session controls',
+    <>
       <label className="dvx-visually-hidden" htmlFor={`${id}-action-search`}>
         Search actions
       </label>
@@ -792,7 +871,7 @@ function SettingsPopover({
           Settings can be changed after the current turn.
         </p>
       ) : null}
-    </div>
+    </>,
   );
 }
 
@@ -844,6 +923,16 @@ function SkillsPanel({
       setPendingSkill(null);
     }
   }, [skills.status]);
+  // A session switch resets the catalog to 'idle' without a re-query;
+  // while this panel is visible that used to deadlock on the loading
+  // message, so re-request whenever the visible panel sees an idle
+  // catalog. `onRefresh` changes identity with the session, which
+  // retries once the new session id lands.
+  useEffect(() => {
+    if (skills.status === 'idle') {
+      onRefresh();
+    }
+  }, [skills.status, onRefresh]);
   return (
     <div className="dvx-skills-panel">
       <div className="dvx-panel-head">
@@ -860,7 +949,7 @@ function SkillsPanel({
           <button
             type="button"
             className="dvx-panel-action"
-            disabled={busy}
+            disabled={skills.status === 'loading'}
             onClick={onRefresh}
           >
             Refresh
@@ -1000,6 +1089,13 @@ function McpPanel({
       setPending(null);
     }
   }, [mcp.status]);
+  // Same session-switch recovery as the skills panel: an idle catalog
+  // under a visible panel means nobody re-queried after the reset.
+  useEffect(() => {
+    if (mcp.status === 'idle') {
+      onRefresh();
+    }
+  }, [mcp.status, onRefresh]);
   const authPending =
     auth !== null &&
     (auth.phase === 'started' || auth.phase === 'browser');
@@ -1028,7 +1124,7 @@ function McpPanel({
           <button
             type="button"
             className="dvx-panel-action"
-            disabled={busy}
+            disabled={mcp.status === 'loading'}
             onClick={onRefresh}
           >
             Refresh
