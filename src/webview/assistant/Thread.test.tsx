@@ -11,12 +11,17 @@ import {
 } from './imagePreviewCache';
 import {
   AttachmentChip,
+  FOLLOW_REJOIN_PX,
   HistoryNotice,
   PendingResponse,
+  applyFollowScroll,
   computePinnedUserIndex,
+  computeStickyLayout,
+  createFollowState,
   filterSlashCommands,
   findMentionToken,
   findSlashToken,
+  formatCompactDividerLabel,
   formatPlanSummary,
   formatThinkingLabel,
   readDroppedFileUris,
@@ -323,6 +328,141 @@ describe('computePinnedUserIndex', () => {
   it('reports none pinned while every message sits below the top', () => {
     expect(computePinnedUserIndex([120, 400], 0)).toBe(-1);
     expect(computePinnedUserIndex([], 0)).toBe(-1);
+  });
+});
+
+describe('computeStickyLayout', () => {
+  it('covers older stuck messages behind the pinned one', () => {
+    const layout = computeStickyLayout([0, 0, 300], [40, 60, 40], 0);
+    expect(layout.pinnedIndex).toBe(1);
+    expect(layout.covered).toEqual([true, false, false]);
+    expect(layout.pushPx).toBe(0);
+  });
+
+  it('pushes the pinned message out as the next one reaches it', () => {
+    // Pinned block is 60px tall; the next message top has scrolled to
+    // 45px, intruding 15px into the pinned block.
+    const layout = computeStickyLayout([0, 45], [60, 40], 0);
+    expect(layout.pinnedIndex).toBe(0);
+    expect(layout.pushPx).toBe(15);
+  });
+
+  it('caps the push at the pinned block height during hand-off', () => {
+    const layout = computeStickyLayout([0, -30], [60, 40], 0);
+    // The next message became pinned itself; the old one is covered.
+    expect(layout.pinnedIndex).toBe(1);
+    expect(layout.covered).toEqual([true, false]);
+    const almost = computeStickyLayout([0, 2], [60, 40], 0);
+    expect(almost.pinnedIndex).toBe(0);
+    expect(almost.pushPx).toBeLessThanOrEqual(60);
+    expect(almost.pushPx).toBeCloseTo(58);
+  });
+
+  it('keeps the pinned message untouched while the next is far', () => {
+    const layout = computeStickyLayout([0, 500], [60, 40], 0);
+    expect(layout.pushPx).toBe(0);
+  });
+});
+
+describe('applyFollowScroll', () => {
+  const sample = (
+    scrollTop: number,
+    scrollHeight: number,
+    clientHeight = 400,
+  ) => ({ scrollTop, scrollHeight, clientHeight });
+
+  it('keeps following across the streaming growth race', () => {
+    const state = createFollowState();
+    // Coordinator glued to bottom (writes 600), but by the time the
+    // scroll event fires more content rendered: scrollTop unchanged
+    // while scrollHeight grew. assistant-ui treated this as a user
+    // scroll; the latch must not.
+    state.pendingProgrammaticTop = 600;
+    applyFollowScroll(state, sample(600, 1000));
+    expect(state.following).toBe(true);
+    applyFollowScroll(state, sample(600, 1400));
+    expect(state.following).toBe(true);
+  });
+
+  it('releases on a genuine upward user scroll', () => {
+    const state = createFollowState();
+    applyFollowScroll(state, sample(600, 1000));
+    applyFollowScroll(state, sample(400, 1000));
+    expect(state.following).toBe(false);
+  });
+
+  it('does not release on a clamp from shrinking content', () => {
+    const state = createFollowState();
+    applyFollowScroll(state, sample(600, 1000));
+    // Content collapsed (group folded); the browser clamps scrollTop.
+    applyFollowScroll(state, sample(200, 620));
+    expect(state.following).toBe(true);
+  });
+
+  it('re-latches when the user returns to the bottom', () => {
+    const state = createFollowState();
+    applyFollowScroll(state, sample(600, 1000));
+    applyFollowScroll(state, sample(300, 1000));
+    expect(state.following).toBe(false);
+    applyFollowScroll(
+      state,
+      sample(1000 - 400 - FOLLOW_REJOIN_PX, 1000),
+    );
+    expect(state.following).toBe(true);
+  });
+
+  it('re-latches a return to bottom that raced streaming growth', () => {
+    const state = createFollowState();
+    applyFollowScroll(state, sample(600, 1200));
+    applyFollowScroll(state, sample(300, 1200));
+    expect(state.following).toBe(false);
+    // The user jumped to the bottom (maxTop of the 1200px content =
+    // 800), but by the time the event fires another 120px streamed
+    // in: the live distance is large yet the gesture reached the
+    // previous bottom, so following resumes.
+    applyFollowScroll(state, sample(800, 1320));
+    expect(state.following).toBe(true);
+    // A partial downward scroll far from the bottom does not latch.
+    const parked = createFollowState();
+    applyFollowScroll(parked, sample(600, 1200));
+    applyFollowScroll(parked, sample(200, 1200));
+    expect(parked.following).toBe(false);
+    applyFollowScroll(parked, sample(400, 1320));
+    expect(parked.following).toBe(false);
+  });
+
+  it('treats the marked programmatic write as non-user input', () => {
+    const state = createFollowState();
+    applyFollowScroll(state, sample(600, 1000));
+    applyFollowScroll(state, sample(300, 1000));
+    expect(state.following).toBe(false);
+    // A programmatic jump back down must not re-enable following by
+    // itself unless it actually lands at the bottom.
+    state.pendingProgrammaticTop = 450;
+    applyFollowScroll(state, sample(450, 1000));
+    expect(state.following).toBe(false);
+    expect(state.pendingProgrammaticTop).toBeNull();
+  });
+});
+
+describe('formatCompactDividerLabel', () => {
+  it('shortens the host compaction message', () => {
+    expect(
+      formatCompactDividerLabel(
+        'Conversation compacted: 71 earlier messages summarized.',
+      ),
+    ).toBe('Summarized 71 earlier messages');
+    expect(
+      formatCompactDividerLabel(
+        'Conversation compacted: 1 earlier message summarized.',
+      ),
+    ).toBe('Summarized 1 earlier message');
+  });
+
+  it('falls back to a generic label without a count', () => {
+    expect(formatCompactDividerLabel('Conversation compacted.')).toBe(
+      'Conversation summarized',
+    );
   });
 });
 

@@ -4,7 +4,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ComposerControls } from './ComposerControls';
+import {
+  ComposerControls,
+  shouldOpenPopoverDown,
+} from './ComposerControls';
 
 afterEach(cleanup);
 
@@ -26,6 +29,21 @@ const context = {
     accuracy: 'estimated' as const,
   },
 };
+
+describe('shouldOpenPopoverDown', () => {
+  it('keeps the upward default for the bottom composer', () => {
+    // Bottom composer: plenty of space above, little below.
+    expect(shouldOpenPopoverDown(600, 60)).toBe(false);
+  });
+
+  it('flips downward when pinned near the viewport top', () => {
+    expect(shouldOpenPopoverDown(40, 500)).toBe(true);
+  });
+
+  it('stays upward when below is even tighter than above', () => {
+    expect(shouldOpenPopoverDown(200, 100)).toBe(false);
+  });
+});
 
 describe('ComposerControls', () => {
   it('shows unsupported runtime model IDs verbatim without inventing catalog data', () => {
@@ -743,6 +761,78 @@ describe('ComposerControls', () => {
     });
     await user.click(compactButton);
     expect(onCompact).toHaveBeenCalledOnce();
+  });
+
+  it('shows an in-progress compact state and ignores clicks', async () => {
+    const user = userEvent.setup();
+    const onCompact = vi.fn();
+    render(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        compactPending
+        onContextRefresh={vi.fn()}
+        onCompact={onCompact}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByLabelText(/Context used 25 of 100/));
+    const compacting = screen.getByRole('button', { name: 'Compacting…' });
+    expect(compacting.hasAttribute('disabled')).toBe(true);
+    expect(compacting.getAttribute('aria-busy')).toBe('true');
+    fireEvent.click(compacting);
+    expect(onCompact).not.toHaveBeenCalled();
+  });
+
+  it('omits the context ring entirely when showContext is off', () => {
+    render(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        showContext={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText(/Context used/)).toBeNull();
+    expect(document.querySelector('.dvx-context-ring')).toBeNull();
+    // The rest of the control row survives.
+    expect(
+      screen.getByRole('button', { name: 'Session controls' }),
+    ).toBeDefined();
   });
 
   it('reports a Context error once', async () => {

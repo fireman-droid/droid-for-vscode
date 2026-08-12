@@ -1098,11 +1098,121 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension dist/droidvisx.vsix --force`
   （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
   需 Reload Window（或完整重启）后加载新 Bundle
+- 2026-08-12 上午打包并安装含 **滚动/吸顶/编辑卡/可选中/Compact
+  十项修复批次** 的构建：`dist/droidvisx.vsix` 633,462 字节
+  （9 files, 618.62 KB），SHA-256
+  `6ED5D5626E4C2B98044752FE3A5BB95E36B0C800ECCBEE52936BFF34498B1BD1`，
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix` 与
+  `cursor --install-extension dist/droidvisx.vsix --force`
+  （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
+  需 Reload Window（或完整重启）后加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- 滚动/吸顶/编辑卡/可选中/Compact 十项修复批次（2026-08-12 上午，
+  用户 Reload 验收后连续报告的十个问题，一批修复）：
+  ① **空转录可滚**根因：`.dvx-reading-column` 的
+  `min-height: calc(100% - 126px)`（及 `.dvx-thread-pending` 变体
+  `calc(100% - 99px)`）硬编码 footer 高度假设，多行草稿把 footer
+  撑过 126px 时列高 + footer 超出视口（headless 实测幽灵溢出
+  141px）。修复：视口改 flex column（阅读列 `flex: 1 1 auto`、
+  footer `flex: 0 0 auto`、空态 `flex: 1`），删除两处 min-height
+  hack；复测空态与多行草稿 overflow 均为 0。
+  ② **自动跟底断**根因：assistant-ui
+  `useThreadViewportAutoScroll` 的 isAtBottom 记账存在竞态——它
+  自己的粘底 scrollTo 产生的异步 scroll 事件晚于下一波内容增长
+  到达时，事件里 scrollTop 未变而 scrollHeight 已涨，被记为
+  "用户上滚"，永久关闭跟随（trace 复现：二次导航场景 dist 持续
+  增长到 700+）。修复：`autoScroll={false}` 停用库的连续跟随，
+  跟随权移交 Thread.tsx 吸顶协调器——新增纯函数
+  `createFollowState`/`applyFollowScroll`：仅"真实上滚"
+  （scrollTop 下降且非内容收缩 clamp）解除跟随；协调器自己的
+  粘底写入打 `pendingProgrammaticTop` 标记、事件到达即消费，
+  永不误判；回底重挂 = 距底 ≤4px（FOLLOW_REJOIN_PX）或
+  "下滚到达上一次底部"（后者对回底途中又有内容流入的竞态免疫）；
+  wheel deltaY<0 兜底解除。增长粘底由 ResizeObserver（阅读列 +
+  footer，覆盖 150ms 高度过渡与 Composer 变高）驱动。复测：
+  untouched 全 0、上滚暂停（距离持续增长）、回底重挂
+  （21→0…0）、二次导航流式全程距底 0。
+  ③ **吸顶文字透叠**根因：pinned 块浅色底 + 下一条用户消息顶上
+  来时无推挤逻辑，两条文字直接层叠。修复：协调器改
+  `computeStickyLayout`（pinned 索引 + covered 集合 + pushPx），
+  下一条顶到 pinned 底边时对 pinned 施加 `translateY(-pushPx)`
+  干净推出（cap 于自身高度），配合 ⑦ 的不透明白底与
+  `[data-pinned] z-index: 3`（sticky 恒建层叠上下文，保证吸顶
+  编辑卡的弹出层不被后续 sticky 行盖住）；截图验证推挤无透叠。
+  ④ **编辑卡去圆环**：`ComposerControls` 新增 `showContext`
+  prop（默认 true），编辑卡传 false，环形指示与 context 面板仅
+  留在底部 Composer。
+  ⑤ **编辑卡橙色丢失**根因：styles.css 后段共享块
+  `.dvx-context-ring-track, .dvx-context-ring-value
+  { stroke: #e4d7cf }` 覆盖了前段 `.dvx-context-ring-value
+  { stroke: var(--dvx-accent) }`（同特异性、后者居后生效），
+  全局（含底部 Composer）环弧都变灰米色；展开面板发灰是 ⑥ 的
+  裁剪表象。修复：共享块只留 fill/stroke-width，value 的 accent
+  描边在其后重申；截图确认橙色弧恢复。
+  ⑥ **吸顶时弹出层向上飞出**根因：`.dvx-composer-popover` 为底部
+  Composer 写死 `bottom: calc(100% + 8px)` 向上展开，编辑卡吸顶
+  在视口顶部时整个面板超出滚动容器上缘被裁掉。修复：开面板时
+  量测控制行 rect，`shouldOpenPopoverDown(spaceAbove,
+  spaceBelow)`（上方 <340px 且下方更宽裕）时给控制行挂
+  `.dvx-controls-down`，弹出层翻转为 `top: calc(100% + 8px)` 向下
+  展开；截图确认模型面板完整可见。
+  ⑦ **静止态用户块白底**：`.dvx-user-block` 改 `#fff` 底 +
+  `var(--dvx-border)` 边框（与底部 Composer 同基调），hover/
+  focus-visible 以 border-strong + 阴影保留可点击 affordance；
+  pinned 态外层仍为 surface 底 + 分隔阴影，无透叠回归。
+  ⑧ **user-select 治理**：容器级 `user-select: none` 覆盖 UI
+  骨架（header、thread-footer、会话抽屉、弹出层、command/mention
+  popup、空态、pending 状态行、活动行 summary、聚合组头、plan
+  折叠头、changes 条、交互 eyebrow/queue/actions、permission
+  菜单、hint、编辑卡 footer/附件行/驳回行、已发送附件 chips、
+  compact 分隔卡，外加 `.dvx-shell button` 全局禁选），白名单
+  恢复 `user-select: text`（Composer/编辑 textarea、工具行内联
+  命令详情）；消息正文、代码块、工具输出保持默认可选。headless
+  计算样式抽查 13 处（hint/状态行/模式触发器/context %/正文/
+  命令详情等）全部符合预期。
+  ⑨ **restore 勾选框重设计**：自绘 14px 圆角勾选控件（选中态
+  `--dvx-accent` 底 + 白勾，hover 边框转 accent，原生 input 视觉
+  隐藏但保留焦点与键盘切换，focus-visible 描边），11px muted
+  文案缩短为 "Restore N files changed after this point"，完整
+  解释移入 title tooltip，行内 hover 背景反馈；位置仍在控制行
+  上方贴近处、与卡内边距对齐，`affectedFiles > 0` 出现条件不变。
+  ⑩ **Compact 三项**：10a 按钮反馈——`App.tsx` 新增
+  `compactPending` latch（两个入口共用：点击即置位并忽略重复
+  点击；会话切换（成功路径 adopt continuation session）、任一
+  `session-compact*` 诊断（blocked/unsupported/failed/成功
+  通知）或 30s 超时清除；断连也清除），按钮 pending 态
+  disabled + spinner + "Compacting…"（aria-busy）。10b 链路
+  结论——`/compact` 此前作为普通 `turn.send` 文本发给 Droid
+  CLI：CLI 以对话口吻确认"压缩成功"，但我们扩展从不 adopt
+  continuation session、也不刷新 context 统计，而按钮路径走
+  `session.compact` RPC → `performCompact` → 换会话 + 重载
+  转录 + `refreshContextAfterTurn`，因此"命令报成功但 % 不变、
+  按钮才真生效"；修复在 Webview 侧：`handleSend` 拦截
+  `^/compact$`（大小写不敏感、允许空白）改走与按钮完全相同的
+  `session.compact` RPC 并清空草稿，两条路径行为一致；
+  `ChatController.ts` 无需改动（该文件当前有另一代理的未提交
+  改动，本批次未触碰）。10c 压缩提示条——`session-compacted`
+  诊断不再渲染灰底通知条，改为 Cursor 风格居中分隔卡
+  `.dvx-compact-divider`（两侧细线 + 小图标 + "Summarized N
+  earlier messages"，单复数与无计数回退处理），历史加载走同一
+  渲染路径自动生效；截图验证分隔卡与 Compacting… 态。
+  新增聚焦测试：`applyFollowScroll`（增长竞态保持、真实上滚
+  解除、收缩 clamp 不解除、回底重挂、回底竞态重挂、程序化标记
+  消费）、`computeStickyLayout`（covered/推挤/cap/远离不推）、
+  `formatCompactDividerLabel`、`shouldOpenPopoverDown`、
+  ComposerControls compactPending 态与 showContext=false、App
+  `/compact` 路由（posts session.compact、零 turn.send、草稿
+  清空、pending 去重）。门禁：typecheck 三 tsconfig 全过，
+  vitest 44 files / 1040 tests 全绿，build + package + install
+  成功（同批打包条目）；headless Chrome 视觉复测七组截图/度量
+  留存 `artifacts/tmp/`（复现与验证脚本
+  `artifacts/repro-scroll-bugs.mjs`、`repro-scroll-trace.mjs`、
+  `shot.mjs`、`eval-page.mjs`）。用户尚未在真实 Cursor 中完成
+  Reload 后的最终可见验收
 - slash/mention 弹窗可见性修复 + 活跃指示去重（2026-08-12 上午，
   用户实测 `/` 与 `@` "完全没反应"、"Droid is working" 与活跃工具
   行双重 shimmer；只读调查确认 Bridge/Host/Runtime 链路健在，

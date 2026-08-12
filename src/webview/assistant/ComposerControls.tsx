@@ -60,6 +60,11 @@ interface ComposerControlsProps {
   readonly mcp: McpPanelState;
   readonly disabled: boolean;
   readonly settingUpdatesDisabled: boolean;
+  /** Hides the context ring + popover (the edit card omits them). */
+  readonly showContext?: boolean;
+  /** A compaction request is in flight; the compact button shows an
+   * in-progress state and ignores further clicks. */
+  readonly compactPending?: boolean;
   readonly onContextRefresh: () => void;
   readonly onCompact: () => void;
   readonly onSettingUpdate: (update: SessionSettingSelection) => void;
@@ -76,6 +81,24 @@ interface ComposerControlsProps {
   readonly onAttachSelection: () => void;
   readonly onAttachProblems: () => void;
   readonly onAttachGitChanges: () => void;
+}
+
+/**
+ * Tallest popover (model list) plus its offset; when less than this
+ * fits above the control row, opening upward would clip off screen.
+ */
+const POPOVER_SPACE_PX = 340;
+
+/**
+ * Whether control-row popovers should open downward: the space above
+ * cannot fit a popover and there is more room below. The bottom
+ * composer keeps its upward default; a pinned edit card flips down.
+ */
+export function shouldOpenPopoverDown(
+  spaceAbove: number,
+  spaceBelow: number,
+): boolean {
+  return spaceAbove < POPOVER_SPACE_PX && spaceBelow > spaceAbove;
 }
 
 export type SessionSettingSelection =
@@ -142,6 +165,8 @@ export function ComposerControls({
   mcp,
   disabled,
   settingUpdatesDisabled,
+  showContext = true,
+  compactPending = false,
   onContextRefresh,
   onCompact,
   onSettingUpdate,
@@ -203,13 +228,28 @@ export function ComposerControls({
     };
   }, [openPanel]);
 
+  const [openDown, setOpenDown] = useState(false);
   const toggle = (panel: Exclude<OpenPanel, null>): void => {
     setOpenPanel((current) => (current === panel ? null : panel));
     setSettingsView('root');
+    // Popovers default to opening upward (bottom composer); when the
+    // controls sit near the viewport top (pinned edit card) that would
+    // push them off screen, so flip downward instead.
+    const rect = controlsRef.current?.getBoundingClientRect();
+    if (rect !== undefined) {
+      setOpenDown(
+        shouldOpenPopoverDown(rect.top, window.innerHeight - rect.bottom),
+      );
+    }
   };
 
   return (
-    <div className="dvx-composer-controls" ref={controlsRef}>
+    <div
+      className={`dvx-composer-controls${
+        openDown ? ' dvx-controls-down' : ''
+      }`}
+      ref={controlsRef}
+    >
       <div className="dvx-composer-control-left">
         <button
           type="button"
@@ -224,38 +264,45 @@ export function ComposerControls({
         >
           <span aria-hidden="true">+</span>
         </button>
-        <button
-          type="button"
-          className="dvx-composer-tool-button dvx-context-button"
-          aria-label={getContextLabel(context)}
-          aria-expanded={openPanel === 'context'}
-          aria-controls={
-            openPanel === 'context' ? `${panelId}-context` : undefined
-          }
-          disabled={disabled}
-          onClick={() => toggle('context')}
-        >
-          <svg
-            className="dvx-context-ring"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
+        {showContext ? (
+          <button
+            type="button"
+            className="dvx-composer-tool-button dvx-context-button"
+            aria-label={getContextLabel(context)}
+            aria-expanded={openPanel === 'context'}
+            aria-controls={
+              openPanel === 'context' ? `${panelId}-context` : undefined
+            }
+            disabled={disabled}
+            onClick={() => toggle('context')}
           >
-            <circle className="dvx-context-ring-track" cx="12" cy="12" r="9" />
-            <circle
-              className="dvx-context-ring-value"
-              cx="12"
-              cy="12"
-              r="9"
-              pathLength="100"
-              strokeDasharray={`${contextPercent} 100`}
-            />
-          </svg>
-          {showContextPercent ? (
-            <span className="dvx-context-percent" aria-hidden="true">
-              {Math.round(contextPercent)}%
-            </span>
-          ) : null}
-        </button>
+            <svg
+              className="dvx-context-ring"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <circle
+                className="dvx-context-ring-track"
+                cx="12"
+                cy="12"
+                r="9"
+              />
+              <circle
+                className="dvx-context-ring-value"
+                cx="12"
+                cy="12"
+                r="9"
+                pathLength="100"
+                strokeDasharray={`${contextPercent} 100`}
+              />
+            </svg>
+            {showContextPercent ? (
+              <span className="dvx-context-percent" aria-hidden="true">
+                {Math.round(contextPercent)}%
+              </span>
+            ) : null}
+          </button>
+        ) : null}
       </div>
 
       <button
@@ -327,6 +374,7 @@ export function ComposerControls({
           id={`${panelId}-context`}
           context={context}
           disabled={disabled || context.status === 'loading'}
+          compactPending={compactPending}
           onRefresh={onContextRefresh}
           onCompact={onCompact}
         />
@@ -1536,12 +1584,14 @@ function ContextPopover({
   id,
   context,
   disabled,
+  compactPending,
   onRefresh,
   onCompact,
 }: {
   readonly id: string;
   readonly context: SessionContextState;
   readonly disabled: boolean;
+  readonly compactPending: boolean;
   readonly onRefresh: () => void;
   readonly onCompact: () => void;
 }): React.JSX.Element {
@@ -1581,10 +1631,18 @@ function ContextPopover({
         <button
           type="button"
           className="dvx-context-compact-button"
-          disabled={disabled}
-          onClick={onCompact}
+          disabled={disabled || compactPending}
+          aria-busy={compactPending}
+          onClick={compactPending ? undefined : onCompact}
         >
-          Compact conversation
+          {compactPending ? (
+            <>
+              <span className="dvx-compact-spinner" aria-hidden="true" />
+              Compacting…
+            </>
+          ) : (
+            'Compact conversation'
+          )}
         </button>
         <p className="dvx-context-compact-note">
           Summarizes earlier messages to free up context.

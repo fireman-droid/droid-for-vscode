@@ -302,6 +302,42 @@ html, body, #root {
   content: "·";
 }
 
+/* Compaction record: a quiet centered divider (hairline + small
+   label), not a notice bar. */
+.dvx-compact-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  user-select: none;
+}
+
+.dvx-compact-divider::before, .dvx-compact-divider::after {
+  height: 1px;
+  flex: 1 1 auto;
+  background: var(--dvx-border);
+  content: "";
+}
+
+.dvx-compact-divider-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  color: var(--dvx-muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 16px;
+}
+
+.dvx-compact-divider-icon {
+  width: 11px;
+  height: 11px;
+  color: var(--dvx-accent);
+  opacity: 0.85;
+}
+
 .dvx-diagnostic {
   display: block;
   margin: 5px 0;
@@ -446,7 +482,8 @@ html, body, #root {
 
 .dvx-empty-state {
   display: grid;
-  min-height: min(52vh, 360px);
+  flex: 1 1 auto;
+  min-height: 0;
   place-content: center;
   justify-items: center;
   padding: 30px 12px;
@@ -1713,12 +1750,13 @@ body {
   height: 100%;
 }
 
-.dvx-thread-pending .dvx-reading-column {
-  min-height: calc(100% - 99px);
-}
-
+/* Column layout: the reading column flexes to fill the space above
+   the sticky footer, so an empty or short transcript never fabricates
+   scrollable overflow (no hardcoded min-height offsets). */
 .dvx-thread-viewport {
   position: relative;
+  display: flex;
+  flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-color: #c9c0b7 transparent;
@@ -1737,9 +1775,11 @@ body {
 }
 
 .dvx-reading-column {
+  display: flex;
   margin: 0 auto;
   width: 100%;
-  min-height: calc(100% - 126px);
+  flex: 1 1 auto;
+  flex-direction: column;
   padding: 20px 16px 40px;
 }
 
@@ -1754,17 +1794,23 @@ body {
 
 /* User messages are Cursor-style full-width blocks that stick to the
    viewport top while their answer scrolls; the coordinator in
-   Thread.tsx marks the active one with data-pinned and hides the
-   stuck ones it covers (data-covered). */
+   Thread.tsx marks the active one with data-pinned, translates it up
+   when the next user message reaches it (push-out hand-off), and
+   hides the stuck ones it covers (data-covered). */
 .dvx-message-user {
   position: sticky;
   top: 0;
   padding-left: 0;
 }
 
+/* Above plain user rows so the popovers of a pinned edit card are
+   never painted under later sticky siblings (sticky always creates a
+   stacking context). Still below the footer (z-index 4). */
 .dvx-message-user[data-pinned] {
+  z-index: 3;
   background: var(--dvx-surface);
   box-shadow: 0 6px 12px -8px rgb(0 0 0 / 25%);
+  will-change: transform;
 }
 
 .dvx-message-user[data-covered] {
@@ -1828,19 +1874,78 @@ body {
   text-align: center;
 }
 
+/* Secondary rewind option: a quiet self-drawn checkbox row sitting
+   right above the edit card's control row, aligned with the card
+   padding and visually below the input in hierarchy. */
 .dvx-user-edit-restore {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: var(--dvx-text);
+  align-self: flex-start;
+  gap: 7px;
+  margin: 0;
+  padding: 3px 6px;
+  margin-left: -6px;
+  border-radius: 6px;
+  color: var(--dvx-muted);
   font-size: 11px;
   line-height: 16px;
   cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
 }
 
-.dvx-user-edit-restore input {
+.dvx-user-edit-restore:hover {
+  color: var(--dvx-text);
+  background: rgb(0 0 0 / 3%);
+}
+
+.dvx-user-edit-restore .dvx-restore-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   margin: 0;
-  accent-color: var(--dvx-accent, #c96442);
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dvx-restore-box {
+  display: grid;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--dvx-border-strong, #d5cdc4);
+  border-radius: 4px;
+  color: transparent;
+  background: #fff;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.dvx-restore-box svg {
+  width: 10px;
+  height: 10px;
+}
+
+.dvx-user-edit-restore:hover .dvx-restore-box {
+  border-color: var(--dvx-accent);
+}
+
+.dvx-restore-input:checked + .dvx-restore-box {
+  border-color: var(--dvx-accent);
+  color: #fff;
+  background: var(--dvx-accent);
+}
+
+.dvx-restore-input:focus-visible + .dvx-restore-box {
+  outline: 1px solid var(--dvx-accent);
+  outline-offset: 1px;
+}
+
+.dvx-restore-copy {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dvx-user-edit-actions {
@@ -1864,8 +1969,9 @@ body {
   cursor: not-allowed;
 }
 
-/* Full-width user block: reading-column wide, left-aligned, with a
-   light tint that separates it from assistant prose. */
+/* Full-width user block: reading-column wide, left-aligned, on the
+   same white card base as the bottom Composer (a border keeps it
+   separated from assistant prose and stays opaque while pinned). */
 .dvx-user-block {
   display: flex;
   box-sizing: border-box;
@@ -1873,9 +1979,10 @@ body {
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
-  padding: 9px 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--dvx-border);
   border-radius: 8px;
-  background: var(--dvx-user);
+  background: #fff;
   color: #262626;
   text-align: left;
 }
@@ -1902,6 +2009,7 @@ body {
 }
 
 .dvx-user-block-editable:hover, .dvx-user-block-editable:focus-visible {
+  border-color: var(--dvx-border-strong);
   box-shadow: 0 2px 10px rgb(0 0 0 / 10%);
 }
 
@@ -2214,6 +2322,7 @@ body {
   position: sticky;
   z-index: 4;
   width: 100%;
+  flex: 0 0 auto;
   bottom: 0;
   padding: 4px 16px 10px;
   background: var(--dvx-surface);
@@ -2356,12 +2465,17 @@ body {
 
 .dvx-context-ring-track, .dvx-context-ring-value {
   fill: none;
-  stroke: #e4d7cf;
   stroke-width: 3;
 }
 
 .dvx-context-ring-track {
   stroke: var(--dvx-border);
+}
+
+/* Repeated here because this shared block once overrode the accent
+   stroke declared earlier; the used-context arc must stay accent. */
+.dvx-context-ring-value {
+  stroke: var(--dvx-accent);
 }
 
 .dvx-shell .dvx-context-button {
@@ -2518,6 +2632,15 @@ body {
   border-radius: 12px;
   background: #faf9f6;
   box-shadow: 0 18px 44px -16px rgb(0 0 0 / 25%);
+}
+
+/* Near the viewport top (pinned edit card) popovers flip downward so
+   they stay on screen; ComposerControls toggles the class from the
+   measured space around the control row. */
+.dvx-controls-down .dvx-composer-popover {
+  top: calc(100% + 8px);
+  bottom: auto;
+  transform-origin: top center;
 }
 
 .dvx-settings-popover {
@@ -3798,6 +3921,35 @@ body {
   opacity: 0.55;
 }
 
+.dvx-context-compact-button[aria-busy="true"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dvx-compact-spinner {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--dvx-border-strong, #d5cdc4);
+  border-radius: 50%;
+  border-top-color: var(--dvx-accent);
+  animation: dvx-spin 700ms linear infinite;
+}
+
+@keyframes dvx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-compact-spinner {
+    animation-duration: 1.6s;
+  }
+}
+
 .dvx-context-compact-note {
   margin: 0;
   color: var(--dvx-muted);
@@ -4489,4 +4641,55 @@ body {
   padding: 6px 8px;
   color: #8a8a8a;
   font-size: 12px;
+}
+
+/* Selection governance (VS Code/Cursor semantics): UI chrome is not
+   selectable, content is. Chrome is disabled at container level and
+   content re-enabled by whitelist, so a page-wide Ctrl+A highlights
+   only message text, code, and tool details. */
+.dvx-shell button {
+  user-select: none;
+}
+
+.dvx-header,
+.dvx-thread-footer,
+.dvx-session-drawer,
+.dvx-drawer-backdrop,
+.dvx-empty-state,
+.dvx-pending,
+.dvx-history-notice,
+.dvx-show-earlier,
+.dvx-assistant-actions,
+.dvx-composer-popover,
+.dvx-command-popup,
+.dvx-mention-popup,
+.dvx-reasoning-flyout,
+.dvx-user-edit-hint,
+.dvx-user-edit-rejection,
+.dvx-user-edit-footer,
+.dvx-user-edit-attachments,
+.dvx-user-sent-attachments,
+.dvx-user-resending-note,
+.dvx-activity-row summary,
+.dvx-thinking-row summary,
+.dvx-activity-group-header,
+.dvx-activity-group-summary,
+.dvx-plan-summary,
+.dvx-plan-marker,
+.dvx-changes,
+.dvx-interaction-eyebrow,
+.dvx-interaction-queue,
+.dvx-interaction-actions,
+.dvx-permission-menu,
+.dvx-permission-tool-meta,
+.dvx-diagnostic code {
+  user-select: none;
+}
+
+/* Content whitelisted back inside chrome containers: the composer
+   and edit textareas, and command/path details on tool rows. */
+.dvx-composer-input,
+.dvx-user-edit-input,
+.dvx-tool-command-inline {
+  user-select: text;
 }

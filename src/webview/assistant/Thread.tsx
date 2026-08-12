@@ -169,6 +169,7 @@ interface DroidThreadProps {
   readonly mcp: McpPanelState;
   readonly onRetry: () => void;
   readonly onContextRefresh: () => void;
+  readonly compactPending: boolean;
   readonly onCompact: () => void;
   readonly onSettingUpdate: (update: SessionSettingSelection) => void;
   readonly onSkillsRefresh: () => void;
@@ -248,6 +249,7 @@ export const DroidThread = memo(function DroidThread({
   mcp,
   onRetry,
   onContextRefresh,
+  compactPending,
   onCompact,
   onSettingUpdate,
   onSkillsRefresh,
@@ -323,8 +325,12 @@ export const DroidThread = memo(function DroidThread({
   };
   // Cursor-style pinned questions: every user message is CSS-sticky at
   // the viewport top; this coordinator marks the last stuck one as
-  // `data-pinned` (opaque backdrop, separator) and hides the stuck
-  // messages it covered so pinned questions never pile up visually.
+  // `data-pinned` (opaque backdrop, separator), pushes it out when the
+  // next user message reaches it, and hides fully covered ones.
+  //
+  // The same effect owns stick-to-bottom (the primitive's autoScroll
+  // is disabled: its isAtBottom latch loses a race between async
+  // scroll events and fast streaming growth, see applyFollowScroll).
   const readingColumnRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const column = readingColumnRef.current;
@@ -336,48 +342,97 @@ export const DroidThread = memo(function DroidThread({
       return undefined;
     }
     let frame = 0;
-    const update = (): void => {
+    const follow = createFollowState();
+    const updatePins = (): void => {
       frame = 0;
       const viewportTop = scroller.getBoundingClientRect().top;
       const messages = [
         ...column.querySelectorAll<HTMLElement>('.dvx-message-user'),
       ];
-      const tops = messages.map(
-        (element) => element.getBoundingClientRect().top,
+      const rects = messages.map((element) =>
+        element.getBoundingClientRect(),
       );
-      const pinnedIndex = computePinnedUserIndex(tops, viewportTop);
+      const layout = computeStickyLayout(
+        rects.map((rect) => rect.top),
+        rects.map((rect) => rect.height),
+        viewportTop,
+      );
       messages.forEach((element, index) => {
         toggleDataAttribute(
           element,
           'data-pinned',
-          index === pinnedIndex,
+          index === layout.pinnedIndex,
         );
         toggleDataAttribute(
           element,
           'data-covered',
-          index < pinnedIndex && tops[index]! <= viewportTop + 1,
+          layout.covered[index] === true,
         );
+        const transform =
+          index === layout.pinnedIndex && layout.pushPx > 0
+            ? `translateY(${-layout.pushPx}px)`
+            : '';
+        if (element.style.transform !== transform) {
+          element.style.transform = transform;
+        }
       });
     };
     const schedule = (): void => {
       if (frame === 0) {
-        frame = requestAnimationFrame(update);
+        frame = requestAnimationFrame(updatePins);
       }
     };
-    scroller.addEventListener('scroll', schedule, { passive: true });
+    // Content growth (streaming rows, CSS height transitions, composer
+    // resizes) glues the viewport to the bottom while following. The
+    // write is marked so the resulting scroll event is never mistaken
+    // for a user scroll.
+    const followBottom = (): void => {
+      if (follow.following) {
+        const maxTop = scroller.scrollHeight - scroller.clientHeight;
+        if (scroller.scrollTop < maxTop - 0.5) {
+          follow.pendingProgrammaticTop = maxTop;
+          scroller.scrollTop = maxTop;
+        }
+      }
+      schedule();
+    };
+    const onScroll = (): void => {
+      applyFollowScroll(follow, {
+        scrollTop: scroller.scrollTop,
+        scrollHeight: scroller.scrollHeight,
+        clientHeight: scroller.clientHeight,
+      });
+      schedule();
+    };
+    // Wheel-up is an unambiguous user intent even when the scroll
+    // event itself races a same-frame content growth.
+    const onWheel = (event: WheelEvent): void => {
+      if (event.deltaY < 0) {
+        follow.following = false;
+      }
+    };
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    scroller.addEventListener('wheel', onWheel, { passive: true });
     const resizeObserver =
       typeof ResizeObserver === 'undefined'
         ? null
-        : new ResizeObserver(schedule);
+        : new ResizeObserver(followBottom);
     resizeObserver?.observe(column);
+    // The sticky footer (composer) lives inside the same scroller, so
+    // its growth also moves the bottom edge.
+    const footer = scroller.querySelector('.dvx-thread-footer');
+    if (footer instanceof HTMLElement) {
+      resizeObserver?.observe(footer);
+    }
     const mutationObserver =
       typeof MutationObserver === 'undefined'
         ? null
         : new MutationObserver(schedule);
     mutationObserver?.observe(column, { childList: true });
-    update();
+    updatePins();
     return () => {
-      scroller.removeEventListener('scroll', schedule);
+      scroller.removeEventListener('scroll', onScroll);
+      scroller.removeEventListener('wheel', onWheel);
       resizeObserver?.disconnect();
       mutationObserver?.disconnect();
       if (frame !== 0) {
@@ -448,7 +503,10 @@ export const DroidThread = memo(function DroidThread({
       <ThreadPrimitive.Viewport
         className="dvx-thread-viewport"
         aria-label="Chat transcript"
-        autoScroll
+        // Continuous follow is owned by the coordinator above; the
+        // primitive keeps only its one-shot scrolls (run start,
+        // initialize, thread switch). See applyFollowScroll.
+        autoScroll={false}
         turnAnchor="bottom"
         scrollToBottomOnRunStart
         scrollToBottomOnInitialize
@@ -536,6 +594,7 @@ export const DroidThread = memo(function DroidThread({
             mcp={mcp}
             onRetry={onRetry}
             onContextRefresh={onContextRefresh}
+            compactPending={compactPending}
             onCompact={onCompact}
             onSettingUpdate={onSettingUpdate}
             onSkillsRefresh={onSkillsRefresh}
@@ -753,23 +812,41 @@ function UserMessage({
                 </div>
               ) : null}
               {affectedFiles > 0 ? (
-                <label className="dvx-user-edit-restore">
+                <label
+                  className="dvx-user-edit-restore"
+                  title={`Resending rewinds the conversation to this message. Also restore the ${affectedFiles} workspace ${
+                    affectedFiles === 1 ? 'file' : 'files'
+                  } Droid changed after it.`}
+                >
                   <input
                     type="checkbox"
+                    className="dvx-restore-input"
                     checked={restoreFiles}
                     onChange={(event) =>
                       setRestoreFiles(event.currentTarget.checked)
                     }
                   />
-                  <span>
-                    Also restore {affectedFiles}{' '}
-                    {affectedFiles === 1 ? 'file' : 'files'} Droid changed
-                    after this message
+                  <span className="dvx-restore-box" aria-hidden="true">
+                    <svg viewBox="0 0 10 10" fill="none">
+                      <path
+                        d="m2 5.2 2.2 2.2L8 3.2"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  <span className="dvx-restore-copy">
+                    Restore {affectedFiles}{' '}
+                    {affectedFiles === 1 ? 'file' : 'files'} changed after
+                    this point
                   </span>
                 </label>
               ) : null}
               <div className="dvx-user-edit-footer">
                 <ComposerControls
+                  showContext={false}
                   settings={editorEnv.settings}
                   context={editorEnv.context}
                   modelCatalog={editorEnv.modelCatalog}
@@ -1215,6 +1292,9 @@ function ChangesSummary({
 
 function Diagnostic({ data }: { readonly data: unknown }): React.JSX.Element {
   const diagnostic = readDiagnostic(data);
+  if (diagnostic.code === 'session-compacted') {
+    return <CompactDivider message={diagnostic.message} />;
+  }
   return (
     <div
       className={`dvx-diagnostic dvx-diagnostic-${diagnostic.severity}`}
@@ -1223,6 +1303,61 @@ function Diagnostic({ data }: { readonly data: unknown }): React.JSX.Element {
     >
       <code aria-hidden="true">{diagnostic.code}</code>
       <span>{diagnostic.message}</span>
+    </div>
+  );
+}
+
+/**
+ * Short centered label for the compaction divider, derived from the
+ * host's `session-compacted` diagnostic message ("Conversation
+ * compacted: N earlier messages summarized.").
+ */
+export function formatCompactDividerLabel(message: string): string {
+  const match = /(\d+) earlier message/.exec(message);
+  if (match === null) {
+    return 'Conversation summarized';
+  }
+  const count = Number(match[1]);
+  return `Summarized ${count} earlier ${
+    count === 1 ? 'message' : 'messages'
+  }`;
+}
+
+/**
+ * Compaction record rendered as a quiet transcript divider (hairline
+ * + centered label), Cursor-style, instead of a notice bar. Applies
+ * to live compactions and reloaded history alike.
+ */
+function CompactDivider({
+  message,
+}: {
+  readonly message: string;
+}): React.JSX.Element {
+  return (
+    <div className="dvx-compact-divider" role="status" title={message}>
+      <span className="dvx-compact-divider-label">
+        <svg
+          className="dvx-compact-divider-icon"
+          viewBox="0 0 12 12"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M3 1.5 6 4l3-2.5M3 10.5 6 8l3 2.5"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M2.2 6h7.6"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+          />
+        </svg>
+        {formatCompactDividerLabel(message)}
+      </span>
     </div>
   );
 }
@@ -1276,6 +1411,7 @@ function Composer({
   mcp,
   onRetry,
   onContextRefresh,
+  compactPending,
   onCompact,
   onSettingUpdate,
   onSkillsRefresh,
@@ -1317,6 +1453,7 @@ function Composer({
   readonly mcp: McpPanelState;
   readonly onRetry: () => void;
   readonly onContextRefresh: () => void;
+  readonly compactPending: boolean;
   readonly onCompact: () => void;
   readonly onSettingUpdate: (update: SessionSettingSelection) => void;
   readonly onSkillsRefresh: () => void;
@@ -1867,6 +2004,7 @@ function Composer({
             disabled={controlsDisabled}
             settingUpdatesDisabled={settingUpdatesDisabled}
             onContextRefresh={onContextRefresh}
+            compactPending={compactPending}
             onCompact={onCompact}
             onSettingUpdate={onSettingUpdate}
             onSkillsRefresh={onSkillsRefresh}
@@ -2806,6 +2944,126 @@ export function computePinnedUserIndex(
     }
   });
   return pinned;
+}
+
+/** Sticky pin/cover/push-out decisions for one coordinator frame. */
+export interface StickyLayout {
+  readonly pinnedIndex: number;
+  /** Older stuck messages fully hidden behind the pinned one. */
+  readonly covered: readonly boolean[];
+  /**
+   * How far (px) the pinned message is pushed up because the next
+   * user message has reached its bottom edge. Emulates the section
+   * header hand-off: the incoming block cleanly pushes the pinned one
+   * out instead of sliding text over text.
+   */
+  readonly pushPx: number;
+}
+
+/**
+ * Computes the pinned message, covered set, and push-out offset from
+ * user message rects. `tops`/`heights` come from live rects; only the
+ * pinned element carries a translate, and its untransformed sticky
+ * position is the viewport top, so the push math stays feedback-free.
+ */
+export function computeStickyLayout(
+  tops: readonly number[],
+  heights: readonly number[],
+  viewportTop: number,
+): StickyLayout {
+  const pinnedIndex = computePinnedUserIndex(tops, viewportTop);
+  const covered = tops.map(
+    (top, index) => index < pinnedIndex && top <= viewportTop + 1,
+  );
+  let pushPx = 0;
+  if (pinnedIndex !== -1) {
+    const nextTop = tops[pinnedIndex + 1];
+    const height = heights[pinnedIndex] ?? 0;
+    if (nextTop !== undefined) {
+      pushPx = Math.min(
+        Math.max(0, viewportTop + height - Math.max(nextTop, viewportTop)),
+        height,
+      );
+    }
+  }
+  return { pinnedIndex, covered, pushPx };
+}
+
+/** A viewport is "at bottom" within this tolerance (fractional
+ * scrollTop under display scaling never lands exactly on 0). */
+export const FOLLOW_REJOIN_PX = 4;
+
+/** One viewport scroll sample fed to the follow latch. */
+export interface FollowScrollSample {
+  readonly scrollTop: number;
+  readonly scrollHeight: number;
+  readonly clientHeight: number;
+}
+
+/** Mutable stick-to-bottom latch owned by the scroll coordinator. */
+export interface FollowState {
+  following: boolean;
+  lastScrollTop: number;
+  lastScrollHeight: number;
+  /** scrollTop the coordinator itself just wrote; the next matching
+   * scroll event is programmatic, not a user gesture. */
+  pendingProgrammaticTop: number | null;
+}
+
+export function createFollowState(): FollowState {
+  return {
+    following: true,
+    lastScrollTop: 0,
+    lastScrollHeight: 0,
+    pendingProgrammaticTop: null,
+  };
+}
+
+/**
+ * Applies one scroll event to the follow latch with Cursor semantics:
+ * only a genuine upward user scroll releases the latch, and returning
+ * to the bottom restores it. Programmatic writes (the coordinator's
+ * own glue scrolls, the primitive's run-start jumps) and clamp events
+ * from shrinking content never release it. This replaces assistant-ui's
+ * isAtBottom bookkeeping, which flips false when the async scroll
+ * event of its own bottom-glue write lands after further content
+ * growth (scrollTop unchanged + taller scrollHeight reads as a user
+ * scroll there), permanently stopping auto-follow mid-stream.
+ */
+export function applyFollowScroll(
+  state: FollowState,
+  sample: FollowScrollSample,
+): void {
+  const distance =
+    sample.scrollHeight - sample.scrollTop - sample.clientHeight;
+  const programmatic =
+    state.pendingProgrammaticTop !== null &&
+    Math.abs(sample.scrollTop - state.pendingProgrammaticTop) <= 1;
+  if (programmatic) {
+    state.pendingProgrammaticTop = null;
+  } else {
+    const shrank = sample.scrollHeight < state.lastScrollHeight;
+    const scrolledUp = sample.scrollTop < state.lastScrollTop - 0.5;
+    const scrolledDown = sample.scrollTop > state.lastScrollTop + 0.5;
+    if (scrolledUp && !shrank) {
+      state.following = false;
+    }
+    // A downward scroll that reaches at least the previous bottom is
+    // a return-to-bottom even when streaming grew the content between
+    // the user's gesture and this event (the live distance is then
+    // whatever just streamed in, not user intent).
+    const previousMaxTop =
+      state.lastScrollHeight - sample.clientHeight;
+    if (
+      distance <= FOLLOW_REJOIN_PX ||
+      (scrolledDown &&
+        sample.scrollTop >= previousMaxTop - FOLLOW_REJOIN_PX)
+    ) {
+      state.following = true;
+    }
+  }
+  state.lastScrollTop = sample.scrollTop;
+  state.lastScrollHeight = sample.scrollHeight;
 }
 
 function toggleDataAttribute(

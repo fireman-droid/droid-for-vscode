@@ -206,8 +206,75 @@ export function App(): React.JSX.Element {
     },
     draft,
   );
+  // Compaction in-flight latch (10a): set when either entry point
+  // fires, cleared when the host answers with a session switch
+  // (success adopts the continuation session) or a session-compact*
+  // diagnostic (blocked/unsupported/failed), with a timeout backstop.
+  const [compactPending, setCompactPending] = useState(false);
+  const compactBaselineRef = useRef<{
+    readonly sessionId: string | null;
+    readonly signal: string | null;
+  } | null>(null);
+  const compactSignal = useMemo(() => {
+    for (let i = state.transcript.length - 1; i >= 0; i -= 1) {
+      const item = state.transcript[i];
+      if (
+        item !== undefined &&
+        item.kind === 'diagnostic' &&
+        item.code.startsWith('session-compact')
+      ) {
+        return item.id;
+      }
+    }
+    return null;
+  }, [state.transcript]);
+  const handleCompact = useCallback((): void => {
+    if (
+      sessionId === null ||
+      connectionStatus !== 'connected' ||
+      compactPending
+    ) {
+      return;
+    }
+    compactBaselineRef.current = { sessionId, signal: compactSignal };
+    setCompactPending(true);
+    post(vscode, { type: 'session.compact', sessionId });
+  }, [compactPending, compactSignal, connectionStatus, sessionId, vscode]);
+  useEffect(() => {
+    if (!compactPending) {
+      return undefined;
+    }
+    const baseline = compactBaselineRef.current;
+    if (
+      baseline === null ||
+      connectionStatus !== 'connected' ||
+      state.sessionId !== baseline.sessionId ||
+      compactSignal !== baseline.signal
+    ) {
+      compactBaselineRef.current = null;
+      setCompactPending(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      compactBaselineRef.current = null;
+      setCompactPending(false);
+    }, 30_000);
+    return () => clearTimeout(timer);
+  }, [compactPending, compactSignal, connectionStatus, state.sessionId]);
+
   const handleSend = useCallback(
     async (text: string): Promise<void> => {
+      // /compact typed in the composer is otherwise forwarded to the
+      // Droid CLI as prompt text, which acknowledges without running
+      // our compaction pipeline (no continuation-session adoption, no
+      // context refresh). Route it through the same RPC as the
+      // Compact button so both paths behave identically (10b).
+      if (/^\/compact$/i.test(text.trim())) {
+        handleCompact();
+        setDraft('');
+        persistDraft(vscode, '');
+        return;
+      }
       const eligibility = {
         connectionStatus,
         sessionId,
@@ -237,6 +304,7 @@ export function App(): React.JSX.Element {
     },
     [
       connectionStatus,
+      handleCompact,
       interactionCount,
       sessionId,
       turnStatus,
@@ -445,12 +513,6 @@ export function App(): React.JSX.Element {
     },
     [sessionId, vscode],
   );
-  const handleCompact = useCallback((): void => {
-    if (sessionId === null) {
-      return;
-    }
-    post(vscode, { type: 'session.compact', sessionId });
-  }, [sessionId, vscode]);
   const handleForkSession = useCallback(
     (targetSessionId: string): void => {
       post(vscode, {
@@ -859,6 +921,7 @@ export function App(): React.JSX.Element {
           mcp={state.mcp}
           onRetry={handleRetry}
           onContextRefresh={handleContextRefresh}
+          compactPending={compactPending}
           onCompact={handleCompact}
           onSettingUpdate={handleSettingUpdate}
           onSkillsRefresh={handleSkillsRefresh}

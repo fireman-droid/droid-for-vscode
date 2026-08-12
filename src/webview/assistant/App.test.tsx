@@ -128,6 +128,34 @@ function snapshot(
 }
 
 describe('assistant-ui App bridge commands', () => {
+  it('routes /compact through the compaction RPC, not turn.send', async () => {
+    render(<App />);
+    host(snapshot(0));
+    const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+    await waitFor(() => expect(input.value).toBe('Restored draft'));
+
+    fireEvent.change(input, { target: { value: '/compact' } });
+    // The first Enter can be swallowed while the composer runtime
+    // settles in jsdom, so keep pressing until the RPC goes out; the
+    // pending latch must still collapse the repeats into one request.
+    await waitFor(() => {
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+      expect(
+        posted.some((message) => message.type === 'session.compact'),
+      ).toBe(true);
+    });
+    expect(
+      posted.filter((message) => message.type === 'session.compact'),
+    ).toEqual([{ type: 'session.compact', sessionId: 'session-a' }]);
+    // The command must not leak to Droid as prompt text: that path
+    // acknowledges compaction without adopting the continuation
+    // session or refreshing context stats.
+    expect(
+      posted.filter((message) => message.type === 'turn.send'),
+    ).toHaveLength(0);
+    expect(persistedState).toEqual({ draft: '' });
+  });
+
   it('restores drafts and posts exact send, stop, retry, and settlements', async () => {
     const user = userEvent.setup();
     render(<App />);
