@@ -3306,16 +3306,24 @@ function ToolActivityRow({
 }): React.JSX.Element {
   // Plan rows open by default only when they appear inside a live
   // turn, so the checklist is visible while Droid works but recovered
-  // histories mount collapsed and stay cheap to lay out. `open` is
-  // always a defined boolean so React never leaves a stale `open`
-  // attribute on a reused <details> node.
+  // histories mount collapsed and stay cheap to lay out.
   const messageRunning = useAuiState(
     (s) => s.message.status?.type === "running",
   );
-  const [open, setOpen] = useState(
+  const planDefaultRef = useRef(
     activity.detailKind === "plan" && messageRunning,
   );
+  // An explicit reader toggle always wins over the automatic policy;
+  // history and replay rows are never "running", so they mount closed.
+  const [openOverride, setOpenOverride] = useState<boolean | null>(null);
   const running = activity.status === "running";
+  // Running execute rows show their live output tail without a click
+  // and settle back closed on completion (user report batch 2 §2).
+  const autoOpen =
+    activity.detailKind === "plan"
+      ? planDefaultRef.current
+      : activity.detailKind === "command" && running;
+  const open = openOverride ?? autoOpen;
   // Collapsed plans keep their position visible: "3/7 · current item"
   // replaces scanning a full checklist (streaming design item E).
   const planSummary =
@@ -3328,7 +3336,14 @@ function ToolActivityRow({
         activity.subagent !== null ? " dvx-activity-row-delegating" : ""
       }${activity.background ? " dvx-activity-row-background" : ""}`}
       open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
+      onToggle={(event) => {
+        // Prop-driven toggles arrive already matching the rendered
+        // state; only a native user toggle diverges from it, and only
+        // that records an override.
+        if (event.currentTarget.open !== open) {
+          setOpenOverride(event.currentTarget.open);
+        }
+      }}
     >
       <summary>
         <span className="dvx-activity-indicator" />

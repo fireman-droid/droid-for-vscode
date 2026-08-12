@@ -794,6 +794,123 @@ describe('assistant-ui App bridge commands', () => {
     ).toEqual([]);
   });
 
+  it('auto-opens a running execute row and settles it closed', async () => {
+    render(<App />);
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText<HTMLTextAreaElement>('Message Droid').value,
+      ).toBe('Restored draft'),
+    );
+    const executeTranscript = (
+      status: 'running' | 'completed',
+      outputTail: string,
+    ) => [
+      {
+        id: 'user-1',
+        kind: 'user' as const,
+        text: 'Run the tests',
+        messageId: 'sdk-user-1',
+      },
+      {
+        id: 'tool-exec',
+        kind: 'tool' as const,
+        turnId: 'turn-1',
+        toolUseId: 'use-exec-1',
+        toolName: 'Execute',
+        action: 'Ran a local command',
+        status,
+        progressCount: 0,
+        latestUpdateKind: null,
+        detailKind: 'command' as const,
+        detail: 'pnpm test',
+        outputTail,
+        ...(status === 'completed' ? { durationMs: 1200 } : {}),
+      },
+    ];
+    host({
+      ...snapshot(0, { turnId: 'turn-1', status: 'streaming' }),
+      transcript: executeTranscript('running', 'suite booting'),
+    });
+    const row = await waitFor(() => {
+      const found = document.querySelector<HTMLDetailsElement>(
+        'details.dvx-activity-row',
+      );
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    // Running execute rows expose the output tail without a click.
+    expect(row.open).toBe(true);
+    expect(document.querySelector('.dvx-tool-output')?.textContent).toBe(
+      'suite booting',
+    );
+
+    // Completion settles the row back to the collapsed form.
+    host({
+      ...snapshot(1),
+      transcript: executeTranscript('completed', 'suite passed'),
+    });
+    await waitFor(() =>
+      expect(
+        document.querySelector<HTMLDetailsElement>(
+          'details.dvx-activity-row',
+        )?.open,
+      ).toBe(false),
+    );
+  });
+
+  it('respects a manual collapse of a running execute row', async () => {
+    render(<App />);
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText<HTMLTextAreaElement>('Message Droid').value,
+      ).toBe('Restored draft'),
+    );
+    const running = (sequence: number, outputTail: string) => ({
+      ...snapshot(sequence, { turnId: 'turn-1', status: 'streaming' }),
+      transcript: [
+        {
+          id: 'tool-exec',
+          kind: 'tool' as const,
+          turnId: 'turn-1',
+          toolUseId: 'use-exec-1',
+          toolName: 'Execute',
+          action: 'Ran a local command',
+          status: 'running' as const,
+          progressCount: 0,
+          latestUpdateKind: null,
+          detailKind: 'command' as const,
+          detail: 'pnpm build',
+          outputTail,
+        },
+      ],
+    });
+    host(running(0, 'building'));
+    const row = await waitFor(() => {
+      const found = document.querySelector<HTMLDetailsElement>(
+        'details.dvx-activity-row',
+      );
+      expect(found).not.toBeNull();
+      expect(found!.open).toBe(true);
+      return found!;
+    });
+
+    // The reader closes the running row; jsdom has no native
+    // summary-click toggling, so flip the DOM state and fire the
+    // toggle event the way the browser would.
+    act(() => {
+      row.open = false;
+      fireEvent(row, new Event('toggle'));
+    });
+    expect(row.open).toBe(false);
+
+    // Later output must not force the row back open.
+    host(running(1, 'building still'));
+    expect(
+      document.querySelector<HTMLDetailsElement>('details.dvx-activity-row')
+        ?.open,
+    ).toBe(false);
+  });
+
   it('closes an abandoned edit card when a new Composer message is sent', async () => {
     const user = userEvent.setup();
     render(<App />);
