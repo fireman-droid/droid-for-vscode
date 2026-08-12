@@ -25,17 +25,20 @@ import type {
   SessionSkillsState,
   PluginSummary,
   SkillSummary,
+  ThemePreference,
 } from '../../shared/bridgeMessages';
 import type {
   SessionTokenUsageState,
   TokenUsageBreakdown,
 } from '../../shared/tokenUsage';
+import { useTheme } from './theme';
 
 type OpenPanel = 'settings' | 'context' | 'model' | 'mode' | null;
 type SettingsView =
   | 'root'
   | 'mode'
   | 'autonomy'
+  | 'theme'
   | 'skills'
   | 'mcp'
   | 'plugins';
@@ -199,6 +202,16 @@ const AUTONOMY_OPTIONS: readonly {
     label: 'High',
     description: 'Proceed broadly within runtime safeguards.',
   },
+];
+
+/** Shell theme choices (webview-local; persisted as a user setting). */
+const THEME_OPTIONS: readonly {
+  readonly value: ThemePreference;
+  readonly label: string;
+}[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
 ];
 
 export function ComposerControls({
@@ -647,6 +660,7 @@ function SettingsPopover({
   readonly onAttach: (source: AttachSource) => void;
 }): React.JSX.Element {
   const [query, setQuery] = useState('');
+  const theme = useTheme();
   const confirmed = settings.value;
   // The popover stacks the root list and the Skills/MCP/Plugins
   // drill-ins ('mode'/'autonomy' are inline expansions of root).
@@ -706,6 +720,8 @@ function SettingsPopover({
     normalizedQuery.length === 0 || 'mode'.includes(normalizedQuery);
   const showAutonomy =
     normalizedQuery.length === 0 || 'autonomy'.includes(normalizedQuery);
+  const showTheme =
+    normalizedQuery.length === 0 || 'theme'.includes(normalizedQuery);
   const showSkills =
     normalizedQuery.length === 0 || 'skills'.includes(normalizedQuery);
   const showMcp =
@@ -856,6 +872,26 @@ function SettingsPopover({
           }}
         />
       ) : null}
+      {showTheme ? (
+        <SettingsDropdown
+          id={`${id}-theme`}
+          title="Theme"
+          expanded={view === 'theme'}
+          current={theme.preference}
+          options={THEME_OPTIONS}
+          // Pure webview appearance — never blocked by a running turn.
+          disabled={false}
+          onToggle={() =>
+            onViewChange(view === 'theme' ? 'root' : 'theme')
+          }
+          onSelect={(value) => {
+            onViewChange('root');
+            if (value !== theme.preference) {
+              theme.onPreferenceChange(value);
+            }
+          }}
+        />
+      ) : null}
       {showSkills || showMcp ? <div className="dvx-settings-divider" /> : null}
       {showSkills ? (
         <button
@@ -972,6 +1008,7 @@ function SettingsPopover({
       ) : null}
       {!showMode &&
       !showAutonomy &&
+      !showTheme &&
       !showSkills &&
       !showMcp &&
       !showPlugins &&

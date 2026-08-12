@@ -93,7 +93,10 @@ describe('MermaidBlockView', () => {
         WAIT_OPTIONS,
       );
       expect(renderMermaidMock).toHaveBeenCalledTimes(1);
-      expect(renderMermaidMock).toHaveBeenCalledWith('graph TD; A-->B');
+      expect(renderMermaidMock).toHaveBeenCalledWith(
+        'graph TD; A-->B',
+        'light',
+      );
       expect(container.querySelector('pre')).toBeNull();
     },
     TEST_TIMEOUT_MS,
@@ -132,7 +135,10 @@ describe('MermaidBlockView', () => {
         await vi.advanceTimersByTimeAsync(2);
       });
       expect(renderMermaidMock).toHaveBeenCalledTimes(1);
-      expect(renderMermaidMock).toHaveBeenCalledWith('graph TD; A-->B');
+      expect(renderMermaidMock).toHaveBeenCalledWith(
+        'graph TD; A-->B',
+        'light',
+      );
       expect(
         container.querySelector('.dvx-mermaid-figure svg'),
       ).not.toBeNull();

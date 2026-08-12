@@ -16,6 +16,7 @@ import {
   MAX_TURN_TEXT_LENGTH,
   type AskUserAnswer,
   type ImageMediaType,
+  type ThemePreference,
   type WebviewToHostMessage,
 } from '../../shared/bridgeMessages';
 import {
@@ -54,6 +55,7 @@ import {
   initialAssistantWebviewState,
   isTurnActive,
   type PendingInteraction,
+  type StoreHostMessage,
 } from './store';
 import { DroidThread } from './Thread';
 import {
@@ -65,6 +67,7 @@ import { selectPlanAnchors } from './planAnchor';
 import { QueuedMessages } from './QueuedMessages';
 import { SideChatSheet } from './SideChatSheet';
 import { selectWorkingSubagents } from './subagentWorking';
+import { ThemeContext, useThemeController } from './theme';
 import { WorkingBadge } from './WorkingBadge';
 import { MAX_BTW_TEXT_LENGTH } from '../../shared/btwProtocol';
 import './styles.css';
@@ -105,6 +108,18 @@ export function App(): React.JSX.Element {
   const [composerNav, setComposerNav] =
     useState<ComposerNavRequest | null>(null);
   const composerNavCounterRef = useRef(0);
+
+  const persistThemePreference = useCallback(
+    (preference: ThemePreference): void => {
+      post(vscode, { type: 'ui.theme.set', preference });
+    },
+    [vscode],
+  );
+  const {
+    context: themeContextValue,
+    resolved: resolvedTheme,
+    setPreference: setThemePreference,
+  } = useThemeController(persistThemePreference);
   const [sessionsOpenSignal, setSessionsOpenSignal] = useState(0);
   const handleSlashNavigate = useCallback(
     (target: SlashNavTarget): void => {
@@ -124,7 +139,7 @@ export function App(): React.JSX.Element {
     // transcript re-renders, and per-message renders saturate the main
     // thread on long sessions. The timeout keeps messages flowing when
     // the webview is hidden and frames stop.
-    let queue: NonNullable<ReturnType<typeof readHostMessage>>[] = [];
+    let queue: StoreHostMessage[] = [];
     let frameId: number | null = null;
     let timerId: ReturnType<typeof setTimeout> | null = null;
     // rAF batching accounting (P3), reported once per finished turn.
@@ -176,6 +191,12 @@ export function App(): React.JSX.Element {
       if (message === undefined) {
         return;
       }
+      // Theme pushes bypass the store (sequence-free view-provider
+      // messages) and apply immediately — no batching for a switch.
+      if (message.type === 'ui.theme') {
+        setThemePreference(message.preference);
+        return;
+      }
       queue.push(message);
       frameId ??= requestAnimationFrame(flush);
       timerId ??= setTimeout(flush, 50);
@@ -188,7 +209,8 @@ export function App(): React.JSX.Element {
       window.removeEventListener('message', handleMessage);
       flush();
     };
-  }, [initialDraft, vscode]);
+    // setThemePreference is a stable useState setter.
+  }, [initialDraft, setThemePreference, vscode]);
 
   useEffect(() => {
     // Main-thread stall accounting (P2): long tasks are aggregated and
@@ -1293,6 +1315,7 @@ export function App(): React.JSX.Element {
         }${showHandshakeNotice ? ' dvx-shell-stalled' : ''}${
           btwSplit ? ' dvx-shell-split' : ''
         }`}
+        data-theme={resolvedTheme}
       >
         <Header
           state={state}
@@ -1469,13 +1492,15 @@ export function App(): React.JSX.Element {
     </AssistantRuntimeProvider>
   );
   return (
-    <OpenPathContext.Provider value={handleOpenPath}>
-      <LocalImageContext.Provider value={localImageSource}>
-        <GitCommitFlowContext.Provider value={gitFlow}>
-          {app}
-        </GitCommitFlowContext.Provider>
-      </LocalImageContext.Provider>
-    </OpenPathContext.Provider>
+    <ThemeContext.Provider value={themeContextValue}>
+      <OpenPathContext.Provider value={handleOpenPath}>
+        <LocalImageContext.Provider value={localImageSource}>
+          <GitCommitFlowContext.Provider value={gitFlow}>
+            {app}
+          </GitCommitFlowContext.Provider>
+        </LocalImageContext.Provider>
+      </OpenPathContext.Provider>
+    </ThemeContext.Provider>
   );
 }
 

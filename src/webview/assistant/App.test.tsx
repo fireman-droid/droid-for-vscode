@@ -662,6 +662,44 @@ describe('assistant-ui App bridge commands', () => {
     }
   });
 
+  it('applies theme pushes immediately and follows the editor on auto', async () => {
+    try {
+      render(<App />);
+      host(snapshot(0));
+      const shell = document.querySelector('.dvx-shell')!;
+      expect(shell.getAttribute('data-theme')).toBe('light');
+      expect(document.documentElement.dataset.dvxTheme).toBe('light');
+
+      // A manual preference pins the shell regardless of the editor,
+      // and bypasses the store batch (no sequence, applied at once).
+      host({ type: 'ui.theme', preference: 'dark' });
+      await waitFor(() =>
+        expect(shell.getAttribute('data-theme')).toBe('dark'),
+      );
+      expect(document.documentElement.dataset.dvxTheme).toBe('dark');
+
+      // Auto resolves against the classes VS Code keeps on <body>
+      // and tracks them live through the mutation observer.
+      act(() => {
+        document.body.classList.add('vscode-dark');
+      });
+      host({ type: 'ui.theme', preference: 'auto' });
+      await waitFor(() =>
+        expect(shell.getAttribute('data-theme')).toBe('dark'),
+      );
+      act(() => {
+        document.body.className = 'vscode-light';
+      });
+      await waitFor(() =>
+        expect(shell.getAttribute('data-theme')).toBe('light'),
+      );
+      expect(document.documentElement.dataset.dvxTheme).toBe('light');
+    } finally {
+      document.body.className = '';
+      delete document.documentElement.dataset.dvxTheme;
+    }
+  });
+
   it('keeps Thinking synchronized and allows setting changes while streaming', async () => {
     const user = userEvent.setup();
     render(<App />);

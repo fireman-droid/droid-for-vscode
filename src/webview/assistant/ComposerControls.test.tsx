@@ -15,6 +15,7 @@ import {
   rankNameMatches,
   shouldOpenPopoverDown,
 } from './ComposerControls';
+import { ThemeContext } from './theme';
 
 afterEach(cleanup);
 
@@ -1624,6 +1625,67 @@ describe('ComposerControls', () => {
     expect(
       screen.getByRole('button', { name: 'Session controls' }),
     ).toBeDefined();
+  });
+
+  it('offers the three-way theme row and reports selections', async () => {
+    const user = userEvent.setup();
+    const onPreferenceChange = vi.fn();
+    render(
+      <ThemeContext.Provider
+        value={{
+          preference: 'auto',
+          resolved: 'light',
+          onPreferenceChange,
+        }}
+      >
+        <ComposerControls
+          settings={settings}
+          context={context}
+          modelCatalog={{
+            status: 'unsupported',
+            items: [],
+            message: 'Catalog unsupported on this runtime.',
+          }}
+          disabled={false}
+          settingUpdatesDisabled={false}
+          onContextRefresh={vi.fn()}
+          onCompact={vi.fn()}
+          onSettingUpdate={vi.fn()}
+          skills={{ status: 'idle', items: [] }}
+          onSkillsRefresh={vi.fn()}
+          onSkillToggle={vi.fn()}
+          mcp={{ status: 'idle', items: [] }}
+          plugins={{ status: 'idle', items: [] }}
+          onMcpRefresh={vi.fn()}
+          onMcpServerToggle={vi.fn()}
+          mcpAuth={null}
+          onMcpServerAuthenticate={vi.fn()}
+          onPluginsRefresh={vi.fn()}
+        />
+      </ThemeContext.Provider>,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Session controls' }),
+    );
+    const themeButton = screen.getByText('Theme').closest('button')!;
+    expect(themeButton.textContent).toContain('Auto');
+    await user.click(themeButton);
+    const options = screen.getByRole('radiogroup', {
+      name: 'Theme options',
+    });
+    expect(
+      Array.from(options.querySelectorAll('[role="radio"]')).map(
+        (option) => option.textContent,
+      ),
+    ).toEqual(['Auto', 'Light', 'Dark']);
+
+    await user.click(screen.getByRole('radio', { name: 'Dark' }));
+    expect(onPreferenceChange).toHaveBeenCalledExactlyOnceWith('dark');
+    // Re-selecting the current preference is a no-op.
+    await user.click(themeButton);
+    await user.click(screen.getByRole('radio', { name: 'Auto' }));
+    expect(onPreferenceChange).toHaveBeenCalledOnce();
   });
 
   it('reports a Context error once', async () => {

@@ -15,6 +15,7 @@ import {
   renderMermaid,
   type MermaidOutcome,
 } from './mermaidRenderer';
+import { useTheme } from './theme';
 
 /**
  * Delay between the last observed source change after a live turn and
@@ -67,6 +68,8 @@ export function MermaidBlockView({
   const [outcome, setOutcome] = useState<MermaidOutcome | null>(null);
   const [showSource, setShowSource] = useState(false);
   const [enlarged, setEnlarged] = useState(false);
+  // A theme switch re-renders the diagram with the matching palette.
+  const { resolved: theme } = useTheme();
 
   useEffect(() => {
     if (running) {
@@ -85,7 +88,7 @@ export function MermaidBlockView({
       return undefined;
     }
     let cancelled = false;
-    void renderMermaid(settled).then((result) => {
+    void renderMermaid(settled, theme).then((result) => {
       if (!cancelled) {
         setOutcome(result);
       }
@@ -93,7 +96,7 @@ export function MermaidBlockView({
     return () => {
       cancelled = true;
     };
-  }, [settled]);
+  }, [settled, theme]);
 
   const sourceBlock = (
     <Pre>
