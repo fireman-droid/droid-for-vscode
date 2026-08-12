@@ -25,7 +25,7 @@ import type {
   SessionCatalogResult,
 } from '../runtime/SessionCatalog';
 import {
-  SESSION_HISTORY_UNAVAILABLE_MESSAGE,
+  unavailableSessionHistory,
   type SessionHistoryLoader,
 } from '../runtime/history/SessionHistory';
 import { DaemonAvailabilityError } from '../runtime/daemon/daemonConnection';
@@ -294,11 +294,7 @@ describe('ChatController', () => {
       yield successfulTurn();
     });
     const history: SessionHistoryLoader = {
-      loadHistory: vi.fn(async () => ({
-        status: 'unavailable' as const,
-        reason: 'history-failed' as const,
-        message: SESSION_HISTORY_UNAVAILABLE_MESSAGE,
-      })),
+      loadHistory: vi.fn(async () => unavailableSessionHistory()),
       loadSubagentSummaries: vi.fn(async () => [
         {
           type: 'explore',
@@ -400,11 +396,7 @@ describe('ChatController', () => {
       yield successfulTurn();
     });
     const history: SessionHistoryLoader = {
-      loadHistory: vi.fn(async () => ({
-        status: 'unavailable' as const,
-        reason: 'history-failed' as const,
-        message: SESSION_HISTORY_UNAVAILABLE_MESSAGE,
-      })),
+      loadHistory: vi.fn(async () => unavailableSessionHistory()),
       loadSubagentSummaries: vi.fn(async () => []),
     };
     const { controller, messages } = createController(
