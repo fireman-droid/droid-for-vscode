@@ -934,24 +934,25 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 最后核对结果：
 
 - Cursor 已安装：`droidvisx.droidvisx@0.0.0`
-- `dist/droidvisx.vsix` 大小：634,136 字节
-- VSIX 修改时间：2026-08-12T11:41（本地）
+- `dist/droidvisx.vsix` 大小：634,337 字节
+- VSIX 修改时间：2026-08-12T12:00（本地）
 - VSIX SHA-256：
-  `8ECDD6D0561CF3F38C79C9A78678D021BB6A0C9F20D9F87426751F114A7BFAE9`
-- VSIX 在此前功能之上追加 2026-08-12 的 webview 修复轮（滚动跟随、
-  sticky 推出、编辑卡片、user-select、compact 批处理）与转录路径
-  点击跳转切片（`workspace.openPath`）
-- 打包链 `package:vsix` 内含 typecheck + 全量 vitest（1045 通过）+
-  Production Build
+  `FCC70EB2CF5D6812FCFFE8655EDA175CFD82D9A37FFE3D352445FF648913B416`
+- VSIX 在此前功能之上追加 2026-08-12 中午的验收后续三项修复批次
+  （编辑卡随新消息自动关闭、行内代码样式调轻、编辑态吸顶豁免
+  推挤）
+- 本轮门禁按仓库惯例分步执行：typecheck + 全量 vitest（44 files /
+  1050 通过，基线 1045 +5）+ Production Build + vsce package +
+  cursor --install-extension
 - 最终 VSIX 已成功安装到 Cursor
 - 已安装的 Extension Bundle、Webview JS 和 CSS 哈希均与本次 Build
   完全一致
 - Extension Bundle SHA-256：
-  `5CFC52E6CE1AE5CC0853F035918C13834B3DE74FF4D5A83CEFA8EF0CBE26A419`
+  `4EE802BB4823EDD0004E4D3EFAA72BAFAB938A29106F19CA4C9971AAE0A6B089`
 - Webview JS SHA-256：
-  `EF2CEDE32BED60C068518FAAEA85562AF8C7378BD65AA43DE8FAA976BEC24A7A`
+  `C22761F9BC4E82F700BED187EBF3917CA4FE35959FA9E6F3BBAEFE96A3921A24`
 - Webview CSS SHA-256：
-  `72D8781BFF9670E0718140EFCDC9CEF3D31ABE749E1D7C46A15E3A5BF5FC0D3E`
+  `C17EFB800FCE96D5B7EEBE84BF57597E4536C549DAF932163D7F2CD4DFAC73A5`
 - 用户尚未在真实 Cursor 中完成最终可见验收
 - 由于版本号仍为 `0.0.0`，现有 Cursor 窗口需要 Reload Window 才会换到
   新 Bundle
@@ -1105,11 +1106,63 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension dist/droidvisx.vsix --force`
   （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
   需 Reload Window（或完整重启）后加载新 Bundle
+- 2026-08-12 中午打包并安装含 **验收后续三项修复批次（编辑卡随
+  新消息自动关闭 + 行内代码样式调轻 + 编辑态吸顶豁免推挤）** 的
+  构建：`dist/droidvisx.vsix` 634,337 字节（9 files, 619.47 KB），
+  SHA-256
+  `FCC70EB2CF5D6812FCFFE8655EDA175CFD82D9A37FFE3D352445FF648913B416`，
+  `npx vsce package --no-dependencies -o dist/droidvisx.vsix` 与
+  `cursor --install-extension dist/droidvisx.vsix --force`
+  （successfully installed）均成功；版本号仍为 `0.0.0`，现有窗口
+  需 Reload Window（或完整重启）后加载新 Bundle
 
 ## 验证状态
 
 最近记录的验证结果：
 
+- 验收后续三项修复批次（2026-08-12 中午，用户验收报告的编辑卡不
+  自动关闭、灰色方框观感、吸顶块被顶出屏幕三项，一批修复）：
+  ① **编辑卡不自动关闭**根因：`editingMessageId` 编辑态只在
+  Cancel/Escape/切换编辑目标/提交 resend 时清除，底部 Composer
+  发送新消息（`handleSend`）与它没有任何联动，上方打开的编辑卡
+  会一直保持展开。修复：App.tsx 每次 `turn.send` 成功提交时递增
+  `sendSignal` 计数器传入 DroidThread；thread 侧 effect 检测到
+  变化即丢弃编辑草稿、`editStage.cancel` 回收 host 编辑暂存区并
+  把卡退回静止态（发新消息是用户放弃该编辑的明确信号）。
+  App.test.tsx 新增回归：打开编辑卡 → Composer 发送 → 编辑
+  textarea 消失 + `editStage.cancel` 已发出 + 原文回显。
+  ② **灰色方框观感**根因：Droid 回复正文里成列的 `[0:73]` 式
+  行内代码引用标记（逐段一个 inline code）命中通用行内代码样式
+  `.dvx-markdown :not(pre) > code` 的 1px #ded6cc 边框 + 不透明
+  底色 + 纵向 padding；而 `--dvx-code`(#f7f5f1) 与表面色
+  (#f5f3ef) 几乎同色，"灰方框"观感几乎全部来自边框，成列堆叠
+  非常刺眼。修复（按原则只调通用样式、不做语义特判）：去边框、
+  换 6.5% 墨色半透明衬底、去纵向 padding（不再撑破行盒）、圆角
+  5→4px；forced-colors 下补 1px CanvasText 边框保留高对比辨识；
+  `.dvx-path-link` 点击 affordance（点状下划线）不受影响。
+  harness 同内容截图回归
+  （artifacts/verify-inline-code-markers.png）。
+  ③ **吸顶块被顶出屏幕**根因：`computeStickyLayout` 的推挤手交
+  （pushPx = 视口顶 + pinned 高度 − 下一条 top，cap 于自身
+  高度）是为 line-clamp 6 行的静止块设计的，推挤窗口只有几十
+  px；编辑态白卡高数百 px 时，下一条用户消息接近的整段滚动区间
+  里卡片被 `translateY` 上移到只剩底部控制行 + hint（用户附图
+  现场）。修复：编辑态豁免推挤——UserMessage 编辑时根元素挂
+  `.dvx-message-editing`，吸顶协调器把该索引作为新参
+  `editingIndex` 传入 `computeStickyLayout`：pinnedIndex ≥
+  editingIndex 时编辑卡独占 pinned 槽（pushPx 恒 0，完整吸顶
+  可见），其他到达视口顶的条目一律 covered 隐藏、不接管吸顶；
+  编辑器仍在 pinned 之下时行为完全不变。Thread.test.tsx 新增
+  4 个边界测试（手交中不推挤、深滚动仍由编辑卡持有 pin、编辑器
+  在下方时照常推挤、全部在视口下方时无 pin）。新增
+  artifacts/sticky-edit-harness.html（长会话 + 顶部消息编辑态 +
+  滚动）headless 截图验证：手交与深滚动场景编辑卡均完整吸顶
+  可见（artifacts/verify-sticky-edit-handoff.png /
+  verify-sticky-edit-deep-scroll.png）。
+  门禁：typecheck 通过；vitest 44 files / 1050 tests 全绿（基线
+  1045 +5）；build 成功；vsce package 9 files, 619.47 KB；
+  cursor --install-extension successfully installed。遗留：三项
+  以用户在真实 Cursor Reload 后的可见验收为准。
 - 滚动/吸顶/编辑卡/可选中/Compact 十项修复批次（2026-08-12 上午，
   用户 Reload 验收后连续报告的十个问题，一批修复）：
   ① **空转录可滚**根因：`.dvx-reading-column` 的

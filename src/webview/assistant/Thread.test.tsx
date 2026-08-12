@@ -362,6 +362,43 @@ describe('computeStickyLayout', () => {
     const layout = computeStickyLayout([0, 500], [60, 40], 0);
     expect(layout.pushPx).toBe(0);
   });
+
+  it('never pushes an open edit card, even mid hand-off', () => {
+    // A 400px edit card is pinned and the next message has intruded
+    // deep into it; without the exemption pushPx would be 355 and
+    // only the card footer would remain visible.
+    const layout = computeStickyLayout([0, 45], [400, 40], 0, 0);
+    expect(layout.pinnedIndex).toBe(0);
+    expect(layout.pushPx).toBe(0);
+  });
+
+  it('keeps the edit card pinned instead of handing off to later messages', () => {
+    // Scrolled far past the editor: the second message would
+    // naturally own the pin, but the editor keeps the slot and the
+    // stuck later message hides behind it.
+    const layout = computeStickyLayout(
+      [-500, -30, 200],
+      [400, 40, 40],
+      0,
+      0,
+    );
+    expect(layout.pinnedIndex).toBe(0);
+    expect(layout.pushPx).toBe(0);
+    expect(layout.covered).toEqual([false, true, false]);
+  });
+
+  it('keeps normal push behavior while the editor sits below the pin', () => {
+    const layout = computeStickyLayout([0, 45], [60, 400], 0, 1);
+    expect(layout.pinnedIndex).toBe(0);
+    expect(layout.pushPx).toBe(15);
+  });
+
+  it('pins nothing while everything, editor included, is below the top', () => {
+    const layout = computeStickyLayout([120, 400], [60, 400], 0, 1);
+    expect(layout.pinnedIndex).toBe(-1);
+    expect(layout.pushPx).toBe(0);
+    expect(layout.covered).toEqual([false, false]);
+  });
 });
 
 describe('applyFollowScroll', () => {

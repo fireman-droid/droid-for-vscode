@@ -67,6 +67,10 @@ export function App(): React.JSX.Element {
     text: initialDraft,
   }));
   const sendPendingRef = useRef(false);
+  // Incremented on every committed Composer send; the thread closes
+  // any open user-message edit card when it changes (a new message is
+  // an explicit signal the user abandoned that edit).
+  const [sendSignal, setSendSignal] = useState(0);
 
   useEffect(() => {
     // Host messages are coalesced into one dispatch batch per animation
@@ -301,6 +305,7 @@ export function App(): React.JSX.Element {
         turnId: nextTurnId,
         text,
       });
+      setSendSignal((value) => value + 1);
       setDraft('');
       persistDraft(vscode, '');
     },
@@ -973,6 +978,7 @@ export function App(): React.JSX.Element {
           onRequestRewindInfo={handleRequestRewindInfo}
           editStage={state.editAttachments}
           editResendRejection={state.editResendRejection}
+          sendSignal={sendSignal}
           onEditStageBegin={handleEditStageBegin}
           onEditStageCancel={handleEditStageCancel}
           onEditAttachFiles={handleEditAttachFiles}

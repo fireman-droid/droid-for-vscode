@@ -529,6 +529,61 @@ describe('assistant-ui App bridge commands', () => {
     ).toEqual([]);
   });
 
+  it('closes an abandoned edit card when a new Composer message is sent', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+    await waitFor(() => expect(input.value).toBe('Restored draft'));
+    host({
+      ...snapshot(0),
+      transcript: [
+        {
+          id: 'user-1',
+          kind: 'user',
+          text: 'Earlier question',
+          messageId: 'sdk-user-1',
+        },
+        {
+          id: 'assistant-1',
+          kind: 'assistant',
+          turnId: 'turn-1',
+          text: 'Earlier answer',
+        },
+      ],
+    });
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Edit message and resend from here',
+      }),
+    );
+    expect(
+      screen.getByLabelText('Edit message and resend'),
+    ).toBeDefined();
+
+    fireEvent.change(input, { target: { value: 'A brand new question' } });
+    await waitFor(() => {
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+      expect(
+        posted.some((message) => message.type === 'turn.send'),
+      ).toBe(true);
+    });
+
+    // Sending a new message abandons the open edit: the card returns
+    // to its resting presentation and the host staging area is
+    // discarded with the draft.
+    await waitFor(() =>
+      expect(
+        screen.queryByLabelText('Edit message and resend'),
+      ).toBeNull(),
+    );
+    expect(posted).toContainEqual({
+      type: 'editStage.cancel',
+      sessionId: 'session-a',
+    });
+    expect(screen.getByText('Earlier question')).toBeDefined();
+  });
+
   it('shows slash and mention popup states instead of staying silent', async () => {
     render(<App />);
     const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');

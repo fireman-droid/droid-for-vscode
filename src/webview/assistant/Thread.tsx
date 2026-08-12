@@ -213,6 +213,12 @@ interface DroidThreadProps {
   readonly onRequestRewindInfo: (messageId: string) => void;
   readonly editStage: EditStageState | null;
   readonly editResendRejection: EditResendRejection | null;
+  /**
+   * Committed-Composer-send counter. Each change closes any open
+   * user-message edit card: sending a new message is an explicit
+   * signal the user abandoned that edit, so its draft is discarded.
+   */
+  readonly sendSignal: number;
   readonly onEditStageBegin: (messageId: string) => void;
   readonly onEditStageCancel: () => void;
   readonly onEditAttachFiles: () => void;
@@ -281,6 +287,7 @@ export const DroidThread = memo(function DroidThread({
   onRequestRewindInfo,
   editStage,
   editResendRejection,
+  sendSignal,
   onEditStageBegin,
   onEditStageCancel,
   onEditAttachFiles,
@@ -323,6 +330,22 @@ export const DroidThread = memo(function DroidThread({
   const reopenEditing = (messageId: string): void => {
     setEditingMessageId(messageId);
   };
+  // A committed Composer send closes any edit card left open above it,
+  // discarding the abandoned edit draft and its host staging area.
+  const lastSendSignalRef = useRef(sendSignal);
+  useEffect(() => {
+    if (lastSendSignalRef.current === sendSignal) {
+      return;
+    }
+    lastSendSignalRef.current = sendSignal;
+    if (editingMessageId !== null) {
+      onEditStageCancel();
+      setEditingMessageId(null);
+    }
+    // Runs only when a send commits; the guards above make the extra
+    // dependencies inert.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sendSignal]);
   // Cursor-style pinned questions: every user message is CSS-sticky at
   // the viewport top; this coordinator marks the last stuck one as
   // `data-pinned` (opaque backdrop, separator), pushes it out when the
@@ -352,10 +375,16 @@ export const DroidThread = memo(function DroidThread({
       const rects = messages.map((element) =>
         element.getBoundingClientRect(),
       );
+      // An open edit card is exempt from the push-out hand-off (see
+      // computeStickyLayout): it stays fully visible while pinned.
+      const editingIndex = messages.findIndex((element) =>
+        element.classList.contains('dvx-message-editing'),
+      );
       const layout = computeStickyLayout(
         rects.map((rect) => rect.top),
         rects.map((rect) => rect.height),
         viewportTop,
+        editingIndex,
       );
       messages.forEach((element, index) => {
         toggleDataAttribute(
@@ -763,7 +792,9 @@ function UserMessage({
   };
   return (
     <MessagePrimitive.Root
-      className="dvx-message dvx-message-user"
+      className={`dvx-message dvx-message-user${
+        editing ? ' dvx-message-editing' : ''
+      }`}
       aria-label="You"
     >
       <div className="dvx-user-message-content">
@@ -2965,13 +2996,32 @@ export interface StickyLayout {
  * user message rects. `tops`/`heights` come from live rects; only the
  * pinned element carries a translate, and its untransformed sticky
  * position is the viewport top, so the push math stays feedback-free.
+ *
+ * `editingIndex` (when not -1) marks a message whose edit card is
+ * open. An open editor owns the pinned slot outright: it is never
+ * pushed out by the next message and later messages never take over
+ * the top (they hide behind it as covered instead). Without this the
+ * push-out hand-off — designed for line-clamped resting blocks —
+ * translates the hundreds-of-pixels-tall edit card up until only its
+ * footer controls remain on screen.
  */
 export function computeStickyLayout(
   tops: readonly number[],
   heights: readonly number[],
   viewportTop: number,
+  editingIndex = -1,
 ): StickyLayout {
   const pinnedIndex = computePinnedUserIndex(tops, viewportTop);
+  if (editingIndex !== -1 && pinnedIndex >= editingIndex) {
+    return {
+      pinnedIndex: editingIndex,
+      covered: tops.map(
+        (top, index) =>
+          index !== editingIndex && top <= viewportTop + 1,
+      ),
+      pushPx: 0,
+    };
+  }
   const covered = tops.map(
     (top, index) => index < pinnedIndex && top <= viewportTop + 1,
   );

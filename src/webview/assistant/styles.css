@@ -118,11 +118,16 @@ html, body, #root {
   font-family: var(--vscode-editor-font-family, "SFMono-Regular"), Consolas, monospace;
 }
 
+/* Inline code reads as quietly emphasized text, not a boxed chip:
+   no border, a faint ink-tinted wash, and no vertical padding so the
+   span never grows past the line box. Droid replies often emit runs
+   of short inline-code markers (`[0:73]`-style citations) on adjacent
+   lines; bordered chips turned those into a jarring stack of gray
+   boxes. */
 .dvx-markdown :not(pre) > code {
-  padding: 0.1em 0.34em;
-  border: 1px solid #ded6cc;
-  border-radius: 5px;
-  background: var(--dvx-code);
+  padding: 0 0.3em;
+  border-radius: 4px;
+  background: rgb(69 54 37 / 6.5%);
   color: #3b342f;
   font-size: 0.92em;
 }
@@ -1647,6 +1652,12 @@ html, body, #root {
   }
 
   .dvx-tool-summary code {
+    border: 1px solid CanvasText;
+  }
+
+  /* The light theme marks inline code with a translucent wash, which
+     forced colors strips; restore a visible boundary here. */
+  .dvx-markdown :not(pre) > code {
     border: 1px solid CanvasText;
   }
 }
