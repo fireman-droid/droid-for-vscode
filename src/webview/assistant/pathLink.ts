@@ -69,6 +69,53 @@ export function detectPathLink(text: string): PathLink | null {
   };
 }
 
+/**
+ * Rebases a detected path link onto the workspace root, mirroring the
+ * host's inside-root rebase (ChatController.handleWorkspaceReadImage):
+ * relative paths pass through normalized, absolute paths must live
+ * under the root, everything else returns null so callers fail closed.
+ * Windows drive-letter roots compare case-insensitively (the volume is
+ * case-preserving, not case-sensitive); POSIX roots compare exactly.
+ */
+export function toWorkspaceRelativePath(
+  root: string,
+  path: string,
+): string | null {
+  const normalizedRoot = normalizeSeparators(root).replace(/\/+$/, '');
+  const normalizedPath = normalizeSeparators(path);
+  if (normalizedRoot.length === 0 || normalizedPath.length === 0) {
+    return null;
+  }
+  if (!isAbsoluteNormalizedPath(normalizedPath)) {
+    return normalizedPath;
+  }
+  if (!isAbsoluteNormalizedPath(normalizedRoot)) {
+    return null;
+  }
+  const caseInsensitive = WINDOWS_ABSOLUTE_PREFIX.test(normalizedRoot);
+  const rootPrefix = caseInsensitive
+    ? normalizedRoot.toLowerCase()
+    : normalizedRoot;
+  const pathPrefix = caseInsensitive
+    ? normalizedPath.toLowerCase()
+    : normalizedPath;
+  if (!pathPrefix.startsWith(`${rootPrefix}/`)) {
+    return null;
+  }
+  const remainder = normalizedPath
+    .slice(normalizedRoot.length + 1)
+    .replace(/^\/+/, '');
+  return remainder.length === 0 ? null : remainder;
+}
+
+function normalizeSeparators(value: string): string {
+  return value.replaceAll('\\', '/');
+}
+
+function isAbsoluteNormalizedPath(value: string): boolean {
+  return value.startsWith('/') || WINDOWS_ABSOLUTE_PREFIX.test(value);
+}
+
 function isValidPosition(value: number): boolean {
   return (
     Number.isSafeInteger(value) &&

@@ -60,6 +60,7 @@ import {
   type GitCommitFlowContextValue,
 } from './GitCommitPanel';
 import { findLatestChangesContext } from './gitCommitDraft';
+import { selectTaskPlanPin } from './planPin';
 import './styles.css';
 
 /**
@@ -572,6 +573,13 @@ export function App(): React.JSX.Element {
   );
   const changesContext = useMemo(
     () => findLatestChangesContext(state.transcript),
+    [state.transcript],
+  );
+  // Current task plan for the pin above the Composer: a pure
+  // projection of the transcript's latest todowrite (no new bridge
+  // data); session switches reset it because the transcript resets.
+  const taskPlanPin = useMemo(
+    () => selectTaskPlanPin(state.transcript),
     [state.transcript],
   );
   const gitFlow = useMemo<GitCommitFlowContextValue>(
@@ -1209,6 +1217,7 @@ export function App(): React.JSX.Element {
           onOpenFileDiff={handleOpenFileDiff}
           onPreviewFile={handlePreviewFile}
           onPreviewInlineHtml={handlePreviewInlineHtml}
+          workspaceRoot={state.workspaceRoot}
           onOpenTerminalMirror={handleOpenTerminalMirror}
           editResendEnabled={
             connectionStatus === 'connected' &&
@@ -1216,6 +1225,7 @@ export function App(): React.JSX.Element {
             !hasInteraction
           }
           inlineInteraction={inlineInteraction}
+          taskPlanPin={taskPlanPin}
         />
       </div>
     </AssistantRuntimeProvider>

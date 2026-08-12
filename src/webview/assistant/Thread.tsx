@@ -68,9 +68,13 @@ import {
 import {
   DroidMarkdownText,
   InlineHtmlPreviewContext,
+  PathPreviewContext,
+  type PathPreviewWiring,
 } from "./MarkdownText";
 import { ChangesCommitEntry } from "./GitCommitPanel";
 import { MessageTimestamp } from "./MessageTimestamp";
+import { parsePlanSteps, type TaskPlanPinState } from "./planPin";
+import { TaskPlanPin } from "./TaskPlanPin";
 import { TranscriptImage } from "./TranscriptImage";
 import { getImagePreview, rememberImagePreview } from "./imagePreviewCache";
 
@@ -238,6 +242,22 @@ interface DroidThreadProps {
   readonly navSignal?: ComposerNavRequest | null;
   /** Opens the panel behind one `/` popup navigation row. */
   readonly onSlashNavigate?: (target: SlashNavTarget) => void;
+  /**
+   * Host-advertised `/btw` side-chat capability (process runtime
+   * only); false keeps the popup row unrendered (fail closed).
+   */
+  readonly btwAvailable?: boolean;
+  /**
+   * Opens the side-chat card from the `/btw` popup row. Direct (no
+   * composer send) so it stays usable while a main turn runs.
+   */
+  readonly onBtwOpen?: () => void;
+  /**
+   * The open side-chat card, anchored above the composer like the
+   * mention/command popups; null while closed. Built in App so the
+   * thread stays free of side-chat state.
+   */
+  readonly sideChat?: ReactNode;
   readonly onAttachPath: (path: string) => void;
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
@@ -287,10 +307,20 @@ interface DroidThreadProps {
   readonly onPreviewFile: (path: string) => void;
   /** Renders an assistant HTML code block in the sandbox panel. */
   readonly onPreviewInlineHtml: (html: string) => void;
+  /**
+   * Absolute workspace folder from the host snapshot; rebases absolute
+   * transcript path links for the Preview entry. Null hides the entry.
+   */
+  readonly workspaceRoot: string | null;
   /** Reveals the read-only terminal mirror of execute output. */
   readonly onOpenTerminalMirror: () => void;
   readonly editResendEnabled: boolean;
   readonly inlineInteraction?: ReactNode;
+  /**
+   * The session's current task plan, pinned above the Composer while
+   * it has open steps (projected in App from transcript todowrites).
+   */
+  readonly taskPlanPin: TaskPlanPinState | null;
 }
 
 export const DroidThread = memo(function DroidThread({
@@ -338,6 +368,9 @@ export const DroidThread = memo(function DroidThread({
   onCommandsRefresh,
   navSignal = null,
   onSlashNavigate,
+  btwAvailable = false,
+  onBtwOpen,
+  sideChat = null,
   onAttachPath,
   onAttachFiles,
   onAttachEditor,
@@ -368,9 +401,11 @@ export const DroidThread = memo(function DroidThread({
   onOpenFileDiff,
   onPreviewFile,
   onPreviewInlineHtml,
+  workspaceRoot,
   onOpenTerminalMirror,
   editResendEnabled,
   inlineInteraction,
+  taskPlanPin,
 }: DroidThreadProps): React.JSX.Element {
   // Only one message may be in edit mode at a time. Opening a new
   // target cancels the previous edit staging area on the host first.
@@ -621,6 +656,10 @@ export const DroidThread = memo(function DroidThread({
       onEditAttachmentRemove,
     ],
   );
+  const pathPreviewWiring = useMemo<PathPreviewWiring>(
+    () => ({ workspaceRoot, previewFile: onPreviewFile }),
+    [workspaceRoot, onPreviewFile],
+  );
   return (
     <ThreadPrimitive.Root
       className={`dvx-thread${interactionPending ? " dvx-thread-pending" : ""}`}
@@ -639,6 +678,7 @@ export const DroidThread = memo(function DroidThread({
       >
         <FileDiffContext.Provider value={onOpenFileDiff}>
           <PreviewContext.Provider value={onPreviewFile}>
+          <PathPreviewContext.Provider value={pathPreviewWiring}>
           <InlineHtmlPreviewContext.Provider value={onPreviewInlineHtml}>
           <TerminalMirrorContext.Provider value={onOpenTerminalMirror}>
           <RegenerateContext.Provider value={onRegenerate}>
@@ -710,6 +750,7 @@ export const DroidThread = memo(function DroidThread({
           </RegenerateContext.Provider>
           </TerminalMirrorContext.Provider>
           </InlineHtmlPreviewContext.Provider>
+          </PathPreviewContext.Provider>
           </PreviewContext.Provider>
         </FileDiffContext.Provider>
         <ThreadPrimitive.ViewportFooter className="dvx-thread-footer">
@@ -729,6 +770,11 @@ export const DroidThread = memo(function DroidThread({
               <ScrollToBottomIcon />
             </button>
           </div>
+          {/* In normal flow at the footer's top: the absolute dock
+              above (bottom: 100%) rides the footer's top edge, so the
+              arrow always floats clear of the pin however tall the
+              expanded checklist grows. */}
+          <TaskPlanPin pin={taskPlanPin} />
           <Composer
             statusMessage={statusMessage}
             showRetry={showRetry}
@@ -766,6 +812,9 @@ export const DroidThread = memo(function DroidThread({
             onCommandsRefresh={onCommandsRefresh}
             navSignal={navSignal}
             onSlashNavigate={onSlashNavigate}
+            btwAvailable={btwAvailable}
+            onBtwOpen={onBtwOpen}
+            sideChat={sideChat}
             onAttachPath={onAttachPath}
             onAttachFiles={onAttachFiles}
             onAttachEditor={onAttachEditor}
@@ -1677,6 +1726,9 @@ function Composer({
   onCommandsRefresh,
   navSignal = null,
   onSlashNavigate,
+  btwAvailable = false,
+  onBtwOpen,
+  sideChat = null,
   onAttachPath,
   onAttachFiles,
   onAttachEditor,
@@ -1726,6 +1778,12 @@ function Composer({
   readonly onCommandsRefresh: () => void;
   readonly navSignal?: ComposerNavRequest | null;
   readonly onSlashNavigate?: (target: SlashNavTarget) => void;
+  /** Renders the `/btw` popup row when the host supports side chat. */
+  readonly btwAvailable?: boolean;
+  /** Opens the side-chat card from the `/btw` popup row. */
+  readonly onBtwOpen?: () => void;
+  /** The open side-chat card, anchored above the composer. */
+  readonly sideChat?: ReactNode;
   readonly onAttachPath: (path: string) => void;
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
@@ -1914,9 +1972,14 @@ function Composer({
 
   const commandMatches =
     slash !== null ? filterSlashCommands(commands, slash.query) : [];
+  // `/btw` joins the Built-in group only while the host advertises
+  // side-chat support (process runtime; fail closed in daemon mode).
+  const builtInCommands = btwAvailable
+    ? [...BUILT_IN_COMMANDS, BTW_COMMAND]
+    : BUILT_IN_COMMANDS;
   const builtInMatches =
     slash !== null
-      ? BUILT_IN_COMMANDS.filter((command) =>
+      ? builtInCommands.filter((command) =>
           command.name.startsWith(slash.query.toLocaleLowerCase()),
         )
       : [];
@@ -2050,11 +2113,30 @@ function Composer({
     onSlashNavigate?.(target);
   };
 
+  /**
+   * Clears the `/` token and opens the side-chat card. Direct like
+   * the navigation rows (not a text completion), so the entry works
+   * while a main turn is running and the composer cannot send.
+   */
+  const selectBtwOpen = (): void => {
+    if (slash === null) {
+      return;
+    }
+    const next = draftRef.current.slice(slash.end);
+    draftRef.current = next;
+    aui.thread.composer().setText(next);
+    onDraftChange(next);
+    closeSlash();
+    onBtwOpen?.();
+  };
+
   const selectSlashEntry = (entry: SlashEntry): void => {
     if (entry.kind === "skill") {
       selectSkillGuide(entry.name);
     } else if (entry.kind === "nav") {
       selectSlashNav(entry.name);
+    } else if (entry.kind === "builtin" && entry.name === "btw") {
+      selectBtwOpen();
     } else {
       selectCommand(
         entry.kind === "command" ? entry.command.name : entry.name,
@@ -2170,6 +2252,9 @@ function Composer({
             <label className="dvx-visually-hidden" htmlFor="dvx-prompt">
               Message Droid
             </label>
+            {/* Before the command popup in the DOM so an open `/`
+                popup paints above the side-chat card while typing. */}
+            {sideChat}
             {slashVisible ? (
               <ComposerPopup
                 className="dvx-mention-popup dvx-command-popup"
@@ -2194,7 +2279,7 @@ function Composer({
                     onMouseDown={(event) => {
                       // Keep focus in the textarea while selecting.
                       event.preventDefault();
-                      selectCommand(command.name);
+                      selectSlashEntry({ kind: "builtin", ...command });
                     }}
                     onMouseEnter={() => setSlashIndex(index)}
                   >
@@ -2658,6 +2743,16 @@ export const BUILT_IN_COMMANDS = [
   { name: "new", description: "Start a new session" },
 ] as const;
 
+/**
+ * `/btw` completes to `/btw ` like other built-ins; App.tsx routes
+ * the sent text onto the side-chat card instead of the model. Only
+ * offered while the host advertises the capability.
+ */
+const BTW_COMMAND = {
+  name: "btw",
+  description: "Ask a side question without touching this chat",
+} as const;
+
 /** Most enabled skills offered in the `/` popup Skills section. */
 const MAX_SLASH_SKILL_MATCHES = 5;
 
@@ -3084,42 +3179,7 @@ function readMetadataSubagent(
   };
 }
 
-interface PlanStep {
-  readonly status: "pending" | "in_progress" | "completed";
-  readonly text: string;
-}
-
-/**
- * Parses the free-form todo text a task-plan tool wrote. The SDK sends
- * it as a numbered list where each line looks like
- * "1. [in_progress] Do the thing".
- */
-function parsePlanSteps(detail: string): readonly PlanStep[] {
-  const steps: PlanStep[] = [];
-  for (const rawLine of detail.split("\n")) {
-    const line = rawLine.trim();
-    if (line.length === 0) {
-      continue;
-    }
-    const match = /^(?:\d+[.)]\s*)?\[([^\]]*)\]\s*(.*)$/u.exec(line);
-    const label = match?.[1]?.toLowerCase().replace(/[\s_-]/gu, "") ?? "";
-    const text = (match?.[2] ?? line.replace(/^\d+[.)]\s*/u, "")).trim();
-    if (text.length === 0) {
-      continue;
-    }
-    const status: PlanStep["status"] =
-      label.includes("progress") || label === "active" || label === "doing"
-        ? "in_progress"
-        : label.includes("complete") ||
-            label.includes("done") ||
-            label === "x" ||
-            label === "checked"
-          ? "completed"
-          : "pending";
-    steps.push({ status, text });
-  }
-  return steps;
-}
+// Plan parsing is shared with the pinned task plan; see planPin.ts.
 
 /**
  * Terminal-style tail of a running execute command (tier1 §1). Pinned

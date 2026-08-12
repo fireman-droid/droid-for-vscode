@@ -21,9 +21,17 @@ import {
   MAX_IMAGE_PATH_LENGTH,
   MAX_INLINE_PREVIEW_HTML_LENGTH,
 } from '../../shared/bridgeMessages';
+import {
+  isPreviewableFilePath,
+  isSafeWorkspaceRelativePath,
+} from '../../shared/validateMessage';
 import { highlightCode } from './highlightCode';
 import { MermaidBlock } from './MermaidBlock';
-import { detectPathLink, type PathLink } from './pathLink';
+import {
+  detectPathLink,
+  toWorkspaceRelativePath,
+  type PathLink,
+} from './pathLink';
 import type { LocalImageEntry } from './store';
 import { TranscriptImage } from './TranscriptImage';
 
@@ -52,6 +60,49 @@ const InsidePreContext = createContext(false);
 export type InlineHtmlPreviewHandler = (html: string) => void;
 export const InlineHtmlPreviewContext =
   createContext<InlineHtmlPreviewHandler | null>(null);
+
+/**
+ * Wiring for the Preview entry next to transcript path links: the
+ * workspace root to rebase absolute paths against, and the handler
+ * that posts the existing `file.preview` message with the resulting
+ * workspace-relative path. The app provides it once at the root; a
+ * null default (or a null root) keeps standalone renders and rootless
+ * workspaces without the entry.
+ */
+export interface PathPreviewWiring {
+  readonly workspaceRoot: string | null;
+  readonly previewFile: (relativePath: string) => void;
+}
+export const PathPreviewContext =
+  createContext<PathPreviewWiring | null>(null);
+
+/**
+ * Workspace-relative path the Preview entry would open, or null when
+ * the link must not offer one: no wiring, no workspace root, a path
+ * outside the root (security boundary), or a non-previewable
+ * extension. Reuses the same shared predicates the bridge parser and
+ * the host enforce on `file.preview`.
+ */
+export function previewablePathOf(
+  wiring: PathPreviewWiring | null,
+  link: PathLink,
+): string | null {
+  if (wiring === null || wiring.workspaceRoot === null) {
+    return null;
+  }
+  const relativePath = toWorkspaceRelativePath(
+    wiring.workspaceRoot,
+    link.path,
+  );
+  if (
+    relativePath === null ||
+    !isSafeWorkspaceRelativePath(relativePath) ||
+    !isPreviewableFilePath(relativePath)
+  ) {
+    return null;
+  }
+  return relativePath;
+}
 
 /**
  * Loose heuristic for "this fence is a previewable HTML document":
@@ -407,6 +458,7 @@ function HighlightedCode({
 }: HTMLAttributes<HTMLElement>): React.JSX.Element {
   const insidePre = useContext(InsidePreContext);
   const openPath = useContext(OpenPathContext);
+  const pathPreview = useContext(PathPreviewContext);
   const language = readCodeLanguage(className);
   const text = useMemo(
     () => (language === null ? '' : readNodeText(children)),
@@ -425,17 +477,30 @@ function HighlightedCode({
         ? null
         : detectPathLink(readNodeText(children));
     if (pathLink !== null && openPath !== null) {
+      const previewPath = previewablePathOf(pathPreview, pathLink);
       return (
-        <code className={className} {...props}>
-          <button
-            type="button"
-            className="dvx-path-link"
-            title={`Open ${pathLink.path}`}
-            onClick={() => openPath(pathLink)}
-          >
-            {children}
-          </button>
-        </code>
+        <>
+          <code className={className} {...props}>
+            <button
+              type="button"
+              className="dvx-path-link"
+              title={`Open ${pathLink.path}`}
+              onClick={() => openPath(pathLink)}
+            >
+              {children}
+            </button>
+          </code>
+          {previewPath !== null && pathPreview !== null ? (
+            <button
+              type="button"
+              className="dvx-preview-chip dvx-path-preview-chip"
+              title={`Preview ${previewPath} in a sandboxed panel`}
+              onClick={() => pathPreview.previewFile(previewPath)}
+            >
+              Preview
+            </button>
+          ) : null}
+        </>
       );
     }
     return (

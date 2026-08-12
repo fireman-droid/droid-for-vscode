@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { MAX_OPEN_PATH_LENGTH } from '../../shared/bridgeMessages';
-import { detectPathLink } from './pathLink';
+import { detectPathLink, toWorkspaceRelativePath } from './pathLink';
 
 describe('detectPathLink', () => {
   it.each([
@@ -79,5 +79,68 @@ describe('detectPathLink', () => {
     // 8-digit suffixes exceed the position cap, so the text only
     // counts as a path when the whole string still looks like one.
     expect(detectPathLink('src/app.ts:99999999')).toBeNull();
+  });
+});
+
+describe('toWorkspaceRelativePath', () => {
+  const ROOT = 'd:\\E\\前端好玩的东西\\droidvisx';
+
+  it('rebases an inside-root Windows absolute path', () => {
+    expect(
+      toWorkspaceRelativePath(
+        ROOT,
+        'D:\\E\\前端好玩的东西\\droidvisx\\artifacts\\烟花.html',
+      ),
+    ).toBe('artifacts/烟花.html');
+  });
+
+  it('compares Windows roots case-insensitively, keeping path casing', () => {
+    expect(
+      toWorkspaceRelativePath('D:/e/PROJ', 'd:\\E\\proj\\Demo\\Index.HTML'),
+    ).toBe('Demo/Index.HTML');
+  });
+
+  it('tolerates a trailing separator on the root', () => {
+    expect(toWorkspaceRelativePath('D:/proj/', 'D:/proj/a.html')).toBe(
+      'a.html',
+    );
+  });
+
+  it('passes relative paths through with normalized separators', () => {
+    expect(toWorkspaceRelativePath(ROOT, 'src\\demo\\a.html')).toBe(
+      'src/demo/a.html',
+    );
+  });
+
+  it('rejects paths outside the root', () => {
+    expect(
+      toWorkspaceRelativePath(ROOT, 'C:\\Users\\me\\烟花.html'),
+    ).toBeNull();
+    expect(toWorkspaceRelativePath(ROOT, 'D:\\E\\other\\a.html')).toBeNull();
+  });
+
+  it('rejects sibling folders sharing the root as a name prefix', () => {
+    expect(
+      toWorkspaceRelativePath('D:/proj', 'D:/project/a.html'),
+    ).toBeNull();
+  });
+
+  it('rejects the root itself and empty inputs', () => {
+    expect(toWorkspaceRelativePath(ROOT, ROOT)).toBeNull();
+    expect(toWorkspaceRelativePath('', 'a.html')).toBeNull();
+    expect(toWorkspaceRelativePath(ROOT, '')).toBeNull();
+  });
+
+  it('compares POSIX roots case-sensitively', () => {
+    expect(
+      toWorkspaceRelativePath('/home/me/proj', '/home/me/proj/a.html'),
+    ).toBe('a.html');
+    expect(
+      toWorkspaceRelativePath('/home/me/proj', '/home/ME/proj/a.html'),
+    ).toBeNull();
+  });
+
+  it('rejects absolute paths against a relative root', () => {
+    expect(toWorkspaceRelativePath('proj', 'D:/proj/a.html')).toBeNull();
   });
 });

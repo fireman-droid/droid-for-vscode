@@ -81,6 +81,27 @@ describe('assistantWebviewReducer', () => {
     expect(state.worktreeCreateAvailable).toBe(false);
   });
 
+  it('tracks the snapshot-borne workspace root', () => {
+    expect(initialAssistantWebviewState.workspaceRoot).toBeNull();
+
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: {
+        ...snapshot(0),
+        workspaceRoot: 'd:\\E\\前端好玩的东西\\droidvisx',
+      },
+    });
+    expect(state.workspaceRoot).toBe('d:\\E\\前端好玩的东西\\droidvisx');
+
+    // Absent root means no usable workspace, not "keep the previous
+    // value": a workspace switch may have removed it.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(1),
+    });
+    expect(state.workspaceRoot).toBeNull();
+  });
+
   it('keeps archived and content-search state across snapshots', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',

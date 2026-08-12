@@ -14,6 +14,8 @@ import {
   LocalImageContext,
   markdownUrlTransform,
   OpenPathContext,
+  PathPreviewContext,
+  previewablePathOf,
   SafeLink,
   safeMarkdownUrlTransform,
 } from './MarkdownText';
@@ -111,6 +113,105 @@ describe('inline code path links', () => {
   it('stays inert without a provided handler', () => {
     render(<DroidMarkdownContent text={`\`${PDF_PATH}\``} />);
     expect(screen.queryByRole('button')).toBeNull();
+  });
+});
+
+describe('path-link Preview entry', () => {
+  const ROOT = 'd:\\E\\前端好玩的东西\\droidvisx';
+  const HTML_PATH = 'D:\\E\\前端好玩的东西\\droidvisx\\artifacts\\烟花.html';
+
+  function renderWithWiring(
+    text: string,
+    wiring: Parameters<typeof previewablePathOf>[0],
+  ): { onOpenPath: ReturnType<typeof vi.fn> } {
+    const onOpenPath = vi.fn();
+    render(
+      <OpenPathContext.Provider value={onOpenPath}>
+        <PathPreviewContext.Provider value={wiring}>
+          <DroidMarkdownContent text={text} />
+        </PathPreviewContext.Provider>
+      </OpenPathContext.Provider>,
+    );
+    return { onOpenPath };
+  }
+
+  it('resolves previewable workspace paths and refuses the rest', () => {
+    const wiring = { workspaceRoot: ROOT, previewFile: vi.fn() };
+    expect(previewablePathOf(wiring, { path: HTML_PATH })).toBe(
+      'artifacts/烟花.html',
+    );
+    expect(previewablePathOf(wiring, { path: 'src/demo/a.htm' })).toBe(
+      'src/demo/a.htm',
+    );
+    // Outside the workspace, wrong extension, no wiring, no root.
+    expect(
+      previewablePathOf(wiring, { path: 'C:\\Users\\me\\烟花.html' }),
+    ).toBeNull();
+    expect(previewablePathOf(wiring, { path: `${ROOT}\\a.pdf` })).toBeNull();
+    expect(previewablePathOf(null, { path: HTML_PATH })).toBeNull();
+    expect(
+      previewablePathOf(
+        { workspaceRoot: null, previewFile: vi.fn() },
+        { path: HTML_PATH },
+      ),
+    ).toBeNull();
+  });
+
+  it('offers Preview next to an inside-root HTML path link', () => {
+    const previewFile = vi.fn();
+    renderWithWiring(`写好了：\`${HTML_PATH}\``, {
+      workspaceRoot: ROOT,
+      previewFile,
+    });
+    const chip = screen.getByRole('button', { name: 'Preview' });
+    expect(chip.className).toBe('dvx-preview-chip dvx-path-preview-chip');
+    fireEvent.click(chip);
+    expect(previewFile).toHaveBeenCalledExactlyOnceWith(
+      'artifacts/烟花.html',
+    );
+  });
+
+  it('keeps the path link itself opening the editor', () => {
+    const { onOpenPath } = renderWithWiring(`\`${HTML_PATH}\``, {
+      workspaceRoot: ROOT,
+      previewFile: vi.fn(),
+    });
+    fireEvent.click(screen.getByRole('button', { name: HTML_PATH }));
+    expect(onOpenPath).toHaveBeenCalledExactlyOnceWith({
+      path: HTML_PATH,
+    });
+  });
+
+  it('shows no Preview for out-of-workspace or non-HTML paths', () => {
+    renderWithWiring(
+      '看 `C:\\Users\\me\\烟花.html` 和 `D:\\E\\前端好玩的东西\\droidvisx\\a.pdf`。',
+      { workspaceRoot: ROOT, previewFile: vi.fn() },
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Preview' }),
+    ).toBeNull();
+    // The links themselves still render.
+    expect(screen.getAllByRole('button')).toHaveLength(2);
+  });
+
+  it('shows no Preview without a workspace root or wiring', () => {
+    renderWithWiring(`\`${HTML_PATH}\``, {
+      workspaceRoot: null,
+      previewFile: vi.fn(),
+    });
+    expect(
+      screen.queryByRole('button', { name: 'Preview' }),
+    ).toBeNull();
+    cleanup();
+    const onOpenPath = vi.fn();
+    render(
+      <OpenPathContext.Provider value={onOpenPath}>
+        <DroidMarkdownContent text={`\`${HTML_PATH}\``} />
+      </OpenPathContext.Provider>,
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Preview' }),
+    ).toBeNull();
   });
 });
 

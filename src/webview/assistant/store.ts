@@ -165,6 +165,12 @@ export interface AssistantWebviewState {
    */
   readonly worktreeCreateAvailable: boolean;
   /**
+   * Absolute workspace folder from the host snapshot; rebases
+   * absolute transcript paths (path-link Preview entry). Null until a
+   * snapshot carries it, which hides rebase-dependent affordances.
+   */
+  readonly workspaceRoot: string | null;
+  /**
    * Read-only mission identity of the active session (state and/or
    * decomposition role); null outside mission decompositions.
    */
@@ -226,6 +232,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   editAttachments: null,
   editResendRejection: null,
   worktreeCreateAvailable: false,
+  workspaceRoot: null,
   mission: null,
   tokenUsage: EMPTY_SESSION_TOKEN_USAGE,
   transcript: [],
@@ -365,6 +372,7 @@ export function assistantWebviewReducer(
             ? state.editResendRejection
             : null,
         worktreeCreateAvailable: event.worktreeCreateAvailable === true,
+        workspaceRoot: event.workspaceRoot ?? null,
         mission: event.mission ?? null,
         tokenUsage: event.tokenUsage ?? EMPTY_SESSION_TOKEN_USAGE,
         transcript: event.transcript,

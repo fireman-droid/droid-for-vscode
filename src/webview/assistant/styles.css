@@ -1651,6 +1651,14 @@ html, body, #root {
   }
 }
 
+/* The path-link Preview entry sits inline in message prose; nudge the
+   chip into the text line without changing its finish. */
+.dvx-path-preview-chip {
+  margin-left: 6px;
+  padding: 1px 7px;
+  vertical-align: 1px;
+}
+
 /* Git commit flow (slice A). The entry is a quiet text action at the
    changes-card tail — same subtle register as .dvx-changes-label, an
    accent only on hover. The expanded panel is a soft raised card in
@@ -5950,4 +5958,140 @@ body {
 .dvx-user-edit-input,
 .dvx-tool-command-inline {
   user-select: text;
+}
+
+/* ---- /btw Side chat card ----------------------------------------
+   Reuses the .dvx-mention-popup shell (anchor, border, radius,
+   shadow, root scrolling) above the composer; the header and input
+   row stay pinned while the Q&A entries scroll between them. */
+.dvx-btw-popup {
+  max-height: min(340px, 55vh);
+  padding: 0;
+}
+
+.dvx-btw-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px 6px 12px;
+  border-bottom: 1px solid var(--dvx-border, #e5e5e5);
+  background: #fff;
+  user-select: none;
+}
+
+.dvx-btw-title {
+  color: var(--dvx-muted, #737373);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.dvx-btw-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin: -2px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dvx-subtle, #a1a1a1);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--dvx-duration-instant, 50ms) ease,
+    color var(--dvx-duration-instant, 50ms) ease;
+}
+
+.dvx-btw-close:hover {
+  background: var(--dvx-soft, rgb(0 0 0 / 4%));
+  color: var(--dvx-ink, #262626);
+}
+
+.dvx-btw-entries {
+  padding: 10px 12px;
+}
+
+.dvx-btw-hint {
+  color: var(--dvx-muted, #737373);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dvx-btw-entry + .dvx-btw-entry {
+  margin-top: 10px;
+  border-top: 1px solid var(--dvx-border, #e5e5e5);
+  padding-top: 10px;
+}
+
+.dvx-btw-question {
+  margin-bottom: 4px;
+  color: var(--dvx-ink, #262626);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.dvx-btw-answer {
+  font-size: 12px;
+  user-select: text;
+}
+
+.dvx-btw-answer > :first-child {
+  margin-top: 0;
+}
+
+.dvx-btw-answer > :last-child {
+  margin-bottom: 0;
+}
+
+.dvx-btw-status {
+  color: var(--dvx-muted, #737373);
+  font-size: 12px;
+}
+
+.dvx-btw-entries > .dvx-btw-status {
+  margin-top: 6px;
+}
+
+.dvx-btw-error {
+  color: var(--dvx-danger, #c93a4a);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.dvx-btw-input-row {
+  position: sticky;
+  bottom: 0;
+  padding: 8px 12px 9px;
+  border-top: 1px solid var(--dvx-border, #e5e5e5);
+  background: #fff;
+}
+
+.dvx-btw-input {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dvx-ink, #262626);
+  font-size: 12px;
+  line-height: 1.5;
+  outline: none;
+  user-select: text;
+}
+
+.dvx-btw-input::placeholder {
+  color: var(--dvx-subtle, #a1a1a1);
+}
+
+.dvx-btw-input:disabled {
+  color: var(--dvx-muted, #737373);
 }
