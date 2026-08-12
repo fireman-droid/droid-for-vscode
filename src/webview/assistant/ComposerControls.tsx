@@ -1307,6 +1307,17 @@ function McpPanel({
   );
 }
 
+/**
+ * Deliberately NOT a `<form>`: this card lives inside the
+ * assistant-ui composer `<form>`, and Chromium never propagates a
+ * nested form's submit event past the outer form element, so the
+ * React root's delegated `onSubmit` (and its `preventDefault`) never
+ * ran — the browser performed a native GET submission and the
+ * navigation killed the whole webview. Submission is a plain button
+ * click plus Enter handling on the inputs instead, where the
+ * `preventDefault` also stops Enter from implicitly submitting the
+ * outer composer form.
+ */
 function McpAddServerForm({
   disabled,
   onSubmit,
@@ -1317,28 +1328,24 @@ function McpAddServerForm({
   const [name, setName] = useState('');
   const [serverType, setServerType] = useState<McpServerType>('stdio');
   const [target, setTarget] = useState('');
-  const [showValidation, setShowValidation] = useState(false);
   const trimmedName = name.trim();
   const trimmedTarget = target.trim();
   const targetValid =
     serverType === 'stdio'
       ? trimmedTarget.length > 0
       : /^https?:\/\//.test(trimmedTarget);
-  const validationMessage =
-    trimmedName.length === 0
-      ? 'Enter a server name.'
-      : !targetValid
-        ? serverType === 'stdio'
-          ? 'Enter the launch command.'
-          : 'Enter a URL starting with http:// or https://.'
-        : null;
-  const canSubmit = !disabled && validationMessage === null;
+  const canSubmit =
+    !disabled && trimmedName.length > 0 && targetValid;
+  // Empty fields just keep the button disabled (quiet); a filled but
+  // malformed URL earns the one hint that explains the disabled state.
+  const shapeHint =
+    serverType !== 'stdio' && trimmedTarget.length > 0 && !targetValid
+      ? 'Enter a URL starting with http:// or https://.'
+      : null;
   const submit = (): void => {
     if (!canSubmit) {
-      setShowValidation(true);
       return;
     }
-    setShowValidation(false);
     if (serverType === 'stdio') {
       const [command = '', ...args] = trimmedTarget.split(/\s+/);
       onSubmit({
@@ -1351,14 +1358,19 @@ function McpAddServerForm({
       onSubmit({ name: trimmedName, serverType, url: trimmedTarget });
     }
   };
+  const submitOnEnter = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+  ): void => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      submit();
+    }
+  };
   return (
-    <form
+    <div
       className="dvx-mcp-add-form"
+      role="form"
       aria-label="Add MCP server"
-      onSubmit={(event) => {
-        event.preventDefault();
-        submit();
-      }}
     >
       <input
         className="dvx-mcp-add-input"
@@ -1368,6 +1380,7 @@ function McpAddServerForm({
         value={name}
         maxLength={128}
         onChange={(event) => setName(event.currentTarget.value)}
+        onKeyDown={submitOnEnter}
       />
       <div className="dvx-mcp-add-types" role="radiogroup" aria-label="Server type">
         {MCP_SERVER_TYPES.map((type) => (
@@ -1395,20 +1408,22 @@ function McpAddServerForm({
         value={target}
         maxLength={1024}
         onChange={(event) => setTarget(event.currentTarget.value)}
+        onKeyDown={submitOnEnter}
       />
-      {showValidation && validationMessage !== null ? (
+      {shapeHint !== null ? (
         <p className="dvx-popover-message dvx-error-text" role="alert">
-          {validationMessage}
+          {shapeHint}
         </p>
       ) : null}
       <button
-        type="submit"
+        type="button"
         className="dvx-mcp-add-submit"
-        disabled={disabled}
+        disabled={!canSubmit}
+        onClick={submit}
       >
         Add server
       </button>
-    </form>
+    </div>
   );
 }
 

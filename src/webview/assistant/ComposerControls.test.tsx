@@ -1261,23 +1261,37 @@ describe('ComposerControls', () => {
     await user.click(screen.getByRole('button', { name: 'Add' }));
     const form = screen.getByRole('form', { name: 'Add MCP server' });
     expect(form).toBeDefined();
-    // Submitting an incomplete form explains what is missing instead
-    // of silently disabling the button.
-    await user.click(screen.getByRole('button', { name: 'Add server' }));
+    // Nested-form regression: this card sits inside the assistant-ui
+    // composer <form>; a real nested <form> makes Chromium drop the
+    // submit event before React sees it, and the resulting native
+    // submission navigates (and kills) the webview.
+    expect(form.tagName).not.toBe('FORM');
+    expect(form.querySelector('form')).toBeNull();
+    // An incomplete form keeps the submit button disabled; clicking
+    // it is inert and posts nothing.
+    const addServer = screen.getByRole('button', { name: 'Add server' });
+    expect(addServer.hasAttribute('disabled')).toBe(true);
+    await user.click(addServer);
     expect(onMcpServerAdd).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert').textContent).toContain(
-      'Enter a server name.',
-    );
     await user.type(
       screen.getByRole('textbox', { name: 'Server name' }),
       'remote',
     );
     await user.click(screen.getByRole('radio', { name: 'http' }));
-    await user.type(
-      screen.getByRole('textbox', { name: 'Server URL' }),
-      'https://example.com/mcp',
+    // A filled but malformed URL keeps the button disabled and shows
+    // the one quiet shape hint; Enter is ignored as well.
+    const urlField = screen.getByRole('textbox', { name: 'Server URL' });
+    await user.type(urlField, 'example.com/mcp');
+    expect(addServer.hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Enter a URL starting with http:// or https://.',
     );
-    await user.click(screen.getByRole('button', { name: 'Add server' }));
+    await user.type(urlField, '{Enter}');
+    expect(onMcpServerAdd).not.toHaveBeenCalled();
+    await user.clear(urlField);
+    await user.type(urlField, 'https://example.com/mcp');
+    expect(addServer.hasAttribute('disabled')).toBe(false);
+    await user.click(addServer);
     expect(onMcpServerAdd).toHaveBeenCalledWith({
       name: 'remote',
       serverType: 'http',
@@ -1291,6 +1305,60 @@ describe('ComposerControls', () => {
       screen.getByRole('button', { name: 'Confirm remove' }),
     );
     expect(onMcpServerRemove).toHaveBeenCalledWith('linear');
+  });
+
+  it('submits a stdio MCP server from Enter inside the add form', async () => {
+    const user = userEvent.setup();
+    const onMcpServerAdd = vi.fn();
+    render(
+      <ComposerControls
+        settings={settings}
+        context={context}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unsupported on this runtime.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'ready', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        onMcpServerAdd={onMcpServerAdd}
+        onMcpServerRemove={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Session controls' }));
+    await user.click(screen.getByText('MCP servers').closest('button')!);
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    const commandField = screen.getByRole('textbox', {
+      name: 'Launch command',
+    });
+    // Enter with empty fields is ignored (no message, nothing posted).
+    await user.type(commandField, '{Enter}');
+    expect(onMcpServerAdd).not.toHaveBeenCalled();
+    await user.type(
+      screen.getByRole('textbox', { name: 'Server name' }),
+      'local',
+    );
+    await user.type(commandField, 'npx -y my-mcp-server{Enter}');
+    expect(onMcpServerAdd).toHaveBeenCalledWith({
+      name: 'local',
+      serverType: 'stdio',
+      command: 'npx',
+      args: ['-y', 'my-mcp-server'],
+    });
   });
 
   it('offers compaction from the context popover', async () => {
