@@ -1070,7 +1070,26 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
       `artifacts/smoke-git-commit.mjs`）；已提交待随包验证
 - [ ] Git 分支创建 / Push / Pull Request（切片 B/C 未开工）
 - [ ] 原生 Terminal 工作流
-- [ ] Background Processes
+- [x] Background Processes 第一切片（切片 A，设计
+      `background-process-design.md` §3.1/§3.2 强信号检测 + 转录
+      quiet 提示行）：探针实证 CLI 0.193.0 真实发出
+      `fireAndForget: true`（`artifacts/probe-fire-and-forget.mjs`
+      三回合对照：前台无键、显式后台与自然语气 dev server 均
+      boolean true，tool_result 确认 `Background process started
+      (PID…)` 真实后台化未阻塞；结论
+      `artifacts/probe-fire-and-forget-conclusions.md`）→ Runtime
+      fail-soft 读取（仅 execute 类且字面 true 命中；键缺失/形态
+      异常零行为变化；历史投影同源提取）→ Bridge
+      `backgroundHint?: { fireAndForget }` 可选字段 exact-key 双侧
+      校验 → Host 单调锁定（流式 input 后到的标记补齐、result 不
+      清除）+ 恢复检查点 round-trip → activity 行下一行 quiet 细字
+      「Background process · Keeps running until you stop it
+      manually」（无图标无色块，沿用 subagent 子行的缩进语言）。
+      GUI kill 维持 fail-closed（设计 §2.3，无进程句柄）；尽力而为
+      列表与复制停止命令为切片 B。已提交待随下一批 VSIX 包验证
+      （本切片未打包未安装，可见验证随包补做）
+- [ ] Background Processes 切片 B（尽力而为列表 + 复制停止命令）/
+      切片 C（弱信号启发式 + 设置开关）未开工
 - [x] Worktree 并行任务第一切片（SessionDrawer「New session in a
       worktree…」入口 → daemon `sessions.create({ worktree: true })` →
       会话行 `worktree · <branch>` 标注 + 完整路径 tooltip。仅

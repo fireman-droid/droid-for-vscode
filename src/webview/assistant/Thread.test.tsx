@@ -29,6 +29,7 @@ import {
   formatSubagentSummary,
   formatThinkingLabel,
   readDroppedFileUris,
+  BackgroundProcessHint,
   SubagentSummaryRow,
 } from './Thread';
 
@@ -181,6 +182,19 @@ describe('SubagentSummaryRow', () => {
     // turn's live treatment.
     expect(document.querySelector('.dvx-subagent-row [class*="shimmer"]'))
       .toBeNull();
+  });
+});
+
+describe('BackgroundProcessHint', () => {
+  it('renders one quiet informational line without chrome', () => {
+    render(createElement(BackgroundProcessHint));
+    const hint = screen.getByText(
+      'Background process · Keeps running until you stop it manually',
+    );
+    expect(hint.className).toBe('dvx-tool-background-hint');
+    // No icon, no button: the GUI cannot stop the process
+    // (fail-closed), so the line only informs.
+    expect(hint.querySelector('svg, button')).toBeNull();
   });
 });
 

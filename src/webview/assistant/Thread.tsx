@@ -2562,6 +2562,13 @@ interface ToolActivityPresentation {
    */
   readonly outputTail: string | null;
   /**
+   * True when the CLI launched this execute call as a detached
+   * background process (fireAndForget). Display-only: the GUI holds
+   * no process handle, so stopping stays a manual user action
+   * (background-process design §2.3, fail-closed).
+   */
+  readonly background: boolean;
+  /**
    * Subagent summary of a delegating Task tool: identity from the
    * delegation, terminal status and counters from the CLI's durable
    * invocation ledger. One level only — child sessions never stream
@@ -2588,6 +2595,7 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
     detail: null,
     errorMessage: null,
     outputTail: null,
+    background: false,
     subagent: null,
   };
   const metadata = readDroidvisxMetadata(part);
@@ -2616,6 +2624,7 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
         | "detail"
         | "errorMessage"
         | "outputTail"
+        | "background"
         | "subagent"
       >),
       durationMs: readMetadataDuration(metadata),
@@ -2641,10 +2650,21 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
         metadata["outputTail"].length > 0
           ? metadata["outputTail"]
           : null,
+      background: readMetadataBackground(metadata["backgroundHint"]),
       subagent: readMetadataSubagent(metadata["subagent"]),
     };
   }
   return fallback;
+}
+
+/** Fail-soft: only `{ fireAndForget: true }` marks a row. */
+function readMetadataBackground(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "fireAndForget" in value &&
+    value.fireAndForget === true
+  );
 }
 
 function readMetadataSubagent(
@@ -2780,7 +2800,7 @@ function ToolActivityRow({
     <details
       className={`dvx-activity-row${running ? " dvx-activity-running" : ""}${
         activity.subagent !== null ? " dvx-activity-row-delegating" : ""
-      }`}
+      }${activity.background ? " dvx-activity-row-background" : ""}`}
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
@@ -2833,19 +2853,38 @@ function ToolActivityRow({
       ) : null}
     </details>
   );
-  if (activity.subagent === null) {
+  if (activity.subagent === null && !activity.background) {
     return row;
   }
   // The delegated subagent hangs one level under its Task row. One
   // level only: child sessions never stream their internals into the
   // parent transcript, so no deeper hierarchy is fabricated. The
   // parent running row owns the turn's shimmer; the sub-row stays
-  // static (animations only belong to what is happening now).
+  // static (animations only belong to what is happening now). A
+  // backgrounded execute row gets the same treatment: one quiet
+  // informational line, since the GUI cannot stop the process.
   return (
     <>
       {row}
-      <SubagentSummaryRow subagent={activity.subagent} />
+      {activity.background ? <BackgroundProcessHint /> : null}
+      {activity.subagent === null ? null : (
+        <SubagentSummaryRow subagent={activity.subagent} />
+      )}
     </>
+  );
+}
+
+/**
+ * One quiet line under an execute row the CLI detached
+ * (fireAndForget). Plain subtle text, no icon, no color chrome
+ * (background-process design §3.2); stopping the process is the
+ * user's manual action because the GUI holds no handle.
+ */
+export function BackgroundProcessHint(): React.JSX.Element {
+  return (
+    <p className="dvx-tool-background-hint">
+      Background process · Keeps running until you stop it manually
+    </p>
   );
 }
 

@@ -1770,8 +1770,20 @@ html, body, #root {
    its Task row, separated by the same hairline language as the rest
    of the shell. The parent row owns any live shimmer; this stays
    static. */
-.dvx-activity-row-delegating {
+.dvx-activity-row-delegating,
+.dvx-activity-row-background {
   margin-bottom: 4px;
+}
+
+/* Quiet one-line note under an execute row the CLI backgrounded
+   (background-process design §3.2): plain subtle text, no icon, no
+   color chrome. The GUI holds no process handle (kill fail-closed),
+   so the line only informs. */
+.dvx-tool-background-hint {
+  margin: 0 0 12px 20px;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .dvx-subagent-row {
