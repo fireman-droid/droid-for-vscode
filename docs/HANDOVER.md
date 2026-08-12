@@ -147,6 +147,17 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 - 「Show earlier messages」一次性展开数百条历史消息时有 300–400ms
   长任务（React 批量挂载成本；2026-08-12 性能复测时发现，与吸顶
   改动无关）。打磨方向：分批挂载。低优先级。
+- **BYOK 自定义模型配置（Add model）**：模型选择器加 "Add model…"
+  入口 + Webview 管理面板，写入走 daemon `customModels.*` RPC（list
+  自带脱敏）；设计已完成，见
+  [`byok-add-model-design.md`](./product/byok-add-model-design.md)
+  （实现时替代下方 V2 表「Custom Models 管理」行）。排期位置待用户
+  拍板（文档建议：发版后 backlog 前列）。
+- **Add to Chat（选中/文件/转录引用三入口）**：编辑器选中与文件
+  右键加入附件暂存（Bridge/Webview 零改动）+ 转录选中 Quote in
+  reply；设计已完成，见
+  [`add-to-chat-design.md`](./product/add-to-chat-design.md)。排期
+  位置待用户拍板（文档建议：入口 a+b 切片近期空档优先、先于 BYOK）。
 
 ### 用户明确排除（近期不做，勿自行加回）
 
