@@ -66,6 +66,7 @@ import {
   type SessionsArchivedRefreshMessage,
   type SessionForkMessage,
   type SessionNewMessage,
+  type WorktreeCreateSessionMessage,
   type SessionRenameMessage,
   type SessionSelectMessage,
   type SessionSettingUpdateMessage,
@@ -126,6 +127,8 @@ export function parseWebviewMessage(
         return parseSessionSelect(value);
       case 'session.new':
         return parseSessionNew(value);
+      case 'worktree.createSession':
+        return parseWorktreeCreateSession(value);
       case 'session.rename':
         return parseSessionRename(value);
       case 'session.favorite':
@@ -480,6 +483,16 @@ function parseSessionNew(
   }
 
   return { type: 'session.new' };
+}
+
+function parseWorktreeCreateSession(
+  value: UnknownRecord,
+): WorktreeCreateSessionMessage | undefined {
+  if (!hasExactKeys(value, ['type'])) {
+    return undefined;
+  }
+
+  return { type: 'worktree.createSession' };
 }
 
 function parseSessionRename(

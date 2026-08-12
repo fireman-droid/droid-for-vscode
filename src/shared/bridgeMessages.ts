@@ -55,6 +55,9 @@ export const MAX_TOOL_ACTIVITIES_PER_TURN = 100;
 export const MAX_INTERACTION_TEXT_LENGTH = MAX_INTERACTION_DETAIL_LENGTH;
 export const MAX_SESSION_CATALOG_ITEMS = 50;
 export const MAX_SESSION_TITLE_LENGTH = 256;
+/** Bounds for the worktree annotation on catalog session rows. */
+export const MAX_WORKTREE_BRANCH_LENGTH = 512;
+export const MAX_WORKTREE_PATH_LENGTH = 1024;
 export const MAX_MODEL_ID_LENGTH = 256;
 export const MAX_MODEL_DISPLAY_NAME_LENGTH = 128;
 export const MAX_MODEL_CATALOG_ITEMS = 100;
@@ -370,6 +373,20 @@ export interface SessionSelectMessage {
 
 export interface SessionNewMessage {
   readonly type: 'session.new';
+}
+
+/**
+ * Creates a new session inside a daemon-managed git worktree
+ * (`sessions.create({ worktree: true })`). Carries no branch name:
+ * probe evidence (artifacts/probe-worktree-create.mjs) shows the
+ * daemon owns branch and directory naming (`<currentBranch>-wt`, an
+ * 8-char session-id suffix on collision) and its RPC accepts none.
+ * Only actionable when the host snapshot advertised
+ * `worktreeCreateAvailable`; the host re-checks and answers with a
+ * session diagnostic otherwise (fail closed).
+ */
+export interface WorktreeCreateSessionMessage {
+  readonly type: 'worktree.createSession';
 }
 
 /** Renames the currently active session. */
@@ -805,6 +822,7 @@ export type WebviewToHostMessage =
   | SessionsRefreshMessage
   | SessionSelectMessage
   | SessionNewMessage
+  | WorktreeCreateSessionMessage
   | SessionRenameMessage
   | SessionFavoriteMessage
   | SessionArchiveMessage
@@ -860,6 +878,18 @@ export interface SessionSummary {
    * mission decomposition (`decompSessionType`).
    */
   readonly missionRole?: MissionSessionRole;
+  /**
+   * Present when the session runs in a daemon-managed git worktree.
+   * `branch` may be '' when git branch recovery failed; the row then
+   * shows the worktree marker without a branch name.
+   */
+  readonly worktree?: SessionWorktreeInfo;
+}
+
+/** Worktree binding of a catalog session (host-recovered from git). */
+export interface SessionWorktreeInfo {
+  readonly branch: string;
+  readonly path: string;
 }
 
 export interface SessionCatalogState {
@@ -1329,6 +1359,12 @@ export interface HostSnapshotMessage {
    * the session is not part of a mission decomposition.
    */
   readonly mission?: SessionMissionSummary;
+  /**
+   * True when the drawer may offer "New session in a worktree":
+   * daemon runtime mode and a git-worktree workspace. Absent means
+   * unavailable and the entry must not render (fail closed).
+   */
+  readonly worktreeCreateAvailable?: boolean;
 }
 
 export interface HostConnectionMessage {
