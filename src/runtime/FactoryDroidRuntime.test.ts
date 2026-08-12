@@ -1402,8 +1402,9 @@ describe('FactoryDroidRuntime', () => {
     });
     expect(handoffIndex).toBeGreaterThan(-1);
     expect(handoffIndex).toBeLessThan(completeIndex);
-    // The notification watch is released once the turn finishes.
-    expect(listeners).toHaveLength(0);
+    // The spec watch is released once the turn finishes; only the
+    // session-lifetime subagent watch remains subscribed.
+    expect(listeners).toHaveLength(1);
   });
 
   it('does not emit spec-handoff for a plain approval or same-session notifications', async () => {
@@ -1460,8 +1461,133 @@ describe('FactoryDroidRuntime', () => {
     expect(
       events.some((event) => event.type === 'spec-handoff'),
     ).toBe(false);
-    // No watch is armed without a proceed_new_session approval.
-    expect(session.onNotification).not.toHaveBeenCalled();
+    // No spec watch is armed without a proceed_new_session approval;
+    // the single subscription is the session-lifetime subagent watch.
+    expect(session.onNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it('emits subagent-started before turn completion for child_session_available', async () => {
+    type Listener = (notification: Record<string, unknown>) => void;
+    const listeners: Listener[] = [];
+    const notifyChild = (payload: Record<string, unknown>) => {
+      for (const listener of [...listeners]) {
+        listener({
+          method: 'droid.session_notification',
+          params: {
+            sessionId: 'session-1',
+            notification: {
+              type: 'child_session_available',
+              timestamp: 1,
+              ...payload,
+            },
+          },
+        });
+      }
+    };
+    const session = Object.assign(
+      createMockSession(async function* () {
+        yield textDelta('delegating work');
+        notifyChild({
+          childSessionId: 'child-abc',
+          toolUseId: 'call_task_1',
+          subagentType: '  explore\u0000  agent ',
+          description: 'Find\u0007 the API\n\n usage',
+        });
+        // Identity fields are optional in the SDK payload.
+        notifyChild({ childSessionId: 'child-def' });
+        yield successfulResult();
+      }),
+      {
+        onNotification: vi.fn((listener: Listener) => {
+          listeners.push(listener);
+          return () => {
+            const index = listeners.indexOf(listener);
+            if (index !== -1) {
+              listeners.splice(index, 1);
+            }
+          };
+        }),
+      },
+    );
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    const events = await collect(runtime.sendTurn('delegate this'));
+    const started = events.filter(
+      (event) => event.type === 'subagent-started',
+    );
+    expect(started).toEqual([
+      {
+        type: 'subagent-started',
+        toolUseId: 'call_task_1',
+        subagentType: 'explore agent',
+        description: 'Find the API usage',
+      },
+      {
+        type: 'subagent-started',
+        toolUseId: null,
+        subagentType: 'unknown',
+        description: '',
+      },
+    ]);
+    const completeIndex = events.findIndex(
+      (event) => event.type === 'turn-complete',
+    );
+    expect(events.indexOf(started[1]!)).toBeLessThan(completeIndex);
+    // The child session id never leaves the runtime.
+    expect(JSON.stringify(events)).not.toContain('child-abc');
+    expect(JSON.stringify(events)).not.toContain('child-def');
+  });
+
+  it('drops child_session_available outside an active turn and keeps the watch armed', async () => {
+    type Listener = (notification: Record<string, unknown>) => void;
+    const listeners: Listener[] = [];
+    const session = Object.assign(
+      createMockSession(async function* () {
+        yield textDelta('quiet turn');
+        yield successfulResult();
+      }),
+      {
+        onNotification: vi.fn((listener: Listener) => {
+          listeners.push(listener);
+          return () => {
+            const index = listeners.indexOf(listener);
+            if (index !== -1) {
+              listeners.splice(index, 1);
+            }
+          };
+        }),
+      },
+    );
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
+
+    // Between turns there is no active turn to attach the event to.
+    for (const listener of [...listeners]) {
+      listener({
+        method: 'droid.session_notification',
+        params: {
+          sessionId: 'session-1',
+          notification: {
+            type: 'child_session_available',
+            timestamp: 1,
+            childSessionId: 'child-xyz',
+            subagentType: 'worker',
+            description: 'stale',
+          },
+        },
+      });
+    }
+
+    const events = await collect(runtime.sendTurn('plain turn'));
+    expect(
+      events.some((event) => event.type === 'subagent-started'),
+    ).toBe(false);
+    // The watch lives for the whole session, not one turn.
+    expect(listeners).toHaveLength(1);
+
+    await runtime.dispose();
+    expect(listeners).toHaveLength(0);
   });
 
   it('drops late stream events and disposes an active session once', async () => {

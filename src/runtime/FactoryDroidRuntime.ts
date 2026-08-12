@@ -72,6 +72,10 @@ import {
 import { createModelCatalogCaptureTransport } from './modelCatalogCaptureTransport';
 import type { RuntimeAvailability, RuntimeEvent } from './runtimeEvents';
 import {
+  sanitizeSubagentDescription,
+  sanitizeSubagentType,
+} from './subagentSummary';
+import {
   createRuntimeInteractionCallbacks,
   type RuntimeInteractionCallbacks,
   type RuntimeInteractionHandler,
@@ -228,6 +232,13 @@ export class FactoryDroidRuntime implements DroidRuntime {
    * the implementation session).
    */
   private specHandoffWatch: SpecHandoffWatch | null = null;
+  /**
+   * Session-lifetime watch for `child_session_available` notifications
+   * (Task tool delegating to a subagent). Armed once per created
+   * session; events surface only while a turn is active because a
+   * subagent always spawns under a running parent Task tool.
+   */
+  private subagentWatchUnsubscribe: (() => void) | null = null;
   /** Runtime events queued for the active turn's stream to yield. */
   private pendingTurnEvents: RuntimeEvent[] = [];
 
@@ -1203,6 +1214,55 @@ export class FactoryDroidRuntime implements DroidRuntime {
     watch.unsubscribe();
   }
 
+  private armSubagentWatch(): void {
+    const session = this.session;
+    if (
+      this.disposed ||
+      this.subagentWatchUnsubscribe !== null ||
+      session === null ||
+      typeof session.onNotification !== 'function'
+    ) {
+      return;
+    }
+    this.subagentWatchUnsubscribe = session.onNotification(
+      (notification) => {
+        const started = readSubagentStartedNotification(notification);
+        if (started === null) {
+          return;
+        }
+        // A subagent only spawns under a running parent Task tool, so
+        // a notification outside an active turn has no row to attach
+        // to and is dropped.
+        if (this.activeTurn === null) {
+          return;
+        }
+        this.pendingTurnEvents.push({
+          type: 'subagent-started',
+          toolUseId: started.toolUseId,
+          subagentType: started.subagentType,
+          description: started.description,
+        });
+        this.recordDiagnostic({
+          level: 'info',
+          name: 'runtime.subagent.started',
+          attributes: {
+            subagentType: started.subagentType,
+            hasToolUseId: started.toolUseId !== null,
+          },
+        });
+      },
+    );
+  }
+
+  private disarmSubagentWatch(): void {
+    const unsubscribe = this.subagentWatchUnsubscribe;
+    if (unsubscribe === null) {
+      return;
+    }
+    this.subagentWatchUnsubscribe = null;
+    unsubscribe();
+  }
+
   dispose(): Promise<void> {
     if (this.disposal) {
       return this.disposal;
@@ -1210,6 +1270,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
 
     this.disposed = true;
     this.disarmSpecHandoffWatch();
+    this.disarmSubagentWatch();
     const disposal = this.disposeOwnedSession().catch((error) => {
       if (this.disposal === disposal) {
         this.disposal = null;
@@ -1292,6 +1353,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
 
     this.session = session;
     this.sessionTarget = target;
+    this.armSubagentWatch();
     this.recordInitializationFinished(startedAt, 'available', 'info');
     return this.available(session);
   }
@@ -1783,6 +1845,39 @@ function readSessionNotificationEnvelope(
     ...(typeof sessionId === 'string' ? { sessionId } : {}),
     ...(typeof type === 'string' ? { type } : {}),
     ...(typeof reason === 'string' ? { reason } : {}),
+  };
+}
+
+/**
+ * Reads a `child_session_available` session notification into the
+ * bounded fields the `subagent-started` runtime event carries. The
+ * `childSessionId` in the payload is intentionally never read so it
+ * cannot leave the Runtime. Returns null for any other notification.
+ */
+function readSubagentStartedNotification(
+  raw: Record<string, unknown>,
+): {
+  toolUseId: string | null;
+  subagentType: string;
+  description: string;
+} | null {
+  const params = raw['params'];
+  if (typeof params !== 'object' || params === null) {
+    return null;
+  }
+  const { notification } = params as Record<string, unknown>;
+  if (typeof notification !== 'object' || notification === null) {
+    return null;
+  }
+  const { type, toolUseId, subagentType, description } =
+    notification as Record<string, unknown>;
+  if (type !== 'child_session_available') {
+    return null;
+  }
+  return {
+    toolUseId: isSafeSessionId(toolUseId) ? toolUseId : null,
+    subagentType: sanitizeSubagentType(subagentType) ?? 'unknown',
+    description: sanitizeSubagentDescription(description),
   };
 }
 

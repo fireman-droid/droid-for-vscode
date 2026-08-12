@@ -63,6 +63,8 @@ export type RuntimeEvent =
       toolUseId: string;
       action: string;
       isError: boolean;
+      /** Bounded text excerpt from a failed tool_result's content. */
+      errorText?: string;
     }
   | {
       type: 'user-message';
@@ -100,6 +102,19 @@ export type RuntimeEvent =
        */
       type: 'spec-handoff';
       implementationSessionId: string;
+    }
+  | {
+      /**
+       * The active turn delegated work to a subagent (Task tool),
+       * projected from the `child_session_available` session
+       * notification. The child session id is dropped here on
+       * purpose so it never leaves the Runtime.
+       */
+      type: 'subagent-started';
+      /** Parent Task tool call this subagent hangs under, if known. */
+      toolUseId: string | null;
+      subagentType: string;
+      description: string;
     }
   | {
       type: 'error';
