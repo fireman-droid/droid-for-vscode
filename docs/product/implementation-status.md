@@ -1242,6 +1242,66 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
   `TaskPlanPin.test.tsx`（展开收起/外点/Escape/live 完成淡出/
   新 todowrite 完成淡出/跨会话不庆祝/回放不挂载）
 
+### 18. /btw 侧聊 + `/` 弹窗内置组扩充（2026-08-12 晚，斜杠对齐 S1+S2）
+
+设计权威：[`side-question-design.md`](./side-question-design.md)（S1）
+与 [`slash-parity-assessment.md`](./slash-parity-assessment.md)（S2），
+均按第一切片定义交付。
+
+- **S1 行为**：`/` 弹窗 Built-in 组末尾出现 `/btw` 行（仅当 Host 在
+  快照上广播 `btwAvailable`，process 模式 only；daemon 模式
+  fail-closed 隐藏全部入口，`/btw` 文本按普通 prompt 发给模型）；
+  选中行或直接发送 `/btw <问题>` 打开 Composer 上方 Side chat 卡片
+  （复用 ComposerPopup 壳、窄栏适配，`/btw <问题>` 同时立即提问）；
+  卡片内提问 → 流式答案（Markdown 渲染）→ 同卡连续追问；主 turn
+  流式期间卡片可用；关卡（× 或切会话）即弃 fork。无 Promote、
+  fork 不进任何会话列表、主转录零新增行、无 `turn.send` 泄漏
+- **探针结论**（`artifacts/probe-btw-sidecar.mjs`，实现按此定型）：
+  ① 链路选型——公开 `DroidClient` + 私有 `ProcessTransport`（与
+  FactoryCommandCatalog 同通道）可完成 load→fork→ask 全链，
+  `forkSession` 带 `btw-fork` tag 即获 CLI 原生 btw 语义（fork 点
+  `lastCompletedTurn`、会话文件落 `sessions/btw/`、不建 cloud
+  session），主会话 Runtime 绑定零接触；② fork 内权限行为——工具
+  权限请求在 fork 内正常触发，故 sidecar 全部 deny
+  （`outcome: 'cancel'`），该条目以引导文案报错（"去主聊天问"）
+  而非渲染权限 UI；③ 泄漏验证——`sessions/btw/` 下的 fork 不进
+  `listSessions`，会话抽屉零改动即免疫；`closeSession` 会终结
+  子进程（生命周期按"一卡一 sidecar、弃后不复用"设计）
+- **S2 行为**（纯 Webview）：修复 CLI 本命/别名漏发模型——
+  `/compress`→ 既有 compact、`/clear`/`/handoff`→ 既有 new 会话，
+  拦截在 `App.handleSend`（`slashBuiltins.ts` 单模块判定）；
+  5 条导航行 `/model` `/mcp` `/skills` `/sessions` `/context`
+  仍在 Built-in 组内（沿用现有行样式），选中打开对应既有
+  popover/面板/抽屉（`navSignal` 信号链 + SessionDrawer 打开接线）
+- **分层**：Bridge `btwProtocol.ts`（`btw.ask`/`btw.dismiss`/
+  `session.btw` 三消息 + 卡片投影类型 + 双侧校验，长度/条数上限，
+  `message: null` 与省略等价）；Runtime `btw/BtwSidecar.ts`
+  （隐藏 fork + 流式 ask 生成器 + deny-all 权限 + dispose）；Host
+  `btwSideChat.ts` + `btwCardState.ts`（卡片状态机投影、每会话
+  单 sidecar、`resetSessionMetadata`/dispose 挂钩即弃）+
+  `ChatController` 接线（快照 `btwAvailable` 广播）+
+  `extension.ts` 仅 process 模式注入工厂；Webview `store.ts` btw
+  切片、`SideChatSheet.tsx` 卡片、`Thread.tsx` `/btw` 行与
+  `sideChat` 挂载、`App.tsx` 路由与生命周期
+- 门禁（最终 HEAD `90b3c9c`）：typecheck 三 tsconfig 全过、全量
+  vitest 80 files / 1804 tests 全绿（新增：btwProtocol 双侧校验、
+  BtwSidecar 生命周期/权限 deny/中断、btwSideChat 状态机、
+  ChatController btw 接线与换会话即弃、SideChatSheet 组件、
+  store btw 切片、slashBuiltins 别名判定）、build 绿。headless
+  Chrome harness 冒烟（`artifacts/btw-harness.html` +
+  `smoke-btw.mjs`，对最终 dist 产物三连跑全 PASS）六场景：
+  popup（/btw + 5 导航行在列）、card（开卡→提问→流式答案→追问→
+  主转录零新增→零 turn.send→关卡发 dismiss）、slashText
+  （`/btw <问题>` 直发开卡即问）、running（主 turn 流式中可用）、
+  daemon（fail-closed：无行、文本直发模型）、aliases
+  （/compress→compact、/clear→new、/model 开 popover、零漏发）
+- 提交：`9bc7a13`（Bridge 契约）、`f0b6b2c`（Runtime sidecar）、
+  `8f3a3f1`（Host 接线）、`f0aa775`（SideChatSheet 组件）、
+  `2a0e763`（null message 校验修复）、`613a5fa` + `ddfa0dc`
+  （S2 别名/导航 + slashBuiltins 模块）；S1 的 Thread/App/store
+  接线与 `store.btw.test.ts` 在热点文件并发下随 `7a8e33a`/
+  `7f95587` 入库（工作树内容一致、门禁全绿）
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -1851,6 +1911,20 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `cursor --install-extension droidvisx.vsix`
   （successfully installed）均成功；现有窗口需 Reload Window 后
   加载新 Bundle
+- 2026-08-12 晚打包并安装含 **/btw 侧聊 + `/` 内置组扩充（斜杠
+  对齐 S1+S2）** 的构建：`dist/droidvisx.vsix` 1,635,935 字节
+  （10 files, 1.56 MB），SHA-256
+  `842015C686B19A9C06212306D96E4C87F87BACDA2058864B21B154524A9DC9B5`，
+  typecheck 三 tsconfig 全过、vitest 80 files / 1804 tests 全绿、
+  build 后 `pnpm exec vsce package --no-dependencies` 与
+  `cursor --install-extension dist/droidvisx.vsix`
+  （successfully installed）均成功；vsix 已解包核对 webview
+  bundle 含 btw 代码，`smoke-btw.mjs` 对同一产物六场景三连
+  PASS（此前 20:00 时点产物上冒烟曾现 `btwAvailable` 未生效的
+  瞬态失败，与并行打包窗口重叠，20:06 重建后不可复现）；本包
+  取代同日稍早的计划钉条包，现有窗口需 Reload Window 后加载新
+  Bundle
+
 
 ## 验证状态
 
