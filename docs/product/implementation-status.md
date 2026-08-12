@@ -1152,6 +1152,11 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [ ] 组织策略
 - [ ] Account Profile
 - [ ] Account Usage
+- [x] 会话/回合 token 明细（V2 成本/token 切片，取证与设计
+      `token-usage-design.md`）：Context 浮层 quiet「Token usage」
+      账目，Last turn / Session 双列五项 token 分解 + 仅 >0 时的
+      Credits 行；SDK 无 USD 成本字段，金额展示 fail-closed 不做；
+      历史会话仅累计并如实注明。已提交待随下一批次包可见验证
 - [x] Git 提交闭环（Git/PR 工作流切片 A，设计
       `git-pr-workflow-design.md` §3.1/§4）：changes 卡片尾部 quiet
       入口「Commit these changes…」→ 内联提交区（分支名、勾选文件
