@@ -118,6 +118,11 @@ import {
   type ChangeStatsReader,
 } from './changeStats';
 import { base64ByteLength } from '../shared/transcriptLimits';
+import {
+  EMPTY_SESSION_TOKEN_USAGE,
+  type SessionTokenUsageState,
+  type TokenUsageBreakdown,
+} from '../shared/tokenUsage';
 import { reconcileSessionHistory } from './reconcileSessionHistory';
 import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
 import {
@@ -384,6 +389,12 @@ export class ChatController {
    * successful history load; null for sessions outside a mission.
    */
   private mission: SessionMissionSummary | null = null;
+  /**
+   * Token-usage breakdown of the active session: cumulative totals
+   * seeded from history and overwritten by live `token-usage`
+   * events; `lastTurn` set by each completed turn in this window.
+   */
+  private tokenUsage: SessionTokenUsageState = EMPTY_SESSION_TOKEN_USAGE;
   private turn: CurrentTurn | null = null;
   private settings: SessionSettingsState = {
     status: 'loading',
@@ -1357,6 +1368,13 @@ export class ChatController {
           this.startStreaming(sessionId, turnId);
         }
         return;
+      case 'token-usage':
+        // Live cumulative totals are authoritative over any history
+        // seed; the CLI pushes a few per turn.
+        this.updateTokenUsage(sessionId, {
+          cumulative: event.cumulative,
+        });
+        return;
       case 'settings-updated':
         this.refreshSettingsAfterRuntimeEvent(sessionId);
         return;
@@ -1400,6 +1418,11 @@ export class ChatController {
     event: Extract<RuntimeEvent, { type: 'turn-complete' }>,
   ): void {
     this.interactions.endTurn(sessionId, turnId);
+    if (event.turnUsage !== undefined) {
+      // Per-turn consumption regardless of outcome; interrupted and
+      // failed turns still burned tokens.
+      this.updateTokenUsage(sessionId, { lastTurn: event.turnUsage });
+    }
     switch (event.outcome) {
       case 'success':
         this.publishTurnChanges(sessionId, turnId);
@@ -1910,6 +1933,7 @@ export class ChatController {
 
     let transcript: HostTranscriptState | null = null;
     let mission: SessionMissionSummary | null = null;
+    let tokenUsage: TokenUsageBreakdown | null = null;
     {
       const loaded = await this.loadHistoryTimed(
         cwd,
@@ -1918,6 +1942,7 @@ export class ChatController {
       if (loaded?.status === 'available') {
         transcript = loaded.state;
         mission = loaded.mission ?? null;
+        tokenUsage = loaded.tokenUsage ?? null;
       }
     }
     if (
@@ -1931,6 +1956,8 @@ export class ChatController {
       return;
     }
     this.mission = mission;
+    // The compacted successor is a new session; its counters restart.
+    this.tokenUsage = { cumulative: tokenUsage, lastTurn: null };
     // If the summarized history cannot be read, keep the previous
     // transcript visible; the runtime context is compacted either way.
     this.transcript =
@@ -2238,11 +2265,13 @@ export class ChatController {
     // reload its history; keep the current transcript if that fails.
     let transcript: HostTranscriptState | null = null;
     let mission: SessionMissionSummary | null = null;
+    let tokenUsage: TokenUsageBreakdown | null = null;
     {
       const loaded = await this.loadHistoryTimed(cwd, forkedSessionId);
       if (loaded?.status === 'available') {
         transcript = loaded.state;
         mission = loaded.mission ?? null;
+        tokenUsage = loaded.tokenUsage ?? null;
       }
     }
     if (
@@ -2256,6 +2285,8 @@ export class ChatController {
       return;
     }
     this.mission = mission;
+    // The fork is a new session; its counters restart.
+    this.tokenUsage = { cumulative: tokenUsage, lastTurn: null };
     this.transcript =
       transcript ?? { ...this.transcript, historyStatus: 'partial' };
     this.recoveryStore.writeSession(forkedSessionId, this.transcript);
@@ -4863,6 +4894,7 @@ export class ChatController {
       } else {
         this.sessionId = null;
         this.mission = null;
+        this.tokenUsage = EMPTY_SESSION_TOKEN_USAGE;
         this.transcript = createHostTranscriptState('unavailable');
       }
       this.connection = {
@@ -4891,6 +4923,7 @@ export class ChatController {
   ): Promise<HostTranscriptState | null> {
     if (target.kind === 'new') {
       this.mission = null;
+      this.tokenUsage = EMPTY_SESSION_TOKEN_USAGE;
       return createHostTranscriptState('complete');
     }
 
@@ -4907,6 +4940,15 @@ export class ChatController {
     }
     this.mission =
       loaded?.status === 'available' ? (loaded.mission ?? null) : null;
+    // Cumulative usage persists in the session file; `lastTurn` does
+    // not (history carries no per-turn usage), so it starts null.
+    this.tokenUsage = {
+      cumulative:
+        loaded?.status === 'available'
+          ? (loaded.tokenUsage ?? null)
+          : null,
+      lastTurn: null,
+    };
     if (loaded?.status === 'available') {
       const reconcileStart = performance.now();
       const reconciled = reconcileSessionHistory(
@@ -5437,6 +5479,12 @@ export class ChatController {
       ...(this.worktreeCreateAvailable
         ? { worktreeCreateAvailable: true }
         : {}),
+      // Omitted when the session has no usage data yet (fail quiet).
+      ...(this.sessionId === null ||
+      (this.tokenUsage.cumulative === null &&
+        this.tokenUsage.lastTurn === null)
+        ? {}
+        : { tokenUsage: this.tokenUsage }),
     } satisfies UnsequencedHostMessage;
     try {
       this.recordHost({
@@ -5524,6 +5572,24 @@ export class ChatController {
       type: 'session.context',
       sessionId,
       context: this.context,
+    });
+  }
+
+  private updateTokenUsage(
+    sessionId: string,
+    update: Partial<{
+      cumulative: TokenUsageBreakdown;
+      lastTurn: TokenUsageBreakdown;
+    }>,
+  ): void {
+    if (this.sessionId !== sessionId) {
+      return;
+    }
+    this.tokenUsage = { ...this.tokenUsage, ...update };
+    this.emit({
+      type: 'session.tokenUsage',
+      sessionId,
+      tokenUsage: this.tokenUsage,
     });
   }
 

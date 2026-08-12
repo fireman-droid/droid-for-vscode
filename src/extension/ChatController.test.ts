@@ -28,6 +28,7 @@ import {
   unavailableSessionHistory,
   type SessionHistoryLoader,
 } from '../runtime/history/SessionHistory';
+import type { TokenUsageBreakdown } from '../shared/tokenUsage';
 import { DaemonAvailabilityError } from '../runtime/daemon/daemonConnection';
 import type { DaemonSessionCatalog } from '../runtime/daemon/DaemonSessionCatalog';
 import type { AttachmentSources } from './attachmentSources';
@@ -478,6 +479,76 @@ describe('ChatController', () => {
     expect(
       items.find((item) => item.id === 'plain-session'),
     ).not.toHaveProperty('missionRole');
+  });
+
+  it('publishes cumulative and per-turn token usage from runtime events', async () => {
+    const first = usageFixture();
+    const second = usageFixture({ inputTokens: 2565, outputTokens: 81 });
+    const turnUsage = usageFixture({
+      inputTokens: 1719,
+      outputTokens: 76,
+      factoryCredits: 0,
+    });
+    const runtime = createMockRuntime(async function* () {
+      yield { type: 'token-usage', cumulative: first };
+      yield { type: 'token-usage', cumulative: second };
+      yield { ...successfulTurn(), turnUsage };
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+    // No usage reported yet: the snapshot omits the field entirely.
+    expect(snapshots(messages).at(-1)).not.toHaveProperty('tokenUsage');
+
+    send(controller, 'session-1', 'turn-1', 'Count tokens');
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
+
+    expect(
+      tokenUsageMessages(messages).map(({ tokenUsage }) => tokenUsage),
+    ).toEqual([
+      { cumulative: first, lastTurn: null },
+      { cumulative: second, lastTurn: null },
+      { cumulative: second, lastTurn: turnUsage },
+    ]);
+  });
+
+  it('seeds cumulative token usage from history when resuming a session', async () => {
+    const persistence = createMemoryPersistence();
+    const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
+    seed.selectSession('usage-session');
+    await seed.flush();
+    const cumulative = usageFixture({ factoryCredits: 2 });
+    const history: SessionHistoryLoader = {
+      loadHistory: vi.fn(async () => ({
+        status: 'available' as const,
+        state: {
+          transcript: [],
+          historyStatus: 'complete' as const,
+          truncated: false,
+        },
+        tokenUsage: cumulative,
+      })),
+    };
+    const runtime = createMockRuntime();
+    runtime.initialize.mockResolvedValue(available('usage-session'));
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('usage-session')]),
+      new SessionRecoveryStore(persistence, 'recovery', 0),
+      history,
+    );
+
+    ready(controller);
+    await waitForConnected(messages);
+
+    // History carries no per-turn usage, so only cumulative is seeded.
+    expect(snapshots(messages).at(-1)).toMatchObject({
+      sessionId: 'usage-session',
+      tokenUsage: { cumulative, lastTurn: null },
+    });
   });
 
   it('caps assistant output and emits one safe truncation diagnostic', async () => {
@@ -6628,6 +6699,31 @@ function successfulTurn(): Extract<
     type: 'turn-complete',
     outcome: 'success',
   };
+}
+
+/** Live values from artifacts/probe-token-usage.out.json. */
+function usageFixture(
+  overrides: Partial<TokenUsageBreakdown> = {},
+): TokenUsageBreakdown {
+  return {
+    inputTokens: 846,
+    outputTokens: 5,
+    cacheReadTokens: 11776,
+    cacheCreationTokens: 0,
+    thinkingTokens: 22,
+    ...overrides,
+  };
+}
+
+function tokenUsageMessages(messages: readonly HostToWebviewMessage[]) {
+  return messages.filter(
+    (
+      message,
+    ): message is Extract<
+      HostToWebviewMessage,
+      { type: 'session.tokenUsage' }
+    > => message.type === 'session.tokenUsage',
+  );
 }
 
 function connectionMessages(messages: readonly HostToWebviewMessage[]) {
