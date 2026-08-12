@@ -151,13 +151,14 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
   入口 + Webview 管理面板，写入走 daemon `customModels.*` RPC（list
   自带脱敏）；设计已完成，见
   [`byok-add-model-design.md`](./product/byok-add-model-design.md)
-  （实现时替代下方 V2 表「Custom Models 管理」行）。排期位置待用户
-  拍板（文档建议：发版后 backlog 前列）。
+  （实现时替代下方 V2 表「Custom Models 管理」行）。排期：**发版后
+  backlog**（用户 2026-08-12 拍板：先专心走主线）。
 - **Add to Chat（选中/文件/转录引用三入口）**：编辑器选中与文件
   右键加入附件暂存（Bridge/Webview 零改动）+ 转录选中 Quote in
   reply；设计已完成，见
-  [`add-to-chat-design.md`](./product/add-to-chat-design.md)。排期
-  位置待用户拍板（文档建议：入口 a+b 切片近期空档优先、先于 BYOK）。
+  [`add-to-chat-design.md`](./product/add-to-chat-design.md)。排期：
+  **发版后 backlog**（用户 2026-08-12 拍板：先专心走主线；文档内
+  建议的优先序——入口 a+b 先于 BYOK——发版后仍适用）。
 
 ### 用户明确排除（近期不做，勿自行加回）
 
@@ -196,10 +197,10 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 
 | 项 | 一句话 | 设计文档 |
 | --- | --- | --- |
-| Git 提交 / PR 工作流 | GUI 内提交、发 PR | 待补（设计中） |
-| 原生 Terminal 工作流 | 命令跑在 VS Code 真终端，可看可接管 | 待补（设计中） |
-| 后台进程管理 | dev server 等进程的列表/停止 | 待补（设计中） |
-| worktree 并行任务 | 独立目录改分支，不动眼前代码 | 待补（设计中） |
+| Git 提交 / PR 工作流 | GUI 内提交、发 PR | [`git-pr-workflow-design.md`](./product/git-pr-workflow-design.md)（提交闭环全可行；PR 仅 daemon+外部 CLI，降级） |
+| 原生 Terminal 工作流 | 命令跑在 VS Code 真终端，可看可接管 | [`native-terminal-design.md`](./product/native-terminal-design.md)（接管 fail-closed；只读镜像降级可行，复用 tier1 §1 数据源） |
+| 后台进程管理 | dev server 等进程的列表/停止 | [`background-process-design.md`](./product/background-process-design.md)（停止 fail-closed；检测+尽力而为列表降级） |
+| worktree 并行任务 | 独立目录改分支，不动眼前代码 | [`worktree-parallel-design.md`](./product/worktree-parallel-design.md)（全可行，daemon 模式） |
 | 会话导出 Markdown | 对话导出成文档——已实现（2026-08-12，提交 1f2df16，命令 `DroidVisX: Export Session as Markdown`），待随下一批次 VSIX 装机验证 | — |
 | Mermaid 图渲染 | 转录里的流程图直接画出来 | — |
 | 成本 / token 明细可视化 | context 条之外的细分用量 | — |
