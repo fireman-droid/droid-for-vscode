@@ -256,6 +256,19 @@ daemon 全量内容搜索（`Content matches` 区显示标题/片段/时间，
 选中会话或检查点为空时跳过早期快照，行为与原先一致。Webview 无
 改动（`connecting` 状态既有处理）。
 
+**更正（2026-08-12 下午）：上述恢复提速自发布以来从未实际生效。**
+日志实证：全天 16+ 次 `host.perf.early-snapshot`（items>0）成功发出，
+但每个激活实例的 `webview.render-ok` 都等于全量快照时刻
+（+9.1s~+15.2s），从未等于早期快照时刻（+0.2s~+4.4s）。根因：早期
+快照发出时 catalog 仍为 `{status:'loading', items:[]}` 且
+activeRuntimeCwd 为 null，快照中无 catalog 项被标 active，Webview
+`validateHostMessage.ts` 的 `parseSessionCatalog` 硬不变量
+`activeItemId !== activeSessionId` 静默拒收整条快照。本批修复：校验
+器在 `connection.status !== 'connected'`（connecting / unavailable）
+时允许 activeItemId 为 null 而 sessionId 非空（Host 侧确实无法在无
+Runtime 归属时标 active，属合法过渡态）；active 行与 sessionId 矛盾
+时仍拒收。见下方「启动/切换性能与可靠性修复批次」。
+
 2026-08-12 凌晨追加 daemon Phase 2 执行链路迁移（可选、默认关闭）：
 新增 `src/runtime/daemon/createDaemonDroidSession.ts`，通过
 `FactoryDroidRuntime` 既有的 `createSdkSession` 注入 seam 提供
@@ -1444,6 +1457,66 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最近记录的验证结果：
 
+- 启动/切换性能与可靠性修复批次（2026-08-12 下午，日志调查实证
+  三项）：
+  **修复 1（P1）握手版本失配静默死亡兜底**——Webview：`App.tsx`
+  在 `webview.ready` 后 5s 内未收到任何 host 消息时显示复用
+  history-notice 视觉语言的克制提示行「DroidVisX was updated
+  behind this window. Run "Developer: Reload Window" to reconnect
+  the panel.」并发 `handshake-timeout` 诊断信标（新增
+  `WEBVIEW_DIAGNOSTIC_KINDS` 项 + `announceHandshakeTimeout`）；
+  Host：`DroidViewProvider` 对 `webview.ready` 的协议版本失配单独
+  打 `host.bridge.protocol-mismatch`（error 级，expected/received），
+  不再混入泛化 `host.bridge.rejected`。测试：`App.test.tsx` 2 个
+  （fake timers 超时出卡/快照到达即消、快照先到不出卡）、
+  `DroidViewProvider.test.ts` 1 个（失配走专门事件不走泛化拒收）。
+  **修复 2（P1）早期恢复快照 100% 被拒**——根因与更正记录见上文
+  「生产已接通 §9」的更正段；`validateHostMessage.ts` 的
+  `parseSessionCatalog` 增加 `allowPendingActive`（连接非
+  `connected` 时允许 activeItemId 为 null 而 sessionId 非空；
+  active 行与 sessionId 矛盾仍拒收）。测试：
+  `validateHostMessage.test.ts` 3 个（connecting 无 active 行接受、
+  unavailable 失败激活快照接受、connecting 但 active 行矛盾拒收）。
+  **修复 3（P2）会话切换/激活串行跑两遍 droid CLI**——
+  `ChatController.replaceRuntime` / `activateInitialRuntime` 的
+  `prepareActivationTranscript`（history 进程）与
+  `createInitializedRuntime`（runtime 进程）改为 `Promise.all`
+  并行；转录侧判废时新增对已就绪 runtime 候选的 close 回收；新增
+  `host.perf.session-switch`（kind/durationMs）端到端切换埋点与
+  `runtime.history.spawn`（loader 每次 CLI spawn 计时，
+  `FactorySessionHistoryLoader` 注入 diagnostics）。测试：
+  `ChatController.test.ts` 重写 2 个串行时代契约（并行启动、
+  stale 后候选必须 dispose 且不持久化）+ 新增 1 个切换埋点；
+  `FactorySessionHistoryLoader.test.ts` 3 个 spawn 观测。
+  **日志实证（修前基线，当日真实窗口日志 16 个激活实例）**：
+  `host.perf.early-snapshot` 于 +0.2s~+4.4s 发出（items>0）但每个
+  实例 `webview.render-ok` 均等于全量快照时刻 +9.1s~+15.2s，从未
+  等于早期快照时刻；`runtime.history.finished` 4,974~7,874ms 与
+  `runtime.initialize.finished` 3,243~6,495ms 纯串行。
+  **修后实证（`artifacts/probe-perf-fixes.mts`：生产
+  ChatController + FactoryDroidRuntime + FactorySessionCatalog +
+  FactorySessionHistoryLoader 真实 droid CLI + 生产
+  `readHostMessage` 校验器全链路）**：早期快照 +114ms 被生产校验
+  器**接受**（activeRows=0、connecting，修前该形状 100% 拒收）；
+  全程 0 条快照被拒；启动激活 history（11.9s）与 initialize
+  （10.2s）完全并行重叠，connected 于 +12.0s（同机串行应
+  ~22s）；真实会话切换 `host.perf.session-switch
+  durationMs=8741`，history 7,284ms ∥ initialize 5,695ms（同一
+  次运行若串行 ≈ 12,979ms + 开销，砍掉整段串行 ~5.7s；绝对值高于
+  6s 目标是因探针与门禁/构建同机并发、两段 CLI 本身偏慢，结构上
+  已是 max 而非 sum）。
+  门禁：typecheck 三 tsconfig 全过；全量 vitest 66 files /
+  1552 tests 全过；build、`pnpm vsce package --no-dependencies`
+  （10 files, 1.55 MB, `artifacts/droidvisx-perf-fixes.vsix`）、
+  `cursor --install-extension` 均成功。遗留：真实 Cursor 窗口
+  Reload 后的 `render-ok ≈ early-snapshot` 与真实 UI 切换的
+  `host.perf.session-switch` 数字待用户 Reload 现有窗口后从
+  DroidVisX Logs 核对（新包已安装；尝试用 `cursor -n` 开新窗验证
+  未成功——DroidVisX 视图未随新窗恢复可见，扩展未激活）。协调
+  说明：本批 `ChatController.ts` / `ChatController.test.ts` /
+  `extension.ts` / `bridgeMessages.ts` / `App.tsx` / `styles.css`
+  的改动被并行的终端镜像代理在 3e7da6b / 733faa3 / 62b6f1b 一并
+  提交（工作树共享所致），其余文件由本批单独提交。
 - V1 切片⑤「Canvas / 原型预览」（2026-08-12 下午，V1 #7）：
   ① **契约**：Bridge 新增 `file.preview`（`PREVIEWABLE_FILE_EXTENSIONS`
   白名单 + `isSafeWorkspaceRelativePath` 双侧校验），
@@ -2370,8 +2443,10 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 1. ~~**收藏与分组**~~ — 已完成（2026-08-11 深夜，见验证状态
    「收藏与分组切片」；[`session-management-design.md`](./session-management-design.md) §1）。
-2. ~~**恢复提速**~~ — 已完成（2026-08-12 凌晨，见验证状态
-   「恢复提速切片」；[`tier1-polish-plan.md`](./tier1-polish-plan.md) §3；从第一档提前）。
+2. ~~**恢复提速**~~ — 已完成（2026-08-12 凌晨交付但因校验器拒收
+   从未生效，2026-08-12 下午修复并实证，见验证状态「启动/切换
+   性能与可靠性修复批次」与「恢复提速切片」；
+   [`tier1-polish-plan.md`](./tier1-polish-plan.md) §3；从第一档提前）。
 3. ~~**对话内图片 + Composer 拖拽/粘贴**~~ — 两段均已完成
    （2026-08-12 凌晨，见验证状态「V1 切片③第一段/第二段」；
    [`rich-content-design.md`](./rich-content-design.md) §1、§1.5）。
