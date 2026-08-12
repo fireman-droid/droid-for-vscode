@@ -19,8 +19,6 @@ import {
 import {
   AttachmentChip,
   ChangesSummary,
-  CommandCardMenu,
-  ExecuteMirrorEntry,
   TerminalMirrorContext,
   FOLLOW_REJOIN_PX,
   HistoryNotice,
@@ -37,6 +35,10 @@ import {
   BackgroundProcessHint,
   SubagentSummaryRow,
 } from './Thread';
+import {
+  CommandCardMenu,
+  ExecuteMirrorEntry,
+} from './thread/commandCard';
 import {
   filterSlashCommands,
   findMentionToken,
