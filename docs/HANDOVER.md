@@ -57,7 +57,7 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 | [`activity-aggregation-research.md`](./product/activity-aggregation-research.md) | Cursor 工具调用聚合调研：分组规则、运行中预览窗、摘要行一手证据 | 参考（同上，仅证据存档） |
 | [`cli-coverage-assessment.md`](./product/cli-coverage-assessment.md) | CLI ↔ GUI 能力覆盖评估：10 条缺口与三类边界 | 参考（用户拍板与现行排期见本文件第 3 节；文中 V1 序号为旧排序） |
 | [`slash-parity-assessment.md`](./product/slash-parity-assessment.md) | CLI 内置斜杠命令全量对齐（0.193.0 共 55 slug 三路取证）：逐条 a/b/c/d 判定 + 补齐切片 S1(/btw)/S2(弹窗扩充)/S3(/cwd)；取代 slash-commands-design §2 旧等价表 | 调研结论（2026-08-12；切片排期见文内 §5 与下方"其他 backlog"） |
-| [`side-question-design.md`](./product/side-question-design.md) | `/btw` 侧边提问（Side Chat）：CLI 原生隐藏 fork 机制取证（btw-fork tag / lastCompletedTurn / sessions/btw 目录 / 升格语义均走公开 RPC）+ 窄栏卡片 UI + sidecar 架构 + 第一切片 | 设计待实现（2026-08-12；发版后 backlog，见下方"其他 backlog"） |
+| [`side-question-design.md`](./product/side-question-design.md) | `/btw` 侧边提问（Side Chat）：CLI 原生隐藏 fork 机制取证（btw-fork tag / lastCompletedTurn / sessions/btw 目录 / 升格语义均走公开 RPC）+ 窄栏卡片 UI + sidecar 架构 + 第一切片 | 已实现记录（S1 于 2026-08-12 晚落地并演进为全高分栏形态；daemon 通道随双模式统一切片落地；升格语义仍未做） |
 | [`mcp-permission-persistence-research.md`](./product/mcp-permission-persistence-research.md) | MCP 持久权限官方渠道调研（CLI 子命令 + settings.json 契约）+ 切片草案 | 调研结论（发版后 backlog 切片的实现依据；推翻 daemon-feature-opportunities §B3 的 fail-closed 判定） |
 | [`daemon-architecture-design.md`](./product/daemon-architecture-design.md) | daemon 化运行调研：SDK daemon 公开面、零配置鉴权方案、分阶段迁移路线 | 已实施存档（Phase 0–3 落地，见第 7 节） |
 | [`daemon-implementation-plan.md`](./product/daemon-implementation-plan.md) | daemon 化四阶段实现计划（自包含执行手册） | 已实施存档（已执行完毕，勿再照此开工；见第 7 节） |
@@ -147,14 +147,12 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 
 ### 其他 backlog（发版后，低优先级）
 
-- **`/btw` Side Chat 与 `/` 命令对齐**（2026-08-12 调研完成）：
-  S1 `/btw` 侧边提问卡片（设计已完成，见
-  [`side-question-design.md`](./product/side-question-design.md)，
-  开工前先跑文内 P1–P3 探针）；S2 `/` 弹窗 Built-in 组扩充
-  （`/compress` `/handoff` `/clear` 别名拦截——现状用户输入
-  `/compress` 会被当普通文本发给模型——加 5 条导航行映射既有
-  UI，~200 行级）；S3 `/cwd` 归入 V2 worktree 切片调研范围。
-  逐条判定见
+- **`/btw` Side Chat 与 `/` 命令对齐**（2026-08-12 调研完成；
+  当晚 S1+S2 已提前落地）：S1 `/btw` 侧边提问（已实现，最终形态为
+  全高分栏，见
+  [`side-question-design.md`](./product/side-question-design.md)）；
+  S2 `/` 弹窗 Built-in 组扩充（已实现，别名导航行）；S3 `/cwd`
+  仍归入 V2 worktree 切片调研范围。逐条判定见
   [`slash-parity-assessment.md`](./product/slash-parity-assessment.md)。
 - 「Show earlier messages」一次性展开数百条历史消息时有 300–400ms
   长任务（React 批量挂载成本；2026-08-12 性能复测时发现，与吸顶
@@ -253,8 +251,9 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
    ```
 
 6. **可见验收**：影响 UI 的切片先用浏览器 harness / 无头冒烟自查，
-   最终由用户在真实 Cursor 中验收。**版本号仍是 `0.0.0`**，同版本
-   覆盖安装后现有窗口不会自动换 Bundle：
+   最终由用户在真实 Cursor 中验收。正式版本号自 2026-08-12 起启用
+   （v0.1.0 之后按 semver 递增，发版遵循 CHANGELOG + tag +
+   verifyVsix 流程）；同版本覆盖安装后现有窗口不会自动换 Bundle：
    - **Reload Window**：加载新 Extension Bundle 与 Webview 资源，
      日常验收用它；
    - **完整退出并重启 Cursor**：额外清掉 webview service worker
@@ -307,20 +306,26 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 > 的架构专项**，有自己的调研结论和分阶段实现计划，无需牵动 V1 切片
 > 顺序（唯一交叉点是下述遗留收尾 A4，它是 #7+ 的前置）。
 
-**现状（2026-08-12，Phase 0–3 已全部落地）**：凭据黑盒复用 CLI 登录
-态（零配置）、归档/取消归档/跨会话搜索走只读 sidecar、执行链路
-`droidvisx.runtime.mode = daemon` 可选（**默认仍是 process**）、脱管
-共享 daemon + 发现文件 + 跨窗口租约（Reload 后 daemon 侧任务存活已
-探针实证）。细节与验证记录见 `implementation-status.md`「运行架构」。
-原"归档需 daemon 接入后做"的 fail-closed 判定已随 Phase 1 落地解除。
+**现状（2026-08-12 晚，Phase 0–3 落地且 daemon 已转正为默认）**：
+凭据黑盒复用 CLI 登录态（零配置）、归档/取消归档/跨会话搜索走只读
+sidecar、脱管共享 daemon + 发现文件 + 跨窗口租约（Reload 后 daemon
+侧任务存活已探针实证）。`droidvisx.runtime.mode` **默认已切为
+`daemon`**（2026-08-12 晚切片：未显式配置时 daemon 起不来会静默
+回退 process 并记 `runtime.mode.fallback`；显式选择永远生效不回退；
+/btw 与 worktree 入口按实际生效模式门控）。细节与验证记录见
+`implementation-status.md`「运行架构」。原"归档需 daemon 接入后做"
+的 fail-closed 判定已随 Phase 1 落地解除。
 
 **遗留收尾与后续机会**（现行真相在
 [`daemon-feature-opportunities.md`](./product/daemon-feature-opportunities.md)）：
 
-- **A4 基础档 reload 对账 UI**（in-flight 回合占位、pending 权限
-  重弹）——已作为第 3 节 #7+（Turn 排队）的前置排入主线，A4 先做。
-- daemon 模式转正门槛（模型目录 unavailable、浏览器 MCP OAuth）见
-  该文档 §B5；`sessions.getMessages` 探针异常核对与 A4 共享前置。
+- **A4 基础档 reload 对账 UI** —— 已落地（2026-08-12 晚：in-flight
+  回合占位、pending 权限重弹、轮询至 idle 后历史对账，真机探针
+  PASS，见 implementation-status「验证状态」）。
+- daemon 模式的两个上游能力缺口维持 fail closed（模型目录
+  reasoning 元数据、浏览器 MCP OAuth——daemon facade 无对应通道，
+  扩展侧无解法）；完整的能力×模式实测矩阵见
+  implementation-status「生产已接通 §21」。
 
 **两份历史文档（已实施存档，接手 A4 前可作背景速读，勿照此开工）**：
 
