@@ -1907,6 +1907,26 @@ export interface ToolActivityMessage {
 }
 
 /**
+ * Settles one delegation's subagent summary out of band — after the
+ * parent turn already reached a terminal state. Background Task
+ * dispatches outlive their turn (probed 2026-08-12: the invocation
+ * ledger keeps them `running` for minutes after the turn ends, and
+ * no session notification announces the change), so the Host's
+ * post-turn ledger reconcile pushes settlements through this message
+ * instead of `tool.activity`, which the webview rightly drops once
+ * the turn is over. Only the `subagent` field of the addressed tool
+ * row may change.
+ */
+export interface SubagentUpdateMessage {
+  readonly type: 'subagent.update';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly toolUseId: string;
+  readonly subagent: ToolSubagentSummary;
+}
+
+/**
  * Appends one image transcript item during a live turn: an image the
  * user attached to the prompt, an image block the assistant created,
  * or an image embedded in a tool result.
@@ -2094,6 +2114,7 @@ export type HostToWebviewMessage =
   | ThinkingDeltaMessage
   | ThinkingCompleteMessage
   | ToolActivityMessage
+  | SubagentUpdateMessage
   | TranscriptImageMessage
   | TurnChangesMessage
   | GitStatusMessage

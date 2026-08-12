@@ -4229,6 +4229,83 @@ describe('readHostMessage', () => {
     ).toBeUndefined();
   });
 
+  it('accepts out-of-band subagent settlements', () => {
+    const update = {
+      type: 'subagent.update',
+      sequence: 9,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolUseId: 'tool-1',
+      subagent: {
+        type: 'explore',
+        description: 'Background research',
+        status: 'completed',
+        toolUseCount: 7,
+        durationMs: 123_000,
+      },
+    };
+    expect(readHostMessage(update)).toEqual(update);
+    expect(
+      readHostMessage({
+        ...update,
+        subagent: {
+          type: 'explore',
+          description: '',
+          status: 'cancelled',
+        },
+      }),
+    ).toEqual({
+      ...update,
+      subagent: { type: 'explore', description: '', status: 'cancelled' },
+    });
+  });
+
+  it.each([
+    // A settlement without a status is pointless and rejected.
+    { type: 'explore', description: 'No status' },
+    // The child session id must never cross the bridge.
+    {
+      type: 'explore',
+      description: '',
+      status: 'completed',
+      childSessionId: 'leak',
+    },
+    { type: '', description: '', status: 'completed' },
+    { type: 'explore', description: '', status: 'exploded' },
+  ])('rejects malformed subagent settlements %#', (subagent) => {
+    expect(
+      readHostMessage({
+        type: 'subagent.update',
+        sequence: 9,
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        toolUseId: 'tool-1',
+        subagent,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('rejects subagent settlements with extra or missing fields', () => {
+    const update = {
+      type: 'subagent.update',
+      sequence: 9,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolUseId: 'tool-1',
+      subagent: {
+        type: 'explore',
+        description: '',
+        status: 'completed',
+      },
+    };
+    expect(
+      readHostMessage({ ...update, status: 'completed' }),
+    ).toBeUndefined();
+    const { toolUseId: _dropped, ...withoutToolUseId } = update;
+    expect(readHostMessage(withoutToolUseId)).toBeUndefined();
+    expect(readHostMessage({ ...update, toolUseId: '' })).toBeUndefined();
+  });
+
   it('accepts background hints on tool rows', () => {
     const activity = {
       type: 'tool.activity',

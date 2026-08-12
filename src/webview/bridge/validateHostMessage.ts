@@ -295,6 +295,8 @@ export function readHostMessage(
         return parseThinkingComplete(value);
       case 'tool.activity':
         return parseToolActivity(value);
+      case 'subagent.update':
+        return parseSubagentUpdate(value);
       case 'transcript.image':
         return parseTranscriptImage(value);
       case 'turn.changes':
@@ -880,6 +882,43 @@ function parseToolActivity(
       : { outputTail: value.outputTail as string }),
     ...(backgroundHint === undefined ? {} : { backgroundHint }),
     ...(subagent === undefined ? {} : { subagent }),
+  };
+}
+
+/**
+ * Out-of-band subagent settlement for one tool row. Only the
+ * `subagent` payload travels — the row's own fields are immutable
+ * from this channel — and a summary without a status is rejected
+ * because a settlement's whole point is the terminal status.
+ */
+function parseSubagentUpdate(
+  value: UnknownRecord,
+): Extract<HostToWebviewMessage, { type: 'subagent.update' }> | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'sequence',
+      'sessionId',
+      'turnId',
+      'toolUseId',
+      'subagent',
+    ]) ||
+    !hasTurnIdentity(value) ||
+    !isId(value.toolUseId)
+  ) {
+    return undefined;
+  }
+  const subagent = parseToolSubagent(value.subagent);
+  if (subagent === undefined || subagent.status === undefined) {
+    return undefined;
+  }
+  return {
+    type: 'subagent.update',
+    sequence: value.sequence,
+    sessionId: value.sessionId,
+    turnId: value.turnId,
+    toolUseId: value.toolUseId,
+    subagent,
   };
 }
 
