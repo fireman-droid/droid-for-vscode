@@ -26,8 +26,10 @@ import {
   findSlashToken,
   formatCompactDividerLabel,
   formatPlanSummary,
+  formatSubagentSummary,
   formatThinkingLabel,
   readDroppedFileUris,
+  SubagentSummaryRow,
 } from './Thread';
 
 afterEach(() => {
@@ -136,6 +138,71 @@ describe('ChangesSummary preview chip', () => {
     );
     fireEvent.click(preview);
     expect(onPreview).toHaveBeenCalledWith('prototypes/dashboard.html');
+  });
+});
+
+describe('SubagentSummaryRow', () => {
+  it('names the delegation with its ledger summary', () => {
+    render(
+      createElement(SubagentSummaryRow, {
+        subagent: {
+          type: 'explore',
+          description: 'Map the payment flow',
+          status: 'completed',
+          toolUseCount: 7,
+          durationMs: 4_200,
+        },
+      }),
+    );
+    screen.getByText('Delegated to explore subagent');
+    screen.getByText('Map the payment flow');
+    screen.getByText('completed · 7 tool uses · 4.2s');
+  });
+
+  it('stays quiet while running without counters', () => {
+    render(
+      createElement(SubagentSummaryRow, {
+        subagent: {
+          type: 'generalPurpose',
+          description: '',
+          status: 'running',
+          toolUseCount: null,
+          durationMs: null,
+        },
+      }),
+    );
+    screen.getByText('running');
+    expect(screen.queryByText(/tool use/)).toBeNull();
+    // No description span when the delegation omitted one.
+    expect(
+      document.querySelector('.dvx-subagent-description'),
+    ).toBeNull();
+    // The sub-row never animates: the parent Task row owns the
+    // turn's live treatment.
+    expect(document.querySelector('.dvx-subagent-row [class*="shimmer"]'))
+      .toBeNull();
+  });
+});
+
+describe('formatSubagentSummary', () => {
+  it('joins status, singular tool use, and duration', () => {
+    expect(
+      formatSubagentSummary({
+        status: 'failed',
+        toolUseCount: 1,
+        durationMs: 900,
+      }),
+    ).toBe('failed · 1 tool use · 0.9s');
+  });
+
+  it('omits counters the ledger never reported', () => {
+    expect(
+      formatSubagentSummary({
+        status: 'cancelled',
+        toolUseCount: null,
+        durationMs: null,
+      }),
+    ).toBe('cancelled');
   });
 });
 

@@ -1766,6 +1766,46 @@ html, body, #root {
   white-space: pre-wrap;
 }
 
+/* Delegated subagent summary: a quiet sub-row hanging one level under
+   its Task row, separated by the same hairline language as the rest
+   of the shell. The parent row owns any live shimmer; this stays
+   static. */
+.dvx-activity-row-delegating {
+  margin-bottom: 4px;
+}
+
+.dvx-subagent-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 1px;
+  margin: 0 0 12px 20px;
+  padding-left: 10px;
+  border-left: 1px solid var(--dvx-border);
+  color: var(--dvx-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.dvx-subagent-label {
+  min-width: 0;
+  overflow: hidden;
+  color: #4d4842;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-subagent-description {
+  display: -webkit-box;
+  overflow: hidden;
+  flex-basis: 100%;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--dvx-muted);
+}
+
 .dvx-tool-summary code {
   flex: 0 0 auto;
   padding: 1px 4px;

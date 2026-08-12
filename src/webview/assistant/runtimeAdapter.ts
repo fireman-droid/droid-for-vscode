@@ -398,7 +398,24 @@ function mapItemToPart(item: SessionTranscriptItem): SafeRuntimePart {
             detailKind: item.detailKind ?? null,
             detail: item.detail ?? null,
             errorMessage: item.errorMessage ?? null,
-            backgroundHint: item.backgroundHint ?? null,
+            // Rebuilt as literals: interfaces lack the index
+            // signature ReadonlyJSONValue requires.
+            backgroundHint:
+              item.backgroundHint === undefined
+                ? null
+                : {
+                    fireAndForget: item.backgroundHint.fireAndForget,
+                  },
+            subagent:
+              item.subagent === undefined
+                ? null
+                : {
+                    type: item.subagent.type,
+                    description: item.subagent.description,
+                    status: item.subagent.status ?? null,
+                    toolUseCount: item.subagent.toolUseCount ?? null,
+                    durationMs: item.subagent.durationMs ?? null,
+                  },
           },
         },
       };

@@ -2561,6 +2561,19 @@ interface ToolActivityPresentation {
    * it — so playback stays previewless by construction.
    */
   readonly outputTail: string | null;
+  /**
+   * Subagent summary of a delegating Task tool: identity from the
+   * delegation, terminal status and counters from the CLI's durable
+   * invocation ledger. One level only — child sessions never stream
+   * their internals into the parent transcript.
+   */
+  readonly subagent: {
+    readonly type: string;
+    readonly description: string;
+    readonly status: string | null;
+    readonly toolUseCount: number | null;
+    readonly durationMs: number | null;
+  } | null;
 }
 
 function readToolActivity(part: unknown): ToolActivityPresentation {
@@ -2575,6 +2588,7 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
     detail: null,
     errorMessage: null,
     outputTail: null,
+    subagent: null,
   };
   const metadata = readDroidvisxMetadata(part);
   if (
@@ -2602,6 +2616,7 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
         | "detail"
         | "errorMessage"
         | "outputTail"
+        | "subagent"
       >),
       durationMs: readMetadataDuration(metadata),
       filePath:
@@ -2626,9 +2641,39 @@ function readToolActivity(part: unknown): ToolActivityPresentation {
         metadata["outputTail"].length > 0
           ? metadata["outputTail"]
           : null,
+      subagent: readMetadataSubagent(metadata["subagent"]),
     };
   }
   return fallback;
+}
+
+function readMetadataSubagent(
+  value: unknown,
+): ToolActivityPresentation["subagent"] {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("type" in value) ||
+    typeof value.type !== "string" ||
+    value.type.length === 0 ||
+    !("description" in value) ||
+    typeof value.description !== "string"
+  ) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    type: value.type,
+    description: value.description,
+    status:
+      typeof record["status"] === "string" ? record["status"] : null,
+    toolUseCount: Number.isSafeInteger(record["toolUseCount"])
+      ? (record["toolUseCount"] as number)
+      : null,
+    durationMs: Number.isSafeInteger(record["durationMs"])
+      ? (record["durationMs"] as number)
+      : null,
+  };
 }
 
 interface PlanStep {
@@ -2731,9 +2776,11 @@ function ToolActivityRow({
     !open && activity.detailKind === "plan" && activity.detail !== null
       ? formatPlanSummary(activity.detail)
       : null;
-  return (
+  const row = (
     <details
-      className={`dvx-activity-row${running ? " dvx-activity-running" : ""}`}
+      className={`dvx-activity-row${running ? " dvx-activity-running" : ""}${
+        activity.subagent !== null ? " dvx-activity-row-delegating" : ""
+      }`}
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
@@ -2786,6 +2833,68 @@ function ToolActivityRow({
       ) : null}
     </details>
   );
+  if (activity.subagent === null) {
+    return row;
+  }
+  // The delegated subagent hangs one level under its Task row. One
+  // level only: child sessions never stream their internals into the
+  // parent transcript, so no deeper hierarchy is fabricated. The
+  // parent running row owns the turn's shimmer; the sub-row stays
+  // static (animations only belong to what is happening now).
+  return (
+    <>
+      {row}
+      <SubagentSummaryRow subagent={activity.subagent} />
+    </>
+  );
+}
+
+/** One quiet indented summary row for a delegated subagent. */
+export function SubagentSummaryRow({
+  subagent,
+}: {
+  readonly subagent: NonNullable<ToolActivityPresentation["subagent"]>;
+}): React.JSX.Element {
+  return (
+    <div className="dvx-subagent-row">
+      <span className="dvx-subagent-label">
+        {`Delegated to ${subagent.type} subagent`}
+      </span>
+      {subagent.status === null ? null : (
+        <span className="dvx-activity-state">
+          {formatSubagentSummary(subagent)}
+        </span>
+      )}
+      {subagent.description.length > 0 ? (
+        <span className="dvx-subagent-description">
+          {subagent.description}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * "running" / "completed · 7 tool uses · 4.2s"; counters only appear
+ * when the invocation ledger reported them.
+ */
+export function formatSubagentSummary(subagent: {
+  readonly status: string | null;
+  readonly toolUseCount: number | null;
+  readonly durationMs: number | null;
+}): string {
+  const pieces = [subagent.status ?? ""];
+  if (subagent.toolUseCount !== null) {
+    pieces.push(
+      `${subagent.toolUseCount} tool ${
+        subagent.toolUseCount === 1 ? "use" : "uses"
+      }`,
+    );
+  }
+  if (subagent.durationMs !== null) {
+    pieces.push(formatDuration(subagent.durationMs));
+  }
+  return pieces.filter((piece) => piece.length > 0).join(" · ");
 }
 
 /**

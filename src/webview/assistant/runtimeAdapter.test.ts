@@ -142,6 +142,51 @@ describe('Droid external-store adapter', () => {
     ).toHaveLength(4_096);
   });
 
+  it('forwards a subagent summary through tool metadata', () => {
+    const messages = mapTranscriptToRuntimeMessages(
+      [
+        { id: 'user-a', kind: 'user', text: 'Delegate it' },
+        {
+          id: 'tool-a',
+          kind: 'tool',
+          turnId: 'turn-a',
+          toolUseId: 'tool-use-a',
+          toolName: 'Task',
+          action: 'Delegated work',
+          status: 'completed',
+          progressCount: 1,
+          latestUpdateKind: null,
+          subagent: {
+            type: 'explore',
+            description: 'Map the payment flow',
+            status: 'completed',
+            toolUseCount: 7,
+            durationMs: 4_200,
+          },
+        },
+      ],
+      null,
+    );
+
+    const assistant = messages[1]!;
+    expect(assistant.content).toMatchObject([
+      {
+        type: 'tool-call',
+        providerMetadata: {
+          droidvisx: {
+            subagent: {
+              type: 'explore',
+              description: 'Map the payment flow',
+              status: 'completed',
+              toolUseCount: 7,
+              durationMs: 4_200,
+            },
+          },
+        },
+      },
+    ]);
+  });
+
   it('attaches user images to their prompt and maps others to data parts', () => {
     const image = (
       id: string,
