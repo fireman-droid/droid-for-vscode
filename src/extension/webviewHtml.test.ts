@@ -33,7 +33,7 @@ describe('getWebviewHtml', () => {
     expect(html).toContain("default-src 'none'");
     expect(html).toContain(`script-src 'nonce-${nonce}'`);
     expect(html).toContain(
-      'style-src vscode-webview://test-source',
+      `style-src vscode-webview://test-source 'nonce-${nonce}'`,
     );
     expect(html).toContain(
       'font-src vscode-webview://test-source',
@@ -58,6 +58,24 @@ describe('getWebviewHtml', () => {
       'href="vscode-webview://test/dist/webview/webview.css"',
     );
     expect(html).toContain('<div id="root"></div>');
+  });
+
+  it('paints the shell background before the stylesheet loads', () => {
+    const html = getWebviewHtml(webview, assets, nonce);
+    const styleTags = [...html.matchAll(/<style\b[^>]*>[^<]*<\/style>/g)].map(
+      ([tag]) => tag,
+    );
+
+    // Exactly one inline style, nonce'd for the CSP, that pins the
+    // warm shell background so the panel never flashes white while
+    // the external stylesheet and the bundle load.
+    expect(styleTags).toHaveLength(1);
+    expect(styleTags[0]).toContain(`nonce="${nonce}"`);
+    expect(styleTags[0]).toContain('html,body{background:#f5f3ef}');
+    // The inline style comes before the external stylesheet.
+    expect(html.indexOf('<style')).toBeLessThan(
+      html.indexOf('<link rel="stylesheet"'),
+    );
   });
 
   it('leaves ready-handshake ownership with the React bundle', () => {

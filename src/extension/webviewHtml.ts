@@ -14,6 +14,14 @@ export interface WebviewAssets {
   readonly style: WebviewResourceUri;
 }
 
+/**
+ * Painted by an inline nonce'd style before the external stylesheet
+ * and the React bundle load, so the panel never flashes the default
+ * white. Must match the `html, body` background in the webview's
+ * `styles.css`.
+ */
+const INITIAL_BACKGROUND = '#f5f3ef';
+
 export function getWebviewHtml(
   webview: WebviewSecurityContext,
   assets: WebviewAssets,
@@ -36,10 +44,11 @@ export function getWebviewHtml(
   <meta charset="UTF-8">
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; font-src ${webview.cspSource}; connect-src 'none';"
+    content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}'; font-src ${webview.cspSource}; connect-src 'none';"
   >
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DroidVisX</title>
+  <style nonce="${nonce}">html,body{background:${INITIAL_BACKGROUND}}</style>
   <link rel="stylesheet" href="${styleUri}">
 </head>
 <body>
