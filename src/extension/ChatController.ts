@@ -125,6 +125,8 @@ import {
 } from '../shared/tokenUsage';
 import { reconcileSessionHistory } from './reconcileSessionHistory';
 import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
+import { isExecuteToolName } from '../shared/toolOutput';
+import type { TerminalMirror } from './terminalMirror';
 import {
   createUnavailableAttachmentSources,
   MAX_IMAGE_ATTACHMENT_BYTES,
@@ -525,6 +527,7 @@ export class ChatController {
     private readonly gitWorkflow: GitWorkflow =
       createUnavailableGitWorkflow(),
     private readonly worktreeSessions?: WorktreeSessionsFeature,
+    private readonly terminalMirror?: TerminalMirror,
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
@@ -700,6 +703,9 @@ export class ChatController {
       case 'file.preview':
         this.handleFilePreview(message.sessionId, message.path);
         return;
+      case 'preview.inlineHtml':
+        this.handleInlineHtmlPreview(message.sessionId, message.html);
+        return;
       case 'workspace.openPath':
         this.handleWorkspaceOpenPath(
           message.sessionId,
@@ -843,6 +849,9 @@ export class ChatController {
           message.paths,
           message.message,
         );
+        return;
+      case 'terminal.openMirror':
+        this.handleTerminalOpenMirror(message.sessionId);
         return;
     }
   }
@@ -1294,6 +1303,7 @@ export class ChatController {
         if (turn === null) {
           return;
         }
+        this.mirrorExecuteEvent(sessionId, event);
         const result = projectToolEvent(turn.activity, event);
         turn.activity = result.state;
         if (result.projection !== null) {
@@ -1412,12 +1422,54 @@ export class ChatController {
     }
   }
 
+  /**
+   * Feeds execute-tool lifecycle and output into the read-only
+   * terminal mirror (native-terminal design slice A). Runs inside the
+   * current-turn gate of the event loop, so only the active session's
+   * live commands are mirrored — history replays never pass here.
+   * Mirrored text goes straight to the terminal and must never enter
+   * diagnostics logs (same red line as the transcript preview).
+   */
+  private mirrorExecuteEvent(
+    sessionId: string,
+    event: Extract<
+      RuntimeEvent,
+      { type: 'tool-start' | 'tool-progress' | 'tool-result' }
+    >,
+  ): void {
+    const mirror = this.terminalMirror;
+    if (mirror === undefined || !isExecuteToolName(event.toolName)) {
+      return;
+    }
+    switch (event.type) {
+      case 'tool-start':
+        mirror.commandStarted({
+          toolUseId: event.toolUseId,
+          ...(event.detailKind === 'command' &&
+          event.detail !== undefined
+            ? { command: event.detail }
+            : {}),
+          sessionTag: sessionId.slice(0, 8),
+        });
+        return;
+      case 'tool-progress':
+        if (event.outputTail !== undefined) {
+          mirror.commandOutput(event.toolUseId, event.outputTail);
+        }
+        return;
+      case 'tool-result':
+        mirror.commandSettled(event.toolUseId);
+        return;
+    }
+  }
+
   private handleTurnComplete(
     sessionId: string,
     turnId: string,
     event: Extract<RuntimeEvent, { type: 'turn-complete' }>,
   ): void {
     this.interactions.endTurn(sessionId, turnId);
+    this.terminalMirror?.settleAll();
     if (event.turnUsage !== undefined) {
       // Per-turn consumption regardless of outcome; interrupted and
       // failed turns still burned tokens.
@@ -2015,6 +2067,35 @@ export class ChatController {
         );
       }
     });
+  }
+
+  /** Renders a bridge-validated transcript HTML code block in the
+   * sandboxed preview panel (same surface as file previews). */
+  private handleInlineHtmlPreview(sessionId: string, html: string): void {
+    if (
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    void this.prototypePreview.openInlineHtml(html).then((outcome) => {
+      if (outcome === 'failed') {
+        this.emitSessionDiagnostic(
+          'preview-failed',
+          PREVIEW_FAILED_MESSAGE,
+        );
+      }
+    });
+  }
+
+  private handleTerminalOpenMirror(sessionId: string): void {
+    if (
+      this.connection.status !== 'connected' ||
+      sessionId !== this.sessionId
+    ) {
+      return;
+    }
+    this.terminalMirror?.open();
   }
 
   /**
@@ -4736,6 +4817,7 @@ export class ChatController {
   private async replaceRuntime(
     target: RuntimeSessionTarget,
   ): Promise<void> {
+    const switchStartedAt = performance.now();
     const generation = ++this.runtimeGeneration;
     this.turnGeneration += 1;
     this.resetSessionMetadata();
@@ -4784,11 +4866,28 @@ export class ChatController {
       }
     }
 
-    const transcript = await this.prepareActivationTranscript(
-      target,
-      generation,
-    );
-    if (transcript === null) {
+    // The transcript projection and the runtime resume each spawn their
+    // own droid CLI process and stay independent until activateRuntime
+    // consumes both; running them serially doubled session-switch
+    // latency (9-12s observed). Neither branch throws: both funnel
+    // failures into their return values.
+    const [transcript, activation] = await Promise.all([
+      this.prepareActivationTranscript(target, generation),
+      this.createInitializedRuntime(target, generation),
+    ]);
+    if (
+      transcript === null ||
+      !this.isCurrentRuntimeGeneration(generation) ||
+      !this.isTargetWorkspaceCurrent(target.cwd)
+    ) {
+      // A stale switch can still hold a live runtime when the
+      // invalidation landed after createInitializedRuntime's own
+      // staleness checks had already passed.
+      if (activation !== null && activation.status === 'available') {
+        await this.closeRuntime(activation.runtime).catch(
+          () => undefined,
+        );
+      }
       if (
         this.isCurrentRuntimeGeneration(generation) &&
         !this.isTargetWorkspaceCurrent(target.cwd)
@@ -4797,30 +4896,7 @@ export class ChatController {
       }
       return;
     }
-    if (
-      !this.isCurrentRuntimeGeneration(generation) ||
-      !this.isTargetWorkspaceCurrent(target.cwd)
-    ) {
-      if (this.isCurrentRuntimeGeneration(generation)) {
-        this.reportWorkspaceChanged(generation);
-      }
-      return;
-    }
-    const activation = await this.createInitializedRuntime(
-      target,
-      generation,
-    );
-    if (
-      !activation ||
-      !this.isCurrentRuntimeGeneration(generation) ||
-      !this.isTargetWorkspaceCurrent(target.cwd)
-    ) {
-      if (
-        this.isCurrentRuntimeGeneration(generation) &&
-        !this.isTargetWorkspaceCurrent(target.cwd)
-      ) {
-        this.reportWorkspaceChanged(generation);
-      }
+    if (activation === null) {
       return;
     }
     if (activation.status === 'failed') {
@@ -4853,6 +4929,17 @@ export class ChatController {
       generation,
       transcript,
     );
+    // End-to-end switch latency, from the replace request to the
+    // activated runtime — the number the parallel activation above is
+    // meant to shrink (verification for the serial 9-12s baseline).
+    this.recordHost({
+      level: 'info',
+      name: 'host.perf.session-switch',
+      attributes: {
+        kind: target.kind,
+        durationMs: Math.round(performance.now() - switchStartedAt),
+      },
+    });
   }
 
   private async activateInitialRuntime(
@@ -4860,28 +4947,25 @@ export class ChatController {
     failedResumeId: string | null,
   ): Promise<void> {
     const generation = ++this.runtimeGeneration;
-    const transcript = await this.prepareActivationTranscript(
-      target,
-      generation,
-    );
-    if (transcript === null) {
-      return;
-    }
+    // Same parallel activation as replaceRuntime: history projection
+    // and runtime resume are independent droid CLI processes.
+    const [transcript, activation] = await Promise.all([
+      this.prepareActivationTranscript(target, generation),
+      this.createInitializedRuntime(target, generation),
+    ]);
     if (
+      transcript === null ||
       !this.isCurrentRuntimeGeneration(generation) ||
       !this.isTargetWorkspaceCurrent(target.cwd)
     ) {
+      if (activation !== null && activation.status === 'available') {
+        await this.closeRuntime(activation.runtime).catch(
+          () => undefined,
+        );
+      }
       return;
     }
-    const activation = await this.createInitializedRuntime(
-      target,
-      generation,
-    );
-    if (
-      !activation ||
-      !this.isCurrentRuntimeGeneration(generation) ||
-      !this.isTargetWorkspaceCurrent(target.cwd)
-    ) {
+    if (activation === null) {
       return;
     }
     if (activation.status === 'failed') {
@@ -5410,6 +5494,7 @@ export class ChatController {
       this.specHandoff = null;
     }
     this.interactions.endTurn(sessionId, turnId);
+    this.terminalMirror?.settleAll();
     this.turn.status = 'failed';
     this.turn.error = TURN_FAILURE_MESSAGE;
     this.emit({

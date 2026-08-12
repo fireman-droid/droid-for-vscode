@@ -50,6 +50,7 @@ import { createVscodePathOpener } from './vscodePathOpener';
 import { PreviewPanelController } from './PreviewPanelController';
 import { createVscodeGitWorkflow } from './vscodeGitWorkflow';
 import { createWorktreeSessionsFeature } from './worktreeSessions';
+import { createTerminalMirror } from './terminalMirror';
 
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
@@ -303,8 +304,14 @@ export function activate(context: vscode.ExtensionContext): void {
   // store, catalog, and history loader the controller uses.
   const recoveryStore = new SessionRecoveryStore(persistence);
   const sessionCatalog = new FactorySessionCatalog();
-  const historyLoader = new FactorySessionHistoryLoader();
+  const historyLoader = new FactorySessionHistoryLoader({ diagnostics });
   const previewController = new PreviewPanelController(diagnostics);
+  // Read-only terminal mirror of execute-command output; takeover is
+  // fail-closed by design (native-terminal design slice A).
+  const terminalMirror = createTerminalMirror({
+    createTerminal: (name, pty) =>
+      vscode.window.createTerminal({ name, pty }),
+  });
   const controller = new ChatController(
     (interactionHandler) =>
       new FactoryDroidRuntime({
@@ -346,6 +353,7 @@ export function activate(context: vscode.ExtensionContext): void {
       enabled: runtimeMode === 'daemon',
       persistence,
     }),
+    terminalMirror,
   );
   const provider = new DroidViewProvider(
     context.extensionUri,
@@ -358,6 +366,7 @@ export function activate(context: vscode.ExtensionContext): void {
     controller,
     provider,
     previewController,
+    terminalMirror,
     diagnostics,
     attachmentSources,
     vscode.window.registerWebviewViewProvider(

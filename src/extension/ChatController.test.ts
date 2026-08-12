@@ -14,6 +14,7 @@ import type {
   RuntimeAvailability,
   RuntimeEvent,
 } from '../runtime/runtimeEvents';
+import type { RuntimeDiagnosticSink } from '../runtime/runtimeDiagnostics';
 import type {
   RuntimeAskUserResult,
   RuntimeInteractionHandler,
@@ -55,6 +56,7 @@ import {
   type WorktreeSessionsFeature,
 } from './worktreeSessions';
 import type { ExternalUrlOpener } from './externalUrlOpener';
+import type { TerminalMirror } from './terminalMirror';
 import { ChatController } from './ChatController';
 import {
   SessionRecoveryStore,
@@ -269,6 +271,124 @@ describe('ChatController', () => {
     ).toBeLessThan(
       messages.findIndex((message) => message.type === 'tool.activity'),
     );
+  });
+
+  it('mirrors execute lifecycle and output into the terminal mirror', async () => {
+    const runtime = createMockRuntime(async function* () {
+      yield {
+        type: 'tool-start',
+        toolName: 'Execute',
+        toolUseId: 'exec-1',
+        action: 'Ran a command',
+        detailKind: 'command',
+        detail: 'pnpm ls',
+      };
+      yield {
+        type: 'tool-progress',
+        toolName: 'Execute',
+        toolUseId: 'exec-1',
+        action: 'Ran a command',
+        updateKind: 'status',
+        outputTail: 'pkg-a\npkg-b',
+      };
+      yield {
+        type: 'tool-result',
+        toolName: 'Execute',
+        toolUseId: 'exec-1',
+        action: 'Ran a command',
+        isError: false,
+      };
+      yield {
+        type: 'tool-start',
+        toolName: 'Read',
+        toolUseId: 'read-1',
+        action: 'Read workspace files',
+      };
+      yield successfulTurn();
+    });
+    const mirror = createMirrorSpy();
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      mirror,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Run pnpm ls');
+
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
+    expect(mirror.commandStarted).toHaveBeenCalledExactlyOnceWith({
+      toolUseId: 'exec-1',
+      command: 'pnpm ls',
+      sessionTag: 'session-1'.slice(0, 8),
+    });
+    expect(mirror.commandOutput).toHaveBeenCalledExactlyOnceWith(
+      'exec-1',
+      'pkg-a\npkg-b',
+    );
+    expect(mirror.commandSettled).toHaveBeenCalledExactlyOnceWith(
+      'exec-1',
+    );
+    // Turn completion releases all mirror state; the non-execute
+    // Read tool never reached the mirror at all.
+    expect(mirror.settleAll).toHaveBeenCalled();
+  });
+
+  it('opens the terminal mirror only for the live session id', async () => {
+    const mirror = createMirrorSpy();
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      mirror,
+    );
+    // Before the handshake nothing is connected: fail closed.
+    controller.handleMessage({
+      type: 'terminal.openMirror',
+      sessionId: 'session-1',
+    });
+    expect(mirror.open).not.toHaveBeenCalled();
+
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'terminal.openMirror',
+      sessionId: 'forged-session',
+    });
+    expect(mirror.open).not.toHaveBeenCalled();
+
+    controller.handleMessage({
+      type: 'terminal.openMirror',
+      sessionId: 'session-1',
+    });
+    expect(mirror.open).toHaveBeenCalledTimes(1);
   });
 
   it('upgrades a Task row on delegation and settles it from the ledger', async () => {
@@ -1542,31 +1662,22 @@ describe('ChatController', () => {
     expect(JSON.stringify(messages)).not.toContain('raw-history-error');
   });
 
-  it('finishes temporary history loading before creating the resume runtime', async () => {
-    const calls: string[] = [];
+  it('starts the resume runtime while history is still loading', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
     seed.selectSession('saved-session');
     await seed.flush();
+    const pendingHistory = deferred<{
+      readonly status: 'available';
+      readonly state: ReturnType<typeof createHostTranscriptState>;
+    }>();
     const history: SessionHistoryLoader = {
-      loadHistory: vi.fn(async () => {
-        calls.push('history-loaded-and-closed');
-        return {
-          status: 'available' as const,
-          state: createHostTranscriptState('complete'),
-        };
-      }),
+      loadHistory: vi.fn(() => pendingHistory.promise),
     };
     const runtime = createMockRuntime();
-    runtime.initialize.mockImplementation(async () => {
-      calls.push('runtime-initialized');
-      return available('saved-session');
-    });
+    runtime.initialize.mockResolvedValue(available('saved-session'));
     const { controller, messages } = createController(
-      () => {
-        calls.push('runtime-created');
-        return runtime;
-      },
+      () => runtime,
       undefined,
       createCatalog([catalogEntry('saved-session')]),
       new SessionRecoveryStore(persistence, 'recovery', 0),
@@ -1574,16 +1685,26 @@ describe('ChatController', () => {
     );
 
     ready(controller);
-    await waitForConnected(messages);
+    // The runtime spawn must not queue behind the history process: the
+    // two droid CLI segments of one activation run in parallel.
+    await vi.waitFor(() => {
+      expect(runtime.initialize).toHaveBeenCalled();
+    });
+    expect(history.loadHistory).toHaveBeenCalledOnce();
+    expect(
+      connectionMessages(messages).at(-1)?.connection.status,
+    ).not.toBe('connected');
 
-    expect(calls).toEqual([
-      'history-loaded-and-closed',
-      'runtime-created',
-      'runtime-initialized',
-    ]);
+    // The activation still waits for the transcript before committing.
+    pendingHistory.resolve({
+      status: 'available',
+      state: createHostTranscriptState('complete'),
+    });
+    await waitForConnected(messages);
+    await controller.dispose();
   });
 
-  it('rejects stale history after an exact workspace change without persisting or creating its candidate', async () => {
+  it('rejects stale history after an exact workspace change without persisting, closing the parallel candidate', async () => {
     const workspace = {
       cwd: 'C:\\workspace-a',
       trusted: true,
@@ -1605,7 +1726,9 @@ describe('ChatController', () => {
     const history: SessionHistoryLoader = {
       loadHistory: vi.fn(() => staleHistory.promise),
     };
-    const createRuntime = vi.fn(() => createMockRuntime());
+    const candidate = createMockRuntime();
+    candidate.initialize.mockResolvedValue(available('saved-session'));
+    const createRuntime = vi.fn(() => candidate);
     const catalog = createCatalog([catalogEntry('saved-session')]);
     const { controller, messages } = createController(
       createRuntime,
@@ -1621,6 +1744,8 @@ describe('ChatController', () => {
         cwd: 'C:\\workspace-a',
         sessionId: 'saved-session',
       });
+      // The candidate runtime starts in parallel with the history load.
+      expect(candidate.initialize).toHaveBeenCalled();
     });
     workspace.cwd = 'C:\\workspace-b';
     workspace.trusted = false;
@@ -1649,9 +1774,66 @@ describe('ChatController', () => {
       });
     });
     expect(history.loadHistory).toHaveBeenCalledOnce();
-    expect(createRuntime).not.toHaveBeenCalled();
+    // The parallel candidate must be torn down, never activated or
+    // persisted, once the workspace change invalidates the switch.
+    expect(candidate.dispose).toHaveBeenCalled();
+    expect(candidate.sendTurn).not.toHaveBeenCalled();
     expect(writeSession).not.toHaveBeenCalled();
     expect(recovery.readSession('saved-session')).toBeUndefined();
+    await controller.dispose();
+  });
+
+  it('records an end-to-end session-switch duration on a successful switch', async () => {
+    const record = vi.fn();
+    const first = createMockRuntime();
+    first.initialize.mockResolvedValue(available('session-1'));
+    const second = createMockRuntime();
+    second.initialize.mockResolvedValue(available('session-2'));
+    const createRuntime = vi
+      .fn<() => MockRuntime>()
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(second);
+    const { controller, messages } = createController(
+      createRuntime,
+      undefined,
+      createCatalog([
+        catalogEntry('session-1'),
+        catalogEntry('session-2'),
+      ]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { record },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'session.select',
+      sessionId: 'session-2',
+    });
+
+    await vi.waitFor(() => {
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level: 'info',
+          name: 'host.perf.session-switch',
+          attributes: expect.objectContaining({
+            kind: 'resume',
+            durationMs: expect.any(Number),
+          }),
+        }),
+      );
+    });
     await controller.dispose();
   });
 
@@ -3284,6 +3466,9 @@ describe('ChatController', () => {
     const openPreview = vi.fn(
       async (): Promise<PrototypePreviewOutcome> => 'opened',
     );
+    const openInlineHtml = vi.fn(
+      async (): Promise<PrototypePreviewOutcome> => 'opened',
+    );
     const { controller, messages } = createController(
       () => createMockRuntime(),
       undefined,
@@ -3296,7 +3481,7 @@ describe('ChatController', () => {
       undefined,
       undefined,
       undefined,
-      { openPreview },
+      { openPreview, openInlineHtml },
     );
     ready(controller);
     await waitForConnected(messages);
@@ -3331,6 +3516,70 @@ describe('ChatController', () => {
       type: 'file.preview',
       sessionId: 'session-1',
       path: 'prototypes/missing.html',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+        severity: 'warning',
+        code: 'preview-failed',
+      });
+    });
+  });
+
+  it('routes inline HTML previews to the opener and reports failures', async () => {
+    const openPreview = vi.fn(
+      async (): Promise<PrototypePreviewOutcome> => 'opened',
+    );
+    const openInlineHtml = vi.fn(
+      async (): Promise<PrototypePreviewOutcome> => 'opened',
+    );
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { openPreview, openInlineHtml },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    const html = '<!DOCTYPE html><html><body>hi</body></html>';
+    controller.handleMessage({
+      type: 'preview.inlineHtml',
+      sessionId: 'session-1',
+      html,
+    });
+    await vi.waitFor(() => {
+      expect(openInlineHtml).toHaveBeenCalledWith(html);
+    });
+    expect(
+      messages.filter(
+        (message) =>
+          message.type === 'runtime.diagnostic' &&
+          message.code === 'preview-failed',
+      ),
+    ).toHaveLength(0);
+
+    // Wrong session requests never reach the opener.
+    controller.handleMessage({
+      type: 'preview.inlineHtml',
+      sessionId: 'session-other',
+      html,
+    });
+    expect(openInlineHtml).toHaveBeenCalledOnce();
+
+    // A failed inline preview surfaces a bounded warning diagnostic.
+    openInlineHtml.mockResolvedValueOnce('failed');
+    controller.handleMessage({
+      type: 'preview.inlineHtml',
+      sessionId: 'session-1',
+      html,
     });
     await vi.waitFor(() => {
       expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
@@ -6554,6 +6803,8 @@ function createController(
   prototypePreview?: PrototypePreviewOpener,
   gitWorkflow?: GitWorkflow,
   worktreeSessions?: WorktreeSessionsFeature,
+  terminalMirror?: TerminalMirror,
+  diagnostics?: RuntimeDiagnosticSink,
 ) {
   const controller = new ChatController(
     createRuntime,
@@ -6570,12 +6821,13 @@ function createController(
     changeStats,
     externalUrl,
     undefined,
-    undefined,
+    diagnostics,
     daemonSessions,
     pathOpener,
     prototypePreview,
     gitWorkflow,
     worktreeSessions,
+    terminalMirror,
   );
   const messages: HostToWebviewMessage[] = [];
   controller.subscribe((message) => {
@@ -6699,6 +6951,17 @@ function successfulTurn(): Extract<
     type: 'turn-complete',
     outcome: 'success',
   };
+}
+
+function createMirrorSpy() {
+  return {
+    open: vi.fn(),
+    commandStarted: vi.fn(),
+    commandOutput: vi.fn(),
+    commandSettled: vi.fn(),
+    settleAll: vi.fn(),
+    dispose: vi.fn(),
+  } satisfies TerminalMirror;
 }
 
 /** Live values from artifacts/probe-token-usage.out.json. */
