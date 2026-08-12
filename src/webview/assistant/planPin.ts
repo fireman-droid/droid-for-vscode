@@ -74,7 +74,7 @@ export function parsePlanSteps(detail: string): readonly PlanStep[] {
  */
 export function selectTaskPlanPin(
   transcript: readonly SessionTranscriptItem[],
-  sessionId: string | null = null,
+  sessionId: string | null,
 ): TaskPlanPinState | null {
   for (let index = transcript.length - 1; index >= 0; index -= 1) {
     const item = transcript[index];

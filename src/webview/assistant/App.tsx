@@ -685,10 +685,11 @@ export function App(): React.JSX.Element {
   );
   // Current task plan for the pin above the Composer: a pure
   // projection of the transcript's latest todowrite (no new bridge
-  // data); session switches reset it because the transcript resets.
+  // data). The session id stamps the pin so the component can tell a
+  // live finish from a finished plan restored in another session.
   const taskPlanPin = useMemo(
-    () => selectTaskPlanPin(state.transcript),
-    [state.transcript],
+    () => selectTaskPlanPin(state.transcript, state.sessionId),
+    [state.transcript, state.sessionId],
   );
   const gitFlow = useMemo<GitCommitFlowContextValue>(
     () => ({
