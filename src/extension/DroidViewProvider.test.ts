@@ -85,6 +85,61 @@ describe('DroidViewProvider', () => {
     expect(view.webview.postMessage).toHaveBeenCalledWith(snapshot);
   });
 
+  it('logs a dedicated event for a version-mismatched webview.ready', () => {
+    const controller = createController();
+    const diagnostics = { record: vi.fn() };
+    const provider = new DroidViewProvider(
+      uri('extension'),
+      controller.value,
+      diagnostics,
+    );
+    const view = createView();
+    provider.resolveWebviewView(
+      view.value,
+      {} as vscodeTypes.WebviewViewResolveContext,
+      {} as vscodeTypes.CancellationToken,
+    );
+
+    // A newer bundle greeting a stale in-memory host after a VSIX
+    // overwrite install: the handshake must fail loudly, not blend
+    // into the generic rejected stream.
+    view.receive({
+      type: 'webview.ready',
+      protocolVersion: BRIDGE_PROTOCOL_VERSION + 1,
+    });
+    expect(controller.handleMessage).not.toHaveBeenCalled();
+    expect(diagnostics.record).toHaveBeenCalledWith({
+      level: 'error',
+      name: 'host.bridge.protocol-mismatch',
+      attributes: {
+        expected: BRIDGE_PROTOCOL_VERSION,
+        received: BRIDGE_PROTOCOL_VERSION + 1,
+      },
+    });
+    expect(diagnostics.record).not.toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'host.bridge.rejected' }),
+    );
+
+    // Non-handshake garbage keeps the generic rejection record.
+    diagnostics.record.mockClear();
+    view.receive({ type: 'not-supported' });
+    expect(diagnostics.record).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'host.bridge.rejected' }),
+    );
+
+    // A matching-version ready with a malformed shape is not a
+    // protocol mismatch.
+    diagnostics.record.mockClear();
+    view.receive({
+      type: 'webview.ready',
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
+      extra: true,
+    });
+    expect(diagnostics.record).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'host.bridge.rejected' }),
+    );
+  });
+
   it('unsubscribes a disposed view without disposing the controller', () => {
     const controller = createController();
     const provider = new DroidViewProvider(

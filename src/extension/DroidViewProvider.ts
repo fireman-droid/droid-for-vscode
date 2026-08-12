@@ -1,12 +1,15 @@
 import * as vscode from 'vscode';
 
 import type { RuntimeDiagnosticSink } from '../runtime/runtimeDiagnostics';
+import { BRIDGE_PROTOCOL_VERSION } from '../shared/bridgeMessages';
+import { isStrictRecord } from '../shared/strictValidation';
 import { parseWebviewMessage } from '../shared/validateMessage';
 import type { ChatController } from './ChatController';
 import { getWebviewHtml } from './webviewHtml';
 
 const BEACON_ERROR_KINDS: ReadonlySet<string> = new Set([
   'boot-timeout',
+  'handshake-timeout',
   'error',
   'unhandledrejection',
 ]);
@@ -17,6 +20,29 @@ function safeStringify(value: unknown): string {
   } catch {
     return String(value).slice(0, 2048);
   }
+}
+
+/**
+ * Detects a `webview.ready` handshake carrying a foreign protocol
+ * version: the signature of a VSIX overwrite install where the bundle
+ * on disk is newer than this in-memory host. Such a ready must be
+ * loggable as its own event — burying it in the generic
+ * `host.bridge.rejected` stream made the resulting dead panel
+ * undiagnosable.
+ */
+function readReadyProtocolMismatch(
+  value: unknown,
+): string | number | null {
+  if (
+    !isStrictRecord(value) ||
+    value.type !== 'webview.ready' ||
+    value.protocolVersion === BRIDGE_PROTOCOL_VERSION
+  ) {
+    return null;
+  }
+  return typeof value.protocolVersion === 'number'
+    ? value.protocolVersion
+    : safeStringify(value.protocolVersion).slice(0, 64);
 }
 
 export class DroidViewProvider
@@ -82,6 +108,18 @@ export class DroidViewProvider
       (untrustedMessage: unknown) => {
         const message = parseWebviewMessage(untrustedMessage);
         if (message === undefined) {
+          const mismatch = readReadyProtocolMismatch(untrustedMessage);
+          if (mismatch !== null) {
+            this.diagnostics?.record({
+              level: 'error',
+              name: 'host.bridge.protocol-mismatch',
+              attributes: {
+                expected: BRIDGE_PROTOCOL_VERSION,
+                received: mismatch,
+              },
+            });
+            return;
+          }
           // Validation rejections used to be silent, which made
           // host<->webview message loss undiagnosable.
           this.diagnostics?.record({
