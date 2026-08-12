@@ -1411,6 +1411,29 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
   （S2 别名/导航 + slashBuiltins 模块）；S1 的 Thread/App/store
   接线与 `store.btw.test.ts` 在热点文件并发下随 `7a8e33a`/
   `7f95587` 入库（工作树内容一致、门禁全绿）
+- **形态重做（2026-08-12 晚，用户拍板，提交 `aaaca96`）**：首版
+  Composer 上方卡片被用户真机否决（"我都说做成 claude 那样，右边
+  出现一个 side question"）。展现层重做为 Claude Code 同款**右缘
+  滑入全高面板**：宽 `min(420px, 82%)`、左侧留主对话可见窄边 +
+  暖色半透明遮罩（点击可关）、左缘 1px 边框 + 双层左投影、滑入
+  220ms/滑出 200ms（reduced-motion 全禁）；结构 = 安静标题行
+  （Side question + ×）→ muted 斜体提示语（对照 Claude 原文）→
+  Q&A 转录区（内部滚动）→ 底部钉输入行（框式输入 + accent 发送
+  按钮，Enter/点击发送）；空态 = 提示语 + 输入框。挂载从 Composer
+  `sideChat` 槽迁到 App 根级（Thread.tsx 槽位管线拆除）；隐藏
+  fork/deny-all 权限/关闭即弃/会话切换清理/Bridge 契约零改动，
+  新增遮罩点击关闭。设计文档 §4.2 已重写为决策记录。门禁：
+  typecheck 三 tsconfig 过、全量 vitest 80 files / 1818 tests
+  全绿、build 绿；冒烟升级为七场景（新增 narrow：320px 仿真下
+  面板 262px + 左边条可见 + 遮罩关闭发 dismiss）对新产物全 PASS，
+  新形态截图目检（空态/问答态/320px）通过。冒烟脚本加预热导航：
+  重建后首跑的冷缓存加载（懒加载 markdown/mermaid 分包）会拖垮
+  等待窗口造成假失败——即此前记录的"20:00 瞬态失败"的真实成因。
+  伴生 `9d0986b`（chore）：`aaaca96` 的共享文件 hunk 不可避免带入
+  并行代理在途的 ActivityGroup 跑马灯接线，将其引用的
+  `activityGrouping` 助手（18 测试绿）落地保 HEAD 可编译，跑马灯
+  切片仍归原代理。**本次重做未打包，随下一个修复包**（当前安装包
+  仍是旧卡片形态）
 
 ### 19. Turn 运行中排队消息（2026-08-12 晚，V1 主线收官切片）
 

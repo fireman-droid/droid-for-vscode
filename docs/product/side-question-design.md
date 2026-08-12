@@ -27,9 +27,9 @@ fork 时 CLI 会把它**升格**为正式会话（`promoteBtwSessionIfNeeded`）
 核心），主会话（含正在跑的 turn）零打扰。Host 侧不动 ChatController
 的单会话绑定，新增一个独立的 **btw sidecar**（沿用
 `FactoryCommandCatalog` / `FactorySessionHistoryLoader` 已验证的
-短生命周期公开 client 模式）。UI 是 Composer 上方一张安静的
-"Side chat" 卡片（复用 `ComposerPopup` 壳与 slash 弹窗几何），
-适配窄侧栏，不学 Claude 的宽右栏。
+短生命周期公开 client 模式）。UI 是**右缘滑入的全高 "Side
+question" 面板**（Claude Code 同形态；用户拍板 2026-08-12 晚，
+推翻首版 Composer 上方卡片，见 §4.2 决策记录）。
 
 ## 1. 参考形态与需求
 
@@ -178,32 +178,36 @@ sidecar 里做（§5）。
 - 不加 `+` 菜单入口、不加常驻按钮（UI restraint：斜杠入口已够，
   等真实使用反馈再说）。
 
-### 4.2 形态：Composer 上方的 "Side chat" 卡片（非右侧栏、非全屏）
+### 4.2 形态：右缘滑入的全高 "Side question" 面板
 
-我们是窄 Secondary Sidebar（常见 320–480px），没有 Claude 那种可
-分栏的宽度。两个候选：
+**决策记录（2026-08-12 晚，用户拍板）**：首版按下方原候选 A
+（Composer 上方卡片，复用 `ComposerPopup` 壳）交付后，用户对照
+真机判定形态做错——"我都说做成 claude 那样，右边出现一个 side
+question"。展现层重做为 Claude Code 同款右侧面板（提交
+`aaaca96`），隐藏 fork / deny-all 权限 / 关闭即弃 / 会话切换清理 /
+Bridge 契约全部不动。原候选讨论保留在 git 历史（d4a4fbc 版本）。
 
-- **A（推荐）：锚定 Composer 上方的卡片**，几何完全复用 `@` / `/`
-  弹窗（同宽、圆角、1px 边框、soft shadow、内部滚动、
-  `prefers-reduced-motion` 无动画），壳直接用
-  `ComposerPopup`（`src/webview/assistant/ComposerPopup.tsx`，
-  自带滚轮封锁 + 外点关闭 + Esc）。区别于 slash 弹窗的一点：
-  **提交后不自动关**（外点关闭行为要可配置，改 `ComposerPopup`
-  加一个 `dismissOnOutsidePress?: boolean`）。
-- B：转录与 Composer 之间的上下分栏常驻区。弃：窄栏里常驻分栏
-  挤压转录可视高度，与"轻量、即用即走"定位相反，也违反 UI
-  restraint（新增常驻结构面）。
+最终形态（`SideChatSheet.tsx`，App 根级挂载，不再走 Composer 的
+`sideChat` 槽）：
 
-卡片内容（自上而下，全部沿用既有安静视觉语言）：
-
-1. 标头行：`Side chat` 小字标签 + 关闭 `×`（复用
-   `dvx-*` 现有标签/按钮样式）；
-2. Q&A 列表（内部滚动，最大高度约视口 45%）：问题行（用户文本，
-   次级底色）+ 答案区（Markdown 渲染复用 `MarkdownText`，
-   streaming 时复用现有 shimmer/流式样式；错误时单行安静错误文案）；
-3. mini 输入行：单行输入 + Enter 提交（占位符
-   "Ask a side question…"），侧问 streaming 中可继续输入、
-   排队策略见 §6 边界。
+- **全高右缘面板**：`position: fixed` overlay（z-index 55，低于
+  图片 lightbox 60），面板宽 `min(420px, 82%)`——窄 Secondary
+  Sidebar（320px）下约 262px，左侧留一条主对话可见的窄边 + 半透明
+  暖色遮罩（`rgb(38 33 27 / 18%)`），点遮罩即关。左缘 1px 边框 +
+  双层柔和左投影；滑入 220ms / 滑出 200ms（遮罩同步淡入淡出），
+  `prefers-reduced-motion` 全部禁用。
+- **面板结构**（自上而下）：
+  1. 安静标题行：`Side question`（12px/650）+ 右上 `×`；
+  2. muted 斜体提示语（对照 Claude 原文）："Ask a quick side
+     question below without interrupting the conversation."；
+  3. Q&A 转录区（flex:1 内部滚动，`overscroll-behavior:
+     contain`）：问题行加粗 + 答案 Markdown（复用
+     `MarkdownText`，streaming shimmer / 安静错误行不变）；
+  4. **输入行钉在面板底部**：框式单行输入（raised 白底、1px 边框、
+     accent 聚焦环）+ 自带 accent 发送按钮（↑，空文本禁用），
+     Enter 或点击发送。
+- 空态 = 标题 + 提示语 + 底部输入框（对照 Claude 截图二）。
+- 关闭路径：`×`、遮罩、Esc、会话切换——语义仍是关卡即弃 fork。
 
 主 Composer、主转录完全不动；主 turn 的流式渲染不受影响。
 
@@ -361,7 +365,7 @@ unsupported；无 Promote、无附件、无历史回看。
 | Runtime | `src/runtime/btw/BtwSidecar.ts`（新） | fork + ask 流 + dispose | ~200 行 |
 | Host | `ChatController.ts` | btw 消息分支、生命周期挂钩、有界投影 | ~150 行 |
 | Webview | `store.ts` / `App.tsx` | btw 状态 + `/btw` 拦截 | ~80 行 |
-| Webview | `SideChatSheet.tsx`（新）+ `Thread.tsx` + `ComposerPopup.tsx` | 卡片组件、Built-in 行、`dismissOnOutsidePress` | ~260 行 |
+| Webview | `SideChatSheet.tsx`（新）+ `Thread.tsx` + `App.tsx` | 右缘面板组件（App 根级挂载）、Built-in 行 | ~260 行 |
 | Webview | `styles.css` | `dvx-btw-*`（追加，遵守轻奢视觉基线） | ~90 行 |
 | 测试 | 各层 `.test.ts(x)` | 校验/守卫/生命周期/组件 | ~500 行 |
 
