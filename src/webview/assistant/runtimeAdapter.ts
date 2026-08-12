@@ -285,7 +285,9 @@ export function mapTranscriptToRuntimeMessages(
   const descriptors: (UserMessageDescriptor | AssistantGroupDescriptor)[] = [];
   const groups = new Map<string, AssistantGroupDescriptor>();
 
-  const appendToGroup = (item: SessionTranscriptItem): void => {
+  const appendToGroup = (
+    item: Exclude<SessionTranscriptItem, { kind: "user" }>,
+  ): void => {
     const key = item.turnId ?? `diagnostic:${item.id}`;
     let group = groups.get(key);
     if (group === undefined) {
