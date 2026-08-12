@@ -19,6 +19,7 @@ import {
 } from '../../shared/bridgeMessages';
 import {
   announceBooted,
+  announceHandshakeTimeout,
   announceReady,
   announceRendered,
   getVsCodeApi,
@@ -54,6 +55,14 @@ import {
 } from './GitCommitPanel';
 import { findLatestChangesContext } from './gitCommitDraft';
 import './styles.css';
+
+/**
+ * How long the webview waits after `webview.ready` for any host
+ * message before showing the reload hint. The normal first snapshot
+ * arrives within milliseconds; only a dead or version-mismatched host
+ * stays silent this long.
+ */
+const HANDSHAKE_TIMEOUT_MS = 5_000;
 
 export function App(): React.JSX.Element {
   const vscodeRef = useRef<ReturnType<typeof getVsCodeApi> | null>(null);
@@ -200,6 +209,26 @@ export function App(): React.JSX.Element {
       announceRendered(vscode, state.transcript.length);
     }
   }, [state.transcript.length, vscode]);
+
+  // Handshake fallback: after a VSIX overwrite install the stale
+  // in-memory host silently drops the newer bundle's `webview.ready`
+  // (protocol version mismatch) and never sends a snapshot. When
+  // nothing at all arrives within the window, surface a quiet reload
+  // hint instead of a forever-idle panel.
+  const receivedHostMessage = state.sequence >= 0;
+  const [handshakeStalled, setHandshakeStalled] = useState(false);
+  useEffect(() => {
+    if (receivedHostMessage) {
+      setHandshakeStalled(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setHandshakeStalled(true);
+      announceHandshakeTimeout(vscode, HANDSHAKE_TIMEOUT_MS);
+    }, HANDSHAKE_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [receivedHostMessage, vscode]);
+  const showHandshakeNotice = handshakeStalled && !receivedHostMessage;
 
   const active = isTurnActive(state.turn);
   const hasInteraction = state.interactions.length > 0;
@@ -997,7 +1026,7 @@ export function App(): React.JSX.Element {
           connectionStatus === 'connected' && active
             ? ' dvx-anim-live'
             : ''
-        }`}
+        }${showHandshakeNotice ? ' dvx-shell-stalled' : ''}`}
       >
         <Header
           state={state}
@@ -1013,6 +1042,15 @@ export function App(): React.JSX.Element {
           onRefreshArchived={handleRefreshArchived}
           onSearchContent={handleSearchContent}
         />
+        {showHandshakeNotice ? (
+          <aside
+            className="dvx-history-notice dvx-handshake-notice"
+            role="alert"
+          >
+            DroidVisX was updated behind this window. Run “Developer:
+            Reload Window” to reconnect the panel.
+          </aside>
+        ) : null}
         <DroidThread
           pending={showPending}
           activity={state.turn?.activity}
@@ -1151,7 +1189,7 @@ function Header({
     <header className="dvx-header">
       <div className="dvx-brand">
         <div>
-          <div className="dvx-title">DroidVisX</div>
+          <div className="dvx-title">Droid</div>
           <div
             className="dvx-runtime-status"
             role={

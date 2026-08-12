@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ComposerControls,
+  rankNameMatches,
   shouldOpenPopoverDown,
 } from './ComposerControls';
 
@@ -44,6 +45,32 @@ describe('shouldOpenPopoverDown', () => {
 
   it('stays upward when below is even tighter than above', () => {
     expect(shouldOpenPopoverDown(200, 100)).toBe(false);
+  });
+});
+
+describe('rankNameMatches', () => {
+  it('matches names only, never descriptions', () => {
+    // Regression: searching "figma" used to surface agent-browser
+    // because its description mentions Figma.
+    const items = [
+      { name: 'agent-browser', description: 'Drives Figma via browser.' },
+      { name: 'figma-design-extract', description: 'Extracts specs.' },
+    ];
+    expect(rankNameMatches(items, 'figma', 5).map((item) => item.name)).toEqual(
+      ['figma-design-extract'],
+    );
+  });
+
+  it('ranks prefix hits above substring hits and caps results', () => {
+    const items = [
+      { name: 'review-figma' },
+      { name: 'figma-sync' },
+      { name: 'my-figma-tool' },
+      { name: 'figma' },
+    ];
+    expect(rankNameMatches(items, 'figma', 3).map((item) => item.name)).toEqual(
+      ['figma-sync', 'figma', 'review-figma'],
+    );
   });
 });
 
@@ -172,14 +199,19 @@ describe('ComposerControls', () => {
         'Current context window unavailable; Droid reported 125 tokens against a 100 model limit',
       ),
     );
-    expect(screen.getByText('Current window unavailable')).toBeDefined();
+    expect(screen.getByText('Over model limit')).toBeDefined();
     expect(screen.getByText('125 tokens reported')).toBeDefined();
     expect(
       screen.getByText(/not a trustworthy active-window percentage/),
     ).toBeDefined();
-    expect(
-      screen.queryByRole('progressbar', { name: 'Context used' }),
-    ).toBeNull();
+    // Degraded visual: the bar stays, pinned full and labeled as an
+    // estimate, instead of vanishing and hollowing out the card.
+    const overBar = screen.getByRole('progressbar', {
+      name: 'Context used',
+    });
+    expect(overBar.getAttribute('aria-valuenow')).toBe('100');
+    expect(overBar.getAttribute('aria-valuetext')).toContain('Estimated');
+    expect(overBar.className).toContain('dvx-context-progress-over');
     expect(screen.getByText('Model limit')).toBeDefined();
     expect(screen.getByText('100')).toBeDefined();
   });

@@ -552,26 +552,17 @@ function SettingsPopover({
     'attach files editor selection context'.includes(normalizedQuery);
   // Real catalog entries also answer the search, so typing a skill or
   // server name surfaces it directly instead of only the static rows.
+  // Matching is name-only (Cursor behavior): description hits pulled
+  // in unrelated entries (searching "figma" surfaced agent-browser
+  // because its description mentions Figma) with no visible reason.
   const matchedSkills =
     normalizedQuery.length === 0
       ? []
-      : skills.items
-          .filter(
-            (skill) =>
-              skill.name.toLocaleLowerCase().includes(normalizedQuery) ||
-              (skill.description ?? '')
-                .toLocaleLowerCase()
-                .includes(normalizedQuery),
-          )
-          .slice(0, 5);
+      : rankNameMatches(skills.items, normalizedQuery, 5);
   const matchedServers =
     normalizedQuery.length === 0
       ? []
-      : mcp.items
-          .filter((server) =>
-            server.name.toLocaleLowerCase().includes(normalizedQuery),
-          )
-          .slice(0, 5);
+      : rankNameMatches(mcp.items, normalizedQuery, 5);
 
   if (view === 'skills') {
     return (
@@ -805,6 +796,29 @@ function SettingsPopover({
   );
 }
 
+/**
+ * Filters entries whose name contains the query and ranks prefix
+ * hits above substring hits (ties keep catalog order). Descriptions
+ * are deliberately not searched — see the settings search comment.
+ */
+export function rankNameMatches<T extends { readonly name: string }>(
+  items: readonly T[],
+  normalizedQuery: string,
+  limit: number,
+): readonly T[] {
+  const prefix: T[] = [];
+  const substring: T[] = [];
+  for (const item of items) {
+    const name = item.name.toLocaleLowerCase();
+    if (name.startsWith(normalizedQuery)) {
+      prefix.push(item);
+    } else if (name.includes(normalizedQuery)) {
+      substring.push(item);
+    }
+  }
+  return [...prefix, ...substring].slice(0, limit);
+}
+
 function SkillsPanel({
   skills,
   disabled,
@@ -832,24 +846,26 @@ function SkillsPanel({
   }, [skills.status]);
   return (
     <div className="dvx-skills-panel">
-      <div className="dvx-popover-heading">
+      <div className="dvx-panel-head">
         <button
           type="button"
-          className="dvx-skills-back"
+          className="dvx-panel-back"
           aria-label="Back to session controls"
           onClick={onBack}
         >
           <ChevronLeftIcon />
-          <strong>Skills</strong>
+          <span className="dvx-panel-title">Skills</span>
         </button>
-        <button
-          type="button"
-          className="dvx-popover-refresh"
-          disabled={busy}
-          onClick={onRefresh}
-        >
-          Refresh
-        </button>
+        <div className="dvx-panel-actions">
+          <button
+            type="button"
+            className="dvx-panel-action"
+            disabled={busy}
+            onClick={onRefresh}
+          >
+            Refresh
+          </button>
+        </div>
       </div>
       {skills.status === 'unsupported' || skills.status === 'error' ? (
         <p
@@ -989,33 +1005,35 @@ function McpPanel({
     (auth.phase === 'started' || auth.phase === 'browser');
   return (
     <div className="dvx-skills-panel">
-      <div className="dvx-popover-heading">
+      <div className="dvx-panel-head">
         <button
           type="button"
-          className="dvx-skills-back"
+          className="dvx-panel-back"
           aria-label="Back to session controls"
           onClick={onBack}
         >
           <ChevronLeftIcon />
-          <strong>MCP servers</strong>
+          <span className="dvx-panel-title">MCP servers</span>
         </button>
-        <button
-          type="button"
-          className="dvx-popover-refresh"
-          disabled={disabled || busy}
-          aria-expanded={adding}
-          onClick={() => setAdding((current) => !current)}
-        >
-          {adding ? 'Close' : 'Add'}
-        </button>
-        <button
-          type="button"
-          className="dvx-popover-refresh"
-          disabled={busy}
-          onClick={onRefresh}
-        >
-          Refresh
-        </button>
+        <div className="dvx-panel-actions">
+          <button
+            type="button"
+            className="dvx-panel-action"
+            disabled={disabled || busy}
+            aria-expanded={adding}
+            onClick={() => setAdding((current) => !current)}
+          >
+            {adding ? 'Close' : 'Add'}
+          </button>
+          <button
+            type="button"
+            className="dvx-panel-action"
+            disabled={busy}
+            onClick={onRefresh}
+          >
+            Refresh
+          </button>
+        </div>
       </div>
       {adding ? (
         <McpAddServerForm
@@ -1798,16 +1816,18 @@ function ContextPopover({
       role="dialog"
       aria-label="Context usage"
     >
-      <div className="dvx-popover-heading">
-        <strong>Context usage</strong>
-        <button
-          type="button"
-          className="dvx-popover-refresh"
-          disabled={disabled}
-          onClick={onRefresh}
-        >
-          Refresh
-        </button>
+      <div className="dvx-panel-head">
+        <span className="dvx-panel-title">Context usage</span>
+        <div className="dvx-panel-actions">
+          <button
+            type="button"
+            className="dvx-panel-action"
+            disabled={disabled}
+            onClick={onRefresh}
+          >
+            Refresh
+          </button>
+        </div>
       </div>
       {context.value !== null ? (
         <ContextUsage stats={context.value} />
@@ -1857,11 +1877,31 @@ function ContextUsage({
   readonly stats: NonNullable<SessionContextState['value']>;
 }): React.JSX.Element {
   if (!hasUsableContextRatio(stats)) {
+    // Degraded visual: the bar stays (full, with an overflow tick at
+    // the end) so the card keeps its shape when totals exceed the
+    // model limit; the Estimated badge flags the reduced accuracy.
     return (
       <div className="dvx-context-usage dvx-context-usage-unavailable">
         <div className="dvx-context-usage-summary">
-          <strong>Current window unavailable</strong>
+          <strong>Over model limit</strong>
+          <span className="dvx-context-estimated" aria-hidden="true">
+            Estimated
+          </span>
           <span>{formatCount(stats.used)} tokens reported</span>
+        </div>
+        <div
+          className="dvx-context-progress dvx-context-progress-over"
+          role="progressbar"
+          aria-label="Context used"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={100}
+          aria-valuetext={`Estimated over the model limit: ${formatCount(
+            stats.used,
+          )} tokens reported, limit ${formatCount(stats.limit)}`}
+        >
+          <span style={{ width: '100%' }} />
+          <span className="dvx-context-overflow-tick" aria-hidden="true" />
         </div>
         <p className="dvx-context-usage-note">
           Droid returned totals beyond the model limit. Long sessions can
