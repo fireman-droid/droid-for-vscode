@@ -254,7 +254,13 @@ export const SessionDrawer = memo(function SessionDrawer({
                           session={session}
                           disabled={disabled}
                           onSelect={(sessionId) =>
-                            runOnce(() => onSelectSession(sessionId))
+                            // Selecting navigates: the drawer closes and
+                            // the chat view takes over immediately, like
+                            // Cursor's history list.
+                            runOnce(() => {
+                              setOpen(false);
+                              onSelectSession(sessionId);
+                            })
                           }
                           onRename={onRenameSession}
                           onFork={(sessionId) =>
@@ -291,7 +297,11 @@ export const SessionDrawer = memo(function SessionDrawer({
                 catalogIds={catalogIds}
                 disabled={disabled}
                 onSelect={(sessionId) =>
-                  runOnce(() => onSelectSession(sessionId))
+                  // Same navigation contract as the catalog rows.
+                  runOnce(() => {
+                    setOpen(false);
+                    onSelectSession(sessionId);
+                  })
                 }
               />
             ) : null}

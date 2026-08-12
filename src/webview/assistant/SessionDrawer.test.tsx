@@ -84,6 +84,10 @@ describe('SessionDrawer', () => {
     );
     expect(onSelect).toHaveBeenCalledOnce();
     expect(onSelect).toHaveBeenCalledWith('session-b');
+    // Selection navigates to the chat view: the drawer closes with it.
+    expect(
+      screen.queryByRole('complementary', { name: 'Session history' }),
+    ).toBeNull();
   });
 
   it('gates session switching and closes with Escape', async () => {
@@ -404,6 +408,10 @@ describe('SessionDrawer', () => {
     await user.click(matchButtons[0]);
     expect(onSelect).toHaveBeenCalledOnce();
     expect(onSelect).toHaveBeenCalledWith('session-b');
+    // Content-match selection navigates too.
+    expect(
+      screen.queryByRole('complementary', { name: 'Session history' }),
+    ).toBeNull();
   });
 
   it('surfaces daemon search errors inside the matches section', async () => {
