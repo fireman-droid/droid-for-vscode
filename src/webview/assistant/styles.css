@@ -3050,29 +3050,55 @@ body {
   line-height: 21.125px;
 }
 
-.dvx-activity-group-preview {
-  overflow-y: auto;
-  max-height: 144px;
-  margin-top: 4px;
+/* Running collapsed group: a one-row viewport under the header; the
+   track slides up one row height when the active member advances
+   (vertical ticker, user report batch 2 §1). Transient status only,
+   so it takes no clicks. */
+.dvx-activity-ticker {
+  --dvx-ticker-row: 22px;
+
+  height: var(--dvx-ticker-row);
+  overflow: hidden;
+  margin-top: 2px;
   padding-left: 12px;
-  scroll-behavior: smooth;
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    #000 28px
-  );
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    #000 28px
-  );
+  pointer-events: none;
+}
+
+.dvx-ticker-track {
+  display: flex;
+  flex-direction: column;
+}
+
+.dvx-ticker-track.dvx-ticker-slide {
+  transform: translateY(calc(-1 * var(--dvx-ticker-row, 22px)));
+  transition: transform 240ms var(--dvx-easing-out-strong);
+}
+
+.dvx-ticker-item {
+  height: var(--dvx-ticker-row);
+  overflow: hidden;
+}
+
+.dvx-ticker-item .dvx-activity-row {
+  margin: 0;
+}
+
+.dvx-ticker-item .dvx-activity-row summary {
+  min-height: var(--dvx-ticker-row);
+  line-height: var(--dvx-ticker-row);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-ticker-track.dvx-ticker-slide {
+    transition: none;
+  }
 }
 
 /* Only the group header shimmers while the run is live; member rows
-   inside the preview stay static so each turn keeps at most one
+   inside the ticker stay static so each turn keeps at most one
    shimmer (activity-shimmer-fix invariant). */
-.dvx-activity-group-preview .dvx-activity-running .dvx-tool-action,
-.dvx-activity-group-preview .dvx-shimmer-text,
+.dvx-activity-ticker .dvx-activity-running .dvx-tool-action,
+.dvx-activity-ticker .dvx-shimmer-text,
 .dvx-thread-pending .dvx-activity-group-header .dvx-shimmer-text {
   background-image: none;
   background-clip: border-box;
@@ -6067,34 +6093,115 @@ body {
   user-select: text;
 }
 
-/* ---- /btw Side chat card ----------------------------------------
-   Reuses the .dvx-mention-popup shell (anchor, border, radius,
-   shadow, root scrolling) above the composer; the header and input
-   row stay pinned while the Q&A entries scroll between them. */
-.dvx-btw-popup {
-  max-height: min(340px, 55vh);
-  padding: 0;
+/* ---- /btw side question panel ------------------------------------
+   Claude Code form factor (user decision 2026-08-12): a full-height
+   sheet slides in from the webview's right edge over a scrim. The
+   panel keeps the shell's warm layered finish — raised surface, 1px
+   left border, doubled soft shadow — with the header and input row
+   pinned while the Q&A transcript scrolls between them. Below the
+   image lightbox (60) so answer images can still zoom above it. */
+.dvx-btw-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dvx-btw-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgb(38 33 27 / 18%);
+  animation: dvx-btw-fade-in 180ms ease-out;
+}
+
+.dvx-btw-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 82%);
+  height: 100%;
+  border-left: 1px solid var(--dvx-border, #e5e5e5);
+  background:
+    linear-gradient(180deg, #fff 0%, #fdfcfa 100%),
+    var(--dvx-raised, #fff);
+  box-shadow:
+    -6px 0 18px -8px rgb(0 0 0 / 14%),
+    -20px 0 48px -20px rgb(0 0 0 / 18%);
+  animation: dvx-btw-slide-in 220ms cubic-bezier(0.22, 0.9, 0.32, 1);
+}
+
+.dvx-btw-leaving .dvx-btw-panel {
+  animation: dvx-btw-slide-out 200ms ease-in forwards;
+}
+
+.dvx-btw-leaving .dvx-btw-scrim {
+  animation: dvx-btw-fade-out 200ms ease-in forwards;
+}
+
+@keyframes dvx-btw-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes dvx-btw-slide-out {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes dvx-btw-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dvx-btw-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-btw-panel,
+  .dvx-btw-scrim,
+  .dvx-btw-leaving .dvx-btw-panel,
+  .dvx-btw-leaving .dvx-btw-scrim {
+    animation: none;
+  }
 }
 
 .dvx-btw-header {
-  position: sticky;
-  top: 0;
-  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 7px 10px 6px 12px;
-  border-bottom: 1px solid var(--dvx-border, #e5e5e5);
-  background: #fff;
+  flex: none;
+  padding: 10px 10px 8px 16px;
   user-select: none;
 }
 
 .dvx-btw-title {
-  color: var(--dvx-muted, #737373);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
+  color: var(--dvx-ink, #262626);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
 }
 
 .dvx-btw-close {
@@ -6121,20 +6228,31 @@ body {
   color: var(--dvx-ink, #262626);
 }
 
-.dvx-btw-entries {
-  padding: 10px 12px;
+/* Muted one-liner under the header, mirroring Claude Code's copy. */
+.dvx-btw-hint {
+  flex: none;
+  margin: 0;
+  padding: 0 16px 10px;
+  color: var(--dvx-muted, #737373);
+  font-size: 11.5px;
+  font-style: italic;
+  line-height: 1.5;
+  user-select: none;
 }
 
-.dvx-btw-hint {
-  color: var(--dvx-muted, #737373);
-  font-size: 12px;
-  line-height: 1.5;
+.dvx-btw-entries {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px;
+  border-top: 1px solid var(--dvx-border, #e5e5e5);
+  overscroll-behavior: contain;
 }
 
 .dvx-btw-entry + .dvx-btw-entry {
-  margin-top: 10px;
+  margin-top: 12px;
   border-top: 1px solid var(--dvx-border, #e5e5e5);
-  padding-top: 10px;
+  padding-top: 12px;
 }
 
 .dvx-btw-question {
@@ -6175,24 +6293,38 @@ body {
   line-height: 1.45;
 }
 
+/* Input pinned to the panel foot: a framed field in the composer's
+   register (raised surface, 1px border, focus ring) with its own
+   accent send button. */
 .dvx-btw-input-row {
-  position: sticky;
-  bottom: 0;
-  padding: 8px 12px 9px;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 12px 12px;
   border-top: 1px solid var(--dvx-border, #e5e5e5);
-  background: #fff;
+  background: var(--dvx-surface, #f5f3ef);
 }
 
 .dvx-btw-input {
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
+  min-width: 0;
+  flex: 1;
+  padding: 7px 11px;
+  border: 1px solid var(--dvx-border, #e5e5e5);
+  border-radius: 9px;
+  background: var(--dvx-raised, #fff);
   color: var(--dvx-ink, #262626);
   font-size: 12px;
   line-height: 1.5;
   outline: none;
+  transition: border-color 130ms ease, box-shadow 130ms ease;
   user-select: text;
+}
+
+.dvx-btw-input:focus-visible {
+  border-color: var(--dvx-accent, #f2612e);
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--dvx-accent, #f2612e) 18%, transparent);
 }
 
 .dvx-btw-input::placeholder {
@@ -6201,6 +6333,32 @@ body {
 
 .dvx-btw-input:disabled {
   color: var(--dvx-muted, #737373);
+}
+
+.dvx-btw-send {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: var(--dvx-accent, #f2612e);
+  box-shadow: 0 5px 12px rgb(222 84 36 / 20%);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 130ms ease, transform 130ms ease;
+}
+
+.dvx-btw-send:hover:not(:disabled) {
+  background: var(--dvx-accent-strong, #df5020);
+}
+
+.dvx-btw-send:active:not(:disabled) {
+  transform: scale(0.94);
 }
 
 /* Task plan pin: the session's current plan pinned above the

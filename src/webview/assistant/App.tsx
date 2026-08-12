@@ -1284,15 +1284,6 @@ export function App(): React.JSX.Element {
           onSlashNavigate={handleSlashNavigate}
           btwAvailable={btwAvailable}
           onBtwOpen={handleBtwOpen}
-          sideChat={
-            btwOpen && btwAvailable && sessionId !== null ? (
-              <SideChatSheet
-                btw={state.btw}
-                onAsk={handleBtwAsk}
-                onDismiss={handleBtwDismiss}
-              />
-            ) : null
-          }
           onAttachPath={handleAttachPath}
           onAttachFiles={handleAttachFiles}
           onAttachEditor={handleAttachEditor}
@@ -1359,6 +1350,15 @@ export function App(): React.JSX.Element {
           }
           queuedCount={queuedCount}
         />
+        {/* Full-height side question panel sliding over the thread
+            from the right edge (Claude Code form factor). */}
+        {btwOpen && btwAvailable && sessionId !== null ? (
+          <SideChatSheet
+            btw={state.btw}
+            onAsk={handleBtwAsk}
+            onDismiss={handleBtwDismiss}
+          />
+        ) : null}
       </div>
     </AssistantRuntimeProvider>
   );

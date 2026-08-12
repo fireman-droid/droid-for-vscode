@@ -8,10 +8,12 @@ import {
   useAuiState,
 } from "@assistant-ui/react";
 import {
+  Children,
   createContext,
   memo,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -62,6 +64,7 @@ import {
 } from "./slashBuiltins";
 import {
   ACTIVITY_GROUP_KEY,
+  activeTickerIndex,
   activityGroupBy,
   summarizeActivityGroup,
   type GroupCandidatePart,
@@ -253,12 +256,6 @@ interface DroidThreadProps {
    * composer send) so it stays usable while a main turn runs.
    */
   readonly onBtwOpen?: () => void;
-  /**
-   * The open side-chat card, anchored above the composer like the
-   * mention/command popups; null while closed. Built in App so the
-   * thread stays free of side-chat state.
-   */
-  readonly sideChat?: ReactNode;
   readonly onAttachPath: (path: string) => void;
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
@@ -324,8 +321,8 @@ interface DroidThreadProps {
   readonly taskPlanPin: TaskPlanPinState | null;
   /**
    * Queued-prompt cards rendered at the transcript tail, above the
-   * Composer; null while the queue is empty. Built in App (like
-   * `sideChat`) so the thread stays free of queue state.
+   * Composer; null while the queue is empty. Built in App so the
+   * thread stays free of queue state.
    */
   readonly queuedMessages?: ReactNode;
   /** Prompts queued behind the running turn (Composer hint). */
@@ -379,7 +376,6 @@ export const DroidThread = memo(function DroidThread({
   onSlashNavigate,
   btwAvailable = false,
   onBtwOpen,
-  sideChat = null,
   onAttachPath,
   onAttachFiles,
   onAttachEditor,
@@ -826,7 +822,6 @@ export const DroidThread = memo(function DroidThread({
             onSlashNavigate={onSlashNavigate}
             btwAvailable={btwAvailable}
             onBtwOpen={onBtwOpen}
-            sideChat={sideChat}
             onAttachPath={onAttachPath}
             onAttachFiles={onAttachFiles}
             onAttachEditor={onAttachEditor}
@@ -1741,7 +1736,6 @@ function Composer({
   onSlashNavigate,
   btwAvailable = false,
   onBtwOpen,
-  sideChat = null,
   onAttachPath,
   onAttachFiles,
   onAttachEditor,
@@ -1794,10 +1788,8 @@ function Composer({
   readonly onSlashNavigate?: (target: SlashNavTarget) => void;
   /** Renders the `/btw` popup row when the host supports side chat. */
   readonly btwAvailable?: boolean;
-  /** Opens the side-chat card from the `/btw` popup row. */
+  /** Opens the side-chat panel from the `/btw` popup row. */
   readonly onBtwOpen?: () => void;
-  /** The open side-chat card, anchored above the composer. */
-  readonly sideChat?: ReactNode;
   readonly onAttachPath: (path: string) => void;
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
@@ -2268,9 +2260,6 @@ function Composer({
             <label className="dvx-visually-hidden" htmlFor="dvx-prompt">
               Message Droid
             </label>
-            {/* Before the command popup in the DOM so an open `/`
-                popup paints above the side-chat card while typing. */}
-            {sideChat}
             {slashVisible ? (
               <ComposerPopup
                 className="dvx-mention-popup dvx-command-popup"
@@ -3508,47 +3497,36 @@ function ActivityGroup({
   readonly children: ReactNode;
 }): React.JSX.Element {
   const parts = useAuiState((s) => s.message.parts);
-  const summary = useMemo(() => {
-    const members: GroupCandidatePart[] = [];
+  const members = useMemo(() => {
+    const found: GroupCandidatePart[] = [];
     for (const index of indices) {
       const member = parts[index];
       if (member !== undefined) {
-        members.push(member);
+        found.push(member);
       }
     }
-    return summarizeActivityGroup(members);
+    return found;
   }, [parts, indices]);
+  const summary = useMemo(() => summarizeActivityGroup(members), [members]);
   const [expanded, setExpanded] = useState(false);
-  const previewRef = useRef<HTMLDivElement | null>(null);
-
-  // Keep the newest activity visible in the bounded preview; the
-  // browser clamps scrollTop, and reduced-motion already forces
-  // scroll-behavior to auto so this never animates there.
-  useEffect(() => {
-    const preview = previewRef.current;
-    if (preview !== null) {
-      preview.scrollTop = preview.scrollHeight;
-    }
-  }, [summary.memberCount, summary.anyRunning]);
 
   if (!summary.renderAsGroup) {
     return <>{children}</>;
   }
 
   if (summary.anyRunning) {
+    // One-row vertical ticker (user report batch 2 §1): only the
+    // member that is running now shows under the header; a new
+    // arrival slides the old row up and out.
     return (
       <div className="dvx-activity-group dvx-activity-group-running">
         <div className="dvx-activity-group-header">
           <span className="dvx-activity-indicator" />
           <span className="dvx-shimmer-text">Exploring</span>
         </div>
-        <div
-          className="dvx-activity-group-preview"
-          ref={previewRef}
-          aria-label="Exploration in progress"
-        >
+        <ActivityTicker activeIndex={activeTickerIndex(members)}>
           {children}
-        </div>
+        </ActivityTicker>
       </div>
     );
   }
@@ -3590,6 +3568,84 @@ function ActivityGroup({
         }`}
       >
         <div className="dvx-activity-group-details-inner">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/** Matches the ticker slide transition in styles.css, plus headroom;
+ * the timeout is the commit fallback when the transition never fires
+ * (reduced motion, occluded webviews). */
+const TICKER_SLIDE_FALLBACK_MS = 320;
+
+/**
+ * One-row vertical ticker over the grouped children: shows only the
+ * active member; when the active index advances, the old row slides
+ * up and out while the new one slides in from below. The trail holds
+ * [previous, current] during a slide and a mid-slide arrival commits
+ * the running slide first (fast-forward), so bursts never queue up.
+ * prefers-reduced-motion degrades to a direct swap via CSS (the
+ * transition is disabled, the fallback timer commits).
+ */
+function ActivityTicker({
+  activeIndex,
+  children,
+}: {
+  readonly activeIndex: number;
+  readonly children: ReactNode;
+}): React.JSX.Element {
+  const childArray = Children.toArray(children);
+  const [trail, setTrail] = useState<readonly number[]>([activeIndex]);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const current = trail[trail.length - 1];
+  if (current !== undefined && current !== activeIndex) {
+    // Adjust during render so the outgoing/incoming pair mounts in
+    // the same pass the active index changes.
+    setTrail([current, activeIndex]);
+  }
+
+  // The slide runs on the DOM class, not rendered className: a forced
+  // style flush pins the two-row track at translateY(0), adding the
+  // class in the same task then transitions from that committed base.
+  // No rAF — headless/occluded webviews throttle it (phase-1 probe).
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    if (track === null) {
+      return undefined;
+    }
+    if (trail.length < 2) {
+      track.classList.remove("dvx-ticker-slide");
+      return undefined;
+    }
+    track.classList.remove("dvx-ticker-slide");
+    void track.offsetHeight;
+    track.classList.add("dvx-ticker-slide");
+    const commit = (): void => {
+      setTrail((previous) =>
+        previous.length > 1 ? [previous[previous.length - 1]!] : previous,
+      );
+    };
+    const timer = setTimeout(commit, TICKER_SLIDE_FALLBACK_MS);
+    const onTransitionEnd = (event: TransitionEvent): void => {
+      if (event.target === track) {
+        commit();
+      }
+    };
+    track.addEventListener("transitionend", onTransitionEnd);
+    return () => {
+      clearTimeout(timer);
+      track.removeEventListener("transitionend", onTransitionEnd);
+    };
+  }, [trail]);
+
+  return (
+    <div className="dvx-activity-ticker" aria-label="Exploration in progress">
+      <div className="dvx-ticker-track" ref={trackRef}>
+        {trail.map((index) => (
+          <div className="dvx-ticker-item" key={index}>
+            {childArray[index] ?? null}
+          </div>
+        ))}
       </div>
     </div>
   );

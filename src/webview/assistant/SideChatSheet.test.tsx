@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +21,19 @@ const readyState: SessionBtwState = {
 };
 
 describe('SideChatSheet', () => {
+  it('renders the panel with its title, hint, and empty transcript', () => {
+    render(
+      <SideChatSheet btw={readyState} onAsk={vi.fn()} onDismiss={vi.fn()} />,
+    );
+    expect(screen.getByRole('dialog', { name: 'Side question' })).toBeTruthy();
+    expect(screen.getByText('Side question')).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Ask a quick side question below without interrupting/,
+      ),
+    ).toBeTruthy();
+  });
+
   it('submits a trimmed question on Enter and clears the input', async () => {
     const user = userEvent.setup();
     const onAsk = vi.fn();
@@ -26,6 +44,26 @@ describe('SideChatSheet', () => {
     await user.type(input, '  what is this error?  {Enter}');
     expect(onAsk).toHaveBeenCalledWith('what is this error?');
     expect(input).toHaveProperty('value', '');
+  });
+
+  it('submits through the send button and disables it while empty', async () => {
+    const user = userEvent.setup();
+    const onAsk = vi.fn();
+    render(
+      <SideChatSheet btw={readyState} onAsk={onAsk} onDismiss={vi.fn()} />,
+    );
+    const send = screen.getByLabelText('Send side question');
+    expect(send).toHaveProperty('disabled', true);
+    await user.type(
+      screen.getByLabelText('Ask a side question'),
+      'what runs this?',
+    );
+    expect(send).toHaveProperty('disabled', false);
+    await user.click(send);
+    expect(onAsk).toHaveBeenCalledWith('what runs this?');
+    expect(
+      screen.getByLabelText('Ask a side question'),
+    ).toHaveProperty('value', '');
   });
 
   it('ignores empty submissions', async () => {
@@ -124,23 +162,37 @@ describe('SideChatSheet', () => {
     ).toHaveProperty('disabled', true);
   });
 
-  it('closes via the header button but not via outside presses', async () => {
+  it('closes via the header button after the slide-out plays', async () => {
     const user = userEvent.setup();
     const onDismiss = vi.fn();
     render(
-      <div>
-        <button type="button">outside</button>
-        <SideChatSheet
-          btw={readyState}
-          onAsk={vi.fn()}
-          onDismiss={onDismiss}
-        />
-      </div>,
+      <SideChatSheet
+        btw={readyState}
+        onAsk={vi.fn()}
+        onDismiss={onDismiss}
+      />,
     );
-    await user.click(screen.getByText('outside'));
-    expect(onDismiss).not.toHaveBeenCalled();
     await user.click(screen.getByLabelText('Close side chat'));
-    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onDismiss).not.toHaveBeenCalled();
+    await waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
+  });
+
+  it('closes via the scrim but not via presses inside the panel', async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    const { container } = render(
+      <SideChatSheet
+        btw={readyState}
+        onAsk={vi.fn()}
+        onDismiss={onDismiss}
+      />,
+    );
+    await user.click(screen.getByText('Side question'));
+    expect(onDismiss).not.toHaveBeenCalled();
+    const scrim = container.querySelector('.dvx-btw-scrim');
+    expect(scrim).not.toBeNull();
+    await user.click(scrim as Element);
+    await waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
   });
 
   it('closes on Escape', async () => {
@@ -154,6 +206,6 @@ describe('SideChatSheet', () => {
       />,
     );
     await user.keyboard('{Escape}');
-    expect(onDismiss).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
   });
 });
