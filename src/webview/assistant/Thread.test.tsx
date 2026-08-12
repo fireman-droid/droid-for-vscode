@@ -13,6 +13,8 @@ import {
 import {
   AttachmentChip,
   ChangesSummary,
+  ExecuteMirrorEntry,
+  TerminalMirrorContext,
   FOLLOW_REJOIN_PX,
   HistoryNotice,
   PendingResponse,
@@ -140,6 +142,50 @@ describe('ChangesSummary preview chip', () => {
     );
     fireEvent.click(preview);
     expect(onPreview).toHaveBeenCalledWith('prototypes/dashboard.html');
+  });
+});
+
+describe('ExecuteMirrorEntry', () => {
+  function renderEntry(
+    status: string,
+    detailKind: 'command' | 'plan' | null,
+    onOpen: (() => void) | null,
+  ) {
+    return render(
+      createElement(
+        TerminalMirrorContext.Provider,
+        { value: onOpen },
+        createElement(ExecuteMirrorEntry, { status, detailKind }),
+      ),
+    );
+  }
+
+  it('shows the quiet entry only on running execute rows', () => {
+    renderEntry('running', 'command', () => undefined);
+    expect(
+      screen.getByRole('button', { name: '在终端中查看' }).className,
+    ).toContain('dvx-terminal-mirror-entry');
+  });
+
+  it('stays hidden for finished, non-execute, and history rows', () => {
+    // Completed execute row: the terminal itself retains the output.
+    renderEntry('completed', 'command', () => undefined);
+    // Running non-execute row (plan detail).
+    renderEntry('running', 'plan', () => undefined);
+    // Unavailable action (no provider value): history/replay surfaces.
+    renderEntry('running', 'command', null);
+    expect(
+      screen.queryByRole('button', { name: '在终端中查看' }),
+    ).toBeNull();
+  });
+
+  it('opens the mirror on click', () => {
+    const onOpen = vi.fn();
+    renderEntry('running', 'command', onOpen);
+    fireEvent.click(
+      screen.getByRole('button', { name: '在终端中查看' }),
+    );
+    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 });
 

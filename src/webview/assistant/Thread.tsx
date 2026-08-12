@@ -152,6 +152,13 @@ export const PreviewContext = createContext<(path: string) => void>(
   () => undefined,
 );
 
+// Live execute rows offer the read-only terminal mirror through this
+// context (native-terminal design slice A). Null means the entry is
+// unavailable and stays hidden. Exported for focused entry tests.
+export const TerminalMirrorContext = createContext<(() => void) | null>(
+  null,
+);
+
 // Regenerating rewinds to the last user message and resends it. Null
 // means the action is currently unavailable (no anchor or turn active).
 const RegenerateContext = createContext<(() => void) | null>(null);
@@ -252,6 +259,8 @@ interface DroidThreadProps {
   readonly onRegenerate: (() => void) | null;
   readonly onOpenFileDiff: (path: string) => void;
   readonly onPreviewFile: (path: string) => void;
+  /** Reveals the read-only terminal mirror of execute output. */
+  readonly onOpenTerminalMirror: () => void;
   readonly editResendEnabled: boolean;
   readonly inlineInteraction?: ReactNode;
 }
@@ -325,6 +334,7 @@ export const DroidThread = memo(function DroidThread({
   onRegenerate,
   onOpenFileDiff,
   onPreviewFile,
+  onOpenTerminalMirror,
   editResendEnabled,
   inlineInteraction,
 }: DroidThreadProps): React.JSX.Element {
@@ -564,6 +574,7 @@ export const DroidThread = memo(function DroidThread({
       >
         <FileDiffContext.Provider value={onOpenFileDiff}>
           <PreviewContext.Provider value={onPreviewFile}>
+          <TerminalMirrorContext.Provider value={onOpenTerminalMirror}>
           <RegenerateContext.Provider value={onRegenerate}>
             <SelectSessionContext.Provider value={onSelectSession}>
             <div className="dvx-reading-column" ref={readingColumnRef}>
@@ -629,6 +640,7 @@ export const DroidThread = memo(function DroidThread({
             </div>
             </SelectSessionContext.Provider>
           </RegenerateContext.Provider>
+          </TerminalMirrorContext.Provider>
           </PreviewContext.Provider>
         </FileDiffContext.Provider>
         <ThreadPrimitive.ViewportFooter className="dvx-thread-footer">
@@ -2869,6 +2881,40 @@ function ToolOutputPreview({
   );
 }
 
+/**
+ * Quiet expanded-area action on a live execute row: reveal the
+ * read-only terminal mirror (native-terminal design slice A). Only
+ * running rows qualify — history and replay rows are never
+ * "running", so playback stays entryless by construction. Exported
+ * for focused visibility and wiring tests.
+ */
+export function ExecuteMirrorEntry({
+  status,
+  detailKind,
+}: {
+  readonly status: ToolActivityPresentation["status"];
+  readonly detailKind: ToolActivityPresentation["detailKind"];
+}): React.JSX.Element | null {
+  const openMirror = useContext(TerminalMirrorContext);
+  if (
+    openMirror === null ||
+    status !== "running" ||
+    detailKind !== "command"
+  ) {
+    return null;
+  }
+  return (
+    <button
+      type="button"
+      className="dvx-terminal-mirror-entry"
+      title="在只读镜像终端中实时查看命令输出"
+      onClick={openMirror}
+    >
+      在终端中查看
+    </button>
+  );
+}
+
 function ToolActivityRow({
   activity,
   toolName,
@@ -2946,6 +2992,10 @@ function ToolActivityRow({
           open={open}
         />
       )}
+      <ExecuteMirrorEntry
+        status={activity.status}
+        detailKind={activity.detailKind}
+      />
       {activity.status === "failed" && activity.errorMessage !== null ? (
         <p className="dvx-tool-error">{activity.errorMessage}</p>
       ) : null}

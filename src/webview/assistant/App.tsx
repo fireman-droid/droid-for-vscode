@@ -698,6 +698,12 @@ export function App(): React.JSX.Element {
     },
     [sessionId, connectionStatus, vscode],
   );
+  const handleOpenTerminalMirror = useCallback((): void => {
+    if (sessionId === null || connectionStatus !== 'connected') {
+      return;
+    }
+    post(vscode, { type: 'terminal.openMirror', sessionId });
+  }, [sessionId, connectionStatus, vscode]);
   const handleOpenPath = useCallback(
     (link: PathLink): void => {
       if (sessionId === null || connectionStatus !== 'connected') {
@@ -1133,6 +1139,7 @@ export function App(): React.JSX.Element {
           }
           onOpenFileDiff={handleOpenFileDiff}
           onPreviewFile={handlePreviewFile}
+          onOpenTerminalMirror={handleOpenTerminalMirror}
           editResendEnabled={
             connectionStatus === 'connected' &&
             !active &&

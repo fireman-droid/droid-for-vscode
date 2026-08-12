@@ -238,6 +238,21 @@ html, body, #root {
   flex: 0 0 12px;
 }
 
+/* Groups the toolbar buttons (Preview, Copy) on the header's right
+   edge; without it the header's space-between would spread them. */
+.dvx-code-block-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.dvx-code-block-copy:disabled {
+  color: var(--dvx-subtle);
+  background: transparent;
+  cursor: default;
+}
+
 .dvx-code-block pre, .dvx-shell .dvx-markdown .dvx-code-block pre {
   margin: 0;
   border: 0;
@@ -2479,6 +2494,14 @@ body {
   padding-right: 4px;
 }
 
+/* assistant-ui mounts the optimistic assistant message before any
+   part arrives; at zero height its slot margin still pushed the
+   "Droid is responding" row a double gap below the question. Hide
+   the root until real content exists. */
+.dvx-message-assistant:empty {
+  display: none;
+}
+
 .dvx-user-edit {
   display: flex;
   width: 100%;
@@ -2975,6 +2998,81 @@ body {
   bottom: 0;
   padding: 4px 16px 10px;
   background: var(--dvx-surface);
+}
+
+/* Scroll-to-bottom: a round affordance floating above the Composer
+   while the transcript is away from the bottom. Fade plus a small
+   lift; the hidden state leaves hit-testing and the tab order, and
+   the short appear delay keeps one-shot replay scrolls from
+   flashing it. */
+.dvx-scroll-bottom-dock {
+  position: absolute;
+  z-index: 3;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 10px;
+  pointer-events: none;
+}
+
+.dvx-scroll-bottom {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--dvx-border);
+  border-radius: 50%;
+  color: var(--dvx-muted);
+  background: var(--dvx-raised);
+  box-shadow: 0 2px 8px rgb(48 42 36 / 12%), 0 1px 2px rgb(48 42 36 / 8%);
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    border-color 130ms ease,
+    color 130ms ease,
+    visibility 0s linear 160ms;
+}
+
+.dvx-scroll-bottom svg {
+  width: 14px;
+  height: 14px;
+}
+
+.dvx-scroll-bottom-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition:
+    opacity 160ms ease 60ms,
+    transform 160ms ease 60ms,
+    border-color 130ms ease,
+    color 130ms ease,
+    visibility 0s linear 60ms;
+}
+
+.dvx-scroll-bottom:hover, .dvx-scroll-bottom:focus-visible {
+  color: var(--dvx-ink);
+  border-color: var(--dvx-border-strong);
+  outline: none;
+}
+
+.dvx-scroll-bottom:focus-visible {
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder, #d2643d), 0 2px 8px rgb(48 42 36 / 12%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-scroll-bottom {
+    transition: none;
+  }
 }
 
 .dvx-composer-wrap {
