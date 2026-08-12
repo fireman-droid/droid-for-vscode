@@ -732,6 +732,30 @@ MCP 面板空表单点 Add server 应点不动（灰态）无任何反应；填�
 server..." 且面板可继续操作（≤30s）；`/` 弹窗按住向下键走到列表
 底部之外高亮行应始终可见。
 
+2026-08-12 深夜追加「已发送图片巨图路径修复 + 引用块降噪」（提交
+f7f9b24 / 56bae56，blockquote 样式 hunk 因共有文件并发被卷入并行
+代理的 62e0e1c，内容无损）：① 用户 v0.1.1 真机仍见巨幅已发送图
+片，排查结论为**漏路径**而非旧 bundle：0.1.1 bundle 内 48px 规则
+在（解包 vsix 验证），但它只覆盖 live 回显顺序（user 文本→image
+项）；历史回放投影按原始消息 content 块序产出，CLI 会话文件里图
+片块**永远在文本块之前**（探针扫描真实会话带图用户消息全部
+`image,…,text`），前置 image 项挂不上 user 气泡、落入回合组按基
+础样式独立渲染成 240px 大图。runtimeAdapter 现缓冲前置的
+user-origin 图片项、由紧邻的 user 项收养，两种顺序同构；缩略图排
+在文本上方（与 Composer 待发送区一致，Cursor 形态）；无相邻
+prompt 的悬空图片仍独立渲染。AI 回复内生成图/工具结果图不受影
+响。② Markdown 引用块降噪：A/B 两版 harness 对比后选 A（全中
+性）——2px 暖灰 hairline（`rgb(38 33 27 / 18%)`）+ 次级暖墨
+`#6b6259`，理由：引用是内容不是强调，且橙色左竖线在本项目已是通
+知类表面（history-notice、empty-mark）的语言，引用继续用橙线会
+语义混淆；嵌套引用、引用内 code/链接配色核对无恙；live 与历史共
+用 `.dvx-markdown` 一处改全生效。门禁：typecheck 三段过；全量
+vitest 80 文件 1826 全过（含新增历史序收养 + 悬空回退用例）；
+build 过；截图留档 `artifacts/tmp/`（sent-image-order 双路径、
+blockquote-current/-a/-b/-final）。**未打包，随下一批次包验收**：
+重开带图历史会话应见 48px 横排缩略图在消息文本上方，点击开
+Lightbox；含 `>` 引用的回复应为灰线灰字安静形态。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
