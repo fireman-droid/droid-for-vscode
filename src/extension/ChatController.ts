@@ -117,6 +117,7 @@ import {
   type TurnActivityState,
 } from './turnActivityState';
 import { handleQueueAdd, handleQueueUpdate, handleQueueRemove, handleQueueResume, handleQueuePromote, handleQueueClear, settleQueueAfterTurn, projectQueueState, discardQueuedPrompts } from './chat/queue';
+import { handleMcpRefresh, pushMcp, handleMcpServerToggle, handleMcpServerAdd, handleMcpServerRemove, handleMcpServerAuthenticate } from './chat/mcp';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
 import {
   clearPrompts,
@@ -399,45 +400,6 @@ const PREVIEW_FAILED_MESSAGE =
   'That prototype could not be previewed. It may have been moved, deleted, or is too large.';
 const OPEN_PATH_FAILED_MESSAGE =
   'That path could not be opened. It may have been moved or deleted.';
-const MCP_UNSUPPORTED_MESSAGE =
-  'This Droid runtime does not expose MCP servers.';
-const MCP_LOAD_FAILED_MESSAGE =
-  'Droid did not return the MCP catalog. Retry from the MCP panel.';
-const MCP_TOGGLE_FAILED_MESSAGE =
-  'Droid could not update that MCP server. The list may be stale; refresh it.';
-const MCP_ADD_FAILED_MESSAGE =
-  'Droid could not add that MCP server. Check the command or URL and retry.';
-const MCP_REMOVE_FAILED_MESSAGE =
-  'Droid could not remove that MCP server. The list may be stale; refresh it.';
-const MCP_AUTH_UNSUPPORTED_MESSAGE =
-  'This Droid runtime does not support MCP authentication.';
-const MCP_AUTH_START_FAILED_MESSAGE =
-  'Droid could not start authentication for that MCP server.';
-const MCP_AUTH_BROWSER_MESSAGE =
-  'Complete the sign-in in your browser.';
-const MCP_AUTH_NO_URL_MESSAGE =
-  'Droid did not start a browser sign-in. The server may already be authenticated; refresh the MCP list to check.';
-const MCP_AUTH_BROWSER_FAILED_MESSAGE =
-  'The sign-in page could not be opened in a browser.';
-const MCP_AUTH_TIMEOUT_MESSAGE =
-  'Stopped waiting for browser authentication. Refresh the MCP list to check the result.';
-/**
- * How long the host waits for an MCP auth outcome before giving up.
- * Kept short: a browser OAuth round-trip either completes within a
- * couple of minutes or the user has abandoned it, and the previous
- * 10-minute wait outlived every real session.
- */
-const MCP_AUTH_WAIT_TIMEOUT_MS = 2 * 60_000;
-const MCP_REQUEST_DROPPED_MESSAGE =
-  'Droid could not accept that MCP change right now. Retry in a moment.';
-/**
- * Ceiling for one MCP catalog read or mutation round-trip. Adding a
- * stdio server spawns its command and waits for the MCP handshake,
- * so a spawnable-but-wrong command (`node` with no script) otherwise
- * hangs the daemon RPC forever and pins the panel in 'loading' with
- * every control disabled. Fail closed to an error state instead.
- */
-const MCP_OPERATION_TIMEOUT_MS = 30_000;
 const SKILL_REQUEST_DROPPED_MESSAGE =
   'Droid could not accept that skill change right now. Retry in a moment.';
 const CONTEXT_READ_FAILED_MESSAGE =
@@ -901,10 +863,10 @@ export class ChatController {
         );
         return;
       case 'mcp.refresh':
-        this.handleMcpRefresh(message.sessionId);
+        handleMcpRefresh(this, message.sessionId);
         return;
       case 'mcp.server.toggle':
-        this.handleMcpServerToggle(
+        handleMcpServerToggle(this, 
           message.sessionId,
           message.name,
           message.enabled,
@@ -912,14 +874,14 @@ export class ChatController {
         return;
       case 'mcp.server.add': {
         const { type: _type, sessionId, ...params } = message;
-        this.handleMcpServerAdd(sessionId, params);
+        handleMcpServerAdd(this, sessionId, params);
         return;
       }
       case 'mcp.server.remove':
-        this.handleMcpServerRemove(message.sessionId, message.name);
+        handleMcpServerRemove(this, message.sessionId, message.name);
         return;
       case 'mcp.server.authenticate':
-        this.handleMcpServerAuthenticate(message.sessionId, message.name);
+        handleMcpServerAuthenticate(this, message.sessionId, message.name);
         return;
       case 'attachment.pick':
         this.handleAttachmentPick(message.sessionId, message.stage);
@@ -3654,482 +3616,6 @@ export class ChatController {
     });
   }
 
-  private handleMcpRefresh(sessionId: string): void {
-    const runtime = this.runtime;
-    const dropReason = this.sessionRequestDropReason(sessionId);
-    if (dropReason !== null || runtime === null) {
-      this.recordDroppedPanelRequest(
-        'mcp.refresh',
-        dropReason ?? 'no-runtime',
-      );
-      return;
-    }
-    this.pushMcp(
-      runtime,
-      this.runtimeGeneration,
-      sessionId,
-      this.activeRuntimeCwd!,
-    );
-  }
-
-  /**
-   * Loads and emits the MCP server catalog. Shares the activation
-   * push path with `pushSkills`; see that method for why this skips
-   * the user-request guard chain.
-   */
-  private pushMcp(
-    runtime: DroidRuntime,
-    generation: number,
-    sessionId: string,
-    cwd: string,
-  ): void {
-    if (typeof runtime.listMcpServers !== 'function') {
-      this.emitMcp(sessionId, {
-        status: 'unsupported',
-        items: [],
-        message: MCP_UNSUPPORTED_MESSAGE,
-      });
-      return;
-    }
-
-    this.emitMcp(sessionId, { status: 'loading', items: [] });
-    void withMcpTimeout(runtime.listMcpServers()).then(
-      (servers) => {
-        if (
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        this.emitMcp(sessionId, {
-          status: 'ready',
-          items: servers.map(projectMcpServerSummary),
-        });
-      },
-      (error) => {
-        if (
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        this.recordPanelFailure(
-          'mcp-load-failed',
-          formatUnknownError(error),
-        );
-        this.emitMcp(sessionId, {
-          status: 'error',
-          items: [],
-          message: MCP_LOAD_FAILED_MESSAGE,
-        });
-      },
-    );
-  }
-
-  private handleMcpServerToggle(
-    sessionId: string,
-    name: string,
-    enabled: boolean,
-  ): void {
-    const runtime = this.runtime;
-    const dropReason = this.sessionRequestDropReason(sessionId);
-    if (dropReason !== null || runtime === null) {
-      this.reportDroppedMcpMutation(
-        'mcp.server.toggle',
-        sessionId,
-        dropReason ?? 'no-runtime',
-      );
-      return;
-    }
-    if (
-      typeof runtime.setMcpServerEnabled !== 'function' ||
-      typeof runtime.listMcpServers !== 'function'
-    ) {
-      this.emitMcp(sessionId, {
-        status: 'unsupported',
-        items: [],
-        message: MCP_UNSUPPORTED_MESSAGE,
-      });
-      return;
-    }
-    this.applyMcpMutation(
-      sessionId,
-      runtime,
-      'toggle',
-      () => runtime.setMcpServerEnabled!(name, enabled),
-      MCP_TOGGLE_FAILED_MESSAGE,
-    );
-  }
-
-  private handleMcpServerAdd(
-    sessionId: string,
-    params: Omit<McpServerAddMessage, 'type' | 'sessionId'>,
-  ): void {
-    const runtime = this.runtime;
-    const dropReason = this.sessionRequestDropReason(sessionId);
-    if (dropReason !== null || runtime === null) {
-      this.reportDroppedMcpMutation(
-        'mcp.server.add',
-        sessionId,
-        dropReason ?? 'no-runtime',
-      );
-      return;
-    }
-    if (
-      typeof runtime.addMcpServer !== 'function' ||
-      typeof runtime.listMcpServers !== 'function'
-    ) {
-      this.emitMcp(sessionId, {
-        status: 'unsupported',
-        items: [],
-        message: MCP_UNSUPPORTED_MESSAGE,
-      });
-      return;
-    }
-    this.applyMcpMutation(
-      sessionId,
-      runtime,
-      'add',
-      () => runtime.addMcpServer!(params),
-      MCP_ADD_FAILED_MESSAGE,
-    );
-  }
-
-  private handleMcpServerRemove(sessionId: string, name: string): void {
-    const runtime = this.runtime;
-    const dropReason = this.sessionRequestDropReason(sessionId);
-    if (dropReason !== null || runtime === null) {
-      this.reportDroppedMcpMutation(
-        'mcp.server.remove',
-        sessionId,
-        dropReason ?? 'no-runtime',
-      );
-      return;
-    }
-    if (
-      typeof runtime.removeMcpServer !== 'function' ||
-      typeof runtime.listMcpServers !== 'function'
-    ) {
-      this.emitMcp(sessionId, {
-        status: 'unsupported',
-        items: [],
-        message: MCP_UNSUPPORTED_MESSAGE,
-      });
-      return;
-    }
-    this.applyMcpMutation(
-      sessionId,
-      runtime,
-      'remove',
-      () => runtime.removeMcpServer!(name),
-      MCP_REMOVE_FAILED_MESSAGE,
-    );
-  }
-
-  /**
-   * Logs a dropped MCP mutation and, when the request came from the
-   * panel the user is looking at, surfaces a visible retry hint. A
-   * dropped Add/Remove/Toggle must never look like a success.
-   */
-  private reportDroppedMcpMutation(
-    op: string,
-    sessionId: string,
-    reason: string,
-  ): void {
-    this.recordDroppedPanelRequest(op, reason);
-    if (reason !== 'session-mismatch' && sessionId === this.sessionId) {
-      this.emitMcp(sessionId, {
-        status: 'error',
-        items: [],
-        message: MCP_REQUEST_DROPPED_MESSAGE,
-      });
-    }
-  }
-
-  /**
-   * Runs one MCP catalog mutation, then re-reads and broadcasts the
-   * catalog. The caller must have verified `listMcpServers` support.
-   * Failures still re-read the catalog: the mutation may have half
-   * landed (Droid writes config before connecting), so the fresh
-   * status badges are the trustworthy signal and the error message
-   * rides along instead of blanking the list.
-   */
-  private applyMcpMutation(
-    sessionId: string,
-    runtime: DroidRuntime,
-    op: string,
-    mutation: () => Promise<void>,
-    failureMessage: string,
-  ): void {
-    this.emitMcp(sessionId, { status: 'loading', items: [] });
-    const generation = this.runtimeGeneration;
-    const cwd = this.activeRuntimeCwd!;
-    void withMcpTimeout(mutation()).then(
-      () =>
-        this.finishMcpMutation(
-          sessionId,
-          runtime,
-          generation,
-          cwd,
-          null,
-        ),
-      (error) => {
-        this.recordPanelFailure(
-          `mcp-${op}-failed`,
-          formatUnknownError(error),
-        );
-        return this.finishMcpMutation(
-          sessionId,
-          runtime,
-          generation,
-          cwd,
-          failureMessage,
-        );
-      },
-    );
-  }
-
-  /** Re-reads the MCP catalog after a mutation attempt and broadcasts
-   * it, attaching `failureMessage` when the mutation failed. */
-  private async finishMcpMutation(
-    sessionId: string,
-    runtime: DroidRuntime,
-    generation: number,
-    cwd: string,
-    failureMessage: string | null,
-  ): Promise<void> {
-    let items: McpServerSummary[] | null = null;
-    try {
-      items = (await withMcpTimeout(runtime.listMcpServers!())).map(
-        projectMcpServerSummary,
-      );
-    } catch (error) {
-      this.recordPanelFailure(
-        'mcp-load-failed',
-        formatUnknownError(error),
-      );
-    }
-    if (
-      !this.isCurrentSessionOperation(runtime, generation, sessionId, cwd)
-    ) {
-      return;
-    }
-    if (items === null) {
-      // The webview store keeps the previous list on error states, so
-      // an empty error payload degrades to "old list + message".
-      this.emitMcp(sessionId, {
-        status: 'error',
-        items: [],
-        message: failureMessage ?? MCP_LOAD_FAILED_MESSAGE,
-      });
-      return;
-    }
-    this.emitMcp(
-      sessionId,
-      failureMessage === null
-        ? { status: 'ready', items }
-        : { status: 'error', items, message: failureMessage },
-    );
-  }
-
-  private handleMcpServerAuthenticate(
-    sessionId: string,
-    name: string,
-  ): void {
-    const runtime = this.runtime;
-    const dropReason =
-      this.mcpAuthServerName !== null
-        ? 'auth-in-flight'
-        : this.sessionRequestDropReason(sessionId);
-    if (dropReason !== null || runtime === null) {
-      this.recordDroppedPanelRequest(
-        'mcp.server.authenticate',
-        dropReason ?? 'no-runtime',
-      );
-      return;
-    }
-    if (typeof runtime.authenticateMcpServer !== 'function') {
-      this.recordPanelFailure(
-        'mcp-auth-unsupported',
-        MCP_AUTH_UNSUPPORTED_MESSAGE,
-      );
-      this.emitMcpAuth(
-        sessionId,
-        name,
-        'error',
-        MCP_AUTH_UNSUPPORTED_MESSAGE,
-      );
-      return;
-    }
-
-    this.mcpAuthServerName = name;
-    this.recordHost({
-      level: 'info',
-      name: 'host.mcp.auth',
-      attributes: { phase: 'started', serverName: name },
-    });
-    this.emitMcpAuth(sessionId, name, 'started', null);
-    const generation = this.runtimeGeneration;
-    const cwd = this.activeRuntimeCwd!;
-    const isCurrentFlow = () =>
-      this.mcpAuthServerName === name &&
-      this.isCurrentSessionOperation(runtime, generation, sessionId, cwd);
-    const finishFlow = () => {
-      if (this.mcpAuthTimer !== null) {
-        clearTimeout(this.mcpAuthTimer);
-        this.mcpAuthTimer = null;
-      }
-      this.mcpAuthServerName = null;
-    };
-    this.mcpAuthTimer = setTimeout(() => {
-      if (this.mcpAuthServerName !== name) {
-        return;
-      }
-      finishFlow();
-      this.recordPanelFailure(
-        'mcp-auth-timeout',
-        `${name}: ${MCP_AUTH_TIMEOUT_MESSAGE}`,
-      );
-      if (
-        this.isCurrentSessionOperation(runtime, generation, sessionId, cwd)
-      ) {
-        this.emitMcpAuth(
-          sessionId,
-          name,
-          'error',
-          MCP_AUTH_TIMEOUT_MESSAGE,
-        );
-      }
-    }, MCP_AUTH_WAIT_TIMEOUT_MS);
-
-    void runtime
-      .authenticateMcpServer(name, (outcome) => {
-        if (this.mcpAuthServerName !== name) {
-          return;
-        }
-        const current = this.isCurrentSessionOperation(
-          runtime,
-          generation,
-          sessionId,
-          cwd,
-        );
-        finishFlow();
-        this.recordHost({
-          level: outcome === 'success' ? 'info' : 'warn',
-          name: 'host.mcp.auth',
-          attributes: { phase: outcome, serverName: name },
-        });
-        if (!current) {
-          return;
-        }
-        this.emitMcpAuth(sessionId, name, outcome, null);
-        if (outcome === 'success') {
-          this.handleMcpRefresh(sessionId);
-        }
-      })
-      .then(
-        async ({ authUrl }) => {
-          if (!isCurrentFlow()) {
-            return;
-          }
-          if (authUrl === null) {
-            // Droid accepted the request but never announced an OAuth
-            // URL - typical for a server that is already signed in.
-            // End the flow now instead of waiting minutes for a
-            // completion notification that will not arrive.
-            finishFlow();
-            this.recordPanelFailure(
-              'mcp-auth-no-url',
-              `${name}: ${MCP_AUTH_NO_URL_MESSAGE}`,
-            );
-            this.emitMcpAuth(
-              sessionId,
-              name,
-              'error',
-              MCP_AUTH_NO_URL_MESSAGE,
-            );
-            this.handleMcpRefresh(sessionId);
-            return;
-          }
-          const opened = await this.externalUrl.openExternal(authUrl);
-          if (!isCurrentFlow()) {
-            return;
-          }
-          this.recordHost({
-            level: opened ? 'info' : 'warn',
-            name: 'host.mcp.auth',
-            attributes: {
-              phase: opened ? 'browser-opened' : 'browser-failed',
-              serverName: name,
-            },
-          });
-          this.emitMcpAuth(
-            sessionId,
-            name,
-            'browser',
-            opened
-              ? MCP_AUTH_BROWSER_MESSAGE
-              : MCP_AUTH_BROWSER_FAILED_MESSAGE,
-          );
-        },
-        () => {
-          if (this.mcpAuthServerName !== name) {
-            return;
-          }
-          const current = this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          );
-          finishFlow();
-          this.recordPanelFailure(
-            'mcp-auth-start-failed',
-            `${name}: ${MCP_AUTH_START_FAILED_MESSAGE}`,
-          );
-          if (current) {
-            this.emitMcpAuth(
-              sessionId,
-              name,
-              'error',
-              MCP_AUTH_START_FAILED_MESSAGE,
-            );
-          }
-        },
-      );
-  }
-
-  private emitMcpAuth(
-    sessionId: string,
-    serverName: string,
-    phase: McpAuthPhase,
-    message: string | null,
-  ): void {
-    this.emit({
-      type: 'mcp.auth',
-      sessionId,
-      serverName,
-      phase,
-      message,
-    });
-  }
-
-  private emitMcp(sessionId: string, mcp: SessionMcpState): void {
-    this.emit({
-      type: 'session.mcp',
-      sessionId,
-      mcp,
-    });
-  }
-
   private canStageAttachments(
     sessionId: string,
     stage?: AttachmentStage,
@@ -6085,7 +5571,7 @@ export class ChatController {
     // re-request can be dropped mid-switch. Pushing fresh state on
     // activation converges an open panel without user action.
     this.pushSkills(runtime, generation, sessionId, cwd);
-    this.pushMcp(runtime, generation, sessionId, cwd);
+    pushMcp(this, runtime, generation, sessionId, cwd);
   }
 
   private refreshContext(
@@ -6757,7 +6243,7 @@ export class ChatController {
    * the guard chain the MCP/Skills handlers share; the caller must
    * treat a non-null reason as a hard stop.
    */
-  private sessionRequestDropReason(sessionId: string): string | null {
+  sessionRequestDropReason(sessionId: string): string | null {
     if (sessionId !== this.sessionId) {
       return 'session-mismatch';
     }
@@ -6781,7 +6267,7 @@ export class ChatController {
    * be fully silent, which made a swallowed "Add MCP server" request
    * indistinguishable from a successful one.
    */
-  private recordDroppedPanelRequest(op: string, reason: string): void {
+  recordDroppedPanelRequest(op: string, reason: string): void {
     this.recordHost({
       level: 'warn',
       name: 'host.ui.request-dropped',
@@ -6794,7 +6280,7 @@ export class ChatController {
    * failures render only inside the Skills/MCP popovers, so without
    * this they leave no trace once the popover closes.
    */
-  private recordPanelFailure(code: string, detail: string): void {
+  recordPanelFailure(code: string, detail: string): void {
     this.recordHost({
       level: 'warn',
       name: 'host.ui.diagnostic',
@@ -7235,7 +6721,7 @@ export class ChatController {
     );
   }
 
-  private isCurrentSessionOperation(
+  isCurrentSessionOperation(
     runtime: DroidRuntime,
     generation: number,
     sessionId: string,
@@ -7469,34 +6955,6 @@ function commitSubject(message: string): string {
  */
 function recoveryTurnId(generation: number): string {
   return `recovery-${generation}`;
-}
-
-/**
- * Rejects when an MCP daemon round-trip outlives
- * `MCP_OPERATION_TIMEOUT_MS`, so a hung add/remove/toggle/list RPC
- * degrades into the normal failure path (error state + fresh
- * catalog read) instead of freezing the MCP panel in 'loading'.
- */
-function withMcpTimeout<T>(operation: Promise<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(
-        new Error(
-          `MCP operation timed out after ${MCP_OPERATION_TIMEOUT_MS}ms`,
-        ),
-      );
-    }, MCP_OPERATION_TIMEOUT_MS);
-    operation.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error: unknown) => {
-        clearTimeout(timer);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      },
-    );
-  });
 }
 
 function unavailableMessage(
@@ -7734,24 +7192,6 @@ function projectCommandSummary(command: RuntimeCommand): CommandSummary {
     description: command.description,
     argumentHint: command.argumentHint,
     isExecutable: command.isExecutable,
-  };
-}
-
-function projectMcpServerSummary(
-  server: RuntimeMcpServer,
-): McpServerSummary {
-  return {
-    name: server.name,
-    status: server.status,
-    toolCount: server.toolCount,
-    requiresAuth: server.requiresAuth,
-    hasAuthTokens: server.hasAuthTokens,
-    tools: server.tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      enabled: tool.enabled,
-      readOnly: tool.readOnly,
-    })),
   };
 }
 
