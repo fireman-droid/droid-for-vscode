@@ -4,6 +4,7 @@ import {
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
   MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
+  type SessionTranscriptItem,
   type ToolActivityStatus,
   type ToolActivityUpdateKind,
   type ToolBackgroundHint,
@@ -295,11 +296,21 @@ export function projectToolEvent(
         const addsBackgroundHint =
           event.backgroundHint !== undefined &&
           existing.backgroundHint === undefined;
+        // The delegation identity refines like detail/filePath while
+        // the Task input streams, but only until a lifecycle status
+        // landed — notification and ledger identities are authority.
+        const updatesSubagent =
+          event.subagent !== undefined &&
+          existing.subagent?.status === undefined &&
+          (existing.subagent?.type !== event.subagent.type ||
+            existing.subagent.description !==
+              event.subagent.description);
         if (
           updatesFilePath ||
           updatesFilePaths ||
           updatesDetail ||
-          addsBackgroundHint
+          addsBackgroundHint ||
+          updatesSubagent
         ) {
           const entry: ToolActivityEntry = {
             ...existing,
@@ -311,6 +322,7 @@ export function projectToolEvent(
             ...(addsBackgroundHint
               ? { backgroundHint: event.backgroundHint }
               : {}),
+            ...(updatesSubagent ? { subagent: event.subagent } : {}),
           };
           const tools = new Map(state.tools);
           tools.set(event.toolUseId, entry);
@@ -372,6 +384,9 @@ export function projectToolEvent(
     ...(event.type === 'tool-start' &&
     event.backgroundHint !== undefined
       ? { backgroundHint: event.backgroundHint }
+      : {}),
+    ...(event.type === 'tool-start' && event.subagent !== undefined
+      ? { subagent: event.subagent }
       : {}),
     ...(event.type === 'tool-progress' &&
     event.outputTail !== undefined
@@ -457,7 +472,10 @@ export function projectSubagentStarted(
     return { state, projection: null };
   }
   const existing = state.tools.get(toolUseId)!;
-  if (existing.subagent !== undefined) {
+  // A row whose identity came from the Task input (no lifecycle
+  // status yet) upgrades to the notification's identity + `running`;
+  // a row that already holds a status keeps it.
+  if (existing.subagent?.status !== undefined) {
     return { state, projection: null };
   }
   const entry: ToolActivityEntry = {
@@ -487,7 +505,7 @@ function resolveSubagentTarget(
   for (const [id, entry] of state.tools) {
     if (
       entry.status === 'running' &&
-      entry.subagent === undefined &&
+      entry.subagent?.status === undefined &&
       toolNameCandidates(entry.toolName).includes('task')
     ) {
       fallback = id;
@@ -591,6 +609,36 @@ export function collectRunningSubagentRows(
       toolUseId,
       type: entry.subagent.type,
       description: entry.subagent.description,
+    });
+  }
+  return rows;
+}
+
+/**
+ * Collects the delegations a replayed transcript still reports as
+ * live (`running`/`pending`), so a session opened after Reload
+ * Window re-arms the same ledger poll a live turn would have armed
+ * at turn end. Without this, a background delegation that outlives
+ * both its turn and the window reload would stay "running" on
+ * screen forever — the ledger has no push channel.
+ */
+export function collectTranscriptSubagentRows(
+  transcript: readonly SessionTranscriptItem[],
+): readonly PendingSubagentRow[] {
+  const rows: PendingSubagentRow[] = [];
+  for (const item of transcript) {
+    if (
+      item.kind !== 'tool' ||
+      (item.subagent?.status !== 'running' &&
+        item.subagent?.status !== 'pending')
+    ) {
+      continue;
+    }
+    rows.push({
+      turnId: item.turnId,
+      toolUseId: item.toolUseId,
+      type: item.subagent.type,
+      description: item.subagent.description,
     });
   }
   return rows;
