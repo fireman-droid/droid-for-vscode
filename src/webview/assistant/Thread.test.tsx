@@ -17,7 +17,6 @@ import {
   rememberImagePreview,
 } from './imagePreviewCache';
 import {
-  AttachmentChip,
   TerminalMirrorContext,
   FOLLOW_REJOIN_PX,
   PreviewContext,
@@ -25,8 +24,11 @@ import {
   computePinnedUserIndex,
   computeStickyLayout,
   createFollowState,
-  readDroppedFileUris,
 } from './Thread';
+import {
+  AttachmentChip,
+  readDroppedFileUris,
+} from './thread/Composer';
 import {
   ChangesSummary,
   HistoryNotice,
