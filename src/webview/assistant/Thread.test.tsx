@@ -29,12 +29,14 @@ import {
   computeStickyLayout,
   createFollowState,
   formatCompactDividerLabel,
-  formatPlanSummary,
-  formatSubagentSummary,
   readDroppedFileUris,
+} from './Thread';
+import {
   BackgroundProcessHint,
   SubagentSummaryRow,
-} from './Thread';
+  formatPlanSummary,
+  formatSubagentSummary,
+} from './thread/activityRows';
 import {
   CommandCardMenu,
   ExecuteMirrorEntry,
