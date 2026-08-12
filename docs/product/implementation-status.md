@@ -654,6 +654,48 @@ diagnostic-harness.html，真实 webview bundle）实测连点 5 次仅 1
 数正确、按钮在右下、消息框不可拖拽拉伸；Preview 面板顶栏为暖色
 成品样式。
 
+2026-08-12 晚追加「用户验收反馈批次二·六项修复」（v0.1.0 发版
+后第一个修复批次，提交 d9bf2b9 / 499edae / 5a89586 / 29f324f /
+9d0986b+2517e73 / f93f5df）：① 全局细滚动条：`* { scrollbar-width:
+thin }` + 半透明暖中性 thumb（hover 加深、track 透明），webkit 6px
+规则兜底非标引擎，删除 `.dvx-tool-output`/`.dvx-model-list`/
+`.dvx-plan-preview` 的逐处定义；刻意隐藏滚动条的表面
+（thread-viewport、session-nav）维持 none。② 已发送图片缩略图：用
+户消息卡内图片与 Composer 待发送区同形态——48px cover 圆角缩略
+图、多图横排（user-block 改 row wrap，文本/附件 chip 各占整行）、
+点击开 Lightbox 逻辑复用。③ Task plan 钉条视觉重做（位置与交互结
+构不变）：暖色渐层卡面 + 1px 边框 + 浮起软阴影与 Composer 解耦；
+展开态头部并入 `dvx-btw-title` 字阶家族；完成项纯变淡降噪（灰勾 +
+0.62 透明度，无删除线）；当前项暖橙点 + 6% 底色微高亮；行距放
+宽；右上进度改 36px hairline 分数进度条（完成转绿）；展开/收起用
+grid-rows 平滑过渡，reduced-motion 降级。④ Execute 行运行中默认展
+开输出预览（实时滚动），完成自动收起；用户手动收起/展开一次即接
+管（openOverride），不再自动弹动。⑤ Explored 聚合收起态改垂直跑
+马灯：运行中头部行下方仅显示当前活跃一条子行，成员推进时旧条
+translateY 上滑出、新条从下滑入（240ms、overflow hidden 裁切，
+`activeTickerIndex` 纯函数选活跃成员，GroupedParts Fragment 解包
+后索引），突发快进不排队；全部完成后收起态只留头部行，点击展开完
+整列表；reduced-motion 直接替换。⑥ 回合内多段回复操作条唯一化：
+runtimeAdapter 识别 reply run（相邻 assistant 描述符至下一条用户
+消息为一 run），只给尾段标 `replyTail` 并聚合全 run 文本作
+`replyCopyText`；中间段不渲染操作条（`dvx-message-cont` 收紧
+margin 至 12px 正文节奏），尾段 Copy 复制整回合拼接文本（段间空
+行）；单段回合形态不变，历史回放与 live 同构。门禁（当前树，含并
+行代理在途文件）：typecheck 三段全过；全量 vitest 80 文件 1822 全
+过（含新增 ticker 选择、auto-open/手动收起、reply-run 唯一操作
+条 + 全文复制、钉条 data-open 用例）；build 过；两项 stress
+（`run-stress-ticker.mjs` 120 回合、`run-stress-output.mjs` 120
+回合）流式期间 50ms+ 长任务均 0 个；六处 harness 截图留档
+`artifacts/tmp/`（ticker-live、exec-auto-open、pin-collapsed/
+expanded、sent-image-thumbs、reply-run、smoke-scrollbar）。**本批
+次未打包安装（完成时工作区含并行代理未提交在制品：
+ChatController/ComposerControls/ComposerPopup），待随下一批次包一
+起真机验收**：跑一条多工具探索回合应见 Explored 下单行跑马灯上滑
+切换、Execute 行自动展开输出并在完成后收起；含 AskUser/计划批准
+的多段回复应只在末段见一份操作条且 Copy 得全文；发一张图片应显示
+48px 缩略图；进行中任务钉条应为独立暖卡面带 hairline 进度；全局
+滚动条应为 6px 细样式。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
