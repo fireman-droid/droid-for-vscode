@@ -94,6 +94,10 @@ import {
   type WorkspaceSearchFilesMessage,
 } from './bridgeMessages';
 import {
+  parseBtwAskMessage,
+  parseBtwDismissMessage,
+} from './btwProtocol';
+import {
   MAX_GIT_COMMIT_MESSAGE_LENGTH,
   MAX_GIT_COMMIT_PATHS,
 } from './gitCommitFlow';
@@ -219,6 +223,10 @@ export function parseWebviewMessage(
         return parseWorkspaceReadImage(value);
       case 'session.setting.update':
         return parseSessionSettingUpdate(value);
+      case 'btw.ask':
+        return parseBtwAskMessage(value) ?? undefined;
+      case 'btw.dismiss':
+        return parseBtwDismissMessage(value) ?? undefined;
       default:
         return undefined;
     }

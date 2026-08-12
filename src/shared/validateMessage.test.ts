@@ -6,6 +6,7 @@ import {
   MAX_ASK_USER_ANSWER_LENGTH,
   MAX_ATTACHMENT_TEXT_FILE_CHARS,
   MAX_BRIDGE_ID_LENGTH,
+  MAX_BTW_TEXT_LENGTH,
   MAX_EDITED_SPEC_LENGTH,
   MAX_MODEL_ID_LENGTH,
   MAX_OPEN_PATH_LENGTH,
@@ -1633,5 +1634,48 @@ describe('parseWebviewMessage', () => {
     expect(parseWebviewMessage(accessor)).toBeUndefined();
     expect(() => parseWebviewMessage(proxy)).not.toThrow();
     expect(parseWebviewMessage(proxy)).toBeUndefined();
+  });
+
+  it('routes btw.ask and btw.dismiss through the shared parser', () => {
+    expect(
+      parseWebviewMessage({
+        type: 'btw.ask',
+        sessionId: 'session-1',
+        text: 'What does this function do?',
+      }),
+    ).toEqual({
+      type: 'btw.ask',
+      sessionId: 'session-1',
+      text: 'What does this function do?',
+    });
+    expect(
+      parseWebviewMessage({
+        type: 'btw.dismiss',
+        sessionId: 'session-1',
+      }),
+    ).toEqual({ type: 'btw.dismiss', sessionId: 'session-1' });
+
+    // Shape violations fall back to undefined like every channel.
+    expect(
+      parseWebviewMessage({
+        type: 'btw.ask',
+        sessionId: 'session-1',
+        text: '',
+      }),
+    ).toBeUndefined();
+    expect(
+      parseWebviewMessage({
+        type: 'btw.ask',
+        sessionId: 'session-1',
+        text: 'q'.repeat(MAX_BTW_TEXT_LENGTH + 1),
+      }),
+    ).toBeUndefined();
+    expect(
+      parseWebviewMessage({
+        type: 'btw.dismiss',
+        sessionId: 'session-1',
+        extra: true,
+      }),
+    ).toBeUndefined();
   });
 });

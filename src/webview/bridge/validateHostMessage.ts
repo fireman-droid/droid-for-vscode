@@ -163,6 +163,10 @@ import {
   type TurnStatus,
 } from '../../shared/bridgeMessages';
 import {
+  parseSessionBtwMessage,
+  type SessionBtwMessage,
+} from '../../shared/btwProtocol';
+import {
   hasExactKeys,
   isExactArray,
   isStrictRecord,
@@ -305,6 +309,8 @@ export function readHostMessage(
         return parseInteractionRequestMessage(value);
       case 'interaction.closed':
         return parseInteractionClosed(value);
+      case 'session.btw':
+        return parseSessionBtw(value);
       default:
         return undefined;
     }
@@ -336,6 +342,7 @@ function parseHostSnapshot(
       [
         'mission',
         'worktreeCreateAvailable',
+        'btwAvailable',
         'tokenUsage',
         'workspaceRoot',
       ],
@@ -347,6 +354,8 @@ function parseHostSnapshot(
     // Hosts omit the flag when unavailable instead of sending false.
     (value.worktreeCreateAvailable !== undefined &&
       value.worktreeCreateAvailable !== true) ||
+    // Same omit-when-unavailable contract as worktreeCreateAvailable.
+    (value.btwAvailable !== undefined && value.btwAvailable !== true) ||
     // Hosts omit the root when no usable workspace exists.
     (value.workspaceRoot !== undefined &&
       (!isNonEmptyBoundedString(value.workspaceRoot, MAX_OPEN_PATH_LENGTH) ||
@@ -430,6 +439,7 @@ function parseHostSnapshot(
     ...(value.worktreeCreateAvailable === undefined
       ? {}
       : { worktreeCreateAvailable: true }),
+    ...(value.btwAvailable === undefined ? {} : { btwAvailable: true }),
     ...(tokenUsage === undefined ? {} : { tokenUsage }),
     ...(value.workspaceRoot === undefined
       ? {}
@@ -1406,6 +1416,17 @@ function parseInteractionClosed(
     turnId: value.turnId,
     requestId: value.requestId,
   };
+}
+
+function parseSessionBtw(
+  value: UnknownRecord,
+): SessionBtwMessage | undefined {
+  // The shared parser owns the shape and content bounds; the
+  // non-negative safe-integer sequence contract is this module's.
+  const message = parseSessionBtwMessage(value);
+  return message !== null && isSequence(message.sequence)
+    ? message
+    : undefined;
 }
 
 function parseInteractionRequest(

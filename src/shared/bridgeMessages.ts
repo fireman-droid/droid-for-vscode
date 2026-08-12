@@ -11,6 +11,11 @@ import {
 } from './toolActivity';
 import type { SessionTokenUsageState } from './tokenUsage';
 import { MAX_SESSION_TRANSCRIPT_ITEMS } from './transcriptLimits';
+import type {
+  BtwAskMessage,
+  BtwDismissMessage,
+  SessionBtwMessage,
+} from './btwProtocol';
 
 export {
   MAX_ASK_USER_ANSWERS,
@@ -46,6 +51,22 @@ export {
   MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
 } from './transcriptLimits';
+export {
+  BTW_ENTRY_STATES,
+  BTW_STATUSES,
+  EMPTY_SESSION_BTW_STATE,
+  MAX_BTW_ANSWER_LENGTH,
+  MAX_BTW_ENTRIES,
+  MAX_BTW_MESSAGE_LENGTH,
+  MAX_BTW_TEXT_LENGTH,
+  type BtwAskMessage,
+  type BtwDismissMessage,
+  type BtwEntry,
+  type BtwEntryState,
+  type BtwStatus,
+  type SessionBtwMessage,
+  type SessionBtwState,
+} from './btwProtocol';
 export { MAX_TOOL_OUTPUT_TAIL_LENGTH } from './toolOutput';
 export {
   GIT_FILE_STATUSES,
@@ -983,7 +1004,9 @@ export type WebviewToHostMessage =
   | WorkspaceSearchFilesMessage
   | WorkspaceReadImageMessage
   | RewindInfoRequestMessage
-  | SessionSettingUpdateMessage;
+  | SessionSettingUpdateMessage
+  | BtwAskMessage
+  | BtwDismissMessage;
 
 export interface ConnectionState {
   readonly status: ConnectionStatus;
@@ -1549,6 +1572,13 @@ export interface HostSnapshotMessage {
    */
   readonly worktreeCreateAvailable?: boolean;
   /**
+   * True when `/btw` side chat is available: process runtime mode
+   * (the hidden fork rides a public process client). Absent means
+   * unavailable and every `/btw` entry point must stay hidden
+   * (fail closed in daemon mode).
+   */
+  readonly btwAvailable?: boolean;
+  /**
    * Session/turn token-usage breakdown. Absent when the host has no
    * usage data for the active session (fail quiet; the popover
    * section must not render).
@@ -2034,4 +2064,5 @@ export type HostToWebviewMessage =
   | UserMessageMetaMessage
   | TurnErrorMessage
   | InteractionRequestMessage
-  | InteractionClosedMessage;
+  | InteractionClosedMessage
+  | SessionBtwMessage;

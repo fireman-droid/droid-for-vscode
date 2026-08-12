@@ -2671,6 +2671,75 @@ describe('readHostMessage', () => {
     ).toBeUndefined();
   });
 
+  it('accepts the btw capability flag with the omit-when-false contract', () => {
+    const snapshot = createSessionSnapshot();
+    expect(
+      readHostMessage({ ...snapshot, btwAvailable: true }),
+    ).toEqual({ ...snapshot, btwAvailable: true });
+    expect(
+      readHostMessage({ ...snapshot, btwAvailable: false }),
+    ).toBeUndefined();
+    expect(
+      readHostMessage({ ...snapshot, btwAvailable: 'yes' }),
+    ).toBeUndefined();
+  });
+
+  it('accepts session.btw card states and rejects malformed ones', () => {
+    const message = {
+      type: 'session.btw',
+      sequence: 3,
+      sessionId: 'session-1',
+      btw: {
+        status: 'ready',
+        entries: [
+          {
+            id: 'btw-1',
+            question: 'What is this?',
+            answer: 'A hidden fork.',
+            state: 'done',
+          },
+        ],
+      },
+    };
+    expect(readHostMessage(message)).toEqual({
+      type: 'session.btw',
+      sequence: 3,
+      sessionId: 'session-1',
+      btw: {
+        status: 'ready',
+        message: null,
+        entries: [
+          {
+            id: 'btw-1',
+            question: 'What is this?',
+            answer: 'A hidden fork.',
+            state: 'done',
+            message: null,
+          },
+        ],
+      },
+    });
+
+    expect(
+      readHostMessage({ ...message, sequence: -1 }),
+    ).toBeUndefined();
+    expect(
+      readHostMessage({
+        ...message,
+        btw: { status: 'nonsense', entries: [] },
+      }),
+    ).toBeUndefined();
+    expect(
+      readHostMessage({
+        ...message,
+        btw: {
+          status: 'ready',
+          entries: [{ id: 'btw-1', question: '', answer: '', state: 'done' }],
+        },
+      }),
+    ).toBeUndefined();
+  });
+
   it('accepts an absolute workspace root on snapshots', () => {
     const snapshot = createSessionSnapshot();
     const message = {
