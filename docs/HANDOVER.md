@@ -56,6 +56,8 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 | [`cursor-streaming-ux-research.md`](./product/cursor-streaming-ux-research.md) | Cursor 流式呈现调研：动效 token、WordStreamer、shimmer 参数一手证据 | 参考（已经由 streaming-experience-design 落地，仅证据存档） |
 | [`activity-aggregation-research.md`](./product/activity-aggregation-research.md) | Cursor 工具调用聚合调研：分组规则、运行中预览窗、摘要行一手证据 | 参考（同上，仅证据存档） |
 | [`cli-coverage-assessment.md`](./product/cli-coverage-assessment.md) | CLI ↔ GUI 能力覆盖评估：10 条缺口与三类边界 | 参考（用户拍板与现行排期见本文件第 3 节；文中 V1 序号为旧排序） |
+| [`slash-parity-assessment.md`](./product/slash-parity-assessment.md) | CLI 内置斜杠命令全量对齐（0.193.0 共 55 slug 三路取证）：逐条 a/b/c/d 判定 + 补齐切片 S1(/btw)/S2(弹窗扩充)/S3(/cwd)；取代 slash-commands-design §2 旧等价表 | 调研结论（2026-08-12；切片排期见文内 §5 与下方"其他 backlog"） |
+| [`side-question-design.md`](./product/side-question-design.md) | `/btw` 侧边提问（Side Chat）：CLI 原生隐藏 fork 机制取证（btw-fork tag / lastCompletedTurn / sessions/btw 目录 / 升格语义均走公开 RPC）+ 窄栏卡片 UI + sidecar 架构 + 第一切片 | 设计待实现（2026-08-12；发版后 backlog，见下方"其他 backlog"） |
 | [`mcp-permission-persistence-research.md`](./product/mcp-permission-persistence-research.md) | MCP 持久权限官方渠道调研（CLI 子命令 + settings.json 契约）+ 切片草案 | 调研结论（发版后 backlog 切片的实现依据；推翻 daemon-feature-opportunities §B3 的 fail-closed 判定） |
 | [`daemon-architecture-design.md`](./product/daemon-architecture-design.md) | daemon 化运行调研：SDK daemon 公开面、零配置鉴权方案、分阶段迁移路线 | 已实施存档（Phase 0–3 落地，见第 7 节） |
 | [`daemon-implementation-plan.md`](./product/daemon-implementation-plan.md) | daemon 化四阶段实现计划（自包含执行手册） | 已实施存档（已执行完毕，勿再照此开工；见第 7 节） |
@@ -145,6 +147,15 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 
 ### 其他 backlog（发版后，低优先级）
 
+- **`/btw` Side Chat 与 `/` 命令对齐**（2026-08-12 调研完成）：
+  S1 `/btw` 侧边提问卡片（设计已完成，见
+  [`side-question-design.md`](./product/side-question-design.md)，
+  开工前先跑文内 P1–P3 探针）；S2 `/` 弹窗 Built-in 组扩充
+  （`/compress` `/handoff` `/clear` 别名拦截——现状用户输入
+  `/compress` 会被当普通文本发给模型——加 5 条导航行映射既有
+  UI，~200 行级）；S3 `/cwd` 归入 V2 worktree 切片调研范围。
+  逐条判定见
+  [`slash-parity-assessment.md`](./product/slash-parity-assessment.md)。
 - 「Show earlier messages」一次性展开数百条历史消息时有 300–400ms
   长任务（React 批量挂载成本；2026-08-12 性能复测时发现，与吸顶
   改动无关）。打磨方向：分批挂载。低优先级。
