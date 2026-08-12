@@ -4,6 +4,58 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-08-12
+
+Fix release for the first round of v0.1.0 field reports: streaming
+correctness, MCP panel survivability, and the acceptance batch of visual
+fixes.
+
+### Fixed
+
+- **Streamed CJK paths** — file paths derived from a streaming tool call
+  no longer stick at a truncated partial parse (a CJK filename cut
+  mid-way), so file chips, the changes card, and the commit panel see the
+  real path.
+- **Stacked error cards** — clicking a dead file chip repeatedly keeps a
+  single diagnostic card instead of stacking identical copies, and a file
+  Droid is still writing is worded as not ready yet rather than missing.
+- **MCP add-server freeze** — submitting the Add server form no longer
+  navigates and permanently blanks the webview, and a hung MCP daemon
+  round-trip times out into the normal retry path instead of pinning the
+  panel in loading.
+- **Popup keyboard follow** — arrow-key navigation in the `/` command and
+  `@` mention popups scrolls the highlighted row into view instead of
+  walking it below the fold.
+- **Commit panel count and buttons** — the changed-file count no longer
+  drops to zero while paths stream in, and Cancel / Commit dock at the
+  panel's lower right in conventional order.
+- **Preview toolbar finish** — the sandboxed preview panel replaces its
+  bare browser-default toolbar with the warm shell finish and quiet
+  Reload / Open in editor buttons.
+- **Exploration ticker** — the collapsed running exploration group shows
+  only the tool that is running and hands off with a news-ticker slide,
+  instead of stacking every member row.
+- **Task plan pin** — the pinned plan wears the warm layered card
+  treatment with quiet progress cues, dropping the flat white card and
+  the strikethrough that read poorly on CJK.
+- **Thin scrollbars everywhere** — popovers, popups, textareas, and
+  preview panes all use the one thin quiet scrollbar instead of chunky
+  engine defaults.
+- **Sent image thumbs** — images in a sent user bubble render as
+  composer-style rounded thumbs instead of a letterboxed black slab.
+- **Live output auto-open** — a running command's output tail opens by
+  itself and settles closed on completion, while a manual toggle always
+  wins over the policy.
+- **One action bar per reply** — a reply split across interleaved
+  thinking segments gets a single action bar whose Copy takes the whole
+  run, instead of one footer per segment.
+
+### Changed
+
+- **`/btw` side panel** — the side chat leaves the composer-anchored card
+  for a full-height right-edge panel over a scrim, with the Q&A
+  transcript scrolling in the middle and the input pinned at the foot.
+
 ## [0.1.0] - 2026-08-12
 
 First release. DroidVisX wraps the local Droid CLI (`@factory/droid-sdk`)
