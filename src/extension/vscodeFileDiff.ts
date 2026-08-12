@@ -33,7 +33,7 @@ export function createVscodeFileDiffOpener(): FileDiffOpener {
       try {
         await vscode.workspace.fs.stat(fileUri);
       } catch {
-        return 'failed';
+        return 'not-found';
       }
 
       if (await hasGitHeadVersion(fileUri)) {

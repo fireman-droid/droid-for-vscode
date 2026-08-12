@@ -376,6 +376,8 @@ const SPEC_HANDOFF_BLOCKED_MESSAGE =
   'The implementation session could not be opened automatically. Select it from History.';
 const FILE_DIFF_FAILED_MESSAGE =
   'That file could not be opened. It may have been moved or deleted.';
+const FILE_NOT_READY_MESSAGE =
+  'That file does not exist yet. Droid is still working on it.';
 const PREVIEW_FAILED_MESSAGE =
   'That prototype could not be previewed. It may have been moved, deleted, or is too large.';
 const OPEN_PATH_FAILED_MESSAGE =
@@ -2513,6 +2515,28 @@ export class ChatController {
       return;
     }
     void this.fileDiff.openDiff(path).then((outcome) => {
+      if (outcome === 'not-found') {
+        // Missing during an active turn means Droid has not written
+        // the file yet; missing on a settled transcript means it was
+        // moved or deleted after the fact.
+        const turnActive =
+          this.turn !== null &&
+          this.turn.status !== 'completed' &&
+          this.turn.status !== 'interrupted' &&
+          this.turn.status !== 'failed';
+        if (turnActive) {
+          this.emitSessionDiagnostic(
+            'file-not-ready',
+            FILE_NOT_READY_MESSAGE,
+          );
+          return;
+        }
+        this.emitSessionDiagnostic(
+          'file-diff-failed',
+          FILE_DIFF_FAILED_MESSAGE,
+        );
+        return;
+      }
       if (outcome === 'failed') {
         this.emitSessionDiagnostic(
           'file-diff-failed',

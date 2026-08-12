@@ -4326,6 +4326,63 @@ describe('ChatController', () => {
     });
   });
 
+  it('words a missing file by turn state: still-writing vs moved-or-deleted', async () => {
+    const openDiff = vi.fn(
+      async (): Promise<FileDiffOutcome> => 'not-found',
+    );
+    const release = deferred<void>();
+    const runtime = createMockRuntime(async function* () {
+      yield { type: 'text-delta', text: 'writing the file' };
+      await release.promise;
+      yield successfulTurn();
+    });
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      { openDiff },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    // Missing during the active turn: Droid has not written it yet.
+    send(controller, 'session-1', 'turn-1', 'Create the file');
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('streaming');
+    });
+    controller.handleMessage({
+      type: 'file.openDiff',
+      sessionId: 'session-1',
+      path: 'docs/Canvas-API-学习文档.md',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+        severity: 'warning',
+        code: 'file-not-ready',
+      });
+    });
+
+    // Missing after the turn settled: moved or deleted.
+    release.resolve();
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
+    controller.handleMessage({
+      type: 'file.openDiff',
+      sessionId: 'session-1',
+      path: 'docs/Canvas-API-学习文档.md',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+        severity: 'warning',
+        code: 'file-diff-failed',
+      });
+    });
+  });
+
   it('previews validated prototype paths and reports failures', async () => {
     const openPreview = vi.fn(
       async (): Promise<PrototypePreviewOutcome> => 'opened',

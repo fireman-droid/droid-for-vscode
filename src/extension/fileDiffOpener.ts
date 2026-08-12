@@ -1,4 +1,11 @@
-export type FileDiffOutcome = 'opened-diff' | 'opened-file' | 'failed';
+/** `not-found` marks a path with no file on disk (vs. an open error),
+ * so the host can word the failure honestly — e.g. a chip clicked
+ * while Droid is still writing the file. */
+export type FileDiffOutcome =
+  | 'opened-diff'
+  | 'opened-file'
+  | 'not-found'
+  | 'failed';
 
 /**
  * Opens a native comparison (or the plain file) for a validated
