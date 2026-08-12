@@ -24,7 +24,10 @@ import type {
   SessionCatalogEntry,
   SessionCatalogResult,
 } from '../runtime/SessionCatalog';
-import type { SessionHistoryLoader } from '../runtime/history/SessionHistory';
+import {
+  SESSION_HISTORY_UNAVAILABLE_MESSAGE,
+  type SessionHistoryLoader,
+} from '../runtime/history/SessionHistory';
 import { DaemonAvailabilityError } from '../runtime/daemon/daemonConnection';
 import type { DaemonSessionCatalog } from '../runtime/daemon/DaemonSessionCatalog';
 import type { AttachmentSources } from './attachmentSources';
@@ -265,6 +268,224 @@ describe('ChatController', () => {
     ).toBeLessThan(
       messages.findIndex((message) => message.type === 'tool.activity'),
     );
+  });
+
+  it('upgrades a Task row on delegation and settles it from the ledger', async () => {
+    const runtime = createMockRuntime(async function* () {
+      yield {
+        type: 'tool-start',
+        toolName: 'Task',
+        toolUseId: 'task-1',
+        action: 'Delegated focused work',
+      };
+      yield {
+        type: 'subagent-started',
+        toolUseId: 'task-1',
+        subagentType: 'explore',
+        description: 'Survey the auth module',
+      };
+      yield {
+        type: 'tool-result',
+        toolName: 'Task',
+        toolUseId: 'task-1',
+        action: 'Delegated focused work',
+        isError: false,
+      };
+      yield successfulTurn();
+    });
+    const history: SessionHistoryLoader = {
+      loadHistory: vi.fn(async () => ({
+        status: 'unavailable' as const,
+        reason: 'history-failed' as const,
+        message: SESSION_HISTORY_UNAVAILABLE_MESSAGE,
+      })),
+      loadSubagentSummaries: vi.fn(async () => [
+        {
+          type: 'explore',
+          description: 'Survey the auth module',
+          status: 'completed' as const,
+          toolUseCount: 7,
+          durationMs: 4200,
+        },
+      ]),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      history,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Delegate the survey');
+
+    await vi.waitFor(() => {
+      expect(
+        toolActivities(messages).at(-1)?.subagent?.status,
+      ).toBe('completed');
+    });
+    expect(history.loadSubagentSummaries).toHaveBeenCalledWith({
+      cwd: 'C:\\workspace',
+      sessionId: 'session-1',
+    });
+    const activities = toolActivities(messages);
+    expect(activities).toEqual([
+      expect.objectContaining({
+        toolUseId: 'task-1',
+        status: 'running',
+      }),
+      expect.objectContaining({
+        toolUseId: 'task-1',
+        status: 'running',
+        subagent: {
+          type: 'explore',
+          description: 'Survey the auth module',
+          status: 'running',
+        },
+      }),
+      expect.objectContaining({
+        toolUseId: 'task-1',
+        status: 'completed',
+        subagent: {
+          type: 'explore',
+          description: 'Survey the auth module',
+          status: 'running',
+        },
+      }),
+      expect.objectContaining({
+        toolUseId: 'task-1',
+        status: 'completed',
+        subagent: {
+          type: 'explore',
+          description: 'Survey the auth module',
+          status: 'completed',
+          toolUseCount: 7,
+          durationMs: 4200,
+        },
+      }),
+    ]);
+    // The settlement lands after the terminal turn state.
+    expect(
+      messages.findIndex(
+        (message) =>
+          message.type === 'turn.state' &&
+          message.status === 'completed',
+      ),
+    ).toBeLessThan(
+      messages.findIndex(
+        (message) =>
+          message.type === 'tool.activity' &&
+          message.subagent?.status === 'completed',
+      ),
+    );
+  });
+
+  it('never loads the invocation ledger for turns without delegation', async () => {
+    const runtime = createMockRuntime(async function* () {
+      yield {
+        type: 'tool-start',
+        toolName: 'Read',
+        toolUseId: 'tool-1',
+        action: 'Read workspace files',
+      };
+      yield {
+        type: 'tool-result',
+        toolName: 'Read',
+        toolUseId: 'tool-1',
+        action: 'Read workspace files',
+        isError: false,
+      };
+      yield successfulTurn();
+    });
+    const history: SessionHistoryLoader = {
+      loadHistory: vi.fn(async () => ({
+        status: 'unavailable' as const,
+        reason: 'history-failed' as const,
+        message: SESSION_HISTORY_UNAVAILABLE_MESSAGE,
+      })),
+      loadSubagentSummaries: vi.fn(async () => []),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      history,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Read a file');
+
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
+    expect(history.loadSubagentSummaries).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the read-only mission identity of a resumed session', async () => {
+    const persistence = createMemoryPersistence();
+    const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
+    seed.selectSession('mission-session');
+    await seed.flush();
+    const history: SessionHistoryLoader = {
+      loadHistory: vi.fn(async () => ({
+        status: 'available' as const,
+        state: {
+          transcript: [],
+          historyStatus: 'complete' as const,
+          truncated: false,
+        },
+        mission: {
+          state: 'running' as const,
+          role: 'orchestrator' as const,
+        },
+      })),
+    };
+    const runtime = createMockRuntime();
+    runtime.initialize.mockResolvedValue(available('mission-session'));
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('mission-session')]),
+      new SessionRecoveryStore(persistence, 'recovery', 0),
+      history,
+    );
+
+    ready(controller);
+    await waitForConnected(messages);
+
+    expect(snapshots(messages).at(-1)).toMatchObject({
+      sessionId: 'mission-session',
+      mission: { state: 'running', role: 'orchestrator' },
+    });
+  });
+
+  it('omits mission identity for plain sessions and forwards catalog roles', async () => {
+    const runtime = createMockRuntime();
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([
+        { ...catalogEntry('worker-session'), missionRole: 'worker' },
+        catalogEntry('plain-session'),
+      ]),
+    );
+
+    ready(controller);
+    await waitForConnected(messages);
+
+    const snapshot = snapshots(messages).at(-1);
+    expect(snapshot).not.toHaveProperty('mission');
+    const items = snapshot?.sessions.items ?? [];
+    expect(
+      items.find((item) => item.id === 'worker-session'),
+    ).toMatchObject({ missionRole: 'worker' });
+    expect(
+      items.find((item) => item.id === 'plain-session'),
+    ).not.toHaveProperty('missionRole');
   });
 
   it('caps assistant output and emits one safe truncation diagnostic', async () => {
