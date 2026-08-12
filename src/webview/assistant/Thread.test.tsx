@@ -30,17 +30,19 @@ import {
   computePinnedUserIndex,
   computeStickyLayout,
   createFollowState,
-  filterSlashCommands,
-  findMentionToken,
-  findSlashToken,
   formatCompactDividerLabel,
   formatPlanSummary,
   formatSubagentSummary,
   readDroppedFileUris,
-  splitMentionPath,
   BackgroundProcessHint,
   SubagentSummaryRow,
 } from './Thread';
+import {
+  filterSlashCommands,
+  findMentionToken,
+  findSlashToken,
+  splitMentionPath,
+} from './thread/composerCommands';
 import { formatThinkingLabel } from './thread/readers';
 
 afterEach(() => {
