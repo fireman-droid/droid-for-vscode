@@ -359,6 +359,59 @@ mermaid.js 未加载、完成后出图且脚本经 nonce 注入成功、浅色�
 通过、图不超阅读列宽、无横向溢出。**本切片未打包安装，待随下一批次
 包一起可见验证**。
 
+2026-08-12 下午追加 V1 主线切片「子代理摘要层级 + Mission 只读展示」
+（设计 `spec-mission-design.md` §3/§2 最小档）：Droid 经 Task 工具委派
+子代理时，对应工具行下挂出一条一级缩进的安静摘要行——主标签
+「Delegated to `<subagentType>` subagent」、副行 description（≤512）、
+右侧状态字（pending/running/completed/failed/cancelled），终态且 SDK
+报告计数时行内补「N tool uses · 时长」。只做一层，不伪造更深层级；
+子会话内部事件不进父转录（SDK 不提供）；`childSessionId` 留在
+Runtime/Host，不进 Webview。数据源三路合一：Runtime 会话级订阅
+`child_session_available` 通知，仅活跃回合投影 `subagent-started`
+事件（回合外丢弃）；回合结束后从 `loadSession().subagentInvocations`
+台账按（type, description）身份对已达终态的行做结算（interrupted 的
+仍在跑的行不复活）；历史加载用同一台账按 FIFO 队列配对 Task 行。
+Mission 只读展示（控制面不做）：header 连接状态旁追加静字
+「· Mission · running」等（`loadSession().mission.state` +
+`decompSessionType`），会话抽屉行沿用 worktree 注记样式加
+「mission / mission · worker」细字。Bridge 新增
+`ToolSubagentSummary`（type ≤64 / description ≤512 / 状态枚举 /
+计数安全整数，exact-key 双侧校验）与快照 `mission` 字段、目录
+`missionRole` 字段；恢复检查点 round-trip 同规格校验。动画纪律：
+子行永远静态，父 Task 行的 shimmer 是回合内唯一动画（计算样式
+断言 `animationName` 全 none）。harness 三场景
+（`artifacts/subagent-harness.html` + `run-smoke-subagent.mjs`）：
+历史回放四种终态 + 无台账 Task 行不出子行 + 抽屉角色注记、流式
+升级→台账结算、120 回合 stress（默认 60 消息窗口 + Show earlier
+两次点开全量 124 子行）。门禁与包验证数字见本条目尾注。
+
+2026-08-12 下午追加 V2 切片「会话/回合 token 明细」：Context 浮层内
+新增一段 quiet「Token usage」账目（复用既有 hairline 分隔与细字标签
+语言，无图表库），显示 SDK 真实提供的五项 token 分解（Input /
+Output / Cache read / Cache write / Thinking），双列 Last turn（本回
+合）与 Session（会话累计）。取证（`docs/product/token-usage-design.md`，
+活体探针 `artifacts/probe-token-usage*.mjs`，CLI 协议 1.155.0）：
+`token_usage_update` 流事件给**累计**五字段（SDK 转换丢弃
+`factoryCredits`）、`result.tokenUsage` 给**本回合**全字段、
+`loadSession().result.tokenUsage` 给历史累计；SDK 全程**无 USD 成本
+字段**，故 UI 不显示金额、不做本地单价换算（fail-closed）；
+`factoryCredits` 仅在 >0 时显示 Credits 行；历史会话只有累计
+（loadSession 消息级无 usage），浮层以一行细字注明
+「Per-turn detail appears after the next completed turn.」；无任何
+usage 数据时整段不渲染（fail-quiet）。链路：Runtime
+`normalizeSdkEvent` 新增 `token-usage` 事件并在 `turn-complete` 上
+投影 `turnUsage`，`projectSessionHistory` 读信封顶层 `tokenUsage`；
+共享 `src/shared/tokenUsage.ts` 严校验投影（五项非负安全整数，
+credits 无效按缺席处理）；Bridge 新增 `session.tokenUsage` 消息与
+快照可选 `tokenUsage` 字段（`validateHostMessage` 双侧严校验）；
+Host `ChatController` 会话级状态（历史种子、live 覆盖累计、
+turn-complete 写 lastTurn、compact/fork/切换重置）；Webview store +
+`ContextPopover` 账目组件。门禁：typecheck 三项目干净；全量 vitest
+61 文件 1478 项全过（新增 shared 投影、Bridge 校验、store 会话
+隔离/重置、controller 发布与历史种子、popover 三态渲染）；build 过
+（webview.js 910.5KB）。**本切片未打包安装，待随下一批次包一起
+可见验证**。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
@@ -774,6 +827,44 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
 - `src/webview/assistant/Thread.tsx`、`src/webview/assistant/App.tsx`、
   `src/webview/assistant/styles.css`（Preview chip 与样式，`6369e96`）
 
+### 13. 子代理摘要层级 + Mission 只读展示（2026-08-12 下午，V1 主线切片⑤）
+
+- Task 委派行下挂一级缩进安静子行：「Delegated to `<type>` subagent」
+  + description 副行 + 状态字；终态且 SDK 报告时行内
+  「N tool uses · 时长」。只做一层；子行永远静态（父行 shimmer 为
+  回合唯一动画）；`childSessionId` 不进 Webview
+- 流式：Runtime 会话级 `onNotification('child_session_available')`
+  → `subagent-started` 事件（仅活跃回合；`toolUseId` 缺失时回落到
+  最近运行中的 Task 行）→ Host `projectSubagentStarted` 行升级
+- 结算：回合成功/中断后 `loadSubagentSummaries()`（fail-soft 回
+  null）按（type, description）身份从台账取最新条目，只结算已达
+  终态的行；无委派的回合不加载台账
+- 历史：`loadSession().subagentInvocations` 建 FIFO 身份队列配对
+  Task 行；`mission.state` + `decompSessionType` 投影快照 `mission`
+  与目录 `missionRole`
+- Mission 只读最小档：header 静字「· Mission · running」等，抽屉行
+  「mission / mission · worker」注记（沿用 worktree 注记样式）；
+  控制面（启动/暂停/恢复/Worker 重试）按设计判定不做
+- Bridge `ToolSubagentSummary`（type ≤64 / description ≤512 / 状态
+  枚举 / 计数安全整数）exact-key 双侧校验；恢复检查点 round-trip
+  同规格（畸形条目整卡拒绝）
+
+主要实现：
+
+- `src/shared/bridgeMessages.ts`、`src/shared/transcriptLimits.ts`、
+  `src/webview/bridge/validateHostMessage.ts`（Bridge 契约 + 校验，
+  `c492c5d`）
+- `src/runtime/subagentSummary.ts`、`src/runtime/FactoryDroidRuntime.ts`、
+  `src/runtime/history/*`、`src/runtime/FactorySessionCatalog.ts`
+  （通知订阅、台账投影、历史配对、目录角色，`07195d0` `95ca7e2`
+  `3ccdb25` `63069ee`）
+- `src/extension/turnActivityState.ts`、`src/extension/hostTranscriptState.ts`、
+  `src/extension/SessionRecoveryStore.ts`、`src/extension/ChatController.ts`
+  （行升级、结算、恢复、编排，`e854d9f` `0203c0e` `b8d7f3d`）
+- `src/webview/assistant/store.ts`、`App.tsx`、`SessionDrawer.tsx`、
+  `runtimeAdapter.ts`、`Thread.tsx`、`styles.css`（子行渲染与
+  mission 静字，`4dcee12` `d1011f7` `9788c20`）
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -1037,7 +1128,12 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
       模型覆盖 + `proceed_new_session*` 实现 Session 收养；见
       「生产已接通 §6」）
 - [ ] Mission 启动
-- [ ] Mission 阶段和 Worker 摘要
+- [x] 子代理摘要层级 + Mission 只读展示（切片⑤：Task 委派行的
+      一级子代理摘要行 + header/抽屉 mission 静字；见
+      「生产已接通 §13」）
+- [ ] Mission 阶段流水和 Worker 详情界面（SDK 只读子集之外的部分，
+      含控制面，按 `spec-mission-design.md` §2 判定暂不做；控制面
+      可行性修正见 `mission-control-feasibility.md`，属后续切片）
 
 ## V2 未完成
 
