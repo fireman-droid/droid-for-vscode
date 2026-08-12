@@ -126,6 +126,7 @@ import { handleRewindInfo, handleEditResend, handleEditStageBegin, handleEditSta
 import { stampRunningFlags, setSessionRunning, ensureBackgroundRunningPoll, seedBackgroundRunning } from './chat/sessionRunning';
 import { settleTurnSubagents, clearZombieSubagentWatch, armReplayedSubagentWatch } from './chat/subagentWatch';
 import { emitEarlyRecoverySnapshot, reconcileDaemonTurn, scheduleRecoveryCheckpoint, checkpointRecoveryTranscript, flushRecoveryCheckpoint, recoveryTurnId } from './chat/recovery';
+import { handleSessionNew, handleWorktreeCreateSession, handleSessionRename, handleSessionFavorite, handleSessionArchive, handleSessionUnarchive, handleArchivedRefresh, handleSessionSearch, handleSessionSelect, handleRefresh, handleSessionFork, loadCatalog, hasCatalogSession, activeSessionSummary, withActiveSession, beginCatalogLoad, bindCatalogViewToWorkspace, clearCatalog, isCurrentCatalogRequest, discardCatalogRequest, touchActiveSession, SESSION_NEW_FAILED_MESSAGE } from './chat/sessionDirectory';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
 import {
   clearPrompts,
@@ -218,8 +219,10 @@ import {
   daemonFailureMessage,
   isEnumValue,
   isSafeBridgeId,
+  SESSION_OPERATION_BLOCKED_MESSAGE,
   isTranscriptProjection,
   isTurnActive,
+  isUsableWorkspace,
   type CurrentTurn,
   type DisposableSubscription,
   type EditStage,
@@ -253,54 +256,18 @@ const RUNTIME_EVENT_ERROR_MESSAGE =
   'Droid reported a runtime error while processing this turn.';
 const ASSISTANT_OUTPUT_TRUNCATED_MESSAGE =
   'Assistant output exceeded the display limit and was truncated.';
-const CATALOG_ERROR_MESSAGE =
-  'Saved Droid sessions could not be loaded.';
-const SESSION_OPERATION_BLOCKED_MESSAGE =
-  'Finish the current Droid activity before changing sessions.';
-const UNKNOWN_SESSION_MESSAGE =
-  'The selected Droid session is not available in this workspace.';
 const SESSION_CLOSE_FAILED_MESSAGE =
   'The current Droid session could not be closed.';
 const SESSION_RESUME_FAILED_MESSAGE =
   'The selected Droid session could not be opened.';
-const SESSION_NEW_FAILED_MESSAGE =
-  'A new Droid session could not be created.';
-const WORKTREE_CREATE_UNAVAILABLE_MESSAGE =
-  'Worktree sessions need the daemon runtime mode and a git workspace.';
 const WORKSPACE_CHANGED_MESSAGE =
   'The workspace changed before the Droid session could be opened.';
-const RENAME_BLOCKED_MESSAGE =
-  'Wait for the current session operation to finish before renaming.';
-const RENAME_UNSUPPORTED_MESSAGE =
-  'This session cannot be renamed.';
-const RENAME_FAILED_MESSAGE =
-  'Droid could not rename the session.';
-const FAVORITE_BLOCKED_MESSAGE =
-  'Wait for the current session operation to finish before changing favorites.';
-const FAVORITE_UNSUPPORTED_MESSAGE =
-  'Session favorites are not available in this Droid runtime.';
-const FAVORITE_FAILED_MESSAGE =
-  'The session favorite could not be saved.';
-const DAEMON_UNSUPPORTED_MESSAGE =
-  'Archive and search are not available in this Droid runtime.';
-const ARCHIVE_BLOCKED_MESSAGE =
-  'Wait for the current session operation to finish before archiving.';
-const ARCHIVE_ACTIVE_MESSAGE =
-  'Switch to another session before archiving the active one.';
-const ARCHIVE_FAILED_MESSAGE = 'The session could not be archived.';
-const UNARCHIVE_FAILED_MESSAGE =
-  'The session could not be restored from the archive.';
 const COMPACT_BLOCKED_MESSAGE =
   'Droid cannot compact right now. Wait for the current activity to finish.';
 const COMPACT_UNSUPPORTED_MESSAGE =
   'This Droid runtime does not support context compaction.';
 const COMPACT_FAILED_MESSAGE =
   'Droid could not compact the conversation.';
-const FORK_BLOCKED_MESSAGE =
-  'Droid cannot fork right now. Wait for the current activity to finish.';
-const FORK_UNSUPPORTED_MESSAGE =
-  'This Droid runtime does not support session forking.';
-const FORK_FAILED_MESSAGE = 'Droid could not fork this session.';
 const SPEC_HANDOFF_DETECTED_MESSAGE =
   'Plan approved. Droid is implementing in a new session; the chat switches there when this turn finishes.';
 const SPEC_HANDOFF_NOT_DETECTED_MESSAGE =
@@ -663,37 +630,37 @@ export class ChatController {
         this.interactions.respondAskUser(message);
         return;
       case 'sessions.refresh':
-        this.handleRefresh();
+        handleRefresh(this);
         return;
       case 'session.select':
-        this.handleSessionSelect(message.sessionId);
+        handleSessionSelect(this, message.sessionId);
         return;
       case 'session.new':
-        this.handleSessionNew();
+        handleSessionNew(this);
         return;
       case 'worktree.createSession':
-        this.handleWorktreeCreateSession();
+        handleWorktreeCreateSession(this);
         return;
       case 'session.rename':
-        this.handleSessionRename(message.sessionId, message.title);
+        handleSessionRename(this, message.sessionId, message.title);
         return;
       case 'session.favorite':
-        this.handleSessionFavorite(
+        handleSessionFavorite(this, 
           message.sessionId,
           message.favorite,
         );
         return;
       case 'session.archive':
-        this.handleSessionArchive(message.sessionId);
+        handleSessionArchive(this, message.sessionId);
         return;
       case 'session.unarchive':
-        this.handleSessionUnarchive(message.sessionId);
+        handleSessionUnarchive(this, message.sessionId);
         return;
       case 'sessions.archivedRefresh':
-        this.handleArchivedRefresh();
+        handleArchivedRefresh(this);
         return;
       case 'session.search':
-        this.handleSessionSearch(message.query);
+        handleSessionSearch(this, message.query);
         return;
       case 'session.context.refresh':
         handleContextRefresh(this, message.sessionId);
@@ -702,7 +669,7 @@ export class ChatController {
         this.handleSessionCompact(message.sessionId);
         return;
       case 'session.fork':
-        this.handleSessionFork(message.sessionId);
+        handleSessionFork(this, message.sessionId);
         return;
       case 'btw.ask':
         this.handleBtwAsk(message.sessionId, message.text);
@@ -902,14 +869,14 @@ export class ChatController {
     this.turn = null;
     this.interactions.cancelAll();
     if (isUsableWorkspace(workspace)) {
-      this.bindCatalogViewToWorkspace(workspace.cwd);
+      bindCatalogViewToWorkspace(this, workspace.cwd);
       this.connection = {
         status: 'unavailable',
         message: WORKSPACE_CHANGED_MESSAGE,
       };
       this.emitSnapshot();
     } else {
-      this.clearCatalog();
+      clearCatalog(this);
       this.emitWorkspaceUnavailable(workspace);
     }
     this.queueWorkspaceTransition(generation, staleRuntimes);
@@ -971,14 +938,14 @@ export class ChatController {
     while (!this.disposed) {
       const workspace = this.getWorkspaceContext();
       if (!isUsableWorkspace(workspace)) {
-        this.clearCatalog();
+        clearCatalog(this);
         this.emitWorkspaceUnavailable(workspace);
         return;
       }
 
       this.connection = { status: 'connecting' };
-      const catalogRequest = this.beginCatalogLoad(workspace.cwd);
-      const catalogPromise = this.loadCatalog(workspace.cwd);
+      const catalogRequest = beginCatalogLoad(this, workspace.cwd);
+      const catalogPromise = loadCatalog(this, workspace.cwd);
       if (!recoveryLoaded) {
         await this.recoveryStore.load();
         recoveryLoaded = true;
@@ -991,8 +958,8 @@ export class ChatController {
       if (this.disposed) {
         return;
       }
-      if (!this.isCurrentCatalogRequest(catalogRequest, workspace.cwd)) {
-        this.discardCatalogRequest(catalogRequest);
+      if (!isCurrentCatalogRequest(this, catalogRequest, workspace.cwd)) {
+        discardCatalogRequest(this, catalogRequest);
         continue;
       }
       this.sessions = catalog;
@@ -1002,7 +969,7 @@ export class ChatController {
         this.recoveryStore.getSelectedSessionId();
       const resumable =
         selectedSessionId !== null &&
-        this.hasCatalogSession(selectedSessionId, workspace.cwd);
+        hasCatalogSession(this, selectedSessionId, workspace.cwd);
       const target: RuntimeSessionTarget = resumable
         ? {
             kind: 'resume',
@@ -1080,7 +1047,7 @@ export class ChatController {
         : sentAttachmentSummaries(consumed),
     );
     scheduleRecoveryCheckpoint(this);
-    this.touchActiveSession();
+    touchActiveSession(this);
     recordRecentCommand(this, sessionId, text);
     this.emitTurnState(sessionId, turnId, 'submitting');
     const attachments =
@@ -1724,14 +1691,14 @@ export class ChatController {
     }
 
     const previousTitle =
-      this.activeSessionSummary()?.title ?? 'Current session';
+      activeSessionSummary(this)?.title ?? 'Current session';
     // The compacted session stays in the catalog: its file remains on
     // disk with the full pre-compaction history, and the compaction
     // divider's "View full history" jump needs it selectable.
     this.sessionId = compactedSessionId;
     this.turn = null;
     clearPendingAttachments(this);
-    this.sessions = this.withActiveSession(this.sessions, {
+    this.sessions = withActiveSession(this, this.sessions, {
       id: compactedSessionId,
       title: previousTitle,
       messageCount: 0,
@@ -1792,165 +1759,6 @@ export class ChatController {
     this.refreshContextAfterTurn(compactedSessionId);
   }
 
-  private handleSessionFork(sessionId: string): void {
-    const runtime = this.runtime;
-    if (
-      runtime !== null &&
-      !this.ensureActiveRuntimeWorkspaceCurrent()
-    ) {
-      return;
-    }
-    if (
-      runtime === null ||
-      this.connection.status !== 'connected' ||
-      sessionId !== this.sessionId
-    ) {
-      return;
-    }
-    if (
-      isTurnActive(this.turn) ||
-      this.interactions.hasPending() ||
-      this.sessionOperationInProgress ||
-      this.refreshInProgress ||
-      this.settingsUpdate !== null
-    ) {
-      this.emitSessionDiagnostic(
-        'session-fork-blocked',
-        FORK_BLOCKED_MESSAGE,
-      );
-      return;
-    }
-    if (typeof runtime.fork !== 'function') {
-      this.emitSessionDiagnostic(
-        'session-fork-unsupported',
-        FORK_UNSUPPORTED_MESSAGE,
-      );
-      return;
-    }
-
-    this.sessionOperationInProgress = true;
-    void this.performFork(runtime, sessionId).finally(() => {
-      this.sessionOperationInProgress = false;
-    });
-  }
-
-  /**
-   * Forks the active session and adopts the copy that Droid returns.
-   * The original session stays in the catalog so the user can go back
-   * to it; the current transcript carries over unchanged.
-   */
-  private async performFork(
-    runtime: DroidRuntime,
-    sessionId: string,
-  ): Promise<void> {
-    const generation = this.runtimeGeneration;
-    const cwd = this.activeRuntimeCwd;
-    if (cwd === null) {
-      return;
-    }
-
-    const previousTitle =
-      this.activeSessionSummary()?.title ?? 'Current session';
-    const forkTitle = forkTitleFromText(`${previousTitle} (fork)`);
-
-    let forkedSessionId: string;
-    try {
-      const result = await runtime.fork!(forkTitle);
-      forkedSessionId = result.sessionId;
-    } catch {
-      if (
-        this.isCurrentSessionOperation(
-          runtime,
-          generation,
-          sessionId,
-          cwd,
-        )
-      ) {
-        this.emitSessionDiagnostic(
-          'session-fork-failed',
-          FORK_FAILED_MESSAGE,
-        );
-      }
-      return;
-    }
-    if (
-      !this.isCurrentSessionOperation(
-        runtime,
-        generation,
-        sessionId,
-        cwd,
-      )
-    ) {
-      return;
-    }
-    if (
-      !isSafeBridgeId(forkedSessionId) ||
-      forkedSessionId === sessionId
-    ) {
-      this.emitSessionDiagnostic(
-        'session-fork-failed',
-        FORK_FAILED_MESSAGE,
-      );
-      return;
-    }
-
-    // Unlike compaction, the forked-from session remains valid and
-    // stays in the catalog; only the active marker moves to the fork.
-    this.sessionId = forkedSessionId;
-    this.turn = null;
-    clearPendingAttachments(this);
-    this.sessions = this.withActiveSession(this.sessions, {
-      id: forkedSessionId,
-      title: forkTitle,
-      messageCount: 0,
-      modifiedTime: new Date().toISOString(),
-      active: true,
-      isFavorite: false,
-    });
-
-    // The fork copies the conversation, but message IDs may differ, so
-    // reload its history; keep the current transcript if that fails.
-    let transcript: HostTranscriptState | null = null;
-    let mission: SessionMissionSummary | null = null;
-    let tokenUsage: TokenUsageBreakdown | null = null;
-    {
-      const loaded = await this.loadHistoryTimed(cwd, forkedSessionId);
-      if (loaded?.status === 'available') {
-        transcript = loaded.state;
-        mission = loaded.mission ?? null;
-        tokenUsage = loaded.tokenUsage ?? null;
-      }
-    }
-    if (
-      !this.isCurrentSessionOperation(
-        runtime,
-        generation,
-        forkedSessionId,
-        cwd,
-      )
-    ) {
-      return;
-    }
-    this.mission = mission;
-    // The fork is a new session; its counters restart.
-    this.tokenUsage = { cumulative: tokenUsage, lastTurn: null };
-    this.transcript =
-      transcript ?? { ...this.transcript, historyStatus: 'partial' };
-    this.recoveryStore.writeSession(forkedSessionId, this.transcript);
-    this.recoveryStore.selectSession(forkedSessionId);
-    void this.recoveryStore.flush();
-    this.emitSnapshot();
-    this.emit({
-      type: 'runtime.diagnostic',
-      sessionId: forkedSessionId,
-      turnId: null,
-      severity: 'info',
-      code: 'session-forked',
-      message: 'Session forked. You are now on the copy.',
-    });
-    this.refreshContextAfterTurn(forkedSessionId);
-  }
-
   private handleRetry(sessionId: string | null): void {
     if (
       this.sessionOperationInProgress ||
@@ -1981,7 +1789,7 @@ export class ChatController {
     }
     const resumableId =
       this.sessionId !== null &&
-      this.hasCatalogSession(this.sessionId, workspace.cwd)
+      hasCatalogSession(this, this.sessionId, workspace.cwd)
         ? this.sessionId
         : null;
     this.startReplacement(
@@ -1998,17 +1806,17 @@ export class ChatController {
   private async retryAfterWorkspaceBecomesAvailable(
     cwd: string,
   ): Promise<void> {
-    const catalogRequest = this.beginCatalogLoad(cwd);
+    const catalogRequest = beginCatalogLoad(this, cwd);
     this.emitSnapshot();
     const [, catalog] = await Promise.all([
       this.recoveryStore.load(),
-      this.loadCatalog(cwd),
+      loadCatalog(this, cwd),
     ]);
     if (this.disposed) {
       return;
     }
-    if (!this.isCurrentCatalogRequest(catalogRequest, cwd)) {
-      this.discardCatalogRequest(catalogRequest);
+    if (!isCurrentCatalogRequest(this, catalogRequest, cwd)) {
+      discardCatalogRequest(this, catalogRequest);
       return;
     }
     this.sessions = catalog;
@@ -2017,7 +1825,7 @@ export class ChatController {
       this.recoveryStore.getSelectedSessionId();
     await this.replaceRuntime(
       selectedSessionId !== null &&
-        this.hasCatalogSession(selectedSessionId, cwd)
+        hasCatalogSession(this, selectedSessionId, cwd)
         ? {
             kind: 'resume',
             cwd,
@@ -2027,578 +1835,7 @@ export class ChatController {
     );
   }
 
-  private handleSessionNew(): void {
-    const workspace = this.getWorkspaceContext();
-    if (!this.canReplaceSession() || !isUsableWorkspace(workspace)) {
-      if (!isUsableWorkspace(workspace)) {
-        this.emitWorkspaceUnavailable(workspace);
-      }
-      return;
-    }
-    this.bindCatalogViewToWorkspace(workspace.cwd);
-    this.startReplacement({ kind: 'new', cwd: workspace.cwd });
-  }
-
-  private handleWorktreeCreateSession(): void {
-    const workspace = this.getWorkspaceContext();
-    if (!this.canReplaceSession() || !isUsableWorkspace(workspace)) {
-      if (!isUsableWorkspace(workspace)) {
-        this.emitWorkspaceUnavailable(workspace);
-      }
-      return;
-    }
-    // The drawer entry never renders without the advertised
-    // capability, so a request without it is stale or hostile. Fail
-    // closed with a diagnostic instead of degrading to a plain
-    // in-workspace session.
-    if (
-      this.worktreeSessions?.enabled !== true ||
-      !this.worktreeCreateAvailable
-    ) {
-      this.emitSessionDiagnostic(
-        'worktree-create-unavailable',
-        WORKTREE_CREATE_UNAVAILABLE_MESSAGE,
-      );
-      return;
-    }
-    this.bindCatalogViewToWorkspace(workspace.cwd);
-    this.startReplacement({
-      kind: 'new',
-      cwd: workspace.cwd,
-      worktree: true,
-    });
-  }
-
-  private handleSessionRename(sessionId: string, title: string): void {
-    const runtime = this.runtime;
-    if (
-      runtime !== null &&
-      !this.ensureActiveRuntimeWorkspaceCurrent()
-    ) {
-      return;
-    }
-    const trimmedTitle = title.trim();
-    if (
-      runtime === null ||
-      this.connection.status !== 'connected' ||
-      sessionId !== this.sessionId ||
-      trimmedTitle.length === 0
-    ) {
-      return;
-    }
-    if (
-      this.sessionOperationInProgress ||
-      this.refreshInProgress
-    ) {
-      this.emitSessionDiagnostic(
-        'session-rename-blocked',
-        RENAME_BLOCKED_MESSAGE,
-      );
-      return;
-    }
-    if (typeof runtime.rename !== 'function') {
-      this.emitSessionDiagnostic(
-        'session-rename-unsupported',
-        RENAME_UNSUPPORTED_MESSAGE,
-      );
-      return;
-    }
-
-    const generation = this.runtimeGeneration;
-    const cwd = this.activeRuntimeCwd;
-    if (cwd === null) {
-      return;
-    }
-    void runtime.rename(trimmedTitle).then(
-      () => {
-        if (
-          !this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        this.sessions = {
-          ...this.sessions,
-          items: this.sessions.items.map((item) =>
-            item.id === sessionId
-              ? { ...item, title: trimmedTitle }
-              : item,
-          ),
-        };
-        this.emitSnapshot();
-      },
-      () => {
-        if (
-          this.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          this.emitSessionDiagnostic(
-            'session-rename-failed',
-            RENAME_FAILED_MESSAGE,
-          );
-        }
-      },
-    );
-  }
-
-  private handleSessionFavorite(
-    sessionId: string,
-    favorite: boolean,
-  ): void {
-    const workspace = this.getWorkspaceContext();
-    if (!isUsableWorkspace(workspace)) {
-      return;
-    }
-    if (this.sessionOperationInProgress || this.refreshInProgress) {
-      this.emitSessionDiagnostic(
-        'session-favorite-blocked',
-        FAVORITE_BLOCKED_MESSAGE,
-      );
-      return;
-    }
-    if (
-      this.sessions.status !== 'ready' ||
-      !this.hasCatalogSession(sessionId, workspace.cwd)
-    ) {
-      this.emitSessionDiagnostic(
-        'session-favorite-invalid',
-        UNKNOWN_SESSION_MESSAGE,
-      );
-      return;
-    }
-    const writeFavorite = this.sessionCatalog.writeFavorite?.bind(
-      this.sessionCatalog,
-    );
-    if (writeFavorite === undefined) {
-      this.emitSessionDiagnostic(
-        'session-favorite-unsupported',
-        FAVORITE_UNSUPPORTED_MESSAGE,
-      );
-      return;
-    }
-
-    // Blocks concurrent catalog reads/writes for the duration of the
-    // file write and the follow-up re-list.
-    this.refreshInProgress = true;
-    void (async () => {
-      let written = false;
-      try {
-        written = await writeFavorite(sessionId, favorite);
-      } catch {
-        written = false;
-      }
-      if (this.disposed) {
-        return;
-      }
-      if (!written) {
-        this.refreshInProgress = false;
-        this.emitSessionDiagnostic(
-          'session-favorite-failed',
-          FAVORITE_FAILED_MESSAGE,
-        );
-        return;
-      }
-
-      // Close the loop through the public listSessions() readback so
-      // the drawer shows what the SDK actually reports.
-      const previousActive = this.activeSessionSummary();
-      const catalogGeneration = this.catalogGeneration;
-      const result = await this.loadCatalog(workspace.cwd);
-      this.refreshInProgress = false;
-      if (
-        this.disposed ||
-        this.catalogGeneration !== catalogGeneration ||
-        this.catalogCwd !== workspace.cwd ||
-        !this.isTargetWorkspaceCurrent(workspace.cwd)
-      ) {
-        return;
-      }
-      if (result.status === 'ready') {
-        this.sessions = this.withActiveSession(result, previousActive);
-        seedBackgroundRunning(this, workspace.cwd);
-      } else {
-        // The write succeeded but the re-list failed; reflect the
-        // write locally so the toggle does not look ignored.
-        this.sessions = {
-          ...this.sessions,
-          items: this.sessions.items.map((item) =>
-            item.id === sessionId
-              ? { ...item, isFavorite: favorite }
-              : item,
-          ),
-        };
-      }
-      this.emitSnapshot();
-    })();
-  }
-
-  /**
-   * Archives a non-active catalog session through the daemon sidecar,
-   * then closes the loop with a catalog re-list (the process-path
-   * `listSessions` skips archived sessions) and an archived-list
-   * refresh.
-   */
-  private handleSessionArchive(sessionId: string): void {
-    const workspace = this.getWorkspaceContext();
-    if (!isUsableWorkspace(workspace)) {
-      return;
-    }
-    if (this.sessionOperationInProgress || this.refreshInProgress) {
-      this.emitSessionDiagnostic(
-        'session-archive-blocked',
-        ARCHIVE_BLOCKED_MESSAGE,
-      );
-      return;
-    }
-    if (
-      this.sessions.status !== 'ready' ||
-      !this.hasCatalogSession(sessionId, workspace.cwd)
-    ) {
-      this.emitSessionDiagnostic(
-        'session-archive-invalid',
-        UNKNOWN_SESSION_MESSAGE,
-      );
-      return;
-    }
-    if (sessionId === this.sessionId) {
-      this.emitSessionDiagnostic(
-        'session-archive-active',
-        ARCHIVE_ACTIVE_MESSAGE,
-      );
-      return;
-    }
-    const daemonSessions = this.daemonSessions;
-    if (daemonSessions === undefined) {
-      this.emitSessionDiagnostic(
-        'session-archive-unsupported',
-        DAEMON_UNSUPPORTED_MESSAGE,
-      );
-      return;
-    }
-
-    this.refreshInProgress = true;
-    void (async () => {
-      let archived = false;
-      let failure = ARCHIVE_FAILED_MESSAGE;
-      try {
-        archived = await (await daemonSessions()).archive(sessionId);
-      } catch (error) {
-        failure = daemonFailureMessage(error, ARCHIVE_FAILED_MESSAGE);
-      }
-      if (this.disposed) {
-        return;
-      }
-      if (!archived) {
-        this.refreshInProgress = false;
-        this.emitSessionDiagnostic('session-archive-failed', failure);
-        return;
-      }
-      await this.reloadCatalogAfterDaemonWrite(workspace.cwd);
-    })();
-  }
-
-  /**
-   * Restores an archived session. The id is not required to be in the
-   * live catalog (archived sessions left it), only shape-validated by
-   * the Bridge.
-   */
-  private handleSessionUnarchive(sessionId: string): void {
-    const workspace = this.getWorkspaceContext();
-    if (!isUsableWorkspace(workspace)) {
-      return;
-    }
-    if (this.sessionOperationInProgress || this.refreshInProgress) {
-      this.emitSessionDiagnostic(
-        'session-unarchive-blocked',
-        ARCHIVE_BLOCKED_MESSAGE,
-      );
-      return;
-    }
-    const daemonSessions = this.daemonSessions;
-    if (daemonSessions === undefined) {
-      this.emitSessionDiagnostic(
-        'session-unarchive-unsupported',
-        DAEMON_UNSUPPORTED_MESSAGE,
-      );
-      return;
-    }
-
-    this.refreshInProgress = true;
-    void (async () => {
-      let restored = false;
-      let failure = UNARCHIVE_FAILED_MESSAGE;
-      try {
-        restored = await (await daemonSessions()).unarchive(sessionId);
-      } catch (error) {
-        failure = daemonFailureMessage(error, UNARCHIVE_FAILED_MESSAGE);
-      }
-      if (this.disposed) {
-        return;
-      }
-      if (!restored) {
-        this.refreshInProgress = false;
-        this.emitSessionDiagnostic('session-unarchive-failed', failure);
-        return;
-      }
-      await this.reloadCatalogAfterDaemonWrite(workspace.cwd);
-    })();
-  }
-
-  /**
-   * Shared readback after a successful daemon archive/unarchive:
-   * re-list the regular catalog, emit the snapshot, then refresh the
-   * archived section. Clears `refreshInProgress`.
-   */
-  private async reloadCatalogAfterDaemonWrite(
-    cwd: string,
-  ): Promise<void> {
-    const previousActive = this.activeSessionSummary();
-    const catalogGeneration = this.catalogGeneration;
-    const result = await this.loadCatalog(cwd);
-    this.refreshInProgress = false;
-    if (this.disposed) {
-      return;
-    }
-    if (
-      this.catalogGeneration === catalogGeneration &&
-      this.catalogCwd === cwd &&
-      this.isTargetWorkspaceCurrent(cwd) &&
-      result.status === 'ready'
-    ) {
-      this.sessions = this.withActiveSession(result, previousActive);
-      seedBackgroundRunning(this, cwd);
-      this.emitSnapshot();
-    }
-    await this.refreshArchived(cwd);
-  }
-
-  private handleArchivedRefresh(): void {
-    const workspace = this.getWorkspaceContext();
-    if (!isUsableWorkspace(workspace)) {
-      return;
-    }
-    void this.refreshArchived(workspace.cwd);
-  }
-
-  private async refreshArchived(cwd: string): Promise<void> {
-    const daemonSessions = this.daemonSessions;
-    if (daemonSessions === undefined) {
-      this.emit({
-        type: 'session.archived',
-        archived: {
-          status: 'error',
-          items: [],
-          message: DAEMON_UNSUPPORTED_MESSAGE,
-        },
-      });
-      return;
-    }
-    this.emit({
-      type: 'session.archived',
-      archived: { status: 'loading', items: [] },
-    });
-    let items: readonly ArchivedSessionSummary[];
-    try {
-      items = (await (await daemonSessions()).listArchived(cwd)).slice(
-        0,
-        MAX_ARCHIVED_SESSION_ITEMS,
-      );
-    } catch (error) {
-      // The unavailable copy renders only inside the drawer; without
-      // this record a failed daemon acquire leaves no local-log trace.
-      this.recordPanelFailure(
-        'archived-load-failed',
-        formatUnknownError(error),
-      );
-      if (!this.disposed) {
-        this.emit({
-          type: 'session.archived',
-          archived: {
-            status: 'error',
-            items: [],
-            message: daemonFailureMessage(
-              error,
-              DAEMON_UNAVAILABLE_MESSAGE,
-            ),
-          },
-        });
-      }
-      return;
-    }
-    if (this.disposed || !this.isTargetWorkspaceCurrent(cwd)) {
-      return;
-    }
-    this.emit({
-      type: 'session.archived',
-      archived: { status: 'ready', items },
-    });
-  }
-
-  private handleSessionSearch(query: string): void {
-    const workspace = this.getWorkspaceContext();
-    if (!isUsableWorkspace(workspace)) {
-      return;
-    }
-    const daemonSessions = this.daemonSessions;
-    if (daemonSessions === undefined) {
-      this.emit({
-        type: 'session.searchResults',
-        search: {
-          status: 'error',
-          query,
-          items: [],
-          message: DAEMON_UNSUPPORTED_MESSAGE,
-        },
-      });
-      return;
-    }
-    void (async () => {
-      try {
-        const matches = (
-          await (await daemonSessions()).search(query)
-        ).slice(0, MAX_SESSION_SEARCH_RESULTS);
-        if (this.disposed) {
-          return;
-        }
-        this.emit({
-          type: 'session.searchResults',
-          search: { status: 'ready', query, items: matches },
-        });
-      } catch (error) {
-        if (this.disposed) {
-          return;
-        }
-        this.emit({
-          type: 'session.searchResults',
-          search: {
-            status: 'error',
-            query,
-            items: [],
-            message: daemonFailureMessage(
-              error,
-              DAEMON_UNAVAILABLE_MESSAGE,
-            ),
-          },
-        });
-      }
-    })();
-  }
-
-  private handleSessionSelect(sessionId: string): void {
-    const workspace = this.getWorkspaceContext();
-    if (!isUsableWorkspace(workspace)) {
-      this.clearCatalog();
-      this.emitWorkspaceUnavailable(workspace);
-      return;
-    }
-    if (!this.canReplaceSession()) {
-      return;
-    }
-    if (this.catalogCwd !== workspace.cwd) {
-      this.emitSessionDiagnostic(
-        'session-selection-invalid',
-        UNKNOWN_SESSION_MESSAGE,
-      );
-      this.startCatalogRefresh(workspace.cwd);
-      return;
-    }
-    if (
-      this.sessions.status !== 'ready' ||
-      !this.hasCatalogSession(sessionId, workspace.cwd)
-    ) {
-      this.emitSessionDiagnostic(
-        'session-selection-invalid',
-        UNKNOWN_SESSION_MESSAGE,
-      );
-      return;
-    }
-    if (
-      sessionId === this.sessionId &&
-      this.activeRuntimeCwd === workspace.cwd
-    ) {
-      this.emitSnapshot();
-      return;
-    }
-    this.startReplacement({
-      kind: 'resume',
-      cwd: workspace.cwd,
-      sessionId,
-    });
-  }
-
-  private handleRefresh(): void {
-    if (
-      this.connection.status === 'connecting' ||
-      this.refreshInProgress ||
-      this.sessionOperationInProgress
-    ) {
-      this.emitSessionDiagnostic(
-        'session-operation-blocked',
-        SESSION_OPERATION_BLOCKED_MESSAGE,
-      );
-      return;
-    }
-    const workspace = this.getWorkspaceContext();
-    if (!isUsableWorkspace(workspace)) {
-      this.emitWorkspaceUnavailable(workspace);
-      return;
-    }
-
-    this.startCatalogRefresh(workspace.cwd);
-  }
-
-  private startCatalogRefresh(cwd: string): void {
-    const previousActive = this.activeSessionSummary();
-    const catalogRequest = this.beginCatalogLoad(cwd);
-    this.refreshInProgress = true;
-    this.emitSnapshot();
-    void this.refreshCatalog(
-      cwd,
-      catalogRequest,
-      previousActive,
-    ).finally(() => {
-      this.refreshInProgress = false;
-    });
-  }
-
-  private async refreshCatalog(
-    cwd: string,
-    catalogRequest: number,
-    previousActive: SessionSummary | undefined,
-  ): Promise<void> {
-    const result = await this.loadCatalog(cwd);
-    if (this.disposed) {
-      return;
-    }
-    if (!this.isCurrentCatalogRequest(catalogRequest, cwd)) {
-      this.discardCatalogRequest(catalogRequest);
-      return;
-    }
-    if (result.status === 'error') {
-      this.sessions = {
-        status: 'error',
-        items: this.markActive(this.sessions.items),
-        message: CATALOG_ERROR_MESSAGE,
-      };
-    } else {
-      this.sessions = this.withActiveSession(
-        result,
-        previousActive,
-      );
-      seedBackgroundRunning(this, cwd);
-    }
-    this.emitSnapshot();
-  }
-
-  private canReplaceSession(): boolean {
+  canReplaceSession(): boolean {
     // A running daemon-backed turn no longer blocks switching:
     // replaceRuntime detaches it and the turn continues on the daemon
     // (the drawer row then carries the quiet running indicator). A
@@ -2624,7 +1861,7 @@ export class ChatController {
     return true;
   }
 
-  private startReplacement(target: RuntimeSessionTarget): void {
+  startReplacement(target: RuntimeSessionTarget): void {
     this.sessionOperationInProgress = true;
     this.connection = { status: 'connecting' };
     this.emitSnapshot();
@@ -2815,7 +2052,7 @@ export class ChatController {
         this.transcript =
           this.recoveryStore.readSession(failedResumeId) ??
           createHostTranscriptState('unavailable');
-        this.sessions = this.withActiveSession(this.sessions);
+        this.sessions = withActiveSession(this, this.sessions);
       } else {
         this.sessionId = null;
         this.mission = null;
@@ -3093,7 +2330,7 @@ export class ChatController {
     this.sessionId = sessionId;
     this.turn = null;
     this.transcript = transcript;
-    this.sessions = this.withActiveSession(
+    this.sessions = withActiveSession(this, 
       this.sessions,
       target.kind === 'new'
         ? {
@@ -3264,45 +2501,6 @@ export class ChatController {
     pushMcp(this, runtime, generation, sessionId, cwd);
   }
 
-  private async loadCatalog(cwd: string): Promise<SessionCatalogState> {
-    let result: SessionCatalogResult;
-    try {
-      result = await this.sessionCatalog.listSessions(cwd);
-    } catch {
-      result = {
-        status: 'unavailable',
-        reason: 'catalog-failed',
-        message: CATALOG_ERROR_MESSAGE,
-      };
-    }
-    if (result.status === 'unavailable') {
-      return {
-        status: 'error',
-        items: [],
-        message: CATALOG_ERROR_MESSAGE,
-      };
-    }
-    const items = projectCatalogEntries(result.sessions);
-    const feature = this.worktreeSessions;
-    if (feature?.enabled !== true) {
-      return { status: 'ready', items };
-    }
-    // Worktree sessions list under their worktree cwd, never under the
-    // workspace cwd (probe: artifacts/probe-worktree-catalog.mjs), so
-    // the registry re-attaches them here.
-    return {
-      status: 'ready',
-      items: await appendWorktreeSessions({
-        cwd,
-        items,
-        store: feature.store,
-        listSessions: (worktreeCwd) =>
-          this.sessionCatalog.listSessions(worktreeCwd),
-        project: projectCatalogEntries,
-      }),
-    };
-  }
-
   failTurn(
     sessionId: string,
     turnId: string,
@@ -3359,7 +2557,7 @@ export class ChatController {
       this.diagnostics?.endTurnScope?.();
     }
     const sessions = stampRunningFlags(this, 
-      this.withActiveSession(this.sessions),
+      withActiveSession(this, this.sessions),
     );
     const workspaceRoot = this.getWorkspaceContext().cwd;
     const snapshot = {
@@ -3624,7 +2822,7 @@ export class ChatController {
     });
   }
 
-  private emitWorkspaceUnavailable(workspace: WorkspaceContext): void {
+  emitWorkspaceUnavailable(workspace: WorkspaceContext): void {
     this.connection =
       workspace.cwd === null
         ? {
@@ -3637,85 +2835,6 @@ export class ChatController {
               'Trust this workspace to start the local Droid runtime.',
           };
     this.emitSnapshot();
-  }
-
-  private hasCatalogSession(sessionId: string, cwd: string): boolean {
-    return (
-      this.catalogCwd === cwd &&
-      this.sessions.status === 'ready' &&
-      this.sessions.items.some(({ id }) => id === sessionId)
-    );
-  }
-
-  private activeSessionSummary(): SessionSummary | undefined {
-    return this.sessionId === null
-      ? undefined
-      : this.sessions.items.find(({ id }) => id === this.sessionId);
-  }
-
-  withActiveSession(
-    sessions: SessionCatalogState,
-    fallback?: SessionSummary,
-  ): SessionCatalogState {
-    if (
-      this.sessionId === null ||
-      this.catalogCwd === null ||
-      this.activeRuntimeCwd !== this.catalogCwd
-    ) {
-      return {
-        ...sessions,
-        items: sessions.items.map((item) => ({
-          ...item,
-          active: false,
-        })),
-      };
-    }
-    const existing = sessions.items.find(
-      ({ id }) => id === this.sessionId,
-    );
-    const active =
-      existing ??
-      fallback ??
-      this.activeSessionSummary() ?? {
-        id: this.sessionId,
-        title: 'Current session',
-        messageCount: 0,
-        modifiedTime: new Date().toISOString(),
-        active: true,
-        isFavorite: false,
-      };
-    const items = sessions.items
-      .filter(({ id }) => id !== this.sessionId)
-      .map((item) => ({ ...item, active: false }));
-    if (items.length >= SESSION_CATALOG_LIMIT) {
-      items.length = SESSION_CATALOG_LIMIT - 1;
-    }
-    items.push({ ...active, active: true });
-    return { ...sessions, items };
-  }
-
-  private markActive(
-    items: readonly SessionSummary[],
-  ): readonly SessionSummary[] {
-    return this.withActiveSession({
-      status: this.sessions.status,
-      items,
-    }).items;
-  }
-
-  private touchActiveSession(): void {
-    if (this.sessionId === null) {
-      return;
-    }
-    const modifiedTime = new Date().toISOString();
-    this.sessions = {
-      ...this.sessions,
-      items: this.sessions.items.map((item) =>
-        item.id === this.sessionId
-          ? { ...item, modifiedTime }
-          : item,
-      ),
-    };
   }
 
   private closeRuntime(
@@ -3923,95 +3042,7 @@ export class ChatController {
     return !this.disposed && this.runtimeGeneration === generation;
   }
 
-  private beginCatalogLoad(cwd: string): number {
-    const generation = ++this.catalogGeneration;
-    this.catalogCwd = cwd;
-    this.sessions = { status: 'loading', items: [] };
-    this.refreshWorktreeAvailability(cwd);
-    return generation;
-  }
-
-  private bindCatalogViewToWorkspace(cwd: string): void {
-    if (this.catalogCwd === cwd) {
-      return;
-    }
-    this.catalogGeneration += 1;
-    this.catalogCwd = cwd;
-    this.sessions = { status: 'idle', items: [] };
-    this.refreshWorktreeAvailability(cwd);
-  }
-
-  private clearCatalog(): void {
-    this.catalogGeneration += 1;
-    this.catalogCwd = null;
-    this.sessions = { status: 'idle', items: [] };
-    this.worktreeAvailabilityCwd = null;
-    this.worktreeCreateAvailable = false;
-    // No catalog, no rows to indicate; the poll loop ends itself.
-    this.runningSessionIds.clear();
-  }
-
-  /**
-   * Recomputes the worktree-create capability for a workspace binding.
-   * One git check per cwd: the async result only lands while the
-   * binding is unchanged, and a later snapshot broadcasts it.
-   */
-  private refreshWorktreeAvailability(cwd: string): void {
-    const feature = this.worktreeSessions;
-    if (
-      feature?.enabled !== true ||
-      this.worktreeAvailabilityCwd === cwd
-    ) {
-      return;
-    }
-    this.worktreeAvailabilityCwd = cwd;
-    this.worktreeCreateAvailable = false;
-    void feature.isGitWorkspace(cwd).then((isGit) => {
-      if (
-        this.disposed ||
-        this.worktreeAvailabilityCwd !== cwd ||
-        !isGit
-      ) {
-        return;
-      }
-      this.worktreeCreateAvailable = true;
-      this.emitSnapshot();
-    });
-  }
-
-  private isCurrentCatalogRequest(
-    generation: number,
-    cwd: string,
-  ): boolean {
-    return (
-      !this.disposed &&
-      this.catalogGeneration === generation &&
-      this.catalogCwd === cwd &&
-      this.isTargetWorkspaceCurrent(cwd)
-    );
-  }
-
-  private discardCatalogRequest(generation: number): void {
-    if (
-      this.disposed ||
-      this.catalogGeneration !== generation
-    ) {
-      return;
-    }
-    const workspace = this.getWorkspaceContext();
-    this.catalogGeneration += 1;
-    this.catalogCwd = isUsableWorkspace(workspace)
-      ? workspace.cwd
-      : null;
-    this.sessions = { status: 'idle', items: [] };
-    if (isUsableWorkspace(workspace)) {
-      this.emitSnapshot();
-    } else {
-      this.emitWorkspaceUnavailable(workspace);
-    }
-  }
-
-  private isTargetWorkspaceCurrent(cwd: string): boolean {
+  isTargetWorkspaceCurrent(cwd: string): boolean {
     const workspace = this.getWorkspaceContext();
     return isUsableWorkspace(workspace) && workspace.cwd === cwd;
   }
@@ -4091,64 +3122,10 @@ function unavailableMessage(
   }
 }
 
-function isUsableWorkspace(
-  workspace: WorkspaceContext,
-): workspace is { readonly cwd: string; readonly trusted: true } {
-  return workspace.cwd !== null && workspace.trusted;
-}
-
 function isSameWorkspaceContext(
   left: WorkspaceContext,
   right: WorkspaceContext,
 ): boolean {
   return left.cwd === right.cwd && left.trusted === right.trusted;
-}
-
-function projectCatalogEntries(
-  entries: readonly SessionCatalogEntry[],
-): SessionSummary[] {
-  const items: SessionSummary[] = [];
-  const ids = new Set<string>();
-  for (const entry of entries) {
-    if (
-      items.length >= SESSION_CATALOG_LIMIT ||
-      !isSafeBridgeId(entry.id) ||
-      ids.has(entry.id) ||
-      !Number.isSafeInteger(entry.messageCount) ||
-      entry.messageCount < 0
-    ) {
-      continue;
-    }
-    const modified = new Date(entry.modifiedTime);
-    if (!Number.isFinite(modified.getTime())) {
-      continue;
-    }
-    ids.add(entry.id);
-    items.push({
-      id: entry.id,
-      title: sanitizeSessionTitle(entry.title),
-      messageCount: entry.messageCount,
-      modifiedTime: modified.toISOString(),
-      active: false,
-      isFavorite: entry.isFavorite === true,
-      ...(entry.missionRole === undefined
-        ? {}
-        : { missionRole: entry.missionRole }),
-    });
-  }
-  return items;
-}
-
-function sanitizeSessionTitle(title: string): string {
-  if (typeof title !== 'string') {
-    return 'Untitled session';
-  }
-  const safe = title
-    .replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, SESSION_TITLE_LIMIT)
-    .trim();
-  return safe || 'Untitled session';
 }
 

@@ -18,7 +18,7 @@ import {
   type SessionRecoveryPersistence,
 } from '../SessionRecoveryStore';
 import { DaemonAvailabilityError } from '../../runtime/daemon/daemonConnection';
-import type { ChatController } from '../ChatController';
+import type { ChatController, WorkspaceContext } from '../ChatController';
 
 /**
  * The visible face the extracted chat/ modules operate on. The
@@ -67,6 +67,8 @@ export interface DisposableSubscription {
   dispose(): void;
 }
 
+export const SESSION_OPERATION_BLOCKED_MESSAGE =
+  'Finish the current Droid activity before changing sessions.';
 export const DAEMON_NOT_LOGGED_IN_MESSAGE =
   'Sign in with the droid CLI to archive and search sessions.';
 export const DAEMON_UNAVAILABLE_MESSAGE =
@@ -106,6 +108,12 @@ export function forkTitleFromText(text: string): string {
   return collapsed.length <= MAX_FORK_TITLE_LENGTH
     ? collapsed
     : `${collapsed.slice(0, MAX_FORK_TITLE_LENGTH - 1)}…`;
+}
+
+export function isUsableWorkspace(
+  workspace: WorkspaceContext,
+): workspace is { readonly cwd: string; readonly trusted: true } {
+  return workspace.cwd !== null && workspace.trusted;
 }
 
 export function isTurnActive(turn: CurrentTurn | null): boolean {

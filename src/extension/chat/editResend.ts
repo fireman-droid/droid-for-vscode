@@ -8,6 +8,7 @@ import {
   type HostTranscriptState,
 } from '../hostTranscriptState';
 import { clearPendingAttachments, emitEditAttachments } from './attachments';
+import { withActiveSession } from './sessionDirectory';
 import {
   forkTitleFromText,
   isSafeBridgeId,
@@ -260,7 +261,7 @@ export async function performEditResend(
     ctl.transcript = truncated;
     ctl.turn = null;
     clearPendingAttachments(ctl);
-    ctl.sessions = ctl.withActiveSession(ctl.sessions, {
+    ctl.sessions = withActiveSession(ctl, ctl.sessions, {
       id: forkedSessionId,
       title: forkTitleFromText(text),
       messageCount: 0,
