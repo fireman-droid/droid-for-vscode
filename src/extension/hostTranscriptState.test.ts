@@ -420,6 +420,48 @@ describe('hostTranscriptState', () => {
     ]);
   });
 
+  it('streams the execute output tail and keeps the final one on completion', () => {
+    let state = createHostTranscriptState('complete');
+    state = project(state, {
+      type: 'tool.activity',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolUseId: 'tool-1',
+      toolName: 'Execute',
+      action: 'Ran a local command',
+      status: 'running',
+      progressCount: 1,
+      latestUpdateKind: 'status',
+      outputTail: 'line-1\nline-2',
+    });
+    expect(state.transcript[0]).toMatchObject({
+      kind: 'tool',
+      outputTail: 'line-1\nline-2',
+    });
+    // The completion update keeps the last projected tail.
+    state = project(state, {
+      type: 'tool.activity',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolUseId: 'tool-1',
+      toolName: 'Execute',
+      action: 'Ran a local command',
+      status: 'completed',
+      progressCount: 2,
+      latestUpdateKind: 'status',
+      durationMs: 40,
+      outputTail: 'line-1\nline-2\nline-3',
+    });
+
+    expect(state.transcript).toEqual([
+      expect.objectContaining({
+        kind: 'tool',
+        status: 'completed',
+        outputTail: 'line-1\nline-2\nline-3',
+      }),
+    ]);
+  });
+
   it('carries and settles a subagent summary across activity updates', () => {
     let state = createHostTranscriptState('complete');
     state = project(state, {

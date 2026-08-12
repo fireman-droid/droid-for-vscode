@@ -439,6 +439,101 @@ describe('turnActivityState', () => {
     });
   });
 
+  it('streams execute output tails and keeps the final tail on completion', () => {
+    const started = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'Execute',
+      toolUseId: 'tool-exec',
+      action: 'Ran a local command',
+    });
+    const first = projectToolEvent(started.state, {
+      type: 'tool-progress',
+      toolName: 'Execute',
+      toolUseId: 'tool-exec',
+      action: 'Ran a local command',
+      updateKind: 'status',
+      outputTail: 'line-1',
+    });
+    // An update without output keeps the last tail visible.
+    const silent = projectToolEvent(first.state, {
+      type: 'tool-progress',
+      toolName: 'Execute',
+      toolUseId: 'tool-exec',
+      action: 'Ran a local command',
+      updateKind: 'status',
+    });
+    const second = projectToolEvent(silent.state, {
+      type: 'tool-progress',
+      toolName: 'Execute',
+      toolUseId: 'tool-exec',
+      action: 'Ran a local command',
+      updateKind: 'status',
+      outputTail: 'line-1\nline-2',
+    });
+    const completed = projectToolEvent(second.state, {
+      type: 'tool-result',
+      toolName: 'Execute',
+      toolUseId: 'tool-exec',
+      action: 'Ran a local command',
+      isError: false,
+    });
+
+    expect(first.projection).toMatchObject({ outputTail: 'line-1' });
+    expect(silent.projection).toMatchObject({ outputTail: 'line-1' });
+    expect(second.projection).toMatchObject({
+      outputTail: 'line-1\nline-2',
+    });
+    expect(completed.projection).toMatchObject({
+      status: 'completed',
+      outputTail: 'line-1\nline-2',
+    });
+  });
+
+  it('keeps streaming changed output tails past the progress cap', () => {
+    let state = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'Execute',
+      toolUseId: 'tool-exec',
+      action: 'Ran a local command',
+    }).state;
+    for (
+      let index = 0;
+      index < MAX_TOOL_PROGRESS_UPDATES_PER_TOOL;
+      index += 1
+    ) {
+      state = projectToolEvent(state, {
+        type: 'tool-progress',
+        toolName: 'Execute',
+        toolUseId: 'tool-exec',
+        action: 'Ran a local command',
+        updateKind: 'status',
+        outputTail: `tail-${index}`,
+      }).state;
+    }
+    const unchanged = projectToolEvent(state, {
+      type: 'tool-progress',
+      toolName: 'Execute',
+      toolUseId: 'tool-exec',
+      action: 'Ran a local command',
+      updateKind: 'status',
+      outputTail: `tail-${MAX_TOOL_PROGRESS_UPDATES_PER_TOOL - 1}`,
+    });
+    const changed = projectToolEvent(unchanged.state, {
+      type: 'tool-progress',
+      toolName: 'Execute',
+      toolUseId: 'tool-exec',
+      action: 'Ran a local command',
+      updateKind: 'status',
+      outputTail: 'fresh tail',
+    });
+
+    expect(unchanged.projection).toBeNull();
+    expect(changed.projection).toMatchObject({
+      progressCount: MAX_TOOL_PROGRESS_UPDATES_PER_TOOL,
+      outputTail: 'fresh tail',
+    });
+  });
+
   it('upgrades the Task row named by the notification to a subagent row', () => {
     const started = projectToolEvent(
       createTurnActivityState(),

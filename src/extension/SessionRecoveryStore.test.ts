@@ -391,6 +391,39 @@ describe('SessionRecoveryStore', () => {
     });
   });
 
+  it('drops execute output tails when reading persisted tool rows', async () => {
+    const persistence = memoryPersistence({
+      version: SESSION_RECOVERY_VERSION,
+      selectedSessionId: 'session-1',
+      sessions: [
+        storedSession('session-1', 1, [
+          {
+            id: 'tool-1',
+            kind: 'tool',
+            turnId: 'turn-1',
+            toolUseId: 'use-1',
+            toolName: 'Execute',
+            action: 'Ran a local command',
+            status: 'completed',
+            progressCount: 3,
+            latestUpdateKind: 'status',
+            outputTail: 'stale command output',
+          },
+        ]),
+      ],
+    });
+    const store = new SessionRecoveryStore(persistence);
+
+    await store.load();
+
+    // The row survives, but its command output never replays.
+    const session = store.readSession('session-1');
+    expect(session?.transcript).toEqual([
+      expect.objectContaining({ kind: 'tool', status: 'completed' }),
+    ]);
+    expect(session?.transcript[0]).not.toHaveProperty('outputTail');
+  });
+
   it('rejects malformed persisted subagent summaries', async () => {
     for (const subagent of [
       { type: '', description: 'Empty type' },

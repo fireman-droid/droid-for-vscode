@@ -42,6 +42,8 @@ export interface ToolActivityProjection {
   readonly detailKind?: ToolDetailKind;
   readonly detail?: string;
   readonly errorMessage?: string;
+  /** Trailing execute output; sticks so completion keeps the tail. */
+  readonly outputTail?: string;
   readonly subagent?: ToolSubagentSummary;
 }
 
@@ -57,6 +59,7 @@ interface ToolActivityEntry {
   readonly detailKind?: ToolDetailKind;
   readonly detail?: string;
   readonly errorMessage?: string;
+  readonly outputTail?: string;
   readonly subagent?: ToolSubagentSummary;
 }
 
@@ -163,13 +166,35 @@ export function projectToolEvent(
 
     if (event.type === 'tool-progress') {
       if (existing.progressCount >= MAX_TOOL_PROGRESS_UPDATES_PER_TOOL) {
-        return { state, projection: null };
+        // The count pins at the cap, but a fresh output tail still
+        // projects so long-running commands keep streaming output.
+        if (
+          event.outputTail === undefined ||
+          event.outputTail === existing.outputTail
+        ) {
+          return { state, projection: null };
+        }
+        const entry: ToolActivityEntry = {
+          ...existing,
+          latestUpdateKind: event.updateKind,
+          outputTail: event.outputTail,
+        };
+        const tools = new Map(state.tools);
+        tools.set(event.toolUseId, entry);
+        return {
+          state: { ...state, tools },
+          projection: projectEntry(event, entry),
+        };
       }
       const entry: ToolActivityEntry = {
         ...existing,
         status: 'running',
         progressCount: existing.progressCount + 1,
         latestUpdateKind: event.updateKind,
+        // Updates without output keep the last tail visible.
+        ...(event.outputTail === undefined
+          ? {}
+          : { outputTail: event.outputTail }),
       };
       const tools = new Map(state.tools);
       tools.set(event.toolUseId, entry);
@@ -250,6 +275,10 @@ export function projectToolEvent(
     ...(event.type === 'tool-start' && event.detail !== undefined
       ? { detailKind: event.detailKind, detail: event.detail }
       : {}),
+    ...(event.type === 'tool-progress' &&
+    event.outputTail !== undefined
+      ? { outputTail: event.outputTail }
+      : {}),
   };
   const tools = new Map(state.tools);
   tools.set(event.toolUseId, entry);
@@ -287,6 +316,9 @@ function projectEntry(
     ...(entry.errorMessage === undefined
       ? {}
       : { errorMessage: entry.errorMessage }),
+    ...(entry.outputTail === undefined
+      ? {}
+      : { outputTail: entry.outputTail }),
     ...(entry.subagent === undefined
       ? {}
       : { subagent: entry.subagent }),
@@ -439,6 +471,9 @@ function projectEntryStandalone(
     ...(entry.errorMessage === undefined
       ? {}
       : { errorMessage: entry.errorMessage }),
+    ...(entry.outputTail === undefined
+      ? {}
+      : { outputTail: entry.outputTail }),
     ...(entry.subagent === undefined
       ? {}
       : { subagent: entry.subagent }),

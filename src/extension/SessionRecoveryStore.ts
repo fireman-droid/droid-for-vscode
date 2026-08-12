@@ -726,6 +726,10 @@ function parseTool(
     'latestUpdateKind',
   ] as const;
   const legacy = hasExactKeys(value, legacyKeys);
+  // `outputTail` is accepted but intentionally dropped: command
+  // output is a live-session display artifact. Checkpoints replay
+  // outputless (matching CLI history projections), and raw command
+  // output never reaches persisted storage.
   if (
     !legacy &&
     !hasExactKeys(value, currentKeys, [
@@ -734,6 +738,7 @@ function parseTool(
       'detailKind',
       'detail',
       'errorMessage',
+      'outputTail',
       'subagent',
     ])
   ) {

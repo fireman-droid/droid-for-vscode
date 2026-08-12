@@ -9,6 +9,7 @@ import {
   MAX_TOOL_ERROR_MESSAGE_LENGTH,
   MAX_TOOL_FILE_PATH_LENGTH,
   MAX_TOOL_NAME_LENGTH,
+  MAX_TOOL_OUTPUT_TAIL_LENGTH,
   MAX_TURN_TEXT_LENGTH,
   type AssistantDeltaMessage,
   type ChangedFileSummary,
@@ -390,6 +391,10 @@ function projectToolActivity(
     0,
     MAX_TOOL_ERROR_MESSAGE_LENGTH,
   );
+  const outputTail = message.outputTail?.slice(
+    0,
+    MAX_TOOL_OUTPUT_TAIL_LENGTH,
+  );
   if (existingIndex >= 0) {
     const existing = state.transcript[existingIndex] as Extract<
       SessionTranscriptItem,
@@ -410,6 +415,7 @@ function projectToolActivity(
         ? {}
         : { detailKind: message.detailKind, detail }),
       ...(errorMessage === undefined ? {} : { errorMessage }),
+      ...(outputTail === undefined ? {} : { outputTail }),
       ...(message.subagent === undefined
         ? {}
         : { subagent: message.subagent }),
@@ -442,6 +448,7 @@ function projectToolActivity(
       ? {}
       : { detailKind: message.detailKind, detail }),
     ...(errorMessage === undefined ? {} : { errorMessage }),
+    ...(outputTail === undefined ? {} : { outputTail }),
     ...(message.subagent === undefined
       ? {}
       : { subagent: message.subagent }),
