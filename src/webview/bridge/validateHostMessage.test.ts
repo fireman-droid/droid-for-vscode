@@ -2797,6 +2797,27 @@ describe('readHostMessage', () => {
     ).toBeUndefined();
   });
 
+  it('accepts sequence-free ui.theme pushes and rejects malformed ones', () => {
+    for (const preference of ['auto', 'light', 'dark'] as const) {
+      expect(
+        readHostMessage({ type: 'ui.theme', preference }),
+      ).toEqual({ type: 'ui.theme', preference });
+    }
+    expect(
+      readHostMessage({ type: 'ui.theme', preference: 'sepia' }),
+    ).toBeUndefined();
+    expect(readHostMessage({ type: 'ui.theme' })).toBeUndefined();
+    // The message deliberately carries no sequence; one smuggled in
+    // (or any other extra key) fails the exact-shape check.
+    expect(
+      readHostMessage({
+        type: 'ui.theme',
+        preference: 'dark',
+        sequence: 1,
+      }),
+    ).toBeUndefined();
+  });
+
   it('accepts an absolute workspace root on snapshots', () => {
     const snapshot = createSessionSnapshot();
     const message = {

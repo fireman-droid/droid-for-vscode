@@ -241,12 +241,16 @@ export interface WorkspaceContext {
 }
 
 export type WorkspaceContextProvider = () => WorkspaceContext;
+/** Everything the controller emits; the view provider's sequence-free
+    `ui.theme` push never passes the sequence stamper below. */
+export type ControllerHostMessage =
+  Exclude<HostToWebviewMessage, { type: 'ui.theme' }>;
 export type ChatControllerListener = (
-  message: HostToWebviewMessage,
+  message: ControllerHostMessage,
 ) => void;
 type UnsequencedHostMessage =
-  HostToWebviewMessage extends infer Message
-    ? Message extends HostToWebviewMessage
+  ControllerHostMessage extends infer Message
+    ? Message extends ControllerHostMessage
       ? Omit<Message, 'sequence'>
       : never
     : never;
@@ -1004,7 +1008,7 @@ export class ChatController {
     const withSequence = {
       ...message,
       sequence: this.nextSequence(),
-    } as HostToWebviewMessage;
+    } as ControllerHostMessage;
     if (this.turnIo !== null) {
       this.turnIo.counts.set(
         message.type,

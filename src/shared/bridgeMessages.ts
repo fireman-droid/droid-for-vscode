@@ -120,7 +120,8 @@ import type {
 // session.plugins H→W).
 // Version 6: queued-messages contract (queue.add/update/remove/
 // resume/clear W→H, queue.state H→W, snapshot `queue` field).
-export const BRIDGE_PROTOCOL_VERSION = 7 as const;
+// Version 8: theme preference pair (ui.theme.set W→H, ui.theme H→W).
+export const BRIDGE_PROTOCOL_VERSION = 8 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_TEXT_LENGTH = 32_000;
@@ -937,6 +938,36 @@ export interface McpServerAuthenticateMessage {
   readonly name: string;
 }
 
+/**
+ * UI theme preference for the DroidVisX shell. 'auto' follows the
+ * editor's current color theme kind; 'light'/'dark' pin the shell.
+ * Persisted host-side as the `droidvisx.theme` user setting.
+ */
+export const THEME_PREFERENCES = ['auto', 'light', 'dark'] as const;
+export type ThemePreference = (typeof THEME_PREFERENCES)[number];
+
+/**
+ * Webview → Host: persist a new theme preference. Handled by the
+ * view provider (writes user settings); never reaches the session
+ * controller.
+ */
+export interface UiThemeSetMessage {
+  readonly type: 'ui.theme.set';
+  readonly preference: ThemePreference;
+}
+
+/**
+ * Host → Webview: the current theme preference. Sent by the view
+ * provider on webview.ready and whenever the `droidvisx.theme`
+ * setting changes. Carries no `sequence` on purpose: it bypasses the
+ * session store (which enforces one monotonic sequence across all
+ * controller-emitted messages) and is applied directly by the shell.
+ */
+export interface UiThemeMessage {
+  readonly type: 'ui.theme';
+  readonly preference: ThemePreference;
+}
+
 export type SessionSettingUpdateMessage =
   | {
       readonly type: 'session.setting.update';
@@ -1031,6 +1062,7 @@ export type WebviewToHostMessage =
   | WorkspaceReadImageMessage
   | RewindInfoRequestMessage
   | SessionSettingUpdateMessage
+  | UiThemeSetMessage
   | BtwAskMessage
   | BtwDismissMessage
   | QueueAddMessage
@@ -2154,4 +2186,5 @@ export type HostToWebviewMessage =
   | InteractionRequestMessage
   | InteractionClosedMessage
   | SessionBtwMessage
-  | QueueStateMessage;
+  | QueueStateMessage
+  | UiThemeMessage;

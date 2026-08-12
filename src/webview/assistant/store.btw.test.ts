@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import type {
-  HostSnapshotMessage,
-  HostToWebviewMessage,
-} from '../../shared/bridgeMessages';
+import type { HostSnapshotMessage } from '../../shared/bridgeMessages';
 import type { SessionBtwState } from '../../shared/btwProtocol';
 import {
   assistantWebviewReducer,
   initialAssistantWebviewState,
   type AssistantWebviewState,
+  type StoreHostMessage,
 } from './store';
 
 /**
@@ -55,7 +53,7 @@ function cardState(question: string): SessionBtwState {
 
 function reduce(
   state: AssistantWebviewState,
-  message: HostToWebviewMessage,
+  message: StoreHostMessage,
 ): AssistantWebviewState {
   return assistantWebviewReducer(state, {
     type: 'host.message',

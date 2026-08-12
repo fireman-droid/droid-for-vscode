@@ -65,7 +65,10 @@ import type {
   BtwSidecarFactory,
   BtwSideChatSidecar,
 } from './btwSideChat';
-import { ChatController } from './ChatController';
+import {
+  ChatController,
+  type ControllerHostMessage,
+} from './ChatController';
 import {
   SessionRecoveryStore,
   type SessionRecoveryPersistence,
@@ -262,7 +265,7 @@ export function createController(
     daemonPlugins,
     btwSidecarFactory,
   );
-  const messages: HostToWebviewMessage[] = [];
+  const messages: ControllerHostMessage[] = [];
   controller.subscribe((message) => {
     messages.push(message);
   });

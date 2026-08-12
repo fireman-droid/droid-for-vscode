@@ -95,6 +95,7 @@ import {
   MAX_IMAGE_PATH_LENGTH,
   WORKSPACE_IMAGE_STATUSES,
   type WorkspaceImageStatus,
+  THEME_PREFERENCES,
   TRANSCRIPT_THINKING_STATUSES,
   TRANSCRIPT_TOOL_STATUSES,
   TURN_STATUSES,
@@ -151,6 +152,7 @@ import {
   type SessionWorktreeInfo,
   type SessionTranscriptItem,
   type SubagentStatus,
+  type ThemePreference,
   type ToolBackgroundHint,
   type ToolSubagentSummary,
   type ToolActivityMessage,
@@ -323,6 +325,8 @@ export function readHostMessage(
         return parseSessionBtw(value);
       case 'queue.state':
         return parseQueueState(value);
+      case 'ui.theme':
+        return parseUiTheme(value);
       default:
         return undefined;
     }
@@ -1507,6 +1511,26 @@ function parseQueueState(
   return message !== null && isSequence(message.sequence)
     ? message
     : undefined;
+}
+
+/**
+ * View-provider theme push. Deliberately sequence-free: it bypasses
+ * the session store and is applied by the shell directly.
+ */
+function parseUiTheme(
+  value: UnknownRecord,
+): Extract<HostToWebviewMessage, { type: 'ui.theme' }> | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'preference']) ||
+    typeof value.preference !== 'string' ||
+    !(THEME_PREFERENCES as readonly string[]).includes(value.preference)
+  ) {
+    return undefined;
+  }
+  return {
+    type: 'ui.theme',
+    preference: value.preference as ThemePreference,
+  };
 }
 
 function parseInteractionRequest(

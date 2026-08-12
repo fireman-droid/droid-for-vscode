@@ -85,7 +85,10 @@ import {
   type TurnSendMessage,
   type TurnStopMessage,
   MAX_WEBVIEW_DIAGNOSTIC_DETAIL_LENGTH,
+  THEME_PREFERENCES,
   WEBVIEW_DIAGNOSTIC_KINDS,
+  type ThemePreference,
+  type UiThemeSetMessage,
   type WebviewDiagnosticKind,
   type WebviewDiagnosticMessage,
   type WebviewReadyMessage,
@@ -150,6 +153,8 @@ export function parseWebviewMessage(
         return parseSessionSelect(value);
       case 'session.new':
         return parseSessionNew(value);
+      case 'ui.theme.set':
+        return parseUiThemeSet(value);
       case 'worktree.createSession':
         return parseWorktreeCreateSession(value);
       case 'session.rename':
@@ -532,6 +537,23 @@ function parseSessionNew(
   }
 
   return { type: 'session.new' };
+}
+
+function parseUiThemeSet(
+  value: UnknownRecord,
+): UiThemeSetMessage | undefined {
+  if (
+    !hasExactKeys(value, ['type', 'preference']) ||
+    typeof value.preference !== 'string' ||
+    !(THEME_PREFERENCES as readonly string[]).includes(value.preference)
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'ui.theme.set',
+    preference: value.preference as ThemePreference,
+  };
 }
 
 function parseWorktreeCreateSession(

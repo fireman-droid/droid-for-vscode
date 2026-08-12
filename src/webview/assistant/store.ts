@@ -231,10 +231,20 @@ export interface AssistantWebviewState {
   readonly git: GitCommitFlowState;
 }
 
+/**
+ * Host messages the store consumes. `ui.theme` is excluded: it is
+ * sequence-free (view-provider push, not controller-emitted) and the
+ * shell applies it directly in App before the reducer dispatch.
+ */
+export type StoreHostMessage = Exclude<
+  HostToWebviewMessage,
+  { type: 'ui.theme' }
+>;
+
 export type AssistantWebviewAction =
   | {
       readonly type: 'host.message';
-      readonly message: HostToWebviewMessage;
+      readonly message: StoreHostMessage;
     }
   | {
       readonly type: 'turn.send';

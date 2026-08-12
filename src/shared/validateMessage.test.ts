@@ -1679,6 +1679,27 @@ describe('parseWebviewMessage', () => {
     ).toBeUndefined();
   });
 
+  it('accepts theme preference updates and rejects malformed ones', () => {
+    for (const preference of ['auto', 'light', 'dark'] as const) {
+      expect(
+        parseWebviewMessage({ type: 'ui.theme.set', preference }),
+      ).toEqual({ type: 'ui.theme.set', preference });
+    }
+    expect(
+      parseWebviewMessage({ type: 'ui.theme.set', preference: 'sepia' }),
+    ).toBeUndefined();
+    expect(
+      parseWebviewMessage({ type: 'ui.theme.set' }),
+    ).toBeUndefined();
+    expect(
+      parseWebviewMessage({
+        type: 'ui.theme.set',
+        preference: 'dark',
+        extra: true,
+      }),
+    ).toBeUndefined();
+  });
+
   it('routes queue.* messages through the shared parser', () => {
     expect(
       parseWebviewMessage({
