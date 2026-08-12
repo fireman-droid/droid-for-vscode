@@ -37,6 +37,10 @@
       {
         "command": "droidvisx.shutdownDaemon",
         "title": "DroidVisX: Shut Down Background Daemon"
+      },
+      {
+        "command": "droidvisx.exportSessionMarkdown",
+        "title": "DroidVisX: Export Session as Markdown"
       }
     ],
     "viewsContainers": {

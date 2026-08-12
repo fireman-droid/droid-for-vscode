@@ -33,9 +33,14 @@ import { DroidViewProvider } from './DroidViewProvider';
 import { exportDiagnosticsBundle } from './exportDiagnostics';
 import { LocalDiagnostics } from './LocalDiagnostics';
 import {
+  SESSION_RECOVERY_STORAGE_KEY,
   SessionRecoveryStore,
   type SessionRecoveryPersistence,
 } from './SessionRecoveryStore';
+import {
+  exportActiveSessionAsMarkdown,
+  readPersistedSelectedSessionId,
+} from './sessionExporter';
 import { RecentCommandsStore } from './RecentCommandsStore';
 import { createGitChangeStatsReader } from './changeStats';
 import { createVscodeAttachmentSources } from './vscodeAttachmentSources';
@@ -47,6 +52,7 @@ const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
 const exportDiagnosticsCommand = 'droidvisx.exportDiagnostics';
 const shutdownDaemonCommand = 'droidvisx.shutdownDaemon';
+const exportSessionCommand = 'droidvisx.exportSessionMarkdown';
 let activeController: ChatController | undefined;
 let disposeDaemonSidecar: (() => Promise<void>) | undefined;
 
@@ -290,6 +296,11 @@ export function activate(context: vscode.ExtensionContext): void {
       : createPrivateDaemonStrategy(),
   );
   disposeDaemonSidecar = daemonSidecar.dispose;
+  // Shared with the export command, which reads the same recovery
+  // store, catalog, and history loader the controller uses.
+  const recoveryStore = new SessionRecoveryStore(persistence);
+  const sessionCatalog = new FactorySessionCatalog();
+  const historyLoader = new FactorySessionHistoryLoader();
   const controller = new ChatController(
     (interactionHandler) =>
       new FactoryDroidRuntime({
@@ -309,9 +320,9 @@ export function activate(context: vscode.ExtensionContext): void {
       cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
       trusted: vscode.workspace.isTrusted,
     }),
-    new FactorySessionCatalog(),
-    new SessionRecoveryStore(persistence),
-    new FactorySessionHistoryLoader(),
+    sessionCatalog,
+    recoveryStore,
+    historyLoader,
     attachmentSources,
     createVscodeFileDiffOpener(),
     createGitChangeStatsReader(
@@ -373,6 +384,20 @@ export function activate(context: vscode.ExtensionContext): void {
           : 'No running DroidVisX daemon was found.',
       );
     }),
+    vscode.commands.registerCommand(exportSessionCommand, () =>
+      exportActiveSessionAsMarkdown({
+        getActiveSessionId: () =>
+          recoveryStore.getSelectedSessionId() ??
+          readPersistedSelectedSessionId(
+            persistence.get(SESSION_RECOVERY_STORAGE_KEY),
+          ),
+        getWorkspaceCwd: () =>
+          vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
+        loadHistory: (request) => historyLoader.loadHistory(request),
+        listSessions: (cwd) => sessionCatalog.listSessions(cwd),
+        diagnostics,
+      }),
+    ),
     vscode.commands.registerCommand(
       exportDiagnosticsCommand,
       async () => {

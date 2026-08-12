@@ -309,6 +309,23 @@ resume 前必须拿到租约（被别的存活窗口占用则拒绝并提示）�
 App 测试：host 消息现在异步落地，断言改用 `findByRole`/`waitFor`，
 Thinking 断言改为逐行独立展开。
 
+2026-08-12 下午追加 V2 切片「会话导出 Markdown」：命令面板新增
+`DroidVisX: Export Session as Markdown`
+（`droidvisx.exportSessionMarkdown`），把当前活动会话（恢复存储的
+selectedSessionId；恢复存储未加载时回读 workspaceState 持久值）
+导出为 Markdown 文档。数据源复用既有 `FactorySessionHistoryLoader`
+历史管线，不新增 Bridge 消息、不动 Webview。文档头含标题 /
+Session ID / 创建与导出时间 / 工作区，并声明导出约定：Thinking 块
+省略、工具调用折叠为一行记录（工具名 + 摘要 + 可选详情引用块）、
+图片以占位符表示、用户附件按文件名列出；助手 Markdown 原样保留；
+全文经 `scrubCredentials` 扫除凭据后落盘（`showSaveDialog`，默认
+文件名含标题 slug 与日期，成功后通知 + Open File）。新增
+`src/extension/sessionExporter.ts` 与 18 项单测（消息序列化、工具
+折叠、凭据扫除、文件名生成、持久 selectedSessionId 回读）；
+`extension.ts` / `package.json` 仅做最小命令注册。已通过
+typecheck、shared+extension 485 项测试与 build；**本切片未打包
+安装，已提交待随下一批次包一起可见验证**。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
@@ -960,6 +977,9 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [ ] 跨设备 Session
 - [ ] Help 和 Feedback
 - [ ] 诊断导出
+- [x] 会话导出 Markdown（`DroidVisX: Export Session as Markdown`，
+      Host 层 `sessionExporter.ts` 复用历史管线与凭据扫除；
+      已提交待随包验证）
 - [ ] 更新管理
 
 ## 当前安装包状态
