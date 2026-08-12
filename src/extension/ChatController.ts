@@ -121,6 +121,7 @@ import { handleMcpRefresh, pushMcp, handleMcpServerToggle, handleMcpServerAdd, h
 import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRefresh, pushSkills, handleSkillToggle, handlePluginsRefresh, handleCommandsRefresh, recordRecentCommand, emitModelCatalog, projectModelCatalog, isSafeModelId, MODEL_CATALOG_FAILED_MESSAGE } from './chat/capabilityPanels';
 import { handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddImage, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
 import { handleSettingUpdate, emitSettings, refreshSettingsAfterRuntimeEvent, projectConfirmedSettings, SETTINGS_READ_FAILED_MESSAGE } from './chat/settings';
+import { handleFileOpenDiff, handleFilePreview, handleInlineHtmlPreview, handleTerminalOpenMirror, handleGitRequestStatus, handleGitCommit, handleWorkspaceOpenPath, handleWorkspaceSearchFiles, handleWorkspaceReadImage } from './chat/workspaceActions';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
 import {
   clearPrompts,
@@ -364,14 +365,6 @@ const SPEC_HANDOFF_NOT_DETECTED_MESSAGE =
   'Droid moved implementation to a new session, but it could not be identified automatically. Refresh History to open it.';
 const SPEC_HANDOFF_BLOCKED_MESSAGE =
   'The implementation session could not be opened automatically. Select it from History.';
-const FILE_DIFF_FAILED_MESSAGE =
-  'That file could not be opened. It may have been moved or deleted.';
-const FILE_NOT_READY_MESSAGE =
-  'That file does not exist yet. Droid is still working on it.';
-const PREVIEW_FAILED_MESSAGE =
-  'That prototype could not be previewed. It may have been moved, deleted, or is too large.';
-const OPEN_PATH_FAILED_MESSAGE =
-  'That path could not be opened. It may have been moved or deleted.';
 
 export class ChatController {
   readonly listeners = new Set<ChatControllerListener>();
@@ -776,16 +769,16 @@ export class ChatController {
         this.btwSideChat?.handleDismiss(message.sessionId);
         return;
       case 'file.openDiff':
-        this.handleFileOpenDiff(message.sessionId, message.path);
+        handleFileOpenDiff(this, message.sessionId, message.path);
         return;
       case 'file.preview':
-        this.handleFilePreview(message.sessionId, message.path);
+        handleFilePreview(this, message.sessionId, message.path);
         return;
       case 'preview.inlineHtml':
-        this.handleInlineHtmlPreview(message.sessionId, message.html);
+        handleInlineHtmlPreview(this, message.sessionId, message.html);
         return;
       case 'workspace.openPath':
-        this.handleWorkspaceOpenPath(
+        handleWorkspaceOpenPath(this, 
           message.sessionId,
           message.path,
           message.line,
@@ -902,14 +895,14 @@ export class ChatController {
         this.handleEditStageCancel(message.sessionId);
         return;
       case 'workspace.searchFiles':
-        this.handleWorkspaceSearchFiles(
+        handleWorkspaceSearchFiles(this, 
           message.sessionId,
           message.requestId,
           message.query,
         );
         return;
       case 'workspace.readImage':
-        this.handleWorkspaceReadImage(message.sessionId, message.path);
+        handleWorkspaceReadImage(this, message.sessionId, message.path);
         return;
       case 'attachment.remove':
         handleAttachmentRemove(this, 
@@ -922,17 +915,17 @@ export class ChatController {
         handleSettingUpdate(this, message);
         return;
       case 'git.requestStatus':
-        this.handleGitRequestStatus(message.sessionId);
+        handleGitRequestStatus(this, message.sessionId);
         return;
       case 'git.commit':
-        this.handleGitCommit(
+        handleGitCommit(this, 
           message.sessionId,
           message.paths,
           message.message,
         );
         return;
       case 'terminal.openMirror':
-        this.handleTerminalOpenMirror(message.sessionId);
+        handleTerminalOpenMirror(this, message.sessionId);
         return;
     }
   }
@@ -2129,219 +2122,6 @@ export class ChatController {
     this.refreshContextAfterTurn(compactedSessionId);
   }
 
-  private handleFileOpenDiff(sessionId: string, path: string): void {
-    if (
-      this.connection.status !== 'connected' ||
-      sessionId !== this.sessionId
-    ) {
-      return;
-    }
-    void this.fileDiff.openDiff(path).then((outcome) => {
-      if (outcome === 'not-found') {
-        // Missing during an active turn means Droid has not written
-        // the file yet; missing on a settled transcript means it was
-        // moved or deleted after the fact.
-        const turnActive =
-          this.turn !== null &&
-          this.turn.status !== 'completed' &&
-          this.turn.status !== 'interrupted' &&
-          this.turn.status !== 'failed';
-        if (turnActive) {
-          this.emitSessionDiagnostic(
-            'file-not-ready',
-            FILE_NOT_READY_MESSAGE,
-          );
-          return;
-        }
-        this.emitSessionDiagnostic(
-          'file-diff-failed',
-          FILE_DIFF_FAILED_MESSAGE,
-        );
-        return;
-      }
-      if (outcome === 'failed') {
-        this.emitSessionDiagnostic(
-          'file-diff-failed',
-          FILE_DIFF_FAILED_MESSAGE,
-        );
-      }
-    });
-  }
-
-  private handleFilePreview(sessionId: string, path: string): void {
-    if (
-      this.connection.status !== 'connected' ||
-      sessionId !== this.sessionId
-    ) {
-      return;
-    }
-    void this.prototypePreview.openPreview(path).then((outcome) => {
-      if (outcome === 'failed') {
-        this.emitSessionDiagnostic(
-          'preview-failed',
-          PREVIEW_FAILED_MESSAGE,
-        );
-      }
-    });
-  }
-
-  /** Renders a bridge-validated transcript HTML code block in the
-   * sandboxed preview panel (same surface as file previews). */
-  private handleInlineHtmlPreview(sessionId: string, html: string): void {
-    if (
-      this.connection.status !== 'connected' ||
-      sessionId !== this.sessionId
-    ) {
-      return;
-    }
-    void this.prototypePreview.openInlineHtml(html).then((outcome) => {
-      if (outcome === 'failed') {
-        this.emitSessionDiagnostic(
-          'preview-failed',
-          PREVIEW_FAILED_MESSAGE,
-        );
-      }
-    });
-  }
-
-  private handleTerminalOpenMirror(sessionId: string): void {
-    if (
-      this.connection.status !== 'connected' ||
-      sessionId !== this.sessionId
-    ) {
-      return;
-    }
-    this.terminalMirror?.open();
-  }
-
-  /**
-   * Paths of the newest changes card, which drive the commit panel's
-   * default selection (`inTurn`); normalized to forward slashes to
-   * match `GitStatusFile` paths.
-   */
-  private latestTurnChangePaths(): ReadonlySet<string> {
-    const items = this.transcript.transcript;
-    for (let i = items.length - 1; i >= 0; i -= 1) {
-      const item = items[i];
-      if (item !== undefined && item.kind === 'changes') {
-        return new Set(
-          item.files.map((file) => file.path.replaceAll('\\', '/')),
-        );
-      }
-    }
-    return new Set();
-  }
-
-  private handleGitRequestStatus(sessionId: string): void {
-    if (
-      this.connection.status !== 'connected' ||
-      sessionId !== this.sessionId
-    ) {
-      return;
-    }
-    const root = this.activeRuntimeCwd;
-    if (root === null) {
-      this.emit({
-        type: 'git.status',
-        sessionId,
-        branch: null,
-        files: [],
-        unavailableReason: 'unsupported-workspace',
-      });
-      return;
-    }
-    const inTurn = this.latestTurnChangePaths();
-    void this.gitWorkflow.status(root, inTurn).then((status) => {
-      if (this.disposed || this.sessionId !== sessionId) {
-        return;
-      }
-      this.emit(
-        status.available
-          ? {
-              type: 'git.status',
-              sessionId,
-              branch: status.branch,
-              files: status.files,
-            }
-          : {
-              type: 'git.status',
-              sessionId,
-              branch: null,
-              files: [],
-              unavailableReason: status.reason,
-            },
-      );
-    });
-  }
-
-  private handleGitCommit(
-    sessionId: string,
-    paths: readonly string[],
-    message: string,
-  ): void {
-    if (
-      this.connection.status !== 'connected' ||
-      sessionId !== this.sessionId
-    ) {
-      return;
-    }
-    const root = this.activeRuntimeCwd;
-    if (root === null) {
-      this.emit({
-        type: 'git.commitResult',
-        sessionId,
-        ok: false,
-        error: 'Git is unavailable (unsupported-workspace).',
-      });
-      return;
-    }
-    void this.gitWorkflow
-      .commit(root, paths, message)
-      .then((outcome) => {
-        if (this.disposed || this.sessionId !== sessionId) {
-          return;
-        }
-        this.emit(
-          outcome.ok
-            ? {
-                type: 'git.commitResult',
-                sessionId,
-                ok: true,
-                hash: outcome.hash,
-                subject: commitSubject(message),
-              }
-            : {
-                type: 'git.commitResult',
-                sessionId,
-                ok: false,
-                error: outcome.error,
-              },
-        );
-      });
-  }
-
-  private handleWorkspaceOpenPath(
-    sessionId: string,
-    path: string,
-    line?: number,
-    column?: number,
-  ): void {
-    if (
-      this.connection.status !== 'connected' ||
-      sessionId !== this.sessionId
-    ) {
-      return;
-    }
-    void this.pathOpener.openPath(path, line, column).then((outcome) => {
-      if (outcome === 'failed') {
-        this.emitSessionDiagnostic(
-          'open-path-failed',
-          OPEN_PATH_FAILED_MESSAGE,
-        );
-      }
-    });
-  }
-
   private handleSessionFork(sessionId: string): void {
     const runtime = this.runtime;
     if (
@@ -3103,197 +2883,6 @@ export class ChatController {
     }
 
     this.startCatalogRefresh(workspace.cwd);
-  }
-
-  private handleWorkspaceSearchFiles(
-    sessionId: string,
-    requestId: string,
-    query: string,
-  ): void {
-    if (
-      sessionId !== this.sessionId ||
-      this.connection.status !== 'connected'
-    ) {
-      // Always answer with the original request id: a silently dropped
-      // request left the mention popup on "Searching files..." forever.
-      const status =
-        this.getWorkspaceContext().cwd === null ? 'no-workspace' : 'ok';
-      this.emitWorkspaceFiles(sessionId, requestId, [], status);
-      this.recordWorkspaceSearch(query, {
-        outcome: 'dropped',
-        reason:
-          sessionId !== this.sessionId
-            ? 'session-mismatch'
-            : 'not-connected',
-        status,
-      });
-      return;
-    }
-    if (query.trim().length === 0) {
-      // A bare `@` lists the open editor tabs instead of nothing.
-      const openFiles = (
-        this.attachmentSources.listOpenEditorFiles?.(
-          MAX_FILE_SEARCH_RESULTS,
-        ) ?? []
-      ).filter((file) => isSafeWorkspaceRelativePath(file));
-      this.emitWorkspaceFiles(sessionId, requestId, openFiles, 'ok');
-      return;
-    }
-    const startedAt = performance.now();
-    void this.attachmentSources
-      .searchWorkspaceFiles(query.trim(), MAX_FILE_SEARCH_RESULTS)
-      .then(
-        (files) => {
-          const safeFiles = files
-            .filter((file) => isSafeWorkspaceRelativePath(file))
-            .slice(0, MAX_FILE_SEARCH_RESULTS);
-          const status =
-            safeFiles.length === 0 &&
-            this.getWorkspaceContext().cwd === null
-              ? 'no-workspace'
-              : 'ok';
-          this.recordWorkspaceSearch(query, {
-            outcome: 'ok',
-            resultCount: safeFiles.length,
-            durationMs: Math.round(performance.now() - startedAt),
-            status,
-          });
-          if (sessionId === this.sessionId) {
-            this.emitWorkspaceFiles(
-              sessionId,
-              requestId,
-              safeFiles,
-              status,
-            );
-          }
-        },
-        (error) => {
-          this.recordWorkspaceSearch(query, {
-            outcome: 'failed',
-            durationMs: Math.round(performance.now() - startedAt),
-            detail: formatUnknownError(error),
-          });
-          if (sessionId === this.sessionId) {
-            this.emitWorkspaceFiles(sessionId, requestId, [], 'ok');
-          }
-        },
-      );
-  }
-
-  /** Structured record for one `@` mention file search (P0 gap: the
-   * search round-trip previously produced zero log events). */
-  private recordWorkspaceSearch(
-    query: string,
-    attributes: {
-      outcome: 'ok' | 'failed' | 'dropped';
-      resultCount?: number;
-      durationMs?: number;
-      reason?: string;
-      status?: string;
-      detail?: string;
-    },
-  ): void {
-    const { detail, ...rest } = attributes;
-    this.recordHost({
-      level: attributes.outcome === 'ok' ? 'info' : 'warn',
-      name: 'host.workspace.search',
-      attributes: { queryLength: query.length, ...rest },
-      ...(detail === undefined ? {} : { detail }),
-    });
-  }
-
-  /**
-   * Reads a workspace-local image referenced by transcript markdown.
-   * Reuses the attachment reader, which enforces workspace
-   * containment and per-kind size caps; anything that is not a
-   * displayable image degrades to a non-ok status so the webview can
-   * fall back to a clickable path link.
-   */
-  private handleWorkspaceReadImage(
-    sessionId: string,
-    path: string,
-  ): void {
-    if (sessionId !== this.sessionId) {
-      return;
-    }
-    const respond = (
-      status: WorkspaceImageStatus,
-      mediaType: ImageMediaType | null = null,
-      data = '',
-    ): void => {
-      if (sessionId !== this.sessionId) {
-        return;
-      }
-      this.emit({
-        type: 'workspace.imageData',
-        sessionId,
-        path,
-        status,
-        mediaType,
-        data,
-      });
-    };
-    const cwd = this.getWorkspaceContext().cwd;
-    if (cwd === null) {
-      respond('not-found');
-      return;
-    }
-    // Markdown may reference the file absolutely; the reader only
-    // accepts workspace-relative paths, so rebase inside-root
-    // absolutes and refuse everything else.
-    const relativePath = isAbsolute(path) ? relative(cwd, path) : path;
-    if (
-      relativePath.length === 0 ||
-      relativePath.startsWith('..') ||
-      isAbsolute(relativePath)
-    ) {
-      respond('not-found');
-      return;
-    }
-    void this.attachmentSources
-      .readWorkspaceFile(relativePath.replaceAll('\\', '/'))
-      .then(
-        (outcome) => {
-          switch (outcome.status) {
-            case 'picked': {
-              const item = outcome.items[0];
-              if (item === undefined || item.kind !== 'image') {
-                respond('unsupported');
-              } else if (item.data.length > MAX_IMAGE_DATA_LENGTH) {
-                respond('too-large');
-              } else {
-                respond('ok', item.mediaType, item.data);
-              }
-              return;
-            }
-            case 'rejected':
-              respond(
-                outcome.reason === 'too-large'
-                  ? 'too-large'
-                  : 'unsupported',
-              );
-              return;
-            default:
-              respond('not-found');
-          }
-        },
-        () => respond('not-found'),
-      );
-  }
-
-  private emitWorkspaceFiles(
-    sessionId: string,
-    requestId: string,
-    files: readonly string[],
-    status: WorkspaceFilesStatus,
-  ): void {
-    this.emit({
-      type: 'workspace.files',
-      sessionId,
-      requestId,
-      status,
-      files,
-    });
   }
 
   /**
@@ -5547,12 +5136,6 @@ export class ChatController {
     }
     return false;
   }
-}
-
-/** Display subject of a commit: first line, trimmed and capped. */
-function commitSubject(message: string): string {
-  const firstLine = message.split('\n', 1)[0] ?? '';
-  return firstLine.trim().slice(0, MAX_GIT_COMMIT_SUBJECT_LENGTH);
 }
 
 /**
