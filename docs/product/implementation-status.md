@@ -518,6 +518,32 @@ segmentIndex 字段；版本 5 为并行 plugins 面板切片（共用同一常�
 **本切片未打包安装（完成时工作区含并行代理未提交在制品），待随
 下一批次包一起可见验证 think→tool→think 分段渲染**。
 
+2026-08-12 傍晚追加「日志实证四项修复：Skills/MCP 面板会话切换死锁 +
+daemon sidecar 可观测性」（提交 7894eb6 / 56a67bd / cdbbec8 /
+771919a / c6ee117）：① 面板死锁（Webview）：会话切换把 store 的
+skills/MCP 目录重置为 `idle` 后无人重查，而面板把 `idle` 也算 busy——
+Refresh 永久禁用、卡死在 "Loading skills…"。现 SkillsPanel/McpPanel
+在目录转 `idle` 时自动触发一次 refresh，Refresh 仅在 `loading` 时禁
+用，面板内 "Start a new session" 点击后退回根视图（新会话收敛交给
+④ 的激活推送）。② sidecar 失败可观测（Host+Runtime）：
+`ensurePrivateDaemon`/`start()` 失败现记 `daemon.sidecar.start-failed`
+（error 级，消息经 scrubCredentials 扫除），归档列表加载失败记
+`host.ui.diagnostic`（archived-load-failed），私有 daemon spawn 的
+stderr 改 pipe 并缓存最后 2KB 尾部拼入失败消息。③ spawn 换端口重试
+（Runtime）：私有 daemon spawn/连接失败自动换新端口重试一次（日志
+判定为 pickFreePort TOCTOU 端口竞争），重试前 `killProcessTree` 收割
+未监听的残孤进程，两次都失败才聚合两个错误显示既有 unavailable 文
+案。④ 激活补推（Host）：会话 available 后（`loadSessionMetadata`）
+经现有 `session.skills`/`session.mcp` 通道主动补推目录，作为 ① 的服
+务端兜底——面板跨会话切换保持打开也能收敛。复现路径 harness 验证
+（App.test.tsx 全装配）：打开 Skills 面板 → 面板内点 Start a new
+session → 新会话可用后面板自动重查、脱离 Loading；另覆盖会话切换时
+面板保持打开的自动刷新路径。门禁：typecheck 三项目干净；全量 vitest
+75 文件 1709 项全过（新增 11 项：spawn 重试/放弃聚合/stderr 尾部/
+残孤收割、双面板 idle 恢复与根视图回退、App 级两条恢复路径、激活补
+推、archived 失败落日志）；build 过。**本批次未打包安装（完成时工作
+区含并行代理未提交在制品），待随下一批次包一起可见验证**。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
