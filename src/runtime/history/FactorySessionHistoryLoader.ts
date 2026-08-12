@@ -3,6 +3,8 @@ import {
   ProcessTransport,
 } from '@factory/droid-sdk/node';
 
+import type { ToolSubagentSummary } from '../../shared/bridgeMessages';
+import { readSubagentInvocations } from '../subagentSummary';
 import {
   type SessionHistoryLoader,
   type SessionHistoryResult,
@@ -39,24 +41,50 @@ export class FactorySessionHistoryLoader
     readonly cwd: string;
     readonly sessionId: string;
   }): Promise<SessionHistoryResult> {
+    const loaded = await this.loadSessionEnvelope(cwd, sessionId);
+    if (loaded === LOAD_FAILED) {
+      return unavailableSessionHistory();
+    }
+    return projectSessionHistory(loaded, { workspaceRoot: cwd });
+  }
+
+  async loadSubagentSummaries({
+    cwd,
+    sessionId,
+  }: {
+    readonly cwd: string;
+    readonly sessionId: string;
+  }): Promise<readonly ToolSubagentSummary[] | null> {
+    const loaded = await this.loadSessionEnvelope(cwd, sessionId);
+    if (loaded === LOAD_FAILED) {
+      return null;
+    }
+    return readSubagentInvocations(loaded);
+  }
+
+  private async loadSessionEnvelope(
+    cwd: string,
+    sessionId: string,
+  ): Promise<unknown> {
     let client: FactoryHistoryClient | null = null;
-    let loaded: unknown;
     try {
       client = await this.createClient(cwd);
-      loaded = await client.loadSession({ sessionId });
+      const loaded: unknown = await client.loadSession({ sessionId });
       const loadedClient = client;
       client = null;
       await loadedClient.close();
+      return loaded;
     } catch {
       if (client) {
         await client.close().catch(() => undefined);
       }
-      return unavailableSessionHistory();
+      return LOAD_FAILED;
     }
-
-    return projectSessionHistory(loaded, { workspaceRoot: cwd });
   }
 }
+
+/** Sentinel distinguishing a failed load from any loaded payload. */
+const LOAD_FAILED = Symbol('load-failed');
 
 async function createLocalHistoryClient(
   cwd: string,

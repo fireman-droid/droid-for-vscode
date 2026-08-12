@@ -1,3 +1,5 @@
+import type { MissionSessionRole } from '../shared/bridgeMessages';
+
 export const MAX_SESSION_CATALOG_ID_LENGTH = 512;
 export const MAX_SESSION_CATALOG_TITLE_LENGTH = 200;
 
@@ -8,6 +10,11 @@ export interface SessionCatalogEntry {
   readonly modifiedTime: string;
   readonly createdTime: string;
   readonly isFavorite: boolean;
+  /**
+   * Present when the SDK catalog marks this session as part of a
+   * mission decomposition (`decompSessionType`).
+   */
+  readonly missionRole?: MissionSessionRole;
 }
 
 export type SessionCatalogResult =

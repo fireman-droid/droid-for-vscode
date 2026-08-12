@@ -118,6 +118,10 @@ function projectSessionMetadata(value: unknown): SessionCatalogEntry | null {
     modifiedTime,
     createdTime,
     isFavorite: value.isFavorite === true,
+    ...(value.decompSessionType === 'orchestrator' ||
+    value.decompSessionType === 'worker'
+      ? { missionRole: value.decompSessionType }
+      : {}),
   };
 }
 

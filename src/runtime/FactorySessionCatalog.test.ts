@@ -117,6 +117,40 @@ describe('FactorySessionCatalog', () => {
     });
   });
 
+  it('projects the mission role only for known decomposition types', async () => {
+    const base = {
+      title: 'Session',
+      messageCount: 0,
+      modifiedTime: new Date('2026-08-09T12:00:00.000Z'),
+      createdTime: new Date('2026-08-08T12:00:00.000Z'),
+    };
+    const catalog = new FactorySessionCatalog({
+      listSdkSessions: async () => [
+        { ...base, id: 'orchestrator-session', decompSessionType: 'orchestrator' },
+        { ...base, id: 'worker-session', decompSessionType: 'worker' },
+        { ...base, id: 'plain-session' },
+        { ...base, id: 'odd-session', decompSessionType: 'supervisor' },
+      ],
+    });
+
+    const result = await catalog.listSessions('C:\\workspace');
+
+    expect(result.status).toBe('available');
+    if (result.status !== 'available') {
+      throw new Error('Expected an available catalog.');
+    }
+    expect(
+      result.sessions.map(({ id, missionRole }) => ({ id, missionRole })),
+    ).toEqual([
+      { id: 'orchestrator-session', missionRole: 'orchestrator' },
+      { id: 'worker-session', missionRole: 'worker' },
+      { id: 'plain-session', missionRole: undefined },
+      { id: 'odd-session', missionRole: undefined },
+    ]);
+    expect('missionRole' in result.sessions[2]!).toBe(false);
+    expect('missionRole' in result.sessions[3]!).toBe(false);
+  });
+
   it('delegates favorite writes to the sessions directory writer', async () => {
     const writeFavoriteFile = vi.fn(async () => true);
     const catalog = new FactorySessionCatalog({
