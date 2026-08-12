@@ -613,6 +613,47 @@ transcript tool 项新增可选 `outputTail` 双侧校验；Host
 活动行应见暖色预览窗实时滚动，完成后定格；重开窗口回放同一会话
 不应出现预览窗。
 
+2026-08-12 晚追加「用户实测反馈五项修复批次」（提交 fba6523 /
+c7d9ea0 / 7007cba / e9d2266 / bd8f10a / e6e883c / af483f2，不单独
+打包，随收尾统一发版包验收）：① 流式工具输入被首个部分解析钉死
+（Host，P0 根因）：CLI 随输入 JSON 累积重发 tool_call_delta，部分
+解析可能把字符串值截在半途（实测 Create 路径停在
+"Canvas-API-学习"，实际文件为 `Canvas-API-学习文档.md`），而
+`turnActivityState.projectToolEvent` 只在字段 undefined 时写入
+filePath/filePaths/detail——首个截断值永久生效，连锁导致 chip 死
+链（点击报 moved or deleted）、Changes 卡路径错、commit 面板
+inTurn 匹配为 0（草稿 "0 files"、默认全不勾、Commit 灰死）。现输
+入派生字段改为后到者胜（backgroundHint 保持单调）；该状态机与昨日
+ApplyPatch 提取修复（5e601d8）同管线，本缺陷在其下游。面板默认勾
+选本回合文件与草稿计数逻辑本就正确，根因修复后恢复工作。② 文件未
+就绪文案（Host）：`FileDiffOutcome` 新增 not-found（`fs.stat` 失
+败与打开失败分开），Turn 活跃期点击未落盘文件回 "That file does
+not exist yet. Droid is still working on it."（file-not-ready），
+已结算转录维持 moved-or-deleted 文案。③ 诊断卡去重（Host+Webview
+双侧）：转录尾部连续诊断段内完全相同的条目（turnId+severity+
+code+message）不再追加，连点 6 次只留 1 张；其间有其他内容时允许
+重现。④ 视觉整改：诊断卡由浅底红点裸条改为 fit-content 暖底渐层
+卡（1px 边框、双层软阴影、光环严重度圆点、warning/error 同步染色
+边框/底/字）；"Commit these changes…" 入口改为 preview-chip 同语
+言的安静动作 chip（hairline 边框、hover 暖色）；commit 面板动作
+右下角停靠（Cancel 左、Commit 主按钮右）；Preview 面板顶栏换暖色
+渐层底、文件名 ink 字重、细分隔线 muted 沙箱注记、Reload/Open in
+editor 用 quiet 1px 边框按钮 + hover/focus 态。⑤ resize 断根（用
+户第二次报）：`.dvx-shell textarea { resize: none }` 单点规则，删
+除 commit 消息框与权限编辑器的逐元素 resize 覆盖。门禁（当前树，
+含并行代理已落提交）：typecheck 三段全过；全量 vitest 80 文件
+1810 全过；聚焦新增截断路径替换/多路径 ApplyPatch 后到者胜、
+not-found 双态文案、host/webview 诊断去重、commit 动作顺序用例。
+冒烟 `artifacts/smoke-diagnostic-dedup.mjs`（配
+diagnostic-harness.html，真实 webview bundle）实测连点 5 次仅 1
+张卡、异文案正常追加；五处 UI 截图留档 `artifacts/fixes-*.png`
+（artifacts 目录不入库）。随包验收：让 Droid 创建一个中文名文件，
+写入中途点 chip 应只出现一张 "does not exist yet" 卡且连点不叠
+加，完成后 chip 显示完整文件名且点击能打开；Changes 卡尾 commit
+入口为 chip 样式，展开面板本回合文件默认勾选、草稿 "N files" 计
+数正确、按钮在右下、消息框不可拖拽拉伸；Preview 面板顶栏为暖色
+成品样式。
+
 ### 当前 Figma Design 还原边界
 
 当前生产 Webview 以 Figma Design 文件
