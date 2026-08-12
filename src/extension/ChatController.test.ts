@@ -2661,6 +2661,145 @@ describe('ChatController', () => {
     expect(createRuntime).toHaveBeenCalledOnce();
   });
 
+  it('detaches a running daemon turn on switch and clears the flag when the daemon reports idle', async () => {
+    const release = deferred<void>();
+    // Daemon-backed runtime: detached turns keep running server-side.
+    const runtime = Object.assign(
+      createMockRuntime(async function* () {
+        yield { type: 'text-delta', text: 'working' };
+        await release.promise;
+        yield successfulTurn();
+      }),
+      { supportsBackgroundTurns: () => true },
+    );
+    const replacement = createMockRuntime();
+    replacement.initialize.mockResolvedValue(available('session-2'));
+    const createRuntime = vi
+      .fn<() => MockRuntime>()
+      .mockReturnValueOnce(runtime)
+      .mockReturnValueOnce(replacement);
+    let workingState = 'thinking';
+    const daemon = {
+      readOpenedWorkingStates: vi.fn(
+        async () => new Map([['session-1', workingState]]),
+      ),
+    };
+    const { controller, messages } = createController(
+      createRuntime,
+      undefined,
+      createCatalog([
+        catalogEntry('session-1'),
+        catalogEntry('session-2'),
+      ]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async () => daemon as unknown as DaemonSessionCatalog,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+    send(controller, 'session-1', 'turn-1', 'Long background work');
+    await vi.waitFor(() => {
+      expect(
+        messages.some((message) => message.type === 'assistant.delta'),
+      ).toBe(true);
+    });
+
+    // Switching away no longer blocks: disposal detaches the turn
+    // instead of interrupting it.
+    controller.handleMessage({
+      type: 'session.select',
+      sessionId: 'session-2',
+    });
+    await vi.waitFor(() => {
+      expect(runtime.dispose).toHaveBeenCalledWith({
+        preserveBackendTurn: true,
+      });
+    });
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(snapshots(messages).at(-1)?.sessionId).toBe('session-2');
+    });
+    // The old session's row carries the running flag.
+    await vi.waitFor(() => {
+      const items = snapshots(messages).at(-1)?.sessions.items ?? [];
+      expect(
+        items.find((item) => item.id === 'session-1')?.running,
+      ).toBe(true);
+    });
+
+    // The daemon reports the session idle: the poll clears the flag
+    // and the webview stops the row animation at once.
+    workingState = 'idle';
+    await vi.waitFor(
+      () => {
+        expect(runningStates(messages).at(-1)).toMatchObject({
+          sessionId: 'session-1',
+          running: false,
+        });
+      },
+      { timeout: 5000 },
+    );
+    release.resolve();
+  });
+
+  it('seeds running flags from the daemon opened-session registry on catalog loads', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      supportsBackgroundTurns: () => true,
+    });
+    let workingState = 'thinking';
+    const daemon = {
+      readOpenedWorkingStates: vi.fn(
+        async () => new Map([['session-2', workingState]]),
+      ),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([
+        catalogEntry('session-1'),
+        catalogEntry('session-2'),
+      ]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async () => daemon as unknown as DaemonSessionCatalog,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    // A session another window (or the CLI) keeps busy gains the flag
+    // without any local turn.
+    await vi.waitFor(() => {
+      expect(runningStates(messages).at(-1)).toMatchObject({
+        sessionId: 'session-2',
+        running: true,
+      });
+    });
+    // The daemon advertises daemon-backed switching in the snapshot.
+    expect(
+      snapshots(messages).at(-1)?.backgroundTurnsAvailable,
+    ).toBe(true);
+
+    // The poll clears the flag once the daemon reports it idle.
+    workingState = 'idle';
+    await vi.waitFor(
+      () => {
+        expect(runningStates(messages).at(-1)).toMatchObject({
+          sessionId: 'session-2',
+          running: false,
+        });
+      },
+      { timeout: 5000 },
+    );
+  });
+
   it('creates a worktree session through the daemon and annotates the row', async () => {
     const initial = createMockRuntime();
     const replacement = Object.assign(createMockRuntime(), {
@@ -8385,7 +8524,7 @@ interface MockRuntime extends DroidRuntime {
     typeof vi.fn<DroidRuntime['updateSessionSetting']>
   >;
   interrupt: ReturnType<typeof vi.fn<() => Promise<void>>>;
-  dispose: ReturnType<typeof vi.fn<() => Promise<void>>>;
+  dispose: ReturnType<typeof vi.fn<DroidRuntime['dispose']>>;
 }
 
 function createMockRuntime(
@@ -8422,7 +8561,7 @@ function createMockRuntime(
     })),
     sendTurn: vi.fn(stream),
     interrupt: vi.fn(async () => {}),
-    dispose: vi.fn(async () => {}),
+    dispose: vi.fn<DroidRuntime['dispose']>(async () => {}),
   };
 }
 
@@ -8723,6 +8862,17 @@ function snapshots(messages: readonly HostToWebviewMessage[]) {
       HostToWebviewMessage,
       { type: 'host.snapshot' }
     > => message.type === 'host.snapshot',
+  );
+}
+
+function runningStates(messages: readonly HostToWebviewMessage[]) {
+  return messages.filter(
+    (
+      message,
+    ): message is Extract<
+      HostToWebviewMessage,
+      { type: 'session.running' }
+    > => message.type === 'session.running',
   );
 }
 
