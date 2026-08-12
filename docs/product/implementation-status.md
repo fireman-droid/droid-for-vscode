@@ -1571,6 +1571,45 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最近记录的验证结果：
 
+- Tab 切换驻留（2026-08-12 下午，续启动/切换性能批次）：
+  **根因**——`extension.ts` 的 `registerWebviewViewProvider` 未传
+  options，VS Code 默认在视图隐藏时销毁 webview iframe、重新显示
+  时整套重建。日志实证（当日真实窗口）：单个扩展宿主实例内
+  `webview.boot-ok` 反复出现（act b3e33c 4 次、ea772c/cab005/
+  50b4da 各 3 次），每次切回付出 boot 1,022~1,185ms + 重渲染
+  1,101~1,355ms ≈ **2.2~2.5s 体感时延**（例：act ea772c 08:33:45
+  与 08:33:49 相隔 4 秒两次完整重启）。早期快照修复只能把重建后的
+  首屏提前，驻留才是根治。
+  **API 取证**——本地 `@types/vscode` `index.d.ts`（11728~11751
+  行）：`registerWebviewViewProvider(viewId, provider, options?)`
+  的 `webviewOptions.retainContextWhenHidden` 对 WebviewView
+  **受支持**（隐藏时保留 iframe、脚本挂起、显示时原状恢复）；
+  `Webview.postMessage` 文档（10004 行）明确 retained 隐藏
+  webview 属于 live、可继续投递消息。代价为文档标注的高内存
+  开销——聊天面板转录/Composer/滚动状态无法快速保存重建，正是
+  该选项的适用场景（参照 Claude for VSCode 的秒切换行为）。
+  **实现**——注册处传
+  `{ webviewOptions: { retainContextWhenHidden: true } }`；
+  `DroidViewProvider` 新增 `onDidChangeVisibility` 监听：打
+  `host.view.visibility` 埋点（visible 布尔），重新可见时向
+  controller 重发 `webview.ready` 做防御性对账（已初始化的
+  controller 对重复 ready 仅重发快照 + 重放 pending 交互，
+  Webview store 按 requestId 去重，全幂等）。
+  **测试**——`DroidViewProvider.test.ts` 新增 2 个（重新可见触发
+  幂等 resync + 埋点、被替换/已 dispose 的视图不再驱动），全文件
+  7/7 绿。
+  **修前/修后**——修前：每次切回一整套 boot-ok（~1.1s）+
+  render-ok（~1.2s）；修后预期：切回零重建，日志中只出现
+  `host.view.visibility {visible:true}` 且**无**新 boot-ok（待下
+  次打包安装 + Reload 后核对）。
+  门禁：`DroidViewProvider.test.ts` 7/7 通过；全局 typecheck 与
+  全量 vitest 此刻被另一并行代理未提交的 interleaved thinking
+  改动（`runtimeEvents.ts` / `normalizeSdkEvent.ts` 的
+  `thinking-delta` 增字段）压红（7 个文件失败均为 thinking 形状
+  断言，与本切片无关；本切片文件聚焦全绿），打包/安装随树恢复
+  绿后的下一个包一并出（真机切换验证同时遗留）。协调说明：
+  `extension.ts` 的注册改动被并行代理在 56a67bd 一并提交，
+  provider 与测试由本切片单独提交（0f483cc）。
 - 启动/切换性能与可靠性修复批次（2026-08-12 下午，日志调查实证
   三项）：
   **修复 1（P1）握手版本失配静默死亡兜底**——Webview：`App.tsx`
