@@ -4,6 +4,7 @@ import {
 } from '@factory/droid-sdk/node';
 
 import type { ToolSubagentSummary } from '../../shared/bridgeMessages';
+import type { RuntimeDiagnosticSink } from '../runtimeDiagnostics';
 import { readSubagentInvocations } from '../subagentSummary';
 import {
   type SessionHistoryLoader,
@@ -23,15 +24,18 @@ export type FactoryHistoryClientFactory = (
 
 export interface FactorySessionHistoryLoaderOptions {
   readonly createClient?: FactoryHistoryClientFactory;
+  readonly diagnostics?: RuntimeDiagnosticSink;
 }
 
 export class FactorySessionHistoryLoader
   implements SessionHistoryLoader
 {
   private readonly createClient: FactoryHistoryClientFactory;
+  private readonly diagnostics: RuntimeDiagnosticSink | undefined;
 
   constructor(options: FactorySessionHistoryLoaderOptions = {}) {
     this.createClient = options.createClient ?? createLocalHistoryClient;
+    this.diagnostics = options.diagnostics;
   }
 
   async loadHistory({
@@ -66,19 +70,55 @@ export class FactorySessionHistoryLoader
     cwd: string,
     sessionId: string,
   ): Promise<unknown> {
+    // Each load spawns (and tears down) its own droid CLI process; the
+    // spawn cost dominates session-switch latency, so it gets its own
+    // timing record next to `runtime.history.finished`.
+    const spawnStart = performance.now();
     let client: FactoryHistoryClient | null = null;
     try {
       client = await this.createClient(cwd);
+      this.recordSpawn(spawnStart, 'ok', sessionId);
       const loaded: unknown = await client.loadSession({ sessionId });
       const loadedClient = client;
       client = null;
       await loadedClient.close();
       return loaded;
-    } catch {
+    } catch (error) {
       if (client) {
         await client.close().catch(() => undefined);
+      } else {
+        this.recordSpawn(spawnStart, 'failed', sessionId, error);
       }
       return LOAD_FAILED;
+    }
+  }
+
+  private recordSpawn(
+    startedAt: number,
+    outcome: 'ok' | 'failed',
+    sessionId: string,
+    error?: unknown,
+  ): void {
+    try {
+      this.diagnostics?.record({
+        level: outcome === 'ok' ? 'info' : 'warn',
+        name: 'runtime.history.spawn',
+        attributes: {
+          durationMs: Math.round(performance.now() - startedAt),
+          outcome,
+          sessionId,
+        },
+        ...(error === undefined
+          ? {}
+          : {
+              detail:
+                error instanceof Error
+                  ? (error.stack ?? error.message)
+                  : String(error),
+            }),
+      });
+    } catch {
+      // Diagnostics must never alter history loading behavior.
     }
   }
 }
