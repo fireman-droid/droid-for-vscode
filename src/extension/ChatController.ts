@@ -1287,6 +1287,10 @@ export class ChatController {
     attachments?: readonly RuntimeAttachment[],
   ): Promise<void> {
     let terminalEventSeen = false;
+    let completeEvent: Extract<
+      RuntimeEvent,
+      { type: 'turn-complete' }
+    > | null = null;
 
     try {
       for await (const event of runtime.sendTurn(text, attachments)) {
@@ -1304,8 +1308,12 @@ export class ChatController {
 
         if (event.type === 'turn-complete') {
           terminalEventSeen = true;
-          this.handleTurnComplete(sessionId, turnId, event);
-          return;
+          // Settle only after leaving the loop: breaking closes the
+          // runtime generator (releasing its active-turn slot), so a
+          // queued prompt dispatched by the completion can start the
+          // next turn instead of hitting "already has an active turn".
+          completeEvent = event;
+          break;
         }
 
         if (this.turn?.status === 'stopping') {
@@ -1324,9 +1332,24 @@ export class ChatController {
           turnId,
         )
       ) {
+        completeEvent = null;
         terminalEventSeen = true;
         this.failTurn(sessionId, turnId, 'runtime-stream-failed');
       }
+    }
+
+    if (
+      completeEvent !== null &&
+      this.isCurrentTurn(
+        runtime,
+        runtimeGeneration,
+        turnGeneration,
+        sessionId,
+        turnId,
+      )
+    ) {
+      this.handleTurnComplete(sessionId, turnId, completeEvent);
+      return;
     }
 
     if (

@@ -7659,6 +7659,52 @@ describe('ChatController queued messages', () => {
     });
   });
 
+  it('closes the runtime stream before dispatching the queued head', async () => {
+    const release = deferred<void>();
+    let active = false;
+    // Mirrors FactoryDroidRuntime's single active-turn slot: the slot
+    // frees only when the generator is closed, so a dispatch fired
+    // before the previous stream unwinds throws exactly like the CLI
+    // runtime does.
+    const runtime = createMockRuntime(async function* (text) {
+      if (active) {
+        throw new Error('Droid runtime already has an active turn.');
+      }
+      active = true;
+      try {
+        if (text === 'Long turn') {
+          await release.promise;
+        }
+        yield successfulTurn();
+      } finally {
+        active = false;
+      }
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Long turn');
+    queueAdd(controller, 'session-1', 'queued-1', 'First queued');
+    release.resolve();
+
+    await vi.waitFor(() => {
+      expect(
+        turnStates(messages).filter(
+          ({ turnId, status }) =>
+            turnId === 'queued-1' && status === 'completed',
+        ),
+      ).toHaveLength(1);
+    });
+    expect(
+      turnStates(messages).filter(({ status }) => status === 'failed'),
+    ).toHaveLength(0);
+    expect(queueStates(messages).at(-1)).toMatchObject({
+      items: [],
+      paused: null,
+    });
+  });
+
   it('pauses the queue on Stop and resumes dispatch only on queue.resume', async () => {
     const release = deferred<void>();
     const runtime = createMockRuntime(async function* () {
