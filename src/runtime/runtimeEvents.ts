@@ -56,6 +56,13 @@ export type RuntimeEvent =
       toolUseId: string;
       action: string;
       updateKind: ToolActivityUpdateKind;
+      /**
+       * Sanitized trailing command output for execute-class tools
+       * (bounded to `MAX_TOOL_OUTPUT_TAIL_LENGTH`). Display-only:
+       * feeds the live output preview and must never enter
+       * diagnostics logs.
+       */
+      outputTail?: string;
     }
   | {
       type: 'tool-result';

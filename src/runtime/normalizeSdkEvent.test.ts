@@ -389,6 +389,70 @@ describe('normalizeSdkEvent', () => {
     });
   });
 
+  it('projects an execute progress tail from the cumulative fullOutput', () => {
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_progress', {
+          toolUseId: 'tool-exec',
+          toolName: 'Execute',
+          content: 'irrelevant',
+          update: {
+            type: 'status',
+            text: 'line-2\nline-3',
+            fullOutput: 'line-1\r\nline-2\nline-3\n',
+            terminalId: 'terminal-1',
+          },
+        }),
+      ),
+    ).toEqual({
+      type: 'tool-progress',
+      toolName: 'Execute',
+      toolUseId: 'tool-exec',
+      action: 'Ran a local command',
+      updateKind: 'status',
+      outputTail: 'line-1\nline-2\nline-3',
+    });
+  });
+
+  it('falls back to the recent-lines text window without fullOutput', () => {
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_progress', {
+          toolUseId: 'tool-exec',
+          toolName: 'Execute',
+          content: 'irrelevant',
+          update: { type: 'status', text: 'tail line' },
+        }),
+      ),
+    ).toMatchObject({ outputTail: 'tail line' });
+  });
+
+  it('omits the output tail for empty or non-execute progress', () => {
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_progress', {
+          toolUseId: 'tool-exec',
+          toolName: 'Execute',
+          content: '',
+          update: { type: 'status', text: '' },
+        }),
+      ),
+    ).not.toHaveProperty('outputTail');
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_progress', {
+          toolUseId: 'tool-read',
+          toolName: 'Read',
+          content: 'sensitive',
+          update: {
+            type: 'status',
+            fullOutput: 'sensitive file contents',
+          },
+        }),
+      ),
+    ).not.toHaveProperty('outputTail');
+  });
+
   it('normalizes working state and strips structured error details', () => {
     const workingState: DroidStreamEvent = {
       type: 'working_state_changed',

@@ -17,6 +17,10 @@ import {
   summarizeToolAction,
   type ToolActivityUpdateKind,
 } from '../shared/toolActivity';
+import {
+  isExecuteToolName,
+  toToolOutputTail,
+} from '../shared/toolOutput';
 import { base64ByteLength } from '../shared/transcriptLimits';
 import { extractToolDetail } from './toolDetail';
 import {
@@ -89,9 +93,18 @@ export function normalizeSdkEvent(
         event.toolUseId,
       );
       const updateKind = normalizeToolUpdateKind(event.update?.type);
-      return activity === undefined || updateKind === undefined
-        ? undefined
-        : { ...activity, updateKind };
+      if (activity === undefined || updateKind === undefined) {
+        return undefined;
+      }
+      const outputTail = extractProgressOutputTail(
+        activity.toolName,
+        event.update,
+      );
+      return {
+        ...activity,
+        updateKind,
+        ...(outputTail === undefined ? {} : { outputTail }),
+      };
     }
 
     case 'tool_result': {
@@ -339,6 +352,30 @@ function normalizeToolActivity<
     toolUseId,
     action: summarizeToolAction(normalizedToolName),
   };
+}
+
+/**
+ * Live output tail of an execute-class tool_progress update. The CLI
+ * sends the cumulative output as `update.fullOutput` on every push
+ * (probed 2026-08-12: `update.type` is always `status`, ~200-400ms
+ * cadence); `update.text` is a sliding recent-lines window kept as a
+ * fallback for payloads without `fullOutput`.
+ */
+function extractProgressOutputTail(
+  toolName: string,
+  update: { text?: string; fullOutput?: string } | undefined,
+): string | undefined {
+  if (update === undefined || !isExecuteToolName(toolName)) {
+    return undefined;
+  }
+  const source =
+    typeof update.fullOutput === 'string' &&
+    update.fullOutput.length > 0
+      ? update.fullOutput
+      : typeof update.text === 'string'
+        ? update.text
+        : undefined;
+  return source === undefined ? undefined : toToolOutputTail(source);
 }
 
 function withToolInputContext(
