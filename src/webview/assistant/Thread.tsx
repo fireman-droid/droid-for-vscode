@@ -1255,6 +1255,16 @@ const AssistantMessage = memo(function AssistantMessage(): React.JSX.Element {
     const value = s.message.metadata.custom?.completedAt;
     return typeof value === "number" ? value : null;
   });
+  // Interactions split one visible reply across several turnIds; only
+  // the run's tail message wears the action bar, middle segments keep
+  // the compact body rhythm (user report batch 2 §6).
+  const replyTail = useAuiState(
+    (s) => s.message.metadata.custom?.replyTail !== false,
+  );
+  const replyCopyText = useAuiState((s) => {
+    const value = s.message.metadata.custom?.replyCopyText;
+    return typeof value === "string" ? value : null;
+  });
   const wasRunningRef = useRef(false);
   if (running) {
     wasRunningRef.current = true;
@@ -1263,7 +1273,9 @@ const AssistantMessage = memo(function AssistantMessage(): React.JSX.Element {
     <MessagePrimitive.Root
       className={`dvx-message dvx-message-assistant${
         running ? " dvx-message-live" : ""
-      }${isLast ? " dvx-message-last" : ""}`}
+      }${isLast ? " dvx-message-last" : ""}${
+        replyTail ? "" : " dvx-message-cont"
+      }`}
       aria-label="Droid"
     >
       <MessagePrimitive.GroupedParts
@@ -1308,28 +1320,75 @@ const AssistantMessage = memo(function AssistantMessage(): React.JSX.Element {
           }
         }}
       </MessagePrimitive.GroupedParts>
-      <ActionBarPrimitive.Root
-        className={`dvx-assistant-actions${
-          !running && wasRunningRef.current ? " dvx-actions-entry" : ""
-        }`}
-        hideWhenRunning
-      >
-        <MessageTimestamp completedAt={completedAt} />
-        <ActionBarPrimitive.Copy
-          className="dvx-message-action dvx-copy-action"
-          aria-label="Copy response"
-          copiedDuration={1500}
+      {replyTail ? (
+        <ActionBarPrimitive.Root
+          className={`dvx-assistant-actions${
+            !running && wasRunningRef.current ? " dvx-actions-entry" : ""
+          }`}
+          hideWhenRunning
         >
-          <CopyActionContent />
-        </ActionBarPrimitive.Copy>
-        <MessagePrimitive.If last>
-          <RegenerateAction />
-          <ForkAction />
-        </MessagePrimitive.If>
-      </ActionBarPrimitive.Root>
+          <MessageTimestamp completedAt={completedAt} />
+          {replyCopyText !== null ? (
+            <ReplyCopyAction text={replyCopyText} />
+          ) : (
+            <ActionBarPrimitive.Copy
+              className="dvx-message-action dvx-copy-action"
+              aria-label="Copy response"
+              copiedDuration={1500}
+            >
+              <CopyActionContent />
+            </ActionBarPrimitive.Copy>
+          )}
+          <MessagePrimitive.If last>
+            <RegenerateAction />
+            <ForkAction />
+          </MessagePrimitive.If>
+        </ActionBarPrimitive.Root>
+      ) : null}
     </MessagePrimitive.Root>
   );
 });
+
+/**
+ * Copies the whole reply run — every assistant text segment of the
+ * turn sequence, blank lines between segments — instead of only this
+ * message's text. Mirrors ActionBarPrimitive.Copy's visuals via the
+ * same classes and data-copied attribute.
+ */
+function ReplyCopyAction({
+  text,
+}: {
+  readonly text: string;
+}): React.JSX.Element {
+  const [copied, setCopied] = useState(false);
+  const resetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (resetRef.current !== null) {
+        clearTimeout(resetRef.current);
+      }
+    },
+    [],
+  );
+  return (
+    <button
+      type="button"
+      className="dvx-message-action dvx-copy-action"
+      aria-label="Copy response"
+      {...(copied ? { "data-copied": "true" } : {})}
+      onClick={() => {
+        void navigator.clipboard?.writeText(text);
+        setCopied(true);
+        if (resetRef.current !== null) {
+          clearTimeout(resetRef.current);
+        }
+        resetRef.current = setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      <CopyActionContent />
+    </button>
+  );
+}
 
 function RegenerateAction(): React.JSX.Element | null {
   const regenerate = useContext(RegenerateContext);

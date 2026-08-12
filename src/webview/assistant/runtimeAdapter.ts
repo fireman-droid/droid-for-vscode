@@ -28,6 +28,15 @@ export interface SafeRuntimeMessage {
   readonly attachments?: readonly SentAttachmentSummary[];
   /** Epoch ms when this assistant reply was seen finishing, if known. */
   readonly completedAt?: number;
+  /**
+   * False for assistant messages that merely continue a reply run
+   * (interactions split one visible reply across several turnIds);
+   * the action bar renders only on the run's tail.
+   */
+  readonly replyTail?: boolean;
+  /** Tail-only: every assistant text segment of the run, joined with
+   * blank lines — what Copy places on the clipboard. */
+  readonly replyCopyText?: string;
 }
 
 type SafeRuntimePart = Exclude<ThreadMessageLike["content"], string>[number];
@@ -193,6 +202,10 @@ export function convertSafeRuntimeMessage(
         messageId: message.messageId ?? null,
         attachments: message.attachments ?? null,
         completedAt: message.completedAt ?? null,
+        // Absent (user messages, non-adapter paths) means tail so the
+        // bar never silently disappears.
+        replyTail: message.replyTail ?? true,
+        replyCopyText: message.replyCopyText ?? null,
       },
     },
   };
@@ -303,6 +316,50 @@ export function mapTranscriptToRuntimeMessages(
     group.items.push(item);
   }
 
+  // Reply runs: maximal stretches of consecutive assistant descriptors
+  // (user messages break them; AskUser/plan approvals split one visible
+  // reply across several turnIds). One action bar per run, on the last
+  // descriptor that carries assistant text — or the run's last when
+  // none does, so Regenerate/Fork stay reachable (user report batch 2
+  // §6). The tail also carries the whole run's text for Copy.
+  const replyTails = new Map<string, string>();
+  let run: AssistantGroupDescriptor[] = [];
+  const flushRun = (): void => {
+    if (run.length === 0) {
+      return;
+    }
+    let tail = run[run.length - 1]!;
+    for (let index = run.length - 1; index >= 0; index -= 1) {
+      if (run[index]!.items.some((item) => item.kind === "assistant")) {
+        tail = run[index]!;
+        break;
+      }
+    }
+    const copyText = run
+      .flatMap((descriptor) =>
+        descriptor.items
+          .filter(
+            (item): item is Extract<
+              SessionTranscriptItem,
+              { kind: "assistant" }
+            > => item.kind === "assistant",
+          )
+          .map((item) => item.text),
+      )
+      .filter((text) => text.length > 0)
+      .join("\n\n");
+    replyTails.set(tail.id, copyText);
+    run = [];
+  };
+  for (const descriptor of descriptors) {
+    if (descriptor.kind === "assistant") {
+      run.push(descriptor);
+    } else {
+      flushRun();
+    }
+  }
+  flushRun();
+
   // Reuse prior message identities when the underlying transcript items and
   // derived state are unchanged, so assistant-ui's per-message conversion
   // cache stays warm and untouched messages skip re-rendering during
@@ -360,9 +417,15 @@ export function mapTranscriptToRuntimeMessages(
             descriptor.id,
             status.type === "running",
           );
+    const replyCopyText = replyTails.get(descriptor.id);
+    const replyTail = replyCopyText !== undefined;
+    // Tail-ness and the aggregated copy text are derived from OTHER
+    // descriptors too, so they participate in the cache key: a former
+    // tail rebuilds without its bar when the run grows, and a tail
+    // rebuilds when any run segment's text changes length.
     const stateKey = `${status.type}:${
       "reason" in status ? status.reason : ""
-    }`;
+    }:${replyTail ? `tail:${replyCopyText.length}` : "cont"}`;
     const cached = cache?.get(descriptor.id);
     if (
       cached !== undefined &&
@@ -378,6 +441,8 @@ export function mapTranscriptToRuntimeMessages(
       content: uniqueToolCallIds(descriptor.items.map(mapItemToPart)),
       status,
       ...(completedAt === undefined ? {} : { completedAt }),
+      replyTail,
+      ...(replyCopyText === undefined ? {} : { replyCopyText }),
     };
     nextEntries.push([
       descriptor.id,

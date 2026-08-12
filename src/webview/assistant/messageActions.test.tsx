@@ -240,4 +240,98 @@ describe('assistant action bar', () => {
       container.querySelectorAll('.dvx-message-time'),
     ).toHaveLength(1);
   });
+
+  it('renders one action bar per reply run and copies the whole run', async () => {
+    // Interactions split one visible reply across turnIds: segment 1
+    // (turn-1) ends at an AskUser, the answer starts turn-2 with more
+    // segments. Only the run tail may carry an action bar, and Copy
+    // must concatenate every assistant text segment.
+    const user = userEvent.setup();
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const { container } = render(<App />);
+    host({
+      ...snapshot(0),
+      transcript: [
+        {
+          id: 'user-1',
+          kind: 'user',
+          text: 'Write the story',
+          messageId: 'sdk-user-1',
+        },
+        {
+          id: 'assistant-1a',
+          kind: 'assistant',
+          turnId: 'turn-1',
+          text: 'Segment one.',
+        },
+        {
+          id: 'tool-1a',
+          kind: 'tool',
+          turnId: 'turn-1',
+          toolUseId: 'use-ask-1',
+          toolName: 'AskUser',
+          action: 'Requested your input',
+          status: 'completed',
+          progressCount: 1,
+          latestUpdateKind: 'tool-result',
+        },
+        {
+          id: 'assistant-2a',
+          kind: 'assistant',
+          turnId: 'turn-2',
+          text: 'Segment two.',
+        },
+        {
+          id: 'tool-2a',
+          kind: 'tool',
+          turnId: 'turn-2',
+          toolUseId: 'use-read-1',
+          toolName: 'Read',
+          action: 'Read workspace files',
+          status: 'completed',
+          progressCount: 1,
+          latestUpdateKind: 'tool-result',
+        },
+        {
+          id: 'assistant-2b',
+          kind: 'assistant',
+          turnId: 'turn-2',
+          text: 'Segment three.',
+        },
+      ],
+    });
+    await screen.findByText('Segment three.');
+
+    // One bar for the whole run, on its tail message; the middle
+    // segment reserves no bar height.
+    expect(
+      container.querySelectorAll('.dvx-assistant-actions'),
+    ).toHaveLength(1);
+    expect(
+      container.querySelectorAll('.dvx-message-cont'),
+    ).toHaveLength(1);
+    expect(
+      container
+        .querySelector('.dvx-message-cont .dvx-assistant-actions'),
+    ).toBeNull();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Copy response' }),
+    );
+    expect(writeText).toHaveBeenCalledWith(
+      'Segment one.\n\nSegment two.\n\nSegment three.',
+    );
+
+    // Single-turn runs keep the classic form: bar per reply.
+    host({ ...snapshot(1), transcript: twoTurnTranscript });
+    await screen.findByText('Second answer');
+    expect(
+      container.querySelectorAll('.dvx-assistant-actions'),
+    ).toHaveLength(2);
+    expect(container.querySelectorAll('.dvx-message-cont')).toHaveLength(0);
+  });
 });

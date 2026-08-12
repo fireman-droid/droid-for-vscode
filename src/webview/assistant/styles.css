@@ -2571,6 +2571,14 @@ body {
   line-height: 21.125px;
 }
 
+/* Continuation segments of one reply run (split by interactions or
+   plan approvals) render no action bar and keep the compact body
+   rhythm instead of a full inter-message gap (user report batch 2
+   §6). */
+.dvx-message-assistant.dvx-message-cont {
+  margin-bottom: 12px;
+}
+
 /* User messages are Cursor-style full-width blocks that stick to the
    viewport top while their answer scrolls; the coordinator in
    Thread.tsx marks the active one with data-pinned, translates it up

@@ -176,6 +176,145 @@ describe('Droid external-store adapter', () => {
     ).toHaveLength(4_096);
   });
 
+  it('marks one reply tail per run and aggregates its copy text', () => {
+    const messages = mapTranscriptToRuntimeMessages(
+      [
+        { id: 'user-a', kind: 'user', text: 'Plan and do it' },
+        // Turn A ends at a plan approval; the user's consent starts
+        // turn B — one visible reply, two turnIds.
+        {
+          id: 'assistant-a1',
+          kind: 'assistant',
+          turnId: 'turn-a',
+          text: 'Here is the plan.',
+        },
+        {
+          id: 'assistant-a2',
+          kind: 'assistant',
+          turnId: 'turn-a',
+          text: 'Waiting for your approval.',
+        },
+        {
+          id: 'assistant-b1',
+          kind: 'assistant',
+          turnId: 'turn-b',
+          text: 'Approved — done.',
+        },
+        { id: 'user-b', kind: 'user', text: 'Thanks' },
+        {
+          id: 'assistant-c1',
+          kind: 'assistant',
+          turnId: 'turn-c',
+          text: 'Anytime.',
+        },
+      ],
+      null,
+    );
+
+    expect(messages.map((message) => message.id)).toEqual([
+      'user-a',
+      'assistant-turn:turn-a',
+      'assistant-turn:turn-b',
+      'user-b',
+      'assistant-turn:turn-c',
+    ]);
+    const [, turnA, turnB, , turnC] = messages;
+    expect(turnA!.replyTail).toBe(false);
+    expect(turnA!.replyCopyText).toBeUndefined();
+    expect(turnB!.replyTail).toBe(true);
+    expect(turnB!.replyCopyText).toBe(
+      'Here is the plan.\n\nWaiting for your approval.\n\nApproved — done.',
+    );
+    expect(turnC!.replyTail).toBe(true);
+    expect(turnC!.replyCopyText).toBe('Anytime.');
+  });
+
+  it('hangs the bar on the last text-bearing turn of a run', () => {
+    const messages = mapTranscriptToRuntimeMessages(
+      [
+        { id: 'user-a', kind: 'user', text: 'Do it' },
+        {
+          id: 'assistant-a1',
+          kind: 'assistant',
+          turnId: 'turn-a',
+          text: 'All done.',
+        },
+        // A trailing text-less turn (tool-only follow-up) must not
+        // steal the bar from the reply text…
+        {
+          id: 'tool-b1',
+          kind: 'tool',
+          turnId: 'turn-b',
+          toolUseId: 'use-b1',
+          toolName: 'Read',
+          action: 'Read workspace files',
+          status: 'completed',
+          progressCount: 1,
+          latestUpdateKind: 'tool-result',
+        },
+      ],
+      null,
+    );
+    expect(messages[1]!.replyTail).toBe(true);
+    expect(messages[1]!.replyCopyText).toBe('All done.');
+    expect(messages[2]!.replyTail).toBe(false);
+
+    // …but a run with no text at all keeps its last message as tail
+    // so Regenerate/Fork stay reachable.
+    const textless = mapTranscriptToRuntimeMessages(
+      [
+        { id: 'user-a', kind: 'user', text: 'Do it' },
+        {
+          id: 'tool-a1',
+          kind: 'tool',
+          turnId: 'turn-a',
+          toolUseId: 'use-a1',
+          toolName: 'Read',
+          action: 'Read workspace files',
+          status: 'completed',
+          progressCount: 1,
+          latestUpdateKind: 'tool-result',
+        },
+      ],
+      null,
+    );
+    expect(textless[1]!.replyTail).toBe(true);
+    expect(textless[1]!.replyCopyText).toBe('');
+  });
+
+  it('moves the tail (and cached identity) when the run grows', () => {
+    const cache = new Map();
+    const base = [
+      { id: 'user-a', kind: 'user', text: 'Go' } as const,
+      {
+        id: 'assistant-a1',
+        kind: 'assistant',
+        turnId: 'turn-a',
+        text: 'Step one.',
+      } as const,
+    ];
+    const first = mapTranscriptToRuntimeMessages(base, null, cache);
+    expect(first[1]!.replyTail).toBe(true);
+
+    const second = mapTranscriptToRuntimeMessages(
+      [
+        ...base,
+        {
+          id: 'assistant-b1',
+          kind: 'assistant',
+          turnId: 'turn-b',
+          text: 'Step two.',
+        },
+      ],
+      null,
+      cache,
+    );
+    // The former tail rebuilt as a continuation despite unchanged items.
+    expect(second[1]!.replyTail).toBe(false);
+    expect(second[2]!.replyTail).toBe(true);
+    expect(second[2]!.replyCopyText).toBe('Step one.\n\nStep two.');
+  });
+
   it('forwards a subagent summary through tool metadata', () => {
     const messages = mapTranscriptToRuntimeMessages(
       [
