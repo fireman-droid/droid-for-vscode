@@ -5990,6 +5990,7 @@ export class ChatController {
       this.diagnostics?.endTurnScope?.();
     }
     const sessions = this.withActiveSession(this.sessions);
+    const workspaceRoot = this.getWorkspaceContext().cwd;
     const snapshot = {
       type: 'host.snapshot',
       sessionId: this.sessionId,
@@ -6023,6 +6024,10 @@ export class ChatController {
         this.tokenUsage.lastTurn === null)
         ? {}
         : { tokenUsage: this.tokenUsage }),
+      // Lets the webview rebase absolute transcript paths (the
+      // path-link Preview entry); omitted without a usable workspace
+      // so rebase-dependent affordances fail closed.
+      ...(workspaceRoot === null ? {} : { workspaceRoot }),
     } satisfies UnsequencedHostMessage;
     try {
       this.recordHost({

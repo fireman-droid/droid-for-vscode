@@ -2630,6 +2630,32 @@ describe('ChatController', () => {
     expect(createRuntime).toHaveBeenCalledOnce();
   });
 
+  it('carries the workspace root on snapshots and omits it rootless', async () => {
+    const runtime = createMockRuntime();
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+    );
+    ready(controller);
+    await waitForConnected(messages);
+    expect(snapshots(messages).at(-1)?.workspaceRoot).toBe(
+      'C:\\workspace',
+    );
+
+    // Without a usable workspace, the field is omitted so webview
+    // path rebasing fails closed.
+    const rootless = createController(() => createMockRuntime(), {
+      cwd: null,
+      trusted: true,
+    });
+    ready(rootless.controller);
+    await Promise.resolve();
+    for (const snapshot of snapshots(rootless.messages)) {
+      expect(snapshot.workspaceRoot).toBeUndefined();
+    }
+  });
+
   it('withholds the worktree capability in non-git workspaces', async () => {
     const runtime = createMockRuntime();
     const { controller, messages } = createController(
