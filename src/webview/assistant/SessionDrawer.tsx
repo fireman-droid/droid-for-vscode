@@ -21,6 +21,14 @@ interface SessionDrawerProps {
     | { readonly status: 'idle'; readonly items: readonly [] };
   readonly sessionSearch: SessionSearchState | null;
   readonly actionsDisabled: boolean;
+  /**
+   * Renders the quiet "New session in a worktree" option. Only true
+   * when the host advertised the capability (daemon runtime mode and
+   * a git workspace); absent or false keeps the entry unrendered
+   * (fail closed, no half-available hint).
+   */
+  readonly worktreeCreateAvailable?: boolean;
+  readonly onCreateWorktreeSession?: () => void;
   readonly onSelectSession: (sessionId: string) => void;
   readonly onRenameSession: (sessionId: string, title: string) => void;
   readonly onForkSession: (sessionId: string) => void;
@@ -44,6 +52,8 @@ export const SessionDrawer = memo(function SessionDrawer({
   archived,
   sessionSearch,
   actionsDisabled,
+  worktreeCreateAvailable,
+  onCreateWorktreeSession,
   onSelectSession,
   onRenameSession,
   onForkSession,
@@ -189,6 +199,22 @@ export const SessionDrawer = memo(function SessionDrawer({
                 <CloseHistoryIcon />
               </button>
             </div>
+            {worktreeCreateAvailable === true &&
+            onCreateWorktreeSession !== undefined ? (
+              <button
+                type="button"
+                className="dvx-session-worktree-new"
+                disabled={disabled}
+                onClick={() =>
+                  runOnce(() => {
+                    setOpen(false);
+                    onCreateWorktreeSession();
+                  })
+                }
+              >
+                New session in a worktree…
+              </button>
+            ) : null}
 
             <CatalogStatus sessions={sessions} pending={pendingAction} />
             {filteredSessions.length > 0 ? (
@@ -569,6 +595,18 @@ function SessionRow({
         onClick={() => onSelect(session.id)}
       >
         <span className="dvx-session-row-title">{session.title}</span>
+        {session.worktree !== undefined ? (
+          // Quiet secondary line; the full worktree path only surfaces
+          // as a tooltip (UI restraint: no new prominent element).
+          <span
+            className="dvx-session-row-worktree"
+            title={session.worktree.path}
+          >
+            {session.worktree.branch.length > 0
+              ? `worktree · ${session.worktree.branch}`
+              : 'worktree'}
+          </span>
+        ) : null}
         <time dateTime={session.modifiedTime}>
           {formatModifiedTime(session.modifiedTime)}
         </time>

@@ -102,6 +102,77 @@ describe('SessionDrawer', () => {
     ).toBeNull();
   });
 
+  it('offers worktree creation only when the host advertised it', async () => {
+    const user = userEvent.setup();
+    const onCreateWorktreeSession = vi.fn();
+    const { unmount } = render(
+      <SessionDrawer
+        {...baseProps()}
+        worktreeCreateAvailable
+        onCreateWorktreeSession={onCreateWorktreeSession}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+    await user.click(
+      screen.getByRole('button', {
+        name: 'New session in a worktree…',
+      }),
+    );
+    expect(onCreateWorktreeSession).toHaveBeenCalledOnce();
+    // The drawer closes so the connecting state is visible behind it.
+    expect(
+      screen.queryByRole('complementary', { name: 'Session history' }),
+    ).toBeNull();
+    unmount();
+
+    // Fail closed: no capability flag, no entry (process mode,
+    // non-git workspaces).
+    render(<SessionDrawer {...baseProps()} />);
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+    expect(
+      screen.queryByRole('button', {
+        name: 'New session in a worktree…',
+      }),
+    ).toBeNull();
+  });
+
+  it('annotates worktree sessions with a quiet branch line', async () => {
+    const user = userEvent.setup();
+    const catalog: SessionCatalogState = {
+      status: 'ready',
+      items: [
+        {
+          id: 'session-wt',
+          title: 'Worktree task',
+          messageCount: 1,
+          modifiedTime: '2026-02-20T11:00:00.000Z',
+          active: false,
+          isFavorite: false,
+          worktree: { branch: 'main-wt', path: 'D:\\repo-wt-main-wt' },
+        },
+        {
+          id: 'session-plain',
+          title: 'Plain session',
+          messageCount: 1,
+          modifiedTime: '2026-02-20T10:00:00.000Z',
+          active: false,
+          isFavorite: false,
+        },
+      ],
+    };
+    render(<SessionDrawer {...baseProps()} sessions={catalog} />);
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+
+    const annotation = screen.getByText('worktree · main-wt');
+    // Full path stays a tooltip, not a rendered line.
+    expect(annotation.getAttribute('title')).toBe('D:\\repo-wt-main-wt');
+    expect(
+      screen
+        .getByRole('button', { name: /^Plain session/ })
+        .textContent?.includes('worktree'),
+    ).toBe(false);
+  });
+
   it('renames only the active session through an inline editor', async () => {
     const user = userEvent.setup();
     const onRename = vi.fn();
