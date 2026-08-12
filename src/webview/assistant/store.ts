@@ -12,6 +12,7 @@ import {
   type SessionCommandsState,
   type SessionContextState,
   type SessionMcpState,
+  type SessionMissionSummary,
   type SessionSearchState,
   type SessionSettingsState,
   type SessionSkillsState,
@@ -154,6 +155,11 @@ export interface AssistantWebviewState {
    * drawer entry entirely (fail closed).
    */
   readonly worktreeCreateAvailable: boolean;
+  /**
+   * Read-only mission identity of the active session (state and/or
+   * decomposition role); null outside mission decompositions.
+   */
+  readonly mission: SessionMissionSummary | null;
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: Extract<
     HostToWebviewMessage,
@@ -205,6 +211,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   editAttachments: null,
   editResendRejection: null,
   worktreeCreateAvailable: false,
+  mission: null,
   transcript: [],
   historyStatus: null,
   truncated: false,
@@ -338,6 +345,7 @@ export function assistantWebviewReducer(
             ? state.editResendRejection
             : null,
         worktreeCreateAvailable: event.worktreeCreateAvailable === true,
+        mission: event.mission ?? null,
         transcript: event.transcript,
         historyStatus: event.historyStatus,
         truncated: event.truncated,
@@ -362,6 +370,7 @@ export function assistantWebviewReducer(
         ...(changed
           ? {
               turn: null,
+              mission: null,
               transcript: [],
               historyStatus: null,
               truncated: false,
@@ -1101,6 +1110,9 @@ function upsertTool(
         ...(event.errorMessage === undefined
           ? {}
           : { errorMessage: event.errorMessage }),
+        ...(event.subagent === undefined
+          ? {}
+          : { subagent: event.subagent }),
       };
     });
   }
@@ -1134,6 +1146,9 @@ function upsertTool(
       ...(event.errorMessage === undefined
         ? {}
         : { errorMessage: event.errorMessage }),
+      ...(event.subagent === undefined
+        ? {}
+        : { subagent: event.subagent }),
     },
   ];
 }

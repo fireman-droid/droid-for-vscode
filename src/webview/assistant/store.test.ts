@@ -215,6 +215,156 @@ describe('assistantWebviewReducer', () => {
     });
   });
 
+  it('tracks the snapshot-borne mission identity per session', () => {
+    expect(initialAssistantWebviewState.mission).toBeNull();
+
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: {
+        ...snapshot(0),
+        mission: { state: 'running', role: 'orchestrator' },
+      },
+    });
+    expect(state.mission).toEqual({
+      state: 'running',
+      role: 'orchestrator',
+    });
+
+    // Absent means "not a mission session", not "keep the previous".
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(1),
+    });
+    expect(state.mission).toBeNull();
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        ...snapshot(2),
+        mission: { state: 'paused', role: null },
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'host.connection',
+        sequence: 3,
+        sessionId: 'session-b',
+        connection: { status: 'connecting' },
+      },
+    });
+    expect(state.mission).toBeNull();
+  });
+
+  it('upgrades a Task row with a subagent summary and settles it', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'turn.send',
+      turnId: 'turn-a',
+      text: 'Delegate the survey',
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'tool.activity',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'task-a',
+        toolName: 'Task',
+        action: 'Delegated to a subagent',
+        status: 'running',
+        progressCount: 0,
+        latestUpdateKind: null,
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'tool.activity',
+        sequence: 2,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'task-a',
+        toolName: 'Task',
+        action: 'Delegated to a subagent',
+        status: 'running',
+        progressCount: 0,
+        latestUpdateKind: null,
+        subagent: {
+          type: 'explore',
+          description: 'Survey the auth module',
+          status: 'running',
+        },
+      },
+    });
+    expect(state.transcript.at(-1)).toMatchObject({
+      kind: 'tool',
+      status: 'running',
+      subagent: { type: 'explore', status: 'running' },
+    });
+
+    // A later update without the field keeps the recorded summary.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'tool.activity',
+        sequence: 3,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'task-a',
+        toolName: 'Task',
+        action: 'Delegated to a subagent',
+        status: 'completed',
+        progressCount: 0,
+        latestUpdateKind: null,
+      },
+    });
+    expect(state.transcript.at(-1)).toMatchObject({
+      kind: 'tool',
+      status: 'completed',
+      subagent: { type: 'explore', status: 'running' },
+    });
+
+    // Turn-end reconciliation replaces it with the ledger summary.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'tool.activity',
+        sequence: 4,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'task-a',
+        toolName: 'Task',
+        action: 'Delegated to a subagent',
+        status: 'completed',
+        progressCount: 0,
+        latestUpdateKind: null,
+        subagent: {
+          type: 'explore',
+          description: 'Survey the auth module',
+          status: 'completed',
+          toolUseCount: 7,
+          durationMs: 4_200,
+        },
+      },
+    });
+    expect(state.transcript.at(-1)).toMatchObject({
+      kind: 'tool',
+      status: 'completed',
+      subagent: {
+        type: 'explore',
+        description: 'Survey the auth module',
+        status: 'completed',
+        toolUseCount: 7,
+        durationMs: 4_200,
+      },
+    });
+  });
+
   it('carries tool file paths and appends one changes summary per turn', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',
