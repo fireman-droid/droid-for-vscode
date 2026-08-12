@@ -117,6 +117,12 @@ export interface FactoryDroidSession {
   readonly id: string;
   readonly settings: Readonly<SessionSettings>;
   readonly availableModels?: readonly AvailableModelConfig[];
+  /**
+   * Actual session working directory when the backend reports one.
+   * Daemon sessions expose it (worktree sessions run in the worktree
+   * path rather than the requested cwd); process sessions omit it.
+   */
+  readonly cwd?: string;
   stream(
     prompt: string,
     options: {
@@ -290,6 +296,10 @@ export class FactoryDroidRuntime implements DroidRuntime {
 
     this.initialization = { target, promise };
     return promise;
+  }
+
+  getSessionCwd(): string | null {
+    return this.session?.cwd ?? null;
   }
 
   async *sendTurn(
@@ -1436,6 +1446,14 @@ export async function createLocalDroidSession(
   },
   dependencies: LocalSessionDependencies = localSessionDependencies,
 ): Promise<FactoryDroidSession> {
+  if (target.kind === 'new' && target.worktree === true) {
+    // Only the daemon has the native create-worktree-and-run channel;
+    // reaching this factory with a worktree target is a wiring bug and
+    // must not silently produce a plain session in the workspace.
+    throw new Error(
+      'Worktree sessions require the daemon runtime mode.',
+    );
+  }
   const observabilityOptions =
     observability === undefined ? {} : { observability };
   const transport = dependencies.createTransport({
@@ -1496,8 +1514,10 @@ function sameSessionTarget(
     right !== null &&
     left.kind === right.kind &&
     left.cwd === right.cwd &&
-    (left.kind === 'new' ||
-      (right.kind === 'resume' && left.sessionId === right.sessionId))
+    (left.kind === 'new'
+      ? right.kind === 'new' &&
+        (left.worktree === true) === (right.worktree === true)
+      : right.kind === 'resume' && left.sessionId === right.sessionId)
   );
 }
 

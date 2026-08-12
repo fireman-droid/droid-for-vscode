@@ -75,6 +75,39 @@ describe('FactoryDroidRuntime', () => {
     ]);
   });
 
+  it('reports the backend session cwd, and null before initialization', async () => {
+    const session = {
+      ...createMockSession(async function* () {}),
+      cwd: 'C:\\workspace-wt-main-wt',
+    };
+    const runtime = createRuntime(async () => session);
+
+    expect(runtime.getSessionCwd()).toBeNull();
+    await runtime.initialize({
+      kind: 'new',
+      cwd: 'C:\\workspace',
+      worktree: true,
+    });
+    expect(runtime.getSessionCwd()).toBe('C:\\workspace-wt-main-wt');
+  });
+
+  it('treats worktree and plain targets as different sessions', async () => {
+    const factory = vi.fn(async () =>
+      createMockSession(async function* () {}),
+    );
+    const runtime = createRuntime(factory);
+
+    await runtime.initialize({ kind: 'new', cwd: 'C:\\workspace' });
+    // Same cwd but worktree flag differs: must not reuse the session.
+    expect(() =>
+      runtime.initialize({
+        kind: 'new',
+        cwd: 'C:\\workspace',
+        worktree: true,
+      }),
+    ).toThrow(/another session target/i);
+  });
+
   it('records full-fidelity lifecycle diagnostics with the prompt text', async () => {
     const session = createMockSession(async function* () {
       yield textDelta('hello');
@@ -1631,6 +1664,28 @@ describe('createLocalDroidSession', () => {
     expect(createTransport).toHaveBeenCalledWith({ cwd: 'C:\\workspace' });
     expect(calls).toEqual(['connect', 'createSession']);
     expect(transport.close).not.toHaveBeenCalled();
+  });
+
+  it('rejects worktree targets fail-closed instead of degrading silently', async () => {
+    const createTransport = vi.fn();
+    const createSession = vi.fn();
+
+    await expect(
+      createLocalDroidSession(
+        {
+          target: { kind: 'new', cwd: 'C:\\workspace', worktree: true },
+          interactionHandler: cancellingRuntimeInteractionHandler,
+        },
+        {
+          createTransport,
+          createSession,
+          resumeSession: vi.fn(),
+        },
+      ),
+    ).rejects.toThrow('Worktree sessions require the daemon runtime mode.');
+    // Must not spawn a plain session in the main workspace.
+    expect(createTransport).not.toHaveBeenCalled();
+    expect(createSession).not.toHaveBeenCalled();
   });
 
   it('injects one observability bundle into transport and session', async () => {

@@ -86,6 +86,10 @@ export async function createDaemonDroidSession(options: {
 
   const session = await droid.sessions.create({
     cwd: options.target.cwd,
+    // Native daemon channel: create (or reuse) a git worktree and run
+    // the session there. Branch and directory naming are daemon-owned;
+    // the actual working directory comes back as `session.cwd`.
+    ...(options.target.worktree === true ? { worktree: true } : {}),
     ...callbacks,
   });
   // A freshly created session id cannot be contested, so the lease is
@@ -148,6 +152,9 @@ function adaptDaemonSession(
   return {
     get id() {
       return session.id;
+    },
+    get cwd(): string | undefined {
+      return session.cwd;
     },
     get settings(): Readonly<SessionSettings> {
       const snapshot = session.settings;

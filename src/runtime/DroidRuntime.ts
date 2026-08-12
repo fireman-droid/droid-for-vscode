@@ -106,6 +106,16 @@ export type RuntimeSessionTarget =
   | {
       readonly kind: 'new';
       readonly cwd: string;
+      /**
+       * Asks the daemon to create (or reuse) a git worktree rooted at
+       * `cwd` and run the session there. Daemon runtime mode only; the
+       * process-mode session factory rejects it (fail closed). Probe
+       * evidence (artifacts/probe-worktree-create.mjs): the daemon
+       * derives the branch name itself (`<currentBranch>-wt`, plus an
+       * 8-char session-id suffix on collision) and silently falls back
+       * to a plain session when `cwd` is not a git repository.
+       */
+      readonly worktree?: boolean;
     }
   | {
       readonly kind: 'resume';
@@ -290,6 +300,14 @@ export interface DroidRuntime {
   initialize(
     target: RuntimeSessionTarget | string,
   ): Promise<RuntimeAvailability>;
+  /**
+   * Actual working directory of the active session as reported by the
+   * session backend, or null when unknown. For daemon worktree
+   * sessions this is the worktree path (differing from the target
+   * cwd); the SDK facade exposes no other worktree metadata, so the
+   * host recovers the branch from git using this path.
+   */
+  getSessionCwd?(): string | null;
   readSessionSettings(): Promise<RuntimeSessionSettings>;
   readContextStats(): Promise<RuntimeContextStats>;
   readModelCatalog(): Promise<RuntimeModelCatalog>;

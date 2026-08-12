@@ -46,6 +46,40 @@ describe('createDaemonDroidSession', () => {
     expect(session.authenticateMcpServer).toBeUndefined();
   });
 
+  it('passes worktree: true to daemon create only when the target asks for it', async () => {
+    const mock = createDroidMock();
+
+    await createDaemonDroidSession({
+      target: { kind: 'new', cwd: 'C:\\workspace', worktree: true },
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      getDroid: async () => mock.droid,
+    });
+
+    expect(mock.sessions.create).toHaveBeenCalledExactlyOnceWith({
+      cwd: 'C:\\workspace',
+      worktree: true,
+      permissionHandler: expect.any(Function),
+      askUserHandler: expect.any(Function),
+    });
+  });
+
+  it('exposes the actual session cwd the daemon reports (worktree path)', async () => {
+    const mock = createDroidMock();
+    // The daemon runs worktree sessions in the worktree directory, not
+    // the requested cwd; the adapter must surface that actual cwd so
+    // the host can bind worktree metadata to it.
+    (mock.created as { cwd: string }).cwd =
+      'C:\\workspace-wt-main-wt';
+
+    const session = await createDaemonDroidSession({
+      target: { kind: 'new', cwd: 'C:\\workspace', worktree: true },
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      getDroid: async () => mock.droid,
+    });
+
+    expect(session.cwd).toBe('C:\\workspace-wt-main-wt');
+  });
+
   it('resumes an existing session id without passing cwd', async () => {
     const mock = createDroidMock();
 
