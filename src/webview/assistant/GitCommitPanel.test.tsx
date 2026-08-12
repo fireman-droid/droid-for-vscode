@@ -7,10 +7,12 @@ import type { GitStatusFile } from '../../shared/gitCommitFlow';
 import {
   ChangesCommitEntry,
   GitCommitFlowContext,
-  initialGitCommitFlowState,
   type GitCommitFlowContextValue,
-  type GitCommitFlowState,
 } from './GitCommitPanel';
+import {
+  initialGitCommitFlowState,
+  type GitCommitFlowState,
+} from './store';
 
 afterEach(cleanup);
 

@@ -423,6 +423,7 @@ function mapItemToPart(
         type: 'data',
         name: 'droid-changes',
         data: {
+          turnId: item.turnId,
           files: item.files.map((file) => ({
             path: file.path,
             additions: file.additions,

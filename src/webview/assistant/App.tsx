@@ -48,6 +48,11 @@ import {
   type PendingInteraction,
 } from './store';
 import { DroidThread } from './Thread';
+import {
+  GitCommitFlowContext,
+  type GitCommitFlowContextValue,
+} from './GitCommitPanel';
+import { findLatestChangesContext } from './gitCommitDraft';
 import './styles.css';
 
 export function App(): React.JSX.Element {
@@ -489,6 +494,46 @@ export function App(): React.JSX.Element {
       request: requestLocalImage,
     }),
     [state.localImages, requestLocalImage],
+  );
+  const handleGitRequestStatus = useCallback((): void => {
+    if (sessionId === null || connectionStatus !== 'connected') {
+      return;
+    }
+    dispatch({ type: 'git.statusRequested' });
+    post(vscode, { type: 'git.requestStatus', sessionId });
+  }, [connectionStatus, sessionId, vscode]);
+  const handleGitCommit = useCallback(
+    (
+      commitTurnId: string,
+      paths: readonly string[],
+      message: string,
+    ): void => {
+      if (sessionId === null || connectionStatus !== 'connected') {
+        return;
+      }
+      dispatch({ type: 'git.commitRequested', turnId: commitTurnId });
+      post(vscode, { type: 'git.commit', sessionId, paths, message });
+    },
+    [connectionStatus, sessionId, vscode],
+  );
+  const changesContext = useMemo(
+    () => findLatestChangesContext(state.transcript),
+    [state.transcript],
+  );
+  const gitFlow = useMemo<GitCommitFlowContextValue>(
+    () => ({
+      state: state.git,
+      latestChangesTurnId: changesContext?.turnId ?? null,
+      promptText: changesContext?.prompt ?? null,
+      onRequestStatus: handleGitRequestStatus,
+      onCommit: handleGitCommit,
+    }),
+    [
+      state.git,
+      changesContext,
+      handleGitRequestStatus,
+      handleGitCommit,
+    ],
   );
   const handleRetry = useCallback((): void => {
     post(vscode, {
@@ -1062,7 +1107,9 @@ export function App(): React.JSX.Element {
   return (
     <OpenPathContext.Provider value={handleOpenPath}>
       <LocalImageContext.Provider value={localImageSource}>
-        {app}
+        <GitCommitFlowContext.Provider value={gitFlow}>
+          {app}
+        </GitCommitFlowContext.Provider>
       </LocalImageContext.Provider>
     </OpenPathContext.Provider>
   );

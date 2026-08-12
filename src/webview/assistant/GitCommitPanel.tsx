@@ -8,9 +8,9 @@ import {
 import {
   MAX_GIT_COMMIT_MESSAGE_LENGTH,
   type GitStatusFile,
-  type GitUnavailableReason,
 } from "../../shared/gitCommitFlow";
 import { buildCommitMessageDraft } from "./gitCommitDraft";
+import type { GitCommitFlowState } from "./store";
 
 /**
  * Inline commit panel behind the quiet entry at the tail of the
@@ -19,39 +19,6 @@ import { buildCommitMessageDraft } from "./gitCommitDraft";
  * up, so the memoized message tree stays free of prop drilling —
  * same pattern as Thread's FileDiffContext.
  */
-
-export type GitAvailability = "unknown" | "available" | "unavailable";
-
-export type GitCommitResultState =
-  | {
-      readonly ok: true;
-      readonly hash: string;
-      readonly subject: string;
-    }
-  | { readonly ok: false; readonly error: string };
-
-export interface GitCommitFlowState {
-  readonly availability: GitAvailability;
-  readonly unavailableReason: GitUnavailableReason | null;
-  readonly statusPending: boolean;
-  readonly branch: string | null;
-  readonly files: readonly GitStatusFile[];
-  readonly commitPending: boolean;
-  /** Changes-card turn whose panel submitted the last commit. */
-  readonly commitTurnId: string | null;
-  readonly lastResult: GitCommitResultState | null;
-}
-
-export const initialGitCommitFlowState: GitCommitFlowState = {
-  availability: "unknown",
-  unavailableReason: null,
-  statusPending: false,
-  branch: null,
-  files: [],
-  commitPending: false,
-  commitTurnId: null,
-  lastResult: null,
-};
 
 export interface GitCommitFlowContextValue {
   readonly state: GitCommitFlowState;

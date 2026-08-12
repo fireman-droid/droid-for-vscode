@@ -863,7 +863,10 @@ export function assistantWebviewReducer(
         sequence: event.sequence,
         git: {
           ...state.git,
-          availability: event.available ? 'available' : 'unavailable',
+          availability:
+            event.unavailableReason === undefined
+              ? 'available'
+              : 'unavailable',
           unavailableReason: event.unavailableReason ?? null,
           statusPending: false,
           branch: event.branch,
