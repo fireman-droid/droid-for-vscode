@@ -2891,6 +2891,33 @@ UI 描述见 §22 重做记录。
   + `Thread` 71 例（+1）共 95 例全绿；`droidvisx-0.7.7.vsix`
   安装成功，待用户 Reload 验收。
 
+### 43. v0.7.8 收口：子代理可读性、daemon 并发安全、/btw pending 与切换计时（2026-08-13 晚，v0.7.8）
+
+- **子代理 UI**：只读转录补工具命令首行/首文件 + `+N` 与可展开
+  Thinking；Working 弹层压紧为 quiet 单列，Host 明确 running 的委派
+  在 Webview Reload 后仍显示，直到权威结清。
+- **目录边界**：process 普通目录与 daemon 归档目录改为只认父会话
+  字段、Session tags、有界 settings sidecar 等权威元数据过滤
+  subagent/Mission worker，不猜标题；缺失元数据时普通会话 fail-open。
+- **daemon 安全**：会话租约的 read-check-write 在独占同级锁内完成；
+  发现记录拿到真实 pid 后才原子独占发布，竞争只收养 pid 存活且健康
+  的赢家并回收重复进程；私有 daemon 生命周期回收前校验当前命令行
+  的预期 executable + 精确 `daemon` 动词。手动 shared-daemon shutdown
+  仍直接信任发现文件 pid，不冒充已覆盖同一身份校验。
+- **MCP**：30s 只停止 Host 等待，SDK 无 abort 通道，底层 RPC 不会被
+  伪称取消；迟到结果被放弃，消费者以 runtime/generation/session/cwd
+  守卫阻止旧结果改写当前面板。
+- **/btw（Bridge v13）**：流式中 Enter 在 Host 保留一个可替换 pending
+  追问，当前答案 done/error 后自动发送；Stop 清当时 pending，
+  Dismiss/切会话随隐藏 fork 清空，Webview 以 quiet "Next" 行投影。
+- **观测优先**：`host.perf.session-switch` 同条记录新增
+  `initializeMs` / `historyMs` / `contextMs`，保留总 `durationMs`；
+  initialize 与 history 仍并行，context 激活后读取，本版不据此预改
+  调度或宣称提速。
+- **验证**：十个独立 feature/fix commit 均按触达文件跑过聚焦单测，
+  最终 typecheck 三段与 `lint:budgets` 全绿；发版包结果见文末
+  “当前安装包状态”。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择

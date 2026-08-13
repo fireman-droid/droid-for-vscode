@@ -2,7 +2,7 @@
 
 > 本文介绍 DroidVisX **当前已实现并可使用**的功能，面向想了解"它现在能做什么"的读者。
 >
-> 版本：v0.7.x（撰写于 2026-08-13；`package.json` 当前为 0.7.3，功能台账最近一次发版记录为 v0.7.1）
+> 版本：v0.7.8（更新于 2026-08-13；以 `package.json` 与功能台账为准）
 >
 > 能力状态（生产已接通 / 部分完成 / 仅探测 / 未实现）的权威台账见
 > [`implementation-status.md`](./implementation-status.md)；本文只覆盖前三类，未实现的路线图项一律不写。
@@ -161,7 +161,10 @@ Composer 底部一排常驻控件：**`+` 设置面板**（"Session controls"，
 - 在其中提问得到流式 Markdown 答案，可同卡连续追问；主回合流式期间照常可用；
 - 技术上它是 CLI 原生 btw 语义的**隐藏 fork**（落在 `sessions/btw/`，不进任何会话列表、不产生主转录行；也没有把侧聊内容"升格"进主会话的通道）；
 - fork 内的工具权限请求一律拒绝并提示"去主聊天问"（deny-all）；
-- 流式中输入框可继续打字，发送键变为 ■ Stop 可中断（用户主动停的部分答案按完成收尾，不标失败）；
+- 流式中输入框可继续打字，Enter 在 Host 权威状态里保留**至多一个**
+  待发追问；再次 Enter 替换它，侧栏以 quiet "Next" 行显示最新内容，
+  当前答案正常完成或报错后自动发送。发送键同时变为 ■ Stop；Stop
+  会清掉按下时已有的待发项，部分答案按完成收尾、不标失败；
 - 关闭（×/Esc/切换会话）即弃 fork；daemon 与 process 两种运行模式均可用。
 
 ### 6.5 回合运行中排队消息
@@ -189,7 +192,7 @@ Composer 底部一排常驻控件：**`+` 设置面板**（"Session controls"，
 
 ## 7. 会话管理
 
-**会话抽屉**。Header 的会话历史入口打开抽屉：列出当前工作区的本地 Session（标题、更新时间、消息数），按 Favorites/Recent 分组、组内最新排前；本地输入即时按标题/ID 过滤。点击记录立即切换并关闭抽屉直接回聊天；daemon 模式下正在后台运行回合的会话行带转圈指示。顶部 "New session" 新建会话。
+**会话抽屉**。Header 的会话历史入口打开抽屉：列出当前工作区的本地 Session（标题、更新时间、消息数），按 Favorites/Recent 分组、组内最新排前；本地输入即时按标题/ID 过滤。点击记录立即切换并关闭抽屉直接回聊天；daemon 模式下正在后台运行回合的会话行带转圈指示。顶部 "New session" 新建会话。普通目录与 daemon 归档目录都只根据 Droid 的父会话字段、Session tags 或有界 settings sidecar 等权威元数据过滤子代理/Mission worker，会话标题不参与判定；元数据缺失时普通会话 fail-open 保留。
 
 **生命周期操作**（行内按钮）：
 
@@ -232,7 +235,9 @@ Composer 底部一排常驻控件：**`+` 设置面板**（"Session controls"，
 
 ### 8.2 Reload 存活与重连对账
 
-daemon 模式使用脱管共享 daemon（服务发现文件 `~/.droidvisx/daemon.json`，并发拉起自动竞争收敛；跨窗口会话租约防止两个窗口同时接管一个会话，死进程租约可抢占）。窗口 Reload 后：进行中的回合显示生成中占位，回合完成后自动以权威历史替换，待处理的权限请求重新弹出（逐 token 续流 SDK 无通道，不做）。命令面板 `DroidVisX: Shut Down Background Daemon` 手动回收共享 daemon。凭据只经公开 `readFactoryAccessCredential()` 读取并直传 SDK，不落盘、不进日志、不过桥。
+daemon 模式使用脱管共享 daemon（服务发现文件 `~/.droidvisx/daemon.json`）。并发窗口的会话租约在同级独占锁内完成整段 read-check-write，避免双方同时认领；死进程租约可抢占。并发拉起时只在拿到真实 pid 后原子独占发布发现记录，竞争者仅接纳 pid 存活且健康检查通过的赢家，并回收自己多起的副本。窗口 Reload 后：进行中的回合显示生成中占位，回合完成后自动以权威历史替换，待处理的权限请求重新弹出（逐 token 续流 SDK 无通道，不做）。
+
+私有 daemon 在连接失败或窗口退出时只会在当前 pid 的命令行仍匹配预期可执行文件与精确 `daemon` 动词后回收进程树，避免 pid 被系统复用后误杀无关进程。命令面板 `DroidVisX: Shut Down Background Daemon` 是另一条手动共享-daemon 路径：当前仍直接信任发现文件中的 pid，不受上述私有生命周期身份校验保护。凭据只经公开 `readFactoryAccessCredential()` 读取并直传 SDK，不落盘、不进日志、不过桥。
 
 ### 8.3 连接诊断与 Retry
 
@@ -293,8 +298,11 @@ Context 面板内 "Token usage" 账目显示 SDK 真实提供的五项分解（I
 - 状态圆点（connected/connecting/failed/disabled）、needs auth 徽标；工具列表可展开，带 read-only/off 徽标；
 - **启停**：`toggleMcpServer`（user 设置级）；
 - **添加/移除**：面板头部 Add 展开内联表单（名称 + stdio/http/sse 类型 + 命令行或 URL，双侧校验）；每行两段式 Remove/Confirm remove（4 秒未确认复位）；
-- **浏览器认证**：needs auth 的服务器行提供 "Authenticate in browser"，经 SDK 发起 OAuth 并打开系统浏览器，同一时间只允许一个认证流、10 分钟超时，成功后自动刷新目录。OAuth URL 只在 Host/Runtime 流转，不进 Webview。**daemon 模式下浏览器 OAuth 刻意 fail-closed 不可用**（daemon 门面无通知通道；列表/启停/增删不受影响）；
-- 全部 MCP RPC 带 30 秒超时，卡死的 stdio 服务器不会锁死面板。
+- **浏览器认证**：needs auth 的服务器行提供 "Authenticate in browser"，经 SDK 发起 OAuth 并打开系统浏览器，同一时间只允许一个认证流、Host 等待 2 分钟后超时，成功后自动刷新目录。OAuth URL 只在 Host/Runtime 流转，不进 Webview。**daemon 模式下浏览器 OAuth 刻意 fail-closed 不可用**（daemon 门面无通知通道；列表/启停/增删不受影响）；
+- Host 最多等待每个 MCP RPC 30 秒，超时后面板进入正常失败/重试路径；
+  Droid SDK 目前没有 `AbortSignal`，因此底层 RPC 不会被取消，仍可能占用
+  daemon 槽直到返回或断线。迟到的 resolve/reject 已被放弃，且所有消费者
+  在投影前重验 runtime、generation、session 与 cwd，不会让旧结果改写当前面板。
 
 **Plugins 只读面板**。`+` 设置面板 Plugins 分区列出已安装插件（id + scope 徽记 + 版本哈希 + Active/Off 只读状态）与 marketplace 计数，尾注 "Manage plugins with the droid CLI"；daemon 不可用/未登录时显式 error 态（含登录指引），不静默空列表。安装/卸载/启停写操作不在当前范围。
 
@@ -309,13 +317,13 @@ Context 面板内 "Token usage" 账目显示 SDK 真实提供的五项分解（I
 - 回合结束后仍在跑的委派诚实降级显示 "running in background"，由后台台账轮询结清（5s 间隔、10 分钟上限）；窗口 Reload 后自动重挂轮询，僵尸行不会永久冻结；
 - 子会话 ID 永不过桥（隐私不变量）。
 
-**"N Working" 徽标与活动弹层**。本窗口活跃回合派发的委派仍在运行时，Composer 左上浮现 "N Working" 药丸；点开弹层：
+**"N Working" 徽标与活动弹层**。本窗口活跃回合派发的委派仍在运行时，Composer 左上浮现 "N Working" 药丸；Host 明确投影为 running 的后台委派在 Webview Reload 后也会继续显示，直到权威轮询结清，不会因前端 `liveTurnIds` 重建而消失。点开的是克制、紧凑的单列表层：
 
 - 逐行显示类型、描述、实时走秒时长，以及**实时活动字幕**（子会话当前所用工具名，面板打开时 2.5s 轮询，关闭即停）；
 - 回合内提供 Stop All（走现有停止通道）；**单个停止**按钮只在 Host 证明可停时渲染（daemon 通道 resume→interrupt→detach 序列，只停这一个，其余继续）——停不掉的行不画按钮，绝不放禁用态占位；
 - 历史回放不出徽标；回合外的后台委派无法停止（运行时无通道），状态字本身即说明。
 
-**只读转录回放**。已终态的委派行提供 quiet "View transcript" 入口，在右侧分栏（/btw 同族视觉）只读回放该子会话的完整转录：无 Composer、无写入口；子会话文件无法解析时 fail-closed 显示 "Transcript unavailable"。会话抽屉与归档列表已过滤子代理子会话，转录回放是它们唯一的入口。
+**只读转录回放**。运行中与已终态的委派行都提供 quiet "View transcript" 入口，在右侧分栏（/btw 同族视觉）只读回放该子会话的转录；运行中每 3 秒原地刷新，结清时再补一次尾部读取。工具行显示命令首行，或首个文件路径与额外文件 `+N`；Thinking 可展开查看，读者上滚时不会被刷新强拉到底。无 Composer、无写入口；子会话文件无法解析时 fail-closed 显示 "Transcript unavailable"。会话抽屉与归档列表按元数据过滤子代理子会话，转录回放是它们唯一的入口。
 
 **Mission 只读展示**。会话属于 Mission 时 Header 追加静字（如 "· Mission · running"），抽屉行带 "mission / mission · worker" 细字注记；Mission 相关确认作为普通权限卡显示与结算。
 *当前限制（部分完成）*：没有 Mission 控制面（启动/暂停/恢复、阶段流水、Worker 详情界面）。
@@ -370,6 +378,12 @@ Droid 产出的 `.html/.htm` 文件（Changes 账本行、已完成的工具行�
 **转录内诊断卡**。业务失败（附件超限、Diff 失败、会话操作被拒等）以随内容自适应的浅底诊断卡出现在转录中（severity 圆点、warning/error 染色），完全相同的连续诊断自动去重；同时全部镜像入日志。
 
 **启动信标**。Webview 资源加载失败、未捕获异常、10 秒启动看门狗、构建号识别陈旧缓存等信标帮助定位"面板空白"类问题。
+
+**会话切换阶段计时**。每次替换 Runtime 的终态
+`host.perf.session-switch` 记录在同一个关联事件里给出总
+`durationMs` 与 `initializeMs`、`historyMs`、`contextMs`。initialize
+与 history 保持并行，context 在激活后读取；这些数据只用于先量化真实
+Cursor 路径，v0.7.8 没有据此预改调度或宣称提速。
 
 *当前限制（部分完成）*：日志无用户可配置级别，无遥测或远程上传（这也是刻意的本地边界）。
 

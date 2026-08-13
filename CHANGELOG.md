@@ -4,6 +4,51 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.8] - 2026-08-13
+
+This release makes live subagent work denser and more informative,
+closes several daemon concurrency and lifecycle races, and adds the
+single pending follow-up requested for `/btw`.
+
+### Added
+
+- **Richer live subagent transcripts** — tool rows now retain a
+  command's first line or the first affected file plus a `+N` count,
+  and Thinking can be expanded in the read-only transcript. The
+  transcript remains available while a delegation runs and refreshes
+  in place.
+- **One pending `/btw` follow-up** — pressing Enter while an answer is
+  streaming stores one host-owned next question; another Enter
+  replaces it, and the latest question sends automatically after the
+  current answer completes or fails. Bridge protocol moves to v13.
+- **Session-switch phase diagnostics** — the existing correlated
+  `host.perf.session-switch` record now reports initialize, history,
+  context, and total durations without changing activation order.
+
+### Changed
+
+- **Compact, reload-safe Working popup** — the active-subagent popup
+  uses a denser quiet layout, and explicitly running delegations stay
+  visible after Webview reload until the host settles them.
+- **Metadata-only worker filtering** — ordinary and archived session
+  catalogs hide subagent and Mission worker sessions using
+  authoritative parent/tag/settings metadata rather than title
+  guesses.
+
+### Fixed
+
+- **Daemon ownership races** — lease claims serialize their complete
+  read-check-write transaction; discovery records publish
+  exclusively only after a real pid exists, validate competing
+  winners, and reap duplicate spawns.
+- **Safer private-daemon reaping** — lifecycle cleanup verifies that a
+  recorded pid still belongs to the expected executable running the
+  `daemon` verb before killing its process tree.
+- **Contained MCP timeouts** — the host stops waiting after 30 seconds
+  and ignores eventual late results behind runtime/session generation
+  guards. The Droid SDK exposes no cancellation signal, so this is
+  containment rather than cancellation of the underlying RPC.
+
 ## [0.7.0] - 2026-08-13
 
 The subagent panel release: the working popup finally answers "what
