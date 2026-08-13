@@ -2,7 +2,7 @@
   "name": "droidvisx",
   "displayName": "DroidVisX",
   "description": "A secure VS Code chat surface for Factory Droid.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "publisher": "droidvisx",
   "private": true,
   "type": "module",

@@ -41,6 +41,8 @@ export interface DaemonBtwStreamEvent {
 export interface DaemonBtwFork {
   /** Streams one turn; ends after the terminal result event. */
   stream(text: string): AsyncIterable<DaemonBtwStreamEvent>;
+  /** Interrupts the streaming turn (side-pane Stop). */
+  interrupt(): Promise<void>;
   /** Ends the fork session in the daemon, then detaches. */
   close(): Promise<void>;
 }
@@ -126,6 +128,7 @@ async function createConnectedDroidBtwClient(
       return {
         stream: (text) =>
           session.stream(text, { includePartialMessages: true }),
+        interrupt: () => session.interrupt(),
         close: () => session.close(),
       };
     },
@@ -202,6 +205,15 @@ class DaemonBtwForkSidecar implements BtwSidecar {
     } finally {
       this.asking = false;
     }
+  }
+
+  async interrupt(): Promise<void> {
+    if (this.disposed || !this.asking) {
+      return;
+    }
+    // The interrupted turn still terminates its own stream (result
+    // event), which settles the in-flight ask.
+    await this.fork.interrupt().catch(() => undefined);
   }
 
   async dispose(): Promise<void> {

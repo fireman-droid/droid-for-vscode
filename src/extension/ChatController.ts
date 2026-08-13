@@ -634,6 +634,9 @@ export class ChatController {
       case 'btw.dismiss':
         this.btwSideChat?.handleDismiss(message.sessionId);
         return;
+      case 'btw.stop':
+        this.btwSideChat?.handleStop(message.sessionId);
+        return;
       case 'subagent.openTranscript':
         handleSubagentOpenTranscript(this, message.sessionId, message.toolUseId);
         return;

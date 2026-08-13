@@ -28,8 +28,17 @@ export function PlanLine({
   readonly anchor: PlanAnchorState;
   readonly running: boolean;
 }): React.JSX.Element {
-  const [expanded, setExpanded] = useState(false);
+  // While the turn is building the plan the checklist opens by
+  // itself so the live check-off is visible without a click, and it
+  // settles closed once every step is done (user report 2026-08-13:
+  // "打钩要一边跑一边看得到"). An explicit reader toggle always wins;
+  // history replay is never "building", so replays mount collapsed.
+  const [expandOverride, setExpandOverride] = useState<boolean | null>(
+    null,
+  );
   const building = running && !anchor.allCompleted;
+  const expanded = expandOverride ?? building;
+  const autoExpanded = expandOverride === null && expanded;
   const count = `${anchor.completedCount}/${anchor.totalCount}`;
   return (
     <section
@@ -42,7 +51,7 @@ export function PlanLine({
         type="button"
         className="dvx-plan-line-row"
         aria-expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
+        onClick={() => setExpandOverride(!expanded)}
       >
         <span className="dvx-plan-line-dot" aria-hidden="true" />
         <span className="dvx-plan-line-title">{anchor.title}</span>
@@ -51,10 +60,13 @@ export function PlanLine({
       </button>
       {/* Always mounted so collapse can animate (grid-rows 0fr↔1fr);
           aria-hidden keeps the closed checklist out of the
-          accessibility tree. */}
+          accessibility tree. data-auto marks the building auto-open,
+          which the pinned overlay suppresses (a floating checklist
+          must never cover the streaming reply uninvited). */}
       <div
         className="dvx-plan-line-body"
         data-open={expanded ? 'true' : 'false'}
+        data-auto={autoExpanded ? 'true' : 'false'}
         aria-hidden={!expanded}
       >
         <div className="dvx-plan-line-body-inner">

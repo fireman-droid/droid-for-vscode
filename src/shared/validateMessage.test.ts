@@ -1654,6 +1654,19 @@ describe('parseWebviewMessage', () => {
         sessionId: 'session-1',
       }),
     ).toEqual({ type: 'btw.dismiss', sessionId: 'session-1' });
+    expect(
+      parseWebviewMessage({
+        type: 'btw.stop',
+        sessionId: 'session-1',
+      }),
+    ).toEqual({ type: 'btw.stop', sessionId: 'session-1' });
+    expect(
+      parseWebviewMessage({
+        type: 'btw.stop',
+        sessionId: 'session-1',
+        extra: true,
+      }),
+    ).toBeUndefined();
 
     // Shape violations fall back to undefined like every channel.
     expect(

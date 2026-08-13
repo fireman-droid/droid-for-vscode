@@ -279,12 +279,15 @@
    objects without capsule fills, subtle state text, and a 58%
    hairline between consecutive rows. */
 .dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row, .dvx-activity-group .dvx-activity-row) {
-  position: relative;
   margin: 0 0 2px;
   padding-left: 15px;
 }
 
+/* The marker dot anchors to the summary line, not the whole details
+   element, so an expanded row keeps the dot centred on its title
+   instead of drifting into the body (user report 2026-08-13). */
 .dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row, .dvx-activity-group .dvx-activity-row) > summary {
+  position: relative;
   min-height: 29px;
   gap: 7px;
   font-size: 11.5px;
@@ -296,7 +299,7 @@
   content: "";
   display: block;
   position: absolute;
-  left: 3px;
+  left: -12px;
   top: 50%;
   width: 4px;
   height: 4px;

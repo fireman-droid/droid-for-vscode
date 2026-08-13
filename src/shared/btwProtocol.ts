@@ -63,6 +63,12 @@ export interface BtwDismissMessage {
   readonly sessionId: string;
 }
 
+/** Webview → Host: stop the streaming side answer (keeps the fork). */
+export interface BtwStopMessage {
+  readonly type: 'btw.stop';
+  readonly sessionId: string;
+}
+
 /** Host → Webview: side-chat card state snapshot. */
 export interface SessionBtwMessage {
   readonly type: 'session.btw';
@@ -134,6 +140,20 @@ export function parseBtwDismissMessage(
     return null;
   }
   return { type: 'btw.dismiss', sessionId: value.sessionId };
+}
+
+export function parseBtwStopMessage(
+  value: unknown,
+): BtwStopMessage | null {
+  if (
+    !isRecord(value) ||
+    value.type !== 'btw.stop' ||
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return null;
+  }
+  return { type: 'btw.stop', sessionId: value.sessionId };
 }
 
 function parseBtwEntry(

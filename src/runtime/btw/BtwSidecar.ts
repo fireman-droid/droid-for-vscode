@@ -41,6 +41,8 @@ export interface BtwSidecarClient {
     tags?: { name: string }[];
   }): Promise<unknown>;
   addUserMessage(params: { text: string }): Promise<unknown>;
+  /** Interrupts the fork's streaming turn (side-pane Stop). */
+  interruptSession?(params?: object): Promise<unknown>;
   onNotification(
     callback: (notification: Record<string, unknown>) => void,
   ): () => void;
@@ -64,6 +66,11 @@ export interface BtwSidecar {
    * terminal `done`/`error` event. One question at a time.
    */
   ask(text: string): AsyncGenerator<BtwAnswerEvent, void>;
+  /**
+   * Optional: interrupts the streaming answer (side-pane Stop). The
+   * in-flight ask still terminates through its own event stream.
+   */
+  interrupt?(): Promise<void>;
   /** Closes the fork and the transport; idempotent, swallows errors. */
   dispose(): Promise<void>;
 }
@@ -205,6 +212,17 @@ class BtwForkSidecar implements BtwSidecar {
       this.interruptAsk = null;
       this.asking = false;
     }
+  }
+
+  async interrupt(): Promise<void> {
+    if (this.disposed || !this.asking) {
+      return;
+    }
+    // The interrupted turn still ends through the notification
+    // stream (agent_turn_completed), which terminates the ask loop.
+    await this.client
+      .interruptSession?.({})
+      .catch(() => undefined);
   }
 
   async dispose(): Promise<void> {

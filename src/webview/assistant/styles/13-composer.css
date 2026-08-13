@@ -238,6 +238,15 @@
   text-overflow: ellipsis;
 }
 
+/* Effort suffix on the trigger ("Fable 5 Max"): quiet grey, never
+   truncates — the model name span yields instead. */
+.dvx-model-trigger .dvx-model-trigger-effort {
+  flex: none;
+  overflow: visible;
+  color: var(--dvx-muted);
+  font-weight: 400;
+}
+
 .dvx-model-trigger .dvx-chevron-down {
   transition: transform 160ms ease;
 }

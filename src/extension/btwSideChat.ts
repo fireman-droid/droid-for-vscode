@@ -26,6 +26,8 @@ import {
 /** Sidecar surface consumed here; `BtwSidecar` satisfies it. */
 export interface BtwSideChatSidecar {
   ask(text: string): AsyncGenerator<BtwAnswerEvent, void>;
+  /** Optional: interrupts the streaming answer (side-pane Stop). */
+  interrupt?(): Promise<void>;
   dispose(): Promise<void>;
 }
 
@@ -52,6 +54,8 @@ export class BtwSideChat {
   /** Bumped by every teardown; async continuations check it. */
   private generation = 0;
   private asking = false;
+  /** A user-initiated Stop is in flight for the current entry. */
+  private stopping = false;
   private entryCounter = 0;
   private emitTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -117,7 +121,9 @@ export class BtwSideChat {
               appendBtwAnswerDelta(this.state, entryId, event.text),
               false,
             );
-          } else if (event.kind === 'done') {
+          } else if (event.kind === 'done' || this.stopping) {
+            // A user-initiated Stop keeps the partial answer as a
+            // settled entry instead of styling it as a failure.
             this.setState(completeBtwEntry(this.state, entryId), true);
           } else {
             this.setState(
@@ -137,8 +143,28 @@ export class BtwSideChat {
     } finally {
       if (this.generation === generation) {
         this.asking = false;
+        this.stopping = false;
       }
     }
+  }
+
+  /**
+   * Stops the streaming answer (side-pane Stop). The interrupted turn
+   * still terminates through its own event stream, which settles the
+   * entry with whatever partial answer arrived.
+   */
+  handleStop(sessionId: string): void {
+    const sidecar = this.sidecar;
+    if (
+      this.boundSessionId !== sessionId ||
+      !this.asking ||
+      this.stopping ||
+      sidecar?.interrupt === undefined
+    ) {
+      return;
+    }
+    this.stopping = true;
+    void sidecar.interrupt().catch(() => undefined);
   }
 
   /** Card closed in the webview: discard the fork and every entry. */
@@ -164,6 +190,7 @@ export class BtwSideChat {
     this.boundSessionId = null;
     this.state = EMPTY_SESSION_BTW_STATE;
     this.asking = false;
+    this.stopping = false;
     if (sidecar !== null) {
       // Best-effort: the fork and its subprocess die with the close.
       void sidecar.dispose().catch(() => undefined);

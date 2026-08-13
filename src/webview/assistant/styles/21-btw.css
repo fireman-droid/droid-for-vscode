@@ -248,6 +248,17 @@
   transition: background-color 130ms ease, transform 130ms ease;
 }
 
+/* Stop replaces Send while an answer streams: same circular pill
+   with a small square glyph. Scoped under .dvx-shell to outrank the
+   global `button { font: inherit }` reset. */
+.dvx-shell .dvx-btw-stop {
+  font-size: 9px;
+}
+
+.dvx-shell .dvx-btw-stop:hover {
+  background: var(--dvx-accent-strong, var(--dvx-accent));
+}
+
 .dvx-btw-send:hover:not(:disabled) {
   background: var(--dvx-accent-strong, var(--dvx-accent-strong));
 }

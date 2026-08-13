@@ -7,6 +7,10 @@ import { BtwSideChat, type BtwSideChatSidecar } from './btwSideChat';
 class FakeSidecar implements BtwSideChatSidecar {
   readonly asked: string[] = [];
   disposed = false;
+  interrupts = 0;
+  /** Set to stall the stream after its deltas until interrupted. */
+  holdAfterDeltas = false;
+  private release: (() => void) | null = null;
   private script: readonly BtwAnswerEvent[][] = [];
 
   respondWith(...turns: readonly BtwAnswerEvent[][]): void {
@@ -19,9 +23,24 @@ class FakeSidecar implements BtwSideChatSidecar {
       { kind: 'done' } as const,
     ];
     for (const event of events) {
+      if (
+        this.holdAfterDeltas &&
+        event.kind !== 'delta' &&
+        this.interrupts === 0
+      ) {
+        await new Promise<void>((resolve) => {
+          this.release = resolve;
+        });
+      }
       await Promise.resolve();
       yield event;
     }
+  }
+
+  async interrupt(): Promise<void> {
+    this.interrupts += 1;
+    this.release?.();
+    this.release = null;
   }
 
   async dispose(): Promise<void> {
@@ -89,6 +108,44 @@ describe('BtwSideChat', () => {
         message: null,
       },
     ]);
+  });
+
+  it('stops a streaming answer and keeps the partial text as done', async () => {
+    // The interrupted turn ends with an error-shaped terminal event
+    // (cancelled result); a user-initiated stop must not style it as
+    // a failure.
+    sidecar.respondWith([
+      { kind: 'delta', text: 'Partial ' },
+      { kind: 'delta', text: 'answer' },
+      { kind: 'error', message: 'cancelled' },
+    ]);
+    sidecar.holdAfterDeltas = true;
+    const card = createCard();
+    const ask = card.handleAsk('/repo', 'main-1', 'q');
+    // Let the deltas land, then stop mid-stream.
+    await vi.advanceTimersByTimeAsync(60);
+    card.handleStop('main-1');
+    await ask;
+
+    expect(sidecar.interrupts).toBe(1);
+    expect(emitted.at(-1)?.btw.entries).toEqual([
+      {
+        id: 'btw-1',
+        question: 'q',
+        answer: 'Partial answer',
+        state: 'done',
+        message: null,
+      },
+    ]);
+  });
+
+  it('ignores stop for unbound sessions and idle cards', async () => {
+    const card = createCard();
+    card.handleStop('main-1');
+    await card.handleAsk('/repo', 'main-1', 'q');
+    card.handleStop('other-session');
+    card.handleStop('main-1');
+    expect(sidecar.interrupts).toBe(0);
   });
 
   it('coalesces streaming deltas instead of emitting per token', async () => {

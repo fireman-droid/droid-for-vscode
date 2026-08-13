@@ -52,6 +52,13 @@ not invent unsupported Droid capabilities.
 5. Review the integrated result and fix correctness, accessibility,
    responsiveness, and visual issues.
 6. Run broad tests, type checks, and builds once at the end when justified.
+   Validation budget (user decision, 2026-08-13 evening): during
+   iteration run ONLY the focused unit tests for files actually
+   touched, plus typecheck and lint:budgets. Do not re-run the full
+   vitest suite, kitchen-parity or other broad smokes per batch —
+   they repeatedly stalled delivery. Broad suites run once per
+   release at most, and headless smokes only when the user asks or
+   when a slice's core claim cannot be proven any cheaper way.
 7. Package and perform visible browser and Cursor verification when the slice
    affects the extension UI.
 8. Mandatory behavioral smoke (user decision, 2026-08-13, replacing the

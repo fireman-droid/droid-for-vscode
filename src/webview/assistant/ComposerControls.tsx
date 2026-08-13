@@ -20,7 +20,6 @@ import type {
   SessionMcpState,
   SessionPluginsState,
   SessionReasoningEffort,
-  SessionSettingUpdateMessage,
   SessionSettingsState,
   SessionSkillsState,
   PluginSummary,
@@ -33,6 +32,10 @@ import type {
 } from '../../shared/tokenUsage';
 import { useTheme } from './theme';
 import { AddModelEntry, CustomModelsPanel } from './CustomModelsPanel';
+import {
+  useOptimisticSettingPick,
+  type SessionSettingSelection,
+} from './useOptimisticSetting';
 
 type OpenPanel =
   | 'settings'
@@ -155,12 +158,7 @@ export function shouldOpenPopoverDown(
   return spaceAbove < POPOVER_SPACE_PX && spaceBelow > spaceAbove;
 }
 
-export type SessionSettingSelection =
-  SessionSettingUpdateMessage extends infer Message
-    ? Message extends SessionSettingUpdateMessage
-      ? Omit<Message, 'type' | 'sessionId'>
-      : never
-    : never;
+export type { SessionSettingSelection } from './useOptimisticSetting';
 
 const MODE_OPTIONS: readonly {
   readonly value: SessionInteractionMode;
@@ -261,14 +259,17 @@ export function ComposerControls({
   const updating = settings.status === 'updating';
   const settingControlsDisabled =
     disabled || settingUpdatesDisabled || confirmed === null || updating;
-  const modelName = getModelName(confirmed?.modelId, modelCatalog);
+  // Optimistic trigger labels (useOptimisticSetting.ts): a picked
+  // mode/model shows immediately; the settled frame reconciles.
+  const { shownMode, shownModelId, pickSetting } =
+    useOptimisticSettingPick(settings, onSettingUpdate);
+  const modelName = getModelName(shownModelId, modelCatalog);
   const contextPercent = getContextPercent(context);
   const showContextPercent =
     context.value !== null && hasUsableContextRatio(context.value);
   const modeLabel =
-    MODE_OPTIONS.find(
-      (option) => option.value === confirmed?.interactionMode,
-    )?.label ?? 'Mode';
+    MODE_OPTIONS.find((option) => option.value === shownMode)?.label ??
+    'Mode';
 
   // A dismissed popover stays mounted as closingPanel while its exit
   // animation plays; the view resets to root only after unmount so
@@ -465,9 +466,7 @@ export function ComposerControls({
       <button
         type="button"
         className={`dvx-mode-trigger${
-          confirmed?.interactionMode === 'spec'
-            ? ' dvx-mode-trigger-spec'
-            : ''
+          shownMode === 'spec' ? ' dvx-mode-trigger-spec' : ''
         }`}
         aria-label={`Mode: ${modeLabel}`}
         aria-expanded={openPanel === 'mode'}
@@ -492,6 +491,13 @@ export function ComposerControls({
         onClick={() => toggle('model')}
       >
         <span>{modelName}</span>
+        {/* Effort rides the trigger as a quiet suffix (Cursor-style
+            "Fable 5 Max" readout, 2026-08-13). */}
+        {confirmed?.reasoningEffort !== undefined ? (
+          <span className="dvx-model-trigger-effort" aria-hidden="true">
+            {formatReasoningLabel(confirmed.reasoningEffort)}
+          </span>
+        ) : null}
         <ChevronDownIcon />
       </button>
 
@@ -507,7 +513,7 @@ export function ComposerControls({
           disabled={settingControlsDisabled}
           attachDisabled={disabled}
           onViewChange={setSettingsView}
-          onUpdate={onSettingUpdate}
+          onUpdate={pickSetting}
           onSkillsRefresh={onSkillsRefresh}
           onSkillToggle={onSkillToggle}
           onMcpRefresh={onMcpRefresh}
@@ -564,12 +570,12 @@ export function ComposerControls({
                 type="button"
                 className="dvx-option-row"
                 role="radio"
-                aria-checked={option.value === confirmed.interactionMode}
+                aria-checked={option.value === shownMode}
                 disabled={settingControlsDisabled}
                 onClick={() => {
                   close();
                   if (option.value !== confirmed.interactionMode) {
-                    onSettingUpdate({
+                    pickSetting({
                       field: 'interactionMode',
                       value: option.value,
                     });
@@ -600,7 +606,7 @@ export function ComposerControls({
           modelCatalog={modelCatalog}
           disabled={settingControlsDisabled}
           onUpdate={(update) => {
-            onSettingUpdate(update);
+            pickSetting(update);
             close();
           }}
           onManageModels={() => open('customModels')}
@@ -2608,7 +2614,7 @@ function ModelPopover({
               className="dvx-model-search"
               type="search"
               value={query}
-              placeholder="Search BYOK models"
+              placeholder="Search models"
               autoComplete="off"
               onChange={(event) => setQuery(event.currentTarget.value)}
             />
@@ -2647,15 +2653,20 @@ function ModelPopover({
                       }}
                     >
                       <strong>{modelLabel}</strong>
-                    </button>
-                    {isSelected ? (
-                      <div className="dvx-model-current-controls">
-                        <span className="dvx-model-reasoning-level">
+                      {/* Effort rides the name line as a grey suffix
+                          (Cursor-style "Fable 5 1M Max", 2026-08-13);
+                          the tail keeps only pencil + check. */}
+                      {isSelected ? (
+                        <span className="dvx-model-effort-suffix">
                           {activeScope === 'spec' &&
                           scopedReasoning === undefined
                             ? 'Default'
                             : formatReasoningLabel(scopedReasoning)}
                         </span>
+                      ) : null}
+                    </button>
+                    {isSelected ? (
+                      <div className="dvx-model-current-controls">
                         <button
                           type="button"
                           className="dvx-model-edit"
@@ -2717,7 +2728,7 @@ function ReasoningEditor({
   return (
     <>
       <h3 className="dvx-reasoning-heading">
-        Options
+        Effort
       </h3>
       <div className="dvx-option-list" role="radiogroup" aria-label="Reasoning">
         {defaultOptionLabel !== undefined ? (

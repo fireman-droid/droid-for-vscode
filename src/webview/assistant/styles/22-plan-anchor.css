@@ -255,6 +255,15 @@
   visibility: visible;
 }
 
+/* The building auto-open only applies inline: while the message is
+   pinned the overlay stays hidden unless the reader opened it — a
+   floating checklist must never cover the streaming reply uninvited. */
+.dvx-message-user[data-pinned]
+  .dvx-plan-line-body[data-open="true"][data-auto="true"] {
+  opacity: 0;
+  visibility: hidden;
+}
+
 .dvx-message-user[data-pinned] .dvx-plan-line-steps {
   padding: 14px 16px 16px;
 }

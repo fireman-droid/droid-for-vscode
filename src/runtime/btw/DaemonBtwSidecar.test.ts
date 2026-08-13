@@ -95,6 +95,9 @@ class FakeDaemonBtwClient implements DaemonBtwClient {
         this.streams.push(stream);
         return stream.events();
       },
+      interrupt: async () => {
+        this.calls.push('interrupt');
+      },
       close: async () => {
         this.calls.push('close');
       },

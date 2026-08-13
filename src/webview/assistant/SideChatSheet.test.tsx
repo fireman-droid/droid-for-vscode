@@ -81,7 +81,10 @@ describe('SideChatSheet', () => {
     expect(onAsk).not.toHaveBeenCalled();
   });
 
-  it('disables the input while an answer streams', () => {
+  it('keeps typing available and offers Stop while an answer streams', async () => {
+    const user = userEvent.setup();
+    const onAsk = vi.fn();
+    const onStop = vi.fn();
     render(
       <SideChatSheet
         btw={{
@@ -97,13 +100,24 @@ describe('SideChatSheet', () => {
           ],
           message: null,
         }}
-        onAsk={vi.fn()}
+        onAsk={onAsk}
+        onStop={onStop}
         onDismiss={vi.fn()}
       />,
     );
+    // Typing stays available (user report 2026-08-13); only sending
+    // waits for the stream, so Enter is a no-op mid-stream.
     const input = screen.getByLabelText('Ask a side question');
-    expect(input).toHaveProperty('disabled', true);
+    expect(input).toHaveProperty('disabled', false);
     expect(input).toHaveProperty('placeholder', 'Answering…');
+    await user.type(input, 'next question{Enter}');
+    expect(onAsk).not.toHaveBeenCalled();
+    // Send is replaced by a working Stop that keeps the partial text.
+    expect(
+      screen.queryByRole('button', { name: 'Send side question' }),
+    ).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Stop answering' }));
+    expect(onStop).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Answering…')).toBeTruthy();
   });
 

@@ -119,7 +119,9 @@ describe('ComposerControls', () => {
     const trigger = screen.getByRole('button', {
       name: 'Model: gpt-5.6-sol-o',
     });
-    expect(trigger.textContent).toBe('gpt-5.6-sol-o');
+    // Name verbatim plus the quiet effort suffix (Cursor-style
+    // trigger readout) — still nothing invented from a catalog.
+    expect(trigger.textContent).toBe('gpt-5.6-sol-oMedium');
     expect(trigger.getAttribute('title')).toBe('custom:gpt-5.6-sol-o');
   });
 
@@ -156,10 +158,12 @@ describe('ComposerControls', () => {
     ).toBeDefined();
     expect(
       screen.getByRole('button', { name: 'Model: model-sol' }).textContent,
-    ).toBe('model-sol');
+    ).toBe('model-solMedium');
     expect(screen.queryByText('Mode')).toBeNull();
     expect(screen.queryByText('Autonomy')).toBeNull();
-    expect(screen.queryByText('Medium')).toBeNull();
+    // No popover content leaks into the closed footer (the trigger's
+    // own effort suffix is the only "Medium" on screen).
+    expect(screen.queryByRole('dialog')).toBeNull();
     const ring = container.querySelector('.dvx-context-ring');
     const arc = container.querySelector('.dvx-context-ring-value');
     expect(ring?.getAttribute('viewBox')).toBe('0 0 24 24');
@@ -308,7 +312,8 @@ describe('ComposerControls', () => {
     await user.click(screen.getByRole('button', { name: 'Model: model-sol' }));
     expect(screen.getByText('Current model')).toBeDefined();
     expect(screen.getByText('Model Sol')).toBeDefined();
-    expect(screen.getByText('Medium')).toBeDefined();
+    // 'Medium' appears twice now: trigger suffix + popover readout.
+    expect(screen.getAllByText('Medium').length).toBeGreaterThan(1);
     expect(screen.getByText('Catalog unsupported on this runtime.')).toBeDefined();
     expect(
       screen.queryByRole('list', { name: 'BYOK models' }),
@@ -442,7 +447,8 @@ describe('ComposerControls', () => {
     expect(screen.getByRole('button', { name: 'Model: model-sol' })).toBeDefined();
     await user.click(screen.getByRole('button', { name: 'Model: model-sol' }));
     expect(screen.getByRole('dialog', { name: 'Model' })).toBeDefined();
-    expect(screen.getByText('Medium')).toBeDefined();
+    // Trigger suffix + the selected row's inline effort suffix.
+    expect(screen.getAllByText('Medium').length).toBeGreaterThan(1);
     await user.type(
       screen.getByRole('searchbox', { name: 'Search BYOK models' }),
       'pro',
@@ -457,15 +463,18 @@ describe('ComposerControls', () => {
       value: 'model-pro',
     });
 
-    await user.click(screen.getByRole('button', { name: 'Model: model-sol' }));
+    // The trigger label reflects the pick optimistically while the
+    // update round-trips; the popover body stays on the confirmed
+    // settings until the settled frame arrives.
+    await user.click(screen.getByRole('button', { name: 'Model: model-pro' }));
     await user.click(
       screen.getByRole('button', { name: 'Edit reasoning for model-sol' }),
     );
     expect(
-      screen.getByRole('heading', { name: 'Options', level: 3 }),
+      screen.getByRole('heading', { name: 'Effort', level: 3 }),
     ).toBeDefined();
     expect(
-      screen.queryByRole('button', { name: 'Options' }),
+      screen.queryByRole('button', { name: 'Effort' }),
     ).toBeNull();
     expect(screen.getAllByRole('radio')).toHaveLength(5);
     expect(screen.queryByText('None')).toBeNull();
@@ -664,6 +673,75 @@ describe('ComposerControls', () => {
     expect(screen.getByRole('alert').textContent).toContain(
       'Mode update failed',
     );
+  });
+
+  it('shows a picked mode immediately and reconciles with the settled frame', async () => {
+    const user = userEvent.setup();
+    const onSettingUpdate = vi.fn();
+    const controlsProps = (
+      settingsState: typeof settings | Record<string, unknown>,
+    ) => ({
+      settings: settingsState as typeof settings,
+      context,
+      modelCatalog: {
+        status: 'unsupported' as const,
+        items: [],
+        message: 'Catalog unsupported on this runtime.',
+      },
+      disabled: false,
+      settingUpdatesDisabled: false,
+      onContextRefresh: vi.fn(),
+      onCompact: vi.fn(),
+      onSettingUpdate,
+      skills: { status: 'idle' as const, items: [] },
+      onSkillsRefresh: vi.fn(),
+      onSkillToggle: vi.fn(),
+      mcp: { status: 'idle' as const, items: [] },
+      plugins: { status: 'idle' as const, items: [] },
+      onMcpRefresh: vi.fn(),
+      onMcpServerToggle: vi.fn(),
+      mcpAuth: null,
+      onMcpServerAuthenticate: vi.fn(),
+      onPluginsRefresh: vi.fn(),
+    });
+    const { rerender } = render(
+      <ComposerControls {...controlsProps(settings)} />,
+    );
+
+    // Picking Spec flips the trigger label immediately, before any
+    // confirming settings frame (the daemon round-trip used to leave
+    // the stale label in place — felt like switching lag).
+    await user.click(screen.getByRole('button', { name: 'Mode: Auto' }));
+    await user.click(screen.getByRole('radio', { name: /Spec/ }));
+    expect(onSettingUpdate).toHaveBeenCalledWith({
+      field: 'interactionMode',
+      value: 'spec',
+    });
+    expect(
+      screen.getByRole('button', { name: 'Mode: Spec' }),
+    ).toBeDefined();
+
+    // The optimistic label holds through the updating frame (which
+    // still carries the old value)…
+    rerender(
+      <ComposerControls
+        {...controlsProps({ status: 'updating', value: settings.value })}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Mode: Spec' }),
+    ).toBeDefined();
+
+    // …and the settled frame becomes authoritative: a rejection that
+    // settles back on the old value snaps the label back.
+    rerender(
+      <ComposerControls
+        {...controlsProps({ status: 'ready', value: settings.value })}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Mode: Auto' }),
+    ).toBeDefined();
   });
 
   it('browses skills and toggles them from the settings popover', async () => {

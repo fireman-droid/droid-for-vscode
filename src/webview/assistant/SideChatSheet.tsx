@@ -21,10 +21,13 @@ const LEAVE_MS = 200;
 export function SideChatSheet({
   btw,
   onAsk,
+  onStop,
   onDismiss,
 }: {
   readonly btw: SessionBtwState;
   readonly onAsk: (text: string) => void;
+  /** Stops the streaming answer, keeping its partial text. */
+  readonly onStop?: () => void;
   readonly onDismiss: () => void;
 }): React.JSX.Element {
   const [text, setText] = useState('');
@@ -34,12 +37,16 @@ export function SideChatSheet({
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
 
-  const streaming =
-    btw.status === 'forking' ||
-    btw.entries.some((entry) => entry.state === 'streaming');
+  const answerStreaming = btw.entries.some(
+    (entry) => entry.state === 'streaming',
+  );
+  const streaming = btw.status === 'forking' || answerStreaming;
   const unavailable =
     btw.status === 'error' || btw.status === 'unsupported';
-  const inputDisabled = streaming || unavailable;
+  // Typing stays available while an answer streams (user report
+  // 2026-08-13); only sending waits for the stream to settle.
+  const inputDisabled = unavailable;
+  const sendDisabled = streaming || unavailable;
 
   // Keep the newest answer text in view while it streams in.
   useEffect(() => {
@@ -85,7 +92,7 @@ export function SideChatSheet({
     if (
       trimmed.length === 0 ||
       trimmed.length > MAX_BTW_TEXT_LENGTH ||
-      inputDisabled
+      sendDisabled
     ) {
       return;
     }
@@ -175,15 +182,26 @@ export function SideChatSheet({
             }
           }}
         />
-        <button
-          type="button"
-          className="dvx-btw-send"
-          aria-label="Send side question"
-          disabled={inputDisabled || text.trim().length === 0}
-          onClick={submit}
-        >
-          ↑
-        </button>
+        {answerStreaming && onStop !== undefined ? (
+          <button
+            type="button"
+            className="dvx-btw-send dvx-btw-stop"
+            aria-label="Stop answering"
+            onClick={onStop}
+          >
+            ■
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="dvx-btw-send"
+            aria-label="Send side question"
+            disabled={sendDisabled || text.trim().length === 0}
+            onClick={submit}
+          >
+            ↑
+          </button>
+        )}
       </div>
     </aside>
   );

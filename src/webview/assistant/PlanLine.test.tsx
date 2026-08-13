@@ -73,6 +73,41 @@ describe('PlanLine', () => {
     );
   });
 
+  it('auto-opens the checklist while the plan is building', () => {
+    const { container } = render(
+      <PlanLine anchor={makeAnchor()} running />,
+    );
+    const body = container.querySelector('.dvx-plan-line-body');
+    expect(body?.getAttribute('data-open')).toBe('true');
+    // Marked auto so the pinned overlay can suppress it.
+    expect(body?.getAttribute('data-auto')).toBe('true');
+  });
+
+  it('settles the auto-open closed once every step is done', () => {
+    const { rerender, container } = render(
+      <PlanLine anchor={makeAnchor()} running />,
+    );
+    rerender(<PlanLine anchor={doneAnchor()} running={false} />);
+    expect(
+      container
+        .querySelector('.dvx-plan-line-body')
+        ?.getAttribute('data-open'),
+    ).toBe('false');
+  });
+
+  it('lets an explicit reader toggle beat the building auto-open', () => {
+    const { container } = render(
+      <PlanLine anchor={makeAnchor()} running />,
+    );
+    fireEvent.click(container.querySelector('.dvx-plan-line-row')!);
+    const body = container.querySelector('.dvx-plan-line-body');
+    expect(body?.getAttribute('data-open')).toBe('false');
+    // A manual open is not auto: the pinned overlay may show it.
+    fireEvent.click(container.querySelector('.dvx-plan-line-row')!);
+    expect(body?.getAttribute('data-open')).toBe('true');
+    expect(body?.getAttribute('data-auto')).toBe('false');
+  });
+
   it('retires quietly once every step is done', () => {
     const { container } = render(
       <PlanLine anchor={doneAnchor()} running={false} />,

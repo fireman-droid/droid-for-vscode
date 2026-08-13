@@ -2751,6 +2751,49 @@ UI 描述见 §22 重做记录。
   为准（回合进行中 status 未定的行不轮询）；`subagent.update` 的
   就地版本不含 childSessionId 变化通知，映射靠 15s TTL 台账重读。
 
+### 38. 用户反馈批 + Cursor 风格模型弹层（2026-08-13 晚，v0.7.1）
+
+- **来源**：用户五条反馈（工具行圆点漂移、计划"跑完才出现"、切换
+  模型/mode 卡顿、/btw 功能不齐、plan 位置歪）+ 两张 Cursor 截图
+  要求模型弹层照搬其呈现（**只迁样式，功能仍以 Droid 能力为准**，
+  不发明 context 档位/thinking 开关）。
+- **工具行圆点**（07 CSS）：marker `::before` 定位锚从整个 details
+  挪到 summary（summary 自身 `position:relative`，`left:-12px`）——
+  展开后圆点不再漂到内容区中部，结构性修复。
+- **计划实时打钩**（PlanLine）：构建期（running 且未全完成）清单
+  **自动展开**、逐步打钩可见，完成后自动收起；读者手动开合永远
+  优先（override）；吸顶 pinned 时自动展开被 CSS 压制
+  （`data-auto` 标记），浮层绝不遮流式回复。实测几何：计划行点/
+  标题中点重合（252.75/252.75），"歪"不成立于 DPR1；待真机复核。
+- **切换卡顿**（新 `useOptimisticSetting.ts`，ComposerControls 瘦身
+  抽出）：点选 mode/模型后触发器标签**立即乐观显示**，settled 帧
+  对账（拒绝则弹回），4s 保险阀防静默丢弃钉死标签；无头量化
+  21–32ms 零长任务，体感卡顿主因即标签等 daemon 确认的旧行为。
+- **/btw Stop + 流中打字**（协议 v11 追加 `btw.stop` W→H）：
+  `BtwSidecar`（process，`client.interruptSession`）与
+  `DaemonBtwFork`（`session.interrupt`）都长出 `interrupt()`；
+  `BtwSideChat.handleStop` 用户主动停 → 部分答案按 done 收尾不标
+  失败；SideChatSheet 流中输入框保持可打字（仅发送等待），Send
+  换成 ■ Stop（`.dvx-shell .dvx-btw-stop` 提级压过全局
+  `button{font:inherit}`）。视觉探针 `probe-btw-stop-visual.mjs`
+  两主题截图过。
+- **Cursor 风格模型弹层**（§35 的迭代）：宽 200→264px；行内
+  "模型名 + 灰色档位后缀"单行读法（仅选中行有档位——Droid 数据
+  只有当前模型的 reasoningEffort，不为未选行发明）；尾部只留
+  hover 铅笔 + 勾；搜索占位 "Search models"；Effort 编辑卡改为
+  弹层**左侧并排卡片**（`right: calc(100%+8px)`，Cursor Options
+  位置），标题 Options→Effort；**触发器带档位后缀**
+  （"model-x High"，灰色不截断）。
+- **验证（按用户 2026-08-13 指示收窄：只跑受影响单测，停跑大面
+  冒烟）**：PlanLine/SideChatSheet/btwSideChat/DaemonBtwSidecar/
+  ComposerControls/validateMessage 聚焦全绿（其中全量 vitest 在
+  本批前半段跑过一次 107 文件 2088 例全绿）；typecheck 三段 +
+  lint:budgets 过；`smoke-plan-anchor` 全绿 +
+  `smoke-switch-perf.mjs`（新增，点击→绘制耗时量化）+
+  `probe-dot-align.mjs`（几何实测）+ `probe-btw-stop-visual.mjs`
+  截图。`smoke-popover-rework.mjs` 断言已同步（264px/12.5px/
+  截断放宽）但**未跑**（用户两次打断，明示别再跑）——待真机验收。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3184,6 +3227,16 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-13 晚用户反馈批发版 v0.7.1**：版本号 `0.7.0 → 0.7.1`。
+  内容 = 台账 §38：工具行圆点锚定修复、计划构建期自动展开打钩、
+  模式/模型切换乐观标签、/btw Stop + 流中打字（协议 v11 追加
+  `btw.stop`）、Cursor 风格模型弹层（264px 单行读法 + Effort 侧
+  卡 + 触发器档位后缀）。门禁按用户指示收窄：受影响聚焦单测 +
+  typecheck + lint:budgets（全量 vitest 本批前半段 107 文件
+  2088 例全绿一次）；`vsce package`（11 files, 1.59 MB）产出
+  `droidvisx-0.7.1.vsix` 安装成功。**需 Reload Window**（v11 同
+  版窗口不需重载协议，但要吃到新 bundle）。真人点测待用户：
+  模型弹层新样式、计划条实时打钩、/btw Stop、切换标签即时性。
 - **2026-08-13 傍晚子代理面板发版 v0.7.0**：版本号 `0.6.0 → 0.7.0`
   （发布提交 `c43777c`，本地 tag `v0.7.0`，无远端未 push）。内容 =
   待办 B 切片 1（`0b53c22`，台账 §37，Bridge 协议 v10→v11）：

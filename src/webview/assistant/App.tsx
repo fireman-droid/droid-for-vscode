@@ -278,6 +278,11 @@ export function App(): React.JSX.Element {
       post(vscode, { type: 'btw.dismiss', sessionId });
     }
   }, [sessionId, vscode]);
+  const handleBtwStop = useCallback((): void => {
+    if (sessionId !== null) {
+      post(vscode, { type: 'btw.stop', sessionId });
+    }
+  }, [sessionId, vscode]);
   const turnId = state.turn?.turnId ?? null;
   const turnStatus = state.turn?.status ?? null;
   // Turn ids this connection has actually seen live on state.turn.
@@ -1451,6 +1456,7 @@ export function App(): React.JSX.Element {
           <SideChatSheet
             btw={state.btw}
             onAsk={handleBtwAsk}
+            onStop={handleBtwStop}
             onDismiss={handleBtwDismiss}
           />
         ) : null}
