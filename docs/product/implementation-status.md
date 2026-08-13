@@ -3351,6 +3351,20 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-13 晚稳定性收口发版 v0.7.8**：版本号 `0.7.7 →
+  0.7.8`，内容 = 台账 §43（丰富子代理转录、紧凑且 Reload-safe 的
+  Working、metadata-only worker 过滤、daemon 租约/发现/私有生命周期
+  加固、MCP 迟到结果隔离、Bridge v13 `/btw` 单 pending、会话切换
+  initialize/history/context 分段计时）。十个 feature/fix commit 均已
+  跑触达文件聚焦单测，最终 typecheck 三段 + `lint:budgets` 全绿；
+  按当前门禁未重复跑全量 Vitest。`pnpm run build` +
+  `pnpm exec vsce package --no-dependencies --out dist/droidvisx.vsix`
+  产出 11 files / 1,676,884 字节，`verify:vsix` 11 条目全绿，SHA-256
+  `67DDA2463677D13C348E1DFDEFAE5BF24A118FEC6FD24FC193DC3F99846C4E5F`；
+  已保留 `droidvisx-0.7.8.vsix` 并以 `cursor --install-extension
+  --force` 安装，`cursor --list-extensions --show-versions` 确认
+  `droidvisx.droidvisx@0.7.8`。**需 Reload Window；约定的唯一一次
+  daemon 子代理面板真机 smoke 尚未执行，等 Reload 后再跑**。
 - **2026-08-13 晚子代理运行实况发版 v0.7.7**：版本号 `0.7.6 →
   0.7.7`。内容 = 台账 §42：在跑委派行给 "View transcript"，转录
   分栏 3s 轮询 + settle 收尾 + "Running…" 微指示 + 贴底守卫；Host
