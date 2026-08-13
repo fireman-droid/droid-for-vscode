@@ -384,12 +384,27 @@ export function pairInvocationMapping(
   return mapping;
 }
 
+/**
+ * Delegation rows that are live right now. Besides rows the ledger
+ * already marked `running`, a statusless delegation under a
+ * still-running Task row counts too (same fallback the webview's
+ * `selectWorkingSubagents` applies): for a FOREGROUND (blocking)
+ * Task the SDK only reports a lifecycle status with the Task's own
+ * tool_result, so `subagent.status` stays undefined for the entire
+ * visible run. Terminal and pending statuses never count.
+ */
 function runningSubagentRowsOf(
   ctl: ChatControllerInternals,
 ): ReadonlyArray<{ toolUseId: string; turnId: string }> {
   const rows: Array<{ toolUseId: string; turnId: string }> = [];
   for (const item of ctl.transcript.transcript) {
-    if (item.kind === 'tool' && item.subagent?.status === 'running') {
+    if (item.kind !== 'tool' || item.subagent === undefined) {
+      continue;
+    }
+    const working =
+      item.subagent.status === 'running' ||
+      (item.subagent.status === undefined && item.status === 'running');
+    if (working) {
       rows.push({ toolUseId: item.toolUseId, turnId: item.turnId });
     }
   }

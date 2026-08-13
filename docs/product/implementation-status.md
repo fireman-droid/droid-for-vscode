@@ -2862,6 +2862,27 @@ UI 描述见 §22 重做记录。
   8 例（+2 前台用例）+ 新建 `SubagentTranscriptSheet.test.tsx`
   6 例全绿；`droidvisx-0.7.6.vsix` 安装成功，待用户 Reload 验收。
 
+### 42. 子代理运行中实况（在跑行 View transcript + 3s 转录轮询 + Host 前台兜底点火活动/单停）（2026-08-13 晚，v0.7.7）
+
+- **用户实锤**："现在问题就是在运行时候看不了啊"——前台委派跑着时
+  没有任何入口能看内部。两处断层：View transcript 只挂终态行；
+  Host `runningSubagentRowsOf` 只认 `subagent.status === 'running'`，
+  前台全程 undefined，弹窗活动轮询/单停/子会话映射整段不点火。
+- **修复 A（Host 兜底）**：`runningSubagentRowsOf` 镜像 webview
+  `selectWorkingSubagents` 规则——无状态委派 + Task 行仍 running
+  即算在跑；下游映射/采样/单停本就不看终态，前台行照常解析
+  childId（派发即写账本），Working 弹窗字幕 + Stop 在跑即活。
+- **修复 B（转录实况）**：在跑委派行同样给 "View transcript"；
+  Sheet 新增 `running` + `onRefresh`，3s（`SUBAGENT_SHEET_REFRESH_MS`）
+  重发 `subagent.openTranscript`（不回 loading，内容原地换；Host
+  单飞去重），settle 时补一发收尾；标题旁 `dvx-shimmer-text`
+  "Running…" 静默指示；正文仅读者已在底部时贴底（ToolOutputPreview
+  钉底模式）。Bridge 零协议变更。
+- **验证（新规则）**：tsc 三段 + lint:budgets 全绿；触达单测
+  `subagentPanel` 15 例（+4）+ `SubagentTranscriptSheet` 9 例（+3）
+  + `Thread` 71 例（+1）共 95 例全绿；`droidvisx-0.7.7.vsix`
+  安装成功，待用户 Reload 验收。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3295,6 +3316,12 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-13 晚子代理运行实况发版 v0.7.7**：版本号 `0.7.6 →
+  0.7.7`。内容 = 台账 §42：在跑委派行给 "View transcript"，转录
+  分栏 3s 轮询 + settle 收尾 + "Running…" 微指示 + 贴底守卫；Host
+  前台无状态行兜底点火活动轮询/单停/childId 映射。门禁：tsc +
+  lint:budgets + 触达文件单测 95 例全绿；`droidvisx-0.7.7.vsix`
+  安装成功。**需 Reload Window**。
 - **2026-08-13 晚子代理体验修复发版 v0.7.6**：版本号 `0.7.5 →
   0.7.6`。内容 = 台账 §41：前台委派全程点亮 "N Working" 药丸
   （无状态委派 + Task 行 running 即计数），子代理只读转录套用主

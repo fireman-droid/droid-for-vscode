@@ -19,6 +19,9 @@ function taskItem(
     readonly type?: string;
     readonly description?: string;
     readonly status?: 'running' | 'completed';
+    /** Omit the delegation status (foreground Task mid-run). */
+    readonly statusless?: boolean;
+    readonly toolStatus?: 'running' | 'completed';
     readonly turnId?: string;
   } = {},
 ): SessionTranscriptItem {
@@ -29,13 +32,15 @@ function taskItem(
     toolUseId,
     toolName: 'Task',
     action: 'Delegated to a subagent',
-    status: 'completed',
+    status: options.toolStatus ?? 'completed',
     progressCount: 0,
     latestUpdateKind: null,
     subagent: {
       type: options.type ?? 'explore',
       description: options.description ?? 'map the flow',
-      status: options.status ?? 'running',
+      ...(options.statusless === true
+        ? {}
+        : { status: options.status ?? 'running' }),
     },
   };
 }
@@ -303,5 +308,106 @@ describe('panel polling', () => {
       );
     });
     handleSubagentPanel(ctl, 'session-1', false);
+  });
+
+  it('polls a statusless delegation under a running Task row', async () => {
+    // Foreground (blocking) Task: the SDK reports no lifecycle
+    // status until the Task's own tool_result, so the host mirrors
+    // the webview fallback and treats the row as live work.
+    const sampleActivity = vi.fn().mockResolvedValue('Read');
+    const gateway = { sampleActivity, interrupt: vi.fn() };
+    const fake = fakeController({
+      subagentControl: () => gateway,
+      transcript: {
+        transcript: [
+          taskItem('use-fg', { statusless: true, toolStatus: 'running' }),
+        ],
+      },
+    });
+    const ctl = asCtl(fake);
+    handleSubagentPanel(ctl, 'session-1', true);
+    await vi.waitFor(() => {
+      expect(fake.emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'subagent.activity',
+          toolUseId: 'use-fg',
+          action: 'Read',
+          stoppable: true,
+        }),
+      );
+    });
+    // The ledger invocation row written at spawn resolved the child.
+    expect(sampleActivity).toHaveBeenCalledWith('child-1');
+    handleSubagentPanel(ctl, 'session-1', false);
+  });
+
+  it('never polls settled or terminal-status delegation rows', async () => {
+    const sampleActivity = vi.fn();
+    const fake = fakeController({
+      subagentControl: () => ({ sampleActivity, interrupt: vi.fn() }),
+      transcript: {
+        transcript: [
+          taskItem('use-done', {
+            status: 'completed',
+            toolStatus: 'completed',
+          }),
+          taskItem('use-settled', {
+            statusless: true,
+            toolStatus: 'completed',
+          }),
+        ],
+      },
+    });
+    const ctl = asCtl(fake);
+    handleSubagentPanel(ctl, 'session-1', true);
+    await pollTick(ctl);
+    expect(sampleActivity).not.toHaveBeenCalled();
+    expect(fake.emit).not.toHaveBeenCalled();
+    handleSubagentPanel(ctl, 'session-1', false);
+  });
+
+  it('stops a foreground statusless delegation through the mapping', async () => {
+    const interrupt = vi.fn().mockResolvedValue(true);
+    const fake = fakeController({
+      subagentControl: () => ({ sampleActivity: vi.fn(), interrupt }),
+      transcript: {
+        transcript: [
+          taskItem('use-fg', { statusless: true, toolStatus: 'running' }),
+        ],
+      },
+    });
+    handleSubagentStop(asCtl(fake), 'session-1', 'turn-1', 'use-fg');
+    await vi.waitFor(() => {
+      expect(interrupt).toHaveBeenCalledWith('child-1');
+    });
+  });
+});
+
+describe('transcript of a running delegation', () => {
+  it('serves the mid-run transcript of a foreground statusless row', async () => {
+    // A running child's session file exists and loads mid-run; the
+    // sheet re-requests it on an interval for the live view.
+    const fake = fakeController({
+      transcript: {
+        transcript: [
+          taskItem('use-fg', { statusless: true, toolStatus: 'running' }),
+        ],
+      },
+    });
+    handleSubagentOpenTranscript(asCtl(fake), 'session-1', 'use-fg');
+    await vi.waitFor(() => {
+      expect(fake.emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'subagent.transcript',
+          status: 'available',
+          toolUseId: 'use-fg',
+          title: 'map the flow',
+        }),
+      );
+    });
+    expect(fake.sessionHistory.loadHistory).toHaveBeenCalledWith({
+      cwd: 'd:/work',
+      sessionId: 'child-1',
+    });
   });
 });

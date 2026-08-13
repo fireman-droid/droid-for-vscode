@@ -282,10 +282,12 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
   /** The parent Task row is still streaming. */
   readonly parentRunning?: boolean;
 }): React.JSX.Element {
-  // Read-only transcript entry (playback design §6.1): terminal rows
-  // only — running child files are still being written, so the live
-  // tier stays out of this slice. Actions-only context keeps the
-  // memo effective across activity polling.
+  // Read-only transcript entry (playback design §6.1, extended to
+  // live rows 2026-08-13): terminal rows replay the settled child
+  // session; running rows open the same sheet mid-run and the sheet
+  // re-requests it on an interval, so the user can look inside a
+  // delegation while it works. Actions-only context keeps the memo
+  // effective across activity polling.
   const subagentActions = useContext(SubagentActionsContext);
   // The delegation identity arrives with the Task input long before
   // the SDK reports a lifecycle status (probed 2026-08-13: the
@@ -318,7 +320,8 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
       )}
       {subagentActions !== null &&
       toolUseId !== undefined &&
-      (status === "completed" ||
+      (effectiveStatus === "running" ||
+        status === "completed" ||
         status === "failed" ||
         status === "cancelled") ? (
         <button

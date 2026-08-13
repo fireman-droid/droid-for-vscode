@@ -30,6 +30,13 @@ export interface SubagentSheetState {
  */
 export interface SubagentPanelActions {
   readonly onOpenTranscript: (toolUseId: string, title: string) => void;
+  /**
+   * Re-requests an open sheet's transcript without resetting it to
+   * `loading`, so a live refresh swaps content in place. The host
+   * single-flights transcript loads per row, so overlapping
+   * re-requests are simply dropped there.
+   */
+  readonly onRefreshTranscript: (toolUseId: string) => void;
   readonly onCloseSheet: () => void;
   readonly onStop: (turnId: string, toolUseId: string) => void;
   readonly onPanelToggle: (open: boolean) => void;
@@ -135,6 +142,15 @@ export function useSubagentPanelFlow(
           sessionId,
           toolUseId,
         });
+      },
+      onRefreshTranscript: (toolUseId) => {
+        if (sessionId !== null) {
+          vscode.postMessage({
+            type: 'subagent.openTranscript',
+            sessionId,
+            toolUseId,
+          });
+        }
       },
       onCloseSheet: () => setSheet(null),
       onStop: (turnId, toolUseId) => {

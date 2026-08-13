@@ -14,6 +14,18 @@
   gap: 2px;
 }
 
+/* Quiet live indicator beside the sheet title while the delegation
+   still runs: the existing shimmer-text treatment at caption size,
+   no extra chrome. The auto right margin keeps it snug against the
+   title inside the space-between header row. */
+.dvx-subsheet-live {
+  flex: none;
+  margin-right: auto;
+  margin-left: 8px;
+  font-size: 10.5px;
+  line-height: 16px;
+}
+
 /* Task prompt in the main chat's user bubble; the markdown block
    fills the bubble's wrapping row layout and reads at the pane's
    12px size. No line clamp: the prompt is the point of this sheet. */

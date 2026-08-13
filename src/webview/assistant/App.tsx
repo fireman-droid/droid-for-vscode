@@ -1267,6 +1267,13 @@ export function App(): React.JSX.Element {
   // The read-only subagent transcript sheet rides the same split
   // column; the /btw pane keeps priority when both want it.
   const subagentSplit = subagentFlow.sheet !== null && !btwSplit;
+  // While the sheet's delegation row still counts as working (same
+  // rule as the badge), the sheet re-requests the transcript on an
+  // interval — the live view of a running subagent.
+  const sheetToolUseId = subagentFlow.sheet?.toolUseId ?? null;
+  const sheetRowRunning =
+    sheetToolUseId !== null &&
+    workingSubagents.some((row) => row.toolUseId === sheetToolUseId);
 
   // Rendered once here so transcript markdown (deep inside
   // assistant-ui's message tree) can open clicked file paths without
@@ -1465,6 +1472,8 @@ export function App(): React.JSX.Element {
         {subagentFlow.sheet !== null && !btwSplit ? (
           <SubagentTranscriptSheet
             sheet={subagentFlow.sheet}
+            running={sheetRowRunning}
+            onRefresh={subagentFlow.actions.onRefreshTranscript}
             onDismiss={subagentFlow.actions.onCloseSheet}
           />
         ) : null}

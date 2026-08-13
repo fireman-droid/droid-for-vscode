@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionTranscriptItem } from '../../shared/bridgeMessages';
 import type { SubagentSheetState } from './subagentPanelFlow';
-import { SubagentTranscriptSheet } from './SubagentTranscriptSheet';
+import {
+  SUBAGENT_SHEET_REFRESH_MS,
+  SubagentTranscriptSheet,
+} from './SubagentTranscriptSheet';
 
 afterEach(cleanup);
 
@@ -73,6 +76,8 @@ describe('SubagentTranscriptSheet', () => {
     const { container } = render(
       <SubagentTranscriptSheet
         sheet={sheetWith({ items })}
+        running={false}
+        onRefresh={vi.fn()}
         onDismiss={vi.fn()}
       />,
     );
@@ -91,6 +96,8 @@ describe('SubagentTranscriptSheet', () => {
     const { container } = render(
       <SubagentTranscriptSheet
         sheet={sheetWith({ items })}
+        running={false}
+        onRefresh={vi.fn()}
         onDismiss={vi.fn()}
       />,
     );
@@ -104,6 +111,8 @@ describe('SubagentTranscriptSheet', () => {
     const { container } = render(
       <SubagentTranscriptSheet
         sheet={sheetWith({ items })}
+        running={false}
+        onRefresh={vi.fn()}
         onDismiss={vi.fn()}
       />,
     );
@@ -134,6 +143,8 @@ describe('SubagentTranscriptSheet', () => {
     const { container } = render(
       <SubagentTranscriptSheet
         sheet={sheetWith({ items })}
+        running={false}
+        onRefresh={vi.fn()}
         onDismiss={vi.fn()}
       />,
     );
@@ -146,6 +157,8 @@ describe('SubagentTranscriptSheet', () => {
     const { container } = render(
       <SubagentTranscriptSheet
         sheet={sheetWith({ status: 'unavailable' })}
+        running={false}
+        onRefresh={vi.fn()}
         onDismiss={vi.fn()}
       />,
     );
@@ -159,6 +172,8 @@ describe('SubagentTranscriptSheet', () => {
       const { container } = render(
         <SubagentTranscriptSheet
           sheet={sheetWith({ items })}
+          running={false}
+          onRefresh={vi.fn()}
           onDismiss={onDismiss}
         />,
       );
@@ -171,5 +186,115 @@ describe('SubagentTranscriptSheet', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('shows the quiet live indicator only while running', () => {
+    const { container, rerender } = render(
+      <SubagentTranscriptSheet
+        sheet={sheetWith({ items })}
+        running
+        onRefresh={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(
+      container.querySelector('.dvx-subsheet-live')?.textContent,
+    ).toBe('Running…');
+    rerender(
+      <SubagentTranscriptSheet
+        sheet={sheetWith({ items })}
+        running={false}
+        onRefresh={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(container.querySelector('.dvx-subsheet-live')).toBeNull();
+  });
+
+  it('re-requests the transcript on an interval while running', () => {
+    vi.useFakeTimers();
+    try {
+      const onRefresh = vi.fn();
+      const { rerender } = render(
+        <SubagentTranscriptSheet
+          sheet={sheetWith({ items })}
+          running
+          onRefresh={onRefresh}
+          onDismiss={vi.fn()}
+        />,
+      );
+      act(() => vi.advanceTimersByTime(SUBAGENT_SHEET_REFRESH_MS));
+      expect(onRefresh).toHaveBeenCalledTimes(1);
+      expect(onRefresh).toHaveBeenCalledWith('task-1');
+      act(() => vi.advanceTimersByTime(SUBAGENT_SHEET_REFRESH_MS));
+      expect(onRefresh).toHaveBeenCalledTimes(2);
+      // Settling fires one final refresh for the transcript tail,
+      // then the interval stays silent.
+      rerender(
+        <SubagentTranscriptSheet
+          sheet={sheetWith({ items })}
+          running={false}
+          onRefresh={onRefresh}
+          onDismiss={vi.fn()}
+        />,
+      );
+      expect(onRefresh).toHaveBeenCalledTimes(3);
+      act(() =>
+        vi.advanceTimersByTime(SUBAGENT_SHEET_REFRESH_MS * 4),
+      );
+      expect(onRefresh).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sticks to the bottom only when the reader was already there', () => {
+    const grownItems: SessionTranscriptItem[] = [
+      ...items,
+      { id: 'a2', kind: 'assistant', turnId: 't1', text: 'More.' },
+    ];
+    const { container, rerender } = render(
+      <SubagentTranscriptSheet
+        sheet={sheetWith({ items })}
+        running
+        onRefresh={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    const body = container.querySelector(
+      '.dvx-subsheet-body',
+    ) as HTMLDivElement;
+    Object.defineProperty(body, 'scrollHeight', {
+      value: 1_000,
+      configurable: true,
+    });
+    Object.defineProperty(body, 'clientHeight', {
+      value: 100,
+      configurable: true,
+    });
+    // Reader scrolled up: a refresh must not move them.
+    body.scrollTop = 200;
+    fireEvent.scroll(body);
+    rerender(
+      <SubagentTranscriptSheet
+        sheet={sheetWith({ items: grownItems })}
+        running
+        onRefresh={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(body.scrollTop).toBe(200);
+    // Back at the bottom: the next refresh keeps following the tail.
+    body.scrollTop = 900;
+    fireEvent.scroll(body);
+    rerender(
+      <SubagentTranscriptSheet
+        sheet={sheetWith({ items: [...grownItems] })}
+        running
+        onRefresh={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(body.scrollTop).toBe(1_000);
   });
 });

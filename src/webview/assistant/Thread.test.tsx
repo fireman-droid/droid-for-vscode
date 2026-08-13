@@ -53,6 +53,7 @@ import {
   splitMentionPath,
 } from './thread/composerCommands';
 import { formatThinkingLabel } from './thread/readers';
+import { SubagentActionsContext } from './subagentPanelFlow';
 
 afterEach(() => {
   cleanup();
@@ -416,6 +417,46 @@ describe('SubagentSummaryRow', () => {
     expect(
       document.querySelector('.dvx-subagent-spinner'),
     ).not.toBeNull();
+  });
+
+  it('offers the transcript entry on live rows, not on inert ones', () => {
+    const actions = {
+      onOpenTranscript: vi.fn(),
+      onRefreshTranscript: vi.fn(),
+      onCloseSheet: vi.fn(),
+      onStop: vi.fn(),
+      onPanelToggle: vi.fn(),
+    };
+    const row = (
+      status: 'running' | null,
+      parentRunning: boolean,
+    ): React.ReactElement =>
+      createElement(
+        SubagentActionsContext.Provider,
+        { value: actions },
+        createElement(SubagentSummaryRow, {
+          type: 'explore',
+          description: 'Map the flow',
+          status,
+          toolUseCount: null,
+          durationMs: null,
+          toolUseId: 'use-1',
+          parentRunning,
+        }),
+      );
+    // Foreground mid-run: statusless under a running Task row.
+    const { rerender } = render(row(null, true));
+    fireEvent.click(screen.getByText('View transcript'));
+    expect(actions.onOpenTranscript).toHaveBeenCalledWith(
+      'use-1',
+      'Map the flow',
+    );
+    // A ledger-reported running row keeps the entry too.
+    rerender(row('running', false));
+    screen.getByText('View transcript');
+    // A statusless row under a settled parent has nothing to open.
+    rerender(row(null, false));
+    expect(screen.queryByText('View transcript')).toBeNull();
   });
 });
 
