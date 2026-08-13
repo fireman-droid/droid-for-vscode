@@ -1453,6 +1453,9 @@ function upsertTool(
         ...(event.filePath === undefined
           ? {}
           : { filePath: event.filePath }),
+        ...(event.additionalFileCount === undefined
+          ? {}
+          : { additionalFileCount: event.additionalFileCount }),
         ...(event.detailKind === undefined || event.detail === undefined
           ? {}
           : { detailKind: event.detailKind, detail: event.detail }),
@@ -1495,6 +1498,9 @@ function upsertTool(
       ...(event.filePath === undefined
         ? {}
         : { filePath: event.filePath }),
+      ...(event.additionalFileCount === undefined
+        ? {}
+        : { additionalFileCount: event.additionalFileCount }),
       ...(event.detailKind === undefined || event.detail === undefined
         ? {}
         : { detailKind: event.detailKind, detail: event.detail }),

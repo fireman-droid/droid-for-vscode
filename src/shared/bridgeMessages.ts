@@ -128,8 +128,8 @@ import type { ChangesUpdateMessage } from './changesProtocol';
 // Version 10: live changes ledger — `turn.changes` is replaced by
 // the streaming `changes.update` (H→W; changesProtocol.ts).
 // Version 11: subagent panel — openTranscript/stop/panel W→H,
-// transcript/activity H→W (subagentProtocol.ts) — plus btw.stop W→H.
-export const BRIDGE_PROTOCOL_VERSION = 11 as const;
+// transcript/activity H→W; version 12 adds bounded multi-file counts.
+export const BRIDGE_PROTOCOL_VERSION = 12 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_TEXT_LENGTH = 32_000;
@@ -1503,12 +1503,10 @@ export interface ToolTranscriptItem {
   readonly progressCount: number;
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
   readonly durationMs?: number;
-  /**
-   * Workspace-relative path (forward slashes) of the file this tool
-   * changed. Only present for file-modifying tools whose target stays
-   * inside the workspace.
-   */
+  /** First safe workspace-relative path changed by this tool. */
   readonly filePath?: string;
+  /** Remaining changed paths, present only when positive. */
+  readonly additionalFileCount?: number;
   /** Present together with `detail`; says how to render it. */
   readonly detailKind?: ToolDetailKind;
   /** Command text or plan text extracted from the tool input. */
@@ -1971,6 +1969,7 @@ export interface ToolActivityMessage {
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
   readonly durationMs?: number;
   readonly filePath?: string;
+  readonly additionalFileCount?: number;
   readonly detailKind?: ToolDetailKind;
   readonly detail?: string;
   /** Error excerpt from a failed tool_result, for the expanded row. */

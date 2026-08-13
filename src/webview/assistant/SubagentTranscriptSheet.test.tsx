@@ -51,6 +51,7 @@ const items: SessionTranscriptItem[] = [
     latestUpdateKind: null,
     durationMs: 1_300,
     filePath: 'src/app.ts',
+    additionalFileCount: 2,
   },
   {
     id: 'tool2',
@@ -62,6 +63,8 @@ const items: SessionTranscriptItem[] = [
     status: 'failed',
     progressCount: 0,
     latestUpdateKind: null,
+    detailKind: 'command',
+    detail: 'pnpm run lint:budgets\nsecond line never shows',
   },
   {
     id: 'a1',
@@ -125,8 +128,16 @@ describe('SubagentTranscriptSheet', () => {
       rows[0]?.querySelector('.dvx-subsheet-tool-file')?.textContent,
     ).toBe('src/app.ts');
     expect(
+      rows[0]?.querySelector('.dvx-subsheet-tool-file-count')?.textContent,
+    ).toBe('+2');
+    expect(
       rows[0]?.querySelector('.dvx-subsheet-tool-state')?.textContent,
     ).toBe('Completed · 1.3s');
+    // Execute-class rows carry the command text: mono, first line only.
+    expect(
+      rows[1]?.querySelector('.dvx-subsheet-tool-cmd')?.textContent,
+    ).toBe('pnpm run lint:budgets');
+    expect(rows[0]?.querySelector('.dvx-subsheet-tool-cmd')).toBeNull();
     // Failed rows keep the subtle error tint and say so.
     expect(rows[1]?.className).toContain('dvx-subsheet-tool-failed');
     expect(
@@ -148,9 +159,46 @@ describe('SubagentTranscriptSheet', () => {
         onDismiss={vi.fn()}
       />,
     );
+    // Textless thinking stays a flat line — no dead disclosure.
     expect(
-      container.querySelector('.dvx-subsheet-thought')?.textContent,
+      container.querySelector('p.dvx-subsheet-thought')?.textContent,
     ).toBe('Thought for 4s');
+    expect(container.querySelector('.dvx-subsheet-thinking')).toBeNull();
+  });
+
+  it('expands a thinking item with text to its thinking prose', () => {
+    const thinkingItems: SessionTranscriptItem[] = [
+      {
+        id: 'th2',
+        kind: 'thinking',
+        turnId: 't1',
+        text: 'The user wants the CSS budget checked first.',
+        status: 'complete',
+        durationMs: 12_400,
+        truncated: false,
+      },
+    ];
+    const { container } = render(
+      <SubagentTranscriptSheet
+        sheet={sheetWith({ items: thinkingItems })}
+        running={false}
+        onRefresh={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    const details = container.querySelector(
+      'details.dvx-subsheet-thinking',
+    ) as HTMLDetailsElement;
+    expect(details).not.toBeNull();
+    expect(details.open).toBe(false);
+    expect(
+      details.querySelector('summary.dvx-subsheet-thought')?.textContent,
+    ).toBe('Thought for 12s');
+    // The thinking text is in the disclosure body, quiet secondary;
+    // the native details element owns expand/collapse.
+    expect(
+      details.querySelector('.dvx-subsheet-thinking-text')?.textContent,
+    ).toBe('The user wants the CSS budget checked first.');
   });
 
   it('shows the unavailable state', () => {

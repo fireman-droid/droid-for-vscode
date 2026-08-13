@@ -835,6 +835,7 @@ function parseToolActivity(
       [
         'durationMs',
         'filePath',
+        'additionalFileCount',
         'detailKind',
         'detail',
         'errorMessage',
@@ -860,6 +861,7 @@ function parseToolActivity(
     (value.durationMs !== undefined && !isSequence(value.durationMs)) ||
     (value.filePath !== undefined &&
       !isSafeWorkspaceRelativePath(value.filePath)) ||
+    !hasValidAdditionalFileCount(value) ||
     !hasValidToolDetail(value) ||
     !hasValidToolErrorMessage(value) ||
     !hasValidToolOutputTail(value)
@@ -898,6 +900,9 @@ function parseToolActivity(
     ...(value.filePath === undefined
       ? {}
       : { filePath: value.filePath }),
+    ...(value.additionalFileCount === undefined
+      ? {}
+      : { additionalFileCount: value.additionalFileCount as number }),
     ...(value.detailKind === undefined
       ? {}
       : {
@@ -3446,6 +3451,7 @@ function parseToolTranscriptItem(
       [
         'durationMs',
         'filePath',
+        'additionalFileCount',
         'detailKind',
         'detail',
         'errorMessage',
@@ -3472,6 +3478,7 @@ function parseToolTranscriptItem(
     (value.durationMs !== undefined && !isSequence(value.durationMs)) ||
     (value.filePath !== undefined &&
       !isSafeWorkspaceRelativePath(value.filePath)) ||
+    !hasValidAdditionalFileCount(value) ||
     !hasValidToolDetail(value) ||
     !hasValidToolErrorMessage(value) ||
     !hasValidToolOutputTail(value)
@@ -3509,6 +3516,9 @@ function parseToolTranscriptItem(
     ...(value.filePath === undefined
       ? {}
       : { filePath: value.filePath }),
+    ...(value.additionalFileCount === undefined
+      ? {}
+      : { additionalFileCount: value.additionalFileCount as number }),
     ...(value.detailKind === undefined
       ? {}
       : {
@@ -3620,6 +3630,16 @@ function hasTurnIdentity(
 
 function isSequence(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+function hasValidAdditionalFileCount(value: UnknownRecord): boolean {
+  return (
+    value.additionalFileCount === undefined ||
+    (value.filePath !== undefined &&
+      isSequence(value.additionalFileCount) &&
+      value.additionalFileCount > 0 &&
+      value.additionalFileCount < MAX_CHANGED_FILES_PER_TURN)
+  );
 }
 
 function readStringDataProperty(

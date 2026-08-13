@@ -277,6 +277,7 @@ describe('projectSessionHistory', () => {
             kind: 'tool',
             toolName: 'ApplyPatch',
             filePath: 'src/page.html',
+            additionalFileCount: 1,
           },
           { kind: 'assistant' },
           {

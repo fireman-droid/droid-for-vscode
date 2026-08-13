@@ -45,6 +45,7 @@ export interface ToolActivityProjection {
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
   readonly durationMs?: number;
   readonly filePath?: string;
+  readonly additionalFileCount?: number;
   readonly detailKind?: ToolDetailKind;
   readonly detail?: string;
   readonly errorMessage?: string;
@@ -434,6 +435,7 @@ function projectEntry(
     ...(entry.filePath === undefined
       ? {}
       : { filePath: entry.filePath }),
+    ...additionalFileCount(entry.filePath, entry.filePaths),
     ...(entry.detail === undefined || entry.detailKind === undefined
       ? {}
       : { detailKind: entry.detailKind, detail: entry.detail }),
@@ -450,6 +452,17 @@ function projectEntry(
       ? {}
       : { subagent: entry.subagent }),
   };
+}
+
+function additionalFileCount(
+  filePath: string | undefined,
+  filePaths: readonly string[] | undefined,
+): { readonly additionalFileCount: number } | Record<never, never> {
+  return filePath !== undefined &&
+    filePaths !== undefined &&
+    filePaths.length > 1
+    ? { additionalFileCount: filePaths.length - 1 }
+    : {};
 }
 
 /**
@@ -770,6 +783,7 @@ function projectEntryStandalone(
     ...(entry.filePath === undefined
       ? {}
       : { filePath: entry.filePath }),
+    ...additionalFileCount(entry.filePath, entry.filePaths),
     ...(entry.detail === undefined || entry.detailKind === undefined
       ? {}
       : { detailKind: entry.detailKind, detail: entry.detail }),

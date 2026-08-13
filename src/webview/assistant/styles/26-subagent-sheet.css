@@ -51,13 +51,55 @@
   margin: 6px 0 10px;
 }
 
-/* Quiet collapsed thinking line: same typography family as the main
-   chat's settled Thinking rows, without the disclosure body. */
+/* Quiet thinking line: same typography family as the main chat's
+   settled Thinking rows. Doubles as the disclosure summary when the
+   item carries text. */
 .dvx-subsheet-thought {
   margin: 2px 0;
   color: var(--dvx-subtle);
   font-size: 11.5px;
   line-height: 19px;
+}
+
+/* Thinking disclosure (main chat's Thinking row language, in the
+   sheet's namespace): quiet summary with a rotating chevron, the
+   thinking text as quiet secondary prose. No box chrome. */
+.dvx-subsheet-thinking {
+  margin: 2px 0;
+}
+
+.dvx-subsheet-thinking > summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  margin: 0;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.dvx-subsheet-thinking > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dvx-subsheet-thinking > summary:hover {
+  color: var(--dvx-muted);
+}
+
+.dvx-subsheet-thinking:not([open]) .dvx-activity-chevron {
+  transform: rotate(-90deg);
+}
+
+.dvx-subsheet-thinking-text {
+  margin: 2px 0 6px;
+  padding: 0;
+  color: var(--dvx-subtle);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 17px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* Quiet ruled tool rows (07-activity-live family): a 4px marker dot
@@ -100,8 +142,35 @@
   white-space: nowrap;
 }
 
-.dvx-subsheet-tool-file {
+.dvx-subsheet-tool-files {
   flex: 0 1 auto;
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.dvx-subsheet-tool-file {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dvx-muted);
+  font-family: var(--dvx-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-subsheet-tool-file-count {
+  flex: none;
+  color: var(--dvx-subtle);
+  font-size: 10px;
+}
+
+/* Command text on Execute-class rows: mono, one line, ellipsized —
+   the same information the main chat's command card title carries. */
+.dvx-subsheet-tool-cmd {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   color: var(--dvx-muted);
   font-family: var(--dvx-mono, ui-monospace, monospace);

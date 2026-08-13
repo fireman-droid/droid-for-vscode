@@ -73,11 +73,13 @@ describe('assistantWebviewReducer changes ledger', () => {
         progressCount: 0,
         latestUpdateKind: null,
         filePath: 'src/app.ts',
+        additionalFileCount: 2,
       },
     });
     expect(state.transcript.at(-1)).toMatchObject({
       kind: 'tool',
       filePath: 'src/app.ts',
+      additionalFileCount: 2,
     });
 
     // First writing frame while the turn is live: the ledger appears

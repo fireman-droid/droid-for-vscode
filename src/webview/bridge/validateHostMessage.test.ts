@@ -8,6 +8,7 @@ import {
   MAX_ASK_USER_TOPIC_LENGTH,
   MAX_ASSISTANT_TEXT_LENGTH,
   MAX_BRIDGE_ID_LENGTH,
+  MAX_CHANGED_FILES_PER_TURN,
   MAX_EDITED_SPEC_LENGTH,
   MAX_INTERACTION_DETAIL_LENGTH,
   MAX_INTERACTION_TITLE_LENGTH,
@@ -618,6 +619,7 @@ describe('readHostMessage', () => {
       progressCount: 0,
       latestUpdateKind: null,
       filePath: 'src/webview/assistant/App.tsx',
+      additionalFileCount: 2,
     },
     {
       type: 'changes.update',
@@ -3391,6 +3393,41 @@ describe('readHostMessage', () => {
       ],
     ]) {
       expect(readHostMessage({ ...snapshot, transcript })).toBeUndefined();
+    }
+  });
+
+  it('accepts bounded multi-file counts and rejects incoherent ones', () => {
+    const snapshot = createSessionSnapshot();
+    const tool = {
+      id: 'tool-1',
+      kind: 'tool',
+      turnId: 'turn-1',
+      toolUseId: 'tool-use-1',
+      toolName: 'ApplyPatch',
+      action: 'Updated workspace files',
+      status: 'completed',
+      progressCount: 0,
+      latestUpdateKind: null,
+      filePath: 'src/app.ts',
+      additionalFileCount: 2,
+    };
+    expect(
+      readHostMessage({ ...snapshot, transcript: [tool] }),
+    ).toMatchObject({ transcript: [tool] });
+
+    for (const invalid of [
+      { ...tool, additionalFileCount: 0 },
+      { ...tool, additionalFileCount: MAX_CHANGED_FILES_PER_TURN },
+      { ...tool, additionalFileCount: 1.5 },
+      { ...tool, additionalFileCount: '2' },
+      (() => {
+        const { filePath: _filePath, ...withoutPath } = tool;
+        return withoutPath;
+      })(),
+    ]) {
+      expect(
+        readHostMessage({ ...snapshot, transcript: [invalid] }),
+      ).toBeUndefined();
     }
   });
 

@@ -79,11 +79,7 @@ interface Projection {
     }
   >;
   readonly toolIdentities: Map<string, string>;
-  /**
-   * Transcript ids of tool items whose call changed several files
-   * (multi-file ApplyPatch); the item itself carries only the first
-   * path, the changes synthesis needs them all.
-   */
+  /** Every path of a multi-file call, used by Changes synthesis. */
   readonly multiFileTools: Map<string, readonly string[]>;
   readonly toolCounts: Map<string, number>;
   readonly imageCounts: Map<string, number>;
@@ -661,6 +657,9 @@ function appendTool(
     progressCount: 0,
     latestUpdateKind: null,
     ...(filePaths.length === 0 ? {} : { filePath: filePaths[0] }),
+    ...(filePaths.length <= 1
+      ? {}
+      : { additionalFileCount: filePaths.length - 1 }),
     ...(detail === undefined
       ? {}
       : { detailKind: detail.kind, detail: detail.text }),

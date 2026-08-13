@@ -376,6 +376,7 @@ describe('turnActivityState', () => {
       toolName: 'ApplyPatch',
       toolUseId: 'tool-patch',
       action: 'Updated workspace files',
+      filePath: 'src/a.ts',
       filePaths: ['src/a.ts', 'src/工具'],
     });
     const completePatch = projectToolEvent(partialPatch.state, {
@@ -383,9 +384,13 @@ describe('turnActivityState', () => {
       toolName: 'ApplyPatch',
       toolUseId: 'tool-patch',
       action: 'Updated workspace files',
+      filePath: 'src/a.ts',
       filePaths: ['src/a.ts', 'src/工具集.ts'],
     });
-    expect(completePatch.projection).not.toBeNull();
+    expect(completePatch.projection).toMatchObject({
+      filePath: 'src/a.ts',
+      additionalFileCount: 1,
+    });
     expect(collectToolFilePaths(completePatch.state)).toEqual([
       'src/a.ts',
       'src/工具集.ts',
@@ -395,6 +400,7 @@ describe('turnActivityState', () => {
       toolName: 'ApplyPatch',
       toolUseId: 'tool-patch',
       action: 'Updated workspace files',
+      filePath: 'src/a.ts',
       filePaths: ['src/a.ts', 'src/工具集.ts'],
     });
     expect(repeatedPatch.projection).toBeNull();

@@ -3,7 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { SessionTranscriptItem } from '../../shared/bridgeMessages';
 import { DroidMarkdownContent } from './MarkdownText';
 import type { SubagentSheetState } from './subagentPanelFlow';
-import { formatDuration, formatToolLifecycle } from './thread/readers';
+import { ActivityChevron } from './thread/icons';
+import {
+  firstLine,
+  formatDuration,
+  formatToolLifecycle,
+} from './thread/readers';
 
 /** Matches the btw collapse duration (styles 21-btw.css). */
 const LEAVE_MS = 200;
@@ -185,13 +190,7 @@ export function SubagentTranscriptRow({
         />
       );
     case 'thinking':
-      return (
-        <p className="dvx-subsheet-thought">
-          {item.durationMs !== undefined && item.durationMs !== null
-            ? `Thought for ${formatSeconds(item.durationMs)}`
-            : 'Thought'}
-        </p>
-      );
+      return <SubsheetThinking item={item} />;
     case 'tool': {
       const failed = item.status === 'failed';
       return (
@@ -201,10 +200,25 @@ export function SubagentTranscriptRow({
           }`}
         >
           <span className="dvx-subsheet-tool-action">{item.action}</span>
-          {item.filePath !== undefined ? (
-            <code className="dvx-subsheet-tool-file" title={item.filePath}>
-              {item.filePath}
+          {item.detailKind === 'command' && item.detail !== undefined ? (
+            <code className="dvx-subsheet-tool-cmd" title={item.detail}>
+              {firstLine(item.detail)}
             </code>
+          ) : null}
+          {item.filePath !== undefined ? (
+            <span className="dvx-subsheet-tool-files">
+              <code
+                className="dvx-subsheet-tool-file"
+                title={item.filePath}
+              >
+                {item.filePath}
+              </code>
+              {item.additionalFileCount === undefined ? null : (
+                <span className="dvx-subsheet-tool-file-count">
+                  +{item.additionalFileCount}
+                </span>
+              )}
+            </span>
           ) : null}
           <span
             className={`dvx-subsheet-tool-state${
@@ -234,6 +248,36 @@ export function SubagentTranscriptRow({
     default:
       return null;
   }
+}
+
+/**
+ * A thinking item as a native disclosure, mirroring the main chat's
+ * settled Thinking rows: the quiet "Thought for Ns" summary with a
+ * chevron, expanding to the thinking text as quiet secondary prose.
+ * The history projection drops empty thinking blocks, but a textless
+ * item still degrades to the flat label (no dead disclosure).
+ */
+function SubsheetThinking({
+  item,
+}: {
+  readonly item: Extract<SessionTranscriptItem, { kind: 'thinking' }>;
+}): React.JSX.Element {
+  const label =
+    item.durationMs !== undefined && item.durationMs !== null
+      ? `Thought for ${formatSeconds(item.durationMs)}`
+      : 'Thought';
+  if (item.text.length === 0) {
+    return <p className="dvx-subsheet-thought">{label}</p>;
+  }
+  return (
+    <details className="dvx-subsheet-thinking">
+      <summary className="dvx-subsheet-thought">
+        {label}
+        <ActivityChevron />
+      </summary>
+      <pre className="dvx-subsheet-thinking-text">{item.text}</pre>
+    </details>
+  );
 }
 
 function formatSeconds(durationMs: number): string {
