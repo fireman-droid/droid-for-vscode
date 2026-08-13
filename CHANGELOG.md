@@ -4,6 +4,37 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-08-13
+
+The subagent panel release: the working popup finally answers "what
+is each subagent doing, and can I stop just this one", and settled
+delegations replay their full transcript read-only.
+
+### Added
+
+- **Live subagent activity** — while the "N Working" popup is open,
+  each running delegation row shows the tool its child session is on
+  right now (host-side polling with backoff; stops when the popup
+  closes). Bridge protocol moves to v11 with the new
+  `subagentProtocol.ts` contract; the child session id never crosses
+  the bridge.
+- **Per-row Stop that actually works** — daemon-backed
+  resume→interrupt→detach stops exactly that delegation while its
+  siblings keep running (probed sequence). The button only renders
+  when the host proved it can stop that row — never a disabled
+  placeholder.
+- **Read-only transcript playback** — settled delegation rows gain a
+  quiet "View transcript" action opening the child session's full
+  transcript in the /btw-style split pane: no composer, no writable
+  entry points, fail-closed to a quiet "Transcript unavailable" when
+  the child file cannot be resolved or loaded.
+
+### Fixed
+
+- **Session drawer leak** — subagent child sessions no longer appear
+  in the session drawer or the archived list; their only entry point
+  is the transcript view on their parent's Task row.
+
 ## [0.6.0] - 2026-08-13
 
 The kitchen-sink parity release: everything the reviewed harness
