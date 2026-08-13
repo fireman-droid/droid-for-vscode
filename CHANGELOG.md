@@ -4,6 +4,36 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-08-13
+
+Polish release from the first full kitchen-sink review loop: the mode
+and model popovers move to a lighter anchored form, the plan line
+reads as live status, and the dark theme loses the ticker smear.
+
+### Changed
+
+- **Mode & model popovers reworked** — both are 200px cards with
+  compact rows and a thin accent check instead of radio circles and
+  selected-row washes, and they now anchor directly above their own
+  triggers with right edges aligned (CSS anchor positioning, with the
+  old row alignment as fallback). The model popover collapses its
+  two-card stack into one card: search crown, 12px model names that
+  truncate long BYOK ids, a hover-revealed reasoning pencil, and a
+  quiet hairline "Add model…" footer.
+- **Plan line title reads as live status** — the collapsed plan line
+  shows the step Droid is on right now, the next pending step between
+  updates, or the last step once everything is done, instead of
+  freezing on the plan's first step. TodoWrite carries no title
+  field; the gap and its fix paths are documented in
+  `docs/product/plan-title-limitation.md`.
+
+### Fixed
+
+- **Dark ticker smear** — in dark theme the exploration ticker's
+  static rows no longer paint a gradient bar behind their text; the
+  paused-shimmer rule re-neutralizes the gradient so flat grey ink is
+  all that renders.
+
 ## [0.4.0] - 2026-08-13
 
 Feature release covering everything since 0.2.0, including the 0.3.0
