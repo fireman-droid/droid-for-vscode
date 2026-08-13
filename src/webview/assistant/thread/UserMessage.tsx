@@ -1,7 +1,7 @@
 // UserMessage: moved verbatim from Thread.tsx (structure-only refactor).
 
 import { MessagePrimitive } from "@assistant-ui/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
   MAX_TURN_TEXT_LENGTH,
@@ -30,6 +30,7 @@ export function UserMessage({
   text,
   messageId,
   attachments,
+  planLine = null,
   editing,
   editStage,
   rejection,
@@ -46,6 +47,12 @@ export function UserMessage({
   readonly text: string;
   readonly messageId: string | null;
   readonly attachments: readonly SentAttachmentSummary[];
+  /**
+   * Thin plan line(s) of the turn this message triggered, rendered
+   * directly under the question inside the same sticky block so the
+   * pin coordinator carries them (built in Thread from planAnchors).
+   */
+  readonly planLine?: ReactNode;
   readonly editing: boolean;
   readonly editStage: EditStageState | null;
   readonly rejection: EditResendRejection | null;
@@ -373,6 +380,7 @@ export function UserMessage({
           </div>
         )}
       </div>
+      {planLine}
     </MessagePrimitive.Root>
   );
 }

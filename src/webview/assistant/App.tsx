@@ -784,10 +784,11 @@ export function App(): React.JSX.Element {
     () => findLatestChangesContext(state.transcript),
     [state.transcript],
   );
-  // Plan anchor cards: pure projections of the transcript's
-  // todowrites (no new bridge data) —
-  // one anchor card per plan lineage, rendered at the creation row's
-  // transcript position and updated in place by later todowrites.
+  // Plan lines: pure projections of the transcript's todowrites (no
+  // new bridge data) — one thin line per plan lineage, keyed by the
+  // user message that triggered the lineage's turn and rendered
+  // directly under that message, updated in place by later
+  // todowrites.
   const planAnchors = useMemo(
     () => selectPlanAnchors(state.transcript),
     [state.transcript],

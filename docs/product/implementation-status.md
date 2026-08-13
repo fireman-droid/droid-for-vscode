@@ -2352,6 +2352,86 @@ UI 描述见 §22 重做记录。
   片**待下包**；真机验收随下一包——跑一条多工具探索回合，Explored
   收起态应见旧行上滑渐隐、新行下方淡入的一格转轮动画。
 
+### 30. 计划细条：重投影到用户消息 + 暂时吸顶 + 圈圈清单（2026-08-13 中午，重做 §20 锚卡形态）
+
+- **来源**：decard 设计稿 §3 方案 A（用户已批准）+ 用户 11:45 样板
+  间验收修正：展开态**撤掉左轨竖线**改每步一个圈圈、内边距加大、
+  宽度与聊天内容框贴合、**hover 一律不加灰底**（"看着很廉价"，
+  反馈只允许字色加深/细下划线级）。§20 的谱系 selector 逻辑保留，
+  其"Created Plan"大卡形态（眉标/渐变/四边框/阴影/独立 foot/双控
+  件）整体废除。
+- **A 位置重投影**：`selectPlanAnchors` 返回值从"按创建 todowrite
+  `toolUseId` 键"改为按**触发该回合的用户消息**键（转录 user 项
+  id，即 aui message id；值为数组，同回合多谱系纵向堆叠），无前置
+  用户消息的计划静默跳过。渲染从 tool-part 路径（`PlanAnchorSlot`
+  按 toolUseId 命中，已删）移到 `Thread.tsx` 的 user 消息渲染回调
+  → `UserMessage` 新 `planLine` slot（question 内容之后、同一
+  sticky 块内），`PlanAnchorContext` 删除。同谱系后续 todowrite 仍
+  原地改这一条；live 与历史回放同构（selector 纯函数吃转录）。
+  state 瘦身：`summary`/`currentText` 字段删除（细条无摘要位）。
+- **B 暂时吸顶**：计划条作为 `.dvx-message-user` sticky 块的普通
+  成员被既有 `computeStickyLayout` 坐标系整体携带，组件内**零滚动
+  监听**。`[data-pinned]` 纯 CSS 加"可读性底盘"：raised 不透明底
+  + 1px 边框 + 8px 圆角，负 margin（-11px）+ 补偿 padding 让内容
+  不跳位；吸顶下展开体转 `position:absolute` 浮层（raised 底 +
+  10px 圆角 + 深投影）向下浮出**不挤压布局**，下一条用户消息自然
+  推走整个 pin。
+- **C 新视觉**（`22-plan-anchor.css` 全量重写为 `dvx-plan-line*`
+  族）：收起一行 = 6px 状态点 + 13px/535 标题（ellipsis）+ 10.5px
+  tabular n/m + 13px chevron，无外框无底色，顶部 hairline 分节，
+  整行单一 disclosure（一个 button，aria-expanded）。运行中状态点
+  accent + 呼吸微光（`dvx-plan-line-glow`，唯一动画载体；全完成即
+  停）；完成退灰。展开清单每步一个 10px 圈：未到空心
+  （border-strong 描边）、当前实心 accent、已完成实心灰 + 7px 白
+  勾；步距 10px、块内边距 12/16（吸顶浮层 14/16），文字跟圈右侧
+  （当前步 ink/500、完成步退灰）。展开收起沿用 grid-rows 0fr↔1fr
+  过渡；hover 只有标题字色加深 + chevron 提亮，**无任何灰底**；
+  reduced-motion 全部瞬切；forced-colors 补边。暗色主题走 token
+  翻转，`24-theme-dark.css` 撤掉旧 plan-anchor 渐变皮（`.dvx-queue`
+  保留），只补吸顶底盘/浮层的深色投影。
+- **门禁**（并行批次在途，聚焦跑）：focused vitest
+  `planAnchor.test.ts`（11 例：解析 3 + 用户消息锚定/无锚跳过/原地
+  更新/不相交开新谱系/同回合堆叠/部分重写续谱/空 detail 跳过）+
+  `PlanLine.test.tsx`（5 例：单行结构与单按钮/运行中 live/完成退
+  灰/完成后不再 glow/整行展开收起三态圈圈）共 16 例绿；全量
+  vitest（--maxWorkers=4，已确认无并发 vitest）102 文件 2033 例中
+  101 文件 2025 例绿，唯一红文件 `GitCommitPanel.test.tsx` 属并行
+  Changes 账本切片在途改名（"Commit these changes…"→"Commit…"），
+  与本切片无关；typecheck webview 两段
+  （tsconfig.webview.json + src/webview/tsconfig.json）绿，
+  extension 段被并行在途 `turnChangesLedger.test.ts` 类型错阻塞
+  （非本切片文件）；lint:budgets 红项全属并行在途文件
+  （turnFlow/bridgeMessages/store.test ratchet），本切片文件均在预
+  算内（Thread.tsx 未触 ratchet）；build 绿。
+- **自验收**（headless Chrome + 真实 dist 产物，
+  `artifacts/plan-anchor-harness.html` + `smoke-plan-anchor.mjs` 重
+  写为五场景，EXIT 0）：replay-open（单条、位于 user 消息 sticky
+  块内 content 之后、安静 1/3、单按钮、无旧卡 chrome）、
+  replay-done（同位 3/3 灰点终态）、stream 全链（首个 todowrite 出
+  条 live 0/3 → 原地 2/3 不出第二条 → 整行展开 3 圈 2 勾 → 收起 →
+  全完成 + 回合结束转 done 3/3）、sticky（滚过消息区间 pin 住：底
+  盘 1px solid + 8px 圆角 + 不透明底实测；吸顶点开浮层
+  position:absolute、块流高不变（35px≡35px）；滚到底第二条消息接
+  管 pin）、dark（暗色展开圈圈清单）。截图六张存 `artifacts/`：
+  `plan-line-collapsed-running.png` / `-expanded.png` /
+  `-pinned.png` / `-pinned-expanded.png` / `-completed.png` /
+  `-dark.png`，人工核对：细条两端与消息列贴齐、圈圈三态清晰、吸顶
+  底盘内容无跳位、浮层带完整精修（边框/圆角/投影）。
+- **打包**：按用户指示不打包，随下一个包走。
+
+主要实现：
+
+- `src/webview/assistant/planAnchor.ts`（selector 重键 + state 瘦
+  身）、`PlanLine.tsx`（新组件，替代删除的
+  `PlanAnchorCard.tsx`）、`Thread.tsx`（planAnchors 类型改
+  Map<userItemId, PlanAnchorState[]>、删 PlanAnchorContext、user
+  回调注入 planLine）、`thread/UserMessage.tsx`（planLine slot）、
+  `thread/AssistantMessage.tsx` + `thread/activityRows.tsx`（删
+  PlanAnchorSlot 投影）、`styles/22-plan-anchor.css`（全量重写）、
+  `styles/24-theme-dark.css`（撤渐变皮 + 深色投影）
+- 测试：`planAnchor.test.ts`（重写）、`PlanLine.test.tsx`（替代删
+  除的 `PlanAnchorCard.test.tsx`）
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择

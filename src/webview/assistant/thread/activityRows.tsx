@@ -6,7 +6,6 @@ import {
   Fragment,
   isValidElement,
   memo,
-  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -23,8 +22,6 @@ import {
 } from "../activityGrouping";
 import { commandCardTitle, commandChips } from "../commandCard";
 import { parsePlanSteps } from "../planAnchor";
-import { PlanAnchorCard } from "../PlanAnchorCard";
-import { PlanAnchorContext } from "../Thread";
 import { PreviewChip, ToolFilePath } from "./transcriptRows";
 import {
   CommandCardMenu,
@@ -81,28 +78,6 @@ export function ToolOutputPreview({
       </pre>
     </div>
   );
-}
-
-/**
- * Renders the plan's anchor card directly above the todowrite row
- * that created the plan (Cursor-style "Created Plan" in the flow).
- * Later todowrite rows render nothing here — they update the anchored
- * card's projection instead. Rendering through the ordinary tool-part
- * path keeps live turns and history replay isomorphic by
- * construction.
- */
-export function PlanAnchorSlot({
-  toolCallId,
-}: {
-  readonly toolCallId: string | undefined;
-}): React.JSX.Element | null {
-  const { anchors, running } = useContext(PlanAnchorContext);
-  const anchor =
-    toolCallId === undefined ? undefined : anchors?.get(toolCallId);
-  if (anchor === undefined) {
-    return null;
-  }
-  return <PlanAnchorCard anchor={anchor} running={running} />;
 }
 
 export function ToolActivityRow({

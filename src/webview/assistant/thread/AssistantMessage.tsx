@@ -21,7 +21,7 @@ import { DroidMarkdownText } from "../MarkdownText";
 import { MessageTimestamp } from "../MessageTimestamp";
 import { TranscriptImage } from "../TranscriptImage";
 import { ForkContext, RegenerateContext } from "../Thread";
-import { ActivityGroup, PlanAnchorSlot, ToolActivityRow } from "./activityRows";
+import { ActivityGroup, ToolActivityRow } from "./activityRows";
 import { CopyActionContent, ForkIcon, RegenerateIcon } from "./icons";
 import { readReasoningDuration, readToolActivity } from "./readers";
 import { ChangesSummary, Diagnostic, ThinkingRow } from "./transcriptRows";
@@ -88,13 +88,10 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
               );
             case "tool-call":
               return (
-                <>
-                  <PlanAnchorSlot toolCallId={part.toolCallId} />
-                  <ToolActivityRow
-                    activity={readToolActivity(part)}
-                    toolName={part.toolName}
-                  />
-                </>
+                <ToolActivityRow
+                  activity={readToolActivity(part)}
+                  toolName={part.toolName}
+                />
               );
             case "data":
               if (part.name === "droid-diagnostic") {

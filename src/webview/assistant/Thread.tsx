@@ -37,6 +37,7 @@ import {
   type PathPreviewWiring,
 } from "./MarkdownText";
 import type { PlanAnchorState } from "./planAnchor";
+import { PlanLine } from "./PlanLine";
 import { AssistantMessage } from "./thread/AssistantMessage";
 import { Composer } from "./thread/Composer";
 import { UserMessage } from "./thread/UserMessage";
@@ -140,15 +141,6 @@ export const PreviewContext = createContext<(path: string) => void>(
 export const TerminalMirrorContext = createContext<(() => void) | null>(
   null,
 );
-
-// Plan anchor cards for the transcript: the map keys creation
-// todowrite toolUseIds to the plan's latest projected state, and
-// `running` drives the card's warm "Building…" status while the turn
-// streams. Exported for focused slot tests.
-export const PlanAnchorContext = createContext<{
-  readonly anchors: ReadonlyMap<string, PlanAnchorState> | null;
-  readonly running: boolean;
-}>({ anchors: null, running: false });
 
 // Regenerating rewinds to the last user message and resends it. Null
 // means the action is currently unavailable (no anchor or turn active).
@@ -286,12 +278,17 @@ interface DroidThreadProps {
   readonly editResendEnabled: boolean;
   readonly inlineInteraction?: ReactNode;
   /**
-   * Plan anchor cards keyed by the creation todowrite's toolUseId
-   * (projected in App from transcript todowrites). Each plan renders
-   * one Cursor-style "Created Plan" card at its creation position in
-   * the transcript, updated in place by later todowrites.
+   * Plan lines keyed by the id of the user message that triggered
+   * the turn each plan was created in (projected in App from
+   * transcript todowrites; the key doubles as the aui message id).
+   * Each plan renders one thin line directly under its user message
+   * — the first element of that turn's reply area — updated in place
+   * by later todowrites.
    */
-  readonly planAnchors?: ReadonlyMap<string, PlanAnchorState> | null;
+  readonly planAnchors?: ReadonlyMap<
+    string,
+    readonly PlanAnchorState[]
+  > | null;
   /**
    * The queued-prompts bar stacked directly above the Composer in
    * the viewport footer; null while the queue is empty. Built in App
@@ -658,10 +655,6 @@ export const DroidThread = memo(function DroidThread({
     () => ({ workspaceRoot, previewFile: onPreviewFile }),
     [workspaceRoot, onPreviewFile],
   );
-  const planAnchorValue = useMemo(
-    () => ({ anchors: planAnchors, running }),
-    [planAnchors, running],
-  );
   return (
     <ThreadPrimitive.Root
       className={`dvx-thread${interactionPending ? " dvx-thread-pending" : ""}`}
@@ -683,7 +676,6 @@ export const DroidThread = memo(function DroidThread({
           <PathPreviewContext.Provider value={pathPreviewWiring}>
           <InlineHtmlPreviewContext.Provider value={onPreviewInlineHtml}>
           <TerminalMirrorContext.Provider value={onOpenTerminalMirror}>
-          <PlanAnchorContext.Provider value={planAnchorValue}>
           <RegenerateContext.Provider value={onRegenerate}>
           <ForkContext.Provider value={onForkSession}>
             <SelectSessionContext.Provider value={onSelectSession}>
@@ -717,11 +709,27 @@ export const DroidThread = memo(function DroidThread({
                     return <AssistantMessage />;
                   }
                   const messageId = readUserMessageId(message.metadata);
+                  // Plan lines of the turn this message triggered:
+                  // rendered inside the sticky message block, directly
+                  // under the question, so the pin coordinator carries
+                  // them through stick/push-out for free.
+                  const plans = planAnchors?.get(message.id);
                   return (
                     <UserMessage
                       text={readMessageText(message.content)}
                       messageId={messageId}
                       attachments={readUserAttachments(message.metadata)}
+                      planLine={
+                        plans === undefined
+                          ? null
+                          : plans.map((plan) => (
+                              <PlanLine
+                                key={plan.anchorToolUseId}
+                                anchor={plan}
+                                running={running}
+                              />
+                            ))
+                      }
                       editing={
                         messageId !== null && messageId === editingMessageId
                       }
@@ -751,7 +759,6 @@ export const DroidThread = memo(function DroidThread({
             </SelectSessionContext.Provider>
           </ForkContext.Provider>
           </RegenerateContext.Provider>
-          </PlanAnchorContext.Provider>
           </TerminalMirrorContext.Provider>
           </InlineHtmlPreviewContext.Provider>
           </PathPreviewContext.Provider>

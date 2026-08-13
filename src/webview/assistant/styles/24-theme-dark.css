@@ -569,11 +569,21 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
   box-shadow: 0 1px 2px rgb(0 0 0 / 35%);
 }
 
-/* ---- 22-plan-anchor / queuedMessages: the warm state-card family ---- */
-.dvx-shell[data-theme='dark'] .dvx-plan-anchor,
+/* ---- 22-plan-anchor / queuedMessages ------------------------------
+   The plan line is chrome-free and token-driven (tokens already flip
+   for dark); only its pinned chassis/overlay shadows need the deeper
+   dark throw. The queue bar keeps the warm state-card family skin. */
 .dvx-shell[data-theme='dark'] .dvx-queue {
   background: linear-gradient(180deg, #29292a, var(--dvx-raised));
   box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-message-user[data-pinned] .dvx-plan-line-row {
+  box-shadow: 0 2px 8px -6px rgb(0 0 0 / 65%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-message-user[data-pinned] .dvx-plan-line-body {
+  box-shadow: 0 14px 30px -16px rgb(0 0 0 / 70%);
 }
 
 .dvx-shell[data-theme='dark'] .dvx-queue-toggle:hover {
