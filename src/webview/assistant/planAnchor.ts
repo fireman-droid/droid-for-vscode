@@ -18,10 +18,13 @@ export interface PlanAnchorState {
   /** toolUseId of the lineage's creation todowrite (stable key). */
   readonly anchorToolUseId: string;
   /**
-   * Static line title: the opening step of the plan as first
-   * written. Droid's todowrite carries no title field, so the first
-   * step is the closest honest stand-in and it stays stable across
-   * updates.
+   * Status-line title: the step Droid is on right now (first
+   * in_progress), else the next pending step, else the last step
+   * once everything is done — so the collapsed line reads as live
+   * progress next to its n/m count. Droid's todowrite carries no
+   * plan-title field, so step text is the only honest source; the
+   * gap and its upstream fix paths are recorded in
+   * docs/product/plan-title-limitation.md.
    */
   readonly title: string;
   /** Latest version of the checklist. */
@@ -68,7 +71,6 @@ interface PlanLineage {
   /** Transcript item id of the user message that triggered the turn. */
   readonly anchorUserItemId: string;
   readonly anchorToolUseId: string;
-  readonly title: string;
   latestSteps: readonly PlanStep[];
 }
 
@@ -116,7 +118,6 @@ export function selectPlanAnchors(
     lineages.push({
       anchorUserItemId: lastUserItemId,
       anchorToolUseId: item.toolUseId,
-      title: firstLineOf(steps[0]?.text ?? ''),
       latestSteps: steps,
     });
   }
@@ -129,7 +130,7 @@ export function selectPlanAnchors(
     ).length;
     const state: PlanAnchorState = {
       anchorToolUseId: lineage.anchorToolUseId,
-      title: lineage.title,
+      title: planLineTitle(steps),
       steps,
       completedCount,
       totalCount: steps.length,
@@ -151,6 +152,15 @@ function sharesAnyStep(
 ): boolean {
   const seen = new Set(previous.map((step) => step.text));
   return next.some((step) => seen.has(step.text));
+}
+
+/** Current-step stand-in title (see PlanAnchorState.title). */
+function planLineTitle(steps: readonly PlanStep[]): string {
+  const current =
+    steps.find((step) => step.status === 'in_progress') ??
+    steps.find((step) => step.status === 'pending') ??
+    steps[steps.length - 1];
+  return firstLineOf(current?.text ?? '');
 }
 
 function firstLineOf(text: string): string {

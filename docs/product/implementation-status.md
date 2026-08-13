@@ -2573,6 +2573,30 @@ UI 描述见 §22 重做记录。
   `artifacts/ticker-dark-fixed.png`。已提交待随下一批 VSIX 真机
   验证；kitchen-sink 样板间（链接真实 dist）现即呈现修复后形态。
 
+### 34. 计划条动态标题 + 标题短板独立档案（2026-08-13 下午）
+
+- **来源**：用户真机截图反馈——计划 5/5 全完成时折叠行仍显示
+  第一步文案，读起来像"卡在第一步"。旧行为是设计取舍（TodoWrite
+  无标题字段，创建时冻结首步文案顶替）；用户拍板改为动态语义，
+  并要求把数据面短板单独立档。
+- **实现**（`src/webview/assistant/planAnchor.ts`）：标题从
+  "lineage 创建时冻结"改为投影时逐次计算
+  `planLineTitle(steps)`——第一个 `in_progress` 步 → 无进行中时
+  下一个 `pending` 步（更新间隙）→ 全完成取最后一步；lineage 不再
+  存 title。PlanLine/CSS 零改动。
+- **短板档案**：新增
+  [`plan-title-limitation.md`](./plan-title-limitation.md)——
+  TodoWrite 数据面只有步骤清单的证据（`toolDetail.ts` 归一化接受
+  形态）、现行缓解、四条后期修复路径判定（上游加字段=首选等待；
+  用户消息首行=备选未采用；LLM 起标题=违反产品原则排除；引导模型
+  写标题=不可控排除）与复查触发点（升级 SDK/CLI 时查 schema）。
+- **验证**：`planAnchor` 聚焦用例更新 + 新增标题级联用例（全
+  pending/进行中/间隙 frontier/全完成），planAnchor + PlanLine +
+  Thread 三文件 87 例全绿；`artifacts/smoke-plan-anchor.mjs` 补四处
+  标题断言（replayOpen 显示进行中步、replayDone 与 stream 完成态
+  显示末步、更新中标题跟随运行步）后五场景全 PASS；typecheck 三段
+  与 lint:budgets 绿。已提交待随下一批 VSIX 真机验证。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择

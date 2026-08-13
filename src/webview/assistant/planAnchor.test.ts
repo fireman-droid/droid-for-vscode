@@ -99,7 +99,7 @@ describe('selectPlanAnchors', () => {
     expect(anchors.get('u1')).toEqual([
       {
         anchorToolUseId: 'use-1',
-        title: 'Read the config',
+        title: 'Wire the selector',
         steps: [
           { status: 'completed', text: 'Read the config' },
           { status: 'in_progress', text: 'Wire the selector' },
@@ -133,8 +133,27 @@ describe('selectPlanAnchors', () => {
     expect(anchor?.anchorToolUseId).toBe('use-1');
     expect(anchor?.completedCount).toBe(3);
     expect(anchor?.allCompleted).toBe(true);
-    // The title stays the plan's opening step as first written.
-    expect(anchor?.title).toBe('Read the config');
+    // Once every step is done the title settles on the last step.
+    expect(anchor?.title).toBe('Write the tests');
+  });
+
+  it('titles the line with the live step, the next pending one, or the last when done', () => {
+    const titleOf = (detail: string) =>
+      selectPlanAnchors([user('u1'), planTool('turn-1', 'use-1', detail)])
+        .get('u1')?.[0]?.title;
+    // Nothing started yet: the opening step is also the next one up.
+    expect(titleOf('1. [pending] First\n2. [pending] Second')).toBe('First');
+    // A running step always wins.
+    expect(
+      titleOf('1. [completed] First\n2. [in_progress] Second\n3. [pending] Third'),
+    ).toBe('Second');
+    // Between updates (nothing in progress) the frontier pending step leads.
+    expect(titleOf('1. [completed] First\n2. [pending] Second')).toBe('Second');
+    // Fully done: the last step, not the first.
+    expect(titleOf('1. [completed] First\n2. [completed] Second')).toBe('Second');
+    expect(
+      titleOf('1. [completed] First\n2. [completed] Second\n3. [completed] Third'),
+    ).toBe('Third');
   });
 
   it('starts a new lineage when an update shares no step text', () => {

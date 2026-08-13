@@ -71,6 +71,7 @@ Skills/MCP/Slash 命令、全保真本地诊断等已生产接通；V1 剩余切
 | [`activity-shimmer-fix-design.md`](./product/activity-shimmer-fix-design.md) | 活动行 shimmer 的诊断与纯 CSS 修复 | 已实现记录 |
 | [`diagnosability-design.md`](./product/diagnosability-design.md) | 全保真日志改造设计（turn 关联、性能埋点、导出）；附录 A 是 2026-08-11 时点的文档盘点（历史快照，现行地图以本表为准） | 已实现记录 |
 | [`log-analysis-playbook.md`](./product/log-analysis-playbook.md) | **读日志排障手册**：日志位置、schema、事件词典、典型故障特征、PowerShell 统计片段 | 参考（排障时必读；随 VSIX 打包进诊断导出包） |
+| [`plan-title-limitation.md`](./product/plan-title-limitation.md) | 计划条标题短板档案：TodoWrite 无标题字段的证据、动态标题缓解（2026-08-13 已实现）、四条后期修复路径判定与复查触发点 | 判定记录（等上游 schema 出现标题字段时复查） |
 
 ### docs/engineering/
 
