@@ -178,6 +178,17 @@ describe('buildPreviewShellHtml', () => {
     expect(MAX_PREVIEW_SOURCE_BYTES).toBe(4 * 1024 * 1024);
   });
 
+  it('wraps the toolbar at narrow widths instead of clipping buttons', () => {
+    // QA v0.3 P2-2: sidebar-width panels clipped "Open in editor"
+    // down to "Ope". The container must wrap, not hide overflow.
+    const shell = shellFor('<p>hi</p>');
+    const toolbarRule =
+      /\.dvx-preview-toolbar \{[^}]*\}/.exec(shell)?.[0] ?? '';
+    expect(toolbarRule).toContain('flex-wrap: wrap');
+    expect(toolbarRule).not.toContain('overflow: hidden');
+    expect(toolbarRule).not.toContain('white-space: nowrap');
+  });
+
   it('drops "Open in editor" and names the chat source for inline HTML', () => {
     const shell = buildPreviewShellHtml({
       fileName: 'Chat snippet',

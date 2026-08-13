@@ -214,21 +214,24 @@ const SHELL_STYLE = /* css */ `
       "Helvetica Neue", Arial, "Microsoft YaHei UI", sans-serif;
     font-size: 12.5px;
   }
+  /* Wrapping instead of clipping: narrow panels used to cut the
+     action buttons mid-word (QA v0.3 P2-2). Text spans ellipsize;
+     the buttons keep their full label and wrap to the next row. */
   .dvx-preview-toolbar {
     display: flex;
     align-items: center;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 6px 10px;
     padding: 9px 14px;
     border-bottom: 1px solid rgb(229 229 229 / 80%);
     background: linear-gradient(180deg, #f7f5f1, #f5f3ef);
-    white-space: nowrap;
-    overflow: hidden;
   }
   .dvx-preview-file {
     color: #171717;
     font-size: 12.5px;
     font-weight: 600;
     letter-spacing: 0.01em;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -239,12 +242,14 @@ const SHELL_STYLE = /* css */ `
     font-size: 11px;
     line-height: 16px;
     letter-spacing: 0.015em;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     cursor: default;
   }
   .dvx-preview-spacer { flex: 1; }
   .dvx-preview-toolbar button {
+    flex: none;
     appearance: none;
     font: inherit;
     font-size: 11.5px;
