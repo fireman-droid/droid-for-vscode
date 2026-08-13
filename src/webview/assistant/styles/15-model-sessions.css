@@ -233,25 +233,50 @@
   font-weight: 400;
 }
 
+/* One notch shorter and it slides down naturally: content-driven
+   height capped at min(400px, 64%), a rounded bottom edge with a
+   hairline and a short shadow, revealed by a clip-path sweep
+   (kitchen-sink form, 2026-08-13). Long lists keep scrolling inside
+   .dvx-session-nav. */
 .dvx-session-drawer {
-  overflow-y: auto;
   color: var(--dvx-ink);
   position: absolute;
   border-left: 0;
   z-index: 21;
   top: 60px;
   right: 0;
-  bottom: 126px;
+  bottom: auto;
   left: 0;
   width: auto;
+  max-height: min(400px, 64%);
   display: flex;
   flex-direction: column;
-  padding: 12px 8px 0;
+  padding: 12px 8px 8px;
   overflow: hidden;
   border: 0;
+  border-bottom: 1px solid var(--dvx-border);
+  border-radius: 0 0 12px 12px;
   background: var(--dvx-surface);
-  box-shadow: none;
-  animation: dvx-fade-in 180ms ease-out;
+  box-shadow: 0 22px 34px -22px rgb(0 0 0 / 32%);
+  animation: dvx-drawer-down 300ms var(--dvx-easing-out-strong);
+}
+
+@keyframes dvx-drawer-down {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+    clip-path: inset(0 0 100% 0 round 0 0 12px 12px);
+  }
+
+  55% {
+    opacity: 1;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round 0 0 12px 12px);
+  }
 }
 
 .dvx-session-search-shell {

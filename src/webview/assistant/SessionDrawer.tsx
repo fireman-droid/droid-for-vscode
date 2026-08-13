@@ -335,11 +335,17 @@ interface SessionGroup {
 function groupSessions(
   items: readonly SessionSummary[],
 ): readonly SessionGroup[] {
-  const favorites = items.filter((session) => session.isFavorite);
+  // Newest first in every group ("finding a chat took too long" —
+  // user decision 2026-08-13); display order no longer trusts the
+  // host catalog order.
+  const sorted = [...items].sort(
+    (a, b) => modifiedStamp(b) - modifiedStamp(a),
+  );
+  const favorites = sorted.filter((session) => session.isFavorite);
   if (favorites.length === 0) {
-    return [{ key: 'all', label: null, items }];
+    return [{ key: 'all', label: null, items: sorted }];
   }
-  const rest = items.filter((session) => !session.isFavorite);
+  const rest = sorted.filter((session) => !session.isFavorite);
   const groups: SessionGroup[] = [
     { key: 'favorites', label: 'Favorites', items: favorites },
   ];
@@ -347,6 +353,11 @@ function groupSessions(
     groups.push({ key: 'recent', label: 'Recent', items: rest });
   }
   return groups;
+}
+
+function modifiedStamp(session: SessionSummary): number {
+  const stamp = Date.parse(session.modifiedTime);
+  return Number.isNaN(stamp) ? 0 : stamp;
 }
 
 /**

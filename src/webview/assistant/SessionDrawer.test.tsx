@@ -90,6 +90,45 @@ describe('SessionDrawer', () => {
     ).toBeNull();
   });
 
+  it('lists chats newest first regardless of the catalog order', async () => {
+    const user = userEvent.setup();
+    const shuffled: SessionCatalogState = {
+      status: 'ready',
+      items: [
+        {
+          id: 'session-old',
+          title: 'Oldest chat',
+          messageCount: 2,
+          modifiedTime: '2026-02-18T08:00:00.000Z',
+          active: false,
+          isFavorite: false,
+        },
+        {
+          id: 'session-new',
+          title: 'Newest chat',
+          messageCount: 5,
+          modifiedTime: '2026-02-21T12:00:00.000Z',
+          active: false,
+          isFavorite: false,
+        },
+        {
+          id: 'session-mid',
+          title: 'Middle chat',
+          messageCount: 4,
+          modifiedTime: '2026-02-19T10:00:00.000Z',
+          active: true,
+          isFavorite: false,
+        },
+      ],
+    };
+    render(<SessionDrawer {...baseProps()} sessions={shuffled} />);
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+    const titles = [
+      ...document.querySelectorAll('.dvx-session-row-title'),
+    ].map((node) => node.textContent);
+    expect(titles).toEqual(['Newest chat', 'Middle chat', 'Oldest chat']);
+  });
+
   it('gates session switching and closes with Escape', async () => {
     const user = userEvent.setup();
     render(<SessionDrawer {...baseProps()} actionsDisabled />);

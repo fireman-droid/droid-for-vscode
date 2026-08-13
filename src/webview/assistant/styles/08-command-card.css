@@ -102,8 +102,35 @@
   border-radius: 0 0 9px 9px;
 }
 
-.dvx-activity-row[open] > .dvx-command-well {
-  animation: dvx-disclose-in 220ms ease-out;
+/* Expand/collapse animates as one continuous height + opacity
+   transition over ::details-content (interpolate-size keyword
+   interpolation; kitchen-sink form, 2026-08-13). The old snap-open
+   disclose animation retires for command cards. */
+.dvx-shell {
+  interpolate-size: allow-keywords;
+}
+
+.dvx-shell .dvx-command-card::details-content {
+  height: 0;
+  overflow: clip;
+  opacity: 0;
+  transition:
+    height var(--dvx-duration-slower) var(--dvx-easing-out-strong),
+    opacity var(--dvx-duration-slow) ease,
+    content-visibility var(--dvx-duration-slower) allow-discrete;
+}
+
+.dvx-shell .dvx-command-card[open]::details-content {
+  height: auto;
+  opacity: 1;
+}
+
+.dvx-shell .dvx-activity-row[open].dvx-command-card > .dvx-command-well {
+  animation: none;
+}
+
+.dvx-shell .dvx-command-card .dvx-tool-output-frame {
+  animation: none;
 }
 
 .dvx-command-line {
@@ -203,5 +230,59 @@
 
 .dvx-command-card .dvx-tool-error {
   margin: 8px 12px 10px;
+}
+
+/* The well follows the theme (kitchen-sink form, 2026-08-13): light
+   theme gets a warm-white well one shade deeper than the shell with
+   dark ink and a light-legible syntax tint; the dark theme keeps the
+   deep warm-umber well above. */
+.dvx-shell:not([data-theme='dark']) .dvx-command-card .dvx-command-well {
+  background: #efece6 linear-gradient(180deg, #f2efe9, #edeae3 46%);
+  border-top: 1px solid var(--dvx-border);
+}
+
+.dvx-shell:not([data-theme='dark']) .dvx-command-prompt {
+  color: rgb(170 122 66 / 78%);
+}
+
+.dvx-shell:not([data-theme='dark']) .dvx-command-line .dvx-command-code {
+  color: #45403a;
+}
+
+.dvx-shell:not([data-theme='dark']) .dvx-cmd-command {
+  color: #b5451f;
+}
+
+.dvx-shell:not([data-theme='dark']) .dvx-cmd-flag {
+  color: #8a7a58;
+}
+
+.dvx-shell:not([data-theme='dark']) .dvx-cmd-string {
+  color: #4f7e3e;
+}
+
+.dvx-shell:not([data-theme='dark']) .dvx-cmd-variable {
+  color: #a35138;
+}
+
+.dvx-shell:not([data-theme='dark']) .dvx-cmd-operator {
+  color: #8a8072;
+}
+
+.dvx-shell:not([data-theme='dark']) .dvx-cmd-path {
+  color: #5c5346;
+}
+
+.dvx-shell:not([data-theme='dark']) .dvx-cmd-comment {
+  color: #918a80;
+}
+
+.dvx-shell:not([data-theme='dark']) .dvx-command-card .dvx-tool-output-frame {
+  background: #eae7e0;
+  border-top: 1px solid var(--dvx-border);
+}
+
+.dvx-shell:not([data-theme='dark']) .dvx-command-card .dvx-tool-output {
+  color: #676058;
 }
 

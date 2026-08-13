@@ -272,3 +272,109 @@
   font-weight: 560;
 }
 
+/* ---- Quiet ruled tool rows (kitchen-sink form, 2026-08-13) --------
+   Plain tool rows (not command cards, thinking rows or exploration
+   group members) read as a marker-dot ledger: 29px rows led by a 4px
+   dot on a 15px rail, past-tense verbs in secondary/525, mono muted
+   objects without capsule fills, subtle state text, and a 58%
+   hairline between consecutive rows. */
+.dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row, .dvx-activity-group .dvx-activity-row) {
+  position: relative;
+  margin: 0 0 2px;
+  padding-left: 15px;
+}
+
+.dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row, .dvx-activity-group .dvx-activity-row) > summary {
+  min-height: 29px;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--dvx-subtle);
+}
+
+.dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row, .dvx-activity-group .dvx-activity-row) > summary::before {
+  content: "";
+  display: block;
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin-top: -2px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--dvx-border-strong);
+  transform: none;
+}
+
+.dvx-shell .dvx-activity-row[open]:not(.dvx-command-card, .dvx-thinking-row, .dvx-activity-group .dvx-activity-row) > summary::before {
+  transform: none;
+}
+
+/* Past-tense verbs: secondary / 525; running rows keep the global
+   shimmer. */
+.dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row, .dvx-activity-running, .dvx-activity-group .dvx-activity-row) .dvx-tool-action {
+  color: var(--dvx-text-secondary);
+  font-weight: 525;
+}
+
+/* Objects: mono / muted / 10.5px, no capsule fill. */
+.dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row) .dvx-tool-file {
+  padding: 0;
+  background: transparent;
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+}
+
+.dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row) .dvx-tool-file:hover,
+.dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row) .dvx-tool-file:focus-visible {
+  background: transparent;
+  color: var(--dvx-ink);
+}
+
+/* State and duration: small subtle text; failures keep the danger
+   ink. */
+.dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row, .dvx-activity-group .dvx-activity-row) .dvx-activity-state:not(.dvx-activity-state-failed) {
+  color: var(--dvx-subtle);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+/* A 58% hairline between consecutive plain rows. */
+.dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row, .dvx-activity-group .dvx-activity-row)
+  + .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row, .dvx-activity-group .dvx-activity-row) {
+  border-top: 1px solid color-mix(in srgb, var(--dvx-border) 58%, transparent);
+}
+
+/* Low-frequency inline actions (Preview and friends) rest hidden and
+   surface on hover / focus-within / touch. */
+.dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row) .dvx-preview-chip {
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  opacity: 0;
+  transition: opacity var(--dvx-duration-fast) ease;
+}
+
+.dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row):hover .dvx-preview-chip,
+.dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row):focus-within .dvx-preview-chip {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row) .dvx-preview-chip {
+    opacity: 1;
+  }
+}
+
+/* TodoWrite activity rows retire from the transcript: the thin plan
+   line under the triggering user message carries the same checklist
+   (kitchen-sink form, 2026-08-13). */
+.dvx-shell .dvx-activity-row:has(.dvx-plan),
+.dvx-shell .dvx-activity-row:has(.dvx-plan-summary) {
+  display: none !important;
+}
+

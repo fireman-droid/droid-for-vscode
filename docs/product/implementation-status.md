@@ -2640,6 +2640,58 @@ UI 描述见 §22 重做记录。
   `popover-mode-dark.png`。ComposerControls 聚焦 30 例绿。发版级
   门禁见 v0.5.0 发版记录（当前安装包状态）。
 
+### 36. 样板间对齐收官批：待办 A 全部落地真身（2026-08-13 下午）
+
+- **来源**：用户拍板"kitchen-sink 就是认可的最终版，待办 A =
+  把它整个搬进真实代码，不再分批"。本批把样板间剩余的全部覆写
+  搬完（弹层批见 §35），待办 A 就此收口。
+- **落地项与位置**：
+  1. **命令卡连续展开过渡**（`08-command-card.css`）：
+     `interpolate-size: allow-keywords` + `::details-content` 高度/
+     透明度过渡（Chrome 131+ 关键字插值），旧的瞬开 disclose 动画
+     对命令卡停用。
+  2. **图片 chip 去重**（`Thread.tsx`）：消息含内联图片预览时过滤
+     IMAGE 类 chips（缩略图已说明一切），其他类型 chips 保留。
+  3. **会话抽屉**（`15-model-sessions.css` + `SessionDrawer.tsx`）：
+     内容自适应高度封顶 min(400px, 64%)、底部圆角 12px + hairline +
+     短影、`dvx-drawer-down` clip-path 下滑展开；**chats 最新排前**
+     ——`groupSessions` 按 modifiedTime 降序排序（Favorites/Recent
+     组内一致），不再信任 Host 目录顺序。
+  4. **计划细条几何**（`22-plan-anchor.css`）：折叠行改 14px 标记
+     轨道网格（点/圈/chevron 同轴）、38px 行高、计数 mono；步骤
+     11.5px/18px 紧凑网格、12px 圈 + 当前步 halo、与聊天内容同宽。
+  5. **View source hover**（`02-markdown.css` + 暗色残留清理）：
+     灰底块退役，改字色加深 + border-strong 细下划线，两主题一致。
+  6. **Droid is working 间距**（`03-transcript-media.css`）：
+     `.dvx-shell .dvx-pending` margin-top 4px（pending 同时是
+     `.dvx-message`，后位 margin 简写会吃掉裸 margin-top，需
+     shell 级权重），前一条消息 `:has(+ .dvx-pending)` 去底边距。
+  7. **终端井跟主题**（`08-command-card.css`）：浅色主题换暖白系
+     浅井（#efece6 渐变）+ 深字 + 浅底可读语法 tint 全套；暗色
+     保留 24 号皮肤自己的深井（#16120e）。
+  8. **工具活动行 Quiet ruled rows**（`07-activity-live.css`，样板
+     间 ⑤ 新设计，属"html 即终版"授权范围）：普通工具行 29px、
+     4px 标记点、过去时动词 secondary/525、对象 mono 无胶囊、行间
+     58% hairline、Preview 等低频动作 hover 浮现。
+  9. **TodoWrite 行退役**（同文件）：`:has(.dvx-plan)` 的活动行
+     display none——计划细条已承载同一清单，消除真机上的重复。
+- **样板间**：全部已搬覆写删除（真身即形态）；`ks-plan-strip`
+  注入停用（真实 PlanLine 直接渲染，标签 ④ 指向真身）；图片
+  chip 去重 JS 删除；演示会话目录改乱序以实证前端排序。遗留存档：
+  ks-ledger / ks-restore 注入仍在（对应功能早已上线，仅演示驱动
+  方式未换成真协议，无产品影响）。
+- **验证**：新增 `artifacts/smoke-kitchen-parity.mjs`（无头 Chrome
+  驱动真实 dist）：interpolate-size=allow-keywords、
+  `::details-content` transition 含 height+opacity、浅井
+  rgb(239,236,230)/暗井 rgb(22,18,14)、含内联图消息仅剩非 IMAGE
+  chip、计划行 grid 且 14px 首列 + 38px、TodoWrite 行 5 条全
+  display:none、pending margin-top 4px 且前消息 0、quiet 行 29px +
+  4px 点 + 无胶囊 mono 10.5px、抽屉高度 304px≤401 + 圆角 + 动画名
+  + **乱序目录仍按新→旧展示**、mermaid 强制 :hover 透明底 +
+  下划线——`pass: true`（截图 kitchen-parity-light/drawer/dark.png）。
+  SessionDrawer 新增乱序排序单测（13 例绿）；Thread/PlanLine 等聚焦
+  87 例绿。发版级门禁见 v0.6.0 发版记录（当前安装包状态）。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择

@@ -73,9 +73,7 @@ html[data-dvx-theme='dark'] *::-webkit-scrollbar-thumb:hover {
 }
 
 .dvx-shell[data-theme='dark'] .dvx-code-block-copy:hover,
-.dvx-shell[data-theme='dark'] .dvx-code-block-copy:focus-visible,
-.dvx-shell[data-theme='dark'] .dvx-mermaid-toggle:hover,
-.dvx-shell[data-theme='dark'] .dvx-mermaid-toggle:focus-visible {
+.dvx-shell[data-theme='dark'] .dvx-code-block-copy:focus-visible {
   background: rgb(255 255 255 / 8%);
 }
 

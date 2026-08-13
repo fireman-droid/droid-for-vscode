@@ -237,9 +237,14 @@
   cursor: pointer;
 }
 
+/* Hover is ink-deepening plus a thin underline — no grey wash block
+   (kitchen-sink form, 2026-08-13). */
 .dvx-mermaid-toggle:hover, .dvx-mermaid-toggle:focus-visible {
   color: var(--dvx-ink);
-  background: rgb(0 0 0 / 5%);
+  background: transparent;
+  text-decoration: underline;
+  text-decoration-color: var(--dvx-border-strong);
+  text-underline-offset: 3px;
 }
 
 .dvx-mermaid-toggle:focus-visible {

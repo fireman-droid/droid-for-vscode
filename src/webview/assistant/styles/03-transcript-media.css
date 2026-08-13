@@ -347,6 +347,21 @@
   font-size: 13px;
 }
 
+/* Pending rows are also .dvx-message, whose later margin shorthand
+   would reset a bare margin-top — the shell-scoped selector keeps the
+   tightened 4px gap in charge. */
+.dvx-shell .dvx-pending {
+  margin-top: 4px;
+}
+
+/* "Droid is working" hugs the content above it: the preceding
+   message drops its inter-message gap, including when an empty
+   assistant shell sits between them (kitchen-sink form, 2026-08-13). */
+.dvx-shell .dvx-message:has(+ .dvx-pending),
+.dvx-shell .dvx-message:has(+ .dvx-message-assistant:empty + .dvx-pending) {
+  margin-bottom: 0;
+}
+
 .dvx-runtime-pulse {
   width: 7px;
   height: 7px;
