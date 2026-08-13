@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import process from 'node:process';
 
 /**
  * Self-built service discovery for the shared detached daemon (daemon
@@ -9,10 +10,10 @@ import path from 'node:path';
  *
  *   ~/.droidvisx/daemon.json  ->  { port, pid, version, startedAt }
  *
- * Concurrent windows race to spawn; the discovery file is created with
- * the `wx` flag so exactly one writer wins and losers connect to the
- * winner (killing their own freshly spawned daemon). The file never
- * contains credentials.
+ * Concurrent windows race to spawn; the discovery file is claimed
+ * exclusively (temp file + hard link, `wx` fallback) so exactly one
+ * writer wins and losers connect to the winner (killing their own
+ * freshly spawned daemon). The file never contains credentials.
  */
 
 export interface DaemonDiscoveryRecord {
@@ -49,6 +50,7 @@ export interface DaemonDiscoveryDeps {
   }>;
   readonly checkHealth: (url: string) => Promise<boolean>;
   readonly killProcessTree: (pid: number) => Promise<void>;
+  readonly isPidAlive: (pid: number) => boolean;
   readonly cliVersion: () => string;
   readonly now: () => number;
   readonly host: string;
@@ -117,7 +119,11 @@ export async function ensureSharedDaemon(
   const existing = readDaemonDiscovery(file, d.readFile);
   if (existing !== null) {
     const url = endpointUrl(d.host, existing.port);
-    if (await d.checkHealth(url)) {
+    // A crashed daemon leaves its record behind. Check the pid first:
+    // it is a cheap syscall, while the health check burns a connect
+    // timeout against a dead port (and a reused port could even answer
+    // for an unrelated process).
+    if (d.isPidAlive(existing.pid) && (await d.checkHealth(url))) {
       return {
         url,
         pid: existing.pid,
@@ -147,7 +153,7 @@ export async function ensureSharedDaemon(
   const winner = readDaemonDiscovery(file, d.readFile);
   if (winner !== null) {
     const url = endpointUrl(d.host, winner.port);
-    if (await d.checkHealth(url)) {
+    if (d.isPidAlive(winner.pid) && (await d.checkHealth(url))) {
       await d.killProcessTree(spawned.pid);
       return {
         url,
@@ -159,14 +165,33 @@ export async function ensureSharedDaemon(
     }
   }
   // The competing record is unhealthy or unreadable: replace it with
-  // ours (non-exclusive write; last writer wins at this point).
+  // ours, but keep the publication exclusive.
   d.deleteFile(file);
-  if (!d.writeFileExclusive(file, JSON.stringify(record))) {
-    // A third contender slipped in; keep our daemon anyway rather than
-    // looping. Both daemons are idle-cheap and the shutdown command
-    // reaps whichever the file points at.
+  if (d.writeFileExclusive(file, JSON.stringify(record))) {
+    return { ...spawned, spawned: true, versionMismatch: false };
   }
-  return { ...spawned, spawned: true, versionMismatch: false };
+  // A third contender slipped in. Trust it only after the same
+  // pid+health checks; otherwise fail instead of returning an
+  // undiscoverable duplicate daemon.
+  const finalWinner = readDaemonDiscovery(file, d.readFile);
+  if (finalWinner !== null) {
+    const url = endpointUrl(d.host, finalWinner.port);
+    if (d.isPidAlive(finalWinner.pid) && (await d.checkHealth(url))) {
+      await d.killProcessTree(spawned.pid);
+      return {
+        url,
+        pid: finalWinner.pid,
+        port: finalWinner.port,
+        spawned: false,
+        versionMismatch: isVersionMismatch(
+          finalWinner.version,
+          d.cliVersion(),
+        ),
+      };
+    }
+  }
+  await d.killProcessTree(spawned.pid);
+  throw new Error('Droid daemon discovery race did not yield a healthy winner.');
 }
 
 /**
@@ -215,6 +240,7 @@ function withDefaults(
       (() => Promise.reject(new Error('startDaemon dependency required'))),
     checkHealth: deps.checkHealth ?? (() => Promise.resolve(false)),
     killProcessTree: deps.killProcessTree ?? noopKill,
+    isPidAlive: deps.isPidAlive ?? defaultIsPidAlive,
     cliVersion: deps.cliVersion ?? (() => 'unknown'),
     now: deps.now ?? Date.now,
     host: deps.host ?? '127.0.0.1',
@@ -229,16 +255,40 @@ function defaultReadFile(file: string): string | null {
   }
 }
 
+/**
+ * Publishes the record atomically: the content is fully written to a
+ * temp file first and only then claimed at the discovery path with
+ * `link` (which, like `wx`, fails when the path already exists), so a
+ * concurrent reader never sees a half-written record. Filesystems
+ * without hard links fall back to the original `wx` write.
+ */
 function defaultWriteFileExclusive(file: string, contents: string): boolean {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${String(process.pid)}.tmp`;
   try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, contents, { flag: 'wx' });
+    fs.writeFileSync(tmp, contents);
+    fs.linkSync(tmp, file);
     return true;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') {
       return false;
     }
-    throw error;
+    try {
+      fs.writeFileSync(file, contents, { flag: 'wx' });
+      return true;
+    } catch (fallbackError) {
+      if ((fallbackError as NodeJS.ErrnoException).code === 'EEXIST') {
+        return false;
+      }
+      throw fallbackError;
+    }
+  } finally {
+    try {
+      fs.unlinkSync(tmp);
+    } catch {
+      // Temp file never materialized or was already removed.
+    }
   }
 }
 
@@ -246,7 +296,17 @@ function defaultDeleteFile(file: string): void {
   try {
     fs.unlinkSync(file);
   } catch {
-    // Already gone.
+    // Already gone (ENOENT) or being swept by a concurrent window.
+  }
+}
+
+function defaultIsPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM means the pid exists but belongs to another user.
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
   }
 }
 

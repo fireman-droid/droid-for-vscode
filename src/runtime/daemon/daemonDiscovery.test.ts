@@ -54,6 +54,7 @@ describe('ensureSharedDaemon', () => {
     const endpoint = await ensureSharedDaemon(FILE, {
       readFile: () => healthyRecord,
       checkHealth: vi.fn(async () => true),
+      isPidAlive: () => true,
       startDaemon,
       cliVersion: () => '0.193.0',
     });
@@ -72,6 +73,7 @@ describe('ensureSharedDaemon', () => {
     const endpoint = await ensureSharedDaemon(FILE, {
       readFile: () => healthyRecord,
       checkHealth: async () => true,
+      isPidAlive: () => true,
       cliVersion: () => '0.200.0',
     });
     expect(endpoint.versionMismatch).toBe(true);
@@ -83,6 +85,7 @@ describe('ensureSharedDaemon', () => {
     const endpoint = await ensureSharedDaemon(FILE, {
       readFile: () => healthyRecord,
       checkHealth: async () => false,
+      isPidAlive: () => true,
       deleteFile,
       writeFileExclusive,
       startDaemon: async () => ({
@@ -111,6 +114,51 @@ describe('ensureSharedDaemon', () => {
     });
   });
 
+  it('skips the health check and replaces the record when the recorded pid is dead', async () => {
+    const checkHealth = vi.fn(async () => true);
+    const deleteFile = vi.fn();
+    const endpoint = await ensureSharedDaemon(FILE, {
+      readFile: () => healthyRecord,
+      checkHealth,
+      isPidAlive: () => false,
+      deleteFile,
+      writeFileExclusive: () => true,
+      startDaemon: async () => ({
+        url: 'ws://127.0.0.1:45900',
+        pid: 5001,
+        port: 45900,
+      }),
+      cliVersion: () => '0.193.0',
+    });
+
+    expect(checkHealth).not.toHaveBeenCalled();
+    expect(deleteFile).toHaveBeenCalledWith(FILE);
+    expect(endpoint).toMatchObject({ pid: 5001, spawned: true });
+  });
+
+  it('does not trust a race winner whose pid is dead', async () => {
+    const reads = [null, healthyRecord];
+    const writes = [false, true];
+    const checkHealth = vi.fn(async () => true);
+    const killProcessTree = vi.fn(async () => {});
+    const endpoint = await ensureSharedDaemon(FILE, {
+      readFile: () => reads.shift() ?? null,
+      writeFileExclusive: () => writes.shift() ?? true,
+      checkHealth,
+      isPidAlive: (pid) => pid !== 4242,
+      killProcessTree,
+      startDaemon: async () => ({
+        url: 'ws://127.0.0.1:45900',
+        pid: 5001,
+        port: 45900,
+      }),
+    });
+
+    expect(checkHealth).not.toHaveBeenCalled();
+    expect(killProcessTree).not.toHaveBeenCalled();
+    expect(endpoint).toMatchObject({ pid: 5001, spawned: true });
+  });
+
   it('loses the wx race to a healthy winner and reaps its own daemon', async () => {
     // First read: no record; read after losing the race: the winner's.
     const reads = [null, healthyRecord];
@@ -119,6 +167,7 @@ describe('ensureSharedDaemon', () => {
       readFile: () => reads.shift() ?? null,
       writeFileExclusive: () => false,
       checkHealth: async () => true,
+      isPidAlive: () => true,
       killProcessTree,
       startDaemon: async () => ({
         url: 'ws://127.0.0.1:45900',
@@ -145,6 +194,7 @@ describe('ensureSharedDaemon', () => {
       readFile: () => reads.shift() ?? null,
       writeFileExclusive: () => writes.shift() ?? true,
       checkHealth: async () => false,
+      isPidAlive: () => true,
       deleteFile,
       killProcessTree,
       startDaemon: async () => ({
@@ -157,6 +207,62 @@ describe('ensureSharedDaemon', () => {
     expect(killProcessTree).not.toHaveBeenCalled();
     expect(deleteFile).toHaveBeenCalledWith(FILE);
     expect(endpoint).toMatchObject({ pid: 5001, spawned: true });
+  });
+
+  it('uses a healthy third contender after replacement publication loses', async () => {
+    const thirdRecord = JSON.stringify({
+      port: 45002,
+      pid: 6002,
+      version: '0.194.0',
+      startedAt: 2,
+    });
+    const reads = [null, healthyRecord, thirdRecord];
+    const writes = [false, false];
+    const killProcessTree = vi.fn(async () => {});
+    const endpoint = await ensureSharedDaemon(FILE, {
+      readFile: () => reads.shift() ?? null,
+      writeFileExclusive: () => writes.shift() ?? false,
+      checkHealth: async (url) => url.endsWith(':45002'),
+      isPidAlive: () => true,
+      deleteFile: vi.fn(),
+      killProcessTree,
+      startDaemon: async () => ({
+        url: 'ws://127.0.0.1:45900',
+        pid: 5001,
+        port: 45900,
+      }),
+      cliVersion: () => '0.194.0',
+    });
+
+    expect(killProcessTree).toHaveBeenCalledWith(5001);
+    expect(endpoint).toMatchObject({
+      pid: 6002,
+      port: 45002,
+      spawned: false,
+    });
+  });
+
+  it('reaps its duplicate and fails when no contender is healthy', async () => {
+    const reads = [null, healthyRecord, healthyRecord];
+    const writes = [false, false];
+    const killProcessTree = vi.fn(async () => {});
+
+    await expect(
+      ensureSharedDaemon(FILE, {
+        readFile: () => reads.shift() ?? null,
+        writeFileExclusive: () => writes.shift() ?? false,
+        checkHealth: async () => false,
+        isPidAlive: () => true,
+        deleteFile: vi.fn(),
+        killProcessTree,
+        startDaemon: async () => ({
+          url: 'ws://127.0.0.1:45900',
+          pid: 5001,
+          port: 45900,
+        }),
+      }),
+    ).rejects.toThrow('discovery race did not yield a healthy winner');
+    expect(killProcessTree).toHaveBeenCalledWith(5001);
   });
 });
 
