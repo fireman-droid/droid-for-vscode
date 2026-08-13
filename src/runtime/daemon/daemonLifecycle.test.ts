@@ -48,7 +48,11 @@ describe('ensurePrivateDaemon', () => {
       },
     );
 
-    expect(endpoint).toEqual({ url: 'ws://127.0.0.1:45678', pid: 4242 });
+    expect(endpoint).toEqual({
+      url: 'ws://127.0.0.1:45678',
+      pid: 4242,
+      executable: 'droid',
+    });
     expect(spawn.calls).toEqual([
       {
         droidPath: 'droid',
@@ -122,7 +126,11 @@ describe('ensurePrivateDaemon', () => {
       waitForPort,
     });
 
-    expect(endpoint).toEqual({ url: 'ws://127.0.0.1:40011', pid: 88 });
+    expect(endpoint).toEqual({
+      url: 'ws://127.0.0.1:40011',
+      pid: 88,
+      executable: 'droid',
+    });
     expect(spawn.calls).toHaveLength(2);
     expect(spawn.calls[0]?.args).toContain('40010');
     expect(spawn.calls[1]?.args).toContain('40011');
@@ -204,6 +212,7 @@ describe('startDetachedDaemon', () => {
       url: 'ws://127.0.0.1:45900',
       pid: 6001,
       port: 45900,
+      executable: 'droid',
     });
     expect(spawn.calls[0]?.args).toEqual([
       'daemon',
@@ -271,15 +280,101 @@ describe('daemon spawn options', () => {
 });
 
 describe('stopDaemon', () => {
-  it('kills the daemon process tree', async () => {
+  const droidCommandLine =
+    'C:\\WINDOWS\\system32\\cmd.exe /d /s /c "droid daemon --port 40004 --host 127.0.0.1 --parent-pid 999"';
+
+  it('kills the daemon process tree once identity is confirmed', async () => {
+    const killProcessTree = vi.fn(async () => undefined);
+    const queryProcessCommandLine = vi.fn(async () => droidCommandLine);
+
+    await stopDaemon(
+      { url: 'ws://127.0.0.1:40004', pid: 55 },
+      { killProcessTree, queryProcessCommandLine },
+    );
+
+    expect(queryProcessCommandLine).toHaveBeenCalledWith(55);
+    expect(killProcessTree).toHaveBeenCalledWith(55);
+  });
+
+  it('skips the kill when the pid was reused by an unrelated process', async () => {
     const killProcessTree = vi.fn(async () => undefined);
 
     await stopDaemon(
       { url: 'ws://127.0.0.1:40004', pid: 55 },
-      { killProcessTree },
+      {
+        killProcessTree,
+        queryProcessCommandLine: async () =>
+          'C:\\Program Files\\Video Editor\\editor.exe --project x',
+      },
+    );
+
+    expect(killProcessTree).not.toHaveBeenCalled();
+  });
+
+  it('does not accept unrelated words containing droid and daemon', async () => {
+    const killProcessTree = vi.fn(async () => undefined);
+
+    await stopDaemon(
+      {
+        url: 'ws://127.0.0.1:40004',
+        pid: 55,
+        executable: 'C:\\tools\\factory-droid.exe',
+      },
+      {
+        killProcessTree,
+        queryProcessCommandLine: async () =>
+          'C:\\tools\\droidvisx-daemon-monitor.exe --watch',
+      },
+    );
+
+    expect(killProcessTree).not.toHaveBeenCalled();
+  });
+
+  it('matches the exact configured executable basename', async () => {
+    const killProcessTree = vi.fn(async () => undefined);
+
+    await stopDaemon(
+      {
+        url: 'ws://127.0.0.1:40004',
+        pid: 55,
+        executable: 'C:\\tools\\factory-droid.exe',
+      },
+      {
+        killProcessTree,
+        queryProcessCommandLine: async () =>
+          '"C:\\tools\\factory-droid.exe" daemon --port 40004',
+      },
     );
 
     expect(killProcessTree).toHaveBeenCalledWith(55);
+  });
+
+  it('skips the kill when identity cannot be determined', async () => {
+    const killProcessTree = vi.fn(async () => undefined);
+
+    await stopDaemon(
+      { url: 'ws://127.0.0.1:40004', pid: 55 },
+      { killProcessTree, queryProcessCommandLine: async () => null },
+    );
+
+    expect(killProcessTree).not.toHaveBeenCalled();
+  });
+
+  it('treats an identity query failure as not-confirmed', async () => {
+    const killProcessTree = vi.fn(async () => undefined);
+
+    await expect(
+      stopDaemon(
+        { url: 'ws://127.0.0.1:40004', pid: 55 },
+        {
+          killProcessTree,
+          queryProcessCommandLine: async () => {
+            throw new Error('query failed');
+          },
+        },
+      ),
+    ).resolves.toBeUndefined();
+    expect(killProcessTree).not.toHaveBeenCalled();
   });
 
   it('swallows kill failures for already dead daemons', async () => {
@@ -290,6 +385,7 @@ describe('stopDaemon', () => {
           killProcessTree: async () => {
             throw new Error('no such process');
           },
+          queryProcessCommandLine: async () => droidCommandLine,
         },
       ),
     ).resolves.toBeUndefined();

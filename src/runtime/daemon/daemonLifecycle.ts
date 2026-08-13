@@ -7,10 +7,14 @@ const DAEMON_LISTEN_TIMEOUT_MS = 30_000;
 const PORT_POLL_INTERVAL_MS = 500;
 /** Last stretch of daemon stderr kept for start-failure reports. */
 const STDERR_TAIL_MAX_CHARS = 2048;
+/** Cap on the pre-kill identity query; unverifiable means no kill. */
+const IDENTITY_QUERY_TIMEOUT_MS = 5_000;
 
 export interface DaemonEndpoint {
   readonly url: string;
   readonly pid: number;
+  /** Exact executable requested when this process was spawned. */
+  readonly executable?: string;
 }
 
 export interface DaemonLifecycleOptions {
@@ -48,6 +52,8 @@ export interface DaemonLifecycleDeps {
     timeoutMs: number,
   ) => Promise<void>;
   readonly killProcessTree: (pid: number) => Promise<void>;
+  /** Resolves the command line of a live pid, or null when unknown. */
+  readonly queryProcessCommandLine: (pid: number) => Promise<string | null>;
 }
 
 /**
@@ -101,7 +107,12 @@ export async function startDetachedDaemon(
     throw error;
   }
 
-  return { url: `ws://${host}:${String(port)}`, pid: child.pid, port };
+  return {
+    url: `ws://${host}:${String(port)}`,
+    pid: child.pid,
+    port,
+    executable: droidPath,
+  };
 }
 
 /**
@@ -163,7 +174,11 @@ export async function ensurePrivateDaemon(
       throw new Error(`${errorText(error)}${stderrSuffix}`);
     }
 
-    return { url: `ws://${host}:${String(port)}`, pid: child.pid };
+    return {
+      url: `ws://${host}:${String(port)}`,
+      pid: child.pid,
+      executable: droidPath,
+    };
   };
 
   // pickFreePort closes its probe socket before the daemon binds, so
@@ -194,17 +209,71 @@ function errorText(error: unknown): string {
  * Terminates a private daemon spawned by {@link ensurePrivateDaemon}.
  * Windows needs the whole tree killed because the daemon is spawned
  * through a shell.
+ *
+ * The pid was recorded at spawn time; by the time we dispose, the
+ * daemon may have died on its own and the OS may have recycled the pid
+ * for an unrelated process — a blind `taskkill /T /F` would then take
+ * down an innocent process tree. The kill therefore only proceeds when
+ * the pid's current command line still looks like our daemon (the
+ * recorded pid is the cmd.exe wrapper on Windows, whose command line
+ * embeds `droid daemon ...`). An unverifiable identity skips the kill:
+ * worst case an orphaned daemon lingers, which is recoverable, unlike
+ * killing a stranger.
  */
 export async function stopDaemon(
   endpoint: DaemonEndpoint,
-  deps: Partial<Pick<DaemonLifecycleDeps, 'killProcessTree'>> = {},
+  deps: Partial<
+    Pick<DaemonLifecycleDeps, 'killProcessTree' | 'queryProcessCommandLine'>
+  > = {},
 ): Promise<void> {
   const killProcessTree = deps.killProcessTree ?? defaultKillProcessTree;
+  const queryProcessCommandLine =
+    deps.queryProcessCommandLine ?? defaultQueryProcessCommandLine;
   try {
+    const commandLine = await queryProcessCommandLine(endpoint.pid);
+    if (
+      commandLine === null ||
+      !looksLikeDroidDaemon(commandLine, endpoint.executable ?? 'droid')
+    ) {
+      return;
+    }
     await killProcessTree(endpoint.pid);
   } catch {
     // Already gone (parent-pid guard) or no permission; nothing to do.
   }
+}
+
+/** Matches both the daemon itself and its cmd.exe/sh wrapper. */
+function looksLikeDroidDaemon(
+  commandLine: string,
+  executable: string,
+): boolean {
+  const tokens = tokenizeCommandLine(commandLine).map((token) =>
+    token.toLowerCase(),
+  );
+  const expected = pathBasename(executable).toLowerCase();
+  return (
+    tokens.some((token) => pathBasename(token) === expected) &&
+    tokens.includes('daemon')
+  );
+}
+
+function tokenizeCommandLine(commandLine: string): string[] {
+  const tokens = commandLine.match(/"[^"]*"|'[^']*'|[^\s]+/g) ?? [];
+  return tokens.flatMap((token) => {
+    const stripped = token.replace(/^(['"])(.*)\1$/, '$2');
+    // cmd.exe /c wraps the complete child command in one quoted
+    // argument. Keep that argument intact for quoted executable paths,
+    // and also expose its words for exact verb/executable matching.
+    return stripped === token || !/\s/.test(stripped)
+      ? [stripped]
+      : [stripped, ...stripped.split(/\s+/)];
+  });
+}
+
+function pathBasename(value: string): string {
+  const normalized = value.replace(/\\/g, '/');
+  return normalized.slice(normalized.lastIndexOf('/') + 1);
 }
 
 /**
@@ -340,6 +409,68 @@ function defaultWaitForPort(
       });
     };
     tryOnce();
+  });
+}
+
+/**
+ * Reads a pid's command line without a shell: PowerShell CIM on
+ * Windows (tasklist only reports the image name — always cmd.exe for
+ * our shell-wrapped daemon — and wmic is removed from newer Windows
+ * 11), `ps` elsewhere. Resolves null when the process is gone, the
+ * query fails, or it exceeds {@link IDENTITY_QUERY_TIMEOUT_MS}.
+ */
+function defaultQueryProcessCommandLine(pid: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    const [command, args] =
+      process.platform === 'win32'
+        ? ([
+            'powershell.exe',
+            [
+              '-NoProfile',
+              '-NonInteractive',
+              '-Command',
+              `(Get-CimInstance Win32_Process -Filter "ProcessId=${String(pid)}").CommandLine`,
+            ],
+          ] as const)
+        : (['ps', ['-p', String(pid), '-o', 'args=']] as const);
+
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (value: string | null): void => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      }
+    };
+
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(command, [...args], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+        windowsHide: true,
+      });
+    } catch {
+      finish(null);
+      return;
+    }
+    timer = setTimeout(() => {
+      child.kill();
+      finish(null);
+    }, IDENTITY_QUERY_TIMEOUT_MS);
+
+    let output = '';
+    child.stdout?.setEncoding('utf8');
+    child.stdout?.on('data', (chunk: string) => {
+      output += chunk;
+    });
+    child.once('error', () => {
+      finish(null);
+    });
+    child.once('exit', () => {
+      const trimmed = output.trim();
+      finish(trimmed === '' ? null : trimmed);
+    });
   });
 }
 
