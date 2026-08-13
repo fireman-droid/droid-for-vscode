@@ -2634,6 +2634,34 @@ UI 描述见 §22 重做记录。
 
 ## 仅探测/声明，没有接入产品
 
+### Mission 控制面与 Task 子代理控制（2026-08-13 实机探针，未接入产品）
+
+外部攻关复探，零 `src/` 改动；全部证据在
+[`mission-control-feasibility.md`](./mission-control-feasibility.md)
+§0.5–§0.8，**推翻了 2026-08-12「控制面现阶段做不了」的旧结论**
+（HANDOVER 第 3 节 fail-closed 表已同步移除该行）：
+
+- **Mission 可启动**：daemon 里用角色 tag 造 orchestrator 会话可以
+  真实启动 mission（§0.5），旧结论"mission 无法经 SDK 启动"作废。
+- **可暂停 / 可恢复 / 可跑完**：running 态 `session.interrupt()` →
+  `paused`（`worker_paused` + `mission_paused` 落盘），恢复与跑完
+  全链路实测通过（§0.6）。
+- **严格串行**：Droid mission 同时至多 1 个 worker（§0.7.1）——
+  观察台形态应是 Feature 清单而非多 worker 网格。
+- **Task 子代理层才是真并行**（§0.8）：面板行数据源 = 拦 `Task`
+  tool_call/tool_result 取 `description`/`subagent_type`/`task_id`
+  （不要依赖 `child_session_available` 通知，daemon 内部消费掉收
+  不到）；活动文字 = 对活着的 task_id 轮询 `sessions.getMessages`
+  （2–3s 退避）；**单独停止实测可行**——
+  `sessions.resume(task_id).interrupt()` 只停那一个、其余继续；
+  逐代理成本读子会话 sidecar 的 `tokenUsage`。
+
+排期状态：子代理面板 + 转录回放证据已齐、未开工（待办 B）；Mission
+观察台技术可行但是否做等用户拍板（待办 C，未排期）。两者的实现约束
+与冒烟要求见
+[`session-handover-2026-08-13.md`](./session-handover-2026-08-13.md)
+§5–§6。
+
 ### 子代理转录只读回放（2026-08-12 探针，未接入产品）
 
 调研 + 探针任务，零 `src/` 改动。探针
@@ -4453,6 +4481,13 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 按用户决定（2026-08-11）：第一档 UI/观察性打磨大部分暂缓，方案已写入
 [`tier1-polish-plan.md`](./tier1-polish-plan.md)；路线索引与排除项见
 [`HANDOVER.md`](../HANDOVER.md) 第 3 节（本节的顺序须与其保持一致）。
+
+**2026-08-13 收工快照**：下方 V1 清单已全部完成并发版（v0.4.0 已装
+机、未经真人点测）。当前待办——A 样板间八项视觉落地、B 子代理面板 +
+转录回放（证据已齐）、C Mission 观察台（可行性已翻案、等拍板）——
+连同并行纪律与已知残差，以
+[`session-handover-2026-08-13.md`](./session-handover-2026-08-13.md)
+为准，本节不复制细节。
 
 ### V1 剩余（按执行顺序）
 
