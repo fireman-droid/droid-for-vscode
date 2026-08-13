@@ -448,20 +448,12 @@ export function ActivityGroup({
   );
 }
 
-/** Matches the ticker slide transition in styles.css, plus headroom;
- * the timeout is the commit fallback when the transition never fires
- * (reduced motion, occluded webviews). */
-export const TICKER_SLIDE_FALLBACK_MS = 320;
+/** Matches the ticker slide transition in styles.css
+ * (--dvx-duration-slower, 300ms), plus headroom; the timeout is the
+ * commit fallback when the transition never fires (reduced motion,
+ * occluded webviews). */
+export const TICKER_SLIDE_FALLBACK_MS = 360;
 
-/**
- * One-row vertical ticker over the grouped children: shows only the
- * active member; when the active index advances, the old row slides
- * up and out while the new one slides in from below. The trail holds
- * [previous, current] during a slide and a mid-slide arrival commits
- * the running slide first (fast-forward), so bursts never queue up.
- * prefers-reduced-motion degrades to a direct swap via CSS (the
- * transition is disabled, the fallback timer commits).
- */
 /**
  * GroupedParts hands a group's rendered members as ONE Fragment
  * element; unwrap it so the ticker can index individual member rows
@@ -477,6 +469,26 @@ export function tickerChildArray(children: ReactNode): ReturnType<typeof Childre
   return Children.toArray(children);
 }
 
+/** One trail row. Member indices may repeat within a trail (a group
+ * can bounce back to a still-running member), so each entry carries
+ * its own monotonic mount key. */
+interface TickerTrailEntry {
+  readonly key: number;
+  readonly member: number;
+}
+
+/**
+ * One-row vertical ticker over the grouped children: shows only the
+ * active member. When the active index advances, the outgoing row
+ * slides up one row height while fading to 0 and the incoming row
+ * rides in from below while fading to 1 — one shared timeline, like a
+ * wheel turning one notch. Each arrival appends to the trail and
+ * advances the track offset, so a mid-slide arrival retargets the
+ * running CSS transitions from their current positions (no queueing,
+ * no snap); the trail prunes back to one row when the track settles.
+ * prefers-reduced-motion degrades to a direct swap via CSS (the
+ * transitions are disabled, the fallback timer commits).
+ */
 export function ActivityTicker({
   activeIndex,
   children,
@@ -485,31 +497,46 @@ export function ActivityTicker({
   readonly children: ReactNode;
 }): React.JSX.Element {
   const childArray = tickerChildArray(children);
-  const [trail, setTrail] = useState<readonly number[]>([activeIndex]);
+  const [trail, setTrail] = useState<readonly TickerTrailEntry[]>([
+    { key: 0, member: activeIndex },
+  ]);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const current = trail[trail.length - 1];
-  if (current !== undefined && current !== activeIndex) {
-    // Adjust during render so the outgoing/incoming pair mounts in
-    // the same pass the active index changes.
-    setTrail([current, activeIndex]);
+  if (current !== undefined && current.member !== activeIndex) {
+    // Append during render so the incoming row mounts in the same
+    // pass the active index changes; an in-flight slide keeps its
+    // rows and simply retargets.
+    setTrail([...trail, { key: current.key + 1, member: activeIndex }]);
   }
 
-  // The slide runs on the DOM class, not rendered className: a forced
-  // style flush pins the two-row track at translateY(0), adding the
-  // class in the same task then transitions from that committed base.
-  // No rAF — headless/occluded webviews throttle it (phase-1 probe).
+  // The slide runs on DOM classes and a DOM-set offset variable, not
+  // rendered props: the forced style flush pins the freshly mounted
+  // incoming row at its pre-slide base (opacity 0, one row below the
+  // viewport), then the same task retargets the track offset and the
+  // per-row active classes, so transform and opacity transition
+  // together from their committed/current values. No rAF —
+  // headless/occluded webviews throttle it (phase-1 probe).
   useLayoutEffect(() => {
     const track = trackRef.current;
     if (track === null) {
       return undefined;
     }
+    const items = track.children;
     if (trail.length < 2) {
       track.classList.remove("dvx-ticker-slide");
+      track.style.removeProperty("--dvx-ticker-offset");
+      items[0]?.classList.add("dvx-ticker-item-active");
       return undefined;
     }
-    track.classList.remove("dvx-ticker-slide");
     void track.offsetHeight;
     track.classList.add("dvx-ticker-slide");
+    track.style.setProperty("--dvx-ticker-offset", String(trail.length - 1));
+    for (let index = 0; index < items.length; index += 1) {
+      items[index]!.classList.toggle(
+        "dvx-ticker-item-active",
+        index === items.length - 1,
+      );
+    }
     const commit = (): void => {
       setTrail((previous) =>
         previous.length > 1 ? [previous[previous.length - 1]!] : previous,
@@ -517,6 +544,8 @@ export function ActivityTicker({
     };
     const timer = setTimeout(commit, TICKER_SLIDE_FALLBACK_MS);
     const onTransitionEnd = (event: TransitionEvent): void => {
+      // Row opacity transitions bubble here too; only the track's own
+      // transform end marks the slide as settled.
       if (event.target === track) {
         commit();
       }
@@ -531,9 +560,9 @@ export function ActivityTicker({
   return (
     <div className="dvx-activity-ticker" aria-label="Exploration in progress">
       <div className="dvx-ticker-track" ref={trackRef}>
-        {trail.map((index) => (
-          <div className="dvx-ticker-item" key={index}>
-            {childArray[index] ?? null}
+        {trail.map((entry) => (
+          <div className="dvx-ticker-item" key={entry.key}>
+            {childArray[entry.member] ?? null}
           </div>
         ))}
       </div>

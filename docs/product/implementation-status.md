@@ -2307,6 +2307,51 @@ UI 描述见 §22 重做记录。
 - **打包**：不打包（打包权归分诊代理）；P1-1 右键真机路径随
   v0.3.0 包验收（命令注册/菜单 when 子句未变）。
 
+### 29. 探索跑马灯渐隐重做：上滑与渐隐同轴 + 打断接续（2026-08-13 上午）
+
+- **来源**：用户 kitchen-sink 样板间验收原话"explore 那个动画效果
+  没做好，向上逐渐消失……它是一个动画过程"。旧实现只把两行轨道
+  `translateY` 上移 240ms，旧行被 overflow 裁切而非渐隐；快速连续
+  到达时快进重置（snap 回基线）而非从当前位置接续。
+- **改动**（`thread/activityRows.tsx` +
+  `styles/12-exploration-ticker.css`）：`ActivityTicker` 的 trail 从
+  "[prev, current] 两行 + 快进提交"改为**可追加轨道**——每次到达
+  追加一行（`TickerTrailEntry` 带单调 key，成员回弹不撞 key）并把
+  DOM 变量 `--dvx-ticker-offset` 目标 +1，运行中的 CSS transition
+  自当前插值位置**重定向**（打断接续，不排队、不重置）；行级
+  `dvx-ticker-item-active` 切 opacity：旧行 1→0 渐隐、新行从下一行
+  位 0→1 淡入，与轨道位移同一时间轴。参数：时长
+  `--dvx-duration-slower`（300ms）、曲线 `--dvx-easing-out-strong`
+  （cubic-bezier(0.215,0.61,0.355,1)）、位移一行高 22px；容器全程
+  22px overflow hidden 锁高；compositor-only（仅 transform +
+  opacity）；`TICKER_SLIDE_FALLBACK_MS` 320→360 随时长档。
+  reduced-motion 下两组 transition 均 none、fallback 计时器提交
+  （瞬切）；展开态列表与历史回放（无 running 成员即无 ticker）语义
+  不变。
+- **门禁与自验收**：新增 `activityRows.ticker.test.tsx` 6 用例
+  （单行挂载、追加保留出场行、打断续接不重置、fallback 提交、
+  transitionend 提交且行级冒泡不早提交、回弹成员双行无 key 冲
+  突），与 activityGrouping 合计 24 用例绿。headless Chrome 自验收
+  `artifacts/smoke-ticker-fade.mjs` + `ticker-fade-harness.html`
+  （真实 dist 产物 + CDP，PASS/EXIT 0）：真速采样**同一帧**
+  translateY −12.1px 且旧行 opacity 0.45/新行 0.55——上滑与渐隐同
+  时发生的数值证明；中间帧截图（headless 截屏延迟 ~100-200ms 对
+  300ms 曲线太粗，故 `Animation.setPlaybackRate 0.25` 慢放同一动画
+  后连拍，括号采样记录精确数值，如 −4.3px/0.64 → −10.9px/0.36）
+  `artifacts/ticker-fade-0{1,2,3}-midframe{,-zoom}.png` 可见旧行半
+  透明+半位移、新行同帧下方淡入；burst（80ms×3）trail 达 4 行、轨
+  道位移无回退（snap-back false）、settle 回单行；90 次采样容器高
+  度全 22px；动画期 50ms+ 长任务 0；reduced-motion 实测
+  transitionProperty none 并经 fallback 收敛。120 回合 stress
+  `run-stress-batch3.mjs` 复跑 PASS（流式期 0 个 50ms+ 长任务）。
+  收口时本树 typecheck/lint:budgets 的报错均属并行批次在途文件
+  （validateHostMessage.test/store.test/workspaceActions.test 类型
+  错、turnFlow/bridgeMessages ratchet 超限），本切片三文件不在其列
+  且行数在预算内（617/339/155）。
+- **打包**：v0.3.0 已由分诊代理先行切包（指纹见 `1f88e5f`），本切
+  片**待下包**；真机验收随下一包——跑一条多工具探索回合，Explored
+  收起态应见旧行上滑渐隐、新行下方淡入的一格转轮动画。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择

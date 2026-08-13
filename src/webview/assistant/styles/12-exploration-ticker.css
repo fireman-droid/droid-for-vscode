@@ -122,10 +122,11 @@
   line-height: 21.125px;
 }
 
-/* Running collapsed group: a one-row viewport under the header; the
-   track slides up one row height when the active member advances
-   (vertical ticker, user report batch 2 §1). Transient status only,
-   so it takes no clicks. */
+/* Running collapsed group: a one-row viewport under the header; when
+   the active member advances the old row slides up one row height
+   while dissolving to transparent, and the new row rides in from
+   below on the same timeline (vertical ticker, user report batch 2 §1
+   + fade rework). Transient status only, so it takes no clicks. */
 .dvx-activity-ticker {
   --dvx-ticker-row: 22px;
 
@@ -136,19 +137,41 @@
   pointer-events: none;
 }
 
+/* The track carries the shared vertical motion. Each arrival appends
+   a row and advances --dvx-ticker-offset (set by the component), so a
+   mid-slide arrival retargets the running transition from its current
+   interpolated position instead of snapping — the wheel keeps
+   turning. Transform + opacity only; layout never animates. */
 .dvx-ticker-track {
   display: flex;
   flex-direction: column;
+  transform: translateY(
+    calc(var(--dvx-ticker-offset, 0) * -1 * var(--dvx-ticker-row, 22px))
+  );
 }
 
 .dvx-ticker-track.dvx-ticker-slide {
-  transform: translateY(calc(-1 * var(--dvx-ticker-row, 22px)));
-  transition: transform 240ms var(--dvx-easing-out-strong);
+  transition: transform var(--dvx-duration-slower)
+    var(--dvx-easing-out-strong);
 }
 
+/* Rows dissolve as they travel: the outgoing row loses
+   .dvx-ticker-item-active and fades to 0 while the track carries it
+   up; the incoming row starts one row below at opacity 0 and fades in
+   on the same clock. */
 .dvx-ticker-item {
   height: var(--dvx-ticker-row);
   overflow: hidden;
+  opacity: 0;
+}
+
+.dvx-ticker-item-active {
+  opacity: 1;
+}
+
+.dvx-ticker-track.dvx-ticker-slide .dvx-ticker-item {
+  transition: opacity var(--dvx-duration-slower)
+    var(--dvx-easing-out-strong);
 }
 
 .dvx-ticker-item .dvx-activity-row {
@@ -161,7 +184,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dvx-ticker-track.dvx-ticker-slide {
+  .dvx-ticker-track.dvx-ticker-slide,
+  .dvx-ticker-track.dvx-ticker-slide .dvx-ticker-item {
     transition: none;
   }
 }
