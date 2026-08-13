@@ -286,9 +286,10 @@ export function App(): React.JSX.Element {
   const turnId = state.turn?.turnId ?? null;
   const turnStatus = state.turn?.status ?? null;
   // Turn ids this connection has actually seen live on state.turn.
-  // History replay never lands here, so its rows can't raise the
-  // Working badge; rows of finished live turns keep counting while
-  // their delegation runs in the background.
+  // The selector needs these only for statusless foreground Tasks;
+  // an explicit ledger `running` status remains authoritative after
+  // reload. Rows of finished live turns stay in the set until the
+  // session changes so background work keeps counting.
   const liveTurnIdsRef = useRef(new Set<string>());
   const liveTurnSessionRef = useRef(state.sessionId);
   if (liveTurnSessionRef.current !== state.sessionId) {

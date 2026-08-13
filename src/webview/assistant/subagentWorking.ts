@@ -14,23 +14,25 @@ export interface WorkingSubagent {
 }
 
 /**
- * Selects the running subagent delegations of live turns.
+ * Selects the running subagent delegations for the Working badge.
  *
- * `liveTurnIds` holds every turn id this webview connection has seen
- * on `state.turn` (App accumulates it; cleared on session change).
- * History replay never populates it, so replayed sessions with rows
- * the ledger still reports as running show no badge; a recovered
- * live/zombie turn does, because its snapshot carries a non-null
- * turn. Rows of finished turns stay counted while their delegation
- * is still running in the background — that window, where nothing
- * else in the UI moves, is exactly what the badge is for.
+ * Rows with an EXPLICIT `subagent.status === 'running'` count
+ * regardless of `liveTurnIds`: the ledger said so, and that includes
+ * history replay after Reload Window (the host's
+ * `armReplayedSubagentWatch` polls exactly those rows and settles
+ * dead ones within a poll tick, so a stale badge self-corrects).
+ * Rows of finished turns stay counted while their delegation is
+ * still running in the background — that window, where nothing else
+ * in the UI moves, is exactly what the badge is for.
  *
- * A statusless delegation under a still-running Task row counts too
- * (same fallback the transcript sub-row applies): the delegation
- * identity arrives with the Task input, but for a FOREGROUND
- * (blocking) Task the SDK only reports a lifecycle status with the
- * Task's own tool_result, so `subagent.status` stays undefined for
- * the entire visible run. Terminal and pending statuses never count.
+ * The statusless fallback KEEPS the liveTurnIds gate: a delegation
+ * without a ledger status under a still-running Task row is live
+ * work only when this connection actually saw the turn run (for a
+ * FOREGROUND Task the SDK reports no lifecycle status until the
+ * Task's own tool_result). Replay cannot tell live work there, so
+ * `liveTurnIds` — every turn id this webview connection has seen on
+ * `state.turn`, cleared on session change — stays authoritative.
+ * Terminal and pending statuses never count.
  */
 export function selectWorkingSubagents(
   transcript: readonly SessionTranscriptItem[],
@@ -38,17 +40,15 @@ export function selectWorkingSubagents(
 ): readonly WorkingSubagent[] {
   const rows: WorkingSubagent[] = [];
   for (const item of transcript) {
-    if (
-      item.kind !== 'tool' ||
-      item.subagent === undefined ||
-      !liveTurnIds.has(item.turnId)
-    ) {
+    if (item.kind !== 'tool' || item.subagent === undefined) {
       continue;
     }
-    const working =
-      item.subagent.status === 'running' ||
-      (item.subagent.status === undefined && item.status === 'running');
-    if (!working) {
+    const explicitRunning = item.subagent.status === 'running';
+    const statuslessLive =
+      item.subagent.status === undefined &&
+      item.status === 'running' &&
+      liveTurnIds.has(item.turnId);
+    if (!explicitRunning && !statuslessLive) {
       continue;
     }
     rows.push({

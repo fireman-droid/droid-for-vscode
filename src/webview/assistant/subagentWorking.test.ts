@@ -27,7 +27,7 @@ function toolRow(
 const live = (ids: readonly string[]): ReadonlySet<string> => new Set(ids);
 
 describe('selectWorkingSubagents', () => {
-  it('counts running delegations of live turns only', () => {
+  it('counts explicit running delegations regardless of live turns', () => {
     const transcript: SessionTranscriptItem[] = [
       toolRow({
         turnId: 'turn-1',
@@ -49,7 +49,9 @@ describe('selectWorkingSubagents', () => {
           durationMs: 4200,
         },
       }),
-      // A running row from a replayed history turn: not live, no badge.
+      // A replayed history row the ledger still reports running: the
+      // ledger said so, so it counts (the host's replay watch settles
+      // dead rows within a poll tick).
       toolRow({
         turnId: 'turn-history',
         toolUseId: 'task-3',
@@ -69,6 +71,12 @@ describe('selectWorkingSubagents', () => {
         toolUseId: 'task-1',
         type: 'explore',
         description: 'Survey the auth module',
+      },
+      {
+        turnId: 'turn-history',
+        toolUseId: 'task-3',
+        type: 'worker',
+        description: 'Replayed running row',
       },
     ]);
   });
@@ -144,7 +152,10 @@ describe('selectWorkingSubagents', () => {
     ).toHaveLength(1);
   });
 
-  it('returns nothing for history replay (no live turns)', () => {
+  it('raises the badge for replayed rows the ledger reports running', () => {
+    // Reload Window: history replay marked the row running and no
+    // turn id is live in this fresh connection. The badge must still
+    // rise — the ledger is authoritative for explicit statuses.
     const transcript = [
       toolRow({
         turnId: 'turn-old',
@@ -154,6 +165,52 @@ describe('selectWorkingSubagents', () => {
           description: 'Still running per ledger',
           status: 'running',
         },
+      }),
+    ];
+    expect(selectWorkingSubagents(transcript, live([]))).toEqual([
+      {
+        turnId: 'turn-old',
+        toolUseId: 'task-1',
+        type: 'worker',
+        description: 'Still running per ledger',
+      },
+    ]);
+  });
+
+  it('drops a replayed row once subagent.update settles it', () => {
+    // The zombie watch polls replayed running rows and pushes their
+    // terminal status through subagent.update; the badge must fall
+    // with the flip.
+    const running = toolRow({
+      turnId: 'turn-old',
+      toolUseId: 'task-1',
+      subagent: { type: 'worker', description: '', status: 'running' },
+    });
+    expect(selectWorkingSubagents([running], live([]))).toHaveLength(1);
+    const settled = toolRow({
+      turnId: 'turn-old',
+      toolUseId: 'task-1',
+      subagent: {
+        type: 'worker',
+        description: '',
+        status: 'completed',
+        toolUseCount: 2,
+        durationMs: 8_000,
+      },
+    });
+    expect(selectWorkingSubagents([settled], live([]))).toEqual([]);
+  });
+
+  it('keeps the liveTurnIds gate for statusless replayed rows', () => {
+    // Replay can leave a tool row 'running' with no ledger status
+    // (e.g. an interrupted history tail); without a live turn there
+    // is no evidence of live work, so no badge.
+    const transcript = [
+      toolRow({
+        turnId: 'turn-history',
+        toolUseId: 'task-replay',
+        status: 'running',
+        subagent: { type: 'explore', description: '' },
       }),
     ];
     expect(selectWorkingSubagents(transcript, live([]))).toEqual([]);
