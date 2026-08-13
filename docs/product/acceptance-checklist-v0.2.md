@@ -391,3 +391,51 @@ worker 缓存）。
   queue-bar / queued-bar / working-badge / command-card /
   session-drawer / subagent，**全部 PASS**（每套断言 JSON 顶层
   `pass: true`），截图同步刷新，引用见上文各节。
+
+---
+
+## 附 2：v0.3.0 发布指纹与验证状态（增补）
+
+- 版本：`0.3.0`，切包提交 `23e8de9`（含分诊修复
+  `d5c1738`/`dff9dda`/`fa2f880`/`9384977`/`aaf3f12` 与 QA 快修
+  `b5aa9bb`/`aef2d0d`/`9c72d90`/`346fafb`）。
+- 包：`dist/droidvisx.vsix`，1,662,797 字节，打包于 2026-08-13
+  11:24，SHA-256
+  `9641211704AB2F4958EBE6CDB05A43BD2DFBBBB494A094E14250C24B490DE139`。
+- 安装：`cursor --install-extension` 成功，
+  `cursor --list-extensions --show-versions` 确认
+  `droidvisx.droidvisx@0.3.0`。快修 P1 代码已在包内实证
+  （解包 `extension.cjs` 含 `stageCapturedSelectionOutcome`）。
+- 上节 I 的「Add to Chat 不在本版」已过时：三入口中编辑器选中
+  入口已随 `b5aa9bb` 落地（冷启动选区暂存 60s + 状态栏反馈）。
+
+### 真机已验证（v0.3.0 分诊修复，截图在 `artifacts/uat/`）
+
+- 启动无终端窗口：杀 daemon 后 Reload 重拉起，隐藏 spawn，
+  控制台窗口零弹出（`09-daemon-fresh-no-console.png`）。
+- 普通回合运行中 Reload：daemon 存活、回合继续并完成
+  （`10/11-scenario1-*.png`）。
+- 委托子代理运行中 Reload：委派回合存活并完成
+  （`28/29-scenario2-*.png`）。
+- compact 进行中 Reload：重连后压缩分隔卡正常渲染、UI 无卡死
+  （`21c/23-scenario3-*.png`）。
+- 排队消息 + Reload：队列以暂停态恢复并带诊断提示（"restored
+  (text only), use Send now"），无静默丢失
+  （`16/17-scenario4-*.png`）。
+- 计划锚卡（真实 TodoWrite / gpt-luna）：创建位置、原地更新
+  0/3→3/3、完成灰勾、View Plan 展开、Reload 回放同构
+  （`24/25/26/27-plan-*.png`）。
+
+### 未验证（用户叫停真机测试，如实标注）
+
+- QA 快修四条（Add to Chat 冷启动、连点去重、Failed 危险色、
+  预览工具栏换行）：代码确认在包内，但**未做真机验证**，其
+  聚焦测试在合并后基线上**未由本次发布方复跑**（快修提交方
+  门禁见 `23e8de9` 记录）。
+- 重装后的 0.3.0 新包本身未做真机冒烟；上述矩阵验证跑在同日
+  10:32 的 0.3.0 旧切包上（两包共享全部分诊修复提交，新包仅
+  多快修四条与文档提交）。
+- 计划锚卡"切走再切回"的会话切换回放未单独验证（Reload 回放
+  已验证）。
+- compact 场景的精确时序窗口（RPC 中途被杀的最坏点）无法从
+  UI 侧钉死；验收以"重连后不卡死、分隔卡完整"为准，已满足。
