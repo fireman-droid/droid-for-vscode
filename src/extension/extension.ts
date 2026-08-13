@@ -68,6 +68,15 @@ const exportDiagnosticsCommand = 'droidvisx.exportDiagnostics';
 const shutdownDaemonCommand = 'droidvisx.shutdownDaemon';
 const exportSessionCommand = 'droidvisx.exportSessionMarkdown';
 const addSelectionToChatCommand = 'droidvisx.addSelectionToChat';
+
+/**
+ * How long `addSelectionToChat` holds an invoke-time capture while a
+ * cold-starting session connects. Real cold starts (daemon spawn plus
+ * history restore) measured ~16s; the old 5s retry window silently
+ * dropped the selection (QA v0.3 P1-1).
+ */
+const ADD_SELECTION_CONNECT_WAIT_MS = 60_000;
+const ADD_SELECTION_POLL_MS = 250;
 let activeController: ChatController | undefined;
 let disposeDaemonSidecar: (() => Promise<void>) | undefined;
 
@@ -517,24 +526,52 @@ export function activate(context: vscode.ExtensionContext): void {
       );
     }),
     vscode.commands.registerCommand(addSelectionToChatCommand, async () => {
-      // Reveal the view first so the staged chip is visible; the
-      // attachment sources' last-editor fallback keeps the selection
-      // readable after focus moves to the webview.
+      // The selection is read once, at invoke time, so however long a
+      // cold-starting session takes to connect, the captured text is
+      // what gets staged — later edits or lost selections don't
+      // matter (QA v0.3 P1-1).
+      const capture = await attachmentSources.readActiveSelection();
       await vscode.commands.executeCommand(
         `${DroidViewProvider.viewType}.focus`,
       );
-      // A first-time reveal is still connecting the session, so retry
-      // briefly instead of dropping the capture.
-      for (let attempt = 0; attempt < 20; attempt += 1) {
-        if (controller.addEditorSelectionToChat()) {
-          return;
+      const startedAt = Date.now();
+      let waitNotice: vscode.Disposable | null = null;
+      try {
+        for (;;) {
+          if (controller.stageCapturedEditorSelection(capture)) {
+            diagnostics.record({
+              level: 'info',
+              name: 'attachment.add-selection-command.staged',
+              attributes: { waitedMs: Date.now() - startedAt },
+            });
+            return;
+          }
+          if (
+            Date.now() - startedAt >=
+            ADD_SELECTION_CONNECT_WAIT_MS
+          ) {
+            break;
+          }
+          // Quiet visible feedback while the session connects;
+          // disposed the moment the capture is delivered.
+          waitNotice ??= vscode.window.setStatusBarMessage(
+            'Selection will be added when Droid connects…',
+          );
+          await new Promise((resolve) =>
+            setTimeout(resolve, ADD_SELECTION_POLL_MS),
+          );
         }
-        await new Promise((resolve) => setTimeout(resolve, 250));
+      } finally {
+        waitNotice?.dispose();
       }
       diagnostics.record({
         level: 'warn',
         name: 'attachment.add-selection-command.dropped',
+        attributes: { waitedMs: Date.now() - startedAt },
       });
+      void vscode.window.showWarningMessage(
+        'DroidVisX could not add the selection: the chat session did not connect within 60 seconds.',
+      );
     }),
     vscode.commands.registerCommand(openLogsCommand, () => {
       diagnostics.record({

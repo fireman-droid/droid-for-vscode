@@ -119,7 +119,7 @@ import { handleQueueAdd, handleQueueUpdate, handleQueueRemove, handleQueueResume
 import { handleMcpRefresh, pushMcp, handleMcpServerToggle, handleMcpServerAdd, handleMcpServerRemove, handleMcpServerAuthenticate } from './chat/mcp';
 import { dispatchCustomModels, type CustomModelsGateway } from './chat/customModels';
 import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRefresh, pushSkills, handleSkillToggle, handlePluginsRefresh, handleCommandsRefresh, recordRecentCommand, emitModelCatalog, projectModelCatalog, MODEL_CATALOG_FAILED_MESSAGE } from './chat/capabilityPanels';
-import { canStageAttachments, handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddImage, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
+import { handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddImage, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, stageCapturedSelectionOutcome, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
 import { handleSettingUpdate, emitSettings, refreshSettingsAfterRuntimeEvent, projectConfirmedSettings, SETTINGS_READ_FAILED_MESSAGE } from './chat/settings';
 import { handleFileOpenDiff, handleFilePreview, handleInlineHtmlPreview, handleTerminalOpenMirror, handleGitRequestStatus, handleGitCommit, handleWorkspaceOpenPath, handleWorkspaceSearchFiles, handleWorkspaceReadImage } from './chat/workspaceActions';
 import { handleRewindInfo, handleEditResend, handleEditStageBegin, handleEditStageCancel } from './chat/editResend';
@@ -179,6 +179,7 @@ import type { TerminalMirror } from './terminalMirror';
 import {
   createUnavailableAttachmentSources,
   MAX_IMAGE_ATTACHMENT_BYTES,
+  type AttachmentCaptureOutcome,
   type AttachmentPayload,
   type AttachmentPickOutcome,
   type AttachmentSources,
@@ -862,22 +863,21 @@ export class ChatController {
   }
 
   /**
-   * Editor-side entry for `droidvisx.addSelectionToChat`: stages the
-   * active editor selection through the same capture pipeline as the
-   * webview `+` menu (mutual exclusion, staging limit, and diagnostic
-   * semantics included). Returns false while no connected session can
-   * stage attachments yet, so the command can retry after revealing
-   * the view.
+   * Editor-side entry for `droidvisx.addSelectionToChat`: stages a
+   * selection the command captured at invoke time, through the same
+   * pipeline as the webview `+` menu (mutual exclusion, staging
+   * limit, dedupe, and diagnostic semantics included). Returns false
+   * while no connected session can accept it yet, so the command
+   * keeps the capture and retries until the cold-starting view
+   * connects (QA v0.3 P1-1).
    */
-  addEditorSelectionToChat(): boolean {
+  stageCapturedEditorSelection(
+    outcome: AttachmentCaptureOutcome,
+  ): boolean {
     if (this.disposed || this.sessionId === null) {
       return false;
     }
-    if (!canStageAttachments(this, this.sessionId)) {
-      return false;
-    }
-    handleAttachmentCapture(this, this.sessionId, 'selection');
-    return true;
+    return stageCapturedSelectionOutcome(this, this.sessionId, outcome);
   }
 
   dispose(): Promise<void> {

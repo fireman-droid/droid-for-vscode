@@ -22,6 +22,7 @@ import { isSafeWorkspaceRelativePath } from '../../shared/validateMessage';
 import { stableTranscriptId } from '../hostTranscriptState';
 import {
   MAX_IMAGE_ATTACHMENT_BYTES,
+  type AttachmentCaptureOutcome,
   type AttachmentPayload,
   type AttachmentPickOutcome,
 } from '../attachmentSources';
@@ -218,6 +219,50 @@ export function handleAttachmentCapture(
         }
       },
     );
+}
+
+/**
+ * Stages a selection the `droidvisx.addSelectionToChat` command read
+ * at invoke time. The read happens before a cold-starting session
+ * exists (QA v0.3 P1-1: the capture must survive however long the
+ * connect takes), so this consumes a ready-made outcome instead of
+ * reading the editor like `handleAttachmentCapture`. Returns false
+ * while the session cannot accept attachments yet — the caller keeps
+ * the capture and retries; empty and failed reads are consumed as the
+ * same in-session diagnostics the webview `+` menu produces.
+ */
+export function stageCapturedSelectionOutcome(
+  ctl: ChatControllerInternals,
+  sessionId: string,
+  outcome: AttachmentCaptureOutcome,
+): boolean {
+  if (!canStageAttachments(ctl, sessionId)) {
+    return false;
+  }
+  switch (outcome.status) {
+    case 'captured':
+      if (stagedCount(ctl) >= MAX_PENDING_ATTACHMENTS) {
+        ctl.emitSessionDiagnostic(
+          'attachment-limit',
+          ATTACHMENT_LIMIT_MESSAGE,
+        );
+        return true;
+      }
+      stageAttachmentPayloads(ctl, [outcome.item], 'selection');
+      return true;
+    case 'empty':
+      ctl.emitSessionDiagnostic(
+        'attachment-empty',
+        ATTACHMENT_NO_SELECTION_MESSAGE,
+      );
+      return true;
+    case 'failed':
+      ctl.emitSessionDiagnostic(
+        'attachment-read-failed',
+        ATTACHMENT_READ_FAILED_MESSAGE,
+      );
+      return true;
+  }
 }
 
 export function handleAttachmentAddPath(
@@ -600,8 +645,11 @@ function isDuplicateCapture(
       ? (ctl.editStage?.attachments ?? [])
       : ctl.pendingAttachments;
   const name = boundAttachmentName(payload.name);
+  // Edit-stage chips may carry no payload (restored from a summary
+  // whose original bytes were evicted); those cannot match content.
   return stagedEntries.some(
     ({ summary, runtime }) =>
+      runtime !== null &&
       summary.kind === capture &&
       summary.name === name &&
       runtime.data === payload.data,

@@ -999,29 +999,36 @@ describe('ChatController', () => {
     ).toHaveLength(1);
   });
 
-  it('stages the editor selection via the command entry and sends it', async () => {
+  it('keeps an invoke-time selection capture across a cold connect and sends it', async () => {
     const runtime = createMockRuntime();
     const selectionData =
       '```12:34:src/webview/assistant/store.ts\nconst a = 1;\n```';
+    // The command reads the editor itself at invoke time; the
+    // controller must never re-read (a cold start takes ~16s and the
+    // editor state may have changed by then, QA v0.3 P1-1).
+    const readActiveSelection = vi.fn(async () => ({
+      status: 'failed' as const,
+    }));
     const sources: AttachmentSources = {
       pickFiles: vi.fn(async () => ({ status: 'cancelled' as const })),
       readActiveEditor: vi.fn(async () => ({ status: 'empty' as const })),
-      readActiveSelection: vi.fn(async () => ({
-        status: 'captured' as const,
-        item: {
-          kind: 'text' as const,
-          name: 'store.ts:12-34',
-          data: selectionData,
-          sizeBytes: selectionData.length,
-          truncated: false,
-        },
-      })),
+      readActiveSelection,
       readProblems: vi.fn(async () => ({ status: 'empty' as const })),
       readGitChanges: vi.fn(async () => ({ status: 'empty' as const })),
       searchWorkspaceFiles: vi.fn(async () => []),
       readWorkspaceFile: vi.fn(async () => ({
         status: 'failed' as const,
       })),
+    };
+    const capture = {
+      status: 'captured' as const,
+      item: {
+        kind: 'text' as const,
+        name: 'store.ts:12-34',
+        data: selectionData,
+        sizeBytes: selectionData.length,
+        truncated: false,
+      },
     };
     const { controller, messages } = createController(
       () => runtime,
@@ -1033,13 +1040,15 @@ describe('ChatController', () => {
     );
 
     // Before the webview connects there is no session to stage into;
-    // the command entry reports that so its caller can retry.
-    expect(controller.addEditorSelectionToChat()).toBe(false);
+    // the command entry reports that so its caller keeps the capture
+    // and retries.
+    expect(controller.stageCapturedEditorSelection(capture)).toBe(false);
 
     ready(controller);
     await waitForConnected(messages);
 
-    expect(controller.addEditorSelectionToChat()).toBe(true);
+    // The late retry stages the original capture untouched.
+    expect(controller.stageCapturedEditorSelection(capture)).toBe(true);
     await vi.waitFor(() => {
       expect(
         attachmentsMessages(messages).at(-1)?.attachments,
@@ -1047,6 +1056,7 @@ describe('ChatController', () => {
         { kind: 'selection', name: 'store.ts:12-34', truncated: false },
       ]);
     });
+    expect(readActiveSelection).not.toHaveBeenCalled();
 
     send(controller, 'session-1', 'turn-1', 'explain this selection');
     await vi.waitFor(() => {
@@ -1060,49 +1070,56 @@ describe('ChatController', () => {
     ).toHaveLength(0);
   });
 
+  it('reports an empty invoke-time capture as the usual in-session diagnostic', async () => {
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+    );
+    const empty = { status: 'empty' as const };
+    expect(controller.stageCapturedEditorSelection(empty)).toBe(false);
+
+    ready(controller);
+    await waitForConnected(messages);
+
+    expect(controller.stageCapturedEditorSelection(empty)).toBe(true);
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+        code: 'attachment-empty',
+        message: 'Select text in an editor first to attach the selection.',
+      });
+    });
+    expect(attachmentsMessages(messages)).toHaveLength(0);
+  });
+
   it('silently ignores a repeated identical selection capture (QA v0.3 P2-5)', async () => {
-    const sameSelection = {
-      kind: 'text' as const,
-      name: 'store.ts:12-34',
-      data: 'const a = 1;',
-      sizeBytes: 12,
-      truncated: false,
-    };
-    const otherSelection = {
-      kind: 'text' as const,
-      name: 'store.ts:40-50',
-      data: 'const b = 2;',
-      sizeBytes: 12,
-      truncated: false,
-    };
-    const queue = [sameSelection, sameSelection, otherSelection];
-    const readActiveSelection = vi.fn(async () => ({
+    const sameCapture = {
       status: 'captured' as const,
-      item: queue.shift() ?? otherSelection,
-    }));
-    const sources: AttachmentSources = {
-      pickFiles: vi.fn(async () => ({ status: 'cancelled' as const })),
-      readActiveEditor: vi.fn(async () => ({ status: 'empty' as const })),
-      readActiveSelection,
-      readProblems: vi.fn(async () => ({ status: 'empty' as const })),
-      readGitChanges: vi.fn(async () => ({ status: 'empty' as const })),
-      searchWorkspaceFiles: vi.fn(async () => []),
-      readWorkspaceFile: vi.fn(async () => ({
-        status: 'failed' as const,
-      })),
+      item: {
+        kind: 'text' as const,
+        name: 'store.ts:12-34',
+        data: 'const a = 1;',
+        sizeBytes: 12,
+        truncated: false,
+      },
+    };
+    const otherCapture = {
+      status: 'captured' as const,
+      item: {
+        kind: 'text' as const,
+        name: 'store.ts:40-50',
+        data: 'const b = 2;',
+        sizeBytes: 12,
+        truncated: false,
+      },
     };
     const { controller, messages } = createController(
       () => createMockRuntime(),
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      sources,
     );
     ready(controller);
     await waitForConnected(messages);
 
-    expect(controller.addEditorSelectionToChat()).toBe(true);
+    expect(controller.stageCapturedEditorSelection(sameCapture)).toBe(
+      true,
+    );
     await vi.waitFor(() => {
       expect(
         attachmentsMessages(messages).at(-1)?.attachments,
@@ -1110,17 +1127,18 @@ describe('ChatController', () => {
     });
 
     // The identical file, range, and content stages no second chip.
-    expect(controller.addEditorSelectionToChat()).toBe(true);
-    await vi.waitFor(() => {
-      expect(readActiveSelection).toHaveBeenCalledTimes(2);
-    });
+    expect(controller.stageCapturedEditorSelection(sameCapture)).toBe(
+      true,
+    );
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(
       attachmentsMessages(messages).at(-1)?.attachments,
     ).toHaveLength(1);
 
     // A different selection still stages alongside the first chip.
-    expect(controller.addEditorSelectionToChat()).toBe(true);
+    expect(controller.stageCapturedEditorSelection(otherCapture)).toBe(
+      true,
+    );
     await vi.waitFor(() => {
       expect(
         attachmentsMessages(messages).at(-1)?.attachments,
