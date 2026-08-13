@@ -182,7 +182,13 @@ export function ToolActivityRow({
         isPreviewableFilePath(activity.filePath) ? (
           <PreviewChip path={activity.filePath} />
         ) : null}
-        <span className="dvx-activity-state">
+        <span
+          className={`dvx-activity-state${
+            activity.status === "failed"
+              ? " dvx-activity-state-failed"
+              : ""
+          }`}
+        >
           {formatToolLifecycle(activity.status)}
           {activity.durationMs === null
             ? ""
