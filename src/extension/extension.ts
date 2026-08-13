@@ -474,6 +474,11 @@ export function activate(context: vscode.ExtensionContext): void {
           })
         : createBtwSidecar({ cwd, mainSessionId }),
   );
+  // BYOK custom-model management rides the same lazy daemon sidecar
+  // as archive/search; the SDK resource satisfies the gateway shape
+  // structurally (byok-add-model-design.md §2.3, probed 2026-08-13).
+  controller.daemonCustomModels = async () =>
+    (await daemonSidecar.droid()).customModels;
   const provider = new DroidViewProvider(
     context.extensionUri,
     controller,

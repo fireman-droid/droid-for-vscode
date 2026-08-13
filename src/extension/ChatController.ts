@@ -117,6 +117,7 @@ import {
 } from './turnActivityState';
 import { handleQueueAdd, handleQueueUpdate, handleQueueRemove, handleQueueResume, handleQueuePromote, handleQueueClear, settleQueueAfterTurn, projectQueueState, discardQueuedPrompts } from './chat/queue';
 import { handleMcpRefresh, pushMcp, handleMcpServerToggle, handleMcpServerAdd, handleMcpServerRemove, handleMcpServerAuthenticate } from './chat/mcp';
+import { dispatchCustomModels, type CustomModelsGateway } from './chat/customModels';
 import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRefresh, pushSkills, handleSkillToggle, handlePluginsRefresh, handleCommandsRefresh, recordRecentCommand, emitModelCatalog, projectModelCatalog, MODEL_CATALOG_FAILED_MESSAGE } from './chat/capabilityPanels';
 import { canStageAttachments, handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddImage, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
 import { handleSettingUpdate, emitSettings, refreshSettingsAfterRuntimeEvent, projectConfirmedSettings, SETTINGS_READ_FAILED_MESSAGE } from './chat/settings';
@@ -379,6 +380,8 @@ export class ChatController {
     null;
   mcpAuthServerName: string | null = null;
   mcpAuthTimer: ReturnType<typeof setTimeout> | null = null;
+  daemonCustomModels?: () => Promise<CustomModelsGateway>;
+  customModelsOp = false;
   /**
    * Post-turn ledger reconcile for background delegations that
    * outlived their turn ("zombie" rows). Probed 2026-08-12: no
@@ -684,21 +687,13 @@ export class ChatController {
         handleCommandsRefresh(this, message.sessionId);
         return;
       case 'skill.toggle':
-        handleSkillToggle(this, 
-          message.sessionId,
-          message.name,
-          message.disabled,
-        );
+        handleSkillToggle(this, message.sessionId, message.name, message.disabled);
         return;
       case 'mcp.refresh':
         handleMcpRefresh(this, message.sessionId);
         return;
       case 'mcp.server.toggle':
-        handleMcpServerToggle(this, 
-          message.sessionId,
-          message.name,
-          message.enabled,
-        );
+        handleMcpServerToggle(this, message.sessionId, message.name, message.enabled);
         return;
       case 'mcp.server.add': {
         const { type: _type, sessionId, ...params } = message;
@@ -710,6 +705,11 @@ export class ChatController {
         return;
       case 'mcp.server.authenticate':
         handleMcpServerAuthenticate(this, message.sessionId, message.name);
+        return;
+      case 'customModels.refresh':
+      case 'customModels.save':
+      case 'customModels.delete':
+        dispatchCustomModels(this, message);
         return;
       case 'attachment.pick':
         handleAttachmentPick(this, message.sessionId, message.stage);
