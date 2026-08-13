@@ -54,15 +54,24 @@ not invent unsupported Droid capabilities.
 6. Run broad tests, type checks, and builds once at the end when justified.
 7. Package and perform visible browser and Cursor verification when the slice
    affects the extension UI.
-8. Mandatory self-acceptance (user decision, 2026-08-12): before reporting a
-   UI slice as done, the implementing agent must verify it visually itself —
-   render the real built webview (harness page or a disposable test chat
-   session; a scratch session does not disturb other files), drive the actual
-   interaction being shipped, capture screenshots into `artifacts/`, and check
-   them against the agreed spec. Walk the adjacent states too (empty, running,
-   error, hover, collapsed/expanded, session switch). Finding your own bugs is
-   part of the slice; do not leave discovery to the user. Include the
-   screenshots in the final report.
+8. Mandatory behavioral smoke (user decision, 2026-08-13, replacing the
+   earlier screenshot self-acceptance rule): before reporting a slice as done,
+   the implementing agent must prove the behavior against the real thing — run
+   the built webview or a disposable scratch chat session with the real
+   runtime, drive the actual interaction being shipped, and assert the
+   observable outcome (event arrived, row rendered, click routed, state
+   settled). Walk the adjacent states too: empty, running, error, hover,
+   collapsed/expanded, session switch, reload. Failures found here are part of
+   the slice.
+
+   Do NOT spend the slice grading your own screenshots for taste: an agent
+   judging its own visual against its own reading of the spec has repeatedly
+   passed designs the user then rejected. Aesthetic sign-off belongs to the
+   user, via the shared replay harness
+   (`artifacts/kitchen-sink-harness.html`). When a slice changes visual
+   language, update that harness so the new form is reviewable there, and
+   report what changed instead of self-approving it. Attach screenshots only
+   as evidence for a specific claim, not as a substitute for assertions.
 9. Update `docs/product/implementation-status.md` in the same change.
 
 Capability research and probes must support an active product slice. Do not
