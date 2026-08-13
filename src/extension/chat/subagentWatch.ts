@@ -1,6 +1,8 @@
 // subagentWatch: moved verbatim from ChatController.ts (structure-only
 // refactor; bodies unchanged except mechanical this. -> ctl.).
 import type { SessionHistoryLoader } from '../../runtime/history/SessionHistory';
+import type { RuntimeSessionWorkingState } from '../../runtime/DroidRuntime';
+import type { SessionTokenUsageState } from '../../shared/tokenUsage';
 import {
   applySubagentSettlement,
   collectRunningSubagentRows,
@@ -11,7 +13,8 @@ import {
   type PendingSubagentRow,
 } from '../turnActivityState';
 import type { HostTranscriptState } from '../hostTranscriptState';
-import type { ChatControllerInternals } from './internals';
+import { reconcileSessionHistory } from '../reconcileSessionHistory';
+import { isTurnActive, type ChatControllerInternals } from './internals';
 
 export /**
  * Poll cadence of the post-turn zombie-subagent reconcile. Each tick
@@ -31,6 +34,23 @@ export const LIVE_SUBAGENT_SYNC_DELAY_MS = 1_500;
 /** One retry, for a ledger row that lands late. */
 const LIVE_SUBAGENT_SYNC_RETRY_MS = 4_000;
 
+/**
+ * A child can settle just before its hidden completion notification
+ * starts the parent's automatic follow-up turn. Do not read the
+ * history during that short idle gap or the eventual aggregate answer
+ * will still be missed.
+ */
+const PARENT_FOLLOWUP_IDLE_GRACE_MS = 10_000;
+
+/**
+ * Process sessions cannot report their working state. In that mode,
+ * keep reloading the bounded public history for a short window after
+ * settlement; the final read closes the same projection gap without
+ * leaving an unbounded poll behind.
+ */
+const PARENT_FOLLOWUP_FALLBACK_MAX_MS = 30_000;
+const PARENT_FOLLOWUP_HARD_MAX_MS = 10 * 60_000;
+
 interface LiveSubagentSync {
   key: string;
   attempt: number;
@@ -38,6 +58,19 @@ interface LiveSubagentSync {
 }
 
 const liveSubagentSyncs = new WeakMap<object, LiveSubagentSync>();
+
+interface ParentFollowupSync {
+  readonly sessionId: string;
+  readonly runtimeGeneration: number;
+  readonly assistantMarker: string;
+  readonly settledAt: number;
+  readonly fallbackDeadlineAt: number;
+  readonly hardDeadlineAt: number;
+  sawRunning: boolean;
+  lastRunningAt: number | null;
+}
+
+const parentFollowupSyncs = new WeakMap<object, ParentFollowupSync>();
 
 /**
  * Mid-turn ledger sync for background delegations (user report
@@ -195,63 +228,66 @@ export function clearLiveSubagentSync(
  */
 export function settleTurnSubagents(
   ctl: ChatControllerInternals,
-  sessionId: string, turnId: string): void {
-    // The zombie watch owns post-turn reconciliation; a pending
-    // mid-turn sync would double-settle the same rows.
-    clearLiveSubagentSync(ctl);
-    const cwd = ctl.activeRuntimeCwd;
-    const loadSummaries = ctl.sessionHistory.loadSubagentSummaries?.bind(
-      ctl.sessionHistory,
-    );
+  sessionId: string,
+  turnId: string,
+): void {
+  // The zombie watch owns post-turn reconciliation; a pending
+  // mid-turn sync would double-settle the same rows.
+  clearLiveSubagentSync(ctl);
+  const cwd = ctl.activeRuntimeCwd;
+  const loadSummaries = ctl.sessionHistory.loadSubagentSummaries?.bind(
+    ctl.sessionHistory,
+  );
+  if (
+    cwd === null ||
+    loadSummaries === undefined ||
+    ctl.sessionId !== sessionId ||
+    ctl.turn?.turnId !== turnId ||
+    !hasSubagentRows(ctl.turn.activity)
+  ) {
+    return;
+  }
+  void loadSummaries({ cwd, sessionId }).then((summaries) => {
+    const turn = ctl.turn;
     if (
-      cwd === null ||
-      loadSummaries === undefined ||
+      ctl.disposed ||
       ctl.sessionId !== sessionId ||
-      ctl.turn?.turnId !== turnId ||
-      !hasSubagentRows(ctl.turn.activity)
+      turn?.turnId !== turnId
     ) {
       return;
     }
-    void loadSummaries({ cwd, sessionId }).then((summaries) => {
-      const turn = ctl.turn;
-      if (
-        ctl.disposed ||
-        ctl.sessionId !== sessionId ||
-        turn?.turnId !== turnId
-      ) {
-        return;
-      }
-      if (summaries !== null) {
-        const result = reconcileSubagentSummaries(
-          turn.activity,
-          summaries,
-        );
-        turn.activity = result.state;
-        for (const projection of result.projections) {
-          // The turn already reached its terminal state, so a live
-          // webview drops tool.activity (acceptsActiveTurn). Only
-          // subagent.update lands after the turn — without it the
-          // rows stay "running" on screen until a full reload.
-          if (projection.subagent !== undefined) {
-            ctl.emit({
-              type: 'subagent.update',
-              sessionId,
-              turnId,
-              toolUseId: projection.toolUseId,
-              subagent: projection.subagent,
-            });
-          }
+    if (summaries !== null) {
+      const result = reconcileSubagentSummaries(
+        turn.activity,
+        summaries,
+      );
+      turn.activity = result.state;
+      for (const projection of result.projections) {
+        // The turn already reached its terminal state, so a live
+        // webview drops tool.activity (acceptsActiveTurn). Only
+        // subagent.update lands after the turn — without it the
+        // rows stay "running" on screen until a full reload.
+        if (projection.subagent !== undefined) {
+          ctl.emit({
+            type: 'subagent.update',
+            sessionId,
+            turnId,
+            toolUseId: projection.toolUseId,
+            subagent: projection.subagent,
+          });
         }
       }
-      // Background delegations the ledger still reports as running
-      // outlive the turn; keep reconciling them out of band.
-      armZombieSubagentWatch(ctl, 
-        sessionId,
-        cwd,
-        loadSummaries,
-        collectRunningSubagentRows(turn.activity, turnId),
-      );
-    });
+    }
+    // Background delegations the ledger still reports as running
+    // outlive the turn; keep reconciling them out of band.
+    armZombieSubagentWatch(
+      ctl,
+      sessionId,
+      cwd,
+      loadSummaries,
+      collectRunningSubagentRows(turn.activity, turnId),
+    );
+  });
 }
 
 /**
@@ -262,120 +298,378 @@ export function settleTurnSubagents(
  */
 export function armZombieSubagentWatch(
   ctl: ChatControllerInternals,
-    sessionId: string,
-    cwd: string,
-    loadSummaries: NonNullable<
-      SessionHistoryLoader['loadSubagentSummaries']
-    >,
-    rows: readonly PendingSubagentRow[],
+  sessionId: string,
+  cwd: string,
+  loadSummaries: NonNullable<
+    SessionHistoryLoader['loadSubagentSummaries']
+  >,
+  rows: readonly PendingSubagentRow[],
   ): void {
-    const existing = ctl.zombieSubagentWatch;
-    if (existing !== null && existing.sessionId !== sessionId) {
-      clearZombieSubagentWatch(ctl);
-    }
-    if (rows.length === 0) {
-      return;
-    }
-    const current = ctl.zombieSubagentWatch;
-    if (current !== null) {
-      const known = new Set(
-        current.rows.map((row) => `${row.turnId}:${row.toolUseId}`),
-      );
-      current.rows = [
-        ...current.rows,
-        ...rows.filter(
-          (row) => !known.has(`${row.turnId}:${row.toolUseId}`),
-        ),
-      ];
-      return;
-    }
-    const watch = {
-      sessionId,
-      rows,
-      deadlineAt: Date.now() + ZOMBIE_SUBAGENT_WATCH_MAX_MS,
-      ticking: false,
-      timer: setInterval(() => {
-        void tickZombieSubagentWatch(ctl, cwd, loadSummaries);
-      }, ZOMBIE_SUBAGENT_POLL_MS),
-    };
-    ctl.zombieSubagentWatch = watch;
-    ctl.recordHost({
-      level: 'info',
-      name: 'host.subagent.zombie-watch-armed',
-      attributes: { rows: rows.length },
-    });
+  const existing = ctl.zombieSubagentWatch;
+  if (existing !== null && existing.sessionId !== sessionId) {
+    clearZombieSubagentWatch(ctl);
+  }
+  if (rows.length === 0) {
+    return;
+  }
+  const current = ctl.zombieSubagentWatch;
+  if (current !== null) {
+    // New background work supersedes an older post-settlement wait;
+    // the next all-settled point establishes a fresh baseline.
+    parentFollowupSyncs.delete(ctl);
+    const known = new Set(
+      current.rows.map((row) => `${row.turnId}:${row.toolUseId}`),
+    );
+    current.rows = [
+      ...current.rows,
+      ...rows.filter(
+        (row) => !known.has(`${row.turnId}:${row.toolUseId}`),
+      ),
+    ];
+    return;
+  }
+  const watch = {
+    sessionId,
+    rows,
+    deadlineAt: Date.now() + ZOMBIE_SUBAGENT_WATCH_MAX_MS,
+    ticking: false,
+    timer: setInterval(() => {
+      void tickZombieSubagentWatch(ctl, cwd, loadSummaries);
+    }, ZOMBIE_SUBAGENT_POLL_MS),
+  };
+  ctl.zombieSubagentWatch = watch;
+  ctl.recordHost({
+    level: 'info',
+    name: 'host.subagent.zombie-watch-armed',
+    attributes: { rows: rows.length },
+  });
 }
 
 export function clearZombieSubagentWatch(ctl: ChatControllerInternals): void {
-    const watch = ctl.zombieSubagentWatch;
-    if (watch === null) {
-      return;
-    }
-    ctl.zombieSubagentWatch = null;
-    clearInterval(watch.timer);
+  const watch = ctl.zombieSubagentWatch;
+  parentFollowupSyncs.delete(ctl);
+  if (watch === null) {
+    return;
+  }
+  ctl.zombieSubagentWatch = null;
+  clearInterval(watch.timer);
 }
 
 export async function tickZombieSubagentWatch(
   ctl: ChatControllerInternals,
-    cwd: string,
-    loadSummaries: NonNullable<
-      SessionHistoryLoader['loadSubagentSummaries']
-    >,
-  ): Promise<void> {
-    const watch = ctl.zombieSubagentWatch;
-    if (watch === null || watch.ticking) {
-      return;
-    }
-    if (
-      ctl.disposed ||
-      ctl.sessionId !== watch.sessionId ||
-      Date.now() > watch.deadlineAt
-    ) {
-      clearZombieSubagentWatch(ctl);
-      return;
-    }
-    watch.ticking = true;
-    const summaries = await loadSummaries({
-      cwd,
-      sessionId: watch.sessionId,
-    }).catch(() => null);
-    watch.ticking = false;
-    if (
-      summaries === null ||
-      ctl.zombieSubagentWatch !== watch ||
-      ctl.disposed ||
-      ctl.sessionId !== watch.sessionId
-    ) {
-      return;
-    }
-    const { settled, pending } = settleZombieSubagents(
-      watch.rows,
-      summaries,
-    );
-    if (settled.length === 0) {
-      return;
-    }
-    for (const { row, subagent } of settled) {
-      if (ctl.turn?.turnId === row.turnId) {
-        ctl.turn.activity = applySubagentSettlement(
-          ctl.turn.activity,
-          row.toolUseId,
-          subagent,
-        );
-      }
-      ctl.emit({
-        type: 'subagent.update',
+  cwd: string,
+  loadSummaries: NonNullable<
+    SessionHistoryLoader['loadSubagentSummaries']
+  >,
+): Promise<void> {
+  const watch = ctl.zombieSubagentWatch;
+  if (watch === null || watch.ticking) {
+    return;
+  }
+  if (
+    ctl.disposed ||
+    ctl.sessionId !== watch.sessionId ||
+    (Date.now() > watch.deadlineAt &&
+      parentFollowupSyncs.get(ctl) === undefined)
+  ) {
+    clearZombieSubagentWatch(ctl);
+    return;
+  }
+  watch.ticking = true;
+  try {
+    if (watch.rows.length > 0) {
+      const summaries = await loadSummaries({
+        cwd,
         sessionId: watch.sessionId,
-        turnId: row.turnId,
-        toolUseId: row.toolUseId,
-        subagent,
-      });
-    }
-    if (pending.length === 0) {
-      clearZombieSubagentWatch(ctl);
-    } else {
+      }).catch(() => null);
+      if (
+        summaries === null ||
+        ctl.zombieSubagentWatch !== watch ||
+        ctl.disposed ||
+        ctl.sessionId !== watch.sessionId
+      ) {
+        return;
+      }
+      const { settled, pending } = settleZombieSubagents(
+        watch.rows,
+        summaries,
+      );
       watch.rows = pending;
+      for (const { row, subagent } of settled) {
+        if (ctl.turn?.turnId === row.turnId) {
+          ctl.turn.activity = applySubagentSettlement(
+            ctl.turn.activity,
+            row.toolUseId,
+            subagent,
+          );
+        }
+        ctl.emit({
+          type: 'subagent.update',
+          sessionId: watch.sessionId,
+          turnId: row.turnId,
+          toolUseId: row.toolUseId,
+          subagent,
+        });
+      }
+      if (settled.length > 0 && pending.length === 0) {
+        const now = Date.now();
+        parentFollowupSyncs.set(ctl, {
+          sessionId: watch.sessionId,
+          runtimeGeneration: ctl.runtimeGeneration,
+          assistantMarker: transcriptAssistantMarker(
+            ctl.transcript.transcript,
+          ),
+          settledAt: now,
+          fallbackDeadlineAt: now + PARENT_FOLLOWUP_FALLBACK_MAX_MS,
+          hardDeadlineAt: now + PARENT_FOLLOWUP_HARD_MAX_MS,
+          // A newer child settlement may start a newer automatic
+          // parent turn, so its working-state observation starts fresh.
+          sawRunning: false,
+          lastRunningAt: null,
+        });
+      } else if (settled.length > 0) {
+        // The eventual final settlement establishes the baseline for
+        // the aggregate parent answer. Earlier completion turns may
+        // emit interim progress, but must not end the watch first.
+        parentFollowupSyncs.delete(ctl);
+      }
     }
+
+    await syncParentFollowupHistory(ctl, watch, cwd);
+    if (
+      ctl.zombieSubagentWatch === watch &&
+      watch.rows.length === 0 &&
+      parentFollowupSyncs.get(ctl) === undefined
+    ) {
+      clearZombieSubagentWatch(ctl);
+    }
+  } finally {
+    if (ctl.zombieSubagentWatch === watch) {
+      watch.ticking = false;
+    }
+  }
+}
+
+/**
+ * Background Task completion notifications run a new parent agent
+ * turn after the foreground stream has already closed. Those events
+ * cannot arrive through the old `session.stream()`, so once a child
+ * settles we wait for the parent to go idle and then replace the
+ * current transcript from public session history.
+ */
+async function syncParentFollowupHistory(
+  ctl: ChatControllerInternals,
+  watch: NonNullable<ChatControllerInternals['zombieSubagentWatch']>,
+  cwd: string,
+): Promise<void> {
+  const sync = parentFollowupSyncs.get(ctl);
+  if (sync === undefined || sync.sessionId !== watch.sessionId) {
+    return;
+  }
+  if (ctl.runtimeGeneration !== sync.runtimeGeneration) {
+    parentFollowupSyncs.delete(ctl);
+    return;
+  }
+  if (Date.now() >= sync.hardDeadlineAt) {
+    parentFollowupSyncs.delete(ctl);
+    return;
+  }
+  // A user-started foreground turn owns transcript projection until
+  // it settles. The parent follow-up history read can safely wait.
+  if (ctl.sessionOperationInProgress || isTurnActive(ctl.turn)) {
+    return;
+  }
+
+  const runtime = ctl.runtime;
+  let workingState: RuntimeSessionWorkingState | null = null;
+  if (runtime !== null && runtime.readSessionWorkingState !== undefined) {
+    try {
+      workingState = await runtime.readSessionWorkingState();
+    } catch {
+      // Process sessions expose the Runtime method but cannot report
+      // backend state. Treat that as the bounded fallback path.
+      workingState = 'unknown';
+    }
+    if (
+      ctl.zombieSubagentWatch !== watch ||
+      ctl.runtime !== runtime ||
+      ctl.disposed ||
+      ctl.sessionId !== sync.sessionId
+    ) {
+      return;
+    }
+    if (
+      workingState === 'running' ||
+      workingState === 'waiting-for-user'
+    ) {
+      sync.sawRunning = true;
+      sync.lastRunningAt = Date.now();
+      return;
+    }
+    if (
+      workingState === 'idle' &&
+      ((!sync.sawRunning &&
+        Date.now() - sync.settledAt <
+          PARENT_FOLLOWUP_IDLE_GRACE_MS) ||
+        (sync.lastRunningAt !== null &&
+          Date.now() - sync.lastRunningAt <
+            PARENT_FOLLOWUP_IDLE_GRACE_MS))
+    ) {
+      return;
+    }
+    if (
+      workingState === 'unknown' &&
+      Date.now() - sync.settledAt < PARENT_FOLLOWUP_IDLE_GRACE_MS
+    ) {
+      return;
+    }
+  } else if (
+    Date.now() - sync.settledAt < PARENT_FOLLOWUP_IDLE_GRACE_MS
+  ) {
+    return;
+  }
+
+  const loaded = await ctl.sessionHistory
+    .loadHistory({ cwd, sessionId: sync.sessionId })
+    .catch(() => null);
+  const currentSync = parentFollowupSyncs.get(ctl);
+  if (
+    ctl.zombieSubagentWatch !== watch ||
+    ctl.disposed ||
+    ctl.sessionId !== sync.sessionId ||
+    ctl.runtimeGeneration !== sync.runtimeGeneration ||
+    currentSync !== sync
+  ) {
+    return;
+  }
+  const available = loaded?.status === 'available';
+  let visibleAnswerChanged = false;
+  if (available) {
+    const mission = loaded.mission ?? null;
+    const tokenUsage: SessionTokenUsageState = {
+      cumulative: loaded.tokenUsage ?? ctl.tokenUsage.cumulative,
+      lastTurn: ctl.tokenUsage.lastTurn,
+    };
+    const transcript = reconcileSessionHistory(
+      loaded.state,
+      ctl.transcript,
+    );
+    visibleAnswerChanged =
+      transcriptAssistantMarker(transcript.transcript) !==
+      sync.assistantMarker;
+    const changed =
+      !sameTranscriptState(transcript, ctl.transcript) ||
+      !sameMission(mission, ctl.mission) ||
+      !sameTokenUsage(tokenUsage, ctl.tokenUsage);
+    ctl.mission = mission;
+    ctl.tokenUsage = tokenUsage;
+    ctl.transcript = transcript;
+    if (changed) {
+      ctl.recoveryStore.writeSession(sync.sessionId, transcript);
+      void ctl.recoveryStore.flush();
+      ctl.emitSnapshot();
+    }
+    if (
+      visibleAnswerChanged &&
+      workingState === 'idle' &&
+      sync.sawRunning
+    ) {
+      parentFollowupSyncs.delete(ctl);
+    }
+  }
+  ctl.recordHost({
+    level: available ? 'info' : 'warn',
+    name: 'host.subagent.parent-history-sync',
+    attributes: {
+      outcome: available ? 'ok' : 'failed',
+      sessionId: sync.sessionId,
+      ...(available
+        ? { items: ctl.transcript.transcript.length }
+        : {}),
+    },
+  });
+
+  if (
+    parentFollowupSyncs.get(ctl) === sync &&
+    Date.now() >=
+    Math.max(
+      sync.fallbackDeadlineAt,
+      (sync.lastRunningAt ?? 0) + PARENT_FOLLOWUP_FALLBACK_MAX_MS,
+    )
+  ) {
+    // A turn too short to observe can start after the first idle
+    // history read. Keep the no-running/unknown fallback alive for
+    // the full bounded window, then stop permanent background I/O.
+    parentFollowupSyncs.delete(ctl);
+  }
+}
+
+/**
+ * Content-only marker for user-visible assistant output. History
+ * projection synthesizes different ids than the live stream, so ids
+ * cannot prove that the automatic parent turn added an answer.
+ */
+function transcriptAssistantMarker(
+  transcript: HostTranscriptState['transcript'],
+): string {
+  let count = 0;
+  let lastText = '';
+  for (const item of transcript) {
+    if (item.kind !== 'assistant') {
+      continue;
+    }
+    count += 1;
+    lastText = item.text;
+  }
+  return JSON.stringify([count, lastText]);
+}
+
+function sameMission(
+  left: ChatControllerInternals['mission'],
+  right: ChatControllerInternals['mission'],
+): boolean {
+  if (left === null || right === null) {
+    return left === right;
+  }
+  return (
+    left.state === right.state &&
+    left.role === right.role
+  );
+}
+
+function sameTokenUsage(
+  left: SessionTokenUsageState,
+  right: SessionTokenUsageState,
+): boolean {
+  return (
+    sameTokenBreakdown(left.cumulative, right.cumulative) &&
+    sameTokenBreakdown(left.lastTurn, right.lastTurn)
+  );
+}
+
+function sameTranscriptState(
+  left: HostTranscriptState,
+  right: HostTranscriptState,
+): boolean {
+  return (
+    left.historyStatus === right.historyStatus &&
+    left.truncated === right.truncated &&
+    JSON.stringify(left.transcript) === JSON.stringify(right.transcript)
+  );
+}
+
+function sameTokenBreakdown(
+  left: SessionTokenUsageState['cumulative'],
+  right: SessionTokenUsageState['cumulative'],
+): boolean {
+  return (
+    left?.inputTokens === right?.inputTokens &&
+    left?.outputTokens === right?.outputTokens &&
+    left?.cacheReadTokens === right?.cacheReadTokens &&
+    left?.cacheCreationTokens === right?.cacheCreationTokens &&
+    left?.thinkingTokens === right?.thinkingTokens &&
+    left?.factoryCredits === right?.factoryCredits
+  );
 }
 
 /**
@@ -386,20 +680,21 @@ export async function tickZombieSubagentWatch(
  */
 export function armReplayedSubagentWatch(
   ctl: ChatControllerInternals,
-    sessionId: string,
-    cwd: string,
-    transcript: HostTranscriptState,
-  ): void {
-    const loadSummaries = ctl.sessionHistory.loadSubagentSummaries?.bind(
-      ctl.sessionHistory,
-    );
-    if (loadSummaries === undefined) {
-      return;
-    }
-    armZombieSubagentWatch(ctl, 
-      sessionId,
-      cwd,
-      loadSummaries,
-      collectTranscriptSubagentRows(transcript.transcript),
-    );
+  sessionId: string,
+  cwd: string,
+  transcript: HostTranscriptState,
+): void {
+  const loadSummaries = ctl.sessionHistory.loadSubagentSummaries?.bind(
+    ctl.sessionHistory,
+  );
+  if (loadSummaries === undefined) {
+    return;
+  }
+  armZombieSubagentWatch(
+    ctl,
+    sessionId,
+    cwd,
+    loadSummaries,
+    collectTranscriptSubagentRows(transcript.transcript),
+  );
 }

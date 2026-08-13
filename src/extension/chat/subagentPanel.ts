@@ -21,6 +21,7 @@ const BACKOFF_TICKS_AFTER_FAILURE = 3;
 const MAPPING_FRESH_MS = 15_000;
 
 interface SubagentPanelState {
+  sessionId: string | null;
   open: boolean;
   timer: ReturnType<typeof setInterval> | null;
   pollBusy: boolean;
@@ -29,11 +30,20 @@ interface SubagentPanelState {
   mapping: Map<string, string | null>;
   mappingSessionId: string | null;
   mappingAt: number;
-  mappingBusy: Promise<void> | null;
+  mappingBusy: {
+    readonly sessionId: string;
+    readonly task: Promise<boolean>;
+  } | null;
+  /** toolUseId → latest paired invocation (host-only child id included). */
+  invocations: Map<string, SubagentInvocationRecord | null>;
   /** toolUseId → last emitted `action|stoppable` (dedupe). */
   lastEmitted: Map<string, string>;
   /** Transcript requests in flight (single-flight per row). */
   inflightTranscripts: Set<string>;
+  /** Stop requests in flight (single-flight per row). */
+  inflightStops: Set<string>;
+  /** Successful interrupts waiting for the ledger to settle. */
+  settlingStops: Set<string>;
 }
 
 const states = new WeakMap<object, SubagentPanelState>();
@@ -42,6 +52,7 @@ function stateOf(ctl: ChatControllerInternals): SubagentPanelState {
   let state = states.get(ctl);
   if (state === undefined) {
     state = {
+      sessionId: ctl.sessionId,
       open: false,
       timer: null,
       pollBusy: false,
@@ -50,10 +61,25 @@ function stateOf(ctl: ChatControllerInternals): SubagentPanelState {
       mappingSessionId: null,
       mappingAt: 0,
       mappingBusy: null,
+      invocations: new Map(),
       lastEmitted: new Map(),
       inflightTranscripts: new Set(),
+      inflightStops: new Set(),
+      settlingStops: new Set(),
     };
     states.set(ctl, state);
+  } else if (state.sessionId !== ctl.sessionId) {
+    state.sessionId = ctl.sessionId;
+    stopPoll(state);
+    state.open = false;
+    state.skipTicks = 0;
+    state.mapping = new Map();
+    state.mappingSessionId = null;
+    state.mappingAt = 0;
+    state.invocations = new Map();
+    state.inflightTranscripts.clear();
+    state.inflightStops.clear();
+    state.settlingStops.clear();
   }
   return state;
 }
@@ -118,22 +144,38 @@ export async function pollTick(
   const sessionId = ctl.sessionId;
   const gateway = ctl.subagentControl?.() ?? null;
   const rows = runningSubagentRowsOf(ctl);
+  const workingIds = new Set(rows.map((row) => row.toolUseId));
+  for (const key of state.settlingStops) {
+    if (
+      key.startsWith(`${sessionId}\u0000`) &&
+      !workingIds.has(key.slice(sessionId.length + 1))
+    ) {
+      state.settlingStops.delete(key);
+    }
+  }
   if (rows.length === 0) {
     return;
   }
   state.pollBusy = true;
   try {
     const unknown = rows.some((row) => !state.mapping.has(row.toolUseId));
-    await ensureMapping(ctl, unknown);
+    const mappingReady = await ensureMapping(ctl, unknown);
     if (ctl.disposed || ctl.sessionId !== sessionId || !state.open) {
       return;
     }
     let failures = 0;
     for (const row of rows) {
-      const childId = state.mapping.get(row.toolUseId) ?? null;
-      const stoppable = gateway !== null && childId !== null;
+      const childId = mappingReady
+        ? (state.mapping.get(row.toolUseId) ?? null)
+        : null;
+      const key = stopKey(sessionId, row.toolUseId);
+      const sampleable =
+        gateway !== null &&
+        childId !== null &&
+        !state.inflightStops.has(key) &&
+        !state.settlingStops.has(key);
       let action: string | null = null;
-      if (stoppable && gateway !== null && childId !== null) {
+      if (sampleable && gateway !== null && childId !== null) {
         action = await gateway.sampleActivity(childId);
         if (action === null) {
           failures += 1;
@@ -142,6 +184,14 @@ export async function pollTick(
       if (ctl.disposed || ctl.sessionId !== sessionId) {
         return;
       }
+      // Stop can begin while sampleActivity is awaiting the daemon.
+      // Recompute after the await so this tick cannot resurrect the
+      // control with a stale `stoppable:true` response.
+      const stoppable =
+        gateway !== null &&
+        childId !== null &&
+        !state.inflightStops.has(key) &&
+        !state.settlingStops.has(key);
       emitActivity(ctl, sessionId, row, action, stoppable);
     }
     if (failures > 0 && failures === rows.length) {
@@ -162,41 +212,165 @@ export function handleSubagentStop(
   if (sessionId !== ctl.sessionId) {
     return;
   }
-  const gateway = ctl.subagentControl?.() ?? null;
-  if (gateway === null) {
+  const state = stateOf(ctl);
+  const key = stopKey(sessionId, toolUseId);
+  const row = taskRowOf(ctl, toolUseId);
+  if (
+    row === undefined ||
+    row.turnId !== turnId ||
+    !isWorkingSubagentRow(row)
+  ) {
+    emitActivity(
+      ctl,
+      sessionId,
+      { toolUseId, turnId },
+      null,
+      false,
+    );
+    if (
+      row?.subagent !== undefined &&
+      isTerminalStatus(row.subagent.status)
+    ) {
+      ctl.emit({
+        type: 'subagent.update',
+        sessionId,
+        turnId: row.turnId,
+        toolUseId,
+        subagent: row.subagent,
+      });
+    }
+    ctl.recordHost({
+      level: 'info',
+      name: 'host.subagent.stop',
+      attributes: { outcome: 'already-settled', toolUseId },
+    });
     return;
   }
-  void (async () => {
-    const state = stateOf(ctl);
-    await ensureMapping(ctl, !state.mapping.has(toolUseId));
-    if (ctl.disposed || ctl.sessionId !== sessionId) {
-      return;
-    }
-    const childId = state.mapping.get(toolUseId) ?? null;
-    if (childId === null) {
-      ctl.recordHost({
-        level: 'warn',
-        name: 'host.subagent.stop',
-        attributes: { outcome: 'unresolved', toolUseId },
-      });
-      return;
-    }
-    const ok = await gateway.interrupt(childId);
+  const gateway = ctl.subagentControl?.() ?? null;
+  if (gateway === null) {
+    emitActivity(ctl, sessionId, row, null, false);
+    return;
+  }
+  if (state.inflightStops.has(key) || state.settlingStops.has(key)) {
     ctl.recordHost({
-      level: ok ? 'info' : 'warn',
+      level: 'debug',
       name: 'host.subagent.stop',
-      attributes: { outcome: ok ? 'ok' : 'failed', toolUseId },
+      attributes: {
+        outcome: state.inflightStops.has(key)
+          ? 'ignored-inflight'
+          : 'ignored-settling',
+        toolUseId,
+      },
     });
-    if (ok && !ctl.disposed && ctl.sessionId === sessionId) {
-      // Drop the control immediately; the invocation ledger settles
-      // the row's terminal status through the existing watch.
-      emitActivity(
-        ctl,
-        sessionId,
-        { toolUseId, turnId },
-        null,
-        false,
-      );
+    return;
+  }
+  state.inflightStops.add(key);
+  // Disable the control before the first await. This closes both the
+  // Host race and the visible repeated-click window.
+  emitActivity(ctl, sessionId, { toolUseId, turnId }, null, false);
+  void (async () => {
+    try {
+      // Always refresh before interrupting: the Working row may be
+      // stale while the durable invocation already reached terminal.
+      const refreshed = await ensureMapping(ctl, true);
+      if (ctl.disposed || ctl.sessionId !== sessionId) {
+        return;
+      }
+      if (!refreshed) {
+        ctl.recordHost({
+          level: 'warn',
+          name: 'host.subagent.stop',
+          attributes: { outcome: 'mapping-failed', toolUseId },
+        });
+        emitActivity(
+          ctl,
+          sessionId,
+          { toolUseId, turnId },
+          null,
+          false,
+        );
+        return;
+      }
+      const invocation = state.invocations.get(toolUseId) ?? null;
+      if (invocation !== null && isTerminalInvocation(invocation)) {
+        emitInvocationSettlement(
+          ctl,
+          sessionId,
+          turnId,
+          toolUseId,
+          invocation,
+        );
+        ctl.recordHost({
+          level: 'info',
+          name: 'host.subagent.stop',
+          attributes: { outcome: 'already-settled', toolUseId },
+        });
+        return;
+      }
+      const childId = invocation?.childSessionId ?? null;
+      if (childId === null) {
+        ctl.recordHost({
+          level: 'warn',
+          name: 'host.subagent.stop',
+          attributes: { outcome: 'unresolved', toolUseId },
+        });
+        return;
+      }
+      const ok = await gateway.interrupt(childId);
+      if (ctl.disposed || ctl.sessionId !== sessionId) {
+        return;
+      }
+      ctl.recordHost({
+        level: ok ? 'info' : 'warn',
+        name: 'host.subagent.stop',
+        attributes: { outcome: ok ? 'ok' : 'failed', toolUseId },
+      });
+      if (ok) {
+        // Keep the control suppressed until a durable terminal row
+        // replaces the stale Working projection.
+        state.settlingStops.add(key);
+      }
+      if (ok) {
+        return;
+      }
+
+      // An interrupt can lose a race with natural completion. Refresh
+      // once before deciding whether the control should come back.
+      const refreshedAfterFailure = await ensureMapping(ctl, true);
+      if (ctl.disposed || ctl.sessionId !== sessionId) {
+        return;
+      }
+      if (!refreshedAfterFailure) {
+        emitActivity(
+          ctl,
+          sessionId,
+          { toolUseId, turnId },
+          null,
+          false,
+        );
+        return;
+      }
+      const latest = state.invocations.get(toolUseId) ?? null;
+      if (latest !== null && isTerminalInvocation(latest)) {
+        state.settlingStops.delete(key);
+        emitInvocationSettlement(
+          ctl,
+          sessionId,
+          turnId,
+          toolUseId,
+          latest,
+        );
+      } else {
+        emitActivity(
+          ctl,
+          sessionId,
+          { toolUseId, turnId },
+          null,
+          true,
+        );
+      }
+    } finally {
+      state.inflightStops.delete(key);
     }
   })();
 }
@@ -211,7 +385,8 @@ export function handleSubagentOpenTranscript(
     return;
   }
   const state = stateOf(ctl);
-  if (state.inflightTranscripts.has(toolUseId)) {
+  const key = stopKey(sessionId, toolUseId);
+  if (state.inflightTranscripts.has(key)) {
     return;
   }
   const row = taskRowOf(ctl, toolUseId);
@@ -235,14 +410,19 @@ export function handleSubagentOpenTranscript(
     unavailable();
     return;
   }
-  state.inflightTranscripts.add(toolUseId);
+  state.inflightTranscripts.add(key);
   void (async () => {
     try {
-      await ensureMapping(ctl, !state.mapping.has(toolUseId));
+      const mappingReady = await ensureMapping(
+        ctl,
+        !state.mapping.has(toolUseId),
+      );
       if (ctl.disposed || ctl.sessionId !== sessionId) {
         return;
       }
-      const childId = state.mapping.get(toolUseId) ?? null;
+      const childId = mappingReady
+        ? (state.mapping.get(toolUseId) ?? null)
+        : null;
       if (childId === null) {
         ctl.recordHost({
           level: 'warn',
@@ -290,7 +470,7 @@ export function handleSubagentOpenTranscript(
         unavailable();
       }
     } finally {
-      state.inflightTranscripts.delete(toolUseId);
+      state.inflightTranscripts.delete(key);
     }
   })();
 }
@@ -305,7 +485,7 @@ export function handleSubagentOpenTranscript(
 async function ensureMapping(
   ctl: ChatControllerInternals,
   needed: boolean,
-): Promise<void> {
+): Promise<boolean> {
   const state = stateOf(ctl);
   const sessionId = ctl.sessionId;
   const cwd = ctl.activeRuntimeCwd;
@@ -313,39 +493,56 @@ async function ensureMapping(
     ctl.sessionHistory,
   );
   if (sessionId === null || cwd === null || load === undefined) {
-    return;
+    return false;
   }
   const fresh =
     state.mappingSessionId === sessionId &&
     Date.now() - state.mappingAt < MAPPING_FRESH_MS;
   if (!needed && fresh) {
-    return;
+    return true;
   }
   if (state.mappingBusy !== null) {
-    await state.mappingBusy;
-    return;
+    if (state.mappingBusy.sessionId === sessionId) {
+      return state.mappingBusy.task;
+    }
   }
-  const task = (async () => {
+  const task = (async (): Promise<boolean> => {
     const records = await load({ cwd, sessionId }).catch(() => null);
     if (
       records === null ||
       ctl.disposed ||
       ctl.sessionId !== sessionId
     ) {
-      return;
+      if (!ctl.disposed && ctl.sessionId === sessionId) {
+        // Force the next panel tick to retry rather than trusting a
+        // stale child mapping after an authoritative refresh failed.
+        state.mappingSessionId = null;
+        state.mappingAt = 0;
+      }
+      return false;
     }
-    state.mapping = pairInvocationMapping(
+    state.invocations = pairInvocationRecords(
       ctl.transcript.transcript,
       records,
     );
+    state.mapping = new Map(
+      [...state.invocations].map(([toolUseId, invocation]) => [
+        toolUseId,
+        invocation?.childSessionId ?? null,
+      ]),
+    );
     state.mappingSessionId = sessionId;
     state.mappingAt = Date.now();
+    return true;
   })();
-  state.mappingBusy = task;
+  const busy = { sessionId, task };
+  state.mappingBusy = busy;
   try {
-    await task;
+    return await task;
   } finally {
-    state.mappingBusy = null;
+    if (state.mappingBusy === busy) {
+      state.mappingBusy = null;
+    }
   }
 }
 
@@ -357,7 +554,21 @@ export function pairInvocationMapping(
   items: readonly SessionTranscriptItem[],
   records: readonly SubagentInvocationRecord[],
 ): Map<string, string | null> {
-  const queues = new Map<string, Array<string | null>>();
+  return new Map(
+    [...pairInvocationRecords(items, records)].map(
+      ([toolUseId, invocation]) => [
+        toolUseId,
+        invocation?.childSessionId ?? null,
+      ],
+    ),
+  );
+}
+
+function pairInvocationRecords(
+  items: readonly SessionTranscriptItem[],
+  records: readonly SubagentInvocationRecord[],
+): Map<string, SubagentInvocationRecord | null> {
+  const queues = new Map<string, SubagentInvocationRecord[]>();
   for (const record of records) {
     const key = subagentIdentityKey(
       record.summary.type,
@@ -365,12 +576,12 @@ export function pairInvocationMapping(
     );
     const queue = queues.get(key);
     if (queue === undefined) {
-      queues.set(key, [record.childSessionId]);
+      queues.set(key, [record]);
     } else {
-      queue.push(record.childSessionId);
+      queue.push(record);
     }
   }
-  const mapping = new Map<string, string | null>();
+  const mapping = new Map<string, SubagentInvocationRecord | null>();
   for (const item of items) {
     if (item.kind !== 'tool' || item.subagent === undefined) {
       continue;
@@ -382,6 +593,47 @@ export function pairInvocationMapping(
     mapping.set(item.toolUseId, queues.get(key)?.shift() ?? null);
   }
   return mapping;
+}
+
+function isWorkingSubagentRow(
+  row: Extract<SessionTranscriptItem, { kind: 'tool' }>,
+): boolean {
+  return (
+    row.subagent?.status === 'running' ||
+    (row.subagent?.status === undefined && row.status === 'running')
+  );
+}
+
+function isTerminalInvocation(invocation: SubagentInvocationRecord): boolean {
+  return isTerminalStatus(invocation.summary.status);
+}
+
+function isTerminalStatus(status: string | undefined): boolean {
+  return (
+    status === 'completed' ||
+    status === 'failed' ||
+    status === 'cancelled'
+  );
+}
+
+function emitInvocationSettlement(
+  ctl: ChatControllerInternals,
+  sessionId: string,
+  turnId: string,
+  toolUseId: string,
+  invocation: SubagentInvocationRecord,
+): void {
+  ctl.emit({
+    type: 'subagent.update',
+    sessionId,
+    turnId,
+    toolUseId,
+    subagent: invocation.summary,
+  });
+}
+
+function stopKey(sessionId: string, toolUseId: string): string {
+  return `${sessionId}\u0000${toolUseId}`;
 }
 
 /**
@@ -401,10 +653,7 @@ function runningSubagentRowsOf(
     if (item.kind !== 'tool' || item.subagent === undefined) {
       continue;
     }
-    const working =
-      item.subagent.status === 'running' ||
-      (item.subagent.status === undefined && item.status === 'running');
-    if (working) {
+    if (isWorkingSubagentRow(item)) {
       rows.push({ toolUseId: item.toolUseId, turnId: item.turnId });
     }
   }

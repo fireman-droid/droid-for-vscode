@@ -1,4 +1,10 @@
-import { createContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import type {
   SessionTranscriptItem,
@@ -77,15 +83,29 @@ export function useSubagentPanelFlow(
 ): SubagentPanelFlowValue {
   const [activities, setActivities] = useState(EMPTY_ACTIVITIES);
   const [sheet, setSheet] = useState<SubagentSheetState | null>(null);
+  const pendingStopsRef = useRef(new Set<string>());
   useEffect(() => {
     setActivities(EMPTY_ACTIVITIES);
     setSheet(null);
+    pendingStopsRef.current.clear();
     if (sessionId === null) {
       return;
     }
     const handleMessage = (event: MessageEvent<unknown>): void => {
       const activity = parseSubagentActivityMessage(event.data);
       if (activity !== null && activity.sessionId === sessionId) {
+        const stopPending = pendingStopsRef.current.has(
+          activity.toolUseId,
+        );
+        if (stopPending && activity.stoppable) {
+          // A sample emitted before the click can arrive after it.
+          // Keep the optimistic hidden state until the Host's
+          // immediate `stoppable:false` acknowledgement lands.
+          return;
+        }
+        if (stopPending) {
+          pendingStopsRef.current.delete(activity.toolUseId);
+        }
         setActivities((previous) => {
           const next = new Map(previous);
           next.set(activity.toolUseId, {
@@ -154,14 +174,28 @@ export function useSubagentPanelFlow(
       },
       onCloseSheet: () => setSheet(null),
       onStop: (turnId, toolUseId) => {
-        if (sessionId !== null) {
-          vscode.postMessage({
-            type: 'subagent.stop',
-            sessionId,
-            turnId,
-            toolUseId,
-          });
+        if (
+          sessionId === null ||
+          pendingStopsRef.current.has(toolUseId)
+        ) {
+          return;
         }
+        pendingStopsRef.current.add(toolUseId);
+        setActivities((previous) => {
+          const current = previous.get(toolUseId);
+          if (current === undefined || !current.stoppable) {
+            return previous;
+          }
+          const next = new Map(previous);
+          next.set(toolUseId, { ...current, stoppable: false });
+          return next;
+        });
+        vscode.postMessage({
+          type: 'subagent.stop',
+          sessionId,
+          turnId,
+          toolUseId,
+        });
       },
       onPanelToggle: (open) => {
         if (sessionId !== null) {

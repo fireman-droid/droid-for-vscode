@@ -49,9 +49,10 @@ function record(
   childSessionId: string | null,
   type = 'explore',
   description = 'map the flow',
+  status: SubagentInvocationRecord['summary']['status'] = 'running',
 ): SubagentInvocationRecord {
   return {
-    summary: { type, description, status: 'running' },
+    summary: { type, description, status },
     childSessionId,
   };
 }
@@ -258,7 +259,165 @@ describe('handleSubagentStop', () => {
   it('does nothing without a control gateway', () => {
     const fake = fakeController({ subagentControl: () => null });
     handleSubagentStop(asCtl(fake), 'session-1', 'turn-1', 'use-1');
-    expect(fake.emit).not.toHaveBeenCalled();
+    expect(fake.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'subagent.activity',
+        stoppable: false,
+      }),
+    );
+  });
+
+  it('single-flights rapid duplicate requests for one row', async () => {
+    let release: (value: boolean) => void = () => undefined;
+    const interrupt = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const fake = fakeController({
+      subagentControl: () => ({
+        sampleActivity: vi.fn(),
+        interrupt,
+      }),
+    });
+    const ctl = asCtl(fake);
+    handleSubagentStop(ctl, 'session-1', 'turn-1', 'use-1');
+    handleSubagentStop(ctl, 'session-1', 'turn-1', 'use-1');
+    await vi.waitFor(() => {
+      expect(interrupt).toHaveBeenCalledOnce();
+    });
+    release(true);
+    await vi.waitFor(() => {
+      expect(fake.recordHost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'host.subagent.stop',
+          attributes: expect.objectContaining({ outcome: 'ok' }),
+        }),
+      );
+    });
+  });
+
+  it('settles a stale row instead of interrupting a terminal child', async () => {
+    const interrupt = vi.fn();
+    const fake = fakeController({
+      subagentControl: () => ({
+        sampleActivity: vi.fn(),
+        interrupt,
+      }),
+    });
+    fake.sessionHistory.loadSubagentInvocations.mockResolvedValue([
+      record('child-1', 'explore', 'map the flow', 'completed'),
+    ]);
+    handleSubagentStop(asCtl(fake), 'session-1', 'turn-1', 'use-1');
+    await vi.waitFor(() => {
+      expect(fake.emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'subagent.update',
+          toolUseId: 'use-1',
+          subagent: expect.objectContaining({ status: 'completed' }),
+        }),
+      );
+    });
+    expect(interrupt).not.toHaveBeenCalled();
+  });
+
+  it('does not interrupt through a stale mapping when refresh fails', async () => {
+    const interrupt = vi.fn();
+    const fake = fakeController({
+      subagentControl: () => ({
+        sampleActivity: vi.fn(),
+        interrupt,
+      }),
+    });
+    fake.sessionHistory.loadSubagentInvocations.mockResolvedValue(null);
+    handleSubagentStop(asCtl(fake), 'session-1', 'turn-1', 'use-1');
+    await vi.waitFor(() => {
+      expect(fake.recordHost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'host.subagent.stop',
+          attributes: expect.objectContaining({
+            outcome: 'mapping-failed',
+          }),
+        }),
+      );
+    });
+    expect(interrupt).not.toHaveBeenCalled();
+    expect(fake.emit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'subagent.activity',
+        stoppable: false,
+      }),
+    );
+  });
+
+  it('reconciles natural completion after an interrupt race', async () => {
+    const interrupt = vi.fn().mockResolvedValue(false);
+    const fake = fakeController({
+      subagentControl: () => ({
+        sampleActivity: vi.fn(),
+        interrupt,
+      }),
+    });
+    fake.sessionHistory.loadSubagentInvocations
+      .mockResolvedValueOnce([record('child-1')])
+      .mockResolvedValueOnce([
+        record('child-1', 'explore', 'map the flow', 'completed'),
+      ]);
+    handleSubagentStop(asCtl(fake), 'session-1', 'turn-1', 'use-1');
+    await vi.waitFor(() => {
+      expect(fake.emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'subagent.update',
+          subagent: expect.objectContaining({ status: 'completed' }),
+        }),
+      );
+    });
+    expect(
+      fake.emit.mock.calls.filter(
+        ([message]) =>
+          message.type === 'subagent.activity' &&
+          message.stoppable === true,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('reloads the invocation mapping after a session switch', async () => {
+    let releaseOld: (
+      value: readonly SubagentInvocationRecord[] | null,
+    ) => void = () => undefined;
+    const oldLoad = new Promise<
+      readonly SubagentInvocationRecord[] | null
+    >((resolve) => {
+      releaseOld = resolve;
+    });
+    const interrupt = vi.fn().mockResolvedValue(true);
+    const fake = fakeController({
+      subagentControl: () => ({
+        sampleActivity: vi.fn(),
+        interrupt,
+      }),
+    });
+    fake.sessionHistory.loadSubagentInvocations
+      .mockReturnValueOnce(oldLoad)
+      .mockResolvedValueOnce([record('child-new')]);
+    const ctl = asCtl(fake);
+    handleSubagentStop(ctl, 'session-1', 'turn-1', 'use-1');
+
+    fake.sessionId = 'session-2';
+    handleSubagentStop(ctl, 'session-2', 'turn-1', 'use-1');
+    await vi.waitFor(() => {
+      expect(
+        fake.sessionHistory.loadSubagentInvocations,
+      ).toHaveBeenCalledTimes(2);
+      expect(interrupt).toHaveBeenCalledWith('child-new');
+    });
+    // The new session did not wait for the stale load to finish.
+    releaseOld([record('child-old')]);
+    await vi.waitFor(() => {
+      expect(interrupt).toHaveBeenCalledOnce();
+    });
+    expect(interrupt).toHaveBeenCalledWith('child-new');
   });
 });
 
@@ -307,6 +466,77 @@ describe('panel polling', () => {
         }),
       );
     });
+    handleSubagentPanel(ctl, 'session-1', false);
+  });
+
+  it('does not sample or expose Stop when the mapping refresh fails', async () => {
+    const sampleActivity = vi.fn();
+    const fake = fakeController({
+      subagentControl: () => ({
+        sampleActivity,
+        interrupt: vi.fn(),
+      }),
+    });
+    fake.sessionHistory.loadSubagentInvocations.mockResolvedValue(null);
+    const ctl = asCtl(fake);
+    handleSubagentPanel(ctl, 'session-1', true);
+    await vi.waitFor(() => {
+      expect(fake.emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'subagent.activity',
+          stoppable: false,
+        }),
+      );
+    });
+    expect(sampleActivity).not.toHaveBeenCalled();
+    handleSubagentPanel(ctl, 'session-1', false);
+  });
+
+  it('does not resurrect Stop when a sample finishes during interrupt', async () => {
+    let releaseSample: (value: string | null) => void = () => undefined;
+    let releaseInterrupt: (value: boolean) => void = () => undefined;
+    const sampleActivity = vi.fn(
+      () =>
+        new Promise<string | null>((resolve) => {
+          releaseSample = resolve;
+        }),
+    );
+    const interrupt = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseInterrupt = resolve;
+        }),
+    );
+    const fake = fakeController({
+      subagentControl: () => ({ sampleActivity, interrupt }),
+    });
+    const ctl = asCtl(fake);
+    handleSubagentPanel(ctl, 'session-1', true);
+    await vi.waitFor(() => {
+      expect(sampleActivity).toHaveBeenCalledOnce();
+    });
+
+    handleSubagentStop(ctl, 'session-1', 'turn-1', 'use-1');
+    await vi.waitFor(() => {
+      expect(interrupt).toHaveBeenCalledOnce();
+    });
+    releaseSample('Read');
+    await vi.waitFor(() => {
+      expect(fake.emit).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          type: 'subagent.activity',
+          stoppable: false,
+        }),
+      );
+    });
+    expect(
+      fake.emit.mock.calls.filter(
+        ([message]) =>
+          message.type === 'subagent.activity' &&
+          message.stoppable === true,
+      ),
+    ).toHaveLength(0);
+    releaseInterrupt(true);
     handleSubagentPanel(ctl, 'session-1', false);
   });
 

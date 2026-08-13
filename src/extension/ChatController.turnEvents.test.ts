@@ -589,6 +589,288 @@ describe('ChatController', () => {
     });
   });
 
+  it('projects the automatic parent answer after a background child settles', async () => {
+    const runtime = Object.assign(
+      createMockRuntime(async function* () {
+        yield {
+          type: 'tool-start',
+          toolName: 'Task',
+          toolUseId: 'task-bg',
+          action: 'Delegated focused work',
+        };
+        yield {
+          type: 'subagent-started',
+          toolUseId: 'task-bg',
+          subagentType: 'explore',
+          description: 'Background research',
+        };
+        yield {
+          type: 'tool-result',
+          toolName: 'Task',
+          toolUseId: 'task-bg',
+          action: 'Delegated focused work',
+          isError: false,
+        };
+        yield successfulTurn();
+      }),
+      {
+        readSessionWorkingState: vi
+          .fn()
+          .mockResolvedValueOnce('idle')
+          .mockResolvedValueOnce('running')
+          .mockResolvedValue('idle'),
+      },
+    );
+    const running = {
+      type: 'explore',
+      description: 'Background research',
+      status: 'running' as const,
+    };
+    const completed = {
+      ...running,
+      status: 'completed' as const,
+      toolUseCount: 4,
+    };
+    let settledInLedger = false;
+    const loadHistory = vi.fn(async () => ({
+      status: 'available' as const,
+      state: {
+        transcript: [
+          {
+            id: 'u1',
+            kind: 'user' as const,
+            text: 'Delegate in the background',
+            messageId: 'message-1',
+          },
+          {
+            id: 'a-final',
+            kind: 'assistant' as const,
+            turnId: 'history-final',
+            text: 'Here is the completed research summary.',
+          },
+        ],
+        historyStatus: 'complete' as const,
+        truncated: false,
+      },
+    }));
+    const history: SessionHistoryLoader = {
+      loadHistory,
+      loadSubagentSummaries: vi.fn(async () => [
+        settledInLedger ? completed : running,
+      ]),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      history,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    vi.useFakeTimers();
+    try {
+      send(controller, 'session-1', 'turn-1', 'Delegate in the background');
+      await vi.advanceTimersByTimeAsync(0);
+      settledInLedger = true;
+      await vi.advanceTimersByTimeAsync(5_100);
+
+      // Child settlement is followed by a real idle gap. Reading now
+      // would reproduce the production loss, so the grace holds.
+      await vi.advanceTimersByTimeAsync(5_100);
+      expect(loadHistory).not.toHaveBeenCalled();
+
+      // The hidden completion notification starts the automatic
+      // parent turn, then its first idle sample is still held long
+      // enough for chained completion notifications to start.
+      await vi.advanceTimersByTimeAsync(5_100);
+      expect(loadHistory).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(10_100);
+
+      expect(loadHistory).toHaveBeenCalledOnce();
+      expect(
+        snapshots(messages).at(-1)?.transcript.at(-1),
+      ).toMatchObject({
+        kind: 'assistant',
+        text: 'Here is the completed research summary.',
+      });
+
+      // The watch closes once a running→idle automatic turn exposes
+      // the changed answer; no further history polling remains.
+      const loads = loadHistory.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(loadHistory).toHaveBeenCalledTimes(loads);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the parent-history fallback bounded when no answer appears', async () => {
+    const runtime = Object.assign(
+      createMockRuntime(async function* () {
+        yield {
+          type: 'tool-start',
+          toolName: 'Task',
+          toolUseId: 'task-bg',
+          action: 'Delegated focused work',
+        };
+        yield {
+          type: 'subagent-started',
+          toolUseId: 'task-bg',
+          subagentType: 'explore',
+          description: 'Quiet background research',
+        };
+        yield {
+          type: 'tool-result',
+          toolName: 'Task',
+          toolUseId: 'task-bg',
+          action: 'Delegated focused work',
+          isError: false,
+        };
+        yield successfulTurn();
+      }),
+      {
+        readSessionWorkingState: vi
+          .fn()
+          .mockResolvedValue('unknown'),
+      },
+    );
+    const running = {
+      type: 'explore',
+      description: 'Quiet background research',
+      status: 'running' as const,
+    };
+    const completed = { ...running, status: 'completed' as const };
+    let settledInLedger = false;
+    const loadHistory = vi.fn(async () => ({
+      status: 'available' as const,
+      state: {
+        transcript: [],
+        historyStatus: 'complete' as const,
+        truncated: false,
+      },
+    }));
+    const history: SessionHistoryLoader = {
+      loadHistory,
+      loadSubagentSummaries: vi.fn(async () => [
+        settledInLedger ? completed : running,
+      ]),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      history,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    vi.useFakeTimers();
+    try {
+      send(controller, 'session-1', 'turn-1', 'Delegate quietly');
+      await vi.advanceTimersByTimeAsync(0);
+      settledInLedger = true;
+      await vi.advanceTimersByTimeAsync(35_100);
+      expect(loadHistory.mock.calls.length).toBeGreaterThan(0);
+      const loads = loadHistory.mock.calls.length;
+      const snapshotsBefore = snapshots(messages).length;
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(loadHistory).toHaveBeenCalledTimes(loads);
+      expect(snapshots(messages)).toHaveLength(snapshotsBefore);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('waits for the final child before syncing the aggregate parent answer', async () => {
+    const runtime = Object.assign(
+      createMockRuntime(async function* () {
+        for (const [toolUseId, description] of [
+          ['task-a', 'Background research A'],
+          ['task-b', 'Background research B'],
+        ] as const) {
+          yield {
+            type: 'tool-start',
+            toolName: 'Task',
+            toolUseId,
+            action: 'Delegated focused work',
+          };
+          yield {
+            type: 'subagent-started',
+            toolUseId,
+            subagentType: 'explore',
+            description,
+          };
+          yield {
+            type: 'tool-result',
+            toolName: 'Task',
+            toolUseId,
+            action: 'Delegated focused work',
+            isError: false,
+          };
+        }
+        yield successfulTurn();
+      }),
+      {
+        readSessionWorkingState: vi.fn().mockResolvedValue('idle'),
+      },
+    );
+    const summaries: Array<{
+      type: string;
+      description: string;
+      status: 'running' | 'completed';
+    }> = [
+      {
+        type: 'explore',
+        description: 'Background research A',
+        status: 'running',
+      },
+      {
+        type: 'explore',
+        description: 'Background research B',
+        status: 'running',
+      },
+    ];
+    const loadHistory = vi.fn(async () => ({
+      status: 'available' as const,
+      state: {
+        transcript: [],
+        historyStatus: 'complete' as const,
+        truncated: false,
+      },
+    }));
+    const history: SessionHistoryLoader = {
+      loadHistory,
+      loadSubagentSummaries: vi.fn(async () => summaries),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      history,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    vi.useFakeTimers();
+    try {
+      send(controller, 'session-1', 'turn-1', 'Delegate twice');
+      await vi.advanceTimersByTimeAsync(0);
+      summaries[0] = { ...summaries[0], status: 'completed' };
+      await vi.advanceTimersByTimeAsync(15_100);
+      expect(loadHistory).not.toHaveBeenCalled();
+
+      summaries[1] = { ...summaries[1], status: 'completed' };
+      await vi.advanceTimersByTimeAsync(15_100);
+      expect(loadHistory).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('re-arms the ledger poll for a replayed running delegation', async () => {
     // Reload Window while a background delegation is still running:
     // the replayed transcript row says "running", the watch that was

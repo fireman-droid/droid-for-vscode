@@ -4,6 +4,20 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.9] - 2026-08-14
+
+### Fixed
+
+- **Background subagent answers now appear live** — after all
+  detached child settles, the Host follows the hidden automatic
+  parent turn through the daemon's working state and refreshes the
+  active transcript from public session history, so the aggregate
+  answer no longer remains only on disk until Reload Window.
+- **Per-row Stop is single-flight and terminal-aware** — rapid clicks
+  collapse into one request, a fresh invocation-ledger read avoids
+  interrupting children that already finished, and stale activity
+  samples cannot bring a removed Stop control back.
+
 ## [0.7.8] - 2026-08-13
 
 This release makes live subagent work denser and more informative,

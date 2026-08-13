@@ -2918,6 +2918,26 @@ UI 描述见 §22 重做记录。
   最终 typecheck 三段与 `lint:budgets` 全绿；发版包结果见文末
   “当前安装包状态”。
 
+### 44. 后台子代理父答案回灌 + 单停竞态修复（2026-08-14 凌晨，v0.7.9）
+
+- **用户真机缺陷**：三个 `Task(await:false)` 子代理完成后，Droid 已在
+  父会话历史生成完整汇总回复，但活跃 DroidVisX 对话不出现；点一次
+  单行 Stop 同时发出多条请求。
+- **根因与修复**：前台 `session.stream()` 已结束，后台完成通知触发的
+  父自动回合只写会话历史，原 zombie watch 只更新子行。现在最后一个
+  子行结清后，Host 以 daemon working state 跨过 idle 间隙并等待自动
+  回合 running→idle，再经公开 history loader + 既有
+  `reconcileSessionHistory` 回灌转录、usage/mission 与恢复快照；无
+  working-state 能力时仅做 30s 有界兜底，所有路径有 10min 硬上限。
+- **Stop 竞态**：Host 与 Webview 双层单飞；点击即乐观撤控件，Host
+  强制刷新 invocation ledger，终态直接 settle，不再 interrupt；失败
+  后再读台账区分自然完成与仍运行。会话切换、迟到活动采样与并发映射
+  读取均有 session guard，不能复活 Stop 或污染新会话。
+- **验证**：聚焦 `ChatController.turnEvents`、`subagentPanel`、
+  `subagentPanelFlow` 共 56 例全绿；typecheck 三段、
+  `lint:budgets` 与 `git diff --check` 全绿。按当前门禁未跑全量
+  Vitest 或额外 daemon smoke。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3351,6 +3371,15 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-14 凌晨后台答案修复发版 v0.7.9**：版本号 `0.7.8 →
+  0.7.9`，内容 = 台账 §44（后台子代理最终父答案自动回灌、单行 Stop
+  Host/Webview 双层单飞与终态竞态收敛）。聚焦 56 例、typecheck
+  三段、`lint:budgets` 全绿；build + VSIX 11 条目验证全绿，产物
+  1,678,691 字节，SHA-256
+  `018963E6D6E8377E74D286390EDB57B7254BDD21CCE12523565D8477D22881B9`。
+  `cursor --install-extension --force` 安装成功并确认
+  `droidvisx.droidvisx@0.7.9`。未跑全量 Vitest，也不追加 daemon
+  smoke；安装后需 Reload Window。
 - **2026-08-13 晚稳定性收口发版 v0.7.8**：版本号 `0.7.7 →
   0.7.8`，内容 = 台账 §43（丰富子代理转录、紧凑且 Reload-safe 的
   Working、metadata-only worker 过滤、daemon 租约/发现/私有生命周期
