@@ -73,6 +73,57 @@ describe('selectWorkingSubagents', () => {
     ]);
   });
 
+  it('counts a statusless delegation under a still-running Task row', () => {
+    // Foreground (blocking) Task: the delegation identity arrives
+    // with the Task input, but the SDK only reports a lifecycle
+    // status with the Task's own tool_result — so for the whole
+    // visible run `subagent.status` is undefined while the tool row
+    // itself is `running`. That is live work by construction.
+    const transcript: SessionTranscriptItem[] = [
+      toolRow({
+        turnId: 'turn-1',
+        toolUseId: 'task-fg',
+        status: 'running',
+        subagent: {
+          type: 'explore',
+          description: '看这个文件夹',
+        },
+      }),
+      // Same shape in a non-live turn: still gated out.
+      toolRow({
+        turnId: 'turn-history',
+        toolUseId: 'task-replay',
+        status: 'running',
+        subagent: { type: 'explore', description: '' },
+      }),
+    ];
+    expect(selectWorkingSubagents(transcript, live(['turn-1']))).toEqual([
+      {
+        turnId: 'turn-1',
+        toolUseId: 'task-fg',
+        type: 'explore',
+        description: '看这个文件夹',
+      },
+    ]);
+  });
+
+  it('drops a statusless delegation once its Task row settled', () => {
+    // The tool row reached a terminal state without the ledger ever
+    // reporting a subagent status: no live work remains to count.
+    const transcript = (['completed', 'failed'] as const).map(
+      (status, index) =>
+        toolRow({
+          turnId: 'turn-1',
+          toolUseId: `task-${index}`,
+          status,
+          subagent: { type: 'worker', description: '' },
+        }),
+    );
+    expect(selectWorkingSubagents(transcript, live(['turn-1']))).toEqual(
+      [],
+    );
+  });
+
   it('keeps counting after the turn ended while delegations still run', () => {
     // The zombie window: the turn reached a terminal state but the
     // background delegation is still running. The turn id stays in

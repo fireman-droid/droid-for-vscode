@@ -1,22 +1,123 @@
 /* Subagent read-only transcript sheet (待办 B slice 1). The pane
-   itself reuses the btw split-pane family (21-btw.css); this file
-   only adds the quiet single-line rows of the read-only renderer.
-   Token-driven throughout, so the dark theme needs no re-skin. */
+   itself reuses the btw split-pane family (21-btw.css); the rows
+   reuse the main chat's visual language: the task prompt sits in the
+   user bubble (classes from 11-user-edit.css), text runs through the
+   shared markdown renderer, and tool use reads as the quiet ruled
+   marker-dot ledger of 07-activity-live.css, rebuilt compactly in
+   the sheet's own namespace (visual parity, none of the live rows'
+   actions). Token-driven throughout, so the dark theme needs no
+   re-skin. */
 
 .dvx-subsheet-body {
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
+/* Task prompt in the main chat's user bubble; the markdown block
+   fills the bubble's wrapping row layout and reads at the pane's
+   12px size. No line clamp: the prompt is the point of this sheet. */
+.dvx-subsheet .dvx-user-block {
+  margin: 2px 0 10px;
+}
+
+.dvx-subsheet-user-md {
+  flex: 1 1 100%;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.dvx-subsheet-user-md > :first-child {
+  margin-top: 0;
+}
+
+.dvx-subsheet-user-md > :last-child {
+  margin-bottom: 0;
+}
+
+.dvx-subsheet-answer {
+  margin: 6px 0 10px;
+}
+
+/* Quiet collapsed thinking line: same typography family as the main
+   chat's settled Thinking rows, without the disclosure body. */
+.dvx-subsheet-thought {
+  margin: 2px 0;
+  color: var(--dvx-subtle);
+  font-size: 11.5px;
+  line-height: 19px;
+}
+
+/* Quiet ruled tool rows (07-activity-live family): a 4px marker dot
+   on a 15px rail, secondary/525 action, mono muted object, subtle
+   state on the right, and a 58% hairline between consecutive rows. */
+.dvx-subsheet-tool {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  min-height: 26px;
+  padding-left: 15px;
+  font-size: 11.5px;
+  line-height: 18px;
+}
+
+.dvx-subsheet-tool::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 4px;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: var(--dvx-border-strong);
+}
+
+.dvx-subsheet-tool + .dvx-subsheet-tool {
+  border-top: 1px solid color-mix(in srgb, var(--dvx-border) 58%, transparent);
+}
+
+.dvx-subsheet-tool-action {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dvx-text-secondary);
+  font-weight: 525;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-subsheet-tool-file {
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: var(--dvx-muted);
+  font-family: var(--dvx-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-subsheet-tool-state {
+  flex: none;
+  margin-left: auto;
+  color: var(--dvx-subtle);
+  font-size: 10.5px;
+}
+
+/* Failed rows keep the subtle error tint of the main ledger. */
+.dvx-subsheet-tool-state-failed,
+.dvx-subsheet-tool-failed .dvx-subsheet-tool-action {
+  color: var(--dvx-danger, #b3401f);
+}
+
+/* Small single-line summaries (changes, diagnostics, images). */
 .dvx-subsheet-line {
   margin: 0;
   color: var(--dvx-subtle);
   font-size: 11.5px;
   line-height: 17px;
   overflow-wrap: anywhere;
-}
-
-.dvx-subsheet-line-failed {
-  color: var(--dvx-danger, #b3401f);
 }
 
 /* Quiet text entry on a settled delegation sub-row: ink-deepening

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { SessionTranscriptItem } from '../../shared/bridgeMessages';
 import { DroidMarkdownContent } from './MarkdownText';
 import type { SubagentSheetState } from './subagentPanelFlow';
+import { formatDuration, formatToolLifecycle } from './thread/readers';
 
 /** Matches the btw collapse duration (styles 21-btw.css). */
 const LEAVE_MS = 200;
@@ -89,9 +90,11 @@ export function SubagentTranscriptSheet({
 }
 
 /**
- * One transcript item, rendered quiet and inert: user text as the
- * question label, assistant markdown through the shared renderer,
- * everything else as small single-line summaries.
+ * One transcript item, rendered read-only in the main chat's visual
+ * language: the task prompt in the user bubble through the shared
+ * markdown renderer, assistant text as transcript markdown, thinking
+ * as the quiet grey line, and tool use as the ruled marker-dot
+ * ledger — visual parity with the live rows, none of their actions.
  */
 export function SubagentTranscriptRow({
   item,
@@ -100,33 +103,56 @@ export function SubagentTranscriptRow({
 }): React.JSX.Element | null {
   switch (item.kind) {
     case 'user':
-      return <p className="dvx-btw-question">{item.text}</p>;
+      return (
+        <div className="dvx-user-block dvx-subsheet-user">
+          <DroidMarkdownContent
+            text={item.text}
+            className="dvx-markdown dvx-subsheet-user-md"
+          />
+        </div>
+      );
     case 'assistant':
       return (
-        <div className="dvx-btw-answer">
-          <DroidMarkdownContent text={item.text} />
-        </div>
+        <DroidMarkdownContent
+          text={item.text}
+          className="dvx-markdown dvx-btw-answer dvx-subsheet-answer"
+        />
       );
     case 'thinking':
       return (
-        <p className="dvx-subsheet-line">
+        <p className="dvx-subsheet-thought">
           {item.durationMs !== undefined && item.durationMs !== null
             ? `Thought for ${formatSeconds(item.durationMs)}`
             : 'Thought'}
         </p>
       );
-    case 'tool':
+    case 'tool': {
+      const failed = item.status === 'failed';
       return (
-        <p
-          className={`dvx-subsheet-line${
-            item.status === 'failed' ? ' dvx-subsheet-line-failed' : ''
+        <div
+          className={`dvx-subsheet-tool${
+            failed ? ' dvx-subsheet-tool-failed' : ''
           }`}
         >
-          {item.action}
-          {item.filePath !== undefined ? ` · ${item.filePath}` : ''}
-          {item.status === 'failed' ? ' · failed' : ''}
-        </p>
+          <span className="dvx-subsheet-tool-action">{item.action}</span>
+          {item.filePath !== undefined ? (
+            <code className="dvx-subsheet-tool-file" title={item.filePath}>
+              {item.filePath}
+            </code>
+          ) : null}
+          <span
+            className={`dvx-subsheet-tool-state${
+              failed ? ' dvx-subsheet-tool-state-failed' : ''
+            }`}
+          >
+            {formatToolLifecycle(item.status)}
+            {item.durationMs !== undefined
+              ? ` · ${formatDuration(item.durationMs)}`
+              : ''}
+          </span>
+        </div>
       );
+    }
     case 'changes':
       return (
         <p className="dvx-subsheet-line">

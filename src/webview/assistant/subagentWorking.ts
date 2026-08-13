@@ -24,6 +24,13 @@ export interface WorkingSubagent {
  * turn. Rows of finished turns stay counted while their delegation
  * is still running in the background — that window, where nothing
  * else in the UI moves, is exactly what the badge is for.
+ *
+ * A statusless delegation under a still-running Task row counts too
+ * (same fallback the transcript sub-row applies): the delegation
+ * identity arrives with the Task input, but for a FOREGROUND
+ * (blocking) Task the SDK only reports a lifecycle status with the
+ * Task's own tool_result, so `subagent.status` stays undefined for
+ * the entire visible run. Terminal and pending statuses never count.
  */
 export function selectWorkingSubagents(
   transcript: readonly SessionTranscriptItem[],
@@ -33,9 +40,15 @@ export function selectWorkingSubagents(
   for (const item of transcript) {
     if (
       item.kind !== 'tool' ||
-      item.subagent?.status !== 'running' ||
+      item.subagent === undefined ||
       !liveTurnIds.has(item.turnId)
     ) {
+      continue;
+    }
+    const working =
+      item.subagent.status === 'running' ||
+      (item.subagent.status === undefined && item.status === 'running');
+    if (!working) {
       continue;
     }
     rows.push({

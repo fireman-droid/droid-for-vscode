@@ -2846,6 +2846,22 @@ UI 描述见 §22 重做记录。
   `droidvisx-0.7.5.vsix` 安装成功。真机验收：重载窗口后自动恢复
   会话不再报打不开（最多迟 15s）。
 
+### 41. Working 药丸前台委派计数 + 子代理转录套用主聊天渲染（2026-08-13 晚，v0.7.6）
+
+- **用户实锤**（前台派遣 explore，daemon）：全程"没有看到小药丸"，
+  跑完才出现；转录分栏是廉价生文本，任务 Prompt 一整坨无层级。
+- **根因 A**：`selectWorkingSubagents` 只数 `status === 'running'`，
+  而前台（阻塞）Task 整个可见期 `subagent.status` 是 undefined（SDK
+  到 tool_result 才给生命周期）；转录子行早有 `parentRunning` 兜底，
+  徽标选择器没有。修复：无状态委派 + Task 行仍 running 即计数。
+- **根因 B**：Sheet 行是裸 `<p>`。重做为主聊天视觉语言：Prompt 进
+  用户气泡（复用 `dvx-user-block`）走共享 Markdown，助手文本
+  `dvx-markdown`，Thinking 灰线，工具行 = 圆点账本（sheet 命名空间
+  紧凑重建，只读无操作），失败行保留淡错误色。
+- **验证（新规则）**：tsc + lint:budgets 全绿；`subagentWorking`
+  8 例（+2 前台用例）+ 新建 `SubagentTranscriptSheet.test.tsx`
+  6 例全绿；`droidvisx-0.7.6.vsix` 安装成功，待用户 Reload 验收。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3279,6 +3295,12 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-13 晚子代理体验修复发版 v0.7.6**：版本号 `0.7.5 →
+  0.7.6`。内容 = 台账 §41：前台委派全程点亮 "N Working" 药丸
+  （无状态委派 + Task 行 running 即计数），子代理只读转录套用主
+  聊天渲染（用户气泡 Markdown Prompt + 圆点工具账本）。门禁：
+  tsc + lint:budgets + 触达文件单测 14 例全绿；
+  `droidvisx-0.7.6.vsix` 安装成功。**需 Reload Window**。
 - **2026-08-13 晚用户反馈批发版 v0.7.1**：版本号 `0.7.0 → 0.7.1`。
   内容 = 台账 §38：工具行圆点锚定修复、计划构建期自动展开打钩、
   模式/模型切换乐观标签、/btw Stop + 流中打字（协议 v11 追加
