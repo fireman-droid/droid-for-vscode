@@ -3073,6 +3073,24 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-13 下午打磨发版 v0.5.0**：版本号 `0.4.0 → 0.5.0`，
+  CHANGELOG 顶部新增 0.5.0 小节（发布提交 `a9a4435`，仅版本号与
+  CHANGELOG；本地 tag `v0.5.0`，无远端未 push）。内容为 v0.4.0 后
+  三个切片：暗色跑马灯糊字修复（`861b1cd`，台账 §33）、计划条动态
+  标题 + 标题短板独立档案（`800065b`，§34 +
+  `plan-title-limitation.md`）、模式/模型弹层轻量化 + 触发按钮锚定
+  （`361a739`，§35，首个完整样板间迭代批）。门禁在干净树跑通：
+  typecheck 三段 + 全量 vitest `--maxWorkers=4` **103 文件 2034 例
+  全绿** + lint:budgets + build + `vsce package`（11 files,
+  1.59 MB）+ `verify:vsix` 11 条目绿。产出 `dist/droidvisx.vsix`
+  1,666,059 字节（15:16），SHA-256
+  `FBD44763DD74BFD3C23EEC040ED769DD5666BAA12043DB3DBDF22F981B9AC17B`，
+  `cursor --install-extension --force` 安装成功，
+  `cursor --list-extensions` 确认 `droidvisx.droidvisx@0.5.0`。
+  **现有窗口需 Reload Window** 加载新 Bundle（Bridge 协议仍为
+  v10，无握手变更）。三个切片各自的行为冒烟全 PASS（smoke-ticker-
+  dark / smoke-plan-anchor / smoke-popover-rework，见 §33–§35）；
+  真人点测仍待用户（v0.4.0 与 v0.5.0 合并验收即可）
 - **2026-08-13 下午功能发版 v0.4.0**：版本号 `0.3.0 → 0.4.0`（发布提交
   `c0d1557`，打包时工作树干净），`CHANGELOG.md` 顶部新增 0.4.0 小节并
   补记未单独成节的 0.3.0 内容。本包覆盖 v0.3.0 之后的全部主线：Changes
