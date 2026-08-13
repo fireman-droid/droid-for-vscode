@@ -162,6 +162,10 @@ import {
   type TranscriptToolStatus,
   type TurnStatus,
 } from '../../shared/bridgeMessages';
+import {
+  CHANGES_UPDATE_STATES,
+  type ChangesUpdateState,
+} from '../../shared/changesProtocol';
 import { parseCustomModelsStateMessage } from '../../shared/customModelsProtocol';
 import {
   parseSessionBtwMessage,
@@ -304,8 +308,8 @@ export function readHostMessage(
         return parseSubagentUpdate(value);
       case 'transcript.image':
         return parseTranscriptImage(value);
-      case 'turn.changes':
-        return parseTurnChanges(value);
+      case 'changes.update':
+        return parseChangesUpdate(value);
       case 'git.status':
         return parseGitStatus(value);
       case 'git.commitResult':
@@ -1083,18 +1087,25 @@ function isImageMediaType(value: unknown): value is ImageMediaType {
   );
 }
 
-function parseTurnChanges(
+const CHANGES_UPDATE_STATE_SET = new Set<string>(
+  CHANGES_UPDATE_STATES,
+);
+
+function parseChangesUpdate(
   value: UnknownRecord,
-): Extract<HostToWebviewMessage, { type: 'turn.changes' }> | undefined {
+): Extract<HostToWebviewMessage, { type: 'changes.update' }> | undefined {
   if (
     !hasExactKeys(value, [
       'type',
       'sequence',
       'sessionId',
       'turnId',
+      'state',
       'files',
     ]) ||
-    !hasTurnIdentity(value)
+    !hasTurnIdentity(value) ||
+    typeof value.state !== 'string' ||
+    !CHANGES_UPDATE_STATE_SET.has(value.state)
   ) {
     return undefined;
   }
@@ -1104,10 +1115,11 @@ function parseTurnChanges(
   }
 
   return {
-    type: 'turn.changes',
+    type: 'changes.update',
     sequence: value.sequence,
     sessionId: value.sessionId,
     turnId: value.turnId,
+    state: value.state as ChangesUpdateState,
     files,
   };
 }

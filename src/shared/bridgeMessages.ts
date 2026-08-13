@@ -114,6 +114,7 @@ import type {
 // Type-only on purpose: the runtime dependency points the other way
 // (customModelsProtocol imports shared model bounds from here).
 import type { CustomModelDeleteMessage, CustomModelSaveMessage, CustomModelsRefreshMessage, CustomModelsStateMessage } from './customModelsProtocol';
+import type { ChangesUpdateMessage } from './changesProtocol';
 
 // Version 3: git commit flow messages (git.requestStatus/git.commit
 // W→H, git.status/git.commitResult H→W).
@@ -126,7 +127,9 @@ import type { CustomModelDeleteMessage, CustomModelSaveMessage, CustomModelsRefr
 // Version 8: theme preference pair (ui.theme.set W→H, ui.theme H→W).
 // Version 9: BYOK custom-models management (customModels.refresh/
 // save/delete W→H, customModels.state H→W; customModelsProtocol.ts).
-export const BRIDGE_PROTOCOL_VERSION = 9 as const;
+// Version 10: live changes ledger — `turn.changes` is replaced by
+// the streaming `changes.update` (H→W; changesProtocol.ts).
+export const BRIDGE_PROTOCOL_VERSION = 10 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_TEXT_LENGTH = 32_000;
@@ -1598,12 +1601,18 @@ export interface ChangedFileSummary {
   readonly deletions: number | null;
 }
 
-/** Per-turn summary of the files its tools created or modified. */
+/**
+ * Per-turn ledger of the files its tools created or modified.
+ * `writing` is a live-turn display flag; the host transcript and
+ * replays only hold settled items (flag absent), so history replays
+ * never animate a "writing" header.
+ */
 export interface ChangesTranscriptItem {
   readonly id: string;
   readonly kind: 'changes';
   readonly turnId: string;
   readonly files: readonly ChangedFileSummary[];
+  readonly writing?: boolean;
 }
 
 export type SessionTranscriptItem =
@@ -2006,15 +2015,6 @@ export interface TranscriptImageMessage {
   readonly item: ImageTranscriptItem;
 }
 
-/** Announces the changed-files summary for a finished turn. */
-export interface TurnChangesMessage {
-  readonly type: 'turn.changes';
-  readonly sequence: number;
-  readonly sessionId: string;
-  readonly turnId: string;
-  readonly files: readonly ChangedFileSummary[];
-}
-
 /**
  * Repository status for the inline commit panel. A present
  * `unavailableReason` means git cannot serve the panel (the entry
@@ -2184,7 +2184,7 @@ export type HostToWebviewMessage =
   | ToolActivityMessage
   | SubagentUpdateMessage
   | TranscriptImageMessage
-  | TurnChangesMessage
+  | ChangesUpdateMessage
   | GitStatusMessage
   | GitCommitResultMessage
   | RuntimeDiagnosticMessage

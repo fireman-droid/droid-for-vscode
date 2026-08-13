@@ -620,10 +620,21 @@ describe('readHostMessage', () => {
       filePath: 'src/webview/assistant/App.tsx',
     },
     {
-      type: 'turn.changes',
+      type: 'changes.update',
       sequence: 7,
       sessionId: 'session-1',
       turnId: 'turn-1',
+      state: 'writing',
+      files: [
+        { path: 'src/app.ts', additions: null, deletions: null },
+      ],
+    },
+    {
+      type: 'changes.update',
+      sequence: 7,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      state: 'settled',
       files: [
         { path: 'src/app.ts', additions: 3, deletions: 1 },
         { path: 'docs/new.md', additions: null, deletions: null },
@@ -2008,11 +2019,28 @@ describe('readHostMessage', () => {
       filePath: '',
     },
     {
-      type: 'turn.changes',
+      type: 'changes.update',
       sequence: 5,
       sessionId: 'session-1',
       turnId: 'turn-1',
+      state: 'settled',
       files: [],
+    },
+    // A legacy pre-v10 summary shape (no state) must not validate.
+    {
+      type: 'changes.update',
+      sequence: 5,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      files: [{ path: 'src/app.ts', additions: 1, deletions: 0 }],
+    },
+    {
+      type: 'changes.update',
+      sequence: 5,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      state: 'done',
+      files: [{ path: 'src/app.ts', additions: 1, deletions: 0 }],
     },
     {
       type: 'workspace.files',
@@ -2122,36 +2150,40 @@ describe('readHostMessage', () => {
       data: '',
     },
     {
-      type: 'turn.changes',
+      type: 'changes.update',
       sequence: 5,
       sessionId: 'session-1',
       turnId: 'turn-1',
+      state: 'writing',
       files: [{ path: '../outside.ts', additions: 1, deletions: 0 }],
     },
     {
-      type: 'turn.changes',
+      type: 'changes.update',
       sequence: 5,
       sessionId: 'session-1',
       turnId: 'turn-1',
+      state: 'writing',
       files: [
         { path: 'src/app.ts', additions: 1, deletions: 0 },
         { path: 'src/app.ts', additions: 2, deletions: 0 },
       ],
     },
     {
-      type: 'turn.changes',
+      type: 'changes.update',
       sequence: 5,
       sessionId: 'session-1',
       turnId: 'turn-1',
+      state: 'settled',
       files: [
         { path: 'src/app.ts', additions: -1, deletions: 0 },
       ],
     },
     {
-      type: 'turn.changes',
+      type: 'changes.update',
       sequence: 5,
       sessionId: 'session-1',
       turnId: 'turn-1',
+      state: 'settled',
       files: [
         {
           path: 'src/app.ts',
