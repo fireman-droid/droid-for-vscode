@@ -3125,6 +3125,23 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-13 下午样板间对齐发版 v0.6.0**：版本号 `0.5.0 → 0.6.0`
+  （发布提交 `bc43cd2` + 棘轮修正 `6295214`，本地 tag `v0.6.0` 指向
+  修正后提交，无远端未 push）。内容 = 待办 A 收官批（`3e4ab55`，
+  台账 §36）：命令卡连续过渡 + 主题化终端井、图片 chip 去重、会话
+  抽屉矮一档/下滑动画/最新排前、计划细条轨道几何 + TodoWrite 行
+  退役、View source 下划线 hover、pending 间距收紧、工具行 Quiet
+  ruled 新设计。门禁：typecheck 三段 + 全量 vitest
+  `--maxWorkers=4` **103 文件 2035 例全绿** + lint:budgets（曾抓到
+  Thread.tsx 超棘轮 1 行，压缩后过）+ build + `vsce package`
+  （11 files, 1.59 MB）+ `verify:vsix` 11 条目绿。产出
+  `dist/droidvisx.vsix` 1,667,493 字节，SHA-256
+  `314EC27401C8536E4F0DEFA01D9B759389B5845B34881880917290BA1FEE5491`，
+  安装成功，`cursor --list-extensions` 确认
+  `droidvisx.droidvisx@0.6.0`。**现有窗口需 Reload Window**。行为
+  冒烟 `smoke-kitchen-parity.mjs` 全绿（修正提交后复跑
+  `pass: true`）；真人点测待用户（v0.4.0–v0.6.0 三版合并验收）。
+  **待办 A 就此收口**，下一站待办 B（子代理面板 + 转录回放）。
 - **2026-08-13 下午打磨发版 v0.5.0**：版本号 `0.4.0 → 0.5.0`，
   CHANGELOG 顶部新增 0.5.0 小节（发布提交 `a9a4435`，仅版本号与
   CHANGELOG；本地 tag `v0.5.0`，无远端未 push）。内容为 v0.4.0 后
