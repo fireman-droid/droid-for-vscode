@@ -200,7 +200,12 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
 }
 
 /* Paused/static shimmer text (07, 12 and the reduced-motion block in
-   18 all settle on the warm #6b6259 literal). */
+   18 all settle on the warm #6b6259 literal). background-image must
+   be re-neutralized here: these dark selectors outrank the light
+   disable rules, so without it the dark gradient above wins the
+   cascade while background-clip stays border-box — the gradient then
+   paints as a bar behind the flat text (dark ticker smear,
+   2026-08-13 user report). */
 .dvx-shell[data-theme='dark']
   .dvx-activity-running:has(~ .dvx-activity-running)
   .dvx-tool-action,
@@ -221,6 +226,7 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
   .dvx-thread-pending
   .dvx-activity-group-header
   .dvx-shimmer-text {
+  background-image: none;
   color: #9a9a9a;
 }
 

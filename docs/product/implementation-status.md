@@ -2551,6 +2551,28 @@ UI 描述见 §22 重做记录。
 主要实现：`src/webview/assistant/styles/12-exploration-ticker.css`、
 `src/webview/assistant/thread/activityRows.tsx`（提交 `44f8924`）
 
+### 33. 暗色跑马灯糊字修复（2026-08-13 下午）
+
+- **报告**：用户真机（v0.4.0）暗色主题下，探索跑马灯上滑动画的
+  文字被一条渐变底糊住（"文字背景和文字糊住了"）。
+- **根因**：`24-theme-dark.css` 的暗色 shimmer 渐变规则
+  （`.dvx-shell[data-theme='dark'] .dvx-shimmer-text`，特异性
+  0,3,0）压过浅色侧跑马灯/暂停态的"关渐变"规则（12/07 号文件里
+  0,2,0–0,3,0 且源顺序在前），`background-image` 在这些静态语境
+  里复活；而 `background-clip` 仍是那些规则给的 `border-box`，
+  渐变不再裁进字形，整条画在扁平文字后面。
+- **修复**：暗色"静态 shimmer"合并规则补 `background-image: none`
+  （与同文件 reduced-motion 块先例一致），覆盖跑马灯行、批量运行
+  次行、待答暂停三类语境；活 shimmer（单条运行行）不受影响。
+- **验证**：`pnpm run build` 后新增
+  `artifacts/smoke-ticker-dark.mjs`（无头 Chrome 加载 kitchen-sink
+  样板间、localStorage 置暗、等待真实跑马灯运行行）断言 computed
+  `background-image === 'none'` 且 color `#9a9a9a`（糊字消失），
+  同时以生产类名探针元素证明跑马灯之外的活 shimmer 渐变与
+  `background-clip: text` 完好——`pass: true`，截图证据
+  `artifacts/ticker-dark-fixed.png`。已提交待随下一批 VSIX 真机
+  验证；kitchen-sink 样板间（链接真实 dist）现即呈现修复后形态。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
