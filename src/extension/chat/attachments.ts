@@ -539,6 +539,16 @@ export function stageAttachmentPayloads(
         );
         break;
       }
+      // Double-invoking a capture command (editor right-click "Add
+      // Selection to Chat") staged two identical chips (QA v0.3
+      // P2-5). The same source, file+range name, and content is
+      // already represented, so ignore it silently.
+      if (
+        capture !== undefined &&
+        isDuplicateCapture(ctl, stage, capture, payload)
+      ) {
+        continue;
+      }
       const runtime = toRuntimeAttachment(payload);
       if (runtime === null) {
         continue;
@@ -572,6 +582,30 @@ export function stageAttachmentPayloads(
         emitAttachments(ctl);
       }
     }
+}
+
+/**
+ * An already-staged chip with the same capture kind, the same bounded
+ * display name (file plus line range for selections), and the same
+ * content marks a repeated capture of identical material.
+ */
+function isDuplicateCapture(
+  ctl: ChatControllerInternals,
+  stage: AttachmentStage | undefined,
+  capture: 'editor' | 'selection',
+  payload: AttachmentPayload,
+): boolean {
+  const stagedEntries =
+    stage === 'edit'
+      ? (ctl.editStage?.attachments ?? [])
+      : ctl.pendingAttachments;
+  const name = boundAttachmentName(payload.name);
+  return stagedEntries.some(
+    ({ summary, runtime }) =>
+      summary.kind === capture &&
+      summary.name === name &&
+      runtime.data === payload.data,
+  );
 }
 
 export function takePendingAttachments(ctl: ChatControllerInternals):

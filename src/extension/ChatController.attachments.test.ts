@@ -1059,4 +1059,75 @@ describe('ChatController', () => {
       attachmentsMessages(messages).at(-1)?.attachments,
     ).toHaveLength(0);
   });
+
+  it('silently ignores a repeated identical selection capture (QA v0.3 P2-5)', async () => {
+    const sameSelection = {
+      kind: 'text' as const,
+      name: 'store.ts:12-34',
+      data: 'const a = 1;',
+      sizeBytes: 12,
+      truncated: false,
+    };
+    const otherSelection = {
+      kind: 'text' as const,
+      name: 'store.ts:40-50',
+      data: 'const b = 2;',
+      sizeBytes: 12,
+      truncated: false,
+    };
+    const queue = [sameSelection, sameSelection, otherSelection];
+    const readActiveSelection = vi.fn(async () => ({
+      status: 'captured' as const,
+      item: queue.shift() ?? otherSelection,
+    }));
+    const sources: AttachmentSources = {
+      pickFiles: vi.fn(async () => ({ status: 'cancelled' as const })),
+      readActiveEditor: vi.fn(async () => ({ status: 'empty' as const })),
+      readActiveSelection,
+      readProblems: vi.fn(async () => ({ status: 'empty' as const })),
+      readGitChanges: vi.fn(async () => ({ status: 'empty' as const })),
+      searchWorkspaceFiles: vi.fn(async () => []),
+      readWorkspaceFile: vi.fn(async () => ({
+        status: 'failed' as const,
+      })),
+    };
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      sources,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    expect(controller.addEditorSelectionToChat()).toBe(true);
+    await vi.waitFor(() => {
+      expect(
+        attachmentsMessages(messages).at(-1)?.attachments,
+      ).toHaveLength(1);
+    });
+
+    // The identical file, range, and content stages no second chip.
+    expect(controller.addEditorSelectionToChat()).toBe(true);
+    await vi.waitFor(() => {
+      expect(readActiveSelection).toHaveBeenCalledTimes(2);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(
+      attachmentsMessages(messages).at(-1)?.attachments,
+    ).toHaveLength(1);
+
+    // A different selection still stages alongside the first chip.
+    expect(controller.addEditorSelectionToChat()).toBe(true);
+    await vi.waitFor(() => {
+      expect(
+        attachmentsMessages(messages).at(-1)?.attachments,
+      ).toMatchObject([
+        { kind: 'selection', name: 'store.ts:12-34' },
+        { kind: 'selection', name: 'store.ts:40-50' },
+      ]);
+    });
+  });
 });
