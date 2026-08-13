@@ -65,15 +65,18 @@
   animation: dvx-spin 700ms linear infinite;
 }
 
+/* Tight, refined panel (小巧精致 rework 2026-08-13): ≤240px wide,
+   ~28px header, ~32px rows, quiet text actions instead of filled
+   pills. Same border and shadow tokens as every popover. */
 .dvx-working-popup {
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
-  width: min(400px, calc(100vw - 40px));
-  max-height: 320px;
+  width: min(240px, calc(100vw - 40px));
+  max-height: 300px;
   overflow-y: auto;
   border: 1px solid var(--dvx-border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: linear-gradient(
     180deg,
     var(--dvx-raised, #fffefb),
@@ -90,34 +93,39 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 9px 12px 8px;
+  min-height: 28px;
+  padding: 5px 10px 4px;
   border-bottom: 1px solid var(--dvx-border);
   background: inherit;
 }
 
 .dvx-working-popup-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--dvx-ink);
 }
 
+/* Stop All: the quiet underline-on-hover text language ("View
+   transcript"), not a filled pill. */
 .dvx-working-stop-all {
-  border: 1px solid var(--dvx-border);
-  border-radius: 7px;
-  background: var(--dvx-raised, var(--dvx-raised));
-  padding: 2px 9px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 3px;
+  min-height: 20px;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--dvx-muted);
   cursor: pointer;
-  transition:
-    border-color var(--dvx-duration-fast, 120ms) ease,
-    color var(--dvx-duration-fast, 120ms) ease;
+  transition: color var(--dvx-duration-fast, 120ms) ease;
 }
 
-.dvx-working-stop-all:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--dvx-accent) 40%, var(--dvx-border));
+.dvx-working-stop-all:hover:not(:disabled),
+.dvx-working-stop-all:focus-visible {
   color: var(--dvx-accent-deep, #b5451f);
+  text-decoration: underline;
+  text-decoration-color: var(--dvx-border-strong);
+  text-underline-offset: 3px;
 }
 
 .dvx-working-stop-all:disabled {
@@ -127,16 +135,16 @@
 
 .dvx-working-list {
   margin: 0;
-  padding: 0;
+  padding: 3px 0;
   list-style: none;
 }
 
 .dvx-working-row {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
   align-items: center;
-  column-gap: 8px;
-  padding: 8px 12px;
+  column-gap: 7px;
+  padding: 5px 10px;
 }
 
 .dvx-working-row + .dvx-working-row {
@@ -146,6 +154,8 @@
 
 .dvx-working-row .dvx-working-spinner {
   grid-row: 1 / -1;
+  width: 12px;
+  height: 12px;
 }
 
 /* Elapsed + the per-row Stop share the trailing column. The Stop
@@ -154,28 +164,45 @@
 .dvx-working-row-tools {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   grid-column: 3;
   grid-row: 1 / -1;
 }
 
+/* Per-row Stop: quiet text action that surfaces on row hover so the
+   rest state stays clean. */
 .dvx-working-row-stop {
-  border: 1px solid var(--dvx-border);
-  border-radius: 7px;
-  background: var(--dvx-raised);
-  padding: 1px 7px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 2px;
   font-family: inherit;
   font-size: 10.5px;
   color: var(--dvx-muted);
   cursor: pointer;
+  opacity: 0;
   transition:
-    border-color var(--dvx-duration-fast, 120ms) ease,
+    opacity var(--dvx-duration-fast, 120ms) ease,
     color var(--dvx-duration-fast, 120ms) ease;
 }
 
-.dvx-working-row-stop:hover {
-  border-color: color-mix(in srgb, var(--dvx-accent) 40%, var(--dvx-border));
+.dvx-working-row:hover .dvx-working-row-stop,
+.dvx-working-row:focus-within .dvx-working-row-stop {
+  opacity: 1;
+}
+
+.dvx-working-row-stop:hover,
+.dvx-working-row-stop:focus-visible {
   color: var(--dvx-accent-deep, #b5451f);
+  text-decoration: underline;
+  text-decoration-color: var(--dvx-border-strong);
+  text-underline-offset: 3px;
+}
+
+@media (hover: none) {
+  .dvx-working-row-stop {
+    opacity: 1;
+  }
 }
 
 /* The live activity subtitle: the last tool observed inside the
@@ -186,7 +213,8 @@
   overflow: hidden;
   color: var(--dvx-subtle);
   font-family: var(--dvx-mono, ui-monospace, monospace);
-  font-size: 10.5px;
+  font-size: 10px;
+  line-height: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -194,8 +222,9 @@
 .dvx-working-row-type {
   min-width: 0;
   overflow: hidden;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11.5px;
+  font-weight: 520;
+  line-height: 16px;
   color: var(--dvx-ink);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -206,14 +235,16 @@
   min-width: 0;
   overflow: hidden;
   color: var(--dvx-muted);
-  font-size: 11.5px;
+  font-size: 11px;
+  line-height: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .dvx-working-row-elapsed {
   color: var(--dvx-subtle);
-  font-size: 11px;
+  font-family: var(--dvx-mono, ui-monospace, monospace);
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
 }
 
