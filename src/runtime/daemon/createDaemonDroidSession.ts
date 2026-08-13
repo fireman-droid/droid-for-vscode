@@ -1,6 +1,7 @@
 import {
   ContextStatsAccuracy,
   SettingsLevel,
+  type AvailableModelConfig,
   type ConnectedDroid,
   type ConnectedDroidSession,
   type SessionSettings,
@@ -25,13 +26,17 @@ import {
  * adapted onto the same `FactoryDroidSession` interface so
  * `FactoryDroidRuntime` runs unchanged.
  *
- * Known Phase 2 divergences from process mode (both fail closed):
- * - No `availableModels`: the daemon facade reports custom models
- *   without `supportedReasoningEfforts`, so the model catalog stays
- *   `unavailable` rather than guessing efforts.
+ * Known Phase 2 divergence from process mode (fails closed):
  * - No `onNotification`/`authenticateMcpServer`: the daemon facade
  *   exposes no session-notification subscription, so browser MCP
  *   OAuth is unsupported (list/toggle/add/remove still work).
+ *
+ * The model catalog comes from `settings.getDefaults()`, whose
+ * `availableModels` carries the same full metadata process mode
+ * captures from initialize/load responses (probe:
+ * artifacts/probe-daemon-model-catalog.mjs, 2026-08-13). A defaults
+ * read failure leaves the catalog `unavailable` without failing the
+ * session.
  */
 export function createDaemonSessionFactory(
   getDroid: () => Promise<ConnectedDroid>,
@@ -77,7 +82,14 @@ export async function createDaemonDroidSession(options: {
       const session = await droid.sessions.resume(options.target.sessionId, {
         ...callbacks,
       });
-      return adaptDaemonSession(droid, session, callbacks, lease);
+      const availableModels = await readDaemonAvailableModels(droid);
+      return adaptDaemonSession(
+        droid,
+        session,
+        callbacks,
+        lease,
+        availableModels,
+      );
     } catch (error) {
       lease.release(options.target.sessionId);
       throw error;
@@ -95,7 +107,34 @@ export async function createDaemonDroidSession(options: {
   // A freshly created session id cannot be contested, so the lease is
   // recorded after the fact purely to mark ownership.
   lease.acquire(session.id);
-  return adaptDaemonSession(droid, session, callbacks, lease);
+  const availableModels = await readDaemonAvailableModels(droid);
+  return adaptDaemonSession(
+    droid,
+    session,
+    callbacks,
+    lease,
+    availableModels,
+  );
+}
+
+/**
+ * Reads the connection-level model catalog. The daemon refreshes
+ * `availableModels` on custom-model CRUD, so a fresh read per session
+ * creation matches process mode's per-initialize/load capture. Any
+ * failure degrades to an `unavailable` catalog instead of failing the
+ * session: model selection is secondary to the chat itself.
+ */
+async function readDaemonAvailableModels(
+  droid: ConnectedDroid,
+): Promise<readonly AvailableModelConfig[] | undefined> {
+  try {
+    const models = (await droid.settings.getDefaults()).availableModels;
+    // Rows the daemon marks disabled are not selectable; drop them
+    // rather than surfacing dead picker entries.
+    return models?.filter((model) => model.disabled !== true);
+  } catch {
+    return undefined;
+  }
 }
 
 const noopLease: SessionLeaseHooks = {
@@ -114,6 +153,7 @@ function adaptDaemonSession(
   session: ConnectedDroidSession,
   callbacks: RuntimeInteractionCallbacks,
   lease: SessionLeaseHooks,
+  availableModels?: readonly AvailableModelConfig[],
 ): FactoryDroidSession {
   // The daemon confirms `updateSettings` before the `settings_updated`
   // notification refreshes the handle's snapshot, so successful updates
@@ -146,13 +186,24 @@ function adaptDaemonSession(
     const oldSessionId = session.id;
     await session.detach();
     lease.release(oldSessionId);
-    return adaptDaemonSession(droid, next, callbacks, lease);
+    // The replacement keeps the already-read catalog (same connection,
+    // no custom-model change happened inside rewind/compact/fork).
+    return adaptDaemonSession(
+      droid,
+      next,
+      callbacks,
+      lease,
+      availableModels,
+    );
   };
 
   return {
     get id() {
       return session.id;
     },
+    ...(availableModels === undefined
+      ? {}
+      : { availableModels: [...availableModels] }),
     get cwd(): string | undefined {
       return session.cwd;
     },

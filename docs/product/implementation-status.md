@@ -1811,15 +1811,18 @@ UI 描述见 §22 重做记录。
   | 归档/取消归档/归档列表 + 内容搜索 | `daemonSessions` sidecar | ✓（Phase 1 私有只读 daemon） | ✓（同一共享连接） | 按需报错态（daemon 起不来时 `DAEMON_UNAVAILABLE` 诊断，与既有 process 失败路径一致，无假可用入口） |
   | Worktree 会话创建 | `worktreeCreateAvailable` | ✗（门恒 false） | ✓（daemon 原生 create 通道） | ✗（`withDaemonGate` 每次读时重估，fail closed） |
   | Plugins 面板（只读） | daemon sidecar | ✓（私有 daemon RPC） | ✓ | 按需报错态（同归档） |
-  | 模型目录（BYOK reasoning） | 会话能力 | ✓ | ✗（daemon facade 无 `supportedReasoningEfforts`，显示 unavailable） | ✓ |
+  | 模型目录（BYOK reasoning） | 会话能力 | ✓ | ✓（~~✗ daemon facade 无 `supportedReasoningEfforts`~~ 判断已被探针证伪，§27 经 `settings.getDefaults()` 移植，2026-08-13） | ✓ |
   | 浏览器 MCP OAuth（`authenticateMcpServer`） | 会话能力 | ✓ | ✗（daemon facade 无 `onNotification` 通道，fail closed；list/toggle/add/remove 均可用） | ✓ |
   | Spec 交接/子代理 started 通知 | `onNotification` | ✓ | ✗（同上，静默无害降级） | ✓ |
   | 终端镜像 / 权限 / AskUser / 队列 / rewind / compact | 无 | ✓ | ✓ | ✓ |
 
-  process 独有能力盘点（供后续移植评估，不在本切片做）：模型
-  目录、浏览器 MCP OAuth、spec 交接与子代理通知——三者同根
-  （daemon facade 缺会话通知订阅与完整模型元数据），移植成本
-  在上游 SDK/daemon 面，扩展侧无解法
+  process 独有能力盘点（供后续移植评估，不在本切片做）：~~模型
+  目录、~~浏览器 MCP OAuth、spec 交接与子代理通知——两者同根
+  （daemon facade 缺会话通知订阅），移植成本在上游 SDK/daemon
+  面，扩展侧无解法。模型目录一项已于 2026-08-13 移植（§27）：
+  当时"daemon facade 缺完整模型元数据"的判断被
+  `probe-daemon-model-catalog.mjs` 证伪——`settings.getDefaults()`
+  即带全元数据 `availableModels`
 - 真机冒烟（生产模块直驱，非 mock）：
   `artifacts/smoke-btw-daemon-live.mts` **9/9 PASS**（production
   daemon 生命周期 + `BtwSideChat` Host 驱动 + 真模型：开卡
@@ -2202,6 +2205,61 @@ UI 描述见 §22 重做记录。
   `custom-models-add-success.png`、`custom-models-form-dark.png`、
   `custom-models-picker-selected.png`。
 
+### 27. daemon 模式模型目录修复：弹层恢复 BYOK 选择（2026-08-13 上午）
+
+- **用户真机缺陷（v0.2.0 daemon 默认模式）**：模型弹层显示
+  "Model selection is unavailable in this Droid runtime"，模型无法
+  选择；v0.1.x（process 模式）可用，属 daemon 默认化后的体验回归。
+  §21 审计当时把模型目录记为 process 独有（"daemon facade 缺完整
+  模型元数据"）——本切片探针证伪了该判断。
+- **探针实证**（`artifacts/probe-daemon-model-catalog.mjs`，私有
+  daemon + 真凭据）：
+  - `settings.getDefaults()`（RPC `daemon.get_default_settings`）
+    返回 48 个 `availableModels`（43 内置 + 5 custom），字段与
+    process 模式 initialize/load 捕获完全同形
+    （`supportedReasoningEfforts` / `defaultReasoningEffort` /
+    `isCustom` / …，另有 `disabled`/`disabledReason` 可选扩展）；
+  - custom 模型 upsert/delete 后再读 getDefaults 立即反映增删
+    （BYOK save → `startReplacement` 重载目录的既有流程因此在
+    daemon 下同样成立）；
+  - 经生产 `createDaemonDroidSession` 适配器 `updateSettings`：
+    切内置模型、切 `custom:` 模型、写 reasoningEffort 三者均生效
+    （settings snapshot 回读一致）。
+- **接线（方案 = 完整目录，产品面与 process 完全一致）**：
+  `createDaemonDroidSession.ts` 建/复会话时读一次
+  `settings.getDefaults().availableModels`，过滤 `disabled: true`
+  行后挂到适配会话的 `availableModels`；rewind/compact/fork 的
+  替换会话沿用已读目录（与 process `createCatalogSessionView`
+  同策略）；getDefaults 失败只降级目录（unavailable 兜底文案
+  保留），不影响会话创建。Runtime `readModelCatalog`、Host 投影
+  （`isCustom` BYOK 过滤）、Bridge、Webview 全链零改动，双侧校验
+  与闭合枚举原样生效，**无协议 bump（v9 不变）**。
+- **测试**：`createDaemonDroidSession.test.ts` 新增 4 例（目录
+  暴露 + disabled 过滤、defaults 缺失/失败双降级、runtime 端 BYOK
+  投影、替换会话沿用目录不重读 defaults），mock 增
+  `settings.getDefaults`；原 "daemon 无 availableModels" 断言随
+  行为更新。聚焦 24/24 过。
+- **真机自验收（daemon 模式，数据零发明）**：
+  - 行为半（`artifacts/smoke-model-picker-daemon-live.mts`，生产
+    daemon 生命周期 + daemon 工厂 + FactoryDroidRuntime + Host
+    投影，真凭据真模型）**4/4 PASS**：会话建立 → 弹层数据 ready
+    5 行 → 切 `custom:DeepSeek-V4-Flash-0`（最省额度）确认 →
+    该模型上真回合答 "ok"；
+  - 视觉半（真实 dist bundle，`artifacts/smoke-model-picker-daemon.mjs`
+    回放 live 捕获数据驱动真 webview）：
+    `model-picker-daemon-open.png`（弹层 5 行 + 当前模型 High
+    徽记 + 铅笔）、`-switched.png`（触发器换 DeepSeek-V4-Flash-0）、
+    `-reasoning.png`（Options 四档 = live 实测 off/low/high/max）、
+    `-unavailable.png`（defaults 读失败兜底态：Current model 卡 +
+    原 quiet 文案，非空白）。
+- **门禁**：三段 typecheck 绿；聚焦 vitest 24/24；全量 vitest
+  `--maxWorkers=4` **100 文件 2012 用例全绿**（2026-08-13，含并行
+  分诊代理在制品的共享树上）；build 绿。`lint:budgets` 本切片文件
+  在预算内（运行时树上并行分诊代理的在制品 `runtimeLifecycle.ts`
+  触及 1103 行棘轮超限，非本切片引入）。
+- **打包**：不打包（打包权归 v0.3.0 分诊代理）；随下包真机可视
+  验收。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -2225,6 +2283,8 @@ UI 描述见 §22 重做记录。
 - Context 刷新失败时保留最后一次已确认数值并提供 Retry；加载期间的重复
   Refresh 会被合并，失败提示指向 `DroidVisX Logs`
 - 使用公开初始化/加载响应及公开 SDK Schema 捕获真实 `availableModels`
+  （process 模式）；daemon 模式经 `settings.getDefaults()` 读同形
+  目录（§27，2026-08-13）
 - 只显示 SDK `isCustom` 字段确认的 BYOK Model；不会按 Model ID 猜测
   Provider 或自定义状态
 - 模型目录缺失、超限、重复、非法或包含未知 Reasoning 值时 fail closed
