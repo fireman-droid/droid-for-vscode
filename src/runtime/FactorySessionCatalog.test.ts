@@ -1,13 +1,28 @@
-import { describe, expect, it, vi } from 'vitest';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   FACTORY_SESSION_CATALOG_LIMIT,
   FactorySessionCatalog,
+  readWorkerSessionIds,
 } from './FactorySessionCatalog';
 import {
   MAX_SESSION_CATALOG_ID_LENGTH,
   MAX_SESSION_CATALOG_TITLE_LENGTH,
 } from './SessionCatalog';
+
+const temporaryDirectories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryDirectories.splice(0).map((directory) =>
+      rm(directory, { recursive: true, force: true }),
+    ),
+  );
+});
 
 describe('FactorySessionCatalog', () => {
   it('lists only the bounded public SDK projection for a cwd', async () => {
@@ -117,7 +132,7 @@ describe('FactorySessionCatalog', () => {
     });
   });
 
-  it('projects the mission role only for known decomposition types', async () => {
+  it('filters mission workers while keeping orchestrators and ordinary sessions', async () => {
     const base = {
       title: 'Session',
       messageCount: 0,
@@ -143,12 +158,65 @@ describe('FactorySessionCatalog', () => {
       result.sessions.map(({ id, missionRole }) => ({ id, missionRole })),
     ).toEqual([
       { id: 'orchestrator-session', missionRole: 'orchestrator' },
-      { id: 'worker-session', missionRole: 'worker' },
       { id: 'plain-session', missionRole: undefined },
       { id: 'odd-session', missionRole: undefined },
     ]);
+    expect('missionRole' in result.sessions[1]!).toBe(false);
     expect('missionRole' in result.sessions[2]!).toBe(false);
-    expect('missionRole' in result.sessions[3]!).toBe(false);
+  });
+
+  it('filters only ids marked by authoritative worker metadata', async () => {
+    const base = {
+      title: 'Session',
+      messageCount: 0,
+      modifiedTime: new Date('2026-08-09T12:00:00.000Z'),
+      createdTime: new Date('2026-08-08T12:00:00.000Z'),
+    };
+    const readWorkerSessionIds = vi.fn(async () =>
+      new Set(['task-child']),
+    );
+    const catalog = new FactorySessionCatalog({
+      listSdkSessions: async () => [
+        { ...base, id: 'ordinary-session' },
+        { ...base, id: 'task-child' },
+      ],
+      sessionsDirectory: 'D:\\fake\\sessions',
+      readWorkerSessionIds,
+    });
+
+    const result = await catalog.listSessions('D:\\workspace');
+
+    expect(result).toMatchObject({
+      status: 'available',
+      sessions: [{ id: 'ordinary-session' }],
+    });
+    expect(readWorkerSessionIds).toHaveBeenCalledWith({
+      sessionsDirectory: 'D:\\fake\\sessions',
+      cwd: 'D:\\workspace',
+      sessionIds: ['ordinary-session', 'task-child'],
+    });
+  });
+
+  it('fails open when worker metadata cannot be read', async () => {
+    const catalog = new FactorySessionCatalog({
+      listSdkSessions: async () => [
+        {
+          id: 'ordinary-session',
+          title: 'Task: keep this user title',
+          messageCount: 0,
+          modifiedTime: new Date('2026-08-09T12:00:00.000Z'),
+          createdTime: new Date('2026-08-08T12:00:00.000Z'),
+        },
+      ],
+      readWorkerSessionIds: async () => {
+        throw new Error('settings unavailable');
+      },
+    });
+
+    await expect(catalog.listSessions('D:\\workspace')).resolves.toMatchObject({
+      status: 'available',
+      sessions: [{ id: 'ordinary-session', title: 'Task: keep this user title' }],
+    });
   });
 
   it('delegates favorite writes to the sessions directory writer', async () => {
@@ -202,3 +270,120 @@ describe('FactorySessionCatalog', () => {
     expect(JSON.stringify(result)).not.toContain('.jsonl');
   });
 });
+
+describe('readWorkerSessionIds', () => {
+  it('reads subagent and Mission worker tags from settings sidecars', async () => {
+    const sessionsDirectory = await createTemporarySessionsDirectory();
+    const cwd = path.join(sessionsDirectory, 'workspace');
+    await mkdir(cwd);
+    const workspaceDirectory = path.join(
+      sessionsDirectory,
+      encodedWorkspaceDirectory(cwd),
+    );
+    await mkdir(workspaceDirectory);
+    await Promise.all([
+      writeSettings(workspaceDirectory, 'ordinary', {
+        tags: [{ name: 'project:user-session' }],
+      }),
+      writeSettings(workspaceDirectory, 'task-child', {
+        tags: [
+          {
+            name: 'subagent',
+            metadata: {
+              callingSessionId: 'parent',
+              callingToolUseId: 'tool',
+            },
+          },
+        ],
+      }),
+      writeSettings(workspaceDirectory, 'mission-worker', {
+        tags: [
+          {
+            name: 'decompSessionType',
+            metadata: { value: 'worker' },
+          },
+        ],
+      }),
+      writeSettings(workspaceDirectory, 'mission-orchestrator', {
+        tags: [
+          {
+            name: 'decompSessionType',
+            metadata: { value: 'orchestrator' },
+          },
+        ],
+      }),
+    ]);
+
+    await expect(
+      readWorkerSessionIds({
+        sessionsDirectory,
+        cwd,
+        sessionIds: [
+          'ordinary',
+          'task-child',
+          'mission-worker',
+          'mission-orchestrator',
+        ],
+      }),
+    ).resolves.toEqual(new Set(['task-child', 'mission-worker']));
+  });
+
+  it('ignores malformed, oversized, missing, and path-like sidecars', async () => {
+    const sessionsDirectory = await createTemporarySessionsDirectory();
+    const cwd = path.join(sessionsDirectory, 'workspace');
+    await mkdir(cwd);
+    const workspaceDirectory = path.join(
+      sessionsDirectory,
+      encodedWorkspaceDirectory(cwd),
+    );
+    await mkdir(workspaceDirectory);
+    await Promise.all([
+      writeFile(
+        path.join(workspaceDirectory, 'malformed.settings.json'),
+        '{',
+        'utf8',
+      ),
+      writeSettings(workspaceDirectory, 'oversized', {
+        padding: 'x'.repeat(70 * 1024),
+        tags: [{ name: 'subagent' }],
+      }),
+    ]);
+
+    await expect(
+      readWorkerSessionIds({
+        sessionsDirectory,
+        cwd,
+        sessionIds: ['malformed', 'oversized', 'missing', '../escape'],
+      }),
+    ).resolves.toEqual(new Set());
+  });
+});
+
+async function createTemporarySessionsDirectory(): Promise<string> {
+  const directory = await mkdtemp(
+    path.join(os.tmpdir(), 'droidvisx-catalog-'),
+  );
+  temporaryDirectories.push(directory);
+  return directory;
+}
+
+function encodedWorkspaceDirectory(cwd: string): string {
+  const normalized = path.resolve(cwd).replace(/[\\/]+$/, '');
+  return process.platform === 'win32'
+    ? `-${normalized
+        .replace(/^([A-Z]):/i, '$1')
+        .replace(/[\\/]+/g, '-')}`
+    : `-${normalized.replace(/^\/+/, '').replace(/\/+/g, '-')}`;
+}
+
+async function writeSettings(
+  directory: string,
+  sessionId: string,
+  value: unknown,
+): Promise<void> {
+  await writeFile(
+    path.join(directory, `${sessionId}.settings.json`),
+    JSON.stringify(value),
+    'utf8',
+  );
+}

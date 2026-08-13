@@ -134,6 +134,57 @@ describe('DaemonSessionCatalog', () => {
     );
   });
 
+  it('filters Task and Mission workers by daemon metadata only', async () => {
+    const modifiedTime = new Date('2026-08-09T12:00:00.000Z');
+    const archivedTime = new Date('2026-08-10T09:30:00.000Z');
+    const row = {
+      title: 'Task: title text is not identity',
+      messageCount: 0,
+      modifiedTime,
+      archivedTime,
+      cwd: CWD,
+    };
+    const catalog = new DaemonSessionCatalog(
+      droidWith({
+        list: async () => [
+          { ...row, id: 'ordinary' },
+          { ...row, id: 'task-child', parentSessionId: 'parent' },
+          { ...row, id: 'tool-child', parentToolUseId: 'tool' },
+          {
+            ...row,
+            id: 'tagged-child',
+            tags: [{ name: 'subagent' }],
+          },
+          {
+            ...row,
+            id: 'mission-worker',
+            tags: [
+              {
+                name: 'decompSessionType',
+                metadata: { value: 'worker' },
+              },
+            ],
+          },
+          {
+            ...row,
+            id: 'mission-orchestrator',
+            tags: [
+              {
+                name: 'decompSessionType',
+                metadata: { value: 'orchestrator' },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    await expect(catalog.listArchived(CWD)).resolves.toEqual([
+      expect.objectContaining({ id: 'ordinary' }),
+      expect.objectContaining({ id: 'mission-orchestrator' }),
+    ]);
+  });
+
   it('maps opened working states by safe session id', async () => {
     const listOpened = vi.fn(async () => [
       { id: 'running-1', workingState: 'working' },

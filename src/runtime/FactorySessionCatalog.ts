@@ -1,4 +1,13 @@
-import { listSessions } from '@factory/droid-sdk/node';
+import { promises as fs } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import {
+  hasSubagentSessionTag,
+  listSessions,
+  SessionSettingsFileSchema,
+  type SessionTag,
+} from '@factory/droid-sdk/node';
 
 import { sanitizeSessionTitle } from '../shared/validateMessage';
 import {
@@ -26,16 +35,24 @@ export type FactoryFavoriteWriter = (
   favorite: boolean,
 ) => Promise<boolean>;
 
+export type WorkerSessionIdsReader = (options: {
+  readonly sessionsDirectory: string;
+  readonly cwd: string;
+  readonly sessionIds: readonly string[];
+}) => Promise<ReadonlySet<string>>;
+
 export interface FactorySessionCatalogOptions {
   readonly listSdkSessions?: FactorySessionLister;
   readonly sessionsDirectory?: string;
   readonly writeFavoriteFile?: FactoryFavoriteWriter;
+  readonly readWorkerSessionIds?: WorkerSessionIdsReader;
 }
 
 export class FactorySessionCatalog implements SessionCatalog {
   private readonly listSdkSessions: FactorySessionLister;
   private readonly sessionsDirectory: string;
   private readonly writeFavoriteFile: FactoryFavoriteWriter;
+  private readonly readWorkerSessionIds: WorkerSessionIdsReader;
 
   constructor(options: FactorySessionCatalogOptions = {}) {
     this.listSdkSessions = options.listSdkSessions ?? listSessions;
@@ -43,6 +60,8 @@ export class FactorySessionCatalog implements SessionCatalog {
       options.sessionsDirectory ?? defaultSessionsDirectory();
     this.writeFavoriteFile =
       options.writeFavoriteFile ?? writeFavoriteFile;
+    this.readWorkerSessionIds =
+      options.readWorkerSessionIds ?? readWorkerSessionIds;
   }
 
   async writeFavorite(
@@ -66,11 +85,23 @@ export class FactorySessionCatalog implements SessionCatalog {
         cwd,
         limit: FACTORY_SESSION_CATALOG_LIMIT,
       });
+      const sessionIds = metadata.flatMap((item) =>
+        isRecord(item) && isSettingsFileSessionId(item.id)
+          ? [item.id]
+          : [],
+      );
+      // Fail-open: missing or malformed settings metadata must not
+      // make an ordinary user session disappear.
+      const workerIds = await this.readWorkerSessionIds({
+        sessionsDirectory: this.sessionsDirectory,
+        cwd,
+        sessionIds,
+      }).catch(() => new Set<string>());
       const sessions: SessionCatalogEntry[] = [];
 
       for (const item of metadata) {
         const projected = projectSessionMetadata(item);
-        if (projected) {
+        if (projected && !workerIds.has(projected.id)) {
           sessions.push(projected);
           if (sessions.length === FACTORY_SESSION_CATALOG_LIMIT) {
             break;
@@ -89,6 +120,132 @@ export class FactorySessionCatalog implements SessionCatalog {
   }
 }
 
+/**
+ * Reads worker identity from the authoritative per-session settings
+ * sidecars. `listSessions()` consumes these files but does not return
+ * their tags, while the sibling global index is incomplete. Reads
+ * are bounded to the already bounded catalog ids and file size.
+ */
+export async function readWorkerSessionIds({
+  sessionsDirectory,
+  cwd,
+  sessionIds,
+}: {
+  readonly sessionsDirectory: string;
+  readonly cwd: string;
+  readonly sessionIds: readonly string[];
+}): Promise<ReadonlySet<string>> {
+  const candidateIds = Array.from(
+    new Set(
+      sessionIds
+        .slice(0, FACTORY_SESSION_CATALOG_LIMIT)
+        .filter(isSettingsFileSessionId),
+    ),
+  );
+  if (candidateIds.length === 0) {
+    return new Set();
+  }
+  const workspaceDirectory = await workspaceSessionsDirectory(
+    sessionsDirectory,
+    cwd,
+  );
+  const directories =
+    workspaceDirectory === sessionsDirectory
+      ? [sessionsDirectory]
+      : [workspaceDirectory, sessionsDirectory];
+  const workerIds = new Set<string>();
+
+  await Promise.all(
+    candidateIds.map(async (sessionId) => {
+      const fileName = `${sessionId}${SESSION_SETTINGS_SUFFIX}`;
+      for (const directory of directories) {
+        const settings = await readBoundedSessionSettings(
+          path.join(directory, fileName),
+        );
+        if (settings && hasWorkerTag(settings.tags)) {
+          workerIds.add(sessionId);
+          return;
+        }
+      }
+    }),
+  );
+  return workerIds;
+}
+
+const SESSION_SETTINGS_SUFFIX = '.settings.json';
+const MAX_SESSION_SETTINGS_BYTES = 64 * 1024;
+
+async function readBoundedSessionSettings(file: string) {
+  try {
+    const handle = await fs.open(file, 'r');
+    try {
+      const buffer = Buffer.allocUnsafe(MAX_SESSION_SETTINGS_BYTES + 1);
+      let length = 0;
+      while (length < buffer.length) {
+        const { bytesRead } = await handle.read(
+          buffer,
+          length,
+          buffer.length - length,
+          length,
+        );
+        if (bytesRead === 0) {
+          break;
+        }
+        length += bytesRead;
+      }
+      if (length > MAX_SESSION_SETTINGS_BYTES) {
+        return null;
+      }
+      const parsed: unknown = JSON.parse(
+        buffer.toString('utf8', 0, length),
+      );
+      const result = SessionSettingsFileSchema.safeParse(parsed);
+      return result.success ? result.data : null;
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    return null;
+  }
+}
+
+function hasWorkerTag(tags: readonly SessionTag[] | undefined): boolean {
+  return (
+    hasSubagentSessionTag(tags) ||
+    tags?.some(
+      (tag) =>
+        tag.name === 'decompSessionType' &&
+        tag.metadata?.value === 'worker',
+    ) === true
+  );
+}
+
+async function workspaceSessionsDirectory(
+  sessionsDirectory: string,
+  cwd: string,
+): Promise<string> {
+  let expandedPath = cwd;
+  if (cwd.startsWith('~/') || cwd === '~') {
+    expandedPath = path.join(os.homedir(), cwd.slice(1));
+  }
+  const absolutePath = path.resolve(expandedPath);
+  const canonicalPath = await fs.realpath(absolutePath).catch(
+    () => absolutePath,
+  );
+  const normalized = canonicalPath.replace(/[\\/]+$/, '');
+  const directoryName =
+    process.platform === 'win32'
+      ? `-${normalized
+          .replace(/^([A-Z]):/i, '$1')
+          .replace(/[\\/]+/g, '-')}`
+      : `-${normalized.replace(/^\/+/, '').replace(/\/+/g, '-')}`;
+  return path.join(sessionsDirectory, directoryName);
+}
+
+function isSettingsFileSessionId(value: unknown): value is string {
+  return isSafeSessionIdentifier(value) && !/[\\/]/.test(value);
+}
+
 function projectSessionMetadata(value: unknown): SessionCatalogEntry | null {
   if (!isRecord(value)) {
     return null;
@@ -99,6 +256,7 @@ function projectSessionMetadata(value: unknown): SessionCatalogEntry | null {
   // the parent's Task row). Child session_start lines carry their
   // caller identity, which the SDK's passthrough metadata preserves.
   if (
+    value.decompSessionType === 'worker' ||
     typeof value.callingSessionId === 'string' ||
     typeof value.callingToolUseId === 'string'
   ) {
@@ -133,8 +291,7 @@ function projectSessionMetadata(value: unknown): SessionCatalogEntry | null {
     modifiedTime,
     createdTime,
     isFavorite: value.isFavorite === true,
-    ...(value.decompSessionType === 'orchestrator' ||
-    value.decompSessionType === 'worker'
+    ...(value.decompSessionType === 'orchestrator'
       ? { missionRole: value.decompSessionType }
       : {}),
   };

@@ -1,7 +1,11 @@
 import path from 'node:path';
 import process from 'node:process';
 
-import type { ConnectedDroid } from '@factory/droid-sdk';
+import {
+  hasSubagentSessionTag,
+  type ConnectedDroid,
+  type SessionTag,
+} from '@factory/droid-sdk';
 
 import { sanitizeSessionTitle } from '../../shared/validateMessage';
 import {
@@ -89,8 +93,13 @@ export class DaemonSessionCatalog {
         !isSafeSessionIdentifier(row.id) ||
         !belongsToWorkspace(cwd, row.cwd, row.repoRoot) ||
         // Subagent child sessions stay out of the drawer (playback
-        // design §5); daemon rows name their parent directly.
-        row.parentSessionId !== undefined
+        // design §5). The daemon exposes Task parent identity and
+        // session tags, including Mission decomposition roles.
+        hasWorkerSessionMetadata(
+          row.parentSessionId,
+          row.parentToolUseId,
+          row.tags,
+        )
       ) {
         continue;
       }
@@ -166,6 +175,23 @@ function projectDate(value: unknown): string | null {
     return null;
   }
   return value.toISOString();
+}
+
+function hasWorkerSessionMetadata(
+  parentSessionId: string | undefined,
+  parentToolUseId: string | undefined,
+  tags: readonly SessionTag[] | undefined,
+): boolean {
+  return (
+    parentSessionId !== undefined ||
+    parentToolUseId !== undefined ||
+    hasSubagentSessionTag(tags) ||
+    tags?.some(
+      (tag) =>
+        tag.name === 'decompSessionType' &&
+        tag.metadata?.value === 'worker',
+    ) === true
+  );
 }
 
 function projectSnippet(
