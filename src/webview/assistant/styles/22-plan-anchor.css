@@ -91,7 +91,9 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  color: var(--dvx-text-secondary);
+  /* Ink, not secondary: the approved harness renders the title as
+     the brightest text on the line (user correction 2026-08-13). */
+  color: var(--dvx-ink);
   font-size: 13px;
   font-weight: 535;
   line-height: 19px;
@@ -215,16 +217,14 @@
 }
 
 /* ---- Pinned (sticky) state --------------------------------------
-   Added by the coordinator's data-pinned only. The row gains the
-   readability chassis; negative margins offset the border + inline
-   padding so the content does not move. */
-.dvx-message-user[data-pinned] .dvx-plan-line-row {
-  margin-inline: -11px;
-  padding-inline: 10px;
-  border: 1px solid var(--dvx-border);
-  border-radius: 8px;
-  background: var(--dvx-raised);
-  box-shadow: 0 2px 8px -6px rgb(31 24 16 / 30%);
+   Added by the coordinator's data-pinned only. The row stays FLAT —
+   the approved kitchen-sink form has no card chassis here (user
+   correction 2026-08-13 evening); the pinned block's opaque surface
+   + its own drop shadow already separate it from the content
+   scrolling underneath. Just add breathing room below the line. */
+.dvx-message-user[data-pinned] .dvx-plan-line {
+  padding-bottom: 8px;
+  margin-bottom: 0;
 }
 
 /* While pinned the expanded checklist floats below the row instead

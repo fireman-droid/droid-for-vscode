@@ -48,7 +48,7 @@ describe('PlanLine', () => {
       'Read the config',
     );
     expect(container.querySelector('.dvx-plan-line-count')?.textContent).toBe(
-      '1/3',
+      '1 / 3',
     );
     expect(container.querySelector('.dvx-plan-line-chevron')).not.toBeNull();
     // The old card chrome is gone: no eyebrow, no summary, no
@@ -116,7 +116,7 @@ describe('PlanLine', () => {
     expect(line?.className).toContain('dvx-plan-line-done');
     expect(line?.className).not.toContain('dvx-plan-line-live');
     expect(container.querySelector('.dvx-plan-line-count')?.textContent).toBe(
-      '3/3',
+      '3 / 3',
     );
   });
 

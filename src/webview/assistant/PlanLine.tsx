@@ -39,7 +39,9 @@ export function PlanLine({
   const building = running && !anchor.allCompleted;
   const expanded = expandOverride ?? building;
   const autoExpanded = expandOverride === null && expanded;
-  const count = `${anchor.completedCount}/${anchor.totalCount}`;
+  // Spaced "n / m" — the approved harness form (user correction
+  // 2026-08-13 evening).
+  const count = `${anchor.completedCount} / ${anchor.totalCount}`;
   return (
     <section
       className={`dvx-plan-line${
