@@ -3184,6 +3184,22 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-13 傍晚子代理面板发版 v0.7.0**：版本号 `0.6.0 → 0.7.0`
+  （发布提交 `c43777c`，本地 tag `v0.7.0`，无远端未 push）。内容 =
+  待办 B 切片 1（`0b53c22`，台账 §37，Bridge 协议 v10→v11）：
+  Working 弹窗行实时活动字幕 + 可用才渲染的单行 Stop（实测
+  resume→interrupt→detach 序列，只停一个）、终态委派行 "View
+  transcript" 只读转录分栏、会话抽屉子会话泄漏修复。门禁：全量
+  vitest `--maxWorkers=4` **107 文件 2082 例全绿**（新增 4 文件
+  47 例）+ typecheck 三段 + lint:budgets + build + `vsce package`
+  （11 files, 1.59 MB）+ `verify:vsix` 11 条目绿。产出
+  `dist/droidvisx.vsix` 1,671,587 字节，SHA-256
+  `A6AF8283CC28F362EA9A5F88154E81F7D97FA4D37D2E5C7E14C321EF19BF9590`，
+  安装成功，`cursor --list-extensions` 确认
+  `droidvisx.droidvisx@0.7.0`。**协议升 v11：现有窗口必须 Reload
+  Window**，旧窗口握手会被拒。真机冒烟按用户指示未跑（脚本就绪，
+  见 §37）；验收以真实使用为准——开个带 Task 委派的回合，点
+  Working 弹窗看活动与 Stop，委派完成后点行内 View transcript。
 - **2026-08-13 下午样板间对齐发版 v0.6.0**：版本号 `0.5.0 → 0.6.0`
   （发布提交 `bc43cd2` + 棘轮修正 `6295214`，本地 tag `v0.6.0` 指向
   修正后提交，无远端未 push）。内容 = 待办 A 收官批（`3e4ab55`，
