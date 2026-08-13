@@ -576,14 +576,6 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
   box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
 }
 
-.dvx-shell[data-theme='dark'] .dvx-message-user[data-pinned] .dvx-plan-line-row {
-  box-shadow: 0 2px 8px -6px rgb(0 0 0 / 65%);
-}
-
-.dvx-shell[data-theme='dark'] .dvx-message-user[data-pinned] .dvx-plan-line-body {
-  box-shadow: 0 14px 30px -16px rgb(0 0 0 / 70%);
-}
-
 .dvx-shell[data-theme='dark'] .dvx-queue-toggle:hover {
   background: rgb(255 255 255 / 5%);
 }

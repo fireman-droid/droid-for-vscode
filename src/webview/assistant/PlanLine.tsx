@@ -62,9 +62,8 @@ export function PlanLine({
       </button>
       {/* Always mounted so collapse can animate (grid-rows 0fr↔1fr);
           aria-hidden keeps the closed checklist out of the
-          accessibility tree. data-auto marks the building auto-open,
-          which the pinned overlay suppresses (a floating checklist
-          must never cover the streaming reply uninvited). */}
+          accessibility tree. data-auto marks a building auto-open
+          (as opposed to a reader's explicit toggle). */}
       <div
         className="dvx-plan-line-body"
         data-open={expanded ? 'true' : 'false'}

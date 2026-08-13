@@ -8,10 +8,9 @@
 
    The line lives inside the sticky .dvx-message-user block, so the
    pin coordinator in Thread.tsx carries it through stick, push-out
-   and cover for free. The [data-pinned] rules at the bottom only add
-   the readability chassis (opaque ground, 1px border, 8px radius —
-   negative margins keep the content from jumping) and swap the
-   expanded body to an overlay that never displaces layout. */
+   and cover for free. Pinned adds NOTHING but breathing room: one
+   surface, in-place expansion, no overlay card (user correction
+   2026-08-13 evening — the approved harness form has no second box). */
 
 .dvx-plan-line {
   position: relative;
@@ -217,62 +216,21 @@
 }
 
 /* ---- Pinned (sticky) state --------------------------------------
-   Added by the coordinator's data-pinned only. The row stays FLAT —
-   the approved kitchen-sink form has no card chassis here (user
-   correction 2026-08-13 evening); the pinned block's opaque surface
-   + its own drop shadow already separate it from the content
-   scrolling underneath. Just add breathing room below the line. */
+   ONE surface, no second box (user correction 2026-08-13 evening:
+   the approved kitchen-sink form expands in place — there is no
+   floating overlay card). The pinned block's opaque surface + drop
+   shadow mask the content scrolling underneath; expanding while
+   pinned simply grows the sticky block inline, exactly like the
+   un-pinned flow. Only breathing room below the line is added. */
 .dvx-message-user[data-pinned] .dvx-plan-line {
   padding-bottom: 8px;
   margin-bottom: 0;
 }
 
-/* While pinned the expanded checklist floats below the row instead
-   of growing the sticky block (no layout displacement; the next
-   user message still pushes the whole pin out naturally). */
-.dvx-message-user[data-pinned] .dvx-plan-line-body {
-  position: absolute;
-  z-index: 1;
-  top: 100%;
-  right: -11px;
-  left: -11px;
-  overflow: hidden;
-  margin-top: 6px;
-  border: 1px solid var(--dvx-border);
-  border-radius: 10px;
-  background: var(--dvx-raised);
-  box-shadow: 0 14px 30px -18px rgb(31 24 16 / 35%);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity var(--dvx-duration-normal) ease,
-    visibility var(--dvx-duration-normal) ease,
-    grid-template-rows var(--dvx-duration-slower)
-      var(--dvx-easing-out-strong);
-}
-
-.dvx-message-user[data-pinned] .dvx-plan-line-body[data-open="true"] {
-  opacity: 1;
-  visibility: visible;
-}
-
-/* The building auto-open only applies inline: while the message is
-   pinned the overlay stays hidden unless the reader opened it — a
-   floating checklist must never cover the streaming reply uninvited. */
-.dvx-message-user[data-pinned]
-  .dvx-plan-line-body[data-open="true"][data-auto="true"] {
-  opacity: 0;
-  visibility: hidden;
-}
-
-.dvx-message-user[data-pinned] .dvx-plan-line-steps {
-  padding: 14px 16px 16px;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .dvx-plan-line-title,
   .dvx-plan-line-chevron,
-  .dvx-plan-line-body,
-  .dvx-message-user[data-pinned] .dvx-plan-line-body {
+  .dvx-plan-line-body {
     transition: none;
   }
 
@@ -288,11 +246,6 @@
 
   .dvx-plan-line-dot,
   .dvx-plan-line-ring {
-    border: 1px solid CanvasText;
-  }
-
-  .dvx-message-user[data-pinned] .dvx-plan-line-row,
-  .dvx-message-user[data-pinned] .dvx-plan-line-body {
     border: 1px solid CanvasText;
   }
 }

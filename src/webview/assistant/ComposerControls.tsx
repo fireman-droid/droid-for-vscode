@@ -491,8 +491,7 @@ export function ComposerControls({
         onClick={() => toggle('model')}
       >
         <span>{modelName}</span>
-        {/* Effort rides the trigger as a quiet suffix (Cursor-style
-            "Fable 5 Max" readout, 2026-08-13). */}
+        {/* Cursor-style "Fable 5 Max" readout (2026-08-13). */}
         {confirmed?.reasoningEffort !== undefined ? (
           <span className="dvx-model-trigger-effort" aria-hidden="true">
             {formatReasoningLabel(confirmed.reasoningEffort)}
@@ -2476,13 +2475,7 @@ function ModelPopover({
   readonly onUpdate: (
     update: Extract<
       SessionSettingSelection,
-      {
-        field:
-          | 'modelId'
-          | 'reasoningEffort'
-          | 'specModeModelId'
-          | 'specModeReasoningEffort';
-      }
+      { field: 'modelId' | 'reasoningEffort' | 'specModeModelId' | 'specModeReasoningEffort' }
     >,
   ) => void;
   readonly onManageModels: () => void;
@@ -2653,9 +2646,8 @@ function ModelPopover({
                       }}
                     >
                       <strong>{modelLabel}</strong>
-                      {/* Effort rides the name line as a grey suffix
-                          (Cursor-style "Fable 5 1M Max", 2026-08-13);
-                          the tail keeps only pencil + check. */}
+                      {/* Grey effort suffix on the name line; the
+                          tail keeps only pencil + check. */}
                       {isSelected ? (
                         <span className="dvx-model-effort-suffix">
                           {activeScope === 'spec' &&
