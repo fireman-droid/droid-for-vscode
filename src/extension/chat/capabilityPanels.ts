@@ -106,6 +106,7 @@ export function refreshContext(
     generation: number,
     sessionId: string,
     cwd: string,
+    onSettled?: () => void,
   ): void {
     const request = ++ctl.contextGeneration;
     const confirmed =
@@ -118,6 +119,7 @@ export function refreshContext(
     void runtime
       .readContextStats()
       .then((result) => {
+        onSettled?.();
         if (
           request !== ctl.contextGeneration ||
           !ctl.isCurrentSessionOperation(
@@ -136,6 +138,7 @@ export function refreshContext(
         emitContext(ctl, sessionId);
       })
       .catch(() => {
+        onSettled?.();
         if (
           request !== ctl.contextGeneration ||
           !ctl.isCurrentSessionOperation(

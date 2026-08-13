@@ -26,6 +26,7 @@ import {
   stop,
   successfulTurn,
   turnStates,
+  unavailableSessionHistory,
   waitForConnected,
   waitForInteraction,
 } from './controllerTestHarness';
@@ -647,16 +648,26 @@ describe('ChatController', () => {
     await controller.dispose();
   });
 
-  it('records an end-to-end session-switch duration on a successful switch', async () => {
+  it('records initialize, history, and context session-switch phases', async () => {
     const record = vi.fn();
     const first = createMockRuntime();
     first.initialize.mockResolvedValue(available('session-1'));
     const second = createMockRuntime();
     second.initialize.mockResolvedValue(available('session-2'));
+    second.readContextStats.mockResolvedValue({
+      used: 1,
+      remaining: 9,
+      limit: 10,
+      accuracy: 'exact',
+    });
     const createRuntime = vi
       .fn<() => MockRuntime>()
       .mockReturnValueOnce(first)
       .mockReturnValueOnce(second);
+    const history = {
+      loadHistory: vi.fn(async () => unavailableSessionHistory()),
+      loadSubagentSummaries: vi.fn(async () => []),
+    };
     const { controller, messages } = createController(
       createRuntime,
       undefined,
@@ -665,7 +676,7 @@ describe('ChatController', () => {
         catalogEntry('session-2'),
       ]),
       undefined,
-      undefined,
+      history,
       undefined,
       undefined,
       undefined,
@@ -694,6 +705,9 @@ describe('ChatController', () => {
           attributes: expect.objectContaining({
             kind: 'resume',
             durationMs: expect.any(Number),
+            initializeMs: expect.any(Number),
+            historyMs: expect.any(Number),
+            contextMs: expect.any(Number),
           }),
         }),
       );

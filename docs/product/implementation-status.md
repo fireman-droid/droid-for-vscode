@@ -2779,6 +2779,12 @@ UI 描述见 §22 重做记录。
   发送；Stop 清掉当时的 pending，Dismiss/切会话随 fork 清空。Send
   换成 ■ Stop（`.dvx-shell .dvx-btw-stop` 提级压过全局
   `button{font:inherit}`）。
+- **会话切换阶段诊断（v0.7.8）**：既有
+  `host.perf.session-switch` 保留端到端 `durationMs`，并在同一条
+  记录追加 `initializeMs`、`historyMs`、`contextMs`。initialize 与
+  history 仍并行；context 在 runtime 激活后异步读取，所以埋点等它
+  settle 后才写出，三项均为 Host 同一时钟的整数毫秒。仅加观测，不
+  据此预先改调度或宣称提速；下一轮应先看真实 Cursor 日志再优化。
 - **Cursor 风格模型弹层**（§35 的迭代）：宽 200→264px；行内
   "模型名 + 灰色档位后缀"单行读法（仅选中行有档位——Droid 数据
   只有当前模型的 reasoningEffort，不为未选行发明）；尾部只留

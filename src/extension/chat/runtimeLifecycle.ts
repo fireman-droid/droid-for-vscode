@@ -15,20 +15,7 @@ import { reconcileSessionHistory } from '../reconcileSessionHistory';
 import { recordCreatedWorktreeSession } from '../worktreeSessions';
 import type { WorkspaceContext } from '../ChatController';
 import { discardQueuedPrompts, restoreQueuedPrompts } from './queue';
-import { pushMcp } from './mcp';
 import { clearPendingAttachments } from './attachments';
-import {
-  emitModelCatalog,
-  MODEL_CATALOG_FAILED_MESSAGE,
-  projectModelCatalog,
-  pushSkills,
-  refreshContext,
-} from './capabilityPanels';
-import {
-  emitSettings,
-  projectConfirmedSettings,
-  SETTINGS_READ_FAILED_MESSAGE,
-} from './settings';
 import {
   beginCatalogLoad,
   clearCatalog,
@@ -51,6 +38,15 @@ import {
   recoveryTurnId,
 } from './recovery';
 import { armReplayedSubagentWatch } from './subagentWatch';
+import {
+  createSessionSwitchTimings,
+  elapsedMs,
+  type SessionSwitchTimings,
+} from './sessionSwitchTimings';
+import {
+  loadSessionMetadata,
+  markSessionSwitchReady,
+} from './sessionMetadata';
 import {
   formatUnknownError,
   isSafeBridgeId,
@@ -183,7 +179,7 @@ export async function replaceRuntime(
   ctl: ChatControllerInternals,
     target: RuntimeSessionTarget,
   ): Promise<void> {
-    const switchStartedAt = performance.now();
+    const phases = createSessionSwitchTimings(target.kind);
     // Captured before any state reset: a live daemon-backed turn
     // survives the switch. Disposal then detaches instead of
     // interrupting, and the old session's drawer row keeps a running
@@ -260,8 +256,13 @@ export async function replaceRuntime(
     // latency (9-12s observed). Neither branch throws: both funnel
     // failures into their return values.
     const [transcript, activation] = await Promise.all([
-      prepareActivationTranscript(ctl, target, generation),
-      createInitializedRuntime(ctl, target, generation),
+      prepareActivationTranscript(
+        ctl,
+        target,
+        generation,
+        phases,
+      ),
+      createInitializedRuntime(ctl, target, generation, phases),
     ]);
     if (
       transcript === null ||
@@ -316,18 +317,9 @@ export async function replaceRuntime(
       activation.id,
       generation,
       transcript,
+      phases,
     );
-    // End-to-end switch latency, from the replace request to the
-    // activated runtime — the number the parallel activation above is
-    // meant to shrink (verification for the serial 9-12s baseline).
-    ctl.recordHost({
-      level: 'info',
-      name: 'host.perf.session-switch',
-      attributes: {
-        kind: target.kind,
-        durationMs: Math.round(performance.now() - switchStartedAt),
-      },
-    });
+    markSessionSwitchReady(ctl, phases);
 }
 
 export async function activateInitialRuntime(
@@ -394,6 +386,7 @@ export async function prepareActivationTranscript(
   ctl: ChatControllerInternals,
     target: RuntimeSessionTarget,
     generation: number,
+    phases?: SessionSwitchTimings,
   ): Promise<HostTranscriptState | null> {
     if (target.kind === 'new') {
       ctl.mission = null;
@@ -402,10 +395,15 @@ export async function prepareActivationTranscript(
     }
 
     const recovered = ctl.recoveryStore.readSession(target.sessionId);
-    const loaded = await loadHistoryTimed(ctl, 
+    const historyStartedAt = performance.now();
+    const loaded = await loadHistoryTimed(
+      ctl,
       target.cwd,
       target.sessionId,
     );
+    if (phases !== undefined) {
+      phases.historyMs = elapsedMs(historyStartedAt);
+    }
     if (
       !isCurrentRuntimeGeneration(ctl, generation) ||
       !isTargetWorkspaceCurrent(ctl, target.cwd)
@@ -500,6 +498,7 @@ export async function createInitializedRuntime(
   ctl: ChatControllerInternals,
     target: RuntimeSessionTarget,
     generation: number,
+    phases?: SessionSwitchTimings,
   ): Promise<
     | {
         readonly status: 'available';
@@ -543,9 +542,13 @@ export async function createInitializedRuntime(
     }
 
     let availability: RuntimeAvailability;
+    const initializeStartedAt = performance.now();
     try {
       availability = await runtime.initialize(target);
     } catch {
+      if (phases !== undefined) {
+        phases.initializeMs = elapsedMs(initializeStartedAt);
+      }
       releaseRecoveryContext();
       await closeRuntime(ctl, runtime).catch(() => undefined);
       return isCurrentRuntimeGeneration(ctl, generation) &&
@@ -555,6 +558,9 @@ export async function createInitializedRuntime(
             message: 'The local Droid runtime could not be initialized.',
           }
         : null;
+    }
+    if (phases !== undefined) {
+      phases.initializeMs = elapsedMs(initializeStartedAt);
     }
 
     if (
@@ -604,6 +610,7 @@ export async function activateRuntime(
     sessionId: string,
     generation: number,
     transcript: HostTranscriptState,
+    phases?: SessionSwitchTimings,
   ): Promise<void> {
     if (
       !isActivationCandidateCurrent(ctl, 
@@ -675,6 +682,7 @@ export async function activateRuntime(
       generation,
       sessionId,
       target.cwd,
+      phases,
     );
     if (target.kind === 'resume') {
       restoreQueuedPrompts(ctl, sessionId);
@@ -728,95 +736,6 @@ export function bindWorktreeSessionMetadata(
       };
       ctl.emitSnapshot();
     });
-}
-
-export function loadSessionMetadata(
-  ctl: ChatControllerInternals,
-    runtime: DroidRuntime,
-    generation: number,
-    sessionId: string,
-    cwd: string,
-  ): void {
-    void runtime
-      .readSessionSettings()
-      .then((result) => {
-        if (
-          !ctl.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        ctl.settings = {
-          status: 'ready',
-          value: projectConfirmedSettings(result),
-        };
-        emitSettings(ctl, sessionId);
-      })
-      .catch(() => {
-        if (
-          !ctl.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        ctl.settings = {
-          status: 'error',
-          value: null,
-          message: SETTINGS_READ_FAILED_MESSAGE,
-        };
-        emitSettings(ctl, sessionId);
-      });
-
-    void runtime
-      .readModelCatalog()
-      .then((result) => {
-        if (
-          !ctl.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        ctl.modelCatalog = projectModelCatalog(result);
-        emitModelCatalog(ctl, sessionId);
-      })
-      .catch(() => {
-        if (
-          !ctl.isCurrentSessionOperation(
-            runtime,
-            generation,
-            sessionId,
-            cwd,
-          )
-        ) {
-          return;
-        }
-        ctl.modelCatalog = {
-          status: 'error',
-          items: [],
-          message: MODEL_CATALOG_FAILED_MESSAGE,
-        };
-        emitModelCatalog(ctl, sessionId);
-      });
-
-    refreshContext(ctl, runtime, generation, sessionId, cwd);
-    // Server-side backstop for the skills/MCP panels: a session switch
-    // resets the webview catalogs to 'idle', and a panel-issued
-    // re-request can be dropped mid-switch. Pushing fresh state on
-    // activation converges an open panel without user action.
-    pushSkills(ctl, runtime, generation, sessionId, cwd);
-    pushMcp(ctl, runtime, generation, sessionId, cwd);
 }
 
 export function resetSessionMetadata(ctl: ChatControllerInternals): void {
