@@ -4,6 +4,35 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-08-13
+
+The kitchen-sink parity release: everything the reviewed harness
+showed is now the real product surface, closing out the visual
+punch list in one batch.
+
+### Changed
+
+- **Command cards** — expanding and collapsing is one continuous
+  height-and-opacity transition instead of a snap-open, and the
+  terminal well follows the theme: light theme gets a warm light well
+  with a light-legible syntax tint, dark keeps its deeper well.
+- **Session drawer** — sized to its content (capped at 400px) with a
+  rounded, hairlined bottom edge and a natural slide-down reveal, and
+  chats now list newest first in every group regardless of catalog
+  order.
+- **Plan line** — the collapsed row and its steps align on one 14px
+  marker rail, the head grows to 38px with a mono count, and steps
+  tighten to 11.5px; TodoWrite activity rows retire from the
+  transcript since the plan line carries the same checklist.
+- **Plain tool rows** — the quiet ruled form: 29px rows led by a small
+  marker dot, past-tense verbs in medium secondary ink, capsule-free
+  mono file objects, hairlines between consecutive rows, and inline
+  actions like Preview surfacing on hover.
+- **Quieter details** — a user message with an inline image preview no
+  longer repeats an IMAGE chip under it; "View source" under Mermaid
+  diagrams underlines on hover instead of washing grey; "Droid is
+  working" hugs the content above it.
+
 ## [0.5.0] - 2026-08-13
 
 Polish release from the first full kitchen-sink review loop: the mode
