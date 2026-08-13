@@ -12,6 +12,7 @@ import { MAX_BRIDGE_ID_LENGTH } from '../../shared/bridgeMessages';
 import type { RuntimeAttachment } from '../../runtime/DroidRuntime';
 import type { SessionCatalog } from '../../runtime/SessionCatalog';
 import type { TurnActivityState } from '../turnActivityState';
+import type { TurnChangesLedger } from '../turnChangesLedger';
 import type { HostTranscriptProjectionMessage } from '../hostTranscriptState';
 import {
   SessionRecoveryStore,
@@ -34,6 +35,12 @@ export interface CurrentTurn {
   status: TurnStatus;
   error?: string;
   activity: TurnActivityState;
+  /**
+   * Live changes ledger of this turn, created lazily when the first
+   * file-modifying tool completes. Cancelled at turn end so the
+   * settled reconciliation is the last `changes.update` publisher.
+   */
+  changesLedger?: TurnChangesLedger;
   /**
    * Marks a turn synthesized by reload reconciliation: the agent loop
    * runs daemon-side with no local stream, so completion comes from

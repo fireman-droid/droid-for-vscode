@@ -579,7 +579,7 @@ describe('ChatController', () => {
     });
   });
 
-  it('publishes a per-turn changes summary with git line stats', async () => {
+  it('streams a live changes ledger and settles it with git line stats', async () => {
     const runtime = createMockRuntime(async function* () {
       yield {
         type: 'tool-start',
@@ -631,17 +631,39 @@ describe('ChatController', () => {
     send(controller, 'session-1', 'turn-1', 'Change files');
     await vi.waitFor(() => {
       expect(
-        messages.find((message) => message.type === 'turn.changes'),
-      ).toBeDefined();
+        messages.some(
+          (message) =>
+            message.type === 'changes.update' &&
+            message.state === 'settled',
+        ),
+      ).toBe(true);
     });
 
-    // Untracked files keep null stats; order follows tool order.
-    expect(read).toHaveBeenCalledWith(['src/app.ts', 'docs/new.md']);
-    expect(
-      messages.find((message) => message.type === 'turn.changes'),
-    ).toMatchObject({
+    const updates = messages.filter(
+      (message) => message.type === 'changes.update',
+    );
+    // Each completed file tool published its row immediately: first
+    // frame with one file, second with both, all pre-git (null
+    // counts) because the per-file stat read is debounced.
+    expect(updates[0]).toMatchObject({
       sessionId: 'session-1',
       turnId: 'turn-1',
+      state: 'writing',
+      files: [{ path: 'src/app.ts', additions: null, deletions: null }],
+    });
+    expect(updates[1]).toMatchObject({
+      state: 'writing',
+      files: [
+        { path: 'src/app.ts', additions: null, deletions: null },
+        { path: 'docs/new.md', additions: null, deletions: null },
+      ],
+    });
+    // Untracked files keep null stats; order follows tool order.
+    expect(read).toHaveBeenCalledWith(['src/app.ts', 'docs/new.md']);
+    expect(updates.at(-1)).toMatchObject({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      state: 'settled',
       files: [
         { path: 'src/app.ts', additions: 3, deletions: 1 },
         { path: 'docs/new.md', additions: null, deletions: null },
@@ -688,7 +710,7 @@ describe('ChatController', () => {
     });
     expect(read).not.toHaveBeenCalled();
     expect(
-      messages.find((message) => message.type === 'turn.changes'),
+      messages.find((message) => message.type === 'changes.update'),
     ).toBeUndefined();
   });
 

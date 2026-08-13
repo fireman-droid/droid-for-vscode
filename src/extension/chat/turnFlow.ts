@@ -30,6 +30,7 @@ import {
 } from '../hostTranscriptState';
 import type { TokenUsageBreakdown } from '../../shared/tokenUsage';
 import { isExecuteToolName } from '../../shared/toolOutput';
+import { recordLiveToolChanges } from './liveChanges';
 import { settleQueueAfterTurn } from './queue';
 import {
   clearPendingAttachments,
@@ -383,6 +384,9 @@ export function handleRuntimeEvent(
             ...result.projection,
           });
         }
+        if (event.type === 'tool-result' && !event.isError) {
+          recordLiveToolChanges(ctl, sessionId, turnId, event.toolUseId);
+        }
         return;
       }
       case 'image-block': {
@@ -629,9 +633,11 @@ export function finishSpecHandoff(
 }
 
 /**
- * Publishes the changed-files summary for a finished turn. Line
- * counts come from git HEAD asynchronously; the summary is dropped
- * when the session changes before the stats arrive.
+ * Publishes the settled changed-files ledger for a finished turn:
+ * the existing whole-turn git reconciliation (one batched numstat
+ * read over every tool-named path) closes the live ledger stream.
+ * Line counts come from git HEAD asynchronously; the settlement is
+ * dropped when the session changes before the stats arrive.
  */
 export function publishTurnChanges(
   ctl: ChatControllerInternals,
@@ -642,6 +648,9 @@ export function publishTurnChanges(
     ) {
       return;
     }
+    // From here the reconciliation owns the stream: pending debounce
+    // reads must not publish a stale `writing` frame after `settled`.
+    ctl.turn.changesLedger?.cancel();
     const paths = collectToolFilePaths(ctl.turn.activity);
     if (paths.length === 0) {
       return;
@@ -670,9 +679,10 @@ export function publishTurnChanges(
       ctl.transcript = next;
       scheduleRecoveryCheckpoint(ctl);
       ctl.emit({
-        type: 'turn.changes',
+        type: 'changes.update',
         sessionId,
         turnId,
+        state: 'settled',
         files,
       });
     });
@@ -987,6 +997,9 @@ export function failTurn(
     }
     ctl.interactions.endTurn(sessionId, turnId);
     ctl.terminalMirror?.settleAll();
+    // No settled reconciliation follows a failed turn; the webview
+    // flips the ledger header on the terminal turn state instead.
+    ctl.turn.changesLedger?.cancel();
     ctl.turn.status = 'failed';
     ctl.turn.error = TURN_FAILURE_MESSAGE;
     ctl.emit({
