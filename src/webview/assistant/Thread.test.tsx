@@ -18,6 +18,7 @@ import {
 } from './imagePreviewCache';
 import {
   TerminalMirrorContext,
+  FileDiffContext,
   FOLLOW_REJOIN_PX,
   PreviewContext,
   applyFollowScroll,
@@ -120,7 +121,7 @@ describe('HistoryNotice', () => {
   });
 });
 
-describe('ChangesSummary preview chip', () => {
+describe('ChangesSummary ledger', () => {
   const changesData = {
     files: [
       { path: 'prototypes/dashboard.html', additions: 12, deletions: 0 },
@@ -129,24 +130,32 @@ describe('ChangesSummary preview chip', () => {
     ],
   };
 
-  function renderChanges(onPreview: (path: string) => void) {
+  function renderChanges(
+    onPreview: (path: string) => void,
+    data: unknown = changesData,
+    onOpenDiff: (path: string) => void = () => undefined,
+  ) {
     return render(
       createElement(
-        PreviewContext.Provider,
-        { value: onPreview },
-        createElement(ChangesSummary, { data: changesData }),
+        FileDiffContext.Provider,
+        { value: onOpenDiff },
+        createElement(
+          PreviewContext.Provider,
+          { value: onPreview },
+          createElement(ChangesSummary, { data }),
+        ),
       ),
     );
   }
 
-  it('shows a Preview chip only for html prototypes', () => {
+  it('shows a Preview row action only for html prototypes', () => {
     renderChanges(() => undefined);
-    const previews = screen.getAllByRole('button', { name: /Preview/ });
+    const previews = screen.getAllByRole('button', { name: /^Preview/ });
     // Exactly the .html and .htm rows, not the .tsx row.
     expect(previews).toHaveLength(2);
     expect(
       previews.every((button) =>
-        button.className.includes('dvx-preview-chip'),
+        button.className.includes('dvx-changes-row-action'),
       ),
     ).toBe(true);
   });
@@ -159,6 +168,45 @@ describe('ChangesSummary preview chip', () => {
     );
     fireEvent.click(preview);
     expect(onPreview).toHaveBeenCalledWith('prototypes/dashboard.html');
+  });
+
+  it('flips the header from writing to settled in place', () => {
+    const first = renderChanges(() => undefined, {
+      ...changesData,
+      writing: true,
+    });
+    expect(screen.getByRole('status').textContent).toContain(
+      'writing · 3 files',
+    );
+    expect(document.querySelector('.dvx-changes-dot')).not.toBeNull();
+    first.unmount();
+
+    renderChanges(() => undefined, changesData);
+    expect(screen.getByRole('status').textContent).toContain(
+      '3 files · settled',
+    );
+    expect(document.querySelector('.dvx-changes-dot')).toBeNull();
+  });
+
+  it('Review opens the diff of every changed file', () => {
+    const onOpenDiff = vi.fn();
+    renderChanges(() => undefined, changesData, onOpenDiff);
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+    expect(onOpenDiff.mock.calls.map(([path]) => path)).toEqual([
+      'prototypes/dashboard.html',
+      'demo/legacy.htm',
+      'src/app.tsx',
+    ]);
+  });
+
+  it('keeps ledger rows free of background hover washes', () => {
+    renderChanges(() => undefined);
+    // Rows are plain list items; the file name is the only button and
+    // carries no chip classes (the grey chip skin was removed).
+    const rows = document.querySelectorAll('.dvx-changes-row');
+    expect(rows).toHaveLength(3);
+    const file = screen.getByTitle('Open changes for src/app.tsx');
+    expect(file.className).toBe('dvx-changes-file');
   });
 });
 

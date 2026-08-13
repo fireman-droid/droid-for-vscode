@@ -78,7 +78,7 @@ async function expandPanel(
   await userEvent
     .setup()
     .click(
-      screen.getByRole('button', { name: 'Commit these changes…' }),
+      screen.getByRole('button', { name: 'Commit…' }),
     );
   return rendered;
 }

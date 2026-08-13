@@ -2432,6 +2432,96 @@ UI 描述见 §22 重做记录。
 - 测试：`planAnchor.test.ts`（重写）、`PlanLine.test.tsx`（替代删
   除的 `PlanAnchorCard.test.tsx`）
 
+### 31. Changes 实时账本：writing 流 + 原地 settled + Ledger 皮肤（2026-08-13 中午）
+
+- **来源**：decard 设计稿 §4 方案 A（用户已批准）+ 用户 11:45 修正
+  （账本行 hover **禁用灰底**，反馈只允许行尾动作按钮浮现 + 字色轻
+  微加深；设计稿中 `--dvx-soft` hover 洗色全部作废）。回合结束一次
+  性 Changes 汇总卡改为**实时账本**。
+- **Bridge v10**：`turn.changes` 一次性消息废除，改为流式
+  `changes.update`（H→W；每帧携带全量累计文件列表 + `state:
+  'writing' | 'settled'`），契约拆到新 `src/shared/changesProtocol.ts`
+  （bridgeMessages 触 ratchet 顶，按既有 protocol 域拆分惯例）。
+  `ChangesTranscriptItem` 增可选 `writing` 展示标志：仅 Webview 由
+  writing 帧自设，Host 转录/历史回放/恢复检查点只存 settled 项，回
+  放永不播 writing 头。双侧校验闭合（`validateHostMessage` 新
+  `parseChangesUpdate`，负例含缺失/非法 state）。
+- **Host 实时流**：新 `src/extension/turnChangesLedger.ts` —— 文件
+  编辑类工具（复用 `extractToolFilePaths` 路径投影）每次完成即时把
+  路径喂给惰性建立的账本：新行**立即发布**（计数 null），每文件
+  trailing 500ms 防抖后经串行队列批量走
+  `git diff --numstat`（单飞 + 到期文件合并为一次 git 调用，不打爆
+  git）；计数无可见变化不发帧。发布器每次发帧复核
+  sessionId/runtimeGeneration/turnId/活跃态，杜绝陈旧防抖计时器把
+  writing 帧漏进后续回合。回合终局沿用既有对账逻辑（全量 numstat
+  补删除/重命名/漏网）发唯一 `settled` 帧，发帧前 `ledger.cancel()`
+  掐掉在途防抖读；失败回合同样 cancel（无 settled，Webview 靠终态
+  turn.state 原地翻头）。喂路径逻辑拆为
+  `src/extension/chat/liveChanges.ts`（turnFlow 触 ratchet 顶）。
+- **Webview 账本**（`ChangesSummary` 重写 + `05-message-cards.css`
+  换肤）：区域随首个文件写入出现并**钉在首现位置**；header 28px 左
+  "Changes"、右运行中 "writing · N files"（5px accent 点 + 实时跳
+  数），终态原地切 "N files · settled" 不改尺寸。文件行 27px 纵列
+  （左侧竖 hairline），等宽弱色文件名 + tabular +A/−D；行 key 为文
+  件路径，同文件更新原地刷新**不重播入场**，新行纯淡入
+  （`--dvx-duration-fast`）。**行 hover 零底色**（背景恒透明），反
+  馈=行尾动作 opacity 浮现 + 文件名字色加深；HTML 行尾 Preview 接
+  既有沙盒预览。footer 顶部 hairline + 同行文字动作：Review（真实
+  能力：对全部文件逐个 `file.openDiff`）+ Commit…（接既有 Git
+  commit 面板，旧 "Commit these changes..." 孤立按钮块与 chip 集合
+  样式全删，`24-theme-dark.css` 撤掉对应暗色洗底规则——账本两主题
+  全走 token，浅色浅底/深色深底）。store 增量处理：writing 帧仅活
+  跃回合生效，settled 帧任意会话生效并原地替换；`finalizeActivities`
+  在回合终态摘掉 writing 标志；陈旧 writing 帧（终态后）丢弃。
+- **门禁**：focused vitest 绿（`turnChangesLedger.test.ts` 7 例：
+  立即发布/防抖/串行合并/无变化不发/上限/cancel 掐在途；
+  `ChatController.workspaceActions.test.ts` 直播→settled 全链；
+  `store.changes.test.ts`（自 store.test.ts 拆出，ratchet）+
+  validateHostMessage + Thread ledger UI 用例 + GitCommitPanel 13 例
+  改名后全绿）；三段 typecheck 绿；lint:budgets 绿（三处 ratchet 超
+  限以拆文件/拆契约消解：turnFlow 1150、bridgeMessages 2200、
+  store.test 2338）；build 绿；全量 vitest --maxWorkers=4 一次
+  （见验证状态）。
+- **自验收 A（行为，真实会话）**：`artifacts/smoke-changes-ledger-live.mts`
+  以真实 `ChatController` + FactoryDroidRuntime（daemon）+ 用户
+  BYOK gpt-luna 在一次性 scratch git 仓库驱动 Droid 连改 4 个文件：
+  6 帧 writing 实录（文件数 1→1→2→2→3→4 单调增长、防抖 numstat 计
+  数中途到达、同文件原地刷新），终态后唯一 settled 帧以真实
+  numstat 对账（a.txt +10/−5、b.txt +3/−0；新建未跟踪文件计数
+  null，符合 HEAD 对账语义），全部 `[PASS]`。
+- **自验收 B（视觉，真实 dist）**：`artifacts/changes-ledger-harness.html`
+  （镜像实录帧形；mock host 应答 git.requestStatus）+
+  `smoke-changes-ledger.mjs` headless Chrome 走四段 staging + hover
+  探针 + Review 点击 + 暗色重放，数值断言全过（首行 27px/头 28px、
+  DOM 节点跨帧同一、hover 行背景 `rgba(0,0,0,0)`、动作 opacity
+  0→1、settled 头切换、footer Review+Commit…、Review 发 4 条
+  `file.openDiff`、暗色行/文件底全透明、无横向溢出），EXIT 0。关
+  键帧六张存 `artifacts/`：`changes-ledger-1-first-row.png` /
+  `-2-writing.png` / `-3-hover.png` / `-4-settled.png` /
+  `-5-dark-writing.png` / `-6-dark-settled.png`，人工核对：账本钉
+  在首现位置（后续工具行在其下追加）、hover 无灰底、settled 原地
+  定格。
+- **打包**：按用户指示不打包，随下一个包走。
+
+主要实现：
+
+- Bridge：`src/shared/changesProtocol.ts`（新）、
+  `bridgeMessages.ts`（v10、writing 标志、union 换员）、
+  `src/webview/bridge/validateHostMessage.ts`
+- Host：`src/extension/turnChangesLedger.ts`（新）、
+  `src/extension/chat/liveChanges.ts`（新）、`chat/turnFlow.ts`
+  （tool-result 喂账本 + settled 对账 + 失败 cancel）、
+  `chat/internals.ts`（CurrentTurn.changesLedger）
+- Webview：`store.ts`（changes.update 增量归约）、
+  `runtimeAdapter.ts`（writing 透传）、
+  `thread/transcriptRows.tsx`（Ledger 重写）、
+  `GitCommitPanel.tsx`（Commit… 文字动作）、
+  `styles/05-message-cards.css`（账本皮肤）、`06-git-commit.css`
+  （旧入口样式删除）、`24-theme-dark.css`（撤 chip 暗色洗底）
+- 测试：`turnChangesLedger.test.ts`（新）、`store.changes.test.ts`
+  （新，自 store.test.ts 拆出）、`ChatController.workspaceActions`
+  / `validateHostMessage` / `Thread` / `GitCommitPanel` 各 .test 更新
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择

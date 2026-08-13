@@ -615,6 +615,7 @@ function mapItemToPart(item: SessionTranscriptItem): SafeRuntimePart {
         name: "droid-changes",
         data: {
           turnId: item.turnId,
+          writing: item.writing === true,
           files: item.files.map((file) => ({
             path: file.path,
             additions: file.additions,

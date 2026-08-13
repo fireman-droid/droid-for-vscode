@@ -38,10 +38,10 @@ export const GitCommitFlowContext =
   createContext<GitCommitFlowContextValue | null>(null);
 
 /**
- * Quiet entry rendered at the tail of a changes card. Only the
- * latest card shows it, and only while git is not known-unavailable;
- * the availability probe runs once on mount so a workspace without
- * `vscode.git` never flashes the entry.
+ * Quiet text action seated in the changes-ledger footer. Only the
+ * latest ledger shows it, and only while git is not
+ * known-unavailable; the availability probe runs once on mount so a
+ * workspace without `vscode.git` never flashes the entry.
  */
 export function ChangesCommitEntry({
   turnId,
@@ -95,13 +95,13 @@ export function ChangesCommitEntry({
     return (
       <button
         type="button"
-        className="dvx-commit-entry"
+        className="dvx-changes-action dvx-changes-commit"
         onClick={() => {
           flow.onRequestStatus();
           setExpanded(true);
         }}
       >
-        Commit these changes…
+        Commit…
       </button>
     );
   }

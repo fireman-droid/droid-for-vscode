@@ -173,18 +173,12 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
   color: var(--dvx-ink);
 }
 
-.dvx-shell[data-theme='dark'] .dvx-changes-file,
-.dvx-shell[data-theme='dark'] .dvx-preview-chip,
-.dvx-shell[data-theme='dark'] .dvx-commit-entry {
+/* The changes ledger and its footer actions are fully token-driven
+   (05-message-cards): transparent rows in both themes, no overrides
+   needed here. */
+.dvx-shell[data-theme='dark'] .dvx-preview-chip {
   border-color: rgb(255 255 255 / 12%);
   background: rgb(255 255 255 / 5%);
-}
-
-.dvx-shell[data-theme='dark'] .dvx-changes-file:hover,
-.dvx-shell[data-theme='dark'] .dvx-changes-file:focus-visible {
-  border-color: rgb(255 255 255 / 20%);
-  background: rgb(255 255 255 / 9%);
-  color: var(--dvx-ink);
 }
 
 /* ---- 07-activity-live --------------------------------------------- */

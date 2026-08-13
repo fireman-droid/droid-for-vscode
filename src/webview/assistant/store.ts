@@ -995,31 +995,39 @@ export function assistantWebviewReducer(
         [...state.transcript, event.item],
       );
     }
-    case 'turn.changes': {
-      if (event.sessionId !== state.sessionId) {
-        return advance(state, event.sequence);
-      }
-      // Arrives after the turn reached a terminal state; the summary
-      // belongs at the end of that turn's items.
-      const id = `changes:${event.turnId}`;
+    case 'changes.update': {
+      // `writing` frames belong to the live turn only; the `settled`
+      // reconciliation lands after the turn reached a terminal state
+      // and therefore only gates on the session.
       if (
-        state.transcript.some(
-          (item) => item.kind === 'changes' && item.turnId === event.turnId,
-        )
+        event.state === 'writing'
+          ? !acceptsActiveTurn(state, event.sessionId, event.turnId)
+          : event.sessionId !== state.sessionId
       ) {
         return advance(state, event.sequence);
       }
+      // The ledger keeps its first-appearance position and id: later
+      // frames replace files in place so DOM keys stay stable and
+      // rows never replay their entry animation.
+      const index = state.transcript.findIndex(
+        (item) =>
+          item.kind === 'changes' && item.turnId === event.turnId,
+      );
+      const existing = state.transcript[index];
+      const item: SessionTranscriptItem = {
+        id: existing?.id ?? `changes:${event.turnId}`,
+        kind: 'changes',
+        turnId: event.turnId,
+        files: event.files,
+        ...(event.state === 'writing' ? { writing: true } : {}),
+      };
       return boundTranscript(
         { ...state, sequence: event.sequence },
-        [
-          ...state.transcript,
-          {
-            id,
-            kind: 'changes',
-            turnId: event.turnId,
-            files: event.files,
-          },
-        ],
+        existing === undefined
+          ? [...state.transcript, item]
+          : state.transcript.map((entry, entryIndex) =>
+              entryIndex === index ? item : entry,
+            ),
       );
     }
     case 'runtime.diagnostic':
@@ -1564,6 +1572,16 @@ function finalizeActivities(
             ? 'completed'
             : 'stopped',
       };
+    }
+    if (
+      item.kind === 'changes' &&
+      item.turnId === turnId &&
+      item.writing === true
+    ) {
+      // Settle the ledger header at once; failed turns get no
+      // settled reconciliation frame at all.
+      const { writing: _writing, ...settled } = item;
+      return settled;
     }
     return item;
   });
