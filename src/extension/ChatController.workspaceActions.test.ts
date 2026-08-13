@@ -143,7 +143,8 @@ describe('ChatController', () => {
     });
     expect(openDiff).toHaveBeenCalledOnce();
 
-    // A failed open surfaces a bounded warning diagnostic.
+    // A failed open surfaces a bounded warning diagnostic naming the
+    // offending path (QA v0.3 P2-3).
     openDiff.mockResolvedValueOnce('failed');
     controller.handleMessage({
       type: 'file.openDiff',
@@ -154,6 +155,7 @@ describe('ChatController', () => {
       expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
         severity: 'warning',
         code: 'file-diff-failed',
+        message: expect.stringContaining('src/missing.ts'),
       });
     });
   });
@@ -211,6 +213,7 @@ describe('ChatController', () => {
       expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
         severity: 'warning',
         code: 'file-diff-failed',
+        message: expect.stringContaining('docs/Canvas-API-学习文档.md'),
       });
     });
   });

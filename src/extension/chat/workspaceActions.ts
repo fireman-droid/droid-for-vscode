@@ -18,8 +18,20 @@ import {
   type ChatControllerInternals,
 } from './internals';
 
-export const FILE_DIFF_FAILED_MESSAGE =
-  'That file could not be opened. It may have been moved or deleted.';
+/**
+ * Names the offending path and the failure mode so repeated clicks on
+ * different chips produce distinguishable diagnostics (QA v0.3 P2-3);
+ * the webview dedupes on code+message, so a fixed sentence collapsed
+ * every failed file into one anonymous card.
+ */
+export function fileDiffFailedMessage(
+  path: string,
+  reason: 'missing' | 'open-error',
+): string {
+  return reason === 'missing'
+    ? `Could not open ${path}. It may have been moved or deleted.`
+    : `Could not open ${path}. The editor failed to open it.`;
+}
 
 export const FILE_NOT_READY_MESSAGE =
   'That file does not exist yet. Droid is still working on it.';
@@ -58,14 +70,14 @@ export function handleFileOpenDiff(
         }
         ctl.emitSessionDiagnostic(
           'file-diff-failed',
-          FILE_DIFF_FAILED_MESSAGE,
+          fileDiffFailedMessage(path, 'missing'),
         );
         return;
       }
       if (outcome === 'failed') {
         ctl.emitSessionDiagnostic(
           'file-diff-failed',
-          FILE_DIFF_FAILED_MESSAGE,
+          fileDiffFailedMessage(path, 'open-error'),
         );
       }
     });
