@@ -563,6 +563,16 @@ export /**
  * `MCP_OPERATION_TIMEOUT_MS`, so a hung add/remove/toggle/list RPC
  * degrades into the normal failure path (error state + fresh
  * catalog read) instead of freezing the MCP panel in 'loading'.
+ *
+ * This abandons the operation but cannot cancel it: the DroidRuntime
+ * MCP contract exposes no abort channel (the SDK RPCs take no
+ * signal), so the orphan keeps occupying its daemon RPC slot until
+ * the daemon answers or the connection drops. That is contained on
+ * our side: this promise has already settled, making the orphan's
+ * eventual resolve/reject a no-op, and every consumer re-checks
+ * `isCurrentSessionOperation` (runtime identity + generation +
+ * session + cwd) before emitting, so a late completion can never
+ * mutate panel state.
  */
 function withMcpTimeout<T>(operation: Promise<T>): Promise<T> {
   return new Promise((resolve, reject) => {

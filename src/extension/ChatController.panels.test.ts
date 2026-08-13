@@ -655,6 +655,51 @@ describe('ChatController', () => {
     ).toContain('could not add');
   });
 
+  it('ignores a timed-out MCP operation that completes late', async () => {
+    // The timeout abandons but cannot cancel the daemon RPC; when the
+    // orphan finally lands it must not mutate panel state.
+    let resolveAdd: (() => void) | undefined;
+    const runtime = Object.assign(createMockRuntime(), {
+      listMcpServers: vi.fn(async () => []),
+      addMcpServer: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveAdd = resolve;
+          }),
+      ),
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    vi.useFakeTimers();
+    try {
+      controller.handleMessage({
+        type: 'mcp.server.add',
+        sessionId: 'session-1',
+        name: 'slow',
+        serverType: 'stdio',
+        command: 'node',
+      });
+      await vi.advanceTimersByTimeAsync(30_001);
+    } finally {
+      vi.useRealTimers();
+    }
+    await vi.waitFor(() => {
+      expect(mcpMessages(messages).at(-1)?.mcp).toMatchObject({
+        status: 'error',
+      });
+    });
+
+    const emittedBefore = mcpMessages(messages).length;
+    resolveAdd?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mcpMessages(messages).length).toBe(emittedBefore);
+    expect(mcpMessages(messages).at(-1)?.mcp).toMatchObject({
+      status: 'error',
+    });
+  });
+
   it('pushes skills and MCP catalogs once a session becomes available', async () => {
     const runtime = Object.assign(createMockRuntime(), {
       listSkills: vi.fn(async () => [
