@@ -2072,7 +2072,9 @@ UI 描述见 §22 重做记录。
   语义全继承）；`extension.ts` 命令先 focusView reveal 再暂存，视图
   首次打开未连接时 250ms×20 重试，超时记
   `attachment.add-selection-command.dropped` 诊断（安静降级，
-  无新错误面）。
+  无新错误面）。**（此段已被 §28 重做，QA P1-1：5s 重试窗打不过
+  实测 ~16s 冷启动——现为触发即捕获 + 60s 持有 + 状态栏反馈 +
+  超时警告。）**
 - **选区 payload 升级**（`selectionAttachmentPayload`，
   `attachmentSources.ts` 纯函数；webview `+` 菜单 Attach selection
   同步受益）：内容从裸文本变为带 `起:迄:相对路径` 头的 fenced
@@ -2259,6 +2261,51 @@ UI 描述见 §22 重做记录。
   触及 1103 行棘轮超限，非本切片引入）。
 - **打包**：不打包（打包权归 v0.3.0 分诊代理）；随下包真机可视
   验收。
+
+### 28. QA v0.3 报告修复批：P1-1 + P2-2/3/4/5（2026-08-13 上午）
+
+- **来源**：[`qa-bug-report-v0.3.md`](./qa-bug-report-v0.3.md)，
+  抢在 v0.3.0 打包前逐条独立提交；P2-1（预览暗色壳）按主题切片
+  遗留归属不在本批，Reload 杀回合归分诊代理。
+- **P1-1 冷启动静默丢选区（`b5aa9bb`）**：
+  `droidvisx.addSelectionToChat` 改为**触发瞬间读一次选区**
+  （`attachmentSources.readActiveSelection()` 在 focusView 之前），
+  捕获结果最长持有 60s（250ms 轮询新入口
+  `ChatController.stageCapturedEditorSelection(outcome)` →
+  `stageCapturedSelectionOutcome`，canStage/上限/去重/diagnostic
+  语义全继承，连接后**原样投递不重读编辑器**）；等待期间
+  `setStatusBarMessage` "Selection will be added when Droid
+  connects…" 投递即消失；超时一次 `showWarningMessage` 取代静默
+  丢弃，`dropped`/`staged` 日志均带 `waitedMs`。旧
+  `addEditorSelectionToChat()`（连接态才捕获、5s 窗）删除。
+  空选区/读失败在连接后以既有 in-session diagnostic 呈现。
+- **P2-5 连点双 chip（`aef2d0d`）**：`stageAttachmentPayloads`
+  对 capture 来源加去重守卫（同 capture 种类 + 同
+  `file:start-end` 名 + 同内容 → 静默忽略；edit-stage 无 payload
+  chip 不参与比对）。
+- **P2-3 Diff 失败无路径（`d5c1738`）**：
+  `fileDiffFailedMessage(path, reason)` 取代固定句，not-found 与
+  open-error 分别措辞，webview code+message 去重不再把不同文件
+  合并成一张匿名卡。
+- **P2-4 命令卡 Failed 无色（`9c72d90`）**：单条工具/命令行状态
+  span 失败时挂既有 `dvx-activity-state-failed`（浅 `#b3401f` /
+  暗 `var(--dvx-danger)`，与探索组一致，零新样式元素）。
+- **P2-2 预览工具栏窄宽裁切（`346fafb`）**：`previewHtml.ts` 工具
+  栏 `flex-wrap: wrap` 取代容器级 nowrap+hidden，文件名/说明
+  span 自带 nowrap+省略号，按钮 `flex: none` 整颗换行不裁切。
+- **门禁与自验收**：聚焦 vitest 随修随跑（workspaceActions 14、
+  previewHtml 18、attachments 16）；收口全量 vitest
+  `--maxWorkers=4` **100 文件 2015 用例全绿**、三段 typecheck 绿、
+  `lint:budgets` 绿。视觉自验收
+  `artifacts/qa-p2-ui-fixes.mts`（真实 dist bundle +
+  `buildPreviewShellHtml` 真实产物，CDP 数值断言 + 截图）：
+  `qa-p2-command-card-failed-{light,dark}.png`（Failed 危险色
+  实测 rgb(179,64,31) / rgb(229,72,77)，Completed 灰不变）、
+  `qa-p2-preview-toolbar-{360,300}.png`（"Open in editor" 完整
+  可点，`fullyVisible: true`），数值报告
+  `qa-p2-ui-fixes.out.json`。
+- **打包**：不打包（打包权归分诊代理）；P1-1 右键真机路径随
+  v0.3.0 包验收（命令注册/菜单 when 子句未变）。
 
 ## 部分完成
 
