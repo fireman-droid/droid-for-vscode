@@ -208,8 +208,14 @@
 
 .dvx-shell .dvx-mode-popover {
   left: auto;
-  width: 260px;
+  width: 200px;
   max-width: calc(100% - 8px);
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--dvx-border-strong) 72%, transparent);
+  border-radius: 8px;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 7%),
+    0 6px 18px -12px rgb(0 0 0 / 26%);
 }
 
 .dvx-shell .dvx-model-trigger {
@@ -346,5 +352,44 @@
   pointer-events: none;
   animation: dvx-rise-out var(--dvx-duration-normal)
     var(--dvx-easing-out-strong) forwards;
+}
+
+/* Mode/model popovers anchor to their own triggers: right edges
+   aligned, 6px above (user decision 2026-08-13). CSS anchor
+   positioning is available in the webview Chromium; without support
+   they keep the row-relative right alignment above. */
+@supports (anchor-name: --dvx-probe) {
+  .dvx-shell .dvx-mode-trigger {
+    anchor-name: --dvx-mode-trigger;
+  }
+
+  .dvx-shell .dvx-model-trigger {
+    anchor-name: --dvx-model-trigger;
+  }
+
+  .dvx-shell .dvx-mode-popover,
+  .dvx-shell .dvx-model-popover {
+    top: auto;
+    left: auto;
+    right: anchor(right);
+    bottom: calc(anchor(top) + 6px);
+    transform-origin: bottom right;
+  }
+
+  .dvx-shell .dvx-mode-popover {
+    position-anchor: --dvx-mode-trigger;
+  }
+
+  .dvx-shell .dvx-model-popover {
+    position-anchor: --dvx-model-trigger;
+  }
+
+  /* Flipped-down state (pinned edit card near the viewport top). */
+  .dvx-shell .dvx-controls-down .dvx-mode-popover,
+  .dvx-shell .dvx-controls-down .dvx-model-popover {
+    top: calc(anchor(bottom) + 6px);
+    bottom: auto;
+    transform-origin: top right;
+  }
 }
 

@@ -20,20 +20,34 @@
   padding: 8px 12px 7px;
 }
 
-/* Quiet fixed entry at the tail of the ModelPopover; sits on the
-   model panel card, separated by a hairline. */
+/* Quiet fixed entry at the tail of the ModelPopover: a hairline
+   footer row inside the one-card popover (the old separate floating
+   card is gone with the popover rework). */
 .dvx-model-popover .dvx-cm-add-entry {
-  margin-top: 6px;
-  border: 1px solid var(--dvx-border);
-  border-radius: 10px;
-  background: var(--dvx-raised);
-  box-shadow: var(--dvx-shadow);
+  min-height: 29px;
+  margin-top: 0;
+  padding: 0 10px;
+  border: 0;
+  border-top: 1px solid var(--dvx-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dvx-model-popover .dvx-cm-add-entry .dvx-popover-row-copy strong {
+  color: var(--dvx-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.dvx-model-popover .dvx-cm-add-entry:hover .dvx-popover-row-copy strong {
+  color: var(--dvx-ink);
 }
 
 .dvx-cm-add-plus {
   flex: 0 0 auto;
   width: 15px;
-  color: var(--dvx-muted);
+  color: var(--dvx-subtle);
   font-size: 13px;
   line-height: 1;
   text-align: center;

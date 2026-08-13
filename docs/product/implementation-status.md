@@ -2597,6 +2597,49 @@ UI 描述见 §22 重做记录。
   显示末步、更新中标题跟随运行步）后五场景全 PASS；typecheck 三段
   与 lint:budgets 绿。已提交待随下一批 VSIX 真机验证。
 
+### 35. 模式/模型弹层轻量化 + 触发按钮锚定（2026-08-13 下午，样板间迭代批）
+
+- **来源与工作流**：用户在 kitchen-sink 样板间逐项提意见（模式弹层
+  "卡片太大"、模型弹层两张分离卡"怪怪的"、模型名 13px 偏大且长
+  BYOK ID 会溢出、弹层位置要锚定在各自触发按钮正上方），形态先在
+  样板间改给用户过目、认可后逐值搬进真实 CSS——AGENTS 第 8 步新
+  验收规程（样板间承担审美签收）的首次完整走通。
+- **实现（纯 CSS，四个文件，无 TSX 改动）**：
+  - `04-chrome-popovers.css`：option 行族（模式弹层 + 推理飞出层）
+    列表 gap 1px、行 5px 7px/圆角 5px、标题 500 字重/17px 行高、
+    hover 软洗色 + 字色加深；**radio 圆圈退役**——未选中行无标记，
+    选中行 `.dvx-radio-mark::after` 画细 accent 勾（border 勾，
+    无新 SVG）。
+  - `13-composer.css`：模式弹层 260→200px、padding 4px、半透明
+    1px 边 + 8px 圆角 + 短距阴影；新增 `@supports (anchor-name)`
+    块——两个触发按钮登记 anchor-name，mode/model 弹层
+    `position-anchor` 锚定（`right: anchor(right)` 右缘对齐、
+    `bottom: calc(anchor(top) + 6px)`、transform-origin 右下；
+    `.dvx-controls-down` 翻转态对称处理）。引擎不支持时回退原有
+    控件行右对齐。
+  - `15-model-sessions.css`：模型弹层合成**一张 200px 卡**（popover
+    本体持卡面，panel 去 chrome，overflow 维持 visible 供推理飞出
+    层）、search 行 29px、列表 4px 内衬、行 26px/圆角 5px、选中行
+    去整行洗底改行尾细勾、模型名 12px/500 + 单行省略号截断、
+    pencil 静默 opacity 0 行 hover/focus-within 浮现、推理飞出层
+    right 236→208px 并换同语言卡面。
+  - `25-custom-models.css`：Add model 入口从独立浮卡改为卡内尾行
+    （hairline 顶边、29px、11.5px muted、hover ink）。
+- **样板间**：临时覆写块全部删除（真身即形态，回归可见）；演示
+  模型目录补长 ID 模型；顺手修复本轮自己引入的快照拒收回归——
+  演示模型 `composer-2.5-fast` 带空 `supportedReasoningEfforts`，
+  校验器要求 ≥1 项导致整个 host.snapshot 被拒、触发按钮永久禁用
+  （冒烟先红后查明，非产品缺陷）。
+- **验证**：新增 `artifacts/smoke-popover-rework.mjs`（无头 Chrome
+  驱动真实 dist 装置页）——两弹层宽 200±1、右缘与触发按钮对齐差
+  ≤1.5px（实测 0px）、上方间距 6px、圆角 8px、行 padding 5px 7px、
+  选中勾伪元素存在、未选中行无圈、长 ID `scrollWidth>clientWidth`
+  截断成立、pencil 静默 opacity 0、Add 行 hairline + 透明底、暗色
+  抽查同过——`pass: true`，截图
+  `artifacts/popover-mode-live.png` / `popover-model-live.png` /
+  `popover-mode-dark.png`。ComposerControls 聚焦 30 例绿。发版级
+  门禁见 v0.5.0 发版记录（当前安装包状态）。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
