@@ -2799,6 +2799,7 @@ describe('readHostMessage', () => {
       btw: {
         status: 'ready',
         message: null,
+        pendingQuestion: null,
         entries: [
           {
             id: 'btw-1',

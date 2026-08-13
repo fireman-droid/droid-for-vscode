@@ -44,9 +44,9 @@ export function SideChatSheet({
   const unavailable =
     btw.status === 'error' || btw.status === 'unsupported';
   // Typing stays available while an answer streams (user report
-  // 2026-08-13); only sending waits for the stream to settle.
+  // 2026-08-13); Enter now fills the Host-owned one-item pending slot.
   const inputDisabled = unavailable;
-  const sendDisabled = streaming || unavailable;
+  const sendDisabled = unavailable;
 
   // Keep the newest answer text in view while it streams in.
   useEffect(() => {
@@ -152,6 +152,12 @@ export function SideChatSheet({
             </span>
           </div>
         ) : null}
+        {btw.pendingQuestion !== null ? (
+          <div className="dvx-btw-pending" role="status">
+            <span className="dvx-btw-pending-label">Next</span>
+            <span>{btw.pendingQuestion}</span>
+          </div>
+        ) : null}
         {unavailable ? (
           <div className="dvx-btw-error" role="alert">
             {btw.message ?? 'Side chat is unavailable.'}
@@ -169,7 +175,11 @@ export function SideChatSheet({
           type="text"
           value={text}
           placeholder={
-            streaming ? 'Answering…' : 'Ask a side question…'
+            btw.pendingQuestion !== null
+              ? 'Replace queued question…'
+              : streaming
+                ? 'Queue next question…'
+                : 'Ask a side question…'
           }
           autoComplete="off"
           maxLength={MAX_BTW_TEXT_LENGTH}

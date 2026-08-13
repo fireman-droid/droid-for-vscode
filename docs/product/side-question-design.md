@@ -333,8 +333,10 @@ export const MAX_BTW_ANSWER_LENGTH = 32000;   // 有界投影，超长截断
 - **主 turn 运行中提问**：允许（这就是卖点）。fork 从磁盘 jsonl
   的 lastCompletedTurn 切分，主子进程不被打扰（历史加载器已证明
   并发读安全）。
-- **侧问 streaming 中再提问**：第一切片直接禁发（mini 输入行
-  disabled + "Answering…"），不建队列——CLI 也是逐条的。
+- **侧问 streaming 中再提问**：Host 保留一个 pending 问题，Enter
+  会写入或替换该槽；当前答案正常结束或报错后自动发送。Stop 清掉
+  当时的 pending，关卡/切会话随 fork 一并清空。Webview 只展示 Host
+  权威回声，不并发调用逐条执行的 sidecar。
 - **fork 内权限请求 / AskUser**：侧卡不渲染权限卡（那是主聊的
   交互面）。第一切片策略：sidecar 的 handler 对权限请求一律
   **拒绝并中断该条目**，条目落 error 态，文案引导"需要工具权限的

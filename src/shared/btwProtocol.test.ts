@@ -94,6 +94,16 @@ describe('parseSessionBtwMessage', () => {
     expect(parsed?.btw.status).toBe('ready');
     expect(parsed?.btw.entries).toHaveLength(1);
     expect(parsed?.btw.message).toBeNull();
+    expect(parsed?.btw.pendingQuestion).toBeNull();
+  });
+
+  it('accepts one bounded pending question', () => {
+    const message = validMessage();
+    (message.btw as Record<string, unknown>).pendingQuestion =
+      'What about the tests?';
+    expect(parseSessionBtwMessage(message)?.btw.pendingQuestion).toBe(
+      'What about the tests?',
+    );
   });
 
   it('accepts an unsupported snapshot with a message', () => {
@@ -218,6 +228,19 @@ describe('parseSessionBtwMessage', () => {
         (message.btw as Record<string, unknown>).message = 'm'.repeat(
           MAX_BTW_MESSAGE_LENGTH + 1,
         );
+      },
+    ],
+    [
+      'empty pending question',
+      (message: Record<string, unknown>) => {
+        (message.btw as Record<string, unknown>).pendingQuestion = '';
+      },
+    ],
+    [
+      'oversized pending question',
+      (message: Record<string, unknown>) => {
+        (message.btw as Record<string, unknown>).pendingQuestion =
+          'q'.repeat(MAX_BTW_TEXT_LENGTH + 1);
       },
     ],
     [

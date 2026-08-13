@@ -128,8 +128,8 @@ import type { ChangesUpdateMessage } from './changesProtocol';
 // Version 10: live changes ledger — `turn.changes` is replaced by
 // the streaming `changes.update` (H→W; changesProtocol.ts).
 // Version 11: subagent panel — openTranscript/stop/panel W→H,
-// transcript/activity H→W; version 12 adds bounded multi-file counts.
-export const BRIDGE_PROTOCOL_VERSION = 12 as const;
+// transcript/activity H→W; v12 adds file counts; v13 adds `/btw` pending state.
+export const BRIDGE_PROTOCOL_VERSION = 13 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_TEXT_LENGTH = 32_000;

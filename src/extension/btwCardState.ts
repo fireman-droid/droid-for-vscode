@@ -18,7 +18,15 @@ export function setBtwStatus(
   status: BtwStatus,
   message: string | null = null,
 ): SessionBtwState {
-  return { status, entries: state.entries, message };
+  return { ...state, status, message };
+}
+
+/** Replaces or clears the card's single pending follow-up. */
+export function setBtwPendingQuestion(
+  state: SessionBtwState,
+  pendingQuestion: string | null,
+): SessionBtwState {
+  return { ...state, pendingQuestion };
 }
 
 /** Appends one streaming question, evicting the oldest beyond cap. */

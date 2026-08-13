@@ -39,6 +39,7 @@ function cardState(question: string): SessionBtwState {
   return {
     status: 'ready',
     message: null,
+    pendingQuestion: null,
     entries: [
       {
         id: 'btw-1',

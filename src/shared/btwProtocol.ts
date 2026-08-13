@@ -48,6 +48,8 @@ export interface SessionBtwState {
   readonly status: BtwStatus;
   readonly entries: readonly BtwEntry[];
   readonly message: string | null;
+  /** At most one follow-up waiting for the streaming answer to settle. */
+  readonly pendingQuestion: string | null;
 }
 
 /** Webview → Host: ask one side question (opens the fork lazily). */
@@ -81,6 +83,7 @@ export const EMPTY_SESSION_BTW_STATE: SessionBtwState = {
   status: 'idle',
   entries: [],
   message: null,
+  pendingQuestion: null,
 };
 
 function isId(value: unknown): value is string {
@@ -208,7 +211,11 @@ export function parseSessionBtwMessage(
   const btw = value.btw;
   if (
     !isRecord(btw) ||
-    !hasExactKeys(btw, ['status', 'entries'], ['message']) ||
+    !hasExactKeys(
+      btw,
+      ['status', 'entries'],
+      ['message', 'pendingQuestion'],
+    ) ||
     !BTW_STATUSES.includes(btw.status as BtwStatus) ||
     !Array.isArray(btw.entries) ||
     btw.entries.length > MAX_BTW_ENTRIES
@@ -231,6 +238,16 @@ export function parseSessionBtwMessage(
     }
     entries.push(entry);
   }
+  if (
+    btw.pendingQuestion !== undefined &&
+    btw.pendingQuestion !== null &&
+    !isNonEmptyBoundedString(
+      btw.pendingQuestion,
+      MAX_BTW_TEXT_LENGTH,
+    )
+  ) {
+    return null;
+  }
   return {
     type: 'session.btw',
     sequence: value.sequence,
@@ -239,6 +256,7 @@ export function parseSessionBtwMessage(
       status: btw.status as BtwStatus,
       entries,
       message: btw.message ?? null,
+      pendingQuestion: btw.pendingQuestion ?? null,
     },
   };
 }

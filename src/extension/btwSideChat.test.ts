@@ -184,6 +184,85 @@ describe('BtwSideChat', () => {
     ]);
   });
 
+  it('keeps one pending follow-up and auto-sends the latest after settle', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const queuedSidecar: BtwSideChatSidecar = {
+      async *ask(text: string) {
+        sidecar.asked.push(text);
+        if (text === 'one') {
+          await gate;
+        }
+        yield { kind: 'done' } as const;
+      },
+      dispose: async () => undefined,
+    };
+    const card = new BtwSideChat(
+      async () => queuedSidecar,
+      (sessionId, btw) => {
+        emitted.push({ sessionId, btw });
+      },
+    );
+
+    const first = card.handleAsk('/repo', 'main-1', 'one');
+    await vi.waitFor(() => {
+      expect(sidecar.asked).toEqual(['one']);
+    });
+    await card.handleAsk('/repo', 'main-1', 'two');
+    await card.handleAsk('/repo', 'main-1', 'replacement');
+    expect(emitted.at(-1)?.btw.pendingQuestion).toBe('replacement');
+
+    release();
+    await first;
+
+    expect(sidecar.asked).toEqual(['one', 'replacement']);
+    expect(emitted.at(-1)?.btw.pendingQuestion).toBeNull();
+    expect(
+      emitted.at(-1)?.btw.entries.map((entry) => entry.question),
+    ).toEqual(['one', 'replacement']);
+  });
+
+  it('auto-sends a pending follow-up after an answer error', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const queuedSidecar: BtwSideChatSidecar = {
+      async *ask(text: string) {
+        sidecar.asked.push(text);
+        if (text === 'one') {
+          await gate;
+          yield { kind: 'error', message: 'failed' } as const;
+          return;
+        }
+        yield { kind: 'done' } as const;
+      },
+      dispose: async () => undefined,
+    };
+    const card = new BtwSideChat(
+      async () => queuedSidecar,
+      (sessionId, btw) => {
+        emitted.push({ sessionId, btw });
+      },
+    );
+
+    const first = card.handleAsk('/repo', 'main-1', 'one');
+    await vi.waitFor(() => {
+      expect(sidecar.asked).toEqual(['one']);
+    });
+    await card.handleAsk('/repo', 'main-1', 'two');
+    release();
+    await first;
+
+    expect(sidecar.asked).toEqual(['one', 'two']);
+    expect(emitted.at(-1)?.btw.entries.map((entry) => entry.state)).toEqual([
+      'error',
+      'done',
+    ]);
+  });
+
   it('marks the entry with guidance when the sidecar reports an error', async () => {
     sidecar.respondWith([
       { kind: 'error', message: 'Needs permissions.' },
@@ -278,6 +357,61 @@ describe('BtwSideChat', () => {
     ).toBe(true);
   });
 
+  it('clears the pending follow-up on dismiss', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const slowSidecar: BtwSideChatSidecar = {
+      async *ask(text: string) {
+        sidecar.asked.push(text);
+        await gate;
+        yield { kind: 'done' } as const;
+      },
+      dispose: async () => {
+        release();
+      },
+    };
+    const card = new BtwSideChat(
+      async () => slowSidecar,
+      (sessionId, btw) => {
+        emitted.push({ sessionId, btw });
+      },
+    );
+    const first = card.handleAsk('/repo', 'main-1', 'one');
+    await vi.waitFor(() => {
+      expect(sidecar.asked).toEqual(['one']);
+    });
+    await card.handleAsk('/repo', 'main-1', 'two');
+
+    card.handleDismiss('main-1');
+    await first;
+
+    expect(sidecar.asked).toEqual(['one']);
+  });
+
+  it('clears the pending follow-up when the current answer is stopped', async () => {
+    sidecar.respondWith(
+      [
+        { kind: 'delta', text: 'partial' },
+        { kind: 'error', message: 'cancelled' },
+      ],
+      [{ kind: 'done' }],
+    );
+    sidecar.holdAfterDeltas = true;
+    const card = createCard();
+    const first = card.handleAsk('/repo', 'main-1', 'one');
+    await vi.advanceTimersByTimeAsync(60);
+    await card.handleAsk('/repo', 'main-1', 'two');
+    expect(emitted.at(-1)?.btw.pendingQuestion).toBe('two');
+
+    card.handleStop('main-1');
+    await first;
+
+    expect(sidecar.asked).toEqual(['one']);
+    expect(emitted.at(-1)?.btw.pendingQuestion).toBeNull();
+  });
+
   it('rebinds onto a fresh fork when the main session changed', async () => {
     sidecar.respondWith([{ kind: 'done' }]);
     const card = createCard();
@@ -296,7 +430,7 @@ describe('BtwSideChat', () => {
     expect(emitted.at(-1)?.sessionId).toBe('main-2');
   });
 
-  it('drops overlapping asks while one is streaming', async () => {
+  it('does not start overlapping asks concurrently', async () => {
     let release: () => void = () => {};
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -326,6 +460,6 @@ describe('BtwSideChat', () => {
     release();
     await Promise.all([first, second]);
 
-    expect(asks).toBe(1);
+    expect(asks).toBe(2);
   });
 });

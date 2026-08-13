@@ -182,6 +182,27 @@
   margin-top: 6px;
 }
 
+.dvx-btw-pending {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--dvx-border, var(--dvx-border));
+  color: var(--dvx-muted, var(--dvx-muted));
+  font-size: 11.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.dvx-btw-pending-label {
+  color: var(--dvx-subtle, var(--dvx-subtle));
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .dvx-btw-error {
   color: var(--dvx-danger, var(--dvx-danger));
   font-size: 12px;

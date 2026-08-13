@@ -2769,14 +2769,16 @@ UI 描述见 §22 重做记录。
   抽出）：点选 mode/模型后触发器标签**立即乐观显示**，settled 帧
   对账（拒绝则弹回），4s 保险阀防静默丢弃钉死标签；无头量化
   21–32ms 零长任务，体感卡顿主因即标签等 daemon 确认的旧行为。
-- **/btw Stop + 流中打字**（协议 v11 追加 `btw.stop` W→H）：
+- **/btw Stop + 单条 pending 追问**（协议 v11 追加 `btw.stop`
+  W→H；v13 在 `session.btw` 增 `pendingQuestion`）：
   `BtwSidecar`（process，`client.interruptSession`）与
   `DaemonBtwFork`（`session.interrupt`）都长出 `interrupt()`；
   `BtwSideChat.handleStop` 用户主动停 → 部分答案按 done 收尾不标
-  失败；SideChatSheet 流中输入框保持可打字（仅发送等待），Send
+  失败；SideChatSheet 流中输入框保持可打字，Enter 把一个追问留在
+  Host 权威 pending 槽（再次 Enter 替换），当前答案完成/报错后自动
+  发送；Stop 清掉当时的 pending，Dismiss/切会话随 fork 清空。Send
   换成 ■ Stop（`.dvx-shell .dvx-btw-stop` 提级压过全局
-  `button{font:inherit}`）。视觉探针 `probe-btw-stop-visual.mjs`
-  两主题截图过。
+  `button{font:inherit}`）。
 - **Cursor 风格模型弹层**（§35 的迭代）：宽 200→264px；行内
   "模型名 + 灰色档位后缀"单行读法（仅选中行有档位——Droid 数据
   只有当前模型的 reasoningEffort，不为未选行发明）；尾部只留

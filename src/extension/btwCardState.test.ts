@@ -10,6 +10,7 @@ import {
   appendBtwQuestion,
   completeBtwEntry,
   failBtwEntry,
+  setBtwPendingQuestion,
   setBtwStatus,
 } from './btwCardState';
 
@@ -84,9 +85,21 @@ describe('btwCardState', () => {
 
   it('keeps entries while switching card status', () => {
     let state = appendBtwQuestion(EMPTY_SESSION_BTW_STATE, 'e1', 'q');
+    state = setBtwPendingQuestion(state, 'next');
     state = setBtwStatus(state, 'error', 'Side chat failed.');
     expect(state.status).toBe('error');
     expect(state.message).toBe('Side chat failed.');
     expect(state.entries).toHaveLength(1);
+    expect(state.pendingQuestion).toBe('next');
+  });
+
+  it('replaces and clears the one pending question', () => {
+    let state = setBtwPendingQuestion(
+      EMPTY_SESSION_BTW_STATE,
+      'first',
+    );
+    state = setBtwPendingQuestion(state, 'replacement');
+    expect(state.pendingQuestion).toBe('replacement');
+    expect(setBtwPendingQuestion(state, null).pendingQuestion).toBeNull();
   });
 });

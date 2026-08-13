@@ -18,6 +18,7 @@ const readyState: SessionBtwState = {
   status: 'ready',
   entries: [],
   message: null,
+  pendingQuestion: null,
 };
 
 describe('SideChatSheet', () => {
@@ -81,11 +82,11 @@ describe('SideChatSheet', () => {
     expect(onAsk).not.toHaveBeenCalled();
   });
 
-  it('keeps typing available and offers Stop while an answer streams', async () => {
+  it('queues one follow-up on Enter while offering Stop', async () => {
     const user = userEvent.setup();
     const onAsk = vi.fn();
     const onStop = vi.fn();
-    render(
+    const { rerender } = render(
       <SideChatSheet
         btw={{
           status: 'ready',
@@ -99,19 +100,51 @@ describe('SideChatSheet', () => {
             },
           ],
           message: null,
+          pendingQuestion: null,
         }}
         onAsk={onAsk}
         onStop={onStop}
         onDismiss={vi.fn()}
       />,
     );
-    // Typing stays available (user report 2026-08-13); only sending
-    // waits for the stream, so Enter is a no-op mid-stream.
+    // Typing and Enter stay available while the current answer runs.
     const input = screen.getByLabelText('Ask a side question');
     expect(input).toHaveProperty('disabled', false);
-    expect(input).toHaveProperty('placeholder', 'Answering…');
+    expect(input).toHaveProperty(
+      'placeholder',
+      'Queue next question…',
+    );
     await user.type(input, 'next question{Enter}');
-    expect(onAsk).not.toHaveBeenCalled();
+    expect(onAsk).toHaveBeenCalledWith('next question');
+    expect(input).toHaveProperty('value', '');
+
+    rerender(
+      <SideChatSheet
+        btw={{
+          status: 'ready',
+          entries: [
+            {
+              id: 'e1',
+              question: 'q',
+              answer: '',
+              state: 'streaming',
+              message: null,
+            },
+          ],
+          message: null,
+          pendingQuestion: 'next question',
+        }}
+        onAsk={onAsk}
+        onStop={onStop}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Next')).toBeTruthy();
+    expect(screen.getByText('next question')).toBeTruthy();
+    expect(input).toHaveProperty(
+      'placeholder',
+      'Replace queued question…',
+    );
     // Send is replaced by a working Stop that keeps the partial text.
     expect(
       screen.queryByRole('button', { name: 'Send side question' }),
@@ -143,6 +176,7 @@ describe('SideChatSheet', () => {
             },
           ],
           message: null,
+          pendingQuestion: null,
         }}
         onAsk={vi.fn()}
         onDismiss={vi.fn()}
@@ -165,6 +199,7 @@ describe('SideChatSheet', () => {
           status: 'unsupported',
           entries: [],
           message: 'Side chat needs the process runtime mode.',
+          pendingQuestion: null,
         }}
         onAsk={vi.fn()}
         onDismiss={vi.fn()}

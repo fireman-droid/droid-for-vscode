@@ -8,6 +8,7 @@ import {
   appendBtwQuestion,
   completeBtwEntry,
   failBtwEntry,
+  setBtwPendingQuestion,
   setBtwStatus,
 } from './btwCardState';
 
@@ -68,8 +69,9 @@ export class BtwSideChat {
   ) {}
 
   /**
-   * Streams one side question. Serialized by the card UI (its input
-   * disables while streaming); overlapping asks are dropped.
+   * Streams one side question. While it runs, the latest overlapping
+   * ask occupies the card's one-item pending slot and is dispatched
+   * automatically after the current answer settles.
    */
   async handleAsk(
     cwd: string,
@@ -77,6 +79,12 @@ export class BtwSideChat {
     text: string,
   ): Promise<void> {
     if (this.asking) {
+      if (this.boundSessionId === mainSessionId) {
+        this.setState(
+          setBtwPendingQuestion(this.state, text),
+          true,
+        );
+      }
       return;
     }
     if (this.boundSessionId !== mainSessionId) {
@@ -96,7 +104,11 @@ export class BtwSideChat {
         } catch {
           if (this.generation === generation) {
             this.setState(
-              setBtwStatus(this.state, 'error', BTW_START_FAILED_MESSAGE),
+              setBtwStatus(
+                setBtwPendingQuestion(this.state, null),
+                'error',
+                BTW_START_FAILED_MESSAGE,
+              ),
               true,
             );
           }
@@ -109,36 +121,71 @@ export class BtwSideChat {
         this.sidecar = sidecar;
         this.setState(setBtwStatus(this.state, 'ready'), true);
       }
-      const entryId = `btw-${(this.entryCounter += 1)}`;
-      this.setState(appendBtwQuestion(this.state, entryId, text), true);
-      try {
-        for await (const event of this.sidecar.ask(text)) {
-          if (this.generation !== generation) {
-            return;
+      let question = text;
+      while (this.generation === generation) {
+        const entryId = `btw-${(this.entryCounter += 1)}`;
+        this.setState(
+          appendBtwQuestion(this.state, entryId, question),
+          true,
+        );
+        let settled = false;
+        try {
+          for await (const event of this.sidecar.ask(question)) {
+            if (this.generation !== generation) {
+              return;
+            }
+            if (event.kind === 'delta') {
+              this.setState(
+                appendBtwAnswerDelta(this.state, entryId, event.text),
+                false,
+              );
+              continue;
+            }
+            if (event.kind === 'done' || this.stopping) {
+              // A user-initiated Stop keeps the partial answer as a
+              // settled entry instead of styling it as a failure.
+              this.setState(
+                completeBtwEntry(this.state, entryId),
+                true,
+              );
+            } else {
+              this.setState(
+                failBtwEntry(this.state, entryId, event.message),
+                true,
+              );
+            }
+            settled = true;
+            break;
           }
-          if (event.kind === 'delta') {
-            this.setState(
-              appendBtwAnswerDelta(this.state, entryId, event.text),
-              false,
-            );
-          } else if (event.kind === 'done' || this.stopping) {
-            // A user-initiated Stop keeps the partial answer as a
-            // settled entry instead of styling it as a failure.
+          if (!settled && this.generation === generation) {
             this.setState(completeBtwEntry(this.state, entryId), true);
-          } else {
+          }
+        } catch {
+          if (this.generation === generation) {
             this.setState(
-              failBtwEntry(this.state, entryId, event.message),
+              this.stopping
+                ? completeBtwEntry(this.state, entryId)
+                : failBtwEntry(
+                    this.state,
+                    entryId,
+                    BTW_ANSWER_FAILED_MESSAGE,
+                  ),
               true,
             );
           }
         }
-      } catch {
-        if (this.generation === generation) {
-          this.setState(
-            failBtwEntry(this.state, entryId, BTW_ANSWER_FAILED_MESSAGE),
-            true,
-          );
+        if (this.generation !== generation) {
+          return;
         }
+        this.stopping = false;
+        const pendingQuestion = this.state.pendingQuestion;
+        if (pendingQuestion === null) {
+          return;
+        }
+        // Clear without an intermediate emit: appending the next
+        // streaming entry publishes the consumed slot atomically.
+        this.state = setBtwPendingQuestion(this.state, null);
+        question = pendingQuestion;
       }
     } finally {
       if (this.generation === generation) {
@@ -164,6 +211,12 @@ export class BtwSideChat {
       return;
     }
     this.stopping = true;
+    if (this.state.pendingQuestion !== null) {
+      this.setState(
+        setBtwPendingQuestion(this.state, null),
+        true,
+      );
+    }
     void sidecar.interrupt().catch(() => undefined);
   }
 
