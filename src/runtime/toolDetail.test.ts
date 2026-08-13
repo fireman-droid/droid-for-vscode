@@ -18,6 +18,71 @@ describe('extractToolDetail', () => {
     ).toEqual({ kind: 'plan', text: '1. [in_progress] Do the thing' });
   });
 
+  it('normalizes JSON-array todos to canonical plan lines', () => {
+    // Models routinely write the CLI's JSON form; the raw string used
+    // to reach the webview and break the plan card.
+    expect(
+      extractToolDetail('TodoWrite', {
+        todos: JSON.stringify([
+          { id: '1', content: 'Draft outline', status: 'completed' },
+          { id: '2', content: 'Write chapter', status: 'in_progress' },
+          { id: '3', content: 'Review', status: 'pending' },
+        ]),
+      }),
+    ).toEqual({
+      kind: 'plan',
+      text:
+        '1. [completed] Draft outline\n' +
+        '2. [in_progress] Write chapter\n' +
+        '3. [pending] Review',
+    });
+  });
+
+  it('normalizes an actual todos array (schema union branch)', () => {
+    expect(
+      extractToolDetail('TodoWrite', {
+        todos: [
+          { content: 'Step one', status: 'pending' },
+          { content: 'Skip: bad status', status: 'nope' },
+        ],
+      }),
+    ).toEqual({ kind: 'plan', text: '1. [pending] Step one' });
+  });
+
+  it('normalizes checkbox and bullet todo lines like the CLI', () => {
+    expect(
+      extractToolDetail('TodoWrite', {
+        todos: '- [x] Done step\n* [ ] Open step\n2) Bare step',
+      }),
+    ).toEqual({
+      kind: 'plan',
+      text:
+        '1. [completed] Done step\n' +
+        '2. [pending] Open step\n' +
+        '3. [pending] Bare step',
+    });
+  });
+
+  it('flattens multi-line step content into one plan line', () => {
+    expect(
+      extractToolDetail('TodoWrite', {
+        todos: JSON.stringify([
+          { content: 'First line\nsecond line', status: 'pending' },
+        ]),
+      }),
+    ).toEqual({ kind: 'plan', text: '1. [pending] First line second line' });
+  });
+
+  it('rejects todos with no parsable steps', () => {
+    expect(
+      extractToolDetail('TodoWrite', { todos: '   ' }),
+    ).toBeUndefined();
+    expect(extractToolDetail('TodoWrite', { todos: 42 })).toBeUndefined();
+    expect(
+      extractToolDetail('TodoWrite', { todos: '[not json' }),
+    ).toEqual({ kind: 'plan', text: '1. [pending] [not json' });
+  });
+
   it('normalizes the tool name before matching', () => {
     expect(
       extractToolDetail('  execute\u0007 ', { command: 'ls -la' }),
