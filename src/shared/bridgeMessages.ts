@@ -111,6 +111,9 @@ import type {
   GitStatusFile,
   GitUnavailableReason,
 } from './gitCommitFlow';
+// Type-only on purpose: the runtime dependency points the other way
+// (customModelsProtocol imports shared model bounds from here).
+import type { CustomModelDeleteMessage, CustomModelSaveMessage, CustomModelsRefreshMessage, CustomModelsStateMessage } from './customModelsProtocol';
 
 // Version 3: git commit flow messages (git.requestStatus/git.commit
 // W→H, git.status/git.commitResult H→W).
@@ -121,7 +124,9 @@ import type {
 // Version 6: queued-messages contract (queue.add/update/remove/
 // resume/clear W→H, queue.state H→W, snapshot `queue` field).
 // Version 8: theme preference pair (ui.theme.set W→H, ui.theme H→W).
-export const BRIDGE_PROTOCOL_VERSION = 8 as const;
+// Version 9: BYOK custom-models management (customModels.refresh/
+// save/delete W→H, customModels.state H→W; customModelsProtocol.ts).
+export const BRIDGE_PROTOCOL_VERSION = 9 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_TEXT_LENGTH = 32_000;
@@ -1063,6 +1068,9 @@ export type WebviewToHostMessage =
   | RewindInfoRequestMessage
   | SessionSettingUpdateMessage
   | UiThemeSetMessage
+  | CustomModelsRefreshMessage
+  | CustomModelSaveMessage
+  | CustomModelDeleteMessage
   | BtwAskMessage
   | BtwDismissMessage
   | QueueAddMessage
@@ -2187,4 +2195,5 @@ export type HostToWebviewMessage =
   | InteractionClosedMessage
   | SessionBtwMessage
   | QueueStateMessage
-  | UiThemeMessage;
+  | UiThemeMessage
+  | CustomModelsStateMessage;

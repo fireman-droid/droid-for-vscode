@@ -101,6 +101,7 @@ import {
   parseBtwAskMessage,
   parseBtwDismissMessage,
 } from './btwProtocol';
+import { parseCustomModelDeleteMessage, parseCustomModelSaveMessage, parseCustomModelsRefreshMessage } from './customModelsProtocol';
 import {
   parseQueueAddMessage,
   parseQueueClearMessage,
@@ -207,6 +208,12 @@ export function parseWebviewMessage(
         return parseMcpServerRemove(value);
       case 'mcp.server.authenticate':
         return parseMcpServerAuthenticate(value);
+      case 'customModels.refresh':
+        return parseCustomModelsRefreshMessage(value) ?? undefined;
+      case 'customModels.save':
+        return parseCustomModelSaveMessage(value) ?? undefined;
+      case 'customModels.delete':
+        return parseCustomModelDeleteMessage(value) ?? undefined;
       case 'attachment.pick':
         return parseAttachmentPick(value);
       case 'attachment.addEditor':
