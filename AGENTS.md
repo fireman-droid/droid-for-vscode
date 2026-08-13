@@ -48,38 +48,18 @@ not invent unsupported Droid capabilities.
    criterion.
 3. Implement the smallest required Runtime, Host, Bridge, and Webview changes
    in dependency order.
-4. Run focused validation while implementing.
-5. Review the integrated result and fix correctness, accessibility,
-   responsiveness, and visual issues.
-6. Run broad tests, type checks, and builds once at the end when justified.
-   Validation budget (user decision, 2026-08-13 evening): during
-   iteration run ONLY the focused unit tests for files actually
-   touched, plus typecheck and lint:budgets. Do not re-run the full
-   vitest suite, kitchen-parity or other broad smokes per batch —
-   they repeatedly stalled delivery. Broad suites run once per
-   release at most, and headless smokes only when the user asks or
-   when a slice's core claim cannot be proven any cheaper way.
-7. Package and perform visible browser and Cursor verification when the slice
-   affects the extension UI.
-8. Mandatory behavioral smoke (user decision, 2026-08-13, replacing the
-   earlier screenshot self-acceptance rule): before reporting a slice as done,
-   the implementing agent must prove the behavior against the real thing — run
-   the built webview or a disposable scratch chat session with the real
-   runtime, drive the actual interaction being shipped, and assert the
-   observable outcome (event arrived, row rendered, click routed, state
-   settled). Walk the adjacent states too: empty, running, error, hover,
-   collapsed/expanded, session switch, reload. Failures found here are part of
-   the slice.
-
-   Do NOT spend the slice grading your own screenshots for taste: an agent
-   judging its own visual against its own reading of the spec has repeatedly
-   passed designs the user then rejected. Aesthetic sign-off belongs to the
-   user, via the shared replay harness
-   (`artifacts/kitchen-sink-harness.html`). When a slice changes visual
-   language, update that harness so the new form is reviewable there, and
-   report what changed instead of self-approving it. Attach screenshots only
-   as evidence for a specific claim, not as a substitute for assertions.
-9. Update `docs/product/implementation-status.md` in the same change.
+4. Validate (user order, 2026-08-13 evening — this REPLACES every earlier
+   smoke/verification rule, including the "mandatory behavioral smoke"):
+   run ONLY `tsc --noEmit`, `lint:budgets`, and the unit tests of files
+   actually touched. Nothing else. NO full vitest suite, NO headless-Chrome
+   smokes, NO screenshot probes, NO harness runs — unless the user asks for
+   one by name in the current conversation, or a shipped bug cannot be
+   reproduced any cheaper way. Time goes to shipping, not to self-acceptance.
+5. Ship: build, `vsce package`, `cursor --install-extension`, tell the user
+   to Reload Window. The user is the acceptance gate — they look at the real
+   UI and send screenshots; fix what they report, by their screenshots.
+6. Update `docs/product/implementation-status.md` in the same change
+   (keep the entry short).
 
 Capability research and probes must support an active product slice. Do not
 expand them into standalone projects without explicit user approval.
@@ -112,8 +92,11 @@ expand them into standalone projects without explicit user approval.
   fallbacks, or impossible-state handling through internal code.
 - Do not invent APIs, commands, or project structure; verify them locally.
 - Treat generated files, lockfiles, migrations, and public contracts carefully.
-- Run focused checks first and broader checks in proportion to risk.
 - Report commands actually run, failures, skipped checks, and remaining risks.
-- Do not declare success based only on code edits; verify observable behavior.
-- A capability is complete only when its Runtime, Host, Bridge, UI, tests,
-  package, and visible verification are complete for the agreed scope.
+- A capability is complete when its Runtime, Host, Bridge, UI, and touched-file
+  tests are done and the build is installed; acceptance of behavior and
+  visuals belongs to the user in the real UI (user order, 2026-08-13 evening).
+- Full vitest runs at most once per release, and only when the release
+  touched shared contracts (Bridge, store, validators). The `artifacts/`
+  smoke scripts are frozen: do not run or maintain them unless the user
+  asks; stale assertions there are acceptable rot, not work.
