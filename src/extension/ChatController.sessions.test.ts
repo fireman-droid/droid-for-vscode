@@ -166,6 +166,72 @@ describe('ChatController', () => {
     release.resolve();
   });
 
+  it('preserves a running daemon turn on dispose (reload keeps the turn alive)', async () => {
+    const release = deferred<void>();
+    const runtime = Object.assign(
+      createMockRuntime(async function* () {
+        yield { type: 'text-delta', text: 'working' };
+        await release.promise;
+        yield successfulTurn();
+      }),
+      { supportsBackgroundTurns: () => true },
+    );
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+    send(controller, 'session-1', 'turn-1', 'Long background work');
+    await vi.waitFor(() => {
+      expect(
+        messages.some((message) => message.type === 'assistant.delta'),
+      ).toBe(true);
+    });
+
+    // Reload/deactivate goes through dispose: the daemon-side turn
+    // must be detached, never interrupted.
+    await controller.dispose();
+    expect(runtime.dispose).toHaveBeenCalledWith({
+      preserveBackendTurn: true,
+    });
+    release.resolve();
+  });
+
+  it('still interrupts a running process-mode turn on dispose', async () => {
+    const release = deferred<void>();
+    // No supportsBackgroundTurns: a process session dies with the
+    // extension host, so dispose keeps the interrupt semantics.
+    const runtime = createMockRuntime(async function* () {
+      yield { type: 'text-delta', text: 'working' };
+      await release.promise;
+      yield successfulTurn();
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+    send(controller, 'session-1', 'turn-1', 'Long process work');
+    await vi.waitFor(() => {
+      expect(
+        messages.some((message) => message.type === 'assistant.delta'),
+      ).toBe(true);
+    });
+
+    await controller.dispose();
+    expect(runtime.dispose).toHaveBeenCalledWith(undefined);
+    release.resolve();
+  });
+
+  it('does not preserve an idle daemon session on dispose', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      supportsBackgroundTurns: () => true,
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    // No live turn: nothing to detach, plain close.
+    await controller.dispose();
+    expect(runtime.dispose).toHaveBeenCalledWith(undefined);
+  });
+
   it('seeds running flags from the daemon opened-session registry on catalog loads', async () => {
     const runtime = Object.assign(createMockRuntime(), {
       supportsBackgroundTurns: () => true,

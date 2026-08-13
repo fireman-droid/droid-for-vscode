@@ -127,7 +127,7 @@ import { stampRunningFlags, setSessionRunning, ensureBackgroundRunningPoll, seed
 import { settleTurnSubagents, clearZombieSubagentWatch, armReplayedSubagentWatch } from './chat/subagentWatch';
 import { emitEarlyRecoverySnapshot, reconcileDaemonTurn, scheduleRecoveryCheckpoint, checkpointRecoveryTranscript, flushRecoveryCheckpoint, recoveryTurnId } from './chat/recovery';
 import { handleSessionNew, handleWorktreeCreateSession, handleSessionRename, handleSessionFavorite, handleSessionArchive, handleSessionUnarchive, handleArchivedRefresh, handleSessionSearch, handleSessionSelect, handleRefresh, handleSessionFork, loadCatalog, hasCatalogSession, activeSessionSummary, withActiveSession, beginCatalogLoad, bindCatalogViewToWorkspace, clearCatalog, isCurrentCatalogRequest, discardCatalogRequest, touchActiveSession, SESSION_NEW_FAILED_MESSAGE } from './chat/sessionDirectory';
-import { handleReady, startReplacement, replaceRuntime, loadHistoryTimed, resetSessionMetadata, closeRuntime, queueWorkspaceTransition, isCurrentRuntime, ensureActiveRuntimeWorkspaceCurrent, isTargetWorkspaceCurrent, emitWorkspaceUnavailable, isSameWorkspaceContext, WORKSPACE_CHANGED_MESSAGE } from './chat/runtimeLifecycle';
+import { handleReady, startReplacement, replaceRuntime, loadHistoryTimed, resetSessionMetadata, closeAllRuntimesForDispose, queueWorkspaceTransition, isCurrentRuntime, ensureActiveRuntimeWorkspaceCurrent, isTargetWorkspaceCurrent, emitWorkspaceUnavailable, isSameWorkspaceContext, WORKSPACE_CHANGED_MESSAGE } from './chat/runtimeLifecycle';
 import { handleSend, handleStop, handleRetry, handleSessionCompact, projectTranscript } from './chat/turnFlow';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
 import {
@@ -223,7 +223,6 @@ import {
   isSafeBridgeId,
   SESSION_OPERATION_BLOCKED_MESSAGE,
   isTranscriptProjection,
-  isTurnActive,
   isUsableWorkspace,
   type CurrentTurn,
   type DisposableSubscription,
@@ -901,15 +900,9 @@ export class ChatController {
     this.contextGeneration += 1;
     this.settingsUpdate = null;
     this.listeners.clear();
-    const runtimes = [...this.managedRuntimes];
-    this.runtime = null;
-    this.disposal = (async () => {
-      await Promise.allSettled([
-        ...runtimes.map((runtime) => closeRuntime(this, runtime)),
-        this.recoveryStore.flush(),
-      ]);
-      await this.recoveryStore.dispose();
-    })();
+    // Detaches a running daemon-side turn instead of interrupting it
+    // (Reload survival); see closeAllRuntimesForDispose.
+    this.disposal = closeAllRuntimesForDispose(this);
     return this.disposal;
   }
 
