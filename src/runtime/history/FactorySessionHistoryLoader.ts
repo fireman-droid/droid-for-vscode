@@ -5,7 +5,11 @@ import {
 
 import type { ToolSubagentSummary } from '../../shared/bridgeMessages';
 import type { RuntimeDiagnosticSink } from '../runtimeDiagnostics';
-import { readSubagentInvocations } from '../subagentSummary';
+import {
+  readSubagentInvocationRecords,
+  readSubagentInvocations,
+  type SubagentInvocationRecord,
+} from '../subagentSummary';
 import {
   type SessionHistoryLoader,
   type SessionHistoryResult,
@@ -64,6 +68,20 @@ export class FactorySessionHistoryLoader
       return null;
     }
     return readSubagentInvocations(loaded);
+  }
+
+  async loadSubagentInvocations({
+    cwd,
+    sessionId,
+  }: {
+    readonly cwd: string;
+    readonly sessionId: string;
+  }): Promise<readonly SubagentInvocationRecord[] | null> {
+    const loaded = await this.loadSessionEnvelope(cwd, sessionId);
+    if (loaded === LOAD_FAILED) {
+      return null;
+    }
+    return readSubagentInvocationRecords(loaded);
   }
 
   private async loadSessionEnvelope(

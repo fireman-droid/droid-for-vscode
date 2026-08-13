@@ -1,72 +1,25 @@
-import {
-  AssistantRuntimeProvider,
-  useAui,
-} from '@assistant-ui/react';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from 'react';
+import { AssistantRuntimeProvider, useAui } from '@assistant-ui/react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
-import {
-  MAX_INLINE_PREVIEW_HTML_LENGTH,
-  MAX_TURN_TEXT_LENGTH,
-  type AskUserAnswer,
-  type ImageMediaType,
-  type ThemePreference,
-  type WebviewToHostMessage,
-} from '../../shared/bridgeMessages';
-import {
-  announceBooted,
-  announceHandshakeTimeout,
-  announceReady,
-  announceRendered,
-  getVsCodeApi,
-  persistDraft,
-  postPerfBeacon,
-  readHostMessage,
-  restoreDraft,
-} from '../bridge/vscode';
+import { MAX_INLINE_PREVIEW_HTML_LENGTH, MAX_TURN_TEXT_LENGTH, type AskUserAnswer, type ImageMediaType, type ThemePreference, type WebviewToHostMessage } from '../../shared/bridgeMessages';
+import { announceBooted, announceHandshakeTimeout, announceReady, announceRendered, getVsCodeApi, persistDraft, postPerfBeacon, readHostMessage, restoreDraft } from '../bridge/vscode';
 import { InteractionPanel } from './Interactions';
 import { LocalImageContext, OpenPathContext } from './MarkdownText';
 import type { PathLink } from './pathLink';
-import type {
-  ComposerNavRequest,
-  McpServerAddParams,
-  SessionSettingSelection,
-} from './ComposerControls';
-import {
-  resolveBuiltinSlash,
-  type SlashNavTarget,
-} from './slashBuiltins';
-import {
-  canSendMessage,
-  DEFAULT_MESSAGE_WINDOW,
-  MESSAGE_WINDOW_STEP,
-  shouldQueueMessage,
-  useDroidExternalStoreRuntime,
-} from './runtimeAdapter';
+import type { ComposerNavRequest, McpServerAddParams, SessionSettingSelection } from './ComposerControls';
+import { resolveBuiltinSlash, type SlashNavTarget } from './slashBuiltins';
+import { canSendMessage, DEFAULT_MESSAGE_WINDOW, MESSAGE_WINDOW_STEP, shouldQueueMessage, useDroidExternalStoreRuntime } from './runtimeAdapter';
 import { SessionDrawer } from './SessionDrawer';
-import {
-  assistantWebviewReducer,
-  initialAssistantWebviewState,
-  isTurnActive,
-  type PendingInteraction,
-  type StoreHostMessage,
-} from './store';
+import { assistantWebviewReducer, initialAssistantWebviewState, isTurnActive, type PendingInteraction, type StoreHostMessage } from './store';
 import { DroidThread } from './Thread';
-import {
-  GitCommitFlowContext,
-  type GitCommitFlowContextValue,
-} from './GitCommitPanel';
+import { GitCommitFlowContext, type GitCommitFlowContextValue } from './GitCommitPanel';
 import { CustomModelsContext, useCustomModelsFlow } from './CustomModelsPanel';
 import { findLatestChangesContext } from './gitCommitDraft';
 import { selectPlanAnchors } from './planAnchor';
 import { QueuedMessages } from './QueuedMessages';
 import { SideChatSheet } from './SideChatSheet';
+import { SubagentActionsContext, SubagentPanelContext, useSubagentPanelFlow } from './subagentPanelFlow';
+import { SubagentTranscriptSheet } from './SubagentTranscriptSheet';
 import { selectWorkingSubagents } from './subagentWorking';
 import { ThemeContext, useThemeController } from './theme';
 import { WorkingBadge } from './WorkingBadge';
@@ -293,6 +246,10 @@ export function App(): React.JSX.Element {
   // hook (window-listener pull, not store/snapshot state) and reach
   // the panel via context — same no-prop-drilling pattern as gitFlow.
   const customModelsFlow = useCustomModelsFlow(vscode, sessionId);
+  // Subagent panel flow (待办 B): live per-row activity + working
+  // per-row Stop for the popup, and the read-only child transcript
+  // sheet. Same window-listener pull pattern as customModelsFlow.
+  const subagentFlow = useSubagentPanelFlow(vscode, sessionId);
   // `/btw` side chat (S1): the card's open flag is webview-local; the
   // host owns the hidden fork and its projected contents (state.btw).
   // Closing the card or switching sessions discards the fork.
@@ -1302,6 +1259,9 @@ export function App(): React.JSX.Element {
   // shell gains a second grid column so both conversations stay live
   // side by side (Claude Code form factor, user decision 2026-08-12).
   const btwSplit = btwOpen && btwAvailable && sessionId !== null;
+  // The read-only subagent transcript sheet rides the same split
+  // column; the /btw pane keeps priority when both want it.
+  const subagentSplit = subagentFlow.sheet !== null && !btwSplit;
 
   // Rendered once here so transcript markdown (deep inside
   // assistant-ui's message tree) can open clicked file paths without
@@ -1319,7 +1279,7 @@ export function App(): React.JSX.Element {
             ? ' dvx-anim-live'
             : ''
         }${showHandshakeNotice ? ' dvx-shell-stalled' : ''}${
-          btwSplit ? ' dvx-shell-split' : ''
+          btwSplit || subagentSplit ? ' dvx-shell-split' : ''
         }`}
         data-theme={resolvedTheme}
       >
@@ -1494,6 +1454,14 @@ export function App(): React.JSX.Element {
             onDismiss={handleBtwDismiss}
           />
         ) : null}
+        {/* Read-only subagent transcript sheet: same split column as
+            /btw; the side question pane keeps priority when open. */}
+        {subagentFlow.sheet !== null && !btwSplit ? (
+          <SubagentTranscriptSheet
+            sheet={subagentFlow.sheet}
+            onDismiss={subagentFlow.actions.onCloseSheet}
+          />
+        ) : null}
       </div>
     </AssistantRuntimeProvider>
   );
@@ -1503,7 +1471,13 @@ export function App(): React.JSX.Element {
         <LocalImageContext.Provider value={localImageSource}>
           <GitCommitFlowContext.Provider value={gitFlow}>
             <CustomModelsContext.Provider value={customModelsFlow}>
-              {app}
+              <SubagentPanelContext.Provider value={subagentFlow}>
+                <SubagentActionsContext.Provider
+                  value={subagentFlow.actions}
+                >
+                  {app}
+                </SubagentActionsContext.Provider>
+              </SubagentPanelContext.Provider>
             </CustomModelsContext.Provider>
           </GitCommitFlowContext.Provider>
         </LocalImageContext.Provider>

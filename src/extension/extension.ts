@@ -6,6 +6,7 @@ import {
 } from '../runtime/FactoryDroidRuntime';
 import { createBtwSidecar } from '../runtime/btw/BtwSidecar';
 import { createDaemonBtwSidecar } from '../runtime/btw/DaemonBtwSidecar';
+import { createDaemonSubagentControl } from '../runtime/subagentControl';
 import { FactorySessionCatalog } from '../runtime/FactorySessionCatalog';
 import { FactorySessionHistoryLoader } from '../runtime/history/FactorySessionHistoryLoader';
 import {
@@ -488,6 +489,13 @@ export function activate(context: vscode.ExtensionContext): void {
   // structurally (byok-add-model-design.md §2.3, probed 2026-08-13).
   controller.daemonCustomModels = async () =>
     (await daemonSidecar.droid()).customModels;
+  // Per-row subagent control (待办 B): live activity sampling and the
+  // probed single-stop sequence ride the shared daemon connection;
+  // in process mode the provider yields null and the UI renders no
+  // stop control (no disabled placeholders).
+  const subagentGateway = createDaemonSubagentControl(daemonSidecar.droid);
+  controller.subagentControl = () =>
+    daemonSessionsActive() ? subagentGateway : null;
   const provider = new DroidViewProvider(
     context.extensionUri,
     controller,

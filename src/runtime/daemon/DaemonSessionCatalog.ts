@@ -87,7 +87,10 @@ export class DaemonSessionCatalog {
       if (
         modifiedTime === null ||
         !isSafeSessionIdentifier(row.id) ||
-        !belongsToWorkspace(cwd, row.cwd, row.repoRoot)
+        !belongsToWorkspace(cwd, row.cwd, row.repoRoot) ||
+        // Subagent child sessions stay out of the drawer (playback
+        // design §5); daemon rows name their parent directly.
+        row.parentSessionId !== undefined
       ) {
         continue;
       }

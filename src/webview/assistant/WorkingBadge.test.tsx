@@ -2,6 +2,10 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  SubagentPanelContext,
+  type SubagentPanelFlowValue,
+} from './subagentPanelFlow';
 import type { WorkingSubagent } from './subagentWorking';
 import { WorkingBadge } from './WorkingBadge';
 
@@ -111,6 +115,42 @@ describe('WorkingBadge', () => {
     fireEvent.click(stop!);
     expect(onStopAll).toHaveBeenCalledTimes(1);
     expect(container.querySelector('.dvx-working-popup')).toBeNull();
+  });
+
+  it('shows live activity and a working per-row Stop from the panel flow', () => {
+    const onStop = vi.fn();
+    const onPanelToggle = vi.fn();
+    const flow: SubagentPanelFlowValue = {
+      activities: new Map([
+        ['task-1', { action: 'Grep', stoppable: true }],
+        ['task-2', { action: null, stoppable: false }],
+      ]),
+      sheet: null,
+      actions: {
+        onOpenTranscript: vi.fn(),
+        onCloseSheet: vi.fn(),
+        onStop,
+        onPanelToggle,
+      },
+    };
+    const { container } = render(
+      <SubagentPanelContext.Provider value={flow}>
+        <WorkingBadge rows={makeRows(2)} turnActive onStopAll={() => {}} />
+      </SubagentPanelContext.Provider>,
+    );
+    fireEvent.click(container.querySelector('.dvx-working-badge')!);
+    // The open/close signal gates host-side polling.
+    expect(onPanelToggle).toHaveBeenLastCalledWith(true);
+    const rows = [...container.querySelectorAll('.dvx-working-row')];
+    // Row 1: live action subtitle + a real Stop.
+    expect(
+      rows[0]?.querySelector('.dvx-working-row-activity')?.textContent,
+    ).toBe('Grep');
+    fireEvent.click(rows[0]!.querySelector('.dvx-working-row-stop')!);
+    expect(onStop).toHaveBeenCalledWith('turn-1', 'task-1');
+    // Row 2: host says unstoppable — no control at all, no subtitle.
+    expect(rows[1]?.querySelector('.dvx-working-row-stop')).toBeNull();
+    expect(rows[1]?.querySelector('.dvx-working-row-activity')).toBeNull();
   });
 
   it('renders no stop control at all outside an active turn', () => {

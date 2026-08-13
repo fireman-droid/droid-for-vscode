@@ -91,6 +91,7 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
                 <ToolActivityRow
                   activity={readToolActivity(part)}
                   toolName={part.toolName}
+                  toolUseId={part.toolCallId}
                 />
               );
             case "data":

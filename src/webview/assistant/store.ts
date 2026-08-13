@@ -25,24 +25,11 @@ import {
   type GitStatusFile,
   type GitUnavailableReason,
 } from '../../shared/bridgeMessages';
-import {
-  EMPTY_SESSION_QUEUE_STATE,
-  MAX_QUEUED_MESSAGES,
-  type SessionQueueState,
-} from '../../shared/queueProtocol';
-import {
-  enforceTranscriptImageBudget,
-  trimTranscriptToLimits,
-} from '../../shared/transcriptLimits';
+import { EMPTY_SESSION_QUEUE_STATE, MAX_QUEUED_MESSAGES, type SessionQueueState } from '../../shared/queueProtocol';
+import { enforceTranscriptImageBudget, trimTranscriptToLimits } from '../../shared/transcriptLimits';
 import { stableTranscriptId } from '../../shared/hostTranscriptState';
-import {
-  EMPTY_SESSION_BTW_STATE,
-  type SessionBtwState,
-} from '../../shared/btwProtocol';
-import {
-  EMPTY_SESSION_TOKEN_USAGE,
-  type SessionTokenUsageState,
-} from '../../shared/tokenUsage';
+import { EMPTY_SESSION_BTW_STATE, type SessionBtwState } from '../../shared/btwProtocol';
+import { EMPTY_SESSION_TOKEN_USAGE, type SessionTokenUsageState } from '../../shared/tokenUsage';
 
 export interface AssistantTurn {
   readonly turnId: string;
@@ -958,6 +945,12 @@ export function assistantWebviewReducer(
         },
         upsertTool(state.transcript, event),
       );
+    case 'subagent.transcript':
+    case 'subagent.activity':
+      // Panel-scoped like customModels.state: the subagent panel flow
+      // hook consumes these off its own window listener; the store
+      // only advances the sequence.
+      return advance(state, event.sequence);
     case 'subagent.update':
       // Out-of-band settlement of a background delegation: lands
       // after its turn reached a terminal state, so it deliberately

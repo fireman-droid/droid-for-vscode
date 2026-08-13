@@ -2692,6 +2692,65 @@ UI 描述见 §22 重做记录。
   SessionDrawer 新增乱序排序单测（13 例绿）；Thread/PlanLine 等聚焦
   87 例绿。发版级门禁见 v0.6.0 发版记录（当前安装包状态）。
 
+### 37. 子代理面板第一批：实时活动 + 单停 + 只读转录回放 + 抽屉过滤（2026-08-13 傍晚，待办 B 切片 1）
+
+- **来源**：待办 B（用户最优先的大件；证据
+  `mission-control-feasibility.md` §0.8 + 回放分档设计
+  `subagent-transcript-playback-design.md` §6.1 保底档）。用户核心
+  诉求：看得出每个子代理还在不在跑、在干嘛、能只停某一个、刷新后
+  不消失；铁律"要么给能用的 Stop，要么别放按钮，禁止禁用态占位"。
+- **Bridge（协议 v10→v11，新域外契约 `subagentProtocol.ts`）**：
+  W→H `subagent.openTranscript` / `subagent.stop` / `subagent.panel`
+  （面板开合门控轮询）；H→W `subagent.transcript`（available/
+  unavailable + 复用 `SessionTranscriptItem` 全套校验）与
+  `subagent.activity`（末个工具名 ≤64 字符 + `stoppable`）。**隐私
+  不变量维持：childSessionId 永不过桥**——Webview 只用父会话
+  toolUseId 作不透明句柄，双侧校验器对任何携带 childSessionId 的
+  载荷（含 items 内层）exact-key 拒收（新增拒收测试）。Host 侧
+  校验走 `validateMessage` default 委托（净 0 行）；Webview 侧新建
+  `validateSubagentMessage.ts` 复用转录条目解析器。
+- **Runtime**：`subagentControl.ts` daemon 网关——
+  `sampleActivity` = `sessions.getMessages(childId,{limit:40})` 取
+  末个 tool_use 名（敌对形态防御解析）；`interrupt` = 实测序列
+  `sessions.resume(childId) → interrupt() → detach()`（deny-all
+  挂接，控制连接不能代答权限；detach 保留子会话可续读）。
+  `subagentSummary.ts` 新增 Host-only
+  `readSubagentInvocationRecords`（台账含 childSessionId 的记录版，
+  单一解析路径；过桥版仍剥 id），历史 loader 增
+  `loadSubagentInvocations`。
+- **Host（`chat/subagentPanel.ts`，状态走模块级 WeakMap，
+  ChatController 零新字段——网关经 extension.ts 后置注入，
+  daemon 不活跃时 provider 回 null）**：toolUseId→childSessionId
+  映射按需从台账加载并与转录 Task 行按"消毒身份 FIFO"配对（与
+  settle 对账同款语义）；面板开启时 2.5s 轮询运行行（全失败退避
+  3 tick、去重后才 emit）；单停成功即撤该行控制（`stoppable:false`）
+  并留台账 settle 收尾；转录请求单飞 + 三层 fail-closed
+  （无行/无 childId/加载失败 → unavailable + 诊断）。
+- **Webview**：`subagentPanelFlow.ts`（customModels 同款窗口监听
+  hook；store 仅 advance 序号）+ 动作/数据双 context（动作恒定引用
+  保住终态子行 memo）；WorkingBadge 弹窗行新增实时活动字幕（mono
+  小字）与 **stoppable 时才渲染的单行 Stop**；弹窗开合发
+  `subagent.panel`；终态委派子行新增 quiet "View transcript" 文字
+  动作（下划线 hover 语言）→ 右侧只读转录分栏
+  `SubagentTranscriptSheet`（复用 /btw 分栏视觉族 + 精简只读渲染器，
+  无 Composer 无写入口，/btw 开启时让位）。
+- **抽屉过滤（设计 §5 同切片强制项）**：`FactorySessionCatalog`
+  投影按子会话 session_start 独有的 `callingSessionId`/
+  `callingToolUseId` 透传键剔除；daemon 归档列表按
+  `parentSessionId` 剔除。
+- **验证**：新增 4 个聚焦测试文件 47 例（契约双向 + childSessionId
+  走私拒收、网关序列与敌对解析、配对/单飞/fail-closed/轮询门控、
+  WorkingBadge 面板行为）全绿；全量 vitest **107 文件 2082 例**、
+  typecheck 三段、lint:budgets（ChatController/App/store/
+  bridgeMessages 四个零余量文件以导入压缩抵新增）、build 全绿。
+  样板间补运行窗活动帧演示与 View transcript 罐头响应。
+  **真机冒烟未跑**（脚本 `artifacts/smoke-subagent-panel-live.mts`
+  已就绪——真 daemon 双子代理、只停一个、转录拉取、双控制器模拟
+  Reload 五段断言；用户 2026-08-13 明示先不跑真机，随包装机后由
+  真实使用验收）。已知边界：轮询行以台账 settle 后 status=running
+  为准（回合进行中 status 未定的行不轮询）；`subagent.update` 的
+  就地版本不含 childSessionId 变化通知，映射靠 15s TTL 台账重读。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择

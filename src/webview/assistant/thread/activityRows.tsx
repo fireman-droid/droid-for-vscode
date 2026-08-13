@@ -6,6 +6,7 @@ import {
   Fragment,
   isValidElement,
   memo,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -22,6 +23,7 @@ import {
 } from "../activityGrouping";
 import { commandCardTitle, commandChips } from "../commandCard";
 import { parsePlanSteps } from "../planAnchor";
+import { SubagentActionsContext } from "../subagentPanelFlow";
 import { PreviewChip, ToolFilePath } from "./transcriptRows";
 import {
   CommandCardMenu,
@@ -83,9 +85,12 @@ export function ToolOutputPreview({
 export function ToolActivityRow({
   activity,
   toolName,
+  toolUseId,
 }: {
   readonly activity: ToolActivityPresentation;
   readonly toolName: string;
+  /** Opaque row handle for subagent actions (never a session id). */
+  readonly toolUseId?: string;
 }): React.JSX.Element {
   // Plan rows open by default only when they appear inside a live
   // turn, so the checklist is visible while Droid works but recovered
@@ -224,6 +229,7 @@ export function ToolActivityRow({
           status={activity.subagent.status}
           toolUseCount={activity.subagent.toolUseCount}
           durationMs={activity.subagent.durationMs}
+          toolUseId={toolUseId}
           // Parent Task row settled while the delegation still runs:
           // the honest label is "running in background" (the ledger
           // has no push channel; the post-turn reconcile polls it).
@@ -265,14 +271,22 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
   status,
   toolUseCount,
   durationMs,
+  toolUseId,
   parentSettled = false,
   parentRunning = false,
 }: NonNullable<ToolActivityPresentation["subagent"]> & {
+  /** Opaque row handle for the read-only transcript entry point. */
+  readonly toolUseId?: string;
   /** The parent Task row reached a terminal state. */
   readonly parentSettled?: boolean;
   /** The parent Task row is still streaming. */
   readonly parentRunning?: boolean;
 }): React.JSX.Element {
+  // Read-only transcript entry (playback design §6.1): terminal rows
+  // only — running child files are still being written, so the live
+  // tier stays out of this slice. Actions-only context keeps the
+  // memo effective across activity polling.
+  const subagentActions = useContext(SubagentActionsContext);
   // The delegation identity arrives with the Task input long before
   // the SDK reports a lifecycle status (probed 2026-08-13: the
   // child_session_available notification only surfaces with the
@@ -302,6 +316,26 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
           })}
         </span>
       )}
+      {subagentActions !== null &&
+      toolUseId !== undefined &&
+      (status === "completed" ||
+        status === "failed" ||
+        status === "cancelled") ? (
+        <button
+          type="button"
+          className="dvx-subagent-view"
+          onClick={() =>
+            subagentActions.onOpenTranscript(
+              toolUseId,
+              description.length > 0
+                ? description
+                : `${type} subagent`,
+            )
+          }
+        >
+          View transcript
+        </button>
+      ) : null}
       {description.length > 0 ? (
         <span className="dvx-subagent-description">{description}</span>
       ) : null}

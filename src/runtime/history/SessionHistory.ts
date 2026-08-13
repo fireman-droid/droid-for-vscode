@@ -4,6 +4,7 @@ import type {
 } from '../../shared/bridgeMessages';
 import type { HostTranscriptState } from '../../shared/hostTranscriptState';
 import type { TokenUsageBreakdown } from '../../shared/tokenUsage';
+import type { SubagentInvocationRecord } from '../subagentSummary';
 
 export const SESSION_HISTORY_UNAVAILABLE_MESSAGE =
   'Saved Droid session history could not be loaded.';
@@ -50,6 +51,15 @@ export interface SessionHistoryLoader {
   loadSubagentSummaries?(
     request: SessionHistoryRequest,
   ): Promise<readonly ToolSubagentSummary[] | null>;
+  /**
+   * Optional: the same ledger with each invocation's host-only child
+   * session id (待办 B registry source: per-row stop, live activity,
+   * transcript replay). The ids never cross the bridge. Resolves
+   * null on any failure instead of throwing.
+   */
+  loadSubagentInvocations?(
+    request: SessionHistoryRequest,
+  ): Promise<readonly SubagentInvocationRecord[] | null>;
 }
 
 export function unavailableSessionHistory(): SessionHistoryResult {

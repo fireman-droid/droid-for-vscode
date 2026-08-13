@@ -167,6 +167,10 @@ import {
   type ChangesUpdateState,
 } from '../../shared/changesProtocol';
 import { parseCustomModelsStateMessage } from '../../shared/customModelsProtocol';
+import { parseSubagentActivityMessage } from '../../shared/subagentProtocol';
+// Lazy circular pair on purpose: that module reuses this file's
+// transcript-item parser for `subagent.transcript` payloads.
+import { parseSubagentTranscript } from './validateSubagentMessage';
 import {
   parseSessionBtwMessage,
   type SessionBtwMessage,
@@ -306,6 +310,10 @@ export function readHostMessage(
         return parseToolActivity(value);
       case 'subagent.update':
         return parseSubagentUpdate(value);
+      case 'subagent.transcript':
+        return parseSubagentTranscript(value);
+      case 'subagent.activity':
+        return parseSubagentActivityMessage(value) ?? undefined;
       case 'transcript.image':
         return parseTranscriptImage(value);
       case 'changes.update':
@@ -3222,7 +3230,7 @@ function parseSessionSearchHit(
   };
 }
 
-function parseSessionTranscript(
+export function parseSessionTranscript(
   value: unknown,
 ): SessionTranscriptItem[] | undefined {
   if (!isExactArray(value, 0, MAX_SESSION_TRANSCRIPT_ITEMS)) {

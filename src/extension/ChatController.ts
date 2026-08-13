@@ -97,24 +97,7 @@ import {
   createUnavailableSessionHistoryLoader,
   type SessionHistoryLoader,
 } from '../runtime/history/SessionHistory';
-import {
-  applySubagentSettlement,
-  collectRunningSubagentRows,
-  collectToolFilePaths,
-  collectTranscriptSubagentRows,
-  createTurnActivityState,
-  hasSubagentRows,
-  projectAssistantDelta,
-  projectSubagentStarted,
-  projectThinkingComplete,
-  projectThinkingDelta,
-  projectToolEvent,
-  reconcileSubagentSummaries,
-  settleZombieSubagents,
-  thinkingSegmentKey,
-  type PendingSubagentRow,
-  type TurnActivityState,
-} from './turnActivityState';
+import { applySubagentSettlement, collectRunningSubagentRows, collectToolFilePaths, collectTranscriptSubagentRows, createTurnActivityState, hasSubagentRows, projectAssistantDelta, projectSubagentStarted, projectThinkingComplete, projectThinkingDelta, projectToolEvent, reconcileSubagentSummaries, settleZombieSubagents, thinkingSegmentKey, type PendingSubagentRow, type TurnActivityState } from './turnActivityState';
 import { handleQueueAdd, handleQueueUpdate, handleQueueRemove, handleQueueResume, handleQueuePromote, handleQueueClear, settleQueueAfterTurn, projectQueueState, discardQueuedPrompts } from './chat/queue';
 import { handleMcpRefresh, pushMcp, handleMcpServerToggle, handleMcpServerAdd, handleMcpServerRemove, handleMcpServerAuthenticate } from './chat/mcp';
 import { dispatchCustomModels, type CustomModelsGateway } from './chat/customModels';
@@ -125,25 +108,14 @@ import { handleFileOpenDiff, handleFilePreview, handleInlineHtmlPreview, handleT
 import { handleRewindInfo, handleEditResend, handleEditStageBegin, handleEditStageCancel } from './chat/editResend';
 import { stampRunningFlags, setSessionRunning, ensureBackgroundRunningPoll, seedBackgroundRunning } from './chat/sessionRunning';
 import { settleTurnSubagents, clearZombieSubagentWatch, armReplayedSubagentWatch } from './chat/subagentWatch';
+import { handleSubagentOpenTranscript, handleSubagentPanel, handleSubagentStop } from './chat/subagentPanel';
+import type { SubagentControlGateway } from '../runtime/subagentControl';
 import { emitEarlyRecoverySnapshot, reconcileDaemonTurn, scheduleRecoveryCheckpoint, checkpointRecoveryTranscript, flushRecoveryCheckpoint, recoveryTurnId } from './chat/recovery';
 import { handleSessionNew, handleWorktreeCreateSession, handleSessionRename, handleSessionFavorite, handleSessionArchive, handleSessionUnarchive, handleArchivedRefresh, handleSessionSearch, handleSessionSelect, handleRefresh, handleSessionFork, loadCatalog, hasCatalogSession, activeSessionSummary, withActiveSession, beginCatalogLoad, bindCatalogViewToWorkspace, clearCatalog, isCurrentCatalogRequest, discardCatalogRequest, touchActiveSession, SESSION_NEW_FAILED_MESSAGE } from './chat/sessionDirectory';
 import { handleReady, startReplacement, replaceRuntime, loadHistoryTimed, resetSessionMetadata, closeAllRuntimesForDispose, queueWorkspaceTransition, isCurrentRuntime, ensureActiveRuntimeWorkspaceCurrent, isTargetWorkspaceCurrent, emitWorkspaceUnavailable, isSameWorkspaceContext, WORKSPACE_CHANGED_MESSAGE } from './chat/runtimeLifecycle';
 import { handleSend, handleStop, handleRetry, handleSessionCompact, projectTranscript } from './chat/turnFlow';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
-import {
-  clearPrompts,
-  dropDispatchedPrompt,
-  emptyQueuedPromptsState,
-  enqueuePrompt,
-  evaluateQueueDispatch,
-  markDispatchBlocked,
-  pauseAfterTerminal,
-  promotePrompt,
-  removePrompt,
-  resumeQueue,
-  updatePromptText,
-  type QueuedPromptsState,
-} from './queuedPromptsState';
+import { clearPrompts, dropDispatchedPrompt, emptyQueuedPromptsState, enqueuePrompt, evaluateQueueDispatch, markDispatchBlocked, pauseAfterTerminal, promotePrompt, removePrompt, resumeQueue, updatePromptText, type QueuedPromptsState } from './queuedPromptsState';
 import type { SessionQueueState } from '../shared/queueProtocol';
 import {
   SESSION_RECOVERY_DEBOUNCE_MS,
@@ -268,6 +240,8 @@ export class ChatController {
   transcript: HostTranscriptState =
     createHostTranscriptState('unavailable');
   sessionId: string | null = null;
+  /** Daemon subagent control provider; extension.ts injects it. */
+  subagentControl: (() => SubagentControlGateway | null) | null = null;
   /**
    * Read-only mission identity of the active session, from the last
    * successful history load; null for sessions outside a mission.
@@ -659,6 +633,15 @@ export class ChatController {
         return;
       case 'btw.dismiss':
         this.btwSideChat?.handleDismiss(message.sessionId);
+        return;
+      case 'subagent.openTranscript':
+        handleSubagentOpenTranscript(this, message.sessionId, message.toolUseId);
+        return;
+      case 'subagent.stop':
+        handleSubagentStop(this, message.sessionId, message.turnId, message.toolUseId);
+        return;
+      case 'subagent.panel':
+        handleSubagentPanel(this, message.sessionId, message.open);
         return;
       case 'file.openDiff':
         handleFileOpenDiff(this, message.sessionId, message.path);

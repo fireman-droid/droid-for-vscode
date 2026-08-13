@@ -94,6 +94,17 @@ function projectSessionMetadata(value: unknown): SessionCatalogEntry | null {
     return null;
   }
 
+  // Subagent child sessions never reach the drawer (playback design
+  // §5: their only sanctioned entry is the read-only transcript on
+  // the parent's Task row). Child session_start lines carry their
+  // caller identity, which the SDK's passthrough metadata preserves.
+  if (
+    typeof value.callingSessionId === 'string' ||
+    typeof value.callingToolUseId === 'string'
+  ) {
+    return null;
+  }
+
   const messageCount = value.messageCount;
   if (
     !isSafeSessionIdentifier(value.id) ||

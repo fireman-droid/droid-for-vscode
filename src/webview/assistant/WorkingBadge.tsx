@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 
 import { ComposerPopup } from './ComposerPopup';
+import { SubagentPanelContext } from './subagentPanelFlow';
 import {
   formatElapsed,
   type WorkingSubagent,
@@ -35,6 +36,15 @@ export function WorkingBadge({
   readonly onStopAll: () => void;
 }): React.JSX.Element | null {
   const [open, setOpen] = useState(false);
+  // Panel flow (待办 B): live per-row activity, working per-row Stop
+  // (only when the host proved it can actually stop that row), and
+  // the open/close signal gating the host's activity polling.
+  const panel = useContext(SubagentPanelContext);
+  const panelRef = useRef(panel);
+  panelRef.current = panel;
+  useEffect(() => {
+    panelRef.current?.actions.onPanelToggle(open);
+  }, [open]);
   // Elapsed time is a pure webview measurement: each delegation is
   // stamped when this component first sees it running. Entries for
   // settled rows are pruned so identities can never leak across
@@ -105,38 +115,58 @@ export function WorkingBadge({
               ) : null}
             </div>
             <ul className="dvx-working-list">
-              {rows.map((row) => (
-                <li
-                  key={`${row.turnId}:${row.toolUseId}`}
-                  className="dvx-working-row"
-                >
-                  <span
-                    className="dvx-working-spinner"
-                    aria-hidden="true"
-                  />
-                  <span className="dvx-working-row-type">
-                    {`${row.type} subagent`}
-                  </span>
-                  {row.description.length > 0 ? (
-                    <span className="dvx-working-row-desc">
-                      {row.description}
+              {rows.map((row) => {
+                const extras = panel?.activities.get(row.toolUseId);
+                return (
+                  <li
+                    key={`${row.turnId}:${row.toolUseId}`}
+                    className="dvx-working-row"
+                  >
+                    <span
+                      className="dvx-working-spinner"
+                      aria-hidden="true"
+                    />
+                    <span className="dvx-working-row-type">
+                      {`${row.type} subagent`}
                     </span>
-                  ) : null}
-                  <span className="dvx-working-row-elapsed">
-                    {formatElapsed(
-                      Date.now() -
-                        (startTimes.get(
-                          `${row.turnId}:${row.toolUseId}`,
-                        ) ?? Date.now()),
-                    )}
-                  </span>
-                  {/* View hook: the subagent transcript playback slice
-                      (subagent-transcript-playback-design.md §6.1)
-                      mounts its read-only transcript entry point here,
-                      keyed by this row's toolUseId. Not rendered in
-                      this slice. */}
-                </li>
-              ))}
+                    <span className="dvx-working-row-tools">
+                      <span className="dvx-working-row-elapsed">
+                        {formatElapsed(
+                          Date.now() -
+                            (startTimes.get(
+                              `${row.turnId}:${row.toolUseId}`,
+                            ) ?? Date.now()),
+                        )}
+                      </span>
+                      {panel !== null && extras?.stoppable === true ? (
+                        <button
+                          type="button"
+                          className="dvx-working-row-stop"
+                          aria-label={`Stop this ${row.type} subagent`}
+                          onClick={() =>
+                            panel.actions.onStop(
+                              row.turnId,
+                              row.toolUseId,
+                            )
+                          }
+                        >
+                          Stop
+                        </button>
+                      ) : null}
+                    </span>
+                    {row.description.length > 0 ? (
+                      <span className="dvx-working-row-desc">
+                        {row.description}
+                      </span>
+                    ) : null}
+                    {extras?.action != null ? (
+                      <span className="dvx-working-row-activity">
+                        {extras.action}
+                      </span>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           </ComposerPopup>
         ) : null}

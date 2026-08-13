@@ -97,11 +97,9 @@ import {
   type WorkspaceReadImageMessage,
   type WorkspaceSearchFilesMessage,
 } from './bridgeMessages';
-import {
-  parseBtwAskMessage,
-  parseBtwDismissMessage,
-} from './btwProtocol';
+import { parseBtwAskMessage, parseBtwDismissMessage } from './btwProtocol';
 import { parseCustomModelDeleteMessage, parseCustomModelSaveMessage, parseCustomModelsRefreshMessage } from './customModelsProtocol';
+import { parseSubagentWebviewMessage } from './subagentProtocol';
 import {
   parseQueueAddMessage,
   parseQueueClearMessage,
@@ -261,7 +259,8 @@ export function parseWebviewMessage(
       case 'queue.clear':
         return parseQueueClearMessage(value) ?? undefined;
       default:
-        return undefined;
+        // Subagent-panel family delegates wholesale (subagentProtocol).
+        return parseSubagentWebviewMessage(value) ?? undefined;
     }
   } catch {
     return undefined;

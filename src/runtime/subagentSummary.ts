@@ -65,14 +65,28 @@ export function subagentIdentityKey(
 }
 
 /**
- * Projects `loadSession().subagentInvocations` into bridge-safe
- * subagent summaries in ledger order. The child session id is
- * dropped here on purpose so it never leaves the Runtime. Malformed
- * entries are skipped instead of failing the whole load.
+ * One ledger invocation with its host-only child session id. The
+ * summary half is bridge-safe; the child id must never leave the
+ * Runtime/Host boundary (the webview addresses rows by toolUseId and
+ * the validators reject any payload carrying a childSessionId).
  */
-export function readSubagentInvocations(
+export interface SubagentInvocationRecord {
+  readonly summary: ToolSubagentSummary;
+  readonly childSessionId: string | null;
+}
+
+/** Ids are opaque CLI uuids; anything unprintable is dropped. */
+const SAFE_CHILD_SESSION_ID = /^[\w.:-]{1,128}$/u;
+
+/**
+ * Projects `loadSession().subagentInvocations` into host-only
+ * invocation records in ledger order (待办 B: the child session id is
+ * the handle for per-row stop, live activity and transcript replay).
+ * Malformed entries are skipped instead of failing the whole load.
+ */
+export function readSubagentInvocationRecords(
   loaded: unknown,
-): readonly ToolSubagentSummary[] {
+): readonly SubagentInvocationRecord[] {
   if (!isStrictRecord(loaded)) {
     return [];
   }
@@ -84,7 +98,7 @@ export function readSubagentInvocations(
     return [];
   }
 
-  const summaries: ToolSubagentSummary[] = [];
+  const records: SubagentInvocationRecord[] = [];
   const count = Math.min(
     result.subagentInvocations.length,
     MAX_SUBAGENT_INVOCATIONS_TO_PROJECT,
@@ -105,15 +119,34 @@ export function readSubagentInvocations(
     }
     const toolUseCount = readCount(entry.toolUseCount);
     const durationMs = readCount(entry.durationMs);
-    summaries.push({
-      type,
-      description: sanitizeSubagentDescription(entry.description),
-      status: status as SubagentStatus,
-      ...(toolUseCount === undefined ? {} : { toolUseCount }),
-      ...(durationMs === undefined ? {} : { durationMs }),
+    records.push({
+      summary: {
+        type,
+        description: sanitizeSubagentDescription(entry.description),
+        status: status as SubagentStatus,
+        ...(toolUseCount === undefined ? {} : { toolUseCount }),
+        ...(durationMs === undefined ? {} : { durationMs }),
+      },
+      childSessionId:
+        typeof entry.childSessionId === 'string' &&
+        SAFE_CHILD_SESSION_ID.test(entry.childSessionId)
+          ? entry.childSessionId
+          : null,
     });
   }
-  return summaries;
+  return records;
+}
+
+/**
+ * Bridge-safe view of the same ledger: the invocation summaries in
+ * ledger order with every child session id already stripped.
+ */
+export function readSubagentInvocations(
+  loaded: unknown,
+): readonly ToolSubagentSummary[] {
+  return readSubagentInvocationRecords(loaded).map(
+    (record) => record.summary,
+  );
 }
 
 function readCount(value: unknown): number | undefined {

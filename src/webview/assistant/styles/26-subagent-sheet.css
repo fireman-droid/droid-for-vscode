@@ -1,0 +1,48 @@
+/* Subagent read-only transcript sheet (待办 B slice 1). The pane
+   itself reuses the btw split-pane family (21-btw.css); this file
+   only adds the quiet single-line rows of the read-only renderer.
+   Token-driven throughout, so the dark theme needs no re-skin. */
+
+.dvx-subsheet-body {
+  gap: 8px;
+}
+
+.dvx-subsheet-line {
+  margin: 0;
+  color: var(--dvx-subtle);
+  font-size: 11.5px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+.dvx-subsheet-line-failed {
+  color: var(--dvx-danger, #b3401f);
+}
+
+/* Quiet text entry on a settled delegation sub-row: ink-deepening
+   plus a thin underline on hover, no grey wash (kitchen-sink hover
+   language). */
+.dvx-subagent-view {
+  min-height: 20px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dvx-muted);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.dvx-subagent-view:hover,
+.dvx-subagent-view:focus-visible {
+  color: var(--dvx-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--dvx-border-strong);
+  text-underline-offset: 3px;
+}
+
+.dvx-subagent-view:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--dvx-focus);
+}

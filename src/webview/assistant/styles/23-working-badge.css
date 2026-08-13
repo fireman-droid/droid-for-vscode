@@ -145,7 +145,50 @@
 }
 
 .dvx-working-row .dvx-working-spinner {
-  grid-row: 1 / span 2;
+  grid-row: 1 / -1;
+}
+
+/* Elapsed + the per-row Stop share the trailing column. The Stop
+   button only exists when the host proved it can stop that row (no
+   disabled placeholders — user decision 2026-08-12). */
+.dvx-working-row-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  grid-column: 3;
+  grid-row: 1 / -1;
+}
+
+.dvx-working-row-stop {
+  border: 1px solid var(--dvx-border);
+  border-radius: 7px;
+  background: var(--dvx-raised);
+  padding: 1px 7px;
+  font-family: inherit;
+  font-size: 10.5px;
+  color: var(--dvx-muted);
+  cursor: pointer;
+  transition:
+    border-color var(--dvx-duration-fast, 120ms) ease,
+    color var(--dvx-duration-fast, 120ms) ease;
+}
+
+.dvx-working-row-stop:hover {
+  border-color: color-mix(in srgb, var(--dvx-accent) 40%, var(--dvx-border));
+  color: var(--dvx-accent-deep, #b5451f);
+}
+
+/* The live activity subtitle: the last tool observed inside the
+   child session, polled while this popup is open. */
+.dvx-working-row-activity {
+  grid-column: 2;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dvx-subtle);
+  font-family: var(--dvx-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dvx-working-row-type {
@@ -169,8 +212,6 @@
 }
 
 .dvx-working-row-elapsed {
-  grid-column: 3;
-  grid-row: 1 / span 2;
   color: var(--dvx-subtle);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
