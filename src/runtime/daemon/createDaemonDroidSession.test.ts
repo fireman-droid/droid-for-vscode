@@ -556,6 +556,25 @@ describe('createDaemonDroidSession', () => {
     expect(lease.release).toHaveBeenCalledWith('saved-session');
   });
 
+  it('detaches a new session when its ownership cannot be secured', async () => {
+    const mock = createDroidMock();
+    const lease = {
+      acquire: vi.fn(() => ({ acquired: false, heldByPid: 4242 }) as const),
+      release: vi.fn(),
+    };
+
+    await expect(
+      createDaemonDroidSession({
+        target: { kind: 'new', cwd: 'C:\\workspace' },
+        interactionHandler: cancellingRuntimeInteractionHandler,
+        getDroid: async () => mock.droid,
+        lease,
+      }),
+    ).rejects.toThrow('open in another window (pid 4242)');
+    expect(mock.created.detach).toHaveBeenCalledOnce();
+    expect(mock.sessions.resume).not.toHaveBeenCalled();
+  });
+
   it('moves the lease from the source to the replacement on compact', async () => {
     const mock = createDroidMock();
     const lease = {
@@ -576,6 +595,30 @@ describe('createDaemonDroidSession', () => {
       'session-2',
     ]);
     expect(lease.release).toHaveBeenCalledExactlyOnceWith('session-1');
+  });
+
+  it('keeps the source attached when replacement ownership cannot be secured', async () => {
+    const mock = createDroidMock();
+    const lease = {
+      acquire: vi
+        .fn()
+        .mockReturnValueOnce({ acquired: true })
+        .mockReturnValueOnce({ acquired: false, heldByPid: 4242 }),
+      release: vi.fn(),
+    };
+    const session = await createDaemonDroidSession({
+      target: { kind: 'new', cwd: 'C:\\workspace' },
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      getDroid: async () => mock.droid,
+      lease,
+    });
+
+    await expect(session.compact?.({})).rejects.toThrow(
+      'open in another window (pid 4242)',
+    );
+    expect(mock.sessions.resume).not.toHaveBeenCalled();
+    expect(mock.created.detach).not.toHaveBeenCalled();
+    expect(lease.release).not.toHaveBeenCalled();
   });
 
   it('releases the lease on close', async () => {

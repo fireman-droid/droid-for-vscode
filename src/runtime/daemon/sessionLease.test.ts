@@ -19,11 +19,22 @@ function memoryFile(initial: string | null = null) {
   };
 }
 
+function immediateLock() {
+  return {
+    runExclusive: <T>(
+      _file: string,
+      _owner: { readonly pid: number; readonly ts: number },
+      operation: () => T,
+    ) => ({ acquired: true, value: operation() }) as const,
+  };
+}
+
 describe('acquireSessionLease', () => {
   it('acquires a free lease and records pid/ts', () => {
     const file = memoryFile();
     const outcome = acquireSessionLease(FILE, 'session-1', {
       ...file,
+      ...immediateLock(),
       pid: () => 111,
       now: () => 1754956800000,
       isPidAlive: () => true,
@@ -41,6 +52,7 @@ describe('acquireSessionLease', () => {
     );
     const outcome = acquireSessionLease(FILE, 'session-1', {
       ...file,
+      ...immediateLock(),
       pid: () => 111,
       isPidAlive: (pid) => pid === 222,
     });
@@ -58,6 +70,7 @@ describe('acquireSessionLease', () => {
     );
     const outcome = acquireSessionLease(FILE, 'session-1', {
       ...file,
+      ...immediateLock(),
       pid: () => 111,
       now: () => 2,
       isPidAlive: () => false,
@@ -70,6 +83,47 @@ describe('acquireSessionLease', () => {
     });
   });
 
+  it('refuses to enter the registry transaction when another window owns the lock', () => {
+    const file = memoryFile();
+    const writeFile = vi.fn(file.writeFile);
+    const outcome = acquireSessionLease(FILE, 'session-1', {
+      readFile: file.readFile,
+      writeFile,
+      pid: () => 111,
+      now: () => 9,
+      isPidAlive: () => true,
+      runExclusive: () => ({
+        acquired: false,
+        heldByPid: 222,
+      }),
+    });
+
+    expect(outcome).toEqual({ acquired: false, heldByPid: 222 });
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it('runs the complete read-check-write while holding the registry lock', () => {
+    const file = memoryFile();
+    let operationRan = false;
+    const outcome = acquireSessionLease(FILE, 'session-1', {
+      ...file,
+      pid: () => 111,
+      now: () => 9,
+      isPidAlive: () => true,
+      runExclusive: (_file, owner, operation) => {
+        expect(owner).toEqual({ pid: 111, ts: 9 });
+        operationRan = true;
+        return { acquired: true, value: operation() };
+      },
+    });
+
+    expect(operationRan).toBe(true);
+    expect(outcome).toEqual({ acquired: true });
+    expect(JSON.parse(file.current() ?? '{}')).toEqual({
+      'session-1': { pid: 111, ts: 9 },
+    });
+  });
+
   it('refreshes its own existing lease', () => {
     const file = memoryFile(
       JSON.stringify({ 'session-1': { pid: 111, ts: 1 } }),
@@ -77,6 +131,7 @@ describe('acquireSessionLease', () => {
     const isPidAlive = vi.fn(() => true);
     const outcome = acquireSessionLease(FILE, 'session-1', {
       ...file,
+      ...immediateLock(),
       pid: () => 111,
       now: () => 9,
       isPidAlive,
@@ -98,7 +153,9 @@ describe('releaseSessionLease', () => {
     );
     releaseSessionLease(FILE, 'session-1', {
       ...file,
+      ...immediateLock(),
       pid: () => 111,
+      now: () => 2,
       isPidAlive: () => true,
     });
 
@@ -113,7 +170,9 @@ describe('releaseSessionLease', () => {
     );
     releaseSessionLease(FILE, 'session-1', {
       ...file,
+      ...immediateLock(),
       pid: () => 111,
+      now: () => 2,
       isPidAlive: () => true,
     });
 
@@ -126,11 +185,33 @@ describe('releaseSessionLease', () => {
     );
     releaseSessionLease(FILE, 'session-1', {
       ...file,
+      ...immediateLock(),
       pid: () => 111,
+      now: () => 2,
       isPidAlive: () => false,
     });
 
     expect(JSON.parse(file.current() ?? '{}')).toEqual({});
+  });
+
+  it('leaves the registry untouched when its lock is contended', () => {
+    const initial = JSON.stringify({
+      'session-1': { pid: 111, ts: 1 },
+    });
+    const file = memoryFile(initial);
+    const writeFile = vi.fn(file.writeFile);
+
+    releaseSessionLease(FILE, 'session-1', {
+      readFile: file.readFile,
+      writeFile,
+      pid: () => 111,
+      now: () => 2,
+      isPidAlive: () => true,
+      runExclusive: () => ({ acquired: false, heldByPid: 222 }),
+    });
+
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(file.current()).toBe(initial);
   });
 });
 

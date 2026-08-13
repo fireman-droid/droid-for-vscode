@@ -122,9 +122,14 @@ export async function createDaemonDroidSession(options: {
     ...(options.target.worktree === true ? { worktree: true } : {}),
     ...callbacks,
   });
-  // A freshly created session id cannot be contested, so the lease is
-  // recorded after the fact purely to mark ownership.
-  lease.acquire(session.id);
+  // A fresh id should never be contested, but registry lock failure
+  // still means ownership was not established. Do not expose an
+  // unleased handle that another window could also attach.
+  const leaseOutcome = lease.acquire(session.id);
+  if (!leaseOutcome.acquired) {
+    await session.detach().catch(() => undefined);
+    throw leaseConflictError(leaseOutcome.heldByPid);
+  }
   const availableModels = await readDaemonAvailableModels(droid);
   return adaptDaemonSession(
     droid,
@@ -188,10 +193,12 @@ function adaptDaemonSession(
   const attachReplacement = async (
     newSessionId: string,
   ): Promise<FactoryDroidSession> => {
-    // The daemon replaces the old session with the new one, so the old
-    // lease implies ownership of the replacement; record it and only
-    // then swap handles.
-    lease.acquire(newSessionId);
+    // The daemon replaces the old session with the new one, but the
+    // replacement id still needs an explicit claim before attachment.
+    const leaseOutcome = lease.acquire(newSessionId);
+    if (!leaseOutcome.acquired) {
+      throw leaseConflictError(leaseOutcome.heldByPid);
+    }
     let next: ConnectedDroidSession;
     try {
       next = await droid.sessions.resume(newSessionId, {
@@ -364,4 +371,14 @@ function adaptDaemonSession(
       lease.release(session.id);
     },
   };
+}
+
+function leaseConflictError(heldByPid: number): Error {
+  return heldByPid > 0
+    ? new Error(
+        `Session is open in another window (pid ${String(heldByPid)}). Close it there or wait for that window to exit.`,
+      )
+    : new Error(
+        'Session ownership could not be secured. Wait briefly and try again.',
+      );
 }

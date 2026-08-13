@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,7 +7,7 @@ import process from 'node:process';
 /**
  * Cross-window session leases (daemon Phase 3). The daemon does not
  * coordinate replacement operations (rewind/compact/fork) across
- * clients, so windows keep a best-effort lease registry:
+ * clients, so windows keep an exclusively locked lease registry:
  *
  *   ~/.droidvisx/sessions-attached.json -> { [sessionId]: { pid, ts } }
  *
@@ -23,6 +24,14 @@ export type SessionLeaseOutcome =
   | { readonly acquired: true }
   | { readonly acquired: false; readonly heldByPid: number };
 
+type RegistryLockOutcome<T> =
+  | { readonly acquired: true; readonly value: T }
+  | { readonly acquired: false; readonly heldByPid: number };
+
+interface RegistryLockOwner extends SessionLeaseEntry {
+  readonly token: string;
+}
+
 /** Injectable seams for unit tests. */
 export interface SessionLeaseDeps {
   readonly readFile: (file: string) => string | null;
@@ -30,6 +39,11 @@ export interface SessionLeaseDeps {
   readonly isPidAlive: (pid: number) => boolean;
   readonly pid: () => number;
   readonly now: () => number;
+  readonly runExclusive: <T>(
+    file: string,
+    owner: SessionLeaseEntry,
+    operation: () => T,
+  ) => RegistryLockOutcome<T>;
 }
 
 export function defaultLeaseFile(): string {
@@ -40,6 +54,10 @@ export function defaultLeaseFile(): string {
  * Acquires (or refreshes) the lease for a session. Fails only when a
  * different, still-alive process holds it; leases from dead processes
  * are silently preempted.
+ *
+ * The complete read-check-write transaction runs under an exclusive
+ * sibling lock file, so two windows cannot both observe a free lease
+ * and report ownership.
  */
 export function acquireSessionLease(
   file: string,
@@ -47,18 +65,25 @@ export function acquireSessionLease(
   deps: Partial<SessionLeaseDeps> = {},
 ): SessionLeaseOutcome {
   const d = withDefaults(deps);
-  const leases = readLeases(file, d.readFile);
-  const existing = leases[sessionId];
-  if (
-    existing !== undefined &&
-    existing.pid !== d.pid() &&
-    d.isPidAlive(existing.pid)
-  ) {
-    return { acquired: false, heldByPid: existing.pid };
+  const owner = { pid: d.pid(), ts: d.now() };
+  const locked = d.runExclusive(file, owner, () => {
+    const leases = readLeases(file, d.readFile);
+    const existing = leases[sessionId];
+    if (
+      existing !== undefined &&
+      existing.pid !== owner.pid &&
+      d.isPidAlive(existing.pid)
+    ) {
+      return { acquired: false, heldByPid: existing.pid };
+    }
+    leases[sessionId] = owner;
+    writeLeases(file, leases, d);
+    return { acquired: true } as const;
+  });
+  if (!locked.acquired) {
+    return locked;
   }
-  leases[sessionId] = { pid: d.pid(), ts: d.now() };
-  writeLeases(file, leases, d);
-  return { acquired: true };
+  return locked.value;
 }
 
 /** Releases a lease this process holds. Foreign live leases are kept. */
@@ -68,22 +93,25 @@ export function releaseSessionLease(
   deps: Partial<SessionLeaseDeps> = {},
 ): void {
   const d = withDefaults(deps);
-  const leases = readLeases(file, d.readFile);
-  const existing = leases[sessionId];
-  if (existing === undefined) {
-    return;
-  }
-  if (existing.pid !== d.pid() && d.isPidAlive(existing.pid)) {
-    return;
-  }
-  delete leases[sessionId];
-  writeLeases(file, leases, d);
+  const owner = { pid: d.pid(), ts: d.now() };
+  d.runExclusive(file, owner, () => {
+    const leases = readLeases(file, d.readFile);
+    const existing = leases[sessionId];
+    if (existing === undefined) {
+      return;
+    }
+    if (existing.pid !== owner.pid && d.isPidAlive(existing.pid)) {
+      return;
+    }
+    delete leases[sessionId];
+    writeLeases(file, leases, d);
+  });
 }
 
 /**
  * Reads and validates the lease registry. The file is an external
  * trust boundary; a corrupt or malformed file reads as empty (leases
- * are advisory, so losing them degrades to Phase 2 behavior).
+ * then fail safe through the sibling transaction lock).
  */
 export function readLeases(
   file: string,
@@ -135,13 +163,138 @@ function writeLeases(
 }
 
 function withDefaults(deps: Partial<SessionLeaseDeps>): SessionLeaseDeps {
+  const isPidAlive = deps.isPidAlive ?? defaultIsPidAlive;
   return {
     readFile: deps.readFile ?? defaultReadFile,
     writeFile: deps.writeFile ?? defaultWriteFile,
-    isPidAlive: deps.isPidAlive ?? defaultIsPidAlive,
+    isPidAlive,
     pid: deps.pid ?? (() => process.pid),
     now: deps.now ?? Date.now,
+    runExclusive:
+      deps.runExclusive ??
+      ((file, owner, operation) =>
+        defaultRunExclusive(file, owner, isPidAlive, operation)),
   };
+}
+
+const REGISTRY_LOCK_SUFFIX = '.lock';
+const REGISTRY_LOCK_ATTEMPTS = 8;
+const REGISTRY_LOCK_WAIT_MS = 4;
+
+function defaultRunExclusive<T>(
+  file: string,
+  owner: SessionLeaseEntry,
+  isPidAlive: (pid: number) => boolean,
+  operation: () => T,
+): RegistryLockOutcome<T> {
+  const lockFile = `${file}${REGISTRY_LOCK_SUFFIX}`;
+  const lockOwner: RegistryLockOwner = {
+    ...owner,
+    token: randomUUID(),
+  };
+  let heldByPid = 0;
+
+  for (let attempt = 0; attempt < REGISTRY_LOCK_ATTEMPTS; attempt++) {
+    if (defaultWriteLockExclusive(lockFile, lockOwner)) {
+      try {
+        return { acquired: true, value: operation() };
+      } finally {
+        defaultDeleteOwnedLock(lockFile, lockOwner.token);
+      }
+    }
+    const existing = readRegistryLock(lockFile);
+    heldByPid = existing?.pid ?? 0;
+    if (existing === null || !isPidAlive(existing.pid)) {
+      defaultDeleteLock(lockFile);
+      continue;
+    }
+    waitSynchronously(REGISTRY_LOCK_WAIT_MS);
+  }
+  return { acquired: false, heldByPid };
+}
+
+function defaultWriteLockExclusive(
+  file: string,
+  owner: RegistryLockOwner,
+): boolean {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const contents = JSON.stringify(owner);
+  const temporary = `${file}.${owner.token}.tmp`;
+  try {
+    fs.writeFileSync(temporary, contents, { flag: 'wx' });
+    try {
+      fs.linkSync(temporary, file);
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+        return false;
+      }
+      try {
+        fs.writeFileSync(file, contents, { flag: 'wx' });
+        return true;
+      } catch (fallbackError) {
+        if ((fallbackError as NodeJS.ErrnoException).code === 'EEXIST') {
+          return false;
+        }
+        throw fallbackError;
+      }
+    }
+  } finally {
+    try {
+      fs.unlinkSync(temporary);
+    } catch {
+      // The temporary file was never created or is already gone.
+    }
+  }
+}
+
+function readRegistryLock(file: string): RegistryLockOwner | null {
+  const raw = defaultReadFile(file);
+  if (raw === null) {
+    return null;
+  }
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (typeof value !== 'object' || value === null) {
+      return null;
+    }
+    const owner = value as Record<string, unknown>;
+    return typeof owner.pid === 'number' &&
+      Number.isInteger(owner.pid) &&
+      owner.pid > 0 &&
+      typeof owner.ts === 'number' &&
+      typeof owner.token === 'string' &&
+      owner.token.length > 0 &&
+      owner.token.length <= 100
+      ? { pid: owner.pid, ts: owner.ts, token: owner.token }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function defaultDeleteOwnedLock(file: string, token: string): void {
+  if (readRegistryLock(file)?.token !== token) {
+    return;
+  }
+  defaultDeleteLock(file);
+}
+
+function defaultDeleteLock(file: string): void {
+  try {
+    fs.unlinkSync(file);
+  } catch {
+    // Already released or reclaimed by another live window.
+  }
+}
+
+function waitSynchronously(milliseconds: number): void {
+  Atomics.wait(
+    new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)),
+    0,
+    0,
+    milliseconds,
+  );
 }
 
 function defaultReadFile(file: string): string | null {
