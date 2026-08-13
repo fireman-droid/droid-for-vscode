@@ -207,16 +207,66 @@ export async function stopDaemon(
   }
 }
 
+/**
+ * Spawn options for the private (parent-pid guarded) daemon.
+ * `shell: true` because `droid` can resolve to droid.cmd on Windows;
+ * `windowsHide` maps to CREATE_NO_WINDOW there, so the cmd.exe wrapper
+ * gets a hidden console that every descendant inherits — no console
+ * window is ever shown.
+ */
+export function privateDaemonSpawnOptions(): {
+  shell: true;
+  stdio: ['ignore', 'ignore', 'pipe'];
+  windowsHide: true;
+} {
+  return {
+    shell: true,
+    stdio: ['ignore', 'ignore', 'pipe'],
+    windowsHide: true,
+  };
+}
+
+/**
+ * Spawn options for the shared daemon that must outlive the extension
+ * host.
+ *
+ * Windows cannot combine `detached` with a hidden console: `detached`
+ * adds the DETACHED_PROCESS creation flag, which makes Win32 ignore
+ * the CREATE_NO_WINDOW flag that `windowsHide` maps to. The cmd.exe
+ * wrapper then runs console-less and the daemon underneath it
+ * allocates its own *visible* console — the v0.2.0 startup console
+ * pop-up. Dropping `detached` on Windows keeps the hidden console
+ * attached to cmd.exe for the whole chain, and the daemon still
+ * survives extension-host death: libuv's kill-on-job-close job holds
+ * only the direct cmd.exe child, while JOB_OBJECT_LIMIT_SILENT_
+ * BREAKAWAY_OK lets grandchildren daemonize. Both properties (no
+ * window, survives parent exit) verified on a real Windows 11 machine
+ * by artifacts/probe-daemon-window.mjs.
+ *
+ * POSIX keeps `detached` (setsid) — required to survive the parent
+ * there, and console windows do not exist.
+ */
+export function detachedDaemonSpawnOptions(
+  platform: NodeJS.Platform = process.platform,
+): {
+  shell: true;
+  detached: boolean;
+  stdio: 'ignore';
+  windowsHide: true;
+} {
+  return {
+    shell: true,
+    detached: platform !== 'win32',
+    stdio: 'ignore',
+    windowsHide: true,
+  };
+}
+
 function defaultSpawnDaemon(
   droidPath: string,
   args: readonly string[],
 ): DaemonSpawnHandle {
-  // shell: true because `droid` resolves to droid.cmd on Windows.
-  const child = spawn(droidPath, [...args], {
-    shell: true,
-    stdio: ['ignore', 'ignore', 'pipe'],
-    windowsHide: true,
-  });
+  const child = spawn(droidPath, [...args], privateDaemonSpawnOptions());
   // Keep only a stderr tail: enough to explain a failed start without
   // buffering a long-lived daemon's full output.
   let stderrTail = '';
@@ -237,12 +287,7 @@ function defaultSpawnDetachedDaemon(
   droidPath: string,
   args: readonly string[],
 ): DaemonSpawnHandle {
-  const child = spawn(droidPath, [...args], {
-    shell: true,
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true,
-  });
+  const child = spawn(droidPath, [...args], detachedDaemonSpawnOptions());
   child.unref();
   return {
     pid: child.pid,

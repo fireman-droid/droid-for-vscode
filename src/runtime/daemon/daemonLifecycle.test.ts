@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  detachedDaemonSpawnOptions,
   ensurePrivateDaemon,
+  privateDaemonSpawnOptions,
   startDetachedDaemon,
   stopDaemon,
   type DaemonSpawnHandle,
@@ -226,6 +228,45 @@ describe('startDetachedDaemon', () => {
         },
       ),
     ).rejects.toThrow('failed to spawn');
+  });
+});
+
+describe('daemon spawn options', () => {
+  it('hides the console and pipes stderr for the private daemon', () => {
+    expect(privateDaemonSpawnOptions()).toEqual({
+      shell: true,
+      stdio: ['ignore', 'ignore', 'pipe'],
+      windowsHide: true,
+    });
+  });
+
+  it('never detaches on Windows so windowsHide stays effective', () => {
+    // detached adds DETACHED_PROCESS, which makes Win32 ignore the
+    // CREATE_NO_WINDOW flag windowsHide maps to — the daemon would
+    // pop a visible console (the v0.2.0 startup window bug).
+    expect(detachedDaemonSpawnOptions('win32')).toEqual({
+      shell: true,
+      detached: false,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+  });
+
+  it('detaches on POSIX where survival needs setsid', () => {
+    for (const platform of ['linux', 'darwin'] as const) {
+      expect(detachedDaemonSpawnOptions(platform)).toEqual({
+        shell: true,
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+    }
+  });
+
+  it('defaults to the current platform', () => {
+    expect(detachedDaemonSpawnOptions()).toEqual(
+      detachedDaemonSpawnOptions(process.platform),
+    );
   });
 });
 
