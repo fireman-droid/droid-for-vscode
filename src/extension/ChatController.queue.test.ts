@@ -2,13 +2,18 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   attachmentsMessages,
+  available,
+  catalogEntry,
+  createCatalog,
   createController,
+  createMemoryPersistence,
   createMockRuntime,
   deferred,
   queueAdd,
   queueStates,
   ready,
   send,
+  SessionRecoveryStore,
   snapshots,
   stop,
   successfulTurn,
@@ -17,6 +22,111 @@ import {
 } from './controllerTestHarness';
 
 describe('ChatController queued messages', () => {
+  it('restores queued prompts as a paused queue after a reload', async () => {
+    const persistence = createMemoryPersistence();
+    const release = deferred<void>();
+    const runtime = createMockRuntime(async function* () {
+      await release.promise;
+      yield successfulTurn();
+    });
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+      new SessionRecoveryStore(persistence, 'recovery', 0),
+    );
+    ready(controller);
+    await waitForConnected(messages);
+    send(controller, 'session-1', 'turn-1', 'Long turn');
+    queueAdd(controller, 'session-1', 'queued-1', 'First queued');
+    queueAdd(controller, 'session-1', 'queued-2', 'Second queued');
+    // Reload: dispose flushes the queue texts with the checkpoint.
+    await controller.dispose();
+    release.resolve();
+
+    const resumed = createMockRuntime();
+    resumed.initialize.mockResolvedValue(available('session-1'));
+    const second = createController(
+      () => resumed,
+      undefined,
+      createCatalog([catalogEntry('session-1')]),
+      new SessionRecoveryStore(persistence, 'recovery', 0),
+    );
+    ready(second.controller);
+    await waitForConnected(second.messages);
+
+    // Restored text-only and paused: nothing auto-dispatches into the
+    // reloaded session until the user resumes.
+    expect(queueStates(second.messages).at(-1)).toMatchObject({
+      sessionId: 'session-1',
+      items: [
+        expect.objectContaining({ text: 'First queued' }),
+        expect.objectContaining({ text: 'Second queued' }),
+      ],
+      paused: 'dispatch-blocked',
+    });
+    expect(
+      second.messages.some(
+        (message) =>
+          message.type === 'runtime.diagnostic' &&
+          message.code === 'queued-messages-restored',
+      ),
+    ).toBe(true);
+    expect(resumed.sendTurn).not.toHaveBeenCalled();
+  });
+
+  it('clears the persisted queue when a session switch discards it', async () => {
+    const persistence = createMemoryPersistence();
+    const recovery = new SessionRecoveryStore(persistence, 'recovery', 0);
+    const release = deferred<void>();
+    const runtime = createMockRuntime(async function* () {
+      yield { type: 'text-delta', text: 'working' };
+      await release.promise;
+      yield { ...successfulTurn(), outcome: 'interrupted' };
+    });
+    runtime.interrupt.mockImplementation(async () => release.resolve());
+    const replacement = createMockRuntime();
+    replacement.initialize.mockResolvedValue(available('session-2'));
+    const createRuntime = vi
+      .fn()
+      .mockReturnValueOnce(runtime)
+      .mockReturnValueOnce(replacement);
+    const { controller, messages } = createController(
+      createRuntime,
+      undefined,
+      createCatalog([
+        catalogEntry('session-1'),
+        catalogEntry('session-2'),
+      ]),
+      recovery,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+    send(controller, 'session-1', 'turn-1', 'Long turn');
+    queueAdd(controller, 'session-1', 'queued-1', 'First queued');
+    expect(recovery.readQueuedTexts('session-1')).toEqual([
+      'First queued',
+    ]);
+    // Stop pauses the queue with its items retained, freeing the
+    // session for a switch while the queue is still non-empty.
+    stop(controller, 'session-1', 'turn-1');
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('interrupted');
+    });
+
+    // Rebind discards the queue (design §4.5) and must clear the
+    // persisted copy too, or a later reload would resurrect prompts
+    // the user already saw discarded.
+    controller.handleMessage({
+      type: 'session.select',
+      sessionId: 'session-2',
+    });
+    await vi.waitFor(() => {
+      expect(snapshots(messages).at(-1)?.sessionId).toBe('session-2');
+    });
+    expect(recovery.readQueuedTexts('session-1')).toEqual([]);
+  });
+
   it('queues prompts during a turn and auto-dispatches them in order after completed', async () => {
     const release = deferred<void>();
     const runtime = createMockRuntime(async function* () {

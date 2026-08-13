@@ -14,7 +14,7 @@ import { EMPTY_SESSION_TOKEN_USAGE } from '../../shared/tokenUsage';
 import { reconcileSessionHistory } from '../reconcileSessionHistory';
 import { recordCreatedWorktreeSession } from '../worktreeSessions';
 import type { WorkspaceContext } from '../ChatController';
-import { discardQueuedPrompts } from './queue';
+import { discardQueuedPrompts, restoreQueuedPrompts } from './queue';
 import { pushMcp } from './mcp';
 import { clearPendingAttachments } from './attachments';
 import {
@@ -677,6 +677,7 @@ export async function activateRuntime(
       target.cwd,
     );
     if (target.kind === 'resume') {
+      restoreQueuedPrompts(ctl, sessionId);
       reconcileDaemonTurn(ctl, runtime, generation, sessionId, target.cwd);
       // Replayed rows the ledger still reported live at load time
       // need the same post-turn ledger poll a live turn would have
@@ -862,6 +863,27 @@ export function closeRuntime(
       });
     ctl.runtimeClosures.set(runtime, closure);
     return closure;
+}
+
+/**
+ * Dispose-time close of every managed runtime. Reload must not kill a
+ * daemon-side turn (reconcileDaemonTurn re-adopts it): an active
+ * background-capable runtime is detached instead of interrupted. */
+export async function closeAllRuntimesForDispose(
+  ctl: ChatControllerInternals,
+): Promise<void> {
+    const keepTurn =
+      isTurnActive(ctl.turn) &&
+      ctl.runtime?.supportsBackgroundTurns?.() === true;
+    const preserved = keepTurn ? ctl.runtime : null;
+    ctl.runtime = null;
+    await Promise.allSettled([
+      ...[...ctl.managedRuntimes].map((runtime) =>
+        closeRuntime(ctl, runtime, runtime === preserved),
+      ),
+      ctl.recoveryStore.flush(),
+    ]);
+    await ctl.recoveryStore.dispose();
 }
 
 export function queueWorkspaceTransition(

@@ -324,6 +324,66 @@ export function emitQueueState(ctl: ChatControllerInternals): void {
       items,
       paused,
     });
+    // Every queue mutation funnels through here, so the recovery
+    // checkpoint always mirrors the live queue: a reload restores the
+    // texts (restoreQueuedPrompts) instead of silently dropping them.
+    ctl.recoveryStore.writeQueuedTexts(
+      ctl.sessionId,
+      ctl.queuedPrompts.items.map((item) => item.text),
+    );
+}
+
+export const QUEUE_RESTORED_CODE = 'queued-messages-restored';
+
+/**
+ * Restores queued prompt texts persisted before a reload into the
+ * resumed session's queue. Restored prompts arrive paused (never
+ * auto-dispatched into a changed world) and text-only: staged
+ * attachment payloads live in host memory and do not survive a
+ * reload, which the diagnostic spells out.
+ */
+export function restoreQueuedPrompts(
+  ctl: ChatControllerInternals,
+  sessionId: string,
+): void {
+    if (
+      ctl.queuedPrompts.items.length > 0 ||
+      sessionId !== ctl.sessionId
+    ) {
+      return;
+    }
+    const texts = ctl.recoveryStore.readQueuedTexts(sessionId);
+    if (texts.length === 0) {
+      return;
+    }
+    ctl.queuedPrompts = {
+      items: texts.map((text, index) => ({
+        queueId: `recovered-${String(ctl.runtimeGeneration)}-${String(index)}`,
+        text,
+        attachments: [],
+      })),
+      paused: 'dispatch-blocked',
+    };
+    ctl.recordHost({
+      level: 'info',
+      name: 'host.queue.restored',
+      attributes: { count: texts.length },
+    });
+    ctl.emit({
+      type: 'runtime.diagnostic',
+      sessionId,
+      turnId: null,
+      severity: 'info',
+      code: QUEUE_RESTORED_CODE,
+      message:
+        texts.length === 1
+          ? '1 queued message from before the reload was restored ' +
+            '(text only). Use "Send now" to dispatch it.'
+          : `${String(texts.length)} queued messages from before the ` +
+            'reload were restored (text only). Use "Send now" to ' +
+            'dispatch them.',
+    });
+    emitQueueState(ctl);
 }
 
 /**
