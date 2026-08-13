@@ -31,6 +31,7 @@ import {
 import type { TokenUsageBreakdown } from '../../shared/tokenUsage';
 import { isExecuteToolName } from '../../shared/toolOutput';
 import { recordLiveToolChanges } from './liveChanges';
+import { scheduleLiveSubagentSync } from './subagentWatch';
 import { settleQueueAfterTurn } from './queue';
 import {
   clearPendingAttachments,
@@ -386,6 +387,15 @@ export function handleRuntimeEvent(
         }
         if (event.type === 'tool-result' && !event.isError) {
           recordLiveToolChanges(ctl, sessionId, turnId, event.toolUseId);
+        }
+        // A finished Task dispatch hands off to a child session the
+        // stream no longer narrates; sync its row with the subagent
+        // ledger so the delegation shows as running mid-turn.
+        if (
+          event.type === 'tool-result' &&
+          result.projection?.subagent !== undefined
+        ) {
+          scheduleLiveSubagentSync(ctl, sessionId, turnId);
         }
         return;
       }

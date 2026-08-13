@@ -2794,6 +2794,33 @@ UI 描述见 §22 重做记录。
   截图。`smoke-popover-rework.mjs` 断言已同步（264px/12.5px/
   截断放宽）但**未跑**（用户两次打断，明示别再跑）——待真机验收。
 
+### 39. 子代理 daemon 模式实时状态修复（2026-08-13 晚，v0.7.4）
+
+- **用户实锤**：5 个并行后台派发的 Task 工具 ~5s 完成后，行显示
+  "Completed · 5.1s"，Working 药丸/行内 running/面板轮询/单停全部
+  不出现——"子代理完全看不到"。
+- **根因**：行升级 running 依赖 `child_session_available` 通知
+  （`armSubagentWatch`），但 daemon 会话外观**有意不暴露
+  `onNotification`**（`createDaemonDroidSession.ts` Phase 2 注释），
+  watch 在 daemon 模式静默不装；回合中无任何替代信号，只有回合末
+  `settleTurnSubagents` 才读台账。v0.7.0 真机冒烟被跳过，此洞未被
+  发现。前台阻塞式 Task 之前"能看"是靠 activityRows 的
+  parentRunning 兜底，后台派发 5s 完成后兜底同样失效。
+- **修复（`chat/subagentWatch.ts` + `chat/turnFlow.ts`，模式无关）**：
+  Task 工具结果落地且行带委派身份 → `scheduleLiveSubagentSync`
+  （WeakMap 去抖，1.5s 首读 + 4s 一次重试）读
+  `loadSubagentSummaries` 台账，`reconcileSubagentSummaries` 就地
+  升级：配对 running → 行亮（药丸/轮询/Stop 全部点火），已终态 →
+  直接 settle；经 `subagent.update` 双端打补丁（store 与 Host 转录
+  均无条件按行应用）。回合终态时 `clearLiveSubagentSync` 取消挂起
+  同步，交棒回合末对账 + 僵尸轮询（修掉 double-settle 竞态，
+  turnEvents 既有用例抓到过一次）。
+- **验证（新规则）**：tsc + lint:budgets +
+  `ChatController.turnEvents` / `subagentPanel` 两个触及测试文件
+  40 例全绿；`droidvisx-0.7.4.vsix` 打包安装成功。真机验收：开一轮
+  后台多派发，几秒内行内出现 "running in background" + Working
+  药丸可点开看实时活动/Stop。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
