@@ -2522,6 +2522,35 @@ UI 描述见 §22 重做记录。
   （新，自 store.test.ts 拆出）、`ChatController.workspaceActions`
   / `validateHostMessage` / `Thread` / `GitCommitPanel` 各 .test 更新
 
+### 32. 探索跑马灯手感对齐用户定稿值（2026-08-13 下午，v0.4.0 收口）
+
+- **来源**：v0.4.0 发版收口时的偏差核对。`1466e70` 落的滑动+溶解机制
+  跑在共享动效 token 上（`--dvx-duration-slower` 300ms +
+  `--dvx-easing-out-strong` + 22px 行高），而用户在
+  `artifacts/ticker-mini.html` 上逐值定稿、并由
+  `decard-design-proposal.md` 开头锁定的是 **280ms / 26px /
+  `cubic-bezier(0.22, 0.61, 0.36, 1)`**。§29 的记录与真身一致，缺的是
+  这一步对齐（交接文档 §5 列为 v0.4.0 build 的第 1 步）。
+- **改动**（`styles/12-exploration-ticker.css` +
+  `thread/activityRows.tsx`）：三个值以**局部自定义属性**落在
+  `.dvx-activity-ticker` 上（`--dvx-ticker-row` / `--dvx-ticker-duration`
+  / `--dvx-ticker-easing`），track 位移与行级 opacity 两条 transition 都
+  改吃局部值，共享 token 语义不动；`--dvx-ticker-offset` 计算式的兜底行高
+  同步 22px→26px；`TICKER_SLIDE_FALLBACK_MS` 360→340（对 280ms 保持同样
+  余量，测试引用常量而非字面量，无需改测）。
+- **门禁与冒烟**：随 v0.4.0 发版门禁一起跑（typecheck 三段 /
+  lint:budgets / 全量 vitest 103 文件 2033 例 / build / vsce package /
+  verify:vsix 全绿）；`artifacts/smoke-ticker-fade.mjs` 对真实 dist 复跑
+  `pass: true` —— 真速采样同帧 `translateY −11.9px` 且两行 opacity
+  `[0.54, 0.46]`（位移与渐隐同轴的数值证明）、burst trail 4 行
+  `snapBack: false`、89 次采样容器高度全 26px、reduced-motion 两条
+  transition 均 none、动画期 50ms+ 长任务 0。冒烟脚本里过期的 22px 期望
+  同步改为 26px。
+- **打包**：已进 v0.4.0（见「当前安装包状态」首条）。
+
+主要实现：`src/webview/assistant/styles/12-exploration-ticker.css`、
+`src/webview/assistant/thread/activityRows.tsx`（提交 `44f8924`）
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -2927,6 +2956,24 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-13 下午功能发版 v0.4.0**：版本号 `0.3.0 → 0.4.0`（发布提交
+  `c0d1557`，打包时工作树干净），`CHANGELOG.md` 顶部新增 0.4.0 小节并
+  补记未单独成节的 0.3.0 内容。本包覆盖 v0.3.0 之后的全部主线：Changes
+  实时账本三层（`34cff89` Bridge v10 `changes.update` / `643b4d6` Host
+  防抖串行 numstat 账本 / `77115f6` Webview Ledger）、计划细条
+  （`cd2ab29`）、ticker 滑动溶解（`1466e70`）+ 手感对齐用户定稿值
+  （`44f8924`，见「生产已接通」§32）、Add Selection 冷启动保留捕获
+  （`b5aa9bb`）。产出 `dist/droidvisx.vsix` 1,665,137 字节
+  （2026-08-13 13:30:47，11 files / 1.59 MB），SHA-256
+  `3BE5D52CE6975553E5CC886EDDFA7B9A6C55A3F252EFCB094A88C1FF49B9FE5F`，
+  `verify:vsix` 通过，`cursor --install-extension --force` 成功，
+  `cursor --list-extensions --show-versions` 确认
+  `droidvisx.droidvisx@0.4.0`；装机目录的 `extension.cjs` /
+  `webview.js` / `webview.css` SHA-256 与本次 build 逐字节一致。
+  **协议 v10：现有窗口必须 Reload Window，否则握手被拒表现为空白面板。**
+  行为冒烟（按 `AGENTS.md` 新第 8 步，断言而非截图自评）全过，逐条见
+  「验证状态」首条。验收入口：
+  `docs/product/acceptance-v0.4.0.md`（含未验证节与 5 分钟点测路径）
 - **2026-08-13 凌晨功能发版 v0.2.0**：版本号 `0.1.1 → 0.2.0`，
   `CHANGELOG.md` 顶部新增 0.2.0 小节（发布提交 `1076241`，仅动
   版本号与 CHANGELOG），覆盖今晚全部切片：daemon 默认运行 + 静默
@@ -3242,6 +3289,44 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最近记录的验证结果：
 
+- **v0.4.0 发版门禁与行为冒烟（2026-08-13 下午，HEAD `c0d1557`，
+  工作树干净）**：门禁全绿——`pnpm run typecheck` 三段 PASS、
+  `pnpm run lint:budgets` `file budgets OK`、
+  `pnpm exec vitest run --maxWorkers=4` **103 files / 2033 tests 全过**
+  （32.33s）、`pnpm run build` PASS、`vsce package --no-dependencies`
+  11 files / 1.59 MB、`pnpm run verify:vsix`
+  `Verified 11 VSIX entries and bundled externals`、
+  `cursor --install-extension` 成功。行为冒烟按新第 8 步全部以断言收口：
+  **①Changes 账本（真实 Droid 回合）**
+  `smoke-changes-ledger-live.mts` 全 `[PASS]`——真实 daemon + BYOK
+  gpt-luna 在一次性 scratch git 仓库连改 4 个文件，回合内流出 6 帧
+  writing（首帧 32.7s，早于终态 48.8s），文件数 `[1,1,2,2,3,4]` 单调增长
+  （首个文件写入即出账本），防抖 numstat 中途到达，恰好一帧 settled
+  与真实 numstat 对账（a.txt +10/−5、b.txt +3/−0、新建未跟踪文件 null）。
+  **②Changes 账本（真实 dist + headless Chrome）**
+  `smoke-changes-ledger.mjs` `pass: true`——首写前不存在、行 27px/头
+  28px、四段 staging 全程 `markerKept`（钉首现位置）、头
+  `writing · N files` 原地切 `4 files · settled`、行 hover 背景
+  `rgba(0,0,0,0)`（零灰底）且仅行尾动作浮现、footer `Review`+`Commit…`
+  横向溢出 0、Review 发 4 条 `file.openDiff`、暗色行底全透明；
+  `smoke-git-commit.mjs` `pass: true` 证明 footer `Commit…`
+  （`.dvx-changes-commit`）拉起既有 Git 面板并走通提交/失败/git 不可用
+  三态。**③计划细条** `smoke-plan-anchor.mjs` 五场景 `pass: true`——
+  全部 `inUserMessage`+`afterContent`（钉在触发消息下方）、收起一行单
+  按钮无卡壳、流式 0/3→原地 2/3→展开 3 圈 2 勾→收起→终态 3/3、吸顶
+  底盘 1px+8px 圆角且行高 35px 不跳、吸顶展开为 absolute 浮层、继续滚
+  `firstPinned:false`/`secondPinned:true`（会离开）。**④ticker**
+  `smoke-ticker-fade.mjs` `pass: true`（数值见 §32）。**⑤Reload 存活**
+  `probe-a4-reload-controller.mjs` PASS——生产 ChatController 两代 +
+  真实 daemon，gen-a 权限挂起中硬退出后 gen-b 观察到流式 `recovery-1`
+  占位回合仍在、权限重投且归属同一回合、`proceed_once` 后 completed、
+  终态转录 5 条为 daemon 产出、`sendTurnNeverCalled:true`（重接非重发）。
+  **⑥排队消息 reload 恢复** 新写 `artifacts/probe-queue-reload.mjs`
+  PASS——回合流式中入队 2 条、恢复存储确实持久化 2 条、dispose 该代后
+  新一代恢复同会话并发 `queued-messages-restored` 诊断、`queue.state`
+  带回原文两条且 `paused: "dispatch-blocked"`、静置 4s 零自动派发。
+  **未验证**：本包没有真人在 Cursor 里点测，视觉审美未签收（按新规则
+  不做截图自评），详见 `docs/product/acceptance-v0.4.0.md` §4。
 - 大文件分解重构（2026-08-13 凌晨，`refactor-plan.md` 批次①–④全量
   落地，31 个 commit：`c339cba`…`645eba6`，纯结构移动、行为零变化）：
   **①** `styles.css` 7148 行拆为 `@import` 索引 + `styles/` 23 段
