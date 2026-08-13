@@ -1,6 +1,9 @@
 # BYOK 自定义模型配置（Add model）设计
 
-> 状态：**设计待实现**（2026-08-12 调研 + 设计，未实现，排期待用户拍板）。
+> 状态：**已实现**（2026-08-13，Bridge v9 + Host daemon RPC + Webview 面板；
+> 探针 `artifacts/probe-custom-models-daemon.mjs`、E2E
+> `artifacts/probe-custom-models-e2e.mjs`、视觉冒烟
+> `artifacts/smoke-custom-models.mjs`）。
 > 基于本机 `~/.factory/` 实际文件、`@factory/droid-sdk` 0.7.0 类型定义、
 > `droid --help` 输出与 docs.factory.ai 官方文档四路取证；文中标注
 > 文件与行号（行号会漂移，定位以符号为准）。本文对应 HANDOVER 第 3

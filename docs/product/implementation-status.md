@@ -2145,7 +2145,8 @@ UI 描述见 §22 重做记录。
   （`chat/customModels.ts`、`ChatController.customModels.test.ts`、
   `CustomModelsPanel.tsx`——其 `customModels.*` 联合类型成员尚未
   落进 bridgeMessages），本切片文件全绿；build 过（webview.css
-  125.7kb）。
+  125.7kb）。**后续（2026-08-13）**：BYOK Add model 切片落地后
+  全量 typecheck 与 vitest **1994 用例**再次全绿。
 - **视觉自验收**（真实 dist bundle，`artifacts/shot.mjs` +
   visual/command-card/queue-bar 装置，截图存 `artifacts/`）：
   `theme-light-conversation.png`（暖白基准零回归）、
@@ -2167,6 +2168,39 @@ UI 描述见 §22 重做记录。
   理论不受影响）；④ 设计文档 §2.2 曾建议 globalState 持久化，实施
   改走 VS Code 设置项（用户任务书点名 `droidvisx.theme`），文档
   该节未回写。
+
+### BYOK Custom Models 管理（Add model 切片）
+
+- [x] Custom Models 的创建、编辑和删除（Provider 三选 +
+      `generic-chat-completion-api`；Bedrock/高级字段只读提示；
+      已配置 BYOK Model 的选择此前已接通）
+- **Bridge 协议 v9**：`src/shared/customModelsProtocol.ts` 双侧
+  exact-keys 校验（W→H `customModels.refresh/save/delete`，H→W
+  `customModels.state` 脱敏投影）；`apiKey` 明文仅出现在 save
+  消息一次；state 不进 `host.snapshot`。
+- **Host**：`src/extension/chat/customModels.ts` 经 extension 注入
+  `daemonCustomModels` → SDK `customModels.list/upsert/delete`；
+  save/delete 日志仅 `{ model, provider, hasApiKey }`；并发冲突映射
+  固定文案并自动 refresh；空闲会话 save/delete 后 `startReplacement`
+  重载以刷新 model catalog（忙碌时跳过，面板 copy 说明）。
+- **Webview**：ModelPopover 底部 quiet「Add model…」→
+  `CustomModelsPanel`（列表/表单/内联删除确认；非嵌套 `<form>`；
+  密码型 key 字段、编辑留空=保留）；`--dvx-*` token + 复用
+  `dvx-mcp-add-*` 表单族；深色主题经 token  swap 继承。
+- **探针实证**（`artifacts/probe-custom-models-daemon.mjs`，私有
+  sidecar）：list 字段 `rawIndex/model/hasApiKey/apiKeyMask/…`；
+  upsert 省略 key 保留 settings.json；冲突
+  `Custom models changed on disk`；delete 后 id 漂移由 copy 警告。
+- **E2E**（`artifacts/probe-custom-models-e2e.mjs`）：upsert →
+  runtime catalog 含新模型 → 选最省额度 BYOK（DeepSeek V4 Flash）
+  对话 `ok` → delete 移除；**PASS**（2026-08-13）。
+- **门禁**：全量 vitest **100 文件 1994 用例**、三段 typecheck、
+  `lint:budgets`、build 全绿（2026-08-13）。
+- **视觉自验收**（真实 dist，`artifacts/smoke-custom-models.mjs`）：
+  `custom-models-add-entry.png`、`custom-models-list.png`、
+  `custom-models-form.png`、`custom-models-form-filled.png`、
+  `custom-models-add-success.png`、`custom-models-form-dark.png`、
+  `custom-models-picker-selected.png`。
 
 ## 部分完成
 
@@ -2492,8 +2526,9 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 - [ ] Marketplaces
 - [ ] Hooks 管理
 - [ ] Automations
-- [ ] Custom Models 的创建、编辑和 Provider 管理（已配置 BYOK Model 的选择
-      已接通）
+- [x] Custom Models 的创建、编辑和 Provider 管理（Add model 切片，
+      2026-08-13；见上文「BYOK Custom Models 管理」；已配置 BYOK
+      Model 的选择此前已接通）
 - [ ] 组织策略
 - [ ] Account Profile
 - [ ] Account Usage
