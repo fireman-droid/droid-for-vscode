@@ -9,6 +9,7 @@ design/**
 docs/**
 !docs/product/log-analysis-playbook.md
 src/**
+scripts/**
 node_modules/**
 dist/**
 !dist/extension/**
