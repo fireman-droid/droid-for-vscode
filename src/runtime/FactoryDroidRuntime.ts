@@ -1362,6 +1362,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
         startedAt,
         'initialization-failed',
         'error',
+        error,
       );
       return this.unavailable(
         'initialization-failed',
@@ -1475,13 +1476,22 @@ export class FactoryDroidRuntime implements DroidRuntime {
     startedAt: number,
     outcome: string,
     level: 'info' | 'warn' | 'error',
+    error?: unknown,
   ): void {
+    // The failure reason rides along (bounded): a bare outcome made
+    // the 2026-08-13 "session could not be opened" hunt needlessly
+    // blind.
+    const reason =
+      error instanceof Error ? error.message : undefined;
     this.recordDiagnostic({
       level,
       name: 'runtime.initialize.finished',
       attributes: {
         durationMs: Math.round(performance.now() - startedAt),
         outcome,
+        ...(reason === undefined
+          ? {}
+          : { reason: reason.slice(0, 300) }),
       },
     });
   }

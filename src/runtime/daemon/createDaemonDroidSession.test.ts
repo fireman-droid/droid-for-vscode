@@ -465,8 +465,11 @@ describe('createDaemonDroidSession', () => {
   it('refuses to resume a session leased to another live window', async () => {
     const mock = createDroidMock();
 
-    await expect(
-      createDaemonDroidSession({
+    // The blocked acquire retries for LEASE_RETRY_MAX_MS before it
+    // gives up (reload-lingering holders usually die within that).
+    vi.useFakeTimers();
+    try {
+      const pending = createDaemonDroidSession({
         target: {
           kind: 'resume',
           cwd: 'C:\\workspace',
@@ -478,9 +481,55 @@ describe('createDaemonDroidSession', () => {
           acquire: () => ({ acquired: false, heldByPid: 4242 }),
           release: vi.fn(),
         },
+      });
+      const assertion = expect(pending).rejects.toThrow(
+        'open in another window (pid 4242)',
+      );
+      await vi.advanceTimersByTimeAsync(15_600);
+      await assertion;
+      expect(mock.sessions.resume).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('resumes after a lingering holder frees the lease mid-retry', async () => {
+    const mock = createDroidMock();
+    // First two acquires hit the dying previous extension host; the
+    // third preempts (holder exited). The resume then proceeds.
+    let attempts = 0;
+    const lease = {
+      acquire: vi.fn(() => {
+        attempts += 1;
+        return attempts < 3
+          ? ({ acquired: false, heldByPid: 4242 } as const)
+          : ({ acquired: true } as const);
       }),
-    ).rejects.toThrow('open in another window (pid 4242)');
-    expect(mock.sessions.resume).not.toHaveBeenCalled();
+      release: vi.fn(),
+    };
+
+    vi.useFakeTimers();
+    try {
+      const pending = createDaemonDroidSession({
+        target: {
+          kind: 'resume',
+          cwd: 'C:\\workspace',
+          sessionId: 'saved-session',
+        },
+        interactionHandler: cancellingRuntimeInteractionHandler,
+        getDroid: async () => mock.droid,
+        lease,
+      });
+      await vi.advanceTimersByTimeAsync(1_100);
+      await pending;
+      expect(lease.acquire).toHaveBeenCalledTimes(3);
+      expect(mock.sessions.resume).toHaveBeenCalledWith(
+        'saved-session',
+        expect.anything(),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('releases the lease when the leased resume fails', async () => {

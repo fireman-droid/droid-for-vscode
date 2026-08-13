@@ -2821,6 +2821,31 @@ UI 描述见 §22 重做记录。
   后台多派发，几秒内行内出现 "running in background" + Working
   药丸可点开看实时活动/Stop。
 
+### 40. 会话租约重载竞态修复 + 初始化失败日志带原因（2026-08-13 晚，v0.7.5）
+
+- **用户实锤**（个人简历工作区窗口）："The selected Droid session
+  could not be opened" + Retry 死循环。日志：daemon 连接正常，
+  `runtime.initialize.finished` 两次失败（163ms / 1ms）但**只有
+  outcome 没有原因**，排查被拖长。
+- **取证**：`probe-resume-error.mjs` 直连共享 daemon（解密
+  auth.v2 凭据）resume 同一会话 → **成功**，daemon 无辜；租约文件
+  当时无此会话（事后已被清）。失败点在连接后 2ms，唯一同步抛错 =
+  `lease.acquire` 的"Session is open in another window"。时间线：
+  19:44:42 窗口重载，**旧扩展宿主要几十秒~2 分钟才退出**（main.log
+  实测），期间它握着本工作区会话租约，新宿主 resume 秒拒；旧宿主
+  死后租约释放，所以事后文件干净。
+- **修复**：
+  `createDaemonDroidSession` resume 分支撞租约时**重试 15s**
+  （500ms 间隔，每次一次文件读；持有 pid 死亡即抢占），扛过重载
+  交接窗口，真双窗口冲突 15s 后仍明确报错；
+  `FactoryDroidRuntime.recordInitializationFinished` 失败记录带
+  `reason`（错误消息截 300 字），以后这类问题一条日志定位。
+- **验证（新规则）**：tsc + lint:budgets +
+  `createDaemonDroidSession.test` 25 例全绿（原"拒绝续租"用例改
+  假时钟推 15.6s，新增"重试中持有者退出→抢占成功"用例）；
+  `droidvisx-0.7.5.vsix` 安装成功。真机验收：重载窗口后自动恢复
+  会话不再报打不开（最多迟 15s）。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择

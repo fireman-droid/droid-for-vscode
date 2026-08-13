@@ -59,6 +59,11 @@ export interface SessionLeaseHooks {
   release(sessionId: string): void;
 }
 
+/** How long a blocked resume keeps re-trying the lease. */
+export const LEASE_RETRY_MAX_MS = 15_000;
+/** Re-acquire cadence while blocked (the check is one file read). */
+export const LEASE_RETRY_INTERVAL_MS = 500;
+
 export async function createDaemonDroidSession(options: {
   target: RuntimeSessionTarget;
   interactionHandler: RuntimeInteractionHandler;
@@ -72,7 +77,20 @@ export async function createDaemonDroidSession(options: {
   const lease = options.lease ?? noopLease;
 
   if (options.target.kind === 'resume') {
-    const outcome = lease.acquire(options.target.sessionId);
+    // A window reload leaves the previous extension host process
+    // alive for up to minutes, still holding this workspace's lease
+    // (user hit 2026-08-13 19:44: resume failed in 1ms against a
+    // holder that was already on its way out). The holder releases
+    // on dispose or dies and gets preempted, so a blocked acquire
+    // retries briefly instead of failing the whole resume.
+    let outcome = lease.acquire(options.target.sessionId);
+    const deadline = Date.now() + LEASE_RETRY_MAX_MS;
+    while (!outcome.acquired && Date.now() < deadline) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, LEASE_RETRY_INTERVAL_MS),
+      );
+      outcome = lease.acquire(options.target.sessionId);
+    }
     if (!outcome.acquired) {
       throw new Error(
         `Session is open in another window (pid ${String(outcome.heldByPid)}). Close it there or wait for that window to exit.`,
