@@ -423,11 +423,11 @@ export function ActivityGroup({
   );
 }
 
-/** Matches the ticker slide transition in styles.css
- * (--dvx-duration-slower, 300ms), plus headroom; the timeout is the
- * commit fallback when the transition never fires (reduced motion,
- * occluded webviews). */
-export const TICKER_SLIDE_FALLBACK_MS = 360;
+/** Matches the ticker slide transition in
+ * 12-exploration-ticker.css (--dvx-ticker-duration, 280ms), plus
+ * headroom; the timeout is the commit fallback when the transition
+ * never fires (reduced motion, occluded webviews). */
+export const TICKER_SLIDE_FALLBACK_MS = 340;
 
 /**
  * GroupedParts hands a group's rendered members as ONE Fragment

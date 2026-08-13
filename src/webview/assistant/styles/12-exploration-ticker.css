@@ -128,7 +128,12 @@
    below on the same timeline (vertical ticker, user report batch 2 §1
    + fade rework). Transient status only, so it takes no clicks. */
 .dvx-activity-ticker {
-  --dvx-ticker-row: 22px;
+  /* Row height, duration and curve are the values the user dialled in
+     on artifacts/ticker-mini.html; they are local to the ticker so the
+     shared motion tokens keep their meaning elsewhere. */
+  --dvx-ticker-row: 26px;
+  --dvx-ticker-duration: 280ms;
+  --dvx-ticker-easing: cubic-bezier(0.22, 0.61, 0.36, 1);
 
   height: var(--dvx-ticker-row);
   overflow: hidden;
@@ -146,13 +151,12 @@
   display: flex;
   flex-direction: column;
   transform: translateY(
-    calc(var(--dvx-ticker-offset, 0) * -1 * var(--dvx-ticker-row, 22px))
+    calc(var(--dvx-ticker-offset, 0) * -1 * var(--dvx-ticker-row, 26px))
   );
 }
 
 .dvx-ticker-track.dvx-ticker-slide {
-  transition: transform var(--dvx-duration-slower)
-    var(--dvx-easing-out-strong);
+  transition: transform var(--dvx-ticker-duration) var(--dvx-ticker-easing);
 }
 
 /* Rows dissolve as they travel: the outgoing row loses
@@ -170,8 +174,7 @@
 }
 
 .dvx-ticker-track.dvx-ticker-slide .dvx-ticker-item {
-  transition: opacity var(--dvx-duration-slower)
-    var(--dvx-easing-out-strong);
+  transition: opacity var(--dvx-ticker-duration) var(--dvx-ticker-easing);
 }
 
 .dvx-ticker-item .dvx-activity-row {
