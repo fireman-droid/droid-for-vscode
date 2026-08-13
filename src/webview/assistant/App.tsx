@@ -62,6 +62,7 @@ import {
   GitCommitFlowContext,
   type GitCommitFlowContextValue,
 } from './GitCommitPanel';
+import { CustomModelsContext, useCustomModelsFlow } from './CustomModelsPanel';
 import { findLatestChangesContext } from './gitCommitDraft';
 import { selectPlanAnchors } from './planAnchor';
 import { QueuedMessages } from './QueuedMessages';
@@ -288,6 +289,10 @@ export function App(): React.JSX.Element {
   const hasInteraction = state.interactions.length > 0;
   const connectionStatus = state.connection.status;
   const sessionId = state.sessionId;
+  // BYOK custom-models panel flow: state + callbacks live in the
+  // hook (window-listener pull, not store/snapshot state) and reach
+  // the panel via context — same no-prop-drilling pattern as gitFlow.
+  const customModelsFlow = useCustomModelsFlow(vscode, sessionId);
   // `/btw` side chat (S1): the card's open flag is webview-local; the
   // host owns the hidden fork and its projected contents (state.btw).
   // Closing the card or switching sessions discards the fork.
@@ -1496,7 +1501,9 @@ export function App(): React.JSX.Element {
       <OpenPathContext.Provider value={handleOpenPath}>
         <LocalImageContext.Provider value={localImageSource}>
           <GitCommitFlowContext.Provider value={gitFlow}>
-            {app}
+            <CustomModelsContext.Provider value={customModelsFlow}>
+              {app}
+            </CustomModelsContext.Provider>
           </GitCommitFlowContext.Provider>
         </LocalImageContext.Provider>
       </OpenPathContext.Provider>

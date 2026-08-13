@@ -32,8 +32,15 @@ import type {
   TokenUsageBreakdown,
 } from '../../shared/tokenUsage';
 import { useTheme } from './theme';
+import { AddModelEntry, CustomModelsPanel } from './CustomModelsPanel';
 
-type OpenPanel = 'settings' | 'context' | 'model' | 'mode' | null;
+type OpenPanel =
+  | 'settings'
+  | 'context'
+  | 'model'
+  | 'mode'
+  | 'customModels'
+  | null;
 type SettingsView =
   | 'root'
   | 'mode'
@@ -596,6 +603,14 @@ export function ComposerControls({
             onSettingUpdate(update);
             close();
           }}
+          onManageModels={() => open('customModels')}
+        />
+      ) : null}
+      {renderedPanel === 'customModels' ? (
+        <CustomModelsPanel
+          key={openSeq}
+          id={`${panelId}-custom-models`}
+          onBack={() => open('model')}
         />
       ) : null}
     </div>
@@ -2446,6 +2461,7 @@ function ModelPopover({
   modelCatalog,
   disabled,
   onUpdate,
+  onManageModels,
 }: {
   readonly id: string;
   readonly settings: SessionSettingsState;
@@ -2463,6 +2479,7 @@ function ModelPopover({
       }
     >,
   ) => void;
+  readonly onManageModels: () => void;
 }): React.JSX.Element {
   const [query, setQuery] = useState('');
   const [editingReasoning, setEditingReasoning] = useState(false);
@@ -2672,6 +2689,7 @@ function ModelPopover({
           current={confirmed}
         />
       )}
+      <AddModelEntry onOpen={onManageModels} />
       <SettingsStatus settings={settings} />
       {disabled && settings.status === 'ready' ? (
         <p className="dvx-popover-message" role="status">

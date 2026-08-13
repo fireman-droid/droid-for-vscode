@@ -748,6 +748,11 @@ export function assistantWebviewReducer(
           : event.commands;
       return { ...state, sequence: event.sequence, commands };
     }
+    case 'customModels.state':
+      // Panel-scoped masked state: the CustomModelsPanel flow hook
+      // consumes it off its own window listener (on-demand pull, not
+      // snapshot-resident); the store only advances the sequence.
+      return advance(state, event.sequence);
     case 'mcp.auth':
       return event.sessionId === state.sessionId
         ? {

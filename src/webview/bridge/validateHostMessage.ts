@@ -162,6 +162,7 @@ import {
   type TranscriptToolStatus,
   type TurnStatus,
 } from '../../shared/bridgeMessages';
+import { parseCustomModelsStateMessage } from '../../shared/customModelsProtocol';
 import {
   parseSessionBtwMessage,
   type SessionBtwMessage,
@@ -327,6 +328,10 @@ export function readHostMessage(
         return parseQueueState(value);
       case 'ui.theme':
         return parseUiTheme(value);
+      case 'customModels.state':
+        // Delegated to the shared BYOK contract module; the panel's
+        // flow hook applies the same parser to its window listener.
+        return parseCustomModelsStateMessage(value) ?? undefined;
       default:
         return undefined;
     }

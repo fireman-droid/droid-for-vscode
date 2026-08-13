@@ -1,0 +1,196 @@
+/* Custom models panel (BYOK Add model). Token-driven throughout so
+   the dark theme inherits via the [data-theme] token swap with no
+   re-skin here. Form inputs/radios/submit reuse the dvx-mcp-add-*
+   primitives from 17-skills-mcp.css — one shared quiet form family,
+   not a new visual language. */
+
+.dvx-cm-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(430px, 72vh);
+  padding: 10px;
+}
+
+/* Head bleeds to the card edges so its divider runs full width
+   (same treatment as .dvx-skills-panel .dvx-panel-head). */
+.dvx-cm-popover .dvx-panel-head {
+  flex: 0 0 auto;
+  margin: -10px -10px 0;
+  padding: 8px 12px 7px;
+}
+
+/* Quiet fixed entry at the tail of the ModelPopover; sits on the
+   model panel card, separated by a hairline. */
+.dvx-model-popover .dvx-cm-add-entry {
+  margin-top: 6px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 10px;
+  background: var(--dvx-raised);
+  box-shadow: var(--dvx-shadow);
+}
+
+.dvx-cm-add-plus {
+  flex: 0 0 auto;
+  width: 15px;
+  color: var(--dvx-muted);
+  font-size: 13px;
+  line-height: 1;
+  text-align: center;
+}
+
+.dvx-cm-list {
+  margin: 0;
+  padding: 0 2px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.dvx-cm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--dvx-border);
+}
+
+.dvx-cm-row:last-child {
+  border-bottom: 0;
+}
+
+.dvx-cm-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dvx-cm-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dvx-ink);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.dvx-cm-badge {
+  padding: 1px 6px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 999px;
+  color: var(--dvx-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.dvx-cm-badge-warn {
+  border-color: var(--dvx-warning);
+  color: var(--dvx-warning);
+}
+
+.dvx-cm-meta {
+  overflow: hidden;
+  color: var(--dvx-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-cm-key {
+  flex: 0 0 auto;
+  color: var(--dvx-subtle);
+  font-family: var(--dvx-mono);
+  font-size: 10px;
+}
+
+.dvx-cm-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.dvx-cm-action {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dvx-muted);
+  cursor: pointer;
+  font-size: 11px;
+  transition: color 130ms ease;
+}
+
+.dvx-cm-action:hover:not(:disabled) {
+  color: var(--dvx-ink);
+}
+
+.dvx-cm-action:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.dvx-cm-delete:hover:not(:disabled),
+.dvx-cm-delete-confirm {
+  color: var(--dvx-danger);
+}
+
+.dvx-cm-delete-confirm {
+  font-weight: 600;
+}
+
+.dvx-cm-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+  border: 1px solid var(--dvx-border);
+  border-radius: 10px;
+  background: var(--dvx-surface);
+}
+
+.dvx-cm-field {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dvx-cm-field-label {
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.dvx-cm-field-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.dvx-cm-check {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 6px;
+  color: var(--dvx-text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.dvx-cm-check input {
+  margin: 0;
+  accent-color: var(--dvx-accent);
+}
+
+.dvx-cm-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 2px;
+}
