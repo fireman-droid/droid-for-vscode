@@ -4,6 +4,79 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-08-13
+
+Feature release covering everything since 0.2.0, including the 0.3.0
+build that shipped without its own entry here. The conversation loses
+two more cards — Changes becomes a live ledger that grows while Droid
+writes, and the plan card becomes a thin line pinned under the message
+that asked for it — while the daemon path picks up dark theme, BYOK
+custom models, editor-selection capture, and a batch of reload and
+model-picker fixes.
+
+### Added
+
+- **Live Changes ledger** — the end-of-turn Changes summary becomes a
+  running ledger that appears with the first file write and stays
+  anchored where it first appeared. The header counts up as
+  `writing · N files` and flips in place to `N files · settled` when
+  the turn reconciles against `git diff --numstat`; the footer offers
+  Review (opens every file's diff) and Commit… (the existing Git
+  commit panel). Rides a new streaming `changes.update` bridge
+  contract on protocol v10.
+- **Dark theme** — a charcoal dark skin with an Auto / Light / Dark
+  choice in the settings popover, persisted through the
+  `droidvisx.theme` setting and applied without a reload.
+- **Add Selection to Chat** — an editor right-click command stages the
+  current selection as a Composer chip, holding the capture until a
+  cold-starting session finishes connecting.
+- **BYOK custom models** — a Custom Models panel reachable from the
+  Model popover adds, edits, and removes bring-your-own-key models
+  through the daemon; credentials stay opaque to DroidVisX.
+- **Queued prompts survive a reload** — prompts queued during a turn
+  are persisted and come back paused after the window reloads, so a
+  reload never silently fires them.
+
+### Changed
+
+- **Plan line replaces the plan card** — the Created Plan card is gone.
+  The plan is now a single quiet line under the user message that
+  triggered it: collapsed to one row, sticky while that message is on
+  screen, expanding to a circle-per-step checklist. No grey hover
+  wash anywhere on it.
+- **Exploration ticker dissolves while it slides** — the outgoing row
+  fades as it travels instead of being clipped, and a fast arrival
+  retargets the running transition from where it is rather than
+  snapping back. Timing is the 280ms / 26px / `cubic-bezier(0.22,
+  0.61, 0.36, 1)` the user dialled in.
+- **Internals** — the three largest source files were split into
+  focused modules (the chat controller into `chat/*`, the thread UI
+  into `thread/*`, the stylesheet into a 23-file import index with
+  colors centralized in `00-tokens.css`), and a file line-budget gate
+  now blocks new monoliths.
+
+### Fixed
+
+- **Reload killed a running daemon turn** — a turn running on the
+  shared daemon now survives a window reload or panel dispose instead
+  of being torn down with the window.
+- **Model picker empty in daemon mode** — the daemon serves the model
+  catalog from `settings.getDefaults`, so the picker lists the full
+  catalog instead of nothing.
+- **Daemon console window on Windows** — the shared daemon no longer
+  spawns a visible console window.
+- **Plan never rendered from a real turn** — TodoWrite payloads are
+  normalized to canonical plan lines, so plans built by the real CLI
+  reach the UI.
+- **Double Add-to-Chat stacked chips** — a repeated identical capture
+  stages one chip instead of two.
+- **Preview toolbar clipped when narrow** — the sandboxed preview
+  toolbar wraps instead of cutting its buttons off.
+- **Failed command card read as success** — a failed command card is
+  colored with the danger token.
+- **Silent diff failures** — `file-diff-failed` diagnostics name the
+  path that failed and why.
+
 ## [0.2.0] - 2026-08-13
 
 Feature release: the daemon becomes the default backend so turns survive
