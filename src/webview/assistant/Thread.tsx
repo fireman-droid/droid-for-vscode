@@ -714,26 +714,21 @@ export const DroidThread = memo(function DroidThread({
                   // under the question, so the pin coordinator carries
                   // them through stick/push-out for free.
                   const plans = planAnchors?.get(message.id);
-                  const attachments = readUserAttachments(message.metadata);
-                  // A message with inline image previews drops its
-                  // IMAGE chips — the thumbnail already says it
+                  // Inline image previews make IMAGE chips redundant
                   // (kitchen-sink form, 2026-08-13); other kinds keep
                   // their chips.
-                  const hasInlineImage = message.content.some(
+                  const hasImage = message.content.some(
                     (part) =>
                       part.type === "data" && part.name === "droid-image",
                   );
+                  const attachments = readUserAttachments(
+                    message.metadata,
+                  ).filter((item) => !hasImage || item.kind !== "image");
                   return (
                     <UserMessage
                       text={readMessageText(message.content)}
                       messageId={messageId}
-                      attachments={
-                        hasInlineImage
-                          ? attachments.filter(
-                              (attachment) => attachment.kind !== "image",
-                            )
-                          : attachments
-                      }
+                      attachments={attachments}
                       planLine={
                         plans === undefined
                           ? null
