@@ -38,7 +38,13 @@ const EMPTY_REASONING_PART = {
   status: { type: "complete" as const },
 };
 
-export function ToolFilePath({ path }: { readonly path: string }): React.JSX.Element {
+export function ToolFilePath({
+  path,
+  turnId,
+}: {
+  readonly path: string;
+  readonly turnId: string | null;
+}): React.JSX.Element {
   const openFileDiff = useContext(FileDiffContext);
   const fileName = path.split("/").at(-1) ?? path;
   return (
@@ -50,7 +56,7 @@ export function ToolFilePath({ path }: { readonly path: string }): React.JSX.Ele
         // Keep the surrounding <details> row from toggling.
         event.preventDefault();
         event.stopPropagation();
-        openFileDiff(path);
+        openFileDiff(path, turnId);
       }}
     >
       {fileName}
@@ -389,8 +395,9 @@ export function readChangesWriting(data: unknown): boolean {
 
 /**
  * Trailing row action opening an .html/.htm prototype in the
- * sandboxed preview panel. Rests invisible; the row's hover or
- * focus-within fades it in (space is reserved, so nothing reflows).
+ * sandboxed preview panel. It stays quietly visible so the final
+ * settled ledger never appears to lose the Preview capability that
+ * was available on an earlier tool row.
  */
 function ChangesPreviewAction({
   path,
@@ -401,7 +408,7 @@ function ChangesPreviewAction({
   return (
     <button
       type="button"
-      className="dvx-changes-action dvx-changes-row-action"
+      className="dvx-changes-action"
       title={`Preview ${path} in a sandboxed panel`}
       onClick={() => openPreview(path)}
     >
@@ -454,7 +461,7 @@ export function ChangesSummary({
               type="button"
               className="dvx-changes-file"
               title={`Open changes for ${file.path}`}
-              onClick={() => openFileDiff(file.path)}
+              onClick={() => openFileDiff(file.path, turnId)}
             >
               {file.path.split("/").at(-1) ?? file.path}
             </button>
@@ -479,7 +486,7 @@ export function ChangesSummary({
           title="Open the diff of every changed file"
           onClick={() => {
             for (const file of files) {
-              openFileDiff(file.path);
+              openFileDiff(file.path, turnId);
             }
           }}
         >

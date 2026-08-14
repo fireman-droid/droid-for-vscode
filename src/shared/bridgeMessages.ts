@@ -128,8 +128,9 @@ import type { ChangesUpdateMessage } from './changesProtocol';
 // Version 10: live changes ledger — `turn.changes` is replaced by
 // the streaming `changes.update` (H→W; changesProtocol.ts).
 // Version 11: subagent panel — openTranscript/stop/panel W→H,
-// transcript/activity H→W; v12–v16; v17 custom-model discovery/import.
-export const BRIDGE_PROTOCOL_VERSION = 17 as const;
+// transcript/activity H→W; v12–v16; v17 custom-model discovery/import;
+// v18 turn-scoped file review.
+export const BRIDGE_PROTOCOL_VERSION = 18 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_DELTA_LENGTH = 16_384;
@@ -597,6 +598,7 @@ export interface SessionForkMessage {
 export interface FileOpenDiffMessage {
   readonly type: 'file.openDiff';
   readonly sessionId: string;
+  readonly turnId: string;
   readonly path: string;
 }
 

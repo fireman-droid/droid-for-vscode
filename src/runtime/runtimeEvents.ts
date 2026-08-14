@@ -55,6 +55,12 @@ export type RuntimeEvent =
       toolName: string;
       toolUseId: string;
       action: string;
+      /**
+       * True only for the SDK's complete `tool_call`, never for a
+       * partial `tool_call_delta`. Lets the host capture a stable
+       * pre-write file baseline without trusting a truncated path.
+       */
+      inputComplete?: true;
       /** Workspace-relative path changed by file-modifying tools. */
       filePath?: string;
       /**

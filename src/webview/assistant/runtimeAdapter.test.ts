@@ -169,6 +169,7 @@ describe('Droid external-store adapter', () => {
         argsText: '',
         providerMetadata: {
           droidvisx: {
+            turnId: 'turn-a',
             action: 'Read workspace files',
             status: 'running',
             progressCount: 3,

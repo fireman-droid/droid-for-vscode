@@ -122,10 +122,14 @@ describe('ChatController', () => {
     controller.handleMessage({
       type: 'file.openDiff',
       sessionId: 'session-1',
+      turnId: 'turn-1',
       path: 'src/app.ts',
     });
     await vi.waitFor(() => {
-      expect(openDiff).toHaveBeenCalledWith('src/app.ts');
+      expect(openDiff).toHaveBeenCalledWith('src/app.ts', {
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+      });
     });
     expect(
       messages.filter(
@@ -139,6 +143,7 @@ describe('ChatController', () => {
     controller.handleMessage({
       type: 'file.openDiff',
       sessionId: 'session-other',
+      turnId: 'turn-1',
       path: 'src/app.ts',
     });
     expect(openDiff).toHaveBeenCalledOnce();
@@ -149,6 +154,7 @@ describe('ChatController', () => {
     controller.handleMessage({
       type: 'file.openDiff',
       sessionId: 'session-1',
+      turnId: 'turn-1',
       path: 'src/missing.ts',
     });
     await vi.waitFor(() => {
@@ -190,6 +196,7 @@ describe('ChatController', () => {
     controller.handleMessage({
       type: 'file.openDiff',
       sessionId: 'session-1',
+      turnId: 'turn-1',
       path: 'docs/Canvas-API-学习文档.md',
     });
     await vi.waitFor(() => {
@@ -222,6 +229,7 @@ describe('ChatController', () => {
     controller.handleMessage({
       type: 'file.openDiff',
       sessionId: 'session-1',
+      turnId: 'turn-1',
       path: 'docs/Canvas-API-学习文档.md',
     });
     await vi.waitFor(() => {
@@ -263,6 +271,7 @@ describe('ChatController', () => {
     controller.handleMessage({
       type: 'file.openDiff',
       sessionId: 'session-1',
+      turnId: 'turn-1',
       path: 'src/late.ts',
     });
     firstTurn.resolve();
@@ -658,6 +667,7 @@ describe('ChatController', () => {
         toolName: 'Edit',
         toolUseId: 'tool-1',
         action: 'Edited workspace files',
+        inputComplete: true,
         filePath: 'src/app.ts',
       };
       yield {
@@ -672,6 +682,7 @@ describe('ChatController', () => {
         toolName: 'Create',
         toolUseId: 'tool-2',
         action: 'Created workspace files',
+        inputComplete: true,
         filePath: 'docs/new.md',
       };
       yield {
@@ -687,6 +698,7 @@ describe('ChatController', () => {
       async (): Promise<ReadonlyMap<string, FileChangeStat>> =>
         new Map([['src/app.ts', { additions: 3, deletions: 1 }]]),
     );
+    const captureTurnBaseline = vi.fn(async () => {});
     const { controller, messages } = createController(
       () => runtime,
       undefined,
@@ -695,7 +707,7 @@ describe('ChatController', () => {
       undefined,
       undefined,
       undefined,
-      { read },
+      { read, captureTurnBaseline },
     );
     ready(controller);
     await waitForConnected(messages);
@@ -714,6 +726,16 @@ describe('ChatController', () => {
     const updates = messages.filter(
       (message) => message.type === 'changes.update',
     );
+    expect(captureTurnBaseline.mock.calls).toEqual([
+      [
+        { sessionId: 'session-1', turnId: 'turn-1' },
+        ['src/app.ts'],
+      ],
+      [
+        { sessionId: 'session-1', turnId: 'turn-1' },
+        ['docs/new.md'],
+      ],
+    ]);
     // Each completed file tool published its row immediately: first
     // frame with one file, second with both, all pre-git (null
     // counts) because the per-file stat read is debounced.
@@ -730,8 +752,11 @@ describe('ChatController', () => {
         { path: 'docs/new.md', additions: null, deletions: null },
       ],
     });
-    // Untracked files keep null stats; order follows tool order.
-    expect(read).toHaveBeenCalledWith(['src/app.ts', 'docs/new.md']);
+    // Paths and their owning turn are reconciled together.
+    expect(read).toHaveBeenCalledWith(
+      ['src/app.ts', 'docs/new.md'],
+      { sessionId: 'session-1', turnId: 'turn-1' },
+    );
     expect(updates.at(-1)).toMatchObject({
       sessionId: 'session-1',
       turnId: 'turn-1',

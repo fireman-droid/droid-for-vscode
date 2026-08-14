@@ -52,6 +52,7 @@ describe('createTurnChangesLedger', () => {
     const publish = vi.fn();
     const ledger = createTurnChangesLedger({
       reader: { read },
+      scope: { sessionId: 'session-a', turnId: 'turn-a' },
       publish,
     });
 
@@ -65,7 +66,10 @@ describe('createTurnChangesLedger', () => {
 
     await vi.advanceTimersByTimeAsync(500);
     expect(read).toHaveBeenCalledTimes(1);
-    expect(read).toHaveBeenCalledWith(['src/app.ts']);
+    expect(read).toHaveBeenCalledWith(
+      ['src/app.ts'],
+      { sessionId: 'session-a', turnId: 'turn-a' },
+    );
     expect(publish).toHaveBeenLastCalledWith([
       { path: 'src/app.ts', additions: 3, deletions: 1 },
     ]);
@@ -79,6 +83,7 @@ describe('createTurnChangesLedger', () => {
     const publish = vi.fn();
     const ledger = createTurnChangesLedger({
       reader: { read },
+      scope: { sessionId: 'session-a', turnId: 'turn-a' },
       publish,
     });
 
@@ -106,6 +111,7 @@ describe('createTurnChangesLedger', () => {
     const publish = vi.fn();
     const ledger = createTurnChangesLedger({
       reader: { read },
+      scope: { sessionId: 'session-a', turnId: 'turn-a' },
       publish,
     });
 
@@ -129,6 +135,7 @@ describe('createTurnChangesLedger', () => {
     const publish = vi.fn();
     const ledger = createTurnChangesLedger({
       reader: { read },
+      scope: { sessionId: 'session-a', turnId: 'turn-a' },
       publish,
     });
 
@@ -146,7 +153,10 @@ describe('createTurnChangesLedger', () => {
     resolveNext(new Map([['src/a.ts', { additions: 2, deletions: 0 }]]));
     await vi.advanceTimersByTimeAsync(0);
     expect(read).toHaveBeenCalledTimes(2);
-    expect(read).toHaveBeenLastCalledWith(['src/b.ts', 'src/c.ts']);
+    expect(read).toHaveBeenLastCalledWith(
+      ['src/b.ts', 'src/c.ts'],
+      { sessionId: 'session-a', turnId: 'turn-a' },
+    );
     resolveNext(new Map());
     await vi.advanceTimersByTimeAsync(0);
     expect(read).toHaveBeenCalledTimes(2);
@@ -160,6 +170,7 @@ describe('createTurnChangesLedger', () => {
     const publish = vi.fn();
     const ledger = createTurnChangesLedger({
       reader: { read },
+      scope: { sessionId: 'session-a', turnId: 'turn-a' },
       publish,
     });
 
@@ -182,6 +193,7 @@ describe('createTurnChangesLedger', () => {
     const publish = vi.fn();
     const ledger = createTurnChangesLedger({
       reader: { read },
+      scope: { sessionId: 'session-a', turnId: 'turn-a' },
       publish,
     });
 
@@ -199,6 +211,7 @@ describe('createTurnChangesLedger', () => {
     const publish = vi.fn();
     const ledger = createTurnChangesLedger({
       reader: { read },
+      scope: { sessionId: 'session-a', turnId: 'turn-a' },
       publish,
     });
 

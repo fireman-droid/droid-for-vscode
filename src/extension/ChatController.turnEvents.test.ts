@@ -251,6 +251,75 @@ describe('ChatController', () => {
     );
   });
 
+  it('captures a complete file-tool baseline before the stream advances', async () => {
+    const releaseCapture = deferred<void>();
+    const afterCompleteCall = vi.fn();
+    const runtime = createMockRuntime(async function* () {
+      yield {
+        type: 'tool-start',
+        toolName: 'Edit',
+        toolUseId: 'edit-1',
+        action: 'Updated workspace files',
+        filePath: 'index.html',
+      };
+      yield {
+        type: 'tool-start',
+        toolName: 'Edit',
+        toolUseId: 'edit-1',
+        action: 'Updated workspace files',
+        inputComplete: true,
+        filePath: 'index.html',
+      };
+      afterCompleteCall();
+      yield {
+        type: 'tool-result',
+        toolName: 'Edit',
+        toolUseId: 'edit-1',
+        action: 'Updated workspace files',
+        isError: false,
+      };
+      yield successfulTurn();
+    });
+    const captureTurnBaseline = vi.fn(async () => releaseCapture.promise);
+    const read = vi.fn(async () =>
+      new Map([
+        ['index.html', { additions: 4, deletions: 1 }],
+      ]),
+    );
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { read, captureTurnBaseline },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Update the prototype');
+    await vi.waitFor(() => {
+      expect(captureTurnBaseline).toHaveBeenCalledWith(
+        { sessionId: 'session-1', turnId: 'turn-1' },
+        ['index.html'],
+      );
+    });
+    expect(captureTurnBaseline).toHaveBeenCalledOnce();
+    expect(afterCompleteCall).not.toHaveBeenCalled();
+
+    releaseCapture.resolve();
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+      expect(read).toHaveBeenCalledWith(
+        ['index.html'],
+        { sessionId: 'session-1', turnId: 'turn-1' },
+      );
+    });
+    expect(afterCompleteCall).toHaveBeenCalledOnce();
+  });
+
   it('mirrors execute lifecycle and output into the terminal mirror', async () => {
     const runtime = createMockRuntime(async function* () {
       yield {

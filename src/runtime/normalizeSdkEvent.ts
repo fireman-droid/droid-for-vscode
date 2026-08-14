@@ -86,11 +86,10 @@ export function normalizeSdkEvent(
       if (activity === undefined) {
         return undefined;
       }
-      return withToolInputContext(
-        activity,
-        event.input,
-        workspaceRoot,
-      );
+      return {
+        ...withToolInputContext(activity, event.input, workspaceRoot),
+        inputComplete: true,
+      };
     }
 
     case 'tool_call_delta': {
@@ -420,7 +419,7 @@ function withToolInputContext(
   activity: Extract<RuntimeEvent, { type: 'tool-start' }>,
   input: unknown,
   workspaceRoot: string | undefined,
-): RuntimeEvent {
+): Extract<RuntimeEvent, { type: 'tool-start' }> {
   const filePaths = normalizeToolFilePaths(
     activity.toolName,
     input,

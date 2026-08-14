@@ -1,3 +1,5 @@
+import type { ChangeStatsScope } from './changeStats';
+
 /** `not-found` marks a path with no file on disk (vs. an open error),
  * so the host can word the failure honestly — e.g. a chip clicked
  * while Droid is still writing the file. */
@@ -13,7 +15,11 @@ export type FileDiffOutcome =
  * resolution and containment checks against the real workspace root.
  */
 export interface FileDiffOpener {
-  openDiff(relativePath: string): Promise<FileDiffOutcome>;
+  openDiff(
+    relativePath: string,
+    scope: ChangeStatsScope,
+  ): Promise<FileDiffOutcome>;
+  dispose?(): void;
 }
 
 export function createUnavailableFileDiffOpener(): FileDiffOpener {

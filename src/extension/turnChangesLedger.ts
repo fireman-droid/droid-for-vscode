@@ -3,14 +3,15 @@ import {
   type ChangedFileSummary,
 } from '../shared/bridgeMessages';
 import type {
+  ChangeStatsScope,
   ChangeStatsReader,
   FileChangeStat,
 } from './changeStats';
 
 /**
- * Trailing debounce per file before its line counts are (re)read
- * from git. Repeated edits to the same file within this window
- * coalesce into one read.
+ * Trailing debounce per file before its line counts are (re)read.
+ * Repeated edits to the same file within this window coalesce into
+ * one reader call.
  */
 export const CHANGES_STAT_DEBOUNCE_MS = 500;
 
@@ -21,9 +22,8 @@ export const CHANGES_STAT_DEBOUNCE_MS = 500;
  *
  * - a new path publishes immediately (row appears without counts);
  * - line counts refresh through a per-file trailing debounce feeding
- *   one serial git queue — concurrent due files coalesce into a
- *   single `git diff --numstat` invocation, so git is never hit by
- *   more than one process at a time;
+ *   one serial stats queue, so concurrent due files coalesce into a
+ *   single reader invocation;
  * - `cancel()` (turn end/failure) stops timers and drops in-flight
  *   results, leaving the turn-end reconciliation as the only
  *   remaining publisher.
@@ -39,6 +39,7 @@ export interface TurnChangesLedger {
 
 export interface TurnChangesLedgerOptions {
   readonly reader: ChangeStatsReader;
+  readonly scope: ChangeStatsScope;
   /** Receives the full cumulative ledger after each visible change. */
   readonly publish: (files: readonly ChangedFileSummary[]) => void;
   readonly debounceMs?: number;
@@ -65,7 +66,7 @@ export function createTurnChangesLedger(
       };
     });
 
-  // Serial queue: one git read at a time; everything due when a read
+  // Serial queue: one stats read at a time; everything due when a read
   // finishes goes into the next single batch invocation.
   const drain = async (): Promise<void> => {
     if (reading) {
@@ -75,9 +76,9 @@ export function createTurnChangesLedger(
     while (due.size > 0 && !cancelled) {
       const batch = [...due];
       due.clear();
-      // ChangeStatsReader never rejects (git failures yield an empty
-      // map), so rows quietly keep their previous counts.
-      const read = await options.reader.read(batch);
+      // Production readers fail soft with an empty map, so rows
+      // quietly keep their previous counts.
+      const read = await options.reader.read(batch, options.scope);
       if (cancelled) {
         break;
       }

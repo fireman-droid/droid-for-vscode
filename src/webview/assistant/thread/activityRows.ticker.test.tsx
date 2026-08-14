@@ -206,6 +206,7 @@ describe('ToolActivityRow', () => {
       <ToolActivityRow
         toolName="Grep"
         activity={{
+          turnId: null,
           action: 'Searched workspace files',
           status: 'completed',
           progressCount: 0,

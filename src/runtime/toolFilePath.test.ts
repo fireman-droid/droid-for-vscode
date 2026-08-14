@@ -19,6 +19,11 @@ describe('extractToolFilePaths', () => {
     expect(extractToolFilePaths('Write', { path: 'a.ts' })).toEqual([
       'a.ts',
     ]);
+    expect(
+      extractToolFilePaths('functions.Edit', {
+        file_path: 'src/namespaced.ts',
+      }),
+    ).toEqual(['src/namespaced.ts']);
     expect(extractToolFilePaths('Read', { file_path: 'a.ts' })).toEqual(
       [],
     );

@@ -914,11 +914,11 @@ export function App(): React.JSX.Element {
     [vscode],
   );
   const handleOpenFileDiff = useCallback(
-    (path: string): void => {
-      if (sessionId === null || connectionStatus !== 'connected') {
+    (path: string, turnId: string | null): void => {
+      if (sessionId === null || turnId === null || connectionStatus !== 'connected') {
         return;
       }
-      post(vscode, { type: 'file.openDiff', sessionId, path });
+      post(vscode, { type: 'file.openDiff', sessionId, turnId, path });
     },
     [sessionId, connectionStatus, vscode],
   );

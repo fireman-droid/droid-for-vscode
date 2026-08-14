@@ -126,6 +126,7 @@ describe('HistoryNotice', () => {
 
 describe('ChangesSummary ledger', () => {
   const changesData = {
+    turnId: 'turn-a',
     files: [
       { path: 'prototypes/dashboard.html', additions: 12, deletions: 0 },
       { path: 'demo/legacy.htm', additions: null, deletions: null },
@@ -136,7 +137,10 @@ describe('ChangesSummary ledger', () => {
   function renderChanges(
     onPreview: (path: string) => void,
     data: unknown = changesData,
-    onOpenDiff: (path: string) => void = () => undefined,
+    onOpenDiff: (
+      path: string,
+      turnId: string | null,
+    ) => void = () => undefined,
   ) {
     return render(
       createElement(
@@ -157,8 +161,8 @@ describe('ChangesSummary ledger', () => {
     // Exactly the .html and .htm rows, not the .tsx row.
     expect(previews).toHaveLength(2);
     expect(
-      previews.every((button) =>
-        button.className.includes('dvx-changes-row-action'),
+      previews.every(
+        (button) => button.className === 'dvx-changes-action',
       ),
     ).toBe(true);
   });
@@ -199,6 +203,11 @@ describe('ChangesSummary ledger', () => {
       'prototypes/dashboard.html',
       'demo/legacy.htm',
       'src/app.tsx',
+    ]);
+    expect(onOpenDiff.mock.calls.map(([, turnId]) => turnId)).toEqual([
+      'turn-a',
+      'turn-a',
+      'turn-a',
     ]);
   });
 

@@ -1,8 +1,36 @@
 // liveChanges: the live half of the changes ledger, split out of
 // turnFlow.ts (the settled half stays with the turn-end
 // reconciliation in publishTurnChanges).
+import type { RuntimeEvent } from '../../runtime/runtimeEvents';
 import { createTurnChangesLedger } from '../turnChangesLedger';
 import { isTurnActive, type ChatControllerInternals } from './internals';
+
+/** Captures complete file-tool inputs before the runtime stream advances. */
+export async function capturePreToolBaseline(
+  ctl: ChatControllerInternals,
+  sessionId: string,
+  turnId: string,
+  event: Extract<RuntimeEvent, { type: 'tool-start' }>,
+): Promise<boolean> {
+  if (event.inputComplete !== true) {
+    return false;
+  }
+  const paths =
+    event.filePaths ??
+    (event.filePath === undefined ? [] : [event.filePath]);
+  if (paths.length === 0) {
+    return false;
+  }
+  try {
+    await ctl.changeStats.captureTurnBaseline?.(
+      { sessionId, turnId },
+      paths,
+    );
+  } catch {
+    // Change accounting is advisory and never fails a turn.
+  }
+  return true;
+}
 
 /**
  * Feeds the live changes ledger with the file paths of one completed
@@ -32,6 +60,7 @@ export function recordLiveToolChanges(
     const runtimeGeneration = ctl.runtimeGeneration;
     turn.changesLedger = createTurnChangesLedger({
       reader: ctl.changeStats,
+      scope: { sessionId, turnId },
       publish: (files) => {
         if (
           ctl.disposed ||

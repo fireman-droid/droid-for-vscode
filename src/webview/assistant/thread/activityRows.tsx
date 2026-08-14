@@ -160,7 +160,10 @@ export function ToolActivityRow({
           <span className="dvx-command-chips">{chips.join(", ")}</span>
         )}
         {activity.filePath === null ? null : (
-          <ToolFilePath path={activity.filePath} />
+          <ToolFilePath
+            path={activity.filePath}
+            turnId={activity.turnId}
+          />
         )}
         {activity.filePath !== null &&
         activity.status === "completed" &&

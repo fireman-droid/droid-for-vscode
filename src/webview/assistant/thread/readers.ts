@@ -3,6 +3,7 @@
 import type { SentAttachmentSummary } from "../../../shared/bridgeMessages";
 
 export interface ToolActivityPresentation {
+  readonly turnId: string | null;
   readonly action: string;
   readonly status: string;
   readonly progressCount: number;
@@ -44,6 +45,7 @@ export interface ToolActivityPresentation {
 
 export function readToolActivity(part: unknown): ToolActivityPresentation {
   const fallback: ToolActivityPresentation = {
+    turnId: null,
     action: "Used a workspace tool",
     status: "completed",
     progressCount: 0,
@@ -79,6 +81,7 @@ export function readToolActivity(part: unknown): ToolActivityPresentation {
       ...(metadata as Omit<
         ToolActivityPresentation,
         | "durationMs"
+        | "turnId"
         | "filePath"
         | "detailKind"
         | "detail"
@@ -88,6 +91,11 @@ export function readToolActivity(part: unknown): ToolActivityPresentation {
         | "background"
         | "subagent"
       >),
+      turnId:
+        typeof metadata["turnId"] === "string" &&
+        metadata["turnId"].length > 0
+          ? metadata["turnId"]
+          : null,
       durationMs: readMetadataDuration(metadata),
       filePath:
         typeof metadata["filePath"] === "string" &&

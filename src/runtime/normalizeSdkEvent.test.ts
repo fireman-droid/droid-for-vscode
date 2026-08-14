@@ -169,6 +169,7 @@ describe('normalizeSdkEvent', () => {
       toolName: 'Read',
       toolUseId: 'tool-1',
       action: 'Read workspace files',
+      inputComplete: true,
     });
     expect(normalizeSdkEvent(toolCallDelta)).toEqual({
       type: 'tool-start',
@@ -463,6 +464,7 @@ describe('normalizeSdkEvent', () => {
       toolName: 'Edit',
       toolUseId: 'tool-edit',
       action: 'Updated workspace files',
+      inputComplete: true,
       filePath: 'src/app.ts',
     });
 
@@ -539,6 +541,7 @@ describe('normalizeSdkEvent', () => {
       toolName: 'ApplyPatch',
       toolUseId: 'tool-patch-single',
       action: 'Updated workspace files',
+      inputComplete: true,
       filePath: 'src/page.html',
     });
 
@@ -613,6 +616,7 @@ describe('normalizeSdkEvent', () => {
       toolName: 'x'.repeat(80),
       toolUseId: 'tool-1',
       action: `Used ${'x'.repeat(80)}`,
+      inputComplete: true,
     });
     expect(
       normalizeSdkEvent(
@@ -678,6 +682,7 @@ describe('normalizeSdkEvent', () => {
       toolName: 'Read',
       toolUseId,
       action: 'Read workspace files',
+      inputComplete: true,
     });
   });
 

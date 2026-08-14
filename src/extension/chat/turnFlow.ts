@@ -29,7 +29,10 @@ import {
   type HostTranscriptState,
 } from '../hostTranscriptState';
 import type { TokenUsageBreakdown } from '../../shared/tokenUsage';
-import { recordLiveToolChanges } from './liveChanges';
+import {
+  capturePreToolBaseline,
+  recordLiveToolChanges,
+} from './liveChanges';
 import { scheduleLiveSubagentSync } from './subagentWatch';
 import { settleQueueAfterTurn } from './queue';
 import {
@@ -244,6 +247,28 @@ export async function consumeTurn(
           continue;
         }
 
+        if (
+          event.type === 'tool-start' &&
+          await capturePreToolBaseline(ctl, sessionId, turnId, event)
+        ) {
+          if (
+            !isCurrentTurn(
+              ctl,
+              runtime,
+              runtimeGeneration,
+              turnGeneration,
+              sessionId,
+              turnId,
+            )
+          ) {
+            return;
+          }
+          if (
+            (ctl.turn?.status as TurnStatus | undefined) === 'stopping'
+          ) {
+            continue;
+          }
+        }
         handleRuntimeEvent(ctl, sessionId, turnId, event);
       }
     } catch {
@@ -613,10 +638,10 @@ export function finishSpecHandoff(
 
 /**
  * Publishes the settled changed-files ledger for a finished turn:
- * the existing whole-turn git reconciliation (one batched numstat
- * read over every tool-named path) closes the live ledger stream.
- * Line counts come from git HEAD asynchronously; the settlement is
- * dropped when the session changes before the stats arrive.
+ * one whole-turn stats read over every tool-named path closes the
+ * live ledger stream. Captured before-turn files are authoritative;
+ * git HEAD is the fallback for paths without a live baseline. The
+ * settlement is dropped when the session changes before stats arrive.
  */
 export function publishTurnChanges(
   ctl: ChatControllerInternals,
@@ -635,7 +660,7 @@ export function publishTurnChanges(
       return;
     }
     const runtimeGeneration = ctl.runtimeGeneration;
-    void ctl.changeStats.read(paths).then((stats) => {
+    void ctl.changeStats.read(paths, { sessionId, turnId }).then((stats) => {
       if (
         ctl.disposed ||
         ctl.sessionId !== sessionId ||

@@ -579,6 +579,7 @@ function mapItemToPart(item: SessionTranscriptItem): SafeRuntimePart {
         argsText: "",
         providerMetadata: {
           droidvisx: {
+            turnId: item.turnId,
             action: item.action,
             status: item.status,
             progressCount: item.progressCount,

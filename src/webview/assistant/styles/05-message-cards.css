@@ -281,24 +281,6 @@
   box-shadow: 0 0 0 1px var(--dvx-focus);
 }
 
-/* Row-tail actions rest invisible (space reserved, so revealing them
-   never reflows the ledger) and fade in on the row's hover or
-   keyboard focus; hoverless and coarse pointers keep them visible. */
-.dvx-changes-row-action {
-  opacity: 0;
-}
-
-.dvx-changes-row:hover .dvx-changes-row-action,
-.dvx-changes-row:focus-within .dvx-changes-row-action {
-  opacity: 1;
-}
-
-@media (hover: none), (pointer: coarse) {
-  .dvx-changes-row-action {
-    opacity: 1;
-  }
-}
-
 .dvx-changes-foot {
   display: flex;
   flex-wrap: wrap;

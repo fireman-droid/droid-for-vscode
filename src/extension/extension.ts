@@ -443,6 +443,10 @@ export function activate(context: vscode.ExtensionContext): void {
     createTerminal: (name, pty) =>
       vscode.window.createTerminal({ name, pty }),
   });
+  const changeStats = createGitChangeStatsReader(
+    () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+  );
+  const fileDiff = createVscodeFileDiffOpener(changeStats);
   const controller = new ChatController(
     (interactionHandler) =>
       new FactoryDroidRuntime({
@@ -461,10 +465,8 @@ export function activate(context: vscode.ExtensionContext): void {
     recoveryStore,
     historyLoader,
     attachmentSources,
-    createVscodeFileDiffOpener(),
-    createGitChangeStatsReader(
-      () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-    ),
+    fileDiff,
+    changeStats,
     createVscodeExternalUrlOpener(),
     new RecentCommandsStore(persistence),
     diagnostics,

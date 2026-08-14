@@ -659,7 +659,7 @@ export class ChatController {
         handleSubagentPanel(this, message.sessionId, message.open);
         return;
       case 'file.openDiff':
-        handleFileOpenDiff(this, message.sessionId, message.path);
+        handleFileOpenDiff(this, message.sessionId, message.turnId, message.path);
         return;
       case 'file.preview':
         handleFilePreview(this, message.sessionId, message.path);
@@ -892,6 +892,7 @@ export class ChatController {
     }
     this.mcpAuthServerName = null;
     clearZombieSubagentWatch(this);
+    this.fileDiff.dispose?.(); this.changeStats.dispose?.();
     this.disposed = true;
     this.runtimeGeneration += 1;
     this.turnGeneration += 1;

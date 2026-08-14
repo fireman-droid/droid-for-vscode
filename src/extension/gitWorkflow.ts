@@ -45,6 +45,10 @@ export interface GitRepositoryLike {
   add(paths: readonly string[]): Promise<void>;
   commit(message: string): Promise<void>;
   getCommit(ref: string): Promise<{ readonly hash: string }>;
+  getObjectDetails?(
+    treeish: string,
+    path: string,
+  ): Promise<unknown>;
 }
 
 export interface GitApiLike {

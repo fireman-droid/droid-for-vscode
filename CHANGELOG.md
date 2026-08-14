@@ -4,6 +4,22 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.22] - 2026-08-15
+
+### Fixed
+
+- **Review and line counts now work outside Git** — complete
+  file-modifying tool calls capture the first bounded pre-write
+  baseline for each turn, so live and settled Changes rows report that
+  turn's real `+A/−D` even for non-Git, untracked, or pre-dirty files.
+- **Review opens the addressed turn's real comparison** — Bridge v18
+  carries the originating turn ID, and the Host opens a native
+  “Before turn ↔ Current” Diff from a bounded, transient virtual
+  document before falling back to Git HEAD or the plain file.
+- **Final HTML Preview stays discoverable** — settled Changes rows keep
+  their quiet Preview action visibly available after repeated edits
+  and the final response.
+
 ## [0.7.21] - 2026-08-15
 
 ### Fixed

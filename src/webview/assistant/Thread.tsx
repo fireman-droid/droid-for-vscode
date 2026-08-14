@@ -139,7 +139,9 @@ export interface UserEditorEnv {
 
 // Tool rows deep inside the transcript open native diffs through this
 // context so the memoized message tree stays free of prop drilling.
-export const FileDiffContext = createContext<(path: string) => void>(() => undefined);
+export const FileDiffContext = createContext<
+  (path: string, turnId: string | null) => void
+>(() => undefined);
 
 // Previewing an .html/.htm prototype opens the sandboxed preview panel
 // through this context, matching the FileDiffContext pattern so deep
@@ -278,7 +280,10 @@ interface DroidThreadProps {
   readonly onRegenerate: (() => void) | null;
   /** Forks a new session from the current state (last message only). */
   readonly onForkSession: (() => void) | null;
-  readonly onOpenFileDiff: (path: string) => void;
+  readonly onOpenFileDiff: (
+    path: string,
+    turnId: string | null,
+  ) => void;
   readonly onPreviewFile: (path: string) => void;
   /** Renders an assistant HTML code block in the sandbox panel. */
   readonly onPreviewInlineHtml: (html: string) => void;

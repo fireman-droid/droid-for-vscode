@@ -4,6 +4,7 @@ import {
   MAX_CHANGED_FILES_PER_TURN,
   MAX_TOOL_FILE_PATH_LENGTH,
 } from '../shared/bridgeMessages';
+import { toolNameCandidates } from '../shared/toolActivity';
 import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
 
 /** Tools whose input names a file they create or modify. */
@@ -36,10 +37,10 @@ export function extractToolFilePaths(
   toolName: string,
   input: unknown,
 ): readonly string[] {
-  const normalized = toolName
-    .replace(/[^\p{L}\p{N}]/gu, '')
-    .toLocaleLowerCase();
-  if (!FILE_MODIFYING_TOOLS.has(normalized)) {
+  const normalized = toolNameCandidates(toolName).find((candidate) =>
+    FILE_MODIFYING_TOOLS.has(candidate),
+  );
+  if (normalized === undefined) {
     return [];
   }
   if (typeof input !== 'object' || input === null) {

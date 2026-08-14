@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.21 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.22 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -3155,6 +3155,23 @@ UI 描述见 §22 重做记录。
   异步归属、旧 checkpoint 过滤、作用域清理、共享渲染与单次 Bridge
   校验。按门禁未跑全量 Vitest、浏览器 smoke 或 daemon smoke。
 
+### 57. 非 Git 回合级文件审阅与稳定 Preview（2026-08-15，v0.7.22）
+
+- **回合基线与实时计数**：完整 `tool_call` 在流继续前首次捕获
+  Edit/Create/Write/ApplyPatch 的工作区文件；partial delta 不作为权威。
+  live/settled Changes 共用 Session+Turn scope，以 `git diff --no-index`
+  计算本回合 `+A/−D`，无基线时才回退 HEAD。
+- **真实 Review**：Bridge v18 给 `file.openDiff` 增加 `turnId`；Host
+  通过只读虚拟文档打开 “Before turn ↔ Current”，因此非 Git、untracked
+  与回合前已 dirty 的文件也可审阅。基线不进 Bridge、转录、checkpoint
+  或导出，并受 4 MiB/文件、16 MiB 总量、4 回合和 4 并发上限约束。
+- **稳定 Preview**：最终 Changes 行的 HTML/HTM Preview 保持安静可见，
+  不再依赖 hover；namespaced 文件工具复用统一 tool-name leaf 识别。
+- **验证**：聚焦 13 个测试文件 **600 例**、三段 typecheck、
+  `lint:budgets` 与 `git diff --check` 全绿；真实临时非 Git 工作区验证
+  no-index 计数，VS Code Diff provider、缓存回收和 Git fallback 均有
+  单测。按门禁未跑全量 Vitest、浏览器 smoke 或 daemon smoke。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3588,6 +3605,17 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-15 非 Git 回合审阅发版 v0.7.22**：版本号
+  `0.7.21 → 0.7.22`，内容 = 台账 §57（完整 tool-call 前置基线、
+  turn-scoped `+A/−D`、Bridge v18、Before turn Diff 与稳定 HTML
+  Preview）。聚焦 13 个测试文件 / 600 例、typecheck 三段、
+  `lint:budgets` 与 `git diff --check` 全绿；simplify 三路审查后补齐
+  bounded read、4 路统计并发、虚拟文档字节/数量上限与关闭回收。build +
+  VSIX 11 条目验证全绿，产物 1,692,375 字节，SHA-256
+  `0479E2DFFC3BE3B34FFC15ABEA02691CF48B18379AFB28E57CEAFB0DC21203DC`。
+  `cursor --install-extension --force` 安装成功并确认
+  `droidvisx.droidvisx@0.7.22`。按门禁未跑全量 Vitest、浏览器 smoke
+  或 daemon smoke；安装后需 Reload Window。
 - **2026-08-15 文件未就绪瞬时提示发版 v0.7.21**：版本号
   `0.7.20 → 0.7.21`，内容 = 台账 §56（活动回合归属、4 秒短时卡片、
   Host/Webview transcript 与旧 checkpoint 过滤、跨回合异步结果隔离）。

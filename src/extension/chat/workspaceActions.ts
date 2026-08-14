@@ -46,7 +46,10 @@ export const OPEN_PATH_FAILED_MESSAGE =
 
 export function handleFileOpenDiff(
   ctl: ChatControllerInternals,
-  sessionId: string, path: string): void {
+  sessionId: string,
+  turnId: string,
+  path: string,
+): void {
     if (
       ctl.connection.status !== 'connected' ||
       sessionId !== ctl.sessionId
@@ -54,7 +57,7 @@ export function handleFileOpenDiff(
       return;
     }
     const requestedTurnId = ctl.turn?.turnId ?? null;
-    void ctl.fileDiff.openDiff(path).then((outcome) => {
+    void ctl.fileDiff.openDiff(path, { sessionId, turnId }).then((outcome) => {
       if (
         ctl.disposed ||
         ctl.connection.status !== 'connected' ||
@@ -67,11 +70,14 @@ export function handleFileOpenDiff(
         // Missing during an active turn means Droid has not written
         // the file yet; missing on a settled transcript means it was
         // moved or deleted after the fact.
-        if (isTurnActive(ctl.turn)) {
+        if (
+          ctl.turn?.turnId === turnId &&
+          isTurnActive(ctl.turn)
+        ) {
           ctl.emitSessionDiagnostic(
             FILE_NOT_READY_DIAGNOSTIC_CODE,
             FILE_NOT_READY_MESSAGE,
-            requestedTurnId,
+            turnId,
           );
           return;
         }

@@ -709,8 +709,9 @@ function parseFileOpenDiff(
   value: UnknownRecord,
 ): FileOpenDiffMessage | undefined {
   if (
-    !hasExactKeys(value, ['type', 'sessionId', 'path']) ||
+    !hasExactKeys(value, ['type', 'sessionId', 'turnId', 'path']) ||
     !isId(value.sessionId) ||
+    !isId(value.turnId) ||
     !isSafeWorkspaceRelativePath(value.path)
   ) {
     return undefined;
@@ -719,6 +720,7 @@ function parseFileOpenDiff(
   return {
     type: 'file.openDiff',
     sessionId: value.sessionId,
+    turnId: value.turnId,
     path: value.path,
   };
 }

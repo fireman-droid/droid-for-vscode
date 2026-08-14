@@ -17,7 +17,7 @@ interface GitExtensionExports {
  * extension is missing, disabled via `git.enabled`, or fails to
  * activate.
  */
-async function getGitApi(): Promise<GitApiLike | undefined> {
+export async function getGitApi(): Promise<GitApiLike | undefined> {
   const extension =
     vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
   if (extension === undefined) {
