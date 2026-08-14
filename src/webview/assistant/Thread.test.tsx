@@ -22,9 +22,11 @@ import {
   FOLLOW_REJOIN_PX,
   PreviewContext,
   applyFollowScroll,
+  applyFollowWheelIntent,
   computePinnedUserIndex,
   computeStickyLayout,
   createFollowState,
+  shouldCompactStickyUser,
 } from './Thread';
 import {
   AttachmentChip,
@@ -746,6 +748,19 @@ describe('computePinnedUserIndex', () => {
     expect(computePinnedUserIndex([120, 400], 0)).toBe(-1);
     expect(computePinnedUserIndex([], 0)).toBe(-1);
   });
+
+  it('retains the current owner through fractional sticky jitter', () => {
+    expect(computePinnedUserIndex([0, 2.5], 0, 1)).toBe(1);
+    expect(computePinnedUserIndex([0, 3.5], 0, 1)).toBe(0);
+  });
+});
+
+describe('shouldCompactStickyUser', () => {
+  it('uses a release deadband so line clamping cannot oscillate', () => {
+    expect(shouldCompactStickyUser(false, 0.5, 0)).toBe(true);
+    expect(shouldCompactStickyUser(true, 20, 0)).toBe(true);
+    expect(shouldCompactStickyUser(true, 49, 0)).toBe(false);
+  });
 });
 
 describe('computeStickyLayout', () => {
@@ -902,6 +917,27 @@ describe('applyFollowScroll', () => {
     applyFollowScroll(state, sample(450, 1000));
     expect(state.following).toBe(false);
     expect(state.pendingProgrammaticTop).toBeNull();
+  });
+
+  it('releases before a slow downward wheel can be glued backward', () => {
+    const state = createFollowState(sample(300, 1000));
+    state.pendingProgrammaticTop = 600;
+    expect(applyFollowWheelIntent(state, 12, sample(300, 1000))).toBe(true);
+    expect(state.following).toBe(false);
+    expect(state.pendingProgrammaticTop).toBeNull();
+  });
+
+  it('keeps streaming follow for a downward wheel already at bottom', () => {
+    const atBottom = sample(900, 1000);
+    const state = createFollowState(atBottom);
+    expect(applyFollowWheelIntent(state, 12, atBottom)).toBe(false);
+    expect(state.following).toBe(true);
+  });
+
+  it('ignores a wheel event without vertical intent', () => {
+    const state = createFollowState(sample(300, 1000));
+    expect(applyFollowWheelIntent(state, 0, sample(300, 1000))).toBe(false);
+    expect(state.following).toBe(true);
   });
 });
 

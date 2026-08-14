@@ -70,3 +70,26 @@ export function applyFollowScroll(
   state.lastScrollTop = sample.scrollTop;
   state.lastScrollHeight = sample.scrollHeight;
 }
+
+/**
+ * A wheel/touchpad gesture is authoritative reading intent in either
+ * direction. Release before ResizeObserver can glue the viewport back
+ * to the bottom; reaching bottom naturally re-enables follow later.
+ */
+export function applyFollowWheelIntent(
+  state: FollowState,
+  deltaY: number,
+  sample: FollowScrollSample,
+): boolean {
+  if (deltaY === 0) {
+    return false;
+  }
+  const distance = sample.scrollHeight - sample.scrollTop - sample.clientHeight;
+  if (deltaY > 0 && distance <= FOLLOW_REJOIN_PX) {
+    state.following = true;
+    return false;
+  }
+  state.following = false;
+  state.pendingProgrammaticTop = null;
+  return true;
+}

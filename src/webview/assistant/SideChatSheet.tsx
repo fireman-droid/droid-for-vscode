@@ -6,6 +6,7 @@ import {
 } from '../../shared/btwProtocol';
 import {
   applyFollowScroll,
+  applyFollowWheelIntent,
   createFollowState,
 } from './followScroll';
 import { DroidMarkdownContent } from './MarkdownText';
@@ -134,9 +135,12 @@ export function SideChatSheet({
       }
     };
     const onWheel = (event: WheelEvent): void => {
-      if (event.deltaY < 0) {
-        follow.following = false;
-        follow.pendingProgrammaticTop = null;
+      const released = applyFollowWheelIntent(follow, event.deltaY, {
+        scrollTop: element.scrollTop,
+        scrollHeight: element.scrollHeight,
+        clientHeight: element.clientHeight,
+      });
+      if (released) {
         cancelFrame();
       }
     };

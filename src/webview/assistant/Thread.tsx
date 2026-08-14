@@ -38,10 +38,16 @@ import {
 } from "./MarkdownText";
 import {
   applyFollowScroll,
+  applyFollowWheelIntent,
   createFollowState,
 } from "./followScroll";
 import type { PlanAnchorState } from "./planAnchor";
 import { PlanLine } from "./PlanLine";
+import {
+  computeStickyLayout,
+  SCROLL_BOTTOM_SHOW_PX,
+  shouldCompactStickyUser,
+} from "./stickyLayout";
 import { AssistantMessage } from "./thread/AssistantMessage";
 import { Composer } from "./thread/Composer";
 import { UserMessage } from "./thread/UserMessage";
@@ -475,6 +481,9 @@ export const DroidThread = memo(function DroidThread({
       return undefined;
     }
     let frame = 0;
+    let previousPinnedElement: HTMLElement | null = null;
+    let pushedElement: HTMLElement | null = null;
+    let pushedPx = 0;
     const follow = createFollowState({
       scrollTop: scroller.scrollTop,
       scrollHeight: scroller.scrollHeight,
@@ -487,27 +496,43 @@ export const DroidThread = memo(function DroidThread({
         ...column.querySelectorAll<HTMLElement>(".dvx-message-user"),
       ];
       const rects = messages.map((element) => element.getBoundingClientRect());
+      const tops = rects.map((rect, index) =>
+        messages[index] === pushedElement ? rect.top + pushedPx : rect.top,
+      );
+      const awayFromBottom =
+        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight >
+        SCROLL_BOTTOM_SHOW_PX;
       // An open edit card is exempt from the push-out hand-off (see
       // computeStickyLayout): it stays fully visible while pinned.
       const editingIndex = messages.findIndex((element) =>
         element.classList.contains("dvx-message-editing"),
       );
       const layout = computeStickyLayout(
-        rects.map((rect) => rect.top),
+        tops,
         rects.map((rect) => rect.height),
         viewportTop,
         editingIndex,
+        previousPinnedElement === null
+          ? -1
+          : messages.indexOf(previousPinnedElement),
       );
+      previousPinnedElement = messages[layout.pinnedIndex] ?? null;
       messages.forEach((element, index) => {
-        toggleDataAttribute(
-          element,
+        element.toggleAttribute(
           "data-pinned",
           index === layout.pinnedIndex,
         );
-        toggleDataAttribute(
-          element,
+        element.toggleAttribute(
           "data-covered",
           layout.covered[index] === true,
+        );
+        element.toggleAttribute(
+          "data-sticky-compact",
+          shouldCompactStickyUser(
+            element.hasAttribute("data-sticky-compact"),
+            tops[index] ?? Number.POSITIVE_INFINITY,
+            viewportTop,
+          ),
         );
         const transform =
           index === layout.pinnedIndex && layout.pushPx > 0
@@ -517,10 +542,10 @@ export const DroidThread = memo(function DroidThread({
           element.style.transform = transform;
         }
       });
-      setAwayFromBottom(
-        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight >
-          SCROLL_BOTTOM_SHOW_PX,
-      );
+      pushedElement =
+        layout.pushPx > 0 ? (messages[layout.pinnedIndex] ?? null) : null;
+      pushedPx = layout.pushPx;
+      setAwayFromBottom(awayFromBottom);
     };
     const schedule = (): void => {
       if (frame === 0) {
@@ -549,13 +574,14 @@ export const DroidThread = memo(function DroidThread({
       });
       schedule();
     };
-    // Wheel-up is an unambiguous user intent even when the scroll
-    // event itself races a same-frame content growth.
+    // Wheel/touchpad intent wins in both directions. Slow downward
+    // reading must not race ResizeObserver and get pulled backward.
     const onWheel = (event: WheelEvent): void => {
-      if (event.deltaY < 0) {
-        follow.following = false;
-        follow.pendingProgrammaticTop = null;
-      }
+      applyFollowWheelIntent(follow, event.deltaY, {
+        scrollTop: scroller.scrollTop,
+        scrollHeight: scroller.scrollHeight,
+        clientHeight: scroller.clientHeight,
+      });
     };
     // The arrow's click: re-latch the follow state first so any
     // streaming growth during the (possibly smooth) descent keeps
@@ -868,110 +894,14 @@ export const DroidThread = memo(function DroidThread({
   );
 });
 
-// Plan parsing is shared with the pinned task plan; see planPin.ts.
-
-/**
- * Index of the user message currently pinned to the viewport top: the
- * last one whose rendered top edge sits at or above the viewport top
- * (CSS sticky keeps every passed message there). -1 when none is
- * pinned.
- */
-export function computePinnedUserIndex(
-  tops: readonly number[],
-  viewportTop: number,
-): number {
-  let pinned = -1;
-  tops.forEach((top, index) => {
-    if (top <= viewportTop + 1) {
-      pinned = index;
-    }
-  });
-  return pinned;
-}
-
-/** Sticky pin/cover/push-out decisions for one coordinator frame. */
-export interface StickyLayout {
-  readonly pinnedIndex: number;
-  /** Older stuck messages fully hidden behind the pinned one. */
-  readonly covered: readonly boolean[];
-  /**
-   * How far (px) the pinned message is pushed up because the next
-   * user message has reached its bottom edge. Emulates the section
-   * header hand-off: the incoming block cleanly pushes the pinned one
-   * out instead of sliding text over text.
-   */
-  readonly pushPx: number;
-}
-
-/**
- * Computes the pinned message, covered set, and push-out offset from
- * user message rects. `tops`/`heights` come from live rects; only the
- * pinned element carries a translate, and its untransformed sticky
- * position is the viewport top, so the push math stays feedback-free.
- *
- * `editingIndex` (when not -1) marks a message whose edit card is
- * open. An open editor owns the pinned slot outright: it is never
- * pushed out by the next message and later messages never take over
- * the top (they hide behind it as covered instead). Without this the
- * push-out hand-off — designed for line-clamped resting blocks —
- * translates the hundreds-of-pixels-tall edit card up until only its
- * footer controls remain on screen.
- */
-export function computeStickyLayout(
-  tops: readonly number[],
-  heights: readonly number[],
-  viewportTop: number,
-  editingIndex = -1,
-): StickyLayout {
-  const pinnedIndex = computePinnedUserIndex(tops, viewportTop);
-  if (editingIndex !== -1 && pinnedIndex >= editingIndex) {
-    return {
-      pinnedIndex: editingIndex,
-      covered: tops.map(
-        (top, index) => index !== editingIndex && top <= viewportTop + 1,
-      ),
-      pushPx: 0,
-    };
-  }
-  const covered = tops.map(
-    (top, index) => index < pinnedIndex && top <= viewportTop + 1,
-  );
-  let pushPx = 0;
-  if (pinnedIndex !== -1) {
-    const nextTop = tops[pinnedIndex + 1];
-    const height = heights[pinnedIndex] ?? 0;
-    if (nextTop !== undefined) {
-      pushPx = Math.min(
-        Math.max(0, viewportTop + height - Math.max(nextTop, viewportTop)),
-        height,
-      );
-    }
-  }
-  return { pinnedIndex, covered, pushPx };
-}
-
-/** The scroll-to-bottom arrow shows past this distance from the
- * bottom: far enough that the streaming glue's transient frame or two
- * of lag never flashes it, close enough to appear on any real
- * upward scroll. */
-export const SCROLL_BOTTOM_SHOW_PX = 48;
-
-function toggleDataAttribute(
-  element: HTMLElement,
-  name: string,
-  on: boolean,
-): void {
-  if (on) {
-    if (!element.hasAttribute(name)) {
-      element.setAttribute(name, "");
-    }
-  } else if (element.hasAttribute(name)) {
-    element.removeAttribute(name);
-  }
-}
-
 export {
   FOLLOW_REJOIN_PX,
   applyFollowScroll,
+  applyFollowWheelIntent,
   createFollowState,
 } from "./followScroll";
+export {
+  computePinnedUserIndex,
+  computeStickyLayout,
+  shouldCompactStickyUser,
+} from "./stickyLayout";

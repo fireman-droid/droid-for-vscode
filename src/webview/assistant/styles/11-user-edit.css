@@ -207,7 +207,7 @@
 /* Once sticky, keep only a compact three-line question header. The
    unpinned card retains six lines for transcript readability, while
    opening its editor still exposes the complete text. */
-.dvx-message-user[data-pinned] .dvx-user-block .dvx-user-text {
+.dvx-message-user[data-sticky-compact] .dvx-user-block .dvx-user-text {
   -webkit-line-clamp: 3;
 }
 

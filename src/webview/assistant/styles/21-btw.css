@@ -209,9 +209,8 @@
   line-height: 1.45;
 }
 
-/* Input pinned to the panel foot: a framed field in the composer's
-   register (raised surface, 1px border, focus ring) with its own
-   accent send button. */
+/* Input pinned to the panel foot: one framed field in the composer's
+   register, with no second focus ring around its 1px border. */
 .dvx-btw-input-row {
   display: flex;
   flex: none;
@@ -233,14 +232,13 @@
   font-size: 12px;
   line-height: 1.5;
   outline: none;
-  transition: border-color 130ms ease, box-shadow 130ms ease;
+  transition: border-color 130ms ease;
   user-select: text;
 }
 
 .dvx-btw-input:focus-visible {
   border-color: var(--dvx-border-strong, var(--dvx-border));
-  box-shadow: 0 1px 1.5px rgb(0 0 0 / 10%),
-    0 1px 1px rgb(0 0 0 / 10%);
+  box-shadow: none;
 }
 
 .dvx-btw-input::placeholder {

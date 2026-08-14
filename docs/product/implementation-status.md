@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.13 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.14 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -3012,6 +3012,23 @@ UI 描述见 §22 重做记录。
   另有三段 typecheck、`lint:budgets`、`git diff --check`、build、
   11 条目 VSIX 校验与本地安装全绿。
 
+### 49. `/btw` 单边框与吸顶滚动稳定性（2026-08-14，v0.7.14）
+
+- **`/btw` 单层聚焦边框**：输入框聚焦仅把原有 1px neutral border
+  加深，不再叠加第二层外部阴影边框。
+- **吸顶 hand-off 稳定**：吸顶所有权增加亚像素滞回；三行 compact
+  状态从 `data-pinned` 独立出来，并在离开顶部后再释放，避免临界点
+  6/3 行高度反馈；协调器按未变换的自然 top 计算下一帧，sticky 用户行
+  退出浏览器 scroll anchoring。
+- **手动阅读优先**：主聊天与 `/btw` 共用 wheel intent latch；任何可
+  移动的纵向滚轮/触控板动作会在 ResizeObserver 写入前解除底部跟随，
+  到底后自然重入；已在底部继续下滚不会误关流式跟随。
+- **验证**：`Thread.test.tsx` 与 `SideChatSheet.test.tsx` 共 91 例、
+  三段 typecheck、`lint:budgets` 与 `git diff --check` 全绿；simplify
+  三路审查发现的底部下滚误解锁、旧 transform 几何、无效 wheel 取消
+  和写后同步布局均已收口。按当前门禁未跑全量 Vitest、浏览器 smoke
+  或 daemon smoke。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3445,6 +3462,17 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-14 吸顶滚动稳定性发版 v0.7.14**：版本号
+  `0.7.13 → 0.7.14`，内容 = 台账 §49（`/btw` 单层 neutral focus
+  border、吸顶所有权与 compact 高度滞回、自然 top 布局、sticky
+  scroll-anchor 隔离、主聊天与 `/btw` 共享手动 wheel intent）。
+  `Thread.test.tsx` 与 `SideChatSheet.test.tsx` 共 91 例、typecheck
+  三段、`lint:budgets` 与 `git diff --check` 全绿；build + VSIX
+  11 条目验证全绿，产物 1,682,808 字节，SHA-256
+  `B6380F4E4E52597F0FEAF20C6E86F3EF36D261B8D1E23AC0BD465BD0331A0375`。
+  `cursor --install-extension --force` 安装成功并确认
+  `droidvisx.droidvisx@0.7.14`。按门禁未跑全量 Vitest、浏览器 smoke
+  或 daemon smoke；安装后需 Reload Window。
 - **2026-08-14 工作区与稳定性收口发版 v0.7.13**：版本号
   `0.7.12 → 0.7.13`，内容 = 台账 §48（Windows shared-daemon
   listener PID / 内容匹配 stale cleanup / identity-safe shutdown、

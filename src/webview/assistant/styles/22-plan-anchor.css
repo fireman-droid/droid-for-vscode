@@ -222,7 +222,7 @@
    shadow mask the content scrolling underneath; expanding while
    pinned simply grows the sticky block inline, exactly like the
    un-pinned flow. Only breathing room below the line is added. */
-.dvx-message-user[data-pinned] .dvx-plan-line {
+.dvx-message-user[data-sticky-compact] .dvx-plan-line {
   padding-bottom: 8px;
   margin-bottom: 0;
 }

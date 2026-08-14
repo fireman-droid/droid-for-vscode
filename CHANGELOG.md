@@ -4,6 +4,20 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.14] - 2026-08-14
+
+### Fixed
+
+- **`/btw` focus has one border** — the input now strengthens its
+  existing neutral border without drawing a second outer shadow ring.
+- **Sticky question hand-offs stay stable** — pin ownership has a
+  subpixel deadband, the compact three-line state no longer changes
+  height at the ownership boundary, and transformed rows are measured
+  from their natural position.
+- **Slow reading is not pulled backward** — any movable vertical wheel
+  or touchpad gesture releases streaming bottom-follow before content
+  growth can write the scroll position; reaching the bottom rejoins it.
+
 ## [0.7.13] - 2026-08-14
 
 ### Fixed
