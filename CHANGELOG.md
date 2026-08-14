@@ -4,6 +4,19 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.21] - 2026-08-15
+
+### Fixed
+
+- **“File not ready” feedback now disappears** — clicking a file
+  before Droid writes it shows a four-second, active-turn notice that
+  clears on turn settlement and never enters transcript history,
+  recovery checkpoints, or exported session state.
+- **Late Diff results cannot attach to a newer turn** — asynchronous
+  file-open outcomes are dropped after the request's session or turn
+  changes, while settled missing files keep the durable
+  moved-or-deleted warning.
+
 ## [0.7.20] - 2026-08-15
 
 ### Added

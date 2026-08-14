@@ -196,8 +196,23 @@ describe('ChatController', () => {
       expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
         severity: 'warning',
         code: 'file-not-ready',
+        turnId: 'turn-1',
       });
     });
+    const snapshotCount = snapshots(messages).length;
+    ready(controller);
+    await vi.waitFor(() => {
+      expect(snapshots(messages).length).toBeGreaterThan(snapshotCount);
+    });
+    expect(
+      snapshots(messages)
+        .at(-1)!
+        .transcript.some(
+          (item) =>
+            item.kind === 'diagnostic' &&
+            item.code === 'file-not-ready',
+        ),
+    ).toBe(false);
 
     // Missing after the turn settled: moved or deleted.
     release.resolve();
@@ -216,6 +231,63 @@ describe('ChatController', () => {
         message: expect.stringContaining('docs/Canvas-API-学习文档.md'),
       });
     });
+  });
+
+  it('drops a stale file-open result after a newer turn starts', async () => {
+    const staleOpen = deferred<FileDiffOutcome>();
+    const firstTurn = deferred<void>();
+    const secondTurn = deferred<void>();
+    let run = 0;
+    const runtime = createMockRuntime(async function* () {
+      run += 1;
+      yield { type: 'text-delta', text: `turn ${run}` };
+      await (run === 1 ? firstTurn.promise : secondTurn.promise);
+      yield successfulTurn();
+    });
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      { openDiff: vi.fn(() => staleOpen.promise) },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'First turn');
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('streaming');
+    });
+    controller.handleMessage({
+      type: 'file.openDiff',
+      sessionId: 'session-1',
+      path: 'src/late.ts',
+    });
+    firstTurn.resolve();
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
+    send(controller, 'session-1', 'turn-2', 'Second turn');
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)).toMatchObject({
+        turnId: 'turn-2',
+        status: 'streaming',
+      });
+    });
+
+    staleOpen.resolve('not-found');
+    await staleOpen.promise;
+    await Promise.resolve();
+    expect(
+      messages.filter(
+        (message) =>
+          message.type === 'runtime.diagnostic' &&
+          message.code === 'file-not-ready',
+      ),
+    ).toHaveLength(0);
+    secondTurn.resolve();
   });
 
   it('previews validated prototype paths and reports failures', async () => {

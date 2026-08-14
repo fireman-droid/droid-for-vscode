@@ -403,6 +403,60 @@ describe('hostTranscriptState', () => {
     ).toHaveLength(3);
   });
 
+  it('excludes transient interaction feedback from recovery history', () => {
+    let state = appendAcceptedUserPrompt(
+      createHostTranscriptState('complete'),
+      'turn-1',
+      'Create the file',
+    );
+    state = project(state, {
+      type: 'runtime.diagnostic',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      severity: 'warning',
+      code: 'file-not-ready',
+      message: 'Droid is still working on it.',
+    });
+    expect(
+      state.transcript.some((item) => item.kind === 'diagnostic'),
+    ).toBe(false);
+    const hydrated = hydrateHostTranscriptState({
+      ...state,
+      transcript: [
+        ...state.transcript,
+        {
+          id: 'legacy-file-not-ready',
+          kind: 'diagnostic',
+          turnId: 'turn-1',
+          severity: 'warning',
+          code: 'file-not-ready',
+          message: 'Droid is still working on it.',
+        },
+      ],
+    });
+    expect(
+      hydrated.transcript.some(
+        (item) =>
+          item.kind === 'diagnostic' && item.code === 'file-not-ready',
+      ),
+    ).toBe(false);
+
+    state = project(state, {
+      type: 'runtime.diagnostic',
+      sessionId: 'session-1',
+      turnId: null,
+      severity: 'warning',
+      code: 'file-diff-failed',
+      message: 'That file could not be opened.',
+    });
+    expect(state.transcript).toContainEqual(
+      expect.objectContaining({
+        kind: 'diagnostic',
+        code: 'file-diff-failed',
+      }),
+    );
+  });
+
   it('downgrades complete history when item or text bounds evict data', () => {
     let items = createHostTranscriptState('complete');
     for (

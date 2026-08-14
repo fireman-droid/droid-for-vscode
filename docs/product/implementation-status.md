@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.20 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.21 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -3139,6 +3139,22 @@ UI 描述见 §22 重做记录。
   双 refresh、陈旧 discovery 阻塞及 selection no-op。按门禁未跑全量
   Vitest、浏览器 smoke 或 daemon smoke。
 
+### 56. 文件未就绪提示的瞬时生命周期（2026-08-15，v0.7.21）
+
+- **只属于当前操作**：活动回合内点击尚未写出的文件时，Host 仍记录并
+  发出 `file-not-ready`，但附带请求回合 ID；异步 Diff 结果若跨 Session
+  或跨回合才返回会直接丢弃，不会误挂到新回合。
+- **不进入历史**：Host transcript projection 与 checkpoint hydration
+  都过滤该瞬时诊断（包括旧版本已保存的条目）；Webview reducer 只推进
+  sequence，不把它映射成 assistant-ui 消息、恢复记录或导出内容。
+- **短时可见**：已校验 Host 消息在 App 单一监听链路中投影为独立状态，
+  复用既有 Diagnostic 卡片显示 4 秒；所属回合终止、断连或身份失效时
+  立即清除，其他回合的终态消息不会误清当前提示。
+- **验证**：聚焦 6 个测试文件 **100 例**、三段 typecheck、
+  `lint:budgets` 与 `git diff --check` 全绿；simplify 三路审查后补齐
+  异步归属、旧 checkpoint 过滤、作用域清理、共享渲染与单次 Bridge
+  校验。按门禁未跑全量 Vitest、浏览器 smoke 或 daemon smoke。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3572,6 +3588,16 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-15 文件未就绪瞬时提示发版 v0.7.21**：版本号
+  `0.7.20 → 0.7.21`，内容 = 台账 §56（活动回合归属、4 秒短时卡片、
+  Host/Webview transcript 与旧 checkpoint 过滤、跨回合异步结果隔离）。
+  聚焦 6 个测试文件 / 100 例、typecheck 三段、`lint:budgets` 与
+  `git diff --check` 全绿；simplify 三路审查问题均已修复。build +
+  VSIX 11 条目验证全绿，产物 1,690,498 字节，SHA-256
+  `C3BDE3D45E477FE27C6C149DAA0795A130E4973D89E957D102597B747E3C7D45`。
+  `cursor --install-extension --force` 安装成功并确认
+  `droidvisx.droidvisx@0.7.21`。按门禁未跑全量 Vitest、浏览器 smoke
+  或 daemon smoke；安装后需 Reload Window。
 - **2026-08-15 Provider 订阅分组发版 v0.7.20**：版本号
   `0.7.19 → 0.7.20`，内容 = 台账 §55（Bridge v17、Host-only bounded
   model discovery、订阅/site/key/shared params 分组、搜索选择与顺序批量

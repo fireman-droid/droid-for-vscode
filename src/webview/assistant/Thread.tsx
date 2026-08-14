@@ -53,6 +53,10 @@ import { Composer } from "./thread/Composer";
 import { UserMessage } from "./thread/UserMessage";
 import { ScrollToBottomIcon } from "./thread/icons";
 import {
+  TransientNotice,
+  type TransientDiagnostic,
+} from "./transientNotice";
+import {
   HistoryNotice,
   PendingResponse,
 } from "./thread/transcriptRows";
@@ -311,6 +315,8 @@ interface DroidThreadProps {
    * in App from the transcript's subagent rows.
    */
   readonly workingBadge?: ReactNode;
+  /** Short-lived host feedback rendered outside assistant-ui history. */
+  readonly transientDiagnostic?: TransientDiagnostic | null;
   /** Prompts queued behind the running turn (Composer hint). */
   readonly queuedCount?: number;
   /** A queued prompt is loaded into the Composer ("Edit Queued"). */
@@ -403,6 +409,7 @@ export const DroidThread = memo(function DroidThread({
   planAnchors = null,
   queuedMessages = null,
   workingBadge = null,
+  transientDiagnostic = null,
   queuedCount = 0,
   queueEditing = false,
   onQueueEditCancel,
@@ -799,6 +806,12 @@ export const DroidThread = memo(function DroidThread({
                   activityLive={activityLive}
                 />
               ) : null}
+              {transientDiagnostic === null ? null : (
+                <TransientNotice
+                  key={transientDiagnostic.sequence}
+                  diagnostic={transientDiagnostic}
+                />
+              )}
               {inlineInteraction}
             </div>
             </SelectSessionContext.Provider>

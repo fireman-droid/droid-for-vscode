@@ -1797,6 +1797,31 @@ describe('assistantWebviewReducer', () => {
     ).toHaveLength(2);
   });
 
+  it('advances past transient diagnostics without storing history', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: {
+        ...snapshot(),
+        turn: { turnId: 'turn-a', status: 'streaming' },
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'runtime.diagnostic',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        severity: 'warning',
+        code: 'file-not-ready',
+        message: 'Droid is still working on it.',
+      },
+    });
+
+    expect(state.sequence).toBe(1);
+    expect(state.transcript).toHaveLength(0);
+  });
+
   it('tracks the command catalog and resets it on session change', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',

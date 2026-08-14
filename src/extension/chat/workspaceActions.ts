@@ -13,8 +13,10 @@ import {
 } from '../../shared/bridgeMessages';
 import { isSafeWorkspaceRelativePath } from '../../shared/validateMessage';
 import { MAX_GIT_COMMIT_SUBJECT_LENGTH } from '../../shared/gitCommitFlow';
+import { FILE_NOT_READY_DIAGNOSTIC_CODE } from '../../shared/transientDiagnostics';
 import {
   formatUnknownError,
+  isTurnActive,
   type ChatControllerInternals,
 } from './internals';
 
@@ -51,20 +53,25 @@ export function handleFileOpenDiff(
     ) {
       return;
     }
+    const requestedTurnId = ctl.turn?.turnId ?? null;
     void ctl.fileDiff.openDiff(path).then((outcome) => {
+      if (
+        ctl.disposed ||
+        ctl.connection.status !== 'connected' ||
+        ctl.sessionId !== sessionId ||
+        (ctl.turn?.turnId ?? null) !== requestedTurnId
+      ) {
+        return;
+      }
       if (outcome === 'not-found') {
         // Missing during an active turn means Droid has not written
         // the file yet; missing on a settled transcript means it was
         // moved or deleted after the fact.
-        const turnActive =
-          ctl.turn !== null &&
-          ctl.turn.status !== 'completed' &&
-          ctl.turn.status !== 'interrupted' &&
-          ctl.turn.status !== 'failed';
-        if (turnActive) {
+        if (isTurnActive(ctl.turn)) {
           ctl.emitSessionDiagnostic(
-            'file-not-ready',
+            FILE_NOT_READY_DIAGNOSTIC_CODE,
             FILE_NOT_READY_MESSAGE,
+            requestedTurnId,
           );
           return;
         }

@@ -24,6 +24,12 @@ import { selectWorkingSubagents } from './subagentWorking';
 import { ThemeContext, useThemeController } from './theme';
 import { WorkingBadge } from './WorkingBadge';
 import { MAX_BTW_TEXT_LENGTH } from '../../shared/btwProtocol';
+import {
+  isTransientNoticeLifecycleMessage,
+  reduceTransientDiagnostic,
+  selectVisibleNotice,
+  type TransientDiagnostic,
+} from './transientNotice';
 import './styles.css';
 
 /**
@@ -42,6 +48,8 @@ export function App(): React.JSX.Element {
     assistantWebviewReducer,
     initialAssistantWebviewState,
   );
+  const [transientDiagnostic, setTransientDiagnostic] =
+    useState<TransientDiagnostic | null>(null);
   const [draft, setDraft] = useState(() => restoreDraft(vscode));
   const [initialDraft] = useState(draft);
   // Rewrites the composer draft programmatically: once on boot with
@@ -150,6 +158,11 @@ export function App(): React.JSX.Element {
       if (message.type === 'ui.theme') {
         applyHostTheme(message.preference, message.resolved);
         return;
+      }
+      if (isTransientNoticeLifecycleMessage(message)) {
+        setTransientDiagnostic((current) =>
+          reduceTransientDiagnostic(current, message),
+        );
       }
       queue.push(message);
       frameId ??= requestAnimationFrame(flush);
@@ -1436,6 +1449,7 @@ export function App(): React.JSX.Element {
               <WorkingBadge rows={workingSubagents} />
             )
           }
+          transientDiagnostic={selectVisibleNotice(transientDiagnostic, sessionId, turnId, active)}
           queuedMessages={
             state.queue.items.length === 0 ? null : (
               <QueuedMessages

@@ -32,6 +32,7 @@ import {
   stableTranscriptId,
   type HostTranscriptState,
 } from '../shared/hostTranscriptState';
+import { isTransientRuntimeDiagnostic } from '../shared/transientDiagnostics';
 
 export {
   stableTranscriptId,
@@ -69,14 +70,19 @@ export function createHostTranscriptState(
 export function hydrateHostTranscriptState(
   state: HostTranscriptState,
 ): HostTranscriptState {
+  const transcript = state.transcript.filter(
+    (item) =>
+      item.kind !== 'diagnostic' ||
+      !isTransientRuntimeDiagnostic(item.code),
+  );
   const historyStatus =
     state.historyStatus === 'complete'
-      ? state.transcript.length > 0
+      ? transcript.length > 0
         ? 'partial'
         : 'unavailable'
       : state.historyStatus;
   const hydrated = boundState({
-    transcript: state.transcript.map(normalizeRestartItem),
+    transcript: transcript.map(normalizeRestartItem),
     historyStatus,
     truncated: state.truncated,
   });
@@ -192,6 +198,9 @@ export function projectHostTranscriptMessage(
     case 'transcript.image':
       return projectTranscriptImage(state, message);
     case 'runtime.diagnostic': {
+      if (isTransientRuntimeDiagnostic(message.code)) {
+        return state;
+      }
       const code = message.code.slice(0, MAX_TURN_TEXT_LENGTH);
       const diagnosticMessage = message.message.slice(
         0,

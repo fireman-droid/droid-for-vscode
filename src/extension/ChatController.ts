@@ -1070,8 +1070,7 @@ export class ChatController {
   }
 
   emitSessionDiagnostic(
-    code: string,
-    message: string,
+    code: string, message: string, turnId: string | null = null,
   ): void {
     // Mirror UI-facing business failures into the local log; without
     // this they vanish whenever the webview is closed or broken.
@@ -1084,7 +1083,7 @@ export class ChatController {
     this.emit({
       type: 'runtime.diagnostic',
       sessionId: this.sessionId,
-      turnId: null,
+      turnId,
       severity: 'warning',
       code,
       message,

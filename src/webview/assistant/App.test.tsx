@@ -136,6 +136,48 @@ function snapshot(
 }
 
 describe('assistant-ui App bridge commands', () => {
+  it('shows file-not-ready feedback only for the active turn', async () => {
+    render(<App />);
+    host(snapshot(0, { turnId: 'turn-a', status: 'streaming' }));
+    host({
+      type: 'runtime.diagnostic',
+      sequence: 1,
+      sessionId: 'session-a',
+      turnId: 'turn-other',
+      severity: 'warning',
+      code: 'file-not-ready',
+      message: 'Wrong turn notice.',
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('Wrong turn notice.')).toBeNull();
+    });
+    host({
+      type: 'runtime.diagnostic',
+      sequence: 2,
+      sessionId: 'session-a',
+      turnId: 'turn-a',
+      severity: 'warning',
+      code: 'file-not-ready',
+      message: 'Droid is still working on it.',
+    });
+    expect(
+      await screen.findByText('Droid is still working on it.'),
+    ).toBeDefined();
+
+    host({
+      type: 'turn.state',
+      sequence: 3,
+      sessionId: 'session-a',
+      turnId: 'turn-a',
+      status: 'completed',
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Droid is still working on it.'),
+      ).toBeNull();
+    });
+  });
+
   it('prepares /btw when the side pane opens before any question', async () => {
     render(<App />);
     host({ ...snapshot(0), btwAvailable: true });

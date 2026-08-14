@@ -30,6 +30,7 @@ import { enforceTranscriptImageBudget, trimTranscriptToLimits } from '../../shar
 import { stableTranscriptId } from '../../shared/hostTranscriptState';
 import { EMPTY_SESSION_BTW_STATE, type SessionBtwState } from '../../shared/btwProtocol';
 import { EMPTY_SESSION_TOKEN_USAGE, type SessionTokenUsageState } from '../../shared/tokenUsage';
+import { isTransientRuntimeDiagnostic } from '../../shared/transientDiagnostics';
 
 export interface AssistantTurn {
   readonly turnId: string;
@@ -1024,7 +1025,8 @@ export function assistantWebviewReducer(
       );
     }
     case 'runtime.diagnostic':
-      if (!acceptsDiagnostic(state, event.sessionId, event.turnId)) {
+      if (!acceptsDiagnostic(state, event.sessionId, event.turnId) ||
+        isTransientRuntimeDiagnostic(event.code)) {
         return advance(state, event.sequence);
       }
       return boundTranscript(
@@ -1247,7 +1249,6 @@ function reconcileQueueEditing(
     ? editing
     : null;
 }
-
 export function isTurnActive(turn: AssistantTurn | null): boolean {
   return (
     turn?.status === 'submitting' ||
@@ -1255,7 +1256,6 @@ export function isTurnActive(turn: AssistantTurn | null): boolean {
     turn?.status === 'stopping'
   );
 }
-
 function advance(
   state: AssistantWebviewState,
   sequence: number,
