@@ -421,6 +421,10 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
   box-shadow: 0 0 0 1px rgb(255 255 255 / 10%);
 }
 
+.dvx-shell[data-theme='dark'] .dvx-settings-search-shell {
+  background: var(--dvx-raised);
+}
+
 .dvx-shell[data-theme='dark'] .dvx-session-search-shell {
   border-color: var(--dvx-border-strong);
 }

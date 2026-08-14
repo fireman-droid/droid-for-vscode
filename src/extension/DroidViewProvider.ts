@@ -59,8 +59,8 @@ function readThemePreference(): ThemePreference {
 /**
  * The theme the webview HTML boots with, so the anti-flash inline
  * background and the first styled frame already match. 'auto' maps
- * the editor's active color theme kind; runtime changes are handled
- * inside the webview (body class observer + `ui.theme` pushes).
+ * the editor's active color theme kind; runtime changes arrive from
+ * the Host color-theme listener through authoritative `ui.theme` pushes.
  */
 function bootTheme(): WebviewBootTheme {
   const preference = readThemePreference();
@@ -85,6 +85,7 @@ export class DroidViewProvider
   private viewDisposalListener: vscode.Disposable | undefined;
   private visibilityListener: vscode.Disposable | undefined;
   private configurationListener: vscode.Disposable | undefined;
+  private colorThemeListener: vscode.Disposable | undefined;
   private controllerSubscription: vscode.Disposable | undefined;
   private webviewView: vscode.WebviewView | undefined;
   private disposed = false;
@@ -131,10 +132,11 @@ export class DroidViewProvider
     );
 
     const postTheme = (): void => {
+      const theme = bootTheme();
       void webviewView.webview
         .postMessage({
           type: 'ui.theme',
-          preference: readThemePreference(),
+          ...theme,
         })
         .then(
           () => undefined,
@@ -148,11 +150,21 @@ export class DroidViewProvider
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (
           this.webviewView === webviewView &&
+          webviewView.visible &&
           event.affectsConfiguration('droidvisx.theme')
         ) {
           postTheme();
         }
       });
+    this.colorThemeListener = vscode.window.onDidChangeActiveColorTheme(() => {
+      if (
+        this.webviewView === webviewView &&
+        webviewView.visible &&
+        readThemePreference() === 'auto'
+      ) {
+        postTheme();
+      }
+    });
 
     this.controllerSubscription = this.controller.subscribe((message) => {
       if (this.webviewView !== webviewView) {
@@ -260,6 +272,7 @@ export class DroidViewProvider
         attributes: { visible: webviewView.visible },
       });
       if (webviewView.visible) {
+        postTheme();
         this.controller.handleMessage({
           type: 'webview.ready',
           protocolVersion: BRIDGE_PROTOCOL_VERSION,
@@ -287,6 +300,8 @@ export class DroidViewProvider
     this.visibilityListener = undefined;
     this.configurationListener?.dispose();
     this.configurationListener = undefined;
+    this.colorThemeListener?.dispose();
+    this.colorThemeListener = undefined;
     this.controllerSubscription?.dispose();
     this.controllerSubscription = undefined;
   }

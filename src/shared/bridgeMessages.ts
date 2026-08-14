@@ -128,8 +128,8 @@ import type { ChangesUpdateMessage } from './changesProtocol';
 // Version 10: live changes ledger — `turn.changes` is replaced by
 // the streaming `changes.update` (H→W; changesProtocol.ts).
 // Version 11: subagent panel — openTranscript/stop/panel W→H,
-// transcript/activity H→W; v12 files; v13 `/btw` pending; v14 prepare; v15 targets.
-export const BRIDGE_PROTOCOL_VERSION = 15 as const;
+// transcript/activity H→W; v12 files; v13 btw; v14 prepare; v15 targets; v16 theme.
+export const BRIDGE_PROTOCOL_VERSION = 16 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_DELTA_LENGTH = 16_384;
@@ -967,17 +967,17 @@ export interface UiThemeSetMessage {
 }
 
 /**
- * Host → Webview: the current theme preference. Sent by the view
- * provider on webview.ready and whenever the `droidvisx.theme`
- * setting changes. Carries no `sequence` on purpose: it bypasses the
+ * Host → Webview: current preference plus its editor-resolved theme.
+ * Sent on ready and preference/editor-theme changes. Carries no
+ * `sequence` on purpose: it bypasses the
  * session store (which enforces one monotonic sequence across all
  * controller-emitted messages) and is applied directly by the shell.
  */
 export interface UiThemeMessage {
   readonly type: 'ui.theme';
   readonly preference: ThemePreference;
+  readonly resolved: 'light' | 'dark';
 }
-
 export type SessionSettingUpdateMessage =
   | {
       readonly type: 'session.setting.update';

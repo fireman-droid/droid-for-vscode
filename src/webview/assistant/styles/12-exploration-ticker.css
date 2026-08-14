@@ -64,12 +64,14 @@
 }
 
 .dvx-activity-state {
+  flex: 0 0 auto;
   margin-left: auto;
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
   color: inherit;
   font-size: inherit;
+  white-space: nowrap;
 }
 
 .dvx-tool-target {

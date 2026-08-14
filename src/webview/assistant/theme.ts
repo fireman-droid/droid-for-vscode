@@ -45,6 +45,13 @@ export function readBootThemePreference(): ThemePreference {
   return value === 'light' || value === 'dark' ? value : 'auto';
 }
 
+/** Host-resolved first-frame theme stamped beside the preference. */
+export function readBootResolvedTheme(): ResolvedTheme {
+  return document.documentElement.dataset.dvxTheme === 'dark'
+    ? 'dark'
+    : 'light';
+}
+
 /**
  * Whether the editor currently runs a dark theme, read from the
  * classes VS Code maintains on the webview body (vscode-dark /
@@ -82,35 +89,27 @@ export function applyDocumentTheme(theme: ResolvedTheme): void {
 }
 
 /**
- * App-side theme wiring: preference boots from the host-stamped HTML
- * attribute and then tracks `ui.theme` pushes (via `setPreference`,
- * a stable setter); 'auto' resolves against the classes VS Code
- * maintains on the webview body, observed live. The resolved theme
- * drives the shell's data-theme attribute (token overrides) and the
- * <html> attribute (page grounds and portalled overlays).
+ * App-side theme wiring: both preference and resolved appearance boot
+ * from host-stamped HTML and then track authoritative `ui.theme`
+ * pushes. The Host listens to VS Code's color-theme event, avoiding
+ * reliance on webview body-class mutation timing for Auto.
  */
 export function useThemeController(
   persistPreference: (preference: ThemePreference) => void,
 ): {
   readonly context: ThemeContextValue;
   readonly resolved: ResolvedTheme;
-  readonly setPreference: (preference: ThemePreference) => void;
+  readonly applyHostTheme: (
+    preference: ThemePreference,
+    resolved: ResolvedTheme,
+  ) => void;
 } {
   const [preference, setPreference] = useState<ThemePreference>(
     readBootThemePreference,
   );
-  const [editorDark, setEditorDark] = useState(() => isEditorDark());
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setEditorDark(isEditorDark());
-    });
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ['class'],
-    });
-    return () => observer.disconnect();
-  }, []);
-  const resolved = resolveTheme(preference, editorDark);
+  const [resolved, setResolved] = useState<ResolvedTheme>(
+    readBootResolvedTheme,
+  );
   useEffect(() => {
     applyDocumentTheme(resolved);
   }, [resolved]);
@@ -118,13 +117,21 @@ export function useThemeController(
     (next: ThemePreference): void => {
       // Optimistic: the host persists and echoes back via ui.theme.
       setPreference(next);
+      setResolved(resolveTheme(next, isEditorDark()));
       persistPreference(next);
     },
     [persistPreference],
+  );
+  const applyHostTheme = useCallback(
+    (nextPreference: ThemePreference, nextResolved: ResolvedTheme): void => {
+      setPreference(nextPreference);
+      setResolved(nextResolved);
+    },
+    [],
   );
   const context = useMemo(
     () => ({ preference, resolved, onPreferenceChange }),
     [onPreferenceChange, preference, resolved],
   );
-  return { context, resolved, setPreference };
+  return { context, resolved, applyHostTheme };
 }

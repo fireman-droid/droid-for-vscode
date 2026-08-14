@@ -5,6 +5,7 @@ import {
   applyDocumentTheme,
   isEditorDark,
   readBootThemePreference,
+  readBootResolvedTheme,
   resolveTheme,
 } from './theme';
 
@@ -45,6 +46,14 @@ describe('boot handoff', () => {
     expect(readBootThemePreference()).toBe('dark');
     document.documentElement.dataset.dvxThemePreference = 'weird';
     expect(readBootThemePreference()).toBe('auto');
+  });
+
+  it('reads the host-resolved first-frame theme', () => {
+    expect(readBootResolvedTheme()).toBe('light');
+    document.documentElement.dataset.dvxTheme = 'dark';
+    expect(readBootResolvedTheme()).toBe('dark');
+    document.documentElement.dataset.dvxTheme = 'unknown';
+    expect(readBootResolvedTheme()).toBe('light');
   });
 
   it('mirrors the resolved theme onto <html> for page grounds', () => {

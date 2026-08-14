@@ -4,6 +4,20 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.19] - 2026-08-15
+
+### Fixed
+
+- **Auto follows Cursor theme changes reliably** — Bridge v16 carries
+  the Host-resolved appearance, and the Extension Host listens to
+  VS Code color-theme changes instead of relying on webview body-class
+  timing.
+- **The `+` search stays available while scrolling** — its quiet
+  search crown remains pinned at the top of the actions panel.
+- **Long activity rows stay on one line** — lifecycle and duration no
+  longer wrap below long search targets; flexible text truncates with
+  an ellipsis instead.
+
 ## [0.7.18] - 2026-08-15
 
 ### Fixed

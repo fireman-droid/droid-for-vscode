@@ -14,6 +14,9 @@ const vscodeMock = vi.hoisted(() => {
     configListeners: new Set<
       (event: { affectsConfiguration(section: string): boolean }) => void
     >(),
+    colorThemeListeners: new Set<
+      (theme: { kind: number }) => void
+    >(),
   };
   const configUpdate = vi.fn(async (key: string, value: unknown) => {
     if (key === 'theme') {
@@ -26,9 +29,16 @@ const vscodeMock = vi.hoisted(() => {
       });
     }
   });
+  const emitColorTheme = (kind: number): void => {
+    state.colorThemeKind = kind;
+    for (const listener of state.colorThemeListeners) {
+      listener({ kind });
+    }
+  };
   return {
     state,
     configUpdate,
+    emitColorTheme,
     Uri: {
       joinPath(base: FakeUri, ...parts: string[]): FakeUri {
         const path = [base.path, ...parts].join('/');
@@ -49,6 +59,16 @@ const vscodeMock = vi.hoisted(() => {
     window: {
       get activeColorTheme() {
         return { kind: state.colorThemeKind };
+      },
+      onDidChangeActiveColorTheme: (
+        listener: (theme: { kind: number }) => void,
+      ) => {
+        state.colorThemeListeners.add(listener);
+        return {
+          dispose: () => {
+            state.colorThemeListeners.delete(listener);
+          },
+        };
       },
     },
     workspace: {
@@ -85,6 +105,7 @@ describe('DroidViewProvider', () => {
     vscodeMock.state.theme = 'auto';
     vscodeMock.state.colorThemeKind = 1;
     vscodeMock.state.configListeners.clear();
+    vscodeMock.state.colorThemeListeners.clear();
   });
 
   it('uses restricted local roots and routes validated bridge messages', () => {
@@ -429,6 +450,7 @@ describe('DroidViewProvider', () => {
     expect(view.webview.postMessage).toHaveBeenCalledWith({
       type: 'ui.theme',
       preference: 'dark',
+      resolved: 'dark',
     });
   });
 
@@ -454,6 +476,50 @@ describe('DroidViewProvider', () => {
     expect(view.webview.postMessage).toHaveBeenCalledWith({
       type: 'ui.theme',
       preference: 'light',
+      resolved: 'light',
+    });
+  });
+
+  it('pushes editor color-theme changes with an authoritative Auto resolution', () => {
+    const controller = createController();
+    const provider = new DroidViewProvider(
+      uri('extension'),
+      controller.value,
+    );
+    const view = createView();
+    provider.resolveWebviewView(
+      view.value,
+      {} as vscodeTypes.WebviewViewResolveContext,
+      {} as vscodeTypes.CancellationToken,
+    );
+
+    vscodeMock.emitColorTheme(vscodeMock.ColorThemeKind.Dark);
+    expect(view.webview.postMessage).toHaveBeenLastCalledWith({
+      type: 'ui.theme',
+      preference: 'auto',
+      resolved: 'dark',
+    });
+    vscodeMock.emitColorTheme(vscodeMock.ColorThemeKind.Light);
+    expect(view.webview.postMessage).toHaveBeenLastCalledWith({
+      type: 'ui.theme',
+      preference: 'auto',
+      resolved: 'light',
+    });
+
+    view.webview.postMessage.mockClear();
+    vscodeMock.state.theme = 'light';
+    vscodeMock.emitColorTheme(vscodeMock.ColorThemeKind.Dark);
+    expect(view.webview.postMessage).not.toHaveBeenCalled();
+
+    vscodeMock.state.theme = 'auto';
+    view.setVisible(false);
+    vscodeMock.emitColorTheme(vscodeMock.ColorThemeKind.Light);
+    expect(view.webview.postMessage).not.toHaveBeenCalled();
+    view.setVisible(true);
+    expect(view.webview.postMessage).toHaveBeenLastCalledWith({
+      type: 'ui.theme',
+      preference: 'auto',
+      resolved: 'light',
     });
   });
 
@@ -481,6 +547,7 @@ describe('DroidViewProvider', () => {
     expect(second.webview.postMessage).toHaveBeenCalledWith({
       type: 'ui.theme',
       preference: 'dark',
+      resolved: 'dark',
     });
   });
 

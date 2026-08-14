@@ -72,7 +72,7 @@ export function App(): React.JSX.Element {
   const {
     context: themeContextValue,
     resolved: resolvedTheme,
-    setPreference: setThemePreference,
+    applyHostTheme,
   } = useThemeController(persistThemePreference);
   const [sessionsOpenSignal, setSessionsOpenSignal] = useState(0);
   const handleSlashNavigate = useCallback(
@@ -148,7 +148,7 @@ export function App(): React.JSX.Element {
       // Theme pushes bypass the store (sequence-free view-provider
       // messages) and apply immediately — no batching for a switch.
       if (message.type === 'ui.theme') {
-        setThemePreference(message.preference);
+        applyHostTheme(message.preference, message.resolved);
         return;
       }
       queue.push(message);
@@ -163,8 +163,8 @@ export function App(): React.JSX.Element {
       window.removeEventListener('message', handleMessage);
       flush();
     };
-    // setThemePreference is a stable useState setter.
-  }, [initialDraft, setThemePreference, vscode]);
+    // applyHostTheme is stable across renders.
+  }, [applyHostTheme, initialDraft, vscode]);
 
   useEffect(() => {
     // Main-thread stall accounting (P2): long tasks are aggregated and

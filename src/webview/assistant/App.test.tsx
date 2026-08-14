@@ -819,24 +819,19 @@ describe('assistant-ui App bridge commands', () => {
 
       // A manual preference pins the shell regardless of the editor,
       // and bypasses the store batch (no sequence, applied at once).
-      host({ type: 'ui.theme', preference: 'dark' });
+      host({ type: 'ui.theme', preference: 'dark', resolved: 'dark' });
       await waitFor(() =>
         expect(shell.getAttribute('data-theme')).toBe('dark'),
       );
       expect(document.documentElement.dataset.dvxTheme).toBe('dark');
 
-      // Auto resolves against the classes VS Code keeps on <body>
-      // and tracks them live through the mutation observer.
-      act(() => {
-        document.body.classList.add('vscode-dark');
-      });
-      host({ type: 'ui.theme', preference: 'auto' });
+      // Auto consumes the Host's authoritative resolution rather than
+      // depending on webview body-class mutation timing.
+      host({ type: 'ui.theme', preference: 'auto', resolved: 'dark' });
       await waitFor(() =>
         expect(shell.getAttribute('data-theme')).toBe('dark'),
       );
-      act(() => {
-        document.body.className = 'vscode-light';
-      });
+      host({ type: 'ui.theme', preference: 'auto', resolved: 'light' });
       await waitFor(() =>
         expect(shell.getAttribute('data-theme')).toBe('light'),
       );

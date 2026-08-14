@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.18 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.19 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -3096,6 +3096,21 @@ UI 描述见 §22 重做记录。
   `lint:budgets` 与 `git diff --check` 全绿；按门禁未跑全量 Vitest、
   浏览器 smoke 或 daemon smoke。
 
+### 54. Auto 主题与紧凑弹层/活动行（2026-08-15，v0.7.19）
+
+- **Auto 主题权威链路**：Bridge v16 的 `ui.theme` 同时携带 preference
+  与 Host 按 `activeColorTheme.kind` 解析的 light/dark；Host 订阅
+  `onDidChangeActiveColorTheme`，Auto 不再依赖 Webview body class
+  更新时机。隐藏视图不接收冗余推送，重新显示时主动对账。
+- **固定搜索入口**：Composer `+` 根面板搜索框使用 sticky crown，
+  长动作列表滚动时仍固定在顶部，明暗主题保持与弹层同色。
+- **单行活动摘要**：Tool 生命周期和耗时设为不收缩、不换行；长 action
+  或 Grep/Glob target 使用既有 ellipsis，让整行高度保持稳定。
+- **验证**：主题/Bridge/Host 触及测试 5 个文件 / 674 例、三段
+  typecheck、`lint:budgets` 与 `git diff --check` 全绿；simplify
+  三路审查后补充隐藏视图与显式主题的冗余推送门。按门禁未跑全量
+  Vitest、浏览器 smoke 或 daemon smoke。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3529,6 +3544,15 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-15 Auto 主题与紧凑行发版 v0.7.19**：版本号
+  `0.7.18 → 0.7.19`，内容 = 台账 §54（Host 权威 Auto 主题、
+  `+` 面板固定搜索入口、长 Tool 活动单行省略）。触及测试 5 个文件 /
+  674 例、typecheck 三段、`lint:budgets` 与 `git diff --check` 全绿；
+  build + VSIX 11 条目验证全绿，产物 1,684,576 字节，SHA-256
+  `5E9FFE7F3723E575435FBAE996CA505933CF315D44F3443205A8A184DE1FD435`。
+  `cursor --install-extension --force` 安装成功并确认
+  `droidvisx.droidvisx@0.7.19`。按门禁未跑全量 Vitest、浏览器 smoke
+  或 daemon smoke；安装后需 Reload Window。
 - **2026-08-15 `/btw` 与模型可读性发版 v0.7.18**：版本号
   `0.7.17 → 0.7.18`，内容 = 台账 §53（侧聊只读吸顶用户卡片与跳转、
   单层焦点、模型 `displayName`、长名称宽度及 Add Model 尾行对齐）。

@@ -2834,24 +2834,22 @@ describe('readHostMessage', () => {
   });
 
   it('accepts sequence-free ui.theme pushes and rejects malformed ones', () => {
-    for (const preference of ['auto', 'light', 'dark'] as const) {
-      expect(
-        readHostMessage({ type: 'ui.theme', preference }),
-      ).toEqual({ type: 'ui.theme', preference });
+    const valid = [
+      { type: 'ui.theme', preference: 'auto', resolved: 'dark' },
+      { type: 'ui.theme', preference: 'light', resolved: 'light' },
+      { type: 'ui.theme', preference: 'dark', resolved: 'dark' },
+    ] as const;
+    for (const message of valid) {
+      expect(readHostMessage(message)).toEqual(message);
     }
-    expect(
-      readHostMessage({ type: 'ui.theme', preference: 'sepia' }),
-    ).toBeUndefined();
-    expect(readHostMessage({ type: 'ui.theme' })).toBeUndefined();
-    // The message deliberately carries no sequence; one smuggled in
-    // (or any other extra key) fails the exact-shape check.
-    expect(
-      readHostMessage({
-        type: 'ui.theme',
-        preference: 'dark',
-        sequence: 1,
-      }),
-    ).toBeUndefined();
+    for (const message of [
+      { type: 'ui.theme', preference: 'sepia', resolved: 'light' },
+      { type: 'ui.theme', preference: 'auto', resolved: 'sepia' },
+      { type: 'ui.theme' },
+      { ...valid[2], sequence: 1 },
+    ]) {
+      expect(readHostMessage(message)).toBeUndefined();
+    }
   });
 
   it('accepts an absolute workspace root on snapshots', () => {

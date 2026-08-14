@@ -140,8 +140,20 @@
 }
 
 .dvx-settings-search-shell {
-  position: relative;
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  background: #faf9f6;
   color: var(--dvx-subtle);
+}
+
+.dvx-settings-search-shell::before {
+  position: absolute;
+  z-index: -1;
+  inset: -10px 0 -4px;
+  background: inherit;
+  content: '';
+  pointer-events: none;
 }
 
 .dvx-settings-search-shell .dvx-search-icon {

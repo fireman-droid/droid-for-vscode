@@ -1548,23 +1548,22 @@ function parseQueueState(
     : undefined;
 }
 
-/**
- * View-provider theme push. Deliberately sequence-free: it bypasses
- * the session store and is applied by the shell directly.
- */
+/** Sequence-free view theme push, applied outside the session store. */
 function parseUiTheme(
   value: UnknownRecord,
 ): Extract<HostToWebviewMessage, { type: 'ui.theme' }> | undefined {
   if (
-    !hasExactKeys(value, ['type', 'preference']) ||
+    !hasExactKeys(value, ['type', 'preference', 'resolved']) ||
     typeof value.preference !== 'string' ||
-    !(THEME_PREFERENCES as readonly string[]).includes(value.preference)
+    !(THEME_PREFERENCES as readonly string[]).includes(value.preference) ||
+    (value.resolved !== 'light' && value.resolved !== 'dark')
   ) {
     return undefined;
   }
   return {
     type: 'ui.theme',
     preference: value.preference as ThemePreference,
+    resolved: value.resolved,
   };
 }
 
