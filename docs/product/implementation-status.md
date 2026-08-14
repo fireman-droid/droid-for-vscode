@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.16 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.17 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -3069,6 +3069,19 @@ UI 描述见 §22 重做记录。
   `lint:budgets` 与 `git diff --check` 全绿；按当前门禁未跑全量
   Vitest、浏览器 smoke 或 daemon smoke。
 
+### 52. 子代理转录面板轻关闭（2026-08-15，v0.7.17）
+
+- **空白处关闭**：子代理转录分栏监听 capture-phase `pointerdown`；
+  面板外点击播放既有 200ms 收拢，面板内交互及其图片 Lightbox 不误关。
+- **选择会话关闭**：`session.select` 发出前同步清空子代理 sheet，不等待
+  Host 快照回传；会话抽屉关闭后不会残留旧分栏。
+- **关闭竞态**：分栏以 `toolUseId` 为 React key；关闭动画期间改开另一条
+  子代理记录会卸载旧计时器，新记录不会被延迟回调误关。
+- **验证**：触及文件 2 个测试文件 / 30 例、三段 typecheck、
+  `lint:budgets` 与 `git diff --check` 全绿；simplify 三路审查发现并
+  补齐旧关闭计时器竞态。按门禁未跑全量 Vitest、浏览器 smoke 或
+  daemon smoke。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3502,6 +3515,15 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-15 子代理转录轻关闭发版 v0.7.17**：版本号
+  `0.7.16 → 0.7.17`，内容 = 台账 §52（面板外点击收拢、选择会话
+  立即关闭、旧关闭计时器隔离）。触及文件 2 个测试文件 / 30 例、
+  typecheck 三段、`lint:budgets` 与 `git diff --check` 全绿；
+  build + VSIX 11 条目验证全绿，产物 1,683,950 字节，SHA-256
+  `B24C981290718F2FC013E91BCD015DBE594453B31FE37128F8DBA50D83BB3716`。
+  `cursor --install-extension --force` 安装成功并确认
+  `droidvisx.droidvisx@0.7.17`。按门禁未跑全量 Vitest、浏览器 smoke
+  或 daemon smoke；安装后需 Reload Window。
 - **2026-08-15 子代理只读转录发版 v0.7.16**：版本号
   `0.7.15 → 0.7.16`，内容 = 台账 §51（主聊天同源只读回放、安全
   Read/Grep/Glob 目标、意图感知平滑跟随、静默轮询 identity 复用、

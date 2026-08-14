@@ -4,6 +4,16 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.17] - 2026-08-15
+
+### Fixed
+
+- **Subagent transcript panes dismiss predictably** — pressing blank
+  space outside the pane plays the close transition, while choosing
+  another session closes it immediately.
+- **Opening another transcript cancels an older close** — a pending
+  leave timer cannot dismiss the newly selected delegation.
+
 ## [0.7.16] - 2026-08-15
 
 ### Fixed

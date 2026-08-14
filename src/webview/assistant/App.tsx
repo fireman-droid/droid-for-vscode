@@ -246,9 +246,8 @@ export function App(): React.JSX.Element {
   // hook (window-listener pull, not store/snapshot state) and reach
   // the panel via context — same no-prop-drilling pattern as gitFlow.
   const customModelsFlow = useCustomModelsFlow(vscode, sessionId);
-  // Subagent panel flow (待办 B): live per-row activity + working
-  // per-row Stop for the popup, and the read-only child transcript
-  // sheet. Same window-listener pull pattern as customModelsFlow.
+  // Observation-only live activity and child transcripts use the same
+  // window-listener pull pattern as customModelsFlow.
   const subagentFlow = useSubagentPanelFlow(vscode, sessionId);
   // `/btw` side chat (S1): the card's open flag is webview-local; the
   // host owns the hidden fork and its projected contents (state.btw).
@@ -790,12 +789,13 @@ export function App(): React.JSX.Element {
   }, [vscode]);
   const handleSelectSession = useCallback(
     (nextSessionId: string): void => {
+      subagentFlow.actions.onCloseSheet();
       post(vscode, {
         type: 'session.select',
         sessionId: nextSessionId,
       });
     },
-    [vscode],
+    [subagentFlow.actions, vscode],
   );
   const handleRenameSession = useCallback(
     (targetSessionId: string, title: string): void => {
@@ -1469,6 +1469,7 @@ export function App(): React.JSX.Element {
             /btw; the side question pane keeps priority when open. */}
         {subagentFlow.sheet !== null && !btwSplit ? (
           <SubagentTranscriptSheet
+            key={subagentFlow.sheet.toolUseId}
             sheet={subagentFlow.sheet}
             running={sheetRowRunning}
             onRefresh={subagentFlow.actions.onRefreshTranscript}

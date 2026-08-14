@@ -4,6 +4,7 @@ import {
   cleanup,
   fireEvent,
   render,
+  screen,
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -242,6 +243,63 @@ describe('SubagentTranscriptSheet', () => {
       expect(onDismiss).not.toHaveBeenCalled();
       act(() => vi.advanceTimersByTime(250));
       expect(onDismiss).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('dismisses from blank space but not from interactions inside', () => {
+    vi.useFakeTimers();
+    try {
+      const onDismiss = vi.fn();
+      render(
+        <SubagentTranscriptSheet
+          sheet={sheetWith({ items })}
+          running={false}
+          onRefresh={vi.fn()}
+          onDismiss={onDismiss}
+        />,
+      );
+      fireEvent.pointerDown(
+        screen.getByRole('complementary', {
+          name: 'Subagent transcript',
+        }),
+      );
+      act(() => vi.advanceTimersByTime(250));
+      expect(onDismiss).not.toHaveBeenCalled();
+
+      fireEvent.pointerDown(document.body);
+      expect(onDismiss).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(250));
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels an old leave timer when another transcript opens', () => {
+    vi.useFakeTimers();
+    try {
+      const onDismiss = vi.fn();
+      const renderSheet = (toolUseId: string) => (
+        <SubagentTranscriptSheet
+          key={toolUseId}
+          sheet={sheetWith({ toolUseId })}
+          running={false}
+          onRefresh={vi.fn()}
+          onDismiss={onDismiss}
+        />
+      );
+      const { rerender } = render(renderSheet('task-1'));
+      fireEvent.pointerDown(document.body);
+      rerender(renderSheet('task-2'));
+      act(() => vi.advanceTimersByTime(250));
+      expect(onDismiss).not.toHaveBeenCalled();
+      expect(
+        screen.getByRole('complementary', {
+          name: 'Subagent transcript',
+        }),
+      ).toBeDefined();
     } finally {
       vi.useRealTimers();
     }

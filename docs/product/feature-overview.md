@@ -326,7 +326,7 @@ Context 面板内 "Token usage" 账目显示 SDK 真实提供的五项分解（I
 - 非运行的历史委派不出徽标；后台委派只展示 Host 权威状态，不按父回合
   是否结束猜测控制能力。
 
-**只读转录回放**。运行中与已终态的委派行都提供 quiet "View transcript" 入口，在右侧分栏（/btw 同族视觉）只读回放该子会话的转录；运行中每 3 秒原地刷新，结清时再补一次尾部读取。消息、Markdown、Thinking、命令卡、Tool 行与 Exploring/Explored 组直接复用主聊天组件（不再维护近似副本）；Read 显示安全工作区相对路径，Grep 显示查询与范围，Glob 显示模式与目录。内容增长与 disclosure 高度变化采用平滑跟随；读者滚动阅读即脱离，到底自然重入。无 Composer、Regenerate、Commit 或终端写入口；子会话文件无法解析时 fail-closed 显示 "Transcript unavailable"。会话抽屉与归档列表按元数据过滤子代理子会话，转录回放是它们唯一的入口。
+**只读转录回放**。运行中与已终态的委派行都提供 quiet "View transcript" 入口，在右侧分栏（/btw 同族视觉）只读回放该子会话的转录；运行中每 3 秒原地刷新，结清时再补一次尾部读取。消息、Markdown、Thinking、命令卡、Tool 行与 Exploring/Explored 组直接复用主聊天组件（不再维护近似副本）；Read 显示安全工作区相对路径，Grep 显示查询与范围，Glob 显示模式与目录。内容增长与 disclosure 高度变化采用平滑跟随；读者滚动阅读即脱离，到底自然重入。点主聊天空白处会播放收拢动画，选择其他会话时立即关闭；面板内交互不会误关，关闭过程中打开另一条记录也不会被旧计时器带走。无 Composer、Regenerate、Commit 或终端写入口；子会话文件无法解析时 fail-closed 显示 "Transcript unavailable"。会话抽屉与归档列表按元数据过滤子代理子会话，转录回放是它们唯一的入口。
 
 **Mission 只读展示**。会话属于 Mission 时 Header 追加静字（如 "· Mission · running"），抽屉行带 "mission / mission · worker" 细字注记；Mission 相关确认作为普通权限卡显示与结算。
 *当前限制（部分完成）*：没有 Mission 控制面（启动/暂停/恢复、阶段流水、Worker 详情界面）。

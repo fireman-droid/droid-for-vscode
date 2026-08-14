@@ -58,6 +58,7 @@ export function SubagentTranscriptSheet({
   readonly onDismiss: () => void;
 }): React.JSX.Element {
   const [leaving, setLeaving] = useState(false);
+  const panelRef = useRef<HTMLElement>(null);
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
   const refreshRef = useRef(onRefresh);
@@ -113,18 +114,40 @@ export function SubagentTranscriptSheet({
   }, [leaving]);
 
   useEffect(() => {
+    const beginDismiss = (): void => {
+      setLeaving(true);
+    };
+    const onPointerDown = (event: PointerEvent): void => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest('.dvx-image-lightbox') !== null
+      ) {
+        return;
+      }
+      if (
+        event.target instanceof Node &&
+        panelRef.current?.contains(event.target) !== true
+      ) {
+        beginDismiss();
+      }
+    };
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        setLeaving(true);
+        beginDismiss();
       }
     };
+    document.addEventListener('pointerdown', onPointerDown, true);
     document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown);
+    };
   }, []);
 
   return (
     <aside
+      ref={panelRef}
       className={`dvx-btw-panel dvx-subsheet${
         leaving ? ' dvx-btw-leaving' : ''
       }`}

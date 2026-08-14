@@ -443,6 +443,67 @@ describe('assistant-ui App bridge commands', () => {
     expect(screen.getByRole('button', { name: 'Stop' })).toBeDefined();
   });
 
+  it('closes a subagent transcript before selecting another session', async () => {
+    render(<App />);
+    host({
+      ...snapshot(0),
+      sessions: {
+        status: 'ready',
+        items: [
+          {
+            id: 'session-a',
+            title: 'Current',
+            messageCount: 1,
+            modifiedTime: '2026-08-15T00:00:00.000Z',
+            active: true,
+          },
+          {
+            id: 'session-b',
+            title: 'Previous',
+            messageCount: 2,
+            modifiedTime: '2026-08-14T00:00:00.000Z',
+            active: false,
+          },
+        ],
+      },
+      transcript: [
+        {
+          id: 'tool:turn-1:task-1',
+          kind: 'tool',
+          turnId: 'turn-1',
+          toolUseId: 'task-1',
+          toolName: 'Task',
+          action: 'Delegated focused work',
+          status: 'completed',
+          progressCount: 0,
+          latestUpdateKind: null,
+          subagent: {
+            type: 'worker',
+            description: 'Inspect the flow',
+            status: 'completed',
+          },
+        },
+      ],
+    });
+
+    fireEvent.click(await screen.findByText('View transcript'));
+    expect(
+      screen.getByRole('complementary', { name: 'Subagent transcript' }),
+    ).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Sessions' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Previous/ }));
+
+    expect(
+      screen.queryByRole('complementary', {
+        name: 'Subagent transcript',
+      }),
+    ).toBeNull();
+    expect(posted).toContainEqual({
+      type: 'session.select',
+      sessionId: 'session-b',
+    });
+  });
+
   it('edits a queued prompt through the Composer and replaces it in place', async () => {
     render(<App />);
     host(snapshot(0));
