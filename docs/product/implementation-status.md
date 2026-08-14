@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.11 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.12 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -1655,9 +1655,10 @@ UI 描述见 §22 重做记录。
   附件在入队时从暂存区取走、随派发回合发送）；**Stop 或回合
   failed → 队列转暂停态**（横幅 + Send now / Clear，绝不自动派发，
   queue.resume 后恢复自动链式排空）；派发被 handleSend 残余守卫
-  拒绝时转 `dispatch-blocked` 暂停而非丢消息。**边界**（照设计
-  §5）：队列驻留 Host 内存，Reload 即失（卡上有细字注明）；换会话
-  /新会话/fork/compact 丢弃队列并出 info 诊断；有排队消息时
+  拒绝时转 `dispatch-blocked` 暂停而非丢消息。**边界**（后续恢复
+  增强已生产接通）：文本随 checkpoint 在 Reload 后恢复为暂停队列，
+  附件负载不恢复；换会话/新会话/fork/compact 丢弃队列并出 info
+  诊断；有排队消息时
   edit-resend 被阻断（互斥，诊断提示先清队）
 - **Bridge**（协议 v6）：`queue.add/update/remove/resume/clear`
   （W→H）+ `queue.state`（H→W，权威快照）+ `host.snapshot` 可选
@@ -1861,8 +1862,8 @@ UI 描述见 §22 重做记录。
   自然消解——footer 只剩队列条一层，与流内计划卡同框呈现
 - **立即发送 = `queue.promote`**（Bridge 协议 v6→**v7**，W→H 第
   6 条消息）：状态机 `promotePrompt` 纯重排提队首；控制器语义
-  ——turn 运行中**只重排不打断**（运行时协议无 mid-turn 注入，
-  完成后优先派发，如实取舍）；暂停态下显式发送意图兼作
+  ——turn 运行中复用安全 Stop，等待匹配终态释放 Runtime 槽后立即
+  派发所选项（仍不是 mid-turn 注入）；暂停态下显式发送意图兼作
   resume，空闲立即派发该条后按既有链式规则继续
 - **Edit Queued（编辑回 Composer，替代就地 textarea）**：点铅笔
   → 文本装回 Composer（`DraftSynchronizer` 命令通道复用）、
@@ -2966,6 +2967,22 @@ UI 描述见 §22 重做记录。
 - **验证**：`App.test.tsx` 17 例、三段 typecheck、`lint:budgets` 与
   `git diff --check` 全绿；按当前门禁未跑全量 Vitest 或 daemon smoke。
 
+### 47. `bug.md` 四项交互修复（2026-08-14，v0.7.12）
+
+- **队列立即发送**：行内 ↑ 复用既有安全 Stop，等待匹配回合终态并释放
+  Runtime 槽后派发所选项；中断失败、所选项被删除或会话切换均 fail
+  closed，不会误发其他排队消息。普通 Stop 仍保留并暂停队列。
+- **吸顶高度与 `/btw` 视觉**：吸顶后的长问题由六行收紧为三行，
+  未吸顶卡片与完整编辑内容不变；`/btw` 输入聚焦改用 Composer 同族的
+  neutral strong border，不再显示突兀 accent ring。
+- **`/btw` 自然跟随**：50ms Host 投影不再逐次跳底，改为可取消逐帧
+  跟随；用户上滑即脱离，到底或新问题重入，reduced-motion 直达且关闭
+  面板不再空等动画时长。
+- **验证**：触达 6 个测试文件共 123 例、三段 typecheck、
+  `lint:budgets` 与 `git diff --check` 全绿；simplify 三路审查发现的
+  首次上滑、残留程序化目标、reduced-motion 与旧恢复文案均已收口。
+  按当前门禁未跑全量 Vitest、浏览器 smoke 或 daemon smoke。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3399,6 +3416,16 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-14 `bug.md` 四项修复发版 v0.7.12**：版本号
+  `0.7.11 → 0.7.12`，内容 = 台账 §47（队列立即发送安全
+  Stop→终态派发、吸顶问题三行上限、`/btw` neutral focus 与用户意图
+  感知逐帧跟随）。触达 6 个测试文件 123 例、typecheck 三段、
+  `lint:budgets` 与 `git diff --check` 全绿；build + VSIX 11 条目
+  验证全绿，产物 1,680,373 字节，SHA-256
+  `5CEC5854184146E2D3ED292189C55DBED24E785CAED118D16F7E8EDE1D44E252`。
+  `cursor --install-extension --force` 安装成功并确认
+  `droidvisx.droidvisx@0.7.12`。未跑全量 Vitest、浏览器 smoke 或
+  daemon smoke；安装后需 Reload Window。
 - **2026-08-14 展开中 Thinking 平滑修复发版 v0.7.11**：版本号
   `0.7.10 → 0.7.11`，内容 = 台账 §46（运行中 `useSmooth` 帧间排放、
   完成态 backlog 连续排空、完成后渐进历史双路径、reduced-motion

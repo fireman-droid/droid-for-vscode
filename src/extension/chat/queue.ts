@@ -14,7 +14,7 @@ import {
 } from '../queuedPromptsState';
 import type { SessionQueueState } from '../../shared/queueProtocol';
 import { emitAttachments } from './attachments';
-import { handleSend } from './turnFlow';
+import { handleSend, handleStop } from './turnFlow';
 import { isTurnActive, type ChatControllerInternals } from './internals';
 
 export const QUEUE_DISPATCH_BLOCKED_MESSAGE =
@@ -123,6 +123,12 @@ export function handleQueueRemove(
       });
     }
     ctl.queuedPrompts = result.state;
+    if (
+      result.removed &&
+      ctl.queueSendNowIntent?.queueId === queueId
+    ) {
+      ctl.queueSendNowIntent = null;
+    }
     emitQueueState(ctl);
 }
 
@@ -142,10 +148,10 @@ export function handleQueueResume(
 
 /**
  * "Send now" on one queued prompt (design §4.8): move it to the
- * head and dispatch as soon as the state machine allows. A running
- * turn is never interrupted — the promotion just decides what goes
- * next — and on a paused queue the explicit send intent doubles as
- * a resume.
+ * head and dispatch it immediately when idle. If a turn owns the
+ * runtime slot, request its existing safe Stop path and wait for the
+ * matching terminal state before dispatching. On a paused queue the
+ * explicit send intent still doubles as a resume.
  */
 export function handleQueuePromote(
   ctl: ChatControllerInternals,
@@ -168,6 +174,30 @@ export function handleQueuePromote(
     }
     ctl.queuedPrompts = resumeQueue(result.state);
     emitQueueState(ctl);
+    const turn = ctl.turn;
+    if (turn !== null && isTurnActive(turn)) {
+      ctl.queueSendNowIntent = {
+        sessionId,
+        turnId: turn.turnId,
+        queueId,
+      };
+      if (turn.status !== 'stopping') {
+        handleStop(ctl, sessionId, turn.turnId);
+      }
+      // Stop acceptance is synchronous (`stopping` is emitted before
+      // the Runtime interrupt Promise begins). If a residual guard
+      // rejects it, do not leave an intent that a later terminal event
+      // could mistake for an accepted send-now request.
+      if (
+        ctl.turn?.turnId !== turn.turnId ||
+        ctl.turn.status !== 'stopping'
+      ) {
+        ctl.queueSendNowIntent = null;
+        pauseQueueAsBlocked(ctl);
+      }
+      return;
+    }
+    ctl.queueSendNowIntent = null;
     maybeDispatchQueue(ctl);
 }
 
@@ -187,6 +217,7 @@ export function handleQueueClear(
         attributes: { count: ctl.queuedPrompts.items.length },
       });
     }
+    ctl.queueSendNowIntent = null;
     ctl.queuedPrompts = clearPrompts();
     emitQueueState(ctl);
 }
@@ -270,24 +301,40 @@ export function pauseQueueAsBlocked(ctl: ChatControllerInternals): void {
  * Applies the queue policy at a terminal turn boundary
  * (queued-messages-design.md §4.3/§4.4): `completed` attempts a
  * dispatch on a microtask (off the turn.state emission stack) so
- * completion side effects land first; Stop and failure park the
- * queue in a paused state that only `queue.resume`, emptying the
- * queue, or a session change leaves.
+ * completion side effects land first; ordinary Stop and failure park
+ * the queue. A row-level send-now Stop is the explicit exception: its
+ * selected prompt dispatches after the matching interrupted terminal
+ * state releases the Runtime slot.
  */
 export function settleQueueAfterTurn(
   ctl: ChatControllerInternals,
     sessionId: string,
+    turnId: string,
     status: 'completed' | 'interrupted' | 'failed',
   ): void {
     if (sessionId !== ctl.sessionId) {
       return;
     }
+    const sendNow = ctl.queueSendNowIntent;
+    const sendNowSettled =
+      sendNow?.sessionId === sessionId &&
+      sendNow.turnId === turnId;
+    if (sendNowSettled) {
+      ctl.queueSendNowIntent = null;
+    }
     if (status === 'completed') {
-      queueMicrotask(() => {
-        if (!ctl.disposed) {
-          maybeDispatchQueue(ctl);
-        }
-      });
+      scheduleQueueDispatch(ctl);
+      return;
+    }
+    if (
+      status === 'interrupted' &&
+      sendNowSettled &&
+      ctl.queuedPrompts.items.some(
+        (item) => item.queueId === sendNow.queueId,
+      )
+    ) {
+      ctl.queuedPrompts = resumeQueue(ctl.queuedPrompts);
+      scheduleQueueDispatch(ctl);
       return;
     }
     const paused = pauseAfterTerminal(ctl.queuedPrompts, status);
@@ -295,6 +342,14 @@ export function settleQueueAfterTurn(
       ctl.queuedPrompts = paused;
       emitQueueState(ctl);
     }
+}
+
+function scheduleQueueDispatch(ctl: ChatControllerInternals): void {
+  queueMicrotask(() => {
+    if (!ctl.disposed) {
+      maybeDispatchQueue(ctl);
+    }
+  });
 }
 
 /** Bounded queue projection shared by `queue.state` and snapshots. */
@@ -394,6 +449,7 @@ export function restoreQueuedPrompts(
  */
 export function discardQueuedPrompts(ctl: ChatControllerInternals): void {
     const count = ctl.queuedPrompts.items.length;
+    ctl.queueSendNowIntent = null;
     if (count === 0) {
       return;
     }

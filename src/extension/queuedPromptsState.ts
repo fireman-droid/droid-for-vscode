@@ -126,10 +126,10 @@ export function clearPrompts<Attachment>(): QueuedPromptsState<Attachment> {
 
 /**
  * Moves one queued prompt to the head ("send now",
- * queued-messages-design.md §4.8). Pure reorder: the caller decides
- * whether the promotion also resumes a paused queue and re-evaluates
- * dispatch. Unknown ids are reported, not thrown, mirroring
- * `updatePromptText`.
+ * queued-messages-design.md §4.8). This pure transition only owns
+ * ordering; the caller decides whether to resume a pause, stop an
+ * active turn, and re-evaluate dispatch. Unknown ids are reported,
+ * not thrown, mirroring `updatePromptText`.
  */
 export function promotePrompt<Attachment>(
   state: QueuedPromptsState<Attachment>,

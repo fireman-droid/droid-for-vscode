@@ -91,6 +91,9 @@ describe('QueuedMessages', () => {
     expect(edits).toHaveLength(2);
     expect(sends).toHaveLength(2);
     expect(removes).toHaveLength(2);
+    expect(sends[0]?.getAttribute('title')).toBe(
+      'Send this message now',
+    );
 
     fireEvent.click(edits[1] as HTMLElement);
     expect(props.onEditBegin).toHaveBeenCalledWith('queue-2');

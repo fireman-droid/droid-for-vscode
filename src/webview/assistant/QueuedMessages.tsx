@@ -13,9 +13,10 @@ import './queuedMessages.css';
  * bar above the Composer (queued-messages-design.md §4.7, redesigned
  * per user decision 2026-08-12 晚). Collapsed it is one quiet line —
  * "N Queued · ⏎ to Send" — that expands to a compact list where each
- * row offers edit / send-now / remove. Editing hands the prompt back
- * to the Composer ("Edit Queued" mode); the row stays in place with
- * an "Editing" tag until the edit is sent or cancelled.
+ * row offers edit / send-now / remove. Send-now safely stops a running
+ * turn before the Host dispatches the chosen prompt. Editing hands the
+ * prompt back to the Composer ("Edit Queued" mode); the row stays in
+ * place with an "Editing" tag until the edit is sent or cancelled.
  *
  * It shares the warm layered card language (and the grid-rows
  * expand/collapse) with the task plan pin so the two stack above the
@@ -185,8 +186,8 @@ export function QueuedMessages({
           ) : (
             <div className="dvx-queue-foot">
               <span className="dvx-queue-note">
-                Sends when the current turn finishes · kept in this
-                window only
+                Sends after the current turn · text restores after
+                reload
               </span>
             </div>
           )}
@@ -246,7 +247,7 @@ function QueuedRow({
             type="button"
             className="dvx-queue-row-action"
             aria-label="Send queued message now"
-            title="Send this message next"
+            title="Send this message now"
             tabIndex={tabIndex}
             onClick={onPromote}
           >

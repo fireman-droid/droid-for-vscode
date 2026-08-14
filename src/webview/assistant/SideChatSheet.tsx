@@ -4,10 +4,16 @@ import {
   MAX_BTW_TEXT_LENGTH,
   type SessionBtwState,
 } from '../../shared/btwProtocol';
+import {
+  applyFollowScroll,
+  createFollowState,
+} from './followScroll';
 import { DroidMarkdownContent } from './MarkdownText';
 
 /** Matches the collapse duration in styles.css (dvx-btw-collapse). */
 const LEAVE_MS = 200;
+const FOLLOW_EASE = 0.24;
+const FOLLOW_SETTLED_PX = 0.5;
 
 /**
  * The `/btw` side question pane: a full-height split-pane column
@@ -35,6 +41,10 @@ export function SideChatSheet({
   const entriesRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dismissRef = useRef(onDismiss);
+  const followNewestRef = useRef<(force?: boolean) => void>(
+    () => undefined,
+  );
+  const previousEntryCountRef = useRef(btw.entries.length);
   dismissRef.current = onDismiss;
 
   const answerStreaming = btw.entries.some(
@@ -48,12 +58,100 @@ export function SideChatSheet({
   const inputDisabled = unavailable;
   const sendDisabled = unavailable;
 
-  // Keep the newest answer text in view while it streams in.
+  // Move with the growing answer instead of jumping once per 50ms
+  // Host projection. An upward user gesture detaches follow; reaching
+  // the bottom or asking a new question rejoins it.
   useEffect(() => {
     const element = entriesRef.current;
-    if (element !== null) {
-      element.scrollTop = element.scrollHeight;
+    if (element === null) {
+      return undefined;
     }
+    const follow = createFollowState({
+      scrollTop: element.scrollTop,
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+    });
+    const reducedMotion = window.matchMedia?.(
+      '(prefers-reduced-motion: reduce)',
+    );
+    let frame = 0;
+    const cancelFrame = (): void => {
+      if (frame !== 0) {
+        window.cancelAnimationFrame(frame);
+        frame = 0;
+      }
+    };
+    const step = (): void => {
+      frame = 0;
+      if (!follow.following) {
+        return;
+      }
+      const target = Math.max(
+        0,
+        element.scrollHeight - element.clientHeight,
+      );
+      const distance = target - element.scrollTop;
+      if (distance <= FOLLOW_SETTLED_PX) {
+        return;
+      }
+      const next = reducedMotion?.matches === true
+        ? target
+        : Math.min(
+            target,
+            element.scrollTop +
+              Math.max(1, distance * FOLLOW_EASE),
+          );
+      follow.pendingProgrammaticTop = next;
+      element.scrollTop = next;
+      if (next < target - FOLLOW_SETTLED_PX) {
+        frame = window.requestAnimationFrame(step);
+      }
+    };
+    const schedule = (): void => {
+      if (follow.following && frame === 0) {
+        frame = window.requestAnimationFrame(step);
+      }
+    };
+    followNewestRef.current = (force = false) => {
+      if (force) {
+        follow.following = true;
+      }
+      schedule();
+    };
+    const onScroll = (): void => {
+      const wasFollowing = follow.following;
+      applyFollowScroll(follow, {
+        scrollTop: element.scrollTop,
+        scrollHeight: element.scrollHeight,
+        clientHeight: element.clientHeight,
+      });
+      if (!wasFollowing && follow.following) {
+        schedule();
+      }
+    };
+    const onWheel = (event: WheelEvent): void => {
+      if (event.deltaY < 0) {
+        follow.following = false;
+        follow.pendingProgrammaticTop = null;
+        cancelFrame();
+      }
+    };
+    element.addEventListener('scroll', onScroll, { passive: true });
+    element.addEventListener('wheel', onWheel, { passive: true });
+    schedule();
+    return () => {
+      followNewestRef.current = () => undefined;
+      element.removeEventListener('scroll', onScroll);
+      element.removeEventListener('wheel', onWheel);
+      cancelFrame();
+    };
+  }, []);
+
+  useEffect(() => {
+    const entryCount = btw.entries.length;
+    const newQuestion = entryCount > previousEntryCountRef.current;
+    previousEntryCountRef.current = entryCount;
+    followNewestRef.current(newQuestion);
   }, [btw]);
 
   useEffect(() => {
@@ -64,6 +162,13 @@ export function SideChatSheet({
   // the reduced-motion path where the animation is disabled.
   useEffect(() => {
     if (!leaving) {
+      return undefined;
+    }
+    if (
+      window.matchMedia?.('(prefers-reduced-motion: reduce)')
+        .matches === true
+    ) {
+      dismissRef.current();
       return undefined;
     }
     const timer = window.setTimeout(() => {

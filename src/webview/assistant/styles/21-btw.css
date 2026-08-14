@@ -238,9 +238,9 @@
 }
 
 .dvx-btw-input:focus-visible {
-  border-color: var(--dvx-accent, var(--dvx-accent));
-  box-shadow: 0 0 0 2px
-    color-mix(in srgb, var(--dvx-accent, var(--dvx-accent)) 18%, transparent);
+  border-color: var(--dvx-border-strong, var(--dvx-border));
+  box-shadow: 0 1px 1.5px rgb(0 0 0 / 10%),
+    0 1px 1px rgb(0 0 0 / 10%);
 }
 
 .dvx-btw-input::placeholder {

@@ -93,8 +93,9 @@ export interface QueueRemoveMessage {
 /**
  * Webview → Host: "send now" — move one queued prompt to the head
  * and dispatch it as soon as the state machine allows. While a turn
- * is running this is a pure reorder (no mid-turn interruption); on a
- * paused queue it also resumes automatic dispatch.
+ * runs the Host stops that turn through its normal safe path, then
+ * dispatches only after terminal settlement; on a paused queue the
+ * action also resumes automatic dispatch.
  */
 export interface QueuePromoteMessage {
   readonly type: 'queue.promote';

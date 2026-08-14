@@ -316,11 +316,22 @@ export class ChatController {
   pendingAttachments: PendingAttachment[] = [];
   /**
    * Prompts queued while a turn runs (queued-messages-design.md
-   * §4.1). Host memory only — the queue dies with the session line
-   * (reload, session switch, fork, compact, workspace change).
+   * §4.1). Payloads stay in Host memory; text is checkpointed for a
+   * paused, text-only reload recovery. A session-line change (select,
+   * fork, compact, workspace change) still discards the queue.
    */
   queuedPrompts: QueuedPromptsState<PendingAttachment> =
     emptyQueuedPromptsState();
+  /**
+   * A row-level "Send now" requested while this turn was active.
+   * The selected prompt dispatches only after Stop reaches a terminal
+   * turn state, never while the runtime still owns its active slot.
+   */
+  queueSendNowIntent: {
+    readonly sessionId: string;
+    readonly turnId: string;
+    readonly queueId: string;
+  } | null = null;
   editStage: EditStage | null = null;
   /**
    * Payloads of already-sent attachments keyed by SDK message id, so

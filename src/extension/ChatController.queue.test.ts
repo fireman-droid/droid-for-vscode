@@ -278,14 +278,18 @@ describe('ChatController queued messages', () => {
     });
   });
 
-  it('promotes a prompt to the head during a turn and dispatches it first', async () => {
+  it('stops the active turn and sends the selected queued prompt now', async () => {
     const release = deferred<void>();
     const runtime = createMockRuntime(async function* (text) {
       if (text === 'Long turn') {
+        yield { type: 'text-delta', text: 'working' };
         await release.promise;
+        yield { ...successfulTurn(), outcome: 'interrupted' };
+        return;
       }
       yield successfulTurn();
     });
+    runtime.interrupt.mockImplementation(async () => release.resolve());
     const { controller, messages } = createController(() => runtime);
     ready(controller);
     await waitForConnected(messages);
@@ -295,7 +299,23 @@ describe('ChatController queued messages', () => {
     queueAdd(controller, 'session-1', 'queued-2', 'Second queued');
     queueAdd(controller, 'session-1', 'queued-3', 'Third queued');
 
-    // Send now while the turn runs: a pure reorder, no interruption.
+    // Unknown ids answer with a corrective echo and change nothing.
+    controller.handleMessage({
+      type: 'queue.promote',
+      sessionId: 'session-1',
+      queueId: 'ghost',
+    });
+    expect(queueStates(messages).at(-1)).toMatchObject({
+      items: [
+        { queueId: 'queued-1' },
+        { queueId: 'queued-2' },
+        { queueId: 'queued-3' },
+      ],
+    });
+
+    // Send now is literal: select the queued prompt, stop the active
+    // turn through the normal safe path, then dispatch after the
+    // interrupted terminal state releases the runtime slot.
     controller.handleMessage({
       type: 'queue.promote',
       sessionId: 'session-1',
@@ -309,23 +329,9 @@ describe('ChatController queued messages', () => {
       ],
       paused: null,
     });
+    expect(runtime.interrupt).toHaveBeenCalledOnce();
     expect(runtime.sendTurn).toHaveBeenCalledOnce();
 
-    // Unknown ids answer with a corrective echo and change nothing.
-    controller.handleMessage({
-      type: 'queue.promote',
-      sessionId: 'session-1',
-      queueId: 'ghost',
-    });
-    expect(queueStates(messages).at(-1)).toMatchObject({
-      items: [
-        { queueId: 'queued-3' },
-        { queueId: 'queued-1' },
-        { queueId: 'queued-2' },
-      ],
-    });
-
-    release.resolve();
     await vi.waitFor(() => {
       expect(runtime.sendTurn).toHaveBeenCalledTimes(4);
     });
@@ -337,6 +343,48 @@ describe('ChatController queued messages', () => {
       'First queued',
       'Second queued',
     ]);
+    expect(
+      turnStates(messages).some(
+        ({ turnId, status }) =>
+          turnId === 'turn-1' && status === 'interrupted',
+      ),
+    ).toBe(true);
+    expect(
+      queueStates(messages).some(({ paused }) => paused === 'stopped'),
+    ).toBe(false);
+  });
+
+  it('falls back to a paused queue when send-now interruption fails', async () => {
+    const release = deferred<void>();
+    const runtime = createMockRuntime(async function* () {
+      yield { type: 'text-delta', text: 'working' };
+      await release.promise;
+      yield successfulTurn();
+    });
+    runtime.interrupt.mockRejectedValue(new Error('interrupt failed'));
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Long turn');
+    queueAdd(controller, 'session-1', 'queued-1', 'Send me now');
+    controller.handleMessage({
+      type: 'queue.promote',
+      sessionId: 'session-1',
+      queueId: 'queued-1',
+    });
+
+    await vi.waitFor(() => {
+      expect(queueStates(messages).at(-1)?.paused).toBe('turn-failed');
+    });
+    expect(runtime.sendTurn).toHaveBeenCalledOnce();
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        type: 'turn.error',
+        code: 'runtime-interrupt-failed',
+      }),
+    );
+    release.resolve();
   });
 
   it('resumes a paused queue when a prompt is promoted', async () => {

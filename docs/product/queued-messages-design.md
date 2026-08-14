@@ -1,11 +1,11 @@
 # Turn 运行中排队消息设计（V1 主线 #7+，发版前最后一步）
 
-> 状态：设计文档（未实现）。调研与技术路线来自
+> 状态：生产已实现，本文保留最初调研、设计基线与后续修订。技术路线来自
 > [`daemon-feature-opportunities.md`](./daemon-feature-opportunities.md)
 > §A1（2026-08-12，用户已定方案甲：Host 层排队）；CLI 侧行为基准见
 > [`cli-coverage-assessment.md`](./cli-coverage-assessment.md) §3 #8。
-> 本文只新建文档、不改任何生产代码。文中源码行号为 2026-08-12
-> 工作区快照，会漂移；定位以文件路径 + 符号名为准。
+> 文中源码行号为 2026-08-12 工作区快照，会漂移；定位以文件路径 +
+> 符号名为准。
 > Bridge 改动受
 > [`architecture-overview.md`](../engineering/architecture-overview.md)
 > 第 3 节不变式约束（双向校验对称、上限共享常量、closed enum、
@@ -133,7 +133,7 @@ QueuePausedReason = 'stopped' | 'turn-failed' | 'dispatch-blocked'
 | `queue.resume` | 清除 paused → `maybeDispatchQueue()` |
 | `queue.remove` / `queue.update` / `queue.clear` | 改队列内容；对已派发（不在队列中）的 queueId 静默忽略 + debug 日志 |
 | 会话切换 / 新会话 / fork / compact / edit-resend 采纳新会话 / runtime 重建 | **丢弃整个队列** + `runtime.diagnostic`（info：'queued messages discarded'，含条数）——队列语义严格绑定当前会话线 |
-| Reload Window | 丢失（Host 内存，§4.6） |
+| Reload Window | 文本恢复为暂停队列；附件负载不恢复（§4.6） |
 
 > 对任务描述"终态（completed/interrupted/failed）后自动逐条发出"的
 > 细化：**只有 completed 自动派发**。interrupted 在本 GUI 只能由用户
@@ -219,18 +219,14 @@ Stop 中断当前回合（既有 `handleStop` → interrupted 终态）→ 队�
 
 ### 4.6 Reload 边界（与 daemon 收尾 A4 的关系）
 
-- **第一版：Host 内存，Reload 丢失。**队列区常显一行弱化小字
-  "Queue is kept in this window only"作为丢失预告（Reload 后无法
-  事后提示，只能事前）。
-- **为什么不先做持久化**：跨 Reload 队列要有意义，前提是 in-flight
-  回合本身跨 Reload 存活并可对账（A4 基础档，
-  `daemon-feature-opportunities.md` §A4）——否则恢复出来的队列挂在
-  一个状态未知的会话上。A4 先行是既定顺序。
-- **A4 之后的增强（登记不实现）**：队列持久化到 `workspaceState`
-  （仅文本 + 附件元数据，与恢复检查点同级），Reload 后恢复为
-  **暂停队列**（`dispatch-blocked` 展示形态），绝不自动派发；附件
-  负载不持久化，恢复后的条目附件降级为"仅元数据、不随发"并在卡片
-  上标注。
+- **当前生产行为**：队列文本随 recovery checkpoint 持久化。Reload
+  后绑定回原会话时恢复为 `dispatch-blocked` 暂停队列，绝不自动派发；
+  UI 与诊断明确提示需手动发送。
+- **附件边界**：附件负载只在 Host 内存，Reload 后恢复项为
+  **text-only**，不会伪装成仍可发送的附件；恢复诊断明确说明该降级。
+- **会话边界不变**：select / new / fork / compact / edit-resend /
+  workspace change 会丢弃队列并清除 checkpoint，不能在另一条会话线
+  复活。
 
 ### 4.7 队列 UI（收纳条形态，用户拍板 2026-08-12 晚，替代首版摊开卡）
 
@@ -259,9 +255,11 @@ Stop 中断当前回合（既有 `handleStop` → interrupted 终态）→ 队�
 - **行内三键**（hover 显影、常驻 0.45 透明度）：铅笔（编辑）、
   ↑（立即发送）、垃圾桶（删除）。
 - **立即发送 = `queue.promote`**：把该条提到队首；turn 运行中只
-  重排（**不打断当前回合**，完成后优先派发——运行时协议没有
-  mid-turn 注入，这是如实取舍）；暂停态下显式的"发送"意图兼作
-  resume，空闲时立即派发该条（后续按既有链式规则继续）。
+  通过既有 Stop 安全路径请求中断，等待该 turn 的终态确认并释放
+  Runtime 活跃槽后再派发所选项（不是 mid-turn 注入）；暂停态下
+  显式的"发送"意图兼作 resume，空闲时立即派发该条（后续按既有
+  链式规则继续）。若中断失败或所选项在终态前被删除，恢复既有暂停
+  策略，不会误发其他条目。
 - **编辑 = 回到 Composer（Edit Queued 模式）**：点铅笔 → 文本装回
   Composer 并全选定位，Composer footer 出现 "Edit Queued ×" quiet
   chip，hint 换为 "Editing a queued message · Enter saves · Esc
@@ -427,7 +425,7 @@ interface QueueStateMessage {
 | Stop | 队列保留 + paused('stopped') + banner（§4.5） |
 | 会话切换 / fork / compact / edit-resend / runtime 重建 | 丢弃队列 + 诊断（§4.1） |
 | edit-resend 与队列互斥 | 队列非空时 edit-resend 拒绝 busy（§4.8） |
-| Reload Window | 丢失；队列区事前提示；持久化列为 A4 后增强（§4.6） |
+| Reload Window | 文本恢复为 `dispatch-blocked` 暂停队列；附件负载丢失（§4.6） |
 | 断连（connection ≠ connected） | 不派发（守卫）；队列保留，重连后下一个触发点恢复 |
 
 ## 7. 验收标准与三步切片
@@ -454,12 +452,12 @@ snapshot 字段 + Host 队列与派发器 + Composer 路由 + 最小可见队列
   update/remove）在本切片一次定稿（AGENTS：先稳定共享契约）。
 
 **切片 2：队列 UI 展示**（排队卡片列 + 附件 chips + 暂停 banner +
-"仅本窗口"提示 + 可访问性）
+恢复边界提示 + 可访问性）
 
 - 完成判据：排队卡片按设计样式出现在转录尾部/Composer 上方并随派发
   逐条消失；Stop 后 banner 出现且 Send now / Clear（`queue.resume` /
-  `queue.clear`）行为正确；Reload 后队列消失且无残留 UI；键盘与
-  aria-live 播报可用。
+  `queue.clear`）行为正确；Reload 后文本以暂停队列恢复且附件不冒充
+  可用；键盘与 aria-live 播报可用。
 
 **切片 3：队列编辑 / 删除**（`queue.update` / `queue.remove` 接线 +
 卡片内联编辑）
@@ -473,7 +471,7 @@ snapshot 字段 + Host 队列与派发器 + Composer 路由 + 最小可见队列
 | 项 | 判定 | 依据 |
 | --- | --- | --- |
 | daemon 原生队列对接（方案乙） | 不做，登记为 A4 完整档后的顺势增强 | 门面无入队 API、排队回合无流可观察（§3.2） |
-| 跨 Reload 持久化 | 不做，A4 基础档落地后按 §4.6 增强 | 依赖 in-flight 回合跨 Reload 对账 |
+| 跨 Reload 持久化 | 已实现文本-only、暂停恢复；附件负载不持久化 | 自动派发继续 fail closed（§4.6） |
 | Steering（当前回合中途注入） | 不做，文案如实"下一回合执行" | Host 层排队的结构性限制（§3.3） |
 | 排队消息的 Mode/Model 覆写 | 不做，每条按派发时会话设置执行 | 会话级语义，与 message-card-design §1.4 同口径 |
 | 排队卡片编辑附件 | 不做（编辑只改文本） | 附件负载在 Host，需另一套编辑暂存语义 |

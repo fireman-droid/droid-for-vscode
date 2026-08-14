@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 
 import {
+  act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -12,7 +14,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SessionBtwState } from '../../shared/btwProtocol';
 import { SideChatSheet } from './SideChatSheet';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const readyState: SessionBtwState = {
   status: 'ready',
@@ -20,6 +25,60 @@ const readyState: SessionBtwState = {
   message: null,
   pendingQuestion: null,
 };
+
+function streamingState(answer: string): SessionBtwState {
+  return {
+    status: 'ready',
+    entries: [
+      {
+        id: 'e1',
+        question: 'q',
+        answer,
+        state: 'streaming',
+        message: null,
+      },
+    ],
+    message: null,
+    pendingQuestion: null,
+  };
+}
+
+function installAnimationFrames(): {
+  readonly runFrame: () => void;
+  readonly restore: () => void;
+} {
+  let nextId = 1;
+  const frames = new Map<number, FrameRequestCallback>();
+  const request = vi
+    .spyOn(window, 'requestAnimationFrame')
+    .mockImplementation((callback) => {
+      const id = nextId;
+      nextId += 1;
+      frames.set(id, callback);
+      return id;
+    });
+  const cancel = vi
+    .spyOn(window, 'cancelAnimationFrame')
+    .mockImplementation((id) => {
+      frames.delete(id);
+    });
+  return {
+    runFrame: () => {
+      const frame = frames.entries().next().value as
+        | [number, FrameRequestCallback]
+        | undefined;
+      if (frame === undefined) {
+        return;
+      }
+      frames.delete(frame[0]);
+      frame[1](performance.now());
+    },
+    restore: () => {
+      request.mockRestore();
+      cancel.mockRestore();
+    },
+  };
+}
 
 describe('SideChatSheet', () => {
   it('renders the panel with its title, hint, and empty transcript', () => {
@@ -192,6 +251,83 @@ describe('SideChatSheet', () => {
     ).toHaveProperty('disabled', false);
   });
 
+  it('follows streaming growth over animation frames instead of jumping', () => {
+    const animation = installAnimationFrames();
+    try {
+      const { container, rerender } = render(
+        <SideChatSheet
+          btw={streamingState('first')}
+          onAsk={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      const entries = container.querySelector(
+        '.dvx-btw-entries',
+      ) as HTMLDivElement;
+      Object.defineProperties(entries, {
+        clientHeight: { configurable: true, value: 400 },
+        scrollHeight: { configurable: true, value: 1000 },
+      });
+      rerender(
+        <SideChatSheet
+          btw={streamingState('first, then more')}
+          onAsk={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      act(() => animation.runFrame());
+      expect(entries.scrollTop).toBeGreaterThan(0);
+      expect(entries.scrollTop).toBeLessThan(600);
+      act(() => animation.runFrame());
+      expect(entries.scrollTop).toBeGreaterThan(100);
+    } finally {
+      animation.restore();
+    }
+  });
+
+  it('stops following when the reader scrolls upward', () => {
+    const animation = installAnimationFrames();
+    try {
+      const { container, rerender } = render(
+        <SideChatSheet
+          btw={streamingState('first')}
+          onAsk={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      const entries = container.querySelector(
+        '.dvx-btw-entries',
+      ) as HTMLDivElement;
+      Object.defineProperties(entries, {
+        clientHeight: { configurable: true, value: 400 },
+        scrollHeight: { configurable: true, value: 1000 },
+      });
+      rerender(
+        <SideChatSheet
+          btw={streamingState('first, then more')}
+          onAsk={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      act(() => animation.runFrame());
+      const followedTop = entries.scrollTop;
+
+      fireEvent.wheel(entries, { deltaY: -80 });
+      rerender(
+        <SideChatSheet
+          btw={streamingState('first, then considerably more')}
+          onAsk={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      act(() => animation.runFrame());
+      expect(entries.scrollTop).toBe(followedTop);
+    } finally {
+      animation.restore();
+    }
+  });
+
   it('shows the unsupported message and disables the input', () => {
     render(
       <SideChatSheet
@@ -226,6 +362,25 @@ describe('SideChatSheet', () => {
     await user.click(screen.getByLabelText('Close side chat'));
     expect(onDismiss).not.toHaveBeenCalled();
     await waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
+  });
+
+  it('closes without an idle delay when reduced motion is requested', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true })),
+    );
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    render(
+      <SideChatSheet
+        btw={readyState}
+        onAsk={vi.fn()}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    await user.click(screen.getByLabelText('Close side chat'));
+    expect(onDismiss).toHaveBeenCalledOnce();
   });
 
   it('renders no scrim and ignores presses inside the pane (split-pane)', async () => {

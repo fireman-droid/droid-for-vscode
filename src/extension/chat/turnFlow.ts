@@ -1042,7 +1042,7 @@ export function emitTurnState(
     ) {
       flushTurnIo(ctl);
       ctl.diagnostics?.endTurnScope?.();
-      settleQueueAfterTurn(ctl, sessionId, status);
+      settleQueueAfterTurn(ctl, sessionId, turnId, status);
       // Every terminal outcome clears the running indicator at once.
       setSessionRunning(ctl, sessionId, false);
     } else {

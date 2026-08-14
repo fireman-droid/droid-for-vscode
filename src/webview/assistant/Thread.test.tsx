@@ -845,6 +845,12 @@ describe('applyFollowScroll', () => {
     expect(state.following).toBe(false);
   });
 
+  it('releases on the first upward scroll from an existing position', () => {
+    const state = createFollowState(sample(600, 1000));
+    applyFollowScroll(state, sample(400, 1000));
+    expect(state.following).toBe(false);
+  });
+
   it('does not release on a clamp from shrinking content', () => {
     const state = createFollowState();
     applyFollowScroll(state, sample(600, 1000));

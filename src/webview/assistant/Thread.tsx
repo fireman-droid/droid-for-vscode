@@ -36,6 +36,10 @@ import {
   PathPreviewContext,
   type PathPreviewWiring,
 } from "./MarkdownText";
+import {
+  applyFollowScroll,
+  createFollowState,
+} from "./followScroll";
 import type { PlanAnchorState } from "./planAnchor";
 import { PlanLine } from "./PlanLine";
 import { AssistantMessage } from "./thread/AssistantMessage";
@@ -471,7 +475,11 @@ export const DroidThread = memo(function DroidThread({
       return undefined;
     }
     let frame = 0;
-    const follow = createFollowState();
+    const follow = createFollowState({
+      scrollTop: scroller.scrollTop,
+      scrollHeight: scroller.scrollHeight,
+      clientHeight: scroller.clientHeight,
+    });
     const updatePins = (): void => {
       frame = 0;
       const viewportTop = scroller.getBoundingClientRect().top;
@@ -546,6 +554,7 @@ export const DroidThread = memo(function DroidThread({
     const onWheel = (event: WheelEvent): void => {
       if (event.deltaY < 0) {
         follow.following = false;
+        follow.pendingProgrammaticTop = null;
       }
     };
     // The arrow's click: re-latch the follow state first so any
@@ -941,85 +950,11 @@ export function computeStickyLayout(
   return { pinnedIndex, covered, pushPx };
 }
 
-/** A viewport is "at bottom" within this tolerance (fractional
- * scrollTop under display scaling never lands exactly on 0). */
-export const FOLLOW_REJOIN_PX = 4;
-
 /** The scroll-to-bottom arrow shows past this distance from the
  * bottom: far enough that the streaming glue's transient frame or two
  * of lag never flashes it, close enough to appear on any real
  * upward scroll. */
 export const SCROLL_BOTTOM_SHOW_PX = 48;
-
-/** One viewport scroll sample fed to the follow latch. */
-export interface FollowScrollSample {
-  readonly scrollTop: number;
-  readonly scrollHeight: number;
-  readonly clientHeight: number;
-}
-
-/** Mutable stick-to-bottom latch owned by the scroll coordinator. */
-export interface FollowState {
-  following: boolean;
-  lastScrollTop: number;
-  lastScrollHeight: number;
-  /** scrollTop the coordinator itself just wrote; the next matching
-   * scroll event is programmatic, not a user gesture. */
-  pendingProgrammaticTop: number | null;
-}
-
-export function createFollowState(): FollowState {
-  return {
-    following: true,
-    lastScrollTop: 0,
-    lastScrollHeight: 0,
-    pendingProgrammaticTop: null,
-  };
-}
-
-/**
- * Applies one scroll event to the follow latch with Cursor semantics:
- * only a genuine upward user scroll releases the latch, and returning
- * to the bottom restores it. Programmatic writes (the coordinator's
- * own glue scrolls, the primitive's run-start jumps) and clamp events
- * from shrinking content never release it. This replaces assistant-ui's
- * isAtBottom bookkeeping, which flips false when the async scroll
- * event of its own bottom-glue write lands after further content
- * growth (scrollTop unchanged + taller scrollHeight reads as a user
- * scroll there), permanently stopping auto-follow mid-stream.
- */
-export function applyFollowScroll(
-  state: FollowState,
-  sample: FollowScrollSample,
-): void {
-  const distance = sample.scrollHeight - sample.scrollTop - sample.clientHeight;
-  const programmatic =
-    state.pendingProgrammaticTop !== null &&
-    Math.abs(sample.scrollTop - state.pendingProgrammaticTop) <= 1;
-  if (programmatic) {
-    state.pendingProgrammaticTop = null;
-  } else {
-    const shrank = sample.scrollHeight < state.lastScrollHeight;
-    const scrolledUp = sample.scrollTop < state.lastScrollTop - 0.5;
-    const scrolledDown = sample.scrollTop > state.lastScrollTop + 0.5;
-    if (scrolledUp && !shrank) {
-      state.following = false;
-    }
-    // A downward scroll that reaches at least the previous bottom is
-    // a return-to-bottom even when streaming grew the content between
-    // the user's gesture and this event (the live distance is then
-    // whatever just streamed in, not user intent).
-    const previousMaxTop = state.lastScrollHeight - sample.clientHeight;
-    if (
-      distance <= FOLLOW_REJOIN_PX ||
-      (scrolledDown && sample.scrollTop >= previousMaxTop - FOLLOW_REJOIN_PX)
-    ) {
-      state.following = true;
-    }
-  }
-  state.lastScrollTop = sample.scrollTop;
-  state.lastScrollHeight = sample.scrollHeight;
-}
 
 function toggleDataAttribute(
   element: HTMLElement,
@@ -1034,3 +969,9 @@ function toggleDataAttribute(
     element.removeAttribute(name);
   }
 }
+
+export {
+  FOLLOW_REJOIN_PX,
+  applyFollowScroll,
+  createFollowState,
+} from "./followScroll";

@@ -4,6 +4,22 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.12] - 2026-08-14
+
+### Fixed
+
+- **Queued “Send now” is immediate** — selecting a waiting message
+  safely stops the active turn, waits for terminal settlement, then
+  dispatches that exact item without opening a mid-turn runtime race.
+- **Pinned questions stay compact** — sticky user cards contract to
+  three text lines instead of occupying a large part of the viewport.
+- **Side-chat focus matches the Composer** — `/btw` uses the neutral
+  strong-border treatment instead of an unrelated accent ring.
+- **Side-chat answers rise naturally** — streaming growth follows the
+  newest answer across animation frames, releases on upward reading
+  intent, rejoins at the bottom or a new question, and respects
+  reduced motion.
+
 ## [0.7.11] - 2026-08-14
 
 ### Fixed
