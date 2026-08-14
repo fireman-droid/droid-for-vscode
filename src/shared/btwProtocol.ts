@@ -52,7 +52,13 @@ export interface SessionBtwState {
   readonly pendingQuestion: string | null;
 }
 
-/** Webview → Host: ask one side question (opens the fork lazily). */
+/** Webview → Host: prepare the hidden fork when the pane opens. */
+export interface BtwPrepareMessage {
+  readonly type: 'btw.prepare';
+  readonly sessionId: string;
+}
+
+/** Webview → Host: ask one side question (prepares as a fallback). */
 export interface BtwAskMessage {
   readonly type: 'btw.ask';
   readonly sessionId: string;
@@ -129,6 +135,20 @@ export function parseBtwAskMessage(
     sessionId: value.sessionId,
     text: value.text,
   };
+}
+
+export function parseBtwPrepareMessage(
+  value: unknown,
+): BtwPrepareMessage | null {
+  if (
+    !isRecord(value) ||
+    value.type !== 'btw.prepare' ||
+    !hasExactKeys(value, ['type', 'sessionId']) ||
+    !isId(value.sessionId)
+  ) {
+    return null;
+  }
+  return { type: 'btw.prepare', sessionId: value.sessionId };
 }
 
 export function parseBtwDismissMessage(

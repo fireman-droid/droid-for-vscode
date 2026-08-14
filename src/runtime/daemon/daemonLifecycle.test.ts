@@ -205,6 +205,7 @@ describe('startDetachedDaemon', () => {
         spawnDetachedDaemon: spawn.spawnDaemon,
         pickFreePort: async () => 45900,
         waitForPort: async () => undefined,
+        resolveListenerPid: async () => null,
       },
     );
 
@@ -224,6 +225,43 @@ describe('startDetachedDaemon', () => {
     expect(spawn.calls[0]?.args).not.toContain('--parent-pid');
   });
 
+  it('returns the durable listener pid instead of the shell wrapper', async () => {
+    const spawn = fakeSpawn(6001);
+
+    const endpoint = await startDetachedDaemon(
+      {},
+      {
+        spawnDetachedDaemon: spawn.spawnDaemon,
+        pickFreePort: async () => 45900,
+        waitForPort: async () => undefined,
+        resolveListenerPid: async () => 7001,
+      },
+    );
+
+    expect(endpoint.pid).toBe(7001);
+  });
+
+  it('reaps an undiscovered daemon when its listener never starts', async () => {
+    const spawn = fakeSpawn(6001);
+    const killProcessTree = vi.fn(async () => undefined);
+
+    await expect(
+      startDetachedDaemon(
+        {},
+        {
+          spawnDetachedDaemon: spawn.spawnDaemon,
+          pickFreePort: async () => 45900,
+          waitForPort: async () => {
+            throw new Error('port timeout');
+          },
+          resolveListenerPid: async () => null,
+          killProcessTree,
+        },
+      ),
+    ).rejects.toThrow('port timeout');
+    expect(killProcessTree).toHaveBeenCalledWith(6001);
+  });
+
   it('rejects when the detached daemon fails to spawn', async () => {
     const spawn = fakeSpawn(undefined);
 
@@ -234,6 +272,7 @@ describe('startDetachedDaemon', () => {
           spawnDetachedDaemon: spawn.spawnDaemon,
           pickFreePort: async () => 45901,
           waitForPort: async () => undefined,
+          resolveListenerPid: async () => null,
         },
       ),
     ).rejects.toThrow('failed to spawn');

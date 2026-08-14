@@ -26,11 +26,13 @@ const FOLLOW_SETTLED_PX = 0.5;
  */
 export function SideChatSheet({
   btw,
+  onPrepare,
   onAsk,
   onStop,
   onDismiss,
 }: {
   readonly btw: SessionBtwState;
+  readonly onPrepare?: () => void;
   readonly onAsk: (text: string) => void;
   /** Stops the streaming answer, keeping its partial text. */
   readonly onStop?: () => void;
@@ -41,11 +43,13 @@ export function SideChatSheet({
   const entriesRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dismissRef = useRef(onDismiss);
+  const prepareRef = useRef(onPrepare);
   const followNewestRef = useRef<(force?: boolean) => void>(
     () => undefined,
   );
   const previousEntryCountRef = useRef(btw.entries.length);
   dismissRef.current = onDismiss;
+  prepareRef.current = onPrepare;
 
   const answerStreaming = btw.entries.some(
     (entry) => entry.state === 'streaming',
@@ -155,6 +159,7 @@ export function SideChatSheet({
   }, [btw]);
 
   useEffect(() => {
+    prepareRef.current?.();
     inputRef.current?.focus();
   }, []);
 

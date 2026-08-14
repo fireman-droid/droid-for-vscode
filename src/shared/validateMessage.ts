@@ -97,7 +97,7 @@ import {
   type WorkspaceReadImageMessage,
   type WorkspaceSearchFilesMessage,
 } from './bridgeMessages';
-import { parseBtwAskMessage, parseBtwDismissMessage, parseBtwStopMessage } from './btwProtocol';
+import { parseBtwAskMessage, parseBtwDismissMessage, parseBtwPrepareMessage, parseBtwStopMessage } from './btwProtocol';
 import { parseCustomModelDeleteMessage, parseCustomModelSaveMessage, parseCustomModelsRefreshMessage } from './customModelsProtocol';
 import { parseSubagentWebviewMessage } from './subagentProtocol';
 import {
@@ -242,6 +242,8 @@ export function parseWebviewMessage(
         return parseWorkspaceReadImage(value);
       case 'session.setting.update':
         return parseSessionSettingUpdate(value);
+      case 'btw.prepare':
+        return parseBtwPrepareMessage(value) ?? undefined;
       case 'btw.ask':
         return parseBtwAskMessage(value) ?? undefined;
       case 'btw.dismiss':

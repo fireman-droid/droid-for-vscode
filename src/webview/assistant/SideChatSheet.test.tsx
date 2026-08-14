@@ -81,6 +81,19 @@ function installAnimationFrames(): {
 }
 
 describe('SideChatSheet', () => {
+  it('prepares the hidden fork as soon as the pane mounts', () => {
+    const onPrepare = vi.fn();
+    render(
+      <SideChatSheet
+        btw={readyState}
+        onPrepare={onPrepare}
+        onAsk={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(onPrepare).toHaveBeenCalledOnce();
+  });
+
   it('renders the panel with its title, hint, and empty transcript', () => {
     render(
       <SideChatSheet btw={readyState} onAsk={vi.fn()} onDismiss={vi.fn()} />,

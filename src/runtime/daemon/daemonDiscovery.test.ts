@@ -114,31 +114,54 @@ describe('ensureSharedDaemon', () => {
     });
   });
 
-  it('skips the health check and replaces the record when the recorded pid is dead', async () => {
+  it('adopts a healthy record that replaces the stale record during cleanup', async () => {
+    const replacement = JSON.stringify({
+      port: 45002,
+      pid: 6002,
+      version: '0.194.0',
+      startedAt: 2,
+    });
+    const reads = [healthyRecord, replacement];
+    const startDaemon = vi.fn();
+    const endpoint = await ensureSharedDaemon(FILE, {
+      readFile: () => reads.shift() ?? replacement,
+      checkHealth: async (url) => url.endsWith(':45002'),
+      deleteFileIfMatches: () => false,
+      startDaemon,
+      cliVersion: () => '0.194.0',
+    });
+
+    expect(startDaemon).not.toHaveBeenCalled();
+    expect(endpoint).toMatchObject({
+      pid: 6002,
+      port: 45002,
+      spawned: false,
+    });
+  });
+
+  it('reuses the healthy listener after its wrapper pid exits', async () => {
     const checkHealth = vi.fn(async () => true);
     const deleteFile = vi.fn();
+    const startDaemon = vi.fn();
     const endpoint = await ensureSharedDaemon(FILE, {
       readFile: () => healthyRecord,
       checkHealth,
       isPidAlive: () => false,
+      resolveListenerPid: async () => 7331,
       deleteFile,
-      writeFileExclusive: () => true,
-      startDaemon: async () => ({
-        url: 'ws://127.0.0.1:45900',
-        pid: 5001,
-        port: 45900,
-      }),
+      startDaemon,
       cliVersion: () => '0.193.0',
     });
 
-    expect(checkHealth).not.toHaveBeenCalled();
-    expect(deleteFile).toHaveBeenCalledWith(FILE);
-    expect(endpoint).toMatchObject({ pid: 5001, spawned: true });
+    expect(checkHealth).toHaveBeenCalledWith('ws://127.0.0.1:45001');
+    expect(deleteFile).not.toHaveBeenCalled();
+    expect(startDaemon).not.toHaveBeenCalled();
+    expect(endpoint).toMatchObject({ pid: 7331, spawned: false });
   });
 
-  it('does not trust a race winner whose pid is dead', async () => {
+  it('trusts a healthy race winner even when its wrapper pid is dead', async () => {
     const reads = [null, healthyRecord];
-    const writes = [false, true];
+    const writes = [false];
     const checkHealth = vi.fn(async () => true);
     const killProcessTree = vi.fn(async () => {});
     const endpoint = await ensureSharedDaemon(FILE, {
@@ -146,6 +169,7 @@ describe('ensureSharedDaemon', () => {
       writeFileExclusive: () => writes.shift() ?? true,
       checkHealth,
       isPidAlive: (pid) => pid !== 4242,
+      resolveListenerPid: async () => 7331,
       killProcessTree,
       startDaemon: async () => ({
         url: 'ws://127.0.0.1:45900',
@@ -154,9 +178,9 @@ describe('ensureSharedDaemon', () => {
       }),
     });
 
-    expect(checkHealth).not.toHaveBeenCalled();
-    expect(killProcessTree).not.toHaveBeenCalled();
-    expect(endpoint).toMatchObject({ pid: 5001, spawned: true });
+    expect(checkHealth).toHaveBeenCalled();
+    expect(killProcessTree).toHaveBeenCalledWith(5001);
+    expect(endpoint).toMatchObject({ pid: 7331, spawned: false });
   });
 
   it('loses the wx race to a healthy winner and reaps its own daemon', async () => {
@@ -207,6 +231,38 @@ describe('ensureSharedDaemon', () => {
     expect(killProcessTree).not.toHaveBeenCalled();
     expect(deleteFile).toHaveBeenCalledWith(FILE);
     expect(endpoint).toMatchObject({ pid: 5001, spawned: true });
+  });
+
+  it('reaps its duplicate when an unhealthy winner is concurrently replaced', async () => {
+    const replacement = JSON.stringify({
+      port: 45002,
+      pid: 6002,
+      version: '0.194.0',
+      startedAt: 2,
+    });
+    const reads = [null, healthyRecord, replacement];
+    const killProcessTree = vi.fn(async () => {});
+    const endpoint = await ensureSharedDaemon(FILE, {
+      readFile: () =>
+        reads.length > 0 ? (reads.shift() ?? null) : replacement,
+      writeFileExclusive: () => false,
+      deleteFileIfMatches: () => false,
+      checkHealth: async (url) => url.endsWith(':45002'),
+      killProcessTree,
+      startDaemon: async () => ({
+        url: 'ws://127.0.0.1:45900',
+        pid: 5001,
+        port: 45900,
+      }),
+      cliVersion: () => '0.194.0',
+    });
+
+    expect(killProcessTree).toHaveBeenCalledWith(5001);
+    expect(endpoint).toMatchObject({
+      pid: 6002,
+      port: 45002,
+      spawned: false,
+    });
   });
 
   it('uses a healthy third contender after replacement publication loses', async () => {
@@ -267,7 +323,7 @@ describe('ensureSharedDaemon', () => {
 });
 
 describe('shutdownSharedDaemon', () => {
-  it('kills the recorded pid and removes the file', async () => {
+  it('kills the verified listener pid and removes the file', async () => {
     const killProcessTree = vi.fn(async () => {});
     const deleteFile = vi.fn();
     await expect(
@@ -279,12 +335,55 @@ describe('shutdownSharedDaemon', () => {
             version: '0.193.0',
             startedAt: 1,
           }),
+        resolveListenerPid: async () => 4242,
         killProcessTree,
         deleteFile,
       }),
     ).resolves.toBe(true);
     expect(killProcessTree).toHaveBeenCalledWith(4242);
     expect(deleteFile).toHaveBeenCalledWith(FILE);
+  });
+
+  it('kills the repaired listener after the wrapper exits', async () => {
+    const killProcessTree = vi.fn(async () => {});
+    const deleteFile = vi.fn();
+    await expect(
+      shutdownSharedDaemon(FILE, {
+        readFile: () =>
+          JSON.stringify({
+            port: 45001,
+            pid: 4242,
+            version: '0.193.0',
+            startedAt: 1,
+          }),
+        resolveListenerPid: async () => 7331,
+        killProcessTree,
+        deleteFile,
+      }),
+    ).resolves.toBe(true);
+    expect(killProcessTree).toHaveBeenCalledWith(7331);
+    expect(deleteFile).toHaveBeenCalledWith(FILE);
+  });
+
+  it('fails closed when a healthy listener identity is unverifiable', async () => {
+    const killProcessTree = vi.fn(async () => {});
+    const deleteFile = vi.fn();
+    await expect(
+      shutdownSharedDaemon(FILE, {
+        readFile: () =>
+          JSON.stringify({
+            port: 45001,
+            pid: 4242,
+            version: '0.193.0',
+            startedAt: 1,
+          }),
+        resolveListenerPid: async () => null,
+        killProcessTree,
+        deleteFile,
+      }),
+    ).resolves.toBe(false);
+    expect(killProcessTree).not.toHaveBeenCalled();
+    expect(deleteFile).not.toHaveBeenCalled();
   });
 
   it('returns false and still clears a malformed file', async () => {

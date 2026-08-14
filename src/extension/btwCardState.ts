@@ -54,18 +54,18 @@ export function appendBtwAnswerDelta(
   id: string,
   text: string,
 ): SessionBtwState {
-  return {
-    ...state,
-    entries: state.entries.map((entry) => {
-      if (entry.id !== id || entry.answer.length >= MAX_BTW_ANSWER_LENGTH) {
-        return entry;
-      }
-      return {
-        ...entry,
-        answer: (entry.answer + text).slice(0, MAX_BTW_ANSWER_LENGTH),
-      };
-    }),
-  };
+  let changed = false;
+  const entries = state.entries.map((entry) => {
+    if (entry.id !== id || entry.answer.length >= MAX_BTW_ANSWER_LENGTH) {
+      return entry;
+    }
+    changed = true;
+    return {
+      ...entry,
+      answer: (entry.answer + text).slice(0, MAX_BTW_ANSWER_LENGTH),
+    };
+  });
+  return changed ? { ...state, entries } : state;
 }
 
 export function completeBtwEntry(

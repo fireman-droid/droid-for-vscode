@@ -48,11 +48,54 @@ describe('tokenizeCommand', () => {
     expect(tokens[0]).toEqual({ kind: 'variable', text: 'TERM=dumb' });
   });
 
+  it('keeps quoted env values lossless without stealing the command', () => {
+    const command = 'LABEL="hello world" node app.js';
+    const tokens = tokenizeCommand(command);
+    expect(tokens.map((token) => token.text).join('')).toBe(command);
+    expect(tokens[0]).toEqual({
+      kind: 'variable',
+      text: 'LABEL="hello world"',
+    });
+    expect(commandChips(command)).toEqual(['node']);
+    expect(
+      commandCardTitle('Ran a local command', 'Execute', command),
+    ).toBe('node app.js');
+  });
+
   it('reopens the command slot after a newline', () => {
     const commands = tokenizeCommand('pnpm build\npnpm test')
       .filter((token) => token.kind === 'command')
       .map((token) => token.text);
     expect(commands).toEqual(['pnpm', 'pnpm']);
+  });
+
+  it('keeps the command slot open through a PowerShell assignment', () => {
+    const tokens = tokenizeCommand(
+      '$rows = Get-Process\n$rows | Sort-Object CPU',
+    );
+    expect(tokens.map((token) => token.text).join('')).toBe(
+      '$rows = Get-Process\n$rows | Sort-Object CPU',
+    );
+    expect(
+      tokens
+        .filter((token) => token.kind === 'command')
+        .map((token) => token.text),
+    ).toEqual(['Get-Process', 'Sort-Object']);
+  });
+
+  it('handles compact PowerShell assignment and grouped expressions', () => {
+    expect(
+      commandChips('$rows=Get-Process\n$html = (Resolve-Path .).Path'),
+    ).toEqual(['Get-Process', 'Resolve-Path']);
+    const uriCommand =
+      "$html = (Resolve-Path -LiteralPath 'D:\\site\\index.html').Path; ([System.Uri]::new($html)).AbsoluteUri";
+    expect(
+      commandCardTitle('Ran a local command', 'Execute', uriCommand),
+    ).toBe('Resolve-Path');
+    expect(commandChips(uriCommand)).toEqual(['Resolve-Path']);
+    expect(commandChips('$rows += Get-Process')).toEqual([
+      'Get-Process',
+    ]);
   });
 
   it('survives an unterminated quote without hanging', () => {
@@ -115,6 +158,19 @@ describe('commandCardTitle', () => {
     expect(
       commandCardTitle('Ran a local command', 'Execute', 'cd src/app'),
     ).toBe('cd');
+  });
+
+  it('titles assignment-heavy PowerShell from the real command', () => {
+    expect(
+      commandCardTitle(
+        'Ran a local command',
+        'Execute',
+        '$rows = Get-Process\n$rows | Sort-Object CPU',
+      ),
+    ).toBe('Get-Process');
+    expect(
+      commandChips('$rows = Get-Process\n$rows | Sort-Object CPU'),
+    ).toEqual(['Get-Process', 'Sort-Object']);
   });
 
   it('falls back to the generic action when nothing usable exists', () => {

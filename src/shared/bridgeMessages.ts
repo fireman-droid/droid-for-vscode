@@ -11,7 +11,7 @@ import {
 } from './toolActivity';
 import type { SessionTokenUsageState } from './tokenUsage';
 import { MAX_SESSION_TRANSCRIPT_ITEMS } from './transcriptLimits';
-import type { BtwAskMessage, BtwDismissMessage, BtwStopMessage, SessionBtwMessage } from './btwProtocol';
+import type { BtwAskMessage, BtwDismissMessage, BtwPrepareMessage, BtwStopMessage, SessionBtwMessage } from './btwProtocol';
 // Type-only on purpose (subagentProtocol imports shared bounds).
 import type { SubagentActivityMessage, SubagentOpenTranscriptMessage, SubagentPanelMessage, SubagentStopMessage, SubagentTranscriptMessage } from './subagentProtocol';
 import type {
@@ -128,8 +128,8 @@ import type { ChangesUpdateMessage } from './changesProtocol';
 // Version 10: live changes ledger — `turn.changes` is replaced by
 // the streaming `changes.update` (H→W; changesProtocol.ts).
 // Version 11: subagent panel — openTranscript/stop/panel W→H,
-// transcript/activity H→W; v12 adds file counts; v13 adds `/btw` pending state.
-export const BRIDGE_PROTOCOL_VERSION = 13 as const;
+// transcript/activity H→W; v12 files; v13 `/btw` pending; v14 pane-open prepare.
+export const BRIDGE_PROTOCOL_VERSION = 14 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_DELTA_LENGTH = 16_384;
@@ -1075,7 +1075,7 @@ export type WebviewToHostMessage =
   | CustomModelsRefreshMessage
   | CustomModelSaveMessage
   | CustomModelDeleteMessage
-  | BtwAskMessage
+  | BtwPrepareMessage | BtwAskMessage
   | BtwDismissMessage | BtwStopMessage
   | SubagentOpenTranscriptMessage | SubagentStopMessage | SubagentPanelMessage
   | QueueAddMessage

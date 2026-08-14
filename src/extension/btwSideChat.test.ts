@@ -81,7 +81,57 @@ describe('BtwSideChat', () => {
     );
   }
 
-  it('forks lazily, streams one answer, and completes the entry', async () => {
+  it('prepares once on open and reuses the fork for the first ask', async () => {
+    const card = createCard();
+    await card.handlePrepare('/repo', 'main-1');
+
+    expect(factoryCalls).toEqual([
+      { cwd: '/repo', mainSessionId: 'main-1' },
+    ]);
+    expect(sidecar.asked).toEqual([]);
+    expect(emitted.at(-1)?.btw.status).toBe('ready');
+
+    await card.handleAsk('/repo', 'main-1', 'first');
+    expect(factoryCalls).toHaveLength(1);
+    expect(sidecar.asked).toEqual(['first']);
+  });
+
+  it('serializes a rapid reopen behind stale preparation', async () => {
+    let releaseFirst: (sidecar: BtwSideChatSidecar) => void = () => undefined;
+    const firstPreparation = new Promise<BtwSideChatSidecar>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const stale = new FakeSidecar();
+    const fresh = new FakeSidecar();
+    let calls = 0;
+    const card = new BtwSideChat(
+      () => {
+        calls += 1;
+        return calls === 1
+          ? firstPreparation
+          : Promise.resolve(fresh);
+      },
+      (sessionId, btw) => {
+        emitted.push({ sessionId, btw });
+      },
+    );
+
+    const first = card.handlePrepare('/repo', 'main-1');
+    card.reset();
+    const reopened = card.handlePrepare('/repo', 'main-1');
+    await Promise.resolve();
+    expect(calls).toBe(1);
+
+    releaseFirst(stale);
+    await first;
+    await reopened;
+
+    expect(calls).toBe(2);
+    expect(stale.disposed).toBe(true);
+    expect(emitted.at(-1)?.btw.status).toBe('ready');
+  });
+
+  it('prepares as an ask fallback, streams, and completes', async () => {
     sidecar.respondWith([
       { kind: 'delta', text: 'Hello' },
       { kind: 'delta', text: ' side' },

@@ -639,6 +639,7 @@ export class ChatController {
       case 'session.fork':
         handleSessionFork(this, message.sessionId);
         return;
+      case 'btw.prepare': this.handleBtwPrepare(message.sessionId); return;
       case 'btw.ask':
         this.handleBtwAsk(message.sessionId, message.text);
         return;
@@ -1112,13 +1113,16 @@ export class ChatController {
     );
   }
 
-  /**
-   * Routes one side question into the hidden-fork side chat
-   * (side-question-design.md §5.3). The ask must target the bound
-   * session in the current workspace; the fork itself never surfaces
-   * in catalogs or the transcript, so nothing else here changes.
-   */
   private handleBtwAsk(sessionId: string, text: string): void {
+    this.withBtwSession(sessionId, (sideChat, cwd) =>
+      void sideChat.handleAsk(cwd, sessionId, text));
+  }
+  private handleBtwPrepare(sessionId: string): void {
+    this.withBtwSession(sessionId, (sideChat, cwd) =>
+      void sideChat.handlePrepare(cwd, sessionId));
+  }
+  private withBtwSession(sessionId: string,
+    run: (sideChat: BtwSideChat, cwd: string) => void): void {
     const sideChat = this.btwSideChat;
     if (sideChat === null || sessionId !== this.sessionId) {
       return;
@@ -1127,8 +1131,7 @@ export class ChatController {
     if (cwd === null || !isTargetWorkspaceCurrent(this, cwd)) {
       return;
     }
-    void sideChat.handleAsk(cwd, sessionId, text);
+    run(sideChat, cwd);
   }
-
 }
 

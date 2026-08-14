@@ -11,6 +11,7 @@ import { FactorySessionCatalog } from '../runtime/FactorySessionCatalog';
 import { FactorySessionHistoryLoader } from '../runtime/history/FactorySessionHistoryLoader';
 import {
   ensurePrivateDaemon,
+  resolveDaemonListenerPid,
   startDetachedDaemon,
   stopDaemon,
   type DaemonEndpoint,
@@ -97,6 +98,14 @@ type DiagnosticsSink = {
   }): void;
 };
 
+const resolveSharedDaemonListener = (
+  port: number,
+  host: string,
+): Promise<number | null> => resolveDaemonListenerPid(port, host);
+
+const killVerifiedSharedDaemon = (pid: number): Promise<void> =>
+  stopDaemon({ url: '', pid, executable: 'droid' });
+
 /**
  * How the daemon sidecar spawns and reaps its daemon.
  *
@@ -132,6 +141,8 @@ function createSharedDaemonStrategy(
       const shared = await ensureSharedDaemon(discoveryFile, {
         startDaemon: () => startDetachedDaemon(),
         checkHealth: (url) => healthCheckDaemon(url),
+        resolveListenerPid: resolveSharedDaemonListener,
+        killProcessTree: killVerifiedSharedDaemon,
       });
       diagnostics.record({
         level: 'info',
@@ -592,7 +603,10 @@ export function activate(context: vscode.ExtensionContext): void {
       // The shared daemon has no shutdown RPC and survives reloads on
       // purpose, so this terminates the discovered pid directly and
       // clears the discovery file. Live windows re-spawn on next use.
-      const stopped = await shutdownSharedDaemon(defaultDiscoveryFile());
+      const stopped = await shutdownSharedDaemon(defaultDiscoveryFile(), {
+        resolveListenerPid: resolveSharedDaemonListener,
+        killProcessTree: killVerifiedSharedDaemon,
+      });
       diagnostics.record({
         level: 'info',
         name: 'daemon.shutdown.requested',

@@ -58,6 +58,7 @@ describe('btwCardState', () => {
     );
     expect(state.entries[0]?.answer).toHaveLength(MAX_BTW_ANSWER_LENGTH);
     const capped = appendBtwAnswerDelta(state, 'e1', 'more');
+    expect(capped).toBe(state);
     expect(capped.entries[0]?.answer).toHaveLength(
       MAX_BTW_ANSWER_LENGTH,
     );

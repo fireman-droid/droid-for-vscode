@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.12 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.13 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -2983,6 +2983,35 @@ UI 描述见 §22 重做记录。
   首次上滑、残留程序化目标、reduced-motion 与旧恢复文案均已收口。
   按当前门禁未跑全量 Vitest、浏览器 smoke 或 daemon smoke。
 
+### 48. 工作区、daemon 与 `/btw` 稳定性收口（2026-08-14，v0.7.13）
+
+- **工作区与 `/ide` 边界**：每个 Cursor Extension Host 仍以自己的
+  `workspaceFolders[0]` 创建 cwd 绑定的 daemon/process Session；共享
+  daemon 只复用服务进程，不共享 Session cwd。DroidVisX 通过 VS Code
+  API 提供显式 Editor/Selection/File/Problems/Git 附件，不实现官方
+  Factory 扩展的 `/ide` 自动上下文协议；Problems 现只投影当前绑定
+  工作区内的 file diagnostics，外部标签页与其他工作区诊断不再混入。
+- **Windows 共享 daemon 所有权**：启动后解析并校验 localhost TCP
+  listener PID，不再把会退出的 `cmd.exe` wrapper 当成长期身份；健康
+  旧 endpoint 即使 wrapper 已退出也继续复用。发现竞态 loser 与显式
+  Shutdown 均注入 identity-safe 清理，Shutdown 只接受与记录端口绑定
+  的已校验 listener；stale record 使用内容匹配的原子移除，避免不同
+  Cursor 窗口互删新记录。
+- **终端摘要与 `/btw`**：命令卡识别 PowerShell 赋值、复合赋值、
+  括号表达式与含空格的引号环境变量，标题/命令 chips 指向真实执行项；
+  Bridge v14 新增 `btw.prepare`，Side pane 挂载即 single-flight 创建
+  hidden fork，首问仅复用，快速关闭重开不会并发堆叠 transport。
+- **归因结论**：当前日志没有证明 DroidVisX 对话逻辑导致独立 CLI
+  crash；已确认的 DroidVisX 压力源是旧 shared-daemon wrapper PID
+  缺陷造成的 orphan daemon 累积。Cursor 自身约 7.32GB 的全局
+  `state.vscdb`（主要为 agent/checkpoint/diff 数据）是另一个独立的
+  I/O 与内存压力源，不归因于 DroidVisX。
+- **验证边界**：不终止用户当前进程，不读取 Prompt/Tool payload，
+  不运行 daemon/browser smoke。触达测试先行全绿；因 Bridge v14 属于
+  shared contract，本发布唯一一次全量 Vitest 为 111 文件 / 2,177 例，
+  另有三段 typecheck、`lint:budgets`、`git diff --check`、build、
+  11 条目 VSIX 校验与本地安装全绿。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3416,6 +3445,18 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-14 工作区与稳定性收口发版 v0.7.13**：版本号
+  `0.7.12 → 0.7.13`，内容 = 台账 §48（Windows shared-daemon
+  listener PID / 内容匹配 stale cleanup / identity-safe shutdown、
+  当前工作区 Problems 过滤、PowerShell 命令卡摘要、Bridge v14
+  `/btw` pane-open prepare）。typecheck 三段、`lint:budgets`、
+  `git diff --check` 与本发布唯一一次全量 Vitest 111 文件 /
+  2,177 例全绿；build + VSIX 11 条目验证全绿，产物
+  1,682,305 字节，SHA-256
+  `EBFDFC3D2A4E3D0401ABEE162A3CF0D691D64AA7379663377D7762E741853DE4`。
+  `cursor --install-extension --force` 安装成功并确认
+  `droidvisx.droidvisx@0.7.13`。未跑 daemon/browser smoke，也未终止
+  当前遗留 daemon；安装后需 Reload Window。
 - **2026-08-14 `bug.md` 四项修复发版 v0.7.12**：版本号
   `0.7.11 → 0.7.12`，内容 = 台账 §47（队列立即发送安全
   Stop→终态派发、吸顶问题三行上限、`/btw` neutral focus 与用户意图

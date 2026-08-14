@@ -9,6 +9,8 @@ const PORT_POLL_INTERVAL_MS = 500;
 const STDERR_TAIL_MAX_CHARS = 2048;
 /** Cap on the pre-kill identity query; unverifiable means no kill. */
 const IDENTITY_QUERY_TIMEOUT_MS = 5_000;
+/** Bounds output from system identity/listener queries. */
+const IDENTITY_QUERY_OUTPUT_MAX_CHARS = 1024 * 1024;
 
 export interface DaemonEndpoint {
   readonly url: string;
@@ -51,6 +53,12 @@ export interface DaemonLifecycleDeps {
     host: string,
     timeoutMs: number,
   ) => Promise<void>;
+  /** Resolves and verifies the process listening on a daemon port. */
+  readonly resolveListenerPid: (
+    port: number,
+    host: string,
+    executable: string,
+  ) => Promise<number | null>;
   readonly killProcessTree: (pid: number) => Promise<void>;
   /** Resolves the command line of a live pid, or null when unknown. */
   readonly queryProcessCommandLine: (pid: number) => Promise<string | null>;
@@ -68,7 +76,11 @@ export async function startDetachedDaemon(
   deps: Partial<
     Pick<
       DaemonLifecycleDeps,
-      'spawnDetachedDaemon' | 'pickFreePort' | 'waitForPort'
+      | 'spawnDetachedDaemon'
+      | 'pickFreePort'
+      | 'waitForPort'
+      | 'resolveListenerPid'
+      | 'killProcessTree'
     >
   > = {},
 ): Promise<DaemonEndpoint & { readonly port: number }> {
@@ -78,6 +90,9 @@ export async function startDetachedDaemon(
     deps.spawnDetachedDaemon ?? defaultSpawnDetachedDaemon;
   const pickFreePort = deps.pickFreePort ?? defaultPickFreePort;
   const waitForPort = deps.waitForPort ?? defaultWaitForPort;
+  const resolveListenerPid =
+    deps.resolveListenerPid ?? resolveDaemonListenerPid;
+  const killProcessTree = deps.killProcessTree ?? defaultKillProcessTree;
 
   const port = await pickFreePort();
   const child = spawnDetached(droidPath, [
@@ -104,12 +119,21 @@ export async function startDetachedDaemon(
         `droid daemon exited before listening (code ${String(exited)})`,
       );
     }
+    try {
+      await killProcessTree(child.pid);
+    } catch {
+      // Already gone; nothing to reap.
+    }
     throw error;
   }
 
   return {
     url: `ws://${host}:${String(port)}`,
-    pid: child.pid,
+    // `shell: true` returns a transient cmd.exe wrapper pid on
+    // Windows. Persist the durable listener when it can be verified.
+    pid:
+      (await resolveListenerPid(port, host, droidPath)) ??
+      child.pid,
     port,
     executable: droidPath,
   };
@@ -251,11 +275,17 @@ function looksLikeDroidDaemon(
   const tokens = tokenizeCommandLine(commandLine).map((token) =>
     token.toLowerCase(),
   );
-  const expected = pathBasename(executable).toLowerCase();
+  const expected = executableStem(pathBasename(executable));
   return (
-    tokens.some((token) => pathBasename(token) === expected) &&
+    tokens.some(
+      (token) => executableStem(pathBasename(token)) === expected,
+    ) &&
     tokens.includes('daemon')
   );
+}
+
+function executableStem(value: string): string {
+  return value.toLowerCase().replace(/\.(?:exe|cmd|bat)$/u, '');
 }
 
 function tokenizeCommandLine(commandLine: string): string[] {
@@ -413,6 +443,96 @@ function defaultWaitForPort(
 }
 
 /**
+ * Resolves the verified `droid daemon` process listening on a local
+ * TCP port. Windows shared daemons are launched through cmd.exe, so
+ * the spawn pid is only a transient wrapper and must not be used as
+ * durable discovery identity.
+ */
+export async function resolveDaemonListenerPid(
+  port: number,
+  host = '127.0.0.1',
+  executable = 'droid',
+): Promise<number | null> {
+  const pid = await queryListeningPid(port, host);
+  if (pid === null) {
+    return null;
+  }
+  const commandLine = await defaultQueryProcessCommandLine(pid);
+  return commandLine !== null &&
+    looksLikeDroidDaemon(commandLine, executable)
+    ? pid
+    : null;
+}
+
+async function queryListeningPid(
+  port: number,
+  host: string,
+): Promise<number | null> {
+  const [command, args] =
+    process.platform === 'win32'
+      ? (['netstat.exe', ['-ano', '-p', 'tcp']] as const)
+      : (['ss', ['-ltnp']] as const);
+  const output = await runBoundedCommandOutput(command, args);
+  return output === null
+    ? null
+    : parseListeningPid(output, port, host, process.platform);
+}
+
+function parseListeningPid(
+  output: string,
+  port: number,
+  host: string,
+  platform: NodeJS.Platform,
+): number | null {
+  for (const line of output.split(/\r?\n/u)) {
+    const columns = line.trim().split(/\s+/u);
+    if (platform === 'win32') {
+      if (
+        columns.length < 5 ||
+        columns[0]?.toUpperCase() !== 'TCP' ||
+        columns[3]?.toUpperCase() !== 'LISTENING' ||
+        !matchesEndpoint(columns[1] ?? '', host, port)
+      ) {
+        continue;
+      }
+      const pid = Number(columns[4]);
+      if (Number.isSafeInteger(pid) && pid > 0) {
+        return pid;
+      }
+      continue;
+    }
+    if (
+      columns.length < 6 ||
+      columns[0]?.toUpperCase() !== 'LISTEN' ||
+      !matchesEndpoint(columns[3] ?? '', host, port)
+    ) {
+      continue;
+    }
+    const match = /pid=(\d+)/u.exec(columns.slice(5).join(' '));
+    const pid = Number(match?.[1]);
+    if (Number.isSafeInteger(pid) && pid > 0) {
+      return pid;
+    }
+  }
+  return null;
+}
+
+function matchesEndpoint(
+  endpoint: string,
+  host: string,
+  port: number,
+): boolean {
+  const separator = endpoint.lastIndexOf(':');
+  if (separator < 0 || Number(endpoint.slice(separator + 1)) !== port) {
+    return false;
+  }
+  const endpointHost = endpoint
+    .slice(0, separator)
+    .replace(/^\[|\]$/gu, '');
+  return endpointHost === host;
+}
+
+/**
  * Reads a pid's command line without a shell: PowerShell CIM on
  * Windows (tasklist only reports the image name — always cmd.exe for
  * our shell-wrapped daemon — and wmic is removed from newer Windows
@@ -420,20 +540,26 @@ function defaultWaitForPort(
  * query fails, or it exceeds {@link IDENTITY_QUERY_TIMEOUT_MS}.
  */
 function defaultQueryProcessCommandLine(pid: number): Promise<string | null> {
-  return new Promise((resolve) => {
-    const [command, args] =
-      process.platform === 'win32'
-        ? ([
-            'powershell.exe',
-            [
-              '-NoProfile',
-              '-NonInteractive',
-              '-Command',
-              `(Get-CimInstance Win32_Process -Filter "ProcessId=${String(pid)}").CommandLine`,
-            ],
-          ] as const)
-        : (['ps', ['-p', String(pid), '-o', 'args=']] as const);
+  const [command, args] =
+    process.platform === 'win32'
+      ? ([
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `(Get-CimInstance Win32_Process -Filter "ProcessId=${String(pid)}").CommandLine`,
+          ],
+        ] as const)
+      : (['ps', ['-p', String(pid), '-o', 'args=']] as const);
+  return runBoundedCommandOutput(command, args);
+}
 
+function runBoundedCommandOutput(
+  command: string,
+  args: readonly string[],
+): Promise<string | null> {
+  return new Promise((resolve) => {
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const finish = (value: string | null): void => {
@@ -462,7 +588,14 @@ function defaultQueryProcessCommandLine(pid: number): Promise<string | null> {
     let output = '';
     child.stdout?.setEncoding('utf8');
     child.stdout?.on('data', (chunk: string) => {
+      if (settled) {
+        return;
+      }
       output += chunk;
+      if (output.length > IDENTITY_QUERY_OUTPUT_MAX_CHARS) {
+        child.kill();
+        finish(null);
+      }
     });
     child.once('error', () => {
       finish(null);

@@ -272,6 +272,11 @@ export function App(): React.JSX.Element {
     },
     [sessionId, vscode],
   );
+  const handleBtwPrepare = useCallback((): void => {
+    if (sessionId !== null) {
+      post(vscode, { type: 'btw.prepare', sessionId });
+    }
+  }, [sessionId, vscode]);
   const handleBtwDismiss = useCallback((): void => {
     setBtwOpen(false);
     if (sessionId !== null) {
@@ -1463,6 +1468,7 @@ export function App(): React.JSX.Element {
         {btwSplit ? (
           <SideChatSheet
             btw={state.btw}
+            onPrepare={handleBtwPrepare}
             onAsk={handleBtwAsk}
             onStop={handleBtwStop}
             onDismiss={handleBtwDismiss}

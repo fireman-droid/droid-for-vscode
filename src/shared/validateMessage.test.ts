@@ -1636,7 +1636,16 @@ describe('parseWebviewMessage', () => {
     expect(parseWebviewMessage(proxy)).toBeUndefined();
   });
 
-  it('routes btw.ask and btw.dismiss through the shared parser', () => {
+  it('routes btw prepare, ask, dismiss, and stop through the shared parser', () => {
+    expect(
+      parseWebviewMessage({
+        type: 'btw.prepare',
+        sessionId: 'session-1',
+      }),
+    ).toEqual({
+      type: 'btw.prepare',
+      sessionId: 'session-1',
+    });
     expect(
       parseWebviewMessage({
         type: 'btw.ask',

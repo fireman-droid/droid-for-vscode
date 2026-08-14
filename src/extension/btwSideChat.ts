@@ -50,6 +50,8 @@ const BTW_EMIT_INTERVAL_MS = 50;
 export class BtwSideChat {
   private state: SessionBtwState = EMPTY_SESSION_BTW_STATE;
   private sidecar: BtwSideChatSidecar | null = null;
+  private sidecarPreparation: Promise<BtwSideChatSidecar | null> | null =
+    null;
   /** Bound main session; asks for other sessions are stale. */
   private boundSessionId: string | null = null;
   /** Bumped by every teardown; async continuations check it. */
@@ -67,6 +69,12 @@ export class BtwSideChat {
       btw: SessionBtwState,
     ) => void,
   ) {}
+
+  /** Prepares the hidden fork as soon as the side pane opens. */
+  async handlePrepare(cwd: string, mainSessionId: string): Promise<void> {
+    this.bindSession(mainSessionId);
+    await this.ensureSidecar(cwd, mainSessionId, this.generation);
+  }
 
   /**
    * Streams one side question. While it runs, the latest overlapping
@@ -87,39 +95,17 @@ export class BtwSideChat {
       }
       return;
     }
-    if (this.boundSessionId !== mainSessionId) {
-      // First ask of a card, or a stale card from a previous session
-      // raced the switch: rebind onto a fresh fork.
-      this.teardown();
-      this.boundSessionId = mainSessionId;
-    }
+    this.bindSession(mainSessionId);
     const generation = this.generation;
     this.asking = true;
     try {
-      if (this.sidecar === null) {
-        this.setState(setBtwStatus(this.state, 'forking'), true);
-        let sidecar: BtwSideChatSidecar;
-        try {
-          sidecar = await this.createSidecar(cwd, mainSessionId);
-        } catch {
-          if (this.generation === generation) {
-            this.setState(
-              setBtwStatus(
-                setBtwPendingQuestion(this.state, null),
-                'error',
-                BTW_START_FAILED_MESSAGE,
-              ),
-              true,
-            );
-          }
-          return;
-        }
-        if (this.generation !== generation) {
-          void sidecar.dispose();
-          return;
-        }
-        this.sidecar = sidecar;
-        this.setState(setBtwStatus(this.state, 'ready'), true);
+      const sidecar = await this.ensureSidecar(
+        cwd,
+        mainSessionId,
+        generation,
+      );
+      if (sidecar === null) {
+        return;
       }
       let question = text;
       while (this.generation === generation) {
@@ -130,7 +116,7 @@ export class BtwSideChat {
         );
         let settled = false;
         try {
-          for await (const event of this.sidecar.ask(question)) {
+          for await (const event of sidecar.ask(question)) {
             if (this.generation !== generation) {
               return;
             }
@@ -250,12 +236,73 @@ export class BtwSideChat {
     }
   }
 
+  private bindSession(mainSessionId: string): void {
+    if (this.boundSessionId !== mainSessionId) {
+      this.teardown();
+      this.boundSessionId = mainSessionId;
+    }
+  }
+
+  private async ensureSidecar(
+    cwd: string,
+    mainSessionId: string,
+    generation: number,
+  ): Promise<BtwSideChatSidecar | null> {
+    if (this.sidecar !== null) {
+      return this.sidecar;
+    }
+    if (this.sidecarPreparation !== null) {
+      const prepared = await this.sidecarPreparation;
+      if (prepared !== null || this.generation !== generation) {
+        return prepared;
+      }
+      return this.ensureSidecar(cwd, mainSessionId, generation);
+    }
+    this.setState(setBtwStatus(this.state, 'forking'), true);
+    const preparation = (async (): Promise<BtwSideChatSidecar | null> => {
+      let sidecar: BtwSideChatSidecar;
+      try {
+        sidecar = await this.createSidecar(cwd, mainSessionId);
+      } catch {
+        if (this.generation === generation) {
+          this.setState(
+            setBtwStatus(
+              setBtwPendingQuestion(this.state, null),
+              'error',
+              BTW_START_FAILED_MESSAGE,
+            ),
+            true,
+          );
+        }
+        return null;
+      }
+      if (this.generation !== generation) {
+        void sidecar.dispose();
+        return null;
+      }
+      this.sidecar = sidecar;
+      this.setState(setBtwStatus(this.state, 'ready'), true);
+      return sidecar;
+    })();
+    this.sidecarPreparation = preparation;
+    try {
+      return await preparation;
+    } finally {
+      if (this.sidecarPreparation === preparation) {
+        this.sidecarPreparation = null;
+      }
+    }
+  }
+
   /**
    * Applies one card transition. Terminal transitions flush
    * immediately; streaming deltas coalesce on a short timer so the
    * growing answer is not resent per token.
    */
   private setState(next: SessionBtwState, urgent: boolean): void {
+    if (next === this.state) {
+      return;
+    }
     this.state = next;
     if (urgent) {
       this.flush();

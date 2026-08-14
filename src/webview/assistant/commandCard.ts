@@ -30,6 +30,14 @@ const OPERATORS = [
   '&&',
   '||',
   '>>',
+  '+=',
+  '-=',
+  '*=',
+  '/=',
+  '%=',
+  '=',
+  '(',
+  ')',
   '|',
   ';',
   '>',
@@ -45,7 +53,7 @@ const COMMAND_SEPARATORS: ReadonlySet<string> = new Set([
   ';',
 ]);
 
-const WORD_BREAK = '|;&><\'"#';
+const WORD_BREAK = '|;&><=\'"#()';
 
 export function tokenizeCommand(
   command: string,
@@ -102,6 +110,24 @@ export function tokenizeCommand(
       continue;
     }
 
+    if (expectCommand) {
+      const envAssignmentEnd = scanEnvAssignment(command, index);
+      if (envAssignmentEnd !== null) {
+        push('variable', command.slice(index, envAssignmentEnd));
+        index = envAssignmentEnd;
+        continue;
+      }
+      const powershellVariable =
+        /^\$[A-Za-z_][\w:]*(?=(?:\+|-|\*|\/|%)?=)/u.exec(
+          command.slice(index),
+        );
+      if (powershellVariable !== null) {
+        push('variable', powershellVariable[0]);
+        index += powershellVariable[0].length;
+        continue;
+      }
+    }
+
     const operator = OPERATORS.find((candidate) =>
       command.startsWith(candidate, index),
     );
@@ -132,11 +158,23 @@ export function tokenizeCommand(
     }
     if (word.startsWith('$')) {
       push('variable', word);
-      expectCommand = false;
+      // In PowerShell `$name = Get-Thing`, the variable is setup
+      // syntax rather than the command-card subject. Keep the command
+      // slot open through a following assignment operator so the real
+      // RHS command becomes the title/chip.
+      const remainder = command.slice(index);
+      expectCommand =
+        expectCommand &&
+        /^[ \t]*(?:\+|-|\*|\/|%)?=/u.test(remainder);
       continue;
     }
     if (word.length > 1 && word.startsWith('-')) {
       push('flag', word);
+      expectCommand = false;
+      continue;
+    }
+    if (expectCommand && /^\[[^\]]+\]::/u.test(word)) {
+      push('text', word);
       expectCommand = false;
       continue;
     }
@@ -152,6 +190,39 @@ export function tokenizeCommand(
     push('text', word);
   }
   return tokens;
+}
+
+function scanEnvAssignment(command: string, start: number): number | null {
+  const name = /^[A-Za-z_][\w-]*=/u.exec(command.slice(start));
+  if (name === null) {
+    return null;
+  }
+  let index = start + name[0].length;
+  let quote: '"' | "'" | null = null;
+  while (index < command.length) {
+    const char = command[index] as string;
+    if (quote !== null) {
+      if (quote === '"' && char === '\\') {
+        index = Math.min(command.length, index + 2);
+        continue;
+      }
+      if (char === quote) {
+        quote = null;
+      }
+      index += 1;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      index += 1;
+      continue;
+    }
+    if (/\s/u.test(char) || '|;&><'.includes(char)) {
+      break;
+    }
+    index += 1;
+  }
+  return index;
 }
 
 /**

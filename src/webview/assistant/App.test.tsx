@@ -136,6 +136,29 @@ function snapshot(
 }
 
 describe('assistant-ui App bridge commands', () => {
+  it('prepares /btw when the side pane opens before any question', async () => {
+    render(<App />);
+    host({ ...snapshot(0), btwAvailable: true });
+    const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+    await waitFor(() => expect(input.value).toBe('Restored draft'));
+
+    fireEvent.change(input, { target: { value: '/btw' } });
+    await waitFor(() => {
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+      expect(
+        screen.getByRole('complementary', { name: 'Side question' }),
+      ).toBeDefined();
+    });
+    await waitFor(() => {
+      expect(
+        posted.filter((message) => message.type === 'btw.prepare'),
+      ).toEqual([{ type: 'btw.prepare', sessionId: 'session-a' }]);
+    });
+    expect(
+      posted.filter((message) => message.type === 'btw.ask'),
+    ).toHaveLength(0);
+  });
+
   it('routes /compact through the compaction RPC, not turn.send', async () => {
     render(<App />);
     host(snapshot(0));

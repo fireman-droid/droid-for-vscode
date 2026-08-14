@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { basename, extname, isAbsolute, join, relative } from 'node:path';
+import { basename, extname, join } from 'node:path';
 
 import * as vscode from 'vscode';
 
@@ -15,6 +15,7 @@ import {
 } from './attachmentSources';
 import { toOpenEditorRelativePaths } from './openEditorTabs';
 import type { RuntimeImageMediaType } from '../runtime/DroidRuntime';
+import { toWorkspaceRelativePath } from '../runtime/toolFilePath';
 
 const IMAGE_MEDIA_TYPES: Record<string, RuntimeImageMediaType> = {
   '.jpg': 'image/jpeg',
@@ -155,13 +156,11 @@ export function createVscodeAttachmentSources(): AttachmentSources & {
       }
       const paths: string[] = [];
       for (const uri of uris) {
-        const relativePath = relative(root.fsPath, uri.fsPath)
-          .replaceAll('\\', '/');
-        if (
-          relativePath.length > 0 &&
-          !relativePath.startsWith('..') &&
-          !isAbsolute(relativePath)
-        ) {
+        const relativePath = toWorkspaceRelativePath(
+          root.fsPath,
+          uri.fsPath,
+        );
+        if (relativePath !== undefined) {
           paths.push(relativePath);
         }
         if (paths.length >= maxResults) {
@@ -204,11 +203,8 @@ export function createVscodeAttachmentSources(): AttachmentSources & {
         return { status: 'failed' };
       }
       const absolute = join(root.fsPath, relativePath);
-      const containment = relative(root.fsPath, absolute);
       if (
-        containment.length === 0 ||
-        containment.startsWith('..') ||
-        isAbsolute(containment)
+        toWorkspaceRelativePath(root.fsPath, absolute) === undefined
       ) {
         return { status: 'failed' };
       }
@@ -226,20 +222,30 @@ export function createVscodeAttachmentSources(): AttachmentSources & {
 
     readProblems(): Promise<AttachmentCaptureOutcome> {
       const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+      if (root === undefined) {
+        return Promise.resolve({ status: 'empty' });
+      }
       const lines: string[] = [];
       let count = 0;
+      let omitted = false;
       try {
-        for (const [uri, diagnostics] of vscode.languages.getDiagnostics()) {
-          if (diagnostics.length === 0) {
+        problems: for (
+          const [uri, diagnostics] of vscode.languages.getDiagnostics()
+        ) {
+          if (
+            diagnostics.length === 0 ||
+            uri.scheme !== 'file'
+          ) {
             continue;
           }
-          const path =
-            root === undefined
-              ? uri.fsPath
-              : relative(root.fsPath, uri.fsPath).replaceAll('\\', '/');
+          const path = toWorkspaceRelativePath(root.fsPath, uri.fsPath);
+          if (path === undefined) {
+            continue;
+          }
           for (const diagnostic of diagnostics) {
             if (count >= MAX_PROBLEM_ITEMS) {
-              break;
+              omitted = true;
+              break problems;
             }
             count += 1;
             const line = diagnostic.range.start.line + 1;
@@ -252,10 +258,9 @@ export function createVscodeAttachmentSources(): AttachmentSources & {
               `${path}:${line} [${severity}]${source} ${diagnostic.message}`,
             );
           }
-          if (count >= MAX_PROBLEM_ITEMS) {
-            lines.push('… more problems omitted');
-            break;
-          }
+        }
+        if (omitted) {
+          lines.push('… more problems omitted');
         }
       } catch {
         return Promise.resolve({ status: 'failed' });

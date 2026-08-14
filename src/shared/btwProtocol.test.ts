@@ -7,8 +7,30 @@ import {
   MAX_BTW_TEXT_LENGTH,
   parseBtwAskMessage,
   parseBtwDismissMessage,
+  parseBtwPrepareMessage,
   parseSessionBtwMessage,
 } from './btwProtocol';
+
+describe('parseBtwPrepareMessage', () => {
+  it('accepts only an exact session-bound prepare request', () => {
+    expect(
+      parseBtwPrepareMessage({
+        type: 'btw.prepare',
+        sessionId: 'session-1',
+      }),
+    ).toEqual({ type: 'btw.prepare', sessionId: 'session-1' });
+    expect(
+      parseBtwPrepareMessage({
+        type: 'btw.prepare',
+        sessionId: 'session-1',
+        extra: true,
+      }),
+    ).toBeNull();
+    expect(
+      parseBtwPrepareMessage({ type: 'btw.prepare', sessionId: '' }),
+    ).toBeNull();
+  });
+});
 
 describe('parseBtwAskMessage', () => {
   it('accepts a well-formed ask', () => {

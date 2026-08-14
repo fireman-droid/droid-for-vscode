@@ -43,12 +43,18 @@ export interface DaemonDiscoveryDeps {
   /** Create with `wx`; returns false when the file already exists. */
   readonly writeFileExclusive: (file: string, contents: string) => boolean;
   readonly deleteFile: (file: string) => void;
+  /** Atomically removes the path only when it still has these contents. */
+  readonly deleteFileIfMatches: (file: string, contents: string) => boolean;
   readonly startDaemon: () => Promise<{
     url: string;
     pid: number;
     port: number;
   }>;
   readonly checkHealth: (url: string) => Promise<boolean>;
+  readonly resolveListenerPid: (
+    port: number,
+    host: string,
+  ) => Promise<number | null>;
   readonly killProcessTree: (pid: number) => Promise<void>;
   readonly isPidAlive: (pid: number) => boolean;
   readonly cliVersion: () => string;
@@ -116,25 +122,20 @@ export async function ensureSharedDaemon(
 ): Promise<SharedDaemonEndpoint> {
   const d = withDefaults(deps);
 
-  const existing = readDaemonDiscovery(file, d.readFile);
+  const existingRaw = d.readFile(file);
+  const existing =
+    existingRaw === null ? null : parseDaemonDiscovery(existingRaw);
   if (existing !== null) {
-    const url = endpointUrl(d.host, existing.port);
-    // A crashed daemon leaves its record behind. Check the pid first:
-    // it is a cheap syscall, while the health check burns a connect
-    // timeout against a dead port (and a reused port could even answer
-    // for an unrelated process).
-    if (d.isPidAlive(existing.pid) && (await d.checkHealth(url))) {
-      return {
-        url,
-        pid: existing.pid,
-        port: existing.port,
-        spawned: false,
-        versionMismatch: isVersionMismatch(existing.version, d.cliVersion()),
-      };
+    const endpoint = await healthyEndpoint(existing, d);
+    if (endpoint !== null) {
+      return endpoint;
     }
-    // Stale record: the daemon died or stopped answering. Clear it so
-    // the `wx` write below can win.
-    d.deleteFile(file);
+  }
+  if (
+    existingRaw !== null &&
+    !d.deleteFileIfMatches(file, existingRaw)
+  ) {
+    return readChangedHealthyEndpoint(file, d);
   }
 
   const spawned = await d.startDaemon();
@@ -150,23 +151,31 @@ export async function ensureSharedDaemon(
 
   // Lost the spawn race: another window registered its daemon between
   // our read and write. Prefer the winner and reap our duplicate.
-  const winner = readDaemonDiscovery(file, d.readFile);
+  const winnerRaw = d.readFile(file);
+  const winner =
+    winnerRaw === null ? null : parseDaemonDiscovery(winnerRaw);
   if (winner !== null) {
-    const url = endpointUrl(d.host, winner.port);
-    if (d.isPidAlive(winner.pid) && (await d.checkHealth(url))) {
+    const endpoint = await healthyEndpoint(winner, d);
+    if (endpoint !== null) {
       await d.killProcessTree(spawned.pid);
-      return {
-        url,
-        pid: winner.pid,
-        port: winner.port,
-        spawned: false,
-        versionMismatch: isVersionMismatch(winner.version, d.cliVersion()),
-      };
+      return endpoint;
     }
   }
   // The competing record is unhealthy or unreadable: replace it with
-  // ours, but keep the publication exclusive.
-  d.deleteFile(file);
+  // ours, but remove only the exact record we inspected.
+  if (
+    winnerRaw !== null &&
+    !d.deleteFileIfMatches(file, winnerRaw)
+  ) {
+    const endpoint = await readChangedHealthyEndpoint(file, d).catch(
+      async (error: unknown) => {
+        await d.killProcessTree(spawned.pid);
+        throw error;
+      },
+    );
+    await d.killProcessTree(spawned.pid);
+    return endpoint;
+  }
   if (d.writeFileExclusive(file, JSON.stringify(record))) {
     return { ...spawned, spawned: true, versionMismatch: false };
   }
@@ -175,19 +184,10 @@ export async function ensureSharedDaemon(
   // undiscoverable duplicate daemon.
   const finalWinner = readDaemonDiscovery(file, d.readFile);
   if (finalWinner !== null) {
-    const url = endpointUrl(d.host, finalWinner.port);
-    if (d.isPidAlive(finalWinner.pid) && (await d.checkHealth(url))) {
+    const endpoint = await healthyEndpoint(finalWinner, d);
+    if (endpoint !== null) {
       await d.killProcessTree(spawned.pid);
-      return {
-        url,
-        pid: finalWinner.pid,
-        port: finalWinner.port,
-        spawned: false,
-        versionMismatch: isVersionMismatch(
-          finalWinner.version,
-          d.cliVersion(),
-        ),
-      };
+      return endpoint;
     }
   }
   await d.killProcessTree(spawned.pid);
@@ -201,21 +201,75 @@ export async function ensureSharedDaemon(
 export async function shutdownSharedDaemon(
   file: string,
   deps: Partial<
-    Pick<DaemonDiscoveryDeps, 'readFile' | 'deleteFile' | 'killProcessTree'>
+    Pick<
+      DaemonDiscoveryDeps,
+      | 'readFile'
+      | 'deleteFile'
+      | 'killProcessTree'
+      | 'resolveListenerPid'
+      | 'host'
+    >
   > = {},
 ): Promise<boolean> {
   const readFile = deps.readFile ?? defaultReadFile;
   const deleteFile = deps.deleteFile ?? defaultDeleteFile;
   const killProcessTree = deps.killProcessTree ?? noopKill;
+  const resolveListenerPid =
+    deps.resolveListenerPid ?? (() => Promise.resolve(null));
+  const host = deps.host ?? '127.0.0.1';
 
   const record = readDaemonDiscovery(file, readFile);
   if (record === null) {
     deleteFile(file);
     return false;
   }
-  await killProcessTree(record.pid);
+  const listenerPid = await resolveListenerPid(record.port, host);
+  if (listenerPid === null) {
+    // Never fall back to the recorded pid: it may be a dead wrapper,
+    // recycled, or attacker-controlled and is not bound to this port.
+    return false;
+  }
+  await killProcessTree(listenerPid);
   deleteFile(file);
   return true;
+}
+
+async function readChangedHealthyEndpoint(
+  file: string,
+  deps: DaemonDiscoveryDeps,
+): Promise<SharedDaemonEndpoint> {
+  const changed = readDaemonDiscovery(file, deps.readFile);
+  if (changed !== null) {
+    const endpoint = await healthyEndpoint(changed, deps);
+    if (endpoint !== null) {
+      return endpoint;
+    }
+  }
+  throw new Error('Droid daemon discovery changed during stale cleanup.');
+}
+
+async function healthyEndpoint(
+  record: DaemonDiscoveryRecord,
+  deps: DaemonDiscoveryDeps,
+): Promise<SharedDaemonEndpoint | null> {
+  const url = endpointUrl(deps.host, record.port);
+  if (!(await deps.checkHealth(url))) {
+    return null;
+  }
+  // Fresh records already contain the durable listener pid. Only
+  // legacy Windows records whose cmd.exe wrapper has exited need the
+  // heavier netstat + identity lookup.
+  const listenerPid = deps.isPidAlive(record.pid)
+    ? null
+    : await deps.resolveListenerPid(record.port, deps.host);
+  const pid = listenerPid ?? record.pid;
+  return {
+    url,
+    pid,
+    port: record.port,
+    spawned: false,
+    versionMismatch: isVersionMismatch(record.version, deps.cliVersion()),
+  };
 }
 
 function isVersionMismatch(recorded: string, current: string): boolean {
@@ -235,16 +289,30 @@ function withDefaults(
     readFile: deps.readFile ?? defaultReadFile,
     writeFileExclusive: deps.writeFileExclusive ?? defaultWriteFileExclusive,
     deleteFile: deps.deleteFile ?? defaultDeleteFile,
+    deleteFileIfMatches:
+      deps.deleteFileIfMatches ??
+      (deps.deleteFile === undefined
+        ? defaultDeleteFileIfMatches
+        : (file, _contents) => {
+            deps.deleteFile?.(file);
+            return true;
+          }),
     startDaemon:
       deps.startDaemon ??
       (() => Promise.reject(new Error('startDaemon dependency required'))),
     checkHealth: deps.checkHealth ?? (() => Promise.resolve(false)),
+    resolveListenerPid:
+      deps.resolveListenerPid ?? (() => Promise.resolve(null)),
     killProcessTree: deps.killProcessTree ?? noopKill,
     isPidAlive: deps.isPidAlive ?? defaultIsPidAlive,
     cliVersion: deps.cliVersion ?? (() => 'unknown'),
     now: deps.now ?? Date.now,
     host: deps.host ?? '127.0.0.1',
   };
+}
+
+function parseDaemonDiscovery(raw: string): DaemonDiscoveryRecord | null {
+  return readDaemonDiscovery('', () => raw);
 }
 
 function defaultReadFile(file: string): string | null {
@@ -297,6 +365,32 @@ function defaultDeleteFile(file: string): void {
     fs.unlinkSync(file);
   } catch {
     // Already gone (ENOENT) or being swept by a concurrent window.
+  }
+}
+
+function defaultDeleteFileIfMatches(
+  file: string,
+  contents: string,
+): boolean {
+  const moved = `${file}.${String(process.pid)}.${String(Date.now())}.stale`;
+  try {
+    fs.renameSync(file, moved);
+  } catch {
+    return false;
+  }
+  try {
+    const movedContents = fs.readFileSync(moved, 'utf8');
+    if (movedContents === contents) {
+      return true;
+    }
+    // The path changed before our atomic rename. Restore that record
+    // only if no newer contender has already published another one.
+    defaultWriteFileExclusive(file, movedContents);
+    return false;
+  } catch {
+    return false;
+  } finally {
+    defaultDeleteFile(moved);
   }
 }
 

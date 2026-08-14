@@ -507,6 +507,18 @@ describe('ChatController', () => {
       snapshots(messages).at(-1)?.transcript ?? [];
 
     controller.handleMessage({
+      type: 'btw.prepare',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(factory).toHaveBeenCalledExactlyOnceWith(
+        'C:\\workspace',
+        'session-1',
+      );
+    });
+    expect(stub.asks).toEqual([]);
+
+    controller.handleMessage({
       type: 'btw.ask',
       sessionId: 'session-1',
       text: 'What is a fork?',
@@ -523,10 +535,7 @@ describe('ChatController', () => {
         },
       ]);
     });
-    expect(factory).toHaveBeenCalledExactlyOnceWith(
-      'C:\\workspace',
-      'session-1',
-    );
+    expect(factory).toHaveBeenCalledTimes(1);
 
     // Card traffic rides its own channel: the main transcript and the
     // session catalog never see the hidden fork.

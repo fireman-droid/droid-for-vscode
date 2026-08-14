@@ -4,6 +4,27 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.13] - 2026-08-14
+
+### Fixed
+
+- **Shared daemon ownership survives Windows shell exit** — discovery
+  records the verified TCP listener PID instead of the transient
+  `cmd.exe` wrapper, reuses healthy legacy endpoints, reaps duplicate
+  race losers, and only shuts down a process verified as the listener
+  for the discovered port.
+- **Discovery replacement is race-safe** — stale records are removed
+  only when their exact contents still own the path, preventing one
+  Cursor window from deleting a healthy record published by another.
+- **PowerShell command cards show the real command** — assignment
+  preambles, grouped expressions, compound assignments, and quoted
+  environment values remain lossless without becoming garbled titles.
+- **Problems attachments stay in the bound workspace** — diagnostics
+  from external editor tabs and other Cursor workspaces are excluded.
+- **`/btw` prepares on pane open** — the hidden fork starts when the
+  side pane mounts, so the first question no longer pays initialization
+  latency; concurrent prepare/ask and rapid reopen remain single-flight.
+
 ## [0.7.12] - 2026-08-14
 
 ### Fixed
