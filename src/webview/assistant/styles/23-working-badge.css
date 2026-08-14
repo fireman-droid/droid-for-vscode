@@ -105,34 +105,6 @@
   color: var(--dvx-ink);
 }
 
-/* Stop All: the quiet underline-on-hover text language ("View
-   transcript"), not a filled pill. */
-.dvx-working-stop-all {
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  padding: 0 3px;
-  min-height: 20px;
-  font-family: inherit;
-  font-size: 10.5px;
-  color: var(--dvx-muted);
-  cursor: pointer;
-  transition: color var(--dvx-duration-fast, 120ms) ease;
-}
-
-.dvx-working-stop-all:hover:not(:disabled),
-.dvx-working-stop-all:focus-visible {
-  color: var(--dvx-accent-deep, #b5451f);
-  text-decoration: underline;
-  text-decoration-color: var(--dvx-border-strong);
-  text-underline-offset: 3px;
-}
-
-.dvx-working-stop-all:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
 .dvx-working-list {
   margin: 0;
   padding: 3px 0;
@@ -167,42 +139,6 @@
   gap: 6px;
   grid-column: 3;
   grid-row: 1 / -1;
-}
-
-/* Per-row Stop: quiet text action that surfaces on row hover so the
-   rest state stays clean. */
-.dvx-working-row-stop {
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  padding: 0 2px;
-  font-family: inherit;
-  font-size: 10.5px;
-  color: var(--dvx-muted);
-  cursor: pointer;
-  opacity: 0;
-  transition:
-    opacity var(--dvx-duration-fast, 120ms) ease,
-    color var(--dvx-duration-fast, 120ms) ease;
-}
-
-.dvx-working-row:hover .dvx-working-row-stop,
-.dvx-working-row:focus-within .dvx-working-row-stop {
-  opacity: 1;
-}
-
-.dvx-working-row-stop:hover,
-.dvx-working-row-stop:focus-visible {
-  color: var(--dvx-accent-deep, #b5451f);
-  text-decoration: underline;
-  text-decoration-color: var(--dvx-border-strong);
-  text-underline-offset: 3px;
-}
-
-@media (hover: none) {
-  .dvx-working-row-stop {
-    opacity: 1;
-  }
 }
 
 /* The live activity subtitle: the last tool observed inside the
@@ -293,8 +229,7 @@
 
 @media (forced-colors: active) {
   .dvx-working-badge,
-  .dvx-working-popup,
-  .dvx-working-stop-all {
+  .dvx-working-popup {
     border: 1px solid CanvasText;
   }
 

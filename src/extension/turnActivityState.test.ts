@@ -426,6 +426,35 @@ describe('turnActivityState', () => {
       detailKind: 'command',
       detail: 'pnpm run typecheck',
     });
+
+    const bareTarget = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start',
+      toolName: 'Read',
+      toolUseId: 'tool-target',
+      action: 'Read workspace files',
+    });
+    const filledTarget = projectToolEvent(bareTarget.state, {
+      type: 'tool-start',
+      toolName: 'Read',
+      toolUseId: 'tool-target',
+      action: 'Read workspace files',
+      target: 'src/app.ts',
+    });
+    expect(filledTarget.projection).toMatchObject({
+      status: 'running',
+      target: 'src/app.ts',
+    });
+    const completedTarget = projectToolEvent(filledTarget.state, {
+      type: 'tool-result',
+      toolName: 'Read',
+      toolUseId: 'tool-target',
+      action: 'Read workspace files',
+      isError: false,
+    });
+    expect(completedTarget.projection).toMatchObject({
+      status: 'completed',
+      target: 'src/app.ts',
+    });
   });
 
   it('keeps the background hint monotonic across the tool lifecycle', () => {

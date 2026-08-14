@@ -19,31 +19,67 @@ function activity(stoppable: boolean, sequence = 1): unknown {
 }
 
 describe('useSubagentPanelFlow', () => {
-  it('suppresses rapid duplicate Stop posts and hides the control', () => {
+  it('preserves sheet and item identities for unchanged polling snapshots', () => {
     const postMessage = vi.fn();
     const { result } = renderHook(() =>
       useSubagentPanelFlow({ postMessage }, 'session-1'),
     );
     act(() => {
+      result.current.actions.onOpenTranscript('task-1', 'Explore');
       window.dispatchEvent(
-        new MessageEvent('message', { data: activity(true) }),
+        new MessageEvent('message', {
+          data: {
+            type: 'subagent.transcript',
+            sequence: 1,
+            sessionId: 'session-1',
+            toolUseId: 'task-1',
+            status: 'available',
+            title: 'Explore',
+            items: [
+              { id: 'user-1', kind: 'user', text: 'Inspect src' },
+              {
+                id: 'assistant-1',
+                kind: 'assistant',
+                turnId: 'turn-1',
+                text: 'Done',
+              },
+            ],
+            truncated: false,
+          },
+        }),
       );
     });
-    expect(result.current.activities.get('task-1')?.stoppable).toBe(true);
+    const firstSheet = result.current.sheet;
+    expect(firstSheet?.status).toBe('available');
 
     act(() => {
-      result.current.actions.onStop('turn-1', 'task-1');
-      result.current.actions.onStop('turn-1', 'task-1');
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'subagent.transcript',
+            sequence: 2,
+            sessionId: 'session-1',
+            toolUseId: 'task-1',
+            status: 'available',
+            title: 'Explore',
+            items: [
+              { id: 'user-1', kind: 'user', text: 'Inspect src' },
+              {
+                id: 'assistant-1',
+                kind: 'assistant',
+                turnId: 'turn-1',
+                text: 'Done',
+              },
+            ],
+            truncated: false,
+          },
+        }),
+      );
     });
-    expect(
-      postMessage.mock.calls.filter(
-        ([message]) => message.type === 'subagent.stop',
-      ),
-    ).toHaveLength(1);
-    expect(result.current.activities.get('task-1')?.stoppable).toBe(false);
+    expect(result.current.sheet).toBe(firstSheet);
   });
 
-  it('allows one retry only after the Host responds', () => {
+  it('ignores stoppable-only updates and exposes no stop action', () => {
     const postMessage = vi.fn();
     const { result } = renderHook(() =>
       useSubagentPanelFlow({ postMessage }, 'session-1'),
@@ -52,28 +88,20 @@ describe('useSubagentPanelFlow', () => {
       window.dispatchEvent(
         new MessageEvent('message', { data: activity(true) }),
       );
-      result.current.actions.onStop('turn-1', 'task-1');
     });
-    act(() => {
-      // A pre-click sample that arrives late must not resurrect Stop.
-      window.dispatchEvent(
-        new MessageEvent('message', { data: activity(true, 2) }),
-      );
-    });
-    expect(result.current.activities.get('task-1')?.stoppable).toBe(false);
+    expect(result.current.activities.get('task-1')?.action).toBe('Read');
+    const firstActivities = result.current.activities;
     act(() => {
       window.dispatchEvent(
-        new MessageEvent('message', { data: activity(false, 3) }),
+        new MessageEvent('message', { data: activity(false, 2) }),
       );
-      window.dispatchEvent(
-        new MessageEvent('message', { data: activity(true, 4) }),
-      );
-      result.current.actions.onStop('turn-1', 'task-1');
     });
+    expect(result.current.activities).toBe(firstActivities);
+    expect('onStop' in result.current.actions).toBe(false);
     expect(
       postMessage.mock.calls.filter(
         ([message]) => message.type === 'subagent.stop',
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(0);
   });
 });

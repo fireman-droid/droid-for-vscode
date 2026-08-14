@@ -320,10 +320,13 @@ Context 面板内 "Token usage" 账目显示 SDK 真实提供的五项分解（I
 **"N Working" 徽标与活动弹层**。本窗口活跃回合派发的委派仍在运行时，Composer 左上浮现 "N Working" 药丸；Host 明确投影为 running 的后台委派在 Webview Reload 后也会继续显示，直到权威轮询结清，不会因前端 `liveTurnIds` 重建而消失。点开的是克制、紧凑的单列表层：
 
 - 逐行显示类型、描述、实时走秒时长，以及**实时活动字幕**（子会话当前所用工具名，面板打开时 2.5s 轮询，关闭即停）；
-- 回合内提供 Stop All（走现有停止通道）；**单个停止**按钮只在 Host 证明可停时渲染（daemon 通道 resume→interrupt→detach 序列，只停这一个，其余继续）——停不掉的行不画按钮，绝不放禁用态占位；
-- 历史回放不出徽标；回合外的后台委派无法停止（运行时无通道），状态字本身即说明。
+- 当前不提供单行 Stop 或 Stop All：子代理取消的单行/批量语义尚不能
+  可靠保证，活动弹层保持纯观察，不发送 `subagent.stop` 或 `turn.stop`；
+  父聊天 Composer 自身的 Stop 不受影响；
+- 非运行的历史委派不出徽标；后台委派只展示 Host 权威状态，不按父回合
+  是否结束猜测控制能力。
 
-**只读转录回放**。运行中与已终态的委派行都提供 quiet "View transcript" 入口，在右侧分栏（/btw 同族视觉）只读回放该子会话的转录；运行中每 3 秒原地刷新，结清时再补一次尾部读取。工具行显示命令首行，或首个文件路径与额外文件 `+N`；Thinking 可展开查看，读者上滚时不会被刷新强拉到底。无 Composer、无写入口；子会话文件无法解析时 fail-closed 显示 "Transcript unavailable"。会话抽屉与归档列表按元数据过滤子代理子会话，转录回放是它们唯一的入口。
+**只读转录回放**。运行中与已终态的委派行都提供 quiet "View transcript" 入口，在右侧分栏（/btw 同族视觉）只读回放该子会话的转录；运行中每 3 秒原地刷新，结清时再补一次尾部读取。消息、Markdown、Thinking、命令卡、Tool 行与 Exploring/Explored 组直接复用主聊天组件（不再维护近似副本）；Read 显示安全工作区相对路径，Grep 显示查询与范围，Glob 显示模式与目录。内容增长与 disclosure 高度变化采用平滑跟随；读者滚动阅读即脱离，到底自然重入。无 Composer、Regenerate、Commit 或终端写入口；子会话文件无法解析时 fail-closed 显示 "Transcript unavailable"。会话抽屉与归档列表按元数据过滤子代理子会话，转录回放是它们唯一的入口。
 
 **Mission 只读展示**。会话属于 Mission 时 Header 追加静字（如 "· Mission · running"），抽屉行带 "mission / mission · worker" 细字注记；Mission 相关确认作为普通权限卡显示与结算。
 *当前限制（部分完成）*：没有 Mission 控制面（启动/暂停/恢复、阶段流水、Worker 详情界面）。

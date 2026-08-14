@@ -302,6 +302,54 @@ describe('assistantWebviewReducer', () => {
     });
   });
 
+  it('stores a safe tool target and keeps it across lifecycle updates', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'turn.send',
+      turnId: 'turn-a',
+      text: 'Inspect the file',
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'tool.activity',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'tool-read',
+        toolName: 'Read',
+        action: 'Read workspace files',
+        target: 'src/app.ts',
+        status: 'running',
+        progressCount: 0,
+        latestUpdateKind: null,
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'tool.activity',
+        sequence: 2,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        toolUseId: 'tool-read',
+        toolName: 'Read',
+        action: 'Read workspace files',
+        status: 'completed',
+        progressCount: 0,
+        latestUpdateKind: null,
+      },
+    });
+    expect(state.transcript.at(-1)).toMatchObject({
+      kind: 'tool',
+      status: 'completed',
+      target: 'src/app.ts',
+    });
+  });
+
   it('streams the execute output tail and keeps it across silent updates', () => {
     let state = assistantWebviewReducer(initialAssistantWebviewState, {
       type: 'host.message',

@@ -48,6 +48,7 @@ export interface ToolActivityProjection {
   readonly additionalFileCount?: number;
   readonly detailKind?: ToolDetailKind;
   readonly detail?: string;
+  readonly target?: string;
   readonly errorMessage?: string;
   /** Trailing execute output; sticks so completion keeps the tail. */
   readonly outputTail?: string;
@@ -69,6 +70,7 @@ interface ToolActivityEntry {
   readonly filePaths?: readonly string[];
   readonly detailKind?: ToolDetailKind;
   readonly detail?: string;
+  readonly target?: string;
   readonly errorMessage?: string;
   readonly outputTail?: string;
   readonly backgroundHint?: ToolBackgroundHint;
@@ -292,6 +294,8 @@ export function projectToolEvent(
           !sameFilePaths(existing.filePaths, event.filePaths);
         const updatesDetail =
           event.detail !== undefined && existing.detail !== event.detail;
+        const updatesTarget =
+          event.target !== undefined && existing.target !== event.target;
         // Monotonic: once a streamed input showed fireAndForget the
         // row stays marked even if later events omit the field.
         const addsBackgroundHint =
@@ -310,6 +314,7 @@ export function projectToolEvent(
           updatesFilePath ||
           updatesFilePaths ||
           updatesDetail ||
+          updatesTarget ||
           addsBackgroundHint ||
           updatesSubagent
         ) {
@@ -320,6 +325,7 @@ export function projectToolEvent(
             ...(updatesDetail
               ? { detailKind: event.detailKind, detail: event.detail }
               : {}),
+            ...(updatesTarget ? { target: event.target } : {}),
             ...(addsBackgroundHint
               ? { backgroundHint: event.backgroundHint }
               : {}),
@@ -382,6 +388,9 @@ export function projectToolEvent(
     ...(event.type === 'tool-start' && event.detail !== undefined
       ? { detailKind: event.detailKind, detail: event.detail }
       : {}),
+    ...(event.type === 'tool-start' && event.target !== undefined
+      ? { target: event.target }
+      : {}),
     ...(event.type === 'tool-start' &&
     event.backgroundHint !== undefined
       ? { backgroundHint: event.backgroundHint }
@@ -439,6 +448,7 @@ function projectEntry(
     ...(entry.detail === undefined || entry.detailKind === undefined
       ? {}
       : { detailKind: entry.detailKind, detail: entry.detail }),
+    ...(entry.target === undefined ? {} : { target: entry.target }),
     ...(entry.errorMessage === undefined
       ? {}
       : { errorMessage: entry.errorMessage }),
@@ -787,6 +797,7 @@ function projectEntryStandalone(
     ...(entry.detail === undefined || entry.detailKind === undefined
       ? {}
       : { detailKind: entry.detailKind, detail: entry.detail }),
+    ...(entry.target === undefined ? {} : { target: entry.target }),
     ...(entry.errorMessage === undefined
       ? {}
       : { errorMessage: entry.errorMessage }),

@@ -28,6 +28,7 @@ import { extractToolBackgroundHint } from './toolBackgroundHint';
 import {
   extractExecuteSummary,
   extractToolDetail,
+  extractToolTarget,
 } from './toolDetail';
 import {
   extractToolFilePaths,
@@ -426,6 +427,11 @@ function withToolInputContext(
     workspaceRoot,
   );
   const detail = extractToolDetail(activity.toolName, input);
+  const target = extractToolTarget(
+    activity.toolName,
+    input,
+    workspaceRoot,
+  );
   const backgroundHint = extractToolBackgroundHint(
     activity.toolName,
     input,
@@ -442,6 +448,7 @@ function withToolInputContext(
     ...(detail === undefined
       ? {}
       : { detailKind: detail.kind, detail: detail.text }),
+    ...(target === undefined ? {} : { target }),
     ...(backgroundHint === undefined ? {} : { backgroundHint }),
     ...(subagent === null ? {} : { subagent }),
   };

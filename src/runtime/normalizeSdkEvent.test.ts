@@ -244,6 +244,43 @@ describe('normalizeSdkEvent', () => {
     ).toMatchObject({ action: 'Ran a local command' });
   });
 
+  it('projects safe Read, Grep, and Glob targets with live tool starts', () => {
+    const root = resolve('workspace-root');
+    const targetOf = (
+      name: string,
+      toolUseId: string,
+      input: unknown,
+    ) =>
+      normalizeSdkEvent(
+        sdkEvent('tool_call', { name, toolUseId, input }),
+        root,
+      );
+
+    expect(
+      targetOf('Read', 'read-1', {
+        file_path: join(root, 'src', 'app.ts'),
+      }),
+    ).toMatchObject({ target: 'src/app.ts' });
+    expect(
+      targetOf('Grep', 'grep-1', {
+        pattern: 'needle',
+        path: 'src',
+        glob: '**/*.ts',
+      }),
+    ).toMatchObject({ target: 'needle · src · **/*.ts' });
+    expect(
+      targetOf('Glob', 'glob-1', {
+        patterns: '**/*.tsx',
+        folder: 'src',
+      }),
+    ).toMatchObject({ target: '**/*.tsx · src' });
+    expect(
+      targetOf('Read', 'read-outside', {
+        file_path: join(root, '..', 'secret.txt'),
+      }),
+    ).not.toHaveProperty('target');
+  });
+
   it('bounds and shapes the failed tool_result error excerpt', () => {
     // Successful results never carry an excerpt.
     expect(

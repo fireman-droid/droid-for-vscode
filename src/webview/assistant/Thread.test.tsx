@@ -426,7 +426,6 @@ describe('SubagentSummaryRow', () => {
       onOpenTranscript: vi.fn(),
       onRefreshTranscript: vi.fn(),
       onCloseSheet: vi.fn(),
-      onStop: vi.fn(),
       onPanelToggle: vi.fn(),
     };
     const row = (

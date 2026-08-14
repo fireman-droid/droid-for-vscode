@@ -73,22 +73,16 @@ worker 缓存）。
 
 - **操作**：点徽标。
 - **预期**：弹出安静列表：每行 = 转圈动效 + "{type} subagent" +
-  描述 + 实时递增的耗时；头部 "N Working" + Stop All 按钮。点外部
-  或再点徽标关闭。
+  描述 + 实时递增的耗时；头部只显示 "N Working"。点外部或再点徽标
+  关闭；不显示单行 Stop 或 Stop All。
 - **截图**：`working-badge-popup.png`。
 
-### B3. Stop All 与回合外诚实降级 [包内已回归]
+### B3. 子代理停止控件暂不提供 [包内已回归]
 
-- **操作**：回合运行中点 Stop All；对比：父回合已结束、后台委派
-  仍在跑时打开弹层。
-- **预期**：回合内 Stop All 走既有停止通道（无二次确认），委派随
-  回合终止；回合外（后台委派停不掉时）弹层里**没有任何 Stop
-  控件或注脚**——用户决策修正（2026-08-12 深夜）："停不掉的就
-  不画控件"，探针实证 `session.interrupt()` 无法杀后台子代理
-  （`artifacts/probe-zombie-subagent.out.json`），故不渲染任何
-  伪装的控制能力。
-- **截图**：`working-badge-stopped.png`（Stop All 后）、
-  `working-badge-zombie.png`（回合外后台运行，弹层无 Stop 控件）。
+- **操作**：父回合运行中与结束后分别打开 Working 弹层。
+- **预期**：两种状态都没有单行 Stop、Stop All、禁用占位或解释性注脚；
+  Webview 不发送 `subagent.stop`。父聊天 Composer 的 Stop 仍只负责父回合。
+- **截图**：`working-badge-popup.png`（纯观察弹层）。
 
 ### B4. 子代理体验审计修复（分支 `dvx/subagent-audit` 合入） [包内已回归]
 

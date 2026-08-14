@@ -148,6 +148,11 @@ export function ToolActivityRow({
             ? commandCardTitle(activity.action, toolName, activity.detail)
             : activity.action}
         </span>
+        {activity.target === null ? null : (
+          <span className="dvx-tool-target" title={activity.target}>
+            {activity.target}
+          </span>
+        )}
         {planSummary === null ? null : (
           <span className="dvx-plan-summary">{planSummary}</span>
         )}

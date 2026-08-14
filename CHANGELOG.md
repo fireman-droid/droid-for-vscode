@@ -4,6 +4,24 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.16] - 2026-08-15
+
+### Fixed
+
+- **Subagent transcripts now use the main chat presentation** —
+  delegated prompts, Markdown, Thinking, command cards, tool rows, and
+  exploration groups share the same read-only components instead of a
+  separate approximation.
+- **Read and search activity identifies its target** — safe
+  workspace-relative Read paths plus bounded Grep/Glob query and scope
+  context survive live projection and history playback.
+- **Child transcript following respects reading intent** — growth
+  descends smoothly, releases on deliberate scrolling, rejoins at the
+  bottom, follows disclosure resizing, and honors reduced motion.
+- **Unreliable subagent cancellation controls are withdrawn** — the
+  activity panel remains observational and sends no single-child or
+  batch stop request; the parent Composer Stop remains unchanged.
+
 ## [0.7.15] - 2026-08-14
 
 ### Fixed

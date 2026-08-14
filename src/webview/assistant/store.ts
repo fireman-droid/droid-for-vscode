@@ -1459,6 +1459,7 @@ function upsertTool(
         ...(event.detailKind === undefined || event.detail === undefined
           ? {}
           : { detailKind: event.detailKind, detail: event.detail }),
+        ...(event.target === undefined ? {} : { target: event.target }),
         ...(event.errorMessage === undefined
           ? {}
           : { errorMessage: event.errorMessage }),
@@ -1504,6 +1505,7 @@ function upsertTool(
       ...(event.detailKind === undefined || event.detail === undefined
         ? {}
         : { detailKind: event.detailKind, detail: event.detail }),
+      ...(event.target === undefined ? {} : { target: event.target }),
       ...(event.errorMessage === undefined
         ? {}
         : { errorMessage: event.errorMessage }),
@@ -1519,7 +1521,6 @@ function upsertTool(
     },
   ];
 }
-
 function markActivitiesStopping(
   transcript: readonly SessionTranscriptItem[],
   turnId: string,

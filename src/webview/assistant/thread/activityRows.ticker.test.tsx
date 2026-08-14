@@ -26,6 +26,7 @@ import {
   ActivityGroup,
   ActivityTicker,
   TICKER_SLIDE_FALLBACK_MS,
+  ToolActivityRow,
 } from './activityRows';
 
 afterEach(() => {
@@ -196,6 +197,34 @@ describe('ActivityTicker', () => {
       actives: [false, false, true],
       offset: '2',
     });
+  });
+});
+
+describe('ToolActivityRow', () => {
+  it('shows the bounded input-derived target beside the action', () => {
+    const { container } = render(
+      <ToolActivityRow
+        toolName="Grep"
+        activity={{
+          action: 'Searched workspace files',
+          status: 'completed',
+          progressCount: 0,
+          latestUpdateKind: null,
+          durationMs: null,
+          filePath: null,
+          detailKind: null,
+          detail: null,
+          target: 'needle · src · **/*.ts',
+          errorMessage: null,
+          outputTail: null,
+          background: false,
+          subagent: null,
+        }}
+      />,
+    );
+    const target = container.querySelector('.dvx-tool-target');
+    expect(target?.textContent).toBe('needle · src · **/*.ts');
+    expect(target?.getAttribute('title')).toBe('needle · src · **/*.ts');
   });
 });
 

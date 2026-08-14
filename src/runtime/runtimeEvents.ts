@@ -67,6 +67,8 @@ export type RuntimeEvent =
       detailKind?: ToolDetailKind;
       /** Command or plan text extracted from the tool input. */
       detail?: string;
+      /** Bounded one-line Read/Grep/Glob target extracted from input. */
+      target?: string;
       /**
        * Fail-soft `fireAndForget` read from an Execute tool input:
        * the CLI detached the command as a background process.

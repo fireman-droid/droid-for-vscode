@@ -128,8 +128,8 @@ import type { ChangesUpdateMessage } from './changesProtocol';
 // Version 10: live changes ledger — `turn.changes` is replaced by
 // the streaming `changes.update` (H→W; changesProtocol.ts).
 // Version 11: subagent panel — openTranscript/stop/panel W→H,
-// transcript/activity H→W; v12 files; v13 `/btw` pending; v14 pane-open prepare.
-export const BRIDGE_PROTOCOL_VERSION = 14 as const;
+// transcript/activity H→W; v12 files; v13 `/btw` pending; v14 prepare; v15 targets.
+export const BRIDGE_PROTOCOL_VERSION = 15 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_DELTA_LENGTH = 16_384;
@@ -154,6 +154,7 @@ export const MAX_COMMAND_ARGUMENT_HINT_LENGTH = 128;
 export const MAX_RECENT_COMMANDS = 8;
 export const MAX_TOOL_FILE_PATH_LENGTH = 512;
 export const MAX_TOOL_DETAIL_LENGTH = 4_000;
+export const MAX_TOOL_TARGET_LENGTH = 512;
 /**
  * Longest tool_result error excerpt carried on a failed tool row so
  * the user can see why the tool failed (e.g. "Tool execution
@@ -1508,10 +1509,10 @@ export interface ToolTranscriptItem {
   readonly filePath?: string;
   /** Remaining changed paths, present only when positive. */
   readonly additionalFileCount?: number;
-  /** Present together with `detail`; says how to render it. */
+  /** Command/plan detail and the kind that determines its rendering. */
   readonly detailKind?: ToolDetailKind;
-  /** Command text or plan text extracted from the tool input. */
   readonly detail?: string;
+  readonly target?: string;
   /** Error excerpt from a failed tool_result, for the expanded row. */
   readonly errorMessage?: string;
   /**
@@ -1973,9 +1974,8 @@ export interface ToolActivityMessage {
   readonly additionalFileCount?: number;
   readonly detailKind?: ToolDetailKind;
   readonly detail?: string;
-  /** Error excerpt from a failed tool_result, for the expanded row. */
+  readonly target?: string;
   readonly errorMessage?: string;
-  /** See `ToolTranscriptItem.outputTail`. */
   readonly outputTail?: string;
   /** Present when the CLI backgrounded this Execute call. */
   readonly backgroundHint?: ToolBackgroundHint;

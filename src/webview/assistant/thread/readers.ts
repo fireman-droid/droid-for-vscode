@@ -11,6 +11,7 @@ export interface ToolActivityPresentation {
   readonly filePath: string | null;
   readonly detailKind: "command" | "plan" | null;
   readonly detail: string | null;
+  readonly target: string | null;
   /** Error excerpt from a failed tool_result, shown when expanded. */
   readonly errorMessage: string | null;
   /**
@@ -51,6 +52,7 @@ export function readToolActivity(part: unknown): ToolActivityPresentation {
     filePath: null,
     detailKind: null,
     detail: null,
+    target: null,
     errorMessage: null,
     outputTail: null,
     background: false,
@@ -80,6 +82,7 @@ export function readToolActivity(part: unknown): ToolActivityPresentation {
         | "filePath"
         | "detailKind"
         | "detail"
+        | "target"
         | "errorMessage"
         | "outputTail"
         | "background"
@@ -97,6 +100,11 @@ export function readToolActivity(part: unknown): ToolActivityPresentation {
         typeof metadata["detail"] === "string" &&
         metadata["detail"].length > 0
           ? metadata["detail"]
+          : null,
+      target:
+        typeof metadata["target"] === "string" &&
+        metadata["target"].length > 0
+          ? metadata["target"]
           : null,
       errorMessage:
         typeof metadata["errorMessage"] === "string" &&

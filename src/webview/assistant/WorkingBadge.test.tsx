@@ -23,18 +23,14 @@ afterEach(cleanup);
 describe('WorkingBadge', () => {
   it('renders nothing without working subagents', () => {
     const { container } = render(
-      <WorkingBadge rows={[]} turnActive={false} onStopAll={() => {}} />,
+      <WorkingBadge rows={[]} />,
     );
     expect(container.querySelector('.dvx-working-badge')).toBeNull();
   });
 
   it('shows the live count with a spinner on the pill', () => {
     const { container } = render(
-      <WorkingBadge
-        rows={makeRows(3)}
-        turnActive
-        onStopAll={() => {}}
-      />,
+      <WorkingBadge rows={makeRows(3)} />,
     );
     const badge = container.querySelector('.dvx-working-badge');
     expect(badge?.textContent).toBe('3 Working');
@@ -58,7 +54,7 @@ describe('WorkingBadge', () => {
       },
     ];
     const { container } = render(
-      <WorkingBadge rows={rows} turnActive onStopAll={() => {}} />,
+      <WorkingBadge rows={rows} />,
     );
     fireEvent.click(container.querySelector('.dvx-working-badge')!);
     const rendered = [
@@ -85,11 +81,7 @@ describe('WorkingBadge', () => {
     vi.useFakeTimers();
     try {
       const { container } = render(
-        <WorkingBadge
-          rows={makeRows(1)}
-          turnActive
-          onStopAll={() => {}}
-        />,
+        <WorkingBadge rows={makeRows(1)} />,
       );
       fireEvent.click(container.querySelector('.dvx-working-badge')!);
       expect(
@@ -104,66 +96,42 @@ describe('WorkingBadge', () => {
     }
   });
 
-  it('Stop All fires the existing stop channel and closes the popup', () => {
-    const onStopAll = vi.fn();
-    const { container } = render(
-      <WorkingBadge rows={makeRows(2)} turnActive onStopAll={onStopAll} />,
-    );
-    fireEvent.click(container.querySelector('.dvx-working-badge')!);
-    const stop = container.querySelector('.dvx-working-stop-all');
-    expect(stop?.hasAttribute('disabled')).toBe(false);
-    fireEvent.click(stop!);
-    expect(onStopAll).toHaveBeenCalledTimes(1);
-    expect(container.querySelector('.dvx-working-popup')).toBeNull();
-  });
-
-  it('shows live activity and a working per-row Stop from the panel flow', () => {
-    const onStop = vi.fn();
+  it('shows live activity without exposing subagent stop controls', () => {
     const onPanelToggle = vi.fn();
     const flow: SubagentPanelFlowValue = {
       activities: new Map([
-        ['task-1', { action: 'Grep', stoppable: true }],
-        ['task-2', { action: null, stoppable: false }],
+        ['task-1', { action: 'Grep' }],
+        ['task-2', { action: null }],
       ]),
       sheet: null,
       actions: {
         onOpenTranscript: vi.fn(),
+        onRefreshTranscript: vi.fn(),
         onCloseSheet: vi.fn(),
-        onStop,
         onPanelToggle,
       },
     };
     const { container } = render(
       <SubagentPanelContext.Provider value={flow}>
-        <WorkingBadge rows={makeRows(2)} turnActive onStopAll={() => {}} />
+        <WorkingBadge rows={makeRows(2)} />
       </SubagentPanelContext.Provider>,
     );
     fireEvent.click(container.querySelector('.dvx-working-badge')!);
     // The open/close signal gates host-side polling.
     expect(onPanelToggle).toHaveBeenLastCalledWith(true);
     const rows = [...container.querySelectorAll('.dvx-working-row')];
-    // Row 1: live action subtitle + a real Stop.
+    // Activity remains visible, but cancellation is deliberately absent.
     expect(
       rows[0]?.querySelector('.dvx-working-row-activity')?.textContent,
     ).toBe('Grep');
-    fireEvent.click(rows[0]!.querySelector('.dvx-working-row-stop')!);
-    expect(onStop).toHaveBeenCalledWith('turn-1', 'task-1');
-    // Row 2: host says unstoppable — no control at all, no subtitle.
-    expect(rows[1]?.querySelector('.dvx-working-row-stop')).toBeNull();
+    expect(container.querySelector('.dvx-working-stop-all')).toBeNull();
+    expect(container.querySelector('.dvx-working-row-stop')).toBeNull();
     expect(rows[1]?.querySelector('.dvx-working-row-activity')).toBeNull();
   });
 
-  it('renders no stop control at all outside an active turn', () => {
-    // Probed 2026-08-12: out of turn, session.interrupt() does not
-    // cancel a background child. Unstoppable work gets no control —
-    // not a disabled one (user decision 2026-08-12); the rows just
-    // show their state.
+  it('renders no stop-control placeholder without panel activity', () => {
     const { container } = render(
-      <WorkingBadge
-        rows={makeRows(1)}
-        turnActive={false}
-        onStopAll={() => {}}
-      />,
+      <WorkingBadge rows={makeRows(1)} />,
     );
     fireEvent.click(container.querySelector('.dvx-working-badge')!);
     expect(container.querySelector('.dvx-working-popup')).not.toBeNull();
@@ -173,7 +141,7 @@ describe('WorkingBadge', () => {
 
   it('offers no per-row stop button or View entry in this slice', () => {
     const { container } = render(
-      <WorkingBadge rows={makeRows(2)} turnActive onStopAll={() => {}} />,
+      <WorkingBadge rows={makeRows(2)} />,
     );
     fireEvent.click(container.querySelector('.dvx-working-badge')!);
     const row = container.querySelector('.dvx-working-row');
@@ -182,12 +150,12 @@ describe('WorkingBadge', () => {
 
   it('disappears once every delegation settles', () => {
     const { container, rerender } = render(
-      <WorkingBadge rows={makeRows(2)} turnActive onStopAll={() => {}} />,
+      <WorkingBadge rows={makeRows(2)} />,
     );
     fireEvent.click(container.querySelector('.dvx-working-badge')!);
     expect(container.querySelector('.dvx-working-popup')).not.toBeNull();
     rerender(
-      <WorkingBadge rows={[]} turnActive={false} onStopAll={() => {}} />,
+      <WorkingBadge rows={[]} />,
     );
     expect(container.querySelector('.dvx-working-badge')).toBeNull();
     expect(container.querySelector('.dvx-working-popup')).toBeNull();
@@ -198,17 +166,13 @@ describe('WorkingBadge', () => {
     try {
       const first = makeRows(1);
       const { container, rerender } = render(
-        <WorkingBadge rows={first} turnActive onStopAll={() => {}} />,
+        <WorkingBadge rows={first} />,
       );
       fireEvent.click(container.querySelector('.dvx-working-badge')!);
       act(() => vi.advanceTimersByTime(5_000));
       // A second delegation appears later; the first keeps its clock.
       rerender(
-        <WorkingBadge
-          rows={[...first, ...makeRows(2).slice(1)]}
-          turnActive
-          onStopAll={() => {}}
-        />,
+        <WorkingBadge rows={[...first, ...makeRows(2).slice(1)]} />,
       );
       act(() => vi.advanceTimersByTime(2_000));
       const elapsed = [

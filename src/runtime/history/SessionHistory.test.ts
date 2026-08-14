@@ -129,11 +129,45 @@ describe('projectSessionHistory', () => {
       result.status === 'available' ? result.state.transcript : [];
     expect(transcript[1]).not.toHaveProperty('filePath');
     expect(transcript[2]).not.toHaveProperty('filePath');
+    expect(transcript[2]).toMatchObject({ target: 'src/app.ts' });
     expect(JSON.stringify(result)).not.toContain('outside');
 
     // Without a workspace root no paths are projected at all.
     const rootless = projectSessionHistory(loaded);
     expect(JSON.stringify(rootless)).not.toContain('app.ts');
+  });
+
+  it('projects meaningful targets for historical search tools', () => {
+    const root = resolve('workspace-root');
+    const result = projectSessionHistory(
+      response([
+        message('assistant-1', 'assistant', [
+          {
+            type: 'tool_use',
+            id: 'tool-grep',
+            name: 'Grep',
+            input: { pattern: 'needle', path: 'src', glob: '**/*.ts' },
+          },
+          {
+            type: 'tool_use',
+            id: 'tool-glob',
+            name: 'Glob',
+            input: { patterns: '**/*.test.ts', folder: 'src' },
+          },
+        ]),
+      ]),
+      { workspaceRoot: root },
+    );
+
+    expect(result).toMatchObject({
+      status: 'available',
+      state: {
+        transcript: [
+          { kind: 'tool', target: 'needle · src · **/*.ts' },
+          { kind: 'tool', target: '**/*.test.ts · src' },
+        ],
+      },
+    });
   });
 
   it('carries the execute background hint fail-soft on history rows', () => {

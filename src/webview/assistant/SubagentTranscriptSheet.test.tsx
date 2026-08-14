@@ -1,5 +1,10 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionTranscriptItem } from '../../shared/bridgeMessages';
@@ -34,7 +39,7 @@ const items: SessionTranscriptItem[] = [
     id: 'th1',
     kind: 'thinking',
     turnId: 't1',
-    text: '',
+    text: 'Map the modules before reading individual files.',
     status: 'complete',
     durationMs: 4_200,
     truncated: false,
@@ -45,26 +50,38 @@ const items: SessionTranscriptItem[] = [
     turnId: 't1',
     toolUseId: 'call-1',
     toolName: 'Read',
-    action: 'Read file',
+    action: 'Read workspace files',
+    target: 'src/app.ts',
     status: 'completed',
     progressCount: 0,
     latestUpdateKind: null,
     durationMs: 1_300,
-    filePath: 'src/app.ts',
-    additionalFileCount: 2,
   },
   {
     id: 'tool2',
     kind: 'tool',
     turnId: 't1',
     toolUseId: 'call-2',
+    toolName: 'Grep',
+    action: 'Searched workspace files',
+    target: 'useEffect · src · **/*.tsx',
+    status: 'completed',
+    progressCount: 0,
+    latestUpdateKind: null,
+  },
+  {
+    id: 'tool3',
+    kind: 'tool',
+    turnId: 't1',
+    toolUseId: 'call-3',
     toolName: 'Execute',
     action: 'Ran command',
     status: 'failed',
     progressCount: 0,
     latestUpdateKind: null,
     detailKind: 'command',
-    detail: 'pnpm run lint:budgets\nsecond line never shows',
+    detail: 'pnpm run lint:budgets',
+    errorMessage: 'Command failed',
   },
   {
     id: 'a1',
@@ -72,10 +89,64 @@ const items: SessionTranscriptItem[] = [
     turnId: 't1',
     text: 'Found **three** modules.',
   },
+  {
+    id: 'changes1',
+    kind: 'changes',
+    turnId: 't1',
+    files: [{ path: 'src/app.ts', additions: 1, deletions: 0 }],
+  },
 ];
 
+function installAnimationFrames(): {
+  readonly runFrame: () => void;
+  readonly restore: () => void;
+} {
+  let nextId = 1;
+  const frames = new Map<number, FrameRequestCallback>();
+  const request = vi
+    .spyOn(window, 'requestAnimationFrame')
+    .mockImplementation((callback) => {
+      const id = nextId++;
+      frames.set(id, callback);
+      return id;
+    });
+  const cancel = vi
+    .spyOn(window, 'cancelAnimationFrame')
+    .mockImplementation((id) => {
+      frames.delete(id);
+    });
+  return {
+    runFrame: () => {
+      const pending = [...frames.entries()];
+      frames.clear();
+      for (const [, callback] of pending) {
+        callback(performance.now());
+      }
+    },
+    restore: () => {
+      request.mockRestore();
+      cancel.mockRestore();
+    },
+  };
+}
+
+function setScrollGeometry(
+  element: HTMLElement,
+  scrollHeight: number,
+  clientHeight = 100,
+): void {
+  Object.defineProperty(element, 'scrollHeight', {
+    value: scrollHeight,
+    configurable: true,
+  });
+  Object.defineProperty(element, 'clientHeight', {
+    value: clientHeight,
+    configurable: true,
+  });
+}
+
 describe('SubagentTranscriptSheet', () => {
-  it('renders the task prompt as markdown inside the user bubble', () => {
+  it('reuses the main read-only message, Markdown, Thinking, and tool rows', () => {
     const { container } = render(
       <SubagentTranscriptSheet
         sheet={sheetWith({ items })}
@@ -84,125 +155,56 @@ describe('SubagentTranscriptSheet', () => {
         onDismiss={vi.fn()}
       />,
     );
-    const bubble = container.querySelector(
-      '.dvx-user-block.dvx-subsheet-user',
+
+    const user = container.querySelector(
+      '.dvx-message-user .dvx-user-block',
     );
-    expect(bubble).not.toBeNull();
-    // Markdown structure, not one raw text blob.
-    expect(bubble?.querySelector('.dvx-markdown h1')?.textContent).toBe(
-      'Goal',
-    );
-    expect(bubble?.querySelector('code')?.textContent).toBe('src');
+    expect(user?.textContent).toContain('# Goal');
+    expect(container.querySelector('.dvx-message-assistant')).not.toBeNull();
+    expect(
+      container.querySelector('.dvx-markdown strong')?.textContent,
+    ).toBe('three');
+    expect(
+      container.querySelector('.dvx-thinking-row summary')?.textContent,
+    ).toContain('Thought for 4s');
+    expect(container.querySelector('.dvx-activity-group')).not.toBeNull();
+    expect(container.querySelectorAll('.dvx-activity-row')).toHaveLength(4);
+    expect(
+      [...container.querySelectorAll('.dvx-tool-target')].map(
+        (target) => target.textContent,
+      ),
+    ).toEqual([
+      'src/app.ts',
+      'useEffect · src · **/*.tsx',
+    ]);
+    expect(
+      container.querySelector('.dvx-command-code')?.textContent,
+    ).toContain('pnpm run lint:budgets');
+    expect(
+      container.querySelector('.dvx-activity-state-failed')?.textContent,
+    ).toContain('Failed');
   });
 
-  it('renders assistant text through the shared markdown renderer', () => {
+  it('keeps child playback actionless where an action could mutate state', () => {
     const { container } = render(
       <SubagentTranscriptSheet
         sheet={sheetWith({ items })}
-        running={false}
+        running
         onRefresh={vi.fn()}
         onDismiss={vi.fn()}
       />,
     );
-    const answer = container.querySelector(
-      '.dvx-markdown.dvx-subsheet-answer',
-    );
-    expect(answer?.querySelector('strong')?.textContent).toBe('three');
+    expect(container.querySelector('.dvx-assistant-actions')).toBeNull();
+    expect(container.querySelector('.dvx-composer')).toBeNull();
+    expect(container.querySelector('.dvx-changes')).toBeNull();
+    expect(container.querySelector('.dvx-terminal-mirror-entry')).toBeNull();
+    expect(
+      container.querySelector('[aria-label="Regenerate response"]'),
+    ).toBeNull();
   });
 
-  it('renders tool items as ruled rows with state and duration', () => {
-    const { container } = render(
-      <SubagentTranscriptSheet
-        sheet={sheetWith({ items })}
-        running={false}
-        onRefresh={vi.fn()}
-        onDismiss={vi.fn()}
-      />,
-    );
-    const rows = [...container.querySelectorAll('.dvx-subsheet-tool')];
-    expect(rows).toHaveLength(2);
-    expect(
-      rows[0]?.querySelector('.dvx-subsheet-tool-action')?.textContent,
-    ).toBe('Read file');
-    expect(
-      rows[0]?.querySelector('.dvx-subsheet-tool-file')?.textContent,
-    ).toBe('src/app.ts');
-    expect(
-      rows[0]?.querySelector('.dvx-subsheet-tool-file-count')?.textContent,
-    ).toBe('+2');
-    expect(
-      rows[0]?.querySelector('.dvx-subsheet-tool-state')?.textContent,
-    ).toBe('Completed · 1.3s');
-    // Execute-class rows carry the command text: mono, first line only.
-    expect(
-      rows[1]?.querySelector('.dvx-subsheet-tool-cmd')?.textContent,
-    ).toBe('pnpm run lint:budgets');
-    expect(rows[0]?.querySelector('.dvx-subsheet-tool-cmd')).toBeNull();
-    // Failed rows keep the subtle error tint and say so.
-    expect(rows[1]?.className).toContain('dvx-subsheet-tool-failed');
-    expect(
-      rows[1]?.querySelector('.dvx-subsheet-tool-state')?.textContent,
-    ).toBe('Failed');
-    expect(
-      rows[1]?.querySelector('.dvx-subsheet-tool-state')?.className,
-    ).toContain('dvx-subsheet-tool-state-failed');
-    // Read-only: the ledger rows carry no buttons at all.
-    expect(container.querySelector('.dvx-subsheet-tool button')).toBeNull();
-  });
-
-  it('renders the quiet thinking line with its duration', () => {
-    const { container } = render(
-      <SubagentTranscriptSheet
-        sheet={sheetWith({ items })}
-        running={false}
-        onRefresh={vi.fn()}
-        onDismiss={vi.fn()}
-      />,
-    );
-    // Textless thinking stays a flat line — no dead disclosure.
-    expect(
-      container.querySelector('p.dvx-subsheet-thought')?.textContent,
-    ).toBe('Thought for 4s');
-    expect(container.querySelector('.dvx-subsheet-thinking')).toBeNull();
-  });
-
-  it('expands a thinking item with text to its thinking prose', () => {
-    const thinkingItems: SessionTranscriptItem[] = [
-      {
-        id: 'th2',
-        kind: 'thinking',
-        turnId: 't1',
-        text: 'The user wants the CSS budget checked first.',
-        status: 'complete',
-        durationMs: 12_400,
-        truncated: false,
-      },
-    ];
-    const { container } = render(
-      <SubagentTranscriptSheet
-        sheet={sheetWith({ items: thinkingItems })}
-        running={false}
-        onRefresh={vi.fn()}
-        onDismiss={vi.fn()}
-      />,
-    );
-    const details = container.querySelector(
-      'details.dvx-subsheet-thinking',
-    ) as HTMLDetailsElement;
-    expect(details).not.toBeNull();
-    expect(details.open).toBe(false);
-    expect(
-      details.querySelector('summary.dvx-subsheet-thought')?.textContent,
-    ).toBe('Thought for 12s');
-    // The thinking text is in the disclosure body, quiet secondary;
-    // the native details element owns expand/collapse.
-    expect(
-      details.querySelector('.dvx-subsheet-thinking-text')?.textContent,
-    ).toBe('The user wants the CSS budget checked first.');
-  });
-
-  it('shows the unavailable state', () => {
-    const { container } = render(
+  it('shows unavailable and truncated states', () => {
+    const { container, rerender } = render(
       <SubagentTranscriptSheet
         sheet={sheetWith({ status: 'unavailable' })}
         running={false}
@@ -211,6 +213,17 @@ describe('SubagentTranscriptSheet', () => {
       />,
     );
     expect(container.textContent).toContain('Transcript unavailable.');
+    rerender(
+      <SubagentTranscriptSheet
+        sheet={sheetWith({ items, truncated: true })}
+        running={false}
+        onRefresh={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(container.textContent).toContain(
+      'Earlier messages were truncated.',
+    );
   });
 
   it('dismisses after the leave animation on ×', () => {
@@ -225,9 +238,7 @@ describe('SubagentTranscriptSheet', () => {
           onDismiss={onDismiss}
         />,
       );
-      fireEvent.click(
-        container.querySelector('.dvx-btw-close') as HTMLElement,
-      );
+      fireEvent.click(container.querySelector('.dvx-btw-close')!);
       expect(onDismiss).not.toHaveBeenCalled();
       act(() => vi.advanceTimersByTime(250));
       expect(onDismiss).toHaveBeenCalledTimes(1);
@@ -236,34 +247,11 @@ describe('SubagentTranscriptSheet', () => {
     }
   });
 
-  it('shows the quiet live indicator only while running', () => {
-    const { container, rerender } = render(
-      <SubagentTranscriptSheet
-        sheet={sheetWith({ items })}
-        running
-        onRefresh={vi.fn()}
-        onDismiss={vi.fn()}
-      />,
-    );
-    expect(
-      container.querySelector('.dvx-subsheet-live')?.textContent,
-    ).toBe('Running…');
-    rerender(
-      <SubagentTranscriptSheet
-        sheet={sheetWith({ items })}
-        running={false}
-        onRefresh={vi.fn()}
-        onDismiss={vi.fn()}
-      />,
-    );
-    expect(container.querySelector('.dvx-subsheet-live')).toBeNull();
-  });
-
-  it('re-requests the transcript on an interval while running', () => {
+  it('shows the live indicator and refreshes only while running', () => {
     vi.useFakeTimers();
     try {
       const onRefresh = vi.fn();
-      const { rerender } = render(
+      const { container, rerender } = render(
         <SubagentTranscriptSheet
           sheet={sheetWith({ items })}
           running
@@ -271,13 +259,9 @@ describe('SubagentTranscriptSheet', () => {
           onDismiss={vi.fn()}
         />,
       );
-      act(() => vi.advanceTimersByTime(SUBAGENT_SHEET_REFRESH_MS));
-      expect(onRefresh).toHaveBeenCalledTimes(1);
-      expect(onRefresh).toHaveBeenCalledWith('task-1');
-      act(() => vi.advanceTimersByTime(SUBAGENT_SHEET_REFRESH_MS));
+      expect(container.querySelector('.dvx-subsheet-live')).not.toBeNull();
+      act(() => vi.advanceTimersByTime(SUBAGENT_SHEET_REFRESH_MS * 2));
       expect(onRefresh).toHaveBeenCalledTimes(2);
-      // Settling fires one final refresh for the transcript tail,
-      // then the interval stays silent.
       rerender(
         <SubagentTranscriptSheet
           sheet={sheetWith({ items })}
@@ -286,63 +270,147 @@ describe('SubagentTranscriptSheet', () => {
           onDismiss={vi.fn()}
         />,
       );
+      expect(container.querySelector('.dvx-subsheet-live')).toBeNull();
+      // One final refresh captures the transcript tail after settlement.
       expect(onRefresh).toHaveBeenCalledTimes(3);
-      act(() =>
-        vi.advanceTimersByTime(SUBAGENT_SHEET_REFRESH_MS * 4),
-      );
+      act(() => vi.advanceTimersByTime(SUBAGENT_SHEET_REFRESH_MS * 2));
       expect(onRefresh).toHaveBeenCalledTimes(3);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('sticks to the bottom only when the reader was already there', () => {
-    const grownItems: SessionTranscriptItem[] = [
-      ...items,
-      { id: 'a2', kind: 'assistant', turnId: 't1', text: 'More.' },
-    ];
-    const { container, rerender } = render(
-      <SubagentTranscriptSheet
-        sheet={sheetWith({ items })}
-        running
-        onRefresh={vi.fn()}
-        onDismiss={vi.fn()}
-      />,
+  it('follows transcript growth smoothly over animation frames', () => {
+    const animation = installAnimationFrames();
+    try {
+      const { container, rerender } = render(
+        <SubagentTranscriptSheet
+          sheet={sheetWith({ items })}
+          running
+          onRefresh={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      const body = container.querySelector<HTMLElement>(
+        '.dvx-subsheet-body',
+      )!;
+      setScrollGeometry(body, 700);
+      rerender(
+        <SubagentTranscriptSheet
+          sheet={sheetWith({
+            items: [
+              ...items,
+              { id: 'a2', kind: 'assistant', turnId: 't1', text: 'More.' },
+            ],
+          })}
+          running
+          onRefresh={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      act(() => animation.runFrame());
+      expect(body.scrollTop).toBeGreaterThan(0);
+      expect(body.scrollTop).toBeLessThan(600);
+      const firstTop = body.scrollTop;
+      act(() => animation.runFrame());
+      expect(body.scrollTop).toBeGreaterThan(firstTop);
+    } finally {
+      animation.restore();
+    }
+  });
+
+  it('releases on reading intent and rejoins after reaching the bottom', () => {
+    const animation = installAnimationFrames();
+    try {
+      const { container, rerender } = render(
+        <SubagentTranscriptSheet
+          sheet={sheetWith({ items })}
+          running
+          onRefresh={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      const body = container.querySelector<HTMLElement>(
+        '.dvx-subsheet-body',
+      )!;
+      setScrollGeometry(body, 1_000);
+      act(() => animation.runFrame());
+      const followedTop = body.scrollTop;
+      fireEvent.wheel(body, { deltaY: -80 });
+      rerender(
+        <SubagentTranscriptSheet
+          sheet={sheetWith({ items: [...items] })}
+          running
+          onRefresh={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      act(() => animation.runFrame());
+      expect(body.scrollTop).toBe(followedTop);
+
+      body.scrollTop = 900;
+      fireEvent.scroll(body);
+      setScrollGeometry(body, 1_200);
+      rerender(
+        <SubagentTranscriptSheet
+          sheet={sheetWith({
+            items: [
+              ...items,
+              { id: 'a3', kind: 'assistant', turnId: 't1', text: 'Tail.' },
+            ],
+          })}
+          running
+          onRefresh={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      act(() => animation.runFrame());
+      expect(body.scrollTop).toBeGreaterThan(900);
+    } finally {
+      animation.restore();
+    }
+  });
+
+  it('observes rendered content growth between polling snapshots', () => {
+    const animation = installAnimationFrames();
+    let notifyResize: (() => void) | undefined;
+    const OriginalResizeObserver = globalThis.ResizeObserver;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class ResizeObserver {
+        constructor(callback: ResizeObserverCallback) {
+          notifyResize = () => callback([], this);
+        }
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      },
     );
-    const body = container.querySelector(
-      '.dvx-subsheet-body',
-    ) as HTMLDivElement;
-    Object.defineProperty(body, 'scrollHeight', {
-      value: 1_000,
-      configurable: true,
-    });
-    Object.defineProperty(body, 'clientHeight', {
-      value: 100,
-      configurable: true,
-    });
-    // Reader scrolled up: a refresh must not move them.
-    body.scrollTop = 200;
-    fireEvent.scroll(body);
-    rerender(
-      <SubagentTranscriptSheet
-        sheet={sheetWith({ items: grownItems })}
-        running
-        onRefresh={vi.fn()}
-        onDismiss={vi.fn()}
-      />,
-    );
-    expect(body.scrollTop).toBe(200);
-    // Back at the bottom: the next refresh keeps following the tail.
-    body.scrollTop = 900;
-    fireEvent.scroll(body);
-    rerender(
-      <SubagentTranscriptSheet
-        sheet={sheetWith({ items: [...grownItems] })}
-        running
-        onRefresh={vi.fn()}
-        onDismiss={vi.fn()}
-      />,
-    );
-    expect(body.scrollTop).toBe(1_000);
+    try {
+      const { container } = render(
+        <SubagentTranscriptSheet
+          sheet={sheetWith({ items })}
+          running
+          onRefresh={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      const body = container.querySelector<HTMLElement>(
+        '.dvx-subsheet-body',
+      )!;
+      setScrollGeometry(body, 100);
+      act(() => animation.runFrame());
+      setScrollGeometry(body, 600);
+      act(() => notifyResize?.());
+      act(() => animation.runFrame());
+      expect(body.scrollTop).toBeGreaterThan(0);
+    } finally {
+      animation.restore();
+      if (OriginalResizeObserver === undefined) {
+        vi.unstubAllGlobals();
+      } else {
+        vi.stubGlobal('ResizeObserver', OriginalResizeObserver);
+      }
+    }
   });
 });

@@ -1,14 +1,30 @@
-import { useEffect, useRef, useState } from 'react';
+import {
+  AssistantRuntimeProvider,
+  ThreadPrimitive,
+  useExternalStoreRuntime,
+  type ExternalStoreAdapter,
+} from '@assistant-ui/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { SessionTranscriptItem } from '../../shared/bridgeMessages';
-import { DroidMarkdownContent } from './MarkdownText';
-import type { SubagentSheetState } from './subagentPanelFlow';
-import { ActivityChevron } from './thread/icons';
 import {
-  firstLine,
-  formatDuration,
-  formatToolLifecycle,
-} from './thread/readers';
+  convertSafeRuntimeMessage,
+  mapTranscriptToRuntimeMessages,
+  type CompletionClock,
+  type RuntimeMessageCache,
+  type SafeRuntimeMessage,
+} from './runtimeAdapter';
+import {
+  SubagentActionsContext,
+  type SubagentSheetState,
+} from './subagentPanelFlow';
+import {
+  SelectSessionContext,
+  TerminalMirrorContext,
+} from './Thread';
+import { ReadOnlyAssistantMessage } from './thread/AssistantMessage';
+import { ReadOnlyUserMessage } from './thread/UserMessage';
+import { useSmoothFollowScroll } from './useSmoothFollowScroll';
 
 /** Matches the btw collapse duration (styles 21-btw.css). */
 const LEAVE_MS = 200;
@@ -47,6 +63,11 @@ export function SubagentTranscriptSheet({
   const refreshRef = useRef(onRefresh);
   refreshRef.current = onRefresh;
   const toolUseId = sheet.toolUseId;
+  const {
+    viewportRef: bodyRef,
+    contentRef,
+    followNewest,
+  } = useSmoothFollowScroll<HTMLDivElement>();
 
   useEffect(() => {
     if (!running) {
@@ -71,17 +92,15 @@ export function SubagentTranscriptSheet({
     wasRunningRef.current = running;
   }, [running, toolUseId]);
 
-  // Follow the tail like a terminal: stick to the bottom only while
-  // the reader is already there; scrolling up unpins until they
-  // return (same pattern as ToolOutputPreview).
-  const bodyRef = useRef<HTMLDivElement | null>(null);
-  const pinnedRef = useRef(true);
+  // Poll swaps in a complete transcript snapshot. Schedule the shared
+  // smooth follower after each swap; a deliberate reading gesture keeps
+  // the latch released. Navigating to another delegation starts at its tail.
+  const previousToolUseIdRef = useRef(toolUseId);
   useEffect(() => {
-    const body = bodyRef.current;
-    if (running && pinnedRef.current && body !== null) {
-      body.scrollTop = body.scrollHeight;
-    }
-  }, [sheet.items, running]);
+    const rowChanged = previousToolUseIdRef.current !== toolUseId;
+    previousToolUseIdRef.current = toolUseId;
+    followNewest(rowChanged);
+  }, [followNewest, running, sheet.items, toolUseId]);
 
   useEffect(() => {
     if (!leaving) {
@@ -133,154 +152,73 @@ export function SubagentTranscriptSheet({
       <div
         className="dvx-btw-entries dvx-subsheet-body"
         ref={bodyRef}
-        onScroll={(event) => {
-          const body = event.currentTarget;
-          pinnedRef.current =
-            body.scrollHeight - body.scrollTop - body.clientHeight < 8;
-        }}
       >
-        {sheet.status === 'loading' ? (
-          <p className="dvx-btw-status">Loading transcript…</p>
-        ) : sheet.status === 'unavailable' ? (
-          <p className="dvx-btw-status">Transcript unavailable.</p>
-        ) : (
-          <>
-            {sheet.items.map((item) => (
-              <SubagentTranscriptRow key={item.id} item={item} />
-            ))}
-            {sheet.truncated ? (
-              <p className="dvx-btw-status">
-                Earlier messages were truncated.
-              </p>
-            ) : null}
-          </>
-        )}
+        <div className="dvx-subsheet-content" ref={contentRef}>
+          {sheet.status === 'loading' ? (
+            <p className="dvx-btw-status">Loading transcript…</p>
+          ) : sheet.status === 'unavailable' ? (
+            <p className="dvx-btw-status">Transcript unavailable.</p>
+          ) : (
+            <ReadOnlySubagentTranscript items={sheet.items} />
+          )}
+          {sheet.status === 'available' && sheet.truncated ? (
+            <p className="dvx-btw-status">
+              Earlier messages were truncated.
+            </p>
+          ) : null}
+        </div>
       </div>
     </aside>
   );
 }
 
-/**
- * One transcript item, rendered read-only in the main chat's visual
- * language: the task prompt in the user bubble through the shared
- * markdown renderer, assistant text as transcript markdown, thinking
- * as the quiet grey line, and tool use as the ruled marker-dot
- * ledger — visual parity with the live rows, none of their actions.
- */
-export function SubagentTranscriptRow({
-  item,
+function ReadOnlySubagentTranscript({
+  items,
 }: {
-  readonly item: SessionTranscriptItem;
-}): React.JSX.Element | null {
-  switch (item.kind) {
-    case 'user':
-      return (
-        <div className="dvx-user-block dvx-subsheet-user">
-          <DroidMarkdownContent
-            text={item.text}
-            className="dvx-markdown dvx-subsheet-user-md"
-          />
-        </div>
-      );
-    case 'assistant':
-      return (
-        <DroidMarkdownContent
-          text={item.text}
-          className="dvx-markdown dvx-btw-answer dvx-subsheet-answer"
-        />
-      );
-    case 'thinking':
-      return <SubsheetThinking item={item} />;
-    case 'tool': {
-      const failed = item.status === 'failed';
-      return (
-        <div
-          className={`dvx-subsheet-tool${
-            failed ? ' dvx-subsheet-tool-failed' : ''
-          }`}
-        >
-          <span className="dvx-subsheet-tool-action">{item.action}</span>
-          {item.detailKind === 'command' && item.detail !== undefined ? (
-            <code className="dvx-subsheet-tool-cmd" title={item.detail}>
-              {firstLine(item.detail)}
-            </code>
-          ) : null}
-          {item.filePath !== undefined ? (
-            <span className="dvx-subsheet-tool-files">
-              <code
-                className="dvx-subsheet-tool-file"
-                title={item.filePath}
-              >
-                {item.filePath}
-              </code>
-              {item.additionalFileCount === undefined ? null : (
-                <span className="dvx-subsheet-tool-file-count">
-                  +{item.additionalFileCount}
-                </span>
-              )}
-            </span>
-          ) : null}
-          <span
-            className={`dvx-subsheet-tool-state${
-              failed ? ' dvx-subsheet-tool-state-failed' : ''
-            }`}
-          >
-            {formatToolLifecycle(item.status)}
-            {item.durationMs !== undefined
-              ? ` · ${formatDuration(item.durationMs)}`
-              : ''}
-          </span>
-        </div>
-      );
-    }
-    case 'changes':
-      return (
-        <p className="dvx-subsheet-line">
-          {`Changes · ${item.files.length} ${
-            item.files.length === 1 ? 'file' : 'files'
-          }`}
-        </p>
-      );
-    case 'diagnostic':
-      return <p className="dvx-subsheet-line">{item.message}</p>;
-    case 'image':
-      return <p className="dvx-subsheet-line">(image)</p>;
-    default:
-      return null;
-  }
-}
-
-/**
- * A thinking item as a native disclosure, mirroring the main chat's
- * settled Thinking rows: the quiet "Thought for Ns" summary with a
- * chevron, expanding to the thinking text as quiet secondary prose.
- * The history projection drops empty thinking blocks, but a textless
- * item still degrades to the flat label (no dead disclosure).
- */
-function SubsheetThinking({
-  item,
-}: {
-  readonly item: Extract<SessionTranscriptItem, { kind: 'thinking' }>;
+  readonly items: readonly SessionTranscriptItem[];
 }): React.JSX.Element {
-  const label =
-    item.durationMs !== undefined && item.durationMs !== null
-      ? `Thought for ${formatSeconds(item.durationMs)}`
-      : 'Thought';
-  if (item.text.length === 0) {
-    return <p className="dvx-subsheet-thought">{label}</p>;
-  }
-  return (
-    <details className="dvx-subsheet-thinking">
-      <summary className="dvx-subsheet-thought">
-        {label}
-        <ActivityChevron />
-      </summary>
-      <pre className="dvx-subsheet-thinking-text">{item.text}</pre>
-    </details>
+  const messageCacheRef = useRef<RuntimeMessageCache>(new Map());
+  const completionClockRef = useRef<CompletionClock>(new Map());
+  const messages = useMemo(
+    () =>
+      mapTranscriptToRuntimeMessages(
+        items,
+        null,
+        messageCacheRef.current,
+        completionClockRef.current,
+      ),
+    [items],
   );
-}
-
-function formatSeconds(durationMs: number): string {
-  const seconds = Math.max(1, Math.round(durationMs / 1_000));
-  return `${seconds}s`;
+  const adapter = useMemo<ExternalStoreAdapter<SafeRuntimeMessage>>(
+    () => ({
+      messages,
+      isRunning: false,
+      isSendDisabled: true,
+      convertMessage: convertSafeRuntimeMessage,
+      onNew: async () => undefined,
+    }),
+    [messages],
+  );
+  const runtime = useExternalStoreRuntime(adapter);
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <TerminalMirrorContext.Provider value={null}>
+        <SelectSessionContext.Provider value={null}>
+          <SubagentActionsContext.Provider value={null}>
+            <div className="dvx-subsheet-thread">
+              <ThreadPrimitive.Messages>
+                {({ message }) =>
+                  message.role === 'user' ? (
+                    <ReadOnlyUserMessage />
+                  ) : (
+                    <ReadOnlyAssistantMessage />
+                  )
+                }
+              </ThreadPrimitive.Messages>
+            </div>
+          </SubagentActionsContext.Provider>
+        </SelectSessionContext.Provider>
+      </TerminalMirrorContext.Provider>
+    </AssistantRuntimeProvider>
+  );
 }

@@ -204,6 +204,7 @@ import {
   transcriptImageDataUnits,
   transcriptTextUnits,
 } from '../../shared/transcriptLimits';
+import { isValidToolTarget } from './validateToolTarget';
 
 const MAX_STRING_LENGTH = MAX_TURN_TEXT_LENGTH;
 const CONNECTION_STATUS_SET = new Set<ConnectionState['status']>(
@@ -839,6 +840,7 @@ function parseToolActivity(
         'additionalFileCount',
         'detailKind',
         'detail',
+        'target',
         'errorMessage',
         'outputTail',
         'backgroundHint',
@@ -864,6 +866,7 @@ function parseToolActivity(
       !isSafeWorkspaceRelativePath(value.filePath)) ||
     !hasValidAdditionalFileCount(value) ||
     !hasValidToolDetail(value) ||
+    !isValidToolTarget(value.target) ||
     !hasValidToolErrorMessage(value) ||
     !hasValidToolOutputTail(value)
   ) {
@@ -910,6 +913,7 @@ function parseToolActivity(
           detailKind: value.detailKind as ToolDetailKind,
           detail: value.detail as string,
         }),
+    ...(value.target === undefined ? {} : { target: value.target as string }),
     ...(value.errorMessage === undefined
       ? {}
       : { errorMessage: value.errorMessage as string }),
@@ -3455,6 +3459,7 @@ function parseToolTranscriptItem(
         'additionalFileCount',
         'detailKind',
         'detail',
+        'target',
         'errorMessage',
         'outputTail',
         'backgroundHint',
@@ -3481,6 +3486,7 @@ function parseToolTranscriptItem(
       !isSafeWorkspaceRelativePath(value.filePath)) ||
     !hasValidAdditionalFileCount(value) ||
     !hasValidToolDetail(value) ||
+    !isValidToolTarget(value.target) ||
     !hasValidToolErrorMessage(value) ||
     !hasValidToolOutputTail(value)
   ) {
@@ -3526,6 +3532,7 @@ function parseToolTranscriptItem(
           detailKind: value.detailKind as ToolDetailKind,
           detail: value.detail as string,
         }),
+    ...(value.target === undefined ? {} : { target: value.target as string }),
     ...(value.errorMessage === undefined
       ? {}
       : { errorMessage: value.errorMessage as string }),

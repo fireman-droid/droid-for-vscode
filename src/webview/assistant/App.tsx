@@ -1433,16 +1433,7 @@ export function App(): React.JSX.Element {
           planAnchors={planAnchors}
           workingBadge={
             workingSubagents.length === 0 ? null : (
-              <WorkingBadge
-                rows={workingSubagents}
-                turnActive={
-                  turnStatus === 'submitting' ||
-                  turnStatus === 'streaming'
-                }
-                onStopAll={() => {
-                  void handleCancel();
-                }}
-              />
+              <WorkingBadge rows={workingSubagents} />
             )
           }
           queuedMessages={

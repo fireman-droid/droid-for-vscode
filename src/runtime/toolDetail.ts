@@ -1,8 +1,16 @@
 import {
   MAX_TOOL_DETAIL_LENGTH,
+  MAX_TOOL_TARGET_LENGTH,
   type ToolDetailKind,
 } from '../shared/bridgeMessages';
-import { MAX_TOOL_ACTION_SUMMARY_LENGTH } from '../shared/toolActivity';
+import {
+  MAX_TOOL_ACTION_SUMMARY_LENGTH,
+  toolNameCandidates,
+} from '../shared/toolActivity';
+import { toWorkspaceRelativePath } from './toolFilePath';
+
+const MAX_TOOL_TARGET_INPUT_SCAN_LENGTH = MAX_TOOL_TARGET_LENGTH * 8;
+const MAX_TOOL_TARGET_PATTERN_ITEMS = 32;
 
 export interface ToolDetail {
   readonly kind: ToolDetailKind;
@@ -34,6 +42,152 @@ export function extractToolDetail(
     return text === undefined ? undefined : { kind: 'plan', text };
   }
   return undefined;
+}
+
+/**
+ * Extracts the small, display-only input context that explains a
+ * non-mutating workspace tool. Raw input and output never cross the
+ * Bridge. Paths are exposed only after resolving inside the workspace.
+ */
+export function extractToolTarget(
+  toolName: string,
+  input: unknown,
+  workspaceRoot?: string,
+): string | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  const record = input as Record<string, unknown>;
+  const names = toolNameCandidates(toolName);
+  if (names.includes('read')) {
+    return readWorkspacePath(
+      record,
+      ['file_path', 'filePath', 'path'],
+      workspaceRoot,
+    );
+  }
+  if (names.includes('grep') || names.includes('search')) {
+    return joinTargetParts(
+      readTargetText(record, ['pattern', 'query', 'search']),
+      readWorkspacePath(
+        record,
+        ['path', 'directory_path', 'directory', 'folder', 'dir', 'cwd'],
+        workspaceRoot,
+      ),
+      readTargetText(record, ['glob_pattern', 'glob', 'include']),
+    );
+  }
+  if (names.includes('glob')) {
+    return joinTargetParts(
+      readTargetPattern(record, ['patterns', 'pattern', 'glob_pattern', 'glob']),
+      readWorkspacePath(
+        record,
+        ['path', 'directory_path', 'directory', 'folder', 'dir', 'cwd'],
+        workspaceRoot,
+      ),
+    );
+  }
+  if (names.includes('ls') || names.includes('list')) {
+    return readWorkspacePath(
+      record,
+      ['path', 'directory_path', 'directory', 'folder', 'dir', 'cwd'],
+      workspaceRoot,
+    );
+  }
+  return undefined;
+}
+
+function readWorkspacePath(
+  record: Record<string, unknown>,
+  keys: readonly string[],
+  workspaceRoot: string | undefined,
+): string | undefined {
+  if (workspaceRoot === undefined) {
+    return undefined;
+  }
+  const rawPath = readTargetText(record, keys);
+  return rawPath === undefined
+    ? undefined
+    : toWorkspaceRelativePath(workspaceRoot, rawPath);
+}
+
+function readTargetText(
+  record: Record<string, unknown>,
+  keys: readonly string[],
+): string | undefined {
+  for (const key of keys) {
+    const normalized = normalizeTargetText(record[key]);
+    if (normalized !== undefined) {
+      return normalized;
+    }
+  }
+  return undefined;
+}
+
+function readTargetPattern(
+  record: Record<string, unknown>,
+  keys: readonly string[],
+): string | undefined {
+  const direct = readTargetText(record, keys);
+  if (direct !== undefined) {
+    return direct;
+  }
+  for (const key of keys) {
+    const value = record[key];
+    if (!Array.isArray(value)) {
+      continue;
+    }
+    let target = '';
+    for (
+      let index = 0;
+      index < Math.min(value.length, MAX_TOOL_TARGET_PATTERN_ITEMS);
+      index += 1
+    ) {
+      const pattern = normalizeTargetText(value[index]);
+      if (pattern === undefined) {
+        continue;
+      }
+      const separator = target.length === 0 ? '' : ', ';
+      const available =
+        MAX_TOOL_TARGET_LENGTH - target.length - separator.length;
+      if (available <= 0) {
+        break;
+      }
+      target += separator + pattern.slice(0, available);
+      if (target.length >= MAX_TOOL_TARGET_LENGTH) {
+        break;
+      }
+    }
+    if (target.length > 0) {
+      return target;
+    }
+  }
+  return undefined;
+}
+
+function normalizeTargetText(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const normalized = value
+    .slice(0, MAX_TOOL_TARGET_INPUT_SCAN_LENGTH)
+    .replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  return normalized.length === 0
+    ? undefined
+    : normalized.slice(0, MAX_TOOL_TARGET_LENGTH);
+}
+
+function joinTargetParts(
+  ...parts: readonly (string | undefined)[]
+): string | undefined {
+  const target = parts
+    .filter((part): part is string => part !== undefined)
+    .join(' · ');
+  return target.length === 0
+    ? undefined
+    : target.slice(0, MAX_TOOL_TARGET_LENGTH);
 }
 
 interface TodoStep {

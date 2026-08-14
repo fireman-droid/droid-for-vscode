@@ -17,7 +17,6 @@ import { isStrictRecord } from '../../shared/strictValidation';
 /** Live per-row extras for the working popup, keyed by toolUseId. */
 export interface SubagentRowExtras {
   readonly action: string | null;
-  readonly stoppable: boolean;
 }
 
 /** The read-only child transcript sheet. */
@@ -44,7 +43,6 @@ export interface SubagentPanelActions {
    */
   readonly onRefreshTranscript: (toolUseId: string) => void;
   readonly onCloseSheet: () => void;
-  readonly onStop: (turnId: string, toolUseId: string) => void;
   readonly onPanelToggle: (open: boolean) => void;
 }
 
@@ -83,35 +81,23 @@ export function useSubagentPanelFlow(
 ): SubagentPanelFlowValue {
   const [activities, setActivities] = useState(EMPTY_ACTIVITIES);
   const [sheet, setSheet] = useState<SubagentSheetState | null>(null);
-  const pendingStopsRef = useRef(new Set<string>());
   useEffect(() => {
     setActivities(EMPTY_ACTIVITIES);
     setSheet(null);
-    pendingStopsRef.current.clear();
     if (sessionId === null) {
       return;
     }
     const handleMessage = (event: MessageEvent<unknown>): void => {
       const activity = parseSubagentActivityMessage(event.data);
       if (activity !== null && activity.sessionId === sessionId) {
-        const stopPending = pendingStopsRef.current.has(
-          activity.toolUseId,
-        );
-        if (stopPending && activity.stoppable) {
-          // A sample emitted before the click can arrive after it.
-          // Keep the optimistic hidden state until the Host's
-          // immediate `stoppable:false` acknowledgement lands.
-          return;
-        }
-        if (stopPending) {
-          pendingStopsRef.current.delete(activity.toolUseId);
-        }
         setActivities((previous) => {
+          if (
+            previous.get(activity.toolUseId)?.action === activity.action
+          ) {
+            return previous;
+          }
           const next = new Map(previous);
-          next.set(activity.toolUseId, {
-            action: activity.action,
-            stoppable: activity.stoppable,
-          });
+          next.set(activity.toolUseId, { action: activity.action });
           return next;
         });
         return;
@@ -127,18 +113,7 @@ export function useSubagentPanelFlow(
         return;
       }
       setSheet((previous) =>
-        previous === null || previous.toolUseId !== transcript.toolUseId
-          ? previous
-          : {
-              toolUseId: transcript.toolUseId,
-              title:
-                transcript.title.length > 0
-                  ? transcript.title
-                  : previous.title,
-              status: transcript.status,
-              items: transcript.items ?? [],
-              truncated: transcript.truncated ?? false,
-            },
+        updateSheetFromTranscript(previous, transcript),
       );
     };
     window.addEventListener('message', handleMessage);
@@ -173,30 +148,6 @@ export function useSubagentPanelFlow(
         }
       },
       onCloseSheet: () => setSheet(null),
-      onStop: (turnId, toolUseId) => {
-        if (
-          sessionId === null ||
-          pendingStopsRef.current.has(toolUseId)
-        ) {
-          return;
-        }
-        pendingStopsRef.current.add(toolUseId);
-        setActivities((previous) => {
-          const current = previous.get(toolUseId);
-          if (current === undefined || !current.stoppable) {
-            return previous;
-          }
-          const next = new Map(previous);
-          next.set(toolUseId, { ...current, stoppable: false });
-          return next;
-        });
-        vscode.postMessage({
-          type: 'subagent.stop',
-          sessionId,
-          turnId,
-          toolUseId,
-        });
-      },
       onPanelToggle: (open) => {
         if (sessionId !== null) {
           vscode.postMessage({ type: 'subagent.panel', sessionId, open });
@@ -209,4 +160,60 @@ export function useSubagentPanelFlow(
     () => ({ activities, sheet, actions }),
     [activities, sheet, actions],
   );
+}
+
+function updateSheetFromTranscript(
+  previous: SubagentSheetState | null,
+  transcript: NonNullable<
+    ReturnType<typeof parseSubagentTranscript>
+  >,
+): SubagentSheetState | null {
+  if (
+    previous === null ||
+    previous.toolUseId !== transcript.toolUseId
+  ) {
+    return previous;
+  }
+  const title =
+    transcript.title.length > 0 ? transcript.title : previous.title;
+  const items = reconcileTranscriptItems(
+    previous.items,
+    transcript.items ?? [],
+  );
+  const truncated = transcript.truncated ?? false;
+  if (
+    previous.title === title &&
+    previous.status === transcript.status &&
+    previous.items === items &&
+    previous.truncated === truncated
+  ) {
+    return previous;
+  }
+  return {
+    toolUseId: transcript.toolUseId,
+    title,
+    status: transcript.status,
+    items,
+    truncated,
+  };
+}
+
+function reconcileTranscriptItems(
+  previous: readonly SessionTranscriptItem[],
+  incoming: readonly SessionTranscriptItem[],
+): readonly SessionTranscriptItem[] {
+  if (
+    previous.length === incoming.length &&
+    JSON.stringify(previous) === JSON.stringify(incoming)
+  ) {
+    return previous;
+  }
+  const byId = new Map(previous.map((item) => [item.id, item]));
+  return incoming.map((item) => {
+    const prior = byId.get(item.id);
+    return prior !== undefined &&
+      JSON.stringify(prior) === JSON.stringify(item)
+      ? prior
+      : item;
+  });
 }

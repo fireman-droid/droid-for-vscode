@@ -385,6 +385,64 @@ describe('assistant-ui App bridge commands', () => {
     });
   });
 
+  it('shows subagent activity without exposing cancellation controls', async () => {
+    const user = userEvent.setup();
+    const taskRow = (toolUseId: string) => ({
+      id: `tool:turn-live:${toolUseId}`,
+      kind: 'tool' as const,
+      turnId: 'turn-live',
+      toolUseId,
+      toolName: 'Task',
+      action: 'Delegated focused work',
+      status: 'running' as const,
+      progressCount: 0,
+      latestUpdateKind: null,
+      subagent: {
+        type: 'worker',
+        description: `Work ${toolUseId}`,
+        status: 'running' as const,
+      },
+    });
+    render(<App />);
+    host({
+      ...snapshot(0, { turnId: 'turn-live', status: 'streaming' }),
+      transcript: [taskRow('task-1'), taskRow('task-2')],
+    });
+
+    await user.click(
+      await screen.findByRole('button', { name: '2 subagents working' }),
+    );
+    host({
+      type: 'subagent.activity',
+      sequence: 1,
+      sessionId: 'session-a',
+      turnId: 'turn-live',
+      toolUseId: 'task-1',
+      action: 'Read',
+      stoppable: true,
+    });
+    host({
+      type: 'subagent.activity',
+      sequence: 2,
+      sessionId: 'session-a',
+      turnId: 'turn-live',
+      toolUseId: 'task-2',
+      action: 'Grep',
+      stoppable: true,
+    });
+    expect(
+      posted.filter((message) => message.type === 'subagent.stop'),
+    ).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Stop All' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /Stop this .* subagent/ }),
+    ).toBeNull();
+    expect(screen.getByText('Read')).toBeDefined();
+    expect(screen.getByText('Grep')).toBeDefined();
+    // Parent cancellation remains an independent Composer control.
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeDefined();
+  });
+
   it('edits a queued prompt through the Composer and replaces it in place', async () => {
     render(<App />);
     host(snapshot(0));

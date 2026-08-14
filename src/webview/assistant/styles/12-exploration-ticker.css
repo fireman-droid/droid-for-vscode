@@ -72,6 +72,18 @@
   font-size: inherit;
 }
 
+.dvx-tool-target {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dvx-subtle);
+  font-family: var(--dvx-mono);
+  font-size: 11.5px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dvx-activity-row[open] {
   border-color: #dcd6ce;
   border: 0;

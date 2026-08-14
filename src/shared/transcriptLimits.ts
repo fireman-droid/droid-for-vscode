@@ -49,6 +49,7 @@ export function transcriptItemTextUnits(
         (item.latestUpdateKind?.length ?? 0) +
         (item.filePath?.length ?? 0) +
         (item.detail?.length ?? 0) +
+        (item.target?.length ?? 0) +
         (item.outputTail?.length ?? 0) +
         (item.subagent === undefined
           ? 0

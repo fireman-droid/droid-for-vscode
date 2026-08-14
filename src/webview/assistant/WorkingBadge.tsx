@@ -15,30 +15,17 @@ import {
  * window after the parent turn finished but background delegations
  * are still running (probed 2026-08-12: the ledger keeps reporting
  * `running` and no other UI element moves during that window).
- *
- * Stop All reuses the existing turn-stop channel and therefore only
- * works while a turn is active. Out of turn there is no kill switch:
- * `session.interrupt()` resolves but demonstrably does not cancel a
- * background child (probe-zombie-subagent.out.json, phase B), so no
- * stop control renders at all — the rows just show their state
- * (user decision 2026-08-12: unstoppable work gets no control, not
- * a disabled one). Per-row stop buttons are omitted for the same
- * reason.
+ * Stop controls are intentionally absent until the Runtime can provide
+ * reliable semantics for both single-child and batch cancellation.
  */
 export function WorkingBadge({
   rows,
-  turnActive,
-  onStopAll,
 }: {
   readonly rows: readonly WorkingSubagent[];
-  /** True while the current turn can still be interrupted. */
-  readonly turnActive: boolean;
-  readonly onStopAll: () => void;
 }): React.JSX.Element | null {
   const [open, setOpen] = useState(false);
-  // Panel flow (待办 B): live per-row activity, working per-row Stop
-  // (only when the host proved it can actually stop that row), and
-  // the open/close signal gating the host's activity polling.
+  // Panel flow: live per-row activity, read-only transcript opening,
+  // and the open/close signal gating the Host's activity polling.
   const panel = useContext(SubagentPanelContext);
   const panelRef = useRef(panel);
   panelRef.current = panel;
@@ -101,18 +88,6 @@ export function WorkingBadge({
               <span className="dvx-working-popup-title">
                 {rows.length} Working
               </span>
-              {turnActive ? (
-                <button
-                  type="button"
-                  className="dvx-working-stop-all"
-                  onClick={() => {
-                    onStopAll();
-                    setOpen(false);
-                  }}
-                >
-                  Stop All
-                </button>
-              ) : null}
             </div>
             <ul className="dvx-working-list">
               {rows.map((row) => {
@@ -138,21 +113,6 @@ export function WorkingBadge({
                             ) ?? Date.now()),
                         )}
                       </span>
-                      {panel !== null && extras?.stoppable === true ? (
-                        <button
-                          type="button"
-                          className="dvx-working-row-stop"
-                          aria-label={`Stop this ${row.type} subagent`}
-                          onClick={() =>
-                            panel.actions.onStop(
-                              row.turnId,
-                              row.toolUseId,
-                            )
-                          }
-                        >
-                          Stop
-                        </button>
-                      ) : null}
                     </span>
                     {row.description.length > 0 ? (
                       <span className="dvx-working-row-desc">

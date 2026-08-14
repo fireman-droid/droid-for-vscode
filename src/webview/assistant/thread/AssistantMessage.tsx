@@ -71,50 +71,7 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
       }`}
       aria-label="Droid"
     >
-      <MessagePrimitive.GroupedParts
-        groupBy={activityGroupBy}
-        indicator="never"
-      >
-        {({ part, children }) => {
-          switch (part.type) {
-            case ACTIVITY_GROUP_KEY:
-              return (
-                <ActivityGroup indices={part.indices}>{children}</ActivityGroup>
-              );
-            case "text":
-              return <DroidMarkdownText />;
-            case "reasoning":
-              return (
-                <ThinkingRow
-                  statusType={part.status?.type}
-                  durationMs={readReasoningDuration(part)}
-                  truncated={readReasoningTruncated(part)}
-                />
-              );
-            case "tool-call":
-              return (
-                <ToolActivityRow
-                  activity={readToolActivity(part)}
-                  toolName={part.toolName}
-                  toolUseId={part.toolCallId}
-                />
-              );
-            case "data":
-              if (part.name === "droid-diagnostic") {
-                return <Diagnostic data={part.data} />;
-              }
-              if (part.name === "droid-changes") {
-                return <ChangesSummary data={part.data} />;
-              }
-              if (part.name === "droid-image") {
-                return <TranscriptImage data={part.data} />;
-              }
-              return null;
-            default:
-              return null;
-          }
-        }}
-      </MessagePrimitive.GroupedParts>
+      <AssistantMessageParts includeChanges />
       {replyTail ? (
         <ActionBarPrimitive.Root
           className={`dvx-assistant-actions${
@@ -143,6 +100,72 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
     </MessagePrimitive.Root>
   );
 });
+
+/** Main message body shared by the live thread and read-only child playback. */
+export function AssistantMessageParts({
+  includeChanges,
+}: {
+  readonly includeChanges: boolean;
+}): React.JSX.Element {
+  return (
+    <MessagePrimitive.GroupedParts
+      groupBy={activityGroupBy}
+      indicator="never"
+    >
+      {({ part, children }) => {
+        switch (part.type) {
+          case ACTIVITY_GROUP_KEY:
+            return (
+              <ActivityGroup indices={part.indices}>{children}</ActivityGroup>
+            );
+          case "text":
+            return <DroidMarkdownText />;
+          case "reasoning":
+            return (
+              <ThinkingRow
+                statusType={part.status?.type}
+                durationMs={readReasoningDuration(part)}
+                truncated={readReasoningTruncated(part)}
+              />
+            );
+          case "tool-call":
+            return (
+              <ToolActivityRow
+                activity={readToolActivity(part)}
+                toolName={part.toolName}
+                toolUseId={part.toolCallId}
+              />
+            );
+          case "data":
+            if (part.name === "droid-diagnostic") {
+              return <Diagnostic data={part.data} />;
+            }
+            if (part.name === "droid-changes") {
+              return includeChanges ? <ChangesSummary data={part.data} /> : null;
+            }
+            if (part.name === "droid-image") {
+              return <TranscriptImage data={part.data} />;
+            }
+            return null;
+          default:
+            return null;
+        }
+      }}
+    </MessagePrimitive.GroupedParts>
+  );
+}
+
+/** Child-session assistant message: identical body, no reply actions. */
+export function ReadOnlyAssistantMessage(): React.JSX.Element {
+  return (
+    <MessagePrimitive.Root
+      className="dvx-message dvx-message-assistant"
+      aria-label="Subagent"
+    >
+      <AssistantMessageParts includeChanges={false} />
+    </MessagePrimitive.Root>
+  );
+}
 
 /**
  * Copies the whole reply run — every assistant text segment of the

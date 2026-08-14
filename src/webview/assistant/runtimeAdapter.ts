@@ -587,6 +587,7 @@ function mapItemToPart(item: SessionTranscriptItem): SafeRuntimePart {
             filePath: item.filePath ?? null,
             detailKind: item.detailKind ?? null,
             detail: item.detail ?? null,
+            target: item.target ?? null,
             errorMessage: item.errorMessage ?? null,
             outputTail: item.outputTail ?? null,
             // Rebuilt as literals: interfaces lack the index

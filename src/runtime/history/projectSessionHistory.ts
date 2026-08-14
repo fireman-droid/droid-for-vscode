@@ -41,6 +41,7 @@ import { extractToolBackgroundHint } from '../toolBackgroundHint';
 import {
   extractExecuteSummary,
   extractToolDetail,
+  extractToolTarget,
 } from '../toolDetail';
 import {
   extractToolFilePaths,
@@ -639,6 +640,11 @@ function appendTool(
     projection.multiFileTools.set(transcriptId, filePaths);
   }
   const detail = extractToolDetail(toolName, block.input);
+  const target = extractToolTarget(
+    toolName,
+    block.input,
+    projection.workspaceRoot,
+  );
   const backgroundHint = extractToolBackgroundHint(
     toolName,
     block.input,
@@ -663,6 +669,7 @@ function appendTool(
     ...(detail === undefined
       ? {}
       : { detailKind: detail.kind, detail: detail.text }),
+    ...(target === undefined ? {} : { target }),
     ...(backgroundHint === undefined ? {} : { backgroundHint }),
     ...(subagent === undefined ? {} : { subagent }),
   });

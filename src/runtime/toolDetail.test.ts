@@ -1,7 +1,13 @@
+import { join, resolve } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { MAX_TOOL_ACTION_SUMMARY_LENGTH } from '../shared/toolActivity';
-import { extractExecuteSummary, extractToolDetail } from './toolDetail';
+import {
+  extractExecuteSummary,
+  extractToolDetail,
+  extractToolTarget,
+} from './toolDetail';
 
 describe('extractToolDetail', () => {
   it('captures the command for execute tools', () => {
@@ -138,5 +144,79 @@ describe('extractExecuteSummary', () => {
       summary: 'x'.repeat(500),
     });
     expect(summary?.length).toBe(MAX_TOOL_ACTION_SUMMARY_LENGTH);
+  });
+});
+
+describe('extractToolTarget', () => {
+  const root = resolve('workspace-root');
+
+  it('projects a Read path only when it resolves inside the workspace', () => {
+    expect(
+      extractToolTarget(
+        'Read',
+        { file_path: join(root, 'src', 'app.ts') },
+        root,
+      ),
+    ).toBe('src/app.ts');
+    expect(
+      extractToolTarget(
+        'Read',
+        { file_path: join(root, '..', 'secret.txt') },
+        root,
+      ),
+    ).toBeUndefined();
+    expect(
+      extractToolTarget('Read', { file_path: 'src/app.ts' }),
+    ).toBeUndefined();
+    expect(
+      extractToolTarget(
+        'functions.Read',
+        { file_path: join(root, 'src', 'namespaced.ts') },
+        root,
+      ),
+    ).toBe('src/namespaced.ts');
+  });
+
+  it('shows Grep query, safe scope, and include pattern on one line', () => {
+    expect(
+      extractToolTarget(
+        'Grep',
+        {
+          pattern: 'useEffect\n\u202e',
+          path: 'src',
+          glob: '**/*.tsx',
+        },
+        root,
+      ),
+    ).toBe('useEffect · src · **/*.tsx');
+  });
+
+  it('shows a Glob pattern and safe directory', () => {
+    expect(
+      extractToolTarget(
+        'Glob',
+        {
+          patterns: ['**/*.test.ts', '!dist/**'],
+          folder: 'src',
+        },
+        root,
+      ),
+    ).toBe('**/*.test.ts, !dist/** · src');
+  });
+
+  it('drops unrelated inputs and bounds hostile search text', () => {
+    expect(
+      extractToolTarget('Execute', { command: 'cat secret' }, root),
+    ).toBeUndefined();
+    const target = extractToolTarget('Grep', {
+      query: `\u0000${'x'.repeat(900)}`,
+    });
+    expect(target).toHaveLength(512);
+    expect(target).not.toContain('\u0000');
+    expect(
+      extractToolTarget('Glob', {
+        patterns: [...Array<string>(32).fill(''), '**/too-late.ts'],
+      }),
+    ).toBeUndefined();
   });
 });

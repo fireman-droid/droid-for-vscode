@@ -345,15 +345,7 @@ export function UserMessage({
                 : undefined
             }
           >
-            <MessagePrimitive.Parts>
-              {({ part }) =>
-                part.type === "data" && part.name === "droid-image" ? (
-                  <TranscriptImage data={part.data} />
-                ) : part.type === "text" ? (
-                  <div className="dvx-user-text">{part.text}</div>
-                ) : null
-              }
-            </MessagePrimitive.Parts>
+            <UserMessageParts />
             {attachments.length > 0 ? (
               <div
                 className="dvx-user-sent-attachments"
@@ -382,6 +374,36 @@ export function UserMessage({
       </div>
       {planLine}
     </MessagePrimitive.Root>
+  );
+}
+
+/** Main user-bubble presentation without edit, rewind, or resend actions. */
+export function ReadOnlyUserMessage(): React.JSX.Element {
+  return (
+    <MessagePrimitive.Root
+      className="dvx-message dvx-message-user"
+      aria-label="Delegated task"
+    >
+      <div className="dvx-user-message-content">
+        <div className="dvx-user-block">
+          <UserMessageParts />
+        </div>
+      </div>
+    </MessagePrimitive.Root>
+  );
+}
+
+function UserMessageParts(): React.JSX.Element {
+  return (
+    <MessagePrimitive.Parts>
+      {({ part }) =>
+        part.type === "data" && part.name === "droid-image" ? (
+          <TranscriptImage data={part.data} />
+        ) : part.type === "text" ? (
+          <div className="dvx-user-text">{part.text}</div>
+        ) : null
+      }
+    </MessagePrimitive.Parts>
   );
 }
 

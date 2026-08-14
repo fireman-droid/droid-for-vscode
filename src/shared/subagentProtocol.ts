@@ -28,7 +28,11 @@ export interface SubagentOpenTranscriptMessage {
   readonly toolUseId: string;
 }
 
-/** Webview → Host: stop one running delegation (daemon-backed). */
+/**
+ * Dormant compatibility route. The production Webview intentionally exposes
+ * no subagent stop action until single/batch cancellation semantics are
+ * reliable; keeping the Host parser is inert and preserves downgrade safety.
+ */
 export interface SubagentStopMessage {
   readonly type: 'subagent.stop';
   readonly sessionId: string;

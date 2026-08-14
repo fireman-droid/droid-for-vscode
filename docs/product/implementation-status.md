@@ -2,7 +2,7 @@
 
 > 本文档是 DroidVisX 当前实现范围的持续更新台账，用来区分“已经接入产品的功能”“部分实现”“仅能力声明/探测”以及“尚未实现”。
 >
-> 最后核对日期：2026-08-14
+> 最后核对日期：2026-08-15
 >
 > 核对对象：当前工作区源码、Bridge、Extension Host、Droid Runtime 适配、Webview、测试、VSIX 与 Cursor 安装状态
 
@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.15 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.16 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -3047,6 +3047,28 @@ UI 描述见 §22 重做记录。
   无重复 lifecycle 或热路径问题，并补齐 ticker/折叠详情的 focus
   隔离。按当前门禁未跑全量 Vitest、浏览器 smoke 或 daemon smoke。
 
+### 51. 子代理转录与停止语义收口（2026-08-15，v0.7.16）
+
+- **主聊天同源回放**：子代理转录改用独立只读 assistant-ui runtime，
+  直接复用主聊天用户气泡、Markdown、Thinking、命令卡、Tool 行与
+  Exploring/Explored 组；移除手写近似行 CSS，同时屏蔽 Composer、
+  Regenerate、Commit、嵌套子代理和终端写入口。
+- **真实活动目标**：Bridge v15 新增有界单行 `target`；Runtime 对
+  Read 路径做工作区边界转换，对 Grep 查询/范围与 Glob 模式/目录做
+  控制字符清理、长度/数组扫描限额；实时事件与历史投影共用同一提取器。
+- **阅读意图跟随**：子转录与 `/btw` 共用 rAF 平滑跟随协调器，
+  wheel/上滚立即脱离，到底重入；ResizeObserver 覆盖 Markdown、
+  Thinking/Tool disclosure 和探索组高度变化，reduced-motion 直达尾部。
+- **停止控件撤下**：单行 Stop 与 Stop All 暂不作为产品能力提供；
+  Working 弹层保持纯观察，Webview 无子代理停止 action，也不会发送
+  `subagent.stop`/`turn.stop`。Host 兼容处理休眠保留，不启动额外任务；
+  父聊天 Composer Stop 维持原语义。
+- **轮询成本**：等价子转录快照保留 sheet/item identity，并复用主
+  runtime message cache，静默轮询不再重复重建 Markdown/活动树。
+- **验证**：触及文件 17 个测试文件 / 659 例、三段 typecheck、
+  `lint:budgets` 与 `git diff --check` 全绿；按当前门禁未跑全量
+  Vitest、浏览器 smoke 或 daemon smoke。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3480,6 +3502,16 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-15 子代理只读转录发版 v0.7.16**：版本号
+  `0.7.15 → 0.7.16`，内容 = 台账 §51（主聊天同源只读回放、安全
+  Read/Grep/Glob 目标、意图感知平滑跟随、静默轮询 identity 复用、
+  撤下不可靠的单行/批量 Stop）。触及文件 17 个测试文件 / 659 例、
+  typecheck 三段、`lint:budgets` 与 `git diff --check` 全绿；
+  build + VSIX 11 条目验证全绿，产物 1,683,737 字节，SHA-256
+  `743E5BBAA4A73E2529A6BEB4EB4660AB2FD464DC0E1A091A45FFC405A3FD22DC`。
+  `cursor --install-extension --force` 安装成功并确认
+  `droidvisx.droidvisx@0.7.16`。按门禁未跑全量 Vitest、浏览器 smoke
+  或 daemon smoke；安装后需 Reload Window。
 - **2026-08-14 探索组完成动画发版 v0.7.15**：版本号
   `0.7.14 → 0.7.15`，内容 = 台账 §50（持久 stage、
   `running → settling → completed`、ticker/summary 交叉淡入淡出、
