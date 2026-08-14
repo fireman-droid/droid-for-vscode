@@ -27,6 +27,7 @@ import {
 } from '../../shared/bridgeMessages';
 import { App } from './App';
 import {
+  LIVE_THINKING_SMOOTH_OPTIONS,
   THINKING_RENDER_CHUNK_SIZE,
   THINKING_WAITING_AFTER_MS,
 } from './thread/transcriptRows';
@@ -810,17 +811,122 @@ describe('assistant-ui App bridge commands', () => {
     expect(thinkingRows[1]?.open).toBe(false);
     expect(thinkingRows[0]?.querySelector('.dvx-thinking-content')).toBeNull();
 
-    host({
-      type: 'thinking.delta',
-      sequence: 1,
-      sessionId: 'session-a',
-      turnId: 'turn-2',
-      delta: '',
-      truncated: true,
-      segmentIndex: 0,
-    });
+    const liveFrames = new Map<number, FrameRequestCallback>();
+    let nextFrameId = 1;
+    let now = 1_000;
+    const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const liveRequestFrame = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        const frameId = nextFrameId;
+        nextFrameId += 1;
+        liveFrames.set(frameId, callback);
+        return frameId;
+      });
+    const liveCancelFrame = vi
+      .spyOn(window, 'cancelAnimationFrame')
+      .mockImplementation((frameId) => {
+        liveFrames.delete(frameId);
+      });
+    const runNextLiveFrame = (): void => {
+      const next = liveFrames.entries().next().value as
+        | [number, FrameRequestCallback]
+        | undefined;
+      if (next === undefined) {
+        throw new Error('Expected a pending animation frame');
+      }
+      liveFrames.delete(next[0]);
+      next[1](now);
+    };
+    try {
+      await user.click(thinkingLabels[1]!.closest('summary')!);
+      expect(
+        thinkingRows[1]?.querySelector('.dvx-thinking-content-live')
+          ?.textContent,
+      ).toBe('Second thought');
+
+      host({
+        type: 'thinking.delta',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-2',
+        delta: ' incoming',
+        truncated: true,
+        segmentIndex: 0,
+      });
+      await act(async () => {
+        runNextLiveFrame();
+        await Promise.resolve();
+      });
+      expect(
+        thinkingRows[1]?.querySelector('.dvx-thinking-content-live')
+          ?.textContent,
+      ).toBe('Second thought');
+      await waitFor(() => expect(liveFrames.size).toBeGreaterThan(0));
+
+      now += LIVE_THINKING_SMOOTH_OPTIONS.maxCharIntervalMs * 2;
+      act(runNextLiveFrame);
+      const partial = thinkingRows[1]?.querySelector(
+        '.dvx-thinking-content-live',
+      )?.textContent;
+      expect(partial?.startsWith('Second thought')).toBe(true);
+      expect(partial).not.toBe('Second thought');
+      expect(partial).not.toBe('Second thought incoming');
+
+      host({
+        type: 'thinking.complete',
+        sequence: 2,
+        sessionId: 'session-a',
+        turnId: 'turn-2',
+        durationMs: 420,
+        segmentIndex: 0,
+      });
+      for (
+        let frame = 0;
+        frame < 5 &&
+        !thinkingRows[1]
+          ?.querySelector('summary')
+          ?.textContent?.startsWith('Thought');
+        frame += 1
+      ) {
+        await act(async () => {
+          runNextLiveFrame();
+          await Promise.resolve();
+        });
+      }
+      expect(
+        thinkingRows[1]
+          ?.querySelector('summary')
+          ?.textContent?.startsWith('Thought'),
+      ).toBe(true);
+      expect(
+        thinkingRows[1]?.querySelector('.dvx-thinking-content-live')
+          ?.textContent,
+      ).toBe(partial);
+
+      for (
+        let frame = 0;
+        frame < 10 &&
+        thinkingRows[1]?.querySelector('.dvx-thinking-content-live')
+          ?.textContent !== 'Second thought incoming';
+        frame += 1
+      ) {
+        now += LIVE_THINKING_SMOOTH_OPTIONS.maxCharIntervalMs * 2;
+        act(runNextLiveFrame);
+      }
+      expect(
+        thinkingRows[1]?.querySelector('.dvx-thinking-content-live')
+          ?.textContent,
+      ).toBe('Second thought incoming');
+      await user.click(thinkingRows[1]!.querySelector('summary')!);
+    } finally {
+      liveCancelFrame.mockRestore();
+      liveRequestFrame.mockRestore();
+      dateNow.mockRestore();
+    }
+
     expect(await screen.findByText('· Safety limit reached')).toBeTruthy();
-    await user.click(thinkingLabels[1]!.closest('summary')!);
+    await user.click(thinkingRows[1]!.querySelector('summary')!);
     expect(
       await screen.findByText(
         'Thinking reached the local safety limit; later reasoning is not retained.',

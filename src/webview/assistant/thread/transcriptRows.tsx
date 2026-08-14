@@ -1,6 +1,6 @@
 // transcriptRows: moved verbatim from Thread.tsx (structure-only refactor).
 
-import { useAuiState } from "@assistant-ui/react";
+import { useAuiState, useSmooth } from "@assistant-ui/react";
 import {
   useContext,
   useDeferredValue,
@@ -8,6 +8,7 @@ import {
   useMemo,
   startTransition,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 import type { SessionHistoryStatus } from "../../../shared/bridgeMessages";
@@ -24,6 +25,18 @@ import { formatThinkingLabel, readDiagnostic } from "./readers";
 export const THINKING_WAITING_AFTER_MS = 10_000;
 export const THINKING_RENDER_CHUNK_SIZE = 16_384;
 const THINKING_RENDER_CHUNKS_PER_FRAME = 4;
+export const LIVE_THINKING_SMOOTH_OPTIONS = {
+  drainMs: 320,
+  maxCharIntervalMs: 20,
+  maxCharsPerFrame: 4_096,
+  minCommitMs: 32,
+} as const;
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+const EMPTY_REASONING_PART = {
+  type: "reasoning" as const,
+  text: "",
+  status: { type: "complete" as const },
+};
 
 export function ToolFilePath({ path }: { readonly path: string }): React.JSX.Element {
   const openFileDiff = useContext(FileDiffContext);
@@ -125,16 +138,115 @@ export function ThinkingRow({
         )}
         <ActivityChevron />
       </summary>
-      {expanded ? <ThinkingContent truncated={truncated} /> : null}
+      {expanded ? (
+        <ThinkingContent
+          statusType={statusType}
+          truncated={truncated}
+        />
+      ) : null}
     </details>
   );
 }
 
 function ThinkingContent({
+  statusType,
   truncated,
 }: {
+  readonly statusType: string | undefined;
   readonly truncated: boolean;
 }): React.JSX.Element {
+  // Keep the renderer selected when this row opens. A live row stays
+  // smooth through settlement; closing and reopening the completed
+  // row selects the bounded progressive history renderer instead.
+  const [openedLive] = useState(statusType === "running");
+  return (
+    <div className="dvx-thinking-body">
+      {openedLive ? <LiveThinkingText /> : <ProgressiveThinkingText />}
+      {truncated ? (
+        <p className="dvx-thinking-limit-note" role="note">
+          Thinking reached the local safety limit; later reasoning is not
+          retained.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function LiveThinkingText(): React.JSX.Element {
+  const reduceMotion = useReducedMotionPreference();
+  return reduceMotion ? (
+    <LiveThinkingRawText />
+  ) : (
+    <LiveThinkingSmoothedText />
+  );
+}
+
+function LiveThinkingRawText(): React.JSX.Element {
+  const text = useAuiState((state) =>
+    state.part.type === "reasoning" ? state.part.text : "",
+  );
+  return (
+    <pre className="dvx-thinking-content dvx-thinking-content-live">
+      {text}
+    </pre>
+  );
+}
+
+function LiveThinkingSmoothedText(): React.JSX.Element {
+  const reasoning = useAuiState((state) =>
+    state.part.type === "reasoning"
+      ? state.part
+      : EMPTY_REASONING_PART,
+  );
+  const [initialSeed] = useState(() =>
+    reasoning.text.slice(0, THINKING_RENDER_CHUNK_SIZE),
+  );
+  const [seeded, setSeeded] = useState(false);
+  useEffect(() => setSeeded(true), []);
+  const seededReasoning = seeded
+    ? reasoning
+    : {
+        ...reasoning,
+        text: initialSeed,
+        status: { type: "complete" as const },
+      };
+  const smoothed = useSmooth(
+    seededReasoning,
+    LIVE_THINKING_SMOOTH_OPTIONS,
+  );
+  return (
+    <pre className="dvx-thinking-content dvx-thinking-content-live">
+      {smoothed.text}
+    </pre>
+  );
+}
+
+function useReducedMotionPreference(): boolean {
+  return useSyncExternalStore(
+    subscribeReducedMotion,
+    readReducedMotion,
+    () => false,
+  );
+}
+
+function subscribeReducedMotion(onChange: () => void): () => void {
+  if (typeof window === "undefined" || window.matchMedia === undefined) {
+    return () => undefined;
+  }
+  const media = window.matchMedia(REDUCED_MOTION_QUERY);
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+}
+
+function readReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia !== undefined &&
+    window.matchMedia(REDUCED_MOTION_QUERY).matches
+  );
+}
+
+function ProgressiveThinkingText(): React.JSX.Element {
   const text = useAuiState((state) =>
     state.part.type === "reasoning" ? state.part.text : "",
   );
@@ -144,21 +256,13 @@ function ThinkingContent({
     [visibleText],
   );
   return (
-    <div className="dvx-thinking-body">
-      <pre className="dvx-thinking-content">
-        {chunks.map((chunk, index) => (
-          <span className="dvx-thinking-chunk" key={index}>
-            {chunk}
-          </span>
-        ))}
-      </pre>
-      {truncated ? (
-        <p className="dvx-thinking-limit-note" role="note">
-          Thinking reached the local safety limit; later reasoning is not
-          retained.
-        </p>
-      ) : null}
-    </div>
+    <pre className="dvx-thinking-content">
+      {chunks.map((chunk, index) => (
+        <span className="dvx-thinking-chunk" key={index}>
+          {chunk}
+        </span>
+      ))}
+    </pre>
   );
 }
 

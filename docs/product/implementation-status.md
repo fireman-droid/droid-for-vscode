@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.10 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.11 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -2952,6 +2952,20 @@ UI 描述见 §22 重做记录。
 - **验证**：触达文件聚焦单测、三段 typecheck、`lint:budgets` 与
   `git diff --check` 全绿；按当前门禁未跑全量 Vitest 或 daemon smoke。
 
+### 46. 展开中 Thinking 帧间平滑（2026-08-14，v0.7.11）
+
+- **用户真机反馈**：v0.7.10 已消除静默截断和 Bridge 消息洪峰，但展开
+  运行中的 Thinking 仍按 200ms Host 批次整块出现，视觉上呈现
+  “停一下、跳一块”。
+- **双路径修复**：运行中打开的行先显示一块有界前缀，再以
+  assistant-ui `useSmooth` 在动画帧间自适应排放后续内容，并在完成时
+  继续排空可见 backlog，不跳到末尾；完成后才打开的历史行继续使用
+  v0.7.10 的渐进分块。系统切换 reduced-motion 时重建平滑游标，避免
+  重播已显示文本。Host 200ms / 16KB 批处理、512K 显式安全阀、折叠
+  不挂载与无 Copy-full 控件均保持不变。
+- **验证**：`App.test.tsx` 17 例、三段 typecheck、`lint:budgets` 与
+  `git diff --check` 全绿；按当前门禁未跑全量 Vitest 或 daemon smoke。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3385,6 +3399,16 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-14 展开中 Thinking 平滑修复发版 v0.7.11**：版本号
+  `0.7.10 → 0.7.11`，内容 = 台账 §46（运行中 `useSmooth` 帧间排放、
+  完成态 backlog 连续排空、完成后渐进历史双路径、reduced-motion
+  游标重建）。`App.test.tsx` 17 例、typecheck 三段、
+  `lint:budgets` 与 `git diff --check` 全绿；build + VSIX 11 条目
+  验证全绿，产物 1,679,514 字节，SHA-256
+  `EC9694F141D4F31AA9A2F3AB7BB170F52823114A1A6335DFE8D6756ADE0031D4`。
+  `cursor --install-extension --force` 安装成功并确认
+  `droidvisx.droidvisx@0.7.11`。未跑全量 Vitest 或 daemon smoke；
+  安装后需 Reload Window。
 - **2026-08-14 长 Thinking 假死修复发版 v0.7.10**：版本号 `0.7.9
   → 0.7.10`，内容 = 台账 §45（200ms / 16KB Host 批处理、512K
   显式紧急安全阀、折叠不挂载、展开逐帧分块、`Receiving` /

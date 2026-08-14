@@ -4,6 +4,18 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.11] - 2026-08-14
+
+### Fixed
+
+- **Expanded live Thinking now flows between Host batches** — opening
+  a running row preserves its visible prefix, then uses assistant-ui
+  smoothing to reveal later reasoning across animation frames instead
+  of displaying one 200ms packet at a time.
+- **Completion no longer jumps past a visible backlog** — rows opened
+  live keep the smooth renderer through settlement; rows opened after
+  completion retain the bounded progressive history renderer.
+
 ## [0.7.10] - 2026-08-14
 
 ### Changed
