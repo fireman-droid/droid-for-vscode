@@ -5,9 +5,10 @@
 .dvx-model-popover {
   right: 10px;
   left: auto;
-  /* Wide enough for "name + effort suffix + check" on one line
-     (Cursor-style readout, 2026-08-13). */
-  width: 264px;
+  /* Long BYOK display names should remain readable; clamp to the
+     webview so the card still fits a narrow secondary sidebar. */
+  width: 320px;
+  max-width: calc(100vw - 20px);
   padding: 0;
   overflow: visible;
   border: 1px solid color-mix(in srgb, var(--dvx-border-strong) 72%, transparent);

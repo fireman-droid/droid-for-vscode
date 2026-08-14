@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.17 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.18 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -3082,6 +3082,20 @@ UI 描述见 §22 重做记录。
   补齐旧关闭计时器竞态。按门禁未跑全量 Vitest、浏览器 smoke 或
   daemon smoke。
 
+### 53. `/btw` 用户卡片与模型选择可读性（2026-08-15，v0.7.18）
+
+- **`/btw` 提问归属**：用户问题复用主聊天卡片样式并在侧聊滚动区吸顶；
+  卡片不可编辑，点击会按 reduced-motion 偏好平滑或即时回到该问答起点。
+- **单层焦点**：`/btw` 与 Custom Model/MCP 共用输入均提高局部选择器
+  优先级，只强化原有边框，不再叠加全局灰色 outline 或 shadow。
+- **模型命名**：目录可用时 Trigger 与 Picker 主标签使用 SDK
+  `displayName`；`custom:…-0` 原始 ID 只保留在 title、搜索和选择值中。
+- **长名称与入口排版**：Trigger 上限增至响应式 230px，模型弹层扩至
+  320px 并按视口夹紧；Add Model 尾行固定为图标/文字两列。
+- **验证**：触及组件 3 个测试文件 / 60 例、三段 typecheck、
+  `lint:budgets` 与 `git diff --check` 全绿；按门禁未跑全量 Vitest、
+  浏览器 smoke 或 daemon smoke。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3110,7 +3124,7 @@ UI 描述见 §22 重做记录。
 - 只显示 SDK `isCustom` 字段确认的 BYOK Model；不会按 Model ID 猜测
   Provider 或自定义状态
 - 模型目录缺失、超限、重复、非法或包含未知 Reasoning 值时 fail closed
-- Plus 和 Context 面板按 Composer 宽度显示；Model 使用 228px 设计宽度
+- Plus 和 Context 面板按 Composer 宽度显示；Model 使用 320px 响应式宽度
 - Model 列表在固定高度内独立纵向滚动，不会把浮层推出 Webview
 - 当前 Model 行在编辑前显示已确认的 Reasoning Effort
 - Reasoning 选项只显示所选 Model 真实声明的值，包括 SDK 的 `xhigh`
@@ -3515,6 +3529,16 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-15 `/btw` 与模型可读性发版 v0.7.18**：版本号
+  `0.7.17 → 0.7.18`，内容 = 台账 §53（侧聊只读吸顶用户卡片与跳转、
+  单层焦点、模型 `displayName`、长名称宽度及 Add Model 尾行对齐）。
+  触及组件 3 个测试文件 / 60 例、typecheck 三段、`lint:budgets` 与
+  `git diff --check` 全绿；build + VSIX 11 条目验证全绿，产物
+  1,684,329 字节，SHA-256
+  `CA3554786A25A18874B1C6E87ADAFDA383722F5F414E4D1CAB5DED73315C7B05`。
+  `cursor --install-extension --force` 安装成功并确认
+  `droidvisx.droidvisx@0.7.18`。按门禁未跑全量 Vitest、浏览器 smoke
+  或 daemon smoke；安装后需 Reload Window。
 - **2026-08-15 子代理转录轻关闭发版 v0.7.17**：版本号
   `0.7.16 → 0.7.17`，内容 = 台账 §52（面板外点击收拢、选择会话
   立即关闭、旧关闭计时器隔离）。触及文件 2 个测试文件 / 30 例、

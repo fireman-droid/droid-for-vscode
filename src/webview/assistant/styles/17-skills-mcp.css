@@ -244,9 +244,11 @@
   font-size: 12px;
 }
 
-.dvx-mcp-add-input:focus-visible {
-  border-color: var(--dvx-accent);
+.dvx-shell .dvx-mcp-add-input:focus,
+.dvx-shell .dvx-mcp-add-input:focus-visible {
+  border-color: var(--dvx-border-strong);
   outline: none;
+  box-shadow: none;
 }
 
 .dvx-mcp-add-types {

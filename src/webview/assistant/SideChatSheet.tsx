@@ -142,7 +142,25 @@ export function SideChatSheet({
         <div className="dvx-btw-entries-content" ref={entriesContentRef}>
           {btw.entries.map((entry) => (
             <div className="dvx-btw-entry" key={entry.id}>
-              <div className="dvx-btw-question">{entry.question}</div>
+              <button
+                type="button"
+                className="dvx-btw-question dvx-user-block"
+                title="Jump to the start of this side question"
+                onClick={(event) =>
+                  event.currentTarget
+                    .closest('.dvx-btw-entry')
+                    ?.scrollIntoView({
+                      behavior: window.matchMedia?.(
+                        '(prefers-reduced-motion: reduce)',
+                      ).matches
+                        ? 'auto'
+                        : 'smooth',
+                      block: 'start',
+                    })
+                }
+              >
+                <span className="dvx-user-text">{entry.question}</span>
+              </button>
               {entry.answer.length > 0 ? (
                 <DroidMarkdownContent
                   text={entry.answer}

@@ -4,6 +4,22 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.18] - 2026-08-15
+
+### Fixed
+
+- **Side-chat questions read like user messages** — `/btw` questions
+  reuse the main user card, stay sticky, remain read-only, and jump
+  smoothly to the start of their exchange when clicked.
+- **Model labels honor configured display names** — generated
+  `custom:…-0` identifiers remain metadata while the trigger and
+  picker show the user-selected name.
+- **Long model names and Add Model align cleanly** — the trigger and
+  responsive model popover are wider, and the Add Model footer keeps
+  its plus and label together instead of splitting them across the row.
+- **Focused side-chat and model fields draw one border** — the shared
+  form inputs no longer inherit a second outer focus outline.
+
 ## [0.7.17] - 2026-08-15
 
 ### Fixed

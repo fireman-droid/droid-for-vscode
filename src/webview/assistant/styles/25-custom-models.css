@@ -32,6 +32,8 @@
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  grid-template-columns: 15px minmax(0, 1fr);
+  gap: 7px;
 }
 
 .dvx-model-popover .dvx-cm-add-entry .dvx-popover-row-copy strong {

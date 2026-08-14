@@ -146,18 +146,28 @@
 
 .dvx-btw-entry + .dvx-btw-entry {
   margin-top: 12px;
-  border-top: 1px solid var(--dvx-border, var(--dvx-border));
   padding-top: 12px;
 }
 
 .dvx-btw-question {
-  margin-bottom: 4px;
-  color: var(--dvx-ink, var(--dvx-ink));
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  margin: 0 0 8px;
+  font: inherit;
+  cursor: pointer;
+  scroll-margin-top: 12px;
+  text-align: left;
   user-select: text;
+}
+
+.dvx-btw-question .dvx-user-text {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.dvx-btw-question:hover {
+  border-color: var(--dvx-border-strong);
 }
 
 .dvx-btw-answer {
@@ -236,8 +246,10 @@
   user-select: text;
 }
 
-.dvx-btw-input:focus-visible {
+.dvx-shell .dvx-btw-input:focus,
+.dvx-shell .dvx-btw-input:focus-visible {
   border-color: var(--dvx-border-strong, var(--dvx-border));
+  outline: none;
   box-shadow: none;
 }
 

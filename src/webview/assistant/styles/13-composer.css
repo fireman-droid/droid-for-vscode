@@ -219,7 +219,9 @@
 }
 
 .dvx-shell .dvx-model-trigger {
-  max-width: 174px;
+  /* Let long configured display names breathe while the percentage
+     cap and flex shrink preserve the narrow secondary sidebar. */
+  max-width: min(230px, 56%);
   margin-left: 8px;
   padding: 0;
   color: var(--dvx-text-secondary);

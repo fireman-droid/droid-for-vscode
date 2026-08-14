@@ -2618,7 +2618,7 @@ function ModelPopover({
             >
               {filtered.map((model) => {
                 const isSelected = model.id === scopedModelId;
-                const modelLabel = formatRawModelId(model.id);
+                const modelLabel = model.displayName;
                 return (
                   <div
                     key={model.id}
@@ -2630,6 +2630,7 @@ function ModelPopover({
                       type="button"
                       className="dvx-model-choice"
                       aria-label={`${model.displayName}, ${model.id}`}
+                      title={model.id}
                       disabled={disabled}
                       onClick={() => {
                         if (isSelected) {
@@ -2828,9 +2829,8 @@ function getModelName(
   if (catalog.status !== 'ready') {
     return formatRawModelId(modelId);
   }
-  return formatRawModelId(
-    catalog.items.find((model) => model.id === modelId)?.id ?? modelId,
-  );
+  return catalog.items.find((model) => model.id === modelId)?.displayName ??
+    formatRawModelId(modelId);
 }
 
 function formatRawModelId(modelId: string): string {

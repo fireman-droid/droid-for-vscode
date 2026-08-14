@@ -125,6 +125,58 @@ describe('ComposerControls', () => {
     expect(trigger.getAttribute('title')).toBe('custom:gpt-5.6-sol-o');
   });
 
+  it('uses catalog display names instead of generated custom model ids', async () => {
+    const user = userEvent.setup();
+    render(
+      <ComposerControls
+        settings={{
+          ...settings,
+          value: {
+            ...settings.value,
+            modelId: 'custom:deepseek-v4-flash-0',
+          },
+        }}
+        context={context}
+        modelCatalog={{
+          status: 'ready',
+          items: [
+            {
+              id: 'custom:deepseek-v4-flash-0',
+              displayName: 'DeepSeek V4 Flash',
+              supportedReasoningEfforts: ['high'],
+            },
+          ],
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
+      />,
+    );
+
+    const trigger = screen.getByRole('button', {
+      name: 'Model: DeepSeek V4 Flash',
+    });
+    expect(trigger.textContent).toBe('DeepSeek V4 FlashMedium');
+    expect(trigger.getAttribute('title')).toBe(
+      'custom:deepseek-v4-flash-0',
+    );
+    await user.click(trigger);
+    expect(screen.getAllByText('DeepSeek V4 Flash')).toHaveLength(2);
+    expect(screen.queryByText('deepseek-v4-flash-0')).toBeNull();
+  });
+
   it('keeps the closed footer compact and free of expanded settings', () => {
     const { container } = render(
       <ComposerControls
@@ -444,8 +496,8 @@ describe('ComposerControls', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Model: model-sol' })).toBeDefined();
-    await user.click(screen.getByRole('button', { name: 'Model: model-sol' }));
+    expect(screen.getByRole('button', { name: 'Model: Sol' })).toBeDefined();
+    await user.click(screen.getByRole('button', { name: 'Model: Sol' }));
     expect(screen.getByRole('dialog', { name: 'Model' })).toBeDefined();
     // Trigger suffix + the selected row's inline effort suffix.
     expect(screen.getAllByText('Medium').length).toBeGreaterThan(1);
@@ -453,7 +505,7 @@ describe('ComposerControls', () => {
       screen.getByRole('searchbox', { name: 'Search BYOK models' }),
       'pro',
     );
-    expect(screen.getByText('model-pro')).toBeDefined();
+    expect(screen.getByText('Pro')).toBeDefined();
     expect(screen.queryByRole('listitem', { name: /Sol/ })).toBeNull();
     await user.click(
       screen.getByRole('button', { name: 'Pro, model-pro' }),
@@ -466,9 +518,9 @@ describe('ComposerControls', () => {
     // The trigger label reflects the pick optimistically while the
     // update round-trips; the popover body stays on the confirmed
     // settings until the settled frame arrives.
-    await user.click(screen.getByRole('button', { name: 'Model: model-pro' }));
+    await user.click(screen.getByRole('button', { name: 'Model: Pro' }));
     await user.click(
-      screen.getByRole('button', { name: 'Edit reasoning for model-sol' }),
+      screen.getByRole('button', { name: 'Edit reasoning for Sol' }),
     );
     expect(
       screen.getByRole('heading', { name: 'Effort', level: 3 }),
@@ -537,7 +589,7 @@ describe('ComposerControls', () => {
 
     // Outside Spec mode the model popover has no scope toggle.
     await user.click(
-      screen.getByRole('button', { name: 'Model: model-sol' }),
+      screen.getByRole('button', { name: 'Model: Sol' }),
     );
     expect(
       screen.queryByRole('radiogroup', { name: 'Model scope' }),
@@ -555,7 +607,7 @@ describe('ComposerControls', () => {
 
     // Selecting a model in the Spec drafting scope posts the spec field.
     await user.click(
-      screen.getByRole('button', { name: 'Model: model-sol' }),
+      screen.getByRole('button', { name: 'Model: Sol' }),
     );
     await user.click(screen.getByRole('radio', { name: 'Spec drafting' }));
     expect(
@@ -577,12 +629,12 @@ describe('ComposerControls', () => {
       renderControls({ ...specValue, specModeModelId: 'model-pro' }),
     );
     await user.click(
-      screen.getByRole('button', { name: 'Model: model-sol' }),
+      screen.getByRole('button', { name: 'Model: Sol' }),
     );
     await user.click(screen.getByRole('radio', { name: 'Spec drafting' }));
     expect(screen.getByText('Default')).toBeDefined();
     await user.click(
-      screen.getByRole('button', { name: 'Edit reasoning for model-pro' }),
+      screen.getByRole('button', { name: 'Edit reasoning for Pro' }),
     );
     const defaultOption = screen.getByRole('radio', {
       name: 'Model default',
@@ -595,7 +647,7 @@ describe('ComposerControls', () => {
     });
 
     await user.click(
-      screen.getByRole('button', { name: 'Model: model-sol' }),
+      screen.getByRole('button', { name: 'Model: Sol' }),
     );
     await user.click(screen.getByRole('radio', { name: 'Spec drafting' }));
     await user.click(

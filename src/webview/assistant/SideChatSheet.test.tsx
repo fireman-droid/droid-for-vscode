@@ -264,6 +264,39 @@ describe('SideChatSheet', () => {
     ).toHaveProperty('disabled', false);
   });
 
+  it('renders sticky read-only user cards that jump to their start', async () => {
+    const user = userEvent.setup();
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    try {
+      render(
+        <SideChatSheet
+          btw={streamingState('Answer')}
+          onAsk={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      const question = screen.getByRole('button', { name: 'q' });
+      expect(question.classList.contains('dvx-user-block')).toBe(true);
+      expect(question.getAttribute('title')).toBe(
+        'Jump to the start of this side question',
+      );
+      await user.click(question);
+      expect(scrollIntoView).toHaveBeenCalledWith({
+        behavior: 'smooth',
+        block: 'start',
+      });
+      expect(
+        screen.queryByLabelText('Edit message and resend from here'),
+      ).toBeNull();
+    } finally {
+      Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+    }
+  });
+
   it('follows streaming growth over animation frames instead of jumping', () => {
     const animation = installAnimationFrames();
     try {
