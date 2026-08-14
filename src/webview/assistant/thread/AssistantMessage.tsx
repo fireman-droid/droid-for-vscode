@@ -23,7 +23,11 @@ import { TranscriptImage } from "../TranscriptImage";
 import { ForkContext, RegenerateContext } from "../Thread";
 import { ActivityGroup, ToolActivityRow } from "./activityRows";
 import { CopyActionContent, ForkIcon, RegenerateIcon } from "./icons";
-import { readReasoningDuration, readToolActivity } from "./readers";
+import {
+  readReasoningDuration,
+  readReasoningTruncated,
+  readToolActivity,
+} from "./readers";
 import { ChangesSummary, Diagnostic, ThinkingRow } from "./transcriptRows";
 
 export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Element {
@@ -84,6 +88,7 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
                 <ThinkingRow
                   statusType={part.status?.type}
                   durationMs={readReasoningDuration(part)}
+                  truncated={readReasoningTruncated(part)}
                 />
               );
             case "tool-call":

@@ -185,6 +185,11 @@ export function readReasoningDuration(part: unknown): number | null {
   return metadata === null ? null : readMetadataDuration(metadata);
 }
 
+export function readReasoningTruncated(part: unknown): boolean {
+  const metadata = readDroidvisxMetadata(part);
+  return metadata?.["truncated"] === true;
+}
+
 export function firstLine(text: string): string {
   const line = text.split("\n", 1)[0] ?? text;
   return line.length > 120 ? `${line.slice(0, 119)}…` : line;

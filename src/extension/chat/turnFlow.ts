@@ -29,7 +29,6 @@ import {
   type HostTranscriptState,
 } from '../hostTranscriptState';
 import type { TokenUsageBreakdown } from '../../shared/tokenUsage';
-import { isExecuteToolName } from '../../shared/toolOutput';
 import { recordLiveToolChanges } from './liveChanges';
 import { scheduleLiveSubagentSync } from './subagentWatch';
 import { settleQueueAfterTurn } from './queue';
@@ -73,6 +72,12 @@ import {
   scheduleRecoveryCheckpoint,
 } from './recovery';
 import { settleTurnSubagents } from './subagentWatch';
+import {
+  discardPendingThinking,
+  flushPendingThinking,
+  queueThinkingProjection,
+} from './thinkingBatch';
+import { mirrorExecuteEvent } from './terminalMirrorFlow';
 import {
   isSafeBridgeId,
   isTranscriptProjection,
@@ -139,6 +144,7 @@ export function handleSend(
 
     const runtimeGeneration = ctl.runtimeGeneration;
     const turnGeneration = ++ctl.turnGeneration;
+    discardPendingThinking(ctl);
     ctl.diagnostics?.beginTurnScope?.(turnId);
     ctl.turnIo = { counts: new Map(), bytes: 0 };
     ctl.recordHost({
@@ -224,6 +230,7 @@ export async function consumeTurn(
         }
 
         if (event.type === 'turn-complete') {
+          flushPendingThinking(ctl, sessionId, turnId);
           terminalEventSeen = true;
           // Settle only after leaving the loop: breaking closes the
           // runtime generator (releasing its active-turn slot), so a
@@ -249,6 +256,7 @@ export async function consumeTurn(
           turnId,
         )
       ) {
+        flushPendingThinking(ctl, sessionId, turnId);
         completeEvent = null;
         terminalEventSeen = true;
         failTurn(ctl, sessionId, turnId, 'runtime-stream-failed');
@@ -289,6 +297,9 @@ export function handleRuntimeEvent(
     turnId: string,
     event: Exclude<RuntimeEvent, { type: 'turn-complete' }>,
   ): void {
+    if (event.type !== 'thinking-delta') {
+      flushPendingThinking(ctl, sessionId, turnId);
+    }
     switch (event.type) {
       case 'text-delta': {
         const turn = ctl.turn;
@@ -337,12 +348,12 @@ export function handleRuntimeEvent(
         );
         turn.activity = result.state;
         if (result.projection !== null) {
-          ctl.emit({
-            type: 'thinking.delta',
+          queueThinkingProjection(
+            ctl,
             sessionId,
             turnId,
-            ...result.projection,
-          });
+            result.projection,
+          );
         }
         return;
       }
@@ -501,48 +512,6 @@ export function handleRuntimeEvent(
           code: 'runtime-event-error',
           message: RUNTIME_EVENT_ERROR_MESSAGE,
         });
-        return;
-    }
-}
-
-/**
- * Feeds execute-tool lifecycle and output into the read-only
- * terminal mirror (native-terminal design slice A). Runs inside the
- * current-turn gate of the event loop, so only the active session's
- * live commands are mirrored — history replays never pass here.
- * Mirrored text goes straight to the terminal and must never enter
- * diagnostics logs (same red line as the transcript preview).
- */
-export function mirrorExecuteEvent(
-  ctl: ChatControllerInternals,
-    sessionId: string,
-    event: Extract<
-      RuntimeEvent,
-      { type: 'tool-start' | 'tool-progress' | 'tool-result' }
-    >,
-  ): void {
-    const mirror = ctl.terminalMirror;
-    if (mirror === undefined || !isExecuteToolName(event.toolName)) {
-      return;
-    }
-    switch (event.type) {
-      case 'tool-start':
-        mirror.commandStarted({
-          toolUseId: event.toolUseId,
-          ...(event.detailKind === 'command' &&
-          event.detail !== undefined
-            ? { command: event.detail }
-            : {}),
-          sessionTag: sessionId.slice(0, 8),
-        });
-        return;
-      case 'tool-progress':
-        if (event.outputTail !== undefined) {
-          mirror.commandOutput(event.toolUseId, event.outputTail);
-        }
-        return;
-      case 'tool-result':
-        mirror.commandSettled(event.toolUseId);
         return;
     }
 }
@@ -726,6 +695,7 @@ export function handleStop(
       typeof runtime.interruptSession === 'function'
         ? () => runtime.interruptSession!()
         : () => runtime.interrupt();
+    flushPendingThinking(ctl, sessionId, turnId);
     ctl.interactions.endTurn(sessionId, turnId);
     setTurnStatus(ctl, sessionId, turnId, 'stopping');
     const runtimeGeneration = ctl.runtimeGeneration;
@@ -998,6 +968,7 @@ export function failTurn(
     turnId: string,
     code: string,
   ): void {
+    flushPendingThinking(ctl, sessionId, turnId);
     if (ctl.turn?.turnId !== turnId) {
       return;
     }

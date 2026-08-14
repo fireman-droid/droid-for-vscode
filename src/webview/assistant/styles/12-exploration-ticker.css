@@ -94,6 +94,44 @@
   font-family: inherit;
 }
 
+.dvx-thinking-live-state {
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.dvx-thinking-body {
+  margin: 6px 0 0;
+  color: var(--dvx-subtle);
+  font-size: 12.5px;
+  line-height: 20.313px;
+}
+
+.dvx-activity-row pre.dvx-thinking-content {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dvx-thinking-chunk {
+  content-visibility: auto;
+}
+
+.dvx-thinking-limit-note {
+  margin: 8px 0 0;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  line-height: 16px;
+}
+
 /* Exploration groups (streaming-experience design item A): while the
    run is live the group shows a shimmering "Exploring" header over a
    bounded auto-scrolling preview; finished runs collapse to an

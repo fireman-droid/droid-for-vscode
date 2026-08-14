@@ -566,6 +566,7 @@ function mapItemToPart(item: SessionTranscriptItem): SafeRuntimePart {
         providerMetadata: {
           droidvisx: {
             durationMs: item.durationMs ?? null,
+            truncated: item.truncated,
           },
         },
       };

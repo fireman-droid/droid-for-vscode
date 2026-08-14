@@ -2,7 +2,7 @@
 
 > 本文档是 DroidVisX 当前实现范围的持续更新台账，用来区分“已经接入产品的功能”“部分实现”“仅能力声明/探测”以及“尚未实现”。
 >
-> 最后核对日期：2026-08-12
+> 最后核对日期：2026-08-14
 >
 > 核对对象：当前工作区源码、Bridge、Extension Host、Droid Runtime 适配、Webview、测试、VSIX 与 Cursor 安装状态
 
@@ -25,8 +25,8 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-本次 Figma Design 还原已经重新打包、验证并安装 VSIX，但现有 Cursor 窗口
-仍需 Reload Window 才会加载同版本号下的新 Bundle；当前尚未形成完成提交。
+当前 v0.7.10 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
 production React）、长会话渲染优化（消息身份缓存、Thinking 展开局部化、
@@ -2938,6 +2938,20 @@ UI 描述见 §22 重做记录。
   `lint:budgets` 与 `git diff --check` 全绿。按当前门禁未跑全量
   Vitest 或额外 daemon smoke。
 
+### 45. 长 Thinking 假死修复（2026-08-14，v0.7.10）
+
+- **用户真机缺陷**：Runtime 仍在持续推理时，旧 32K Thinking 累计上限
+  会静默丢弃后续 delta，界面因没有新内容而看似冻结；同一真实回合可向
+  Webview 投递约 8,400 条 token 级消息。
+- **生产修复**：Host 以 200ms / 16KB 有界批次投影 Thinking，并在
+  Tool、正文、完成、Stop 与失败前强制冲刷；正常长 Thinking 保留上限
+  提升到显式 512K 紧急安全阀。Webview 折叠时不挂载正文，展开先渲染
+  一块再逐帧追加，其余文本仍完整保留；运行行显示 `Receiving` 或
+  `Waiting for model`，达到安全阀时持续显示说明。不提供复制完整
+  Thinking 控件。
+- **验证**：触达文件聚焦单测、三段 typecheck、`lint:budgets` 与
+  `git diff --check` 全绿；按当前门禁未跑全量 Vitest 或 daemon smoke。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3371,6 +3385,16 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-14 长 Thinking 假死修复发版 v0.7.10**：版本号 `0.7.9
+  → 0.7.10`，内容 = 台账 §45（200ms / 16KB Host 批处理、512K
+  显式紧急安全阀、折叠不挂载、展开逐帧分块、`Receiving` /
+  `Waiting for model` 状态）。触达 7 个测试文件 436 例、typecheck
+  三段、`lint:budgets` 与 `git diff --check` 全绿；build + VSIX
+  11 条目验证全绿，产物 1,678,987 字节，SHA-256
+  `DCAE50164F747D46CE2011133CA35D456308C626A0460E741509AE892D4B069C`。
+  `cursor --install-extension --force` 安装成功并确认
+  `droidvisx.droidvisx@0.7.10`。未跑全量 Vitest 或 daemon smoke；
+  安装后需 Reload Window。
 - **2026-08-14 凌晨后台答案修复发版 v0.7.9**：版本号 `0.7.8 →
   0.7.9`，内容 = 台账 §44（后台子代理最终父答案自动回灌、单行 Stop
   Host/Webview 双层单飞与终态竞态收敛）。聚焦 56 例、typecheck

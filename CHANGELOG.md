@@ -4,6 +4,25 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.10] - 2026-08-14
+
+### Changed
+
+- **Long Thinking stays responsive and visibly alive** — the Host
+  coalesces token-level reasoning into 200ms, 16KB Bridge chunks and
+  flushes them before tools, answers, completion, Stop, or failure.
+  The live row distinguishes `Receiving` from `Waiting for model`.
+- **Expanded reasoning mounts progressively** — collapsed Thinking
+  retains no text body in the DOM; opening it renders one bounded
+  chunk first and schedules the remainder without blocking the click.
+
+### Fixed
+
+- **The silent 32K Thinking freeze is gone** — normal long reasoning
+  remains available up to an explicit 512K emergency safety limit.
+  Reaching that limit is reported in the row and expanded body instead
+  of silently discarding later content.
+
 ## [0.7.9] - 2026-08-14
 
 ### Fixed

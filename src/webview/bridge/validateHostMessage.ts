@@ -48,6 +48,7 @@ import {
   MAX_MCP_AUTH_MESSAGE_LENGTH,
   MCP_AUTH_PHASES,
   MCP_SERVER_STATUSES,
+  MAX_THINKING_DELTA_LENGTH,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
   MAX_TOOL_DETAIL_LENGTH,
@@ -767,7 +768,7 @@ function parseThinkingDelta(
       'segmentIndex',
     ]) ||
     !hasTurnIdentity(value) ||
-    !isBoundedString(value.delta, MAX_THINKING_TEXT_LENGTH) ||
+    !isBoundedString(value.delta, MAX_THINKING_DELTA_LENGTH) ||
     typeof value.truncated !== 'boolean' ||
     !isSequence(value.segmentIndex)
   ) {

@@ -31,6 +31,7 @@ import {
   usageFixture,
   waitForConnected,
 } from './controllerTestHarness';
+import { MAX_THINKING_DELTA_LENGTH } from '../shared/bridgeMessages';
 
 describe('ChatController', () => {
   it('initializes one runtime on repeated ready messages and keeps sequences monotonic', async () => {
@@ -1172,6 +1173,97 @@ describe('ChatController', () => {
     expect(JSON.stringify(messages)).not.toContain('secret overflow');
   });
 
+  it('coalesces token-level Thinking and flushes before later events', async () => {
+    const runtime = createMockRuntime(async function* () {
+      for (let index = 0; index < 128; index += 1) {
+        yield {
+          type: 'thinking-delta',
+          text: 'x',
+          messageId: 'message-1',
+          blockIndex: 0,
+        };
+      }
+      yield {
+        type: 'tool-start',
+        toolName: 'Read',
+        toolUseId: 'tool-1',
+        action: 'Read workspace files',
+      };
+      yield { type: 'text-delta', text: 'Done' };
+      yield successfulTurn();
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Think');
+
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
+    const thinking = messages.filter(
+      (message) => message.type === 'thinking.delta',
+    );
+    expect(thinking).toHaveLength(1);
+    expect(thinking[0]).toMatchObject({
+      delta: 'x'.repeat(128),
+      truncated: false,
+      segmentIndex: 0,
+    });
+    const thinkingIndex = messages.findIndex(
+      (message) => message.type === 'thinking.delta',
+    );
+    const toolIndex = messages.findIndex(
+      (message) => message.type === 'tool.activity',
+    );
+    const textIndex = messages.findIndex(
+      (message) => message.type === 'assistant.delta',
+    );
+    const completedIndex = messages.findIndex(
+      (message) =>
+        message.type === 'turn.state' && message.status === 'completed',
+    );
+    expect(thinkingIndex).toBeGreaterThanOrEqual(0);
+    expect(toolIndex).toBeGreaterThan(thinkingIndex);
+    expect(textIndex).toBeGreaterThan(toolIndex);
+    expect(completedIndex).toBeGreaterThan(textIndex);
+  });
+
+  it('retains Thinking beyond the former 32K display cutoff', async () => {
+    const longThinking = 'a'.repeat(40_000);
+    const runtime = createMockRuntime(async function* () {
+      yield {
+        type: 'thinking-delta',
+        text: longThinking,
+        messageId: 'message-1',
+        blockIndex: 0,
+      };
+      yield successfulTurn();
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Think');
+
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
+    const thinking = messages.filter(
+      (message) => message.type === 'thinking.delta',
+    );
+    expect(
+      thinking.map((message) => message.delta).join(''),
+    ).toBe(longThinking);
+    expect(
+      thinking.every(
+        (message) =>
+          message.delta.length <= MAX_THINKING_DELTA_LENGTH &&
+          !message.truncated,
+      ),
+    ).toBe(true);
+  });
+
   it('caps thinking output and emits truncation only once', async () => {
     const runtime = createMockRuntime(async function* () {
       yield {
@@ -1200,20 +1292,68 @@ describe('ChatController', () => {
     const thinking = messages.filter(
       (message) => message.type === 'thinking.delta',
     );
-    expect(thinking).toHaveLength(2);
-    expect(thinking[0]).toMatchObject({
-      delta: 'a'.repeat(MAX_THINKING_TEXT_LENGTH),
-      truncated: false,
-      segmentIndex: 0,
-    });
-    // The truncation marker pins to the segment that showed text
-    // instead of opening an empty row for the clipped-away segment.
-    expect(thinking[1]).toMatchObject({
-      delta: '',
-      truncated: true,
-      segmentIndex: 0,
-    });
+    expect(thinking).toHaveLength(
+      Math.ceil(
+        MAX_THINKING_TEXT_LENGTH / MAX_THINKING_DELTA_LENGTH,
+      ),
+    );
+    expect(thinking.map((message) => message.delta).join('')).toBe(
+      'a'.repeat(MAX_THINKING_TEXT_LENGTH),
+    );
+    expect(
+      thinking.every(
+        (message) => message.delta.length <= MAX_THINKING_DELTA_LENGTH,
+      ),
+    ).toBe(true);
+    expect(thinking.filter((message) => message.truncated)).toEqual([
+      expect.objectContaining({
+        truncated: true,
+        segmentIndex: 0,
+      }),
+    ]);
     expect(JSON.stringify(messages)).not.toContain('secret overflow');
+  });
+
+  it('flushes pending Thinking on Stop without a late timer duplicate', async () => {
+    const release = deferred<void>();
+    const runtime = createMockRuntime(async function* () {
+      yield {
+        type: 'thinking-delta',
+        text: 'pending thought',
+        messageId: 'message-1',
+        blockIndex: 0,
+      };
+      await release.promise;
+      yield {
+        ...successfulTurn(),
+        outcome: 'interrupted',
+      };
+    });
+    runtime.interrupt.mockImplementation(async () => release.resolve());
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Think');
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('streaming');
+    });
+    stop(controller, 'session-1', 'turn-1');
+
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('interrupted');
+    });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const thinking = messages.filter(
+      (message) => message.type === 'thinking.delta',
+    );
+    expect(thinking).toEqual([
+      expect.objectContaining({
+        delta: 'pending thought',
+        truncated: false,
+        segmentIndex: 0,
+      }),
+    ]);
   });
 
   it('numbers interleaved thinking segments and completes each in place', async () => {

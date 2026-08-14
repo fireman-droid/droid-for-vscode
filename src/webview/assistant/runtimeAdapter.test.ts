@@ -150,7 +150,16 @@ describe('Droid external-store adapter', () => {
     expect(assistant.role).toBe('assistant');
     expect(assistant.status).toEqual({ type: 'running' });
     expect(assistant.content).toMatchObject([
-      { type: 'reasoning', text: 'Looking' },
+      {
+        type: 'reasoning',
+        text: 'Looking',
+        providerMetadata: {
+          droidvisx: {
+            durationMs: null,
+            truncated: false,
+          },
+        },
+      },
       {
         type: 'tool-call',
         toolCallId: 'tool-use-a',

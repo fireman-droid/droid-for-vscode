@@ -26,6 +26,10 @@ import {
   type WebviewToHostMessage,
 } from '../../shared/bridgeMessages';
 import { App } from './App';
+import {
+  THINKING_RENDER_CHUNK_SIZE,
+  THINKING_WAITING_AFTER_MS,
+} from './thread/transcriptRows';
 
 let persistedState: unknown = { draft: 'Restored draft' };
 const posted: WebviewToHostMessage[] = [];
@@ -702,6 +706,8 @@ describe('assistant-ui App bridge commands', () => {
 
   it('keeps Thinking synchronized and allows setting changes while streaming', async () => {
     const user = userEvent.setup();
+    const completedThinking =
+      'a'.repeat(THINKING_RENDER_CHUNK_SIZE * 4) + 'b';
     render(<App />);
     await waitFor(() =>
       expect(posted).toContainEqual({
@@ -728,10 +734,10 @@ describe('assistant-ui App bridge commands', () => {
       },
       transcript: [
         {
-          id: 'thinking-1',
+          id: 'thinking:turn-1:0',
           kind: 'thinking',
           turnId: 'turn-1',
-          text: 'First thought',
+          text: completedThinking,
           status: 'complete',
           truncated: false,
         },
@@ -742,7 +748,7 @@ describe('assistant-ui App bridge commands', () => {
           text: 'First answer',
         },
         {
-          id: 'thinking-2',
+          id: 'thinking:turn-2:0',
           kind: 'thinking',
           turnId: 'turn-2',
           text: 'Second thought',
@@ -765,15 +771,61 @@ describe('assistant-ui App bridge commands', () => {
     );
     expect(thinkingRows).toHaveLength(2);
     expect(thinkingRows.every((row) => row?.open === false)).toBe(true);
+    expect(document.querySelector('.dvx-thinking-content')).toBeNull();
+    expect(screen.getByText('· Receiving')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: /copy full thinking/i }),
+    ).toBeNull();
 
     // Expansion is per row: toggling one Thinking row must not open the
     // others, which stalled long transcripts when it expanded them all.
-    await user.click(thinkingLabels[0]!.closest('summary')!);
-    await waitFor(() => expect(thinkingRows[0]?.open).toBe(true));
-    expect(thinkingRows[1]?.open).toBe(false);
+    const scheduledFrames: FrameRequestCallback[] = [];
+    const requestFrame = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        scheduledFrames.push(callback);
+        return scheduledFrames.length;
+      });
+    try {
+      await user.click(thinkingLabels[0]!.closest('summary')!);
+      await waitFor(() => expect(thinkingRows[0]?.open).toBe(true));
+      expect(thinkingRows[1]?.open).toBe(false);
+      expect(
+        thinkingRows[0]?.querySelectorAll('.dvx-thinking-chunk'),
+      ).toHaveLength(1);
+
+      act(() => scheduledFrames.shift()?.(performance.now()));
+      const chunks = thinkingRows[0]?.querySelectorAll(
+        '.dvx-thinking-chunk',
+      );
+      expect(chunks).toHaveLength(5);
+      expect(
+        Array.from(chunks ?? [], (chunk) => chunk.textContent).join(''),
+      ).toBe(completedThinking);
+    } finally {
+      requestFrame.mockRestore();
+    }
     await user.click(thinkingLabels[0]!.closest('summary')!);
     await waitFor(() => expect(thinkingRows[0]?.open).toBe(false));
     expect(thinkingRows[1]?.open).toBe(false);
+    expect(thinkingRows[0]?.querySelector('.dvx-thinking-content')).toBeNull();
+
+    host({
+      type: 'thinking.delta',
+      sequence: 1,
+      sessionId: 'session-a',
+      turnId: 'turn-2',
+      delta: '',
+      truncated: true,
+      segmentIndex: 0,
+    });
+    expect(await screen.findByText('· Safety limit reached')).toBeTruthy();
+    await user.click(thinkingLabels[1]!.closest('summary')!);
+    expect(
+      await screen.findByText(
+        'Thinking reached the local safety limit; later reasoning is not retained.',
+      ),
+    ).toBeTruthy();
 
     const sessionControls = screen.getByRole<HTMLButtonElement>('button', {
       name: 'Session controls',
@@ -816,6 +868,57 @@ describe('assistant-ui App bridge commands', () => {
       field: 'modelId',
       value: 'factory/model-next',
     });
+  });
+
+  it('distinguishes incoming Thinking from waiting for the model', async () => {
+    render(<App />);
+    await waitFor(() =>
+      expect(posted).toContainEqual({
+        type: 'webview.ready',
+        protocolVersion: BRIDGE_PROTOCOL_VERSION,
+      }),
+    );
+    vi.useFakeTimers();
+    try {
+      host({
+        ...snapshot(0, { turnId: 'turn-1', status: 'streaming' }),
+        transcript: [
+          {
+            id: 'thinking:turn-1:0',
+            kind: 'thinking',
+            turnId: 'turn-1',
+            text: 'First',
+            status: 'active',
+            truncated: false,
+          },
+        ],
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+      expect(screen.getByText('· Receiving')).toBeTruthy();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(THINKING_WAITING_AFTER_MS);
+      });
+      expect(screen.getByText('· Waiting for model')).toBeTruthy();
+
+      host({
+        type: 'thinking.delta',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-1',
+        delta: ' thought',
+        truncated: false,
+        segmentIndex: 0,
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+      expect(screen.getByText('· Receiving')).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('swaps the composer placeholder while the session is in Spec mode', async () => {

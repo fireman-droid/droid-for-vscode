@@ -1,7 +1,14 @@
 // transcriptRows: moved verbatim from Thread.tsx (structure-only refactor).
 
-import { MessagePartPrimitive } from "@assistant-ui/react";
-import { useContext, useState } from "react";
+import { useAuiState } from "@assistant-ui/react";
+import {
+  useContext,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  startTransition,
+  useState,
+} from "react";
 
 import type { SessionHistoryStatus } from "../../../shared/bridgeMessages";
 import { isPreviewableFilePath } from "../../../shared/validateMessage";
@@ -14,12 +21,9 @@ import {
 import { ActivityChevron } from "./icons";
 import { formatThinkingLabel, readDiagnostic } from "./readers";
 
-export const THINKING_SMOOTH_OPTIONS = {
-  drainMs: 480,
-  maxCharIntervalMs: 12,
-  maxCharsPerFrame: 12,
-  minCommitMs: 48,
-} as const;
+export const THINKING_WAITING_AFTER_MS = 10_000;
+export const THINKING_RENDER_CHUNK_SIZE = 16_384;
+const THINKING_RENDER_CHUNKS_PER_FRAME = 4;
 
 export function ToolFilePath({ path }: { readonly path: string }): React.JSX.Element {
   const openFileDiff = useContext(FileDiffContext);
@@ -65,14 +69,37 @@ export function PreviewChip({ path }: { readonly path: string }): React.JSX.Elem
 export function ThinkingRow({
   statusType,
   durationMs,
+  truncated,
 }: {
   readonly statusType: string | undefined;
   readonly durationMs: number | null;
+  readonly truncated: boolean;
 }): React.JSX.Element {
   // Expansion is per row: a shared toggle used to open every Thinking
   // row in the session at once, which stalled long transcripts for
   // seconds on a single click.
   const [expanded, setExpanded] = useState(false);
+  const textLength = useAuiState((state) =>
+    state.part.type === "reasoning" ? state.part.text.length : 0,
+  );
+  const [waiting, setWaiting] = useState(false);
+  useEffect(() => {
+    if (statusType !== "running" || truncated) {
+      setWaiting(false);
+      return undefined;
+    }
+    setWaiting(false);
+    const timer = setTimeout(
+      () => setWaiting(true),
+      THINKING_WAITING_AFTER_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [statusType, textLength, truncated]);
+  const liveState = truncated
+    ? "Safety limit reached"
+    : waiting
+      ? "Waiting for model"
+      : "Receiving";
   return (
     <details
       className="dvx-activity-row dvx-thinking-row"
@@ -82,19 +109,125 @@ export function ThinkingRow({
       <summary>
         <span className="dvx-activity-indicator" />
         {statusType === "running" ? (
-          <span className="dvx-shimmer-text">Thinking</span>
+          <>
+            <span className="dvx-shimmer-text">Thinking</span>
+            <span className="dvx-thinking-live-state">· {liveState}</span>
+          </>
         ) : (
-          formatThinkingLabel(statusType, durationMs)
+          <>
+            {formatThinkingLabel(statusType, durationMs)}
+            {truncated ? (
+              <span className="dvx-thinking-live-state">
+                · Safety limit reached
+              </span>
+            ) : null}
+          </>
         )}
         <ActivityChevron />
       </summary>
-      <MessagePartPrimitive.Text
-        className="dvx-thinking-content"
-        component="pre"
-        smooth={THINKING_SMOOTH_OPTIONS}
-      />
+      {expanded ? <ThinkingContent truncated={truncated} /> : null}
     </details>
   );
+}
+
+function ThinkingContent({
+  truncated,
+}: {
+  readonly truncated: boolean;
+}): React.JSX.Element {
+  const text = useAuiState((state) =>
+    state.part.type === "reasoning" ? state.part.text : "",
+  );
+  const visibleText = useProgressiveThinkingText(text);
+  const chunks = useMemo(
+    () => splitThinkingText(visibleText),
+    [visibleText],
+  );
+  return (
+    <div className="dvx-thinking-body">
+      <pre className="dvx-thinking-content">
+        {chunks.map((chunk, index) => (
+          <span className="dvx-thinking-chunk" key={index}>
+            {chunk}
+          </span>
+        ))}
+      </pre>
+      {truncated ? (
+        <p className="dvx-thinking-limit-note" role="note">
+          Thinking reached the local safety limit; later reasoning is not
+          retained.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function useProgressiveThinkingText(text: string): string {
+  const deferredText = useDeferredValue(text);
+  const targetLength = deferredText.length;
+  const [visibleLength, setVisibleLength] = useState(() =>
+    Math.min(targetLength, THINKING_RENDER_CHUNK_SIZE),
+  );
+  useEffect(() => {
+    setVisibleLength((current) => Math.min(current, targetLength));
+  }, [targetLength]);
+  useEffect(() => {
+    if (visibleLength >= targetLength) {
+      return undefined;
+    }
+    const frame = requestAnimationFrame(() => {
+      startTransition(() => {
+        setVisibleLength((current) =>
+          Math.min(
+            targetLength,
+            current +
+              THINKING_RENDER_CHUNK_SIZE *
+                THINKING_RENDER_CHUNKS_PER_FRAME,
+          ),
+        );
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [targetLength, visibleLength]);
+  let safeLength = Math.min(visibleLength, targetLength);
+  if (
+    safeLength > 0 &&
+    safeLength < targetLength &&
+    isHighSurrogate(deferredText.charCodeAt(safeLength - 1))
+  ) {
+    safeLength -= 1;
+  }
+  return deferredText.slice(0, safeLength);
+}
+
+export function splitThinkingText(text: string): readonly string[] {
+  if (text.length === 0) {
+    return [""];
+  }
+  const chunks: string[] = [];
+  for (let offset = 0; offset < text.length; ) {
+    let end = Math.min(
+      offset + THINKING_RENDER_CHUNK_SIZE,
+      text.length,
+    );
+    if (end < text.length) {
+      const newline = text.lastIndexOf("\n", end - 1);
+      const space = text.lastIndexOf(" ", end - 1);
+      const naturalBreak = Math.max(newline, space);
+      if (naturalBreak > offset + THINKING_RENDER_CHUNK_SIZE / 2) {
+        end = naturalBreak + 1;
+      } else if (isHighSurrogate(text.charCodeAt(end - 1))) {
+        end -= 1;
+      }
+    }
+    chunks.push(text.slice(offset, end));
+    offset = end;
+  }
+  return chunks;
+}
+
+function isHighSurrogate(value: number): boolean {
+  return value >= 0xd800 && value <= 0xdbff;
 }
 
 export interface ChangedFileEntry {
