@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.19 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.20 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -3111,6 +3111,34 @@ UI 描述见 §22 重做记录。
   三路审查后补充隐藏视图与显式主题的冗余推送门。按门禁未跑全量
   Vitest、浏览器 smoke 或 daemon smoke。
 
+### 55. Provider 订阅分组与模型目录导入（2026-08-15，v0.7.20）
+
+- **订阅分组 UI**：Custom Models 由平铺行改为
+  `provider + API base URL + masked key + shared params` 分组；每组显示
+  site/key 状态与模型行，可从组内继续 Add models。无法识别 key mask
+  的条目保持独立，未知 provider 禁止有损编辑；原手动单模型表单保留。
+- **Fetch → 选择 → 导入**：Provider 表单复用 quiet MCP 输入族；
+  OpenAI/Anthropic 预填官方 base URL，OpenAI-compatible 自填。目录可
+  搜索、Select visible、最多选 32 项；已识别同组模型显示 Added。key
+  仅存组件本地，关闭或切换 Session 即卸载清空。
+- **Bridge v17**：新增 W→H `customModels.discover/import` 与 H→W
+  `customModels.discovery`；双向 exact-keys、数量/字符串/URL 上限与
+  hostile shape 测试闭合。Webview 无网络能力，discovery state 不进
+  snapshot。
+- **Host-only discovery**：`modelDiscovery.ts` 使用 10s timeout、
+  1 MiB 解压后 body cap、`redirect: error`、OpenAI Bearer /
+  Anthropic `x-api-key`；拒绝 URL credentials/query/hash、HTTP 错误、
+  malformed/oversized catalog，并只投影 model/displayName。响应反射
+  key 时 fail closed，日志只记固定 failure class。
+- **批量写与竞态**：daemon upsert 保持顺序写；同组已有 ID 跳过，
+  `success:false` 不误报完成，部分失败保留已成功 masked rows。Session/
+  Workspace 切换会 Abort 旧 discovery，旧回调不能清掉新操作互斥位。
+- **验证**：聚焦 8 个测试文件 **763 例**、三段 typecheck、
+  `lint:budgets` 与 `git diff --check` 全绿；simplify 三路审查后修复
+  daemon false-success、未知 provider 有损编辑、无 mask key 误分组、
+  双 refresh、陈旧 discovery 阻塞及 selection no-op。按门禁未跑全量
+  Vitest、浏览器 smoke 或 daemon smoke。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3544,6 +3572,17 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-15 Provider 订阅分组发版 v0.7.20**：版本号
+  `0.7.19 → 0.7.20`，内容 = 台账 §55（Bridge v17、Host-only bounded
+  model discovery、订阅/site/key/shared params 分组、搜索选择与顺序批量
+  import、手动 fallback、凭据与陈旧请求隔离）。聚焦 8 个测试文件 /
+  763 例、typecheck 三段、`lint:budgets` 与 `git diff --check` 全绿；
+  simplify 三路审查问题均已修复。build + VSIX 11 条目验证全绿，产物
+  1,689,883 字节，SHA-256
+  `8CAA6B8C590EB36D8C4B74158FB03F3AC80F3B5712FCEBAB492A34698EEB70BA`。
+  `cursor --install-extension --force` 安装成功并确认
+  `droidvisx.droidvisx@0.7.20`。按门禁未跑全量 Vitest、浏览器 smoke
+  或 daemon smoke；安装后需 Reload Window。
 - **2026-08-15 Auto 主题与紧凑行发版 v0.7.19**：版本号
   `0.7.18 → 0.7.19`，内容 = 台账 §54（Host 权威 Auto 主题、
   `+` 面板固定搜索入口、长 Tool 活动单行省略）。触及测试 5 个文件 /

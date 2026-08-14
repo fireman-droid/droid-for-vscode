@@ -111,7 +111,7 @@ import type {
 } from './gitCommitFlow';
 // Type-only on purpose: the runtime dependency points the other way
 // (customModelsProtocol imports shared model bounds from here).
-import type { CustomModelDeleteMessage, CustomModelSaveMessage, CustomModelsRefreshMessage, CustomModelsStateMessage } from './customModelsProtocol';
+import type { CustomModelsHostMessage, CustomModelsWebviewMessage } from './customModelsProtocol';
 import type { ChangesUpdateMessage } from './changesProtocol';
 
 // Version 3: git commit flow messages (git.requestStatus/git.commit
@@ -128,8 +128,8 @@ import type { ChangesUpdateMessage } from './changesProtocol';
 // Version 10: live changes ledger — `turn.changes` is replaced by
 // the streaming `changes.update` (H→W; changesProtocol.ts).
 // Version 11: subagent panel — openTranscript/stop/panel W→H,
-// transcript/activity H→W; v12 files; v13 btw; v14 prepare; v15 targets; v16 theme.
-export const BRIDGE_PROTOCOL_VERSION = 16 as const;
+// transcript/activity H→W; v12–v16; v17 custom-model discovery/import.
+export const BRIDGE_PROTOCOL_VERSION = 17 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_DELTA_LENGTH = 16_384;
@@ -1073,9 +1073,7 @@ export type WebviewToHostMessage =
   | RewindInfoRequestMessage
   | SessionSettingUpdateMessage
   | UiThemeSetMessage
-  | CustomModelsRefreshMessage
-  | CustomModelSaveMessage
-  | CustomModelDeleteMessage
+  | CustomModelsWebviewMessage
   | BtwPrepareMessage | BtwAskMessage
   | BtwDismissMessage | BtwStopMessage
   | SubagentOpenTranscriptMessage | SubagentStopMessage | SubagentPanelMessage
@@ -2197,5 +2195,5 @@ export type HostToWebviewMessage =
   | SessionBtwMessage
   | QueueStateMessage
   | UiThemeMessage
-  | CustomModelsStateMessage
+  | CustomModelsHostMessage
   | SubagentTranscriptMessage | SubagentActivityMessage;

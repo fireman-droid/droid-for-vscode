@@ -63,6 +63,7 @@ import {
   type WorktreeSessionsFeature,
 } from './worktreeSessions';
 import { createTerminalMirror } from './terminalMirror';
+import { createHttpCustomModelDiscovery } from './chat/modelDiscovery';
 
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
@@ -500,6 +501,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // structurally (byok-add-model-design.md §2.3, probed 2026-08-13).
   controller.daemonCustomModels = async () =>
     (await daemonSidecar.droid()).customModels;
+  controller.modelDiscovery = createHttpCustomModelDiscovery();
   // Per-row subagent control (待办 B): live activity sampling and the
   // probed single-stop sequence ride the shared daemon connection;
   // in process mode the provider yields null and the UI renders no

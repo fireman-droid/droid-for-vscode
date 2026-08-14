@@ -739,6 +739,11 @@ export function bindWorktreeSessionMetadata(
 }
 
 export function resetSessionMetadata(ctl: ChatControllerInternals): void {
+    if (ctl.customModelsDiscoveryAbort !== null) {
+      ctl.customModelsDiscoveryAbort.abort();
+      ctl.customModelsDiscoveryAbort = null;
+      ctl.customModelsOp = false;
+    }
     ctl.contextGeneration += 1;
     ctl.specHandoff = null;
     ctl.settingsUpdate = null;

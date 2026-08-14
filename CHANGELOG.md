@@ -4,6 +4,25 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.20] - 2026-08-15
+
+### Added
+
+- **Custom models can be added by provider group** — enter one API
+  site and key, fetch the bounded provider catalog, search and select
+  up to 32 models, then import them with shared token and image
+  settings. Manual single-model entry remains available.
+
+### Changed
+
+- **Configured models are organized by subscription** — rows with the
+  same provider, API site, masked key, and shared parameters now live
+  in one refined group with an in-place “Add models” action.
+- **Provider discovery stays Host-only** — Bridge v17 carries exact,
+  bounded discovery/import messages; redirects, oversized responses,
+  malformed catalogs, reflected credentials, and stale requests fail
+  closed without returning or logging plaintext keys.
+
 ## [0.7.19] - 2026-08-15
 
 ### Fixed

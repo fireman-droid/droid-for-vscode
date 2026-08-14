@@ -98,7 +98,7 @@ import {
   type WorkspaceSearchFilesMessage,
 } from './bridgeMessages';
 import { parseBtwAskMessage, parseBtwDismissMessage, parseBtwPrepareMessage, parseBtwStopMessage } from './btwProtocol';
-import { parseCustomModelDeleteMessage, parseCustomModelSaveMessage, parseCustomModelsRefreshMessage } from './customModelsProtocol';
+import { parseCustomModelsWebviewMessage } from './customModelsProtocol';
 import { parseSubagentWebviewMessage } from './subagentProtocol';
 import {
   parseQueueAddMessage,
@@ -206,12 +206,10 @@ export function parseWebviewMessage(
         return parseMcpServerRemove(value);
       case 'mcp.server.authenticate':
         return parseMcpServerAuthenticate(value);
-      case 'customModels.refresh':
-        return parseCustomModelsRefreshMessage(value) ?? undefined;
-      case 'customModels.save':
-        return parseCustomModelSaveMessage(value) ?? undefined;
+      case 'customModels.refresh': case 'customModels.save':
       case 'customModels.delete':
-        return parseCustomModelDeleteMessage(value) ?? undefined;
+      case 'customModels.discover': case 'customModels.import':
+        return parseCustomModelsWebviewMessage(value) ?? undefined;
       case 'attachment.pick':
         return parseAttachmentPick(value);
       case 'attachment.addEditor':

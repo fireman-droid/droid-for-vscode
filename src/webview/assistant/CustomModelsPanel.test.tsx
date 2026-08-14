@@ -49,10 +49,14 @@ function flowValue(
   overrides: Partial<CustomModelsFlowValue> = {},
 ): CustomModelsFlowValue {
   return {
+    sessionId: 'session-1',
     customModels: { status: 'ready', items: [LUNA, QWEN] },
+    discovery: { status: 'idle' },
     onRefresh: vi.fn(),
     onSave: vi.fn(),
     onDelete: vi.fn(),
+    onDiscover: vi.fn(),
+    onImport: vi.fn(),
     ...overrides,
   };
 }
@@ -75,8 +79,16 @@ function stateMessage(
   return { type: 'customModels.state', sequence, sessionId, customModels };
 }
 
+function discoveryMessage(
+  sessionId: string,
+  discovery: unknown,
+  sequence = 1,
+): unknown {
+  return { type: 'customModels.discovery', sequence, sessionId, discovery };
+}
+
 describe('useCustomModelsFlow', () => {
-  it('posts refresh/save/delete stamped with the session id', () => {
+  it('posts list and provider commands stamped with the session id', () => {
     const postMessage = vi.fn();
     const { result } = renderHook(() =>
       useCustomModelsFlow({ postMessage }, 'session-1'),
@@ -90,6 +102,19 @@ describe('useCustomModelsFlow', () => {
       noImageSupport: false,
     });
     result.current.onDelete(1, 'qwen3:4b');
+    result.current.onDiscover({
+      provider: 'openai',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'fetch-key-for-test',
+    });
+    result.current.onImport({
+      provider: 'openai',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'fetch-key-for-test',
+      models: [{ model: 'model-a', displayName: 'Model A' }],
+      maxOutputTokens: 8192,
+      noImageSupport: false,
+    });
     expect(postMessage.mock.calls.map(([m]) => m)).toEqual([
       { type: 'customModels.refresh', sessionId: 'session-1' },
       {
@@ -107,6 +132,23 @@ describe('useCustomModelsFlow', () => {
         rawIndex: 1,
         expectedModel: 'qwen3:4b',
       },
+      {
+        type: 'customModels.discover',
+        sessionId: 'session-1',
+        provider: 'openai',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'fetch-key-for-test',
+      },
+      {
+        type: 'customModels.import',
+        sessionId: 'session-1',
+        provider: 'openai',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'fetch-key-for-test',
+        models: [{ model: 'model-a', displayName: 'Model A' }],
+        maxOutputTokens: 8192,
+        noImageSupport: false,
+      },
     ]);
   });
 
@@ -116,7 +158,52 @@ describe('useCustomModelsFlow', () => {
       useCustomModelsFlow({ postMessage }, null),
     );
     result.current.onRefresh();
+    result.current.onDiscover({
+      provider: 'openai',
+      baseUrl: 'https://api.example.com/v1',
+    });
     expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it('accepts only exact current-session discovery pushes', async () => {
+    const { result } = renderHook(() =>
+      useCustomModelsFlow({ postMessage: vi.fn() }, 'session-1'),
+    );
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: discoveryMessage('session-other', {
+            status: 'ready',
+            items: [{ model: 'other' }],
+          }),
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: discoveryMessage('session-1', {
+            status: 'ready',
+            items: [{ model: 'model-a', apiKey: 'hostile' }],
+          }),
+        }),
+      );
+    });
+    expect(result.current.discovery).toEqual({ status: 'idle' });
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: discoveryMessage('session-1', {
+            status: 'ready',
+            items: [{ model: 'model-a', displayName: 'Model A' }],
+          }),
+        }),
+      );
+    });
+    await waitFor(() => {
+      expect(result.current.discovery).toEqual({
+        status: 'ready',
+        items: [{ model: 'model-a', displayName: 'Model A' }],
+      });
+    });
   });
 
   it('applies validated pushes for the current session only', async () => {
@@ -200,7 +287,7 @@ describe('useCustomModelsFlow', () => {
 });
 
 describe('AddModelEntry', () => {
-  it('re-reads the list and opens the panel', async () => {
+  it('opens the panel and lets its mount own the refresh', async () => {
     const value = flowValue();
     const onOpen = vi.fn();
     render(
@@ -211,7 +298,7 @@ describe('AddModelEntry', () => {
     await userEvent.click(
       screen.getByRole('button', { name: /add model/i }),
     );
-    expect(value.onRefresh).toHaveBeenCalledTimes(1);
+    expect(value.onRefresh).not.toHaveBeenCalled();
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 });
@@ -224,9 +311,9 @@ describe('CustomModelsPanel list', () => {
     expect(screen.getByText('no key')).toBeTruthy();
     expect(screen.getByText('Bedrock')).toBeTruthy();
     expect(screen.getByText('Invalid')).toBeTruthy();
-    expect(
-      screen.getByText(/qwen3:4b · generic-chat-completion-api/),
-    ).toBeTruthy();
+    expect(screen.getByText('OpenAI')).toBeTruthy();
+    expect(screen.getByText('OpenAI-compatible')).toBeTruthy();
+    expect(screen.getByText('http://localhost:11434/v1')).toBeTruthy();
   });
 
   it('re-pulls when the state is idle (session-switch recovery)', () => {
@@ -250,9 +337,33 @@ describe('CustomModelsPanel list', () => {
       screen.getByText(/need the local droid daemon/),
     ).toBeTruthy();
     expect(
-      (screen.getByRole('button', { name: 'Add' }) as HTMLButtonElement)
+      (screen.getByRole('button', {
+        name: 'Add provider',
+      }) as HTMLButtonElement)
         .disabled,
     ).toBe(true);
+  });
+
+  it('keeps unsupported providers visible but prevents lossy edits', () => {
+    renderPanel(
+      flowValue({
+        customModels: {
+          status: 'ready',
+          items: [
+            {
+              ...LUNA,
+              provider: 'bedrock-converse',
+              hasBedrockConfig: true,
+            },
+          ],
+        },
+      }),
+    );
+    const edit = screen.getByRole('button', {
+      name: 'Edit',
+    }) as HTMLButtonElement;
+    expect(edit.disabled).toBe(true);
+    expect(edit.title).toContain('settings.json');
   });
 
   it('deletes only after the inline confirm and warns about id drift', async () => {
@@ -275,7 +386,12 @@ describe('CustomModelsPanel form', () => {
   it('gates Save until required fields are valid, then saves a create', async () => {
     const value = flowValue();
     renderPanel(value);
-    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Add provider' }),
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Add one manually' }),
+    );
     const save = screen.getByRole('button', {
       name: 'Add model',
     }) as HTMLButtonElement;
@@ -298,7 +414,7 @@ describe('CustomModelsPanel form', () => {
       'http://localhost:11434/v1',
     );
     await userEvent.click(
-      screen.getByRole('radio', { name: 'Generic' }),
+      screen.getByRole('radio', { name: 'OpenAI-compatible' }),
     );
     await userEvent.type(screen.getByLabelText('API key'), 'sk-test-1');
     expect(save.disabled).toBe(false);
@@ -359,7 +475,12 @@ describe('CustomModelsPanel form', () => {
   it('rejects a non-numeric token limit with the one hint', async () => {
     const value = flowValue();
     renderPanel(value);
-    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Add provider' }),
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Add one manually' }),
+    );
     await userEvent.type(
       screen.getByLabelText('Model ID *'),
       'qwen3:4b',
@@ -382,5 +503,125 @@ describe('CustomModelsPanel form', () => {
     expect(
       screen.getByText(/positive whole number/),
     ).toBeTruthy();
+  });
+});
+
+describe('CustomModelsPanel provider groups', () => {
+  it('drops a typed key when the active session changes', async () => {
+    const first = flowValue();
+    const view = render(
+      <CustomModelsContext.Provider value={first}>
+        <CustomModelsPanel id="cm" onBack={vi.fn()} />
+      </CustomModelsContext.Provider>,
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Add provider' }),
+    );
+    await userEvent.type(
+      screen.getByLabelText('API key'),
+      'session-one-key',
+    );
+    view.rerender(
+      <CustomModelsContext.Provider
+        value={flowValue({ sessionId: 'session-2' })}
+      >
+        <CustomModelsPanel id="cm" onBack={vi.fn()} />
+      </CustomModelsContext.Provider>,
+    );
+    expect(screen.getByLabelText('API key')).toHaveProperty('value', '');
+  });
+
+  it('prefills an existing group but requires the masked key again', async () => {
+    renderPanel(
+      flowValue({
+        discovery: {
+          status: 'ready',
+          items: [{ model: 'gpt-5.6-luna', displayName: 'GPT-5.6 Luna' }],
+        },
+      }),
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Add models to OpenAI' }),
+    );
+    expect(
+      (screen.getByLabelText('API base URL *') as HTMLInputElement).value,
+    ).toBe('http://38.47.121.18:8080');
+    expect(
+      (screen.getByLabelText('API key') as HTMLInputElement).placeholder,
+    ).toContain('••••c752');
+    expect(screen.getByLabelText('API key')).toHaveProperty('value', '');
+    await userEvent.type(screen.getByLabelText('API key'), 'same-key-c752');
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Fetch models' }),
+    );
+    expect(
+      screen.getByRole('checkbox', { name: /GPT-5.6 Luna/ }),
+    ).toHaveProperty('disabled', true);
+  });
+
+  it('fetches, selects, and imports models with shared settings', async () => {
+    const value = flowValue({
+      discovery: {
+        status: 'ready',
+        items: [
+          { model: 'gpt-5.6-luna', displayName: 'GPT-5.6 Luna' },
+          { model: 'model-new', displayName: 'Model New' },
+        ],
+      },
+    });
+    renderPanel(value);
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Add provider' }),
+    );
+    await userEvent.type(
+      screen.getByLabelText('API key'),
+      'provider-key-for-test',
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Fetch models' }),
+    );
+    expect(value.onDiscover).toHaveBeenCalledWith({
+      provider: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'provider-key-for-test',
+    });
+    const configured = screen.getByRole('checkbox', {
+      name: /GPT-5.6 Luna/,
+    }) as HTMLInputElement;
+    expect(configured.disabled).toBe(false);
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: /Model New/ }),
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Add 1 selected' }),
+    );
+    expect(value.onImport).toHaveBeenCalledWith({
+      provider: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'provider-key-for-test',
+      models: [{ model: 'model-new', displayName: 'Model New' }],
+      maxOutputTokens: null,
+      noImageSupport: false,
+    });
+  });
+
+  it('shows fixed Host discovery errors without exposing a response', async () => {
+    renderPanel(
+      flowValue({
+        discovery: {
+          status: 'error',
+          message: 'No model catalog was found at this base URL.',
+        },
+      }),
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Add provider' }),
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Fetch models' }),
+    );
+    expect(
+      screen.getByRole('alert').textContent,
+    ).toContain('No model catalog was found');
   });
 });

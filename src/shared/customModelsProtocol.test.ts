@@ -2,11 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import {
   IDLE_CUSTOM_MODELS_STATE,
+  MAX_CUSTOM_MODEL_IMPORT_ITEMS,
   MAX_CUSTOM_MODEL_KEY_LENGTH,
   MAX_CUSTOM_MODEL_URL_LENGTH,
   mergeCustomModelsState,
+  parseCustomModelDiscoveryState,
   parseCustomModelDeleteMessage,
   parseCustomModelSaveMessage,
+  parseCustomModelsDiscoverMessage,
+  parseCustomModelsDiscoveryStateMessage,
+  parseCustomModelsImportMessage,
   parseCustomModelsRefreshMessage,
   parseCustomModelsState,
   parseCustomModelsStateMessage,
@@ -182,6 +187,105 @@ describe('parseCustomModelSaveMessage', () => {
     expect(parseCustomModelSaveMessage(withoutUrl)).toBeNull();
     expect(
       parseCustomModelSaveMessage({ ...validSave, id: 'custom:X-0' }),
+    ).toBeNull();
+  });
+});
+
+describe('custom model discovery messages', () => {
+  const discover = {
+    type: 'customModels.discover',
+    sessionId: 's',
+    provider: 'openai',
+    baseUrl: 'https://api.example.com/v1',
+    apiKey: 'test-key',
+  } as const;
+  const imported = {
+    type: 'customModels.import',
+    sessionId: 's',
+    provider: 'openai',
+    baseUrl: 'https://api.example.com/v1',
+    apiKey: 'test-key',
+    models: [{ model: 'model-a', displayName: 'Model A' }],
+    maxOutputTokens: 8192,
+    noImageSupport: false,
+  } as const;
+
+  it('accepts exact discover and batch-import requests', () => {
+    expect(parseCustomModelsDiscoverMessage(discover)).toEqual(discover);
+    expect(parseCustomModelsImportMessage(imported)).toEqual(imported);
+  });
+
+  it('rejects unsafe discovery credentials and endpoints', () => {
+    const credentialedUrl = new URL('https://api.example.invalid/v1');
+    credentialedUrl.username = 'placeholder';
+    expect(
+      parseCustomModelsDiscoverMessage({
+        ...discover,
+        baseUrl: 'file:///models',
+      }),
+    ).toBeNull();
+    expect(
+      parseCustomModelsDiscoverMessage({
+        ...discover,
+        baseUrl: credentialedUrl.toString(),
+      }),
+    ).toBeNull();
+    expect(
+      parseCustomModelsDiscoverMessage({ ...discover, apiKey: 'a\u0000b' }),
+    ).toBeNull();
+    expect(
+      parseCustomModelsDiscoverMessage({
+        ...discover,
+        baseUrl: 'https://api.example.com/v1?page=1',
+      }),
+    ).toBeNull();
+    expect(
+      parseCustomModelsDiscoverMessage({ ...discover, extra: true }),
+    ).toBeNull();
+  });
+
+  it('requires a bounded unique import selection', () => {
+    expect(
+      parseCustomModelsImportMessage({ ...imported, models: [] }),
+    ).toBeNull();
+    expect(
+      parseCustomModelsImportMessage({
+        ...imported,
+        models: [{ model: 'same' }, { model: 'same' }],
+      }),
+    ).toBeNull();
+    expect(
+      parseCustomModelsImportMessage({
+        ...imported,
+        models: Array.from(
+          { length: MAX_CUSTOM_MODEL_IMPORT_ITEMS + 1 },
+          (_, index) => ({ model: `model-${index}` }),
+        ),
+      }),
+    ).toBeNull();
+  });
+
+  it('validates bounded discovery states and their host envelope', () => {
+    const discovery = {
+      status: 'ready',
+      items: [{ model: 'model-a', displayName: 'Model A' }],
+    } as const;
+    expect(parseCustomModelDiscoveryState(discovery)).toEqual(discovery);
+    const message = {
+      type: 'customModels.discovery',
+      sequence: 2,
+      sessionId: 's',
+      discovery,
+    } as const;
+    expect(parseCustomModelsDiscoveryStateMessage(message)).toEqual(message);
+    expect(
+      parseCustomModelDiscoveryState({
+        status: 'ready',
+        items: [{ model: 'model-a', owned_by: 'provider' }],
+      }),
+    ).toBeNull();
+    expect(
+      parseCustomModelsDiscoveryStateMessage({ ...message, apiKey: 'leak' }),
     ).toBeNull();
   });
 });

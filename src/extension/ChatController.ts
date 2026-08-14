@@ -100,7 +100,7 @@ import {
 import { applySubagentSettlement, collectRunningSubagentRows, collectToolFilePaths, collectTranscriptSubagentRows, createTurnActivityState, hasSubagentRows, projectAssistantDelta, projectSubagentStarted, projectThinkingComplete, projectThinkingDelta, projectToolEvent, reconcileSubagentSummaries, settleZombieSubagents, thinkingSegmentKey, type PendingSubagentRow, type TurnActivityState } from './turnActivityState';
 import { handleQueueAdd, handleQueueUpdate, handleQueueRemove, handleQueueResume, handleQueuePromote, handleQueueClear, settleQueueAfterTurn, projectQueueState, discardQueuedPrompts } from './chat/queue';
 import { handleMcpRefresh, pushMcp, handleMcpServerToggle, handleMcpServerAdd, handleMcpServerRemove, handleMcpServerAuthenticate } from './chat/mcp';
-import { dispatchCustomModels, type CustomModelsGateway } from './chat/customModels';
+import { dispatchCustomModels, type CustomModelsGateway } from './chat/customModels'; import type { CustomModelDiscoveryGateway } from './chat/modelDiscovery';
 import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRefresh, pushSkills, handleSkillToggle, handlePluginsRefresh, handleCommandsRefresh, recordRecentCommand, emitModelCatalog, projectModelCatalog, MODEL_CATALOG_FAILED_MESSAGE } from './chat/capabilityPanels';
 import { handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddImage, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, stageCapturedSelectionOutcome, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
 import { handleSettingUpdate, emitSettings, refreshSettingsAfterRuntimeEvent, projectConfirmedSettings, SETTINGS_READ_FAILED_MESSAGE } from './chat/settings';
@@ -365,8 +365,8 @@ export class ChatController {
     null;
   mcpAuthServerName: string | null = null;
   mcpAuthTimer: ReturnType<typeof setTimeout> | null = null;
-  daemonCustomModels?: () => Promise<CustomModelsGateway>;
-  customModelsOp = false;
+  daemonCustomModels?: () => Promise<CustomModelsGateway>; modelDiscovery?: CustomModelDiscoveryGateway;
+  customModelsDiscoveryAbort: AbortController | null = null; customModelsOp = false;
   /**
    * Post-turn ledger reconcile for background delegations that
    * outlived their turn ("zombie" rows). Probed 2026-08-12: no
@@ -704,9 +704,9 @@ export class ChatController {
       case 'mcp.server.authenticate':
         handleMcpServerAuthenticate(this, message.sessionId, message.name);
         return;
-      case 'customModels.refresh':
-      case 'customModels.save':
-      case 'customModels.delete':
+      case 'customModels.refresh': case 'customModels.save': case 'customModels.delete':
+      case 'customModels.discover':
+      case 'customModels.import':
         dispatchCustomModels(this, message);
         return;
       case 'attachment.pick':
@@ -896,8 +896,8 @@ export class ChatController {
     this.runtimeGeneration += 1;
     this.turnGeneration += 1;
     this.contextGeneration += 1;
-    this.settingsUpdate = null;
-    this.listeners.clear();
+    this.customModelsDiscoveryAbort?.abort(); this.customModelsDiscoveryAbort = null;
+    this.settingsUpdate = null; this.listeners.clear();
     // Detaches a running daemon-side turn instead of interrupting it
     // (Reload survival); see closeAllRuntimesForDispose.
     this.disposal = closeAllRuntimesForDispose(this);

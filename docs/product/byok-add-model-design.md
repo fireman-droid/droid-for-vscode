@@ -1,6 +1,8 @@
 # BYOK 自定义模型配置（Add model）设计
 
-> 状态：**已实现**（2026-08-13，Bridge v9 + Host daemon RPC + Webview 面板；
+> 状态：**已实现并扩展**（2026-08-15，Bridge v17 + Host-only Provider
+> Discovery + daemon RPC + Webview 订阅分组面板；基础单模型管理最初于
+> 2026-08-13 以 Bridge v9 落地；
 > 探针 `artifacts/probe-custom-models-daemon.mjs`、E2E
 > `artifacts/probe-custom-models-e2e.mjs`、视觉冒烟
 > `artifacts/smoke-custom-models.mjs`）。
@@ -261,8 +263,9 @@ export interface CustomModelListItem {
   delete 用 result 里的 models 直接广播新 state。互斥沿用
   `refreshInProgress` 风格的局部 in-flight 标志，一次一个操作。
 - **凭据路径**（红线核心）：
-  1. `apiKey` 明文生命周期 = `customModels.save` 消息体 → upsert
-     params，一次转手，Host 不留副本、不进任何 state/快照/转录。
+  1. `apiKey` 明文只存在于请求级 `customModels.save/discover/import`
+     消息体，并直接交给 daemon upsert 或 Host provider fetch；Host
+     不留副本，不进任何 state/快照/转录。
   2. 日志：save/delete 事件只记
      `{ model, provider, hasApiKey: boolean }` 摘要，**不记消息原文**。
      现状核实：入站消息只有校验被拒时才整条进日志
@@ -272,8 +275,8 @@ export interface CustomModelListItem {
      模式也覆盖，`LocalDiagnostics.ts` L448–461），双保险成立。
   3. daemon RPC 失败的原始 error 不外泄（沿用 daemonConnection.ts
      "Deliberately drop the original error" 惯例），投影为固定文案。
-- 保存成功后不自动重载会话（用户可能正在对话），只广播 state +
-  提示；"Refresh session" 动作复用现有 `session.refresh` 消息路径。
+- 保存、删除或导入成功后，Host 仅在当前会话空闲且无待处理交互/
+  队列时原位重载目录；忙碌会话不打断，下一次会话重载再读取。
 
 ### 5.3 Webview（`src/webview/assistant/`）
 
@@ -319,8 +322,9 @@ export interface CustomModelListItem {
    `host.snapshot` / 转录消息不含 key 与掩码。
 6. daemon 不可用时（登出/断网停 daemon）面板显示 unavailable 文案，
    无崩溃、无直写文件行为。
-7. 门禁：`pnpm run typecheck`、`pnpm run test`（含 Bridge 双向敌对
-   输入测试）、`pnpm run build` 全绿。
+7. 门禁：三段 `tsc --noEmit`、`lint:budgets`、实际触及文件的聚焦
+   单元测试与 `pnpm run build` 全绿；按当前交付纪律不额外跑全量
+   Vitest 或浏览器 smoke。
 
 ## 8. 切片与排期建议
 
@@ -331,3 +335,56 @@ export interface CustomModelListItem {
 - 排期建议：**发版后 backlog 前列**——用户价值高（目前只能手改
   JSON）、Runtime 零改动、daemon sidecar 基建现成；不阻塞 V1 主线
   （HANDOVER 第 3 节 #4–#8）。最终排期位置待用户拍板。
+
+## 9. 订阅/Provider 分组扩展（2026-08-15，Bridge v17）
+
+### 9.1 用户流程
+
+- 已配置行按 `provider + baseUrl + apiKeyMask + maxOutputTokens +
+  noImageSupport` 分组；无法识别 mask 的 keyed 行保持独立，不能误判为
+  同一订阅。非三种基础 BYOK provider 的行只读展示，避免编辑时偷偷
+  改写成 OpenAI。
+- “Add provider” 创建一组请求级配置：Provider、API base URL、API
+  key、共享 token/image 参数。OpenAI 与 Anthropic 预填官方 `/v1`
+  base URL；OpenAI-compatible 由用户填写。
+- “Fetch models” 后可搜索目录、选择最多 32 项并批量导入；同一已识别
+  分组里已存在的 model 会显示 Added 并跳过。旧的单模型表单保留为
+  “Add one manually” fallback，供不支持标准 `/models` 的服务使用。
+- 进入已有分组时只回显 daemon mask，明文 key 必须重新输入；关闭面板
+  或切换 Session 会立即卸载表单并丢弃 key。
+
+### 9.2 Bridge v17
+
+- W→H 新增 `customModels.discover` 与 `customModels.import`；前者只带
+  provider/baseUrl/可选 key，后者最多 32 个严格投影的
+  `{ model, displayName? }` 以及共享参数。
+- H→W 新增 `customModels.discovery` 三态
+  `loading | ready(items) | error(message)`。`items` 只允许 model 与
+  displayName，不允许 provider 原始 metadata，更不允许 key。
+- `customModels.state` 与 discovery state 继续是面板级临时状态，不进
+  `host.snapshot`。Webview 不发网络请求。
+
+### 9.3 Host discovery 安全边界
+
+- Extension Host 仅向用户填写的 HTTP(S) base URL 的 `/models` 发 GET；
+  OpenAI-compatible 使用 Bearer，Anthropic 使用 `x-api-key` +
+  `anthropic-version: 2023-06-01`。`redirect: error` 防止凭据跨 origin。
+- 超时 10 秒，解压后的 body 与 `Content-Length` 均限制 1 MiB；拒绝
+  URL 内嵌凭据、query/hash、非成功 HTTP、无效 JSON 与未知 catalog
+  shape。响应只投影安全的 id/display_name，最多沿用模型目录上限。
+- Provider 若在 model/display name 中反射请求 key，整行被丢弃；若响应
+  因此无有效行则固定错误。诊断只记 failure class/status，不记 URL、
+  响应体、请求 key 或原始异常。
+- Session/Workspace 切换会 Abort 旧 discovery；旧 promise 不能清除
+  新操作的互斥位，也不能向新 Session 发状态。
+
+### 9.4 批量写入语义
+
+- Host 先读 daemon masked list，以可识别的 provider/base URL/key mask/
+  共享参数判断同组重复，再按用户选择顺序逐项 `upsert`，避免并发写
+  settings 竞争。daemon 返回 `success: false` 视为失败，不误报 ready。
+- 中途失败时保留并回发已成功模型的 masked 列表，使用固定文案并在空闲
+  时重载目录；原始 RPC error 与 key 不越过 Host。
+- Provider 使用非标准目录路径、额外 headers、Azure 风格部署目录等情形
+  不在本切片自动发现范围内，使用手动单模型 fallback；Webview 不获得
+  任意网络能力。

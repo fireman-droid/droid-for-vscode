@@ -4,13 +4,16 @@ import {
   MAX_MODEL_ID_LENGTH,
 } from './bridgeMessages';
 import { MAX_BRIDGE_ID_LENGTH } from './interactionProtocol';
-import { hasExactKeys } from './strictValidation';
+import {
+  hasExactKeys,
+  isStrictRecord as isRecord,
+} from './strictValidation';
 
 /**
  * BYOK custom-models bridge contract
  * (docs/product/byok-add-model-design.md §5.1).
  *
- * The management panel lists, saves, and deletes `customModels`
+ * The management panel lists, discovers, imports, saves, and deletes `customModels`
  * entries of `~/.factory/settings.json` through the daemon RPCs
  * `daemon.list_custom_models` / `upsert_custom_model` /
  * `delete_custom_model` (probed 2026-08-13,
@@ -21,9 +24,10 @@ import { hasExactKeys } from './strictValidation';
  * `import type` from this module: the runtime dependency points the
  * other way (shared model bounds come from the main contract).
  *
- * Credential red line: `apiKey` plaintext exists exactly once, on the
- * webview→host save message, and is handed to the daemon RPC in one
- * step. Host→webview state carries only `hasApiKey` and the
+ * Credential red line: `apiKey` plaintext travels only on request-scoped
+ * webview→host save/discover/import messages and is handed to the provider
+ * or daemon in one step. Host→webview state carries only projected catalog
+ * names or `hasApiKey` and the
  * daemon-masked `apiKeyMask` (probe: `••••` + last 4 chars) — never
  * key material.
  */
@@ -34,6 +38,7 @@ export const MAX_CUSTOM_MODEL_MASK_LENGTH = 32;
 export const MAX_CUSTOM_MODEL_PROVIDER_LENGTH = 64;
 export const MAX_CUSTOM_MODEL_OUTPUT_TOKENS = 100_000_000;
 export const MAX_CUSTOM_MODELS_MESSAGE_LENGTH = 512;
+export const MAX_CUSTOM_MODEL_IMPORT_ITEMS = 32;
 
 /**
  * Providers the save form offers. The upsert RPC accepts an open
@@ -106,6 +111,53 @@ export interface CustomModelsRefreshMessage {
   readonly sessionId: string;
 }
 
+/** One provider-returned model projected without arbitrary metadata. */
+export interface DiscoveredCustomModel {
+  readonly model: string;
+  readonly displayName?: string;
+}
+
+export type CustomModelDiscoveryState =
+  | { readonly status: 'loading' }
+  | {
+      readonly status: 'ready';
+      readonly items: readonly DiscoveredCustomModel[];
+    }
+  | { readonly status: 'error'; readonly message: string };
+
+export type CustomModelDiscoveryUiState =
+  | CustomModelDiscoveryState
+  | { readonly status: 'idle' };
+
+export const IDLE_CUSTOM_MODEL_DISCOVERY_STATE: CustomModelDiscoveryUiState = {
+  status: 'idle',
+};
+
+/**
+ * Webview → Host: fetch a provider's model catalog. The Host performs
+ * the bounded request; the Webview remains network-free. Plaintext key
+ * is request-scoped and never returns across the Bridge.
+ */
+export interface CustomModelsDiscoverMessage {
+  readonly type: 'customModels.discover';
+  readonly sessionId: string;
+  readonly provider: CustomModelProvider;
+  readonly baseUrl: string;
+  readonly apiKey?: string;
+}
+
+/** Webview → Host: import selected discovery rows with shared settings. */
+export interface CustomModelsImportMessage {
+  readonly type: 'customModels.import';
+  readonly sessionId: string;
+  readonly provider: CustomModelProvider;
+  readonly baseUrl: string;
+  readonly apiKey?: string;
+  readonly models: readonly DiscoveredCustomModel[];
+  readonly maxOutputTokens: number | null;
+  readonly noImageSupport: boolean;
+}
+
 /**
  * Webview → Host: create or edit one custom model. `rawIndex` +
  * `expectedModel` together mark an edit (daemon optimistic-concurrency
@@ -148,9 +200,24 @@ export interface CustomModelsStateMessage {
   readonly customModels: CustomModelsState;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+/** Host → Webview: bounded provider discovery progress/results. */
+export interface CustomModelsDiscoveryStateMessage {
+  readonly type: 'customModels.discovery';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly discovery: CustomModelDiscoveryState;
 }
+
+export type CustomModelsWebviewMessage =
+  | CustomModelsRefreshMessage
+  | CustomModelSaveMessage
+  | CustomModelDeleteMessage
+  | CustomModelsDiscoverMessage
+  | CustomModelsImportMessage;
+
+export type CustomModelsHostMessage =
+  | CustomModelsStateMessage
+  | CustomModelsDiscoveryStateMessage;
 
 function isId(value: unknown): value is string {
   return (
@@ -161,7 +228,10 @@ function isId(value: unknown): value is string {
 }
 
 /** Non-empty, trimmed, bounded, control-character-free text. */
-function isSafeText(value: unknown, maximumLength: number): value is string {
+export function isSafeText(
+  value: unknown,
+  maximumLength: number,
+): value is string {
   return (
     typeof value === 'string' &&
     value.length > 0 &&
@@ -180,12 +250,26 @@ function isRawIndex(value: unknown): value is number {
   );
 }
 
-function isSaveBaseUrl(value: unknown): value is string {
-  return (
-    isSafeText(value, MAX_CUSTOM_MODEL_URL_LENGTH) &&
-    !/\s/.test(value) &&
-    /^https?:\/\/./.test(value)
-  );
+export function isCustomModelBaseUrl(value: unknown): boolean {
+  if (
+    !isSafeText(value, MAX_CUSTOM_MODEL_URL_LENGTH) ||
+    /\s/u.test(value)
+  ) {
+    return false;
+  }
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      url.hostname.length > 0 &&
+      url.username.length === 0 &&
+      url.password.length === 0 &&
+      url.search.length === 0 &&
+      url.hash.length === 0
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function parseCustomModelsRefreshMessage(
@@ -226,7 +310,7 @@ export function parseCustomModelSaveMessage(
     !(CUSTOM_MODEL_PROVIDERS as readonly string[]).includes(
       value.provider as string,
     ) ||
-    !isSaveBaseUrl(value.baseUrl) ||
+    !isCustomModelBaseUrl(value.baseUrl) ||
     // Edit marker fields travel as a pair or not at all.
     (value.rawIndex === undefined) !==
       (value.expectedModel === undefined) ||
@@ -262,10 +346,123 @@ export function parseCustomModelSaveMessage(
       ? {}
       : { displayName: value.displayName as string }),
     provider: value.provider as CustomModelProvider,
-    baseUrl: value.baseUrl,
+    baseUrl: value.baseUrl as string,
     ...(value.apiKey === undefined
       ? {}
       : { apiKey: value.apiKey as string }),
+    maxOutputTokens: value.maxOutputTokens as number | null,
+    noImageSupport: value.noImageSupport,
+  };
+}
+
+function isProvider(value: unknown): value is CustomModelProvider {
+  return (
+    typeof value === 'string' &&
+    (CUSTOM_MODEL_PROVIDERS as readonly string[]).includes(value)
+  );
+}
+
+function parseDiscoveredModel(value: unknown): DiscoveredCustomModel | null {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ['model'], ['displayName']) ||
+    !isSafeText(value.model, MAX_MODEL_ID_LENGTH) ||
+    (value.displayName !== undefined &&
+      !isSafeText(value.displayName, MAX_MODEL_DISPLAY_NAME_LENGTH))
+  ) {
+    return null;
+  }
+  return {
+    model: value.model,
+    ...(value.displayName === undefined
+      ? {}
+      : { displayName: value.displayName as string }),
+  };
+}
+
+export function parseCustomModelsDiscoverMessage(
+  value: unknown,
+): CustomModelsDiscoverMessage | null {
+  if (
+    !isRecord(value) ||
+    value.type !== 'customModels.discover' ||
+    !hasExactKeys(
+      value,
+      ['type', 'sessionId', 'provider', 'baseUrl'],
+      ['apiKey'],
+    ) ||
+    !isId(value.sessionId) ||
+    !isProvider(value.provider) ||
+    !isCustomModelBaseUrl(value.baseUrl) ||
+    (value.apiKey !== undefined &&
+      !isSafeText(value.apiKey, MAX_CUSTOM_MODEL_KEY_LENGTH))
+  ) {
+    return null;
+  }
+  return {
+    type: 'customModels.discover',
+    sessionId: value.sessionId,
+    provider: value.provider,
+    baseUrl: value.baseUrl as string,
+    ...(value.apiKey === undefined ? {} : { apiKey: value.apiKey }),
+  };
+}
+
+export function parseCustomModelsImportMessage(
+  value: unknown,
+): CustomModelsImportMessage | null {
+  if (
+    !isRecord(value) ||
+    value.type !== 'customModels.import' ||
+    !hasExactKeys(
+      value,
+      [
+        'type',
+        'sessionId',
+        'provider',
+        'baseUrl',
+        'models',
+        'maxOutputTokens',
+        'noImageSupport',
+      ],
+      ['apiKey'],
+    ) ||
+    !isId(value.sessionId) ||
+    !isProvider(value.provider) ||
+    !isCustomModelBaseUrl(value.baseUrl) ||
+    (value.apiKey !== undefined &&
+      !isSafeText(value.apiKey, MAX_CUSTOM_MODEL_KEY_LENGTH)) ||
+    !Array.isArray(value.models) ||
+    value.models.length === 0 ||
+    value.models.length > MAX_CUSTOM_MODEL_IMPORT_ITEMS ||
+    (value.maxOutputTokens !== null &&
+      !(
+        Number.isSafeInteger(value.maxOutputTokens) &&
+        (value.maxOutputTokens as number) >= 1 &&
+        (value.maxOutputTokens as number) <=
+          MAX_CUSTOM_MODEL_OUTPUT_TOKENS
+      )) ||
+    typeof value.noImageSupport !== 'boolean'
+  ) {
+    return null;
+  }
+  const models: DiscoveredCustomModel[] = [];
+  const ids = new Set<string>();
+  for (const raw of value.models) {
+    const model = parseDiscoveredModel(raw);
+    if (model === null || ids.has(model.model)) {
+      return null;
+    }
+    ids.add(model.model);
+    models.push(model);
+  }
+  return {
+    type: 'customModels.import',
+    sessionId: value.sessionId,
+    provider: value.provider,
+    baseUrl: value.baseUrl as string,
+    ...(value.apiKey === undefined ? {} : { apiKey: value.apiKey }),
+    models,
     maxOutputTokens: value.maxOutputTokens as number | null,
     noImageSupport: value.noImageSupport,
   };
@@ -449,6 +646,101 @@ export function parseCustomModelsStateMessage(
     sessionId: value.sessionId,
     customModels,
   };
+}
+
+export function parseCustomModelDiscoveryState(
+  value: unknown,
+): CustomModelDiscoveryState | null {
+  if (!isRecord(value) || typeof value.status !== 'string') {
+    return null;
+  }
+  if (value.status === 'loading') {
+    return hasExactKeys(value, ['status']) ? { status: 'loading' } : null;
+  }
+  if (value.status === 'error') {
+    return hasExactKeys(value, ['status', 'message']) &&
+      isStateMessageText(value.message)
+      ? { status: 'error', message: value.message }
+      : null;
+  }
+  if (
+    value.status !== 'ready' ||
+    !hasExactKeys(value, ['status', 'items']) ||
+    !Array.isArray(value.items) ||
+    value.items.length > MAX_MODEL_CATALOG_ITEMS
+  ) {
+    return null;
+  }
+  const items: DiscoveredCustomModel[] = [];
+  const ids = new Set<string>();
+  for (const raw of value.items) {
+    const item = parseDiscoveredModel(raw);
+    if (item === null || ids.has(item.model)) {
+      return null;
+    }
+    ids.add(item.model);
+    items.push(item);
+  }
+  return { status: 'ready', items };
+}
+
+export function parseCustomModelsDiscoveryStateMessage(
+  value: unknown,
+): CustomModelsDiscoveryStateMessage | null {
+  if (
+    !isRecord(value) ||
+    value.type !== 'customModels.discovery' ||
+    !hasExactKeys(value, ['type', 'sequence', 'sessionId', 'discovery']) ||
+    typeof value.sequence !== 'number' ||
+    !Number.isFinite(value.sequence) ||
+    !isId(value.sessionId)
+  ) {
+    return null;
+  }
+  const discovery = parseCustomModelDiscoveryState(value.discovery);
+  return discovery === null
+    ? null
+    : {
+        type: 'customModels.discovery',
+        sequence: value.sequence,
+        sessionId: value.sessionId,
+        discovery,
+      };
+}
+
+export function parseCustomModelsWebviewMessage(
+  value: unknown,
+): CustomModelsWebviewMessage | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  switch (value.type) {
+    case 'customModels.refresh':
+      return parseCustomModelsRefreshMessage(value);
+    case 'customModels.save':
+      return parseCustomModelSaveMessage(value);
+    case 'customModels.delete':
+      return parseCustomModelDeleteMessage(value);
+    case 'customModels.discover':
+      return parseCustomModelsDiscoverMessage(value);
+    case 'customModels.import':
+      return parseCustomModelsImportMessage(value);
+    default:
+      return null;
+  }
+}
+
+export function parseCustomModelsHostMessage(
+  value: unknown,
+): CustomModelsHostMessage | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  return value.type === 'customModels.state'
+    ? parseCustomModelsStateMessage(value)
+    : value.type === 'customModels.discovery'
+      ? parseCustomModelsDiscoveryStateMessage(value)
+      : null;
 }
 
 /**

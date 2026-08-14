@@ -150,6 +150,22 @@ describe('parseWebviewMessage', () => {
       sessionId: 'session-1',
     },
     {
+      type: 'customModels.discover',
+      sessionId: 'session-1',
+      provider: 'openai',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'credential-for-test',
+    },
+    {
+      type: 'customModels.import',
+      sessionId: 'session-1',
+      provider: 'openai',
+      baseUrl: 'https://api.example.com/v1',
+      models: [{ model: 'model-a', displayName: 'Model A' }],
+      maxOutputTokens: null,
+      noImageSupport: false,
+    },
+    {
       type: 'mcp.refresh',
       sessionId: 'session-1',
     },

@@ -3,27 +3,43 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
 import {
   CUSTOM_MODEL_PROVIDERS,
+  IDLE_CUSTOM_MODEL_DISCOVERY_STATE,
   IDLE_CUSTOM_MODELS_STATE,
   MAX_CUSTOM_MODEL_KEY_LENGTH,
   MAX_CUSTOM_MODEL_OUTPUT_TOKENS,
   MAX_CUSTOM_MODEL_URL_LENGTH,
+  isCustomModelBaseUrl,
   mergeCustomModelsState,
+  parseCustomModelsDiscoveryStateMessage,
   parseCustomModelsStateMessage,
   type CustomModelListItem,
+  type CustomModelDiscoveryUiState,
   type CustomModelProvider,
   type CustomModelSaveMessage,
   type CustomModelsUiState,
 } from '../../shared/customModelsProtocol';
 import {
+  isSafeDisplayName,
+  isSafeModelId,
+} from '../../shared/validateMessage';
+import {
   MAX_MODEL_DISPLAY_NAME_LENGTH,
   MAX_MODEL_ID_LENGTH,
   type WebviewToHostMessage,
 } from '../../shared/bridgeMessages';
+import {
+  CUSTOM_MODEL_PROVIDER_LABELS,
+  CustomModelProviderForm,
+  type CustomModelProviderPreset,
+  type CustomModelsDiscoverParams,
+  type CustomModelsImportParams,
+} from './CustomModelProviderForm';
 
 /**
  * BYOK custom-model management
@@ -47,10 +63,14 @@ export type CustomModelSaveParams = Omit<
 >;
 
 export interface CustomModelsFlowValue {
+  readonly sessionId: string | null;
   readonly customModels: CustomModelsUiState;
+  readonly discovery: CustomModelDiscoveryUiState;
   readonly onRefresh: () => void;
   readonly onSave: (params: CustomModelSaveParams) => void;
   readonly onDelete: (rawIndex: number, expectedModel: string) => void;
+  readonly onDiscover: (params: CustomModelsDiscoverParams) => void;
+  readonly onImport: (params: CustomModelsImportParams) => void;
 }
 
 export const CustomModelsContext =
@@ -76,26 +96,50 @@ export function useCustomModelsFlow(
   const [customModels, setCustomModels] = useState<CustomModelsUiState>(
     IDLE_CUSTOM_MODELS_STATE,
   );
+  const [discovery, setDiscovery] = useState<CustomModelDiscoveryUiState>(
+    IDLE_CUSTOM_MODEL_DISCOVERY_STATE,
+  );
+  const latestSequence = useRef(-1);
   useEffect(() => {
     setCustomModels(IDLE_CUSTOM_MODELS_STATE);
+    setDiscovery(IDLE_CUSTOM_MODEL_DISCOVERY_STATE);
+    latestSequence.current = -1;
     if (sessionId === null) {
       return;
     }
     const handleMessage = (event: MessageEvent<unknown>): void => {
-      const message = parseCustomModelsStateMessage(event.data);
-      if (message === null || message.sessionId !== sessionId) {
+      const stateMessage = parseCustomModelsStateMessage(event.data);
+      if (
+        stateMessage !== null &&
+        stateMessage.sessionId === sessionId &&
+        stateMessage.sequence > latestSequence.current
+      ) {
+        latestSequence.current = stateMessage.sequence;
+        setCustomModels((previous) =>
+          mergeCustomModelsState(previous, stateMessage.customModels),
+        );
         return;
       }
-      setCustomModels((previous) =>
-        mergeCustomModelsState(previous, message.customModels),
+      const discoveryMessage = parseCustomModelsDiscoveryStateMessage(
+        event.data,
       );
+      if (
+        discoveryMessage !== null &&
+        discoveryMessage.sessionId === sessionId &&
+        discoveryMessage.sequence > latestSequence.current
+      ) {
+        latestSequence.current = discoveryMessage.sequence;
+        setDiscovery(discoveryMessage.discovery);
+      }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, [sessionId]);
   return useMemo(
     () => ({
+      sessionId,
       customModels,
+      discovery,
       onRefresh: () => {
         if (sessionId !== null) {
           vscode.postMessage({ type: 'customModels.refresh', sessionId });
@@ -120,15 +164,34 @@ export function useCustomModelsFlow(
           });
         }
       },
+      onDiscover: (params) => {
+        if (sessionId !== null) {
+          setDiscovery({ status: 'loading' });
+          vscode.postMessage({
+            type: 'customModels.discover',
+            sessionId,
+            ...params,
+          });
+        }
+      },
+      onImport: (params) => {
+        if (sessionId !== null) {
+          vscode.postMessage({
+            type: 'customModels.import',
+            sessionId,
+            ...params,
+          });
+        }
+      },
     }),
-    [customModels, sessionId, vscode],
+    [customModels, discovery, sessionId, vscode],
   );
 }
 
 /**
- * Quiet fixed row at the tail of the ModelPopover. Re-reads the list
- * on entry (same convention as the Skills/MCP link rows) so the panel
- * reflects edits made from the CLI or settings.json meanwhile.
+ * Quiet fixed row at the tail of the ModelPopover. The mounted panel
+ * performs the on-entry refresh so this click cannot race it with a
+ * duplicate request.
  */
 export function AddModelEntry({
   onOpen,
@@ -143,10 +206,7 @@ export function AddModelEntry({
     <button
       type="button"
       className="dvx-popover-row dvx-cm-add-entry"
-      onClick={() => {
-        flow.onRefresh();
-        onOpen();
-      }}
+      onClick={onOpen}
     >
       <span className="dvx-cm-add-plus" aria-hidden="true">
         +
@@ -160,7 +220,11 @@ export function AddModelEntry({
 
 type PanelView =
   | { readonly mode: 'list' }
-  | { readonly mode: 'create' }
+  | {
+      readonly mode: 'provider';
+      readonly initial?: CustomModelProviderPreset;
+    }
+  | { readonly mode: 'manual' }
   | { readonly mode: 'edit'; readonly item: CustomModelListItem };
 
 export function CustomModelsPanel({
@@ -208,8 +272,10 @@ export function CustomModelsPanel({
           <span className="dvx-panel-title">
             {view.mode === 'list'
               ? 'Custom models'
-              : view.mode === 'create'
-                ? 'Add model'
+              : view.mode === 'provider'
+                ? 'Add models'
+                : view.mode === 'manual'
+                  ? 'Add one model'
                 : 'Edit model'}
           </span>
         </button>
@@ -219,9 +285,9 @@ export function CustomModelsPanel({
               type="button"
               className="dvx-panel-action"
               disabled={busy || state.status === 'unavailable'}
-              onClick={() => setView({ mode: 'create' })}
+              onClick={() => setView({ mode: 'provider' })}
             >
-              Add
+              Add provider
             </button>
             <button
               type="button"
@@ -240,13 +306,33 @@ export function CustomModelsPanel({
           busy={busy}
           mutated={mutated}
           onEdit={(item) => setView({ mode: 'edit', item })}
+          onAddToGroup={(initial) =>
+            setView({ mode: 'provider', initial })
+          }
           onDelete={(item) => {
             setMutated(true);
             flow.onDelete(item.rawIndex, item.model);
           }}
         />
+      ) : view.mode === 'provider' ? (
+        <CustomModelProviderForm
+          key={flow.sessionId ?? 'no-session'}
+          initial={view.initial}
+          configuredItems={state.items}
+          discovery={flow.discovery}
+          busy={busy}
+          onCancel={() => setView({ mode: 'list' })}
+          onManual={() => setView({ mode: 'manual' })}
+          onDiscover={flow.onDiscover}
+          onImport={(params) => {
+            setMutated(true);
+            setView({ mode: 'list' });
+            flow.onImport(params);
+          }}
+        />
       ) : (
         <CustomModelForm
+          key={flow.sessionId ?? 'no-session'}
           item={view.mode === 'edit' ? view.item : null}
           busy={busy}
           onCancel={() => setView({ mode: 'list' })}
@@ -266,12 +352,14 @@ function CustomModelsList({
   busy,
   mutated,
   onEdit,
+  onAddToGroup,
   onDelete,
 }: {
   readonly state: CustomModelsUiState;
   readonly busy: boolean;
   readonly mutated: boolean;
   readonly onEdit: (item: CustomModelListItem) => void;
+  readonly onAddToGroup: (initial: CustomModelProviderPreset) => void;
   readonly onDelete: (item: CustomModelListItem) => void;
 }): React.JSX.Element {
   // Two-step destructive confirm, keyed by rawIndex (MCP pattern);
@@ -307,61 +395,55 @@ function CustomModelsList({
         </p>
       ) : null}
       {state.items.length > 0 ? (
-        <ul className="dvx-cm-list" aria-label="Custom models">
-          {state.items.map((item) => (
-            <li key={item.rawIndex} className="dvx-cm-row">
-              <span className="dvx-cm-copy">
-                <span className="dvx-cm-name">
-                  {item.displayName ?? item.model}
-                  {item.hasBedrockConfig ? (
-                    <span className="dvx-cm-badge">Bedrock</span>
-                  ) : null}
-                  {!item.isValid ? (
-                    <span className="dvx-cm-badge dvx-cm-badge-warn">
-                      Invalid
-                    </span>
-                  ) : null}
+        <div className="dvx-cm-groups" aria-label="Custom model groups">
+          {groupCustomModels(state.items).map((group) => (
+            <section key={group.key} className="dvx-cm-group">
+              <div className="dvx-cm-group-head">
+                <span className="dvx-cm-copy">
+                  <strong className="dvx-cm-group-title">
+                    {group.providerLabel}
+                  </strong>
+                  <span className="dvx-cm-meta" title={group.baseUrl}>
+                    {group.baseUrl}
+                  </span>
                 </span>
-                <span className="dvx-cm-meta">
-                  {item.model} · {item.provider}
-                  {item.baseUrl !== undefined ? ` · ${item.baseUrl}` : ''}
+                <span className="dvx-cm-key" title="API key">
+                  {group.keyLabel}
                 </span>
-              </span>
-              <span className="dvx-cm-key" title="API key">
-                {item.hasApiKey ? (item.apiKeyMask ?? 'key set') : 'no key'}
-              </span>
-              <span className="dvx-cm-actions">
-                <button
-                  type="button"
-                  className="dvx-cm-action"
-                  disabled={busy}
-                  onClick={() => onEdit(item)}
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  className={`dvx-cm-action dvx-cm-delete${
-                    confirming === item.rawIndex
-                      ? ' dvx-cm-delete-confirm'
-                      : ''
-                  }`}
-                  disabled={busy}
-                  onClick={() => {
-                    if (confirming === item.rawIndex) {
-                      setConfirming(null);
-                      onDelete(item);
-                    } else {
-                      setConfirming(item.rawIndex);
-                    }
-                  }}
-                >
-                  {confirming === item.rawIndex ? 'Confirm?' : 'Delete'}
-                </button>
-              </span>
-            </li>
+                {group.preset !== null ? (
+                  <button
+                    type="button"
+                    className="dvx-cm-action"
+                    disabled={busy}
+                    aria-label={`Add models to ${group.providerLabel}`}
+                    onClick={() => onAddToGroup(group.preset!)}
+                  >
+                    Add models
+                  </button>
+                ) : null}
+              </div>
+              <ul className="dvx-cm-list">
+                {group.items.map((item) => (
+                  <CustomModelRow
+                    key={item.rawIndex}
+                    item={item}
+                    busy={busy}
+                    confirming={confirming === item.rawIndex}
+                    onEdit={onEdit}
+                    onDelete={() => {
+                      if (confirming === item.rawIndex) {
+                        setConfirming(null);
+                        onDelete(item);
+                      } else {
+                        setConfirming(item.rawIndex);
+                      }
+                    }}
+                  />
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       ) : null}
       {confirming !== null ? (
         <p className="dvx-popover-message" role="status">
@@ -379,11 +461,129 @@ function CustomModelsList({
   );
 }
 
-const PROVIDER_LABELS: Record<CustomModelProvider, string> = {
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-  'generic-chat-completion-api': 'Generic',
-};
+function CustomModelRow({
+  item,
+  busy,
+  confirming,
+  onEdit,
+  onDelete,
+}: {
+  readonly item: CustomModelListItem;
+  readonly busy: boolean;
+  readonly confirming: boolean;
+  readonly onEdit: (item: CustomModelListItem) => void;
+  readonly onDelete: () => void;
+}): React.JSX.Element {
+  const editable = isFormProvider(item.provider);
+  return (
+    <li className="dvx-cm-row">
+      <span className="dvx-cm-copy">
+        <span className="dvx-cm-name">
+          {item.displayName ?? item.model}
+          {item.hasBedrockConfig ? (
+            <span className="dvx-cm-badge">Bedrock</span>
+          ) : null}
+          {!item.isValid ? (
+            <span className="dvx-cm-badge dvx-cm-badge-warn">Invalid</span>
+          ) : null}
+        </span>
+        {item.displayName !== undefined ? (
+          <span className="dvx-cm-meta">{item.model}</span>
+        ) : null}
+      </span>
+      <span className="dvx-cm-actions">
+        <button
+          type="button"
+          className="dvx-cm-action"
+          disabled={busy || !editable}
+          title={
+            editable
+              ? undefined
+              : 'Edit this provider in settings.json'
+          }
+          onClick={() => onEdit(item)}
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          className={`dvx-cm-action dvx-cm-delete${
+            confirming ? ' dvx-cm-delete-confirm' : ''
+          }`}
+          disabled={busy}
+          onClick={onDelete}
+        >
+          {confirming ? 'Confirm?' : 'Delete'}
+        </button>
+      </span>
+    </li>
+  );
+}
+
+interface CustomModelGroup {
+  readonly key: string;
+  readonly providerLabel: string;
+  readonly baseUrl: string;
+  readonly keyLabel: string;
+  readonly preset: CustomModelProviderPreset | null;
+  readonly items: readonly CustomModelListItem[];
+}
+
+function groupCustomModels(
+  items: readonly CustomModelListItem[],
+): CustomModelGroup[] {
+  const grouped = new Map<string, CustomModelListItem[]>();
+  for (const item of items) {
+    const credentialKey =
+      item.apiKeyMask ??
+      (item.hasApiKey ? `unknown:${item.rawIndex}` : 'no-key');
+    const key = [
+      item.provider,
+      item.baseUrl ?? '',
+      credentialKey,
+      String(item.maxOutputTokens ?? ''),
+      String(item.noImageSupport ?? ''),
+    ].join('\u0000');
+    const rows = grouped.get(key);
+    if (rows === undefined) {
+      grouped.set(key, [item]);
+    } else {
+      rows.push(item);
+    }
+  }
+  return [...grouped].map(([key, rows]) => {
+    const first = rows[0]!;
+    const provider = isFormProvider(first.provider)
+      ? first.provider
+      : null;
+    const baseUrl = first.baseUrl ?? 'No API base URL';
+    const keyed = rows.find((item) => item.hasApiKey);
+    return {
+      key,
+      providerLabel:
+        provider === null
+          ? first.provider
+          : CUSTOM_MODEL_PROVIDER_LABELS[provider],
+      baseUrl,
+      keyLabel: keyed?.apiKeyMask ?? (keyed === undefined ? 'no key' : 'key set'),
+      preset:
+        provider === null ||
+        first.baseUrl === undefined ||
+        (keyed !== undefined && keyed.apiKeyMask === undefined)
+          ? null
+          : {
+              provider,
+              baseUrl: first.baseUrl,
+              ...(keyed === undefined
+                ? {}
+                : { keyHint: keyed.apiKeyMask ?? 'key set' }),
+              maxOutputTokens: first.maxOutputTokens ?? null,
+              noImageSupport: first.noImageSupport === true,
+            },
+      items: rows,
+    };
+  });
+}
 
 const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;
 
@@ -425,17 +625,10 @@ function CustomModelForm({
   const trimmedName = displayName.trim();
   const trimmedUrl = baseUrl.trim();
   const trimmedKey = apiKey.trim();
-  const modelValid =
-    trimmedModel.length > 0 &&
-    trimmedModel.length <= MAX_MODEL_ID_LENGTH &&
-    !CONTROL_CHARS.test(trimmedModel);
-  const urlValid =
-    /^https?:\/\/./.test(trimmedUrl) &&
-    !/\s/.test(trimmedUrl) &&
-    trimmedUrl.length <= MAX_CUSTOM_MODEL_URL_LENGTH;
+  const modelValid = isSafeModelId(trimmedModel);
+  const urlValid = isCustomModelBaseUrl(trimmedUrl);
   const nameValid =
-    trimmedName.length <= MAX_MODEL_DISPLAY_NAME_LENGTH &&
-    !CONTROL_CHARS.test(trimmedName);
+    trimmedName.length === 0 || isSafeDisplayName(trimmedName);
   const keyValid =
     trimmedKey.length <= MAX_CUSTOM_MODEL_KEY_LENGTH &&
     !CONTROL_CHARS.test(trimmedKey);
@@ -528,7 +721,7 @@ function CustomModelForm({
               aria-checked={provider === value}
               onClick={() => setProvider(value)}
             >
-              {PROVIDER_LABELS[value]}
+              {CUSTOM_MODEL_PROVIDER_LABELS[value]}
             </button>
           ))}
         </div>

@@ -167,7 +167,7 @@ import {
   CHANGES_UPDATE_STATES,
   type ChangesUpdateState,
 } from '../../shared/changesProtocol';
-import { parseCustomModelsStateMessage } from '../../shared/customModelsProtocol';
+import { parseCustomModelsHostMessage } from '../../shared/customModelsProtocol';
 import { parseSubagentActivityMessage } from '../../shared/subagentProtocol';
 // Lazy circular pair on purpose: that module reuses this file's
 // transcript-item parser for `subagent.transcript` payloads.
@@ -343,9 +343,10 @@ export function readHostMessage(
       case 'ui.theme':
         return parseUiTheme(value);
       case 'customModels.state':
+      case 'customModels.discovery':
         // Delegated to the shared BYOK contract module; the panel's
         // flow hook applies the same parser to its window listener.
-        return parseCustomModelsStateMessage(value) ?? undefined;
+        return parseCustomModelsHostMessage(value) ?? undefined;
       default:
         return undefined;
     }

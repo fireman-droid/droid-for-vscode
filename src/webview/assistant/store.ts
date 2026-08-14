@@ -735,7 +735,7 @@ export function assistantWebviewReducer(
           : event.commands;
       return { ...state, sequence: event.sequence, commands };
     }
-    case 'customModels.state':
+    case 'customModels.state': case 'customModels.discovery':
       // Panel-scoped masked state: the CustomModelsPanel flow hook
       // consumes it off its own window listener (on-demand pull, not
       // snapshot-resident); the store only advances the sequence.
