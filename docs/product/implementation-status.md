@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.14 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.15 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -3029,6 +3029,24 @@ UI 描述见 §22 重做记录。
   和写后同步布局均已收口。按当前门禁未跑全量 Vitest、浏览器 smoke
   或 daemon smoke。
 
+### 50. 探索组完成动画连续性（2026-08-14，v0.7.15）
+
+- **连续状态交接**：探索组由直接切换 running/completed DOM 改为
+  `running → settling → completed`。完成摘要从运行首帧起保持稳定节点，
+  最后一条 ticker 与摘要交叉淡入淡出，外层 stage 同步由两行平滑收为
+  一行，下方相邻 `Explored …` 记录不再瞬间上跳。
+- **中断与历史边界**：活动在 settle 完成前恢复时会取消旧完成计时并
+  回到 running；真实 `height` transition 结束即清理旧 ticker，
+  reduced-motion 或被遮挡 Webview 没有事件时由有界 fallback 收口；
+  首次挂载的历史完成组直接显示摘要，不重放动画。
+- **键盘边界**：仅视觉展示的 ticker 和未展开详情使用 `inert`，
+  不可见的 Tool 行与按钮不会进入 Tab 顺序；摘要只在 completed 后
+  可聚焦和展开。
+- **验证**：`activityRows.ticker.test.tsx` 11 例、三段 typecheck、
+  `lint:budgets` 与 `git diff --check` 全绿；simplify 三路审查确认
+  无重复 lifecycle 或热路径问题，并补齐 ticker/折叠详情的 focus
+  隔离。按当前门禁未跑全量 Vitest、浏览器 smoke 或 daemon smoke。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
@@ -3462,6 +3480,17 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 最后核对结果：
 
+- **2026-08-14 探索组完成动画发版 v0.7.15**：版本号
+  `0.7.14 → 0.7.15`，内容 = 台账 §50（持久 stage、
+  `running → settling → completed`、ticker/summary 交叉淡入淡出、
+  同步高度收拢、恢复运行取消 settle、历史完成直显与 hidden focus
+  隔离）。`activityRows.ticker.test.tsx` 11 例、typecheck 三段、
+  `lint:budgets` 与 `git diff --check` 全绿；build + VSIX 11 条目
+  验证全绿，产物 1,683,377 字节，SHA-256
+  `3F38D33B167CE8E579C317FF42B7764932582CB3E122F4B78B7B9F1994A95FF7`。
+  `cursor --install-extension --force` 安装成功并确认
+  `droidvisx.droidvisx@0.7.15`。按门禁未跑全量 Vitest、浏览器 smoke
+  或 daemon smoke；安装后需 Reload Window。
 - **2026-08-14 吸顶滚动稳定性发版 v0.7.14**：版本号
   `0.7.13 → 0.7.14`，内容 = 台账 §49（`/btw` 单层 neutral focus
   border、吸顶所有权与 compact 高度滞回、自然 top 布局、sticky

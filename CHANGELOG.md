@@ -4,6 +4,18 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.15] - 2026-08-14
+
+### Fixed
+
+- **Exploration groups finish without jumping** — the final live
+  ticker stays mounted while its completed summary crossfades in and
+  the shared container smoothly contracts, so following rows are no
+  longer pulled upward by an abrupt DOM replacement.
+- **Hidden activity details stay out of keyboard navigation** —
+  transient ticker rows and collapsed completed details are inert
+  until their visible summary is ready or expanded.
+
 ## [0.7.14] - 2026-08-14
 
 ### Fixed

@@ -396,26 +396,37 @@ export function ActivityGroup({
   }, [parts, indices]);
   const summary = useMemo(() => summarizeActivityGroup(members), [members]);
   const [expanded, setExpanded] = useState(false);
+  const activeIndex = activeTickerIndex(members);
+  const [tickerIndex, setTickerIndex] = useState(activeIndex);
+  const [phase, setPhase] = useState<ActivityGroupPhase>(
+    summary.anyRunning ? "running" : "completed",
+  );
+
+  useLayoutEffect(() => {
+    if (summary.anyRunning) {
+      setTickerIndex((current) =>
+        current === activeIndex ? current : activeIndex,
+      );
+      setPhase((current) => (current === "running" ? current : "running"));
+      return;
+    }
+    setPhase((current) => (current === "running" ? "settling" : current));
+  }, [activeIndex, summary.anyRunning]);
+
+  useEffect(() => {
+    if (phase !== "settling") {
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setPhase((current) =>
+        current === "settling" ? "completed" : current,
+      );
+    }, ACTIVITY_SETTLE_FALLBACK_MS);
+    return () => clearTimeout(timer);
+  }, [phase]);
 
   if (!summary.renderAsGroup) {
     return <>{children}</>;
-  }
-
-  if (summary.anyRunning) {
-    // One-row vertical ticker (user report batch 2 §1): only the
-    // member that is running now shows under the header; a new
-    // arrival slides the old row up and out.
-    return (
-      <div className="dvx-activity-group dvx-activity-group-running">
-        <div className="dvx-activity-group-header">
-          <span className="dvx-activity-indicator" />
-          <span className="dvx-shimmer-text">Exploring</span>
-        </div>
-        <ActivityTicker activeIndex={activeTickerIndex(members)}>
-          {children}
-        </ActivityTicker>
-      </div>
-    );
   }
 
   const stateBits: string[] = [];
@@ -429,36 +440,82 @@ export function ActivityGroup({
     stateBits.push(formatDuration(summary.durationMs));
   }
   return (
-    <div className="dvx-activity-group">
-      <button
-        type="button"
-        className="dvx-activity-group-summary"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
-      >
-        <span className="dvx-activity-indicator" />
-        <span className="dvx-tool-action">Explored {summary.countsLabel}</span>
-        {stateBits.length > 0 ? (
-          <span
-            className={`dvx-activity-state${
-              summary.failedCount > 0 ? " dvx-activity-state-failed" : ""
-            }`}
-          >
-            {stateBits.join(" · ")}
-          </span>
-        ) : null}
-        <ActivityChevron />
-      </button>
+    <div className={`dvx-activity-group dvx-activity-group-${phase}`}>
       <div
-        className={`dvx-activity-group-details${
-          expanded ? " dvx-activity-group-details-open" : ""
-        }`}
+        className="dvx-activity-group-stage"
+        onTransitionEnd={(event) => {
+          if (
+            phase === "settling" &&
+            event.target === event.currentTarget &&
+            event.propertyName === "height"
+          ) {
+            setPhase("completed");
+          }
+        }}
       >
-        <div className="dvx-activity-group-details-inner">{children}</div>
+        {phase !== "completed" ? (
+          <div
+            className="dvx-activity-group-running-view"
+            aria-hidden={phase !== "running"}
+          >
+            <div className="dvx-activity-group-header">
+              <span className="dvx-activity-indicator" />
+              <span className="dvx-shimmer-text">Exploring</span>
+            </div>
+            <ActivityTicker activeIndex={tickerIndex}>
+              {children}
+            </ActivityTicker>
+          </div>
+        ) : null}
+        <button
+          type="button"
+          className="dvx-activity-group-summary"
+          aria-expanded={phase === "completed" && expanded}
+          aria-hidden={phase === "running"}
+          tabIndex={phase === "completed" ? 0 : -1}
+          onClick={() => {
+            if (phase === "completed") {
+              setExpanded((value) => !value);
+            }
+          }}
+        >
+          <span className="dvx-activity-indicator" />
+          <span className="dvx-tool-action">
+            Explored {summary.countsLabel}
+          </span>
+          {stateBits.length > 0 ? (
+            <span
+              className={`dvx-activity-state${
+                summary.failedCount > 0
+                  ? " dvx-activity-state-failed"
+                  : ""
+              }`}
+            >
+              {stateBits.join(" · ")}
+            </span>
+          ) : null}
+          <ActivityChevron />
+        </button>
       </div>
+      {phase === "completed" ? (
+        <div
+          className={`dvx-activity-group-details${
+            expanded ? " dvx-activity-group-details-open" : ""
+          }`}
+          aria-hidden={!expanded}
+          inert={expanded ? undefined : true}
+        >
+          <div className="dvx-activity-group-details-inner">{children}</div>
+        </div>
+      ) : null}
     </div>
   );
 }
+
+type ActivityGroupPhase = "running" | "settling" | "completed";
+
+/** Matches the 200ms group-height transition, plus fallback headroom. */
+export const ACTIVITY_SETTLE_FALLBACK_MS = 260;
 
 /** Matches the ticker slide transition in
  * 12-exploration-ticker.css (--dvx-ticker-duration, 280ms), plus
@@ -570,7 +627,7 @@ export function ActivityTicker({
   }, [trail]);
 
   return (
-    <div className="dvx-activity-ticker" aria-label="Exploration in progress">
+    <div className="dvx-activity-ticker" aria-hidden="true" inert>
       <div className="dvx-ticker-track" ref={trackRef}>
         {trail.map((entry) => (
           <div className="dvx-ticker-item" key={entry.key}>
