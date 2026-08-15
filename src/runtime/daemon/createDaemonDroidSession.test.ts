@@ -344,7 +344,7 @@ describe('createDaemonDroidSession', () => {
     });
   });
 
-  it('derives estimated context stats from the context breakdown', async () => {
+  it('uses daemon last-call tokens instead of cumulative breakdown totals', async () => {
     const mock = createDroidMock();
     const runtime = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
@@ -354,15 +354,43 @@ describe('createDaemonDroidSession', () => {
     });
     await runtime.initialize('C:\\workspace');
 
-    await expect(runtime.readContextStats()).resolves.toEqual({
-      used: 40000,
-      remaining: 60000,
+    await expect(runtime.readContextWindow()).resolves.toEqual({
+      availability: 'available',
+      used: 25000,
+      remaining: 75000,
       limit: 100000,
-      accuracy: 'estimated',
     });
     expect(mock.sessions.getContextBreakdown).toHaveBeenCalledWith(
       'session-1',
     );
+  });
+
+  it('fails closed when daemon last-call usage is missing', async () => {
+    const mock = createDroidMock();
+    mock.sessions.getContextBreakdown.mockResolvedValueOnce({
+      modelId: 'model-1',
+      modelDisplayName: 'Model 1',
+      contextBudget: 100000,
+      lastCallCompactionTokens: undefined,
+      usedTokens: 40000.4,
+      freeTokens: 59999.6,
+      categories: [],
+      skills: [],
+      mcpServers: [],
+      droids: [],
+    });
+    const runtime = new FactoryDroidRuntime({
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      createSdkSession: createDaemonSessionFactory(
+        async () => mock.droid,
+      ),
+    });
+    await runtime.initialize('C:\\workspace');
+
+    await expect(runtime.readContextWindow()).resolves.toEqual({
+      availability: 'unavailable',
+      reason: 'no-last-call',
+    });
   });
 
   it('overlays confirmed settings updates until the snapshot catches up', async () => {
@@ -795,6 +823,7 @@ function createDroidMock(
       modelId: 'model-1',
       modelDisplayName: 'Model 1',
       contextBudget: 100000,
+      lastCallCompactionTokens: 25000 as number | undefined,
       usedTokens: 40000.4,
       freeTokens: 59999.6,
       categories: [],

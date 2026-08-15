@@ -919,18 +919,17 @@ describe('FactoryDroidRuntime', () => {
       specModeModelId: null,
       specModeReasoningEffort: null,
     });
-    await expect(runtime.readContextStats()).resolves.toEqual({
+    await expect(runtime.readContextWindow()).resolves.toEqual({
+      availability: 'available',
       used: 40,
       remaining: 60,
       limit: 100,
-      accuracy: 'exact',
     });
     await expect(runtime.readModelCatalog()).resolves.toEqual({
       status: 'unavailable',
     });
   });
-
-  it('accepts SDK-valid context values without inventing cross-field constraints', async () => {
+  it('uses only last-call usage even when SDK totals exceed the budget', async () => {
     const session = createMockSession(async function* () {});
     session.getContextStats.mockResolvedValue({
       used: 101,
@@ -947,24 +946,57 @@ describe('FactoryDroidRuntime', () => {
     });
     await runtime.initialize('C:\\workspace');
 
-    await expect(runtime.readContextStats()).resolves.toEqual({
-      used: 101,
-      remaining: 108,
+    await expect(runtime.readContextWindow()).resolves.toEqual({
+      availability: 'available',
+      used: 40,
+      remaining: 60,
       limit: 100,
-      accuracy: 'estimated',
     });
     expect(diagnostics.record).toHaveBeenCalledWith({
       level: 'info',
       name: 'runtime.context.finished',
       attributes: {
         durationMs: expect.any(Number),
-        outcome: 'success',
-        accuracy: 'estimated',
-        arithmeticDelta: 109,
+        outcome: 'available',
+        source: 'last-call',
+        used: 40,
+        limit: 100,
       },
     });
   });
+  it.each([
+    {
+      lastCallTokenUsage: { status: 'missing' as const },
+      reason: 'no-last-call',
+    },
+    {
+      lastCallTokenUsage: { status: 'invalid' as const },
+      reason: 'invalid-last-call',
+    },
+    {
+      lastCallTokenUsage: {
+        status: 'available' as const,
+        used: 101,
+      },
+      reason: 'invalid-last-call',
+    },
+  ])('fails closed for unavailable last-call data', async ({
+    lastCallTokenUsage,
+    reason,
+  }) => {
+    const session = createMockSession(async function* () {});
+    session.readContextWindowSource.mockResolvedValue({
+      limit: 100,
+      lastCallTokenUsage,
+    });
+    const runtime = createRuntime(async () => session);
+    await runtime.initialize('C:\\workspace');
 
+    await expect(runtime.readContextWindow()).resolves.toEqual({
+      availability: 'unavailable',
+      reason,
+    });
+  });
   it('projects only BYOK models from the real startup catalog', async () => {
     const session = createMockSession(async function* () {});
     session.availableModels = [
@@ -1046,7 +1078,7 @@ describe('FactoryDroidRuntime', () => {
     expect(session.updateSettings).toHaveBeenCalledOnce();
   });
 
-  it('rejects malformed SDK settings, context, and update values safely', async () => {
+  it('handles malformed SDK settings, context, and update values safely', async () => {
     const session = createMockSession(async function* () {});
     const diagnostics = { record: vi.fn() };
     const runtime = new FactoryDroidRuntime({
@@ -1061,23 +1093,24 @@ describe('FactoryDroidRuntime', () => {
       'Droid returned invalid session settings.',
     );
     session.settings.interactionMode = DroidInteractionMode.Auto;
-    session.getContextStats.mockResolvedValue({
-      used: -1,
-      remaining: 0,
-      limit: 100,
-      accuracy: ContextStatsAccuracy.Estimated,
-      updatedAt: new Date().toISOString(),
+    session.readContextWindowSource.mockResolvedValue({
+      limit: -1,
+      lastCallTokenUsage: {
+        status: 'available',
+        used: 0,
+      },
     });
-    await expect(runtime.readContextStats()).rejects.toThrow(
-      'Droid context statistics could not be read.',
-    );
+    await expect(runtime.readContextWindow()).resolves.toEqual({
+      availability: 'unavailable',
+      reason: 'invalid-budget',
+    });
     expect(diagnostics.record).toHaveBeenCalledWith({
-      level: 'error',
+      level: 'info',
       name: 'runtime.context.finished',
       attributes: {
         durationMs: expect.any(Number),
-        outcome: 'invalid-stats',
-        reason: 'negative',
+        outcome: 'unavailable',
+        reason: 'invalid-budget',
       },
     });
     await expect(
@@ -1103,7 +1136,7 @@ describe('FactoryDroidRuntime', () => {
 
   it('replaces SDK read and update errors with generic runtime failures', async () => {
     const session = createMockSession(async function* () {});
-    session.getContextStats.mockRejectedValue(
+    session.readContextWindowSource.mockRejectedValue(
       new Error('sensitive context failure'),
     );
     session.updateSettings.mockRejectedValue(
@@ -1112,7 +1145,7 @@ describe('FactoryDroidRuntime', () => {
     const runtime = createRuntime(async () => session);
     await runtime.initialize('C:\\workspace');
 
-    await expect(runtime.readContextStats()).rejects.toThrow(
+    await expect(runtime.readContextWindow()).rejects.toThrow(
       'Droid context statistics could not be read.',
     );
     await expect(
@@ -1865,19 +1898,19 @@ describe('createLocalDroidSession', () => {
     });
     const createTransport = vi.fn(() => transport);
 
-    await expect(
-      createLocalDroidSession(
-        {
-          target: { kind: 'new', cwd: 'C:\\workspace' },
-          interactionHandler: cancellingRuntimeInteractionHandler,
-        },
-        {
-          createTransport,
-          createSession,
-          resumeSession: vi.fn(),
-        },
-      ),
-    ).resolves.toBe(session);
+    const created = await createLocalDroidSession(
+      {
+        target: { kind: 'new', cwd: 'C:\\workspace' },
+        interactionHandler: cancellingRuntimeInteractionHandler,
+      },
+      {
+        createTransport,
+        createSession,
+        resumeSession: vi.fn(),
+      },
+    );
+    expect(created.id).toBe(session.id);
+    expect(created).not.toBe(session);
 
     expect(createTransport).toHaveBeenCalledWith({ cwd: 'C:\\workspace' });
     expect(calls).toEqual(['connect', 'createSession']);
@@ -2059,19 +2092,19 @@ describe('createLocalDroidSession', () => {
     });
     const createTransport = vi.fn(() => transport);
 
-    await expect(
-      createLocalDroidSession(
-        {
-          target: {
-            kind: 'resume',
-            cwd: 'C:\\workspace',
-            sessionId: 'saved-session',
-          },
-          interactionHandler,
+    const resumed = await createLocalDroidSession(
+      {
+        target: {
+          kind: 'resume',
+          cwd: 'C:\\workspace',
+          sessionId: 'saved-session',
         },
-        { createTransport, createSession, resumeSession },
-      ),
-    ).resolves.toBe(session);
+        interactionHandler,
+      },
+      { createTransport, createSession, resumeSession },
+    );
+    expect(resumed.id).toBe(session.id);
+    expect(resumed).not.toBe(session);
 
     expect(createTransport).toHaveBeenCalledWith({ cwd: 'C:\\workspace' });
     expect(createSession).not.toHaveBeenCalled();
@@ -2256,6 +2289,15 @@ function createMockSession(
         updatedAt: new Date().toISOString(),
       }),
     ),
+    readContextWindowSource: vi.fn<
+      NonNullable<FactoryDroidSession['readContextWindowSource']>
+    >(async () => ({
+      limit: 100,
+      lastCallTokenUsage: {
+        status: 'available',
+        used: 40,
+      },
+    })),
     close: vi.fn(async () => {}),
   };
 }

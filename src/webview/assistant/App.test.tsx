@@ -118,10 +118,10 @@ function snapshot(
     context: {
       status: 'ready',
       value: {
+        availability: 'available',
         used: 20_000,
         remaining: 180_000,
         limit: 200_000,
-        accuracy: 'exact',
       },
     },
     modelCatalog: {

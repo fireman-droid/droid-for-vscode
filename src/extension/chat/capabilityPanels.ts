@@ -23,7 +23,7 @@ import {
 import type {
   DroidRuntime,
   RuntimeCommand,
-  RuntimeContextStats,
+  RuntimeContextWindow,
   RuntimeModelCatalog,
   RuntimeModelCatalogItem,
   RuntimeSkill,
@@ -117,7 +117,7 @@ export function refreshContext(
     ctl.context = { status: 'loading', value: confirmed };
     emitContext(ctl, sessionId);
     void runtime
-      .readContextStats()
+      .readContextWindow()
       .then((result) => {
         onSettled?.();
         if (
@@ -133,7 +133,7 @@ export function refreshContext(
         }
         ctl.context = {
           status: 'ready',
-          value: projectContextStats(result),
+          value: projectContextWindow(result),
         };
         emitContext(ctl, sessionId);
       })
@@ -605,23 +605,38 @@ export function emitModelCatalog(
     });
 }
 
-export function projectContextStats(
-  context: RuntimeContextStats,
+export function projectContextWindow(
+  context: RuntimeContextWindow,
 ): SessionContextStats {
+  if (context.availability === 'unavailable') {
+    if (
+      context.reason !== 'no-last-call' &&
+      context.reason !== 'invalid-last-call' &&
+      context.reason !== 'invalid-budget'
+    ) {
+      throw new Error('Invalid runtime context window.');
+    }
+    return {
+      availability: 'unavailable',
+      reason: context.reason,
+    };
+  }
   if (
+    context.availability !== 'available' ||
     !isSafeContextNumber(context.used) ||
     !isSafeContextNumber(context.remaining) ||
     !isSafeContextNumber(context.limit) ||
-    (context.accuracy !== 'exact' &&
-      context.accuracy !== 'estimated')
+    context.limit === 0 ||
+    context.used > context.limit ||
+    context.remaining !== context.limit - context.used
   ) {
-    throw new Error('Invalid runtime context statistics.');
+    throw new Error('Invalid runtime context window.');
   }
   return {
+    availability: 'available',
     used: context.used,
     remaining: context.remaining,
     limit: context.limit,
-    accuracy: context.accuracy,
   };
 }
 

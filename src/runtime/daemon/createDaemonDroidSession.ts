@@ -283,8 +283,8 @@ function adaptDaemonSession(
       return result;
     },
     async getContextStats() {
-      // The daemon facade has no context-stats call; derive the meter
-      // from the context breakdown and mark it estimated.
+      // Retained for the SDK-compatible session facade and capability
+      // probing. These cumulative totals do not drive DroidVisX's meter.
       const breakdown = await droid.sessions.getContextBreakdown(
         session.id,
       );
@@ -294,6 +294,24 @@ function adaptDaemonSession(
         limit: Math.round(breakdown.contextBudget),
         accuracy: ContextStatsAccuracy.Estimated,
         updatedAt: new Date().toISOString(),
+      };
+    },
+    async readContextWindowSource() {
+      const breakdown = await droid.sessions.getContextBreakdown(
+        session.id,
+      );
+      const lastCall = breakdown.lastCallCompactionTokens;
+      return {
+        limit: breakdown.contextBudget,
+        lastCallTokenUsage:
+          lastCall === undefined
+            ? { status: 'missing' }
+            : Number.isSafeInteger(lastCall) && lastCall >= 0
+              ? {
+                  status: 'available',
+                  used: lastCall,
+                }
+              : { status: 'invalid' },
       };
     },
     async rewind(params) {

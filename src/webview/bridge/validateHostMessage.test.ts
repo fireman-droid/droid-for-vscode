@@ -919,38 +919,6 @@ describe('readHostMessage', () => {
     ).toBeDefined();
     expect(
       readHostMessage({
-        type: 'session.context',
-        sequence: 2,
-        sessionId: 'session-1',
-        context: {
-          status: 'ready',
-          value: {
-            used: 130,
-            remaining: 169,
-            limit: 100,
-            accuracy: 'estimated',
-          },
-        },
-      }),
-    ).toBeDefined();
-    expect(
-      readHostMessage({
-        type: 'session.context',
-        sequence: 2,
-        sessionId: 'session-1',
-        context: {
-          status: 'ready',
-          value: {
-            used: 0,
-            remaining: 0,
-            limit: 0,
-            accuracy: 'estimated',
-          },
-        },
-      }),
-    ).toBeDefined();
-    expect(
-      readHostMessage({
         type: 'session.model-catalog',
         sequence: 3,
         sessionId: 'session-1',
@@ -971,48 +939,6 @@ describe('readHostMessage', () => {
       settings: {
         status: 'ready',
         value: { ...readySettings().value, interactionMode: 'agi' },
-      },
-    },
-    {
-      type: 'session.context',
-      sequence: 1,
-      sessionId: 'session-1',
-      context: {
-        status: 'ready',
-        value: {
-          used: -1,
-          remaining: 1,
-          limit: 1,
-          accuracy: 'estimated',
-        },
-      },
-    },
-    {
-      type: 'session.context',
-      sequence: 1,
-      sessionId: 'session-1',
-      context: {
-        status: 'ready',
-        value: {
-          used: 0.25,
-          remaining: 0.75,
-          limit: 1,
-          accuracy: 'estimated',
-        },
-      },
-    },
-    {
-      type: 'session.context',
-      sequence: 1,
-      sessionId: 'session-1',
-      context: {
-        status: 'ready',
-        value: {
-          used: Number.POSITIVE_INFINITY,
-          remaining: 0,
-          limit: Number.POSITIVE_INFINITY,
-          accuracy: 'estimated',
-        },
       },
     },
     {
@@ -4681,10 +4607,10 @@ function readyContext() {
   return {
     status: 'ready' as const,
     value: {
+      availability: 'available' as const,
       used: 25_000,
       remaining: 175_000,
       limit: 200_000,
-      accuracy: 'exact' as const,
     },
   };
 }

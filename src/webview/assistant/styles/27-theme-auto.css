@@ -226,12 +226,7 @@ html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb:hover {
 
 .dvx-shell[data-dvx-theme-preference='auto']
   .dvx-context-progress
-  span,
-.dvx-shell[data-dvx-theme-preference='auto']
-  .dvx-context-progress-over
-  > span:first-child,
-.dvx-shell[data-dvx-theme-preference='auto']
-  .dvx-context-overflow-tick {
+  span {
   background: var(
     --vscode-progressBar-background,
     var(--vscode-button-background, var(--dvx-accent))

@@ -63,7 +63,6 @@ import type {
   DroidRuntime,
   RuntimeAttachment,
   RuntimeCommand,
-  RuntimeContextStats,
   RuntimeModelCatalog,
   RuntimeModelCatalogItem,
   RuntimeSessionSettings,

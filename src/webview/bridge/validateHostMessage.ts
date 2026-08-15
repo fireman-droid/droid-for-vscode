@@ -128,7 +128,6 @@ import {
   type SessionCatalogStatus,
   type SessionSearchHit,
   type SessionSearchState,
-  type SessionContextState,
   type SessionInteractionMode,
   type SessionReasoningEffort,
   type SessionSettingsState,
@@ -205,6 +204,7 @@ import {
   transcriptTextUnits,
 } from '../../shared/transcriptLimits';
 import { isValidToolTarget } from './validateToolTarget';
+import { parseSessionContext } from './validateContextState';
 
 const MAX_STRING_LENGTH = MAX_TURN_TEXT_LENGTH;
 const CONNECTION_STATUS_SET = new Set<ConnectionState['status']>(
@@ -1887,73 +1887,6 @@ function parseConfirmedSettings(
     autonomyLevel: value.autonomyLevel,
     specModeModelId: value.specModeModelId,
     specModeReasoningEffort: value.specModeReasoningEffort,
-  };
-}
-
-function parseSessionContext(
-  value: unknown,
-): SessionContextState | undefined {
-  if (!isStrictRecord(value)) {
-    return undefined;
-  }
-  const status = readStringDataProperty(value, 'status');
-  if (status === undefined) {
-    return undefined;
-  }
-
-  if (status === 'error') {
-    if (
-      !hasExactKeys(value, ['status', 'value', 'message']) ||
-      !isBoundedString(value.message, MAX_STRING_LENGTH)
-    ) {
-      return undefined;
-    }
-    const context =
-      value.value === null ? null : parseContextStats(value.value);
-    return context === undefined
-      ? undefined
-      : { status: 'error', value: context, message: value.message };
-  }
-  if (
-    (status !== 'loading' && status !== 'ready') ||
-    !hasExactKeys(value, ['status', 'value'])
-  ) {
-    return undefined;
-  }
-  const context =
-    value.value === null ? null : parseContextStats(value.value);
-  if (
-    context === undefined ||
-    (status === 'ready' && context === null)
-  ) {
-    return undefined;
-  }
-  if (status === 'loading') {
-    return { status: 'loading', value: context };
-  }
-  return context === null
-    ? undefined
-    : { status: 'ready', value: context };
-}
-
-function parseContextStats(
-  value: unknown,
-): Exclude<SessionContextState['value'], null> | undefined {
-  if (
-    !isStrictRecord(value) ||
-    !hasExactKeys(value, ['used', 'remaining', 'limit', 'accuracy']) ||
-    !isContextNumber(value.used) ||
-    !isContextNumber(value.remaining) ||
-    !isContextNumber(value.limit) ||
-    (value.accuracy !== 'exact' && value.accuracy !== 'estimated')
-  ) {
-    return undefined;
-  }
-  return {
-    used: value.used,
-    remaining: value.remaining,
-    limit: value.limit,
-    accuracy: value.accuracy,
   };
 }
 
@@ -3660,10 +3593,6 @@ function readStringDataProperty(
     typeof descriptor.value === 'string'
     ? descriptor.value
     : undefined;
-}
-
-function isContextNumber(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
 function isNullableId(value: unknown): value is string | null {

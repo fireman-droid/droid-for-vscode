@@ -47,8 +47,7 @@ import {
   type RuntimeRewindInfo,
   type RuntimeRewindParams,
   type RuntimeRewindResult,
-  type RuntimeContextAccuracy,
-  type RuntimeContextStats,
+  type RuntimeContextWindow,
   type RuntimeModelCatalog,
   type RuntimeModelCatalogItem,
   type RuntimeSessionSettings,
@@ -71,7 +70,15 @@ import {
   normalizeSdkEvent,
   normalizeSdkEventImages,
 } from './normalizeSdkEvent';
-import { createModelCatalogCaptureTransport } from './modelCatalogCaptureTransport';
+import {
+  createModelCatalogCaptureTransport,
+} from './modelCatalogCaptureTransport';
+import { createCapturedSessionView } from './capturedSessionView';
+import {
+  classifyInvalidContextWindowSource,
+  projectContextWindow,
+  type FactoryContextWindowSource,
+} from './contextWindow';
 import type { RuntimeAvailability, RuntimeEvent } from './runtimeEvents';
 import {
   sanitizeSubagentDescription,
@@ -149,6 +156,13 @@ export interface FactoryDroidSession {
     params: DroidSessionUpdateSettingsOptions,
   ): Promise<unknown>;
   getContextStats(): Promise<GetContextStatsResult>;
+  /**
+   * Runtime-owned current-window source. Process sessions combine the
+   * public context limit with captured last-call notifications; daemon
+   * sessions read both fields from the public context breakdown.
+   */
+  readContextWindowSource?(): Promise<FactoryContextWindowSource>;
+  releaseContextWindowSource?(): void;
   rewind?(
     params: FactoryDroidSessionRewindParams,
   ): Promise<{ session: FactoryDroidSession }>;
@@ -490,16 +504,24 @@ export class FactoryDroidRuntime implements DroidRuntime {
     }
   }
 
-  async readContextStats(): Promise<RuntimeContextStats> {
+  async readContextWindow(): Promise<RuntimeContextWindow> {
     const session = this.requireSession();
     const startedAt = performance.now();
     this.recordDiagnostic({
       level: 'debug',
       name: 'runtime.context.started',
     });
-    let stats: GetContextStatsResult;
+    let source: FactoryContextWindowSource;
     try {
-      stats = await session.getContextStats();
+      if (typeof session.readContextWindowSource === 'function') {
+        source = await session.readContextWindowSource();
+      } else {
+        const stats = await session.getContextStats();
+        source = {
+          limit: stats.limit,
+          lastCallTokenUsage: { status: 'missing' },
+        };
+      }
     } catch {
       this.recordDiagnostic({
         level: 'error',
@@ -512,28 +534,31 @@ export class FactoryDroidRuntime implements DroidRuntime {
       throw new Error('Droid context statistics could not be read.');
     }
     try {
-      const projected = projectContextStats(stats);
+      const projected = projectContextWindow(source);
       this.recordDiagnostic({
         level: 'info',
         name: 'runtime.context.finished',
         attributes: {
           durationMs: Math.round(performance.now() - startedAt),
-          outcome: 'success',
-          accuracy: projected.accuracy,
-          arithmeticDelta:
-            projected.used + projected.remaining - projected.limit,
+          outcome: projected.availability,
+          ...(projected.availability === 'available'
+            ? {
+                source: 'last-call',
+                used: projected.used,
+                limit: projected.limit,
+              }
+            : { reason: projected.reason }),
         },
       });
       return projected;
     } catch {
-      const reason = classifyInvalidContextStats(stats);
       this.recordDiagnostic({
         level: 'error',
         name: 'runtime.context.finished',
         attributes: {
           durationMs: Math.round(performance.now() - startedAt),
-          outcome: 'invalid-stats',
-          reason,
+          outcome: 'invalid-source',
+          reason: classifyInvalidContextWindowSource(source),
         },
       });
       throw new Error('Droid context statistics could not be read.');
@@ -661,13 +686,14 @@ export class FactoryDroidRuntime implements DroidRuntime {
       throw error;
     }
 
-    // The SDK replaces the rewound session in place; re-apply the
-    // captured model catalog view so `availableModels` survives the fork.
+    // The SDK replaces the rewound session in place; re-apply captured
+    // session metadata so the model catalog and Context source survive.
     const availableModels = session.availableModels;
-    this.session =
-      availableModels === undefined
-        ? nextSession
-        : createCatalogSessionView(nextSession, availableModels);
+    session.releaseContextWindowSource?.();
+    this.session = createCapturedSessionView(
+      nextSession,
+      availableModels,
+    );
     if (this.sessionTarget) {
       this.sessionTarget = {
         kind: 'resume',
@@ -738,13 +764,14 @@ export class FactoryDroidRuntime implements DroidRuntime {
       throw error;
     }
 
-    // Compaction continues in a new session; re-apply the captured
-    // model catalog view so `availableModels` survives the swap.
+    // Compaction continues in a new session; re-apply captured session
+    // metadata so the model catalog and Context source survive.
     const availableModels = session.availableModels;
-    this.session =
-      availableModels === undefined
-        ? nextSession
-        : createCatalogSessionView(nextSession, availableModels);
+    session.releaseContextWindowSource?.();
+    this.session = createCapturedSessionView(
+      nextSession,
+      availableModels,
+    );
     if (this.sessionTarget) {
       this.sessionTarget = {
         kind: 'resume',
@@ -796,13 +823,14 @@ export class FactoryDroidRuntime implements DroidRuntime {
       throw error;
     }
 
-    // Forking replaces the SDK session handle in place; re-apply the
-    // captured model catalog view so `availableModels` survives.
+    // Forking replaces the SDK session handle in place; re-apply
+    // captured session metadata.
     const availableModels = session.availableModels;
-    this.session =
-      availableModels === undefined
-        ? nextSession
-        : createCatalogSessionView(nextSession, availableModels);
+    session.releaseContextWindowSource?.();
+    this.session = createCapturedSessionView(
+      nextSession,
+      availableModels,
+    );
     if (this.sessionTarget) {
       this.sessionTarget = {
         kind: 'resume',
@@ -1611,9 +1639,11 @@ export async function createLocalDroidSession(
   }
 
   const availableModels = catalogCapture.readAvailableModels();
-  return availableModels === undefined
-    ? session
-    : createCatalogSessionView(session, availableModels);
+  return createCapturedSessionView(
+    session,
+    availableModels,
+    catalogCapture.readLastCallTokenUsage(),
+  );
 }
 
 function normalizeSessionTarget(
@@ -1701,26 +1731,6 @@ function projectSessionSettings(
     autonomyLevel,
     specModeModelId: specModeModelId ?? null,
     specModeReasoningEffort,
-  };
-}
-
-function projectContextStats(
-  stats: GetContextStatsResult,
-): RuntimeContextStats {
-  if (
-    !isContextNumber(stats.used) ||
-    !isContextNumber(stats.remaining) ||
-    !isContextNumber(stats.limit) ||
-    (stats.accuracy !== 'exact' && stats.accuracy !== 'estimated')
-  ) {
-    throw new Error('Invalid context statistics.');
-  }
-
-  return {
-    used: stats.used,
-    remaining: stats.remaining,
-    limit: stats.limit,
-    accuracy: stats.accuracy as RuntimeContextAccuracy,
   };
 }
 
@@ -1937,10 +1947,6 @@ function isSafeModelDisplayName(value: unknown): value is string {
   );
 }
 
-function isContextNumber(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) >= 0;
-}
-
 /**
  * Projects the SDK's `DroidWorkingState` string onto the runtime enum.
  * Null (session no longer listed by the backend) and unrecognized
@@ -1963,106 +1969,6 @@ function projectWorkingState(
     default:
       return 'unknown';
   }
-}
-
-function classifyInvalidContextStats(
-  stats: GetContextStatsResult,
-): string {
-  if (
-    !Number.isSafeInteger(stats.used) ||
-    !Number.isSafeInteger(stats.remaining) ||
-    !Number.isSafeInteger(stats.limit)
-  ) {
-    return 'non-integer';
-  }
-  if (stats.used < 0 || stats.remaining < 0 || stats.limit < 0) {
-    return 'negative';
-  }
-  if (
-    stats.accuracy !== 'exact' &&
-    stats.accuracy !== 'estimated'
-  ) {
-    return 'invalid-accuracy';
-  }
-  return 'projection-error';
-}
-
-function createCatalogSessionView(
-  session: FactoryDroidSession,
-  availableModels: readonly AvailableModelConfig[],
-): FactoryDroidSession {
-  const view: FactoryDroidSession = {
-    get id() {
-      return session.id;
-    },
-    get settings() {
-      return session.settings;
-    },
-    availableModels: [...availableModels],
-    stream(prompt, options) {
-      return session.stream(prompt, options);
-    },
-    interrupt() {
-      return session.interrupt();
-    },
-    updateSettings(params) {
-      return session.updateSettings(params);
-    },
-    getContextStats() {
-      return session.getContextStats();
-    },
-    close() {
-      return session.close();
-    },
-  };
-  if (typeof session.readWorkingState === 'function') {
-    view.readWorkingState = () => session.readWorkingState!();
-  }
-  if (typeof session.rewind === 'function') {
-    view.rewind = (params) => session.rewind!(params);
-  }
-  if (typeof session.getRewindInfo === 'function') {
-    view.getRewindInfo = (params) => session.getRewindInfo!(params);
-  }
-  if (typeof session.compact === 'function') {
-    view.compact = (params) => session.compact!(params);
-  }
-  if (typeof session.fork === 'function') {
-    view.fork = (params) => session.fork!(params);
-  }
-  if (typeof session.rename === 'function') {
-    view.rename = (params) => session.rename!(params);
-  }
-  if (typeof session.listSkills === 'function') {
-    view.listSkills = () => session.listSkills!();
-  }
-  if (typeof session.setSkillDisabled === 'function') {
-    view.setSkillDisabled = (params) => session.setSkillDisabled!(params);
-  }
-  if (typeof session.listMcpServers === 'function') {
-    view.listMcpServers = () => session.listMcpServers!();
-  }
-  if (typeof session.listMcpTools === 'function') {
-    view.listMcpTools = () => session.listMcpTools!();
-  }
-  if (typeof session.toggleMcpServer === 'function') {
-    view.toggleMcpServer = (params) => session.toggleMcpServer!(params);
-  }
-  if (typeof session.addMcpServer === 'function') {
-    view.addMcpServer = (params) => session.addMcpServer!(params);
-  }
-  if (typeof session.removeMcpServer === 'function') {
-    view.removeMcpServer = (params) => session.removeMcpServer!(params);
-  }
-  if (typeof session.authenticateMcpServer === 'function') {
-    view.authenticateMcpServer = (params) =>
-      session.authenticateMcpServer!(params);
-  }
-  if (typeof session.onNotification === 'function') {
-    view.onNotification = (callback, filter) =>
-      session.onNotification!(callback, filter);
-  }
-  return view;
 }
 
 /**

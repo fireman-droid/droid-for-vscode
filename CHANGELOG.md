@@ -4,6 +4,19 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.26] - 2026-08-15
+
+### Fixed
+
+- **Context fullness now uses the latest provider call** — process
+  sessions retain validated load and live notification usage, while
+  daemon sessions use `lastCallCompactionTokens`; each compares its
+  provider-reported latest-call measurement against the model budget.
+- **Cumulative totals can no longer become a Context percentage** —
+  missing, malformed, fractional, unsafe, or over-budget last-call
+  data renders “Current window unavailable.” Session and last-turn
+  totals remain available only in the separate token ledger.
+
 ## [0.7.25] - 2026-08-15
 
 ### Changed

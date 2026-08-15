@@ -334,7 +334,7 @@
 }
 
 .dvx-context-usage-unavailable .dvx-context-usage-summary strong {
-  max-width: 58%;
+  max-width: 100%;
   font-size: 17px;
   line-height: 22px;
   letter-spacing: -0.02em;
@@ -364,54 +364,11 @@
   background: linear-gradient(90deg, var(--dvx-accent), #ff8b60);
 }
 
-/* Degraded over-limit bar: pinned full with a softer wash and an
-   overflow tick past the right end, so the card keeps its shape
-   while reading as an estimate rather than a live percentage. */
-.dvx-context-progress-over {
-  position: relative;
-  overflow: visible;
-}
-
-.dvx-context-progress-over > span:first-child {
-  border-radius: 999px 2px 2px 999px;
-  background: linear-gradient(
-    90deg,
-    rgb(242 97 46 / 55%),
-    rgb(255 139 96 / 75%)
-  );
-}
-
-.dvx-context-overflow-tick {
-  position: absolute;
-  top: -3px;
-  bottom: -3px;
-  right: -6px;
-  width: 2.5px;
-  border-radius: 2px;
-  background: #d2643d;
-}
-
-/* Quiet estimate badge hugging the over-limit heading; margin-right
-   auto keeps the token count pushed to the row's far right. */
-.dvx-context-usage-summary .dvx-context-estimated {
-  flex: none;
-  margin-right: auto;
-  padding: 1px 7px;
-  border: 1px solid var(--dvx-border);
-  border-radius: 999px;
-  color: var(--dvx-muted);
-  font-size: 9.5px;
-  font-weight: 550;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-}
-
 .dvx-context-details {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   padding-top: 10px;
   gap: 0;
-  margin-inline: -15px;
   margin: 0 -16px;
   padding: 0;
   border-top: 1px solid rgb(229 229 229 / 60%);

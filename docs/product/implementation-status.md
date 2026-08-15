@@ -25,8 +25,8 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.25 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
-加载新 Bundle，本地提交状态见本轮最终交付记录。
+当前 v0.7.26 Last-call Context 切片已重新打包、验证并安装；现有 Cursor
+窗口需 Reload Window 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
 production React）、长会话渲染优化（消息身份缓存、Thinking 展开局部化、
@@ -139,8 +139,9 @@ store 在实时 `tool.activity` 更新中丢失 `filePath` 的问题。
 `docs/preflight/`。该预研确认 Context 的累计 `used`、Breakdown
 `usedTokens`、`freeTokens` 和 Category Sum 都不能表示当前窗口；只有公开
 Schema 中最新 Provider Call 的 `lastCallTokenUsage` /
-`lastCallCompactionTokens` 可以作为当前 Compaction Meter 分子。该正确 Meter
-尚未接入当前生产包，当前包继续使用不会伪造百分比的 Unavailable 降级。
+`lastCallCompactionTokens` 可以作为当前 Compaction Meter 分子。v0.7.26
+现已按该语义接通正确 Meter；缺失或非法的 last-call 数据继续明确降级为
+Unavailable，不会回退到累计统计。
 公开高层 Node Session 没有模型目录方法，
 但公开的 `initializeSession()` / `loadSession()` 响应包含经过 SDK Schema
 验证的 `availableModels`。生产 Runtime 现在只投影其中由 SDK 标记为
@@ -3222,26 +3223,41 @@ UI 描述见 §22 重做记录。
   `1717218201AF15483D11C87F8D1FE88EAADA88BC13EADF32D06B57EECC16124D`），
   Cursor 已确认安装 `droidvisx.droidvisx@0.7.25`。
 
+### 61. Last-call Context 窗口用量（2026-08-15，v0.7.26）
+
+- **真实分子**：Process Resume 从公开、经 Schema 校验的 Load 响应保留
+  `lastCallTokenUsage`，活跃 Session 通过公开 `onNotification()` 更新；
+  Process 投影 `input + cacheRead + output`，Daemon 直接使用公开
+  `lastCallCompactionTokens`；两者各自以模型 Budget 为分母（实测标量与
+  对应 Provider Call 求和一致）。
+- **严格分离**：`getContextStats().used/remaining` 与 Breakdown 的累计
+  `usedTokens/freeTokens` 不再进入 Ring 或百分比；累计/Last turn 继续只在
+  独立 Token usage ledger 中显示。
+- **Fail closed**：缺失、负数、小数、unsafe 或超 Budget 的 last-call
+  数据显示 “Current window unavailable”，Bridge v19 显式区分
+  available/unavailable；Host 继续以 Runtime/Session/CWD generation
+  丢弃迟到结果，并在刷新失败时保留最近确认值。
+- **验证**：触达 12 个测试文件 **545 例**、三段 typecheck、
+  `lint:budgets`、`git diff --check` 与 simplify 三路审查全绿；按门禁
+  未跑全量 Vitest、浏览器 smoke、daemon smoke 或历史 artifacts harness。
+- **交付**：生产 bundle 已打入并验证 11-entry
+  `droidvisx-0.7.26.vsix`（1,695,886 bytes，SHA-256
+  `C7B3338BD740A5BA5C0583CAFD0EE768BE80BA7E373C5E0BE5A008A30AE441C3`），
+  Cursor 已确认安装 `droidvisx.droidvisx@0.7.26`。
+
 ## 部分完成
 
 ### Session Settings、Context 与模型选择
 
 - 读取并显示真实 Interaction Mode、Model、Reasoning Effort 和 Autonomy
 - 更新 Mode、Autonomy、Model 和所选 Model 支持的 Reasoning Effort
-- 使用 `getContextStats()` 读取并校验 SDK 返回字段；当前只把可信范围内的
-  旧 DTO 显示为比例，累计值超过 Model Limit 时不会显示比例
-- Context 对每个公开数值独立执行安全整数和非负校验，不再增加 SDK Schema
-  没有要求的跨字段约束；`estimated` 统计可有舍入差
-- 只有 `used`、`remaining` 和 `limit` 能形成有效窗口比例时才显示百分比；
-  SDK 通过 Schema 但报告值超过 Model Limit 时，UI 显示原始报告量和
-  “Current window unavailable”，不会把累计/压缩相关统计误报为 100%
-- 最新无 Prompt 公开 SDK Probe 进一步证明 `getContextStats().used`、
-  `getContextBreakdown().usedTokens`、`freeTokens` 和 Category Sum 均可能是
-  累计值；正确实现必须使用
-  `inputTokens + cacheReadTokens + (outputTokens ?? 0)`，该和已与
-  `lastCallCompactionTokens` 实测一致，并以 `contextBudget` / `limit` 为分母
-- 正确的 Last-call Meter 仍属于下一实现切片；在接通前不得把当前
-  Unavailable 降级改回累计百分比
+- Context Meter 只使用最新 Provider Call：
+  `inputTokens + cacheReadTokens + (outputTokens ?? 0)`；Process 以
+  `getContextStats().limit` 为分母，Daemon 以 `contextBudget` 为分母
+- `getContextStats().used/remaining`、Breakdown `usedTokens/freeTokens`
+  和 Category Sum 都是累计/诊断统计，永不进入 Ring 或百分比
+- 缺失、非法或超过 Budget 的 last-call 数据显式显示
+  “Current window unavailable”，不会显示估计 Bar 或泄漏累计值
 - Context 刷新失败时保留最后一次已确认数值并提供 Retry；加载期间的重复
   Refresh 会被合并，失败提示指向 `DroidVisX Logs`
 - 使用公开初始化/加载响应及公开 SDK Schema 捕获真实 `availableModels`
@@ -5378,6 +5394,10 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 `[delivery-plan.md](./delivery-plan.md)`。
 
 ## 下一步
+
+**当前状态（2026-08-15）**：用户 Debug Checklist 的 item 25 已由
+v0.7.26 Last-call Context Meter 完成；下方 V1 路线与 2026-08-13
+收工快照保留为历史记录，不再代表当前唯一待办。
 
 按用户决定（2026-08-11）：第一档 UI/观察性打磨大部分暂缓，方案已写入
 [`tier1-polish-plan.md`](./tier1-polish-plan.md)；路线索引与排除项见

@@ -10,6 +10,7 @@ import {
   type ToolActivityUpdateKind,
 } from './toolActivity';
 import type { SessionTokenUsageState } from './tokenUsage';
+import type { SessionContextStats } from './contextState';
 import { MAX_SESSION_TRANSCRIPT_ITEMS } from './transcriptLimits';
 import type { BtwAskMessage, BtwDismissMessage, BtwPrepareMessage, BtwStopMessage, SessionBtwMessage } from './btwProtocol';
 // Type-only on purpose (subagentProtocol imports shared bounds).
@@ -129,8 +130,8 @@ import type { ChangesUpdateMessage } from './changesProtocol';
 // the streaming `changes.update` (H→W; changesProtocol.ts).
 // Version 11: subagent panel — openTranscript/stop/panel W→H,
 // transcript/activity H→W; v12–v16; v17 custom-model discovery/import;
-// v18 turn-scoped file review.
-export const BRIDGE_PROTOCOL_VERSION = 18 as const;
+// v18 turn-scoped file review; v19 truthful last-call Context window.
+export const BRIDGE_PROTOCOL_VERSION = 19 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_DELTA_LENGTH = 16_384;
@@ -374,7 +375,10 @@ export const SESSION_REASONING_EFFORTS = [
 export type SessionReasoningEffort =
   (typeof SESSION_REASONING_EFFORTS)[number];
 
-export type SessionContextAccuracy = 'exact' | 'estimated';
+export type {
+  SessionContextStats,
+  SessionContextUnavailableReason,
+} from './contextState';
 
 export interface WebviewReadyMessage {
   readonly type: 'webview.ready';
@@ -1205,13 +1209,6 @@ export type SessionSettingsState =
       readonly value: ConfirmedSessionSettings | null;
       readonly message: string;
     };
-
-export interface SessionContextStats {
-  readonly used: number;
-  readonly remaining: number;
-  readonly limit: number;
-  readonly accuracy: SessionContextAccuracy;
-}
 
 export type SessionContextState =
   | {

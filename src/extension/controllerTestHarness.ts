@@ -167,8 +167,8 @@ export interface MockRuntime extends DroidRuntime {
   readSessionSettings: ReturnType<
     typeof vi.fn<DroidRuntime['readSessionSettings']>
   >;
-  readContextStats: ReturnType<
-    typeof vi.fn<DroidRuntime['readContextStats']>
+  readContextWindow: ReturnType<
+    typeof vi.fn<DroidRuntime['readContextWindow']>
   >;
   readModelCatalog: ReturnType<
     typeof vi.fn<DroidRuntime['readModelCatalog']>
@@ -195,11 +195,11 @@ export function createMockRuntime(
       specModeModelId: null,
       specModeReasoningEffort: null,
     })),
-    readContextStats: vi.fn(async () => ({
+    readContextWindow: vi.fn(async () => ({
+      availability: 'available',
       used: 40,
       remaining: 60,
       limit: 100,
-      accuracy: 'exact',
     })),
     readModelCatalog: vi.fn(async () => ({
       status: 'unavailable',

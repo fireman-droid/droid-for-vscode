@@ -2224,6 +2224,7 @@ function ContextPopover({
       className="dvx-composer-popover dvx-context-popover"
       role="dialog"
       aria-label="Context usage"
+      aria-busy={context.status === 'loading'}
     >
       <div className="dvx-panel-head">
         <span className="dvx-panel-title">Context usage</span>
@@ -2234,7 +2235,7 @@ function ContextPopover({
             disabled={disabled}
             onClick={onRefresh}
           >
-            Refresh
+            {context.status === 'loading' ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
       </div>
@@ -2285,47 +2286,26 @@ function ContextUsage({
 }: {
   readonly stats: NonNullable<SessionContextState['value']>;
 }): React.JSX.Element {
-  if (!hasUsableContextRatio(stats)) {
-    // Degraded visual: the bar stays (full, with an overflow tick at
-    // the end) so the card keeps its shape when totals exceed the
-    // model limit; the Estimated badge flags the reduced accuracy.
+  if (stats.availability === 'unavailable') {
+    const detail =
+      stats.reason === 'no-last-call'
+        ? 'Droid has not reported a provider call for this session yet.'
+        : stats.reason === 'invalid-budget'
+          ? 'The model context budget could not be validated.'
+          : 'The latest provider-call usage could not be validated.';
     return (
       <div className="dvx-context-usage dvx-context-usage-unavailable">
         <div className="dvx-context-usage-summary">
-          <strong>Over model limit</strong>
-          <span className="dvx-context-estimated" aria-hidden="true">
-            Estimated
-          </span>
-          <span>{formatCount(stats.used)} tokens reported</span>
-        </div>
-        <div
-          className="dvx-context-progress dvx-context-progress-over"
-          role="progressbar"
-          aria-label="Context used"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={100}
-          aria-valuetext={`Estimated over the model limit: ${formatCount(
-            stats.used,
-          )} tokens reported, limit ${formatCount(stats.limit)}`}
-        >
-          <span style={{ width: '100%' }} />
-          <span className="dvx-context-overflow-tick" aria-hidden="true" />
+          <strong>Current window unavailable</strong>
         </div>
         <p className="dvx-context-usage-note">
-          Droid returned totals beyond the model limit. Long sessions can
-          continue through context compaction, so this estimate is not a
-          trustworthy active-window percentage.
+          {detail} The meter appears only when an exact latest-call
+          numerator is available.
         </p>
-        <dl className="dvx-context-details">
-          <Stat label="Model limit" value={formatCount(stats.limit)} />
-          <Stat label="Accuracy" value={formatLabel(stats.accuracy)} />
-        </dl>
       </div>
     );
   }
-  const usedPercent =
-    Math.min(100, Math.max(0, (stats.used / stats.limit) * 100));
+  const usedPercent = (stats.used / stats.limit) * 100;
   const roundedPercent = Math.round(usedPercent);
 
   return (
@@ -2351,7 +2331,7 @@ function ContextUsage({
       </div>
       <dl className="dvx-context-details">
         <Stat label="Remaining" value={formatCount(stats.remaining)} />
-        <Stat label="Accuracy" value={formatLabel(stats.accuracy)} />
+        <Stat label="Source" value="Latest provider call" />
       </dl>
     </div>
   );
@@ -2865,10 +2845,7 @@ function getContextPercent(context: SessionContextState): number {
   ) {
     return 0;
   }
-  return Math.min(
-    100,
-    Math.max(0, (context.value.used / context.value.limit) * 100),
-  );
+  return (context.value.used / context.value.limit) * 100;
 }
 
 function getContextLabel(context: SessionContextState): string {
@@ -2878,9 +2855,7 @@ function getContextLabel(context: SessionContextState): string {
       : 'Context usage unavailable';
   }
   if (!hasUsableContextRatio(context.value)) {
-    return `Current context window unavailable; Droid reported ${formatCount(
-      context.value.used,
-    )} tokens against a ${formatCount(context.value.limit)} model limit`;
+    return 'Current context window unavailable';
   }
   return `Context used ${formatCount(context.value.used)} of ${formatCount(
     context.value.limit,
@@ -2889,12 +2864,11 @@ function getContextLabel(context: SessionContextState): string {
 
 function hasUsableContextRatio(
   stats: NonNullable<SessionContextState['value']>,
-): boolean {
-  return (
-    stats.limit > 0 &&
-    stats.used <= stats.limit &&
-    stats.remaining <= stats.limit
-  );
+): stats is Extract<
+  NonNullable<SessionContextState['value']>,
+  { availability: 'available' }
+> {
+  return stats.availability === 'available';
 }
 
 function formatCount(value: number): string {

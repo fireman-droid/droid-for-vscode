@@ -396,20 +396,6 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
   background: linear-gradient(90deg, #c9c9c9, #e8e8e8);
 }
 
-.dvx-shell[data-theme='dark']
-  .dvx-context-progress-over
-  > span:first-child {
-  background: linear-gradient(
-    90deg,
-    rgb(232 232 232 / 55%),
-    rgb(212 212 212 / 75%)
-  );
-}
-
-.dvx-shell[data-theme='dark'] .dvx-context-overflow-tick {
-  background: #e8e8e8;
-}
-
 .dvx-shell[data-theme='dark'] .dvx-context-details,
 .dvx-shell[data-theme='dark'] .dvx-context-details div + div,
 .dvx-shell[data-theme='dark'] .dvx-token-usage {

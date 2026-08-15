@@ -92,14 +92,20 @@ export const RUNTIME_SESSION_WORKING_STATES = [
 export type RuntimeSessionWorkingState =
   (typeof RUNTIME_SESSION_WORKING_STATES)[number];
 
-export type RuntimeContextAccuracy = 'exact' | 'estimated';
-
-export interface RuntimeContextStats {
-  readonly used: number;
-  readonly remaining: number;
-  readonly limit: number;
-  readonly accuracy: RuntimeContextAccuracy;
-}
+export type RuntimeContextWindow =
+  | {
+      readonly availability: 'available';
+      readonly used: number;
+      readonly remaining: number;
+      readonly limit: number;
+    }
+  | {
+      readonly availability: 'unavailable';
+      readonly reason:
+        | 'no-last-call'
+        | 'invalid-last-call'
+        | 'invalid-budget';
+    };
 
 export interface RuntimeModelCatalogUnavailable {
   readonly status: 'unavailable';
@@ -327,7 +333,7 @@ export interface DroidRuntime {
    */
   getSessionCwd?(): string | null;
   readSessionSettings(): Promise<RuntimeSessionSettings>;
-  readContextStats(): Promise<RuntimeContextStats>;
+  readContextWindow(): Promise<RuntimeContextWindow>;
   readModelCatalog(): Promise<RuntimeModelCatalog>;
   updateSessionSetting(
     update: RuntimeSessionSettingUpdate,

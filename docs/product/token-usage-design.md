@@ -24,7 +24,7 @@ an opaque optional `tokenMultiplier`).
 | `result` stream message `.tokenUsage` | full `TokenUsage` incl. `factoryCredits`, or `null` | once at end of each turn | Confirmed live; values are **per-turn** (turn1 846/5 + turn2 1719/76 = final cumulative 2565/81) |
 | `loadSession().result.tokenUsage` | full `TokenUsage` incl. `factoryCredits`, optional | history load | Confirmed present with cumulative session totals |
 | `loadSession().result.lastCallTokenUsage` | `inputTokens / cacheReadTokens / outputTokens?` | history load | Confirmed present (last LLM *call*, not last turn) |
-| `session_token_usage_changed` notification | `tokenUsage` + `inclusiveTokenUsage?` + `lastCallTokenUsage?` | wire-level | Confirmed on the wire; only the converted `token_usage_update` reaches the public stream |
+| `session_token_usage_changed` notification | `tokenUsage` + `inclusiveTokenUsage?` + `lastCallTokenUsage?` | public raw session notification | Confirmed live; `lastCallTokenUsage` is retained only for the Context meter |
 | `agent_turn_completed` notification | per-turn `tokenUsage`, `cumulativeTokenUsage`, `childTokenUsage`, `cumulativeChildTokenUsage`, `turnId`, `durationMs` | wire-level | Confirmed on the wire; SDK drops it (never converted to a stream event) |
 | per-message usage in history | — | — | **Absent**: no usage/cost/credit keys on any `loadSession` message |
 
@@ -34,11 +34,14 @@ Both process mode and daemon mode go through the same
 converter (`convertNotificationToStreamMessage`) produces the same
 `token_usage_update` events, so the live path is identical in both modes.
 
-Existing wiring: the context ring is **pull-based** (`getContextStats` RPC →
-`RuntimeContextStats` → `SessionContextStats` Bridge state → composer ring +
-popover). No token-usage data is consumed anywhere today —
-`normalizeSdkEvent.ts` drops `token_usage_update` in its `default` arm and
-`result` only projects `subtype`.
+Current wiring separates two meanings:
+
+- The Context ring is pull-based. Process mode combines the validated
+  `getContextStats().limit` with the latest validated public
+  `lastCallTokenUsage`; daemon mode uses
+  `contextBudget / lastCallCompactionTokens`.
+- The token ledger consumes cumulative `token_usage_update` and per-turn
+  result usage. Those counters never feed the ring or percentage.
 
 ## Verdicts
 
@@ -64,8 +67,26 @@ Fail-closed (not implemented, data not available):
 - **Subagent/child usage split** (`childTokenUsage`) and per-turn records
   via `agent_turn_completed` — wire-notification only; adopting it would
   mean tapping raw transport, out of v1 scope.
-- **`lastCallTokenUsage`** — per-LLM-call, not per-turn; skipped to avoid
-  presenting a misleading "last turn" number.
+
+## Current-window meter (v0.7.26)
+
+`lastCallTokenUsage` is intentionally not presented as “last turn.” It has
+one narrower use: the SDK identifies it as the provider-call numerator for
+the context/compaction meter.
+
+1. Process resume captures validated load-response
+   `lastCallTokenUsage`; live sessions update it from the public
+   `session_token_usage_changed` subscription.
+2. The process-mode numerator is
+   `inputTokens + cacheReadTokens + (outputTokens ?? 0)`.
+3. Process mode reads only `getContextStats().limit`; daemon mode reads
+   the provider-reported `contextBudget` and
+   `lastCallCompactionTokens` together (the measured scalar matched the
+   corresponding Provider Call sum).
+4. Negative, fractional, unsafe, missing, or over-budget values produce
+   explicit “Current window unavailable” state, never a clamped estimate.
+5. Runtime/session/CWD generations still reject stale refresh results, and
+   a failed refresh retains the last confirmed value with an error state.
 
 ## v1 design
 

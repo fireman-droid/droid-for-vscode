@@ -33,10 +33,10 @@ const settings = {
 const context = {
   status: 'ready' as const,
   value: {
+    availability: 'available' as const,
     used: 25,
     remaining: 75,
     limit: 100,
-    accuracy: 'estimated' as const,
   },
 };
 
@@ -222,17 +222,15 @@ describe('ComposerControls', () => {
     expect(arc?.getAttribute('stroke-dasharray')).toBe('25 100');
   });
 
-  it('does not present incoherent SDK totals as active-window usage', () => {
+  it('does not invent a meter when latest-call usage is unavailable', () => {
     const { container } = render(
       <ComposerControls
         settings={settings}
         context={{
           status: 'ready',
           value: {
-            used: 125,
-            remaining: 175,
-            limit: 100,
-            accuracy: 'estimated',
+            availability: 'unavailable',
+            reason: 'invalid-last-call',
           },
         }}
         modelCatalog={{
@@ -264,25 +262,16 @@ describe('ComposerControls', () => {
         ?.getAttribute('stroke-dasharray'),
     ).toBe('0 100');
     fireEvent.click(
-      screen.getByLabelText(
-        'Current context window unavailable; Droid reported 125 tokens against a 100 model limit',
-      ),
+      screen.getByLabelText('Current context window unavailable'),
     );
-    expect(screen.getByText('Over model limit')).toBeDefined();
-    expect(screen.getByText('125 tokens reported')).toBeDefined();
+    expect(screen.getByText('Current window unavailable')).toBeDefined();
     expect(
-      screen.getByText(/not a trustworthy active-window percentage/),
+      screen.getByText(/latest provider-call usage could not be validated/i),
     ).toBeDefined();
-    // Degraded visual: the bar stays, pinned full and labeled as an
-    // estimate, instead of vanishing and hollowing out the card.
-    const overBar = screen.getByRole('progressbar', {
-      name: 'Context used',
-    });
-    expect(overBar.getAttribute('aria-valuenow')).toBe('100');
-    expect(overBar.getAttribute('aria-valuetext')).toContain('Estimated');
-    expect(overBar.className).toContain('dvx-context-progress-over');
-    expect(screen.getByText('Model limit')).toBeDefined();
-    expect(screen.getByText('100')).toBeDefined();
+    expect(
+      screen.queryByRole('progressbar', { name: 'Context used' }),
+    ).toBeNull();
+    expect(screen.queryByText(/tokens reported/)).toBeNull();
   });
 
   it('opens only real controls and emits exact selected values', async () => {
@@ -357,7 +346,8 @@ describe('ComposerControls', () => {
     ).toBe('25');
     expect(screen.getByText('Remaining')).toBeDefined();
     expect(screen.getByText('75')).toBeDefined();
-    expect(screen.getByText('Estimated')).toBeDefined();
+    expect(screen.getByText('Source')).toBeDefined();
+    expect(screen.getByText('Latest provider call')).toBeDefined();
     await user.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(onContextRefresh).toHaveBeenCalledOnce();
 

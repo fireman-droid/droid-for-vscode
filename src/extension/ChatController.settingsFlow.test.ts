@@ -41,7 +41,12 @@ describe('ChatController', () => {
       ).toMatchObject({
         context: {
           status: 'ready',
-          value: { used: 40, remaining: 60, limit: 100 },
+          value: {
+            availability: 'available',
+            used: 40,
+            remaining: 60,
+            limit: 100,
+          },
         },
       });
       expect(
@@ -617,7 +622,7 @@ describe('ChatController', () => {
     ready(controller);
     await waitForConnected(messages);
     await vi.waitFor(() => {
-      expect(runtime.readContextStats).toHaveBeenCalledTimes(1);
+      expect(runtime.readContextWindow).toHaveBeenCalledTimes(1);
     });
 
     controller.handleMessage({
@@ -625,12 +630,12 @@ describe('ChatController', () => {
       sessionId: 'session-1',
     });
     await vi.waitFor(() => {
-      expect(runtime.readContextStats).toHaveBeenCalledTimes(2);
+      expect(runtime.readContextWindow).toHaveBeenCalledTimes(2);
     });
 
     send(controller, 'session-1', 'turn-context', 'Continue');
     await vi.waitFor(() => {
-      expect(runtime.readContextStats).toHaveBeenCalledTimes(3);
+      expect(runtime.readContextWindow).toHaveBeenCalledTimes(3);
       expect(turnStates(messages).at(-1)?.status).toBe('completed');
     });
   });
@@ -644,11 +649,16 @@ describe('ChatController', () => {
       expect(lastMessage(messages, 'session.context')).toMatchObject({
         context: {
           status: 'ready',
-          value: { used: 40, remaining: 60, limit: 100 },
+          value: {
+            availability: 'available',
+            used: 40,
+            remaining: 60,
+            limit: 100,
+          },
         },
       });
     });
-    runtime.readContextStats.mockRejectedValueOnce(
+    runtime.readContextWindow.mockRejectedValueOnce(
       new Error('sensitive SDK failure'),
     );
 
@@ -662,20 +672,23 @@ describe('ChatController', () => {
     });
 
     await vi.waitFor(() => {
-      expect(runtime.readContextStats).toHaveBeenCalledTimes(2);
+      expect(runtime.readContextWindow).toHaveBeenCalledTimes(2);
       expect(lastMessage(messages, 'session.context')).toMatchObject({
         context: {
           status: 'error',
-          value: { used: 40, remaining: 60, limit: 100 },
+          value: {
+            availability: 'available',
+            used: 40,
+            remaining: 60,
+            limit: 100,
+          },
           message: expect.stringContaining('DroidVisX Logs'),
         },
       });
     });
-    runtime.readContextStats.mockResolvedValueOnce({
-      used: 145,
-      remaining: 154,
-      limit: 100,
-      accuracy: 'estimated',
+    runtime.readContextWindow.mockResolvedValueOnce({
+      availability: 'unavailable',
+      reason: 'invalid-last-call',
     });
     controller.handleMessage({
       type: 'session.context.refresh',
@@ -683,18 +696,73 @@ describe('ChatController', () => {
     });
 
     await vi.waitFor(() => {
-      expect(runtime.readContextStats).toHaveBeenCalledTimes(3);
+      expect(runtime.readContextWindow).toHaveBeenCalledTimes(3);
       expect(lastMessage(messages, 'session.context')).toMatchObject({
         context: {
           status: 'ready',
           value: {
-            used: 145,
-            remaining: 154,
-            limit: 100,
-            accuracy: 'estimated',
+            availability: 'unavailable',
+            reason: 'invalid-last-call',
           },
         },
       });
+    });
+  });
+
+  it('discards a stale Context response after a workspace generation change', async () => {
+    const workspace = {
+      cwd: 'C:\\workspace-a' as string | null,
+      trusted: true,
+    };
+    const refresh = deferred<{
+      availability: 'available';
+      used: number;
+      remaining: number;
+      limit: number;
+    }>();
+    const runtime = createMockRuntime();
+    const { controller, messages } = createController(
+      () => runtime,
+      workspace,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+    await vi.waitFor(() => {
+      expect(runtime.readContextWindow).toHaveBeenCalledOnce();
+    });
+    runtime.readContextWindow.mockReturnValueOnce(refresh.promise);
+
+    controller.handleMessage({
+      type: 'session.context.refresh',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(runtime.readContextWindow).toHaveBeenCalledTimes(2);
+    });
+    const changedAt = messages.length;
+    workspace.trusted = false;
+    controller.handleWorkspaceContextChanged();
+    refresh.resolve({
+      availability: 'available',
+      used: 99,
+      remaining: 1,
+      limit: 100,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(
+      messages.slice(changedAt).some(
+        (message) =>
+          message.type === 'session.context' &&
+          message.context.status === 'ready' &&
+          message.context.value.availability === 'available' &&
+          message.context.value.used === 99,
+      ),
+    ).toBe(false);
+    expect(snapshots(messages).at(-1)?.context).toEqual({
+      status: 'loading',
+      value: null,
     });
   });
 

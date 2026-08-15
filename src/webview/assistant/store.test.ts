@@ -43,10 +43,10 @@ function snapshot(
     context: {
       status: 'ready',
       value: {
+        availability: 'available',
         used: 10,
         remaining: 90,
         limit: 100,
-        accuracy: 'exact',
       },
     },
     modelCatalog: {
@@ -1074,10 +1074,10 @@ describe('assistantWebviewReducer', () => {
         context: {
           status: 'ready',
           value: {
+            availability: 'available',
             used: 25,
             remaining: 75,
             limit: 100,
-            accuracy: 'estimated',
           },
         },
       },

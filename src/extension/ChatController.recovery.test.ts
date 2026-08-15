@@ -654,11 +654,11 @@ describe('ChatController', () => {
     first.initialize.mockResolvedValue(available('session-1'));
     const second = createMockRuntime();
     second.initialize.mockResolvedValue(available('session-2'));
-    second.readContextStats.mockResolvedValue({
+    second.readContextWindow.mockResolvedValue({
+      availability: 'available',
       used: 1,
       remaining: 9,
       limit: 10,
-      accuracy: 'exact',
     });
     const createRuntime = vi
       .fn<() => MockRuntime>()
