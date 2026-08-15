@@ -56,10 +56,16 @@ describe('boot handoff', () => {
     expect(readBootResolvedTheme()).toBe('light');
   });
 
-  it('mirrors the resolved theme onto <html> for page grounds', () => {
-    applyDocumentTheme('dark');
+  it('mirrors the theme pair onto <html> for grounds and Auto tokens', () => {
+    applyDocumentTheme('dark', 'auto');
     expect(document.documentElement.dataset.dvxTheme).toBe('dark');
-    applyDocumentTheme('light');
+    expect(
+      document.documentElement.dataset.dvxThemePreference,
+    ).toBe('auto');
+    applyDocumentTheme('light', 'light');
     expect(document.documentElement.dataset.dvxTheme).toBe('light');
+    expect(
+      document.documentElement.dataset.dvxThemePreference,
+    ).toBe('light');
   });
 });

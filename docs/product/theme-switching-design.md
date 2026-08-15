@@ -1,6 +1,6 @@
 # 主题切换（暗色主题）可行性调研
 
-状态：调研 + 原型完成，未实施生产代码。日期：2026-08-12。
+状态：生产已实施；2026-08-14 补齐实际编辑器配色的 Auto 模式。
 配套原型（真实 styles.css 复刻 + 整体调色，480px 侧边栏宽度）：
 
 - `artifacts/theme-proto-light.html` → `artifacts/theme-proto-light.png`
@@ -20,6 +20,11 @@
    Auto**（用户拍板，2026-08-12：跟随 Cursor/VS Code 当前主题）。
 4. 暗色下的轻奢标准重新调校：边框用半透明白（9%/16%）、阴影更
    收敛（单层短距）、层级"更亮 = 更浮起"。
+5. **Auto 必须跟随编辑器的实际配色，不是只跟随 light/dark kind 后
+   复用固定皮肤**（用户补充，2026-08-14）。因此 Light/Dark 保留产品
+   自有暖白/炭黑 token；Auto 用公开 `--vscode-*` 变量替换 surface、
+   text、border、accent、selection、input、terminal 和 syntax token，
+   resolved kind 只继续负责 `color-scheme` 与结构性暗色修正。
 
 对迁移的影响：工作量下调——不需要设计"暖白 v2"的 token 值（light
 主题的 token 值就是现状收敛出来的值），§2.4 估计里"暗色 token 表
@@ -154,10 +159,10 @@ forced-colors 媒体块（高对比模式，主题化不影响它）。
 
 推荐**三态 Auto / Light / Dark，默认 Auto**：
 
-- VS Code 给 webview `<body>` 自动挂 `vscode-light / vscode-dark /
-  vscode-high-contrast` 类并在主题变化时更新，Auto = 监听 body 类
-  （`MutationObserver` on `document.body`，attributeFilter class）
-  映射到 `data-theme`，零轮询、零新 Bridge 消息。
+- Host 监听 VS Code active-color-theme 事件并推送 authoritative resolved
+  kind；Auto 同时用 webview 中公开的 `--vscode-*` CSS 变量直接驱动
+  DroidVisX token，因此编辑器切换到任意第三方配色时，surface/text/
+  accent 等会跟着变化，而不是落回固定炭黑皮肤。无需轮询。
 - 手动 Light/Dark 覆盖 Auto，存 §2.2 的设置项。
 - 入口 UI 遵守 UI-restraint：设置弹层里一行三态（复用现有
   settings popover 的行样式），不做显眼开关。首切片甚至可以只做

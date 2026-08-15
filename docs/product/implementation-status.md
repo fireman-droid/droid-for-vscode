@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.24 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.25 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -3201,6 +3201,26 @@ UI 描述见 §22 重做记录。
 - **验证**：`planAnchor`、`Thread`、`App` 3 个触达测试文件
   **111 例**、三段 typecheck 与 `lint:budgets` 全绿；按门禁未跑全量
   Vitest、浏览器 smoke 或 daemon smoke。
+
+### 60. 模型工作流层次与真实编辑器 Auto 配色（2026-08-15，v0.7.25）
+
+- **模型与表单视觉**：Picker 的选中行改为轻量 raised surface，Reasoning
+  编辑紧贴模型名且常驻可见；Provider/手动编辑表单统一分段控件、输入
+  深度、目录选择卡和 sticky action footer，窄侧栏自动纵排。
+- **交互与安全**：Provider 选择改用原生 radio（键盘方向键与单一 Tab
+  stop），Enter 在 endpoint 字段执行 Fetch 而不穿透外层 Composer；
+  切换 Provider 会清空旧 key。两个表单共用 credential/token 校验。
+- **真实 Auto**：Host 的 resolved kind 继续负责 `color-scheme` 与暗色
+  结构修正；Auto 另以公开 `--vscode-*` 变量映射 surface/text/border/
+  accent/selection/input/terminal/syntax token 和首帧底色。显式 Light/
+  Dark 固定皮肤不变。
+- **验证**：触达 4 个测试文件 **51 例**、三段 typecheck、
+  `lint:budgets`、`git diff --check` 与 simplify 三路审查全绿；按门禁
+  未跑全量 Vitest、浏览器或 daemon smoke。
+- **交付**：生产 bundle 已打入并验证 11-entry
+  `droidvisx-0.7.25.vsix`（1,695,148 bytes，SHA-256
+  `1717218201AF15483D11C87F8D1FE88EAADA88BC13EADF32D06B57EECC16124D`），
+  Cursor 已确认安装 `droidvisx.droidvisx@0.7.25`。
 
 ## 部分完成
 

@@ -238,7 +238,7 @@
   padding: 5px 8px;
   border: 1px solid var(--dvx-border);
   border-radius: 6px;
-  background: var(--dvx-bg);
+  background: var(--dvx-code);
   color: var(--dvx-ink);
   font-family: inherit;
   font-size: 12px;
@@ -257,6 +257,9 @@
 }
 
 .dvx-mcp-add-type {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 3px 10px;
   border: 1px solid var(--dvx-border);
   border-radius: 999px;
@@ -266,11 +269,21 @@
   font-size: 11px;
 }
 
-.dvx-mcp-add-type[aria-checked='true'] {
+.dvx-mcp-add-type[aria-checked='true'],
+.dvx-mcp-add-type[data-checked='true'] {
   border-color: var(--dvx-accent);
   background: var(--dvx-accent-soft, rgba(193, 95, 60, 0.1));
   color: var(--dvx-accent);
   font-weight: 600;
+}
+
+.dvx-mcp-add-type:has(input:focus-visible) {
+  outline: 2px solid var(--dvx-focus);
+  outline-offset: 2px;
+}
+
+.dvx-shell .dvx-mcp-add-type input:focus-visible {
+  outline: none;
 }
 
 .dvx-mcp-add-submit {

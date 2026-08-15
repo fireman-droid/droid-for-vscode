@@ -1,0 +1,270 @@
+/* ==== Auto theme ===================================================
+   Light and Dark are deliberate DroidVisX skins. Auto is different:
+   it follows the active Cursor/VS Code color theme itself, not just
+   its light/dark kind. The Host still resolves kind for native
+   color-scheme and dark-only structural fixes; this final scope
+   replaces the palette with public `--vscode-*` theme variables.
+
+   Every variable carries the existing DroidVisX token as fallback so
+   standalone harness pages and incomplete third-party themes remain
+   legible. This file is imported last because Auto must win over both
+   the fixed dark token table and its literal convergence overrides. */
+
+.dvx-shell[data-dvx-theme-preference='auto'],
+html[data-dvx-theme-preference='auto'] .dvx-image-lightbox,
+html[data-dvx-theme-preference='auto'] .dvx-slash-tooltip {
+  --dvx-surface: var(
+    --vscode-sideBar-background,
+    var(--vscode-editor-background, #f5f3ef)
+  );
+  --dvx-raised: var(
+    --vscode-editorWidget-background,
+    var(--vscode-input-background, var(--dvx-surface))
+  );
+  --dvx-code: var(
+    --vscode-textCodeBlock-background,
+    var(--vscode-input-background, var(--dvx-raised))
+  );
+
+  --dvx-ink: var(--vscode-foreground, #262626);
+  --dvx-text-strong: var(
+    --vscode-foreground,
+    var(--vscode-editor-foreground, #404040)
+  );
+  --dvx-text-secondary: var(
+    --vscode-descriptionForeground,
+    var(--vscode-foreground, #525252)
+  );
+  --dvx-muted: var(
+    --vscode-descriptionForeground,
+    var(--vscode-foreground, #737373)
+  );
+  --dvx-subtle: var(
+    --vscode-disabledForeground,
+    var(--vscode-input-placeholderForeground, #a1a1a1)
+  );
+
+  --dvx-border: var(
+    --vscode-panel-border,
+    var(--vscode-widget-border, var(--vscode-input-border, #e5e5e5))
+  );
+  --dvx-border-strong: var(
+    --vscode-widget-border,
+    var(--vscode-focusBorder, var(--dvx-border))
+  );
+  --dvx-soft: var(
+    --vscode-list-hoverBackground,
+    color-mix(in srgb, var(--dvx-ink) 6%, transparent)
+  );
+
+  --dvx-accent: var(--vscode-button-background, #f2612e);
+  --dvx-accent-strong: var(
+    --vscode-button-hoverBackground,
+    var(--vscode-button-background, #df5020)
+  );
+  --dvx-accent-deep: var(
+    --vscode-textLink-activeForeground,
+    var(--vscode-button-background, #b5451f)
+  );
+  --dvx-accent-soft: var(
+    --vscode-list-inactiveSelectionBackground,
+    var(--vscode-list-hoverBackground, transparent)
+  );
+
+  --dvx-danger: var(--vscode-errorForeground, #c93a4a);
+  --dvx-warning: var(--vscode-editorWarning-foreground, #bb4d00);
+  --dvx-diff-add: var(
+    --vscode-gitDecoration-addedResourceForeground,
+    #1a7f37
+  );
+  --dvx-diff-del: var(
+    --vscode-gitDecoration-deletedResourceForeground,
+    #cf222e
+  );
+  --dvx-focus: var(--vscode-focusBorder, #d2643d);
+  --dvx-shadow: 0 12px 30px -14px
+    var(--vscode-widget-shadow, rgb(0 0 0 / 32%));
+
+  --dvx-hl-comment: var(
+    --vscode-editorCodeLens-foreground,
+    var(--dvx-muted)
+  );
+  --dvx-hl-keyword: var(--vscode-symbolIcon-keywordForeground, #a626a4);
+  --dvx-hl-string: var(--vscode-symbolIcon-stringForeground, #50a14f);
+  --dvx-hl-number: var(--vscode-symbolIcon-numberForeground, #b25a00);
+  --dvx-hl-title: var(--vscode-symbolIcon-functionForeground, #4078f2);
+  --dvx-hl-type: var(--vscode-symbolIcon-classForeground, #c18401);
+  --dvx-hl-attr: var(--vscode-symbolIcon-propertyForeground, #986801);
+  --dvx-hl-deletion: var(
+    --vscode-gitDecoration-deletedResourceForeground,
+    #c03d33
+  );
+  --dvx-hl-meta: var(
+    --vscode-editorCodeLens-foreground,
+    var(--dvx-muted)
+  );
+}
+
+html[data-dvx-theme-preference='auto'],
+html[data-dvx-theme-preference='auto'] body,
+html[data-dvx-theme-preference='auto'] #root {
+  background: var(
+    --vscode-sideBar-background,
+    var(--vscode-editor-background, #f5f3ef)
+  );
+}
+
+html[data-dvx-theme-preference='auto'] * {
+  scrollbar-color:
+    var(--vscode-scrollbarSlider-background, rgb(127 127 127 / 28%))
+    transparent;
+}
+
+html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb {
+  background: var(
+    --vscode-scrollbarSlider-background,
+    rgb(127 127 127 / 28%)
+  );
+}
+
+html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb:hover {
+  background: var(
+    --vscode-scrollbarSlider-hoverBackground,
+    rgb(127 127 127 / 45%)
+  );
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-markdown a,
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-path-link:hover {
+  color: var(--vscode-textLink-foreground, var(--dvx-accent-deep));
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-markdown a,
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-path-link {
+  text-decoration-color: color-mix(
+    in srgb,
+    var(--vscode-textLink-foreground, var(--dvx-accent-deep)) 48%,
+    transparent
+  );
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-markdown pre,
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-activity-row pre,
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-permission-tool pre {
+  color: var(--vscode-editor-foreground, var(--dvx-ink)) !important;
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-markdown
+  :not(pre)
+  > code {
+  background: var(--vscode-textCodeBlock-background, var(--dvx-code));
+  color: var(--vscode-editor-foreground, var(--dvx-ink));
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-diagnostic {
+  background: linear-gradient(
+    180deg,
+    var(--vscode-editorWidget-background, var(--dvx-raised)),
+    var(--dvx-raised)
+  );
+  box-shadow: 0 1px 2px
+    var(--vscode-widget-shadow, rgb(0 0 0 / 24%));
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-send-action,
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-user-edit-send,
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-user-edit-send:hover:not(:disabled),
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-user-edit-send:focus-visible,
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-btw-send {
+  color: var(--vscode-button-foreground, #fff);
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-popover-row:hover,
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-option-row:hover:not(:disabled),
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-model-row:hover:not([aria-current='true']),
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-settings-select-option:hover:not(:disabled),
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-queue-toggle:hover,
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-queue-row:hover {
+  background: var(--vscode-list-hoverBackground, var(--dvx-soft));
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-session-row[aria-current='true'] {
+  background: var(
+    --vscode-list-inactiveSelectionBackground,
+    var(--dvx-accent-soft)
+  );
+  color: var(
+    --vscode-list-inactiveSelectionForeground,
+    var(--dvx-ink)
+  );
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-command-card
+  .dvx-command-well,
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-command-card
+  .dvx-tool-output-frame {
+  background: var(
+    --vscode-terminal-background,
+    var(--vscode-editor-background, var(--dvx-code))
+  );
+  color: var(--vscode-terminal-foreground, var(--dvx-ink));
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-composer-dragover {
+  background: var(
+    --vscode-list-dropBackground,
+    var(--vscode-list-hoverBackground, var(--dvx-soft))
+  );
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-context-progress
+  span,
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-context-progress-over
+  > span:first-child,
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-context-overflow-tick {
+  background: var(
+    --vscode-progressBar-background,
+    var(--vscode-button-background, var(--dvx-accent))
+  );
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-btw-panel,
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-queue {
+  background: linear-gradient(
+    180deg,
+    var(--dvx-raised),
+    var(--dvx-surface)
+  );
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-mcp-add-input,
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-permission-editor
+  textarea,
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-ask-user
+  input[type='text'] {
+  background: var(--vscode-input-background, var(--dvx-code));
+  color: var(--vscode-input-foreground, var(--dvx-ink));
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-mcp-add-input::placeholder,
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-permission-editor
+  textarea::placeholder,
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-ask-user
+  input[type='text']::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--dvx-subtle));
+}

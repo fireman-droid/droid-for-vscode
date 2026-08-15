@@ -857,7 +857,13 @@ describe('assistant-ui App bridge commands', () => {
       host(snapshot(0));
       const shell = document.querySelector('.dvx-shell')!;
       expect(shell.getAttribute('data-theme')).toBe('light');
+      expect(
+        shell.getAttribute('data-dvx-theme-preference'),
+      ).toBe('auto');
       expect(document.documentElement.dataset.dvxTheme).toBe('light');
+      expect(
+        document.documentElement.dataset.dvxThemePreference,
+      ).toBe('auto');
 
       // A manual preference pins the shell regardless of the editor,
       // and bypasses the store batch (no sequence, applied at once).
@@ -865,6 +871,9 @@ describe('assistant-ui App bridge commands', () => {
       await waitFor(() =>
         expect(shell.getAttribute('data-theme')).toBe('dark'),
       );
+      expect(
+        shell.getAttribute('data-dvx-theme-preference'),
+      ).toBe('dark');
       expect(document.documentElement.dataset.dvxTheme).toBe('dark');
 
       // Auto consumes the Host's authoritative resolution rather than
@@ -873,6 +882,9 @@ describe('assistant-ui App bridge commands', () => {
       await waitFor(() =>
         expect(shell.getAttribute('data-theme')).toBe('dark'),
       );
+      expect(
+        shell.getAttribute('data-dvx-theme-preference'),
+      ).toBe('auto');
       host({ type: 'ui.theme', preference: 'auto', resolved: 'light' });
       await waitFor(() =>
         expect(shell.getAttribute('data-theme')).toBe('light'),
@@ -881,6 +893,7 @@ describe('assistant-ui App bridge commands', () => {
     } finally {
       document.body.className = '';
       delete document.documentElement.dataset.dvxTheme;
+      delete document.documentElement.dataset.dvxThemePreference;
     }
   });
 

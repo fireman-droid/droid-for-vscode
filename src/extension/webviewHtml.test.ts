@@ -65,7 +65,10 @@ describe('getWebviewHtml', () => {
       preference: 'auto',
       resolved: 'light',
     });
-    expect(light).toContain('html,body{background:#f5f3ef}');
+    expect(light).toContain(
+      'html,body{background:var(--vscode-sideBar-background,' +
+        'var(--vscode-editor-background,#f5f3ef))}',
+    );
     expect(light).toContain('data-dvx-theme="light"');
     expect(light).toContain('data-dvx-theme-preference="auto"');
 
@@ -84,12 +87,14 @@ describe('getWebviewHtml', () => {
       ([tag]) => tag,
     );
 
-    // Exactly one inline style, nonce'd for the CSP, that pins the
-    // warm shell background so the panel never flashes white while
-    // the external stylesheet and the bundle load.
+    // Exactly one inline style, nonce'd for the CSP, that follows the
+    // editor ground in Auto before the external stylesheet loads.
     expect(styleTags).toHaveLength(1);
     expect(styleTags[0]).toContain(`nonce="${nonce}"`);
-    expect(styleTags[0]).toContain('html,body{background:#f5f3ef}');
+    expect(styleTags[0]).toContain(
+      'html,body{background:var(--vscode-sideBar-background,' +
+        'var(--vscode-editor-background,#f5f3ef))}',
+    );
     // The inline style comes before the external stylesheet.
     expect(html.indexOf('<style')).toBeLessThan(
       html.indexOf('<link rel="stylesheet"'),

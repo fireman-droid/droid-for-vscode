@@ -1312,6 +1312,7 @@ export function App(): React.JSX.Element {
           btwSplit || subagentSplit ? ' dvx-shell-split' : ''
         }`}
         data-theme={resolvedTheme}
+        data-dvx-theme-preference={themeContextValue.preference}
       >
         <Header
           state={state}

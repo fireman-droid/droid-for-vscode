@@ -4,6 +4,27 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.25] - 2026-08-15
+
+### Changed
+
+- **Model selection has clearer depth and tighter controls** — rows
+  use a refined raised selected state, the reasoning pencil stays
+  beside the selected name, and long catalogs retain a taller bounded
+  scroll area.
+- **Provider setup now reads as one workflow** — endpoint fields,
+  native keyboard-accessible provider choices, discovered models, and
+  responsive secondary/primary actions share one layered card with a
+  sticky footer. Switching providers clears the previous credential.
+
+### Fixed
+
+- **Auto now follows the editor's actual color palette** — public
+  `--vscode-*` variables drive surfaces, text, borders, selections,
+  inputs, terminal wells, accents, syntax colors, and the first-frame
+  background. Explicit Light and Dark continue using DroidVisX's
+  fixed warm and charcoal skins.
+
 ## [0.7.24] - 2026-08-15
 
 ### Fixed

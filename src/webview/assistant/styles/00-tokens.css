@@ -5,7 +5,8 @@
    product's warm-white baseline; the dark theme overrides only token
    values via `.dvx-shell[data-theme="dark"]`
    (docs/product/theme-switching-design.md §2.1), plus the literal
-   dark skin in 24-theme-dark.css.
+   dark skin in 24-theme-dark.css. Auto is a final editor-variable
+   scope in 27-theme-auto.css; explicit Light/Dark keep these values.
 
    The lightbox and the slash tooltip portal to <body>, outside
    .dvx-shell — they must sit in the token scope explicitly or their

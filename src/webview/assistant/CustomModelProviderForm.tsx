@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 
 import {
   CUSTOM_MODEL_PROVIDERS,
@@ -7,6 +7,7 @@ import {
   MAX_CUSTOM_MODEL_OUTPUT_TOKENS,
   MAX_CUSTOM_MODEL_URL_LENGTH,
   isCustomModelBaseUrl,
+  isSafeText,
   type CustomModelDiscoveryUiState,
   type CustomModelListItem,
   type CustomModelProvider,
@@ -29,8 +30,6 @@ const PROVIDER_DEFAULT_URLS: Record<CustomModelProvider, string> = {
   'generic-chat-completion-api': '',
 };
 
-const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;
-
 export type CustomModelsDiscoverParams = Omit<
   CustomModelsDiscoverMessage,
   'type' | 'sessionId'
@@ -47,6 +46,68 @@ export interface CustomModelProviderPreset {
   readonly keyHint?: string;
   readonly maxOutputTokens: number | null;
   readonly noImageSupport: boolean;
+}
+
+export function readCustomModelOptions(
+  apiKey: string,
+  maxTokens: string,
+): {
+  readonly trimmedKey: string;
+  readonly keyValid: boolean;
+  readonly tokenText: string;
+  readonly tokenNumber: number;
+  readonly tokensValid: boolean;
+} {
+  const trimmedKey = apiKey.trim();
+  const tokenText = maxTokens.trim();
+  const tokenNumber = Number(tokenText);
+  return {
+    trimmedKey,
+    keyValid:
+      trimmedKey.length === 0 ||
+      isSafeText(trimmedKey, MAX_CUSTOM_MODEL_KEY_LENGTH),
+    tokenText,
+    tokenNumber,
+    tokensValid:
+      tokenText.length === 0 ||
+      (Number.isSafeInteger(tokenNumber) &&
+        tokenNumber >= 1 &&
+        tokenNumber <= MAX_CUSTOM_MODEL_OUTPUT_TOKENS),
+  };
+}
+
+export function CustomModelProviderSelector({
+  value,
+  onChange,
+}: {
+  readonly value: CustomModelProvider;
+  readonly onChange: (provider: CustomModelProvider) => void;
+}): React.JSX.Element {
+  const name = useId();
+  return (
+    <div className="dvx-cm-field" role="radiogroup" aria-label="Provider">
+      <span className="dvx-cm-field-label">Provider *</span>
+      <div className="dvx-mcp-add-types">
+        {CUSTOM_MODEL_PROVIDERS.map((provider) => (
+          <label
+            key={provider}
+            className="dvx-mcp-add-type"
+            data-checked={value === provider ? 'true' : undefined}
+          >
+            <input
+              className="dvx-visually-hidden"
+              type="radio"
+              name={name}
+              value={provider}
+              checked={value === provider}
+              onChange={() => onChange(provider)}
+            />
+            <span>{CUSTOM_MODEL_PROVIDER_LABELS[provider]}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 interface CustomModelProviderFormProps {
@@ -107,35 +168,37 @@ export function CustomModelProviderForm({
     [configuredItems, initial],
   );
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const visibleItems =
-    discovery.status === 'ready'
-      ? discovery.items.filter(
-          (item) =>
-            normalizedQuery.length === 0 ||
-            item.model.toLocaleLowerCase().includes(normalizedQuery) ||
-            item.displayName
-              ?.toLocaleLowerCase()
-              .includes(normalizedQuery) === true,
-        )
-      : [];
-  const selectedItems =
-    discovery.status === 'ready'
-      ? discovery.items.filter((item) => selected.has(item.model))
-      : [];
+  const visibleItems = useMemo(
+    () =>
+      requested && discovery.status === 'ready'
+        ? discovery.items.filter(
+            (item) =>
+              normalizedQuery.length === 0 ||
+              item.model.toLocaleLowerCase().includes(normalizedQuery) ||
+              item.displayName
+                ?.toLocaleLowerCase()
+                .includes(normalizedQuery) === true,
+          )
+        : [],
+    [discovery, normalizedQuery, requested],
+  );
+  const selectedItems = useMemo(
+    () =>
+      discovery.status === 'ready'
+        ? discovery.items.filter((item) => selected.has(item.model))
+        : [],
+    [discovery, selected],
+  );
 
   const trimmedUrl = baseUrl.trim();
-  const trimmedKey = apiKey.trim();
+  const {
+    trimmedKey,
+    keyValid,
+    tokenText,
+    tokenNumber,
+    tokensValid,
+  } = readCustomModelOptions(apiKey, maxTokens);
   const urlValid = isCustomModelBaseUrl(trimmedUrl);
-  const keyValid =
-    trimmedKey.length <= MAX_CUSTOM_MODEL_KEY_LENGTH &&
-    !CONTROL_CHARS.test(trimmedKey);
-  const tokenText = maxTokens.trim();
-  const tokenNumber = Number(tokenText);
-  const tokensValid =
-    tokenText.length === 0 ||
-    (Number.isSafeInteger(tokenNumber) &&
-      tokenNumber >= 1 &&
-      tokenNumber <= MAX_CUSTOM_MODEL_OUTPUT_TOKENS);
   const valid = urlValid && keyValid && tokensValid;
   const working =
     busy || (requested && discovery.status === 'loading');
@@ -179,6 +242,7 @@ export function CustomModelProviderForm({
     }
     setProvider(next);
     setBaseUrl(PROVIDER_DEFAULT_URLS[next]);
+    setApiKey('');
     setRequested(false);
     setSelected(new Set());
   };
@@ -198,26 +262,21 @@ export function CustomModelProviderForm({
       return next;
     });
   };
+  const fetchOnEnter = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+  ): void => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      fetchModels();
+    }
+  };
 
   return (
     <div className="dvx-cm-form" role="form" aria-label="Provider model group">
-      <div className="dvx-cm-field" role="radiogroup" aria-label="Provider">
-        <span className="dvx-cm-field-label">Provider *</span>
-        <div className="dvx-mcp-add-types">
-          {CUSTOM_MODEL_PROVIDERS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              className="dvx-mcp-add-type"
-              aria-checked={provider === value}
-              onClick={() => selectProvider(value)}
-            >
-              {CUSTOM_MODEL_PROVIDER_LABELS[value]}
-            </button>
-          ))}
-        </div>
-      </div>
+      <CustomModelProviderSelector
+        value={provider}
+        onChange={selectProvider}
+      />
       <label className="dvx-cm-field">
         <span className="dvx-cm-field-label">API base URL *</span>
         <input
@@ -228,6 +287,7 @@ export function CustomModelProviderForm({
           placeholder="e.g. http://localhost:11434/v1"
           autoComplete="off"
           spellCheck={false}
+          onKeyDown={fetchOnEnter}
           onChange={(event) => {
             setBaseUrl(event.currentTarget.value);
             setRequested(false);
@@ -248,6 +308,7 @@ export function CustomModelProviderForm({
               : `${initial.keyHint} — enter again to fetch`
           }
           autoComplete="off"
+          onKeyDown={fetchOnEnter}
           onChange={(event) => {
             setApiKey(event.currentTarget.value);
             setRequested(false);
@@ -266,6 +327,7 @@ export function CustomModelProviderForm({
             maxLength={12}
             placeholder="Model default"
             autoComplete="off"
+            onKeyDown={fetchOnEnter}
             onChange={(event) => setMaxTokens(event.currentTarget.value)}
           />
         </label>
@@ -285,19 +347,6 @@ export function CustomModelProviderForm({
           {hint}
         </p>
       ) : null}
-      <div className="dvx-cm-provider-actions">
-        <button
-          type="button"
-          className="dvx-mcp-add-submit"
-          disabled={!valid || working}
-          onClick={fetchModels}
-        >
-          {working ? 'Fetching…' : 'Fetch models'}
-        </button>
-        <button type="button" className="dvx-cm-action" onClick={onManual}>
-          Add one manually
-        </button>
-      </div>
       {requested ? (
         <DiscoveryPicker
           discovery={discovery}
@@ -321,21 +370,48 @@ export function CustomModelProviderForm({
         />
       ) : null}
       <div className="dvx-cm-form-actions">
-        {requested && discovery.status === 'ready' ? (
+        <div className="dvx-cm-form-actions-secondary">
+          <button
+            type="button"
+            className="dvx-cm-secondary-action"
+            onClick={onManual}
+          >
+            Add one manually
+          </button>
+          <button
+            type="button"
+            className="dvx-cm-secondary-action"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+        </div>
+        <div className="dvx-cm-form-actions-primary">
           <button
             type="button"
             className="dvx-mcp-add-submit"
-            disabled={selectedItems.length === 0 || working}
-            onClick={importSelected}
+            disabled={!valid || working}
+            onClick={fetchModels}
           >
-            {selectedItems.length === 0
-              ? 'Add selected'
-              : `Add ${selectedItems.length} selected`}
+            {working
+              ? 'Fetching…'
+              : requested
+                ? 'Fetch again'
+                : 'Fetch models'}
           </button>
-        ) : null}
-        <button type="button" className="dvx-cm-action" onClick={onCancel}>
-          Cancel
-        </button>
+          {requested && discovery.status === 'ready' ? (
+            <button
+              type="button"
+              className="dvx-mcp-add-submit"
+              disabled={selectedItems.length === 0 || working}
+              onClick={importSelected}
+            >
+              {selectedItems.length === 0
+                ? 'Add selected'
+                : `Add ${selectedItems.length} selected`}
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -407,6 +483,11 @@ function DiscoveryPicker({
           placeholder="Search models"
           value={query}
           onChange={(event) => onQueryChange(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+            }
+          }}
         />
         <button
           type="button"

@@ -3,10 +3,10 @@
    re-skins a declaration that still carries a warm-light literal in
    its home file (the convergence debt list, theme design doc §1.1).
    Ordered by source file so each override is easy to trace back.
-   Imported last on purpose — with the [data-theme] prefix these
-   selectors out-rank their light originals without !important (the
-   two !important cases mirror equally-important light rules in
-   19-system-overlays.css). */
+   Imported after the component files it corrects. Auto-dark uses this
+   as its structural base, then 27-theme-auto.css replaces palette
+   literals with editor variables. The two !important cases mirror
+   equally-important light rules in 19-system-overlays.css. */
 
 /* ---- page grounds (01-base / 10-shell-frame; outside .dvx-shell,
    keyed off the <html> attribute the boot HTML and App maintain) --- */
@@ -138,7 +138,8 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
 
 .dvx-shell[data-theme='dark'] .dvx-popover-row:hover,
 .dvx-shell[data-theme='dark'] .dvx-option-row:hover:not(:disabled),
-.dvx-shell[data-theme='dark'] .dvx-model-row:hover {
+.dvx-shell[data-theme='dark']
+  .dvx-model-row:hover:not([aria-current='true']) {
   background: rgb(255 255 255 / 5%);
 }
 

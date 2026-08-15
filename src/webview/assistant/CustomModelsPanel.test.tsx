@@ -531,6 +531,35 @@ describe('CustomModelsPanel provider groups', () => {
     expect(screen.getByLabelText('API key')).toHaveProperty('value', '');
   });
 
+  it('isolates provider credentials and fetches on Enter', async () => {
+    const value = flowValue();
+    renderPanel(value);
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Add provider' }),
+    );
+    const key = screen.getByLabelText('API key');
+    await userEvent.type(key, 'openai-key');
+    await userEvent.click(
+      screen.getByRole('radio', { name: 'Anthropic' }),
+    );
+    expect(key).toHaveProperty('value', '');
+    expect(screen.getByRole('radio', { name: 'Anthropic' })).toHaveProperty(
+      'checked',
+      true,
+    );
+    expect(screen.getByLabelText('API base URL *')).toHaveProperty(
+      'value',
+      'https://api.anthropic.com/v1',
+    );
+    await userEvent.type(key, 'anthropic-key');
+    await userEvent.type(screen.getByLabelText('API base URL *'), '{enter}');
+    expect(value.onDiscover).toHaveBeenCalledWith({
+      provider: 'anthropic',
+      baseUrl: 'https://api.anthropic.com/v1',
+      apiKey: 'anthropic-key',
+    });
+  });
+
   it('prefills an existing group but requires the masked key again', async () => {
     renderPanel(
       flowValue({
@@ -580,6 +609,25 @@ describe('CustomModelsPanel provider groups', () => {
     await userEvent.click(
       screen.getByRole('button', { name: 'Fetch models' }),
     );
+    const actionFooter = screen
+      .getByRole('button', { name: 'Fetch again' })
+      .closest('.dvx-cm-form-actions');
+    expect(actionFooter).not.toBeNull();
+    expect(
+      actionFooter?.querySelector(
+        '.dvx-cm-form-actions-secondary',
+      )?.textContent,
+    ).toContain('Add one manually');
+    expect(
+      actionFooter?.querySelector(
+        '.dvx-cm-form-actions-secondary',
+      )?.textContent,
+    ).toContain('Cancel');
+    expect(
+      actionFooter?.querySelector(
+        '.dvx-cm-form-actions-primary',
+      )?.textContent,
+    ).toContain('Add selected');
     expect(value.onDiscover).toHaveBeenCalledWith({
       provider: 'openai',
       baseUrl: 'https://api.openai.com/v1',

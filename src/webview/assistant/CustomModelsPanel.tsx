@@ -12,7 +12,6 @@ import {
   IDLE_CUSTOM_MODEL_DISCOVERY_STATE,
   IDLE_CUSTOM_MODELS_STATE,
   MAX_CUSTOM_MODEL_KEY_LENGTH,
-  MAX_CUSTOM_MODEL_OUTPUT_TOKENS,
   MAX_CUSTOM_MODEL_URL_LENGTH,
   isCustomModelBaseUrl,
   mergeCustomModelsState,
@@ -36,6 +35,8 @@ import {
 import {
   CUSTOM_MODEL_PROVIDER_LABELS,
   CustomModelProviderForm,
+  CustomModelProviderSelector,
+  readCustomModelOptions,
   type CustomModelProviderPreset,
   type CustomModelsDiscoverParams,
   type CustomModelsImportParams,
@@ -585,8 +586,6 @@ function groupCustomModels(
   });
 }
 
-const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;
-
 /**
  * Deliberately NOT a `<form>` (MCP add-form lesson): this card lives
  * inside the assistant-ui composer `<form>`, and a nested form's
@@ -624,21 +623,17 @@ function CustomModelForm({
   const trimmedModel = model.trim();
   const trimmedName = displayName.trim();
   const trimmedUrl = baseUrl.trim();
-  const trimmedKey = apiKey.trim();
+  const {
+    trimmedKey,
+    keyValid,
+    tokenText: tokens,
+    tokenNumber: tokensNumber,
+    tokensValid,
+  } = readCustomModelOptions(apiKey, maxTokens);
   const modelValid = isSafeModelId(trimmedModel);
   const urlValid = isCustomModelBaseUrl(trimmedUrl);
   const nameValid =
     trimmedName.length === 0 || isSafeDisplayName(trimmedName);
-  const keyValid =
-    trimmedKey.length <= MAX_CUSTOM_MODEL_KEY_LENGTH &&
-    !CONTROL_CHARS.test(trimmedKey);
-  const tokens = maxTokens.trim();
-  const tokensNumber = Number(tokens);
-  const tokensValid =
-    tokens.length === 0 ||
-    (Number.isSafeInteger(tokensNumber) &&
-      tokensNumber >= 1 &&
-      tokensNumber <= MAX_CUSTOM_MODEL_OUTPUT_TOKENS);
   const canSave =
     !busy && modelValid && urlValid && nameValid && keyValid && tokensValid;
   // Quiet gate: empty required fields just keep Save disabled; a
@@ -705,27 +700,10 @@ function CustomModelForm({
           onKeyDown={submitOnEnter}
         />
       </label>
-      <div
-        className="dvx-cm-field"
-        role="radiogroup"
-        aria-label="Provider"
-      >
-        <span className="dvx-cm-field-label">Provider *</span>
-        <div className="dvx-mcp-add-types">
-          {CUSTOM_MODEL_PROVIDERS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              className="dvx-mcp-add-type"
-              aria-checked={provider === value}
-              onClick={() => setProvider(value)}
-            >
-              {CUSTOM_MODEL_PROVIDER_LABELS[value]}
-            </button>
-          ))}
-        </div>
-      </div>
+      <CustomModelProviderSelector
+        value={provider}
+        onChange={setProvider}
+      />
       <label className="dvx-cm-field">
         <span className="dvx-cm-field-label">Base URL *</span>
         <input
@@ -795,21 +773,25 @@ function CustomModelForm({
         </p>
       ) : null}
       <div className="dvx-cm-form-actions">
-        <button
-          type="button"
-          className="dvx-mcp-add-submit"
-          disabled={!canSave}
-          onClick={submit}
-        >
-          {item === null ? 'Add model' : 'Save changes'}
-        </button>
-        <button
-          type="button"
-          className="dvx-cm-action"
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
+        <div className="dvx-cm-form-actions-secondary">
+          <button
+            type="button"
+            className="dvx-cm-secondary-action"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+        </div>
+        <div className="dvx-cm-form-actions-primary">
+          <button
+            type="button"
+            className="dvx-mcp-add-submit"
+            disabled={!canSave}
+            onClick={submit}
+          >
+            {item === null ? 'Add model' : 'Save changes'}
+          </button>
+        </div>
       </div>
     </div>
   );

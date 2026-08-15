@@ -18,15 +18,17 @@ export interface WebviewAssets {
 
 /**
  * Painted by an inline nonce'd style before the external stylesheet
- * and the React bundle load, so the panel never flashes the default
- * white (or, under the dark theme, warm white). Must match the
- * per-theme `html, body` backgrounds in the webview's stylesheet
- * (light: 10-shell-frame.css, dark: 24-theme-dark.css).
+ * and React load, so the panel never flashes white. Explicit themes
+ * use the fixed DroidVisX grounds; Auto uses the editor's injected
+ * CSS variable from the first frame.
  */
 const INITIAL_BACKGROUNDS = {
   light: '#f5f3ef',
   dark: '#1a1a1a',
 } as const;
+
+const AUTO_INITIAL_BACKGROUND =
+  'var(--vscode-sideBar-background,var(--vscode-editor-background,#f5f3ef))';
 
 export type WebviewInitialTheme = keyof typeof INITIAL_BACKGROUNDS;
 
@@ -63,6 +65,10 @@ export function getWebviewHtml(
   const styleUri = escapeHtmlAttribute(
     webview.asWebviewUri(assets.style).toString(),
   );
+  const initialBackground =
+    theme.preference === 'auto'
+      ? AUTO_INITIAL_BACKGROUND
+      : INITIAL_BACKGROUNDS[theme.resolved];
 
   // The data-dvx-theme attribute lets the stylesheet's page-ground
   // rules apply from the first styled frame (before React mounts and
@@ -78,7 +84,7 @@ export function getWebviewHtml(
   >
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DroidVisX</title>
-  <style nonce="${nonce}">html,body{background:${INITIAL_BACKGROUNDS[theme.resolved]}}</style>
+  <style nonce="${nonce}">html,body{background:${initialBackground}}</style>
   <link rel="stylesheet" href="${styleUri}">
 </head>
 <body>

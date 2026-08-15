@@ -9,7 +9,7 @@ import {
 
 import type { ThemePreference } from '../../shared/bridgeMessages';
 
-/** The theme actually painted ('auto' resolved against the editor). */
+/** The editor color-scheme kind ('auto' resolved against the editor). */
 export type ResolvedTheme = 'light' | 'dark';
 
 export interface ThemeContextValue {
@@ -79,13 +79,18 @@ export function resolveTheme(
 }
 
 /**
- * Mirrors the resolved theme onto <html>. The page grounds
- * (html/body/#root) and the portalled overlays (lightbox, slash
- * tooltip) live outside `.dvx-shell`, so their theming is keyed off
- * this attribute (theme design doc §2.1).
+ * Mirrors the theme pair onto <html>. The page grounds and portalled
+ * overlays live outside `.dvx-shell`, so they need both the resolved
+ * light/dark kind and the preference. In Auto, CSS consumes the
+ * editor's live `--vscode-*` color variables instead of repainting
+ * the fixed DroidVisX light/dark palette.
  */
-export function applyDocumentTheme(theme: ResolvedTheme): void {
+export function applyDocumentTheme(
+  theme: ResolvedTheme,
+  preference: ThemePreference,
+): void {
   document.documentElement.dataset.dvxTheme = theme;
+  document.documentElement.dataset.dvxThemePreference = preference;
 }
 
 /**
@@ -111,8 +116,8 @@ export function useThemeController(
     readBootResolvedTheme,
   );
   useEffect(() => {
-    applyDocumentTheme(resolved);
-  }, [resolved]);
+    applyDocumentTheme(resolved, preference);
+  }, [preference, resolved]);
   const onPreferenceChange = useCallback(
     (next: ThemePreference): void => {
       // Optimistic: the host persists and echoes back via ui.theme.
