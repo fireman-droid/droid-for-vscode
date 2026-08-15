@@ -765,10 +765,9 @@ export function App(): React.JSX.Element {
     [state.transcript],
   );
   // Plan lines: pure projections of the transcript's todowrites (no
-  // new bridge data) — one thin line per plan lineage, keyed by the
-  // user message that triggered the lineage's turn and rendered
-  // directly under that message, updated in place by later
-  // todowrites.
+  // new bridge data) — at most one thin line per user anchor,
+  // rendered directly under that message and updated in place by
+  // later todowrites.
   const planAnchors = useMemo(
     () => selectPlanAnchors(state.transcript),
     [state.transcript],

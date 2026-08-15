@@ -96,20 +96,18 @@ describe('selectPlanAnchors', () => {
       planTool('turn-1', 'use-1', PLAN_V2),
     ]);
     expect([...anchors.keys()]).toEqual(['u1']);
-    expect(anchors.get('u1')).toEqual([
-      {
-        anchorToolUseId: 'use-1',
-        title: 'Wire the selector',
-        steps: [
-          { status: 'completed', text: 'Read the config' },
-          { status: 'in_progress', text: 'Wire the selector' },
-          { status: 'pending', text: 'Write the tests' },
-        ],
-        completedCount: 1,
-        totalCount: 3,
-        allCompleted: false,
-      },
-    ]);
+    expect(anchors.get('u1')).toEqual({
+      anchorToolUseId: 'use-1',
+      title: 'Wire the selector',
+      steps: [
+        { status: 'completed', text: 'Read the config' },
+        { status: 'in_progress', text: 'Wire the selector' },
+        { status: 'pending', text: 'Write the tests' },
+      ],
+      completedCount: 1,
+      totalCount: 3,
+      allCompleted: false,
+    });
   });
 
   it('skips a plan with no preceding user message (no anchor)', () => {
@@ -129,7 +127,7 @@ describe('selectPlanAnchors', () => {
     // The overlapping turn-2 update continues the lineage anchored at
     // u1 — no second line under u2.
     expect([...anchors.keys()]).toEqual(['u1']);
-    const anchor = anchors.get('u1')?.[0];
+    const anchor = anchors.get('u1');
     expect(anchor?.anchorToolUseId).toBe('use-1');
     expect(anchor?.completedCount).toBe(3);
     expect(anchor?.allCompleted).toBe(true);
@@ -140,7 +138,7 @@ describe('selectPlanAnchors', () => {
   it('titles the line with the live step, the next pending one, or the last when done', () => {
     const titleOf = (detail: string) =>
       selectPlanAnchors([user('u1'), planTool('turn-1', 'use-1', detail)])
-        .get('u1')?.[0]?.title;
+        .get('u1')?.title;
     // Nothing started yet: the opening step is also the next one up.
     expect(titleOf('1. [pending] First\n2. [pending] Second')).toBe('First');
     // A running step always wins.
@@ -164,20 +162,22 @@ describe('selectPlanAnchors', () => {
       planTool('turn-2', 'use-9', '1. [in_progress] A wholly new mission'),
     ]);
     expect([...anchors.keys()]).toEqual(['u1', 'u2']);
-    expect(anchors.get('u1')?.[0]?.allCompleted).toBe(true);
-    expect(anchors.get('u2')?.[0]?.title).toBe('A wholly new mission');
+    expect(anchors.get('u1')?.allCompleted).toBe(true);
+    expect(anchors.get('u2')?.title).toBe('A wholly new mission');
   });
 
-  it('stacks two disjoint lineages of one turn under the same message', () => {
+  it('replaces a disjoint rewrite under the same message in place', () => {
     const anchors = selectPlanAnchors([
       user('u1'),
       planTool('turn-1', 'use-1', PLAN_V3),
       planTool('turn-1', 'use-2', '1. [in_progress] A wholly new mission'),
     ]);
     expect([...anchors.keys()]).toEqual(['u1']);
-    expect(
-      anchors.get('u1')?.map((anchor) => anchor.anchorToolUseId),
-    ).toEqual(['use-1', 'use-2']);
+    expect(anchors.get('u1')).toMatchObject({
+      anchorToolUseId: 'use-1',
+      title: 'A wholly new mission',
+      totalCount: 1,
+    });
   });
 
   it('continues the lineage on partial overlap (plan rewrite)', () => {
@@ -191,8 +191,8 @@ describe('selectPlanAnchors', () => {
       ),
     ]);
     expect([...anchors.keys()]).toEqual(['u1']);
-    expect(anchors.get('u1')?.[0]?.totalCount).toBe(2);
-    expect(anchors.get('u1')?.[0]?.steps[1]?.text).toBe('A rewritten step');
+    expect(anchors.get('u1')?.totalCount).toBe(2);
+    expect(anchors.get('u1')?.steps[1]?.text).toBe('A rewritten step');
   });
 
   it('skips plan rows whose detail parses to no steps', () => {
@@ -202,6 +202,22 @@ describe('selectPlanAnchors', () => {
       planTool('turn-2', 'use-2', '   '),
     ]);
     expect([...anchors.keys()]).toEqual(['u1']);
-    expect(anchors.get('u1')?.[0]?.totalCount).toBe(3);
+    expect(anchors.get('u1')?.totalCount).toBe(3);
+  });
+
+  it('keeps a new user plan separate after the previous plan completed', () => {
+    const anchors = selectPlanAnchors([
+      user('u1'),
+      planTool('turn-1', 'use-1', PLAN_V3),
+      user('u2'),
+      planTool(
+        'turn-2',
+        'use-2',
+        '1. [in_progress] Write the tests\n2. [pending] Ship it',
+      ),
+    ]);
+    expect([...anchors.keys()]).toEqual(['u1', 'u2']);
+    expect(anchors.get('u1')?.anchorToolUseId).toBe('use-1');
+    expect(anchors.get('u2')?.anchorToolUseId).toBe('use-2');
   });
 });

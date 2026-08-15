@@ -300,13 +300,13 @@ interface DroidThreadProps {
    * Plan lines keyed by the id of the user message that triggered
    * the turn each plan was created in (projected in App from
    * transcript todowrites; the key doubles as the aui message id).
-   * Each plan renders one thin line directly under its user message
-   * — the first element of that turn's reply area — updated in place
-   * by later todowrites.
+   * Each user anchor owns at most one thin line directly under its
+   * message — the first element of that turn's reply area — updated
+   * in place by later todowrites.
    */
   readonly planAnchors?: ReadonlyMap<
     string,
-    readonly PlanAnchorState[]
+    PlanAnchorState
   > | null;
   /**
    * The queued-prompts bar stacked directly above the Composer in
@@ -760,7 +760,7 @@ export const DroidThread = memo(function DroidThread({
                   // rendered inside the sticky message block, directly
                   // under the question, so the pin coordinator carries
                   // them through stick/push-out for free.
-                  const plans = planAnchors?.get(message.id);
+                  const plan = planAnchors?.get(message.id);
                   // Inline image previews make IMAGE chips redundant
                   // (kitchen-sink form, 2026-08-13); other kinds keep
                   // their chips.
@@ -777,15 +777,15 @@ export const DroidThread = memo(function DroidThread({
                       messageId={messageId}
                       attachments={attachments}
                       planLine={
-                        plans === undefined
+                        plan === undefined
                           ? null
-                          : plans.map((plan) => (
+                          : (
                               <PlanLine
                                 key={plan.anchorToolUseId}
                                 anchor={plan}
                                 running={running}
                               />
-                            ))
+                            )
                       }
                       editing={
                         messageId !== null && messageId === editingMessageId

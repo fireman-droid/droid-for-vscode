@@ -10,9 +10,10 @@ export interface PlanStep {
  * transcript. The line renders directly under the user message that
  * triggered the turn in which the plan was created (the first
  * element of that turn's reply area) and shows the plan's latest
- * state; later todowrite rows of the same lineage update the line in
- * place and never spawn a new one. Derived purely from transcript
- * tool items (detailKind 'plan'); no new bridge data is involved.
+ * state; later todowrite rows anchored to that same user message
+ * always replace the line in place, even when Droid rewrites every
+ * step. Derived purely from transcript tool items (detailKind
+ * 'plan'); no new bridge data is involved.
  */
 export interface PlanAnchorState {
   /** toolUseId of the lineage's creation todowrite (stable key). */
@@ -78,17 +79,16 @@ interface PlanLineage {
  * Groups the session's todowrites into plan lineages and projects
  * each lineage's latest state onto the user message that triggered
  * the turn the lineage was created in (map key: the user transcript
- * item's id, which doubles as the aui message id). A later todowrite
- * continues the current lineage when it shares at least one step
- * text with the lineage's latest version — Droid rewrites the full
- * list on every update, so progress updates overlap heavily. A fully
- * disjoint list reads as a genuinely new plan and starts a new
- * lineage with its own line. A plan with no preceding user message
- * has no anchor position and is skipped (fail quiet).
+ * item's id, which doubles as the aui message id). Every anchor owns
+ * at most one visible plan: a later todowrite under the same anchor
+ * updates it even after a complete rewrite. Across user anchors,
+ * overlap continues an unfinished lineage; a completed lineage or a
+ * disjoint list starts a genuinely new plan. A plan with no preceding
+ * user message has no anchor position and is skipped (fail quiet).
  */
 export function selectPlanAnchors(
   transcript: readonly SessionTranscriptItem[],
-): ReadonlyMap<string, readonly PlanAnchorState[]> {
+): ReadonlyMap<string, PlanAnchorState> {
   const lineages: PlanLineage[] = [];
   let lastUserItemId: string | null = null;
   for (const item of transcript) {
@@ -108,7 +108,13 @@ export function selectPlanAnchors(
       continue;
     }
     const current = lineages[lineages.length - 1];
-    if (current !== undefined && sharesAnyStep(current.latestSteps, steps)) {
+    const sameAnchor =
+      current?.anchorUserItemId === lastUserItemId;
+    const continuesUnfinished =
+      current !== undefined &&
+      !planCompleted(current.latestSteps) &&
+      sharesAnyStep(current.latestSteps, steps);
+    if (current !== undefined && (sameAnchor || continuesUnfinished)) {
       current.latestSteps = steps;
       continue;
     }
@@ -122,7 +128,7 @@ export function selectPlanAnchors(
     });
   }
 
-  const anchors = new Map<string, PlanAnchorState[]>();
+  const anchors = new Map<string, PlanAnchorState>();
   for (const lineage of lineages) {
     const steps = lineage.latestSteps;
     const completedCount = steps.filter(
@@ -136,14 +142,13 @@ export function selectPlanAnchors(
       totalCount: steps.length,
       allCompleted: completedCount === steps.length,
     };
-    const existing = anchors.get(lineage.anchorUserItemId);
-    if (existing === undefined) {
-      anchors.set(lineage.anchorUserItemId, [state]);
-    } else {
-      existing.push(state);
-    }
+    anchors.set(lineage.anchorUserItemId, state);
   }
   return anchors;
+}
+
+function planCompleted(steps: readonly PlanStep[]): boolean {
+  return steps.every((step) => step.status === 'completed');
 }
 
 function sharesAnyStep(

@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.23 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.24 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -3188,6 +3188,19 @@ UI 描述见 §22 重做记录。
 - **验证**：触达 7 个测试文件 **164 例**、三段 typecheck 与
   `lint:budgets` 全绿；按门禁未跑全量 Vitest、浏览器 smoke 或 daemon
   smoke。
+
+### 59. TodoWrite 计划单卡原位更新（2026-08-15，v0.7.24）
+
+- **一个用户锚点只保留一张计划**：`selectPlanAnchors` 的投影从
+  `userId → PlanAnchorState[]` 收紧为 `userId → PlanAnchorState`；
+  同一用户回合里的后续 TodoWrite 即使把所有步骤完全改写，也只替换
+  现有 checklist，不再追加第二张卡。
+- **组件身份与独立计划**：原始 TodoWrite 的 `anchorToolUseId` 在更新时
+  保持不变，因此 React key 与读者展开状态不会重置；前一计划已完成后，
+  后续用户请求仍建立自己的锚点，独立计划不会被误合并。
+- **验证**：`planAnchor`、`Thread`、`App` 3 个触达测试文件
+  **111 例**、三段 typecheck 与 `lint:budgets` 全绿；按门禁未跑全量
+  Vitest、浏览器 smoke 或 daemon smoke。
 
 ## 部分完成
 

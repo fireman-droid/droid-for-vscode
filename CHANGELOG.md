@@ -4,6 +4,19 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.24] - 2026-08-15
+
+### Fixed
+
+- **Plan updates no longer stack duplicate cards** — each triggering
+  user message owns at most one plan line, and later TodoWrite calls
+  replace its checklist in place even when Droid rewrites every step.
+  The original line identity is retained so expansion state does not
+  reset.
+- **Separate completed plans remain separate** — a later user request
+  still receives its own plan line instead of being merged into an
+  already finished plan.
+
 ## [0.7.23] - 2026-08-15
 
 ### Fixed
