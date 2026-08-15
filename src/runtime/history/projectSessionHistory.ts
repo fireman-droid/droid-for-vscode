@@ -162,6 +162,20 @@ export function projectSessionHistory(
   }
 }
 
+/**
+ * Projects the public daemon `sessions.getMessages()` array through the same
+ * bounded, privacy-preserving history path as `loadSession()`.
+ */
+export function projectSessionMessages(
+  messages: unknown,
+  options?: { readonly workspaceRoot?: string },
+): SessionHistoryResult {
+  return projectSessionHistory(
+    { result: { session: { messages } } },
+    options,
+  );
+}
+
 function readLoadedMessages(value: unknown): readonly unknown[] | null {
   if (!isStrictRecord(value)) {
     return null;

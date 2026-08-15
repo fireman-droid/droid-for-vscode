@@ -182,11 +182,14 @@ export function SubagentTranscriptSheet({
           ) : sheet.status === 'unavailable' ? (
             <p className="dvx-btw-status">Transcript unavailable.</p>
           ) : (
-            <ReadOnlySubagentTranscript items={sheet.items} />
+            <ReadOnlySubagentTranscript
+              items={sheet.items}
+              running={running}
+            />
           )}
           {sheet.status === 'available' && sheet.truncated ? (
             <p className="dvx-btw-status">
-              Earlier messages were truncated.
+              Some messages were truncated.
             </p>
           ) : null}
         </div>
@@ -197,30 +200,36 @@ export function SubagentTranscriptSheet({
 
 function ReadOnlySubagentTranscript({
   items,
+  running,
 }: {
   readonly items: readonly SessionTranscriptItem[];
+  readonly running: boolean;
 }): React.JSX.Element {
   const messageCacheRef = useRef<RuntimeMessageCache>(new Map());
   const completionClockRef = useRef<CompletionClock>(new Map());
+  const activeTurn = useMemo(
+    () => (running ? lastTranscriptTurn(items) : null),
+    [items, running],
+  );
   const messages = useMemo(
     () =>
       mapTranscriptToRuntimeMessages(
         items,
-        null,
+        activeTurn,
         messageCacheRef.current,
         completionClockRef.current,
       ),
-    [items],
+    [activeTurn, items],
   );
   const adapter = useMemo<ExternalStoreAdapter<SafeRuntimeMessage>>(
     () => ({
       messages,
-      isRunning: false,
+      isRunning: running,
       isSendDisabled: true,
       convertMessage: convertSafeRuntimeMessage,
       onNew: async () => undefined,
     }),
-    [messages],
+    [messages, running],
   );
   const runtime = useExternalStoreRuntime(adapter);
   return (
@@ -244,4 +253,16 @@ function ReadOnlySubagentTranscript({
       </TerminalMirrorContext.Provider>
     </AssistantRuntimeProvider>
   );
+}
+
+function lastTranscriptTurn(
+  items: readonly SessionTranscriptItem[],
+): { readonly turnId: string; readonly status: 'streaming' } | null {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]!;
+    if (item.kind !== 'user' && typeof item.turnId === 'string') {
+      return { turnId: item.turnId, status: 'streaming' };
+    }
+  }
+  return null;
 }

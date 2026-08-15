@@ -12,9 +12,36 @@ import {
 } from '../../shared/bridgeMessages';
 import { FactorySessionHistoryLoader } from './FactorySessionHistoryLoader';
 import { SESSION_HISTORY_UNAVAILABLE_MESSAGE } from './SessionHistory';
-import { projectSessionHistory } from './projectSessionHistory';
+import {
+  projectSessionHistory,
+  projectSessionMessages,
+} from './projectSessionHistory';
 
 describe('projectSessionHistory', () => {
+  it('projects a public daemon message snapshot through the same path', () => {
+    const result = projectSessionMessages([
+      message('user-live', 'user', [
+        { type: 'text', text: 'Inspect live state' },
+      ]),
+      message('assistant-live', 'assistant', [
+        { type: 'text', text: 'First complete message' },
+      ]),
+    ]);
+
+    expect(result).toMatchObject({
+      status: 'available',
+      state: {
+        transcript: [
+          { kind: 'user', text: 'Inspect live state' },
+          { kind: 'assistant', text: 'First complete message' },
+        ],
+      },
+    });
+    expect(projectSessionMessages('hostile')).toMatchObject({
+      status: 'unavailable',
+    });
+  });
+
   it('projects visible text, thinking, and safe tool lifecycle in order', () => {
     const loaded = response([
       message('raw-user-id', 'user', [

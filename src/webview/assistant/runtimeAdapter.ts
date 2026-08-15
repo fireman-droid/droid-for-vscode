@@ -289,7 +289,10 @@ interface AssistantGroupDescriptor {
 
 export function mapTranscriptToRuntimeMessages(
   transcript: readonly SessionTranscriptItem[],
-  turn: AssistantWebviewState["turn"],
+  turn: Pick<
+    NonNullable<AssistantWebviewState["turn"]>,
+    "turnId" | "status"
+  > | null,
   cache?: RuntimeMessageCache,
   completionClock?: CompletionClock,
 ): readonly SafeRuntimeMessage[] {

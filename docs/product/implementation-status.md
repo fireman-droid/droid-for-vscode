@@ -25,7 +25,7 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.22 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
+当前 v0.7.23 已重新打包、验证并安装；现有 Cursor 窗口需 Reload Window
 加载新 Bundle，本地提交状态见本轮最终交付记录。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
@@ -3171,6 +3171,23 @@ UI 描述见 §22 重做记录。
   `lint:budgets` 与 `git diff --check` 全绿；真实临时非 Git 工作区验证
   no-index 计数，VS Code Diff provider、缓存回收和 Git fallback 均有
   单测。按门禁未跑全量 Vitest、浏览器 smoke 或 daemon smoke。
+
+### 58. 子代理运行中增量转录（2026-08-15，v0.7.23）
+
+- **公开 Runtime 数据源**：daemon 模式的运行中子代理改用公开
+  `sessions.getMessages(childId,{limit:100})` 读取有界消息快照，再走
+  与历史加载相同的安全投影；不读取私有 JSONL，也不把消息级轮询冒充
+  token delta。process 模式与 daemon 失败时保留既有完整历史回退。
+- **稳定增量呈现**：Webview 按转录 item ID 保留未变化对象，更新正在增长
+  的消息并追加新行；只读 assistant-ui runtime 收到真实 running 状态，
+  当前子代理回复使用主聊天 live 呈现，读者离开底部后仍保持滚动意图。
+- **结尾与长会话边界**：同一行请求继续单飞，但 in-flight 期间保留一个
+  trailing refresh，避免结束瞬间的最后一段被吞；公开 100 消息窗口饱和
+  或子代理已结清时改读完整持久化历史，失败则显示带 truncated 标记的
+  有界快照。childSessionId 仍只存在 Host。
+- **验证**：触达 7 个测试文件 **164 例**、三段 typecheck 与
+  `lint:budgets` 全绿；按门禁未跑全量 Vitest、浏览器 smoke 或 daemon
+  smoke。
 
 ## 部分完成
 

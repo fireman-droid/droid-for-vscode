@@ -3,7 +3,9 @@ import {
   type ConnectedDroid,
 } from '@factory/droid-sdk';
 
+import type { HostTranscriptState } from '../shared/hostTranscriptState';
 import { MAX_SUBAGENT_ACTIVITY_LENGTH } from '../shared/subagentProtocol';
+import { projectSessionMessages } from './history/projectSessionHistory';
 
 /**
  * Host-facing control surface over running Task subagents (待办 B;
@@ -22,15 +24,32 @@ import { MAX_SUBAGENT_ACTIVITY_LENGTH } from '../shared/subagentProtocol';
  * daemon sessions are active, and the host renders no stop control
  * without it (no disabled placeholders — user decision 2026-08-12).
  */
+export interface SubagentTranscriptSnapshot {
+  readonly state: HostTranscriptState;
+  /** The public facade reached its hard window limit. */
+  readonly saturated: boolean;
+}
+
 export interface SubagentControlGateway {
   /** Last tool name inside the child, or null when unreadable. */
   sampleActivity(childSessionId: string): Promise<string | null>;
+  /**
+   * Bounded live child transcript from the public daemon message snapshot.
+   * Optional so process-mode and older injected gateways keep the coarse
+   * persisted-history fallback.
+   */
+  readTranscript?(
+    childSessionId: string,
+    workspaceRoot: string,
+  ): Promise<SubagentTranscriptSnapshot | null>;
   /** True when the interrupt round-trip completed. */
   interrupt(childSessionId: string): Promise<boolean>;
 }
 
 /** Messages fetched per activity sample; newest tail is enough. */
 const ACTIVITY_SAMPLE_LIMIT = 40;
+/** Public facade hard maximum; saturation falls back to full history. */
+const TRANSCRIPT_SNAPSHOT_LIMIT = 100;
 
 export function createDaemonSubagentControl(
   getDroid: () => Promise<ConnectedDroid>,
@@ -44,6 +63,27 @@ export function createDaemonSubagentControl(
           { limit: ACTIVITY_SAMPLE_LIMIT },
         );
         return lastToolName(messages);
+      } catch {
+        return null;
+      }
+    },
+    async readTranscript(childSessionId, workspaceRoot) {
+      try {
+        const droid = await getDroid();
+        const messages = await droid.sessions.getMessages(
+          childSessionId,
+          { limit: TRANSCRIPT_SNAPSHOT_LIMIT },
+        );
+        const projected = projectSessionMessages(messages, {
+          workspaceRoot,
+        });
+        return projected.status === 'available'
+          ? {
+              state: projected.state,
+              saturated:
+                messages.length === TRANSCRIPT_SNAPSHOT_LIMIT,
+            }
+          : null;
       } catch {
         return null;
       }

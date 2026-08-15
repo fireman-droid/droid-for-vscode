@@ -40,6 +40,8 @@ interface SubagentPanelState {
   lastEmitted: Map<string, string>;
   /** Transcript requests in flight (single-flight per row). */
   inflightTranscripts: Set<string>;
+  /** One trailing refresh retained while a row request is in flight. */
+  pendingTranscripts: Set<string>;
   /** Stop requests in flight (single-flight per row). */
   inflightStops: Set<string>;
   /** Successful interrupts waiting for the ledger to settle. */
@@ -64,6 +66,7 @@ function stateOf(ctl: ChatControllerInternals): SubagentPanelState {
       invocations: new Map(),
       lastEmitted: new Map(),
       inflightTranscripts: new Set(),
+      pendingTranscripts: new Set(),
       inflightStops: new Set(),
       settlingStops: new Set(),
     };
@@ -78,6 +81,7 @@ function stateOf(ctl: ChatControllerInternals): SubagentPanelState {
     state.mappingAt = 0;
     state.invocations = new Map();
     state.inflightTranscripts.clear();
+    state.pendingTranscripts.clear();
     state.inflightStops.clear();
     state.settlingStops.clear();
   }
@@ -387,6 +391,7 @@ export function handleSubagentOpenTranscript(
   const state = stateOf(ctl);
   const key = stopKey(sessionId, toolUseId);
   if (state.inflightTranscripts.has(key)) {
+    state.pendingTranscripts.add(key);
     return;
   }
   const row = taskRowOf(ctl, toolUseId);
@@ -432,14 +437,38 @@ export function handleSubagentOpenTranscript(
         unavailable();
         return;
       }
-      const result = await ctl.sessionHistory.loadHistory({
-        cwd,
-        sessionId: childId,
-      });
+      const currentRow = taskRowOf(ctl, toolUseId);
+      const gateway = ctl.subagentControl?.() ?? null;
+      const liveSnapshot =
+        currentRow !== undefined &&
+        isWorkingSubagentRow(currentRow) &&
+        gateway?.readTranscript !== undefined
+          ? await gateway.readTranscript(childId, cwd)
+          : null;
       if (ctl.disposed || ctl.sessionId !== sessionId) {
         return;
       }
-      if (result.status !== 'available') {
+      const persisted =
+        liveSnapshot === null || liveSnapshot.saturated
+          ? await ctl.sessionHistory.loadHistory({
+              cwd,
+              sessionId: childId,
+            })
+          : null;
+      if (ctl.disposed || ctl.sessionId !== sessionId) {
+        return;
+      }
+      const transcriptState =
+        persisted?.status === 'available'
+          ? persisted.state
+          : liveSnapshot?.saturated === true
+            ? {
+                ...liveSnapshot.state,
+                historyStatus: 'partial' as const,
+                truncated: true,
+              }
+            : (liveSnapshot?.state ?? null);
+      if (transcriptState === null) {
         ctl.recordHost({
           level: 'warn',
           name: 'host.subagent.transcript',
@@ -453,7 +482,11 @@ export function handleSubagentOpenTranscript(
         name: 'host.subagent.transcript',
         attributes: {
           outcome: 'ok',
-          items: result.state.transcript.length,
+          source:
+            persisted?.status === 'available'
+              ? 'history'
+              : 'daemon',
+          items: transcriptState.transcript.length,
         },
       });
       ctl.emit({
@@ -462,8 +495,8 @@ export function handleSubagentOpenTranscript(
         toolUseId,
         status: 'available',
         title,
-        items: result.state.transcript,
-        truncated: result.state.truncated,
+        items: transcriptState.transcript,
+        truncated: transcriptState.truncated,
       });
     } catch {
       if (!ctl.disposed && ctl.sessionId === sessionId) {
@@ -471,6 +504,13 @@ export function handleSubagentOpenTranscript(
       }
     } finally {
       state.inflightTranscripts.delete(key);
+      if (
+        state.pendingTranscripts.delete(key) &&
+        !ctl.disposed &&
+        ctl.sessionId === sessionId
+      ) {
+        handleSubagentOpenTranscript(ctl, sessionId, toolUseId);
+      }
     }
   })();
 }

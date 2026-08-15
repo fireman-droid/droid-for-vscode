@@ -55,6 +55,40 @@ describe('createDaemonSubagentControl', () => {
     expect(getMessages).toHaveBeenCalledWith('child-1', { limit: 40 });
   });
 
+  it('projects a bounded live transcript through sessions.getMessages', async () => {
+    const getMessages = vi.fn().mockResolvedValue([
+      {
+        id: 'user-1',
+        role: 'user',
+        content: [{ type: 'text', text: 'Inspect src' }],
+      },
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Reading now' }],
+      },
+    ]);
+    const gateway = createDaemonSubagentControl(async () =>
+      ({ sessions: { getMessages } }) as never,
+    );
+
+    await expect(
+      gateway.readTranscript?.('child-live', 'd:/work'),
+    ).resolves.toMatchObject({
+      state: {
+        transcript: [
+          { kind: 'user', text: 'Inspect src' },
+          { kind: 'assistant', text: 'Reading now' },
+        ],
+        truncated: false,
+      },
+      saturated: false,
+    });
+    expect(getMessages).toHaveBeenCalledWith('child-live', {
+      limit: 100,
+    });
+  });
+
   it('runs the probed stop sequence resume→interrupt→detach', async () => {
     const interrupt = vi.fn().mockResolvedValue(undefined);
     const detach = vi.fn().mockResolvedValue(undefined);
@@ -75,6 +109,9 @@ describe('createDaemonSubagentControl', () => {
     });
     await expect(gateway.interrupt('child-3')).resolves.toBe(false);
     await expect(gateway.sampleActivity('child-3')).resolves.toBeNull();
+    await expect(
+      gateway.readTranscript?.('child-3', 'd:/work'),
+    ).resolves.toBeNull();
   });
 
   it('still detaches when the interrupt itself rejects', async () => {

@@ -5,6 +5,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -223,7 +224,7 @@ describe('SubagentTranscriptSheet', () => {
       />,
     );
     expect(container.textContent).toContain(
-      'Earlier messages were truncated.',
+      'Some messages were truncated.',
     );
   });
 
@@ -303,6 +304,37 @@ describe('SubagentTranscriptSheet', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('marks the current child reply live until its row settles', async () => {
+    const { container, rerender } = render(
+      <SubagentTranscriptSheet
+        sheet={sheetWith({ items })}
+        running
+        onRefresh={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(
+      container.querySelector(
+        '.dvx-message-assistant.dvx-message-live',
+      ),
+    ).not.toBeNull();
+    rerender(
+      <SubagentTranscriptSheet
+        sheet={sheetWith({ items })}
+        running={false}
+        onRefresh={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(
+        container.querySelector(
+          '.dvx-message-assistant.dvx-message-live',
+        ),
+      ).toBeNull();
+    });
   });
 
   it('shows the live indicator and refreshes only while running', () => {

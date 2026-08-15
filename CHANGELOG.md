@@ -4,6 +4,20 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.23] - 2026-08-15
+
+### Fixed
+
+- **Running subagent transcripts now advance incrementally** — the
+  read-only Preview polls bounded public daemon message snapshots,
+  updates complete child messages in place, and presents the current
+  child reply as live instead of waiting for one large persisted
+  history load.
+- **The final child transcript tail is no longer lost** — refreshes
+  that overlap an in-flight request retain one trailing pass, while
+  settled or saturated public windows fall back to complete persisted
+  history.
+
 ## [0.7.22] - 2026-08-15
 
 ### Fixed

@@ -157,9 +157,14 @@ export function AssistantMessageParts({
 
 /** Child-session assistant message: identical body, no reply actions. */
 export function ReadOnlyAssistantMessage(): React.JSX.Element {
+  const running = useAuiState(
+    (state) => state.message.status?.type === "running",
+  );
   return (
     <MessagePrimitive.Root
-      className="dvx-message dvx-message-assistant"
+      className={`dvx-message dvx-message-assistant${
+        running ? " dvx-message-live" : ""
+      }`}
       aria-label="Subagent"
     >
       <AssistantMessageParts includeChanges={false} />

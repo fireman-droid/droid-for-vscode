@@ -68,6 +68,7 @@ interface FakeController {
   };
   subagentControl: (() => {
     sampleActivity: ReturnType<typeof vi.fn>;
+    readTranscript?: ReturnType<typeof vi.fn>;
     interrupt: ReturnType<typeof vi.fn>;
   } | null) | null;
   emit: ReturnType<typeof vi.fn>;
@@ -149,7 +150,7 @@ describe('pairInvocationMapping', () => {
 
 describe('handleSubagentOpenTranscript', () => {
   it('serves the child transcript through the history loader', async () => {
-    const fake = fakeController();
+    const fake = fakeController({ subagentControl: () => null });
     handleSubagentOpenTranscript(asCtl(fake), 'session-1', 'use-1');
     await vi.waitFor(() => {
       expect(fake.emit).toHaveBeenCalledWith(
@@ -171,6 +172,132 @@ describe('handleSubagentOpenTranscript', () => {
       unknown
     >;
     expect('childSessionId' in message).toBe(false);
+  });
+
+  it('uses daemon snapshots while running, then persisted history when settled', async () => {
+    const liveState = {
+      transcript: [
+        { id: 'u-live', kind: 'user' as const, text: 'investigate' },
+        {
+          id: 'a-live',
+          kind: 'assistant' as const,
+          turnId: 'child-turn',
+          text: 'First message',
+        },
+      ],
+      historyStatus: 'complete' as const,
+      truncated: false,
+    };
+    const readTranscript = vi.fn().mockResolvedValue({
+      state: liveState,
+      saturated: false,
+    });
+    const fake = fakeController({
+      subagentControl: () => ({
+        sampleActivity: vi.fn(),
+        readTranscript,
+        interrupt: vi.fn(),
+      }),
+    });
+
+    handleSubagentOpenTranscript(asCtl(fake), 'session-1', 'use-1');
+    await vi.waitFor(() => {
+      expect(readTranscript).toHaveBeenCalledWith('child-1', 'd:/work');
+    });
+    expect(fake.sessionHistory.loadHistory).not.toHaveBeenCalled();
+    expect(fake.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'available',
+        items: liveState.transcript,
+      }),
+    );
+
+    fake.transcript.transcript = [
+      taskItem('use-1', { status: 'completed' }),
+    ];
+    handleSubagentOpenTranscript(asCtl(fake), 'session-1', 'use-1');
+    await vi.waitFor(() => {
+      expect(fake.sessionHistory.loadHistory).toHaveBeenCalledWith({
+        cwd: 'd:/work',
+        sessionId: 'child-1',
+      });
+    });
+    expect(readTranscript).toHaveBeenCalledOnce();
+  });
+
+  it('falls back to persisted history when a live snapshot fails', async () => {
+    const readTranscript = vi.fn().mockResolvedValue(null);
+    const fake = fakeController({
+      subagentControl: () => ({
+        sampleActivity: vi.fn(),
+        readTranscript,
+        interrupt: vi.fn(),
+      }),
+    });
+
+    handleSubagentOpenTranscript(asCtl(fake), 'session-1', 'use-1');
+    await vi.waitFor(() => {
+      expect(fake.sessionHistory.loadHistory).toHaveBeenCalledOnce();
+    });
+    expect(fake.emit).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'available' }),
+    );
+  });
+
+  it('prefers full history when the public live window saturates', async () => {
+    const readTranscript = vi.fn().mockResolvedValue({
+      state: {
+        transcript: [
+          { id: 'live-head', kind: 'user', text: 'partial head' },
+        ],
+        historyStatus: 'complete',
+        truncated: false,
+      },
+      saturated: true,
+    });
+    const fake = fakeController({
+      subagentControl: () => ({
+        sampleActivity: vi.fn(),
+        readTranscript,
+        interrupt: vi.fn(),
+      }),
+    });
+
+    handleSubagentOpenTranscript(asCtl(fake), 'session-1', 'use-1');
+    await vi.waitFor(() => {
+      expect(fake.sessionHistory.loadHistory).toHaveBeenCalledOnce();
+    });
+    expect(fake.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'available',
+        items: [
+          expect.objectContaining({ id: 'u1', text: 'investigate' }),
+        ],
+        truncated: false,
+      }),
+    );
+
+    fake.emit.mockClear();
+    fake.sessionHistory.loadHistory.mockResolvedValue({
+      status: 'unavailable',
+      reason: 'history-failed',
+      message: 'nope',
+    });
+    handleSubagentOpenTranscript(asCtl(fake), 'session-1', 'use-1');
+    await vi.waitFor(() => {
+      expect(fake.emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'available',
+          items: [
+            expect.objectContaining({
+              id: 'live-head',
+              text: 'partial head',
+            }),
+          ],
+          truncated: true,
+        }),
+      );
+    });
   });
 
   it('fails closed when the ledger cannot name a child session', async () => {
@@ -205,14 +332,17 @@ describe('handleSubagentOpenTranscript', () => {
     });
   });
 
-  it('single-flights concurrent requests for the same row', async () => {
-    const fake = fakeController();
+  it('single-flights concurrent requests and retains one trailing refresh', async () => {
+    const fake = fakeController({ subagentControl: () => null });
     let release: (value: unknown) => void = () => undefined;
-    fake.sessionHistory.loadHistory.mockReturnValue(
+    fake.sessionHistory.loadHistory.mockReturnValueOnce(
       new Promise((resolve) => {
         release = resolve;
       }),
-    );
+    ).mockResolvedValue({
+      status: 'available',
+      state: { transcript: [], historyStatus: 'complete', truncated: false },
+    });
     const ctl = asCtl(fake);
     handleSubagentOpenTranscript(ctl, 'session-1', 'use-1');
     handleSubagentOpenTranscript(ctl, 'session-1', 'use-1');
@@ -222,6 +352,9 @@ describe('handleSubagentOpenTranscript', () => {
     release({
       status: 'available',
       state: { transcript: [], historyStatus: 'complete', truncated: false },
+    });
+    await vi.waitFor(() => {
+      expect(fake.sessionHistory.loadHistory).toHaveBeenCalledTimes(2);
     });
   });
 
