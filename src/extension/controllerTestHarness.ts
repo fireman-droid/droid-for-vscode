@@ -69,6 +69,7 @@ import {
   ChatController,
   type ControllerHostMessage,
 } from './ChatController';
+import type { MissionGateway } from './chat/mission/MissionGateway';
 import {
   SessionRecoveryStore,
   type SessionRecoveryPersistence,
@@ -239,6 +240,7 @@ export function createController(
   diagnostics?: RuntimeDiagnosticSink,
   daemonPlugins?: () => Promise<DaemonPluginCatalog>,
   btwSidecarFactory?: BtwSidecarFactory,
+  missionGateway?: MissionGateway,
 ) {
   const controller = new ChatController(
     createRuntime,
@@ -264,6 +266,7 @@ export function createController(
     terminalMirror,
     daemonPlugins,
     btwSidecarFactory,
+    missionGateway,
   );
   const messages: ControllerHostMessage[] = [];
   controller.subscribe((message) => {

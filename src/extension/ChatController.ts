@@ -114,6 +114,8 @@ import { handleSessionNew, handleWorktreeCreateSession, handleSessionRename, han
 import { handleReady, startReplacement, replaceRuntime, loadHistoryTimed, resetSessionMetadata, closeAllRuntimesForDispose, queueWorkspaceTransition, isCurrentRuntime, ensureActiveRuntimeWorkspaceCurrent, isTargetWorkspaceCurrent, emitWorkspaceUnavailable, isSameWorkspaceContext, WORKSPACE_CHANGED_MESSAGE } from './chat/runtimeLifecycle';
 import { handleSend, handleStop, handleRetry, handleSessionCompact, projectTranscript } from './chat/turnFlow';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
+import { handleMissionStart } from './chat/mission/controller';
+import type { MissionGateway } from './chat/mission/MissionGateway';
 import { clearPrompts, dropDispatchedPrompt, emptyQueuedPromptsState, enqueuePrompt, evaluateQueueDispatch, markDispatchBlocked, pauseAfterTerminal, promotePrompt, removePrompt, resumeQueue, updatePromptText, type QueuedPromptsState } from './queuedPromptsState';
 import type { SessionQueueState } from '../shared/queueProtocol';
 import {
@@ -272,6 +274,8 @@ export class ChatController {
   settingsUpdate: symbol | null = null;
   catalogGeneration = 0;
   catalogCwd: string | null = null;
+  /** Prevents duplicate Mission creation while the Host gateway settles. */
+  missionStartInProgress = false;
   /**
    * True when the current workspace may create worktree sessions:
    * daemon runtime mode (worktreeSessions.enabled) and a git
@@ -434,6 +438,7 @@ export class ChatController {
     readonly daemonPlugins?: () => Promise<DaemonPluginCatalog>,
     btwSidecarFactory?: BtwSidecarFactory,
   ) {
+    readonly missionGateway?: MissionGateway,
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
     };
@@ -533,6 +538,9 @@ export class ChatController {
       case 'turn.editResend':
         handleEditResend(this, 
           message.sessionId,
+      case 'mission.start':
+        handleMissionStart(this, message);
+        return;
           message.turnId,
           message.messageId,
           message.text,

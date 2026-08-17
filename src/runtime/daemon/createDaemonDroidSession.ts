@@ -179,6 +179,26 @@ function adaptDaemonSession(
   availableModels?: readonly AvailableModelConfig[],
 ): FactoryDroidSession {
   // The daemon confirms `updateSettings` before the `settings_updated`
+/** Adapts a retained daemon handle without creating or resuming another one. */
+export function adaptConnectedDaemonSession(
+  droid: ConnectedDroid,
+  session: ConnectedDroidSession,
+  interactionHandler: RuntimeInteractionHandler,
+  lease: SessionLeaseHooks,
+  availableModels?: readonly AvailableModelConfig[],
+): FactoryDroidSession {
+  const outcome = lease.acquire(session.id);
+  if (!outcome.acquired) {
+    throw leaseConflictError(outcome.heldByPid);
+  }
+  return adaptDaemonSession(
+    droid,
+    session,
+    createRuntimeInteractionCallbacks(interactionHandler),
+    lease,
+    availableModels,
+  );
+}
   // notification refreshes the handle's snapshot, so successful updates
   // are overlaid locally until the snapshot reports the same value.
   let pendingSettings: SupportedSettingsUpdate = {};

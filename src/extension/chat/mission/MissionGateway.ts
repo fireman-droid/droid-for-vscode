@@ -1,0 +1,226 @@
+import type {
+  ConnectedDroid,
+  ConnectedDroidSession,
+} from '@factory/droid-sdk';
+
+import type { DroidRuntime } from '../../../runtime/DroidRuntime';
+import {
+  createMissionOrchestrator,
+  createMissionOrchestratorIdentity,
+} from '../../../runtime/daemon/missionOrchestrator';
+import type {
+  MissionReasoningEffort,
+  MissionStartMessage,
+} from '../../../shared/missionProtocol';
+import {
+  validatePair,
+  validatePreferences,
+  type MissionCatalogModel,
+  type MissionPreferenceStore,
+  type MissionProfilePair,
+  type MissionWorkspacePreferences,
+} from './MissionPreferences';
+
+export interface MissionGatewayRuntime {
+  readonly runtime: DroidRuntime;
+  initialize(): Promise<void>;
+}
+
+export interface MissionGatewayStart {
+  readonly workspaceId: string;
+  readonly cwd: string;
+  readonly message: MissionStartMessage;
+  readonly catalog: readonly MissionCatalogModel[];
+}
+
+export type MissionGatewayResult =
+  | {
+      readonly status: 'ready';
+      readonly sessionId: string;
+      readonly runtime: MissionGatewayRuntime;
+      readonly settings: MissionSettings;
+    }
+  | {
+      readonly status: 'rejected';
+      readonly code:
+        | 'unavailable-model'
+        | 'unsupported-reasoning'
+        | 'settings-mismatch'
+        | 'daemon-unavailable';
+    };
+
+export interface MissionGatewayOptions {
+  readonly getDroid: () => Promise<ConnectedDroid>;
+  readonly preferences: MissionPreferenceStore;
+  readonly createRuntime: (
+    session: ConnectedDroidSession,
+    droid: ConnectedDroid,
+    orchestrator: MissionProfilePair,
+  ) => MissionGatewayRuntime;
+}
+
+/**
+ * Extension-Host Mission entry boundary. It validates every effective model
+ * pair before creating a session, then applies and verifies the six-property
+ * SDK settings object while retaining the original attached handle.
+ */
+export class MissionGateway {
+  constructor(private readonly options: MissionGatewayOptions) {}
+
+  async start(input: MissionGatewayStart): Promise<MissionGatewayResult> {
+    const requestedPreferences: MissionWorkspacePreferences = {
+      worker: resolveInheritedProfile(
+        input.message.worker,
+        input.message.orchestrator,
+      ),
+      validator: resolveInheritedProfile(
+        input.message.validator,
+        input.message.orchestrator,
+      ),
+      scrutinyEnabled: input.message.scrutinyEnabled,
+      userTestingEnabled: input.message.userTestingEnabled,
+    };
+    const effective = validateStart(
+      input.message.orchestrator,
+      requestedPreferences,
+      input.catalog,
+    );
+    if (effective.valid === false) {
+      return { status: 'rejected', code: effective.reason };
+    }
+
+    let droid: ConnectedDroid;
+    try {
+      droid = await this.options.getDroid();
+    } catch {
+      return { status: 'rejected', code: 'daemon-unavailable' };
+    }
+    const settings = toMissionSettings(effective.value);
+    let session: ConnectedDroidSession;
+    try {
+      session = await createMissionOrchestrator({
+        droid,
+        cwd: input.cwd,
+        modelId: input.message.orchestrator.modelId,
+        reasoningEffort: input.message.orchestrator
+          .reasoningEffort as MissionReasoningEffort,
+        missionId: createMissionOrchestratorIdentity(),
+      });
+      // Bridge reasoning values are catalog-validated. The SDK's public
+      // daemon facade narrows this enum more than its actual 0.7.0 Mission
+      // settings schema, so retain the exact verified six-property object.
+      await droid.sessions.updateSettings(session.id, {
+        missionSettings: settings as never,
+      });
+    } catch {
+      return { status: 'rejected', code: 'daemon-unavailable' };
+    }
+
+    if (!(await hasDurableMissionSettings(session, settings))) {
+      await session.detach().catch(() => undefined);
+      return { status: 'rejected', code: 'settings-mismatch' };
+    }
+
+    try {
+      const runtime = this.options.createRuntime(
+        session,
+        droid,
+        input.message.orchestrator,
+      );
+      await runtime.initialize();
+      await this.options.preferences.save(input.workspaceId, effective.value);
+      return { status: 'ready', sessionId: session.id, runtime, settings };
+    } catch {
+      await session.detach().catch(() => undefined);
+      return { status: 'rejected', code: 'daemon-unavailable' };
+    }
+  }
+
+  preferencesFor(
+    workspaceId: string,
+    orchestrator: MissionProfilePair,
+    catalog: readonly MissionCatalogModel[],
+  ) {
+    return this.options.preferences.validate(workspaceId, orchestrator, catalog);
+  }
+}
+
+export interface MissionSettings {
+  readonly workerModel: string;
+  readonly workerReasoningEffort: MissionReasoningEffort;
+  readonly validationWorkerModel: string;
+  readonly validationWorkerReasoningEffort: MissionReasoningEffort;
+  readonly skipScrutiny: boolean;
+  readonly skipUserTesting: boolean;
+}
+
+function validateStart(
+  orchestrator: MissionProfilePair,
+  preferences: MissionWorkspacePreferences,
+  catalog: readonly MissionCatalogModel[],
+):
+  | { readonly valid: true; readonly value: MissionWorkspacePreferences }
+  | {
+      readonly valid: false;
+      readonly reason: 'unavailable-model' | 'unsupported-reasoning';
+    } {
+  const orchestratorFailure = validatePair(orchestrator, catalog);
+  if (orchestratorFailure !== undefined) {
+    return orchestratorFailure;
+  }
+  return validatePreferences(preferences, catalog);
+}
+
+function toMissionSettings(
+  preferences: MissionWorkspacePreferences,
+): MissionSettings {
+  return {
+    workerModel: preferences.worker.modelId,
+    workerReasoningEffort: preferences.worker.reasoningEffort,
+    validationWorkerModel: preferences.validator.modelId,
+    validationWorkerReasoningEffort: preferences.validator.reasoningEffort,
+    skipScrutiny: !preferences.scrutinyEnabled,
+    skipUserTesting: !preferences.userTestingEnabled,
+  };
+}
+
+function sameMissionSettings(
+  actual: unknown,
+  expected: MissionSettings,
+): boolean {
+  if (actual === null || typeof actual !== 'object' || Array.isArray(actual)) {
+    return false;
+  }
+  const value = actual as Partial<MissionSettings>;
+  return (
+    value.workerModel === expected.workerModel &&
+    value.workerReasoningEffort === expected.workerReasoningEffort &&
+    value.validationWorkerModel === expected.validationWorkerModel &&
+    value.validationWorkerReasoningEffort ===
+      expected.validationWorkerReasoningEffort &&
+    value.skipScrutiny === expected.skipScrutiny &&
+    value.skipUserTesting === expected.skipUserTesting
+  );
+}
+
+async function hasDurableMissionSettings(
+  session: ConnectedDroidSession,
+  expected: MissionSettings,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (sameMissionSettings(session.settings.missionSettings, expected)) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return false;
+}
+
+function resolveInheritedProfile(
+  profile: MissionWorkspacePreferences['worker'],
+  orchestrator: MissionProfilePair,
+): MissionWorkspacePreferences['worker'] {
+  return profile.mode === 'same-as-orchestrator'
+    ? { mode: 'same-as-orchestrator', ...orchestrator }
+    : profile;
+}

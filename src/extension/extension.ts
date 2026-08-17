@@ -64,6 +64,9 @@ import {
 } from './worktreeSessions';
 import { createTerminalMirror } from './terminalMirror';
 import { createHttpCustomModelDiscovery } from './chat/modelDiscovery';
+import { MissionGateway } from './chat/mission/MissionGateway';
+import { MissionPreferenceStore } from './chat/mission/MissionPreferences';
+import { createMissionRuntime } from './chat/mission/MissionRuntime';
 
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
@@ -392,6 +395,7 @@ export function activate(context: vscode.ExtensionContext): void {
       : createPrivateDaemonStrategy(),
   );
   disposeDaemonSidecar = daemonSidecar.dispose;
+  const sessionLease = createSessionLeaseHooks();
   // Daemon-mode session creation. Explicitly configured daemon users
   // keep hard failures; the default gets the silent process fallback,
   // recorded once as `runtime.mode.fallback` (quiet local log only —
@@ -447,7 +451,20 @@ export function activate(context: vscode.ExtensionContext): void {
     () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
   );
   const fileDiff = createVscodeFileDiffOpener(changeStats);
-  const controller = new ChatController(
+  let controller: ChatController;
+  const missionGateway = new MissionGateway({
+    getDroid: daemonSidecar.droid,
+    preferences: new MissionPreferenceStore(persistence),
+    createRuntime: (session, droid, orchestrator) =>
+      createMissionRuntime(
+        session,
+        droid,
+        controller.interactions.createRuntimeHandler(),
+        orchestrator,
+        sessionLease,
+      ),
+  });
+  controller = new ChatController(
     (interactionHandler) =>
       new FactoryDroidRuntime({
         interactionHandler,
@@ -497,6 +514,7 @@ export function activate(context: vscode.ExtensionContext): void {
             getDroid: daemonSidecar.droid,
           })
         : createBtwSidecar({ cwd, mainSessionId }),
+    missionGateway,
   );
   // BYOK custom-model management rides the same lazy daemon sidecar
   // as archive/search; the SDK resource satisfies the gateway shape
