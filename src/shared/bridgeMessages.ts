@@ -114,6 +114,10 @@ import type {
 // (customModelsProtocol imports shared model bounds from here).
 import type { CustomModelsHostMessage, CustomModelsWebviewMessage } from './customModelsProtocol';
 import type { ChangesUpdateMessage } from './changesProtocol';
+import type {
+  MissionHostMessage,
+  MissionWebviewMessage,
+} from './missionProtocol';
 
 // Version 3: git commit flow messages (git.requestStatus/git.commit
 // W→H, git.status/git.commitResult H→W).
@@ -131,7 +135,7 @@ import type { ChangesUpdateMessage } from './changesProtocol';
 // Version 11: subagent panel — openTranscript/stop/panel W→H,
 // transcript/activity H→W; v12–v16; v17 custom-model discovery/import;
 // v18 turn-scoped file review; v19 truthful last-call Context window.
-export const BRIDGE_PROTOCOL_VERSION = 19 as const;
+export const BRIDGE_PROTOCOL_VERSION = 25 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_DELTA_LENGTH = 16_384;
@@ -1088,7 +1092,8 @@ export type WebviewToHostMessage =
   | QueueRemoveMessage
   | QueuePromoteMessage
   | QueueResumeMessage
-  | QueueClearMessage;
+  | QueueClearMessage
+  | MissionWebviewMessage;
 
 export interface ConnectionState {
   readonly status: ConnectionStatus;
@@ -2195,4 +2200,22 @@ export type HostToWebviewMessage =
   | QueueStateMessage
   | UiThemeMessage
   | CustomModelsHostMessage
-  | SubagentTranscriptMessage | SubagentActivityMessage;
+  | SubagentTranscriptMessage | SubagentActivityMessage
+  | MissionHostMessage;
+
+export type {
+  MissionControlAction,
+  MissionControlMessage,
+  MissionControlResultMessage,
+  MissionDisclosureMessage,
+  MissionFeatureSnapshot,
+  MissionHostMessage,
+  MissionLifecycle,
+  MissionProfile,
+  MissionProfileMode,
+  MissionReasoningEffort,
+  MissionSnapshotMessage,
+  MissionStartMessage,
+  MissionViewerOpenMessage,
+  MissionWebviewMessage,
+} from './missionProtocol';

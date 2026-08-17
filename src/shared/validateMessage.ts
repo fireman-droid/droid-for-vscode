@@ -99,6 +99,7 @@ import {
 } from './bridgeMessages';
 import { parseBtwAskMessage, parseBtwDismissMessage, parseBtwPrepareMessage, parseBtwStopMessage } from './btwProtocol';
 import { parseCustomModelsWebviewMessage } from './customModelsProtocol';
+import { parseMissionWebviewMessage } from './missionProtocol';
 import { parseSubagentWebviewMessage } from './subagentProtocol';
 import {
   parseQueueAddMessage,
@@ -260,6 +261,10 @@ export function parseWebviewMessage(
         return parseQueueResumeMessage(value) ?? undefined;
       case 'queue.clear':
         return parseQueueClearMessage(value) ?? undefined;
+      case 'mission.start': case 'mission.dismissSetup': case 'mission.pause':
+      case 'mission.resume': case 'mission.stopCurrentFeature': case 'mission.refresh':
+      case 'mission.disclosure.set': case 'mission.viewer.open':
+        return parseMissionWebviewMessage(value);
       default:
         // Subagent-panel family delegates wholesale (subagentProtocol).
         return parseSubagentWebviewMessage(value) ?? undefined;

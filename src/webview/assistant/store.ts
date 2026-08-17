@@ -1230,6 +1230,13 @@ export function assistantWebviewReducer(
             }),
           }
         : advance(state, event.sequence);
+    case 'mission.snapshot':
+      // Mission state is projected by its dedicated store slice. Until
+      // that slice subscribes, preserve Bridge sequencing without
+      // allowing the snapshot to affect ordinary chat state.
+      return advance(state, event.sequence);
+    case 'mission.controlResult':
+      return advance(state, event.sequence);
   }
 }
 
