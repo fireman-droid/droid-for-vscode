@@ -8,6 +8,12 @@ import { LocalImageContext, OpenPathContext } from './MarkdownText';
 import type { PathLink } from './pathLink';
 import type { ComposerNavRequest, McpServerAddParams, SessionSettingSelection } from './ComposerControls';
 import { resolveBuiltinSlash, type SlashNavTarget } from './slashBuiltins';
+import {
+  createMissionSetupSubmission,
+  MissionSetup,
+  validateMissionSetupSubmission,
+} from './mission/MissionSetup';
+import { useMissionEntry } from './mission/useMissionEntry';
 import { canSendMessage, DEFAULT_MESSAGE_WINDOW, MESSAGE_WINDOW_STEP, shouldQueueMessage, useDroidExternalStoreRuntime } from './runtimeAdapter';
 import { SessionDrawer } from './SessionDrawer';
 import { assistantWebviewReducer, initialAssistantWebviewState, isTurnActive, type PendingInteraction, type StoreHostMessage } from './store';
@@ -47,6 +53,12 @@ export function App(): React.JSX.Element {
   const [state, dispatch] = useReducer(
     assistantWebviewReducer,
     initialAssistantWebviewState,
+  );
+  const missionEntry = useMissionEntry(
+    vscode,
+    state.sessionId,
+    state.missionControlResult,
+    createTurnId,
   );
   const [transientDiagnostic, setTransientDiagnostic] =
     useState<TransientDiagnostic | null>(null);
@@ -432,12 +444,34 @@ export function App(): React.JSX.Element {
           post(vscode, { type: 'session.new' });
         } else if (builtin.kind === 'navigate') {
           handleSlashNavigate(builtin.target);
-        } else {
+        } else if (builtin.kind === 'btw') {
           // `/btw` opens the side chat card; a trailing question is
           // asked immediately, a bare `/btw` just opens it.
           setBtwOpen(true);
           if (builtin.question.length > 0) {
             handleBtwAsk(builtin.question);
+          }
+        } else {
+          const capabilities = state.missionSnapshot?.setup;
+          if (
+            builtin.task.length === 0 ||
+            capabilities === undefined ||
+            state.sessionId === null
+          ) {
+            missionEntry.openSetup(builtin.task);
+          } else {
+            const submission = createMissionSetupSubmission(
+              capabilities,
+              builtin.task,
+            );
+            if (
+              validateMissionSetupSubmission(capabilities, submission).length >
+              0
+            ) {
+              missionEntry.openSetup(builtin.task);
+            } else {
+              missionEntry.startDirect(submission);
+            }
           }
         }
         setDraft('');
@@ -500,9 +534,11 @@ export function App(): React.JSX.Element {
       handleCompact,
       handleSlashNavigate,
       interactionCount,
+      missionEntry,
       queuedCount,
       queueEditingId,
       sessionId,
+      state.missionSnapshot,
       turnStatus,
       vscode,
     ],
@@ -1462,6 +1498,26 @@ export function App(): React.JSX.Element {
                 onClear={handleQueueClear}
               />
             )
+          }
+          missionSetup={
+            missionEntry.setupEntry === null ||
+            missionEntry.setupEntry.sessionId !== state.sessionId ||
+            state.missionSnapshot?.setup === undefined
+              ? null
+              : (
+                  <MissionSetup
+                    key={missionEntry.setupEntry.id}
+                    capabilities={state.missionSnapshot.setup}
+                    initialTask={missionEntry.setupEntry.task}
+                    onStart={missionEntry.startFromSetup}
+                    onDismiss={missionEntry.dismissSetup}
+                    result={
+                      state.missionControlResult?.action === 'start'
+                        ? state.missionControlResult
+                        : null
+                    }
+                  />
+                )
           }
           queuedCount={queuedCount}
           queueEditing={queueEditingId !== null}

@@ -314,6 +314,8 @@ interface DroidThreadProps {
    * so the thread stays free of queue state.
    */
   readonly queuedMessages?: ReactNode;
+  /** Inline Mission setup, mounted directly above the existing Composer. */
+  readonly missionSetup?: ReactNode;
   /**
    * The floating "N Working" subagent pill hovering over the
    * Composer's left edge; null while no delegation is running. Built
@@ -413,6 +415,7 @@ export const DroidThread = memo(function DroidThread({
   inlineInteraction,
   planAnchors = null,
   queuedMessages = null,
+  missionSetup = null,
   workingBadge = null,
   transientDiagnostic = null,
   queuedCount = 0,
@@ -852,6 +855,7 @@ export const DroidThread = memo(function DroidThread({
               directly above the Composer, sharing the warm card
               language of the plan-era pins. */}
           {queuedMessages}
+          {missionSetup}
           <Composer
             statusMessage={statusMessage}
             showRetry={showRetry}

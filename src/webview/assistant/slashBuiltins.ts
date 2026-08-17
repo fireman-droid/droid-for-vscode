@@ -35,7 +35,8 @@ export type BuiltinSlashAction =
   | { readonly kind: 'compact' }
   | { readonly kind: 'new' }
   | { readonly kind: 'navigate'; readonly target: SlashNavTarget }
-  | { readonly kind: 'btw'; readonly question: string };
+  | { readonly kind: 'btw'; readonly question: string }
+  | { readonly kind: 'mission'; readonly task: string };
 
 /** CLI-parity aliases onto the existing compaction pipeline. */
 const COMPACT_ALIASES = new Set(['compact', 'compress', 'handoff']);
@@ -75,6 +76,9 @@ export function resolveBuiltinSlash(
     return options.btwEnabled
       ? { kind: 'btw', question: rest.trim() }
       : null;
+  }
+  if (slug === 'mission') {
+    return { kind: 'mission', task: rest.trim() };
   }
   if (rest.length > 0) {
     return null;

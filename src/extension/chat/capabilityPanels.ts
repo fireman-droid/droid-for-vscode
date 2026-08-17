@@ -41,6 +41,7 @@ import {
   isEnumValue,
   type ChatControllerInternals,
 } from './internals';
+import { emitMissionSetupCapabilities } from './mission/setupProjection';
 
 export const SKILLS_UNSUPPORTED_MESSAGE =
   'This Droid runtime does not expose skills.';
@@ -603,6 +604,7 @@ export function emitModelCatalog(
       sessionId,
       modelCatalog: ctl.modelCatalog,
     });
+    emitMissionSetupCapabilities(ctl);
 }
 
 export function projectContextWindow(

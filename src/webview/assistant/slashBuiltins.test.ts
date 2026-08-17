@@ -61,4 +61,20 @@ describe('resolveBuiltinSlash', () => {
     expect(resolveBuiltinSlash('/btw hello', btwOff)).toBeNull();
     expect(resolveBuiltinSlash('/btw', btwOff)).toBeNull();
   });
+
+  it('classifies Mission command forms without changing the task', () => {
+    expect(resolveBuiltinSlash(' /mission ', btwOff)).toEqual({
+      kind: 'mission',
+      task: '',
+    });
+    expect(
+      resolveBuiltinSlash('/mission  Keep  punctuation: a/b?  ', btwOff),
+    ).toEqual({
+      kind: 'mission',
+      task: 'Keep  punctuation: a/b?',
+    });
+    expect(resolveBuiltinSlash('/missionary nope', btwOff)).toBeNull();
+    expect(resolveBuiltinSlash('@/mission', btwOff)).toBeNull();
+    expect(resolveBuiltinSlash('explain /mission', btwOff)).toBeNull();
+  });
 });

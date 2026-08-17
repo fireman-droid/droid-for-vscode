@@ -437,8 +437,8 @@ export class ChatController {
     readonly terminalMirror?: TerminalMirror,
     readonly daemonPlugins?: () => Promise<DaemonPluginCatalog>,
     btwSidecarFactory?: BtwSidecarFactory,
-  ) {
     readonly missionGateway?: MissionGateway,
+  ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
     };
@@ -532,15 +532,15 @@ export class ChatController {
           message.text,
         );
         return;
+      case 'mission.start':
+        handleMissionStart(this, message);
+        return;
       case 'turn.stop':
         handleStop(this, message.sessionId, message.turnId);
         return;
       case 'turn.editResend':
         handleEditResend(this, 
           message.sessionId,
-      case 'mission.start':
-        handleMissionStart(this, message);
-        return;
           message.turnId,
           message.messageId,
           message.text,

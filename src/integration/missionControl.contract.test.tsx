@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { MissionGateway } from '../extension/chat/mission/MissionGateway';
+import { emitMissionSetupCapabilities } from '../extension/chat/mission/setupProjection';
 import {
   createController,
   createMockRuntime,
@@ -36,6 +37,36 @@ describe('Mission entry contract', () => {
   it('direct starts through official Mission gates', async () => {
     const missionRuntime = createMockRuntime();
     const gateway = {
+      setupCapabilitiesFor: vi.fn(
+        (
+          _workspaceId: string,
+          orchestrator: typeof startMessage.orchestrator,
+          catalog: {
+            readonly status: 'loading' | 'ready' | 'error' | 'unsupported';
+            readonly items: readonly {
+              readonly id: string;
+              readonly displayName: string;
+              readonly supportedReasoningEfforts: readonly string[];
+            }[];
+          },
+        ) => ({
+          currentChat: orchestrator,
+          catalogStatus: catalog.status,
+          catalog: catalog.items,
+          preferences: {
+            worker: {
+              mode: 'same-as-orchestrator' as const,
+              ...orchestrator,
+            },
+            validator: {
+              mode: 'same-as-orchestrator' as const,
+              ...orchestrator,
+            },
+            scrutinyEnabled: true,
+            userTestingEnabled: true,
+          },
+        }),
+      ),
       start: vi.fn(async () => ({
         status: 'ready' as const,
         sessionId: 'orchestrator-2',
@@ -86,6 +117,46 @@ describe('Mission entry contract', () => {
         },
       ],
     };
+    controller.settings = {
+      status: 'ready',
+      value: {
+        interactionMode: 'auto',
+        modelId: 'model-orchestrator',
+        reasoningEffort: 'high',
+        autonomyLevel: 'medium',
+        specModeModelId: null,
+        specModeReasoningEffort: null,
+      },
+    };
+    emitMissionSetupCapabilities(controller);
+
+    expect(
+      messages.find(
+        (candidate) =>
+          candidate.type === 'mission.snapshot' &&
+          candidate.setup?.catalogStatus === 'ready',
+      ),
+    ).toMatchObject({
+      setup: {
+        currentChat: startMessage.orchestrator,
+        catalog: [
+          {
+            id: 'model-orchestrator',
+            supportedReasoningEfforts: ['high'],
+          },
+        ],
+        preferences: {
+          worker: {
+            mode: 'same-as-orchestrator',
+            ...startMessage.orchestrator,
+          },
+          validator: {
+            mode: 'same-as-orchestrator',
+            ...startMessage.orchestrator,
+          },
+        },
+      },
+    });
 
     controller.handleMessage(startMessage);
 

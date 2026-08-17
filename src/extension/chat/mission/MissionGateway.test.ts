@@ -62,6 +62,73 @@ function createPreferences(): MissionPreferenceStore {
 }
 
 describe('MissionGateway', () => {
+  it('projects current chat, catalog, and advisory workspace preferences', async () => {
+    const preferences = createPreferences();
+    await preferences.save('workspace-a', {
+      worker: {
+        mode: 'override',
+        modelId: 'model-worker',
+        reasoningEffort: 'medium',
+      },
+      validator: {
+        mode: 'same-as-orchestrator',
+        modelId: 'old-orchestrator',
+        reasoningEffort: 'medium',
+      },
+      scrutinyEnabled: false,
+      userTestingEnabled: true,
+    });
+    const gateway = new MissionGateway({
+      getDroid: async () => ({}) as ConnectedDroid,
+      preferences,
+      createRuntime: () => ({
+        runtime: {} as never,
+        initialize: async () => {},
+      }),
+    });
+
+    expect(
+      gateway.setupCapabilitiesFor(
+        'workspace-a',
+        {
+          modelId: 'model-orchestrator',
+          reasoningEffort: 'high',
+        },
+        {
+          status: 'ready',
+          items: catalog.map((item) => ({
+            ...item,
+            displayName: item.id,
+          })),
+        },
+      ),
+    ).toEqual({
+      currentChat: {
+        modelId: 'model-orchestrator',
+        reasoningEffort: 'high',
+      },
+      catalogStatus: 'ready',
+      catalog: catalog.map((item) => ({
+        ...item,
+        displayName: item.id,
+      })),
+      preferences: {
+        worker: {
+          mode: 'override',
+          modelId: 'model-worker',
+          reasoningEffort: 'medium',
+        },
+        validator: {
+          mode: 'same-as-orchestrator',
+          modelId: 'model-orchestrator',
+          reasoningEffort: 'high',
+        },
+        scrutinyEnabled: false,
+        userTestingEnabled: true,
+      },
+    });
+  });
+
   it('applies and verifies official Mission settings', async () => {
     const calls: string[] = [];
     const requestedSettings = {

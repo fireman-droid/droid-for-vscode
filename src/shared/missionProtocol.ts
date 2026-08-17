@@ -50,6 +50,38 @@ export interface MissionProfile {
   readonly reasoningEffort: MissionReasoningEffort;
 }
 
+export function resolveMissionProfile(
+  profile: MissionProfile,
+  orchestrator: Omit<MissionProfile, 'mode'>,
+): MissionProfile {
+  return profile.mode === 'same-as-orchestrator'
+    ? { mode: 'same-as-orchestrator', ...orchestrator }
+    : profile;
+}
+
+export function missionPairError(
+  pair: Omit<MissionProfile, 'mode'>,
+  catalog: readonly {
+    readonly id: string;
+    readonly supportedReasoningEfforts: readonly string[];
+  }[],
+): 'unavailable-model' | 'unsupported-reasoning' | undefined {
+  const model = catalog.find((candidate) => candidate.id === pair.modelId);
+  if (model === undefined) {
+    return 'unavailable-model';
+  }
+  return model.supportedReasoningEfforts.includes(pair.reasoningEffort)
+    ? undefined
+    : 'unsupported-reasoning';
+}
+
+export function isMissionTaskText(value: unknown): value is string {
+  return (
+    isPresentationText(value, MAX_MISSION_TASK_LENGTH) &&
+    value.length > 0
+  );
+}
+
 export interface MissionStartMessage {
   readonly type: 'mission.start';
   readonly protocolVersion: typeof MISSION_BRIDGE_PROTOCOL_VERSION;
@@ -111,6 +143,28 @@ export interface MissionFeatureSnapshot {
   readonly workerViewAvailable?: true;
 }
 
+export interface MissionSetupCatalogItem {
+  readonly id: string;
+  readonly displayName: string;
+  readonly supportedReasoningEfforts: readonly MissionReasoningEffort[];
+}
+
+/**
+ * Host-owned setup inputs. Preferences are advisory and may be stale; the
+ * Webview and Host both revalidate every effective pair against `catalog`.
+ */
+export interface MissionSetupCapabilities {
+  readonly currentChat: Omit<MissionProfile, 'mode'>;
+  readonly catalogStatus: 'loading' | 'ready' | 'error' | 'unsupported';
+  readonly catalog: readonly MissionSetupCatalogItem[];
+  readonly preferences: {
+    readonly worker: MissionProfile;
+    readonly validator: MissionProfile;
+    readonly scrutinyEnabled: boolean;
+    readonly userTestingEnabled: boolean;
+  };
+}
+
 export interface MissionSnapshotMessage {
   readonly type: 'mission.snapshot';
   readonly protocolVersion: typeof MISSION_BRIDGE_PROTOCOL_VERSION;
@@ -135,6 +189,7 @@ export interface MissionSnapshotMessage {
     readonly scrutinyEnabled: boolean;
     readonly userTestingEnabled: boolean;
   };
+  readonly setup?: MissionSetupCapabilities;
 }
 
 export const MISSION_CONTROL_ACTIONS = [
@@ -229,6 +284,7 @@ export function parseMissionHostMessage(
         'presentationPhase',
         'title',
         'currentFeatureId',
+        'setup',
       ],
     ) ||
     value.protocolVersion !== MISSION_BRIDGE_PROTOCOL_VERSION ||
@@ -277,7 +333,13 @@ export function parseMissionHostMessage(
   }
   const controls = parseControls(value.controls);
   const validator = parseValidator(value.validator);
-  if (controls === undefined || validator === undefined) {
+  const setup =
+    value.setup === undefined ? undefined : parseSetupCapabilities(value.setup);
+  if (
+    controls === undefined ||
+    validator === undefined ||
+    (value.setup !== undefined && setup === undefined)
+  ) {
     return undefined;
   }
   if (
@@ -313,6 +375,7 @@ export function parseMissionHostMessage(
     completedFeatureCount: value.completedFeatureCount,
     controls,
     validator,
+    ...(setup === undefined ? {} : { setup }),
   };
 }
 
@@ -387,8 +450,7 @@ function parseMissionStart(
       'userTestingEnabled',
     ]) ||
     !hasMissionEnvelope(value) ||
-    !isPresentationText(value.task, MAX_MISSION_TASK_LENGTH) ||
-    value.task.length === 0 ||
+    !isMissionTaskText(value.task) ||
     typeof value.scrutinyEnabled !== 'boolean' ||
     typeof value.userTestingEnabled !== 'boolean'
   ) {
@@ -630,6 +692,115 @@ function parseValidator(
   return {
     scrutinyEnabled: value.scrutinyEnabled,
     userTestingEnabled: value.userTestingEnabled,
+  };
+}
+
+function parseSetupCapabilities(
+  value: unknown,
+): MissionSetupCapabilities | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, [
+      'currentChat',
+      'catalogStatus',
+      'catalog',
+      'preferences',
+    ]) ||
+    (value.catalogStatus !== 'loading' &&
+      value.catalogStatus !== 'ready' &&
+      value.catalogStatus !== 'error' &&
+      value.catalogStatus !== 'unsupported') ||
+    !isExactArray(value.catalog, 0, 200) ||
+    (value.catalogStatus !== 'ready' && value.catalog.length !== 0)
+  ) {
+    return undefined;
+  }
+  const currentChat = parseOrchestratorProfile(value.currentChat);
+  const preferences = parseSetupPreferences(value.preferences, currentChat);
+  if (currentChat === undefined || preferences === undefined) {
+    return undefined;
+  }
+  const catalog: MissionSetupCatalogItem[] = [];
+  const modelIds = new Set<string>();
+  for (const candidate of value.catalog) {
+    const model = parseSetupCatalogItem(candidate);
+    if (model === undefined || modelIds.has(model.id)) {
+      return undefined;
+    }
+    modelIds.add(model.id);
+    catalog.push(model);
+  }
+  return {
+    currentChat,
+    catalogStatus: value.catalogStatus,
+    catalog,
+    preferences,
+  };
+}
+
+function parseSetupPreferences(
+  value: unknown,
+  currentChat: Omit<MissionProfile, 'mode'> | undefined,
+): MissionSetupCapabilities['preferences'] | undefined {
+  if (
+    currentChat === undefined ||
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, [
+      'worker',
+      'validator',
+      'scrutinyEnabled',
+      'userTestingEnabled',
+    ]) ||
+    typeof value.scrutinyEnabled !== 'boolean' ||
+    typeof value.userTestingEnabled !== 'boolean'
+  ) {
+    return undefined;
+  }
+  const worker = parseMissionProfile(value.worker);
+  const validator = parseMissionProfile(value.validator);
+  if (
+    worker === undefined ||
+    validator === undefined ||
+    !matchesInheritedProfile(worker, currentChat) ||
+    !matchesInheritedProfile(validator, currentChat)
+  ) {
+    return undefined;
+  }
+  return {
+    worker,
+    validator,
+    scrutinyEnabled: value.scrutinyEnabled,
+    userTestingEnabled: value.userTestingEnabled,
+  };
+}
+
+function parseSetupCatalogItem(
+  value: unknown,
+): MissionSetupCatalogItem | undefined {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, [
+      'id',
+      'displayName',
+      'supportedReasoningEfforts',
+    ]) ||
+    !isMissionModelId(value.id) ||
+    !isPresentationText(value.displayName, 256) ||
+    !isExactArray(value.supportedReasoningEfforts, 0, MISSION_REASONING_EFFORTS.length)
+  ) {
+    return undefined;
+  }
+  const efforts: MissionReasoningEffort[] = [];
+  for (const effort of value.supportedReasoningEfforts) {
+    if (!isReasoningEffort(effort) || efforts.includes(effort)) {
+      return undefined;
+    }
+    efforts.push(effort);
+  }
+  return {
+    id: value.id,
+    displayName: value.displayName,
+    supportedReasoningEfforts: efforts,
   };
 }
 

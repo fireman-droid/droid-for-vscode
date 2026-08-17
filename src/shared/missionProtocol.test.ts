@@ -132,6 +132,81 @@ describe('Mission Bridge protocol', () => {
     ).toBeUndefined();
   });
 
+  it('accepts a bounded Mission setup capability projection', () => {
+    const snapshot = {
+      type: 'mission.snapshot',
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
+      sequence: 9,
+      scope: 'selected-chat',
+      revision: 0,
+      availability: 'attached',
+      features: [],
+      completedFeatureCount: 0,
+      controls: {
+        canPause: false,
+        canResume: false,
+        canStopCurrentFeature: false,
+      },
+      validator: {
+        scrutinyEnabled: false,
+        userTestingEnabled: true,
+      },
+      setup: {
+        currentChat: {
+          modelId: 'model-orchestrator',
+          reasoningEffort: 'high',
+        },
+        catalogStatus: 'ready',
+        catalog: [
+          {
+            id: 'model-orchestrator',
+            displayName: 'Orchestrator',
+            supportedReasoningEfforts: ['medium', 'high'],
+          },
+        ],
+        preferences: {
+          worker: {
+            mode: 'same-as-orchestrator',
+            modelId: 'model-orchestrator',
+            reasoningEffort: 'high',
+          },
+          validator: {
+            mode: 'override',
+            modelId: 'model-orchestrator',
+            reasoningEffort: 'medium',
+          },
+          scrutinyEnabled: false,
+          userTestingEnabled: true,
+        },
+      },
+    } as const;
+
+    expect(parseMissionHostMessage(snapshot)).toEqual(snapshot);
+    expect(
+      parseMissionHostMessage({
+        ...snapshot,
+        setup: {
+          ...snapshot.setup,
+          cwd: 'C:\\workspace',
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      parseMissionHostMessage({
+        ...snapshot,
+        setup: {
+          ...snapshot.setup,
+          catalog: [
+            {
+              ...snapshot.setup.catalog[0],
+              token: 'secret',
+            },
+          ],
+        },
+      }),
+    ).toBeUndefined();
+  });
+
   it('bounds correlated Mission control results', () => {
     expect(
       parseMissionHostMessage({

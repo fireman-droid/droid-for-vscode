@@ -17,6 +17,7 @@ import type {
 import { isSafeModelId } from '../../shared/validateMessage';
 import { ensureActiveRuntimeWorkspaceCurrent } from './runtimeLifecycle';
 import { isEnumValue, type ChatControllerInternals } from './internals';
+import { emitMissionSetupCapabilities } from './mission/setupProjection';
 
 export const SETTINGS_READ_FAILED_MESSAGE =
   'Droid session settings could not be loaded.';
@@ -181,6 +182,7 @@ export function emitSettings(
       sessionId,
       settings: ctl.settings,
     });
+    emitMissionSetupCapabilities(ctl);
 }
 
 export function isCurrentSettingsUpdate(

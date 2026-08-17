@@ -10,8 +10,10 @@ import {
 } from '../../../runtime/daemon/missionOrchestrator';
 import type {
   MissionReasoningEffort,
+  MissionSetupCapabilities,
   MissionStartMessage,
 } from '../../../shared/missionProtocol';
+import { resolveMissionProfile } from '../../../shared/missionProtocol';
 import {
   validatePair,
   validatePreferences,
@@ -69,11 +71,11 @@ export class MissionGateway {
 
   async start(input: MissionGatewayStart): Promise<MissionGatewayResult> {
     const requestedPreferences: MissionWorkspacePreferences = {
-      worker: resolveInheritedProfile(
+      worker: resolveMissionProfile(
         input.message.worker,
         input.message.orchestrator,
       ),
-      validator: resolveInheritedProfile(
+      validator: resolveMissionProfile(
         input.message.validator,
         input.message.orchestrator,
       ),
@@ -142,6 +144,22 @@ export class MissionGateway {
     catalog: readonly MissionCatalogModel[],
   ) {
     return this.options.preferences.validate(workspaceId, orchestrator, catalog);
+  }
+
+  setupCapabilitiesFor(
+    workspaceId: string,
+    orchestrator: MissionProfilePair,
+    catalog: {
+      readonly status: MissionSetupCapabilities['catalogStatus'];
+      readonly items: MissionSetupCapabilities['catalog'];
+    },
+  ): MissionSetupCapabilities {
+    return {
+      currentChat: orchestrator,
+      catalogStatus: catalog.status,
+      catalog: catalog.status === 'ready' ? catalog.items : [],
+      preferences: this.options.preferences.read(workspaceId, orchestrator),
+    };
   }
 }
 
@@ -214,13 +232,4 @@ async function hasDurableMissionSettings(
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   return false;
-}
-
-function resolveInheritedProfile(
-  profile: MissionWorkspacePreferences['worker'],
-  orchestrator: MissionProfilePair,
-): MissionWorkspacePreferences['worker'] {
-  return profile.mode === 'same-as-orchestrator'
-    ? { mode: 'same-as-orchestrator', ...orchestrator }
-    : profile;
 }

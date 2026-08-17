@@ -25,6 +25,10 @@ import {
   type GitStatusFile,
   type GitUnavailableReason,
 } from '../../shared/bridgeMessages';
+import type {
+  MissionControlResultMessage,
+  MissionSnapshotMessage,
+} from '../../shared/missionProtocol';
 import { EMPTY_SESSION_QUEUE_STATE, MAX_QUEUED_MESSAGES, type SessionQueueState } from '../../shared/queueProtocol';
 import { enforceTranscriptImageBudget, trimTranscriptToLimits } from '../../shared/transcriptLimits';
 import { stableTranscriptId } from '../../shared/hostTranscriptState';
@@ -186,6 +190,10 @@ export interface AssistantWebviewState {
    * decomposition role); null outside mission decompositions.
    */
   readonly mission: SessionMissionSummary | null;
+  /** Authoritative bounded Mission setup/control projection. */
+  readonly missionSnapshot: MissionSnapshotMessage | null;
+  /** Latest correlated Mission operation settlement. */
+  readonly missionControlResult: MissionControlResultMessage | null;
   /**
    * Token-usage breakdown of the active session (cumulative totals +
    * last completed turn); empty members until the host reports data.
@@ -290,6 +298,8 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   btw: EMPTY_SESSION_BTW_STATE,
   workspaceRoot: null,
   mission: null,
+  missionSnapshot: null,
+  missionControlResult: null,
   tokenUsage: EMPTY_SESSION_TOKEN_USAGE,
   queue: EMPTY_SESSION_QUEUE_STATE,
   queueEditing: null,
@@ -557,6 +567,12 @@ export function assistantWebviewReducer(
             : EMPTY_SESSION_BTW_STATE,
         workspaceRoot: event.workspaceRoot ?? null,
         mission: event.mission ?? null,
+        missionSnapshot:
+          event.sessionId === state.sessionId ? state.missionSnapshot : null,
+        missionControlResult:
+          event.sessionId === state.sessionId
+            ? state.missionControlResult
+            : null,
         tokenUsage: event.tokenUsage ?? EMPTY_SESSION_TOKEN_USAGE,
         queue: event.queue ?? EMPTY_SESSION_QUEUE_STATE,
         queueEditing: reconcileQueueEditing(
@@ -588,6 +604,8 @@ export function assistantWebviewReducer(
           ? {
               turn: null,
               mission: null,
+              missionSnapshot: null,
+              missionControlResult: null,
               btw: EMPTY_SESSION_BTW_STATE,
               tokenUsage: EMPTY_SESSION_TOKEN_USAGE,
               queue: EMPTY_SESSION_QUEUE_STATE,
@@ -1231,12 +1249,17 @@ export function assistantWebviewReducer(
           }
         : advance(state, event.sequence);
     case 'mission.snapshot':
-      // Mission state is projected by its dedicated store slice. Until
-      // that slice subscribes, preserve Bridge sequencing without
-      // allowing the snapshot to affect ordinary chat state.
-      return advance(state, event.sequence);
+      return {
+        ...state,
+        sequence: event.sequence,
+        missionSnapshot: event,
+      };
     case 'mission.controlResult':
-      return advance(state, event.sequence);
+      return {
+        ...state,
+        sequence: event.sequence,
+        missionControlResult: event,
+      };
   }
 }
 

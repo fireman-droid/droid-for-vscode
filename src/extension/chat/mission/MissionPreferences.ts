@@ -2,6 +2,10 @@ import type {
   MissionProfile,
   MissionReasoningEffort,
 } from '../../../shared/missionProtocol';
+import {
+  missionPairError,
+  resolveMissionProfile,
+} from '../../../shared/missionProtocol';
 
 const STORAGE_KEY = 'droidvisx.mission.preferences.v1';
 
@@ -47,7 +51,13 @@ export class MissionPreferenceStore {
     workspaceId: string,
     orchestrator: MissionProfilePair,
   ): MissionWorkspacePreferences {
-    const saved = this.readAll()[workspaceId];
+    const stored = this.persistence.get<unknown>(STORAGE_KEY);
+    const saved =
+      stored !== null && typeof stored === 'object' && !Array.isArray(stored)
+        ? parsePreferences(
+            (stored as Readonly<Record<string, unknown>>)[workspaceId],
+          )
+        : undefined;
     return saved === undefined
       ? defaults(orchestrator)
       : applyInheritance(saved, orchestrator);
@@ -105,13 +115,8 @@ export function validatePair(
   profile: MissionProfilePair,
   catalog: readonly MissionCatalogModel[],
 ): Exclude<MissionPreferenceValidation, { readonly valid: true }> | undefined {
-  const model = catalog.find((candidate) => candidate.id === profile.modelId);
-  if (model === undefined) {
-    return { valid: false, reason: 'unavailable-model' };
-  }
-  return model.supportedReasoningEfforts.includes(profile.reasoningEffort)
-    ? undefined
-    : { valid: false, reason: 'unsupported-reasoning' };
+  const reason = missionPairError(profile, catalog);
+  return reason === undefined ? undefined : { valid: false, reason };
 }
 
 function defaults(
@@ -140,13 +145,9 @@ function applyInheritance(
   saved: MissionWorkspacePreferences,
   orchestrator: MissionProfilePair,
 ): MissionWorkspacePreferences {
-  const inherit = (profile: MissionProfile): MissionProfile =>
-    profile.mode === 'same-as-orchestrator'
-      ? { mode: 'same-as-orchestrator', ...orchestrator }
-      : { ...profile };
   return {
-    worker: inherit(saved.worker),
-    validator: inherit(saved.validator),
+    worker: resolveMissionProfile(saved.worker, orchestrator),
+    validator: resolveMissionProfile(saved.validator, orchestrator),
     scrutinyEnabled: saved.scrutinyEnabled,
     userTestingEnabled: saved.userTestingEnabled,
   };
