@@ -43,7 +43,11 @@ export function createDaemonSessionFactory(
   lease?: SessionLeaseHooks,
 ): FactoryDroidSessionFactory {
   return (options) =>
-    createDaemonDroidSession({ ...options, getDroid, lease });
+    createDaemonDroidSession({
+      ...options,
+      getDroid,
+      lease,
+    });
 }
 
 /**
@@ -168,7 +172,11 @@ const noopLease: SessionLeaseHooks = {
 /** Session-setting fields the daemon accepts and the runtime updates. */
 type SupportedSettingsUpdate = Pick<
   UpdateSessionSettingsOptions,
-  'interactionMode' | 'modelId' | 'reasoningEffort' | 'autonomyLevel'
+  | 'interactionMode'
+  | 'modelId'
+  | 'reasoningEffort'
+  | 'autonomyLevel'
+  | 'missionSettings'
 >;
 
 /** Adapts a retained daemon handle without creating or resuming another one. */
@@ -295,6 +303,9 @@ function adaptDaemonSession(
         ...(params.autonomyLevel === undefined
           ? {}
           : { autonomyLevel: params.autonomyLevel }),
+        ...(params.missionSettings === undefined
+          ? {}
+          : { missionSettings: params.missionSettings }),
       };
       const result = await droid.sessions.updateSettings(
         session.id,

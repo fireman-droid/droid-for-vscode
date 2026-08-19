@@ -407,7 +407,8 @@ describe('DroidViewProvider', () => {
       'data-dvx-theme-preference="auto"',
     );
     expect(view.webview.html).toContain(
-      'html,body{background:#1a1a1a}',
+      'html,body{background:var(--vscode-sideBar-background,' +
+        'var(--vscode-editor-background,#f5f3ef))}',
     );
 
     // An explicit preference overrides the editor theme kind.

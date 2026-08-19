@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
   workspaceRoot: '/repo' as string | undefined,
@@ -17,6 +17,32 @@ const vscodeMock = vi.hoisted(() => {
   }
 
   const panels: FakePanel[] = [];
+  const watchers: FakeWatcher[] = [];
+
+  class FakeWatcher {
+    disposed = false;
+    private change: ((uri: FakeUri) => void) | undefined;
+    private create: ((uri: FakeUri) => void) | undefined;
+    private delete: ((uri: FakeUri) => void) | undefined;
+    onDidChange(listener: (uri: FakeUri) => void) {
+      this.change = listener;
+      return { dispose: () => undefined };
+    }
+    onDidCreate(listener: (uri: FakeUri) => void) {
+      this.create = listener;
+      return { dispose: () => undefined };
+    }
+    onDidDelete(listener: (uri: FakeUri) => void) {
+      this.delete = listener;
+      return { dispose: () => undefined };
+    }
+    fireChange(path: string): void {
+      this.change?.(FakeUri.file(path));
+    }
+    dispose(): void {
+      this.disposed = true;
+    }
+  }
 
   class FakePanel {
     title = '';
@@ -61,6 +87,9 @@ const vscodeMock = vi.hoisted(() => {
 
   return {
     Uri: FakeUri,
+    RelativePattern: class {
+      constructor(readonly base: unknown, readonly pattern: string) {}
+    },
     ViewColumn: { Active: -1 },
     window: {
       createWebviewPanel: vi.fn(
@@ -97,8 +126,14 @@ const vscodeMock = vi.hoisted(() => {
           return new Uint8Array(Buffer.from(content, 'utf8'));
         }),
       },
+      createFileSystemWatcher: vi.fn(() => {
+        const watcher = new FakeWatcher();
+        watchers.push(watcher);
+        return watcher;
+      }),
     },
     __panels: panels,
+    __watchers: watchers,
     __showTextDocument: showTextDocument,
   };
 });
@@ -135,8 +170,13 @@ beforeEach(() => {
   state.workspaceRoot = '/repo';
   state.files.clear();
   vscodeMock.__panels.length = 0;
+  vscodeMock.__watchers.length = 0;
   vscodeMock.window.createWebviewPanel.mockClear();
   vscodeMock.__showTextDocument.mockClear();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('PreviewPanelController.openPreview', () => {
@@ -149,7 +189,7 @@ describe('PreviewPanelController.openPreview', () => {
 
     expect(outcome).toBe('opened');
     const panel = lastPanel();
-    expect(panel?.title).toBe('Preview · proto.html');
+    expect(panel?.title).toBe('Canvas · proto.html');
     expect(panel?.revealCalls).toBe(1);
     expect(panel?.webview.options).toMatchObject({
       enableScripts: true,
@@ -174,7 +214,7 @@ describe('PreviewPanelController.openPreview', () => {
     await controller.openPreview('b.html');
 
     expect(vscodeMock.window.createWebviewPanel).toHaveBeenCalledTimes(1);
-    expect(lastPanel()?.title).toBe('Preview · b.html');
+    expect(lastPanel()?.title).toBe('Canvas · b.html');
   });
 
   it.each([
@@ -236,7 +276,7 @@ describe('PreviewPanelController.openInlineHtml', () => {
 
     expect(outcome).toBe('opened');
     const panel = lastPanel();
-    expect(panel?.title).toBe('Preview · Chat snippet');
+    expect(panel?.title).toBe('Canvas · Interactive HTML artifact');
     expect(panel?.webview.html).toContain('sandbox="allow-scripts"');
     expect(panel?.webview.html).not.toContain('allow-same-origin');
     expect(panel?.webview.html).toContain('&lt;script&gt;go()&lt;/script&gt;');
@@ -273,8 +313,9 @@ describe('PreviewPanelController.openInlineHtml', () => {
     await controller.openInlineHtml('<p>inline-v1</p>');
     const panel = lastPanel();
 
+    const reload = canvasCommand(panel, 'canvas.reload');
     panel!.webview.html = '';
-    panel?.webview.receive({ type: 'preview.reload' });
+    panel?.webview.receive(reload);
     await flush();
     expect(panel?.webview.html).toContain('inline-v1');
   });
@@ -282,7 +323,8 @@ describe('PreviewPanelController.openInlineHtml', () => {
   it('ignores forged openInEditor messages for inline content', async () => {
     const controller = new PreviewPanelController();
     await controller.openInlineHtml('<p>inline</p>');
-    lastPanel()?.webview.receive({ type: 'preview.openInEditor' });
+    const panel = lastPanel();
+    panel?.webview.receive(canvasCommand(panel, 'canvas.openInEditor'));
     await flush();
     expect(vscodeMock.__showTextDocument).not.toHaveBeenCalled();
   });
@@ -293,11 +335,13 @@ describe('PreviewPanelController.openInlineHtml', () => {
     await controller.openPreview('a.html');
     await controller.openInlineHtml('<p>inline</p>');
     expect(vscodeMock.window.createWebviewPanel).toHaveBeenCalledTimes(1);
-    expect(lastPanel()?.title).toBe('Preview · Chat snippet');
+    expect(lastPanel()?.title).toBe('Canvas · Interactive HTML artifact');
 
     // Reload after the switch re-renders the inline source, not the file.
+    const panel = lastPanel();
+    const reload = canvasCommand(panel, 'canvas.reload');
     lastPanel()!.webview.html = '';
-    lastPanel()?.webview.receive({ type: 'preview.reload' });
+    panel?.webview.receive(reload);
     await flush();
     expect(lastPanel()?.webview.html).toContain('inline');
     expect(lastPanel()?.webview.html).not.toContain('<p>a</p>');
@@ -312,12 +356,12 @@ describe('PreviewPanelController toolbar commands', () => {
     const panel = lastPanel();
 
     state.files.set('/repo/proto.html', '<p>v2</p>');
-    panel?.webview.receive({ type: 'preview.reload' });
+    panel?.webview.receive(canvasCommand(panel, 'canvas.reload'));
     await flush();
     expect(panel?.webview.html).toContain('v2');
 
     state.files.delete('/repo/proto.html');
-    panel?.webview.receive({ type: 'preview.reload' });
+    panel?.webview.receive(canvasCommand(panel, 'canvas.reload'));
     await flush();
     expect(panel?.webview.html).not.toContain('<iframe');
     expect(panel?.webview.html).toContain('was deleted');
@@ -328,7 +372,8 @@ describe('PreviewPanelController toolbar commands', () => {
     state.files.set('/repo/proto.html', '<p>hi</p>');
     const controller = new PreviewPanelController();
     await controller.openPreview('proto.html');
-    lastPanel()?.webview.receive({ type: 'preview.openInEditor' });
+    const panel = lastPanel();
+    panel?.webview.receive(canvasCommand(panel, 'canvas.openInEditor'));
     await flush();
     expect(vscodeMock.__showTextDocument).toHaveBeenCalledTimes(1);
   });
@@ -341,11 +386,12 @@ describe('PreviewPanelController toolbar commands', () => {
     const panel = lastPanel();
 
     for (const hostile of [
-      { type: 'preview.reload', path: '../../etc/passwd' },
-      { type: 'preview.openInEditor', extra: 1 },
+      { ...canvasCommand(panel, 'canvas.reload'), path: '../../etc/passwd' },
+      { ...canvasCommand(panel, 'canvas.openInEditor'), extra: 1 },
+      { type: 'canvas.reload', generation: 0, revision: 1 },
       { type: 'evil' },
-      'preview.reload',
-      { type: 'preview.reload', __proto__: { polluted: true } },
+      'canvas.reload',
+      { type: 'canvas.reload', __proto__: { polluted: true } },
     ]) {
       panel?.webview.receive(hostile);
     }
@@ -366,11 +412,80 @@ describe('PreviewPanelController toolbar commands', () => {
     const panel = lastPanel();
     controller.dispose();
     expect(panel?.disposed).toBe(true);
-    panel?.webview.receive({ type: 'preview.openInEditor' });
+    panel?.webview.receive(canvasCommand(panel, 'canvas.openInEditor'));
     await flush();
     expect(vscodeMock.__showTextDocument).not.toHaveBeenCalled();
   });
+
+  it('returns revision-bound element feedback through the registered sink', async () => {
+    const feedback: string[] = [];
+    const controller = new PreviewPanelController();
+    controller.setFeedbackHandler((text) => feedback.push(text));
+    await controller.openInlineHtml('<button id="save">Save</button>', {
+      artifactId: 'inline:save-demo',
+      title: 'Save flow',
+    });
+    const panel = lastPanel();
+    panel?.webview.receive({
+      ...canvasCommand(panel, 'canvas.feedback'),
+      feedback: 'Make this action quieter.',
+      selection: {
+        tag: 'button',
+        id: 'save',
+        text: 'Save',
+        path: 'button#save',
+      },
+    });
+    expect(feedback).toEqual([
+      expect.stringContaining('Canvas feedback for Save flow:'),
+    ]);
+    expect(feedback[0]).toContain('Selected element: <button> at button#save');
+    expect(feedback[0]).toContain('Make this action quieter.');
+  });
+
+  it('preserves the opening baseline when a stable artifact is revised', async () => {
+    const controller = new PreviewPanelController();
+    const artifact = { artifactId: 'inline:stable-demo', title: 'Stable demo' };
+    await controller.openInlineHtml('<p>version one</p>', artifact);
+    await controller.openInlineHtml('<p>version two</p>', artifact);
+    const html = lastPanel()?.webview.html ?? '';
+    expect(html).toContain('data-revision="2"');
+    expect(html).toContain('version one');
+    expect(html).toContain('version two');
+  });
+
+  it('debounces file changes and disposes the watcher with the panel', async () => {
+    vi.useFakeTimers();
+    state.files.set('/repo/proto.html', '<p>v1</p>');
+    const controller = new PreviewPanelController();
+    await controller.openPreview('proto.html');
+    const watcher = vscodeMock.__watchers[0];
+    state.files.set('/repo/proto.html', '<p>v2</p>');
+    watcher?.fireChange('/repo/proto.html');
+    watcher?.fireChange('/repo/proto.html');
+    await vi.advanceTimersByTimeAsync(200);
+    expect(lastPanel()?.webview.html).toContain('v2');
+    lastPanel()?.dispose();
+    expect(watcher?.disposed).toBe(true);
+    vi.useRealTimers();
+  });
 });
+
+function canvasCommand(
+  panel: ReturnType<typeof lastPanel>,
+  type: 'canvas.reload' | 'canvas.openInEditor' | 'canvas.feedback',
+): {
+  readonly type: string;
+  readonly generation: number;
+  readonly revision: number;
+} {
+  const html = panel?.webview.html ?? '';
+  return {
+    type,
+    generation: Number(/data-generation="(\d+)"/u.exec(html)?.[1] ?? -1),
+    revision: Number(/data-revision="(\d+)"/u.exec(html)?.[1] ?? -1),
+  };
+}
 
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));

@@ -110,7 +110,7 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  color: #8a8a8a;
+  color: var(--dvx-muted);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -118,7 +118,7 @@
 
 .dvx-command-status {
   padding: 6px 8px;
-  color: #8a8a8a;
+  color: var(--dvx-muted);
   font-size: 12px;
 }
 

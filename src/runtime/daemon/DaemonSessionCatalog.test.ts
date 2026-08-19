@@ -175,6 +175,13 @@ describe('DaemonSessionCatalog', () => {
               },
             ],
           },
+          // Agent-team `droid exec` runs belong to the team panel,
+          // never the drawer or the archived list.
+          {
+            ...row,
+            id: 'exec-team',
+            tags: [{ name: 'exec' }],
+          },
         ],
       }),
     );

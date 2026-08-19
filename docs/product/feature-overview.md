@@ -361,12 +361,11 @@ Context 面板内 "Token usage" 账目显示 SDK 真实提供的五项分解（I
 
 账本 footer 的 Commit… 展开内联提交面板：显示分支名、勾选文件（默认勾选本回合触碰的文件）、以 prompt 首行本地拼出草稿消息（不调 LLM），经 VS Code Git 扩展 `add + commit` 提交，回显短哈希 + subject，失败原样显示 git 错误；无 git 扩展/无仓库/多根工作区时 fail-soft 隐藏入口。分支创建、Push 与 Pull Request 不在当前范围。
 
-### 12.6 Canvas / 原型预览（沙箱）
+### 12.6 Canvas 交互成果面板（沙箱）
 
-Droid 产出的 `.html/.htm` 文件（Changes 账本行、已完成的工具行、消息中的路径链接）与消息中的内联 HTML 代码块，可在编辑器旁的独立面板（单实例复用）中安全预览：
+Droid 产出的 `.html/.htm` 文件与已结算的内联 HTML 代码块会成为稳定 Canvas artifact，在编辑器旁的单实例 Canvas Studio 中重新进入。Studio 提供 Preview / Code / Diff、Desktop / Tablet / Mobile、Reload、文件自动刷新、元素选择和“Add to Composer”反馈；反馈只追加草稿，绝不自动发送。`/canvas` 同样只插入可见成果请求模板。
 
-- **安全模型**：Host 读取内容内联进 `sandbox="allow-scripts"`（无 same-origin）的 srcdoc iframe，opaque origin + 双层 CSP，**零网络出口**（fetch/XHR/WebSocket/CDN/外链图片全部阻断）、零本地文件可读、无 vscode API、无存储；工具栏如实标注 "Sandboxed · inline code only · no network"，即同目录外链资源不可加载，仅自包含 HTML 可完整渲染；
-- 工具栏提供 **Reload**（重读磁盘/重渲染）与 **Open in editor**（内联内容无背景文件时隐藏）；文件缺失或超 4MB 时面板内显示克制提示，不静默。
+安全边界保持 opaque-origin `sandbox="allow-scripts"` + 双 CSP、零网络、零本地资源、无存储与无 vscode API。面板消息使用 exact-key + generation/revision 校验，选择描述、反馈、源码、Diff 行数与内存 baseline 均有上限。本阶段不提供 Browser、本地服务器、框架 live app、直接视觉改源、网络、导出或持久版本历史。
 
 ### 12.7 只读终端镜像
 

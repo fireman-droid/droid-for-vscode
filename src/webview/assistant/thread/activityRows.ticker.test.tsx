@@ -11,14 +11,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const aui = vi.hoisted(() => ({
   parts: [] as Array<Record<string, unknown>>,
+  messageRunning: true,
 }));
 
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (
     selector: (state: {
-      message: { parts: Array<Record<string, unknown>> };
+      message: {
+        parts: Array<Record<string, unknown>>;
+        status: { type: string };
+      };
     }) => unknown,
-  ) => selector({ message: { parts: aui.parts } }),
+  ) =>
+    selector({
+      message: {
+        parts: aui.parts,
+        status: { type: aui.messageRunning ? 'running' : 'complete' },
+      },
+    }),
 }));
 
 import {
@@ -33,6 +43,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   aui.parts = [];
+  aui.messageRunning = true;
 });
 
 const members = [
@@ -96,6 +107,15 @@ function readState(container: HTMLElement): {
   };
 }
 
+function finishGroupTicker(container: HTMLElement): void {
+  const track = container.querySelector('.dvx-ticker-track');
+  if (!(track instanceof HTMLElement)) {
+    throw new Error('ticker track not mounted');
+  }
+  fireEvent.transitionEnd(track, { propertyName: 'transform' });
+  fireEvent.transitionEnd(track, { propertyName: 'transform' });
+}
+
 describe('ActivityTicker', () => {
   it('mounts a single visible row without a slide in flight', () => {
     const { container } = render(
@@ -126,7 +146,7 @@ describe('ActivityTicker', () => {
     });
   });
 
-  it('extends the trail on a mid-slide arrival instead of resetting', () => {
+  it('holds the next sequential row when the source advances mid-slide', () => {
     vi.useFakeTimers();
     const { container, rerender } = render(
       <ActivityTicker activeIndex={0}>{members}</ActivityTicker>,
@@ -134,20 +154,29 @@ describe('ActivityTicker', () => {
     rerender(<ActivityTicker activeIndex={1}>{members}</ActivityTicker>);
     rerender(<ActivityTicker activeIndex={2}>{members}</ActivityTicker>);
     expect(readState(container)).toMatchObject({
-      rows: ['0', '1', '2'],
-      actives: [false, false, true],
+      rows: ['0', '1'],
+      actives: [false, true],
       sliding: true,
-      offset: '2',
+      offset: '1',
     });
   });
 
-  it('prunes to the newest row and clears the slide when the fallback fires', () => {
+  it('plays every intermediate row before settling on a burst target', () => {
     vi.useFakeTimers();
     const { container, rerender } = render(
       <ActivityTicker activeIndex={0}>{members}</ActivityTicker>,
     );
     rerender(<ActivityTicker activeIndex={1}>{members}</ActivityTicker>);
     rerender(<ActivityTicker activeIndex={2}>{members}</ActivityTicker>);
+    act(() => {
+      vi.advanceTimersByTime(TICKER_SLIDE_FALLBACK_MS + 10);
+    });
+    expect(readState(container)).toMatchObject({
+      rows: ['1', '2'],
+      actives: [false, true],
+      sliding: true,
+      offset: '1',
+    });
     act(() => {
       vi.advanceTimersByTime(TICKER_SLIDE_FALLBACK_MS + 10);
     });
@@ -185,7 +214,7 @@ describe('ActivityTicker', () => {
     });
   });
 
-  it('renders a bounced-back member twice without key collisions', () => {
+  it('does not rewind when a later source snapshot points backward', () => {
     vi.useFakeTimers();
     const { container, rerender } = render(
       <ActivityTicker activeIndex={0}>{members}</ActivityTicker>,
@@ -193,9 +222,9 @@ describe('ActivityTicker', () => {
     rerender(<ActivityTicker activeIndex={1}>{members}</ActivityTicker>);
     rerender(<ActivityTicker activeIndex={0}>{members}</ActivityTicker>);
     expect(readState(container)).toMatchObject({
-      rows: ['0', '1', '0'],
-      actives: [false, false, true],
-      offset: '2',
+      rows: ['0', '1'],
+      actives: [false, true],
+      offset: '1',
     });
   });
 });
@@ -230,7 +259,7 @@ describe('ToolActivityRow', () => {
 });
 
 describe('ActivityGroup completion transition', () => {
-  it('keeps the final running view mounted while the summary enters', () => {
+  it('keeps the running view until every burst member has been shown', () => {
     vi.useFakeTimers();
     aui.parts = groupParts(true);
     const { container, rerender } = render(activityGroup());
@@ -242,7 +271,14 @@ describe('ActivityGroup completion transition', () => {
     ).not.toBeNull();
 
     aui.parts = groupParts(false);
+    aui.messageRunning = false;
     rerender(activityGroup());
+    expect(
+      container
+        .querySelector('.dvx-activity-group')
+        ?.classList.contains('dvx-activity-group-running'),
+    ).toBe(true);
+    finishGroupTicker(container);
     expect(
       container.querySelector('.dvx-activity-group-summary'),
     ).toBe(summaryButton);
@@ -262,7 +298,9 @@ describe('ActivityGroup completion transition', () => {
     aui.parts = groupParts(true);
     const { container, rerender } = render(activityGroup());
     aui.parts = groupParts(false);
+    aui.messageRunning = false;
     rerender(activityGroup());
+    finishGroupTicker(container);
 
     const stage = container.querySelector('.dvx-activity-group-stage');
     if (!(stage instanceof HTMLElement)) {
@@ -284,7 +322,9 @@ describe('ActivityGroup completion transition', () => {
     aui.parts = groupParts(true);
     const { container, rerender } = render(activityGroup());
     aui.parts = groupParts(false);
+    aui.messageRunning = false;
     rerender(activityGroup());
+    finishGroupTicker(container);
     act(() => {
       vi.advanceTimersByTime(ACTIVITY_SETTLE_FALLBACK_MS + 1);
     });
@@ -300,7 +340,9 @@ describe('ActivityGroup completion transition', () => {
     aui.parts = groupParts(true);
     const { container, rerender } = render(activityGroup());
     aui.parts = groupParts(false);
+    aui.messageRunning = false;
     rerender(activityGroup());
+    finishGroupTicker(container);
     expect(
       container
         .querySelector('.dvx-activity-group')
@@ -308,6 +350,7 @@ describe('ActivityGroup completion transition', () => {
     ).toBe(true);
 
     aui.parts = groupParts(true);
+    aui.messageRunning = true;
     rerender(activityGroup());
     act(() => {
       vi.advanceTimersByTime(ACTIVITY_SETTLE_FALLBACK_MS + 1);
@@ -321,6 +364,7 @@ describe('ActivityGroup completion transition', () => {
 
   it('mounts historical completed groups directly without replaying motion', () => {
     aui.parts = groupParts(false);
+    aui.messageRunning = false;
     const { container } = render(activityGroup());
     expect(
       container
@@ -339,5 +383,35 @@ describe('ActivityGroup completion transition', () => {
     fireEvent.click(summary);
     expect(details?.hasAttribute('inert')).toBe(false);
     expect(details?.getAttribute('aria-hidden')).toBe('false');
+  });
+
+  it('opens complete interactive details while exploration is still running', () => {
+    aui.parts = groupParts(true);
+    const children = [
+      <div key="read">Read app.ts</div>,
+      <details key="thinking">
+        <summary>Thinking</summary>
+        <p>Inspect the imports next.</p>
+      </details>,
+      <div key="grep">Grep imports</div>,
+    ];
+    const { container } = render(
+      <ActivityGroup indices={[0, 1, 2]}>
+        <>{children}</>
+      </ActivityGroup>,
+    );
+    const header = container.querySelector('.dvx-activity-group-header');
+    const details = container.querySelector('.dvx-activity-group-details');
+    if (!(header instanceof HTMLElement)) {
+      throw new Error('running group header not mounted');
+    }
+    expect(header.getAttribute('aria-expanded')).toBe('false');
+    expect(details?.hasAttribute('inert')).toBe(true);
+
+    fireEvent.click(header);
+    expect(header.getAttribute('aria-expanded')).toBe('true');
+    expect(details?.hasAttribute('inert')).toBe(false);
+    expect(details?.textContent).toContain('Thinking');
+    expect(details?.textContent).toContain('Inspect the imports next.');
   });
 });

@@ -159,13 +159,13 @@ export class SessionRecoveryStore {
   writeSession(
     sessionId: string,
     cache: SessionRecoveryCache,
-  ): void {
+  ): boolean {
     if (this.disposed || !isId(sessionId)) {
-      return;
+      return false;
     }
     const safeCache = parseCache(cache);
     if (!safeCache) {
-      return;
+      return false;
     }
     this.sessions.set(sessionId, {
       sessionId,
@@ -175,6 +175,7 @@ export class SessionRecoveryStore {
     });
     this.enforceLimits();
     this.changed();
+    return true;
   }
 
   /** Queued prompt texts persisted for this session (may be empty). */

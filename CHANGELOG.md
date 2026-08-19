@@ -4,6 +4,427 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.59] - 2026-08-17
+
+### Added
+
+- **Preview is now an interactive Canvas artifact surface** — settled inline
+  HTML renders as a stable transcript artifact card, while `.html/.htm`
+  files and chat artifacts reopen in a single Canvas Studio with Preview,
+  Code, Diff, Desktop/Tablet/Mobile sizing, reload, and file auto-refresh.
+- **Canvas feedback returns safely to chat** — element selection produces a
+  bounded descriptor, and user feedback is appended to the current Composer
+  draft without sending. Panel commands are exact-key and bound to the active
+  artifact generation and revision.
+- **`/canvas` is discoverable in the Composer** — selection inserts a visible
+  interactive-result request template instead of starting a turn.
+
+### Security
+
+- Canvas keeps the existing opaque-origin `srcdoc` sandbox, zero-network CSP,
+  zero workspace resource access, and strict path containment. Code/Diff,
+  line rendering, in-memory baselines, selection descriptors, and feedback
+  payloads are all bounded.
+
+## [0.7.58] - 2026-08-17
+
+### Fixed
+
+- **Mission dropdowns are no longer native browser chrome** — Orchestrator,
+  Worker, and Validator selects now use a custom chevron, layered gradient
+  surface, hover and focus feedback, and full Auto/Dark theme parity.
+
+## [0.7.57] - 2026-08-17
+
+### Fixed
+
+- **Mission setup task field no longer resizes** — the drag handle that let
+  the Mission textarea grow past the card layout is removed; the field now
+  has a fixed height with internal scrolling for long tasks.
+- **Mission Control matches the new setup finish** — the live Mission card
+  gains the same layered surface, and its 2px hairline progress bar is
+  replaced by a refined gradient track with tactile Pause/Resume/Stop
+  buttons.
+
+## [0.7.56] - 2026-08-17
+
+### Changed
+
+- **Mission setup is now a designed execution brief** — the `/mission`
+  surface has a clearer task hierarchy, Orchestrator/Worker/Validation flow,
+  role-based advanced settings, custom quality toggles, stronger theme-aware
+  contrast, and a full-width primary action on narrow sidebars.
+- **Mission motion is purposeful and accessible** — the setup card enters
+  softly, execution stages resolve in sequence, Advanced settings expand and
+  collapse smoothly, and all motion respects reduced-motion preferences.
+
+## [0.7.55] - 2026-08-17
+
+### Fixed
+
+- **`/mission` is discoverable in the Composer command menu** — capable
+  sessions now advertise the built-in command with “Start a Factory Mission”;
+  selecting it clears the slash query and opens Mission setup without sending
+  a chat turn.
+
+## [0.7.54] - 2026-08-17
+
+### Fixed
+
+- **Reloaded daemon history is chronological** — paged
+  `sessions.getMessages` results now pass through the public SDK
+  parent-chain ordering helper before projection, so the transcript bottom is
+  the latest exchange whether a daemon version returns newest-first or
+  oldest-first.
+- **Complete reloads persist as complete checkpoints** — startup now keeps the
+  ordered 143-item daemon body instead of synthesizing a 175-item partial
+  merge, and recovery validation accepts the bounded `target` and
+  `additionalFileCount` fields already allowed by the Bridge. Rejected
+  activation checkpoints are now recorded in diagnostics instead of failing
+  silently.
+
+## [0.7.53] - 2026-08-17
+
+### Fixed
+
+- **Complete daemon history is authoritative during startup reload** —
+  recovery checkpoints can enrich matched rows and finish the final shared
+  turn, but can no longer append or prepend disconnected branches when the
+  daemon returned a complete history.
+- **The earlier-content warning now reflects the real history source** —
+  stale checkpoint content no longer turns a complete daemon response into a
+  synthetic partial result; genuinely partial daemon history still retains
+  bounded recovery evidence.
+
+## [0.7.52] - 2026-08-17
+
+### Fixed
+
+- **Reload no longer resurrects stale local dialogue** — when authoritative
+  daemon history has advanced past the last shared user message, unmatched
+  recovery prefixes from an older rewind or selection lineage are discarded
+  instead of being prepended as phantom conversation.
+
+## [0.7.51] - 2026-08-17
+
+### Fixed
+
+- **Reload history refreshes preserve the current conversation tail** —
+  asynchronous daemon history reads can no longer replace messages accepted
+  in the active window while the read was in flight.
+- **Revealing earlier messages keeps the reading position anchored** — newly
+  prepended history no longer makes the latest exchange appear to disappear
+  or jump out of the viewport.
+
+## [0.7.50] - 2026-08-17
+
+### Added
+
+- **Official Factory Mission support in the main chat** — `/mission` opens
+  inline setup, while `/mission <task>` starts directly with catalog-validated
+  Orchestrator, Worker, and shared Validator model/reasoning choices. Scrutiny
+  and User Testing remain independently configurable and enabled by default.
+- **Live Mission control and recovery** — ordered Features, completed progress,
+  lifecycle, Pause, Resume, Stop current Feature, and reload recovery are
+  projected from official daemon state and notifications. Controls are
+  revision-bound, serialized, and fail closed when ownership becomes stale.
+- **Read-only Mission Worker Viewer** — completed or active Worker transcripts
+  open in a separate neutral Viewer. Worker Session IDs remain Host-only, and
+  both the Viewer UI and Host reject Stop attempts in Mission read-only mode.
+
+### Changed
+
+- **Official confirmations stay in the transcript** — Mission proposal and
+  start confirmations continue through the existing Droid interaction flow
+  instead of introducing a parallel approval surface.
+
+## [0.7.49] - 2026-08-16
+
+### Removed
+
+- **The custom managed-Agent product path has been retired** — DroidVisX no
+  longer injects `launch_agent`, creates tagged background Sessions, polls an
+  Agent Activity list, or exposes the custom `N Working` Open/Stop dock. The
+  incomplete launcher never returned a child result to the parent and could
+  misreport provider failures as completion.
+
+### Changed
+
+- **Official Droid surfaces remain authoritative** — native Task/Subagent
+  cards, live bounded activity, settlement, Mission mode, Mission permission
+  requests, and Mission history identity are unchanged. Bridge v24 removes
+  only the custom Agent Activity messages.
+- **Session Viewer is retained as neutral Mission groundwork** — its tested
+  read-only daemon transcript panel and bundle now use a generic daemon
+  Session target. It has no visible entry until an official Mission Worker
+  source supplies lifecycle and Stop semantics.
+
+## [0.7.48] - 2026-08-16
+
+### Added
+
+- **Main Droid sessions can launch independent managed Agents** — daemon-mode
+  chats receive a local `launch_agent` MCP tool that creates an official
+  daemon Session in the current workspace and starts its turn asynchronously.
+  Model and reasoning overrides are catalog-validated, while unattended
+  permissions and AskUser requests fail closed.
+
+### Fixed
+
+- **Agent Activity now has a real launch-to-Stop lifecycle** — the Working dock
+  accepts only the dedicated DroidVisX-managed Agent tag from
+  `sessions.listOpened()`. Ordinary external `droid exec` sessions are no
+  longer treated as a trigger they cannot satisfy.
+
+## [0.7.47] - 2026-08-16
+
+### Added
+
+- **Running Agents open in independent read-only editor tabs** — each tab
+  follows the main chat transcript structure, updates from daemon history,
+  supports an individual Stop action, and retains the final transcript until
+  the user closes it. The tab lifecycle is a generic Session Viewer ready for
+  a future Mission adapter.
+
+### Changed
+
+- **Agent Activity is now the live `N Working` dock** — the former header
+  history page is replaced by a compact Composer popup containing only
+  daemon-confirmed, currently working top-level `exec` Agents. Settled Agents
+  leave the list automatically, and Stop always revalidates and interrupts
+  only the selected session.
+- **Subagents now use only their inline Task cards** — aggregate Subagent
+  Working UI, Details actions, transcript sheets, and Subagent Stop routes are
+  removed; cards retain their live bounded activity subtitle.
+
+## [0.7.46] - 2026-08-16
+
+### Fixed
+
+- **Each session now shows only its latest Plan card** — a completed Plan stays
+  available until the next Plan begins, then the new lineage replaces the old
+  card instead of leaving historical Plan cards throughout the conversation.
+- **Plan lifecycle UI follows the Plan's own turn** — unrelated later responses
+  no longer wake or auto-expand an unfinished old Plan; failed TodoWrite calls
+  cannot replace the last valid Plan, and genuinely new Plans receive fresh UI
+  identity.
+
+## [0.7.45] - 2026-08-16
+
+### Fixed
+
+- **Reload no longer lets an old recovery checkpoint hide ReviewDock** —
+  disconnected local recovery is kept before complete daemon history instead
+  of being appended as a false latest turn.
+- **Sent user messages stay compact** — message cards use their natural
+  one-line height and clamp at four lines; sticky cards remain capped at three.
+- **Composer selection and width follow the conversation** — the empty
+  “Ask Droid…” placeholder cannot join transcript text selections, while typed
+  drafts remain selectable, and the Composer now shares the transcript's
+  centered 760px content cap.
+
+## [0.7.44] - 2026-08-16
+
+### Fixed
+
+- **ReviewDock status text is vertically centered** — “No pending turn
+  changes” now occupies the same centered 24px action track as Review instead
+  of inheriting the commit result's top alignment.
+
+## [0.7.43] - 2026-08-16
+
+### Fixed
+
+- **Auto subagent cards use a single-color glass surface** — the card now
+  uses the active editor widget background with only a hairline, restrained
+  shadow, and light backdrop blur instead of layered color gradients.
+- **Status-card text no longer selects accidentally** — subagent summaries
+  behave as compact status UI; copyable transcript content remains available
+  through Details.
+
+## [0.7.42] - 2026-08-16
+
+### Fixed
+
+- **Subagent cards now follow Auto theme colors** — Auto builds the progress
+  card surface, border, type hierarchy, and lifecycle accents from the active
+  Cursor theme instead of inheriting DroidVisX's fixed warm Dark palette.
+
+## [0.7.41] - 2026-08-16
+
+### Fixed
+
+- **Daemon authentication follows the current Droid CLI sign-in** — DroidVisX
+  now prefers the CLI's secure keyring credentials, refreshes expiring access
+  tokens with bounded cross-process rotation, and retains legacy credentials
+  only when no secure credential file exists.
+- **Daemon mode no longer silently falls back to a subprocess** — authentication
+  or connection failures block the Runtime with safe Retry guidance; process
+  mode runs only when explicitly selected.
+- **Failed authentication no longer leaks replacement listeners** — discovery
+  distinguishes authentication rejection from an unreachable daemon, preserves
+  healthy listeners during sign-in problems, and verifies ownership before
+  reaping an unreachable DroidVisX daemon.
+
+## [0.7.40] - 2026-08-16
+
+### Fixed
+
+- **Model edit sits beside the selected check** — the reasoning edit
+  button now joins the right-aligned action pair instead of appearing
+  immediately after the model name.
+
+## [0.7.39] - 2026-08-16
+
+### Fixed
+
+- **Model picker uses a tighter width** — the compact 208px menu
+  keeps model names and the selected check visually connected instead
+  of leaving an oversized empty span.
+- **Add models is centered** — the footer action now aligns to the
+  middle of the model picker.
+
+## [0.7.38] - 2026-08-16
+
+### Fixed
+
+- **Committed reviews survive Reload** — the latest DroidVisX commit
+  now persists its turn, hash, paths, and exact `+N −N` counts, so
+  Review opens `<commit^> ↔ <commit>` instead of an empty
+  `HEAD ↔ Working` comparison after the working tree becomes clean.
+- **Created and deleted files remain reviewable** — committed files
+  missing on either side use a bounded virtual empty document;
+  uncommitted deletions also retain the native `HEAD ↔ Working` path.
+- **Commit state stays turn-correct** — Bridge v22 scopes status,
+  commit requests, results, and restored markers to the Changes turn,
+  rejects stale commit requests/replies, and does not let unrelated
+  dirty files reopen Commit.
+- **Diff and commit diagnostics are actionable** — local logs now
+  record commit start/finish and the successful or failed Diff source
+  (`turn-baseline`, `committed-turn`, `git-head`, or `plain-file`).
+
+## [0.7.37] - 2026-08-16
+
+### Fixed
+
+- **Tool-row filenames open the workspace file** — clicking a filename
+  in AI activity now uses the ordinary `workspace.openPath` route;
+  native Diff remains exclusive to ReviewDock's Diff and Review actions.
+- **Live edit statistics stay visible beside tool files** — matching
+  activity rows now show the current turn's cumulative `+N −N` counts
+  and refresh in place as `changes.update` frames arrive.
+
+## [0.7.36] - 2026-08-16
+
+### Changed
+
+- **Subagent progress cards use the approved refined surface** — light
+  and dark themes now use layered warm backgrounds, hairline borders,
+  inset highlights, soft shadows, stronger typography, and a single
+  quiet lifecycle pip. Running cards add a reduced-motion-safe
+  breathing halo without changing the card's information or actions.
+
+## [0.7.35] - 2026-08-16
+
+### Fixed
+
+- **AskUser choices stay bright in Auto themes** — option labels now
+  use Cursor's direct foreground color instead of the mixed secondary
+  text token, improving contrast on dark sidebars without affecting
+  the fixed Light and Dark skins.
+
+## [0.7.34] - 2026-08-16
+
+### Fixed
+
+- **AskUser radio focus stays circular in Cursor** — native radio
+  controls now use a circular box-shadow focus ring instead of
+  Chromium's rectangular outline, while preserving visible keyboard
+  focus and the normal checkbox treatment.
+
+## [0.7.33] - 2026-08-16
+
+### Fixed
+
+- **New files open in the native Review Diff** — before-turn virtual
+  documents now retain the target filename and extension while using
+  a separate stable identity, so an empty baseline remains a real empty
+  file instead of losing the target editor context.
+- **Diff failures keep their underlying editor error** — rejected
+  baseline, Git HEAD, and plain-file opens are recorded in local
+  diagnostics while preserving the existing safe user-facing fallback.
+
+## [0.7.32] - 2026-08-16
+
+### Fixed
+
+- **Review text stays visible in Auto dark themes** — the solid
+  Review action now uses an explicit surface-on-ink foreground with
+  enough selector specificity to override the global button reset;
+  forced-colors continues to use system ButtonText and ButtonFace.
+
+## [0.7.31] - 2026-08-15
+
+### Added
+
+- **Latest-turn Review now stays above the Composer** — the dock
+  summarizes changed files, expands to per-file Diff and HTML Preview,
+  reuses the existing commit flow, and leaves older turns as quiet
+  one-line Changes history.
+
+### Changed
+
+- **The former Agent teams page is now honest Agent activity** — it
+  lists only independently verifiable, top-level `droid exec`
+  automation sessions from the public daemon API. Recent modification
+  time is shown as “Updated recently,” never as a running state or
+  team relationship.
+- **Agent activity uses Bridge v21** — cwd and workspace generations,
+  per-selection request IDs, single-flight reads, and trailing
+  refreshes prevent closed, switched, or superseded transcript loads
+  from writing into the current page.
+
+### Security
+
+- **Private session-index fallback was removed** — Agent activity no
+  longer reads undocumented session files or infers team membership,
+  roles, leaders, or parent relationships.
+
+## [0.7.30] - 2026-08-15
+
+### Fixed
+
+- Collapsed plan cards no longer retain a redundant completion line.
+
+## [0.7.29] - 2026-08-15
+
+### Fixed
+
+- Markdown dividers in Auto theme now use a quiet neutral hairline
+  instead of the browser's high-contrast default rule.
+
+## [0.7.28] - 2026-08-15
+
+### Added
+
+- Task calls now show a parent-session progress card with status,
+  elapsed time, latest activity, and tool-use count.
+- Independent `droid exec` transcripts gained a full-page read-only
+  viewer, which is superseded by the honest Agent activity semantics
+  in v0.7.31.
+
+### Changed
+
+- Daemon-first history loading and richer recovery reconciliation
+  reduce session-switch latency and retain live activity detail.
+
+## [0.7.27] - 2026-08-15
+
+### Fixed
+
+- Main-turn watchdog settlement and terminal error presentation now
+  converge stalled or failed turns without duplicate error surfaces.
+
 ## [0.7.26] - 2026-08-15
 
 ### Fixed

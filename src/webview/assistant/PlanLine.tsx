@@ -3,23 +3,25 @@ import { useState } from 'react';
 import type { PlanAnchorState } from './planAnchor';
 
 /**
- * Thin plan line anchored directly under the user message that
- * triggered the turn (decard design §3 A + user corrections
- * 2026-08-13). Collapsed it is one hairline-topped row — status dot,
- * title, n/m, chevron — and the whole row is the single disclosure
- * target. Expanded it lists the steps, each led by a small circle:
- * hollow for pending, accent-filled for the current step, grey with
- * a check for completed ones. While the turn is building the plan
- * the status dot carries the only animation (accent glow); once
- * every step is done the dot retires to grey.
+ * Plan card anchored directly under the user message that triggered
+ * the turn (spec §3.5, 2026-08-15 — this REPLACES the 2026-08-13
+ * "no card chrome" decision). Collapsed it is a one-row card — 32px
+ * title row (status dot, title, n / m, chevron) closed by a 2px
+ * completion bar — and the whole row is the single disclosure
+ * target. Expanded it lists the steps below a hairline, each led by
+ * a small circle: hollow for pending, accent-filled for the current
+ * step, grey with a check for completed ones. While the turn is
+ * building the plan the status dot carries the only ambient
+ * animation (accent glow); once every step is done the dot and the
+ * bar retire to grey.
  *
  * The line is a normal member of the sticky user-message block: the
  * existing pin coordinator in Thread.tsx carries it, and
  * [data-pinned] CSS alone adds the readability chassis and swaps the
  * expanded body to a non-displacing overlay. No scroll listening in
- * here. Later todowrites of the same lineage update the line in
- * place (see planAnchor.ts), and live turns and history replay
- * render identically.
+ * here. Later TodoWrites of the same lineage update the line in
+ * place; a new lineage replaces the old card session-wide (see
+ * planAnchor.ts). Live turns and history replay render identically.
  */
 export function PlanLine({
   anchor,
@@ -42,6 +44,10 @@ export function PlanLine({
   // Spaced "n / m" — the approved harness form (user correction
   // 2026-08-13 evening).
   const count = `${anchor.completedCount} / ${anchor.totalCount}`;
+  const progressPercent =
+    anchor.totalCount > 0
+      ? (anchor.completedCount / anchor.totalCount) * 100
+      : 0;
   return (
     <section
       className={`dvx-plan-line${
@@ -60,6 +66,14 @@ export function PlanLine({
         <span className="dvx-plan-line-count">{count}</span>
         <PlanLineChevron open={expanded} />
       </button>
+      {/* 2px completion bar seated on the title row's bottom edge
+          (spec §3.5); turns grey with the retired card. */}
+      <span className="dvx-plan-line-bar" aria-hidden="true">
+        <span
+          className="dvx-plan-line-bar-fill"
+          style={{ width: `${progressPercent}%` }}
+        />
+      </span>
       {/* Always mounted so collapse can animate (grid-rows 0fr↔1fr);
           aria-hidden keeps the closed checklist out of the
           accessibility tree. data-auto marks a building auto-open

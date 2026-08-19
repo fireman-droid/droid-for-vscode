@@ -13,21 +13,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MermaidBlock, MermaidBlockView } from './MermaidBlock';
 import { renderMermaid } from './mermaidRenderer';
+import { MessageStreamingContext } from './messageStreaming';
 
 vi.mock('./mermaidRenderer', async (importOriginal) => {
   const original =
     await importOriginal<typeof import('./mermaidRenderer')>();
   return { ...original, renderMermaid: vi.fn() };
 });
-
-const aui = vi.hoisted(() => ({
-  state: { message: { status: { type: 'running' } } },
-}));
-
-vi.mock('@assistant-ui/react', () => ({
-  useAuiState: (selector: (state: typeof aui.state) => boolean) =>
-    selector(aui.state),
-}));
 
 const renderMermaidMock = vi.mocked(renderMermaid);
 
@@ -58,7 +50,6 @@ afterEach(() => {
   vi.useRealTimers();
   cleanup();
   renderMermaidMock.mockReset();
-  aui.state = { message: { status: { type: 'running' } } };
 });
 
 describe('MermaidBlockView', () => {
@@ -229,22 +220,20 @@ describe('MermaidBlockView', () => {
 
 describe('MermaidBlock', () => {
   it(
-    'derives streaming state from the message status',
+    'reacts to the parent message streaming context without remounting',
     async () => {
       renderMermaidMock.mockResolvedValue(OK_OUTCOME);
       const { container, rerender } = render(
-        <MermaidBlock code="graph TD; A-->B" components={components} />,
+        <MessageStreamingContext.Provider value>
+          <MermaidBlock code="graph TD; A-->B" components={components} />
+        </MessageStreamingContext.Provider>,
       );
       expect(renderMermaidMock).not.toHaveBeenCalled();
       expect(screen.getByText('graph TD; A-->B').tagName).toBe('CODE');
-      aui.state = { message: { status: { type: 'complete' } } };
-      // Fresh components identity defeats the memo so the mocked
-      // useAuiState re-reads the updated status on this rerender.
       rerender(
-        <MermaidBlock
-          code="graph TD; A-->B"
-          components={{ ...components }}
-        />,
+        <MessageStreamingContext.Provider value={false}>
+          <MermaidBlock code="graph TD; A-->B" components={components} />
+        </MessageStreamingContext.Provider>,
       );
       await waitFor(
         () => expect(renderMermaidMock).toHaveBeenCalledTimes(1),

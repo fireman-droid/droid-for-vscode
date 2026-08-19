@@ -71,12 +71,14 @@ describe('selectWorkingSubagents', () => {
         toolUseId: 'task-1',
         type: 'explore',
         description: 'Survey the auth module',
+        toolUseCount: null,
       },
       {
         turnId: 'turn-history',
         toolUseId: 'task-3',
         type: 'worker',
         description: 'Replayed running row',
+        toolUseCount: null,
       },
     ]);
   });
@@ -111,6 +113,7 @@ describe('selectWorkingSubagents', () => {
         toolUseId: 'task-fg',
         type: 'explore',
         description: '看这个文件夹',
+        toolUseCount: null,
       },
     ]);
   });
@@ -173,6 +176,7 @@ describe('selectWorkingSubagents', () => {
         toolUseId: 'task-1',
         type: 'worker',
         description: 'Still running per ledger',
+        toolUseCount: null,
       },
     ]);
   });

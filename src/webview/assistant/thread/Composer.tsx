@@ -32,6 +32,7 @@ import {
 import { ComposerPopup } from "../ComposerPopup";
 import { getImagePreview, rememberImagePreview } from "../imagePreviewCache";
 import {
+  CANVAS_REQUEST_TEMPLATE,
   SLASH_NAV_COMMANDS,
   type SlashNavTarget,
 } from "../slashBuiltins";
@@ -39,6 +40,7 @@ import type { FileSearchResult, SlashCommandsState } from "../Thread";
 import {
   BTW_COMMAND,
   BUILT_IN_COMMANDS,
+  MISSION_COMMAND,
   MAX_SLASH_SKILL_MATCHES,
   filterSlashCommands,
   findMentionToken,
@@ -48,7 +50,7 @@ import {
   type SlashEntry,
   type SlashToken,
 } from "./composerCommands";
-import { SendIcon } from "./icons";
+import { ComposerSendButton } from "./ComposerSendButton";
 
 export function Composer({
   statusMessage,
@@ -87,6 +89,7 @@ export function Composer({
   onCommandsRefresh,
   navSignal = null,
   onSlashNavigate,
+  onMissionOpen,
   btwAvailable = false,
   onBtwOpen,
   onAttachPath,
@@ -141,6 +144,7 @@ export function Composer({
   readonly onCommandsRefresh: () => void;
   readonly navSignal?: ComposerNavRequest | null;
   readonly onSlashNavigate?: (target: SlashNavTarget) => void;
+  readonly onMissionOpen?: () => void;
   /** Renders the `/btw` popup row when the host supports side chat. */
   readonly btwAvailable?: boolean;
   /** Opens the side-chat panel from the `/btw` popup row. */
@@ -339,11 +343,12 @@ export function Composer({
 
   const commandMatches =
     slash !== null ? filterSlashCommands(commands, slash.query) : [];
-  // `/btw` joins the Built-in group only while the host advertises
-  // side-chat support (process runtime; fail closed in daemon mode).
-  const builtInCommands = btwAvailable
-    ? [...BUILT_IN_COMMANDS, BTW_COMMAND]
-    : BUILT_IN_COMMANDS;
+  // Capability-gated built-ins fail closed when their Host support is absent.
+  const builtInCommands = [
+    ...BUILT_IN_COMMANDS,
+    ...(onMissionOpen === undefined ? [] : [MISSION_COMMAND]),
+    ...(btwAvailable ? [BTW_COMMAND] : []),
+  ];
   const builtInMatches =
     slash !== null
       ? builtInCommands.filter((command) =>
@@ -442,30 +447,23 @@ export function Composer({
     setSlashIndex(0);
   };
 
-  /** Completes the draft to `/name ` without sending. */
-  const selectCommand = (name: string): void => {
+  const replaceSlash = (prefix: string): void => {
     if (slash === null) {
       return;
     }
-    const next = `/${name} ` + draftRef.current.slice(slash.end);
+    const next = prefix + draftRef.current.slice(slash.end);
     draftRef.current = next;
     aui.thread.composer().setText(next);
     onDraftChange(next);
     closeSlash();
   };
 
+  /** Completes the draft to `/name ` without sending. */
+  const selectCommand = (name: string): void => replaceSlash(`/${name} `);
+
   /** Replaces the `/` token with guiding text for one skill. */
-  const selectSkillGuide = (name: string): void => {
-    if (slash === null) {
-      return;
-    }
-    const next =
-      `Use the "${name}" skill: ` + draftRef.current.slice(slash.end);
-    draftRef.current = next;
-    aui.thread.composer().setText(next);
-    onDraftChange(next);
-    closeSlash();
-  };
+  const selectSkillGuide = (name: string): void =>
+    replaceSlash(`Use the "${name}" skill: `);
 
   /** Clears the `/` token and opens the target panel directly. */
   const selectSlashNav = (target: SlashNavTarget): void => {
@@ -497,6 +495,18 @@ export function Composer({
     onBtwOpen?.();
   };
 
+  const selectMissionOpen = (): void => {
+    if (slash === null) {
+      return;
+    }
+    const next = draftRef.current.slice(slash.end);
+    draftRef.current = next;
+    aui.thread.composer().setText(next);
+    onDraftChange(next);
+    closeSlash();
+    onMissionOpen?.();
+  };
+
   const selectSlashEntry = (entry: SlashEntry): void => {
     if (entry.kind === "skill") {
       selectSkillGuide(entry.name);
@@ -504,6 +514,10 @@ export function Composer({
       selectSlashNav(entry.name);
     } else if (entry.kind === "builtin" && entry.name === "btw") {
       selectBtwOpen();
+    } else if (entry.kind === "builtin" && entry.name === "mission") {
+      selectMissionOpen();
+    } else if (entry.kind === "builtin" && entry.name === "canvas") {
+      replaceSlash(CANVAS_REQUEST_TEMPLATE);
     } else {
       selectCommand(
         entry.kind === "command" ? entry.command.name : entry.name,
@@ -725,7 +739,12 @@ export function Composer({
                     ) : null}
                   </button>
                 ))}
-                {commandMatches.length === 0 ? (
+                {commandMatches.length === 0 &&
+                (slash?.query.length === 0 ||
+                  builtInMatches.length +
+                    navMatches.length +
+                    skillMatches.length ===
+                    0) ? (
                   <div className="dvx-command-status" role="status">
                     {commands.status === "loading"
                       ? "Loading commands…"
@@ -871,9 +890,14 @@ export function Composer({
               submitMode="enter"
               addAttachmentOnPaste={false}
               onPaste={(event) => {
-                // Screenshots and copied image files stage as
-                // attachments; plain-text pastes keep default
-                // behavior.
+                // Rich clipboard payloads can expose both text and an
+                // image. Preserve native text paste in that case; only
+                // image-only payloads should become attachments.
+                const text =
+                  event.clipboardData?.getData("text/plain") ?? "";
+                if (text.length > 0) {
+                  return;
+                }
                 const files = Array.from(
                   event.clipboardData?.files ?? [],
                 ).filter((file) => isImageMediaType(file.type));
@@ -1046,20 +1070,18 @@ export function Composer({
             >
               Retry
             </button>
+          ) : stopping || (!running && queuedCount > 0) ? (
+            <ComposerSendButton
+              onSend={() => aui.thread.composer().send()}
+            />
           ) : running ? (
             <ComposerPrimitive.Cancel
               className="dvx-composer-action dvx-stop-action"
-              disabled={stopping}
             >
               Stop
             </ComposerPrimitive.Cancel>
           ) : (
-            <ComposerPrimitive.Send
-              className="dvx-composer-action dvx-send-action"
-              aria-label="Send"
-            >
-              <SendIcon />
-            </ComposerPrimitive.Send>
+            <ComposerSendButton />
           )}
         </div>
       </ComposerPrimitive.Root>
@@ -1070,7 +1092,9 @@ export function Composer({
             ? `Queue is full (${MAX_QUEUED_MESSAGES}) · Remove a queued message to add another`
             : interactionPending
               ? "Pending request · Complete the action above"
-              : running
+              : stopping
+                ? "Stopping · Enter sends next when this turn stops"
+                : running
                 ? "Droid is active · Enter queues for after this turn"
                 : queuedCount > 0
                   ? "Enter adds to the queue · Shift+Enter for a new line"

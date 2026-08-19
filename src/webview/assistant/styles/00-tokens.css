@@ -23,10 +23,13 @@
   --dvx-duration-slower: 300ms;   /* large block entry ceiling */
   --dvx-easing-out-strong: cubic-bezier(0.215, 0.61, 0.355, 1);
 
-  /* Surfaces */
+  /* Surfaces (spec §1.5): surface < code < raised < overlay; the
+     well is the deep terminal floor (R4 拍板: stays warm). */
   --dvx-surface: #f5f3ef;
   --dvx-raised: #fff;
   --dvx-code: #f7f5f1;
+  --dvx-overlay: #fbfaf7;
+  --dvx-well: #eceae5;
 
   /* Text (ink → text-secondary → muted → subtle, darkest first) */
   --dvx-ink: #262626;
@@ -35,9 +38,11 @@
   --dvx-muted: #737373;
   --dvx-subtle: #a1a1a1;
 
-  /* Lines and washes */
-  --dvx-border: #e5e5e5;
-  --dvx-border-strong: #d4d4d4;
+  /* Lines and washes: translucent black hairlines (spec §1.5 — a
+     hairline that works over any warm ground, replacing the solid
+     #e5e5e5/#d4d4d4 pair that read flat on non-white surfaces). */
+  --dvx-border: rgb(0 0 0 / 8%);
+  --dvx-border-strong: rgb(0 0 0 / 15%);
   --dvx-soft: rgb(0 0 0 / 4%);
 
   /* Brand */
@@ -59,6 +64,14 @@
 
   /* Elevation */
   --dvx-shadow: 0 16px 40px -14px rgb(0 0 0 / 28%);
+
+  /* Context Usage chart segments (spec §1.5, muted five-color set:
+     gray · purple · teal · orange · blue; consumed in 段 B). */
+  --dvx-ctx-1: #9a9a9a;
+  --dvx-ctx-2: #8a6fc8;
+  --dvx-ctx-3: #2f9688;
+  --dvx-ctx-4: #c07a3a;
+  --dvx-ctx-5: #4a7fc0;
 
   /* Type */
   --dvx-mono: ui-monospace, monospace;
@@ -92,10 +105,13 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox,
 html[data-dvx-theme='dark'] .dvx-slash-tooltip {
   color-scheme: dark;
 
-  /* Surfaces */
+  /* Surfaces: overlay floats one step above the card; the terminal
+     well drops below the page floor (kept warm-umber, R4 拍板). */
   --dvx-surface: #1a1a1a;
   --dvx-raised: #242425;
   --dvx-code: #1e1e1f;
+  --dvx-overlay: #2a2a2c;
+  --dvx-well: #16120e;
 
   /* Text */
   --dvx-ink: #e8e8e8;
@@ -125,6 +141,13 @@ html[data-dvx-theme='dark'] .dvx-slash-tooltip {
 
   /* Elevation: shorter throw, deeper ink */
   --dvx-shadow: 0 12px 28px -12px rgb(0 0 0 / 55%);
+
+  /* Context Usage chart segments (lifted for the dark ground). */
+  --dvx-ctx-1: #7f7f86;
+  --dvx-ctx-2: #a48fd8;
+  --dvx-ctx-3: #58b5a8;
+  --dvx-ctx-4: #d8955c;
+  --dvx-ctx-5: #6f9fd8;
 
   /* Syntax highlighting (VS Code Dark+ derived) */
   --dvx-hl-comment: #6a9955;

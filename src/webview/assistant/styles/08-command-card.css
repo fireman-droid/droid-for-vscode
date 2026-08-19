@@ -56,26 +56,29 @@
   z-index: 5;
   min-width: 150px;
   overflow: hidden;
-  padding: 5px;
-  border: 1px solid var(--dvx-border);
-  border-radius: 9px;
-  background: var(--dvx-raised);
+  padding: 6px;
+  border: 1px solid color-mix(in srgb, var(--dvx-border-strong) 72%, transparent);
+  border-radius: 8px;
+  background: var(--dvx-overlay);
   box-shadow:
-    0 2px 6px -3px rgb(0 0 0 / 10%),
-    0 16px 40px -14px rgb(0 0 0 / 25%);
+    0 1px 2px rgb(0 0 0 / 7%),
+    0 6px 18px -12px rgb(0 0 0 / 26%);
   animation: dvx-rise-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .dvx-command-menu button {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
-  padding: 6px 10px;
+  min-height: 32px;
+  padding: 5px 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: var(--dvx-text-strong);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 500;
   line-height: 17px;
   text-align: left;
   transition:
@@ -85,21 +88,23 @@
 
 .dvx-command-menu button:hover {
   color: var(--dvx-ink);
-  background: color-mix(in srgb, var(--dvx-accent) 7%, var(--dvx-raised));
+  background: var(--dvx-soft);
 }
 
-/* The terminal well: a deep warm-umber panel (the shell stays warm
-   white; only the terminal content goes dark, at a warm color
-   temperature). Flush under the header; rounded only when it closes
-   the card. */
+/* The terminal well: the shell's deep terminal floor (--dvx-well,
+   spec §1.5 — warm-umber in dark, warm-white in light per R4 拍板),
+   with a faint lighter top edge. Flush under the header; rounded only
+   when it closes the card. */
 .dvx-command-card .dvx-command-well {
   overflow: hidden;
   border-top: 1px solid var(--dvx-border);
-  background: #262019 linear-gradient(180deg, #2b241d, #262019 42%);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 3%), transparent 42%),
+    var(--dvx-well);
 }
 
 .dvx-command-card .dvx-command-well:last-child {
-  border-radius: 0 0 9px 9px;
+  border-radius: 0 0 7px 7px;
 }
 
 /* Expand/collapse animates as one continuous height + opacity
@@ -210,12 +215,14 @@
   border: 0;
   border-top: 1px solid rgb(255 244 230 / 8%);
   border-radius: 0;
-  background: #262019 linear-gradient(180deg, rgb(0 0 0 / 16%), rgb(0 0 0 / 16%));
+  background:
+    linear-gradient(180deg, rgb(0 0 0 / 16%), rgb(0 0 0 / 16%)),
+    var(--dvx-well);
   box-shadow: none;
 }
 
 .dvx-command-card .dvx-tool-output-frame:last-child {
-  border-radius: 0 0 9px 9px;
+  border-radius: 0 0 7px 7px;
 }
 
 .dvx-command-card .dvx-tool-output {
@@ -232,14 +239,10 @@
   margin: 8px 12px 10px;
 }
 
-/* The well follows the theme (kitchen-sink form, 2026-08-13): light
-   theme gets a warm-white well one shade deeper than the shell with
-   dark ink and a light-legible syntax tint; the dark theme keeps the
-   deep warm-umber well above. */
-.dvx-shell:not([data-theme='dark']) .dvx-command-card .dvx-command-well {
-  background: #efece6 linear-gradient(180deg, #f2efe9, #edeae3 46%);
-  border-top: 1px solid var(--dvx-border);
-}
+/* The well follows the theme (kitchen-sink form, 2026-08-13): the
+   light --dvx-well is a warm-white floor one shade deeper than the
+   shell with dark ink and a light-legible syntax tint; the dark token
+   keeps the deep warm-umber well. */
 
 .dvx-shell:not([data-theme='dark']) .dvx-command-prompt {
   color: rgb(170 122 66 / 78%);
@@ -278,7 +281,7 @@
 }
 
 .dvx-shell:not([data-theme='dark']) .dvx-command-card .dvx-tool-output-frame {
-  background: #eae7e0;
+  background: color-mix(in srgb, rgb(0 0 0) 2%, var(--dvx-well));
   border-top: 1px solid var(--dvx-border);
 }
 

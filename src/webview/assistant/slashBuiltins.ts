@@ -36,7 +36,12 @@ export type BuiltinSlashAction =
   | { readonly kind: 'new' }
   | { readonly kind: 'navigate'; readonly target: SlashNavTarget }
   | { readonly kind: 'btw'; readonly question: string }
+  | { readonly kind: 'canvas'; readonly request: string }
   | { readonly kind: 'mission'; readonly task: string };
+
+export const CANVAS_REQUEST_TEMPLATE =
+  'Create an interactive Canvas artifact for:\n\n' +
+  '[Describe the result, audience, and key interactions]';
 
 /** CLI-parity aliases onto the existing compaction pipeline. */
 const COMPACT_ALIASES = new Set(['compact', 'compress', 'handoff']);
@@ -79,6 +84,9 @@ export function resolveBuiltinSlash(
   }
   if (slug === 'mission') {
     return { kind: 'mission', task: rest.trim() };
+  }
+  if (slug === 'canvas') {
+    return { kind: 'canvas', request: rest.trim() };
   }
   if (rest.length > 0) {
     return null;

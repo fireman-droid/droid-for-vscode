@@ -25,9 +25,13 @@
 @import './styles/20-selection-governance.css';
 @import './styles/21-btw.css';
 @import './styles/22-plan-anchor.css';
-@import './styles/23-working-badge.css';
 @import './styles/24-theme-dark.css';
 @import './styles/25-custom-models.css';
-@import './styles/26-subagent-sheet.css';
+@import './styles/29-review-dock.css';
+@import './styles/30-session-viewer.css';
+@import './styles/31-mission-setup.css';
+@import './styles/31-mission-model-select.css';
 @import './styles/31-mission.css';
+@import './styles/32-canvas-artifact.css';
+@import './styles/33-question-navigation.css';
 @import './styles/27-theme-auto.css';

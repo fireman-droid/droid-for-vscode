@@ -11,6 +11,8 @@ export interface WorkingSubagent {
   readonly toolUseId: string;
   readonly type: string;
   readonly description: string;
+  /** Tool count when the durable invocation ledger already reported it. */
+  readonly toolUseCount: number | null;
 }
 
 /**
@@ -56,6 +58,7 @@ export function selectWorkingSubagents(
       toolUseId: item.toolUseId,
       type: item.subagent.type,
       description: item.subagent.description,
+      toolUseCount: item.subagent.toolUseCount ?? null,
     });
   }
   return rows;

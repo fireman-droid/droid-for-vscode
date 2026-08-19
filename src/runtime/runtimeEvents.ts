@@ -7,6 +7,35 @@ import type {
 } from '../shared/bridgeMessages';
 import type { ToolActivityUpdateKind } from '../shared/toolActivity';
 import type { TokenUsageBreakdown } from '../shared/tokenUsage';
+import type { MissionLifecycle } from '../shared/missionProtocol';
+
+export interface MissionRuntimeFeature {
+  readonly id: string;
+  readonly description: string;
+  readonly status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  readonly skillName: string;
+  readonly milestone?: string;
+}
+
+export interface MissionProgressSummary {
+  readonly type:
+    | 'mission_accepted'
+    | 'mission_paused'
+    | 'mission_resumed'
+    | 'mission_run_started'
+    | 'worker_started'
+    | 'worker_selected_feature'
+    | 'worker_completed'
+    | 'worker_failed'
+    | 'worker_paused'
+    | 'handoff_items_dismissed'
+    | 'milestone_validation_triggered';
+  readonly timestamp: string;
+  readonly workerSessionId?: string;
+  readonly featureId?: string;
+  readonly title?: string;
+  readonly exitCode?: number;
+}
 
 export type RuntimeAvailability =
   | {
@@ -24,11 +53,40 @@ export type RuntimeAvailability =
       reason:
         | 'cli-not-found'
         | 'invalid-cwd'
+        | 'daemon-not-logged-in'
+        | 'daemon-credentials-unreadable'
+        | 'daemon-refresh-failed'
+        | 'daemon-unavailable'
         | 'initialization-failed';
       message: string;
     };
 
 export type RuntimeEvent =
+  | {
+      type: 'mission-state';
+      lifecycle: MissionLifecycle;
+    }
+  | {
+      type: 'mission-features';
+      features: readonly MissionRuntimeFeature[];
+    }
+  | {
+      type: 'mission-progress';
+      entries: readonly MissionProgressSummary[];
+    }
+  | {
+      type: 'mission-heartbeat';
+      timestamp: string;
+    }
+  | {
+      type: 'mission-worker-started';
+      workerSessionId: string;
+    }
+  | {
+      type: 'mission-worker-completed';
+      workerSessionId: string;
+      exitCode: number;
+    }
   | {
       type: 'text-delta';
       text: string;

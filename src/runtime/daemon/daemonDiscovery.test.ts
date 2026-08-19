@@ -53,7 +53,7 @@ describe('ensureSharedDaemon', () => {
     const startDaemon = vi.fn();
     const endpoint = await ensureSharedDaemon(FILE, {
       readFile: () => healthyRecord,
-      checkHealth: vi.fn(async () => true),
+      checkHealth: vi.fn(async () => 'healthy' as const),
       isPidAlive: () => true,
       startDaemon,
       cliVersion: () => '0.193.0',
@@ -72,7 +72,7 @@ describe('ensureSharedDaemon', () => {
   it('flags a version mismatch when reusing a daemon from another CLI version', async () => {
     const endpoint = await ensureSharedDaemon(FILE, {
       readFile: () => healthyRecord,
-      checkHealth: async () => true,
+      checkHealth: async () => 'healthy',
       isPidAlive: () => true,
       cliVersion: () => '0.200.0',
     });
@@ -82,11 +82,17 @@ describe('ensureSharedDaemon', () => {
   it('replaces a stale record: delete, spawn detached, write exclusively', async () => {
     const deleteFile = vi.fn();
     const writeFileExclusive = vi.fn(() => true);
+    let contents: string | null = healthyRecord;
     const endpoint = await ensureSharedDaemon(FILE, {
-      readFile: () => healthyRecord,
-      checkHealth: async () => false,
+      readFile: () => contents,
+      checkHealth: async () => 'unreachable',
       isPidAlive: () => true,
       deleteFile,
+      deleteFileIfMatches: (file) => {
+        deleteFile(file);
+        contents = null;
+        return true;
+      },
       writeFileExclusive,
       startDaemon: async () => ({
         url: 'ws://127.0.0.1:45900',
@@ -125,7 +131,8 @@ describe('ensureSharedDaemon', () => {
     const startDaemon = vi.fn();
     const endpoint = await ensureSharedDaemon(FILE, {
       readFile: () => reads.shift() ?? replacement,
-      checkHealth: async (url) => url.endsWith(':45002'),
+      checkHealth: async (url) =>
+        url.endsWith(':45002') ? 'healthy' : 'unreachable',
       deleteFileIfMatches: () => false,
       startDaemon,
       cliVersion: () => '0.194.0',
@@ -140,7 +147,7 @@ describe('ensureSharedDaemon', () => {
   });
 
   it('reuses the healthy listener after its wrapper pid exits', async () => {
-    const checkHealth = vi.fn(async () => true);
+    const checkHealth = vi.fn(async () => 'healthy' as const);
     const deleteFile = vi.fn();
     const startDaemon = vi.fn();
     const endpoint = await ensureSharedDaemon(FILE, {
@@ -162,7 +169,7 @@ describe('ensureSharedDaemon', () => {
   it('trusts a healthy race winner even when its wrapper pid is dead', async () => {
     const reads = [null, healthyRecord];
     const writes = [false];
-    const checkHealth = vi.fn(async () => true);
+    const checkHealth = vi.fn(async () => 'healthy' as const);
     const killProcessTree = vi.fn(async () => {});
     const endpoint = await ensureSharedDaemon(FILE, {
       readFile: () => reads.shift() ?? null,
@@ -190,7 +197,7 @@ describe('ensureSharedDaemon', () => {
     const endpoint = await ensureSharedDaemon(FILE, {
       readFile: () => reads.shift() ?? null,
       writeFileExclusive: () => false,
-      checkHealth: async () => true,
+      checkHealth: async () => 'healthy',
       isPidAlive: () => true,
       killProcessTree,
       startDaemon: async () => ({
@@ -217,7 +224,7 @@ describe('ensureSharedDaemon', () => {
     const endpoint = await ensureSharedDaemon(FILE, {
       readFile: () => reads.shift() ?? null,
       writeFileExclusive: () => writes.shift() ?? true,
-      checkHealth: async () => false,
+      checkHealth: async () => 'unreachable',
       isPidAlive: () => true,
       deleteFile,
       killProcessTree,
@@ -247,7 +254,8 @@ describe('ensureSharedDaemon', () => {
         reads.length > 0 ? (reads.shift() ?? null) : replacement,
       writeFileExclusive: () => false,
       deleteFileIfMatches: () => false,
-      checkHealth: async (url) => url.endsWith(':45002'),
+      checkHealth: async (url) =>
+        url.endsWith(':45002') ? 'healthy' : 'unreachable',
       killProcessTree,
       startDaemon: async () => ({
         url: 'ws://127.0.0.1:45900',
@@ -278,7 +286,8 @@ describe('ensureSharedDaemon', () => {
     const endpoint = await ensureSharedDaemon(FILE, {
       readFile: () => reads.shift() ?? null,
       writeFileExclusive: () => writes.shift() ?? false,
-      checkHealth: async (url) => url.endsWith(':45002'),
+      checkHealth: async (url) =>
+        url.endsWith(':45002') ? 'healthy' : 'unreachable',
       isPidAlive: () => true,
       deleteFile: vi.fn(),
       killProcessTree,
@@ -307,7 +316,7 @@ describe('ensureSharedDaemon', () => {
       ensureSharedDaemon(FILE, {
         readFile: () => reads.shift() ?? null,
         writeFileExclusive: () => writes.shift() ?? false,
-        checkHealth: async () => false,
+        checkHealth: async () => 'unreachable',
         isPidAlive: () => true,
         deleteFile: vi.fn(),
         killProcessTree,
@@ -319,6 +328,26 @@ describe('ensureSharedDaemon', () => {
       }),
     ).rejects.toThrow('discovery race did not yield a healthy winner');
     expect(killProcessTree).toHaveBeenCalledWith(5001);
+  });
+
+  it('keeps an authenticated-listener record on credential failure', async () => {
+    const startDaemon = vi.fn();
+    const deleteFile = vi.fn();
+    const killProcessTree = vi.fn(async () => {});
+
+    const endpoint = await ensureSharedDaemon(FILE, {
+      readFile: () => healthyRecord,
+      checkHealth: async () => 'authentication-failed',
+      isPidAlive: () => true,
+      startDaemon,
+      deleteFile,
+      killProcessTree,
+    });
+
+    expect(endpoint).toMatchObject({ pid: 4242, spawned: false });
+    expect(startDaemon).not.toHaveBeenCalled();
+    expect(deleteFile).not.toHaveBeenCalled();
+    expect(killProcessTree).not.toHaveBeenCalled();
   });
 });
 

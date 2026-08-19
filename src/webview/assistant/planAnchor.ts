@@ -6,18 +6,21 @@ export interface PlanStep {
 }
 
 /**
- * Projection of one task plan for its thin plan line in the
- * transcript. The line renders directly under the user message that
- * triggered the turn in which the plan was created (the first
- * element of that turn's reply area) and shows the plan's latest
- * state; later todowrite rows anchored to that same user message
- * always replace the line in place, even when Droid rewrites every
- * step. Derived purely from transcript tool items (detailKind
- * 'plan'); no new bridge data is involved.
+ * Projection of the session's latest task-plan lineage. Its thin line
+ * renders under the user message that created that lineage and shows
+ * its latest state. A newer lineage replaces it session-wide. Derived
+ * purely from transcript tool items (detailKind 'plan'); no new
+ * bridge data is involved.
  */
 export interface PlanAnchorState {
   /** toolUseId of the lineage's creation todowrite (stable key). */
   readonly anchorToolUseId: string;
+  /**
+   * Turn of the latest TodoWrite snapshot. Live styling is scoped to
+   * this turn so a later unrelated response cannot wake an older
+   * unfinished plan.
+   */
+  readonly latestTurnId: string;
   /**
    * Status-line title: the step Droid is on right now (first
    * in_progress), else the next pending step, else the last step
@@ -72,24 +75,24 @@ interface PlanLineage {
   /** Transcript item id of the user message that triggered the turn. */
   readonly anchorUserItemId: string;
   readonly anchorToolUseId: string;
+  latestTurnId: string;
   latestSteps: readonly PlanStep[];
 }
 
 /**
- * Groups the session's todowrites into plan lineages and projects
- * each lineage's latest state onto the user message that triggered
- * the turn the lineage was created in (map key: the user transcript
- * item's id, which doubles as the aui message id). Every anchor owns
- * at most one visible plan: a later todowrite under the same anchor
- * updates it even after a complete rewrite. Across user anchors,
- * overlap continues an unfinished lineage; a completed lineage or a
- * disjoint list starts a genuinely new plan. A plan with no preceding
- * user message has no anchor position and is skipped (fail quiet).
+ * Projects exactly one Plan card for the whole session: the latest
+ * lineage, anchored to the user message that created it (map key:
+ * that transcript item id, which doubles as the aui message id).
+ * Later TodoWrites update the current lineage in place. Across user
+ * anchors, overlap continues an unfinished lineage; a completed
+ * lineage or a disjoint list starts a new plan and replaces the old
+ * card entirely. A plan with no preceding user message has no anchor
+ * position and is skipped (fail quiet).
  */
 export function selectPlanAnchors(
   transcript: readonly SessionTranscriptItem[],
 ): ReadonlyMap<string, PlanAnchorState> {
-  const lineages: PlanLineage[] = [];
+  let current: PlanLineage | null = null;
   let lastUserItemId: string | null = null;
   for (const item of transcript) {
     if (item.kind === 'user') {
@@ -99,7 +102,8 @@ export function selectPlanAnchors(
     if (
       item.kind !== 'tool' ||
       item.detailKind !== 'plan' ||
-      item.detail === undefined
+      item.detail === undefined ||
+      item.status === 'failed'
     ) {
       continue;
     }
@@ -107,43 +111,48 @@ export function selectPlanAnchors(
     if (steps.length === 0) {
       continue;
     }
-    const current = lineages[lineages.length - 1];
-    const sameAnchor =
-      current?.anchorUserItemId === lastUserItemId;
-    const continuesUnfinished =
-      current !== undefined &&
-      !planCompleted(current.latestSteps) &&
-      sharesAnyStep(current.latestSteps, steps);
-    if (current !== undefined && (sameAnchor || continuesUnfinished)) {
-      current.latestSteps = steps;
-      continue;
+    if (current !== null) {
+      const sameAnchor =
+        current.anchorUserItemId === lastUserItemId;
+      const sharesCurrent = sharesAnyStep(current.latestSteps, steps);
+      const unfinished = !planCompleted(current.latestSteps);
+      const continues = unfinished
+        ? sameAnchor || sharesCurrent
+        : sameAnchor && sharesCurrent;
+      if (continues) {
+        current.latestTurnId = item.turnId;
+        current.latestSteps = steps;
+        continue;
+      }
     }
     if (lastUserItemId === null) {
       continue;
     }
-    lineages.push({
+    current = {
       anchorUserItemId: lastUserItemId,
       anchorToolUseId: item.toolUseId,
+      latestTurnId: item.turnId,
       latestSteps: steps,
-    });
+    };
   }
 
   const anchors = new Map<string, PlanAnchorState>();
-  for (const lineage of lineages) {
-    const steps = lineage.latestSteps;
-    const completedCount = steps.filter(
-      (step) => step.status === 'completed',
-    ).length;
-    const state: PlanAnchorState = {
-      anchorToolUseId: lineage.anchorToolUseId,
-      title: planLineTitle(steps),
-      steps,
-      completedCount,
-      totalCount: steps.length,
-      allCompleted: completedCount === steps.length,
-    };
-    anchors.set(lineage.anchorUserItemId, state);
+  if (current === null) {
+    return anchors;
   }
+  const steps = current.latestSteps;
+  const completedCount = steps.filter(
+    (step) => step.status === 'completed',
+  ).length;
+  anchors.set(current.anchorUserItemId, {
+    anchorToolUseId: current.anchorToolUseId,
+    latestTurnId: current.latestTurnId,
+    title: planLineTitle(steps),
+    steps,
+    completedCount,
+    totalCount: steps.length,
+    allCompleted: completedCount === steps.length,
+  });
   return anchors;
 }
 
@@ -171,4 +180,17 @@ function planLineTitle(steps: readonly PlanStep[]): string {
 function firstLineOf(text: string): string {
   const index = text.indexOf('\n');
   return index === -1 ? text : text.slice(0, index);
+}
+
+/** A Plan animates only while the turn that last updated it is active. */
+export function isPlanLive(
+  anchor: PlanAnchorState,
+  running: boolean,
+  activeTurnId: string | null,
+): boolean {
+  return (
+    running &&
+    activeTurnId !== null &&
+    anchor.latestTurnId === activeTurnId
+  );
 }

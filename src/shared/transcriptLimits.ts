@@ -3,6 +3,16 @@ import type { SessionTranscriptItem } from './bridgeMessages';
 export const MAX_SESSION_TRANSCRIPT_ITEMS = 2_000;
 export const MAX_SESSION_TRANSCRIPT_TEXT_UNITS = 1_000_000;
 /**
+ * Thinking text counts against the text-unit budget at a fraction of
+ * its length. Long sessions carry a handful of giant thinking blocks
+ * (43MB session `671e76ac…`: projection kept 141 rows because
+ * thinking ate the whole budget, bug #36); discounting keeps the
+ * budget meaningful for conversation text without an entirely
+ * separate accounting loop. Each thinking item is still individually
+ * capped by MAX_THINKING_TEXT_LENGTH.
+ */
+export const THINKING_TEXT_UNIT_DIVISOR = 8;
+/**
  * Most images per session that keep their base64 payload. Older
  * images degrade to placeholder rows (metadata retained, bytes
  * dropped) so a screenshot-heavy session cannot exhaust memory.
@@ -34,7 +44,7 @@ export function transcriptItemTextUnits(
         item.id.length +
         item.kind.length +
         item.turnId.length +
-        item.text.length +
+        Math.ceil(item.text.length / THINKING_TEXT_UNIT_DIVISOR) +
         item.status.length
       );
     case 'tool':

@@ -338,16 +338,18 @@ describe('ComposerControls', () => {
     expect(autonomyButton.getAttribute('aria-expanded')).toBe('false');
 
     await user.click(screen.getByLabelText(/Context used 25 of 100/));
-    expect(screen.getByText('25% used')).toBeDefined();
+    expect(screen.getByText('25% Full')).toBeDefined();
     expect(
       screen
         .getByRole('progressbar', { name: 'Context used' })
         .getAttribute('aria-valuenow'),
     ).toBe('25');
-    expect(screen.getByText('Remaining')).toBeDefined();
-    expect(screen.getByText('75')).toBeDefined();
-    expect(screen.getByText('Source')).toBeDefined();
-    expect(screen.getByText('Latest provider call')).toBeDefined();
+    expect(
+      screen
+        .getByRole('progressbar', { name: 'Context used' })
+        .getAttribute('aria-valuetext'),
+    ).toBe('25% used (25 of 100)');
+    expect(screen.getByText(/~25 \/ 100 Tokens/)).toBeDefined();
     await user.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(onContextRefresh).toHaveBeenCalledOnce();
 
@@ -1559,7 +1561,7 @@ describe('ComposerControls', () => {
     expect(onCompact).not.toHaveBeenCalled();
   });
 
-  it('shows the SDK token breakdown for both scopes without inventing cost', async () => {
+  it('shows cumulative token categories with last-turn detail and no cost', async () => {
     const user = userEvent.setup();
     render(
       <ComposerControls
@@ -1607,17 +1609,11 @@ describe('ComposerControls', () => {
     );
 
     await user.click(screen.getByLabelText(/Context used 25 of 100/));
-    expect(
-      screen.getByRole('columnheader', { name: 'Last turn' }),
-    ).toBeDefined();
-    expect(
-      screen.getByRole('columnheader', { name: 'Session' }),
-    ).toBeDefined();
-    const input = screen.getByRole('row', { name: /^Input/ });
-    expect(input.textContent).toContain('1,719');
-    expect(input.textContent).toContain('2,565');
+    const input = screen.getByText('Input').closest('li')!;
+    expect(input.textContent).toContain('2.6K');
+    expect(input.getAttribute('title')).toBe('Last turn: 1,719');
     // Zero credits reported: no Credits row, and never a money amount.
-    expect(screen.queryByRole('row', { name: /Credits/ })).toBeNull();
+    expect(screen.queryByText('Credits')).toBeNull();
     expect(screen.queryByText(/\$/)).toBeNull();
     // Per-turn data exists, so no missing-detail note.
     expect(screen.queryByText(/Per-turn detail/)).toBeNull();
@@ -1664,12 +1660,8 @@ describe('ComposerControls', () => {
     );
 
     await user.click(screen.getByLabelText(/Context used 25 of 100/));
-    expect(
-      screen.queryByRole('columnheader', { name: 'Last turn' }),
-    ).toBeNull();
-    expect(
-      screen.getByRole('row', { name: /Credits/ }).textContent,
-    ).toContain('1.25');
+    const credits = screen.getByText('Credits').closest('li')!;
+    expect(credits.textContent).toContain('1.25');
     expect(
       screen.getByText('Per-turn detail appears after the next completed turn.'),
     ).toBeDefined();

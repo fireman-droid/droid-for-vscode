@@ -3,9 +3,11 @@
 > 状态（2026-08-12 更新）：**分节状态**——§1 / §1.5（对话内图片 +
 > Composer 拖拽/粘贴）已实现（V1 切片③，见 `implementation-status.md`，
 > 预研存档 [`slice-prep-rich-content.md`](./slice-prep-rich-content.md)）；
-> §2（Canvas / 原型预览）设计待实现，现排 **V1 #7**（2026-08-12 用户
-> 调整：发版前倒数第二），开工预研见
-> [`slice-prep-canvas.md`](./slice-prep-canvas.md)。
+> §2 的安全 HTML 预览已实现，并在 2026-08-17 演进为 Canvas 交互成果
+> 面板（Preview / Code / Diff、响应式视口、文件自动刷新、元素反馈回
+> Composer）。本文 §2 保留最初方案决策记录；当前生产范围以
+> [`feature-overview.md`](./feature-overview.md) §12.6 与
+> [`implementation-status.md`](./implementation-status.md) §12 为准。
 >
 > 原始状态：设计文档（未实现）。本文基于 2026-08-11 对
 > `node_modules/@factory/droid-sdk@0.7.0`（`FACTORY_PROTOCOL_VERSION: "1.151.0"`）

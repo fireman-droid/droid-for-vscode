@@ -1,0 +1,136 @@
+import { useEffect, useRef, useState } from 'react';
+
+import {
+  SESSION_VIEWER_PROTOCOL_VERSION,
+  type SessionViewerSnapshotMessage,
+} from '../../shared/sessionViewerProtocol';
+import { ReadOnlyTranscript } from '../assistant/ReadOnlyTranscript';
+import { parseSessionViewerHostMessage } from './validateSessionViewerHostMessage';
+
+interface SessionViewerPort {
+  postMessage(message: unknown): void;
+}
+
+export function SessionViewerApp({
+  vscode,
+}: {
+  readonly vscode: SessionViewerPort;
+}): React.JSX.Element {
+  const [snapshot, setSnapshot] =
+    useState<SessionViewerSnapshotMessage | null>(null);
+  const viewportRef = useRef<HTMLElement>(null);
+  const followRef = useRef(true);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent<unknown>): void => {
+      const message = parseSessionViewerHostMessage(event.data);
+      if (message === null) {
+        return;
+      }
+      if (message.type === 'sessionViewer.theme') {
+        document.documentElement.dataset.dvxTheme = message.resolved;
+        document.documentElement.dataset.dvxThemePreference =
+          message.preference;
+        return;
+      }
+      setSnapshot(message);
+    };
+    window.addEventListener('message', onMessage);
+    vscode.postMessage({
+      type: 'sessionViewer.ready',
+      protocolVersion: SESSION_VIEWER_PROTOCOL_VERSION,
+    });
+    window.__dvxBooted = true;
+    return () => window.removeEventListener('message', onMessage);
+  }, [vscode]);
+
+  useEffect(() => {
+    if (!followRef.current) {
+      return;
+    }
+    const viewport = viewportRef.current;
+    if (viewport !== null) {
+      viewport.scrollTop = viewport.scrollHeight;
+    }
+  }, [snapshot]);
+
+  const title = snapshot?.target.title ?? 'Session activity';
+  const running = snapshot?.running === true;
+  const readOnly = snapshot?.target.mode === 'mission-readonly';
+  return (
+    <main className="dvx-session-viewer" data-running={running}>
+      <header className="dvx-session-viewer-header">
+        <div className="dvx-session-viewer-heading">
+          <h1>{title}</h1>
+          <span className="dvx-session-viewer-state" role="status">
+            {snapshot === null
+              ? 'Loading'
+              : snapshot.stopping
+              ? 'Stopping…'
+              : running
+                ? 'Working'
+                : 'Finished'}
+          </span>
+        </div>
+        {running && !readOnly ? (
+          <button
+            type="button"
+            className="dvx-session-viewer-stop"
+            disabled={snapshot?.stopping === true}
+            onClick={() => {
+              vscode.postMessage({
+                type: 'sessionViewer.stop',
+                protocolVersion: SESSION_VIEWER_PROTOCOL_VERSION,
+              });
+            }}
+          >
+            Stop
+          </button>
+        ) : null}
+      </header>
+      {snapshot?.stopError ? (
+        <p className="dvx-session-viewer-error" role="alert">
+          Stop failed. The session may still be working.
+        </p>
+      ) : null}
+      <section
+        ref={viewportRef}
+        className="dvx-session-viewer-viewport"
+        aria-label="Read-only session transcript"
+        onScroll={(event) => {
+          const element = event.currentTarget;
+          followRef.current =
+            element.scrollHeight -
+              element.scrollTop -
+              element.clientHeight <
+            48;
+        }}
+      >
+        <div className="dvx-session-viewer-content">
+          {snapshot === null ? (
+            <p className="dvx-session-viewer-status">
+              Loading session…
+            </p>
+          ) : snapshot.status === 'unavailable' ? (
+            <p className="dvx-session-viewer-status">
+              {snapshot.reason}
+            </p>
+          ) : (
+            <>
+              {snapshot.truncated ? (
+                <p className="dvx-session-viewer-note">
+                  Older transcript items were omitted.
+                </p>
+              ) : null}
+              <ReadOnlyTranscript
+                items={snapshot.items}
+                running={snapshot.running}
+                className="dvx-session-viewer-thread"
+              />
+            </>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}

@@ -113,19 +113,25 @@ describe('buildPreviewShellHtml', () => {
     expect(shell).not.toContain('allow-modals');
   });
 
-  it('registers no window message listener for the child to reach', () => {
+  it('accepts child selection only from the current sandbox frame', () => {
     const shell = shellFor('<p>hi</p>');
-    expect(shell).not.toContain("addEventListener('message'");
-    expect(shell).not.toContain('addEventListener("message"');
-    expect(shell).not.toContain('onmessage');
+    expect(shell).toContain("window.addEventListener('message'");
+    expect(shell).toContain('event.source !== frame.contentWindow');
+    expect(shell).toContain("message.type !== 'dvx.canvas.selected'");
   });
 
-  it('posts exactly the two fixed toolbar commands', () => {
+  it('renders Canvas Studio views and revision-bound commands', () => {
     const shell = shellFor('<p>hi</p>');
-    expect(shell).toContain("postMessage({ type: 'preview.reload' })");
-    expect(shell).toContain(
-      "postMessage({ type: 'preview.openInEditor' })",
-    );
+    expect(shell).toContain("command('canvas.reload')");
+    expect(shell).toContain("command('canvas.openInEditor')");
+    expect(shell).toContain("type: 'canvas.feedback'");
+    expect(shell).toContain('data-view="preview"');
+    expect(shell).toContain('data-view="code"');
+    expect(shell).toContain('data-view="diff"');
+    expect(shell).toContain('data-viewport="mobile"');
+    expect(shell).toContain('slice(0, 2000)');
+    expect(shell).toContain('limited to the first 2,000 lines');
+    expect(shell).toContain('Add to Composer');
     expect(shell).toContain('>Reload<');
     expect(shell).toContain('>Open in editor<');
   });
@@ -183,7 +189,7 @@ describe('buildPreviewShellHtml', () => {
     // down to "Ope". The container must wrap, not hide overflow.
     const shell = shellFor('<p>hi</p>');
     const toolbarRule =
-      /\.dvx-preview-toolbar \{[^}]*\}/.exec(shell)?.[0] ?? '';
+      /\.dvx-canvas-bar \{[^}]*\}/.exec(shell)?.[0] ?? '';
     expect(toolbarRule).toContain('flex-wrap: wrap');
     expect(toolbarRule).not.toContain('overflow: hidden');
     expect(toolbarRule).not.toContain('white-space: nowrap');

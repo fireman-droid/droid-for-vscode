@@ -17,8 +17,8 @@
   border: 1px solid var(--dvx-border);
   border-radius: 12px;
   background: var(--dvx-raised);
-  box-shadow: 0 1px 1.5px rgb(0 0 0 / 10%), 0 1px 1px rgb(0 0 0 / 10%);
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  box-shadow: none;
+  transition: border-color 160ms ease;
 }
 
 .dvx-user-edit-card:focus-within {
@@ -152,12 +152,13 @@
   flex-flow: row wrap;
   align-items: stretch;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border: 1px solid var(--dvx-border);
   border-radius: 8px;
   background: var(--dvx-raised);
   color: var(--dvx-ink);
   text-align: left;
+  transition: border-color 160ms ease;
 }
 
 .dvx-user-block > .dvx-user-text,
@@ -195,17 +196,17 @@
   line-height: 21.125px;
 }
 
-/* Long questions stay a few lines tall so a pinned block never eats
-   half the viewport; opening the editor shows the full text. */
+/* Sent questions occupy their natural one-line height and stop at four
+   lines; opening the editor exposes the complete text. */
 .dvx-user-block .dvx-user-text {
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 6;
+  -webkit-line-clamp: 4;
 }
 
 /* Once sticky, keep only a compact three-line question header. The
-   unpinned card retains six lines for transcript readability, while
+   unpinned card retains four lines for transcript readability, while
    opening its editor still exposes the complete text. */
 .dvx-message-user[data-sticky-compact] .dvx-user-block .dvx-user-text {
   -webkit-line-clamp: 3;
@@ -213,12 +214,10 @@
 
 .dvx-user-block-editable {
   cursor: pointer;
-  transition: box-shadow 120ms ease;
 }
 
 .dvx-user-block-editable:hover, .dvx-user-block-editable:focus-visible {
   border-color: var(--dvx-border-strong);
-  box-shadow: 0 2px 10px rgb(0 0 0 / 10%);
 }
 
 .dvx-user-block-editable:focus-visible {

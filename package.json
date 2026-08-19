@@ -2,7 +2,7 @@
   "name": "droidvisx",
   "displayName": "DroidVisX",
   "description": "A secure VS Code chat surface for Factory Droid.",
-  "version": "0.7.26",
+  "version": "0.7.59",
   "publisher": "droidvisx",
   "private": true,
   "type": "module",
@@ -89,7 +89,7 @@
             "Sessions run over a persistent local droid daemon connection, so tasks survive window reloads (default)."
           ],
           "default": "daemon",
-          "description": "How DroidVisX executes Droid sessions. Changing this requires a window reload. When unset, DroidVisX uses the daemon and silently falls back to per-window subprocesses if the daemon cannot start; an explicit choice is always kept."
+          "description": "How DroidVisX executes Droid sessions. Changing this requires a window reload. Daemon is strict by default; per-window subprocesses are used only when Process is explicitly selected."
         },
         "droidvisx.theme": {
           "type": "string",
@@ -112,6 +112,7 @@
   "packageManager": "pnpm@10.2.0",
   "scripts": {
     "build": "node esbuild.mjs",
+    "dev:webview": "vite --config vite.webview.config.ts",
     "test:extension": "vitest run src/shared src/extension",
     "test:webview": "vitest run src/webview",
     "test:integration": "pnpm run build && node src/integration/runTest.mjs",
@@ -153,6 +154,7 @@
     "jsdom": "27.2.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
+    "vite": "^8.2.1",
     "vitest": "^4.0.15"
   }
 }

@@ -14,6 +14,7 @@ const expectedEntries = [
   // Lazily injected mermaid bundle; ships alongside webview.js but is
   // only loaded when a completed ```mermaid block needs rendering.
   'extension/dist/webview/mermaid.js',
+  'extension/dist/webview/session-viewer.js',
   'extension/dist/webview/webview.css',
   'extension/dist/webview/webview.js',
   // Shipped so "Export Diagnostics Bundle" can include the AI playbook.
@@ -80,6 +81,26 @@ assert.doesNotMatch(webviewBundle, /\bDroidClient\b/u);
 assert.doesNotMatch(webviewBundle, /\brequire\(["']vscode["']\)/u);
 assert.doesNotMatch(webviewBundle, /\beval\s*\(/u);
 assert.doesNotMatch(webviewBundle, /\bnew\s+Function\s*\(/u);
+
+const sessionViewerBundle = readEntry(
+  'extension/dist/webview/session-viewer.js',
+);
+assert.deepEqual(
+  [...staticRequires(sessionViewerBundle)],
+  [],
+  'Session Viewer bundle must have no runtime externals',
+);
+assert.doesNotMatch(sessionViewerBundle, /sourceMappingURL/u);
+assert.doesNotMatch(sessionViewerBundle, /@factory\/droid-sdk/u);
+assert.doesNotMatch(sessionViewerBundle, /assistant-cloud/iu);
+assert.doesNotMatch(sessionViewerBundle, /\bProcessTransport\b/u);
+assert.doesNotMatch(sessionViewerBundle, /\bDroidClient\b/u);
+assert.doesNotMatch(
+  sessionViewerBundle,
+  /\brequire\(["']vscode["']\)/u,
+);
+assert.doesNotMatch(sessionViewerBundle, /\beval\s*\(/u);
+assert.doesNotMatch(sessionViewerBundle, /\bnew\s+Function\s*\(/u);
 
 const icon = readEntry('extension/resources/droidvisx.svg');
 assert.doesNotMatch(icon, /<script\b/iu);

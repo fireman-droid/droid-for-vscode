@@ -1,4 +1,7 @@
-import type { SessionTranscriptItem } from '../../shared/bridgeMessages';
+import type {
+  ChangesTranscriptItem,
+  SessionTranscriptItem,
+} from '../../shared/bridgeMessages';
 
 /**
  * Local commit-message drafting for the inline commit panel (slice A
@@ -39,6 +42,22 @@ export interface LatestChangesContext {
   readonly prompt: string | null;
 }
 
+/** Returns the newest turn-scoped Changes projection, if one exists. */
+export function findLatestChangesItem(
+  transcript: readonly SessionTranscriptItem[],
+): ChangesTranscriptItem | null {
+  for (let index = transcript.length - 1; index >= 0; index -= 1) {
+    const item = transcript[index];
+    if (item !== undefined && item.kind === 'changes') {
+      return item;
+    }
+    if (item !== undefined && item.kind === 'user') {
+      return null;
+    }
+  }
+  return null;
+}
+
 /**
  * Finds the transcript's last changes card and the user prompt that
  * preceded it. User items carry no turnId, so the nearest preceding
@@ -49,7 +68,13 @@ export function findLatestChangesContext(
 ): LatestChangesContext | null {
   for (let index = transcript.length - 1; index >= 0; index -= 1) {
     const item = transcript[index];
-    if (item === undefined || item.kind !== 'changes') {
+    if (item === undefined) {
+      continue;
+    }
+    if (item.kind === 'user') {
+      return null;
+    }
+    if (item.kind !== 'changes') {
       continue;
     }
     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {

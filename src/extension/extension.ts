@@ -1,14 +1,12 @@
 import * as vscode from 'vscode';
 
-import {
-  createLocalDroidSession,
-  FactoryDroidRuntime,
-} from '../runtime/FactoryDroidRuntime';
+import { FactoryDroidRuntime } from '../runtime/FactoryDroidRuntime';
 import { createBtwSidecar } from '../runtime/btw/BtwSidecar';
 import { createDaemonBtwSidecar } from '../runtime/btw/DaemonBtwSidecar';
 import { createDaemonSubagentControl } from '../runtime/subagentControl';
 import { FactorySessionCatalog } from '../runtime/FactorySessionCatalog';
 import { FactorySessionHistoryLoader } from '../runtime/history/FactorySessionHistoryLoader';
+import { createDaemonFirstHistoryLoader } from '../runtime/history/DaemonSessionHistoryLoader';
 import {
   ensurePrivateDaemon,
   resolveDaemonListenerPid,
@@ -17,6 +15,7 @@ import {
   type DaemonEndpoint,
 } from '../runtime/daemon/daemonLifecycle';
 import {
+  DaemonAvailabilityError,
   openDaemonConnection,
   type DaemonConnection,
 } from '../runtime/daemon/daemonConnection';
@@ -26,7 +25,6 @@ import {
   createDaemonSessionFactory,
   type SessionLeaseHooks,
 } from '../runtime/daemon/createDaemonDroidSession';
-import { createDaemonFirstSessionFactory } from '../runtime/daemon/daemonFirstSessionFactory';
 import {
   defaultDiscoveryFile,
   ensureSharedDaemon,
@@ -58,15 +56,18 @@ import { createVscodeFileDiffOpener } from './vscodeFileDiff';
 import { createVscodePathOpener } from './vscodePathOpener';
 import { PreviewPanelController } from './PreviewPanelController';
 import { createVscodeGitWorkflow } from './vscodeGitWorkflow';
+import { createCommittedStatsHistoryLoader } from './committedHistoryStats';
 import {
   createWorktreeSessionsFeature,
   type WorktreeSessionsFeature,
 } from './worktreeSessions';
 import { createTerminalMirror } from './terminalMirror';
 import { createHttpCustomModelDiscovery } from './chat/modelDiscovery';
+import { ProviderRegistry } from './chat/providerRegistry';
 import { MissionGateway } from './chat/mission/MissionGateway';
 import { MissionPreferenceStore } from './chat/mission/MissionPreferences';
 import { createMissionRuntime } from './chat/mission/MissionRuntime';
+import { SessionViewerPanelController } from './SessionViewerPanelController';
 
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
@@ -123,7 +124,7 @@ const killVerifiedSharedDaemon = (pid: number): Promise<void> =>
 interface DaemonLifecycleStrategy {
   start(): Promise<DaemonEndpoint>;
   /** Reap a specific endpoint after a fatal connection failure. */
-  reapOnFailure(endpoint: DaemonEndpoint): Promise<void>;
+  reapOnFailure(endpoint: DaemonEndpoint, error: unknown): Promise<void>;
   /** Reap on extension deactivation (no-op for the shared daemon). */
   reapOnDispose(endpoint: DaemonEndpoint): Promise<void>;
 }
@@ -160,26 +161,41 @@ function createSharedDaemonStrategy(
       });
       return { url: shared.url, pid: shared.pid };
     },
-    // A shared daemon must survive reconnect failures and disposal; a
-    // stale discovery record is cleared by the next `ensureSharedDaemon`
-    // health check, and `droidvisx.shutdownDaemon` handles teardown.
-    reapOnFailure: () => Promise.resolve(),
+    reapOnFailure: async (_endpoint, error) => {
+      if (
+        error instanceof DaemonAvailabilityError &&
+        error.reason !== 'connect-failed'
+      ) {
+        return;
+      }
+      await shutdownSharedDaemon(discoveryFile, {
+        resolveListenerPid: resolveSharedDaemonListener,
+        killProcessTree: killVerifiedSharedDaemon,
+      });
+    },
     reapOnDispose: () => Promise.resolve(),
   };
 }
 
 /** Confirms a daemon answers an authenticated read-only RPC. */
-async function healthCheckDaemon(url: string): Promise<boolean> {
+async function healthCheckDaemon(
+  url: string,
+): Promise<'healthy' | 'authentication-failed' | 'unreachable'> {
   try {
     const connection = await openDaemonConnection({ url });
     try {
       await connection.droid.sessions.list({ limit: 1 });
-      return connection.status() === 'connected';
+      return connection.status() === 'connected'
+        ? 'healthy'
+        : 'authentication-failed';
     } finally {
       connection.dispose();
     }
-  } catch {
-    return false;
+  } catch (error) {
+    return error instanceof DaemonAvailabilityError &&
+      error.reason !== 'connect-failed'
+      ? 'authentication-failed'
+      : 'unreachable';
   }
 }
 
@@ -238,7 +254,7 @@ function createDaemonSidecar(
         },
         detail: error instanceof Error ? error.message : String(error),
       });
-      await strategy.reapOnFailure(endpoint);
+      await strategy.reapOnFailure(endpoint, error);
       throw error;
     }
   };
@@ -270,7 +286,7 @@ function createDaemonSidecar(
       }),
       async (error: unknown) => {
         sidecar = null;
-        await strategy.reapOnFailure(current.endpoint);
+        await strategy.reapOnFailure(current.endpoint, error);
         throw error;
       },
     );
@@ -305,9 +321,9 @@ function createDaemonSidecar(
  * never attach the same session.
  */
 /**
- * Re-evaluates a worktree feature's daemon dependency on every read:
- * after a daemon-to-process fallback the drawer entry and the create
- * guard both fail closed instead of advertising a dead capability.
+ * Re-evaluates a worktree feature's daemon dependency on every read.
+ * Explicit process mode fails closed instead of advertising a daemon
+ * capability.
  */
 function withDaemonGate(
   feature: WorktreeSessionsFeature,
@@ -364,9 +380,8 @@ export function activate(context: vscode.ExtensionContext): void {
   };
   const attachmentSources = createVscodeAttachmentSources();
   // Read once at activation: switching modes requires a window reload.
-  // Daemon is the default; a user who explicitly sets a mode keeps it
-  // (no fallback), while the default gets a silent process fallback
-  // when the daemon cannot start (see createDaemonFirstSessionFactory).
+  // Daemon is strict by default. Process transport is used only when
+  // the user explicitly selects it in settings.
   const modeConfiguration = vscode.workspace.getConfiguration('droidvisx');
   const runtimeMode = modeConfiguration.get<'process' | 'daemon'>(
     'runtime.mode',
@@ -396,50 +411,22 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   disposeDaemonSidecar = daemonSidecar.dispose;
   const sessionLease = createSessionLeaseHooks();
-  // Daemon-mode session creation. Explicitly configured daemon users
-  // keep hard failures; the default gets the silent process fallback,
-  // recorded once as `runtime.mode.fallback` (quiet local log only —
-  // the whole point is that the user never has to notice the mode).
   const daemonSessions =
     runtimeMode !== 'daemon'
       ? null
-      : modeExplicit
-        ? {
-            factory: createDaemonSessionFactory(
-              daemonSidecar.droid,
-              createSessionLeaseHooks(),
-            ),
-            didFallBack: () => false,
-          }
-        : createDaemonFirstSessionFactory({
-            acquireDaemon: daemonSidecar.droid,
-            daemonFactory: createDaemonSessionFactory(
-              daemonSidecar.droid,
-              createSessionLeaseHooks(),
-            ),
-            processFactory: (options) =>
-              createLocalDroidSession({
-                ...options,
-                observability: diagnostics.observability,
-              }),
-            onFallback: (error) => {
-              diagnostics.record({
-                level: 'warn',
-                name: 'runtime.mode.fallback',
-                attributes: { from: 'daemon', to: 'process' },
-                detail:
-                  error instanceof Error ? error.message : String(error),
-              });
-            },
-          });
+      : {
+          factory: createDaemonSessionFactory(
+            daemonSidecar.droid,
+            sessionLease,
+          ),
+        };
   /** True while this window's sessions actually run over the daemon. */
   const daemonSessionsActive = (): boolean =>
-    daemonSessions !== null && !daemonSessions.didFallBack();
+    daemonSessions !== null;
   // Shared with the export command, which reads the same recovery
   // store, catalog, and history loader the controller uses.
   const recoveryStore = new SessionRecoveryStore(persistence);
   const sessionCatalog = new FactorySessionCatalog();
-  const historyLoader = new FactorySessionHistoryLoader({ diagnostics });
   const previewController = new PreviewPanelController(diagnostics);
   // Read-only terminal mirror of execute-command output; takeover is
   // fail-closed by design (native-terminal design slice A).
@@ -449,8 +436,39 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   const changeStats = createGitChangeStatsReader(
     () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+    {},
+    persistence,
   );
-  const fileDiff = createVscodeFileDiffOpener(changeStats);
+  // Daemon-first history (bug #37), enriched with the latest durable
+  // commit's exact line counts after Reload.
+  const historyLoader = createCommittedStatsHistoryLoader(
+    createDaemonFirstHistoryLoader({
+      getDroid: daemonSidecar.droid,
+      isDaemonActive: () => daemonSessionsActive(),
+      fallback: new FactorySessionHistoryLoader({ diagnostics }),
+      diagnostics,
+    }),
+    changeStats,
+  );
+  const fileDiff = createVscodeFileDiffOpener(
+    changeStats,
+    diagnostics,
+  );
+  const sessionViewer = new SessionViewerPanelController(
+    context.extensionUri,
+    historyLoader,
+    () => ({
+      async isRunning(target) {
+        const rows = await (await daemonSidecar.droid()).sessions.listOpened();
+        const row = rows.find(({ id }) => id === target.sessionId);
+        return row === undefined ? false : String(row.workingState) !== 'idle';
+      },
+      async stop() {
+        return 'failed';
+      },
+    }),
+    diagnostics,
+  );
   let controller: ChatController;
   const missionGateway = new MissionGateway({
     getDroid: daemonSidecar.droid,
@@ -463,6 +481,17 @@ export function activate(context: vscode.ExtensionContext): void {
         orchestrator,
         sessionLease,
       ),
+    openWorkerViewer: ({ sessionId, title }) => {
+      const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (cwd === undefined) return;
+      sessionViewer.open({
+        kind: 'daemon-session',
+        mode: 'mission-readonly',
+        sessionId,
+        title,
+        cwd,
+      });
+    },
   });
   controller = new ChatController(
     (interactionHandler) =>
@@ -505,8 +534,7 @@ export function activate(context: vscode.ExtensionContext): void {
     daemonSidecar.plugins,
     // `/btw` side chat: hidden fork over the daemon connection in
     // daemon mode (probe: artifacts/probe-btw-daemon.mjs), over a
-    // short-lived private CLI client in process mode — including
-    // after a daemon-to-process fallback, when sessions are on disk.
+    // short-lived private CLI client in explicit process mode.
     (cwd, mainSessionId) =>
       daemonSessionsActive()
         ? createDaemonBtwSidecar({
@@ -516,16 +544,29 @@ export function activate(context: vscode.ExtensionContext): void {
         : createBtwSidecar({ cwd, mainSessionId }),
     missionGateway,
   );
+  previewController.setFeedbackHandler((text) => {
+    controller.emit({ type: 'canvas.feedbackDraft', text });
+  });
   // BYOK custom-model management rides the same lazy daemon sidecar
   // as archive/search; the SDK resource satisfies the gateway shape
   // structurally (byok-add-model-design.md §2.3, probed 2026-08-13).
   controller.daemonCustomModels = async () =>
     (await daemonSidecar.droid()).customModels;
   controller.modelDiscovery = createHttpCustomModelDiscovery();
-  // Per-row subagent control (待办 B): live activity sampling and the
-  // probed single-stop sequence ride the shared daemon connection;
-  // in process mode the provider yields null and the UI renders no
-  // stop control (no disabled placeholders).
+  controller.providerRegistry = new ProviderRegistry(
+    context.globalState,
+    context.secrets,
+  );
+  controller.promptProviderApiKey = () =>
+    vscode.window.showInputBox({
+      title: 'Save provider API key',
+      prompt: 'Stored securely by VS Code and used only by this connection.',
+      password: true,
+      ignoreFocusOut: true,
+    });
+  // Inline Subagent-card activity sampling rides the shared daemon
+  // connection. Process mode keeps the card but omits the live tool
+  // subtitle.
   const subagentGateway = createDaemonSubagentControl(daemonSidecar.droid);
   controller.subagentControl = () =>
     daemonSessionsActive() ? subagentGateway : null;
@@ -541,6 +582,7 @@ export function activate(context: vscode.ExtensionContext): void {
     provider,
     previewController,
     terminalMirror,
+    sessionViewer,
     diagnostics,
     attachmentSources,
     vscode.window.registerWebviewViewProvider(

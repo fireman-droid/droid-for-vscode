@@ -7,33 +7,37 @@ import { trimTranscriptToLimits } from '../shared/transcriptLimits';
 
 /**
  * Merges a freshly loaded session history with a locally recovered
- * checkpoint of the same session without repeating shared content.
- *
- * Strategy: user messages are alignment anchors (SDK `messageId`
- * primary, unique trimmed text as fallback for items without one).
- * When both sides share at least one anchor, `loaded` is the
- * authoritative body; `recovered` may only contribute a prefix the SDK
- * no longer returns (rewind branches, compaction) and a suffix the CLI
- * never persisted (crash mid-turn). Everything recovered between the
- * matched anchors is discarded because text-exact item keys are
- * unstable there (thinking length drift, synthesized changes rows).
- * Without any shared anchor the legacy suffix/prefix overlap merge
- * applies unchanged.
+ * checkpoint. User messages align both sides; loaded history owns the
+ * shared body, while recovery may supply bounded missing edges.
  */
 export function reconcileSessionHistory(
   loaded: HostTranscriptState,
   recovered: HostTranscriptState | undefined,
+  options: ReconcileSessionHistoryOptions = {},
 ): HostTranscriptState {
   if (recovered === undefined || recovered.transcript.length === 0) {
     return loaded;
   }
   if (loaded.transcript.length === 0) {
+    if (
+      options.authoritativeLoaded === true &&
+      loaded.historyStatus === 'complete'
+    ) {
+      return loaded;
+    }
     return markPartial(recovered);
   }
   return (
-    reconcileByUserAnchors(loaded, recovered) ??
-    reconcileByOverlap(loaded, recovered)
+    reconcileByUserAnchors(loaded, recovered, options) ??
+    reconcileByOverlap(loaded, recovered, options)
   );
+}
+
+export interface ReconcileSessionHistoryOptions {
+  /** Complete startup daemon history rejects unmatched local branches. */
+  readonly authoritativeLoaded?: boolean;
+  /** A background read must keep unknown turns from the live Host tail. */
+  readonly preserveLocalTail?: boolean;
 }
 
 interface AnchorMatch {
@@ -46,6 +50,7 @@ interface AnchorMatch {
 function reconcileByUserAnchors(
   loaded: HostTranscriptState,
   recovered: HostTranscriptState,
+  options: ReconcileSessionHistoryOptions,
 ): HostTranscriptState | null {
   const alignment = matchUserAnchors(
     recovered.transcript,
@@ -57,23 +62,47 @@ function reconcileByUserAnchors(
   if (firstMatch === undefined || lastMatch === undefined) {
     return null;
   }
+  const loadedIsAuthoritative =
+    options.authoritativeLoaded === true &&
+    loaded.historyStatus === 'complete';
 
   // Sent-attachment chip metadata only exists on the recovered side
   // (loadSession cannot attribute non-image attachment blocks back to
   // chips), so matched anchors adopt it onto the authoritative items.
   loaded = withRecoveredAttachments(loaded, recovered.transcript, matches);
+  // Live-only rich state (outputTail, tool durations, measured
+  // changes line counts) merges back onto the authoritative loaded
+  // rows instead of being discarded with the recovered mid-region
+  // (bug #36). Field-only: indices stay valid for the head/tail math.
+  const enrichment = enrichLoadedFromRecovered(
+    loaded,
+    recovered.transcript,
+    matches,
+  );
+  loaded = enrichment.state;
 
   // Duplicate filters are scoped to the adjacent loaded region: a
   // prepended head must not repeat what loaded starts with (resend
   // residue), and an appended tail must not repeat how loaded ends.
   // The same text appearing again far away inside loaded is genuine
   // conversation repetition, not merge duplication.
+  const loadedHasNewerTurn = loaded.transcript.some(
+    (item, index) =>
+      index > lastMatch.loadedIndex && item.kind === 'user',
+  );
   const headRegionKeys = keySet(
     loaded.transcript.slice(0, firstMatch.loadedIndex + 1),
   );
-  const head = recovered.transcript
-    .slice(0, firstMatch.recoveredIndex)
-    .filter((item) => !headRegionKeys.has(transcriptItemKey(item)));
+  // Once authoritative daemon history has advanced beyond the last
+  // shared user anchor, an unmatched recovery prefix belongs to an
+  // older rewind/selection lineage. Prepending it creates phantom
+  // dialogue after Reload. Prefix recovery remains valid only when
+  // loaded is a compacted suffix with no newer turn of its own.
+  const head = loadedIsAuthoritative || loadedHasNewerTurn
+    ? []
+    : recovered.transcript
+        .slice(0, firstMatch.recoveredIndex)
+        .filter((item) => !headRegionKeys.has(transcriptItemKey(item)));
   const tailRegionKeys = keySet(
     loaded.transcript.slice(lastMatch.loadedIndex),
   );
@@ -82,17 +111,372 @@ function reconcileByUserAnchors(
     recovered.transcript,
     lastMatch,
     alignment.loadedKnowsAnchor,
+    options.preserveLocalTail === true,
+    !loadedIsAuthoritative ||
+      options.preserveLocalTail === true,
   ).filter((item) => !tailRegionKeys.has(transcriptItemKey(item)));
 
-  if (head.length === 0 && tail.length === 0) {
-    return loaded;
+  if (
+    head.length === 0 &&
+    tail.length === 0 &&
+    enrichment.insertions.size === 0
+  ) {
+    return enrichment.changed
+      ? boundEnriched(loaded)
+      : loaded;
   }
+  const body: SessionTranscriptItem[] = [];
+  loaded.transcript.forEach((item, index) => {
+    body.push(item);
+    const inserted = enrichment.insertions.get(index);
+    if (inserted !== undefined) {
+      body.push(...inserted);
+    }
+  });
   return mergeStates(
-    [...head, ...loaded.transcript, ...tail],
+    [...head, ...body, ...tail],
     loaded,
     recovered,
-    true,
+    head.length > 0 || tail.length > 0,
   );
+}
+
+/**
+ * Re-applies the shared transcript bounds after field enrichment
+ * added text (outputTail) to an otherwise unchanged loaded body.
+ */
+function boundEnriched(loaded: HostTranscriptState): HostTranscriptState {
+  const bounded = trimTranscriptToLimits(loaded.transcript);
+  if (!bounded.trimmed) {
+    return loaded;
+  }
+  return {
+    transcript: bounded.transcript,
+    historyStatus: 'partial',
+    truncated: true,
+  };
+}
+
+interface RecoveredEnrichment {
+  readonly state: HostTranscriptState;
+  /** True when at least one loaded item gained a recovered field. */
+  readonly changed: boolean;
+  /**
+   * Recovered-only diagnostic rows to insert after the given loaded
+   * index (end of the matched turn segment), in recovered order.
+   */
+  readonly insertions: ReadonlyMap<
+    number,
+    readonly SessionTranscriptItem[]
+  >;
+}
+
+/**
+ * Merges the live-only rich state of a recovered checkpoint back onto
+ * the authoritative loaded rows, per matched turn segment (anchor →
+ * next user item on both sides):
+ *
+ * - tool rows regain `outputTail` and `durationMs` (history
+ *   projection never produces either). Pairing is exact-first
+ *   (toolName + detail + filePath + target, FIFO), then FIFO by
+ *   toolName for the leftovers — misaligned repeats of the same tool
+ *   inside one turn are the accepted worst case.
+ * - changes rows regain measured per-file additions/deletions
+ *   (history synthesizes them as null).
+ * - thinking rows regain `durationMs` when history lacks it.
+ * - diagnostic rows (never persisted by the CLI) are re-inserted at
+ *   the end of their turn segment, re-homed to the loaded turnId.
+ */
+function enrichLoadedFromRecovered(
+  loaded: HostTranscriptState,
+  recovered: readonly SessionTranscriptItem[],
+  matches: readonly AnchorMatch[],
+): RecoveredEnrichment {
+  let transcript: SessionTranscriptItem[] | null = null;
+  let changed = false;
+  const insertions = new Map<number, SessionTranscriptItem[]>();
+
+  const replace = (index: number, item: SessionTranscriptItem): void => {
+    transcript ??= [...loaded.transcript];
+    transcript[index] = item;
+    changed = true;
+  };
+
+  for (const match of matches) {
+    const loadedEnd = segmentEnd(loaded.transcript, match.loadedIndex);
+    const recoveredEnd = segmentEnd(recovered, match.recoveredIndex);
+    const loadedSegment: number[] = [];
+    for (
+      let index = match.loadedIndex + 1;
+      index < loadedEnd;
+      index += 1
+    ) {
+      loadedSegment.push(index);
+    }
+    const recoveredSegment = recovered.slice(
+      match.recoveredIndex + 1,
+      recoveredEnd,
+    );
+    enrichSegmentTools(
+      loaded.transcript,
+      loadedSegment,
+      recoveredSegment,
+      replace,
+    );
+    enrichSegmentChanges(
+      loaded.transcript,
+      loadedSegment,
+      recoveredSegment,
+      replace,
+    );
+    enrichSegmentThinking(
+      loaded.transcript,
+      loadedSegment,
+      recoveredSegment,
+      replace,
+    );
+    const diagnostics = segmentDiagnostics(
+      loaded.transcript,
+      loadedSegment,
+      recoveredSegment,
+    );
+    if (diagnostics.length > 0) {
+      insertions.set(loadedEnd - 1, diagnostics);
+    }
+  }
+
+  return {
+    state:
+      transcript === null ? loaded : { ...loaded, transcript },
+    changed,
+    insertions,
+  };
+}
+
+function segmentEnd(
+  transcript: readonly SessionTranscriptItem[],
+  anchorIndex: number,
+): number {
+  const next = nextUserIndex(transcript, anchorIndex);
+  return next === -1 ? transcript.length : next;
+}
+
+type ToolItem = Extract<SessionTranscriptItem, { kind: 'tool' }>;
+
+function toolPairingKey(item: ToolItem): string {
+  return JSON.stringify([
+    item.toolName,
+    item.detail ?? null,
+    item.filePath ?? null,
+    item.target ?? null,
+  ]);
+}
+
+function enrichSegmentTools(
+  loaded: readonly SessionTranscriptItem[],
+  loadedSegment: readonly number[],
+  recoveredSegment: readonly SessionTranscriptItem[],
+  replace: (index: number, item: SessionTranscriptItem) => void,
+): void {
+  const recoveredTools = recoveredSegment.filter(
+    (item): item is ToolItem => item.kind === 'tool',
+  );
+  if (recoveredTools.length === 0) {
+    return;
+  }
+  const exactQueues = new Map<string, ToolItem[]>();
+  for (const tool of recoveredTools) {
+    const key = toolPairingKey(tool);
+    const queue = exactQueues.get(key);
+    if (queue === undefined) {
+      exactQueues.set(key, [tool]);
+    } else {
+      queue.push(tool);
+    }
+  }
+  const consumed = new Set<ToolItem>();
+  const paired = new Map<number, ToolItem>();
+  for (const index of loadedSegment) {
+    const item = loaded[index];
+    if (item?.kind !== 'tool') {
+      continue;
+    }
+    const candidate = exactQueues.get(toolPairingKey(item))?.shift();
+    if (candidate !== undefined) {
+      consumed.add(candidate);
+      paired.set(index, candidate);
+    }
+  }
+  const nameQueues = new Map<string, ToolItem[]>();
+  for (const tool of recoveredTools) {
+    if (consumed.has(tool)) {
+      continue;
+    }
+    const queue = nameQueues.get(tool.toolName);
+    if (queue === undefined) {
+      nameQueues.set(tool.toolName, [tool]);
+    } else {
+      queue.push(tool);
+    }
+  }
+  for (const index of loadedSegment) {
+    const item = loaded[index];
+    if (item?.kind !== 'tool') {
+      continue;
+    }
+    const candidate =
+      paired.get(index) ?? nameQueues.get(item.toolName)?.shift();
+    if (candidate === undefined) {
+      continue;
+    }
+    const outputTail =
+      item.outputTail === undefined &&
+      candidate.outputTail !== undefined
+        ? { outputTail: candidate.outputTail }
+        : {};
+    const durationMs =
+      item.durationMs === undefined &&
+      candidate.durationMs !== undefined
+        ? { durationMs: candidate.durationMs }
+        : {};
+    if (
+      Object.keys(outputTail).length === 0 &&
+      Object.keys(durationMs).length === 0
+    ) {
+      continue;
+    }
+    replace(index, { ...item, ...outputTail, ...durationMs });
+  }
+}
+
+function enrichSegmentChanges(
+  loaded: readonly SessionTranscriptItem[],
+  loadedSegment: readonly number[],
+  recoveredSegment: readonly SessionTranscriptItem[],
+  replace: (index: number, item: SessionTranscriptItem) => void,
+): void {
+  const recoveredChanges = recoveredSegment.filter(
+    (item): item is Extract<SessionTranscriptItem, { kind: 'changes' }> =>
+      item.kind === 'changes',
+  );
+  if (recoveredChanges.length === 0) {
+    return;
+  }
+  let cursor = 0;
+  for (const index of loadedSegment) {
+    const item = loaded[index];
+    if (item?.kind !== 'changes') {
+      continue;
+    }
+    const candidate = recoveredChanges[cursor];
+    if (candidate === undefined) {
+      return;
+    }
+    cursor += 1;
+    const counts = new Map(
+      candidate.files.map((file) => [
+        file.path,
+        { additions: file.additions, deletions: file.deletions },
+      ]),
+    );
+    let fileChanged = false;
+    const files = item.files.map((file) => {
+      const measured = counts.get(file.path);
+      if (
+        measured === undefined ||
+        (file.additions !== null || file.deletions !== null) ||
+        (measured.additions === null && measured.deletions === null)
+      ) {
+        return file;
+      }
+      fileChanged = true;
+      return {
+        ...file,
+        additions: measured.additions,
+        deletions: measured.deletions,
+      };
+    });
+    if (fileChanged) {
+      replace(index, { ...item, files });
+    }
+  }
+}
+
+function enrichSegmentThinking(
+  loaded: readonly SessionTranscriptItem[],
+  loadedSegment: readonly number[],
+  recoveredSegment: readonly SessionTranscriptItem[],
+  replace: (index: number, item: SessionTranscriptItem) => void,
+): void {
+  const recoveredThinking = recoveredSegment.filter(
+    (item): item is Extract<SessionTranscriptItem, { kind: 'thinking' }> =>
+      item.kind === 'thinking',
+  );
+  if (recoveredThinking.length === 0) {
+    return;
+  }
+  let cursor = 0;
+  for (const index of loadedSegment) {
+    const item = loaded[index];
+    if (item?.kind !== 'thinking') {
+      continue;
+    }
+    const candidate = recoveredThinking[cursor];
+    if (candidate === undefined) {
+      return;
+    }
+    cursor += 1;
+    if (
+      item.durationMs === undefined &&
+      candidate.durationMs !== undefined
+    ) {
+      replace(index, { ...item, durationMs: candidate.durationMs });
+    }
+  }
+}
+
+/**
+ * Recovered diagnostic rows of one turn segment, deduped and re-homed
+ * to the loaded segment's turnId so grouping stays coherent.
+ */
+function segmentDiagnostics(
+  loaded: readonly SessionTranscriptItem[],
+  loadedSegment: readonly number[],
+  recoveredSegment: readonly SessionTranscriptItem[],
+): SessionTranscriptItem[] {
+  const diagnostics = recoveredSegment.filter(
+    (item): item is Extract<SessionTranscriptItem, { kind: 'diagnostic' }> =>
+      item.kind === 'diagnostic',
+  );
+  if (diagnostics.length === 0) {
+    return [];
+  }
+  let segmentTurnId: string | null = null;
+  const existingKeys = new Set<string>();
+  for (const index of loadedSegment) {
+    const item = loaded[index];
+    if (item === undefined) {
+      continue;
+    }
+    existingKeys.add(transcriptItemKey(item));
+    if (
+      segmentTurnId === null &&
+      item.kind !== 'user' &&
+      item.turnId !== null
+    ) {
+      segmentTurnId = item.turnId;
+    }
+  }
+  const inserted: SessionTranscriptItem[] = [];
+  for (const diagnostic of diagnostics) {
+    const key = transcriptItemKey(diagnostic);
+    if (existingKeys.has(key)) {
+      continue;
+    }
+    existingKeys.add(key);
+    inserted.push({ ...diagnostic, turnId: segmentTurnId });
+  }
+  return inserted;
 }
 
 /**
@@ -127,21 +511,14 @@ function withRecoveredAttachments(
   return transcript === null ? loaded : { ...loaded, transcript };
 }
 
-/**
- * Recovered items past the last common anchor that loaded is missing:
- * the rest of the final shared turn when loaded persisted nothing
- * after its anchor, plus whole turns the CLI never persisted. Trailing
- * turns whose user anchor loaded already contains are stale duplicate
- * copies — checkpoints written while the old concatenating merge was
- * active carry the conversation twice — and are skipped. When loaded
- * itself has newer turns past the anchor, the whole recovered turn
- * tail is stale and is dropped.
- */
+/** Returns the proven missing suffix after the final shared user anchor. */
 function trailingRecoveredItems(
   loaded: readonly SessionTranscriptItem[],
   recovered: readonly SessionTranscriptItem[],
   lastMatch: AnchorMatch,
   loadedKnowsAnchor: (item: SessionTranscriptItem) => boolean,
+  preserveLocalTail: boolean,
+  preserveWholeLocalTail: boolean,
 ): readonly SessionTranscriptItem[] {
   const firstTrailingUser = nextUserIndex(
     recovered,
@@ -157,11 +534,14 @@ function trailingRecoveredItems(
   if (firstTrailingUser === -1) {
     return sameTurnRemainder;
   }
+  if (!preserveWholeLocalTail) {
+    return sameTurnRemainder;
+  }
   const loadedHasNewerTurn = loaded.some(
     (item, index) =>
       index > lastMatch.loadedIndex && item.kind === 'user',
   );
-  if (loadedHasNewerTurn) {
+  if (loadedHasNewerTurn && !preserveLocalTail) {
     return sameTurnRemainder;
   }
   let start = firstTrailingUser;
@@ -297,7 +677,14 @@ function uniqueTexts(
 function reconcileByOverlap(
   loaded: HostTranscriptState,
   recovered: HostTranscriptState,
+  options: ReconcileSessionHistoryOptions,
 ): HostTranscriptState {
+  if (
+    options.authoritativeLoaded === true &&
+    loaded.historyStatus === 'complete'
+  ) {
+    return loaded;
+  }
   const loadedKeys = loaded.transcript.map(transcriptItemKey);
   const recoveredKeys = recovered.transcript.map(transcriptItemKey);
   const recoveredToLoaded = suffixPrefixOverlap(
@@ -350,8 +737,15 @@ function reconcileByOverlap(
     );
   }
 
+  // With no anchor and no overlap, chronology cannot be proven. A complete
+  // public history is still the authoritative current body, while recovery
+  // may contain an older rewind branch or a checkpoint left behind by a
+  // previously selected session turn. Keep that disconnected local material
+  // as a prefix, never as the tail: appending it after newer daemon history
+  // makes stale user rows look current and hides latest-turn surfaces such as
+  // ReviewDock.
   return mergeStates(
-    [...loaded.transcript, ...recovered.transcript],
+    [...recovered.transcript, ...loaded.transcript],
     loaded,
     recovered,
     true,

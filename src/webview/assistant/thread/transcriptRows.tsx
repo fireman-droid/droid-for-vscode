@@ -12,12 +12,12 @@ import {
 } from "react";
 
 import type { SessionHistoryStatus } from "../../../shared/bridgeMessages";
-import { isPreviewableFilePath } from "../../../shared/validateMessage";
-import { ChangesCommitEntry } from "../GitCommitPanel";
+import { OpenPathContext } from "../MarkdownText";
 import {
   FileDiffContext,
   PreviewContext,
   SelectSessionContext,
+  ToolChangesContext,
 } from "../Thread";
 import { ActivityChevron } from "./icons";
 import { formatThinkingLabel, readDiagnostic } from "./readers";
@@ -45,26 +45,53 @@ export function ToolFilePath({
   readonly path: string;
   readonly turnId: string | null;
 }): React.JSX.Element {
-  const openFileDiff = useContext(FileDiffContext);
+  const openPath = useContext(OpenPathContext);
+  const toolChanges = useContext(ToolChangesContext);
+  const changedFile =
+    toolChanges.turnId === turnId
+      ? toolChanges.filesByPath.get(path)
+      : undefined;
+  const additions = changedFile?.additions;
+  const deletions = changedFile?.deletions;
+  const hasAdditions = additions !== null && additions !== undefined;
+  const hasDeletions = deletions !== null && deletions !== undefined;
   const fileName = path.split("/").at(-1) ?? path;
   return (
-    <button
-      type="button"
-      className="dvx-tool-file"
-      title={`Open changes for ${path}`}
-      onClick={(event) => {
-        // Keep the surrounding <details> row from toggling.
-        event.preventDefault();
-        event.stopPropagation();
-        openFileDiff(path, turnId);
-      }}
-    >
-      {fileName}
-    </button>
+    <>
+      <button
+        type="button"
+        className="dvx-tool-file"
+        title={`Open ${path}`}
+        onClick={(event) => {
+          // Keep the surrounding <details> row from toggling.
+          event.preventDefault();
+          event.stopPropagation();
+          openPath?.({ path });
+        }}
+      >
+        {fileName}
+      </button>
+      {hasAdditions || hasDeletions ? (
+        <span
+          className="dvx-tool-file-stats"
+          aria-label={[
+            ...(hasAdditions ? [`${additions} lines added`] : []),
+            ...(hasDeletions ? [`${deletions} lines removed`] : []),
+          ].join(", ")}
+        >
+          {hasAdditions ? (
+            <span className="dvx-changes-add">+{additions}</span>
+          ) : null}
+          {hasDeletions ? (
+            <span className="dvx-changes-del">−{deletions}</span>
+          ) : null}
+        </span>
+      ) : null}
+    </>
   );
 }
 
-// Quiet sibling chip that opens the sandboxed preview panel. Only shown
+// Quiet sibling chip that opens the sandboxed Canvas panel. Only shown
 // for self-contained .html/.htm prototypes, so the UI never offers a
 // preview the host cannot render.
 export function PreviewChip({ path }: { readonly path: string }): React.JSX.Element {
@@ -73,14 +100,14 @@ export function PreviewChip({ path }: { readonly path: string }): React.JSX.Elem
     <button
       type="button"
       className="dvx-preview-chip"
-      title={`Preview ${path} in a sandboxed panel`}
+      title={`Open ${path} in Canvas`}
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
         openPreview(path);
       }}
     >
-      Preview
+      Canvas
     </button>
   );
 }
@@ -393,39 +420,7 @@ export function readChangesWriting(data: unknown): boolean {
   );
 }
 
-/**
- * Trailing row action opening an .html/.htm prototype in the
- * sandboxed preview panel. It stays quietly visible so the final
- * settled ledger never appears to lose the Preview capability that
- * was available on an earlier tool row.
- */
-function ChangesPreviewAction({
-  path,
-}: {
-  readonly path: string;
-}): React.JSX.Element {
-  const openPreview = useContext(PreviewContext);
-  return (
-    <button
-      type="button"
-      className="dvx-changes-action"
-      title={`Preview ${path} in a sandboxed panel`}
-      onClick={() => openPreview(path)}
-    >
-      Preview
-    </button>
-  );
-}
-
-/**
- * Live changes ledger (decard design §4 option A). The area appears
- * with the first written file and grows row by row; repeated writes
- * to one file refresh its counts in place (row keys are the file
- * paths, so React reuses the DOM node and never replays the entry
- * fade). While the host streams `writing` frames the header shows
- * an accent dot with a live count; the settled reconciliation (or a
- * terminal turn state) flips it in place without resizing the area.
- */
+/** Quiet historical marker; the latest full ledger lives in ReviewDock. */
 export function ChangesSummary({
   data,
 }: {
@@ -434,67 +429,53 @@ export function ChangesSummary({
   const openFileDiff = useContext(FileDiffContext);
   const files = readChangedFiles(data);
   const turnId = readChangesTurnId(data);
-  const writing = readChangesWriting(data);
   if (files.length === 0) {
     return null;
   }
   const count = `${files.length} ${files.length === 1 ? "file" : "files"}`;
+  const additions = files.reduce(
+    (total, file) => total + (file.additions ?? 0),
+    0,
+  );
+  const deletions = files.reduce(
+    (total, file) => total + (file.deletions ?? 0),
+    0,
+  );
+  const hasAdditions = files.some((file) => file.additions !== null);
+  const hasDeletions = files.some((file) => file.deletions !== null);
   return (
-    <section className="dvx-changes" role="group" aria-label="Changed files">
-      <header className="dvx-changes-head">
+    <button
+      type="button"
+      className="dvx-changes-history"
+      title={`Open all changes from this turn (${count})`}
+      onClick={() => {
+        for (const file of files) {
+          openFileDiff(file.path, turnId);
+        }
+      }}
+    >
+      <span className="dvx-changes-history-label">
         <span className="dvx-changes-title">Changes</span>
-        <span className="dvx-changes-status" role="status">
-          {writing ? (
-            <>
-              <span className="dvx-changes-dot" aria-hidden="true" />
-              writing · {count}
-            </>
-          ) : (
-            <>{count} · settled</>
-          )}
-        </span>
-      </header>
-      <ul className="dvx-changes-files">
-        {files.map((file) => (
-          <li key={file.path} className="dvx-changes-row">
-            <button
-              type="button"
-              className="dvx-changes-file"
-              title={`Open changes for ${file.path}`}
-              onClick={() => openFileDiff(file.path, turnId)}
-            >
-              {file.path.split("/").at(-1) ?? file.path}
-            </button>
-            <span className="dvx-changes-stats">
-              {file.additions !== null ? (
-                <span className="dvx-changes-add">+{file.additions}</span>
+        <span aria-hidden="true">·</span>
+        <span>{count}</span>
+        {hasAdditions || hasDeletions ? (
+          <>
+            <span aria-hidden="true">·</span>
+            <span className="dvx-changes-history-stats">
+              {hasAdditions ? (
+                <span className="dvx-changes-add">+{additions}</span>
               ) : null}
-              {file.deletions !== null ? (
-                <span className="dvx-changes-del">−{file.deletions}</span>
+              {hasAdditions && hasDeletions ? (
+                <span aria-hidden="true">/</span>
+              ) : null}
+              {hasDeletions ? (
+                <span className="dvx-changes-del">−{deletions}</span>
               ) : null}
             </span>
-            {isPreviewableFilePath(file.path) ? (
-              <ChangesPreviewAction path={file.path} />
-            ) : null}
-          </li>
-        ))}
-      </ul>
-      <footer className="dvx-changes-foot">
-        <button
-          type="button"
-          className="dvx-changes-action"
-          title="Open the diff of every changed file"
-          onClick={() => {
-            for (const file of files) {
-              openFileDiff(file.path, turnId);
-            }
-          }}
-        >
-          Review
-        </button>
-        <ChangesCommitEntry turnId={turnId} />
-      </footer>
-    </section>
+          </>
+        ) : null}
+      </span>
+    </button>
   );
 }
 

@@ -20,6 +20,7 @@ import remarkGfm from 'remark-gfm';
 import {
   MAX_IMAGE_PATH_LENGTH,
   MAX_INLINE_PREVIEW_HTML_LENGTH,
+  type CanvasInlineArtifact,
 } from '../../shared/bridgeMessages';
 import {
   isPreviewableFilePath,
@@ -27,6 +28,7 @@ import {
 } from '../../shared/validateMessage';
 import { highlightCode } from './highlightCode';
 import { MermaidBlock } from './MermaidBlock';
+import { MessageStreamingContext } from './messageStreaming';
 import {
   detectPathLink,
   toWorkspaceRelativePath,
@@ -57,7 +59,10 @@ const InsidePreContext = createContext(false);
  * keeps standalone markdown renders (tests, interaction panels)
  * without the entry.
  */
-export type InlineHtmlPreviewHandler = (html: string) => void;
+export type InlineHtmlPreviewHandler = (
+  html: string,
+  artifact: CanvasInlineArtifact,
+) => void;
 export const InlineHtmlPreviewContext =
   createContext<InlineHtmlPreviewHandler | null>(null);
 
@@ -385,6 +390,16 @@ export function CodeBlock({
     isInlineHtmlPreviewCandidate(language, previewText);
   const previewTooLarge =
     previewable && previewText.length > MAX_INLINE_PREVIEW_HTML_LENGTH;
+  const canvasArtifact = useMemo(
+    () =>
+      previewText === null
+        ? null
+        : {
+            artifactId: `inline:${stableSourceId(previewText)}`,
+            title: readCanvasTitle(previewText),
+          },
+    [previewText],
+  );
   const copy = (): void => {
     const text = preRef.current?.innerText ?? '';
     void navigator.clipboard.writeText(text).then(() => {
@@ -397,28 +412,38 @@ export function CodeBlock({
   };
   return (
     <div className="dvx-code-block">
+      {previewable && canvasArtifact !== null ? (
+        <div className="dvx-canvas-artifact">
+          <span className="dvx-canvas-artifact-mark">
+            <CodePreviewIcon />
+          </span>
+          <span className="dvx-canvas-artifact-copy">
+            <span className="dvx-canvas-artifact-kicker">Canvas artifact</span>
+            <strong>{canvasArtifact.title}</strong>
+            <span>Interactive HTML · sandboxed · no network</span>
+          </span>
+          <button
+            type="button"
+            disabled={previewTooLarge}
+            aria-label={`Open ${canvasArtifact.title} in Canvas`}
+            title={
+              previewTooLarge
+                ? `Too large to open (limit ${String(
+                    MAX_INLINE_PREVIEW_HTML_LENGTH / 1024,
+                  )} KB)`
+                : 'Open the interactive artifact'
+            }
+            onClick={() =>
+              previewInlineHtml?.(previewText, canvasArtifact)
+            }
+          >
+            Open Canvas
+          </button>
+        </div>
+      ) : null}
       <div className="dvx-code-block-header">
         <span className="dvx-code-block-language">{language ?? 'text'}</span>
         <span className="dvx-code-block-actions">
-          {previewable ? (
-            <button
-              type="button"
-              className="dvx-code-block-copy"
-              disabled={previewTooLarge}
-              aria-label="Preview HTML"
-              title={
-                previewTooLarge
-                  ? `Too large to preview (limit ${String(
-                      MAX_INLINE_PREVIEW_HTML_LENGTH / 1024,
-                    )} KB)`
-                  : 'Preview in a sandboxed panel'
-              }
-              onClick={() => previewInlineHtml(previewText)}
-            >
-              <CodePreviewIcon />
-              <span>Preview</span>
-            </button>
-          ) : null}
           <button
             type="button"
             className="dvx-code-block-copy"
@@ -439,15 +464,32 @@ export function CodeBlock({
   );
 }
 
+function stableSourceId(source: string): string {
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  for (let index = 0; index < source.length; index += 1) {
+    const code = source.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ code, 0x85ebca6b);
+  }
+  return `${(first >>> 0).toString(36)}${(second >>> 0).toString(36)}`;
+}
+
+function readCanvasTitle(source: string): string {
+  const match = /<title(?:\s[^>]*)?>([^<]{1,120})<\/title>/iu.exec(source);
+  return (
+    match?.[1]?.replace(/\s+/gu, ' ').trim() ||
+    'Interactive HTML artifact'
+  );
+}
+
 // Transcript-only wrapper: aui message state exists there (same
 // constraint as MermaidBlock) and gates the Preview entry until the
 // message stops streaming.
 function TranscriptCodeBlock(
   props: HTMLAttributes<HTMLPreElement>,
 ): React.JSX.Element {
-  const running = useAuiState(
-    (state) => state.message.status?.type === 'running',
-  );
+  const running = useContext(MessageStreamingContext);
   return <CodeBlock {...props} streaming={running} />;
 }
 
@@ -494,10 +536,10 @@ function HighlightedCode({
             <button
               type="button"
               className="dvx-preview-chip dvx-path-preview-chip"
-              title={`Preview ${previewPath} in a sandboxed panel`}
+              title={`Open ${previewPath} in Canvas`}
               onClick={() => pathPreview.previewFile(previewPath)}
             >
-              Preview
+              Canvas
             </button>
           ) : null}
         </>
@@ -619,16 +661,21 @@ export const DroidMarkdownContent = memo(function DroidMarkdownContent({
 
 export const DroidMarkdownText = memo(function DroidMarkdownText():
   React.JSX.Element {
+  const running = useAuiState(
+    (state) => state.message.status?.type === 'running',
+  );
   return (
-    <MarkdownTextPrimitive
-      className="dvx-markdown"
-      remarkPlugins={REMARK_PLUGINS}
-      components={TRANSCRIPT_COMPONENTS}
-      componentsByLanguage={COMPONENTS_BY_LANGUAGE}
-      skipHtml
-      urlTransform={markdownUrlTransform}
-      smooth={TEXT_SMOOTH_OPTIONS}
-      defer
-    />
+    <MessageStreamingContext.Provider value={running}>
+      <MarkdownTextPrimitive
+        className="dvx-markdown"
+        remarkPlugins={REMARK_PLUGINS}
+        components={TRANSCRIPT_COMPONENTS}
+        componentsByLanguage={COMPONENTS_BY_LANGUAGE}
+        skipHtml
+        urlTransform={markdownUrlTransform}
+        smooth={TEXT_SMOOTH_OPTIONS}
+        defer
+      />
+    </MessageStreamingContext.Provider>
   );
 });

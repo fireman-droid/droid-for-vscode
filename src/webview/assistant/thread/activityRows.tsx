@@ -6,6 +6,7 @@ import {
   Fragment,
   isValidElement,
   memo,
+  useCallback,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -23,7 +24,10 @@ import {
 } from "../activityGrouping";
 import { commandCardTitle, commandChips } from "../commandCard";
 import { parsePlanSteps } from "../planAnchor";
-import { SubagentActionsContext } from "../subagentPanelFlow";
+import {
+  useSubagentActivity,
+} from "../subagentPanelFlow";
+import { formatElapsed } from "../subagentWorking";
 import { PreviewChip, ToolFilePath } from "./transcriptRows";
 import {
   CommandCardMenu,
@@ -124,6 +128,20 @@ export function ToolActivityRow({
   const isCommand =
     activity.detailKind === "command" && activity.detail !== null;
   const chips = isCommand ? commandChips(activity.detail ?? "") : [];
+  // A failed command reads like a real terminal: its error lands
+  // inside the output well (user report #29) instead of a loose
+  // paragraph under the card. With a live tail already showing the
+  // output, only the error's summary line is appended to it.
+  const commandError =
+    isCommand && activity.status === "failed"
+      ? activity.errorMessage
+      : null;
+  const outputText =
+    commandError === null
+      ? activity.outputTail
+      : activity.outputTail === null
+        ? commandError
+        : `${activity.outputTail}\n${firstLine(commandError)}`;
   const row = (
     <details
       className={`dvx-activity-row${running ? " dvx-activity-running" : ""}${
@@ -199,9 +217,9 @@ export function ToolActivityRow({
           <span>{formatToolProgress(activity)}</span>
         </div>
       )}
-      {activity.outputTail === null ? null : (
+      {outputText === null ? null : (
         <ToolOutputPreview
-          text={activity.outputTail}
+          text={outputText}
           running={running}
           open={open}
         />
@@ -210,7 +228,9 @@ export function ToolActivityRow({
         status={activity.status}
         detailKind={activity.detailKind}
       />
-      {activity.status === "failed" && activity.errorMessage !== null ? (
+      {activity.status === "failed" &&
+      activity.errorMessage !== null &&
+      commandError === null ? (
         <p className="dvx-tool-error">{activity.errorMessage}</p>
       ) : null}
     </details>
@@ -290,13 +310,7 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
   /** The parent Task row is still streaming. */
   readonly parentRunning?: boolean;
 }): React.JSX.Element {
-  // Read-only transcript entry (playback design §6.1, extended to
-  // live rows 2026-08-13): terminal rows replay the settled child
-  // session; running rows open the same sheet mid-run and the sheet
-  // re-requests it on an interval, so the user can look inside a
-  // delegation while it works. Actions-only context keeps the memo
-  // effective across activity polling.
-  const subagentActions = useContext(SubagentActionsContext);
+  const activity = useSubagentActivity(toolUseId);
   // The delegation identity arrives with the Task input long before
   // the SDK reports a lifecycle status (probed 2026-08-13: the
   // child_session_available notification only surfaces with the
@@ -309,50 +323,67 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
     parentSettled && effectiveStatus === "running"
       ? "running in background"
       : effectiveStatus;
+  const running = effectiveStatus === "running";
+  const startedAtRef = useRef(Date.now());
+  const [, setElapsedTick] = useState(0);
+  useEffect(() => {
+    if (!running || durationMs !== null) {
+      return undefined;
+    }
+    const timer = window.setInterval(
+      () => setElapsedTick((tick) => tick + 1),
+      1_000,
+    );
+    return () => window.clearInterval(timer);
+  }, [durationMs, running]);
+  const elapsed =
+    durationMs !== null
+      ? formatDuration(durationMs)
+      : running
+        ? formatElapsed(Date.now() - startedAtRef.current)
+        : "—";
+  const latestActivity =
+    activity?.action ?? null;
   return (
-    <div className="dvx-subagent-row">
-      {effectiveStatus === "running" ? (
-        <span className="dvx-subagent-spinner" aria-hidden="true" />
-      ) : null}
-      <span className="dvx-subagent-label">
-        {`Delegated to ${type} subagent`}
-      </span>
-      {label === null ? null : (
-        <span className="dvx-activity-state">
-          {formatSubagentSummary({
-            status: label,
-            toolUseCount,
-            durationMs,
-          })}
+    <div className={`dvx-subagent-row${running ? " dvx-subagent-live" : ""}`}>
+      <div className="dvx-subagent-head">
+        {running ? (
+          <span className="dvx-subagent-spinner" aria-hidden="true" />
+        ) : null}
+        <span className="dvx-subagent-label">
+          {`${type} subagent`}
         </span>
-      )}
-      {subagentActions !== null &&
-      toolUseId !== undefined &&
-      (effectiveStatus === "running" ||
-        status === "completed" ||
-        status === "failed" ||
-        status === "cancelled") ? (
-        <button
-          type="button"
-          className="dvx-subagent-view"
-          onClick={() =>
-            subagentActions.onOpenTranscript(
-              toolUseId,
-              description.length > 0
-                ? description
-                : `${type} subagent`,
-            )
-          }
-        >
-          View transcript
-        </button>
-      ) : null}
+        <span className="dvx-subagent-status">
+          {formatSubagentStatus(label)}
+        </span>
+      </div>
       {description.length > 0 ? (
         <span className="dvx-subagent-description">{description}</span>
       ) : null}
+      <div className="dvx-subagent-metrics">
+        <span>
+          <span className="dvx-subagent-metric-label">Elapsed</span>
+          {elapsed}
+        </span>
+        <span>
+          <span className="dvx-subagent-metric-label">Tools</span>
+          {toolUseCount ?? "—"}
+        </span>
+        <span className="dvx-subagent-latest">
+          <span className="dvx-subagent-metric-label">Latest</span>
+          {latestActivity ?? (running ? "Waiting for activity…" : "—")}
+        </span>
+      </div>
     </div>
   );
 });
+
+function formatSubagentStatus(status: string | null): string {
+  if (status === null) {
+    return "Pending";
+  }
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
 
 /**
  * "running" / "completed · 7 tool uses · 4.2s"; counters only appear
@@ -405,21 +436,31 @@ export function ActivityGroup({
   const summary = useMemo(() => summarizeActivityGroup(members), [members]);
   const [expanded, setExpanded] = useState(false);
   const activeIndex = activeTickerIndex(members);
-  const [tickerIndex, setTickerIndex] = useState(activeIndex);
-  const [phase, setPhase] = useState<ActivityGroupPhase>(
-    summary.anyRunning ? "running" : "completed",
+  const messageRunning = useAuiState(
+    (s) => s.message.status?.type === "running",
   );
+  const groupClosed =
+    !messageRunning ||
+    (indices[indices.length - 1] ?? -1) < parts.length - 1;
+  const requiresPlaybackRef = useRef(messageRunning);
+  const [visibleTickerIndex, setVisibleTickerIndex] = useState(0);
+  const [phase, setPhase] = useState<ActivityGroupPhase>(
+    groupClosed ? "completed" : "running",
+  );
+  const handleTickerSettled = useCallback((index: number): void => {
+    setVisibleTickerIndex(index);
+  }, []);
 
   useLayoutEffect(() => {
-    if (summary.anyRunning) {
-      setTickerIndex((current) =>
-        current === activeIndex ? current : activeIndex,
-      );
+    const visualComplete =
+      !requiresPlaybackRef.current ||
+      visibleTickerIndex >= members.length - 1;
+    if (!groupClosed || !visualComplete) {
       setPhase((current) => (current === "running" ? current : "running"));
       return;
     }
     setPhase((current) => (current === "running" ? "settling" : current));
-  }, [activeIndex, summary.anyRunning]);
+  }, [groupClosed, members.length, visibleTickerIndex]);
 
   useEffect(() => {
     if (phase !== "settling") {
@@ -466,11 +507,20 @@ export function ActivityGroup({
             className="dvx-activity-group-running-view"
             aria-hidden={phase !== "running"}
           >
-            <div className="dvx-activity-group-header">
+            <button
+              type="button"
+              className="dvx-activity-group-header"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((value) => !value)}
+            >
               <span className="dvx-activity-indicator" />
               <span className="dvx-shimmer-text">Exploring</span>
-            </div>
-            <ActivityTicker activeIndex={tickerIndex}>
+              <ActivityChevron />
+            </button>
+            <ActivityTicker
+              activeIndex={activeIndex}
+              onSettled={handleTickerSettled}
+            >
               {children}
             </ActivityTicker>
           </div>
@@ -505,17 +555,15 @@ export function ActivityGroup({
           <ActivityChevron />
         </button>
       </div>
-      {phase === "completed" ? (
-        <div
-          className={`dvx-activity-group-details${
-            expanded ? " dvx-activity-group-details-open" : ""
-          }`}
-          aria-hidden={!expanded}
-          inert={expanded ? undefined : true}
-        >
-          <div className="dvx-activity-group-details-inner">{children}</div>
-        </div>
-      ) : null}
+      <div
+        className={`dvx-activity-group-details${
+          expanded ? " dvx-activity-group-details-open" : ""
+        }`}
+        aria-hidden={!expanded}
+        inert={expanded ? undefined : true}
+      >
+        <div className="dvx-activity-group-details-inner">{children}</div>
+      </div>
     </div>
   );
 }
@@ -546,9 +594,8 @@ export function tickerChildArray(children: ReactNode): ReturnType<typeof Childre
   return Children.toArray(children);
 }
 
-/** One trail row. Member indices may repeat within a trail (a group
- * can bounce back to a still-running member), so each entry carries
- * its own monotonic mount key. */
+/** One trail row. Each entry carries its own monotonic mount key so
+ * adjacent steps can overlap during the slide without key reuse. */
 interface TickerTrailEntry {
   readonly key: number;
   readonly member: number;
@@ -556,35 +603,30 @@ interface TickerTrailEntry {
 
 /**
  * One-row vertical ticker over the grouped children: shows only the
- * active member. When the active index advances, the outgoing row
- * slides up one row height while fading to 0 and the incoming row
- * rides in from below while fading to 1 — one shared timeline, like a
- * wheel turning one notch. Each arrival appends to the trail and
- * advances the track offset, so a mid-slide arrival retargets the
- * running CSS transitions from their current positions (no queueing,
- * no snap); the trail prunes back to one row when the track settles.
+ * active member. When the source advances several members inside one
+ * Webview frame, the ticker still moves one index per slide: the
+ * outgoing row fades upward and the next row enters below. The latest
+ * source index is a monotonic target, not a direct jump, so every
+ * explored file remains visible before the group can complete.
  * prefers-reduced-motion degrades to a direct swap via CSS (the
  * transitions are disabled, the fallback timer commits).
  */
 export function ActivityTicker({
   activeIndex,
+  onSettled,
   children,
 }: {
   readonly activeIndex: number;
+  readonly onSettled?: (index: number) => void;
   readonly children: ReactNode;
 }): React.JSX.Element {
   const childArray = tickerChildArray(children);
+  const targetRef = useRef(activeIndex);
+  targetRef.current = Math.max(targetRef.current, activeIndex);
   const [trail, setTrail] = useState<readonly TickerTrailEntry[]>([
-    { key: 0, member: activeIndex },
+    { key: 0, member: 0 },
   ]);
   const trackRef = useRef<HTMLDivElement | null>(null);
-  const current = trail[trail.length - 1];
-  if (current !== undefined && current.member !== activeIndex) {
-    // Append during render so the incoming row mounts in the same
-    // pass the active index changes; an in-flight slide keeps its
-    // rows and simply retargets.
-    setTrail([...trail, { key: current.key + 1, member: activeIndex }]);
-  }
 
   // The slide runs on DOM classes and a DOM-set offset variable, not
   // rendered props: the forced style flush pins the freshly mounted
@@ -603,6 +645,19 @@ export function ActivityTicker({
       track.classList.remove("dvx-ticker-slide");
       track.style.removeProperty("--dvx-ticker-offset");
       items[0]?.classList.add("dvx-ticker-item-active");
+      const current = trail[0];
+      const target = Math.min(
+        targetRef.current,
+        Math.max(0, childArray.length - 1),
+      );
+      if (current !== undefined && current.member < target) {
+        setTrail([
+          current,
+          { key: current.key + 1, member: current.member + 1 },
+        ]);
+      } else if (current !== undefined) {
+        onSettled?.(current.member);
+      }
       return undefined;
     }
     void track.offsetHeight;
@@ -632,7 +687,7 @@ export function ActivityTicker({
       clearTimeout(timer);
       track.removeEventListener("transitionend", onTransitionEnd);
     };
-  }, [trail]);
+  }, [activeIndex, childArray.length, onSettled, trail]);
 
   return (
     <div className="dvx-activity-ticker" aria-hidden="true" inert>

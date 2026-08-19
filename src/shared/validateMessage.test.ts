@@ -247,6 +247,8 @@ describe('parseWebviewMessage', () => {
       type: 'preview.inlineHtml',
       sessionId: 'session-1',
       html: '<!DOCTYPE html><html><body><h1>Demo</h1></body></html>',
+      artifactId: 'inline:canvas-a1',
+      title: 'Interactive prototype',
     },
     {
       type: 'preview.inlineHtml',
@@ -256,16 +258,19 @@ describe('parseWebviewMessage', () => {
     {
       type: 'git.requestStatus',
       sessionId: 'session-1',
+      turnId: 'turn-1',
     },
     {
       type: 'git.commit',
       sessionId: 'session-1',
+      turnId: 'turn-1',
       paths: ['src/app.ts', 'docs/notes.md'],
       message: 'feat: add commit panel\n\nvia DroidVisX, 2 files',
     },
     {
       type: 'git.commit',
       sessionId: 'session-1',
+      turnId: 'turn-1',
       paths: ['src/app.ts'],
       message: 'x'.repeat(5000),
     },
@@ -706,6 +711,19 @@ describe('parseWebviewMessage', () => {
       sessionId: 'session-1',
       html: '<html></html>',
       extra: true,
+    },
+    {
+      type: 'preview.inlineHtml',
+      sessionId: 'session-1',
+      html: '<html></html>',
+      artifactId: 'inline:only-id',
+    },
+    {
+      type: 'preview.inlineHtml',
+      sessionId: 'session-1',
+      html: '<html></html>',
+      artifactId: '../unsafe',
+      title: 'Unsafe',
     },
     { type: 'git.requestStatus', sessionId: '' },
     { type: 'git.requestStatus' },

@@ -161,6 +161,59 @@ describe('createGitChangeStatsReader turn baselines', () => {
     );
   });
 
+  it('restores a committed turn after Reload and clears it on the next edit turn', async () => {
+    let stored: unknown;
+    const persistence = {
+      get: <T,>(_key: string): T | undefined => stored as T | undefined,
+      update: (_key: string, value: unknown): Promise<void> => {
+        stored = value;
+        return Promise.resolve();
+      },
+    };
+    const dependencies = {
+      readWorkspaceFile: vi.fn(async () => Buffer.from('before\n')),
+      readBaselineStat: vi.fn(async () => ({
+        additions: 1,
+        deletions: 1,
+      })),
+      readHeadStats: vi.fn(async () => new Map()),
+    };
+    const beforeReload = createGitChangeStatsReader(
+      () => 'C:\\workspace',
+      dependencies,
+      persistence,
+    );
+    await beforeReload.rememberCommittedTurn?.(
+      scope,
+      'abc1234',
+      ['index.html'],
+      [{ path: 'index.html', additions: 3, deletions: 1 }],
+    );
+    expect(stored).toBeDefined();
+
+    const afterReload = createGitChangeStatsReader(
+      () => 'C:\\workspace',
+      dependencies,
+      persistence,
+    );
+    expect(afterReload.readCommittedTurn?.('session-a')).toEqual({
+      turnId: 'turn-a',
+      hash: 'abc1234',
+      paths: ['index.html'],
+      stats: [
+        { path: 'index.html', additions: 3, deletions: 1 },
+      ],
+    });
+
+    await afterReload.captureTurnBaseline?.(
+      { sessionId: 'session-a', turnId: 'turn-b' },
+      ['next.html'],
+    );
+    expect(
+      afterReload.readCommittedTurn?.('session-a'),
+    ).toBeUndefined();
+  });
+
   it('evicts older turns when the byte budget fills', async () => {
     const baseline = Buffer.alloc(4 * 1024 * 1024, 1);
     const readBaselineStat = vi.fn(

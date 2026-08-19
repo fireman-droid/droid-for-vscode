@@ -66,10 +66,6 @@ describe('SessionDrawer', () => {
     expect(
       screen.getByRole('complementary', { name: 'Session history' }),
     ).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'Close session history' }),
-    ).toBeTruthy();
-    expect(screen.getByText('All chats').textContent).toBe('All chats');
 
     await user.type(
       screen.getByRole('searchbox', { name: 'Search sessions' }),
@@ -143,6 +139,32 @@ describe('SessionDrawer', () => {
     expect(
       screen.queryByRole('complementary', { name: 'Session history' }),
     ).toBeNull();
+  });
+
+  it('closes on an outside press like a popover', async () => {
+    const user = userEvent.setup();
+    render(<SessionDrawer {...baseProps()} />);
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+    expect(
+      screen.getByRole('complementary', { name: 'Session history' }),
+    ).toBeTruthy();
+
+    await user.click(document.body);
+    expect(
+      screen.queryByRole('complementary', { name: 'Session history' }),
+    ).toBeNull();
+  });
+
+  it('carries the exact stamp on the row tooltip, not as a column', async () => {
+    const user = userEvent.setup();
+    render(<SessionDrawer {...baseProps()} />);
+    await user.click(screen.getByRole('button', { name: 'Sessions' }));
+    const row = screen.getByRole('button', {
+      name: /^Previous refactor/,
+    });
+    // Grouping expresses recency; rows render no <time> column.
+    expect(row.querySelector('time')).toBeNull();
+    expect(row.getAttribute('title')).toBeTruthy();
   });
 
   it('offers worktree creation only when the host advertised it', async () => {
@@ -299,18 +321,19 @@ describe('SessionDrawer', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Sessions' }));
 
-    // The favorites group renders first and holds the starred row.
+    // The favorites group renders first; the rest fall into one
+    // relative-time group (label depends on today's date).
     const headings = screen.getAllByRole('heading', { level: 3 });
-    expect(headings.map((heading) => heading.textContent)).toEqual([
-      'Favorites',
-      'Recent',
-    ]);
+    expect(headings).toHaveLength(2);
+    expect(headings[0].textContent).toBe('Favorites');
     const favoriteGroup = screen.getByRole('region', {
       name: 'Favorites',
     });
     expect(favoriteGroup.textContent).toContain('Previous refactor');
-    const recentGroup = screen.getByRole('region', { name: 'Recent' });
-    expect(recentGroup.textContent).toContain('Current work');
+    const restGroup = screen.getByRole('region', {
+      name: headings[1].textContent ?? '',
+    });
+    expect(restGroup.textContent).toContain('Current work');
 
     // A favorited row offers removal.
     await user.click(

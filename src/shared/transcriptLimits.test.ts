@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SessionTranscriptItem } from './bridgeMessages';
-import { transcriptTextUnits } from './transcriptLimits';
+import {
+  THINKING_TEXT_UNIT_DIVISOR,
+  transcriptTextUnits,
+} from './transcriptLimits';
 
 describe('transcriptTextUnits', () => {
   it('charges input-derived tool targets to the transcript text budget', () => {
@@ -20,5 +23,40 @@ describe('transcriptTextUnits', () => {
       transcriptTextUnits([{ ...tool, target: 'src/app.ts' }]) -
         transcriptTextUnits([tool]),
     ).toBe('src/app.ts'.length);
+  });
+
+  it('discounts thinking text so it cannot crowd out conversation', () => {
+    const thinking: Extract<
+      SessionTranscriptItem,
+      { kind: 'thinking' }
+    > = {
+      id: 'th-1',
+      kind: 'thinking',
+      turnId: 'turn-1',
+      text: '',
+      status: 'complete',
+      truncated: false,
+    };
+    const grown = 'x'.repeat(80_000);
+    expect(
+      transcriptTextUnits([{ ...thinking, text: grown }]) -
+        transcriptTextUnits([thinking]),
+    ).toBe(Math.ceil(grown.length / THINKING_TEXT_UNIT_DIVISOR));
+
+    // Assistant text stays fully charged: the discount is
+    // thinking-specific.
+    const assistant: Extract<
+      SessionTranscriptItem,
+      { kind: 'assistant' }
+    > = {
+      id: 'a-1',
+      kind: 'assistant',
+      turnId: 'turn-1',
+      text: grown,
+    };
+    expect(
+      transcriptTextUnits([assistant]) -
+        transcriptTextUnits([{ ...assistant, text: '' }]),
+    ).toBe(grown.length);
   });
 });

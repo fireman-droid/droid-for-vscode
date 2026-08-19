@@ -36,6 +36,23 @@ export function isExecuteToolName(toolName: string): boolean {
 }
 
 /**
+ * Terminal-noise cleanup shared by live output tails and failed-tool
+ * error excerpts: carriage-return overwrites applied (progress bars
+ * keep only their final frame), ANSI escapes and control characters
+ * stripped. Bounding to a display length stays with the callers.
+ */
+export function stripTerminalNoise(raw: string): string {
+  return raw
+    .replace(/\r\n/gu, '\n')
+    .split('\n')
+    .map((line) => line.slice(line.lastIndexOf('\r') + 1))
+    .join('\n')
+    .replace(ANSI_PATTERN, '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/gu, '');
+}
+
+/**
  * Display tail of one command's cumulative output: carriage-return
  * overwrites applied (progress bars keep only their final frame),
  * ANSI escapes and control noise stripped, bounded to the trailing
@@ -44,15 +61,7 @@ export function isExecuteToolName(toolName: string): boolean {
  */
 export function toToolOutputTail(raw: string): string | undefined {
   const windowed = raw.slice(-RAW_OUTPUT_WINDOW);
-  const sanitized = windowed
-    .replace(/\r\n/gu, '\n')
-    .split('\n')
-    .map((line) => line.slice(line.lastIndexOf('\r') + 1))
-    .join('\n')
-    .replace(ANSI_PATTERN, '')
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/gu, '')
-    .trimEnd();
+  const sanitized = stripTerminalNoise(windowed).trimEnd();
   if (sanitized.length <= MAX_TOOL_OUTPUT_TAIL_LENGTH) {
     return sanitized.length === 0 ? undefined : sanitized;
   }

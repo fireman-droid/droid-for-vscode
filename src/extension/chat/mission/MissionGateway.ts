@@ -22,6 +22,10 @@ import {
   type MissionProfilePair,
   type MissionWorkspacePreferences,
 } from './MissionPreferences';
+import {
+  MissionSnapshotReducer,
+  type MissionValidatorState,
+} from './MissionSnapshotReducer';
 
 export interface MissionGatewayRuntime {
   readonly runtime: DroidRuntime;
@@ -59,6 +63,10 @@ export interface MissionGatewayOptions {
     droid: ConnectedDroid,
     orchestrator: MissionProfilePair,
   ) => MissionGatewayRuntime;
+  readonly openWorkerViewer?: (target: {
+    readonly sessionId: string;
+    readonly title: string;
+  }) => void;
 }
 
 /**
@@ -160,6 +168,45 @@ export class MissionGateway {
       catalog: catalog.status === 'ready' ? catalog.items : [],
       preferences: this.options.preferences.read(workspaceId, orchestrator),
     };
+  }
+
+  async killWorker(
+    orchestratorSessionId: string,
+    workerSessionId: string,
+  ): Promise<boolean> {
+    try {
+      const droid = await this.options.getDroid();
+      await droid.sessions.killWorker(
+        orchestratorSessionId,
+        workerSessionId,
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async recover(
+    sessionId: string,
+    validator: MissionValidatorState,
+  ): Promise<MissionSnapshotReducer | null> {
+    try {
+      const droid = await this.options.getDroid();
+      const rows = await droid.sessions.list({ limit: 100 });
+      const mission = rows.find((row) => row.id === sessionId)?.mission;
+      const reducer = new MissionSnapshotReducer(validator);
+      return reducer.hydrate(mission) ? reducer : null;
+    } catch {
+      return null;
+    }
+  }
+
+  openWorkerViewer(target: { sessionId: string; title: string }): boolean {
+    if (this.options.openWorkerViewer === undefined) {
+      return false;
+    }
+    this.options.openWorkerViewer(target);
+    return true;
   }
 }
 

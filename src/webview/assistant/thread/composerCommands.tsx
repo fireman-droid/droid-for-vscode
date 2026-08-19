@@ -78,6 +78,7 @@ export const BUILT_IN_COMMANDS = [
     description: "Summarize earlier messages to free context",
   },
   { name: "new", description: "Start a new session" },
+  { name: "canvas", description: "Create an interactive result artifact" },
 ] as const;
 
 /**
@@ -88,6 +89,12 @@ export const BUILT_IN_COMMANDS = [
 export const BTW_COMMAND = {
   name: "btw",
   description: "Ask a side question without touching this chat",
+} as const;
+
+/** Opens the official Factory Mission setup without sending a turn. */
+export const MISSION_COMMAND = {
+  name: "mission",
+  description: "Start a Factory Mission",
 } as const;
 
 /** Most enabled skills offered in the `/` popup Skills section. */

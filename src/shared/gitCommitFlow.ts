@@ -1,10 +1,8 @@
 /**
  * Payload types, closed enums, and bounds for the git commit flow
  * (slice A of `docs/product/git-pr-workflow-design.md`). The Bridge
- * message shapes themselves live in `bridgeMessages.ts`; this
- * satellite exists so the host workflow module, both validators, and
- * the webview commit panel import the same constants instead of
- * duplicating numbers.
+ * message shapes and bounds live here so the host workflow, Bridge
+ * unions, both validators, and webview share one narrow contract.
  */
 
 /** Closed set of per-file states the commit panel can display. */
@@ -50,6 +48,51 @@ export interface GitStatusFile {
    */
   readonly inTurn: boolean;
 }
+
+export interface GitRequestStatusMessage {
+  readonly type: 'git.requestStatus';
+  readonly sessionId: string;
+  readonly turnId: string;
+}
+
+export interface GitCommitRequestMessage {
+  readonly type: 'git.commit';
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly paths: readonly string[];
+  readonly message: string;
+}
+
+export interface GitStatusMessage {
+  readonly type: 'git.status';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly branch: string | null;
+  readonly files: readonly GitStatusFile[];
+  /** Latest Changes turn was committed through DroidVisX. */
+  readonly committedHash?: string;
+  readonly unavailableReason?: GitUnavailableReason;
+}
+
+export type GitCommitResultMessage =
+  | {
+      readonly type: 'git.commitResult';
+      readonly sequence: number;
+      readonly sessionId: string;
+      readonly turnId: string;
+      readonly ok: true;
+      readonly hash: string;
+      readonly subject: string;
+    }
+  | {
+      readonly type: 'git.commitResult';
+      readonly sequence: number;
+      readonly sessionId: string;
+      readonly turnId: string;
+      readonly ok: false;
+      readonly error: string;
+    };
 
 /** Most files one `git.status` message may list (in-turn files first). */
 export const MAX_GIT_STATUS_FILES = 100;

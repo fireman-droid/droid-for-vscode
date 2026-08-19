@@ -17,8 +17,19 @@ body {
   display: grid;
   min-width: 0;
   color-scheme: light;
+  /* Cursor-height chrome bar (spec §2.3: one ~40px row). Sticky rows
+     inside the scroll viewport read their top offset from
+     --dvx-sticky-top so 段 B/C footer work can re-anchor them without
+     touching each consumer (spec R2). */
+  --dvx-header-h: 40px;
+  --dvx-sticky-top: 0px;
+  /* One definition of the readable content cap and side padding:
+     transcript content and every footer surface share the 760px cap
+     instead of continuing to stretch through medium-width panels. */
+  --dvx-column-pad: 12px;
+  --dvx-column-max: 760px;
   /* Design tokens live in 00-tokens.css (imported first). */
-  grid-template-rows: 60px minmax(0, 1fr);
+  grid-template-rows: var(--dvx-header-h) minmax(0, 1fr);
   width: 100%;
   height: 100vh;
   border-radius: 0;
@@ -38,9 +49,9 @@ body {
   justify-content: space-between;
   min-width: 0;
   border-bottom-color: var(--dvx-border);
-  min-height: 60px;
-  padding: 12px 16px;
-  border-bottom: 1px solid rgb(229 229 229 / 80%);
+  min-height: var(--dvx-header-h);
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--dvx-border);
   background: var(--dvx-surface);
   box-shadow: none;
 }
@@ -52,10 +63,19 @@ body {
   gap: 0;
 }
 
+/* One-line brand row (spec §2.3): title and connection status share
+   the 40px bar on a common baseline instead of stacking two lines. */
+.dvx-brand > div {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  gap: 8px;
+}
+
 .dvx-title {
-  color: #171717;
-  font-size: 14px;
-  font-weight: 700;
+  color: var(--dvx-ink);
+  font-size: 13px;
+  font-weight: 650;
   line-height: 17.5px;
   letter-spacing: 0;
 }
@@ -81,8 +101,8 @@ body {
   display: inline-grid;
   place-items: center;
   padding: 0;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-color: var(--dvx-border);
   border-radius: 50%;
   color: var(--dvx-muted);
@@ -127,15 +147,15 @@ body {
   display: flex;
   margin: 0 auto;
   width: 100%;
+  max-width: calc(var(--dvx-column-max) + 2 * var(--dvx-column-pad));
   flex: 1 1 auto;
   flex-direction: column;
-  padding: 20px 16px 40px;
+  padding: 20px var(--dvx-column-pad) 40px;
 }
 
 .dvx-message {
   width: 100%;
-  margin-bottom: 27px;
-  margin: 0 0 20px;
+  margin: 0 0 14px;
   color: var(--dvx-ink);
   font-size: 13px;
   line-height: 21.125px;
@@ -146,7 +166,7 @@ body {
    rhythm instead of a full inter-message gap (user report batch 2
    §6). */
 .dvx-message-assistant.dvx-message-cont {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 /* User messages are Cursor-style full-width blocks that stick to the
@@ -156,7 +176,7 @@ body {
    hides the stuck ones it covers (data-covered). */
 .dvx-message-user {
   position: sticky;
-  top: 0;
+  top: var(--dvx-sticky-top);
   padding-left: 0;
   overflow-anchor: none;
 }

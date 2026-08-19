@@ -2,6 +2,9 @@ import type { MissionStartMessage } from '../../../shared/missionProtocol';
 import type { ChatControllerInternals } from '../internals';
 import { closeRuntime } from '../runtimeLifecycle';
 import { handleSend } from '../turnFlow';
+import { MissionSnapshotReducer } from './MissionSnapshotReducer';
+
+export { handleMissionCommand } from './controls';
 
 const MISSION_START_BLOCKED = 'Mission setup is still starting.';
 
@@ -27,16 +30,31 @@ export function handleMissionStart(
     return;
   }
 
+  const ownerRuntime = ctl.runtime;
+  const ownerSessionId = ctl.sessionId!;
+  const ownerGeneration = ctl.runtimeGeneration;
+  const ownerCwd = workspace.cwd;
   ctl.missionStartInProgress = true;
   void ctl.missionGateway
     .start({
-      workspaceId: workspace.cwd,
-      cwd: workspace.cwd,
+      workspaceId: ownerCwd,
+      cwd: ownerCwd,
       message,
       catalog: catalog.items,
     })
     .then(async (result) => {
-      if (ctl.disposed) {
+      const ownerIsCurrent = () =>
+        !ctl.disposed &&
+        ctl.isCurrentSessionOperation(
+          ownerRuntime,
+          ownerGeneration,
+          ownerSessionId,
+          ownerCwd,
+        );
+      if (!ownerIsCurrent()) {
+        if (result.status === 'ready') {
+          await closeRuntime(ctl, result.runtime.runtime).catch(() => undefined);
+        }
         return;
       }
       if (result.status === 'rejected') {
@@ -51,20 +69,26 @@ export function handleMissionStart(
       try {
         await closeRuntime(ctl, oldRuntime);
       } catch {
+        await closeRuntime(ctl, result.runtime.runtime).catch(() => undefined);
         emitRejected(ctl, message.requestId, 'unavailable');
         return;
       }
-      if (ctl.disposed) {
+      if (!ownerIsCurrent()) {
+        await closeRuntime(ctl, result.runtime.runtime).catch(() => undefined);
         return;
       }
 
       ctl.runtimeGeneration += 1;
       ctl.runtime = result.runtime.runtime;
       ctl.managedRuntimes.add(result.runtime.runtime);
-      ctl.activeRuntimeCwd = workspace.cwd;
+      ctl.activeRuntimeCwd = ownerCwd;
       ctl.sessionId = result.sessionId;
       ctl.turn = null;
-      ctl.mission = null;
+      ctl.mission = { state: null, role: 'orchestrator' };
+      ctl.missionRuntime = new MissionSnapshotReducer({
+        scrutinyEnabled: !result.settings.skipScrutiny,
+        userTestingEnabled: !result.settings.skipUserTesting,
+      });
       ctl.transcript = {
         transcript: [],
         historyStatus: 'unavailable',
@@ -96,25 +120,7 @@ export function handleMissionStart(
       }
 
       ctl.emitSnapshot();
-      ctl.emit({
-        type: 'mission.snapshot',
-        protocolVersion: 25,
-        scope: 'selected-chat',
-        revision: 0,
-        availability: 'attached',
-        presentationPhase: 'loading',
-        features: [],
-        completedFeatureCount: 0,
-        controls: {
-          canPause: false,
-          canResume: false,
-          canStopCurrentFeature: false,
-        },
-        validator: {
-          scrutinyEnabled: !result.settings.skipScrutiny,
-          userTestingEnabled: !result.settings.skipUserTesting,
-        },
-      });
+      ctl.emit(ctl.missionRuntime.snapshot());
       ctl.emit({
         type: 'mission.controlResult',
         protocolVersion: 25,

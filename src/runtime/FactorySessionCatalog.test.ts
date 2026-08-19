@@ -312,6 +312,11 @@ describe('readWorkerSessionIds', () => {
           },
         ],
       }),
+      // Agent-team `droid exec` runs stay out of the drawer: resuming
+      // one would double-write against the external CLI process.
+      writeSettings(workspaceDirectory, 'exec-team', {
+        tags: [{ name: 'exec' }],
+      }),
     ]);
 
     await expect(
@@ -323,9 +328,12 @@ describe('readWorkerSessionIds', () => {
           'task-child',
           'mission-worker',
           'mission-orchestrator',
+          'exec-team',
         ],
       }),
-    ).resolves.toEqual(new Set(['task-child', 'mission-worker']));
+    ).resolves.toEqual(
+      new Set(['task-child', 'mission-worker', 'exec-team']),
+    );
   });
 
   it('ignores malformed, oversized, missing, and path-like sidecars', async () => {

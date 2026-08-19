@@ -18,6 +18,10 @@ export interface FileDiffOpener {
   openDiff(
     relativePath: string,
     scope: ChangeStatsScope,
+    options?: {
+      /** Commit produced from the latest turn, retained across Reload. */
+      readonly committedRef?: string;
+    },
   ): Promise<FileDiffOutcome>;
   dispose?(): void;
 }

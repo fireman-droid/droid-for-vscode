@@ -42,9 +42,22 @@
 
 /* Content whitelisted back inside chrome containers: the composer
    and edit textareas, and command/path details on tool rows. */
-.dvx-composer-input,
 .dvx-user-edit-input,
 .dvx-tool-command-inline {
   user-select: text;
+}
+
+/* An empty textarea has no user content to select. Keeping it outside
+   document selection prevents a drag from an assistant reply from
+   highlighting the "Ask Droid…" placeholder. Typed drafts remain
+   normally selectable. */
+.dvx-composer-input:placeholder-shown {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.dvx-composer-input:not(:placeholder-shown) {
+  user-select: text;
+  -webkit-user-select: text;
 }
 

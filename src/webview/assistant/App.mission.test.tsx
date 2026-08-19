@@ -180,6 +180,98 @@ async function enterComposer(text: string): Promise<HTMLTextAreaElement> {
 }
 
 describe('App Mission entry', () => {
+  it('discovers /canvas and inserts a visible request template without sending', async () => {
+    render(<App />);
+    host(chatSnapshot());
+    const input =
+      screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+
+    fireEvent.change(input, { target: { value: '/canvas' } });
+    expect(
+      await screen.findByRole('option', {
+        name: /\/canvas.*Create an interactive result artifact/i,
+      }),
+    ).toBeDefined();
+    input.focus();
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => {
+      expect(input.value).toContain('Create an interactive Canvas artifact for:');
+      expect(input.value).toContain('[Describe the result');
+    });
+    expect(posted.some((message) => message.type === 'turn.send')).toBe(false);
+  });
+
+  it('appends Canvas feedback to the current Composer draft without sending', async () => {
+    render(<App />);
+    host(chatSnapshot());
+    const input =
+      screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+    fireEvent.change(input, { target: { value: 'Keep this note.' } });
+
+    host({
+      type: 'canvas.feedbackDraft',
+      sequence: 1,
+      text: 'Canvas feedback:\n\nReduce the card radius.',
+    });
+
+    await waitFor(() => {
+      expect(input.value).toBe(
+        'Keep this note.\n\nCanvas feedback:\n\nReduce the card radius.',
+      );
+    });
+    host({
+      type: 'canvas.feedbackDraft',
+      sequence: 1,
+      text: 'Duplicate feedback',
+    });
+    expect(input.value).not.toContain('Duplicate feedback');
+    expect(posted.some((message) => message.type === 'turn.send')).toBe(false);
+  });
+
+  it('discovers /mission in the slash popup and opens setup directly', async () => {
+    render(<App />);
+    host(chatSnapshot());
+    host(missionSnapshot());
+    const input =
+      screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+
+    fireEvent.change(input, { target: { value: '/mission' } });
+    const command = await screen.findByRole('option', {
+      name: /\/mission.*Start a Factory Mission/i,
+    });
+    expect(screen.queryByText('No matching commands')).toBeNull();
+
+    input.focus();
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    expect(
+      await screen.findByRole('heading', { name: 'Start a Mission' }),
+    ).toBeDefined();
+    expect(input.value).toBe('');
+    expect(
+      posted.some(
+        (message) =>
+          message.type === 'mission.start' || message.type === 'turn.send',
+      ),
+    ).toBe(false);
+  });
+
+  it('hides the built-in when Mission setup is unavailable', async () => {
+    render(<App />);
+    host(chatSnapshot());
+    host({ ...missionSnapshot(), setup: undefined });
+    const input =
+      screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+
+    fireEvent.change(input, { target: { value: '/mission' } });
+    expect(await screen.findByText('No matching commands')).toBeDefined();
+    expect(
+      screen.queryByRole('option', {
+        name: /\/mission.*Start a Factory Mission/i,
+      }),
+    ).toBeNull();
+  });
+
   it('preserves chat around setup and dismisses locally', async () => {
     render(<App />);
     host(chatSnapshot());
@@ -190,7 +282,9 @@ describe('App Mission entry', () => {
     expect(await screen.findByRole('heading', { name: 'Start a Mission' })).toBeDefined();
     expect(screen.getByText('Existing transcript')).toBe(transcript);
     expect(screen.getByLabelText('Message Droid')).toBe(input);
-    expect(document.activeElement).toBe(input);
+    expect(document.activeElement).toBe(
+      screen.getByLabelText('Mission task'),
+    );
 
     fireEvent.change(input, { target: { value: 'Keep this draft' } });
     fireEvent.click(

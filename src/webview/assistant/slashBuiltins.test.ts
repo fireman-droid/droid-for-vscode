@@ -77,4 +77,15 @@ describe('resolveBuiltinSlash', () => {
     expect(resolveBuiltinSlash('@/mission', btwOff)).toBeNull();
     expect(resolveBuiltinSlash('explain /mission', btwOff)).toBeNull();
   });
+
+  it('turns /canvas forms into local template requests', () => {
+    expect(resolveBuiltinSlash('/canvas', btwOff)).toEqual({
+      kind: 'canvas',
+      request: '',
+    });
+    expect(resolveBuiltinSlash('/canvas  A review dashboard ', btwOff)).toEqual({
+      kind: 'canvas',
+      request: 'A review dashboard',
+    });
+  });
 });

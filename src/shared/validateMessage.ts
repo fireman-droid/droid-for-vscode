@@ -50,7 +50,6 @@ import {
   type FilePreviewMessage,
   type GitCommitRequestMessage,
   type GitRequestStatusMessage,
-  MAX_INLINE_PREVIEW_HTML_LENGTH,
   PREVIEWABLE_FILE_EXTENSIONS,
   type PreviewInlineHtmlMessage,
   type McpRefreshMessage,
@@ -99,6 +98,9 @@ import {
 } from './bridgeMessages';
 import { parseBtwAskMessage, parseBtwDismissMessage, parseBtwPrepareMessage, parseBtwStopMessage } from './btwProtocol';
 import { parseCustomModelsWebviewMessage } from './customModelsProtocol';
+import {
+  parseCanvasInlinePreviewMessage,
+} from './canvasProtocol';
 import { parseMissionWebviewMessage } from './missionProtocol';
 import { parseSubagentWebviewMessage } from './subagentProtocol';
 import {
@@ -210,6 +212,13 @@ export function parseWebviewMessage(
       case 'customModels.refresh': case 'customModels.save':
       case 'customModels.delete':
       case 'customModels.discover': case 'customModels.import':
+      case 'providerModels.refresh':
+      case 'providerModels.saveProvider':
+      case 'providerModels.fetch':
+      case 'providerModels.saveModel':
+      case 'providerModels.import':
+      case 'providerModels.test':
+      case 'providerModels.testAll':
         return parseCustomModelsWebviewMessage(value) ?? undefined;
       case 'attachment.pick':
         return parseAttachmentPick(value);
@@ -263,10 +272,11 @@ export function parseWebviewMessage(
         return parseQueueClearMessage(value) ?? undefined;
       case 'mission.start': case 'mission.dismissSetup': case 'mission.pause':
       case 'mission.resume': case 'mission.stopCurrentFeature': case 'mission.refresh':
-      case 'mission.disclosure.set': case 'mission.viewer.open':
+      case 'mission.disclosure.set':
+      case 'mission.viewer.open':
         return parseMissionWebviewMessage(value);
       default:
-        // Subagent-panel family delegates wholesale (subagentProtocol).
+        // Panel-scoped message families delegate wholesale.
         return parseSubagentWebviewMessage(value) ?? undefined;
     }
   } catch {
@@ -843,34 +853,19 @@ function parseFilePreview(
 function parsePreviewInlineHtml(
   value: UnknownRecord,
 ): PreviewInlineHtmlMessage | undefined {
-  if (
-    !hasExactKeys(value, ['type', 'sessionId', 'html']) ||
-    !isId(value.sessionId) ||
-    typeof value.html !== 'string' ||
-    value.html.length === 0 ||
-    value.html.length > MAX_INLINE_PREVIEW_HTML_LENGTH
-  ) {
-    return undefined;
-  }
-
-  return {
-    type: 'preview.inlineHtml',
-    sessionId: value.sessionId,
-    html: value.html,
-  };
+  return parseCanvasInlinePreviewMessage(value, isId);
 }
 
-function parseGitRequestStatus(
-  value: UnknownRecord,
-): GitRequestStatusMessage | undefined {
+function parseGitRequestStatus(value: UnknownRecord): GitRequestStatusMessage | undefined {
   if (
-    !hasExactKeys(value, ['type', 'sessionId']) ||
-    !isId(value.sessionId)
+    !hasExactKeys(value, ['type', 'sessionId', 'turnId']) ||
+    !isId(value.sessionId) ||
+    !isId(value.turnId)
   ) {
     return undefined;
   }
 
-  return { type: 'git.requestStatus', sessionId: value.sessionId };
+  return { type: 'git.requestStatus', sessionId: value.sessionId, turnId: value.turnId };
 }
 
 function parseTerminalOpenMirror(
@@ -886,12 +881,11 @@ function parseTerminalOpenMirror(
   return { type: 'terminal.openMirror', sessionId: value.sessionId };
 }
 
-function parseGitCommitRequest(
-  value: UnknownRecord,
-): GitCommitRequestMessage | undefined {
+function parseGitCommitRequest(value: UnknownRecord): GitCommitRequestMessage | undefined {
   if (
-    !hasExactKeys(value, ['type', 'sessionId', 'paths', 'message']) ||
+    !hasExactKeys(value, ['type', 'sessionId', 'turnId', 'paths', 'message']) ||
     !isId(value.sessionId) ||
+    !isId(value.turnId) ||
     !isExactArray(value.paths, 1, MAX_GIT_COMMIT_PATHS) ||
     typeof value.message !== 'string' ||
     value.message.trim().length === 0 ||
@@ -912,12 +906,7 @@ function parseGitCommitRequest(
     paths.push(pathValue);
   }
 
-  return {
-    type: 'git.commit',
-    sessionId: value.sessionId,
-    paths,
-    message: value.message,
-  };
+  return { type: 'git.commit', sessionId: value.sessionId, turnId: value.turnId, paths, message: value.message };
 }
 
 function parseSkillsRefresh(

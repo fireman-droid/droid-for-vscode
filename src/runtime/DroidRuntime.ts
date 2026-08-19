@@ -122,6 +122,11 @@ export interface RuntimeModelCatalogItem {
   readonly supportedReasoningEfforts: readonly RuntimeReasoningEffort[];
 }
 
+export interface RuntimeMissionSettings {
+  readonly scrutinyEnabled: boolean;
+  readonly userTestingEnabled: boolean;
+}
+
 export type RuntimeModelCatalog =
   | RuntimeModelCatalogUnavailable
   | RuntimeModelCatalogAvailable;
@@ -333,6 +338,8 @@ export interface DroidRuntime {
    */
   getSessionCwd?(): string | null;
   readSessionSettings(): Promise<RuntimeSessionSettings>;
+  /** Host-only persisted Mission validator toggles, null outside Mission. */
+  readMissionSettings?(): RuntimeMissionSettings | null;
   readContextWindow(): Promise<RuntimeContextWindow>;
   readModelCatalog(): Promise<RuntimeModelCatalog>;
   updateSessionSetting(

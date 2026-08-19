@@ -1,40 +1,28 @@
 import {
-  MAX_IMAGES_PER_TURN,
-  MAX_TOOL_ACTIVITIES_PER_TURN,
-  type AttachmentSummary,
-  type EditAttachmentSummary,
-  type EditResendRejectReason,
-  type HostToWebviewMessage,
-  type InteractionRequest,
-  type McpAuthPhase,
-  type ModelCatalogState,
-  type SessionArchivedState,
-  type SessionCommandsState,
-  type SessionContextState,
-  type SessionMcpState,
-  type SessionMissionSummary,
-  type SessionPluginsState,
-  type SessionSearchState,
-  type SessionSettingsState,
-  type SessionSkillsState,
-  type SessionTranscriptItem,
-  type TurnStatus,
-  type WorkspaceFilesStatus,
-  type ImageMediaType,
-  type WorkspaceImageStatus,
-  type GitStatusFile,
-  type GitUnavailableReason,
+  MAX_IMAGES_PER_TURN, MAX_TOOL_ACTIVITIES_PER_TURN,
+  type AttachmentSummary, type EditAttachmentSummary, type EditResendRejectReason,
+  type HostToWebviewMessage, type InteractionRequest, type McpAuthPhase,
+  type ModelCatalogState, type SessionArchivedState, type SessionCommandsState,
+  type SessionContextState, type SessionMcpState, type SessionMissionSummary,
+  type SessionPluginsState, type SessionSearchState, type SessionSettingsState,
+  type SessionSkillsState, type SessionTranscriptItem, type TurnStatus,
+  type WorkspaceFilesStatus, type ImageMediaType, type WorkspaceImageStatus,
 } from '../../shared/bridgeMessages';
-import type {
-  MissionControlResultMessage,
-  MissionSnapshotMessage,
-} from '../../shared/missionProtocol';
+import type { MissionControlResultMessage, MissionSnapshotMessage } from '../../shared/missionProtocol';
 import { EMPTY_SESSION_QUEUE_STATE, MAX_QUEUED_MESSAGES, type SessionQueueState } from '../../shared/queueProtocol';
 import { enforceTranscriptImageBudget, trimTranscriptToLimits } from '../../shared/transcriptLimits';
 import { stableTranscriptId } from '../../shared/hostTranscriptState';
 import { EMPTY_SESSION_BTW_STATE, type SessionBtwState } from '../../shared/btwProtocol';
 import { EMPTY_SESSION_TOKEN_USAGE, type SessionTokenUsageState } from '../../shared/tokenUsage';
 import { isTransientRuntimeDiagnostic } from '../../shared/transientDiagnostics';
+import { initialGitCommitFlowState, type GitCommitFlowState } from './gitCommitStore';
+
+export { initialGitCommitFlowState } from './gitCommitStore';
+export type {
+  GitAvailability,
+  GitCommitFlowState,
+  GitCommitResultState,
+} from './gitCommitStore';
 
 export interface AssistantTurn {
   readonly turnId: string;
@@ -48,36 +36,6 @@ export interface PendingInteraction {
   readonly turnId: string;
   readonly request: InteractionRequest;
 }
-
-export type GitAvailability = 'unknown' | 'available' | 'unavailable';
-
-export type GitCommitResultState =
-  | { readonly ok: true; readonly hash: string; readonly subject: string }
-  | { readonly ok: false; readonly error: string };
-
-/** Inline commit panel state (git/PR workflow slice A). */
-export interface GitCommitFlowState {
-  readonly availability: GitAvailability;
-  readonly unavailableReason: GitUnavailableReason | null;
-  readonly statusPending: boolean;
-  readonly branch: string | null;
-  readonly files: readonly GitStatusFile[];
-  readonly commitPending: boolean;
-  /** Changes-card turn whose panel submitted the last commit. */
-  readonly commitTurnId: string | null;
-  readonly lastResult: GitCommitResultState | null;
-}
-
-export const initialGitCommitFlowState: GitCommitFlowState = {
-  availability: 'unknown',
-  unavailableReason: null,
-  statusPending: false,
-  branch: null,
-  files: [],
-  commitPending: false,
-  commitTurnId: null,
-  lastResult: null,
-};
 
 /** One resolved markdown image reference. */
 export interface LocalImageEntry {
@@ -228,13 +186,12 @@ export interface AssistantWebviewState {
 }
 
 /**
- * Host messages the store consumes. `ui.theme` is excluded: it is
- * sequence-free (view-provider push, not controller-emitted) and the
- * shell applies it directly in App before the reducer dispatch.
+ * Host messages the store consumes. App handles sequence-free theme
+ * pushes and transient Canvas draft commands directly.
  */
 export type StoreHostMessage = Exclude<
   HostToWebviewMessage,
-  { type: 'ui.theme' }
+  { type: 'ui.theme' | 'canvas.feedbackDraft' }
 >;
 
 export type AssistantWebviewAction =
@@ -248,7 +205,10 @@ export type AssistantWebviewAction =
       readonly text: string;
     }
   | { readonly type: 'turn.stop' }
-  | { readonly type: 'git.statusRequested' }
+  | {
+      readonly type: 'git.statusRequested';
+      readonly turnId: string;
+    }
   | {
       readonly type: 'git.commitRequested';
       readonly turnId: string;
@@ -344,7 +304,11 @@ export function assistantWebviewReducer(
   if (action.type === 'git.statusRequested') {
     return {
       ...state,
-      git: { ...state.git, statusPending: true },
+      git: {
+        ...state.git,
+        statusPending: true,
+        statusTurnId: action.turnId,
+      },
     };
   }
 
@@ -754,7 +718,9 @@ export function assistantWebviewReducer(
           : event.commands;
       return { ...state, sequence: event.sequence, commands };
     }
-    case 'customModels.state': case 'customModels.discovery':
+    case 'customModels.state':
+    case 'customModels.discovery':
+    case 'providerModels.state':
       // Panel-scoped masked state: the CustomModelsPanel flow hook
       // consumes it off its own window listener (on-demand pull, not
       // snapshot-resident); the store only advances the sequence.
@@ -964,11 +930,7 @@ export function assistantWebviewReducer(
         },
         upsertTool(state.transcript, event),
       );
-    case 'subagent.transcript':
     case 'subagent.activity':
-      // Panel-scoped like customModels.state: the subagent panel flow
-      // hook consumes these off its own window listener; the store
-      // only advances the sequence.
       return advance(state, event.sequence);
     case 'subagent.update':
       // Out-of-band settlement of a background delegation: lands
@@ -1203,7 +1165,10 @@ export function assistantWebviewReducer(
         ),
       };
     case 'git.status':
-      if (event.sessionId !== state.sessionId) {
+      if (
+        event.sessionId !== state.sessionId ||
+        event.turnId !== state.git.statusTurnId
+      ) {
         return advance(state, event.sequence);
       }
       return {
@@ -1219,10 +1184,14 @@ export function assistantWebviewReducer(
           statusPending: false,
           branch: event.branch,
           files: event.files,
+          committedHash: event.committedHash ?? null,
         },
       };
     case 'git.commitResult':
-      if (event.sessionId !== state.sessionId) {
+      if (
+        event.sessionId !== state.sessionId ||
+        event.turnId !== state.git.commitTurnId
+      ) {
         return advance(state, event.sequence);
       }
       return {

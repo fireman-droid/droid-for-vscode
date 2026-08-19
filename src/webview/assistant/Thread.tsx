@@ -3,6 +3,7 @@ import {
   createContext,
   memo,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -14,6 +15,7 @@ import type {
   EditResendRejectReason,
   ImageMediaType,
   ModelCatalogState,
+  ChangesTranscriptItem,
   SessionCommandsState,
   SessionHistoryStatus,
   AttachmentSummary,
@@ -34,6 +36,7 @@ import type { SlashNavTarget } from "./slashBuiltins";
 import {
   InlineHtmlPreviewContext,
   PathPreviewContext,
+  type InlineHtmlPreviewHandler,
   type PathPreviewWiring,
 } from "./MarkdownText";
 import {
@@ -41,8 +44,9 @@ import {
   applyFollowWheelIntent,
   createFollowState,
 } from "./followScroll";
-import type { PlanAnchorState } from "./planAnchor";
+import { isPlanLive, type PlanAnchorState } from "./planAnchor";
 import { PlanLine } from "./PlanLine";
+import { QuestionNavigator } from "./QuestionNavigator";
 import {
   computeStickyLayout,
   SCROLL_BOTTOM_SHOW_PX,
@@ -65,6 +69,7 @@ import {
   readUserAttachments,
   readUserMessageId,
 } from "./thread/readers";
+import { useQuestionNavigation } from "./useQuestionNavigation";
 
 /** Latest workspace search result delivered by the host. */
 export interface FileSearchResult {
@@ -143,6 +148,20 @@ export const FileDiffContext = createContext<
   (path: string, turnId: string | null) => void
 >(() => undefined);
 
+// The latest turn's cumulative file counts stay available to deep tool
+// rows even though the full ledger is rendered separately in ReviewDock.
+type ToolFileChange = ChangesTranscriptItem["files"][number];
+interface ToolChangesContextValue {
+  readonly turnId: string | null;
+  readonly filesByPath: ReadonlyMap<string, ToolFileChange>;
+}
+const EMPTY_TOOL_CHANGES: ToolChangesContextValue = {
+  turnId: null,
+  filesByPath: new Map(),
+};
+export const ToolChangesContext =
+  createContext<ToolChangesContextValue>(EMPTY_TOOL_CHANGES);
+
 // Previewing an .html/.htm prototype opens the sandboxed preview panel
 // through this context, matching the FileDiffContext pattern so deep
 // Changes/Tool rows stay free of prop drilling. Exported for focused
@@ -189,6 +208,8 @@ interface DroidThreadProps {
   readonly statusMessage?: string;
   readonly showRetry: boolean;
   readonly running: boolean;
+  /** Current foreground turn; scopes Plan live styling to its own updates. */
+  readonly activeTurnId: string | null;
   readonly stopping: boolean;
   readonly interactionPending: boolean;
   readonly controlsDisabled: boolean;
@@ -225,6 +246,8 @@ interface DroidThreadProps {
   readonly navSignal?: ComposerNavRequest | null;
   /** Opens the panel behind one `/` popup navigation row. */
   readonly onSlashNavigate?: (target: SlashNavTarget) => void;
+  /** Opens official Mission setup from the Composer slash catalog. */
+  readonly onMissionOpen?: () => void;
   /**
    * Host-advertised `/btw` side-chat capability (process runtime
    * only); false keeps the popup row unrendered (fail closed).
@@ -286,7 +309,7 @@ interface DroidThreadProps {
   ) => void;
   readonly onPreviewFile: (path: string) => void;
   /** Renders an assistant HTML code block in the sandbox panel. */
-  readonly onPreviewInlineHtml: (html: string) => void;
+  readonly onPreviewInlineHtml: InlineHtmlPreviewHandler;
   /**
    * Absolute workspace folder from the host snapshot; rebases absolute
    * transcript path links for the Preview entry. Null hides the entry.
@@ -317,11 +340,11 @@ interface DroidThreadProps {
   /** Inline Mission setup, mounted directly above the existing Composer. */
   readonly missionSetup?: ReactNode;
   /**
-   * The floating "N Working" subagent pill hovering over the
-   * Composer's left edge; null while no delegation is running. Built
-   * in App from the transcript's subagent rows.
+   * Latest turn's Changes review, pinned above queued prompts and the
+   * Composer. Built in App because the footer's transcript contexts
+   * have already closed at this boundary.
    */
-  readonly workingBadge?: ReactNode;
+  readonly reviewDock?: ReactNode;
   /** Short-lived host feedback rendered outside assistant-ui history. */
   readonly transientDiagnostic?: TransientDiagnostic | null;
   /** Prompts queued behind the running turn (Composer hint). */
@@ -344,6 +367,7 @@ export const DroidThread = memo(function DroidThread({
   statusMessage,
   showRetry,
   running,
+  activeTurnId,
   stopping,
   interactionPending,
   controlsDisabled,
@@ -377,6 +401,7 @@ export const DroidThread = memo(function DroidThread({
   onCommandsRefresh,
   navSignal = null,
   onSlashNavigate,
+  onMissionOpen,
   btwAvailable = false,
   onBtwOpen,
   onAttachPath,
@@ -416,7 +441,7 @@ export const DroidThread = memo(function DroidThread({
   planAnchors = null,
   queuedMessages = null,
   missionSetup = null,
-  workingBadge = null,
+  reviewDock = null,
   transientDiagnostic = null,
   queuedCount = 0,
   queueEditing = false,
@@ -484,6 +509,37 @@ export const DroidThread = memo(function DroidThread({
   // click re-latches `follow.following` rather than owning any
   // scroll state of its own.
   const readingColumnRef = useRef<HTMLDivElement | null>(null);
+  const questionNavigation = useQuestionNavigation(readingColumnRef);
+  const historyRevealAnchorRef = useRef<{
+    readonly scrollHeight: number;
+    readonly scrollTop: number;
+  } | null>(null);
+  const revealEarlier = (): void => {
+    const column = readingColumnRef.current;
+    const scroller = column?.closest(".dvx-thread-viewport");
+    historyRevealAnchorRef.current =
+      scroller instanceof HTMLElement
+        ? {
+            scrollHeight: scroller.scrollHeight,
+            scrollTop: scroller.scrollTop,
+          }
+        : null;
+    onShowEarlier();
+  };
+  useLayoutEffect(() => {
+    const anchor = historyRevealAnchorRef.current;
+    historyRevealAnchorRef.current = null;
+    const column = readingColumnRef.current;
+    const scroller = column?.closest(".dvx-thread-viewport");
+    if (anchor === null || !(scroller instanceof HTMLElement)) {
+      return;
+    }
+    // History is prepended above the current reading position. Offset
+    // by exactly that growth so the latest exchange cannot appear to
+    // vanish or jump when older messages mount.
+    scroller.scrollTop =
+      anchor.scrollTop + (scroller.scrollHeight - anchor.scrollHeight);
+  }, [hiddenMessageCount]);
   const [awayFromBottom, setAwayFromBottom] = useState(false);
   const scrollToBottomRef = useRef<() => void>(() => {});
   useEffect(() => {
@@ -738,7 +794,7 @@ export const DroidThread = memo(function DroidThread({
                 <button
                   type="button"
                   className="dvx-show-earlier"
-                  onClick={onShowEarlier}
+                  onClick={revealEarlier}
                 >
                   Show earlier messages ({hiddenMessageCount} hidden)
                 </button>
@@ -759,10 +815,9 @@ export const DroidThread = memo(function DroidThread({
                     return <AssistantMessage />;
                   }
                   const messageId = readUserMessageId(message.metadata);
-                  // Plan lines of the turn this message triggered:
-                  // rendered inside the sticky message block, directly
-                  // under the question, so the pin coordinator carries
-                  // them through stick/push-out for free.
+                  // The session's single latest Plan is anchored under
+                  // the message that created its lineage. A newer plan
+                  // removes the old map entry entirely.
                   const plan = planAnchors?.get(message.id);
                   // Inline image previews make IMAGE chips redundant
                   // (kitchen-sink form, 2026-08-13); other kinds keep
@@ -786,7 +841,11 @@ export const DroidThread = memo(function DroidThread({
                               <PlanLine
                                 key={plan.anchorToolUseId}
                                 anchor={plan}
-                                running={running}
+                                running={isPlanLive(
+                                  plan,
+                                  running,
+                                  activeTurnId,
+                                )}
                               />
                             )
                       }
@@ -847,10 +906,7 @@ export const DroidThread = memo(function DroidThread({
               <ScrollToBottomIcon />
             </button>
           </div>
-          {/* Independent floating pill at the Composer's left edge
-              (Cursor form factor) — not part of the stacked
-              conversation-state bars below. */}
-          {workingBadge}
+          {reviewDock}
           {/* Conversation-state bar family: the queue bar sits
               directly above the Composer, sharing the warm card
               language of the plan-era pins. */}
@@ -893,6 +949,7 @@ export const DroidThread = memo(function DroidThread({
             onCommandsRefresh={onCommandsRefresh}
             navSignal={navSignal}
             onSlashNavigate={onSlashNavigate}
+            onMissionOpen={onMissionOpen}
             btwAvailable={btwAvailable}
             onBtwOpen={onBtwOpen}
             onAttachPath={onAttachPath}
@@ -912,6 +969,12 @@ export const DroidThread = memo(function DroidThread({
           />
         </ThreadPrimitive.ViewportFooter>
       </ThreadPrimitive.Viewport>
+      <QuestionNavigator
+        visible={questionNavigation.visible}
+        items={questionNavigation.items}
+        activeIndex={questionNavigation.activeIndex}
+        onNavigate={questionNavigation.navigate}
+      />
     </ThreadPrimitive.Root>
   );
 });

@@ -1,11 +1,5 @@
-// customModels: BYOK custom-model management through the daemon
-// sidecar (docs/product/byok-add-model-design.md; RPC behavior probed
-// in artifacts/probe-custom-models-daemon.mjs, 2026-08-13).
-//
-// Credential red line: `apiKey` plaintext is request-scoped to one
-// save/discover/import handoff. It is never stored on the controller,
-// echoed into emitted state, or logged.
 import {
+  CUSTOM_MODEL_PROVIDERS,
   MAX_CUSTOM_MODEL_MASK_LENGTH,
   MAX_CUSTOM_MODEL_PROVIDER_LENGTH,
   MAX_CUSTOM_MODEL_URL_LENGTH,
@@ -19,12 +13,12 @@ import {
   type CustomModelsRefreshMessage,
   type CustomModelsState,
   type CustomModelsWebviewMessage,
+  type CustomModelProvider,
+  type ProviderModelsState,
+  type ProviderModelsWebviewMessage,
 } from '../../shared/customModelsProtocol';
 import { MAX_MODEL_CATALOG_ITEMS } from '../../shared/bridgeMessages';
-import {
-  isSafeDisplayName,
-  isSafeModelId,
-} from '../../shared/validateMessage';
+import { isSafeDisplayName, isSafeModelId } from '../../shared/validateMessage';
 import { startReplacement } from './runtimeLifecycle';
 import {
   ModelDiscoveryError,
@@ -36,43 +30,26 @@ import {
   isTurnActive,
   type ChatControllerInternals,
 } from './internals';
-
+import { ProviderRegistry, type ProviderConnection } from './providerRegistry';
+import { testCustomModel } from './modelTesting';
 export const CUSTOM_MODELS_UNAVAILABLE_MESSAGE =
   'Custom models need the local droid daemon. Sign in with the droid CLI, then retry.';
-
 export const CUSTOM_MODELS_NOT_LOGGED_IN_MESSAGE =
   'Sign in with the droid CLI to manage custom models.';
-
 export const CUSTOM_MODELS_LOAD_FAILED_MESSAGE =
   'Droid did not return the custom model list. Retry from the panel.';
-
 export const CUSTOM_MODELS_SAVE_FAILED_MESSAGE =
   'Droid could not save that model. Check the values and retry.';
-
 export const CUSTOM_MODELS_DELETE_FAILED_MESSAGE =
   'Droid could not delete that model. The list may be stale; refresh it.';
-
-/**
- * Copy for the daemon's optimistic-concurrency rejection (probed
- * error: "Custom models changed on disk; refresh and try again").
- */
 export const CUSTOM_MODELS_CONFLICT_MESSAGE =
   'Custom models changed outside this panel. Review the refreshed list and retry.';
-
 export const CUSTOM_MODELS_BUSY_MESSAGE =
   'Another custom-model operation is still running. Retry in a moment.';
-
 export const CUSTOM_MODELS_DISCOVERY_UNAVAILABLE_MESSAGE =
   'Model discovery is unavailable in this extension host.';
-
 export const CUSTOM_MODELS_IMPORT_FAILED_MESSAGE =
   'Droid could not add every selected model. Review the current group and retry.';
-
-/**
- * One list row as the daemon returns it (already key-scrubbed:
- * `hasApiKey`/`apiKeyMask` only, never plaintext). Structurally
- * matches the SDK's `DaemonListCustomModelsResult['models'][number]`.
- */
 export interface DaemonCustomModelRow {
   readonly rawIndex: number;
   readonly model: string;
@@ -86,12 +63,6 @@ export interface DaemonCustomModelRow {
   readonly hasBedrockConfig: boolean;
   readonly isValid: boolean;
 }
-
-/**
- * Daemon custom-models RPC surface; structurally satisfied by the
- * SDK's `ConnectedDroid['customModels']` resource, so extension.ts
- * wires `droid.customModels` straight through.
- */
 export interface CustomModelsGateway {
   list(): Promise<DaemonCustomModelRow[]>;
   upsert(params: {
@@ -110,25 +81,21 @@ export interface CustomModelsGateway {
     expectedModel: string;
   }): Promise<{ success: boolean; models: DaemonCustomModelRow[] }>;
 }
-
-/**
- * The two controller members this module owns: the lazily acquired
- * daemon gateway (wired in extension.ts next to `daemonPlugins`) and
- * the one-at-a-time in-flight flag. Declared as an explicit slot type
- * so the module compiles against the full dependency surface;
- * ChatController carries both members.
- */
 export interface CustomModelsHostSlots {
   daemonCustomModels?: () => Promise<CustomModelsGateway>;
   modelDiscovery?: CustomModelDiscoveryGateway;
   customModelsDiscoveryAbort: AbortController | null;
   customModelsOp: boolean;
+  providerRegistry?: ProviderRegistry;
+  promptProviderApiKey?: () => Thenable<string | undefined>;
+  providerTests: Map<string, {
+    readonly status: 'passed' | 'failed';
+    readonly summary: string;
+    readonly latencyMs: number;
+  }>;
 }
-
 export type CustomModelsHost = ChatControllerInternals &
   CustomModelsHostSlots;
-
-/** Single dispatch entry so ChatController grows one case group. */
 export function dispatchCustomModels(
   ctl: CustomModelsHost,
   message: CustomModelsWebviewMessage,
@@ -141,11 +108,244 @@ export function dispatchCustomModels(
     handleCustomModelDelete(ctl, message);
   } else if (message.type === 'customModels.discover') {
     handleCustomModelsDiscover(ctl, message);
+  } else if (
+    message.type === 'providerModels.refresh' ||
+    message.type === 'providerModels.saveProvider' ||
+    message.type === 'providerModels.fetch' ||
+    message.type === 'providerModels.saveModel' ||
+    message.type === 'providerModels.import' ||
+    message.type === 'providerModels.test' ||
+    message.type === 'providerModels.testAll'
+  ) {
+    handleProviderModels(ctl, message);
   } else {
     handleCustomModelsImport(ctl, message);
   }
 }
-
+function handleProviderModels(
+  ctl: CustomModelsHost,
+  message: ProviderModelsWebviewMessage,
+): void {
+  const dropReason = ctl.sessionRequestDropReason(message.sessionId);
+  if (dropReason !== null || ctl.providerRegistry === undefined) {
+    if (dropReason !== null) ctl.recordDroppedPanelRequest(message.type, dropReason);
+    return;
+  }
+  if (message.type === 'providerModels.refresh') {
+    refreshProviders(ctl, message.sessionId);
+    return;
+  }
+  if (message.type === 'providerModels.saveProvider') {
+    if (ctl.customModelsOp) return;
+    ctl.customModelsOp = true;
+    const apiKey = message.setApiKey === true
+      ? (ctl.promptProviderApiKey?.() ?? Promise.resolve(undefined))
+      : Promise.resolve(undefined);
+    void apiKey.then((key) => ctl.providerRegistry!.save({
+      displayName: message.displayName,
+      protocol: message.protocol,
+      rootUrl: message.rootUrl,
+      ...(key === undefined || key.length === 0 ? {} : { apiKey: key }),
+      ...(message.providerId === undefined ? {} : { id: message.providerId }),
+    })).then(
+      () => {
+        ctl.customModelsOp = false;
+        refreshProviders(ctl, message.sessionId);
+      },
+      () => {
+        ctl.customModelsOp = false;
+        emitProviderModels(ctl, message.sessionId, {
+          status: 'error', providers: [], message: 'Could not save this connection.',
+        });
+      },
+    );
+    return;
+  }
+  const provider = ctl.providerRegistry.get(message.providerId);
+  if (provider === null) {
+    const copy = 'This connection is no longer available. Refresh and retry.';
+    if (message.type === 'providerModels.fetch') {
+      emitCustomModelDiscovery(ctl, message.sessionId, { status: 'error', message: copy });
+    } else {
+      emitProviderModels(ctl, message.sessionId, { status: 'error', providers: [], message: copy });
+    }
+    return;
+  }
+  if (message.type === 'providerModels.fetch') {
+    void fetchProviderModels(ctl, message.sessionId, provider);
+    return;
+  }
+  if (message.type === 'providerModels.test') {
+    void testProviderModel(ctl, message.sessionId, provider, message.model);
+    return;
+  }
+  if (message.type === 'providerModels.testAll') {
+    void testAllProviderModels(ctl, message.sessionId, provider);
+    return;
+  }
+  const apiKey = ctl.providerRegistry.apiKey(provider.id);
+  void apiKey.then((key) => {
+    if (key === undefined) {
+      emitProviderModels(ctl, message.sessionId, {
+        status: 'error', providers: [], message: 'Add an API key to this connection before adding models.',
+      });
+      return;
+    }
+    if (message.type === 'providerModels.import') {
+      handleCustomModelsImport(ctl, {
+        type: 'customModels.import', sessionId: message.sessionId,
+        provider: provider.protocol, baseUrl: provider.apiBaseUrl, apiKey: key,
+        models: message.models, maxOutputTokens: message.maxOutputTokens,
+        noImageSupport: message.noImageSupport,
+      });
+      return;
+    }
+    handleCustomModelSave(ctl, {
+      type: 'customModels.save', sessionId: message.sessionId,
+      provider: provider.protocol, baseUrl: provider.apiBaseUrl, apiKey: key,
+      model: message.model,
+      ...(message.displayName === undefined ? {} : { displayName: message.displayName }),
+      ...(message.rawIndex === undefined ? {} : { rawIndex: message.rawIndex, expectedModel: message.expectedModel }),
+      maxOutputTokens: message.maxOutputTokens, noImageSupport: message.noImageSupport,
+    });
+  });
+}
+function refreshProviders(ctl: CustomModelsHost, sessionId: string): void {
+  const gateway = beginCustomModelsRequest(ctl, 'providerModels.refresh', sessionId);
+  if (gateway === null || ctl.providerRegistry === undefined) return;
+  ctl.customModelsOp = true;
+  emitProviderModels(ctl, sessionId, { status: 'loading', providers: [] });
+  void gateway().then((resource) => resource.list()).then(
+    async (models) => {
+      ctl.customModelsOp = false;
+      const configured = ctl.providerRegistry!.list();
+      const providers = await projectProviderConnections(
+        configured, models, ctl.providerRegistry!, ctl.providerTests,
+      );
+      emitProviderModels(ctl, sessionId, { status: 'ready', providers });
+      emitCustomModels(ctl, sessionId, { status: 'ready', items: projectCustomModelItems(models) });
+    },
+    () => {
+      ctl.customModelsOp = false;
+      emitProviderModels(ctl, sessionId, {
+        status: 'error', providers: [], message: CUSTOM_MODELS_LOAD_FAILED_MESSAGE,
+      });
+    },
+  );
+}
+async function fetchProviderModels(
+  ctl: CustomModelsHost, sessionId: string, provider: ProviderConnection,
+): Promise<void> {
+  if (ctl.customModelsOp || ctl.modelDiscovery === undefined || ctl.providerRegistry === undefined) return;
+  const key = await ctl.providerRegistry.apiKey(provider.id);
+  if (key === undefined) {
+    emitCustomModelDiscovery(ctl, sessionId, {
+      status: 'error', message: 'Add an API key to this connection before fetching models.',
+    });
+    return;
+  }
+  ctl.customModelsOp = true;
+  emitCustomModelDiscovery(ctl, sessionId, { status: 'loading' });
+  try {
+    const items = await ctl.modelDiscovery.discover(
+      { provider: provider.protocol, baseUrl: provider.apiBaseUrl, apiKey: key },
+    );
+    emitCustomModelDiscovery(ctl, sessionId, { status: 'ready', items });
+  } catch {
+    emitCustomModelDiscovery(ctl, sessionId, {
+      status: 'error', message: 'Could not fetch models from this connection.',
+    });
+  } finally {
+    ctl.customModelsOp = false;
+  }
+}
+async function testProviderModel(
+  ctl: CustomModelsHost, sessionId: string, provider: ProviderConnection, model: string,
+): Promise<void> {
+  if (ctl.providerRegistry === undefined || ctl.customModelsOp) return;
+  const key = await ctl.providerRegistry.apiKey(provider.id);
+  if (key === undefined) {
+    emitProviderModels(ctl, sessionId, {
+      status: 'error', providers: [], message: 'Add an API key to this connection before testing a model.',
+    });
+    return;
+  }
+  ctl.customModelsOp = true;
+  const result = await testCustomModel({
+    protocol: provider.protocol, baseUrl: provider.apiBaseUrl, apiKey: key, model,
+  });
+  ctl.providerTests.set(provider.id, result);
+  ctl.customModelsOp = false;
+  refreshProviders(ctl, sessionId);
+}
+async function testAllProviderModels(
+  ctl: CustomModelsHost, sessionId: string, provider: ProviderConnection,
+): Promise<void> {
+  if (ctl.providerRegistry === undefined || ctl.customModelsOp) return;
+  const key = await ctl.providerRegistry.apiKey(provider.id);
+  if (key === undefined || ctl.daemonCustomModels === undefined) return;
+  ctl.customModelsOp = true;
+  try {
+    const rows = await (await ctl.daemonCustomModels()).list();
+    const models = rows.filter((row) =>
+      row.provider === provider.protocol && row.baseUrl === provider.apiBaseUrl,
+    ).slice(0, 16);
+    let passed = 0;
+    let latencyMs = 0;
+    for (const row of models) {
+      const result = await testCustomModel({
+        protocol: provider.protocol, baseUrl: provider.apiBaseUrl, apiKey: key, model: row.model,
+      });
+      if (result.status === 'passed') passed += 1;
+      latencyMs += result.latencyMs;
+    }
+    ctl.providerTests.set(provider.id, {
+      status: passed === models.length ? 'passed' : 'failed',
+      summary: `${passed} of ${models.length} models replied.`,
+      latencyMs,
+    });
+  } finally {
+    ctl.customModelsOp = false;
+  }
+  refreshProviders(ctl, sessionId);
+}
+async function projectProviderConnections(
+  configured: readonly ProviderConnection[],
+  models: readonly DaemonCustomModelRow[],
+  registry: ProviderRegistry,
+  tests: ReadonlyMap<string, { readonly status: 'passed' | 'failed'; readonly summary: string; readonly latencyMs: number }>,
+): Promise<ProviderModelsState['providers']> {
+  const saved = await Promise.all(configured.slice(0, MAX_MODEL_CATALOG_ITEMS).map(async (provider) => ({
+    id: provider.id, displayName: provider.displayName, protocol: provider.protocol,
+    rootUrl: provider.rootUrl, apiBaseUrl: provider.apiBaseUrl,
+    hasApiKey: await registry.hasApiKey(provider.id), imported: false,
+    modelCount: models.filter((model) =>
+      model.provider === provider.protocol && model.baseUrl === provider.apiBaseUrl).length,
+    ...(tests.has(provider.id) ? { latestTest: tests.get(provider.id)! } : {}),
+  })));
+  const claimed = new Set(saved.map((provider) => `${provider.protocol}\u0000${provider.apiBaseUrl}`));
+  for (const row of models) {
+    if (
+      saved.length >= MAX_MODEL_CATALOG_ITEMS ||
+      !(CUSTOM_MODEL_PROVIDERS as readonly string[]).includes(row.provider) ||
+      row.baseUrl === undefined ||
+      claimed.has(`${row.provider}\u0000${row.baseUrl}`)
+    ) continue;
+    claimed.add(`${row.provider}\u0000${row.baseUrl}`);
+    saved.push({
+      id: `imported:${saved.length}`, displayName: 'Imported connection',
+      protocol: row.provider as CustomModelProvider, rootUrl: row.baseUrl, apiBaseUrl: row.baseUrl,
+      hasApiKey: false, imported: true,
+      modelCount: models.filter((model) => model.provider === row.provider && model.baseUrl === row.baseUrl).length,
+    });
+  }
+  return saved;
+}
+function emitProviderModels(
+  ctl: CustomModelsHost, sessionId: string, providers: ProviderModelsState,
+): void {
+  ctl.emit({ type: 'providerModels.state', sessionId, providers });
+}
 export function handleCustomModelsRefresh(
   ctl: CustomModelsHost,
   sessionId: string,
@@ -162,7 +362,6 @@ export function handleCustomModelsRefresh(
     resource.list().then((models) => ({ models })),
   );
 }
-
 export function handleCustomModelSave(
   ctl: CustomModelsHost,
   message: CustomModelSaveMessage,
@@ -186,8 +385,6 @@ export function handleCustomModelSave(
     },
   });
   runCustomModelsOperation(ctl, message.sessionId, 'save', (resource) =>
-    // Single handoff: the plaintext key moves from the validated
-    // message into the RPC params and nowhere else.
     resource
       .upsert({
         ...(message.rawIndex === undefined
@@ -211,7 +408,6 @@ export function handleCustomModelSave(
       .then(requireMutationSuccess),
   );
 }
-
 export function handleCustomModelDelete(
   ctl: CustomModelsHost,
   message: CustomModelDeleteMessage,
@@ -236,7 +432,6 @@ export function handleCustomModelDelete(
       .then(requireMutationSuccess),
   );
 }
-
 export function handleCustomModelsDiscover(
   ctl: CustomModelsHost,
   message: CustomModelsDiscoverMessage,
@@ -323,7 +518,6 @@ export function handleCustomModelsDiscover(
       },
     );
 }
-
 function finishCustomModelDiscovery(
   ctl: CustomModelsHost,
   abort: AbortController,
@@ -335,7 +529,6 @@ function finishCustomModelDiscovery(
   ctl.customModelsOp = false;
   return true;
 }
-
 export function handleCustomModelsImport(
   ctl: CustomModelsHost,
   message: CustomModelsImportMessage,
@@ -389,13 +582,6 @@ export function handleCustomModelsImport(
     return { models };
   });
 }
-
-/**
- * Shared guard chain for daemon-backed panel requests. Returns the
- * gateway provider when the request may proceed, null after emitting
- * the appropriate drop/unavailable/busy signal — a dropped save or
- * delete must never look like a success.
- */
 function beginCustomModelsRequest(
   ctl: CustomModelsHost,
   op: string,
@@ -428,13 +614,6 @@ function beginCustomModelsRequest(
   }
   return gateway;
 }
-
-/**
- * Runs one daemon round-trip and broadcasts the resulting masked
- * list. Every RPC (list/upsert/delete) answers with the fresh models
- * array, so success paths never need a second read. Raw daemon errors
- * stay host-side; the Bridge carries fixed copy only.
- */
 function runCustomModelsOperation(
   ctl: CustomModelsHost,
   sessionId: string,
@@ -493,8 +672,6 @@ function runCustomModelsOperation(
               : [],
           message: customModelsFailureMessage(op, error),
         });
-        // The concurrency guard fired because the file changed under
-        // us; converge the panel on the daemon's current truth.
         if (op !== 'refresh' && isConflictError(error)) {
           handleCustomModelsRefresh(ctl, sessionId);
         } else if (
@@ -506,14 +683,6 @@ function runCustomModelsOperation(
       },
     );
 }
-
-/**
- * Makes a saved or deleted model immediately selectable: the model
- * catalog is captured per session load (initialize/load_session), so
- * reload the active session in place when nothing would be lost.
- * Busy sessions skip quietly — the panel copy explains that models
- * appear with the next session (re)load.
- */
 function reloadSessionCatalogWhenIdle(
   ctl: CustomModelsHost,
   sessionId: string,
@@ -543,14 +712,6 @@ function reloadSessionCatalogWhenIdle(
   });
   startReplacement(ctl, { kind: 'resume', cwd, sessionId });
 }
-
-/**
- * Failure logging honoring the credential red line: list failures may
- * carry the raw error (no key was in flight and LocalDiagnostics
- * scrubs assignments anyway); save/delete failures log a fixed
- * classification only, because upstream validation errors could echo
- * request params.
- */
 function recordCustomModelsFailure(
   ctl: CustomModelsHost,
   op: string,
@@ -567,7 +728,6 @@ function recordCustomModelsFailure(
           : 'rpc-error',
   );
 }
-
 function customModelsFailureMessage(
   op: 'refresh' | 'save' | 'delete' | 'import',
   error: unknown,
@@ -587,15 +747,12 @@ function customModelsFailureMessage(
     CUSTOM_MODELS_NOT_LOGGED_IN_MESSAGE,
   );
 }
-
-/** Matches the daemon's optimistic-concurrency rejection (probed). */
 function isConflictError(error: unknown): boolean {
   return (
     (error instanceof CustomModelImportFailure && error.conflict) ||
     (error instanceof Error && error.message.includes('changed on disk'))
   );
 }
-
 class CustomModelImportFailure extends Error {
   constructor(
     readonly models: readonly DaemonCustomModelRow[],
@@ -604,7 +761,6 @@ class CustomModelImportFailure extends Error {
     super('custom-model-import-failed');
   }
 }
-
 function requireMutationSuccess<T extends {
   readonly success: boolean;
   readonly models: DaemonCustomModelRow[];
@@ -614,7 +770,6 @@ function requireMutationSuccess<T extends {
   }
   return result;
 }
-
 function isSameCustomModelGroup(
   row: DaemonCustomModelRow,
   message: CustomModelsImportMessage,
@@ -636,7 +791,6 @@ function isSameCustomModelGroup(
     credentialMatches
   );
 }
-
 function emitCustomModels(
   ctl: CustomModelsHost,
   sessionId: string,
@@ -648,7 +802,6 @@ function emitCustomModels(
     customModels,
   });
 }
-
 function emitCustomModelDiscovery(
   ctl: CustomModelsHost,
   sessionId: string,
@@ -656,7 +809,6 @@ function emitCustomModelDiscovery(
 ): void {
   ctl.emit({ type: 'customModels.discovery', sessionId, discovery });
 }
-
 function discoveryFailureClass(error: unknown): string {
   return error instanceof ModelDiscoveryError
     ? error.status === undefined
@@ -664,7 +816,6 @@ function discoveryFailureClass(error: unknown): string {
       : `${error.kind}:${error.status}`
     : 'request-failed';
 }
-
 function discoveryFailureMessage(error: unknown): string {
   if (error instanceof ModelDiscoveryError) {
     if (error.kind === 'http' && (error.status === 401 || error.status === 403)) {
@@ -685,13 +836,6 @@ function discoveryFailureMessage(error: unknown): string {
   }
   return 'Could not fetch models from this provider. Check the site and retry.';
 }
-
-/**
- * Projects daemon rows into bounded Bridge items. Rows violating the
- * contract (unsafe strings, duplicate rawIndex) are dropped, never
- * displayed with invented values (fail closed); the cap mirrors the
- * model catalog bound.
- */
 export function projectCustomModelItems(
   rows: readonly DaemonCustomModelRow[],
 ): CustomModelListItem[] {

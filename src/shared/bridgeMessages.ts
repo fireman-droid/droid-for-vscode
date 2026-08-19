@@ -14,7 +14,10 @@ import type { SessionContextStats } from './contextState';
 import { MAX_SESSION_TRANSCRIPT_ITEMS } from './transcriptLimits';
 import type { BtwAskMessage, BtwDismissMessage, BtwPrepareMessage, BtwStopMessage, SessionBtwMessage } from './btwProtocol';
 // Type-only on purpose (subagentProtocol imports shared bounds).
-import type { SubagentActivityMessage, SubagentOpenTranscriptMessage, SubagentPanelMessage, SubagentStopMessage, SubagentTranscriptMessage } from './subagentProtocol';
+import type {
+  SubagentActivityMessage,
+  SubagentPanelMessage,
+} from './subagentProtocol';
 import type {
   QueueAddMessage,
   QueueClearMessage,
@@ -25,6 +28,10 @@ import type {
   QueueUpdateMessage,
   SessionQueueState,
 } from './queueProtocol';
+import type {
+  CanvasFeedbackDraftMessage,
+  PreviewInlineHtmlMessage,
+} from './canvasProtocol';
 
 export {
   MAX_ASK_USER_ANSWERS,
@@ -102,13 +109,19 @@ export {
   MAX_GIT_COMMIT_SUBJECT_LENGTH,
   MAX_GIT_STATUS_FILES,
   isGitCommitHashEcho,
+  type GitCommitRequestMessage,
+  type GitCommitResultMessage,
   type GitFileStatus,
+  type GitRequestStatusMessage,
+  type GitStatusMessage,
   type GitStatusFile,
   type GitUnavailableReason,
 } from './gitCommitFlow';
 import type {
-  GitStatusFile,
-  GitUnavailableReason,
+  GitCommitRequestMessage as GitCommitRequestContract,
+  GitCommitResultMessage as GitCommitResultContract,
+  GitRequestStatusMessage as GitRequestStatusContract,
+  GitStatusMessage as GitStatusContract,
 } from './gitCommitFlow';
 // Type-only on purpose: the runtime dependency points the other way
 // (customModelsProtocol imports shared model bounds from here).
@@ -134,8 +147,15 @@ import type {
 // the streaming `changes.update` (H→W; changesProtocol.ts).
 // Version 11: subagent panel — openTranscript/stop/panel W→H,
 // transcript/activity H→W; v12–v16; v17 custom-model discovery/import;
-// v18 turn-scoped file review; v19 truthful last-call Context window.
-export const BRIDGE_PROTOCOL_VERSION = 25 as const;
+// v18 turn-scoped file review; v19 truthful last-call Context window;
+// v20 legacy activity; v21 introduces honest cwd-scoped Agent
+// activity (`agentActivity.*`; teamProtocol.ts); v22 turn-scopes the
+// Git flow and restores latest-turn commit state after Reload; v23
+// makes Agent Activity live-only and adds editor-tab open/stop; v24
+// retires that custom Agent contract in favor of official Mission and
+// Task/Subagent surfaces; v25 adds the bounded Mission setup, control,
+// and snapshot contracts; v26 adds Provider-first custom-model management.
+export const BRIDGE_PROTOCOL_VERSION = 26 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_DELTA_LENGTH = 16_384;
@@ -631,49 +651,6 @@ export interface FilePreviewMessage {
 }
 
 /**
- * Largest inline HTML payload (UTF-16 code units, 512 KB) accepted on
- * a `preview.inlineHtml` message. Both sides enforce it: the webview
- * disables the code-block Preview entry above the limit and the
- * bridge parser rejects oversized payloads outright.
- */
-export const MAX_INLINE_PREVIEW_HTML_LENGTH = 512 * 1024;
-
-/**
- * Asks the host to render an assistant-authored HTML code block from
- * the transcript in the sandboxed prototype preview panel. The source
- * travels by value (there is no backing file); the host revalidates
- * the size before inlining it into the srcdoc sandbox.
- */
-export interface PreviewInlineHtmlMessage {
-  readonly type: 'preview.inlineHtml';
-  readonly sessionId: string;
-  readonly html: string;
-}
-
-/**
- * Asks the host for the repository's commit status (branch plus
- * working-tree/index change list) behind the changes-card commit
- * entry. The host answers with `git.status`.
- */
-export interface GitRequestStatusMessage {
-  readonly type: 'git.requestStatus';
-  readonly sessionId: string;
-}
-
-/**
- * Asks the host to stage exactly these workspace-relative paths and
- * commit them with the given message (`repository.add` +
- * `repository.commit` on the built-in vscode.git extension). The
- * host answers with `git.commitResult`.
- */
-export interface GitCommitRequestMessage {
-  readonly type: 'git.commit';
-  readonly sessionId: string;
-  readonly paths: readonly string[];
-  readonly message: string;
-}
-
-/**
  * Asks the host to reveal the read-only terminal mirror of the
  * active session's execute-command output (native-terminal design
  * slice A), creating the terminal lazily on first use. The mirrored
@@ -1053,8 +1030,8 @@ export type WebviewToHostMessage =
   | FileOpenDiffMessage
   | FilePreviewMessage
   | PreviewInlineHtmlMessage
-  | GitRequestStatusMessage
-  | GitCommitRequestMessage
+  | GitRequestStatusContract
+  | GitCommitRequestContract
   | TerminalOpenMirrorMessage
   | WorkspaceOpenPathMessage
   | SkillsRefreshMessage
@@ -1086,7 +1063,7 @@ export type WebviewToHostMessage =
   | CustomModelsWebviewMessage
   | BtwPrepareMessage | BtwAskMessage
   | BtwDismissMessage | BtwStopMessage
-  | SubagentOpenTranscriptMessage | SubagentStopMessage | SubagentPanelMessage
+  | SubagentPanelMessage
   | QueueAddMessage
   | QueueUpdateMessage
   | QueueRemoveMessage
@@ -1595,8 +1572,8 @@ export interface ImageTranscriptItem {
 
 /**
  * One workspace-relative file a turn changed. Line counts are measured
- * against git HEAD when the turn completes; null when unavailable
- * (no git, binary file, or untracked file).
+ * against the captured before-turn content, with git HEAD as the
+ * history fallback; null when no textual comparison is available.
  */
 export interface ChangedFileSummary {
   readonly path: string;
@@ -2018,44 +1995,6 @@ export interface TranscriptImageMessage {
   readonly item: ImageTranscriptItem;
 }
 
-/**
- * Repository status for the inline commit panel. A present
- * `unavailableReason` means git cannot serve the panel (the entry
- * hides); branch is then null and files empty. Files list in-turn
- * rows first, capped at `MAX_GIT_STATUS_FILES`.
- */
-export interface GitStatusMessage {
-  readonly type: 'git.status';
-  readonly sequence: number;
-  readonly sessionId: string;
-  readonly branch: string | null;
-  readonly files: readonly GitStatusFile[];
-  readonly unavailableReason?: GitUnavailableReason;
-}
-
-/**
- * Outcome of one `git.commit` request: the short-hash echo (possibly
- * empty when unreadable after an otherwise successful commit) and the
- * message subject on success, or git's own error text (hook output
- * included) on failure.
- */
-export type GitCommitResultMessage =
-  | {
-      readonly type: 'git.commitResult';
-      readonly sequence: number;
-      readonly sessionId: string;
-      readonly ok: true;
-      readonly hash: string;
-      readonly subject: string;
-    }
-  | {
-      readonly type: 'git.commitResult';
-      readonly sequence: number;
-      readonly sessionId: string;
-      readonly ok: false;
-      readonly error: string;
-    };
-
 export interface RuntimeDiagnosticMessage {
   readonly type: 'runtime.diagnostic';
   readonly sequence: number;
@@ -2188,8 +2127,8 @@ export type HostToWebviewMessage =
   | SubagentUpdateMessage
   | TranscriptImageMessage
   | ChangesUpdateMessage
-  | GitStatusMessage
-  | GitCommitResultMessage
+  | GitStatusContract
+  | GitCommitResultContract
   | RuntimeDiagnosticMessage
   | TurnStateMessage
   | UserMessageMetaMessage
@@ -2200,12 +2139,23 @@ export type HostToWebviewMessage =
   | QueueStateMessage
   | UiThemeMessage
   | CustomModelsHostMessage
-  | SubagentTranscriptMessage | SubagentActivityMessage
+  | SubagentActivityMessage
+  | CanvasFeedbackDraftMessage
   | MissionHostMessage;
 
 export type {
-  MissionControlAction,
+  CanvasFeedbackDraftMessage,
+  CanvasInlineArtifact,
+  CanvasPanelMessage,
+  CanvasSelectionDescriptor,
+  CanvasView,
+  CanvasViewport,
+  PreviewInlineHtmlMessage,
+} from './canvasProtocol';
+export { MAX_INLINE_PREVIEW_HTML_LENGTH } from './canvasProtocol';
+export type {
   MissionControlMessage,
+  MissionControlAction,
   MissionControlResultMessage,
   MissionDisclosureMessage,
   MissionFeatureSnapshot,

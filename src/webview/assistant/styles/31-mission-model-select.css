@@ -1,0 +1,226 @@
+/* Mission picker: one compact command surface for every setup dropdown. */
+
+.dvx-mission-picker {
+  position: relative;
+  min-width: 0;
+}
+
+/* The selected value remains a quiet single-line control. Every catalog
+   uses the same framed sheet instead of mixing browser and project chrome. */
+.dvx-mission-picker-trigger {
+  display: flex;
+  width: 100%;
+  height: 38px;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 0 11px;
+  border: 1px solid var(--dvx-border-strong);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--dvx-raised) 97%, var(--dvx-surface)),
+      color-mix(in srgb, var(--dvx-raised) 84%, var(--dvx-surface))
+    );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--dvx-ink) 4%, transparent),
+    0 1px 2px rgb(0 0 0 / 6%);
+  color: var(--dvx-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.003em;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dvx-duration-fast) ease,
+    background var(--dvx-duration-fast) ease,
+    box-shadow var(--dvx-duration-fast) ease;
+}
+
+.dvx-mission-picker-value {
+  overflow: hidden;
+  min-width: 0;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-mission-picker-chevron {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  margin: 0 2px 3px 0;
+  border-right: 1.5px solid var(--dvx-muted);
+  border-bottom: 1.5px solid var(--dvx-muted);
+  transform: rotate(45deg);
+  transition:
+    border-color var(--dvx-duration-fast) ease,
+    transform var(--dvx-duration-fast) var(--dvx-easing-out-strong);
+}
+
+.dvx-mission-picker-trigger[aria-expanded='true'] {
+  border-color: color-mix(in srgb, var(--dvx-focus) 72%, var(--dvx-border-strong));
+  background: var(--dvx-raised);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--dvx-ink) 4%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--dvx-focus) 12%, transparent);
+}
+
+.dvx-mission-picker-trigger[aria-expanded='true']
+  .dvx-mission-picker-chevron {
+  margin-top: 4px;
+  transform: rotate(225deg);
+}
+
+.dvx-mission-picker-trigger:disabled {
+  cursor: default;
+}
+
+.dvx-mission-picker:has(> .dvx-mission-picker-trigger:disabled)
+  .dvx-mission-picker-chevron {
+  border-color: var(--dvx-subtle);
+}
+
+.dvx-mission-picker-menu {
+  position: absolute;
+  z-index: 4;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  min-width: 0;
+  padding: 5px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--dvx-border-strong) 82%, transparent);
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--dvx-overlay) 96%, var(--dvx-raised)),
+      var(--dvx-overlay)
+    );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--dvx-ink) 5%, transparent),
+    0 2px 4px rgb(0 0 0 / 9%),
+    0 16px 30px -18px rgb(0 0 0 / 54%);
+  animation: dvx-mission-picker-menu-in var(--dvx-duration-normal)
+    var(--dvx-easing-out-strong) both;
+  transform-origin: top center;
+}
+
+.dvx-mission-picker[data-placement='top'] .dvx-mission-picker-menu {
+  top: auto;
+  bottom: calc(100% + 6px);
+  transform-origin: bottom center;
+}
+
+.dvx-mission-picker-menu-label {
+  display: block;
+  padding: 4px 7px 3px;
+  color: var(--dvx-subtle);
+  font-size: 9px;
+  font-weight: 640;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.dvx-mission-picker-options {
+  display: grid;
+  max-height: min(112px, calc(100vh - 112px));
+  gap: 1px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dvx-mission-picker-option {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 31px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dvx-text-strong);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 480;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--dvx-duration-fast) ease,
+    color var(--dvx-duration-fast) ease;
+}
+
+.dvx-mission-picker-option > span:first-child {
+  overflow: hidden;
+  min-width: 0;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .dvx-mission-picker-trigger:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--dvx-ink) 58%, var(--dvx-border-strong));
+    background: var(--dvx-raised);
+  }
+
+  .dvx-mission-picker-trigger:hover:not(:disabled)
+    .dvx-mission-picker-chevron {
+    border-color: var(--dvx-text-strong);
+  }
+
+  .dvx-mission-picker-option:hover {
+    background: color-mix(in srgb, var(--dvx-soft) 82%, transparent);
+    color: var(--dvx-ink);
+  }
+}
+
+.dvx-mission-picker-option[data-active='true'] {
+  background: color-mix(in srgb, var(--dvx-soft) 82%, transparent);
+  color: var(--dvx-ink);
+}
+
+.dvx-mission-picker-option[aria-selected='true'] {
+  color: var(--dvx-ink);
+  font-weight: 580;
+}
+
+.dvx-mission-picker-check {
+  flex: 0 0 auto;
+  color: var(--dvx-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@keyframes dvx-mission-picker-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.99);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-mission-picker-trigger,
+  .dvx-mission-picker-chevron,
+  .dvx-mission-picker-option {
+    transition: none;
+  }
+
+  .dvx-mission-picker-menu {
+    animation: none;
+  }
+}
+

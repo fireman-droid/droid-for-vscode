@@ -14,7 +14,6 @@ const TEST_BUDGET = 2000;
 const ALLOWLIST = new Map(Object.entries({
   'src/webview/bridge/validateHostMessage.test.ts': 4707,
   'src/webview/bridge/validateHostMessage.ts': 3887,
-  'src/webview/assistant/ComposerControls.tsx': 2916,
   'src/webview/assistant/store.test.ts': 2486,
   'src/runtime/FactoryDroidRuntime.test.ts': 2424,
   'src/runtime/FactoryDroidRuntime.ts': 2288,
@@ -30,7 +29,6 @@ const ALLOWLIST = new Map(Object.entries({
   'src/extension/chat/runtimeLifecycle.ts': 1102,
   'src/runtime/history/projectSessionHistory.ts': 1042,
   'src/webview/assistant/Thread.tsx': 1041,
-  'src/webview/assistant/SessionDrawer.tsx': 974,
 }));
 
 function suggestion(file) {

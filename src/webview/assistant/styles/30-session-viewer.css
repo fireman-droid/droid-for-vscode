@@ -1,0 +1,204 @@
+/* Reusable read-only editor-tab transcript shell retained for a future
+   official Mission Worker source. */
+
+.dvx-session-viewer {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--dvx-raised) 32%, transparent),
+      transparent 110px
+    ),
+    var(--dvx-surface);
+  color: var(--dvx-ink);
+}
+
+.dvx-session-viewer-header {
+  display: flex;
+  min-width: 0;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px max(18px, calc((100% - var(--dvx-content-max)) / 2));
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--dvx-border) 78%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--dvx-surface) 94%,
+    transparent
+  );
+  box-shadow: 0 8px 26px -28px rgb(33 27 20 / 42%);
+}
+
+.dvx-session-viewer-heading {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.dvx-session-viewer-heading h1 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--dvx-text-strong);
+  font-size: 12.5px;
+  font-weight: 590;
+  letter-spacing: -0.006em;
+  line-height: 19px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-session-viewer-state {
+  flex: none;
+  color: var(--dvx-subtle);
+  font-size: 10.5px;
+  line-height: 16px;
+}
+
+.dvx-session-viewer[data-running='true']
+  .dvx-session-viewer-state {
+  color: var(--dvx-muted);
+}
+
+.dvx-session-viewer-stop {
+  flex: none;
+  padding: 2px 1px;
+  border: 0;
+  background: transparent;
+  color: var(--dvx-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 540;
+  line-height: 18px;
+  cursor: pointer;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition:
+    color var(--dvx-duration-fast) ease,
+    text-decoration-color var(--dvx-duration-fast) ease;
+}
+
+.dvx-session-viewer-stop:hover {
+  color: var(--dvx-danger);
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+}
+
+.dvx-session-viewer-stop:focus-visible {
+  outline: 1px solid var(--dvx-focus);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.dvx-session-viewer-stop:disabled {
+  color: var(--dvx-subtle);
+  cursor: default;
+  text-decoration: none;
+}
+
+.dvx-session-viewer-error {
+  margin: 0;
+  padding: 6px max(18px, calc((100% - var(--dvx-content-max)) / 2));
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--dvx-danger) 22%, transparent);
+  color: var(--dvx-danger);
+  font-size: 10.5px;
+  line-height: 16px;
+}
+
+.dvx-session-viewer-viewport {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.dvx-session-viewer-content {
+  width: min(100%, var(--dvx-content-max));
+  min-height: 100%;
+  margin-inline: auto;
+  padding: 24px var(--dvx-column-pad) 64px;
+}
+
+.dvx-session-viewer-thread {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+}
+
+.dvx-session-viewer-thread .dvx-message:last-child {
+  margin-bottom: 0;
+}
+
+.dvx-readonly-thread .dvx-message-user {
+  position: relative;
+  top: auto;
+}
+
+.dvx-readonly-thread .dvx-user-block {
+  margin: 0;
+}
+
+.dvx-readonly-thread .dvx-user-block .dvx-user-text {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+
+.dvx-session-viewer-status,
+.dvx-session-viewer-note {
+  margin: 0;
+  color: var(--dvx-muted);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.dvx-session-viewer-status {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  text-align: center;
+}
+
+.dvx-session-viewer-note {
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--dvx-border) 64%, transparent);
+  color: var(--dvx-subtle);
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .dvx-session-viewer-header {
+    padding-inline: 12px;
+  }
+
+  .dvx-session-viewer-content {
+    padding: 18px 12px 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-session-viewer-stop {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .dvx-session-viewer-header,
+  .dvx-session-viewer-error,
+  .dvx-session-viewer-note {
+    border-color: CanvasText;
+  }
+}

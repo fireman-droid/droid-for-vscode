@@ -1,10 +1,12 @@
 import { connectToDaemon, type ConnectedDroid } from '@factory/droid-sdk';
 
-import { readFactoryAccessCredential } from './factoryCredentials';
+import { resolveFactoryAccessCredential } from './factoryTokenRefresh';
 
 export type DaemonAvailabilityReason =
   | 'not-logged-in'
   | 'credentials-unreadable'
+  | 'refresh-failed'
+  | 'authentication-failed'
   | 'connect-failed';
 
 /**
@@ -31,26 +33,26 @@ export interface DaemonConnection {
 }
 
 export interface DaemonConnectionDeps {
-  readonly readCredential: typeof readFactoryAccessCredential;
+  readonly resolveCredential: typeof resolveFactoryAccessCredential;
   readonly connect: typeof connectToDaemon;
 }
 
 /**
  * Connects to and authenticates against a daemon endpoint.
  *
- * The local credential is re-read on every call (never cached; the
- * droid CLI refreshes it in the background) and only ever passed to
- * the SDK in memory. The SDK facade's `auth.apiKey` field is actually
- * the token channel, so the WorkOS JWT goes there.
+ * The CLI credential is re-read and refreshed on every connection.
+ * The SDK facade's `auth.apiKey` field is the daemon token channel,
+ * so the current WorkOS JWT goes there.
  */
 export async function openDaemonConnection(
   endpoint: { readonly url: string },
   deps: Partial<DaemonConnectionDeps> = {},
 ): Promise<DaemonConnection> {
-  const readCredential = deps.readCredential ?? readFactoryAccessCredential;
+  const resolveCredential =
+    deps.resolveCredential ?? resolveFactoryAccessCredential;
   const connect = deps.connect ?? connectToDaemon;
 
-  const credential = readCredential();
+  const credential = await resolveCredential();
   if (credential.status === 'not-logged-in') {
     throw new DaemonAvailabilityError(
       'not-logged-in',
@@ -58,24 +60,34 @@ export async function openDaemonConnection(
     );
   }
   if (credential.status !== 'ok') {
+    if (credential.status === 'refresh-failed') {
+      throw new DaemonAvailabilityError(
+        'refresh-failed',
+        credential.permanent
+          ? 'Droid sign-in expired. Sign in again with the droid CLI, then retry.'
+          : 'Droid sign-in could not be refreshed. Check the network, then retry.',
+      );
+    }
     throw new DaemonAvailabilityError(
       'credentials-unreadable',
       'Local droid credentials could not be read.',
     );
   }
 
-  let status: DaemonConnectionStatus = 'connected';
+  const connectionState: { status: DaemonConnectionStatus } = {
+    status: 'connected',
+  };
   let droid: ConnectedDroid;
   try {
     droid = await connect({
       url: endpoint.url,
       auth: { apiKey: credential.credential.token },
       onAuthenticationError: () => {
-        status = 'auth-error';
+        connectionState.status = 'auth-error';
       },
       onError: () => {
-        if (status === 'connected') {
-          status = 'failed';
+        if (connectionState.status === 'connected') {
+          connectionState.status = 'failed';
         }
       },
     });
@@ -83,16 +95,20 @@ export async function openDaemonConnection(
     // Deliberately drop the original error: SDK connect errors can
     // embed request payloads and must never reach logs or the Bridge.
     throw new DaemonAvailabilityError(
-      'connect-failed',
-      'Could not connect to the local droid daemon.',
+      connectionState.status === 'auth-error'
+        ? 'authentication-failed'
+        : 'connect-failed',
+      connectionState.status === 'auth-error'
+        ? 'The local droid daemon rejected the current sign-in.'
+        : 'Could not connect to the local droid daemon.',
     );
   }
 
   return {
     droid,
-    status: () => status,
+    status: () => connectionState.status,
     dispose: () => {
-      status = 'failed';
+      connectionState.status = 'failed';
       try {
         droid.disconnect();
       } catch {

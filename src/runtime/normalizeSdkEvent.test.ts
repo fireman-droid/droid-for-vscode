@@ -334,6 +334,24 @@ describe('normalizeSdkEvent', () => {
         }),
       ),
     ).not.toHaveProperty('errorText');
+    // ANSI color runs in the CLI's error content are stripped, so
+    // the excerpt never shows literal escape garbage (#29).
+    expect(
+      normalizeSdkEvent(
+        sdkEvent('tool_result', {
+          toolUseId: 'tool-ansi',
+          toolName: 'Execute',
+          isError: true,
+          content:
+            'Error: Command failed (exit code: 1)\n' +
+            '\u001b[31;1mParserError: \u001b[0mMissing closing brace',
+        }),
+      ),
+    ).toMatchObject({
+      errorText:
+        'Error: Command failed (exit code: 1)\n' +
+        'ParserError: Missing closing brace',
+    });
   });
 
   it('surfaces the Task delegation identity from the tool-start input', () => {

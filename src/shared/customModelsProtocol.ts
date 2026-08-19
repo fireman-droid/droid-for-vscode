@@ -8,7 +8,6 @@ import {
   hasExactKeys,
   isStrictRecord as isRecord,
 } from './strictValidation';
-
 /**
  * BYOK custom-models bridge contract
  * (docs/product/byok-add-model-design.md §5.1).
@@ -31,7 +30,6 @@ import {
  * daemon-masked `apiKeyMask` (probe: `••••` + last 4 chars) — never
  * key material.
  */
-
 export const MAX_CUSTOM_MODEL_URL_LENGTH = 2048;
 export const MAX_CUSTOM_MODEL_KEY_LENGTH = 512;
 export const MAX_CUSTOM_MODEL_MASK_LENGTH = 32;
@@ -39,7 +37,6 @@ export const MAX_CUSTOM_MODEL_PROVIDER_LENGTH = 64;
 export const MAX_CUSTOM_MODEL_OUTPUT_TOKENS = 100_000_000;
 export const MAX_CUSTOM_MODELS_MESSAGE_LENGTH = 512;
 export const MAX_CUSTOM_MODEL_IMPORT_ITEMS = 32;
-
 /**
  * Providers the save form offers. The upsert RPC accepts an open
  * string, but the GUI only writes the three documented BYOK values
@@ -54,7 +51,6 @@ export const CUSTOM_MODEL_PROVIDERS = [
 ] as const;
 export type CustomModelProvider =
   (typeof CUSTOM_MODEL_PROVIDERS)[number];
-
 /**
  * One custom model as the daemon lists it — already key-scrubbed.
  * `rawIndex` is the live array position in settings.json (probed:
@@ -74,7 +70,6 @@ export interface CustomModelListItem {
   readonly hasBedrockConfig: boolean;
   readonly isValid: boolean;
 }
-
 export type CustomModelsState =
   | {
       readonly status: 'loading';
@@ -94,29 +89,24 @@ export type CustomModelsState =
       readonly items: readonly [];
       readonly message: string;
     };
-
 /** Webview panel state: 'idle' means not requested yet. */
 export type CustomModelsUiState =
   | CustomModelsState
   | { readonly status: 'idle'; readonly items: readonly [] };
-
 export const IDLE_CUSTOM_MODELS_STATE: CustomModelsUiState = {
   status: 'idle',
   items: [],
 };
-
 /** Webview → Host: (re)load the custom model list from the daemon. */
 export interface CustomModelsRefreshMessage {
   readonly type: 'customModels.refresh';
   readonly sessionId: string;
 }
-
 /** One provider-returned model projected without arbitrary metadata. */
 export interface DiscoveredCustomModel {
   readonly model: string;
   readonly displayName?: string;
 }
-
 export type CustomModelDiscoveryState =
   | { readonly status: 'loading' }
   | {
@@ -124,15 +114,12 @@ export type CustomModelDiscoveryState =
       readonly items: readonly DiscoveredCustomModel[];
     }
   | { readonly status: 'error'; readonly message: string };
-
 export type CustomModelDiscoveryUiState =
   | CustomModelDiscoveryState
   | { readonly status: 'idle' };
-
 export const IDLE_CUSTOM_MODEL_DISCOVERY_STATE: CustomModelDiscoveryUiState = {
   status: 'idle',
 };
-
 /**
  * Webview → Host: fetch a provider's model catalog. The Host performs
  * the bounded request; the Webview remains network-free. Plaintext key
@@ -145,7 +132,6 @@ export interface CustomModelsDiscoverMessage {
   readonly baseUrl: string;
   readonly apiKey?: string;
 }
-
 /** Webview → Host: import selected discovery rows with shared settings. */
 export interface CustomModelsImportMessage {
   readonly type: 'customModels.import';
@@ -157,7 +143,6 @@ export interface CustomModelsImportMessage {
   readonly maxOutputTokens: number | null;
   readonly noImageSupport: boolean;
 }
-
 /**
  * Webview → Host: create or edit one custom model. `rawIndex` +
  * `expectedModel` together mark an edit (daemon optimistic-concurrency
@@ -179,7 +164,6 @@ export interface CustomModelSaveMessage {
   readonly maxOutputTokens: number | null;
   readonly noImageSupport: boolean;
 }
-
 /** Webview → Host: delete one custom model (concurrency-guarded). */
 export interface CustomModelDeleteMessage {
   readonly type: 'customModels.delete';
@@ -187,7 +171,6 @@ export interface CustomModelDeleteMessage {
   readonly rawIndex: number;
   readonly expectedModel: string;
 }
-
 /**
  * Host → Webview: masked custom-model list state. Not part of
  * `host.snapshot`: the panel pulls on demand so masks never sit in
@@ -199,7 +182,6 @@ export interface CustomModelsStateMessage {
   readonly sessionId: string;
   readonly customModels: CustomModelsState;
 }
-
 /** Host → Webview: bounded provider discovery progress/results. */
 export interface CustomModelsDiscoveryStateMessage {
   readonly type: 'customModels.discovery';
@@ -207,18 +189,31 @@ export interface CustomModelsDiscoveryStateMessage {
   readonly sessionId: string;
   readonly discovery: CustomModelDiscoveryState;
 }
-
+/**
+ * Provider-owned management state. API keys never occur here: the Host
+ * projects presence only and reads the SecretStorage value just-in-time.
+ */
+import type { ProviderConnectionSummary, ProviderModelsState, ProviderModelsStateMessage, ProviderModelsRefreshMessage, ProviderSaveMessage, ProviderModelsFetchMessage, ProviderModelSaveMessage, ProviderModelImportMessage, ProviderModelTestMessage, ProviderModelsTestAllMessage, ProviderModelsWebviewMessage } from "./providerModelsProtocol";
+export type { ProviderConnectionSummary, ProviderModelsState, ProviderModelsStateMessage, ProviderModelsRefreshMessage, ProviderSaveMessage, ProviderModelsFetchMessage, ProviderModelSaveMessage, ProviderModelImportMessage, ProviderModelTestMessage, ProviderModelsTestAllMessage, ProviderModelsWebviewMessage } from "./providerModelsProtocol";
+import {
+  parseProviderModelsStateMessage,
+  parseProviderModelsWebviewMessage,
+} from "./providerModelsProtocol";
+export {
+  parseProviderModelsStateMessage,
+  parseProviderModelsWebviewMessage,
+} from "./providerModelsProtocol";
 export type CustomModelsWebviewMessage =
   | CustomModelsRefreshMessage
   | CustomModelSaveMessage
   | CustomModelDeleteMessage
   | CustomModelsDiscoverMessage
-  | CustomModelsImportMessage;
-
+  | CustomModelsImportMessage
+  | ProviderModelsWebviewMessage;
 export type CustomModelsHostMessage =
   | CustomModelsStateMessage
-  | CustomModelsDiscoveryStateMessage;
-
+  | CustomModelsDiscoveryStateMessage
+  | ProviderModelsStateMessage;
 function isId(value: unknown): value is string {
   return (
     typeof value === 'string' &&
@@ -226,7 +221,6 @@ function isId(value: unknown): value is string {
     value.length <= MAX_BRIDGE_ID_LENGTH
   );
 }
-
 /** Non-empty, trimmed, bounded, control-character-free text. */
 export function isSafeText(
   value: unknown,
@@ -241,7 +235,6 @@ export function isSafeText(
     !/[\u0000-\u001f\u007f-\u009f]/.test(value)
   );
 }
-
 function isRawIndex(value: unknown): value is number {
   return (
     Number.isSafeInteger(value) &&
@@ -249,7 +242,6 @@ function isRawIndex(value: unknown): value is number {
     (value as number) < MAX_MODEL_CATALOG_ITEMS
   );
 }
-
 export function isCustomModelBaseUrl(value: unknown): boolean {
   if (
     !isSafeText(value, MAX_CUSTOM_MODEL_URL_LENGTH) ||
@@ -271,7 +263,6 @@ export function isCustomModelBaseUrl(value: unknown): boolean {
     return false;
   }
 }
-
 export function parseCustomModelsRefreshMessage(
   value: unknown,
 ): CustomModelsRefreshMessage | null {
@@ -285,7 +276,6 @@ export function parseCustomModelsRefreshMessage(
   }
   return { type: 'customModels.refresh', sessionId: value.sessionId };
 }
-
 export function parseCustomModelSaveMessage(
   value: unknown,
 ): CustomModelSaveMessage | null {
@@ -311,7 +301,6 @@ export function parseCustomModelSaveMessage(
       value.provider as string,
     ) ||
     !isCustomModelBaseUrl(value.baseUrl) ||
-    // Edit marker fields travel as a pair or not at all.
     (value.rawIndex === undefined) !==
       (value.expectedModel === undefined) ||
     (value.rawIndex !== undefined && !isRawIndex(value.rawIndex)) ||
@@ -354,14 +343,12 @@ export function parseCustomModelSaveMessage(
     noImageSupport: value.noImageSupport,
   };
 }
-
 function isProvider(value: unknown): value is CustomModelProvider {
   return (
     typeof value === 'string' &&
     (CUSTOM_MODEL_PROVIDERS as readonly string[]).includes(value)
   );
 }
-
 function parseDiscoveredModel(value: unknown): DiscoveredCustomModel | null {
   if (
     !isRecord(value) ||
@@ -379,7 +366,6 @@ function parseDiscoveredModel(value: unknown): DiscoveredCustomModel | null {
       : { displayName: value.displayName as string }),
   };
 }
-
 export function parseCustomModelsDiscoverMessage(
   value: unknown,
 ): CustomModelsDiscoverMessage | null {
@@ -407,7 +393,6 @@ export function parseCustomModelsDiscoverMessage(
     ...(value.apiKey === undefined ? {} : { apiKey: value.apiKey }),
   };
 }
-
 export function parseCustomModelsImportMessage(
   value: unknown,
 ): CustomModelsImportMessage | null {
@@ -467,7 +452,6 @@ export function parseCustomModelsImportMessage(
     noImageSupport: value.noImageSupport,
   };
 }
-
 export function parseCustomModelDeleteMessage(
   value: unknown,
 ): CustomModelDeleteMessage | null {
@@ -493,7 +477,6 @@ export function parseCustomModelDeleteMessage(
     expectedModel: value.expectedModel,
   };
 }
-
 function parseCustomModelListItem(
   value: unknown,
 ): CustomModelListItem | null {
@@ -563,7 +546,6 @@ function parseCustomModelListItem(
     isValid: value.isValid,
   };
 }
-
 function isStateMessageText(value: unknown): value is string {
   return (
     typeof value === 'string' &&
@@ -571,7 +553,6 @@ function isStateMessageText(value: unknown): value is string {
     value.length <= MAX_CUSTOM_MODELS_MESSAGE_LENGTH
   );
 }
-
 export function parseCustomModelsState(
   value: unknown,
 ): CustomModelsState | null {
@@ -617,7 +598,6 @@ export function parseCustomModelsState(
     ? { status: 'error', items, message: value.message as string }
     : { status, items };
 }
-
 export function parseCustomModelsStateMessage(
   value: unknown,
 ): CustomModelsStateMessage | null {
@@ -647,7 +627,6 @@ export function parseCustomModelsStateMessage(
     customModels,
   };
 }
-
 export function parseCustomModelDiscoveryState(
   value: unknown,
 ): CustomModelDiscoveryState | null {
@@ -683,7 +662,6 @@ export function parseCustomModelDiscoveryState(
   }
   return { status: 'ready', items };
 }
-
 export function parseCustomModelsDiscoveryStateMessage(
   value: unknown,
 ): CustomModelsDiscoveryStateMessage | null {
@@ -707,7 +685,6 @@ export function parseCustomModelsDiscoveryStateMessage(
         discovery,
       };
 }
-
 export function parseCustomModelsWebviewMessage(
   value: unknown,
 ): CustomModelsWebviewMessage | null {
@@ -725,11 +702,18 @@ export function parseCustomModelsWebviewMessage(
       return parseCustomModelsDiscoverMessage(value);
     case 'customModels.import':
       return parseCustomModelsImportMessage(value);
+    case 'providerModels.refresh':
+    case 'providerModels.saveProvider':
+    case 'providerModels.fetch':
+    case 'providerModels.saveModel':
+    case 'providerModels.import':
+    case 'providerModels.test':
+    case 'providerModels.testAll':
+      return parseProviderModelsWebviewMessage(value);
     default:
       return null;
   }
 }
-
 export function parseCustomModelsHostMessage(
   value: unknown,
 ): CustomModelsHostMessage | null {
@@ -740,14 +724,10 @@ export function parseCustomModelsHostMessage(
     ? parseCustomModelsStateMessage(value)
     : value.type === 'customModels.discovery'
       ? parseCustomModelsDiscoveryStateMessage(value)
+      : value.type === 'providerModels.state'
+        ? parseProviderModelsStateMessage(value)
       : null;
 }
-
-/**
- * Store-side merge mirroring the skills/MCP panels: a loading or
- * error event with no items keeps showing the previous list instead
- * of blanking it. 'unavailable' replaces outright.
- */
 export function mergeCustomModelsState(
   previous: CustomModelsUiState,
   next: CustomModelsState,

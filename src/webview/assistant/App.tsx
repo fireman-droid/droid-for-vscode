@@ -7,28 +7,33 @@ import { InteractionPanel } from './Interactions';
 import { LocalImageContext, OpenPathContext } from './MarkdownText';
 import type { PathLink } from './pathLink';
 import type { ComposerNavRequest, McpServerAddParams, SessionSettingSelection } from './ComposerControls';
-import { resolveBuiltinSlash, type SlashNavTarget } from './slashBuiltins';
+import {
+  CANVAS_REQUEST_TEMPLATE,
+  resolveBuiltinSlash,
+  type SlashNavTarget,
+} from './slashBuiltins';
 import {
   createMissionSetupSubmission,
   MissionSetup,
   validateMissionSetupSubmission,
 } from './mission/MissionSetup';
 import { useMissionEntry } from './mission/useMissionEntry';
+import { useMissionControl } from './mission/useMissionControl';
 import { canSendMessage, DEFAULT_MESSAGE_WINDOW, MESSAGE_WINDOW_STEP, shouldQueueMessage, useDroidExternalStoreRuntime } from './runtimeAdapter';
-import { SessionDrawer } from './SessionDrawer';
+import { AppHeader } from './AppHeader';
 import { assistantWebviewReducer, initialAssistantWebviewState, isTurnActive, type PendingInteraction, type StoreHostMessage } from './store';
-import { DroidThread } from './Thread';
+import { DroidThread, ToolChangesContext } from './Thread';
 import { GitCommitFlowContext, type GitCommitFlowContextValue } from './GitCommitPanel';
-import { CustomModelsContext, useCustomModelsFlow } from './CustomModelsPanel';
-import { findLatestChangesContext } from './gitCommitDraft';
+import { CustomModelsContext, useCustomModelsFlow } from './customModelsFlow';
+import { ModelsPage } from './ModelsPage';
+import { findLatestChangesContext, findLatestChangesItem } from './gitCommitDraft';
 import { selectPlanAnchors } from './planAnchor';
 import { QueuedMessages } from './QueuedMessages';
+import { ReviewDock } from './ReviewDock';
 import { SideChatSheet } from './SideChatSheet';
-import { SubagentActionsContext, SubagentPanelContext, useSubagentPanelFlow } from './subagentPanelFlow';
-import { SubagentTranscriptSheet } from './SubagentTranscriptSheet';
+import { SubagentActivityStoreContext, useSubagentPanelFlow } from './subagentPanelFlow';
 import { selectWorkingSubagents } from './subagentWorking';
 import { ThemeContext, useThemeController } from './theme';
-import { WorkingBadge } from './WorkingBadge';
 import { MAX_BTW_TEXT_LENGTH } from '../../shared/btwProtocol';
 import {
   isTransientNoticeLifecycleMessage,
@@ -60,21 +65,28 @@ export function App(): React.JSX.Element {
     state.missionControlResult,
     createTurnId,
   );
+  const missionControl = useMissionControl(vscode, createTurnId);
   const [transientDiagnostic, setTransientDiagnostic] =
     useState<TransientDiagnostic | null>(null);
   const [draft, setDraft] = useState(() => restoreDraft(vscode));
+  const draftValueRef = useRef(draft);
   const [initialDraft] = useState(draft);
-  // Rewrites the composer draft programmatically: once on boot with
-  // the restored draft, then on queued-prompt edit begin/cancel
-  // ("Edit Queued" loads the prompt text, cancel clears it).
   const [draftCommand, setDraftCommand] = useState(() => ({
     id: 0,
     text: initialDraft,
   }));
+  const replaceComposerDraft = useCallback(
+    (text: string): void => {
+      draftValueRef.current = text;
+      setDraft(text);
+      setDraftCommand((command) => ({ id: command.id + 1, text }));
+      persistDraft(vscode, text);
+    },
+    [vscode],
+  );
   const sendPendingRef = useRef(false);
-  // Incremented on every committed Composer send; the thread closes
-  // any open user-message edit card when it changes (a new message is
-  // an explicit signal the user abandoned that edit).
+  const canvasFeedbackSequenceRef = useRef(-1);
+  // A new send closes any abandoned user-message edit card.
   const [sendSignal, setSendSignal] = useState(0);
   // Slash-command navigation (S2): `/model` `/mcp` `/skills`
   // `/context` open composer popovers; `/sessions` opens the history
@@ -82,7 +94,6 @@ export function App(): React.JSX.Element {
   const [composerNav, setComposerNav] =
     useState<ComposerNavRequest | null>(null);
   const composerNavCounterRef = useRef(0);
-
   const persistThemePreference = useCallback(
     (preference: ThemePreference): void => {
       post(vscode, { type: 'ui.theme.set', preference });
@@ -106,6 +117,9 @@ export function App(): React.JSX.Element {
     },
     [],
   );
+  const handleMissionOpen = useCallback((): void => {
+    missionEntry.openSetup('');
+  }, [missionEntry.openSetup]);
 
   useEffect(() => {
     // Host messages are coalesced into one dispatch batch per animation
@@ -171,6 +185,17 @@ export function App(): React.JSX.Element {
         applyHostTheme(message.preference, message.resolved);
         return;
       }
+      if (message.type === 'canvas.feedbackDraft') {
+        if (message.sequence <= canvasFeedbackSequenceRef.current) return;
+        canvasFeedbackSequenceRef.current = message.sequence;
+        const current = draftValueRef.current.trim();
+        replaceComposerDraft(
+          current.length === 0
+            ? message.text
+            : `${draftValueRef.current}\n\n${message.text}`,
+        );
+        return;
+      }
       if (isTransientNoticeLifecycleMessage(message)) {
         setTransientDiagnostic((current) =>
           reduceTransientDiagnostic(current, message),
@@ -189,7 +214,7 @@ export function App(): React.JSX.Element {
       flush();
     };
     // applyHostTheme is stable across renders.
-  }, [applyHostTheme, initialDraft, vscode]);
+  }, [applyHostTheme, initialDraft, replaceComposerDraft, vscode]);
 
   useEffect(() => {
     // Main-thread stall accounting (P2): long tasks are aggregated and
@@ -267,10 +292,24 @@ export function App(): React.JSX.Element {
   const hasInteraction = state.interactions.length > 0;
   const connectionStatus = state.connection.status;
   const sessionId = state.sessionId;
-  // BYOK custom-models panel flow: state + callbacks live in the
-  // hook (window-listener pull, not store/snapshot state) and reach
-  // the panel via context — same no-prop-drilling pattern as gitFlow.
-  const customModelsFlow = useCustomModelsFlow(vscode, sessionId);
+  // Full-page BYOK model manager (spec §6 拍板): a webview-local view
+  // switch — the page replaces the chat area while the session keeps
+  // streaming in the background store.
+  const [modelsPageOpen, setModelsPageOpen] = useState(false);
+  const openModelsPage = useCallback((): void => {
+    setModelsPageOpen(true);
+  }, []);
+  const closeModelsPage = useCallback((): void => {
+    setModelsPageOpen(false);
+  }, []);
+  // BYOK custom-models flow: state + callbacks live in the hook
+  // (window-listener pull, not store/snapshot state) and reach the
+  // pages via context — same no-prop-drilling pattern as gitFlow.
+  const customModelsFlow = useCustomModelsFlow(
+    vscode,
+    sessionId,
+    openModelsPage,
+  );
   // Observation-only live activity and child transcripts use the same
   // window-listener pull pattern as customModelsFlow.
   const subagentFlow = useSubagentPanelFlow(vscode, sessionId);
@@ -334,6 +373,10 @@ export function App(): React.JSX.Element {
     // turnId covers set growth; the set itself is a stable ref.
     [state.transcript, turnId],
   );
+  useEffect(() => {
+    subagentFlow.onPanelToggle(workingSubagents.length > 0);
+    return () => subagentFlow.onPanelToggle(false);
+  }, [subagentFlow, workingSubagents.length]);
   const interactionCount = state.interactions.length;
   const queuedCount = state.queue.items.length;
   const queueEditingId = state.queueEditing?.queueId ?? null;
@@ -424,6 +467,7 @@ export function App(): React.JSX.Element {
           });
         }
         dispatch({ type: 'queue.editEnd' });
+        draftValueRef.current = '';
         setDraft('');
         persistDraft(vscode, '');
         return;
@@ -451,6 +495,13 @@ export function App(): React.JSX.Element {
           if (builtin.question.length > 0) {
             handleBtwAsk(builtin.question);
           }
+        } else if (builtin.kind === 'canvas') {
+          replaceComposerDraft(
+            builtin.request.length === 0
+              ? CANVAS_REQUEST_TEMPLATE
+              : `Create an interactive Canvas artifact for:\n\n${builtin.request}`,
+          );
+          return;
         } else {
           const capabilities = state.missionSnapshot?.setup;
           if (
@@ -474,6 +525,7 @@ export function App(): React.JSX.Element {
             }
           }
         }
+        draftValueRef.current = '';
         setDraft('');
         persistDraft(vscode, '');
         return;
@@ -502,16 +554,15 @@ export function App(): React.JSX.Element {
       if (queueRoute) {
         // A turn is running (or a paused queue holds earlier
         // prompts): enqueue on the host instead of starting a turn.
-        // The optimistic card shows immediately; the host's
-        // `queue.state` echo reconciles.
+        // During stopping, send-now makes this next instruction run
+        // immediately after interruption instead of parking it.
         const queueId = createTurnId();
         dispatch({ type: 'queue.add', queueId, text });
-        post(vscode, {
-          type: 'queue.add',
-          sessionId: eligibility.sessionId,
-          queueId,
-          text,
-        });
+        post(vscode, { type: 'queue.add', sessionId: eligibility.sessionId, queueId, text });
+        if (turnStatus === 'stopping' || state.queue.paused !== null) {
+          dispatch({ type: 'queue.promote', queueId });
+          post(vscode, { type: 'queue.promote', sessionId: eligibility.sessionId, queueId });
+        }
       } else {
         sendPendingRef.current = true;
         const nextTurnId = createTurnId();
@@ -524,6 +575,7 @@ export function App(): React.JSX.Element {
         });
       }
       setSendSignal((value) => value + 1);
+      draftValueRef.current = '';
       setDraft('');
       persistDraft(vscode, '');
     },
@@ -537,8 +589,10 @@ export function App(): React.JSX.Element {
       missionEntry,
       queuedCount,
       queueEditingId,
+      replaceComposerDraft,
       sessionId,
       state.missionSnapshot,
+      state.queue.paused,
       turnStatus,
       vscode,
     ],
@@ -570,6 +624,7 @@ export function App(): React.JSX.Element {
         id: command.id + 1,
         text: item.text,
       }));
+      draftValueRef.current = item.text;
       setDraft(item.text);
       persistDraft(vscode, item.text);
     },
@@ -581,6 +636,7 @@ export function App(): React.JSX.Element {
     }
     dispatch({ type: 'queue.editEnd' });
     setDraftCommand((command) => ({ id: command.id + 1, text: '' }));
+    draftValueRef.current = '';
     setDraft('');
     persistDraft(vscode, '');
   }, [queueEditingId, vscode]);
@@ -653,6 +709,7 @@ export function App(): React.JSX.Element {
 
   const handleDraftChange = useCallback(
     (nextDraft: string): void => {
+      draftValueRef.current = nextDraft;
       setDraft(nextDraft);
       persistDraft(vscode, nextDraft);
     },
@@ -775,12 +832,16 @@ export function App(): React.JSX.Element {
     }),
     [state.localImages, requestLocalImage],
   );
-  const handleGitRequestStatus = useCallback((): void => {
+  const handleGitRequestStatus = useCallback((requestTurnId: string): void => {
     if (sessionId === null || connectionStatus !== 'connected') {
       return;
     }
-    dispatch({ type: 'git.statusRequested' });
-    post(vscode, { type: 'git.requestStatus', sessionId });
+    dispatch({ type: 'git.statusRequested', turnId: requestTurnId });
+    post(vscode, {
+      type: 'git.requestStatus',
+      sessionId,
+      turnId: requestTurnId,
+    });
   }, [connectionStatus, sessionId, vscode]);
   const handleGitCommit = useCallback(
     (
@@ -792,7 +853,13 @@ export function App(): React.JSX.Element {
         return;
       }
       dispatch({ type: 'git.commitRequested', turnId: commitTurnId });
-      post(vscode, { type: 'git.commit', sessionId, paths, message });
+      post(vscode, {
+        type: 'git.commit',
+        sessionId,
+        turnId: commitTurnId,
+        paths,
+        message,
+      });
     },
     [connectionStatus, sessionId, vscode],
   );
@@ -800,10 +867,22 @@ export function App(): React.JSX.Element {
     () => findLatestChangesContext(state.transcript),
     [state.transcript],
   );
-  // Plan lines: pure projections of the transcript's todowrites (no
-  // new bridge data) — at most one thin line per user anchor,
-  // rendered directly under that message and updated in place by
-  // later todowrites.
+  const latestChanges = useMemo(
+    () => findLatestChangesItem(state.transcript),
+    [state.transcript],
+  );
+  const toolChanges = useMemo(
+    () => ({
+      turnId: latestChanges?.turnId ?? null,
+      filesByPath: new Map(
+        (latestChanges?.files ?? []).map((file) => [file.path, file] as const),
+      ),
+    }),
+    [latestChanges],
+  );
+  // Plan line: pure projection of transcript TodoWrites (no new
+  // bridge data). The selector returns only the latest lineage, so a
+  // new plan replaces the completed historical card.
   const planAnchors = useMemo(
     () => selectPlanAnchors(state.transcript),
     [state.transcript],
@@ -837,13 +916,12 @@ export function App(): React.JSX.Element {
   }, [vscode]);
   const handleSelectSession = useCallback(
     (nextSessionId: string): void => {
-      subagentFlow.actions.onCloseSheet();
       post(vscode, {
         type: 'session.select',
         sessionId: nextSessionId,
       });
     },
-    [subagentFlow.actions, vscode],
+    [vscode],
   );
   const handleRenameSession = useCallback(
     (targetSessionId: string, title: string): void => {
@@ -976,7 +1054,10 @@ export function App(): React.JSX.Element {
   // already disabled above MAX_INLINE_PREVIEW_HTML_LENGTH, so this
   // guard only drops payloads a stale DOM could still submit.
   const handlePreviewInlineHtml = useCallback(
-    (html: string): void => {
+    (
+      html: string,
+      artifact: { readonly artifactId: string; readonly title: string },
+    ): void => {
       if (
         sessionId === null ||
         connectionStatus !== 'connected' ||
@@ -985,7 +1066,13 @@ export function App(): React.JSX.Element {
       ) {
         return;
       }
-      post(vscode, { type: 'preview.inlineHtml', sessionId, html });
+      post(vscode, {
+        type: 'preview.inlineHtml',
+        sessionId,
+        html,
+        artifactId: artifact.artifactId,
+        title: artifact.title,
+      });
     },
     [sessionId, connectionStatus, vscode],
   );
@@ -1317,17 +1404,11 @@ export function App(): React.JSX.Element {
   // Split-pane /btw: while the side question pane is mounted the
   // shell gains a second grid column so both conversations stay live
   // side by side (Claude Code form factor, user decision 2026-08-12).
-  const btwSplit = btwOpen && btwAvailable && sessionId !== null;
-  // The read-only subagent transcript sheet rides the same split
-  // column; the /btw pane keeps priority when both want it.
-  const subagentSplit = subagentFlow.sheet !== null && !btwSplit;
-  // While the sheet's delegation row still counts as working (same
-  // rule as the badge), the sheet re-requests the transcript on an
-  // interval — the live view of a running subagent.
-  const sheetToolUseId = subagentFlow.sheet?.toolUseId ?? null;
-  const sheetRowRunning =
-    sheetToolUseId !== null &&
-    workingSubagents.some((row) => row.toolUseId === sheetToolUseId);
+  // The models page owns the whole content area, so /btw does not
+  // split the shell while it is open.
+  const fullPageOpen = modelsPageOpen;
+  const btwSplit =
+    !fullPageOpen && btwOpen && btwAvailable && sessionId !== null;
 
   // Rendered once here so transcript markdown (deep inside
   // assistant-ui's message tree) can open clicked file paths without
@@ -1345,12 +1426,12 @@ export function App(): React.JSX.Element {
             ? ' dvx-anim-live'
             : ''
         }${showHandshakeNotice ? ' dvx-shell-stalled' : ''}${
-          btwSplit || subagentSplit ? ' dvx-shell-split' : ''
+          btwSplit ? ' dvx-shell-split' : ''
         }`}
         data-theme={resolvedTheme}
         data-dvx-theme-preference={themeContextValue.preference}
       >
-        <Header
+        <AppHeader
           state={state}
           sessionActionsDisabled={sessionActionsDisabled}
           sessionsOpenSignal={sessionsOpenSignal}
@@ -1364,6 +1445,7 @@ export function App(): React.JSX.Element {
           onUnarchiveSession={handleUnarchiveSession}
           onRefreshArchived={handleRefreshArchived}
           onSearchContent={handleSearchContent}
+          onMissionCommand={missionControl}
         />
         {showHandshakeNotice ? (
           <aside
@@ -1374,6 +1456,11 @@ export function App(): React.JSX.Element {
             Reload Window” to reconnect the panel.
           </aside>
         ) : null}
+        {/* The model manager page replaces the chat content while
+            open (spec §6 拍板); the store keeps streaming behind it. */}
+        {modelsPageOpen ? (
+          <ModelsPage onClose={closeModelsPage} />
+        ) : (
         <DroidThread
           pending={showPending}
           activity={state.turn?.activity}
@@ -1388,6 +1475,7 @@ export function App(): React.JSX.Element {
             state.turn?.status === 'failed'
           }
           running={active}
+          activeTurnId={active ? turnId : null}
           stopping={state.turn?.status === 'stopping'}
           interactionPending={hasInteraction}
           controlsDisabled={
@@ -1480,9 +1568,15 @@ export function App(): React.JSX.Element {
           }
           inlineInteraction={inlineInteraction}
           planAnchors={planAnchors}
-          workingBadge={
-            workingSubagents.length === 0 ? null : (
-              <WorkingBadge rows={workingSubagents} />
+          reviewDock={
+            latestChanges === null || latestChanges.files.length === 0 ? null : (
+              <ReviewDock
+                key={`${sessionId ?? 'none'}:${latestChanges.turnId}`}
+                changes={latestChanges}
+                onOpenFileDiff={handleOpenFileDiff}
+                onPreviewFile={handlePreviewFile}
+                deferMount
+              />
             )
           }
           transientDiagnostic={selectVisibleNotice(transientDiagnostic, sessionId, turnId, active)}
@@ -1519,10 +1613,17 @@ export function App(): React.JSX.Element {
                   />
                 )
           }
+          onMissionOpen={
+            state.sessionId !== null &&
+            state.missionSnapshot?.setup !== undefined
+              ? handleMissionOpen
+              : undefined
+          }
           queuedCount={queuedCount}
           queueEditing={queueEditingId !== null}
           onQueueEditCancel={handleQueueEditCancel}
         />
+        )}
         {/* Full-height side question pane living in the shell's
             second grid column beside the main conversation (Claude
             Code split-pane form factor). */}
@@ -1535,143 +1636,27 @@ export function App(): React.JSX.Element {
             onDismiss={handleBtwDismiss}
           />
         ) : null}
-        {/* Read-only subagent transcript sheet: same split column as
-            /btw; the side question pane keeps priority when open. */}
-        {subagentFlow.sheet !== null && !btwSplit ? (
-          <SubagentTranscriptSheet
-            key={subagentFlow.sheet.toolUseId}
-            sheet={subagentFlow.sheet}
-            running={sheetRowRunning}
-            onRefresh={subagentFlow.actions.onRefreshTranscript}
-            onDismiss={subagentFlow.actions.onCloseSheet}
-          />
-        ) : null}
       </div>
     </AssistantRuntimeProvider>
   );
   return (
     <ThemeContext.Provider value={themeContextValue}>
       <OpenPathContext.Provider value={handleOpenPath}>
+        <ToolChangesContext.Provider value={toolChanges}>
         <LocalImageContext.Provider value={localImageSource}>
           <GitCommitFlowContext.Provider value={gitFlow}>
             <CustomModelsContext.Provider value={customModelsFlow}>
-              <SubagentPanelContext.Provider value={subagentFlow}>
-                <SubagentActionsContext.Provider
-                  value={subagentFlow.actions}
-                >
-                  {app}
-                </SubagentActionsContext.Provider>
-              </SubagentPanelContext.Provider>
+              <SubagentActivityStoreContext.Provider
+                value={subagentFlow.activityStore}
+              >
+                {app}
+              </SubagentActivityStoreContext.Provider>
             </CustomModelsContext.Provider>
           </GitCommitFlowContext.Provider>
         </LocalImageContext.Provider>
+        </ToolChangesContext.Provider>
       </OpenPathContext.Provider>
     </ThemeContext.Provider>
-  );
-}
-
-function Header({
-  state,
-  sessionActionsDisabled,
-  sessionsOpenSignal,
-  onNewSession,
-  onCreateWorktreeSession,
-  onSelectSession,
-  onRenameSession,
-  onForkSession,
-  onToggleFavorite,
-  onArchiveSession,
-  onUnarchiveSession,
-  onRefreshArchived,
-  onSearchContent,
-}: {
-  readonly state: typeof initialAssistantWebviewState;
-  readonly sessionActionsDisabled: boolean;
-  /** `/sessions` navigation counter; a change opens the drawer. */
-  readonly sessionsOpenSignal: number;
-  readonly onNewSession: () => void;
-  readonly onCreateWorktreeSession: () => void;
-  readonly onSelectSession: (sessionId: string) => void;
-  readonly onRenameSession: (sessionId: string, title: string) => void;
-  readonly onForkSession: (sessionId: string) => void;
-  readonly onToggleFavorite: (
-    sessionId: string,
-    favorite: boolean,
-  ) => void;
-  readonly onArchiveSession: (sessionId: string) => void;
-  readonly onUnarchiveSession: (sessionId: string) => void;
-  readonly onRefreshArchived: () => void;
-  readonly onSearchContent: (query: string) => void;
-}): React.JSX.Element {
-  const connectionLabel = formatConnectionStatus(state.connection.status);
-  return (
-    <header className="dvx-header">
-      <div className="dvx-brand">
-        <div>
-          <div className="dvx-title">Droid</div>
-          <div
-            className="dvx-runtime-status"
-            role={
-              state.connection.status === 'unavailable' ? 'alert' : 'status'
-            }
-          >
-            <span>{connectionLabel}</span>
-            {/* Quiet read-only mission identity; same muted style as
-                the connection label (UI restraint: no new element). */}
-            {state.mission !== null ? (
-              <span>{`· ${formatMissionIdentity(state.mission)}`}</span>
-            ) : null}
-          </div>
-        </div>
-      </div>
-      <div className="dvx-header-actions">
-        <button
-          className="dvx-icon-button dvx-header-new"
-          type="button"
-          aria-label="New session"
-          disabled={sessionActionsDisabled}
-          onClick={onNewSession}
-        >
-          <NewSessionIcon />
-        </button>
-        <SessionDrawer
-          sessions={state.sessions}
-          archived={state.archived}
-          sessionSearch={state.sessionSearch}
-          actionsDisabled={sessionActionsDisabled}
-          openSignal={sessionsOpenSignal}
-          worktreeCreateAvailable={state.worktreeCreateAvailable}
-          onCreateWorktreeSession={onCreateWorktreeSession}
-          onSelectSession={onSelectSession}
-          onRenameSession={onRenameSession}
-          onForkSession={onForkSession}
-          onToggleFavorite={onToggleFavorite}
-          onArchiveSession={onArchiveSession}
-          onUnarchiveSession={onUnarchiveSession}
-          onRefreshArchived={onRefreshArchived}
-          onSearchContent={onSearchContent}
-        />
-      </div>
-    </header>
-  );
-}
-
-function NewSessionIcon(): React.JSX.Element {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M8 3.333v9.334M3.333 8h9.334"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-    </svg>
   );
 }
 
@@ -1759,45 +1744,4 @@ function createTurnId(): string {
     return globalThis.crypto.randomUUID();
   }
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-}
-
-function formatConnectionStatus(
-  status: typeof initialAssistantWebviewState.connection.status,
-): string {
-  switch (status) {
-    case 'connected':
-      return 'Local runtime connected';
-    case 'connecting':
-      return 'Connecting to local runtime';
-    case 'unavailable':
-      return 'Local runtime unavailable';
-    case 'idle':
-      return 'Local runtime idle';
-  }
-}
-
-/** "Mission · running" / "Mission worker" read-only identity text. */
-function formatMissionIdentity(
-  mission: NonNullable<typeof initialAssistantWebviewState.mission>,
-): string {
-  const label =
-    mission.role === 'worker' ? 'Mission worker' : 'Mission';
-  return mission.state === null
-    ? label
-    : `${label} · ${formatMissionState(mission.state)}`;
-}
-
-function formatMissionState(
-  state: NonNullable<
-    NonNullable<typeof initialAssistantWebviewState.mission>['state']
-  >,
-): string {
-  switch (state) {
-    case 'awaiting_input':
-      return 'awaiting input';
-    case 'orchestrator_turn':
-      return 'orchestrating';
-    default:
-      return state;
-  }
 }

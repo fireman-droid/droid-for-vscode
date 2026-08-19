@@ -41,7 +41,7 @@
   min-height: 0;
   border-left: 1px solid var(--dvx-border, var(--dvx-border));
   background:
-    linear-gradient(180deg, var(--dvx-raised) 0%, #fdfcfa 100%),
+    linear-gradient(180deg, var(--dvx-raised) 0%, var(--dvx-surface) 100%),
     var(--dvx-raised, var(--dvx-raised));
   animation: dvx-btw-expand 200ms var(--dvx-easing-out-strong);
 }
@@ -135,13 +135,22 @@
   user-select: none;
 }
 
+/* No top padding on the scroll container itself: Chromium anchors
+   sticky children below a scroll container's own padding, which let
+   one line of the previous entry peek above the pinned question
+   (旧账 30). The breathing room lives on the inner content wrapper
+   instead, so sticky questions pin flush with the visual top. */
 .dvx-btw-entries {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 16px;
+  padding: 0 16px 12px;
   border-top: 1px solid var(--dvx-border, var(--dvx-border));
   overscroll-behavior: contain;
+}
+
+.dvx-btw-entries-content {
+  padding-top: 12px;
 }
 
 .dvx-btw-entry + .dvx-btw-entry {
@@ -152,7 +161,8 @@
 .dvx-btw-question {
   position: sticky;
   z-index: 1;
-  top: 0;
+  /* Same parameterized offset as .dvx-message-user (spec R2). */
+  top: var(--dvx-sticky-top, 0px);
   margin: 0 0 8px;
   font: inherit;
   cursor: pointer;

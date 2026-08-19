@@ -3,8 +3,31 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_TOOL_OUTPUT_TAIL_LENGTH,
   isExecuteToolName,
+  stripTerminalNoise,
   toToolOutputTail,
 } from './toolOutput';
+
+describe('stripTerminalNoise', () => {
+  it('strips ANSI color runs from failed-command excerpts (#29)', () => {
+    // Shape from the user screenshot: PowerShell ParserError with
+    // bracketed color codes rendered as literal garbage.
+    expect(
+      stripTerminalNoise(
+        'Error: Command failed (exit code: 1)\n' +
+          '\u001b[31;1mParserError: \u001b[0m\n' +
+          '\u001b[31;1m\u001b[36;1mLine |\u001b[0m',
+      ),
+    ).toBe(
+      'Error: Command failed (exit code: 1)\nParserError: \nLine |',
+    );
+  });
+
+  it('applies carriage-return overwrites without trimming', () => {
+    expect(stripTerminalNoise('10%\r100%\ndone \n')).toBe(
+      '100%\ndone \n',
+    );
+  });
+});
 
 describe('isExecuteToolName', () => {
   it.each(['Execute', 'execute', 'Bash', 'shell', 'tools/Execute'])(

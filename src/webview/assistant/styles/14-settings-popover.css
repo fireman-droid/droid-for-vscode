@@ -47,7 +47,7 @@
 
 .dvx-settings-select {
   overflow: hidden;
-  border: 1px solid rgb(229 229 229 / 80%);
+  border: 1px solid var(--dvx-border);
   border-radius: 8px;
   background: var(--dvx-raised);
 }
@@ -61,15 +61,15 @@
   cursor: pointer;
   grid-template-columns: minmax(0, 1fr) auto 16px;
   gap: 6px;
-  min-height: 37px;
-  padding: 8px 12px;
+  min-height: 32px;
+  padding: 6px 10px;
   border: 0;
-  border-radius: 0;
+  border-radius: 4px;
   background: transparent;
 }
 
 .dvx-settings-select[data-expanded="true"] .dvx-popover-row {
-  border-bottom: 1px solid rgb(229 229 229 / 80%);
+  border-bottom: 1px solid var(--dvx-border);
 }
 
 .dvx-popover-row-icon, .dvx-popover-row-copy span {
@@ -114,8 +114,8 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  min-height: 30px;
-  padding: 5px 12px;
+  min-height: 27px;
+  padding: 4px 10px;
   border: 0;
   background: transparent;
   color: var(--dvx-text-secondary);
@@ -143,14 +143,14 @@
   position: sticky;
   z-index: 2;
   top: 0;
-  background: #faf9f6;
+  background: var(--dvx-overlay);
   color: var(--dvx-subtle);
 }
 
 .dvx-settings-search-shell::before {
   position: absolute;
   z-index: -1;
-  inset: -10px 0 -4px;
+  inset: -6px 0 -4px;
   background: inherit;
   content: '';
   pointer-events: none;
@@ -185,7 +185,7 @@
 .dvx-settings-divider {
   height: 1px;
   margin: 5px 2px;
-  background: rgb(229 229 229 / 80%);
+  background: var(--dvx-border);
 }
 
 .dvx-settings-info-row {
@@ -210,9 +210,131 @@
   font-size: 11.5px;
 }
 
+/* ---- Context Usage (Cursor form, spec §3.2) ----------------------
+   Title row with quiet icon actions, one summary line, a 4px
+   segmented category bar over --dvx-ctx-1..5, a 26px swatch legend,
+   and the Compact footer row (18-interactions.css). */
 .dvx-context-popover {
-  min-height: 167px;
   padding: 0;
+}
+
+.dvx-context-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px 0 16px;
+}
+
+.dvx-context-head-title {
+  color: var(--dvx-ink);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.dvx-context-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dvx-context-icon-button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dvx-muted);
+  cursor: pointer;
+  transition: background-color 130ms ease, color 130ms ease;
+}
+
+.dvx-context-icon-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.dvx-context-icon-button:hover:not(:disabled) {
+  color: var(--dvx-ink);
+  background: var(--dvx-soft);
+}
+
+.dvx-context-icon-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.dvx-context-refresh-spinning {
+  animation: dvx-spin 900ms linear infinite;
+}
+
+.dvx-context-bar {
+  display: flex;
+  overflow: hidden;
+  height: 4px;
+  margin: 8px 0 10px;
+  gap: 2px;
+  border-radius: 2px;
+  background: var(--dvx-border);
+}
+
+.dvx-context-bar-segment {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  flex: 0 0 auto;
+  border-radius: 2px;
+  transition: width 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dvx-context-legend {
+  display: grid;
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+}
+
+.dvx-context-legend-row {
+  display: flex;
+  align-items: center;
+  min-height: 26px;
+  gap: 8px;
+}
+
+.dvx-context-legend-swatch {
+  display: block;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+}
+
+.dvx-context-legend-credits .dvx-context-legend-swatch {
+  background: var(--dvx-border-strong);
+}
+
+.dvx-context-legend-label {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+  color: var(--dvx-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-context-legend-value {
+  flex: 0 0 auto;
+  color: var(--dvx-muted);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
 }
 
 .dvx-popover-heading {
@@ -246,13 +368,13 @@
   gap: 8px;
   min-height: 40px;
   padding: 10px 16px 8px;
-  border-bottom: 1px solid rgb(229 229 229 / 60%);
+  border-bottom: 1px solid var(--dvx-border);
 }
 
 /* Inside the padded settings popover the head bleeds to the card
    edges so its divider runs full width. */
 .dvx-skills-panel .dvx-panel-head {
-  margin: -10px -10px 0;
+  margin: -6px -6px 0;
   padding: 8px 12px 7px;
 }
 
@@ -317,138 +439,32 @@
 }
 
 .dvx-context-usage {
-  padding: 12px 16px 0;
+  padding: 6px 16px 0;
 }
 
 .dvx-context-usage-summary strong {
-  color: #171717;
-  font-size: 28px;
-  font-weight: 600;
-  line-height: 30.5px;
-  letter-spacing: -0.04em;
+  color: var(--dvx-ink);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
 }
 
 .dvx-context-usage-summary span {
   color: var(--dvx-muted);
-  font-size: 11px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .dvx-context-usage-unavailable .dvx-context-usage-summary strong {
   max-width: 100%;
-  font-size: 17px;
-  line-height: 22px;
-  letter-spacing: -0.02em;
-}
-
-.dvx-context-usage-note {
-  margin: 10px 0 14px;
-  color: var(--dvx-muted);
-  font-size: 11px;
-  line-height: 17px;
-}
-
-.dvx-context-progress {
-  overflow: hidden;
-  height: 8px;
-  margin: 10px 0 14px;
-  border-radius: 999px;
-  background: var(--dvx-border);
-}
-
-.dvx-context-progress span {
-  display: block;
-  height: 100%;
-  min-width: 0;
-  transition: width 280ms cubic-bezier(0.22, 1, 0.36, 1);
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--dvx-accent), #ff8b60);
-}
-
-.dvx-context-details {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding-top: 10px;
-  gap: 0;
-  margin: 0 -16px;
-  padding: 0;
-  border-top: 1px solid rgb(229 229 229 / 60%);
-}
-
-.dvx-context-details div {
-  min-width: 0;
-  min-height: 58px;
-  padding: 10px 16px;
-}
-
-.dvx-context-details div + div {
-  padding-left: 16px;
-  border-left: 1px solid rgb(229 229 229 / 60%);
-}
-
-.dvx-context-details dt {
-  color: var(--dvx-subtle);
-  font-size: 11px;
-  line-height: 16px;
-}
-
-.dvx-context-details dd {
-  margin: 2px 0 0;
-  font-weight: 650;
-  color: var(--dvx-text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 20px;
 }
 
-/* Token-usage ledger: quiet per-turn/session breakdown sharing the
-   context popover's hairline and muted-label language. Tabular
-   numerals keep the columns readable without any chart chrome. */
-.dvx-token-usage {
-  padding: 10px 16px 2px;
-  border-top: 1px solid rgb(229 229 229 / 60%);
-}
-
-.dvx-token-usage-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.dvx-token-usage-table th,
-.dvx-token-usage-table td {
-  padding: 2px 0;
+.dvx-context-usage-note {
+  margin: 6px 0 10px;
+  color: var(--dvx-muted);
   font-size: 11px;
-  font-weight: 400;
-  line-height: 16px;
-  text-align: right;
-}
-
-.dvx-token-usage-table thead th {
-  padding-bottom: 5px;
-  color: var(--dvx-subtle);
-}
-
-.dvx-token-usage-table thead th:first-child {
-  color: var(--dvx-text-strong);
-  font-weight: 500;
-  text-align: left;
-}
-
-.dvx-token-usage-table th[scope="row"] {
-  color: var(--dvx-muted);
-  text-align: left;
-}
-
-.dvx-token-usage-table td {
-  min-width: 62px;
-  padding-left: 12px;
-  color: var(--dvx-text-secondary);
-  font-weight: 550;
-  font-variant-numeric: tabular-nums;
-}
-
-.dvx-token-usage-note {
-  margin: 7px 0 0;
-  color: var(--dvx-muted);
-  font-size: 10.5px;
-  line-height: 1.35;
+  line-height: 17px;
 }
 

@@ -175,7 +175,7 @@ export async function readWorkerSessionIds({
 const SESSION_SETTINGS_SUFFIX = '.settings.json';
 const MAX_SESSION_SETTINGS_BYTES = 64 * 1024;
 
-async function readBoundedSessionSettings(file: string) {
+export async function readBoundedSessionSettings(file: string) {
   try {
     const handle = await fs.open(file, 'r');
     try {
@@ -212,6 +212,10 @@ async function readBoundedSessionSettings(file: string) {
 function hasWorkerTag(tags: readonly SessionTag[] | undefined): boolean {
   return (
     hasSubagentSessionTag(tags) ||
+    // Independent `droid exec` automation sessions belong in the
+    // read-only Agent activity page. Resuming one from the main drawer
+    // could double-write against its external CLI process.
+    tags?.some((tag) => tag.name === 'exec') === true ||
     tags?.some(
       (tag) =>
         tag.name === 'decompSessionType' &&
@@ -220,7 +224,7 @@ function hasWorkerTag(tags: readonly SessionTag[] | undefined): boolean {
   );
 }
 
-async function workspaceSessionsDirectory(
+export async function workspaceSessionsDirectory(
   sessionsDirectory: string,
   cwd: string,
 ): Promise<string> {

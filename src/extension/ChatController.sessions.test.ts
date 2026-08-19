@@ -17,6 +17,9 @@ import {
   send,
   type SessionCatalog,
   type SessionCatalogResult,
+  type SessionHistoryLoader,
+  type SessionRecoveryPersistence,
+  SessionRecoveryStore,
   snapshots,
   successfulTurn,
   turnStates,
@@ -164,6 +167,109 @@ describe('ChatController', () => {
       { timeout: 5000 },
     );
     release.resolve();
+  });
+
+  it('paints the recovered checkpoint immediately on switch, before history loads', async () => {
+    // Bug #37 checkpoint-first rendering: the switch used to leave
+    // the old transcript on screen for the full ~5-8s history spawn.
+    const values = new Map<string, unknown>();
+    const persistence: SessionRecoveryPersistence = {
+      get: <T>(key: string) => values.get(key) as T | undefined,
+      update: async (key: string, value: unknown) => {
+        values.set(key, value);
+      },
+    };
+    const seed = new SessionRecoveryStore(persistence);
+    await seed.load();
+    seed.writeSession('session-2', {
+      transcript: [
+        { id: 'u1', kind: 'user', text: 'Recovered prompt' },
+      ],
+      historyStatus: 'complete',
+      truncated: false,
+    });
+    await seed.flush();
+
+    const historyDeferred = deferred<
+      Awaited<ReturnType<SessionHistoryLoader['loadHistory']>>
+    >();
+    const history: SessionHistoryLoader = {
+      // The initial session-1 activation is a `new` target, so only
+      // the session-2 switch reaches this loader.
+      loadHistory: vi.fn(() => historyDeferred.promise),
+    };
+    const initDeferred = deferred<void>();
+    const runtime = createMockRuntime();
+    const replacement = createMockRuntime();
+    replacement.initialize.mockImplementation(async () => {
+      await initDeferred.promise;
+      return available('session-2');
+    });
+    const createRuntime = vi
+      .fn<() => MockRuntime>()
+      .mockReturnValueOnce(runtime)
+      .mockReturnValueOnce(replacement);
+    const { controller, messages } = createController(
+      createRuntime,
+      undefined,
+      createCatalog([
+        catalogEntry('session-1'),
+        catalogEntry('session-2'),
+      ]),
+      new SessionRecoveryStore(persistence),
+      history,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'session.select',
+      sessionId: 'session-2',
+    });
+    // The checkpoint snapshot arrives while both the history load and
+    // the runtime initialize are still pending.
+    await vi.waitFor(() => {
+      const latest = snapshots(messages).at(-1);
+      expect(latest?.sessionId).toBe('session-2');
+      expect(latest?.connection.status).toBe('connecting');
+      expect(latest?.transcript).toEqual([
+        { id: 'u1', kind: 'user', text: 'Recovered prompt' },
+      ]);
+    });
+
+    historyDeferred.resolve({
+      status: 'available',
+      state: {
+        transcript: [
+          {
+            id: 'sdk-u1',
+            kind: 'user',
+            text: 'Recovered prompt',
+            messageId: 'mid-1',
+          },
+          {
+            id: 'sdk-a1',
+            kind: 'assistant',
+            turnId: 'turn-1',
+            text: 'Loaded answer',
+          },
+        ],
+        historyStatus: 'complete',
+        truncated: false,
+      },
+    });
+    initDeferred.resolve();
+    await vi.waitFor(() => {
+      const latest = snapshots(messages).at(-1);
+      expect(latest?.connection.status).toBe('connected');
+      expect(latest?.sessionId).toBe('session-2');
+      expect(
+        latest?.transcript.some(
+          (item) =>
+            item.kind === 'assistant' && item.text === 'Loaded answer',
+        ),
+      ).toBe(true);
+    });
   });
 
   it('preserves a running daemon turn on dispose (reload keeps the turn alive)', async () => {

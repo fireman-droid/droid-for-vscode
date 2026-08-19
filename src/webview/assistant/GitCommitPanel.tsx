@@ -26,7 +26,7 @@ export interface GitCommitFlowContextValue {
   readonly latestChangesTurnId: string | null;
   /** Prompt that produced the latest changes card. */
   readonly promptText: string | null;
-  readonly onRequestStatus: () => void;
+  readonly onRequestStatus: (turnId: string) => void;
   readonly onCommit: (
     turnId: string,
     paths: readonly string[],
@@ -56,17 +56,28 @@ export function ChangesCommitEntry({
     flow.latestChangesTurnId === turnId;
   const availability = flow?.state.availability ?? "unavailable";
   const statusPending = flow?.state.statusPending ?? false;
+  const statusIsCurrent =
+    flow?.state.statusTurnId === turnId;
+  const currentStatusPending = statusPending && statusIsCurrent;
   const onRequestStatus = flow?.onRequestStatus;
   useEffect(() => {
     if (
       isLatest &&
-      availability === "unknown" &&
-      !statusPending &&
+      availability !== "unavailable" &&
+      (!statusIsCurrent || availability === "unknown") &&
+      !currentStatusPending &&
       onRequestStatus !== undefined
     ) {
-      onRequestStatus();
+      onRequestStatus(turnId);
     }
-  }, [isLatest, availability, statusPending, onRequestStatus]);
+  }, [
+    isLatest,
+    statusIsCurrent,
+    availability,
+    currentStatusPending,
+    onRequestStatus,
+    turnId,
+  ]);
   const committedOk =
     flow !== null &&
     flow.state.lastResult?.ok === true &&
@@ -88,8 +99,28 @@ export function ChangesCommitEntry({
       </div>
     );
   }
+  if (!statusIsCurrent) {
+    return null;
+  }
+  if (flow.state.committedHash !== null) {
+    return (
+      <div className="dvx-commit-result" role="status">
+        Committed {flow.state.committedHash.slice(0, 7)}
+      </div>
+    );
+  }
   if (availability !== "available") {
     return null;
+  }
+  if (
+    !statusPending &&
+    !flow.state.files.some((file) => file.inTurn)
+  ) {
+    return (
+      <div className="dvx-commit-result" role="status">
+        No pending turn changes
+      </div>
+    );
   }
   if (!expanded) {
     return (
@@ -97,7 +128,7 @@ export function ChangesCommitEntry({
         type="button"
         className="dvx-changes-action dvx-changes-commit"
         onClick={() => {
-          flow.onRequestStatus();
+          flow.onRequestStatus(turnId);
           setExpanded(true);
         }}
       >

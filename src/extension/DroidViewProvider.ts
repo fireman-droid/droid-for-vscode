@@ -3,12 +3,15 @@ import * as vscode from 'vscode';
 import type { RuntimeDiagnosticSink } from '../runtime/runtimeDiagnostics';
 import {
   BRIDGE_PROTOCOL_VERSION,
-  type ThemePreference,
 } from '../shared/bridgeMessages';
 import { isStrictRecord } from '../shared/strictValidation';
 import { parseWebviewMessage } from '../shared/validateMessage';
 import type { ChatController } from './ChatController';
-import { getWebviewHtml, type WebviewBootTheme } from './webviewHtml';
+import { getWebviewHtml } from './webviewHtml';
+import {
+  readWebviewBootTheme,
+  readWebviewThemePreference,
+} from './webviewTheme';
 
 const BEACON_ERROR_KINDS: ReadonlySet<string> = new Set([
   'boot-timeout',
@@ -46,34 +49,6 @@ function readReadyProtocolMismatch(
   return typeof value.protocolVersion === 'number'
     ? value.protocolVersion
     : safeStringify(value.protocolVersion).slice(0, 64);
-}
-
-/** The persisted `droidvisx.theme` user setting (fail to 'auto'). */
-function readThemePreference(): ThemePreference {
-  const value = vscode.workspace
-    .getConfiguration('droidvisx')
-    .get<string>('theme', 'auto');
-  return value === 'light' || value === 'dark' ? value : 'auto';
-}
-
-/**
- * The theme the webview HTML boots with, so the anti-flash inline
- * background and the first styled frame already match. 'auto' maps
- * the editor's active color theme kind; runtime changes arrive from
- * the Host color-theme listener through authoritative `ui.theme` pushes.
- */
-function bootTheme(): WebviewBootTheme {
-  const preference = readThemePreference();
-  if (preference !== 'auto') {
-    return { preference, resolved: preference };
-  }
-  const kind = vscode.window.activeColorTheme.kind;
-  const resolved =
-    kind === vscode.ColorThemeKind.Dark ||
-    kind === vscode.ColorThemeKind.HighContrast
-      ? 'dark'
-      : 'light';
-  return { preference, resolved };
 }
 
 export class DroidViewProvider
@@ -128,11 +103,11 @@ export class DroidViewProvider
         style: vscode.Uri.joinPath(webviewDistUri, 'webview.css'),
       },
       undefined,
-      bootTheme(),
+      readWebviewBootTheme(),
     );
 
     const postTheme = (): void => {
-      const theme = bootTheme();
+      const theme = readWebviewBootTheme();
       void webviewView.webview
         .postMessage({
           type: 'ui.theme',
@@ -160,7 +135,7 @@ export class DroidViewProvider
       if (
         this.webviewView === webviewView &&
         webviewView.visible &&
-        readThemePreference() === 'auto'
+        readWebviewThemePreference() === 'auto'
       ) {
         postTheme();
       }

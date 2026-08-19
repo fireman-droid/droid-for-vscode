@@ -99,6 +99,15 @@ function discoveryMessages(
   );
 }
 
+function providerMessages(messages: readonly unknown[]): unknown[] {
+  return messages.filter(
+    (message) =>
+      typeof message === 'object' &&
+      message !== null &&
+      (message as { type?: unknown }).type === 'providerModels.state',
+  );
+}
+
 async function connectedHost(options: {
   gateway?: CustomModelsGateway | null;
   discovery?: CustomModelDiscoveryGateway;
@@ -254,6 +263,37 @@ describe('ChatController custom models', () => {
       expect.anything(),
     );
     expect(JSON.stringify(messages)).not.toContain('discovery-key-for-test');
+  });
+
+  it('reports a missing Provider key through discovery without clearing Providers', async () => {
+    const { host, controller, messages } = await connectedHost({
+      discovery: { discover: vi.fn(async () => []) },
+    });
+    host.providerRegistry = {
+      get: vi.fn(() => ({
+        id: 'provider-a',
+        displayName: 'Gateway',
+        protocol: 'openai',
+        rootUrl: 'https://api.example.com',
+        apiBaseUrl: 'https://api.example.com/v1',
+        secretKey: 'secret-a',
+      })),
+      apiKey: vi.fn(async () => undefined),
+    } as unknown as NonNullable<CustomModelsHost['providerRegistry']>;
+    const providerCount = providerMessages(messages).length;
+    dispatchCustomModels(host, {
+      type: 'providerModels.fetch',
+      sessionId: 'session-1',
+      providerId: 'provider-a',
+    });
+    await vi.waitFor(() =>
+      expect(discoveryMessages(messages).at(-1)?.discovery).toMatchObject({
+        status: 'error',
+        message: expect.stringContaining('API key'),
+      }),
+    );
+    expect(providerMessages(messages)).toHaveLength(providerCount);
+    await controller.dispose();
   });
 
   it('reports unavailable discovery and ignores stale results', async () => {

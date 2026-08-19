@@ -163,7 +163,7 @@ describe('path-link Preview entry', () => {
       workspaceRoot: ROOT,
       previewFile,
     });
-    const chip = screen.getByRole('button', { name: 'Preview' });
+    const chip = screen.getByRole('button', { name: 'Canvas' });
     expect(chip.className).toBe('dvx-preview-chip dvx-path-preview-chip');
     fireEvent.click(chip);
     expect(previewFile).toHaveBeenCalledExactlyOnceWith(
@@ -188,7 +188,7 @@ describe('path-link Preview entry', () => {
       { workspaceRoot: ROOT, previewFile: vi.fn() },
     );
     expect(
-      screen.queryByRole('button', { name: 'Preview' }),
+      screen.queryByRole('button', { name: 'Canvas' }),
     ).toBeNull();
     // The links themselves still render.
     expect(screen.getAllByRole('button')).toHaveLength(2);
@@ -200,7 +200,7 @@ describe('path-link Preview entry', () => {
       previewFile: vi.fn(),
     });
     expect(
-      screen.queryByRole('button', { name: 'Preview' }),
+      screen.queryByRole('button', { name: 'Canvas' }),
     ).toBeNull();
     cleanup();
     const onOpenPath = vi.fn();
@@ -210,7 +210,7 @@ describe('path-link Preview entry', () => {
       </OpenPathContext.Provider>,
     );
     expect(
-      screen.queryByRole('button', { name: 'Preview' }),
+      screen.queryByRole('button', { name: 'Canvas' }),
     ).toBeNull();
   });
 });
@@ -327,20 +327,24 @@ describe('HTML code block preview', () => {
     expect(isInlineHtmlPreviewCandidate('html', '   \n')).toBe(false);
   });
 
-  it('offers Preview next to Copy and sends the fence source', () => {
+  it('renders a stable Canvas artifact card and sends its identity', () => {
     const onPreview = vi.fn();
     render(
       <InlineHtmlPreviewContext.Provider value={onPreview}>
         <DroidMarkdownContent text={HTML_FENCE} />
       </InlineHtmlPreviewContext.Provider>,
     );
-    const button = screen.getByRole('button', { name: 'Preview HTML' });
-    expect(
-      button.parentElement?.querySelector('[aria-label="Copy code"]'),
-    ).not.toBeNull();
+    const button = screen.getByRole('button', {
+      name: 'Open Interactive HTML artifact in Canvas',
+    });
+    expect(screen.getByLabelText('Copy code')).not.toBeNull();
     fireEvent.click(button);
     expect(onPreview).toHaveBeenCalledExactlyOnceWith(
       '<!DOCTYPE html>\n<html><body><p>hi</p></body></html>\n',
+      expect.objectContaining({
+        artifactId: expect.stringMatching(/^inline:/),
+        title: 'Interactive HTML artifact',
+      }),
     );
   });
 
@@ -352,12 +356,16 @@ describe('HTML code block preview', () => {
       </InlineHtmlPreviewContext.Provider>,
     );
     expect(
-      screen.queryByRole('button', { name: 'Preview HTML' }),
+      screen.queryByRole('button', {
+        name: 'Open Interactive HTML artifact in Canvas',
+      }),
     ).toBeNull();
     cleanup();
     render(<DroidMarkdownContent text={HTML_FENCE} />);
     expect(
-      screen.queryByRole('button', { name: 'Preview HTML' }),
+      screen.queryByRole('button', {
+        name: 'Open Interactive HTML artifact in Canvas',
+      }),
     ).toBeNull();
   });
 
@@ -374,10 +382,10 @@ describe('HTML code block preview', () => {
       </InlineHtmlPreviewContext.Provider>,
     );
     const button = screen.getByRole<HTMLButtonElement>('button', {
-      name: 'Preview HTML',
+      name: 'Open Interactive HTML artifact in Canvas',
     });
     expect(button.disabled).toBe(true);
-    expect(button.title).toBe('Too large to preview (limit 512 KB)');
+    expect(button.title).toBe('Too large to open (limit 512 KB)');
     fireEvent.click(button);
     expect(onPreview).not.toHaveBeenCalled();
   });
@@ -392,7 +400,9 @@ describe('HTML code block preview', () => {
       </InlineHtmlPreviewContext.Provider>,
     );
     expect(
-      screen.queryByRole('button', { name: 'Preview HTML' }),
+      screen.queryByRole('button', {
+        name: 'Open Interactive HTML artifact in Canvas',
+      }),
     ).toBeNull();
     rerender(
       <InlineHtmlPreviewContext.Provider value={onPreview}>
@@ -401,9 +411,16 @@ describe('HTML code block preview', () => {
         </CodeBlock>
       </InlineHtmlPreviewContext.Provider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Preview HTML' }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Open Interactive HTML artifact in Canvas',
+      }),
+    );
     expect(onPreview).toHaveBeenCalledExactlyOnceWith(
       '<!DOCTYPE html><p>hi</p>',
+      expect.objectContaining({
+        artifactId: expect.stringMatching(/^inline:/),
+      }),
     );
   });
 });

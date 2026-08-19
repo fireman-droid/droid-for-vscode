@@ -150,10 +150,14 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--dvx-danger) 12%, transparent);
 }
 
+/* Block-level: one image per row (旧账 33 — the old inline-flex let
+   two transcript images share a line). Natural width up to the
+   column; sent-attachment thumbs inside .dvx-user-block stay small
+   flex items and are unaffected. */
 .dvx-transcript-image {
   position: relative;
-  display: inline-flex;
-  margin: 5px 0;
+  display: block;
+  margin: 8px 0;
   max-width: 100%;
 }
 
@@ -161,7 +165,7 @@
   display: block;
   padding: 0;
   border: 1px solid var(--dvx-border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--dvx-code);
   cursor: zoom-in;
   overflow: hidden;
@@ -427,7 +431,7 @@
    the shell grows a quiet third row borrowing the history-notice
    language (UI restraint: no new prominent element). */
 .dvx-shell-stalled {
-  grid-template-rows: 60px auto minmax(0, 1fr);
+  grid-template-rows: var(--dvx-header-h) auto minmax(0, 1fr);
 }
 
 .dvx-handshake-notice {

@@ -55,6 +55,7 @@ import {
   SESSION_OPERATION_BLOCKED_MESSAGE,
   type ChatControllerInternals,
 } from './internals';
+import { recoverMissionProjection } from './mission/recovery';
 
 export const SESSION_CLOSE_FAILED_MESSAGE =
   'The current Droid session could not be closed.';
@@ -250,6 +251,38 @@ export async function replaceRuntime(
       }
     }
 
+    // Checkpoint-first paint (bug #37): a resumed session's recovered
+    // checkpoint renders immediately while the slow history load and
+    // runtime activation run. The connection stays `connecting`, which
+    // keeps every mutating handler rejected until the authoritative
+    // activation snapshot replaces this one in place.
+    if (target.kind === 'resume') {
+      const checkpoint = ctl.recoveryStore.readSession(
+        target.sessionId,
+      );
+      if (
+        checkpoint !== undefined &&
+        checkpoint.transcript.length > 0
+      ) {
+        ctl.sessionId = target.sessionId;
+        ctl.transcript = checkpoint;
+        ctl.turn = null;
+        ctl.mission = null;
+        ctl.tokenUsage = EMPTY_SESSION_TOKEN_USAGE;
+        ctl.sessions = withActiveSession(ctl, ctl.sessions);
+        ctl.recordHost({
+          level: 'info',
+          name: 'host.perf.early-snapshot',
+          attributes: {
+            sessionId: target.sessionId,
+            items: checkpoint.transcript.length,
+            phase: 'switch',
+          },
+        });
+        ctl.emitSnapshot();
+      }
+    }
+
     // The transcript projection and the runtime resume each spawn their
     // own droid CLI process and stay independent until activateRuntime
     // consumes both; running them serially doubled session-switch
@@ -426,6 +459,7 @@ export async function prepareActivationTranscript(
       const reconciled = reconcileSessionHistory(
         loaded.state,
         recovered,
+        { authoritativeLoaded: true },
       );
       // Recovery reconciliation accounting (P7): a merge that degrades
       // to concatenation (reconciled ≈ recovered + loaded) is the
@@ -628,7 +662,21 @@ export async function activateRuntime(
       }
       return;
     }
-    ctl.recoveryStore.writeSession(sessionId, transcript);
+    const checkpointAccepted = ctl.recoveryStore.writeSession(
+      sessionId,
+      transcript,
+    );
+    if (!checkpointAccepted) {
+      ctl.recordHost({
+        level: 'warn',
+        name: 'host.recovery.checkpoint-rejected',
+        attributes: {
+          sessionId,
+          items: transcript.transcript.length,
+          historyStatus: transcript.historyStatus,
+        },
+      });
+    }
     await ctl.recoveryStore.flush();
     if (
       !isActivationCandidateCurrent(ctl, 
@@ -669,6 +717,7 @@ export async function activateRuntime(
     ctl.recoveryStore.selectSession(sessionId);
     void ctl.recoveryStore.flush();
     ctl.emitSnapshot();
+    recoverMissionProjection(ctl, runtime, generation, sessionId, target.cwd);
     if (target.kind === 'new' && target.worktree === true) {
       bindWorktreeSessionMetadata(ctl, 
         runtime,
@@ -739,6 +788,7 @@ export function bindWorktreeSessionMetadata(
 }
 
 export function resetSessionMetadata(ctl: ChatControllerInternals): void {
+    ctl.missionRuntime = null;
     if (ctl.customModelsDiscoveryAbort !== null) {
       ctl.customModelsDiscoveryAbort.abort();
       ctl.customModelsDiscoveryAbort = null;
@@ -1012,6 +1062,14 @@ export function unavailableMessage(
       return 'Install the Droid CLI and sign in before using DroidVisX.';
     case 'invalid-cwd':
       return 'Droid could not use the selected workspace folder.';
+    case 'daemon-not-logged-in':
+      return 'Sign in with the droid CLI, then Retry the daemon connection.';
+    case 'daemon-credentials-unreadable':
+      return 'DroidVisX could not read the current Droid CLI sign-in.';
+    case 'daemon-refresh-failed':
+      return 'The Droid CLI sign-in could not authenticate the local daemon. Sign in again, then Retry.';
+    case 'daemon-unavailable':
+      return 'The local droid daemon could not be reached. Retry the connection.';
     case 'initialization-failed':
       return 'The local Droid runtime could not be initialized.';
   }

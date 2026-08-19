@@ -1,7 +1,7 @@
-import { useAuiState } from '@assistant-ui/react';
 import type { SyntaxHighlighterProps } from '@assistant-ui/react-markdown';
 import {
   memo,
+  useContext,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import { DiagramLightbox } from './Lightbox';
+import { MessageStreamingContext } from './messageStreaming';
 import {
   adoptDiagramStyles,
   reapplyInlineStyles,
@@ -37,9 +38,7 @@ export const MermaidBlock = memo(function MermaidBlock({
   code,
   components,
 }: SyntaxHighlighterProps): React.JSX.Element {
-  const running = useAuiState(
-    (state) => state.message.status?.type === 'running',
-  );
+  const running = useContext(MessageStreamingContext);
   return (
     <MermaidBlockView
       code={code}

@@ -136,6 +136,72 @@ function snapshot(
 }
 
 describe('assistant-ui App bridge commands', () => {
+  it('keeps a newly completed exchange when earlier history is revealed', async () => {
+    render(<App />);
+    const transcript = Array.from({ length: 80 }, (_, index) => [
+      {
+        id: `user-${index}`,
+        kind: 'user' as const,
+        text: `Question ${index}`,
+      },
+      {
+        id: `assistant-${index}`,
+        kind: 'assistant' as const,
+        turnId: `turn-${index}`,
+        text: index === 79 ? 'Most recent answer' : `Answer ${index}`,
+      },
+    ]).flat();
+    host({ ...snapshot(0), transcript });
+
+    const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+    fireEvent.change(input, { target: { value: 'Fresh question' } });
+    await waitFor(() => {
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+      expect(posted.some((message) => message.type === 'turn.send')).toBe(true);
+    });
+    const sent = posted.find((message) => message.type === 'turn.send');
+    if (sent?.type !== 'turn.send') {
+      throw new Error('Expected turn.send');
+    }
+    host({
+      type: 'assistant.delta',
+      sequence: 1,
+      sessionId: 'session-a',
+      turnId: sent.turnId,
+      delta: 'Fresh answer',
+    });
+    host({
+      type: 'turn.state',
+      sequence: 2,
+      sessionId: 'session-a',
+      turnId: sent.turnId,
+      status: 'completed',
+    });
+    expect(await screen.findByText('Fresh answer')).toBeDefined();
+    const viewport = screen.getByLabelText<HTMLElement>('Chat transcript');
+    let heightRead = 0;
+    Object.defineProperty(viewport, 'scrollHeight', {
+      configurable: true,
+      get: () => {
+        heightRead += 1;
+        return heightRead === 1 ? 1_000 : 1_600;
+      },
+    });
+    Object.defineProperty(viewport, 'scrollTop', {
+      configurable: true,
+      value: 120,
+      writable: true,
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: /Show earlier messages/ }),
+    );
+
+    expect(await screen.findByText('Fresh question')).toBeDefined();
+    expect(await screen.findByText('Fresh answer')).toBeDefined();
+    expect(await screen.findByText('Question 0')).toBeDefined();
+    expect(viewport.scrollTop).toBe(720);
+  });
+
   it('shows file-not-ready feedback only for the active turn', async () => {
     render(<App />);
     host(snapshot(0, { turnId: 'turn-a', status: 'streaming' }));
@@ -427,8 +493,119 @@ describe('assistant-ui App bridge commands', () => {
     });
   });
 
-  it('shows subagent activity without exposing cancellation controls', async () => {
+  it('keeps native copy and text paste for mixed clipboard payloads', () => {
+    render(<App />);
+    host(snapshot(0));
+    const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+    const image = new File(['image'], 'image.png', { type: 'image/png' });
+    const clipboardData = {
+      files: [image],
+      getData: (type: string) =>
+        type === 'text/plain' ? 'copied text' : '',
+    };
+
+    expect(
+      fireEvent.keyDown(input, { key: 'c', code: 'KeyC', ctrlKey: true }),
+    ).toBe(true);
+    expect(fireEvent.copy(input, { clipboardData })).toBe(true);
+    expect(fireEvent.paste(input, { clipboardData })).toBe(true);
+    expect(
+      posted.some((message) => message.type === 'attachment.addImage'),
+    ).toBe(false);
+  });
+
+  it.each(['Enter', 'send arrow'])(
+    'sends the next instruction after Stop with %s',
+    async (method) => {
+      const user = userEvent.setup();
+      render(<App />);
+      host(snapshot(0, { turnId: 'turn-stop', status: 'streaming' }));
+      const input =
+        screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+      await user.click(await screen.findByRole('button', { name: 'Stop' }));
+      expect(posted).toContainEqual({
+        type: 'turn.stop',
+        sessionId: 'session-a',
+        turnId: 'turn-stop',
+      });
+      await screen.findByRole('button', { name: 'Send' });
+      expect(
+        screen.getByText('Stopping · Enter sends next when this turn stops'),
+      ).toBeDefined();
+
+      fireEvent.change(input, { target: { value: 'Use the new direction' } });
+      if (method === 'Enter') {
+        fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+      } else {
+        await user.click(screen.getByRole('button', { name: 'Send' }));
+      }
+
+      await waitFor(() =>
+        expect(
+          posted.some((message) => message.type === 'queue.promote'),
+        ).toBe(true),
+      );
+      const added = posted.find((message) => message.type === 'queue.add');
+      if (added?.type !== 'queue.add') {
+        throw new Error('Expected queue.add');
+      }
+      expect(added).toEqual({
+        type: 'queue.add',
+        sessionId: 'session-a',
+        queueId: added.queueId,
+        text: 'Use the new direction',
+      });
+      expect(posted).toContainEqual({
+        type: 'queue.promote',
+        sessionId: 'session-a',
+        queueId: added.queueId,
+      });
+    },
+  );
+
+  it('keeps the send arrow usable after Stop settles into a paused queue', async () => {
     const user = userEvent.setup();
+    render(<App />);
+    host(snapshot(0, { turnId: 'turn-stop', status: 'streaming' }));
+    await user.click(await screen.findByRole('button', { name: 'Stop' }));
+    host({
+      type: 'turn.state',
+      sequence: 1,
+      sessionId: 'session-a',
+      turnId: 'turn-stop',
+      status: 'interrupted',
+    });
+    host({
+      type: 'queue.state',
+      sequence: 2,
+      sessionId: 'session-a',
+      items: [
+        { queueId: 'queue-old', text: 'Earlier follow-up', attachments: [] },
+      ],
+      paused: 'stopped',
+    });
+
+    const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+    fireEvent.change(input, { target: { value: 'Use this direction now' } });
+    const send = screen.getByRole<HTMLButtonElement>('button', { name: 'Send' });
+    expect(send.disabled).toBe(false);
+    await user.click(send);
+
+    const added = posted.find(
+      (message) =>
+        message.type === 'queue.add' && message.text === 'Use this direction now',
+    );
+    if (added?.type !== 'queue.add') {
+      throw new Error('Expected queue.add');
+    }
+    expect(posted).toContainEqual({
+      type: 'queue.promote',
+      sessionId: 'session-a',
+      queueId: added.queueId,
+    });
+  });
+
+  it('keeps Subagent presentation inside its inline Task cards', async () => {
     const taskRow = (toolUseId: string) => ({
       id: `tool:turn-live:${toolUseId}`,
       kind: 'tool' as const,
@@ -450,10 +627,14 @@ describe('assistant-ui App bridge commands', () => {
       ...snapshot(0, { turnId: 'turn-live', status: 'streaming' }),
       transcript: [taskRow('task-1'), taskRow('task-2')],
     });
-
-    await user.click(
-      await screen.findByRole('button', { name: '2 subagents working' }),
+    await waitFor(() =>
+      expect(posted).toContainEqual({
+        type: 'subagent.panel',
+        sessionId: 'session-a',
+        open: true,
+      }),
     );
+
     host({
       type: 'subagent.activity',
       sequence: 1,
@@ -461,7 +642,6 @@ describe('assistant-ui App bridge commands', () => {
       turnId: 'turn-live',
       toolUseId: 'task-1',
       action: 'Read',
-      stoppable: true,
     });
     host({
       type: 'subagent.activity',
@@ -470,8 +650,10 @@ describe('assistant-ui App bridge commands', () => {
       turnId: 'turn-live',
       toolUseId: 'task-2',
       action: 'Grep',
-      stoppable: true,
     });
+    expect(
+      screen.queryByRole('button', { name: /subagents working/i }),
+    ).toBeNull();
     expect(
       posted.filter((message) => message.type === 'subagent.stop'),
     ).toHaveLength(0);
@@ -479,70 +661,279 @@ describe('assistant-ui App bridge commands', () => {
     expect(
       screen.queryByRole('button', { name: /Stop this .* subagent/ }),
     ).toBeNull();
-    expect(screen.getByText('Read')).toBeDefined();
-    expect(screen.getByText('Grep')).toBeDefined();
+    expect(await screen.findByText('Read')).toBeDefined();
+    expect(await screen.findByText('Grep')).toBeDefined();
     // Parent cancellation remains an independent Composer control.
     expect(screen.getByRole('button', { name: 'Stop' })).toBeDefined();
   });
 
-  it('closes a subagent transcript before selecting another session', async () => {
+  it('opens tool-row filenames as workspace files instead of diffs', async () => {
     render(<App />);
     host({
-      ...snapshot(0),
-      sessions: {
-        status: 'ready',
-        items: [
-          {
-            id: 'session-a',
-            title: 'Current',
-            messageCount: 1,
-            modifiedTime: '2026-08-15T00:00:00.000Z',
-            active: true,
-          },
-          {
-            id: 'session-b',
-            title: 'Previous',
-            messageCount: 2,
-            modifiedTime: '2026-08-14T00:00:00.000Z',
-            active: false,
-          },
-        ],
-      },
+      ...snapshot(0, { turnId: 'turn-live', status: 'streaming' }),
       transcript: [
         {
-          id: 'tool:turn-1:task-1',
+          id: 'tool:turn-live:write-1',
           kind: 'tool',
-          turnId: 'turn-1',
-          toolUseId: 'task-1',
-          toolName: 'Task',
-          action: 'Delegated focused work',
+          turnId: 'turn-live',
+          toolUseId: 'write-1',
+          toolName: 'Write',
+          action: 'Wrote file',
           status: 'completed',
           progressCount: 0,
           latestUpdateKind: null,
-          subagent: {
-            type: 'worker',
-            description: 'Inspect the flow',
-            status: 'completed',
-          },
+          filePath: 'src/app.tsx',
         },
       ],
     });
 
-    fireEvent.click(await screen.findByText('View transcript'));
-    expect(
-      screen.getByRole('complementary', { name: 'Subagent transcript' }),
-    ).toBeDefined();
-    fireEvent.click(screen.getByRole('button', { name: 'Sessions' }));
-    fireEvent.click(screen.getByRole('button', { name: /^Previous/ }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'app.tsx' }),
+    );
 
-    expect(
-      screen.queryByRole('complementary', {
-        name: 'Subagent transcript',
-      }),
-    ).toBeNull();
     expect(posted).toContainEqual({
-      type: 'session.select',
+      type: 'workspace.openPath',
+      sessionId: 'session-a',
+      path: 'src/app.tsx',
+    });
+    expect(
+      posted.filter((message) => message.type === 'file.openDiff'),
+    ).toHaveLength(0);
+
+    host({
+      type: 'changes.update',
+      sequence: 1,
+      sessionId: 'session-a',
+      turnId: 'turn-live',
+      state: 'writing',
+      files: [{ path: 'src/app.tsx', additions: 88, deletions: 11 }],
+    });
+    await waitFor(() => {
+      expect(
+        document.querySelector('.dvx-tool-file-stats')?.textContent,
+      ).toBe('+88−11');
+    });
+  });
+
+  it('orders ReviewDock, Queue, and Composer and wires review actions', async () => {
+    render(<App />);
+    host({
+      ...snapshot(0, { turnId: 'turn-live', status: 'streaming' }),
+      queue: {
+        items: [
+          {
+            queueId: 'queue-1',
+            text: 'Follow up',
+            attachments: [],
+          },
+        ],
+        paused: null,
+      },
+      transcript: [
+        { id: 'user-1', kind: 'user', text: 'Build the prototype' },
+        {
+          id: 'tool:turn-live:task-1',
+          kind: 'tool',
+          turnId: 'turn-live',
+          toolUseId: 'task-1',
+          toolName: 'Task',
+          action: 'Delegated focused work',
+          status: 'running',
+          progressCount: 0,
+          latestUpdateKind: null,
+          subagent: {
+            type: 'worker',
+            description: 'Check the result',
+            status: 'running',
+          },
+        },
+        {
+          id: 'changes:turn-live',
+          kind: 'changes',
+          turnId: 'turn-live',
+          files: [
+            {
+              path: 'prototype/index.html',
+              additions: 10,
+              deletions: 0,
+            },
+            {
+              path: 'src/app.tsx',
+              additions: 2,
+              deletions: 1,
+            },
+          ],
+        },
+      ],
+    });
+    const footer = await waitFor(() => {
+      const found = document.querySelector('.dvx-thread-footer');
+      expect(found).not.toBeNull();
+      expect(found!.querySelector('.dvx-review-dock')).not.toBeNull();
+      expect(found!.querySelector('.dvx-queue')).not.toBeNull();
+      return found!;
+    });
+    const children = Array.from(footer.children);
+    const indexOf = (selector: string): number =>
+      children.findIndex((child) => child.matches(selector));
+    expect(indexOf('.dvx-review-dock')).toBeLessThan(
+      indexOf('.dvx-queue'),
+    );
+    expect(indexOf('.dvx-queue')).toBeLessThan(
+      indexOf('.dvx-composer-wrap'),
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '2 files changed' }),
+    );
+    fireEvent.click(
+      screen.getByTitle('Open changes for prototype/index.html'),
+    );
+    fireEvent.click(
+      screen.getByTitle(
+        'Open prototype/index.html in Canvas',
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+    expect(posted).toContainEqual({
+      type: 'file.preview',
+      sessionId: 'session-a',
+      path: 'prototype/index.html',
+    });
+    expect(
+      posted.filter((message) => message.type === 'file.openDiff'),
+    ).toEqual([
+      {
+        type: 'file.openDiff',
+        sessionId: 'session-a',
+        turnId: 'turn-live',
+        path: 'prototype/index.html',
+      },
+      {
+        type: 'file.openDiff',
+        sessionId: 'session-a',
+        turnId: 'turn-live',
+        path: 'prototype/index.html',
+      },
+      {
+        type: 'file.openDiff',
+        sessionId: 'session-a',
+        turnId: 'turn-live',
+        path: 'src/app.tsx',
+      },
+    ]);
+  });
+
+  it('keeps only historical Changes summaries and docks only the latest one', async () => {
+    render(<App />);
+    host({
+      ...snapshot(0),
+      transcript: [
+        { id: 'user-1', kind: 'user', text: 'First turn' },
+        {
+          id: 'changes:turn-1',
+          kind: 'changes',
+          turnId: 'turn-1',
+          files: [
+            { path: 'old.ts', additions: 1, deletions: 0 },
+          ],
+        },
+        { id: 'user-2', kind: 'user', text: 'Second turn' },
+        {
+          id: 'changes:turn-2',
+          kind: 'changes',
+          turnId: 'turn-2',
+          files: [
+            { path: 'new.ts', additions: 2, deletions: 1 },
+          ],
+        },
+      ],
+    });
+
+    await screen.findByRole('region', {
+      name: 'Review latest changes',
+    });
+    const history = document.querySelectorAll('.dvx-changes-history');
+    expect(history).toHaveLength(1);
+    expect(history[0]?.textContent).toBe('Changes·1 file·+1/−0');
+    fireEvent.click(history[0]!);
+    expect(posted).toContainEqual({
+      type: 'file.openDiff',
+      sessionId: 'session-a',
+      turnId: 'turn-1',
+      path: 'old.ts',
+    });
+  });
+
+  it('removes the previous ReviewDock as soon as a new turn is sent', async () => {
+    render(<App />);
+    host({
+      ...snapshot(0),
+      transcript: [
+        { id: 'user-1', kind: 'user', text: 'First turn' },
+        {
+          id: 'changes:turn-1',
+          kind: 'changes',
+          turnId: 'turn-1',
+          files: [
+            { path: 'old.ts', additions: 1, deletions: 0 },
+          ],
+        },
+      ],
+    });
+    await screen.findByRole('region', {
+      name: 'Review latest changes',
+    });
+
+    const input = screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+    fireEvent.change(input, { target: { value: 'Start a fresh turn' } });
+    await waitFor(() => {
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+      expect(
+        posted.some((message) => message.type === 'turn.send'),
+      ).toBe(true);
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('region', {
+          name: 'Review latest changes',
+        }),
+      ).toBeNull();
+    });
+  });
+
+  it('clears ReviewDock immediately when the active session changes', async () => {
+    render(<App />);
+    host({
+      ...snapshot(0),
+      transcript: [
+        { id: 'user-1', kind: 'user', text: 'First turn' },
+        {
+          id: 'changes:turn-1',
+          kind: 'changes',
+          turnId: 'turn-1',
+          files: [
+            { path: 'old.ts', additions: 1, deletions: 0 },
+          ],
+        },
+      ],
+    });
+    await screen.findByRole('region', {
+      name: 'Review latest changes',
+    });
+
+    host({
+      type: 'host.connection',
+      sequence: 1,
       sessionId: 'session-b',
+      connection: { status: 'connected' },
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('region', {
+          name: 'Review latest changes',
+        }),
+      ).toBeNull();
     });
   });
 

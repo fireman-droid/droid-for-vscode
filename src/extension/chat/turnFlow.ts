@@ -1,5 +1,4 @@
-// turnFlow: moved verbatim from ChatController.ts (structure-only
-// refactor; bodies unchanged except mechanical this. -> ctl.).
+// turnFlow: extracted ChatController turn behavior.
 import type {
   HostToWebviewMessage,
   SessionMissionSummary,
@@ -33,7 +32,7 @@ import {
   capturePreToolBaseline,
   recordLiveToolChanges,
 } from './liveChanges';
-import { scheduleLiveSubagentSync } from './subagentWatch';
+import { scheduleLiveSubagentSync, settleTurnSubagents } from './subagentWatch';
 import { settleQueueAfterTurn } from './queue';
 import {
   clearPendingAttachments,
@@ -74,13 +73,14 @@ import {
   flushRecoveryCheckpoint,
   scheduleRecoveryCheckpoint,
 } from './recovery';
-import { settleTurnSubagents } from './subagentWatch';
 import {
   discardPendingThinking,
   flushPendingThinking,
   queueThinkingProjection,
 } from './thinkingBatch';
 import { mirrorExecuteEvent } from './terminalMirrorFlow';
+import { handleMissionRuntimeEvent } from './mission/runtimeEvents';
+import { armTurnWatchdog, clearTurnWatchdog, markStopRequested } from './turnWatchdog';
 import {
   isSafeBridgeId,
   isTranscriptProjection,
@@ -165,6 +165,7 @@ export function handleSend(
       status: 'submitting',
       activity: createTurnActivityState(),
     };
+    armTurnWatchdog(ctl, sessionId, turnId);
     ctl.interactions.beginTurn(sessionId, turnId);
     // Edit-resend consumes the edit staging area passed in by the
     // caller; a plain send consumes the composer staging area.
@@ -325,6 +326,7 @@ export function handleRuntimeEvent(
     if (event.type !== 'thinking-delta') {
       flushPendingThinking(ctl, sessionId, turnId);
     }
+  if (handleMissionRuntimeEvent(ctl, event)) return;
     switch (event.type) {
       case 'text-delta': {
         const turn = ctl.turn;
@@ -723,6 +725,7 @@ export function handleStop(
     flushPendingThinking(ctl, sessionId, turnId);
     ctl.interactions.endTurn(sessionId, turnId);
     setTurnStatus(ctl, sessionId, turnId, 'stopping');
+    markStopRequested(ctl, sessionId, turnId); // stop-settle deadline (#32)
     const runtimeGeneration = ctl.runtimeGeneration;
     const turnGeneration = ctl.turnGeneration;
     void interruptTurn().catch(() => {
@@ -1065,6 +1068,7 @@ export function emitTurnState(
       status === 'interrupted' ||
       status === 'failed'
     ) {
+      clearTurnWatchdog(ctl);
       flushTurnIo(ctl);
       ctl.diagnostics?.endTurnScope?.();
       settleQueueAfterTurn(ctl, sessionId, turnId, status);

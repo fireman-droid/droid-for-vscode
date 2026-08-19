@@ -1,9 +1,9 @@
-// workspaceActions: moved verbatim from ChatController.ts (structure-only
-// refactor; bodies unchanged except mechanical this. -> ctl.).
+// Workspace-scoped file, preview, Git, and attachment actions.
 import { isAbsolute, relative } from 'node:path';
 
 import type {
   ImageMediaType,
+  PreviewInlineHtmlMessage,
   WorkspaceFilesStatus,
   WorkspaceImageStatus,
 } from '../../shared/bridgeMessages';
@@ -57,7 +57,22 @@ export function handleFileOpenDiff(
       return;
     }
     const requestedTurnId = ctl.turn?.turnId ?? null;
-    void ctl.fileDiff.openDiff(path, { sessionId, turnId }).then((outcome) => {
+    const latestChanges = latestTurnChanges(ctl);
+    const committed = ctl.changeStats.readCommittedTurn?.(sessionId);
+    const committedRef =
+      latestChanges?.turnId === turnId &&
+      committed !== undefined &&
+      committed.paths.includes(path.replaceAll('\\', '/'))
+        ? committed.hash
+        : undefined;
+    const open = committedRef === undefined
+      ? ctl.fileDiff.openDiff(path, { sessionId, turnId })
+      : ctl.fileDiff.openDiff(
+          path,
+          { sessionId, turnId },
+          { committedRef },
+        );
+    void open.then((outcome) => {
       if (
         ctl.disposed ||
         ctl.connection.status !== 'connected' ||
@@ -98,7 +113,9 @@ export function handleFileOpenDiff(
 
 export function handleFilePreview(
   ctl: ChatControllerInternals,
-  sessionId: string, path: string): void {
+  sessionId: string,
+  path: string,
+): void {
     if (
       ctl.connection.status !== 'connected' ||
       sessionId !== ctl.sessionId
@@ -119,14 +136,20 @@ export function handleFilePreview(
  * sandboxed preview panel (same surface as file previews). */
 export function handleInlineHtmlPreview(
   ctl: ChatControllerInternals,
-  sessionId: string, html: string): void {
+  message: PreviewInlineHtmlMessage,
+): void {
+  const { sessionId, html } = message;
     if (
       ctl.connection.status !== 'connected' ||
       sessionId !== ctl.sessionId
     ) {
       return;
     }
-    void ctl.prototypePreview.openInlineHtml(html).then((outcome) => {
+    const artifact =
+      message.artifactId === undefined
+        ? undefined
+        : { artifactId: message.artifactId, title: message.title as string };
+    void ctl.prototypePreview.openInlineHtml(html, artifact).then((outcome) => {
       if (outcome === 'failed') {
         ctl.emitSessionDiagnostic(
           'preview-failed',
@@ -153,22 +176,34 @@ export function handleTerminalOpenMirror(
  * default selection (`inTurn`); normalized to forward slashes to
  * match `GitStatusFile` paths.
  */
-export function latestTurnChangePaths(ctl: ChatControllerInternals): ReadonlySet<string> {
-    const items = ctl.transcript.transcript;
-    for (let i = items.length - 1; i >= 0; i -= 1) {
-      const item = items[i];
-      if (item !== undefined && item.kind === 'changes') {
-        return new Set(
-          item.files.map((file) => file.path.replaceAll('\\', '/')),
-        );
-      }
+export function latestTurnChangePaths(
+  ctl: ChatControllerInternals,
+): ReadonlySet<string> {
+  const changes = latestTurnChanges(ctl);
+  return new Set(
+    changes?.files.map((file) => file.path.replaceAll('\\', '/')) ?? [],
+  );
+}
+
+function latestTurnChanges(ctl: ChatControllerInternals) {
+  const items = ctl.transcript.transcript;
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item?.kind === 'changes') {
+      return item;
     }
-    return new Set();
+    if (item?.kind === 'user') {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 export function handleGitRequestStatus(
   ctl: ChatControllerInternals,
-  sessionId: string): void {
+  sessionId: string,
+  turnId: string,
+): void {
     if (
       ctl.connection.status !== 'connected' ||
       sessionId !== ctl.sessionId
@@ -180,104 +215,173 @@ export function handleGitRequestStatus(
       ctl.emit({
         type: 'git.status',
         sessionId,
+        turnId,
         branch: null,
         files: [],
         unavailableReason: 'unsupported-workspace',
       });
       return;
     }
-    const inTurn = latestTurnChangePaths(ctl);
+    const latestChanges = latestTurnChanges(ctl);
+    const inTurn =
+      latestChanges?.turnId === turnId
+        ? latestTurnChangePaths(ctl)
+        : new Set<string>();
     void ctl.gitWorkflow.status(root, inTurn).then((status) => {
       if (ctl.disposed || ctl.sessionId !== sessionId) {
         return;
       }
-      ctl.emit(
-        status.available
-          ? {
-              type: 'git.status',
-              sessionId,
-              branch: status.branch,
-              files: status.files,
-            }
-          : {
-              type: 'git.status',
-              sessionId,
-              branch: null,
-              files: [],
-              unavailableReason: status.reason,
-            },
-      );
+      if (status.available) {
+        const committed = ctl.changeStats.readCommittedTurn?.(sessionId);
+        const committedHash =
+          committed !== undefined &&
+          inTurn.size > 0 &&
+          [...inTurn].every((path) => committed.paths.includes(path)) &&
+          !status.files.some((file) => file.inTurn)
+            ? committed.hash
+            : undefined;
+        ctl.emit({
+          type: 'git.status',
+          sessionId,
+          turnId,
+          branch: status.branch,
+          files: status.files,
+          ...(committedHash === undefined ? {} : { committedHash }),
+        });
+        return;
+      }
+      ctl.emit({
+        type: 'git.status',
+        sessionId,
+        turnId,
+        branch: null,
+        files: [],
+        unavailableReason: status.reason,
+      });
     });
 }
 
 export function handleGitCommit(
   ctl: ChatControllerInternals,
-    sessionId: string,
-    paths: readonly string[],
-    message: string,
-  ): void {
-    if (
-      ctl.connection.status !== 'connected' ||
-      sessionId !== ctl.sessionId
-    ) {
-      return;
-    }
-    const root = ctl.activeRuntimeCwd;
-    if (root === null) {
-      ctl.emit({
-        type: 'git.commitResult',
-        sessionId,
-        ok: false,
-        error: 'Git is unavailable (unsupported-workspace).',
+  sessionId: string,
+  turnId: string,
+  paths: readonly string[],
+  message: string,
+): void {
+  if (
+    ctl.connection.status !== 'connected' ||
+    sessionId !== ctl.sessionId
+  ) {
+    return;
+  }
+  const root = ctl.activeRuntimeCwd;
+  if (root === null) {
+    ctl.emit({
+      type: 'git.commitResult',
+      sessionId,
+      turnId,
+      ok: false,
+      error: 'Git is unavailable (unsupported-workspace).',
+    });
+    return;
+  }
+  const commitChanges = latestTurnChanges(ctl);
+  const commitTurnId = commitChanges?.turnId;
+  if (commitTurnId !== turnId) {
+    ctl.emit({
+      type: 'git.commitResult',
+      sessionId,
+      turnId,
+      ok: false,
+      error: 'The Changes turn is no longer current. Reopen Commit.',
+    });
+    return;
+  }
+  ctl.recordHost({
+    level: 'info',
+    name: 'host.git.commit.started',
+    attributes: { fileCount: paths.length },
+  });
+  const normalizedPaths = paths.map((path) =>
+    path.replaceAll('\\', '/'),
+  );
+  const selectedPaths = new Set(normalizedPaths);
+  const committedStats = commitChanges?.files.filter((file) =>
+    selectedPaths.has(file.path.replaceAll('\\', '/')),
+  );
+  void ctl.gitWorkflow
+    .commit(root, paths, message)
+    .then(async (outcome) => {
+      ctl.recordHost({
+        level: outcome.ok ? 'info' : 'warn',
+        name: 'host.git.commit.finished',
+        attributes: {
+          outcome: outcome.ok ? 'success' : 'failed',
+          fileCount: paths.length,
+          ...(outcome.ok ? { hash: outcome.hash } : {}),
+        },
+        ...(outcome.ok ? {} : { detail: outcome.error }),
       });
-      return;
-    }
-    void ctl.gitWorkflow
-      .commit(root, paths, message)
-      .then((outcome) => {
-        if (ctl.disposed || ctl.sessionId !== sessionId) {
-          return;
-        }
-        ctl.emit(
-          outcome.ok
-            ? {
-                type: 'git.commitResult',
-                sessionId,
-                ok: true,
-                hash: outcome.hash,
-                subject: commitSubject(message),
-              }
-            : {
-                type: 'git.commitResult',
-                sessionId,
-                ok: false,
-                error: outcome.error,
-              },
+      if (
+        outcome.ok &&
+        outcome.hash !== '' &&
+        commitTurnId !== undefined
+      ) {
+        await ctl.changeStats.rememberCommittedTurn?.(
+          { sessionId, turnId: commitTurnId },
+          outcome.hash,
+          normalizedPaths,
+          committedStats,
         );
-      });
+      }
+      if (ctl.disposed || ctl.sessionId !== sessionId) {
+        return;
+      }
+      ctl.emit(
+        outcome.ok
+          ? {
+              type: 'git.commitResult',
+              sessionId,
+              turnId,
+              ok: true,
+              hash: outcome.hash,
+              subject: commitSubject(message),
+            }
+          : {
+              type: 'git.commitResult',
+              sessionId,
+              turnId,
+              ok: false,
+              error: outcome.error,
+            },
+      );
+      if (outcome.ok) {
+        handleGitRequestStatus(ctl, sessionId, turnId);
+      }
+    });
 }
 
 export function handleWorkspaceOpenPath(
   ctl: ChatControllerInternals,
-    sessionId: string,
-    path: string,
-    line?: number,
-    column?: number,
-  ): void {
-    if (
-      ctl.connection.status !== 'connected' ||
-      sessionId !== ctl.sessionId
-    ) {
-      return;
+  sessionId: string,
+  path: string,
+  line?: number,
+  column?: number,
+): void {
+  if (
+    ctl.connection.status !== 'connected' ||
+    sessionId !== ctl.sessionId
+  ) {
+    return;
+  }
+  void ctl.pathOpener.openPath(path, line, column).then((outcome) => {
+    if (outcome === 'failed') {
+      ctl.emitSessionDiagnostic(
+        'open-path-failed',
+        OPEN_PATH_FAILED_MESSAGE,
+      );
     }
-    void ctl.pathOpener.openPath(path, line, column).then((outcome) => {
-      if (outcome === 'failed') {
-        ctl.emitSessionDiagnostic(
-          'open-path-failed',
-          OPEN_PATH_FAILED_MESSAGE,
-        );
-      }
-    });
+  });
 }
 
 export function handleWorkspaceSearchFiles(

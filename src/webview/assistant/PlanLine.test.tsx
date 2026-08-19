@@ -8,6 +8,7 @@ import { PlanLine } from './PlanLine';
 function makeAnchor(overrides: Partial<PlanAnchorState> = {}): PlanAnchorState {
   return {
     anchorToolUseId: 'use-1',
+    latestTurnId: 'turn-1',
     title: 'Read the config',
     steps: [
       { status: 'completed', text: 'Read the config' },

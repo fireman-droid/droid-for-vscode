@@ -228,29 +228,9 @@
   color: var(--dvx-danger);
 }
 
-.dvx-session-row:hover:not(:disabled) {
-  background: var(--dvx-soft);
-}
-
 .dvx-session-row[aria-current="true"]:disabled {
   cursor: default;
   opacity: 1;
-}
-
-.dvx-session-row code {
-  overflow: hidden;
-  color: var(--dvx-muted);
-  font-size: 10.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dvx-session-row-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--dvx-muted);
-  font-size: 10.5px;
 }
 
 .dvx-permission-risk, .dvx-form-error {
@@ -288,12 +268,6 @@
   }
 }
 
-@media (min-width: 720px) {
-  .dvx-session-drawer {
-    width: 350px;
-  }
-}
-
 .dvx-shell button, .dvx-shell input, .dvx-shell textarea {
   font-family: inherit;
 }
@@ -301,9 +275,9 @@
 .dvx-status-seam {
   flex: 0 0 auto;
   width: 1px;
-  height: 33px;
+  height: 24px;
   border-radius: 999px;
-  background: #dbd7d0;
+  background: var(--dvx-border-strong);
 }
 
 .dvx-status-connected {
@@ -357,7 +331,7 @@
   cursor: pointer;
   max-width: min(52%, 240px);
   padding: 5px 4px;
-  color: #33312d;
+  color: var(--dvx-text-secondary);
   font-size: 12px;
   font-weight: 590;
 }
@@ -432,35 +406,6 @@
 .dvx-model-search, .dvx-permission-editor textarea, .dvx-ask-user input[type="text"] {
   border-color: var(--dvx-border);
   background: var(--dvx-raised);
-}
-
-.dvx-drawer-backdrop {
-  position: fixed;
-  inset: 0;
-  border: 0;
-  cursor: default;
-  z-index: 20;
-  background: rgb(31 31 29 / 10%);
-  animation: dvx-fade-in 180ms ease-out;
-}
-
-.dvx-drawer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.dvx-session-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  margin: 8px 0 12px;
-}
-
-.dvx-session-row[aria-current="true"] {
-  border-left-color: transparent;
-  background: #ece8e1;
 }
 
 .dvx-permission-editor textarea:focus-visible, .dvx-ask-user input[type="text"]:focus-visible {
@@ -543,12 +488,11 @@
   }
 
   .dvx-header {
-    min-height: 58px;
     padding-inline: 8px;
   }
 
   .dvx-status-seam {
-    height: 28px;
+    height: 20px;
   }
 
   .dvx-header-actions {
@@ -556,16 +500,8 @@
   }
 
   .dvx-icon-button {
-    width: 30px;
-    height: 30px;
-  }
-
-  .dvx-thread-footer {
-    padding-inline: 8px;
-  }
-
-  .dvx-reading-column {
-    padding-inline: 10px;
+    width: 26px;
+    height: 26px;
   }
 
   .dvx-composer {
@@ -578,17 +514,11 @@
   }
 }
 
+/* Wide panels add breathing room without changing the shared content
+   cap owned by 10-shell-frame.css and 13-composer.css. */
 @media (min-width: 900px) {
-  .dvx-reading-column {
-    padding-inline: 22px;
-  }
-
-  .dvx-thread-footer {
-    padding-inline: 22px;
-  }
-
-  .dvx-reading-column, .dvx-composer-wrap {
-    max-width: 860px;
+  .dvx-shell {
+    --dvx-column-pad: 22px;
   }
 }
 

@@ -1,6 +1,5 @@
 import { isAbsolute, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
 import type {
   ArchivedSessionSummary,
   AttachmentKind,
@@ -99,7 +98,7 @@ import {
 import { applySubagentSettlement, collectRunningSubagentRows, collectToolFilePaths, collectTranscriptSubagentRows, createTurnActivityState, hasSubagentRows, projectAssistantDelta, projectSubagentStarted, projectThinkingComplete, projectThinkingDelta, projectToolEvent, reconcileSubagentSummaries, settleZombieSubagents, thinkingSegmentKey, type PendingSubagentRow, type TurnActivityState } from './turnActivityState';
 import { handleQueueAdd, handleQueueUpdate, handleQueueRemove, handleQueueResume, handleQueuePromote, handleQueueClear, settleQueueAfterTurn, projectQueueState, discardQueuedPrompts } from './chat/queue';
 import { handleMcpRefresh, pushMcp, handleMcpServerToggle, handleMcpServerAdd, handleMcpServerRemove, handleMcpServerAuthenticate } from './chat/mcp';
-import { dispatchCustomModels, type CustomModelsGateway } from './chat/customModels'; import type { CustomModelDiscoveryGateway } from './chat/modelDiscovery';
+import { dispatchCustomModels, type CustomModelsGateway } from './chat/customModels'; import type { CustomModelDiscoveryGateway } from './chat/modelDiscovery'; import type { ProviderRegistry } from './chat/providerRegistry';
 import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRefresh, pushSkills, handleSkillToggle, handlePluginsRefresh, handleCommandsRefresh, recordRecentCommand, emitModelCatalog, projectModelCatalog, MODEL_CATALOG_FAILED_MESSAGE } from './chat/capabilityPanels';
 import { handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddImage, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, stageCapturedSelectionOutcome, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
 import { handleSettingUpdate, emitSettings, refreshSettingsAfterRuntimeEvent, projectConfirmedSettings, SETTINGS_READ_FAILED_MESSAGE } from './chat/settings';
@@ -107,15 +106,17 @@ import { handleFileOpenDiff, handleFilePreview, handleInlineHtmlPreview, handleT
 import { handleRewindInfo, handleEditResend, handleEditStageBegin, handleEditStageCancel } from './chat/editResend';
 import { stampRunningFlags, setSessionRunning, ensureBackgroundRunningPoll, seedBackgroundRunning } from './chat/sessionRunning';
 import { settleTurnSubagents, clearZombieSubagentWatch, armReplayedSubagentWatch } from './chat/subagentWatch';
-import { handleSubagentOpenTranscript, handleSubagentPanel, handleSubagentStop } from './chat/subagentPanel';
+import { clearTurnWatchdog, type TurnWatchdogState } from './chat/turnWatchdog';
+import { handleSubagentPanel } from './chat/subagentPanel';
 import type { SubagentControlGateway } from '../runtime/subagentControl';
 import { emitEarlyRecoverySnapshot, reconcileDaemonTurn, scheduleRecoveryCheckpoint, checkpointRecoveryTranscript, flushRecoveryCheckpoint, recoveryTurnId } from './chat/recovery';
 import { handleSessionNew, handleWorktreeCreateSession, handleSessionRename, handleSessionFavorite, handleSessionArchive, handleSessionUnarchive, handleArchivedRefresh, handleSessionSearch, handleSessionSelect, handleRefresh, handleSessionFork, loadCatalog, hasCatalogSession, activeSessionSummary, withActiveSession, beginCatalogLoad, bindCatalogViewToWorkspace, clearCatalog, isCurrentCatalogRequest, discardCatalogRequest, touchActiveSession, SESSION_NEW_FAILED_MESSAGE } from './chat/sessionDirectory';
 import { handleReady, startReplacement, replaceRuntime, loadHistoryTimed, resetSessionMetadata, closeAllRuntimesForDispose, queueWorkspaceTransition, isCurrentRuntime, ensureActiveRuntimeWorkspaceCurrent, isTargetWorkspaceCurrent, emitWorkspaceUnavailable, isSameWorkspaceContext, WORKSPACE_CHANGED_MESSAGE } from './chat/runtimeLifecycle';
 import { handleSend, handleStop, handleRetry, handleSessionCompact, projectTranscript } from './chat/turnFlow';
-import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
-import { handleMissionStart } from './chat/mission/controller';
+import { handleMissionCommand, handleMissionStart } from './chat/mission/controller';
 import type { MissionGateway } from './chat/mission/MissionGateway';
+import type { MissionSnapshotReducer } from './chat/mission/MissionSnapshotReducer';
+import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
 import { clearPrompts, dropDispatchedPrompt, emptyQueuedPromptsState, enqueuePrompt, evaluateQueueDispatch, markDispatchBlocked, pauseAfterTerminal, promotePrompt, removePrompt, resumeQueue, updatePromptText, type QueuedPromptsState } from './queuedPromptsState';
 import type { SessionQueueState } from '../shared/queueProtocol';
 import {
@@ -204,16 +205,13 @@ import {
   type EditStagedAttachment,
   type PendingAttachment,
 } from './chat/internals';
-
 export type DroidRuntimeFactory = (
   interactionHandler: RuntimeInteractionHandler,
 ) => DroidRuntime;
-
 export interface WorkspaceContext {
   readonly cwd: string | null;
   readonly trusted: boolean;
 }
-
 export type WorkspaceContextProvider = () => WorkspaceContext;
 /** Everything the controller emits; the view provider's sequence-free
     `ui.theme` push never passes the sequence stamper below. */
@@ -228,7 +226,6 @@ type UnsequencedHostMessage =
       ? Omit<Message, 'sequence'>
       : never
     : never;
-
 export class ChatController {
   readonly listeners = new Set<ChatControllerListener>();
   readonly interactions: PendingInteractionCoordinator;
@@ -243,13 +240,12 @@ export class ChatController {
   sessionId: string | null = null;
   /** Daemon subagent control provider; extension.ts injects it. */
   subagentControl: (() => SubagentControlGateway | null) | null = null;
-  /**
-   * Read-only mission identity of the active session, from the last
+  /** Read-only mission identity of the active session, from the last
    * successful history load; null for sessions outside a mission.
    */
   mission: SessionMissionSummary | null = null;
-  /**
-   * Token-usage breakdown of the active session: cumulative totals
+  missionRuntime: MissionSnapshotReducer | null = null;
+  /** Token-usage breakdown of the active session: cumulative totals
    * seeded from history and overwritten by live `token-usage`
    * events; `lastTurn` set by each completed turn in this window.
    */
@@ -272,10 +268,10 @@ export class ChatController {
   turnGeneration = 0;
   contextGeneration = 0;
   settingsUpdate: symbol | null = null;
-  catalogGeneration = 0;
-  catalogCwd: string | null = null;
   /** Prevents duplicate Mission creation while the Host gateway settles. */
   missionStartInProgress = false;
+  catalogGeneration = 0;
+  catalogCwd: string | null = null;
   /**
    * True when the current workspace may create worktree sessions:
    * daemon runtime mode (worktreeSessions.enabled) and a git
@@ -364,11 +360,13 @@ export class ChatController {
     readonly sessionId: string;
     readonly cache: HostTranscriptState;
   } | null = null;
-  recoveryCheckpointTimer: ReturnType<typeof setTimeout> | null =
-    null;
+  recoveryCheckpointTimer: ReturnType<typeof setTimeout> | null = null;
   mcpAuthServerName: string | null = null;
   mcpAuthTimer: ReturnType<typeof setTimeout> | null = null;
   daemonCustomModels?: () => Promise<CustomModelsGateway>; modelDiscovery?: CustomModelDiscoveryGateway;
+  providerRegistry?: ProviderRegistry;
+  promptProviderApiKey?: () => Thenable<string | undefined>;
+  readonly providerTests = new Map<string, { readonly status: 'passed' | 'failed'; readonly summary: string; readonly latencyMs: number }>();
   customModelsDiscoveryAbort: AbortController | null = null; customModelsOp = false;
   /**
    * Post-turn ledger reconcile for background delegations that
@@ -386,6 +384,7 @@ export class ChatController {
     /** Serializes ticks so a slow ledger read never overlaps. */
     ticking: boolean;
   } | null = null;
+  turnWatchdog: TurnWatchdogState | null = null; // main-turn watchdog (#32)
   commandsCache: {
     readonly sessionId: string;
     readonly items: readonly CommandSummary[];
@@ -405,7 +404,6 @@ export class ChatController {
   } | null = null;
   /** Hidden-fork side chat; null when no sidecar factory is wired. */
   readonly btwSideChat: BtwSideChat | null;
-
   constructor(
     readonly createRuntime: DroidRuntimeFactory,
     readonly getWorkspaceContext: WorkspaceContextProvider,
@@ -502,12 +500,10 @@ export class ChatController {
       },
     );
   }
-
   subscribe(listener: ChatControllerListener): DisposableSubscription {
     if (this.disposed) {
       return { dispose() {} };
     }
-
     this.listeners.add(listener);
     return {
       dispose: () => {
@@ -515,12 +511,10 @@ export class ChatController {
       },
     };
   }
-
   handleMessage(message: WebviewToHostMessage): void {
     if (this.disposed) {
       return;
     }
-
     switch (message.type) {
       case 'webview.ready':
         void handleReady(this);
@@ -534,6 +528,10 @@ export class ChatController {
         return;
       case 'mission.start':
         handleMissionStart(this, message);
+        return;
+      case 'mission.dismissSetup': case 'mission.pause': case 'mission.resume': case 'mission.stopCurrentFeature':
+      case 'mission.refresh': case 'mission.disclosure.set': case 'mission.viewer.open':
+        handleMissionCommand(this, message);
         return;
       case 'turn.stop':
         handleStop(this, message.sessionId, message.turnId);
@@ -656,15 +654,7 @@ export class ChatController {
       case 'btw.stop':
         this.btwSideChat?.handleStop(message.sessionId);
         return;
-      case 'subagent.openTranscript':
-        handleSubagentOpenTranscript(this, message.sessionId, message.toolUseId);
-        return;
-      case 'subagent.stop':
-        handleSubagentStop(this, message.sessionId, message.turnId, message.toolUseId);
-        return;
-      case 'subagent.panel':
-        handleSubagentPanel(this, message.sessionId, message.open);
-        return;
+      case 'subagent.panel': handleSubagentPanel(this, message.sessionId, message.open); return;
       case 'file.openDiff':
         handleFileOpenDiff(this, message.sessionId, message.turnId, message.path);
         return;
@@ -672,7 +662,7 @@ export class ChatController {
         handleFilePreview(this, message.sessionId, message.path);
         return;
       case 'preview.inlineHtml':
-        handleInlineHtmlPreview(this, message.sessionId, message.html);
+        handleInlineHtmlPreview(this, message);
         return;
       case 'workspace.openPath':
         handleWorkspaceOpenPath(this, 
@@ -714,6 +704,13 @@ export class ChatController {
       case 'customModels.refresh': case 'customModels.save': case 'customModels.delete':
       case 'customModels.discover':
       case 'customModels.import':
+      case 'providerModels.refresh':
+      case 'providerModels.saveProvider':
+      case 'providerModels.fetch':
+      case 'providerModels.saveModel':
+      case 'providerModels.import':
+      case 'providerModels.test':
+      case 'providerModels.testAll':
         dispatchCustomModels(this, message);
         return;
       case 'attachment.pick':
@@ -809,26 +806,20 @@ export class ChatController {
         handleSettingUpdate(this, message);
         return;
       case 'git.requestStatus':
-        handleGitRequestStatus(this, message.sessionId);
+        handleGitRequestStatus(this, message.sessionId, message.turnId);
         return;
       case 'git.commit':
-        handleGitCommit(this, 
-          message.sessionId,
-          message.paths,
-          message.message,
-        );
+        handleGitCommit(this, message.sessionId, message.turnId, message.paths, message.message);
         return;
       case 'terminal.openMirror':
         handleTerminalOpenMirror(this, message.sessionId);
         return;
     }
   }
-
   handleWorkspaceContextChanged(): void {
     if (this.disposed) {
       return;
     }
-
     const workspace = this.getWorkspaceContext();
     if (isSameWorkspaceContext(this.workspaceContext, workspace)) {
       return;
@@ -837,7 +828,6 @@ export class ChatController {
     if (this.initialization === null) {
       return;
     }
-
     const generation = ++this.workspaceContextGeneration;
     const staleRuntimes = [...this.managedRuntimes];
     this.runtimeGeneration += 1;
@@ -866,7 +856,6 @@ export class ChatController {
     }
     queueWorkspaceTransition(this, generation, staleRuntimes);
   }
-
   /**
    * Editor-side entry for `droidvisx.addSelectionToChat`: stages a
    * selection the command captured at invoke time, through the same
@@ -884,12 +873,10 @@ export class ChatController {
     }
     return stageCapturedSelectionOutcome(this, this.sessionId, outcome);
   }
-
   dispose(): Promise<void> {
     if (this.disposal) {
       return this.disposal;
     }
-
     checkpointRecoveryTranscript(this);
     this.interactions.cancelAll();
     this.btwSideChat?.reset();
@@ -898,7 +885,7 @@ export class ChatController {
       this.mcpAuthTimer = null;
     }
     this.mcpAuthServerName = null;
-    clearZombieSubagentWatch(this);
+    clearZombieSubagentWatch(this); clearTurnWatchdog(this);
     this.fileDiff.dispose?.(); this.changeStats.dispose?.();
     this.disposed = true;
     this.runtimeGeneration += 1;
@@ -911,7 +898,6 @@ export class ChatController {
     this.disposal = closeAllRuntimesForDispose(this);
     return this.disposal;
   }
-
   emitSnapshot(): void {
     if (this.turn === null) {
       // Invariant: an open turn scope always corresponds to the live
@@ -988,7 +974,6 @@ export class ChatController {
     }
     this.emit(snapshot);
   }
-
   recordHost(event: RuntimeDiagnosticEvent): void {
     try {
       this.diagnostics?.record(event);
@@ -996,14 +981,12 @@ export class ChatController {
       // Diagnostics must never alter controller behavior.
     }
   }
-
   emit(
     message: UnsequencedHostMessage,
   ): void {
     if (this.disposed) {
       return;
     }
-
     const withSequence = {
       ...message,
       sequence: this.nextSequence(),
@@ -1024,7 +1007,6 @@ export class ChatController {
       listener(withSequence);
     }
   }
-
   /**
    * Names the first guard that would drop a webview panel request for
    * the given session, or null when the request may proceed. Mirrors
@@ -1049,7 +1031,6 @@ export class ChatController {
     }
     return null;
   }
-
   /**
    * Logs a panel request the guard chain dropped. These drops used to
    * be fully silent, which made a swallowed "Add MCP server" request
@@ -1062,7 +1043,6 @@ export class ChatController {
       attributes: { op, reason },
     });
   }
-
   /**
    * Mirrors a panel-level business failure into the local log. Panel
    * failures render only inside the Skills/MCP popovers, so without
@@ -1076,7 +1056,6 @@ export class ChatController {
       detail,
     });
   }
-
   emitSessionDiagnostic(
     code: string, message: string, turnId: string | null = null,
   ): void {
@@ -1097,7 +1076,6 @@ export class ChatController {
       message,
     });
   }
-
   private nextSequence(): number {
     if (this.sequence >= Number.MAX_SAFE_INTEGER) {
       throw new Error('DroidVisX host message sequence was exhausted.');
@@ -1105,7 +1083,6 @@ export class ChatController {
     this.sequence += 1;
     return this.sequence;
   }
-
   isCurrentSessionOperation(
     runtime: DroidRuntime,
     generation: number,
@@ -1119,7 +1096,6 @@ export class ChatController {
       isTargetWorkspaceCurrent(this, cwd)
     );
   }
-
   private handleBtwAsk(sessionId: string, text: string): void {
     this.withBtwSession(sessionId, (sideChat, cwd) =>
       void sideChat.handleAsk(cwd, sessionId, text));
@@ -1141,4 +1117,3 @@ export class ChatController {
     run(sideChat, cwd);
   }
 }
-

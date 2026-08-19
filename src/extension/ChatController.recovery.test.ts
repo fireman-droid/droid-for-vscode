@@ -153,7 +153,7 @@ describe('ChatController', () => {
     });
   });
 
-  it('reconciles and persists public history with locally recovered content before activation commit', async () => {
+  it('persists complete public history as authoritative before activation commit', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
     seed.writeSession(
@@ -214,32 +214,22 @@ describe('ChatController', () => {
     });
     expect(snapshots(messages).at(-1)).toMatchObject({
       sessionId: 'saved-session',
-      historyStatus: 'partial',
+      historyStatus: 'complete',
       truncated: false,
-      transcript: [
-        { kind: 'user', text: 'Loaded old prompt' },
-        { kind: 'assistant', text: 'Loaded old answer' },
-        { kind: 'user', text: 'Cached fallback' },
-      ],
+      transcript: historyState.transcript,
     });
     expect(writeSession).toHaveBeenCalledWith(
       'saved-session',
       expect.objectContaining({
-        historyStatus: 'partial',
+        historyStatus: 'complete',
         truncated: false,
-        transcript: [
-          ...historyState.transcript,
-          expect.objectContaining({ text: 'Cached fallback' }),
-        ],
+        transcript: historyState.transcript,
       }),
     );
     expect(recovery.readSession('saved-session')).toMatchObject({
-      historyStatus: 'partial',
+      historyStatus: 'complete',
       truncated: false,
-      transcript: [
-        ...historyState.transcript,
-        expect.objectContaining({ text: 'Cached fallback' }),
-      ],
+      transcript: historyState.transcript,
     });
   });
 

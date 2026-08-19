@@ -5,6 +5,7 @@ import {
   MAX_DRAFT_SUBJECT_CHARS,
   buildCommitMessageDraft,
   findLatestChangesContext,
+  findLatestChangesItem,
 } from './gitCommitDraft';
 
 describe('buildCommitMessageDraft', () => {
@@ -82,6 +83,40 @@ describe('findLatestChangesContext', () => {
   it('returns null without any changes card', () => {
     expect(
       findLatestChangesContext([user('u1', 'prompt only')]),
+    ).toBeNull();
+  });
+
+  it('does not carry an older commit context into a newer user turn', () => {
+    expect(
+      findLatestChangesContext([
+        user('u1', 'first prompt'),
+        changes('c1', 'turn-1'),
+        user('u2', 'new turn without changes'),
+      ]),
+    ).toBeNull();
+  });
+});
+
+describe('findLatestChangesItem', () => {
+  it('returns the newest Changes item in the current turn segment', () => {
+    const newest = changes('c2', 'turn-2');
+    expect(
+      findLatestChangesItem([
+        user('u1', 'first'),
+        changes('c1', 'turn-1'),
+        user('u2', 'second'),
+        newest,
+      ]),
+    ).toBe(newest);
+  });
+
+  it('does not carry an older ReviewDock into a newer user turn', () => {
+    expect(
+      findLatestChangesItem([
+        user('u1', 'first'),
+        changes('c1', 'turn-1'),
+        user('u2', 'new turn without changes'),
+      ]),
     ).toBeNull();
   });
 });

@@ -2,9 +2,10 @@
 
 > 写给零记忆接手者的架构 onboarding。内容全部从当前源码实证（文中
 > 标注文件），不是设计愿景。交接总索引与剩余工作见
-> [`docs/HANDOVER.md`](../HANDOVER.md)；进度以
-> [`docs/product/implementation-status.md`](../product/implementation-status.md)
-> 为准。
+> [`docs/README.md`](../README.md)；当前进度
+> [`docs/debug/handover-2026-08-15.md`](../debug/handover-2026-08-15.md)；
+> 已装机能力
+> [`docs/product/implementation-status.md`](../product/implementation-status.md)。
 >
 > 创建日期：2026-08-11。
 
@@ -278,7 +279,7 @@ messageId 的锚点退化为两侧唯一的 `text.trim()`（重复文本不作�
 不自动换 Bundle）；怀疑 Webview 资源被 service worker 缓存钉住时
 （日志 `boot-ok` 的 build id 与本次构建不符）需**完整退出重启
 Cursor**。完成一个切片的完整门禁与提交流程见
-[`docs/HANDOVER.md`](../HANDOVER.md) 第 4 节。
+[`docs/HANDOVER.md`](../HANDOVER.md)。
 
 ## 5. 延伸阅读
 

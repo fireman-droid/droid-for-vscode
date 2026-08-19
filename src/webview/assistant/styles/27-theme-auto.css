@@ -10,48 +10,60 @@
    legible. This file is imported last because Auto must win over both
    the fixed dark token table and its literal convergence overrides. */
 
+/* ==== §1.5 auto rework (2026-08-15) ================================
+   The old mapping trusted `--vscode-editorWidget-background` (often
+   identical to the sideBar ground) and `--vscode-panel-border` (often
+   transparent), so many themes rendered cards and borders invisible
+   (需求 5 / R1). Every "layer difference" token now derives
+   deterministically from two anchors that always exist and always
+   differ — `--vscode-foreground` (ink) × `--vscode-sideBar-background`
+   (surface) — via color-mix, so card/overlay/border/text contrast
+   survives any theme. */
 .dvx-shell[data-dvx-theme-preference='auto'],
 html[data-dvx-theme-preference='auto'] .dvx-image-lightbox,
 html[data-dvx-theme-preference='auto'] .dvx-slash-tooltip {
+  /* The two anchors. */
   --dvx-surface: var(
     --vscode-sideBar-background,
     var(--vscode-editor-background, #f5f3ef)
   );
-  --dvx-raised: var(
-    --vscode-editorWidget-background,
-    var(--vscode-input-background, var(--dvx-surface))
-  );
+  --dvx-ink: var(--vscode-foreground, #262626);
+
+  /* Surface ladder: every step is a fixed ink-mix above the ground,
+     so the card/overlay separation can never collapse to zero. */
+  --dvx-raised: color-mix(in srgb, var(--dvx-ink) 5%, var(--dvx-surface));
+  --dvx-overlay: color-mix(in srgb, var(--dvx-ink) 8%, var(--dvx-surface));
   --dvx-code: var(
     --vscode-textCodeBlock-background,
-    var(--vscode-input-background, var(--dvx-raised))
+    color-mix(in srgb, var(--dvx-ink) 4%, var(--dvx-surface))
+  );
+  /* Terminal floor: the editor's own terminal ground when defined,
+     otherwise a step darker than the page (§3.4: well below card). */
+  --dvx-well: var(
+    --vscode-terminal-background,
+    color-mix(in srgb, #000 20%, var(--dvx-surface))
   );
 
-  --dvx-ink: var(--vscode-foreground, #262626);
-  --dvx-text-strong: var(
-    --vscode-foreground,
-    var(--vscode-editor-foreground, #404040)
+  /* Text ladder: one interpolation family (88/76/62/45% ink over
+     surface) instead of borrowed theme roles, so the five ranks stay
+     ordered in any theme. */
+  --dvx-text-strong: color-mix(
+    in srgb,
+    var(--dvx-ink) 88%,
+    var(--dvx-surface)
   );
-  --dvx-text-secondary: var(
-    --vscode-descriptionForeground,
-    var(--vscode-foreground, #525252)
+  --dvx-text-secondary: color-mix(
+    in srgb,
+    var(--dvx-ink) 76%,
+    var(--dvx-surface)
   );
-  --dvx-muted: var(
-    --vscode-descriptionForeground,
-    var(--vscode-foreground, #737373)
-  );
-  --dvx-subtle: var(
-    --vscode-disabledForeground,
-    var(--vscode-input-placeholderForeground, #a1a1a1)
-  );
+  --dvx-muted: color-mix(in srgb, var(--dvx-ink) 62%, var(--dvx-surface));
+  --dvx-subtle: color-mix(in srgb, var(--dvx-ink) 45%, var(--dvx-surface));
 
-  --dvx-border: var(
-    --vscode-panel-border,
-    var(--vscode-widget-border, var(--vscode-input-border, #e5e5e5))
-  );
-  --dvx-border-strong: var(
-    --vscode-widget-border,
-    var(--vscode-focusBorder, var(--dvx-border))
-  );
+  /* Hairlines: translucent ink (panel-border retired — commonly
+     transparent, which erased card edges; 补充需求 4). */
+  --dvx-border: color-mix(in srgb, var(--dvx-ink) 12%, transparent);
+  --dvx-border-strong: color-mix(in srgb, var(--dvx-ink) 22%, transparent);
   --dvx-soft: var(
     --vscode-list-hoverBackground,
     color-mix(in srgb, var(--dvx-ink) 6%, transparent)
@@ -66,9 +78,11 @@ html[data-dvx-theme-preference='auto'] .dvx-slash-tooltip {
     --vscode-textLink-activeForeground,
     var(--vscode-button-background, #b5451f)
   );
-  --dvx-accent-soft: var(
-    --vscode-list-inactiveSelectionBackground,
-    var(--vscode-list-hoverBackground, transparent)
+  /* Tied to the accent itself instead of the list-selection color. */
+  --dvx-accent-soft: color-mix(
+    in srgb,
+    var(--dvx-accent) 12%,
+    var(--dvx-surface)
   );
 
   --dvx-danger: var(--vscode-errorForeground, #c93a4a);
@@ -162,10 +176,18 @@ html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb:hover {
   color: var(--vscode-editor-foreground, var(--dvx-ink));
 }
 
+/* Browser-default <hr> colors resolve to a near-white rule in some
+   dark editor themes. Keep Markdown separators in the same quiet
+   neutral hierarchy as the rest of the Auto skin. */
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-markdown hr {
+  border: 0;
+  border-top: 1px solid var(--dvx-border-strong);
+}
+
 .dvx-shell[data-dvx-theme-preference='auto'] .dvx-diagnostic {
   background: linear-gradient(
     180deg,
-    var(--vscode-editorWidget-background, var(--dvx-raised)),
+    var(--dvx-overlay),
     var(--dvx-raised)
   );
   box-shadow: 0 1px 2px
@@ -176,8 +198,28 @@ html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb:hover {
 .dvx-shell[data-dvx-theme-preference='auto'] .dvx-user-edit-send,
 .dvx-shell[data-dvx-theme-preference='auto'] .dvx-user-edit-send:hover:not(:disabled),
 .dvx-shell[data-dvx-theme-preference='auto'] .dvx-user-edit-send:focus-visible,
-.dvx-shell[data-dvx-theme-preference='auto'] .dvx-btw-send {
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-btw-send,
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-mission-start {
   color: var(--vscode-button-foreground, #fff);
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-mission-field textarea,
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-mission-picker-trigger {
+  border-color: var(--vscode-input-border, var(--dvx-border-strong));
+  background: var(--vscode-input-background, var(--dvx-surface));
+  color: var(--vscode-input-foreground, var(--dvx-ink));
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-mission-field
+  textarea::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--dvx-subtle));
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-mission-switch
+  > span {
+  background: var(--vscode-button-foreground, #fff);
 }
 
 .dvx-shell[data-dvx-theme-preference='auto'] .dvx-popover-row:hover,
@@ -210,10 +252,8 @@ html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb:hover {
 .dvx-shell[data-dvx-theme-preference='auto']
   .dvx-command-card
   .dvx-tool-output-frame {
-  background: var(
-    --vscode-terminal-background,
-    var(--vscode-editor-background, var(--dvx-code))
-  );
+  /* --dvx-well already prefers --vscode-terminal-background in auto. */
+  background: var(--dvx-well);
   color: var(--vscode-terminal-foreground, var(--dvx-ink));
 }
 
@@ -240,6 +280,83 @@ html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb:hover {
     var(--dvx-raised),
     var(--dvx-surface)
   );
+}
+
+/* Auto keeps the subagent card as one quiet editor-owned color. No
+   radial wash or two-stop gradient: the only depth is a hairline,
+   restrained shadow and optional backdrop blur. */
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-subagent-row {
+  border-color: var(--dvx-border-strong);
+  background: var(
+    --vscode-editorWidget-background,
+    var(--dvx-raised)
+  );
+  box-shadow: 0 12px 28px -24px
+    var(--vscode-widget-shadow, rgb(0 0 0 / 48%));
+  backdrop-filter: blur(8px);
+  color: var(--dvx-muted);
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-subagent-head::before {
+  background: var(--vscode-icon-foreground, var(--dvx-subtle));
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-subagent-live
+  .dvx-subagent-head::before {
+  background: var(
+    --vscode-progressBar-background,
+    var(--dvx-accent)
+  );
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-subagent-label {
+  color: var(--vscode-foreground, var(--dvx-ink));
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-subagent-status,
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-subagent-description {
+  color: var(
+    --vscode-descriptionForeground,
+    var(--dvx-text-secondary)
+  );
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-subagent-live
+  .dvx-subagent-status {
+  color: var(
+    --vscode-editorWarning-foreground,
+    var(--dvx-accent-deep)
+  );
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-subagent-metrics {
+  border-top-color: var(--dvx-border);
+  color: var(--dvx-text-secondary);
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-subagent-metric-label {
+  color: var(
+    --vscode-disabledForeground,
+    var(--dvx-subtle)
+  );
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-subagent-latest {
+  color: var(--dvx-muted);
+}
+
+/* AskUser choices are actionable primary text. The shared secondary
+   token becomes too gray against some Auto dark sidebars, so use the
+   editor theme's direct foreground instead of another surface mix. */
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-question-options
+  label {
+  color: var(--vscode-foreground, var(--dvx-ink));
 }
 
 .dvx-shell[data-dvx-theme-preference='auto'] .dvx-mcp-add-input,

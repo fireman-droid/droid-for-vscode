@@ -37,6 +37,11 @@ export interface SharedDaemonEndpoint {
   readonly versionMismatch: boolean;
 }
 
+export type DaemonHealth =
+  | 'healthy'
+  | 'authentication-failed'
+  | 'unreachable';
+
 /** Injectable filesystem/process seams for unit tests. */
 export interface DaemonDiscoveryDeps {
   readonly readFile: (file: string) => string | null;
@@ -50,7 +55,7 @@ export interface DaemonDiscoveryDeps {
     pid: number;
     port: number;
   }>;
-  readonly checkHealth: (url: string) => Promise<boolean>;
+  readonly checkHealth: (url: string) => Promise<DaemonHealth>;
   readonly resolveListenerPid: (
     port: number,
     host: string,
@@ -130,11 +135,14 @@ export async function ensureSharedDaemon(
     if (endpoint !== null) {
       return endpoint;
     }
-  }
-  if (
+    await reapUnreachableRecord(file, existingRaw, existing, d);
+  } else if (
     existingRaw !== null &&
     !d.deleteFileIfMatches(file, existingRaw)
   ) {
+    return readChangedHealthyEndpoint(file, d);
+  }
+  if (existingRaw !== null && d.readFile(file) !== null) {
     return readChangedHealthyEndpoint(file, d);
   }
 
@@ -253,7 +261,8 @@ async function healthyEndpoint(
   deps: DaemonDiscoveryDeps,
 ): Promise<SharedDaemonEndpoint | null> {
   const url = endpointUrl(deps.host, record.port);
-  if (!(await deps.checkHealth(url))) {
+  const health = await deps.checkHealth(url);
+  if (health === 'unreachable') {
     return null;
   }
   // Fresh records already contain the durable listener pid. Only
@@ -270,6 +279,22 @@ async function healthyEndpoint(
     spawned: false,
     versionMismatch: isVersionMismatch(record.version, deps.cliVersion()),
   };
+}
+
+async function reapUnreachableRecord(
+  file: string,
+  raw: string | null,
+  record: DaemonDiscoveryRecord,
+  deps: DaemonDiscoveryDeps,
+): Promise<void> {
+  if (raw === null) {
+    return;
+  }
+  const listenerPid = await deps.resolveListenerPid(record.port, deps.host);
+  if (listenerPid !== null) {
+    await deps.killProcessTree(listenerPid);
+  }
+  deps.deleteFileIfMatches(file, raw);
 }
 
 function isVersionMismatch(recorded: string, current: string): boolean {
@@ -300,7 +325,8 @@ function withDefaults(
     startDaemon:
       deps.startDaemon ??
       (() => Promise.reject(new Error('startDaemon dependency required'))),
-    checkHealth: deps.checkHealth ?? (() => Promise.resolve(false)),
+    checkHealth:
+      deps.checkHealth ?? (() => Promise.resolve('unreachable')),
     resolveListenerPid:
       deps.resolveListenerPid ?? (() => Promise.resolve(null)),
     killProcessTree: deps.killProcessTree ?? noopKill,

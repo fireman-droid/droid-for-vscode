@@ -82,7 +82,9 @@ describe('reconcileSessionHistory', () => {
       user('sdk-c', 'Later prompt'),
     ]);
 
-    const merged = reconcileSessionHistory(loaded, recovered);
+    const merged = reconcileSessionHistory(loaded, recovered, {
+      authoritativeLoaded: true,
+    });
     expect(merged.transcript[0]).toEqual({
       ...loaded.transcript[0],
       attachments: chips,
@@ -92,15 +94,98 @@ describe('reconcileSessionHistory', () => {
     );
   });
 
-  it('retains non-overlapping safe content and marks chronology partial', () => {
+  it('keeps disconnected recovery before authoritative complete history', () => {
     const recovered = state([user('cached', 'Locally observed prompt')]);
     const loaded = state([user('sdk', 'Public SDK prompt')]);
 
     expect(reconcileSessionHistory(loaded, recovered)).toEqual({
-      transcript: [...loaded.transcript, ...recovered.transcript],
+      transcript: [...recovered.transcript, ...loaded.transcript],
       historyStatus: 'partial',
       truncated: false,
     });
+  });
+
+  it('uses complete daemon history alone during startup recovery', () => {
+    const recovered = state([
+      user('cached-u', 'Stale local branch'),
+      assistant('cached-a', 'Stale local answer'),
+    ]);
+    const loaded = state([
+      user('sdk-u', 'Durable daemon prompt'),
+      assistant('sdk-a', 'Durable daemon answer'),
+    ]);
+
+    expect(
+      reconcileSessionHistory(loaded, recovered, {
+        authoritativeLoaded: true,
+      }),
+    ).toBe(loaded);
+  });
+
+  it('uses an empty complete daemon history over a stale checkpoint', () => {
+    const recovered = state([
+      user('cached-u', 'Stale checkpoint prompt'),
+      assistant('cached-a', 'Stale checkpoint answer'),
+    ]);
+    const loaded = state([]);
+
+    expect(
+      reconcileSessionHistory(loaded, recovered, {
+        authoritativeLoaded: true,
+      }),
+    ).toBe(loaded);
+  });
+
+  it('retains recovery evidence when startup daemon history is genuinely partial', () => {
+    const recovered = state([
+      user('cached-old-u', 'Older prompt'),
+      assistant('cached-old-a', 'Older answer'),
+      anchored('cached-shared-u', 'Shared prompt', 'shared-mid'),
+      assistant('cached-shared-a', 'Shared answer'),
+    ]);
+    const loaded: HostTranscriptState = {
+      ...state([
+        anchored('sdk-shared-u', 'Shared prompt', 'shared-mid'),
+        assistant('sdk-shared-a', 'Shared answer'),
+      ]),
+      historyStatus: 'partial',
+    };
+
+    expect(
+      reconcileSessionHistory(loaded, recovered, {
+        authoritativeLoaded: true,
+      }),
+    ).toEqual({
+      transcript: [
+        recovered.transcript[0],
+        recovered.transcript[1],
+        ...loaded.transcript,
+      ],
+      historyStatus: 'partial',
+      truncated: false,
+    });
+  });
+
+  it('does not let a stale disconnected checkpoint hide loaded changes', () => {
+    const recovered = state([
+      user('cached-u', 'Older local prompt'),
+      assistant('cached-a', 'Older local answer'),
+    ]);
+    const loaded = state([
+      user('sdk-u', 'Current daemon prompt'),
+      changes('sdk-c', 'current-turn', ['src/current.ts']),
+      assistant('sdk-a', 'Current daemon answer'),
+    ]);
+
+    const result = reconcileSessionHistory(loaded, recovered);
+    expect(result.transcript).toEqual([
+      ...recovered.transcript,
+      ...loaded.transcript,
+    ]);
+    const kinds = result.transcript.map((item) => item.kind);
+    const lastUser = kinds.lastIndexOf('user');
+    const lastChanges = kinds.lastIndexOf('changes');
+    expect(lastChanges).toBeGreaterThan(lastUser);
   });
 
   it('uniquifies duplicated toolUseIds when both merge sides kept a copy', () => {
@@ -157,7 +242,7 @@ describe('reconcileSessionHistory', () => {
     const loaded = state([user('sdk', 'Public SDK prompt')]);
 
     expect(reconcileSessionHistory(loaded, recovered)).toEqual({
-      transcript: [...loaded.transcript, ...recovered.transcript],
+      transcript: [...recovered.transcript, ...loaded.transcript],
       historyStatus: 'partial',
       truncated: true,
     });
@@ -187,7 +272,7 @@ describe('reconcileSessionHistory', () => {
       expect(result.historyStatus).toBe('complete');
     });
 
-    it('prepends the recovered rewind-branch prefix ahead of the loaded body', () => {
+    it('drops a stale rewind prefix when loaded has a newer turn', () => {
       const recovered = state([
         anchored('r-u0', 'Original question', 'mid-0'),
         assistant('r-a0', 'Original answer'),
@@ -201,15 +286,7 @@ describe('reconcileSessionHistory', () => {
         assistant('l-a2', 'Follow-up answer'),
       ]);
 
-      expect(reconcileSessionHistory(loaded, recovered)).toEqual({
-        transcript: [
-          recovered.transcript[0],
-          recovered.transcript[1],
-          ...loaded.transcript,
-        ],
-        historyStatus: 'partial',
-        truncated: false,
-      });
+      expect(reconcileSessionHistory(loaded, recovered)).toBe(loaded);
     });
 
     it('drops the unmatched resend residue that repeats the first loaded anchor text', () => {
@@ -258,7 +335,11 @@ describe('reconcileSessionHistory', () => {
         anchored('l-u2', 'Question two', 'mid-2'),
       ]);
 
-      expect(reconcileSessionHistory(loaded, recovered)).toEqual({
+      expect(
+        reconcileSessionHistory(loaded, recovered, {
+          authoritativeLoaded: true,
+        }),
+      ).toEqual({
         transcript: [...loaded.transcript, recovered.transcript[3]],
         historyStatus: 'partial',
         truncated: false,
@@ -303,6 +384,40 @@ describe('reconcileSessionHistory', () => {
       ]);
 
       expect(reconcileSessionHistory(loaded, recovered)).toBe(loaded);
+    });
+
+    it('keeps the live local tail during a background history refresh', () => {
+      // Reload/background-sync race: the history read started with Q1,
+      // then daemon history returned Q2 while the current window had
+      // already accepted Q3. The live Host transcript is authoritative
+      // for its unknown tail; replacing it with the older read must not
+      // make the just-sent exchange disappear.
+      const recovered = state([
+        anchored('r-u1', 'Question one', 'mid-1'),
+        assistant('r-a1', 'Answer one'),
+        user('r-u3', 'Question sent in this window'),
+        assistant('r-a3', 'Fresh streamed answer'),
+      ]);
+      const loaded = state([
+        anchored('l-u1', 'Question one', 'mid-1'),
+        assistant('l-a1', 'Answer one'),
+        anchored('l-u2', 'Daemon history arrived late', 'mid-2'),
+        assistant('l-a2', 'Older persisted answer'),
+      ]);
+
+      expect(
+        reconcileSessionHistory(loaded, recovered, {
+          preserveLocalTail: true,
+        }),
+      ).toEqual({
+        transcript: [
+          ...loaded.transcript,
+          recovered.transcript[2],
+          recovered.transcript[3],
+        ],
+        historyStatus: 'partial',
+        truncated: false,
+      });
     });
 
     it('skips stale duplicate trailing turns but keeps the genuinely new one', () => {
@@ -406,10 +521,12 @@ describe('reconcileSessionHistory', () => {
 
       const result = reconcileSessionHistory(loaded, recovered);
 
-      // Loaded body plus the two-item rewind-branch prefix the SDK no
-      // longer returns; the duplicate resend residue is dropped.
-      expect(result.transcript).toHaveLength(realShapeLoaded.length + 2);
-      expect(result.historyStatus).toBe('partial');
+      // Loaded already advanced past the final shared anchor, so the
+      // recovered rewind branch is stale UI state, not current daemon
+      // history. Keeping it would create phantom dialogue on Reload.
+      expect(result).toBe(loaded);
+      expect(result.transcript).toHaveLength(realShapeLoaded.length);
+      expect(result.historyStatus).toBe('complete');
 
       const messageIds = result.transcript
         .filter((item) => item.kind === 'user')
@@ -422,12 +539,261 @@ describe('reconcileSessionHistory', () => {
         .map((item) => (item as { toolUseId: string }).toolUseId);
       expect(new Set(toolUseIds).size).toBe(toolUseIds.length);
 
-      // The body is the loaded history unchanged; only the recovered
-      // rewind-branch prefix sits in front of it.
-      expect(result.transcript.slice(2)).toEqual(realShapeLoaded);
-      expect(result.transcript[0]).toEqual(realShapeRecovered[0]);
-      expect(result.transcript[1]).toEqual(realShapeRecovered[1]);
+      expect(result.transcript).toEqual(realShapeLoaded);
     });
+
+    it('keeps the logged 73/72 startup shape at 72 complete items', () => {
+      const daemonBody = realShapeLoaded.slice(0, 72);
+      const recovered = state([
+        user('cached-stale-u', 'Stale checkpoint-only prompt'),
+        ...daemonBody,
+      ]);
+      const loaded = state(daemonBody);
+      expect(recovered.transcript).toHaveLength(73);
+      expect(loaded.transcript).toHaveLength(72);
+
+      const result = reconcileSessionHistory(loaded, recovered, {
+        authoritativeLoaded: true,
+      });
+
+      expect(result).toBe(loaded);
+      expect(result.transcript).toHaveLength(72);
+      expect(result.historyStatus).toBe('complete');
+    });
+  });
+});
+
+describe('recovered rich-state enrichment (bug #36)', () => {
+  function richTool(
+    id: string,
+    turnId: string,
+    toolUseId: string,
+    overrides: Partial<
+      Extract<SessionTranscriptItem, { kind: 'tool' }>
+    > = {},
+  ): Extract<SessionTranscriptItem, { kind: 'tool' }> {
+    return { ...tool(id, turnId, toolUseId), ...overrides };
+  }
+
+  it('merges outputTail and durationMs onto matched loaded tool rows', () => {
+    const recovered = state([
+      anchored('cached-u', 'Run the build', 'mid-1'),
+      richTool('cached-t', 'live-turn', 'live-use', {
+        toolName: 'Execute',
+        detail: 'pnpm run build',
+        outputTail: 'Build OK in 3.2s',
+        durationMs: 3200,
+        status: 'completed',
+      }),
+      assistant('cached-a', 'Done'),
+    ]);
+    const loaded = state([
+      anchored('sdk-u', 'Run the build', 'mid-1'),
+      richTool('sdk-t', 'history-turn', 'history-use', {
+        toolName: 'Execute',
+        detail: 'pnpm run build',
+        status: 'completed',
+      }),
+      assistant('sdk-a', 'Done'),
+    ]);
+
+    const merged = reconcileSessionHistory(loaded, recovered, {
+      authoritativeLoaded: true,
+    });
+    expect(merged.historyStatus).toBe('complete');
+    expect(merged.transcript).toHaveLength(3);
+    expect(merged.transcript[1]).toEqual({
+      ...loaded.transcript[1],
+      outputTail: 'Build OK in 3.2s',
+      durationMs: 3200,
+    });
+  });
+
+  it('pairs repeated same-name tools by detail before falling back', () => {
+    const recovered = state([
+      anchored('cached-u', 'Run both', 'mid-1'),
+      richTool('cached-t1', 'live-turn', 'live-1', {
+        toolName: 'Execute',
+        detail: 'npm test',
+        outputTail: 'tests passed',
+      }),
+      richTool('cached-t2', 'live-turn', 'live-2', {
+        toolName: 'Execute',
+        detail: 'npm run lint',
+        outputTail: 'lint clean',
+      }),
+    ]);
+    // Loaded persisted the two calls in the opposite order.
+    const loaded = state([
+      anchored('sdk-u', 'Run both', 'mid-1'),
+      richTool('sdk-t1', 'history-turn', 'hist-1', {
+        toolName: 'Execute',
+        detail: 'npm run lint',
+      }),
+      richTool('sdk-t2', 'history-turn', 'hist-2', {
+        toolName: 'Execute',
+        detail: 'npm test',
+      }),
+    ]);
+
+    const merged = reconcileSessionHistory(loaded, recovered);
+    expect(
+      merged.transcript.map((item) =>
+        item.kind === 'tool' ? item.outputTail : undefined,
+      ),
+    ).toEqual([undefined, 'lint clean', 'tests passed']);
+  });
+
+  it('never overwrites loaded tool fields that already exist', () => {
+    const recovered = state([
+      anchored('cached-u', 'Prompt', 'mid-1'),
+      richTool('cached-t', 'live-turn', 'live-use', {
+        outputTail: 'stale tail',
+        durationMs: 99,
+      }),
+    ]);
+    const loaded = state([
+      anchored('sdk-u', 'Prompt', 'mid-1'),
+      richTool('sdk-t', 'history-turn', 'hist-use', {
+        outputTail: 'authoritative tail',
+        durationMs: 5,
+      }),
+    ]);
+
+    const merged = reconcileSessionHistory(loaded, recovered);
+    expect(merged.transcript[1]).toBe(loaded.transcript[1]);
+  });
+
+  it('restores measured changes line counts onto synthesized rows', () => {
+    const recovered = state([
+      anchored('cached-u', 'Edit files', 'mid-1'),
+      {
+        ...changes('cached-c', 'live-turn', ['src/a.ts']),
+        files: [
+          { path: 'src/a.ts', additions: 12, deletions: 3 },
+          { path: 'src/gone.ts', additions: 1, deletions: 1 },
+        ],
+      },
+    ]);
+    const loaded = state([
+      anchored('sdk-u', 'Edit files', 'mid-1'),
+      {
+        ...changes('sdk-c', 'history-turn', []),
+        files: [
+          { path: 'src/a.ts', additions: null, deletions: null },
+          { path: 'src/b.ts', additions: null, deletions: null },
+        ],
+      },
+    ]);
+
+    const merged = reconcileSessionHistory(loaded, recovered);
+    const row = merged.transcript[1];
+    expect(row?.kind).toBe('changes');
+    if (row?.kind !== 'changes') {
+      return;
+    }
+    expect(row.files).toEqual([
+      { path: 'src/a.ts', additions: 12, deletions: 3 },
+      { path: 'src/b.ts', additions: null, deletions: null },
+    ]);
+  });
+
+  it('re-inserts recovered diagnostics at the end of their turn', () => {
+    const diagnostic: SessionTranscriptItem = {
+      id: 'diagnostic:42',
+      kind: 'diagnostic',
+      turnId: 'live-turn',
+      severity: 'warning',
+      code: 'tool-failed',
+      message: 'The command exited with code 1.',
+    };
+    const recovered = state([
+      anchored('cached-u1', 'First prompt', 'mid-1'),
+      diagnostic,
+      anchored('cached-u2', 'Second prompt', 'mid-2'),
+      assistant('cached-a2', 'Second answer'),
+    ]);
+    const loaded = state([
+      anchored('sdk-u1', 'First prompt', 'mid-1'),
+      assistant('sdk-a1', 'First answer'),
+      anchored('sdk-u2', 'Second prompt', 'mid-2'),
+      assistant('sdk-a2', 'Second answer'),
+    ]);
+
+    const merged = reconcileSessionHistory(loaded, recovered);
+    expect(merged.transcript.map((item) => item.kind)).toEqual([
+      'user',
+      'assistant',
+      'diagnostic',
+      'user',
+      'assistant',
+    ]);
+    // Re-homed to the loaded turn so grouping stays coherent.
+    expect(merged.transcript[2]).toEqual({
+      ...diagnostic,
+      turnId: (
+        loaded.transcript[1] as { turnId: string }
+      ).turnId,
+    });
+    // Carrying a synthetic diagnostic row alone does not demote an
+    // otherwise complete history.
+    expect(merged.historyStatus).toBe('complete');
+  });
+
+  it('does not duplicate diagnostics already present in the segment', () => {
+    const diagnostic: SessionTranscriptItem = {
+      id: 'diagnostic:7',
+      kind: 'diagnostic',
+      turnId: 'live-turn',
+      severity: 'warning',
+      code: 'tool-failed',
+      message: 'Duplicate candidate.',
+    };
+    const recovered = state([
+      anchored('cached-u', 'Prompt', 'mid-1'),
+      diagnostic,
+      { ...diagnostic, id: 'diagnostic:8' },
+    ]);
+    const loaded = state([
+      anchored('sdk-u', 'Prompt', 'mid-1'),
+      assistant('sdk-a', 'Answer'),
+    ]);
+
+    const merged = reconcileSessionHistory(loaded, recovered);
+    expect(
+      merged.transcript.filter((item) => item.kind === 'diagnostic'),
+    ).toHaveLength(1);
+  });
+
+  it('does not enrich across misaligned anchors', () => {
+    // The recovered tail turn has no matching loaded anchor: its rich
+    // rows must not bleed into the previous matched segment.
+    const recovered = state([
+      anchored('cached-u1', 'Shared prompt', 'mid-1'),
+      richTool('cached-t1', 'live-1', 'live-use-1', {
+        toolName: 'Read',
+      }),
+      user('cached-u2', 'Unshared prompt'),
+      richTool('cached-t2', 'live-2', 'live-use-2', {
+        toolName: 'Execute',
+        outputTail: 'should stay in its own turn',
+      }),
+    ]);
+    const loaded = state([
+      anchored('sdk-u1', 'Shared prompt', 'mid-1'),
+      richTool('sdk-t1', 'hist-1', 'hist-use-1', {
+        toolName: 'Execute',
+      }),
+      anchored('sdk-u2', 'Loaded-only prompt', 'mid-9'),
+    ]);
+
+    const merged = reconcileSessionHistory(loaded, recovered);
+    const enrichedTool = merged.transcript.find(
+      (item) => item.kind === 'tool' && item.id === 'sdk-t1',
+    );
+    expect(
+      (enrichedTool as { outputTail?: string }).outputTail,
+    ).toBeUndefined();
   });
 });
 

@@ -1,55 +1,19 @@
-import {
-  ToolConfirmationOutcome,
-  type ConnectedDroid,
-} from '@factory/droid-sdk';
+import type { ConnectedDroid } from '@factory/droid-sdk';
 
-import type { HostTranscriptState } from '../shared/hostTranscriptState';
 import { MAX_SUBAGENT_ACTIVITY_LENGTH } from '../shared/subagentProtocol';
-import { projectSessionMessages } from './history/projectSessionHistory';
 
 /**
- * Host-facing control surface over running Task subagents (待办 B;
- * evidence mission-control-feasibility.md §0.8, probed 2026-08-12):
- *
- * - `sampleActivity` polls `sessions.getMessages(childId, {limit})`
- *   and reports the last tool call observed inside the child session
- *   — the quiet "what it is doing right now" subtitle.
- * - `interrupt` performs the probed stop sequence
- *   `sessions.resume(childId) → interrupt() → detach()`, which stops
- *   exactly that child while its siblings keep running. The resume
- *   attaches with deny-all handlers so the control connection can
- *   never answer permissions on the child's behalf.
- *
- * Both are daemon-only; the extension wires this gateway only while
- * daemon sessions are active, and the host renders no stop control
- * without it (no disabled placeholders — user decision 2026-08-12).
+ * Host-facing observation surface for inline Task subagent cards.
+ * Child session ids remain host-only; the public daemon snapshot is
+ * sampled only for the newest bounded tool name.
  */
-export interface SubagentTranscriptSnapshot {
-  readonly state: HostTranscriptState;
-  /** The public facade reached its hard window limit. */
-  readonly saturated: boolean;
-}
-
 export interface SubagentControlGateway {
   /** Last tool name inside the child, or null when unreadable. */
   sampleActivity(childSessionId: string): Promise<string | null>;
-  /**
-   * Bounded live child transcript from the public daemon message snapshot.
-   * Optional so process-mode and older injected gateways keep the coarse
-   * persisted-history fallback.
-   */
-  readTranscript?(
-    childSessionId: string,
-    workspaceRoot: string,
-  ): Promise<SubagentTranscriptSnapshot | null>;
-  /** True when the interrupt round-trip completed. */
-  interrupt(childSessionId: string): Promise<boolean>;
 }
 
 /** Messages fetched per activity sample; newest tail is enough. */
 const ACTIVITY_SAMPLE_LIMIT = 40;
-/** Public facade hard maximum; saturation falls back to full history. */
-const TRANSCRIPT_SNAPSHOT_LIMIT = 100;
 
 export function createDaemonSubagentControl(
   getDroid: () => Promise<ConnectedDroid>,
@@ -65,46 +29,6 @@ export function createDaemonSubagentControl(
         return lastToolName(messages);
       } catch {
         return null;
-      }
-    },
-    async readTranscript(childSessionId, workspaceRoot) {
-      try {
-        const droid = await getDroid();
-        const messages = await droid.sessions.getMessages(
-          childSessionId,
-          { limit: TRANSCRIPT_SNAPSHOT_LIMIT },
-        );
-        const projected = projectSessionMessages(messages, {
-          workspaceRoot,
-        });
-        return projected.status === 'available'
-          ? {
-              state: projected.state,
-              saturated:
-                messages.length === TRANSCRIPT_SNAPSHOT_LIMIT,
-            }
-          : null;
-      } catch {
-        return null;
-      }
-    },
-    async interrupt(childSessionId) {
-      try {
-        const droid = await getDroid();
-        const session = await droid.sessions.resume(childSessionId, {
-          permissionHandler: () => ToolConfirmationOutcome.Cancel,
-          askUserHandler: () => ({ cancelled: true, answers: [] }),
-        });
-        try {
-          await session.interrupt();
-        } finally {
-          // Detach only: the child session must stay resumable for
-          // the read-only transcript view.
-          await session.detach().catch(() => undefined);
-        }
-        return true;
-      } catch {
-        return false;
       }
     },
   };

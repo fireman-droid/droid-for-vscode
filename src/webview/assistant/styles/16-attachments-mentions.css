@@ -112,8 +112,8 @@
   overscroll-behavior: contain;
   padding: 4px;
   border: 1px solid var(--dvx-border);
-  border-radius: 10px;
-  background: var(--dvx-raised);
+  border-radius: 8px;
+  background: var(--dvx-overlay);
   box-shadow: 0 6px 18px rgb(0 0 0 / 12%);
 }
 
@@ -144,7 +144,7 @@
 
 .dvx-mention-path {
   overflow: hidden;
-  color: #8a8a8a;
+  color: var(--dvx-muted);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;

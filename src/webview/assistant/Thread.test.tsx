@@ -20,7 +20,6 @@ import {
   TerminalMirrorContext,
   FileDiffContext,
   FOLLOW_REJOIN_PX,
-  PreviewContext,
   applyFollowScroll,
   applyFollowWheelIntent,
   computePinnedUserIndex,
@@ -55,7 +54,7 @@ import {
   splitMentionPath,
 } from './thread/composerCommands';
 import { formatThinkingLabel } from './thread/readers';
-import { SubagentActionsContext } from './subagentPanelFlow';
+import { SubagentActivityStoreContext } from './subagentPanelFlow';
 
 afterEach(() => {
   cleanup();
@@ -124,7 +123,7 @@ describe('HistoryNotice', () => {
   });
 });
 
-describe('ChangesSummary ledger', () => {
+describe('historical ChangesSummary', () => {
   const changesData = {
     turnId: 'turn-a',
     files: [
@@ -135,7 +134,6 @@ describe('ChangesSummary ledger', () => {
   };
 
   function renderChanges(
-    onPreview: (path: string) => void,
     data: unknown = changesData,
     onOpenDiff: (
       path: string,
@@ -146,79 +144,39 @@ describe('ChangesSummary ledger', () => {
       createElement(
         FileDiffContext.Provider,
         { value: onOpenDiff },
-        createElement(
-          PreviewContext.Provider,
-          { value: onPreview },
-          createElement(ChangesSummary, { data }),
-        ),
+        createElement(ChangesSummary, { data }),
       ),
     );
   }
 
-  it('shows a Preview row action only for html prototypes', () => {
-    renderChanges(() => undefined);
-    const previews = screen.getAllByRole('button', { name: /^Preview/ });
-    // Exactly the .html and .htm rows, not the .tsx row.
-    expect(previews).toHaveLength(2);
-    expect(
-      previews.every(
-        (button) => button.className === 'dvx-changes-action',
-      ),
-    ).toBe(true);
+  it('renders one compact aggregate line without latest-turn actions', () => {
+    renderChanges();
+    const summary = screen.getByRole('button');
+    expect(summary.className).toBe('dvx-changes-history');
+    expect(summary.textContent).toBe('Changes·3 files·+15/−1');
+    expect(document.querySelector('ul, li')).toBeNull();
+    expect(screen.queryByText('prototypes/dashboard.html')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Preview/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Commit/i })).toBeNull();
   });
 
-  it('opens the previewed path on click', () => {
-    const onPreview = vi.fn();
-    renderChanges(onPreview);
-    const preview = screen.getByTitle(
-      /Preview prototypes\/dashboard\.html/,
-    );
-    fireEvent.click(preview);
-    expect(onPreview).toHaveBeenCalledWith('prototypes/dashboard.html');
-  });
-
-  it('flips the header from writing to settled in place', () => {
-    const first = renderChanges(() => undefined, {
-      ...changesData,
-      writing: true,
-    });
-    expect(screen.getByRole('status').textContent).toContain(
-      'writing · 3 files',
-    );
-    expect(document.querySelector('.dvx-changes-dot')).not.toBeNull();
-    first.unmount();
-
-    renderChanges(() => undefined, changesData);
-    expect(screen.getByRole('status').textContent).toContain(
-      '3 files · settled',
-    );
-    expect(document.querySelector('.dvx-changes-dot')).toBeNull();
-  });
-
-  it('Review opens the diff of every changed file', () => {
+  it('opens every historical diff with that turn in stable order', () => {
     const onOpenDiff = vi.fn();
-    renderChanges(() => undefined, changesData, onOpenDiff);
-    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
-    expect(onOpenDiff.mock.calls.map(([path]) => path)).toEqual([
-      'prototypes/dashboard.html',
-      'demo/legacy.htm',
-      'src/app.tsx',
-    ]);
-    expect(onOpenDiff.mock.calls.map(([, turnId]) => turnId)).toEqual([
-      'turn-a',
-      'turn-a',
-      'turn-a',
+    renderChanges(changesData, onOpenDiff);
+    fireEvent.click(screen.getByRole('button'));
+    expect(onOpenDiff.mock.calls).toEqual([
+      ['prototypes/dashboard.html', 'turn-a'],
+      ['demo/legacy.htm', 'turn-a'],
+      ['src/app.tsx', 'turn-a'],
     ]);
   });
 
-  it('keeps ledger rows free of background hover washes', () => {
-    renderChanges(() => undefined);
-    // Rows are plain list items; the file name is the only button and
-    // carries no chip classes (the grey chip skin was removed).
-    const rows = document.querySelectorAll('.dvx-changes-row');
-    expect(rows).toHaveLength(3);
-    const file = screen.getByTitle('Open changes for src/app.tsx');
-    expect(file.className).toBe('dvx-changes-file');
+  it('stays absent for an empty Changes projection', () => {
+    const { container } = renderChanges({
+      turnId: 'turn-a',
+      files: [],
+    });
+    expect(container.childElementCount).toBe(0);
   });
 });
 
@@ -335,9 +293,15 @@ describe('SubagentSummaryRow', () => {
         durationMs: 4_200,
       }),
     );
-    screen.getByText('Delegated to explore subagent');
+    screen.getByText('explore subagent');
     screen.getByText('Map the payment flow');
-    screen.getByText('completed · 7 tool uses · 4.2s');
+    screen.getByText('Completed');
+    expect(
+      document.querySelector('.dvx-subagent-metrics')?.textContent,
+    ).toContain('Elapsed4.2s');
+    expect(
+      document.querySelector('.dvx-subagent-metrics')?.textContent,
+    ).toContain('Tools7');
   });
 
   it('spins quietly while running without counters', () => {
@@ -350,7 +314,7 @@ describe('SubagentSummaryRow', () => {
         durationMs: null,
       }),
     );
-    screen.getByText('running');
+    screen.getByText('Running');
     expect(screen.queryByText(/tool use/)).toBeNull();
     // No description span when the delegation omitted one.
     expect(
@@ -378,7 +342,7 @@ describe('SubagentSummaryRow', () => {
         parentRunning: true,
       }),
     );
-    screen.getByText('running');
+    screen.getByText('Running');
     expect(
       document.querySelector('.dvx-subagent-spinner'),
     ).not.toBeNull();
@@ -394,8 +358,8 @@ describe('SubagentSummaryRow', () => {
         durationMs: null,
       }),
     );
-    screen.getByText('Delegated to explore subagent');
-    expect(screen.queryByText('running')).toBeNull();
+    screen.getByText('explore subagent');
+    screen.getByText('Pending');
     expect(document.querySelector('.dvx-subagent-spinner')).toBeNull();
   });
 
@@ -423,50 +387,74 @@ describe('SubagentSummaryRow', () => {
         parentSettled: true,
       }),
     );
-    screen.getByText('running in background');
+    screen.getByText('Running in background');
     // Still live work, so the spinner stays.
     expect(
       document.querySelector('.dvx-subagent-spinner'),
     ).not.toBeNull();
   });
 
-  it('offers the transcript entry on live rows, not on inert ones', () => {
-    const actions = {
-      onOpenTranscript: vi.fn(),
-      onRefreshTranscript: vi.fn(),
-      onCloseSheet: vi.fn(),
-      onPanelToggle: vi.fn(),
-    };
-    const row = (
-      status: 'running' | null,
-      parentRunning: boolean,
-    ): React.ReactElement =>
-      createElement(
-        SubagentActionsContext.Provider,
-        { value: actions },
-        createElement(SubagentSummaryRow, {
-          type: 'explore',
-          description: 'Map the flow',
-          status,
-          toolUseCount: null,
-          durationMs: null,
-          toolUseId: 'use-1',
-          parentRunning,
-        }),
-      );
-    // Foreground mid-run: statusless under a running Task row.
-    const { rerender } = render(row(null, true));
-    fireEvent.click(screen.getByText('View transcript'));
-    expect(actions.onOpenTranscript).toHaveBeenCalledWith(
-      'use-1',
-      'Map the flow',
+  it('keeps every Subagent state inside the inline card', () => {
+    const { rerender } = render(
+      createElement(SubagentSummaryRow, {
+        type: 'explore',
+        description: 'Map the flow',
+        status: null,
+        toolUseCount: null,
+        durationMs: null,
+        toolUseId: 'use-1',
+        parentRunning: true,
+      }),
     );
-    // A ledger-reported running row keeps the entry too.
-    rerender(row('running', false));
-    screen.getByText('View transcript');
-    // A statusless row under a settled parent has nothing to open.
-    rerender(row(null, false));
-    expect(screen.queryByText('View transcript')).toBeNull();
+    expect(
+      screen.queryByRole('button', {
+        name: 'Open explore subagent details',
+      }),
+    ).toBeNull();
+    rerender(
+      createElement(SubagentSummaryRow, {
+        type: 'explore',
+        description: 'Map the flow',
+        status: 'running',
+        toolUseCount: null,
+        durationMs: null,
+        toolUseId: 'use-1',
+        parentRunning: false,
+      }),
+    );
+    expect(
+      screen.queryByRole('button', {
+        name: 'Open explore subagent details',
+      }),
+    ).toBeNull();
+  });
+
+  it('shows the latest sampled child activity in the progress card', () => {
+    const activity = { action: 'Reading files' };
+    render(
+      <SubagentActivityStoreContext.Provider
+        value={{
+          get: (toolUseId) =>
+            toolUseId === 'use-1'
+              ? activity
+              : undefined,
+          subscribe: () => () => undefined,
+        }}
+      >
+        <SubagentSummaryRow
+          type="explore"
+          description="Map the flow"
+          status="running"
+          toolUseCount={3}
+          durationMs={null}
+          toolUseId="use-1"
+        />
+      </SubagentActivityStoreContext.Provider>,
+    );
+    expect(
+      document.querySelector('.dvx-subagent-metrics')?.textContent,
+    ).toContain('Tools3');
+    screen.getByText('Reading files');
   });
 });
 

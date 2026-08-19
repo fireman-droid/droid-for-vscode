@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -46,9 +46,47 @@ const capabilities: MissionSetupCapabilities = {
   },
 };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('MissionSetup', () => {
+  it('opens a compact picker above controls near the viewport edge', async () => {
+    const user = userEvent.setup();
+    render(
+      <MissionSetup
+        capabilities={capabilities}
+        initialTask="Ship this"
+        onStart={vi.fn(() => 'request-1')}
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(320);
+    const trigger = screen.getByRole('combobox', {
+      name: 'Orchestrator model',
+    });
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+      bottom: 286,
+      height: 38,
+      left: 20,
+      right: 420,
+      top: 248,
+      width: 400,
+      x: 20,
+      y: 248,
+      toJSON: () => ({}),
+    });
+
+    await user.click(trigger);
+
+    expect(trigger.parentElement?.dataset.placement).toBe('top');
+    expect(
+      screen.getByRole('listbox', { name: 'Orchestrator model options' }),
+    ).toBeDefined();
+  });
+
   it('selects worker and validator independently with shared semantics', async () => {
     const user = userEvent.setup();
     const onStart = vi.fn(() => 'request-1');
@@ -67,37 +105,54 @@ describe('MissionSetup', () => {
     );
     expect(
       screen.getByText(
-        'The shared Validator profile is used by Scrutiny and User Testing.',
+        'Both checks use the shared Validator profile configured above.',
       ),
     ).toBeDefined();
 
-    await user.selectOptions(
-      screen.getByLabelText('Worker inheritance'),
-      'override',
+    expect(
+      screen.getByRole('combobox', { name: 'Orchestrator reasoning' })
+        .tagName,
+    ).toBe('BUTTON');
+    await user.click(
+      screen.getByRole('combobox', { name: 'Worker inheritance' }),
     );
-    await user.selectOptions(screen.getByLabelText('Worker model'), 'worker-b');
-    await user.selectOptions(
-      screen.getByLabelText('Worker reasoning'),
-      'medium',
+    await user.click(
+      screen.getByRole('option', { name: 'Choose independently' }),
     );
-    await user.selectOptions(
-      screen.getByLabelText('Validator inheritance'),
-      'override',
+    await user.click(screen.getByRole('combobox', { name: 'Worker model' }));
+    expect(
+      screen.getByRole('listbox', { name: 'Worker model options' }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole('option', { name: 'Worker B' }).tabIndex,
+    ).toBe(-1);
+    await user.keyboard('{ArrowDown}{Enter}');
+    await user.click(
+      screen.getByRole('combobox', { name: 'Worker reasoning' }),
     );
-    await user.selectOptions(
-      screen.getByLabelText('Validator model'),
-      'validator-c',
+    await user.click(screen.getByRole('option', { name: 'Medium' }));
+    await user.click(
+      screen.getByRole('combobox', { name: 'Validator inheritance' }),
     );
+    await user.click(
+      screen.getByRole('option', { name: 'Choose independently' }),
+    );
+    await user.click(
+      screen.getByRole('combobox', { name: 'Validator model' }),
+    );
+    await user.click(screen.getByRole('option', { name: 'Validator C' }));
     await user.click(
       screen.getByRole('button', { name: 'Advanced Mission settings' }),
     );
-    expect(screen.queryByLabelText('Validator model')).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Validator model')).toBeNull();
+    });
     await user.click(
       screen.getByRole('button', { name: 'Advanced Mission settings' }),
     );
     expect(
-      (screen.getByLabelText('Validator model') as HTMLSelectElement).value,
-    ).toBe('validator-c');
+      screen.getByRole('combobox', { name: 'Validator model' }).textContent,
+    ).toContain('Validator C');
     await user.click(screen.getByRole('checkbox', { name: 'Run Scrutiny' }));
     await user.click(screen.getByRole('button', { name: 'Start Mission' }));
 
@@ -183,10 +238,10 @@ describe('MissionSetup', () => {
 
     const start = screen.getByRole('button', { name: 'Start Mission' });
     expect((start as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByRole('status').textContent).toContain(
-      'Enter a Mission task.',
-    );
-    await user.type(screen.getByLabelText('Mission task'), 'Implement it');
+    const task = screen.getByLabelText('Mission task');
+    expect(document.activeElement).toBe(task);
+    expect(screen.getByRole('status').textContent).toBe('');
+    await user.type(task, 'Implement it');
     await user.dblClick(start);
     expect(onStart).toHaveBeenCalledTimes(1);
     expect(

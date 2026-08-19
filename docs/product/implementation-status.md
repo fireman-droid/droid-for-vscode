@@ -2,7 +2,7 @@
 
 > 本文档是 DroidVisX 当前实现范围的持续更新台账，用来区分“已经接入产品的功能”“部分实现”“仅能力声明/探测”以及“尚未实现”。
 >
-> 最后核对日期：2026-08-15
+> 最后核对日期：2026-08-18
 >
 > 核对对象：当前工作区源码、Bridge、Extension Host、Droid Runtime 适配、Webview、测试、VSIX 与 Cursor 安装状态
 
@@ -25,8 +25,38 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 v0.7.26 Last-call Context 切片已重新打包、验证并安装；现有 Cursor
-窗口需 Reload Window 加载新 Bundle，本地提交状态见本轮最终交付记录。
+当前 **v0.7.59** 已完成源码、聚焦验证、VSIX 校验并安装到 Cursor，等待用户
+Reload Window 验收。原 Preview 已演进为 Canvas 交互成果面板：稳定 artifact
+卡、Preview/Code/Diff、响应式视口、文件自动刷新、内存 baseline、元素选择与
+反馈回 Composer 已形成完整链路，并保持 opaque-origin、零网络与 revision /
+generation fail-closed 边界。Mission 的模型、推理和继承下拉框已统一为键盘
+可操作的紧凑命令面选择器，覆盖 Auto/Dark 主题、选中/悬停/焦点反馈、短列表
+内部滚动和临近视口边缘时的上下展开。Mission setup
+任务输入框已移除拖拽变形手柄，改为固定
+高度加内部滚动；Mission Control 卡片与进度条同步提升到新 setup 的材质层级，
+Pause/Resume/Stop 获得实体按钮形态。Mission setup 已从扁平原生表单重构为任务简报与
+Orchestrator → Worker → Validation 执行关系面板；宽窄布局、Auto/Dark
+对比度、角色区块、质量开关与主操作层级已经重新设计。面板入场、执行阶段
+递进以及 Advanced 展开/收起采用短时 GPU 友好动画，并完整尊重
+`prefers-reduced-motion`。Composer 的 slash command menu 现在会在 Host
+提供 Mission setup capability 时显示 `/mission — Start a Factory Mission`；
+选择该项会清空 slash 查询并直接打开 Mission 设置，不发送 chat turn。daemon
+`sessions.getMessages` 的分页结果现在先经公开 SDK parent-chain helper
+统一为从旧到新，Webview 底部因此始终对应最新 exchange。启动 reload 以
+complete daemon 历史为唯一对话正文；实测 73 项旧 checkpoint + 143 项
+daemon 历史会保持为 143 项 complete，不再合成为 175 项 partial。
+checkpoint 严格校验已与 Bridge 的 Tool `target` / `additionalFileCount`
+字段一致，写入拒绝会进入诊断，不再静默停留在旧 checkpoint。真正 partial
+的 daemon 历史仍保留有界恢复证据。后台 daemon 历史刷新保留当前窗口已经接受的新消息尾部；
+“Show earlier messages” 追加旧消息时保持原阅读位置。官方 Factory Mission
+已形成 Runtime → Host →
+Bridge → Webview 完整链路：`/mission` 内联设置、`/mission <task>` 直启、
+模型与推理继承/覆盖、独立 Validator 开关、官方确认、按官方顺序显示
+Feature 与完成进度、Pause/Resume/Stop 当前 Feature、重载恢复，以及独立
+只读 Worker Viewer。控制请求绑定快照 revision 并串行结算；Worker
+Session ID 仅保留在 Host，Mission Viewer UI 与 Host 均拒绝 Stop。
+交接见
+[`docs/debug/handover-2026-08-15.md`](../debug/handover-2026-08-15.md)。
 
 2026-08-11 产品化打磨轮已完成源码与测试：Production Build（minify +
 production React）、长会话渲染优化（消息身份缓存、Thinking 展开局部化、
@@ -136,7 +166,7 @@ ApplyPatch）的行内新增工作区相对路径 chip。Runtime 从 SDK tool_ca
 `filePath` 的 Tool 项此前会被恢复校验整体拒绝；同时修复 Webview
 store 在实时 `tool.activity` 更新中丢失 `filePath` 的问题。
 下一轮严格两小时实现窗口的证据、范围、执行顺序、验收和回滚已经固化到
-`docs/preflight/`。该预研确认 Context 的累计 `used`、Breakdown
+`docs/archive/preflight/`。该预研确认 Context 的累计 `used`、Breakdown
 `usedTokens`、`freeTokens` 和 Category Sum 都不能表示当前窗口；只有公开
 Schema 中最新 Provider Call 的 `lastCallTokenUsage` /
 `lastCallCompactionTokens` 可以作为当前 Compaction Meter 分子。v0.7.26
@@ -864,10 +894,11 @@ Context 和 Model 浮层固定在 Composer 上方约 7px。
 - 固定模型清单与 “Add Models”，生产 UI 仅显示 Runtime 返回且 SDK 标记为
   `isCustom: true` 的 BYOK `availableModels`；
 - 全局或永久权限（文件附件、Skills 与 MCP 浏览启停已生产接通）；
-- 完整 Mission 管理、Worker、阶段和进度界面。
+- 原型中没有官方 Runtime 来源的装饰性能力。
 
-Mission 目前只会在 Droid 发出真实确认请求时，作为普通权限卡片显示和
-结算。ExitSpec 的计划则只在真实权限选项允许时显示和编辑。
+Mission 的官方确认仍作为普通权限卡片显示和结算；启动、Feature 顺序与
+进度、Pause/Resume/Stop、恢复及只读 Worker Viewer 已生产接通。
+ExitSpec 的计划仍只在真实权限选项允许时显示和编辑。
 
 ## 生产已接通
 
@@ -1197,59 +1228,35 @@ Promise 拒绝、10 秒启动看门狗、`boot-ok` 构建号识别陈旧缓存�
 - `src/extension/webviewHtml.ts`
 - `esbuild.mjs`
 
-### 12. Canvas / 原型预览（2026-08-12 下午切片⑤，V1 #7）
+### 12. Canvas 交互成果面板（2026-08-17 扩展）
 
-- 转录里 Droid 产出的 `.html` / `.htm` 原型可在扩展内独立
-  `WebviewPanel`（`ViewColumn.Beside`，单实例复用）中安全预览
-- 预览入口是既有安静视觉语言里的克制 “Preview” 文字 chip：出现在
-  Changes 卡的可预览文件行与工具活动行（仅 `completed` 且路径经
-  `isPreviewableFilePath` 判定为可预览时），未新造横幅/填充徽标/彩条
-- 工具栏提供 **Reload**（重读磁盘、重渲染）与 **Open in editor**
-  （在编辑器打开原文件）两枚控制，均为暖中性描边按钮
-- 安全模型（预研风险项逐条落实，Chromium 实证）：
-  - **方案偏移（预研结论优先于设计推测）**：VS Code 自 1.56 起嵌套
-    iframe 无法导航到 `asWebviewUri` 资源（microsoft/vscode#121479、
-    #123766，官方 as-designed），故不采用设计文档推测的
-    `asWebviewUri` 载入，改为 Host 侧读取原型 HTML 内联进
-    `sandbox="allow-scripts"` 的 `srcdoc` iframe；面板
-    `localResourceRoots: []`（零本地文件可读，比原计划父目录根更紧）
-  - **R1 网络出口**：Shell 文档 CSP + 注入原型的 `<meta>` CSP 双点
-    执行，`default-src 'none'`、`connect-src 'none'`、`img-src`
-    仅 `data: blob:`——fetch/XHR/WebSocket、CDN 脚本、外链图片全部
-    构造性阻断（Chromium 探针 fetch→TypeError、websocket→error、
-    图片信标→blocked，ALL-PASS）
-  - **同源逃逸 / vscode API / 存储**：`allow-scripts` 不带
-    `allow-same-origin` ⇒ 原型为 opaque origin；探针实证父
-    `contentDocument` 读取为 `null`、`contentWindow` 属性读取抛
-    `SecurityError`、`acquireVsCodeApi` 不存在、`localStorage` 拒绝
-    （ALL-PASS）
-  - **原型→Host 通道**：Shell 不注册任何 `window` message 监听；
-    沙箱子帧向 `parent.postMessage` 无消费者。Shell 工具栏只向 Host
-    发两条固定、无 payload 的命令（`preview.reload` /
-    `preview.openInEditor`）
-  - **CSP 收紧的有意偏移**：Shell 脚本不加 nonce（nonce/hash 会让
-    浏览器忽略 `'unsafe-inline'`，而 srcdoc 继承策略需要它跑原型内联
-    脚本）；`'unsafe-eval'` 在 opaque origin 且零出口下不引入新面，
-    保留以兼容 eval 型原型。Shell 模板每处插值均 HTML 转义
-- **fail-closed 记录**：同目录相对资源（外链 CSS/JS/图片）在 opaque
-  origin + 无 service worker 下不可加载，工具栏如实标注
-  “Sandboxed · inline code only · no network”；仅自包含 HTML 可完整
-  渲染。文件缺失/被移动/超 4MB（`MAX_PREVIEW_SOURCE_BYTES`）时面板内
-  显示克制 notice 并回报 `preview-failed` 诊断，不静默
-- Bridge 新增 `file.preview` 消息（`PREVIEWABLE_FILE_EXTENSIONS`
-  白名单 + `isSafeWorkspaceRelativePath` 双侧校验，拒空/错扩展/越界/
-  路径穿越/绝对路径/控制字符/超长）
+- Droid 产出的 `.html/.htm` 文件与已结算的内联 HTML 代码块现在是有稳定
+  身份的 Canvas artifact；转录代码块显示成品卡，文件入口统一使用
+  “Canvas”。`/canvas` 只把可见成果请求模板写入 Composer，不自动发送。
+- 单实例 Canvas Studio 提供 **Preview / Code / Diff**、Desktop / Tablet /
+  Mobile 视口、Reload、文件来源的 Open in editor、元素选择与反馈面板。
+  Code/Diff 各限制为 512K 字符，Diff 最多构造 2,000 行；最多保留 8 个
+  内存 baseline，不写版本文件、不承诺持久历史。
+- 文件 artifact 使用 watcher 自动刷新（180ms debounce，切换/关闭即
+  dispose）；同一 artifact 的 opening baseline 保持不变，内容变化递增
+  revision。面板重建递增 generation，所有 Panel→Host 命令必须 exact-key
+  且同时匹配当前 generation/revision，旧面板消息与伪造 payload 均拒绝。
+- 元素选择只投影有界的 tag/id/classes/text/DOM path。反馈经 Host 生成
+  `canvas.feedbackDraft`，追加到当前 Composer 草稿并聚焦，绝不自动发送；
+  Host→Webview sequence 重放会被丢弃。
+- 原安全边界不放宽：Host 读取内容后内联进
+  `sandbox="allow-scripts"`（无 same-origin）的 srcdoc iframe；Shell +
+  注入 meta 双 CSP 保持零网络、零工作区资源、零存储、无 vscode API。
+  Shell 只消费来自当前 iframe 的 exact selection 消息，选择描述再次经
+  Host 共享协议校验。文件路径仍执行扩展名白名单、相对路径与真实工作区
+  containment 复验；文件上限仍为 4MB，内联上限仍为 512K。
+- 本轮明确不包含 Browser/本地服务器、React/Vue live app、直接可视化改
+  源码、网络访问、导出、磁盘版本历史或 Cursor 私有 `.canvas.tsx` runtime。
 
-主要实现：
-
-- `src/shared/bridgeMessages.ts`、`src/shared/validateMessage.ts`
-  （Bridge 契约 + 校验，`e8a0a37`）
-- `src/extension/previewHtml.ts`、`src/extension/PreviewPanelController.ts`、
-  `src/extension/prototypePreview.ts`（Host 面板与沙箱 shell，`baab0dc`）
-- `src/extension/ChatController.ts`、`src/extension/extension.ts`
-  （路由与注入，`6e8fad3`）
-- `src/webview/assistant/Thread.tsx`、`src/webview/assistant/App.tsx`、
-  `src/webview/assistant/styles.css`（Preview chip 与样式，`6369e96`）
+主要实现：`src/shared/canvasProtocol.ts`、`src/extension/previewHtml.ts`、
+`src/extension/canvasShellScript.ts`、`src/extension/canvasShellStyle.ts`、
+`src/extension/PreviewPanelController.ts`、`src/webview/assistant/MarkdownText.tsx`
+与 Composer slash / draft wiring。
 
 ### 13. 子代理摘要层级 + Mission 只读展示（2026-08-12 下午，V1 主线切片⑤）
 
@@ -2178,6 +2185,17 @@ UI 描述见 §22 重做记录。
 
 ### BYOK Custom Models 管理（Add model 切片）
 
+- [部分完成，2026-08-17] Provider-first 管理面已接入：连接名称、协议、
+  domain root 与解析后的 API base 由 Host registry 持久化；密钥仅写入
+  VS Code `SecretStorage`，Bridge 仅投影 `hasApiKey`。Provider detail
+  支持 fetch、手动添加、模型级编辑和安全的 daemon upsert；旧 daemon
+  rows 以 `Imported connection` 显示并可在首次 fetch 前 claim。单模型
+  Test 是 Host 侧 12 秒、1-token 的真实推理请求，不把 catalog 成功误报
+  为连接测试。
+- [修复，2026-08-18] 空 fetch 结果保留 Provider 列表状态并提供
+  「Add model manually」恢复入口；无已存 API key 时禁用 fetch；从
+  Provider editor 返回列表会同时刷新连接与模型状态。
+
 - [x] Custom Models 的创建、编辑和删除（Provider 三选 +
       `generic-chat-completion-api`；Bedrock/高级字段只读提示；
       已配置 BYOK Model 的选择此前已接通）
@@ -2266,7 +2284,7 @@ UI 描述见 §22 重做记录。
 
 ### 28. QA v0.3 报告修复批：P1-1 + P2-2/3/4/5（2026-08-13 上午）
 
-- **来源**：[`qa-bug-report-v0.3.md`](./qa-bug-report-v0.3.md)，
+- **来源**：[`qa-bug-report-v0.3.md`](../archive/acceptance/qa-bug-report-v0.3.md)，
   抢在 v0.3.0 打包前逐条独立提交；P2-1（预览暗色壳）按主题切片
   遗留归属不在本批，Reload 杀回合归分诊代理。
 - **P1-1 冷启动静默丢选区（`b5aa9bb`）**：
@@ -3245,7 +3263,414 @@ UI 描述见 §22 重做记录。
   `C7B3338BD740A5BA5C0583CAFD0EE768BE80BA7E373C5E0BE5A008A30AE441C3`），
   Cursor 已确认安装 `droidvisx.droidvisx@0.7.26`。
 
-## 部分完成
+### 62. 主 turn 看门狗与终端错误收口（2026-08-15，v0.7.27）
+
+- **#32 长任务不停止**：新增 Host 侧 `chat/turnWatchdog.ts`——Stop 停在
+  `stopping` 超 10s 先补发 `interruptSession` 再本地强结算为
+  interrupted；streaming 主 turn 在 30s 宽限后连续 3 次读到 daemon
+  idle 按 completed 结算。结算前重载持久历史补丢失内容、turn
+  generation 孤儿化死流，队列派发与 Fork/Regenerate 随终态恢复；
+  子代理僵尸清理仍归 `subagentWatch`。
+- **#29 终端错误**：`stripTerminalNoise`（`shared/toolOutput.ts`）在
+  Runtime `extractToolResultText` 源头剥离 ANSI/控制符；
+  `activityRows.tsx` 把 failed 命令的错误文本并入终端 well，不再
+  在卡片外渲染独立段落。
+- **#35 / #5 复核**：plan 实时投影链路（tool-start detail → 即时
+  `tool.activity` → store upsert → `selectPlanAnchors`）审计无
+  「结束后才显示」缺口，待实机复现；选区附件工作区 containment
+  残留范围已在 bug.md 注明，暂不加过滤。
+- **验证**：触达 6 个测试文件 **136 例**、`tsc --noEmit`、
+  `lint:budgets` 全绿；按门禁未跑全量 Vitest、浏览器或 daemon smoke。
+
+### 63. 段 A 视觉与 daemon 历史通道（2026-08-15，v0.7.28 已装机）
+
+- **已装机**。当前工作区随 Agent 段 C 收尾打入 v0.7.28。交接：
+  [`docs/debug/handover-2026-08-15.md`](../debug/handover-2026-08-15.md)。
+- Webview：§1.5 三主题 token（auto 双锚点 color-mix）、脏灰清洗、
+  会话抽屉改 300px 右锚浮层、列宽 token 化、吸顶 padding 外移、
+  转录图片一行一张、`ComposerControls` 拆到 `composer/`。
+- Host/Runtime：`DaemonSessionHistoryLoader`（getMessages 分页替代
+  spawn）、检查点先行渲染、`reconcileSessionHistory` 富态合并、
+  thinking 1/8 权重；`teamSessions`/`teamSessionPanel` + Bridge v20；
+  会话抽屉过滤 `exec` tag。
+- 段 C UI 与打包装机已在 §64 接通；#38 不在本次 Agent 切片验收内。
+
+### 64. Task 进度卡与 exec 团队只读页（2026-08-15，v0.7.28 已装机）
+
+- **Task 子代理**：父 Task 行下改为常驻进度卡，展示状态、运行时本地
+  elapsed（终态优先台账 `durationMs`）、最近一次子会话工具活动和
+  `toolUseCount`；缺失数据保持 `—`，不伪造进度百分比。父会话 Task
+  结果继续承载最终结论；原 `SubagentTranscriptSheet` 仅由 Details
+  打开作只读兜底。
+- **exec 团队**：顶部 quiet 入口打开工作区团队列表，按 Bridge v20
+  `team.panel` / `team.openTranscript` 消费 Host 已发现的 `exec`
+  会话。点击进入整页只读转录，复用 assistant-ui 主聊天的 User /
+  Assistant / Markdown / Thinking / Tool 渲染，但不挂 Composer、
+  Regenerate、Fork、Terminal mirror 或 Changes 操作。
+- **刷新与状态边界**：列表和活跃转录按 5s 批次刷新；“Active recently”
+  明示其来自 60s mtime 新鲜度启发，不承诺精确运行态，也不声称 token
+  级流式。选中 id 与转录 id 必须一致，Host 以 panel generation
+  废弃关闭前的在途响应，防止旧响应串页。
+- **布局边界**：团队页面替换聊天内容区；Task 详情仍为只读 sheet；
+  `/btw` split pane 继续只服务 BTW。
+- **只读与效率加固**：独立转录显式隔离主会话的路径、文件预览与本地
+  图片操作 Context；Task 最近活动按 `toolUseId` 细粒度订阅，轮询不再
+  使所有 memoized 卡片重渲染；Task sheet 与 team 页共用批量刷新 hook。
+- **验证/安装**：`pnpm run typecheck`、`pnpm run lint:budgets`、
+  11 个触及测试文件 **194 例**全绿；`pnpm run build` 成功；
+  `dist/droidvisx.vsix`（v0.7.28，11 entries，1.63 MB）校验通过并由
+  `cursor --install-extension --force` 成功安装。真实视觉与会话行为
+  仍以用户 Reload Window 后的实机验收为准。
+
+### 65. Auto Markdown 分隔线降噪（2026-08-15，v0.7.29 已装机）
+
+- 用户实机截图确认 Auto 深色编辑器主题中的 Markdown `<hr>` 落到浏览器
+  默认近白色，阅读流中对比过强；Auto scope 现显式取消默认边框，并以
+  `--dvx-border-strong` 绘制 1px 中性灰 hairline。显式 Light/Dark
+  固定皮肤不变。
+- **验证/安装**：三段 typecheck、`lint:budgets`、scoped
+  `git diff --check`、build、VSIX package/verify 全绿；v0.7.29 已由
+  `cursor --install-extension --force` 成功安装。CSS-only 修复无适用
+  单元测试，按门禁未跑全量 Vitest 或浏览器 smoke，待用户 Reload
+  Window 视觉验收。
+
+### 66. 收起计划卡移除完成度尾线（2026-08-15，v0.7.30 已装机）
+
+- 用户实机截图确认计划卡收起后，独立的 2px completion bar 仍贴在卡片
+  底部，视觉上像多余的第二根底边。现由标题行 `aria-expanded` 直接控制：
+  收起态隐藏进度条，只保留正常卡片 frame；展开态仍展示完成度和步骤。
+- **验证/安装**：三段 typecheck、`lint:budgets`、scoped
+  `git diff --check`、build、VSIX package/verify 全绿；v0.7.30 已由
+  `cursor --install-extension --force` 成功安装。CSS-only 修复无适用
+  单元测试，按门禁未跑全量 Vitest 或浏览器 smoke，待用户 Reload
+  Window 视觉验收。
+
+### 67. ReviewDock 吸底 + 诚实 Agent activity（2026-08-15，v0.7.31 已装机）
+
+- **Review 吸底完成**：最新 turn 的 Changes 迁到 Composer 上方
+  `ReviewDock`，复用逐文件原生 Diff、HTML Preview 与既有 Commit
+  流程；历史 Changes 降为安静单行。新 user turn / Session 不沿用
+  旧 Dock，最新 Changes 不在 transcript 重复，延迟挂载具备卸载与
+  切换 cleanup。无安全公开能力的 Undo All 保持不实现。
+- **Agent activity 取代误导性的 Agent teams**：Bridge v21 只从
+  public daemon list 投影 cwd 内独立顶层 `exec` automation
+  sessions，排除 Task parent/subagent、BTW、Mission、归档与其他
+  工作区；删除私有 `sessions-index.json` fallback。mtime 仅表达
+  `Updated recently` / `Activity state unknown`，不推断 running、
+  teamId、成员、角色或 leader。
+- **只读与竞态边界**：最近/较早分区，整页 transcript 无 Composer；
+  panel/workspace generation、cwd、known-list 与 requestId 防关闭、
+  换目录和 A→B→A 旧回写；列表与 transcript single-flight 并保留
+  最新 trailing refresh，recent 转 unknown 时做一次最终刷新。
+- **验证/安装**：三段 typecheck、`lint:budgets`、11 个触及测试文件
+  **535 例**、scoped `git diff --check`、build、VSIX 11 entries
+  verify 全绿。`dist/droidvisx.vsix` 1,708,698 bytes，SHA-256
+  `3F8CDCAB3D8ADACE50A9EC3B26FEF54F6D4E4C42DB84874DAA93BCDD3D3EB646`；
+  已安装并确认 `droidvisx.droidvisx@0.7.31`。按门禁未跑全量
+  Vitest、浏览器/daemon smoke 或截图探针，待 Reload Window 实机验收。
+
+### 68. Review 实心按钮文字对比修复（2026-08-16，v0.7.32 已装机）
+
+- 用户实机截图确认 Auto 深色主题中 ReviewDock 右上实心按钮只有浅紫灰
+  填充、`Review` 文字不可见。根因是全局 `.dvx-shell button`
+  specificity 高于组件类，令文字继承 `--dvx-ink`，与按钮同色。
+- 组件规则现以 `.dvx-shell .dvx-review-dock-review` 明确覆盖全局 reset，
+  使用 `--dvx-surface` / `--dvx-ink` 反色；forced-colors 同步提高
+  specificity，继续使用系统 `ButtonText` / `ButtonFace`。尺寸、背景、
+  hover、布局和点击行为不变。
+- **验证/安装**：三段 typecheck、`lint:budgets`、ReviewDock 8 例、
+  build、VSIX 11 entries verify 全绿。产物 1,708,825 bytes，SHA-256
+  `69B3D323C702D04347B32432AF19528A5E96803262EECE01F5C53D6DD9D9990B`；
+  已安装并确认 `droidvisx.droidvisx@0.7.32`，待 Reload Window 实机验收。
+
+### 69. 新建文件原生 Diff 兼容修复（2026-08-16，v0.7.33 已装机）
+
+- 用户实机确认非 Git 工作区中新建 `index.html` 可 Preview，但 Review /
+  Diff 被 Cursor 编辑器拒绝。Before-turn 空 baseline 保持真实空字符串；
+  虚拟文档现保留目标 basename / extension，并以独立递增 query identity
+  管理内容和关闭清理，避免把失效缓存伪装成有效空文档。
+- baseline、Git HEAD 与普通文件三段打开失败现将底层异常写入本地
+  diagnostics，同时继续使用既有安全 UI 文案和 fallback 顺序。
+- **验证/安装**：三段 typecheck、`lint:budgets`、`vscodeFileDiff` 7 例、
+  scoped `git diff --check`、build、VSIX 11 entries verify 全绿。产物
+  1,709,116 bytes，SHA-256
+  `8FE639B64792C0720DA790B6F67232E3601B5CBBB3D4C965ED986B569F0F459E`；
+  已安装并确认 `droidvisx.droidvisx@0.7.33`，待 Reload Window 实机验收。
+
+### 70. AskUser 单选焦点环修复（2026-08-16，v0.7.34 已装机）
+
+- 用户实机截图确认 AskUser 单选项获得焦点后，Cursor 仍把原生 radio 的
+  CSS `outline` 绘制为黄色正方形；此前仅添加 `border-radius: 50%`
+  无法改变该平台行为。
+- radio 现取消矩形 outline，改用跟随圆形边界的 1px `box-shadow`
+  焦点环；键盘焦点仍清晰可见，checkbox 的矩形焦点样式保持不变。
+- **验证/安装**：三段 typecheck、`lint:budgets`、Interactions 7 例、
+  build、VSIX 11 entries verify 全绿。产物 1,709,215 bytes，SHA-256
+  `F5868233E3DFCE64CC6228C482ED73B89073A199BD00D96DDFB12E583344F48E`；
+  已安装并确认 `droidvisx.droidvisx@0.7.34`，待 Reload Window 实机验收。
+
+### 71. AskUser Auto 文字对比修复（2026-08-16，v0.7.35 已装机）
+
+- Auto 主题下 AskUser 选项文字不再使用与背景混合后的次级文本 token，
+  改为直接跟随 Cursor `--vscode-foreground`；固定 Light/Dark 主题不受影响。
+- **验证/安装**：Interactions 7 例、三段 typecheck、`lint:budgets`、
+  scoped `git diff --check`、build 与 VSIX 11 entries verify 全绿。产物
+  1,709,314 bytes，SHA-256
+  `272333E052747297F46E9B32116688DE4DBA58CC5FD5443FDCE650EC84BE9243`；
+  已安装并确认 `droidvisx.droidvisx@0.7.35`，待 Reload Window 实机验收。
+
+### 72. Subagent 卡片批准样式迁入（2026-08-16，v0.7.36 已装机）
+
+- 按用户批准的独立 HTML 样板迁入生产：结构、字段和 Details 行为不变；
+  Light/Dark 使用分层暖色背景、发丝边框、内嵌高光、软阴影和提亮字级。
+- 运行态改用单一呼吸状态点，旧 spinner 仅视觉隐藏；reduced-motion
+  停止动画，forced-colors 保留系统色可读性。
+- **验证/安装**：Thread 76 例、三段 typecheck、`lint:budgets`、scoped
+  `git diff --check`、build 与 VSIX 11 entries verify 全绿。产物
+  1,709,959 bytes，SHA-256
+  `0CC81EAFFC4D8F6756F05374E0C19490AB745E111AE371A2615CDAEA22E0E7C9`；
+  已安装并确认 `droidvisx.droidvisx@0.7.36`，待 Reload Window 实机验收。
+
+### 73. 工具文件普通打开 + 实时行数回显（2026-08-16，v0.7.37 已装机）
+
+- AI 工具行文件名不再复用 `FileDiffContext`，改走 App 根部既有
+  `OpenPathContext` → `workspace.openPath`，点击稳定打开普通工作区文件；
+  ReviewDock 的 `Diff` / `Review` 继续独占 `file.openDiff`。
+- 当前回合 `changes.update` 的累计文件统计按路径映射到工具行；有计数的
+  文件名旁实时显示 `+N −N` 并原地刷新，尚未完成首次 numstat 的 null
+  计数保持隐藏。
+- **复现/验证/安装**：新增回归先稳定复现错误载荷
+  `file.openDiff`，修复后断言 `workspace.openPath`、无 Diff 载荷及
+  `+88 −11` 实时更新；App + Thread 聚焦测试 103 例、三段 typecheck、
+  `lint:budgets`、scoped `git diff --check`、build 与 VSIX 11 entries
+  verify 全绿。产物 1,710,379 bytes，SHA-256
+  `83DE6A5C21F2C5139C0BDBB36CD0408A195B5B6CF2D7715C4EDA19C9250E6C74`；
+  已安装并确认 `droidvisx.droidvisx@0.7.37`，待 Reload Window 实机验收。
+
+### 74. Reload 后提交审阅闭环（2026-08-16，v0.7.38 已装机）
+
+- 日志复盘确认：`4186fef` 提交后 Reload 的历史恢复为 `recovered: 0`、
+  `loaded/reconciled: 138`；内存 baseline 与 commit UI 状态已丢失，而
+  HTML 工作区文件与 HEAD 相同，旧逻辑只能打开空的 `HEAD ↔ Working`。
+- 最新 DroidVisX commit 的 session、原 turn、hash、paths 与精确
+  `+N −N` 现写入有界 workspaceState；Reload 合成历史时把统计恢复到
+  最新 Changes，Diff 则打开 `<commit^> ↔ <commit>`。提交创建/删除及
+  未提交删除均使用有界空文档补齐缺侧。
+- Bridge v22 的 status/request/commit/result 均绑定 Changes turn；
+  Host 拒绝过期 commit，Webview 丢弃过期 status/result，旧 turn 的
+  pending 或 committed 状态不再污染新 ReviewDock。成功提交会先等待
+  持久化，再回发结果；即使 controller 正在 dispose，已成功的提交仍会
+  完成持久化。
+- 新增 `host.git.commit.started/finished` 与
+  `host.file-diff.opened/open-failed` 诊断，记录 commit 结果及实际 Diff
+  来源。聚焦测试覆盖 Reload 持久化、历史统计恢复、commit-parent Diff、
+  创建/删除、编辑器拒绝回退、过期 turn 与 dispose 竞态。
+- 三段 typecheck、777 项 touched-file 测试、`lint:budgets`、scoped
+  `git diff --check`、production build 与 VSIX 11 entries verify 全绿。
+  产物 1,712,684 bytes，SHA-256
+  `7A7572DD57BD8B4026A50877B71C5BF9F16220EB8BAAA8D2D977FD089019BB1A`；
+  已安装 `droidvisx.droidvisx@0.7.38`，待 Reload Window 实机验收。
+
+### 75. Model picker 紧凑宽度与页脚居中（2026-08-16，v0.7.39 已装机）
+
+- Model picker 从 240px 收紧到 208px，减少模型名称与右侧选中勾之间的
+  空白距离；`Add models` 页脚动作改为水平居中，交互与窄窗口上限不变。
+- `ComposerControls` 聚焦测试 32 例、三段 typecheck、
+  `lint:budgets`、scoped `git diff --check`、production build 与 VSIX
+  11 entries verify 全绿。产物 1,712,799 bytes，SHA-256
+  `10D86DEED0C8266A9D6CF049492C0B133CA4488D8E72B410325B42ACE9DE60FA`；
+  已安装 `droidvisx.droidvisx@0.7.39`，待 Reload Window 实机验收。
+
+### 76. Model picker 右侧操作对齐（2026-08-16，v0.7.40 已装机）
+
+- 选中模型的 reasoning 编辑铅笔通过 row 内 `margin-left: auto` 推到右侧，
+  与选中勾保持同一尾部操作组；reasoning flyout 内原有勾选对齐不受影响。
+- `ComposerControls` 聚焦测试 32 例、三段 typecheck、
+  `lint:budgets`、scoped `git diff --check`、production build 与 VSIX
+  11 entries verify 全绿。产物 1,712,865 bytes，SHA-256
+  `2CEA81C7164E3DF46401E73B6E7919C7A12E965C66E629F095CF80BAE3139E44`；
+  已安装 `droidvisx.droidvisx@0.7.40`，待 Reload Window 实机验收。
+
+### 77. 严格 daemon 认证修复（2026-08-16，v0.7.41 已装机）
+
+- 根因已闭环：CLI 0.197.0 使用当前 `auth.v2.keyring`，旧版 DroidVisX
+  却读取已过期的 `auth.v2.file`。Host 现优先读取系统安全存储中的 CLI
+  keyring，安全文件存在但不可解密时 fail closed；仅在安全文件不存在时
+  兼容旧凭据。token 临期时经 Factory refresh grant 轮换，并以跨进程锁、
+  原子替换、字段/大小校验和有界重试保护写入。
+- 默认/显式 daemon 模式不再静默创建 ProcessTransport；认证、刷新或连接
+  失败会把 Runtime 阻断为可 Retry 的 daemon 专属 unavailable 原因。
+  仅显式选择 Process 时才启动窗口级 CLI。
+- discovery 健康检查区分认证失败与不可达：认证失败保留现有 listener，
+  不再重复 spawn；仅对不可达且 ownership 校验通过的 DroidVisX daemon
+  做定向清理。用户同意式临时 Process 回退未纳入本版。
+- 生产凭据读取确认 `keyring-v2` 且 refresh token 存在；真实连接探针通过，
+  `sessions.list` 成功并读取 1 条、`customModels.list` 成功并读取 6 个。
+  三段 typecheck、8 files / 151 项 touched-file 测试、`lint:budgets`、
+  scoped `git diff --check`、production build、VSIX 11 entries 及 keyring
+  bundle markers verify 全绿。产物 1,716,176 bytes，SHA-256
+  `0C9375DCB0DF1174B8188B50179DF6C58EFFF6F3C3FA553480E5EC69CA6FFEC7`；
+  已安装 `droidvisx.droidvisx@0.7.41`，待 Reload Window 实机验收。
+
+### 78. Auto 模式 subagent 卡片配色（2026-08-16，v0.7.42 已装机）
+
+- Auto 模式下的 subagent 进度卡不再沿用固定 Dark 暖黑字面量；卡片表面、
+  边框、文字层级、分隔线与 lifecycle 强调色改由当前 Cursor 主题变量及
+  Auto surface ladder 生成。显式 Light / Dark 配色保持不变。
+- 本切片仅改 CSS 与发版记录，无对应逻辑单测；三段 typecheck、
+  `lint:budgets`、scoped `git diff --check`、production build、VSIX
+  11 entries verify 及生成 CSS 的 `dark-before-auto` cascade 检查全绿。
+  产物 1,716,439 bytes，SHA-256
+  `981EE3B7E973FB22CDD422BF7EAE8145FDA85694DAC8725957B2E01A9E77130B`；
+  已安装 `droidvisx.droidvisx@0.7.42`，待 Reload Window 实机验收。
+
+### 79. Auto subagent 纯色玻璃卡片（2026-08-16，v0.7.43 已装机）
+
+- 按实机截图收敛 Auto 卡片：删除 radial/linear 混色，直接使用当前 Cursor
+  `editorWidget.background` 单色，仅保留 hairline、克制阴影与 8px
+  backdrop blur。显式 Light / Dark 皮肤不变。
+- subagent 摘要是状态 UI，现禁止整卡文字选区，避免拖动产生大面积蓝色；
+  需要复制的子会话正文仍从 Details transcript 进入。
+- 本切片仅改 CSS 与发版记录，无对应逻辑单测；三段 typecheck、
+  `lint:budgets`、scoped `git diff --check`、production build、VSIX
+  11 entries verify，以及生成 CSS 的单色、blur、`user-select: none`
+  检查全绿。产物 1,716,569 bytes，SHA-256
+  `A47A22D0AD97C891763186C7EB2F903DBC1FF8EA6F766221B38F5A48566A452E`；
+  已安装 `droidvisx.droidvisx@0.7.43`，待 Reload Window 实机验收。
+
+### 80. ReviewDock 状态文案垂直居中（2026-08-16，v0.7.44 已装机）
+
+- `No pending turn changes` 不再继承通用 commit result 的顶对齐；在
+  ReviewDock 内使用与 Review 按钮一致的 24px action track，并通过
+  `align-self/align-items: center` 在整行中垂直居中。
+- 本切片仅改 CSS 与发版记录，无对应逻辑单测；三段 typecheck、
+  `lint:budgets`、scoped `git diff --check`、production build、VSIX
+  11 entries verify 及生成 CSS 的 24px centered track 检查全绿。
+  产物 1,716,664 bytes，SHA-256
+  `0C95C3A7324B21B0B70AF3D3687901741D3EFC0188422155F512A28733717636`；
+  已安装 `droidvisx.droidvisx@0.7.44`，待 Reload Window 实机验收。
+
+### 81. Reload ReviewDock 与消息/Composer 约束修复（2026-08-16，v0.7.45）
+
+- 无共同用户锚点且无首尾重叠时，完整 daemon 历史仍作为当前权威主体；
+  断开的旧 recovery checkpoint 只保留在其前方，不再错误追加到尾部并被
+  `findLatestChangesItem` 误判为更新 user turn。Reload 后最新 Changes 的
+  ReviewDock 因此继续可见。
+- 已发送用户消息按自然高度显示，最少一行、最多四行；sticky 紧凑态仍为
+  三行，点击编辑继续显示完整文本。
+- 空 Composer 的 `Ask Droid about your workspace` placeholder 不再进入从
+  assistant 正文拖出的文字选区；输入真实草稿后恢复正常文本选择。
+- transcript、Composer、ReviewDock、queue 与 working dock 共享居中的
+  760px 内容限宽，中宽与宽面板均不再无上限横向拉伸。
+- 回归测试覆盖断开旧 checkpoint + 权威 loaded Changes 的时序；聚焦测试
+  27/27、三段 typecheck、`lint:budgets`、scoped `git diff --check`、
+  production build、VSIX 11 entries 与生成 CSS 标记检查已通过。产物
+  1,716,871 bytes，SHA-256
+  `7A1F20AA27C511A314237A54B1ED018F441FEE9293AE76B46B3AF44D2DE87981`；
+  已安装 `droidvisx.droidvisx@0.7.45`，待 Reload Window 实机验收。
+
+### 82. Session 单例 Plan 生命周期（2026-08-16，v0.7.46）
+
+- `TodoWrite → transcript → selectPlanAnchors → PlanLine` 仍是唯一数据链，
+  不增加 Host/Bridge 状态；selector 现在每个 session 最多投影一个最新
+  Plan。完成 Plan 会保留，直到新 lineage 开始时由新卡替换，旧用户消息下
+  不再残留历史 Plan 卡。
+- Plan live/自动展开只跟随其最近 TodoWrite 的 turnId；后续无关回合不会
+  唤醒旧的未完成 Plan。失败 TodoWrite 不覆盖最后有效 Plan；同锚点下已完成
+  后开始的不相交 Plan 使用新 toolUseId identity，避免继承旧 disclosure。
+- 聚焦 touched-file 测试 4 文件 126/126、三段 typecheck 与
+  `lint:budgets` 全绿；production build 与 11-file VSIX 打包通过。产物
+  1,717,155 bytes，SHA-256
+  `590C39B6DDFE6691C3E5F3AEC134284E8FE57DD056D4CCC13FB679756A60C502`；
+  已安装 `droidvisx.droidvisx@0.7.46`，待 Reload Window 实机验收。
+
+### 83. Live Agent Activity + 通用 Session Viewer（2026-08-16，v0.7.47）
+
+- Agent Activity 删除 header 历史页与 modified-time 推断，改由 public
+  daemon `sessions.listOpened()` 每 2 秒投影当前 workspace 内非 idle、
+  顶层、非 Subagent/BTW/Mission 的 `exec` sessions；Composer 上方显示
+  `N Working`，弹层逐行 Open / Stop。Stop 在 Runtime 再校验身份后走
+  `resume → interrupt → detach`，控制连接使用 deny-all handlers。
+- 新增通用 `SessionViewerPanelController`：按 `kind + sessionId` 为每个
+  Agent 复用一个独立 editor tab，2.5 秒刷新 daemon-first history 与权威
+  workingState，复用主聊天的 Markdown/Thinking/Tool/图片消息结构，无
+  Composer 或写操作。Agent 结算后补一次最终转录读取、停止轮询但保留 tab；
+  该基础层可由未来 Mission adapter 复用。
+- Subagent 删除聚合 Working 弹层、Details、侧边转录与 Stop Bridge 路由，
+  只保留对话内 Task 进度卡及 host-only child id 映射产生的有界最新活动。
+- touched-file 验证 21 个测试文件 **868/868**、三段 typecheck、
+  `lint:budgets`、scoped `git diff --check`、production build 全绿。
+  VSIX 校验 12 entries（含独立 `session-viewer.js`）；产物
+  `droidvisx-0.7.47.vsix` 为 1,980,930 bytes，SHA-256
+  `D362CD1433524A858ECF8E550C6D330B2C99498B81A429CAB90231113A645C8D`。
+  已安装 `droidvisx.droidvisx@0.7.47`，待 Reload Window 实机验收。
+
+### 84. Daemon-managed Agent Launcher（2026-08-16，v0.7.48）
+
+- daemon 模式的主 Droid Session 创建/恢复/替换时注入 Extension Host 内
+  bearer-protected localhost MCP server；`launch_agent` 使用官方
+  `sessions.create()` + `session.stream()` 在当前 workspace 启动独立
+  Session，工具立即返回 session id，后台只消费 stream，不复制转录。
+- 子 Session 使用稳定 `droidvisx-managed-agent` tag、Auto mode 与 Low
+  autonomy；额外 permission 与 AskUser fail closed。可选 model id 和
+  reasoning effort 必须精确通过 daemon `availableModels` 校验，prompt
+  不进入诊断日志。Extension 退出会 detach handle 并关闭本地 MCP server。
+- Agent Activity 从 generic `exec` 改为只接受 managed tag；普通独立
+  `droid exec` 明确不进入 Working / Viewer / Stop 生命周期。
+- 三段 typecheck、3 个 touched test files **38/38**、`lint:budgets`、
+  scoped `git diff --check`、production build 与 12-entry VSIX 校验全绿；
+  按门禁未跑全量 Vitest 或 smoke。产物 `droidvisx-0.7.48.vsix` 为
+  1,982,669 bytes，SHA-256
+  `BF6A806591F62C892BB86B3B81CAD151D0D6FD685B7513025838CB35CC7991C5`；
+  已安装 `droidvisx.droidvisx@0.7.48`，待 Reload Window 实机验收。
+
+### 85. 长对话用户提问导航（2026-08-18，v0.7.59）
+
+- 主聊天出现纵向滚动时，在右侧显示仅由用户提问组成的迷你导航；悬停或
+  键盘聚焦节点显示有界问题摘要，当前提问使用更长的强调刻度。
+- 点击刻度把对应用户消息精确吸附到转录视口顶部；上下箭头跳到上一条或
+  下一条用户提问。导航以稳定 message id 和非 sticky 锚点定位；加载更早
+  历史后仍保持身份稳定，长历史只渲染当前附近最多 13 个节点，不新增
+  Runtime、Host 或 Bridge 状态，并尊重 reduced motion。
+- 聚焦测试 `QuestionNavigator.test.tsx` **7/7**；连同 Provider 修复的
+  touched-file 测试共 **69/69**，三段 typecheck 与 `lint:budgets`
+  已通过。Production build 与 `droidvisx-0.7.59.vsix` 打包通过并已
+  覆盖安装，待 Reload Window 完成真实 Cursor 可见验收。
+
+### 86. Stop 后立即续发恢复（2026-08-18，v0.7.59）
+
+- `stopping` 阶段重新显示可用发送箭头；Enter 与箭头提交的新指令复用现有
+  Queue Send now 意图，在当前回合确认 `interrupted` 后立即发送，不再被
+  Stop 的队列暂停策略停住。补充修复 `interrupted` 已落入 paused queue
+  后箭头仍被 assistant-ui 禁用的问题：箭头与 Enter 共用显式发送路径，
+  新指令会 add + promote 并恢复派发。
+
+### 87. Explore 过程可展开与顺序播放（2026-08-18，v0.7.59）
+
+- 运行中的 Exploring 标题可展开完整成员列表，短 Thinking 不再被只读
+  ticker 锁住，可继续单独展开查看内容。
+- Webview 同一帧收到多个 Read/Grep 时，ticker 把最新成员当作目标但按
+  中间索引逐项播放；来源结束后也会等待最后一个可视步骤播放完才收成
+  Explored 摘要。历史完成态仍直接静态渲染，不重放动画。
+- 聚焦测试 **31/31**、三段 typecheck 与 `lint:budgets` 通过；Webview
+  Lab 注入 14 个 Read，实测按 9→10→11→12→13→14 顺序显示，运行中
+  Thinking 可展开，turn 完成后才显示 `Explored 14 files`。Production
+  build、VSIX 打包和 v0.7.59 覆盖安装已完成，待 Reload Window 真机验收。
+
+### 88. Composer 混合剪贴板粘贴（2026-08-18，v0.7.59）
+
+- Composer 现在仅把纯图片剪贴板转为附件；同时含 `text/plain` 与图片的
+  富剪贴板保留浏览器原生文本复制/粘贴，不再因图片分支
+  `preventDefault()` 而让 Ctrl+V 看似失效。聚焦 App 测试 **30/30**、
+  三段 typecheck 与 `lint:budgets` 通过；Webview Lab 已验证混合载荷会
+  粘贴文本。
+
+### 89. Mermaid 首次完成自动预览（2026-08-18，v0.7.59）
+
+- 消息根部现在把实时 running 状态通过 React Context 显式传给 Markdown
+  代码块与 Mermaid renderer；流式转终态会直接唤醒已挂载的 Mermaid，
+  不再依赖重新打开会话后的组件重建。聚焦 Mermaid/Markdown 测试
+  **34/34**、三段 typecheck 与 `lint:budgets` 通过。
 
 ### Session Settings、Context 与模型选择
 
@@ -3346,7 +3771,7 @@ UI 描述见 §22 重做记录。
 排期状态：子代理面板 + 转录回放证据已齐、未开工（待办 B）；Mission
 观察台技术可行但是否做等用户拍板（待办 C，未排期）。两者的实现约束
 与冒烟要求见
-[`session-handover-2026-08-13.md`](./session-handover-2026-08-13.md)
+[`session-handover-2026-08-13.md`](../archive/handovers/session-handover-2026-08-13.md)
 §5–§6。
 
 ### 子代理转录只读回放（2026-08-12 探针，未接入产品）
@@ -3918,7 +4343,7 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   **协议 v10：现有窗口必须 Reload Window，否则握手被拒表现为空白面板。**
   行为冒烟（按 `AGENTS.md` 新第 8 步，断言而非截图自评）全过，逐条见
   「验证状态」首条。验收入口：
-  `docs/product/acceptance-v0.4.0.md`（含未验证节与 5 分钟点测路径）
+  `docs/archive/acceptance/acceptance-v0.4.0.md`（含未验证节与 5 分钟点测路径）
 - **2026-08-13 凌晨功能发版 v0.2.0**：版本号 `0.1.1 → 0.2.0`，
   `CHANGELOG.md` 顶部新增 0.2.0 小节（发布提交 `1076241`，仅动
   版本号与 CHANGELOG），覆盖今晚全部切片：daemon 默认运行 + 静默
@@ -3936,7 +4361,7 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   `dist/webview` 上复跑 harness 冒烟七套（plan-anchor / queue-bar
   / queued-bar / working-badge / command-card / session-drawer /
   subagent）**全 PASS**，截图刷新进 `artifacts/`。验收入口：
-  `docs/product/acceptance-checklist-v0.2.md`（含 Bridge v7 需
+  `docs/archive/acceptance/acceptance-checklist-v0.2.md`（含 Bridge v7 需
   Reload 提醒、已知残留风险、明确不在本版清单）
 - **2026-08-12 晚修复版发版 v0.1.1**：版本号 `0.1.0 → 0.1.1`，
   `CHANGELOG.md` 顶部新增 0.1.1 小节 13 条（Fixed 12 / Changed 1），
@@ -4271,7 +4696,7 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
   新一代恢复同会话并发 `queued-messages-restored` 诊断、`queue.state`
   带回原文两条且 `paused: "dispatch-blocked"`、静置 4s 零自动派发。
   **未验证**：本包没有真人在 Cursor 里点测，视觉审美未签收（按新规则
-  不做截图自评），详见 `docs/product/acceptance-v0.4.0.md` §4。
+  不做截图自评），详见 `docs/archive/acceptance/acceptance-v0.4.0.md` §4。
 - 大文件分解重构（2026-08-13 凌晨，`refactor-plan.md` 批次①–④全量
   落地，31 个 commit：`c339cba`…`645eba6`，纯结构移动、行为零变化）：
   **①** `styles.css` 7148 行拆为 `@import` 索引 + `styles/` 23 段
@@ -5395,19 +5820,21 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 ## 下一步
 
-**当前状态（2026-08-15）**：用户 Debug Checklist 的 item 25 已由
-v0.7.26 Last-call Context Meter 完成；下方 V1 路线与 2026-08-13
-收工快照保留为历史记录，不再代表当前唯一待办。
+**当前状态（2026-08-15 晚）**：v0.7.27 已装机。段 A + daemon 通道在
+工作区未装包；段 B/D/C UI 未做。下一模型从
+[`docs/debug/handover-2026-08-15.md`](../debug/handover-2026-08-15.md)
+接着干。下方 V1 路线与 2026-08-13 收工快照保留为历史记录。
 
 按用户决定（2026-08-11）：第一档 UI/观察性打磨大部分暂缓，方案已写入
 [`tier1-polish-plan.md`](./tier1-polish-plan.md)；路线索引与排除项见
-[`HANDOVER.md`](../HANDOVER.md) 第 3 节（本节的顺序须与其保持一致）。
+[`HANDOVER.md`](../HANDOVER.md)（排除项与切片流程；当前待办以
+[`debug/handover-2026-08-15.md`](../debug/handover-2026-08-15.md) 为准）。
 
 **2026-08-13 收工快照**：下方 V1 清单已全部完成并发版（v0.4.0 已装
 机、未经真人点测）。当前待办——A 样板间八项视觉落地、B 子代理面板 +
 转录回放（证据已齐）、C Mission 观察台（可行性已翻案、等拍板）——
 连同并行纪律与已知残差，以
-[`session-handover-2026-08-13.md`](./session-handover-2026-08-13.md)
+[`session-handover-2026-08-13.md`](../archive/handovers/session-handover-2026-08-13.md)
 为准，本节不复制细节。
 
 ### V1 剩余（按执行顺序）
@@ -5641,6 +6068,16 @@ pointer），`pnpm run build` 与围栏代码块不受影响，点击产生的�
 `artifacts/path-link-verify.png`。
 
 每个切片保持完整测试、打包、安装和 Cursor 可见验收。
+
+### 49. 退役自建 Managed Agent，收敛到官方 Mission/Task（2026-08-16）
+
+- 删除 `launch_agent` MCP、managed Session tag、Agent Activity
+  Gateway/轮询/Bridge/Store 与自建 `N Working` Open/Stop UI。
+- 官方 Task/Subagent 的内联卡片、活动采样、台账结算与父会话后续同步
+  保持生产接通；Mission 模式、确认卡和历史身份投影保持不变。
+- 独立 Session Viewer 改为中性 daemon Session 目标并保留测试与 Bundle，
+  仅作为未来官方 Mission Worker 适配基础；当前无入口，状态为“仅基础设施”。
+- Bridge 升至 v24；Launcher 唯一直接使用的 `zod` 顶层依赖已移除。
 
 ## 维护规则
 

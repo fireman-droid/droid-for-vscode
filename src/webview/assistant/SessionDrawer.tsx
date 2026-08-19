@@ -13,6 +13,16 @@ import {
   type SessionSearchState,
   type SessionSummary,
 } from '../../shared/bridgeMessages';
+import {
+  ArchiveIcon,
+  CheckCircleIcon,
+  ChevronIcon,
+  ForkIcon,
+  RenameIcon,
+  SessionIcon,
+  StarIcon,
+  UnarchiveIcon,
+} from './sessionDrawerIcons';
 
 interface SessionDrawerProps {
   readonly sessions: SessionCatalogState;
@@ -52,6 +62,13 @@ const MODIFIED_TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
   timeStyle: 'short',
 });
 
+/**
+ * Chat history as a right-anchored popover under the header clock
+ * button (Cursor form, spec §2.1): search crown, relative-time
+ * groups, 28px rows with hover-revealed actions, and the Archived
+ * fold at the bottom. Dates left the rows — grouping expresses them,
+ * the exact stamp lives in each row's hover title.
+ */
 export const SessionDrawer = memo(function SessionDrawer({
   sessions,
   archived,
@@ -75,6 +92,7 @@ export const SessionDrawer = memo(function SessionDrawer({
   const [pendingAction, setPendingAction] = useState(false);
   const pendingActionRef = useRef(false);
   const previousSessionsRef = useRef(sessions);
+  const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (previousSessionsRef.current !== sessions) {
@@ -102,8 +120,22 @@ export const SessionDrawer = memo(function SessionDrawer({
         setOpen(false);
       }
     };
+    // A popover closes on any outside press (Cursor behavior); the
+    // trigger itself still toggles through its own click handler.
+    const handlePointerDown = (event: PointerEvent): void => {
+      if (
+        event.target instanceof Node &&
+        !rootRef.current?.contains(event.target)
+      ) {
+        setOpen(false);
+      }
+    };
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
   }, [open]);
 
   const normalizedQuery = query.trim().toLowerCase();
@@ -160,7 +192,7 @@ export const SessionDrawer = memo(function SessionDrawer({
   );
 
   return (
-    <>
+    <div className="dvx-session-popover-root" ref={rootRef}>
       <button
         type="button"
         className="dvx-icon-button dvx-session-toggle"
@@ -172,152 +204,136 @@ export const SessionDrawer = memo(function SessionDrawer({
         <SessionIcon />
       </button>
       {open ? (
-        <>
-          <aside
-            id="dvx-session-drawer"
-            className="dvx-session-drawer"
-            aria-label="Session history"
-          >
-            <label className="dvx-visually-hidden" htmlFor="dvx-session-search">
-              Search sessions
-            </label>
-            <div className="dvx-session-search-shell">
-              <span aria-hidden="true" className="dvx-session-search-icon">
-                <SearchIcon />
-              </span>
-              <input
-                id="dvx-session-search"
-                className="dvx-session-search"
-                type="search"
-                value={query}
-                placeholder="Search chats · Enter searches content"
-                autoComplete="off"
-                maxLength={MAX_SESSION_SEARCH_QUERY_LENGTH}
-                onChange={(event) => setQuery(event.currentTarget.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    submitContentSearch();
-                  }
-                }}
-              />
-            </div>
-            <div className="dvx-session-filter-row">
-              <span>All chats</span>
-              <button
-                type="button"
-                className="dvx-session-close"
-                aria-label="Close session history"
-                onClick={() => setOpen(false)}
-              >
-                <CloseHistoryIcon />
-              </button>
-            </div>
-            {worktreeCreateAvailable === true &&
-            onCreateWorktreeSession !== undefined ? (
-              <button
-                type="button"
-                className="dvx-session-worktree-new"
-                disabled={disabled}
-                onClick={() =>
-                  runOnce(() => {
-                    setOpen(false);
-                    onCreateWorktreeSession();
-                  })
-                }
-              >
-                New session in a worktree…
-              </button>
-            ) : null}
-
-            <CatalogStatus sessions={sessions} pending={pendingAction} />
-            {filteredSessions.length > 0 ? (
-              <nav
-                className="dvx-session-nav"
-                aria-label="Session history"
-              >
-                {sessionGroups.map((group) => (
-                  <section
-                    key={group.key}
-                    className="dvx-session-group"
-                    aria-label={group.label ?? undefined}
-                  >
-                    {group.label !== null ? (
-                      <h3 className="dvx-session-group-label">
-                        {group.label}
-                      </h3>
-                    ) : null}
-                    <ul className="dvx-session-list">
-                      {group.items.map((session) => (
-                        <SessionRow
-                          key={session.id}
-                          session={session}
-                          disabled={disabled}
-                          onSelect={(sessionId) =>
-                            // Selecting navigates: the drawer closes and
-                            // the chat view takes over immediately, like
-                            // Cursor's history list.
-                            runOnce(() => {
-                              setOpen(false);
-                              onSelectSession(sessionId);
-                            })
-                          }
-                          onRename={onRenameSession}
-                          onFork={(sessionId) =>
-                            runOnce(() => onForkSession(sessionId))
-                          }
-                          onToggleFavorite={(sessionId, favorite) =>
-                            runOnce(() =>
-                              onToggleFavorite(sessionId, favorite),
-                            )
-                          }
-                          onArchive={(sessionId) =>
-                            runOnce(() => onArchiveSession(sessionId))
-                          }
-                        />
-                      ))}
-                    </ul>
-                  </section>
-                ))}
-              </nav>
-            ) : normalizedQuery.length > 0 ||
-              sessions.status === 'ready' ||
-              sessions.status === 'idle' ? (
-              <p className="dvx-session-empty">
-                {normalizedQuery.length > 0
-                  ? 'No sessions match your search.'
-                  : sessions.status === 'ready'
-                    ? 'No Droid sessions found.'
-                    : 'Session history has not loaded yet.'}
-              </p>
-            ) : null}
-            {sessionSearch !== null ? (
-              <ContentMatches
-                search={sessionSearch}
-                catalogIds={catalogIds}
-                disabled={disabled}
-                onSelect={(sessionId) =>
-                  // Same navigation contract as the catalog rows.
-                  runOnce(() => {
-                    setOpen(false);
-                    onSelectSession(sessionId);
-                  })
-                }
-              />
-            ) : null}
-            <ArchivedSection
-              archived={archived}
-              open={archivedOpen}
+        <aside
+          id="dvx-session-drawer"
+          className="dvx-session-drawer"
+          aria-label="Session history"
+        >
+          <label className="dvx-visually-hidden" htmlFor="dvx-session-search">
+            Search sessions
+          </label>
+          <input
+            id="dvx-session-search"
+            className="dvx-session-search"
+            type="search"
+            value={query}
+            placeholder="Search chats · Enter searches content"
+            autoComplete="off"
+            maxLength={MAX_SESSION_SEARCH_QUERY_LENGTH}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                submitContentSearch();
+              }
+            }}
+          />
+          <CatalogStatus sessions={sessions} pending={pendingAction} />
+          {filteredSessions.length > 0 ? (
+            <nav
+              className="dvx-session-nav"
+              aria-label="Session history"
+            >
+              {sessionGroups.map((group) => (
+                <section
+                  key={group.key}
+                  className="dvx-session-group"
+                  aria-label={group.label ?? undefined}
+                >
+                  {group.label !== null ? (
+                    <h3 className="dvx-session-group-label">
+                      {group.label}
+                    </h3>
+                  ) : null}
+                  <ul className="dvx-session-list">
+                    {group.items.map((session) => (
+                      <SessionRow
+                        key={session.id}
+                        session={session}
+                        disabled={disabled}
+                        onSelect={(sessionId) =>
+                          // Selecting navigates: the popover closes and
+                          // the chat view takes over immediately, like
+                          // Cursor's history list.
+                          runOnce(() => {
+                            setOpen(false);
+                            onSelectSession(sessionId);
+                          })
+                        }
+                        onRename={onRenameSession}
+                        onFork={(sessionId) =>
+                          runOnce(() => onForkSession(sessionId))
+                        }
+                        onToggleFavorite={(sessionId, favorite) =>
+                          runOnce(() =>
+                            onToggleFavorite(sessionId, favorite),
+                          )
+                        }
+                        onArchive={(sessionId) =>
+                          runOnce(() => onArchiveSession(sessionId))
+                        }
+                      />
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </nav>
+          ) : normalizedQuery.length > 0 ||
+            sessions.status === 'ready' ||
+            sessions.status === 'idle' ? (
+            <p className="dvx-session-empty">
+              {normalizedQuery.length > 0
+                ? 'No sessions match your search.'
+                : sessions.status === 'ready'
+                  ? 'No Droid sessions found.'
+                  : 'Session history has not loaded yet.'}
+            </p>
+          ) : null}
+          {sessionSearch !== null ? (
+            <ContentMatches
+              search={sessionSearch}
+              catalogIds={catalogIds}
               disabled={disabled}
-              onToggle={toggleArchived}
-              onUnarchive={(sessionId) =>
-                runOnce(() => onUnarchiveSession(sessionId))
+              onSelect={(sessionId) =>
+                // Same navigation contract as the catalog rows.
+                runOnce(() => {
+                  setOpen(false);
+                  onSelectSession(sessionId);
+                })
               }
             />
-          </aside>
-        </>
+          ) : null}
+          {worktreeCreateAvailable === true &&
+          onCreateWorktreeSession !== undefined ? (
+            // Our worktree entry survives the Cursor restyle as a
+            // quiet secondary row at the popover foot (spec §2.1:
+            // features stay, chrome submits to the popover language).
+            <button
+              type="button"
+              className="dvx-session-worktree-new"
+              disabled={disabled}
+              onClick={() =>
+                runOnce(() => {
+                  setOpen(false);
+                  onCreateWorktreeSession();
+                })
+              }
+            >
+              New session in a worktree…
+            </button>
+          ) : null}
+          <ArchivedSection
+            archived={archived}
+            open={archivedOpen}
+            disabled={disabled}
+            onToggle={toggleArchived}
+            onUnarchive={(sessionId) =>
+              runOnce(() => onUnarchiveSession(sessionId))
+            }
+          />
+        </aside>
       ) : null}
-    </>
+    </div>
   );
 });
 
@@ -327,30 +343,75 @@ interface SessionGroup {
   readonly items: readonly SessionSummary[];
 }
 
+const DAY_MS = 86_400_000;
+
+type TimeBucket = 'today' | 'yesterday' | 'week' | 'older';
+
+const TIME_BUCKETS: readonly {
+  readonly key: TimeBucket;
+  readonly label: string;
+}[] = [
+  { key: 'today', label: 'Today' },
+  { key: 'yesterday', label: 'Yesterday' },
+  { key: 'week', label: 'Previous 7 days' },
+  { key: 'older', label: 'Older' },
+];
+
+function timeBucket(stamp: number, startOfToday: number): TimeBucket {
+  if (stamp >= startOfToday) {
+    return 'today';
+  }
+  if (stamp >= startOfToday - DAY_MS) {
+    return 'yesterday';
+  }
+  if (stamp >= startOfToday - 7 * DAY_MS) {
+    return 'week';
+  }
+  return 'older';
+}
+
 /**
- * Partitions the catalog into a pinned Favorites group and the rest.
- * Order within each group keeps the host's modified-time ordering.
- * Without favorites the list renders ungrouped, exactly as before.
+ * Pinned Favorites first, then relative-time groups (Today /
+ * Yesterday / Previous 7 days / Older — Cursor's history grouping).
+ * Newest first inside every group ("finding a chat took too long",
+ * user decision 2026-08-13); display order never trusts the host
+ * catalog order.
  */
-function groupSessions(
+export function groupSessions(
   items: readonly SessionSummary[],
+  now = new Date(),
 ): readonly SessionGroup[] {
-  // Newest first in every group ("finding a chat took too long" —
-  // user decision 2026-08-13); display order no longer trusts the
-  // host catalog order.
   const sorted = [...items].sort(
     (a, b) => modifiedStamp(b) - modifiedStamp(a),
   );
+  const groups: SessionGroup[] = [];
   const favorites = sorted.filter((session) => session.isFavorite);
-  if (favorites.length === 0) {
-    return [{ key: 'all', label: null, items: sorted }];
+  if (favorites.length > 0) {
+    groups.push({ key: 'favorites', label: 'Favorites', items: favorites });
   }
-  const rest = sorted.filter((session) => !session.isFavorite);
-  const groups: SessionGroup[] = [
-    { key: 'favorites', label: 'Favorites', items: favorites },
-  ];
-  if (rest.length > 0) {
-    groups.push({ key: 'recent', label: 'Recent', items: rest });
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
+  const buckets = new Map<TimeBucket, SessionSummary[]>();
+  for (const session of sorted) {
+    if (session.isFavorite) {
+      continue;
+    }
+    const bucket = timeBucket(modifiedStamp(session), startOfToday);
+    const members = buckets.get(bucket);
+    if (members === undefined) {
+      buckets.set(bucket, [session]);
+    } else {
+      members.push(session);
+    }
+  }
+  for (const { key, label } of TIME_BUCKETS) {
+    const members = buckets.get(key);
+    if (members !== undefined) {
+      groups.push({ key, label, items: members });
+    }
   }
   return groups;
 }
@@ -404,19 +465,19 @@ function ContentMatches({
                     {hit.snippet}
                   </span>
                 ) : null}
-                {hit.modifiedTime !== null ? (
-                  <time dateTime={hit.modifiedTime}>
-                    {formatModifiedTime(hit.modifiedTime)}
-                  </time>
-                ) : null}
               </>
             );
+            const stampTitle =
+              hit.modifiedTime !== null
+                ? formatModifiedTime(hit.modifiedTime)
+                : undefined;
             return (
               <li key={hit.id} className="dvx-session-row-shell">
                 {selectable ? (
                   <button
                     type="button"
                     className="dvx-session-row dvx-session-match"
+                    title={stampTitle}
                     disabled={disabled}
                     onClick={() => onSelect(hit.id)}
                   >
@@ -497,13 +558,15 @@ function ArchivedSection({
           <ul className="dvx-session-list">
             {archived.items.map((session) => (
               <li key={session.id} className="dvx-session-row-shell">
-                <div className="dvx-session-row dvx-session-row-static">
+                <div
+                  className="dvx-session-row dvx-session-row-static"
+                  title={`Archived ${formatModifiedTime(
+                    session.archivedTime,
+                  )}`}
+                >
                   <span className="dvx-session-row-title">
                     {session.title}
                   </span>
-                  <time dateTime={session.archivedTime}>
-                    {formatModifiedTime(session.archivedTime)}
-                  </time>
                 </div>
                 <button
                   type="button"
@@ -626,29 +689,35 @@ function SessionRow({
         type="button"
         className="dvx-session-row"
         aria-current={session.active ? 'true' : undefined}
+        // The exact stamp moved off the row into its hover title
+        // (grouping already expresses recency, spec §2.1).
+        title={formatModifiedTime(session.modifiedTime)}
         disabled={disabled || session.active}
         onClick={() => onSelect(session.id)}
       >
-        <span className="dvx-session-row-title">
-          {session.running === true ? (
-            // Quiet inline spinner: a detached daemon turn is still
-            // running in the background. Decorative ring; the
-            // accessible signal is the hidden text.
-            <>
-              <span
-                className="dvx-session-run-spinner"
-                aria-hidden="true"
-              />
-              <span className="dvx-visually-hidden">
-                {'Turn still running. '}
-              </span>
-            </>
-          ) : null}
-          {session.title}
-        </span>
+        {session.running === true ? (
+          // Quiet inline spinner: a detached daemon turn is still
+          // running in the background. Decorative ring; the
+          // accessible signal is the hidden text.
+          <>
+            <span
+              className="dvx-session-run-spinner"
+              aria-hidden="true"
+            />
+            <span className="dvx-visually-hidden">
+              {'Turn still running. '}
+            </span>
+          </>
+        ) : (
+          <span className="dvx-session-row-state" aria-hidden="true">
+            <CheckCircleIcon />
+          </span>
+        )}
+        <span className="dvx-session-row-title">{session.title}</span>
         {session.worktree !== undefined ? (
-          // Quiet secondary line; the full worktree path only surfaces
-          // as a tooltip (UI restraint: no new prominent element).
+          // Quiet inline annotation; the full worktree path only
+          // surfaces as a tooltip (UI restraint: no second line in a
+          // 28px row).
           <span
             className="dvx-session-row-worktree"
             title={session.worktree.path}
@@ -659,16 +728,12 @@ function SessionRow({
           </span>
         ) : null}
         {session.missionRole !== undefined ? (
-          // Same quiet secondary style as the worktree annotation.
           <span className="dvx-session-row-worktree">
             {session.missionRole === 'worker'
               ? 'mission · worker'
               : 'mission'}
           </span>
         ) : null}
-        <time dateTime={session.modifiedTime}>
-          {formatModifiedTime(session.modifiedTime)}
-        </time>
       </button>
       <button
         type="button"
@@ -738,227 +803,9 @@ function SessionRow({
   );
 }
 
-function StarIcon({
-  filled,
-}: {
-  readonly filled: boolean;
-}): React.JSX.Element {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 16 16"
-      fill={filled ? 'currentColor' : 'none'}
-      aria-hidden="true"
-    >
-      <path
-        d="m8 2.2 1.76 3.57 3.94.57-2.85 2.78.67 3.92L8 11.19l-3.52 1.85.67-3.92L2.3 6.34l3.94-.57L8 2.2Z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function ForkIcon(): React.JSX.Element {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
-      <circle cx="4.5" cy="3.75" r="1.75" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="11.5" cy="3.75" r="1.75" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="8" cy="12.25" r="1.75" stroke="currentColor" strokeWidth="1.2" />
-      <path
-        d="M4.5 5.5v1a2 2 0 0 0 2 2h3a2 2 0 0 0 2-2v-1M8 8.5v2"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function RenameIcon(): React.JSX.Element {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="m11.1 2.6 2.3 2.3-7.6 7.6-3 .7.7-3 7.6-7.6Z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function ArchiveIcon(): React.JSX.Element {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
-      <rect
-        x="2.25"
-        y="3"
-        width="11.5"
-        height="3"
-        rx="0.75"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
-      <path
-        d="M3.25 6v6a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1V6M6.5 8.75h3"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function UnarchiveIcon(): React.JSX.Element {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
-      <rect
-        x="2.25"
-        y="3"
-        width="11.5"
-        height="3"
-        rx="0.75"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
-      <path
-        d="M3.25 6v6a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1V6M8 12v-4m0 0-1.75 1.75M8 8l1.75 1.75"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function ChevronIcon(): React.JSX.Element {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="m6 4 4 4-4 4"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function formatModifiedTime(value: string): string {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp)
     ? MODIFIED_TIME_FORMAT.format(timestamp)
     : value;
-}
-
-function SessionIcon(): React.JSX.Element {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M2 2v3.333h3.333M2.033 8.667a6 6 0 1 0 1.967-5.134l-2 1.8M8 4.667V8l2.333 1.333"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function SearchIcon(): React.JSX.Element {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
-      <circle
-        cx="7"
-        cy="7"
-        r="3.75"
-        stroke="currentColor"
-        strokeWidth="1.25"
-      />
-      <path
-        d="m9.8 9.8 3 3"
-        stroke="currentColor"
-        strokeWidth="1.25"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function CloseHistoryIcon(): React.JSX.Element {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
-      <rect
-        x="2.5"
-        y="2.75"
-        width="11"
-        height="10.5"
-        rx="1.5"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
-      <path
-        d="M9.5 2.75v10.5M7.25 6 5.25 8l2 2"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 }

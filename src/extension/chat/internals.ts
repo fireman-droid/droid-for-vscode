@@ -80,6 +80,10 @@ export const DAEMON_NOT_LOGGED_IN_MESSAGE =
   'Sign in with the droid CLI to archive and search sessions.';
 export const DAEMON_UNAVAILABLE_MESSAGE =
   'The local droid daemon is unavailable.';
+export const DAEMON_CREDENTIALS_UNREADABLE_MESSAGE =
+  'DroidVisX could not read the current Droid CLI sign-in.';
+export const DAEMON_REFRESH_FAILED_MESSAGE =
+  'The Droid CLI sign-in could not authenticate the local daemon. Sign in again, then retry.';
 
 /**
  * Maps daemon-path failures to fixed user-facing messages. Raw error
@@ -91,9 +95,17 @@ export function daemonFailureMessage(
   notLoggedIn: string = DAEMON_NOT_LOGGED_IN_MESSAGE,
 ): string {
   if (error instanceof DaemonAvailabilityError) {
-    return error.reason === 'not-logged-in'
-      ? notLoggedIn
-      : DAEMON_UNAVAILABLE_MESSAGE;
+    switch (error.reason) {
+      case 'not-logged-in':
+        return notLoggedIn;
+      case 'credentials-unreadable':
+        return DAEMON_CREDENTIALS_UNREADABLE_MESSAGE;
+      case 'refresh-failed':
+      case 'authentication-failed':
+        return DAEMON_REFRESH_FAILED_MESSAGE;
+      case 'connect-failed':
+        return DAEMON_UNAVAILABLE_MESSAGE;
+    }
   }
   return fallback;
 }

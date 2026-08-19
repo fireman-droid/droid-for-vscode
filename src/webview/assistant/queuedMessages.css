@@ -7,6 +7,7 @@
 .dvx-queue {
   box-sizing: border-box;
   width: 100%;
+  max-width: var(--dvx-column-max);
   margin: 0 auto 8px;
   border: 1px solid var(--dvx-border);
   border-radius: 12px;
@@ -15,12 +16,6 @@
     0 1px 2px rgb(31 24 16 / 5%),
     0 10px 26px -18px rgb(31 24 16 / 28%);
   overflow: hidden;
-}
-
-@media (min-width: 900px) {
-  .dvx-queue {
-    max-width: 860px;
-  }
 }
 
 /* Collapsed header: one quiet line, the whole row toggles. */

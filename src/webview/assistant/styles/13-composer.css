@@ -2,7 +2,7 @@
   position: relative;
   width: 100%;
   margin: 0 auto;
-  max-width: none;
+  max-width: var(--dvx-column-max);
 }
 
 .dvx-composer {
@@ -15,7 +15,9 @@
   border: 1px solid var(--dvx-border);
   border-radius: 12px;
   background: var(--dvx-raised);
-  box-shadow: 0 1px 1.5px rgb(0 0 0 / 10%), 0 1px 1px rgb(0 0 0 / 10%);
+  /* Cards carry no shadow — hairline only (spec §1.2); the big
+     throw stays reserved for floating overlays. */
+  box-shadow: none;
 }
 
 .dvx-composer-pending {
@@ -33,7 +35,7 @@
 
 .dvx-composer:focus-within {
   border-color: var(--dvx-border-strong);
-  box-shadow: 0 1px 1.5px rgb(0 0 0 / 10%), 0 1px 1px rgb(0 0 0 / 10%);
+  box-shadow: none;
 }
 
 /* Files dragged over the composer stage as attachments. */
@@ -59,6 +61,8 @@
 
 .dvx-composer-input::placeholder {
   color: var(--dvx-subtle);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .dvx-composer-status {
@@ -208,14 +212,54 @@
 
 .dvx-shell .dvx-mode-popover {
   left: auto;
-  width: 200px;
+  width: 168px;
   max-width: calc(100% - 8px);
-  padding: 4px;
+  padding: 6px;
   border: 1px solid color-mix(in srgb, var(--dvx-border-strong) 72%, transparent);
   border-radius: 8px;
   box-shadow:
     0 1px 2px rgb(0 0 0 / 7%),
     0 6px 18px -12px rgb(0 0 0 / 26%);
+}
+
+/* Cursor menu rows (spec §3.1): one 32px icon-led line per mode —
+   14px linear glyph, 13px label, selected check on the right; the
+   old two-line copy lives on as the row's hover title. */
+.dvx-mode-option {
+  justify-content: flex-start;
+  min-height: 32px;
+  padding: 0 8px;
+  gap: 8px;
+  border-radius: 4px;
+}
+
+.dvx-mode-option-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  color: var(--dvx-muted);
+}
+
+.dvx-mode-option:hover:not(:disabled) .dvx-mode-option-icon,
+.dvx-mode-option[aria-checked='true'] .dvx-mode-option-icon {
+  color: var(--dvx-text-secondary);
+}
+
+.dvx-mode-option-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dvx-text-strong);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-mode-option:hover:not(:disabled) .dvx-mode-option-label {
+  color: var(--dvx-ink);
 }
 
 .dvx-shell .dvx-model-trigger {
@@ -327,11 +371,11 @@
   left: 0;
   width: auto;
   max-height: 520px;
-  padding: 10px;
+  padding: 6px;
   border: 1px solid var(--dvx-border);
-  border-radius: 12px;
-  background: #faf9f6;
-  box-shadow: 0 18px 44px -16px rgb(0 0 0 / 25%);
+  border-radius: 8px;
+  background: var(--dvx-overlay);
+  box-shadow: var(--dvx-shadow);
 }
 
 /* Near the viewport top (pinned edit card) popovers flip downward so

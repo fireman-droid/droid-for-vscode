@@ -1,0 +1,43 @@
+:root {
+  color-scheme: dark;
+  --vscode-sideBar-background: #1f2023;
+  --vscode-editor-background: #1b1c1f;
+  --vscode-foreground: #e7e3dc;
+  --vscode-descriptionForeground: #a6a19a;
+  --vscode-input-background: #26272b;
+  --vscode-input-foreground: #eeeae3;
+  --vscode-input-border: #3b3d43;
+  --vscode-focusBorder: #8d786a;
+  --vscode-button-background: #d7c1b3;
+  --vscode-button-foreground: #241f1b;
+  --vscode-button-hoverBackground: #e4cec0;
+  --vscode-errorForeground: #ef8f96;
+  --vscode-editorWarning-foreground: #d6a269;
+  --vscode-list-hoverBackground: rgb(255 255 255 / 6%);
+  --vscode-widget-shadow: rgb(0 0 0 / 48%);
+}
+
+html,
+body,
+#root,
+.dvx-dev-shell {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background: var(--vscode-sideBar-background);
+}
+
+.dvx-dev-shell {
+  display: flex;
+}
+
+.dvx-dev-shell > .dvx-models-page {
+  width: 100%;
+  flex: 1 1 auto;
+}

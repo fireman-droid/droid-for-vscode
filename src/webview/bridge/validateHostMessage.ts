@@ -167,11 +167,9 @@ import {
   type ChangesUpdateState,
 } from '../../shared/changesProtocol';
 import { parseCustomModelsHostMessage } from '../../shared/customModelsProtocol';
+import { parseCanvasFeedbackDraftMessage } from '../../shared/canvasProtocol';
 import { parseMissionHostMessage } from '../../shared/missionProtocol';
 import { parseSubagentActivityMessage } from '../../shared/subagentProtocol';
-// Lazy circular pair on purpose: that module reuses this file's
-// transcript-item parser for `subagent.transcript` payloads.
-import { parseSubagentTranscript } from './validateSubagentMessage';
 import {
   parseSessionBtwMessage,
   type SessionBtwMessage,
@@ -313,8 +311,6 @@ export function readHostMessage(
         return parseToolActivity(value);
       case 'subagent.update':
         return parseSubagentUpdate(value);
-      case 'subagent.transcript':
-        return parseSubagentTranscript(value);
       case 'subagent.activity':
         return parseSubagentActivityMessage(value) ?? undefined;
       case 'transcript.image':
@@ -345,9 +341,12 @@ export function readHostMessage(
         return parseUiTheme(value);
       case 'customModels.state':
       case 'customModels.discovery':
+      case 'providerModels.state':
         // Delegated to the shared BYOK contract module; the panel's
         // flow hook applies the same parser to its window listener.
         return parseCustomModelsHostMessage(value) ?? undefined;
+      case 'canvas.feedbackDraft':
+        return parseCanvasFeedbackDraftMessage(value);
       case 'mission.snapshot':
       case 'mission.controlResult':
         return parseMissionHostMessage(value);
@@ -1207,11 +1206,12 @@ function parseGitStatus(
   if (
     !hasExactKeys(
       value,
-      ['type', 'sequence', 'sessionId', 'branch', 'files'],
-      ['unavailableReason'],
+      ['type', 'sequence', 'sessionId', 'turnId', 'branch', 'files'],
+      ['committedHash', 'unavailableReason'],
     ) ||
     !isSequence(value.sequence) ||
-    !isId(value.sessionId)
+    !isId(value.sessionId) ||
+    !isId(value.turnId)
   ) {
     return undefined;
   }
@@ -1226,11 +1226,21 @@ function parseGitStatus(
   if (reason !== undefined && !isGitUnavailableReason(reason)) {
     return undefined;
   }
+  const committedHash = value.committedHash;
+  if (
+    committedHash !== undefined &&
+    (!isGitCommitHashEcho(committedHash) || committedHash === '')
+  ) {
+    return undefined;
+  }
   const files = parseGitStatusFiles(value.files);
   // An unavailable report must not smuggle repository data.
   if (
     files === undefined ||
-    (reason !== undefined && (files.length > 0 || branch !== null))
+    (reason !== undefined &&
+      (files.length > 0 ||
+        branch !== null ||
+        committedHash !== undefined))
   ) {
     return undefined;
   }
@@ -1239,8 +1249,10 @@ function parseGitStatus(
     type: 'git.status',
     sequence: value.sequence,
     sessionId: value.sessionId,
+    turnId: value.turnId,
     branch,
     files,
+    ...(committedHash === undefined ? {} : { committedHash }),
     ...(reason === undefined ? {} : { unavailableReason: reason }),
   };
 }
@@ -1292,12 +1304,14 @@ function parseGitCommitResult(
         'type',
         'sequence',
         'sessionId',
+        'turnId',
         'ok',
         'hash',
         'subject',
       ]) ||
       !isSequence(value.sequence) ||
       !isId(value.sessionId) ||
+      !isId(value.turnId) ||
       !isGitCommitHashEcho(value.hash) ||
       !isBoundedString(value.subject, MAX_GIT_COMMIT_SUBJECT_LENGTH)
     ) {
@@ -1307,6 +1321,7 @@ function parseGitCommitResult(
       type: 'git.commitResult',
       sequence: value.sequence,
       sessionId: value.sessionId,
+      turnId: value.turnId,
       ok: true,
       hash: value.hash,
       subject: value.subject,
@@ -1318,11 +1333,13 @@ function parseGitCommitResult(
         'type',
         'sequence',
         'sessionId',
+        'turnId',
         'ok',
         'error',
       ]) ||
       !isSequence(value.sequence) ||
       !isId(value.sessionId) ||
+      !isId(value.turnId) ||
       !isNonEmptyBoundedString(
         value.error,
         MAX_GIT_COMMIT_ERROR_LENGTH,
@@ -1334,6 +1351,7 @@ function parseGitCommitResult(
       type: 'git.commitResult',
       sequence: value.sequence,
       sessionId: value.sessionId,
+      turnId: value.turnId,
       ok: false,
       error: value.error,
     };

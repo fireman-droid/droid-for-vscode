@@ -52,6 +52,7 @@
   height: 14px;
   flex: 0 0 14px;
   color: var(--dvx-subtle);
+  pointer-events: none;
   transform: rotate(0deg);
   transform-box: fill-box;
   transform-origin: 50% 50%;
@@ -228,17 +229,41 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
   min-height: 21px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--dvx-text-strong);
+  cursor: pointer;
+  font: inherit;
   font-weight: 500;
   line-height: 21.125px;
+  text-align: left;
 }
 
-/* Running collapsed group: a one-row viewport under the header; when
+.dvx-activity-group-header .dvx-activity-chevron {
+  margin-left: auto;
+  transform: rotate(-90deg);
+}
+
+.dvx-activity-group-header[aria-expanded='true'] .dvx-activity-chevron {
+  transform: rotate(0);
+}
+
+.dvx-activity-group-header:hover .dvx-activity-chevron,
+.dvx-activity-group-header:focus-visible .dvx-activity-chevron,
+.dvx-activity-group-summary:hover .dvx-activity-chevron,
+.dvx-activity-group-summary:focus-visible .dvx-activity-chevron {
+  color: var(--dvx-text-strong);
+}
+
+/* Running group: a one-row viewport under the clickable header; when
    the active member advances the old row slides up one row height
    while dissolving to transparent, and the new row rides in from
-   below on the same timeline (vertical ticker, user report batch 2 §1
-   + fade rework). Transient status only, so it takes no clicks. */
+   below on the same timeline. The ticker itself stays presentation-
+   only; the header opens the complete interactive details, including
+   grouped Thinking rows. */
 .dvx-activity-ticker {
   /* Row height, duration and curve are the values the user dialled in
      on artifacts/ticker-mini.html; they are local to the ticker so the
@@ -254,11 +279,9 @@
   pointer-events: none;
 }
 
-/* The track carries the shared vertical motion. Each arrival appends
-   a row and advances --dvx-ticker-offset (set by the component), so a
-   mid-slide arrival retargets the running transition from its current
-   interpolated position instead of snapping — the wheel keeps
-   turning. Transform + opacity only; layout never animates. */
+/* The track carries one shared vertical step at a time. Bursty source
+   updates advance the target but never skip intermediate member rows.
+   Transform + opacity only; layout never animates. */
 .dvx-ticker-track {
   display: flex;
   flex-direction: column;
@@ -379,7 +402,7 @@
   width: 100%;
   flex: 0 0 auto;
   bottom: 0;
-  padding: 4px 16px 10px;
+  padding: 4px var(--dvx-column-pad) 10px;
   background: var(--dvx-surface);
 }
 

@@ -14,7 +14,13 @@ export interface PrototypePreviewOpener {
    * revalidate the size and keep the source in memory so Reload can
    * re-render the identical content.
    */
-  openInlineHtml(html: string): Promise<PrototypePreviewOutcome>;
+  openInlineHtml(
+    html: string,
+    artifact?: {
+      readonly artifactId: string;
+      readonly title: string;
+    },
+  ): Promise<PrototypePreviewOutcome>;
 }
 
 export function createUnavailablePrototypePreviewOpener(): PrototypePreviewOpener {

@@ -1,37 +1,44 @@
-/* Plan line (decard design §3 A + user corrections 2026-08-13):
-   a thin hairline-topped disclosure row anchored directly under the
-   user message that triggered the turn — no card chrome. Structure
-   comes from the hairline, the four-level text greys and the status
-   dot; the running state's dot glow is the only animation carrier.
-   Hover feedback is text-colour only: no grey wash blocks anywhere
-   on this family (user decision 2026-08-13).
+/* Plan card (spec §3.5, user rework 2026-08-15 — the 2026-08-13
+   "no card chrome / hairline row" decision is retired): a full card
+   in the terminal-card family, anchored directly under the user
+   message that triggered the turn. radius 8, 1px hairline, raised
+   ground, no shadow. A 32px title row (status dot · title · n / m ·
+   chevron) closes with a 2px completion bar; the step checklist
+   opens below a hairline. Hover feedback stays ink-deepening only —
+   no grey wash blocks on rows (standing user decision).
 
-   The line lives inside the sticky .dvx-message-user block, so the
+   The card lives inside the sticky .dvx-message-user block, so the
    pin coordinator in Thread.tsx carries it through stick, push-out
-   and cover for free. Pinned adds NOTHING but breathing room: one
-   surface, in-place expansion, no overlay card (user correction
-   2026-08-13 evening — the approved harness form has no second box). */
+   and cover for free. */
 
 .dvx-plan-line {
   position: relative;
-  margin: 12px 0 2px;
+  overflow: hidden;
+  margin: 10px 0 2px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 8px;
+  background: var(--dvx-raised);
+  box-shadow: none;
+  transition: border-color 160ms ease;
 }
 
-/* One disclosure target: the whole collapsed row. A 14px marker rail
-   leads the grid so the dot, the step circles and the chevron share
-   one centred column, and the line spans the full chat-content width
-   (kitchen-sink form, 2026-08-13). */
+.dvx-plan-line:hover {
+  border-color: var(--dvx-border-strong);
+}
+
+/* One disclosure target: the whole 32px title row. A 14px marker
+   rail leads the grid so the dot, the step circles and the chevron
+   share one centred column. */
 .dvx-plan-line-row {
   display: grid;
   box-sizing: border-box;
   width: 100%;
-  min-height: 38px;
+  min-height: 32px;
   grid-template-columns: 14px minmax(0, 1fr) auto 14px;
-  gap: 9px;
+  gap: 8px;
   align-items: center;
-  padding: 0;
+  padding: 0 12px;
   border: 0;
-  border-top: 1px solid var(--dvx-border);
   background: none;
   color: var(--dvx-text-secondary);
   font: inherit;
@@ -45,16 +52,19 @@
   color: var(--dvx-ink);
 }
 
+/* The chevron rests near-invisible and surfaces on hover/focus
+   (spec §3.5: hover 显形). */
 .dvx-plan-line-row:hover .dvx-plan-line-chevron,
-.dvx-plan-line-row:focus-visible .dvx-plan-line-chevron {
+.dvx-plan-line-row:focus-visible .dvx-plan-line-chevron,
+.dvx-plan-line-row[aria-expanded='true'] .dvx-plan-line-chevron {
   color: var(--dvx-text-secondary);
   opacity: 1;
 }
 
 .dvx-plan-line-row:focus-visible {
-  border-radius: 4px;
+  border-radius: 7px;
   outline: 1px solid var(--dvx-focus);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 .dvx-plan-line-dot {
@@ -66,7 +76,7 @@
 }
 
 /* Running: the dot turns accent with a soft breathing halo — the
-   line's only animation. Completed plans retire the dot to grey. */
+   card's only ambient animation. Completed plans retire it to grey. */
 .dvx-plan-line-live .dvx-plan-line-dot {
   background: var(--dvx-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--dvx-accent) 10%, transparent);
@@ -90,11 +100,9 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  /* Ink, not secondary: the approved harness renders the title as
-     the brightest text on the line (user correction 2026-08-13). */
   color: var(--dvx-ink);
   font-size: 13px;
-  font-weight: 535;
+  font-weight: 500;
   line-height: 19px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -102,20 +110,19 @@
 }
 
 .dvx-plan-line-count {
-  color: var(--dvx-subtle);
-  font-family: var(--dvx-mono, ui-monospace, monospace);
-  font-size: 10.5px;
+  color: var(--dvx-muted);
+  font-size: 11.5px;
   line-height: 16px;
   font-variant-numeric: tabular-nums;
 }
 
 .dvx-plan-line-chevron {
   display: block;
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   justify-self: center;
   color: var(--dvx-subtle);
-  opacity: 0.8;
+  opacity: 0;
   transform: rotate(0deg);
   transform-box: fill-box;
   transform-origin: 50% 50%;
@@ -129,8 +136,37 @@
   transform: rotate(180deg);
 }
 
+/* 2px completion bar on the title row's bottom edge: accent share
+   over a border-colored track; the whole strip fades to grey once
+   every step is done. */
+.dvx-plan-line-bar {
+  display: block;
+  height: 2px;
+  background: var(--dvx-border);
+}
+
+/* The checklist already carries the useful step detail when open.
+   Once collapsed, the completion strip reads as a stray second
+   bottom border, so the one-row card keeps only its normal frame. */
+.dvx-plan-line-row[aria-expanded='false'] + .dvx-plan-line-bar {
+  display: none;
+}
+
+.dvx-plan-line-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--dvx-accent);
+  transition: width var(--dvx-duration-slower) var(--dvx-easing-out-strong),
+    background-color 400ms ease;
+}
+
+.dvx-plan-line-done .dvx-plan-line-bar-fill {
+  background: var(--dvx-border-strong);
+}
+
 /* The checklist stays mounted so both directions animate: the body
-   grid transitions 0fr↔1fr and the inner wrapper clips. */
+   grid transitions 0fr↔1fr and the inner wrapper clips
+   (height + opacity language, respects reduced motion below). */
 .dvx-plan-line-body {
   display: grid;
   grid-template-rows: 0fr;
@@ -147,29 +183,31 @@
   overflow: hidden;
 }
 
-/* Step list: one small circle per step on the same 14px rail as the
-   head dot, tighter rhythm (kitchen-sink form, 2026-08-13). */
+/* Step list: hairline-separated from the title strip, 26px rows on
+   the same 14px marker rail. */
 .dvx-plan-line-steps {
   display: grid;
   gap: 2px;
-  margin: 2px 0 8px;
-  padding: 0;
+  margin: 0;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--dvx-border);
   list-style: none;
 }
 
 .dvx-plan-line-step {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr);
-  gap: 9px;
+  gap: 8px;
   align-items: start;
-  padding: 5px 0;
+  min-height: 26px;
+  padding: 4px 0;
   color: var(--dvx-muted);
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 18px;
 }
 
-/* Circles: hollow = pending, accent-filled = current, grey with a
-   small check = completed. */
+/* Circles: hollow = pending, accent-filled + breathing = current,
+   grey with a small check = completed. */
 .dvx-plan-line-ring {
   display: grid;
   box-sizing: border-box;
@@ -178,7 +216,7 @@
   margin-top: 3px;
   justify-self: center;
   place-items: center;
-  border: 1.5px solid var(--dvx-border-strong);
+  border: 1.5px solid var(--dvx-subtle);
   border-radius: 50%;
   background: transparent;
 }
@@ -187,6 +225,7 @@
   border-color: var(--dvx-accent);
   background: var(--dvx-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--dvx-accent) 12%, transparent);
+  animation: dvx-plan-line-glow 2s ease-in-out infinite;
 }
 
 .dvx-plan-line-step-in_progress .dvx-plan-line-text {
@@ -200,7 +239,29 @@
 }
 
 .dvx-plan-line-step-completed .dvx-plan-line-text {
-  color: var(--dvx-subtle);
+  color: var(--dvx-muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+/* The ring's hollow→filled check flip pops briefly; gated on the
+   live-turn shell class so history replay mounts silently. */
+.dvx-anim-live
+  .dvx-plan-line-live
+  .dvx-plan-line-step-completed
+  .dvx-plan-line-ring {
+  animation: dvx-plan-check-pop var(--dvx-duration-normal)
+    var(--dvx-easing-out-strong);
+}
+
+@keyframes dvx-plan-check-pop {
+  from {
+    transform: scale(0.6);
+  }
+
+  to {
+    transform: scale(1);
+  }
 }
 
 .dvx-plan-line-check {
@@ -216,36 +277,41 @@
 }
 
 /* ---- Pinned (sticky) state --------------------------------------
-   ONE surface, no second box (user correction 2026-08-13 evening:
-   the approved kitchen-sink form expands in place — there is no
-   floating overlay card). The pinned block's opaque surface + drop
-   shadow mask the content scrolling underneath; expanding while
-   pinned simply grows the sticky block inline, exactly like the
-   un-pinned flow. Only breathing room below the line is added. */
+   ONE surface, in-place expansion, no overlay card (standing user
+   correction). Only breathing room below the card is added. */
 .dvx-message-user[data-sticky-compact] .dvx-plan-line {
-  padding-bottom: 8px;
-  margin-bottom: 0;
+  margin-bottom: 8px;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .dvx-plan-line-title,
   .dvx-plan-line-chevron,
-  .dvx-plan-line-body {
+  .dvx-plan-line-body,
+  .dvx-plan-line-bar-fill {
     transition: none;
   }
 
-  .dvx-plan-line-live .dvx-plan-line-dot {
+  .dvx-plan-line-live .dvx-plan-line-dot,
+  .dvx-plan-line-step-in_progress .dvx-plan-line-ring,
+  .dvx-anim-live
+    .dvx-plan-line-live
+    .dvx-plan-line-step-completed
+    .dvx-plan-line-ring {
     animation: none;
   }
 }
 
 @media (forced-colors: active) {
-  .dvx-plan-line-row {
-    border-top: 1px solid CanvasText;
+  .dvx-plan-line {
+    border: 1px solid CanvasText;
   }
 
   .dvx-plan-line-dot,
   .dvx-plan-line-ring {
     border: 1px solid CanvasText;
+  }
+
+  .dvx-plan-line-bar-fill {
+    background: Highlight;
   }
 }

@@ -1,34 +1,31 @@
-/* Two-end footer row: action on the left, quiet explainer filling
-   the right side of the same line. */
+/* Context Usage footer row (spec §3.2 拍板): explainer on the left,
+   quiet Compact text action on the right, one hairline above. */
 .dvx-context-compact {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  margin-top: 12px;
-  padding: 12px 16px 14px;
+  margin-top: 8px;
+  padding: 8px 16px 10px;
   border-top: 1px solid var(--dvx-border);
 }
 
-/* Accent-outline action: quiet white base, warm accent stroke and
-   ink; hover deepens into the soft accent wash. */
+/* Bare text action (.dvx-changes-action language): no border, no
+   fill — color alone carries the affordance. */
 .dvx-context-compact-button {
   flex: none;
-  padding: 4px 10px;
-  border: 1px solid color-mix(in srgb, var(--dvx-accent) 42%, var(--dvx-raised));
-  border-radius: 6px;
-  background: var(--dvx-raised);
-  color: var(--dvx-accent-strong);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dvx-text-secondary);
   cursor: pointer;
-  font-size: 11px;
-  font-weight: 550;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
-  transition: border-color 130ms ease, background-color 130ms ease;
+  font-size: 11.5px;
+  font-weight: 500;
+  transition: color 130ms ease;
 }
 
 .dvx-context-compact-button:hover:not(:disabled) {
-  border-color: var(--dvx-accent);
-  background: var(--dvx-accent-soft);
+  color: var(--dvx-ink);
 }
 
 .dvx-context-compact-button:disabled {
@@ -69,10 +66,10 @@
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
-  color: var(--dvx-muted);
-  font-size: 10.5px;
+  color: var(--dvx-subtle);
+  font-size: 11px;
   line-height: 1.35;
-  text-align: right;
+  text-align: left;
 }
 
 /* Interactions render as a flat inline block inside the conversation flow:
@@ -131,7 +128,7 @@
 
 .dvx-interaction-heading h2 {
   margin-top: 4px;
-  color: #171717;
+  color: var(--dvx-ink);
   font-size: 13.5px;
   font-weight: 600;
   line-height: 21.938px;
@@ -150,7 +147,7 @@
   border-radius: 0;
   padding: 10px 0;
   border: 0;
-  border-bottom: 1px solid rgb(229 229 229 / 60%);
+  border-bottom: 1px solid var(--dvx-border);
   background: transparent;
 }
 
@@ -260,7 +257,7 @@
   margin: 6px 0 10px;
   padding: 8px 10px;
   overflow: auto;
-  border: 1px solid rgb(229 229 229 / 80%);
+  border: 1px solid var(--dvx-border);
   border-radius: 6px;
   background: rgb(255 255 255 / 65%);
 }
@@ -461,6 +458,9 @@
   margin: 0;
 }
 
+/* Unified overlay-menu language (旧账 34b, plan选择.png): hairline
+   border, radius 8, 6px padding, quiet single-line rows with the
+   plain --dvx-soft hover instead of the old accent-tinted wash. */
 .dvx-permission-menu {
   position: absolute;
   right: 0;
@@ -469,23 +469,28 @@
   min-width: 174px;
   max-width: min(340px, 86vw);
   overflow: hidden;
-  padding: 5px;
-  border: 1px solid var(--dvx-border);
-  border-radius: 9px;
-  background: var(--dvx-raised);
-  box-shadow: 0 2px 6px -3px rgb(0 0 0 / 10%), 0 16px 40px -14px rgb(0 0 0 / 25%);
+  padding: 6px;
+  border: 1px solid color-mix(in srgb, var(--dvx-border-strong) 72%, transparent);
+  border-radius: 8px;
+  background: var(--dvx-overlay);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 7%),
+    0 6px 18px -12px rgb(0 0 0 / 26%);
   animation: dvx-rise-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .dvx-permission-menu button {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
-  padding: 7px 10px;
+  min-height: 32px;
+  padding: 5px 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 4px;
   color: var(--dvx-text-strong);
   background: transparent;
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 500;
   line-height: 17px;
   text-align: left;
   transition: background-color var(--dvx-duration-fast) ease, color var(--dvx-duration-fast) ease;
@@ -493,7 +498,7 @@
 
 .dvx-permission-menu button:hover:not(:disabled) {
   color: var(--dvx-ink);
-  background: color-mix(in srgb, var(--dvx-accent) 7%, var(--dvx-raised));
+  background: var(--dvx-soft);
 }
 
 .dvx-ask-user .dvx-interaction-heading, .dvx-ask-user .dvx-ask-questions {
@@ -530,7 +535,7 @@
   margin: 0;
   padding: 12px 0;
   border: 0;
-  border-bottom: 1px solid rgb(229 229 229 / 60%);
+  border-bottom: 1px solid var(--dvx-border);
 }
 
 .dvx-ask-user fieldset:first-child {
@@ -615,16 +620,6 @@
   opacity: 0.4;
 }
 
-@media (max-width: 462px) {
-  .dvx-reading-column {
-    padding-inline: 16px;
-  }
-
-  .dvx-thread-footer {
-    padding-inline: 16px;
-  }
-}
-
 @media (max-width: 420px) {
   .dvx-session-title {
     max-width: 120px;
@@ -643,15 +638,6 @@
     padding-inline: 11px;
   }
 
-  .dvx-reading-column {
-    padding: 24px 10px 34px;
-    padding-inline: 14px;
-  }
-
-  .dvx-thread-footer {
-    padding-inline: 12px;
-  }
-
   .dvx-interaction-panel {
     margin-bottom: 24px;
   }
@@ -663,8 +649,8 @@
 }
 
 @media (max-width: 350px) {
-  .dvx-reading-column, .dvx-thread-footer {
-    padding-inline: 10px;
+  .dvx-shell {
+    --dvx-column-pad: 10px;
   }
 
   .dvx-permission-plan .dvx-plan-preview {

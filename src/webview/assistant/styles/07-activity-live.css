@@ -20,10 +20,10 @@
   white-space: pre-wrap;
 }
 
-/* Delegated subagent summary: a quiet sub-row hanging one level under
-   its Task row, separated by the same hairline language as the rest
-   of the shell. The parent row owns any live shimmer; this stays
-   static. */
+/* Delegated Task progress card: one restrained finished surface under
+   its parent tool row. It reports lifecycle, elapsed time, last
+   sampled activity and tool count without pretending there is a
+   percentage. The full transcript remains a secondary Details path. */
 .dvx-activity-row-delegating,
 .dvx-activity-row-background {
   margin-bottom: 4px;
@@ -41,35 +41,230 @@
 }
 
 .dvx-subagent-row {
+  display: grid;
+  gap: 8px;
+  margin: 9px 0 14px 20px;
+  padding: 11px 13px 10px;
+  border: 1px solid #e1dccb;
+  border-radius: 10px;
+  background:
+    radial-gradient(
+      150% 120% at 10% 0%,
+      rgb(255 255 255 / 72%),
+      transparent 55%
+    ),
+    linear-gradient(180deg, #fdfcf8, #f6f3ea);
+  box-shadow:
+    0 14px 30px -22px rgb(96 84 62 / 34%),
+    inset 0 1px 0 #fff;
+  color: #676252;
+  font-size: 11px;
+  line-height: 16px;
+  user-select: none;
+}
+
+.dvx-subagent-head {
   display: flex;
-  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
-  column-gap: 6px;
-  row-gap: 1px;
-  margin: 0 0 12px 20px;
-  padding-left: 10px;
-  border-left: 1px solid var(--dvx-border);
-  color: var(--dvx-muted);
-  font-size: 12px;
-  line-height: 18px;
+  gap: 8px;
+}
+
+.dvx-subagent-head::before {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: #a29c8c;
+  content: "";
+}
+
+/* The approved surface uses the header pip as its sole lifecycle
+   indicator; keep the existing DOM spinner inert to avoid two dots. */
+.dvx-subagent-row .dvx-subagent-spinner {
+  display: none;
+}
+
+.dvx-subagent-live .dvx-subagent-head::before {
+  background: #b9854d;
+  animation: dvx-subagent-pip-breathe-light 2.4s ease-in-out infinite;
+}
+
+@keyframes dvx-subagent-pip-breathe-light {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgb(185 133 77 / 20%);
+  }
+  50% {
+    box-shadow: 0 0 0 4.5px rgb(185 133 77 / 7%);
+  }
 }
 
 .dvx-subagent-label {
   min-width: 0;
+  flex: 1;
   overflow: hidden;
-  color: #4d4842;
-  font-weight: 500;
+  color: #2d2b25;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dvx-subagent-status {
+  flex: none;
+  color: #8d8778;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.dvx-subagent-live .dvx-subagent-status {
+  color: #a8763a;
 }
 
 .dvx-subagent-description {
   display: -webkit-box;
   overflow: hidden;
-  flex-basis: 100%;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  color: var(--dvx-muted);
+  color: #6f6a5c;
+  line-height: 17px;
+}
+
+.dvx-subagent-metrics {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  padding-top: 8px;
+  border-top: 1px solid #e7e2d2;
+  color: #4a463c;
+  font-variant-numeric: tabular-nums;
+}
+
+.dvx-subagent-metrics > span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.dvx-subagent-metric-label {
+  color: #a39d8d;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dvx-subagent-latest {
+  flex: 1;
+  overflow: hidden;
+  color: #676252;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-subagent-row {
+  border-color: rgb(228 216 192 / 10%);
+  background:
+    radial-gradient(
+      150% 120% at 10% 0%,
+      rgb(216 180 132 / 6%),
+      transparent 52%
+    ),
+    linear-gradient(180deg, #282720, #22211b);
+  box-shadow:
+    0 16px 34px -24px rgb(0 0 0 / 85%),
+    inset 0 1px 0 rgb(255 247 232 / 5%);
+  color: #b3ad9e;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-subagent-head::before {
+  background: #8f897b;
+}
+
+.dvx-shell[data-theme='dark']
+  .dvx-subagent-live
+  .dvx-subagent-head::before {
+  background: #d8a967;
+  animation-name: dvx-subagent-pip-breathe-dark;
+}
+
+@keyframes dvx-subagent-pip-breathe-dark {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgb(216 169 103 / 18%);
+  }
+  50% {
+    box-shadow: 0 0 0 4.5px rgb(216 169 103 / 6%);
+  }
+}
+
+.dvx-shell[data-theme='dark'] .dvx-subagent-label {
+  color: #ece7db;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-subagent-status {
+  color: #a39d8e;
+}
+
+.dvx-shell[data-theme='dark']
+  .dvx-subagent-live
+  .dvx-subagent-status {
+  color: #d3ab74;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-subagent-description {
+  color: #ada798;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-subagent-metrics {
+  border-top-color: rgb(228 216 192 / 8%);
+  color: #d8d2c2;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-subagent-metric-label {
+  color: #7e786a;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-subagent-latest {
+  color: #b3ad9e;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-subagent-live .dvx-subagent-head::before {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .dvx-subagent-row {
+    border-color: CanvasText;
+    background: Canvas;
+    box-shadow: none;
+    color: CanvasText;
+  }
+
+  .dvx-subagent-label,
+  .dvx-subagent-status,
+  .dvx-subagent-description,
+  .dvx-subagent-metrics,
+  .dvx-subagent-metric-label,
+  .dvx-subagent-latest {
+    color: CanvasText;
+  }
+
+  .dvx-subagent-head::before {
+    background: CanvasText;
+  }
+
+  .dvx-subagent-live .dvx-subagent-head::before {
+    background: Highlight;
+  }
 }
 
 .dvx-tool-summary code {
@@ -233,15 +428,16 @@
 /* Doubled class (plus :not for the title) out-ranks the later
    Claude-style flattening pass (`.dvx-activity-row { border: 0; … }`,
    `.dvx-activity-row summary { padding: 0; … }`) without !important. */
+/* Geometry follows Cursor (spec §3.4, 需求 9): radius 8, hairline
+   only — no card shadow — and a 28px collapsed header row. The warm
+   well tokens stay untouched (R4 拍板: 保暖调只抄几何). */
 .dvx-activity-row.dvx-command-card {
   overflow: visible;
   border: 1px solid var(--dvx-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--dvx-raised);
-  box-shadow:
-    0 1px 2px rgb(38 33 27 / 4%),
-    0 6px 18px -12px rgb(38 33 27 / 14%);
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  box-shadow: none;
+  transition: border-color 160ms ease;
 }
 
 .dvx-activity-row.dvx-command-card:hover {
@@ -249,13 +445,13 @@
 }
 
 .dvx-activity-row.dvx-command-card > summary {
-  min-height: 24px;
-  padding: 7px 10px 7px 12px;
-  border-radius: 9px;
+  min-height: 28px;
+  padding: 4px 10px 4px 12px;
+  border-radius: 7px;
 }
 
 .dvx-activity-row.dvx-command-card[open] > summary {
-  border-radius: 9px 9px 0 0;
+  border-radius: 7px 7px 0 0;
 }
 
 /* Scoped to settled rows so the running shimmer (which paints the
@@ -333,6 +529,16 @@
 .dvx-shell .dvx-activity-row:not(.dvx-command-card, .dvx-thinking-row) .dvx-tool-file:focus-visible {
   background: transparent;
   color: var(--dvx-ink);
+}
+
+.dvx-tool-file-stats {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 5px;
+  font-family: var(--dvx-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
 }
 
 /* State and duration: small subtle text; failures keep the danger

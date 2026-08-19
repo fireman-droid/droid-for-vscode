@@ -60,6 +60,25 @@ const webviewResult = await build({
   logLevel: 'info',
 });
 
+const sessionViewerResult = await build({
+  entryPoints: ['src/webview/sessionViewer/main.tsx'],
+  outfile: 'dist/webview/session-viewer.js',
+  bundle: true,
+  packages: 'bundle',
+  platform: 'browser',
+  format: 'iife',
+  target: 'es2022',
+  minify: true,
+  define: {
+    'process.env.NODE_ENV': '"production"',
+    __DVX_BUILD_ID__: JSON.stringify(buildId),
+  },
+  sourcemap: false,
+  legalComments: 'none',
+  metafile: true,
+  logLevel: 'info',
+});
+
 // Separate lazily loaded bundle: the webview injects it on demand the
 // first time a completed ```mermaid block needs rendering (script tag
 // carrying the page nonce), keeping mermaid out of the first-screen
@@ -93,13 +112,19 @@ assertExpectedExternals(webviewResult.metafile, {
   required: new Set(),
   allowed: () => false,
 });
+assertExpectedExternals(sessionViewerResult.metafile, {
+  required: new Set(),
+  allowed: () => false,
+});
 assertExpectedExternals(mermaidResult.metafile, {
   required: new Set(),
   allowed: () => false,
 });
 assertNoForbiddenWebviewInputs(webviewResult.metafile);
+assertNoForbiddenWebviewInputs(sessionViewerResult.metafile);
 assertNoForbiddenWebviewInputs(mermaidResult.metafile);
 assertMermaidStaysLazy(webviewResult.metafile);
+assertMermaidStaysLazy(sessionViewerResult.metafile);
 
 // The whole point of the separate bundle is boot performance; fail the
 // build if a future refactor statically imports mermaid into the

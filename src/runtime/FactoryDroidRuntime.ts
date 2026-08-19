@@ -65,6 +65,7 @@ import {
   type RuntimeSkillLocation,
 } from './DroidRuntime';
 import { isSafeModelId } from '../shared/validateMessage';
+import { DaemonAvailabilityError } from './daemon/daemonConnection';
 import { loadSessionCommands } from './commands/FactoryCommandCatalog';
 import {
   normalizeSdkEvent,
@@ -502,6 +503,25 @@ export class FactoryDroidRuntime implements DroidRuntime {
     } catch {
       throw new Error('Droid returned invalid session settings.');
     }
+  }
+
+  readMissionSettings(): import('./DroidRuntime').RuntimeMissionSettings | null {
+    const settings = this.requireSession().settings.missionSettings;
+    if (
+      settings === null ||
+      typeof settings !== 'object' ||
+      Array.isArray(settings) ||
+      !('skipScrutiny' in settings) ||
+      typeof settings.skipScrutiny !== 'boolean' ||
+      !('skipUserTesting' in settings) ||
+      typeof settings.skipUserTesting !== 'boolean'
+    ) {
+      return null;
+    }
+    return {
+      scrutinyEnabled: !settings.skipScrutiny,
+      userTestingEnabled: !settings.skipUserTesting,
+    };
   }
 
   async readContextWindow(): Promise<RuntimeContextWindow> {
@@ -1362,6 +1382,16 @@ export class FactoryDroidRuntime implements DroidRuntime {
         interactionHandler: this.interactionHandler,
       });
     } catch (error) {
+      if (error instanceof DaemonAvailabilityError) {
+        const [reason, message] = daemonInitializationFailure(error.reason);
+        this.recordInitializationFinished(
+          startedAt,
+          reason,
+          'error',
+          error,
+        );
+        return this.unavailable(reason, message);
+      }
       if (error instanceof InvalidSessionCwdError) {
         this.recordInitializationFinished(
           startedAt,
@@ -1532,6 +1562,37 @@ export class FactoryDroidRuntime implements DroidRuntime {
     } catch {
       // Diagnostics must never alter Runtime behavior.
     }
+  }
+}
+
+function daemonInitializationFailure(
+  reason: DaemonAvailabilityError['reason'],
+): [
+  Extract<RuntimeAvailability, { status: 'unavailable' }>['reason'],
+  string,
+] {
+  switch (reason) {
+    case 'not-logged-in':
+      return [
+        'daemon-not-logged-in',
+        'Sign in with the droid CLI, then retry the daemon connection.',
+      ];
+    case 'credentials-unreadable':
+      return [
+        'daemon-credentials-unreadable',
+        'DroidVisX could not read the current Droid CLI sign-in.',
+      ];
+    case 'refresh-failed':
+    case 'authentication-failed':
+      return [
+        'daemon-refresh-failed',
+        'The Droid CLI sign-in could not authenticate the local daemon.',
+      ];
+    case 'connect-failed':
+      return [
+        'daemon-unavailable',
+        'The local droid daemon could not be reached.',
+      ];
   }
 }
 

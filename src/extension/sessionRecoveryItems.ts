@@ -42,6 +42,7 @@ import {
   type ToolActivityUpdateKind,
 } from '../shared/toolActivity';
 import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
+import { isValidToolTarget } from '../shared/validateToolTarget';
 
 /**
  * Per-item validation for recovery checkpoints (extracted verbatim
@@ -273,8 +274,10 @@ function parseTool(
     !hasExactKeys(value, currentKeys, [
       'durationMs',
       'filePath',
+      'additionalFileCount',
       'detailKind',
       'detail',
+      'target',
       'errorMessage',
       'outputTail',
       'backgroundHint',
@@ -288,8 +291,12 @@ function parseTool(
   const toolUseId = dataValue(value, 'toolUseId');
   const toolName = dataValue(value, 'toolName');
   const filePath = legacy ? undefined : dataValue(value, 'filePath');
+  const additionalFileCount = legacy
+    ? undefined
+    : dataValue(value, 'additionalFileCount');
   const detailKind = legacy ? undefined : dataValue(value, 'detailKind');
   const detail = legacy ? undefined : dataValue(value, 'detail');
+  const target = legacy ? undefined : dataValue(value, 'target');
   const errorMessage = legacy
     ? undefined
     : dataValue(value, 'errorMessage');
@@ -338,9 +345,15 @@ function parseTool(
     (durationMs === undefined ||
       (Number.isSafeInteger(durationMs) && (durationMs as number) >= 0)) &&
     (filePath === undefined || isSafeWorkspaceRelativePath(filePath)) &&
+    (additionalFileCount === undefined ||
+      (filePath !== undefined &&
+        Number.isSafeInteger(additionalFileCount) &&
+        (additionalFileCount as number) > 0 &&
+        (additionalFileCount as number) < MAX_CHANGED_FILES_PER_TURN)) &&
     ((detailKind === undefined && detail === undefined) ||
       (isOneOf(detailKind, TOOL_DETAIL_KINDS) &&
         isNonEmptyBoundedString(detail, MAX_TOOL_DETAIL_LENGTH))) &&
+    isValidToolTarget(target) &&
     (errorMessage === undefined ||
       isNonEmptyBoundedString(
         errorMessage,
@@ -363,12 +376,18 @@ function parseTool(
         ...(filePath === undefined
           ? {}
           : { filePath: filePath as string }),
+        ...(additionalFileCount === undefined
+          ? {}
+          : {
+              additionalFileCount: additionalFileCount as number,
+            }),
         ...(detailKind === undefined
           ? {}
           : {
               detailKind: detailKind as ToolDetailKind,
               detail: detail as string,
             }),
+        ...(target === undefined ? {} : { target }),
         ...(errorMessage === undefined
           ? {}
           : { errorMessage: errorMessage as string }),

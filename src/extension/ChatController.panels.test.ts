@@ -238,6 +238,20 @@ describe('ChatController', () => {
       ],
       [
         new DaemonAvailabilityError(
+          'refresh-failed',
+          'refresh token auth-detail-must-not-leak',
+        ),
+        'The Droid CLI sign-in could not authenticate the local daemon. Sign in again, then retry.',
+      ],
+      [
+        new DaemonAvailabilityError(
+          'credentials-unreadable',
+          'keyring auth-detail-must-not-leak',
+        ),
+        'DroidVisX could not read the current Droid CLI sign-in.',
+      ],
+      [
+        new DaemonAvailabilityError(
           'connect-failed',
           'pipe path auth-detail-must-not-leak',
         ),

@@ -65,6 +65,7 @@ function readyState(
 ): Partial<GitCommitFlowState> {
   return {
     availability: 'available',
+    statusTurnId: 'turn-1',
     branch: 'main',
     files: FILES,
     ...overrides,
@@ -106,6 +107,18 @@ describe('ChangesCommitEntry', () => {
       'turn-0',
     );
     expect(onRequestStatus).not.toHaveBeenCalled();
+    expect(document.body.textContent).toBe('');
+  });
+
+  it('requests fresh status and hides stale commit state for a new turn', () => {
+    const { onRequestStatus } = renderEntry(
+      readyState({
+        statusTurnId: 'turn-old',
+        statusPending: true,
+        committedHash: 'deadbee',
+      }),
+    );
+    expect(onRequestStatus).toHaveBeenCalledWith('turn-1');
     expect(document.body.textContent).toBe('');
   });
 
@@ -241,11 +254,44 @@ describe('ChangesCommitEntry', () => {
     );
   });
 
-  it('shows an empty-state hint when there is nothing to commit', async () => {
-    await expandPanel({ files: [] });
+  it('restores the committed marker from git status after Reload', () => {
+    renderEntry(
+      readyState({
+        committedHash: 'abc1234',
+        files: [
+          {
+            path: 'notes.md',
+            status: 'untracked',
+            staged: false,
+            inTurn: false,
+          },
+        ],
+      }),
+    );
     expect(
-      screen.getByText('No uncommitted changes.'),
-    ).toBeDefined();
-    expect(screen.queryByRole('checkbox')).toBeNull();
+      screen.getByRole('status').textContent,
+    ).toBe('Committed abc1234');
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('does not reopen Commit for unrelated working-tree files', () => {
+    renderEntry(
+      readyState({
+        files: [
+          {
+            path: 'notes.md',
+            status: 'untracked',
+            staged: false,
+            inTurn: false,
+          },
+        ],
+      }),
+    );
+    expect(
+      screen.getByRole('status').textContent,
+    ).toBe('No pending turn changes');
+    expect(
+      screen.queryByRole('button', { name: 'Commit…' }),
+    ).toBeNull();
   });
 });

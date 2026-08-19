@@ -72,6 +72,9 @@ interface ParentFollowupSync {
 
 const parentFollowupSyncs = new WeakMap<object, ParentFollowupSync>();
 
+/** Watches whose ledger read already logged a failure (log dedupe). */
+const failedWatchReads = new WeakSet<object>();
+
 /**
  * Mid-turn ledger sync for background delegations (user report
  * 2026-08-13 evening: five parallel Task dispatches completed in ~5s
@@ -149,6 +152,18 @@ function armLiveSubagentTimer(
           state.key !== `${sessionId}:${turnId}`
         ) {
           return;
+        }
+        if (summaries === null) {
+          // The mid-turn ledger read failed outright; say so instead
+          // of silently looking like "no rows yet".
+          ctl.recordHost({
+            level: 'warn',
+            name: 'host.subagent.live-sync',
+            attributes: {
+              outcome: 'ledger-failed',
+              attempt: state.attempt,
+            },
+          });
         }
         const updated =
           summaries === null
@@ -383,6 +398,24 @@ export async function tickZombieSubagentWatch(
         sessionId: watch.sessionId,
       }).catch(() => null);
       if (
+        summaries === null &&
+        ctl.zombieSubagentWatch === watch &&
+        !ctl.disposed &&
+        !failedWatchReads.has(watch)
+      ) {
+        // Once per failure streak: a silently failing poll used to be
+        // indistinguishable from "nothing settled yet" (bug #37 notes).
+        failedWatchReads.add(watch);
+        ctl.recordHost({
+          level: 'warn',
+          name: 'host.subagent.zombie-watch',
+          attributes: {
+            outcome: 'ledger-failed',
+            sessionId: watch.sessionId,
+          },
+        });
+      }
+      if (
         summaries === null ||
         ctl.zombieSubagentWatch !== watch ||
         ctl.disposed ||
@@ -390,6 +423,7 @@ export async function tickZombieSubagentWatch(
       ) {
         return;
       }
+      failedWatchReads.delete(watch);
       const { settled, pending } = settleZombieSubagents(
         watch.rows,
         summaries,
@@ -553,6 +587,7 @@ async function syncParentFollowupHistory(
     const transcript = reconcileSessionHistory(
       loaded.state,
       ctl.transcript,
+      { preserveLocalTail: true },
     );
     visibleAnswerChanged =
       transcriptAssistantMarker(transcript.transcript) !==

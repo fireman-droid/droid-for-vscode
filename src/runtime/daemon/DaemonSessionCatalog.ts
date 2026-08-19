@@ -186,6 +186,10 @@ function hasWorkerSessionMetadata(
     parentSessionId !== undefined ||
     parentToolUseId !== undefined ||
     hasSubagentSessionTag(tags) ||
+    // Agent-team `droid exec` sessions stay out of the drawer (they
+    // belong to the team panel; resuming one risks a double-write
+    // against the external CLI process, 探索 #31).
+    tags?.some((tag) => tag.name === 'exec') === true ||
     tags?.some(
       (tag) =>
         tag.name === 'decompSessionType' &&
@@ -216,7 +220,7 @@ function projectSnippet(
   return null;
 }
 
-function belongsToWorkspace(
+export function belongsToWorkspace(
   workspaceCwd: string,
   rowCwd: string | undefined,
   rowRepoRoot: string | undefined,

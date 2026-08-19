@@ -1,6 +1,6 @@
 // UserMessage: moved verbatim from Thread.tsx (structure-only refactor).
 
-import { MessagePrimitive } from "@assistant-ui/react";
+import { MessagePrimitive, useAuiState } from "@assistant-ui/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
@@ -48,9 +48,9 @@ export function UserMessage({
   readonly messageId: string | null;
   readonly attachments: readonly SentAttachmentSummary[];
   /**
-   * Thin plan line(s) of the turn this message triggered, rendered
+   * The session's single latest plan line, when anchored here, rendered
    * directly under the question inside the same sticky block so the
-   * pin coordinator carries them (built in Thread from planAnchors).
+   * pin coordinator carries it (built in Thread from planAnchors).
    */
   readonly planLine?: ReactNode;
   readonly editing: boolean;
@@ -70,6 +70,7 @@ export function UserMessage({
   readonly onSubmitEdit: () => void;
   readonly onReopenEdit: (messageId: string) => void;
 }): React.JSX.Element {
+  const runtimeMessageId = useAuiState((state) => state.message.id);
   const [editText, setEditText] = useState(text);
   const [restoreFiles, setRestoreFiles] = useState(false);
   const [resending, setResending] = useState(false);
@@ -187,6 +188,9 @@ export function UserMessage({
     resendResetRef.current = setTimeout(() => setResending(false), 8000);
   };
   return (
+    <>
+    <span className="dvx-question-anchor" data-question-id={runtimeMessageId}
+      aria-hidden="true" />
     <MessagePrimitive.Root
       className={`dvx-message dvx-message-user${
         editing ? " dvx-message-editing" : ""
@@ -374,6 +378,7 @@ export function UserMessage({
       </div>
       {planLine}
     </MessagePrimitive.Root>
+    </>
   );
 }
 

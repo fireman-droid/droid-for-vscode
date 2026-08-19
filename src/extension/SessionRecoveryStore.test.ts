@@ -81,6 +81,8 @@ describe('SessionRecoveryStore', () => {
             progressCount: 0,
             latestUpdateKind: null,
             filePath: 'src/app.ts',
+            additionalFileCount: 2,
+            target: 'src/app.ts',
           },
           {
             id: 'changes-1',
@@ -103,6 +105,8 @@ describe('SessionRecoveryStore', () => {
         expect.objectContaining({
           kind: 'tool',
           filePath: 'src/app.ts',
+          additionalFileCount: 2,
+          target: 'src/app.ts',
         }),
         expect.objectContaining({
           kind: 'changes',
@@ -272,6 +276,20 @@ describe('SessionRecoveryStore', () => {
           progressCount: 0,
           latestUpdateKind: null,
           filePath: '../outside.ts',
+        },
+      ],
+      [
+        {
+          id: 'tool-1',
+          kind: 'tool',
+          turnId: 'turn-1',
+          toolUseId: 'use-1',
+          toolName: 'Grep',
+          action: 'Searched workspace content',
+          status: 'completed',
+          progressCount: 0,
+          latestUpdateKind: null,
+          target: 'line one\nline two',
         },
       ],
       [

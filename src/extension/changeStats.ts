@@ -2,7 +2,11 @@ import { execFile, spawn } from 'node:child_process';
 import { open } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { MAX_CHANGED_FILES_PER_TURN } from '../shared/bridgeMessages';
+import {
+  MAX_BRIDGE_ID_LENGTH,
+  MAX_CHANGED_FILES_PER_TURN,
+} from '../shared/bridgeMessages';
+import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
 import { toWorkspaceRelativePath } from '../runtime/toolFilePath';
 
 export interface FileChangeStat {
@@ -13,6 +17,22 @@ export interface FileChangeStat {
 export interface ChangeStatsScope {
   readonly sessionId: string;
   readonly turnId: string;
+}
+
+export interface CommittedTurnRecord {
+  readonly turnId: string;
+  readonly hash: string;
+  readonly paths: readonly string[];
+  readonly stats?: readonly CommittedFileStat[];
+}
+
+export interface CommittedFileStat extends FileChangeStat {
+  readonly path: string;
+}
+
+export interface ChangeStatsPersistence {
+  get<T>(key: string): T | undefined;
+  update(key: string, value: unknown): PromiseLike<void>;
 }
 
 /**
@@ -34,6 +54,15 @@ export interface ChangeStatsReader {
     scope: ChangeStatsScope,
     path: string,
   ): Promise<string | undefined>;
+  rememberCommittedTurn?(
+    scope: ChangeStatsScope,
+    hash: string,
+    paths: readonly string[],
+    stats?: readonly CommittedFileStat[],
+  ): Promise<void>;
+  readCommittedTurn?(
+    sessionId: string,
+  ): CommittedTurnRecord | undefined;
   dispose?(): void;
 }
 
@@ -49,6 +78,9 @@ const MAX_BASELINE_FILE_BYTES = 4 * 1024 * 1024;
 const MAX_BASELINE_BYTES = 16 * 1024 * 1024;
 const MAX_BASELINE_TURNS = 4;
 const BASELINE_DIFF_CONCURRENCY = 4;
+const COMMITTED_TURNS_STORAGE_KEY = 'droidvisx.committedTurns';
+const COMMITTED_TURNS_VERSION = 1;
+const MAX_COMMITTED_SESSIONS = 8;
 
 interface ChangeStatsDependencies {
   readonly readWorkspaceFile: (
@@ -127,6 +159,7 @@ function parseNumstatCounts(
 export function createGitChangeStatsReader(
   getWorkspaceRoot: () => string | undefined,
   overrides: Partial<ChangeStatsDependencies> = {},
+  persistence?: ChangeStatsPersistence,
 ): ChangeStatsReader {
   const dependencies: ChangeStatsDependencies = {
     readWorkspaceFile: readBoundedWorkspaceFile,
@@ -135,7 +168,22 @@ export function createGitChangeStatsReader(
     ...overrides,
   };
   const turns = new Map<string, TurnBaselines>();
+  const committedTurns = readCommittedTurns(persistence);
   let baselineBytes = 0;
+
+  const persistCommittedTurns = async (): Promise<void> => {
+    if (persistence === undefined) {
+      return;
+    }
+    await Promise.resolve(
+      persistence.update(COMMITTED_TURNS_STORAGE_KEY, {
+        version: COMMITTED_TURNS_VERSION,
+        sessions: [...committedTurns.entries()].map(
+          ([sessionId, record]) => ({ sessionId, ...record }),
+        ),
+      }),
+    ).catch(() => undefined);
+  };
 
   const evictOldestTurn = (preserveKey?: string): boolean => {
     for (const [key, turn] of turns) {
@@ -162,6 +210,11 @@ export function createGitChangeStatsReader(
 
   return {
     async captureTurnBaseline(scope, paths) {
+      const committed = committedTurns.get(scope.sessionId);
+      if (committed !== undefined && committed.turnId !== scope.turnId) {
+        committedTurns.delete(scope.sessionId);
+        await persistCommittedTurns();
+      }
       const key = scopeKey(scope);
       let turn = turns.get(key);
       if (turn === undefined) {
@@ -272,15 +325,174 @@ export function createGitChangeStatsReader(
     },
     async readTurnBaseline(scope, path) {
       const bytes = turns.get(scopeKey(scope))?.files.get(path);
-      return bytes === undefined || bytes.includes(0)
+      return bytes === undefined ||
+        (bytes.length > 0 && bytes.includes(0))
         ? undefined
         : bytes.toString('utf8');
     },
+    async rememberCommittedTurn(scope, hash, paths, stats) {
+      if (!/^[0-9a-f]{4,40}$/.test(hash) || paths.length === 0) {
+        return;
+      }
+      const committedPaths = [...new Set(paths)]
+        .filter(isSafeWorkspaceRelativePath)
+        .slice(0, MAX_CHANGED_FILES_PER_TURN);
+      if (committedPaths.length === 0) {
+        return;
+      }
+      const pathSet = new Set(committedPaths);
+      committedTurns.delete(scope.sessionId);
+      committedTurns.set(scope.sessionId, {
+        turnId: scope.turnId,
+        hash,
+        paths: committedPaths,
+        ...(stats === undefined
+          ? {}
+          : { stats: sanitizeCommittedStats(stats, pathSet) }),
+      });
+      while (committedTurns.size > MAX_COMMITTED_SESSIONS) {
+        const oldest = committedTurns.keys().next().value as
+          | string
+          | undefined;
+        if (oldest === undefined) {
+          break;
+        }
+        committedTurns.delete(oldest);
+      }
+      await persistCommittedTurns();
+    },
+    readCommittedTurn(sessionId) {
+      const record = committedTurns.get(sessionId);
+      return record === undefined
+        ? undefined
+        : {
+            ...record,
+            paths: [...record.paths],
+            ...(record.stats === undefined
+              ? {}
+              : { stats: record.stats.map((stat) => ({ ...stat })) }),
+          };
+    },
     dispose() {
       turns.clear();
+      committedTurns.clear();
       baselineBytes = 0;
     },
   };
+}
+
+function readCommittedTurns(
+  persistence: ChangeStatsPersistence | undefined,
+): Map<string, CommittedTurnRecord> {
+  const records = new Map<string, CommittedTurnRecord>();
+  const value = persistence?.get<unknown>(COMMITTED_TURNS_STORAGE_KEY);
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    (value as { version?: unknown }).version !== COMMITTED_TURNS_VERSION ||
+    !Array.isArray((value as { sessions?: unknown }).sessions)
+  ) {
+    return records;
+  }
+  for (const entry of (value as { sessions: unknown[] }).sessions.slice(
+    -MAX_COMMITTED_SESSIONS,
+  )) {
+    if (
+      typeof entry !== 'object' ||
+      entry === null ||
+      typeof (entry as { sessionId?: unknown }).sessionId !== 'string' ||
+      (entry as { sessionId: string }).sessionId.length === 0 ||
+      (entry as { sessionId: string }).sessionId.length >
+        MAX_BRIDGE_ID_LENGTH ||
+      typeof (entry as { turnId?: unknown }).turnId !== 'string' ||
+      (entry as { turnId: string }).turnId.length === 0 ||
+      (entry as { turnId: string }).turnId.length >
+        MAX_BRIDGE_ID_LENGTH ||
+      typeof (entry as { hash?: unknown }).hash !== 'string' ||
+      !/^[0-9a-f]{4,40}$/.test((entry as { hash: string }).hash) ||
+      !Array.isArray((entry as { paths?: unknown }).paths) ||
+      (entry as { paths: unknown[] }).paths.length === 0 ||
+      (entry as { paths: unknown[] }).paths.length >
+        MAX_CHANGED_FILES_PER_TURN ||
+      !(entry as { paths: unknown[] }).paths.every(
+        (path) => isSafeWorkspaceRelativePath(path),
+      )
+    ) {
+      continue;
+    }
+    const paths = [
+      ...new Set((entry as { paths: string[] }).paths),
+    ].slice(0, MAX_CHANGED_FILES_PER_TURN);
+    const rawStats = (entry as { stats?: unknown }).stats;
+    if (
+      rawStats !== undefined &&
+      (!Array.isArray(rawStats) ||
+        rawStats.length > MAX_CHANGED_FILES_PER_TURN)
+    ) {
+      continue;
+    }
+    const stats =
+      rawStats === undefined
+        ? undefined
+        : sanitizeCommittedStats(rawStats, new Set(paths));
+    if (
+      rawStats !== undefined &&
+      stats?.length !== rawStats.length
+    ) {
+      continue;
+    }
+    records.set((entry as { sessionId: string }).sessionId, {
+      turnId: (entry as { turnId: string }).turnId,
+      hash: (entry as { hash: string }).hash,
+      paths,
+      ...(stats === undefined ? {} : { stats }),
+    });
+  }
+  return records;
+}
+
+function sanitizeCommittedStats(
+  values: readonly unknown[],
+  paths: ReadonlySet<string>,
+): CommittedFileStat[] {
+  const stats: CommittedFileStat[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (
+      typeof value !== 'object' ||
+      value === null ||
+      typeof (value as { path?: unknown }).path !== 'string'
+    ) {
+      continue;
+    }
+    const candidate = value as {
+      path: string;
+      additions?: unknown;
+      deletions?: unknown;
+    };
+    if (
+      !paths.has(candidate.path) ||
+      seen.has(candidate.path) ||
+      !isNullableCount(candidate.additions) ||
+      !isNullableCount(candidate.deletions)
+    ) {
+      continue;
+    }
+    seen.add(candidate.path);
+    stats.push({
+      path: candidate.path,
+      additions: candidate.additions,
+      deletions: candidate.deletions,
+    });
+  }
+  return stats;
+}
+
+function isNullableCount(value: unknown): value is number | null {
+  return (
+    value === null ||
+    (Number.isSafeInteger(value) && (value as number) >= 0)
+  );
 }
 
 function scopeKey(scope: ChangeStatsScope): string {

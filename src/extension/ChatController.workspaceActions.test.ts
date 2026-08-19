@@ -166,6 +166,73 @@ describe('ChatController', () => {
     });
   });
 
+  it('uses the retained commit only for the latest Changes turn after Reload', async () => {
+    const openDiff = vi.fn(
+      async (): Promise<FileDiffOutcome> => 'opened-diff',
+    );
+    const changeStats = {
+      read: vi.fn(async () => new Map()),
+      readCommittedTurn: vi.fn(() => ({
+        turnId: 'live-turn-before-reload',
+        hash: 'abc1234',
+        paths: ['src/app.ts'],
+      })),
+    };
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      { openDiff },
+      changeStats,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+    controller.transcript = {
+      transcript: [
+        {
+          id: 'changes:history-turn',
+          kind: 'changes',
+          turnId: 'history-turn',
+          files: [
+            { path: 'src/app.ts', additions: null, deletions: null },
+          ],
+        },
+      ],
+      historyStatus: 'complete',
+      truncated: false,
+    };
+
+    controller.handleMessage({
+      type: 'file.openDiff',
+      sessionId: 'session-1',
+      turnId: 'history-turn',
+      path: 'src/app.ts',
+    });
+    await vi.waitFor(() => {
+      expect(openDiff).toHaveBeenCalledWith(
+        'src/app.ts',
+        { sessionId: 'session-1', turnId: 'history-turn' },
+        { committedRef: 'abc1234' },
+      );
+    });
+
+    controller.handleMessage({
+      type: 'file.openDiff',
+      sessionId: 'session-1',
+      turnId: 'older-turn',
+      path: 'src/app.ts',
+    });
+    await vi.waitFor(() => {
+      expect(openDiff).toHaveBeenLastCalledWith(
+        'src/app.ts',
+        { sessionId: 'session-1', turnId: 'older-turn' },
+      );
+    });
+  });
+
   it('words a missing file by turn state: still-writing vs moved-or-deleted', async () => {
     const openDiff = vi.fn(
       async (): Promise<FileDiffOutcome> => 'not-found',
@@ -445,6 +512,36 @@ describe('ChatController', () => {
         Awaited<ReturnType<GitWorkflow['commit']>>
       > => ({ ok: true, hash: 'abc1234' }),
     );
+    let committed:
+      | {
+          readonly turnId: string;
+          readonly hash: string;
+          readonly paths: readonly string[];
+          readonly stats?: readonly {
+            readonly path: string;
+            readonly additions: number | null;
+            readonly deletions: number | null;
+          }[];
+        }
+      | undefined;
+    const changeStats = {
+      read: vi.fn(async () => new Map()),
+      rememberCommittedTurn: vi.fn(
+        async (
+          scope: { sessionId: string; turnId: string },
+          hash: string,
+          paths: readonly string[],
+          stats?: readonly {
+            path: string;
+            additions: number | null;
+            deletions: number | null;
+          }[],
+        ) => {
+          committed = { turnId: scope.turnId, hash, paths, stats };
+        },
+      ),
+      readCommittedTurn: vi.fn(() => committed),
+    };
     const { controller, messages } = createController(
       () => createMockRuntime(),
       undefined,
@@ -453,7 +550,7 @@ describe('ChatController', () => {
       undefined,
       undefined,
       undefined,
-      undefined,
+      changeStats,
       undefined,
       undefined,
       undefined,
@@ -462,19 +559,38 @@ describe('ChatController', () => {
     );
     ready(controller);
     await waitForConnected(messages);
+    controller.transcript = {
+      transcript: [
+        {
+          id: 'changes:turn-a',
+          kind: 'changes',
+          turnId: 'turn-a',
+          files: [
+            { path: 'src/app.ts', additions: 1, deletions: 1 },
+          ],
+        },
+      ],
+      historyStatus: 'complete',
+      truncated: false,
+    };
 
     controller.handleMessage({
       type: 'git.requestStatus',
       sessionId: 'session-1',
+      turnId: 'turn-a',
     });
     await vi.waitFor(() => {
       expect(lastMessage(messages, 'git.status')).toMatchObject({
         sessionId: 'session-1',
+        turnId: 'turn-a',
         branch: 'main',
         files: [expect.objectContaining({ path: 'src/app.ts' })],
       });
     });
-    expect(status).toHaveBeenCalledWith('C:\\workspace', new Set());
+    expect(status).toHaveBeenCalledWith(
+      'C:\\workspace',
+      new Set(['src/app.ts']),
+    );
     expect(
       lastMessage(messages, 'git.status'),
     ).not.toHaveProperty('unavailableReason');
@@ -483,12 +599,14 @@ describe('ChatController', () => {
     controller.handleMessage({
       type: 'git.requestStatus',
       sessionId: 'session-other',
+      turnId: 'turn-a',
     });
     expect(status).toHaveBeenCalledOnce();
 
     controller.handleMessage({
       type: 'git.commit',
       sessionId: 'session-1',
+      turnId: 'turn-a',
       paths: ['src/app.ts'],
       message: 'feat: add app\n\nBody detail.',
     });
@@ -505,6 +623,34 @@ describe('ChatController', () => {
       ['src/app.ts'],
       'feat: add app\n\nBody detail.',
     );
+    expect(changeStats.rememberCommittedTurn).toHaveBeenCalledWith(
+      { sessionId: 'session-1', turnId: 'turn-a' },
+      'abc1234',
+      ['src/app.ts'],
+      [{ path: 'src/app.ts', additions: 1, deletions: 1 }],
+    );
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'git.status')).toMatchObject({
+        turnId: 'turn-a',
+        committedHash: 'abc1234',
+      });
+    });
+
+    controller.handleMessage({
+      type: 'git.commit',
+      sessionId: 'session-1',
+      turnId: 'turn-old',
+      paths: ['src/app.ts'],
+      message: 'feat: stale commit',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'git.commitResult')).toMatchObject({
+        ok: false,
+        error:
+          'The Changes turn is no longer current. Reopen Commit.',
+      });
+    });
+    expect(commit).toHaveBeenCalledOnce();
   });
 
   it('reports git unavailability and commit failures', async () => {
@@ -535,14 +681,30 @@ describe('ChatController', () => {
     );
     ready(controller);
     await waitForConnected(messages);
+    controller.transcript = {
+      transcript: [
+        {
+          id: 'changes:turn-a',
+          kind: 'changes',
+          turnId: 'turn-a',
+          files: [
+            { path: 'src/app.ts', additions: 1, deletions: 1 },
+          ],
+        },
+      ],
+      historyStatus: 'complete',
+      truncated: false,
+    };
 
     controller.handleMessage({
       type: 'git.requestStatus',
       sessionId: 'session-1',
+      turnId: 'turn-a',
     });
     await vi.waitFor(() => {
       expect(lastMessage(messages, 'git.status')).toMatchObject({
         sessionId: 'session-1',
+        turnId: 'turn-a',
         branch: null,
         files: [],
         unavailableReason: 'no-repository',
@@ -552,6 +714,7 @@ describe('ChatController', () => {
     controller.handleMessage({
       type: 'git.commit',
       sessionId: 'session-1',
+      turnId: 'turn-a',
       paths: ['src/app.ts'],
       message: 'feat: add app',
     });
@@ -561,6 +724,75 @@ describe('ChatController', () => {
         error: 'pre-commit hook rejected the commit',
       });
     });
+  });
+
+  it('persists a completed commit even when the controller was disposed', async () => {
+    const pending =
+      deferred<Awaited<ReturnType<GitWorkflow['commit']>>>();
+    const commit = vi.fn(() => pending.promise);
+    const rememberCommittedTurn = vi.fn(async () => undefined);
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        read: vi.fn(async () => new Map()),
+        rememberCommittedTurn,
+      },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        status: vi.fn(async () => ({
+          available: true as const,
+          branch: 'main',
+          files: [],
+        })),
+        commit,
+      },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+    controller.transcript = {
+      transcript: [
+        {
+          id: 'changes:turn-a',
+          kind: 'changes',
+          turnId: 'turn-a',
+          files: [
+            { path: 'src/app.ts', additions: 2, deletions: 1 },
+          ],
+        },
+      ],
+      historyStatus: 'complete',
+      truncated: false,
+    };
+
+    controller.handleMessage({
+      type: 'git.commit',
+      sessionId: 'session-1',
+      turnId: 'turn-a',
+      paths: ['src/app.ts'],
+      message: 'fix: durable commit',
+    });
+    await vi.waitFor(() => expect(commit).toHaveBeenCalledOnce());
+    controller.dispose();
+    pending.resolve({ ok: true, hash: 'abc1234' });
+
+    await vi.waitFor(() => {
+      expect(rememberCommittedTurn).toHaveBeenCalledWith(
+        { sessionId: 'session-1', turnId: 'turn-a' },
+        'abc1234',
+        ['src/app.ts'],
+        [{ path: 'src/app.ts', additions: 2, deletions: 1 }],
+      );
+    });
+    expect(lastMessage(messages, 'git.commitResult')).toBeUndefined();
   });
 
   it('degrades git requests to unavailable without an injected workflow', async () => {
@@ -573,6 +805,7 @@ describe('ChatController', () => {
     controller.handleMessage({
       type: 'git.requestStatus',
       sessionId: 'session-1',
+      turnId: 'turn-a',
     });
     await vi.waitFor(() => {
       expect(lastMessage(messages, 'git.status')).toMatchObject({

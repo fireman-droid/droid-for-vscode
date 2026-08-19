@@ -19,6 +19,7 @@ import {
 } from '../shared/toolActivity';
 import {
   isExecuteToolName,
+  stripTerminalNoise,
   toToolOutputTail,
 } from '../shared/toolOutput';
 import { base64ByteLength } from '../shared/transcriptLimits';
@@ -35,11 +36,16 @@ import {
   toWorkspaceRelativePath,
 } from './toolFilePath';
 import type { RuntimeEvent } from './runtimeEvents';
+import { normalizeMissionEvent } from './normalizeMissionEvent';
 
 export function normalizeSdkEvent(
   event: DroidStreamEvent,
   workspaceRoot?: string,
 ): RuntimeEvent | undefined {
+  const missionEvent = normalizeMissionEvent(event);
+  if (missionEvent !== undefined) {
+    return missionEvent;
+  }
   switch (event.type) {
     case 'assistant_text_delta':
       return event.text.length === 0
@@ -263,9 +269,10 @@ function extractImageBlocks(
 
 /**
  * Text excerpt from one tool_result's content: a plain string or the
- * text blocks of a block array, bounded to the bridge error-message
- * cap. Used only for failed results so the UI can show why the tool
- * failed (the history projection reuses this).
+ * text blocks of a block array, terminal noise (ANSI escapes,
+ * carriage-return overwrites) stripped, bounded to the bridge
+ * error-message cap. Used only for failed results so the UI can show
+ * why the tool failed (the history projection reuses this).
  */
 export function extractToolResultText(
   content: unknown,
@@ -287,7 +294,7 @@ export function extractToolResultText(
             .map((block) => block.text)
             .join('\n')
         : '';
-  const trimmed = text.trim();
+  const trimmed = stripTerminalNoise(text).trim();
   if (trimmed.length === 0) {
     return undefined;
   }

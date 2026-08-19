@@ -17,6 +17,7 @@ import {
   ACTIVITY_GROUP_KEY,
   activityGroupBy,
 } from "../activityGrouping";
+import { GitCommitFlowContext } from "../GitCommitPanel";
 import { DroidMarkdownText } from "../MarkdownText";
 import { MessageTimestamp } from "../MessageTimestamp";
 import { TranscriptImage } from "../TranscriptImage";
@@ -41,6 +42,12 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
   // The newest reply keeps its action bar quietly visible
   // (dvx-message-last); earlier ones reveal it on hover.
   const isLast = useAuiState((s) => s.message.isLast);
+  const messageId = useAuiState((s) => s.message.id);
+  const gitFlow = useContext(GitCommitFlowContext);
+  const includeChanges =
+    gitFlow?.latestChangesTurnId === null ||
+    gitFlow?.latestChangesTurnId === undefined ||
+    messageId !== `assistant-turn:${gitFlow.latestChangesTurnId}`;
   // Completion time stamped when the host/webview saw the turn end;
   // messages rebuilt from public CLI history carry none, and their
   // bar simply shows no age.
@@ -71,7 +78,7 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
       }`}
       aria-label="Droid"
     >
-      <AssistantMessageParts includeChanges />
+      <AssistantMessageParts includeChanges={includeChanges} />
       {replyTail ? (
         <ActionBarPrimitive.Root
           className={`dvx-assistant-actions${

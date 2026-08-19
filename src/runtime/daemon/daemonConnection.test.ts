@@ -6,22 +6,26 @@ import {
   DaemonAvailabilityError,
   openDaemonConnection,
 } from './daemonConnection';
-import type { readFactoryAccessCredential } from './factoryCredentials';
+import type { resolveFactoryAccessCredential } from './factoryTokenRefresh';
 
-type ReadCredential = typeof readFactoryAccessCredential;
+type ResolveCredential = typeof resolveFactoryAccessCredential;
 type Connect = typeof connectToDaemon;
 
 const ENDPOINT = { url: 'ws://127.0.0.1:41000' };
 
-function okCredential(token: string): ReturnType<ReadCredential> {
+function okCredential(token: string): Awaited<ReturnType<ResolveCredential>> {
   return {
     status: 'ok',
     credential: {
       token,
+      refreshToken: 'refresh',
       orgId: 'org-1',
       expiresAt: Date.now() + 60_000,
+      source: 'keyfile-v2',
+      file: 'auth.v2.file',
+      encryptionKey: Buffer.alloc(32),
     },
-  } as ReturnType<ReadCredential>;
+  };
 }
 
 function fakeDroid(): ConnectedDroid {
@@ -36,9 +40,9 @@ describe('openDaemonConnection', () => {
 
     await expect(
       openDaemonConnection(ENDPOINT, {
-        readCredential: (() => ({
+        resolveCredential: (async () => ({
           status: 'not-logged-in',
-        })) as unknown as ReadCredential,
+        })) as ResolveCredential,
         connect: connect as unknown as Connect,
       }),
     ).rejects.toMatchObject({
@@ -51,9 +55,9 @@ describe('openDaemonConnection', () => {
   it('classifies unreadable credentials as availability', async () => {
     await expect(
       openDaemonConnection(ENDPOINT, {
-        readCredential: (() => ({
+        resolveCredential: (async () => ({
           status: 'unreadable',
-        })) as unknown as ReadCredential,
+        })) as ResolveCredential,
         connect: vi.fn() as unknown as Connect,
       }),
     ).rejects.toMatchObject({ reason: 'credentials-unreadable' });
@@ -64,7 +68,7 @@ describe('openDaemonConnection', () => {
     const connect = vi.fn(async () => droid);
 
     const connection = await openDaemonConnection(ENDPOINT, {
-      readCredential: () => okCredential('jwt-token-value'),
+      resolveCredential: async () => okCredential('jwt-token-value'),
       connect: connect as unknown as Connect,
     });
 
@@ -82,7 +86,7 @@ describe('openDaemonConnection', () => {
 
   it('sanitizes connect failures into availability errors', async () => {
     const failure = openDaemonConnection(ENDPOINT, {
-      readCredential: () => okCredential('jwt-token-value'),
+      resolveCredential: async () => okCredential('jwt-token-value'),
       connect: (async () => {
         throw new Error('handshake with token jwt-token-value failed');
       }) as unknown as Connect,
@@ -109,7 +113,7 @@ describe('openDaemonConnection', () => {
     );
 
     const connection = await openDaemonConnection(ENDPOINT, {
-      readCredential: () => okCredential('jwt'),
+      resolveCredential: async () => okCredential('jwt'),
       connect: connect as unknown as Connect,
     });
 
@@ -121,7 +125,7 @@ describe('openDaemonConnection', () => {
   it('disconnects and reports failed after dispose', async () => {
     const droid = fakeDroid();
     const connection = await openDaemonConnection(ENDPOINT, {
-      readCredential: () => okCredential('jwt'),
+      resolveCredential: async () => okCredential('jwt'),
       connect: (async () => droid) as unknown as Connect,
     });
 
