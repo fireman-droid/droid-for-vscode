@@ -15,7 +15,7 @@ const ALLOWLIST = new Map(Object.entries({
   'src/webview/bridge/validateHostMessage.test.ts': 4707,
   'src/webview/bridge/validateHostMessage.ts': 3887,
   'src/webview/assistant/store.test.ts': 2486,
-  'src/runtime/FactoryDroidRuntime.test.ts': 2424,
+  'src/runtime/FactoryDroidRuntime.test.ts': 2404,
   'src/runtime/FactoryDroidRuntime.ts': 2288,
   'src/shared/bridgeMessages.ts': 2202,
   'src/webview/assistant/App.tsx': 1748,

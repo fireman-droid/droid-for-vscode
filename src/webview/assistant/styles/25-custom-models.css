@@ -1,9 +1,5 @@
-/* Full-page BYOK model manager + stand-alone provider/editor pages
-   (spec §6, 拍板 2026-08-15: pages replace the chat view; the old
-   in-popover panel is gone). Token-driven throughout so dark/auto
-   inherit via the token swap. Page chrome (head/body/footer) is
-   shared by ModelsPage and ModelProviderPage; the quiet form family
-   (28px inputs, radius 6, hairline → strong focus) is local here. */
+/* Full-page BYOK manager. Page chrome is shared; the quiet 28px form
+   family (radius 6, hairline → strong focus) is local here. */
 
 .dvx-models-page {
   display: flex;
@@ -14,8 +10,6 @@
   background: var(--dvx-surface);
 }
 
-/* Page crown: ~36px row with the quiet back affordance ("‹ Models"),
-   an optional 13px title, and right-aligned quiet actions. */
 .dvx-page-head {
   display: flex;
   align-items: center;
@@ -273,28 +267,46 @@
 .dvx-cm-edit-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+}
+
+.dvx-cm-section-test,
+.dvx-cm-edit-status {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--dvx-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-cm-section-test {
+  margin: -2px 0 8px;
 }
 
 .dvx-cm-edit-row {
-  display: grid;
-  grid-template-columns:
-    minmax(180px, 1.35fr)
-    minmax(150px, 1fr)
-    minmax(90px, 0.45fr)
-    auto
-    auto;
-  align-items: end;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  padding: 11px 12px;
+  padding: 12px 13px 11px;
   border: 1px solid var(--dvx-border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--dvx-raised);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--dvx-ink) 4%, transparent);
 }
 
-.dvx-cm-token-field {
-  min-width: 90px;
+.dvx-cm-edit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dvx-cm-edit-meta {
+  display: grid;
+  grid-template-columns: minmax(108px, 0.42fr) minmax(0, 1fr);
+  align-items: end;
+  gap: 12px;
 }
 
 .dvx-cm-inline-check {
@@ -303,12 +315,69 @@
   white-space: nowrap;
 }
 
+.dvx-cm-edit-foot {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--dvx-border) 85%, transparent);
+}
+
+.dvx-cm-edit-status {
+  flex: 1 1 auto;
+}
+
+.dvx-cm-edit-status-failed {
+  color: var(--dvx-danger);
+}
+
 .dvx-cm-inline-actions {
   display: flex;
-  min-height: 28px;
+  flex: none;
   align-items: center;
   justify-content: flex-end;
-  gap: 5px;
+  gap: 6px;
+}
+
+.dvx-cm-edit-btn {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--dvx-raised) 70%, var(--dvx-surface));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--dvx-ink) 4%, transparent);
+  color: var(--dvx-text-secondary);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 550;
+  transition:
+    color var(--dvx-duration-fast) ease,
+    border-color var(--dvx-duration-fast) ease,
+    background-color var(--dvx-duration-fast) ease;
+}
+
+.dvx-cm-edit-btn:hover:not(:disabled) {
+  color: var(--dvx-ink);
+  border-color: var(--dvx-border-strong);
+  background: var(--dvx-soft);
+}
+
+.dvx-cm-edit-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.dvx-cm-edit-btn-save {
+  color: var(--dvx-ink);
+}
+
+.dvx-cm-edit-btn-delete:hover:not(:disabled) {
+  color: var(--dvx-danger);
+  border-color: color-mix(in srgb, var(--dvx-danger) 35%, var(--dvx-border));
 }
 
 .dvx-cm-inline-catalog {
@@ -718,23 +787,5 @@
 
   .dvx-page-footer .dvx-page-primary {
     width: 100%;
-  }
-}
-
-@media (max-width: 760px) {
-  .dvx-cm-edit-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-
-  .dvx-cm-token-field,
-  .dvx-cm-inline-check,
-  .dvx-cm-inline-actions {
-    grid-column: auto;
-  }
-}
-
-@media (max-width: 520px) {
-  .dvx-cm-edit-row {
-    grid-template-columns: minmax(0, 1fr);
   }
 }

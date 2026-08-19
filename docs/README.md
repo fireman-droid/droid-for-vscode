@@ -47,6 +47,7 @@ docs/
 | `ui-cursor-spec` 不在这里 | 在 [`debug/ui-cursor-spec.md`](./debug/ui-cursor-spec.md) |
 | `spec-mission-design.md` / `slice-prep-spec-mode.md` | Spec Mode |
 | `queued-messages-design.md` | 发送队列（行为已有，设计可参考） |
+| `changes-ledger-git-snapshot-design.md` | Changes 账本改造（git 快照树为权威），未开工 |
 | `byok-add-model-design.md` | 自定义模型（段 D 会碰到） |
 | `subagent-transcript-playback-design.md` | 子代理转录（段 C 会碰到） |
 | `rich-content-design.md` / `slice-prep-canvas.md` | Canvas 仍待做 |

@@ -1,5 +1,4 @@
 import {
-  CUSTOM_MODEL_PROVIDERS,
   MAX_CUSTOM_MODEL_MASK_LENGTH,
   MAX_CUSTOM_MODEL_PROVIDER_LENGTH,
   MAX_CUSTOM_MODEL_URL_LENGTH,
@@ -13,25 +12,23 @@ import {
   type CustomModelsRefreshMessage,
   type CustomModelsState,
   type CustomModelsWebviewMessage,
-  type CustomModelProvider,
-  type ProviderModelsState,
-  type ProviderModelsWebviewMessage,
 } from '../../shared/customModelsProtocol';
 import { MAX_MODEL_CATALOG_ITEMS } from '../../shared/bridgeMessages';
+import { sameProviderEndpoint } from '../../shared/providerEndpoint';
 import { isSafeDisplayName, isSafeModelId } from '../../shared/validateMessage';
 import { startReplacement } from './runtimeLifecycle';
 import {
   ModelDiscoveryError,
   type CustomModelDiscoveryGateway,
 } from './modelDiscovery';
+import { handleProviderModels } from './providerModels';
 import {
   daemonFailureMessage,
   formatUnknownError,
   isTurnActive,
   type ChatControllerInternals,
 } from './internals';
-import { ProviderRegistry, type ProviderConnection } from './providerRegistry';
-import { testCustomModel } from './modelTesting';
+import { ProviderRegistry } from './providerRegistry';
 export const CUSTOM_MODELS_UNAVAILABLE_MESSAGE =
   'Custom models need the local droid daemon. Sign in with the droid CLI, then retry.';
 export const CUSTOM_MODELS_NOT_LOGGED_IN_MESSAGE =
@@ -121,230 +118,6 @@ export function dispatchCustomModels(
   } else {
     handleCustomModelsImport(ctl, message);
   }
-}
-function handleProviderModels(
-  ctl: CustomModelsHost,
-  message: ProviderModelsWebviewMessage,
-): void {
-  const dropReason = ctl.sessionRequestDropReason(message.sessionId);
-  if (dropReason !== null || ctl.providerRegistry === undefined) {
-    if (dropReason !== null) ctl.recordDroppedPanelRequest(message.type, dropReason);
-    return;
-  }
-  if (message.type === 'providerModels.refresh') {
-    refreshProviders(ctl, message.sessionId);
-    return;
-  }
-  if (message.type === 'providerModels.saveProvider') {
-    if (ctl.customModelsOp) return;
-    ctl.customModelsOp = true;
-    const apiKey = message.setApiKey === true
-      ? (ctl.promptProviderApiKey?.() ?? Promise.resolve(undefined))
-      : Promise.resolve(undefined);
-    void apiKey.then((key) => ctl.providerRegistry!.save({
-      displayName: message.displayName,
-      protocol: message.protocol,
-      rootUrl: message.rootUrl,
-      ...(key === undefined || key.length === 0 ? {} : { apiKey: key }),
-      ...(message.providerId === undefined ? {} : { id: message.providerId }),
-    })).then(
-      () => {
-        ctl.customModelsOp = false;
-        refreshProviders(ctl, message.sessionId);
-      },
-      () => {
-        ctl.customModelsOp = false;
-        emitProviderModels(ctl, message.sessionId, {
-          status: 'error', providers: [], message: 'Could not save this connection.',
-        });
-      },
-    );
-    return;
-  }
-  const provider = ctl.providerRegistry.get(message.providerId);
-  if (provider === null) {
-    const copy = 'This connection is no longer available. Refresh and retry.';
-    if (message.type === 'providerModels.fetch') {
-      emitCustomModelDiscovery(ctl, message.sessionId, { status: 'error', message: copy });
-    } else {
-      emitProviderModels(ctl, message.sessionId, { status: 'error', providers: [], message: copy });
-    }
-    return;
-  }
-  if (message.type === 'providerModels.fetch') {
-    void fetchProviderModels(ctl, message.sessionId, provider);
-    return;
-  }
-  if (message.type === 'providerModels.test') {
-    void testProviderModel(ctl, message.sessionId, provider, message.model);
-    return;
-  }
-  if (message.type === 'providerModels.testAll') {
-    void testAllProviderModels(ctl, message.sessionId, provider);
-    return;
-  }
-  const apiKey = ctl.providerRegistry.apiKey(provider.id);
-  void apiKey.then((key) => {
-    if (key === undefined) {
-      emitProviderModels(ctl, message.sessionId, {
-        status: 'error', providers: [], message: 'Add an API key to this connection before adding models.',
-      });
-      return;
-    }
-    if (message.type === 'providerModels.import') {
-      handleCustomModelsImport(ctl, {
-        type: 'customModels.import', sessionId: message.sessionId,
-        provider: provider.protocol, baseUrl: provider.apiBaseUrl, apiKey: key,
-        models: message.models, maxOutputTokens: message.maxOutputTokens,
-        noImageSupport: message.noImageSupport,
-      });
-      return;
-    }
-    handleCustomModelSave(ctl, {
-      type: 'customModels.save', sessionId: message.sessionId,
-      provider: provider.protocol, baseUrl: provider.apiBaseUrl, apiKey: key,
-      model: message.model,
-      ...(message.displayName === undefined ? {} : { displayName: message.displayName }),
-      ...(message.rawIndex === undefined ? {} : { rawIndex: message.rawIndex, expectedModel: message.expectedModel }),
-      maxOutputTokens: message.maxOutputTokens, noImageSupport: message.noImageSupport,
-    });
-  });
-}
-function refreshProviders(ctl: CustomModelsHost, sessionId: string): void {
-  const gateway = beginCustomModelsRequest(ctl, 'providerModels.refresh', sessionId);
-  if (gateway === null || ctl.providerRegistry === undefined) return;
-  ctl.customModelsOp = true;
-  emitProviderModels(ctl, sessionId, { status: 'loading', providers: [] });
-  void gateway().then((resource) => resource.list()).then(
-    async (models) => {
-      ctl.customModelsOp = false;
-      const configured = ctl.providerRegistry!.list();
-      const providers = await projectProviderConnections(
-        configured, models, ctl.providerRegistry!, ctl.providerTests,
-      );
-      emitProviderModels(ctl, sessionId, { status: 'ready', providers });
-      emitCustomModels(ctl, sessionId, { status: 'ready', items: projectCustomModelItems(models) });
-    },
-    () => {
-      ctl.customModelsOp = false;
-      emitProviderModels(ctl, sessionId, {
-        status: 'error', providers: [], message: CUSTOM_MODELS_LOAD_FAILED_MESSAGE,
-      });
-    },
-  );
-}
-async function fetchProviderModels(
-  ctl: CustomModelsHost, sessionId: string, provider: ProviderConnection,
-): Promise<void> {
-  if (ctl.customModelsOp || ctl.modelDiscovery === undefined || ctl.providerRegistry === undefined) return;
-  const key = await ctl.providerRegistry.apiKey(provider.id);
-  if (key === undefined) {
-    emitCustomModelDiscovery(ctl, sessionId, {
-      status: 'error', message: 'Add an API key to this connection before fetching models.',
-    });
-    return;
-  }
-  ctl.customModelsOp = true;
-  emitCustomModelDiscovery(ctl, sessionId, { status: 'loading' });
-  try {
-    const items = await ctl.modelDiscovery.discover(
-      { provider: provider.protocol, baseUrl: provider.apiBaseUrl, apiKey: key },
-    );
-    emitCustomModelDiscovery(ctl, sessionId, { status: 'ready', items });
-  } catch {
-    emitCustomModelDiscovery(ctl, sessionId, {
-      status: 'error', message: 'Could not fetch models from this connection.',
-    });
-  } finally {
-    ctl.customModelsOp = false;
-  }
-}
-async function testProviderModel(
-  ctl: CustomModelsHost, sessionId: string, provider: ProviderConnection, model: string,
-): Promise<void> {
-  if (ctl.providerRegistry === undefined || ctl.customModelsOp) return;
-  const key = await ctl.providerRegistry.apiKey(provider.id);
-  if (key === undefined) {
-    emitProviderModels(ctl, sessionId, {
-      status: 'error', providers: [], message: 'Add an API key to this connection before testing a model.',
-    });
-    return;
-  }
-  ctl.customModelsOp = true;
-  const result = await testCustomModel({
-    protocol: provider.protocol, baseUrl: provider.apiBaseUrl, apiKey: key, model,
-  });
-  ctl.providerTests.set(provider.id, result);
-  ctl.customModelsOp = false;
-  refreshProviders(ctl, sessionId);
-}
-async function testAllProviderModels(
-  ctl: CustomModelsHost, sessionId: string, provider: ProviderConnection,
-): Promise<void> {
-  if (ctl.providerRegistry === undefined || ctl.customModelsOp) return;
-  const key = await ctl.providerRegistry.apiKey(provider.id);
-  if (key === undefined || ctl.daemonCustomModels === undefined) return;
-  ctl.customModelsOp = true;
-  try {
-    const rows = await (await ctl.daemonCustomModels()).list();
-    const models = rows.filter((row) =>
-      row.provider === provider.protocol && row.baseUrl === provider.apiBaseUrl,
-    ).slice(0, 16);
-    let passed = 0;
-    let latencyMs = 0;
-    for (const row of models) {
-      const result = await testCustomModel({
-        protocol: provider.protocol, baseUrl: provider.apiBaseUrl, apiKey: key, model: row.model,
-      });
-      if (result.status === 'passed') passed += 1;
-      latencyMs += result.latencyMs;
-    }
-    ctl.providerTests.set(provider.id, {
-      status: passed === models.length ? 'passed' : 'failed',
-      summary: `${passed} of ${models.length} models replied.`,
-      latencyMs,
-    });
-  } finally {
-    ctl.customModelsOp = false;
-  }
-  refreshProviders(ctl, sessionId);
-}
-async function projectProviderConnections(
-  configured: readonly ProviderConnection[],
-  models: readonly DaemonCustomModelRow[],
-  registry: ProviderRegistry,
-  tests: ReadonlyMap<string, { readonly status: 'passed' | 'failed'; readonly summary: string; readonly latencyMs: number }>,
-): Promise<ProviderModelsState['providers']> {
-  const saved = await Promise.all(configured.slice(0, MAX_MODEL_CATALOG_ITEMS).map(async (provider) => ({
-    id: provider.id, displayName: provider.displayName, protocol: provider.protocol,
-    rootUrl: provider.rootUrl, apiBaseUrl: provider.apiBaseUrl,
-    hasApiKey: await registry.hasApiKey(provider.id), imported: false,
-    modelCount: models.filter((model) =>
-      model.provider === provider.protocol && model.baseUrl === provider.apiBaseUrl).length,
-    ...(tests.has(provider.id) ? { latestTest: tests.get(provider.id)! } : {}),
-  })));
-  const claimed = new Set(saved.map((provider) => `${provider.protocol}\u0000${provider.apiBaseUrl}`));
-  for (const row of models) {
-    if (
-      saved.length >= MAX_MODEL_CATALOG_ITEMS ||
-      !(CUSTOM_MODEL_PROVIDERS as readonly string[]).includes(row.provider) ||
-      row.baseUrl === undefined ||
-      claimed.has(`${row.provider}\u0000${row.baseUrl}`)
-    ) continue;
-    claimed.add(`${row.provider}\u0000${row.baseUrl}`);
-    saved.push({
-      id: `imported:${saved.length}`, displayName: 'Imported connection',
-      protocol: row.provider as CustomModelProvider, rootUrl: row.baseUrl, apiBaseUrl: row.baseUrl,
-      hasApiKey: false, imported: true,
-      modelCount: models.filter((model) => model.provider === row.provider && model.baseUrl === row.baseUrl).length,
-    });
-  }
-  return saved;
-}
-function emitProviderModels(
-  ctl: CustomModelsHost, sessionId: string, providers: ProviderModelsState,
-): void {
-  ctl.emit({ type: 'providerModels.state', sessionId, providers });
 }
 export function handleCustomModelsRefresh(
   ctl: CustomModelsHost,
@@ -784,8 +557,7 @@ function isSameCustomModelGroup(
         row.apiKeyMask.endsWith(incomingKey.slice(-4));
   return (
     row.provider === message.provider &&
-    row.baseUrl?.replace(/\/+$/u, '') ===
-      message.baseUrl.replace(/\/+$/u, '') &&
+    sameProviderEndpoint(row.baseUrl, message.baseUrl) &&
     (row.maxOutputTokens ?? null) === message.maxOutputTokens &&
     (row.noImageSupport === true) === message.noImageSupport &&
     credentialMatches

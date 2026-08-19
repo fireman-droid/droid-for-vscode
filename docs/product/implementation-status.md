@@ -2195,6 +2195,13 @@ UI 描述见 §22 重做记录。
 - [修复，2026-08-18] 空 fetch 结果保留 Provider 列表状态并提供
   「Add model manually」恢复入口；无已存 API key 时禁用 fetch；从
   Provider editor 返回列表会同时刷新连接与模型状态。
+- [修复，2026-08-19] Domain root 原样写入 `settings.json` `baseUrl`，
+  不再由 Host 拼接 `/v1`（Droid 自己拼接）。Imported connection 的
+  Test / Test all 会真正发 1-token 探测，结果画在模型卡片上；卡片改为
+  堆叠字段 + 底栏按钮。
+- [修复，2026-08-19] Composer 待发送图片点击进入 lightbox；已发送用户
+  消息点图不再打开编辑变成 `image.png` 文件卡，同样走预览。关掉预览
+  时吞掉穿透点击，避免闪白误开编辑；文件附件改为与图片同款方框。
 
 - [x] Custom Models 的创建、编辑和删除（Provider 三选 +
       `generic-chat-completion-api`；Bedrock/高级字段只读提示；
@@ -3672,6 +3679,27 @@ UI 描述见 §22 重做记录。
   不再依赖重新打开会话后的组件重建。聚焦 Mermaid/Markdown 测试
   **34/34**、三段 typecheck 与 `lint:budgets` 通过。
 
+### 90. Context Meter 归一化与会话内下限（2026-08-19，v0.7.59）
+
+- 用户实测两个症状（Ring 显示 0%、面板显示 “Current window
+  unavailable”）已定位到同一分子语义：`runtime.context.finished` 诊断
+  显示同一会话在 129465 → 304 → 126387 → 73 之间跳变，并在打断回合和
+  resume 长会话后判为 `invalid-last-call`。Droid 把 Session Title 之类
+  的小型辅助调用也计入同一 last-call 通道。
+- 修复：小数估计值改为四舍五入而不是判为非法（与 `getContextStats`
+  既有的 `Math.round` 一致）；超出 Budget 的 last-call 夹到 100% 而不是
+  整块降级；`projectContextWindow` 接受同一 session id 内已确认的分子
+  下限，辅助调用不再把窗口打回 0%。Rewind/Compact/Fork 都会换新
+  session id，下限随之归零。`unavailable` 诊断新增被拒绝的原始
+  `budget`/`lastCall` 值。
+- 验证：新增 `src/runtime/contextWindow.test.ts` **13/13**，
+  FactoryDroidRuntime **57/57**、createDaemonDroidSession **29/29**、
+  三段 typecheck 与 `lint:budgets` 通过（该测试文件 ratchet 由 2424
+  降到 2404）。live daemon 探针
+  `artifacts/probe-context-breakdown-live.mjs` 因本机 daemon 拒绝探针
+  凭据（CLI credential 与 env API key 都是 `authentication-failed`）未
+  取到原始字段，改由上述诊断在真机 UI 中收口。
+
 ### Session Settings、Context 与模型选择
 
 - 读取并显示真实 Interaction Mode、Model、Reasoning Effort 和 Autonomy
@@ -3681,8 +3709,9 @@ UI 描述见 §22 重做记录。
   `getContextStats().limit` 为分母，Daemon 以 `contextBudget` 为分母
 - `getContextStats().used/remaining`、Breakdown `usedTokens/freeTokens`
   和 Category Sum 都是累计/诊断统计，永不进入 Ring 或百分比
-- 缺失、非法或超过 Budget 的 last-call 数据显式显示
-  “Current window unavailable”，不会显示估计 Bar 或泄漏累计值
+- last-call 分子按会话取已确认上限（辅助小调用不下拉窗口），小数四舍
+  五入，超 Budget 夹到 100%；只有缺失或非数值 last-call、非法 Budget
+  才显示 “Current window unavailable”，且永不泄漏累计值
 - Context 刷新失败时保留最后一次已确认数值并提供 Retry；加载期间的重复
   Refresh 会被合并，失败提示指向 `DroidVisX Logs`
 - 使用公开初始化/加载响应及公开 SDK Schema 捕获真实 `availableModels`

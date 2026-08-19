@@ -44,6 +44,9 @@
 | --- | --- | --- | --- | --- |
 | 36 | 久对话恢复差：长会话恢复后内容大量缺失，实时卡片信息（终端输出、耗时、changes 行数、diagnostic 卡）丢失 | — | **代码已落地、未打包装机**（工作区，目标 v0.7.28）。`reconcileSessionHistory` 按锚点合并 recovered 富态（outputTail / durationMs / changes ±行 / diagnostic）；thinking 按 1/8 权重记账。详见 [handover-2026-08-15.md](./handover-2026-08-15.md)。原根因：预算裁剪把 43MB 会话裁成 141 行 + 对账整段丢弃富态 | 部分（代码未装包） |
 | 37 | 切换会话慢：常态 5–8s，最差 14.6s 才可用 | — | **代码已落地、未打包装机**。`DaemonSessionHistoryLoader` 走 daemon `getMessages` 分页，消灭 ~5s spawn 税；`replaceRuntime` 检查点先行渲染；子代理轮询不再 spawn。`runtime.initialize`（1.6–9s）仍是 CLI 侧瓶颈。详见交接文档 | 部分（代码未装包） |
+| 39 | 模型写入 Droid JSON 会把 Domain root 拼上 `/v1`；Edit connection 上 Test / Test all 点了没反应 | [image/edit-connection-models.png](./image/edit-connection-models.png)、[image/model-card-test.png](./image/model-card-test.png) | 写入改为只存 typed root（Droid 自己拼接协议路径）。Imported connection 现在能在 Host 上解析；Test 走真实 1-token 推理并把结果画在卡片上。**待装包验收** | 待实机验收 |
+| 41 | 聊天区待发送图片无法点击预览；发出后点击会变成 image.png 文件卡 | [image/composer-image-preview.png](./image/composer-image-preview.png) | Composer 缩略图可开 lightbox；发出后点图不再进入编辑变成文件卡，而是预览。**待装包验收** | 待实机验收 |
+| 42 | 已发送消息点开预览后再点别处会闪白；文件附件仍是长条芯片而非图片同款方框 | [image/composer-image-preview.png](./image/composer-image-preview.png) | 关掉预览时吞掉穿透点击，避免误开编辑；文件改为 48px 方框，点击同样预览。 | 待实机验收 |
 
 ---
 
@@ -51,7 +54,7 @@
 
 | 编号 | 去向 |
 | --- | --- |
-| 10 / 20、11、12、19、22 / 27、23、24、26、30、33、34 | [style-refactor.md](./style-refactor.md) |
+| 10 / 20、11、12、19、22 / 27、23、24、26、30、33、34、40 | [style-refactor.md](./style-refactor.md) |
 | 16、31 | [explore-subagent.md](./explore-subagent.md) |
 | 21、25、28 | [feature-extend.md](./feature-extend.md) |
 | 6 | 已删除（shared daemon 已确认修复） |

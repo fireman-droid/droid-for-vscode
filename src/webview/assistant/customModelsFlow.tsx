@@ -64,8 +64,8 @@ export const CUSTOM_MODEL_PROVIDER_LABELS: Record<
 };
 
 export const PROVIDER_DEFAULT_URLS: Record<CustomModelProvider, string> = {
-  anthropic: 'https://api.anthropic.com/v1',
-  openai: 'https://api.openai.com/v1',
+  anthropic: 'https://api.anthropic.com',
+  openai: 'https://api.openai.com',
   'generic-chat-completion-api': '',
 };
 

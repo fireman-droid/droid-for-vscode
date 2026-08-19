@@ -4,7 +4,7 @@
 // 2026-08-13): list returns masked rows, upsert/delete answer with
 // the fresh models array, and stale expectedModel guards reject with
 // "Custom models changed on disk; refresh and try again".
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createController,
@@ -40,7 +40,9 @@ import {
 import type {
   CustomModelsDiscoveryStateMessage,
   CustomModelsStateMessage,
+  ProviderModelsStateMessage,
 } from '../shared/customModelsProtocol';
+import type { ProviderRegistry } from './chat/providerRegistry';
 import { resetSessionMetadata } from './chat/runtimeLifecycle';
 
 /** One masked row exactly as the probe captured it. */
@@ -876,3 +878,170 @@ describe('projectCustomModelItems', () => {
     });
   });
 });
+
+describe('provider model writes and tests', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('upserts the typed domain root without concatenating /v1', async () => {
+    const gateway = createGateway();
+    const { host } = await connectedHost({ gateway });
+    const provider = {
+      id: 'provider-a',
+      displayName: 'Imported connection',
+      protocol: 'anthropic' as const,
+      rootUrl: 'http://38.47.121.18:8080',
+      apiBaseUrl: 'http://38.47.121.18:8080/v1',
+    };
+    host.providerRegistry = {
+      get: () => provider,
+      list: () => [provider],
+      apiKey: async () => 'sk-test-key',
+      hasApiKey: async () => true,
+      save: async () => provider,
+      delete: async () => {},
+    } as unknown as ProviderRegistry;
+
+    dispatchCustomModels(host, {
+      type: 'providerModels.saveModel',
+      sessionId: 'session-1',
+      providerId: 'provider-a',
+      model: 'claude-sonnet-5',
+      displayName: 'Claude Sonnet 5',
+      maxOutputTokens: 16384,
+      noImageSupport: false,
+    });
+    await vi.waitFor(() => {
+      expect(gateway.upsert).toHaveBeenCalled();
+    });
+    expect(gateway.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'claude-sonnet-5',
+        provider: 'anthropic',
+        baseUrl: 'http://38.47.121.18:8080',
+      }),
+    );
+    expect(String(gateway.upsert.mock.calls[0]?.[0]?.baseUrl)).not.toContain(
+      '/v1',
+    );
+  });
+
+  it('tests an imported connection and keeps the result on the editor card', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({ content: [{ type: 'text', text: 'OK' }] }),
+      ),
+    );
+    const gateway = createGateway();
+    gateway.list.mockResolvedValue([
+      probeRow({
+        provider: 'anthropic',
+        model: 'claude-sonnet-5',
+        displayName: 'Claude Sonnet 5',
+        baseUrl: 'http://38.47.121.18:8080',
+      }),
+    ]);
+    const { host, messages } = await connectedHost({ gateway });
+    host.providerRegistry = {
+      get: () => null,
+      list: () => [],
+      apiKey: async () => undefined,
+      hasApiKey: async () => false,
+      save: async () => {
+        throw new Error('imported connections are not in the registry');
+      },
+      delete: async () => {},
+    } as unknown as ProviderRegistry;
+    host.promptProviderApiKey = async () => 'prompted-key';
+
+    dispatchCustomModels(host, {
+      type: 'providerModels.refresh',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(latestProviders(messages)?.[0]?.id).toBe('imported:0');
+    });
+
+    dispatchCustomModels(host, {
+      type: 'providerModels.test',
+      sessionId: 'session-1',
+      providerId: 'imported:0',
+      model: 'claude-sonnet-5',
+    });
+    await vi.waitFor(() => {
+      expect(latestProviders(messages)?.[0]?.modelTests).toEqual([
+        expect.objectContaining({
+          model: 'claude-sonnet-5',
+          status: 'passed',
+        }),
+      ]);
+    });
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]?.toString()).toBe(
+      'http://38.47.121.18:8080/v1/messages',
+    );
+  });
+
+  it('tests every daemon model on the connection even when /v1 was stored', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({ content: [{ type: 'text', text: 'OK' }] }),
+      ),
+    );
+    const gateway = createGateway();
+    gateway.list.mockResolvedValue([
+      probeRow({
+        rawIndex: 0,
+        provider: 'anthropic',
+        model: 'claude-sonnet-5',
+        baseUrl: 'http://38.47.121.18:8080',
+      }),
+      probeRow({
+        rawIndex: 1,
+        provider: 'anthropic',
+        model: 'claude-opus-5',
+        baseUrl: 'http://38.47.121.18:8080',
+      }),
+    ]);
+    const { host, messages } = await connectedHost({ gateway });
+    const provider = {
+      id: 'provider-a',
+      displayName: 'Gateway',
+      protocol: 'anthropic' as const,
+      rootUrl: 'http://38.47.121.18:8080',
+      apiBaseUrl: 'http://38.47.121.18:8080/v1',
+    };
+    host.providerRegistry = {
+      get: () => provider,
+      list: () => [provider],
+      apiKey: async () => 'sk-test-key',
+      hasApiKey: async () => true,
+      save: async () => provider,
+      delete: async () => {},
+    } as unknown as ProviderRegistry;
+
+    dispatchCustomModels(host, {
+      type: 'providerModels.testAll',
+      sessionId: 'session-1',
+      providerId: 'provider-a',
+    });
+    await vi.waitFor(() => {
+      expect(latestProviders(messages)?.[0]?.latestTest).toMatchObject({
+        status: 'passed',
+        summary: '2 of 2 models replied.',
+      });
+    });
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+  });
+});
+
+function latestProviders(
+  messages: readonly unknown[],
+): ProviderModelsStateMessage['providers']['providers'] | undefined {
+  const last = providerMessages(messages).at(-1) as
+    | ProviderModelsStateMessage
+    | undefined;
+  return last?.providers.providers;
+}

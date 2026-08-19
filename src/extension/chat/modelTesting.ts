@@ -1,4 +1,5 @@
 import type { CustomModelProvider } from '../../shared/customModelsProtocol';
+import { resolveHttpApiBase } from '../../shared/providerEndpoint';
 
 const TIMEOUT_MS = 12_000;
 const MAX_RESPONSE_BYTES = 8_192;
@@ -27,7 +28,7 @@ export async function testCustomModel(
     const anthropic = request.protocol === 'anthropic';
     const url = new URL(
       anthropic ? 'messages' : 'chat/completions',
-      `${request.baseUrl.replace(/\/+$/u, '')}/`,
+      `${resolveHttpApiBase(request.protocol, request.baseUrl).replace(/\/+$/u, '')}/`,
     );
     const body = anthropic
       ? { model: request.model, max_tokens: 1, messages: [{ role: 'user', content: 'Reply with OK.' }] }

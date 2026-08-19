@@ -233,6 +233,8 @@
   background: rgb(0 0 0 / 65%);
   cursor: zoom-out;
   touch-action: none;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Sized to its natural resolution on load and centered via negative
@@ -341,6 +343,47 @@
   border-radius: 6px;
   background: var(--dvx-raised);
   box-shadow: 0 12px 40px rgb(0 0 0 / 30%);
+}
+
+.dvx-file-preview {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  box-sizing: border-box;
+  min-width: 168px;
+  max-width: min(420px, calc(100% - 48px));
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 20px 16px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 12px;
+  background: var(--dvx-raised);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 35%);
+  color: var(--dvx-ink);
+  cursor: default;
+  transform: translate(-50%, -50%);
+}
+
+.dvx-file-preview svg {
+  width: 28px;
+  height: 28px;
+  color: var(--dvx-muted);
+}
+
+.dvx-file-preview-name {
+  overflow-wrap: anywhere;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 18px;
+}
+
+.dvx-file-preview-meta {
+  color: var(--dvx-muted);
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .dvx-pending {

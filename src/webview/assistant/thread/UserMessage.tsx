@@ -5,7 +5,6 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
   MAX_TURN_TEXT_LENGTH,
-  type EditAttachmentSummary,
   type EditResendRejectReason,
   type SentAttachmentSummary,
 } from "../../../shared/bridgeMessages";
@@ -17,7 +16,7 @@ import type {
   RewindFileInfo,
   UserEditorEnv,
 } from "../Thread";
-import { ATTACHMENT_KIND_LABELS } from "./Composer";
+import { EditAttachmentChip, SentAttachmentChip } from "./AttachmentChip";
 import { SendIcon } from "./icons";
 
 export const EDIT_REJECT_COPY: Record<EditResendRejectReason, string> = {
@@ -129,10 +128,20 @@ export function UserMessage({
         return;
       }
       if (
+        event.target instanceof Element &&
+        event.target.closest(".dvx-image-lightbox") !== null
+      ) {
+        return;
+      }
+      if (
         card.querySelector(".dvx-composer-popover") !== null &&
         card.querySelector("[data-popover-closing]") === null
       ) {
         return;
+      }
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && card.contains(active)) {
+        active.blur();
       }
       onCancelEdit();
     };
@@ -201,6 +210,9 @@ export function UserMessage({
         {editing ? (
           <div className="dvx-user-edit" ref={editCardRef}>
             <div className="dvx-user-edit-card">
+              <div className="dvx-user-edit-images">
+                <UserMessageImages />
+              </div>
               <textarea
                 className="dvx-user-edit-input"
                 aria-label="Edit message and resend"
@@ -218,12 +230,16 @@ export function UserMessage({
                   }
                 }}
               />
-              {stagedAttachments.length > 0 ? (
+              {stagedAttachments.some(
+                (attachment) => attachment.kind !== "image",
+              ) ? (
                 <div
                   className="dvx-user-edit-attachments"
                   aria-label="Attachments to resend"
                 >
-                  {stagedAttachments.map((attachment) => (
+                  {stagedAttachments
+                    .filter((attachment) => attachment.kind !== "image")
+                    .map((attachment) => (
                     <EditAttachmentChip
                       key={attachment.id}
                       attachment={attachment}
@@ -350,27 +366,19 @@ export function UserMessage({
             }
           >
             <UserMessageParts />
-            {attachments.length > 0 ? (
+            {attachments.some((attachment) => attachment.kind !== "image") ? (
               <div
                 className="dvx-user-sent-attachments"
                 aria-label="Attachments sent with this message"
               >
-                {attachments.map((attachment, index) => (
-                  <span
-                    key={`${attachment.name}-${index}`}
-                    className="dvx-attachment-chip dvx-attachment-sent"
-                  >
-                    <span className="dvx-attachment-kind">
-                      {ATTACHMENT_KIND_LABELS[attachment.kind]}
-                    </span>
-                    <span
-                      className="dvx-attachment-name"
-                      title={attachment.name}
-                    >
-                      {attachment.name}
-                    </span>
-                  </span>
-                ))}
+                {attachments
+                  .filter((attachment) => attachment.kind !== "image")
+                  .map((attachment, index) => (
+                    <SentAttachmentChip
+                      key={`${attachment.name}-${index}`}
+                      attachment={attachment}
+                    />
+                  ))}
               </div>
             ) : null}
           </div>
@@ -398,6 +406,18 @@ export function ReadOnlyUserMessage(): React.JSX.Element {
   );
 }
 
+function UserMessageImages(): React.JSX.Element {
+  return (
+    <MessagePrimitive.Parts>
+      {({ part }) =>
+        part.type === "data" && part.name === "droid-image" ? (
+          <TranscriptImage data={part.data} />
+        ) : null
+      }
+    </MessagePrimitive.Parts>
+  );
+}
+
 function UserMessageParts(): React.JSX.Element {
   return (
     <MessagePrimitive.Parts>
@@ -409,42 +429,5 @@ function UserMessageParts(): React.JSX.Element {
         ) : null
       }
     </MessagePrimitive.Parts>
-  );
-}
-
-export function EditAttachmentChip({
-  attachment,
-  onRemove,
-}: {
-  readonly attachment: EditAttachmentSummary;
-  readonly onRemove: (attachmentId: string) => void;
-}): React.JSX.Element {
-  return (
-    <span
-      className={`dvx-attachment-chip${
-        attachment.restorable ? "" : " dvx-attachment-unrestorable"
-      }`}
-    >
-      <span className="dvx-attachment-kind">
-        {ATTACHMENT_KIND_LABELS[attachment.kind]}
-      </span>
-      <span className="dvx-attachment-name" title={attachment.name}>
-        {attachment.name}
-      </span>
-      {attachment.truncated ? (
-        <span className="dvx-attachment-truncated">truncated</span>
-      ) : null}
-      {attachment.restorable ? null : (
-        <span className="dvx-attachment-readd">re-add to include</span>
-      )}
-      <button
-        type="button"
-        className="dvx-attachment-remove"
-        aria-label={`Remove attachment ${attachment.name}`}
-        onClick={() => onRemove(attachment.id)}
-      >
-        ×
-      </button>
-    </span>
   );
 }

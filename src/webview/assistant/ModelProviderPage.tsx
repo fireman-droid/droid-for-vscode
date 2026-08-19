@@ -224,7 +224,7 @@ export function ModelProviderPage({
               type="text"
               value={baseUrl}
               maxLength={MAX_CUSTOM_MODEL_URL_LENGTH}
-              placeholder="e.g. http://localhost:11434/v1"
+              placeholder="e.g. http://localhost:11434"
               autoComplete="off"
               spellCheck={false}
               onKeyDown={fetchOnEnter}
@@ -507,7 +507,7 @@ export function ModelEditorPage({
           />
           <label className="dvx-cm-field">
             <span className="dvx-cm-field-label">Base URL *</span>
-            <input className="dvx-cm-input" type="text" placeholder="e.g. http://localhost:11434/v1"
+            <input className="dvx-cm-input" type="text" placeholder="e.g. http://localhost:11434"
               value={baseUrl} maxLength={MAX_CUSTOM_MODEL_URL_LENGTH} autoComplete="off" spellCheck={false}
               onChange={(event) => setBaseUrl(event.currentTarget.value)} onKeyDown={submitOnEnter} />
           </label>

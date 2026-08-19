@@ -333,17 +333,14 @@ function adaptDaemonSession(
         session.id,
       );
       const lastCall = breakdown.lastCallCompactionTokens;
+      // Range and rounding belong to projectContextWindow, which owns
+      // the same normalization for both runtime modes.
       return {
         limit: breakdown.contextBudget,
         lastCallTokenUsage:
           lastCall === undefined
             ? { status: 'missing' }
-            : Number.isSafeInteger(lastCall) && lastCall >= 0
-              ? {
-                  status: 'available',
-                  used: lastCall,
-                }
-              : { status: 'invalid' },
+            : { status: 'available', used: lastCall },
       };
     },
     async rewind(params) {

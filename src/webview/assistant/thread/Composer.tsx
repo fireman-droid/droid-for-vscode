@@ -30,7 +30,8 @@ import {
   type SkillsPanelState,
 } from "../ComposerControls";
 import { ComposerPopup } from "../ComposerPopup";
-import { getImagePreview, rememberImagePreview } from "../imagePreviewCache";
+import { rememberImagePreview } from "../imagePreviewCache";
+import { AttachmentChip } from "./AttachmentChip";
 import {
   CANVAS_REQUEST_TEMPLATE,
   SLASH_NAV_COMMANDS,
@@ -1104,68 +1105,8 @@ export function Composer({
   );
 }
 
-export const ATTACHMENT_KIND_LABELS: Record<AttachmentSummary["kind"], string> = {
-  image: "Image",
-  pdf: "PDF",
-  text: "File",
-  editor: "Editor",
-  selection: "Selection",
-};
+export { ATTACHMENT_KIND_LABELS, AttachmentChip } from "./AttachmentChip";
 
-export function AttachmentChip({
-  attachment,
-  onRemove,
-}: {
-  readonly attachment: AttachmentSummary;
-  readonly onRemove: (attachmentId: string) => void;
-}): React.JSX.Element {
-  const preview =
-    attachment.kind === "image"
-      ? getImagePreview(attachment.name, attachment.sizeBytes)
-      : undefined;
-  if (preview !== undefined) {
-    return (
-      <span className="dvx-attachment-thumb" title={attachment.name}>
-        <img
-          className="dvx-attachment-thumb-image"
-          src={preview}
-          alt={attachment.name}
-        />
-        <button
-          type="button"
-          className="dvx-attachment-thumb-remove"
-          aria-label={`Remove attachment ${attachment.name}`}
-          onClick={() => onRemove(attachment.id)}
-        >
-          ×
-        </button>
-      </span>
-    );
-  }
-  return (
-    <span className="dvx-attachment-chip">
-      <span className="dvx-attachment-kind">
-        {ATTACHMENT_KIND_LABELS[attachment.kind]}
-      </span>
-      <span className="dvx-attachment-name" title={attachment.name}>
-        {attachment.name}
-      </span>
-      {attachment.truncated ? (
-        <span className="dvx-attachment-truncated">truncated</span>
-      ) : null}
-      <button
-        type="button"
-        className="dvx-attachment-remove"
-        aria-label={`Remove attachment ${attachment.name}`}
-        onClick={() => onRemove(attachment.id)}
-      >
-        ×
-      </button>
-    </span>
-  );
-}
-
-/** Original file-size cap for one image attachment (host mirror). */
 export const MAX_ATTACHMENT_IMAGE_BYTES = 4 * 1024 * 1024;
 
 export function isImageMediaType(value: string): value is ImageMediaType {

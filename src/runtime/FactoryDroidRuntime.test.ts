@@ -964,37 +964,21 @@ describe('FactoryDroidRuntime', () => {
       },
     });
   });
-  it.each([
-    {
-      lastCallTokenUsage: { status: 'missing' as const },
-      reason: 'no-last-call',
-    },
-    {
-      lastCallTokenUsage: { status: 'invalid' as const },
-      reason: 'invalid-last-call',
-    },
-    {
-      lastCallTokenUsage: {
-        status: 'available' as const,
-        used: 101,
-      },
-      reason: 'invalid-last-call',
-    },
-  ])('fails closed for unavailable last-call data', async ({
-    lastCallTokenUsage,
-    reason,
-  }) => {
+  // Numerator normalization itself is covered in contextWindow.test.ts.
+  it('holds the confirmed window across a small auxiliary call', async () => {
     const session = createMockSession(async function* () {});
-    session.readContextWindowSource.mockResolvedValue({
-      limit: 100,
-      lastCallTokenUsage,
+    const source = (used: number) => ({
+      limit: 1000,
+      lastCallTokenUsage: { status: 'available' as const, used },
     });
+    session.readContextWindowSource.mockResolvedValue(source(800));
     const runtime = createRuntime(async () => session);
     await runtime.initialize('C:\\workspace');
+    await runtime.readContextWindow();
+    session.readContextWindowSource.mockResolvedValue(source(73));
 
-    await expect(runtime.readContextWindow()).resolves.toEqual({
-      availability: 'unavailable',
-      reason,
+    await expect(runtime.readContextWindow()).resolves.toMatchObject({
+      used: 800,
     });
   });
   it('projects only BYOK models from the real startup catalog', async () => {
@@ -1111,6 +1095,8 @@ describe('FactoryDroidRuntime', () => {
         durationMs: expect.any(Number),
         outcome: 'unavailable',
         reason: 'invalid-budget',
+        budget: -1,
+        lastCall: 0,
       },
     });
     await expect(

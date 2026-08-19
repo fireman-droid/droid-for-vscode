@@ -32,6 +32,7 @@
 | 34a | 按钮多一个方框 | [image/按钮.png](./image/按钮.png) | — | 未做 |
 | 34b | plan 选择模式太素、卡通感不对味 | [image/plan选择.png](./image/plan选择.png) | 按轻奢重做；**先静态稿**再实现 | 未做 |
 | 34c | 计划卡片缺 padding、过于单调 | [image/计划卡片.png](./image/计划卡片.png) | 补 padding + 完整质感；**先静态稿**再实现 | 未做 |
+| 40 | Edit connection 模型卡片布局丑：五列挤、按钮纯文字、Max tokens 与 checkbox 不对齐 | [image/model-card-test.png](./image/model-card-test.png) | 改为字段堆叠 + 底栏实体按钮 + 测试状态。**待装包验收** | 待实机验收 |
 
 ---
 
@@ -48,7 +49,7 @@
 
 | 编号 | 去向 |
 | --- | --- |
-| 行为类 1–5、7–9、13–15、17–18、29、32、35 | [bug.md](./bug.md) |
+| 行为类 1–5、7–9、13–15、17–18、29、32、35、39 | [bug.md](./bug.md) |
 | 16、31 | [explore-subagent.md](./explore-subagent.md) |
 | 21、25、28 | [feature-extend.md](./feature-extend.md) |
 

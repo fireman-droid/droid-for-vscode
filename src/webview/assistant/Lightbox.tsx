@@ -38,6 +38,25 @@ function clampZoom(scale: number): number {
 }
 
 /**
+ * Close a body-portaled overlay without letting the same pointer
+ * fall through to the transcript (which would flash the edit card
+ * or native textarea).
+ */
+export function dismissOverlay(onClose: () => void): void {
+  const swallow = (event: Event): void => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  document.addEventListener('pointerup', swallow, true);
+  document.addEventListener('click', swallow, true);
+  window.setTimeout(() => {
+    document.removeEventListener('pointerup', swallow, true);
+    document.removeEventListener('click', swallow, true);
+  }, 0);
+  onClose();
+}
+
+/**
  * Full-viewport media viewer shared by transcript images and mermaid
  * diagrams: wheel (and touchpad pinch via ctrl+wheel) zooms anchored
  * at the cursor, dragging pans once magnified past fit, double-click
@@ -68,6 +87,17 @@ export function MediaLightbox({
   const [zoomPercent, setZoomPercent] = useState<number | null>(null);
   const [pannable, setPannable] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const closedRef = useRef(false);
+
+  const closeFromBackdrop = (event: ReactMouseEvent): void => {
+    if (event.target !== event.currentTarget || closedRef.current) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    closedRef.current = true;
+    dismissOverlay(onClose);
+  };
 
   const applyView = useCallback((animate = false): void => {
     const stage = stageRef.current;
@@ -220,7 +250,8 @@ export function MediaLightbox({
       role="dialog"
       aria-modal="true"
       aria-label={label}
-      onClick={onClose}
+      onPointerDown={closeFromBackdrop}
+      onClick={closeFromBackdrop}
     >
       <div
         ref={stageRef}

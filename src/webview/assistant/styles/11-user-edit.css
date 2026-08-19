@@ -30,7 +30,7 @@
   width: 100%;
   padding: 2px 2px 4px;
   border: none;
-  background: transparent;
+  background: var(--dvx-raised);
   color: var(--dvx-ink);
   font: inherit;
   font-size: 13px;
@@ -169,24 +169,28 @@
 /* Same form as the composer's pending thumbs
    (.dvx-attachment-thumb-image): 48px cover crop, 7px radius; the
    existing click-to-lightbox affordance stays. */
-.dvx-user-block .dvx-transcript-image {
+.dvx-user-block .dvx-transcript-image,
+.dvx-user-edit .dvx-transcript-image {
   margin: 0;
 }
 
-.dvx-user-block .dvx-image-thumb-button {
+.dvx-user-block .dvx-image-thumb-button,
+.dvx-user-edit .dvx-image-thumb-button {
   border-radius: 7px;
   transition: border-color 120ms ease;
 }
 
-.dvx-user-block .dvx-image-thumb-button:hover {
+.dvx-user-block .dvx-image-thumb-button:hover,
+.dvx-user-edit .dvx-image-thumb-button:hover {
   border-color: var(--dvx-border-strong);
 }
 
-.dvx-user-block .dvx-image-thumb {
+.dvx-user-block .dvx-image-thumb,
+.dvx-user-edit .dvx-image-thumb {
   width: 48px;
   height: 48px;
   object-fit: cover;
-  background: #f6f2ea;
+  background: var(--dvx-code);
 }
 
 .dvx-user-text {
@@ -245,7 +249,14 @@
   gap: 6px;
 }
 
-.dvx-attachment-unrestorable {
+.dvx-user-edit-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dvx-attachment-unrestorable .dvx-attachment-thumb-file,
+.dvx-attachment-unrestorable .dvx-attachment-thumb-image {
   border-style: dashed;
   opacity: 0.65;
 }

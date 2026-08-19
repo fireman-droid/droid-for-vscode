@@ -51,6 +51,17 @@ describe('provider custom-model protocol', () => {
           hasApiKey: true,
           imported: false,
           modelCount: 2,
+          latestTest: {
+            status: 'passed',
+            summary: '2 of 2 models replied.',
+            latencyMs: 80,
+          },
+          modelTests: [{
+            model: 'claude-sonnet-5',
+            status: 'passed',
+            summary: 'OK',
+            latencyMs: 40,
+          }],
         }],
       },
     })?.providers.status).toBe('ready');

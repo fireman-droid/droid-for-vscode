@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TranscriptImage } from './TranscriptImage';
 
@@ -77,6 +77,38 @@ describe('TranscriptImage', () => {
     ).toBeDefined();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('does not bubble the enlarge click to a wrapping editor surface', () => {
+    const onOuter = vi.fn();
+    render(
+      <button type="button" onClick={onOuter}>
+        <TranscriptImage data={imageData} />
+      </button>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Enlarge image/ }));
+    expect(onOuter).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Image preview' })).toBeDefined();
+  });
+
+  it('closes from the backdrop without clicking through to the transcript', () => {
+    const onOuter = vi.fn();
+    render(
+      <button type="button" onClick={onOuter}>
+        <TranscriptImage data={imageData} />
+      </button>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Enlarge image/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Image preview' });
+    fireEvent.pointerDown(dialog);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const leaked = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(leaked);
+    expect(leaked.defaultPrevented).toBe(true);
+    expect(onOuter).not.toHaveBeenCalled();
   });
 
   it('closes from the close button without bubbling to the backdrop', async () => {

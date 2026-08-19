@@ -193,8 +193,8 @@ export interface CustomModelsDiscoveryStateMessage {
  * Provider-owned management state. API keys never occur here: the Host
  * projects presence only and reads the SecretStorage value just-in-time.
  */
-import type { ProviderConnectionSummary, ProviderModelsState, ProviderModelsStateMessage, ProviderModelsRefreshMessage, ProviderSaveMessage, ProviderModelsFetchMessage, ProviderModelSaveMessage, ProviderModelImportMessage, ProviderModelTestMessage, ProviderModelsTestAllMessage, ProviderModelsWebviewMessage } from "./providerModelsProtocol";
-export type { ProviderConnectionSummary, ProviderModelsState, ProviderModelsStateMessage, ProviderModelsRefreshMessage, ProviderSaveMessage, ProviderModelsFetchMessage, ProviderModelSaveMessage, ProviderModelImportMessage, ProviderModelTestMessage, ProviderModelsTestAllMessage, ProviderModelsWebviewMessage } from "./providerModelsProtocol";
+import type { ProviderConnectionSummary, ProviderModelTestResult, ProviderModelsState, ProviderModelsStateMessage, ProviderModelsRefreshMessage, ProviderSaveMessage, ProviderModelsFetchMessage, ProviderModelSaveMessage, ProviderModelImportMessage, ProviderModelTestMessage, ProviderModelsTestAllMessage, ProviderModelsWebviewMessage } from "./providerModelsProtocol";
+export type { ProviderConnectionSummary, ProviderModelTestResult, ProviderModelsState, ProviderModelsStateMessage, ProviderModelsRefreshMessage, ProviderSaveMessage, ProviderModelsFetchMessage, ProviderModelSaveMessage, ProviderModelImportMessage, ProviderModelTestMessage, ProviderModelsTestAllMessage, ProviderModelsWebviewMessage } from "./providerModelsProtocol";
 import {
   parseProviderModelsStateMessage,
   parseProviderModelsWebviewMessage,

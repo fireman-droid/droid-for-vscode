@@ -365,6 +365,36 @@ describe('createDaemonDroidSession', () => {
     );
   });
 
+  it('rounds fractional daemon last-call estimates', async () => {
+    const mock = createDroidMock();
+    mock.sessions.getContextBreakdown.mockResolvedValueOnce({
+      modelId: 'model-1',
+      modelDisplayName: 'Model 1',
+      contextBudget: 100000,
+      lastCallCompactionTokens: 24999.6,
+      usedTokens: 40000.4,
+      freeTokens: 59999.6,
+      categories: [],
+      skills: [],
+      mcpServers: [],
+      droids: [],
+    });
+    const runtime = new FactoryDroidRuntime({
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      createSdkSession: createDaemonSessionFactory(
+        async () => mock.droid,
+      ),
+    });
+    await runtime.initialize('C:\\workspace');
+
+    await expect(runtime.readContextWindow()).resolves.toEqual({
+      availability: 'available',
+      used: 25000,
+      remaining: 75000,
+      limit: 100000,
+    });
+  });
+
   it('fails closed when daemon last-call usage is missing', async () => {
     const mock = createDroidMock();
     mock.sessions.getContextBreakdown.mockResolvedValueOnce({

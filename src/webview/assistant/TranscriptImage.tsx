@@ -94,7 +94,10 @@ export function TranscriptImage({
         className="dvx-image-thumb-button"
         title="Click to enlarge"
         aria-label={`Enlarge image (${formatBytes(image.byteLength)})`}
-        onClick={() => setExpanded(true)}
+        onClick={(event) => {
+          event.stopPropagation();
+          setExpanded(true);
+        }}
       >
         <img
           className="dvx-image-thumb"
@@ -121,7 +124,7 @@ export function TranscriptImage({
  * reports its natural resolution on load so `scale` reads directly as
  * a zoom percentage.
  */
-function ImageLightbox({
+export function ImageLightbox({
   src,
   onClose,
 }: {

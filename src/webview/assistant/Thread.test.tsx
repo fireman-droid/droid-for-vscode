@@ -967,7 +967,7 @@ describe('AttachmentChip', () => {
     truncated: false,
   };
 
-  it('renders a thumbnail when the webview staged the image bytes', () => {
+  it('renders a thumbnail that opens the image preview', async () => {
     rememberImagePreview(
       'shot.png',
       3,
@@ -979,6 +979,8 @@ describe('AttachmentChip', () => {
     expect(image.getAttribute('src')).toBe(
       'data:image/png;base64,aW1n',
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Preview shot.png' }));
+    expect(screen.getByRole('dialog', { name: 'Image preview' })).toBeDefined();
     fireEvent.click(
       screen.getByRole('button', {
         name: 'Remove attachment shot.png',
@@ -987,11 +989,33 @@ describe('AttachmentChip', () => {
     expect(onRemove).toHaveBeenCalledWith('attachment-1');
   });
 
-  it('falls back to the labeled chip without cached bytes', () => {
+  it('renders a square file tile without cached image bytes', () => {
     render(<AttachmentChip attachment={summary} onRemove={vi.fn()} />);
     expect(screen.queryByRole('img')).toBeNull();
-    expect(screen.getByText('Image')).toBeDefined();
+    expect(screen.getByText('PNG')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview shot.png' }));
+    expect(screen.getByRole('dialog', { name: 'File preview' })).toBeDefined();
     expect(screen.getByText('shot.png')).toBeDefined();
+  });
+
+  it('renders non-image attachments as the same square tile', () => {
+    render(
+      <AttachmentChip
+        attachment={{
+          id: 'file-1',
+          kind: 'text',
+          name: 'notes.md',
+          sizeBytes: 128,
+          truncated: false,
+        }}
+        onRemove={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText('File')).toBeNull();
+    expect(screen.getByText('MD')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview notes.md' }));
+    expect(screen.getByRole('dialog', { name: 'File preview' })).toBeDefined();
+    expect(screen.getByText('notes.md')).toBeDefined();
   });
 });
 

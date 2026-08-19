@@ -271,7 +271,7 @@ Spec 态由 Composer placeholder（"Describe what to plan…"）与 Mode 触发�
 
 ### 9.5 Context 用量与 Compact
 
-Context 圆环打开用量面板：**只使用 Provider 报告的最新调用用量对模型 Budget 形成当前窗口比例**；Process 从公开 Load/Notification 的 `lastCallTokenUsage` 投影 `input + cacheRead + output`，Daemon 使用公开 `lastCallCompactionTokens`。累计 `used/free` 只属于 Token ledger，永不进入圆环。缺失、非法或超 Budget 时显示 "Current window unavailable"（fail-closed）；刷新失败保留最后确认值并提供 Retry。面板底部 "Compact conversation" 触发会话压缩（§7）。
+Context 圆环打开用量面板：**只使用 Provider 报告的最新调用用量对模型 Budget 形成当前窗口比例**；Process 从公开 Load/Notification 的 `lastCallTokenUsage` 投影 `input + cacheRead + output`，Daemon 使用公开 `lastCallCompactionTokens`。累计 `used/free` 只属于 Token ledger，永不进入圆环。分子按会话取已确认上限（Session Title 等小型辅助调用不会把窗口拉回 0%），小数估计四舍五入，超 Budget 夹到 100%；只有缺失或非数值 last-call、非法 Budget 才显示 "Current window unavailable"（fail-closed）。刷新失败保留最后确认值并提供 Retry。面板底部 "Compact conversation" 触发会话压缩（§7）。
 *当前限制（部分完成）*：Context 分类明细尚未完成语义确认。
 
 ### 9.6 Token 用量

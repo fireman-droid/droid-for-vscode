@@ -3,6 +3,12 @@ import { MAX_BRIDGE_ID_LENGTH } from "./interactionProtocol";
 import { hasExactKeys, isStrictRecord as isRecord } from "./strictValidation";
 import { CUSTOM_MODEL_PROVIDERS, MAX_CUSTOM_MODEL_IMPORT_ITEMS, MAX_CUSTOM_MODEL_OUTPUT_TOKENS, MAX_CUSTOM_MODELS_MESSAGE_LENGTH, isCustomModelBaseUrl, isSafeText, type CustomModelProvider, type DiscoveredCustomModel } from "./customModelsProtocol";
 
+export interface ProviderModelTestResult {
+  readonly model: string;
+  readonly status: 'passed' | 'failed';
+  readonly summary: string;
+  readonly latencyMs: number;
+}
 export interface ProviderConnectionSummary {
   readonly id: string;
   readonly displayName: string;
@@ -17,6 +23,7 @@ export interface ProviderConnectionSummary {
     readonly summary: string;
     readonly latencyMs: number;
   };
+  readonly modelTests?: readonly ProviderModelTestResult[];
 }
 export type ProviderModelsState =
   | { readonly status: 'loading'; readonly providers: readonly ProviderConnectionSummary[] }
@@ -236,23 +243,54 @@ export function parseProviderModelsWebviewMessage(
     ...(value.rawIndex === undefined ? {} : { rawIndex: value.rawIndex, expectedModel: value.expectedModel }),
   };
 }
+function parseTestResult(value: unknown): ProviderModelTestResult | null {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ['status', 'summary', 'latencyMs'], ['model']) ||
+    (value.status !== 'passed' && value.status !== 'failed') ||
+    !isStateMessageText(value.summary) ||
+    !Number.isSafeInteger(value.latencyMs) ||
+    (value.latencyMs as number) < 0 ||
+    (value.latencyMs as number) > 120_000
+  ) {
+    return null;
+  }
+  if (value.model !== undefined && !isSafeText(value.model, MAX_MODEL_ID_LENGTH)) {
+    return null;
+  }
+  return value as unknown as ProviderModelTestResult;
+}
 function parseProviderSummary(value: unknown): ProviderConnectionSummary | null {
   if (!isRecord(value) || !hasExactKeys(value,
     ['id', 'displayName', 'protocol', 'rootUrl', 'apiBaseUrl', 'hasApiKey', 'imported', 'modelCount'],
-    ['latestTest']) ||
+    ['latestTest', 'modelTests']) ||
     !parseProviderId(value.id) || !isSafeText(value.displayName, 80) ||
     !isProvider(value.protocol) || !isCustomModelBaseUrl(value.rootUrl) ||
     !isCustomModelBaseUrl(value.apiBaseUrl) || typeof value.hasApiKey !== 'boolean' ||
     typeof value.imported !== 'boolean' ||
     !Number.isSafeInteger(value.modelCount) || (value.modelCount as number) < 0 ||
     (value.modelCount as number) > MAX_MODEL_CATALOG_ITEMS) return null;
-  if (value.latestTest !== undefined) {
-    if (!isRecord(value.latestTest) || !hasExactKeys(value.latestTest, ['status', 'summary', 'latencyMs']) ||
-      (value.latestTest.status !== 'passed' && value.latestTest.status !== 'failed') ||
-      !isStateMessageText(value.latestTest.summary) ||
-      !Number.isSafeInteger(value.latestTest.latencyMs) ||
-      (value.latestTest.latencyMs as number) < 0 ||
-      (value.latestTest.latencyMs as number) > 120_000) return null;
+  if (value.latestTest !== undefined && parseTestResult(value.latestTest) === null) {
+    return null;
+  }
+  if (value.modelTests !== undefined) {
+    if (
+      !Array.isArray(value.modelTests) ||
+      value.modelTests.length === 0 ||
+      value.modelTests.length > MAX_MODEL_CATALOG_ITEMS
+    ) {
+      return null;
+    }
+    const modelTests = value.modelTests.map((row) => {
+      if (!isRecord(row) || !isSafeText(row.model, MAX_MODEL_ID_LENGTH)) {
+        return null;
+      }
+      const parsed = parseTestResult(row);
+      return parsed === null ? null : { ...parsed, model: row.model };
+    });
+    if (modelTests.some((row) => row === null)) {
+      return null;
+    }
   }
   return value as unknown as ProviderConnectionSummary;
 }

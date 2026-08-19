@@ -249,7 +249,7 @@ const previewApi = {
         displayName: message.displayName,
         protocol: message.protocol,
         rootUrl: message.rootUrl,
-        apiBaseUrl: `${message.rootUrl.replace(/\/+$/u, '')}/v1`,
+        apiBaseUrl: message.rootUrl.replace(/\/+$/u, ''),
         hasApiKey: message.setApiKey === true || previous?.hasApiKey === true,
         imported: false,
         modelCount: previous?.modelCount ?? 0,

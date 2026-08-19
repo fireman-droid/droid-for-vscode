@@ -50,6 +50,14 @@
   overflow: visible;
 }
 
+.dvx-attachment-thumb-preview {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
 .dvx-attachment-thumb-image {
   display: block;
   width: 48px;
@@ -57,7 +65,42 @@
   border: 1px solid var(--dvx-border);
   border-radius: 7px;
   object-fit: cover;
-  background: #f6f2ea;
+  background: var(--dvx-code);
+}
+
+.dvx-attachment-thumb-file {
+  display: flex;
+  box-sizing: border-box;
+  width: 48px;
+  height: 48px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 2px 3px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 7px;
+  background: var(--dvx-code);
+  color: var(--dvx-muted);
+  cursor: zoom-in;
+}
+
+.dvx-attachment-thumb-file svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.dvx-attachment-thumb-ext {
+  overflow: hidden;
+  max-width: 42px;
+  color: var(--dvx-text-secondary);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dvx-attachment-thumb-remove {

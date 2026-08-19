@@ -263,6 +263,16 @@ export class FactoryDroidRuntime implements DroidRuntime {
    * subagent always spawns under a running parent Task tool.
    */
   private subagentWatchUnsubscribe: (() => void) | null = null;
+  /**
+   * Highest context numerator confirmed for one session id, held as
+   * the floor {@link projectContextWindow} needs. Rewind, compaction
+   * and fork all continue in a new session id, which drops the floor
+   * with the shrunken conversation.
+   */
+  private confirmedContextUsed: {
+    readonly sessionId: string;
+    readonly used: number;
+  } | null = null;
   /** Runtime events queued for the active turn's stream to yield. */
   private pendingTurnEvents: RuntimeEvent[] = [];
 
@@ -554,7 +564,18 @@ export class FactoryDroidRuntime implements DroidRuntime {
       throw new Error('Droid context statistics could not be read.');
     }
     try {
-      const projected = projectContextWindow(source);
+      const projected = projectContextWindow(
+        source,
+        this.confirmedContextUsed?.sessionId === session.id
+          ? this.confirmedContextUsed.used
+          : 0,
+      );
+      if (projected.availability === 'available') {
+        this.confirmedContextUsed = {
+          sessionId: session.id,
+          used: projected.used,
+        };
+      }
       this.recordDiagnostic({
         level: 'info',
         name: 'runtime.context.finished',
@@ -567,7 +588,16 @@ export class FactoryDroidRuntime implements DroidRuntime {
                 used: projected.used,
                 limit: projected.limit,
               }
-            : { reason: projected.reason }),
+            : {
+                reason: projected.reason,
+                // The rejected numbers: the only way to tell which
+                // daemon field went bad on a real session.
+                budget: source.limit,
+                lastCall:
+                  source.lastCallTokenUsage.status === 'available'
+                    ? source.lastCallTokenUsage.used
+                    : source.lastCallTokenUsage.status,
+              }),
         },
       });
       return projected;

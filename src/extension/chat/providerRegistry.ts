@@ -7,6 +7,10 @@ import {
   isSafeText,
   type CustomModelProvider,
 } from '../../shared/customModelsProtocol';
+import {
+  normalizeProviderRoot,
+  sameProviderEndpoint,
+} from '../../shared/providerEndpoint';
 
 const STORAGE_KEY = 'droidvisx.customModelProviders.v1';
 const SECRET_PREFIX = 'droidvisx.customModelProvider.';
@@ -82,19 +86,21 @@ export class ProviderRegistry {
     if (input.id !== undefined && existing === null) {
       throw new Error('unknown-provider-connection');
     }
+    const rootUrl = normalizeProviderRoot(input.rootUrl);
     const provider: ProviderConnection = {
       id: existing?.id ?? randomUUID(),
       displayName: input.displayName,
       protocol: input.protocol,
-      rootUrl: normalizeRootUrl(input.rootUrl),
-      apiBaseUrl: resolveProviderApiBase(input.protocol, input.rootUrl),
+      rootUrl,
+      // Droid concatenates the protocol path. Persist the typed root.
+      apiBaseUrl: rootUrl,
     };
     if (
       this.list().some(
         (item) =>
           item.id !== provider.id &&
           item.protocol === provider.protocol &&
-          item.apiBaseUrl === provider.apiBaseUrl,
+          sameProviderEndpoint(item.rootUrl, provider.rootUrl),
       )
     ) {
       throw new Error('duplicate-provider-connection');
@@ -129,32 +135,6 @@ export class ProviderRegistry {
   async hasApiKey(id: string): Promise<boolean> {
     return (await this.apiKey(id)) !== undefined;
   }
-}
-
-export function resolveProviderApiBase(
-  protocol: CustomModelProvider,
-  rootUrl: string,
-): string {
-  const url = new URL(normalizeRootUrl(rootUrl));
-  const path = url.pathname.replace(/\/+$/u, '');
-  if (path !== '' && path !== '/') {
-    return url.toString();
-  }
-  // These are the only default path conventions accepted by the existing
-  // host discovery client. Explicit compatible paths remain untouched.
-  url.pathname =
-    protocol === 'anthropic' && /(^|\.)deepseek\.com$/iu.test(url.hostname)
-      ? '/anthropic'
-      : '/v1';
-  return url.toString();
-}
-
-function normalizeRootUrl(value: string): string {
-  const url = new URL(value);
-  url.hash = '';
-  url.search = '';
-  url.pathname = url.pathname.replace(/\/+$/u, '') || '/';
-  return url.toString().replace(/\/$/u, '');
 }
 
 function secretKey(id: string): string {
@@ -192,7 +172,7 @@ function parseStoredProvider(value: unknown): ProviderConnection | null {
     id: row.id as string,
     displayName: row.displayName as string,
     protocol: row.protocol as CustomModelProvider,
-    rootUrl: row.rootUrl as string,
-    apiBaseUrl: row.apiBaseUrl as string,
+    rootUrl: normalizeProviderRoot(row.rootUrl as string),
+    apiBaseUrl: normalizeProviderRoot(row.rootUrl as string),
   };
 }

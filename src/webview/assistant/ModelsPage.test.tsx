@@ -58,6 +58,67 @@ describe("ProviderEditor", () => {
     expect(screen.getByLabelText("Model ID *")).toBeDefined();
   });
 
+  it("tests a saved model from the editor card", () => {
+    const onTest = vi.fn();
+    const onTestAll = vi.fn();
+    render(
+      <ProviderEditor
+        {...editorProps({
+          onTest,
+          onTestAll,
+          items: [
+            {
+              rawIndex: 0,
+              model: "claude-sonnet-5",
+              displayName: "Claude Sonnet 5",
+              provider: "openai",
+              baseUrl: "https://api.example.com",
+              hasApiKey: true,
+              hasBedrockConfig: false,
+              isValid: true,
+              maxOutputTokens: 16384,
+            },
+          ],
+          provider: {
+            ...provider,
+            rootUrl: "https://api.example.com",
+            apiBaseUrl: "https://api.example.com/v1",
+            modelCount: 1,
+            modelTests: [
+              {
+                model: "claude-sonnet-5",
+                status: "passed",
+                summary: "OK",
+                latencyMs: 42,
+              },
+            ],
+          },
+          providers: [
+            {
+              ...provider,
+              rootUrl: "https://api.example.com",
+              apiBaseUrl: "https://api.example.com/v1",
+              modelCount: 1,
+              modelTests: [
+                {
+                  model: "claude-sonnet-5",
+                  status: "passed",
+                  summary: "OK",
+                  latencyMs: 42,
+                },
+              ],
+            },
+          ],
+        })}
+      />,
+    );
+    expect(screen.getByText("Passed · 42ms")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Test" }));
+    fireEvent.click(screen.getByRole("button", { name: "Test all" }));
+    expect(onTest).toHaveBeenCalledWith("provider-a", "claude-sonnet-5");
+    expect(onTestAll).toHaveBeenCalledWith("provider-a");
+  });
+
   it("keeps fetch disabled until the connection has a saved key", () => {
     const providerWithoutKey = { ...provider, hasApiKey: false };
     render(

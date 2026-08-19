@@ -17,7 +17,9 @@ import {
   isCustomModelBaseUrl,
   type CustomModelProvider,
   type ProviderConnectionSummary,
+  type ProviderModelTestResult,
 } from '../../shared/customModelsProtocol';
+import { sameProviderEndpoint } from '../../shared/providerEndpoint';
 import {
   MAX_MODEL_DISPLAY_NAME_LENGTH,
   MAX_MODEL_ID_LENGTH,
@@ -274,13 +276,13 @@ export function ProviderEditor({
   const [protocol, setProtocol] = useState<CustomModelProvider>(provider?.protocol ?? 'openai');
   const [rootUrl, setRootUrl] = useState(provider?.rootUrl ?? '');
   const [setApiKey, setSetApiKey] = useState(false);
-  const savedProvider = provider === undefined
-    ? providers.find((candidate) =>
-        !candidate.imported &&
-        candidate.displayName === displayName.trim() &&
-        candidate.protocol === protocol &&
-        candidate.rootUrl === rootUrl.trim())
-    : (providers.find((candidate) => candidate.id === provider.id) ?? provider);
+  const savedProvider = resolveEditorProvider(
+    provider,
+    providers,
+    displayName,
+    protocol,
+    rootUrl,
+  );
   const valid = displayName.trim().length > 0 && isCustomModelBaseUrl(rootUrl.trim());
   return <div className="dvx-models-page" role="form" aria-label="Provider connection">
     <PageHead backLabel="Models" backAriaLabel="Back to models" title={provider === undefined ? 'New connection' : 'Edit connection'} onBack={onBack} />
@@ -340,11 +342,17 @@ function ProviderModelsSection({
 }): React.JSX.Element {
   const [adding, setAdding] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
-  const models = items.filter((item) => item.provider === provider.protocol && item.baseUrl === provider.apiBaseUrl);
+  const models = items.filter((item) =>
+    item.provider === provider.protocol &&
+    sameProviderEndpoint(item.baseUrl, provider.rootUrl),
+  );
   return <section className="dvx-page-section"><div className="dvx-page-section-head"><h3 className="dvx-page-section-title">Model configuration</h3>
     <div className="dvx-cm-detail-actions"><button type="button" className="dvx-page-action" disabled={busy || !provider.hasApiKey} onClick={() => { setCatalogOpen(true); onFetch(provider.id); }}>Fetch model list</button>
       <button type="button" className="dvx-page-action" disabled={busy || adding} onClick={() => setAdding(true)}>Add model</button>
       <button type="button" className="dvx-page-action" disabled={busy || models.length === 0} onClick={() => onTestAll(provider.id)}>Test all</button></div></div>
+    {provider.latestTest !== undefined ? <p className="dvx-cm-section-test" role="status">
+      {provider.latestTest.summary}
+    </p> : null}
     {catalogOpen ? <InlineCatalog discovery={discovery} busy={busy}
       onClose={() => setCatalogOpen(false)}
       onAddManual={() => { setCatalogOpen(false); setAdding(true); }}
@@ -353,6 +361,7 @@ function ProviderModelsSection({
     {models.length === 0 && !adding ? <p className="dvx-page-note">No models configured for this connection.</p> : null}
     <div className="dvx-cm-edit-list">
       {models.map((item) => <InlineModelRow key={item.rawIndex} item={item} busy={busy}
+        test={provider.modelTests?.find((result) => result.model === item.model)}
         onSave={(params) => onSaveModel(provider.id, params)} onTest={() => onTest(provider.id, item.model)} onDelete={() => onDelete(item)} />)}
       {adding ? <InlineModelRow item={null} busy={busy}
         onSave={(params) => { onSaveModel(provider.id, params); setAdding(false); }}
@@ -361,10 +370,38 @@ function ProviderModelsSection({
   </section>;
 }
 
+function resolveEditorProvider(
+  provider: ProviderConnectionSummary | undefined,
+  providers: readonly ProviderConnectionSummary[],
+  displayName: string,
+  protocol: CustomModelProvider,
+  rootUrl: string,
+): ProviderConnectionSummary | undefined {
+  if (provider !== undefined) {
+    const byId = providers.find((candidate) => candidate.id === provider.id);
+    if (byId !== undefined) {
+      return byId;
+    }
+    const byEndpoint = providers.find((candidate) =>
+      !candidate.imported &&
+      candidate.protocol === provider.protocol &&
+      sameProviderEndpoint(candidate.rootUrl, provider.rootUrl),
+    );
+    return byEndpoint ?? provider;
+  }
+  return providers.find((candidate) =>
+    !candidate.imported &&
+    candidate.displayName === displayName.trim() &&
+    candidate.protocol === protocol &&
+    sameProviderEndpoint(candidate.rootUrl, rootUrl.trim()),
+  );
+}
+
 function InlineModelRow({
-  item, busy, onSave, onTest, onDelete, onCancel,
+  item, busy, test, onSave, onTest, onDelete, onCancel,
 }: {
   readonly item: CustomModelListItem | null; readonly busy: boolean;
+  readonly test?: ProviderModelTestResult;
   readonly onSave: (params: {
     readonly model: string; readonly displayName?: string; readonly maxOutputTokens: number | null;
     readonly noImageSupport: boolean; readonly rawIndex?: number; readonly expectedModel?: string;
@@ -379,27 +416,36 @@ function InlineModelRow({
   const valid = model.trim().length > 0 && model.trim().length <= MAX_MODEL_ID_LENGTH &&
     (displayName.trim().length === 0 || displayName.trim().length <= MAX_MODEL_DISPLAY_NAME_LENGTH) &&
     (maxTokens.trim().length === 0 || (Number.isSafeInteger(tokenNumber) && tokenNumber > 0));
-  return <div className="dvx-cm-edit-row">
-    <label className="dvx-cm-field"><span className="dvx-cm-field-label">Model ID *</span>
-      <input className="dvx-cm-input" value={model} maxLength={MAX_MODEL_ID_LENGTH}
-        onChange={(event) => setModel(event.currentTarget.value)} /></label>
-    <label className="dvx-cm-field"><span className="dvx-cm-field-label">Display name</span>
-      <input className="dvx-cm-input" value={displayName} maxLength={MAX_MODEL_DISPLAY_NAME_LENGTH}
-        onChange={(event) => setDisplayName(event.currentTarget.value)} /></label>
-    <label className="dvx-cm-field dvx-cm-token-field"><span className="dvx-cm-field-label">Max tokens</span>
-      <input className="dvx-cm-input" inputMode="numeric" value={maxTokens}
-        onChange={(event) => setMaxTokens(event.currentTarget.value)} /></label>
-    <label className="dvx-cm-check dvx-cm-inline-check"><input type="checkbox" checked={noImageSupport}
-      onChange={(event) => setNoImageSupport(event.currentTarget.checked)} /><span>No images</span></label>
-    <div className="dvx-cm-inline-actions">{onTest ? <button type="button" className="dvx-cm-action" onClick={onTest}>Test</button> : null}
-      <button type="button" className="dvx-cm-action" disabled={busy || !valid} onClick={() => onSave({
-        model: model.trim(), ...(displayName.trim() ? { displayName: displayName.trim() } : {}),
-        maxOutputTokens: maxTokens.trim() ? tokenNumber : null, noImageSupport,
-        ...(item === null ? {} : { rawIndex: item.rawIndex, expectedModel: item.model }),
-      })}>{item === null ? 'Add' : 'Save'}</button>
-      {onDelete ? <button type="button" className="dvx-cm-action dvx-cm-delete" onClick={onDelete}>Delete</button> : null}
-      {onCancel ? <button type="button" className="dvx-cm-action" onClick={onCancel}>Cancel</button> : null}</div>
-  </div>;
+  return <article className="dvx-cm-edit-row">
+    <div className="dvx-cm-edit-fields">
+      <label className="dvx-cm-field"><span className="dvx-cm-field-label">Model ID *</span>
+        <input className="dvx-cm-input" value={model} maxLength={MAX_MODEL_ID_LENGTH}
+          onChange={(event) => setModel(event.currentTarget.value)} /></label>
+      <label className="dvx-cm-field"><span className="dvx-cm-field-label">Display name</span>
+        <input className="dvx-cm-input" value={displayName} maxLength={MAX_MODEL_DISPLAY_NAME_LENGTH}
+          onChange={(event) => setDisplayName(event.currentTarget.value)} /></label>
+      <div className="dvx-cm-edit-meta">
+        <label className="dvx-cm-field dvx-cm-token-field"><span className="dvx-cm-field-label">Max tokens</span>
+          <input className="dvx-cm-input" inputMode="numeric" value={maxTokens}
+            onChange={(event) => setMaxTokens(event.currentTarget.value)} /></label>
+        <label className="dvx-cm-check dvx-cm-inline-check"><input type="checkbox" checked={noImageSupport}
+          onChange={(event) => setNoImageSupport(event.currentTarget.checked)} /><span>No images</span></label>
+      </div>
+    </div>
+    <div className="dvx-cm-edit-foot">
+      {test !== undefined ? <p className={`dvx-cm-edit-status${test.status === 'failed' ? ' dvx-cm-edit-status-failed' : ''}`} role="status">
+        {test.status === 'passed' ? `Passed · ${test.latencyMs}ms` : test.summary}
+      </p> : <span className="dvx-cm-edit-status" />}
+      <div className="dvx-cm-inline-actions">{onTest ? <button type="button" className="dvx-cm-edit-btn" disabled={busy} onClick={onTest}>Test</button> : null}
+        <button type="button" className="dvx-cm-edit-btn dvx-cm-edit-btn-save" disabled={busy || !valid} onClick={() => onSave({
+          model: model.trim(), ...(displayName.trim() ? { displayName: displayName.trim() } : {}),
+          maxOutputTokens: maxTokens.trim() ? tokenNumber : null, noImageSupport,
+          ...(item === null ? {} : { rawIndex: item.rawIndex, expectedModel: item.model }),
+        })}>{item === null ? 'Add' : 'Save'}</button>
+        {onDelete ? <button type="button" className="dvx-cm-edit-btn dvx-cm-edit-btn-delete" disabled={busy} onClick={onDelete}>Delete</button> : null}
+        {onCancel ? <button type="button" className="dvx-cm-edit-btn" disabled={busy} onClick={onCancel}>Cancel</button> : null}</div>
+    </div>
+  </article>;
 }
 
 function InlineCatalog({
