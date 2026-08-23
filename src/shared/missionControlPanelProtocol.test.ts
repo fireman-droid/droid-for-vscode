@@ -178,6 +178,11 @@ describe('Mission Control panel protocol', () => {
     ['title', 'Investigate[/mission-name]'],
     ['title', '/mission, continue'],
     ['title', 'Investigate(/mission)'],
+    ['title', '//mission'],
+    ['title', '///mission'],
+    ['title', 'Investigate //mission'],
+    ['workspaceLabel', '//mission'],
+    ['computerLabel', 'Investigate ///mission'],
     ['title', '/workspace'],
     ['title', 'Investigate(/workspace)'],
     ['title', 'Investigate: /workspace, now'],
@@ -209,6 +214,7 @@ describe('Mission Control panel protocol', () => {
       '/mission',
       '/mission Review catalog safety',
       'Investigate /mission and input/output (release 1.2)',
+      'scope/mission remains an identifier',
       'Created 2026/08/24 with ratio 3/5',
       'tokenizer=cl100k and secretariat=enabled',
       'not_client_secret=ordinary-value',
@@ -317,6 +323,15 @@ describe('Mission Control panel protocol', () => {
         error: {
           ...failure.error,
           message: 'api_key=super-secret-value',
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      parseMissionControlPanelHostMessage({
+        ...failure,
+        error: {
+          ...failure.error,
+          message: 'Retry after //mission',
         },
       }),
     ).toBeUndefined();

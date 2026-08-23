@@ -262,6 +262,167 @@ describe('LocalDiagnostics', () => {
     expect(recordLine).not.toContain('sensitive');
   });
 
+  it('scrubs every original nested string leaf before JSON serialization', async () => {
+    const directory = await temporaryDirectory();
+    const diagnostics = new LocalDiagnostics({
+      directory,
+      output: silentOutput(),
+      now: () => new Date('2026-08-11T12:00:00.000Z'),
+    });
+
+    diagnostics.record({
+      level: 'error',
+      name: 'runtime.stream.error',
+      attributes: {
+        nested: {
+          note: 'api_key="double-secret" plus context',
+          items: [
+            "client_secret='single-secret' plus context",
+            'token="unterminated-secret',
+            'ordinary "quoted" and \\escaped\\ text',
+          ],
+          request: {
+            authorization: 'exact-key-secret',
+            not_authorization: 'ordinary-value',
+          },
+        } as never,
+      },
+    });
+    await diagnostics.flush();
+
+    const [recordLine] = (await readFile(diagnostics.filePath, 'utf8'))
+      .trim()
+      .split('\n');
+    const record = JSON.parse(recordLine ?? '{}') as {
+      attributes?: { nested?: string };
+    };
+    const nested = JSON.parse(record.attributes?.nested ?? '{}') as {
+      note?: string;
+      items?: string[];
+      request?: Record<string, string>;
+    };
+    expect(nested).toEqual({
+      note: 'api_key="[REDACTED]" plus context',
+      items: [
+        "client_secret='[REDACTED]' plus context",
+        'token="[REDACTED]"',
+        'ordinary "quoted" and \\escaped\\ text',
+      ],
+      request: {
+        authorization: '[REDACTED]',
+        not_authorization: 'ordinary-value',
+      },
+    });
+    expect(recordLine).not.toMatch(
+      /double-secret|single-secret|unterminated-secret|exact-key-secret/u,
+    );
+  });
+
+  it('bounds nested structures and contains cycles and unsupported values', async () => {
+    const directory = await temporaryDirectory();
+    const diagnostics = new LocalDiagnostics({
+      directory,
+      output: silentOutput(),
+      now: () => new Date('2026-08-11T12:00:00.000Z'),
+    });
+    const cyclic: Record<string, unknown> = {
+      kept: 'ordinary-value',
+      unsupported: Symbol('unsupported'),
+    };
+    cyclic.self = cyclic;
+    const manyProperties = Object.fromEntries(
+      Array.from({ length: 40 }, (_, index) => [
+        `property-${index}`,
+        `value-${index}`,
+      ]),
+    );
+    const oversized = Object.fromEntries(
+      Array.from({ length: 32 }, (_, index) => [
+        `large-${index}`,
+        'x'.repeat(1_000),
+      ]),
+    );
+    let deep: Record<string, unknown> = {
+      note: 'api_key="depth-secret"',
+    };
+    for (let depth = 0; depth < 12; depth += 1) {
+      deep = { child: deep };
+    }
+
+    diagnostics.record({
+      level: 'info',
+      name: 'runtime.nested',
+      attributes: {
+        cyclic,
+        manyProperties,
+        oversized,
+        deep,
+      } as never,
+    });
+    await diagnostics.flush();
+
+    const [recordLine] = (await readFile(diagnostics.filePath, 'utf8'))
+      .trim()
+      .split('\n');
+    const record = JSON.parse(recordLine ?? '{}') as {
+      attributes?: Record<string, string>;
+    };
+    const projectedCycle = JSON.parse(
+      record.attributes?.cyclic ?? '{}',
+    ) as Record<string, unknown>;
+    const projectedMany = JSON.parse(
+      record.attributes?.manyProperties ?? '{}',
+    ) as Record<string, unknown>;
+    expect(projectedCycle).toEqual({ kept: 'ordinary-value' });
+    expect(Object.keys(projectedMany)).toHaveLength(32);
+    expect(record.attributes?.oversized?.length).toBeLessThanOrEqual(8_192);
+    expect(() =>
+      JSON.parse(record.attributes?.oversized ?? ''),
+    ).not.toThrow();
+    expect(() => JSON.parse(record.attributes?.deep ?? '')).not.toThrow();
+    expect(recordLine).not.toContain('depth-secret');
+  });
+
+  it('contains nested property access errors and continues writing', async () => {
+    const directory = await temporaryDirectory();
+    const diagnostics = new LocalDiagnostics({
+      directory,
+      output: silentOutput(),
+      now: () => new Date('2026-08-11T12:00:00.000Z'),
+    });
+    const inaccessible = Object.defineProperty(
+      { kept: 'ordinary-value' },
+      'failure',
+      {
+        enumerable: true,
+        get: () => {
+          throw new Error('property unavailable');
+        },
+      },
+    );
+
+    diagnostics.record({
+      level: 'warn',
+      name: 'runtime.nested.error',
+      attributes: {
+        inaccessible,
+        after: 'still-written',
+      } as never,
+    });
+    await diagnostics.flush();
+
+    const [recordLine] = (await readFile(diagnostics.filePath, 'utf8'))
+      .trim()
+      .split('\n');
+    const record = JSON.parse(recordLine ?? '{}') as {
+      attributes?: Record<string, unknown>;
+    };
+    expect(record.attributes).toEqual({
+      inaccessible: '{"kept":"ordinary-value"}',
+      after: 'still-written',
+    });
+  });
+
   it('writes one file per UTC day', async () => {
     const directory = await temporaryDirectory();
     let now = new Date('2026-08-11T23:59:00.000Z');

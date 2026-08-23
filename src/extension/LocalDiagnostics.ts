@@ -39,6 +39,7 @@ const MAX_DETAIL_LENGTH = 16_384;
 const MAX_ATTRIBUTE_COUNT = 32;
 const MAX_ATTRIBUTE_KEY_LENGTH = 64;
 const MAX_ATTRIBUTE_STRING_LENGTH = 8_192;
+const MAX_ATTRIBUTE_NESTING_DEPTH = 8;
 const NAME_PATTERN = /^[a-zA-Z0-9_.:-]+$/u;
 const LOG_FILE_PATTERN = /^droidvisx-\d{8}\.jsonl$/u;
 
@@ -343,17 +344,34 @@ function projectAttributes(
     return undefined;
   }
   const projected: Record<string, RuntimeDiagnosticAttribute> = {};
-  for (const [rawKey, rawValue] of Object.entries(attributes)) {
+  let rawKeys: string[];
+  try {
+    rawKeys = Object.keys(attributes);
+  } catch {
+    return undefined;
+  }
+  for (const rawKey of rawKeys) {
     if (Object.keys(projected).length >= MAX_ATTRIBUTE_COUNT) {
       break;
     }
-    const key = rawKey.slice(0, MAX_ATTRIBUTE_KEY_LENGTH);
+    const key = scrubCredentials(rawKey).slice(
+      0,
+      MAX_ATTRIBUTE_KEY_LENGTH,
+    );
     if (key.length === 0) {
       continue;
     }
     if (isCredentialKey(rawKey)) {
       projected[key] = '[REDACTED]';
-    } else if (typeof rawValue === 'string') {
+      continue;
+    }
+    let rawValue: unknown;
+    try {
+      rawValue = attributes[rawKey];
+    } catch {
+      continue;
+    }
+    if (typeof rawValue === 'string') {
       projected[key] = scrubCredentials(rawValue).slice(
         0,
         MAX_ATTRIBUTE_STRING_LENGTH,
@@ -370,20 +388,124 @@ function projectAttributes(
     ) {
       projected[key] = rawValue;
     } else if (rawValue !== undefined) {
-      // SDK attributes can carry nested objects; serialize instead of
-      // dropping them (full fidelity).
-      try {
-        projected[key] = scrubCredentials(
-          JSON.stringify(rawValue, (nestedKey, nestedValue) =>
-            isCredentialKey(nestedKey) ? '[REDACTED]' : nestedValue,
-          ) ?? String(rawValue),
-        ).slice(0, MAX_ATTRIBUTE_STRING_LENGTH);
-      } catch {
-        // Unserializable values are omitted.
+      const sanitized = sanitizeNestedAttribute(
+        rawValue,
+        0,
+        new WeakSet<object>(),
+      );
+      if (sanitized !== OMIT_ATTRIBUTE_VALUE) {
+        const serialized = JSON.stringify(sanitized);
+        projected[key] =
+          serialized.length <= MAX_ATTRIBUTE_STRING_LENGTH
+            ? serialized
+            : 'null';
       }
     }
   }
   return Object.keys(projected).length === 0 ? undefined : projected;
+}
+
+const OMIT_ATTRIBUTE_VALUE = Symbol('omit-diagnostic-attribute-value');
+type SanitizedNestedAttribute =
+  | string
+  | number
+  | boolean
+  | null
+  | SanitizedNestedAttribute[]
+  | { [key: string]: SanitizedNestedAttribute };
+
+function sanitizeNestedAttribute(
+  value: unknown,
+  depth: number,
+  ancestors: WeakSet<object>,
+): SanitizedNestedAttribute | typeof OMIT_ATTRIBUTE_VALUE {
+  if (typeof value === 'string') {
+    return scrubCredentials(value).slice(0, MAX_ATTRIBUTE_STRING_LENGTH);
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+  if (typeof value === 'boolean' || value === null) {
+    return value;
+  }
+  if (
+    value === undefined ||
+    typeof value === 'bigint' ||
+    typeof value === 'function' ||
+    typeof value === 'symbol' ||
+    typeof value !== 'object' ||
+    depth >= MAX_ATTRIBUTE_NESTING_DEPTH ||
+    ancestors.has(value)
+  ) {
+    return OMIT_ATTRIBUTE_VALUE;
+  }
+
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      const projected: SanitizedNestedAttribute[] = [];
+      const count = Math.min(value.length, MAX_ATTRIBUTE_COUNT);
+      for (let index = 0; index < count; index += 1) {
+        let nestedValue: unknown;
+        try {
+          nestedValue = value[index];
+        } catch {
+          projected.push(null);
+          continue;
+        }
+        const sanitized = sanitizeNestedAttribute(
+          nestedValue,
+          depth + 1,
+          ancestors,
+        );
+        projected.push(
+          sanitized === OMIT_ATTRIBUTE_VALUE ? null : sanitized,
+        );
+      }
+      return projected;
+    }
+
+    if (Object.getPrototypeOf(value) !== Object.prototype) {
+      return OMIT_ATTRIBUTE_VALUE;
+    }
+    let keys: string[];
+    try {
+      keys = Object.keys(value);
+    } catch {
+      return OMIT_ATTRIBUTE_VALUE;
+    }
+    const projected: Record<string, SanitizedNestedAttribute> = {};
+    for (const rawKey of keys.slice(0, MAX_ATTRIBUTE_COUNT)) {
+      const key = scrubCredentials(rawKey).slice(
+        0,
+        MAX_ATTRIBUTE_KEY_LENGTH,
+      );
+      if (key.length === 0 || Object.hasOwn(projected, key)) {
+        continue;
+      }
+      if (isCredentialKey(rawKey)) {
+        projected[key] = '[REDACTED]';
+        continue;
+      }
+      let nestedValue: unknown;
+      try {
+        nestedValue = (value as Record<string, unknown>)[rawKey];
+      } catch {
+        continue;
+      }
+      const sanitized = sanitizeNestedAttribute(
+        nestedValue,
+        depth + 1,
+        ancestors,
+      );
+      if (sanitized !== OMIT_ATTRIBUTE_VALUE) {
+        projected[key] = sanitized;
+      }
+    }
+    return projected;
+  } finally {
+    ancestors.delete(value);
+  }
 }
 
 function projectSdkLogName(event: DroidLogEvent): string {

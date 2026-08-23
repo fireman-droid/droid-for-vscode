@@ -16,7 +16,10 @@ import {
   MAX_MISSION_CONTROL_TITLE_LENGTH,
   type MissionControlCatalogRow,
 } from '../../../shared/missionControlPanelProtocol';
-import { isSafePresentationText } from '../../../shared/presentationSafety';
+import {
+  containsRepeatedBoundarySlashRun,
+  isSafePresentationText,
+} from '../../../shared/presentationSafety';
 
 export interface MissionCatalogProjectionOptions {
   readonly getDroid: () => Promise<ConnectedDroid>;
@@ -290,7 +293,8 @@ function projectWorkspaceLabel(repoRoot: string | undefined): string {
     repoRoot.length > 2_048 ||
     /[\u0000-\u001f\u007f-\u009f]/.test(repoRoot) ||
     /^(?:https?|wss?|file):\/\//i.test(repoRoot) ||
-    /^~[\\/]/.test(repoRoot)
+    /^~[\\/]/.test(repoRoot) ||
+    containsRepeatedBoundarySlashRun(repoRoot)
   ) {
     return '—';
   }

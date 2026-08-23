@@ -302,6 +302,10 @@ describe('MissionGateway', () => {
     'Investigate[/mission-name]',
     '/mission, continue',
     'Investigate(/mission)',
+    '//mission',
+    '///mission',
+    'Investigate //mission',
+    'Investigate ///mission now',
     '/workspace',
     'Investigate(/workspace)',
     'Investigate: /workspace, now',
@@ -335,6 +339,7 @@ describe('MissionGateway', () => {
   it.each([
     '/Users/alice/api_key=super-secret-value',
     'D:\\work\\token=super-secret-value',
+    '//mission',
   ])('replaces unsafe workspace presentation text %s', async (repoRoot) => {
     const { gateway } = catalogGateway([
       {
@@ -359,6 +364,7 @@ describe('MissionGateway', () => {
   it.each([
     'Workstation(/Users/alice/.ssh/id_rsa)',
     'token=super-secret-value',
+    'Investigate //mission',
   ])('replaces unsafe computer presentation text %s', async (label) => {
     const { gateway } = catalogGateway(
       [
@@ -388,6 +394,7 @@ describe('MissionGateway', () => {
       '/mission',
       '/mission Review catalog safety',
       'Investigate /mission and input/output (release 1.2)',
+      'scope/mission remains an identifier',
       'Created 2026/08/24 with ratio 3/5',
       'tokenizer=cl100k and secretariat=enabled',
       'not_client_secret=ordinary-value',
