@@ -294,6 +294,14 @@ describe('MissionGateway', () => {
     'Investigate(C:\\Users\\alice\\secret.txt)',
     'Investigate(\\\\server\\share\\secret.txt)',
     'Investigate(/Users/alice/.ssh/id_rsa)',
+    '/mission.txt',
+    'Investigate(/mission.txt)',
+    '/mission/path',
+    'Investigate /mission/path',
+    '/mission-name',
+    'Investigate[/mission-name]',
+    '/mission, continue',
+    'Investigate(/mission)',
     '/workspace',
     'Investigate(/workspace)',
     'Investigate: /workspace, now',
@@ -377,6 +385,8 @@ describe('MissionGateway', () => {
 
   it('preserves legitimate bounded punctuation and slash text', async () => {
     for (const title of [
+      '/mission',
+      '/mission Review catalog safety',
       'Investigate /mission and input/output (release 1.2)',
       'Created 2026/08/24 with ratio 3/5',
       'tokenizer=cl100k and secretariat=enabled',

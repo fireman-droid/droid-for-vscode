@@ -374,7 +374,9 @@ function projectAttributes(
       // dropping them (full fidelity).
       try {
         projected[key] = scrubCredentials(
-          JSON.stringify(rawValue) ?? String(rawValue),
+          JSON.stringify(rawValue, (nestedKey, nestedValue) =>
+            isCredentialKey(nestedKey) ? '[REDACTED]' : nestedValue,
+          ) ?? String(rawValue),
         ).slice(0, MAX_ATTRIBUTE_STRING_LENGTH);
       } catch {
         // Unserializable values are omitted.

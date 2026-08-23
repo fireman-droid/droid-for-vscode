@@ -224,6 +224,44 @@ describe('LocalDiagnostics', () => {
     expect(contents).toContain('curl -H');
   });
 
+  it('redacts nested credential keys before serializing escaped values', async () => {
+    const directory = await temporaryDirectory();
+    const diagnostics = new LocalDiagnostics({
+      directory,
+      output: silentOutput(),
+      now: () => new Date('2026-08-11T12:00:00.000Z'),
+    });
+
+    diagnostics.record({
+      level: 'error',
+      name: 'runtime.stream.error',
+      attributes: {
+        nested: {
+          request: {
+            access_token: 'alpha"sensitive',
+            note: 'legitimate "quoted" text',
+          },
+        } as never,
+      },
+    });
+    await diagnostics.flush();
+
+    const [recordLine] = (await readFile(diagnostics.filePath, 'utf8'))
+      .trim()
+      .split('\n');
+    const record = JSON.parse(recordLine ?? '{}') as {
+      attributes?: { nested?: string };
+    };
+    const nested = JSON.parse(record.attributes?.nested ?? '{}') as {
+      request?: { access_token?: string; note?: string };
+    };
+    expect(nested.request).toEqual({
+      access_token: '[REDACTED]',
+      note: 'legitimate "quoted" text',
+    });
+    expect(recordLine).not.toContain('sensitive');
+  });
+
   it('writes one file per UTC day', async () => {
     const directory = await temporaryDirectory();
     let now = new Date('2026-08-11T23:59:00.000Z');
@@ -342,10 +380,41 @@ describe('scrubCredentials', () => {
     },
   );
 
-  it('keeps ordinary paths, commands, and ids untouched', () => {
-    const input =
-      'Ran `git status` in C:\\repo; tokenizer=cl100k; not_client_secret=ordinary';
-    expect(scrubCredentials(input)).toBe(input);
+  it.each([
+    [
+      'api_key="alpha\\"sensitive" plus context',
+      'api_key="[REDACTED]" plus context',
+    ],
+    [
+      "client_secret='alpha\\'sensitive' plus context",
+      "client_secret='[REDACTED]' plus context",
+    ],
+    ['token="alpha\\"sensitive', 'token="[REDACTED]"'],
+    ["password='alpha\\'sensitive", "password='[REDACTED]'"],
+    [
+      'secret="alpha\\"sensitive\nnext line',
+      'secret="[REDACTED]"\nnext line',
+    ],
+    [
+      "authorization='alpha\\'sensitive\r\nnext line",
+      "authorization='[REDACTED]'\r\nnext line",
+    ],
+  ])(
+    'consumes escaped and unterminated quoted assignment %s',
+    (input, expected) => {
+      expect(scrubCredentials(input)).toBe(expected);
+      expect(scrubCredentials(input)).not.toContain('sensitive');
+    },
+  );
+
+  it('keeps ordinary paths, commands, ids, and escaped text untouched', () => {
+    for (const input of [
+      'Ran `git status` in C:\\repo; tokenizer=cl100k; not_client_secret=ordinary',
+      'note="alpha\\"sensitive" plus context',
+      "message='alpha\\'sensitive' plus context",
+    ]) {
+      expect(scrubCredentials(input)).toBe(input);
+    }
   });
 });
 

@@ -170,6 +170,14 @@ describe('Mission Control panel protocol', () => {
     ['title', 'Investigate(C:\\Users\\alice\\secret.txt)'],
     ['title', 'Investigate(\\\\server\\share\\secret.txt)'],
     ['title', 'Investigate(/Users/alice/.ssh/id_rsa)'],
+    ['title', '/mission.txt'],
+    ['title', 'Investigate(/mission.txt)'],
+    ['title', '/mission/path'],
+    ['title', 'Investigate /mission/path'],
+    ['title', '/mission-name'],
+    ['title', 'Investigate[/mission-name]'],
+    ['title', '/mission, continue'],
+    ['title', 'Investigate(/mission)'],
     ['title', '/workspace'],
     ['title', 'Investigate(/workspace)'],
     ['title', 'Investigate: /workspace, now'],
@@ -198,6 +206,8 @@ describe('Mission Control panel protocol', () => {
 
   it('preserves legitimate bounded punctuation and slash text', () => {
     for (const title of [
+      '/mission',
+      '/mission Review catalog safety',
       'Investigate /mission and input/output (release 1.2)',
       'Created 2026/08/24 with ratio 3/5',
       'tokenizer=cl100k and secretariat=enabled',

@@ -3,7 +3,7 @@ const ABSOLUTE_DRIVE_PATH_PATTERN = /[A-Za-z]:[\\/]/u;
 const UNC_PATH_PATTERN = /\\\\[^\\/\s]+[\\/][^\\/\s]+/u;
 const HOME_PATH_PATTERN = /~[\\/][^\s()[\]{}]+/u;
 const POSIX_PATH_PATTERN =
-  /(?:^|[^\p{L}\p{N}_])\/(?!mission(?=$|[^\p{L}\p{N}_/\\-]))[^/\\\s()[\]{}<>,;:]+(?:\/[^/\\\s()[\]{}<>,;:]+)*/u;
+  /(?:^|[^\p{L}\p{N}_])\/(?!mission(?=$|\s))[^/\\\s()[\]{}<>,;:]+(?:\/[^/\\\s()[\]{}<>,;:]+)*/u;
 const COMMON_POSIX_ROOT_PATTERN =
   /(?:^|[^\p{L}\p{N}_])\/(?:Users|home|var|tmp|etc|usr|opt|srv|root|mnt|media|private|Volumes)(?:[\\/]|(?=$|[^\p{L}\p{N}_]))/u;
 const URL_PATTERN = /(?:https?|wss?|file):\/\//iu;
@@ -14,7 +14,7 @@ const CREDENTIAL_KEY_PATTERN = new RegExp(
   'iu',
 );
 const CREDENTIAL_ASSIGNMENT_SOURCE =
-  `(^|[^\\p{L}\\p{N}_-])(${CREDENTIAL_KEY_SOURCE}["']?\\s*[:=]\\s*)(?:"([^"\\r\\n]*)"|'([^'\\r\\n]*)'|([^\\s"'\\x60,;&]+))`;
+  `(^|[^\\p{L}\\p{N}_-])(${CREDENTIAL_KEY_SOURCE}["']?\\s*[:=]\\s*)(?:"((?:\\\\[^\\r\\n]|[^"\\\\\\r\\n])*)(?:"|(?=[\\r\\n]|$))|'((?:\\\\[^\\r\\n]|[^'\\\\\\r\\n])*)(?:'|(?=[\\r\\n]|$))|([^\\s"'\\x60,;&]+))`;
 const CREDENTIAL_ASSIGNMENT_PATTERN = new RegExp(
   CREDENTIAL_ASSIGNMENT_SOURCE,
   'iu',
