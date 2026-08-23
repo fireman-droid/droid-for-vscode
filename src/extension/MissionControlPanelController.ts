@@ -97,7 +97,17 @@ export class MissionControlPanelController implements vscode.Disposable {
       return;
     }
     if (this.panelEntry !== null) {
+      const returnsToCatalog = this.route !== 'catalog';
       this.navigate('catalog');
+      if (returnsToCatalog && this.panelEntry.ready) {
+        const requestId = `catalog-${this.panelEntry.instance}-route-${this.nextCatalogRevision}`;
+        this.panelEntry.seenRequestIds.add(requestId);
+        this.startCatalogRequest(
+          this.panelEntry,
+          requestId,
+          this.catalog.filter,
+        );
+      }
       this.post({
         type: 'missionControl.route',
         protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
@@ -240,9 +250,14 @@ export class MissionControlPanelController implements vscode.Disposable {
     if (message.type === 'missionControl.navigate') {
       if (message.route === 'detail') {
         this.navigate('detail', message.catalogId);
-      } else {
-        this.navigate(message.route);
+        return;
       }
+      if (message.route === 'new-mission') {
+        this.navigate('new-mission');
+        return;
+      }
+      this.navigate('catalog');
+      this.startCatalogRequest(entry, message.requestId, this.catalog.filter);
       return;
     }
     this.navigate('catalog');

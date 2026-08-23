@@ -94,8 +94,14 @@ describe('MissionCatalog', () => {
     );
 
     const missionButtons = screen.getAllByRole('button', {
-      name: /Open Mission “Duplicate title”/,
+      name: /Open Mission “Duplicate title” in Repository/,
     });
+    expect(missionButtons[0]?.getAttribute('aria-label')).toBe(
+      'Open Mission “Duplicate title” in Repository one',
+    );
+    expect(missionButtons[1]?.getAttribute('aria-label')).toBe(
+      'Open Mission “Duplicate title” in Repository two',
+    );
     await user.click(missionButtons[0]!);
     missionButtons[1]!.focus();
     await user.keyboard('{Enter}');
@@ -121,8 +127,42 @@ describe('MissionCatalog', () => {
 
     expect(container.textContent).not.toContain('mission-safe-alpha');
     expect(container.innerHTML).not.toContain('mission-safe-alpha');
+    expect(
+      screen.getByRole('button', {
+        name: 'Open Mission “Duplicate title” in Repository one',
+      }),
+    ).toBeDefined();
     expect(screen.getByText('Repository one')).toBeDefined();
     expect(screen.getAllByText('—')).toHaveLength(3);
+  });
+
+  it('distinguishes duplicate titles even when safe workspace labels match', () => {
+    const duplicateWorkspaceRows = [
+      row('mission-safe-one', 'Same title', 'running', 'Shared workspace'),
+      row('mission-safe-two', 'Same title', 'paused', 'Shared workspace'),
+    ];
+    const { container } = render(
+      <MissionCatalog
+        state={{ status: 'ready', rows: duplicateWorkspaceRows }}
+        filter="all"
+        onFilter={vi.fn()}
+        onRefresh={vi.fn()}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Open Mission “Same title” in Shared workspace, item 1 of 2',
+      }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole('button', {
+        name: 'Open Mission “Same title” in Shared workspace, item 2 of 2',
+      }),
+    ).toBeDefined();
+    expect(container.innerHTML).not.toContain('mission-safe-one');
+    expect(container.innerHTML).not.toContain('mission-safe-two');
   });
 
   it('retains stale rows while refreshing and exposes bounded recovery actions', async () => {

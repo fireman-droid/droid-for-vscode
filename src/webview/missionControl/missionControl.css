@@ -162,6 +162,7 @@ p {
 }
 
 .mission-control-columns {
+  box-sizing: border-box;
   padding: 10px 14px;
   color: var(--mission-muted);
   border-top: 1px solid var(--mission-border);
@@ -181,6 +182,7 @@ p {
 }
 
 .mission-control-row {
+  box-sizing: border-box;
   width: 100%;
   padding: 15px 14px;
   text-align: left;
@@ -227,7 +229,7 @@ p {
   border-color: transparent;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 819px) {
   .mission-control-page {
     padding: 24px 18px 48px;
   }

@@ -253,7 +253,120 @@ describe('MissionControlPanelController', () => {
       protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
       route: 'catalog',
     });
-    expect(listCatalog).toHaveBeenCalledOnce();
+    expect(listCatalog).toHaveBeenCalledTimes(2);
+    controller.dispose();
+  });
+
+  it('replaces an initial load canceled by Back and rejects the canceled result', async () => {
+    const canceled = deferred<{
+      status: 'ready';
+      rows: readonly MissionControlCatalogRow[];
+    }>();
+    const replacement = deferred<{
+      status: 'ready';
+      rows: readonly MissionControlCatalogRow[];
+    }>();
+    const listCatalog = vi
+      .fn()
+      .mockReturnValueOnce(canceled.promise)
+      .mockReturnValueOnce(replacement.promise);
+    const controller = new MissionControlPanelController(
+      new vscodeMock.Uri('/extension') as never,
+      { listCatalog },
+    );
+    controller.open();
+    const panel = vscodeMock.__panels[0]!;
+    panel.webview.receive(readyMessage());
+
+    panel.webview.receive({
+      type: 'missionControl.navigate',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      requestId: 'new-mission',
+      route: 'new-mission',
+    });
+    panel.webview.receive({
+      type: 'missionControl.navigate',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      requestId: 'back-to-catalog',
+      route: 'catalog',
+    });
+    expect(listCatalog).toHaveBeenCalledTimes(2);
+
+    canceled.resolve({
+      status: 'ready',
+      rows: [row('mission-catalog-canceled', 'Canceled Mission')],
+    });
+    replacement.resolve({
+      status: 'ready',
+      rows: [row('mission-catalog-current', 'Current Mission')],
+    });
+    await settle();
+
+    expect(JSON.stringify(panel.webview.posted)).not.toContain(
+      'Canceled Mission',
+    );
+    expect(panel.webview.posted.at(-1)).toMatchObject({
+      requestId: 'back-to-catalog',
+      status: 'ready',
+      rows: [{ title: 'Current Mission' }],
+    });
+    controller.dispose();
+  });
+
+  it('replaces a stale refresh canceled by a Host catalog route and retains rows and filter', async () => {
+    const canceledRefresh = deferred<{
+      status: 'ready';
+      rows: readonly MissionControlCatalogRow[];
+    }>();
+    const replacement = deferred<{
+      status: 'ready';
+      rows: readonly MissionControlCatalogRow[];
+    }>();
+    const listCatalog = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 'ready',
+        rows: [row('mission-catalog-stale', 'Stale Mission')],
+      })
+      .mockReturnValueOnce(canceledRefresh.promise)
+      .mockReturnValueOnce(replacement.promise);
+    const controller = new MissionControlPanelController(
+      new vscodeMock.Uri('/extension') as never,
+      { listCatalog },
+    );
+    controller.open();
+    const panel = vscodeMock.__panels[0]!;
+    panel.webview.receive(readyMessage());
+    await settle();
+
+    panel.webview.receive(requestMessage('refresh-paused', 'paused'));
+    panel.webview.receive(navigateMessage('detail-during-refresh'));
+    controller.open();
+
+    expect(listCatalog).toHaveBeenCalledTimes(3);
+    expect(controller.catalogState()).toMatchObject({
+      filter: 'paused',
+      rows: [{ title: 'Stale Mission' }],
+    });
+
+    canceledRefresh.resolve({
+      status: 'ready',
+      rows: [row('mission-catalog-canceled', 'Canceled Refresh')],
+    });
+    replacement.resolve({
+      status: 'ready',
+      rows: [row('mission-catalog-current', 'Current Refresh')],
+    });
+    await settle();
+
+    expect(JSON.stringify(panel.webview.posted)).not.toContain(
+      'Canceled Refresh',
+    );
+    expect(panel.webview.posted.at(-1)).toMatchObject({
+      filter: 'paused',
+      status: 'ready',
+      rows: [{ title: 'Current Refresh' }],
+    });
     controller.dispose();
   });
 

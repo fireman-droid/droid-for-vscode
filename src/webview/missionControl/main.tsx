@@ -47,6 +47,11 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     return;
   }
   if (message.type === 'missionControl.route') {
+    latestRequestId = null;
+    state =
+      rows.length > 0
+        ? { status: 'refreshing', rows }
+        : { status: 'loading', rows: [] };
     renderCatalog();
     focusHeading();
     return;
@@ -100,6 +105,13 @@ function requestCatalog(nextFilter: MissionControlCatalogFilter): void {
 function navigate(navigation: MissionCatalogNavigation): void {
   requestCounter += 1;
   const requestId = `navigate-webview-${Date.now()}-${requestCounter}`;
+  if (navigation.route === 'catalog') {
+    latestRequestId = requestId;
+    state =
+      rows.length > 0
+        ? { status: 'refreshing', rows }
+        : { status: 'loading', rows: [] };
+  }
   missionVscode.postMessage({
     type: 'missionControl.navigate',
     protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,

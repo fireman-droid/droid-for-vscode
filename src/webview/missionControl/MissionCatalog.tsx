@@ -34,6 +34,7 @@ export function MissionCatalog({
   readonly onNavigate: (navigation: MissionCatalogNavigation) => void;
 }): React.JSX.Element {
   const visibleRows = state.rows.filter((row) => matchesFilter(row, filter));
+  const rowNames = readRowAccessibleNames(visibleRows);
   const status = readStatus(state, visibleRows.length, filter);
 
   return (
@@ -121,12 +122,12 @@ export function MissionCatalog({
               <span>Created</span>
             </div>
             <ul className="mission-control-list" aria-label="Missions">
-              {visibleRows.map((row) => (
+              {visibleRows.map((row, index) => (
                 <li key={row.catalogId}>
                   <button
                     type="button"
                     className="mission-control-row"
-                    aria-label={`Open Mission “${row.title}”`}
+                    aria-label={rowNames[index]}
                     onClick={() =>
                       onNavigate({
                         route: 'detail',
@@ -151,6 +152,28 @@ export function MissionCatalog({
       </section>
     </main>
   );
+}
+
+function readRowAccessibleNames(
+  rows: readonly MissionControlCatalogRow[],
+): readonly string[] {
+  const baseNames = rows.map(
+    (row) => `Open Mission “${row.title}” in ${row.workspaceLabel}`,
+  );
+  const totals = new Map<string, number>();
+  for (const name of baseNames) {
+    totals.set(name, (totals.get(name) ?? 0) + 1);
+  }
+  const positions = new Map<string, number>();
+  return baseNames.map((name) => {
+    const total = totals.get(name) ?? 1;
+    if (total === 1) {
+      return name;
+    }
+    const position = (positions.get(name) ?? 0) + 1;
+    positions.set(name, position);
+    return `${name}, item ${position} of ${total}`;
+  });
 }
 
 function MissionValue({
