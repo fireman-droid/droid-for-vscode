@@ -19,7 +19,8 @@
     "onCommand:droidvisx.focusView",
     "onCommand:droidvisx.openLogs",
     "onCommand:droidvisx.exportDiagnostics",
-    "onCommand:droidvisx.addSelectionToChat"
+    "onCommand:droidvisx.addSelectionToChat",
+    "onCommand:droidvisx.openMissionControl"
   ],
   "contributes": {
     "commands": [
@@ -46,6 +47,10 @@
       {
         "command": "droidvisx.addSelectionToChat",
         "title": "DroidVisX: Add Selection to Chat"
+      },
+      {
+        "command": "droidvisx.openMissionControl",
+        "title": "DroidVisX: Open Mission Control"
       }
     ],
     "menus": {

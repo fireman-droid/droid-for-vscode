@@ -81,6 +81,37 @@ const sessionViewerResult = await build({
   logLevel: 'info',
 });
 
+const missionControlResult = await build({
+  entryPoints: ['src/webview/missionControl/main.ts'],
+  outfile: 'dist/webview/mission-control.js',
+  bundle: true,
+  packages: 'bundle',
+  platform: 'browser',
+  format: 'iife',
+  target: 'es2022',
+  minify: true,
+  define: {
+    'process.env.NODE_ENV': '"production"',
+    __DVX_BUILD_ID__: JSON.stringify(buildId),
+  },
+  sourcemap: false,
+  legalComments: 'none',
+  metafile: true,
+  logLevel: 'info',
+});
+
+const missionControlCssResult = await build({
+  entryPoints: ['src/webview/missionControl/missionControl.css'],
+  outfile: 'dist/webview/mission-control.css',
+  bundle: true,
+  platform: 'browser',
+  minify: true,
+  sourcemap: false,
+  legalComments: 'none',
+  metafile: true,
+  logLevel: 'info',
+});
+
 // Separate lazily loaded bundle: the webview injects it on demand the
 // first time a completed ```mermaid block needs rendering (script tag
 // carrying the page nonce), keeping mermaid out of the first-screen
@@ -118,12 +149,21 @@ assertExpectedExternals(sessionViewerResult.metafile, {
   required: new Set(),
   allowed: () => false,
 });
+assertExpectedExternals(missionControlResult.metafile, {
+  required: new Set(),
+  allowed: () => false,
+});
+assertExpectedExternals(missionControlCssResult.metafile, {
+  required: new Set(),
+  allowed: () => false,
+});
 assertExpectedExternals(mermaidResult.metafile, {
   required: new Set(),
   allowed: () => false,
 });
 assertNoForbiddenWebviewInputs(webviewResult.metafile);
 assertNoForbiddenWebviewInputs(sessionViewerResult.metafile);
+assertNoForbiddenWebviewInputs(missionControlResult.metafile);
 assertNoForbiddenWebviewInputs(mermaidResult.metafile);
 assertMermaidStaysLazy(webviewResult.metafile);
 assertMermaidStaysLazy(sessionViewerResult.metafile);

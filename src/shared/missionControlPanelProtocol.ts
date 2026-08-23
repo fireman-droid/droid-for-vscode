@@ -51,7 +51,14 @@ export interface MissionControlCatalogRequest {
   readonly filter: MissionControlCatalogFilter;
 }
 
-export type MissionControlPanelWebviewMessage = MissionControlCatalogRequest;
+export interface MissionControlReadyMessage {
+  readonly type: 'missionControl.ready';
+  readonly protocolVersion: typeof MISSION_CONTROL_PANEL_PROTOCOL_VERSION;
+}
+
+export type MissionControlPanelWebviewMessage =
+  | MissionControlReadyMessage
+  | MissionControlCatalogRequest;
 
 export interface MissionControlCatalogReadyResult {
   readonly type: 'missionControl.catalog.result';
@@ -81,7 +88,13 @@ export interface MissionControlCatalogErrorResult {
 
 export type MissionControlPanelHostMessage =
   | MissionControlCatalogReadyResult
-  | MissionControlCatalogErrorResult;
+  | MissionControlCatalogErrorResult
+  | {
+      readonly type: 'missionControl.theme';
+      readonly protocolVersion: typeof MISSION_CONTROL_PANEL_PROTOCOL_VERSION;
+      readonly preference: 'auto' | 'light' | 'dark';
+      readonly resolved: 'light' | 'dark';
+    };
 
 const LIFECYCLE_SET = new Set<string>(MISSION_LIFECYCLES);
 const FILTER_SET = new Set<string>(MISSION_CONTROL_CATALOG_FILTERS);
@@ -89,6 +102,17 @@ const FILTER_SET = new Set<string>(MISSION_CONTROL_CATALOG_FILTERS);
 export function parseMissionControlPanelWebviewMessage(
   value: unknown,
 ): MissionControlPanelWebviewMessage | undefined {
+  if (
+    isStrictRecord(value) &&
+    hasExactKeys(value, ['type', 'protocolVersion']) &&
+    value.type === 'missionControl.ready' &&
+    value.protocolVersion === MISSION_CONTROL_PANEL_PROTOCOL_VERSION
+  ) {
+    return {
+      type: 'missionControl.ready',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+    };
+  }
   if (
     !isStrictRecord(value) ||
     !hasExactKeys(value, ['type', 'protocolVersion', 'requestId', 'filter']) ||
@@ -110,6 +134,28 @@ export function parseMissionControlPanelWebviewMessage(
 export function parseMissionControlPanelHostMessage(
   value: unknown,
 ): MissionControlPanelHostMessage | undefined {
+  if (
+    isStrictRecord(value) &&
+    hasExactKeys(value, [
+      'type',
+      'protocolVersion',
+      'preference',
+      'resolved',
+    ]) &&
+    value.type === 'missionControl.theme' &&
+    value.protocolVersion === MISSION_CONTROL_PANEL_PROTOCOL_VERSION &&
+    (value.preference === 'auto' ||
+      value.preference === 'light' ||
+      value.preference === 'dark') &&
+    (value.resolved === 'light' || value.resolved === 'dark')
+  ) {
+    return {
+      type: 'missionControl.theme',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      preference: value.preference,
+      resolved: value.resolved,
+    };
+  }
   if (
     !isStrictRecord(value) ||
     value.type !== 'missionControl.catalog.result' ||

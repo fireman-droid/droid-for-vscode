@@ -38,6 +38,36 @@ const ready = {
 } as const;
 
 describe('Mission Control panel protocol', () => {
+  it('accepts only the exact ready handshake and bounded theme broadcasts', () => {
+    const readyHandshake = {
+      type: 'missionControl.ready',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+    } as const;
+    expect(
+      parseMissionControlPanelWebviewMessage(readyHandshake),
+    ).toEqual(readyHandshake);
+    expect(
+      parseMissionControlPanelWebviewMessage({
+        ...readyHandshake,
+        requestId: 'unexpected',
+      }),
+    ).toBeUndefined();
+
+    const theme = {
+      type: 'missionControl.theme',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      preference: 'auto',
+      resolved: 'dark',
+    } as const;
+    expect(parseMissionControlPanelHostMessage(theme)).toEqual(theme);
+    expect(
+      parseMissionControlPanelHostMessage({
+        ...theme,
+        resolved: 'sepia',
+      }),
+    ).toBeUndefined();
+  });
+
   it('accepts exact versioned catalog requests and official filters', () => {
     expect(parseMissionControlPanelWebviewMessage(request)).toEqual(request);
     for (const invalid of [

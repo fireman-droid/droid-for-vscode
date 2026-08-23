@@ -1,0 +1,98 @@
+:root {
+  color-scheme: light dark;
+  font-family: var(--vscode-font-family, system-ui, sans-serif);
+  color: var(--vscode-foreground, #1f1f1f);
+  background: var(--vscode-editor-background, #fff);
+}
+
+html[data-dvx-theme='light'] {
+  color-scheme: light;
+}
+
+html[data-dvx-theme='dark'] {
+  color-scheme: dark;
+}
+
+html[data-dvx-theme-preference='light'] {
+  background: #fff;
+}
+
+html[data-dvx-theme-preference='dark'] {
+  background: #000;
+}
+
+body {
+  margin: 0;
+  background: inherit;
+}
+
+main {
+  box-sizing: border-box;
+  width: min(100%, 960px);
+  margin: 0 auto;
+  padding: 32px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+p {
+  color: var(--vscode-descriptionForeground, currentColor);
+}
+
+button {
+  min-height: 30px;
+  padding: 4px 10px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--vscode-panel-border, currentColor);
+  border-radius: 4px;
+  font: inherit;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder, currentColor);
+  outline-offset: 2px;
+}
+
+.mission-control-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 24px 0 16px;
+}
+
+.mission-control-filters button[aria-pressed='true'] {
+  background: var(--vscode-toolbar-hoverBackground, transparent);
+}
+
+.mission-control-status {
+  min-height: 20px;
+}
+
+.mission-control-list {
+  padding: 0;
+  border-top: 1px solid var(--vscode-panel-border, currentColor);
+  list-style: none;
+}
+
+.mission-control-list li {
+  display: grid;
+  gap: 4px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--vscode-panel-border, currentColor);
+}
+
+.mission-control-list span,
+.mission-control-error {
+  color: var(--vscode-descriptionForeground, currentColor);
+}
+
+@media (max-width: 520px) {
+  main {
+    padding: 20px 16px;
+  }
+}

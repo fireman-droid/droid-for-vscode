@@ -70,6 +70,7 @@ import { MissionGateway } from './chat/mission/MissionGateway';
 import { MissionPreferenceStore } from './chat/mission/MissionPreferences';
 import { createMissionRuntime } from './chat/mission/MissionRuntime';
 import { SessionViewerPanelController } from './SessionViewerPanelController';
+import { MissionControlPanelController } from './MissionControlPanelController';
 
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
@@ -77,6 +78,7 @@ const exportDiagnosticsCommand = 'droidvisx.exportDiagnostics';
 const shutdownDaemonCommand = 'droidvisx.shutdownDaemon';
 const exportSessionCommand = 'droidvisx.exportSessionMarkdown';
 const addSelectionToChatCommand = 'droidvisx.addSelectionToChat';
+const openMissionControlCommand = 'droidvisx.openMissionControl';
 
 /**
  * How long `addSelectionToChat` holds an invoke-time capture while a
@@ -507,6 +509,12 @@ export function activate(context: vscode.ExtensionContext): void {
       });
     },
   });
+  const missionControl = new MissionControlPanelController(
+    context.extensionUri,
+    missionGateway,
+    {},
+    diagnostics,
+  );
   controller = new ChatController(
     (interactionHandler) =>
       new FactoryDroidRuntime({
@@ -599,6 +607,7 @@ export function activate(context: vscode.ExtensionContext): void {
     previewController,
     terminalMirror,
     sessionViewer,
+    missionControl,
     diagnostics,
     attachmentSources,
     vscode.window.registerWebviewViewProvider(
@@ -623,6 +632,9 @@ export function activate(context: vscode.ExtensionContext): void {
       await vscode.commands.executeCommand(
         `${DroidViewProvider.viewType}.focus`,
       );
+    }),
+    vscode.commands.registerCommand(openMissionControlCommand, () => {
+      missionControl.open();
     }),
     vscode.commands.registerCommand(addSelectionToChatCommand, async () => {
       // The selection is read once, at invoke time, so however long a
