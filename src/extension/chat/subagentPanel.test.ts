@@ -53,7 +53,10 @@ function record(
 function fakeController(
   transcript: SessionTranscriptItem[] = [taskItem('use-1')],
 ) {
-  const sampleActivity = vi.fn(async () => 'Reading files');
+  const sampleActivities = vi.fn(async () => [
+    { action: 'Read workspace files', target: 'src/app.ts' },
+    { action: 'Searched workspace content', target: 'src' },
+  ]);
   const fake = {
     sessionId: 'session-1',
     disposed: false,
@@ -64,14 +67,14 @@ function fakeController(
         .fn()
         .mockResolvedValue([record('child-1')]),
     },
-    subagentControl: () => ({ sampleActivity }),
+    subagentControl: () => ({ sampleActivities }),
     emit: vi.fn(),
     recordHost: vi.fn(),
   };
   return {
     fake,
     ctl: fake as unknown as ChatControllerInternals,
-    sampleActivity,
+    sampleActivities,
   };
 }
 
@@ -102,22 +105,37 @@ describe('pairInvocationMapping', () => {
 });
 
 describe('inline Subagent activity polling', () => {
-  it('publishes only the latest bounded action for the chat card', async () => {
-    const { fake, ctl, sampleActivity } = fakeController();
+  it('publishes only the bounded activity trail for the chat card', async () => {
+    const { fake, ctl, sampleActivities } = fakeController();
     handleSubagentPanel(ctl, 'session-1', true);
     await vi.waitFor(() => {
-      expect(sampleActivity).toHaveBeenCalledWith('child-1');
+      expect(sampleActivities).toHaveBeenCalledWith(
+        'child-1',
+        'd:/work',
+      );
     });
     expect(fake.emit).toHaveBeenCalledWith({
       type: 'subagent.activity',
       sessionId: 'session-1',
       turnId: 'turn-1',
       toolUseId: 'use-1',
-      action: 'Reading files',
+      activities: [
+        { action: 'Read workspace files', target: 'src/app.ts' },
+        { action: 'Searched workspace content', target: 'src' },
+      ],
     });
     const message = fake.emit.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(message).not.toHaveProperty('stoppable');
     expect(message).not.toHaveProperty('childSessionId');
+    stopSubagentPanelPoll(ctl);
+  });
+
+  it('does not emit the same semantic trail twice', async () => {
+    const { fake, ctl } = fakeController();
+    handleSubagentPanel(ctl, 'session-1', true);
+    await vi.waitFor(() => expect(fake.emit).toHaveBeenCalledOnce());
+    await pollTick(ctl);
+    expect(fake.emit).toHaveBeenCalledOnce();
     stopSubagentPanelPoll(ctl);
   });
 

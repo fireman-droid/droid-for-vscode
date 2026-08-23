@@ -1,10 +1,9 @@
 import {
   AssistantRuntimeProvider,
-  ThreadPrimitive,
   useExternalStoreRuntime,
   type ExternalStoreAdapter,
 } from '@assistant-ui/react';
-import { useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, type RefObject } from 'react';
 
 import type { SessionTranscriptItem } from '../../shared/bridgeMessages';
 import {
@@ -26,6 +25,13 @@ import {
 } from './Thread';
 import { ReadOnlyAssistantMessage } from './thread/AssistantMessage';
 import { ReadOnlyUserMessage } from './thread/UserMessage';
+import { VirtualizedMessages } from './thread/VirtualizedMessages';
+
+/** Stable identity: MessageById memos on each field of this object. */
+const READONLY_MESSAGE_COMPONENTS = {
+  UserMessage: ReadOnlyUserMessage,
+  AssistantMessage: ReadOnlyAssistantMessage,
+};
 
 /**
  * Shared assistant-ui projection for observation-only transcripts.
@@ -37,11 +43,26 @@ export function ReadOnlyTranscript({
   items,
   running,
   className = '',
+  getScroller: getScrollerProp,
+  followingRef: followingRefProp,
 }: {
   readonly items: readonly SessionTranscriptItem[];
   readonly running: boolean;
   readonly className?: string;
+  readonly getScroller?: () => HTMLElement | null;
+  readonly followingRef?: RefObject<{ following: boolean } | null>;
 }): React.JSX.Element {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const localFollowRef = useRef({ following: true });
+  const followingRef = followingRefProp ?? localFollowRef;
+  const getScroller = useCallback((): HTMLElement | null => {
+    if (getScrollerProp !== undefined) {
+      return getScrollerProp();
+    }
+    const root = rootRef.current;
+    const scroller = root?.closest('.dvx-session-viewer-viewport');
+    return scroller instanceof HTMLElement ? scroller : null;
+  }, [getScrollerProp]);
   const messageCacheRef = useRef<RuntimeMessageCache>(new Map());
   const completionClockRef = useRef<CompletionClock>(new Map());
   const activeTurn = useMemo(
@@ -78,21 +99,18 @@ export function ReadOnlyTranscript({
               <TerminalMirrorContext.Provider value={null}>
                 <SelectSessionContext.Provider value={null}>
                   <div
+                    ref={rootRef}
                     className={`dvx-readonly-thread${
                       className.length === 0
                         ? ''
                         : ` ${className}`
                     }`}
                   >
-                    <ThreadPrimitive.Messages>
-                      {({ message }) =>
-                        message.role === 'user' ? (
-                          <ReadOnlyUserMessage />
-                        ) : (
-                          <ReadOnlyAssistantMessage />
-                        )
-                      }
-                    </ThreadPrimitive.Messages>
+                    <VirtualizedMessages
+                      getScroller={getScroller}
+                      followingRef={followingRef}
+                      components={READONLY_MESSAGE_COMPONENTS}
+                    />
                   </div>
                 </SelectSessionContext.Provider>
               </TerminalMirrorContext.Provider>

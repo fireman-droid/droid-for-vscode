@@ -10,7 +10,9 @@ describe('inline Subagent activity validation', () => {
       sessionId: 'session-1',
       turnId: 'turn-1',
       toolUseId: 'use-1',
-      action: 'Grep',
+      activities: [
+        { action: 'Searched workspace content', target: 'src' },
+      ],
     };
     expect(readHostMessage(activity)).toEqual(activity);
     expect(

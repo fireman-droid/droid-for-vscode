@@ -32,6 +32,12 @@ import {
   THINKING_WAITING_AFTER_MS,
 } from './thread/transcriptRows';
 
+async function findListEditTriggers(): Promise<HTMLElement[]> {
+  return screen.findAllByRole('button', {
+    name: 'Edit message and resend from here',
+  });
+}
+
 let persistedState: unknown = { draft: 'Restored draft' };
 const posted: WebviewToHostMessage[] = [];
 const vscode = {
@@ -196,10 +202,12 @@ describe('assistant-ui App bridge commands', () => {
       screen.getByRole('button', { name: /Show earlier messages/ }),
     );
 
-    expect(await screen.findByText('Fresh question')).toBeDefined();
+    expect(await screen.findAllByText('Fresh question')).toHaveLength(1);
     expect(await screen.findByText('Fresh answer')).toBeDefined();
-    expect(await screen.findByText('Question 0')).toBeDefined();
     expect(viewport.scrollTop).toBe(720);
+    expect(
+      screen.queryByRole('button', { name: /Show earlier messages/ }),
+    ).toBeNull();
   });
 
   it('shows file-not-ready feedback only for the active turn', async () => {
@@ -519,15 +527,28 @@ describe('assistant-ui App bridge commands', () => {
     async (method) => {
       const user = userEvent.setup();
       render(<App />);
-      host(snapshot(0, { turnId: 'turn-stop', status: 'streaming' }));
+      host({
+        ...snapshot(0, { turnId: 'turn-stop', status: 'streaming' }),
+        transcript: [
+          { id: 'user-stop', kind: 'user', text: 'Original instruction' },
+          {
+            id: 'assistant-stop',
+            kind: 'assistant',
+            turnId: 'turn-stop',
+            text: '',
+          },
+        ],
+      });
       const input =
         screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
+      expect(await screen.findByText('Droid is responding')).toBeDefined();
       await user.click(await screen.findByRole('button', { name: 'Stop' }));
       expect(posted).toContainEqual({
         type: 'turn.stop',
         sessionId: 'session-a',
         turnId: 'turn-stop',
       });
+      expect(screen.queryByText('Droid is responding')).toBeNull();
       await screen.findByRole('button', { name: 'Send' });
       expect(
         screen.getByText('Stopping · Enter sends next when this turn stops'),
@@ -537,7 +558,11 @@ describe('assistant-ui App bridge commands', () => {
       if (method === 'Enter') {
         fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
       } else {
-        await user.click(screen.getByRole('button', { name: 'Send' }));
+        const send = screen.getByRole<HTMLButtonElement>('button', {
+          name: 'Send',
+        });
+        expect(send.disabled).toBe(false);
+        await user.click(send);
       }
 
       await waitFor(() =>
@@ -641,7 +666,7 @@ describe('assistant-ui App bridge commands', () => {
       sessionId: 'session-a',
       turnId: 'turn-live',
       toolUseId: 'task-1',
-      action: 'Read',
+      activities: [{ action: 'Read workspace files', target: 'src/app.ts' }],
     });
     host({
       type: 'subagent.activity',
@@ -649,7 +674,7 @@ describe('assistant-ui App bridge commands', () => {
       sessionId: 'session-a',
       turnId: 'turn-live',
       toolUseId: 'task-2',
-      action: 'Grep',
+      activities: [{ action: 'Searched workspace content', target: 'src' }],
     });
     expect(
       screen.queryByRole('button', { name: /subagents working/i }),
@@ -661,8 +686,8 @@ describe('assistant-ui App bridge commands', () => {
     expect(
       screen.queryByRole('button', { name: /Stop this .* subagent/ }),
     ).toBeNull();
-    expect(await screen.findByText('Read')).toBeDefined();
-    expect(await screen.findByText('Grep')).toBeDefined();
+    expect(await screen.findByText('Read workspace files')).toBeDefined();
+    expect(await screen.findByText('Searched workspace content')).toBeDefined();
     // Parent cancellation remains an independent Composer control.
     expect(screen.getByRole('button', { name: 'Stop' })).toBeDefined();
   });
@@ -769,13 +794,13 @@ describe('assistant-ui App bridge commands', () => {
     const footer = await waitFor(() => {
       const found = document.querySelector('.dvx-thread-footer');
       expect(found).not.toBeNull();
+      expect(found!.closest('.dvx-thread-viewport')).toBeNull();
       expect(found!.querySelector('.dvx-review-dock')).not.toBeNull();
       expect(found!.querySelector('.dvx-queue')).not.toBeNull();
       return found!;
     });
-    const children = Array.from(footer.children);
     const indexOf = (selector: string): number =>
-      children.findIndex((child) => child.matches(selector));
+      Array.from(footer.children).findIndex((child) => child.matches(selector));
     expect(indexOf('.dvx-review-dock')).toBeLessThan(
       indexOf('.dvx-queue'),
     );
@@ -1709,11 +1734,7 @@ describe('assistant-ui App bridge commands', () => {
       }),
     ).toBeNull();
 
-    await user.click(
-      screen.getByRole('button', {
-        name: 'Edit message and resend from here',
-      }),
-    );
+    await user.click((await findListEditTriggers())[0]);
     expect(posted).toContainEqual({
       type: 'editStage.begin',
       sessionId: 'session-a',
@@ -1864,14 +1885,8 @@ describe('assistant-ui App bridge commands', () => {
       ],
     });
 
-    await user.click(
-      await screen.findByRole('button', {
-        name: 'Edit message and resend from here',
-      }),
-    );
-    expect(
-      screen.getByLabelText('Edit message and resend'),
-    ).toBeDefined();
+    await user.click((await findListEditTriggers())[0]);
+    expect(screen.getAllByLabelText('Edit message and resend')).toHaveLength(1);
 
     fireEvent.change(input, { target: { value: 'A brand new question' } });
     await waitFor(() => {
@@ -1886,14 +1901,14 @@ describe('assistant-ui App bridge commands', () => {
     // discarded with the draft.
     await waitFor(() =>
       expect(
-        screen.queryByLabelText('Edit message and resend'),
-      ).toBeNull(),
+        screen.queryAllByLabelText('Edit message and resend'),
+      ).toHaveLength(0),
     );
     expect(posted).toContainEqual({
       type: 'editStage.cancel',
       sessionId: 'session-a',
     });
-    expect(screen.getByText('Earlier question')).toBeDefined();
+    expect(screen.getAllByText('Earlier question')).toHaveLength(1);
   });
 
   it('shows slash and mention popup states instead of staying silent', async () => {

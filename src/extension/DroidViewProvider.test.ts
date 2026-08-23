@@ -349,7 +349,7 @@ describe('DroidViewProvider', () => {
     expect(late.webview.onDidReceiveMessage).not.toHaveBeenCalled();
   });
 
-  it('resyncs an initialized controller when the retained view becomes visible again', () => {
+  it('refreshes the theme when the retained view becomes visible again', () => {
     const controller = createController();
     const record = vi.fn();
     const provider = new DroidViewProvider(
@@ -374,18 +374,18 @@ describe('DroidViewProvider', () => {
     });
     expect(controller.handleMessage).not.toHaveBeenCalled();
 
-    // Re-show drives the idempotent ready resync so any message the
-    // suspended webview missed is reconciled by a fresh snapshot.
+    // Re-show only refreshes the theme. A ready resync would dump a
+    // full snapshot and remount the in-flight assistant reply.
     view.setVisible(true);
     expect(record).toHaveBeenCalledWith({
       level: 'info',
       name: 'host.view.visibility',
       attributes: { visible: true },
     });
-    expect(controller.handleMessage).toHaveBeenCalledExactlyOnceWith({
-      type: 'webview.ready',
-      protocolVersion: BRIDGE_PROTOCOL_VERSION,
-    });
+    expect(controller.handleMessage).not.toHaveBeenCalled();
+    expect(view.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'ui.theme' }),
+    );
   });
 
   it('boots the webview HTML on the resolved theme', () => {

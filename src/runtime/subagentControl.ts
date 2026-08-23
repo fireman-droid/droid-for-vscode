@@ -1,15 +1,34 @@
 import type { ConnectedDroid } from '@factory/droid-sdk';
 
-import { MAX_SUBAGENT_ACTIVITY_LENGTH } from '../shared/subagentProtocol';
+import {
+  MAX_SUBAGENT_ACTIVITIES,
+  MAX_SUBAGENT_ACTIVITY_LENGTH,
+  MAX_SUBAGENT_ACTIVITY_TARGET_LENGTH,
+  type SubagentActivityItem,
+} from '../shared/subagentProtocol';
+import {
+  summarizeToolAction,
+  toolNameCandidates,
+} from '../shared/toolActivity';
+import {
+  extractToolFilePaths,
+  toWorkspaceRelativePath,
+} from './toolFilePath';
+import {
+  extractToolTarget,
+  normalizeTodoDetail,
+} from './toolDetail';
 
 /**
  * Host-facing observation surface for inline Task subagent cards.
  * Child session ids remain host-only; the public daemon snapshot is
- * sampled only for the newest bounded tool name.
+ * projected to a bounded semantic activity trail.
  */
 export interface SubagentControlGateway {
-  /** Last tool name inside the child, or null when unreadable. */
-  sampleActivity(childSessionId: string): Promise<string | null>;
+  sampleActivities(
+    childSessionId: string,
+    workspaceRoot: string,
+  ): Promise<readonly SubagentActivityItem[]>;
 }
 
 /** Messages fetched per activity sample; newest tail is enough. */
@@ -19,69 +38,212 @@ export function createDaemonSubagentControl(
   getDroid: () => Promise<ConnectedDroid>,
 ): SubagentControlGateway {
   return {
-    async sampleActivity(childSessionId) {
+    async sampleActivities(childSessionId, workspaceRoot) {
       try {
         const droid = await getDroid();
         const messages = await droid.sessions.getMessages(
           childSessionId,
           { limit: ACTIVITY_SAMPLE_LIMIT },
         );
-        return lastToolName(messages);
+        return projectSubagentActivities(messages, workspaceRoot);
       } catch {
-        return null;
+        return [];
       }
     },
   };
 }
 
 /**
- * Scans a `getMessages` payload back to front for the newest tool
- * call and returns its bounded name. The payload shape is treated as
- * untrusted: every step is structural.
+ * Scans a `getMessages` payload newest-first and keeps the latest
+ * semantic activity plus three preceding distinct activities. Raw
+ * input and output never leave this Runtime projection.
  */
-export function lastToolName(messages: unknown): string | null {
+export function projectSubagentActivities(
+  messages: unknown,
+  workspaceRoot: string,
+): readonly SubagentActivityItem[] {
   if (!Array.isArray(messages)) {
-    return null;
+    return [];
   }
+  const activities: SubagentActivityItem[] = [];
+  let previousFingerprint: string | null = null;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const name = toolNameOf(messages[index]);
-    if (name !== null) {
-      return name;
+    const content = contentOf(messages[index]);
+    for (
+      let blockIndex = content.length - 1;
+      blockIndex >= 0;
+      blockIndex -= 1
+    ) {
+      const activity = activityOf(content[blockIndex], workspaceRoot);
+      if (activity === null) {
+        continue;
+      }
+      const fingerprint = `${activity.action}\u0000${activity.target ?? ''}`;
+      if (fingerprint !== previousFingerprint) {
+        activities.push(activity);
+        previousFingerprint = fingerprint;
+      }
+      if (activities.length >= MAX_SUBAGENT_ACTIVITIES) {
+        return activities;
+      }
     }
   }
-  return null;
+  return activities;
 }
 
-function toolNameOf(message: unknown): string | null {
+function contentOf(message: unknown): readonly unknown[] {
   if (typeof message !== 'object' || message === null) {
-    return null;
+    return [];
   }
   const content = (message as { content?: unknown }).content;
-  if (!Array.isArray(content)) {
+  return Array.isArray(content) ? content : [];
+}
+
+function activityOf(
+  block: unknown,
+  workspaceRoot: string,
+): SubagentActivityItem | null {
+  if (
+    typeof block !== 'object' ||
+    block === null ||
+    (block as { type?: unknown }).type !== 'tool_use'
+  ) {
     return null;
   }
-  for (let index = content.length - 1; index >= 0; index -= 1) {
-    const block: unknown = content[index];
-    if (
-      typeof block !== 'object' ||
-      block === null ||
-      (block as { type?: unknown }).type !== 'tool_use'
-    ) {
-      continue;
-    }
-    const name = (block as { name?: unknown }).name;
-    if (typeof name !== 'string') {
-      continue;
-    }
-    const bounded = name
-      .replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, MAX_SUBAGENT_ACTIVITY_LENGTH)
-      .trim();
-    if (bounded.length > 0) {
-      return bounded;
-    }
+  const rawName = (block as { name?: unknown }).name;
+  if (typeof rawName !== 'string') {
+    return null;
   }
-  return null;
+  const toolName = boundedText(rawName, MAX_SUBAGENT_ACTIVITY_LENGTH);
+  if (toolName === null) {
+    return null;
+  }
+  const input = (block as { input?: unknown }).input;
+  const summarized = summarizeToolAction(toolName);
+  const action = boundedText(
+    summarized.startsWith('Used ')
+      ? 'Continued delegated work'
+      : summarized,
+    MAX_SUBAGENT_ACTIVITY_LENGTH,
+  );
+  if (action === null) {
+    return null;
+  }
+  return {
+    action,
+    target: targetOf(toolName, input, workspaceRoot),
+  };
+}
+
+function targetOf(
+  toolName: string,
+  input: unknown,
+  workspaceRoot: string,
+): string | null {
+  const names = toolNameCandidates(toolName);
+  const target =
+    fileTargetOf(toolName, input, workspaceRoot) ??
+    executeTargetOf(names, input) ??
+    todoTargetOf(names, input) ??
+    skillTargetOf(names, input) ??
+    extractToolTarget(toolName, input, workspaceRoot);
+  return target === undefined
+    ? null
+    : boundedText(target, MAX_SUBAGENT_ACTIVITY_TARGET_LENGTH);
+}
+
+function fileTargetOf(
+  toolName: string,
+  input: unknown,
+  workspaceRoot: string,
+): string | undefined {
+  const paths = extractToolFilePaths(toolName, input)
+    .map((path) => toWorkspaceRelativePath(workspaceRoot, path))
+    .filter((path): path is string => path !== undefined);
+  const first = paths[0];
+  if (first === undefined) {
+    return undefined;
+  }
+  return paths.length === 1
+    ? first
+    : `${first} + ${String(paths.length - 1)} files`;
+}
+
+function executeTargetOf(
+  names: readonly string[],
+  input: unknown,
+): string | undefined {
+  if (
+    !names.includes('execute') ||
+    typeof input !== 'object' ||
+    input === null
+  ) {
+    return undefined;
+  }
+  const command = (input as { command?: unknown }).command;
+  if (typeof command !== 'string') {
+    return undefined;
+  }
+  const sample = command.slice(0, 1_024).toLocaleLowerCase();
+  if (/\b(vitest|jest|pytest)\b|(?:^|\s)(?:pnpm|npm|yarn)\s+(?:run\s+)?test\b/u.test(sample)) {
+    return 'Tests';
+  }
+  if (/\btsc\b|typecheck/u.test(sample)) {
+    return 'TypeScript check';
+  }
+  if (/\b(eslint|stylelint)\b|(?:^|\s)(?:pnpm|npm|yarn)\s+(?:run\s+)?lint\b/u.test(sample)) {
+    return 'Lint check';
+  }
+  if (/\b(esbuild|webpack)\b|(?:^|\s)(?:pnpm|npm|yarn)\s+(?:run\s+)?build\b/u.test(sample)) {
+    return 'Build';
+  }
+  return undefined;
+}
+
+function todoTargetOf(
+  names: readonly string[],
+  input: unknown,
+): string | undefined {
+  if (
+    !names.includes('todowrite') ||
+    typeof input !== 'object' ||
+    input === null
+  ) {
+    return undefined;
+  }
+  const detail = normalizeTodoDetail(
+    (input as { todos?: unknown }).todos,
+  );
+  const current = detail
+    ?.split('\n')
+    .find((line) => line.includes('[in_progress]'));
+  return current?.replace(/^\d+\.\s+\[in_progress\]\s+/u, '');
+}
+
+function skillTargetOf(
+  names: readonly string[],
+  input: unknown,
+): string | undefined {
+  if (
+    !names.includes('skill') ||
+    typeof input !== 'object' ||
+    input === null
+  ) {
+    return undefined;
+  }
+  const skill = (input as { skill?: unknown }).skill;
+  return typeof skill === 'string' ? skill : undefined;
+}
+
+function boundedText(value: string, maxLength: number): string | null {
+  const bounded = value
+    .replace(
+      /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]+/gu,
+      ' ',
+    )
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .slice(0, maxLength)
+    .trim();
+  return bounded.length > 0 ? bounded : null;
 }

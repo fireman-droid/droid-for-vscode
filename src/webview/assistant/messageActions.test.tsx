@@ -31,6 +31,18 @@ import type {
 } from '../../shared/bridgeMessages';
 import { App } from './App';
 
+// The sticky pin overlays a second copy of the question covering the
+// viewport top, so an unscoped query can land on the overlay instead of
+// the row it means. Edit affordances are addressed on the real list.
+async function findListEditTriggers(): Promise<HTMLElement[]> {
+  const all = await screen.findAllByRole('button', {
+    name: 'Edit message and resend from here',
+  });
+  return all.filter(
+    (element) => element.closest('.dvx-virtual-detached-pin') === null,
+  );
+}
+
 let persistedState: unknown = { draft: '' };
 const posted: WebviewToHostMessage[] = [];
 const vscode = {
@@ -163,11 +175,7 @@ describe('user edit card dismissal', () => {
     render(<App />);
     host({ ...snapshot(0), transcript: twoTurnTranscript });
 
-    await user.click(
-      (await screen.findAllByRole('button', {
-        name: 'Edit message and resend from here',
-      }))[0],
-    );
+    await user.click((await findListEditTriggers())[0]);
     const editor = screen.getByLabelText('Edit message and resend');
 
     // No Cancel button anywhere in the edit card.
@@ -190,6 +198,56 @@ describe('user edit card dismissal', () => {
       sessionId: 'session-a',
     });
     expect(screen.getByText('First question')).toBeDefined();
+  });
+});
+
+describe('user edit card restore control', () => {
+  it('collapses the rewind file list behind a trigger and forwards the choice on resend', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    host({ ...snapshot(0), transcript: twoTurnTranscript });
+
+    await user.click((await findListEditTriggers())[0]);
+
+    host({
+      type: 'rewind.info',
+      sequence: 1,
+      sessionId: 'session-a',
+      messageId: 'sdk-user-1',
+      restorableCount: 2,
+      createdCount: 1,
+      restorablePaths: ['src/a.ts'],
+      createdPaths: ['src/b.ts'],
+      evictedFiles: [],
+    });
+
+    // Collapsed by default: no file path is visible until opened.
+    expect(await screen.findByText('Restore 3 files changed after this point'))
+      .toBeDefined();
+    expect(screen.queryByText('src/a.ts')).toBeNull();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Restorable files' }),
+    );
+    expect(screen.getByText('src/a.ts')).toBeDefined();
+    expect(screen.getByText('new')).toBeDefined();
+
+    await user.click(screen.getByRole('checkbox'));
+    fireEvent.keyDown(screen.getByLabelText('Edit message and resend'), {
+      key: 'Enter',
+    });
+
+    await waitFor(() =>
+      expect(posted).toContainEqual(
+        expect.objectContaining({
+          type: 'turn.editResend',
+          sessionId: 'session-a',
+          messageId: 'sdk-user-1',
+          text: 'First question',
+          restoreFiles: true,
+        }),
+      ),
+    );
   });
 });
 

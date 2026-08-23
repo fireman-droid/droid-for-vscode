@@ -1,0 +1,292 @@
+/* Pending AskUser and ExitSpecMode surfaces sit with the Composer instead of
+   interrupting transcript chronology. The warm layered treatment matches the
+   shell's restrained raised surfaces while keeping the two cards independent. */
+.dvx-thread-footer > .dvx-interaction-panel {
+  box-sizing: border-box;
+  display: flex;
+  min-height: 0;
+  width: 100%;
+  max-width: var(--dvx-column-max);
+  max-height: min(52vh, 520px);
+  flex-direction: column;
+  margin: 0 auto 8px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(
+    in srgb,
+    var(--dvx-border-strong) 78%,
+    var(--dvx-border)
+  );
+  border-radius: 13px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--dvx-raised) 96%, var(--dvx-accent) 4%),
+      var(--dvx-raised)
+    );
+  box-shadow:
+    0 1px 2px rgb(48 42 36 / 8%),
+    0 14px 34px -26px rgb(48 42 36 / 34%);
+}
+
+.dvx-thread-footer .dvx-interaction-queue {
+  padding: 7px 14px 0;
+}
+
+.dvx-thread-footer .dvx-interaction-card {
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  padding: 13px 14px 0;
+}
+
+.dvx-thread-footer .dvx-interaction-heading {
+  flex: none;
+}
+
+.dvx-thread-footer .dvx-interaction-heading h2 {
+  font-size: 14px;
+  line-height: 21px;
+}
+
+.dvx-thread-footer .dvx-ask-questions {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.dvx-thread-footer .dvx-ask-user fieldset {
+  padding-block: 13px;
+}
+
+.dvx-thread-footer .dvx-question-options {
+  gap: 6px;
+  padding-top: 8px;
+}
+
+.dvx-thread-footer .dvx-question-options label {
+  min-height: 36px;
+  padding: 7px 9px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: color-mix(
+    in srgb,
+    var(--dvx-surface) 52%,
+    transparent
+  );
+  transition:
+    border-color var(--dvx-duration-fast) ease,
+    background-color var(--dvx-duration-fast) ease,
+    box-shadow var(--dvx-duration-fast) ease;
+}
+
+.dvx-thread-footer .dvx-question-options label:hover {
+  border-color: var(--dvx-border);
+  background: color-mix(
+    in srgb,
+    var(--dvx-soft) 72%,
+    var(--dvx-raised)
+  );
+}
+
+.dvx-thread-footer .dvx-question-options label:has(input:checked) {
+  border-color: color-mix(
+    in srgb,
+    var(--dvx-accent) 38%,
+    var(--dvx-border)
+  );
+  background: color-mix(
+    in srgb,
+    var(--dvx-accent) 7%,
+    var(--dvx-raised)
+  );
+  box-shadow: inset 0 0 0 1px color-mix(
+    in srgb,
+    var(--dvx-accent) 8%,
+    transparent
+  );
+}
+
+.dvx-thread-footer .dvx-ask-user input[type='text'] {
+  background: color-mix(
+    in srgb,
+    var(--dvx-raised) 88%,
+    var(--dvx-surface)
+  );
+}
+
+.dvx-thread-footer .dvx-interaction-actions {
+  flex: none;
+  height: auto;
+  min-height: 56px;
+  margin-top: 0;
+  padding: 11px 0 12px;
+  border-top: 1px solid color-mix(
+    in srgb,
+    var(--dvx-border) 76%,
+    transparent
+  );
+}
+
+.dvx-thread-footer .dvx-plan-preview {
+  min-height: 92px;
+  max-height: min(34vh, 340px);
+  margin-top: 11px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(
+    in srgb,
+    var(--dvx-border) 82%,
+    transparent
+  );
+  border-radius: 9px;
+  background: color-mix(
+    in srgb,
+    var(--dvx-surface) 58%,
+    var(--dvx-raised)
+  );
+  scrollbar-gutter: stable;
+}
+
+.dvx-plan-open-title {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dvx-plan-open-title > span:last-child {
+  flex: none;
+  color: var(--dvx-muted);
+  font-size: 11px;
+  font-weight: 500;
+  transition: color var(--dvx-duration-fast) ease;
+}
+
+.dvx-plan-open-title:hover > span:last-child,
+.dvx-plan-open-title:focus-visible > span:last-child {
+  color: var(--dvx-accent);
+}
+
+.dvx-plan-open-title:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid color-mix(
+    in srgb,
+    var(--dvx-focus) 55%,
+    transparent
+  );
+  outline-offset: 3px;
+}
+
+.dvx-plan-document-status {
+  flex: none;
+  margin: 7px 1px 0;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.dvx-ask-result {
+  max-width: 560px;
+  margin: 8px 0 2px;
+  padding: 9px 11px;
+  border-left: 2px solid color-mix(
+    in srgb,
+    var(--dvx-accent) 58%,
+    var(--dvx-border)
+  );
+  border-radius: 0 7px 7px 0;
+  background: color-mix(
+    in srgb,
+    var(--dvx-soft) 48%,
+    transparent
+  );
+}
+
+.dvx-ask-result header {
+  margin-bottom: 5px;
+  color: var(--dvx-subtle);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.dvx-ask-result dl,
+.dvx-ask-result dd {
+  margin: 0;
+}
+
+.dvx-ask-result dl {
+  display: grid;
+  gap: 4px;
+}
+
+.dvx-ask-result dl > div {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.34fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.dvx-ask-result dt {
+  color: var(--dvx-subtle);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.dvx-ask-result dd {
+  color: var(--dvx-text-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.dvx-ask-result-cancelled {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  border-left-color: var(--dvx-border-strong);
+}
+
+.dvx-ask-result-cancelled span {
+  color: var(--dvx-subtle);
+  font-size: 11px;
+}
+
+.dvx-ask-result-cancelled strong {
+  color: var(--dvx-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+@media (max-width: 420px) {
+  .dvx-thread-footer > .dvx-interaction-panel {
+    max-height: min(56vh, 500px);
+    margin-bottom: 7px;
+  }
+
+  .dvx-thread-footer .dvx-interaction-card {
+    padding-inline: 12px;
+  }
+
+  .dvx-plan-open-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .dvx-ask-result dl > div {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}

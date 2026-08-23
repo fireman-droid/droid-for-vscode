@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { SessionHistoryLoader } from '../runtime/history/SessionHistory';
 import {
-  createCommittedStatsHistoryLoader,
-  restoreCommittedHistoryStats,
+  createTurnStatsHistoryLoader,
+  restoreTurnChangeStats,
 } from './committedHistoryStats';
+import type { TurnSnapshotRecord } from './turnSnapshots';
 
 const state = {
   transcript: [
@@ -14,6 +15,14 @@ const state = {
       turnId: 'history-older',
       files: [
         { path: 'src/old.ts', additions: null, deletions: null },
+      ],
+    },
+    {
+      id: 'changes:kept',
+      kind: 'changes' as const,
+      turnId: 'history-kept',
+      files: [
+        { path: 'src/kept.ts', additions: 8, deletions: 2 },
       ],
     },
     {
@@ -30,31 +39,87 @@ const state = {
   truncated: false,
 };
 
-const committed = {
-  turnId: 'live-turn-before-reload',
-  hash: 'abc1234',
-  paths: ['src/app.ts'],
-  stats: [
-    { path: 'src/app.ts', additions: 3, deletions: 1 },
-  ],
-};
+const records: readonly TurnSnapshotRecord[] = [
+  {
+    turnId: 'live-older',
+    files: [{ path: 'src/old.ts', additions: 1, deletions: 4 }],
+  },
+  {
+    turnId: 'history-kept',
+    files: [{ path: 'src/kept.ts', additions: 99, deletions: 99 }],
+  },
+  {
+    turnId: 'live-latest',
+    files: [
+      { path: 'src/app.ts', additions: 3, deletions: 1 },
+      { path: 'docs/note.md', additions: 2, deletions: 0 },
+    ],
+  },
+];
 
-describe('committed history stats', () => {
-  it('restores counts on the latest synthesized Changes row', () => {
-    const restored = restoreCommittedHistoryStats(state, committed);
+describe('turn history stats', () => {
+  it('restores every Changes row by turnId then path overlap, without overwriting known counts', () => {
+    const restored = restoreTurnChangeStats(state, records);
 
     expect(restored.transcript).toEqual([
-      state.transcript[0],
       {
-        ...state.transcript[1],
+        ...state.transcript[0],
+        files: [{ path: 'src/old.ts', additions: 1, deletions: 4 }],
+      },
+      state.transcript[1],
+      {
+        ...state.transcript[2],
         files: [
           { path: 'src/app.ts', additions: 3, deletions: 1 },
+          { path: 'docs/note.md', additions: 2, deletions: 0 },
+        ],
+      },
+    ]);
+  });
+
+  it('consumes each snapshot record at most once on overlap ties', () => {
+    const restored = restoreTurnChangeStats(
+      {
+        ...state,
+        transcript: [
           {
-            path: 'docs/note.md',
-            additions: null,
-            deletions: null,
+            id: 'changes:a',
+            kind: 'changes',
+            turnId: 'a',
+            files: [{ path: 'src/app.ts', additions: null, deletions: null }],
+          },
+          {
+            id: 'changes:b',
+            kind: 'changes',
+            turnId: 'b',
+            files: [{ path: 'src/app.ts', additions: null, deletions: null }],
           },
         ],
+      },
+      [
+        {
+          turnId: 'older',
+          files: [{ path: 'src/app.ts', additions: 1, deletions: 0 }],
+        },
+        {
+          turnId: 'newer',
+          files: [{ path: 'src/app.ts', additions: 9, deletions: 2 }],
+        },
+      ],
+    );
+
+    expect(restored.transcript).toEqual([
+      {
+        id: 'changes:a',
+        kind: 'changes',
+        turnId: 'a',
+        files: [{ path: 'src/app.ts', additions: 1, deletions: 0 }],
+      },
+      {
+        id: 'changes:b',
+        kind: 'changes',
+        turnId: 'b',
+        files: [{ path: 'src/app.ts', additions: 9, deletions: 2 }],
       },
     ]);
   });
@@ -68,9 +133,8 @@ describe('committed history stats', () => {
       })),
       loadSubagentSummaries,
     };
-    const loader = createCommittedStatsHistoryLoader(base, {
-      read: async () => new Map(),
-      readCommittedTurn: () => committed,
+    const loader = createTurnStatsHistoryLoader(base, {
+      readTurns: () => records,
     });
 
     await expect(
@@ -82,15 +146,14 @@ describe('committed history stats', () => {
       status: 'available',
       state: {
         transcript: [
+          {
+            files: [{ path: 'src/old.ts', additions: 1, deletions: 4 }],
+          },
           {},
           {
             files: [
               { path: 'src/app.ts', additions: 3, deletions: 1 },
-              {
-                path: 'docs/note.md',
-                additions: null,
-                deletions: null,
-              },
+              { path: 'docs/note.md', additions: 2, deletions: 0 },
             ],
           },
         ],

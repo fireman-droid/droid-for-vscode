@@ -11,6 +11,7 @@ describe('parseSessionContext', () => {
         used: 25,
         remaining: 75,
         limit: 100,
+        compactionDetected: true,
       },
     },
     {
@@ -74,6 +75,16 @@ describe('parseSessionContext', () => {
         used: 25,
         remaining: 76,
         limit: 100,
+      },
+    },
+    {
+      status: 'ready',
+      value: {
+        availability: 'available',
+        used: 25,
+        remaining: 75,
+        limit: 100,
+        compactionDetected: false,
       },
     },
     {

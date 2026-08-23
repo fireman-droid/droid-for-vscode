@@ -9,6 +9,31 @@ import {
 import { reconcileSessionHistory } from './reconcileSessionHistory';
 
 describe('reconcileSessionHistory', () => {
+  it('deduplicates matching AskUser results across history and recovery IDs', () => {
+    const loaded = state([
+      user('sdk-user', 'Choose'),
+      {
+        id: 'sdk-result',
+        kind: 'ask-user-result',
+        turnId: 'sdk-turn',
+        status: 'answered',
+        answers: [{ topic: 'Library', answer: 'React' }],
+      },
+    ]);
+    const recovered = state([
+      user('cached-user', 'Choose'),
+      {
+        id: 'cached-result',
+        kind: 'ask-user-result',
+        turnId: 'cached-turn',
+        status: 'answered',
+        answers: [{ topic: 'Library', answer: 'React' }],
+      },
+    ]);
+
+    expect(reconcileSessionHistory(loaded, recovered)).toBe(loaded);
+  });
+
   it('keeps a recovered prefix when public SDK history is a compacted suffix', () => {
     // 'Recent prompt' is a unique-text anchor on both sides, so the
     // anchored path applies: loaded is the authoritative body and the
@@ -164,6 +189,33 @@ describe('reconcileSessionHistory', () => {
       historyStatus: 'partial',
       truncated: false,
     });
+  });
+
+  it('does not append a stale checkpoint tail behind a truncated daemon tail', () => {
+    const recovered = state([
+      anchored('cached-shared-u', 'Shared prompt', 'shared-mid'),
+      assistant('cached-shared-a', 'Shared answer'),
+      user('cached-local-u', '你好'),
+      assistant('cached-stale-a', 'Old answer from another turn'),
+    ]);
+    const loaded: HostTranscriptState = {
+      ...state([
+        anchored('sdk-shared-u', 'Shared prompt', 'shared-mid'),
+        assistant('sdk-shared-a', 'Shared answer'),
+        user(
+          'sdk-current-u',
+          '这个版本号问题应该优先看后端有没有修复？',
+        ),
+      ]),
+      historyStatus: 'partial',
+      truncated: true,
+    };
+
+    expect(
+      reconcileSessionHistory(loaded, recovered, {
+        authoritativeLoaded: true,
+      }),
+    ).toBe(loaded);
   });
 
   it('does not let a stale disconnected checkpoint hide loaded changes', () => {

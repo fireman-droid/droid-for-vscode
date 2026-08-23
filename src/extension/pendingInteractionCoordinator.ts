@@ -1,6 +1,7 @@
 import {
   MAX_ASK_USER_ANSWER_LENGTH,
   MAX_EDITED_SPEC_LENGTH,
+  type AskUserInteractionResult,
   type AskUserInteractionRequest,
   type AskUserRespondMessage,
   type InteractionRequest,
@@ -29,6 +30,7 @@ export interface PendingInteractionProjection extends InteractionContext {
 
 export interface ClosedInteractionProjection extends InteractionContext {
   readonly requestId: string;
+  readonly result?: AskUserInteractionResult;
 }
 
 type PendingInteraction =
@@ -214,8 +216,19 @@ export class PendingInteractionCoordinator {
             answer,
           })),
         };
+    const projection: AskUserInteractionResult = message.cancelled
+      ? { status: 'cancelled' }
+      : {
+          status: 'answered',
+          answers: entry.runtimeRequest.questions.map((question) => ({
+            topic: question.topic,
+            answer:
+              message.answers.find(({ index }) => index === question.index)
+                ?.answer ?? '',
+          })),
+        };
     this.pending.delete(message.requestId);
-    this.close(entry);
+    this.close(entry, projection);
     entry.resolve(result);
     return true;
   }
@@ -276,25 +289,30 @@ export class PendingInteractionCoordinator {
       return;
     }
 
-    this.close(entry);
     if (entry.kind === 'permission') {
+      this.close(entry);
       entry.resolve(
         cancellingRuntimeInteractionHandler.requestPermission(
           entry.runtimeRequest,
         ),
       );
     } else {
+      this.close(entry, { status: 'cancelled' });
       entry.resolve(
         cancellingRuntimeInteractionHandler.askUser(entry.runtimeRequest),
       );
     }
   }
 
-  private close(entry: PendingInteraction): void {
+  private close(
+    entry: PendingInteraction,
+    result?: AskUserInteractionResult,
+  ): void {
     try {
       this.onClosed({
         ...entry.context,
         requestId: entry.request.requestId,
+        ...(result === undefined ? {} : { result }),
       });
     } catch {
       // Interaction settlement must not depend on a view listener.

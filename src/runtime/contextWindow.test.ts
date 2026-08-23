@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { projectContextWindow } from './contextWindow';
+import {
+  projectContextWindow,
+  resolveContextWindow,
+} from './contextWindow';
 
 const source = (
   limit: number,
@@ -56,6 +59,80 @@ describe('projectContextWindow', () => {
         126_387,
       ),
     ).toMatchObject({ used: 126_387, remaining: 123_613 });
+  });
+
+  it('resets a near-full floor after an automatic compaction drop', () => {
+    expect(
+      projectContextWindow(
+        source(250_000, { status: 'available', used: 212_067 }),
+        250_000,
+      ),
+    ).toEqual({
+      availability: 'available',
+      used: 212_067,
+      remaining: 37_933,
+      limit: 250_000,
+      compactionDetected: true,
+    });
+  });
+
+  it('does not mistake a tiny post-threshold call for compaction', () => {
+    expect(
+      projectContextWindow(
+        source(250_000, { status: 'available', used: 304 }),
+        250_000,
+      ),
+    ).toMatchObject({
+      used: 250_000,
+      remaining: 0,
+    });
+  });
+
+  it('keeps automatic compaction evidence for later session reads', () => {
+    const first = resolveContextWindow(
+      source(250_000, { status: 'available', used: 212_067 }),
+      'session-1',
+      {
+        sessionId: 'session-1',
+        used: 250_000,
+        limit: 250_000,
+        compactionDetected: false,
+      },
+    );
+    const next = resolveContextWindow(
+      source(250_000, { status: 'available', used: 220_000 }),
+      'session-1',
+      first.confirmed,
+    );
+
+    expect(first.window).toMatchObject({
+      used: 212_067,
+      compactionDetected: true,
+    });
+    expect(next.window).toMatchObject({
+      used: 220_000,
+      compactionDetected: true,
+    });
+  });
+
+  it('does not report compaction when the model budget changed', () => {
+    const changed = resolveContextWindow(
+      source(100_000, { status: 'available', used: 80_000 }),
+      'session-1',
+      {
+        sessionId: 'session-1',
+        used: 250_000,
+        limit: 250_000,
+        compactionDetected: false,
+      },
+    );
+
+    expect(changed.window).toEqual({
+      availability: 'available',
+      used: 80_000,
+      remaining: 20_000,
+      limit: 100_000,
+    });
   });
 
   it('never lets the floor exceed the budget', () => {

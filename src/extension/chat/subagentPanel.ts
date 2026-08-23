@@ -1,7 +1,8 @@
 // Host-side live activity sampler for inline Subagent cards. Child
-// session ids remain host-only; the webview receives only the latest
-// bounded action keyed by the parent Task's toolUseId.
+// session ids remain host-only; the webview receives only a bounded
+// semantic activity trail keyed by the parent Task's toolUseId.
 import type { SessionTranscriptItem } from '../../shared/bridgeMessages';
+import type { SubagentActivityItem } from '../../shared/subagentProtocol';
 import {
   subagentIdentityKey,
   type SubagentInvocationRecord,
@@ -118,6 +119,7 @@ export async function pollTick(
     return;
   }
   const sessionId = ctl.sessionId;
+  const workspaceRoot = ctl.activeRuntimeCwd;
   const rows = runningSubagentRowsOf(ctl);
   if (rows.length === 0) {
     state.lastEmitted.clear();
@@ -143,12 +145,19 @@ export async function pollTick(
       const childId = mappingReady
         ? (state.mapping.get(row.toolUseId) ?? null)
         : null;
-      if (gateway === null || childId === null) {
-        return { row, action: null, sampled: false };
+      if (
+        gateway === null ||
+        childId === null ||
+        workspaceRoot === null
+      ) {
+        return { row, activities: [], sampled: false };
       }
       return {
         row,
-        action: await gateway.sampleActivity(childId),
+        activities: await gateway.sampleActivities(
+          childId,
+          workspaceRoot,
+        ),
         sampled: true,
       };
     }));
@@ -159,13 +168,13 @@ export async function pollTick(
     ) {
       return;
     }
-    for (const { row, action } of samples) {
-      emitActivity(ctl, sessionId, row, action);
+    for (const { row, activities } of samples) {
+      emitActivity(ctl, sessionId, row, activities);
     }
     const sampled = samples.filter((sample) => sample.sampled);
     if (
       sampled.length > 0 &&
-      sampled.every((sample) => sample.action === null)
+      sampled.every((sample) => sample.activities.length === 0)
     ) {
       state.skipTicks = BACKOFF_TICKS_AFTER_FAILURE;
     }
@@ -299,10 +308,10 @@ function emitActivity(
   ctl: ChatControllerInternals,
   sessionId: string,
   row: { readonly toolUseId: string; readonly turnId: string },
-  action: string | null,
+  activities: readonly SubagentActivityItem[],
 ): void {
   const state = stateOf(ctl);
-  const fingerprint = action ?? '';
+  const fingerprint = JSON.stringify(activities);
   if (state.lastEmitted.get(row.toolUseId) === fingerprint) {
     return;
   }
@@ -312,6 +321,6 @@ function emitActivity(
     sessionId,
     turnId: row.turnId,
     toolUseId: row.toolUseId,
-    action,
+    activities,
   });
 }

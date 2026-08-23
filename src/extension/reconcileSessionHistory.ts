@@ -4,6 +4,7 @@ import {
   type HostTranscriptState,
 } from '../shared/hostTranscriptState';
 import { trimTranscriptToLimits } from '../shared/transcriptLimits';
+import { transcriptItemKey } from './transcriptReconcileKey';
 
 /**
  * Merges a freshly loaded session history with a locally recovered
@@ -34,7 +35,7 @@ export function reconcileSessionHistory(
 }
 
 export interface ReconcileSessionHistoryOptions {
-  /** Complete startup daemon history rejects unmatched local branches. */
+  /** Startup daemon history owns its complete or bounded current tail. */
   readonly authoritativeLoaded?: boolean;
   /** A background read must keep unknown turns from the live Host tail. */
   readonly preserveLocalTail?: boolean;
@@ -62,9 +63,9 @@ function reconcileByUserAnchors(
   if (firstMatch === undefined || lastMatch === undefined) {
     return null;
   }
-  const loadedIsAuthoritative =
+  const loadedTailIsAuthoritative =
     options.authoritativeLoaded === true &&
-    loaded.historyStatus === 'complete';
+    (loaded.historyStatus === 'complete' || loaded.truncated);
 
   // Sent-attachment chip metadata only exists on the recovered side
   // (loadSession cannot attribute non-image attachment blocks back to
@@ -98,7 +99,7 @@ function reconcileByUserAnchors(
   // older rewind/selection lineage. Prepending it creates phantom
   // dialogue after Reload. Prefix recovery remains valid only when
   // loaded is a compacted suffix with no newer turn of its own.
-  const head = loadedIsAuthoritative || loadedHasNewerTurn
+  const head = loadedTailIsAuthoritative || loadedHasNewerTurn
     ? []
     : recovered.transcript
         .slice(0, firstMatch.recoveredIndex)
@@ -112,7 +113,7 @@ function reconcileByUserAnchors(
     lastMatch,
     alignment.loadedKnowsAnchor,
     options.preserveLocalTail === true,
-    !loadedIsAuthoritative ||
+    !loadedTailIsAuthoritative ||
       options.preserveLocalTail === true,
   ).filter((item) => !tailRegionKeys.has(transcriptItemKey(item)));
 
@@ -681,7 +682,7 @@ function reconcileByOverlap(
 ): HostTranscriptState {
   if (
     options.authoritativeLoaded === true &&
-    loaded.historyStatus === 'complete'
+    (loaded.historyStatus === 'complete' || loaded.truncated)
   ) {
     return loaded;
   }
@@ -860,40 +861,4 @@ function suffixPrefixOverlap(
     }
   }
   return 0;
-}
-
-function transcriptItemKey(item: SessionTranscriptItem): string {
-  switch (item.kind) {
-    case 'user':
-      return JSON.stringify([item.kind, item.text]);
-    case 'assistant':
-      return JSON.stringify([item.kind, item.text]);
-    case 'thinking':
-      return JSON.stringify([item.kind, item.text]);
-    case 'tool':
-      return JSON.stringify([item.kind, item.toolName, item.action]);
-    case 'changes':
-      return JSON.stringify([
-        item.kind,
-        item.files.map((file) => file.path),
-      ]);
-    case 'diagnostic':
-      return JSON.stringify([
-        item.kind,
-        item.severity,
-        item.code,
-        item.message,
-      ]);
-    // `data` is deliberately excluded: a recovered checkpoint holds a
-    // placeholder (empty data) for the same image the loaded history
-    // carries in full, and the two must merge as one item.
-    case 'image':
-      return JSON.stringify([
-        item.kind,
-        item.origin,
-        item.mediaType,
-        item.byteLength,
-        item.generated,
-      ]);
-  }
 }

@@ -78,6 +78,20 @@ export function transcriptItemTextUnits(
           0,
         )
       );
+    case 'ask-user-result':
+      return (
+        item.id.length +
+        item.kind.length +
+        item.turnId.length +
+        item.status.length +
+        (item.status === 'answered'
+          ? item.answers.reduce(
+              (total, answer) =>
+                total + answer.topic.length + answer.answer.length,
+              0,
+            )
+          : 0)
+      );
     case 'diagnostic':
       return (
         item.id.length +

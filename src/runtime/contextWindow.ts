@@ -6,6 +6,18 @@ export interface FactoryContextWindowSource {
   readonly lastCallTokenUsage: CapturedLastCallTokenUsage;
 }
 
+export interface ConfirmedContextWindow {
+  readonly sessionId: string;
+  readonly used: number;
+  readonly limit: number;
+  readonly compactionDetected: boolean;
+}
+
+const COMPACTION_HIGH_WATER_FRACTION = 0.9;
+const COMPACTION_MIN_DROP_FRACTION = 0.1;
+const AUXILIARY_CALL_MAX_TOKENS = 2_000;
+const AUXILIARY_CALL_MAX_FRACTION = 0.02;
+
 export function projectContextWindow(
   source: FactoryContextWindowSource,
   /**
@@ -39,15 +51,62 @@ export function projectContextWindow(
       reason: 'invalid-last-call',
     };
   }
-  // A conversation sitting at the compaction threshold legitimately
-  // exceeds the budget, as does one whose model was switched to a
-  // smaller window: report a full meter, not no meter.
-  const used = Math.min(Math.max(reported, confirmedUsed), limit);
+  const compactionDetected = isCompactionDrop(
+    reported,
+    confirmedUsed,
+    limit,
+  );
+  // Small title/metadata calls still keep the confirmed floor. A
+  // substantial provider call that follows a near-full window is the
+  // observable same-session signature of automatic compaction, so it
+  // is allowed to reset that floor.
+  const used = Math.min(
+    compactionDetected ? reported : Math.max(reported, confirmedUsed),
+    limit,
+  );
   return {
     availability: 'available',
     used,
     remaining: limit - used,
     limit,
+    ...(compactionDetected ? { compactionDetected: true } : {}),
+  };
+}
+
+export function resolveContextWindow(
+  source: FactoryContextWindowSource,
+  sessionId: string,
+  confirmed: ConfirmedContextWindow | null,
+): {
+  readonly window: RuntimeContextWindow;
+  readonly confirmed: ConfirmedContextWindow | null;
+} {
+  const previous =
+    confirmed?.sessionId === sessionId ? confirmed : null;
+  let projected = projectContextWindow(source);
+  if (
+    projected.availability === 'available' &&
+    previous?.limit === projected.limit
+  ) {
+    projected = projectContextWindow(source, previous.used);
+  }
+  if (projected.availability === 'unavailable') {
+    return { window: projected, confirmed: previous };
+  }
+  const compactionDetected =
+    projected.compactionDetected === true ||
+    previous?.compactionDetected === true;
+  const window = compactionDetected
+    ? { ...projected, compactionDetected: true as const }
+    : projected;
+  return {
+    window,
+    confirmed: {
+      sessionId,
+      used: window.used,
+      limit: window.limit,
+      compactionDetected,
+    },
   };
 }
 
@@ -74,4 +133,20 @@ function contextTokens(value: number): number | null {
     value <= Number.MAX_SAFE_INTEGER
     ? Math.round(value)
     : null;
+}
+
+function isCompactionDrop(
+  reported: number,
+  confirmedUsed: number,
+  limit: number,
+): boolean {
+  const auxiliaryCeiling = Math.max(
+    AUXILIARY_CALL_MAX_TOKENS,
+    limit * AUXILIARY_CALL_MAX_FRACTION,
+  );
+  return (
+    confirmedUsed >= limit * COMPACTION_HIGH_WATER_FRACTION &&
+    reported > auxiliaryCeiling &&
+    confirmedUsed - reported >= limit * COMPACTION_MIN_DROP_FRACTION
+  );
 }

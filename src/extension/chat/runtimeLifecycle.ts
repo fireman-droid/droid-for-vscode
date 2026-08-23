@@ -132,6 +132,7 @@ export async function handleReady(ctl: ChatControllerInternals): Promise<void> {
       }
       ctl.emitSnapshot();
       ctl.interactions.replayPending();
+      ctl.planDocuments.replay();
       return;
     }
 

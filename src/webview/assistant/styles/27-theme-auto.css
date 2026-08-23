@@ -346,8 +346,31 @@ html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb:hover {
   );
 }
 
-.dvx-shell[data-dvx-theme-preference='auto'] .dvx-subagent-latest {
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-subagent-activity-label {
+  color: var(
+    --vscode-disabledForeground,
+    var(--dvx-subtle)
+  );
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-subagent-activity-line {
+  color: var(--vscode-foreground, var(--dvx-ink));
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-subagent-activity-target,
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-subagent-activity-empty,
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-subagent-recent-item {
   color: var(--dvx-muted);
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-subagent-recent-item::before {
+  background: var(--vscode-disabledForeground, var(--dvx-subtle));
 }
 
 /* AskUser choices are actionable primary text. The shared secondary

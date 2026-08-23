@@ -191,7 +191,7 @@ describe('PendingInteractionCoordinator', () => {
   });
 
   it('validates cancellation and exactly one non-empty AskUser answer per index', async () => {
-    const { coordinator, handler } = createCoordinator();
+    const { coordinator, handler, closed } = createCoordinator();
     coordinator.beginTurn('session-1', 'turn-1');
     const first = handler.askUser({
       toolCallId: 'ask-1',
@@ -261,6 +261,26 @@ describe('PendingInteractionCoordinator', () => {
       cancelled: true,
       answers: [],
     });
+    expect(closed).toEqual([
+      {
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        requestId: 'interaction-1',
+        result: {
+          status: 'answered',
+          answers: [
+            { topic: 'Decision', answer: 'First' },
+            { topic: 'Decision', answer: 'Second' },
+          ],
+        },
+      },
+      {
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        requestId: 'interaction-2',
+        result: { status: 'cancelled' },
+      },
+    ]);
   });
 
   it('keeps concurrent promises independent and replays requests in insertion order', async () => {

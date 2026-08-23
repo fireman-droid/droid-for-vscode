@@ -44,6 +44,7 @@ import {
   type RuntimeDisposeOptions,
   type RuntimeCompactResult,
   type RuntimeForkResult,
+  type RuntimeGitDiff,
   type RuntimeRewindInfo,
   type RuntimeRewindParams,
   type RuntimeRewindResult,
@@ -65,6 +66,8 @@ import {
   type RuntimeSkillLocation,
 } from './DroidRuntime';
 import { isSafeModelId } from '../shared/validateMessage';
+import { projectGitDiff } from './gitBranchDiff';
+import { projectRewindInfo } from './rewindInfo';
 import { DaemonAvailabilityError } from './daemon/daemonConnection';
 import { loadSessionCommands } from './commands/FactoryCommandCatalog';
 import {
@@ -77,7 +80,8 @@ import {
 import { createCapturedSessionView } from './capturedSessionView';
 import {
   classifyInvalidContextWindowSource,
-  projectContextWindow,
+  resolveContextWindow,
+  type ConfirmedContextWindow,
   type FactoryContextWindowSource,
 } from './contextWindow';
 import type { RuntimeAvailability, RuntimeEvent } from './runtimeEvents';
@@ -127,6 +131,20 @@ export interface FactoryDroidSessionRewindInfo {
   readonly evictedFiles: Array<{ filePath: string; reason: string }>;
 }
 
+/** The daemon's branch-versus-base git report, as the facade sees it. */
+export interface FactoryDroidSessionGitDiff {
+  readonly branch: string;
+  readonly baseBranch: string;
+  readonly files: ReadonlyArray<{
+    path: string;
+    additions: number;
+    deletions: number;
+  }>;
+  readonly totalAdditions: number;
+  readonly totalDeletions: number;
+  readonly commitCount: number;
+}
+
 export interface FactoryDroidSession {
   readonly id: string;
   readonly settings: Readonly<SessionSettings>;
@@ -170,6 +188,7 @@ export interface FactoryDroidSession {
   getRewindInfo?(params: {
     messageId: string;
   }): Promise<FactoryDroidSessionRewindInfo>;
+  getGitDiff?(): Promise<FactoryDroidSessionGitDiff>;
   compact?(params?: {
     customInstructions?: string;
   }): Promise<{ session: FactoryDroidSession; removedCount: number }>;
@@ -265,14 +284,11 @@ export class FactoryDroidRuntime implements DroidRuntime {
   private subagentWatchUnsubscribe: (() => void) | null = null;
   /**
    * Highest context numerator confirmed for one session id, held as
-   * the floor {@link projectContextWindow} needs. Rewind, compaction
-   * and fork all continue in a new session id, which drops the floor
-   * with the shrunken conversation.
+   * the floor {@link projectContextWindow} needs. Session replacement
+   * drops it with the id; an observed automatic-compaction drop resets
+   * it in place and remains visible until the session changes.
    */
-  private confirmedContextUsed: {
-    readonly sessionId: string;
-    readonly used: number;
-  } | null = null;
+  private confirmedContextUsed: ConfirmedContextWindow | null = null;
   /** Runtime events queued for the active turn's stream to yield. */
   private pendingTurnEvents: RuntimeEvent[] = [];
 
@@ -564,32 +580,30 @@ export class FactoryDroidRuntime implements DroidRuntime {
       throw new Error('Droid context statistics could not be read.');
     }
     try {
-      const projected = projectContextWindow(
+      const resolved = resolveContextWindow(
         source,
-        this.confirmedContextUsed?.sessionId === session.id
-          ? this.confirmedContextUsed.used
-          : 0,
+        session.id,
+        this.confirmedContextUsed,
       );
-      if (projected.availability === 'available') {
-        this.confirmedContextUsed = {
-          sessionId: session.id,
-          used: projected.used,
-        };
-      }
+      this.confirmedContextUsed = resolved.confirmed;
+      const result = resolved.window;
       this.recordDiagnostic({
         level: 'info',
         name: 'runtime.context.finished',
         attributes: {
           durationMs: Math.round(performance.now() - startedAt),
-          outcome: projected.availability,
-          ...(projected.availability === 'available'
+          outcome: result.availability,
+          ...(result.availability === 'available'
             ? {
                 source: 'last-call',
-                used: projected.used,
-                limit: projected.limit,
+                used: result.used,
+                limit: result.limit,
+                ...(result.compactionDetected === true
+                  ? { compactionDetected: true }
+                  : {}),
               }
             : {
-                reason: projected.reason,
+                reason: result.reason,
                 // The rejected numbers: the only way to tell which
                 // daemon field went bad on a real session.
                 budget: source.limit,
@@ -600,7 +614,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
               }),
         },
       });
-      return projected;
+      return result;
     } catch {
       this.recordDiagnostic({
         level: 'error',
@@ -771,10 +785,18 @@ export class FactoryDroidRuntime implements DroidRuntime {
       );
     }
     const info = await session.getRewindInfo({ messageId });
-    return {
-      restorableCount: info.availableFiles.length,
-      createdCount: info.createdFiles.length,
-    };
+    return projectRewindInfo(info, this.sessionTarget?.cwd ?? null);
+  }
+
+  async readGitDiff(): Promise<RuntimeGitDiff> {
+    const session = this.requireSession();
+    if (typeof session.getGitDiff !== 'function') {
+      throw new Error('The Droid session does not report a git diff.');
+    }
+    return projectGitDiff(
+      await session.getGitDiff(),
+      this.sessionTarget?.cwd ?? null,
+    );
   }
 
   async compact(): Promise<RuntimeCompactResult> {

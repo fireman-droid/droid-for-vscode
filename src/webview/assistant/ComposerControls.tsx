@@ -171,7 +171,21 @@ export function ComposerControls({
   // mode/model shows immediately; the settled frame reconciles.
   const { shownMode, shownModelId, pickSetting } =
     useOptimisticSettingPick(settings, onSettingUpdate);
-  const modelName = getModelName(shownModelId, modelCatalog);
+  // While Spec mode has an active drafting-model override, the
+  // trigger reflects it instead of the session model (2026-08-16
+  // redesign) — otherwise a working override was invisible outside
+  // the popover. Not optimistic: specModeModelId picks settle like
+  // the existing reasoning-effort readout below already does.
+  const specOverrideModelId =
+    confirmed?.interactionMode === 'spec' ? confirmed.specModeModelId : null;
+  const modelName = getModelName(
+    specOverrideModelId ?? shownModelId,
+    modelCatalog,
+  );
+  const triggerReasoning =
+    specOverrideModelId !== null
+      ? (confirmed?.specModeReasoningEffort ?? undefined)
+      : confirmed?.reasoningEffort;
   const contextPercent = getContextPercent(context);
   const showContextPercent =
     context.value !== null && hasUsableContextRatio(context.value);
@@ -390,7 +404,7 @@ export function ComposerControls({
         type="button"
         className="dvx-model-trigger"
         aria-label={`Model: ${modelName}`}
-        title={confirmed?.modelId}
+        title={specOverrideModelId ?? confirmed?.modelId}
         aria-expanded={openPanel === 'model'}
         aria-controls={
           openPanel === 'model' ? `${panelId}-model` : undefined
@@ -400,9 +414,14 @@ export function ComposerControls({
       >
         <span>{modelName}</span>
         {/* Cursor-style "Fable 5 Max" readout (2026-08-13). */}
-        {confirmed?.reasoningEffort !== undefined ? (
+        {triggerReasoning !== undefined ? (
           <span className="dvx-model-trigger-effort" aria-hidden="true">
-            {formatReasoningLabel(confirmed.reasoningEffort)}
+            {formatReasoningLabel(triggerReasoning)}
+          </span>
+        ) : null}
+        {specOverrideModelId !== null ? (
+          <span className="dvx-model-trigger-scope" aria-hidden="true">
+            spec
           </span>
         ) : null}
         <ChevronDownIcon />

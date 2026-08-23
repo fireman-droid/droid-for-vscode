@@ -86,21 +86,8 @@ html, body, #root {
   outline-offset: 2px;
 }
 
-/* Native radios keep a rectangular CSS outline in Cursor even when the
-   control itself is round. Shape the control here, then replace only
-   its focus outline with a box-shadow ring, which follows the circle.
-   Checkboxes retain the normal rectangular keyboard ring. */
-.dvx-shell input[type='radio'] {
-  border-radius: 50%;
-}
-
 .dvx-shell input[type='checkbox'] {
   border-radius: 3px;
-}
-
-.dvx-shell input[type='radio']:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 1px var(--dvx-focus);
 }
 
 .dvx-shell input[type='checkbox']:focus-visible {

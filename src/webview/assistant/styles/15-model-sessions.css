@@ -68,68 +68,77 @@
   box-shadow: 0 0 0 1px var(--dvx-soft);
 }
 
-/* Spec drafting scope: small 2-segment switch (spec §5.1, 24px,
-   radius 6) above the search crown; ours only, Cursor has none. */
-.dvx-model-scope {
+/* Spec drafting entry row (root view): quiet trailing row below the
+   model list, hairline-top footer like dvx-model-add-row. Opens the
+   drill-in sub-view; unlike the old scope switch this is never
+   gated on interaction mode, so the drafting model can be set before
+   ever entering Spec mode. */
+.dvx-model-spec-row {
   display: flex;
-  height: 24px;
-  flex: none;
-  gap: 2px;
-  margin: 6px 6px 4px;
-  padding: 2px;
-  border: 1px solid var(--dvx-border);
-  border-radius: 6px;
-  background: var(--dvx-surface);
-}
-
-.dvx-model-scope-option {
-  flex: 1;
-  padding: 0 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 6px 10px;
   border: 0;
-  border-radius: 4px;
-  color: var(--dvx-muted);
+  border-top: 1px solid var(--dvx-border);
   background: transparent;
-  font-size: 11px;
-  line-height: 18px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.dvx-model-scope-option[aria-checked='true'] {
   color: var(--dvx-ink);
-  background: var(--dvx-raised);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
-}
-
-.dvx-model-spec-default {
-  margin: 0 6px 4px;
-  padding: 4px 8px;
-  border: 1px dashed var(--dvx-border-strong);
-  border-radius: 6px;
-  color: var(--dvx-muted);
-  background: transparent;
-  font-size: 11px;
-  line-height: 16px;
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
 
-.dvx-model-spec-default:hover:not(:disabled) {
-  color: var(--dvx-ink);
+.dvx-model-spec-row:hover:not(:disabled) {
   background: var(--dvx-soft);
 }
 
-/* Selected state stays unfilled: solid accent-tinted stroke and
-   accent ink are the only cues (UI restraint, no filled pills).
-   Full opacity: this is a selected marker, not an unavailable
-   control, so the global disabled fade must not wash it out. */
-.dvx-shell .dvx-model-spec-default:disabled {
-  border-style: solid;
-  color: var(--dvx-accent-strong);
-  border-color: color-mix(in srgb, var(--dvx-accent) 34%, var(--dvx-raised));
-  background: transparent;
-  cursor: default;
-  opacity: 1;
+/* The 208px popover has no room for a wrapped label: the value
+   ellipsises instead. */
+.dvx-model-spec-row-label {
+  flex: none;
+  white-space: nowrap;
+}
+
+.dvx-model-spec-row-right {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.dvx-model-spec-row-value {
+  overflow: hidden;
+  color: var(--dvx-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-model-spec-row .dvx-chevron-down {
+  flex: none;
+  transform: rotate(-90deg);
+  color: var(--dvx-subtle);
+}
+
+/* Drill-in sub-view header: reuses 14-settings-popover.css's shared
+   panel head, tightened for the 208px model popover. The title must
+   ellipsis rather than wrap — a wrapped label was the exact bug this
+   sub-view replaced (2026-08-16 style fix). */
+.dvx-model-panel .dvx-panel-head {
+  padding: 8px 8px 7px;
+}
+
+.dvx-model-panel .dvx-panel-back {
+  min-width: 0;
+}
+
+.dvx-model-panel .dvx-panel-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dvx-model-list {

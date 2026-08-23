@@ -2,6 +2,7 @@ import { ThreadPrimitive } from "@assistant-ui/react";
 import {
   createContext,
   memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -15,6 +16,7 @@ import type {
   EditResendRejectReason,
   ImageMediaType,
   ModelCatalogState,
+  RewindEvictedFile,
   ChangesTranscriptItem,
   SessionCommandsState,
   SessionHistoryStatus,
@@ -44,17 +46,16 @@ import {
   applyFollowWheelIntent,
   createFollowState,
 } from "./followScroll";
-import { isPlanLive, type PlanAnchorState } from "./planAnchor";
-import { PlanLine } from "./PlanLine";
+import type { PlanAnchorState } from "./planAnchor";
 import { QuestionNavigator } from "./QuestionNavigator";
-import {
-  computeStickyLayout,
-  SCROLL_BOTTOM_SHOW_PX,
-  shouldCompactStickyUser,
-} from "./stickyLayout";
-import { AssistantMessage } from "./thread/AssistantMessage";
+import { SCROLL_BOTTOM_SHOW_PX } from "./stickyLayout";
+import type { TranscriptVirtualizerApi } from "./thread/buildTurns";
 import { Composer } from "./thread/Composer";
-import { UserMessage } from "./thread/UserMessage";
+import {
+  ThreadMessageChromeContext,
+  type ThreadMessageChrome,
+} from "./thread/messageChrome";
+import { VirtualizedMessages } from "./thread/VirtualizedMessages";
 import { ScrollToBottomIcon } from "./thread/icons";
 import {
   TransientNotice,
@@ -64,11 +65,6 @@ import {
   HistoryNotice,
   PendingResponse,
 } from "./thread/transcriptRows";
-import {
-  readMessageText,
-  readUserAttachments,
-  readUserMessageId,
-} from "./thread/readers";
 import { useQuestionNavigation } from "./useQuestionNavigation";
 
 /** Latest workspace search result delivered by the host. */
@@ -93,6 +89,9 @@ export interface RewindFileInfo {
   readonly messageId: string;
   readonly restorableCount: number;
   readonly createdCount: number;
+  readonly restorablePaths: readonly string[];
+  readonly createdPaths: readonly string[];
+  readonly evictedFiles: readonly RewindEvictedFile[];
 }
 
 /** Edit staging area contents for the message being edited. */
@@ -319,6 +318,7 @@ interface DroidThreadProps {
   readonly onOpenTerminalMirror: () => void;
   readonly editResendEnabled: boolean;
   readonly inlineInteraction?: ReactNode;
+  readonly footerInteraction?: ReactNode;
   /**
    * Plan lines keyed by the id of the user message that triggered
    * the turn each plan was created in (projected in App from
@@ -438,6 +438,7 @@ export const DroidThread = memo(function DroidThread({
   onOpenTerminalMirror,
   editResendEnabled,
   inlineInteraction,
+  footerInteraction,
   planAnchors = null,
   queuedMessages = null,
   missionSetup = null,
@@ -495,12 +496,7 @@ export const DroidThread = memo(function DroidThread({
     // dependencies inert.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sendSignal]);
-  // Cursor-style pinned questions: every user message is CSS-sticky at
-  // the viewport top; this coordinator marks the last stuck one as
-  // `data-pinned` (opaque backdrop, separator), pushes it out when the
-  // next user message reaches it, and hides fully covered ones.
-  //
-  // The same effect owns stick-to-bottom (the primitive's autoScroll
+  // Stick-to-bottom is owned here because the primitive's autoScroll
   // is disabled: its isAtBottom latch loses a race between async
   // scroll events and fast streaming growth, see applyFollowScroll).
   //
@@ -509,7 +505,12 @@ export const DroidThread = memo(function DroidThread({
   // click re-latches `follow.following` rather than owning any
   // scroll state of its own.
   const readingColumnRef = useRef<HTMLDivElement | null>(null);
-  const questionNavigation = useQuestionNavigation(readingColumnRef);
+  const followRef = useRef(createFollowState());
+  const virtualizerApiRef = useRef<TranscriptVirtualizerApi | null>(null);
+  const questionNavigation = useQuestionNavigation(
+    readingColumnRef,
+    virtualizerApiRef,
+  );
   const historyRevealAnchorRef = useRef<{
     readonly scrollHeight: number;
     readonly scrollTop: number;
@@ -552,75 +553,17 @@ export const DroidThread = memo(function DroidThread({
       return undefined;
     }
     let frame = 0;
-    let previousPinnedElement: HTMLElement | null = null;
-    let pushedElement: HTMLElement | null = null;
-    let pushedPx = 0;
-    const follow = createFollowState({
-      scrollTop: scroller.scrollTop,
-      scrollHeight: scroller.scrollHeight,
-      clientHeight: scroller.clientHeight,
-    });
-    const updatePins = (): void => {
+    const follow = followRef.current;
+    const updateScrollState = (): void => {
       frame = 0;
-      const viewportTop = scroller.getBoundingClientRect().top;
-      const messages = [
-        ...column.querySelectorAll<HTMLElement>(".dvx-message-user"),
-      ];
-      const rects = messages.map((element) => element.getBoundingClientRect());
-      const tops = rects.map((rect, index) =>
-        messages[index] === pushedElement ? rect.top + pushedPx : rect.top,
-      );
       const awayFromBottom =
         scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight >
         SCROLL_BOTTOM_SHOW_PX;
-      // An open edit card is exempt from the push-out hand-off (see
-      // computeStickyLayout): it stays fully visible while pinned.
-      const editingIndex = messages.findIndex((element) =>
-        element.classList.contains("dvx-message-editing"),
-      );
-      const layout = computeStickyLayout(
-        tops,
-        rects.map((rect) => rect.height),
-        viewportTop,
-        editingIndex,
-        previousPinnedElement === null
-          ? -1
-          : messages.indexOf(previousPinnedElement),
-      );
-      previousPinnedElement = messages[layout.pinnedIndex] ?? null;
-      messages.forEach((element, index) => {
-        element.toggleAttribute(
-          "data-pinned",
-          index === layout.pinnedIndex,
-        );
-        element.toggleAttribute(
-          "data-covered",
-          layout.covered[index] === true,
-        );
-        element.toggleAttribute(
-          "data-sticky-compact",
-          shouldCompactStickyUser(
-            element.hasAttribute("data-sticky-compact"),
-            tops[index] ?? Number.POSITIVE_INFINITY,
-            viewportTop,
-          ),
-        );
-        const transform =
-          index === layout.pinnedIndex && layout.pushPx > 0
-            ? `translateY(${-layout.pushPx}px)`
-            : "";
-        if (element.style.transform !== transform) {
-          element.style.transform = transform;
-        }
-      });
-      pushedElement =
-        layout.pushPx > 0 ? (messages[layout.pinnedIndex] ?? null) : null;
-      pushedPx = layout.pushPx;
       setAwayFromBottom(awayFromBottom);
     };
     const schedule = (): void => {
       if (frame === 0) {
-        frame = requestAnimationFrame(updatePins);
+        frame = requestAnimationFrame(updateScrollState);
       }
     };
     // Content growth (streaming rows, CSS height transitions, composer
@@ -677,18 +620,13 @@ export const DroidThread = memo(function DroidThread({
         ? null
         : new ResizeObserver(followBottom);
     resizeObserver?.observe(column);
-    // The sticky footer (composer) lives inside the same scroller, so
-    // its growth also moves the bottom edge.
-    const footer = scroller.querySelector(".dvx-thread-footer");
-    if (footer instanceof HTMLElement) {
-      resizeObserver?.observe(footer);
-    }
+    resizeObserver?.observe(scroller);
     const mutationObserver =
       typeof MutationObserver === "undefined"
         ? null
         : new MutationObserver(schedule);
-    mutationObserver?.observe(column, { childList: true });
-    updatePins();
+    mutationObserver?.observe(column, { childList: true, subtree: true });
+    updateScrollState();
     return () => {
       scroller.removeEventListener("scroll", onScroll);
       scroller.removeEventListener("wheel", onWheel);
@@ -761,6 +699,43 @@ export const DroidThread = memo(function DroidThread({
     () => ({ workspaceRoot, previewFile: onPreviewFile }),
     [workspaceRoot, onPreviewFile],
   );
+  const messageChrome = useMemo<ThreadMessageChrome>(
+    () => ({
+      planAnchors,
+      running,
+      activeTurnId,
+      editingMessageId,
+      editStage,
+      rejection: editResendRejection,
+      editorEnv,
+      editResendEnabled,
+      rewindInfo,
+      onRequestRewindInfo,
+      onEditResend,
+      onBeginEdit: beginEditing,
+      onCancelEdit: cancelEditing,
+      onSubmitEdit: submitEditing,
+      onReopenEdit: reopenEditing,
+    }),
+    [
+      activeTurnId,
+      editResendEnabled,
+      editResendRejection,
+      editStage,
+      editingMessageId,
+      editorEnv,
+      planAnchors,
+      rewindInfo,
+      running,
+      onEditResend,
+      onRequestRewindInfo,
+    ],
+  );
+  const getScroller = useCallback((): HTMLElement | null => {
+    const column = readingColumnRef.current;
+    const scroller = column?.closest(".dvx-thread-viewport");
+    return scroller instanceof HTMLElement ? scroller : null;
+  }, []);
   return (
     <ThreadPrimitive.Root
       className={`dvx-thread${interactionPending ? " dvx-thread-pending" : ""}`}
@@ -809,64 +784,13 @@ export const DroidThread = memo(function DroidThread({
                   </p>
                 </div>
               </ThreadPrimitive.Empty>
-              <ThreadPrimitive.Messages>
-                {({ message }) => {
-                  if (message.role !== "user") {
-                    return <AssistantMessage />;
-                  }
-                  const messageId = readUserMessageId(message.metadata);
-                  // The session's single latest Plan is anchored under
-                  // the message that created its lineage. A newer plan
-                  // removes the old map entry entirely.
-                  const plan = planAnchors?.get(message.id);
-                  // Inline image previews make IMAGE chips redundant
-                  // (kitchen-sink form, 2026-08-13); other kinds keep
-                  // their chips.
-                  const hasImage = message.content.some(
-                    (part) =>
-                      part.type === "data" && part.name === "droid-image",
-                  );
-                  const attachments = readUserAttachments(
-                    message.metadata,
-                  ).filter((item) => !hasImage || item.kind !== "image");
-                  return (
-                    <UserMessage
-                      text={readMessageText(message.content)}
-                      messageId={messageId}
-                      attachments={attachments}
-                      planLine={
-                        plan === undefined
-                          ? null
-                          : (
-                              <PlanLine
-                                key={plan.anchorToolUseId}
-                                anchor={plan}
-                                running={isPlanLive(
-                                  plan,
-                                  running,
-                                  activeTurnId,
-                                )}
-                              />
-                            )
-                      }
-                      editing={
-                        messageId !== null && messageId === editingMessageId
-                      }
-                      editStage={editStage}
-                      rejection={editResendRejection}
-                      editorEnv={editorEnv}
-                      editResendEnabled={editResendEnabled}
-                      rewindInfo={rewindInfo}
-                      onRequestRewindInfo={onRequestRewindInfo}
-                      onEditResend={onEditResend}
-                      onBeginEdit={beginEditing}
-                      onCancelEdit={cancelEditing}
-                      onSubmitEdit={submitEditing}
-                      onReopenEdit={reopenEditing}
-                    />
-                  );
-                }}
-              </ThreadPrimitive.Messages>
+              <ThreadMessageChromeContext.Provider value={messageChrome}>
+                <VirtualizedMessages
+                  getScroller={getScroller}
+                  followingRef={followRef}
+                  apiRef={virtualizerApiRef}
+                />
+              </ThreadMessageChromeContext.Provider>
               {pending ? (
                 <PendingResponse
                   activity={activity}
@@ -889,7 +813,8 @@ export const DroidThread = memo(function DroidThread({
           </PathPreviewContext.Provider>
           </PreviewContext.Provider>
         </FileDiffContext.Provider>
-        <ThreadPrimitive.ViewportFooter className="dvx-thread-footer">
+      </ThreadPrimitive.Viewport>
+      <div className="dvx-thread-footer">
           <div className="dvx-scroll-bottom-dock">
             <button
               type="button"
@@ -912,6 +837,7 @@ export const DroidThread = memo(function DroidThread({
               language of the plan-era pins. */}
           {queuedMessages}
           {missionSetup}
+          {footerInteraction}
           <Composer
             statusMessage={statusMessage}
             showRetry={showRetry}
@@ -967,8 +893,7 @@ export const DroidThread = memo(function DroidThread({
             queueEditing={queueEditing}
             onQueueEditCancel={onQueueEditCancel}
           />
-        </ThreadPrimitive.ViewportFooter>
-      </ThreadPrimitive.Viewport>
+      </div>
       <QuestionNavigator
         visible={questionNavigation.visible}
         items={questionNavigation.items}

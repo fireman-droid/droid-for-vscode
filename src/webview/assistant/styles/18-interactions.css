@@ -271,29 +271,6 @@
   display: none;
 }
 
-.dvx-plan-preview-expanded {
-  max-height: none;
-  overflow: visible;
-}
-
-.dvx-plan-expand {
-  justify-self: start;
-  margin: 4px 0 0;
-  padding: 3px 8px;
-  border: 1px solid var(--dvx-border);
-  border-radius: 999px;
-  color: var(--dvx-muted);
-  background: var(--dvx-raised);
-  font-size: 11px;
-  line-height: 16px;
-  cursor: pointer;
-}
-
-.dvx-plan-expand:hover {
-  color: var(--dvx-ink);
-  border-color: var(--dvx-border-strong);
-}
-
 .dvx-permission-editor-heading {
   display: flex;
   align-items: center;
@@ -572,6 +549,7 @@
 }
 
 .dvx-question-options label {
+  position: relative;
   cursor: pointer;
   overflow-wrap: anywhere;
   display: grid;
@@ -593,7 +571,68 @@
   accent-color: var(--dvx-accent);
 }
 
-.dvx-question-options label > span {
+.dvx-question-options .dvx-question-radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dvx-question-radio:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.dvx-question-radio-mark {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+  border: 1px solid var(--dvx-border-strong);
+  border-radius: 50%;
+  background: var(--dvx-raised);
+  transition:
+    border-color 130ms ease,
+    box-shadow 130ms ease,
+    background-color 130ms ease;
+}
+
+.dvx-question-radio-mark::after {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--dvx-accent);
+  content: "";
+  opacity: 0;
+  transform: scale(0.55);
+  transition: opacity 130ms ease, transform 130ms ease;
+}
+
+.dvx-question-radio:checked + .dvx-question-radio-mark {
+  border-color: var(--dvx-accent);
+}
+
+.dvx-question-radio:checked + .dvx-question-radio-mark::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.dvx-question-radio:focus-visible + .dvx-question-radio-mark {
+  border-color: var(--dvx-focus);
+  box-shadow: 0 0 0 2px color-mix(
+    in srgb,
+    var(--dvx-focus) 34%,
+    transparent
+  );
+}
+
+.dvx-question-options label:hover .dvx-question-radio-mark {
+  border-color: var(--dvx-accent);
+}
+
+.dvx-question-option-text {
   min-width: 0;
   overflow-wrap: anywhere;
 }

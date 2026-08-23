@@ -1,9 +1,9 @@
 // Model picker popover (spec §5.1, cursor/模型卡片.png): borderless
 // search crown, quiet 27px rows with the check on the right edge and
-// the effort pencil riding the name, a reasoning flyout, the spec
-// drafting scope, and a fixed "Add models" foot that opens the
-// full-page model manager. Also exports the model-name helpers the
-// trigger consumes.
+// the effort pencil riding the name, a reasoning flyout, a drill-in
+// sub-view for the spec drafting override, and a fixed "Add models"
+// foot that opens the full-page model manager. Also exports the
+// model-name helpers the trigger consumes.
 
 import { useContext, useMemo, useState } from 'react';
 
@@ -16,7 +16,12 @@ import type {
 } from '../../../shared/bridgeMessages';
 import { CustomModelsContext } from '../customModelsFlow';
 import type { SessionSettingSelection } from '../useOptimisticSetting';
-import { SettingsStatus, Stat, formatReasoningLabel } from './shared';
+import {
+  ChevronDownIcon,
+  SettingsStatus,
+  Stat,
+  formatReasoningLabel,
+} from './shared';
 
 export function ModelPopover({
   id,
@@ -41,25 +46,30 @@ export function ModelPopover({
 }): React.JSX.Element {
   const [query, setQuery] = useState('');
   const [editingReasoning, setEditingReasoning] = useState(false);
-  const [scope, setScope] = useState<'session' | 'spec'>('session');
+  const [view, setView] = useState<'root' | 'spec'>('root');
   const confirmed = settings.value;
-  // The spec drafting scope only exists while the session is in Spec
-  // mode; leaving Spec mode snaps the popover back to the session scope.
-  const specScopeAvailable = confirmed?.interactionMode === 'spec';
-  const activeScope = specScopeAvailable ? scope : 'session';
-  // In the spec scope an unset drafting model means "session model".
-  const scopedModelId =
-    activeScope === 'spec'
-      ? (confirmed?.specModeModelId ?? confirmed?.modelId)
-      : confirmed?.modelId;
-  const scopedReasoning =
-    activeScope === 'spec'
-      ? (confirmed?.specModeReasoningEffort ?? undefined)
-      : confirmed?.reasoningEffort;
+  const isSpecView = view === 'spec';
+  const specModelOverrideId = confirmed?.specModeModelId ?? null;
+  // An unset drafting model inherits the session model; "Same as
+  // session" carries that state on its own row, so a model row only
+  // checks when specModeModelId names it explicitly (no double tick).
+  const effectiveModelId = isSpecView
+    ? (specModelOverrideId ?? confirmed?.modelId)
+    : confirmed?.modelId;
+  const rowMatchId = isSpecView ? (specModelOverrideId ?? undefined) : effectiveModelId;
+  const scopedReasoning = isSpecView
+    ? (confirmed?.specModeReasoningEffort ?? undefined)
+    : confirmed?.reasoningEffort;
+  const usesSessionModel = isSpecView && specModelOverrideId === null;
   const selected =
     confirmed === null || modelCatalog.status !== 'ready'
       ? undefined
-      : modelCatalog.items.find((item) => item.id === scopedModelId);
+      : modelCatalog.items.find((item) => item.id === effectiveModelId);
+  const goToView = (next: 'root' | 'spec'): void => {
+    setView(next);
+    setEditingReasoning(false);
+    setQuery('');
+  };
   const filtered = useMemo(() => {
     if (modelCatalog.status !== 'ready') {
       return [];
@@ -80,7 +90,7 @@ export function ModelPopover({
       id={id}
       className="dvx-composer-popover dvx-model-popover"
       role="dialog"
-      aria-label="Model"
+      aria-label={isSpecView ? 'Spec drafting model' : 'Model'}
     >
       {modelCatalog.status === 'ready' ? (
         <>
@@ -91,10 +101,10 @@ export function ModelPopover({
                 current={scopedReasoning}
                 disabled={disabled}
                 defaultOptionLabel={
-                  activeScope === 'spec' ? 'Model default' : undefined
+                  isSpecView ? 'Model default' : undefined
                 }
                 onSelect={(effort) =>
-                  activeScope === 'spec'
+                  isSpecView
                     ? onUpdate({
                         field: 'specModeReasoningEffort',
                         value: effort,
@@ -109,54 +119,18 @@ export function ModelPopover({
             </div>
           ) : null}
           <div className="dvx-model-panel">
-            {specScopeAvailable ? (
-              <div
-                className="dvx-model-scope"
-                role="radiogroup"
-                aria-label="Model scope"
-              >
+            {isSpecView ? (
+              <div className="dvx-panel-head">
                 <button
                   type="button"
-                  role="radio"
-                  aria-checked={activeScope === 'session'}
-                  className="dvx-model-scope-option"
-                  onClick={() => {
-                    setScope('session');
-                    setEditingReasoning(false);
-                  }}
+                  className="dvx-panel-back"
+                  aria-label="Back to model"
+                  onClick={() => goToView('root')}
                 >
-                  Session
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={activeScope === 'spec'}
-                  className="dvx-model-scope-option"
-                  onClick={() => {
-                    setScope('spec');
-                    setEditingReasoning(false);
-                  }}
-                >
-                  Spec drafting
+                  <ChevronLeftIcon />
+                  <span className="dvx-panel-title">Spec drafting</span>
                 </button>
               </div>
-            ) : null}
-            {activeScope === 'spec' ? (
-              <button
-                type="button"
-                className="dvx-model-spec-default"
-                aria-pressed={confirmed?.specModeModelId === null}
-                disabled={
-                  disabled || confirmed?.specModeModelId === null
-                }
-                onClick={() =>
-                  onUpdate({ field: 'specModeModelId', value: null })
-                }
-              >
-                {confirmed?.specModeModelId === null
-                  ? 'Drafting with the session model'
-                  : 'Use session model'}
-              </button>
             ) : null}
             <label className="dvx-visually-hidden" htmlFor={`${id}-search`}>
               Search BYOK models
@@ -173,10 +147,60 @@ export function ModelPopover({
             <div
               className="dvx-model-list"
               role="list"
-              aria-label="BYOK models"
+              aria-label={isSpecView ? 'Spec drafting models' : 'BYOK models'}
             >
+              {isSpecView ? (
+                <>
+                  <div
+                    className="dvx-model-row"
+                    role="listitem"
+                    aria-current={usesSessionModel ? 'true' : undefined}
+                  >
+                    <button
+                      type="button"
+                      className="dvx-model-choice"
+                      aria-label="Same as session"
+                      disabled={disabled}
+                      onClick={() => {
+                        if (usesSessionModel) {
+                          return;
+                        }
+                        onUpdate({ field: 'specModeModelId', value: null });
+                      }}
+                    >
+                      <span className="dvx-model-name">Same as session</span>
+                      {usesSessionModel ? (
+                        <span className="dvx-model-effort-suffix">
+                          {scopedReasoning === undefined
+                            ? 'Default'
+                            : formatReasoningLabel(scopedReasoning)}
+                        </span>
+                      ) : null}
+                    </button>
+                    {usesSessionModel ? (
+                      <>
+                        <button
+                          type="button"
+                          className="dvx-model-edit"
+                          aria-label="Edit reasoning for the session model"
+                          disabled={
+                            disabled ||
+                            selected === undefined ||
+                            selected.supportedReasoningEfforts.length === 0
+                          }
+                          onClick={() => setEditingReasoning(true)}
+                        >
+                          <PencilIcon />
+                        </button>
+                        <CheckIcon className="dvx-model-check" />
+                      </>
+                    ) : null}
+                  </div>
+                  <div className="dvx-settings-divider" />
+                </>
+              ) : null}
               {filtered.map((model) => {
-                const isSelected = model.id === scopedModelId;
+                const isSelected = model.id === rowMatchId;
                 const modelLabel = model.displayName;
                 return (
                   <div
@@ -196,7 +220,7 @@ export function ModelPopover({
                           return;
                         }
                         onUpdate(
-                          activeScope === 'spec'
+                          isSpecView
                             ? {
                                 field: 'specModeModelId',
                                 value: model.id,
@@ -210,8 +234,7 @@ export function ModelPopover({
                           one-line "Fable 5 Extra High" readout). */}
                       {isSelected ? (
                         <span className="dvx-model-effort-suffix">
-                          {activeScope === 'spec' &&
-                          scopedReasoning === undefined
+                          {isSpecView && scopedReasoning === undefined
                             ? 'Default'
                             : formatReasoningLabel(scopedReasoning)}
                         </span>
@@ -248,6 +271,25 @@ export function ModelPopover({
               ) : null}
             </div>
           </div>
+          {!isSpecView ? (
+            <button
+              type="button"
+              className="dvx-model-spec-row"
+              aria-label="Spec drafting"
+              disabled={disabled}
+              onClick={() => goToView('spec')}
+            >
+              <span className="dvx-model-spec-row-label">Spec drafting</span>
+              <span className="dvx-model-spec-row-right">
+                <span className="dvx-model-spec-row-value">
+                  {specModelOverrideId === null
+                    ? 'Session'
+                    : getModelName(specModelOverrideId, modelCatalog)}
+                </span>
+                <ChevronDownIcon />
+              </span>
+            </button>
+          ) : null}
         </>
       ) : (
         <ModelCatalogStatus
@@ -464,6 +506,25 @@ function CheckIcon({
         d="m3.75 8.5 3 3 5.5-6.5"
         stroke="currentColor"
         strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ChevronLeftIcon(): React.JSX.Element {
+  return (
+    <svg
+      className="dvx-chevron-left"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="m9.5 4.5-3.5 3.5 3.5 3.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

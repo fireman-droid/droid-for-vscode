@@ -264,4 +264,59 @@ describe('assistantWebviewReducer Git flow', () => {
       lastResult: null,
     });
   });
+
+  it('keeps a branch diff for the active session and drops it on switch', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    expect(state.branchDiff).toBeNull();
+
+    // Another session's report only advances the sequence.
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'git.branchDiff',
+        sequence: 1,
+        sessionId: 'session-b',
+        branch: 'other',
+        baseBranch: 'main',
+        files: [],
+        additions: 0,
+        deletions: 0,
+        commitCount: 0,
+      },
+    });
+    expect(state.branchDiff).toBeNull();
+    expect(state.sequence).toBe(1);
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'git.branchDiff',
+        sequence: 2,
+        sessionId: 'session-a',
+        branch: 'feature/dock',
+        baseBranch: 'main',
+        files: [{ path: 'src/app.tsx', additions: 4, deletions: 2 }],
+        additions: 4,
+        deletions: 2,
+        commitCount: 3,
+      },
+    });
+    expect(state.branchDiff).toEqual({
+      branch: 'feature/dock',
+      baseBranch: 'main',
+      files: [{ path: 'src/app.tsx', additions: 4, deletions: 2 }],
+      additions: 4,
+      deletions: 2,
+      commitCount: 3,
+    });
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: snapshot(3, 'session-b'),
+    });
+    expect(state.branchDiff).toBeNull();
+  });
 });

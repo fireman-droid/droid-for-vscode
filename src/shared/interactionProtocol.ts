@@ -41,3 +41,83 @@ export const PERMISSION_CONFIRMATION_KINDS = [
 
 export type PermissionConfirmationKind =
   (typeof PERMISSION_CONFIRMATION_KINDS)[number];
+
+/** Opens or focuses the editable Markdown document for one pending Plan. */
+export interface PlanDocumentOpenMessage {
+  readonly type: 'plan.document.open';
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly requestId: string;
+}
+
+export interface AskUserResultAnswer {
+  readonly topic: string;
+  readonly answer: string;
+}
+
+export interface PermissionRespondMessage {
+  readonly type: 'permission.respond';
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly requestId: string;
+  readonly selectedOption: string;
+  readonly editedSpecContent?: string;
+}
+
+export interface AskUserAnswer {
+  readonly index: number;
+  readonly answer: string;
+}
+
+export interface AskUserRespondMessage {
+  readonly type: 'ask-user.respond';
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly requestId: string;
+  readonly cancelled: boolean;
+  readonly answers: readonly AskUserAnswer[];
+}
+
+export type AskUserInteractionResult =
+  | {
+      readonly status: 'answered';
+      readonly answers: readonly AskUserResultAnswer[];
+    }
+  | {
+      readonly status: 'cancelled';
+    };
+
+interface AskUserResultTranscriptBase {
+  readonly id: string;
+  readonly kind: 'ask-user-result';
+  readonly turnId: string;
+}
+
+/** Compact, durable echo of one settled AskUser interaction. */
+export type AskUserResultTranscriptItem =
+  | (AskUserResultTranscriptBase & {
+      readonly status: 'answered';
+      readonly answers: readonly AskUserResultAnswer[];
+    })
+  | (AskUserResultTranscriptBase & {
+      readonly status: 'cancelled';
+    });
+
+export const PLAN_DOCUMENT_STATUSES = [
+  'ready',
+  'too-large',
+  'closed',
+  'failed',
+] as const;
+export type PlanDocumentStatus = (typeof PLAN_DOCUMENT_STATUSES)[number];
+
+/** Latest Host-owned draft state for one pending ExitSpecMode Plan. */
+export interface PlanDocumentStateMessage {
+  readonly type: 'plan.document.state';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly requestId: string;
+  readonly status: PlanDocumentStatus;
+  readonly content?: string;
+}

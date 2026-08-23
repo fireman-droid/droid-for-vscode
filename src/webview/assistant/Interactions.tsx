@@ -29,12 +29,16 @@ interface InteractionPanelProps {
     cancelled: boolean,
     answers: readonly AskUserAnswer[],
   ) => void;
+  readonly onPlanDocumentOpen?: (
+    interaction: PendingInteraction,
+  ) => void;
 }
 
 export const InteractionPanel = memo(function InteractionPanel({
   requests,
   onPermissionRespond,
   onAskUserRespond,
+  onPlanDocumentOpen,
 }: InteractionPanelProps): React.JSX.Element | null {
   const panelRef = useRef<HTMLElement>(null);
   const active = requests[0];
@@ -66,6 +70,14 @@ export const InteractionPanel = memo(function InteractionPanel({
         <PermissionRequestCard
           key={active.request.requestId}
           request={active.request}
+          planDocument={active.planDocument}
+          {...(onPlanDocumentOpen === undefined ||
+          active.request.editableSpecContent === undefined ||
+          active.request.options.filter(
+            ({ requiresEditedSpec }) => requiresEditedSpec,
+          ).length !== 1
+            ? {}
+            : { onOpenPlanDocument: () => onPlanDocumentOpen(active) })}
           onRespond={(selectedOption, editedSpecContent) =>
             onPermissionRespond(
               active,
@@ -89,9 +101,13 @@ export const InteractionPanel = memo(function InteractionPanel({
 
 export function PermissionRequestCard({
   request,
+  planDocument,
+  onOpenPlanDocument,
   onRespond,
 }: {
   readonly request: PermissionInteractionRequest;
+  readonly planDocument?: PendingInteraction['planDocument'];
+  readonly onOpenPlanDocument?: () => void;
   readonly onRespond: (
     selectedOption: string,
     editedSpecContent?: string,
@@ -103,7 +119,6 @@ export function PermissionRequestCard({
   const [editedSpecContent, setEditedSpecContent] = useState(
     request.editableSpecContent ?? '',
   );
-  const [planExpanded, setPlanExpanded] = useState(false);
   const [editPreview, setEditPreview] = useState(false);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [awaitingClose, setAwaitingClose] = useState(false);
@@ -113,13 +128,16 @@ export function PermissionRequestCard({
   const requestPresentation = getPermissionPresentation(request);
   const editedSpecTooLong =
     editedSpecContent.length > MAX_EDITED_SPEC_LENGTH;
+  const planDocumentTooLong = planDocument?.status === 'too-large';
+  const planContent =
+    planDocument?.content ??
+    requestPresentation.planPreview;
   const negativeOptions = request.options
     .map((option, index) => ({ option, index }))
     .filter(({ option }) => isNegativePermissionOption(option));
   const positiveOptions = request.options
     .map((option, index) => ({ option, index }))
     .filter(({ option }) => !isNegativePermissionOption(option));
-
   const respond = (
     selectedOption: string,
     nextEditedSpecContent?: string,
@@ -142,7 +160,22 @@ export function PermissionRequestCard({
         <span className="dvx-interaction-eyebrow">
           {requestPresentation.eyebrow}
         </span>
-        <h2 id={titleId}>{requestPresentation.title}</h2>
+        {requestPresentation.kind === 'plan' &&
+        onOpenPlanDocument !== undefined ? (
+          <h2 id={titleId}>
+            <button
+              type="button"
+              className="dvx-plan-open-title"
+              disabled={awaitingClose}
+              onClick={onOpenPlanDocument}
+            >
+              <span>{requestPresentation.title}</span>
+              <span>Open in editor</span>
+            </button>
+          </h2>
+        ) : (
+          <h2 id={titleId}>{requestPresentation.title}</h2>
+        )}
       </header>
       <div className="dvx-permission-tools">
         {request.tools.map((tool) => (
@@ -168,7 +201,32 @@ export function PermissionRequestCard({
         ))}
       </div>
 
-      {editOption !== undefined ? (
+      {requestPresentation.kind === 'plan' &&
+      planContent !== undefined &&
+      onOpenPlanDocument !== undefined ? (
+        <>
+          <div className="dvx-plan-preview">
+            <DroidMarkdownContent
+              className="dvx-plan-markdown"
+              text={planContent}
+            />
+          </div>
+          {planDocument?.status === 'too-large' ? (
+            <p className="dvx-plan-document-status dvx-error-text" role="status">
+              The edited plan is over the 262,144 character limit. Shorten it
+              in the editor before approving.
+            </p>
+          ) : planDocument?.status === 'closed' ? (
+            <p className="dvx-plan-document-status">
+              Editor closed. Open it again to continue editing.
+            </p>
+          ) : planDocument?.status === 'failed' ? (
+            <p className="dvx-plan-document-status dvx-error-text" role="status">
+              Cursor could not open the plan document.
+            </p>
+          ) : null}
+        </>
+      ) : editOption !== undefined ? (
         <div className="dvx-permission-editor">
           <div className="dvx-permission-editor-heading">
             <label htmlFor={editorId}>{editOption.label}</label>
@@ -228,26 +286,12 @@ export function PermissionRequestCard({
         </div>
       ) : requestPresentation.planPreview !== undefined ? (
         <>
-          <div
-            className={`dvx-plan-preview${
-              planExpanded ? ' dvx-plan-preview-expanded' : ''
-            }`}
-          >
+          <div className="dvx-plan-preview">
             <DroidMarkdownContent
               className="dvx-plan-markdown"
               text={requestPresentation.planPreview}
             />
           </div>
-          {isLongPlan(requestPresentation.planPreview) ? (
-            <button
-              type="button"
-              className="dvx-plan-expand"
-              aria-expanded={planExpanded}
-              onClick={() => setPlanExpanded((value) => !value)}
-            >
-              {planExpanded ? 'Collapse spec' : 'View full spec'}
-            </button>
-          ) : null}
         </>
       ) : null}
 
@@ -298,7 +342,13 @@ export function PermissionRequestCard({
                   type="button"
                   key={index}
                   disabled={awaitingClose}
-                  onClick={() => setEditOptionIndex(index)}
+                  onClick={() => {
+                    if (onOpenPlanDocument === undefined) {
+                      setEditOptionIndex(index);
+                    } else {
+                      onOpenPlanDocument();
+                    }
+                  }}
                 >
                   {option.label}
                 </button>
@@ -308,7 +358,7 @@ export function PermissionRequestCard({
                 ({ option }) => !option.requiresEditedSpec,
               )}
               expanded={showMoreOptions}
-              disabled={awaitingClose}
+              disabled={awaitingClose || planDocumentTooLong}
               primaryLabel="Approve plan"
               menuLabel="More plan approval options"
               onExpandedChange={setShowMoreOptions}
@@ -574,6 +624,11 @@ export function AskUserRequestCard({
                   return (
                     <label htmlFor={inputId} key={optionIndex}>
                       <input
+                        className={
+                          presentation.multiSelect
+                            ? undefined
+                            : 'dvx-question-radio'
+                        }
                         id={inputId}
                         type={
                           presentation.multiSelect ? 'checkbox' : 'radio'
@@ -594,7 +649,15 @@ export function AskUserRequestCard({
                           }))
                         }
                       />
-                      <span>{option}</span>
+                      {presentation.multiSelect ? null : (
+                        <span
+                          className="dvx-question-radio-mark"
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span className="dvx-question-option-text">
+                        {option}
+                      </span>
                     </label>
                   );
                 })}
@@ -724,18 +787,6 @@ function formatEmbeddedQuestionnaire(text: string): string | null {
     .replace(/\s*\[option\]\s*/giu, '\n• ')
     .replace(/\n{3,}/gu, '\n\n')
     .trim();
-}
-
-/**
- * Threshold below which the plan already fits the collapsed preview,
- * so the expand toggle would do nothing visible.
- */
-const LONG_PLAN_CHARACTERS = 1200;
-
-function isLongPlan(plan: string): boolean {
-  return (
-    plan.length > LONG_PLAN_CHARACTERS || plan.split('\n').length > 24
-  );
 }
 
 function formatConfirmationKind(value: string): string {

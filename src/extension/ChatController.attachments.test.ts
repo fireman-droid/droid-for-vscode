@@ -644,6 +644,9 @@ describe('ChatController', () => {
       getRewindInfo: vi.fn(async () => ({
         restorableCount: 2,
         createdCount: 1,
+        restorablePaths: ['src/app.ts', 'src/store.ts'],
+        createdPaths: ['docs/new.md'],
+        evictedFiles: [{ path: 'src/big.bin', reason: 'size-limit' }],
       })),
     });
     const { controller, messages } = createController(() => runtime);
@@ -661,6 +664,9 @@ describe('ChatController', () => {
         messageId: 'sdk-msg-1',
         restorableCount: 2,
         createdCount: 1,
+        restorablePaths: ['src/app.ts', 'src/store.ts'],
+        createdPaths: ['docs/new.md'],
+        evictedFiles: [{ path: 'src/big.bin', reason: 'size-limit' }],
       });
     });
 

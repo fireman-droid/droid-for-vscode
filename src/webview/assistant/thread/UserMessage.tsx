@@ -17,6 +17,7 @@ import type {
   UserEditorEnv,
 } from "../Thread";
 import { EditAttachmentChip, SentAttachmentChip } from "./AttachmentChip";
+import { EditRestoreControl } from "./EditRestoreControl";
 import { SendIcon } from "./icons";
 
 export const EDIT_REJECT_COPY: Record<EditResendRejectReason, string> = {
@@ -172,6 +173,20 @@ export function UserMessage({
     fileImpact === null
       ? 0
       : fileImpact.restorableCount + fileImpact.createdCount;
+  const affectedPaths =
+    fileImpact === null
+      ? []
+      : [
+          ...fileImpact.restorablePaths.map((path) => ({
+            path,
+            created: false,
+          })),
+          ...fileImpact.createdPaths.map((path) => ({
+            path,
+            created: true,
+          })),
+        ];
+  const evictedFiles = fileImpact?.evictedFiles ?? [];
   const stagedAttachments =
     editing && editStage !== null && editStage.messageId === messageId
       ? editStage.attachments
@@ -253,39 +268,6 @@ export function UserMessage({
                   {rejectionCopy}
                 </div>
               ) : null}
-              {affectedFiles > 0 ? (
-                <label
-                  className="dvx-user-edit-restore"
-                  title={`Resending rewinds the conversation to this message. Also restore the ${affectedFiles} workspace ${
-                    affectedFiles === 1 ? "file" : "files"
-                  } Droid changed after it.`}
-                >
-                  <input
-                    type="checkbox"
-                    className="dvx-restore-input"
-                    checked={restoreFiles}
-                    onChange={(event) =>
-                      setRestoreFiles(event.currentTarget.checked)
-                    }
-                  />
-                  <span className="dvx-restore-box" aria-hidden="true">
-                    <svg viewBox="0 0 10 10" fill="none">
-                      <path
-                        d="m2 5.2 2.2 2.2L8 3.2"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                  <span className="dvx-restore-copy">
-                    Restore {affectedFiles}{" "}
-                    {affectedFiles === 1 ? "file" : "files"} changed after this
-                    point
-                  </span>
-                </label>
-              ) : null}
               <div className="dvx-user-edit-footer">
                 <ComposerControls
                   showContext={false}
@@ -328,6 +310,13 @@ export function UserMessage({
                 </div>
               </div>
             </div>
+            <EditRestoreControl
+              affectedFiles={affectedFiles}
+              affectedPaths={affectedPaths}
+              evictedFiles={evictedFiles}
+              restoreFiles={restoreFiles}
+              onRestoreFilesChange={setRestoreFiles}
+            />
           </div>
         ) : resending ? (
           <div className="dvx-user-resending">

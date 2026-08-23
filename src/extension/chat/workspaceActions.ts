@@ -12,7 +12,10 @@ import {
   MAX_IMAGE_DATA_LENGTH,
 } from '../../shared/bridgeMessages';
 import { isSafeWorkspaceRelativePath } from '../../shared/validateMessage';
-import { MAX_GIT_COMMIT_SUBJECT_LENGTH } from '../../shared/gitCommitFlow';
+import {
+  MAX_GIT_COMMIT_SUBJECT_LENGTH,
+  type GitBranchDiffUnavailableReason,
+} from '../../shared/gitCommitFlow';
 import { FILE_NOT_READY_DIAGNOSTIC_CODE } from '../../shared/transientDiagnostics';
 import {
   formatUnknownError,
@@ -259,6 +262,60 @@ export function handleGitRequestStatus(
         unavailableReason: status.reason,
       });
     });
+}
+
+export function handleGitRequestBranchDiff(
+  ctl: ChatControllerInternals,
+  sessionId: string,
+): void {
+  if (
+    ctl.connection.status !== 'connected' ||
+    sessionId !== ctl.sessionId
+  ) {
+    return;
+  }
+  const runtime = ctl.runtime;
+  const unavailable = (
+    reason: GitBranchDiffUnavailableReason,
+  ): void => {
+    ctl.emit({
+      type: 'git.branchDiff',
+      sessionId,
+      branch: null,
+      baseBranch: null,
+      files: [],
+      additions: 0,
+      deletions: 0,
+      commitCount: 0,
+      unavailableReason: reason,
+    });
+  };
+  if (runtime === null || typeof runtime.readGitDiff !== 'function') {
+    unavailable('unsupported-runtime');
+    return;
+  }
+  void runtime.readGitDiff().then(
+    (diff) => {
+      if (ctl.disposed || ctl.sessionId !== sessionId) {
+        return;
+      }
+      ctl.emit({
+        type: 'git.branchDiff',
+        sessionId,
+        branch: diff.branch,
+        baseBranch: diff.baseBranch,
+        files: diff.files,
+        additions: diff.additions,
+        deletions: diff.deletions,
+        commitCount: diff.commitCount,
+      });
+    },
+    () => {
+      if (!ctl.disposed && ctl.sessionId === sessionId) {
+        unavailable('read-failed');
+      }
+    },
+  );
 }
 
 export function handleGitCommit(

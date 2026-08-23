@@ -339,25 +339,23 @@ describe('FactoryDroidRuntime', () => {
       id: 'session-fork',
     };
     const info = {
-      availableFiles: [
-        { filePath: 'src/app.ts', contentHash: 'abc', size: 10 },
-      ],
+      availableFiles: [{ filePath: 'src/app.ts', contentHash: 'a', size: 10 },
+        { filePath: '../outside.ts', contentHash: 'b', size: 4 }],
       createdFiles: [{ filePath: 'docs/new.md' }],
-      evictedFiles: [],
+      evictedFiles: [{ filePath: 'src/big.bin', reason: 'size-limit' }],
     };
-    const session = Object.assign(
-      createMockSession(async function* () {}),
-      {
-        rewind: vi.fn(async () => ({ session: forked })),
-        getRewindInfo: vi.fn(async () => info),
-      },
-    );
+    const session = Object.assign(createMockSession(async function* () {}), {
+      rewind: vi.fn(async () => ({ session: forked })),
+      getRewindInfo: vi.fn(async () => info),
+    });
     const runtime = createRuntime(async () => session);
     await runtime.initialize('C:\\workspace');
 
     await expect(
       runtime.getRewindInfo('sdk-msg-1'),
-    ).resolves.toEqual({ restorableCount: 1, createdCount: 1 });
+    ).resolves.toEqual({ restorableCount: 2, createdCount: 1,
+      restorablePaths: ['src/app.ts'], createdPaths: ['docs/new.md'],
+      evictedFiles: [{ path: 'src/big.bin', reason: 'size-limit' }] });
     expect(session.getRewindInfo).toHaveBeenCalledWith({
       messageId: 'sdk-msg-1',
     });

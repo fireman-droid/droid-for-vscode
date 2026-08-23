@@ -8,10 +8,13 @@ import {
 } from 'react';
 
 import type { WebviewToHostMessage } from '../../shared/bridgeMessages';
-import { parseSubagentActivityMessage } from '../../shared/subagentProtocol';
+import {
+  parseSubagentActivityMessage,
+  type SubagentActivityItem,
+} from '../../shared/subagentProtocol';
 
 export interface SubagentRowExtras {
-  readonly action: string | null;
+  readonly activities: readonly SubagentActivityItem[];
 }
 
 export interface SubagentActivityStore {
@@ -60,7 +63,19 @@ function createSubagentActivityStore(): MutableSubagentActivityStore {
       };
     },
     publish: (toolUseId, extras) => {
-      if (values.get(toolUseId)?.action === extras.action) {
+      const previous = values.get(toolUseId)?.activities;
+      if (
+        previous !== undefined &&
+        previous.length === extras.activities.length &&
+        previous.every((activity, index) => {
+          const next = extras.activities[index];
+          return (
+            next !== undefined &&
+            activity.action === next.action &&
+            activity.target === next.target
+          );
+        })
+      ) {
         return;
       }
       values.set(toolUseId, extras);
@@ -119,7 +134,7 @@ export function useSubagentPanelFlow(
       const activity = parseSubagentActivityMessage(event.data);
       if (activity !== null && activity.sessionId === sessionId) {
         activityStore.publish(activity.toolUseId, {
-          action: activity.action,
+          activities: activity.activities,
         });
       }
     };

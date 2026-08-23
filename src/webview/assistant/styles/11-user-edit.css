@@ -2,6 +2,7 @@
   display: flex;
   width: 100%;
   flex-direction: column;
+  gap: 6px;
 }
 
 /* Same card shell as the bottom Composer so editing feels like the
@@ -42,17 +43,45 @@
   outline: none;
 }
 
-/* Secondary rewind option: a quiet self-drawn checkbox row sitting
-   right above the edit card's control row, aligned with the card
-   padding and visually below the input in hierarchy. */
+/* File-restore dock: a small collapsed card at the bottom of the
+   edit card (2026-08-19 layout feedback — the checkbox and its file
+   list used to sit permanently expanded between the input and the
+   control row, dominating a narrow sidebar card). Reuses the bottom
+   Review dock's toggle/body/row classes verbatim so an expand pushes
+   the card open in place instead of a floating layer that could clip
+   or overlap the transcript. */
+.dvx-restore-dock {
+  overflow: hidden;
+  border: 1px solid var(--dvx-border);
+  border-radius: 8px;
+  background: var(--dvx-raised);
+}
+
+.dvx-restore-dock-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px 2px 6px;
+}
+
+/* The disclosure button fills the row instead of shrinking to its
+   chevron's width, so the blank space beside the checkbox label is
+   still part of its click target (2026-08-19 user report: clicking
+   there did nothing). */
+.dvx-restore-dock-head .dvx-review-dock-toggle {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+/* Secondary rewind option: a quiet self-drawn checkbox row, the
+   dock's header content. */
 .dvx-user-edit-restore {
   display: inline-flex;
+  min-width: 0;
   align-items: center;
-  align-self: flex-start;
   gap: 7px;
   margin: 0;
   padding: 3px 6px;
-  margin-left: -6px;
   border-radius: 6px;
   color: var(--dvx-muted);
   font-size: 11px;
@@ -114,6 +143,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* File rows themselves reuse `.dvx-review-dock-row`/`-path` verbatim
+   (29-review-dock.css); only the "new" tag is specific to restore. */
+.dvx-restore-file-tag {
+  flex: 0 0 auto;
+  color: var(--dvx-muted);
+  font-family: inherit;
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  opacity: 0.8;
+}
+
+.dvx-restore-evicted {
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  line-height: 16px;
 }
 
 .dvx-user-edit-actions {
@@ -212,7 +258,8 @@
 /* Once sticky, keep only a compact three-line question header. The
    unpinned card retains four lines for transcript readability, while
    opening its editor still exposes the complete text. */
-.dvx-message-user[data-sticky-compact] .dvx-user-block .dvx-user-text {
+.dvx-message-user[data-sticky-compact] .dvx-user-block .dvx-user-text,
+.dvx-virtual-turn[data-sticky-compact] .dvx-user-block .dvx-user-text {
   -webkit-line-clamp: 3;
 }
 

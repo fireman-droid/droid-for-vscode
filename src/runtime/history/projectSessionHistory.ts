@@ -44,14 +44,15 @@ import {
   extractToolTarget,
 } from '../toolDetail';
 import {
-  extractToolFilePaths,
-  toWorkspaceRelativePath,
-} from '../toolFilePath';
-import {
   type SessionHistoryResult,
   unavailableSessionHistory,
 } from './SessionHistory';
 import { readSessionMission } from './sessionMission';
+import {
+  projectAskUserHistoryItem,
+  readAskUserTopics,
+} from './askUserHistory';
+import { historyToolFilePaths } from './historyToolPaths';
 
 const MAX_RAW_MESSAGES_TO_PROJECT = 10_000;
 const MAX_RAW_BLOCKS_PER_MESSAGE = 1_000;
@@ -77,6 +78,7 @@ interface Projection {
     string,
     {
       readonly transcriptId: string;
+      readonly askUserTopics?: readonly string[];
     }
   >;
   readonly toolIdentities: Map<string, string>;
@@ -646,7 +648,7 @@ function appendTool(
     toolUseId,
   );
   const filePaths = historyToolFilePaths(
-    projection,
+    projection.workspaceRoot,
     toolName,
     block.input,
   );
@@ -692,30 +694,13 @@ function appendTool(
     (projection.toolCounts.get(turnId) ?? 0) + 1,
   );
   if (!projection.tools.has(rawToolIdentity)) {
-    projection.tools.set(rawToolIdentity, { transcriptId });
+    const askUserTopics = readAskUserTopics(toolName, block.input);
+    projection.tools.set(rawToolIdentity, {
+      transcriptId,
+      ...(askUserTopics === undefined ? {} : { askUserTopics }),
+    });
     projection.toolIdentities.set(transcriptId, rawToolIdentity);
   }
-}
-
-function historyToolFilePaths(
-  projection: Projection,
-  toolName: string,
-  input: unknown,
-): readonly string[] {
-  const root = projection.workspaceRoot;
-  if (root === undefined) {
-    return [];
-  }
-  const paths: string[] = [];
-  const seen = new Set<string>();
-  for (const rawPath of extractToolFilePaths(toolName, input)) {
-    const relativePath = toWorkspaceRelativePath(root, rawPath);
-    if (relativePath !== undefined && !seen.has(relativePath)) {
-      seen.add(relativePath);
-      paths.push(relativePath);
-    }
-  }
-  return paths;
 }
 
 /**
@@ -783,6 +768,20 @@ function completeTool(
   projection.transcript[index] = updated;
   projection.transcriptTextUnits +=
     transcriptItemTextUnits(updated) - transcriptItemTextUnits(existing);
+  const askUserResult = projectAskUserHistoryItem(
+    tool.askUserTopics,
+    extractToolResultText(block.content),
+    block.isError === true,
+    stableTranscriptId(
+      'ask-user-result',
+      'history',
+      tool.transcriptId,
+    ),
+    existing.turnId,
+  );
+  if (askUserResult !== undefined) {
+    appendTranscriptItem(projection, askUserResult);
+  }
 }
 
 function isVisibleMessage(

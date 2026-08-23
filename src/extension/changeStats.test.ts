@@ -307,6 +307,34 @@ describe('createGitChangeStatsReader turn baselines', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it('reads a git tree snapshot when the in-memory baseline missed', async () => {
+    const readTreeFile = vi.fn(async () => 'from-tree\n');
+    const reader = createGitChangeStatsReader(
+      () => 'C:\\workspace',
+      {
+        readWorkspaceFile: vi.fn(async () => Buffer.from('live\n')),
+        readBaselineStat: vi.fn(async () => ({
+          additions: 1,
+          deletions: 0,
+        })),
+        readHeadStats: vi.fn(async () => new Map()),
+      },
+      undefined,
+      { readTreeFile },
+    );
+
+    await expect(
+      reader.readTurnBaseline?.(scope, 'src/app.ts'),
+    ).resolves.toBe('from-tree\n');
+    expect(readTreeFile).toHaveBeenCalledWith(scope, 'src/app.ts');
+
+    await reader.captureTurnBaseline?.(scope, ['src/app.ts']);
+    await expect(
+      reader.readTurnBaseline?.(scope, 'src/app.ts'),
+    ).resolves.toBe('live\n');
+    expect(readTreeFile).toHaveBeenCalledOnce();
+  });
 });
 
 describe('createUnavailableChangeStatsReader', () => {

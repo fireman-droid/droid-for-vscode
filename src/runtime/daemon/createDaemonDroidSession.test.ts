@@ -455,6 +455,40 @@ describe('createDaemonDroidSession', () => {
     expect(session.settings.modelId).toBe('model-3');
   });
 
+  it('forwards spec drafting overrides and their resets to the daemon', async () => {
+    const mock = createDroidMock();
+    const session = await createDaemonDroidSession({
+      target: { kind: 'new', cwd: 'C:\\workspace' },
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      getDroid: async () => mock.droid,
+    });
+
+    await session.updateSettings({ specModeModelId: 'model-2' });
+    expect(mock.sessions.updateSettings).toHaveBeenCalledWith(
+      'session-1',
+      { specModeModelId: 'model-2' },
+    );
+    expect(session.settings.specModeModelId).toBe('model-2');
+
+    // null is a reset, not "no change": it must reach the daemon, and
+    // the overlay retires against a snapshot that reports it absent.
+    await session.updateSettings({
+      specModeModelId: null,
+      specModeReasoningEffort: null,
+    });
+    expect(mock.sessions.updateSettings).toHaveBeenLastCalledWith(
+      'session-1',
+      { specModeModelId: null, specModeReasoningEffort: null },
+    );
+    mock.created.settings = { ...mock.created.settings };
+    expect(session.settings.specModeModelId ?? null).toBeNull();
+    mock.created.settings = {
+      ...mock.created.settings,
+      specModeModelId: 'model-3',
+    };
+    expect(session.settings.specModeModelId).toBe('model-3');
+  });
+
   it('compacts into a resumed replacement session and detaches the source', async () => {
     const mock = createDroidMock();
     const runtime = new FactoryDroidRuntime({

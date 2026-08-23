@@ -71,7 +71,7 @@ DroidVisX 是一个 VS Code / Cursor 扩展，为 Factory **Droid CLI/SDK** 提�
 - **Regenerate**：仅最后一条回答；锚定其前一条用户消息，经 SDK Rewind 分支按原文重发；
 - **Fork chat**：仅最后一条助手消息，且仅连接态、无活动回合、无待答交互时可用；SDK `forkSession` 只支持从会话当前态分叉，故不提供"从任意消息分叉"。
 
-**阅读辅助**。转录距底部超过约 48px 时 Composer 上方浮现"回到底部"圆形箭头，点击回底并恢复自动跟随；上滑阅读时内容增长不会把视口拽回底部。长会话默认只渲染尾部约 60 条消息，顶部提供 "Show earlier messages" 分批展开；高频流式消息按动画帧合批渲染，保证长会话不卡顿。
+**阅读辅助**。转录距底部超过约 48px 时 Composer 上方浮现"回到底部"圆形箭头，点击回底并恢复自动跟随；上滑阅读时内容增长不会把视口拽回底部。长会话默认只把尾部约 60 条消息送进 runtime，顶部提供 "Show earlier messages" 分批展开；已展开的那段只挂视口附近的回合（真虚拟化），其余用空白占位。高频流式消息按动画帧合批渲染。未挂载正文无法用 Ctrl+F 搜到。
 
 ## 3. 工具活动与权限审批
 
@@ -98,6 +98,11 @@ DroidVisX 是一个 VS Code / Cursor 扩展，为 Factory **Droid CLI/SDK** 提�
 - 权限详情可以显示原始文本或 Patch；待处理审批期间 Composer 附件与控件不被禁用。
 
 **AskUser 问答**。Droid 主动提问时支持单选、多选、无预设选项的开放文本问题与自定义答案，可一次处理多个问题，Submit/Cancel 按原问题索引精确回传；Factory 问卷标记文本（字面 `\n`、`[topic]`、`[option]`）会被格式化为可读问卷并转为开放文本回答。
+
+待处理 AskUser 只把权威队首停靠在 Composer 正上方，使用有界内部滚动和
+清晰的选中、hover、键盘焦点层级；回答或取消后卡片消失，并在 live 转录、
+恢复检查点、公开 SDK 历史、Session Viewer 与 Markdown 导出中留下紧凑记录。
+普通权限仍留在转录流内，请求顺序与 AskUser 回传机制均未改变。
 
 ## 4. 计划与任务（TodoWrite）
 
@@ -183,7 +188,7 @@ Composer 底部一排常驻控件：**`+` 设置面板**（"Session controls"，
 
 - 编辑卡 = 文本编辑区 + 可重发附件 chips（不可恢复的附件标注 "re-add to include"）+ 完整的第二实例 Composer 控件 + 圆形发送按钮；
 - 点击卡外任意处或 Escape 即静默取消，无确认弹窗（卡内 Mode/Model 弹出层打开时，第一次外点只收弹出层）；
-- 打开时自动经 SDK `getRewindInfo` 查询文件影响，有受影响文件时显示 "Restore N files changed after this point" 勾选项（默认不勾选，勾选后 Rewind 以 SDK 报告的清单恢复/删除文件，否则保持当前工作区不变）；
+- 打开时自动经 SDK `getRewindInfo` 查询文件影响，有受影响文件时显示 "Restore N files changed after this point" 勾选项（默认不勾选，勾选后 Rewind 以 SDK 报告的清单恢复/删除文件，否则保持当前工作区不变）；勾选项下方列出这份清单（最多 40 条，新建文件带 `new` 标签），SDK 报告的 evicted 文件另起一行 "N files cannot be restored"，逐条原因在 tooltip；
 - Resend 经 SDK `session.rewind` 建立分支 Session、截断转录并以新文本重问；被拒绝（忙碌/不可锚定/失败）时以明确文案回到编辑态；
 - 有活跃回合或待处理交互时 Resend 被拒绝。
 
@@ -262,16 +267,22 @@ Mode 触发器一键切换 **Auto / Spec / Mission**；Autonomy 在 `+` 设置�
 
 Spec 态由 Composer placeholder（"Describe what to plan…"）与 Mode 触发器强调色表达。Droid 产出计划（`ExitSpecMode`）时：
 
-- 计划以安全 GFM 渲染；长计划（>1,200 字符或 24 行）默认折叠预览 + "View full spec" 展开；计划文本上限 256K，超限截断显示而非静默取消审批；
-- SDK 提供可编辑选项时可**编辑计划**（Edit/Preview 双视图实时预览）；操作遵循 Deny / Edit / Approve 层级，额外审批范围进 Split Button 菜单；
+- 权威队首计划停靠在 Composer 正上方，以有界安全 GFM 预览显示；标题和
+  "Open in editor" 在 Cursor 打开或聚焦同一份可编辑 Markdown 草稿；
+- 合法编辑以 120ms 防抖同步到卡片与审批。默认批准在内容改变后自动复用
+  SDK 的 `proceed_edit + editedSpecContent`，非默认批准范围不被静默改写；
+- 草稿超过 256K 时不截断且禁用批准，拒绝/取消仍可用；关闭编辑器保留最后
+  合法草稿，批准、拒绝或取消后 Plan 卡消失且不强制关闭用户文档；
+- 非可编辑计划使用单一有界 Markdown 预览，长正文仅在预览区内部滚动，
+  不提供差异不明显的展开/收起状态；TodoWrite PlanLine 不受影响；
 - 审批后 SDK 发 `settings_updated` 时 Host 重读权威 Settings，Mode 不会停留在旧 Spec 显示；`proceed_new_session*` 类批准后自动收养实施 Session（信号缺失时降级为可见 warning 提示从 History 打开，不静默）；
-- Model 弹层在 Spec 模式提供 Session / Spec drafting 双 Scope，可为**起草**单独选模型与推理力度或重置回会话默认。
+- Model 弹层任何模式下都有一行安静的 "Spec drafting" 入口（不再要求先进入 Spec 模式），点开进入独立子视图：首行 "Same as session" 与模型列表共享同一套勾选标记，勾在哪一行就是当前生效状态，不会同时打两个勾；选中该行可为**起草**单独设置模型与推理力度，或选回 "Same as session" 重置。Spec 模式下若起草模型被覆盖，Composer 的 Model 触发按钮会显示该起草模型（而非会话模型）并带一个安静的 "spec" 后缀，覆盖状态在弹层外也可见（2026-08-19 重做，取代此前视觉上无法区分继承/覆盖状态的双 Scope 切换）。
 
 *当前限制（部分完成）*：完整的计划生命周期形态（超出上述闭环的部分）以 SDK 能力为准，尚未扩展。
 
 ### 9.5 Context 用量与 Compact
 
-Context 圆环打开用量面板：**只使用 Provider 报告的最新调用用量对模型 Budget 形成当前窗口比例**；Process 从公开 Load/Notification 的 `lastCallTokenUsage` 投影 `input + cacheRead + output`，Daemon 使用公开 `lastCallCompactionTokens`。累计 `used/free` 只属于 Token ledger，永不进入圆环。分子按会话取已确认上限（Session Title 等小型辅助调用不会把窗口拉回 0%），小数估计四舍五入，超 Budget 夹到 100%；只有缺失或非数值 last-call、非法 Budget 才显示 "Current window unavailable"（fail-closed）。刷新失败保留最后确认值并提供 Retry。面板底部 "Compact conversation" 触发会话压缩（§7）。
+Context 圆环打开用量面板：**只使用 Provider 报告的最新调用用量对模型 Budget 形成当前窗口比例**；Process 从公开 Load/Notification 的 `lastCallTokenUsage` 投影 `input + cacheRead + output`，Daemon 使用公开 `lastCallCompactionTokens`。累计 `used/free` 只属于 Token ledger，永不进入圆环。分子按会话保留已确认高位以忽略 Session Title 等小型辅助调用；接近满窗后的显著正常调用下降会识别为自动压缩并重置高位，面板保留这项检测证据。小数估计四舍五入，超 Budget 夹到 100%；100% 会说明自动压缩在下一次模型调用开始时检查。只有缺失或非数值 last-call、非法 Budget 才显示 "Current window unavailable"（fail-closed）。刷新失败保留最后确认值并提供 Retry。面板底部 "Compact conversation" 触发会话压缩（§7）。
 *当前限制（部分完成）*：Context 分类明细尚未完成语义确认。
 
 ### 9.6 Token 用量
@@ -326,7 +337,7 @@ Context 面板内 "Token usage" 账目显示 SDK 真实提供的五项分解（I
 - 非运行的历史委派不出徽标；后台委派只展示 Host 权威状态，不按父回合
   是否结束猜测控制能力。
 
-**只读转录回放**。运行中与已终态的委派行都提供 quiet "View transcript" 入口，在右侧分栏（/btw 同族视觉）只读回放该子会话的转录；运行中每 3 秒原地刷新，结清时再补一次尾部读取。消息、Markdown、Thinking、命令卡、Tool 行与 Exploring/Explored 组直接复用主聊天组件（不再维护近似副本）；Read 显示安全工作区相对路径，Grep 显示查询与范围，Glob 显示模式与目录。内容增长与 disclosure 高度变化采用平滑跟随；读者滚动阅读即脱离，到底自然重入。点主聊天空白处会播放收拢动画，选择其他会话时立即关闭；面板内交互不会误关，关闭过程中打开另一条记录也不会被旧计时器带走。无 Composer、Regenerate、Commit 或终端写入口；子会话文件无法解析时 fail-closed 显示 "Transcript unavailable"。会话抽屉与归档列表按元数据过滤子代理子会话，转录回放是它们唯一的入口。
+**只读转录回放**。运行中与已终态的委派行都提供 quiet "View transcript" 入口，在右侧分栏（/btw 同族视觉）只读回放该子会话的转录；运行中每 3 秒原地刷新，结清时再补一次尾部读取。消息、Markdown、Thinking、命令卡、Tool 行与 Exploring/Explored 组直接复用主聊天组件（不再维护近似副本）；长转录只挂视口附近回合。Read 显示安全工作区相对路径，Grep 显示查询与范围，Glob 显示模式与目录。内容增长与 disclosure 高度变化采用平滑跟随；读者滚动阅读即脱离，到底自然重入。点主聊天空白处会播放收拢动画，选择其他会话时立即关闭；面板内交互不会误关，关闭过程中打开另一条记录也不会被旧计时器带走。无 Composer、Regenerate、Commit 或终端写入口；子会话文件无法解析时 fail-closed 显示 "Transcript unavailable"。会话抽屉与归档列表按元数据过滤子代理子会话，转录回放是它们唯一的入口。
 
 **Mission 只读展示**。会话属于 Mission 时 Header 追加静字（如 "· Mission · running"），抽屉行带 "mission / mission · worker" 细字注记；Mission 相关确认作为普通权限卡显示与结算。
 *当前限制（部分完成）*：没有 Mission 控制面（启动/暂停/恢复、阶段流水、Worker 详情界面）。
@@ -350,12 +361,18 @@ Context 面板内 "Token usage" 账目显示 SDK 真实提供的五项分解（I
 
 ### 12.3 文件 Diff 入口
 
-文件修改类工具行的路径 chip、Changes 账本的文件行点击后，经 `vscode.diff` 打开 git HEAD ↔ Working 原生对比（无 git 或无 HEAD 版本时回退直接打开文件）；回合进行中点击尚未落盘的文件给出 "does not exist yet" 明确提示。
+文件修改类工具行的路径 chip、Changes 账本的文件行点击后，经 `vscode.diff` 打开 **Before turn ↔ Current**：左侧来自该回合的 git before-tree（内存 baseline 仍优先，未命中再读树）。没有回合树时回退 committedRef，再回退 git HEAD ↔ Working，再回退直接打开文件；回合进行中点击尚未落盘的文件给出 "does not exist yet" 明确提示。
 *当前限制（部分完成）*：无 Diff Hunk 级操作、无独立 Changes 页面。
 
 ### 12.4 Changes 实时账本
 
-回合中 Droid 每写一个文件，转录内的 Changes 账本立即出现/追加一行（钉在首现位置）：header 运行中显示 "writing · N files" 实时跳数，回合结束经 `git diff --numstat` 对账后原地翻为 "N files · settled"；每行显示等宽文件名 + `+A/−D` 行数（untracked/二进制/无 git 时无计数）。行尾动作 hover 浮现（HTML 文件带 Preview）；footer 提供 **Review**（逐个打开全部文件 Diff）与 **Commit…**（见下）。历史加载按回合合成同样的摘要（无行数）。
+回合中 Droid 每写一个文件，转录内的 Changes 账本立即出现/追加一行（钉在首现位置）：header 运行中显示 "writing · N files" 实时跳数（仍用内存 baseline）。回合结束（成功 / 中断 / **失败**）对该回合 before/after git tree 做 `diff --numstat`，行集为窗口内全部工作区变更（含 Bash / 删除 / 新建），忽略文件若曾被工具点名则用内存计数补上并丢弃 `+0 −0`。原地翻为 "N files · settled"；每行显示等宽文件名 + `+A/−D`。树 oid 与行数写入 `workspaceState`（`droidvisx.turnSnapshots`），Reload 后按 turnId 或路径重叠恢复计数，Diff 仍走 Before turn。footer 提供 **Review** 与 **Commit…**。非 git 工作区保持改造前的内存 baseline 行为。
+
+Review dock 另有 **Branch** 开关（仅 daemon 运行时可见），经官方
+`daemon.get_git_diff`（`statsOnly`）把视角从"本回合"切到"本分支 vs base"：
+显示 `branch vs base`、分支总增删、commit 数与逐文件 `+A/−D`（最多 100 行，
+总数仍是全分支口径）。这些行不属于任何回合，因此按钮是 **Open**（打开文件）
+而不是 Diff。读取失败或运行时不支持时只说明不可用，不夹带任何仓库数据。
 
 ### 12.5 Git 提交
 

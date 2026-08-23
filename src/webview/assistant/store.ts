@@ -1,8 +1,9 @@
 import {
   MAX_IMAGES_PER_TURN, MAX_TOOL_ACTIVITIES_PER_TURN,
   type AttachmentSummary, type EditAttachmentSummary, type EditResendRejectReason,
-  type HostToWebviewMessage, type InteractionRequest, type McpAuthPhase,
-  type ModelCatalogState, type SessionArchivedState, type SessionCommandsState,
+  type HostToWebviewMessage, type McpAuthPhase,
+  type GitBranchDiffState, type ModelCatalogState, type RewindFileImpact,
+  type SessionArchivedState, type SessionCommandsState,
   type SessionContextState, type SessionMcpState, type SessionMissionSummary,
   type SessionPluginsState, type SessionSearchState, type SessionSettingsState,
   type SessionSkillsState, type SessionTranscriptItem, type TurnStatus,
@@ -16,6 +17,11 @@ import { EMPTY_SESSION_BTW_STATE, type SessionBtwState } from '../../shared/btwP
 import { EMPTY_SESSION_TOKEN_USAGE, type SessionTokenUsageState } from '../../shared/tokenUsage';
 import { isTransientRuntimeDiagnostic } from '../../shared/transientDiagnostics';
 import { initialGitCommitFlowState, type GitCommitFlowState } from './gitCommitStore';
+import {
+  reduceInteractionClosed,
+  reducePlanDocumentState,
+  type PendingInteraction,
+} from './interactionStore';
 
 export { initialGitCommitFlowState } from './gitCommitStore';
 export type {
@@ -31,11 +37,7 @@ export interface AssistantTurn {
   readonly error?: string;
 }
 
-export interface PendingInteraction {
-  readonly sessionId: string;
-  readonly turnId: string;
-  readonly request: InteractionRequest;
-}
+export type { PendingInteraction } from './interactionStore';
 
 /** One resolved markdown image reference. */
 export interface LocalImageEntry {
@@ -98,11 +100,9 @@ export interface AssistantWebviewState {
   /** Latest daemon content-search result, or null before a search. */
   readonly sessionSearch: SessionSearchState | null;
   /** Latest rewind file-impact info for the edit-resend editor. */
-  readonly rewindInfo: {
-    readonly messageId: string;
-    readonly restorableCount: number;
-    readonly createdCount: number;
-  } | null;
+  readonly rewindInfo: RewindFileImpact | null;
+  /** Latest branch-versus-base diff, or null before a request. */
+  readonly branchDiff: GitBranchDiffState | null;
   /** Edit staging area contents for the message being edited. */
   readonly editAttachments: {
     readonly messageId: string;
@@ -250,6 +250,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   archived: { status: 'idle', items: [] },
   sessionSearch: null,
   rewindInfo: null,
+  branchDiff: null,
   editAttachments: null,
   editResendRejection: null,
   worktreeCreateAvailable: false,
@@ -511,6 +512,8 @@ export function assistantWebviewReducer(
         archived: state.archived,
         sessionSearch: state.sessionSearch,
         rewindInfo: null,
+        branchDiff:
+          event.sessionId === state.sessionId ? state.branchDiff : null,
         // A snapshot means the session identity may have changed (e.g.
         // an adopted edit-resend fork); any in-progress edit is stale.
         editAttachments:
@@ -840,18 +843,17 @@ export function assistantWebviewReducer(
         localImages: Object.fromEntries(entries),
       };
     }
-    case 'rewind.info':
-      return event.sessionId === state.sessionId
-        ? {
-            ...state,
-            sequence: event.sequence,
-            rewindInfo: {
-              messageId: event.messageId,
-              restorableCount: event.restorableCount,
-              createdCount: event.createdCount,
-            },
-          }
-        : advance(state, event.sequence);
+    case 'git.branchDiff': {
+      const { type: _type, sequence, sessionId, ...branchDiff } = event;
+      return sessionId === state.sessionId
+        ? { ...state, sequence, branchDiff } : advance(state, sequence);
+    }
+    case 'rewind.info': {
+      const { type: _type, sequence, sessionId, ...rewindInfo } = event;
+      return sessionId === state.sessionId
+        ? { ...state, sequence, rewindInfo }
+        : advance(state, sequence);
+    }
     case 'assistant.delta':
       if (!acceptsActiveTurn(state, event.sessionId, event.turnId)) {
         return advance(state, event.sequence);
@@ -1154,16 +1156,9 @@ export function assistantWebviewReducer(
         ],
       };
     case 'interaction.closed':
-      if (event.sessionId !== state.sessionId) {
-        return advance(state, event.sequence);
-      }
-      return {
-        ...state,
-        sequence: event.sequence,
-        interactions: state.interactions.filter(
-          ({ request }) => request.requestId !== event.requestId,
-        ),
-      };
+      return reduceInteractionClosed(state, event);
+    case 'plan.document.state':
+      return reducePlanDocumentState(state, event);
     case 'git.status':
       if (
         event.sessionId !== state.sessionId ||

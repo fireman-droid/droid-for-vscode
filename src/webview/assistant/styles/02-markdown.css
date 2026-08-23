@@ -14,6 +14,19 @@
   font-size: 1.08em;
 }
 
+.dvx-markdown .katex {
+  font-size: 1em;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.dvx-markdown .katex-display {
+  max-width: 100%;
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .dvx-markdown a {
   color: #a84f34;
   text-decoration: underline;

@@ -342,8 +342,9 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
       : running
         ? formatElapsed(Date.now() - startedAtRef.current)
         : "—";
-  const latestActivity =
-    activity?.action ?? null;
+  const activities = activity?.activities ?? [];
+  const latestActivity = activities[0] ?? null;
+  const recentActivities = activities.slice(1);
   return (
     <div className={`dvx-subagent-row${running ? " dvx-subagent-live" : ""}`}>
       <div className="dvx-subagent-head">
@@ -360,19 +361,60 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
       {description.length > 0 ? (
         <span className="dvx-subagent-description">{description}</span>
       ) : null}
+      <div className="dvx-subagent-activity">
+        <span className="dvx-subagent-activity-label">
+          Latest activity
+        </span>
+        {latestActivity === null ? (
+          <span className="dvx-subagent-activity-empty">
+            {running ? "Waiting for activity…" : "No activity recorded"}
+          </span>
+        ) : (
+          <span className="dvx-subagent-activity-line">
+            <span className="dvx-subagent-activity-action">
+              {latestActivity.action}
+            </span>
+            {latestActivity.target === null ? null : (
+              <span className="dvx-subagent-activity-target">
+                {latestActivity.target}
+              </span>
+            )}
+          </span>
+        )}
+      </div>
+      {recentActivities.length === 0 ? null : (
+        <div className="dvx-subagent-recent">
+          <span className="dvx-subagent-activity-label">Recent</span>
+          <ol className="dvx-subagent-recent-list">
+            {recentActivities.map((recentActivity, index) => (
+              <li
+                className="dvx-subagent-recent-item"
+                key={`${recentActivity.action}\u0000${
+                  recentActivity.target ?? ""
+                }\u0000${String(index)}`}
+              >
+                <span>{recentActivity.action}</span>
+                {recentActivity.target === null ? null : (
+                  <span className="dvx-subagent-activity-target">
+                    {recentActivity.target}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
       <div className="dvx-subagent-metrics">
         <span>
           <span className="dvx-subagent-metric-label">Elapsed</span>
           {elapsed}
         </span>
-        <span>
-          <span className="dvx-subagent-metric-label">Tools</span>
-          {toolUseCount ?? "—"}
-        </span>
-        <span className="dvx-subagent-latest">
-          <span className="dvx-subagent-metric-label">Latest</span>
-          {latestActivity ?? (running ? "Waiting for activity…" : "—")}
-        </span>
+        {toolUseCount === null ? null : (
+          <span>
+            <span className="dvx-subagent-metric-label">Tools</span>
+            {toolUseCount}
+          </span>
+        )}
       </div>
     </div>
   );

@@ -193,6 +193,28 @@ describe('renderSessionMarkdown', () => {
     );
   });
 
+  it('renders compact AskUser answers and cancellations', () => {
+    const markdown = renderSessionMarkdown(metadata(), [
+      {
+        id: 'ask-1',
+        kind: 'ask-user-result',
+        turnId: 'turn-1',
+        status: 'answered',
+        answers: [{ topic: 'Library', answer: 'React' }],
+      },
+      {
+        id: 'ask-2',
+        kind: 'ask-user-result',
+        turnId: 'turn-1',
+        status: 'cancelled',
+      },
+    ]);
+
+    expect(markdown).toContain('**Your answers**');
+    expect(markdown).toContain('- **Library:** React');
+    expect(markdown).toContain('> **Question cancelled**');
+  });
+
   it('scrubs credential-shaped values from every part of the document', () => {
     const markdown = renderSessionMarkdown(metadata(), [
       user('my key is sk-abcdefghijklmnop1234 please keep it'),

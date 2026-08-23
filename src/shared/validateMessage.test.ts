@@ -22,6 +22,20 @@ import {
 } from './validateMessage';
 
 describe('parseWebviewMessage', () => {
+  it('accepts only exact Plan document open identities', () => {
+    const message = {
+      type: 'plan.document.open',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      requestId: 'plan-1',
+    };
+    expect(parseWebviewMessage(message)).toEqual(message);
+    expect(parseWebviewMessage({ ...message, extra: true })).toBeUndefined();
+    expect(
+      parseWebviewMessage({ ...message, requestId: '' }),
+    ).toBeUndefined();
+  });
+
   it.each([
     {
       type: 'webview.ready',

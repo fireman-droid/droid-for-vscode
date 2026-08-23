@@ -16,10 +16,9 @@ import type { PlanAnchorState } from './planAnchor';
  * bar retire to grey.
  *
  * The line is a normal member of the sticky user-message block: the
- * existing pin coordinator in Thread.tsx carries it, and
- * [data-pinned] CSS alone adds the readability chassis and swaps the
- * expanded body to a non-displacing overlay. No scroll listening in
- * here. Later TodoWrites of the same lineage update the line in
+ * its user-led virtual turn carries it through the browser's native
+ * sticky hand-off. No scroll listening lives here. Later TodoWrites
+ * of the same lineage update the line in
  * place; a new lineage replaces the old card session-wide (see
  * planAnchor.ts). Live turns and history replay render identically.
  */

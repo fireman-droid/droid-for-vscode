@@ -231,12 +231,11 @@ export class DroidViewProvider
     // With retainContextWhenHidden the view survives tab switches
     // (no reboot, no re-resolve), so hide/show becomes a visibility
     // flip. The visibility log is the observable proof that a
-    // switch-back happened without a webview.boot-ok. The ready
-    // resync on re-show is defensive: an initialized controller
-    // treats a repeated ready as "re-emit the snapshot and replay
-    // pending interactions", both of which the webview handles
-    // idempotently, so any message the suspended webview might have
-    // missed while hidden is reconciled wholesale.
+    // switch-back happened without a webview.boot-ok. Re-show only
+    // refreshes the theme: a repeated webview.ready would dump a
+    // full snapshot and remount the live assistant message, which
+    // looked like the reply streaming from scratch. Deltas posted
+    // while hidden stay in the webview message queue.
     this.visibilityListener = webviewView.onDidChangeVisibility(() => {
       if (this.webviewView !== webviewView) {
         return;
@@ -248,10 +247,6 @@ export class DroidViewProvider
       });
       if (webviewView.visible) {
         postTheme();
-        this.controller.handleMessage({
-          type: 'webview.ready',
-          protocolVersion: BRIDGE_PROTOCOL_VERSION,
-        });
       }
     });
   }

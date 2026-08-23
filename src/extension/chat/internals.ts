@@ -158,6 +158,8 @@ export function isTranscriptProjection(
     message.type === 'subagent.update' ||
     message.type === 'transcript.image' ||
     message.type === 'runtime.diagnostic' ||
+    (message.type === 'interaction.closed' &&
+      message.result !== undefined) ||
     message.type === 'turn.state'
   );
 }

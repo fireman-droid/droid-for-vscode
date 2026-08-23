@@ -17,6 +17,7 @@ import {
   ACTIVITY_GROUP_KEY,
   activityGroupBy,
 } from "../activityGrouping";
+import { AskUserResult } from "../AskUserResult";
 import { GitCommitFlowContext } from "../GitCommitPanel";
 import { DroidMarkdownText } from "../MarkdownText";
 import { MessageTimestamp } from "../MessageTimestamp";
@@ -152,6 +153,9 @@ export function AssistantMessageParts({
             }
             if (part.name === "droid-image") {
               return <TranscriptImage data={part.data} />;
+            }
+            if (part.name === "droid-ask-user-result") {
+              return <AskUserResult data={part.data} />;
             }
             return null;
           default:

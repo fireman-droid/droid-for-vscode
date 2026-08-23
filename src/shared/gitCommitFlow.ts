@@ -94,8 +94,63 @@ export type GitCommitResultMessage =
       readonly error: string;
     };
 
+/** One row of the branch review list. */
+export interface GitBranchDiffFile {
+  /** Workspace-relative path with forward slashes. */
+  readonly path: string;
+  readonly additions: number;
+  readonly deletions: number;
+}
+
+/**
+ * Why `git.branchDiff` carries no file list. The webview hides the
+ * branch view for every reason; no raw error text crosses the Bridge.
+ */
+export const GIT_BRANCH_DIFF_UNAVAILABLE_REASONS = [
+  /** The session backend exposes no branch diff (process mode). */
+  'unsupported-runtime',
+  /** The backend answered, but could not read the repository. */
+  'read-failed',
+] as const;
+
+export type GitBranchDiffUnavailableReason =
+  (typeof GIT_BRANCH_DIFF_UNAVAILABLE_REASONS)[number];
+
+export interface GitRequestBranchDiffMessage {
+  readonly type: 'git.requestBranchDiff';
+  readonly sessionId: string;
+}
+
+/**
+ * The session branch measured against its base branch: every file the
+ * branch changed, committed or not. Scope is the branch, not one turn,
+ * so it complements rather than replaces the per-turn Changes ledger.
+ */
+export interface GitBranchDiffMessage {
+  readonly type: 'git.branchDiff';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly branch: string | null;
+  readonly baseBranch: string | null;
+  readonly files: readonly GitBranchDiffFile[];
+  /** Totals as the backend reports them, over the uncapped file set. */
+  readonly additions: number;
+  readonly deletions: number;
+  readonly commitCount: number;
+  readonly unavailableReason?: GitBranchDiffUnavailableReason;
+}
+
+/** The branch report the webview keeps, without its Bridge envelope. */
+export type GitBranchDiffState = Omit<
+  GitBranchDiffMessage,
+  'type' | 'sequence' | 'sessionId'
+>;
+
 /** Most files one `git.status` message may list (in-turn files first). */
 export const MAX_GIT_STATUS_FILES = 100;
+
+/** Most files one `git.branchDiff` message may list. */
+export const MAX_GIT_BRANCH_DIFF_FILES = MAX_GIT_STATUS_FILES;
 
 /** Most paths one `git.commit` request may stage. */
 export const MAX_GIT_COMMIT_PATHS = MAX_GIT_STATUS_FILES;

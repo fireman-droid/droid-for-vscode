@@ -50,13 +50,15 @@ import {
 } from './sessionExporter';
 import { RecentCommandsStore } from './RecentCommandsStore';
 import { createGitChangeStatsReader } from './changeStats';
+import { createTurnStatsHistoryLoader } from './committedHistoryStats';
+import { createTurnSnapshotStore } from './turnSnapshots';
 import { createVscodeAttachmentSources } from './vscodeAttachmentSources';
 import { createVscodeExternalUrlOpener } from './vscodeExternalUrlOpener';
 import { createVscodeFileDiffOpener } from './vscodeFileDiff';
 import { createVscodePathOpener } from './vscodePathOpener';
 import { PreviewPanelController } from './PreviewPanelController';
+import { PlanDocumentController } from './planDocumentController';
 import { createVscodeGitWorkflow } from './vscodeGitWorkflow';
-import { createCommittedStatsHistoryLoader } from './committedHistoryStats';
 import {
   createWorktreeSessionsFeature,
   type WorktreeSessionsFeature,
@@ -434,21 +436,30 @@ export function activate(context: vscode.ExtensionContext): void {
     createTerminal: (name, pty) =>
       vscode.window.createTerminal({ name, pty }),
   });
+  const turnSnapshots = createTurnSnapshotStore(
+    () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+    vscode.Uri.joinPath(context.globalStorageUri, 'turn-objects').fsPath,
+    persistence,
+    {
+      recordDiagnostic: (event) => diagnostics.record(event),
+    },
+  );
+  void turnSnapshots.prune();
   const changeStats = createGitChangeStatsReader(
     () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
     {},
     persistence,
+    turnSnapshots,
   );
-  // Daemon-first history (bug #37), enriched with the latest durable
-  // commit's exact line counts after Reload.
-  const historyLoader = createCommittedStatsHistoryLoader(
+  // Daemon-first history, with per-turn snapshot counts after Reload.
+  const historyLoader = createTurnStatsHistoryLoader(
     createDaemonFirstHistoryLoader({
       getDroid: daemonSidecar.droid,
       isDaemonActive: () => daemonSessionsActive(),
       fallback: new FactorySessionHistoryLoader({ diagnostics }),
       diagnostics,
     }),
-    changeStats,
+    turnSnapshots,
   );
   const fileDiff = createVscodeFileDiffOpener(
     changeStats,
@@ -470,6 +481,9 @@ export function activate(context: vscode.ExtensionContext): void {
     diagnostics,
   );
   let controller: ChatController;
+  const planDocuments = new PlanDocumentController((state) => {
+    controller.emit(state);
+  });
   const missionGateway = new MissionGateway({
     getDroid: daemonSidecar.droid,
     preferences: new MissionPreferenceStore(persistence),
@@ -543,6 +557,8 @@ export function activate(context: vscode.ExtensionContext): void {
           })
         : createBtwSidecar({ cwd, mainSessionId }),
     missionGateway,
+    turnSnapshots,
+    planDocuments,
   );
   previewController.setFeedbackHandler((text) => {
     controller.emit({ type: 'canvas.feedbackDraft', text });

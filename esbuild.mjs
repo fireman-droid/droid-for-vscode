@@ -52,6 +52,8 @@ const webviewResult = await build({
   },
   loader: {
     '.woff2': 'file',
+    '.woff': 'file',
+    '.ttf': 'file',
   },
   assetNames: 'assets/[name]',
   sourcemap: false,

@@ -3,6 +3,9 @@ import {
   DIAGNOSTIC_SEVERITIES,
   IMAGE_MEDIA_TYPES,
   IMAGE_ORIGINS,
+  MAX_ASK_USER_ANSWERS,
+  MAX_ASK_USER_ANSWER_LENGTH,
+  MAX_ASK_USER_TOPIC_LENGTH,
   MAX_ASSISTANT_TEXT_LENGTH,
   MAX_ATTACHMENT_NAME_LENGTH,
   MAX_PENDING_ATTACHMENTS,
@@ -68,6 +71,8 @@ export function parseTranscriptItem(
       return parseTool(value);
     case 'changes':
       return parseChanges(value);
+    case 'ask-user-result':
+      return parseAskUserResult(value);
     case 'diagnostic':
       return parseDiagnostic(value);
     case 'image':
@@ -75,6 +80,62 @@ export function parseTranscriptItem(
     default:
       return undefined;
   }
+}
+
+function parseAskUserResult(
+  value: UnknownRecord,
+): Extract<
+  SessionTranscriptItem,
+  { kind: 'ask-user-result' }
+> | undefined {
+  const id = dataValue(value, 'id');
+  const turnId = dataValue(value, 'turnId');
+  const status = dataValue(value, 'status');
+  if (!isId(id) || !isId(turnId)) {
+    return undefined;
+  }
+  if (status === 'cancelled') {
+    return hasExactKeys(value, ['id', 'kind', 'turnId', 'status'])
+      ? { id, kind: 'ask-user-result', turnId, status: 'cancelled' }
+      : undefined;
+  }
+  const answersValue = dataValue(value, 'answers');
+  if (
+    status !== 'answered' ||
+    !hasExactKeys(value, [
+      'id',
+      'kind',
+      'turnId',
+      'status',
+      'answers',
+    ]) ||
+    !isExactArray(answersValue, 1, MAX_ASK_USER_ANSWERS)
+  ) {
+    return undefined;
+  }
+  const answers: Array<{ topic: string; answer: string }> = [];
+  for (const answerValue of answersValue) {
+    if (!isStrictRecord(answerValue)) {
+      return undefined;
+    }
+    const topic = dataValue(answerValue, 'topic');
+    const answer = dataValue(answerValue, 'answer');
+    if (
+      !hasExactKeys(answerValue, ['topic', 'answer']) ||
+      !isNonEmptyBoundedString(topic, MAX_ASK_USER_TOPIC_LENGTH) ||
+      !isNonEmptyBoundedString(answer, MAX_ASK_USER_ANSWER_LENGTH)
+    ) {
+      return undefined;
+    }
+    answers.push({ topic, answer });
+  }
+  return {
+    id,
+    kind: 'ask-user-result',
+    turnId,
+    status: 'answered',
+    answers,
+  };
 }
 
 const IMAGE_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;

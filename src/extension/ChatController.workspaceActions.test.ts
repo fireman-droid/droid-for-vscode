@@ -460,7 +460,7 @@ describe('ChatController', () => {
       html,
     });
     await vi.waitFor(() => {
-      expect(openInlineHtml).toHaveBeenCalledWith(html);
+      expect(openInlineHtml).toHaveBeenCalledWith(html, undefined);
     });
     expect(
       messages.filter(
@@ -1183,5 +1183,86 @@ describe('ChatController', () => {
     expect(JSON.stringify(messages)).not.toContain(
       'private compaction failure',
     );
+  });
+
+  it('answers git.requestBranchDiff and fails closed when it cannot', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      readGitDiff: vi.fn(async () => ({
+        branch: 'feature/dock',
+        baseBranch: 'main',
+        files: [{ path: 'src/app.tsx', additions: 4, deletions: 2 }],
+        additions: 4,
+        deletions: 2,
+        commitCount: 3,
+      })),
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    // A stale session id is ignored entirely.
+    controller.handleMessage({
+      type: 'git.requestBranchDiff',
+      sessionId: 'session-other',
+    });
+    expect(runtime.readGitDiff).not.toHaveBeenCalled();
+
+    controller.handleMessage({
+      type: 'git.requestBranchDiff',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'git.branchDiff')).toMatchObject({
+        branch: 'feature/dock',
+        baseBranch: 'main',
+        files: [{ path: 'src/app.tsx', additions: 4, deletions: 2 }],
+        commitCount: 3,
+      });
+    });
+
+    const failing = Object.assign(createMockRuntime(), {
+      readGitDiff: vi.fn(async () => {
+        throw new Error('private git failure');
+      }),
+    });
+    const failed = createController(() => failing);
+    ready(failed.controller);
+    await waitForConnected(failed.messages);
+    failed.controller.handleMessage({
+      type: 'git.requestBranchDiff',
+      sessionId: 'session-1',
+    });
+    await vi.waitFor(() => {
+      expect(lastMessage(failed.messages, 'git.branchDiff')).toMatchObject({
+        branch: null,
+        files: [],
+        unavailableReason: 'read-failed',
+      });
+    });
+    expect(JSON.stringify(failed.messages)).not.toContain(
+      'private git failure',
+    );
+  });
+
+  it('reports unsupported-runtime when the runtime has no branch diff', async () => {
+    const { controller, messages } = createController(() =>
+      createMockRuntime(),
+    );
+    ready(controller);
+    await waitForConnected(messages);
+    controller.handleMessage({
+      type: 'git.requestBranchDiff',
+      sessionId: 'session-1',
+    });
+
+    expect(lastMessage(messages, 'git.branchDiff')).toMatchObject({
+      branch: null,
+      baseBranch: null,
+      files: [],
+      additions: 0,
+      deletions: 0,
+      commitCount: 0,
+      unavailableReason: 'unsupported-runtime',
+    });
   });
 });

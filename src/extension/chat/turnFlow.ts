@@ -32,6 +32,7 @@ import {
   capturePreToolBaseline,
   recordLiveToolChanges,
 } from './liveChanges';
+import { resolveSettledChangeFiles } from './settleTurnChanges';
 import { scheduleLiveSubagentSync, settleTurnSubagents } from './subagentWatch';
 import { settleQueueAfterTurn } from './queue';
 import {
@@ -165,6 +166,7 @@ export function handleSend(
       status: 'submitting',
       activity: createTurnActivityState(),
     };
+    void ctl.turnSnapshots?.capture({ sessionId, turnId }, 'before');
     armTurnWatchdog(ctl, sessionId, turnId);
     ctl.interactions.beginTurn(sessionId, turnId);
     // Edit-resend consumes the edit staging area passed in by the
@@ -639,11 +641,10 @@ export function finishSpecHandoff(
 }
 
 /**
- * Publishes the settled changed-files ledger for a finished turn:
- * one whole-turn stats read over every tool-named path closes the
- * live ledger stream. Captured before-turn files are authoritative;
- * git HEAD is the fallback for paths without a live baseline. The
- * settlement is dropped when the session changes before stats arrive.
+ * Publishes the settled changed-files ledger for a finished turn.
+ * Git trees are the authority when a before-snapshot exists; the
+ * in-memory baseline remains the fallback. Settlement is dropped
+ * when the session changes before stats arrive.
  */
 export function publishTurnChanges(
   ctl: ChatControllerInternals,
@@ -657,41 +658,37 @@ export function publishTurnChanges(
     // From here the reconciliation owns the stream: pending debounce
     // reads must not publish a stale `writing` frame after `settled`.
     ctl.turn.changesLedger?.cancel();
-    const paths = collectToolFilePaths(ctl.turn.activity);
-    if (paths.length === 0) {
-      return;
-    }
+    const toolPaths = collectToolFilePaths(ctl.turn.activity);
     const runtimeGeneration = ctl.runtimeGeneration;
-    void ctl.changeStats.read(paths, { sessionId, turnId }).then((stats) => {
-      if (
-        ctl.disposed ||
-        ctl.sessionId !== sessionId ||
-        ctl.runtimeGeneration !== runtimeGeneration
-      ) {
-        return;
-      }
-      const files = paths.map((path) => {
-        const stat = stats.get(path);
-        return {
-          path,
-          additions: stat?.additions ?? null,
-          deletions: stat?.deletions ?? null,
-        };
-      });
-      const next = appendTurnChanges(ctl.transcript, turnId, files);
-      if (next === ctl.transcript) {
-        return;
-      }
-      ctl.transcript = next;
-      scheduleRecoveryCheckpoint(ctl);
-      ctl.emit({
-        type: 'changes.update',
-        sessionId,
-        turnId,
-        state: 'settled',
-        files,
-      });
-    });
+    void resolveSettledChangeFiles(ctl, sessionId, turnId, toolPaths).then(
+      (files) => {
+        if (
+          ctl.disposed ||
+          ctl.sessionId !== sessionId ||
+          ctl.runtimeGeneration !== runtimeGeneration ||
+          files.length === 0
+        ) {
+          return;
+        }
+        const next = appendTurnChanges(ctl.transcript, turnId, files);
+        if (next === ctl.transcript) {
+          return;
+        }
+        ctl.transcript = next;
+        scheduleRecoveryCheckpoint(ctl);
+        ctl.emit({
+          type: 'changes.update',
+          sessionId,
+          turnId,
+          state: 'settled',
+          files,
+        });
+        void ctl.turnSnapshots?.rememberFiles(
+          { sessionId, turnId },
+          files,
+        );
+      },
+    );
 }
 
 export function handleStop(
@@ -1006,9 +1003,8 @@ export function failTurn(
     }
     ctl.interactions.endTurn(sessionId, turnId);
     ctl.terminalMirror?.settleAll();
-    // No settled reconciliation follows a failed turn; the webview
-    // flips the ledger header on the terminal turn state instead.
     ctl.turn.changesLedger?.cancel();
+    publishTurnChanges(ctl, sessionId, turnId);
     ctl.turn.status = 'failed';
     ctl.turn.error = TURN_FAILURE_MESSAGE;
     ctl.emit({

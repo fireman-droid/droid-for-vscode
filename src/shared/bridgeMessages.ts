@@ -1,7 +1,14 @@
 import {
   MAX_INTERACTION_DETAIL_LENGTH,
   MAX_PERMISSION_TOOL_NAME_LENGTH,
+  type AskUserAnswer,
+  type AskUserInteractionResult,
+  type AskUserResultTranscriptItem,
+  type AskUserRespondMessage,
+  type PlanDocumentOpenMessage,
+  type PlanDocumentStateMessage,
   type PermissionConfirmationKind,
+  type PermissionRespondMessage,
 } from './interactionProtocol';
 import {
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
@@ -52,8 +59,18 @@ export {
   MAX_PERMISSION_TOOLS,
   MAX_PERMISSION_TOOL_NAME_LENGTH,
   MAX_SPEC_PLAN_LENGTH,
+  PLAN_DOCUMENT_STATUSES,
   PERMISSION_CONFIRMATION_KINDS,
+  type AskUserInteractionResult,
+  type AskUserAnswer,
+  type AskUserResultAnswer,
+  type AskUserResultTranscriptItem,
+  type AskUserRespondMessage,
+  type PlanDocumentOpenMessage,
+  type PlanDocumentStateMessage,
+  type PlanDocumentStatus,
   type PermissionConfirmationKind,
+  type PermissionRespondMessage,
 } from './interactionProtocol';
 export {
   MAX_TOOL_ACTION_SUMMARY_LENGTH,
@@ -100,28 +117,34 @@ export type {
 } from './queueProtocol';
 export { MAX_TOOL_OUTPUT_TAIL_LENGTH } from './toolOutput';
 export {
-  GIT_FILE_STATUSES,
+  GIT_BRANCH_DIFF_UNAVAILABLE_REASONS, GIT_FILE_STATUSES,
   GIT_UNAVAILABLE_REASONS,
-  MAX_GIT_BRANCH_LENGTH,
+  MAX_GIT_BRANCH_DIFF_FILES, MAX_GIT_BRANCH_LENGTH,
   MAX_GIT_COMMIT_ERROR_LENGTH,
   MAX_GIT_COMMIT_MESSAGE_LENGTH,
   MAX_GIT_COMMIT_PATHS,
   MAX_GIT_COMMIT_SUBJECT_LENGTH,
   MAX_GIT_STATUS_FILES,
   isGitCommitHashEcho,
+  type GitBranchDiffFile,
+  type GitBranchDiffMessage,
+  type GitBranchDiffState,
+  type GitBranchDiffUnavailableReason,
   type GitCommitRequestMessage,
   type GitCommitResultMessage,
   type GitFileStatus,
+  type GitRequestBranchDiffMessage,
   type GitRequestStatusMessage,
   type GitStatusMessage,
   type GitStatusFile,
   type GitUnavailableReason,
 } from './gitCommitFlow';
 import type {
+  GitBranchDiffMessage as GitBranchDiffContract,
   GitCommitRequestMessage as GitCommitRequestContract,
   GitCommitResultMessage as GitCommitResultContract,
-  GitRequestStatusMessage as GitRequestStatusContract,
-  GitStatusMessage as GitStatusContract,
+  GitRequestBranchDiffMessage as GitRequestBranchDiffContract,
+  GitRequestStatusMessage as GitRequestStatusContract, GitStatusMessage as GitStatusContract,
 } from './gitCommitFlow';
 // Type-only on purpose: the runtime dependency points the other way
 // (customModelsProtocol imports shared model bounds from here).
@@ -154,8 +177,11 @@ import type {
 // makes Agent Activity live-only and adds editor-tab open/stop; v24
 // retires that custom Agent contract in favor of official Mission and
 // Task/Subagent surfaces; v25 adds the bounded Mission setup, control,
-// and snapshot contracts; v26 adds Provider-first custom-model management.
-export const BRIDGE_PROTOCOL_VERSION = 26 as const;
+// and snapshot contracts; v26 adds Provider-first custom-model management;
+// v27 adds bounded semantic trails to inline Subagent activity; v28
+// docks AskUser/ExitSpecMode above the Composer, adds durable AskUser
+// results, and synchronizes editable Plan documents with Cursor.
+export const BRIDGE_PROTOCOL_VERSION = 28 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_DELTA_LENGTH = 16_384;
@@ -478,29 +504,6 @@ export interface RewindInfoRequestMessage {
 export interface RuntimeRetryMessage {
   readonly type: 'runtime.retry';
   readonly sessionId: string | null;
-}
-
-export interface PermissionRespondMessage {
-  readonly type: 'permission.respond';
-  readonly sessionId: string;
-  readonly turnId: string;
-  readonly requestId: string;
-  readonly selectedOption: string;
-  readonly editedSpecContent?: string;
-}
-
-export interface AskUserAnswer {
-  readonly index: number;
-  readonly answer: string;
-}
-
-export interface AskUserRespondMessage {
-  readonly type: 'ask-user.respond';
-  readonly sessionId: string;
-  readonly turnId: string;
-  readonly requestId: string;
-  readonly cancelled: boolean;
-  readonly answers: readonly AskUserAnswer[];
 }
 
 export interface SessionsRefreshMessage {
@@ -1014,6 +1017,7 @@ export type WebviewToHostMessage =
   | RuntimeRetryMessage
   | PermissionRespondMessage
   | AskUserRespondMessage
+  | PlanDocumentOpenMessage
   | SessionsRefreshMessage
   | SessionSelectMessage
   | SessionNewMessage
@@ -1031,6 +1035,7 @@ export type WebviewToHostMessage =
   | FilePreviewMessage
   | PreviewInlineHtmlMessage
   | GitRequestStatusContract
+  | GitRequestBranchDiffContract
   | GitCommitRequestContract
   | TerminalOpenMirrorMessage
   | WorkspaceOpenPathMessage
@@ -1601,6 +1606,7 @@ export type SessionTranscriptItem =
   | ThinkingTranscriptItem
   | ToolTranscriptItem
   | ChangesTranscriptItem
+  | AskUserResultTranscriptItem
   | DiagnosticTranscriptItem
   | ImageTranscriptItem;
 
@@ -1841,19 +1847,40 @@ export interface McpAuthStateMessage {
   readonly message: string | null;
 }
 
+export const MAX_REWIND_INFO_FILES = 40;
+export const MAX_REWIND_EVICTED_REASON_LENGTH = 120;
+
+/** A file a rewind cannot restore, with the backend's reason. */
+export interface RewindEvictedFile {
+  readonly path: string;
+  readonly reason: string;
+}
+
 /**
- * How rewinding to `messageId` would affect workspace files, as
- * counts only. Answers a webview `rewind.info` request.
+ * How rewinding to `messageId` would affect workspace files. The path
+ * lists are capped at `MAX_REWIND_INFO_FILES` and omit files outside
+ * the workspace, so they can be shorter than the counts.
  */
-export interface RewindInfoStateMessage {
-  readonly type: 'rewind.info';
-  readonly sequence: number;
-  readonly sessionId: string;
+export interface RewindFileImpact {
   readonly messageId: string;
   /** Files Droid changed after the anchor that a rewind can restore. */
   readonly restorableCount: number;
   /** Files Droid created after the anchor that a rewind can delete. */
   readonly createdCount: number;
+  readonly restorablePaths: readonly string[];
+  readonly createdPaths: readonly string[];
+  /**
+   * Files Droid changed after the anchor but can no longer restore, so
+   * a rewind leaves them at their current contents.
+   */
+  readonly evictedFiles: readonly RewindEvictedFile[];
+}
+
+/** Answers a webview `rewind.info` request. */
+export interface RewindInfoStateMessage extends RewindFileImpact {
+  readonly type: 'rewind.info';
+  readonly sequence: number;
+  readonly sessionId: string;
 }
 
 export const WORKSPACE_FILES_STATUSES = [
@@ -2097,6 +2124,7 @@ export interface InteractionClosedMessage {
   readonly sessionId: string;
   readonly turnId: string;
   readonly requestId: string;
+  readonly result?: AskUserInteractionResult;
 }
 
 export type HostToWebviewMessage =
@@ -2128,6 +2156,7 @@ export type HostToWebviewMessage =
   | TranscriptImageMessage
   | ChangesUpdateMessage
   | GitStatusContract
+  | GitBranchDiffContract
   | GitCommitResultContract
   | RuntimeDiagnosticMessage
   | TurnStateMessage
@@ -2135,6 +2164,7 @@ export type HostToWebviewMessage =
   | TurnErrorMessage
   | InteractionRequestMessage
   | InteractionClosedMessage
+  | PlanDocumentStateMessage
   | SessionBtwMessage
   | QueueStateMessage
   | UiThemeMessage

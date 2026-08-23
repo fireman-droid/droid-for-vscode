@@ -108,6 +108,9 @@ function copyOptionalSessionMethods(
   if (typeof session.getRewindInfo === 'function') {
     view.getRewindInfo = (params) => session.getRewindInfo!(params);
   }
+  if (typeof session.getGitDiff === 'function') {
+    view.getGitDiff = () => session.getGitDiff!();
+  }
   if (typeof session.compact === 'function') {
     view.compact = (params) => session.compact!(params);
   }

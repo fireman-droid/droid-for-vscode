@@ -170,27 +170,66 @@ describe('assistant interaction cards', () => {
     expect(onRespond).toHaveBeenCalledWith('proceed-safe', undefined);
   });
 
-  it('expands long plans and previews edited specs inside the card', async () => {
+  it('uses the Cursor document as the Plan editor and blocks oversized approval', async () => {
     const user = userEvent.setup();
+    const onOpenPlanDocument = vi.fn();
     const onRespond = vi.fn();
-
-    // Short plans fit the collapsed preview, so no toggle appears.
-    const short = render(
+    render(
       <PermissionRequestCard
-        request={permission}
+        request={{
+          ...permission,
+          options: [
+            {
+              label: 'Reject',
+              value: 'cancel',
+              requiresEditedSpec: false,
+            },
+            {
+              label: 'Edit plan',
+              value: 'proceed_edit',
+              requiresEditedSpec: true,
+            },
+            {
+              label: 'Proceed',
+              value: 'proceed_once',
+              requiresEditedSpec: false,
+            },
+          ],
+        }}
+        planDocument={{ status: 'too-large' }}
+        onOpenPlanDocument={onOpenPlanDocument}
         onRespond={onRespond}
       />,
     );
+
+    await user.click(
+      screen.getByRole('button', { name: /Open in editor/ }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Edit plan' }));
+    expect(onOpenPlanDocument).toHaveBeenCalledTimes(2);
     expect(
-      screen.queryByRole('button', { name: 'View full spec' }),
-    ).toBeNull();
-    short.unmount();
+      screen.getByRole<HTMLButtonElement>('button', {
+        name: 'Approve plan',
+      }).disabled,
+    ).toBe(true);
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Reject' })
+        .disabled,
+    ).toBe(false);
+    expect(
+      screen.getByText(/over the 262,144 character limit/),
+    ).toBeDefined();
+  });
+
+  it('keeps long plans bounded and previews edited specs inside the card', async () => {
+    const user = userEvent.setup();
+    const onRespond = vi.fn();
 
     const longPlan = Array.from(
       { length: 40 },
       (_, index) => `## Section ${index}\n\nStep detail ${index}.`,
     ).join('\n\n');
-    const { container } = render(
+    render(
       <PermissionRequestCard
         request={{ ...permission, editableSpecContent: longPlan }}
         onRespond={onRespond}
@@ -198,19 +237,7 @@ describe('assistant interaction cards', () => {
     );
 
     expect(
-      container.querySelector('.dvx-plan-preview-expanded'),
-    ).toBeNull();
-    await user.click(
-      screen.getByRole('button', { name: 'View full spec' }),
-    );
-    expect(
-      container.querySelector('.dvx-plan-preview-expanded'),
-    ).not.toBeNull();
-    await user.click(
-      screen.getByRole('button', { name: 'Collapse spec' }),
-    );
-    expect(
-      container.querySelector('.dvx-plan-preview-expanded'),
+      screen.queryByRole('button', { name: 'View full spec' }),
     ).toBeNull();
 
     // The edit view previews the current draft with the same renderer.
@@ -241,8 +268,24 @@ describe('assistant interaction cards', () => {
     const first = render(
       <AskUserRequestCard request={askUser} onRespond={onRespond} />,
     );
-    await user.click(screen.getByLabelText('React'));
-    await user.click(screen.getByLabelText('Tests'));
+    const reactRadio = screen.getByRole<HTMLInputElement>('radio', {
+      name: 'React',
+    });
+    const testsCheckbox = screen.getByRole<HTMLInputElement>('checkbox', {
+      name: 'Tests',
+    });
+    expect(reactRadio.classList.contains('dvx-question-radio')).toBe(true);
+    expect(
+      reactRadio.nextElementSibling?.classList.contains(
+        'dvx-question-radio-mark',
+      ),
+    ).toBe(true);
+    expect(
+      testsCheckbox.classList.contains('dvx-question-radio'),
+    ).toBe(false);
+
+    await user.click(reactRadio);
+    await user.click(testsCheckbox);
     await user.click(screen.getByLabelText('Types'));
     await user.type(
       screen.getAllByLabelText('Your own answer')[1]!,

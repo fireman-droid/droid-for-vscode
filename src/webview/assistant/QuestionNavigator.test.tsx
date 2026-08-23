@@ -10,6 +10,7 @@ import {
 import {
   findActiveQuestionIndex,
   isScrollableTranscript,
+  projectQuestionItems,
   questionPreview,
   scrollQuestionToTop,
 } from "./useQuestionNavigation";
@@ -27,6 +28,7 @@ describe("question navigation helpers", () => {
     expect(findActiveQuestionIndex([20, 240, 580], 0)).toBe(0);
     expect(findActiveQuestionIndex([20, 240, 580], 240)).toBe(1);
     expect(findActiveQuestionIndex([20, 240, 580], 900)).toBe(2);
+    expect(findActiveQuestionIndex([20, 240, 900], 700, 700)).toBe(2);
   });
 
   it("normalizes and bounds hover previews", () => {
@@ -35,15 +37,43 @@ describe("question navigation helpers", () => {
     expect(questionPreview("x".repeat(240), 0)).toHaveLength(180);
   });
 
-  it("keeps a bounded window centered on long histories", () => {
+  it("projects question markers from runtime user messages", () => {
+    expect(
+      projectQuestionItems([
+        {
+          id: "assistant-0",
+          role: "assistant",
+          content: [{ type: "text", text: "Hi" }],
+        },
+        {
+          id: "user-1",
+          role: "user",
+          content: [{ type: "text", text: "  Why\n now?  " }],
+        },
+        {
+          id: "user-2",
+          role: "user",
+          content: [{ type: "text", text: "Next" }],
+        },
+      ]),
+    ).toEqual([
+      { key: "user-1", preview: "Why now?" },
+      { key: "user-2", preview: "Next" },
+    ]);
+  });
+
+  it("samples the full history while retaining the active neighborhood", () => {
     const items = Array.from({ length: 40 }, (_, index) => ({
       key: `question-${index}`,
       preview: `Question ${index}`,
     }));
     const visible = visibleQuestionItems(items, 20);
-    expect(visible).toHaveLength(13);
-    expect(visible[0]?.index).toBe(14);
-    expect(visible.at(-1)?.index).toBe(26);
+    expect(visible).toHaveLength(21);
+    expect(visible[0]?.index).toBe(0);
+    expect(visible.at(-1)?.index).toBe(39);
+    expect(visible.map(({ index }) => index)).toEqual(
+      expect.arrayContaining([19, 20, 21]),
+    );
   });
 
   it("top-snaps with reduced-motion support", () => {
@@ -97,5 +127,22 @@ describe("QuestionNavigator", () => {
     fireEvent.click(screen.getByRole("button", { name: /Third question/ }));
     fireEvent.click(screen.getByRole("button", { name: "Next question" }));
     expect(onNavigate.mock.calls).toEqual([["one"], ["three"], ["three"]]);
+  });
+
+  it("spaces every rendered question tick evenly", () => {
+    render(
+      <QuestionNavigator
+        visible
+        items={items}
+        activeIndex={1}
+        onNavigate={() => undefined}
+      />,
+    );
+    const positions = items.map(({ preview }) =>
+      screen
+        .getByRole("button", { name: new RegExp(preview) })
+        .style.getPropertyValue("--dvx-question-position"),
+    );
+    expect(positions).toEqual(["0", "0.5", "1"]);
   });
 });

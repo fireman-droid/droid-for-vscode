@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 
 import { MAX_INLINE_PREVIEW_HTML_LENGTH, MAX_TURN_TEXT_LENGTH, type AskUserAnswer, type ImageMediaType, type ThemePreference, type WebviewToHostMessage } from '../../shared/bridgeMessages';
 import { announceBooted, announceHandshakeTimeout, announceReady, announceRendered, getVsCodeApi, persistDraft, postPerfBeacon, readHostMessage, restoreDraft } from '../bridge/vscode';
-import { InteractionPanel } from './Interactions';
+import { buildInteractionSlots } from './interactionSlots';
 import { LocalImageContext, OpenPathContext } from './MarkdownText';
 import type { PathLink } from './pathLink';
 import type { ComposerNavRequest, McpServerAddParams, SessionSettingSelection } from './ComposerControls';
@@ -29,7 +29,7 @@ import { ModelsPage } from './ModelsPage';
 import { findLatestChangesContext, findLatestChangesItem } from './gitCommitDraft';
 import { selectPlanAnchors } from './planAnchor';
 import { QueuedMessages } from './QueuedMessages';
-import { ReviewDock } from './ReviewDock';
+import { ReviewDockSlot } from './reviewDockSlot';
 import { SideChatSheet } from './SideChatSheet';
 import { SubagentActivityStoreContext, useSubagentPanelFlow } from './subagentPanelFlow';
 import { selectWorkingSubagents } from './subagentWorking';
@@ -287,8 +287,8 @@ export function App(): React.JSX.Element {
     return () => clearTimeout(timer);
   }, [receivedHostMessage, vscode]);
   const showHandshakeNotice = handshakeStalled && !receivedHostMessage;
-
   const active = isTurnActive(state.turn);
+  const generating = active && state.turn?.status !== 'stopping';
   const hasInteraction = state.interactions.length > 0;
   const connectionStatus = state.connection.status;
   const sessionId = state.sessionId;
@@ -1379,7 +1379,7 @@ export function App(): React.JSX.Element {
     state.connection.status !== 'connected' ||
     (active && !state.backgroundTurnsAvailable) ||
     hasInteraction;
-  const showPending = active && !hasInteraction;
+  const showPending = generating && !hasInteraction;
   // A running tool row or streaming thinking block already carries the
   // live shimmer; the pending status row then stays static so each
   // turn keeps exactly one animated indicator.
@@ -1392,14 +1392,9 @@ export function App(): React.JSX.Element {
       ),
     [state.transcript],
   );
-  const inlineInteraction =
-    state.interactions.length > 0 ? (
-      <InteractionPanel
-        requests={state.interactions}
-        onPermissionRespond={handlePermissionRespond}
-        onAskUserRespond={handleAskUserRespond}
-      />
-    ) : null;
+  const { inlineInteraction, footerInteraction } = buildInteractionSlots(
+    state.interactions, handlePermissionRespond, handleAskUserRespond, vscode,
+  );
 
   // Split-pane /btw: while the side question pane is mounted the
   // shell gains a second grid column so both conversations stay live
@@ -1422,7 +1417,7 @@ export function App(): React.JSX.Element {
           Show earlier all mount without the class and stay silent. */}
       <div
         className={`dvx-shell${
-          connectionStatus === 'connected' && active
+          connectionStatus === 'connected' && generating
             ? ' dvx-anim-live'
             : ''
         }${showHandshakeNotice ? ' dvx-shell-stalled' : ''}${
@@ -1567,17 +1562,18 @@ export function App(): React.JSX.Element {
             !hasInteraction
           }
           inlineInteraction={inlineInteraction}
+          footerInteraction={footerInteraction}
           planAnchors={planAnchors}
           reviewDock={
-            latestChanges === null || latestChanges.files.length === 0 ? null : (
-              <ReviewDock
-                key={`${sessionId ?? 'none'}:${latestChanges.turnId}`}
-                changes={latestChanges}
-                onOpenFileDiff={handleOpenFileDiff}
-                onPreviewFile={handlePreviewFile}
-                deferMount
-              />
-            )
+            <ReviewDockSlot
+              changes={latestChanges}
+              sessionId={connectionStatus === 'connected' ? sessionId : null}
+              vscode={vscode}
+              branchDiff={state.branchDiff}
+              onOpenFileDiff={handleOpenFileDiff}
+              onPreviewFile={handlePreviewFile}
+              onOpenPath={handleOpenPath}
+            />
           }
           transientDiagnostic={selectVisibleNotice(transientDiagnostic, sessionId, turnId, active)}
           queuedMessages={

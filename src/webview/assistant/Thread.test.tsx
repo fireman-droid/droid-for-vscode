@@ -316,6 +316,7 @@ describe('SubagentSummaryRow', () => {
     );
     screen.getByText('Running');
     expect(screen.queryByText(/tool use/)).toBeNull();
+    expect(screen.queryByText('Tools')).toBeNull();
     // No description span when the delegation omitted one.
     expect(
       document.querySelector('.dvx-subagent-description'),
@@ -429,8 +430,15 @@ describe('SubagentSummaryRow', () => {
     ).toBeNull();
   });
 
-  it('shows the latest sampled child activity in the progress card', () => {
-    const activity = { action: 'Reading files' };
+  it('shows the latest child activity and three recent activities', () => {
+    const activity = {
+      activities: [
+        { action: 'Read workspace files', target: 'src/runtime.ts' },
+        { action: 'Searched workspace content', target: 'SSE · src' },
+        { action: 'Updated the task plan', target: 'Map runtime state' },
+        { action: 'Loaded workflow guidance', target: 'frontend-design' },
+      ],
+    };
     render(
       <SubagentActivityStoreContext.Provider
         value={{
@@ -454,7 +462,18 @@ describe('SubagentSummaryRow', () => {
     expect(
       document.querySelector('.dvx-subagent-metrics')?.textContent,
     ).toContain('Tools3');
-    screen.getByText('Reading files');
+    screen.getByText('Latest activity');
+    screen.getByText('Read workspace files');
+    screen.getByText('src/runtime.ts');
+    screen.getByText('Recent');
+    const recent = document.querySelector('.dvx-subagent-recent-list');
+    expect(recent?.children).toHaveLength(3);
+    screen.getByText('Searched workspace content');
+    screen.getByText('SSE · src');
+    screen.getByText('Updated the task plan');
+    screen.getByText('Map runtime state');
+    screen.getByText('Loaded workflow guidance');
+    screen.getByText('frontend-design');
   });
 });
 

@@ -279,7 +279,8 @@
 /* ---- Pinned (sticky) state --------------------------------------
    ONE surface, in-place expansion, no overlay card (standing user
    correction). Only breathing room below the card is added. */
-.dvx-message-user[data-sticky-compact] .dvx-plan-line {
+.dvx-message-user[data-sticky-compact] .dvx-plan-line,
+.dvx-virtual-turn[data-sticky-compact] .dvx-plan-line {
   margin-bottom: 8px;
 }
 

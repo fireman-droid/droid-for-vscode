@@ -15,7 +15,9 @@ import {
   type ReactNode,
 } from 'react';
 import ReactMarkdown from 'react-markdown';
+import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 
 import {
   MAX_IMAGE_PATH_LENGTH,
@@ -128,12 +130,22 @@ export function isInlineHtmlPreviewCandidate(
   return head.startsWith('<!doctype') || head.startsWith('<html');
 }
 
-const REMARK_PLUGINS = [remarkGfm];
+const REMARK_PLUGINS = [remarkGfm, remarkMath];
+const REHYPE_PLUGINS = [rehypeKatex];
 const SAFE_HTTP_URL = /^https?:\/\//iu;
+/**
+ * `maxCharsPerFrame` only ever binds while the reveal is behind, and it
+ * overrides `drainMs` when it does: at 18 characters a frame a backlog
+ * drains at ~1k characters a second, so reattaching to a turn that ran
+ * while the panel was closed replayed its whole body as a typewriter,
+ * and a fast live stream fell seconds behind. Sized like the thinking
+ * log so the backlog honours `drainMs` instead; per-character pacing
+ * during a live stream is set by `maxCharIntervalMs` and unaffected.
+ */
 const TEXT_SMOOTH_OPTIONS = {
   drainMs: 360,
   maxCharIntervalMs: 10,
-  maxCharsPerFrame: 18,
+  maxCharsPerFrame: 4_096,
   minCommitMs: 40,
 } as const;
 
@@ -188,6 +200,18 @@ export function markdownUrlTransform(url: string, key: string): string {
     return url;
   }
   return safeMarkdownUrlTransform(url);
+}
+
+export function normalizeMathDelimiters(input: string): string {
+  return input
+    .replace(
+      /\\\[([\s\S]*?)\\\]/gu,
+      (_match, formula: string) => `$$\n${formula.trim()}\n$$`,
+    )
+    .replace(
+      /\\\(([\s\S]*?)\\\)/gu,
+      (_match, formula: string) => `$${formula.trim()}$`,
+    );
 }
 
 /** Markdown percent-encodes spaces and CJK in URLs; file paths on
@@ -649,11 +673,12 @@ export const DroidMarkdownContent = memo(function DroidMarkdownContent({
     <div className={className}>
       <ReactMarkdown
         remarkPlugins={REMARK_PLUGINS}
+        rehypePlugins={REHYPE_PLUGINS}
         components={COMPONENTS}
         skipHtml
         urlTransform={markdownUrlTransform}
       >
-        {text}
+        {normalizeMathDelimiters(text)}
       </ReactMarkdown>
     </div>
   );
@@ -669,6 +694,8 @@ export const DroidMarkdownText = memo(function DroidMarkdownText():
       <MarkdownTextPrimitive
         className="dvx-markdown"
         remarkPlugins={REMARK_PLUGINS}
+        rehypePlugins={REHYPE_PLUGINS}
+        preprocess={normalizeMathDelimiters}
         components={TRANSCRIPT_COMPONENTS}
         componentsByLanguage={COMPONENTS_BY_LANGUAGE}
         skipHtml

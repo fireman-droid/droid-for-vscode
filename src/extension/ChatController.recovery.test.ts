@@ -312,6 +312,81 @@ describe('ChatController', () => {
     });
   });
 
+  it('reloads recovered-turn history while the daemon is still running', async () => {
+    const recovery = await seededRecoveryStore('saved-session');
+    const history: SessionHistoryLoader = {
+      loadHistory: vi
+        .fn<SessionHistoryLoader['loadHistory']>()
+        .mockResolvedValueOnce({
+          status: 'available',
+          state: {
+            transcript: [
+              { id: 'user-1', kind: 'user', text: 'Long task' },
+            ],
+            historyStatus: 'complete',
+            truncated: false,
+          },
+        })
+        .mockResolvedValue({
+          status: 'available',
+          state: {
+            transcript: [
+              { id: 'user-1', kind: 'user', text: 'Long task' },
+              {
+                id: 'assistant-1',
+                kind: 'assistant',
+                turnId: 'daemon-turn',
+                text: 'Partial answer so far',
+              },
+            ],
+            historyStatus: 'complete',
+            truncated: false,
+          },
+        }),
+    };
+    const runtime = createMockRuntime();
+    runtime.initialize.mockResolvedValue(available('saved-session'));
+    runtime.readSessionWorkingState = vi
+      .fn<() => Promise<RuntimeSessionWorkingState>>()
+      .mockImplementation(async () => {
+        const loads = vi.mocked(history.loadHistory).mock.calls.length;
+        return loads >= 2 ? 'idle' : 'running';
+      });
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('saved-session')]),
+      recovery,
+      history,
+    );
+
+    ready(controller);
+    await waitForConnected(messages);
+
+    await vi.waitFor(
+      () => {
+        const midTurn = snapshots(messages).find(
+          (snapshot) =>
+            snapshot.turn?.status === 'streaming' &&
+            snapshot.transcript.some(
+              (item) =>
+                item.kind === 'assistant' &&
+                item.text === 'Partial answer so far',
+            ),
+        );
+        expect(midTurn).toBeDefined();
+      },
+      { timeout: 6000 },
+    );
+
+    await vi.waitFor(
+      () => {
+        expect(turnStates(messages).at(-1)?.status).toBe('completed');
+      },
+      { timeout: 5000 },
+    );
+  });
+
   it('re-emits a permission replayed during a daemon resume and keeps it answerable', async () => {
     const recovery = await seededRecoveryStore('saved-session');
     let workingState: RuntimeSessionWorkingState = 'waiting-for-user';

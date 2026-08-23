@@ -2,7 +2,7 @@
 
 > 本文档是 DroidVisX 当前实现范围的持续更新台账，用来区分“已经接入产品的功能”“部分实现”“仅能力声明/探测”以及“尚未实现”。
 >
-> 最后核对日期：2026-08-18
+> 最后核对日期：2026-08-23
 >
 > 核对对象：当前工作区源码、Bridge、Extension Host、Droid Runtime 适配、Webview、测试、VSIX 与 Cursor 安装状态
 
@@ -25,8 +25,16 @@ Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
-当前 **v0.7.59** 已完成源码、聚焦验证、VSIX 校验并安装到 Cursor，等待用户
-Reload Window 验收。原 Preview 已演进为 Canvas 交互成果面板：稳定 artifact
+当前 **v0.7.89** 已完成源码、聚焦验证、VSIX 打包并安装到 Cursor，等待用户
+Reload Window 验收。待处理的 AskUser 与 ExitSpecMode Plan 现在只把权威
+队首停靠在 Composer 正上方，普通权限仍留在转录流；AskUser 的回答或取消会
+作为紧凑记录进入 live 转录、恢复、公开历史、Session Viewer 与 Markdown
+导出。Plan 卡显示有界 Markdown 预览，点击后在 Cursor 打开同一份可编辑
+Markdown 草稿，合法编辑同步回预览和审批，超 256K 时只阻止批准、不阻止
+拒绝，结算后不保留 Plan 卡。TodoWrite 的 PlanLine 没有改动。
+AskUser dock 的高度约束由 flex 链路完整传到问题列表，只有问题正文滚动；
+标题、Cancel、Submit 与 Composer 固定可见，不再由外层转录滚动拖动或裁切。
+Session viewer 只读转录同样只挂视口附近回合。原 Preview 已演进为 Canvas 交互成果面板：稳定 artifact
 卡、Preview/Code/Diff、响应式视口、文件自动刷新、内存 baseline、元素选择与
 反馈回 Composer 已形成完整链路，并保持 opaque-origin、零网络与 revision /
 generation fail-closed 边界。Mission 的模型、推理和继承下拉框已统一为键盘
@@ -981,9 +989,9 @@ ExitSpec 的计划仍只在真实权限选项允许时显示和编辑。
 
 - 投影 Droid SDK 返回的真实权限选项
 - Edit、Execute、Create、Patch、MCP Tool、Sandbox、Spec 和 Mission 等确认类别
-- 权限、Plan 和 AskUser 全部作为对话流内的扁平内联交互块显示（单一表面、
-  细分隔线、行内动作），不再使用底部浮层或嵌套卡片；不把每个 Tool 再绘制
-  成独立大卡片
+- 普通权限继续作为对话流内的扁平内联交互块显示；AskUser 与
+  ExitSpecMode Plan 的权威队首停靠在 Composer 正上方，不改变请求顺序，
+  也不把每个 Tool 再绘制成独立大卡片
 - 拒绝操作与主要允许操作始终可见；额外 Session/Always Allow 范围只在
   真实 SDK 选项存在时进入 14px Chevron 的 Split Button 菜单
 - Split Button 使用统一 32px 高按钮体、32px Chevron 分段、单一外轮廓和
@@ -1011,13 +1019,22 @@ ExitSpec 的计划仍只在真实权限选项允许时显示和编辑。
 - 一次处理多个问题
 - Submit 和 Cancel
 - 按原问题索引精确返回答案
+- 待处理卡停靠在 Composer 正上方并使用有界内部滚动；选中、hover 与
+  键盘焦点状态沿用暖色轻奢层级
+- 回答和取消会作为紧凑转录记录持久存在，并在 Reload、公开 SDK 历史、
+  Session Viewer 与 Markdown 导出中保持同构；其他工具失败仍显示普通失败行
 
 ### 6. 完整 Spec Mode 闭环（2026-08-12 中午切片④）
 
-- 显示 `ExitSpecMode` 返回的计划
-- 通过安全 GFM Markdown 显示标题、列表和代码，不暴露原始 `####` 标记
-- 在 SDK 提供可编辑选项时编辑计划；编辑器带 Edit/Preview 双视图
-  （Preview 用同一 Markdown 渲染器实时预览草稿）
+- `ExitSpecMode` 计划以 Composer 上方的有界安全 GFM Markdown 预览显示；
+  标题和 “Open in editor” 打开或聚焦同一份 Cursor Markdown 草稿
+- 工作区编辑以 120ms 防抖同步到预览与审批；默认批准若内容已改，Host
+  自动复用 SDK 的 `proceed_edit + editedSpecContent`，非默认批准范围不被
+  静默改写
+- 草稿超过 262,144 字符时不截断，批准禁用而拒绝/取消仍可用；关闭编辑器
+  保留最后合法草稿供重开，结算后解除同步且不强关用户文档
+- Plan 在批准、拒绝或取消后消失，不创建持久结算卡；TodoWrite
+  `PlanLine` 保持原样
 - 可见操作遵循 Figma 的 Deny、Edit、Approve 层级；额外审批范围进入
   Split Button 菜单
 - 返回 Droid SDK 提供的审批结果
@@ -1028,8 +1045,9 @@ ExitSpec 的计划仍只在真实权限选项允许时显示和编辑。
   `confirmationKind` 区分），超限计划在 Runtime 截断显示而非取消
   整个审批；回归测试构造超 32K 与超 256K 计划过桥
   （`runtimeInteractions.test.ts`、`validateHostMessage.test.ts`）
-- 长计划卡默认折叠预览 + “View full spec” 展开/收起（阈值
-  1,200 字符或 24 行）
+- 非可编辑计划使用单一有界 Markdown 预览，长正文仅在预览区内部滚动；
+  不再保留差异不明显的 “View full spec” / “Collapse spec” 状态，
+  审批按钮始终固定在预览区下方
 - Spec 模式可视化（2026-08-12 下午按 UI restraint / Visual bar 收敛）：
   Composer 上方徽标横幅已删除，Spec 态改由 Composer placeholder
   （“Describe what to plan…”）与 Mode 触发器纯文字强调色（无填充底）
@@ -1049,9 +1067,8 @@ ExitSpec 的计划仍只在真实权限选项允许时显示和编辑。
   Runtime 事件；Host 在回合结束时按 Compact/Fork 同款替换机制收养
   实现 Session。信号缺失时降级为可见 warning（提示从 History 打开），
   不静默
-- 历史加载/恢复回放：Spec 起草文本走 assistant 转录、ExitSpecMode
-  工具记录走既有 reconcile 管线（真实会话 fixture 已含该工具），
-  无需新增路径
+- 历史加载/恢复回放：Spec 起草文本与 ExitSpecMode 工具记录仍走既有
+  reconcile 管线；待处理 Plan 的临时编辑器状态不伪装成已结算历史
 
 Spec 起草期间的流式渲染与普通回合共享既有 `assistant.delta` 链路；
 “动画只属于正在发生的事”约定不变。
@@ -3700,6 +3717,474 @@ UI 描述见 §22 重做记录。
   凭据（CLI credential 与 env API key 都是 `authentication-failed`）未
   取到原始字段，改由上述诊断在真机 UI 中收口。
 
+### 91. Changes 账本 git 树快照（2026-08-19）
+
+- 每回合 send / 恢复回合 fire-and-forget 捕获 before tree，settle 或
+  fail 时 await 同一串行队列再捕获 after，以 `git diff --numstat`
+  两棵树为 settled 行集（Bash/删除/新建入账，工具 `+0 −0` 丢弃）。
+- 对象写入 `globalStorage/turn-objects`，记录写入 `workspaceState`
+  key `droidvisx.turnSnapshots`（8 会话 × 24 回合）。Reload 后
+  `restoreTurnChangeStats` 按 turnId 或路径重叠回填 null 计数；
+  `readTurnBaseline` 未命中内存时读 before-tree，Diff 标题仍是
+  Before turn ↔ Current。非 git 工作区与快照失败回退原内存 baseline。
+- 发起方复核修正两处：`after` 树缺失时不再退化成单树 diff（旧行为把
+  整库报成删除），改为返回空表交回内存 baseline；`git show` 遇 128
+  追加 `cat-file -e` 判定树是否还在，树丢失时不再把文件显示成全新增。
+  `diff`/`show`/`cat-file` 改用不绑 `GIT_INDEX_FILE` 的只读环境。
+- 本切片不装包。设计与偏差见
+  [`changes-ledger-git-snapshot-design.md`](./changes-ledger-git-snapshot-design.md)。
+  验证：`typecheck` / `lint:budgets` 通过；vitest
+  `turnSnapshots` + `committedHistoryStats` + `changeStats` +
+  `settleTurnChanges` **32/32**。棘轮 `turnFlow.ts` 1160→1156、
+  `ChatController.ts` 1138→1123。
+
+### 92. 官方 rewind 明细与分支级 Review（2026-08-19）
+
+- 编辑重发卡片此前只显示 `get_rewind_info` 的两个计数。现在
+  `projectRewindInfo`（新 `src/runtime/rewindInfo.ts`）把
+  `availableFiles`/`createdFiles`/`evictedFiles` 一并投影为工作区
+  相对路径：勾选“恢复文件”后列出将被还原的文件（新建文件带 `new`
+  标签），并在下方以安静状态行说明“N 个文件无法恢复”，逐条原因进
+  tooltip。列表上限 40 条、原因截断 120 字符；工作区外的文件不列出，
+  但计数仍按后端原值显示。Bridge 侧 `RewindFileImpact` 扩展并逐字段
+  校验（安全相对路径 + exact keys）。
+- ReviewDock 新增 “Branch” 开关，走官方 `daemon.get_git_diff`
+  （`statsOnly: true`，不传补丁文本）：展示 `branch vs base`、分支总
+  增删、commit 数和逐文件 `+/−`。行内按钮是 **Open** 而不是 Diff ——
+  这些改动不属于任何一个回合，没有回合 baseline 能框住它们。
+  `projectGitDiff`（新 `src/runtime/gitBranchDiff.ts`）相对化并截断
+  到 100 条，总数保持后端全分支口径（可以大于列表之和）。
+- 仅 daemon 模式可用：process 运行时回 `unsupported-runtime`，
+  Webview 直接隐藏该开关；读取失败回 `read-failed`。不可用载荷是
+  fail-closed 的（无文件、无分支名），校验器拒绝任何夹带。分支写操作
+  仍按 `git-pr-workflow-design.md` 走 `vscode.git`，本切片只读。
+- 本切片不装包。验证：三段 `typecheck` 与 `lint:budgets` 通过；vitest
+  `rewindInfo` 3、`gitBranchDiff` 4、`parseGitBranchDiff` 6、
+  `store.git` 4、`ReviewDock` 10、`ChatController.workspaceActions` 19、
+  `store` 40、`validateHostMessage` 314、`FactoryDroidRuntime` 57、
+  `App` 30 全部通过。棘轮只降不升：`FactoryDroidRuntime.ts` 2288→2276、
+  `FactoryDroidRuntime.test.ts` 2404→2402；App.tsx 的 ReviewDock 槽位
+  抽到新 `reviewDockSlot.tsx` 以守住 1748 上限。
+
+### 93. Spec drafting 模型覆盖重做（2026-08-19，v0.7.61）
+
+- 根因（用户报告"选了之后两个模型都一样，功能意义何在"）：旧版
+  `dvx-model-scope` Session/Spec drafting 双 Scope 切换只在会话已处于
+  Spec 模式时才出现（DroidVisX 自加的限制，非 SDK 限制，用户无法提前
+  配置起草模型）；未覆盖态与已选中会话模型态在弹层内渲染完全相同的
+  行 + 勾选样式，视觉上无法区分"继承"与"覆盖"；Composer 的 Model
+  触发按钮从不反映 Spec 覆盖，永远显示会话模型，导致覆盖即使生效也
+  从弹层外部不可见。落盘核查确认 `specModeReasoningEffort` 曾正确
+  持久化（更新链路本身没问题），但没有任何本地会话 `.settings.json`
+  成功持久化过 `specModeModelId`——功能从用户视角形同虚设。
+- 重做：`ModelPopover.tsx` 移除 `specScopeAvailable` 门禁和
+  `dvx-model-scope` 单选组 + `dvx-model-spec-default` 虚线按钮；
+  主视图新增一行安静的 "Spec drafting" 入口（`dvx-model-spec-row`，
+  复用页脚 hairline 页脚样式，不再判断 `interactionMode`），右侧显示
+  当前起草模型或 "Same as session"，点击进入复用 Skills/MCP 抽屉图案
+  （`dvx-panel-head`/`dvx-panel-back`，本地新增 `ChevronLeftIcon`）的
+  子视图；子视图首行是与模型列表同款的 "Same as session" 行，勾选位置
+  是状态的唯一标志——`specModeModelId === null` 时只有该行打勾，模型
+  列表里即便某模型 id 恰好等于当前会话模型也不会重复打勾。子视图内
+  选中任意行只写 `specModeModelId`/`specModeReasoningEffort`，从不
+  触碰会话字段。Composer 的 Model 触发按钮新增：Spec 模式下若存在
+  起草覆盖，显示该模型名 + 安静灰色 "spec" 后缀（复用既有 effort
+  后缀 `flex:none; overflow:visible` 手法），而非恒定显示会话模型。
+- **真正的功能性根因（v0.7.62 补，用户实测报告"选了跟没选一样，
+  重新打开还是 default"）**：daemon 适配层
+  `createDaemonDroidSession.ts` 的 `updateSettings` 只把
+  `interactionMode`/`modelId`/`reasoningEffort`/`autonomyLevel`/
+  `missionSettings` 五个字段拼进请求，`specModeModelId` /
+  `specModeReasoningEffort` 被静默丢弃——而 SDK 的
+  `UpdateSessionSettingsOptions` 明确包含这两个字段。daemon 是默认
+  模式，所以此前所有起草覆盖写入都没离开过进程，这才是"从没持久化过
+  `specModeModelId`"的真因（Bridge/Host/Runtime 其余各层此前核实正确）。
+  修复：两个字段一并转发，且按 `=== undefined` 判断（null 是"重置"
+  的真实取值，不能当成"未更新"）。SDK 写入用 null 重置、读回时字段
+  缺省，因此本地待确认覆盖层改存快照写法（null → undefined），
+  重置后覆盖层能正常退休、不再遮挡后续外部变更。
+- 同批两处布局修复（用户截图）：① Model 弹层 "Spec drafting" 入口行
+  在 208px 宽度里换行——标签补 `flex:none; white-space:nowrap`，
+  继承态取值文案由 "Same as session" 收敛为 "Session"（子视图内仍是
+  完整的 "Same as session" 行）；② ReviewDock 头部 Branch 开关挤掉
+  Commit/Review 到第二行——`dvx-review-dock-head` 是三列 grid，新增的
+  Branch 按钮没有 `grid-column` 声明被自动放进第 2 列，改为四列并各自
+  显式占位（1 计数 / 2 Branch / 3 Commit / 4 Review）。
+- 验证：`tsc --noEmit` 三 tsconfig 全过（首轮暴露了 SDK 读写不对称，
+  已按上文修正）；`lint:budgets` 通过（`15-model-sessions.css` 748→753，
+  仍在 800 内）；vitest `createDaemonDroidSession` 30/30（含新增回归：
+  起草覆盖与 null 重置都必须出现在 daemon 请求里）、
+  `ComposerControls` 32/32、`ReviewDock` 10/10 通过。本切片未跑全量
+  vitest（未触碰共享 Bridge/Store 契约）。
+
+### 94. 编辑卡 restore 控件收进弹层（2026-08-19，v0.7.63）
+
+- 用户反馈：编辑卡正文里常驻的 "Restore N files" 勾选行 + 文件清单
+  （固定 96px 滚动区）+ "N files cannot be restored" 提示，在窄侧边栏
+  里挤占了输入框下方本该安静的空间，位置不对。
+- **第一版（悬浮弹层，用户实测截图打回）**：把控件挪进控制行做成
+  触发器 + `dvx-composer-popover` 弹层。实测暴露真实 bug：弹层
+  `max-width: min(320px, 100%)` 里的 `100%` 是相对触发器自身（很窄的
+  flex item）算的，不是卡片宽度，文件名被压成两端截断的乱码状；
+  悬浮定位还容易和下方 transcript 重叠。用户否决，改方向。
+- **第二版（用户再次打回：不应嵌在编辑卡边框内）**：把弹层换成了
+  照抄 `ReviewDock.tsx` 的折叠卡片，但仍然放在
+  `.dvx-user-edit-card` 内部（发送按钮行之后）——用户指出 `ReviewDock`
+  本身在真实布局里是钉在输入框**外面**的独立一条，不共享输入框卡片
+  的边框，这版嵌在卡内是"卡中卡"，不对。
+- **第三版（落地版）**：`EditRestoreControl` 移到 `.dvx-user-edit-card`
+  外面，作为 `.dvx-user-edit`（外层容器，也是外点击判定用的 ref）
+  下的独立同级卡片，渲染在编辑卡下方，自带边框/圆角/`--dvx-raised`
+  背景（PlanLine 同款"消息下独立卡片"处理），与编辑卡之间用
+  `.dvx-user-edit` 的 `gap: 6px` 隔开。默认折叠；头部是勾选框行 +
+  展开箭头按钮，点箭头原地展开出文件列表（`new` 标签、逐条
+  `title`）和不可恢复提示，复用 `ReviewDock` 已有的
+  `dvx-review-dock-toggle`/`-body`/`-files`/`-row`/`-path` 类名和
+  `ActivityChevron`，没有新写一套列表 CSS。`restoreFiles` 状态、
+  `onEditResend(messageId, text, restoreFiles && affectedFiles > 0)`
+  语义不变；纯 evicted（无可恢复文件）时不渲染卡片壳，只留一行
+  状态文字。
+- 验证：`tsc --noEmit` 通过；`lint:budgets` 通过（`UserMessage.tsx`
+  483→422，新文件 `EditRestoreControl.tsx` 139 行，`11-user-edit.css`
+  383→371，均在预算内）；`messageActions.test.tsx` 新增一例覆盖
+  折叠/展开/勾选转发，6/6 通过。
+- 遗留：Plan 卡片全会话唯一、完成后应从历史消失——已在同日后续
+  切片处理（活动流不再渲染 TodoWrite 行；`selectPlanAnchors` 在
+  `allCompleted` 时省略卡片）。
+
+### 95. 恢复回合无输出、切标签假流式、Context 环填色（2026-08-19，v0.7.64）
+
+- 日志（`act: 338ea4`）：`runtime.context.finished` 反复 `used: 250000 /
+  limit: 250000`（last-call 窗，不锁发送）；分类数字是 session 累计
+  （Cache read 上亿是累计，不是环算错）。同激活里
+  `host.reload.turn-recovered` 后约 4 分钟只有 "Droid is working…"，
+  Stop 才 `runtime.history.finished` 多出 11 条——恢复路径不重放 token，
+  以前只在 idle/Stop 时刷历史。
+- 切标签：`host.view.visibility` false→true 曾伪造 `webview.ready` →
+  整表 snapshot → 流式消息 remount，smooth 文字从头播。
+- 修复：恢复回合每 ~2s 刷历史（有增长才 snapshot）；可见时只
+  `postTheme`；Context 环改为单段 last-call 填色，图例标明 session totals。
+
+### 96. Review dock / restore dock 展开动画（2026-08-19，v0.7.65）
+
+- 用户要求：底部 Review 卡与编辑卡下方的 restore 卡点击展开时太生硬，
+  参照 Plan line 的平滑动画补上。
+- Review dock 的文件列表体和 Branch 列表体、restore dock 的文件列表体
+  三处，全部从"点击时插入 DOM、收起时整体卸载"改为复用 Plan line 的
+  `grid-template-rows: 0fr ↔ 1fr` 网格高度过渡（`22-plan-anchor.css`
+  同款 `--dvx-duration-slower` / `--dvx-easing-out-strong`）：首次展开
+  后常驻挂载，之后靠 `data-open`/`aria-hidden` 切换视觉状态，两个方向
+  都能动画；从未展开过的卡片仍然不挂载列表标记（对大历史下的 DOM
+  体量是净减负，见 `transcript-performance-design.md` 的分层分析）。
+  `.dvx-review-dock-body` 的 `border-top` 挪到新增的
+  `.dvx-review-dock-body-inner` 上，避免收起到 0 高度时露出一条杂散
+  边框线。`ReviewDock.tsx` 的 `BranchBody` 不再自带外层卡片壳，改为
+  只渲染内容，外层动画壳统一由调用方提供。
+- 验证：`tsc --noEmit` 通过；`lint:budgets` 通过（`29-review-dock.css`
+  378 行、`ReviewDock.tsx` 275 行、`EditRestoreControl.tsx` 157 行，
+  均在预算内）；`ReviewDock.test.tsx`（10 例）与
+  `messageActions.test.tsx`（6 例）共 16 例全部通过，未修改任何断言
+  ——常驻挂载的时机与既有"未展开时不挂载"的断言天然一致。
+
+### 97. Review dock / restore dock 展开动画补丁（2026-08-19，v0.7.66）
+
+- 用户实测 §96 反馈两处问题：
+  1. Reload 之后**第一次**点开没有动画，直接瞬间出现。
+  2. restore 行点勾选文字和箭头之间的空白区域没反应，只有那颗
+     小箭头图标能点。
+- 根因 1：文件列表首次打开时，"挂载 DOM" 和 "设为展开态" 发生在
+  同一次渲染提交里——元素第一次出现在页面上就已经是 `data-open="true"`，
+  浏览器没有更早一帧的收起态可以过渡，所以直接瞬间到位。新增
+  `useDeferredDisclosure` hook：挂载后用一帧 `requestAnimationFrame`
+  延迟才把驱动 CSS 网格高度的 `open` 置真，之后的每次展开/收起都是
+  正常切换（无延迟，因为元素已经在页面上有真实的上一帧可以过渡）。
+  `aria-hidden` 不跟着这个延迟走，仍然用调用方的即时逻辑状态，
+  避免可访问性状态滞后于实际交互（也避免了 `getByRole` 测试查询因
+  `aria-hidden` 滞后而查不到按钮）。`ReviewDock.tsx` 的文件列表体/
+  Branch 列表体与 `EditRestoreControl.tsx` 的文件列表体三处统一改用
+  这个 hook。
+- 根因 2：`.dvx-restore-dock-head` 用 `justify-content: space-between`
+  把勾选 `<label>` 和纯图标 `<button>` 推向两端，中间留白不属于任何
+  可点击元素。改为让箭头按钮 `flex: 1 1 auto` 撑满剩余空间、图标本身
+  `justify-content: flex-end` 贴右，点击行右侧任意位置都能展开。
+- 验证：`tsc --noEmit` 通过；`lint:budgets` 通过（新文件
+  `useDeferredDisclosure.ts` 30 行）；`ReviewDock.test.tsx`（10 例）与
+  `messageActions.test.tsx`（6 例）共 16 例全部通过，未修改断言。
+
+### 98. 长会话 transcript 真虚拟化（2026-08-20，v0.7.67）
+
+- 档位 3b（`docs/product/transcript-performance-design.md`）：
+  `ThreadPrimitive.Messages` 改为 TanStack Virtual +
+  `ThreadPrimitive.Unstable_MessageById`，只挂视口 + overscan 回合；
+  `rangeExtractor` 强制保留当前 sticky pin、下一条 user（push-out）
+  和最后一回合（流式）。spacer 用 padding 而不是 absolute，sticky
+  CSS 继续生效。`runtimeAdapter` 的 60/+120 数据窗口本轮不改。
+- 问题导航改为 runtime user 消息投影 + virtualizer `scrollToIndex`，
+  保留 `findActiveQuestionIndex`。Ctrl+F 找不到未挂载正文。
+- 验证：`tsc --noEmit`、`lint:budgets`、`buildTurns.test.ts` /
+  `QuestionNavigator.test.tsx` / `App.test.tsx` / `messageActions.test.tsx`。
+
+### 99. Session viewer 只读转录虚拟化（2026-08-20，v0.7.68）
+
+- `ReadOnlyTranscript` 改为复用主聊天的 `VirtualizedMessages`
+  （`Unstable_MessageById` + TanStack），只读组件表模块级稳定引用。
+  Session viewer 的 viewport 作为 scroller，原 48px 粘底跟随保留。
+  无 sticky 问句、无问题导航、无 Show earlier 数据窗口。
+- 验证：`tsc --noEmit`、`lint:budgets`、`ReadOnlyTranscript.test.tsx` /
+  `SessionViewerApp.test.tsx`。
+
+### 100. 问题跳转平滑滚动与落地吸顶（2026-08-20，v0.7.69）
+
+- `shouldDetachStickyPin(coveragePin, navPin)` 由 5 参降到 2 参：
+  `coveragePin` 已表示「顶边到达吸顶线」，原 `scrollTop > pinStart + 1`
+  要求越过之后才吸，而跳转落地时 `scrollTop == pinStart`，正好卡在门槛
+  外——这是「点击后不吸顶」的直接原因。`navPin` 保留以避免 seek 期间
+  克隆闪烁。
+- `scrollToMessageId` 前置飞行段：全程持有 `navTargetRef`（挡
+  `scrollToFn` 与尺寸调整的瞬时写），但 `navPin` 保持 -1，路上走正常
+  挂载窗口。目标优先取已挂载行的 DOM 位置，否则
+  `measurementsCache[index].start`，再退按比例估算；`scrollTo({
+  behavior: 'smooth' })` 后每帧重读目标，漂移 > 8px 改道重发。结束条件
+  为到位 ±1px / 静止两帧（≥100ms 后才判） / 1200ms 上限，随后原样进入
+  既有 `setNavPin` + `snapMountedIndexToTop` 精确吸附。reduced-motion、
+  无 scroller、无 `scrollTo`、距离 < 2px 直接走原瞬时路径。
+- `Thread.tsx` 的 `updatePins` 不再收集 `.dvx-virtual-turns` 之下的问句：
+  克隆层本身就是吸顶面，喂进 `computeStickyLayout` 会被 `data-covered`
+  打成 `visibility: hidden`。虚拟化无条件启用，该半段自然空转，
+  `awayFromBottom` 与 `stickyLayout.ts` 不动。
+- 未恢复（本轮不在范围）：push-out 手递手动画、吸顶紧凑 3 行态；
+  `scrollQuestionToTop()` 仍为仅测试调用的孤儿函数。
+- 验证：`tsc --noEmit`（三 config）、`lint:budgets`、
+  `buildTurns.test.ts` / `Thread.test.tsx`（93 passed）。
+- 打包阻塞项（发布 v0.7.69 时修复，均为测试环境而非产品缺陷）：
+  `package:vsix` 跑全量 vitest，虚拟化落地后有 11 条失败。jsdom 不提供
+  `ResizeObserver`，TanStack 用它观察 scroller 与每个已挂载行，缺失时
+  卸载期 `Virtualizer.cleanup` 抛错且一行都渲染不出——`src/test/setup.ts`
+  补惰性 stub（尺寸仍来自 `estimateSize` 与 `initialRect`）；
+  `App.mission.test.tsx` 自带的 `ResizeObserver` stub 缺 `unobserve`
+  （两个姊妹用例都有），补齐。吸顶问句在 DOM 中有两份，真实浏览器
+  对 `visibility: hidden` 的那份不做查找/朗读，jsdom 不做布局所以两份
+  都能命中，`setup.ts` 用 `configure({ defaultIgnore })` 忽略克隆层，
+  与 `App.test.tsx` 既有 `listCopies`（保留列表内那份）取同一约定。
+- 全量 vitest：156 files / 2460 tests passed；`dist/droidvisx.vsix`
+  1.95 MB，已 `cursor --install-extension --force` 安装。
+
+### 101. 虚拟化行测量漏掉外边距（2026-08-20，v0.7.70）
+
+- 用户实测 §100 后反馈：滚动一下快一下慢，停下来后上下留大片空白。
+- 根因：`.dvx-virtual-turn` 只有 `min-width: 0`，不构成 BFC，内部
+  `.dvx-message` 的 `margin-bottom: 14px` 会穿过包裹层塌陷出去；而
+  `virtualizer.measureElement` 用 `getBoundingClientRect()` 量包裹层，
+  该值从不含外边距。于是每行被记成比它实际占位少一个外边距，模型与
+  真实布局按「每已挂载行 14px」累计偏移：行比虚拟器认为的位置更靠下，
+  窗口下方的 spacer 短一截（底部空白），窗口每移动一次就按累计误差
+  弹一下（滚动不匀）。
+- 修复：`.dvx-virtual-turn` 改 `display: flow-root`，把外边距收进包裹层，
+  量到的行高等于它真实占用的空间。视觉行距不变（14px 仍在，只是从
+  塌陷到包裹层外变成包含在内）。
+- 验证：`tsc --noEmit`、`lint:budgets`、全量 vitest 2460 passed（打包
+  闸门），已打包安装。
+
+### 102. 滚动补偿判定被整体替换（2026-08-20，v0.7.71）
+
+- 用户实测 §101 后反馈：滚动速度仍然一下快一下慢。
+- 根因：渲染期无条件写
+  `virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () =>
+  navTargetRef.current === null`。virtual-core 的实现是「消费者提供了
+  谓词就完全不用默认判定」，而默认判定区分首次测量（`itemStart <
+  scrollOffsetWithAdj`）与重测量（要求整行在折叠线以上，且
+  `scrollDirection !== 'backward'`，注释明确说这是为了避免流式增长把
+  视口往下拖 #1218 和向上滚时的抖动级联）。我们那句等于对**任意行、
+  任意方向、折叠线以下也算**的尺寸变化都调用
+  `applyScrollAdjustment(delta)`，于是每量到一行（估算 120px 与真实
+  行高之差）就在用户自己的滚动之上再推一把——表现即为忽快忽慢。
+- 修复：只在跳转期间（`navTargetRef` 持有期）设 `() => false`，落地时
+  由 `endNavigation()` 复位为 `undefined`，交回库的默认判定；三处
+  navTarget 置位/清除收敛到一处配对。
+- 验证：`tsc --noEmit`、`buildTurns.test.ts` / `Thread.test.tsx` /
+  `App.test.tsx`（123 passed）、全量 vitest（打包闸门），已打包安装。
+
+### 103. 虚拟列表缺少 scrollMargin（2026-08-20，v0.7.72）
+
+- 用户反馈三条：超长历史仍卡顿；两张卡片挨得近时跳转会找错；自然下滑
+  时吸顶卡片会在下一张到达之前消失，出现无吸顶的空档。
+- 根因一（后两条同源）：`useVirtualizer` 从未传 `scrollMargin`。
+  virtual-core 的 index 0 起点是 `paddingStart + scrollMargin`，
+  `getTotalSize()` 又减回 `scrollMargin`——即「measurement 用滚动容器
+  坐标，spacer 用列表内坐标」。而 `.dvx-virtual-turns` 并非
+  `.dvx-thread-viewport` 的第一个内容：阅读栏 `padding-top`、
+  `HistoryNotice`、"Show earlier messages" 按钮都在它上面。于是每个
+  `measurement.start` 都比真实位置小一个固定偏移 O：
+  - `stickyUserMessageIndex(..., scrollTop)` 提前 O 像素切到下一题，
+    旧 pin 消失而新题还在折叠线下 O 像素 → 无吸顶空档；
+  - `questionTops()` / 飞行目标同样偏 O，两题间距小于 O 时就落到邻居。
+- 修复：`listRef` + `useLayoutEffect` 量
+  `list.top - scroller.top + scroller.scrollTop`，用 `ResizeObserver`
+  盯滚动容器与阅读栏，喂给 `scrollMargin`；`paddingTop` /
+  `paddingBottom` 各自减去 `scrollMargin` 换回列表内坐标。
+- 根因二（卡顿）：`questionTops()` 对每个问题做一次
+  `rows.findIndex`（O(问题数 × 行数)），且 `coveragePin` 每帧
+  `measurementsCache.map()` 重建整条 start 数组再线性扫描——两者都在
+  滚动帧上，且随历史长度增长。
+- 修复：新增 `userQuestionRows(rows)` 一次性产出对齐的
+  `{ indexes, ids }`（按 rows memo），`stickyUserMessageIndex` /
+  `stickyUserIndexAtOrBefore` 改为对问题行二分（start 单调递增），
+  `questionTops()` 直接按 indexes 取 start。
+- 验证：`tsc --noEmit`、`lint:budgets`、`buildTurns.test.ts` /
+  `Thread.test.tsx` / `App.test.tsx`（125 passed）、全量 vitest
+  （打包闸门），已打包安装。
+
+### 104. 吸顶交接改为顶出，并清除调试探针（2026-08-20，v0.7.73）
+
+- 用户反馈：两张卡片本应「贴上就交接」，现在是下一张先被盖住、过一会
+  才切换。原因是 pin 是覆盖在正文之上的克隆节点，下一题的真实行从它
+  底下滑过去，直到 `start <= scrollTop + 1` 才整体一换；真实 CSS
+  sticky 的行为是被后一张顶出去，两张永不重叠。
+- 修复：`stickyPinPushPx(pinSize, nextQuestionStart, scrollTop)` 计算
+  `gap < pinSize ? pinSize - gap : 0`，克隆节点按 `translateY(-push)`
+  上移。`pinSize` 取行测量值（含消息间距 14px），因此顶出从「间距收
+  到正常行距」时开始，全程保持该间距，到达切换阈值时旧卡刚好完全离
+  场。溢出部分由 `.dvx-thread-viewport` 自身裁剪。
+- 同时按用户要求清除另一 AI 留下的调试探针：`VirtualizedMessages.tsx`
+  与 `useQuestionNavigation.ts` 的 `#region agent log`（每 250ms 一次
+  `querySelectorAll` + 多次 `getBoundingClientRect`，是实打实的强制回
+  流）、宿主 `DroidViewProvider` / `SessionViewerPanelController` 两处
+  转发，以及向 `127.0.0.1:7473` POST 的 `src/extension/debugIngest.ts`
+  （整文件删除）。随之清掉 `pinStart`、`started` 等孤立局部变量。
+- 验证：`tsc --noEmit`、`lint:budgets`、`buildTurns.test.ts` /
+  `Thread.test.tsx` / `App.test.tsx` / `src/extension`（54 files /
+  752 passed，新增顶出边界用例）、全量 vitest（打包闸门），已打包安装。
+
+### 105. 追赶积压被逐字动画放慢，顶出依赖未定位置（2026-08-20，v0.7.74）
+
+- 用户反馈一：后台跑了几小时的任务，回来打开面板，剩余内容被当成流式
+  输出一个字一个字打出来。根因：`MarkdownText` 的
+  `TEXT_SMOOTH_OPTIONS.maxCharsPerFrame = 18`。读 `useSmooth` 源码可知
+  该封顶只在「显示落后于目标」时生效，且生效时会**覆盖** `drainMs`：
+  `baseTimePerChar = min(maxCharIntervalMs, drainMs / remaining)`，
+  积压很大时前者被算成接近 0，于是每帧仍只吐 18 字 ≈ 1k 字/秒——2 万
+  字要 18 秒。重连时整段正文一次到达且 `status` 仍是 running，
+  `displayedText` 从 "" 起算，就被完整重播一遍；同样的封顶也让快速模型
+  的实时流落后数秒。
+- 修复：`maxCharsPerFrame` 改为 `4_096`，与 `transcriptRows.tsx` 的
+  `LIVE_THINKING_SMOOTH_OPTIONS` 取同一量级。积压回归 `drainMs: 360`
+  预算内排空；实时流的逐字节奏由 `maxCharIntervalMs` 决定，不受影响。
+- 用户反馈二：恢复历史信息之后，吸顶交接时位置一卡一卡。根因：§104 的
+  顶出用 `measurements[next].start` 取下一题位置，而未挂载行的 start 只
+  是估算值（`ESTIMATED_ITEM_HEIGHT` 120），每当中间某行首次被测量就会
+  整体位移，顶出量随之反复跳变。
+- 修复：改用 `items.find(...)`（已挂载虚拟项）的 start；取不到就返回
+  `NaN`，`stickyPinPushPx` 已对非有限值返回 0。下一题远到未挂载时，本来
+  也不该有任何顶出。
+- 验证：`tsc --noEmit`、`lint:budgets`、`buildTurns.test.ts` /
+  `MarkdownText.test.tsx` / `Thread.test.tsx`（124 passed）、全量 vitest
+  （打包闸门），已打包安装。
+
+### 106. 截断历史被误判为尾部不完整（2026-08-23，v0.7.75）
+
+- 日志确认重开 `ai-drawing` 时 daemon 返回 2778 条 message，投影保留最新
+  2000 项并标记 `partial`；随后 recovery 又将 2000 项本地 checkpoint 与
+  其合并。源 `.jsonl` 顺序正确，错序只存在于合并结果：8 月 22 日的旧回答
+  被接到 8 月 23 日最新的“你好”后面。
+- 根因：投影达到条数/文本上限时从旧头部淘汰并设置
+  `truncated + partial`，当前尾部仍然权威；合并却只把 `complete` 视为
+  authoritative，因而允许追加 checkpoint 的未匹配尾巴。
+- 修复：startup `authoritativeLoaded` 下，`complete` **或** `truncated`
+  的 daemon 历史都拥有权威尾部，禁止追加旧 checkpoint 尾巴。显式
+  `preserveLocalTail` 的后台读取竞态不受影响。
+- 验证：`tsc --noEmit`、`lint:budgets`、
+  `reconcileSessionHistory.test.ts`（33 passed，新增真实错序回归用例），
+  已打包安装。
+
+### 107. 原生磁吸交接与全局问题轨道（2026-08-23，v0.7.76）
+
+- 转录虚拟化由“单条 message 一行”改为“用户问题 + 后续回复一个回合一行”；
+  真实用户卡在自己的回合内使用浏览器原生 sticky，下一回合自然顶走。删除
+  detached clone、隐藏原卡、逐帧 transform 和依赖估算位置的 push-out。
+- 右侧问题导航改为全局比例轨道：问题刻度保持全局位置，当前滚动指示连续
+  移动；长历史有界抽样但固定保留首尾、当前和相邻问题，悬停摘要保留。
+- 远距离点击先单次快速靠近目标，再由 TanStack Virtual 3.17.7 的
+  reconciled `scrollToIndex` 做短距离平滑精确落地；删除 1200ms 自写飞行、
+  每帧改道和 12 帧 seek/snap。
+- 验证：三段 `tsc --noEmit`、`lint:budgets`、`buildTurns.test.ts` /
+  `QuestionNavigator.test.tsx` / `Thread.test.tsx` / `App.test.tsx` /
+  `messageActions.test.tsx` / `planAnchor.test.ts` /
+  `ReadOnlyTranscript.test.tsx` / `SessionViewerApp.test.tsx`
+  （148 passed），已打包安装。
+
+### 108. 等距问题刻度与空回复暂停结算（2026-08-23，v0.7.77）
+
+- 右侧问题导航的有界可见刻度改为上下等距排列；当前问题直接使用更长的
+  accent 刻度，不再叠加独立滚动进度线。悬停预览、首尾/当前/相邻保留和
+  精确跳转行为不变。
+- 用户在首段 Assistant 文本到达前点 Stop 时，Webview 立即撤下
+  “Droid is responding/working”；`stopping` 不再向 assistant-ui 声明为
+  generating，空 Assistant part 与 Thinking 行同步结算为 cancelled。
+  原始 `stopping` 状态仍参与 queue 路由，Enter 与发送箭头会继续
+  `queue.add + queue.promote`，无需等待 Host 中断结算。
+- 验证：`tsc --noEmit`、`lint:budgets`、本轮改动文件对应聚焦测试，
+  已打包安装。
+
+### 109. 自动压缩用量回落与 daemon 分支时序（2026-08-23，v0.7.78）
+
+- 受影响真实会话的 2945 条 daemon 消息包含 2 个父链 tip；SDK
+  `orderMessagesByParentChain` 选择最新 tip 后，把链外的 1 条旧 Assistant
+  消息按时间追加到结果末尾，导致 Reload 后旧消息出现在页面最底部。历史
+  边界现改按持久化 `createdAt` 稳定排序，分支消息回到原时间位置，真正
+  最新消息保持在末尾。
+- 同一会话元数据确认发生过 11 次自动压缩。Context 的会话内单调下限此前
+  会把压缩后的真实下降也锁在旧高位；现仅保留对小型辅助调用的下限，接近
+  满窗后出现足够大的正常 Provider Call 下降时重置下限，并在会话内保留
+  `compactionDetected` 证据。面板显示检测结果；100% 时明确说明这是最新
+  已完成调用，自动压缩在下一次模型调用开始时检查。
+
+### 110. Assistant Markdown 公式渲染（2026-08-23，v0.7.79）
+
+- `MarkdownTextPrimitive` 与独立 `DroidMarkdownContent` 统一接入
+  `remark-math + rehype-katex`，KaTeX 字体/样式随 Webview CSS 本地打包，
+  不放宽 CSP、也不访问网络。
+- 支持 `$…$` / `$$…$$`，并在 Markdown 解析前把模型常见的
+  `\(...\)` / `\[…\]` 规范化为对应 delimiter；截图中的
+  `\[\boxed{21\text{颗}}\]` 现在渲染为块级公式。超宽块公式在阅读列内
+  横向滚动。
+- 验证：`MarkdownText.test.tsx` 29/29、三段 `tsc --noEmit`、
+  `lint:budgets` 与生产 build 通过；KaTeX CSS/字体已本地打包并安装
+  `droidvisx.droidvisx@0.7.79`。
+
+### 111. AskUser 单选圆形控件（2026-08-23，v0.7.80）
+
+- AskUser 单选项保留原生 `input[type=radio]` 的焦点、键盘与读屏语义，
+  但将原生视觉完全隐藏，改由相邻标记绘制圆形边框、选中圆点与圆形
+  `focus-visible` 光环，Cursor 不再有机会叠加方形原生 chrome。
+- 多选 checkbox 的方形视觉和交互不变。验证：
+  `Interactions.test.tsx` 7/7、三段 `tsc --noEmit` 与
+  `lint:budgets`、生产 build 与 VSIX 打包通过；已安装
+  `droidvisx.droidvisx@0.7.80`。
+
+### 112. KaTeX 外框宽度修复（2026-08-23，v0.7.81）
+
+- 截图像素确认 `\boxed{21\text{颗}}` 的外框只剩 2px × 18px 竖线。
+  根因是 `.dvx-markdown` 的 `overflow-wrap: anywhere` 被 KaTeX 子树
+  继承，将 `.katex-base` 的 `min-content` 宽度压为 0；文字可以溢出，
+  依赖内在宽度的 `fbox` 却横向塌缩。
+- KaTeX 根节点现恢复 `overflow-wrap: normal` 与 `word-break: normal`；
+  prose 断行不变，超宽块公式继续由 `.katex-display` 横向滚动。验证：
+  `MarkdownText.test.tsx` 29/29、三段 `tsc --noEmit` 与
+  `lint:budgets`、生产 build 与 VSIX 打包通过；已安装
+  `droidvisx.droidvisx@0.7.81`。
+
+### 113. 子代理实时任务叙事卡（2026-08-23，v0.7.82）
+
+- 子代理卡继续通过公开 daemon `sessions.getMessages()` 每 2.5 秒近实时采样，
+  但不再把最新工具名直接显示成 `Skill`、`Grep` 或 `Read`。Runtime 现将
+  最新观察活动和此前最多三条不同活动投影为有界的人类可读动作，并仅携带
+  通过工作区边界检查的相对目标、当前 Todo 项或安全的验证类别。
+- Bridge v27 只允许最多四条 exact-key 活动；child session ID、原始命令、
+  工具输入/输出和模型推理继续留在 Host。卡片显示 `Latest activity` 与
+  `Recent` 轨迹，SDK 未提供操作数时不再显示 `Tools —`。验证：
+  触及范围测试 126/126、三段 `tsc --noEmit`、`lint:budgets`、生产 build
+  与 VSIX 打包通过；已安装 `droidvisx.droidvisx@0.7.82`。
+
 ### Session Settings、Context 与模型选择
 
 - 读取并显示真实 Interaction Mode、Model、Reasoning Effort 和 Autonomy
@@ -3709,9 +4194,10 @@ UI 描述见 §22 重做记录。
   `getContextStats().limit` 为分母，Daemon 以 `contextBudget` 为分母
 - `getContextStats().used/remaining`、Breakdown `usedTokens/freeTokens`
   和 Category Sum 都是累计/诊断统计，永不进入 Ring 或百分比
-- last-call 分子按会话取已确认上限（辅助小调用不下拉窗口），小数四舍
-  五入，超 Budget 夹到 100%；只有缺失或非数值 last-call、非法 Budget
-  才显示 “Current window unavailable”，且永不泄漏累计值
+- last-call 分子按会话保留已确认高位以忽略辅助小调用；接近满窗后的显著
+  正常调用下降会被识别为自动压缩并重置高位。小数四舍五入，超 Budget
+  夹到 100%；只有缺失或非数值 last-call、非法 Budget 才显示
+  “Current window unavailable”，且永不泄漏累计值
 - Context 刷新失败时保留最后一次已确认数值并提供 Retry；加载期间的重复
   Refresh 会被合并，失败提示指向 `DroidVisX Logs`
 - 使用公开初始化/加载响应及公开 SDK Schema 捕获真实 `availableModels`
@@ -3971,11 +4457,14 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 
 - [x] 每轮 Changes 摘要（回合完成后转录内追加 `changes` 项，历史
       加载按回合合成；文件 chip 点击打开原生 Diff）
-- [x] 文件增删行统计（回合完成时 `git diff --numstat` 对 HEAD 测量，
-      untracked/二进制/无 git 显示无计数 chip，历史摘要不带计数）
+- [x] 文件增删行统计（回合结束对 before/after git tree 做
+      `diff --numstat`；失败回合同样 settled；Reload 后从
+      `droidvisx.turnSnapshots` 回填计数；非 git / 快照失败仍走
+      内存 baseline，历史行在无快照时仍为 null）
 - [ ] Changes 页面
-- [x] 使用 `vscode.diff`（Tool 行文件 chip 点击打开 HEAD ↔ Working
-      原生对比，无 git HEAD 版本时回退打开文件）
+- [x] 使用 `vscode.diff`（优先 Before turn ↔ Current：内存
+      baseline 或 before-tree；否则 committedRef，再 HEAD ↔ Working，
+      无 git HEAD 时回退打开文件）
 - [x] 文件修改类 Tool（Edit/Create/Write/ApplyPatch）行显示工作区
       相对路径 chip（实时流与历史投影均覆盖，越界路径不显示）
 - [ ] Diff Hunk 操作
@@ -4124,6 +4613,24 @@ Mode、Autonomy、Model 和 Reasoning 更新，并以 SDK 回读的 Session Sett
 ## 当前安装包状态
 
 最后核对结果：
+
+- **2026-08-23 子代理实时任务叙事卡 v0.7.82**：官方子会话历史采样现投影为
+  最新具体活动和此前最多三条安全轨迹；裸工具名、`Tools —`、child session
+  ID、原始参数与输出不进入卡片。触及范围测试 126/126、typecheck 三段、
+  `lint:budgets`、build 与 VSIX 打包通过，已安装
+  `droidvisx.droidvisx@0.7.82`。
+
+- **2026-08-23 KaTeX 外框宽度修复 v0.7.81**：阻止 prose 的
+  `overflow-wrap: anywhere` 进入 KaTeX 内在宽度计算，
+  `\boxed{21\text{颗}}` 不再塌成单条竖线。Markdown 聚焦测试
+  29/29、typecheck 三段、`lint:budgets`、build 与 VSIX 打包通过，
+  已安装 `droidvisx.droidvisx@0.7.81`。
+
+- **2026-08-23 AskUser 单选修复 v0.7.80**：原生 radio 视觉改为完全
+  隐藏，受控圆形标记负责选中点、hover 与圆形键盘焦点环；checkbox
+  保持不变。`Interactions.test.tsx` 7/7、typecheck 三段、
+  `lint:budgets`、build 与 VSIX 打包通过，已安装
+  `droidvisx.droidvisx@0.7.80`。
 
 - **2026-08-15 非 Git 回合审阅发版 v0.7.22**：版本号
   `0.7.21 → 0.7.22`，内容 = 台账 §57（完整 tool-call 前置基线、

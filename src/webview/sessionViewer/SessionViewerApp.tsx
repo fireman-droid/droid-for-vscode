@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   SESSION_VIEWER_PROTOCOL_VERSION,
@@ -19,7 +19,11 @@ export function SessionViewerApp({
   const [snapshot, setSnapshot] =
     useState<SessionViewerSnapshotMessage | null>(null);
   const viewportRef = useRef<HTMLElement>(null);
-  const followRef = useRef(true);
+  const followRef = useRef({ following: true });
+  const getScroller = useCallback(
+    (): HTMLElement | null => viewportRef.current,
+    [],
+  );
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<unknown>): void => {
@@ -45,7 +49,7 @@ export function SessionViewerApp({
   }, [vscode]);
 
   useEffect(() => {
-    if (!followRef.current) {
+    if (!followRef.current.following) {
       return;
     }
     const viewport = viewportRef.current;
@@ -99,7 +103,7 @@ export function SessionViewerApp({
         aria-label="Read-only session transcript"
         onScroll={(event) => {
           const element = event.currentTarget;
-          followRef.current =
+          followRef.current.following =
             element.scrollHeight -
               element.scrollTop -
               element.clientHeight <
@@ -126,6 +130,8 @@ export function SessionViewerApp({
                 items={snapshot.items}
                 running={snapshot.running}
                 className="dvx-session-viewer-thread"
+                getScroller={getScroller}
+                followingRef={followRef}
               />
             </>
           )}

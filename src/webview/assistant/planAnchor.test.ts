@@ -128,7 +128,7 @@ describe('selectPlanAnchors', () => {
       otherTool('turn-1', 'use-2'),
       planTool('turn-1', 'use-3', PLAN_V2),
       user('u2'),
-      planTool('turn-2', 'use-4', PLAN_V3),
+      planTool('turn-2', 'use-4', PLAN_V2),
     ]);
     // The overlapping turn-2 update continues the lineage anchored at
     // u1 — no second line under u2.
@@ -136,10 +136,19 @@ describe('selectPlanAnchors', () => {
     const anchor = anchors.get('u1');
     expect(anchor?.anchorToolUseId).toBe('use-1');
     expect(anchor?.latestTurnId).toBe('turn-2');
-    expect(anchor?.completedCount).toBe(3);
-    expect(anchor?.allCompleted).toBe(true);
-    // Once every step is done the title settles on the last step.
-    expect(anchor?.title).toBe('Write the tests');
+    expect(anchor?.completedCount).toBe(1);
+    expect(anchor?.allCompleted).toBe(false);
+    expect(anchor?.title).toBe('Wire the selector');
+  });
+
+  it('hides the card once every step is completed', () => {
+    expect(
+      selectPlanAnchors([
+        user('u1'),
+        planTool('turn-1', 'use-1', PLAN_V1),
+        planTool('turn-1', 'use-3', PLAN_V3),
+      ]).size,
+    ).toBe(0);
   });
 
   it('titles the line with the live step, the next pending one, or the last when done', () => {
@@ -154,11 +163,11 @@ describe('selectPlanAnchors', () => {
     ).toBe('Second');
     // Between updates (nothing in progress) the frontier pending step leads.
     expect(titleOf('1. [completed] First\n2. [pending] Second')).toBe('Second');
-    // Fully done: the last step, not the first.
-    expect(titleOf('1. [completed] First\n2. [completed] Second')).toBe('Second');
+    // Fully done: the card is omitted rather than retitled.
+    expect(titleOf('1. [completed] First\n2. [completed] Second')).toBeUndefined();
     expect(
       titleOf('1. [completed] First\n2. [completed] Second\n3. [completed] Third'),
-    ).toBe('Third');
+    ).toBeUndefined();
   });
 
   it('replaces the old card when a new lineage starts', () => {

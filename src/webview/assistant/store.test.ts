@@ -962,12 +962,18 @@ describe('assistantWebviewReducer', () => {
         messageId: 'message-1',
         restorableCount: 2,
         createdCount: 1,
+        restorablePaths: ['src/app.ts', 'src/store.ts'],
+        createdPaths: ['docs/new.md'],
+        evictedFiles: [{ path: 'src/big.bin', reason: 'size-limit' }],
       },
     });
     expect(state.rewindInfo).toEqual({
       messageId: 'message-1',
       restorableCount: 2,
       createdCount: 1,
+      restorablePaths: ['src/app.ts', 'src/store.ts'],
+      createdPaths: ['docs/new.md'],
+      evictedFiles: [{ path: 'src/big.bin', reason: 'size-limit' }],
     });
 
     state = assistantWebviewReducer(state, {
@@ -979,6 +985,9 @@ describe('assistantWebviewReducer', () => {
         messageId: 'message-9',
         restorableCount: 0,
         createdCount: 0,
+        restorablePaths: [],
+        createdPaths: [],
+        evictedFiles: [],
       },
     });
     expect(state.rewindInfo?.messageId).toBe('message-1');
@@ -1617,6 +1626,95 @@ describe('assistantWebviewReducer', () => {
     });
     expect(state.terminalTurnId).toBe('turn-a');
     expect(state.interactions).toEqual([]);
+  });
+
+  it('syncs Plan document state and appends one AskUser settlement result', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: snapshot(),
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'interaction.request',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        request: {
+          requestId: 'plan-a',
+          kind: 'permission',
+          tools: [
+            {
+              toolUseId: 'tool-a',
+              toolName: 'ExitSpecMode',
+              confirmationKind: 'exit_spec_mode',
+              title: 'Review plan',
+            },
+          ],
+          options: [
+            {
+              label: 'Approve',
+              value: 'proceed_once',
+              requiresEditedSpec: false,
+            },
+          ],
+          editableSpecContent: '# Original',
+        },
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'plan.document.state',
+        sequence: 2,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        requestId: 'plan-a',
+        status: 'ready',
+        content: '# Revised',
+      },
+    });
+    expect(state.interactions[0]?.planDocument).toEqual({
+      status: 'ready',
+      content: '# Revised',
+    });
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'interaction.closed',
+        sequence: 3,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        requestId: 'ask-a',
+        result: {
+          status: 'answered',
+          answers: [{ topic: 'Library', answer: 'React' }],
+        },
+      },
+    });
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'interaction.closed',
+        sequence: 4,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        requestId: 'ask-a',
+        result: {
+          status: 'answered',
+          answers: [{ topic: 'Library', answer: 'React' }],
+        },
+      },
+    });
+    expect(
+      state.transcript.filter(({ kind }) => kind === 'ask-user-result'),
+    ).toEqual([
+      expect.objectContaining({
+        status: 'answered',
+        answers: [{ topic: 'Library', answer: 'React' }],
+      }),
+    ]);
   });
 
   it('stops a running tool when the overall turn fails', () => {

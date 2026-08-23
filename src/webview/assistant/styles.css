@@ -2,6 +2,7 @@
    Import order is the cascade contract: several late files
    (19-system-overlays, 20-selection-governance and everything after)
    out-rank earlier rules purely by source order. Never reorder. */
+@import 'katex/dist/katex.min.css';
 @import './styles/00-tokens.css';
 @import './styles/01-base.css';
 @import './styles/02-markdown.css';
@@ -25,6 +26,7 @@
 @import './styles/20-selection-governance.css';
 @import './styles/21-btw.css';
 @import './styles/22-plan-anchor.css';
+@import './styles/23-interaction-dock.css';
 @import './styles/24-theme-dark.css';
 @import './styles/25-custom-models.css';
 @import './styles/29-review-dock.css';

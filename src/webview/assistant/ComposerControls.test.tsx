@@ -531,7 +531,7 @@ describe('ComposerControls', () => {
     });
   });
 
-  it('offers spec drafting overrides only while the session is in Spec mode', async () => {
+  it('offers a Spec drafting model entry regardless of interaction mode', async () => {
     const user = userEvent.setup();
     const onSettingUpdate = vi.fn();
     const catalog = {
@@ -579,72 +579,59 @@ describe('ComposerControls', () => {
     );
     const { rerender } = render(renderControls(settings.value));
 
-    // Outside Spec mode the model popover has no scope toggle.
-    await user.click(
-      screen.getByRole('button', { name: 'Model: Sol' }),
-    );
-    expect(
-      screen.queryByRole('radiogroup', { name: 'Model scope' }),
-    ).toBeNull();
-    fireEvent.keyDown(document, { key: 'Escape' });
+    // Outside Spec mode the entry is still present (no gating) and
+    // reads "Same as session" while unset.
+    await user.click(screen.getByRole('button', { name: 'Model: Sol' }));
+    const specEntry = screen.getByRole('button', { name: 'Spec drafting' });
+    expect(specEntry.textContent).toContain('Session');
+    await user.click(specEntry);
 
-    const specValue = {
-      ...settings.value,
-      interactionMode: 'spec' as const,
-    };
-    rerender(renderControls(specValue));
-    expect(
-      screen.getByRole('button', { name: 'Mode: Spec' }).className,
-    ).toContain('dvx-mode-trigger-spec');
-
-    // Selecting a model in the Spec drafting scope posts the spec field.
-    await user.click(
-      screen.getByRole('button', { name: 'Model: Sol' }),
-    );
-    await user.click(screen.getByRole('radio', { name: 'Spec drafting' }));
-    expect(
-      screen.getByRole('button', {
-        name: 'Drafting with the session model',
-      }),
-    ).toBeDefined();
-    await user.click(
-      screen.getByRole('button', { name: 'Pro, model-pro' }),
-    );
+    // Inside the drill-in, "Same as session" is the sole checked
+    // row — the model list underneath shows no duplicate tick, even
+    // though it happens to resolve to the same model (model-sol).
+    const checkedRows = screen.getAllByRole('listitem', { current: true });
+    expect(checkedRows).toHaveLength(1);
+    expect(checkedRows[0].textContent).toContain('Same as session');
+    await user.click(screen.getByRole('button', { name: 'Pro, model-pro' }));
     expect(onSettingUpdate).toHaveBeenCalledWith({
       field: 'specModeModelId',
       value: 'model-pro',
     });
 
-    // With an override set, the drafting model can be reset to the
-    // session model and its reasoning to the model default.
-    rerender(
-      renderControls({ ...specValue, specModeModelId: 'model-pro' }),
-    );
-    await user.click(
-      screen.getByRole('button', { name: 'Model: Sol' }),
-    );
-    await user.click(screen.getByRole('radio', { name: 'Spec drafting' }));
+    // With an override set and Spec mode active, the trigger reflects
+    // the drafting model (not the session model) and flags it "spec".
+    const specValue = {
+      ...settings.value,
+      interactionMode: 'spec' as const,
+      specModeModelId: 'model-pro',
+    };
+    rerender(renderControls(specValue));
+    const trigger = screen.getByRole('button', { name: 'Model: Pro' });
+    expect(trigger.textContent).toContain('spec');
+
+    // Re-opening the drill-in shows Pro checked and its reasoning
+    // editable; picking None posts the spec-only reasoning field.
+    await user.click(trigger);
+    await user.click(screen.getByRole('button', { name: 'Spec drafting' }));
     expect(screen.getByText('Default')).toBeDefined();
     await user.click(
       screen.getByRole('button', { name: 'Edit reasoning for Pro' }),
     );
-    const defaultOption = screen.getByRole('radio', {
-      name: 'Model default',
-    });
-    expect(defaultOption.getAttribute('aria-checked')).toBe('true');
+    expect(
+      screen.getByRole('radio', { name: 'Model default' }).getAttribute(
+        'aria-checked',
+      ),
+    ).toBe('true');
     await user.click(screen.getByRole('radio', { name: 'None' }));
     expect(onSettingUpdate).toHaveBeenCalledWith({
       field: 'specModeReasoningEffort',
       value: 'none',
     });
 
-    await user.click(
-      screen.getByRole('button', { name: 'Model: Sol' }),
-    );
-    await user.click(screen.getByRole('radio', { name: 'Spec drafting' }));
-    await user.click(
-      screen.getByRole('button', { name: 'Use session model' }),
-    );
+    // Picking "Same as session" again clears the override.
+    await user.click(trigger);
+    await user.click(screen.getByRole('button', { name: 'Spec drafting' }));
+    await user.click(screen.getByRole('button', { name: 'Same as session' }));
     expect(onSettingUpdate).toHaveBeenCalledWith({
       field: 'specModeModelId',
       value: null,
@@ -1522,6 +1509,61 @@ describe('ComposerControls', () => {
     expect(onCompact).toHaveBeenCalledOnce();
   });
 
+  it('explains full usage and confirms detected automatic compaction', async () => {
+    const user = userEvent.setup();
+    const renderContext = (
+      value: typeof context.value & { compactionDetected?: true },
+    ) => (
+      <ComposerControls
+        settings={settings}
+        context={{ status: 'ready', value }}
+        modelCatalog={{
+          status: 'unsupported',
+          items: [],
+          message: 'Catalog unavailable.',
+        }}
+        disabled={false}
+        settingUpdatesDisabled={false}
+        onContextRefresh={vi.fn()}
+        onCompact={vi.fn()}
+        onSettingUpdate={vi.fn()}
+        skills={{ status: 'idle', items: [] }}
+        onSkillsRefresh={vi.fn()}
+        onSkillToggle={vi.fn()}
+        mcp={{ status: 'idle', items: [] }}
+        plugins={{ status: 'idle', items: [] }}
+        onMcpRefresh={vi.fn()}
+        onMcpServerToggle={vi.fn()}
+        mcpAuth={null}
+        onMcpServerAuthenticate={vi.fn()}
+        onPluginsRefresh={vi.fn()}
+      />
+    );
+    const { rerender } = render(
+      renderContext({
+        availability: 'available',
+        used: 100,
+        remaining: 0,
+        limit: 100,
+      }),
+    );
+
+    await user.click(screen.getByLabelText(/Context used 100 of 100/));
+    expect(
+      screen.getByText(/Automatic compaction is checked when the next/),
+    ).toBeDefined();
+    rerender(
+      renderContext({
+        availability: 'available',
+        used: 62,
+        remaining: 38,
+        limit: 100,
+        compactionDetected: true,
+      }),
+    );
+    expect(screen.getByText(/Automatic compaction detected/)).toBeDefined();
+  });
+
   it('shows an in-progress compact state and ignores clicks', async () => {
     const user = userEvent.setup();
     const onCompact = vi.fn();
@@ -1609,6 +1651,9 @@ describe('ComposerControls', () => {
     );
 
     await user.click(screen.getByLabelText(/Context used 25 of 100/));
+    expect(document.querySelectorAll('.dvx-context-bar-segment')).toHaveLength(
+      1,
+    );
     const input = screen.getByText('Input').closest('li')!;
     expect(input.textContent).toContain('2.6K');
     expect(input.getAttribute('title')).toBe('Last turn: 1,719');
@@ -1617,6 +1662,11 @@ describe('ComposerControls', () => {
     expect(screen.queryByText(/\$/)).toBeNull();
     // Per-turn data exists, so no missing-detail note.
     expect(screen.queryByText(/Per-turn detail/)).toBeNull();
+    expect(
+      screen.getByText(
+        'Category counts are session totals. The meter is the latest call.',
+      ),
+    ).toBeDefined();
   });
 
   it('marks history sessions as cumulative-only and surfaces credits', async () => {

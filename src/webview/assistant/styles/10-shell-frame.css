@@ -115,21 +115,23 @@ body {
 }
 
 .dvx-thread {
+  display: grid;
   min-width: 0;
   min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
   height: 100%;
 }
 
-/* Column layout: the reading column flexes to fill the space above
-   the sticky footer, so an empty or short transcript never fabricates
-   scrollable overflow (no hardcoded min-height offsets). */
+/* The transcript is the only scroll row. The footer is a separate
+   auto-sized row, so Composer never moves with transcript scrolling. */
 .dvx-thread-viewport {
   position: relative;
   display: flex;
+  min-height: 0;
   flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
-  height: 100%;
+  height: auto;
   background: var(--dvx-surface);
   scrollbar-width: none;
 }
@@ -153,6 +155,30 @@ body {
   padding: 20px var(--dvx-column-pad) 40px;
 }
 
+.dvx-virtual-turns {
+  min-width: 0;
+}
+
+.dvx-virtual-turns-window {
+  min-width: 0;
+}
+
+.dvx-virtual-turn .dvx-message-user {
+  position: sticky;
+  top: var(--dvx-sticky-top);
+}
+
+/* flow-root is load-bearing: the virtualizer measures this wrapper with
+   getBoundingClientRect, which excludes margins, while the message
+   inside carries the inter-message margin. Without a block formatting
+   context that margin collapses out of the wrapper, so every row is
+   recorded shorter than the space it occupies and the model drifts a
+   full margin per mounted row against the real layout. */
+.dvx-virtual-turn {
+  display: flow-root;
+  min-width: 0;
+}
+
 .dvx-message {
   width: 100%;
   margin: 0 0 14px;
@@ -169,11 +195,8 @@ body {
   margin-bottom: 10px;
 }
 
-/* User messages are Cursor-style full-width blocks that stick to the
-   viewport top while their answer scrolls; the coordinator in
-   Thread.tsx marks the active one with data-pinned, translates it up
-   when the next user message reaches it (push-out hand-off), and
-   hides the stuck ones it covers (data-covered). */
+/* User messages stick inside their user-led virtual turn. The turn
+   boundary gives native sticky positioning its push-out hand-off. */
 .dvx-message-user {
   position: sticky;
   top: var(--dvx-sticky-top);
@@ -184,11 +207,11 @@ body {
 /* Above plain user rows so the popovers of a pinned edit card are
    never painted under later sticky siblings (sticky always creates a
    stacking context). Still below the footer (z-index 4). */
-.dvx-message-user[data-pinned] {
+.dvx-message-user[data-pinned],
+.dvx-virtual-turn[data-sticky-owner] .dvx-message-user {
   z-index: 3;
   background: var(--dvx-surface);
   box-shadow: 0 6px 12px -8px rgb(0 0 0 / 25%);
-  will-change: transform;
 }
 
 .dvx-message-user[data-covered] {

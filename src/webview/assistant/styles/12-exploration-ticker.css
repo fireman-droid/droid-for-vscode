@@ -397,11 +397,10 @@
 }
 
 .dvx-thread-footer {
-  position: sticky;
+  position: relative;
   z-index: 4;
   width: 100%;
-  flex: 0 0 auto;
-  bottom: 0;
+  min-height: 0;
   padding: 4px var(--dvx-column-pad) 10px;
   background: var(--dvx-surface);
 }

@@ -7,6 +7,13 @@ import { hasExactKeys } from './strictValidation';
  * Task's opaque toolUseId.
  */
 export const MAX_SUBAGENT_ACTIVITY_LENGTH = 64;
+export const MAX_SUBAGENT_ACTIVITY_TARGET_LENGTH = 160;
+export const MAX_SUBAGENT_ACTIVITIES = 4;
+
+export interface SubagentActivityItem {
+  readonly action: string;
+  readonly target: string | null;
+}
 
 export interface SubagentPanelMessage {
   readonly type: 'subagent.panel';
@@ -20,7 +27,7 @@ export interface SubagentActivityMessage {
   readonly sessionId: string;
   readonly turnId: string;
   readonly toolUseId: string;
-  readonly action: string | null;
+  readonly activities: readonly SubagentActivityItem[];
 }
 
 function isId(value: unknown): value is string {
@@ -35,6 +42,29 @@ function isId(value: unknown): value is string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isBoundedText(value: unknown, maxLength: number): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= maxLength &&
+    value.trim() === value &&
+    !/[\u0000-\u001f\u007f-\u009f]/u.test(value)
+  );
+}
+
+function isActivityItem(value: unknown): value is SubagentActivityItem {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, ['action', 'target']) &&
+    isBoundedText(value.action, MAX_SUBAGENT_ACTIVITY_LENGTH) &&
+    (value.target === null ||
+      isBoundedText(
+        value.target,
+        MAX_SUBAGENT_ACTIVITY_TARGET_LENGTH,
+      ))
+  );
 }
 
 export function parseSubagentWebviewMessage(
@@ -68,7 +98,7 @@ export function parseSubagentActivityMessage(
       'sessionId',
       'turnId',
       'toolUseId',
-      'action',
+      'activities',
     ]) ||
     typeof value.sequence !== 'number' ||
     !Number.isSafeInteger(value.sequence) ||
@@ -76,12 +106,9 @@ export function parseSubagentActivityMessage(
     !isId(value.sessionId) ||
     !isId(value.turnId) ||
     !isId(value.toolUseId) ||
-    (value.action !== null &&
-      (typeof value.action !== 'string' ||
-        value.action.length === 0 ||
-        value.action.length > MAX_SUBAGENT_ACTIVITY_LENGTH ||
-        value.action.trim() !== value.action ||
-        /[\u0000-\u001f\u007f-\u009f]/u.test(value.action)))
+    !Array.isArray(value.activities) ||
+    value.activities.length > MAX_SUBAGENT_ACTIVITIES ||
+    !value.activities.every(isActivityItem)
   ) {
     return null;
   }
@@ -91,6 +118,6 @@ export function parseSubagentActivityMessage(
     sessionId: value.sessionId,
     turnId: value.turnId,
     toolUseId: value.toolUseId,
-    action: value.action,
+    activities: value.activities,
   };
 }

@@ -1,8 +1,7 @@
 # Changes 账本改造方案（B：git 快照树为权威）
 
-> 状态：**尚未开工的设计**。执行者请先读 `AGENTS.md`（交付循环、分层边界、文件行数预算是硬约束），再读本文。
+> 状态：**已落地（2026-08-19）**。源码已接通；本切片不装包，由发起方安装验收。执行者先读 `AGENTS.md`，再读本文。
 > 仓库：`d:\E\前端好玩的东西\droidvisx`，分支 `main`。
-> 本文自包含：不需要读上下文对话即可实施。
 
 ## 0. 一句话目标
 
@@ -291,3 +290,92 @@ pnpm exec vitest run src/extension/turnSnapshots.test.ts src/extension/committed
 - 不要动 `src/webview/**` 与 `src/shared/bridgeMessages.ts`（本方案零 Bridge 改动；若发现必须改，停下来先报告）。
 - 不要顺手重构、补防御性代码、加新依赖。
 - 不要动工作树里已有的未提交改动（自定义模型/图片附件等在制品）。
+
+## 10. 落地记录（2026-08-19）
+
+源码已接通，**未装包**。常量：
+
+| 名字 | 取值 |
+| --- | --- |
+| `SNAPSHOT_TIMEOUT_MS` | 10_000 |
+| `MAX_SNAPSHOT_SESSIONS` | 8 |
+| `MAX_SNAPSHOT_TURNS_PER_SESSION` | 24 |
+| `MAX_SNAPSHOT_OBJECT_BYTES` | 256 * 1024 * 1024 |
+| `MAX_NUMSTAT_OUTPUT_BYTES` | 1_048_576（与 changeStats 同值，本模块自持） |
+| `MAX_OPEN_BASELINE_BYTES` | 16 * 1024 * 1024（与 vscodeFileDiff 同值，本模块自持；不能从该文件 import，因其 `import vscode`） |
+| `TURN_SNAPSHOTS_STORAGE_KEY` | `droidvisx.turnSnapshots` |
+| `TURN_SNAPSHOTS_VERSION` | 1 |
+| 对象目录 | `globalStorageUri/turn-objects` |
+
+持久化样例：
+
+```json
+{
+  "version": 1,
+  "sessions": [
+    {
+      "sessionId": "session-a",
+      "turns": [
+        {
+          "turnId": "turn-a",
+          "before": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "after": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "files": [{ "path": "src/app.ts", "additions": 3, "deletions": 1 }]
+        }
+      ]
+    }
+  ]
+}
+```
+
+校验：sessionId/turnId 非空且 ≤ `MAX_BRIDGE_ID_LENGTH`；before/after 若出现必须是 40 位 hex；files 若出现则每项 path 过 `isSafeWorkspaceRelativePath`、计数 `null` 或 `Number.isSafeInteger && >= 0`、无重复 path、长度 ≤ 24。任一不合法 → **丢弃该 turn**；session 无合法 turn → 丢弃该 session。
+
+### 偏差
+
+1. **`readTurns(sessionId)`**：方案里 `read(sessionId, turnId?)` 只能返回一条记录，多行历史恢复需要整段 turns。`read` 仍按方案（省略 turnId 时返回该会话最新一条）。
+2. **`resolveSettledChangeFiles`** 抽到 `src/extension/chat/settleTurnChanges.ts`：`turnFlow.ts` 已在行数棘轮顶（1160），settle 逻辑不能再写进该文件。`publishTurnChanges` 仍留在 `turnFlow.ts`。
+3. **`capture('after')` 走同一串行队列**：方案写 before fire-and-forget，但 after 必须等到 before 的 `write-tree` 完成，否则 `diff` 没有 tree0。实现上所有 `capture`/`rememberFiles`/`prune` 入同一队列；`publishTurnChanges` **await** `capture('after')`。
+4. **恢复回合锚点**是 `recovery.ts:132` 建 `ctl.turn` 处，不是方案写的 `:135`（3 行漂移）。
+5. **`rev-parse --git-path objects`**：方案只写 `--git-dir`。worktree 的 git-dir 没有 objects，alternate 必须指向 common objects，否则 `add -A` 会把整库 blob 复制进我们的 object 目录。
+6. **`git diff` 增加 `--relative`**：与现有 `readHeadStats` 一致，路径才是工作区相对，才能和 toolPaths / chip 对上。
+7. **`git show` 对缺席路径返回 `''`**（exit 128）：新建文件 Reload 后左侧才能是空文档；返回 `undefined` 会掉进 HEAD ↔ Working。
+8. **`createCommittedStatsHistoryLoader` 已改名为 `createTurnStatsHistoryLoader`**，不再读 `droidvisx.committedTurns` 的行数。该 key 仍给 `workspaceActions.ts` 的 committedRef 用。
+9. **ChatController** 以**末尾可选参数**注入 `turnSnapshots`，避免中间插参打乱 `extension.ts` / 测试 harness 的位置实参。
+10. `changeStats.readTurnBaseline` 的 snapshots 形参是 `Pick<TurnSnapshotStore, 'readTreeFile'>`（只用到这一方法）。
+
+### 未覆盖（按方案不修）
+
+- 历史里从未合成出 `changes` 行的回合，不凭空插行。
+- `.gitignore` 文件 Reload 后无行数、无树基准。
+- live writing 仍用内存 baseline（缺陷 5 只影响过程数字）。
+- SHA-256 仓库的 tree oid 不是 40 hex，快照会失败并回退内存。
+- 工作区是 git 仓库子目录时，`git show <tree>:<workspace-relative>` 与 index 路径约定需要复核。
+
+### 复核修正（2026-08-19，发起方）
+
+临时仓库实测（Windows git 2.53）确认 `GIT_OBJECT_DIRECTORY` + alternates
+可用：新对象只落我们的目录，仓库对象未被写入，numstat 数字正确。同一批实测
+暴露两处缺陷，已修：
+
+1. **单树 diff 会把整库报成删除（方案 §5.1 的设计错误）**。`after`
+   缺失时原本退化成 `git diff --numstat <before>`（对工作树），但该形式
+   依赖 index，而环境里绑的是一个不存在的临时 index 文件。实测：只改
+   `a.txt` 一行，输出却是 `0 5 a.txt` + `0 1 b.txt`（后者从未被碰）。
+   settle 时 after 捕获超时/失败即触发。现改为**两棵树都在才 diff**，
+   否则返回空表交给内存 baseline 兜底。
+2. **`git show` 的 128 同时表示"路径不在树里"和"树对象没了"**。原实现
+   一律映射成 `''`，树丢失时会把整个文件显示成全新增。现在 128 追加一次
+   `git cat-file -e <before>^{tree}`：树在才返回 `''`（本回合新建），
+   树不在返回 `undefined`，落回 HEAD ↔ Working。
+
+顺带：`diff` / `show` / `cat-file` 改用不绑 `GIT_INDEX_FILE` 的只读环境，
+消除固定临时 index 文件名在并发调用下的相互干扰。
+
+复跑：`typecheck` / `lint:budgets` 通过；四个测试文件 **32/32**（新增
+"两棵树都在才 diff"、"before 树丢失时拒绝空基准"两条）。
+
+`ChatController.workspaceActions.test.ts` 的 `routes inline HTML previews`
+失败与本切片无关：`workspaceActions.ts:152` 已改成
+`openInlineHtml(html, artifact)` 两参，测试仍断言单参，来自更早的
+preview attachments 提交。
+

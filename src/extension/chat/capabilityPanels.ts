@@ -639,6 +639,9 @@ export function projectContextWindow(
     used: context.used,
     remaining: context.remaining,
     limit: context.limit,
+    ...(context.compactionDetected === true
+      ? { compactionDetected: true }
+      : {}),
   };
 }
 

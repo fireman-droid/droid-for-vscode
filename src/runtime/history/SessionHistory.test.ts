@@ -18,6 +18,72 @@ import {
 } from './projectSessionHistory';
 
 describe('projectSessionHistory', () => {
+  it('reconstructs answered and cancelled AskUser results from public tool history', () => {
+    const result = projectSessionHistory({
+      result: {
+        session: {
+          messages: [
+            message('assistant-ask', 'assistant', [
+              {
+                type: 'tool_use',
+                id: 'ask-1',
+                name: 'AskUser',
+                input: {
+                  questionnaire:
+                    '1. [question] Which library?\n[topic] Library\n[option] React\n[option] Vue',
+                },
+              },
+              {
+                type: 'tool_use',
+                id: 'ask-2',
+                name: 'AskUser',
+                input: {
+                  questionnaire:
+                    '1. [question] Continue?\n[topic] Decision\n[option] Yes',
+                },
+              },
+            ]),
+            message('tool-answers', 'tool', [
+              {
+                type: 'tool_result',
+                toolUseId: 'ask-1',
+                isError: false,
+                content:
+                  '[question] Which library?\n[answer] React',
+              },
+              {
+                type: 'tool_result',
+                toolUseId: 'ask-2',
+                isError: true,
+                content: 'Error: User cancelled AskUser',
+              },
+            ]),
+          ],
+        },
+      },
+    });
+
+    expect(result.status).toBe('available');
+    if (result.status !== 'available') {
+      return;
+    }
+    expect(
+      result.state.transcript.filter(
+        ({ kind }) => kind === 'ask-user-result',
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        kind: 'ask-user-result',
+        status: 'answered',
+        answers: [{ topic: 'Library', answer: 'React' }],
+      }),
+      expect.objectContaining({
+        kind: 'ask-user-result',
+        status: 'cancelled',
+      }),
+    ]);
+  });
+
   it('projects a public daemon message snapshot through the same path', () => {
     const result = projectSessionMessages([
       message('user-live', 'user', [

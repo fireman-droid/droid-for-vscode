@@ -152,6 +152,12 @@ function ContextUsage({
   }
   const usedPercent = (stats.used / stats.limit) * 100;
   const roundedPercent = Math.round(usedPercent);
+  const windowNote =
+    stats.compactionDetected === true
+      ? 'Automatic compaction detected. The meter now reflects the compacted model call.'
+      : roundedPercent >= 100
+        ? 'This is the latest completed model call. Automatic compaction is checked when the next model call starts.'
+        : null;
   // Legend scope: session totals when the SDK reported them, else the
   // last turn (history sessions carry no per-turn usage and fresh
   // sessions may carry only one scope).
@@ -192,32 +198,21 @@ function ContextUsage({
           stats.used,
         )} of ${formatCount(stats.limit)})`}
       >
-        {legend.length === 0 ? (
-          <span
-            className="dvx-context-bar-segment"
-            style={{
-              width: `${usedPercent}%`,
-              background: 'var(--dvx-accent)',
-            }}
-          />
-        ) : (
-          legend.map((category) => (
-            <span
-              key={category.field}
-              className="dvx-context-bar-segment"
-              style={{
-                width: `${
-                  (breakdown![category.field] / breakdownTotal) *
-                  usedPercent
-                }%`,
-                background: `var(${category.colorVar})`,
-              }}
-            />
-          ))
-        )}
+        <span
+          className="dvx-context-bar-segment"
+          style={{
+            width: `${usedPercent}%`,
+            background: 'var(--dvx-accent)',
+          }}
+        />
       </div>
+      {windowNote === null ? null : (
+        <p className="dvx-context-usage-note" role="status">
+          {windowNote}
+        </p>
+      )}
       {legend.length === 0 ? null : (
-        <ul className="dvx-context-legend">
+        <ul className="dvx-context-legend" aria-label="Session token totals">
           {legend.map((category) => (
             <li
               key={category.field}
@@ -255,9 +250,11 @@ function ContextUsage({
           ) : null}
         </ul>
       )}
-      {breakdown !== null && lastTurn === null ? (
+      {breakdown !== null ? (
         <p className="dvx-context-usage-note">
-          Per-turn detail appears after the next completed turn.
+          {lastTurn === null
+            ? 'Per-turn detail appears after the next completed turn.'
+            : 'Category counts are session totals. The meter is the latest call.'}
         </p>
       ) : null}
     </div>

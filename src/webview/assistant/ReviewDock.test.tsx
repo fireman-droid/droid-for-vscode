@@ -335,4 +335,81 @@ describe("ReviewDock", () => {
       requestFrame.mockRestore();
     }
   });
+
+  it("requests the branch diff and lists what the branch changed", () => {
+    const onRequestBranchDiff = vi.fn();
+    const onOpenFile = vi.fn();
+    const view = render(
+      <ReviewDock
+        changes={changes()}
+        onOpenFileDiff={vi.fn()}
+        onPreviewFile={vi.fn()}
+        branchDiff={null}
+        onRequestBranchDiff={onRequestBranchDiff}
+        onOpenFile={onOpenFile}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Branch" }));
+    expect(onRequestBranchDiff).toHaveBeenCalledOnce();
+    screen.getByText("Reading branch…");
+    // The turn list yields to the branch list rather than stacking.
+    expect(screen.queryByTitle("Open changes for src/app.tsx")).toBeNull();
+
+    view.rerender(
+      <ReviewDock
+        changes={changes()}
+        onOpenFileDiff={vi.fn()}
+        onPreviewFile={vi.fn()}
+        branchDiff={{
+          branch: "feature/dock",
+          baseBranch: "main",
+          files: [{ path: "src/app.tsx", additions: 4, deletions: 2 }],
+          additions: 4,
+          deletions: 2,
+          commitCount: 1,
+        }}
+        onRequestBranchDiff={onRequestBranchDiff}
+        onOpenFile={onOpenFile}
+      />,
+    );
+    screen.getByText("feature/dock vs main");
+    screen.getByText("1 commit");
+    fireEvent.click(screen.getByRole("button", { name: "Open" }));
+    expect(onOpenFile).toHaveBeenCalledWith("src/app.tsx");
+  });
+
+  it("says so when the branch is unavailable and hides the daemon-only toggle", () => {
+    const unavailable = {
+      branch: null,
+      baseBranch: null,
+      files: [],
+      additions: 0,
+      deletions: 0,
+      commitCount: 0,
+    } as const;
+    const view = render(
+      <ReviewDock
+        changes={changes()}
+        onOpenFileDiff={vi.fn()}
+        onPreviewFile={vi.fn()}
+        branchDiff={{ ...unavailable, unavailableReason: "read-failed" }}
+        onRequestBranchDiff={vi.fn()}
+        onOpenFile={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Branch" }));
+    screen.getByText("Branch changes are unavailable for this session.");
+
+    view.rerender(
+      <ReviewDock
+        changes={changes()}
+        onOpenFileDiff={vi.fn()}
+        onPreviewFile={vi.fn()}
+        branchDiff={{ ...unavailable, unavailableReason: "unsupported-runtime" }}
+        onRequestBranchDiff={vi.fn()}
+        onOpenFile={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Branch" })).toBeNull();
+  });
 });

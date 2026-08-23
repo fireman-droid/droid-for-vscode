@@ -59,4 +59,21 @@ describe('transcriptTextUnits', () => {
         transcriptTextUnits([{ ...assistant, text: '' }]),
     ).toBe(grown.length);
   });
+
+  it('charges AskUser topics and answers to the text budget', () => {
+    const base = {
+      id: 'ask-1',
+      kind: 'ask-user-result',
+      turnId: 'turn-1',
+      status: 'answered',
+      answers: [{ topic: '', answer: '' }],
+    } as const;
+    const filled = {
+      ...base,
+      answers: [{ topic: 'Library', answer: 'React' }],
+    } as const;
+    expect(
+      transcriptTextUnits([filled]) - transcriptTextUnits([base]),
+    ).toBe('LibraryReact'.length);
+  });
 });

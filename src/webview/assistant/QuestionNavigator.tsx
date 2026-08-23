@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import type { QuestionNavigationItem } from "./useQuestionNavigation";
 
 interface QuestionNavigatorProps {
@@ -7,7 +9,7 @@ interface QuestionNavigatorProps {
   readonly onNavigate: (messageId: string) => void;
 }
 
-const MAX_VISIBLE_QUESTION_NODES = 13;
+const MAX_VISIBLE_QUESTION_NODES = 21;
 
 export function visibleQuestionItems(
   items: readonly QuestionNavigationItem[],
@@ -16,14 +18,51 @@ export function visibleQuestionItems(
   if (items.length <= MAX_VISIBLE_QUESTION_NODES) {
     return items.map((item, index) => ({ item, index }));
   }
-  const half = Math.floor(MAX_VISIBLE_QUESTION_NODES / 2);
-  const start = Math.min(
-    Math.max(activeIndex - half, 0),
-    items.length - MAX_VISIBLE_QUESTION_NODES,
+  const current = Math.min(Math.max(activeIndex, 0), items.length - 1);
+  const required = new Set(
+    [0, items.length - 1, current - 1, current, current + 1].filter(
+      (index) => index >= 0 && index < items.length,
+    ),
   );
-  return items
-    .slice(start, start + MAX_VISIBLE_QUESTION_NODES)
-    .map((item, offset) => ({ item, index: start + offset }));
+  const selected = new Set<number>();
+  for (let slot = 0; slot < MAX_VISIBLE_QUESTION_NODES; slot += 1) {
+    selected.add(
+      Math.round(
+        (slot * (items.length - 1)) /
+          (MAX_VISIBLE_QUESTION_NODES - 1),
+      ),
+    );
+  }
+  required.forEach((index) => selected.add(index));
+  while (selected.size > MAX_VISIBLE_QUESTION_NODES) {
+    const removable = [...selected]
+      .filter((index) => !required.has(index))
+      .sort((left, right) => {
+        const leftDistance = Math.min(
+          ...[...required].map((index) => Math.abs(index - left)),
+        );
+        const rightDistance = Math.min(
+          ...[...required].map((index) => Math.abs(index - right)),
+        );
+        return leftDistance - rightDistance || left - right;
+      });
+    const remove = removable[0];
+    if (remove === undefined) {
+      break;
+    }
+    selected.delete(remove);
+  }
+  return [...selected]
+    .sort((left, right) => left - right)
+    .map((index) => ({ item: items[index]!, index }));
+}
+
+function positionStyle(position: number): CSSProperties {
+  return {
+    "--dvx-question-position": String(
+      Math.min(1, Math.max(0, position)),
+    ),
+  } as CSSProperties;
 }
 
 function QuestionChevron({
@@ -70,11 +109,16 @@ export function QuestionNavigator({
         <QuestionChevron direction="up" />
       </button>
       <div className="dvx-question-nav-track">
-        {visibleItems.map(({ item, index }) => (
+        {visibleItems.map(({ item, index }, slot) => (
           <button
             key={item.key}
             type="button"
             className="dvx-question-nav-node"
+            style={positionStyle(
+              visibleItems.length === 1
+                ? 0.5
+                : slot / (visibleItems.length - 1),
+            )}
             aria-label={`Jump to question ${index + 1}: ${item.preview}`}
             aria-current={index === currentIndex ? "true" : undefined}
             data-preview={item.preview}

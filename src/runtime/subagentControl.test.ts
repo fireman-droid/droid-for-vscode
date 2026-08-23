@@ -2,56 +2,162 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   createDaemonSubagentControl,
-  lastToolName,
+  projectSubagentActivities,
 } from './subagentControl';
 import { readSubagentInvocationRecords } from './subagentSummary';
 
-describe('lastToolName', () => {
-  it('returns the newest tool_use name across messages', () => {
+describe('projectSubagentActivities', () => {
+  it('returns the latest semantic activity and three preceding activities', () => {
     expect(
-      lastToolName([
+      projectSubagentActivities([
         {
           content: [
-            { type: 'tool_use', name: 'LS' },
+            {
+              type: 'tool_use',
+              name: 'Skill',
+              input: { skill: 'frontend-design' },
+            },
             { type: 'text', text: 'hi' },
           ],
         },
-        { content: [{ type: 'tool_use', name: 'Grep' }] },
-        { content: [{ type: 'text', text: 'done' }] },
-      ]),
-    ).toBe('Grep');
-  });
-
-  it('bounds and sanitizes hostile names, skipping unusable ones', () => {
-    expect(
-      lastToolName([
         {
           content: [
-            { type: 'tool_use', name: `  Weird${'\u0000'}Tool\n ` },
+            {
+              type: 'tool_use',
+              name: 'Read',
+              input: { file_path: 'd:/work/src/app.ts' },
+            },
+            {
+              type: 'tool_use',
+              name: 'Grep',
+              input: { pattern: 'SSE', path: 'd:/work/src' },
+            },
           ],
         },
-      ]),
-    ).toBe('Weird Tool');
+        {
+          content: [
+            {
+              type: 'tool_use',
+              name: 'Execute',
+              input: { command: 'pnpm exec vitest run app.test.ts' },
+            },
+          ],
+        },
+        { content: [{ type: 'text', text: 'done' }] },
+      ], 'd:/work'),
+    ).toEqual([
+      { action: 'Ran a local command', target: 'Tests' },
+      {
+        action: 'Searched workspace content',
+        target: 'SSE · src',
+      },
+      { action: 'Read workspace files', target: 'src/app.ts' },
+      {
+        action: 'Loaded workflow guidance',
+        target: 'frontend-design',
+      },
+    ]);
+  });
+
+  it('deduplicates adjacent activities and strips unsafe detail', () => {
     expect(
-      lastToolName([
+      projectSubagentActivities([
+        {
+          content: [
+            {
+              type: 'tool_use',
+              name: 'Read',
+              input: { file_path: 'd:/outside/secret.txt' },
+            },
+            {
+              type: 'tool_use',
+              name: 'Read',
+              input: { file_path: 'd:/outside/secret.txt' },
+            },
+            {
+              type: 'tool_use',
+              name: `  Weird${'\u0000'}Tool\n `,
+              input: { secret: 'RAW_INPUT_SECRET' },
+            },
+          ],
+        },
+      ], 'd:/work'),
+    ).toEqual([
+      { action: 'Continued delegated work', target: null },
+      { action: 'Read workspace files', target: null },
+    ]);
+    expect(
+      projectSubagentActivities([
         { content: [{ type: 'tool_use', name: '\u0007\u0000' }] },
         'not-a-message',
         { content: 'not-an-array' },
-      ]),
-    ).toBeNull();
-    expect(lastToolName('nope')).toBeNull();
+      ], 'd:/work'),
+    ).toEqual([]);
+    expect(projectSubagentActivities('nope', 'd:/work')).toEqual([]);
+  });
+
+  it('projects changed files and the current plan item without raw input', () => {
+    expect(
+      projectSubagentActivities([
+        {
+          content: [
+            {
+              type: 'tool_use',
+              name: 'Edit',
+              input: {
+                file_path: 'd:/work/src/app.ts',
+                secret: 'RAW_INPUT_SECRET',
+              },
+            },
+            {
+              type: 'tool_use',
+              name: 'TodoWrite',
+              input: {
+                todos:
+                  '1. [completed] Inspect code\n' +
+                  '2. [in_progress] Implement semantic activity',
+              },
+            },
+          ],
+        },
+      ], 'd:/work'),
+    ).toEqual([
+      {
+        action: 'Updated the task plan',
+        target: 'Implement semantic activity',
+      },
+      {
+        action: 'Updated workspace files',
+        target: 'src/app.ts',
+      },
+    ]);
   });
 });
 
 describe('createDaemonSubagentControl', () => {
   it('samples activity through sessions.getMessages', async () => {
     const getMessages = vi.fn().mockResolvedValue([
-      { content: [{ type: 'tool_use', name: 'Glob' }] },
+      {
+        content: [
+          {
+            type: 'tool_use',
+            name: 'Glob',
+            input: { patterns: '**/*.ts', folder: 'd:/work/src' },
+          },
+        ],
+      },
     ]);
     const gateway = createDaemonSubagentControl(async () =>
       ({ sessions: { getMessages } }) as never,
     );
-    await expect(gateway.sampleActivity('child-1')).resolves.toBe('Glob');
+    await expect(
+      gateway.sampleActivities('child-1', 'd:/work'),
+    ).resolves.toEqual([
+      {
+        action: 'Inspected workspace structure',
+        target: '**/*.ts · src',
+      },
+    ]);
     expect(getMessages).toHaveBeenCalledWith('child-1', { limit: 40 });
   });
 
@@ -59,7 +165,9 @@ describe('createDaemonSubagentControl', () => {
     const gateway = createDaemonSubagentControl(async () => {
       throw new Error('daemon down');
     });
-    await expect(gateway.sampleActivity('child-3')).resolves.toBeNull();
+    await expect(
+      gateway.sampleActivities('child-3', 'd:/work'),
+    ).resolves.toEqual([]);
   });
 });
 

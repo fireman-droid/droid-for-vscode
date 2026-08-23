@@ -8,6 +8,7 @@ import {
 } from '../shared/bridgeMessages';
 import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
 import { toWorkspaceRelativePath } from '../runtime/toolFilePath';
+import type { TurnSnapshotStore } from './turnSnapshots';
 
 export interface FileChangeStat {
   readonly additions: number | null;
@@ -160,6 +161,7 @@ export function createGitChangeStatsReader(
   getWorkspaceRoot: () => string | undefined,
   overrides: Partial<ChangeStatsDependencies> = {},
   persistence?: ChangeStatsPersistence,
+  snapshots?: Pick<TurnSnapshotStore, 'readTreeFile'>,
 ): ChangeStatsReader {
   const dependencies: ChangeStatsDependencies = {
     readWorkspaceFile: readBoundedWorkspaceFile,
@@ -325,10 +327,12 @@ export function createGitChangeStatsReader(
     },
     async readTurnBaseline(scope, path) {
       const bytes = turns.get(scopeKey(scope))?.files.get(path);
-      return bytes === undefined ||
-        (bytes.length > 0 && bytes.includes(0))
-        ? undefined
-        : bytes.toString('utf8');
+      if (bytes !== undefined) {
+        return bytes.length > 0 && bytes.includes(0)
+          ? undefined
+          : bytes.toString('utf8');
+      }
+      return snapshots?.readTreeFile(scope, path);
     },
     async rememberCommittedTurn(scope, hash, paths, stats) {
       if (!/^[0-9a-f]{4,40}$/.test(hash) || paths.length === 0) {

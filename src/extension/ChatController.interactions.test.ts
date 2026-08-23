@@ -110,6 +110,15 @@ describe('ChatController', () => {
       permission.request.requestId,
       askUser.request.requestId,
     ]);
+    expect(
+      messages.filter((message) => message.type === 'interaction.closed').at(-1),
+    ).toMatchObject({
+      requestId: askUser.request.requestId,
+      result: {
+        status: 'answered',
+        answers: [{ topic: 'Choice', answer: 'Yes' }],
+      },
+    });
   });
 
   it('replays every pending interaction after each ready with fresh monotonic sequences', async () => {

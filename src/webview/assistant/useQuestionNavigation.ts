@@ -1,9 +1,14 @@
+import { useAuiState } from "@assistant-ui/react";
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type RefObject,
 } from "react";
+
+import { readMessageText } from "./thread/readers";
+import type { TranscriptVirtualizerApi } from "./thread/buildTurns";
 
 const MAX_PREVIEW_LENGTH = 180;
 
@@ -34,16 +39,27 @@ export function isScrollableTranscript(
 export function findActiveQuestionIndex(
   questionTops: readonly number[],
   scrollTop: number,
+  maxScrollTop = Number.POSITIVE_INFINITY,
 ): number {
   if (questionTops.length === 0) {
     return 0;
   }
+  if (maxScrollTop - scrollTop <= 1) {
+    return questionTops.length - 1;
+  }
+  let low = 0;
+  let high = questionTops.length - 1;
   let activeIndex = 0;
-  questionTops.forEach((top, index) => {
+  while (low <= high) {
+    const index = (low + high) >> 1;
+    const top = questionTops[index] ?? Number.POSITIVE_INFINITY;
     if (top <= scrollTop + 1) {
       activeIndex = index;
+      low = index + 1;
+    } else {
+      high = index - 1;
     }
-  });
+  }
   return activeIndex;
 }
 
@@ -97,24 +113,71 @@ function sameState(
   );
 }
 
-function readQuestionItems(
-  elements: readonly HTMLElement[],
+function readDomQuestionTops(
+  column: HTMLElement,
+  scroller: HTMLElement,
+  keys: readonly string[],
+): readonly number[] | null {
+  const scrollerTop = layoutTop(scroller);
+  const byId = new Map<string, number>();
+  Array.from(
+    column.querySelectorAll<HTMLElement>(".dvx-question-anchor"),
+  ).forEach((element) => {
+    const id = element.dataset.questionId;
+    if (id !== undefined) {
+      byId.set(id, layoutTop(element) - scrollerTop);
+    }
+  });
+  if (byId.size === 0) {
+    return null;
+  }
+  return keys.map((key, index) => byId.get(key) ?? (byId.get(keys[index - 1] ?? "") ?? 0));
+}
+
+export function projectQuestionItems(
+  messages: readonly {
+    readonly id: string;
+    readonly role: string;
+    readonly content: unknown;
+  }[],
 ): readonly QuestionNavigationItem[] {
-  return elements.map((element, index) => ({
-    key: element.dataset.questionId ?? `question-${index}`,
-    preview: questionPreview(
-      element.nextElementSibling?.querySelector(".dvx-user-text")
-        ?.textContent ?? "",
-      index,
-    ),
-  }));
+  const items: QuestionNavigationItem[] = [];
+  for (const message of messages) {
+    if (message.role !== "user") {
+      continue;
+    }
+    const content = Array.isArray(message.content) ? message.content : [];
+    items.push({
+      key: message.id,
+      preview: questionPreview(readMessageText(content), items.length),
+    });
+  }
+  return items;
 }
 
 export function useQuestionNavigation(
   readingColumnRef: RefObject<HTMLDivElement | null>,
+  virtualizerApiRef: RefObject<TranscriptVirtualizerApi | null>,
 ): QuestionNavigationState & {
   readonly navigate: (messageId: string) => void;
 } {
+  const prevQuestionsRef = useRef<readonly QuestionNavigationItem[]>([]);
+  const questions = useAuiState((state) => {
+    const next = projectQuestionItems(state.thread.messages);
+    const previous = prevQuestionsRef.current;
+    if (
+      previous.length === next.length &&
+      previous.every(
+        (item, index) =>
+          item.key === next[index]?.key &&
+          item.preview === next[index]?.preview,
+      )
+    ) {
+      return previous;
+    }
+    prevQuestionsRef.current = next;
+    return next;
+  });
   const [state, setState] = useState<QuestionNavigationState>(EMPTY_STATE);
   const measure = useCallback((): void => {
     const column = readingColumnRef.current;
@@ -123,33 +186,34 @@ export function useQuestionNavigation(
       setState(EMPTY_STATE);
       return;
     }
-    const elements = Array.from(
-      column.querySelectorAll<HTMLElement>(".dvx-question-anchor"),
-    );
-    const scrollerTop = layoutTop(scroller);
+    const keys = questions.map((item) => item.key);
+    const virtualTops = virtualizerApiRef.current?.questionTops();
+    const usedVirtual =
+      virtualTops !== undefined && virtualTops.length === keys.length;
+    const tops = usedVirtual
+      ? virtualTops
+      : (readDomQuestionTops(column, scroller, keys) ?? []);
     const visible =
-      elements.length > 0 &&
+      keys.length > 0 &&
       isScrollableTranscript(scroller.scrollHeight, scroller.clientHeight);
-    const activeIndex = findActiveQuestionIndex(
-      elements.map((element) => layoutTop(element) - scrollerTop),
-      scroller.scrollTop,
+    const maxScrollTop = Math.max(
+      0,
+      scroller.scrollHeight - scroller.clientHeight,
     );
-    const keys = elements.map(
-      (element, index) =>
-        element.dataset.questionId ?? `question-${index}`,
+    const activeIndex = findActiveQuestionIndex(
+      tops,
+      scroller.scrollTop,
+      maxScrollTop,
     );
     setState((previous) => {
-      const sameQuestions =
-        previous.items.length === keys.length &&
-        previous.items.every((item, index) => item.key === keys[index]);
       const next: QuestionNavigationState = {
         visible,
         activeIndex,
-        items: sameQuestions ? previous.items : readQuestionItems(elements),
+        items: questions,
       };
       return sameState(previous, next) ? previous : next;
     });
-  }, [readingColumnRef]);
+  }, [questions, readingColumnRef, virtualizerApiRef]);
   useEffect(() => {
     const column = readingColumnRef.current;
     const scroller = column?.closest(".dvx-thread-viewport");
@@ -191,25 +255,9 @@ export function useQuestionNavigation(
   }, [measure, readingColumnRef]);
   const navigate = useCallback(
     (messageId: string): void => {
-      const column = readingColumnRef.current;
-      const target = Array.from(
-        column?.querySelectorAll<HTMLElement>(".dvx-question-anchor") ?? [],
-      ).find((element) => element.dataset.questionId === messageId);
-      if (target === undefined) {
-        return;
-      }
-      const scroller = column?.closest(".dvx-thread-viewport");
-      if (!(scroller instanceof HTMLElement)) {
-        return;
-      }
-      scrollQuestionToTop(
-        scroller,
-        target,
-        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ??
-          false,
-      );
+      virtualizerApiRef.current?.scrollToMessageId(messageId);
     },
-    [readingColumnRef],
+    [virtualizerApiRef],
   );
   return { ...state, navigate };
 }

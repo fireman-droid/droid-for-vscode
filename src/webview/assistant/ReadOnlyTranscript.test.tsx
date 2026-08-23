@@ -68,4 +68,28 @@ describe('ReadOnlyTranscript', () => {
     expect(previewHtml).not.toHaveBeenCalled();
     expect(requestImage).not.toHaveBeenCalled();
   });
+
+  it('mounts only a window of turns for a long transcript', () => {
+    const items = Array.from({ length: 40 }, (_, index) => [
+      {
+        id: `user-${index}`,
+        kind: 'user' as const,
+        text: `Question ${index}`,
+      },
+      {
+        id: `assistant-${index}`,
+        kind: 'assistant' as const,
+        turnId: `turn-${index}`,
+        text: `Answer ${index}`,
+      },
+    ]).flat();
+    const { container } = render(
+      <ReadOnlyTranscript items={items} running={false} />,
+    );
+    const mounted = container.querySelectorAll('.dvx-message');
+    expect(mounted.length).toBeGreaterThan(0);
+    expect(mounted.length).toBeLessThan(items.length);
+    expect(screen.getByText('Answer 39')).toBeDefined();
+    expect(screen.queryByText('Question 0')).toBeNull();
+  });
 });

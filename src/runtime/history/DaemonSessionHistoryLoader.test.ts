@@ -184,6 +184,45 @@ describe('createDaemonFirstHistoryLoader.loadHistory', () => {
     });
   });
 
+  it('keeps an old disconnected branch out of the current transcript tail', async () => {
+    const messages = [
+      textMessage('m4', 'assistant', 'latest answer', 5, 'm3'),
+      textMessage('m3', 'user', 'latest question', 4, 'm2'),
+      textMessage('branch', 'assistant', 'old branch answer', 3, 'm2'),
+      textMessage('m2', 'assistant', 'earlier answer', 2, 'm1'),
+      textMessage('m1', 'user', 'earlier question', 1),
+    ];
+    const loader = createDaemonFirstHistoryLoader({
+      getDroid: droidWithMessages(async () => messages),
+      isDaemonActive: () => true,
+      fallback: fallbackLoader(),
+      sessionsDirectory: tempDir(),
+      taskInvocationsFile: path.join(tempDir(), 'missing.json'),
+    });
+
+    const loaded = await loader.loadHistory({
+      cwd: 'C:\\workspace',
+      sessionId: 'session-1',
+    });
+    expect(loaded.status).toBe('available');
+    if (loaded.status !== 'available') {
+      return;
+    }
+    expect(
+      loaded.state.transcript.map((item) =>
+        item.kind === 'user' || item.kind === 'assistant'
+          ? item.text
+          : item.kind,
+      ),
+    ).toEqual([
+      'earlier question',
+      'earlier answer',
+      'old branch answer',
+      'latest question',
+      'latest answer',
+    ]);
+  });
+
   it('falls back to the spawn loader when the daemon read fails', async () => {
     const fallbackResult = {
       status: 'available' as const,

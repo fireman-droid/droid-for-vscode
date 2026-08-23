@@ -9,6 +9,7 @@ export type SessionContextStats =
       readonly used: number;
       readonly remaining: number;
       readonly limit: number;
+      readonly compactionDetected?: true;
     }
   | {
       readonly availability: 'unavailable';

@@ -13,6 +13,7 @@ import {
   isSafeMarkdownUrl,
   LocalImageContext,
   markdownUrlTransform,
+  normalizeMathDelimiters,
   OpenPathContext,
   PathPreviewContext,
   previewablePathOf,
@@ -21,6 +22,35 @@ import {
 } from './MarkdownText';
 
 afterEach(cleanup);
+
+describe('Markdown math', () => {
+  it('renders display and inline LaTeX with KaTeX', () => {
+    const { container } = render(
+      <DroidMarkdownContent
+        text={'答案：\n\n\\[\\boxed{21\\text{颗}}\\]\n\n速度为 \\(v=\\frac{s}{t}\\)。'}
+      />,
+    );
+
+    expect(container.querySelector('.katex-display')).not.toBeNull();
+    expect(container.querySelector('.katex .fbox')).not.toBeNull();
+    expect(container.querySelectorAll('.katex')).toHaveLength(2);
+    const visibleMath = Array.from(
+      container.querySelectorAll('.katex-html'),
+      (node) => node.textContent,
+    ).join('');
+    expect(visibleMath).not.toContain('\\boxed');
+    expect(visibleMath).not.toContain('\\frac');
+  });
+
+  it('normalizes model-style delimiters and keeps dollar syntax unchanged', () => {
+    expect(normalizeMathDelimiters('\\[x^2\\] and \\(y\\)')).toBe(
+      '$$\nx^2\n$$ and $y$',
+    );
+    expect(normalizeMathDelimiters('$a$ and $$b$$')).toBe(
+      '$a$ and $$b$$',
+    );
+  });
+});
 
 describe('safe Markdown links', () => {
   it.each([

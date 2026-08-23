@@ -1,9 +1,13 @@
 import { useEffect, useId, useState } from "react";
 
-import type { ChangesTranscriptItem } from "../../shared/bridgeMessages";
+import type {
+  ChangesTranscriptItem,
+  GitBranchDiffState,
+} from "../../shared/bridgeMessages";
 import { isPreviewableFilePath } from "../../shared/validateMessage";
 import { ChangesCommitEntry } from "./GitCommitPanel";
 import { ActivityChevron } from "./thread/icons";
+import { useDeferredDisclosure } from "./useDeferredDisclosure";
 
 interface ReviewDockProps {
   readonly changes: ChangesTranscriptItem;
@@ -12,6 +16,10 @@ interface ReviewDockProps {
     turnId: string | null,
   ) => void;
   readonly onPreviewFile: (path: string) => void;
+  /** Latest answer to `onRequestBranchDiff`, null before the first. */
+  readonly branchDiff: GitBranchDiffState | null;
+  readonly onRequestBranchDiff: () => void;
+  readonly onOpenFile: (path: string) => void;
   /** Lets assistant-ui commit the matching transcript projection first. */
   readonly deferMount?: boolean;
 }
@@ -25,9 +33,13 @@ export function ReviewDock({
   changes,
   onOpenFileDiff,
   onPreviewFile,
+  branchDiff,
+  onRequestBranchDiff,
+  onOpenFile,
   deferMount = false,
 }: ReviewDockProps): React.JSX.Element | null {
   const [expanded, setExpanded] = useState(false);
+  const [branchView, setBranchView] = useState(false);
   const [ready, setReady] = useState(!deferMount);
   const filesId = useId();
   useEffect(() => {
@@ -38,6 +50,13 @@ export function ReviewDock({
     const frame = requestAnimationFrame(() => setReady(true));
     return () => cancelAnimationFrame(frame);
   }, [deferMount]);
+  // Each body mounts once the reader opens it, then stays mounted
+  // (collapsed via CSS) so both open and close animate; a turn no
+  // one ever expands never pays for the row/list markup at all.
+  const showFiles = expanded && !branchView;
+  const showBranch = expanded && branchView;
+  const files = useDeferredDisclosure(showFiles);
+  const branch = useDeferredDisclosure(showBranch);
   if (changes.files.length === 0 || !ready) {
     return null;
   }
@@ -69,6 +88,21 @@ export function ReviewDock({
           ) : null}
         </button>
         <div className="dvx-review-dock-actions">
+          {branchDiff?.unavailableReason === "unsupported-runtime" ? null : (
+            <button
+              type="button"
+              className="dvx-review-dock-branch-toggle"
+              aria-pressed={branchView}
+              title="Everything this branch changed against its base"
+              onClick={() => {
+                setBranchView((current) => !current);
+                setExpanded(true);
+                onRequestBranchDiff();
+              }}
+            >
+              Branch
+            </button>
+          )}
           <ChangesCommitEntry key={changes.turnId} turnId={changes.turnId} />
           <button
             type="button"
@@ -80,60 +114,153 @@ export function ReviewDock({
           </button>
         </div>
       </div>
-      {expanded ? (
-        <div className="dvx-review-dock-body" id={filesId}>
-          <ul className="dvx-review-dock-files">
-            {changes.files.map((file) => {
-              const hasAdditions = file.additions !== null;
-              const hasDeletions = file.deletions !== null;
-              return (
-                <li key={file.path} className="dvx-review-dock-row">
-                  <span className="dvx-review-dock-path" title={file.path}>
-                    {file.path}
-                  </span>
-                  {hasAdditions || hasDeletions ? (
-                    <span className="dvx-review-dock-stats">
-                      {hasAdditions ? (
-                        <span className="dvx-changes-add">
-                          +{file.additions}
-                        </span>
-                      ) : null}
-                      {hasAdditions && hasDeletions ? (
-                        <span aria-hidden="true">/</span>
-                      ) : null}
-                      {hasDeletions ? (
-                        <span className="dvx-changes-del">
-                          −{file.deletions}
-                        </span>
-                      ) : null}
+      {branch.mounted ? (
+        <div
+          className="dvx-review-dock-body dvx-review-dock-branch"
+          data-open={branch.open ? "true" : "false"}
+          aria-hidden={!showBranch}
+        >
+          <div className="dvx-review-dock-body-inner">
+            <BranchBody diff={branchDiff} onOpenFile={onOpenFile} />
+          </div>
+        </div>
+      ) : null}
+      {files.mounted ? (
+        <div
+          className="dvx-review-dock-body"
+          id={filesId}
+          data-open={files.open ? "true" : "false"}
+          aria-hidden={!showFiles}
+        >
+          <div className="dvx-review-dock-body-inner">
+            <ul className="dvx-review-dock-files">
+              {changes.files.map((file) => {
+                const hasAdditions = file.additions !== null;
+                const hasDeletions = file.deletions !== null;
+                return (
+                  <li key={file.path} className="dvx-review-dock-row">
+                    <span className="dvx-review-dock-path" title={file.path}>
+                      {file.path}
                     </span>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="dvx-review-dock-file-action"
-                    title={`Open changes for ${file.path}`}
-                    onClick={() =>
-                      onOpenFileDiff(file.path, changes.turnId)
-                    }
-                  >
-                    Diff
-                  </button>
-                  {isPreviewableFilePath(file.path) ? (
+                    {hasAdditions || hasDeletions ? (
+                      <span className="dvx-review-dock-stats">
+                        {hasAdditions ? (
+                          <span className="dvx-changes-add">
+                            +{file.additions}
+                          </span>
+                        ) : null}
+                        {hasAdditions && hasDeletions ? (
+                          <span aria-hidden="true">/</span>
+                        ) : null}
+                        {hasDeletions ? (
+                          <span className="dvx-changes-del">
+                            −{file.deletions}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : null}
                     <button
                       type="button"
                       className="dvx-review-dock-file-action"
-                      title={`Open ${file.path} in Canvas`}
-                      onClick={() => onPreviewFile(file.path)}
+                      title={`Open changes for ${file.path}`}
+                      onClick={() =>
+                        onOpenFileDiff(file.path, changes.turnId)
+                      }
                     >
-                      Canvas
+                      Diff
                     </button>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
+                    {isPreviewableFilePath(file.path) ? (
+                      <button
+                        type="button"
+                        className="dvx-review-dock-file-action"
+                        title={`Open ${file.path} in Canvas`}
+                        onClick={() => onPreviewFile(file.path)}
+                      >
+                        Canvas
+                      </button>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         </div>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * Branch-scope counterpart of the turn list: every file this branch
+ * changed against its base, committed or not. Rows open the file
+ * itself; no turn owns them, so no turn baseline could frame a diff.
+ * The caller supplies the animated `.dvx-review-dock-body` shell, so
+ * this renders only the inner content.
+ */
+function BranchBody({
+  diff,
+  onOpenFile,
+}: {
+  readonly diff: GitBranchDiffState | null;
+  readonly onOpenFile: (path: string) => void;
+}): React.JSX.Element {
+  if (diff === null) {
+    return (
+      <div className="dvx-review-dock-branch-note" role="status">
+        Reading branch…
+      </div>
+    );
+  }
+  if (diff.unavailableReason !== undefined) {
+    return (
+      <div className="dvx-review-dock-branch-note" role="status">
+        Branch changes are unavailable for this session.
+      </div>
+    );
+  }
+  return (
+    <>
+      <div className="dvx-review-dock-branch-head">
+        <span className="dvx-review-dock-branch-name">
+          {diff.branch} vs {diff.baseBranch}
+        </span>
+        <span className="dvx-review-dock-stats">
+          <span className="dvx-changes-add">+{diff.additions}</span>
+          <span aria-hidden="true">/</span>
+          <span className="dvx-changes-del">−{diff.deletions}</span>
+        </span>
+        <span className="dvx-review-dock-branch-commits">
+          {diff.commitCount} {diff.commitCount === 1 ? "commit" : "commits"}
+        </span>
+      </div>
+      {diff.files.length === 0 ? (
+        <div className="dvx-review-dock-branch-note">
+          No files differ from the base branch.
+        </div>
+      ) : (
+        <ul className="dvx-review-dock-files">
+          {diff.files.map((file) => (
+            <li key={file.path} className="dvx-review-dock-row">
+              <span className="dvx-review-dock-path" title={file.path}>
+                {file.path}
+              </span>
+              <span className="dvx-review-dock-stats">
+                <span className="dvx-changes-add">+{file.additions}</span>
+                <span aria-hidden="true">/</span>
+                <span className="dvx-changes-del">−{file.deletions}</span>
+              </span>
+              <button
+                type="button"
+                className="dvx-review-dock-file-action"
+                title={`Open ${file.path}`}
+                onClick={() => onOpenFile(file.path)}
+              >
+                Open
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }

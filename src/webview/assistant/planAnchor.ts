@@ -86,8 +86,9 @@ interface PlanLineage {
  * Later TodoWrites update the current lineage in place. Across user
  * anchors, overlap continues an unfinished lineage; a completed
  * lineage or a disjoint list starts a new plan and replaces the old
- * card entirely. A plan with no preceding user message has no anchor
- * position and is skipped (fail quiet).
+ * card entirely. Once every step is done the card is omitted, so
+ * history does not keep a finished plan. A plan with no preceding
+ * user message has no anchor position and is skipped (fail quiet).
  */
 export function selectPlanAnchors(
   transcript: readonly SessionTranscriptItem[],
@@ -144,6 +145,10 @@ export function selectPlanAnchors(
   const completedCount = steps.filter(
     (step) => step.status === 'completed',
   ).length;
+  const allCompleted = completedCount === steps.length;
+  if (allCompleted) {
+    return anchors;
+  }
   anchors.set(current.anchorUserItemId, {
     anchorToolUseId: current.anchorToolUseId,
     latestTurnId: current.latestTurnId,
@@ -151,7 +156,7 @@ export function selectPlanAnchors(
     steps,
     completedCount,
     totalCount: steps.length,
-    allCompleted: completedCount === steps.length,
+    allCompleted,
   });
   return anchors;
 }

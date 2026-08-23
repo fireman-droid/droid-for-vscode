@@ -176,8 +176,29 @@ type SupportedSettingsUpdate = Pick<
   | 'modelId'
   | 'reasoningEffort'
   | 'autonomyLevel'
+  | 'specModeModelId'
+  | 'specModeReasoningEffort'
   | 'missionSettings'
 >;
+
+/**
+ * Overlay shape for a confirmed update: a spec override is reset by
+ * writing null, but the snapshot reports an unset field as absent.
+ */
+function toSettingsOverlay(
+  update: SupportedSettingsUpdate,
+): Partial<SessionSettings> {
+  const { specModeModelId, specModeReasoningEffort, ...rest } = update;
+  return {
+    ...rest,
+    ...(specModeModelId === undefined
+      ? {}
+      : { specModeModelId: specModeModelId ?? undefined }),
+    ...(specModeReasoningEffort === undefined
+      ? {}
+      : { specModeReasoningEffort: specModeReasoningEffort ?? undefined }),
+  };
+}
 
 /** Adapts a retained daemon handle without creating or resuming another one. */
 export function adaptConnectedDaemonSession(
@@ -210,7 +231,7 @@ function adaptDaemonSession(
   // The daemon confirms `updateSettings` before the `settings_updated`
   // notification refreshes the handle's snapshot, so successful updates
   // are overlaid locally until the snapshot reports the same value.
-  let pendingSettings: SupportedSettingsUpdate = {};
+  let pendingSettings: Partial<SessionSettings> = {};
 
   /**
    * Replacement operations (rewind/compact/fork) leave the daemon-side
@@ -265,7 +286,7 @@ function adaptDaemonSession(
       const snapshot = session.settings;
       for (const key of Object.keys(
         pendingSettings,
-      ) as (keyof SupportedSettingsUpdate)[]) {
+      ) as (keyof SessionSettings)[]) {
         if (snapshot[key] === pendingSettings[key]) {
           delete pendingSettings[key];
         }
@@ -303,6 +324,14 @@ function adaptDaemonSession(
         ...(params.autonomyLevel === undefined
           ? {}
           : { autonomyLevel: params.autonomyLevel }),
+        // null is a real value here (reset to the session model /
+        // model default), so only `undefined` means "not updating".
+        ...(params.specModeModelId === undefined
+          ? {}
+          : { specModeModelId: params.specModeModelId }),
+        ...(params.specModeReasoningEffort === undefined
+          ? {}
+          : { specModeReasoningEffort: params.specModeReasoningEffort }),
         ...(params.missionSettings === undefined
           ? {}
           : { missionSettings: params.missionSettings }),
@@ -311,7 +340,10 @@ function adaptDaemonSession(
         session.id,
         update,
       );
-      pendingSettings = { ...pendingSettings, ...update };
+      pendingSettings = {
+        ...pendingSettings,
+        ...toSettingsOverlay(update),
+      };
       return result;
     },
     async getContextStats() {
@@ -349,6 +381,25 @@ function adaptDaemonSession(
     },
     async getRewindInfo(params) {
       return droid.sessions.getRewindInfo(session.id, params.messageId);
+    },
+    async getGitDiff() {
+      // statsOnly keeps the full diff text off the wire; DroidVisX
+      // opens native diffs per file instead of rendering patch text.
+      const result = await droid.git.getDiff({
+        sessionId: session.id,
+        statsOnly: true,
+      });
+      if (!result.success) {
+        throw new Error(result.unavailableReason);
+      }
+      return {
+        branch: result.data.branch,
+        baseBranch: result.data.baseBranch,
+        files: result.data.files,
+        totalAdditions: result.data.totalAdditions,
+        totalDeletions: result.data.totalDeletions,
+        commitCount: result.data.commits.length,
+      };
     },
     async compact(params) {
       const result = await session.compact(params?.customInstructions);

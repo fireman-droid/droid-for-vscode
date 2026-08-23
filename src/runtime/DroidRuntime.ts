@@ -98,6 +98,8 @@ export type RuntimeContextWindow =
       readonly used: number;
       readonly remaining: number;
       readonly limit: number;
+      /** A same-session high-water drop confirmed automatic compaction. */
+      readonly compactionDetected?: true;
     }
   | {
       readonly availability: 'unavailable';
@@ -308,12 +310,51 @@ export interface RuntimeRewindResult {
   readonly sessionId: string;
 }
 
-/** How a rewind would affect workspace files, as counts only. */
+/** A file a rewind cannot restore, with the backend's reason. */
+export interface RuntimeRewindEvictedFile {
+  readonly path: string;
+  readonly reason: string;
+}
+
+/** How a rewind would affect workspace files. */
 export interface RuntimeRewindInfo {
   /** Files Droid changed after the anchor that a rewind can restore. */
   readonly restorableCount: number;
   /** Files Droid created after the anchor that a rewind can delete. */
   readonly createdCount: number;
+  /**
+   * Workspace-relative paths behind the counts. Shorter than the
+   * counts when the backend names a file outside the workspace or
+   * the display cap truncates the list.
+   */
+  readonly restorablePaths: readonly string[];
+  readonly createdPaths: readonly string[];
+  /**
+   * Files Droid changed after the anchor but can no longer restore,
+   * so a rewind leaves them at their current contents.
+   */
+  readonly evictedFiles: readonly RuntimeRewindEvictedFile[];
+}
+
+/** One file the session branch changed against its base branch. */
+export interface RuntimeGitDiffFile {
+  /** Path relative to the session working directory. */
+  readonly path: string;
+  readonly additions: number;
+  readonly deletions: number;
+}
+
+/**
+ * The session branch measured against its base branch, committed and
+ * uncommitted together. Scope is the branch, not one turn.
+ */
+export interface RuntimeGitDiff {
+  readonly branch: string;
+  readonly baseBranch: string;
+  readonly files: readonly RuntimeGitDiffFile[];
+  readonly additions: number;
+  readonly deletions: number;
+  readonly commitCount: number;
 }
 
 export interface RuntimeCompactResult {
@@ -384,6 +425,12 @@ export interface DroidRuntime {
    * workspace files. Optional: absent when the runtime cannot rewind.
    */
   getRewindInfo?(messageId: string): Promise<RuntimeRewindInfo>;
+  /**
+   * Reads the session branch's diff against its base branch. Optional:
+   * absent when the session backend exposes no git RPC (process mode).
+   * Rejects when the backend cannot read the repository.
+   */
+  readGitDiff?(): Promise<RuntimeGitDiff>;
   /**
    * Compacts the active session's context: Droid summarizes older
    * messages into a continuation session that this runtime then

@@ -39,6 +39,32 @@ const connectedState: AssistantWebviewState = {
 };
 
 describe('Droid external-store adapter', () => {
+  it('maps AskUser results to a dedicated data part', () => {
+    const messages = mapTranscriptToRuntimeMessages(
+      [
+        {
+          id: 'ask-result',
+          kind: 'ask-user-result',
+          turnId: 'turn-a',
+          status: 'answered',
+          answers: [{ topic: 'Library', answer: 'React' }],
+        },
+      ],
+      null,
+    );
+
+    expect(messages[0]?.content).toEqual([
+      {
+        type: 'data',
+        name: 'droid-ask-user-result',
+        data: {
+          status: 'answered',
+          answers: [{ topic: 'Library', answer: 'React' }],
+        },
+      },
+    ]);
+  });
+
   it('applies the shared send state and text limits', () => {
     const eligible = {
       connectionStatus: 'connected' as const,
@@ -557,6 +583,50 @@ describe('Droid external-store adapter', () => {
     expect(callIds[0]).toBe('tool-dupe');
   });
 
+  it('omits TodoWrite plan tools from the activity stream', () => {
+    const planTool = {
+      id: 'tool-plan',
+      kind: 'tool',
+      turnId: 'turn-a',
+      toolUseId: 'use-plan',
+      toolName: 'TodoWrite',
+      action: 'Updated the task plan',
+      status: 'completed',
+      progressCount: 0,
+      latestUpdateKind: null,
+      detailKind: 'plan',
+      detail: '1. [in_progress] Step',
+    } as const;
+    const mixed = mapTranscriptToRuntimeMessages(
+      [
+        { id: 'user-a', kind: 'user', text: 'do it' },
+        planTool,
+        {
+          id: 'assistant-a',
+          kind: 'assistant',
+          turnId: 'turn-a',
+          text: 'Working.',
+        },
+      ],
+      null,
+    );
+    expect(mixed).toHaveLength(2);
+    expect(mixed[1]).toMatchObject({
+      role: 'assistant',
+      content: [{ type: 'text', text: 'Working.' }],
+    });
+
+    const planOnly = mapTranscriptToRuntimeMessages(
+      [
+        { id: 'user-b', kind: 'user', text: 'next' },
+        { ...planTool, id: 'tool-plan-2', turnId: 'turn-b' },
+      ],
+      null,
+    );
+    expect(planOnly).toHaveLength(1);
+    expect(planOnly[0]).toMatchObject({ role: 'user', id: 'user-b' });
+  });
+
   it('reuses message identities for untouched transcript items', () => {
     const userItem = {
       id: 'user-a',
@@ -617,6 +687,62 @@ describe('Droid external-store adapter', () => {
     });
   });
 
+  it('settles an empty assistant part as soon as Stop is requested', () => {
+    const transcript = [
+      { id: 'user-a', kind: 'user', text: 'Start' },
+      {
+        id: 'assistant-a',
+        kind: 'assistant',
+        turnId: 'turn-a',
+        text: '',
+      },
+    ] as const;
+    const streaming = mapTranscriptToRuntimeMessages(transcript, {
+      turnId: 'turn-a',
+      status: 'streaming',
+    });
+    expect(streaming[1]?.status).toEqual({ type: 'running' });
+    expect(streaming[1]?.content[0]).toMatchObject({
+      type: 'text',
+      text: '',
+      status: { type: 'running' },
+    });
+
+    const stopping = mapTranscriptToRuntimeMessages(transcript, {
+      turnId: 'turn-a',
+      status: 'stopping',
+    });
+    expect(stopping[1]?.status).toEqual({
+      type: 'incomplete',
+      reason: 'cancelled',
+    });
+    expect(stopping[1]?.content[0]).toEqual({ type: 'text', text: '' });
+  });
+
+  it('does not preserve a stopping Thinking row as live activity', () => {
+    const messages = mapTranscriptToRuntimeMessages(
+      [
+        {
+          id: 'thinking-a',
+          kind: 'thinking',
+          turnId: 'turn-a',
+          text: 'Checking',
+          status: 'stopping',
+          truncated: false,
+        },
+      ],
+      null,
+    );
+    expect(messages[0]?.status).toEqual({
+      type: 'incomplete',
+      reason: 'cancelled',
+    });
+    expect(messages[0]?.content[0]).toMatchObject({
+      type: 'reasoning',
+      status: { type: 'incomplete', reason: 'cancelled' },
+    });
+  });
+
   it('extracts only text and refuses sends while gated', async () => {
     const onSend = vi.fn();
     const append = userAppend([
@@ -673,5 +799,19 @@ describe('Droid external-store adapter', () => {
     );
     await running.onCancel?.();
     expect(onCancel).toHaveBeenCalledTimes(1);
+
+    const stopping = createRuntimeAdapter(
+      {
+        ...connectedState,
+        turn: { turnId: 'turn-a', status: 'stopping' },
+      },
+      [],
+      { onSend, onCancel },
+    );
+    expect(stopping.isRunning).toBe(false);
+    expect(stopping.isSendDisabled).toBe(false);
+    expect(stopping.onCancel).toBeUndefined();
+    await stopping.onNew(userAppend([{ type: 'text', text: 'Next' }]));
+    expect(onSend).toHaveBeenLastCalledWith('Next');
   });
 });

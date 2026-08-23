@@ -13,6 +13,7 @@ import {
   MAX_TURN_TEXT_LENGTH,
   type AssistantDeltaMessage,
   type ChangedFileSummary,
+  type InteractionClosedMessage,
   type RuntimeDiagnosticMessage,
   type SentAttachmentSummary,
   type SessionHistoryStatus,
@@ -49,7 +50,8 @@ export type HostTranscriptProjectionMessage =
   | SubagentUpdateMessage
   | TranscriptImageMessage
   | RuntimeDiagnosticMessage
-  | TurnStateMessage;
+  | TurnStateMessage
+  | InteractionClosedMessage;
 
 const TERMINAL_TURN_STATUSES = new Set([
   'completed',
@@ -236,6 +238,36 @@ export function projectHostTranscriptMessage(
         message.code === 'assistant-output-truncated' ||
           code.length < message.code.length ||
           diagnosticMessage.length < message.message.length,
+      );
+    }
+    case 'interaction.closed': {
+      if (message.result === undefined) {
+        return state;
+      }
+      const id = stableTranscriptId(
+        'ask-user-result',
+        message.turnId,
+        message.requestId,
+      );
+      if (state.transcript.some((item) => item.id === id)) {
+        return state;
+      }
+      return appendItem(
+        state,
+        message.result.status === 'cancelled'
+          ? {
+              id,
+              kind: 'ask-user-result',
+              turnId: message.turnId,
+              status: 'cancelled',
+            }
+          : {
+              id,
+              kind: 'ask-user-result',
+              turnId: message.turnId,
+              status: 'answered',
+              answers: message.result.answers,
+            },
       );
     }
     case 'turn.state':

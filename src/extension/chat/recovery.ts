@@ -34,6 +34,13 @@ export /**
  */
 const RECOVERED_TURN_MAX_UNKNOWN_READS = 3;
 
+/**
+ * History reloads while a recovered turn is still running. Reload
+ * after this many working-state polls (~2s) so new assistant text
+ * appears without waiting for Stop (live tokens are not re-streamed).
+ */
+const RECOVERED_TURN_HISTORY_REFRESH_POLLS = 4;
+
 export const RECOVERED_HISTORY_FAILED_MESSAGE =
   'The turn finished in the background, but its result could not be ' +
   'reloaded. Open the session again from History to see it.';
@@ -77,8 +84,9 @@ export function emitEarlyRecoverySnapshot(ctl: ChatControllerInternals): void {
  * the turn is still live, projects it as a synthesized recovery
  * turn: the transcript tail shows the existing generating indicator
  * and permissions the SDK replayed during resume surface again. The
- * poll loop closes the turn once the daemon goes idle by reloading
- * the session history (full-result replacement; the basic tier does
+ * poll loop reloads history every few seconds so growing text
+ * appears before idle, then closes the turn once the daemon goes
+ * idle with a final history reload (the basic tier does
  * not re-stream tokens). Process sessions cannot report a working
  * state — the probe throws there — so process-mode recovery is
  * unchanged.
@@ -135,6 +143,7 @@ export function reconcileDaemonTurn(
         activity: createTurnActivityState(),
         recovery: true,
       };
+      void ctl.turnSnapshots?.capture({ sessionId, turnId }, 'before');
       ctl.recordHost({
         level: 'info',
         name: 'host.reload.turn-recovered',
@@ -164,7 +173,8 @@ export function reconcileDaemonTurn(
 
 /**
  * Watches a recovered daemon-side turn until the daemon reports the
- * session idle, then swaps the placeholder for the persisted result.
+ * session idle, periodically reloading history so growing text
+ * appears, then swaps the placeholder for the persisted result.
  * Repeated `unknown` reads fail the turn (fail closed: the daemon
  * lost track of the session, so the result may never arrive).
  */
@@ -178,6 +188,7 @@ export async function pollRecoveredTurn(
     turnId: string,
   ): Promise<void> {
     let unknownReads = 0;
+    let pollsSinceHistoryRefresh = 0;
     while (true) {
       await delay(RECOVERED_TURN_POLL_MS);
       if (
@@ -228,7 +239,76 @@ export async function pollRecoveredTurn(
         );
         return;
       }
+      pollsSinceHistoryRefresh += 1;
+      if (pollsSinceHistoryRefresh >= RECOVERED_TURN_HISTORY_REFRESH_POLLS) {
+        pollsSinceHistoryRefresh = 0;
+        await refreshRecoveredTurnTranscript(
+          ctl,
+          runtime,
+          runtimeGeneration,
+          turnGeneration,
+          sessionId,
+          cwd,
+          turnId,
+        );
+      }
     }
+}
+
+/**
+ * Pulls persisted history into the live recovered transcript so the
+ * webview shows growing results while the daemon is still running.
+ */
+async function refreshRecoveredTurnTranscript(
+  ctl: ChatControllerInternals,
+  runtime: DroidRuntime,
+  runtimeGeneration: number,
+  turnGeneration: number,
+  sessionId: string,
+  cwd: string,
+  turnId: string,
+): Promise<void> {
+  const previous = ctl.transcript.transcript;
+  const loaded = await loadHistoryTimed(ctl, cwd, sessionId);
+  if (
+    !isCurrentTurn(ctl, 
+      runtime,
+      runtimeGeneration,
+      turnGeneration,
+      sessionId,
+      turnId,
+    ) ||
+    loaded?.status !== 'available'
+  ) {
+    return;
+  }
+  const next = reconcileSessionHistory(loaded.state, ctl.transcript);
+  if (!recoveredTranscriptAdvanced(previous, next.transcript)) {
+    return;
+  }
+  ctl.transcript = next;
+  ctl.emitSnapshot();
+}
+
+function recoveredTranscriptAdvanced(
+  previous: readonly { readonly id: string; readonly kind: string; readonly text?: string }[],
+  next: readonly { readonly id: string; readonly kind: string; readonly text?: string }[],
+): boolean {
+  if (next.length !== previous.length) {
+    return true;
+  }
+  const prevLast = previous.at(-1);
+  const nextLast = next.at(-1);
+  if (prevLast?.id !== nextLast?.id) {
+    return true;
+  }
+  if (
+    prevLast?.kind === 'assistant' &&
+    nextLast?.kind === 'assistant'
+  ) {
+    return (nextLast.text?.length ?? 0) > (prevLast.text?.length ?? 0);
+  }
+  return false;
 }
 
 /**

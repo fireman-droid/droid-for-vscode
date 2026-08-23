@@ -3,7 +3,6 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
-  orderMessagesByParentChain,
   type ConnectedDroid,
   type SessionMessage,
 } from '@factory/droid-sdk';
@@ -41,7 +40,7 @@ import type {
  * with `cursor` = the id of the last message of the previous page)
  * instead of spawning a droid CLI process per load (~5s fixed tax).
  * Daemon versions may return pages newest-first or oldest-first, so
- * the public SDK parent-chain helper normalizes every bounded window
+ * fetched messages are normalized by their persisted creation time
  * before projection. The spawn-based loader stays as the fallback
  * for process mode and daemon failures.
  *
@@ -210,8 +209,10 @@ export function createDaemonFirstHistoryLoader(
  * Pages daemon messages and keeps a chronological rolling window of
  * the newest raw messages, mirroring the projector's own budget.
  * Ordering each bounded window handles both observed newest-first
- * daemon reads and older oldest-first behavior without guessing from
- * timestamps or blindly reversing one endpoint version.
+ * daemon reads and older oldest-first behavior. Parent-chain order is
+ * not used here: its disconnected-branch fallback appends old branch
+ * messages after the current tip, which places stale content at the
+ * transcript bottom after compaction or rewind.
  */
 async function fetchSessionMessages(
   droid: ConnectedDroid,
@@ -237,7 +238,7 @@ async function fetchSessionMessages(
       window.length >
       MAX_RAW_MESSAGE_WINDOW + RAW_MESSAGE_TRIM_HEADROOM
     ) {
-      const ordered = orderMessagesByParentChain(window);
+      const ordered = orderMessagesChronologically(window);
       window.splice(
         0,
         window.length,
@@ -254,11 +255,24 @@ async function fetchSessionMessages(
     cursor = nextCursor;
   }
   return {
-    messages: orderMessagesByParentChain(window).slice(
+    messages: orderMessagesChronologically(window).slice(
       -MAX_RAW_MESSAGE_WINDOW,
     ),
     pages,
   };
+}
+
+function orderMessagesChronologically(
+  messages: readonly SessionMessage[],
+): SessionMessage[] {
+  return messages
+    .map((message, fetchedIndex) => ({ message, fetchedIndex }))
+    .sort(
+      (left, right) =>
+        left.message.createdAt - right.message.createdAt ||
+        left.fetchedIndex - right.fetchedIndex,
+    )
+    .map(({ message }) => message);
 }
 
 function readMessageId(value: unknown): string | null {

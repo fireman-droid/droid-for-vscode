@@ -90,6 +90,9 @@ import {
   MAX_IMAGE_DATA_LENGTH,
   MAX_FILE_SEARCH_RESULTS,
   MAX_PENDING_ATTACHMENTS,
+  MAX_REWIND_EVICTED_REASON_LENGTH,
+  MAX_REWIND_INFO_FILES,
+  type RewindEvictedFile,
   SKILL_LOCATIONS,
   WORKSPACE_FILES_STATUSES,
   type WorkspaceFilesStatus,
@@ -186,6 +189,11 @@ import {
   isStrictRecord,
   type UnknownRecord,
 } from '../../shared/strictValidation';
+import {
+  parseAskUserResultTranscriptItem,
+  parseInteractionClosedMessage,
+  parsePlanDocumentStateMessage,
+} from './interactionHostValidation';
 import type {
   SessionTokenUsageState,
   TokenUsageBreakdown,
@@ -196,6 +204,7 @@ import {
   isSafeModelId,
   isSafeWorkspaceRelativePath,
 } from '../../shared/validateMessage';
+import { parseGitBranchDiff } from './parseGitBranchDiff';
 import {
   MAX_SESSION_IMAGE_DATA_UNITS,
   MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
@@ -319,6 +328,8 @@ export function readHostMessage(
         return parseChangesUpdate(value);
       case 'git.status':
         return parseGitStatus(value);
+      case 'git.branchDiff':
+        return parseGitBranchDiff(value);
       case 'git.commitResult':
         return parseGitCommitResult(value);
       case 'runtime.diagnostic':
@@ -332,7 +343,9 @@ export function readHostMessage(
       case 'interaction.request':
         return parseInteractionRequestMessage(value);
       case 'interaction.closed':
-        return parseInteractionClosed(value);
+        return parseInteractionClosedMessage(value);
+      case 'plan.document.state':
+        return parsePlanDocumentStateMessage(value);
       case 'session.btw':
         return parseSessionBtw(value);
       case 'queue.state':
@@ -1521,34 +1534,6 @@ function parseInteractionRequestMessage(
   };
 }
 
-function parseInteractionClosed(
-  value: UnknownRecord,
-):
-  | Extract<HostToWebviewMessage, { type: 'interaction.closed' }>
-  | undefined {
-  if (
-    !hasExactKeys(value, [
-      'type',
-      'sequence',
-      'sessionId',
-      'turnId',
-      'requestId',
-    ]) ||
-    !hasTurnIdentity(value) ||
-    !isId(value.requestId)
-  ) {
-    return undefined;
-  }
-
-  return {
-    type: 'interaction.closed',
-    sequence: value.sequence,
-    sessionId: value.sessionId,
-    turnId: value.turnId,
-    requestId: value.requestId,
-  };
-}
-
 function parseSessionBtw(
   value: UnknownRecord,
 ): SessionBtwMessage | undefined {
@@ -2208,6 +2193,9 @@ function parseRewindInfo(
       'messageId',
       'restorableCount',
       'createdCount',
+      'restorablePaths',
+      'createdPaths',
+      'evictedFiles',
     ]) ||
     !isSequence(value.sequence) ||
     !isId(value.sessionId) ||
@@ -2217,6 +2205,13 @@ function parseRewindInfo(
   ) {
     return undefined;
   }
+  const restorablePaths = parseRewindPaths(value.restorablePaths);
+  const createdPaths = parseRewindPaths(value.createdPaths);
+  const evictedFiles = parseRewindEvictedFiles(value.evictedFiles);
+  if (restorablePaths === undefined || createdPaths === undefined ||
+      evictedFiles === undefined) {
+    return undefined;
+  }
   return {
     type: 'rewind.info',
     sequence: value.sequence,
@@ -2224,7 +2219,36 @@ function parseRewindInfo(
     messageId: value.messageId,
     restorableCount: value.restorableCount,
     createdCount: value.createdCount,
+    restorablePaths,
+    createdPaths,
+    evictedFiles,
   };
+}
+
+function parseRewindPaths(value: unknown): string[] | undefined {
+  return isExactArray(value, 0, MAX_REWIND_INFO_FILES) &&
+    value.every((path) => isSafeWorkspaceRelativePath(path))
+    ? (value as string[])
+    : undefined;
+}
+
+function parseRewindEvictedFiles(
+  value: unknown,
+): RewindEvictedFile[] | undefined {
+  return isExactArray(value, 0, MAX_REWIND_INFO_FILES) &&
+    value.every(isRewindEvictedFile)
+    ? (value as RewindEvictedFile[])
+    : undefined;
+}
+
+function isRewindEvictedFile(value: unknown): value is RewindEvictedFile {
+  return (
+    isStrictRecord(value) &&
+    hasExactKeys(value, ['path', 'reason']) &&
+    isSafeWorkspaceRelativePath(value.path) &&
+    typeof value.reason === 'string' &&
+    value.reason.length <= MAX_REWIND_EVICTED_REASON_LENGTH
+  );
 }
 
 function parseAttachmentSummary(
@@ -3246,6 +3270,8 @@ function parseSessionTranscriptItem(
       return parseToolTranscriptItem(value);
     case 'changes':
       return parseChangesTranscriptItem(value);
+    case 'ask-user-result':
+      return parseAskUserResultTranscriptItem(value);
     case 'diagnostic':
       return parseDiagnosticTranscriptItem(value);
     case 'image':

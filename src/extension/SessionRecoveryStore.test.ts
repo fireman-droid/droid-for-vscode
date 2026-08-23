@@ -15,6 +15,48 @@ import {
 } from './SessionRecoveryStore';
 
 describe('SessionRecoveryStore', () => {
+  it('persists exact AskUser answer and cancellation records', async () => {
+    const persistence = memoryPersistence();
+    const store = new SessionRecoveryStore(persistence);
+    store.writeSession(
+      'session-1',
+      cache([
+        {
+          id: 'ask-result-1',
+          kind: 'ask-user-result',
+          turnId: 'turn-1',
+          status: 'answered',
+          answers: [{ topic: 'Library', answer: 'React' }],
+        },
+        {
+          id: 'ask-result-2',
+          kind: 'ask-user-result',
+          turnId: 'turn-1',
+          status: 'cancelled',
+        },
+      ]),
+    );
+    await store.flush();
+
+    const reloaded = new SessionRecoveryStore(persistence);
+    await reloaded.load();
+    expect(reloaded.readSession('session-1')?.transcript).toEqual([
+      {
+        id: 'ask-result-1',
+        kind: 'ask-user-result',
+        turnId: 'turn-1',
+        status: 'answered',
+        answers: [{ topic: 'Library', answer: 'React' }],
+      },
+      {
+        id: 'ask-result-2',
+        kind: 'ask-user-result',
+        turnId: 'turn-1',
+        status: 'cancelled',
+      },
+    ]);
+  });
+
   it('loads only exact, versioned safe projections and normalizes restart state', async () => {
     const persistence = memoryPersistence({
       version: SESSION_RECOVERY_VERSION,

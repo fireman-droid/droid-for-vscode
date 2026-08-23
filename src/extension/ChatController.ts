@@ -102,7 +102,7 @@ import { dispatchCustomModels, type CustomModelsGateway } from './chat/customMod
 import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRefresh, pushSkills, handleSkillToggle, handlePluginsRefresh, handleCommandsRefresh, recordRecentCommand, emitModelCatalog, projectModelCatalog, MODEL_CATALOG_FAILED_MESSAGE } from './chat/capabilityPanels';
 import { handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddImage, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, stageCapturedSelectionOutcome, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
 import { handleSettingUpdate, emitSettings, refreshSettingsAfterRuntimeEvent, projectConfirmedSettings, SETTINGS_READ_FAILED_MESSAGE } from './chat/settings';
-import { handleFileOpenDiff, handleFilePreview, handleInlineHtmlPreview, handleTerminalOpenMirror, handleGitRequestStatus, handleGitCommit, handleWorkspaceOpenPath, handleWorkspaceSearchFiles, handleWorkspaceReadImage } from './chat/workspaceActions';
+import { handleFileOpenDiff, handleFilePreview, handleInlineHtmlPreview, handleTerminalOpenMirror, handleGitRequestStatus, handleGitRequestBranchDiff, handleGitCommit, handleWorkspaceOpenPath, handleWorkspaceSearchFiles, handleWorkspaceReadImage } from './chat/workspaceActions';
 import { handleRewindInfo, handleEditResend, handleEditStageBegin, handleEditStageCancel } from './chat/editResend';
 import { stampRunningFlags, setSessionRunning, ensureBackgroundRunningPoll, seedBackgroundRunning } from './chat/sessionRunning';
 import { settleTurnSubagents, clearZombieSubagentWatch, armReplayedSubagentWatch } from './chat/subagentWatch';
@@ -114,9 +114,14 @@ import { handleSessionNew, handleWorktreeCreateSession, handleSessionRename, han
 import { handleReady, startReplacement, replaceRuntime, loadHistoryTimed, resetSessionMetadata, closeAllRuntimesForDispose, queueWorkspaceTransition, isCurrentRuntime, ensureActiveRuntimeWorkspaceCurrent, isTargetWorkspaceCurrent, emitWorkspaceUnavailable, isSameWorkspaceContext, WORKSPACE_CHANGED_MESSAGE } from './chat/runtimeLifecycle';
 import { handleSend, handleStop, handleRetry, handleSessionCompact, projectTranscript } from './chat/turnFlow';
 import { handleMissionCommand, handleMissionStart } from './chat/mission/controller';
+import { handlePermissionResponse, handlePlanDocumentOpen } from './chat/interactionResponses';
 import type { MissionGateway } from './chat/mission/MissionGateway';
 import type { MissionSnapshotReducer } from './chat/mission/MissionSnapshotReducer';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
+import {
+  createUnavailablePlanDocumentGateway,
+  type PlanDocumentGateway,
+} from './planDocumentGateway';
 import { clearPrompts, dropDispatchedPrompt, emptyQueuedPromptsState, enqueuePrompt, evaluateQueueDispatch, markDispatchBlocked, pauseAfterTerminal, promotePrompt, removePrompt, resumeQueue, updatePromptText, type QueuedPromptsState } from './queuedPromptsState';
 import type { SessionQueueState } from '../shared/queueProtocol';
 import {
@@ -139,6 +144,7 @@ import {
   createUnavailableChangeStatsReader,
   type ChangeStatsReader,
 } from './changeStats';
+import type { TurnSnapshotStore } from './turnSnapshots';
 import { base64ByteLength } from '../shared/transcriptLimits';
 import {
   EMPTY_SESSION_TOKEN_USAGE,
@@ -436,6 +442,9 @@ export class ChatController {
     readonly daemonPlugins?: () => Promise<DaemonPluginCatalog>,
     btwSidecarFactory?: BtwSidecarFactory,
     readonly missionGateway?: MissionGateway,
+    readonly turnSnapshots?: TurnSnapshotStore,
+    readonly planDocuments: PlanDocumentGateway =
+      createUnavailablePlanDocumentGateway(),
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
@@ -467,6 +476,9 @@ export class ChatController {
             requestId: request.requestId,
           },
         });
+        if (request.kind === 'permission') {
+          this.planDocuments.track(sessionId, turnId, request);
+        }
         this.emit({
           type: 'interaction.request',
           sessionId,
@@ -474,7 +486,8 @@ export class ChatController {
           request,
         });
       },
-      ({ sessionId, turnId, requestId }) => {
+      ({ sessionId, turnId, requestId, result }) => {
+        this.planDocuments.settle(requestId);
         const openedAt = this.interactionOpenedAt.get(requestId);
         this.interactionOpenedAt.delete(requestId);
         this.recordHost({
@@ -496,6 +509,7 @@ export class ChatController {
           sessionId,
           turnId,
           requestId,
+          ...(result === undefined ? {} : { result }),
         });
       },
     );
@@ -578,29 +592,16 @@ export class ChatController {
         handleRetry(this, message.sessionId);
         return;
       case 'permission.respond':
-        if (!ensureActiveRuntimeWorkspaceCurrent(this)) {
-          return;
-        }
-        if (
-          this.interactions.respondPermission(message) &&
-          message.selectedOption.startsWith('proceed_new_session') &&
-          message.sessionId === this.sessionId &&
-          this.turn?.turnId === message.turnId
-        ) {
-          // A ProceedNewSession* approval only exists on ExitSpecMode
-          // requests; remember it so a missing handoff signal degrades
-          // to a visible warning instead of silence.
-          this.specHandoff = {
-            turnId: message.turnId,
-            status: 'expected',
-          };
-        }
+        handlePermissionResponse(this, message);
         return;
       case 'ask-user.respond':
         if (!ensureActiveRuntimeWorkspaceCurrent(this)) {
           return;
         }
         this.interactions.respondAskUser(message);
+        return;
+      case 'plan.document.open':
+        handlePlanDocumentOpen(this, message);
         return;
       case 'sessions.refresh':
         handleRefresh(this);
@@ -806,8 +807,8 @@ export class ChatController {
         handleSettingUpdate(this, message);
         return;
       case 'git.requestStatus':
-        handleGitRequestStatus(this, message.sessionId, message.turnId);
-        return;
+        handleGitRequestStatus(this, message.sessionId, message.turnId); return;
+      case 'git.requestBranchDiff': handleGitRequestBranchDiff(this, message.sessionId); return;
       case 'git.commit':
         handleGitCommit(this, message.sessionId, message.turnId, message.paths, message.message);
         return;
@@ -887,6 +888,8 @@ export class ChatController {
     this.mcpAuthServerName = null;
     clearZombieSubagentWatch(this); clearTurnWatchdog(this);
     this.fileDiff.dispose?.(); this.changeStats.dispose?.();
+    this.turnSnapshots?.dispose();
+    this.planDocuments.dispose();
     this.disposed = true;
     this.runtimeGeneration += 1;
     this.turnGeneration += 1;

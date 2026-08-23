@@ -4,6 +4,216 @@ All notable changes to DroidVisX are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.89] - 2026-08-23
+
+### Removed
+
+- **Plan View full/Collapse controls** — the two states did not create a meaningful size difference inside the fixed footer. Non-editable Plans now use one bounded Markdown preview with internal scrolling and permanently accessible approval controls.
+
+## [0.7.88] - 2026-08-23
+
+### Fixed
+
+- **Scrollable Plan previews always expose their top-right expansion control** — visibility now follows the rendered preview's actual `scrollHeight` instead of relying only on a text-length/line-count estimate, and updates when the dock resizes.
+
+## [0.7.87] - 2026-08-23
+
+### Fixed
+
+- **Expanded Plan previews remain readable and actionable** — View full/Collapse now sits in the card's top-right, and expanded Markdown scrolls inside the bounded preview instead of overflowing through the approval controls.
+
+## [0.7.86] - 2026-08-23
+
+### Fixed
+
+- **AskUser actions have a visible bottom inset again** — the footer dock now overrides the legacy fixed 44px action-row height, preserving 12px between Cancel/Submit and the card border.
+
+## [0.7.85] - 2026-08-23
+
+### Fixed
+
+- **The Composer remains fixed while the transcript or AskUser questionnaire scrolls** — Thread is now a two-row layout with the transcript as the only scroll container and the interaction/Composer footer as a separate fixed row. Footer resizing still updates bottom-follow behavior without putting the footer back inside transcript scrolling.
+
+## [0.7.84] - 2026-08-23
+
+### Fixed
+
+- **Tall AskUser cards no longer clip Cancel and Submit** — the dock now participates in a bounded flex layout, only the question list scrolls, and the heading and action row remain fully visible.
+
+## [0.7.83] - 2026-08-23
+
+### Changed
+
+- **Pending AskUser and ExitSpecMode Plan requests now sit directly above the Composer** — only the authoritative queue head is shown there, while ordinary permission requests remain in transcript flow. AskUser keeps its existing response mechanics with clearer selected, hover, focus, and bounded-scroll states.
+- **Plan review now uses an editable Cursor Markdown document** — the bounded card preview follows valid editor changes, repeated opens focus the same draft, and approving an edited default Plan sends the SDK's existing `proceed_edit` response. Oversized drafts block approval without blocking rejection, and Plan UI disappears after settlement.
+- **Answered and cancelled AskUser requests now remain as compact transcript records** — live settlement, recovery checkpoints, public SDK history, Session Viewer rendering, and Markdown export share the same bounded result projection without retaining settled Plan cards.
+
+## [0.7.82] - 2026-08-23
+
+### Changed
+
+- **Running Subagent cards now explain the work instead of exposing raw tool names** — the existing 2.5-second official session-history sampler projects the latest observed activity plus three preceding actions into bounded human-readable descriptions with safe workspace-relative targets. Child session IDs, raw commands, tool inputs, outputs, and model reasoning remain Host-only; unavailable tool counts are no longer rendered as `Tools —`.
+
+## [0.7.81] - 2026-08-23
+
+### Fixed
+
+- **Boxed formulas retain their full rectangular border** — the transcript's aggressive prose wrapping no longer leaks into KaTeX's intrinsic-width calculation. Expressions such as `\boxed{21\text{颗}}` keep their horizontal extent instead of collapsing the box to a single vertical line, while oversized display math still scrolls inside the reading column.
+
+## [0.7.80] - 2026-08-23
+
+### Fixed
+
+- **AskUser single-choice controls no longer show a square around the selected circle** — the native radio remains focusable and screen-reader accessible but no longer paints its browser chrome. A controlled circular indicator now owns the selected dot, hover border, and circular keyboard focus ring; multi-select checkboxes are unchanged.
+
+## [0.7.79] - 2026-08-23
+
+### Fixed
+
+- **Assistant formulas render instead of showing raw LaTeX** — the shared Markdown renderer now parses inline and display math with KaTeX. Standard `$…$` / `$$…$$` syntax and model-emitted `\(...\)` / `\[…\]` delimiters work in live messages, restored history, session views, and side-chat answers; oversized display equations scroll within the reading column.
+
+## [0.7.78] - 2026-08-23
+
+### Fixed
+
+- **Reload no longer puts an old branch message at the transcript bottom** — daemon history is normalized by persisted creation time instead of the SDK helper that appends messages outside the selected parent chain after its newest tip. Compaction and rewind branches now remain at their historical position, while the actual latest message stays last.
+- **Automatic compaction can lower Context usage within the same session** — the confirmed high-water mark still ignores tiny title and metadata calls, but a substantial provider call after a near-full window now resets the floor and records automatic-compaction evidence. The Context panel confirms that evidence, and at 100% explains that the meter is the latest completed call and automatic compaction is checked when the next model call starts.
+
+## [0.7.77] - 2026-08-23
+
+### Changed
+
+- **Question ticks are evenly spaced** — the bounded global navigator now distributes its visible question ticks uniformly from top to bottom instead of encoding transcript-height proportions. The current question is the single longer accent tick; the separate progress marker is removed. Hover previews and exact question jumps are unchanged.
+
+### Fixed
+
+- **Stopping before the first assistant output no longer leaves a live response behind or blocks the next send** — `stopping` still routes the next prompt through the queue, but it is no longer exposed to assistant-ui as an actively generating run. The pending response disappears immediately, empty assistant parts and Thinking rows settle as cancelled, and Enter or the send arrow remains usable while host interruption finishes.
+
+## [0.7.76] - 2026-08-23
+
+### Changed
+
+- **Pinned questions use the browser's native sticky hand-off again** — the virtualizer now mounts one user-led turn per row, so each real user card sticks within its own question-and-answer block and the next turn pushes it out continuously. The detached duplicate, hidden original, per-frame transform and estimate-sensitive push calculation are removed.
+- **The question navigator is now a global position rail** — ticks keep their position across the full loaded transcript and the current scroll indicator moves continuously instead of rebinding a local 13-question window. Long histories retain a bounded, evenly sampled set plus the current question and its neighbors, with the existing hover previews.
+
+### Fixed
+
+- **Long question jumps no longer repeatedly retarget a full-distance smooth animation** — navigation makes one immediate approach near the measured target, then delegates the short exact landing to TanStack Virtual's reconciled `scrollToIndex`. This removes the custom 1,200 ms flight and twelve-frame seek loop that surged as estimated row heights settled.
+
+## [0.7.75] - 2026-08-23
+
+### Fixed
+
+- **Reloading a long session could append an old checkpoint answer after the newest daemon messages** — a 2,000-item daemon projection is marked `partial` because it drops the oldest head while preserving the current tail. Recovery treated every partial history as if its tail might also be missing, so it could append an unmatched local checkpoint tail after newer messages. Startup reconciliation now treats a bounded/truncated daemon projection as authoritative at the tail, while still allowing the explicit live-window background-refresh path to preserve a newer local tail.
+
+## [0.7.74] - 2026-08-20
+
+### Fixed
+
+- **Reopening the panel after a long background turn replayed the whole answer as a typewriter** — the transcript's text reveal was capped at 18 characters a frame. That cap only binds while the reveal is behind, and when it binds it overrides the 360 ms drain budget, so a body that arrived in one update crawled out at about a thousand characters a second: minutes of animation for a turn that ran for hours. It also made fast live streams fall seconds behind. The cap is now sized like the thinking log's, so a backlog drains within the intended 360 ms while live per-character pacing is unchanged.
+- **The pinned question stepped around during the hand-off in freshly revealed history** — the push-out measured its distance to the next question through that question's recorded offset, which is only an estimate until the row is rendered, and it moves every time an intervening row is measured for the first time. The push now uses the next question's settled position and stays at rest until it has one.
+
+## [0.7.73] - 2026-08-20
+
+### Changed
+
+- **The pinned question now hands the top slot over instead of being covered** — the pin is a clone drawn over the transcript, so the next question slid underneath it and the two swapped only once the incoming one reached the top. Real sticky positioning pushes the outgoing card out with the incoming one, and the clone now reproduces that: once the gap closes to the normal spacing between messages, the pin rides up by exactly as much as the next question advances, so the two never overlap and the swap happens with the outgoing card already gone.
+
+### Removed
+
+- **Debug instrumentation left in the shipping build** — the transcript and the question navigator posted a measurement snapshot every 250 ms, each one running `querySelectorAll` and several `getBoundingClientRect` calls, and the extension host forwarded those payloads to a `127.0.0.1:7473` ingest endpoint. All of it is gone, along with the `debugIngest` module.
+
+## [0.7.72] - 2026-08-20
+
+### Fixed
+
+- **The navigator landed on the wrong question when two were close together, and the pinned question vanished before the next one arrived** — the virtualizer was never told where the list starts inside the scroller. The reading column's padding, the history notice and the "show earlier messages" button all sit above it, so every recorded row position was short by that distance. The sticky pin therefore switched to the next question that many pixels before it reached the top, leaving a band with no pin at all, and a jump aimed that many pixels off, which picks the neighbour whenever two questions sit closer than the offset. The list now measures its own offset and reports it to the virtualizer, so recorded positions and real scroll positions agree.
+- **Long histories stuttered while scrolling** — resolving the question offsets rescanned the whole transcript once per question on every scroll frame, and the sticky-pin lookup rebuilt a full-length array of row positions per frame. Both now index the question rows once per transcript change and bisect them.
+
+## [0.7.71] - 2026-08-20
+
+### Fixed
+
+- **Scrolling still surged and stalled after 0.7.70** — the transcript replaced the virtualizer's scroll-compensation rule with a blanket "always compensate", which it only needed in order to hold still during a navigator jump. Supplying that predicate discards the library's own, which compensates a row only when it sits above the fold, distinguishes a first measurement from a re-measurement, and never compensates while the reader scrolls up. Without it every row measured on the way — including rows below the fold and rows growing mid-stream — shoved the scroll position by its estimate-to-actual delta, on top of the reader's own scrolling. The override now applies only while a jump is in flight and is cleared the moment it lands.
+
+## [0.7.70] - 2026-08-20
+
+### Fixed
+
+- **Scrolling a long transcript was uneven and left large empty bands** — the virtualizer measures each row wrapper with `getBoundingClientRect`, which excludes margins, but the message inside carries the inter-message margin and nothing contained it. Every row was recorded shorter than the space it occupies, so the scroll model drifted a full margin per mounted row against the real layout: rows sat lower than the virtualizer believed, the spacer below the window came up short, and each window shift snapped the content by the accumulated error. The row wrapper is now `display: flow-root`, so a measured row is exactly the space it takes.
+
+## [0.7.69] - 2026-08-20
+
+### Fixed
+
+- **Jumping to a question from the navigator is smooth again** — virtualization had replaced the old animated `scrollTo` with an instant write plus correction passes. The jump now glides natively to the target and only then runs the exact alignment pass; the target is re-read every frame so rows measured in flight retarget the animation instead of producing a jump at the end. `prefers-reduced-motion` keeps the instant jump.
+- **Landing on a question now lands it pinned** — the sticky clone required scrolling *past* the question's top edge, so a jump, which lands exactly on that edge, arrived unpinned until you nudged the wheel. The clone now appears the moment a question's top edge reaches the viewport top, matching CSS sticky.
+- **The sticky pin could blank out** — the pre-virtualization sticky coordinator still measured virtualized rows and the pin clone itself, and marked the clone `data-covered` (hidden) whenever an overscanned question sat above the viewport. It now leaves the virtualized list alone.
+
+## [0.7.68] - 2026-08-20
+
+### Changed
+
+- **Session viewer transcripts are virtualized too** — the read-only worker/subagent panel now mounts only turns near the viewport, using the same TanStack + `Unstable_MessageById` list as the main chat. Stick-to-bottom while following is unchanged.
+
+## [0.7.67] - 2026-08-20
+
+### Changed
+
+- **Long transcripts now virtualize the mounted DOM** — the chat only mounts turns near the viewport (plus the sticky question, its successor, and the live last turn), using assistant-ui `Unstable_MessageById` and TanStack Virtual. The 60/+120 “Show earlier” data window is unchanged; Ctrl+F will not find text that is not mounted.
+
+## [0.7.66] - 2026-08-19
+
+### Fixed
+
+- **Review/restore dock's first open had no animation** — a body that had never been opened before mounted already at its open size in the same paint, so the browser had no earlier frame to transition from; the very first expand is now deferred one animation frame like every later one. Closing was never affected.
+- **Restore dock's disclosure button only responded to its small chevron icon** — the blank space between the checkbox label and the chevron did nothing. The button now fills that space so the whole right side of the row expands the file list.
+
+## [0.7.65] - 2026-08-19
+
+### Changed
+
+- **Bottom Review dock and the edit card's restore dock now animate open/close** — both used to hard-mount/unmount their file list on click. They now expand and collapse with the same smooth grid-height transition as the Plan line, and the list only ever mounts once a reader opens it (a turn no one expands never pays for the row markup).
+
+## [0.7.64] - 2026-08-19
+
+### Fixed
+
+- **Recovered turns show growing answers without Stop** — after a reload, a daemon-side turn sat on "Droid is working…" until Stop forced a history reload. The host now reloads session history every ~2s while that recovered turn is still running (live tokens are not re-streamed on the basic recovery path).
+- **Switching Cursor tabs no longer replays a live reply** — showing the sidebar again used to send `webview.ready`, which dumped a full transcript snapshot and remounted the in-flight assistant message (smooth-text replayed from the start). Re-show now only refreshes the theme; queued deltas keep the existing message.
+- **Context meter bar matches the last-call fill** — category counts (session totals, including multi-million cache reads) no longer paint the bar. The bar is a single last-call fill; the legend stays cumulative and says so.
+
+## [0.7.63] - 2026-08-19
+
+### Changed
+
+- **Edit card's file-restore option moved to its own card below the edit card** — the always-expanded "Restore N files" checkbox, file list, and evicted-files note no longer sit inside the edit card's own border. They now render as an independent collapsed dock underneath it (same "own card" treatment as the bottom Review dock and the Plan line), reusing the Review dock's toggle/body/row styling and expanding in place instead of a floating popover (an earlier flyout attempt clipped file names to the width of its own trigger and could overlap the transcript).
+
+### Fixed
+
+- **Plan cards no longer pile up in history** — TodoWrite snapshots are no longer rendered as activity-stream cards (the session keeps a single Plan line under the creating message), and a fully completed plan is omitted so leftover cards disappear after the task finishes.
+
+## [0.7.62] - 2026-08-19
+
+### Fixed
+
+- **Spec drafting overrides now actually reach the daemon** — the daemon session adapter built its `updateSettings` payload from five fields and silently dropped `specModeModelId`/`specModeReasoningEffort`, so in daemon mode (the default) every drafting-model pick was discarded and reopening the popover showed the default again. Both fields are forwarded now, including `null` as an explicit reset.
+- Model popover's "Spec drafting" row no longer wraps in the narrow sidebar.
+- ReviewDock header no longer pushes Commit and Review onto a second line when the Branch toggle is present.
+
+## [0.7.61] - 2026-08-19
+
+### Changed
+
+- **Spec drafting model override redesigned** — the Model popover's "Spec drafting" entry is now always visible (previously it only appeared once a session was already in Spec mode) and opens a dedicated sub-view instead of an ambiguous two-way scope switch. "Same as session" and the model list now share one checkmark, so inherited and overridden states can no longer look identical. When Spec mode has an active drafting-model override, the Composer's Model trigger shows that model with a quiet "spec" suffix instead of always showing the session model.
+
+## [0.7.60] - 2026-08-19
+
+### Fixed
+
+- Context meter no longer drops to 0% on auxiliary last-call reports; fractional daemon estimates round instead of going unavailable.
+- Changes ledger settles from per-turn git tree snapshots (including failed turns and Bash/delete/create), and Reload restores counts plus Before-turn diffs.
+
 ## [0.7.59] - 2026-08-17
 
 ### Added

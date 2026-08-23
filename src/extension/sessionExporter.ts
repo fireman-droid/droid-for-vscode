@@ -134,6 +134,17 @@ export function renderSessionMarkdown(
         lines.push('', `- *Changed files:* ${files}`);
         break;
       }
+      case 'ask-user-result':
+        ensureSection('assistant');
+        if (item.status === 'cancelled') {
+          lines.push('', '> **Question cancelled**');
+          break;
+        }
+        lines.push('', '**Your answers**');
+        for (const { topic, answer } of item.answers) {
+          lines.push(`- **${escapeMarkdownLabel(topic)}:** ${answer}`);
+        }
+        break;
       case 'image':
         ensureSection(item.origin === 'user' ? 'user' : 'assistant');
         lines.push(
@@ -152,6 +163,10 @@ export function renderSessionMarkdown(
 
   lines.push('');
   return scrubCredentials(lines.join('\n'));
+}
+
+function escapeMarkdownLabel(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll('*', '\\*');
 }
 
 /**

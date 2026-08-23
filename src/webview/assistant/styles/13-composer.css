@@ -293,6 +293,16 @@
   font-weight: 400;
 }
 
+/* "spec" suffix: shown only while an active spec-drafting override
+   makes the trigger display a different model than the session's,
+   so the override is visible outside the popover too. */
+.dvx-model-trigger .dvx-model-trigger-scope {
+  flex: none;
+  overflow: visible;
+  color: var(--dvx-subtle);
+  font-weight: 400;
+}
+
 .dvx-model-trigger .dvx-chevron-down {
   transition: transform 160ms ease;
 }

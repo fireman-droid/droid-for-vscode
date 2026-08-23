@@ -957,6 +957,53 @@ describe('hostTranscriptState', () => {
     expect(fromFirst?.transcript).toEqual([]);
     expect(truncateFromUserMessage(state, 'sdk-msg-unknown')).toBeNull();
   });
+
+  it('projects one stable AskUser answer or cancellation record', () => {
+    let state = createHostTranscriptState('complete');
+    state = project(state, {
+      type: 'interaction.closed',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      requestId: 'ask-1',
+      result: {
+        status: 'answered',
+        answers: [{ topic: 'Library', answer: 'React' }],
+      },
+    });
+    state = project(state, {
+      type: 'interaction.closed',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      requestId: 'ask-1',
+      result: {
+        status: 'answered',
+        answers: [{ topic: 'Library', answer: 'React' }],
+      },
+    });
+    state = project(state, {
+      type: 'interaction.closed',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      requestId: 'ask-2',
+      result: { status: 'cancelled' },
+    });
+
+    expect(state.transcript).toEqual([
+      {
+        id: stableTranscriptId('ask-user-result', 'turn-1', 'ask-1'),
+        kind: 'ask-user-result',
+        turnId: 'turn-1',
+        status: 'answered',
+        answers: [{ topic: 'Library', answer: 'React' }],
+      },
+      {
+        id: stableTranscriptId('ask-user-result', 'turn-1', 'ask-2'),
+        kind: 'ask-user-result',
+        turnId: 'turn-1',
+        status: 'cancelled',
+      },
+    ]);
+  });
 });
 
 function project(

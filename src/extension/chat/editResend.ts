@@ -53,6 +53,9 @@ export function handleRewindInfo(
             messageId,
             restorableCount: info.restorableCount,
             createdCount: info.createdCount,
+            restorablePaths: info.restorablePaths,
+            createdPaths: info.createdPaths,
+            evictedFiles: info.evictedFiles,
           });
         }
       },

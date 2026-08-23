@@ -8,3 +8,32 @@ if (
 ) {
   Element.prototype.scrollIntoView = () => {};
 }
+
+// The virtualized transcript observes its scroller and every mounted row
+// through ResizeObserver, which jsdom does not ship. Without a stand-in
+// the virtualizer throws on unmount and renders no rows at all. Sizes
+// still come from the estimate and initialRect, so an inert observer is
+// all the DOM tests need.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  } as unknown as typeof ResizeObserver;
+}
+
+// The pinned question is rendered twice: its row in the list plus the
+// detached sticky clone overlaying the viewport top. Queries must not
+// match both, and the list row is the copy tests mean (the clone comes
+// and goes with the scroll offset), which is the same choice the
+// `listCopies` helper in App.test.tsx already makes.
+if (typeof document !== 'undefined') {
+  const { configure } = await import('@testing-library/react');
+  configure({
+    defaultIgnore:
+      'script, style, .dvx-virtual-detached-pin, .dvx-virtual-detached-pin *',
+  });
+}
+
+// The dynamic import above needs this file to be a module.
+export {};

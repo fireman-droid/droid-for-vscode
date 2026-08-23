@@ -121,7 +121,7 @@ import {
   isStrictRecord,
   type UnknownRecord,
 } from './strictValidation';
-
+import { parsePlanDocumentOpen } from './parsePlanDocumentOpen';
 export function parseWebviewMessage(
   value: unknown,
 ): WebviewToHostMessage | undefined {
@@ -149,6 +149,7 @@ export function parseWebviewMessage(
         return parsePermissionRespond(value);
       case 'ask-user.respond':
         return parseAskUserRespond(value);
+      case 'plan.document.open': return parsePlanDocumentOpen(value);
       case 'sessions.refresh':
         return parseSessionsRefresh(value);
       case 'session.select':
@@ -185,6 +186,11 @@ export function parseWebviewMessage(
         return parsePreviewInlineHtml(value);
       case 'git.requestStatus':
         return parseGitRequestStatus(value);
+      case 'git.requestBranchDiff':
+        return hasExactKeys(value, ['type', 'sessionId']) &&
+          isId(value.sessionId)
+          ? { type: 'git.requestBranchDiff', sessionId: value.sessionId }
+          : undefined;
       case 'git.commit':
         return parseGitCommitRequest(value);
       case 'terminal.openMirror':

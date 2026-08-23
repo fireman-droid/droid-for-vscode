@@ -13,7 +13,10 @@ function activity(sequence = 1, toolUseId = 'task-1'): unknown {
     sessionId: 'session-1',
     turnId: 'turn-1',
     toolUseId,
-    action: 'Read',
+    activities: [
+      { action: 'Read workspace files', target: 'src/app.ts' },
+      { action: 'Searched workspace content', target: 'src' },
+    ],
   };
 }
 
@@ -42,7 +45,10 @@ describe('useSubagentPanelFlow', () => {
     expect(firstListener).toHaveBeenCalledOnce();
     expect(secondListener).not.toHaveBeenCalled();
     expect(result.current.activityStore.get('task-1')).toEqual({
-      action: 'Read',
+      activities: [
+        { action: 'Read workspace files', target: 'src/app.ts' },
+        { action: 'Searched workspace content', target: 'src' },
+      ],
     });
     unsubscribeFirst();
     unsubscribeSecond();

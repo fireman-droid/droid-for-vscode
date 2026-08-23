@@ -23,7 +23,7 @@
 .dvx-review-dock-head {
   display: grid;
   min-height: 32px;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   column-gap: 9px;
   padding: 3px 5px 3px 8px;
@@ -91,7 +91,7 @@
 
 .dvx-review-dock-actions > .dvx-changes-commit,
 .dvx-review-dock-actions > .dvx-commit-result {
-  grid-column: 2;
+  grid-column: 3;
 }
 
 .dvx-review-dock-actions > .dvx-commit-result {
@@ -110,7 +110,7 @@
 .dvx-shell .dvx-review-dock-review {
   display: inline-flex;
   height: 24px;
-  grid-column: 3;
+  grid-column: 4;
   align-items: center;
   justify-content: center;
   padding: 0 10px;
@@ -141,8 +141,94 @@
   outline-offset: 1px;
 }
 
+/* Mounted once the reader has opened it at least once so both
+   directions animate (same grid-rows 0fr↔1fr technique as
+   PlanLine's checklist body, 22-plan-anchor.css). */
 .dvx-review-dock-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dvx-duration-slower)
+    var(--dvx-easing-out-strong);
+}
+
+.dvx-review-dock-body[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+
+.dvx-review-dock-body-inner {
+  min-height: 0;
+  overflow: hidden;
   border-top: 1px solid var(--dvx-border);
+}
+
+/* Branch scope reuses the turn list's rows; only its header line and
+   the quiet fallback notes are new. */
+.dvx-review-dock-branch-toggle {
+  display: inline-flex;
+  height: 24px;
+  grid-column: 2;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--dvx-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    border-color var(--dvx-duration-fast) ease,
+    color var(--dvx-duration-fast) ease;
+}
+
+.dvx-review-dock-branch-toggle:hover {
+  color: var(--dvx-ink);
+  border-color: var(--dvx-border);
+}
+
+.dvx-review-dock-branch-toggle[aria-pressed='true'] {
+  border-color: var(--dvx-border-strong);
+  color: var(--dvx-ink);
+}
+
+.dvx-review-dock-branch-toggle:focus-visible {
+  outline: 1px solid var(--dvx-focus);
+  outline-offset: 1px;
+}
+
+.dvx-review-dock-branch-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px 2px;
+}
+
+.dvx-review-dock-branch-name {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--dvx-ink);
+  font-family: var(--dvx-mono);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-review-dock-branch-commits {
+  margin-left: auto;
+  color: var(--dvx-subtle);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.dvx-review-dock-branch-note {
+  padding: 8px 10px;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+}
+
+.dvx-review-dock-branch .dvx-review-dock-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .dvx-review-dock-files {
@@ -273,7 +359,8 @@
   .dvx-review-dock-toggle .dvx-activity-chevron,
   .dvx-review-dock-review,
   .dvx-review-dock-row,
-  .dvx-review-dock-file-action {
+  .dvx-review-dock-file-action,
+  .dvx-review-dock-body {
     transition: none;
   }
 }

@@ -14,7 +14,7 @@ import {
   type TurnStatus,
 } from "../../shared/bridgeMessages";
 import { MAX_QUEUED_MESSAGES } from "../../shared/queueProtocol";
-import { type AssistantWebviewState, isTurnActive } from "./store";
+import { type AssistantWebviewState } from "./store";
 
 export interface SafeRuntimeMessage {
   readonly id: string;
@@ -172,7 +172,12 @@ export function createRuntimeAdapter(
   };
   return {
     messages,
-    isRunning: isTurnActive(state.turn),
+    // `stopping` still routes the next prompt through the queue, but the
+    // cancelled run is no longer generating. Keeping assistant-ui in a
+    // running state here can reject Composer sends until host settlement.
+    isRunning:
+      state.turn?.status === "submitting" ||
+      state.turn?.status === "streaming",
     isSendDisabled: !canSendMessage(
       sendEligibility,
       undefined,
@@ -352,6 +357,12 @@ export function mapTranscriptToRuntimeMessages(
       continue;
     }
     flushPendingUserImages();
+    // Plan checklists render once, as PlanLine under the creating
+    // user message. Streaming them as tool-call rows left every
+    // TodoWrite snapshot in history as an extra card.
+    if (item.kind === "tool" && item.detailKind === "plan") {
+      continue;
+    }
     appendToGroup(item);
   }
   flushPendingUserImages();
@@ -429,7 +440,7 @@ export function mapTranscriptToRuntimeMessages(
         // Thumbs above the prompt text, matching the composer's
         // pending-attachment layout.
         content: [
-          ...descriptor.images.map(mapItemToPart),
+          ...descriptor.images.map((item) => mapItemToPart(item)),
           { type: "text", text: item.text },
         ],
         optimistic,
@@ -480,7 +491,11 @@ export function mapTranscriptToRuntimeMessages(
     const message: SafeRuntimeMessage = {
       id: descriptor.id,
       role: "assistant",
-      content: uniqueToolCallIds(descriptor.items.map(mapItemToPart)),
+      content: uniqueToolCallIds(
+        descriptor.items.map((item) =>
+          mapItemToPart(item, status.type === "running"),
+        ),
+      ),
       status,
       ...(completedAt === undefined ? {} : { completedAt }),
       replyTail,
@@ -553,13 +568,18 @@ function uniqueToolCallIds(
   });
 }
 
-function mapItemToPart(item: SessionTranscriptItem): SafeRuntimePart {
+function mapItemToPart(
+  item: SessionTranscriptItem,
+  messageRunning = false,
+): SafeRuntimePart {
   switch (item.kind) {
     case "assistant":
       return {
         type: "text",
         text: item.text,
-        status: item.text.length === 0 ? { type: "running" } : undefined,
+        ...(item.text.length === 0 && messageRunning
+          ? { status: { type: "running" as const } }
+          : {}),
       };
     case "thinking":
       return {
@@ -629,6 +649,21 @@ function mapItemToPart(item: SessionTranscriptItem): SafeRuntimePart {
           })),
         },
       };
+    case "ask-user-result":
+      return {
+        type: "data",
+        name: "droid-ask-user-result",
+        data:
+          item.status === "cancelled"
+            ? { status: "cancelled" }
+            : {
+                status: "answered",
+                answers: item.answers.map(({ topic, answer }) => ({
+                  topic,
+                  answer,
+                })),
+              },
+      };
     case "diagnostic":
       return {
         type: "data",
@@ -668,10 +703,10 @@ function mapActivityStatus(
       type: "incomplete";
       reason: "cancelled";
     } {
-  if (status === "active" || status === "stopping") {
+  if (status === "active") {
     return { type: "running" };
   }
-  if (status === "stopped") {
+  if (status === "stopping" || status === "stopped") {
     return { type: "incomplete", reason: "cancelled" };
   }
   return { type: "complete" };
@@ -688,9 +723,8 @@ function resolveAssistantStatus(
   const hasRunning = items.some(
     (item) =>
       (item.kind === "thinking" &&
-        (item.status === "active" || item.status === "stopping")) ||
-      (item.kind === "tool" &&
-        (item.status === "running" || item.status === "stopping")),
+        item.status === "active") ||
+      (item.kind === "tool" && item.status === "running"),
   );
   if (hasRunning) {
     return { type: "running" };
@@ -705,8 +739,10 @@ function resolveAssistantStatus(
   }
   const wasStopped = items.some(
     (item) =>
-      (item.kind === "tool" && item.status === "stopped") ||
-      (item.kind === "thinking" && item.status === "stopped"),
+      (item.kind === "tool" &&
+        (item.status === "stopping" || item.status === "stopped")) ||
+      (item.kind === "thinking" &&
+        (item.status === "stopping" || item.status === "stopped")),
   );
   return wasStopped
     ? { type: "incomplete", reason: "cancelled" }
@@ -719,8 +755,9 @@ function mapTurnStatus(
   switch (status) {
     case "submitting":
     case "streaming":
-    case "stopping":
       return { type: "running" };
+    case "stopping":
+      return { type: "incomplete", reason: "cancelled" };
     case "interrupted":
       return { type: "incomplete", reason: "cancelled" };
     case "failed":
