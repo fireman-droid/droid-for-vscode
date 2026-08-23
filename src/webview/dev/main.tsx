@@ -1,11 +1,11 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import {
-  BRIDGE_PROTOCOL_VERSION,
-  type HostToWebviewMessage,
-  type WebviewToHostMessage,
+import type {
+  HostToWebviewMessage,
+  ThemePreference,
+  WebviewToHostMessage,
 } from '../../shared/bridgeMessages';
-import { MISSION_BRIDGE_PROTOCOL_VERSION } from '../../shared/missionProtocol';
 import { App } from '../assistant/App';
 import {
   ModelsPage,
@@ -16,6 +16,19 @@ import {
   type CustomModelsFlowValue,
 } from '../assistant/customModelsFlow';
 import '../assistant/styles.css';
+import { type StudioScenarioId } from './scenarios';
+import { StudioControls } from './StudioControls';
+import {
+  assertStudioScenario,
+  assertStudioTheme,
+  assertStudioWidth,
+  createStudioRuntime,
+  parseStudioConfig,
+  writeStudioConfig,
+  type StudioApi,
+  type StudioConfig,
+  type StudioViewportWidth,
+} from './studioRuntime';
 import './preview.css';
 
 const provider = {
@@ -63,17 +76,8 @@ const items = [
 ] as const;
 
 const noop = (): void => {};
-const longTranscript = Array.from({ length: 90 }, (_, index) => [
-  { id: `long-user-${index}`, kind: 'user' as const, text: `Question ${index}` },
-  {
-    id: `long-assistant-${index}`,
-    kind: 'assistant' as const,
-    turnId: `long-turn-${index}`,
-    text: `Answer ${index}\n\n${'Long answer content. '.repeat(8)}`,
-  },
-]).flat();
 const flow: CustomModelsFlowValue = {
-  sessionId: 'preview-session',
+  sessionId: 'studio-session',
   customModels: { status: 'ready', items },
   discovery: { status: 'ready', items },
   providers: {
@@ -106,199 +110,93 @@ const flow: CustomModelsFlowValue = {
 };
 let previewProviders = [...flow.providers.providers];
 
-let sequence = 0;
-const emit = (message: HostToWebviewMessage): void => {
-  window.setTimeout(() => {
-    window.dispatchEvent(new MessageEvent('message', { data: message }));
-  });
-};
-
-const snapshot = (): HostToWebviewMessage => ({
-  type: 'host.snapshot',
-  sequence: sequence++,
-  sessionId: 'preview-session',
-  connection: { status: 'connected' },
-  turn: null,
-  sessions: {
-    status: 'ready',
-    items: [{
-      id: 'preview-session',
-      title: 'Webview Lab',
-      messageCount: 2,
-      modifiedTime: '2026-08-17T12:00:00.000Z',
-      active: true,
-      isFavorite: false,
-    }],
-  },
-  settings: {
-    status: 'ready',
-    value: {
-      interactionMode: 'auto',
-      modelId: 'factory/gpt-5.6',
-      reasoningEffort: 'high',
-      autonomyLevel: 'medium',
-      specModeModelId: null,
-      specModeReasoningEffort: null,
-    },
-  },
-  context: {
-    status: 'ready',
-    value: {
-      availability: 'available',
-      used: 24_000,
-      remaining: 176_000,
-      limit: 200_000,
-    },
-  },
-  modelCatalog: {
-    status: 'ready',
-    items: [{
-      id: 'factory/gpt-5.6',
-      displayName: 'GPT-5.6',
-      supportedReasoningEfforts: ['low', 'medium', 'high'],
-    }],
-  },
-  transcript: new URLSearchParams(window.location.search).has('longHistory')
-    ? longTranscript
-    : [
-        { id: 'preview-user', kind: 'user', text: 'Review the current workspace.' },
-        {
-          id: 'preview-assistant',
-          kind: 'assistant',
-          turnId: 'preview-turn',
-          text: 'The browser lab is connected to development fixtures.',
-        },
-      ],
-  historyStatus: 'complete',
-  truncated: false,
-});
-
-const missionSnapshot = (): HostToWebviewMessage => ({
-  type: 'mission.snapshot',
-  protocolVersion: MISSION_BRIDGE_PROTOCOL_VERSION,
-  sequence: sequence++,
-  scope: 'selected-chat',
-  revision: 0,
-  availability: 'attached',
-  features: [],
-  completedFeatureCount: 0,
-  controls: {
-    canPause: false,
-    canResume: false,
-    canStopCurrentFeature: false,
-  },
-  validator: {
-    scrutinyEnabled: true,
-    userTestingEnabled: true,
-  },
-  setup: {
-    currentChat: {
-      modelId: 'factory/gpt-5.6',
-      reasoningEffort: 'high',
-    },
-    catalogStatus: 'ready',
-    catalog: [{
-      id: 'factory/gpt-5.6',
-      displayName: 'GPT-5.6',
-      supportedReasoningEfforts: ['low', 'medium', 'high'],
-    }],
-    preferences: {
-      worker: {
-        mode: 'same-as-orchestrator',
-        modelId: 'factory/gpt-5.6',
-        reasoningEffort: 'high',
-      },
-      validator: {
-        mode: 'same-as-orchestrator',
-        modelId: 'factory/gpt-5.6',
-        reasoningEffort: 'high',
-      },
-      scrutinyEnabled: true,
-      userTestingEnabled: true,
-    },
-  },
-});
-
-const previewApi = {
-  getState: (): unknown => ({}),
-  setState: (_state: unknown): void => {},
-  postMessage: (message: WebviewToHostMessage): void => {
-    if (
-      message.type === 'webview.ready' &&
-      message.protocolVersion === BRIDGE_PROTOCOL_VERSION
-    ) {
-      emit(snapshot());
-      emit(missionSnapshot());
-      return;
-    }
-    if (message.type === 'providerModels.refresh') {
-      emit({
-        type: 'providerModels.state',
-        sequence: sequence++,
-        sessionId: message.sessionId,
-        providers: { status: 'ready', providers: previewProviders },
-      });
-      return;
-    }
-    if (message.type === 'providerModels.saveProvider') {
-      const previous = message.providerId === undefined
+function handlePreviewPostMessage(
+  message: WebviewToHostMessage,
+  emit: (message: HostToWebviewMessage) => void,
+): void {
+  if (message.type === 'providerModels.refresh') {
+    emit({
+      type: 'providerModels.state',
+      sequence: nextAuxiliarySequence(),
+      sessionId: message.sessionId,
+      providers: { status: 'ready', providers: previewProviders },
+    });
+    return;
+  }
+  if (message.type === 'providerModels.saveProvider') {
+    const previous =
+      message.providerId === undefined
         ? undefined
-        : previewProviders.find((candidate) => candidate.id === message.providerId);
-      const saved = {
-        id: previous?.id ?? 'preview-created-provider',
-        displayName: message.displayName,
-        protocol: message.protocol,
-        rootUrl: message.rootUrl,
-        apiBaseUrl: message.rootUrl.replace(/\/+$/u, ''),
-        hasApiKey: message.setApiKey === true || previous?.hasApiKey === true,
-        imported: false,
-        modelCount: previous?.modelCount ?? 0,
-      };
-      previewProviders = [
-        ...previewProviders.filter((candidate) => candidate.id !== saved.id),
-        saved,
-      ];
-      emit({
-        type: 'providerModels.state',
-        sequence: sequence++,
-        sessionId: message.sessionId,
-        providers: { status: 'ready', providers: previewProviders },
-      });
-      return;
-    }
-    if (message.type === 'customModels.refresh') {
-      emit({
-        type: 'customModels.state',
-        sequence: sequence++,
-        sessionId: message.sessionId,
-        customModels: flow.customModels.status === 'idle'
+        : previewProviders.find(
+            (candidate) => candidate.id === message.providerId,
+          );
+    const saved = {
+      id: previous?.id ?? 'preview-created-provider',
+      displayName: message.displayName,
+      protocol: message.protocol,
+      rootUrl: message.rootUrl,
+      apiBaseUrl: message.rootUrl.replace(/\/+$/u, ''),
+      hasApiKey: message.setApiKey === true || previous?.hasApiKey === true,
+      imported: false,
+      modelCount: previous?.modelCount ?? 0,
+    };
+    previewProviders = [
+      ...previewProviders.filter((candidate) => candidate.id !== saved.id),
+      saved,
+    ];
+    emit({
+      type: 'providerModels.state',
+      sequence: nextAuxiliarySequence(),
+      sessionId: message.sessionId,
+      providers: { status: 'ready', providers: previewProviders },
+    });
+    return;
+  }
+  if (message.type === 'customModels.refresh') {
+    emit({
+      type: 'customModels.state',
+      sequence: nextAuxiliarySequence(),
+      sessionId: message.sessionId,
+      customModels:
+        flow.customModels.status === 'idle'
           ? { status: 'ready', items: [] }
           : flow.customModels,
-      });
-      return;
-    }
-    if (message.type === 'providerModels.fetch') {
-      emit({
-        type: 'customModels.discovery',
-        sequence: sequence++,
-        sessionId: message.sessionId,
-        discovery: flow.discovery.status === 'idle'
+    });
+    return;
+  }
+  if (message.type === 'providerModels.fetch') {
+    emit({
+      type: 'customModels.discovery',
+      sequence: nextAuxiliarySequence(),
+      sessionId: message.sessionId,
+      discovery:
+        flow.discovery.status === 'idle'
           ? { status: 'ready', items: [] }
           : flow.discovery,
-      });
-    }
-  },
-};
+    });
+  }
+}
+
+let auxiliarySequence = 100_000;
+function nextAuxiliarySequence(): number {
+  auxiliarySequence += 1;
+  return auxiliarySequence;
+}
+
+const initialConfig = parseStudioConfig(window.location.search);
+const studioRuntime = createStudioRuntime(initialConfig, {
+  onPostMessage: handlePreviewPostMessage,
+});
 
 (globalThis as {
-  acquireVsCodeApi?: () => typeof previewApi;
-  __dvxApi?: typeof previewApi;
-}).acquireVsCodeApi = () => previewApi;
+  acquireVsCodeApi?: () => typeof studioRuntime;
+  __dvxApi?: typeof studioRuntime;
+}).acquireVsCodeApi = () => studioRuntime;
 
 function Preview(): React.JSX.Element {
   const path = window.location.pathname;
   if (path === '/' || path === '/app') {
-    return <App />;
+    return <Studio />;
   }
   const content = path.endsWith('/provider') ? (
     <ProviderEditor
@@ -330,6 +228,92 @@ function Preview(): React.JSX.Element {
         {content}
       </div>
     </CustomModelsContext.Provider>
+  );
+}
+
+function Studio(): React.JSX.Element {
+  const [config, setConfig] = useState(initialConfig);
+  const [appKey, setAppKey] = useState(0);
+
+  const applyConfig = useCallback(
+    (nextConfig: StudioConfig, resetState = false): void => {
+      studioRuntime.configure(nextConfig, resetState);
+      writeStudioConfig(nextConfig);
+      setConfig(nextConfig);
+      if (resetState) {
+        setAppKey((value) => value + 1);
+      }
+    },
+    [],
+  );
+  const setScenario = useCallback(
+    (scenario: StudioScenarioId): void => {
+      applyConfig({ ...studioRuntime.getConfig(), scenario }, true);
+    },
+    [applyConfig],
+  );
+  const setTheme = useCallback(
+    (theme: ThemePreference): void => {
+      applyConfig({ ...studioRuntime.getConfig(), theme });
+    },
+    [applyConfig],
+  );
+  const setWidth = useCallback(
+    (width: StudioViewportWidth): void => {
+      applyConfig({ ...studioRuntime.getConfig(), width });
+    },
+    [applyConfig],
+  );
+  const reset = useCallback((): void => {
+    applyConfig(studioRuntime.getConfig(), true);
+  }, [applyConfig]);
+
+  const studioApi = useMemo<StudioApi>(
+    () => ({
+      getState: studioRuntime.getConfig,
+      setScenario: (scenario) => {
+        assertStudioScenario(scenario);
+        setScenario(scenario);
+      },
+      setTheme: (theme) => {
+        assertStudioTheme(theme);
+        setTheme(theme);
+      },
+      setWidth: (width) => {
+        assertStudioWidth(width);
+        setWidth(width);
+      },
+      reset,
+    }),
+    [reset, setScenario, setTheme, setWidth],
+  );
+  useEffect(() => {
+    const target = globalThis as { __dvxStudio?: StudioApi };
+    target.__dvxStudio = studioApi;
+    return () => {
+      delete target.__dvxStudio;
+    };
+  }, [studioApi]);
+
+  return (
+    <main className="dvx-studio">
+      <StudioControls
+        config={config}
+        onScenarioChange={setScenario}
+        onThemeChange={setTheme}
+        onWidthChange={setWidth}
+        onReset={reset}
+      />
+      <section className="dvx-studio-stage" aria-label="Webview preview">
+        <div
+          className="dvx-studio-viewport"
+          style={{ width: `${config.width}px` }}
+          data-studio-width={config.width}
+        >
+          <App key={appKey} />
+        </div>
+      </section>
+    </main>
   );
 }
 

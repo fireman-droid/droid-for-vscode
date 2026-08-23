@@ -24,6 +24,14 @@ Session、历史记录、权限交互和恢复安全能力。Module 1 的 Sessio
 Settings、Context、隐私安全 Tool 活动、消息 Copy/Reuse、本地诊断、
 Bridge v2 和暖色 assistant-ui Webview 已形成完整源码链路。
 
+2026-08-23 新增仅开发环境使用的 Scenario Studio：现有
+`pnpm run dev:webview` 页面直接挂载生产 `App`，通过同一 Host message
+validator 与 reducer 提供 Full workflow、Conversation、Streaming、Plan、
+AskUser、Review、Subagent、Permission、Queue + attachments、Long history、
+Failure、Empty 十二种确定性状态；支持 URL、页面控制条、
+Light/Dark/Auto、320/400/480/760px 画布及 `window.__dvxStudio` 控制。
+它不接入 Droid Runtime、不改变 Bridge DTO，也不计为生产用户能力。
+
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
 当前 **v0.7.89** 已完成源码、聚焦验证、VSIX 打包并安装到 Cursor，等待用户
 Reload Window 验收。待处理的 AskUser 与 ExitSpecMode Plan 现在只把权威

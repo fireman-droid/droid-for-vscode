@@ -6,6 +6,154 @@
 
 ---
 
+## 当前执行计划：Scenario Studio → 主聊天 UI 改造（2026-08-23）
+
+状态：**Scenario Studio 已完成；主聊天 UI 改造待讨论**。本节是当前施工顺序；下方 2026-08-15 Cursor
+重构计划保留为历史需求与几何参考，不再决定本轮视觉方向。
+
+### 目标
+
+先让浏览器端稳定控制主聊天的关键 UI 状态，再在同一个生产 `App` 和
+同一套生产 CSS 上完成第一轮视觉改造。改造过程中不靠临时 DOM 注入、
+手工等待真实 Droid 触发稀有状态或维护第二套展示组件。
+
+本轮可观察结果：
+
+1. `pnpm run dev:webview` 打开的 Webview Lab 能从页面控制条或 URL
+   切换关键 Scenario、主题和窄/宽视口。
+2. Scenario 使用真实 `HostToWebviewMessage` 类型和生产 reducer，
+   Tool、Thinking、Plan、AskUser、Review、Subagent、长历史等状态能
+   稳定重现。
+3. Browser MCP 可直接导航到指定 Scenario，截图和检查真实生产组件。
+4. 后续 UI 方向与用户聊定后，再用同一工作台改造主聊天壳、消息、活动行、
+   Composer 和底部 Dock。
+
+### 当前决策
+
+- **Scenario 先行，Live Relay 延后。** 时间优先给 UI 改造。真实 Droid
+  浏览器联调仍采用已确认的后续方案：Extension Host loopback relay
+  复用 `ChatController.subscribe()` / `handleMessage()` 与现有双向严格
+  Bridge 校验；浏览器不直接引入 Droid SDK。
+- **只渲染生产组件。** Studio 外壳只负责选择状态、主题和视口，不复制
+  `App`、Thread、Composer、Interaction 或 Review 组件。
+- **UI 视觉方向暂不锁定。** Claude 暖中性方案保留为候选；具体参考、
+  层级和材质等后续与用户聊定后再实施。Cursor 窄侧栏尺寸仍属于宿主约束。
+- **保持 DroidVisX 身份。** 不复制 Claude 商标、营销页大字号、专有字体
+  或示例文案；继续使用本地 Inter、系统字体、VS Code 变量和现有功能语义。
+- **生产能力不变。** 本轮不改 Runtime、Session、权限、Bridge DTO 或
+  Droid 能力，只补开发场景和视觉呈现。
+
+### 范围
+
+#### Scenario Studio
+
+场景按“完整工作流 + 专用状态”组织：
+
+| Scenario | 必须覆盖 |
+| --- | --- |
+| `full-workflow` | 长工作过程：Thinking、Tool、Plan、Subagent、Changes、队列与 Markdown 回答 |
+| `conversation` | 普通用户消息、Markdown 回答、消息操作、Composer |
+| `streaming` | Thinking、Tool running/completed、命令详情、Pending response |
+| `plan` | Todo/Plan 进行中与完成态、Plan interaction |
+| `ask-user` | 多问题、选项、自由输入、固定操作区 |
+| `review` | Changes history、ReviewDock 收起与展开所需数据 |
+| `subagent` | 运行中 Subagent 卡、最近活动、完成态 |
+| `permission` | 多工具确认、风险说明和批准选项 |
+| `queued-attachments` | 暂停队列、队列附件和 Composer 暂存附件 |
+| `long-history` | 虚拟列表、吸顶用户卡、问题导航、Show earlier |
+| `failure` | 断线、Turn error、Tool failure、恢复/截断提示 |
+| `empty` | 已连接但还没有消息的会话 |
+
+控制面：
+
+- URL：`/app?scenario=<id>&theme=<light|dark|auto>&width=<px>`；
+- 页面控制条：Scenario、Theme、Viewport、Reset；
+- 全局只读控制 API：`window.__dvxStudio`，供 Browser MCP 选择场景和
+  读取当前配置；
+- Scenario 切换必须重置 sequence、持久化草稿和临时 UI 状态，避免前一
+  场景污染后一场景。
+
+#### 第一轮 UI 改造
+
+包含：
+
+- Header 与阅读列的共同宽度、品牌和状态层级；
+- 用户消息、Assistant 正文、Markdown 与消息操作；
+- Thinking、Tool、命令、Plan、Subagent 活动呈现；
+- Composer、Mode/Model/Context 浮层；
+- AskUser / Plan interaction Dock 与 ReviewDock；
+- Question Navigator 在 320–480px 下不覆盖正文；
+- Light、Dark、Auto 的表面、边框、文字和强调色层级。
+
+不包含：
+
+- Models / Provider 整页重做；
+- Mission Setup / Mission Control 整页重做；
+- Agent activity、Session Viewer、Canvas 的整体重做；
+- Browser Live Relay；
+- 新 Droid 能力、新 Bridge DTO 或新依赖。
+
+### 结构
+
+```mermaid
+flowchart LR
+    C[Studio controls] --> R[Scenario registry]
+    R --> P[Dev webview port]
+    P --> A[Production App]
+    A --> V[Bridge validators]
+    A --> U[Production UI]
+```
+
+- `src/webview/dev/scenarios.ts`：类型安全的 Scenario registry 和消息；
+- `src/webview/dev/studioRuntime.ts`：sequence、emit、postMessage 响应和
+  Scenario reset；
+- `src/webview/dev/StudioControls.tsx`：仅开发环境控制条；
+- `src/webview/dev/main.tsx`：装配生产 App、Studio transport 和独立页面；
+- `src/webview/dev/preview.css`：Studio 外壳，不承载生产视觉修补；
+- 对应聚焦测试验证 URL 解析、场景切换、sequence 和关键场景消息合法。
+
+新文件都需低于仓库预算；不把场景继续堆进已达 340 行的 `main.tsx`。
+
+### 执行顺序
+
+1. 拆出现有 Webview Lab transport 和基础 snapshot。
+2. 建 Scenario registry、URL 配置和 `window.__dvxStudio`。
+3. 增加控制条及 320 / 400 / 480 / 760px 画布。
+4. 补齐上表 12 个场景，先让生产 App 全部可见。
+5. 运行 Webview `tsc --noEmit`、`lint:budgets` 和触及的聚焦测试。
+6. 更新 `implementation-status.md`，记录 Scenario Studio 为开发工具，
+   不把它误记为用户产品能力。
+7. 与用户聊定 UI 方向后，以 `conversation` / `streaming` / `ask-user` /
+   `review` / `long-history` 为第一轮视觉验收面，实施主聊天 UI 改造。
+8. 再次运行同样的聚焦门禁，随后 build、VSIX package、安装；用户在真实
+   Cursor Secondary Sidebar Reload Window 后验收。
+
+### 完成标准
+
+Scenario 阶段完成：
+
+- 12 个场景可由 URL 和控制条稳定切换；
+- 320、400、480、760px 可视；
+- Light、Dark、Auto 可切换；
+- Scenario 消息均通过现有生产 Host message validator；
+- 切换后无旧场景 transcript、interaction 或 sequence 残留；
+- Browser MCP 能读取并截图指定场景。
+
+实现结果：12 个场景、URL 配置、页面控制条、四档视口和
+`window.__dvxStudio` 已落地；Webview TypeScript、文件预算及聚焦 6 项
+测试通过。按当前仓库门禁未运行浏览器 smoke。
+
+UI 阶段完成：
+
+- 上述主聊天范围使用一套统一材质与文字层级；
+- 320–480px 无正文覆盖、横向溢出或 Footer 控件裁切；
+- Tool / Thinking 从属于最终回答，AskUser / Review 保持明确可操作；
+- 不新增不受 Runtime 支持的控件或状态；
+- 触及文件测试、Webview TypeScript、预算检查通过；
+- build、package、安装完成，等待用户真实 Cursor 验收。
+
+---
+
 ## 已完成 · 待实机验收
 
 审计结论：下列条目已在对应版本落地，统一待实机过目后再标「已完成」。
