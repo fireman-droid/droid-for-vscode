@@ -107,12 +107,12 @@ export class MissionControlPanelController implements vscode.Disposable {
           requestId,
           this.catalog.filter,
         );
+        this.post({
+          type: 'missionControl.route',
+          protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+          route: 'catalog',
+        });
       }
-      this.post({
-        type: 'missionControl.route',
-        protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
-        route: 'catalog',
-      });
       this.panelEntry.panel.reveal(undefined, false);
       return;
     }

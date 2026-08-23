@@ -215,6 +215,12 @@ describe('MissionControlPanelController', () => {
         rows: [expect.objectContaining({ title: 'Catalog foundation' })],
       }),
     );
+
+    const postedAfterSettlement = [...panel.webview.posted];
+    controller.open();
+    expect(panel.revealCalls).toBe(2);
+    expect(listCatalog).toHaveBeenCalledOnce();
+    expect(panel.webview.posted).toEqual(postedAfterSettlement);
     controller.dispose();
   });
 
@@ -242,6 +248,7 @@ describe('MissionControlPanelController', () => {
       'mission-catalog-one',
     );
 
+    const postedBeforeReturn = panel.webview.posted.length;
     controller.open();
     expect(controller.routeState()).toEqual({
       route: 'catalog',
@@ -253,6 +260,12 @@ describe('MissionControlPanelController', () => {
       protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
       route: 'catalog',
     });
+    expect(
+      panel.webview.posted.slice(postedBeforeReturn).filter(
+        (message) =>
+          (message as { type?: string }).type === 'missionControl.route',
+      ),
+    ).toHaveLength(1);
     expect(listCatalog).toHaveBeenCalledTimes(2);
     controller.dispose();
   });

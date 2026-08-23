@@ -294,9 +294,15 @@ describe('MissionGateway', () => {
     'Investigate(C:\\Users\\alice\\secret.txt)',
     'Investigate(\\\\server\\share\\secret.txt)',
     'Investigate(/Users/alice/.ssh/id_rsa)',
+    '/workspace',
+    'Investigate(/workspace)',
+    'Investigate: /workspace, now',
     'Investigate</tmp>',
     'Investigate(~/secrets/key)',
     'api_key=super-secret-value',
+    "api_key='super-secret-value'",
+    'api_token="super-secret-value"',
+    'client_secret=super-secret-value',
     'OPENAI_API_KEY=super-secret-value',
   ])('rejects unsafe title presentation text %s', async (title) => {
     const { gateway } = catalogGateway([
@@ -370,24 +376,30 @@ describe('MissionGateway', () => {
   });
 
   it('preserves legitimate bounded punctuation and slash text', async () => {
-    const title = 'Investigate /mission and input/output (release 1.2)';
-    const { gateway } = catalogGateway([
-      {
-        rows: [
-          {
-            sessionId: 'legitimate-punctuation',
-            updatedAt: 1_777_000_000,
-            mission: { state: 'running', title },
-          },
-        ],
-        hasMore: false,
-      },
-    ]);
+    for (const title of [
+      'Investigate /mission and input/output (release 1.2)',
+      'Created 2026/08/24 with ratio 3/5',
+      'tokenizer=cl100k and secretariat=enabled',
+      'not_client_secret=ordinary-value',
+    ]) {
+      const { gateway } = catalogGateway([
+        {
+          rows: [
+            {
+              sessionId: 'legitimate-punctuation',
+              updatedAt: 1_777_000_000,
+              mission: { state: 'running', title },
+            },
+          ],
+          hasMore: false,
+        },
+      ]);
 
-    await expect(gateway.listCatalog()).resolves.toMatchObject({
-      status: 'ready',
-      rows: [{ title }],
-    });
+      await expect(gateway.listCatalog()).resolves.toMatchObject({
+        status: 'ready',
+        rows: [{ title }],
+      });
+    }
   });
 
   it('deduplicates by newest Mission update then daemon update and sorts deterministically', async () => {

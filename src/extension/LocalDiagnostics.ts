@@ -20,6 +20,10 @@ import type {
   RuntimeDiagnosticEvent,
   RuntimeDiagnosticSink,
 } from '../runtime/runtimeDiagnostics';
+import {
+  isCredentialKey,
+  scrubCredentialAssignments,
+} from '../shared/presentationSafety';
 
 /**
  * Full-fidelity local diagnostics (user decision, 2026-08-11): this is a
@@ -347,7 +351,9 @@ function projectAttributes(
     if (key.length === 0) {
       continue;
     }
-    if (typeof rawValue === 'string') {
+    if (isCredentialKey(rawKey)) {
+      projected[key] = '[REDACTED]';
+    } else if (typeof rawValue === 'string') {
       projected[key] = scrubCredentials(rawValue).slice(
         0,
         MAX_ATTRIBUTE_STRING_LENGTH,
@@ -456,16 +462,12 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/gu,
 ];
 
-// key: value / key=value assignments for credential-named keys.
-const ASSIGNMENT_PATTERN =
-  /((?:api[-_]?key|secret|token|passwd|password|credential|authorization|access[-_]?key)["']?\s*[:=]\s*)("?)[^\s"'`,;&]+\2/giu;
-
 export function scrubCredentials(text: string): string {
   let scrubbed = text;
   for (const pattern of TOKEN_PATTERNS) {
     scrubbed = scrubbed.replace(pattern, '[REDACTED]');
   }
-  return scrubbed.replace(ASSIGNMENT_PATTERN, '$1[REDACTED]');
+  return scrubCredentialAssignments(scrubbed);
 }
 
 function sanitizeDetail(detail: string): string {

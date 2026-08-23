@@ -3,12 +3,54 @@ const ABSOLUTE_DRIVE_PATH_PATTERN = /[A-Za-z]:[\\/]/u;
 const UNC_PATH_PATTERN = /\\\\[^\\/\s]+[\\/][^\\/\s]+/u;
 const HOME_PATH_PATTERN = /~[\\/][^\s()[\]{}]+/u;
 const POSIX_PATH_PATTERN =
-  /(?:^|[^\p{L}\p{N}_])\/(?:[^/\\\s()[\]{}]+\/)+[^/\\\s()[\]{}]+/u;
+  /(?:^|[^\p{L}\p{N}_])\/(?!mission(?=$|[^\p{L}\p{N}_/\\-]))[^/\\\s()[\]{}<>,;:]+(?:\/[^/\\\s()[\]{}<>,;:]+)*/u;
 const COMMON_POSIX_ROOT_PATTERN =
   /(?:^|[^\p{L}\p{N}_])\/(?:Users|home|var|tmp|etc|usr|opt|srv|root|mnt|media|private|Volumes)(?:[\\/]|(?=$|[^\p{L}\p{N}_]))/u;
 const URL_PATTERN = /(?:https?|wss?|file):\/\//iu;
-const CREDENTIAL_ASSIGNMENT_PATTERN =
-  /(?:api[-_]?(?:key|token)|secret|token|passwd|password|credential|authorization|access[-_]?(?:key|token)|client[-_]?secret)["']?\s*[:=]\s*"?[^\s"'`,;&]+/iu;
+const CREDENTIAL_KEY_SOURCE =
+  '(?:api[-_]?(?:key|token)|secret|token|passwd|password|credential|authorization|access[-_]?(?:key|token)|client[-_]?secret|openai_api_key)';
+const CREDENTIAL_KEY_PATTERN = new RegExp(
+  `^${CREDENTIAL_KEY_SOURCE}$`,
+  'iu',
+);
+const CREDENTIAL_ASSIGNMENT_SOURCE =
+  `(^|[^\\p{L}\\p{N}_-])(${CREDENTIAL_KEY_SOURCE}["']?\\s*[:=]\\s*)(?:"([^"\\r\\n]*)"|'([^'\\r\\n]*)'|([^\\s"'\\x60,;&]+))`;
+const CREDENTIAL_ASSIGNMENT_PATTERN = new RegExp(
+  CREDENTIAL_ASSIGNMENT_SOURCE,
+  'iu',
+);
+const CREDENTIAL_ASSIGNMENT_GLOBAL_PATTERN = new RegExp(
+  CREDENTIAL_ASSIGNMENT_SOURCE,
+  'giu',
+);
+
+export function isCredentialKey(value: string): boolean {
+  return CREDENTIAL_KEY_PATTERN.test(value);
+}
+
+export function containsCredentialAssignment(value: string): boolean {
+  return CREDENTIAL_ASSIGNMENT_PATTERN.test(value);
+}
+
+export function scrubCredentialAssignments(value: string): string {
+  return value.replace(
+    CREDENTIAL_ASSIGNMENT_GLOBAL_PATTERN,
+    (
+      _match,
+      boundary: string,
+      assignment: string,
+      doubleQuoted: string | undefined,
+      singleQuoted: string | undefined,
+    ) =>
+      `${boundary}${assignment}${
+        doubleQuoted !== undefined
+          ? '"[REDACTED]"'
+          : singleQuoted !== undefined
+            ? "'[REDACTED]'"
+            : '[REDACTED]'
+      }`,
+  );
+}
 
 export function isSafePresentationText(
   value: unknown,
@@ -26,6 +68,6 @@ export function isSafePresentationText(
     !POSIX_PATH_PATTERN.test(value) &&
     !COMMON_POSIX_ROOT_PATTERN.test(value) &&
     !URL_PATTERN.test(value) &&
-    !CREDENTIAL_ASSIGNMENT_PATTERN.test(value)
+    !containsCredentialAssignment(value)
   );
 }

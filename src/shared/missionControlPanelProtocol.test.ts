@@ -37,6 +37,26 @@ const ready = {
   rows: [row],
 } as const;
 
+const credentialKeys = [
+  'api-key',
+  'api_key',
+  'api-token',
+  'api_token',
+  'secret',
+  'token',
+  'passwd',
+  'password',
+  'credential',
+  'authorization',
+  'access-key',
+  'access_key',
+  'access-token',
+  'access_token',
+  'client-secret',
+  'client_secret',
+  'OPENAI_API_KEY',
+] as const;
+
 describe('Mission Control panel protocol', () => {
   it('accepts only the exact ready handshake and bounded theme broadcasts', () => {
     const readyHandshake = {
@@ -150,14 +170,20 @@ describe('Mission Control panel protocol', () => {
     ['title', 'Investigate(C:\\Users\\alice\\secret.txt)'],
     ['title', 'Investigate(\\\\server\\share\\secret.txt)'],
     ['title', 'Investigate(/Users/alice/.ssh/id_rsa)'],
+    ['title', '/workspace'],
+    ['title', 'Investigate(/workspace)'],
+    ['title', 'Investigate: /workspace, now'],
     ['title', 'Investigate</tmp>'],
     ['title', 'Investigate(~/secrets/key)'],
     ['title', 'api_key=super-secret-value'],
+    ['title', "api_key='super-secret-value'"],
+    ['title', 'api_token="super-secret-value"'],
     ['title', 'OPENAI_API_KEY=super-secret-value'],
     ['workspaceLabel', 'Workspace(/home/alice/private)'],
-    ['workspaceLabel', 'password=super-secret-value'],
+    ['workspaceLabel', 'password="super-secret-value"'],
     ['computerLabel', 'Computer(/var/run/private.sock)'],
-    ['computerLabel', 'access_token=super-secret-value'],
+    ['computerLabel', "access_token='super-secret-value'"],
+    ['computerLabel', 'client_secret=super-secret-value'],
   ] as const)(
     'rejects unsafe %s presentation text',
     (property, presentation) => {
@@ -171,14 +197,38 @@ describe('Mission Control panel protocol', () => {
   );
 
   it('preserves legitimate bounded punctuation and slash text', () => {
-    const title = 'Investigate /mission and input/output (release 1.2)';
-    expect(
-      parseMissionControlPanelHostMessage({
-        ...ready,
-        rows: [{ ...row, title }],
-      }),
-    ).toMatchObject({ rows: [{ title }] });
+    for (const title of [
+      'Investigate /mission and input/output (release 1.2)',
+      'Created 2026/08/24 with ratio 3/5',
+      'tokenizer=cl100k and secretariat=enabled',
+      'not_client_secret=ordinary-value',
+    ]) {
+      expect(
+        parseMissionControlPanelHostMessage({
+          ...ready,
+          rows: [{ ...row, title }],
+        }),
+      ).toMatchObject({ rows: [{ title }] });
+    }
   });
+
+  it.each(credentialKeys)(
+    'rejects quoted and unquoted %s assignments',
+    (key) => {
+      for (const assignment of [
+        `${key}=unquoted-value`,
+        `${key}='single-quoted value'`,
+        `${key}="double-quoted value"`,
+      ]) {
+        expect(
+          parseMissionControlPanelHostMessage({
+            ...ready,
+            rows: [{ ...row, title: assignment }],
+          }),
+        ).toBeUndefined();
+      }
+    },
+  );
 
   it.each([
     { completed: 0, total: 0 },

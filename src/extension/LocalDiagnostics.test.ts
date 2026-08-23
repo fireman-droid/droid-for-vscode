@@ -7,6 +7,25 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocalDiagnostics, scrubCredentials } from './LocalDiagnostics';
 
 const temporaryDirectories: string[] = [];
+const credentialKeys = [
+  'api-key',
+  'api_key',
+  'api-token',
+  'api_token',
+  'secret',
+  'token',
+  'passwd',
+  'password',
+  'credential',
+  'authorization',
+  'access-key',
+  'access_key',
+  'access-token',
+  'access_token',
+  'client-secret',
+  'client_secret',
+  'OPENAI_API_KEY',
+] as const;
 
 afterEach(async () => {
   await Promise.all(
@@ -167,10 +186,23 @@ describe('LocalDiagnostics', () => {
       attributes: {
         header: 'Authorization: Bearer abc123def456ghi789',
         openai: 'failed with sk-proj-abcdefghijklmnop1234',
-        assignment: 'api_key=super-secret-value plus context',
+        assignment: "api_key='super-secret-value' plus context",
+        ...Object.fromEntries(
+          credentialKeys.map((key, index) => [
+            key,
+            `structured-secret-${index}`,
+          ]),
+        ),
+        nested: {
+          request: {
+            access_token: 'nested-secret-value',
+          },
+        } as never,
+        not_client_secret: 'ordinary-structured-value',
+        refresh_token: 'ordinary-refresh-value',
       },
       detail:
-        'command `curl -H "Authorization: Bearer abc123def456ghi789"` failed in C:\\repo (token: ghp_abcdefghijklmnopqrst1234)',
+        'command `curl -H "Authorization: Bearer abc123def456ghi789"` failed in C:\\repo (client_secret="detail-secret-value")',
     });
     await diagnostics.flush();
 
@@ -178,8 +210,15 @@ describe('LocalDiagnostics', () => {
     expect(contents).not.toContain('abc123def456ghi789');
     expect(contents).not.toContain('sk-proj-abcdefghijklmnop1234');
     expect(contents).not.toContain('super-secret-value');
+    for (let index = 0; index < credentialKeys.length; index += 1) {
+      expect(contents).not.toContain(`structured-secret-${index}`);
+    }
+    expect(contents).not.toContain('nested-secret-value');
+    expect(contents).not.toContain('detail-secret-value');
     expect(contents).not.toContain('ghp_abcdefghijklmnopqrst1234');
     expect(contents).toContain('[REDACTED]');
+    expect(contents).toContain('ordinary-structured-value');
+    expect(contents).toContain('ordinary-refresh-value');
     // Non-credential free text stays verbatim.
     expect(contents).toContain('failed in C:\\\\repo');
     expect(contents).toContain('curl -H');
@@ -279,14 +318,33 @@ describe('scrubCredentials', () => {
     ['api-key: sk-abcdefghijklmnop1234', /api-key/],
     ['AWS key AKIAIOSFODNN7EXAMPLE in output', /AWS key/],
     ['slack xoxb-12345678-abcdefghij', /slack/],
+    ["api_key='single-quoted-value'", /api_key/],
+    ['api_token="double-quoted-value"', /api_token/],
+    ['client_secret=unquoted-value', /client_secret/],
+    ['access-token="access-value"', /access-token/],
   ])('scrubs %s', (input) => {
     const scrubbed = scrubCredentials(input);
     expect(scrubbed).toContain('[REDACTED]');
   });
 
+  it.each(credentialKeys)(
+    'scrubs quoted and unquoted %s assignments',
+    (key) => {
+      for (const assignment of [
+        `${key}=unquoted-value`,
+        `${key}='single-quoted value'`,
+        `${key}="double-quoted value"`,
+      ]) {
+        const scrubbed = scrubCredentials(assignment);
+        expect(scrubbed).toContain('[REDACTED]');
+        expect(scrubbed).not.toContain('value');
+      }
+    },
+  );
+
   it('keeps ordinary paths, commands, and ids untouched', () => {
     const input =
-      'Ran `git status` in C:\\repo for session-abc turn 4f3e; tokenizer=cl100k';
+      'Ran `git status` in C:\\repo; tokenizer=cl100k; not_client_secret=ordinary';
     expect(scrubCredentials(input)).toBe(input);
   });
 });
