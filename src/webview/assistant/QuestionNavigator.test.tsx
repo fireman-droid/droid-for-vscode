@@ -129,8 +129,8 @@ describe("QuestionNavigator", () => {
     expect(onNavigate.mock.calls).toEqual([["one"], ["three"], ["three"]]);
   });
 
-  it("spaces every rendered question tick evenly", () => {
-    render(
+  it("uses a compact sparse track for a short question list", () => {
+    const { container } = render(
       <QuestionNavigator
         visible
         items={items}
@@ -138,11 +138,23 @@ describe("QuestionNavigator", () => {
         onNavigate={() => undefined}
       />,
     );
-    const positions = items.map(({ preview }) =>
+    expect(
+      container.querySelector(".dvx-question-nav")?.getAttribute("data-density"),
+    ).toBe("sparse");
+    expect(
+      container
+        .querySelector<HTMLElement>(".dvx-question-nav-track")
+        ?.style.getPropertyValue("--dvx-question-track-height"),
+    ).toBe("32px");
+    expect(
       screen
-        .getByRole("button", { name: new RegExp(preview) })
-        .style.getPropertyValue("--dvx-question-position"),
-    );
-    expect(positions).toEqual(["0", "0.5", "1"]);
+        .getByRole("button", { name: /First question/ })
+        .getAttribute("data-adjacent"),
+    ).toBe("true");
+    expect(
+      screen
+        .getByRole("button", { name: /Third question/ })
+        .getAttribute("data-adjacent"),
+    ).toBe("true");
   });
 });

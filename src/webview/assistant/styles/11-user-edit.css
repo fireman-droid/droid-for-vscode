@@ -19,17 +19,15 @@
   border-radius: 12px;
   background: var(--dvx-raised);
   box-shadow: none;
-  transition: border-color 160ms ease;
-}
-
-.dvx-user-edit-card:focus-within {
-  border-color: var(--dvx-border-strong);
 }
 
 .dvx-user-edit-input {
   box-sizing: border-box;
   width: 100%;
+  max-height: 27px;
   padding: 2px 2px 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: none;
   background: var(--dvx-raised);
   color: var(--dvx-ink);
@@ -300,6 +298,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.dvx-user-edit-images:empty {
+  display: none;
 }
 
 .dvx-attachment-unrestorable .dvx-attachment-thumb-file,

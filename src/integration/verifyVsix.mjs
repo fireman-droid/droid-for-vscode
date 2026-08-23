@@ -10,7 +10,6 @@ const expectedEntries = [
   // lowercases the entry name inside the archive.
   'extension/changelog.md',
   'extension/dist/extension/extension.cjs',
-  'extension/dist/webview/assets/inter-latin-wght-normal.woff2',
   // Lazily injected mermaid bundle; ships alongside webview.js but is
   // only loaded when a completed ```mermaid block needs rendering.
   'extension/dist/webview/mermaid.js',
@@ -29,8 +28,10 @@ const entries = execFileSync('tar', ['-tf', vsixPath], {
   .split(/\r?\n/u)
   .filter(Boolean)
   .sort();
+const assetPrefix = 'extension/dist/webview/assets/';
+const assetEntries = entries.filter((entry) => entry.startsWith(assetPrefix));
 assert.deepEqual(
-  entries,
+  entries.filter((entry) => !entry.startsWith(assetPrefix)),
   expectedEntries,
   `Unexpected VSIX contents:\n${entries.join('\n')}`,
 );
@@ -51,6 +52,30 @@ assert.ok(
   manifest.contributes.views.droidvisx.some(
     (entry) => entry.id === 'droidvisx.chat' && entry.type === 'webview',
   ),
+);
+
+const webviewCss = readEntry('extension/dist/webview/webview.css');
+const referencedAssets = [
+  ...new Set(
+    [...webviewCss.matchAll(/url\(["']?\.\/assets\/([^"')]+)["']?\)/gu)].map(
+      (match) => `${assetPrefix}${match[1]}`,
+    ),
+  ),
+].sort();
+assert.deepEqual(
+  assetEntries,
+  referencedAssets,
+  'VSIX webview assets must exactly match CSS references',
+);
+assert.ok(
+  assetEntries.includes(
+    'extension/dist/webview/assets/inter-latin-wght-normal.woff2',
+  ),
+  'VSIX must include the Inter webfont',
+);
+assert.ok(
+  assetEntries.some((entry) => entry.includes('/KaTeX_')),
+  'VSIX must include the KaTeX webfonts',
 );
 
 const extensionBundle = readEntry('extension/dist/extension/extension.cjs');

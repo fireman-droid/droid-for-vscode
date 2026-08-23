@@ -75,6 +75,8 @@ interface ComposerControlsProps {
   readonly plugins: PluginsPanelState;
   readonly disabled: boolean;
   readonly settingUpdatesDisabled: boolean;
+  /** Hides the `+` settings/attachment trigger in historical editors. */
+  readonly showSessionControls?: boolean;
   /** Hides the context ring + popover (the edit card omits them). */
   readonly showContext?: boolean;
   /** A compaction request is in flight; the compact button shows an
@@ -137,6 +139,7 @@ export function ComposerControls({
   plugins,
   disabled,
   settingUpdatesDisabled,
+  showSessionControls = true,
   showContext = true,
   compactPending = false,
   onContextRefresh,
@@ -330,60 +333,64 @@ export function ComposerControls({
       }
       ref={controlsRef}
     >
-      <div className="dvx-composer-control-left">
-        <button
-          type="button"
-          className="dvx-composer-tool-button dvx-plus-button"
-          aria-label="Session controls"
-          aria-expanded={openPanel === 'settings'}
-          aria-controls={
-            openPanel === 'settings' ? `${panelId}-settings` : undefined
-          }
-          disabled={disabled}
-          onClick={() => toggle('settings')}
-        >
-          <span aria-hidden="true">+</span>
-        </button>
-        {showContext ? (
-          <button
-            type="button"
-            className="dvx-composer-tool-button dvx-context-button"
-            aria-label={getContextLabel(context)}
-            aria-expanded={openPanel === 'context'}
-            aria-controls={
-              openPanel === 'context' ? `${panelId}-context` : undefined
-            }
-            disabled={disabled}
-            onClick={() => toggle('context')}
-          >
-            <svg
-              className="dvx-context-ring"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
+      {showSessionControls || showContext ? (
+        <div className="dvx-composer-control-left">
+          {showSessionControls ? (
+            <button
+              type="button"
+              className="dvx-composer-tool-button dvx-plus-button"
+              aria-label="Session controls"
+              aria-expanded={openPanel === 'settings'}
+              aria-controls={
+                openPanel === 'settings' ? `${panelId}-settings` : undefined
+              }
+              disabled={disabled}
+              onClick={() => toggle('settings')}
             >
-              <circle
-                className="dvx-context-ring-track"
-                cx="12"
-                cy="12"
-                r="9"
-              />
-              <circle
-                className="dvx-context-ring-value"
-                cx="12"
-                cy="12"
-                r="9"
-                pathLength="100"
-                strokeDasharray={`${contextPercent} 100`}
-              />
-            </svg>
-            {showContextPercent ? (
-              <span className="dvx-context-percent" aria-hidden="true">
-                {Math.round(contextPercent)}%
-              </span>
-            ) : null}
-          </button>
-        ) : null}
-      </div>
+              <span aria-hidden="true">+</span>
+            </button>
+          ) : null}
+          {showContext ? (
+            <button
+              type="button"
+              className="dvx-composer-tool-button dvx-context-button"
+              aria-label={getContextLabel(context)}
+              aria-expanded={openPanel === 'context'}
+              aria-controls={
+                openPanel === 'context' ? `${panelId}-context` : undefined
+              }
+              disabled={disabled}
+              onClick={() => toggle('context')}
+            >
+              <svg
+                className="dvx-context-ring"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle
+                  className="dvx-context-ring-track"
+                  cx="12"
+                  cy="12"
+                  r="9"
+                />
+                <circle
+                  className="dvx-context-ring-value"
+                  cx="12"
+                  cy="12"
+                  r="9"
+                  pathLength="100"
+                  strokeDasharray={`${contextPercent} 100`}
+                />
+              </svg>
+              {showContextPercent ? (
+                <span className="dvx-context-percent" aria-hidden="true">
+                  {Math.round(contextPercent)}%
+                </span>
+              ) : null}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <button
         type="button"

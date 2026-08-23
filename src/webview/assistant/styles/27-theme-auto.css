@@ -169,6 +169,20 @@ html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb:hover {
 }
 
 .dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-permission-permission
+  .dvx-permission-tool-meta
+  code {
+  color: var(--dvx-muted);
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-permission-permission
+  .dvx-permission-tool
+  pre {
+  color: var(--dvx-muted) !important;
+}
+
+.dvx-shell[data-dvx-theme-preference='auto']
   .dvx-markdown
   :not(pre)
   > code {
@@ -184,7 +198,10 @@ html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb:hover {
   border-top: 1px solid var(--dvx-border-strong);
 }
 
-.dvx-shell[data-dvx-theme-preference='auto'] .dvx-diagnostic {
+.dvx-shell[data-dvx-theme-preference='auto']
+  .dvx-diagnostic:not([data-diagnostic-code='queue-paused']):not(
+    [data-diagnostic-code='history-partial']
+  ) {
   background: linear-gradient(
     180deg,
     var(--dvx-overlay),
@@ -280,97 +297,6 @@ html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb:hover {
     var(--dvx-raised),
     var(--dvx-surface)
   );
-}
-
-/* Auto keeps the subagent card as one quiet editor-owned color. No
-   radial wash or two-stop gradient: the only depth is a hairline,
-   restrained shadow and optional backdrop blur. */
-.dvx-shell[data-dvx-theme-preference='auto'] .dvx-subagent-row {
-  border-color: var(--dvx-border-strong);
-  background: var(
-    --vscode-editorWidget-background,
-    var(--dvx-raised)
-  );
-  box-shadow: 0 12px 28px -24px
-    var(--vscode-widget-shadow, rgb(0 0 0 / 48%));
-  backdrop-filter: blur(8px);
-  color: var(--dvx-muted);
-}
-
-.dvx-shell[data-dvx-theme-preference='auto']
-  .dvx-subagent-head::before {
-  background: var(--vscode-icon-foreground, var(--dvx-subtle));
-}
-
-.dvx-shell[data-dvx-theme-preference='auto']
-  .dvx-subagent-live
-  .dvx-subagent-head::before {
-  background: var(
-    --vscode-progressBar-background,
-    var(--dvx-accent)
-  );
-}
-
-.dvx-shell[data-dvx-theme-preference='auto'] .dvx-subagent-label {
-  color: var(--vscode-foreground, var(--dvx-ink));
-}
-
-.dvx-shell[data-dvx-theme-preference='auto'] .dvx-subagent-status,
-.dvx-shell[data-dvx-theme-preference='auto']
-  .dvx-subagent-description {
-  color: var(
-    --vscode-descriptionForeground,
-    var(--dvx-text-secondary)
-  );
-}
-
-.dvx-shell[data-dvx-theme-preference='auto']
-  .dvx-subagent-live
-  .dvx-subagent-status {
-  color: var(
-    --vscode-editorWarning-foreground,
-    var(--dvx-accent-deep)
-  );
-}
-
-.dvx-shell[data-dvx-theme-preference='auto'] .dvx-subagent-metrics {
-  border-top-color: var(--dvx-border);
-  color: var(--dvx-text-secondary);
-}
-
-.dvx-shell[data-dvx-theme-preference='auto']
-  .dvx-subagent-metric-label {
-  color: var(
-    --vscode-disabledForeground,
-    var(--dvx-subtle)
-  );
-}
-
-.dvx-shell[data-dvx-theme-preference='auto']
-  .dvx-subagent-activity-label {
-  color: var(
-    --vscode-disabledForeground,
-    var(--dvx-subtle)
-  );
-}
-
-.dvx-shell[data-dvx-theme-preference='auto']
-  .dvx-subagent-activity-line {
-  color: var(--vscode-foreground, var(--dvx-ink));
-}
-
-.dvx-shell[data-dvx-theme-preference='auto']
-  .dvx-subagent-activity-target,
-.dvx-shell[data-dvx-theme-preference='auto']
-  .dvx-subagent-activity-empty,
-.dvx-shell[data-dvx-theme-preference='auto']
-  .dvx-subagent-recent-item {
-  color: var(--dvx-muted);
-}
-
-.dvx-shell[data-dvx-theme-preference='auto']
-  .dvx-subagent-recent-item::before {
-  background: var(--vscode-disabledForeground, var(--dvx-subtle));
 }
 
 /* AskUser choices are actionable primary text. The shared secondary

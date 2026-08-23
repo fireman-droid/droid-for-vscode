@@ -45,8 +45,11 @@ describe('PlanLine', () => {
     expect(row?.tagName).toBe('BUTTON');
     expect(row?.getAttribute('aria-expanded')).toBe('false');
     expect(container.querySelector('.dvx-plan-line-dot')).not.toBeNull();
-    expect(container.querySelector('.dvx-plan-line-title')?.textContent).toBe(
-      'Read the config',
+    expect(container.querySelector('.dvx-plan-line-label')?.textContent).toBe(
+      'Plan',
+    );
+    expect(container.querySelector('.dvx-plan-line-current')?.textContent).toBe(
+      'Wire the selector',
     );
     expect(container.querySelector('.dvx-plan-line-count')?.textContent).toBe(
       '1 / 3',
@@ -67,7 +70,7 @@ describe('PlanLine', () => {
     ).toBe('true');
   });
 
-  it('marks the line live while the turn runs (dot glow carrier)', () => {
+  it('marks the line live while the turn runs', () => {
     const { container } = render(<PlanLine anchor={makeAnchor()} running />);
     expect(container.querySelector('.dvx-plan-line')?.className).toContain(
       'dvx-plan-line-live',
@@ -80,6 +83,9 @@ describe('PlanLine', () => {
     );
     const body = container.querySelector('.dvx-plan-line-body');
     expect(body?.getAttribute('data-open')).toBe('true');
+    expect(container.querySelector('.dvx-plan-line-title')?.textContent).toBe(
+      'Implementation plan',
+    );
     // Marked auto so the pinned overlay can suppress it.
     expect(body?.getAttribute('data-auto')).toBe('true');
   });

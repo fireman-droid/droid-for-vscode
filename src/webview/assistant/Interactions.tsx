@@ -157,24 +157,31 @@ export function PermissionRequestCard({
       aria-busy={awaitingClose}
     >
       <header className="dvx-interaction-heading">
-        <span className="dvx-interaction-eyebrow">
-          {requestPresentation.eyebrow}
-        </span>
         {requestPresentation.kind === 'plan' &&
         onOpenPlanDocument !== undefined ? (
-          <h2 id={titleId}>
-            <button
-              type="button"
-              className="dvx-plan-open-title"
-              disabled={awaitingClose}
-              onClick={onOpenPlanDocument}
-            >
-              <span>{requestPresentation.title}</span>
-              <span>Open in editor</span>
-            </button>
-          </h2>
+          <>
+            <div className="dvx-plan-heading-meta">
+              <span className="dvx-interaction-eyebrow">
+                {requestPresentation.eyebrow}
+              </span>
+              <button
+                type="button"
+                className="dvx-plan-open-action"
+                disabled={awaitingClose}
+                onClick={onOpenPlanDocument}
+              >
+                Open in editor
+              </button>
+            </div>
+            <h2 id={titleId}>{requestPresentation.title}</h2>
+          </>
         ) : (
-          <h2 id={titleId}>{requestPresentation.title}</h2>
+          <>
+            <span className="dvx-interaction-eyebrow">
+              {requestPresentation.eyebrow}
+            </span>
+            <h2 id={titleId}>{requestPresentation.title}</h2>
+          </>
         )}
       </header>
       <div className="dvx-permission-tools">

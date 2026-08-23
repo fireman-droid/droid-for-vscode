@@ -14,19 +14,12 @@
   overflow: hidden;
   border: 1px solid color-mix(
     in srgb,
-    var(--dvx-border-strong) 78%,
-    var(--dvx-border)
+    var(--dvx-border) 88%,
+    transparent
   );
-  border-radius: 13px;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--dvx-raised) 96%, var(--dvx-accent) 4%),
-      var(--dvx-raised)
-    );
-  box-shadow:
-    0 1px 2px rgb(48 42 36 / 8%),
-    0 14px 34px -26px rgb(48 42 36 / 34%);
+  border-radius: 10px;
+  background: var(--dvx-raised);
+  box-shadow: 0 1px 3px rgb(48 42 36 / 8%);
 }
 
 .dvx-thread-footer .dvx-interaction-queue {
@@ -39,7 +32,7 @@
   min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  padding: 13px 14px 0;
+  padding: 11px 12px 0;
 }
 
 .dvx-thread-footer .dvx-interaction-heading {
@@ -122,9 +115,9 @@
 .dvx-thread-footer .dvx-interaction-actions {
   flex: none;
   height: auto;
-  min-height: 56px;
+  min-height: 44px;
   margin-top: 0;
-  padding: 11px 0 12px;
+  padding: 8px 0 9px;
   border-top: 1px solid color-mix(
     in srgb,
     var(--dvx-border) 76%,
@@ -133,53 +126,58 @@
 }
 
 .dvx-thread-footer .dvx-plan-preview {
-  min-height: 92px;
-  max-height: min(34vh, 340px);
-  margin-top: 11px;
-  padding: 11px 12px;
+  min-height: 0;
+  max-height: min(30vh, 260px);
+  margin-top: 8px;
+  padding: 8px 10px;
   border: 1px solid color-mix(
     in srgb,
     var(--dvx-border) 82%,
     transparent
   );
-  border-radius: 9px;
+  border-radius: 7px;
   background: color-mix(
     in srgb,
-    var(--dvx-surface) 58%,
+    var(--dvx-surface) 42%,
     var(--dvx-raised)
   );
   scrollbar-gutter: stable;
 }
 
-.dvx-plan-open-title {
+.dvx-plan-heading-meta {
   display: flex;
-  width: 100%;
-  align-items: baseline;
+  min-width: 0;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 0;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+  gap: 10px;
 }
 
-.dvx-plan-open-title > span:last-child {
+.dvx-plan-heading-meta .dvx-interaction-eyebrow {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dvx-plan-open-action {
   flex: none;
+  padding: 0;
+  border: 0;
   color: var(--dvx-muted);
+  background: transparent;
+  font: inherit;
   font-size: 11px;
   font-weight: 500;
+  cursor: pointer;
   transition: color var(--dvx-duration-fast) ease;
 }
 
-.dvx-plan-open-title:hover > span:last-child,
-.dvx-plan-open-title:focus-visible > span:last-child {
+.dvx-plan-open-action:hover:not(:disabled),
+.dvx-plan-open-action:focus-visible {
   color: var(--dvx-accent);
 }
 
-.dvx-plan-open-title:focus-visible {
+.dvx-plan-open-action:focus-visible {
   border-radius: 4px;
   outline: 2px solid color-mix(
     in srgb,
@@ -187,6 +185,175 @@
     transparent
   );
   outline-offset: 3px;
+}
+
+.dvx-plan-open-action:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.dvx-thread-footer .dvx-permission-plan .dvx-button-danger {
+  border-color: var(--dvx-border);
+  color: var(--dvx-text-secondary);
+  background: var(--dvx-raised);
+}
+
+.dvx-thread-footer .dvx-permission-plan .dvx-button-danger:hover:not(:disabled) {
+  border-color: var(--dvx-border-strong);
+  color: var(--dvx-ink);
+  background: var(--dvx-soft);
+}
+
+.dvx-thread-footer .dvx-permission-plan .dvx-interaction-actions {
+  gap: 6px;
+}
+
+.dvx-thread-footer .dvx-permission-plan .dvx-button {
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  line-height: 18px;
+}
+
+.dvx-thread-footer .dvx-permission-plan .dvx-permission-allow-group {
+  height: 28px;
+  border-radius: 6px;
+}
+
+.dvx-thread-footer .dvx-permission-plan .dvx-permission-primary {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 6px 0 0 6px;
+}
+
+.dvx-thread-footer .dvx-permission-plan .dvx-permission-primary:only-child {
+  border-radius: 6px;
+}
+
+.dvx-thread-footer .dvx-permission-plan .dvx-permission-more {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  flex-basis: 28px;
+  border-radius: 0 6px 6px 0;
+}
+
+.dvx-permission-permission .dvx-interaction-heading h2 {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.dvx-permission-permission .dvx-permission-tools {
+  gap: 0;
+  margin-top: 8px;
+  overflow: hidden;
+  border: 1px solid var(--dvx-border);
+  border-radius: 7px;
+  background: color-mix(
+    in srgb,
+    var(--dvx-surface) 34%,
+    var(--dvx-raised)
+  );
+}
+
+.dvx-permission-permission .dvx-permission-tool {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--dvx-border);
+}
+
+.dvx-permission-permission .dvx-permission-tool:last-child {
+  border-bottom: 0;
+}
+
+.dvx-permission-permission .dvx-permission-tool-meta {
+  gap: 6px;
+  margin-bottom: 2px;
+  font-size: 10.5px;
+  line-height: 15px;
+}
+
+.dvx-shell
+  .dvx-permission-permission
+  .dvx-permission-tool-meta
+  code {
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  font-weight: 550;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.dvx-permission-permission .dvx-permission-tool strong {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.dvx-permission-permission .dvx-permission-tool pre {
+  margin-top: 1px;
+  color: var(--dvx-muted);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dvx-permission-permission .dvx-permission-risk {
+  margin-top: 2px;
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  line-height: 15px;
+}
+
+.dvx-permission-permission .dvx-interaction-actions {
+  min-height: 41px;
+  gap: 6px;
+  padding: 7px 0 7px;
+}
+
+.dvx-permission-permission .dvx-button {
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  line-height: 18px;
+}
+
+.dvx-permission-permission .dvx-button-danger {
+  border-color: var(--dvx-border);
+  color: var(--dvx-text-secondary);
+  background: var(--dvx-raised);
+}
+
+.dvx-permission-permission .dvx-button-danger:hover:not(:disabled) {
+  border-color: var(--dvx-border-strong);
+  color: var(--dvx-ink);
+  background: var(--dvx-soft);
+}
+
+.dvx-permission-permission .dvx-permission-allow-group {
+  height: 28px;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.dvx-permission-permission .dvx-permission-primary {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 6px 0 0 6px;
+}
+
+.dvx-permission-permission .dvx-permission-primary:only-child {
+  border-radius: 6px;
+}
+
+.dvx-permission-permission .dvx-permission-more {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  flex-basis: 28px;
+  border-radius: 0 6px 6px 0;
 }
 
 .dvx-plan-document-status {
@@ -277,12 +444,6 @@
 
   .dvx-thread-footer .dvx-interaction-card {
     padding-inline: 12px;
-  }
-
-  .dvx-plan-open-title {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 2px;
   }
 
   .dvx-ask-result dl > div {

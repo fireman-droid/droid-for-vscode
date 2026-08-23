@@ -21,4 +21,5 @@ esbuild.mjs
 pnpm-lock.yaml
 tsconfig*.json
 vitest.config.ts
+vite.webview.config.ts
 *.log

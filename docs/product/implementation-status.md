@@ -32,6 +32,13 @@ Failure、Empty 十二种确定性状态；支持 URL、页面控制条、
 Light/Dark/Auto、320/400/480/760px 画布及 `window.__dvxStudio` 控制。
 它不接入 Droid Runtime、不改变 Bridge DTO，也不计为生产用户能力。
 
+2026-08-23 完成一轮局部 Webview 交互整理：历史消息编辑改为紧凑的内部滚动
+输入，并只保留重发相关控件；用户消息与 Implementation Plan 共用连续外框，
+ExitSpecMode 与权限请求在保留全部操作的前提下收紧层级。队列/历史提示和
+Subagent 状态改用更安静的主题 token。问题导航根据数量切换紧凑圆点组与
+抽样高密度点轨，保留预览、前后跳转和直接定位。本轮未改变 Runtime 或
+Bridge 契约。
+
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
 当前 **v0.7.89** 已完成源码、聚焦验证、VSIX 打包并安装到 Cursor，等待用户
 Reload Window 验收。待处理的 AskUser 与 ExitSpecMode Plan 现在只把权威

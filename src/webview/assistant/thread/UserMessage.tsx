@@ -218,6 +218,10 @@ export function UserMessage({
     <MessagePrimitive.Root
       className={`dvx-message dvx-message-user${
         editing ? " dvx-message-editing" : ""
+      }${
+        planLine !== null && !resending
+          ? " dvx-message-with-plan"
+          : ""
       }`}
       aria-label="You"
     >
@@ -270,6 +274,7 @@ export function UserMessage({
               ) : null}
               <div className="dvx-user-edit-footer">
                 <ComposerControls
+                  showSessionControls={false}
                   showContext={false}
                   settings={editorEnv.settings}
                   context={editorEnv.context}

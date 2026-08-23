@@ -492,6 +492,7 @@ export function Diagnostic({ data }: { readonly data: unknown }): React.JSX.Elem
   return (
     <div
       className={`dvx-diagnostic dvx-diagnostic-${diagnostic.severity}`}
+      data-diagnostic-code={diagnostic.code}
       role={diagnostic.severity === "error" ? "alert" : "status"}
       title={`${diagnostic.code}: ${diagnostic.message}`}
     >

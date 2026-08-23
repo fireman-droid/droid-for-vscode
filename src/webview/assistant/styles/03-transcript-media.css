@@ -134,6 +134,34 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--dvx-warning) 13%, transparent);
 }
 
+.dvx-diagnostic[data-diagnostic-code="queue-paused"],
+.dvx-diagnostic[data-diagnostic-code="history-partial"] {
+  gap: 6px;
+  margin: 4px 0;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--dvx-muted);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0;
+}
+
+.dvx-diagnostic[data-diagnostic-code="queue-paused"]::before {
+  width: 4px;
+  height: 4px;
+  margin-top: 6px;
+  background: var(--dvx-warning);
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+.dvx-diagnostic[data-diagnostic-code="history-partial"]::before {
+  display: none;
+}
+
 .dvx-diagnostic-error {
   border-color: color-mix(in srgb, var(--dvx-danger) 20%, var(--dvx-border));
   background:
@@ -482,10 +510,11 @@
 }
 
 .dvx-history-notice {
-  padding: 8px 10px;
-  border-left: 2px solid var(--dvx-accent);
+  padding: 2px 0;
+  border: 0;
   color: var(--dvx-muted);
-  font-size: 12px;
+  font-size: 11.5px;
+  line-height: 18px;
 }
 
 .dvx-show-earlier {

@@ -6,7 +6,7 @@ import type { PlanAnchorState } from './planAnchor';
  * Plan card anchored directly under the user message that triggered
  * the turn (spec §3.5, 2026-08-15 — this REPLACES the 2026-08-13
  * "no card chrome" decision). Collapsed it is a one-row card — 32px
- * title row (status dot, title, n / m, chevron) closed by a 2px
+ * title row (status dot, title, n / m, chevron) closed by a thin
  * completion bar — and the whole row is the single disclosure
  * target. Expanded it lists the steps below a hairline, each led by
  * a small circle: hollow for pending, accent-filled for the current
@@ -43,6 +43,10 @@ export function PlanLine({
   // Spaced "n / m" — the approved harness form (user correction
   // 2026-08-13 evening).
   const count = `${anchor.completedCount} / ${anchor.totalCount}`;
+  const currentStep =
+    anchor.steps.find((step) => step.status === 'in_progress')?.text ??
+    anchor.steps.find((step) => step.status === 'pending')?.text ??
+    anchor.title;
   const progressPercent =
     anchor.totalCount > 0
       ? (anchor.completedCount / anchor.totalCount) * 100
@@ -52,7 +56,7 @@ export function PlanLine({
       className={`dvx-plan-line${
         anchor.allCompleted ? ' dvx-plan-line-done' : ''
       }${building ? ' dvx-plan-line-live' : ''}`}
-      aria-label={`Task plan, ${anchor.completedCount} of ${anchor.totalCount} done`}
+      aria-label={`Implementation plan, ${anchor.completedCount} of ${anchor.totalCount} done`}
     >
       <button
         type="button"
@@ -61,11 +65,23 @@ export function PlanLine({
         onClick={() => setExpandOverride(!expanded)}
       >
         <span className="dvx-plan-line-dot" aria-hidden="true" />
-        <span className="dvx-plan-line-title">{anchor.title}</span>
+        <span className="dvx-plan-line-title">
+          {expanded ? (
+            'Implementation plan'
+          ) : (
+            <>
+              <span className="dvx-plan-line-label">Plan</span>
+              <span className="dvx-plan-line-separator" aria-hidden="true">
+                ·
+              </span>
+              <span className="dvx-plan-line-current">{currentStep}</span>
+            </>
+          )}
+        </span>
         <span className="dvx-plan-line-count">{count}</span>
         <PlanLineChevron open={expanded} />
       </button>
-      {/* 2px completion bar seated on the title row's bottom edge
+      {/* Thin completion bar seated on the title row's bottom edge
           (spec §3.5); turns grey with the retired card. */}
       <span className="dvx-plan-line-bar" aria-hidden="true">
         <span

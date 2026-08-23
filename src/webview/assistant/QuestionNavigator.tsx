@@ -57,11 +57,10 @@ export function visibleQuestionItems(
     .map((index) => ({ item: items[index]!, index }));
 }
 
-function positionStyle(position: number): CSSProperties {
+function trackStyle(count: number, dense: boolean): CSSProperties {
+  const gap = dense ? 10 : 14;
   return {
-    "--dvx-question-position": String(
-      Math.min(1, Math.max(0, position)),
-    ),
+    "--dvx-question-track-height": `${Math.max(4, (count - 1) * gap + 4)}px`,
   } as CSSProperties;
 }
 
@@ -97,8 +96,13 @@ export function QuestionNavigator({
     items.length - 1,
   );
   const visibleItems = visibleQuestionItems(items, currentIndex);
+  const dense = items.length > 6;
   return (
-    <nav className="dvx-question-nav" aria-label="Question navigation">
+    <nav
+      className="dvx-question-nav"
+      data-density={dense ? "dense" : "sparse"}
+      aria-label="Question navigation"
+    >
       <button
         type="button"
         className="dvx-question-nav-step"
@@ -108,19 +112,20 @@ export function QuestionNavigator({
       >
         <QuestionChevron direction="up" />
       </button>
-      <div className="dvx-question-nav-track">
-        {visibleItems.map(({ item, index }, slot) => (
+      <div
+        className="dvx-question-nav-track"
+        style={trackStyle(visibleItems.length, dense)}
+      >
+        {visibleItems.map(({ item, index }) => (
           <button
             key={item.key}
             type="button"
             className="dvx-question-nav-node"
-            style={positionStyle(
-              visibleItems.length === 1
-                ? 0.5
-                : slot / (visibleItems.length - 1),
-            )}
             aria-label={`Jump to question ${index + 1}: ${item.preview}`}
             aria-current={index === currentIndex ? "true" : undefined}
+            data-adjacent={
+              Math.abs(index - currentIndex) === 1 ? "true" : undefined
+            }
             data-preview={item.preview}
             onClick={() => onNavigate(item.key)}
           >

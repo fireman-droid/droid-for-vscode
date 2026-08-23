@@ -318,8 +318,8 @@
 }
 
 /* Quotes are content, not emphasis: a neutral warm-grey hairline and
-   secondary warm ink (user report, 2026-08-12). Accent left-bars stay
-   reserved for notice surfaces (.dvx-history-notice, .dvx-empty-mark). */
+   secondary warm ink (user report, 2026-08-12). System notices use
+   plain text instead of reusing this left-rail treatment. */
 .dvx-markdown blockquote {
   padding-left: 10px;
   border-left: 2px solid rgb(38 33 27 / 18%);

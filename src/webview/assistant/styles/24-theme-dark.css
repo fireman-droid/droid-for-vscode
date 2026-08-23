@@ -83,7 +83,10 @@ html[data-dvx-theme='dark'] *::-webkit-scrollbar-thumb:hover {
 }
 
 /* ---- 03-transcript-media ------------------------------------------ */
-.dvx-shell[data-theme='dark'] .dvx-diagnostic {
+.dvx-shell[data-theme='dark']
+  .dvx-diagnostic:not([data-diagnostic-code='queue-paused']):not(
+    [data-diagnostic-code='history-partial']
+  ) {
   background: linear-gradient(180deg, var(--dvx-overlay), var(--dvx-raised));
   box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
 }
@@ -166,7 +169,7 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
 
 /* ---- 07-activity-live --------------------------------------------- */
 .dvx-shell[data-theme='dark'] .dvx-subagent-label {
-  color: #ece7db;
+  color: var(--dvx-ink);
 }
 
 /* Shimmer: gray base with the same warm-gold glint, lifted. */
@@ -416,6 +419,13 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
   .dvx-permission-tool-meta
   code {
   color: #e0a563;
+}
+
+.dvx-shell[data-theme='dark']
+  .dvx-permission-permission
+  .dvx-permission-tool-meta
+  code {
+  color: var(--dvx-muted);
 }
 
 .dvx-shell[data-theme='dark'] .dvx-plan-preview {
