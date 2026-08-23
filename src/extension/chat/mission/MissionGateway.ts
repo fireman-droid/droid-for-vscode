@@ -15,6 +15,11 @@ import type {
 } from '../../../shared/missionProtocol';
 import { resolveMissionProfile } from '../../../shared/missionProtocol';
 import {
+  listMissionCatalog,
+  type MissionCatalogProjectionOptions,
+  type MissionCatalogResult,
+} from './MissionCatalogProjection';
+import {
   validatePair,
   validatePreferences,
   type MissionCatalogModel,
@@ -55,7 +60,7 @@ export type MissionGatewayResult =
         | 'daemon-unavailable';
     };
 
-export interface MissionGatewayOptions {
+export interface MissionGatewayOptions extends MissionCatalogProjectionOptions {
   readonly getDroid: () => Promise<ConnectedDroid>;
   readonly preferences: MissionPreferenceStore;
   readonly createRuntime: (
@@ -69,6 +74,8 @@ export interface MissionGatewayOptions {
   }) => void;
 }
 
+export type { MissionCatalogResult } from './MissionCatalogProjection';
+
 /**
  * Extension-Host Mission entry boundary. It validates every effective model
  * pair before creating a session, then applies and verifies the six-property
@@ -76,6 +83,10 @@ export interface MissionGatewayOptions {
  */
 export class MissionGateway {
   constructor(private readonly options: MissionGatewayOptions) {}
+
+  async listCatalog(): Promise<MissionCatalogResult> {
+    return listMissionCatalog(this.options);
+  }
 
   async start(input: MissionGatewayStart): Promise<MissionGatewayResult> {
     const requestedPreferences: MissionWorkspacePreferences = {
@@ -208,6 +219,7 @@ export class MissionGateway {
     this.options.openWorkerViewer(target);
     return true;
   }
+
 }
 
 export interface MissionSettings {

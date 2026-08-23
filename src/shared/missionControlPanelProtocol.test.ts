@@ -1,0 +1,144 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+  parseMissionControlPanelHostMessage,
+  parseMissionControlPanelWebviewMessage,
+} from './missionControlPanelProtocol';
+
+const request = {
+  type: 'missionControl.catalog.request',
+  protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+  requestId: 'catalog-request-1',
+  filter: 'running',
+} as const;
+
+const row = {
+  catalogId: 'mission-abcdefghijklmnopqrstuvwxyz012345',
+  title: 'Catalog foundation',
+  lifecycle: 'running',
+  workspaceLabel: 'droidvisx',
+  computerLabel: 'Local workstation',
+  progress: { completed: 2, total: 5 },
+  createdAt: '2026-08-23T10:00:00.000Z',
+  updatedAt: '2026-08-23T11:00:00.000Z',
+  elapsedMs: 3_600_000,
+  attached: false,
+} as const;
+
+const ready = {
+  type: 'missionControl.catalog.result',
+  protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+  sequence: 4,
+  requestId: request.requestId,
+  status: 'ready',
+  revision: 2,
+  filter: 'running',
+  rows: [row],
+} as const;
+
+describe('Mission Control panel protocol', () => {
+  it('accepts exact versioned catalog requests and official filters', () => {
+    expect(parseMissionControlPanelWebviewMessage(request)).toEqual(request);
+    for (const invalid of [
+      { ...request, protocolVersion: 2 },
+      { ...request, filter: 'failed' },
+      { ...request, requestId: 'x'.repeat(129) },
+      { ...request, sessionId: 'daemon-session-1' },
+    ]) {
+      expect(parseMissionControlPanelWebviewMessage(invalid)).toBeUndefined();
+    }
+  });
+
+  it('accepts a bounded ready catalog and rejects unknown or secret fields', () => {
+    expect(parseMissionControlPanelHostMessage(ready)).toEqual(ready);
+    for (const invalid of [
+      { ...ready, daemonUrl: 'ws://localhost:1234' },
+      { ...ready, rows: [{ ...row, lifecycle: 'failed' }] },
+      { ...ready, rows: [{ ...row, title: 'C:\\Users\\secret\\repo' }] },
+      { ...ready, rows: [{ ...row, title: '/Users/secret/repo' }] },
+      { ...ready, rows: [{ ...row, title: '\\\\server\\secret\\repo' }] },
+      { ...ready, rows: [{ ...row, workspaceLabel: 'https://example.test/repo' }] },
+      { ...ready, rows: [{ ...row, hostId: 'opaque-host-id' }] },
+      { ...ready, rows: [{ ...row, workerSessionId: 'worker-secret' }] },
+      { ...ready, rows: [{ ...row, title: 'x'.repeat(257) }] },
+      { ...ready, rows: [{ ...row, progress: { completed: 6, total: 5 } }] },
+      { ...ready, rows: [{ ...row, createdAt: 'not-a-date' }] },
+    ]) {
+      expect(parseMissionControlPanelHostMessage(invalid)).toBeUndefined();
+    }
+  });
+
+  it.each([
+    { completed: 0, total: 0 },
+    { completed: 0, total: 4 },
+    { completed: 2, total: 4 },
+    { completed: 4, total: 4 },
+  ])('accepts valid progress $completed/$total', (progress) => {
+    expect(
+      parseMissionControlPanelHostMessage({
+        ...ready,
+        rows: [{ ...row, progress }],
+      }),
+    ).toBeDefined();
+  });
+
+  it.each([
+    { completed: -1, total: 4 },
+    { completed: Number.NaN, total: 4 },
+    { completed: 1, total: Number.POSITIVE_INFINITY },
+    { completed: 10_001, total: 10_001 },
+  ])('rejects invalid progress $completed/$total', (progress) => {
+    expect(
+      parseMissionControlPanelHostMessage({
+        ...ready,
+        rows: [{ ...row, progress }],
+      }),
+    ).toBeUndefined();
+  });
+
+  it('rejects duplicate catalog identities and oversized row arrays', () => {
+    expect(
+      parseMissionControlPanelHostMessage({
+        ...ready,
+        rows: [row, { ...row, title: 'Duplicate' }],
+      }),
+    ).toBeUndefined();
+    expect(
+      parseMissionControlPanelHostMessage({
+        ...ready,
+        rows: Array.from({ length: 10_001 }, (_, index) => ({
+          ...row,
+          catalogId: `mission-${index}`,
+        })),
+      }),
+    ).toBeUndefined();
+  });
+
+  it('validates exact sanitized incomplete-list failures', () => {
+    const failure = {
+      type: 'missionControl.catalog.result',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      sequence: 5,
+      requestId: request.requestId,
+      status: 'error',
+      revision: 2,
+      filter: 'all',
+      error: {
+        code: 'incomplete-list',
+        message: 'The complete Mission catalog could not be loaded.',
+        retryable: true,
+      },
+    } as const;
+    expect(parseMissionControlPanelHostMessage(failure)).toEqual(failure);
+    expect(
+      parseMissionControlPanelHostMessage({ ...failure, rows: [row] }),
+    ).toBeUndefined();
+    expect(
+      parseMissionControlPanelHostMessage({
+        ...failure,
+        error: { ...failure.error, detail: 'token=secret' },
+      }),
+    ).toBeUndefined();
+  });
+});
