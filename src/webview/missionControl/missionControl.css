@@ -1,8 +1,14 @@
 :root {
   color-scheme: light dark;
+  --mission-bg: var(--vscode-editor-background, #fff);
+  --mission-fg: var(--vscode-editor-foreground, #1f1f1f);
+  --mission-muted: var(--vscode-descriptionForeground, #666);
+  --mission-border: var(--vscode-panel-border, #b8b8b8);
+  --mission-hover: var(--vscode-list-hoverBackground, rgb(127 127 127 / 10%));
+  --mission-focus: var(--vscode-focusBorder, #646464);
   font-family: var(--vscode-font-family, system-ui, sans-serif);
-  color: var(--vscode-foreground, #1f1f1f);
-  background: var(--vscode-editor-background, #fff);
+  color: var(--mission-fg);
+  background: var(--mission-bg);
 }
 
 html[data-dvx-theme='light'] {
@@ -14,33 +20,35 @@ html[data-dvx-theme='dark'] {
 }
 
 html[data-dvx-theme-preference='light'] {
+  --mission-bg: #fff;
+  --mission-fg: #111;
+  --mission-muted: #606060;
+  --mission-border: #d4d4d4;
+  --mission-hover: #f6f6f6;
+  --mission-focus: #303030;
   background: #fff;
 }
 
 html[data-dvx-theme-preference='dark'] {
+  --mission-bg: #000;
+  --mission-fg: #f4f4f4;
+  --mission-muted: #a0a0a0;
+  --mission-border: #333;
+  --mission-hover: #111;
+  --mission-focus: #d0d0d0;
   background: #000;
+}
+
+html,
+body,
+#root {
+  height: 100%;
 }
 
 body {
   margin: 0;
+  overflow: hidden;
   background: inherit;
-}
-
-main {
-  box-sizing: border-box;
-  width: min(100%, 960px);
-  margin: 0 auto;
-  padding: 32px;
-}
-
-h1 {
-  margin: 0 0 8px;
-  font-size: 24px;
-  font-weight: 600;
-}
-
-p {
-  color: var(--vscode-descriptionForeground, currentColor);
 }
 
 button {
@@ -48,51 +56,240 @@ button {
   padding: 4px 10px;
   color: inherit;
   background: transparent;
-  border: 1px solid var(--vscode-panel-border, currentColor);
-  border-radius: 4px;
+  border: 1px solid var(--mission-border);
+  border-radius: 5px;
   font: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--mission-hover);
 }
 
 button:focus-visible {
-  outline: 2px solid var(--vscode-focusBorder, currentColor);
+  outline: 2px solid var(--mission-focus);
   outline-offset: 2px;
+}
+
+.mission-control-page {
+  box-sizing: border-box;
+  width: min(100%, 1120px);
+  height: 100%;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 36px 40px 64px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.mission-control-header {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--mission-border);
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 25px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+}
+
+p {
+  margin: 0;
+  color: var(--mission-muted);
+  line-height: 1.55;
+}
+
+.mission-control-primary {
+  color: var(--mission-bg);
+  background: var(--mission-fg);
+  border-color: var(--mission-fg);
+}
+
+.mission-control-primary:hover {
+  background: var(--mission-fg);
+  opacity: 0.86;
+}
+
+.mission-control-toolbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 0 14px;
 }
 
 .mission-control-filters {
   display: flex;
+  min-width: 0;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 24px 0 16px;
+  gap: 4px;
 }
 
-.mission-control-filters button[aria-pressed='true'] {
-  background: var(--vscode-toolbar-hoverBackground, transparent);
+.mission-control-filters button {
+  border-color: transparent;
+  color: var(--mission-muted);
+}
+
+.mission-control-filters button[aria-selected='true'] {
+  color: var(--mission-fg);
+  border-color: var(--mission-border);
 }
 
 .mission-control-status {
-  min-height: 20px;
+  min-height: 22px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.mission-control-retry {
+  margin: 2px 0 16px;
+}
+
+.mission-control-columns,
+.mission-control-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) minmax(120px, 1fr) minmax(110px, 0.8fr) minmax(90px, 0.6fr) minmax(100px, 0.7fr);
+  min-width: 0;
+  gap: 18px;
+  align-items: center;
+}
+
+.mission-control-columns {
+  padding: 10px 14px;
+  color: var(--mission-muted);
+  border-top: 1px solid var(--mission-border);
+  border-bottom: 1px solid var(--mission-border);
+  font-size: 11px;
 }
 
 .mission-control-list {
+  margin: 0;
   padding: 0;
-  border-top: 1px solid var(--vscode-panel-border, currentColor);
   list-style: none;
 }
 
 .mission-control-list li {
+  min-width: 0;
+  border-bottom: 1px solid var(--mission-border);
+}
+
+.mission-control-row {
+  width: 100%;
+  padding: 15px 14px;
+  text-align: left;
+  border: 0;
+  border-radius: 0;
+}
+
+.mission-control-title,
+.mission-control-value {
   display: grid;
-  gap: 4px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--vscode-panel-border, currentColor);
+  min-width: 0;
+  gap: 3px;
 }
 
-.mission-control-list span,
-.mission-control-error {
-  color: var(--vscode-descriptionForeground, currentColor);
+.mission-control-title strong,
+.mission-control-value > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-@media (max-width: 520px) {
-  main {
-    padding: 20px 16px;
+.mission-control-title small,
+.mission-control-value small {
+  color: var(--mission-muted);
+  font-size: 10px;
+}
+
+.mission-control-value small {
+  display: none;
+}
+
+.mission-control-route {
+  padding-top: 40px;
+}
+
+.mission-control-route h1 {
+  margin-top: 28px;
+}
+
+.mission-control-back {
+  padding-inline: 0;
+  color: var(--mission-muted);
+  border-color: transparent;
+}
+
+@media (max-width: 640px) {
+  .mission-control-page {
+    padding: 24px 18px 48px;
+  }
+
+  .mission-control-header {
+    display: grid;
+    gap: 18px;
+  }
+
+  .mission-control-primary {
+    justify-self: start;
+  }
+
+  .mission-control-columns {
+    display: none;
+  }
+
+  .mission-control-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 13px 18px;
+    padding-inline: 4px;
+  }
+
+  .mission-control-title {
+    grid-column: 1 / -1;
+  }
+
+  .mission-control-value small {
+    display: block;
+  }
+}
+
+@media (max-width: 420px) {
+  .mission-control-toolbar {
+    align-items: flex-end;
+  }
+
+  .mission-control-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0s !important;
+  }
+}
+
+@media (forced-colors: active) {
+  button,
+  .mission-control-header,
+  .mission-control-columns,
+  .mission-control-list li {
+    border-color: CanvasText;
+  }
+
+  .mission-control-primary {
+    color: ButtonText;
+    background: ButtonFace;
   }
 }

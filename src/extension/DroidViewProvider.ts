@@ -69,6 +69,7 @@ export class DroidViewProvider
     private readonly extensionUri: vscode.Uri,
     private readonly controller: ChatController,
     private readonly diagnostics?: RuntimeDiagnosticSink,
+    private readonly openMissionControl?: () => void,
   ) {}
 
   resolveWebviewView(
@@ -209,6 +210,10 @@ export class DroidViewProvider
                 });
               },
             );
+          return;
+        }
+        if (message.type === 'mission.panel.open') {
+          this.openMissionControl?.();
           return;
         }
 

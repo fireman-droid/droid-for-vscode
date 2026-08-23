@@ -118,8 +118,8 @@ export function App(): React.JSX.Element {
     [],
   );
   const handleMissionOpen = useCallback((): void => {
-    missionEntry.openSetup('');
-  }, [missionEntry.openSetup]);
+    missionControl({ type: 'mission.panel.open' });
+  }, [missionControl]);
 
   useEffect(() => {
     // Host messages are coalesced into one dispatch batch per animation
@@ -504,8 +504,9 @@ export function App(): React.JSX.Element {
           return;
         } else {
           const capabilities = state.missionSnapshot?.setup;
-          if (
-            builtin.task.length === 0 ||
+          if (builtin.task.length === 0) {
+            handleMissionOpen();
+          } else if (
             capabilities === undefined ||
             state.sessionId === null
           ) {
@@ -1610,10 +1611,7 @@ export function App(): React.JSX.Element {
                 )
           }
           onMissionOpen={
-            state.sessionId !== null &&
-            state.missionSnapshot?.setup !== undefined
-              ? handleMissionOpen
-              : undefined
+            handleMissionOpen
           }
           queuedCount={queuedCount}
           queueEditing={queueEditingId !== null}

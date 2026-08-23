@@ -75,6 +75,22 @@ describe('Mission Bridge protocol', () => {
     ).toBeUndefined();
   });
 
+  it('accepts only the exact non-mutating Mission panel intent', () => {
+    const open = {
+      type: 'mission.panel.open',
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
+      requestId: 'request-panel-1',
+      scope: 'selected-chat',
+    } as const;
+    expect(parseMissionWebviewMessage(open)).toEqual(open);
+    expect(
+      parseMissionWebviewMessage({ ...open, catalogId: 'mission-secret' }),
+    ).toBeUndefined();
+    expect(
+      parseMissionWebviewMessage({ ...open, scope: 'other-chat' }),
+    ).toBeUndefined();
+  });
+
   it('accepts only safe authoritative Mission snapshots', () => {
     const snapshot = {
       type: 'mission.snapshot',

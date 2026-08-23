@@ -230,7 +230,7 @@ describe('App Mission entry', () => {
     expect(posted.some((message) => message.type === 'turn.send')).toBe(false);
   });
 
-  it('discovers /mission in the slash popup and opens setup directly', async () => {
+  it('discovers /mission in the slash popup and opens Mission Control', async () => {
     render(<App />);
     host(chatSnapshot());
     host(missionSnapshot());
@@ -239,15 +239,20 @@ describe('App Mission entry', () => {
 
     fireEvent.change(input, { target: { value: '/mission' } });
     const command = await screen.findByRole('option', {
-      name: /\/mission.*Start a Factory Mission/i,
+      name: /\/mission.*Open Mission Control/i,
     });
     expect(screen.queryByText('No matching commands')).toBeNull();
 
     input.focus();
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    await waitFor(() =>
+      expect(
+        posted.some((message) => message.type === 'mission.panel.open'),
+      ).toBe(true),
+    );
     expect(
-      await screen.findByRole('heading', { name: 'Start a Mission' }),
-    ).toBeDefined();
+      screen.queryByRole('heading', { name: 'Start a Mission' }),
+    ).toBeNull();
     expect(input.value).toBe('');
     expect(
       posted.some(
@@ -257,7 +262,7 @@ describe('App Mission entry', () => {
     ).toBe(false);
   });
 
-  it('hides the built-in when Mission setup is unavailable', async () => {
+  it('keeps the catalog entry available when Mission setup is unavailable', async () => {
     render(<App />);
     host(chatSnapshot());
     host({ ...missionSnapshot(), setup: undefined });
@@ -265,40 +270,30 @@ describe('App Mission entry', () => {
       screen.getByLabelText<HTMLTextAreaElement>('Message Droid');
 
     fireEvent.change(input, { target: { value: '/mission' } });
-    expect(await screen.findByText('No matching commands')).toBeDefined();
     expect(
-      screen.queryByRole('option', {
-        name: /\/mission.*Start a Factory Mission/i,
+      await screen.findByRole('option', {
+        name: /\/mission.*Open Mission Control/i,
       }),
-    ).toBeNull();
+    ).toBeDefined();
   });
 
-  it('preserves chat around setup and dismisses locally', async () => {
+  it('submits bare /mission without opening inline setup or sending', async () => {
     render(<App />);
     host(chatSnapshot());
     host(missionSnapshot());
-    const transcript = await screen.findByText('Existing transcript');
     const input = await enterComposer('/mission');
 
-    expect(await screen.findByRole('heading', { name: 'Start a Mission' })).toBeDefined();
-    expect(screen.getByText('Existing transcript')).toBe(transcript);
-    expect(screen.getByLabelText('Message Droid')).toBe(input);
-    expect(document.activeElement).toBe(
-      screen.getByLabelText('Mission task'),
-    );
-
-    fireEvent.change(input, { target: { value: 'Keep this draft' } });
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Dismiss Mission setup' }),
-    );
     expect(screen.queryByRole('heading', { name: 'Start a Mission' })).toBeNull();
-    expect(input.value).toBe('Keep this draft');
+    expect(input.value).toBe('');
     expect(
       posted.some(
         (message) =>
           message.type === 'mission.start' || message.type === 'turn.send',
       ),
     ).toBe(false);
+    expect(
+      posted.filter((message) => message.type === 'mission.panel.open'),
+    ).toHaveLength(1);
   });
 
   it('direct starts once with valid effective preferences', async () => {
@@ -368,12 +363,14 @@ describe('App Mission entry', () => {
     );
   });
 
-  it('does not carry setup across selected chats', async () => {
+  it('does not revive inline setup across selected chats', async () => {
     render(<App />);
     host(chatSnapshot());
     host(missionSnapshot());
     await enterComposer('/mission');
-    expect(await screen.findByRole('heading', { name: 'Start a Mission' })).toBeDefined();
+    expect(
+      screen.queryByRole('heading', { name: 'Start a Mission' }),
+    ).toBeNull();
 
     const next = chatSnapshot();
     host({
@@ -392,10 +389,11 @@ describe('App Mission entry', () => {
     });
     host({ ...missionSnapshot(), sequence: 3 });
 
-    await waitFor(() => {
-      expect(
-        screen.queryByRole('heading', { name: 'Start a Mission' }),
-      ).toBeNull();
-    });
+    expect(
+      screen.queryByRole('heading', { name: 'Start a Mission' }),
+    ).toBeNull();
+    expect(
+      posted.filter((message) => message.type === 'mission.panel.open'),
+    ).toHaveLength(1);
   });
 });

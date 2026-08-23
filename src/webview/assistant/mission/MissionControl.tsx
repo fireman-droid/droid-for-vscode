@@ -52,40 +52,6 @@ export function MissionControl({
               }}
             />
           </div>
-          <ol className="dvx-mission-features">
-            {snapshot.features.map((feature) => (
-              <li
-                key={feature.id}
-                data-status={feature.status}
-                aria-current={
-                  feature.id === snapshot.currentFeatureId ? 'step' : undefined
-                }
-              >
-                <span className="dvx-mission-feature-mark" aria-hidden="true" />
-                <span className="dvx-mission-feature-copy">
-                  <span>{feature.title}</span>
-                  {feature.milestone === undefined ? null : (
-                    <small>{feature.milestone}</small>
-                  )}
-                </span>
-                {feature.workerViewAvailable === true ? (
-                  <button
-                    type="button"
-                    className="dvx-mission-worker-view"
-                    onClick={() =>
-                      onCommand({
-                        type: 'mission.viewer.open',
-                        revision: snapshot.revision,
-                        featureId: feature.id,
-                      })
-                    }
-                  >
-                    View worker
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ol>
           <div className="dvx-mission-control-actions">
             {snapshot.controls.canPause ? (
               <ControlButton
@@ -125,6 +91,10 @@ export function MissionControl({
                 {`${formatBusy(busy)}…`}
               </span>
             )}
+            <ControlButton
+              label="Open Mission Control"
+              onClick={() => onCommand({ type: 'mission.panel.open' })}
+            />
           </div>
         </div>
       ) : null}

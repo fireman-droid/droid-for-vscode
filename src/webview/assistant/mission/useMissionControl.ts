@@ -6,6 +6,9 @@ import type { MissionMessagePoster } from './missionStart';
 
 export type MissionUiCommand =
   | {
+      readonly type: 'mission.panel.open';
+    }
+  | {
       readonly type:
         | 'mission.pause'
         | 'mission.resume'
@@ -35,7 +38,9 @@ export function useMissionControl(
         scope: 'selected-chat' as const,
       };
       let message: WebviewToHostMessage;
-      if (command.type === 'mission.disclosure.set') {
+      if (command.type === 'mission.panel.open') {
+        message = { ...envelope, type: command.type };
+      } else if (command.type === 'mission.disclosure.set') {
         message = { ...envelope, type: command.type, expanded: command.expanded };
       } else if (command.type === 'mission.viewer.open') {
         message = {

@@ -82,7 +82,7 @@ const sessionViewerResult = await build({
 });
 
 const missionControlResult = await build({
-  entryPoints: ['src/webview/missionControl/main.ts'],
+  entryPoints: ['src/webview/missionControl/main.tsx'],
   outfile: 'dist/webview/mission-control.js',
   bundle: true,
   packages: 'bundle',

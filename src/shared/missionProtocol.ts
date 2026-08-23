@@ -126,11 +126,19 @@ export interface MissionViewerOpenMessage {
   readonly featureId: string;
 }
 
+export interface MissionPanelOpenMessage {
+  readonly type: 'mission.panel.open';
+  readonly protocolVersion: typeof MISSION_BRIDGE_PROTOCOL_VERSION;
+  readonly requestId: string;
+  readonly scope: 'selected-chat';
+}
+
 export type MissionWebviewMessage =
   | MissionStartMessage
   | MissionControlMessage
   | MissionDisclosureMessage
-  | MissionViewerOpenMessage;
+  | MissionViewerOpenMessage
+  | MissionPanelOpenMessage;
 
 export interface MissionFeatureSnapshot {
   readonly id: string;
@@ -247,9 +255,33 @@ export function parseMissionWebviewMessage(
       return parseMissionDisclosure(value);
     case 'mission.viewer.open':
       return parseMissionViewerOpen(value);
+    case 'mission.panel.open':
+      return parseMissionPanelOpen(value);
     default:
       return undefined;
   }
+}
+
+function parseMissionPanelOpen(
+  value: UnknownRecord,
+): MissionPanelOpenMessage | undefined {
+  if (
+    !hasExactKeys(value, [
+      'type',
+      'protocolVersion',
+      'requestId',
+      'scope',
+    ]) ||
+    !hasMissionEnvelope(value)
+  ) {
+    return undefined;
+  }
+  return {
+    type: 'mission.panel.open',
+    protocolVersion: MISSION_BRIDGE_PROTOCOL_VERSION,
+    requestId: value.requestId,
+    scope: 'selected-chat',
+  };
 }
 
 export function parseMissionHostMessage(

@@ -57,6 +57,7 @@ export class MissionControlPanelController implements vscode.Disposable {
   private readonly deadlineMs: number;
   private panelEntry: PanelEntry | null = null;
   private route: MissionControlRoute = 'catalog';
+  private detailCatalogId: string | null = null;
   private routeRevision = 0;
   private catalog: CatalogState = {
     filter: 'all',
@@ -97,6 +98,11 @@ export class MissionControlPanelController implements vscode.Disposable {
     }
     if (this.panelEntry !== null) {
       this.navigate('catalog');
+      this.post({
+        type: 'missionControl.route',
+        protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+        route: 'catalog',
+      });
       this.panelEntry.panel.reveal(undefined, false);
       return;
     }
@@ -156,13 +162,24 @@ export class MissionControlPanelController implements vscode.Disposable {
     );
   }
 
-  navigate(route: MissionControlRoute): void {
-    if (this.route === route) {
+  navigate(route: 'catalog' | 'new-mission'): void;
+  navigate(route: 'detail', catalogId: string): void;
+  navigate(route: MissionControlRoute, catalogId: string | null = null): void {
+    const nextCatalogId = route === 'detail' ? catalogId : null;
+    if (this.route === route && this.detailCatalogId === nextCatalogId) {
       return;
     }
     this.route = route;
+    this.detailCatalogId = nextCatalogId;
     this.routeRevision += 1;
     this.activeOperation = null;
+  }
+
+  routeState(): {
+    readonly route: MissionControlRoute;
+    readonly catalogId: string | null;
+  } {
+    return { route: this.route, catalogId: this.detailCatalogId };
   }
 
   catalogState(): CatalogState {
@@ -212,6 +229,14 @@ export class MissionControlPanelController implements vscode.Disposable {
       return;
     }
     entry.seenRequestIds.add(message.requestId);
+    if (message.type === 'missionControl.navigate') {
+      if (message.route === 'detail') {
+        this.navigate('detail', message.catalogId);
+      } else {
+        this.navigate(message.route);
+      }
+      return;
+    }
     this.navigate('catalog');
     this.startCatalogRequest(entry, message.requestId, message.filter);
   }
@@ -359,6 +384,7 @@ export class MissionControlPanelController implements vscode.Disposable {
     this.activeOperation = null;
     this.routeRevision += 1;
     this.route = 'catalog';
+    this.detailCatalogId = null;
     this.catalog = { filter: 'all', rows: [], revision: 0 };
     this.nextSequence = 1;
     this.nextCatalogRevision = 1;

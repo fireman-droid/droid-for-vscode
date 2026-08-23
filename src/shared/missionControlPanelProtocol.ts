@@ -56,9 +56,25 @@ export interface MissionControlReadyMessage {
   readonly protocolVersion: typeof MISSION_CONTROL_PANEL_PROTOCOL_VERSION;
 }
 
+export type MissionControlNavigateMessage =
+  | {
+      readonly type: 'missionControl.navigate';
+      readonly protocolVersion: typeof MISSION_CONTROL_PANEL_PROTOCOL_VERSION;
+      readonly requestId: string;
+      readonly route: 'catalog' | 'new-mission';
+    }
+  | {
+      readonly type: 'missionControl.navigate';
+      readonly protocolVersion: typeof MISSION_CONTROL_PANEL_PROTOCOL_VERSION;
+      readonly requestId: string;
+      readonly route: 'detail';
+      readonly catalogId: string;
+    };
+
 export type MissionControlPanelWebviewMessage =
   | MissionControlReadyMessage
-  | MissionControlCatalogRequest;
+  | MissionControlCatalogRequest
+  | MissionControlNavigateMessage;
 
 export interface MissionControlCatalogReadyResult {
   readonly type: 'missionControl.catalog.result';
@@ -94,6 +110,11 @@ export type MissionControlPanelHostMessage =
       readonly protocolVersion: typeof MISSION_CONTROL_PANEL_PROTOCOL_VERSION;
       readonly preference: 'auto' | 'light' | 'dark';
       readonly resolved: 'light' | 'dark';
+    }
+  | {
+      readonly type: 'missionControl.route';
+      readonly protocolVersion: typeof MISSION_CONTROL_PANEL_PROTOCOL_VERSION;
+      readonly route: 'catalog';
     };
 
 const LIFECYCLE_SET = new Set<string>(MISSION_LIFECYCLES);
@@ -102,6 +123,44 @@ const FILTER_SET = new Set<string>(MISSION_CONTROL_CATALOG_FILTERS);
 export function parseMissionControlPanelWebviewMessage(
   value: unknown,
 ): MissionControlPanelWebviewMessage | undefined {
+  if (
+    isStrictRecord(value) &&
+    value.type === 'missionControl.navigate' &&
+    value.protocolVersion === MISSION_CONTROL_PANEL_PROTOCOL_VERSION &&
+    isRequestId(value.requestId)
+  ) {
+    if (
+      (value.route === 'catalog' || value.route === 'new-mission') &&
+      hasExactKeys(value, ['type', 'protocolVersion', 'requestId', 'route'])
+    ) {
+      return {
+        type: 'missionControl.navigate',
+        protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+        requestId: value.requestId,
+        route: value.route,
+      };
+    }
+    if (
+      value.route === 'detail' &&
+      hasExactKeys(value, [
+        'type',
+        'protocolVersion',
+        'requestId',
+        'route',
+        'catalogId',
+      ]) &&
+      isCatalogId(value.catalogId)
+    ) {
+      return {
+        type: 'missionControl.navigate',
+        protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+        requestId: value.requestId,
+        route: 'detail',
+        catalogId: value.catalogId,
+      };
+    }
+    return undefined;
+  }
   if (
     isStrictRecord(value) &&
     hasExactKeys(value, ['type', 'protocolVersion']) &&
@@ -134,6 +193,19 @@ export function parseMissionControlPanelWebviewMessage(
 export function parseMissionControlPanelHostMessage(
   value: unknown,
 ): MissionControlPanelHostMessage | undefined {
+  if (
+    isStrictRecord(value) &&
+    hasExactKeys(value, ['type', 'protocolVersion', 'route']) &&
+    value.type === 'missionControl.route' &&
+    value.protocolVersion === MISSION_CONTROL_PANEL_PROTOCOL_VERSION &&
+    value.route === 'catalog'
+  ) {
+    return {
+      type: 'missionControl.route',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      route: 'catalog',
+    };
+  }
   if (
     isStrictRecord(value) &&
     hasExactKeys(value, [

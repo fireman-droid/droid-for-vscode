@@ -164,6 +164,33 @@ describe('DroidViewProvider', () => {
     expect(view.webview.postMessage).toHaveBeenCalledWith(snapshot);
   });
 
+  it('routes the compact Sidebar Mission Control action outside chat state', () => {
+    const controller = createController();
+    const openMissionControl = vi.fn();
+    const provider = new DroidViewProvider(
+      uri('extension'),
+      controller.value,
+      undefined,
+      openMissionControl,
+    );
+    const view = createView();
+    provider.resolveWebviewView(
+      view.value,
+      {} as vscodeTypes.WebviewViewResolveContext,
+      {} as vscodeTypes.CancellationToken,
+    );
+
+    view.receive({
+      type: 'mission.panel.open',
+      protocolVersion: 25,
+      requestId: 'open-mission-control-1',
+      scope: 'selected-chat',
+    });
+
+    expect(openMissionControl).toHaveBeenCalledOnce();
+    expect(controller.handleMessage).not.toHaveBeenCalled();
+  });
+
   it('logs a dedicated event for a version-mismatched webview.ready', () => {
     const controller = createController();
     const diagnostics = { record: vi.fn() };

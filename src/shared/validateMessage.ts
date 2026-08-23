@@ -279,7 +279,7 @@ export function parseWebviewMessage(
       case 'mission.start': case 'mission.dismissSetup': case 'mission.pause':
       case 'mission.resume': case 'mission.stopCurrentFeature': case 'mission.refresh':
       case 'mission.disclosure.set':
-      case 'mission.viewer.open':
+      case 'mission.viewer.open': case 'mission.panel.open':
         return parseMissionWebviewMessage(value);
       default:
         // Panel-scoped message families delegate wholesale.

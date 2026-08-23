@@ -47,15 +47,12 @@ const snapshot: MissionSnapshotMessage = {
 afterEach(cleanup);
 
 describe('MissionControl', () => {
-  it('renders ordered progress and posts revision-bound controls', async () => {
+  it('stays compact and posts panel plus revision-bound controls', async () => {
     const user = userEvent.setup();
     const onCommand = vi.fn();
     render(<MissionControl snapshot={snapshot} onCommand={onCommand} />);
 
-    expect(screen.getAllByRole('listitem').map((row) => row.textContent)).toEqual([
-      'First featureView worker',
-      'Second feature',
-    ]);
+    expect(screen.queryByRole('list')).toBeNull();
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe(
       '1',
     );
@@ -63,7 +60,9 @@ describe('MissionControl', () => {
     await user.click(
       screen.getByRole('button', { name: 'Stop current feature' }),
     );
-    await user.click(screen.getByRole('button', { name: 'View worker' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Open Mission Control' }),
+    );
     expect(onCommand).toHaveBeenNthCalledWith(1, {
       type: 'mission.pause',
       revision: 3,
@@ -73,9 +72,7 @@ describe('MissionControl', () => {
       revision: 3,
     });
     expect(onCommand).toHaveBeenNthCalledWith(3, {
-      type: 'mission.viewer.open',
-      revision: 3,
-      featureId: 'first',
+      type: 'mission.panel.open',
     });
   });
 
@@ -86,7 +83,7 @@ describe('MissionControl', () => {
     await user.click(
       screen.getByRole('button', { name: /Ship Mission controls/ }),
     );
-    expect(screen.queryByRole('list')).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
     expect(onCommand).toHaveBeenCalledWith({
       type: 'mission.disclosure.set',
       expanded: false,

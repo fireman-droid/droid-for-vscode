@@ -147,6 +147,19 @@ function requestMessage(requestId: string, filter = 'all') {
   };
 }
 
+function navigateMessage(
+  requestId: string,
+  catalogId = 'mission-catalog-one',
+) {
+  return {
+    type: 'missionControl.navigate',
+    protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+    requestId,
+    route: 'detail',
+    catalogId,
+  };
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   vscodeMock.__panels.length = 0;
@@ -197,6 +210,45 @@ describe('MissionControlPanelController', () => {
         rows: [expect.objectContaining({ title: 'Catalog foundation' })],
       }),
     );
+    controller.dispose();
+  });
+
+  it('navigates by safe identity without catalog mutation and returns repeated entry to catalog', async () => {
+    const listCatalog = vi.fn().mockResolvedValue({
+      status: 'ready',
+      rows: [row('mission-catalog-one', 'Duplicate title')],
+    });
+    const controller = new MissionControlPanelController(
+      new vscodeMock.Uri('/extension') as never,
+      { listCatalog },
+    );
+    controller.open();
+    const panel = vscodeMock.__panels[0]!;
+    panel.webview.receive(readyMessage());
+    await settle();
+
+    panel.webview.receive(navigateMessage('detail-one'));
+    expect(listCatalog).toHaveBeenCalledOnce();
+    expect(controller.routeState()).toEqual({
+      route: 'detail',
+      catalogId: 'mission-catalog-one',
+    });
+    expect(controller.catalogState().rows[0]?.catalogId).toBe(
+      'mission-catalog-one',
+    );
+
+    controller.open();
+    expect(controller.routeState()).toEqual({
+      route: 'catalog',
+      catalogId: null,
+    });
+    expect(panel.revealCalls).toBe(1);
+    expect(panel.webview.posted.at(-1)).toEqual({
+      type: 'missionControl.route',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      route: 'catalog',
+    });
+    expect(listCatalog).toHaveBeenCalledOnce();
     controller.dispose();
   });
 

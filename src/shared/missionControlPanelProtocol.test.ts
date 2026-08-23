@@ -66,6 +66,17 @@ describe('Mission Control panel protocol', () => {
         resolved: 'sepia',
       }),
     ).toBeUndefined();
+    expect(
+      parseMissionControlPanelHostMessage({
+        type: 'missionControl.route',
+        protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+        route: 'catalog',
+      }),
+    ).toEqual({
+      type: 'missionControl.route',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      route: 'catalog',
+    });
   });
 
   it('accepts exact versioned catalog requests and official filters', () => {
@@ -78,6 +89,42 @@ describe('Mission Control panel protocol', () => {
     ]) {
       expect(parseMissionControlPanelWebviewMessage(invalid)).toBeUndefined();
     }
+  });
+
+  it('accepts only safe route navigation identities', () => {
+    const detail = {
+      type: 'missionControl.navigate',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      requestId: 'navigate-detail-1',
+      route: 'detail',
+      catalogId: row.catalogId,
+    } as const;
+    expect(parseMissionControlPanelWebviewMessage(detail)).toEqual(detail);
+    expect(
+      parseMissionControlPanelWebviewMessage({
+        ...detail,
+        catalogId: 'daemon-session-raw',
+      }),
+    ).toBeUndefined();
+    expect(
+      parseMissionControlPanelWebviewMessage({
+        ...detail,
+        route: 'new-mission',
+      }),
+    ).toBeUndefined();
+    expect(
+      parseMissionControlPanelWebviewMessage({
+        type: 'missionControl.navigate',
+        protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+        requestId: 'navigate-new-1',
+        route: 'new-mission',
+      }),
+    ).toEqual({
+      type: 'missionControl.navigate',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      requestId: 'navigate-new-1',
+      route: 'new-mission',
+    });
   });
 
   it('accepts a bounded ready catalog and rejects unknown or secret fields', () => {
