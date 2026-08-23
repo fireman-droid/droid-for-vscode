@@ -191,6 +191,205 @@ describe('MissionGateway', () => {
     expect(serialized).not.toContain('D:\\');
   });
 
+  it.each([
+    { completedFeatures: undefined, totalFeatures: undefined },
+    { completedFeatures: 2, totalFeatures: undefined },
+    { completedFeatures: undefined, totalFeatures: 5 },
+    { completedFeatures: -1, totalFeatures: undefined },
+    {
+      completedFeatures: undefined,
+      totalFeatures: Number.POSITIVE_INFINITY,
+    },
+  ])(
+    'projects unavailable progress for optional counts %#',
+    async (progress) => {
+      const { gateway } = catalogGateway([
+        {
+          rows: [
+            {
+              sessionId: 'optional-progress',
+              updatedAt: 1_777_000_000,
+              mission: {
+                state: 'running',
+                ...progress,
+              },
+            },
+          ],
+          hasMore: false,
+        },
+      ]);
+
+      await expect(gateway.listCatalog()).resolves.toMatchObject({
+        status: 'ready',
+        rows: [{ progress: null }],
+      });
+    },
+  );
+
+  it.each([
+    { completedFeatures: 0, totalFeatures: 0 },
+    { completedFeatures: 0, totalFeatures: 4 },
+    { completedFeatures: 2, totalFeatures: 4 },
+    { completedFeatures: 4, totalFeatures: 4 },
+  ])('preserves fully declared valid progress %#', async (progress) => {
+    const { gateway } = catalogGateway([
+      {
+        rows: [
+          {
+            sessionId: 'valid-progress',
+            updatedAt: 1_777_000_000,
+            mission: {
+              state: 'running',
+              ...progress,
+            },
+          },
+        ],
+        hasMore: false,
+      },
+    ]);
+
+    await expect(gateway.listCatalog()).resolves.toMatchObject({
+      status: 'ready',
+      rows: [
+        {
+          progress: {
+            completed: progress.completedFeatures,
+            total: progress.totalFeatures,
+          },
+        },
+      ],
+    });
+  });
+
+  it.each([
+    { completedFeatures: -1, totalFeatures: 4 },
+    { completedFeatures: Number.NaN, totalFeatures: 4 },
+    { completedFeatures: 1, totalFeatures: Number.POSITIVE_INFINITY },
+    { completedFeatures: 10_001, totalFeatures: 10_001 },
+    { completedFeatures: 3, totalFeatures: 2 },
+  ])('rejects fully declared invalid progress %#', async (progress) => {
+    const { gateway } = catalogGateway([
+      {
+        rows: [
+          {
+            sessionId: 'invalid-progress',
+            updatedAt: 1_777_000_000,
+            mission: {
+              state: 'running',
+              ...progress,
+            },
+          },
+        ],
+        hasMore: false,
+      },
+    ]);
+
+    await expect(gateway.listCatalog()).resolves.toMatchObject({
+      status: 'error',
+      code: 'invalid-data',
+    });
+  });
+
+  it.each([
+    'Investigate(C:\\Users\\alice\\secret.txt)',
+    'Investigate(\\\\server\\share\\secret.txt)',
+    'Investigate(/Users/alice/.ssh/id_rsa)',
+    'Investigate</tmp>',
+    'Investigate(~/secrets/key)',
+    'api_key=super-secret-value',
+    'OPENAI_API_KEY=super-secret-value',
+  ])('rejects unsafe title presentation text %s', async (title) => {
+    const { gateway } = catalogGateway([
+      {
+        rows: [
+          {
+            sessionId: 'unsafe-title',
+            updatedAt: 1_777_000_000,
+            mission: { state: 'running', title },
+          },
+        ],
+        hasMore: false,
+      },
+    ]);
+
+    await expect(gateway.listCatalog()).resolves.toMatchObject({
+      status: 'error',
+      code: 'invalid-data',
+    });
+  });
+
+  it.each([
+    '/Users/alice/api_key=super-secret-value',
+    'D:\\work\\token=super-secret-value',
+  ])('replaces unsafe workspace presentation text %s', async (repoRoot) => {
+    const { gateway } = catalogGateway([
+      {
+        rows: [
+          {
+            sessionId: 'unsafe-workspace',
+            repoRoot,
+            updatedAt: 1_777_000_000,
+            mission: { state: 'running' },
+          },
+        ],
+        hasMore: false,
+      },
+    ]);
+
+    await expect(gateway.listCatalog()).resolves.toMatchObject({
+      status: 'ready',
+      rows: [{ workspaceLabel: '—' }],
+    });
+  });
+
+  it.each([
+    'Workstation(/Users/alice/.ssh/id_rsa)',
+    'token=super-secret-value',
+  ])('replaces unsafe computer presentation text %s', async (label) => {
+    const { gateway } = catalogGateway(
+      [
+        {
+          rows: [
+            {
+              sessionId: 'unsafe-computer',
+              hostId: 'opaque-host-id',
+              updatedAt: 1_777_000_000,
+              mission: { state: 'running' },
+            },
+          ],
+          hasMore: false,
+        },
+      ],
+      { resolveComputerLabel: () => label },
+    );
+
+    await expect(gateway.listCatalog()).resolves.toMatchObject({
+      status: 'ready',
+      rows: [{ computerLabel: '—' }],
+    });
+  });
+
+  it('preserves legitimate bounded punctuation and slash text', async () => {
+    const title = 'Investigate /mission and input/output (release 1.2)';
+    const { gateway } = catalogGateway([
+      {
+        rows: [
+          {
+            sessionId: 'legitimate-punctuation',
+            updatedAt: 1_777_000_000,
+            mission: { state: 'running', title },
+          },
+        ],
+        hasMore: false,
+      },
+    ]);
+
+    await expect(gateway.listCatalog()).resolves.toMatchObject({
+      status: 'ready',
+      rows: [{ title }],
+    });
+  });
+
   it('deduplicates by newest Mission update then daemon update and sorts deterministically', async () => {
     const candidates = [
       {
@@ -401,31 +600,6 @@ describe('MissionGateway', () => {
       message: 'The complete Mission catalog could not be loaded.',
     });
     vi.useRealTimers();
-  });
-
-  it('rejects invalid Mission progress rather than publishing an unsafe row', async () => {
-    const { gateway } = catalogGateway([
-      {
-        rows: [
-          {
-            sessionId: 'invalid-progress',
-            updatedAt: 1_777_000_000,
-            mission: {
-              state: 'running',
-              completedFeatures: 3,
-              totalFeatures: 2,
-            },
-          },
-        ],
-        hasMore: false,
-      },
-    ]);
-
-    await expect(gateway.listCatalog()).resolves.toEqual({
-      status: 'error',
-      code: 'invalid-data',
-      message: 'Mission catalog data was invalid.',
-    });
   });
 
   it('projects current chat, catalog, and advisory workspace preferences', async () => {

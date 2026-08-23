@@ -3,6 +3,12 @@ import {
   type MissionLifecycle,
 } from './missionProtocol';
 import {
+  MAX_WEBVIEW_DIAGNOSTIC_DETAIL_LENGTH,
+  WEBVIEW_DIAGNOSTIC_KINDS,
+  type WebviewDiagnosticMessage,
+} from './bridgeMessages';
+import { isSafePresentationText } from './presentationSafety';
+import {
   hasExactKeys,
   isExactArray,
   isStrictRecord,
@@ -74,7 +80,8 @@ export type MissionControlNavigateMessage =
 export type MissionControlPanelWebviewMessage =
   | MissionControlReadyMessage
   | MissionControlCatalogRequest
-  | MissionControlNavigateMessage;
+  | MissionControlNavigateMessage
+  | WebviewDiagnosticMessage;
 
 export interface MissionControlCatalogReadyResult {
   readonly type: 'missionControl.catalog.result';
@@ -123,6 +130,21 @@ const FILTER_SET = new Set<string>(MISSION_CONTROL_CATALOG_FILTERS);
 export function parseMissionControlPanelWebviewMessage(
   value: unknown,
 ): MissionControlPanelWebviewMessage | undefined {
+  if (
+    isStrictRecord(value) &&
+    value.type === 'webview.diagnostic' &&
+    hasExactKeys(value, ['type', 'kind', 'detail']) &&
+    typeof value.kind === 'string' &&
+    (WEBVIEW_DIAGNOSTIC_KINDS as readonly string[]).includes(value.kind) &&
+    typeof value.detail === 'string' &&
+    value.detail.length <= MAX_WEBVIEW_DIAGNOSTIC_DETAIL_LENGTH
+  ) {
+    return {
+      type: 'webview.diagnostic',
+      kind: value.kind as WebviewDiagnosticMessage['kind'],
+      detail: value.detail,
+    };
+  }
   if (
     isStrictRecord(value) &&
     value.type === 'missionControl.navigate' &&
@@ -449,18 +471,4 @@ function isCatalogFilter(value: unknown): value is MissionControlCatalogFilter {
 
 function isRevision(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
-}
-
-function isSafePresentationText(
-  value: unknown,
-  maximum: number,
-): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= maximum &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value) &&
-    !/(?:[A-Za-z]:[\\/]|\\\\|(?:^|\s)~?[\\/]|(?:^|\s)~[\\/])/.test(value) &&
-    !/(?:https?|wss?|file):\/\//i.test(value)
-  );
 }

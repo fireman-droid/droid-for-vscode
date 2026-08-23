@@ -1,3 +1,7 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const vscodeMock = vi.hoisted(() => {
@@ -103,6 +107,7 @@ import {
   MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
   type MissionControlCatalogRow,
 } from '../shared/missionControlPanelProtocol';
+import { LocalDiagnostics } from './LocalDiagnostics';
 import { MissionControlPanelController } from './MissionControlPanelController';
 
 const row = (
@@ -443,6 +448,45 @@ describe('MissionControlPanelController', () => {
     controller.open();
     expect(vscodeMock.window.createWebviewPanel).toHaveBeenCalledTimes(2);
     controller.dispose();
+  });
+
+  it('records exact Webview diagnostics with credential-scrubbed local detail', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'dvx-mission-control-'));
+    const diagnostics = new LocalDiagnostics({
+      directory,
+      output: {
+        appendLine: () => undefined,
+        show: () => undefined,
+        dispose: () => undefined,
+      },
+      now: () => new Date('2026-08-24T10:00:00.000Z'),
+    });
+    const controller = new MissionControlPanelController(
+      new vscodeMock.Uri('/extension') as never,
+      { listCatalog: vi.fn() },
+      {},
+      diagnostics,
+    );
+
+    try {
+      controller.open();
+      const panel = vscodeMock.__panels[0]!;
+      panel.webview.receive({
+        type: 'webview.diagnostic',
+        kind: 'boot-timeout',
+        detail: 'resource failed api_key=super-secret-value',
+      });
+      await diagnostics.flush();
+
+      const contents = await readFile(diagnostics.filePath, 'utf8');
+      expect(contents).toContain('"name":"missionControl.boot-timeout"');
+      expect(contents).toContain('[REDACTED]');
+      expect(contents).not.toContain('super-secret-value');
+    } finally {
+      controller.dispose();
+      diagnostics.dispose();
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });
 

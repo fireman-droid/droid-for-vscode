@@ -147,6 +147,40 @@ describe('Mission Control panel protocol', () => {
   });
 
   it.each([
+    ['title', 'Investigate(C:\\Users\\alice\\secret.txt)'],
+    ['title', 'Investigate(\\\\server\\share\\secret.txt)'],
+    ['title', 'Investigate(/Users/alice/.ssh/id_rsa)'],
+    ['title', 'Investigate</tmp>'],
+    ['title', 'Investigate(~/secrets/key)'],
+    ['title', 'api_key=super-secret-value'],
+    ['title', 'OPENAI_API_KEY=super-secret-value'],
+    ['workspaceLabel', 'Workspace(/home/alice/private)'],
+    ['workspaceLabel', 'password=super-secret-value'],
+    ['computerLabel', 'Computer(/var/run/private.sock)'],
+    ['computerLabel', 'access_token=super-secret-value'],
+  ] as const)(
+    'rejects unsafe %s presentation text',
+    (property, presentation) => {
+      expect(
+        parseMissionControlPanelHostMessage({
+          ...ready,
+          rows: [{ ...row, [property]: presentation }],
+        }),
+      ).toBeUndefined();
+    },
+  );
+
+  it('preserves legitimate bounded punctuation and slash text', () => {
+    const title = 'Investigate /mission and input/output (release 1.2)';
+    expect(
+      parseMissionControlPanelHostMessage({
+        ...ready,
+        rows: [{ ...row, title }],
+      }),
+    ).toMatchObject({ rows: [{ title }] });
+  });
+
+  it.each([
     { completed: 0, total: 0 },
     { completed: 0, total: 4 },
     { completed: 2, total: 4 },
@@ -217,5 +251,33 @@ describe('Mission Control panel protocol', () => {
         error: { ...failure.error, detail: 'token=secret' },
       }),
     ).toBeUndefined();
+    expect(
+      parseMissionControlPanelHostMessage({
+        ...failure,
+        error: {
+          ...failure.error,
+          message: 'api_key=super-secret-value',
+        },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('accepts exact bounded Webview diagnostics and rejects malformed beacons', () => {
+    const diagnostic = {
+      type: 'webview.diagnostic',
+      kind: 'boot-timeout',
+      detail: 'no boot beacon within 5000ms',
+    } as const;
+    expect(parseMissionControlPanelWebviewMessage(diagnostic)).toEqual(
+      diagnostic,
+    );
+    for (const invalid of [
+      { ...diagnostic, kind: 'arbitrary-kind' },
+      { ...diagnostic, detail: 'x'.repeat(2_049) },
+      { ...diagnostic, protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION },
+      { type: 'webview.diagnostic', kind: 'boot-timeout' },
+    ]) {
+      expect(parseMissionControlPanelWebviewMessage(invalid)).toBeUndefined();
+    }
   });
 });

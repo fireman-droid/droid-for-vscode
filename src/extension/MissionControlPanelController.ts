@@ -211,6 +211,14 @@ export class MissionControlPanelController implements vscode.Disposable {
       });
       return;
     }
+    if (message.type === 'webview.diagnostic') {
+      this.diagnostics?.record({
+        level: 'warn',
+        name: `missionControl.${message.kind}`,
+        detail: message.detail,
+      });
+      return;
+    }
     if (message.type === 'missionControl.ready') {
       if (entry.ready) {
         return;

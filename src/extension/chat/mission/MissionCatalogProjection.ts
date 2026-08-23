@@ -16,6 +16,7 @@ import {
   MAX_MISSION_CONTROL_TITLE_LENGTH,
   type MissionControlCatalogRow,
 } from '../../../shared/missionControlPanelProtocol';
+import { isSafePresentationText } from '../../../shared/presentationSafety';
 
 export interface MissionCatalogProjectionOptions {
   readonly getDroid: () => Promise<ConnectedDroid>;
@@ -239,12 +240,10 @@ function projectProgress(
   completed: number | undefined,
   total: number | undefined,
 ): MissionControlCatalogRow['progress'] {
-  if (completed === undefined && total === undefined) {
+  if (completed === undefined || total === undefined) {
     return null;
   }
   if (
-    completed === undefined ||
-    total === undefined ||
     !isFeatureCount(completed) ||
     !isFeatureCount(total) ||
     completed > total
@@ -299,7 +298,7 @@ function projectWorkspaceLabel(repoRoot: string | undefined): string {
     repoRoot.includes('\\')
       ? path.win32.basename(repoRoot)
       : path.posix.basename(repoRoot);
-  return isPresentationText(label, MAX_MISSION_CONTROL_LABEL_LENGTH)
+  return isSafePresentationText(label, MAX_MISSION_CONTROL_LABEL_LENGTH)
     ? label
     : '—';
 }
@@ -313,31 +312,16 @@ function projectComputerLabel(
   }
   const label = options.resolveComputerLabel(hostId);
   return label !== hostId &&
-    isPresentationText(label, MAX_MISSION_CONTROL_LABEL_LENGTH)
+    isSafePresentationText(label, MAX_MISSION_CONTROL_LABEL_LENGTH)
     ? label
     : '—';
 }
 
 function requirePresentationText(value: string, maximum: number): string {
-  if (!isPresentationText(value, maximum)) {
+  if (!isSafePresentationText(value, maximum)) {
     throw new InvalidCatalogError();
   }
   return value;
-}
-
-function isPresentationText(
-  value: unknown,
-  maximum: number,
-): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= maximum &&
-    value.trim() === value &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value) &&
-    !/(?:[A-Za-z]:[\\/]|\\\\|(?:^|\s)~?[\\/])/.test(value) &&
-    !/(?:https?|wss?|file):\/\//i.test(value)
-  );
 }
 
 function isSafeSourceId(value: string): boolean {
