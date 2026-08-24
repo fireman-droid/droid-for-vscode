@@ -2,10 +2,7 @@ const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 const ABSOLUTE_DRIVE_PATH_PATTERN = /[A-Za-z]:[\\/]/u;
 const UNC_PATH_PATTERN = /\\\\[^\\/\s]+[\\/][^\\/\s]+/u;
 const HOME_PATH_PATTERN = /~[\\/][^\s()[\]{}]+/u;
-const IDENTIFIER_CHARACTER_PATTERN = /[\p{L}\p{N}_]/u;
-const POSIX_SEGMENT_DELIMITER_PATTERN = /[/\\\s()[\]{}<>,;:]/u;
-const COMMON_POSIX_ROOT_PATTERN =
-  /(?:^|[^\p{L}\p{N}_])\/(?:Users|home|var|tmp|etc|usr|opt|srv|root|mnt|media|private|Volumes)(?:[\\/]|(?=$|[^\p{L}\p{N}_]))/u;
+const IDENTIFIER_CONTINUE_PATTERN = /\p{ID_Continue}/u;
 const URL_PATTERN = /(?:https?|wss?|file):\/\//iu;
 const CREDENTIAL_KEY_SOURCE =
   '(?:api[-_]?(?:key|token)|secret|token|passwd|password|credential|authorization|access[-_]?(?:key|token)|client[-_]?secret|openai_api_key)';
@@ -58,7 +55,7 @@ export function containsRepeatedBoundarySlashRun(value: string): boolean {
       value[index] === '/' &&
       value[index + 1] === '/' &&
       (index === 0 ||
-        !IDENTIFIER_CHARACTER_PATTERN.test(value[index - 1] ?? ''))
+        !isIdentifierContinueBefore(value, index))
     ) {
       return true;
     }
@@ -77,7 +74,7 @@ function containsUnsafePosixPath(value: string): boolean {
     const previous = value[index - 1];
     if (
       previous !== undefined &&
-      IDENTIFIER_CHARACTER_PATTERN.test(previous)
+      isIdentifierContinueBefore(value, index)
     ) {
       continue;
     }
@@ -86,15 +83,6 @@ function containsUnsafePosixPath(value: string): boolean {
     while (value[slashRunEnd] === '/') {
       slashRunEnd += 1;
     }
-    const firstSegmentCharacter = value[slashRunEnd];
-    if (
-      firstSegmentCharacter === undefined ||
-      POSIX_SEGMENT_DELIMITER_PATTERN.test(firstSegmentCharacter)
-    ) {
-      index = slashRunEnd - 1;
-      continue;
-    }
-
     const isExactMissionCommand =
       slashRunEnd === index + 1 &&
       (index === 0 || /\s/u.test(previous ?? '')) &&
@@ -107,6 +95,27 @@ function containsUnsafePosixPath(value: string): boolean {
     index = slashRunEnd + 'mission'.length - 1;
   }
   return false;
+}
+
+function isIdentifierContinueBefore(
+  value: string,
+  index: number,
+): boolean {
+  if (index <= 0) {
+    return false;
+  }
+  const trailingUnit = value.charCodeAt(index - 1);
+  const codePointStart =
+    trailingUnit >= 0xdc00 &&
+    trailingUnit <= 0xdfff &&
+    index >= 2 &&
+    value.charCodeAt(index - 2) >= 0xd800 &&
+    value.charCodeAt(index - 2) <= 0xdbff
+      ? index - 2
+      : index - 1;
+  return IDENTIFIER_CONTINUE_PATTERN.test(
+    value.slice(codePointStart, index),
+  );
 }
 
 export function isSafePresentationText(
@@ -123,7 +132,6 @@ export function isSafePresentationText(
     !UNC_PATH_PATTERN.test(value) &&
     !HOME_PATH_PATTERN.test(value) &&
     !containsUnsafePosixPath(value) &&
-    !COMMON_POSIX_ROOT_PATTERN.test(value) &&
     !URL_PATTERN.test(value) &&
     !containsCredentialAssignment(value)
   );

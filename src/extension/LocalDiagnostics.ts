@@ -40,6 +40,8 @@ const MAX_ATTRIBUTE_COUNT = 32;
 const MAX_ATTRIBUTE_KEY_LENGTH = 64;
 const MAX_ATTRIBUTE_STRING_LENGTH = 8_192;
 const MAX_ATTRIBUTE_NESTING_DEPTH = 8;
+const MAX_ATTRIBUTE_PROJECTION_NODES = 256;
+const MAX_ATTRIBUTE_PROJECTION_OUTPUT_UNITS = 8_192;
 const NAME_PATTERN = /^[a-zA-Z0-9_.:-]+$/u;
 const LOG_FILE_PATTERN = /^droidvisx-\d{8}\.jsonl$/u;
 
@@ -226,7 +228,12 @@ export class LocalDiagnostics implements RuntimeDiagnosticSink {
     };
     this.sequence += 1;
 
-    const line = `${JSON.stringify(record)}\n`;
+    let line: string;
+    try {
+      line = `${JSON.stringify(record)}\n`;
+    } catch {
+      return;
+    }
     try {
       this.output.appendLine(formatOutputRecord(record));
     } catch {
@@ -344,6 +351,10 @@ function projectAttributes(
     return undefined;
   }
   const projected: Record<string, RuntimeDiagnosticAttribute> = {};
+  const context: AttributeProjectionContext = {
+    remainingNodes: MAX_ATTRIBUTE_PROJECTION_NODES,
+    remainingOutputUnits: MAX_ATTRIBUTE_PROJECTION_OUTPUT_UNITS,
+  };
   let rawKeys: string[];
   try {
     rawKeys = Object.keys(attributes);
@@ -351,17 +362,30 @@ function projectAttributes(
     return undefined;
   }
   for (const rawKey of rawKeys) {
-    if (Object.keys(projected).length >= MAX_ATTRIBUTE_COUNT) {
+    if (
+      Object.keys(projected).length >= MAX_ATTRIBUTE_COUNT ||
+      context.remainingNodes <= 0 ||
+      context.remainingOutputUnits <= 0
+    ) {
       break;
     }
     const key = scrubCredentials(rawKey).slice(
       0,
       MAX_ATTRIBUTE_KEY_LENGTH,
     );
-    if (key.length === 0) {
+    if (
+      key.length === 0 ||
+      key.length > context.remainingOutputUnits
+    ) {
       continue;
     }
     if (isCredentialKey(rawKey)) {
+      if (
+        !consumeNode(context) ||
+        !consumeOutput(context, key.length + '[REDACTED]'.length)
+      ) {
+        break;
+      }
       projected[key] = '[REDACTED]';
       continue;
     }
@@ -371,35 +395,67 @@ function projectAttributes(
     } catch {
       continue;
     }
+    const outputBefore = context.remainingOutputUnits;
+    if (!consumeOutput(context, key.length)) {
+      break;
+    }
     if (typeof rawValue === 'string') {
-      projected[key] = scrubCredentials(rawValue).slice(
+      if (!consumeNode(context)) {
+        context.remainingOutputUnits = outputBefore;
+        break;
+      }
+      const sanitized = scrubCredentials(rawValue).slice(
         0,
-        MAX_ATTRIBUTE_STRING_LENGTH,
+        Math.min(
+          MAX_ATTRIBUTE_STRING_LENGTH,
+          context.remainingOutputUnits,
+        ),
       );
+      if (!consumeOutput(context, sanitized.length)) {
+        context.remainingOutputUnits = outputBefore;
+        break;
+      }
+      projected[key] = sanitized;
     } else if (
       typeof rawValue === 'number' &&
       !Number.isFinite(rawValue)
     ) {
+      if (!consumePrimitive(context, 0)) {
+        context.remainingOutputUnits = outputBefore;
+        break;
+      }
       projected[key] = 0;
     } else if (
       typeof rawValue === 'number' ||
       typeof rawValue === 'boolean' ||
       rawValue === null
     ) {
+      if (!consumePrimitive(context, rawValue)) {
+        context.remainingOutputUnits = outputBefore;
+        break;
+      }
       projected[key] = rawValue;
     } else if (rawValue !== undefined) {
       const sanitized = sanitizeNestedAttribute(
         rawValue,
         0,
         new WeakSet<object>(),
+        context,
       );
       if (sanitized !== OMIT_ATTRIBUTE_VALUE) {
-        const serialized = JSON.stringify(sanitized);
-        projected[key] =
-          serialized.length <= MAX_ATTRIBUTE_STRING_LENGTH
-            ? serialized
-            : 'null';
+        let serialized: string;
+        try {
+          serialized = JSON.stringify(sanitized);
+        } catch {
+          context.remainingOutputUnits = outputBefore;
+          continue;
+        }
+        if (serialized.length <= MAX_ATTRIBUTE_STRING_LENGTH) {
+          projected[key] = serialized;
+          continue;
+        }
       }
+      context.remainingOutputUnits = outputBefore;
     }
   }
   return Object.keys(projected).length === 0 ? undefined : projected;
@@ -414,19 +470,36 @@ type SanitizedNestedAttribute =
   | SanitizedNestedAttribute[]
   | { [key: string]: SanitizedNestedAttribute };
 
+interface AttributeProjectionContext {
+  remainingNodes: number;
+  remainingOutputUnits: number;
+}
+
 function sanitizeNestedAttribute(
   value: unknown,
   depth: number,
   ancestors: WeakSet<object>,
+  context: AttributeProjectionContext,
 ): SanitizedNestedAttribute | typeof OMIT_ATTRIBUTE_VALUE {
+  if (!consumeNode(context)) {
+    return OMIT_ATTRIBUTE_VALUE;
+  }
   if (typeof value === 'string') {
-    return scrubCredentials(value).slice(0, MAX_ATTRIBUTE_STRING_LENGTH);
+    return projectNestedString(
+      scrubCredentials(value).slice(0, MAX_ATTRIBUTE_STRING_LENGTH),
+      context,
+    );
   }
   if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : 0;
+    const sanitized = Number.isFinite(value) ? value : 0;
+    return consumeSerializedPrimitive(context, sanitized)
+      ? sanitized
+      : OMIT_ATTRIBUTE_VALUE;
   }
   if (typeof value === 'boolean' || value === null) {
-    return value;
+    return consumeSerializedPrimitive(context, value)
+      ? value
+      : OMIT_ATTRIBUTE_VALUE;
   }
   if (
     value === undefined ||
@@ -434,44 +507,98 @@ function sanitizeNestedAttribute(
     typeof value === 'function' ||
     typeof value === 'symbol' ||
     typeof value !== 'object' ||
-    depth >= MAX_ATTRIBUTE_NESTING_DEPTH ||
-    ancestors.has(value)
+    depth >= MAX_ATTRIBUTE_NESTING_DEPTH
   ) {
     return OMIT_ATTRIBUTE_VALUE;
   }
 
-  ancestors.add(value);
   try {
-    if (Array.isArray(value)) {
+    if (ancestors.has(value)) {
+      return OMIT_ATTRIBUTE_VALUE;
+    }
+    ancestors.add(value);
+  } catch {
+    return OMIT_ATTRIBUTE_VALUE;
+  }
+  try {
+    let isArray: boolean;
+    try {
+      isArray = Array.isArray(value);
+    } catch {
+      return OMIT_ATTRIBUTE_VALUE;
+    }
+    if (isArray) {
+      const arrayValue = value as readonly unknown[];
+      if (!consumeOutput(context, 2)) {
+        return OMIT_ATTRIBUTE_VALUE;
+      }
       const projected: SanitizedNestedAttribute[] = [];
-      const count = Math.min(value.length, MAX_ATTRIBUTE_COUNT);
+      let length: number;
+      try {
+        length = arrayValue.length;
+      } catch {
+        return projected;
+      }
+      const count =
+        typeof length === 'number' && Number.isFinite(length)
+          ? Math.min(Math.max(Math.floor(length), 0), MAX_ATTRIBUTE_COUNT)
+          : 0;
       for (let index = 0; index < count; index += 1) {
+        const outputBefore = context.remainingOutputUnits;
+        if (index > 0 && !consumeOutput(context, 1)) {
+          break;
+        }
         let nestedValue: unknown;
         try {
-          nestedValue = value[index];
+          nestedValue = arrayValue[index];
         } catch {
-          projected.push(null);
+          if (consumeOutput(context, 4)) {
+            projected.push(null);
+          } else {
+            context.remainingOutputUnits = outputBefore;
+          }
           continue;
         }
         const sanitized = sanitizeNestedAttribute(
           nestedValue,
           depth + 1,
           ancestors,
+          context,
         );
-        projected.push(
-          sanitized === OMIT_ATTRIBUTE_VALUE ? null : sanitized,
-        );
+        if (sanitized !== OMIT_ATTRIBUTE_VALUE) {
+          projected.push(sanitized);
+          continue;
+        }
+        context.remainingOutputUnits = outputBefore;
+        if (
+          (index === 0 || consumeOutput(context, 1)) &&
+          consumeOutput(context, 4)
+        ) {
+          projected.push(null);
+        } else {
+          context.remainingOutputUnits = outputBefore;
+          break;
+        }
       }
       return projected;
     }
 
-    if (Object.getPrototypeOf(value) !== Object.prototype) {
+    let prototype: object | null;
+    try {
+      prototype = Object.getPrototypeOf(value);
+    } catch {
+      return OMIT_ATTRIBUTE_VALUE;
+    }
+    if (prototype !== Object.prototype) {
       return OMIT_ATTRIBUTE_VALUE;
     }
     let keys: string[];
     try {
       keys = Object.keys(value);
     } catch {
+      return OMIT_ATTRIBUTE_VALUE;
+    }
+    if (!consumeOutput(context, 2)) {
       return OMIT_ATTRIBUTE_VALUE;
     }
     const projected: Record<string, SanitizedNestedAttribute> = {};
@@ -483,7 +610,28 @@ function sanitizeNestedAttribute(
       if (key.length === 0 || Object.hasOwn(projected, key)) {
         continue;
       }
+      let serializedKey: string;
+      try {
+        serializedKey = JSON.stringify(key);
+      } catch {
+        continue;
+      }
+      const outputBefore = context.remainingOutputUnits;
+      const propertyPrefixLength =
+        (Object.keys(projected).length === 0 ? 0 : 1) +
+        serializedKey.length +
+        1;
+      if (!consumeOutput(context, propertyPrefixLength)) {
+        break;
+      }
       if (isCredentialKey(rawKey)) {
+        if (
+          !consumeNode(context) ||
+          !consumeOutput(context, '"[REDACTED]"'.length)
+        ) {
+          context.remainingOutputUnits = outputBefore;
+          break;
+        }
         projected[key] = '[REDACTED]';
         continue;
       }
@@ -491,21 +639,103 @@ function sanitizeNestedAttribute(
       try {
         nestedValue = (value as Record<string, unknown>)[rawKey];
       } catch {
+        context.remainingOutputUnits = outputBefore;
         continue;
       }
       const sanitized = sanitizeNestedAttribute(
         nestedValue,
         depth + 1,
         ancestors,
+        context,
       );
       if (sanitized !== OMIT_ATTRIBUTE_VALUE) {
         projected[key] = sanitized;
+      } else {
+        context.remainingOutputUnits = outputBefore;
       }
     }
     return projected;
   } finally {
-    ancestors.delete(value);
+    try {
+      ancestors.delete(value);
+    } catch {
+      // A failed cleanup cannot make diagnostics escape the trust boundary.
+    }
   }
+}
+
+function consumeNode(context: AttributeProjectionContext): boolean {
+  if (context.remainingNodes <= 0) {
+    return false;
+  }
+  context.remainingNodes -= 1;
+  return true;
+}
+
+function consumeOutput(
+  context: AttributeProjectionContext,
+  units: number,
+): boolean {
+  if (units > context.remainingOutputUnits) {
+    return false;
+  }
+  context.remainingOutputUnits -= units;
+  return true;
+}
+
+function consumePrimitive(
+  context: AttributeProjectionContext,
+  value: number | boolean | null,
+): boolean {
+  return consumeNode(context) && consumeSerializedPrimitive(context, value);
+}
+
+function consumeSerializedPrimitive(
+  context: AttributeProjectionContext,
+  value: number | boolean | null,
+): boolean {
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    return false;
+  }
+  return consumeOutput(context, serialized.length);
+}
+
+function projectNestedString(
+  value: string,
+  context: AttributeProjectionContext,
+): string | typeof OMIT_ATTRIBUTE_VALUE {
+  let low = 0;
+  let high = Math.min(value.length, MAX_ATTRIBUTE_STRING_LENGTH);
+  let projected: string | typeof OMIT_ATTRIBUTE_VALUE =
+    OMIT_ATTRIBUTE_VALUE;
+  let projectedLength = 0;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const candidate = value.slice(0, middle);
+    let serialized: string;
+    try {
+      serialized = JSON.stringify(candidate);
+    } catch {
+      return OMIT_ATTRIBUTE_VALUE;
+    }
+    if (serialized.length <= context.remainingOutputUnits) {
+      projected = candidate;
+      projectedLength = serialized.length;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  if (
+    projected === OMIT_ATTRIBUTE_VALUE ||
+    !consumeOutput(context, projectedLength)
+  ) {
+    return OMIT_ATTRIBUTE_VALUE;
+  }
+  return projected;
 }
 
 function projectSdkLogName(event: DroidLogEvent): string {
@@ -604,10 +834,14 @@ function sanitizeDetail(detail: string): string {
 }
 
 function formatOutputRecord(record: PersistedDiagnosticRecord): string {
-  const attributes =
-    record.attributes === undefined
-      ? ''
-      : ` ${JSON.stringify(record.attributes)}`;
+  let attributes = '';
+  if (record.attributes !== undefined) {
+    try {
+      attributes = ` ${JSON.stringify(record.attributes)}`;
+    } catch {
+      // Keep the remaining bounded record available in the Output Channel.
+    }
+  }
   const turn = record.turn === undefined ? '' : ` turn=${record.turn}`;
   const detail =
     record.detail === undefined ? '' : ` | ${record.detail}`;

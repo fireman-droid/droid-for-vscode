@@ -379,7 +379,9 @@ describe('LocalDiagnostics', () => {
     expect(() =>
       JSON.parse(record.attributes?.oversized ?? ''),
     ).not.toThrow();
-    expect(() => JSON.parse(record.attributes?.deep ?? '')).not.toThrow();
+    if (record.attributes?.deep !== undefined) {
+      expect(() => JSON.parse(record.attributes?.deep ?? '')).not.toThrow();
+    }
     expect(recordLine).not.toContain('depth-secret');
   });
 
@@ -420,6 +422,162 @@ describe('LocalDiagnostics', () => {
     expect(record.attributes).toEqual({
       inaccessible: '{"kept":"ordinary-value"}',
       after: 'still-written',
+    });
+  });
+
+  it('shares aggregate node and output budgets across a compact acyclic DAG', async () => {
+    const directory = await temporaryDirectory();
+    const diagnostics = new LocalDiagnostics({
+      directory,
+      output: silentOutput(),
+      now: () => new Date('2026-08-11T12:00:00.000Z'),
+    });
+    let propertyReads = 0;
+    const shared = Object.fromEntries(
+      Array.from({ length: 32 }, (_, index) => [
+        `property-${index}`,
+        Object.defineProperty({}, 'value', {
+          enumerable: true,
+          get: () => {
+            propertyReads += 1;
+            return `${'x'.repeat(96)} token="dag-secret-${index}"`;
+          },
+        }),
+      ]),
+    );
+    const attributes = Object.fromEntries(
+      Array.from({ length: 32 }, (_, index) => [
+        `branch-${index}`,
+        shared,
+      ]),
+    );
+
+    diagnostics.record({
+      level: 'info',
+      name: 'runtime.aggregate-budget',
+      attributes: attributes as never,
+    });
+    await diagnostics.flush();
+
+    const [recordLine] = (await readFile(diagnostics.filePath, 'utf8'))
+      .trim()
+      .split('\n');
+    const record = JSON.parse(recordLine ?? '{}') as {
+      attributes?: Record<string, string>;
+    };
+    const projectedUnits = Object.entries(record.attributes ?? {}).reduce(
+      (total, [key, value]) => total + key.length + value.length,
+      0,
+    );
+    expect(propertyReads).toBeLessThanOrEqual(256);
+    expect(projectedUnits).toBeLessThanOrEqual(8_192);
+    expect(recordLine).not.toContain('dag-secret');
+    for (const serialized of Object.values(record.attributes ?? {})) {
+      expect(() => JSON.parse(serialized)).not.toThrow();
+    }
+  });
+
+  it('contains hostile and revoked Proxy reflection traps without suppressing safe following attributes', async () => {
+    const directory = await temporaryDirectory();
+    const diagnostics = new LocalDiagnostics({
+      directory,
+      output: silentOutput(),
+      now: () => new Date('2026-08-11T12:00:00.000Z'),
+    });
+    const prototypeTrap = new Proxy(
+      {},
+      {
+        getPrototypeOf: () => {
+          throw new Error('prototype unavailable');
+        },
+      },
+    );
+    const keyTrap = new Proxy(
+      {},
+      {
+        ownKeys: () => {
+          throw new Error('keys unavailable');
+        },
+      },
+    );
+    const descriptorTrap = new Proxy(
+      { value: 'unreachable' },
+      {
+        getOwnPropertyDescriptor: () => {
+          throw new Error('descriptor unavailable');
+        },
+      },
+    );
+    const lengthTrap = new Proxy([], {
+      get: (target, property, receiver) => {
+        if (property === 'length') {
+          throw new Error('length unavailable');
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const indexTrap = new Proxy(['unreachable'], {
+      get: (target, property, receiver) => {
+        if (property === '0') {
+          throw new Error('index unavailable');
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const propertyTrap = new Proxy(
+      { unavailable: 'unreachable', kept: 'ordinary-value' },
+      {
+        get: (target, property, receiver) => {
+          if (property === 'unavailable') {
+            throw new Error('property unavailable');
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+    const revokedObject = Proxy.revocable({}, {});
+    revokedObject.revoke();
+    const revokedArray = Proxy.revocable([], {});
+    revokedArray.revoke();
+
+    expect(() =>
+      diagnostics.record({
+        level: 'warn',
+        name: 'runtime.hostile-proxies',
+        attributes: {
+          prototypeTrap,
+          keyTrap,
+          descriptorTrap,
+          lengthTrap,
+          indexTrap,
+          propertyTrap,
+          revokedObject: revokedObject.proxy,
+          revokedArray: revokedArray.proxy,
+          after: 'still-written',
+        } as never,
+      }),
+    ).not.toThrow();
+    diagnostics.record({
+      level: 'info',
+      name: 'runtime.after-hostile-proxies',
+      attributes: { safe: 'following-record' },
+    });
+    await diagnostics.flush();
+
+    const records = (await readFile(diagnostics.filePath, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as {
+        attributes?: Record<string, string>;
+      });
+    expect(records).toHaveLength(2);
+    expect(records[0]?.attributes).toMatchObject({
+      indexTrap: '[null]',
+      propertyTrap: '{"kept":"ordinary-value"}',
+      after: 'still-written',
+    });
+    expect(records[1]?.attributes).toEqual({
+      safe: 'following-record',
     });
   });
 

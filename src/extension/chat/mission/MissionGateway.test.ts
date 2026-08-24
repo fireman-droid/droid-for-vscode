@@ -395,6 +395,11 @@ describe('MissionGateway', () => {
       '/mission Review catalog safety',
       'Investigate /mission and input/output (release 1.2)',
       'scope/mission remains an identifier',
+      '𐐀/mission remains an identifier',
+      'e\u0301/mission remains an identifier',
+      'e\u0301/Users remains an identifier',
+      'version2/mission remains an identifier',
+      'scope‿/mission remains an identifier',
       'Created 2026/08/24 with ratio 3/5',
       'tokenizer=cl100k and secretariat=enabled',
       'not_client_secret=ordinary-value',
@@ -417,6 +422,35 @@ describe('MissionGateway', () => {
         rows: [{ title }],
       });
     }
+  });
+
+  it.each([
+    '/',
+    '/ ',
+    'Root /',
+    'Root / now',
+    '//',
+    '///',
+    'Root // now',
+    'Root /// now',
+  ])('rejects bare and repeated POSIX roots %s', async (title) => {
+    const { gateway } = catalogGateway([
+      {
+        rows: [
+          {
+            sessionId: 'unsafe-root',
+            updatedAt: 1_777_000_000,
+            mission: { state: 'running', title },
+          },
+        ],
+        hasMore: false,
+      },
+    ]);
+
+    await expect(gateway.listCatalog()).resolves.toMatchObject({
+      status: 'error',
+      code: 'invalid-data',
+    });
   });
 
   it('deduplicates by newest Mission update then daemon update and sorts deterministically', async () => {

@@ -215,6 +215,11 @@ describe('Mission Control panel protocol', () => {
       '/mission Review catalog safety',
       'Investigate /mission and input/output (release 1.2)',
       'scope/mission remains an identifier',
+      '𐐀/mission remains an identifier',
+      'e\u0301/mission remains an identifier',
+      'e\u0301/Users remains an identifier',
+      'version2/mission remains an identifier',
+      'scope‿/mission remains an identifier',
       'Created 2026/08/24 with ratio 3/5',
       'tokenizer=cl100k and secretariat=enabled',
       'not_client_secret=ordinary-value',
@@ -226,6 +231,24 @@ describe('Mission Control panel protocol', () => {
         }),
       ).toMatchObject({ rows: [{ title }] });
     }
+  });
+
+  it.each([
+    '/',
+    '/ ',
+    'Root /',
+    'Root / now',
+    '//',
+    '///',
+    'Root // now',
+    'Root /// now',
+  ])('rejects bare and repeated POSIX roots %s', (title) => {
+    expect(
+      parseMissionControlPanelHostMessage({
+        ...ready,
+        rows: [{ ...row, title }],
+      }),
+    ).toBeUndefined();
   });
 
   it.each(credentialKeys)(
