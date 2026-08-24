@@ -381,13 +381,15 @@ function projectAttributes(
     }
     if (isCredentialKey(rawKey)) {
       if (
-        !consumeNode(context) ||
         !consumeOutput(context, key.length + '[REDACTED]'.length)
       ) {
         break;
       }
       projected[key] = '[REDACTED]';
       continue;
+    }
+    if (!consumeNode(context)) {
+      break;
     }
     let rawValue: unknown;
     try {
@@ -400,10 +402,6 @@ function projectAttributes(
       break;
     }
     if (typeof rawValue === 'string') {
-      if (!consumeNode(context)) {
-        context.remainingOutputUnits = outputBefore;
-        break;
-      }
       const sanitized = scrubCredentials(rawValue).slice(
         0,
         Math.min(
@@ -420,7 +418,7 @@ function projectAttributes(
       typeof rawValue === 'number' &&
       !Number.isFinite(rawValue)
     ) {
-      if (!consumePrimitive(context, 0)) {
+      if (!consumeSerializedPrimitive(context, 0)) {
         context.remainingOutputUnits = outputBefore;
         break;
       }
@@ -430,7 +428,7 @@ function projectAttributes(
       typeof rawValue === 'boolean' ||
       rawValue === null
     ) {
-      if (!consumePrimitive(context, rawValue)) {
+      if (!consumeSerializedPrimitive(context, rawValue)) {
         context.remainingOutputUnits = outputBefore;
         break;
       }
@@ -455,6 +453,8 @@ function projectAttributes(
           continue;
         }
       }
+      context.remainingOutputUnits = outputBefore;
+    } else {
       context.remainingOutputUnits = outputBefore;
     }
   }
@@ -481,9 +481,6 @@ function sanitizeNestedAttribute(
   ancestors: WeakSet<object>,
   context: AttributeProjectionContext,
 ): SanitizedNestedAttribute | typeof OMIT_ATTRIBUTE_VALUE {
-  if (!consumeNode(context)) {
-    return OMIT_ATTRIBUTE_VALUE;
-  }
   if (typeof value === 'string') {
     return projectNestedString(
       scrubCredentials(value).slice(0, MAX_ATTRIBUTE_STRING_LENGTH),
@@ -534,6 +531,9 @@ function sanitizeNestedAttribute(
       }
       const projected: SanitizedNestedAttribute[] = [];
       let length: number;
+      if (!consumeNode(context)) {
+        return projected;
+      }
       try {
         length = arrayValue.length;
       } catch {
@@ -544,6 +544,9 @@ function sanitizeNestedAttribute(
           ? Math.min(Math.max(Math.floor(length), 0), MAX_ATTRIBUTE_COUNT)
           : 0;
       for (let index = 0; index < count; index += 1) {
+        if (!consumeNode(context)) {
+          break;
+        }
         const outputBefore = context.remainingOutputUnits;
         if (index > 0 && !consumeOutput(context, 1)) {
           break;
@@ -626,7 +629,6 @@ function sanitizeNestedAttribute(
       }
       if (isCredentialKey(rawKey)) {
         if (
-          !consumeNode(context) ||
           !consumeOutput(context, '"[REDACTED]"'.length)
         ) {
           context.remainingOutputUnits = outputBefore;
@@ -634,6 +636,10 @@ function sanitizeNestedAttribute(
         }
         projected[key] = '[REDACTED]';
         continue;
+      }
+      if (!consumeNode(context)) {
+        context.remainingOutputUnits = outputBefore;
+        break;
       }
       let nestedValue: unknown;
       try {
@@ -681,13 +687,6 @@ function consumeOutput(
   }
   context.remainingOutputUnits -= units;
   return true;
-}
-
-function consumePrimitive(
-  context: AttributeProjectionContext,
-  value: number | boolean | null,
-): boolean {
-  return consumeNode(context) && consumeSerializedPrimitive(context, value);
 }
 
 function consumeSerializedPrimitive(

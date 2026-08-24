@@ -251,6 +251,24 @@ describe('Mission Control panel protocol', () => {
     ).toBeUndefined();
   });
 
+  it.each([
+    'scope//mission',
+    '𐐀//mission',
+    'e\u0301//Users',
+    'version2//mission',
+    'scope‿//tmp',
+  ])(
+    'rejects repeated slash runs after identifier continuation %s',
+    (title) => {
+      expect(
+        parseMissionControlPanelHostMessage({
+          ...ready,
+          rows: [{ ...row, title }],
+        }),
+      ).toBeUndefined();
+    },
+  );
+
   it.each(credentialKeys)(
     'rejects quoted and unquoted %s assignments',
     (key) => {

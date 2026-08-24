@@ -453,6 +453,35 @@ describe('MissionGateway', () => {
     });
   });
 
+  it.each([
+    'scope//mission',
+    '𐐀//mission',
+    'e\u0301//Users',
+    'version2//mission',
+    'scope‿//tmp',
+  ])(
+    'rejects repeated slash runs after identifier continuation %s',
+    async (title) => {
+      const { gateway } = catalogGateway([
+        {
+          rows: [
+            {
+              sessionId: 'unsafe-composed-slash-run',
+              updatedAt: 1_777_000_000,
+              mission: { state: 'running', title },
+            },
+          ],
+          hasMore: false,
+        },
+      ]);
+
+      await expect(gateway.listCatalog()).resolves.toMatchObject({
+        status: 'error',
+        code: 'invalid-data',
+      });
+    },
+  );
+
   it('deduplicates by newest Mission update then daemon update and sorts deterministically', async () => {
     const candidates = [
       {

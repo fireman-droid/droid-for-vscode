@@ -477,6 +477,178 @@ describe('LocalDiagnostics', () => {
     }
   });
 
+  it('charges every top-level and nested read attempt before access', async () => {
+    const directory = await temporaryDirectory();
+    const diagnostics = new LocalDiagnostics({
+      directory,
+      output: silentOutput(),
+      now: () => new Date('2026-08-11T12:00:00.000Z'),
+    });
+    let attemptedReads = 0;
+    let readsAfterBudget = 0;
+    const attributes: Record<string, unknown> = {};
+    for (let index = 0; index < 250; index += 1) {
+      Object.defineProperty(
+        attributes,
+        `${'x'.repeat(61)}${index}`,
+        {
+          enumerable: true,
+          get: () => {
+            attemptedReads += 1;
+            if (index >= 132 && index < 191) {
+              throw new Error('unavailable');
+            }
+            return index < 132 ? undefined : Symbol('unsupported');
+          },
+        },
+      );
+    }
+    Object.defineProperty(attributes, 'safeTop', {
+      enumerable: true,
+      get: () => {
+        attemptedReads += 1;
+        return 'top-level-safe';
+      },
+    });
+    const nested = Object.defineProperties({}, {
+      throwing: {
+        enumerable: true,
+        get: () => {
+          attemptedReads += 1;
+          throw new Error('nested unavailable');
+        },
+      },
+      missing: {
+        enumerable: true,
+        get: () => {
+          attemptedReads += 1;
+          return undefined;
+        },
+      },
+      unsupported: {
+        enumerable: true,
+        get: () => {
+          attemptedReads += 1;
+          return () => undefined;
+        },
+      },
+      safe: {
+        enumerable: true,
+        get: () => {
+          attemptedReads += 1;
+          return 'nested-safe';
+        },
+      },
+      after: {
+        enumerable: true,
+        get: () => {
+          readsAfterBudget += 1;
+          return 'must-not-be-read';
+        },
+      },
+    });
+    Object.defineProperty(attributes, 'nested', {
+      enumerable: true,
+      get: () => {
+        attemptedReads += 1;
+        return nested;
+      },
+    });
+    Object.defineProperty(attributes, 'topAfter', {
+      enumerable: true,
+      get: () => {
+        readsAfterBudget += 1;
+        return 'must-not-be-read';
+      },
+    });
+
+    diagnostics.record({
+      level: 'info',
+      name: 'runtime.read-attempt-budget',
+      attributes: attributes as never,
+    });
+    diagnostics.record({
+      level: 'info',
+      name: 'runtime.fresh-read-attempt-budget',
+      attributes: Object.defineProperty({}, 'safe', {
+        enumerable: true,
+        get: () => 'following-event',
+      }) as never,
+    });
+    await diagnostics.flush();
+
+    const records = (await readFile(diagnostics.filePath, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as {
+        attributes?: Record<string, string>;
+      });
+    expect(attemptedReads).toBe(256);
+    expect(readsAfterBudget).toBe(0);
+    expect(records[0]?.attributes).toEqual({
+      safeTop: 'top-level-safe',
+      nested: '{"safe":"nested-safe"}',
+    });
+    expect(records[1]?.attributes).toEqual({
+      safe: 'following-event',
+    });
+  });
+
+  it('charges array length and index reads without crossing the ceiling', async () => {
+    const directory = await temporaryDirectory();
+    const diagnostics = new LocalDiagnostics({
+      directory,
+      output: silentOutput(),
+      now: () => new Date('2026-08-11T12:00:00.000Z'),
+    });
+    let attemptedReads = 0;
+    let readsAfterBudget = 0;
+    const attributes: Record<string, unknown> = {};
+    for (let index = 0; index < 253; index += 1) {
+      Object.defineProperty(attributes, `missing-${index}`, {
+        enumerable: true,
+        get: () => {
+          attemptedReads += 1;
+          return undefined;
+        },
+      });
+    }
+    const array = new Proxy(['kept', 'unreachable'], {
+      get: (target, property, receiver) => {
+        if (property === 'length' || property === '0') {
+          attemptedReads += 1;
+        } else if (property === '1') {
+          readsAfterBudget += 1;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    Object.defineProperty(attributes, 'array', {
+      enumerable: true,
+      get: () => {
+        attemptedReads += 1;
+        return array;
+      },
+    });
+
+    diagnostics.record({
+      level: 'info',
+      name: 'runtime.array-read-attempt-budget',
+      attributes: attributes as never,
+    });
+    await diagnostics.flush();
+
+    const [recordLine] = (await readFile(diagnostics.filePath, 'utf8'))
+      .trim()
+      .split('\n');
+    const record = JSON.parse(recordLine ?? '{}') as {
+      attributes?: Record<string, string>;
+    };
+    expect(attemptedReads).toBe(256);
+    expect(readsAfterBudget).toBe(0);
+    expect(record.attributes).toEqual({ array: '["kept"]' });
+  });
+
   it('contains hostile and revoked Proxy reflection traps without suppressing safe following attributes', async () => {
     const directory = await temporaryDirectory();
     const diagnostics = new LocalDiagnostics({

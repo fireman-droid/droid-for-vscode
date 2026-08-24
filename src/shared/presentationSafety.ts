@@ -51,12 +51,7 @@ export function scrubCredentialAssignments(value: string): string {
 
 export function containsRepeatedBoundarySlashRun(value: string): boolean {
   for (let index = 0; index < value.length - 1; index += 1) {
-    if (
-      value[index] === '/' &&
-      value[index + 1] === '/' &&
-      (index === 0 ||
-        !isIdentifierContinueBefore(value, index))
-    ) {
+    if (value[index] === '/' && value[index + 1] === '/') {
       return true;
     }
   }
