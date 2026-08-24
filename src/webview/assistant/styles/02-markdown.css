@@ -224,7 +224,7 @@
 }
 
 .dvx-mermaid-zoom:hover .dvx-mermaid-figure {
-  border-color: var(--dvx-border-strong, #d5cdc4);
+  border-color: var(--dvx-border-hover);
 }
 
 .dvx-mermaid-zoom:focus-visible {

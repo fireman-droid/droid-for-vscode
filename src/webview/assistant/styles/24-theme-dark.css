@@ -13,7 +13,7 @@
 html[data-dvx-theme='dark'],
 html[data-dvx-theme='dark'] body,
 html[data-dvx-theme='dark'] #root {
-  background: #1a1a1a;
+  background: #000;
 }
 
 /* ---- 01-base: scrollbars flip to translucent white --------------- */
@@ -40,8 +40,8 @@ html[data-dvx-theme='dark'] *::-webkit-scrollbar-thumb:hover {
 /* Links keep the warm copper family, lifted and desaturated for the
    dark ground (quiet, not the retired accent orange). */
 .dvx-shell[data-theme='dark'] .dvx-markdown a {
-  color: #c79b84;
-  text-decoration-color: rgb(199 155 132 / 42%);
+  color: var(--dvx-ink);
+  text-decoration-color: rgb(255 255 255 / 42%);
 }
 
 .dvx-shell[data-theme='dark'] .dvx-markdown :not(pre) > code {
@@ -50,11 +50,11 @@ html[data-dvx-theme='dark'] *::-webkit-scrollbar-thumb:hover {
 }
 
 .dvx-shell[data-theme='dark'] .dvx-path-link {
-  text-decoration-color: rgb(199 155 132 / 45%);
+  text-decoration-color: rgb(255 255 255 / 45%);
 }
 
 .dvx-shell[data-theme='dark'] .dvx-path-link:hover {
-  color: #c79b84;
+  color: var(--dvx-ink);
 }
 
 .dvx-shell[data-theme='dark'] .dvx-path-link:focus-visible {
@@ -87,8 +87,8 @@ html[data-dvx-theme='dark'] *::-webkit-scrollbar-thumb:hover {
   .dvx-diagnostic:not([data-diagnostic-code='queue-paused']):not(
     [data-diagnostic-code='history-partial']
   ) {
-  background: linear-gradient(180deg, var(--dvx-overlay), var(--dvx-raised));
-  box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+  background: var(--dvx-raised);
+  box-shadow: none;
 }
 
 .dvx-shell[data-theme='dark'] .dvx-diagnostic-error {
@@ -122,7 +122,7 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
 /* The one solid element: light fill, dark glyph (prototype's
    btn-primary swap). Covers the base rule's `color: white`. */
 .dvx-shell[data-theme='dark'] .dvx-send-action {
-  color: #1a1a1a;
+  color: var(--dvx-on-accent);
   box-shadow: 0 1px 2px rgb(0 0 0 / 35%);
 }
 
@@ -179,7 +179,7 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
     100deg,
     #8f8f8f 0%,
     #8f8f8f 38%,
-    #d4c08e 50%,
+    #fff 50%,
     #8f8f8f 62%,
     #8f8f8f 100%
   );
@@ -247,15 +247,10 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
   color: var(--dvx-ink);
 }
 
-/* ---- 08-command-card: the well now rides --dvx-well (dark #16120e,
-   a step darker than the #242425 card so the "recessed terminal"
-   hierarchy survives); only the output tail's deeper wash and warm
-   hairline remain theme-specific. */
+/* ---- 08-command-card ---------------------------------------------- */
 .dvx-shell[data-theme='dark'] .dvx-command-card .dvx-tool-output-frame {
-  border-top-color: rgb(255 244 230 / 7%);
-  background:
-    linear-gradient(180deg, rgb(0 0 0 / 22%), rgb(0 0 0 / 22%)),
-    var(--dvx-well);
+  border-top-color: var(--dvx-border);
+  background: var(--dvx-well);
   box-shadow: none;
 }
 
@@ -276,13 +271,13 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
    The send fill was the focus orange; dark keeps the light-fill/
    dark-glyph pattern of the main send button. */
 .dvx-shell[data-theme='dark'] .dvx-user-edit-send {
-  color: #1a1a1a;
+  color: var(--dvx-on-accent);
   background: var(--dvx-accent);
 }
 
 .dvx-shell[data-theme='dark'] .dvx-user-edit-send:hover:not(:disabled),
 .dvx-shell[data-theme='dark'] .dvx-user-edit-send:focus-visible {
-  color: #1a1a1a;
+  color: var(--dvx-on-accent);
   background: var(--dvx-accent-strong);
 }
 
@@ -391,7 +386,7 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
 }
 
 .dvx-shell[data-theme='dark'] .dvx-mcp-status-connecting {
-  background: #dcb474;
+  background: var(--dvx-muted);
 }
 
 .dvx-shell[data-theme='dark'] .dvx-mcp-status-disabled {
@@ -445,7 +440,7 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
 /* ---- 21-btw: the panel gradient is token-driven in its home file
    (raised → surface), so dark needs no re-skin. ---------------------- */
 .dvx-shell[data-theme='dark'] .dvx-btw-send {
-  color: #1a1a1a;
+  color: var(--dvx-on-accent);
   box-shadow: 0 1px 2px rgb(0 0 0 / 35%);
 }
 
@@ -454,8 +449,8 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
    for dark); only its pinned chassis/overlay shadows need the deeper
    dark throw. The queue bar keeps the warm state-card family skin. */
 .dvx-shell[data-theme='dark'] .dvx-queue {
-  background: linear-gradient(180deg, var(--dvx-overlay), var(--dvx-raised));
-  box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+  background: var(--dvx-raised);
+  box-shadow: none;
 }
 
 .dvx-shell[data-theme='dark'] .dvx-queue-toggle:hover {

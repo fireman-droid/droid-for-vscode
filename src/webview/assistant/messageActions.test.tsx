@@ -281,6 +281,26 @@ describe('assistant action bar', () => {
     expect(screen.queryByRole('button', { name: 'Fork chat' })).toBeNull();
   });
 
+  it('keeps settled reply action bars mounted while the latest reply runs', async () => {
+    const { container } = render(<App />);
+    host({
+      ...snapshot(0, { turnId: 'turn-2', status: 'streaming' }),
+      transcript: twoTurnTranscript,
+    });
+    await screen.findByText('Second answer');
+
+    expect(
+      container.querySelectorAll('.dvx-assistant-actions'),
+    ).toHaveLength(1);
+
+    host({ ...snapshot(1), transcript: twoTurnTranscript });
+    await waitFor(() =>
+      expect(
+        container.querySelectorAll('.dvx-assistant-actions'),
+      ).toHaveLength(2),
+    );
+  });
+
   it('stamps a relative time only for replies seen finishing live', async () => {
     const { container } = render(<App />);
     host({

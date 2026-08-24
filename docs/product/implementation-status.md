@@ -2,7 +2,7 @@
 
 > 本文档是 DroidVisX 当前实现范围的持续更新台账，用来区分“已经接入产品的功能”“部分实现”“仅能力声明/探测”以及“尚未实现”。
 >
-> 最后核对日期：2026-08-23
+> 最后核对日期：2026-08-24
 >
 > 核对对象：当前工作区源码、Bridge、Extension Host、Droid Runtime 适配、Webview、测试、VSIX 与 Cursor 安装状态
 
@@ -38,6 +38,21 @@ ExitSpecMode 与权限请求在保留全部操作的前提下收紧层级。队�
 Subagent 状态改用更安静的主题 token。问题导航根据数量切换紧凑圆点组与
 抽样高密度点轨，保留预览、前后跳转和直接定位。本轮未改变 Runtime 或
 Bridge 契约。
+
+2026-08-23 完成 Webview 单色主题收敛：固定 Light 使用纯白表面与黑色主操作，
+固定 Dark 使用纯黑表面与白色主操作；Auto 继续映射编辑器颜色，并从编辑器
+前景色生成可见边框，避免透明主题变量吞掉组件边界。终端、权限、Plan、
+Composer、Subagent 与问题导航同步完成局部层级和间距修正，所有既有操作保留。
+
+同日修复问题导航的非确定性跳转：移除远距离预定位、原生平滑滚动与虚拟列表
+动态测量并行控制 `scrollTop` 的路径，统一通过虚拟列表执行一次顶部对齐定位，
+并在跳转前释放底部跟随，避免同一操作随机表现为卡顿、瞬移或正常滚动。
+
+2026-08-24 修复聊天交互状态：提交消息会重新锁定底部跟随，虚拟列表测量不再
+把已锁底视口向上拉回；Auto 主题发送箭头保持可见；Explore 跑马灯在页面切换
+重挂载后从当前 Runtime 进度恢复，不再重播已展示成员。回复完成时只挂载当前
+回复的操作栏，历史回复操作栏不再随全局运行状态反复卸载，旧消息阅读位置保持
+稳定。
 
 Module 1 仍等待用户在真实 Cursor Secondary Sidebar 中完成最终可见验收。
 当前 **v0.7.89** 已完成源码、聚焦验证、VSIX 打包并安装到 Cursor，等待用户
@@ -885,6 +900,29 @@ normalizeSdkEvent / Thread / commandCard）过；全量 86 文件 1915
 包验收**。遗留：极窄宽度卡头芯片省略截断（by design）；无
 summary 的链式命令规则标题取首个实义命令名（如 `Write-Output`），
 不如模型 summary 可读，属数据上限而非缺陷。
+
+### 2026-08-24 Mission Control 暂停点
+
+**状态：部分完成，尚未发布。**
+
+已完成：
+- 已批准目标是以官方风格的编辑器区域 Mission Control 替代旧内联 `/mission`：跨仓库目录、可审查的 `/mission <task>`、官方 readiness、详情工作区、紧凑 Sidebar、Droid 权威和单色主题；`/clear` 不在范围内。
+- 仓库仅完成 catalog-foundation：权威类型化 daemon 分页/continuation（含跨仓库归档 Mission 元数据）、严格安全协议/投影、单例 `MissionControlPanelController`、命令与 bundle 壳、目录 Webview 筛选/安全路由/loading-empty-stale-error-retry 状态和紧凑 Sidebar 入口，以及确定性请求归属、响应式单色/无障碍和有界展示/诊断安全。
+
+验证状态：
+- scrutiny 第 7 轮通过：22 个精选文件、247 项测试、typecheck、文件预算均通过，无阻塞发现。
+- 用户测试第 1 轮共 12 项断言，9 项通过；仅缺少聚焦证明而失败的 3 项为 VAL-CATALOG-004（authority/busy 独立性）、VAL-CATALOG-005（ready-empty 与初始 sanitized error/Retry）、VAL-CATALOG-011（Paused/Completed/filter-empty/cancelled 生命周期矩阵）。
+- Mission Control 尚未构建、打包、安装或获得视觉验收；除非有直接本地证据，已安装扩展仍为 Mission 前的 v0.7.89 question-navigation 构建。
+
+尚未完成：
+- New Mission 协议/readiness/start/UI；详情工作区、Worker Viewer、activation 与 controls；最终响应式/无障碍整合；README/状态发布文档；VSIX 构建、验证、安装及真实 Cursor 验收。
+- 用户已主动暂停；在明确恢复前不得继续执行 Mission。恢复路径：`C:\Users\ASUS\.factory\missions\54a54db6-91ce-46e0-9566-e75dda6658a4`。
+
+恢复顺序：
+1. 新增一个小型 catalog 测试覆盖修复 feature 并重跑 catalog 用户测试。
+2. 完成 3 个 New Mission features。
+3. 完成 7 个 workspace/release features 及自动验证器。
+4. 打包、安装、Reload Window，并进行人工验收。
 
 ### 当前 Figma Design 还原边界
 

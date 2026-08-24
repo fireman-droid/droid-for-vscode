@@ -78,7 +78,7 @@
 }
 
 .dvx-thread-footer .dvx-question-options label:hover {
-  border-color: var(--dvx-border);
+  border-color: var(--dvx-border-hover);
   background: color-mix(
     in srgb,
     var(--dvx-soft) 72%,
@@ -199,7 +199,7 @@
 }
 
 .dvx-thread-footer .dvx-permission-plan .dvx-button-danger:hover:not(:disabled) {
-  border-color: var(--dvx-border-strong);
+  border-color: var(--dvx-border-hover);
   color: var(--dvx-ink);
   background: var(--dvx-soft);
 }
@@ -239,15 +239,34 @@
   border-radius: 0 6px 6px 0;
 }
 
+/* A regular permission request already owns one bordered action
+   surface. Remove the generic interaction rails around that surface. */
+.dvx-interaction-panel:has(> .dvx-permission-permission) {
+  margin-top: 16px;
+  padding: 0;
+  border: 0;
+}
+
+.dvx-interaction-panel:has(> .dvx-permission-permission)
+  > .dvx-permission-permission {
+  padding-top: 0;
+}
+
+.dvx-permission-permission .dvx-interaction-eyebrow::before {
+  width: 5px;
+  height: 5px;
+  background: var(--dvx-muted);
+}
+
 .dvx-permission-permission .dvx-interaction-heading h2 {
-  margin-top: 2px;
+  margin-top: 3px;
   font-size: 13px;
   line-height: 19px;
 }
 
 .dvx-permission-permission .dvx-permission-tools {
   gap: 0;
-  margin-top: 8px;
+  margin-top: 7px;
   overflow: hidden;
   border: 1px solid var(--dvx-border);
   border-radius: 7px;
@@ -307,9 +326,9 @@
 }
 
 .dvx-permission-permission .dvx-interaction-actions {
-  min-height: 41px;
+  min-height: 28px;
   gap: 6px;
-  padding: 7px 0 7px;
+  padding: 8px 0 0;
 }
 
 .dvx-permission-permission .dvx-button {
@@ -326,7 +345,7 @@
 }
 
 .dvx-permission-permission .dvx-button-danger:hover:not(:disabled) {
-  border-color: var(--dvx-border-strong);
+  border-color: var(--dvx-border-hover);
   color: var(--dvx-ink);
   background: var(--dvx-soft);
 }

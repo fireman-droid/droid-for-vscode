@@ -167,7 +167,7 @@
 }
 
 .dvx-commit-cancel:hover {
-  border-color: var(--dvx-border-strong);
+  border-color: var(--dvx-border-hover);
   color: var(--dvx-ink);
 }
 

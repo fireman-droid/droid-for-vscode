@@ -76,11 +76,8 @@
   text-decoration: underline;
 }
 
-/* Transient host notices: a content-fit finished card in the shell's
-   register — layered warm-white gradient over 1px border, doubled
-   soft shadow, and a halo-ringed severity dot. Severity tints the
-   border, wash, and ink together but stays in the warm muted range;
-   no flat alert strips. */
+/* Transient host notices use the same monochrome surface contract as
+   the transcript. Severity remains in the semantic marker only. */
 .dvx-diagnostic {
   display: flex;
   width: fit-content;
@@ -91,10 +88,8 @@
   padding: 7px 13px 7px 12px;
   border: 1px solid var(--dvx-border);
   border-radius: 9px;
-  background: linear-gradient(180deg, #fffdfb, var(--dvx-raised));
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 3%),
-    0 8px 18px -14px rgb(0 0 0 / 16%);
+  background: var(--dvx-raised);
+  box-shadow: none;
   color: var(--dvx-muted);
   font-size: 11.5px;
   line-height: 17px;
@@ -120,12 +115,7 @@
 
 .dvx-diagnostic-warning {
   border-color: color-mix(in srgb, var(--dvx-warning) 18%, var(--dvx-border));
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--dvx-warning) 3%, var(--dvx-raised)),
-      var(--dvx-raised)
-    );
+  background: var(--dvx-raised);
   color: color-mix(in srgb, var(--dvx-warning) 52%, var(--dvx-muted));
 }
 
@@ -164,12 +154,7 @@
 
 .dvx-diagnostic-error {
   border-color: color-mix(in srgb, var(--dvx-danger) 20%, var(--dvx-border));
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--dvx-danger) 3%, var(--dvx-raised)),
-      var(--dvx-raised)
-    );
+  background: var(--dvx-raised);
   color: color-mix(in srgb, var(--dvx-danger) 78%, #4a3b3b);
 }
 
@@ -533,6 +518,6 @@
 
 .dvx-show-earlier:hover {
   color: var(--dvx-text);
-  border-color: var(--dvx-accent);
+  border-color: var(--dvx-border-hover);
 }
 

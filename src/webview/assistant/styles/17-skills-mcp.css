@@ -79,7 +79,7 @@
   padding: 0;
   border: 1px solid var(--dvx-border);
   border-radius: 999px;
-  background: #ddd6cc;
+  background: var(--dvx-soft);
   cursor: pointer;
   transition: background 140ms ease;
 }
@@ -126,11 +126,11 @@
 }
 
 .dvx-mcp-status-connecting {
-  background: #d99a2b;
+  background: var(--dvx-muted);
 }
 
 .dvx-mcp-status-disabled {
-  background: #b8ad9d;
+  background: var(--dvx-subtle);
 }
 
 .dvx-mcp-tools-toggle {
@@ -180,8 +180,8 @@
 }
 
 .dvx-mcp-auth-button:hover:not(:disabled) {
-  border-color: var(--dvx-accent);
-  color: var(--dvx-accent);
+  border-color: var(--dvx-border-hover);
+  color: var(--dvx-ink);
 }
 
 .dvx-mcp-auth-button:disabled {
@@ -246,7 +246,7 @@
 
 .dvx-shell .dvx-mcp-add-input:focus,
 .dvx-shell .dvx-mcp-add-input:focus-visible {
-  border-color: var(--dvx-border-strong);
+  border-color: var(--dvx-focus);
   outline: none;
   box-shadow: none;
 }
@@ -299,8 +299,8 @@
 }
 
 .dvx-mcp-add-submit:hover:not(:disabled) {
-  border-color: var(--dvx-accent);
-  color: var(--dvx-accent);
+  border-color: var(--dvx-border-hover);
+  color: var(--dvx-ink);
 }
 
 .dvx-mcp-add-submit:disabled {

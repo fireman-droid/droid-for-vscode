@@ -3,10 +3,10 @@
   min-width: 0;
   align-items: center;
   gap: 7px;
-  margin: 6px 0 0;
+  margin: 1px 0 0;
   color: var(--dvx-subtle);
   font-size: 12px;
-  line-height: 19px;
+  line-height: 18px;
 }
 
 /* Failure excerpt from the tool_result, revealed on expand. Muted
@@ -47,14 +47,8 @@
   padding: 11px 13px 10px;
   border: 1px solid var(--dvx-border);
   border-radius: 10px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--dvx-raised) 96%, var(--dvx-surface)),
-    color-mix(in srgb, var(--dvx-raised) 84%, var(--dvx-surface))
-  );
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 5%),
-    inset 0 1px 0 color-mix(in srgb, var(--dvx-ink) 4%, transparent);
+  background: var(--dvx-raised);
+  box-shadow: none;
   color: var(--dvx-muted);
   font-size: 11px;
   line-height: 16px;
@@ -444,30 +438,28 @@
 /* Doubled class (plus :not for the title) out-ranks the later
    Claude-style flattening pass (`.dvx-activity-row { border: 0; … }`,
    `.dvx-activity-row summary { padding: 0; … }`) without !important. */
-/* Geometry follows Cursor (spec §3.4, 需求 9): radius 8, hairline
-   only — no card shadow — and a 28px collapsed header row. The warm
-   well tokens stay untouched (R4 拍板: 保暖调只抄几何). */
+/* The command title stays in the transcript flow. Only its terminal
+   body receives a framed surface. */
 .dvx-activity-row.dvx-command-card {
   overflow: visible;
-  border: 1px solid var(--dvx-border);
-  border-radius: 8px;
-  background: var(--dvx-raised);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
-  transition: border-color 160ms ease;
 }
 
 .dvx-activity-row.dvx-command-card:hover {
-  border-color: var(--dvx-border-strong);
+  border-color: transparent;
 }
 
 .dvx-activity-row.dvx-command-card > summary {
-  min-height: 28px;
-  padding: 4px 10px 4px 12px;
-  border-radius: 7px;
+  min-height: 24px;
+  padding: 0 2px 5px 0;
+  border-radius: 0;
 }
 
 .dvx-activity-row.dvx-command-card[open] > summary {
-  border-radius: 7px 7px 0 0;
+  border-radius: 0;
 }
 
 /* Scoped to settled rows so the running shimmer (which paints the
@@ -475,7 +467,7 @@
 .dvx-activity-row.dvx-command-card:not(.dvx-activity-running)
   .dvx-tool-action {
   flex: 0 1 auto;
-  color: #33302b;
+  color: var(--dvx-text-strong);
   font-weight: 560;
 }
 

@@ -7,10 +7,8 @@
   border: 1px solid var(--dvx-border);
   border-bottom: 0;
   border-radius: 11px 11px 0 0;
-  background:
-    radial-gradient(circle at 14% -40%, var(--dvx-accent-soft), transparent 45%),
-    linear-gradient(180deg, var(--dvx-raised), var(--dvx-code));
-  box-shadow: 0 10px 25px -24px rgb(0 0 0 / 42%);
+  background: var(--dvx-raised);
+  box-shadow: none;
 }
 
 .dvx-canvas-artifact-mark {
@@ -20,9 +18,9 @@
   place-items: center;
   border: 1px solid var(--dvx-border);
   border-radius: 9px;
-  background: color-mix(in srgb, var(--dvx-raised) 82%, transparent);
-  color: var(--dvx-accent-deep);
-  box-shadow: 0 2px 7px rgb(0 0 0 / 5%);
+  background: var(--dvx-raised);
+  color: var(--dvx-ink);
+  box-shadow: none;
 }
 
 .dvx-canvas-artifact-mark svg {
@@ -85,7 +83,7 @@
 }
 
 .dvx-canvas-artifact > button:hover:not(:disabled) {
-  border-color: var(--dvx-focus);
+  border-color: var(--dvx-border-hover);
   background: var(--dvx-raised);
   color: var(--dvx-ink);
 }

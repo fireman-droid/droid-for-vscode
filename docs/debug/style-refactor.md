@@ -143,6 +143,27 @@ Scenario 阶段完成：
 `window.__dvxStudio` 已落地；Webview TypeScript、文件预算及聚焦 6 项
 测试通过。按当前仓库门禁未运行浏览器 smoke。
 
+### Cursor Browser / Scenario Studio 实测注意
+
+- 主题由两个值共同决定：`data-theme` 是解析后的明暗结果，
+  `data-dvx-theme-preference` 才是 Light / Dark / Auto 偏好。
+  `data-theme="dark"` 与 `data-dvx-theme-preference="auto"` 同时出现表示
+  “Auto 当前解析为暗色”，不是固定 Dark。检查样式命中时必须同时读取两者；
+  Auto 文件最后导入，会按 preference 覆盖固定暗色 token。
+- `window.__dvxStudio.setTheme()` 经异步 `MessageEvent` 把主题送入生产
+  `App`。自动化在调用后不能立刻截图或量 CSS，需等待 `.dvx-shell` 的两个
+  theme data attribute 与 `window.__dvxStudio.getState()` 一致。
+- Studio 的 `--vscode-*` 变量来自 `src/webview/dev/preview.css` 的固定开发
+  样本，不是当前 Cursor 实际主题。它能验证 Auto selector、布局和 token
+  映射，不能替代真实 Secondary Sidebar 中的最终颜色与对比度验收。
+- 某些真实 Cursor 主题会把 `--vscode-panel-border` 或
+  `--vscode-widget-border` 明确定义为 `transparent`；此时 CSS
+  `var(--token, fallback)` 不会进入 fallback。Auto 的结构边框应从编辑器
+  foreground 派生可见 hairline，不能只依赖 border token 回退。
+- 控制条的 320 / 400 / 480 / 760px 只设置内部
+  `.dvx-studio-viewport`，不是浏览器页面宽度。做覆盖或横向溢出测量时应以
+  viewport / `.dvx-shell` 为边界，不能用整张截图宽度代替。
+
 UI 阶段完成：
 
 - 上述主聊天范围使用一套统一材质与文字层级；

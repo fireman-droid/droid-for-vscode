@@ -26,10 +26,6 @@
   border-radius: 0 0 8px 8px;
 }
 
-.dvx-plan-line:hover {
-  border-color: var(--dvx-border-strong);
-}
-
 /* One disclosure target: the whole 32px title row. A 14px marker
    rail leads the grid so the dot, the step circles and the chevron
    share one centred column. */
@@ -50,15 +46,12 @@
   cursor: pointer;
 }
 
-/* Hover feedback stays at ink-deepening level — never a grey block. */
-.dvx-plan-line-row:hover .dvx-plan-line-title,
+/* Keyboard focus remains visible without adding pointer hover chrome. */
 .dvx-plan-line-row:focus-visible .dvx-plan-line-title {
   color: var(--dvx-ink);
 }
 
-/* The chevron rests near-invisible and surfaces on hover/focus
-   (spec §3.5: hover 显形). */
-.dvx-plan-line-row:hover .dvx-plan-line-chevron,
+/* The chevron surfaces only for keyboard focus or expanded state. */
 .dvx-plan-line-row:focus-visible .dvx-plan-line-chevron,
 .dvx-plan-line-row[aria-expanded='true'] .dvx-plan-line-chevron {
   color: var(--dvx-text-secondary);

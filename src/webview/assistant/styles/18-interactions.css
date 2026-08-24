@@ -372,7 +372,7 @@
 
 .dvx-shell .dvx-button-primary {
   border: 0;
-  color: var(--dvx-raised);
+  color: var(--dvx-on-accent);
   background: var(--dvx-accent);
 }
 
@@ -409,30 +409,39 @@
 }
 
 .dvx-shell .dvx-permission-more {
-  display: inline-grid;
+  position: relative;
+  display: inline-block;
   flex: 0 0 32px;
   width: 32px;
   min-width: 32px;
   height: 32px;
   min-height: 32px;
-  place-items: center;
   padding: 0;
-  border-left: 1px solid rgb(255 255 255 / 30%);
+  border-left: 1px solid
+    color-mix(in srgb, var(--dvx-on-accent) 30%, transparent);
   border-radius: 0 7px 7px 0;
   box-shadow: none;
   line-height: 0;
 }
 
 .dvx-shell .dvx-permission-primary:hover:not(:disabled), .dvx-shell .dvx-permission-more:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--dvx-accent) 90%, #000);
+  background: var(--dvx-accent-strong);
 }
 
 .dvx-permission-chevron {
+  position: absolute;
+  top: 50%;
+  left: calc(50% - 0.5px);
   display: block;
-  flex: none;
   width: 14px;
   height: 14px;
   margin: 0;
+  transform: translate(-50%, -50%);
+  transform-origin: 50% 50%;
+}
+
+.dvx-permission-more[aria-expanded='true'] .dvx-permission-chevron {
+  transform: translate(-50%, -50%) rotate(180deg);
 }
 
 /* Unified overlay-menu language (旧账 34b, plan选择.png): hairline
@@ -629,7 +638,7 @@
 }
 
 .dvx-question-options label:hover .dvx-question-radio-mark {
-  border-color: var(--dvx-accent);
+  border-color: var(--dvx-border-hover);
 }
 
 .dvx-question-option-text {

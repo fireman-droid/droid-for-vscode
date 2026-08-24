@@ -1,8 +1,4 @@
-/* Queued prompts folded into a Cursor-style bar directly above the
-   Composer (queued-messages design §4.7, collapsed form per user
-   decision 2026-08-12 晚). Wears the same warm layered card language
-   as the plan-era pins so the conversation-state bars above the
-   Composer read as one family. */
+/* Queued prompts folded into a restrained bar above the Composer. */
 
 .dvx-queue {
   box-sizing: border-box;
@@ -11,10 +7,8 @@
   margin: 0 auto 8px;
   border: 1px solid var(--dvx-border);
   border-radius: 12px;
-  background: linear-gradient(180deg, #fffefc, #fbf8f3);
-  box-shadow:
-    0 1px 2px rgb(31 24 16 / 5%),
-    0 10px 26px -18px rgb(31 24 16 / 28%);
+  background: var(--dvx-raised);
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -38,7 +32,7 @@
 }
 
 .dvx-queue-toggle:hover {
-  background: rgb(69 54 37 / 4%);
+  background: var(--dvx-soft);
 }
 
 .dvx-queue-toggle:focus-visible {
@@ -126,14 +120,14 @@
 }
 
 .dvx-queue-row:hover {
-  background: rgb(69 54 37 / 5%);
+  background: var(--dvx-soft);
 }
 
 .dvx-queue-row-text {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: #262626;
+  color: var(--dvx-ink);
   font-size: 12.5px;
   line-height: 20px;
   text-overflow: ellipsis;
@@ -188,7 +182,7 @@
 
 .dvx-queue-row-action:hover {
   color: var(--dvx-ink);
-  background: rgb(69 54 37 / 8%);
+  background: var(--dvx-soft);
 }
 
 .dvx-queue-row-action-danger:hover {
@@ -242,7 +236,7 @@
 }
 
 .dvx-queue-action:hover {
-  border-color: var(--dvx-accent);
+  border-color: var(--dvx-border-hover);
   color: var(--dvx-ink);
   background: var(--dvx-soft);
 }
@@ -257,7 +251,7 @@
   padding: 2px 4px 2px 8px;
   border: 1px solid var(--dvx-border);
   border-radius: 999px;
-  background: var(--dvx-soft, rgb(69 54 37 / 5%));
+  background: var(--dvx-soft);
   color: var(--dvx-muted);
   font-size: 11.5px;
   line-height: 18px;

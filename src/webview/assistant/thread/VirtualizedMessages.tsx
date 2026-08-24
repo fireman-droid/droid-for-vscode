@@ -28,14 +28,6 @@ import { THREAD_MESSAGE_COMPONENTS } from "./messageChrome";
 const ESTIMATED_MESSAGE_HEIGHT = 120;
 const OVERSCAN = 8;
 const INITIAL_RECT = { height: 800, width: 400 };
-const APPROACH_VIEWPORT_FRACTION = 0.65;
-const SHORT_JUMP_VIEWPORTS = 1.25;
-
-function prefersReducedMotion(): boolean {
-  return (
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
-  );
-}
 
 function releaseFollowForJump(
   follow: { following: boolean } | null,
@@ -50,20 +42,6 @@ function releaseFollowForJump(
       follow as { following: boolean; pendingProgrammaticTop: number | null }
     ).pendingProgrammaticTop = scrollTop;
   }
-}
-
-function writeScrollerTop(
-  element: HTMLElement,
-  top: number,
-  follow: { following: boolean } | null,
-): void {
-  const maxTop = Math.max(0, element.scrollHeight - element.clientHeight);
-  const next = Math.min(maxTop, Math.max(0, top));
-  releaseFollowForJump(follow, next);
-  if (typeof element.scrollTo === "function") {
-    element.scrollTo({ top: next, behavior: "auto" });
-  }
-  element.scrollTop = next;
 }
 
 function useThreadMessageRows(): readonly MessageRow[] {
@@ -119,7 +97,6 @@ export function VirtualizedMessages({
   );
   const listRef = useRef<HTMLDivElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
-  const approachFrameRef = useRef(0);
 
   useLayoutEffect(() => {
     const list = listRef.current;
@@ -174,8 +151,7 @@ export function VirtualizedMessages({
         if (
           maxScroll - element.scrollTop <= FOLLOW_REJOIN_PX &&
           top < maxScroll &&
-          delta > 0 &&
-          delta < 80
+          delta > 0
         ) {
           return;
         }
@@ -183,6 +159,7 @@ export function VirtualizedMessages({
           followingRef.current.following = false;
         }
       }
+      releaseFollowForJump(followingRef.current, top);
       if (typeof element.scrollTo === "function") {
         element.scrollTo({ top, behavior });
         return;
@@ -202,41 +179,10 @@ export function VirtualizedMessages({
         if (index < 0 || element === null) {
           return;
         }
-        if (approachFrameRef.current !== 0) {
-          cancelAnimationFrame(approachFrameRef.current);
-          approachFrameRef.current = 0;
-        }
-        const follow = followingRef.current;
-        const reducedMotion = prefersReducedMotion();
-        const target =
-          virtualizer.getOffsetForIndex(index, "start")?.[0] ??
-          virtualizer.measurementsCache[index]?.start;
-        if (target === undefined || reducedMotion) {
-          releaseFollowForJump(follow, element.scrollTop);
-          virtualizer.scrollToIndex(index, {
-            align: "start",
-            behavior: "auto",
-          });
-          return;
-        }
-        const distance = Math.abs(target - element.scrollTop);
-        if (distance > element.clientHeight * SHORT_JUMP_VIEWPORTS) {
-          const direction = target > element.scrollTop ? 1 : -1;
-          const approach =
-            target -
-            direction *
-              element.clientHeight *
-              APPROACH_VIEWPORT_FRACTION;
-          writeScrollerTop(element, approach, follow);
-        } else {
-          releaseFollowForJump(follow, element.scrollTop);
-        }
-        approachFrameRef.current = requestAnimationFrame(() => {
-          approachFrameRef.current = 0;
-          virtualizer.scrollToIndex(index, {
-            align: "start",
-            behavior: "smooth",
-          });
+        releaseFollowForJump(followingRef.current, element.scrollTop);
+        virtualizer.scrollToIndex(index, {
+          align: "start",
+          behavior: "auto",
         });
       },
       questionTops: () => {
@@ -254,10 +200,6 @@ export function VirtualizedMessages({
     };
     apiRef.current = api;
     return () => {
-      if (approachFrameRef.current !== 0) {
-        cancelAnimationFrame(approachFrameRef.current);
-        approachFrameRef.current = 0;
-      }
       if (apiRef.current === api) {
         apiRef.current = null;
       }

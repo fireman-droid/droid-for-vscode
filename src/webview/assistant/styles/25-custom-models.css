@@ -190,7 +190,7 @@
   border: 0;
   border-radius: 5px;
   background: var(--dvx-accent);
-  color: var(--vscode-button-foreground, #241f1b);
+  color: var(--dvx-on-accent);
   font-size: 12px;
   font-weight: 550;
   white-space: nowrap;
@@ -240,7 +240,7 @@
 }
 
 .dvx-cm-provider-card:hover {
-  border-color: var(--dvx-border-strong);
+  border-color: var(--dvx-border-hover);
   background: color-mix(in srgb, var(--dvx-raised) 88%, var(--dvx-soft));
 }
 
@@ -362,7 +362,7 @@
 
 .dvx-cm-edit-btn:hover:not(:disabled) {
   color: var(--dvx-ink);
-  border-color: var(--dvx-border-strong);
+  border-color: var(--dvx-border-hover);
   background: var(--dvx-soft);
 }
 
@@ -635,12 +635,12 @@
 }
 
 .dvx-cm-input:hover {
-  border-color: var(--dvx-border-strong);
+  border-color: var(--dvx-border-hover);
 }
 
 .dvx-shell .dvx-cm-input:focus,
 .dvx-shell .dvx-cm-input:focus-visible {
-  border-color: var(--dvx-border-strong);
+  border-color: var(--dvx-focus);
   outline: none;
   box-shadow: 0 0 0 1px var(--dvx-soft);
 }

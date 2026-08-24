@@ -11,9 +11,9 @@
 }
 
 .dvx-stop-action {
-  border-color: #d9afa9;
+  border-color: color-mix(in srgb, var(--dvx-danger) 38%, transparent);
   color: var(--dvx-danger);
-  background: #fff8f6;
+  background: transparent;
 }
 
 .dvx-composer-tool-button:hover:not(:disabled), .dvx-model-trigger:hover:not(:disabled), .dvx-popover-back:hover:not(:disabled), .dvx-popover-refresh:hover:not(:disabled), .dvx-model-edit:hover:not(:disabled) {
@@ -221,7 +221,7 @@
   border: 1px solid var(--dvx-border);
   border-radius: 8px;
   color: var(--dvx-ink);
-  background: #fbf8f4;
+  background: var(--dvx-raised);
 }
 
 .dvx-error-text {
@@ -345,7 +345,7 @@
   place-items: center;
   padding: 0;
   border: 0;
-  color: white;
+  color: var(--dvx-on-accent);
   line-height: 1;
   width: 32px;
   min-width: 32px;
@@ -353,7 +353,7 @@
   min-height: 32px;
   border-radius: 9px;
   background: var(--dvx-accent);
-  box-shadow: 0 5px 12px rgb(222 84 36 / 20%);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 14%);
   font-size: 19px;
   transition: background-color 130ms ease, filter 130ms ease, transform 130ms ease;
 }
@@ -365,15 +365,15 @@
 .dvx-popover-row-icon {
   display: grid;
   place-items: center;
-  border: 1px solid #e4c6b8;
+  border: 1px solid var(--dvx-border);
   border-radius: 8px;
-  color: var(--dvx-accent);
+  color: var(--dvx-ink);
   font-size: 12px;
   font-weight: 700;
   width: 26px;
   height: 26px;
-  border-color: #ead2c6;
-  background: #fffaf8;
+  border-color: var(--dvx-border);
+  background: var(--dvx-raised);
 }
 
 .dvx-option-row, .dvx-model-row {
@@ -422,7 +422,7 @@
 }
 
 .dvx-button-primary {
-  color: var(--dvx-raised);
+  color: var(--dvx-on-accent);
   border-color: var(--dvx-accent);
   background: var(--dvx-accent);
 }

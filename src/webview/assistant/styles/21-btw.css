@@ -40,9 +40,7 @@
   height: 100%;
   min-height: 0;
   border-left: 1px solid var(--dvx-border, var(--dvx-border));
-  background:
-    linear-gradient(180deg, var(--dvx-raised) 0%, var(--dvx-surface) 100%),
-    var(--dvx-raised, var(--dvx-raised));
+  background: var(--dvx-raised);
   animation: dvx-btw-expand 200ms var(--dvx-easing-out-strong);
 }
 
@@ -177,7 +175,7 @@
 }
 
 .dvx-btw-question:hover {
-  border-color: var(--dvx-border-strong);
+  border-color: var(--dvx-border-hover);
 }
 
 .dvx-btw-answer {
@@ -281,8 +279,8 @@
   border: 0;
   border-radius: 9px;
   background: var(--dvx-accent, var(--dvx-accent));
-  box-shadow: 0 5px 12px rgb(222 84 36 / 20%);
-  color: var(--dvx-raised);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 14%);
+  color: var(--dvx-on-accent);
   font-size: 16px;
   line-height: 1;
   cursor: pointer;

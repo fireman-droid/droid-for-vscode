@@ -8,13 +8,7 @@
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--dvx-raised) 32%, transparent),
-      transparent 110px
-    ),
-    var(--dvx-surface);
+  background: var(--dvx-surface);
   color: var(--dvx-ink);
 }
 
@@ -28,12 +22,8 @@
   padding: 8px max(18px, calc((100% - var(--dvx-content-max)) / 2));
   border-bottom: 1px solid
     color-mix(in srgb, var(--dvx-border) 78%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--dvx-surface) 94%,
-    transparent
-  );
-  box-shadow: 0 8px 26px -28px rgb(33 27 20 / 42%);
+  background: var(--dvx-surface);
+  box-shadow: none;
 }
 
 .dvx-session-viewer-heading {

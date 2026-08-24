@@ -80,12 +80,11 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
       aria-label="Droid"
     >
       <AssistantMessageParts includeChanges={includeChanges} />
-      {replyTail ? (
+      {replyTail && !running ? (
         <ActionBarPrimitive.Root
           className={`dvx-assistant-actions${
             !running && wasRunningRef.current ? " dvx-actions-entry" : ""
           }`}
-          hideWhenRunning
         >
           <MessageTimestamp completedAt={completedAt} />
           {replyCopyText !== null ? (

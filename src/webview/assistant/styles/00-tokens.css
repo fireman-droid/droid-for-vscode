@@ -1,8 +1,8 @@
 /* Design tokens — single definition site (moved verbatim from the
    .dvx-shell rule in 10-shell-frame.css; custom properties have one
    definition in the whole sheet, so hoisting them into this earlier
-   file cannot change the cascade). The light values below ARE the
-   product's warm-white baseline; the dark theme overrides only token
+   file cannot change the cascade). The light values below are the
+   product's pure-white monochrome baseline; the dark theme overrides only token
    values via `.dvx-shell[data-theme="dark"]`
    (docs/product/theme-switching-design.md §2.1), plus the literal
    dark skin in 24-theme-dark.css. Auto is a final editor-variable
@@ -23,55 +23,55 @@
   --dvx-duration-slower: 300ms;   /* large block entry ceiling */
   --dvx-easing-out-strong: cubic-bezier(0.215, 0.61, 0.355, 1);
 
-  /* Surfaces (spec §1.5): surface < code < raised < overlay; the
-     well is the deep terminal floor (R4 拍板: stays warm). */
-  --dvx-surface: #f5f3ef;
+  /* Persistent surfaces stay pure white. Code and terminal wells are
+     the sole recessed exception. */
+  --dvx-surface: #fff;
   --dvx-raised: #fff;
-  --dvx-code: #f7f5f1;
-  --dvx-overlay: #fbfaf7;
-  --dvx-well: #eceae5;
+  --dvx-code: #f6f6f6;
+  --dvx-overlay: #fff;
+  --dvx-well: #f6f6f6;
 
   /* Text (ink → text-secondary → muted → subtle, darkest first) */
-  --dvx-ink: #262626;
-  --dvx-text-strong: #404040;
-  --dvx-text-secondary: #525252;
+  --dvx-ink: #000;
+  --dvx-text-strong: #171717;
+  --dvx-text-secondary: #404040;
   --dvx-muted: #737373;
-  --dvx-subtle: #a1a1a1;
+  --dvx-subtle: #a3a3a3;
 
-  /* Lines and washes: translucent black hairlines (spec §1.5 — a
-     hairline that works over any warm ground, replacing the solid
-     #e5e5e5/#d4d4d4 pair that read flat on non-white surfaces). */
-  --dvx-border: rgb(0 0 0 / 8%);
-  --dvx-border-strong: rgb(0 0 0 / 15%);
-  --dvx-soft: rgb(0 0 0 / 4%);
+  /* Lines and washes: translucent black hairlines over pure white. */
+  --dvx-border: rgb(0 0 0 / 14%);
+  --dvx-border-strong: rgb(0 0 0 / 24%);
+  --dvx-border-hover: #a3a3a3;
+  --dvx-soft: rgb(0 0 0 / 5%);
 
-  /* Brand */
-  --dvx-accent: #f2612e;
-  --dvx-accent-strong: #df5020;
-  --dvx-accent-deep: #b5451f;
-  --dvx-accent-soft: #fff0ea;
+  /* Fixed themes are monochrome. Auto replaces these with editor
+     button, link, selection and focus tokens. */
+  --dvx-accent: #000;
+  --dvx-accent-strong: #1a1a1a;
+  --dvx-accent-deep: #000;
+  --dvx-accent-soft: rgb(0 0 0 / 6%);
+  --dvx-on-accent: #fff;
 
   /* Semantics */
   /* Calm crimson: reads as danger without the neon-pink plastic
      sting of the old #ec003f (visual-bar decision, 2026-08-12). */
   --dvx-danger: #c93a4a;
-  --dvx-warning: rgb(187 77 0 / 90%);
+  --dvx-warning: #525252;
   --dvx-diff-add: #1a7f37;
   --dvx-diff-del: #cf222e;
-  /* Focus ring: owned by the shell, not the editor theme (theme doc
-     §1.3 — a VS Code-blue ring on the warm panel read as foreign). */
-  --dvx-focus: #d2643d;
+  /* Focus follows the fixed monochrome foreground. */
+  --dvx-focus: #737373;
 
   /* Elevation */
   --dvx-shadow: 0 16px 40px -14px rgb(0 0 0 / 28%);
 
-  /* Context Usage chart segments (spec §1.5, muted five-color set:
-     gray · purple · teal · orange · blue; consumed in 段 B). */
-  --dvx-ctx-1: #9a9a9a;
-  --dvx-ctx-2: #8a6fc8;
-  --dvx-ctx-3: #2f9688;
-  --dvx-ctx-4: #c07a3a;
-  --dvx-ctx-5: #4a7fc0;
+  /* Context Usage stays distinguishable without introducing chrome
+     accent colors into the fixed theme. */
+  --dvx-ctx-1: #262626;
+  --dvx-ctx-2: #525252;
+  --dvx-ctx-3: #737373;
+  --dvx-ctx-4: #a3a3a3;
+  --dvx-ctx-5: #d4d4d4;
 
   /* Type */
   --dvx-mono: ui-monospace, monospace;
@@ -89,65 +89,57 @@
   --dvx-hl-meta: #7a6a56;
 }
 
-/* ==== Dark theme (charcoal v2, user-approved prototype
-   artifacts/theme-proto-dark.png, 2026-08-12) ========================
-   Grayscale ladder referencing Cursor's dark (#1a1a1a–#252526), not a
-   simple inversion: elevation direction flips (lighter = more
-   raised), borders become translucent white hairlines, shadows get
-   shorter and deeper, and the brand orange leaves entirely — accent
-   consumers collapse to light grays (send button reads as a light
-   fill with dark glyph via the raised/ink swap). Body text #e8e8e8 on
-   #1a1a1a ≈ 13.6:1; muted #9a9a9a ≈ 5.5:1 (≥ 4.5:1 for reading text).
-   Rules that still carry warm-light literals are re-skinned in
-   24-theme-dark.css. */
+/* ==== Dark theme (pure-black monochrome) ============================
+   Persistent surfaces stay black and separate through white
+   hairlines, typography and spacing. */
 .dvx-shell[data-theme='dark'],
 html[data-dvx-theme='dark'] .dvx-image-lightbox,
 html[data-dvx-theme='dark'] .dvx-slash-tooltip {
   color-scheme: dark;
 
-  /* Surfaces: overlay floats one step above the card; the terminal
-     well drops below the page floor (kept warm-umber, R4 拍板). */
-  --dvx-surface: #1a1a1a;
-  --dvx-raised: #242425;
-  --dvx-code: #1e1e1f;
-  --dvx-overlay: #2a2a2c;
-  --dvx-well: #16120e;
+  /* Code and terminal wells are the sole recessed exception. */
+  --dvx-surface: #000;
+  --dvx-raised: #000;
+  --dvx-code: #080808;
+  --dvx-overlay: #000;
+  --dvx-well: #101010;
 
   /* Text */
-  --dvx-ink: #e8e8e8;
-  --dvx-text-strong: #d6d6d6;
-  --dvx-text-secondary: #bdbdbd;
-  --dvx-muted: #9a9a9a;
-  --dvx-subtle: #6f6f6f;
+  --dvx-ink: #fff;
+  --dvx-text-strong: #e8e8e8;
+  --dvx-text-secondary: #d6d6d6;
+  --dvx-muted: #a3a3a3;
+  --dvx-subtle: #737373;
 
   /* Lines and washes (translucent white; hover = brighter) */
-  --dvx-border: rgb(255 255 255 / 9%);
-  --dvx-border-strong: rgb(255 255 255 / 16%);
-  --dvx-soft: rgb(255 255 255 / 6%);
+  --dvx-border: rgb(255 255 255 / 18%);
+  --dvx-border-strong: rgb(255 255 255 / 28%);
+  --dvx-border-hover: #737373;
+  --dvx-soft: rgb(255 255 255 / 7%);
 
-  /* Brand: orange retired — accent consumers go light-gray, so the
-     one solid element (send) becomes a light fill with dark glyph. */
-  --dvx-accent: #d4d4d4;
-  --dvx-accent-strong: #e8e8e8;
-  --dvx-accent-deep: #bdbdbd;
-  --dvx-accent-soft: rgb(255 255 255 / 10%);
+  /* Primary controls invert to a white fill with black content. */
+  --dvx-accent: #fff;
+  --dvx-accent-strong: #e6e6e6;
+  --dvx-accent-deep: #fff;
+  --dvx-accent-soft: rgb(255 255 255 / 8%);
+  --dvx-on-accent: #000;
 
   /* Semantics (lifted for dark ground) */
   --dvx-danger: #e5484d;
-  --dvx-warning: rgb(220 180 120 / 90%);
+  --dvx-warning: #bdbdbd;
   --dvx-diff-add: #57ab5a;
   --dvx-diff-del: #f47067;
-  --dvx-focus: rgb(255 255 255 / 42%);
+  --dvx-focus: #a3a3a3;
 
   /* Elevation: shorter throw, deeper ink */
   --dvx-shadow: 0 12px 28px -12px rgb(0 0 0 / 55%);
 
-  /* Context Usage chart segments (lifted for the dark ground). */
-  --dvx-ctx-1: #7f7f86;
-  --dvx-ctx-2: #a48fd8;
-  --dvx-ctx-3: #58b5a8;
-  --dvx-ctx-4: #d8955c;
-  --dvx-ctx-5: #6f9fd8;
+  /* Context Usage uses a lifted grayscale ladder. */
+  --dvx-ctx-1: #d4d4d4;
+  --dvx-ctx-2: #a3a3a3;
+  --dvx-ctx-3: #737373;
+  --dvx-ctx-4: #525252;
+  --dvx-ctx-5: #262626;
 
   /* Syntax highlighting (VS Code Dark+ derived) */
   --dvx-hl-comment: #6a9955;

@@ -9,14 +9,8 @@
   overflow: hidden;
   border: 1px solid var(--dvx-border);
   border-radius: 10px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--dvx-raised) 94%, var(--dvx-surface)),
-    color-mix(in srgb, var(--dvx-raised) 82%, var(--dvx-surface))
-  );
-  box-shadow:
-    0 1px 2px rgb(31 24 16 / 5%),
-    0 9px 22px -18px rgb(31 24 16 / 26%);
+  background: var(--dvx-raised);
+  box-shadow: none;
   user-select: none;
 }
 
@@ -184,7 +178,7 @@
 
 .dvx-review-dock-branch-toggle:hover {
   color: var(--dvx-ink);
-  border-color: var(--dvx-border);
+  border-color: var(--dvx-border-hover);
 }
 
 .dvx-review-dock-branch-toggle[aria-pressed='true'] {

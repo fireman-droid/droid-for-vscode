@@ -12,12 +12,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const aui = vi.hoisted(() => ({
   parts: [] as Array<Record<string, unknown>>,
   messageRunning: true,
+  messageId: 0,
 }));
 
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (
     selector: (state: {
       message: {
+        id: string;
         parts: Array<Record<string, unknown>>;
         status: { type: string };
       };
@@ -25,6 +27,7 @@ vi.mock('@assistant-ui/react', () => ({
   ) =>
     selector({
       message: {
+        id: `message-${aui.messageId}`,
         parts: aui.parts,
         status: { type: aui.messageRunning ? 'running' : 'complete' },
       },
@@ -44,12 +47,14 @@ afterEach(() => {
   vi.useRealTimers();
   aui.parts = [];
   aui.messageRunning = true;
+  aui.messageId += 1;
 });
 
 const members = [
   <div key="m0" data-member="0"><button type="button">member 0</button></div>,
   <div key="m1" data-member="1"><button type="button">member 1</button></div>,
   <div key="m2" data-member="2"><button type="button">member 2</button></div>,
+  <div key="m3" data-member="3"><button type="button">member 3</button></div>,
 ];
 
 function groupParts(running: boolean): Array<Record<string, unknown>> {
@@ -71,9 +76,11 @@ function toolPart(
   };
 }
 
-function activityGroup(): React.JSX.Element {
+function activityGroup(
+  indices: readonly number[] = [0, 1, 2],
+): React.JSX.Element {
   return (
-    <ActivityGroup indices={[0, 1, 2]}>
+    <ActivityGroup indices={indices}>
       <>{members}</>
     </ActivityGroup>
   );
@@ -130,6 +137,18 @@ describe('ActivityTicker', () => {
     expect(
       container.querySelector('.dvx-activity-ticker')?.hasAttribute('inert'),
     ).toBe(true);
+  });
+
+  it('mounts at the current member without replaying earlier rows', () => {
+    const { container } = render(
+      <ActivityTicker activeIndex={2}>{members}</ActivityTicker>,
+    );
+    expect(readState(container)).toMatchObject({
+      rows: ['2'],
+      actives: [true],
+      sliding: false,
+      offset: '',
+    });
   });
 
   it('keeps the outgoing row mounted and marks only the incoming row active', () => {
@@ -259,6 +278,42 @@ describe('ToolActivityRow', () => {
 });
 
 describe('ActivityGroup completion transition', () => {
+  it('resumes a remounted running group at its current member', () => {
+    vi.useFakeTimers();
+    aui.parts = groupParts(true);
+    const first = render(activityGroup());
+    const track = first.container.querySelector('.dvx-ticker-track');
+    if (!(track instanceof HTMLElement)) {
+      throw new Error('ticker track not mounted');
+    }
+    fireEvent.transitionEnd(track, { propertyName: 'transform' });
+    first.unmount();
+
+    const resumed = render(activityGroup());
+    expect(readState(resumed.container)).toMatchObject({
+      rows: ['2'],
+      actives: [true],
+      sliding: false,
+      offset: '',
+    });
+  });
+
+  it('resumes when the running group gained members while unmounted', () => {
+    vi.useFakeTimers();
+    aui.parts = groupParts(true);
+    const first = render(activityGroup());
+    first.unmount();
+
+    aui.parts = [...groupParts(false), toolPart('Grep', 'running')];
+    const resumed = render(activityGroup([0, 1, 2, 3]));
+    expect(readState(resumed.container)).toMatchObject({
+      rows: ['3'],
+      actives: [true],
+      sliding: false,
+      offset: '',
+    });
+  });
+
   it('keeps the running view until every burst member has been shown', () => {
     vi.useFakeTimers();
     aui.parts = groupParts(true);

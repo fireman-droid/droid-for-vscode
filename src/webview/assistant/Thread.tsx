@@ -515,6 +515,7 @@ export const DroidThread = memo(function DroidThread({
     readonly scrollHeight: number;
     readonly scrollTop: number;
   } | null>(null);
+  const lastFollowSendSignalRef = useRef(sendSignal);
   const revealEarlier = (): void => {
     const column = readingColumnRef.current;
     const scroller = column?.closest(".dvx-thread-viewport");
@@ -543,6 +544,25 @@ export const DroidThread = memo(function DroidThread({
   }, [hiddenMessageCount]);
   const [awayFromBottom, setAwayFromBottom] = useState(false);
   const scrollToBottomRef = useRef<() => void>(() => {});
+  useLayoutEffect(() => {
+    if (lastFollowSendSignalRef.current === sendSignal) {
+      return;
+    }
+    lastFollowSendSignalRef.current = sendSignal;
+    if (queueEditing) {
+      return;
+    }
+    const column = readingColumnRef.current;
+    const scroller = column?.closest(".dvx-thread-viewport");
+    if (!(scroller instanceof HTMLElement)) {
+      return;
+    }
+    const follow = followRef.current;
+    const maxTop = scroller.scrollHeight - scroller.clientHeight;
+    follow.following = true;
+    follow.pendingProgrammaticTop = maxTop;
+    scroller.scrollTop = maxTop;
+  }, [queueEditing, sendSignal]);
   useEffect(() => {
     const column = readingColumnRef.current;
     if (column === null) {

@@ -91,20 +91,26 @@
   background: var(--dvx-soft);
 }
 
-/* The terminal well: the shell's deep terminal floor (--dvx-well,
-   spec §1.5 — warm-umber in dark, warm-white in light per R4 拍板),
-   with a faint lighter top edge. Flush under the header; rounded only
-   when it closes the card. */
+/* The terminal well is the sole persistent gray surface in fixed
+   themes, outlined strongly enough to separate from the page. */
 .dvx-command-card .dvx-command-well {
   overflow: hidden;
-  border-top: 1px solid var(--dvx-border);
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 3%), transparent 42%),
-    var(--dvx-well);
+  margin-top: 0;
+  border: 1px solid var(--dvx-border-strong);
+  border-radius: 7px;
+  background: var(--dvx-well);
+  box-shadow: inset 0 1px 0
+    color-mix(in srgb, var(--dvx-ink) 4%, transparent);
 }
 
 .dvx-command-card .dvx-command-well:last-child {
-  border-radius: 0 0 7px 7px;
+  border-radius: 7px;
+}
+
+.dvx-command-card
+  .dvx-command-well:has(+ .dvx-tool-output-frame) {
+  border-bottom: 0;
+  border-radius: 7px 7px 0 0;
 }
 
 /* Expand/collapse animates as one continuous height + opacity
@@ -142,7 +148,7 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 9px 12px 8px;
+  padding: 7px 10px;
   font-family: var(--vscode-editor-font-family, 'SFMono-Regular'), Consolas, monospace;
   font-size: 11.5px;
   line-height: 1.6;
@@ -150,7 +156,7 @@
 
 .dvx-command-prompt {
   flex: 0 0 auto;
-  color: rgb(214 172 116 / 62%);
+  color: var(--dvx-muted);
   font-weight: 600;
   user-select: none;
 }
@@ -164,7 +170,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: #d9d2c7;
+  color: var(--dvx-text-strong);
   font-family: inherit;
   font-size: inherit;
   line-height: inherit;
@@ -173,16 +179,14 @@
   user-select: text;
 }
 
-/* Syntax tint, derived from the warm palette (accent → apricot and
-   copper, neutrals → sand and cream) — deliberately not Cursor's
-   cool blue theme. */
+/* Command syntax stays legible without reintroducing chrome accent. */
 .dvx-cmd-command {
-  color: #e69a68;
+  color: var(--dvx-ink);
   font-weight: 600;
 }
 
 .dvx-cmd-flag {
-  color: #c8b693;
+  color: var(--dvx-text-secondary);
 }
 
 .dvx-cmd-string {
@@ -190,34 +194,29 @@
 }
 
 .dvx-cmd-variable {
-  color: #d98e7a;
+  color: var(--dvx-ink);
 }
 
 .dvx-cmd-operator {
-  color: #8f8577;
+  color: var(--dvx-muted);
 }
 
 .dvx-cmd-path {
-  color: #e3d8c4;
+  color: var(--dvx-text-strong);
 }
 
 .dvx-cmd-comment {
-  color: #7d7466;
+  color: var(--dvx-muted);
   font-style: italic;
 }
 
-/* Output tail inside the well family: same pinned-scroll pre,
-   restyled onto the dark surface — a shade darker than the command
-   area, split by a warm hairline, muted warm text. The top fade mask
-   still dissolves the truncated tail. */
+/* Output tail shares the terminal surface and is split by a hairline. */
 .dvx-command-card .dvx-tool-output-frame {
   margin: 0;
-  border: 0;
-  border-top: 1px solid rgb(255 244 230 / 8%);
-  border-radius: 0;
-  background:
-    linear-gradient(180deg, rgb(0 0 0 / 16%), rgb(0 0 0 / 16%)),
-    var(--dvx-well);
+  border: 1px solid var(--dvx-border-strong);
+  border-top-color: var(--dvx-border);
+  border-radius: 0 0 7px 7px;
+  background: var(--dvx-well);
   box-shadow: none;
 }
 
@@ -226,17 +225,17 @@
 }
 
 .dvx-command-card .dvx-tool-output {
-  padding: 8px 12px 9px;
-  color: #a89e90;
+  padding: 8px 10px 9px;
+  color: var(--dvx-text-secondary);
 }
 
 /* Quiet actions that follow the well sit on the card's white apron. */
 .dvx-command-card .dvx-terminal-mirror-entry {
-  margin: 6px 12px 9px;
+  margin: 6px 2px 8px;
 }
 
 .dvx-command-card .dvx-tool-error {
-  margin: 8px 12px 10px;
+  margin: 7px 10px 9px;
 }
 
 /* The well follows the theme (kitchen-sink form, 2026-08-13): the
@@ -245,19 +244,19 @@
    keeps the deep warm-umber well. */
 
 .dvx-shell:not([data-theme='dark']) .dvx-command-prompt {
-  color: rgb(170 122 66 / 78%);
+  color: var(--dvx-muted);
 }
 
 .dvx-shell:not([data-theme='dark']) .dvx-command-line .dvx-command-code {
-  color: #45403a;
+  color: var(--dvx-text-strong);
 }
 
 .dvx-shell:not([data-theme='dark']) .dvx-cmd-command {
-  color: #b5451f;
+  color: var(--dvx-ink);
 }
 
 .dvx-shell:not([data-theme='dark']) .dvx-cmd-flag {
-  color: #8a7a58;
+  color: var(--dvx-text-secondary);
 }
 
 .dvx-shell:not([data-theme='dark']) .dvx-cmd-string {
@@ -265,19 +264,19 @@
 }
 
 .dvx-shell:not([data-theme='dark']) .dvx-cmd-variable {
-  color: #a35138;
+  color: var(--dvx-ink);
 }
 
 .dvx-shell:not([data-theme='dark']) .dvx-cmd-operator {
-  color: #8a8072;
+  color: var(--dvx-muted);
 }
 
 .dvx-shell:not([data-theme='dark']) .dvx-cmd-path {
-  color: #5c5346;
+  color: var(--dvx-text-secondary);
 }
 
 .dvx-shell:not([data-theme='dark']) .dvx-cmd-comment {
-  color: #918a80;
+  color: var(--dvx-muted);
 }
 
 .dvx-shell:not([data-theme='dark']) .dvx-command-card .dvx-tool-output-frame {
@@ -286,6 +285,6 @@
 }
 
 .dvx-shell:not([data-theme='dark']) .dvx-command-card .dvx-tool-output {
-  color: #676058;
+  color: var(--dvx-text-secondary);
 }
 

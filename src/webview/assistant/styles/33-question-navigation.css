@@ -9,11 +9,15 @@
   pointer-events: none;
 }
 
+.dvx-thread:has(> .dvx-question-nav) .dvx-reading-column {
+  padding-right: calc(var(--dvx-column-pad) + 10px);
+}
+
 .dvx-question-nav {
   position: absolute;
   z-index: 3;
   top: 50%;
-  right: 6px;
+  right: 0;
   display: flex;
   width: 18px;
   height: calc(var(--dvx-question-track-height) + 42px);

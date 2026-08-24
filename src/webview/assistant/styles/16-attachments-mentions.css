@@ -200,14 +200,14 @@
   max-width: 100%;
   min-height: 24px;
   padding: 2px 4px 2px 8px;
-  border: 1px solid rgb(226 220 210 / 90%);
+  border: 1px solid var(--dvx-border);
   border-radius: 7px;
-  background: #f6f2ea;
+  background: var(--dvx-raised);
   font-size: 11.5px;
 }
 
 .dvx-attachment-kind {
-  color: #8a7a63;
+  color: var(--dvx-muted);
   font-size: 10px;
   font-weight: 650;
   letter-spacing: 0.04em;

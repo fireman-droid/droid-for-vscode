@@ -4,15 +4,8 @@
   overflow: hidden;
   border: 1px solid var(--dvx-border-strong);
   border-radius: 13px;
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--dvx-raised) 94%, var(--dvx-surface)),
-    color-mix(in srgb, var(--dvx-raised) 82%, var(--dvx-surface))
-  );
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--dvx-ink) 5%, transparent),
-    0 1px 2px rgb(0 0 0 / 9%),
-    0 12px 30px -24px rgb(0 0 0 / 52%);
+  background: var(--dvx-raised);
+  box-shadow: none;
 }
 
 .dvx-mission-control-head {
@@ -92,12 +85,8 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    var(--dvx-accent-deep),
-    var(--dvx-accent)
-  );
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 22%);
+  background: var(--dvx-accent);
+  box-shadow: none;
   transition: width var(--dvx-duration-normal) var(--dvx-easing-out-strong);
 }
 
@@ -196,7 +185,7 @@
 
 @media (hover: hover) {
   .dvx-mission-control-actions button:hover:not(:disabled) {
-    border-color: var(--dvx-ink);
+    border-color: var(--dvx-border-hover);
     background: var(--dvx-raised);
     color: var(--dvx-ink);
     transform: translateY(-1px);

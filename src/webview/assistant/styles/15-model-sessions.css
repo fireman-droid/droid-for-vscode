@@ -63,7 +63,7 @@
 }
 
 .dvx-shell .dvx-settings-search:focus-visible {
-  border-color: var(--dvx-border-strong);
+  border-color: var(--dvx-focus);
   outline: none;
   box-shadow: 0 0 0 1px var(--dvx-soft);
 }

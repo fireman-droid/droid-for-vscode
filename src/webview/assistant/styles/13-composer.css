@@ -34,7 +34,7 @@
 }
 
 .dvx-composer:focus-within {
-  border-color: var(--dvx-border-strong);
+  border-color: var(--dvx-border);
   box-shadow: none;
 }
 
@@ -42,7 +42,7 @@
 .dvx-composer-dragover {
   border-color: var(--dvx-border-strong);
   border-style: dashed;
-  background: #fdf9f3;
+  background: var(--dvx-soft);
 }
 
 .dvx-composer-input {
@@ -346,13 +346,33 @@
 }
 
 .dvx-send-icon {
-  display: block;
-  width: 16px;
-  height: 16px;
+  display: none;
+}
+
+.dvx-send-action::before,
+.dvx-send-action::after {
+  grid-area: 1 / 1;
+  content: "";
+}
+
+.dvx-send-action::before {
+  width: 7px;
+  height: 7px;
+  border-top: 1.5px solid currentColor;
+  border-left: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.dvx-send-action::after {
+  width: 1.5px;
+  height: 11px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translateY(1px);
 }
 
 .dvx-shell .dvx-send-action:disabled {
-  color: var(--dvx-raised);
+  color: var(--dvx-on-accent);
   opacity: 1;
 }
 

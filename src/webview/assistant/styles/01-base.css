@@ -17,7 +17,7 @@ html, body, #root {
   /* Outside .dvx-shell scope: tokens do not resolve here. Must stay
      a literal equal to --dvx-surface (theme doc §2.1: these three
      page-ground colors get synced by the boot script when theming). */
-  background: #f5f3ef;
+  background: #fff;
 }
 
 .dvx-shell *, .dvx-shell *::before, .dvx-shell *::after {
@@ -137,7 +137,7 @@ html, body, #root {
 }
 
 .dvx-icon-button:hover, .dvx-button:hover:not(:disabled), .dvx-composer-action:hover:not(:disabled) {
-  border-color: var(--dvx-border-strong);
+  border-color: var(--dvx-border-hover);
   background: var(--dvx-soft);
 }
 

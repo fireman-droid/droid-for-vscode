@@ -464,13 +464,16 @@
     visibility 0s linear 60ms;
 }
 
-.dvx-scroll-bottom:hover, .dvx-scroll-bottom:focus-visible {
+.dvx-scroll-bottom:hover {
   color: var(--dvx-ink);
-  border-color: var(--dvx-border-strong);
+  border-color: var(--dvx-border-hover);
   outline: none;
 }
 
 .dvx-scroll-bottom:focus-visible {
+  color: var(--dvx-ink);
+  border-color: var(--dvx-focus);
+  outline: none;
   box-shadow: 0 0 0 1px var(--dvx-focus), 0 2px 8px rgb(48 42 36 / 12%);
 }
 

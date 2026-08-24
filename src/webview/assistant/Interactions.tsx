@@ -520,7 +520,7 @@ function PermissionMenuChevron(): React.JSX.Element {
       aria-hidden="true"
     >
       <path
-        d="m4.25 8.25 2.75-2.75 2.75 2.75"
+        d="m4.25 5.75 2.75 2.75 2.75-2.75"
         stroke="currentColor"
         strokeWidth="1.2"
         strokeLinecap="round"

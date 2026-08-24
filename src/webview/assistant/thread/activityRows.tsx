@@ -43,6 +43,8 @@ import {
   type ToolActivityPresentation,
 } from "./readers";
 
+const activityTickerProgress = new Map<string, number>();
+
 /**
  * Terminal-style tail of a running execute command (tier1 §1). Pinned
  * to the bottom like a terminal; scrolling up unpins until the reader
@@ -464,6 +466,7 @@ export function ActivityGroup({
   readonly indices: readonly number[];
   readonly children: ReactNode;
 }): React.JSX.Element {
+  const messageId = useAuiState((s) => s.message.id);
   const parts = useAuiState((s) => s.message.parts);
   const members = useMemo(() => {
     const found: GroupCandidatePart[] = [];
@@ -484,14 +487,34 @@ export function ActivityGroup({
   const groupClosed =
     !messageRunning ||
     (indices[indices.length - 1] ?? -1) < parts.length - 1;
+  const playbackKey = `${messageId}:${indices[0] ?? -1}`;
+  const resumedTickerIndex = activityTickerProgress.get(playbackKey);
+  const initialTickerIndex =
+    resumedTickerIndex === undefined
+      ? 0
+      : Math.max(resumedTickerIndex, activeIndex);
   const requiresPlaybackRef = useRef(messageRunning);
-  const [visibleTickerIndex, setVisibleTickerIndex] = useState(0);
+  const [visibleTickerIndex, setVisibleTickerIndex] =
+    useState(initialTickerIndex);
   const [phase, setPhase] = useState<ActivityGroupPhase>(
     groupClosed ? "completed" : "running",
   );
-  const handleTickerSettled = useCallback((index: number): void => {
-    setVisibleTickerIndex(index);
-  }, []);
+  const handleTickerSettled = useCallback(
+    (index: number): void => {
+      activityTickerProgress.set(playbackKey, index);
+      setVisibleTickerIndex(index);
+    },
+    [playbackKey],
+  );
+
+  useLayoutEffect(() => {
+    if (
+      messageRunning &&
+      !activityTickerProgress.has(playbackKey)
+    ) {
+      activityTickerProgress.set(playbackKey, visibleTickerIndex);
+    }
+  }, [messageRunning, playbackKey, visibleTickerIndex]);
 
   useLayoutEffect(() => {
     const visualComplete =
@@ -515,6 +538,11 @@ export function ActivityGroup({
     }, ACTIVITY_SETTLE_FALLBACK_MS);
     return () => clearTimeout(timer);
   }, [phase]);
+  useEffect(() => {
+    if (phase === "completed") {
+      activityTickerProgress.delete(playbackKey);
+    }
+  }, [phase, playbackKey]);
 
   if (!summary.renderAsGroup) {
     return <>{children}</>;
@@ -561,6 +589,7 @@ export function ActivityGroup({
             </button>
             <ActivityTicker
               activeIndex={activeIndex}
+              initialIndex={initialTickerIndex}
               onSettled={handleTickerSettled}
             >
               {children}
@@ -655,10 +684,12 @@ interface TickerTrailEntry {
  */
 export function ActivityTicker({
   activeIndex,
+  initialIndex = activeIndex,
   onSettled,
   children,
 }: {
   readonly activeIndex: number;
+  readonly initialIndex?: number;
   readonly onSettled?: (index: number) => void;
   readonly children: ReactNode;
 }): React.JSX.Element {
@@ -666,7 +697,13 @@ export function ActivityTicker({
   const targetRef = useRef(activeIndex);
   targetRef.current = Math.max(targetRef.current, activeIndex);
   const [trail, setTrail] = useState<readonly TickerTrailEntry[]>([
-    { key: 0, member: 0 },
+    {
+      key: 0,
+      member: Math.min(
+        Math.max(0, initialIndex),
+        Math.max(0, childArray.length - 1),
+      ),
+    },
   ]);
   const trackRef = useRef<HTMLDivElement | null>(null);
 
@@ -712,6 +749,10 @@ export function ActivityTicker({
       );
     }
     const commit = (): void => {
+      const settled = trail[trail.length - 1];
+      if (settled !== undefined) {
+        onSettled?.(settled.member);
+      }
       setTrail((previous) =>
         previous.length > 1 ? [previous[previous.length - 1]!] : previous,
       );

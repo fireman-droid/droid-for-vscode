@@ -2,6 +2,7 @@
 .cursor/**
 .workflow/**
 .codex/**
+.claude/**
 .git/**
 .gitignore
 artifacts/**

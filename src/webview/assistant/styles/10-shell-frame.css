@@ -2,14 +2,14 @@
    keep literals equal to --dvx-surface (see 01-base.css note). */
 body {
   overflow: clip;
-  background: #f5f3ef;
+  background: #fff;
 }
 
 #root {
   box-sizing: border-box;
   display: block;
   padding: 0;
-  background: #f5f3ef;
+  background: #fff;
 }
 
 .dvx-shell {
