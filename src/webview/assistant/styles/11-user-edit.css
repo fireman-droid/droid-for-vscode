@@ -266,7 +266,11 @@
 }
 
 .dvx-user-block-editable:hover {
-  border-color: var(--dvx-border-hover);
+  border-color: color-mix(
+    in srgb,
+    var(--dvx-border-strong) 55%,
+    var(--dvx-border)
+  );
 }
 
 .dvx-user-block-editable:focus-visible {
