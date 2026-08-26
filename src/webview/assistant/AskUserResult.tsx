@@ -25,7 +25,10 @@ export function AskUserResult({
   }
   return (
     <section className="dvx-ask-result" aria-label="Your answers">
-      <header>Your answers</header>
+      <header>
+        <span className="dvx-ask-result-dot" aria-hidden="true" />
+        <span>Answers</span>
+      </header>
       <dl>
         {result.answers.map(({ topic, answer }, index) => (
           <div key={`${topic}:${index}`}>

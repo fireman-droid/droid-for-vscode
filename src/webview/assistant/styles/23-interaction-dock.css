@@ -386,27 +386,36 @@
 .dvx-ask-result {
   max-width: 560px;
   margin: 8px 0 2px;
-  padding: 9px 11px;
-  border-left: 2px solid color-mix(
-    in srgb,
-    var(--dvx-accent) 58%,
-    var(--dvx-border)
-  );
-  border-radius: 0 7px 7px 0;
-  background: color-mix(
-    in srgb,
-    var(--dvx-soft) 48%,
-    transparent
-  );
+  padding: 10px 11px 9px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 8px;
+  background: var(--dvx-raised);
+  box-shadow: none;
 }
 
 .dvx-ask-result header {
-  margin-bottom: 5px;
-  color: var(--dvx-subtle);
-  font-size: 10.5px;
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 4px;
+  color: var(--dvx-text-secondary);
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.035em;
-  text-transform: uppercase;
+}
+
+.dvx-ask-result-dot {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: color-mix(
+    in srgb,
+    var(--dvx-accent) 70%,
+    var(--dvx-subtle)
+  );
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--dvx-accent) 11%, transparent);
 }
 
 .dvx-ask-result dl,
@@ -416,24 +425,27 @@
 
 .dvx-ask-result dl {
   display: grid;
-  gap: 4px;
+  gap: 0;
 }
 
 .dvx-ask-result dl > div {
   display: grid;
-  grid-template-columns: minmax(72px, 0.34fr) minmax(0, 1fr);
-  gap: 10px;
+  min-width: 0;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  padding: 3px 0;
 }
 
 .dvx-ask-result dt {
   color: var(--dvx-subtle);
-  font-size: 11.5px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 400;
 }
 
 .dvx-ask-result dd {
   color: var(--dvx-text-secondary);
   font-size: 12px;
+  line-height: 17px;
   overflow-wrap: anywhere;
 }
 
@@ -441,7 +453,6 @@
   display: flex;
   align-items: baseline;
   gap: 10px;
-  border-left-color: var(--dvx-border-strong);
 }
 
 .dvx-ask-result-cancelled span {
