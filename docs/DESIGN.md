@@ -216,6 +216,119 @@ flowchart LR
 5. 伪造、过期或不匹配的父 Session、Turn、Tool 身份不能打开其他 Session。
 6. Viewer 与主聊天视觉和消息能力一致，但没有 Composer、Diff 或写操作。
 
+## 真实浏览器联调
+
+最后确认：2026-08-26
+
+### 目标与边界
+
+浏览器联调页运行与 Cursor 侧栏相同的 DroidVisX `App`，连接当前 Cursor
+Extension Host 中唯一的 `ChatController`，共享当前 Session、真实 Runtime、
+实时消息和全部已暴露操作。它只用于本机开发联调，不是独立产品入口。
+
+Studio 继续承担静态场景和视觉状态预览；真实联调使用独立 `/live` 路径。两者
+不得混用 transport、状态或 fallback。浏览器 Bundle 不包含 Droid SDK、
+Runtime 或 Extension Host 代码。
+
+```mermaid
+flowchart LR
+  SIDE[Cursor 侧栏 Webview] <-->|现有 VS Code Bridge| ROUTER[共享 Host 消息路由]
+  BROWSER[浏览器 App] <-->|本机 HTTP 事件流 + POST| DEV[Browser Dev Bridge]
+  DEV <--> ROUTER
+  ROUTER <--> HOST[唯一 ChatController]
+  HOST <--> RUNTIME[真实 Droid Runtime / daemon]
+```
+
+### 启动与生命周期
+
+- 用户在 DroidVisX 源码 workspace 中执行
+  `DroidVisX: Start Browser Dev Client`。
+- 命令根据 workspace 根目录 `package.json` 的 `name: droidvisx` 确认源码
+  位置，不扫描或猜测其他目录。
+- Extension Host 启动只监听 `127.0.0.1` 随机端口的 Browser Dev Bridge，
+  再从源码 workspace 自动启动固定端口 4173 的 Vite，并打开 `/live`。
+- 每次启动生成临时连接令牌。令牌放在 URL fragment，只由浏览器 JavaScript
+  读取并发给 Bridge，不出现在 Vite HTTP 请求中。
+- 再次执行 Start 时复用本次实例并重新打开当前地址，不启动第二套 Host 或 Vite。
+- Browser Dev Client 关闭只断开浏览器连接，不停止 Runtime。显式 Stop 命令、
+  Extension Host 停用或 Cursor 窗口关闭时关闭 Bridge 和本次启动的 Vite 子进程。
+- 正常扩展激活不监听联调端口，也不启动开发进程。
+
+### 组件职责
+
+#### 共享 Host 消息路由
+
+`DroidViewProvider` 现有入站逻辑提取为共享路由入口。侧栏和 Browser Dev Bridge
+都先使用 `parseWebviewMessage` 校验，再通过同一入口处理主题、Mission 面板、
+诊断和 `ChatController.handleMessage()`。浏览器不能拥有放宽校验的旁路。
+
+#### ChatController 定向初始化
+
+Runtime 增量继续由 `ChatController` 广播给侧栏和浏览器。浏览器连接初始化不能
+调用当前广播式 `webview.ready` 流程，否则会让已打开的侧栏重复接收 Snapshot
+和待处理交互。
+
+`ChatController` 提供只读的当前 Snapshot 投影，待处理 Interaction 和 Plan
+Document 也提供面向指定发送者的 replay。Browser Dev Bridge 只向新连接发送：
+
+1. 当前主题；
+2. 当前 Host Snapshot；
+3. 待处理 Interaction；
+4. 当前 Plan Document；
+5. 当前 Mission setup。
+
+这些定向消息仍使用同一 Bridge DTO 和全局递增 sequence，不能建立第二套状态
+协议。
+
+#### Browser Dev Bridge
+
+Bridge 只负责一个浏览器客户端和以下边界：
+
+- 管理 HTTP Host 事件流与浏览器 POST 入站；
+- 校验临时 token、允许的 Vite Origin、HTTP 方法和共享 Bridge 消息；
+- 订阅 `ChatController` 与 Mission setup 投影；
+- 将浏览器消息交给共享 Host 路由；
+- 启动、监控并停止 Vite 子进程。
+
+首版不支持多个浏览器页，不引入客户端主从、写权限仲裁或独立 Session。
+
+#### 浏览器 transport
+
+`src/webview/dev/main.tsx` 保留当前 Studio 入口：
+
+- `/` 和 `/app` 使用现有 fake Studio runtime；
+- `/live` 创建 Browser transport，暴露与 `acquireVsCodeApi()` 相同的
+  `getState`、`setState` 和 `postMessage` 接口，然后直接挂载现有 `App`。
+
+Browser transport 使用页面内存保存 Webview state，Host→浏览器通过事件流，
+浏览器→Host 通过 POST。事件流断开后自动重连并重新请求定向初始化，不重启
+Runtime。
+
+### 安全与失败行为
+
+- Bridge 只绑定 `127.0.0.1`，不允许局域网或公网监听。
+- token 或 Origin 不匹配时拒绝请求，不降级到匿名连接。
+- 只接受自动启动的固定 Vite Origin。
+- token、凭据、SDK 对象和 Host-only child Session 映射不能进入日志或页面
+  状态。
+- Vite 启动失败、4173 被占用或 Bridge 启动失败时，关闭本次已经启动的资源，
+  并通过 Cursor 通知和 DroidVisX 日志报告具体错误。
+- Browser transport 不使用 Studio snapshot 作为断线或错误 fallback；真实
+  Host 不可用时显示连接失败。
+- 浏览器断开不取消正在运行的 Droid Turn；重新连接后使用当前真实状态恢复。
+
+### 验收标准
+
+1. 浏览器 `/live` 渲染现有真实 `App`，没有 Studio 控制台或 fake scenario。
+2. 浏览器与侧栏显示相同 Session、历史、设置、Interaction 和实时增量。
+3. 浏览器可发送消息、停止回合、回答权限与 AskUser、切换 Session，并执行当前
+   UI 已暴露的其他真实操作。
+4. 浏览器操作产生的状态在侧栏同步出现，侧栏操作也同步到浏览器。
+5. 浏览器 Reload 后恢复当前真实状态，不重启 Runtime，也不让侧栏重复重放。
+6. 未执行 Start 命令时没有本地联调监听端口或 Vite 子进程。
+7. Stop、扩展停用和 Cursor 窗口关闭后 Bridge 与 Vite 均停止。
+8. Studio 仍可通过原有 `pnpm run dev:webview` 使用。
+
 ## Cursor Agent Diff 对标研究
 
 研究日期：2026-08-25
