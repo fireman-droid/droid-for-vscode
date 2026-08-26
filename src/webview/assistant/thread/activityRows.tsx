@@ -351,7 +351,6 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
         : "—";
   const activities = activity?.activities ?? [];
   const latestActivity = activities[0] ?? null;
-  const recentActivities = activities.slice(1);
   return (
     <button
       type="button"
@@ -373,20 +372,29 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
         <span className="dvx-subagent-status">
           {formatSubagentStatus(label)}
         </span>
+        <span className="dvx-subagent-open-arrow" aria-hidden="true">
+          ›
+        </span>
       </div>
       {description.length > 0 ? (
         <span className="dvx-subagent-description">{description}</span>
       ) : null}
       <div className="dvx-subagent-activity">
-        <span className="dvx-subagent-activity-label">
-          Latest activity
-        </span>
+        <span
+          className="dvx-subagent-activity-dot"
+          aria-hidden="true"
+        />
         {latestActivity === null ? (
           <span className="dvx-subagent-activity-empty">
             {running ? "Waiting for activity…" : "No activity recorded"}
           </span>
         ) : (
-          <span className="dvx-subagent-activity-line">
+          <span
+            className="dvx-subagent-activity-line"
+            key={`${latestActivity.action}\u0000${
+              latestActivity.target ?? ""
+            }`}
+          >
             <span className="dvx-subagent-activity-action">
               {latestActivity.action}
             </span>
@@ -398,38 +406,19 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
           </span>
         )}
       </div>
-      {recentActivities.length === 0 ? null : (
-        <div className="dvx-subagent-recent">
-          <span className="dvx-subagent-activity-label">Recent</span>
-          <ol className="dvx-subagent-recent-list">
-            {recentActivities.map((recentActivity, index) => (
-              <li
-                className="dvx-subagent-recent-item"
-                key={`${recentActivity.action}\u0000${
-                  recentActivity.target ?? ""
-                }\u0000${String(index)}`}
-              >
-                <span>{recentActivity.action}</span>
-                {recentActivity.target === null ? null : (
-                  <span className="dvx-subagent-activity-target">
-                    {recentActivity.target}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
       <div className="dvx-subagent-metrics">
         <span>
           <span className="dvx-subagent-metric-label">Elapsed</span>
           {elapsed}
         </span>
         {toolUseCount === null ? null : (
-          <span>
-            <span className="dvx-subagent-metric-label">Tools</span>
-            {toolUseCount}
-          </span>
+          <>
+            <span className="dvx-subagent-metric-separator">·</span>
+            <span>
+              <span className="dvx-subagent-metric-label">Tools</span>
+              {toolUseCount}
+            </span>
+          </>
         )}
       </div>
     </button>
