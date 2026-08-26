@@ -174,8 +174,7 @@ export function normalizeSdkEvent(
       };
 
     case 'token_usage_update': {
-      // Cumulative session totals (probed 2026-08-12; see
-      // docs/product/token-usage-design.md). Malformed payloads are
+      // Cumulative session totals. Malformed payloads are
       // dropped whole so the UI never regresses to bogus counters.
       const cumulative = readTokenUsageBreakdown(event);
       return cumulative === undefined

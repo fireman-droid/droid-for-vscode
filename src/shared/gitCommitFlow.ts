@@ -1,6 +1,5 @@
 /**
- * Payload types, closed enums, and bounds for the git commit flow
- * (slice A of `docs/product/git-pr-workflow-design.md`). The Bridge
+ * Payload types, closed enums, and bounds for the git commit flow. The Bridge
  * message shapes and bounds live here so the host workflow, Bridge
  * unions, both validators, and webview share one narrow contract.
  */

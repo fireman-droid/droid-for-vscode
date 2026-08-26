@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import { FactoryDroidRuntime } from '../runtime/FactoryDroidRuntime';
 import { createBtwSidecar } from '../runtime/btw/BtwSidecar';
 import { createDaemonBtwSidecar } from '../runtime/btw/DaemonBtwSidecar';
-import { createDaemonSubagentControl } from '../runtime/subagentControl';
 import { FactorySessionCatalog } from '../runtime/FactorySessionCatalog';
 import { FactorySessionHistoryLoader } from '../runtime/history/FactorySessionHistoryLoader';
 import { createDaemonFirstHistoryLoader } from '../runtime/history/DaemonSessionHistoryLoader';
@@ -69,8 +68,10 @@ import { ProviderRegistry } from './chat/providerRegistry';
 import { MissionGateway } from './chat/mission/MissionGateway';
 import { MissionPreferenceStore } from './chat/mission/MissionPreferences';
 import { createMissionRuntime } from './chat/mission/MissionRuntime';
+import { createMissionControlSetupProjection } from './chat/mission/setupProjection';
 import { SessionViewerPanelController } from './SessionViewerPanelController';
 import { MissionControlPanelController } from './MissionControlPanelController';
+import { SubagentTranscriptService } from './SubagentTranscriptService';
 
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
@@ -414,13 +415,19 @@ export function activate(context: vscode.ExtensionContext): void {
       : createPrivateDaemonStrategy(),
   );
   disposeDaemonSidecar = daemonSidecar.dispose;
+  let subagentTranscripts: SubagentTranscriptService | null = null;
+  const getDaemonDroid = async (): Promise<DaemonConnection['droid']> => {
+    const droid = await daemonSidecar.droid();
+    subagentTranscripts?.bindDaemonDroid(droid);
+    return droid;
+  };
   const sessionLease = createSessionLeaseHooks();
   const daemonSessions =
     runtimeMode !== 'daemon'
       ? null
       : {
           factory: createDaemonSessionFactory(
-            daemonSidecar.droid,
+            getDaemonDroid,
             sessionLease,
           ),
         };
@@ -472,6 +479,10 @@ export function activate(context: vscode.ExtensionContext): void {
     historyLoader,
     () => ({
       async isRunning(target) {
+        if (target.mode === 'subagent-readonly') {
+          return subagentTranscripts?.readViewer(target.sessionId)?.running ??
+            null;
+        }
         const rows = await (await daemonSidecar.droid()).sessions.listOpened();
         const row = rows.find(({ id }) => id === target.sessionId);
         return row === undefined ? false : String(row.workingState) !== 'idle';
@@ -479,15 +490,64 @@ export function activate(context: vscode.ExtensionContext): void {
       async stop() {
         return 'failed';
       },
+      readTranscript(target) {
+        return target.mode === 'subagent-readonly'
+          ? (subagentTranscripts?.readViewer(target.sessionId) ?? null)
+          : null;
+      },
+      subscribe(target, listener) {
+        return target.mode === 'subagent-readonly'
+          ? (subagentTranscripts?.subscribeViewer(
+              target.sessionId,
+              listener,
+            ) ?? (() => undefined))
+          : () => undefined;
+      },
     }),
     diagnostics,
   );
   let controller: ChatController;
+  subagentTranscripts = new SubagentTranscriptService(historyLoader, {
+    resolveParentRow: (parentSessionId, toolUseId) => {
+      if (controller?.sessionId !== parentSessionId) {
+        return null;
+      }
+      const item = controller.transcript.transcript.find(
+        (candidate) =>
+          candidate.kind === 'tool' &&
+          candidate.toolUseId === toolUseId &&
+          candidate.subagent !== undefined,
+      );
+      const cwd = controller.activeRuntimeCwd;
+      return item?.kind === 'tool' &&
+        item.subagent !== undefined &&
+        cwd !== null
+        ? {
+            parentSessionId,
+            turnId: item.turnId,
+            toolUseId,
+            type: item.subagent.type,
+            description: item.subagent.description,
+            cwd,
+          }
+        : null;
+    },
+    openViewer: ({ childSessionId, title, cwd }) => {
+      sessionViewer.open({
+        kind: 'daemon-session',
+        mode: 'subagent-readonly',
+        sessionId: childSessionId,
+        title,
+        cwd,
+      });
+    },
+  });
   const planDocuments = new PlanDocumentController((state) => {
     controller.emit(state);
   });
   const missionGateway = new MissionGateway({
-    getDroid: daemonSidecar.droid,
+    getDroid: getDaemonDroid,
+    getAttachedSessionId: () => controller?.sessionId ?? undefined,
     preferences: new MissionPreferenceStore(persistence),
     createRuntime: (session, droid, orchestrator) =>
       createMissionRuntime(
@@ -509,18 +569,22 @@ export function activate(context: vscode.ExtensionContext): void {
       });
     },
   });
-  const missionControl = new MissionControlPanelController(
-    context.extensionUri,
-    missionGateway,
-    {},
-    diagnostics,
-  );
   controller = new ChatController(
     (interactionHandler) =>
       new FactoryDroidRuntime({
         interactionHandler,
         diagnostics,
         observability: diagnostics.observability,
+        ...(runtimeMode === 'process'
+          ? {
+              onSessionNotification: (parentSessionId, notification) => {
+                subagentTranscripts?.observeProcessNotification(
+                  parentSessionId,
+                  notification,
+                );
+              },
+            }
+          : {}),
         ...(daemonSessions === null
           ? {}
           : { createSdkSession: daemonSessions.factory }),
@@ -568,6 +632,65 @@ export function activate(context: vscode.ExtensionContext): void {
     turnSnapshots,
     planDocuments,
   );
+  const missionSetupProjection = createMissionControlSetupProjection(controller);
+  const missionControl = new MissionControlPanelController(
+    context.extensionUri,
+    {
+      listCatalog: () => missionGateway.listCatalog(),
+      readSetup: missionSetupProjection.read,
+      subscribeSetup: missionSetupProjection.subscribe,
+      chatController: controller,
+      inspectReadiness: (cwd) => missionGateway.inspectReadiness(cwd),
+      acknowledgeReadinessWarning: (cwd) =>
+        missionGateway.acknowledgeReadinessWarning(cwd),
+      openCatalogMission: (catalogId) => {
+        const sessionId = missionGateway.sessionIdForCatalogId(catalogId);
+        if (
+          sessionId === null ||
+          controller.sessions.status !== 'ready' ||
+          !controller.sessions.items.some((item) => item.id === sessionId)
+        ) {
+          return null;
+        }
+        controller.handleMessage({ type: 'session.select', sessionId });
+        return sessionId;
+      },
+      readActiveSession: () => {
+        const summary = controller.sessions.items.find(
+          (item) => item.id === controller.sessionId,
+        );
+        return {
+          sessionId: controller.sessionId,
+          missionRole:
+            controller.mission?.role ?? summary?.missionRole ?? null,
+        };
+      },
+      selectSession: (sessionId) => {
+        if (
+          controller.sessions.status !== 'ready' ||
+          !controller.sessions.items.some(
+            (item) =>
+              item.id === sessionId && item.missionRole === undefined,
+          )
+        ) {
+          return false;
+        }
+        controller.handleMessage({ type: 'session.select', sessionId });
+        return true;
+      },
+      createSession: () => {
+        controller.handleMessage({ type: 'session.new' });
+      },
+      readWorkspaceCwd: () => controller.workspaceContext.cwd,
+      focusChat: () => {
+        void vscode.commands.executeCommand(
+          `${DroidViewProvider.viewType}.focus`,
+        );
+      },
+    },
+    {},
+    diagnostics,
+  );
   previewController.setFeedbackHandler((text) => {
     controller.emit({ type: 'canvas.feedbackDraft', text });
   });
@@ -588,17 +711,25 @@ export function activate(context: vscode.ExtensionContext): void {
       password: true,
       ignoreFocusOut: true,
     });
-  // Inline Subagent-card activity sampling rides the shared daemon
-  // connection. Process mode keeps the card but omits the live tool
-  // subtitle.
-  const subagentGateway = createDaemonSubagentControl(daemonSidecar.droid);
-  controller.subagentControl = () =>
-    daemonSessionsActive() ? subagentGateway : null;
+  controller.subagentTranscripts = subagentTranscripts;
   const provider = new DroidViewProvider(
     context.extensionUri,
     controller,
     diagnostics,
-    () => missionControl.open(),
+    (target, task) => {
+      if (target === 'catalog') {
+        missionControl.open();
+      } else {
+        missionControl.openMission(task);
+      }
+    },
+    {
+      subscribe: (listener) =>
+        missionControl.onDidChangeWorkspaceSetup(listener),
+      replay: () => missionControl.replayWorkspaceSetup(),
+      handleMessage: (message) =>
+        missionControl.handleWorkspaceMessage(message),
+    },
   );
   activeController = controller;
 
@@ -608,6 +739,7 @@ export function activate(context: vscode.ExtensionContext): void {
     previewController,
     terminalMirror,
     sessionViewer,
+    subagentTranscripts,
     missionControl,
     diagnostics,
     attachmentSources,

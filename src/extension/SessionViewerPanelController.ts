@@ -22,7 +22,10 @@ const VIEW_TYPE = 'droidvisx.sessionViewer';
 
 export interface SessionViewerPanelTarget {
   readonly kind: SessionViewerTargetKind;
-  readonly mode: 'standard' | 'mission-readonly';
+  readonly mode:
+    | 'standard'
+    | 'mission-readonly'
+    | 'subagent-readonly';
   readonly sessionId: string;
   readonly title: string;
   readonly cwd: string;
@@ -33,6 +36,18 @@ export interface SessionViewerSource {
   stop(
     target: SessionViewerPanelTarget,
   ): Promise<SessionViewerStopOutcome>;
+  readTranscript?(
+    target: SessionViewerPanelTarget,
+  ): {
+    readonly items: readonly import('../shared/bridgeMessages').SessionTranscriptItem[];
+    readonly truncated: boolean;
+    readonly running: boolean;
+    readonly lifecycle: import('../shared/sessionViewerProtocol').SessionViewerLifecycle;
+  } | null;
+  subscribe?(
+    target: SessionViewerPanelTarget,
+    listener: () => void,
+  ): () => void;
 }
 
 export type SessionViewerSourceResolver = (
@@ -51,6 +66,7 @@ interface ViewerEntry {
   stopping: boolean;
   stopError: boolean;
   lastSnapshot: SessionViewerSnapshotMessage | null;
+  sourceSubscription: (() => void) | null;
 }
 
 /**
@@ -142,6 +158,7 @@ export class SessionViewerPanelController implements vscode.Disposable {
       stopping: false,
       stopError: false,
       lastSnapshot: null,
+      sourceSubscription: null,
     };
     this.entries.set(key, entry);
     entry.disposables.push(
@@ -199,7 +216,7 @@ export class SessionViewerPanelController implements vscode.Disposable {
       void this.refresh(entry);
       return;
     }
-    if (entry.target.mode === 'mission-readonly') {
+    if (entry.target.mode !== 'standard') {
       this.diagnostics?.record({
         level: 'warn',
         name: 'host.sessionViewer.readonly-rejected',
@@ -211,6 +228,15 @@ export class SessionViewerPanelController implements vscode.Disposable {
   }
 
   private startRefresh(entry: ViewerEntry): void {
+    const source = this.resolveSource(entry.target.kind);
+    if (
+      entry.sourceSubscription === null &&
+      source?.subscribe !== undefined
+    ) {
+      entry.sourceSubscription = source.subscribe(entry.target, () => {
+        void this.refresh(entry);
+      });
+    }
     if (entry.timer === null) {
       entry.timer = setInterval(() => {
         void this.refresh(entry);
@@ -237,12 +263,17 @@ export class SessionViewerPanelController implements vscode.Disposable {
     entry.refreshBusy = true;
     try {
       const source = this.resolveSource(entry.target.kind);
+      const live = source?.readTranscript?.(entry.target) ?? null;
       const [loaded, running] = await Promise.all([
-        this.history.loadHistory({
-          cwd: entry.target.cwd,
-          sessionId: entry.target.sessionId,
-        }),
-        source?.isRunning(entry.target) ?? Promise.resolve(null),
+        live === null
+          ? this.history.loadHistory({
+              cwd: entry.target.cwd,
+              sessionId: entry.target.sessionId,
+            })
+          : Promise.resolve(null),
+        live === null
+          ? (source?.isRunning(entry.target) ?? Promise.resolve(null))
+          : Promise.resolve(live.running),
       ]);
       if (!this.isCurrent(entry)) {
         return;
@@ -268,7 +299,20 @@ export class SessionViewerPanelController implements vscode.Disposable {
       }
       const target = publicTarget(entry.target);
       const snapshot: SessionViewerSnapshotMessage =
-        loaded.status === 'available'
+        live !== null
+          ? {
+              type: 'sessionViewer.snapshot',
+              protocolVersion: SESSION_VIEWER_PROTOCOL_VERSION,
+              status: 'ready',
+              target,
+              items: live.items,
+              truncated: live.truncated,
+              running: entry.running,
+              lifecycle: live.lifecycle,
+              stopping: entry.stopping,
+              stopError: entry.stopError,
+            }
+          : loaded?.status === 'available'
           ? {
               type: 'sessionViewer.snapshot',
               protocolVersion: SESSION_VIEWER_PROTOCOL_VERSION,
@@ -277,6 +321,7 @@ export class SessionViewerPanelController implements vscode.Disposable {
               items: loaded.state.transcript,
               truncated: loaded.state.truncated,
               running: entry.running,
+              lifecycle: entry.running ? 'working' : 'completed',
               stopping: entry.stopping,
               stopError: entry.stopError,
             }
@@ -287,6 +332,7 @@ export class SessionViewerPanelController implements vscode.Disposable {
               target,
               reason: 'This session transcript is unavailable.',
               running: entry.running,
+              lifecycle: entry.running ? 'working' : 'completed',
               stopping: false,
               stopError: entry.stopError,
             };
@@ -357,6 +403,7 @@ export class SessionViewerPanelController implements vscode.Disposable {
     const next: SessionViewerSnapshotMessage = {
       ...snapshot,
       running: entry.running,
+      lifecycle: snapshot.lifecycle,
       stopping: entry.stopping,
       stopError: entry.stopError,
     };
@@ -398,6 +445,8 @@ export class SessionViewerPanelController implements vscode.Disposable {
     }
     this.entries.delete(key);
     this.stopRefresh(entry);
+    entry.sourceSubscription?.();
+    entry.sourceSubscription = null;
     for (const disposable of entry.disposables) {
       disposable.dispose();
     }
@@ -411,7 +460,7 @@ function targetKey(target: SessionViewerPanelTarget): string {
 function publicTarget(
   target: SessionViewerPanelTarget,
 ): SessionViewerTarget {
-  return target.mode === 'mission-readonly'
+  return target.mode !== 'standard'
     ? { kind: target.kind, mode: target.mode, title: target.title }
     : {
         kind: target.kind,

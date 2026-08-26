@@ -38,6 +38,13 @@ interface MutableSubagentActivityStore
 
 export const SubagentActivityStoreContext =
   createContext<SubagentActivityStore | null>(null);
+export const SubagentOpenContext = createContext<
+  | ((
+      turnId: string,
+      toolUseId: string,
+    ) => void)
+  | null
+>(null);
 
 interface SubagentPanelPort {
   postMessage(message: WebviewToHostMessage): void;
@@ -112,6 +119,13 @@ export function useSubagentActivity(
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
+export function useOpenSubagent(): (
+  turnId: string,
+  toolUseId: string,
+) => void {
+  return useContext(SubagentOpenContext) ?? (() => undefined);
+}
+
 /**
  * Keeps only the live-activity feed used by inline Subagent cards.
  * Transcript sheets, aggregate popups, and Subagent actions are not
@@ -123,6 +137,7 @@ export function useSubagentPanelFlow(
 ): {
   readonly activityStore: SubagentActivityStore;
   readonly onPanelToggle: (open: boolean) => void;
+  readonly openSubagent: (turnId: string, toolUseId: string) => void;
 } {
   const activityStore = useMemo(createSubagentActivityStore, []);
   useEffect(() => {
@@ -149,8 +164,21 @@ export function useSubagentPanelFlow(
     },
     [sessionId, vscode],
   );
+  const openSubagent = useCallback(
+    (turnId: string, toolUseId: string): void => {
+      if (sessionId !== null) {
+        vscode.postMessage({
+          type: 'subagent.open',
+          sessionId,
+          turnId,
+          toolUseId,
+        });
+      }
+    },
+    [sessionId, vscode],
+  );
   return useMemo(
-    () => ({ activityStore, onPanelToggle }),
-    [activityStore, onPanelToggle],
+    () => ({ activityStore, onPanelToggle, openSubagent }),
+    [activityStore, onPanelToggle, openSubagent],
   );
 }

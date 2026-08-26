@@ -246,6 +246,7 @@ interface DroidThreadProps {
   /** Opens the panel behind one `/` popup navigation row. */
   readonly onSlashNavigate?: (target: SlashNavTarget) => void;
   /** Opens official Mission setup from the Composer slash catalog. */
+  readonly missionActive?: boolean;
   readonly onMissionOpen?: () => void;
   /**
    * Host-advertised `/btw` side-chat capability (process runtime
@@ -401,6 +402,7 @@ export const DroidThread = memo(function DroidThread({
   onCommandsRefresh,
   navSignal = null,
   onSlashNavigate,
+  missionActive = false,
   onMissionOpen,
   btwAvailable = false,
   onBtwOpen,
@@ -895,6 +897,7 @@ export const DroidThread = memo(function DroidThread({
             onCommandsRefresh={onCommandsRefresh}
             navSignal={navSignal}
             onSlashNavigate={onSlashNavigate}
+            missionActive={missionActive}
             onMissionOpen={onMissionOpen}
             btwAvailable={btwAvailable}
             onBtwOpen={onBtwOpen}

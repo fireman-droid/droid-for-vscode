@@ -41,7 +41,11 @@
 }
 
 .dvx-subagent-row {
+  width: calc(100% - 20px);
   display: grid;
+  appearance: none;
+  text-align: left;
+  font-family: inherit;
   gap: 8px;
   margin: 9px 0 14px 20px;
   padding: 11px 13px 10px;
@@ -53,6 +57,24 @@
   font-size: 11px;
   line-height: 16px;
   user-select: none;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+
+.dvx-subagent-row:hover:not(:disabled) {
+  border-color: var(--dvx-border-strong);
+  background: var(--dvx-soft);
+}
+
+.dvx-subagent-row:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+.dvx-subagent-row:disabled {
+  cursor: default;
 }
 
 .dvx-subagent-head {

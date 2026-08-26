@@ -37,6 +37,26 @@ const ready = {
   rows: [row],
 } as const;
 
+const setupDraft = {
+  task: 'Review  C:\\repo\\task',
+  orchestrator: {
+    modelId: 'factory/orchestrator',
+    reasoningEffort: 'high',
+  },
+  worker: {
+    mode: 'same-as-orchestrator',
+    modelId: 'factory/orchestrator',
+    reasoningEffort: 'high',
+  },
+  validator: {
+    mode: 'override',
+    modelId: 'factory/validator',
+    reasoningEffort: 'medium',
+  },
+  scrutinyEnabled: true,
+  userTestingEnabled: false,
+} as const;
+
 const credentialKeys = [
   'api-key',
   'api_key',
@@ -109,6 +129,75 @@ describe('Mission Control panel protocol', () => {
     ]) {
       expect(parseMissionControlPanelWebviewMessage(invalid)).toBeUndefined();
     }
+  });
+
+  it('owns setup draft updates by setup, workspace, and chat revisions', () => {
+    const update = {
+      type: 'missionControl.setup.update',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      requestId: 'setup-update-1',
+      setupRevision: 3,
+      workspaceAuthorityRevision: 4,
+      chatOwnerRevision: 5,
+      draft: setupDraft,
+    } as const;
+    expect(parseMissionControlPanelWebviewMessage(update)).toEqual(update);
+    for (const invalid of [
+      { ...update, setupRevision: -1 },
+      { ...update, sessionId: 'raw-session-id' },
+      { ...update, draft: { ...setupDraft, task: 'bad\u0000task' } },
+      {
+        ...update,
+        draft: {
+          ...setupDraft,
+          worker: { ...setupDraft.worker, modelId: 'other-model' },
+        },
+      },
+    ]) {
+      expect(parseMissionControlPanelWebviewMessage(invalid)).toBeUndefined();
+    }
+
+    const snapshot = {
+      type: 'missionControl.setup.snapshot',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      sequence: 7,
+      setupRevision: 3,
+      workspaceAuthorityRevision: 4,
+      chatOwnerRevision: 5,
+      phase: 'draft',
+      availability: 'ready',
+      reason: null,
+      draft: setupDraft,
+      capabilities: {
+        currentChat: setupDraft.orchestrator,
+        catalogStatus: 'ready',
+        catalog: [
+          {
+            id: 'factory/orchestrator',
+            displayName: 'Orchestrator',
+            supportedReasoningEfforts: ['high'],
+          },
+          {
+            id: 'factory/validator',
+            displayName: 'Validator',
+            supportedReasoningEfforts: ['medium'],
+          },
+        ],
+        preferences: {
+          worker: setupDraft.worker,
+          validator: setupDraft.validator,
+          scrutinyEnabled: true,
+          userTestingEnabled: false,
+        },
+      },
+    } as const;
+    expect(parseMissionControlPanelHostMessage(snapshot)).toEqual(snapshot);
+    expect(
+      parseMissionControlPanelHostMessage({
+        ...snapshot,
+        cwd: 'C:\\repo',
+      }),
+    ).toBeUndefined();
   });
 
   it('accepts only safe route navigation identities', () => {

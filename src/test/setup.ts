@@ -24,9 +24,8 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 
 // The pinned question is rendered twice: its row in the list plus the
 // detached sticky clone overlaying the viewport top. Queries must not
-// match both, and the list row is the copy tests mean (the clone comes
-// and goes with the scroll offset), which is the same choice the
-// `listCopies` helper in App.test.tsx already makes.
+// match both, and the list row is the intended copy (the clone comes
+// and goes with the scroll offset).
 if (typeof document !== 'undefined') {
   const { configure } = await import('@testing-library/react');
   configure({

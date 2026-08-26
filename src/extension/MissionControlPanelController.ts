@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-
 import {
   MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
   parseMissionControlPanelWebviewMessage,
@@ -7,28 +6,64 @@ import {
   type MissionControlCatalogRow,
   type MissionControlPanelHostMessage,
 } from '../shared/missionControlPanelProtocol';
+import type {
+  MissionControlSetupContinueMessage,
+  MissionControlSetupAvailability,
+  MissionControlSetupDraft,
+  MissionControlSetupPhase,
+  MissionControlSetupReason,
+  MissionControlSetupSnapshotMessage,
+  MissionControlSetupUpdateMessage,
+} from '../shared/missionControlSetupProtocol';
+import { parseMissionControlSetupWebviewMessage } from '../shared/missionControlSetupProtocol';
+import type {
+  MissionSetupCapabilities,
+  MissionStartMessage,
+} from '../shared/missionProtocol';
 import type { RuntimeDiagnosticSink } from '../runtime/runtimeDiagnostics';
-import type { MissionCatalogResult } from './chat/mission/MissionGateway';
+import type { MissionCatalogResult, MissionReadinessResult } from './chat/mission/MissionGateway';
+import { MissionWorkspaceState } from './chat/mission/MissionWorkspaceState';
+import type {
+  ChatController,
+  ControllerHostMessage,
+} from './ChatController';
 import { getWebviewHtml } from './webviewHtml';
 import {
   readWebviewBootTheme,
   readWebviewThemePreference,
 } from './webviewTheme';
-
+import { parseWebviewMessage } from '../shared/validateMessage';
 const VIEW_TYPE = 'droidvisx.missionControl';
 const PANEL_TITLE = 'Mission Control';
 export const MISSION_CONTROL_CATALOG_DEADLINE_MS = 20_000;
-
 export type MissionControlRoute = 'catalog' | 'new-mission' | 'detail';
-
 export interface MissionControlCatalogSource {
   listCatalog(): Promise<MissionCatalogResult>;
+  readSetup?(): MissionControlSetupAuthority;
+  subscribeSetup?(listener: () => void): vscode.Disposable;
+  readonly chatController?: ChatController;
+  inspectReadiness?(cwd: string): Promise<MissionReadinessResult>;
+  acknowledgeReadinessWarning?(cwd: string): Promise<boolean>;
+  openCatalogMission?(catalogId: string): string | null;
+  readActiveSession?(): {
+    readonly sessionId: string | null;
+    readonly missionRole: 'orchestrator' | 'worker' | null;
+  };
+  selectSession?(sessionId: string): boolean;
+  createSession?(): void;
+  readWorkspaceCwd?(): string | null;
+  focusChat?(): void;
 }
-
+export interface MissionControlSetupAuthority {
+  readonly workspaceAuthorityRevision: number;
+  readonly chatOwnerRevision: number;
+  readonly availability: MissionControlSetupAvailability;
+  readonly reason: MissionControlSetupReason | null;
+  readonly capabilities: MissionSetupCapabilities | null;
+}
 export interface MissionControlPanelControllerOptions {
   readonly deadlineMs?: number;
 }
-
 interface CatalogState {
   readonly filter: MissionControlCatalogFilter;
   readonly rows: readonly MissionControlCatalogRow[];
@@ -52,7 +87,17 @@ interface PanelEntry {
   ready: boolean;
 }
 
+type MissionWorkspaceHostMessage =
+  | MissionControlSetupSnapshotMessage
+  | Extract<
+      MissionControlPanelHostMessage,
+      { type: 'missionControl.route' }
+    >;
+
 export class MissionControlPanelController implements vscode.Disposable {
+  private readonly setupEmitter =
+    new vscode.EventEmitter<MissionWorkspaceHostMessage>();
+  readonly onDidChangeWorkspaceSetup = this.setupEmitter.event;
   private readonly subscriptions: vscode.Disposable[];
   private readonly deadlineMs: number;
   private panelEntry: PanelEntry | null = null;
@@ -68,6 +113,12 @@ export class MissionControlPanelController implements vscode.Disposable {
   private nextPanelInstance = 1;
   private nextSequence = 1;
   private nextCatalogRevision = 1;
+  private setupRevision = 0;
+  private setupDraft: MissionControlSetupDraft | null = null;
+  private setupPhase: MissionControlSetupPhase = 'draft';
+  private readiness: MissionControlSetupSnapshotMessage['readiness'] = null;
+  private pendingMissionStart: MissionStartMessage | null = null;
+  private readonly workspaceState = new MissionWorkspaceState();
   private disposed = false;
 
   constructor(
@@ -90,16 +141,74 @@ export class MissionControlPanelController implements vscode.Disposable {
         }
       }),
     ];
+    const setupSubscription = this.source.subscribeSetup?.(() => {
+      if (this.route === 'new-mission') {
+        this.hydrateSetupProfiles(this.readSetupAuthority().capabilities);
+        this.postSetupSnapshot();
+      }
+    });
+    if (setupSubscription !== undefined) {
+      this.subscriptions.push(setupSubscription);
+    }
+    const chatSubscription = this.source.chatController?.subscribe((message) => {
+      this.handleChatControllerMessage(message);
+    });
+    if (chatSubscription !== undefined) {
+      this.subscriptions.push(chatSubscription);
+    }
   }
 
   open(): void {
+    this.openRoute('catalog');
+    this.postWorkspaceRoute('catalog');
+  }
+
+  openNewMission(task?: string): void {
     if (this.disposed) {
       return;
     }
+    this.panelEntry?.panel.dispose();
+    this.workspaceState.openDraft(this.source.readActiveSession?.(), {
+      select: this.source.selectSession,
+      create: this.source.createSession,
+    });
+    this.resetSetupOperation();
+    this.prepareSetupDraft(task);
+    this.navigate('new-mission');
+    this.postWorkspaceRoute('new-mission');
+    this.postSetupSnapshot();
+    this.source.focusChat?.();
+  }
+
+  openMission(task?: string): void {
+    const active = this.source.readActiveSession?.();
+    if (
+      active?.sessionId !== null &&
+      active?.missionRole === 'orchestrator'
+    ) {
+      this.workspaceState.activate(active.sessionId);
+      this.navigate('detail', active.sessionId);
+      this.postWorkspaceRoute('detail', active.sessionId);
+      this.source.focusChat?.();
+      return;
+    }
+    this.openNewMission(task);
+  }
+
+  private openRoute(route: 'catalog' | 'new-mission', task?: string): void {
+    if (this.disposed) {
+      return;
+    }
+    if (route === 'new-mission') {
+      if (this.route !== 'new-mission') {
+        this.resetSetupOperation();
+      }
+      this.prepareSetupDraft(task);
+    }
     if (this.panelEntry !== null) {
-      const returnsToCatalog = this.route !== 'catalog';
-      this.navigate('catalog');
-      if (returnsToCatalog && this.panelEntry.ready) {
+      const routeChanged = this.route !== route;
+      this.navigate(route);
+      if (route === 'catalog' && routeChanged && this.panelEntry.ready) {
         const requestId = `catalog-${this.panelEntry.instance}-route-${this.nextCatalogRevision}`;
         this.panelEntry.seenRequestIds.add(requestId);
         this.startCatalogRequest(
@@ -112,12 +221,19 @@ export class MissionControlPanelController implements vscode.Disposable {
           protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
           route: 'catalog',
         });
+      } else if (route === 'new-mission' && this.panelEntry.ready) {
+        this.post({
+          type: 'missionControl.route',
+          protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+          route: 'new-mission',
+        });
+        this.postSetupSnapshot();
       }
       this.panelEntry.panel.reveal(undefined, false);
       return;
     }
 
-    this.route = 'catalog';
+    this.route = route;
     this.routeRevision += 1;
     const panel = vscode.window.createWebviewPanel(
       VIEW_TYPE,
@@ -207,6 +323,34 @@ export class MissionControlPanelController implements vscode.Disposable {
     for (const subscription of this.subscriptions) {
       subscription.dispose();
     }
+    this.setupEmitter.dispose();
+  }
+
+  replayWorkspaceSetup(): void {
+    if (this.route === 'detail' && this.detailCatalogId !== null) {
+      this.postWorkspaceRoute('detail', this.detailCatalogId);
+    } else if (this.route === 'new-mission') {
+      this.postWorkspaceRoute('new-mission');
+    }
+    this.postSetupSnapshot();
+  }
+
+  handleWorkspaceMessage(value: unknown): boolean {
+    const setupMessage = parseMissionControlSetupWebviewMessage(value);
+    if (setupMessage !== undefined) {
+      this.handleSetupMessage(setupMessage);
+      return true;
+    }
+    const message = parseWebviewMessage(value);
+    if (message?.type === 'mission.dismissSetup') {
+      this.closeMissionWorkspace();
+      return true;
+    }
+    if (message?.type !== 'mission.start') {
+      return false;
+    }
+    void this.inspectAndStartMission(message);
+    return true;
   }
 
   private handleMessage(entry: PanelEntry, value: unknown): void {
@@ -215,10 +359,6 @@ export class MissionControlPanelController implements vscode.Disposable {
     }
     const message = parseMissionControlPanelWebviewMessage(value);
     if (message === undefined) {
-      this.diagnostics?.record({
-        level: 'warn',
-        name: 'host.missionControl.rejected',
-      });
       return;
     }
     if (message.type === 'webview.diagnostic') {
@@ -247,15 +387,44 @@ export class MissionControlPanelController implements vscode.Disposable {
       return;
     }
     entry.seenRequestIds.add(message.requestId);
+    if (message.type === 'missionControl.setup.update') {
+      this.handleSetupMessage(message);
+      return;
+    }
+    if (message.type === 'missionControl.setup.continue') {
+      this.handleSetupMessage(message);
+      return;
+    }
     if (message.type === 'missionControl.navigate') {
+      if (this.setupPhase === 'starting') {
+        return;
+      }
       if (message.route === 'detail') {
+        this.workspaceState.remember(this.source.readActiveSession?.());
+        const sessionId =
+          this.source.openCatalogMission?.(message.catalogId) ?? null;
+        if (sessionId === null) {
+          this.diagnostics?.record({
+            level: 'warn',
+            name: 'host.missionControl.open-rejected',
+            attributes: { reason: 'unknown-catalog-id' },
+          });
+          return;
+        }
+        entry.panel.dispose();
+        this.resetSetupOperation();
+        this.workspaceState.activate(sessionId);
         this.navigate('detail', message.catalogId);
+        this.postWorkspaceRoute('detail', message.catalogId);
+        this.source.focusChat?.();
         return;
       }
       if (message.route === 'new-mission') {
-        this.navigate('new-mission');
+        entry.panel.dispose();
+        this.openNewMission();
         return;
       }
+      this.resetSetupOperation();
       this.navigate('catalog');
       this.startCatalogRequest(entry, message.requestId, this.catalog.filter);
       return;
@@ -349,6 +518,131 @@ export class MissionControlPanelController implements vscode.Disposable {
     });
   }
 
+  private prepareSetupDraft(task?: string): void {
+    const capabilities = this.readSetupAuthority().capabilities;
+    if (this.setupDraft === null) {
+      this.setupDraft = createSetupDraft(
+        capabilities,
+        task ?? '',
+      );
+      this.setupRevision += 1;
+      this.resetSetupOperation();
+      return;
+    }
+    if (task !== undefined && task !== this.setupDraft.task) {
+      this.setupDraft = { ...this.setupDraft, task };
+      this.setupRevision += 1;
+      this.resetSetupOperation();
+    }
+    this.hydrateSetupProfiles(capabilities);
+  }
+
+  private hydrateSetupProfiles(
+    capabilities: MissionSetupCapabilities | null,
+  ): void {
+    if (
+      capabilities === null ||
+      this.setupDraft === null ||
+      this.setupDraft.orchestrator !== null
+    ) {
+      return;
+    }
+    this.setupDraft = {
+      ...this.setupDraft,
+      orchestrator: capabilities.currentChat,
+      worker: capabilities.preferences.worker,
+      validator: capabilities.preferences.validator,
+    };
+    this.setupRevision += 1;
+  }
+
+  private postSetupSnapshot(
+    authority = this.readSetupAuthority(),
+  ): void {
+    if (this.route !== 'new-mission' || this.setupDraft === null) {
+      return;
+    }
+    const message: MissionControlSetupSnapshotMessage = {
+      type: 'missionControl.setup.snapshot',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      sequence: this.nextSequence++,
+      setupRevision: this.setupRevision,
+      workspaceAuthorityRevision: authority.workspaceAuthorityRevision,
+      chatOwnerRevision: authority.chatOwnerRevision,
+      phase: this.setupPhase,
+      availability: authority.availability,
+      reason: authority.reason,
+      readiness: this.readiness,
+      draft: this.setupDraft,
+      capabilities: authority.capabilities,
+    };
+    this.setupEmitter.fire(message);
+  }
+
+  private postWorkspaceRoute(
+    route: MissionControlRoute,
+    catalogId?: string,
+  ): void {
+    this.setupEmitter.fire(
+      route === 'detail'
+        ? {
+            type: 'missionControl.route',
+            protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+            route,
+            catalogId: catalogId ?? 'active-mission',
+          }
+        : {
+            type: 'missionControl.route',
+            protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+            route,
+          },
+    );
+  }
+
+  private handleSetupMessage(
+    message:
+      | MissionControlSetupUpdateMessage
+      | MissionControlSetupContinueMessage,
+  ): void {
+    if (message.type === 'missionControl.setup.continue') {
+      if (
+        this.route === 'new-mission' &&
+        this.setupPhase === 'advisory' &&
+        this.pendingMissionStart !== null &&
+        message.setupRevision === this.setupRevision
+      ) {
+        void this.continueMissionStart(this.pendingMissionStart);
+      }
+      return;
+    }
+    const authority = this.readSetupAuthority();
+    if (
+      this.route !== 'new-mission' ||
+      message.setupRevision !== this.setupRevision ||
+      message.workspaceAuthorityRevision !==
+        authority.workspaceAuthorityRevision ||
+      message.chatOwnerRevision !== authority.chatOwnerRevision
+    ) {
+      this.postSetupSnapshot(authority);
+      return;
+    }
+    this.setupDraft = message.draft;
+    this.setupRevision += 1;
+    this.postSetupSnapshot(authority);
+  }
+
+  private readSetupAuthority(): MissionControlSetupAuthority {
+    return (
+      this.source.readSetup?.() ?? {
+        workspaceAuthorityRevision: 0,
+        chatOwnerRevision: 0,
+        availability: 'unavailable',
+        reason: 'gateway-unavailable',
+        capabilities: null,
+      }
+    );
+  }
+
   private withDeadline(
     request: Promise<MissionCatalogResult>,
   ): Promise<MissionCatalogResult | null> {
@@ -382,9 +676,14 @@ export class MissionControlPanelController implements vscode.Disposable {
       protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
       ...theme,
     });
+    this.post({ type: 'ui.theme', ...theme });
   }
 
-  private post(message: MissionControlPanelHostMessage): void {
+  private post(message: MissionControlPanelHostMessage | ControllerHostMessage | {
+    readonly type: 'ui.theme';
+    readonly preference: 'auto' | 'light' | 'dark';
+    readonly resolved: 'light' | 'dark';
+  }): void {
     const entry = this.panelEntry;
     if (entry === null || !entry.ready) {
       return;
@@ -415,4 +714,183 @@ export class MissionControlPanelController implements vscode.Disposable {
       disposable.dispose();
     }
   }
+
+  private handleChatControllerMessage(message: ControllerHostMessage): void {
+    if (message.type === 'host.snapshot') {
+      this.handleActiveSessionSnapshot(message);
+    }
+    if (
+      message.type === 'mission.controlResult' &&
+      message.action === 'start'
+    ) {
+      const readinessIndeterminate =
+        this.setupPhase === 'indeterminate';
+      this.pendingMissionStart = null;
+      this.readiness = null;
+      if (message.status === 'accepted') {
+        this.setupPhase = 'draft';
+        const sessionId = this.source.readActiveSession?.().sessionId;
+        if (sessionId !== null && sessionId !== undefined) {
+          this.workspaceState.activate(sessionId);
+        }
+        this.navigate('detail', 'active-mission');
+        this.postWorkspaceRoute('detail', 'active-mission');
+      } else {
+        this.setupPhase = readinessIndeterminate
+          ? 'indeterminate'
+          : 'draft';
+        this.postSetupSnapshot();
+      }
+    }
+  }
+
+  private async inspectAndStartMission(
+    message: MissionStartMessage,
+  ): Promise<void> {
+    const authority = this.readSetupAuthority();
+    const cwd = this.source.readWorkspaceCwd?.() ?? null;
+    if (
+      this.route !== 'new-mission' ||
+      (this.setupPhase !== 'draft' &&
+        this.setupPhase !== 'indeterminate') ||
+      authority.availability !== 'ready' ||
+      cwd === null ||
+      this.source.inspectReadiness === undefined
+    ) {
+      this.rejectMissionStart(message.requestId);
+      return;
+    }
+    this.pendingMissionStart = message;
+    this.setupPhase = 'inspecting';
+    this.readiness = null;
+    const revision = this.setupRevision;
+    this.postSetupSnapshot(authority);
+    const result = await this.source.inspectReadiness(cwd);
+    if (
+      this.pendingMissionStart !== message ||
+      this.setupRevision !== revision ||
+      this.route !== 'new-mission'
+    ) {
+      return;
+    }
+    if (result.status === 'error') {
+      this.setupPhase = 'indeterminate';
+      this.pendingMissionStart = null;
+      this.postSetupSnapshot();
+      this.rejectMissionStart(message.requestId);
+      return;
+    }
+    if (result.warning !== null) {
+      this.setupPhase = 'advisory';
+      this.readiness = {
+        warning: result.warning.state,
+        level: result.warning.level,
+      };
+      this.postSetupSnapshot();
+      return;
+    }
+    this.forwardMissionStart(message);
+  }
+
+  private async continueMissionStart(
+    message: MissionStartMessage,
+  ): Promise<void> {
+    const cwd = this.source.readWorkspaceCwd?.() ?? null;
+    if (
+      cwd === null ||
+      this.source.acknowledgeReadinessWarning === undefined
+    ) {
+      this.rejectMissionStart(message.requestId);
+      return;
+    }
+    this.setupPhase = 'starting';
+    this.postSetupSnapshot();
+    if (!(await this.source.acknowledgeReadinessWarning(cwd))) {
+      this.setupPhase = 'indeterminate';
+      this.pendingMissionStart = null;
+      this.postSetupSnapshot();
+      this.rejectMissionStart(message.requestId);
+      return;
+    }
+    if (this.pendingMissionStart === message && this.route === 'new-mission') {
+      this.forwardMissionStart(message);
+    }
+  }
+
+  private forwardMissionStart(message: MissionStartMessage): void {
+    this.setupPhase = 'starting';
+    this.postSetupSnapshot();
+    this.source.chatController?.handleMessage(message);
+  }
+
+  private rejectMissionStart(requestId: string): void {
+    this.source.chatController?.emit({
+      type: 'mission.controlResult',
+      protocolVersion: 25,
+      scope: 'selected-chat',
+      requestId,
+      action: 'start',
+      status: 'rejected',
+      rejectionCode: 'unavailable',
+    });
+  }
+
+  private closeMissionWorkspace(): void {
+    this.resetSetupOperation();
+    this.navigate('catalog');
+    this.postWorkspaceRoute('catalog');
+    this.workspaceState.close(this.source.readActiveSession?.(), {
+      select: this.source.selectSession,
+      create: this.source.createSession,
+    });
+    this.source.focusChat?.();
+  }
+
+  private handleActiveSessionSnapshot(
+    message: Extract<ControllerHostMessage, { type: 'host.snapshot' }>,
+  ): void {
+    const observation = this.workspaceState.observe(message);
+    if (observation.kind === 'mission') {
+      if (this.route === 'catalog' && this.panelEntry === null) {
+        this.navigate('detail', observation.sessionId);
+        this.postWorkspaceRoute('detail', observation.sessionId);
+      }
+      return;
+    }
+    if (observation.kind === 'normal' && this.route === 'detail') {
+      this.navigate('catalog');
+      this.postWorkspaceRoute('catalog');
+    }
+  }
+
+  private resetSetupOperation(): void {
+    this.pendingMissionStart = null;
+    this.setupPhase = 'draft';
+    this.readiness = null;
+  }
+
+}
+
+function createSetupDraft(
+  capabilities: MissionSetupCapabilities | null,
+  task: string,
+): MissionControlSetupDraft {
+  if (capabilities === null) {
+    return {
+      task,
+      orchestrator: null,
+      worker: null,
+      validator: null,
+      scrutinyEnabled: true,
+      userTestingEnabled: true,
+    };
+  }
+  return {
+    task,
+    orchestrator: capabilities.currentChat,
+    worker: capabilities.preferences.worker,
+    validator: capabilities.preferences.validator,
+    scrutinyEnabled: capabilities.preferences.scrutinyEnabled,
+    userTestingEnabled: capabilities.preferences.userTestingEnabled,
+  };
 }

@@ -107,8 +107,8 @@ import { handleRewindInfo, handleEditResend, handleEditStageBegin, handleEditSta
 import { stampRunningFlags, setSessionRunning, ensureBackgroundRunningPoll, seedBackgroundRunning } from './chat/sessionRunning';
 import { settleTurnSubagents, clearZombieSubagentWatch, armReplayedSubagentWatch } from './chat/subagentWatch';
 import { clearTurnWatchdog, type TurnWatchdogState } from './chat/turnWatchdog';
-import { handleSubagentPanel } from './chat/subagentPanel';
-import type { SubagentControlGateway } from '../runtime/subagentControl';
+import { handleSubagentOpen, handleSubagentPanel } from './chat/subagentPanel';
+import type { SubagentTranscriptService } from './SubagentTranscriptService';
 import { emitEarlyRecoverySnapshot, reconcileDaemonTurn, scheduleRecoveryCheckpoint, checkpointRecoveryTranscript, flushRecoveryCheckpoint, recoveryTurnId } from './chat/recovery';
 import { handleSessionNew, handleWorktreeCreateSession, handleSessionRename, handleSessionFavorite, handleSessionArchive, handleSessionUnarchive, handleArchivedRefresh, handleSessionSearch, handleSessionSelect, handleRefresh, handleSessionFork, loadCatalog, hasCatalogSession, activeSessionSummary, withActiveSession, beginCatalogLoad, bindCatalogViewToWorkspace, clearCatalog, isCurrentCatalogRequest, discardCatalogRequest, touchActiveSession, SESSION_NEW_FAILED_MESSAGE } from './chat/sessionDirectory';
 import { handleReady, startReplacement, replaceRuntime, loadHistoryTimed, resetSessionMetadata, closeAllRuntimesForDispose, queueWorkspaceTransition, isCurrentRuntime, ensureActiveRuntimeWorkspaceCurrent, isTargetWorkspaceCurrent, emitWorkspaceUnavailable, isSameWorkspaceContext, WORKSPACE_CHANGED_MESSAGE } from './chat/runtimeLifecycle';
@@ -221,8 +221,8 @@ export interface WorkspaceContext {
 export type WorkspaceContextProvider = () => WorkspaceContext;
 /** Everything the controller emits; the view provider's sequence-free
     `ui.theme` push never passes the sequence stamper below. */
-export type ControllerHostMessage =
-  Exclude<HostToWebviewMessage, { type: 'ui.theme' }>;
+export type ControllerHostMessage = Exclude<
+  HostToWebviewMessage, { type: 'ui.theme' }>;
 export type ChatControllerListener = (
   message: ControllerHostMessage,
 ) => void;
@@ -244,8 +244,7 @@ export class ChatController {
   transcript: HostTranscriptState =
     createHostTranscriptState('unavailable');
   sessionId: string | null = null;
-  /** Daemon subagent control provider; extension.ts injects it. */
-  subagentControl: (() => SubagentControlGateway | null) | null = null;
+  subagentTranscripts: SubagentTranscriptService | null = null; // Host-only child registry/store.
   /** Read-only mission identity of the active session, from the last
    * successful history load; null for sessions outside a mission.
    */
@@ -656,6 +655,7 @@ export class ChatController {
         this.btwSideChat?.handleStop(message.sessionId);
         return;
       case 'subagent.panel': handleSubagentPanel(this, message.sessionId, message.open); return;
+      case 'subagent.open': handleSubagentOpen(this, message.sessionId, message.turnId, message.toolUseId); return;
       case 'file.openDiff':
         handleFileOpenDiff(this, message.sessionId, message.turnId, message.path);
         return;

@@ -3,7 +3,7 @@ import type {
   ThemePreference,
 } from './bridgeMessages';
 
-export const SESSION_VIEWER_PROTOCOL_VERSION = 1 as const;
+export const SESSION_VIEWER_PROTOCOL_VERSION = 2 as const;
 export const MAX_SESSION_VIEWER_TITLE_LENGTH = 512;
 export const MAX_SESSION_VIEWER_REASON_LENGTH = 512;
 export const SESSION_VIEWER_TARGET_KINDS = [
@@ -11,7 +11,10 @@ export const SESSION_VIEWER_TARGET_KINDS = [
 ] as const;
 export type SessionViewerTargetKind =
   (typeof SESSION_VIEWER_TARGET_KINDS)[number];
-export type SessionViewerMode = 'standard' | 'mission-readonly';
+export type SessionViewerMode =
+  | 'standard'
+  | 'mission-readonly'
+  | 'subagent-readonly';
 
 export type SessionViewerTarget =
   | {
@@ -22,7 +25,7 @@ export type SessionViewerTarget =
     }
   | {
       readonly kind: SessionViewerTargetKind;
-      readonly mode: 'mission-readonly';
+      readonly mode: 'mission-readonly' | 'subagent-readonly';
       readonly title: string;
     };
 
@@ -30,6 +33,12 @@ export type SessionViewerStopOutcome =
   | 'accepted'
   | 'not-running'
   | 'failed';
+export type SessionViewerLifecycle =
+  | 'starting'
+  | 'working'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 
 export type SessionViewerWebviewMessage =
   | {
@@ -55,6 +64,7 @@ export type SessionViewerSnapshotMessage =
       readonly items: readonly SessionTranscriptItem[];
       readonly truncated: boolean;
       readonly running: boolean;
+      readonly lifecycle: SessionViewerLifecycle;
       readonly stopping: boolean;
       readonly stopError: boolean;
     }
@@ -65,6 +75,7 @@ export type SessionViewerSnapshotMessage =
       readonly target: SessionViewerTarget;
       readonly reason: string;
       readonly running: boolean;
+      readonly lifecycle: SessionViewerLifecycle;
       readonly stopping: boolean;
       readonly stopError: boolean;
     };

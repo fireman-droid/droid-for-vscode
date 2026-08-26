@@ -29,6 +29,7 @@ interface MissionSetupProps {
   readonly onStart: (submission: MissionSetupSubmission) => string | null;
   readonly onDismiss: () => void;
   readonly result?: MissionSetupResult | null;
+  readonly startDisabled?: boolean;
 }
 
 interface Pair {
@@ -98,6 +99,7 @@ export function MissionSetup({
   onStart,
   onDismiss,
   result = null,
+  startDisabled = false,
 }: MissionSetupProps): React.JSX.Element {
   const [task, setTask] = useState(initialTask);
   const [orchestrator, setOrchestrator] = useState<Pair>(
@@ -181,7 +183,7 @@ export function MissionSetup({
     Number(scrutinyEnabled) + Number(userTestingEnabled);
 
   const submit = (): void => {
-    if (pending || validation.errors.length > 0) {
+    if (pending || startDisabled || validation.errors.length > 0) {
       return;
     }
     const requestId = onStart(validation.submission);
@@ -358,7 +360,7 @@ export function MissionSetup({
         <button
           type="button"
           className="dvx-mission-start"
-          disabled={pending || validation.errors.length > 0}
+          disabled={pending || startDisabled || validation.errors.length > 0}
           onClick={submit}
         >
           {pending ? 'Starting…' : 'Start Mission'}

@@ -614,6 +614,65 @@ describe('MissionControlPanelController', () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it('owns New Mission draft revisions and rejects stale Webview updates', () => {
+    const authority = {
+      workspaceAuthorityRevision: 4,
+      chatOwnerRevision: 7,
+      availability: 'unavailable' as const,
+      reason: 'selected-chat-unavailable' as const,
+      capabilities: null,
+    };
+    const controller = new MissionControlPanelController(
+      new vscodeMock.Uri('/extension') as never,
+      {
+        listCatalog: vi.fn(),
+        readSetup: () => authority,
+      },
+    );
+    controller.openNewMission('Preserve this task');
+    const panel = vscodeMock.__panels[0]!;
+    panel.webview.receive(readyMessage());
+
+    expect(panel.webview.posted.at(-1)).toMatchObject({
+      type: 'missionControl.setup.snapshot',
+      setupRevision: 1,
+      draft: { task: 'Preserve this task' },
+    });
+    const update = {
+      type: 'missionControl.setup.update',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      requestId: 'setup-one',
+      setupRevision: 1,
+      workspaceAuthorityRevision: 4,
+      chatOwnerRevision: 7,
+      draft: {
+        task: 'Edited task',
+        orchestrator: null,
+        worker: null,
+        validator: null,
+        scrutinyEnabled: true,
+        userTestingEnabled: true,
+      },
+    };
+    panel.webview.receive(update);
+    expect(panel.webview.posted.at(-1)).toMatchObject({
+      type: 'missionControl.setup.snapshot',
+      setupRevision: 2,
+      draft: { task: 'Edited task' },
+    });
+
+    panel.webview.receive({
+      ...update,
+      requestId: 'setup-stale',
+      draft: { ...update.draft, task: 'Stale task' },
+    });
+    expect(panel.webview.posted.at(-1)).toMatchObject({
+      setupRevision: 2,
+      draft: { task: 'Edited task' },
+    });
+    controller.dispose();
+  });
 });
 
 async function settle(): Promise<void> {

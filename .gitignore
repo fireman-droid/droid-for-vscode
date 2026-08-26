@@ -7,3 +7,7 @@ artifacts/
 .factory/skills/
 .cursor/skills/
 .workflow/
+.superpowers/
+.claude/*.log
+.cursor/*.log
+.factory/tmp/

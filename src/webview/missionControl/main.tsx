@@ -47,13 +47,18 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     return;
   }
   if (message.type === 'missionControl.route') {
-    latestRequestId = null;
-    state =
-      rows.length > 0
-        ? { status: 'refreshing', rows }
-        : { status: 'loading', rows: [] };
-    renderCatalog();
+    if (message.route === 'catalog') {
+      latestRequestId = null;
+      state =
+        rows.length > 0
+          ? { status: 'refreshing', rows }
+          : { status: 'loading', rows: [] };
+      renderCatalog();
+    }
     focusHeading();
+    return;
+  }
+  if (message.type === 'missionControl.setup.snapshot') {
     return;
   }
   if (
@@ -120,16 +125,6 @@ function navigate(navigation: MissionCatalogNavigation): void {
   });
   if (navigation.route === 'catalog') {
     renderCatalog();
-  } else if (navigation.route === 'new-mission') {
-    renderRoute(
-      'New Mission',
-      'Mission setup will open here. No Mission has been started.',
-    );
-  } else {
-    const title =
-      rows.find((row) => row.catalogId === navigation.catalogId)?.title ??
-      'Mission';
-    renderRoute(title, 'Mission details will open here.');
   }
   focusHeading();
 }
@@ -143,26 +138,6 @@ function renderCatalog(): void {
       onRefresh: () => requestCatalog(filter),
       onNavigate: navigate,
     }),
-  );
-}
-
-function renderRoute(title: string, description: string): void {
-  root.render(
-    createElement(
-      'main',
-      { className: 'mission-control-page mission-control-route' },
-      createElement(
-        'button',
-        {
-          type: 'button',
-          className: 'mission-control-back',
-          onClick: () => navigate({ route: 'catalog' }),
-        },
-        'Back to Missions',
-      ),
-      createElement('h1', { tabIndex: -1 }, title),
-      createElement('p', null, description),
-    ),
   );
 }
 

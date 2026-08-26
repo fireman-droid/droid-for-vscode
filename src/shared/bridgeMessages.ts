@@ -21,10 +21,7 @@ import type { SessionContextStats } from './contextState';
 import { MAX_SESSION_TRANSCRIPT_ITEMS } from './transcriptLimits';
 import type { BtwAskMessage, BtwDismissMessage, BtwPrepareMessage, BtwStopMessage, SessionBtwMessage } from './btwProtocol';
 // Type-only on purpose (subagentProtocol imports shared bounds).
-import type {
-  SubagentActivityMessage,
-  SubagentPanelMessage,
-} from './subagentProtocol';
+import type { SubagentActivityMessage, SubagentOpenMessage, SubagentPanelMessage } from './subagentProtocol';
 import type {
   QueueAddMessage,
   QueueClearMessage,
@@ -1069,6 +1066,7 @@ export type WebviewToHostMessage =
   | BtwPrepareMessage | BtwAskMessage
   | BtwDismissMessage | BtwStopMessage
   | SubagentPanelMessage
+  | SubagentOpenMessage
   | QueueAddMessage
   | QueueUpdateMessage
   | QueueRemoveMessage
@@ -1698,8 +1696,8 @@ export interface SessionContextStateMessage {
 /**
  * Token-usage breakdown of the active session: cumulative totals
  * (live `token_usage_update` stream or `loadSession` history seed)
- * plus the last turn completed in this window. Tokens only — the
- * Droid SDK exposes no USD cost (docs/product/token-usage-design.md).
+ * plus the last turn completed in this window. Tokens only; the
+ * Droid SDK exposes no USD cost.
  */
 export interface SessionTokenUsageStateMessage {
   readonly type: 'session.tokenUsage';

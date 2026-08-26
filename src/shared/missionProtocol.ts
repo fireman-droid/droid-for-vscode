@@ -77,9 +77,26 @@ export function missionPairError(
 
 export function isMissionTaskText(value: unknown): value is string {
   return (
-    isPresentationText(value, MAX_MISSION_TASK_LENGTH) &&
-    value.length > 0
+    isMissionTaskDraftText(value) &&
+    value.length > 0 &&
+    value.trim() === value
   );
+}
+
+export function isMissionTaskDraftText(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length <= MAX_MISSION_TASK_LENGTH &&
+    !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/.test(value)
+  );
+}
+
+export function normalizeMissionTaskText(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const normalized = value.trim();
+  return isMissionTaskText(normalized) ? normalized : undefined;
 }
 
 export interface MissionStartMessage {
@@ -131,6 +148,8 @@ export interface MissionPanelOpenMessage {
   readonly protocolVersion: typeof MISSION_BRIDGE_PROTOCOL_VERSION;
   readonly requestId: string;
   readonly scope: 'selected-chat';
+  readonly target?: 'catalog' | 'setup';
+  readonly task?: string;
 }
 
 export type MissionWebviewMessage =
@@ -262,17 +281,14 @@ export function parseMissionWebviewMessage(
   }
 }
 
-function parseMissionPanelOpen(
-  value: UnknownRecord,
-): MissionPanelOpenMessage | undefined {
+function parseMissionPanelOpen(value: UnknownRecord): MissionPanelOpenMessage | undefined {
   if (
-    !hasExactKeys(value, [
-      'type',
-      'protocolVersion',
-      'requestId',
-      'scope',
+    !hasExactKeys(value, ['type', 'protocolVersion', 'requestId', 'scope'], [
+      'target', 'task',
     ]) ||
-    !hasMissionEnvelope(value)
+    !hasMissionEnvelope(value) ||
+    (value.target !== undefined && value.target !== 'catalog' && value.target !== 'setup') ||
+    (value.task !== undefined && !isMissionTaskText(value.task))
   ) {
     return undefined;
   }
@@ -281,6 +297,8 @@ function parseMissionPanelOpen(
     protocolVersion: MISSION_BRIDGE_PROTOCOL_VERSION,
     requestId: value.requestId,
     scope: 'selected-chat',
+    ...(value.target === undefined ? {} : { target: value.target }),
+    ...(value.task === undefined ? {} : { task: value.task }),
   };
 }
 
@@ -366,7 +384,9 @@ export function parseMissionHostMessage(
   const controls = parseControls(value.controls);
   const validator = parseValidator(value.validator);
   const setup =
-    value.setup === undefined ? undefined : parseSetupCapabilities(value.setup);
+    value.setup === undefined
+      ? undefined
+      : parseMissionSetupCapabilities(value.setup);
   if (
     controls === undefined ||
     validator === undefined ||
@@ -727,7 +747,7 @@ function parseValidator(
   };
 }
 
-function parseSetupCapabilities(
+export function parseMissionSetupCapabilities(
   value: unknown,
 ): MissionSetupCapabilities | undefined {
   if (

@@ -76,13 +76,12 @@ export async function exportDiagnosticsBundle(
   const playbookUri = vscode.Uri.joinPath(
     context.extensionUri,
     'docs',
-    'product',
-    'log-analysis-playbook.md',
+    'TROUBLESHOOTING.md',
   );
   try {
     zip.addBuffer(
       Buffer.from(await vscode.workspace.fs.readFile(playbookUri)),
-      'log-analysis-playbook.md',
+      'TROUBLESHOOTING.md',
     );
   } catch {
     // A missing playbook copy must not block the export.

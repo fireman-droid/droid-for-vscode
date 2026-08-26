@@ -55,7 +55,7 @@ export function MissionControl({
           <div className="dvx-mission-control-actions">
             {snapshot.controls.canPause ? (
               <ControlButton
-                label="Pause"
+                label="Pause activity"
                 onClick={() =>
                   onCommand({
                     type: 'mission.pause',

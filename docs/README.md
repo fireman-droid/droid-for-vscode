@@ -1,58 +1,24 @@
-# docs/
+# DroidVisX 文档
 
-文档入口。**不要把新调研默认丢进 `product/`。** 做完就归档，活文档保持短。
+文档只保留当前有效信息。历史设计、验收记录和施工流水从 Git 历史查看，
+不在仓库里维护第二份。
 
-## 日常只看这些
-
-| 读什么 | 干什么 |
+| 文件 | 内容 |
 | --- | --- |
-| **[`发现问题写哪里.md`](./发现问题写哪里.md)** | **用着用着发现 bug / 样式 / 缺功能，记到哪** |
-| [`../AGENTS.md`](../AGENTS.md) | 怎么干活（门禁、分层、装包） |
-| [`debug/handover-2026-08-15.md`](./debug/handover-2026-08-15.md) | **当前做到哪、下一步做什么**（给下一个模型） |
-| [`debug/README.md`](./debug/README.md) | 进行中的 bug / 样式 / 子代理 / 扩展分册 |
-| [`product/implementation-status.md`](./product/implementation-status.md) | 已装机能力台账（很长，按需搜，不要通读） |
-| [`engineering/architecture-overview.md`](./engineering/architecture-overview.md) | 四层架构 |
+| [`PLAN.md`](./PLAN.md) | 当前目标、执行顺序和明确不做的内容 |
+| [`STATUS.md`](./STATUS.md) | 已完成、进行中、受限和未实现能力 |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | 四层架构、关键文件和安全边界 |
+| [`DESIGN.md`](./DESIGN.md) | UI 视觉与交互规则 |
+| [`CAPABILITIES.md`](./CAPABILITIES.md) | Droid 能力来源与产品支持矩阵 |
+| [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md) | 日志位置和排障步骤 |
+| [`FEEDBACK.md`](./FEEDBACK.md) | Bug、样式和功能反馈模板 |
 
-排障日志：[`product/log-analysis-playbook.md`](./product/log-analysis-playbook.md)。
+工作方式、验证和交付规则只看根目录 [`AGENTS.md`](../AGENTS.md)。
 
-## 目录怎么分
+## 维护规则
 
-```text
-docs/
-  README.md                 ← 你在这里
-  HANDOVER.md               ← 接手约定（排除项、切片流程）；进度不写这里
-  debug/                    ← 当前反馈与施工（活）
-  product/                  ← 仍可能开工的设计 + 进度台账
-  engineering/              ← 架构（很少改）
-  archive/                  ← 历史：预研、已落地设计、旧验收、旧交接
-```
-
-**新文档规则**
-
-1. 正在修的东西进 `debug/` 对应分册，不要新开总清单。
-2. 尚未开工、以后可能做的设计才进 `product/`。
-3. 已经落地或过期的设计/调研 **挪到 `archive/`**，不要继续堆在 `product/`。
-4. 跨会话交接只保留一份：目前是 `debug/handover-2026-08-15.md`。下一份交接应替换它，旧的移入 `archive/handovers/`。
-
-## `product/` 里还留着什么
-
-都是「还可能对照着做」的设计，不是待办清单。开工时再读，不要当进度表。
-
-| 文件 | 何时读 |
-| --- | --- |
-| `implementation-status.md` | 查某能力是否已接通 |
-| `delivery-plan.md` | 交付原则（模块表已过时） |
-| `log-analysis-playbook.md` | 排障 |
-| `feature-overview.md` | 给人看「现在能干什么」（版本号可能滞后） |
-| `ui-cursor-spec` 不在这里 | 在 [`debug/ui-cursor-spec.md`](./debug/ui-cursor-spec.md) |
-| `spec-mission-design.md` / `slice-prep-spec-mode.md` | Spec Mode |
-| `queued-messages-design.md` | 发送队列（行为已有，设计可参考） |
-| `changes-ledger-git-snapshot-design.md` | Changes 账本改造（git 快照树为权威），未开工 |
-| `byok-add-model-design.md` | 自定义模型（段 D 会碰到） |
-| `subagent-transcript-playback-design.md` | 子代理转录（段 C 会碰到） |
-| `rich-content-design.md` / `slice-prep-canvas.md` | Canvas 仍待做 |
-| `theme-switching-design.md` | 主题（段 A 已动 token，对照用） |
-| `tier1-polish-plan.md` | 流式命令预览等残留 |
-| `plugins-hooks-design.md`、`git-pr-workflow-design.md`、`native-terminal-design.md`、`background-process-design.md`、`worktree-parallel-design.md`、`add-to-chat-design.md`、`conversation-minimap-design.md`、`interleaved-thinking-design.md`、`token-usage-design.md`、`plan-title-limitation.md`、`mission-control-feasibility.md` | V2 / 边界证据，未排期不要开工 |
-
-归档清单见 [`archive/README.md`](./archive/README.md)。
+1. 当前工作只写进 `PLAN.md`。
+2. 产品事实只写进 `STATUS.md` 或 `CAPABILITIES.md`。
+3. 架构和视觉规则分别只写一处。
+4. 已完成的施工过程不追加到文档，版本变化写入 `CHANGELOG.md`。
+5. 不创建日期交接、临时调研、验收流水或归档 Markdown。

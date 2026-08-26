@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   MISSION_BRIDGE_PROTOCOL_VERSION,
+  normalizeMissionTaskText,
   parseMissionHostMessage,
   parseMissionWebviewMessage,
 } from './missionProtocol';
@@ -41,10 +42,26 @@ describe('Mission Bridge protocol', () => {
       { ...startIntent, protocolVersion: BRIDGE_PROTOCOL_VERSION + 1 },
       { ...startIntent, worker: { ...startIntent.worker, modelId: 'other' } },
       { ...startIntent, callback: () => undefined },
-      { ...startIntent, task: 'C:\\Users\\secret\\task' },
+      { ...startIntent, task: 'bad\u0000task' },
+      { ...startIntent, task: 'bad\u0085task' },
     ]) {
       expect(parseMissionWebviewMessage(hostile)).toBeUndefined();
     }
+  });
+
+  it('normalizes outer task whitespace once and preserves review content', () => {
+    const task = ' \r\n\tKeep  Unicode 你好 and C:\\repo\\task\n\t ';
+    expect(normalizeMissionTaskText(task)).toBe(
+      'Keep  Unicode 你好 and C:\\repo\\task',
+    );
+    expect(
+      parseMissionWebviewMessage({
+        ...startIntent,
+        task: 'Keep  Unicode 你好 and C:\\repo\\task\n\tcontinued',
+      }),
+    ).toMatchObject({
+      task: 'Keep  Unicode 你好 and C:\\repo\\task\n\tcontinued',
+    });
   });
 
   it('validates exact Mission control intents', () => {
@@ -83,6 +100,15 @@ describe('Mission Bridge protocol', () => {
       scope: 'selected-chat',
     } as const;
     expect(parseMissionWebviewMessage(open)).toEqual(open);
+    expect(
+      parseMissionWebviewMessage({
+        ...open,
+        task: 'Review  C:\\repo\\task',
+      }),
+    ).toEqual({
+      ...open,
+      task: 'Review  C:\\repo\\task',
+    });
     expect(
       parseMissionWebviewMessage({ ...open, catalogId: 'mission-secret' }),
     ).toBeUndefined();

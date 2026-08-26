@@ -26,9 +26,7 @@ export interface PlanAnchorState {
    * in_progress), else the next pending step, else the last step
    * once everything is done — so the collapsed line reads as live
    * progress next to its n/m count. Droid's todowrite carries no
-   * plan-title field, so step text is the only honest source; the
-   * gap and its upstream fix paths are recorded in
-   * docs/product/plan-title-limitation.md.
+   * plan-title field, so step text is the only honest source.
    */
   readonly title: string;
   /** Latest version of the checklist. */

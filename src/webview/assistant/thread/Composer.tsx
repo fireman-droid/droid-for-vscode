@@ -41,7 +41,6 @@ import type { FileSearchResult, SlashCommandsState } from "../Thread";
 import {
   BTW_COMMAND,
   BUILT_IN_COMMANDS,
-  MISSION_COMMAND,
   MAX_SLASH_SKILL_MATCHES,
   filterSlashCommands,
   findMentionToken,
@@ -90,6 +89,7 @@ export function Composer({
   onCommandsRefresh,
   navSignal = null,
   onSlashNavigate,
+  missionActive = false,
   onMissionOpen,
   btwAvailable = false,
   onBtwOpen,
@@ -145,6 +145,7 @@ export function Composer({
   readonly onCommandsRefresh: () => void;
   readonly navSignal?: ComposerNavRequest | null;
   readonly onSlashNavigate?: (target: SlashNavTarget) => void;
+  readonly missionActive?: boolean;
   readonly onMissionOpen?: () => void;
   /** Renders the `/btw` popup row when the host supports side chat. */
   readonly btwAvailable?: boolean;
@@ -343,11 +344,14 @@ export function Composer({
   }, [slashOpen, controlsDisabled]);
 
   const commandMatches =
-    slash !== null ? filterSlashCommands(commands, slash.query) : [];
+    slash !== null
+      ? filterSlashCommands(commands, slash.query).filter(
+          (command) => command.name !== "mission",
+        )
+      : [];
   // Capability-gated built-ins fail closed when their Host support is absent.
   const builtInCommands = [
     ...BUILT_IN_COMMANDS,
-    ...(onMissionOpen === undefined ? [] : [MISSION_COMMAND]),
     ...(btwAvailable ? [BTW_COMMAND] : []),
   ];
   const builtInMatches =
@@ -496,18 +500,6 @@ export function Composer({
     onBtwOpen?.();
   };
 
-  const selectMissionOpen = (): void => {
-    if (slash === null) {
-      return;
-    }
-    const next = draftRef.current.slice(slash.end);
-    draftRef.current = next;
-    aui.thread.composer().setText(next);
-    onDraftChange(next);
-    closeSlash();
-    onMissionOpen?.();
-  };
-
   const selectSlashEntry = (entry: SlashEntry): void => {
     if (entry.kind === "skill") {
       selectSkillGuide(entry.name);
@@ -515,8 +507,6 @@ export function Composer({
       selectSlashNav(entry.name);
     } else if (entry.kind === "builtin" && entry.name === "btw") {
       selectBtwOpen();
-    } else if (entry.kind === "builtin" && entry.name === "mission") {
-      selectMissionOpen();
     } else if (entry.kind === "builtin" && entry.name === "canvas") {
       replaceSlash(CANVAS_REQUEST_TEMPLATE);
     } else {
@@ -1046,6 +1036,8 @@ export function Composer({
             compactPending={compactPending}
             onCompact={onCompact}
             onSettingUpdate={onSettingUpdate}
+            missionActive={missionActive}
+            onMissionOpen={onMissionOpen}
             onSkillsRefresh={onSkillsRefresh}
             onSkillToggle={onSkillToggle}
             onMcpRefresh={onMcpRefresh}

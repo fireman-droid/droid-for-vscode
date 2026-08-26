@@ -13,12 +13,15 @@ const expectedEntries = [
   // Lazily injected mermaid bundle; ships alongside webview.js but is
   // only loaded when a completed ```mermaid block needs rendering.
   'extension/dist/webview/mermaid.js',
+  'extension/dist/webview/mission-control.css',
+  'extension/dist/webview/mission-control.js',
   'extension/dist/webview/session-viewer.js',
   'extension/dist/webview/webview.css',
   'extension/dist/webview/webview.js',
-  // Shipped so "Export Diagnostics Bundle" can include the AI playbook.
-  'extension/docs/product/log-analysis-playbook.md',
+  // Shipped so "Export Diagnostics Bundle" can include troubleshooting help.
+  'extension/docs/TROUBLESHOOTING.md',
   'extension/package.json',
+  'extension/readme.md',
   'extension/resources/droidvisx.svg',
 ].sort();
 

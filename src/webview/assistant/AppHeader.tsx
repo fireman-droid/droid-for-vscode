@@ -2,10 +2,10 @@
 // verbatim from App.tsx (structure-only split under the file-budget
 // ratchet); App remains the only consumer.
 
+import { useMemo } from 'react';
+
 import { SessionDrawer } from './SessionDrawer';
 import type { AssistantWebviewState } from './store';
-import { MissionControl } from './mission/MissionControl';
-import type { MissionUiCommand } from './mission/useMissionControl';
 
 export function AppHeader({
   state,
@@ -21,7 +21,6 @@ export function AppHeader({
   onUnarchiveSession,
   onRefreshArchived,
   onSearchContent,
-  onMissionCommand,
 }: {
   readonly state: AssistantWebviewState;
   readonly sessionActionsDisabled: boolean;
@@ -40,9 +39,52 @@ export function AppHeader({
   readonly onUnarchiveSession: (sessionId: string) => void;
   readonly onRefreshArchived: () => void;
   readonly onSearchContent: (query: string) => void;
-  readonly onMissionCommand: (command: MissionUiCommand) => void;
 }): React.JSX.Element {
   const connectionLabel = formatConnectionStatus(state.connection.status);
+  const ordinarySessions = useMemo(
+    () => ({
+      ...state.sessions,
+      items: state.sessions.items.filter(
+        (session) => session.missionRole === undefined,
+      ),
+    }),
+    [state.sessions],
+  );
+  const missionSessionIds = useMemo(
+    () =>
+      new Set(
+        state.sessions.items
+          .filter((session) => session.missionRole !== undefined)
+          .map((session) => session.id),
+      ),
+    [state.sessions.items],
+  );
+  const ordinaryArchived = useMemo(
+    () =>
+      state.archived.status !== 'ready'
+        ? state.archived
+        : {
+            ...state.archived,
+            items: state.archived.items.filter(
+              (session) => !missionSessionIds.has(session.id),
+            ),
+          },
+    [missionSessionIds, state.archived],
+  );
+  const ordinarySearch = useMemo(
+    () =>
+      state.sessionSearch === null
+        ? null
+        : state.sessionSearch.status !== 'ready'
+          ? state.sessionSearch
+          : {
+            ...state.sessionSearch,
+            items: state.sessionSearch.items.filter(
+              (session) => !missionSessionIds.has(session.id),
+            ),
+          },
+    [missionSessionIds, state.sessionSearch],
+  );
   return (
     <>
     <header className="dvx-header">
@@ -75,9 +117,9 @@ export function AppHeader({
           <NewSessionIcon />
         </button>
         <SessionDrawer
-          sessions={state.sessions}
-          archived={state.archived}
-          sessionSearch={state.sessionSearch}
+          sessions={ordinarySessions}
+          archived={ordinaryArchived}
+          sessionSearch={ordinarySearch}
           actionsDisabled={sessionActionsDisabled}
           openSignal={sessionsOpenSignal}
           worktreeCreateAvailable={state.worktreeCreateAvailable}
@@ -93,12 +135,6 @@ export function AppHeader({
         />
       </div>
     </header>
-    {state.missionSnapshot?.lifecycle === undefined ? null : (
-      <MissionControl
-        snapshot={state.missionSnapshot}
-        onCommand={onMissionCommand}
-      />
-    )}
     </>
   );
 }

@@ -248,6 +248,7 @@ export interface FactoryDroidRuntimeOptions {
    * defaults to the short-lived public-client catalog loader.
    */
   readonly loadSessionCommands?: typeof loadSessionCommands;
+  readonly onSessionNotification?: (parentSessionId: string, notification: Record<string, unknown>) => void;
 }
 
 export class FactoryDroidRuntime implements DroidRuntime {
@@ -255,6 +256,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
   private readonly interactionHandler: RuntimeInteractionHandler;
   private readonly diagnostics: RuntimeDiagnosticSink | undefined;
   private readonly loadSessionCommands: typeof loadSessionCommands;
+  private readonly onSessionNotification?: FactoryDroidRuntimeOptions['onSessionNotification'];
   private session: FactoryDroidSession | null = null;
   private sessionTarget: RuntimeSessionTarget | null = null;
   private initialization:
@@ -314,6 +316,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
     this.diagnostics = options.diagnostics;
     this.loadSessionCommands =
       options.loadSessionCommands ?? loadSessionCommands;
+    this.onSessionNotification = options.onSessionNotification;
     this.createSdkSession =
       options.createSdkSession ??
       ((sessionOptions) =>
@@ -1361,6 +1364,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
     }
     this.subagentWatchUnsubscribe = session.onNotification(
       (notification) => {
+        this.onSessionNotification?.(session.id, notification);
         const started = readSubagentStartedNotification(notification);
         if (started === null) {
           return;

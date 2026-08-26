@@ -4,6 +4,7 @@ import {
   SESSION_VIEWER_PROTOCOL_VERSION,
   SESSION_VIEWER_TARGET_KINDS,
   type SessionViewerHostMessage,
+  type SessionViewerLifecycle,
   type SessionViewerTarget,
 } from '../../shared/sessionViewerProtocol';
 import { MAX_BRIDGE_ID_LENGTH } from '../../shared/interactionProtocol';
@@ -43,6 +44,7 @@ export function parseSessionViewerHostMessage(
   if (
     target === null ||
     typeof value.running !== 'boolean' ||
+    !isLifecycle(value.lifecycle) ||
     typeof value.stopping !== 'boolean' ||
     typeof value.stopError !== 'boolean'
   ) {
@@ -57,6 +59,7 @@ export function parseSessionViewerHostMessage(
         'target',
         'reason',
         'running',
+        'lifecycle',
         'stopping',
         'stopError',
       ]) ||
@@ -71,6 +74,7 @@ export function parseSessionViewerHostMessage(
       target,
       reason: value.reason,
       running: value.running,
+      lifecycle: value.lifecycle,
       stopping: value.stopping,
       stopError: value.stopError,
     };
@@ -85,6 +89,7 @@ export function parseSessionViewerHostMessage(
       'items',
       'truncated',
       'running',
+      'lifecycle',
       'stopping',
       'stopError',
     ]) ||
@@ -104,9 +109,22 @@ export function parseSessionViewerHostMessage(
     items,
     truncated: value.truncated,
     running: value.running,
+    lifecycle: value.lifecycle,
     stopping: value.stopping,
     stopError: value.stopError,
   };
+}
+
+function isLifecycle(
+  value: unknown,
+): value is SessionViewerLifecycle {
+  return (
+    value === 'starting' ||
+    value === 'working' ||
+    value === 'completed' ||
+    value === 'failed' ||
+    value === 'cancelled'
+  );
 }
 
 function parseTarget(value: unknown): SessionViewerTarget | null {
@@ -114,12 +132,17 @@ function parseTarget(value: unknown): SessionViewerTarget | null {
     !isStrictRecord(value) ||
     typeof value.kind !== 'string' ||
     !(SESSION_VIEWER_TARGET_KINDS as readonly string[]).includes(value.kind) ||
-    (value.mode !== 'standard' && value.mode !== 'mission-readonly') ||
+    (value.mode !== 'standard' &&
+      value.mode !== 'mission-readonly' &&
+      value.mode !== 'subagent-readonly') ||
     !isDisplayText(value.title, MAX_SESSION_VIEWER_TITLE_LENGTH)
   ) {
     return null;
   }
-  if (value.mode === 'mission-readonly') {
+  if (
+    value.mode === 'mission-readonly' ||
+    value.mode === 'subagent-readonly'
+  ) {
     return hasExactKeys(value, ['kind', 'mode', 'title'])
       ? {
           kind: value.kind as SessionViewerTarget['kind'],

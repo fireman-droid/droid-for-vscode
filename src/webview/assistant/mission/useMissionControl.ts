@@ -6,7 +6,12 @@ import type { MissionMessagePoster } from './missionStart';
 
 export type MissionUiCommand =
   | {
+      readonly type: 'mission.dismissSetup';
+    }
+  | {
       readonly type: 'mission.panel.open';
+      readonly target?: 'catalog' | 'setup';
+      readonly task?: string;
     }
   | {
       readonly type:
@@ -39,7 +44,20 @@ export function useMissionControl(
       };
       let message: WebviewToHostMessage;
       if (command.type === 'mission.panel.open') {
-        message = { ...envelope, type: command.type };
+        message = {
+          ...envelope,
+          type: command.type,
+          ...(command.target === undefined
+            ? {}
+            : { target: command.target }),
+          ...(command.task === undefined ? {} : { task: command.task }),
+        };
+      } else if (command.type === 'mission.dismissSetup') {
+        message = {
+          ...envelope,
+          type: command.type,
+          snapshotRevision: 0,
+        };
       } else if (command.type === 'mission.disclosure.set') {
         message = { ...envelope, type: command.type, expanded: command.expanded };
       } else if (command.type === 'mission.viewer.open') {

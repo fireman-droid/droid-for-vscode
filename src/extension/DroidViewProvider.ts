@@ -61,6 +61,7 @@ export class DroidViewProvider
   private visibilityListener: vscode.Disposable | undefined;
   private configurationListener: vscode.Disposable | undefined;
   private colorThemeListener: vscode.Disposable | undefined;
+  private missionSetupListener: vscode.Disposable | undefined;
   private controllerSubscription: vscode.Disposable | undefined;
   private webviewView: vscode.WebviewView | undefined;
   private disposed = false;
@@ -69,7 +70,17 @@ export class DroidViewProvider
     private readonly extensionUri: vscode.Uri,
     private readonly controller: ChatController,
     private readonly diagnostics?: RuntimeDiagnosticSink,
-    private readonly openMissionControl?: () => void,
+    private readonly openMissionControl?: (
+      target: 'catalog' | 'setup',
+      task?: string,
+    ) => void,
+    private readonly missionWorkspace?: {
+      readonly subscribe: (
+        listener: (message: unknown) => void,
+      ) => vscode.Disposable;
+      readonly replay: () => void;
+      readonly handleMessage: (value: unknown) => boolean;
+    },
   ) {}
 
   resolveWebviewView(
@@ -141,6 +152,14 @@ export class DroidViewProvider
         postTheme();
       }
     });
+    this.missionSetupListener = this.missionWorkspace?.subscribe((message) => {
+      if (this.webviewView === webviewView) {
+        void webviewView.webview.postMessage(message).then(
+          () => undefined,
+          () => undefined,
+        );
+      }
+    });
 
     this.controllerSubscription = this.controller.subscribe((message) => {
       if (this.webviewView !== webviewView) {
@@ -153,6 +172,9 @@ export class DroidViewProvider
     });
     this.messageListener = webviewView.webview.onDidReceiveMessage(
       (untrustedMessage: unknown) => {
+        if (this.missionWorkspace?.handleMessage(untrustedMessage) === true) {
+          return;
+        }
         const message = parseWebviewMessage(untrustedMessage);
         if (message === undefined) {
           const mismatch = readReadyProtocolMismatch(untrustedMessage);
@@ -213,7 +235,10 @@ export class DroidViewProvider
           return;
         }
         if (message.type === 'mission.panel.open') {
-          this.openMissionControl?.();
+          this.openMissionControl?.(
+            message.target ?? 'catalog',
+            message.task,
+          );
           return;
         }
 
@@ -221,6 +246,7 @@ export class DroidViewProvider
         // preference the retained webview may have missed while hidden.
         if (message.type === 'webview.ready') {
           postTheme();
+          this.missionWorkspace?.replay();
         }
 
         this.controller.handleMessage(message);
@@ -277,6 +303,8 @@ export class DroidViewProvider
     this.configurationListener = undefined;
     this.colorThemeListener?.dispose();
     this.colorThemeListener = undefined;
+    this.missionSetupListener?.dispose();
+    this.missionSetupListener = undefined;
     this.controllerSubscription?.dispose();
     this.controllerSubscription = undefined;
   }

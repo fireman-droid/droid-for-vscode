@@ -18,6 +18,13 @@ export function SessionViewerApp({
 }): React.JSX.Element {
   const [snapshot, setSnapshot] =
     useState<SessionViewerSnapshotMessage | null>(null);
+  const [theme, setTheme] = useState(() => ({
+    resolved:
+      document.documentElement.dataset.dvxTheme === 'dark'
+        ? ('dark' as const)
+        : ('light' as const),
+    preference: readThemePreference(),
+  }));
   const viewportRef = useRef<HTMLElement>(null);
   const followRef = useRef({ following: true });
   const getScroller = useCallback(
@@ -35,6 +42,10 @@ export function SessionViewerApp({
         document.documentElement.dataset.dvxTheme = message.resolved;
         document.documentElement.dataset.dvxThemePreference =
           message.preference;
+        setTheme({
+          resolved: message.resolved,
+          preference: message.preference,
+        });
         return;
       }
       setSnapshot(message);
@@ -60,9 +71,16 @@ export function SessionViewerApp({
 
   const title = snapshot?.target.title ?? 'Session activity';
   const running = snapshot?.running === true;
-  const readOnly = snapshot?.target.mode === 'mission-readonly';
+  const readOnly =
+    snapshot?.target.mode === 'mission-readonly' ||
+    snapshot?.target.mode === 'subagent-readonly';
   return (
-    <main className="dvx-session-viewer" data-running={running}>
+    <main
+      className="dvx-shell dvx-session-viewer"
+      data-running={running}
+      data-theme={theme.resolved}
+      data-dvx-theme-preference={theme.preference}
+    >
       <header className="dvx-session-viewer-header">
         <div className="dvx-session-viewer-heading">
           <h1>{title}</h1>
@@ -71,9 +89,7 @@ export function SessionViewerApp({
               ? 'Loading'
               : snapshot.stopping
               ? 'Stopping…'
-              : running
-                ? 'Working'
-                : 'Finished'}
+              : lifecycleLabel(snapshot.lifecycle)}
           </span>
         </div>
         {running && !readOnly ? (
@@ -139,4 +155,18 @@ export function SessionViewerApp({
       </section>
     </main>
   );
+}
+
+function lifecycleLabel(
+  lifecycle: SessionViewerSnapshotMessage['lifecycle'],
+): string {
+  return lifecycle.charAt(0).toUpperCase() + lifecycle.slice(1);
+}
+
+function readThemePreference(): 'light' | 'dark' | 'auto' {
+  const preference =
+    document.documentElement.dataset.dvxThemePreference;
+  return preference === 'light' || preference === 'dark'
+    ? preference
+    : 'auto';
 }

@@ -393,11 +393,90 @@ export function ReadOnlyUserMessage(): React.JSX.Element {
     >
       <div className="dvx-user-message-content">
         <div className="dvx-user-block">
-          <UserMessageParts />
+          <ReadOnlyUserMessageParts />
         </div>
       </div>
     </MessagePrimitive.Root>
   );
+}
+
+function ReadOnlyUserMessageParts(): React.JSX.Element {
+  return (
+    <MessagePrimitive.Parts>
+      {({ part }) => {
+        if (part.type === "data" && part.name === "droid-image") {
+          return <TranscriptImage data={part.data} />;
+        }
+        if (part.type !== "text") {
+          return null;
+        }
+        const delegated = parseDelegatedTask(part.text);
+        return delegated === null ? (
+          <div className="dvx-user-text">{part.text}</div>
+        ) : (
+          <div className="dvx-delegated-task">
+            <div className="dvx-delegated-task-head">
+              <span className="dvx-delegated-task-eyebrow">
+                Delegated task
+              </span>
+              <span className="dvx-delegated-task-meta">
+                {delegated.type}
+                {delegated.complexity === null
+                  ? ""
+                  : ` · ${delegated.complexity}`}
+              </span>
+            </div>
+            <strong className="dvx-delegated-task-title">
+              {delegated.description}
+            </strong>
+            <div className="dvx-delegated-task-body">
+              {delegated.task}
+            </div>
+            <details className="dvx-delegated-task-details">
+              <summary>Invocation details</summary>
+              <pre>{part.text}</pre>
+            </details>
+          </div>
+        );
+      }}
+    </MessagePrimitive.Parts>
+  );
+}
+
+interface DelegatedTask {
+  readonly type: string;
+  readonly complexity: string | null;
+  readonly description: string;
+  readonly task: string;
+}
+
+function parseDelegatedTask(text: string): DelegatedTask | null {
+  if (!text.startsWith("# Task Tool Invocation")) {
+    return null;
+  }
+  const type = readInvocationField(text, "Subagent type");
+  const description = readInvocationField(text, "Task description");
+  const task = text.match(
+    /## Task\s*\r?\n---BEGIN TASK FROM PARENT AGENT---\s*\r?\n([\s\S]*?)\r?\n---END TASK FROM PARENT AGENT---/,
+  )?.[1]?.trim();
+  if (type === null || description === null || !task) {
+    return null;
+  }
+  return {
+    type,
+    complexity: readInvocationField(text, "Task complexity"),
+    description,
+    task,
+  };
+}
+
+function readInvocationField(text: string, label: string): string | null {
+  const prefix = `${label}:`;
+  const line = text
+    .split(/\r?\n/)
+    .find((candidate) => candidate.startsWith(prefix));
+  const value = line?.slice(prefix.length).trim() ?? "";
+  return value.length === 0 ? null : value;
 }
 
 function UserMessageImages(): React.JSX.Element {

@@ -9,8 +9,7 @@ import {
   isStrictRecord as isRecord,
 } from './strictValidation';
 /**
- * BYOK custom-models bridge contract
- * (docs/product/byok-add-model-design.md §5.1).
+ * BYOK custom-models bridge contract.
  *
  * The management panel lists, discovers, imports, saves, and deletes `customModels`
  * entries of `~/.factory/settings.json` through the daemon RPCs

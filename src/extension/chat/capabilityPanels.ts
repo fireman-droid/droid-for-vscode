@@ -371,8 +371,7 @@ export function emitSkills(
  * Serves the read-only plugins panel through the daemon sidecar:
  * `plugins.listInstalled` and `marketplaces.list` run concurrently
  * against the active session id (the daemon accepts any on-disk
- * session id for these RPCs — probe evidence in
- * docs/product/plugins-hooks-design.md §2.1). Daemon failures
+ * session id for these RPCs). Daemon failures
  * surface as an explicit error state, never a silent empty list.
  */
 export function handlePluginsRefresh(

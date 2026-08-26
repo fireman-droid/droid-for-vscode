@@ -691,12 +691,12 @@ describe('ChatController', () => {
       readGitChanges: vi.fn(async () => ({ status: 'empty' as const })),
       searchWorkspaceFiles: vi.fn(async () => [
         'src/webview/assistant/Thread.tsx',
-        'src/webview/assistant/Thread.test.tsx',
+        'src/webview/assistant/thread/buildTurns.ts',
       ]),
       listOpenEditorFiles: vi.fn(() => [
         'src/extension/ChatController.ts',
         '../outside/escape.ts',
-        'docs/HANDOVER.md',
+        'docs/PLAN.md',
       ]),
       readWorkspaceFile: vi.fn(async (path: string) => ({
         status: 'picked' as const,
@@ -733,7 +733,7 @@ describe('ChatController', () => {
         requestId: 'file-search-1',
         files: [
           'src/webview/assistant/Thread.tsx',
-          'src/webview/assistant/Thread.test.tsx',
+          'src/webview/assistant/thread/buildTurns.ts',
         ],
       });
     });
@@ -755,7 +755,7 @@ describe('ChatController', () => {
       status: 'ok',
       files: [
         'src/extension/ChatController.ts',
-        'docs/HANDOVER.md',
+        'docs/PLAN.md',
       ],
     });
     expect(sources.listOpenEditorFiles).toHaveBeenCalledWith(20);

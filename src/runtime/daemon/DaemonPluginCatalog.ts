@@ -22,9 +22,8 @@ export interface PluginCatalogSnapshot {
 /**
  * Read-only plugin operations that only exist on the daemon protocol
  * (`plugins.*` / `marketplaces.*` are daemon resources; the session
- * channel has no plugin methods). Probe evidence
- * (artifacts/probe-plugins-daemon.mjs, recorded in
- * docs/product/plugins-hooks-design.md §2.1) shows both RPCs accept
+ * channel has no plugin methods). Probe evidence from
+ * artifacts/probe-plugins-daemon.mjs shows both RPCs accept
  * any on-disk session id without a daemon-opened session, so the
  * sidecar daemon alone can serve them in process runtime mode.
  */

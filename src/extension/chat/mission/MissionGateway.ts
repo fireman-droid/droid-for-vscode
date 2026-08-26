@@ -13,6 +13,7 @@ import type {
   MissionSetupCapabilities,
   MissionStartMessage,
 } from '../../../shared/missionProtocol';
+import type { MissionReadinessWarning } from '../../../shared/missionControlSetupProtocol';
 import { resolveMissionProfile } from '../../../shared/missionProtocol';
 import {
   listMissionCatalog,
@@ -76,16 +77,73 @@ export interface MissionGatewayOptions extends MissionCatalogProjectionOptions {
 
 export type { MissionCatalogResult } from './MissionCatalogProjection';
 
+export type MissionReadinessResult =
+  | {
+      readonly status: 'ready';
+      readonly warning: {
+        readonly state: MissionReadinessWarning;
+        readonly level: number | null;
+      } | null;
+    }
+  | { readonly status: 'error' };
+
 /**
  * Extension-Host Mission entry boundary. It validates every effective model
  * pair before creating a session, then applies and verifies the six-property
  * SDK settings object while retaining the original attached handle.
  */
 export class MissionGateway {
+  private catalogTargets = new Map<string, string>();
+
   constructor(private readonly options: MissionGatewayOptions) {}
 
   async listCatalog(): Promise<MissionCatalogResult> {
-    return listMissionCatalog(this.options);
+    const targets = new Map<string, string>();
+    const result = await listMissionCatalog({
+      ...this.options,
+      rememberCatalogTarget: (catalogId, sessionId) => {
+        targets.set(catalogId, sessionId);
+      },
+    });
+    if (result.status === 'ready') {
+      this.catalogTargets = targets;
+    }
+    return result;
+  }
+
+  sessionIdForCatalogId(catalogId: string): string | null {
+    return this.catalogTargets.get(catalogId) ?? null;
+  }
+
+  async inspectReadiness(cwd: string): Promise<MissionReadinessResult> {
+    try {
+      const droid = await this.options.getDroid();
+      const result = await droid.unstable.missions.inspectReadiness(cwd);
+      const warning = result.warning;
+      if (warning === undefined || warning.state === 'ok') {
+        return { status: 'ready', warning: null };
+      }
+      return {
+        status: 'ready',
+        warning: {
+          state: warning.state,
+          level:
+            typeof warning.level === 'number' ? warning.level : null,
+        },
+      };
+    } catch {
+      return { status: 'error' };
+    }
+  }
+
+  async acknowledgeReadinessWarning(cwd: string): Promise<boolean> {
+    try {
+      const droid = await this.options.getDroid();
+      await droid.unstable.missions.acknowledgeReadinessWarning(cwd);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async start(input: MissionGatewayStart): Promise<MissionGatewayResult> {

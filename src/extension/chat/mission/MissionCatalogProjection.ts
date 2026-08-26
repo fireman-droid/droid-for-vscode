@@ -27,6 +27,10 @@ export interface MissionCatalogProjectionOptions {
   readonly resolveComputerLabel?: (hostId: string) => string | undefined;
   readonly getAttachedSessionId?: () => string | undefined;
   readonly timeoutMs?: number;
+  readonly rememberCatalogTarget?: (
+    catalogId: string,
+    sessionId: string,
+  ) => void;
 }
 
 export type MissionCatalogResult =
@@ -180,6 +184,7 @@ function projectCatalogCandidate(
     elapsedMs,
     attached: raw.sessionId === options.getAttachedSessionId?.(),
   };
+  options.rememberCatalogTarget?.(row.catalogId, raw.sessionId);
   return {
     sourceId: raw.sessionId,
     row,

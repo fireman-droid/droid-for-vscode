@@ -85,6 +85,8 @@ interface ComposerControlsProps {
   readonly onContextRefresh: () => void;
   readonly onCompact: () => void;
   readonly onSettingUpdate: (update: SessionSettingSelection) => void;
+  readonly missionActive?: boolean;
+  readonly onMissionOpen?: () => void;
   readonly onSkillsRefresh: () => void;
   readonly onSkillToggle: (name: string, disabled: boolean) => void;
   readonly onMcpRefresh: () => void;
@@ -145,6 +147,8 @@ export function ComposerControls({
   onContextRefresh,
   onCompact,
   onSettingUpdate,
+  missionActive = false,
+  onMissionOpen,
   onSkillsRefresh,
   onSkillToggle,
   onMcpRefresh,
@@ -174,6 +178,7 @@ export function ComposerControls({
   // mode/model shows immediately; the settled frame reconciles.
   const { shownMode, shownModelId, pickSetting } =
     useOptimisticSettingPick(settings, onSettingUpdate);
+  const displayedMode = missionActive ? 'mission' : shownMode;
   // While Spec mode has an active drafting-model override, the
   // trigger reflects it instead of the session model (2026-08-16
   // redesign) — otherwise a working override was invisible outside
@@ -193,7 +198,7 @@ export function ComposerControls({
   const showContextPercent =
     context.value !== null && hasUsableContextRatio(context.value);
   const modeLabel =
-    MODE_OPTIONS.find((option) => option.value === shownMode)?.label ??
+    MODE_OPTIONS.find((option) => option.value === displayedMode)?.label ??
     'Mode';
 
   // A dismissed popover stays mounted as closingPanel while its exit
@@ -395,7 +400,7 @@ export function ComposerControls({
       <button
         type="button"
         className={`dvx-mode-trigger${
-          shownMode === 'spec' ? ' dvx-mode-trigger-spec' : ''
+          displayedMode === 'spec' ? ' dvx-mode-trigger-spec' : ''
         }`}
         aria-label={`Mode: ${modeLabel}`}
         aria-expanded={openPanel === 'mode'}
@@ -490,10 +495,14 @@ export function ComposerControls({
         <ModePopover
           id={`${panelId}-mode`}
           settings={settings}
-          shownMode={shownMode ?? confirmed.interactionMode}
+          shownMode={displayedMode ?? confirmed.interactionMode}
           disabled={settingControlsDisabled}
           onSelect={(value) => {
             close();
+            if (value === 'mission') {
+              onMissionOpen?.();
+              return;
+            }
             if (value !== confirmed.interactionMode) {
               pickSetting({
                 field: 'interactionMode',

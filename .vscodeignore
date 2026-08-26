@@ -8,7 +8,7 @@
 artifacts/**
 design/**
 docs/**
-!docs/product/log-analysis-playbook.md
+!docs/TROUBLESHOOTING.md
 src/**
 scripts/**
 node_modules/**

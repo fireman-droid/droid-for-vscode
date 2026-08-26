@@ -52,10 +52,8 @@ export function sanitizeSubagentDescription(value: unknown): string {
 }
 
 /**
- * Key that pairs one Task tool call with one ledger invocation. The
- * public `subagentInvocations` payload does not expose the parent
- * tool-use id, so pairing is FIFO per (type, description) identity —
- * both sides sanitized by the helpers above.
+ * Fallback key that pairs one Task tool call with one invocation when
+ * the source does not expose its parent tool-use id.
  */
 export function subagentIdentityKey(
   type: string,
@@ -73,10 +71,11 @@ export function subagentIdentityKey(
 export interface SubagentInvocationRecord {
   readonly summary: ToolSubagentSummary;
   readonly childSessionId: string | null;
+  readonly parentToolUseId?: string;
 }
 
-/** Ids are opaque CLI uuids; anything unprintable is dropped. */
-const SAFE_CHILD_SESSION_ID = /^[\w.:-]{1,128}$/u;
+/** Host-only CLI identifiers are opaque; anything unprintable is dropped. */
+const SAFE_OPAQUE_ID = /^[\w.:-]{1,128}$/u;
 
 /**
  * Projects `loadSession().subagentInvocations` into host-only
@@ -129,9 +128,13 @@ export function readSubagentInvocationRecords(
       },
       childSessionId:
         typeof entry.childSessionId === 'string' &&
-        SAFE_CHILD_SESSION_ID.test(entry.childSessionId)
+        SAFE_OPAQUE_ID.test(entry.childSessionId)
           ? entry.childSessionId
           : null,
+      ...(typeof entry.parentToolUseId === 'string' &&
+      SAFE_OPAQUE_ID.test(entry.parentToolUseId)
+        ? { parentToolUseId: entry.parentToolUseId }
+        : {}),
     });
   }
   return records;

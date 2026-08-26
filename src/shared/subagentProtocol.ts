@@ -21,6 +21,13 @@ export interface SubagentPanelMessage {
   readonly open: boolean;
 }
 
+export interface SubagentOpenMessage {
+  readonly type: 'subagent.open';
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly toolUseId: string;
+}
+
 export interface SubagentActivityMessage {
   readonly type: 'subagent.activity';
   readonly sequence: number;
@@ -69,21 +76,40 @@ function isActivityItem(value: unknown): value is SubagentActivityItem {
 
 export function parseSubagentWebviewMessage(
   value: unknown,
-): SubagentPanelMessage | null {
-  if (
-    !isRecord(value) ||
-    value.type !== 'subagent.panel' ||
-    !hasExactKeys(value, ['type', 'sessionId', 'open']) ||
-    !isId(value.sessionId) ||
-    typeof value.open !== 'boolean'
-  ) {
+): SubagentPanelMessage | SubagentOpenMessage | null {
+  if (!isRecord(value)) {
     return null;
   }
-  return {
-    type: value.type,
-    sessionId: value.sessionId,
-    open: value.open,
-  };
+  if (value.type === 'subagent.panel') {
+    return hasExactKeys(value, ['type', 'sessionId', 'open']) &&
+      isId(value.sessionId) &&
+      typeof value.open === 'boolean'
+      ? {
+          type: value.type,
+          sessionId: value.sessionId,
+          open: value.open,
+        }
+      : null;
+  }
+  if (value.type === 'subagent.open') {
+    return hasExactKeys(value, [
+      'type',
+      'sessionId',
+      'turnId',
+      'toolUseId',
+    ]) &&
+      isId(value.sessionId) &&
+      isId(value.turnId) &&
+      isId(value.toolUseId)
+      ? {
+          type: value.type,
+          sessionId: value.sessionId,
+          turnId: value.turnId,
+          toolUseId: value.toolUseId,
+        }
+      : null;
+  }
+  return null;
 }
 
 export function parseSubagentActivityMessage(

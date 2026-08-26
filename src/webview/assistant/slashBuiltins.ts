@@ -37,7 +37,7 @@ export type BuiltinSlashAction =
   | { readonly kind: 'navigate'; readonly target: SlashNavTarget }
   | { readonly kind: 'btw'; readonly question: string }
   | { readonly kind: 'canvas'; readonly request: string }
-  | { readonly kind: 'mission'; readonly task: string };
+  | { readonly kind: 'removed' };
 
 export const CANVAS_REQUEST_TEMPLATE =
   'Create an interactive Canvas artifact for:\n\n' +
@@ -83,7 +83,7 @@ export function resolveBuiltinSlash(
       : null;
   }
   if (slug === 'mission') {
-    return { kind: 'mission', task: rest.trim() };
+    return { kind: 'removed' };
   }
   if (slug === 'canvas') {
     return { kind: 'canvas', request: rest.trim() };

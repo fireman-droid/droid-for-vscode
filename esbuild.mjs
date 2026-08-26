@@ -90,6 +90,12 @@ const missionControlResult = await build({
   format: 'iife',
   target: 'es2022',
   minify: true,
+  loader: {
+    '.woff2': 'file',
+    '.woff': 'file',
+    '.ttf': 'file',
+  },
+  assetNames: 'assets/[name]',
   define: {
     'process.env.NODE_ENV': '"production"',
     __DVX_BUILD_ID__: JSON.stringify(buildId),
@@ -106,6 +112,12 @@ const missionControlCssResult = await build({
   bundle: true,
   platform: 'browser',
   minify: true,
+  loader: {
+    '.woff2': 'file',
+    '.woff': 'file',
+    '.ttf': 'file',
+  },
+  assetNames: 'assets/[name]',
   sourcemap: false,
   legalComments: 'none',
   metafile: true,

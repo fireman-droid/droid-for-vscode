@@ -23,9 +23,8 @@ import {
 } from '../../shared/customModelsProtocol';
 
 /**
- * BYOK custom-models flow
- * (docs/product/byok-add-model-design.md §4-§5.3): context, App-level
- * hook, and shared grouping/validation helpers. The management UI
+ * BYOK custom-models flow: context, App-level hook, and shared
+ * grouping/validation helpers. The management UI
  * lives on full pages (ModelsPage.tsx / ModelProviderPage.tsx) that
  * replace the chat view; the model menu's "Add models" row opens them
  * through `onOpenManager`. All Bridge traffic flows through context

@@ -1,8 +1,7 @@
 import { isStrictRecord } from './strictValidation';
 
 /**
- * One token-usage breakdown mirroring the SDK's `TokenUsage` shape
- * (probed 2026-08-12; see docs/product/token-usage-design.md). The same
+ * One token-usage breakdown mirroring the SDK's `TokenUsage` shape. The same
  * shape carries two scopes: cumulative session totals (live
  * `token_usage_update` events, `loadSession` envelope) and one turn's
  * consumption (`result.tokenUsage`).

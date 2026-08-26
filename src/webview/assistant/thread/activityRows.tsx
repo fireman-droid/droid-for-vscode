@@ -26,6 +26,7 @@ import { commandCardTitle, commandChips } from "../commandCard";
 import { parsePlanSteps } from "../planAnchor";
 import {
   useSubagentActivity,
+  useOpenSubagent,
 } from "../subagentPanelFlow";
 import { formatElapsed } from "../subagentWorking";
 import { PreviewChip, ToolFilePath } from "./transcriptRows";
@@ -260,6 +261,7 @@ export function ToolActivityRow({
           toolUseCount={activity.subagent.toolUseCount}
           durationMs={activity.subagent.durationMs}
           toolUseId={toolUseId}
+          turnId={activity.turnId}
           // Parent Task row settled while the delegation still runs:
           // the honest label is "running in background" (the ledger
           // has no push channel; the post-turn reconcile polls it).
@@ -302,17 +304,20 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
   toolUseCount,
   durationMs,
   toolUseId,
+  turnId,
   parentSettled = false,
   parentRunning = false,
 }: NonNullable<ToolActivityPresentation["subagent"]> & {
   /** Opaque row handle for the read-only transcript entry point. */
   readonly toolUseId?: string;
+  readonly turnId: string | null;
   /** The parent Task row reached a terminal state. */
   readonly parentSettled?: boolean;
   /** The parent Task row is still streaming. */
   readonly parentRunning?: boolean;
 }): React.JSX.Element {
   const activity = useSubagentActivity(toolUseId);
+  const openSubagent = useOpenSubagent();
   // The delegation identity arrives with the Task input long before
   // the SDK reports a lifecycle status (probed 2026-08-13: the
   // child_session_available notification only surfaces with the
@@ -348,7 +353,16 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
   const latestActivity = activities[0] ?? null;
   const recentActivities = activities.slice(1);
   return (
-    <div className={`dvx-subagent-row${running ? " dvx-subagent-live" : ""}`}>
+    <button
+      type="button"
+      className={`dvx-subagent-row${running ? " dvx-subagent-live" : ""}`}
+      disabled={toolUseId === undefined || turnId === null}
+      onClick={() => {
+        if (toolUseId !== undefined && turnId !== null) {
+          openSubagent(turnId, toolUseId);
+        }
+      }}
+    >
       <div className="dvx-subagent-head">
         {running ? (
           <span className="dvx-subagent-spinner" aria-hidden="true" />
@@ -418,7 +432,7 @@ export const SubagentSummaryRow = memo(function SubagentSummaryRow({
           </span>
         )}
       </div>
-    </div>
+    </button>
   );
 });
 

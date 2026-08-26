@@ -296,40 +296,31 @@ describe('App Mission entry', () => {
     ).toHaveLength(1);
   });
 
-  it('direct starts once with valid effective preferences', async () => {
+  it('routes a task-bearing Mission command to editable review without starting', async () => {
     render(<App />);
     host(chatSnapshot());
     host(missionSnapshot());
     await enterComposer('/mission  Keep  punctuation: a/b?  ');
 
     await waitFor(() => {
-      const starts = posted.filter(
+      const opens = posted.filter(
         (message): message is Extract<
           WebviewToHostMessage,
-          { type: 'mission.start' }
-        > => message.type === 'mission.start',
+          { type: 'mission.panel.open' }
+        > => message.type === 'mission.panel.open',
       );
-      expect(starts).toHaveLength(1);
-      expect(starts[0]).toMatchObject({
+      expect(opens).toHaveLength(1);
+      expect(opens[0]).toMatchObject({
         task: 'Keep  punctuation: a/b?',
-        worker: {
-          mode: 'same-as-orchestrator',
-          modelId: 'model-a',
-          reasoningEffort: 'high',
-        },
-        validator: {
-          mode: 'same-as-orchestrator',
-          modelId: 'model-a',
-          reasoningEffort: 'high',
-        },
-        scrutinyEnabled: true,
-        userTestingEnabled: true,
       });
     });
+    expect(posted.some((message) => message.type === 'mission.start')).toBe(
+      false,
+    );
     expect(screen.queryByRole('heading', { name: 'Start a Mission' })).toBeNull();
   });
 
-  it('keeps invalid direct start editable without fallback', async () => {
+  it('routes unavailable setup to dedicated review without inline fallback', async () => {
     render(<App />);
     host(chatSnapshot());
     host(
@@ -343,21 +334,14 @@ describe('App Mission entry', () => {
     );
     await enterComposer('/mission Preserve this exact task!');
 
-    expect(
-      await screen.findByDisplayValue('Preserve this exact task!'),
-    ).toBeDefined();
-    expect(
-      screen.getByRole('status', { name: 'Mission setup status' }).textContent,
-    ).toContain(
-      'The Worker model is unavailable.',
-    );
-    expect(
-      (
-        screen.getByRole('button', {
-          name: 'Start Mission',
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true);
+    await waitFor(() => {
+      expect(
+        posted.find((message) => message.type === 'mission.panel.open'),
+      ).toMatchObject({
+        task: 'Preserve this exact task!',
+      });
+    });
+    expect(screen.queryByRole('heading', { name: 'Start a Mission' })).toBeNull();
     expect(posted.some((message) => message.type === 'mission.start')).toBe(
       false,
     );

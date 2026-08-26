@@ -91,12 +91,6 @@ export const BTW_COMMAND = {
   description: "Ask a side question without touching this chat",
 } as const;
 
-/** Opens the dedicated Mission Control panel without sending a turn. */
-export const MISSION_COMMAND = {
-  name: "mission",
-  description: "Open Mission Control",
-} as const;
-
 /** Most enabled skills offered in the `/` popup Skills section. */
 export const MAX_SLASH_SKILL_MATCHES = 5;
 

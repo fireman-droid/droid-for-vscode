@@ -962,7 +962,6 @@ describe('FactoryDroidRuntime', () => {
       },
     });
   });
-  // Numerator normalization itself is covered in contextWindow.test.ts.
   it('holds the confirmed window across a small auxiliary call', async () => {
     const session = createMockSession(async function* () {});
     const source = (used: number) => ({

@@ -14,8 +14,16 @@ import {
   isStrictRecord,
   type UnknownRecord,
 } from './strictValidation';
+import {
+  parseMissionControlSetupHostMessage,
+  parseMissionControlSetupWebviewMessage,
+  type MissionControlSetupContinueMessage,
+  type MissionControlSetupSnapshotMessage,
+  type MissionControlSetupUpdateMessage,
+} from './missionControlSetupProtocol';
+export { MISSION_CONTROL_PANEL_PROTOCOL_VERSION } from './missionControlProtocolVersion';
+import { MISSION_CONTROL_PANEL_PROTOCOL_VERSION } from './missionControlProtocolVersion';
 
-export const MISSION_CONTROL_PANEL_PROTOCOL_VERSION = 1 as const;
 export const MAX_MISSION_CONTROL_CATALOG_ROWS = 10_000;
 export const MAX_MISSION_CONTROL_CATALOG_ID_LENGTH = 160;
 export const MAX_MISSION_CONTROL_REQUEST_ID_LENGTH = 128;
@@ -81,6 +89,8 @@ export type MissionControlPanelWebviewMessage =
   | MissionControlReadyMessage
   | MissionControlCatalogRequest
   | MissionControlNavigateMessage
+  | MissionControlSetupUpdateMessage
+  | MissionControlSetupContinueMessage
   | WebviewDiagnosticMessage;
 
 export interface MissionControlCatalogReadyResult {
@@ -112,6 +122,7 @@ export interface MissionControlCatalogErrorResult {
 export type MissionControlPanelHostMessage =
   | MissionControlCatalogReadyResult
   | MissionControlCatalogErrorResult
+  | MissionControlSetupSnapshotMessage
   | {
       readonly type: 'missionControl.theme';
       readonly protocolVersion: typeof MISSION_CONTROL_PANEL_PROTOCOL_VERSION;
@@ -121,7 +132,13 @@ export type MissionControlPanelHostMessage =
   | {
       readonly type: 'missionControl.route';
       readonly protocolVersion: typeof MISSION_CONTROL_PANEL_PROTOCOL_VERSION;
-      readonly route: 'catalog';
+      readonly route: 'catalog' | 'new-mission';
+    }
+  | {
+      readonly type: 'missionControl.route';
+      readonly protocolVersion: typeof MISSION_CONTROL_PANEL_PROTOCOL_VERSION;
+      readonly route: 'detail';
+      readonly catalogId: string;
     };
 
 const LIFECYCLE_SET = new Set<string>(MISSION_LIFECYCLES);
@@ -130,6 +147,10 @@ const FILTER_SET = new Set<string>(MISSION_CONTROL_CATALOG_FILTERS);
 export function parseMissionControlPanelWebviewMessage(
   value: unknown,
 ): MissionControlPanelWebviewMessage | undefined {
+  const setup = parseMissionControlSetupWebviewMessage(value);
+  if (setup !== undefined) {
+    return setup;
+  }
   if (
     isStrictRecord(value) &&
     value.type === 'webview.diagnostic' &&
@@ -215,17 +236,36 @@ export function parseMissionControlPanelWebviewMessage(
 export function parseMissionControlPanelHostMessage(
   value: unknown,
 ): MissionControlPanelHostMessage | undefined {
+  const setup = parseMissionControlSetupHostMessage(value);
+  if (setup !== undefined) {
+    return setup;
+  }
   if (
     isStrictRecord(value) &&
     hasExactKeys(value, ['type', 'protocolVersion', 'route']) &&
     value.type === 'missionControl.route' &&
     value.protocolVersion === MISSION_CONTROL_PANEL_PROTOCOL_VERSION &&
-    value.route === 'catalog'
+    (value.route === 'catalog' || value.route === 'new-mission')
   ) {
     return {
       type: 'missionControl.route',
       protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
-      route: 'catalog',
+      route: value.route,
+    };
+  }
+  if (
+    isStrictRecord(value) &&
+    hasExactKeys(value, ['type', 'protocolVersion', 'route', 'catalogId']) &&
+    value.type === 'missionControl.route' &&
+    value.protocolVersion === MISSION_CONTROL_PANEL_PROTOCOL_VERSION &&
+    value.route === 'detail' &&
+    isCatalogId(value.catalogId)
+  ) {
+    return {
+      type: 'missionControl.route',
+      protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+      route: 'detail',
+      catalogId: value.catalogId,
     };
   }
   if (

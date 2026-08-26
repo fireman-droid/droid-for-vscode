@@ -2,6 +2,9 @@ import { AssistantRuntimeProvider, useAui } from '@assistant-ui/react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
 import { MAX_INLINE_PREVIEW_HTML_LENGTH, MAX_TURN_TEXT_LENGTH, type AskUserAnswer, type ImageMediaType, type ThemePreference, type WebviewToHostMessage } from '../../shared/bridgeMessages';
+import { parseMissionControlPanelHostMessage } from '../../shared/missionControlPanelProtocol';
+import type { MissionControlSetupSnapshotMessage } from '../../shared/missionControlSetupProtocol';
+import { normalizeMissionTaskText } from '../../shared/missionProtocol';
 import { announceBooted, announceHandshakeTimeout, announceReady, announceRendered, getVsCodeApi, persistDraft, postPerfBeacon, readHostMessage, restoreDraft } from '../bridge/vscode';
 import { buildInteractionSlots } from './interactionSlots';
 import { LocalImageContext, OpenPathContext } from './MarkdownText';
@@ -12,12 +15,6 @@ import {
   resolveBuiltinSlash,
   type SlashNavTarget,
 } from './slashBuiltins';
-import {
-  createMissionSetupSubmission,
-  MissionSetup,
-  validateMissionSetupSubmission,
-} from './mission/MissionSetup';
-import { useMissionEntry } from './mission/useMissionEntry';
 import { useMissionControl } from './mission/useMissionControl';
 import { canSendMessage, DEFAULT_MESSAGE_WINDOW, MESSAGE_WINDOW_STEP, shouldQueueMessage, useDroidExternalStoreRuntime } from './runtimeAdapter';
 import { AppHeader } from './AppHeader';
@@ -31,7 +28,8 @@ import { selectPlanAnchors } from './planAnchor';
 import { QueuedMessages } from './QueuedMessages';
 import { ReviewDockSlot } from './reviewDockSlot';
 import { SideChatSheet } from './SideChatSheet';
-import { SubagentActivityStoreContext, useSubagentPanelFlow } from './subagentPanelFlow';
+import { MissionWorkspace } from '../missionControl/MissionWorkspace';
+import { SubagentActivityStoreContext, SubagentOpenContext, useSubagentPanelFlow } from './subagentPanelFlow';
 import { selectWorkingSubagents } from './subagentWorking';
 import { ThemeContext, useThemeController } from './theme';
 import { MAX_BTW_TEXT_LENGTH } from '../../shared/btwProtocol';
@@ -59,15 +57,11 @@ export function App(): React.JSX.Element {
     assistantWebviewReducer,
     initialAssistantWebviewState,
   );
-  const missionEntry = useMissionEntry(
-    vscode,
-    state.sessionId,
-    state.missionControlResult,
-    createTurnId,
-  );
   const missionControl = useMissionControl(vscode, createTurnId);
   const [transientDiagnostic, setTransientDiagnostic] =
     useState<TransientDiagnostic | null>(null);
+  const [missionWorkspaceRoute, setMissionWorkspaceRoute] = useState<'new-mission' | 'detail' | null>(null);
+  const [missionSetup, setMissionSetup] = useState<MissionControlSetupSnapshotMessage | null>(null);
   const [draft, setDraft] = useState(() => restoreDraft(vscode));
   const draftValueRef = useRef(draft);
   const [initialDraft] = useState(draft);
@@ -88,6 +82,14 @@ export function App(): React.JSX.Element {
   const canvasFeedbackSequenceRef = useRef(-1);
   // A new send closes any abandoned user-message edit card.
   const [sendSignal, setSendSignal] = useState(0);
+  useEffect(() => {
+    if (
+      state.missionControlResult?.action === 'start' &&
+      state.missionControlResult.status === 'accepted'
+    ) {
+      setMissionWorkspaceRoute('detail');
+    }
+  }, [state.missionControlResult]);
   // Slash-command navigation (S2): `/model` `/mcp` `/skills`
   // `/context` open composer popovers; `/sessions` opens the history
   // drawer. Monotonic ids let the same target fire repeatedly.
@@ -117,8 +119,18 @@ export function App(): React.JSX.Element {
     },
     [],
   );
-  const handleMissionOpen = useCallback((): void => {
-    missionControl({ type: 'mission.panel.open' });
+  const handleMissionOpen = useCallback((task?: string): void => {
+    missionControl({
+      type: 'mission.panel.open',
+      target: 'setup',
+      ...(task === undefined ? {} : { task }),
+    });
+  }, [missionControl]);
+  const handleMissionCatalogOpen = useCallback((): void => {
+    missionControl({ type: 'mission.panel.open', target: 'catalog' });
+  }, [missionControl]);
+  const handleMissionClose = useCallback((): void => {
+    missionControl({ type: 'mission.dismissSetup' });
   }, [missionControl]);
 
   useEffect(() => {
@@ -175,6 +187,19 @@ export function App(): React.JSX.Element {
       }
     };
     const handleMessage = (event: MessageEvent<unknown>): void => {
+      const missionWorkspaceMessage = parseMissionControlPanelHostMessage(
+        event.data,
+      );
+      if (missionWorkspaceMessage?.type === 'missionControl.route') {
+        const catalog = missionWorkspaceMessage.route === 'catalog';
+        setMissionWorkspaceRoute(catalog ? null : missionWorkspaceMessage.route);
+        if (catalog) setMissionSetup(null);
+        return;
+      }
+      if (missionWorkspaceMessage?.type === 'missionControl.setup.snapshot') {
+        setMissionSetup(missionWorkspaceMessage);
+        return;
+      }
       const message = readHostMessage(event.data);
       if (message === undefined) {
         return;
@@ -502,29 +527,6 @@ export function App(): React.JSX.Element {
               : `Create an interactive Canvas artifact for:\n\n${builtin.request}`,
           );
           return;
-        } else {
-          const capabilities = state.missionSnapshot?.setup;
-          if (builtin.task.length === 0) {
-            handleMissionOpen();
-          } else if (
-            capabilities === undefined ||
-            state.sessionId === null
-          ) {
-            missionEntry.openSetup(builtin.task);
-          } else {
-            const submission = createMissionSetupSubmission(
-              capabilities,
-              builtin.task,
-            );
-            if (
-              validateMissionSetupSubmission(capabilities, submission).length >
-              0
-            ) {
-              missionEntry.openSetup(builtin.task);
-            } else {
-              missionEntry.startDirect(submission);
-            }
-          }
         }
         draftValueRef.current = '';
         setDraft('');
@@ -585,14 +587,13 @@ export function App(): React.JSX.Element {
       connectionStatus,
       handleBtwAsk,
       handleCompact,
+      handleMissionOpen,
       handleSlashNavigate,
       interactionCount,
-      missionEntry,
       queuedCount,
       queueEditingId,
       replaceComposerDraft,
       sessionId,
-      state.missionSnapshot,
       state.queue.paused,
       turnStatus,
       vscode,
@@ -1403,8 +1404,13 @@ export function App(): React.JSX.Element {
   // The models page owns the whole content area, so /btw does not
   // split the shell while it is open.
   const fullPageOpen = modelsPageOpen;
+  const missionSplit = !fullPageOpen && missionWorkspaceRoute !== null;
   const btwSplit =
-    !fullPageOpen && btwOpen && btwAvailable && sessionId !== null;
+    !fullPageOpen &&
+    !missionSplit &&
+    btwOpen &&
+    btwAvailable &&
+    sessionId !== null;
 
   // Rendered once here so transcript markdown (deep inside
   // assistant-ui's message tree) can open clicked file paths without
@@ -1422,7 +1428,7 @@ export function App(): React.JSX.Element {
             ? ' dvx-anim-live'
             : ''
         }${showHandshakeNotice ? ' dvx-shell-stalled' : ''}${
-          btwSplit ? ' dvx-shell-split' : ''
+          btwSplit || missionSplit ? ' dvx-shell-split' : ''
         }`}
         data-theme={resolvedTheme}
         data-dvx-theme-preference={themeContextValue.preference}
@@ -1441,7 +1447,6 @@ export function App(): React.JSX.Element {
           onUnarchiveSession={handleUnarchiveSession}
           onRefreshArchived={handleRefreshArchived}
           onSearchContent={handleSearchContent}
-          onMissionCommand={missionControl}
         />
         {showHandshakeNotice ? (
           <aside
@@ -1509,6 +1514,7 @@ export function App(): React.JSX.Element {
           onCommandsRefresh={handleCommandsRefresh}
           navSignal={composerNav}
           onSlashNavigate={handleSlashNavigate}
+          missionActive={missionWorkspaceRoute === 'detail'}
           btwAvailable={btwAvailable}
           onBtwOpen={handleBtwOpen}
           onAttachPath={handleAttachPath}
@@ -1590,28 +1596,9 @@ export function App(): React.JSX.Element {
               />
             )
           }
-          missionSetup={
-            missionEntry.setupEntry === null ||
-            missionEntry.setupEntry.sessionId !== state.sessionId ||
-            state.missionSnapshot?.setup === undefined
-              ? null
-              : (
-                  <MissionSetup
-                    key={missionEntry.setupEntry.id}
-                    capabilities={state.missionSnapshot.setup}
-                    initialTask={missionEntry.setupEntry.task}
-                    onStart={missionEntry.startFromSetup}
-                    onDismiss={missionEntry.dismissSetup}
-                    result={
-                      state.missionControlResult?.action === 'start'
-                        ? state.missionControlResult
-                        : null
-                    }
-                  />
-                )
-          }
+          missionSetup={null}
           onMissionOpen={
-            handleMissionOpen
+            () => handleMissionOpen(normalizeMissionTaskText(draft))
           }
           queuedCount={queuedCount}
           queueEditing={queueEditingId !== null}
@@ -1629,6 +1616,16 @@ export function App(): React.JSX.Element {
             onStop={handleBtwStop}
             onDismiss={handleBtwDismiss}
           />
+        ) : missionSplit ? (
+          <MissionWorkspace
+            route={missionWorkspaceRoute}
+            setup={missionSetup}
+            mission={state.missionSnapshot}
+            result={state.missionControlResult}
+            vscode={vscode}
+            onCatalog={handleMissionCatalogOpen}
+            onClose={handleMissionClose}
+          />
         ) : null}
       </div>
     </AssistantRuntimeProvider>
@@ -1643,7 +1640,11 @@ export function App(): React.JSX.Element {
               <SubagentActivityStoreContext.Provider
                 value={subagentFlow.activityStore}
               >
-                {app}
+                <SubagentOpenContext.Provider
+                  value={subagentFlow.openSubagent}
+                >
+                  {app}
+                </SubagentOpenContext.Provider>
               </SubagentActivityStoreContext.Provider>
             </CustomModelsContext.Provider>
           </GitCommitFlowContext.Provider>
