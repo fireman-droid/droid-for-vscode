@@ -119,10 +119,8 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
   background: rgb(229 72 77 / 10%);
 }
 
-/* The one solid element: light fill, dark glyph (prototype's
-   btn-primary swap). Covers the base rule's `color: white`. */
+/* The shared composer rules own the neutral foreground/background. */
 .dvx-shell[data-theme='dark'] .dvx-send-action {
-  color: var(--dvx-on-accent);
   box-shadow: 0 1px 2px rgb(0 0 0 / 35%);
 }
 
@@ -440,7 +438,6 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
 /* ---- 21-btw: the panel gradient is token-driven in its home file
    (raised → surface), so dark needs no re-skin. ---------------------- */
 .dvx-shell[data-theme='dark'] .dvx-btw-send {
-  color: var(--dvx-on-accent);
   box-shadow: 0 1px 2px rgb(0 0 0 / 35%);
 }
 
