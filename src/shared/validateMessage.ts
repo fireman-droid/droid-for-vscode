@@ -27,7 +27,6 @@ import {
   MAX_OPEN_PATH_POSITION,
   MAX_SESSION_SEARCH_QUERY_LENGTH,
   IMAGE_MEDIA_TYPES,
-  MAX_ATTACHMENT_IMAGE_BASE64_LENGTH,
   MAX_ATTACHMENT_NAME_LENGTH,
   MAX_ATTACHMENT_TEXT_FILE_CHARS,
   MAX_ATTACHMENT_URI_COUNT,
@@ -36,7 +35,6 @@ import {
   type AskUserRespondMessage,
   type AttachmentAddEditorMessage,
   type AttachmentAddGitChangesMessage,
-  type AttachmentAddImageMessage,
   type AttachmentAddTextFileMessage,
   type AttachmentAddUrisMessage,
   type EditStageBeginMessage,
@@ -103,6 +101,7 @@ import {
 } from './canvasProtocol';
 import { parseMissionWebviewMessage } from './missionProtocol';
 import { parseSubagentWebviewMessage } from './subagentProtocol';
+import { parseReviewWebviewMessage } from './reviewProtocol';
 import {
   parseQueueAddMessage,
   parseQueueClearMessage,
@@ -122,6 +121,7 @@ import {
   type UnknownRecord,
 } from './strictValidation';
 import { parsePlanDocumentOpen } from './parsePlanDocumentOpen';
+import { parseAttachmentImageMessage } from './parseAttachmentImageMessage';
 export function parseWebviewMessage(
   value: unknown,
 ): WebviewToHostMessage | undefined {
@@ -180,6 +180,20 @@ export function parseWebviewMessage(
         return parseSessionFork(value);
       case 'file.openDiff':
         return parseFileOpenDiff(value);
+      case 'review.open':
+      case 'review.navigate':
+      case 'review.selectFile':
+      case 'review.markReviewed':
+      case 'review.refresh':
+      case 'review.restorePreview':
+      case 'review.restoreFile':
+      case 'review.restoreTurn':
+      case 'review.runAgentReview':
+        return parseReviewWebviewMessage(
+          value,
+          isId,
+          isSafeWorkspaceRelativePath,
+        );
       case 'file.preview':
         return parseFilePreview(value);
       case 'preview.inlineHtml':
@@ -237,7 +251,10 @@ export function parseWebviewMessage(
       case 'attachment.addGitChanges':
         return parseAttachmentAddGitChanges(value);
       case 'attachment.addImage':
-        return parseAttachmentAddImage(value);
+      case 'attachment.addPdf':
+      case 'attachment.addRemoteImage':
+      case 'attachment.readImage':
+        return parseAttachmentImageMessage(value, isId, hasValidStage);
       case 'attachment.addUris':
         return parseAttachmentAddUris(value);
       case 'attachment.addTextFile':
@@ -1207,53 +1224,6 @@ function parseAttachmentAddGitChanges(
   return {
     type: 'attachment.addGitChanges',
     sessionId: value.sessionId,
-    ...stageOf(value),
-  };
-}
-
-/**
- * Base64 with correct padding. Combined with the media type
- * whitelist and length cap, this is the only shape of binary content
- * accepted from the webview.
- */
-const ATTACHMENT_BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
-
-function parseAttachmentAddImage(
-  value: UnknownRecord,
-): AttachmentAddImageMessage | undefined {
-  if (
-    !hasExactKeys(value, [
-      'type',
-      'sessionId',
-      'name',
-      'mediaType',
-      'dataBase64',
-    ], ['stage']) ||
-    !isId(value.sessionId) ||
-    !hasValidStage(value) ||
-    typeof value.name !== 'string' ||
-    value.name.length === 0 ||
-    value.name.length > MAX_ATTACHMENT_NAME_LENGTH ||
-    /[\u0000-\u001f\u007f]/.test(value.name) ||
-    typeof value.mediaType !== 'string' ||
-    !(IMAGE_MEDIA_TYPES as readonly string[]).includes(
-      value.mediaType,
-    ) ||
-    typeof value.dataBase64 !== 'string' ||
-    value.dataBase64.length === 0 ||
-    value.dataBase64.length % 4 !== 0 ||
-    value.dataBase64.length > MAX_ATTACHMENT_IMAGE_BASE64_LENGTH ||
-    !ATTACHMENT_BASE64_PATTERN.test(value.dataBase64)
-  ) {
-    return undefined;
-  }
-
-  return {
-    type: 'attachment.addImage',
-    sessionId: value.sessionId,
-    name: value.name,
-    mediaType: value.mediaType as AttachmentAddImageMessage['mediaType'],
-    dataBase64: value.dataBase64,
     ...stageOf(value),
   };
 }

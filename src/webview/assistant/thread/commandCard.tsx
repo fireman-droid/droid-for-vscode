@@ -12,34 +12,79 @@ import { tokenizeCommand } from "../commandCard";
 import { TerminalMirrorContext } from "../Thread";
 import type { ToolActivityPresentation } from "./readers";
 
-/**
- * The command card's `$`-prefixed command line. Tokens carry warm
- * syntax tints (command / flag / string / path); joining them
- * reproduces the command byte for byte, so nothing is invented.
- */
-export function CommandWellLine({
+/** Cursor-style terminal marker: prompt at rest, disclosure on hover/open. */
+export function CommandCardLeading(): React.JSX.Element {
+  return (
+    <span className="dvx-command-leading" aria-hidden="true">
+      <span className="dvx-command-leading-prompt">&gt;_</span>
+      <svg
+        className="dvx-command-leading-chevron"
+        viewBox="0 0 12 12"
+        fill="none"
+      >
+        <path
+          d="M4.5 2.5 8 6 4.5 9.5"
+          stroke="currentColor"
+          strokeWidth="1.35"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
+}
+
+/** One scroll surface containing both the tinted command and gray output. */
+export function CommandTerminalContent({
   command,
+  outputText,
+  running,
+  open,
 }: {
   readonly command: string;
+  readonly outputText: string | null;
+  readonly running: boolean;
+  readonly open: boolean;
 }): React.JSX.Element {
   const tokens = useMemo(() => tokenizeCommand(command), [command]);
+  const preRef = useRef<HTMLPreElement | null>(null);
+  const pinnedRef = useRef(true);
+  useEffect(() => {
+    const pre = preRef.current;
+    if (running && open && pinnedRef.current && pre !== null) {
+      pre.scrollTop = pre.scrollHeight;
+    }
+  }, [open, outputText, running]);
   return (
-    <div className="dvx-command-line">
-      <span className="dvx-command-prompt" aria-hidden="true">
-        $
+    <pre
+      ref={preRef}
+      className="dvx-command-well"
+      onScroll={(event) => {
+        const pre = event.currentTarget;
+        pinnedRef.current =
+          pre.scrollHeight - pre.scrollTop - pre.clientHeight < 8;
+      }}
+    >
+      <span className="dvx-command-entry">
+        <span className="dvx-command-prompt" aria-hidden="true">
+          $
+        </span>
+        <code className="dvx-command-code">
+          {tokens.map((token, index) =>
+            token.kind === "text" ? (
+              token.text
+            ) : (
+              <span key={index} className={`dvx-cmd-${token.kind}`}>
+                {token.text}
+              </span>
+            ),
+          )}
+        </code>
       </span>
-      <code className="dvx-command-code">
-        {tokens.map((token, index) =>
-          token.kind === "text" ? (
-            token.text
-          ) : (
-            <span key={index} className={`dvx-cmd-${token.kind}`}>
-              {token.text}
-            </span>
-          ),
-        )}
-      </code>
-    </div>
+      {outputText === null ? null : (
+        <span className="dvx-command-output">{outputText}</span>
+      )}
+    </pre>
   );
 }
 

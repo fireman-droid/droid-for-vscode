@@ -41,13 +41,13 @@
 }
 
 .dvx-subagent-row {
-  width: calc(100% - 20px);
+  width: 100%;
   display: grid;
   appearance: none;
   text-align: left;
   font-family: inherit;
   gap: 8px;
-  margin: 9px 0 14px 20px;
+  margin: 9px 0 14px;
   padding: 11px 12px 10px;
   border: 1px solid var(--dvx-border);
   border-radius: 8px;
@@ -449,39 +449,47 @@
   color: var(--dvx-accent-strong);
 }
 
-/* ---- Command card (terminal-card redesign, 2026-08-12) ------------
-   Execute rows graduate from quiet text rows to a finished card:
-   warm-white header (title + command-name chips + "…" menu + chevron)
-   over a warm-dark terminal well ($-prefixed tinted command line,
-   output tail below a hairline). Collapsed state is the header row
-   alone. The <details> element and every behavior (auto-open while
-   running, reader override, tail pinning, mirror entry, background
-   hint) are unchanged — this is skin and information architecture. */
-/* Doubled class (plus :not for the title) out-ranks the later
-   Claude-style flattening pass (`.dvx-activity-row { border: 0; … }`,
-   `.dvx-activity-row summary { padding: 0; … }`) without !important. */
-/* The command title stays in the transcript flow. Only its terminal
-   body receives a framed surface. */
+/* ---- Cursor-style terminal card -----------------------------------
+   One continuous frame owns the collapsed header and expanded body.
+   Existing details behavior, output pinning, copy menu and terminal
+   mirror entry remain unchanged. */
 .dvx-activity-row.dvx-command-card {
   overflow: visible;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  margin: 4px 0 12px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 8px;
+  background: color-mix(
+    in srgb,
+    var(--dvx-well) 95%,
+    var(--dvx-ink) 5%
+  );
   box-shadow: none;
+  transition: border-color 140ms ease;
 }
 
 .dvx-activity-row.dvx-command-card:hover {
-  border-color: transparent;
+  border-color: color-mix(
+    in srgb,
+    var(--dvx-border-strong) 55%,
+    var(--dvx-border)
+  );
 }
 
 .dvx-activity-row.dvx-command-card > summary {
-  min-height: 24px;
-  padding: 0 2px 5px 0;
-  border-radius: 0;
+  min-height: 38px;
+  gap: 7px;
+  padding: 7px 8px 7px 10px;
+  border-radius: 7px;
+  background: color-mix(
+    in srgb,
+    var(--dvx-well) 95%,
+    var(--dvx-ink) 5%
+  );
 }
 
 .dvx-activity-row.dvx-command-card[open] > summary {
-  border-radius: 0;
+  border-bottom: 1px solid var(--dvx-border);
+  border-radius: 7px 7px 0 0;
 }
 
 /* Scoped to settled rows so the running shimmer (which paints the
@@ -489,13 +497,19 @@
 .dvx-activity-row.dvx-command-card:not(.dvx-activity-running)
   .dvx-tool-action {
   flex: 0 1 auto;
+  min-width: 0;
   color: var(--dvx-text-strong);
-  font-weight: 560;
+  font-size: 11.5px;
+  font-weight: 520;
+  line-height: 18px;
 }
 
 .dvx-activity-row.dvx-command-card.dvx-activity-running .dvx-tool-action {
   flex: 0 1 auto;
-  font-weight: 560;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 520;
+  line-height: 18px;
 }
 
 /* ---- Quiet ruled tool rows (kitchen-sink form, 2026-08-13) --------

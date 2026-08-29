@@ -131,6 +131,9 @@ export async function handleReady(ctl: ChatControllerInternals): Promise<void> {
         return;
       }
       ctl.emitSnapshot();
+      if (ctl.sessionId !== null) {
+        await ctl.reviewCoordinator?.replay(ctl.sessionId);
+      }
       ctl.interactions.replayPending();
       ctl.planDocuments.replay();
       return;
@@ -138,6 +141,9 @@ export async function handleReady(ctl: ChatControllerInternals): Promise<void> {
 
     ctl.initialization = startup(ctl);
     await ctl.initialization;
+    if (ctl.sessionId !== null) {
+      await ctl.reviewCoordinator?.replay(ctl.sessionId);
+    }
 }
 
 export function canReplaceSession(ctl: ChatControllerInternals): boolean {

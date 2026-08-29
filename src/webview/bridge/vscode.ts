@@ -64,19 +64,6 @@ export function announceRendered(
   });
 }
 
-/** Posts an aggregated performance beacon (P2 longtask / P3 batch). */
-export function postPerfBeacon(
-  vscode: VsCodeApi,
-  kind: 'perf-longtask' | 'perf-batch',
-  detail: string,
-): void {
-  vscode.postMessage({
-    type: 'webview.diagnostic',
-    kind,
-    detail: detail.slice(0, 2048),
-  });
-}
-
 /**
  * Reports that no host message at all arrived within the handshake
  * window after `webview.ready` — the signature of a stale in-memory

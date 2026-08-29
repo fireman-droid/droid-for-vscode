@@ -14,6 +14,7 @@ import {
   type TurnStatus,
 } from "../../shared/bridgeMessages";
 import { MAX_QUEUED_MESSAGES } from "../../shared/queueProtocol";
+import { formatSelectionQuote } from "./selectionQuote";
 import { type AssistantWebviewState } from "./store";
 
 export interface SafeRuntimeMessage {
@@ -228,13 +229,23 @@ export function convertSafeRuntimeMessage(
 }
 
 export function extractText(message: AppendMessage): string {
-  return message.content
+  const body = message.content
     .filter(
       (part): part is Extract<typeof part, { type: "text" }> =>
         part.type === "text",
     )
     .map(({ text }) => text)
     .join("");
+  const quote = message.metadata.custom?.quote;
+  return formatSelectionQuote(
+    typeof quote === "object" &&
+      quote !== null &&
+      "text" in quote &&
+      typeof quote.text === "string"
+      ? quote.text
+      : "",
+    body,
+  );
 }
 
 interface RuntimeMessageCacheEntry {

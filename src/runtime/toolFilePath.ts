@@ -64,6 +64,27 @@ export function extractToolFilePaths(
   return [];
 }
 
+export function hasCompleteToolFilePaths(
+  toolName: string,
+  input: unknown,
+): boolean {
+  const normalized = toolNameCandidates(toolName).find((candidate) =>
+    FILE_MODIFYING_TOOLS.has(candidate),
+  );
+  if (normalized === undefined) return false;
+  if (normalized !== 'applypatch') {
+    return extractToolFilePaths(toolName, input).length > 0;
+  }
+  const patchText =
+    typeof input === 'object' && input !== null
+      ? (input as Record<string, unknown>)['input']
+      : undefined;
+  return (
+    typeof patchText === 'string' &&
+    /(?:^|\r?\n)\*\*\* End Patch\s*$/.test(patchText)
+  );
+}
+
 function extractPatchFilePaths(patchText: unknown): readonly string[] {
   if (typeof patchText !== 'string') {
     return [];

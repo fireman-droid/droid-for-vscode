@@ -13,7 +13,8 @@
    var() references never resolve. */
 .dvx-shell,
 .dvx-image-lightbox,
-.dvx-slash-tooltip {
+.dvx-slash-tooltip,
+.dvx-selection-toolbar {
   /* Motion tokens (streaming-experience-design): every new animation
      references these; legacy animations migrate opportunistically. */
   --dvx-duration-instant: 50ms;   /* hover yield, instant feedback */
@@ -94,7 +95,8 @@
    hairlines, typography and spacing. */
 .dvx-shell[data-theme='dark'],
 html[data-dvx-theme='dark'] .dvx-image-lightbox,
-html[data-dvx-theme='dark'] .dvx-slash-tooltip {
+html[data-dvx-theme='dark'] .dvx-slash-tooltip,
+html[data-dvx-theme='dark'] .dvx-selection-toolbar {
   color-scheme: dark;
 
   /* Code and terminal wells are the sole recessed exception. */

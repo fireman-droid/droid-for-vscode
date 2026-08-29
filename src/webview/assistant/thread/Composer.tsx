@@ -5,10 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
-  IMAGE_MEDIA_TYPES,
+  MAX_ATTACHMENT_IMAGE_BYTES,
+  MAX_ATTACHMENT_PDF_BYTES,
   MAX_ATTACHMENT_TEXT_FILE_CHARS,
   MAX_ATTACHMENT_URI_COUNT,
-  MAX_ATTACHMENT_URI_LENGTH,
   MAX_PENDING_ATTACHMENTS,
   MAX_TURN_TEXT_LENGTH,
   type AttachmentSummary,
@@ -19,6 +19,13 @@ import {
 } from "../../../shared/bridgeMessages";
 import { MAX_QUEUED_MESSAGES } from "../../../shared/queueProtocol";
 import type { SessionTokenUsageState } from "../../../shared/tokenUsage";
+import type { AttachmentImageEntry } from "../store";
+import {
+  isImageMediaType,
+  readDroppedFileUris,
+  readDroppedRemoteImageUrl,
+  readFileAsBase64,
+} from "../attachmentIngress";
 import {
   ComposerControls,
   type ComposerNavRequest,
@@ -52,6 +59,20 @@ import {
 } from "./composerCommands";
 import { ComposerSendButton } from "./ComposerSendButton";
 
+function ComposerQuotePreview(): React.JSX.Element {
+  return (
+    <ComposerPrimitive.Quote className="dvx-composer-quote">
+      <ComposerPrimitive.QuoteText className="dvx-composer-quote-text" />
+      <ComposerPrimitive.QuoteDismiss
+        className="dvx-composer-quote-dismiss"
+        aria-label="Remove quoted context"
+      >
+        ×
+      </ComposerPrimitive.QuoteDismiss>
+    </ComposerPrimitive.Quote>
+  );
+}
+
 export function Composer({
   statusMessage,
   showRetry,
@@ -83,6 +104,7 @@ export function Composer({
   onPluginsRefresh,
   onNewSession,
   attachments,
+  attachmentImages,
   fileSearch,
   onFileSearch,
   commands,
@@ -100,8 +122,12 @@ export function Composer({
   onAttachProblems,
   onAttachGitChanges,
   onAttachImage,
+  onAttachPdf,
+  onAttachRemoteImage,
   onAttachUris,
   onAttachTextFile,
+  onAttachmentReadImage,
+  onAttachmentReplaceImage,
   onAttachmentRemove,
   onDraftChange,
   queuedCount = 0,
@@ -139,6 +165,7 @@ export function Composer({
   /** Starts a fresh session (skill changes apply at session start). */
   readonly onNewSession: () => void;
   readonly attachments: readonly AttachmentSummary[];
+  readonly attachmentImages: Readonly<Record<string, AttachmentImageEntry>>;
   readonly fileSearch: FileSearchResult | null;
   readonly onFileSearch: (requestId: string, query: string) => void;
   readonly commands: SlashCommandsState;
@@ -162,11 +189,20 @@ export function Composer({
     mediaType: ImageMediaType,
     dataBase64: string,
   ) => void;
+  readonly onAttachPdf: (name: string, dataBase64: string) => void;
+  readonly onAttachRemoteImage: (url: string) => void;
   readonly onAttachUris: (uris: readonly string[]) => void;
   readonly onAttachTextFile: (
     name: string,
     text: string,
     truncated: boolean,
+  ) => void;
+  readonly onAttachmentReadImage: (attachmentId: string) => void;
+  readonly onAttachmentReplaceImage: (
+    attachmentId: string,
+    name: string,
+    mediaType: ImageMediaType,
+    dataBase64: string,
   ) => void;
   readonly onAttachmentRemove: (attachmentId: string) => void;
   readonly onDraftChange: (draft: string) => void;
@@ -232,6 +268,22 @@ export function Composer({
     });
   };
 
+  const stagePdfFile = (file: File): void => {
+    if (file.size === 0 || file.size > MAX_ATTACHMENT_PDF_BYTES) {
+      showDropNotice(
+        `${file.name || "PDF"} is too large to attach (6 MB max).`,
+      );
+      return;
+    }
+    void readFileAsBase64(file).then((dataBase64) => {
+      if (dataBase64 === null) {
+        showDropNotice(`${file.name} could not be read.`);
+      } else {
+        onAttachPdf(file.name || "document.pdf", dataBase64);
+      }
+    });
+  };
+
   /**
    * Stages one non-image dropped file as a text attachment. The bytes
    * never leave the webview unless they decode as NUL-free text within
@@ -283,6 +335,11 @@ export function Composer({
     for (const file of files.slice(0, Math.max(remaining, 0))) {
       if (isImageMediaType(file.type)) {
         stageImageFile(file);
+      } else if (
+        file.type === "application/pdf" ||
+        file.name.toLocaleLowerCase().endsWith(".pdf")
+      ) {
+        stagePdfFile(file);
       } else {
         void stageDroppedTextFile(file);
       }
@@ -317,6 +374,11 @@ export function Composer({
     const files = Array.from(dataTransfer.files);
     if (files.length > 0) {
       stageDroppedFiles(files);
+      return true;
+    }
+    const remoteImageUrl = readDroppedRemoteImageUrl(dataTransfer);
+    if (remoteImageUrl !== null) {
+      onAttachRemoteImage(remoteImageUrl);
       return true;
     }
     return false;
@@ -583,7 +645,8 @@ export function Composer({
           if (
             types.includes("Files") ||
             types.includes("text/uri-list") ||
-            types.includes("application/vnd.code.uri-list")
+            types.includes("application/vnd.code.uri-list") ||
+            types.includes("text/html")
           ) {
             event.preventDefault();
             event.dataTransfer.dropEffect = "copy";
@@ -605,6 +668,7 @@ export function Composer({
           }
         }}
       >
+        {interactionPending ? null : <ComposerQuotePreview />}
         {attachments.length > 0 && !interactionPending ? (
           <div
             className="dvx-attachment-chips"
@@ -614,6 +678,9 @@ export function Composer({
               <AttachmentChip
                 key={attachment.id}
                 attachment={attachment}
+                image={attachmentImages[attachment.id]}
+                onRequestImage={onAttachmentReadImage}
+                onReplaceImage={onAttachmentReplaceImage}
                 onRemove={onAttachmentRemove}
               />
             ))}
@@ -881,19 +948,18 @@ export function Composer({
               submitMode="enter"
               addAttachmentOnPaste={false}
               onPaste={(event) => {
-                // Rich clipboard payloads can expose both text and an
-                // image. Preserve native text paste in that case; only
-                // image-only payloads should become attachments.
-                const text =
-                  event.clipboardData?.getData("text/plain") ?? "";
-                if (text.length > 0) {
-                  return;
-                }
                 const files = Array.from(
                   event.clipboardData?.files ?? [],
                 ).filter((file) => isImageMediaType(file.type));
                 if (files.length > 0) {
-                  event.preventDefault();
+                  // Keep native text insertion when rich clipboard data
+                  // carries both text and images.
+                  if (
+                    (event.clipboardData?.getData("text/plain") ?? "")
+                      .length === 0
+                  ) {
+                    event.preventDefault();
+                  }
                   stageDroppedFiles(files);
                 }
               }}
@@ -1070,8 +1136,10 @@ export function Composer({
           ) : running ? (
             <ComposerPrimitive.Cancel
               className="dvx-composer-action dvx-stop-action"
+              aria-label="Stop Droid"
+              title="Stop"
             >
-              Stop
+              <span aria-hidden="true">■</span>
             </ComposerPrimitive.Cancel>
           ) : (
             <ComposerSendButton />
@@ -1099,66 +1167,4 @@ export function Composer({
 
 export { ATTACHMENT_KIND_LABELS, AttachmentChip } from "./AttachmentChip";
 
-export const MAX_ATTACHMENT_IMAGE_BYTES = 4 * 1024 * 1024;
-
-export function isImageMediaType(value: string): value is ImageMediaType {
-  return (IMAGE_MEDIA_TYPES as readonly string[]).includes(value);
-}
-
-/**
- * Extracts bounded `file://` URIs from a drop. Editor explorer drags
- * populate `text/uri-list` (newline separated, `#` comments) and
- * sometimes `application/vnd.code.uri-list` (JSON array); anything
- * that is not a file URI is dropped here before crossing the bridge.
- */
-export function readDroppedFileUris(
-  dataTransfer: Pick<DataTransfer, "getData">,
-): readonly string[] {
-  const plain = dataTransfer.getData("text/uri-list");
-  let entries = plain
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#"));
-  if (entries.length === 0) {
-    const code = dataTransfer.getData("application/vnd.code.uri-list");
-    if (code.length > 0) {
-      try {
-        const parsed: unknown = JSON.parse(code);
-        entries = Array.isArray(parsed)
-          ? parsed.filter((entry): entry is string => typeof entry === "string")
-          : [];
-      } catch {
-        entries = code
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0);
-      }
-    }
-  }
-  return entries.filter(
-    (uri) =>
-      uri.startsWith("file://") && uri.length <= MAX_ATTACHMENT_URI_LENGTH,
-  );
-}
-
-/**
- * Reads one image file into raw base64 for the `attachment.addImage`
- * bridge message. Returns null when the read fails or the result is
- * not the expected data-URI shape.
- */
-export function readFileAsBase64(file: File): Promise<string | null> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onerror = () => resolve(null);
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result !== "string") {
-        resolve(null);
-        return;
-      }
-      const separator = result.indexOf(",");
-      resolve(separator === -1 ? null : result.slice(separator + 1));
-    };
-    reader.readAsDataURL(file);
-  });
-}
+export { MAX_ATTACHMENT_IMAGE_BYTES };

@@ -151,6 +151,41 @@ import type {
   MissionHostMessage,
   MissionWebviewMessage,
 } from './missionProtocol';
+import type {
+  ReviewHostMessage,
+  ReviewWebviewMessage,
+} from './reviewProtocol';
+import type {
+  AttachmentAddImageMessage,
+  AttachmentAddPdfMessage,
+  AttachmentAddRemoteImageMessage,
+  AttachmentReadImageMessage,
+  AttachmentStage,
+  SessionAttachmentImageDataMessage,
+} from './attachmentImageProtocol';
+import type {
+  AttachmentAddTextFileMessage,
+  AttachmentAddUrisMessage,
+} from './attachmentDropProtocol';
+export {
+  MAX_ATTACHMENT_IMAGE_BASE64_LENGTH,
+  MAX_ATTACHMENT_IMAGE_BYTES,
+  MAX_ATTACHMENT_PDF_BASE64_LENGTH,
+  MAX_ATTACHMENT_PDF_BYTES,
+  MAX_ATTACHMENT_REMOTE_URL_LENGTH,
+  type AttachmentAddImageMessage,
+  type AttachmentAddPdfMessage,
+  type AttachmentAddRemoteImageMessage,
+  type AttachmentReadImageMessage,
+  type AttachmentStage,
+  type SessionAttachmentImageDataMessage,
+} from './attachmentImageProtocol';
+export {
+  MAX_ATTACHMENT_TEXT_FILE_CHARS,
+  MAX_ATTACHMENT_URI_LENGTH,
+  type AttachmentAddTextFileMessage,
+  type AttachmentAddUrisMessage,
+} from './attachmentDropProtocol';
 
 // Version 3: git commit flow messages (git.requestStatus/git.commit
 // W→H, git.status/git.commitResult H→W).
@@ -177,8 +212,10 @@ import type {
 // and snapshot contracts; v26 adds Provider-first custom-model management;
 // v27 adds bounded semantic trails to inline Subagent activity; v28
 // docks AskUser/ExitSpecMode above the Composer, adds durable AskUser
-// results, and synchronizes editable Plan documents with Cursor.
-export const BRIDGE_PROTOCOL_VERSION = 28 as const;
+// results, and synchronizes editable Plan documents with Cursor; v29
+// adds staged-image preview, replacement, and public HTTPS ingestion;
+// v30 adds Host-owned sequential Diff review and safe Turn restore.
+export const BRIDGE_PROTOCOL_VERSION = 30 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_DELTA_LENGTH = 16_384;
@@ -719,8 +756,6 @@ export interface CommandsRefreshMessage {
  * staging area (default, field absent) or the per-message edit
  * staging area opened by `editStage.begin`.
  */
-export type AttachmentStage = 'edit';
-
 /**
  * Asks the host to open a native file picker and stage the chosen
  * files as pending attachments for the next prompt.
@@ -767,7 +802,6 @@ export interface AttachmentAddGitChangesMessage {
  * the base64 encoding of the 4 MB original-file cap shared with the
  * host file picker (`MAX_IMAGE_ATTACHMENT_BYTES`).
  */
-export const MAX_ATTACHMENT_IMAGE_BASE64_LENGTH = 5_592_408;
 
 /**
  * Stages one image dropped or pasted into the composer as a pending
@@ -775,53 +809,12 @@ export const MAX_ATTACHMENT_IMAGE_BASE64_LENGTH = 5_592_408;
  * binary content; both validators bound its media type, name, and
  * base64 length.
  */
-export interface AttachmentAddImageMessage {
-  readonly type: 'attachment.addImage';
-  readonly sessionId: string;
-  readonly name: string;
-  readonly mediaType: ImageMediaType;
-  readonly dataBase64: string;
-  readonly stage?: AttachmentStage;
-}
-
-/** Longest accepted `file://` URI in a composer drop. */
-export const MAX_ATTACHMENT_URI_LENGTH = 2048;
-
 /**
  * Stages files dropped onto the composer from an editor explorer drag
  * (`text/uri-list`). The host resolves each `file://` URI, keeps only
  * files inside the workspace, and reads them through the same reader
  * as the attach-files picker.
  */
-export interface AttachmentAddUrisMessage {
-  readonly type: 'attachment.addUris';
-  readonly sessionId: string;
-  readonly uris: readonly string[];
-  readonly stage?: AttachmentStage;
-}
-
-/**
- * Character cap for one dropped text file, mirroring the host picker's
- * text-attachment truncation limit.
- */
-export const MAX_ATTACHMENT_TEXT_FILE_CHARS = 262_144;
-
-/**
- * Stages one non-image file dropped onto the composer from outside the
- * editor (for example a system file manager). The webview reads and
- * decodes the dropped bytes itself, so the message carries the bounded
- * text content instead of a path.
- */
-export interface AttachmentAddTextFileMessage {
-  readonly type: 'attachment.addTextFile';
-  readonly sessionId: string;
-  readonly name: string;
-  readonly text: string;
-  /** True when the webview cut the content at the character cap. */
-  readonly truncated: boolean;
-  readonly stage?: AttachmentStage;
-}
-
 /** Removes one staged attachment by its host-assigned id. */
 export interface AttachmentRemoveMessage {
   readonly type: 'attachment.remove';
@@ -1051,6 +1044,9 @@ export type WebviewToHostMessage =
   | AttachmentAddProblemsMessage
   | AttachmentAddGitChangesMessage
   | AttachmentAddImageMessage
+  | AttachmentAddPdfMessage
+  | AttachmentAddRemoteImageMessage
+  | AttachmentReadImageMessage
   | AttachmentAddUrisMessage
   | AttachmentAddTextFileMessage
   | AttachmentRemoveMessage
@@ -1073,7 +1069,8 @@ export type WebviewToHostMessage =
   | QueuePromoteMessage
   | QueueResumeMessage
   | QueueClearMessage
-  | MissionWebviewMessage;
+  | MissionWebviewMessage
+  | ReviewWebviewMessage;
 
 export interface ConnectionState {
   readonly status: ConnectionStatus;
@@ -2141,6 +2138,7 @@ export type HostToWebviewMessage =
   | SessionRunningStateMessage
   | SessionSearchStateMessage
   | SessionAttachmentsStateMessage
+  | SessionAttachmentImageDataMessage
   | SessionEditAttachmentsStateMessage
   | TurnEditResendRejectedMessage
   | WorkspaceFilesMessage
@@ -2169,7 +2167,8 @@ export type HostToWebviewMessage =
   | CustomModelsHostMessage
   | SubagentActivityMessage
   | CanvasFeedbackDraftMessage
-  | MissionHostMessage;
+  | MissionHostMessage
+  | ReviewHostMessage;
 
 export type {
   CanvasFeedbackDraftMessage,
@@ -2197,3 +2196,4 @@ export type {
   MissionViewerOpenMessage,
   MissionWebviewMessage,
 } from './missionProtocol';
+export type * from './reviewProtocol';

@@ -1,9 +1,13 @@
 import type { RuntimeImageMediaType } from '../runtime/DroidRuntime';
+import {
+  MAX_ATTACHMENT_IMAGE_BYTES,
+  MAX_ATTACHMENT_PDF_BYTES,
+} from '../shared/bridgeMessages';
 
 /** Original file-size cap for one image attachment. */
-export const MAX_IMAGE_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+export const MAX_IMAGE_ATTACHMENT_BYTES = MAX_ATTACHMENT_IMAGE_BYTES;
 /** Original file-size cap for one PDF attachment. */
-export const MAX_PDF_ATTACHMENT_BYTES = 6 * 1024 * 1024;
+export const MAX_PDF_ATTACHMENT_BYTES = MAX_ATTACHMENT_PDF_BYTES;
 /** Character cap for one text attachment; longer text is truncated. */
 export const MAX_TEXT_ATTACHMENT_CHARS = 256 * 1024;
 
@@ -117,6 +121,10 @@ export interface AttachmentSources {
   /** Reads one workspace file by validated relative path. */
   readWorkspaceFile(
     relativePath: string,
+  ): Promise<AttachmentPickOutcome>;
+  /** Fetches one public HTTPS image through the host trust boundary. */
+  readRemoteImage?(
+    url: string,
   ): Promise<AttachmentPickOutcome>;
   /** Captures current workspace diagnostics as a text attachment. */
   readProblems(): Promise<AttachmentCaptureOutcome>;

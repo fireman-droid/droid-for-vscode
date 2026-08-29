@@ -1,11 +1,11 @@
 import { AssistantRuntimeProvider, useAui } from '@assistant-ui/react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
-import { MAX_INLINE_PREVIEW_HTML_LENGTH, MAX_TURN_TEXT_LENGTH, type AskUserAnswer, type ImageMediaType, type ThemePreference, type WebviewToHostMessage } from '../../shared/bridgeMessages';
+import { MAX_INLINE_PREVIEW_HTML_LENGTH, MAX_TURN_TEXT_LENGTH, type AskUserAnswer, type ThemePreference, type WebviewToHostMessage } from '../../shared/bridgeMessages';
 import { parseMissionControlPanelHostMessage } from '../../shared/missionControlPanelProtocol';
 import type { MissionControlSetupSnapshotMessage } from '../../shared/missionControlSetupProtocol';
 import { normalizeMissionTaskText } from '../../shared/missionProtocol';
-import { announceBooted, announceHandshakeTimeout, announceReady, announceRendered, getVsCodeApi, persistDraft, postPerfBeacon, readHostMessage, restoreDraft } from '../bridge/vscode';
+import { announceBooted, announceHandshakeTimeout, announceReady, announceRendered, getVsCodeApi, persistDraft, readHostMessage, restoreDraft } from '../bridge/vscode';
 import { buildInteractionSlots } from './interactionSlots';
 import { LocalImageContext, OpenPathContext } from './MarkdownText';
 import type { PathLink } from './pathLink';
@@ -28,11 +28,12 @@ import { selectPlanAnchors } from './planAnchor';
 import { QueuedMessages } from './QueuedMessages';
 import { ReviewDockSlot } from './reviewDockSlot';
 import { SideChatSheet } from './SideChatSheet';
+import { useBtwPanel } from './useBtwPanel';
 import { MissionWorkspace } from '../missionControl/MissionWorkspace';
 import { SubagentActivityStoreContext, SubagentOpenContext, useSubagentPanelFlow } from './subagentPanelFlow';
 import { selectWorkingSubagents } from './subagentWorking';
 import { ThemeContext, useThemeController } from './theme';
-import { MAX_BTW_TEXT_LENGTH } from '../../shared/btwProtocol';
+import { useAttachmentActions } from './useAttachmentActions';
 import {
   isTransientNoticeLifecycleMessage,
   reduceTransientDiagnostic,
@@ -159,33 +160,10 @@ export function App(): React.JSX.Element {
       const batch = queue;
       queue = [];
       sendPendingRef.current = false;
-      const flushStart = performance.now();
-      let turnFinished = false;
-      for (const message of batch) {
-        if (
-          message.type === 'turn.state' &&
-          (message.status === 'completed' ||
-            message.status === 'interrupted' ||
-            message.status === 'failed')
-        ) {
-          turnFinished = true;
-        }
+    for (const message of batch) {
         dispatch({ type: 'host.message', message });
-      }
-      const flushMs = performance.now() - flushStart;
-      batchStats.flushes += 1;
-      batchStats.messages += batch.length;
-      batchStats.maxBatch = Math.max(batchStats.maxBatch, batch.length);
-      batchStats.maxFlushMs = Math.max(batchStats.maxFlushMs, flushMs);
-      if (turnFinished && batchStats.messages > 0) {
-        postPerfBeacon(
-          vscode,
-          'perf-batch',
-          `flushes ${batchStats.flushes} messages ${batchStats.messages} maxBatch ${batchStats.maxBatch} maxFlushMs ${Math.round(batchStats.maxFlushMs)}`,
-        );
-        batchStats = { flushes: 0, messages: 0, maxBatch: 0, maxFlushMs: 0 };
-      }
-    };
+    }
+  };
     const handleMessage = (event: MessageEvent<unknown>): void => {
       const missionWorkspaceMessage = parseMissionControlPanelHostMessage(
         event.data,
@@ -241,48 +219,6 @@ export function App(): React.JSX.Element {
     // applyHostTheme is stable across renders.
   }, [applyHostTheme, initialDraft, replaceComposerDraft, vscode]);
 
-  useEffect(() => {
-    // Main-thread stall accounting (P2): long tasks are aggregated and
-    // reported at most once per 30s window, only when any occurred.
-    if (typeof PerformanceObserver !== 'function') {
-      return;
-    }
-    let count = 0;
-    let totalMs = 0;
-    let maxMs = 0;
-    let observer: PerformanceObserver;
-    try {
-      observer = new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          count += 1;
-          totalMs += entry.duration;
-          maxMs = Math.max(maxMs, entry.duration);
-        }
-      });
-      observer.observe({ entryTypes: ['longtask'] });
-    } catch {
-      // The longtask entry type is unsupported in some environments.
-      return;
-    }
-    const intervalId = setInterval(() => {
-      if (count === 0) {
-        return;
-      }
-      postPerfBeacon(
-        vscode,
-        'perf-longtask',
-        `count ${count} maxMs ${Math.round(maxMs)} totalMs ${Math.round(totalMs)} windowMs 30000`,
-      );
-      count = 0;
-      totalMs = 0;
-      maxMs = 0;
-    }, 30_000);
-    return () => {
-      clearInterval(intervalId);
-      observer.disconnect();
-    };
-  }, [vscode]);
-
   // One-shot beacon proving the first non-empty transcript reached the
   // DOM; its absence in the logs isolates a render-phase hang.
   const renderedBeaconRef = useRef(false);
@@ -317,6 +253,35 @@ export function App(): React.JSX.Element {
   const hasInteraction = state.interactions.length > 0;
   const connectionStatus = state.connection.status;
   const sessionId = state.sessionId;
+  const {
+    handleAttachPath,
+    handleAttachFiles,
+    handleAttachEditor,
+    handleAttachSelection,
+    handleAttachProblems,
+    handleAttachGitChanges,
+    handleAttachImage,
+    handleAttachPdf,
+    handleAttachRemoteImage,
+    handleAttachUris,
+    handleAttachTextFile,
+    handleAttachmentRemove,
+    handleEditStageBegin,
+    handleEditStageCancel,
+    handleEditAttachFiles,
+    handleEditAttachEditor,
+    handleEditAttachSelection,
+    handleEditAttachProblems,
+    handleEditAttachGitChanges,
+    handleEditAttachImage,
+    handleEditAttachPdf,
+    handleEditAttachRemoteImage,
+    handleEditAttachUris,
+    handleEditAttachTextFile,
+    handleEditAttachmentRemove,
+    handleAttachmentReadImage,
+    handleAttachmentReplaceImage,
+  } = useAttachmentActions(vscode, sessionId, connectionStatus);
   // Full-page BYOK model manager (spec §6 拍板): a webview-local view
   // switch — the page replaces the chat area while the session keeps
   // streaming in the background store.
@@ -338,44 +303,16 @@ export function App(): React.JSX.Element {
   // Observation-only live activity and child transcripts use the same
   // window-listener pull pattern as customModelsFlow.
   const subagentFlow = useSubagentPanelFlow(vscode, sessionId);
-  // `/btw` side chat (S1): the card's open flag is webview-local; the
-  // host owns the hidden fork and its projected contents (state.btw).
-  // Closing the card or switching sessions discards the fork.
   const btwAvailable = state.btwAvailable;
-  const [btwOpen, setBtwOpen] = useState(false);
-  const btwSessionRef = useRef(sessionId);
-  if (btwSessionRef.current !== sessionId) {
-    btwSessionRef.current = sessionId;
-    setBtwOpen(false);
-  }
-  const handleBtwOpen = useCallback((): void => {
-    setBtwOpen(true);
-  }, []);
-  const handleBtwAsk = useCallback(
-    (text: string): void => {
-      const question = text.trim().slice(0, MAX_BTW_TEXT_LENGTH);
-      if (sessionId !== null && question.length > 0) {
-        post(vscode, { type: 'btw.ask', sessionId, text: question });
-      }
-    },
-    [sessionId, vscode],
-  );
-  const handleBtwPrepare = useCallback((): void => {
-    if (sessionId !== null) {
-      post(vscode, { type: 'btw.prepare', sessionId });
-    }
-  }, [sessionId, vscode]);
-  const handleBtwDismiss = useCallback((): void => {
-    setBtwOpen(false);
-    if (sessionId !== null) {
-      post(vscode, { type: 'btw.dismiss', sessionId });
-    }
-  }, [sessionId, vscode]);
-  const handleBtwStop = useCallback((): void => {
-    if (sessionId !== null) {
-      post(vscode, { type: 'btw.stop', sessionId });
-    }
-  }, [sessionId, vscode]);
+  const btw = useBtwPanel(vscode, btwAvailable ? sessionId : null);
+  const {
+    open: btwOpen,
+    openPanel: handleBtwOpen,
+    openWithQuote: handleBtwQuote,
+    ask: handleBtwAsk,
+    stop: handleBtwStop,
+    dismiss: handleBtwDismiss,
+  } = btw;
   const turnId = state.turn?.turnId ?? null;
   const turnStatus = state.turn?.status ?? null;
   // Turn ids this connection has actually seen live on state.turn.
@@ -516,7 +453,7 @@ export function App(): React.JSX.Element {
         } else if (builtin.kind === 'btw') {
           // `/btw` opens the side chat card; a trailing question is
           // asked immediately, a bare `/btw` just opens it.
-          setBtwOpen(true);
+          handleBtwOpen();
           if (builtin.question.length > 0) {
             handleBtwAsk(builtin.question);
           }
@@ -793,18 +730,6 @@ export function App(): React.JSX.Element {
     },
     [connectionStatus, sessionId, vscode],
   );
-  const handleAttachPath = useCallback(
-    (path: string): void => {
-      if (sessionId !== null && connectionStatus === 'connected') {
-        post(vscode, {
-          type: 'attachment.addPath',
-          sessionId,
-          path,
-        });
-      }
-    },
-    [connectionStatus, sessionId, vscode],
-  );
   // Markdown image resolution: one in-flight request per path; the
   // reply lands in `state.localImages` and re-renders the reference.
   const requestedImagesRef = useRef<Set<string>>(new Set());
@@ -1037,6 +962,20 @@ export function App(): React.JSX.Element {
     },
     [sessionId, connectionStatus, vscode],
   );
+  const handleOpenReviewTurn = useCallback(
+    (reviewTurnId: string): void => {
+      if (sessionId === null || connectionStatus !== 'connected') {
+        return;
+      }
+      post(vscode, {
+        type: 'review.open',
+        sessionId,
+        scopeKind: 'turn',
+        turnId: reviewTurnId,
+      });
+    },
+    [sessionId, connectionStatus, vscode],
+  );
   const handlePreviewFile = useCallback(
     (path: string): void => {
       if (sessionId === null || connectionStatus !== 'connected') {
@@ -1154,179 +1093,6 @@ export function App(): React.JSX.Element {
         type: 'mcp.server.authenticate',
         sessionId,
         name,
-      });
-    },
-    [sessionId, vscode],
-  );
-  const handleAttachFiles = useCallback((): void => {
-    if (sessionId === null) {
-      return;
-    }
-    post(vscode, { type: 'attachment.pick', sessionId });
-  }, [sessionId, vscode]);
-  const handleAttachEditor = useCallback((): void => {
-    if (sessionId === null) {
-      return;
-    }
-    post(vscode, { type: 'attachment.addEditor', sessionId });
-  }, [sessionId, vscode]);
-  const handleAttachSelection = useCallback((): void => {
-    if (sessionId === null) {
-      return;
-    }
-    post(vscode, { type: 'attachment.addSelection', sessionId });
-  }, [sessionId, vscode]);
-  const handleAttachProblems = useCallback((): void => {
-    if (sessionId === null) {
-      return;
-    }
-    post(vscode, { type: 'attachment.addProblems', sessionId });
-  }, [sessionId, vscode]);
-  const handleAttachGitChanges = useCallback((): void => {
-    if (sessionId === null) {
-      return;
-    }
-    post(vscode, { type: 'attachment.addGitChanges', sessionId });
-  }, [sessionId, vscode]);
-  const handleAttachImage = useCallback(
-    (
-      name: string,
-      mediaType: ImageMediaType,
-      dataBase64: string,
-    ): void => {
-      if (sessionId === null || connectionStatus !== 'connected') {
-        return;
-      }
-      post(vscode, {
-        type: 'attachment.addImage',
-        sessionId,
-        name,
-        mediaType,
-        dataBase64,
-      });
-    },
-    [connectionStatus, sessionId, vscode],
-  );
-  const handleAttachUris = useCallback(
-    (uris: readonly string[]): void => {
-      if (
-        sessionId === null ||
-        connectionStatus !== 'connected' ||
-        uris.length === 0
-      ) {
-        return;
-      }
-      post(vscode, {
-        type: 'attachment.addUris',
-        sessionId,
-        uris,
-      });
-    },
-    [connectionStatus, sessionId, vscode],
-  );
-  const handleAttachTextFile = useCallback(
-    (name: string, text: string, truncated: boolean): void => {
-      if (sessionId === null || connectionStatus !== 'connected') {
-        return;
-      }
-      post(vscode, {
-        type: 'attachment.addTextFile',
-        sessionId,
-        name,
-        text,
-        truncated,
-      });
-    },
-    [connectionStatus, sessionId, vscode],
-  );
-  const handleAttachmentRemove = useCallback(
-    (attachmentId: string): void => {
-      if (sessionId === null) {
-        return;
-      }
-      post(vscode, {
-        type: 'attachment.remove',
-        sessionId,
-        attachmentId,
-      });
-    },
-    [sessionId, vscode],
-  );
-  const handleEditStageBegin = useCallback(
-    (messageId: string): void => {
-      if (sessionId === null || connectionStatus !== 'connected') {
-        return;
-      }
-      post(vscode, { type: 'editStage.begin', sessionId, messageId });
-    },
-    [connectionStatus, sessionId, vscode],
-  );
-  const handleEditStageCancel = useCallback((): void => {
-    if (sessionId === null) {
-      return;
-    }
-    post(vscode, { type: 'editStage.cancel', sessionId });
-  }, [sessionId, vscode]);
-  const handleEditAttachFiles = useCallback((): void => {
-    if (sessionId === null) {
-      return;
-    }
-    post(vscode, {
-      type: 'attachment.pick',
-      sessionId,
-      stage: 'edit',
-    });
-  }, [sessionId, vscode]);
-  const handleEditAttachEditor = useCallback((): void => {
-    if (sessionId === null) {
-      return;
-    }
-    post(vscode, {
-      type: 'attachment.addEditor',
-      sessionId,
-      stage: 'edit',
-    });
-  }, [sessionId, vscode]);
-  const handleEditAttachSelection = useCallback((): void => {
-    if (sessionId === null) {
-      return;
-    }
-    post(vscode, {
-      type: 'attachment.addSelection',
-      sessionId,
-      stage: 'edit',
-    });
-  }, [sessionId, vscode]);
-  const handleEditAttachProblems = useCallback((): void => {
-    if (sessionId === null) {
-      return;
-    }
-    post(vscode, {
-      type: 'attachment.addProblems',
-      sessionId,
-      stage: 'edit',
-    });
-  }, [sessionId, vscode]);
-  const handleEditAttachGitChanges = useCallback((): void => {
-    if (sessionId === null) {
-      return;
-    }
-    post(vscode, {
-      type: 'attachment.addGitChanges',
-      sessionId,
-      stage: 'edit',
-    });
-  }, [sessionId, vscode]);
-  const handleEditAttachmentRemove = useCallback(
-    (attachmentId: string): void => {
-      if (sessionId === null) {
-        return;
-      }
-      post(vscode, {
-        type: 'attachment.remove',
-        sessionId,
-        attachmentId,
-        stage: 'edit',
       });
     },
     [sessionId, vscode],
@@ -1508,6 +1274,7 @@ export function App(): React.JSX.Element {
           onNewSession={handleNewSession}
           onSelectSession={handleSelectSession}
           attachments={state.attachments}
+          attachmentImages={state.attachmentImages}
           fileSearch={state.fileSearch}
           onFileSearch={handleFileSearch}
           commands={state.commands}
@@ -1517,6 +1284,7 @@ export function App(): React.JSX.Element {
           missionActive={missionWorkspaceRoute === 'detail'}
           btwAvailable={btwAvailable}
           onBtwOpen={handleBtwOpen}
+          onBtwQuote={handleBtwQuote}
           onAttachPath={handleAttachPath}
           onAttachFiles={handleAttachFiles}
           onAttachEditor={handleAttachEditor}
@@ -1524,8 +1292,12 @@ export function App(): React.JSX.Element {
           onAttachProblems={handleAttachProblems}
           onAttachGitChanges={handleAttachGitChanges}
           onAttachImage={handleAttachImage}
+          onAttachPdf={handleAttachPdf}
+          onAttachRemoteImage={handleAttachRemoteImage}
           onAttachUris={handleAttachUris}
           onAttachTextFile={handleAttachTextFile}
+          onAttachmentReadImage={handleAttachmentReadImage}
+          onAttachmentReplaceImage={handleAttachmentReplaceImage}
           onAttachmentRemove={handleAttachmentRemove}
           onDraftChange={handleDraftChange}
           onEditResend={handleEditResend}
@@ -1541,6 +1313,11 @@ export function App(): React.JSX.Element {
           onEditAttachSelection={handleEditAttachSelection}
           onEditAttachProblems={handleEditAttachProblems}
           onEditAttachGitChanges={handleEditAttachGitChanges}
+          onEditAttachImage={handleEditAttachImage}
+          onEditAttachPdf={handleEditAttachPdf}
+          onEditAttachRemoteImage={handleEditAttachRemoteImage}
+          onEditAttachUris={handleEditAttachUris}
+          onEditAttachTextFile={handleEditAttachTextFile}
           onEditAttachmentRemove={handleEditAttachmentRemove}
           onRegenerate={
             connectionStatus === 'connected' &&
@@ -1559,6 +1336,7 @@ export function App(): React.JSX.Element {
               : null
           }
           onOpenFileDiff={handleOpenFileDiff}
+          onOpenReviewTurn={handleOpenReviewTurn}
           onPreviewFile={handlePreviewFile}
           onPreviewInlineHtml={handlePreviewInlineHtml}
           workspaceRoot={state.workspaceRoot}
@@ -1576,10 +1354,10 @@ export function App(): React.JSX.Element {
               changes={latestChanges}
               sessionId={connectionStatus === 'connected' ? sessionId : null}
               vscode={vscode}
-              branchDiff={state.branchDiff}
-              onOpenFileDiff={handleOpenFileDiff}
-              onPreviewFile={handlePreviewFile}
-              onOpenPath={handleOpenPath}
+              review={state.review.scope}
+              restorePreview={state.review.restorePreview}
+              operation={state.review.operation}
+              agent={state.review.agent}
             />
           }
           transientDiagnostic={selectVisibleNotice(transientDiagnostic, sessionId, turnId, active)}
@@ -1610,8 +1388,13 @@ export function App(): React.JSX.Element {
             Code split-pane form factor). */}
         {btwSplit ? (
           <SideChatSheet
-            btw={state.btw}
-            onPrepare={handleBtwPrepare}
+            state={state.btw}
+            draft={btw.draft}
+            quote={btw.quote}
+            width={btw.width}
+            onDraftChange={btw.setDraft}
+            onQuoteClear={btw.clearQuote}
+            onWidthChange={btw.setWidth}
             onAsk={handleBtwAsk}
             onStop={handleBtwStop}
             onDismiss={handleBtwDismiss}

@@ -7,13 +7,16 @@ import {
   useVirtualizer,
 } from "@tanstack/react-virtual";
 import {
+  useContext,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ComponentType,
   type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { FOLLOW_REJOIN_PX } from "../followScroll";
 import {
@@ -23,11 +26,20 @@ import {
   type MessageRow,
   type TranscriptVirtualizerApi,
 } from "./buildTurns";
-import { THREAD_MESSAGE_COMPONENTS } from "./messageChrome";
+import {
+  MessageSurfaceContext,
+  PinnedMessageContext,
+  ThreadMessageChromeContext,
+  THREAD_MESSAGE_COMPONENTS,
+} from "./messageChrome";
 
 const ESTIMATED_MESSAGE_HEIGHT = 120;
 const OVERSCAN = 8;
 const INITIAL_RECT = { height: 800, width: 400 };
+type MessageComponents = {
+  readonly UserMessage: ComponentType;
+  readonly AssistantMessage: ComponentType;
+};
 
 function releaseFollowForJump(
   follow: { following: boolean } | null,
@@ -76,15 +88,17 @@ export function VirtualizedMessages({
   followingRef,
   apiRef,
   components = THREAD_MESSAGE_COMPONENTS,
+  enablePinnedSurface = true,
+  floatingHost = null,
 }: {
   readonly getScroller: () => HTMLElement | null;
   readonly followingRef: RefObject<{ following: boolean } | null>;
   readonly apiRef?: RefObject<TranscriptVirtualizerApi | null>;
-  readonly components?: {
-    readonly UserMessage: ComponentType;
-    readonly AssistantMessage: ComponentType;
-  };
+  readonly components?: MessageComponents;
+  readonly enablePinnedSurface?: boolean;
+  readonly floatingHost?: HTMLElement | null;
 }): React.JSX.Element | null {
+  const chrome = useContext(ThreadMessageChromeContext);
   const rows = useThreadMessageRows();
   const turns = useMemo(() => buildTurns(rows), [rows]);
   const roleById = useMemo(
@@ -97,6 +111,29 @@ export function VirtualizedMessages({
   );
   const listRef = useRef<HTMLDivElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
+
+  const subscribeToScroll = useMemo(
+    () => (onStoreChange: () => void): (() => void) => {
+      const scroller = getScroller();
+      if (scroller === null) {
+        return () => undefined;
+      }
+      scroller.addEventListener("scroll", onStoreChange, {
+        passive: true,
+      });
+      return () => scroller.removeEventListener("scroll", onStoreChange);
+    },
+    [getScroller],
+  );
+  const getScrollSnapshot = useMemo(
+    () => (): number => getScroller()?.scrollTop ?? 0,
+    [getScroller],
+  );
+  const scrollTop = useSyncExternalStore(
+    subscribeToScroll,
+    getScrollSnapshot,
+    getScrollSnapshot,
+  );
 
   useLayoutEffect(() => {
     const list = listRef.current;
@@ -146,6 +183,9 @@ export function VirtualizedMessages({
       }
       const top = offset + (adjustments ?? 0);
       if (followingRef.current?.following === true) {
+        if ((adjustments ?? 0) !== 0) {
+          return;
+        }
         const maxScroll = element.scrollHeight - element.clientHeight;
         const delta = element.scrollTop - top;
         if (
@@ -214,10 +254,6 @@ export function VirtualizedMessages({
     virtualizer,
   ]);
 
-  if (turns.length === 0) {
-    return null;
-  }
-
   const items = virtualizer.getVirtualItems();
   const paddingTop = Math.max(
     0,
@@ -228,49 +264,83 @@ export function VirtualizedMessages({
     virtualizer.getTotalSize() -
       ((items.at(-1)?.end ?? scrollMargin) - scrollMargin),
   );
-  const scroller = getScroller();
-  const scrollTop = scroller?.scrollTop ?? virtualizer.scrollOffset ?? 0;
   const pinCandidate = virtualizer.getVirtualItemForOffset(scrollTop);
   const pinnedTurn =
     pinCandidate !== undefined &&
     pinCandidate.start <= scrollTop + 1
       ? pinCandidate.index
       : -1;
+  const naturalPinnedMessageId =
+    pinnedTurn === -1
+      ? null
+      : (turns[pinnedTurn]?.messageIds[0] ?? null);
+  const editingMessageId = chrome?.editingMessageId ?? null;
+  const [editingPinnedMessageId, setEditingPinnedMessageId] =
+    useState<string | null>(null);
+  useLayoutEffect(() => {
+    if (editingMessageId === null) {
+      setEditingPinnedMessageId(null);
+    } else if (editingPinnedMessageId === null && naturalPinnedMessageId !== null) {
+      setEditingPinnedMessageId(naturalPinnedMessageId);
+    }
+  }, [editingMessageId, editingPinnedMessageId, naturalPinnedMessageId]);
+  const displayedMessageId =
+    enablePinnedSurface && floatingHost !== null
+      ? (editingMessageId === null
+          ? naturalPinnedMessageId
+          : (editingPinnedMessageId ?? naturalPinnedMessageId))
+      : null;
+
+  if (turns.length === 0) {
+    return null;
+  }
 
   return (
-    <div className="dvx-virtual-turns" ref={listRef}>
-      <div
-        className="dvx-virtual-turns-window"
-        style={{ paddingTop, paddingBottom }}
-      >
-        {items.map((item) => {
-          const turn = turns[item.index];
-          if (turn === undefined) {
-            return null;
-          }
-          const ownsSticky =
-            item.index === pinnedTurn &&
-            roleById.get(turn.messageIds[0] ?? "") === "user";
-          return (
-            <div
-              key={item.key}
-              data-index={item.index}
-              data-sticky-owner={ownsSticky ? "" : undefined}
-              data-sticky-compact={ownsSticky ? "" : undefined}
-              ref={virtualizer.measureElement}
-              className="dvx-virtual-turn"
-            >
-              {turn.messageIds.map((messageId) => (
-                <ThreadPrimitive.Unstable_MessageById
-                  key={messageId}
-                  messageId={messageId}
-                  components={components}
-                />
-              ))}
-            </div>
-          );
-        })}
+    <PinnedMessageContext.Provider value={{ messageId: displayedMessageId }}>
+      {displayedMessageId !== null && floatingHost !== null
+        ? createPortal(
+            <MessageSurfaceContext.Provider value="pinned">
+              <div className="dvx-pinned-user-layer">
+                <div className="dvx-pinned-user-layer-content">
+                  <ThreadPrimitive.Unstable_MessageById
+                    messageId={displayedMessageId}
+                    components={components}
+                  />
+                </div>
+              </div>
+            </MessageSurfaceContext.Provider>,
+            floatingHost,
+          )
+        : null}
+      <div className="dvx-virtual-turns" ref={listRef}>
+        <div
+          className="dvx-virtual-turns-window"
+          style={{ paddingTop, paddingBottom }}
+        >
+          {items.map((item) => {
+            const turn = turns[item.index];
+            if (turn === undefined) {
+              return null;
+            }
+            return (
+              <div
+                key={item.key}
+                data-index={item.index}
+                ref={virtualizer.measureElement}
+                className="dvx-virtual-turn"
+              >
+                {turn.messageIds.map((messageId) => (
+                  <ThreadPrimitive.Unstable_MessageById
+                    key={messageId}
+                    messageId={messageId}
+                    components={components}
+                  />
+                ))}
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
+    </PinnedMessageContext.Provider>
   );
 }

@@ -2,7 +2,13 @@ import type {
   PermissionInteractionRequest,
   PermissionRespondMessage,
   PlanDocumentOpenMessage,
+  PlanDocumentStateMessage,
 } from '../shared/bridgeMessages';
+
+export type PlanDocumentStateProjection = Omit<
+  PlanDocumentStateMessage,
+  'sequence'
+>;
 
 export interface PlanDocumentGateway {
   track(
@@ -16,6 +22,9 @@ export interface PlanDocumentGateway {
   ): PermissionRespondMessage | null;
   settle(requestId: string): void;
   replay(): void;
+  replayTo(
+    listener: (state: PlanDocumentStateProjection) => void,
+  ): void;
   dispose(): void;
 }
 
@@ -28,6 +37,7 @@ export function createUnavailablePlanDocumentGateway(): PlanDocumentGateway {
     },
     settle() {},
     replay() {},
+    replayTo() {},
     dispose() {},
   };
 }

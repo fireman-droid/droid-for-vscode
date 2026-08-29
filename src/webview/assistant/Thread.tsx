@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import type {
+  AttachmentStage,
   EditAttachmentSummary,
   EditResendRejectReason,
   ImageMediaType,
@@ -24,6 +25,7 @@ import type {
   SessionContextState,
   SessionSettingsState,
 } from "../../shared/bridgeMessages";
+import type { AttachmentImageEntry } from "./store";
 import type { SessionTokenUsageState } from "../../shared/tokenUsage";
 import type {
   ComposerNavRequest,
@@ -48,6 +50,7 @@ import {
 } from "./followScroll";
 import type { PlanAnchorState } from "./planAnchor";
 import { QuestionNavigator } from "./QuestionNavigator";
+import { SelectionQuoteToolbar } from "./SelectionQuoteToolbar";
 import { SCROLL_BOTTOM_SHOW_PX } from "./stickyLayout";
 import type { TranscriptVirtualizerApi } from "./thread/buildTurns";
 import { Composer } from "./thread/Composer";
@@ -66,6 +69,8 @@ import {
   PendingResponse,
 } from "./thread/transcriptRows";
 import { useQuestionNavigation } from "./useQuestionNavigation";
+import type { UserEditorEnv } from "./userEditorEnv";
+export type { UserEditorEnv } from "./userEditorEnv";
 
 /** Latest workspace search result delivered by the host. */
 export interface FileSearchResult {
@@ -107,45 +112,14 @@ export interface EditResendRejection {
   readonly sequence: number;
 }
 
-/**
- * Session-scoped controls and edit-scoped attachment callbacks the
- * in-card message editor needs; grouped so each user message takes a
- * single prop.
- */
-export interface UserEditorEnv {
-  readonly settings: SessionSettingsState;
-  readonly context: SessionContextState;
-  readonly modelCatalog: ModelCatalogState;
-  readonly skills: SkillsPanelState;
-  readonly mcp: McpPanelState;
-  readonly plugins: PluginsPanelState;
-  readonly mcpAuth: McpAuthProgress | null;
-  readonly controlsDisabled: boolean;
-  readonly settingUpdatesDisabled: boolean;
-  readonly onContextRefresh: () => void;
-  readonly onCompact: () => void;
-  readonly onSettingUpdate: (update: SessionSettingSelection) => void;
-  readonly onSkillsRefresh: () => void;
-  readonly onSkillToggle: (name: string, disabled: boolean) => void;
-  readonly onMcpRefresh: () => void;
-  readonly onMcpServerToggle: (name: string, enabled: boolean) => void;
-  readonly onMcpServerAdd: (params: McpServerAddParams) => void;
-  readonly onMcpServerRemove: (name: string) => void;
-  readonly onMcpServerAuthenticate: (name: string) => void;
-  readonly onPluginsRefresh: () => void;
-  readonly onAttachFiles: () => void;
-  readonly onAttachEditor: () => void;
-  readonly onAttachSelection: () => void;
-  readonly onAttachProblems: () => void;
-  readonly onAttachGitChanges: () => void;
-  readonly onAttachmentRemove: (attachmentId: string) => void;
-}
-
 // Tool rows deep inside the transcript open native diffs through this
 // context so the memoized message tree stays free of prop drilling.
 export const FileDiffContext = createContext<
   (path: string, turnId: string | null) => void
 >(() => undefined);
+export const ReviewTurnContext = createContext<(turnId: string) => void>(
+  () => undefined,
+);
 
 // The latest turn's cumulative file counts stay available to deep tool
 // rows even though the full ledger is rendered separately in ReviewDock.
@@ -237,6 +211,7 @@ interface DroidThreadProps {
   /** Starts a fresh session (skill changes apply at session start). */
   readonly onNewSession: () => void;
   readonly attachments: readonly AttachmentSummary[];
+  readonly attachmentImages: Readonly<Record<string, AttachmentImageEntry>>;
   readonly fileSearch: FileSearchResult | null;
   readonly onFileSearch: (requestId: string, query: string) => void;
   readonly commands: SlashCommandsState;
@@ -258,6 +233,7 @@ interface DroidThreadProps {
    * composer send) so it stays usable while a main turn runs.
    */
   readonly onBtwOpen?: () => void;
+  readonly onBtwQuote?: (quote: string) => void;
   readonly onAttachPath: (path: string) => void;
   readonly onAttachFiles: () => void;
   readonly onAttachEditor: () => void;
@@ -269,11 +245,24 @@ interface DroidThreadProps {
     mediaType: ImageMediaType,
     dataBase64: string,
   ) => void;
+  readonly onAttachPdf: (name: string, dataBase64: string) => void;
+  readonly onAttachRemoteImage: (url: string) => void;
   readonly onAttachUris: (uris: readonly string[]) => void;
   readonly onAttachTextFile: (
     name: string,
     text: string,
     truncated: boolean,
+  ) => void;
+  readonly onAttachmentReadImage: (
+    attachmentId: string,
+    stage?: AttachmentStage,
+  ) => void;
+  readonly onAttachmentReplaceImage: (
+    attachmentId: string,
+    name: string,
+    mediaType: ImageMediaType,
+    dataBase64: string,
+    stage?: AttachmentStage,
   ) => void;
   readonly onAttachmentRemove: (attachmentId: string) => void;
   readonly onDraftChange: (draft: string) => void;
@@ -299,6 +288,19 @@ interface DroidThreadProps {
   readonly onEditAttachSelection: () => void;
   readonly onEditAttachProblems: () => void;
   readonly onEditAttachGitChanges: () => void;
+  readonly onEditAttachImage: (
+    name: string,
+    mediaType: ImageMediaType,
+    dataBase64: string,
+  ) => void;
+  readonly onEditAttachPdf: (name: string, dataBase64: string) => void;
+  readonly onEditAttachRemoteImage: (url: string) => void;
+  readonly onEditAttachUris: (uris: readonly string[]) => void;
+  readonly onEditAttachTextFile: (
+    name: string,
+    text: string,
+    truncated: boolean,
+  ) => void;
   readonly onEditAttachmentRemove: (attachmentId: string) => void;
   readonly onRegenerate: (() => void) | null;
   /** Forks a new session from the current state (last message only). */
@@ -307,6 +309,7 @@ interface DroidThreadProps {
     path: string,
     turnId: string | null,
   ) => void;
+  readonly onOpenReviewTurn: (turnId: string) => void;
   readonly onPreviewFile: (path: string) => void;
   /** Renders an assistant HTML code block in the sandbox panel. */
   readonly onPreviewInlineHtml: InlineHtmlPreviewHandler;
@@ -396,6 +399,7 @@ export const DroidThread = memo(function DroidThread({
   onPluginsRefresh,
   onNewSession,
   attachments,
+  attachmentImages,
   fileSearch,
   onFileSearch,
   commands,
@@ -406,6 +410,7 @@ export const DroidThread = memo(function DroidThread({
   onMissionOpen,
   btwAvailable = false,
   onBtwOpen,
+  onBtwQuote,
   onAttachPath,
   onAttachFiles,
   onAttachEditor,
@@ -413,8 +418,12 @@ export const DroidThread = memo(function DroidThread({
   onAttachProblems,
   onAttachGitChanges,
   onAttachImage,
+  onAttachPdf,
+  onAttachRemoteImage,
   onAttachUris,
   onAttachTextFile,
+  onAttachmentReadImage,
+  onAttachmentReplaceImage,
   onAttachmentRemove,
   onDraftChange,
   onEditResend,
@@ -430,10 +439,16 @@ export const DroidThread = memo(function DroidThread({
   onEditAttachSelection,
   onEditAttachProblems,
   onEditAttachGitChanges,
+  onEditAttachImage,
+  onEditAttachPdf,
+  onEditAttachRemoteImage,
+  onEditAttachUris,
+  onEditAttachTextFile,
   onEditAttachmentRemove,
   onRegenerate,
   onForkSession,
   onOpenFileDiff,
+  onOpenReviewTurn,
   onPreviewFile,
   onPreviewInlineHtml,
   workspaceRoot,
@@ -686,6 +701,14 @@ export const DroidThread = memo(function DroidThread({
       onAttachSelection: onEditAttachSelection,
       onAttachProblems: onEditAttachProblems,
       onAttachGitChanges: onEditAttachGitChanges,
+      onAttachImage: onEditAttachImage,
+      onAttachPdf: onEditAttachPdf,
+      onAttachRemoteImage: onEditAttachRemoteImage,
+      onAttachUris: onEditAttachUris,
+      onAttachTextFile: onEditAttachTextFile,
+      attachmentImages,
+      onAttachmentReadImage,
+      onAttachmentReplaceImage,
       onAttachmentRemove: onEditAttachmentRemove,
     }),
     [
@@ -714,6 +737,14 @@ export const DroidThread = memo(function DroidThread({
       onEditAttachSelection,
       onEditAttachProblems,
       onEditAttachGitChanges,
+      onEditAttachImage,
+      onEditAttachPdf,
+      onEditAttachRemoteImage,
+      onEditAttachUris,
+      onEditAttachTextFile,
+      attachmentImages,
+      onAttachmentReadImage,
+      onAttachmentReplaceImage,
       onEditAttachmentRemove,
     ],
   );
@@ -758,23 +789,24 @@ export const DroidThread = memo(function DroidThread({
     const scroller = column?.closest(".dvx-thread-viewport");
     return scroller instanceof HTMLElement ? scroller : null;
   }, []);
+  const [messageOverlayHost, setMessageOverlayHost] = useState<HTMLDivElement | null>(null);
   return (
-    <ThreadPrimitive.Root
-      className={`dvx-thread${interactionPending ? " dvx-thread-pending" : ""}`}
-    >
-      <ThreadPrimitive.Viewport
-        className="dvx-thread-viewport"
-        aria-label="Chat transcript"
-        // Continuous follow is owned by the coordinator above; the
-        // primitive keeps only its one-shot scrolls (run start,
-        // initialize, thread switch). See applyFollowScroll.
-        autoScroll={false}
-        turnAnchor="bottom"
-        scrollToBottomOnRunStart
-        scrollToBottomOnInitialize
-        scrollToBottomOnThreadSwitch
-      >
+    <ThreadPrimitive.Root className={`dvx-thread${interactionPending ? " dvx-thread-pending" : ""}`}>
+      <div className="dvx-thread-body"><div ref={setMessageOverlayHost} className="dvx-message-overlay-host" />
+        <ThreadPrimitive.Viewport
+          className="dvx-thread-viewport"
+          aria-label="Chat transcript"
+          // Continuous follow is owned by the coordinator above; the
+          // primitive keeps only its one-shot scrolls (run start,
+          // initialize, thread switch). See applyFollowScroll.
+          autoScroll={false}
+          turnAnchor="bottom"
+          scrollToBottomOnRunStart
+          scrollToBottomOnInitialize
+          scrollToBottomOnThreadSwitch
+        >
         <FileDiffContext.Provider value={onOpenFileDiff}>
+          <ReviewTurnContext.Provider value={onOpenReviewTurn}>
           <PreviewContext.Provider value={onPreviewFile}>
           <PathPreviewContext.Provider value={pathPreviewWiring}>
           <InlineHtmlPreviewContext.Provider value={onPreviewInlineHtml}>
@@ -811,8 +843,12 @@ export const DroidThread = memo(function DroidThread({
                   getScroller={getScroller}
                   followingRef={followRef}
                   apiRef={virtualizerApiRef}
+                  floatingHost={messageOverlayHost}
                 />
               </ThreadMessageChromeContext.Provider>
+              {onBtwQuote === undefined ? null : (
+                <SelectionQuoteToolbar onBtwQuote={onBtwQuote} />
+              )}
               {pending ? (
                 <PendingResponse
                   activity={activity}
@@ -834,8 +870,9 @@ export const DroidThread = memo(function DroidThread({
           </InlineHtmlPreviewContext.Provider>
           </PathPreviewContext.Provider>
           </PreviewContext.Provider>
+          </ReviewTurnContext.Provider>
         </FileDiffContext.Provider>
-      </ThreadPrimitive.Viewport>
+        </ThreadPrimitive.Viewport></div>
       <div className="dvx-thread-footer">
           <div className="dvx-scroll-bottom-dock">
             <button
@@ -891,6 +928,7 @@ export const DroidThread = memo(function DroidThread({
             onPluginsRefresh={onPluginsRefresh}
             onNewSession={onNewSession}
             attachments={attachments}
+            attachmentImages={attachmentImages}
             fileSearch={fileSearch}
             onFileSearch={onFileSearch}
             commands={commands}
@@ -908,8 +946,12 @@ export const DroidThread = memo(function DroidThread({
             onAttachProblems={onAttachProblems}
             onAttachGitChanges={onAttachGitChanges}
             onAttachImage={onAttachImage}
+            onAttachPdf={onAttachPdf}
+            onAttachRemoteImage={onAttachRemoteImage}
             onAttachUris={onAttachUris}
             onAttachTextFile={onAttachTextFile}
+            onAttachmentReadImage={onAttachmentReadImage}
+            onAttachmentReplaceImage={onAttachmentReplaceImage}
             onAttachmentRemove={onAttachmentRemove}
             onDraftChange={onDraftChange}
             queuedCount={queuedCount}

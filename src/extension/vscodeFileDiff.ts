@@ -8,8 +8,9 @@ import type {
   FileDiffOpener,
   FileDiffOutcome,
 } from './fileDiffOpener';
-import type { ChangeStatsReader } from './changeStats';
+import type { ChangeStatsReader, ChangeStatsScope } from './changeStats';
 import { getGitApi } from './vscodeGitWorkflow';
+import type { DiffSelectionRegistry } from './diffSelectionRegistry';
 
 const TURN_BASELINE_SCHEME = 'droidvisx-turn-baseline';
 const MAX_OPEN_BASELINE_DOCUMENTS = 32;
@@ -31,6 +32,7 @@ interface BaselineDocument {
 export function createVscodeFileDiffOpener(
   changeStats: ChangeStatsReader,
   diagnostics: RuntimeDiagnosticSink,
+  selectionRegistry?: DiffSelectionRegistry,
 ): FileDiffOpener {
   const baselineDocuments = new Map<string, BaselineDocument>();
   const baselineIds = new Map<string, string>();
@@ -137,6 +139,15 @@ export function createVscodeFileDiffOpener(
             );
         if (baselineUri !== undefined && currentUri !== undefined) {
           try {
+            registerDiffSides(
+              selectionRegistry,
+              baselineUri,
+              currentUri,
+              scope,
+              safePath,
+              'Before turn',
+              'Current',
+            );
             await vscode.commands.executeCommand(
               'vscode.diff',
               baselineUri,
@@ -160,6 +171,24 @@ export function createVscodeFileDiffOpener(
       }
 
       if (
+        options?.baselineRef !== undefined &&
+        await openGitRefDiff(
+          options.baselineRef,
+          options.baselineLabel ?? options.baselineRef,
+          fileUri,
+          fileExists,
+          safePath,
+          virtualDocument,
+          diagnostics,
+          scope,
+          selectionRegistry,
+        )
+      ) {
+        recordOpenSuccess(diagnostics, 'git-ref', safePath, options.baselineRef);
+        return 'opened-diff';
+      }
+
+      if (
         options?.committedRef !== undefined &&
         await openCommittedDiff(
           options.committedRef,
@@ -167,6 +196,8 @@ export function createVscodeFileDiffOpener(
           safePath,
           virtualDocument,
           diagnostics,
+          scope,
+          selectionRegistry,
         )
       ) {
         recordOpenSuccess(
@@ -192,6 +223,15 @@ export function createVscodeFileDiffOpener(
             );
         if (workingUri !== undefined) {
           try {
+            registerDiffSides(
+              selectionRegistry,
+              headUri,
+              workingUri,
+              scope,
+              safePath,
+              'HEAD',
+              'Working',
+            );
             await vscode.commands.executeCommand(
               'vscode.diff',
               headUri,
@@ -228,6 +268,7 @@ export function createVscodeFileDiffOpener(
       baselineBytes = 0;
       closeListener.dispose();
       provider.dispose();
+      selectionRegistry?.clear();
     },
   };
 }
@@ -244,6 +285,8 @@ async function openCommittedDiff(
   relativePath: string,
   virtualDocument: VirtualDocumentFactory,
   diagnostics: RuntimeDiagnosticSink,
+  scope: ChangeStatsScope,
+  selectionRegistry?: DiffSelectionRegistry,
 ): Promise<boolean> {
   if (!/^[0-9a-f]{4,40}$/.test(commitRef)) {
     return false;
@@ -281,6 +324,15 @@ async function openCommittedDiff(
     return false;
   }
   try {
+    registerDiffSides(
+      selectionRegistry,
+      beforeUri,
+      afterUri,
+      scope,
+      relativePath,
+      `Before ${commitRef.slice(0, 7)}`,
+      `Committed ${commitRef.slice(0, 7)}`,
+    );
     await vscode.commands.executeCommand(
       'vscode.diff',
       beforeUri,
@@ -327,6 +379,7 @@ function recordOpenFailure(
   phase:
     | 'turn-baseline'
     | 'committed-turn'
+    | 'git-ref'
     | 'git-head'
     | 'plain-file',
   path: string,
@@ -345,7 +398,12 @@ function recordOpenFailure(
 
 function recordOpenSuccess(
   diagnostics: RuntimeDiagnosticSink,
-  source: 'turn-baseline' | 'committed-turn' | 'git-head' | 'plain-file',
+  source:
+    | 'turn-baseline'
+    | 'committed-turn'
+    | 'git-ref'
+    | 'git-head'
+    | 'plain-file',
   path: string,
   ref?: string,
 ): void {
@@ -357,6 +415,98 @@ function recordOpenSuccess(
       path,
       ...(ref === undefined ? {} : { ref }),
     },
+  });
+}
+
+async function openGitRefDiff(
+  ref: string,
+  label: string,
+  fileUri: vscode.Uri,
+  fileExists: boolean,
+  relativePath: string,
+  virtualDocument: VirtualDocumentFactory,
+  diagnostics: RuntimeDiagnosticSink,
+  scope: ChangeStatsScope,
+  selectionRegistry?: DiffSelectionRegistry,
+): Promise<boolean> {
+  if (!/^[0-9a-f]{40}$/.test(ref)) {
+    return false;
+  }
+  const gitFile = await resolveGitFile(fileUri);
+  if (gitFile === undefined) {
+    return false;
+  }
+  const beforeExists = await hasGitObject(
+    gitFile.repository,
+    ref,
+    gitFile.path,
+  );
+  if (!beforeExists && !fileExists) {
+    return false;
+  }
+  const beforeUri = beforeExists
+    ? gitObjectUri(fileUri, ref)
+    : virtualDocument(
+        `ref\u0000${ref}\u0000${relativePath}\u0000before`,
+        relativePath,
+        '',
+      );
+  const currentUri = fileExists
+    ? fileUri
+    : virtualDocument(
+        `ref\u0000${ref}\u0000${relativePath}\u0000deleted`,
+        relativePath,
+        '',
+      );
+  if (beforeUri === undefined || currentUri === undefined) {
+    return false;
+  }
+  try {
+    registerDiffSides(
+      selectionRegistry,
+      beforeUri,
+      currentUri,
+      scope,
+      relativePath,
+      label,
+      'Working',
+    );
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      beforeUri,
+      currentUri,
+      `${relativePath} (${label} ↔ Working)`,
+      { preview: true },
+    );
+    return true;
+  } catch (error) {
+    recordOpenFailure(diagnostics, 'git-ref', relativePath, error);
+    return false;
+  }
+}
+
+function registerDiffSides(
+  registry: DiffSelectionRegistry | undefined,
+  beforeUri: vscode.Uri,
+  currentUri: vscode.Uri,
+  scope: ChangeStatsScope,
+  path: string,
+  beforeLabel: string,
+  currentLabel: string,
+): void {
+  registry?.register(beforeUri, {
+    path,
+    side: 'before',
+    label: beforeLabel,
+    sessionId: scope.sessionId,
+    reviewScopeId: scope.turnId,
+  });
+  registry?.register(currentUri, {
+    path,
+    side: 'current',
+    label: currentLabel,
+    sessionId: scope.sessionId,
+    reviewScopeId: scope.turnId,
   });
 }
 

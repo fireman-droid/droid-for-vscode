@@ -3,15 +3,12 @@ import {
   MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
   parseMissionControlPanelWebviewMessage,
   type MissionControlCatalogFilter,
-  type MissionControlCatalogRow,
   type MissionControlPanelHostMessage,
 } from '../shared/missionControlPanelProtocol';
 import type {
   MissionControlSetupContinueMessage,
-  MissionControlSetupAvailability,
   MissionControlSetupDraft,
   MissionControlSetupPhase,
-  MissionControlSetupReason,
   MissionControlSetupSnapshotMessage,
   MissionControlSetupUpdateMessage,
 } from '../shared/missionControlSetupProtocol';
@@ -21,7 +18,7 @@ import type {
   MissionStartMessage,
 } from '../shared/missionProtocol';
 import type { RuntimeDiagnosticSink } from '../runtime/runtimeDiagnostics';
-import type { MissionCatalogResult, MissionReadinessResult } from './chat/mission/MissionGateway';
+import type { MissionCatalogResult } from './chat/mission/MissionGateway';
 import { MissionWorkspaceState } from './chat/mission/MissionWorkspaceState';
 import type {
   ChatController,
@@ -33,66 +30,25 @@ import {
   readWebviewThemePreference,
 } from './webviewTheme';
 import { parseWebviewMessage } from '../shared/validateMessage';
+import type {
+  MissionControlCatalogSource,
+  MissionControlCatalogOperation as CatalogOperation,
+  MissionControlCatalogState as CatalogState,
+  MissionControlPanelEntry as PanelEntry,
+  MissionControlPanelControllerOptions,
+  MissionControlRoute,
+  MissionControlSetupAuthority,
+  MissionWorkspaceHostMessage,
+} from './missionControlTypes';
+export type {
+  MissionControlCatalogSource,
+  MissionControlPanelControllerOptions,
+  MissionControlRoute,
+  MissionControlSetupAuthority,
+} from './missionControlTypes';
 const VIEW_TYPE = 'droidvisx.missionControl';
 const PANEL_TITLE = 'Mission Control';
 export const MISSION_CONTROL_CATALOG_DEADLINE_MS = 20_000;
-export type MissionControlRoute = 'catalog' | 'new-mission' | 'detail';
-export interface MissionControlCatalogSource {
-  listCatalog(): Promise<MissionCatalogResult>;
-  readSetup?(): MissionControlSetupAuthority;
-  subscribeSetup?(listener: () => void): vscode.Disposable;
-  readonly chatController?: ChatController;
-  inspectReadiness?(cwd: string): Promise<MissionReadinessResult>;
-  acknowledgeReadinessWarning?(cwd: string): Promise<boolean>;
-  openCatalogMission?(catalogId: string): string | null;
-  readActiveSession?(): {
-    readonly sessionId: string | null;
-    readonly missionRole: 'orchestrator' | 'worker' | null;
-  };
-  selectSession?(sessionId: string): boolean;
-  createSession?(): void;
-  readWorkspaceCwd?(): string | null;
-  focusChat?(): void;
-}
-export interface MissionControlSetupAuthority {
-  readonly workspaceAuthorityRevision: number;
-  readonly chatOwnerRevision: number;
-  readonly availability: MissionControlSetupAvailability;
-  readonly reason: MissionControlSetupReason | null;
-  readonly capabilities: MissionSetupCapabilities | null;
-}
-export interface MissionControlPanelControllerOptions {
-  readonly deadlineMs?: number;
-}
-interface CatalogState {
-  readonly filter: MissionControlCatalogFilter;
-  readonly rows: readonly MissionControlCatalogRow[];
-  readonly revision: number;
-}
-
-interface CatalogOperation {
-  readonly owner: object;
-  readonly panelInstance: number;
-  readonly routeRevision: number;
-  readonly requestId: string;
-  readonly filter: MissionControlCatalogFilter;
-  readonly revision: number;
-}
-
-interface PanelEntry {
-  readonly instance: number;
-  readonly panel: vscode.WebviewPanel;
-  readonly disposables: vscode.Disposable[];
-  readonly seenRequestIds: Set<string>;
-  ready: boolean;
-}
-
-type MissionWorkspaceHostMessage =
-  | MissionControlSetupSnapshotMessage
-  | Extract<
-      MissionControlPanelHostMessage,
-      { type: 'missionControl.route' }
-    >;
 
 export class MissionControlPanelController implements vscode.Disposable {
   private readonly setupEmitter =
@@ -327,12 +283,22 @@ export class MissionControlPanelController implements vscode.Disposable {
   }
 
   replayWorkspaceSetup(): void {
-    if (this.route === 'detail' && this.detailCatalogId !== null) {
-      this.postWorkspaceRoute('detail', this.detailCatalogId);
-    } else if (this.route === 'new-mission') {
-      this.postWorkspaceRoute('new-mission');
+    this.replayWorkspaceSetupTo((message) => {
+      this.setupEmitter.fire(message);
+    });
+  }
+
+  replayWorkspaceSetupTo(
+    listener: (message: MissionWorkspaceHostMessage) => void,
+  ): void {
+    const route = this.createWorkspaceRouteMessage();
+    if (route !== null) {
+      listener(route);
     }
-    this.postSetupSnapshot();
+    const setup = this.createSetupSnapshot();
+    if (setup !== null) {
+      listener(setup);
+    }
   }
 
   handleWorkspaceMessage(value: unknown): boolean {
@@ -559,10 +525,19 @@ export class MissionControlPanelController implements vscode.Disposable {
   private postSetupSnapshot(
     authority = this.readSetupAuthority(),
   ): void {
-    if (this.route !== 'new-mission' || this.setupDraft === null) {
-      return;
+    const message = this.createSetupSnapshot(authority);
+    if (message !== null) {
+      this.setupEmitter.fire(message);
     }
-    const message: MissionControlSetupSnapshotMessage = {
+  }
+
+  private createSetupSnapshot(
+    authority = this.readSetupAuthority(),
+  ): MissionControlSetupSnapshotMessage | null {
+    if (this.route !== 'new-mission' || this.setupDraft === null) {
+      return null;
+    }
+    return {
       type: 'missionControl.setup.snapshot',
       protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
       sequence: this.nextSequence++,
@@ -576,27 +551,43 @@ export class MissionControlPanelController implements vscode.Disposable {
       draft: this.setupDraft,
       capabilities: authority.capabilities,
     };
-    this.setupEmitter.fire(message);
   }
 
   private postWorkspaceRoute(
     route: MissionControlRoute,
     catalogId?: string,
   ): void {
-    this.setupEmitter.fire(
-      route === 'detail'
-        ? {
-            type: 'missionControl.route',
-            protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
-            route,
-            catalogId: catalogId ?? 'active-mission',
-          }
-        : {
-            type: 'missionControl.route',
-            protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
-            route,
-          },
-    );
+    this.setupEmitter.fire(this.workspaceRouteMessage(route, catalogId));
+  }
+
+  private createWorkspaceRouteMessage(): MissionWorkspaceHostMessage | null {
+    if (this.route === 'detail' && this.detailCatalogId !== null) {
+      return this.workspaceRouteMessage('detail', this.detailCatalogId);
+    }
+    return this.route === 'new-mission'
+      ? this.workspaceRouteMessage('new-mission')
+      : null;
+  }
+
+  private workspaceRouteMessage(
+    route: MissionControlRoute,
+    catalogId?: string,
+  ): Extract<
+    MissionWorkspaceHostMessage,
+    { type: 'missionControl.route' }
+  > {
+    return route === 'detail'
+      ? {
+          type: 'missionControl.route',
+          protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+          route,
+          catalogId: catalogId!,
+        }
+      : {
+          type: 'missionControl.route',
+          protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+          route,
+        };
   }
 
   private handleSetupMessage(

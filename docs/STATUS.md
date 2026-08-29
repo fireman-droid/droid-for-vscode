@@ -1,13 +1,13 @@
 # 当前状态
 
-最后更新：2026-08-26
+最后更新：2026-08-27
 包版本：`0.7.89`
 
 ## 总结
 
-主聊天、新版 Mission Control 和实时子代理只读对话的生产链路已经接通。
-当前工作区含未提交实现；`0.7.89` 新版 VSIX 已覆盖安装，等待 Reload Window
-后的真实运行和视觉验收。
+主聊天、新版 Mission Control、实时子代理只读对话、真实浏览器联调和统一
+Diff 审查链路已经接通。`0.7.89` 新版 VSIX 已覆盖安装；Cursor 内真实行为
+和视觉仍以用户验收为准。
 
 ## 已接通
 
@@ -22,7 +22,18 @@
 
 - 权限请求、AskUser 和 ExitSpecMode Plan
 - 文件、图片、PDF、活动编辑器、选区、Problems 和 Git changes 附件
+- 主 Composer 与历史编辑卡支持选择、粘贴和拖入图片、PDF、可读文本、编辑器 URI
+  及公开 HTTPS 图片；落点决定进入主附件区或编辑重发附件区
+- 待发送图片支持缩放、平移和红色自由笔标注，保存后原位替换 Host 持有的发送字节；
+  GIF 和动态 WebP 只预览、发送，不进入标注
 - Slash commands、文件提及和选区加入聊天
+
+### BTW 旁问
+
+- 右侧使用可拖拽宽度的轻量旁注流，回答继续支持 Markdown、代码和长文本
+- 输入框自动增长到三行，Enter 发送、Shift+Enter 换行，排队问题贴近输入区
+- 主对话正文选区提供 `Add to Chat` 和 `By the Way`，均只预填引用、不自动发送
+- 同一主对话内关闭只隐藏并保留旁问上下文；切换主对话或 Reload 后清空
 
 ### 展示与 IDE 集成
 
@@ -32,6 +43,29 @@
 - 只读终端镜像和 Session Viewer
 - 子代理 Task 卡实时摘要，整卡打开每 child 独立只读 Editor
 - 子代理完整文本、Thinking、Tool 进度/结果、图片和明确生命周期
+
+### Diff Review
+
+- Latest Turn、Workspace 和 Branch 只在 ReviewDock 内切换文件列表；点击 Review
+  直接打开当前待审文件并复用一个 Cursor 原生 preview Diff，文件行或 Previous /
+  Next 继续切换当前 Diff
+- 后续纯聊天回合不会清空最近一次实际改动的 Latest Turn Dock；新的改动回合
+  仍会替换它，Session 切换继续按各自 transcript 隔离
+- Latest Turn 缺少完整 before/after snapshot 时，使用已记录的文件清单回退到
+  HEAD ↔ Working Diff；该回退只读，不提供 Restore
+- 历史 Changes、Workspace 和 Branch 使用同一 ReviewDock；Branch 明确显示
+  base branch，无法建立可靠基线的文件降级为 Open only
+- reviewed 只由明确按钮产生，按文件版本持久化；当前 Session 最近打开的 scope
+  在 Reload 后重建并验证版本，文件再次变化时显示 changed-after-review，不计入完成率
+- Turn 提供 Restore file / Restore turn 双重预检；未保存编辑、after-state
+  不匹配或快照缺失都会阻止写入，整 Turn 任一冲突则全部不写
+- Tool 明确命名的 Git ignored 文件也会进入 before / after 精确快照，可正常
+  Diff 和 Restore，不再被误判为快照缺失
+- 整 Turn 恢复使用恢复日志和失败回滚；扩展启动时会继续处理未完成恢复日志
+- 原生 Diff 左右两侧选区均可通过 `Add Selection to Chat` 回主 Composer，
+  引用携带 before/current、文件和 Review scope 身份
+- Agent Review 通过独立公开 `/review` Session 运行，结果使用只读 Session
+  Viewer，不混入主 Session transcript，也不改变 reviewed 状态
 
 ### 设置与扩展能力
 
@@ -71,6 +105,22 @@
 - Viewer 使用与主聊天一致的 Cursor 版心；首条 Task Invocation 显示委派摘要并可展开原文
 - Webview 只能按父 Session、Turn 和 Task `toolUseId` 请求打开，Host 校验后解析 child
 
+### 真实浏览器联调
+
+- `DroidVisX: Start Browser Dev Client` 从当前源码 workspace 自动启动 Vite、
+  本机 Bridge 并优先在 Cursor Browser 打开 `/live`
+- `/live` 直接渲染生产 `App`，与 Cursor 侧栏共享唯一 `ChatController`、当前
+  Session、真实 Runtime 和全部现有操作
+- Host 增量同步给浏览器和侧栏；每个客户端 Reload 使用定向 Snapshot，不让另一端
+  重复重放
+- Browser transport 继续使用共享 Bridge DTO 和 Host 校验，不包含 Droid SDK、
+  Runtime 或 Extension Host 代码
+- Bridge 只监听 `127.0.0.1`，使用每次启动生成的临时令牌并限制固定 Vite Origin
+- `DroidVisX: Stop Browser Dev Client`、扩展停用或 Cursor 窗口关闭时停止 Bridge
+  与本次启动的 Vite
+- 原有 `pnpm run dev:webview` Studio 继续提供 fake scenario 视觉预览，与真实
+  `/live` transport 分离
+
 ### 能力展示
 
 - 插件面板目前以读取状态为主
@@ -89,7 +139,7 @@
 
 ## 当前工作区
 
-- Mission Control 完整实现和相关清理仍未提交
+- Mission、实时子代理和 Viewer 基线已建立本地 checkpoint
 - 测试套件已删除纯 UI、样式、格式化和自证型用例
 - 打包不再自动运行测试
-- 下一步只按 [`PLAN.md`](./PLAN.md) 执行
+- 真实浏览器联调通过本机 Bridge 与 Vite 启停、双客户端 boot 和定向 replay 验证

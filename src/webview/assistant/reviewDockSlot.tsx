@@ -2,59 +2,140 @@ import { useCallback } from "react";
 
 import type {
   ChangesTranscriptItem,
-  GitBranchDiffState,
+  ReviewAgentStateMessage,
+  ReviewOperationResultMessage,
+  ReviewRestorePreviewStateMessage,
+  ReviewScopeKind,
+  ReviewScopeState,
+  ReviewWebviewMessage,
   WebviewToHostMessage,
 } from "../../shared/bridgeMessages";
-import type { PathLink } from "./pathLink";
 import { ReviewDock } from "./ReviewDock";
 
 interface MessagePoster {
   postMessage(message: WebviewToHostMessage): void;
 }
 
-/**
- * Wires the viewport-footer Review dock to the Bridge. Rendering it
- * needs a latest-changes card and a connected session; `sessionId` is
- * null whenever either is missing.
- */
+type Sessionless<T> = T extends { readonly sessionId: string }
+  ? Omit<T, "sessionId">
+  : never;
+
 export function ReviewDockSlot({
   changes,
   sessionId,
   vscode,
-  branchDiff,
-  onOpenFileDiff,
-  onPreviewFile,
-  onOpenPath,
+  review,
+  restorePreview,
+  operation,
+  agent,
 }: {
   readonly changes: ChangesTranscriptItem | null;
   readonly sessionId: string | null;
   readonly vscode: MessagePoster;
-  readonly branchDiff: GitBranchDiffState | null;
-  readonly onOpenFileDiff: (path: string, turnId: string | null) => void;
-  readonly onPreviewFile: (path: string) => void;
-  readonly onOpenPath: (link: PathLink) => void;
+  readonly review: ReviewScopeState | null;
+  readonly restorePreview: ReviewRestorePreviewStateMessage | null;
+  readonly operation: ReviewOperationResultMessage | null;
+  readonly agent: ReviewAgentStateMessage | null;
 }): React.JSX.Element | null {
-  const requestBranchDiff = useCallback((): void => {
-    if (sessionId !== null) {
-      vscode.postMessage({ type: "git.requestBranchDiff", sessionId });
-    }
-  }, [sessionId, vscode]);
-  const openFile = useCallback(
-    (path: string): void => onOpenPath({ path }),
-    [onOpenPath],
+  const postReview = useCallback(
+    (message: Sessionless<ReviewWebviewMessage>): void => {
+      if (sessionId !== null) {
+        vscode.postMessage({ ...message, sessionId } as WebviewToHostMessage);
+      }
+    },
+    [sessionId, vscode],
   );
   if (changes === null || changes.files.length === 0) {
     return null;
   }
+  const scope = review?.sessionId === sessionId ? review : null;
   return (
     <ReviewDock
       key={`${sessionId ?? "none"}:${changes.turnId}`}
       changes={changes}
-      onOpenFileDiff={onOpenFileDiff}
-      onPreviewFile={onPreviewFile}
-      branchDiff={branchDiff}
-      onRequestBranchDiff={requestBranchDiff}
-      onOpenFile={openFile}
+      review={scope}
+      restorePreview={restorePreview}
+      operation={operation}
+      agent={agent}
+      onOpenScope={(scopeKind: ReviewScopeKind, turnId?: string) =>
+        postReview({
+          type: "review.open",
+          scopeKind,
+          ...(turnId === undefined ? {} : { turnId }),
+        })
+      }
+      onSelectFile={(path) => {
+        if (scope !== null) {
+          postReview({
+            type: "review.selectFile",
+            reviewScopeId: scope.reviewScopeId,
+            baseline: scope.baseline,
+            path,
+          });
+        }
+      }}
+      onNavigate={(direction) => {
+        if (scope !== null) {
+          postReview({
+            type: "review.navigate",
+            reviewScopeId: scope.reviewScopeId,
+            baseline: scope.baseline,
+            direction,
+          });
+        }
+      }}
+      onMarkReviewed={(advance) => {
+        const current =
+          scope?.currentIndex === null || scope?.currentIndex === undefined
+            ? null
+            : scope.files[scope.currentIndex] ?? null;
+        if (scope !== null && current !== null) {
+          postReview({
+            type: "review.markReviewed",
+            reviewScopeId: scope.reviewScopeId,
+            baseline: scope.baseline,
+            path: current.path,
+            version: current.version,
+            advance,
+          });
+        }
+      }}
+      onPreviewRestore={(target) => {
+        const current =
+          scope?.currentIndex === null || scope?.currentIndex === undefined
+            ? null
+            : scope.files[scope.currentIndex] ?? null;
+        if (scope !== null && (target === "turn" || current !== null)) {
+          postReview({
+            type: "review.restorePreview",
+            reviewScopeId: scope.reviewScopeId,
+            baseline: scope.baseline,
+            target,
+            ...(target === "file" && current !== null
+              ? { path: current.path, version: current.version }
+              : {}),
+          });
+        }
+      }}
+      onConfirmRestore={(target, previewId) => {
+        if (scope !== null) {
+          postReview({
+            type: target === "file" ? "review.restoreFile" : "review.restoreTurn",
+            reviewScopeId: scope.reviewScopeId,
+            baseline: scope.baseline,
+            previewId,
+          });
+        }
+      }}
+      onRunAgentReview={() => {
+        if (scope !== null) {
+          postReview({
+            type: "review.runAgentReview",
+            reviewScopeId: scope.reviewScopeId,
+            baseline: scope.baseline,
+          });
+        }
+      }}
       deferMount
     />
   );

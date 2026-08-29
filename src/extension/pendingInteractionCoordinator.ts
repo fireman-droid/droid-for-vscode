@@ -257,6 +257,17 @@ export class PendingInteractionCoordinator {
     }
   }
 
+  replayPendingTo(
+    listener: (projection: PendingInteractionProjection) => void,
+  ): void {
+    for (const entry of [...this.pending.values()]) {
+      listener({
+        ...entry.context,
+        request: entry.request,
+      });
+    }
+  }
+
   hasPending(): boolean {
     return this.pending.size > 0;
   }

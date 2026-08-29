@@ -13,6 +13,7 @@ import {
 const SCOPE = { sessionId: 'session-a', turnId: 'turn-a' };
 const BEFORE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const AFTER = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+const PATH_BEFORE = 'cccccccccccccccccccccccccccccccccccccccc';
 
 function memoryPersistence(initial?: unknown): ChangeStatsPersistence & {
   stored: unknown;
@@ -129,6 +130,92 @@ describe('createTurnSnapshotStore', () => {
       after: AFTER,
     });
     expect(unlink).toHaveBeenCalled();
+  });
+
+  it('force-includes tool paths in both trees even when Git ignores them', async () => {
+    const path = 'artifacts/diff-review-test/a.txt';
+    const toolPath = join('/workspace', ...path.split('/'));
+    const writes = [BEFORE, PATH_BEFORE, AFTER];
+    const runGit = vi.fn<TurnSnapshotDependencies['runGit']>(
+      async (args) => {
+        const command = verb(args);
+        if (command === 'rev-parse') {
+          return gitResult(
+            args.includes('--absolute-git-dir')
+              ? '/workspace/.git\n'
+              : '/workspace/.git/objects\n',
+          );
+        }
+        if (command === 'write-tree') {
+          return gitResult(`${writes.shift()}\n`);
+        }
+        return gitResult('');
+      },
+    );
+    const persistence = memoryPersistence();
+    const { store } = createStore(runGit, {}, persistence);
+
+    await store.capture(SCOPE, 'before');
+    await store.capturePaths(SCOPE, [toolPath]);
+    await store.capture(SCOPE, 'after');
+
+    expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toMatchObject({
+      before: PATH_BEFORE,
+      after: AFTER,
+      snapshotPaths: [path],
+    });
+    const forcedAdds = runGit.mock.calls.filter(
+      ([args]) =>
+        verb(args) === 'add' &&
+        args.includes('-f') &&
+        args.includes(path),
+    );
+    expect(forcedAdds).toHaveLength(2);
+  });
+
+  it('keeps a missing Create path absent from the before tree', async () => {
+    const path = 'docs/new.md';
+    const toolPath = join('/workspace', ...path.split('/'));
+    const writes = [BEFORE, BEFORE, AFTER];
+    let present = false;
+    const runGit = vi.fn<TurnSnapshotDependencies['runGit']>(
+      async (args) => {
+        const command = verb(args);
+        if (command === 'rev-parse') {
+          return gitResult(
+            args.includes('--absolute-git-dir')
+              ? '/workspace/.git\n'
+              : '/workspace/.git/objects\n',
+          );
+        }
+        if (command === 'write-tree') {
+          return gitResult(`${writes.shift()}\n`);
+        }
+        if (command === 'add' && args.includes(path) && !present) {
+          return gitResult('', 128);
+        }
+        return gitResult('');
+      },
+    );
+    const { store } = createStore(runGit);
+
+    await store.capture(SCOPE, 'before');
+    await store.capturePaths(SCOPE, [toolPath]);
+    present = true;
+    await store.capture(SCOPE, 'after');
+
+    expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toMatchObject({
+      before: BEFORE,
+      after: AFTER,
+      snapshotPaths: [path],
+    });
+    const forcedAdds = runGit.mock.calls.filter(
+      ([args]) =>
+        verb(args) === 'add' &&
+        args.includes('-f') &&
+        args.includes(path),
+    );
+    expect(forcedAdds).toHaveLength(2);
   });
 
   it('diffs the two captured trees without binding an index', async () => {

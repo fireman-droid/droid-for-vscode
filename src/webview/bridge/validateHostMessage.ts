@@ -75,6 +75,7 @@ import {
   EDIT_RESEND_REJECT_REASONS,
   IMAGE_MEDIA_TYPES,
   IMAGE_ORIGINS,
+  MAX_ATTACHMENT_IMAGE_BASE64_LENGTH,
   MAX_ATTACHMENT_NAME_LENGTH,
   MAX_CHANGED_FILES_PER_TURN,
   GIT_FILE_STATUSES,
@@ -165,6 +166,7 @@ import {
   type TranscriptToolStatus,
   type TurnStatus,
 } from '../../shared/bridgeMessages';
+import { parseAttachmentImageData } from './parseAttachmentImageData';
 import {
   CHANGES_UPDATE_STATES,
   type ChangesUpdateState,
@@ -173,6 +175,7 @@ import { parseCustomModelsHostMessage } from '../../shared/customModelsProtocol'
 import { parseCanvasFeedbackDraftMessage } from '../../shared/canvasProtocol';
 import { parseMissionHostMessage } from '../../shared/missionProtocol';
 import { parseSubagentActivityMessage } from '../../shared/subagentProtocol';
+import { parseReviewHostMessage } from '../../shared/reviewProtocol';
 import {
   parseSessionBtwMessage,
   type SessionBtwMessage,
@@ -300,6 +303,8 @@ export function readHostMessage(
         return parseSessionSearchMessage(value);
       case 'session.attachments':
         return parseSessionAttachmentsMessage(value);
+      case 'session.attachmentImageData':
+        return parseAttachmentImageData(value);
       case 'session.editAttachments':
         return parseSessionEditAttachmentsMessage(value);
       case 'turn.editResendRejected':
@@ -332,6 +337,11 @@ export function readHostMessage(
         return parseGitBranchDiff(value);
       case 'git.commitResult':
         return parseGitCommitResult(value);
+      case 'review.state':
+      case 'review.restorePreview':
+      case 'review.operationResult':
+      case 'review.agentReviewState':
+        return parseReviewHostMessage(value);
       case 'runtime.diagnostic':
         return parseRuntimeDiagnostic(value);
       case 'turn.state':

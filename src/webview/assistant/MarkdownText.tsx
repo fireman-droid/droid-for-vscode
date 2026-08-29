@@ -1,5 +1,8 @@
 import { useAuiState } from '@assistant-ui/react';
-import { MarkdownTextPrimitive } from '@assistant-ui/react-markdown';
+import {
+  escapeCurrencyDollars,
+  MarkdownTextPrimitive,
+} from '@assistant-ui/react-markdown';
 import {
   createContext,
   isValidElement,
@@ -130,25 +133,15 @@ export function isInlineHtmlPreviewCandidate(
   return head.startsWith('<!doctype') || head.startsWith('<html');
 }
 
-const REMARK_PLUGINS = [remarkGfm, remarkMath];
+const REMARK_PLUGINS = [
+  remarkGfm,
+  [remarkMath, { singleDollarTextMath: true }] as [
+    typeof remarkMath,
+    { singleDollarTextMath: boolean },
+  ],
+];
 const REHYPE_PLUGINS = [rehypeKatex];
 const SAFE_HTTP_URL = /^https?:\/\//iu;
-/**
- * `maxCharsPerFrame` only ever binds while the reveal is behind, and it
- * overrides `drainMs` when it does: at 18 characters a frame a backlog
- * drains at ~1k characters a second, so reattaching to a turn that ran
- * while the panel was closed replayed its whole body as a typewriter,
- * and a fast live stream fell seconds behind. Sized like the thinking
- * log so the backlog honours `drainMs` instead; per-character pacing
- * during a live stream is set by `maxCharIntervalMs` and unaffected.
- */
-const TEXT_SMOOTH_OPTIONS = {
-  drainMs: 360,
-  maxCharIntervalMs: 10,
-  maxCharsPerFrame: 4_096,
-  minCommitMs: 40,
-} as const;
-
 export function isSafeMarkdownUrl(url: string | undefined): url is string {
   return typeof url === 'string' && SAFE_HTTP_URL.test(url);
 }
@@ -203,7 +196,7 @@ export function markdownUrlTransform(url: string, key: string): string {
 }
 
 export function normalizeMathDelimiters(input: string): string {
-  return input
+  const normalized = input
     .replace(
       /\\\[([\s\S]*?)\\\]/gu,
       (_match, formula: string) => `$$\n${formula.trim()}\n$$`,
@@ -212,6 +205,107 @@ export function normalizeMathDelimiters(input: string): string {
       /\\\(([\s\S]*?)\\\)/gu,
       (_match, formula: string) => `$${formula.trim()}$`,
     );
+  return escapeCurrencyDollars(
+    promoteBareLatexBlocks(promoteDisplayEnvironments(normalized)),
+  );
+}
+
+const DISPLAY_ENVIRONMENT = /\\(?:begin|end)\{(?:array|aligned|gathered|matrix|pmatrix|bmatrix|cases)\}/u;
+const DOUBLE_DOLLAR_MATH = /\$\$([\s\S]*?)\$\$/gu;
+const BARE_LATEX_COMMAND = /\\(?:operatorname|begin|boxed|text|qquad|frac|sqrt|binom|le|ge|ne|neq|times|cdot|infty)\b/u;
+const BARE_DISPLAY_ENVIRONMENT = /^\s*\\begin\{(?:array|aligned|gathered|matrix|pmatrix|bmatrix|cases)\}/u;
+const DISPLAY_ENVIRONMENT_END = /\\end\{(?:array|aligned|gathered|matrix|pmatrix|bmatrix|cases)\}/u;
+const CODE_FENCE = /^\s*(`{3,}|~{3,})/u;
+const HAN_CHARACTER = /\p{Script=Han}/u;
+
+function promoteDisplayEnvironments(input: string): string {
+  return input.replace(
+    DOUBLE_DOLLAR_MATH,
+    (match: string, formula: string) =>
+      DISPLAY_ENVIRONMENT.test(formula)
+        ? `$$\n${formula.trim()}\n$$`
+        : match,
+  );
+}
+
+function promoteBareLatexBlocks(input: string): string {
+  const lines = input.split('\n');
+  const output: string[] = [];
+  let inCodeFence = false;
+  let inExistingDisplay = false;
+  let inDisplayBlock = false;
+  let bareBlock: string[] = [];
+
+  const flushBareBlock = (): void => {
+    if (bareBlock.length === 0) {
+      return;
+    }
+    output.push('$$', bareBlock.join('\n').trim(), '$$');
+    bareBlock = [];
+    inDisplayBlock = false;
+  };
+
+  for (const line of lines) {
+    const fence = CODE_FENCE.test(line);
+    if (fence) {
+      flushBareBlock();
+      output.push(line);
+      inCodeFence = !inCodeFence;
+      continue;
+    }
+    if (inCodeFence) {
+      output.push(line);
+      continue;
+    }
+    if (inExistingDisplay) {
+      output.push(line);
+      if (line.trim() === '$$') {
+        inExistingDisplay = false;
+      }
+      continue;
+    }
+    if (line.trim() === '$$') {
+      flushBareBlock();
+      output.push('$$');
+      inExistingDisplay = true;
+      continue;
+    }
+    if (inDisplayBlock) {
+      bareBlock.push(line);
+      if (DISPLAY_ENVIRONMENT_END.test(line)) {
+        flushBareBlock();
+      }
+      continue;
+    }
+    if (line.includes('$$') || line.includes('$')) {
+      output.push(line);
+      continue;
+    }
+    if (!isBareLatexLine(line)) {
+      output.push(line);
+      continue;
+    }
+    if (BARE_DISPLAY_ENVIRONMENT.test(line) &&
+        !DISPLAY_ENVIRONMENT_END.test(line)) {
+      inDisplayBlock = true;
+      bareBlock.push(line);
+      continue;
+    }
+    output.push('$$', line.trim(), '$$');
+  }
+  flushBareBlock();
+  return output.join('\n');
+}
+
+function isBareLatexLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (trimmed.length === 0) {
+    return false;
+  }
+  if (trimmed.startsWith('\\')) {
+    return BARE_LATEX_COMMAND.test(trimmed);
+  }
+  return !HAN_CHARACTER.test(line) && BARE_LATEX_COMMAND.test(line);
 }
 
 /** Markdown percent-encodes spaces and CJK in URLs; file paths on
@@ -691,18 +785,20 @@ export const DroidMarkdownText = memo(function DroidMarkdownText():
   );
   return (
     <MessageStreamingContext.Provider value={running}>
-      <MarkdownTextPrimitive
-        className="dvx-markdown"
-        remarkPlugins={REMARK_PLUGINS}
-        rehypePlugins={REHYPE_PLUGINS}
-        preprocess={normalizeMathDelimiters}
-        components={TRANSCRIPT_COMPONENTS}
-        componentsByLanguage={COMPONENTS_BY_LANGUAGE}
-        skipHtml
-        urlTransform={markdownUrlTransform}
-        smooth={TEXT_SMOOTH_OPTIONS}
-        defer
-      />
+      <div data-aui-quote-selectable>
+        <MarkdownTextPrimitive
+          className="dvx-markdown"
+          remarkPlugins={REMARK_PLUGINS}
+          rehypePlugins={REHYPE_PLUGINS}
+          preprocess={normalizeMathDelimiters}
+          components={TRANSCRIPT_COMPONENTS}
+          componentsByLanguage={COMPONENTS_BY_LANGUAGE}
+          skipHtml
+          urlTransform={markdownUrlTransform}
+          smooth={false}
+          defer
+        />
+      </div>
     </MessageStreamingContext.Provider>
   );
 });

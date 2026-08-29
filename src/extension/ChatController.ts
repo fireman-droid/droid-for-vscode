@@ -96,21 +96,23 @@ import {
   type SessionHistoryLoader,
 } from '../runtime/history/SessionHistory';
 import { applySubagentSettlement, collectRunningSubagentRows, collectToolFilePaths, collectTranscriptSubagentRows, createTurnActivityState, hasSubagentRows, projectAssistantDelta, projectSubagentStarted, projectThinkingComplete, projectThinkingDelta, projectToolEvent, reconcileSubagentSummaries, settleZombieSubagents, thinkingSegmentKey, type PendingSubagentRow, type TurnActivityState } from './turnActivityState';
-import { handleQueueAdd, handleQueueUpdate, handleQueueRemove, handleQueueResume, handleQueuePromote, handleQueueClear, settleQueueAfterTurn, projectQueueState, discardQueuedPrompts } from './chat/queue';
+import { handleQueueAdd, handleQueueUpdate, handleQueueRemove, handleQueueResume, handleQueuePromote, handleQueueClear, settleQueueAfterTurn, discardQueuedPrompts } from './chat/queue';
 import { handleMcpRefresh, pushMcp, handleMcpServerToggle, handleMcpServerAdd, handleMcpServerRemove, handleMcpServerAuthenticate } from './chat/mcp';
 import { dispatchCustomModels, type CustomModelsGateway } from './chat/customModels'; import type { CustomModelDiscoveryGateway } from './chat/modelDiscovery'; import type { ProviderRegistry } from './chat/providerRegistry';
 import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRefresh, pushSkills, handleSkillToggle, handlePluginsRefresh, handleCommandsRefresh, recordRecentCommand, emitModelCatalog, projectModelCatalog, MODEL_CATALOG_FAILED_MESSAGE } from './chat/capabilityPanels';
-import { handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddImage, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, stageCapturedSelectionOutcome, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
+import { handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, stageCapturedSelectionOutcome, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
+import { handleAttachmentAddImage, handleAttachmentAddPdf, handleAttachmentAddRemoteImage, handleAttachmentReadImage } from './chat/attachmentImages';
 import { handleSettingUpdate, emitSettings, refreshSettingsAfterRuntimeEvent, projectConfirmedSettings, SETTINGS_READ_FAILED_MESSAGE } from './chat/settings';
 import { handleFileOpenDiff, handleFilePreview, handleInlineHtmlPreview, handleTerminalOpenMirror, handleGitRequestStatus, handleGitRequestBranchDiff, handleGitCommit, handleWorkspaceOpenPath, handleWorkspaceSearchFiles, handleWorkspaceReadImage } from './chat/workspaceActions';
 import { handleRewindInfo, handleEditResend, handleEditStageBegin, handleEditStageCancel } from './chat/editResend';
-import { stampRunningFlags, setSessionRunning, ensureBackgroundRunningPoll, seedBackgroundRunning } from './chat/sessionRunning';
+import { handleReviewMessage } from './chat/reviewActions';
+import { setSessionRunning, ensureBackgroundRunningPoll, seedBackgroundRunning } from './chat/sessionRunning';
 import { settleTurnSubagents, clearZombieSubagentWatch, armReplayedSubagentWatch } from './chat/subagentWatch';
 import { clearTurnWatchdog, type TurnWatchdogState } from './chat/turnWatchdog';
 import { handleSubagentOpen, handleSubagentPanel } from './chat/subagentPanel';
 import type { SubagentTranscriptService } from './SubagentTranscriptService';
 import { emitEarlyRecoverySnapshot, reconcileDaemonTurn, scheduleRecoveryCheckpoint, checkpointRecoveryTranscript, flushRecoveryCheckpoint, recoveryTurnId } from './chat/recovery';
-import { handleSessionNew, handleWorktreeCreateSession, handleSessionRename, handleSessionFavorite, handleSessionArchive, handleSessionUnarchive, handleArchivedRefresh, handleSessionSearch, handleSessionSelect, handleRefresh, handleSessionFork, loadCatalog, hasCatalogSession, activeSessionSummary, withActiveSession, beginCatalogLoad, bindCatalogViewToWorkspace, clearCatalog, isCurrentCatalogRequest, discardCatalogRequest, touchActiveSession, SESSION_NEW_FAILED_MESSAGE } from './chat/sessionDirectory';
+import { handleSessionNew, handleWorktreeCreateSession, handleSessionRename, handleSessionFavorite, handleSessionArchive, handleSessionUnarchive, handleArchivedRefresh, handleSessionSearch, handleSessionSelect, handleRefresh, handleSessionFork, loadCatalog, hasCatalogSession, activeSessionSummary, beginCatalogLoad, bindCatalogViewToWorkspace, clearCatalog, isCurrentCatalogRequest, discardCatalogRequest, touchActiveSession, SESSION_NEW_FAILED_MESSAGE } from './chat/sessionDirectory';
 import { handleReady, startReplacement, replaceRuntime, loadHistoryTimed, resetSessionMetadata, closeAllRuntimesForDispose, queueWorkspaceTransition, isCurrentRuntime, ensureActiveRuntimeWorkspaceCurrent, isTargetWorkspaceCurrent, emitWorkspaceUnavailable, isSameWorkspaceContext, WORKSPACE_CHANGED_MESSAGE } from './chat/runtimeLifecycle';
 import { handleSend, handleStop, handleRetry, handleSessionCompact, projectTranscript } from './chat/turnFlow';
 import { handleMissionCommand, handleMissionStart } from './chat/mission/controller';
@@ -145,6 +147,7 @@ import {
   type ChangeStatsReader,
 } from './changeStats';
 import type { TurnSnapshotStore } from './turnSnapshots';
+import type { ReviewCoordinator } from './reviewCoordinator';
 import { base64ByteLength } from '../shared/transcriptLimits';
 import {
   EMPTY_SESSION_TOKEN_USAGE,
@@ -156,6 +159,8 @@ import { BtwSideChat, type BtwSidecarFactory } from './btwSideChat';
 import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
 import { isExecuteToolName } from '../shared/toolOutput';
 import type { TerminalMirror } from './terminalMirror';
+import { buildHostSnapshot } from './chat/hostSnapshot';
+import { replayControllerTo } from './chat/browserReplay';
 import {
   createUnavailableAttachmentSources,
   MAX_IMAGE_ATTACHMENT_BYTES,
@@ -444,6 +449,7 @@ export class ChatController {
     readonly turnSnapshots?: TurnSnapshotStore,
     readonly planDocuments: PlanDocumentGateway =
       createUnavailablePlanDocumentGateway(),
+    readonly reviewCoordinator?: ReviewCoordinator,
   ) {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
@@ -659,6 +665,16 @@ export class ChatController {
       case 'file.openDiff':
         handleFileOpenDiff(this, message.sessionId, message.turnId, message.path);
         return;
+      case 'review.open':
+      case 'review.navigate':
+      case 'review.markReviewed':
+      case 'review.refresh':
+      case 'review.restorePreview':
+      case 'review.restoreFile':
+      case 'review.restoreTurn':
+      case 'review.runAgentReview':
+        handleReviewMessage(this, message);
+        return;
       case 'file.preview':
         handleFilePreview(this, message.sessionId, message.path);
         return;
@@ -758,6 +774,32 @@ export class ChatController {
           message.name,
           message.mediaType,
           message.dataBase64,
+          message.stage,
+          message.replaceAttachmentId,
+        );
+        return;
+      case 'attachment.addPdf':
+        handleAttachmentAddPdf(
+          this,
+          message.sessionId,
+          message.name,
+          message.dataBase64,
+          message.stage,
+        );
+        return;
+      case 'attachment.addRemoteImage':
+        handleAttachmentAddRemoteImage(
+          this,
+          message.sessionId,
+          message.url,
+          message.stage,
+        );
+        return;
+      case 'attachment.readImage':
+        handleAttachmentReadImage(
+          this,
+          message.sessionId,
+          message.attachmentId,
           message.stage,
         );
         return;
@@ -889,6 +931,7 @@ export class ChatController {
     clearZombieSubagentWatch(this); clearTurnWatchdog(this);
     this.fileDiff.dispose?.(); this.changeStats.dispose?.();
     this.turnSnapshots?.dispose();
+    this.reviewCoordinator?.dispose();
     this.planDocuments.dispose();
     this.disposed = true;
     this.runtimeGeneration += 1;
@@ -902,80 +945,10 @@ export class ChatController {
     return this.disposal;
   }
   emitSnapshot(): void {
-    if (this.turn === null) {
-      // Invariant: an open turn scope always corresponds to the live
-      // turn. Session adoption paths clear the turn without a terminal
-      // turn.state, so close the scope here.
-      this.diagnostics?.endTurnScope?.();
-    }
-    const sessions = stampRunningFlags(this, 
-      withActiveSession(this, this.sessions),
-    );
-    const workspaceRoot = this.getWorkspaceContext().cwd;
-    const snapshot = {
-      type: 'host.snapshot',
-      sessionId: this.sessionId,
-      connection: this.connection,
-      turn:
-        this.turn === null
-          ? null
-          : {
-              turnId: this.turn.turnId,
-              status: this.turn.status,
-              ...(this.turn.error === undefined
-                ? {}
-                : { error: this.turn.error }),
-            },
-      sessions,
-      settings: this.settings,
-      context: this.context,
-      modelCatalog: this.modelCatalog,
-      transcript: this.transcript.transcript,
-      historyStatus: this.transcript.historyStatus,
-      truncated: this.transcript.truncated,
-      ...(this.mission === null || this.sessionId === null
-        ? {}
-        : { mission: this.mission }),
-      ...(this.worktreeCreateAvailable
-        ? { worktreeCreateAvailable: true }
-        : {}),
-      ...(this.btwSideChat === null ? {} : { btwAvailable: true }),
-      // Daemon-backed sessions keep detached turns running, so the
-      // webview may allow switching away mid-turn; omitted in process
-      // mode (fail closed: switching stays blocked there).
-      ...(this.runtime?.supportsBackgroundTurns?.() === true
-        ? { backgroundTurnsAvailable: true }
-        : {}),
-      // Omitted when the session has no usage data yet (fail quiet).
-      ...(this.sessionId === null ||
-      (this.tokenUsage.cumulative === null &&
-        this.tokenUsage.lastTurn === null)
-        ? {}
-        : { tokenUsage: this.tokenUsage }),
-      // Omitted while empty: an absent field and an empty queue are
-      // the same state on the webview side.
-      ...(this.sessionId === null ||
-      this.queuedPrompts.items.length === 0
-        ? {}
-        : { queue: projectQueueState(this) }),
-      // Lets the webview rebase absolute transcript paths (the
-      // path-link Preview entry); omitted without a usable workspace
-      // so rebase-dependent affordances fail closed.
-      ...(workspaceRoot === null ? {} : { workspaceRoot }),
-    } satisfies UnsequencedHostMessage;
-    try {
-      this.recordHost({
-        level: 'debug',
-        name: 'host.perf.snapshot',
-        attributes: {
-          bytes: JSON.stringify(snapshot).length,
-          items: this.transcript.transcript.length,
-        },
-      });
-    } catch {
-      // Measurement failures never block the snapshot.
-    }
-    this.emit(snapshot);
+    this.emit(buildHostSnapshot(this));
+  }
+  async replayTo(listener: ChatControllerListener): Promise<void> {
+    return replayControllerTo(this, listener);
   }
   recordHost(event: RuntimeDiagnosticEvent): void {
     try {
@@ -990,10 +963,7 @@ export class ChatController {
     if (this.disposed) {
       return;
     }
-    const withSequence = {
-      ...message,
-      sequence: this.nextSequence(),
-    } as ControllerHostMessage;
+    const withSequence = this.stamp(message);
     if (this.turnIo !== null) {
       this.turnIo.counts.set(
         message.type,
@@ -1009,6 +979,20 @@ export class ChatController {
     for (const listener of this.listeners) {
       listener(withSequence);
     }
+  }
+  emitTo(
+    listener: ChatControllerListener,
+    message: UnsequencedHostMessage,
+  ): void {
+    if (!this.disposed) {
+      listener(this.stamp(message));
+    }
+  }
+  private stamp(message: UnsequencedHostMessage): ControllerHostMessage {
+    return {
+      ...message,
+      sequence: this.nextSequence(),
+    } as ControllerHostMessage;
   }
   /**
    * Names the first guard that would drop a webview panel request for

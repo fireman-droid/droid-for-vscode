@@ -2,13 +2,20 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 
 import { createPortal } from "react-dom";
 
 import type {
+  AttachmentStage,
   AttachmentKind,
   AttachmentSummary,
   EditAttachmentSummary,
+  ImageMediaType,
   SentAttachmentSummary,
 } from "../../../shared/bridgeMessages";
 import { dismissOverlay } from "../Lightbox";
 import { getImagePreview } from "../imagePreviewCache";
+import type { AttachmentImageEntry } from "../store";
+import {
+  isAnimatedWebp,
+  StagedImageLightbox,
+} from "../StagedImageLightbox";
 import { ImageLightbox } from "../TranscriptImage";
 
 export const ATTACHMENT_KIND_LABELS: Record<AttachmentKind, string> = {
@@ -21,16 +28,31 @@ export const ATTACHMENT_KIND_LABELS: Record<AttachmentKind, string> = {
 
 export function AttachmentChip({
   attachment,
+  image,
+  onRequestImage,
+  onReplaceImage,
   onRemove,
 }: {
   readonly attachment: AttachmentSummary;
+  readonly image?: AttachmentImageEntry;
+  readonly onRequestImage?: (attachmentId: string) => void;
+  readonly onReplaceImage?: (
+    attachmentId: string,
+    name: string,
+    mediaType: ImageMediaType,
+    dataBase64: string,
+  ) => void;
   readonly onRemove: (attachmentId: string) => void;
 }): React.JSX.Element {
   return (
     <AttachmentTile
       kind={attachment.kind}
+      attachmentId={attachment.id}
       name={attachment.name}
       sizeBytes={attachment.sizeBytes}
+      image={image}
+      onRequestImage={onRequestImage}
+      onReplaceImage={onReplaceImage}
       onRemove={() => onRemove(attachment.id)}
     />
   );
@@ -38,16 +60,50 @@ export function AttachmentChip({
 
 export function EditAttachmentChip({
   attachment,
+  image,
+  onRequestImage,
+  onReplaceImage,
   onRemove,
 }: {
   readonly attachment: EditAttachmentSummary;
+  readonly image?: AttachmentImageEntry;
+  readonly onRequestImage?: (
+    attachmentId: string,
+    stage: AttachmentStage,
+  ) => void;
+  readonly onReplaceImage?: (
+    attachmentId: string,
+    name: string,
+    mediaType: ImageMediaType,
+    dataBase64: string,
+    stage: AttachmentStage,
+  ) => void;
   readonly onRemove: (attachmentId: string) => void;
 }): React.JSX.Element {
   return (
     <AttachmentTile
       kind={attachment.kind}
+      attachmentId={attachment.id}
       name={attachment.name}
       sizeBytes={attachment.sizeBytes}
+      image={image}
+      onRequestImage={
+        onRequestImage === undefined
+          ? undefined
+          : (attachmentId) => onRequestImage(attachmentId, "edit")
+      }
+      onReplaceImage={
+        onReplaceImage === undefined
+          ? undefined
+          : (attachmentId, name, mediaType, dataBase64) =>
+              onReplaceImage(
+                attachmentId,
+                name,
+                mediaType,
+                dataBase64,
+                "edit",
+              )
+      }
       unrestorable={!attachment.restorable}
       onRemove={() => onRemove(attachment.id)}
     />
@@ -70,20 +126,52 @@ export function SentAttachmentChip({
 
 function AttachmentTile({
   kind,
+  attachmentId,
   name,
   sizeBytes,
+  image,
   unrestorable = false,
+  onRequestImage,
+  onReplaceImage,
   onRemove,
 }: {
   readonly kind: AttachmentKind;
+  readonly attachmentId?: string;
   readonly name: string;
   readonly sizeBytes: number;
+  readonly image?: AttachmentImageEntry;
   readonly unrestorable?: boolean;
+  readonly onRequestImage?: (attachmentId: string) => void;
+  readonly onReplaceImage?: (
+    attachmentId: string,
+    name: string,
+    mediaType: ImageMediaType,
+    dataBase64: string,
+  ) => void;
   readonly onRemove?: () => void;
 }): React.JSX.Element {
   const [previewOpen, setPreviewOpen] = useState(false);
+  useEffect(() => {
+    if (
+      kind === "image" &&
+      attachmentId !== undefined &&
+      image === undefined
+    ) {
+      onRequestImage?.(attachmentId);
+    }
+  }, [attachmentId, image, kind, onRequestImage]);
   const imageSrc =
-    kind === "image" ? getImagePreview(name, sizeBytes) : undefined;
+    kind !== "image"
+      ? undefined
+      : image?.status === "ready"
+        ? `data:${image.mediaType};base64,${image.dataBase64}`
+        : getImagePreview(name, sizeBytes);
+  const stagedImage =
+    image?.status === "ready" &&
+    attachmentId !== undefined &&
+    onReplaceImage !== undefined
+      ? image
+      : null;
   const openPreview = (event: ReactMouseEvent): void => {
     event.stopPropagation();
     setPreviewOpen(true);
@@ -133,7 +221,27 @@ function AttachmentTile({
           ×
         </button>
       ) : null}
-      {previewOpen && imageSrc !== undefined ? (
+      {previewOpen && imageSrc !== undefined && stagedImage !== null ? (
+        <StagedImageLightbox
+          src={imageSrc}
+          mediaType={stagedImage.mediaType}
+          annotatable={
+            stagedImage.mediaType !== "image/gif" &&
+            (stagedImage.mediaType !== "image/webp" ||
+              !isAnimatedWebp(stagedImage.dataBase64))
+          }
+          onSave={(dataBase64, mediaType) =>
+            onReplaceImage?.(
+              attachmentId!,
+              name,
+              mediaType,
+              dataBase64,
+            )
+          }
+          onClose={() => setPreviewOpen(false)}
+        />
+      ) : null}
+      {previewOpen && imageSrc !== undefined && stagedImage === null ? (
         <ImageLightbox src={imageSrc} onClose={() => setPreviewOpen(false)} />
       ) : null}
       {previewOpen && imageSrc === undefined ? (

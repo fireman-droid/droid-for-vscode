@@ -387,6 +387,31 @@ describe('parseWebviewMessage', () => {
       dataBase64: 'aW1hZ2U=',
     },
     {
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'annotated.png',
+      mediaType: 'image/png',
+      dataBase64: 'aW1hZ2U=',
+      replaceAttachmentId: 'attachment-1',
+    },
+    {
+      type: 'attachment.addPdf',
+      sessionId: 'session-1',
+      name: 'document.pdf',
+      dataBase64: 'JVBERg==',
+    },
+    {
+      type: 'attachment.addRemoteImage',
+      sessionId: 'session-1',
+      url: 'https://images.example.com/photo.png',
+    },
+    {
+      type: 'attachment.readImage',
+      sessionId: 'session-1',
+      attachmentId: 'attachment-1',
+      stage: 'edit',
+    },
+    {
       type: 'attachment.pick',
       sessionId: 'session-1',
       stage: 'edit',
@@ -1038,6 +1063,30 @@ describe('parseWebviewMessage', () => {
       mediaType: 'image/png',
       dataBase64: 'aW1hZ2U=',
       stage: null,
+    },
+    {
+      type: 'attachment.addRemoteImage',
+      sessionId: 'session-1',
+      url: 'http://images.example.com/photo.png',
+    },
+    {
+      type: 'attachment.addRemoteImage',
+      sessionId: 'session-1',
+      url: 'https://user:password@images.example.com/photo.png',
+    },
+    {
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'a.png',
+      mediaType: 'image/png',
+      dataBase64: 'aW1hZ2U=',
+      replaceAttachmentId: '',
+    },
+    {
+      type: 'attachment.addPdf',
+      sessionId: 'session-1',
+      name: 'document.pdf',
+      dataBase64: 'not-padded',
     },
     {
       // URI list must not be empty.

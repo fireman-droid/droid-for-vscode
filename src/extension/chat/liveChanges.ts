@@ -5,23 +5,24 @@ import type { RuntimeEvent } from '../../runtime/runtimeEvents';
 import { createTurnChangesLedger } from '../turnChangesLedger';
 import { isTurnActive, type ChatControllerInternals } from './internals';
 
-/** Captures complete file-tool inputs before the runtime stream advances. */
+/** Captures a complete file-tool path set before the stream advances. */
 export async function capturePreToolBaseline(
   ctl: ChatControllerInternals,
   sessionId: string,
   turnId: string,
   event: Extract<RuntimeEvent, { type: 'tool-start' }>,
 ): Promise<boolean> {
-  if (event.inputComplete !== true) {
-    return false;
-  }
   const paths =
     event.filePaths ??
     (event.filePath === undefined ? [] : [event.filePath]);
-  if (paths.length === 0) {
+  if (
+    paths.length === 0 ||
+    (event.inputComplete !== true && event.filePathsComplete !== true)
+  ) {
     return false;
   }
   try {
+    await ctl.turnSnapshots?.capturePaths({ sessionId, turnId }, paths);
     await ctl.changeStats.captureTurnBaseline?.(
       { sessionId, turnId },
       paths,

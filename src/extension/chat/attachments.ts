@@ -22,6 +22,7 @@ import { isSafeWorkspaceRelativePath } from '../../shared/validateMessage';
 import { stableTranscriptId } from '../hostTranscriptState';
 import {
   MAX_IMAGE_ATTACHMENT_BYTES,
+  MAX_PDF_ATTACHMENT_BYTES,
   type AttachmentCaptureOutcome,
   type AttachmentPayload,
   type AttachmentPickOutcome,
@@ -328,48 +329,6 @@ export function handleAttachmentAddPath(
  * whitelist, base64 shape, 4 MB cap); the decoded-size check here
  * keeps this path bound by the same rule as the file picker.
  */
-export function handleAttachmentAddImage(
-  ctl: ChatControllerInternals,
-    sessionId: string,
-    name: string,
-    mediaType: ImageMediaType,
-    dataBase64: string,
-    stage?: AttachmentStage,
-  ): void {
-    if (!canStageAttachments(ctl, sessionId, stage)) {
-      return;
-    }
-    if (stagedCount(ctl, stage) >= MAX_PENDING_ATTACHMENTS) {
-      ctl.emitSessionDiagnostic(
-        'attachment-limit',
-        ATTACHMENT_LIMIT_MESSAGE,
-      );
-      return;
-    }
-    const sizeBytes = base64ByteLength(dataBase64);
-    if (sizeBytes > MAX_IMAGE_ATTACHMENT_BYTES) {
-      ctl.emitSessionDiagnostic(
-        'attachment-rejected',
-        ATTACHMENT_TOO_LARGE_MESSAGE,
-      );
-      return;
-    }
-    stageAttachmentPayloads(ctl, 
-      [
-        {
-          kind: 'image',
-          name,
-          data: dataBase64,
-          mediaType,
-          sizeBytes,
-          truncated: false,
-        },
-      ],
-      undefined,
-      stage,
-    );
-}
-
 /**
  * Stages files dropped onto the composer as `file://` URIs (editor
  * explorer drags). URIs resolving outside the active workspace are

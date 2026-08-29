@@ -16,6 +16,8 @@ import {
 import { toOpenEditorRelativePaths } from './openEditorTabs';
 import type { RuntimeImageMediaType } from '../runtime/DroidRuntime';
 import { toWorkspaceRelativePath } from '../runtime/toolFilePath';
+import { readPublicHttpsImage } from './remoteImageAttachment';
+import type { DiffSelectionRegistry } from './diffSelectionRegistry';
 
 const IMAGE_MEDIA_TYPES: Record<string, RuntimeImageMediaType> = {
   '.jpg': 'image/jpeg',
@@ -30,7 +32,9 @@ const IMAGE_MEDIA_TYPES: Record<string, RuntimeImageMediaType> = {
  * text editor because focusing the webview clears
  * `window.activeTextEditor`.
  */
-export function createVscodeAttachmentSources(): AttachmentSources & {
+export function createVscodeAttachmentSources(
+  diffSelections?: DiffSelectionRegistry,
+): AttachmentSources & {
   dispose(): void;
 } {
   let lastTextEditor: vscode.TextEditor | undefined =
@@ -119,11 +123,18 @@ export function createVscodeAttachmentSources(): AttachmentSources & {
         end.character === 0 && end.line > start.line
           ? end.line
           : end.line + 1;
+      const diff = diffSelections?.resolve(editor.document.uri);
       return Promise.resolve({
         status: 'captured',
         item: selectionAttachmentPayload({
-          displayName: displayName(editor.document),
-          relativePath: workspaceRelativePath(editor.document),
+          displayName:
+            diff === undefined
+              ? displayName(editor.document)
+              : `${displayNameFromPath(diff.path)} · ${diff.label}`,
+          relativePath:
+            diff === undefined
+              ? workspaceRelativePath(editor.document)
+              : `${diff.path} [${diff.label}; ${diff.side}; scope ${diff.reviewScopeId}]`,
           startLine,
           endLine,
           text,
@@ -220,6 +231,10 @@ export function createVscodeAttachmentSources(): AttachmentSources & {
       return { status: 'picked', items: [payload] };
     },
 
+    readRemoteImage(url): Promise<AttachmentPickOutcome> {
+      return readPublicHttpsImage(url);
+    },
+
     readProblems(): Promise<AttachmentCaptureOutcome> {
       const root = vscode.workspace.workspaceFolders?.[0]?.uri;
       if (root === undefined) {
@@ -301,6 +316,10 @@ export function createVscodeAttachmentSources(): AttachmentSources & {
       subscription.dispose();
     },
   };
+}
+
+function displayNameFromPath(path: string): string {
+  return path.split('/').at(-1) ?? path;
 }
 
 /** Most diagnostics included in one Problems attachment. */

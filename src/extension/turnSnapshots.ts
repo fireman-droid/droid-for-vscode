@@ -8,13 +8,13 @@ import {
   unlink as fsUnlink,
 } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
-
 import {
   MAX_BRIDGE_ID_LENGTH,
   MAX_CHANGED_FILES_PER_TURN,
 } from '../shared/bridgeMessages';
 import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
 import type { RuntimeDiagnosticEvent } from '../runtime/runtimeDiagnostics';
+import { toWorkspaceRelativePath } from '../runtime/toolFilePath';
 import {
   parseGitNumstat,
   type ChangeStatsPersistence,
@@ -31,7 +31,6 @@ export const MAX_NUMSTAT_OUTPUT_BYTES = 1024 * 1024;
 export const MAX_OPEN_BASELINE_BYTES = 16 * 1024 * 1024;
 export const TURN_SNAPSHOTS_STORAGE_KEY = 'droidvisx.turnSnapshots';
 export const TURN_SNAPSHOTS_VERSION = 1;
-
 const TREE_OID = /^[0-9a-f]{40}$/;
 const GIT_CONFIG_ARGS = [
   '-c',
@@ -49,9 +48,9 @@ export interface TurnSnapshotRecord {
   readonly turnId: string;
   readonly before?: string;
   readonly after?: string;
+  readonly snapshotPaths?: readonly string[];
   readonly files?: readonly CommittedFileStat[];
 }
-
 export interface GitRunResult {
   readonly stdout: Buffer;
   readonly code: number | null;
@@ -85,8 +84,18 @@ export interface TurnSnapshotStore {
     scope: TurnSnapshotScope,
     phase: 'before' | 'after',
   ): Promise<string | undefined>;
+  capturePaths(scope: TurnSnapshotScope, paths: readonly string[]): Promise<void>;
   diff(scope: TurnSnapshotScope): Promise<ReadonlyMap<string, FileChangeStat>>;
   readTreeFile(scope: TurnSnapshotScope, path: string): Promise<string | undefined>;
+  /**
+   * Reads exact bounded bytes from one captured tree. `null` means the
+   * path was absent from that valid tree; `undefined` means unavailable.
+   */
+  readTreeBytes(
+    scope: TurnSnapshotScope,
+    path: string,
+    phase: 'before' | 'after',
+  ): Promise<Buffer | null | undefined>;
   rememberFiles(
     scope: TurnSnapshotScope,
     files: readonly CommittedFileStat[],
@@ -181,6 +190,16 @@ export function createTurnSnapshotStore(
       maxStdoutBytes,
     });
 
+  const addSnapshotPaths = async (
+    root: string, paths: readonly string[], env: NodeJS.ProcessEnv, deadline: number,
+  ): Promise<'ok' | 'timeout' | 'failed'> => {
+    for (const path of paths) {
+      const added = await git(root, ['add', '-f', '-A', '--', path], env, deadline, 4096);
+      if (added.timedOut) return 'timeout';
+      if (added.code !== 0 && added.code !== 128) return 'failed';
+    }
+    return 'ok';
+  };
   const resolveLayout = async (
     root: string,
     deadline: number,
@@ -272,6 +291,17 @@ export function createTurnSnapshotStore(
           add.timedOut ? 'timeout' : 'add-failed',
         );
       }
+      const snapshotPaths = phase === 'after'
+        ? readTurn(sessions, scope.sessionId, scope.turnId)?.snapshotPaths
+        : undefined;
+      if (snapshotPaths !== undefined && snapshotPaths.length > 0) {
+        const added = await addSnapshotPaths(root, snapshotPaths, env, deadline);
+        if (added !== 'ok') return failCapture(
+          scope,
+          phase,
+          added === 'timeout' ? 'timeout' : 'add-paths-failed',
+        );
+      }
       const written = await git(root, ['write-tree'], env, deadline, 4096);
       if (written.timedOut || written.code !== 0) {
         return failCapture(
@@ -298,9 +328,128 @@ export function createTurnSnapshotStore(
     }
   };
 
+  const capturePathsNow = async (
+    scope: TurnSnapshotScope,
+    paths: readonly string[],
+  ): Promise<void> => {
+    if (disposed || storeDisabled || disabledSessions.has(scope.sessionId)) return;
+    const record = readTurn(sessions, scope.sessionId, scope.turnId);
+    if (record?.before === undefined) return;
+    const root = getWorkspaceRoot();
+    if (root === undefined) return;
+    const captured = new Set(record.snapshotPaths ?? []);
+    const additions = [...new Set(paths)]
+      .flatMap((path) => toWorkspaceRelativePath(root, path) ?? [])
+      .filter((path) => !captured.has(path))
+      .slice(0, Math.max(0, MAX_CHANGED_FILES_PER_TURN - captured.size));
+    if (additions.length === 0) return;
+    const deadline = dependencies.now() + SNAPSHOT_TIMEOUT_MS;
+    const resolved = await resolveLayout(root, deadline);
+    if (resolved === undefined) return void failCapture(
+      scope, 'before', 'not-a-git-workspace',
+    );
+    const indexFile = join(storageDir, `index-${++indexSeq}`);
+    try {
+      await dependencies.mkdir(objectsDir);
+      const env = snapshotEnv(indexFile, resolved.repoObjectsDir);
+      const loaded = await git(
+        root,
+        ['read-tree', record.before],
+        env,
+        deadline,
+        4096,
+      );
+      if (loaded.timedOut || loaded.code !== 0) return void failCapture(
+          scope,
+          'before',
+          loaded.timedOut ? 'timeout' : 'read-tree-failed',
+      );
+      const added = await addSnapshotPaths(root, additions, env, deadline);
+      if (added !== 'ok') return void failCapture(
+        scope,
+        'before',
+        added === 'timeout' ? 'timeout' : 'add-paths-failed',
+      );
+      const written = await git(root, ['write-tree'], env, deadline, 4096);
+      if (written.timedOut || written.code !== 0) return void failCapture(
+          scope,
+          'before',
+          written.timedOut ? 'timeout' : 'write-tree-failed',
+      );
+      const oid = written.stdout.toString('utf8').trim().toLowerCase();
+      if (!TREE_OID.test(oid)) return void failCapture(
+        scope, 'before', 'invalid-tree-oid',
+      );
+      upsertTurn(sessions, scope, {
+        before: oid,
+        snapshotPaths: [...captured, ...additions],
+      });
+      await persist();
+    } catch (error) {
+      return void failCapture(
+        scope,
+        'before',
+        error instanceof Error ? error.message : 'capture-paths-failed',
+      );
+    } finally {
+      await dependencies.unlink(indexFile).catch(() => undefined);
+    }
+  };
+
+  const readTreeBytes = async (
+    scope: TurnSnapshotScope,
+    path: string,
+    phase: 'before' | 'after',
+  ): Promise<Buffer | null | undefined> => {
+    if (!isSafeWorkspaceRelativePath(path) || disposed || storeDisabled) {
+      return undefined;
+    }
+    const oid = readTurn(sessions, scope.sessionId, scope.turnId)?.[phase];
+    if (oid === undefined) {
+      return undefined;
+    }
+    const root = getWorkspaceRoot();
+    if (root === undefined) {
+      return undefined;
+    }
+    const deadline = dependencies.now() + SNAPSHOT_TIMEOUT_MS;
+    const resolved = await resolveLayout(root, deadline);
+    if (resolved === undefined) {
+      return undefined;
+    }
+    const env = readEnv(resolved.repoObjectsDir);
+    const result = await git(
+      root,
+      ['show', `${oid}:${path}`],
+      env,
+      deadline,
+      MAX_OPEN_BASELINE_BYTES,
+    );
+    if (result.timedOut) {
+      return undefined;
+    }
+    if (result.code === 0) {
+      return result.stdout;
+    }
+    if (result.code !== 128) {
+      return undefined;
+    }
+    const tree = await git(
+      root,
+      ['cat-file', '-e', `${oid}^{tree}`],
+      env,
+      deadline,
+      4096,
+    );
+    return tree.timedOut || tree.code !== 0 ? undefined : null;
+  };
+
   return {
     capture(scope, phase) {
       return enqueue(() => captureNow(scope, phase));
+    },
+    capturePaths(scope, paths) {
+      return enqueue(() => capturePathsNow(scope, paths));
     },
     async diff(scope) {
       const record = readTurn(sessions, scope.sessionId, scope.turnId);
@@ -355,58 +504,16 @@ export function createTurnSnapshotStore(
       return parseGitNumstat(result.stdout.toString('utf8'));
     },
     async readTreeFile(scope, path) {
-      if (
-        !isSafeWorkspaceRelativePath(path) ||
-        disposed ||
-        storeDisabled
-      ) {
+      const bytes = await readTreeBytes(scope, path, 'before');
+      if (bytes === undefined) {
         return undefined;
       }
-      const record = readTurn(sessions, scope.sessionId, scope.turnId);
-      if (record?.before === undefined) {
-        return undefined;
+      if (bytes === null) {
+        return '';
       }
-      const root = getWorkspaceRoot();
-      if (root === undefined) {
-        return undefined;
-      }
-      const deadline = dependencies.now() + SNAPSHOT_TIMEOUT_MS;
-      const resolved = await resolveLayout(root, deadline);
-      if (resolved === undefined) {
-        return undefined;
-      }
-      const env = readEnv(resolved.repoObjectsDir);
-      const result = await git(
-        root,
-        ['show', `${record.before}:${path}`],
-        env,
-        deadline,
-        MAX_OPEN_BASELINE_BYTES,
-      );
-      if (result.timedOut) {
-        return undefined;
-      }
-      if (result.code !== 0) {
-        // 128 covers both "path absent from the before-tree" (created
-        // this turn, so an empty baseline is correct) and "the tree
-        // itself is gone", which must not render as an all-new file.
-        if (result.code !== 128) {
-          return undefined;
-        }
-        const tree = await git(
-          root,
-          ['cat-file', '-e', `${record.before}^{tree}`],
-          env,
-          deadline,
-          4096,
-        );
-        return tree.timedOut || tree.code !== 0 ? undefined : '';
-      }
-      if (result.stdout.includes(0)) {
-        return undefined;
-      }
-      return result.stdout.toString('utf8');
+      return bytes.includes(0) ? undefined : bytes.toString('utf8');
     },
+    readTreeBytes,
     rememberFiles(scope, files) {
       return enqueue(async () => {
         if (disposed) {
@@ -580,11 +687,21 @@ function parseTurnEntry(entry: unknown): TurnSnapshotRecord | undefined {
     return undefined;
   }
   const filesValue = (entry as { files?: unknown }).files;
+  const snapshotPathsValue = (entry as { snapshotPaths?: unknown }).snapshotPaths;
+  const snapshotPaths = snapshotPathsValue === undefined
+    ? undefined
+    : sanitizeSnapshotPaths(snapshotPathsValue);
+  if (snapshotPathsValue !== undefined && snapshotPaths === undefined) {
+    return undefined;
+  }
   if (filesValue === undefined) {
     return {
       turnId,
       ...(before === undefined ? {} : { before }),
       ...(after === undefined ? {} : { after }),
+      ...(snapshotPaths === undefined || snapshotPaths.length === 0
+        ? {}
+        : { snapshotPaths }),
     };
   }
   if (
@@ -601,6 +718,9 @@ function parseTurnEntry(entry: unknown): TurnSnapshotRecord | undefined {
     turnId,
     ...(before === undefined ? {} : { before }),
     ...(after === undefined ? {} : { after }),
+    ...(snapshotPaths === undefined || snapshotPaths.length === 0
+      ? {}
+      : { snapshotPaths }),
     ...(files.length === 0 ? {} : { files }),
   };
 }
@@ -649,6 +769,18 @@ function sanitizeFiles(
   return files;
 }
 
+function sanitizeSnapshotPaths(value: unknown): string[] | undefined {
+  if (!Array.isArray(value) || value.length > MAX_CHANGED_FILES_PER_TURN) return;
+  const paths: string[] = [];
+  const seen = new Set<string>();
+  for (const path of value) {
+    if (!isSafeWorkspaceRelativePath(path) || seen.has(path)) return;
+    seen.add(path);
+    paths.push(path);
+  }
+  return paths;
+}
+
 function isNullableCount(value: unknown): value is number | null {
   return (
     value === null ||
@@ -674,6 +806,9 @@ function cloneRecord(
     turnId: record.turnId,
     ...(record.before === undefined ? {} : { before: record.before }),
     ...(record.after === undefined ? {} : { after: record.after }),
+    ...(record.snapshotPaths === undefined
+      ? {}
+      : { snapshotPaths: [...record.snapshotPaths] }),
     ...(record.files === undefined
       ? {}
       : { files: record.files.map((file) => ({ ...file })) }),

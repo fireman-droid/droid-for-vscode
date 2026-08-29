@@ -42,13 +42,99 @@ describe('Markdown math', () => {
     expect(visibleMath).not.toContain('\\frac');
   });
 
-  it('normalizes model-style delimiters and keeps dollar syntax unchanged', () => {
+  it('normalizes model-style delimiters and protects currency', () => {
     expect(normalizeMathDelimiters('\\[x^2\\] and \\(y\\)')).toBe(
       '$$\nx^2\n$$ and $y$',
     );
     expect(normalizeMathDelimiters('$a$ and $$b$$')).toBe(
       '$a$ and $$b$$',
     );
+  });
+
+  it('renders inline math without consuming a following currency amount', () => {
+    const { container } = render(
+      <DroidMarkdownContent
+        text={'选择 $s_1$，价格是 $5，后面的中文不能变成公式。'}
+      />,
+    );
+
+    expect(container.querySelector('.katex')).not.toBeNull();
+    expect(container.querySelector('.katex-error')).toBeNull();
+    expect(container.textContent).toContain('价格是 $5，后面的中文不能变成公式。');
+    expect(container.querySelector('.katex-html')?.textContent).toContain('s1');
+  });
+
+  it('promotes array environments to display math', () => {
+    const { container } = render(
+      <DroidMarkdownContent
+        text={
+          String.raw`结果：$$\begin{array}{c|cc}\text{当前上层}&A&B \\ \hline 1234&2&2 \\ \end{array}$$`
+        }
+      />,
+    );
+
+    expect(container.querySelector('.katex-display')).not.toBeNull();
+    expect(container.querySelector('.katex-error')).toBeNull();
+    expect(container.querySelector('.katex-html')?.textContent).not.toContain(
+      '\\begin{array}',
+    );
+  });
+
+  it('promotes bare LaTeX lines without changing fenced code', () => {
+    const { container } = render(
+      <DroidMarkdownContent
+        text={[
+          String.raw`A=1432,\qquad B=4231.`,
+          '',
+          String.raw`\operatorname{match}(1234,A)=2,`,
+          '',
+          String.raw`\begin{array}{c|cc}\text{当前上层}&A&B \\ \hline 1234&2&2 \\ \end{array}`,
+          '',
+          String.raw`\boxed{x=6}.`,
+          '',
+          '```tex',
+          String.raw`\operatorname{match}(1234,A)=2,`,
+          '```',
+        ].join('\n')}
+      />,
+    );
+
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(4);
+    expect(container.querySelector('.katex-error')).toBeNull();
+    expect(container.querySelector('pre code')?.textContent).toContain(
+      '\\operatorname{match}',
+    );
+  });
+
+  it('normalizes indented display fences before prose and tables', () => {
+    const { container } = render(
+      <DroidMarkdownContent
+        text={String.raw`2. 将上层第 1,2 个杯子交换，得到
+   $$
+q=2134,
+$$
+   再询问一次；
+
+关键是下面这个有限情形表：
+
+| 初始询问 | $2134$ 处询问 | 剩余最多交换次数 |
+|---:|---:|---:|
+| 4 | 4 | 0 |
+
+$$
+\operatorname{match}(1234,A)=2,
+$$
+因为第 $1,3$ 位匹配；`}
+      />,
+    );
+
+    expect(container.querySelectorAll('.katex-error')).toHaveLength(0);
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(2);
+    expect(
+      Array.from(container.querySelectorAll('.dvx-markdown p')).some(
+        (node) => node.textContent?.includes('\\operatorname'),
+      ),
+    ).toBe(false);
   });
 });
 

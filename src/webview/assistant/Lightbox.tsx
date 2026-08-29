@@ -17,6 +17,7 @@ import {
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 8;
+const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 5, 8] as const;
 /** Breathing room around the fitted content, in px per side. */
 const FIT_PADDING = 24;
 
@@ -35,6 +36,22 @@ interface ViewState {
 
 function clampZoom(scale: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
+}
+
+export function nextImageZoom(
+  scale: number,
+  direction: -1 | 1,
+): number | undefined {
+  if (direction === 1) {
+    return ZOOM_LEVELS.find((level) => level > scale);
+  }
+  for (let index = ZOOM_LEVELS.length - 1; index >= 0; index -= 1) {
+    const level = ZOOM_LEVELS[index];
+    if (level !== undefined && level < scale) {
+      return level;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -214,6 +231,19 @@ export function MediaLightbox({
     applyView(true);
   }, [applyView]);
 
+  const stepZoom = useCallback(
+    (direction: -1 | 1): void => {
+      const view = viewRef.current;
+      const next = nextImageZoom(view.scale, direction);
+      if (next === undefined) {
+        return;
+      }
+      view.scale = next;
+      applyView(true);
+    },
+    [applyView],
+  );
+
   const handleDoubleClick = useCallback(
     (event: ReactMouseEvent): void => {
       const container = containerRef.current;
@@ -304,43 +334,125 @@ export function MediaLightbox({
           {zoomPercent}%
         </span>
       ) : null}
-      <div className="dvx-image-lightbox-actions">
+      <div
+        className="dvx-image-lightbox-actions"
+        role="toolbar"
+        aria-label={`${label} controls`}
+      >
         <button
           type="button"
-          className="dvx-image-lightbox-action"
-          aria-label="Reset zoom to fit"
+          className="dvx-image-lightbox-icon"
+          aria-label="Zoom out"
+          title="Zoom out"
+          disabled={zoomPercent !== null && zoomPercent <= MIN_ZOOM * 100}
+          onClick={(event) => {
+            event.stopPropagation();
+            stepZoom(-1);
+          }}
+        >
+          <ImageZoomOutIcon />
+        </button>
+        <button
+          type="button"
+          className="dvx-image-lightbox-icon"
+          aria-label="Zoom in"
+          title="Zoom in"
+          disabled={zoomPercent !== null && zoomPercent >= MAX_ZOOM * 100}
+          onClick={(event) => {
+            event.stopPropagation();
+            stepZoom(1);
+          }}
+        >
+          <ImageZoomInIcon />
+        </button>
+        <button
+          type="button"
+          className="dvx-image-lightbox-icon"
+          aria-label="Fit image to preview"
+          title="Fit image to preview"
           onClick={(event) => {
             event.stopPropagation();
             resetToFit();
           }}
         >
-          Reset
+          <ImageFitIcon />
         </button>
         <button
           type="button"
-          className="dvx-image-lightbox-action"
-          aria-label="Zoom to 100%"
+          className="dvx-image-lightbox-icon"
+          aria-label="Show image at actual size"
+          title="Actual size"
           onClick={(event) => {
             event.stopPropagation();
             zoomToActualSize();
           }}
         >
-          1:1
+          <ImageActualSizeIcon />
         </button>
         <button
           type="button"
           className="dvx-image-lightbox-close"
           aria-label={`Close ${label.toLocaleLowerCase()}`}
+          title="Close"
           onClick={(event) => {
             event.stopPropagation();
             onClose();
           }}
         >
-          ✕
+          <ImageCloseIcon />
         </button>
       </div>
     </div>,
     document.body,
+  );
+}
+
+export function ImageZoomOutIcon(): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="3.75" stroke="currentColor" />
+      <path d="M4.75 7h4.5M9.75 9.75 13 13" stroke="currentColor" />
+    </svg>
+  );
+}
+
+export function ImageZoomInIcon(): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="3.75" stroke="currentColor" />
+      <path
+        d="M4.75 7h4.5M7 4.75v4.5M9.75 9.75 13 13"
+        stroke="currentColor"
+      />
+    </svg>
+  );
+}
+
+export function ImageFitIcon(): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M2.75 6V2.75H6M10 2.75h3.25V6M13.25 10v3.25H10M6 13.25H2.75V10"
+        stroke="currentColor"
+      />
+    </svg>
+  );
+}
+
+export function ImageActualSizeIcon(): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="10" height="10" rx="1" stroke="currentColor" />
+      <path d="M5.5 10.5h5" stroke="currentColor" />
+    </svg>
+  );
+}
+
+export function ImageCloseIcon(): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="m4 4 8 8m0-8-8 8" stroke="currentColor" />
+    </svg>
   );
 }
 

@@ -51,9 +51,6 @@ export function findLatestChangesItem(
     if (item !== undefined && item.kind === 'changes') {
       return item;
     }
-    if (item !== undefined && item.kind === 'user') {
-      return null;
-    }
   }
   return null;
 }
@@ -70,9 +67,6 @@ export function findLatestChangesContext(
     const item = transcript[index];
     if (item === undefined) {
       continue;
-    }
-    if (item.kind === 'user') {
-      return null;
     }
     if (item.kind !== 'changes') {
       continue;

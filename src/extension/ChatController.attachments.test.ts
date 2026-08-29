@@ -172,6 +172,116 @@ describe('ChatController', () => {
     ).toHaveLength(0);
   });
 
+  it('previews and atomically replaces the staged image bytes', async () => {
+    const runtime = createMockRuntime();
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'original.png',
+      mediaType: 'image/png',
+      dataBase64: 'b2xk',
+    });
+    const original = attachmentsMessages(messages).at(-1)!.attachments[0]!;
+    controller.handleMessage({
+      type: 'attachment.readImage',
+      sessionId: 'session-1',
+      attachmentId: original.id,
+    });
+    expect(lastMessage(messages, 'session.attachmentImageData')).toMatchObject({
+      attachmentId: original.id,
+      status: 'ready',
+      name: 'original.png',
+      mediaType: 'image/png',
+      dataBase64: 'b2xk',
+    });
+
+    controller.handleMessage({
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'ignored-name.webp',
+      mediaType: 'image/webp',
+      dataBase64: 'bmV3',
+      replaceAttachmentId: original.id,
+    });
+    const replaced = attachmentsMessages(messages).at(-1)!.attachments[0]!;
+    expect(replaced).toMatchObject({
+      id: original.id,
+      name: 'original.png',
+      sizeBytes: 3,
+    });
+
+    controller.handleMessage({
+      type: 'attachment.addImage',
+      sessionId: 'session-1',
+      name: 'missing.png',
+      mediaType: 'image/png',
+      dataBase64: 'YmFk',
+      replaceAttachmentId: 'attachment-missing',
+    });
+    expect(attachmentsMessages(messages).at(-1)!.attachments).toEqual([
+      replaced,
+    ]);
+
+    send(controller, 'session-1', 'turn-1', 'use the annotation');
+    await vi.waitFor(() => {
+      expect(runtime.sendTurn).toHaveBeenCalledWith('use the annotation', [
+        { kind: 'image', data: 'bmV3', mediaType: 'image/webp' },
+      ]);
+    });
+  });
+
+  it('stages public remote images through the host source', async () => {
+    const runtime = createMockRuntime();
+    const sources: AttachmentSources = {
+      pickFiles: vi.fn(async () => ({ status: 'cancelled' as const })),
+      readActiveEditor: vi.fn(async () => ({ status: 'empty' as const })),
+      readActiveSelection: vi.fn(async () => ({ status: 'empty' as const })),
+      readProblems: vi.fn(async () => ({ status: 'empty' as const })),
+      readGitChanges: vi.fn(async () => ({ status: 'empty' as const })),
+      searchWorkspaceFiles: vi.fn(async () => []),
+      readWorkspaceFile: vi.fn(async () => ({ status: 'failed' as const })),
+      readRemoteImage: vi.fn(async () => ({
+        status: 'picked' as const,
+        items: [{
+          kind: 'image' as const,
+          name: 'remote.png',
+          data: 'cmVtb3Rl',
+          mediaType: 'image/png' as const,
+          sizeBytes: 6,
+          truncated: false,
+        }],
+      })),
+    };
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      sources,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    controller.handleMessage({
+      type: 'attachment.addRemoteImage',
+      sessionId: 'session-1',
+      url: 'https://images.example.com/remote.png',
+    });
+    await vi.waitFor(() => {
+      expect(attachmentsMessages(messages).at(-1)?.attachments).toMatchObject([
+        { kind: 'image', name: 'remote.png', sizeBytes: 6 },
+      ]);
+    });
+    expect(sources.readRemoteImage).toHaveBeenCalledWith(
+      'https://images.example.com/remote.png',
+    );
+  });
+
   it('stages dropped file URIs inside the workspace and reports outside ones', async () => {
     const runtime = createMockRuntime();
     const sources: AttachmentSources = {

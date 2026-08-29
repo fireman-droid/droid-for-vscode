@@ -1,7 +1,6 @@
 /* The Plan line is the attached footer of the user-message card.
    Collapsed it summarizes the current step; expanded it becomes the
-   full checklist. It stays in the sticky message block so the pin
-   coordinator carries both surfaces together. */
+   full checklist. The pinned and flow surfaces render it together. */
 
 .dvx-plan-line {
   position: relative;
@@ -280,14 +279,6 @@
 .dvx-plan-line-text {
   min-width: 0;
   word-break: break-word;
-}
-
-/* ---- Pinned (sticky) state --------------------------------------
-   ONE surface, in-place expansion, no overlay card (standing user
-   correction). Only breathing room below the card is added. */
-.dvx-message-user[data-sticky-compact] .dvx-plan-line,
-.dvx-virtual-turn[data-sticky-compact] .dvx-plan-line {
-  margin-bottom: 8px;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -51,13 +51,10 @@ import { RecentCommandsStore } from './RecentCommandsStore';
 import { createGitChangeStatsReader } from './changeStats';
 import { createTurnStatsHistoryLoader } from './committedHistoryStats';
 import { createTurnSnapshotStore } from './turnSnapshots';
-import { createVscodeAttachmentSources } from './vscodeAttachmentSources';
 import { createVscodeExternalUrlOpener } from './vscodeExternalUrlOpener';
-import { createVscodeFileDiffOpener } from './vscodeFileDiff';
 import { createVscodePathOpener } from './vscodePathOpener';
 import { PreviewPanelController } from './PreviewPanelController';
 import { PlanDocumentController } from './planDocumentController';
-import { createVscodeGitWorkflow } from './vscodeGitWorkflow';
 import {
   createWorktreeSessionsFeature,
   type WorktreeSessionsFeature,
@@ -72,7 +69,8 @@ import { createMissionControlSetupProjection } from './chat/mission/setupProject
 import { SessionViewerPanelController } from './SessionViewerPanelController';
 import { MissionControlPanelController } from './MissionControlPanelController';
 import { SubagentTranscriptService } from './SubagentTranscriptService';
-
+import { BrowserDevBridge, registerBrowserDevCommands } from './BrowserDevBridge';
+import { createReviewFeature, createReviewFoundation } from './createReviewFeature';
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
 const exportDiagnosticsCommand = 'droidvisx.exportDiagnostics';
@@ -89,8 +87,7 @@ const openMissionControlCommand = 'droidvisx.openMissionControl';
  */
 const ADD_SELECTION_CONNECT_WAIT_MS = 60_000;
 const ADD_SELECTION_POLL_MS = 250;
-let activeController: ChatController | undefined;
-let disposeDaemonSidecar: (() => Promise<void>) | undefined;
+let activeController: ChatController | undefined, activeBrowserDevBridge: BrowserDevBridge | undefined, disposeDaemonSidecar: (() => Promise<void>) | undefined;
 
 interface DaemonSidecar {
   readonly endpoint: DaemonEndpoint;
@@ -383,7 +380,6 @@ export function activate(context: vscode.ExtensionContext): void {
     update: (key: string, value: unknown) =>
       context.workspaceState.update(key, value),
   };
-  const attachmentSources = createVscodeAttachmentSources();
   // Read once at activation: switching modes requires a window reload.
   // Daemon is strict by default. Process transport is used only when
   // the user explicitly selects it in settings.
@@ -470,10 +466,8 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     turnSnapshots,
   );
-  const fileDiff = createVscodeFileDiffOpener(
-    changeStats,
-    diagnostics,
-  );
+  const { attachmentSources, fileDiff, gitWorkflow } =
+    createReviewFoundation(changeStats, diagnostics);
   const sessionViewer = new SessionViewerPanelController(
     context.extensionUri,
     historyLoader,
@@ -545,6 +539,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const planDocuments = new PlanDocumentController((state) => {
     controller.emit(state);
   });
+  const reviewCoordinator = createReviewFeature({
+    context, snapshots: turnSnapshots, fileDiff, persistence, gitWorkflow,
+    diagnostics, getController: () => controller, sessionViewer,
+    createSdkSession: createDaemonSessionFactory(daemonSidecar.droid, sessionLease),
+  });
   const missionGateway = new MissionGateway({
     getDroid: getDaemonDroid,
     getAttachedSessionId: () => controller?.sessionId ?? undefined,
@@ -605,7 +604,7 @@ export function activate(context: vscode.ExtensionContext): void {
     daemonSidecar.provider,
     createVscodePathOpener(),
     previewController,
-    createVscodeGitWorkflow(),
+    gitWorkflow,
     // Worktree sessions ride the daemon's native create channel; in
     // process mode (including a fallback from the daemon default) the
     // gate reads false and worktree entry points fail closed.
@@ -631,6 +630,7 @@ export function activate(context: vscode.ExtensionContext): void {
     missionGateway,
     turnSnapshots,
     planDocuments,
+    reviewCoordinator,
   );
   const missionSetupProjection = createMissionControlSetupProjection(controller);
   const missionControl = new MissionControlPanelController(
@@ -691,6 +691,8 @@ export function activate(context: vscode.ExtensionContext): void {
     {},
     diagnostics,
   );
+  const browserDevBridge = new BrowserDevBridge(controller, missionControl, diagnostics);
+  activeBrowserDevBridge = browserDevBridge;
   previewController.setFeedbackHandler((text) => {
     controller.emit({ type: 'canvas.feedbackDraft', text });
   });
@@ -741,6 +743,8 @@ export function activate(context: vscode.ExtensionContext): void {
     sessionViewer,
     subagentTranscripts,
     missionControl,
+    browserDevBridge,
+    ...registerBrowserDevCommands(browserDevBridge),
     diagnostics,
     attachmentSources,
     vscode.window.registerWebviewViewProvider(
@@ -886,10 +890,10 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export async function deactivate(): Promise<void> {
-  const controller = activeController;
-  const disposeSidecar = disposeDaemonSidecar;
-  activeController = undefined;
-  disposeDaemonSidecar = undefined;
+  const controller = activeController, browserDevBridge = activeBrowserDevBridge,
+    disposeSidecar = disposeDaemonSidecar;
+  activeController = undefined; activeBrowserDevBridge = undefined; disposeDaemonSidecar = undefined;
+  await browserDevBridge?.stop();
   await controller?.dispose();
   await disposeSidecar?.();
 }

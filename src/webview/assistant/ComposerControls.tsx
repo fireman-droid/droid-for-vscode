@@ -118,6 +118,7 @@ const POPOVER_SPACE_PX = 340;
  * exit (--dvx-duration-normal, 150ms) finishes before unmount.
  */
 const POPOVER_EXIT_MS = 190;
+const POPOVER_EDGE_GAP_PX = 8;
 
 /**
  * Whether control-row popovers should open downward: the space above
@@ -258,6 +259,53 @@ export function ComposerControls({
   }, [openPanel]);
 
   const [openDown, setOpenDown] = useState(false);
+  const [popoverSpace, setPopoverSpace] = useState({
+    above: POPOVER_SPACE_PX,
+    below: POPOVER_SPACE_PX,
+  });
+  const measurePopoverSpace = (): void => {
+    const controls = controlsRef.current;
+    if (controls === null) {
+      return;
+    }
+    const controlsRect = controls.getBoundingClientRect();
+    const threadBody = controls.closest<HTMLElement>('.dvx-thread-body');
+    const shell = controls.closest<HTMLElement>('.dvx-shell');
+    const boundary =
+      threadBody?.getBoundingClientRect() ??
+      shell?.getBoundingClientRect() ?? {
+        top: 0,
+        bottom: window.innerHeight,
+      };
+    const above = Math.max(
+      0,
+      controlsRect.top - boundary.top - POPOVER_EDGE_GAP_PX,
+    );
+    const below = Math.max(
+      0,
+      boundary.bottom - controlsRect.bottom - POPOVER_EDGE_GAP_PX,
+    );
+    setPopoverSpace({ above, below });
+    setOpenDown(shouldOpenPopoverDown(above, below));
+  };
+  useEffect(() => {
+    if (openPanel === null) {
+      return;
+    }
+    const updatePlacement = (): void => {
+      measurePopoverSpace();
+    };
+    updatePlacement();
+    window.addEventListener('resize', updatePlacement);
+    window.visualViewport?.addEventListener('resize', updatePlacement);
+    return () => {
+      window.removeEventListener('resize', updatePlacement);
+      window.visualViewport?.removeEventListener('resize', updatePlacement);
+    };
+    // The controls ref and measurement function are stable for this
+    // component; placement only needs to follow the open panel.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openPanel]);
   // Each open remounts the popover component (fresh search/view
   // state) even when it reopens while the previous instance is still
   // mounted playing its exit animation.
@@ -271,15 +319,10 @@ export function ComposerControls({
     setOpenPanel(panel);
     setOpenSeq((sequence) => sequence + 1);
     setSettingsView('root');
-    // Popovers default to opening upward (bottom composer); when the
-    // controls sit near the viewport top (pinned edit card) that would
-    // push them off screen, so flip downward instead.
-    const rect = controlsRef.current?.getBoundingClientRect();
-    if (rect !== undefined) {
-      setOpenDown(
-        shouldOpenPopoverDown(rect.top, window.innerHeight - rect.bottom),
-      );
-    }
+    // Popovers default to opening upward (bottom composer). Pinned
+    // controls use the thread-body boundary and flip downward when
+    // that gives the panel more room.
+    measurePopoverSpace();
   };
   const toggle = (panel: Exclude<OpenPanel, null>): void => {
     if (openPanel === panel) {
@@ -337,6 +380,15 @@ export function ComposerControls({
         openPanel === null && closingPanel !== null ? '' : undefined
       }
       ref={controlsRef}
+      style={
+        {
+          '--dvx-popover-space-above': `${popoverSpace.above}px`,
+          '--dvx-popover-space-below': `${popoverSpace.below}px`,
+        } as React.CSSProperties & {
+          readonly '--dvx-popover-space-above': string;
+          readonly '--dvx-popover-space-below': string;
+        }
+      }
     >
       {showSessionControls || showContext ? (
         <div className="dvx-composer-control-left">

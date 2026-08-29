@@ -589,6 +589,24 @@ describe('normalizeSdkEvent', () => {
       filePaths: ['src/a.ts', 'src/b.ts'],
     });
 
+    const partialPatch = (input: string) =>
+      normalizeSdkEvent(
+        sdkEvent('tool_call_delta', {
+          toolUse: {
+            type: 'tool_use',
+            id: 'tool-patch-partial',
+            name: 'ApplyPatch',
+            input: { input },
+          },
+        }),
+        root,
+      );
+    const patchPrefix = '*** Begin Patch\n*** Update File: src/a.ts\n';
+    expect(partialPatch(patchPrefix)).not.toHaveProperty('filePathsComplete');
+    expect(
+      partialPatch(`${patchPrefix}*** End Patch`),
+    ).toHaveProperty('filePathsComplete', true);
+
     // Malformed patch text projects no path fields at all.
     const malformed = normalizeSdkEvent(
       sdkEvent('tool_call', {

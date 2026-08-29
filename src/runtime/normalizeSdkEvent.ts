@@ -33,6 +33,7 @@ import {
 } from './toolDetail';
 import {
   extractToolFilePaths,
+  hasCompleteToolFilePaths,
   toWorkspaceRelativePath,
 } from './toolFilePath';
 import type { RuntimeEvent } from './runtimeEvents';
@@ -111,6 +112,7 @@ export function normalizeSdkEvent(
         activity,
         event.toolUse.input,
         workspaceRoot,
+        true,
       );
     }
 
@@ -425,12 +427,17 @@ function withToolInputContext(
   activity: Extract<RuntimeEvent, { type: 'tool-start' }>,
   input: unknown,
   workspaceRoot: string | undefined,
+  includePathsComplete = false,
 ): Extract<RuntimeEvent, { type: 'tool-start' }> {
   const filePaths = normalizeToolFilePaths(
     activity.toolName,
     input,
     workspaceRoot,
   );
+  const filePathsComplete =
+    includePathsComplete &&
+    filePaths.length > 0 &&
+    hasCompleteToolFilePaths(activity.toolName, input);
   const detail = extractToolDetail(activity.toolName, input);
   const target = extractToolTarget(
     activity.toolName,
@@ -450,6 +457,7 @@ function withToolInputContext(
     ...(summary === undefined ? {} : { action: summary }),
     ...(filePaths.length === 0 ? {} : { filePath: filePaths[0] }),
     ...(filePaths.length <= 1 ? {} : { filePaths }),
+    ...(filePathsComplete ? { filePathsComplete: true } : {}),
     ...(detail === undefined
       ? {}
       : { detailKind: detail.kind, detail: detail.text }),

@@ -1,20 +1,8 @@
-/* ---- /btw side question pane -------------------------------------
-   Claude Code form factor (user decision 2026-08-12, second pass):
-   not a drawer — the shell splits into two live columns ("它是共生
-   的"). The main conversation keeps its full stack (header, thread,
-   composer) in the left column while the side question pane owns a
-   full-height right column behind a 1px divider. No scrim, no
-   outside-press close; both panes stay interactive at once. The pane
-   keeps the shell's warm layered finish — raised surface over the
-   warm shell ground — with the header and input row pinned while the
-   Q&A transcript scrolls between them. */
+/* ---- /btw quiet side-note pane ------------------------------- */
 .dvx-shell-split {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-/* Explicit placement: everything else stays in the main column; the
-   pane owns the second column across all rows (header included, as
-   in Claude Code). */
 .dvx-shell-split > .dvx-header,
 .dvx-shell-split > .dvx-handshake-notice,
 .dvx-shell-split > .dvx-thread {
@@ -27,58 +15,48 @@
 }
 
 .dvx-btw-panel {
-  /* Default 42% of the webview, clamped to 200–420px, and always
-     leaving the main conversation at least ~110px at extreme widths
-     (narrow-pane decision: shrink, never fall back to an overlay). */
-  --dvx-btw-width: min(max(42vw, 200px), 420px, calc(100vw - 110px));
-
   position: relative;
   display: flex;
   overflow: hidden;
   flex-direction: column;
-  width: var(--dvx-btw-width);
+  width: min(var(--dvx-btw-width), calc(100vw - 160px));
   height: 100%;
   min-height: 0;
-  border-left: 1px solid var(--dvx-border, var(--dvx-border));
-  background: var(--dvx-raised);
-  animation: dvx-btw-expand 200ms var(--dvx-easing-out-strong);
-}
-
-/* Hold content at the settled width during the expand/collapse so
-   text does not rewrap mid-animation; overflow:hidden clips it. */
-.dvx-btw-panel > * {
-  min-width: var(--dvx-btw-width);
-}
-
-.dvx-btw-leaving {
-  animation: dvx-btw-collapse 200ms ease-in forwards;
+  border-left: 1px solid var(--dvx-border);
+  background: var(--dvx-surface);
+  animation: dvx-btw-expand 160ms var(--dvx-easing-out-strong);
 }
 
 @keyframes dvx-btw-expand {
-  from {
-    width: 0;
-  }
-
-  to {
-    width: var(--dvx-btw-width);
-  }
+  from { width: 0; }
+  to { width: min(var(--dvx-btw-width), calc(100vw - 160px)); }
 }
 
-@keyframes dvx-btw-collapse {
-  from {
-    width: var(--dvx-btw-width);
-  }
-
-  to {
-    width: 0;
-  }
+.dvx-btw-resizer {
+  position: absolute;
+  z-index: 5;
+  inset: 0 auto 0 0;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .dvx-btw-panel,
-  .dvx-btw-leaving {
-    animation: none;
-  }
+.dvx-btw-resizer::after {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  background: transparent;
+  content: "";
+  transition: background 120ms ease;
+}
+
+.dvx-btw-resizer:hover::after,
+.dvx-btw-resizer:focus-visible::after {
+  background: var(--dvx-border-strong);
+}
+
+.dvx-btw-resizer:focus-visible {
+  outline: none;
 }
 
 .dvx-btw-header {
@@ -86,226 +64,216 @@
   align-items: center;
   justify-content: space-between;
   flex: none;
-  padding: 10px 10px 8px 16px;
+  min-height: 40px;
+  padding: 9px 10px 7px 14px;
   user-select: none;
 }
 
 .dvx-btw-title {
-  color: var(--dvx-ink, var(--dvx-ink));
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.2px;
+  margin: 0;
+  color: var(--dvx-text-strong);
+  font-size: 11.5px;
+  font-weight: 620;
+  letter-spacing: 0.02em;
 }
 
 .dvx-btw-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  margin: -2px 0;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: 5px;
   background: transparent;
-  color: var(--dvx-subtle, var(--dvx-subtle));
-  font-size: 14px;
+  color: var(--dvx-subtle);
+  font-size: 15px;
   line-height: 1;
   cursor: pointer;
-  transition: background var(--dvx-duration-instant, 50ms) ease,
-    color var(--dvx-duration-instant, 50ms) ease;
 }
 
 .dvx-btw-close:hover {
-  background: var(--dvx-soft, var(--dvx-soft));
-  color: var(--dvx-ink, var(--dvx-ink));
+  background: var(--dvx-soft);
+  color: var(--dvx-ink);
 }
 
-/* Muted one-liner under the header, mirroring Claude Code's copy. */
-.dvx-btw-hint {
-  flex: none;
-  margin: 0;
-  padding: 0 16px 10px;
-  color: var(--dvx-muted, var(--dvx-muted));
-  font-size: 11.5px;
-  font-style: italic;
-  line-height: 1.5;
-  user-select: none;
-}
-
-/* No top padding on the scroll container itself: Chromium anchors
-   sticky children below a scroll container's own padding, which let
-   one line of the previous entry peek above the pinned question
-   (旧账 30). The breathing room lives on the inner content wrapper
-   instead, so sticky questions pin flush with the visual top. */
 .dvx-btw-entries {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 16px 12px;
-  border-top: 1px solid var(--dvx-border, var(--dvx-border));
+  padding: 0 14px 16px;
   overscroll-behavior: contain;
 }
 
 .dvx-btw-entries-content {
-  padding-top: 12px;
+  padding-top: 7px;
 }
 
 .dvx-btw-entry + .dvx-btw-entry {
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 20px;
 }
 
 .dvx-btw-question {
-  position: sticky;
-  z-index: 1;
-  /* Same parameterized offset as .dvx-message-user (spec R2). */
-  top: var(--dvx-sticky-top, 0px);
   margin: 0 0 8px;
-  font: inherit;
-  cursor: pointer;
-  scroll-margin-top: 12px;
-  text-align: left;
+  color: var(--dvx-text-strong);
+  font-size: 12px;
+  line-height: 1.5;
   user-select: text;
 }
 
-.dvx-btw-question .dvx-user-text {
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.dvx-btw-question:hover {
-  border-color: var(--dvx-border-hover);
+.dvx-btw-question-text {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .dvx-btw-answer {
+  color: var(--dvx-ink);
   font-size: 12px;
+  line-height: 1.55;
   user-select: text;
 }
 
-.dvx-btw-answer > :first-child {
-  margin-top: 0;
+.dvx-btw-answer > :first-child { margin-top: 0; }
+.dvx-btw-answer > :last-child { margin-bottom: 0; }
+
+.dvx-btw-status,
+.dvx-btw-error {
+  margin: 0;
+  color: var(--dvx-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
 }
 
-.dvx-btw-answer > :last-child {
-  margin-bottom: 0;
+.dvx-btw-error {
+  color: var(--dvx-danger);
 }
 
-.dvx-btw-status {
-  color: var(--dvx-muted, var(--dvx-muted));
-  font-size: 12px;
-}
-
-.dvx-btw-entries-content > .dvx-btw-status {
-  margin-top: 6px;
+.dvx-btw-composer {
+  display: grid;
+  flex: none;
+  gap: 7px;
+  padding: 9px 11px 11px;
+  border-top: 1px solid color-mix(in srgb, var(--dvx-border) 76%, transparent);
+  background: var(--dvx-surface);
 }
 
 .dvx-btw-pending {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  display: flex;
+  min-width: 0;
   gap: 7px;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--dvx-border, var(--dvx-border));
-  color: var(--dvx-muted, var(--dvx-muted));
-  font-size: 11.5px;
-  line-height: 1.45;
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
 .dvx-btw-pending-label {
-  color: var(--dvx-subtle, var(--dvx-subtle));
+  flex: none;
+  color: var(--dvx-subtle);
   font-size: 9.5px;
-  font-weight: 650;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
-.dvx-btw-error {
-  color: var(--dvx-danger, var(--dvx-danger));
-  font-size: 12px;
-  line-height: 1.45;
+.dvx-quiet-quote {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+  line-height: 1.42;
 }
 
-/* Input pinned to the panel foot: one framed field in the composer's
-   register, with no second focus ring around its 1px border. */
+.dvx-quiet-quote > span {
+  display: -webkit-box;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dvx-quiet-quote button {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dvx-subtle);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.dvx-quiet-quote button:hover {
+  color: var(--dvx-ink);
+}
+
 .dvx-btw-input-row {
   display: flex;
-  flex: none;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 12px 12px;
-  border-top: 1px solid var(--dvx-border, var(--dvx-border));
-  background: var(--dvx-surface, var(--dvx-surface));
+  min-width: 0;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 7px 7px 7px 9px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 9px;
+  background: var(--dvx-raised);
 }
 
 .dvx-btw-input {
   min-width: 0;
+  max-height: 64px;
   flex: 1;
-  padding: 7px 11px;
-  border: 1px solid var(--dvx-border, var(--dvx-border));
-  border-radius: 9px;
-  background: var(--dvx-raised, var(--dvx-raised));
-  color: var(--dvx-ink, var(--dvx-ink));
+  resize: none;
+  overflow-y: auto;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--dvx-ink);
+  font: inherit;
   font-size: 12px;
-  line-height: 1.5;
-  outline: none;
-  transition: border-color 130ms ease;
+  line-height: 18px;
   user-select: text;
 }
 
-.dvx-shell .dvx-btw-input:focus,
-.dvx-shell .dvx-btw-input:focus-visible {
-  border-color: var(--dvx-border-strong, var(--dvx-border));
-  outline: none;
-  box-shadow: none;
-}
-
-.dvx-btw-input::placeholder {
-  color: var(--dvx-subtle, var(--dvx-subtle));
-}
-
-.dvx-btw-input:disabled {
-  color: var(--dvx-muted, var(--dvx-muted));
-}
+.dvx-btw-input::placeholder { color: var(--dvx-subtle); }
+.dvx-btw-input:disabled { color: var(--dvx-muted); }
 
 .dvx-btw-send {
   display: grid;
   flex: none;
+  width: 24px;
+  height: 24px;
   place-items: center;
-  width: 30px;
-  height: 30px;
   padding: 0;
-  border: 0;
-  border-radius: 9px;
-  background: var(--dvx-accent, var(--dvx-accent));
-  box-shadow: 0 1px 2px rgb(0 0 0 / 14%);
-  color: var(--dvx-on-accent);
-  font-size: 16px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--dvx-ink) 8%, var(--dvx-raised));
+  color: var(--dvx-ink);
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
-  transition: background-color 130ms ease, transform 130ms ease;
-}
-
-/* Stop replaces Send while an answer streams: same circular pill
-   with a small square glyph. Scoped under .dvx-shell to outrank the
-   global `button { font: inherit }` reset. */
-.dvx-shell .dvx-btw-stop {
-  font-size: 9px;
-}
-
-.dvx-shell .dvx-btw-stop:hover {
-  background: var(--dvx-accent-strong, var(--dvx-accent));
 }
 
 .dvx-btw-send:hover:not(:disabled) {
-  background: var(--dvx-accent-strong, var(--dvx-accent-strong));
+  border-color: var(--dvx-border-hover);
+  background: color-mix(in srgb, var(--dvx-ink) 12%, var(--dvx-raised));
 }
-
-.dvx-btw-send:active:not(:disabled) {
-  transform: scale(0.94);
+.dvx-btw-send:disabled {
+  background: color-mix(in srgb, var(--dvx-ink) 6%, var(--dvx-raised));
+  color: color-mix(in srgb, var(--dvx-ink) 56%, var(--dvx-raised));
+  opacity: 1;
+  cursor: default;
 }
+.dvx-shell .dvx-btw-stop { font-size: 8px; }
 
+@media (prefers-reduced-motion: reduce) {
+  .dvx-btw-panel { animation: none; }
+}
 /* Mission setup and detail reuse the same split-pane shell as /btw. */
 .mission-inspector {
   --dvx-btw-width: min(max(42vw, 280px), 440px, calc(100vw - 160px));

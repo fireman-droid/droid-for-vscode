@@ -1,14 +1,26 @@
 // UserMessage: moved verbatim from Thread.tsx (structure-only refactor).
 
 import { MessagePrimitive, useAuiState } from "@assistant-ui/react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import {
+  MAX_ATTACHMENT_IMAGE_BYTES,
+  MAX_ATTACHMENT_PDF_BYTES,
+  MAX_ATTACHMENT_TEXT_FILE_CHARS,
+  MAX_ATTACHMENT_URI_COUNT,
+  MAX_PENDING_ATTACHMENTS,
   MAX_TURN_TEXT_LENGTH,
   type EditResendRejectReason,
   type SentAttachmentSummary,
 } from "../../../shared/bridgeMessages";
 import { ComposerControls } from "../ComposerControls";
+import { parseSelectionQuote } from "../selectionQuote";
 import { TranscriptImage } from "../TranscriptImage";
 import type {
   EditResendRejection,
@@ -19,6 +31,12 @@ import type {
 import { EditAttachmentChip, SentAttachmentChip } from "./AttachmentChip";
 import { EditRestoreControl } from "./EditRestoreControl";
 import { SendIcon } from "./icons";
+import {
+  isImageMediaType,
+  readDroppedFileUris,
+  readDroppedRemoteImageUrl,
+  readFileAsBase64,
+} from "../attachmentIngress";
 
 export const EDIT_REJECT_COPY: Record<EditResendRejectReason, string> = {
   busy: "Droid is busy — stop or finish the current work, then resend.",
@@ -31,6 +49,7 @@ export function UserMessage({
   messageId,
   attachments,
   planLine = null,
+  pinnedPlaceholder = false,
   editing,
   editStage,
   rejection,
@@ -49,10 +68,16 @@ export function UserMessage({
   readonly attachments: readonly SentAttachmentSummary[];
   /**
    * The session's single latest plan line, when anchored here, rendered
-   * directly under the question inside the same sticky block so the
-   * pin coordinator carries it (built in Thread from planAnchors).
+   * directly under the question inside the same message surface (built
+   * in Thread from planAnchors).
    */
   readonly planLine?: ReactNode;
+  /**
+   * The original message remains in the virtualized document as an
+   * invisible layout placeholder while its pinned copy is painted at
+   * the viewport edge.
+   */
+  readonly pinnedPlaceholder?: boolean;
   readonly editing: boolean;
   readonly editStage: EditStageState | null;
   readonly rejection: EditResendRejection | null;
@@ -74,6 +99,8 @@ export function UserMessage({
   const [editText, setEditText] = useState(text);
   const [restoreFiles, setRestoreFiles] = useState(false);
   const [resending, setResending] = useState(false);
+  const [dropNotice, setDropNotice] = useState<string | null>(null);
+  const editInputRef = useRef<HTMLTextAreaElement | null>(null);
   const resendResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearResendTimer = (): void => {
     if (resendResetRef.current !== null) {
@@ -82,6 +109,14 @@ export function UserMessage({
     }
   };
   useEffect(() => clearResendTimer, []);
+  useLayoutEffect(() => {
+    const input = editInputRef.current;
+    if (!editing || input === null) {
+      return;
+    }
+    input.style.height = "auto";
+    input.style.height = `${Math.min(69, Math.max(42, input.scrollHeight))}px`;
+  }, [editText, editing]);
   // Opening the editor from viewing resets the draft to the sent text;
   // reopening after a rejection keeps the user's edited draft.
   const wasEditing = useRef(false);
@@ -211,6 +246,84 @@ export function UserMessage({
     clearResendTimer();
     resendResetRef.current = setTimeout(() => setResending(false), 8000);
   };
+  const stageEditFiles = (files: readonly File[]): void => {
+    const remaining = Math.max(
+      0,
+      MAX_PENDING_ATTACHMENTS - stagedAttachments.length,
+    );
+    if (files.length > remaining) {
+      setDropNotice(
+        `Up to ${MAX_PENDING_ATTACHMENTS} attachments can be staged for one message.`,
+      );
+    }
+    for (const file of files.slice(0, remaining)) {
+      if (isImageMediaType(file.type)) {
+        const mediaType = file.type;
+        if (file.size === 0 || file.size > MAX_ATTACHMENT_IMAGE_BYTES) {
+          setDropNotice(`${file.name || "Image"} is too large to attach.`);
+          continue;
+        }
+        void readFileAsBase64(file).then((dataBase64) => {
+          if (dataBase64 !== null) {
+            editorEnv.onAttachImage(
+              file.name || "pasted-image",
+              mediaType,
+              dataBase64,
+            );
+          }
+        });
+        continue;
+      }
+      if (
+        file.type === "application/pdf" ||
+        file.name.toLocaleLowerCase().endsWith(".pdf")
+      ) {
+        if (file.size === 0 || file.size > MAX_ATTACHMENT_PDF_BYTES) {
+          setDropNotice(`${file.name || "PDF"} is too large to attach.`);
+          continue;
+        }
+        void readFileAsBase64(file).then((dataBase64) => {
+          if (dataBase64 !== null) {
+            editorEnv.onAttachPdf(file.name || "document.pdf", dataBase64);
+          }
+        });
+        continue;
+      }
+      const byteCap = MAX_ATTACHMENT_TEXT_FILE_CHARS * 4;
+      const blob = file.size > byteCap ? file.slice(0, byteCap) : file;
+      void blob.text().then((raw) => {
+        if (raw.includes("\u0000")) {
+          setDropNotice(`${file.name} is not a supported text file.`);
+          return;
+        }
+        const truncated =
+          file.size > byteCap || raw.length > MAX_ATTACHMENT_TEXT_FILE_CHARS;
+        editorEnv.onAttachTextFile(
+          file.name,
+          truncated ? raw.slice(0, MAX_ATTACHMENT_TEXT_FILE_CHARS) : raw,
+          truncated,
+        );
+      });
+    }
+  };
+  const handleEditDrop = (dataTransfer: DataTransfer): boolean => {
+    const uris = readDroppedFileUris(dataTransfer);
+    if (uris.length > 0) {
+      editorEnv.onAttachUris(uris.slice(0, MAX_ATTACHMENT_URI_COUNT));
+      return true;
+    }
+    const files = Array.from(dataTransfer.files);
+    if (files.length > 0) {
+      stageEditFiles(files);
+      return true;
+    }
+    const remote = readDroppedRemoteImageUrl(dataTransfer);
+    if (remote !== null) {
+      editorEnv.onAttachRemoteImage(remote);
+      return true;
+    }
+    return false;
+  };
   return (
     <>
     <span className="dvx-question-anchor" data-question-id={runtimeMessageId}
@@ -222,24 +335,50 @@ export function UserMessage({
         planLine !== null && !resending
           ? " dvx-message-with-plan"
           : ""
-      }`}
-      aria-label="You"
+      }${pinnedPlaceholder ? " dvx-pinned-user-placeholder" : ""}`}
+      data-aui-quote-selectable="false"
+      data-pinned-placeholder={pinnedPlaceholder ? "" : undefined}
+      aria-hidden={pinnedPlaceholder || undefined}
+      aria-label={pinnedPlaceholder ? undefined : "You"}
     >
       <div className="dvx-user-message-content">
         {editing ? (
           <div className="dvx-user-edit" ref={editCardRef}>
-            <div className="dvx-user-edit-card">
-              <div className="dvx-user-edit-images">
-                <UserMessageImages />
-              </div>
+            <div
+              className="dvx-user-edit-card"
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+              }}
+              onDrop={(event) => {
+                if (handleEditDrop(event.dataTransfer)) {
+                  event.preventDefault();
+                }
+              }}
+            >
               <textarea
+                ref={editInputRef}
                 className="dvx-user-edit-input"
                 aria-label="Edit message and resend"
                 value={editText}
                 maxLength={MAX_TURN_TEXT_LENGTH}
-                rows={Math.min(8, Math.max(2, editText.split("\n").length))}
+                rows={Math.min(3, Math.max(2, editText.split("\n").length))}
                 autoFocus
                 onChange={(event) => setEditText(event.currentTarget.value)}
+                onPaste={(event) => {
+                  const files = Array.from(
+                    event.clipboardData?.files ?? [],
+                  ).filter((file) => isImageMediaType(file.type));
+                  if (files.length > 0) {
+                    if (
+                      (event.clipboardData?.getData("text/plain") ?? "")
+                        .length === 0
+                    ) {
+                      event.preventDefault();
+                    }
+                    stageEditFiles(files);
+                  }
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
@@ -249,22 +388,26 @@ export function UserMessage({
                   }
                 }}
               />
-              {stagedAttachments.some(
-                (attachment) => attachment.kind !== "image",
-              ) ? (
+              {stagedAttachments.length > 0 ? (
                 <div
                   className="dvx-user-edit-attachments"
                   aria-label="Attachments to resend"
                 >
-                  {stagedAttachments
-                    .filter((attachment) => attachment.kind !== "image")
-                    .map((attachment) => (
+                  {stagedAttachments.map((attachment) => (
                     <EditAttachmentChip
                       key={attachment.id}
                       attachment={attachment}
+                      image={editorEnv.attachmentImages[attachment.id]}
+                      onRequestImage={editorEnv.onAttachmentReadImage}
+                      onReplaceImage={editorEnv.onAttachmentReplaceImage}
                       onRemove={editorEnv.onAttachmentRemove}
                     />
                   ))}
+                </div>
+              ) : null}
+              {dropNotice !== null ? (
+                <div className="dvx-user-edit-rejection" role="status">
+                  {dropNotice}
                 </div>
               ) : null}
               {rejectionCopy !== null ? (
@@ -273,6 +416,16 @@ export function UserMessage({
                 </div>
               ) : null}
               <div className="dvx-user-edit-footer">
+                <button
+                  className="dvx-composer-tool-button dvx-plus-button"
+                  type="button"
+                  aria-label="Attach files to edited message"
+                  title="Attach files"
+                  disabled={editorEnv.controlsDisabled}
+                  onClick={editorEnv.onAttachFiles}
+                >
+                  +
+                </button>
                 <ComposerControls
                   showSessionControls={false}
                   showContext={false}
@@ -390,6 +543,7 @@ export function ReadOnlyUserMessage(): React.JSX.Element {
     <MessagePrimitive.Root
       className="dvx-message dvx-message-user"
       aria-label="Delegated task"
+      data-aui-quote-selectable="false"
     >
       <div className="dvx-user-message-content">
         <div className="dvx-user-block">
@@ -492,15 +646,45 @@ function UserMessageImages(): React.JSX.Element {
 }
 
 function UserMessageParts(): React.JSX.Element {
+  const runtimeQuote = useAuiState((state) => {
+    const quote = state.message.metadata.custom?.quote;
+    return typeof quote === "object" &&
+      quote !== null &&
+      "text" in quote &&
+      typeof quote.text === "string"
+      ? quote.text
+      : null;
+  });
   return (
     <MessagePrimitive.Parts>
-      {({ part }) =>
-        part.type === "data" && part.name === "droid-image" ? (
-          <TranscriptImage data={part.data} />
-        ) : part.type === "text" ? (
-          <div className="dvx-user-text">{part.text}</div>
-        ) : null
-      }
+      {({ part }) => {
+        if (part.type === "data" && part.name === "droid-image") {
+          return <TranscriptImage data={part.data} />;
+        }
+        if (part.type !== "text") {
+          return null;
+        }
+        const parsed = parseSelectionQuote(part.text);
+        const quote = runtimeQuote ?? parsed?.quote ?? null;
+        return (
+          <>
+            {quote === null ? null : (
+              <div
+                className="dvx-user-quote"
+                data-aui-quote-selectable
+              >
+                {quote}
+              </div>
+            )}
+            <div
+              className="dvx-user-text"
+              data-aui-quote-selectable
+            >
+              {parsed?.body ?? part.text}
+            </div>
+          </>
+        );
+      }}
     </MessagePrimitive.Parts>
   );
 }

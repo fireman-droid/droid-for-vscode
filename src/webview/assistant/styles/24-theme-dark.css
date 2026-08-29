@@ -258,10 +258,7 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
 }
 
 /* ---- 10-shell-frame ------------------------------------------------ */
-.dvx-shell[data-theme='dark'] .dvx-message-user[data-pinned],
-.dvx-shell[data-theme='dark']
-  .dvx-virtual-turn[data-sticky-owner]
-  .dvx-message-user {
+.dvx-shell[data-theme='dark'] .dvx-pinned-user-layer .dvx-message-user {
   box-shadow: 0 6px 12px -8px rgb(0 0 0 / 60%);
 }
 

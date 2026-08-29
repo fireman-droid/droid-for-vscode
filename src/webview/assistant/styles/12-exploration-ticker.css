@@ -147,10 +147,10 @@
   line-height: 16px;
 }
 
-/* Exploration groups (streaming-experience design item A): while the
-   run is live the group shows a shimmering "Exploring" header over a
-   bounded auto-scrolling preview; finished runs collapse to an
-   "Explored 3 files, 2 searches" summary that expands on click. */
+/* Exploration groups stay in the transcript flow with no card
+   surface. One real summary button owns expansion in both live and
+   completed states; the live current-activity slot never duplicates
+   an interactive member row. */
 .dvx-activity-group {
   margin: 0 0 12px;
   font-size: 13px;
@@ -165,190 +165,9 @@
   margin-bottom: 0;
 }
 
-.dvx-activity-group-stage {
-  --dvx-activity-summary-height: 21.125px;
-  --dvx-activity-running-height: 49.125px;
-
-  position: relative;
-  height: var(--dvx-activity-running-height);
-  overflow: hidden;
-  transition: height var(--dvx-duration-slow)
-    var(--dvx-easing-out-strong);
-}
-
-.dvx-activity-group-settling .dvx-activity-group-stage,
-.dvx-activity-group-completed .dvx-activity-group-stage {
-  height: var(--dvx-activity-summary-height);
-}
-
-.dvx-activity-group-running-view,
-.dvx-activity-group-stage > .dvx-activity-group-summary {
-  position: absolute;
-  inset: 0 0 auto;
-}
-
-.dvx-activity-group-running-view {
-  opacity: 1;
-  transform: translateY(0);
-  transition:
-    opacity var(--dvx-duration-normal) ease,
-    transform var(--dvx-duration-slow) var(--dvx-easing-out-strong);
-}
-
-.dvx-activity-group-stage > .dvx-activity-group-summary {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(4px);
-  transition:
-    opacity var(--dvx-duration-normal) ease,
-    transform var(--dvx-duration-slow) var(--dvx-easing-out-strong);
-}
-
-.dvx-activity-group-settling .dvx-activity-group-running-view {
-  opacity: 0;
-  transform: translateY(-4px);
-}
-
-.dvx-activity-group-settling
-  .dvx-activity-group-stage
-  > .dvx-activity-group-summary,
-.dvx-activity-group-completed
-  .dvx-activity-group-stage
-  > .dvx-activity-group-summary {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.dvx-activity-group-completed
-  .dvx-activity-group-stage
-  > .dvx-activity-group-summary {
-  pointer-events: auto;
-}
-
-.dvx-activity-group-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  min-height: 21px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--dvx-text-strong);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 500;
-  line-height: 21.125px;
-  text-align: left;
-}
-
-.dvx-activity-group-header .dvx-activity-chevron {
-  margin-left: auto;
-  transform: rotate(-90deg);
-}
-
-.dvx-activity-group-header[aria-expanded='true'] .dvx-activity-chevron {
-  transform: rotate(0);
-}
-
-.dvx-activity-group-header:hover .dvx-activity-chevron,
-.dvx-activity-group-header:focus-visible .dvx-activity-chevron,
-.dvx-activity-group-summary:hover .dvx-activity-chevron,
-.dvx-activity-group-summary:focus-visible .dvx-activity-chevron {
-  color: var(--dvx-text-strong);
-}
-
-/* Running group: a one-row viewport under the clickable header; when
-   the active member advances the old row slides up one row height
-   while dissolving to transparent, and the new row rides in from
-   below on the same timeline. The ticker itself stays presentation-
-   only; the header opens the complete interactive details, including
-   grouped Thinking rows. */
-.dvx-activity-ticker {
-  /* Row height, duration and curve are the values the user dialled in
-     on artifacts/ticker-mini.html; they are local to the ticker so the
-     shared motion tokens keep their meaning elsewhere. */
-  --dvx-ticker-row: 26px;
-  --dvx-ticker-duration: 280ms;
-  --dvx-ticker-easing: cubic-bezier(0.22, 0.61, 0.36, 1);
-
-  height: var(--dvx-ticker-row);
-  overflow: hidden;
-  margin-top: 2px;
-  padding-left: 12px;
-  pointer-events: none;
-}
-
-/* The track carries one shared vertical step at a time. Bursty source
-   updates advance the target but never skip intermediate member rows.
-   Transform + opacity only; layout never animates. */
-.dvx-ticker-track {
-  display: flex;
-  flex-direction: column;
-  transform: translateY(
-    calc(var(--dvx-ticker-offset, 0) * -1 * var(--dvx-ticker-row, 26px))
-  );
-}
-
-.dvx-ticker-track.dvx-ticker-slide {
-  transition: transform var(--dvx-ticker-duration) var(--dvx-ticker-easing);
-}
-
-/* Rows dissolve as they travel: the outgoing row loses
-   .dvx-ticker-item-active and fades to 0 while the track carries it
-   up; the incoming row starts one row below at opacity 0 and fades in
-   on the same clock. */
-.dvx-ticker-item {
-  height: var(--dvx-ticker-row);
-  overflow: hidden;
-  opacity: 0;
-}
-
-.dvx-ticker-item-active {
-  opacity: 1;
-}
-
-.dvx-ticker-track.dvx-ticker-slide .dvx-ticker-item {
-  transition: opacity var(--dvx-ticker-duration) var(--dvx-ticker-easing);
-}
-
-.dvx-ticker-item .dvx-activity-row {
-  margin: 0;
-}
-
-.dvx-ticker-item .dvx-activity-row summary {
-  min-height: var(--dvx-ticker-row);
-  line-height: var(--dvx-ticker-row);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dvx-ticker-track.dvx-ticker-slide,
-  .dvx-ticker-track.dvx-ticker-slide .dvx-ticker-item {
-    transition: none;
-  }
-
-  .dvx-activity-group-stage,
-  .dvx-activity-group-running-view,
-  .dvx-activity-group-stage > .dvx-activity-group-summary {
-    transition: none;
-  }
-}
-
-/* Only the group header shimmers while the run is live; member rows
-   inside the ticker stay static so each turn keeps at most one
-   shimmer (activity-shimmer-fix invariant). */
-.dvx-activity-ticker .dvx-activity-running .dvx-tool-action,
-.dvx-activity-ticker .dvx-shimmer-text,
-.dvx-thread-pending .dvx-activity-group-header .dvx-shimmer-text {
-  background-image: none;
-  background-clip: border-box;
-  -webkit-background-clip: border-box;
-  color: #6b6259;
-  animation: none;
-}
-
 .dvx-activity-group-summary {
-  display: flex;
+  display: grid;
+  grid-template-columns: 14px auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
   width: 100%;
@@ -357,6 +176,7 @@
   margin: 0;
   padding: 0;
   border: 0;
+  border-radius: 0;
   background: transparent;
   color: var(--dvx-text-strong);
   cursor: pointer;
@@ -366,9 +186,110 @@
   text-align: left;
 }
 
+.dvx-activity-group-summary-completed {
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+}
+
 .dvx-activity-group-summary[aria-expanded='false']
-  .dvx-activity-chevron {
+  > .dvx-activity-chevron {
   transform: rotate(-90deg);
+}
+
+.dvx-activity-group-summary[aria-expanded='true']
+  > .dvx-activity-chevron {
+  transform: rotate(0);
+}
+
+.dvx-activity-group-summary:hover > .dvx-activity-chevron,
+.dvx-activity-group-summary:focus-visible > .dvx-activity-chevron,
+.dvx-activity-group-summary:hover .dvx-activity-group-title,
+.dvx-activity-group-summary:focus-visible .dvx-activity-group-title,
+.dvx-activity-group-summary-completed:hover .dvx-tool-action,
+.dvx-activity-group-summary-completed:focus-visible .dvx-tool-action {
+  color: var(--dvx-text-strong);
+}
+
+.dvx-activity-group-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dvx-ink);
+  white-space: nowrap;
+  transition: color 150ms ease;
+}
+
+.dvx-activity-group-running-dot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 50%;
+  background: var(--dvx-subtle);
+  animation: dvx-activity-group-breathe 1.65s ease-in-out infinite;
+}
+
+.dvx-activity-group-current-slot {
+  min-width: 0;
+  height: 17px;
+  overflow: hidden;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 17px;
+  white-space: nowrap;
+}
+
+.dvx-activity-group-current-slot::before {
+  content: '·';
+  margin-right: 7px;
+  color: var(--dvx-border-strong);
+}
+
+.dvx-activity-group-current {
+  display: inline-flex;
+  max-width: calc(100% - 12px);
+  min-width: 0;
+  gap: 6px;
+  vertical-align: top;
+  animation: dvx-activity-group-current-in 190ms
+    cubic-bezier(0.22, 0.75, 0.3, 1) both;
+}
+
+.dvx-activity-group-current > span:first-child {
+  flex: 0 0 auto;
+}
+
+.dvx-activity-group-current-target {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--dvx-mono);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes dvx-activity-group-breathe {
+  0%,
+  100% {
+    opacity: 0.44;
+    transform: scale(0.84);
+  }
+
+  50% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+}
+
+@keyframes dvx-activity-group-current-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .dvx-activity-state-failed {
@@ -394,6 +315,13 @@
 
 .dvx-activity-group-details-open .dvx-activity-group-details-inner {
   padding-top: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-activity-group-running-dot,
+  .dvx-activity-group-current {
+    animation: none;
+  }
 }
 
 .dvx-thread-footer {

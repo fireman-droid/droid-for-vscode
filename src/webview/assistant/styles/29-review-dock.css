@@ -1,6 +1,5 @@
-/* Latest-turn Changes review pinned in the viewport footer. The
-   collapsed row is deliberately quiet; the solid neutral Review
-   action is its single visual anchor. */
+/* Host-owned sequential Diff review. The Dock controls scope, order,
+   progress and safe actions; code remains in Cursor's native Diff. */
 .dvx-review-dock {
   box-sizing: border-box;
   width: 100%;
@@ -17,9 +16,9 @@
 .dvx-review-dock-head {
   display: grid;
   min-height: 32px;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  column-gap: 9px;
+  gap: 8px;
   padding: 3px 5px 3px 8px;
 }
 
@@ -66,7 +65,6 @@
   gap: 5px;
   color: var(--dvx-subtle);
   font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
 }
 
 .dvx-review-dock-writing > span {
@@ -77,34 +75,14 @@
   opacity: 0.72;
 }
 
-/* display: contents lets ChangesCommitEntry's expanded panel take a
-   full second grid row without changing that existing Git flow. */
 .dvx-review-dock-actions {
   display: contents;
-}
-
-.dvx-review-dock-actions > .dvx-changes-commit,
-.dvx-review-dock-actions > .dvx-commit-result {
-  grid-column: 3;
-}
-
-.dvx-review-dock-actions > .dvx-commit-result {
-  display: inline-flex;
-  height: 24px;
-  align-self: center;
-  align-items: center;
-}
-
-.dvx-review-dock-actions > .dvx-commit-panel {
-  width: auto;
-  grid-column: 1 / -1;
-  margin: 5px 3px 6px;
 }
 
 .dvx-shell .dvx-review-dock-review {
   display: inline-flex;
   height: 24px;
-  grid-column: 4;
+  grid-column: 2;
   align-items: center;
   justify-content: center;
   padding: 0 10px;
@@ -116,10 +94,6 @@
   font-size: 11px;
   font-weight: 580;
   cursor: pointer;
-  transition:
-    border-color var(--dvx-duration-fast) ease,
-    background var(--dvx-duration-fast) ease,
-    opacity var(--dvx-duration-fast) ease;
 }
 
 .dvx-review-dock-review:hover {
@@ -127,17 +101,6 @@
   background: var(--dvx-text-strong);
 }
 
-.dvx-review-dock-toggle:focus-visible,
-.dvx-review-dock-file-action:focus-visible,
-.dvx-review-dock-review:focus-visible {
-  border-radius: 4px;
-  outline: 1px solid var(--dvx-focus);
-  outline-offset: 1px;
-}
-
-/* Mounted once the reader has opened it at least once so both
-   directions animate (same grid-rows 0fr↔1fr technique as
-   PlanLine's checklist body, 22-plan-anchor.css). */
 .dvx-review-dock-body {
   display: grid;
   grid-template-rows: 0fr;
@@ -155,52 +118,77 @@
   border-top: 1px solid var(--dvx-border);
 }
 
-/* Branch scope reuses the turn list's rows; only its header line and
-   the quiet fallback notes are new. */
-.dvx-review-dock-branch-toggle {
-  display: inline-flex;
-  height: 24px;
-  grid-column: 2;
+.dvx-review-scope-row {
+  display: flex;
+  min-height: 30px;
   align-items: center;
-  justify-content: center;
-  padding: 0 8px;
+  gap: 2px;
+  padding: 3px 7px;
+  border-bottom: 1px solid var(--dvx-border);
+}
+
+.dvx-review-scope,
+.dvx-review-nav button,
+.dvx-review-controls button,
+.dvx-review-confirm button {
+  height: 23px;
+  padding: 0 7px;
   border: 1px solid transparent;
-  border-radius: 6px;
-  background: none;
+  border-radius: 5px;
+  background: transparent;
   color: var(--dvx-muted);
   font: inherit;
-  font-size: 11px;
+  font-size: 10.5px;
   cursor: pointer;
-  transition:
-    border-color var(--dvx-duration-fast) ease,
-    color var(--dvx-duration-fast) ease;
 }
 
-.dvx-review-dock-branch-toggle:hover {
-  color: var(--dvx-ink);
+.dvx-review-scope:hover,
+.dvx-review-nav button:hover:not(:disabled),
+.dvx-review-controls button:hover:not(:disabled),
+.dvx-review-confirm button:hover:not(:disabled) {
   border-color: var(--dvx-border-hover);
-}
-
-.dvx-review-dock-branch-toggle[aria-pressed='true'] {
-  border-color: var(--dvx-border-strong);
   color: var(--dvx-ink);
 }
 
-.dvx-review-dock-branch-toggle:focus-visible {
-  outline: 1px solid var(--dvx-focus);
-  outline-offset: 1px;
+.dvx-review-scope[aria-pressed='true'] {
+  border-color: var(--dvx-border-strong);
+  background: var(--dvx-soft);
+  color: var(--dvx-ink);
 }
 
-.dvx-review-dock-branch-head {
+.dvx-review-progress {
+  margin-left: auto;
+  color: var(--dvx-subtle);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dvx-review-current {
   display: flex;
-  align-items: baseline;
+  min-height: 34px;
+  align-items: center;
   gap: 8px;
-  padding: 6px 10px 2px;
+  padding: 4px 7px 2px 10px;
 }
 
-.dvx-review-dock-branch-name {
-  overflow: hidden;
+.dvx-review-current-meta {
+  display: flex;
   min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dvx-review-baseline {
+  color: var(--dvx-subtle);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dvx-review-current-path {
+  overflow: hidden;
   color: var(--dvx-ink);
   font-family: var(--dvx-mono);
   font-size: 10.5px;
@@ -208,27 +196,22 @@
   white-space: nowrap;
 }
 
-.dvx-review-dock-branch-commits {
-  margin-left: auto;
-  color: var(--dvx-subtle);
-  font-size: 10.5px;
-  white-space: nowrap;
+.dvx-review-nav {
+  display: flex;
+  gap: 2px;
 }
 
-.dvx-review-dock-branch-note {
-  padding: 8px 10px;
-  color: var(--dvx-subtle);
-  font-size: 11px;
-}
-
-.dvx-review-dock-branch .dvx-review-dock-row {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+.dvx-review-nav button:disabled,
+.dvx-review-controls button:disabled,
+.dvx-review-confirm button:disabled {
+  cursor: default;
+  opacity: 0.38;
 }
 
 .dvx-review-dock-files {
-  max-height: 40vh;
+  max-height: min(32vh, 240px);
   margin: 0;
-  padding: 3px 6px;
+  padding: 2px 6px 4px;
   overflow-y: auto;
   list-style: none;
   overscroll-behavior: contain;
@@ -237,17 +220,52 @@
 .dvx-review-dock-row {
   display: grid;
   min-width: 0;
-  height: 24px;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  width: 100%;
+  height: 23px;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   padding: 0 4px;
-  border-radius: 5px;
-  transition: background var(--dvx-duration-fast) ease;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.dvx-review-dock-row:hover {
+.dvx-review-dock-row:hover,
+.dvx-review-dock-row:focus-visible,
+.dvx-review-dock-row[data-current='true'] {
   background: var(--dvx-soft);
+}
+
+.dvx-review-file-state {
+  width: 5px;
+  height: 5px;
+  border: 1px solid var(--dvx-border-strong);
+  border-radius: 50%;
+}
+
+.dvx-review-file-state[data-state='reviewed'] {
+  border-color: var(--dvx-success);
+  background: var(--dvx-success);
+}
+
+.dvx-review-file-state[data-state='current'] {
+  border-color: var(--dvx-accent);
+  background: var(--dvx-accent);
+}
+
+.dvx-review-file-state[data-state='changed-after-review'],
+.dvx-review-file-state[data-state='restore-conflict'] {
+  border-color: var(--dvx-warning);
+}
+
+.dvx-review-file-state[data-state='open-only'] {
+  border-radius: 1px;
+  opacity: 0.55;
 }
 
 .dvx-review-dock-path {
@@ -260,36 +278,171 @@
   white-space: nowrap;
 }
 
-.dvx-review-dock-row:hover .dvx-review-dock-path {
-  color: var(--dvx-ink);
-}
-
 .dvx-review-dock-stats {
   display: inline-flex;
-  gap: 2px;
+  gap: 4px;
   color: var(--dvx-subtle);
-  font-size: 10.5px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
-.dvx-review-dock-file-action {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--dvx-subtle);
-  font: inherit;
-  font-size: 10.5px;
-  cursor: pointer;
-  transition: color var(--dvx-duration-fast) ease;
+.dvx-review-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 7px 6px;
+  border-top: 1px solid var(--dvx-border);
 }
 
-.dvx-review-dock-file-action:hover,
-.dvx-review-dock-file-action:focus-visible {
+.dvx-review-controls button:nth-child(-n + 2) {
   color: var(--dvx-ink);
 }
 
-/* Transcript Changes become one low-noise history line. */
+.dvx-review-controls-spacer {
+  flex: 1;
+}
+
+.dvx-review-more-wrap {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.dvx-review-more-trigger,
+.dvx-review-more-item {
+  height: 23px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dvx-muted);
+  font: inherit;
+  font-size: 10.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dvx-review-more-trigger {
+  border-color: var(--dvx-border);
+}
+
+.dvx-review-more-trigger[aria-expanded='true'] {
+  border-color: var(--dvx-border-hover);
+  background: var(--dvx-soft);
+  color: var(--dvx-ink);
+}
+
+.dvx-review-more-trigger:hover,
+.dvx-review-more-item:hover:not(:disabled) {
+  border-color: var(--dvx-border-hover);
+  color: var(--dvx-ink);
+}
+
+.dvx-review-more-menu {
+  display: none;
+  width: min(230px, calc(100vw - 32px));
+  margin: 0 0 4px;
+  padding: 4px;
+  border: 1px solid var(--dvx-border);
+  border-radius: 8px;
+  background: var(--dvx-raised);
+  box-shadow: 0 7px 20px -12px rgb(0 0 0 / 28%);
+}
+
+.dvx-review-more-menu[data-open='true'] {
+  display: flex;
+  flex-direction: column;
+}
+
+.dvx-review-more-menu > .dvx-changes-commit,
+.dvx-review-more-menu > .dvx-commit-result,
+.dvx-review-more-item {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dvx-review-more-menu > .dvx-changes-commit {
+  min-height: 27px;
+  padding: 0 7px;
+  border-radius: 5px;
+  color: var(--dvx-muted);
+  font: inherit;
+  font-size: 10.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dvx-review-more-menu > .dvx-changes-commit:hover {
+  background: var(--dvx-soft);
+  color: var(--dvx-ink);
+}
+
+.dvx-review-more-menu > .dvx-commit-result {
+  padding: 4px 7px;
+  font-size: 10.5px;
+}
+
+.dvx-review-more-menu .dvx-commit-panel {
+  margin: 0;
+  padding: 8px 5px 5px;
+  border: 0;
+  border-top: 1px solid var(--dvx-border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.dvx-review-more-item {
+  min-height: 27px;
+  color: var(--dvx-muted);
+}
+
+.dvx-review-more-item:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.dvx-review-agent-status {
+  min-height: 28px;
+  padding: 3px 8px;
+  border-top: 1px solid var(--dvx-border);
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+}
+
+.dvx-review-confirm,
+.dvx-review-result {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-top: 1px solid var(--dvx-border);
+  color: var(--dvx-muted);
+  font-size: 10.5px;
+}
+
+.dvx-review-confirm button {
+  margin-left: auto;
+}
+
+.dvx-review-result[data-ok='false'] {
+  color: var(--dvx-warning);
+}
+
+.dvx-review-dock-branch-note {
+  padding: 8px 10px;
+  color: var(--dvx-subtle);
+  font-size: 11px;
+}
+
+.dvx-review-dock button:focus-visible {
+  outline: 1px solid var(--dvx-focus);
+  outline-offset: 1px;
+}
+
+/* Transcript Changes become one low-noise historical entry. */
 .dvx-changes-history {
   display: flex;
   max-width: 100%;
@@ -316,13 +469,7 @@
 
 .dvx-changes-history .dvx-changes-title {
   color: var(--dvx-muted);
-  font-size: inherit;
   font-weight: 540;
-}
-
-.dvx-changes-history:hover,
-.dvx-changes-history:focus-visible {
-  color: var(--dvx-muted);
 }
 
 .dvx-changes-history:focus-visible {
@@ -332,35 +479,27 @@
 }
 
 @media (max-width: 350px) {
-  .dvx-review-dock-head {
-    column-gap: 6px;
-  }
-
-  .dvx-review-dock-writing {
+  .dvx-review-dock-writing,
+  .dvx-review-progress {
     display: none;
   }
 
-  .dvx-review-dock-review {
-    padding-inline: 8px;
-  }
-
-  .dvx-review-dock-row {
-    gap: 6px;
+  .dvx-review-scope,
+  .dvx-review-controls button {
+    padding-inline: 5px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .dvx-review-dock-toggle .dvx-activity-chevron,
-  .dvx-review-dock-review,
-  .dvx-review-dock-row,
-  .dvx-review-dock-file-action,
   .dvx-review-dock-body {
     transition: none;
   }
 }
 
 @media (forced-colors: active) {
-  .dvx-review-dock {
+  .dvx-review-dock,
+  .dvx-review-file-state {
     border-color: CanvasText;
   }
 

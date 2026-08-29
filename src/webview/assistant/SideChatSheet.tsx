@@ -1,251 +1,304 @@
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 
 import {
   MAX_BTW_TEXT_LENGTH,
   type SessionBtwState,
-} from '../../shared/btwProtocol';
-import { DroidMarkdownContent } from './MarkdownText';
-import { useSmoothFollowScroll } from './useSmoothFollowScroll';
+} from "../../shared/btwProtocol";
+import { DroidMarkdownContent } from "./MarkdownText";
+import {
+  formatSelectionQuote,
+  parseSelectionQuote,
+} from "./selectionQuote";
+import { SendIcon } from "./thread/icons";
+import { useSmoothFollowScroll } from "./useSmoothFollowScroll";
 
-/** Matches the collapse duration in styles.css (dvx-btw-collapse). */
-const LEAVE_MS = 200;
+const MIN_PANEL_WIDTH = 220;
+const MAX_PANEL_WIDTH = 520;
+const MIN_MAIN_WIDTH = 160;
 
-/**
- * The `/btw` side question pane: a full-height split-pane column
- * living beside the main conversation (side-question-design.md §4.2,
- * Claude Code form factor per user decision 2026-08-12 — "它是共生
- * 的", not a drawer). Both panes stay interactive at once; there is
- * no scrim and no outside-press close. It closes on the `×` button,
- * Escape, or session changes — closing discards the hidden fork on
- * the host side.
- */
-export function SideChatSheet({
-  btw,
-  onPrepare,
-  onAsk,
-  onStop,
+function clampPanelWidth(width: number): number {
+  return Math.min(
+    Math.max(MIN_PANEL_WIDTH, width),
+    MAX_PANEL_WIDTH,
+    Math.max(MIN_PANEL_WIDTH, window.innerWidth - MIN_MAIN_WIDTH),
+  );
+}
+
+function QuietQuote({
+  text,
   onDismiss,
 }: {
-  readonly btw: SessionBtwState;
-  readonly onPrepare?: () => void;
-  readonly onAsk: (text: string) => void;
-  /** Stops the streaming answer, keeping its partial text. */
-  readonly onStop?: () => void;
-  readonly onDismiss: () => void;
+  readonly text: string;
+  readonly onDismiss?: () => void;
 }): React.JSX.Element {
-  const [text, setText] = useState('');
-  const [leaving, setLeaving] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dismissRef = useRef(onDismiss);
-  const prepareRef = useRef(onPrepare);
+  return (
+    <div className="dvx-quiet-quote">
+      <span>{text}</span>
+      {onDismiss === undefined ? null : (
+        <button
+          type="button"
+          aria-label="Remove quoted context"
+          onClick={onDismiss}
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SideQuestion({ text }: { readonly text: string }): React.JSX.Element {
+  const parsed = parseSelectionQuote(text);
+  return (
+    <div className="dvx-btw-question">
+      {parsed === null ? null : <QuietQuote text={parsed.quote} />}
+      <div className="dvx-btw-question-text">
+        {parsed?.body ?? text}
+      </div>
+    </div>
+  );
+}
+
+export function SideChatSheet({
+  state,
+  draft,
+  quote,
+  width,
+  onDraftChange,
+  onQuoteClear,
+  onWidthChange,
+  onDismiss,
+  onAsk,
+  onStop,
+}: {
+  readonly state: SessionBtwState;
+  readonly draft: string;
+  readonly quote: string | null;
+  readonly width: number;
+  readonly onDraftChange: (draft: string) => void;
+  readonly onQuoteClear: () => void;
+  readonly onWidthChange: (width: number) => void;
+  readonly onDismiss: () => void;
+  readonly onAsk: (text: string) => void;
+  readonly onStop: () => void;
+}): React.JSX.Element {
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const resizeRef = useRef<{
+    readonly pointerId: number;
+    readonly startX: number;
+    readonly startWidth: number;
+  } | null>(null);
+  const streaming = state.entries.some((entry) => entry.state === "streaming");
+  const canAsk =
+    state.status !== "unsupported" &&
+    state.status !== "error" &&
+    state.pendingQuestion === null;
+  const quotePrefix =
+    quote === null ? "" : formatSelectionQuote(quote, "").concat("\n\n");
+  const maxDraftLength = Math.max(
+    0,
+    MAX_BTW_TEXT_LENGTH - quotePrefix.length,
+  );
   const {
     viewportRef: entriesRef,
     contentRef: entriesContentRef,
     followNewest,
   } = useSmoothFollowScroll<HTMLDivElement>();
-  const previousEntryCountRef = useRef(btw.entries.length);
-  dismissRef.current = onDismiss;
-  prepareRef.current = onPrepare;
-
-  const answerStreaming = btw.entries.some(
-    (entry) => entry.state === 'streaming',
-  );
-  const streaming = btw.status === 'forking' || answerStreaming;
-  const unavailable =
-    btw.status === 'error' || btw.status === 'unsupported';
-  // Typing stays available while an answer streams (user report
-  // 2026-08-13); Enter now fills the Host-owned one-item pending slot.
-  const inputDisabled = unavailable;
-  const sendDisabled = unavailable;
 
   useEffect(() => {
-    const entryCount = btw.entries.length;
-    const newQuestion = entryCount > previousEntryCountRef.current;
-    previousEntryCountRef.current = entryCount;
-    followNewest(newQuestion);
-  }, [btw, followNewest]);
+    followNewest();
+  }, [followNewest, state.entries, state.pendingQuestion]);
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (input === null) {
+      return;
+    }
+    input.style.height = "0";
+    input.style.height = `${Math.min(input.scrollHeight, 64)}px`;
+  }, [draft]);
 
   useEffect(() => {
-    prepareRef.current?.();
     inputRef.current?.focus();
   }, []);
 
-  // Play the width collapse before unmounting; the timeout doubles as
-  // the reduced-motion path where the animation is disabled.
   useEffect(() => {
-    if (!leaving) {
-      return undefined;
-    }
-    if (
-      window.matchMedia?.('(prefers-reduced-motion: reduce)')
-        .matches === true
-    ) {
-      dismissRef.current();
-      return undefined;
-    }
-    const timer = window.setTimeout(() => {
-      dismissRef.current();
-    }, LEAVE_MS);
-    return () => window.clearTimeout(timer);
-  }, [leaving]);
-
-  const close = (): void => {
-    setLeaving(true);
-  };
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        setLeaving(true);
+    const handleEscape = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        onDismiss();
       }
     };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, []);
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [onDismiss]);
 
   const submit = (): void => {
-    const trimmed = text.trim();
-    if (
-      trimmed.length === 0 ||
-      trimmed.length > MAX_BTW_TEXT_LENGTH ||
-      sendDisabled
-    ) {
+    const body = draft.trim();
+    if (!canAsk || body.length === 0) {
       return;
     }
-    onAsk(trimmed);
-    setText('');
+    onAsk(formatSelectionQuote(quote ?? "", body));
+    onDraftChange("");
+    onQuoteClear();
+  };
+  const handleResizeMove = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ): void => {
+    const resize = resizeRef.current;
+    if (resize === null || resize.pointerId !== event.pointerId) {
+      return;
+    }
+    onWidthChange(
+      clampPanelWidth(
+        resize.startWidth + resize.startX - event.clientX,
+      ),
+    );
+  };
+  const stopResize = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (resizeRef.current?.pointerId === event.pointerId) {
+      resizeRef.current = null;
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   };
 
   return (
     <aside
-      className={`dvx-btw-panel${leaving ? ' dvx-btw-leaving' : ''}`}
-      role="complementary"
-      aria-label="Side question"
+      className="dvx-btw-panel"
+      aria-label="By the Way side chat"
+      style={
+        { "--dvx-btw-width": `${width}px` } as CSSProperties
+      }
     >
+      <div
+        className="dvx-btw-resizer"
+        role="separator"
+        aria-label="Resize By the Way panel"
+        aria-orientation="vertical"
+        tabIndex={0}
+        onPointerDown={(event) => {
+          resizeRef.current = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startWidth: width,
+          };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={handleResizeMove}
+        onPointerUp={stopResize}
+        onPointerCancel={stopResize}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+            return;
+          }
+          event.preventDefault();
+          onWidthChange(
+            clampPanelWidth(
+              width + (event.key === "ArrowLeft" ? 16 : -16),
+            ),
+          );
+        }}
+      />
       <header className="dvx-btw-header">
-        <span className="dvx-btw-title">Side question</span>
+        <h2 className="dvx-btw-title">BTW</h2>
         <button
           type="button"
           className="dvx-btw-close"
-          aria-label="Close side chat"
-          onClick={close}
+          onClick={onDismiss}
+          aria-label="Close By the Way"
         >
           ×
         </button>
       </header>
-      <p className="dvx-btw-hint">
-        Ask a quick side question below without interrupting the
-        conversation.
-      </p>
-      <div className="dvx-btw-entries" ref={entriesRef}>
-        <div className="dvx-btw-entries-content" ref={entriesContentRef}>
-          {btw.entries.map((entry) => (
-            <div className="dvx-btw-entry" key={entry.id}>
-              <button
-                type="button"
-                className="dvx-btw-question dvx-user-block"
-                title="Jump to the start of this side question"
-                onClick={(event) =>
-                  event.currentTarget
-                    .closest('.dvx-btw-entry')
-                    ?.scrollIntoView({
-                      behavior: window.matchMedia?.(
-                        '(prefers-reduced-motion: reduce)',
-                      ).matches
-                        ? 'auto'
-                        : 'smooth',
-                      block: 'start',
-                    })
-                }
-              >
-                <span className="dvx-user-text">{entry.question}</span>
-              </button>
-              {entry.answer.length > 0 ? (
-                <DroidMarkdownContent
-                  text={entry.answer}
-                  className="dvx-markdown dvx-btw-answer"
-                />
-              ) : null}
-              {entry.state === 'streaming' &&
-              entry.answer.length === 0 ? (
-                <div className="dvx-btw-status" role="status">
-                  Answering…
-                </div>
-              ) : null}
-              {entry.state === 'error' ? (
-                <div className="dvx-btw-status" role="status">
-                  {entry.message ?? 'Side question failed.'}
-                </div>
-              ) : null}
-            </div>
+      <div ref={entriesRef} className="dvx-btw-entries">
+        <div
+          ref={entriesContentRef}
+          className="dvx-btw-entries-content"
+        >
+          {state.entries.length === 0 && state.status === "forking" ? (
+            <p className="dvx-btw-status">Preparing…</p>
+          ) : null}
+          {state.entries.map((entry) => (
+            <article key={entry.id} className="dvx-btw-entry">
+              <SideQuestion text={entry.question} />
+              <div className="dvx-btw-answer">
+                {entry.answer.length === 0 && entry.state === "streaming" ? (
+                  <span className="dvx-btw-status">Thinking…</span>
+                ) : (
+                  <DroidMarkdownContent text={entry.answer} />
+                )}
+              </div>
+              {entry.message === null ? null : (
+                <p className="dvx-btw-error">{entry.message}</p>
+              )}
+            </article>
           ))}
-          {btw.status === 'forking' ? (
-            <div className="dvx-btw-status" role="status">
-              Preparing side chat…
-            </div>
-          ) : null}
-          {btw.pendingQuestion === null ? null : (
-            <div className="dvx-btw-pending" role="status">
-              <span>Next</span>
-              <span>{btw.pendingQuestion}</span>
-            </div>
-          )}
-          {unavailable ? (
-            <div className="dvx-btw-error" role="alert">
-              {btw.message ?? 'Side chat is unavailable.'}
-            </div>
-          ) : null}
         </div>
       </div>
-      <div className="dvx-btw-input-row">
-        <label className="dvx-visually-hidden" htmlFor="dvx-btw-input">
-          Ask a side question
-        </label>
-        <input
-          id="dvx-btw-input"
-          ref={inputRef}
-          className="dvx-btw-input"
-          type="text"
-          value={text}
-          placeholder={
-            btw.pendingQuestion !== null
-              ? 'Replace queued question…'
-              : streaming
-                ? 'Queue next question…'
-                : 'Ask a side question…'
-          }
-          autoComplete="off"
-          maxLength={MAX_BTW_TEXT_LENGTH}
-          disabled={inputDisabled}
-          onChange={(event) => setText(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              submit();
-            }
-          }}
-        />
-        {answerStreaming && onStop !== undefined ? (
-          <button
-            type="button"
-            className="dvx-btw-send dvx-btw-stop"
-            aria-label="Stop answering"
-            onClick={onStop}
-          >
-            ■
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="dvx-btw-send"
-            aria-label="Send side question"
-            disabled={sendDisabled || text.trim().length === 0}
-            onClick={submit}
-          >
-            ↑
-          </button>
+      <div className="dvx-btw-composer">
+        {state.pendingQuestion === null ? null : (
+          <div className="dvx-btw-pending">
+            <span className="dvx-btw-pending-label">Queued</span>
+            <span>
+              {parseSelectionQuote(state.pendingQuestion)?.body ??
+                state.pendingQuestion}
+            </span>
+          </div>
         )}
+        {state.message === null ? null : (
+          <p className="dvx-btw-error">{state.message}</p>
+        )}
+        {quote === null ? null : (
+          <QuietQuote text={quote} onDismiss={onQuoteClear} />
+        )}
+        <div className="dvx-btw-input-row">
+          <textarea
+            ref={inputRef}
+            className="dvx-btw-input"
+            value={draft}
+            rows={1}
+            maxLength={maxDraftLength}
+            disabled={!canAsk}
+            placeholder="Ask a side question…"
+            aria-label="By the Way question"
+            onChange={(event) => onDraftChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                submit();
+              }
+            }}
+          />
+          {streaming ? (
+            <button
+              type="button"
+              className="dvx-btw-send dvx-btw-stop"
+              onClick={onStop}
+              aria-label="Stop side answer"
+            >
+              ■
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="dvx-btw-send"
+              onClick={submit}
+              disabled={!canAsk || draft.trim().length === 0}
+              aria-label="Send side question"
+            >
+              <SendIcon />
+            </button>
+          )}
+        </div>
       </div>
     </aside>
   );

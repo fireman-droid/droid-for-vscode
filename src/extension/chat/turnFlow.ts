@@ -661,13 +661,14 @@ export function publishTurnChanges(
     const toolPaths = collectToolFilePaths(ctl.turn.activity);
     const runtimeGeneration = ctl.runtimeGeneration;
     void resolveSettledChangeFiles(ctl, sessionId, turnId, toolPaths).then(
-      (files) => {
-        if (
-          ctl.disposed ||
-          ctl.sessionId !== sessionId ||
-          ctl.runtimeGeneration !== runtimeGeneration ||
-          files.length === 0
-        ) {
+      async (files) => {
+        if (ctl.disposed || ctl.sessionId !== sessionId ||
+          ctl.runtimeGeneration !== runtimeGeneration || files.length === 0) {
+          return;
+        }
+        await ctl.turnSnapshots?.rememberFiles({ sessionId, turnId }, files);
+        if (ctl.disposed || ctl.sessionId !== sessionId ||
+          ctl.runtimeGeneration !== runtimeGeneration) {
           return;
         }
         const next = appendTurnChanges(ctl.transcript, turnId, files);
@@ -683,10 +684,6 @@ export function publishTurnChanges(
           state: 'settled',
           files,
         });
-        void ctl.turnSnapshots?.rememberFiles(
-          { sessionId, turnId },
-          files,
-        );
       },
     );
 }

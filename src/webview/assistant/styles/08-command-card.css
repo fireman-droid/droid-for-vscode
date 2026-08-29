@@ -6,11 +6,51 @@
   overflow: hidden;
   color: var(--dvx-subtle);
   font-family: var(--dvx-mono, ui-monospace, monospace);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 400;
   line-height: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dvx-command-leading {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  flex: 0 0 16px;
+  place-items: center;
+  color: var(--dvx-subtle);
+  pointer-events: none;
+}
+
+.dvx-command-leading-prompt {
+  font-family: var(--dvx-mono, ui-monospace, monospace);
+  font-size: 10px;
+  line-height: 16px;
+  letter-spacing: -1px;
+}
+
+.dvx-command-leading-chevron {
+  width: 12px;
+  height: 12px;
+  display: none;
+  transform-origin: center;
+  transition: transform var(--dvx-duration-normal)
+    var(--dvx-easing-out-strong);
+}
+
+.dvx-command-card:not([open]):hover .dvx-command-leading-prompt,
+.dvx-command-card[open] .dvx-command-leading-prompt {
+  display: none;
+}
+
+.dvx-command-card:not([open]):hover .dvx-command-leading-chevron,
+.dvx-command-card[open] .dvx-command-leading-chevron {
+  display: block;
+}
+
+.dvx-command-card[open] .dvx-command-leading-chevron {
+  transform: rotate(90deg);
 }
 
 /* "…" overflow menu: a quiet 20px trigger and a small raised panel,
@@ -19,6 +59,16 @@
   position: relative;
   display: inline-flex;
   flex: 0 0 auto;
+}
+
+.dvx-command-card .dvx-command-menu-root {
+  margin-left: auto;
+}
+
+.dvx-command-card
+  .dvx-activity-state
+  + .dvx-command-menu-root {
+  margin-left: 0;
 }
 
 .dvx-command-menu-trigger {
@@ -91,26 +141,24 @@
   background: var(--dvx-soft);
 }
 
-/* The terminal well is the sole persistent gray surface in fixed
-   themes, outlined strongly enough to separate from the page. */
+/* The details element owns the only outer frame. Command and output
+   share this one scroll surface; color alone separates their roles. */
 .dvx-command-card .dvx-command-well {
-  overflow: hidden;
-  margin-top: 0;
-  border: 1px solid var(--dvx-border-strong);
-  border-radius: 7px;
+  margin: 0;
+  max-height: 228px;
+  padding: 8px 10px 11px;
+  overflow: auto;
+  border: 0;
+  border-radius: 0 0 7px 7px;
   background: var(--dvx-well);
-  box-shadow: inset 0 1px 0
-    color-mix(in srgb, var(--dvx-ink) 4%, transparent);
-}
-
-.dvx-command-card .dvx-command-well:last-child {
-  border-radius: 7px;
-}
-
-.dvx-command-card
-  .dvx-command-well:has(+ .dvx-tool-output-frame) {
-  border-bottom: 0;
-  border-radius: 7px 7px 0 0;
+  color: var(--dvx-text-secondary);
+  font-family: var(--vscode-editor-font-family, 'SFMono-Regular'), Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  box-shadow: none;
 }
 
 /* Expand/collapse animates as one continuous height + opacity
@@ -125,6 +173,8 @@
   height: 0;
   overflow: clip;
   opacity: 0;
+  border-radius: 0 0 7px 7px;
+  background: var(--dvx-well);
   transition:
     height var(--dvx-duration-slower) var(--dvx-easing-out-strong),
     opacity var(--dvx-duration-slow) ease,
@@ -140,18 +190,11 @@
   animation: none;
 }
 
-.dvx-shell .dvx-command-card .dvx-tool-output-frame {
-  animation: none;
-}
-
-.dvx-command-line {
+.dvx-command-entry {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 7px 10px;
-  font-family: var(--vscode-editor-font-family, 'SFMono-Regular'), Consolas, monospace;
-  font-size: 11.5px;
-  line-height: 1.6;
+  color: var(--dvx-text-strong);
 }
 
 .dvx-command-prompt {
@@ -163,7 +206,7 @@
 
 /* Soft wrap with hanging indent: the $ gutter owns the first column,
    so wrapped continuation lines align under the command text. */
-.dvx-command-line .dvx-command-code {
+.dvx-command-entry .dvx-command-code {
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
@@ -177,6 +220,12 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
+}
+
+.dvx-command-output {
+  display: block;
+  margin-top: 7px;
+  color: var(--dvx-muted);
 }
 
 /* Command syntax stays legible without reintroducing chrome accent. */
@@ -210,25 +259,6 @@
   font-style: italic;
 }
 
-/* Output tail shares the terminal surface and is split by a hairline. */
-.dvx-command-card .dvx-tool-output-frame {
-  margin: 0;
-  border: 1px solid var(--dvx-border-strong);
-  border-top-color: var(--dvx-border);
-  border-radius: 0 0 7px 7px;
-  background: var(--dvx-well);
-  box-shadow: none;
-}
-
-.dvx-command-card .dvx-tool-output-frame:last-child {
-  border-radius: 0 0 7px 7px;
-}
-
-.dvx-command-card .dvx-tool-output {
-  padding: 8px 10px 9px;
-  color: var(--dvx-text-secondary);
-}
-
 /* Quiet actions that follow the well sit on the card's white apron. */
 .dvx-command-card .dvx-terminal-mirror-entry {
   margin: 6px 2px 8px;
@@ -247,7 +277,7 @@
   color: var(--dvx-muted);
 }
 
-.dvx-shell:not([data-theme='dark']) .dvx-command-line .dvx-command-code {
+.dvx-shell:not([data-theme='dark']) .dvx-command-entry .dvx-command-code {
   color: var(--dvx-text-strong);
 }
 
@@ -279,12 +309,7 @@
   color: var(--dvx-muted);
 }
 
-.dvx-shell:not([data-theme='dark']) .dvx-command-card .dvx-tool-output-frame {
-  background: color-mix(in srgb, rgb(0 0 0) 2%, var(--dvx-well));
-  border-top: 1px solid var(--dvx-border);
-}
-
-.dvx-shell:not([data-theme='dark']) .dvx-command-card .dvx-tool-output {
-  color: var(--dvx-text-secondary);
+.dvx-shell:not([data-theme='dark']) .dvx-command-output {
+  color: var(--dvx-muted);
 }
 

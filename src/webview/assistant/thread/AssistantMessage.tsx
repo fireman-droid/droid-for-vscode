@@ -77,6 +77,7 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
       }${isLast ? " dvx-message-last" : ""}${
         replyTail ? "" : " dvx-message-cont"
       }`}
+      data-aui-quote-selectable="false"
       aria-label="Droid"
     >
       <AssistantMessageParts includeChanges={includeChanges} />
@@ -176,6 +177,7 @@ export function ReadOnlyAssistantMessage(): React.JSX.Element {
         running ? " dvx-message-live" : ""
       }`}
       aria-label="Subagent"
+      data-aui-quote-selectable="false"
     >
       <AssistantMessageParts includeChanges={false} />
     </MessagePrimitive.Root>

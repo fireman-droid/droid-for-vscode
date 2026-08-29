@@ -10,6 +10,11 @@ import { VirtualizedMessages } from "./VirtualizedMessages";
 
 const mocks = vi.hoisted(() => ({
   scrollToIndex: vi.fn(),
+  scrollToFn: null as null | ((
+    offset: number,
+    options: { adjustments?: number; behavior?: ScrollBehavior },
+    instance: { scrollElement: HTMLElement | null },
+  ) => void),
 }));
 
 vi.mock("@assistant-ui/react", () => ({
@@ -39,23 +44,27 @@ vi.mock("@assistant-ui/react", () => ({
 
 vi.mock("@tanstack/react-virtual", () => ({
   observeElementRect: vi.fn(),
-  useVirtualizer: () => ({
-    getTotalSize: () => 240,
-    getVirtualItemForOffset: () => undefined,
-    getVirtualItems: () => [],
-    measureElement: vi.fn(),
-    measurementsCache: [
-      { start: 0, end: 120 },
-      { start: 120, end: 240 },
-    ],
-    scrollOffset: 0,
-    scrollToIndex: mocks.scrollToIndex,
-  }),
+  useVirtualizer: (options: { scrollToFn: typeof mocks.scrollToFn }) => {
+    mocks.scrollToFn = options.scrollToFn;
+    return {
+      getTotalSize: () => 240,
+      getVirtualItemForOffset: () => undefined,
+      getVirtualItems: () => [],
+      measureElement: vi.fn(),
+      measurementsCache: [
+        { start: 0, end: 120 },
+        { start: 120, end: 240 },
+      ],
+      scrollOffset: 0,
+      scrollToIndex: mocks.scrollToIndex,
+    };
+  },
 }));
 
 afterEach(() => {
   cleanup();
   mocks.scrollToIndex.mockClear();
+  mocks.scrollToFn = null;
 });
 
 describe("VirtualizedMessages question navigation", () => {
@@ -90,5 +99,36 @@ describe("VirtualizedMessages question navigation", () => {
     });
     expect(followingRef.current.following).toBe(false);
     expect(followingRef.current.pendingProgrammaticTop).toBe(40);
+  });
+
+  it("lets bottom-follow own scrolling during virtual size corrections", () => {
+    const scroller = document.createElement("div");
+    const scrollTo = vi.fn();
+    scroller.scrollTo = scrollTo;
+    const followingRef = {
+      current: createFollowState({
+        scrollTop: 400,
+        scrollHeight: 800,
+        clientHeight: 400,
+      }),
+    };
+
+    render(
+      <VirtualizedMessages
+        getScroller={() => scroller}
+        followingRef={followingRef}
+      />,
+    );
+
+    act(() => {
+      mocks.scrollToFn?.(
+        320,
+        { adjustments: 24, behavior: "auto" },
+        { scrollElement: scroller },
+      );
+    });
+
+    expect(scrollTo).not.toHaveBeenCalled();
+    expect(followingRef.current.following).toBe(true);
   });
 });

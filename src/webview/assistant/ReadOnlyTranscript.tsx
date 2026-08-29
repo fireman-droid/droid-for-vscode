@@ -110,6 +110,7 @@ export function ReadOnlyTranscript({
                       getScroller={getScroller}
                       followingRef={followingRef}
                       components={READONLY_MESSAGE_COMPONENTS}
+                      enablePinnedSurface={false}
                     />
                   </div>
                 </SelectSessionContext.Provider>

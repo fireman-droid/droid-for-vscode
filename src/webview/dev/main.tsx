@@ -29,6 +29,7 @@ import {
   type StudioConfig,
   type StudioViewportWidth,
 } from './studioRuntime';
+import { createBrowserRuntime } from './browserRuntime';
 import './preview.css';
 
 const provider = {
@@ -183,17 +184,23 @@ function nextAuxiliarySequence(): number {
   return auxiliarySequence;
 }
 
+const live = window.location.pathname === '/live';
 const initialConfig = parseStudioConfig(window.location.search);
-const studioRuntime = createStudioRuntime(initialConfig, {
-  onPostMessage: handlePreviewPostMessage,
-});
+const runtime = live
+  ? createBrowserRuntime()
+  : createStudioRuntime(initialConfig, {
+      onPostMessage: handlePreviewPostMessage,
+    });
 
 (globalThis as {
-  acquireVsCodeApi?: () => typeof studioRuntime;
-  __dvxApi?: typeof studioRuntime;
-}).acquireVsCodeApi = () => studioRuntime;
+  acquireVsCodeApi?: () => typeof runtime;
+  __dvxApi?: typeof runtime;
+}).acquireVsCodeApi = () => runtime;
 
 function Preview(): React.JSX.Element {
+  if (live) {
+    return <App />;
+  }
   const path = window.location.pathname;
   if (path === '/' || path === '/app') {
     return <Studio />;
@@ -232,6 +239,7 @@ function Preview(): React.JSX.Element {
 }
 
 function Studio(): React.JSX.Element {
+  const studioRuntime = runtime as ReturnType<typeof createStudioRuntime>;
   const [config, setConfig] = useState(initialConfig);
   const [appKey, setAppKey] = useState(0);
 

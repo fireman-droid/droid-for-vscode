@@ -5,16 +5,13 @@ import {
   type PermissionInteractionRequest,
   type PermissionRespondMessage,
   type PlanDocumentOpenMessage,
-  type PlanDocumentStateMessage,
 } from '../shared/bridgeMessages';
-import type { PlanDocumentGateway } from './planDocumentGateway';
+import type {
+  PlanDocumentGateway,
+  PlanDocumentStateProjection,
+} from './planDocumentGateway';
 
 const PLAN_DOCUMENT_DEBOUNCE_MS = 120;
-
-type PlanDocumentStateProjection = Omit<
-  PlanDocumentStateMessage,
-  'sequence'
->;
 
 interface PendingPlanDocument {
   readonly sessionId: string;
@@ -175,14 +172,20 @@ export class PlanDocumentController implements PlanDocumentGateway {
   }
 
   replay(): void {
+    this.replayTo(this.emit);
+  }
+
+  replayTo(
+    listener: (state: PlanDocumentStateProjection) => void,
+  ): void {
     for (const entry of this.pending.values()) {
       if (entry.tooLarge) {
-        this.emitState(entry, 'too-large');
+        listener(this.projectState(entry, 'too-large'));
       } else if (
         entry.document !== undefined ||
         entry.draft !== entry.initialContent
       ) {
-        this.emitState(entry, 'ready', entry.draft);
+        listener(this.projectState(entry, 'ready', entry.draft));
       }
     }
   }
@@ -282,17 +285,25 @@ export class PlanDocumentController implements PlanDocumentGateway {
 
   private emitState(
     entry: PendingPlanDocument,
-    status: PlanDocumentStateMessage['status'],
+    status: PlanDocumentStateProjection['status'],
     content?: string,
   ): void {
-    this.emit({
+    this.emit(this.projectState(entry, status, content));
+  }
+
+  private projectState(
+    entry: PendingPlanDocument,
+    status: PlanDocumentStateProjection['status'],
+    content?: string,
+  ): PlanDocumentStateProjection {
+    return {
       type: 'plan.document.state',
       sessionId: entry.sessionId,
       turnId: entry.turnId,
       requestId: entry.requestId,
       status,
       ...(content === undefined ? {} : { content }),
-    });
+    };
   }
 }
 

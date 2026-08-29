@@ -1,6 +1,7 @@
 .dvx-user-edit {
   display: flex;
   width: 100%;
+  border-color: var(--dvx-border);
   flex-direction: column;
   gap: 6px;
 }
@@ -24,7 +25,8 @@
 .dvx-user-edit-input {
   box-sizing: border-box;
   width: 100%;
-  max-height: 27px;
+  min-height: 42px;
+  max-height: 69px;
   padding: 2px 2px 4px;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -166,6 +168,10 @@
   gap: 4px;
 }
 
+.dvx-user-edit-footer .dvx-send-action {
+  color: var(--dvx-on-accent);
+}
+
 .dvx-user-edit-send {
   color: var(--dvx-on-accent);
   background: var(--dvx-accent);
@@ -244,6 +250,18 @@
   line-height: 21.125px;
 }
 
+.dvx-user-quote {
+  display: -webkit-box;
+  margin-bottom: 5px;
+  overflow: hidden;
+  color: color-mix(in srgb, currentColor 62%, transparent);
+  font-size: 11px;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 /* Sent questions occupy their natural one-line height and stop at four
    lines; opening the editor exposes the complete text. */
 .dvx-user-block .dvx-user-text {
@@ -251,14 +269,6 @@
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
-}
-
-/* Once sticky, keep only a compact three-line question header. The
-   unpinned card retains four lines for transcript readability, while
-   opening its editor still exposes the complete text. */
-.dvx-message-user[data-sticky-compact] .dvx-user-block .dvx-user-text,
-.dvx-virtual-turn[data-sticky-compact] .dvx-user-block .dvx-user-text {
-  -webkit-line-clamp: 3;
 }
 
 .dvx-user-block-editable {

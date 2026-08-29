@@ -1,55 +1,13 @@
 import * as vscode from 'vscode';
 
 import type { RuntimeDiagnosticSink } from '../runtime/runtimeDiagnostics';
-import {
-  BRIDGE_PROTOCOL_VERSION,
-} from '../shared/bridgeMessages';
-import { isStrictRecord } from '../shared/strictValidation';
-import { parseWebviewMessage } from '../shared/validateMessage';
 import type { ChatController } from './ChatController';
 import { getWebviewHtml } from './webviewHtml';
+import { routeWebviewMessage } from './webviewMessageRouter';
 import {
   readWebviewBootTheme,
   readWebviewThemePreference,
 } from './webviewTheme';
-
-const BEACON_ERROR_KINDS: ReadonlySet<string> = new Set([
-  'boot-timeout',
-  'handshake-timeout',
-  'error',
-  'unhandledrejection',
-]);
-
-function safeStringify(value: unknown): string {
-  try {
-    return (JSON.stringify(value) ?? String(value)).slice(0, 2048);
-  } catch {
-    return String(value).slice(0, 2048);
-  }
-}
-
-/**
- * Detects a `webview.ready` handshake carrying a foreign protocol
- * version: the signature of a VSIX overwrite install where the bundle
- * on disk is newer than this in-memory host. Such a ready must be
- * loggable as its own event — burying it in the generic
- * `host.bridge.rejected` stream made the resulting dead panel
- * undiagnosable.
- */
-function readReadyProtocolMismatch(
-  value: unknown,
-): string | number | null {
-  if (
-    !isStrictRecord(value) ||
-    value.type !== 'webview.ready' ||
-    value.protocolVersion === BRIDGE_PROTOCOL_VERSION
-  ) {
-    return null;
-  }
-  return typeof value.protocolVersion === 'number'
-    ? value.protocolVersion
-    : safeStringify(value.protocolVersion).slice(0, 64);
-}
 
 export class DroidViewProvider
   implements vscode.WebviewViewProvider, vscode.Disposable
@@ -172,84 +130,27 @@ export class DroidViewProvider
     });
     this.messageListener = webviewView.webview.onDidReceiveMessage(
       (untrustedMessage: unknown) => {
-        if (this.missionWorkspace?.handleMessage(untrustedMessage) === true) {
-          return;
-        }
-        const message = parseWebviewMessage(untrustedMessage);
-        if (message === undefined) {
-          const mismatch = readReadyProtocolMismatch(untrustedMessage);
-          if (mismatch !== null) {
-            this.diagnostics?.record({
-              level: 'error',
-              name: 'host.bridge.protocol-mismatch',
-              attributes: {
-                expected: BRIDGE_PROTOCOL_VERSION,
-                received: mismatch,
-              },
+        routeWebviewMessage(untrustedMessage, {
+          controller: this.controller,
+          diagnostics: this.diagnostics,
+          ...(this.missionWorkspace === undefined
+            ? {}
+            : { missionWorkspace: this.missionWorkspace }),
+          ...(this.openMissionControl === undefined
+            ? {}
+            : { openMissionControl: this.openMissionControl }),
+          postTheme,
+          onReady: () => {
+            void this.controller.replayTo((message) => {
+              if (this.webviewView === webviewView) {
+                void webviewView.webview.postMessage(message).then(
+                  () => undefined,
+                  () => undefined,
+                );
+              }
             });
-            return;
-          }
-          // Validation rejections used to be silent, which made
-          // host<->webview message loss undiagnosable.
-          this.diagnostics?.record({
-            level: 'warn',
-            name: 'host.bridge.rejected',
-            attributes: { direction: 'inbound' },
-            detail: safeStringify(untrustedMessage),
-          });
-          return;
-        }
-
-        if (message.type === 'webview.diagnostic') {
-          this.diagnostics?.record({
-            level: BEACON_ERROR_KINDS.has(message.kind)
-              ? 'error'
-              : 'info',
-            name: `webview.${message.kind}`,
-            detail: message.detail,
-          });
-          return;
-        }
-
-        // Theme preference is a view concern, not a session concern:
-        // persist it as the user setting and stop here. The write
-        // triggers onDidChangeConfiguration, which echoes ui.theme.
-        if (message.type === 'ui.theme.set') {
-          void vscode.workspace
-            .getConfiguration('droidvisx')
-            .update(
-              'theme',
-              message.preference,
-              vscode.ConfigurationTarget.Global,
-            )
-            .then(
-              () => undefined,
-              () => {
-                this.diagnostics?.record({
-                  level: 'warn',
-                  name: 'host.theme.persist-failed',
-                  attributes: { preference: message.preference },
-                });
-              },
-            );
-          return;
-        }
-        if (message.type === 'mission.panel.open') {
-          this.openMissionControl?.(
-            message.target ?? 'catalog',
-            message.task,
-          );
-          return;
-        }
-
-        // The ready resync (boot or re-show) also refreshes the theme
-        // preference the retained webview may have missed while hidden.
-        if (message.type === 'webview.ready') {
-          postTheme();
-          this.missionWorkspace?.replay();
-        }
-
-        this.controller.handleMessage(message);
+          },
+        });
       },
     );
     this.viewDisposalListener = webviewView.onDidDispose(() => {

@@ -251,8 +251,9 @@ describe('ChatController', () => {
     );
   });
 
-  it('captures a complete file-tool baseline before the stream advances', async () => {
+  it('captures a complete partial path set before the stream advances', async () => {
     const releaseCapture = deferred<void>();
+    const afterIncompleteCall = vi.fn();
     const afterCompleteCall = vi.fn();
     const runtime = createMockRuntime(async function* () {
       yield {
@@ -261,6 +262,15 @@ describe('ChatController', () => {
         toolUseId: 'edit-1',
         action: 'Updated workspace files',
         filePath: 'index.html',
+      };
+      afterIncompleteCall();
+      yield {
+        type: 'tool-start',
+        toolName: 'Edit',
+        toolUseId: 'edit-1',
+        action: 'Updated workspace files',
+        filePath: 'index.html',
+        filePathsComplete: true,
       };
       yield {
         type: 'tool-start',
@@ -306,6 +316,7 @@ describe('ChatController', () => {
         ['index.html'],
       );
     });
+    expect(afterIncompleteCall).toHaveBeenCalledOnce();
     expect(captureTurnBaseline).toHaveBeenCalledOnce();
     expect(afterCompleteCall).not.toHaveBeenCalled();
 
@@ -317,6 +328,7 @@ describe('ChatController', () => {
         { sessionId: 'session-1', turnId: 'turn-1' },
       );
     });
+    expect(captureTurnBaseline).toHaveBeenCalledTimes(2);
     expect(afterCompleteCall).toHaveBeenCalledOnce();
   });
 

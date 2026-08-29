@@ -14,6 +14,7 @@ import { EMPTY_SESSION_QUEUE_STATE, MAX_QUEUED_MESSAGES, type SessionQueueState 
 import { enforceTranscriptImageBudget, trimTranscriptToLimits } from '../../shared/transcriptLimits';
 import { stableTranscriptId } from '../../shared/hostTranscriptState';
 import { EMPTY_SESSION_BTW_STATE, type SessionBtwState } from '../../shared/btwProtocol';
+import { EMPTY_REVIEW_UI_STATE, reduceReviewUiMessage, type ReviewUiState } from './reviewStore';
 import { EMPTY_SESSION_TOKEN_USAGE, type SessionTokenUsageState } from '../../shared/tokenUsage';
 import { isTransientRuntimeDiagnostic } from '../../shared/transientDiagnostics';
 import { initialGitCommitFlowState, type GitCommitFlowState } from './gitCommitStore';
@@ -22,6 +23,11 @@ import {
   reducePlanDocumentState,
   type PendingInteraction,
 } from './interactionStore';
+import {
+  reduceAttachmentMessage,
+  type AttachmentImageEntry,
+} from './attachmentImageStore';
+export type { AttachmentImageEntry } from './attachmentImageStore';
 
 export { initialGitCommitFlowState } from './gitCommitStore';
 export type {
@@ -38,7 +44,6 @@ export interface AssistantTurn {
 }
 
 export type { PendingInteraction } from './interactionStore';
-
 /** One resolved markdown image reference. */
 export interface LocalImageEntry {
   readonly status: WorkspaceImageStatus;
@@ -46,7 +51,6 @@ export interface LocalImageEntry {
   /** Pure base64 payload; empty unless status is 'ok'. */
   readonly data: string;
 }
-
 export interface AssistantWebviewState {
   readonly sequence: number;
   readonly sessionId: string | null;
@@ -82,6 +86,10 @@ export interface AssistantWebviewState {
   } | null;
   /** Attachments staged on the host for the next prompt. */
   readonly attachments: readonly AttachmentSummary[];
+  /** Host-owned staged image bytes loaded on demand for preview. */
+  readonly attachmentImages: Readonly<
+    Record<string, AttachmentImageEntry>
+  >;
   /** Latest workspace file search result for the `@` mention popup. */
   readonly fileSearch: {
     readonly requestId: string;
@@ -103,6 +111,7 @@ export interface AssistantWebviewState {
   readonly rewindInfo: RewindFileImpact | null;
   /** Latest branch-versus-base diff, or null before a request. */
   readonly branchDiff: GitBranchDiffState | null;
+  readonly review: ReviewUiState;
   /** Edit staging area contents for the message being edited. */
   readonly editAttachments: {
     readonly messageId: string;
@@ -184,7 +193,6 @@ export interface AssistantWebviewState {
   /** Inline commit panel state behind the changes-card entry. */
   readonly git: GitCommitFlowState;
 }
-
 /**
  * Host messages the store consumes. App handles sequence-free theme
  * pushes and transient Canvas draft commands directly.
@@ -193,7 +201,6 @@ export type StoreHostMessage = Exclude<
   HostToWebviewMessage,
   { type: 'ui.theme' | 'canvas.feedbackDraft' }
 >;
-
 export type AssistantWebviewAction =
   | {
       readonly type: 'host.message';
@@ -245,12 +252,14 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   commands: { status: 'idle', items: [], recent: [] },
   mcpAuth: null,
   attachments: [],
+  attachmentImages: {},
   fileSearch: null,
   localImages: {},
   archived: { status: 'idle', items: [] },
   sessionSearch: null,
   rewindInfo: null,
   branchDiff: null,
+  review: EMPTY_REVIEW_UI_STATE,
   editAttachments: null,
   editResendRejection: null,
   worktreeCreateAvailable: false,
@@ -503,6 +512,10 @@ export function assistantWebviewReducer(
           event.sessionId === state.sessionId ? state.mcpAuth : null,
         attachments:
           event.sessionId === state.sessionId ? state.attachments : [],
+        attachmentImages:
+          event.sessionId === state.sessionId
+            ? state.attachmentImages
+            : {},
         fileSearch:
           event.sessionId === state.sessionId ? state.fileSearch : null,
         localImages:
@@ -514,6 +527,8 @@ export function assistantWebviewReducer(
         rewindInfo: null,
         branchDiff:
           event.sessionId === state.sessionId ? state.branchDiff : null,
+        review: event.sessionId === state.sessionId
+          ? state.review : EMPTY_REVIEW_UI_STATE,
         // A snapshot means the session identity may have changed (e.g.
         // an adopted edit-resend fork); any in-progress edit is stale.
         editAttachments:
@@ -589,10 +604,12 @@ export function assistantWebviewReducer(
               commands: { status: 'idle', items: [], recent: [] },
               mcpAuth: null,
               attachments: [],
+              attachmentImages: {},
               editAttachments: null,
               editResendRejection: null,
               interactions: [],
               terminalTurnId: null,
+              review: EMPTY_REVIEW_UI_STATE,
             }
           : {}),
       };
@@ -741,24 +758,9 @@ export function assistantWebviewReducer(
           }
         : advance(state, event.sequence);
     case 'session.attachments':
-      return event.sessionId === state.sessionId
-        ? {
-            ...state,
-            sequence: event.sequence,
-            attachments: event.attachments,
-          }
-        : advance(state, event.sequence);
+    case 'session.attachmentImageData':
     case 'session.editAttachments':
-      return event.sessionId === state.sessionId
-        ? {
-            ...state,
-            sequence: event.sequence,
-            editAttachments: {
-              messageId: event.messageId,
-              attachments: event.attachments,
-            },
-          }
-        : advance(state, event.sequence);
+      return reduceAttachmentMessage(state, event);
     case 'turn.editResendRejected':
       return event.sessionId === state.sessionId
         ? {
@@ -848,6 +850,10 @@ export function assistantWebviewReducer(
       return sessionId === state.sessionId
         ? { ...state, sequence, branchDiff } : advance(state, sequence);
     }
+    case 'review.state': case 'review.restorePreview':
+    case 'review.operationResult': case 'review.agentReviewState':
+      return { ...state, sequence: event.sequence,
+        review: reduceReviewUiMessage(state.review, event, state.sessionId) };
     case 'rewind.info': {
       const { type: _type, sequence, sessionId, ...rewindInfo } = event;
       return sessionId === state.sessionId

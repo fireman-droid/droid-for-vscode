@@ -195,12 +195,11 @@ const CATEGORY_NOUNS: Readonly<
 };
 
 /**
- * Which member the running-group ticker shows: the last member still
- * reporting a running/stopping status, falling back to the newest
- * member while the group waits between tool calls (user report
- * batch 2 §1).
+ * The latest group member worth naming in the collapsed summary:
+ * prefer a member still running/stopping, then fall back to the
+ * newest member while the group waits between tool calls.
  */
-export function activeTickerIndex(
+export function activeActivityIndex(
   parts: readonly GroupCandidatePart[],
 ): number {
   for (let index = parts.length - 1; index >= 0; index -= 1) {

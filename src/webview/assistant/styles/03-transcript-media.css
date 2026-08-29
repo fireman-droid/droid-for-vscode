@@ -297,47 +297,75 @@
   pointer-events: none;
 }
 
-/* Viewer chrome: Reset / 1:1 / close grouped top-right over the
-   backdrop, sharing the dark translucent pill language. */
+/* Compact viewer toolbar, aligned with Cursor's image-preview chrome. */
 .dvx-image-lightbox-actions {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 10px;
+  right: 10px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 6px;
+  background: rgb(24 24 24 / 94%);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 28%);
+  cursor: default;
 }
 
 .dvx-image-lightbox-action {
-  height: 28px;
-  padding: 0 11px;
+  height: 26px;
+  padding: 0 9px;
   border: 0;
-  border-radius: 999px;
-  background: rgb(0 0 0 / 55%);
+  border-radius: 4px;
+  background: transparent;
   color: rgb(255 255 255 / 92%);
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
 }
 
-.dvx-image-lightbox-action:hover {
-  background: rgb(0 0 0 / 75%);
+.dvx-image-lightbox-action:hover:not(:disabled) {
+  background: rgb(255 255 255 / 9%);
 }
 
+.dvx-image-lightbox-icon,
 .dvx-image-lightbox-close {
-  width: 28px;
-  height: 28px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  padding: 0;
   border: 0;
-  border-radius: 50%;
-  background: rgb(0 0 0 / 55%);
-  color: var(--dvx-raised);
-  font-size: 13px;
-  line-height: 28px;
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(255 255 255 / 72%);
   cursor: pointer;
 }
 
+.dvx-image-lightbox-icon svg,
+.dvx-image-lightbox-close svg {
+  width: 14px;
+  height: 14px;
+}
+
+.dvx-image-lightbox-icon path,
+.dvx-image-lightbox-icon circle,
+.dvx-image-lightbox-icon rect,
+.dvx-image-lightbox-close path {
+  stroke-width: 1.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dvx-image-lightbox-icon:hover:not(:disabled),
 .dvx-image-lightbox-close:hover {
-  background: rgb(0 0 0 / 75%);
+  background: rgb(255 255 255 / 9%);
+  color: rgb(255 255 255 / 94%);
+}
+
+.dvx-image-lightbox-close {
+  margin-left: 1px;
 }
 
 /* Media fills the natural-size stage; SVG diagrams keep a white
@@ -348,6 +376,44 @@
   height: 100%;
   border-radius: inherit;
   user-select: none;
+}
+
+.dvx-staged-image-stage {
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 30%);
+}
+
+.dvx-staged-image-drawable {
+  cursor: crosshair;
+}
+
+.dvx-staged-image-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.dvx-staged-image-error {
+  position: absolute;
+  bottom: 48px;
+  left: 50%;
+  max-width: min(420px, calc(100% - 48px));
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 72%);
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.dvx-image-lightbox-action:disabled,
+.dvx-image-lightbox-icon:disabled {
+  cursor: default;
+  opacity: 0.42;
 }
 
 .dvx-lightbox-diagram {

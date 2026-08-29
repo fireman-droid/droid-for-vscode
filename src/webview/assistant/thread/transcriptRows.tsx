@@ -16,6 +16,7 @@ import { OpenPathContext } from "../MarkdownText";
 import {
   FileDiffContext,
   PreviewContext,
+  ReviewTurnContext,
   SelectSessionContext,
   ToolChangesContext,
 } from "../Thread";
@@ -426,7 +427,7 @@ export function ChangesSummary({
 }: {
   readonly data: unknown;
 }): React.JSX.Element | null {
-  const openFileDiff = useContext(FileDiffContext);
+  const openReviewTurn = useContext(ReviewTurnContext);
   const files = readChangedFiles(data);
   const turnId = readChangesTurnId(data);
   if (files.length === 0) {
@@ -447,10 +448,10 @@ export function ChangesSummary({
     <button
       type="button"
       className="dvx-changes-history"
-      title={`Open all changes from this turn (${count})`}
+      title={`Review changes from this turn (${count})`}
       onClick={() => {
-        for (const file of files) {
-          openFileDiff(file.path, turnId);
+        if (turnId !== null) {
+          openReviewTurn(turnId);
         }
       }}
     >

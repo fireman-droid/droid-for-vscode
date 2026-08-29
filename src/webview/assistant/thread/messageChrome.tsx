@@ -1,5 +1,9 @@
 import { useAuiState } from "@assistant-ui/react";
-import { createContext, useContext, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  type ReactNode,
+} from "react";
 
 import { isPlanLive, type PlanAnchorState } from "../planAnchor";
 import { PlanLine } from "../PlanLine";
@@ -46,14 +50,30 @@ export interface ThreadMessageChrome {
 export const ThreadMessageChromeContext =
   createContext<ThreadMessageChrome | null>(null);
 
+export interface PinnedMessageLayout {
+  readonly messageId: string | null;
+}
+
+export const PinnedMessageContext =
+  createContext<PinnedMessageLayout>({
+    messageId: null,
+  });
+
+export const MessageSurfaceContext =
+  createContext<"flow" | "pinned">("flow");
+
 function ThreadUserMessage(): ReactNode {
   const chrome = useContext(ThreadMessageChromeContext);
+  const pinned = useContext(PinnedMessageContext);
+  const surface = useContext(MessageSurfaceContext);
   const message = useAuiState((state) => state.message);
   if (chrome === null) {
     return null;
   }
   const content = Array.isArray(message.content) ? message.content : [];
   const messageId = readUserMessageId(message.metadata);
+  const isPinnedMessage = pinned.messageId === message.id;
+  const pinnedPlaceholder = surface === "flow" && isPinnedMessage;
   const plan = chrome.planAnchors?.get(message.id);
   const hasImage = content.some(
     (part) =>
@@ -81,7 +101,12 @@ function ThreadUserMessage(): ReactNode {
           />
         )
       }
-      editing={messageId !== null && messageId === chrome.editingMessageId}
+      editing={
+        !pinnedPlaceholder &&
+        messageId !== null &&
+        messageId === chrome.editingMessageId
+      }
+      pinnedPlaceholder={pinnedPlaceholder}
       editStage={chrome.editStage}
       rejection={chrome.rejection}
       editorEnv={chrome.editorEnv}

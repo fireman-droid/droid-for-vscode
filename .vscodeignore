@@ -1,5 +1,6 @@
 .factory/**
 .cursor/**
+.superpowers/**
 .workflow/**
 .codex/**
 .claude/**

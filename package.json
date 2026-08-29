@@ -20,7 +20,9 @@
     "onCommand:droidvisx.openLogs",
     "onCommand:droidvisx.exportDiagnostics",
     "onCommand:droidvisx.addSelectionToChat",
-    "onCommand:droidvisx.openMissionControl"
+    "onCommand:droidvisx.openMissionControl",
+    "onCommand:droidvisx.startBrowserDevClient",
+    "onCommand:droidvisx.stopBrowserDevClient"
   ],
   "contributes": {
     "commands": [
@@ -51,6 +53,14 @@
       {
         "command": "droidvisx.openMissionControl",
         "title": "DroidVisX: Open Mission Control"
+      },
+      {
+        "command": "droidvisx.startBrowserDevClient",
+        "title": "DroidVisX: Start Browser Dev Client"
+      },
+      {
+        "command": "droidvisx.stopBrowserDevClient",
+        "title": "DroidVisX: Stop Browser Dev Client"
       }
     ],
     "menus": {
@@ -139,7 +149,7 @@
     "@fontsource-variable/inter": "^5.3.0",
     "@tanstack/react-virtual": "^3.14.9",
     "highlight.js": "^11.11.1",
-    "katex": "^0.18.4",
+    "katex": "^0.16.47",
     "mermaid": "^11.16.1",
     "react": "19.2.0",
     "react-dom": "19.2.0",

@@ -119,6 +119,8 @@ export type RuntimeEvent =
        * pre-write file baseline without trusting a truncated path.
        */
       inputComplete?: true;
+      /** The partial input already names the complete modified-path set. */
+      filePathsComplete?: true;
       /** Workspace-relative path changed by file-modifying tools. */
       filePath?: string;
       /**

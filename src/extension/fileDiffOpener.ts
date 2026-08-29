@@ -21,6 +21,9 @@ export interface FileDiffOpener {
     options?: {
       /** Commit produced from the latest turn, retained across Reload. */
       readonly committedRef?: string;
+      /** Explicit Git baseline for Workspace/Branch review. */
+      readonly baselineRef?: string;
+      readonly baselineLabel?: string;
     },
   ): Promise<FileDiffOutcome>;
   dispose?(): void;

@@ -246,7 +246,8 @@ flowchart LR
 - 命令根据 workspace 根目录 `package.json` 的 `name: droidvisx` 确认源码
   位置，不扫描或猜测其他目录。
 - Extension Host 启动只监听 `127.0.0.1` 随机端口的 Browser Dev Bridge，
-  再从源码 workspace 自动启动固定端口 4173 的 Vite，并打开 `/live`。
+  再从源码 workspace 自动启动固定端口 4173 的 Vite，并优先在 Cursor Browser
+  打开 `/live`；非 Cursor 环境回退系统浏览器。
 - 每次启动生成临时连接令牌。令牌放在 URL fragment，只由浏览器 JavaScript
   读取并发给 Bridge，不出现在 Vite HTTP 请求中。
 - 再次执行 Start 时复用本次实例并重新打开当前地址，不启动第二套 Host 或 Vite。
@@ -511,3 +512,210 @@ settled 清单。界面应把它表达为“回合期间发生的变化”，除
 - [Cursor Forum 搜索：All Changes 显示旧 Agent 变化并忽略用户编辑](https://forum.cursor.com/search?q=%22All%20changes%22%20show%20stale%20agent%20changes%20and%20disregard%20user%20changes)
 - [Cursor Forum 搜索：Agent Review/Accept 界面缺失后产生自动接受感知](https://forum.cursor.com/search?q=Agent%20mode%20no%20longer%20shows%20review%20accept%20interface)
 - [Cursor Forum 搜索：Review 入口停留并与 Commit 行为混淆](https://forum.cursor.com/search?q=Agent%20%221%20File%20Review%22%20stuck)
+
+## 统一 Diff 审查系统
+
+设计日期：2026-08-27
+
+本设计将上面的对标建议合并成一条完整链路，不再把连续导航、安全恢复、
+Diff 引用和 Agent Review 作为彼此独立的候选功能。界面继续采用
+**ReviewDock 导航 + Cursor / VS Code 原生 Diff**：聊天侧负责范围、顺序、
+进度和动作，代码阅读始终回到编辑器。
+
+### 产品语义
+
+- Workspace 中的文件在 Droid 工具执行时已经写入磁盘。Review 是写入后的审查，
+  不是写入前的 Accept / Reject。
+- 默认范围是 `Latest Turn`，因为它有明确的 `sessionId`、`turnId` 和 before
+  基线。`Workspace` 与 `Branch` 是显式切换的更大范围，不能反过来污染 Turn
+  归因。
+- `reviewed` 只表示用户对某个确定版本的 Diff 做了明确确认，不代表 stage、
+  commit、测试通过、质量通过或接受修改。
+- Diff Review 负责展示事实；Agent Review 是另一次 Droid 语义审查，两者有
+  独立状态和结果。
+
+### 用户流程
+
+1. Turn 执行中，Dock 流式显示文件和增删统计。`View live` 可打开一个原生
+   preview Diff，但此时不能标记 reviewed。
+2. Turn settled 后，`Review` 从第一个未审查文件开始；任何时刻只复用一个
+   preview Diff 标签。
+3. Dock 展示文件顺序、当前项、`reviewed / total`、Previous、Next、
+   `Mark reviewed` 和 `Mark reviewed & Next`。普通导航不会自动标记。
+4. reviewed 进度跨 Reload 保存；被确认的文件之后再次变化时，只重置该文件。
+5. 历史 `Changes` 重新进入对应 Turn 的同一审查流程。审查历史 Turn 时，新
+   Turn 只提示 `Newer changes available`，不会静默切换当前范围。
+6. 全部文件确认后显示 `N of N reviewed`，并提供 Ask Droid、Agent Review、
+   Commit 和 Restore 等后续动作，不显示 Accepted 或 Approved。
+
+### 范围
+
+| 范围 | 比较事实 | 默认动作 |
+| --- | --- | --- |
+| Turn | `Before turn ↔ Current`；已提交历史回合可用 `commit^ ↔ commit` | 原生 Diff、reviewed、引用、安全恢复 |
+| Workspace | `HEAD ↔ Working` | 原生 Diff、reviewed、引用 |
+| Branch | `baseBranch ↔ branch / working tree`，标题必须显示基线 | 原生 Diff、reviewed、引用 |
+
+无法建立可靠比较基线时，文件只能标记为 `Open only`，不能伪装成 Diff；
+该文件也不能参与 reviewed 完成率或恢复。
+
+### Host-owned Review Coordinator
+
+Extension Host 新增唯一的 Review Coordinator。它按
+`workspace + sessionId + reviewScopeId` 持有审查状态，Webview 不自行推导
+文件身份或恢复安全性。
+
+Coordinator 负责：
+
+- 从 settled Turn ledger、Workspace Git 状态或 Branch diff 构建有序文件集；
+- 维护当前索引、明确确认的 reviewed 版本和 remaining 数量；
+- 打开或替换唯一的原生 preview Diff；
+- 监听 Workspace 文件变化，使对应 reviewed 版本失效；
+- 跨 Reload 持久化有界 Review 状态，并在 Session、Turn、workspace 或基线
+  不匹配时拒绝恢复；
+- 生成 Restore 预检，执行冲突安全的文件恢复；
+- 为 DroidVisX 打开的 Diff 注册真实 path、scope、side 和 Turn 身份；
+- 启动独立的 `/review` Session，并把它交给现有只读 Session Viewer 展示。
+
+ReviewDock 只渲染 Host 状态并发送用户意图。新 Turn 到来时 Dock 的“最新摘要”
+可以更新，但正在进行的审查对象只有用户显式切换后才改变。
+
+### Review 状态
+
+Review scope 使用以下生命周期：
+
+- `writing`：文件仍在变化，只允许 live view；
+- `settled`：文件集和基线已确定，可以开始审查；
+- `reviewing`：存在当前文件和 reviewed 进度；
+- `complete`：所有可比较文件都被用户明确确认；
+- `stale`：范围基线、workspace 或身份不再匹配，必须重新读取；
+- `unavailable`：Runtime、Git 或快照无法提供可靠比较。
+
+单文件状态为 `unreviewed`、`current`、`reviewed`、`changed-after-review`、
+`open-only` 或 `restore-conflict`。状态不能从按钮是否可见推断。
+
+reviewed 必须绑定 Diff 版本。Host 同时监听 `onDidChangeTextDocument` 和
+Workspace 文件变化；进程内任一侧变化立即失效。跨 Reload 时，在现有 Diff
+大小上限内重新读取双方字节并计算持久化版本指纹，只有基线身份和双方指纹都匹配
+才恢复 reviewed。版本指纹只用于证明“仍是用户确认过的 Diff”，不承担来源归因
+或权限用途。
+
+### Bridge 契约
+
+共享 Bridge 增加独立 Review 消息域：
+
+- Webview → Host：
+  `review.open`、`review.navigate`、`review.markReviewed`、
+  `review.switchScope`、`review.refresh`、`review.restorePreview`、
+  `review.restoreFile`、`review.restoreTurn`、`review.runAgentReview`。
+- Host → Webview：
+  `review.state`、`review.restorePreview`、`review.operationResult`、
+  `review.agentReviewState`。
+
+每条写操作消息都携带 `sessionId`、`reviewScopeId`、基线身份和当前版本；
+Host 使用 exact-key validation，并在执行前重新验证当前 workspace、Session、
+Turn、文件版本和恢复预检。Webview 的 reviewed 集合、文件内容或恢复判断从不
+作为权限事实。
+
+现有 `file.openDiff` 保留给 Tool 行和简单文件入口；ReviewDock 改用 Coordinator
+的导航消息，避免 Webview 再循环打开全部文件。历史 `Changes` 也只请求打开
+对应 Review scope。
+
+### 原生 Diff 与双侧引用
+
+Coordinator 继续使用公开 `vscode.diff`。Turn、Workspace 和 Branch 均生成
+明确标题；Previous / Next 只替换同一个 `{ preview: true }` Diff，不批量打开
+标签页。
+
+`Add Diff Selection to Chat` 扩展现有选择附件管线：
+
+- 当前文件侧和 before-baseline 虚拟文档侧都可使用；
+- Host 从 Diff 注册表还原真实 `sessionId`、scope、path、side 和行范围；
+- 引用明确标记 `Before turn`、`Current`、`HEAD` 或 Branch 基线；
+- 选择文本继续走现有有界附件暂存、去重和 Composer 预览；
+- 只允许加入当前已连接的主 Session。历史 Turn 引用保留原 scope 身份，界面
+  不把它描述为当前回合内容。
+
+### 冲突安全恢复
+
+Turn scope 提供 `Restore file` 和 `Restore turn`，含义始终是“恢复到此 Turn
+之前”。Workspace 与 Branch scope 不提供该动作。
+
+恢复分两步：
+
+1. Host 读取 before、after 和当前 Workspace，返回 restorable、created、
+   deleted、conflicted、missing-snapshot 和 unsupported 清单。
+2. 用户确认后携带预检身份提交恢复；Host 再次执行同一预检，通过后才写入。
+
+安全规则：
+
+- 修改文件只有在当前字节仍等于 Turn after 时才能写回 before；
+- 新建文件只有在当前字节仍等于 after 时才能删除；
+- 删除文件只有在当前仍不存在时才能恢复 before；
+- 目标文件存在未保存的 TextDocument 修改时直接视为冲突；
+- 快照被逐出、路径不安全、文件类型不支持、内容超限或任何后续编辑都 fail
+  closed；
+- `Restore turn` 是全有或全无。任一文件冲突时不写任何文件，用户可改用单文件
+  Restore 处理其余安全项；
+- 不提供“确认后覆盖冲突文件”，不执行 `git reset --hard`、`git clean` 或私有
+  SCM 命令。
+
+整回合恢复在串行 Coordinator 队列中二次预检，先建立有界恢复日志和临时副本，
+再执行写入；任一写入失败时回滚已经处理的路径。进程崩溃无法获得真正的跨文件
+文件系统事务，因此启动时必须检测未完成日志并恢复原状；恢复或回滚未完成时显示
+准确路径和诊断，不报告成功。
+
+恢复成功后刷新 Turn、Workspace 和 Branch scope，所有受影响文件的 reviewed
+状态按新 Diff 版本重新计算。现有历史消息 Rewind 仍负责“回到一条用户消息并
+重新发送”，不与 Review Restore 合并。
+
+### Agent Review
+
+Agent Review 使用 Factory 公开 `/review` 工作流，在独立的新 Droid Session
+中审查 Workspace 或 Branch Git 范围。它不声称只审查私有 Turn baseline。
+
+- ReviewDock 可启动 Agent Review，并清楚展示将审查的 Git 范围；
+- Host 创建独立 Session，生命周期和身份沿用现有 Session 基础设施；
+- 结果通过现有只读 Session Viewer 打开，不混入原任务 transcript；
+- 具体 Turn 中发现的问题通过双侧 Diff 引用回主 Composer，由原 Session 解释
+  或修复；
+- Agent Review 失败、取消或不可用不会改变 reviewed、Git stage 或恢复状态。
+
+### 持久化与边界
+
+- 持久化记录有 workspace、Session、scope、Turn、基线、文件顺序、当前项、
+  reviewed 版本和更新时间，并采用现有有界 storage 策略。
+- Reload 后先验证 workspace 与基线，再恢复 UI；验证失败进入 `stale`，不会
+  展示旧完成状态。
+- 新 Session、切换 workspace、Turn snapshot 淘汰和 Branch base 变化都会使
+  相关 scope 失效。
+- 文件归因只能表达为“此 Turn 期间发生的变化”；没有工具级证据时不声称某行
+  由 Agent 生成。
+
+### 实施里程碑
+
+1. **Review Core**：稳定 shared protocol、Host Coordinator、持久化与
+   Webview Store，接通 Latest Turn 单 Diff 导航和 reviewed 失效。
+2. **Scopes**：接通历史 Turn、Workspace 与 Branch 的可靠逐文件比较，移除
+   所有批量打开 Diff 的入口。
+3. **Safe Restore**：扩展 Turn snapshot 的 before / after 字节读取、双重预检、
+   单文件恢复和原子 Restore turn。
+4. **Diff Quote**：注册原生 Diff 双侧身份，扩展 Selection 附件到 Composer。
+5. **Agent Review**：通过公开 `/review` 创建独立审查 Session，并复用只读
+   Viewer。
+6. **完成与恢复**：Reload、Session/workspace 切换、基线淘汰、Branch base
+   变化和操作失败的状态对账。
+
+每个里程碑按 Shared Bridge → Host → Webview 的依赖顺序实现。最终必须通过
+类型检查、文件预算、相关协议/状态/恢复测试、生产构建、VSIX 校验和安装，并由
+用户在真实 Cursor 中验收原生 Diff 标签复用、进度失效、冲突恢复和独立
+Agent Review。
+
+### 明确不做
+
+- 不在 Secondary Sidebar 中重建 Monaco 或聚合 patch renderer；
+- 不调用私有 Multi Diff 命令；
+- 不把打开、Next、Commit 或 Agent Review 自动解释为 reviewed；
+- 不把 reviewed、stage、commit、恢复和质量结论合并；
+- 不覆盖 Turn 之后的用户编辑；
+- 不承诺没有公开 API 的行级 Agent / Human blame。

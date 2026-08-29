@@ -12,7 +12,8 @@
 
 .dvx-shell[data-dvx-theme-preference='auto'],
 html[data-dvx-theme-preference='auto'] .dvx-image-lightbox,
-html[data-dvx-theme-preference='auto'] .dvx-slash-tooltip {
+html[data-dvx-theme-preference='auto'] .dvx-slash-tooltip,
+html[data-dvx-theme-preference='auto'] .dvx-selection-toolbar {
   --dvx-surface: var(
     --vscode-sideBar-background,
     var(--vscode-editor-background, #fff)
@@ -212,11 +213,9 @@ html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb:hover {
   box-shadow: none;
 }
 
-.dvx-shell[data-dvx-theme-preference='auto'] .dvx-send-action,
 .dvx-shell[data-dvx-theme-preference='auto'] .dvx-user-edit-send,
 .dvx-shell[data-dvx-theme-preference='auto'] .dvx-user-edit-send:hover:not(:disabled),
 .dvx-shell[data-dvx-theme-preference='auto'] .dvx-user-edit-send:focus-visible,
-.dvx-shell[data-dvx-theme-preference='auto'] .dvx-btw-send,
 .dvx-shell[data-dvx-theme-preference='auto'] .dvx-mission-start {
   color: var(--vscode-button-foreground, #fff);
 }
