@@ -287,10 +287,12 @@ export function ReviewDock({
                       data-open={moreOpen ? "true" : "false"}
                       aria-hidden={!moreOpen}
                     >
-                      <ChangesCommitEntry
-                        key={changes.turnId}
-                        turnId={changes.turnId}
-                      />
+                      {!writing ? (
+                        <ChangesCommitEntry
+                          key={changes.turnId}
+                          turnId={changes.turnId}
+                        />
+                      ) : null}
                       {!writing &&
                       review.scopeKind === "turn" &&
                       current?.restorable ? (
@@ -317,26 +319,28 @@ export function ReviewDock({
                           Restore turn
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        className="dvx-review-more-item"
-                        disabled={
-                          writing ||
-                          (agent?.reviewScopeId === review.reviewScopeId &&
-                            (agent.status === "starting" ||
-                              agent.status === "running"))
-                        }
-                        onClick={() => {
-                          setMoreOpen(false);
-                          onRunAgentReview();
-                        }}
-                      >
-                        {agent?.reviewScopeId === review.reviewScopeId &&
-                        (agent.status === "starting" ||
-                          agent.status === "running")
-                          ? "Agent Review running"
-                          : "Agent Review"}
-                      </button>
+                      {review.scopeKind !== "turn" ? (
+                        <button
+                          type="button"
+                          className="dvx-review-more-item"
+                          disabled={
+                            writing ||
+                            (agent?.reviewScopeId === review.reviewScopeId &&
+                              (agent.status === "starting" ||
+                                agent.status === "running"))
+                          }
+                          onClick={() => {
+                            setMoreOpen(false);
+                            onRunAgentReview();
+                          }}
+                        >
+                          {agent?.reviewScopeId === review.reviewScopeId &&
+                          (agent.status === "starting" ||
+                            agent.status === "running")
+                            ? "Agent Review running"
+                            : "Agent Review"}
+                        </button>
+                      ) : null}
                     </div>
                     <button
                       type="button"

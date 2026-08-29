@@ -133,7 +133,6 @@ import {
 } from './SessionRecoveryStore';
 import {
   appendAcceptedUserPrompt,
-  appendTurnChanges,
   attachUserMessageId,
   createHostTranscriptState,
   projectHostTranscriptMessage,

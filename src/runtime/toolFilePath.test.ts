@@ -60,7 +60,7 @@ describe('extractToolFilePaths', () => {
     ]);
   });
 
-  it('covers a rewrite via its Add header and skips pure deletes', () => {
+  it('deduplicates rewrites and includes pure deletes', () => {
     // The CLI rewrites a file as a Delete+Add pair for the same path.
     const rewrite = [
       '*** Begin Patch',
@@ -80,7 +80,7 @@ describe('extractToolFilePaths', () => {
     ].join('\n');
     expect(
       extractToolFilePaths('ApplyPatch', { input: deleteOnly }),
-    ).toEqual([]);
+    ).toEqual(['src/gone.ts']);
   });
 
   it('handles CRLF patches and repeated headers', () => {

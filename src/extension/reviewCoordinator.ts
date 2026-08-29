@@ -18,7 +18,6 @@ import type {
   ReviewScopeState,
   ReviewWebviewMessage,
 } from '../shared/reviewProtocol';
-import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
 import { toWorkspaceRelativePath } from '../runtime/toolFilePath';
 import type {
   ChangeStatsPersistence,
@@ -32,6 +31,7 @@ import {
 } from './reviewAgent';
 import {
   digest,
+  createActiveScope,
   isNotFound,
   isRecoveryEntry,
   latestPersistedScope,
@@ -45,6 +45,12 @@ import {
   type PersistedScope,
   type RecoveryEntry,
 } from './reviewCoordinatorSupport';
+import {
+  openWritingTurn,
+  refreshWritingTurn,
+  settleWritingTurn,
+  type ReviewWritingScopeHost,
+} from './reviewWritingScopes';
 
 const REVIEW_STORAGE_KEY = 'droidvisx.reviewState';
 const REVIEW_STORAGE_VERSION = 1;
@@ -101,6 +107,7 @@ export class ReviewCoordinator implements vscode.Disposable {
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private operation: Promise<void> = Promise.resolve();
   private disposed = false;
+  private readonly writingScopes: ReviewWritingScopeHost;
 
   constructor(private readonly options: ReviewCoordinatorOptions) {
     this.persisted = readPersistedScopes(
@@ -109,6 +116,22 @@ export class ReviewCoordinator implements vscode.Disposable {
       REVIEW_STORAGE_VERSION,
       MAX_PERSISTED_SCOPES,
     );
+    this.writingScopes = {
+      snapshots: options.snapshots,
+      persisted: this.persisted,
+      getActive: () => this.active,
+      setActive: (scope) => {
+        this.active = scope;
+      },
+      publish: (scope) => this.publishState(scope),
+      loadSettled: (sessionId, turnId) =>
+        this.loadTurnScope(sessionId, turnId),
+      refreshVersions: (scope) => this.refreshVersions(scope),
+      persist: (scope) => this.persistScope(scope),
+      enqueue: (task) => {
+        void (this.operation = this.operation.then(task));
+      },
+    };
     const watcher = vscode.workspace.createFileSystemWatcher('**/*');
     this.disposables = [
       watcher,
@@ -145,18 +168,23 @@ export class ReviewCoordinator implements vscode.Disposable {
     turnId: string,
     files: readonly CommittedFileStat[],
   ): void {
-    const record = this.options.snapshots.read(sessionId, turnId);
-    const scope = this.createScope(
-      { type: 'review.open', sessionId, scopeKind: 'turn', turnId },
-      record?.before ?? `writing-${turnId}`,
-      'Before turn',
-      files,
-      record?.before !== undefined,
-    );
-    scope.lifecycle = 'writing';
-    scope.reviewed.clear();
-    this.active = scope;
-    this.publishState(scope);
+    openWritingTurn(this.writingScopes, sessionId, turnId, files);
+  }
+
+  refreshWritingTurn(
+    sessionId: string,
+    turnId: string,
+    files: readonly CommittedFileStat[],
+  ): void {
+    refreshWritingTurn(this.writingScopes, sessionId, turnId, files);
+  }
+
+  settleWritingTurn(
+    sessionId: string,
+    turnId: string,
+    files: readonly CommittedFileStat[],
+  ): void {
+    settleWritingTurn(this.writingScopes, sessionId, turnId, files);
   }
 
   replay(sessionId: string): Promise<void> {
@@ -258,22 +286,24 @@ export class ReviewCoordinator implements vscode.Disposable {
       if (source === undefined) {
         return unavailableScope(message, 'HEAD is unavailable for this workspace.');
       }
-      return this.createScope(
+      return createActiveScope(
         message,
         source.baseline,
         'HEAD',
         source.files,
+        this.persisted,
       );
     }
     const source = await this.options.readBranchDiff();
     if (source === undefined) {
       return unavailableScope(message, 'Branch comparison is unavailable.');
     }
-    return this.createScope(
+    return createActiveScope(
       message,
       source.baseline,
       source.diff.baseBranch,
       source.diff.files,
+      this.persisted,
     );
   }
 
@@ -289,11 +319,12 @@ export class ReviewCoordinator implements vscode.Disposable {
       const fallbackFiles = record?.files ?? [];
       if (fallbackFiles.length > 0) {
         const workspace = await this.options.readWorkspaceFiles();
-        const fallback = this.createScope(
+        const fallback = createActiveScope(
           message,
           workspace?.baseline ?? record?.before ?? `missing-${turnId}`,
           'HEAD',
           fallbackFiles,
+          this.persisted,
           true,
           false,
           workspace?.baseline,
@@ -304,11 +335,12 @@ export class ReviewCoordinator implements vscode.Disposable {
             : 'This turn has no complete snapshot. Showing HEAD vs working tree.';
         return fallback;
       }
-      const unavailable = this.createScope(
+      const unavailable = createActiveScope(
         message,
         record?.before ?? `missing-${turnId}`,
         'Before turn',
         fallbackFiles,
+        this.persisted,
         false,
       );
       unavailable.lifecycle = 'unavailable';
@@ -316,47 +348,13 @@ export class ReviewCoordinator implements vscode.Disposable {
       return unavailable;
     }
     const stats = record.files ?? mapStats(await this.options.snapshots.diff({ sessionId, turnId }));
-    return this.createScope(
+    return createActiveScope(
       message,
       `${record.before}:${record.after}`,
       'Before turn',
       stats,
+      this.persisted,
     );
-  }
-
-  private createScope(
-    message: ReviewOpenMessage, baseline: string, baselineLabel: string,
-    stats: readonly CommittedFileStat[], comparable = true,
-    restorable = comparable && message.scopeKind === 'turn',
-    fallbackBaselineRef?: string,
-  ): ActiveScope {
-    const reviewScopeId = scopeId(message, baseline);
-    const saved = this.persisted.get(reviewScopeId);
-    const reviewed = new Map(saved?.baseline === baseline
-      ? saved.reviewed.map(({ path, version }) => [path, version]) : []);
-    const files = stats
-      .filter(({ path }) => isSafeWorkspaceRelativePath(path))
-      .slice(0, 200)
-      .map((file) => ({ ...file, version: '', comparable, restorable, restoreConflict: false }));
-    const currentPath = saved?.baseline === baseline ? saved.currentPath : undefined;
-    const savedIndex = currentPath === undefined
-      ? -1 : files.findIndex(({ path }) => path === currentPath);
-    const firstUnreviewed = files.findIndex(({ path }) => !reviewed.has(path));
-    return {
-      reviewScopeId,
-      sessionId: message.sessionId,
-      scopeKind: message.scopeKind,
-      ...(message.turnId === undefined ? {} : { turnId: message.turnId }),
-      baseline,
-      baselineLabel,
-      ...(fallbackBaselineRef === undefined ? {} : { fallbackBaselineRef }),
-      lifecycle: files.length === 0 ? 'complete' : 'settled',
-      files,
-      currentIndex: files.length === 0
-        ? null
-        : savedIndex >= 0 ? savedIndex : firstUnreviewed >= 0 ? firstUnreviewed : 0,
-      reviewed,
-    };
   }
 
   private async reloadActive(): Promise<void> {

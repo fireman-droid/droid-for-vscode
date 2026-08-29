@@ -17,6 +17,7 @@ vi.mock('vscode', () => {
 
 import type { ChangeStatsPersistence } from './changeStats';
 import type { FileDiffOpener } from './fileDiffOpener';
+import type { ReviewAgentRunner } from './reviewAgent';
 import { ReviewCoordinator } from './reviewCoordinator';
 import { scopeId } from './reviewCoordinatorSupport';
 import type { TurnSnapshotStore } from './turnSnapshots';
@@ -33,6 +34,7 @@ function createCoordinator(
     async () => 'opened-diff',
   ),
   snapshots = {} as TurnSnapshotStore,
+  runAgentReview?: ReviewAgentRunner,
 ): ReviewCoordinator {
   return new ReviewCoordinator({
     getWorkspaceRoot: () => 'Z:\\missing-review-workspace',
@@ -46,6 +48,7 @@ function createCoordinator(
       files,
     }),
     readBranchDiff: async () => undefined,
+    runAgentReview,
   });
 }
 
@@ -238,6 +241,120 @@ describe('ReviewCoordinator reload recovery', () => {
             }),
           ],
         }),
+      }),
+    );
+    coordinator.dispose();
+  });
+
+  it('refreshes an opened writing turn and settles it without reopening Diff', async () => {
+    const persistence: ChangeStatsPersistence = {
+      get: <T,>() => undefined as T | undefined,
+      update: vi.fn(() => Promise.resolve()),
+    };
+    let settled = false;
+    const snapshots = {
+      read: () =>
+        settled
+          ? {
+              turnId: 'turn-1',
+              before: 'before-tree',
+              after: 'after-tree',
+              files: [
+                { path: 'latest.txt', additions: 2, deletions: 1 },
+              ],
+            }
+          : { turnId: 'turn-1', before: 'before-tree' },
+    } as unknown as TurnSnapshotStore;
+    const publish = vi.fn();
+    const openDiff = vi.fn<FileDiffOpener['openDiff']>(
+      async () => 'opened-diff',
+    );
+    const coordinator = createCoordinator(
+      persistence,
+      publish,
+      openDiff,
+      snapshots,
+    );
+
+    coordinator.openWritingTurn('session-1', 'turn-1', [
+      { path: 'old.txt', additions: null, deletions: null },
+    ]);
+    coordinator.refreshWritingTurn('session-1', 'turn-1', [
+      { path: 'old.txt', additions: 1, deletions: 0 },
+      { path: 'latest.txt', additions: null, deletions: null },
+    ]);
+    expect(publish).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'review.state',
+        state: expect.objectContaining({
+          lifecycle: 'writing',
+          files: [
+            expect.objectContaining({ path: 'old.txt' }),
+            expect.objectContaining({ path: 'latest.txt' }),
+          ],
+        }),
+      }),
+    );
+
+    settled = true;
+    coordinator.settleWritingTurn('session-1', 'turn-1', [
+      { path: 'latest.txt', additions: 2, deletions: 1 },
+    ]);
+    await coordinator.replay('session-1');
+    expect(publish).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'review.state',
+        state: expect.objectContaining({
+          files: [expect.objectContaining({ path: 'latest.txt' })],
+        }),
+      }),
+    );
+    expect(openDiff).not.toHaveBeenCalled();
+    coordinator.dispose();
+  });
+
+  it('rejects Agent Review for a private turn baseline', async () => {
+    const persistence: ChangeStatsPersistence = {
+      get: <T,>() => undefined as T | undefined,
+      update: vi.fn(() => Promise.resolve()),
+    };
+    const publish = vi.fn();
+    const run = vi.fn<ReviewAgentRunner['run']>();
+    const snapshots = {
+      read: () => ({ turnId: 'turn-1', before: 'before-tree' }),
+    } as unknown as TurnSnapshotStore;
+    const coordinator = createCoordinator(
+      persistence,
+      publish,
+      undefined,
+      snapshots,
+      { run },
+    );
+    coordinator.openWritingTurn('session-1', 'turn-1', [
+      { path: 'old.txt', additions: null, deletions: null },
+    ]);
+    const reviewScopeId = scopeId(
+      {
+        type: 'review.open',
+        sessionId: 'session-1',
+        scopeKind: 'turn',
+        turnId: 'turn-1',
+      },
+      'before-tree',
+    );
+    coordinator.handle({
+      type: 'review.runAgentReview',
+      sessionId: 'session-1',
+      reviewScopeId,
+      baseline: 'before-tree',
+    });
+    await coordinator.replay('session-1');
+
+    expect(run).not.toHaveBeenCalled();
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'review.agentReviewState',
+        status: 'failed',
       }),
     );
     coordinator.dispose();

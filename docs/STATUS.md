@@ -50,7 +50,9 @@ Diff 审查链路已经接通。`0.7.89` 新版 VSIX 已覆盖安装；Cursor �
   直接打开当前待审文件并复用一个 Cursor 原生 preview Diff，文件行或 Previous /
   Next 继续切换当前 Diff
 - 后续纯聊天回合不会清空最近一次实际改动的 Latest Turn Dock；新的改动回合
-  仍会替换它，Session 切换继续按各自 transcript 隔离
+  仍会替换它，Commit 继续绑定该改动回合，Session 切换按各自 transcript 隔离
+- 实时 Changes 同步写入 Host transcript；已打开的 writing Review scope 会随新增文件
+  刷新并在 turn 结束后切换到 settled snapshot，最终无净改动时清除临时 Dock
 - Latest Turn 缺少完整 before/after snapshot 时，使用已记录的文件清单回退到
   HEAD ↔ Working Diff；该回退只读，不提供 Restore
 - 历史 Changes、Workspace 和 Branch 使用同一 ReviewDock；Branch 明确显示
@@ -61,11 +63,14 @@ Diff 审查链路已经接通。`0.7.89` 新版 VSIX 已覆盖安装；Cursor �
   不匹配或快照缺失都会阻止写入，整 Turn 任一冲突则全部不写
 - Tool 明确命名的 Git ignored 文件也会进入 before / after 精确快照，可正常
   Diff 和 Restore，不再被误判为快照缺失
+- ApplyPatch 的 Add、Update 和 Delete 路径都参与实时 ledger 与 pre-tool baseline
 - 整 Turn 恢复使用恢复日志和失败回滚；扩展启动时会继续处理未完成恢复日志
 - 原生 Diff 左右两侧选区均可通过 `Add Selection to Chat` 回主 Composer，
-  引用携带 before/current、文件和 Review scope 身份
-- Agent Review 通过独立公开 `/review` Session 运行，结果使用只读 Session
-  Viewer，不混入主 Session transcript，也不改变 reviewed 状态
+  引用携带 before/current、文件和 Review scope 身份；历史 Session 的 Diff
+  选区不会附加到当前聊天
+- Agent Review 仅用于 Workspace / Branch Git scope，通过独立公开 `/review`
+  Session 运行；结果使用只读 Session Viewer，不混入主 Session transcript，
+  也不改变 reviewed 状态
 
 ### 设置与扩展能力
 

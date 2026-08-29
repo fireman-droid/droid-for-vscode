@@ -53,6 +53,64 @@ export function mapStats(
   return [...stats].map(([path, value]) => ({ path, ...value }));
 }
 
+export function createActiveScope(
+  message: ReviewOpenMessage,
+  baseline: string,
+  baselineLabel: string,
+  stats: readonly CommittedFileStat[],
+  persisted: ReadonlyMap<string, PersistedScope>,
+  comparable = true,
+  restorable = comparable && message.scopeKind === 'turn',
+  fallbackBaselineRef?: string,
+): ActiveScope {
+  const reviewScopeId = scopeId(message, baseline);
+  const saved = persisted.get(reviewScopeId);
+  const reviewed = new Map(
+    saved?.baseline === baseline
+      ? saved.reviewed.map(({ path, version }) => [path, version])
+      : [],
+  );
+  const files = stats
+    .filter(({ path }) => isSafeWorkspaceRelativePath(path))
+    .slice(0, 200)
+    .map((file) => ({
+      ...file,
+      version: '',
+      comparable,
+      restorable,
+      restoreConflict: false,
+    }));
+  const currentPath =
+    saved?.baseline === baseline ? saved.currentPath : undefined;
+  const savedIndex =
+    currentPath === undefined
+      ? -1
+      : files.findIndex(({ path }) => path === currentPath);
+  const firstUnreviewed = files.findIndex(
+    ({ path }) => !reviewed.has(path),
+  );
+  return {
+    reviewScopeId,
+    sessionId: message.sessionId,
+    scopeKind: message.scopeKind,
+    ...(message.turnId === undefined ? {} : { turnId: message.turnId }),
+    baseline,
+    baselineLabel,
+    ...(fallbackBaselineRef === undefined ? {} : { fallbackBaselineRef }),
+    lifecycle: files.length === 0 ? 'complete' : 'settled',
+    files,
+    currentIndex:
+      files.length === 0
+        ? null
+        : savedIndex >= 0
+          ? savedIndex
+          : firstUnreviewed >= 0
+            ? firstUnreviewed
+            : 0,
+    reviewed,
+  };
+}
+
 export function unavailableScope(
   message: ReviewOpenMessage,
   reason: string,

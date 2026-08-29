@@ -25,6 +25,11 @@ export interface AttachmentPayload {
   readonly mediaType?: RuntimeImageMediaType;
   readonly sizeBytes: number;
   readonly truncated: boolean;
+  /**
+   * Host-only provenance for a selection captured from a registered
+   * Diff side. It is checked before staging and never sent to Droid.
+   */
+  readonly sourceSessionId?: string;
 }
 
 /**
@@ -49,8 +54,16 @@ export function selectionAttachmentPayload(args: {
   readonly startLine: number;
   readonly endLine: number;
   readonly text: string;
+  readonly sourceSessionId?: string;
 }): AttachmentPayload {
-  const { displayName, relativePath, startLine, endLine, text } = args;
+  const {
+    displayName,
+    relativePath,
+    startLine,
+    endLine,
+    text,
+    sourceSessionId,
+  } = args;
   let fenceLength = 3;
   for (const run of text.matchAll(/`{3,}/g)) {
     fenceLength = Math.max(fenceLength, run[0].length + 1);
@@ -79,6 +92,7 @@ export function selectionAttachmentPayload(args: {
     data,
     sizeBytes: Buffer.byteLength(data, 'utf8'),
     truncated,
+    ...(sourceSessionId === undefined ? {} : { sourceSessionId }),
   };
 }
 

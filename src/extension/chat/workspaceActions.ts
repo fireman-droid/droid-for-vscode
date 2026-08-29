@@ -195,9 +195,6 @@ function latestTurnChanges(ctl: ChatControllerInternals) {
     if (item?.kind === 'changes') {
       return item;
     }
-    if (item?.kind === 'user') {
-      return undefined;
-    }
   }
   return undefined;
 }
@@ -339,6 +336,19 @@ export function handleGitCommit(
       turnId,
       ok: false,
       error: 'Git is unavailable (unsupported-workspace).',
+    });
+    return;
+  }
+  if (
+    ctl.turn?.turnId === turnId &&
+    isTurnActive(ctl.turn)
+  ) {
+    ctl.emit({
+      type: 'git.commitResult',
+      sessionId,
+      turnId,
+      ok: false,
+      error: 'Wait for the Changes turn to finish before committing.',
     });
     return;
   }

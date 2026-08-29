@@ -536,6 +536,16 @@ export function stageAttachmentPayloads(
     }
     let staged = 0;
     for (const payload of payloads) {
+      if (
+        payload.sourceSessionId !== undefined &&
+        payload.sourceSessionId !== ctl.sessionId
+      ) {
+        ctl.emitSessionDiagnostic(
+          'attachment-read-failed',
+          ATTACHMENT_READ_FAILED_MESSAGE,
+        );
+        continue;
+      }
       if (stagedCount(ctl, stage) >= MAX_PENDING_ATTACHMENTS) {
         ctl.emitSessionDiagnostic(
           'attachment-limit',

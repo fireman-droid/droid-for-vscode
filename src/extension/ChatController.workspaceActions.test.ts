@@ -21,6 +21,7 @@ import {
   turnStates,
   waitForConnected,
 } from './controllerTestHarness';
+import { createTurnActivityState } from './turnActivityState';
 
 describe('ChatController', () => {
   it('compacts the session, adopts the continuation, and reloads its transcript', async () => {
@@ -569,6 +570,11 @@ describe('ChatController', () => {
             { path: 'src/app.ts', additions: 1, deletions: 1 },
           ],
         },
+        {
+          id: 'user:turn-chat',
+          kind: 'user',
+          text: 'Explain the result without changing files.',
+        },
       ],
       historyStatus: 'complete',
       truncated: false,
@@ -594,6 +600,25 @@ describe('ChatController', () => {
     expect(
       lastMessage(messages, 'git.status'),
     ).not.toHaveProperty('unavailableReason');
+
+    controller.turn = {
+      turnId: 'turn-a',
+      status: 'streaming',
+      activity: createTurnActivityState(),
+    };
+    controller.handleMessage({
+      type: 'git.commit',
+      sessionId: 'session-1',
+      turnId: 'turn-a',
+      paths: ['src/app.ts'],
+      message: 'feat: commit too early',
+    });
+    expect(lastMessage(messages, 'git.commitResult')).toMatchObject({
+      ok: false,
+      error: 'Wait for the Changes turn to finish before committing.',
+    });
+    expect(commit).not.toHaveBeenCalled();
+    controller.turn = null;
 
     // Wrong session requests never reach the workflow.
     controller.handleMessage({
@@ -999,6 +1024,70 @@ describe('ChatController', () => {
         { path: 'docs/new.md', additions: null, deletions: null },
       ],
     });
+    expect(
+      controller.transcript.transcript.find(
+        (item) => item.kind === 'changes' && item.turnId === 'turn-1',
+      ),
+    ).toMatchObject({
+      files: [
+        { path: 'src/app.ts', additions: 3, deletions: 1 },
+        { path: 'docs/new.md', additions: null, deletions: null },
+      ],
+    });
+  });
+
+  it('clears a live changes row when settlement finds no net change', async () => {
+    const runtime = createMockRuntime(async function* () {
+      yield {
+        type: 'tool-start',
+        toolName: 'Edit',
+        toolUseId: 'tool-1',
+        action: 'Edited workspace files',
+        inputComplete: true,
+        filePath: 'src/app.ts',
+      };
+      yield {
+        type: 'tool-result',
+        toolName: 'Edit',
+        toolUseId: 'tool-1',
+        action: 'Edited workspace files',
+        isError: false,
+      };
+      yield successfulTurn();
+    });
+    const read = vi.fn(
+      async (): Promise<ReadonlyMap<string, FileChangeStat>> =>
+        new Map([['src/app.ts', { additions: 0, deletions: 0 }]]),
+    );
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { read },
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    send(controller, 'session-1', 'turn-1', 'Change then restore a file');
+    await vi.waitFor(() => {
+      expect(
+        messages.some(
+          (message) =>
+            message.type === 'changes.update' &&
+            message.state === 'settled' &&
+            message.files.length === 0,
+        ),
+      ).toBe(true);
+    });
+    expect(
+      controller.transcript.transcript.some(
+        (item) => item.kind === 'changes' && item.turnId === 'turn-1',
+      ),
+    ).toBe(false);
   });
 
   it('skips the changes summary when no tool named a workspace file', async () => {

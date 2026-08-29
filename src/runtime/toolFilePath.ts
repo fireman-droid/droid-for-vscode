@@ -17,13 +17,9 @@ const FILE_MODIFYING_TOOLS = new Set([
 
 const PATH_INPUT_KEYS = ['file_path', 'filePath', 'path'] as const;
 
-/**
- * File headers of the CLI's ApplyPatch `input` patch text. Only Add
- * and Update name files the turn changed; a Delete-only path would
- * surface a dead Preview chip, and real rewrites emit Delete+Add
- * pairs for the same path, so the Add header already covers them.
- */
-const PATCH_FILE_HEADER = /^\*{3} (?:Add|Update) File: (.+)$/gm;
+/** File headers of the CLI's ApplyPatch `input` patch text. */
+const PATCH_FILE_HEADER =
+  /^\*{3} (?:Add|Update|Delete) File: (.+)$/gm;
 
 /**
  * Reads every target file path out of a file-modifying tool's raw

@@ -1154,7 +1154,10 @@ function parseChangesUpdate(
   ) {
     return undefined;
   }
-  const files = parseChangedFiles(value.files);
+  const files = parseChangedFiles(
+    value.files,
+    value.state === 'settled' ? 0 : 1,
+  );
   if (files === undefined) {
     return undefined;
   }
@@ -1171,8 +1174,15 @@ function parseChangesUpdate(
 
 function parseChangedFiles(
   value: unknown,
+  minimumLength = 1,
 ): ChangedFileSummary[] | undefined {
-  if (!isExactArray(value, 1, MAX_CHANGED_FILES_PER_TURN)) {
+  if (
+    !isExactArray(
+      value,
+      minimumLength,
+      MAX_CHANGED_FILES_PER_TURN,
+    )
+  ) {
     return undefined;
   }
   const files: ChangedFileSummary[] = [];

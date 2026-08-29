@@ -10,12 +10,12 @@ import {
 import { MAX_SESSION_IMAGE_DATA_UNITS } from '../shared/transcriptLimits';
 import {
   appendAcceptedUserPrompt,
-  appendTurnChanges,
   attachUserMessageId,
   createHostTranscriptState,
   hydrateHostTranscriptState,
   MAX_HOST_TRANSCRIPT_DIAGNOSTICS,
   projectHostTranscriptMessage,
+  reconcileTurnChanges,
   stableTranscriptId,
   truncateFromUserMessage,
   type HostTranscriptProjectionMessage,
@@ -709,7 +709,7 @@ describe('hostTranscriptState', () => {
     ]);
   });
 
-  it('appends a bounded per-turn changes summary exactly once', () => {
+  it('reconciles a bounded per-turn changes summary', () => {
     let state = appendAcceptedUserPrompt(
       createHostTranscriptState('complete'),
       'turn-1',
@@ -719,7 +719,7 @@ describe('hostTranscriptState', () => {
       { path: 'src/app.ts', additions: 3, deletions: 1 },
       { path: 'docs/new.md', additions: null, deletions: null },
     ];
-    state = appendTurnChanges(state, 'turn-1', files);
+    state = reconcileTurnChanges(state, 'turn-1', files);
     expect(state.transcript.at(-1)).toEqual({
       id: stableTranscriptId('changes', 'turn-1'),
       kind: 'changes',
@@ -727,9 +727,15 @@ describe('hostTranscriptState', () => {
       files,
     });
 
-    // Repeated publication and empty lists are no-ops.
-    expect(appendTurnChanges(state, 'turn-1', files)).toBe(state);
-    expect(appendTurnChanges(state, 'turn-2', [])).toBe(state);
+    // Repeated publication is a no-op; later frames replace in place.
+    expect(reconcileTurnChanges(state, 'turn-1', files)).toBe(state);
+    state = reconcileTurnChanges(state, 'turn-1', [
+      { path: 'src/app.ts', additions: 4, deletions: 1 },
+    ]);
+    expect(state.transcript.at(-1)).toMatchObject({
+      kind: 'changes',
+      files: [{ path: 'src/app.ts', additions: 4, deletions: 1 }],
+    });
 
     // Oversized lists are clipped to the bridge bound.
     const oversized = Array.from(
@@ -740,12 +746,19 @@ describe('hostTranscriptState', () => {
         deletions: 0,
       }),
     );
-    const clipped = appendTurnChanges(state, 'turn-2', oversized);
+    const clipped = reconcileTurnChanges(state, 'turn-2', oversized);
     const changes = clipped.transcript.at(-1);
     expect(changes?.kind).toBe('changes');
     expect(
       changes?.kind === 'changes' ? changes.files : [],
     ).toHaveLength(MAX_CHANGED_FILES_PER_TURN);
+
+    const removed = reconcileTurnChanges(clipped, 'turn-1', []);
+    expect(
+      removed.transcript.some(
+        (item) => item.kind === 'changes' && item.turnId === 'turn-1',
+      ),
+    ).toBe(false);
   });
 
   it('never projects interaction or raw tool payload shapes', () => {

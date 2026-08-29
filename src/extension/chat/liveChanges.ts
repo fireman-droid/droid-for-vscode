@@ -2,6 +2,7 @@
 // turnFlow.ts (the settled half stays with the turn-end
 // reconciliation in publishTurnChanges).
 import type { RuntimeEvent } from '../../runtime/runtimeEvents';
+import { reconcileTurnChanges } from '../hostTranscriptState';
 import { createTurnChangesLedger } from '../turnChangesLedger';
 import { isTurnActive, type ChatControllerInternals } from './internals';
 
@@ -72,6 +73,16 @@ export function recordLiveToolChanges(
         ) {
           return;
         }
+        ctl.transcript = reconcileTurnChanges(
+          ctl.transcript,
+          turnId,
+          files,
+        );
+        ctl.reviewCoordinator?.refreshWritingTurn(
+          sessionId,
+          turnId,
+          files,
+        );
         ctl.emit({
           type: 'changes.update',
           sessionId,

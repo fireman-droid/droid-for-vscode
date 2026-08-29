@@ -34,7 +34,19 @@ export async function runAgentReview(
     readonly baselineLabel: string;
   } | undefined,
 ): Promise<void> {
-  if (scope === undefined || runner === undefined) return;
+  if (scope === undefined) return;
+  if (scope.scopeKind === 'turn') {
+    publish({
+      type: 'review.agentReviewState',
+      sessionId: message.sessionId,
+      reviewScopeId: message.reviewScopeId,
+      status: 'failed',
+      message:
+        'Agent Review is available for Workspace or Branch scope.',
+    });
+    return;
+  }
+  if (runner === undefined) return;
   publish({
     type: 'review.agentReviewState',
     sessionId: message.sessionId,

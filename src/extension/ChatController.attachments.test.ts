@@ -1186,6 +1186,36 @@ describe('ChatController', () => {
     ).toHaveLength(0);
   });
 
+  it('rejects a Diff selection captured from another session', async () => {
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    expect(
+      controller.stageCapturedEditorSelection({
+        status: 'captured',
+        item: {
+          kind: 'text',
+          name: 'app.ts · Before turn:1-2',
+          data: '```1:2:src/app.ts [Before turn]\nold\n```',
+          sizeBytes: 48,
+          truncated: false,
+          sourceSessionId: 'session-old',
+        },
+      }),
+    ).toBe(true);
+    await vi.waitFor(() => {
+      expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+        code: 'attachment-read-failed',
+      });
+    });
+    expect(
+      attachmentsMessages(messages).at(-1)?.attachments ?? [],
+    ).toHaveLength(0);
+  });
+
   it('reports an empty invoke-time capture as the usual in-session diagnostic', async () => {
     const { controller, messages } = createController(
       () => createMockRuntime(),

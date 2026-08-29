@@ -661,6 +661,8 @@ describe('readHostMessage', () => {
         { path: 'docs/new.md', additions: null, deletions: null },
       ],
     },
+    { type: 'changes.update', sequence: 7, sessionId: 'session-1',
+      turnId: 'turn-1', state: 'settled', files: [] },
     {
       type: 'git.status',
       sequence: 7,
@@ -1975,14 +1977,8 @@ describe('readHostMessage', () => {
       latestUpdateKind: null,
       filePath: '',
     },
-    {
-      type: 'changes.update',
-      sequence: 5,
-      sessionId: 'session-1',
-      turnId: 'turn-1',
-      state: 'settled',
-      files: [],
-    },
+    { type: 'changes.update', sequence: 5, sessionId: 'session-1',
+      turnId: 'turn-1', state: 'writing', files: [] },
     // A legacy pre-v10 summary shape (no state) must not validate.
     {
       type: 'changes.update',

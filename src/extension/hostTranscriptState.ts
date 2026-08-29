@@ -159,27 +159,56 @@ export function truncateFromUserMessage(
 }
 
 /**
- * Appends the per-turn changed-files summary. No-ops when the turn
- * already has one or the file list is empty.
+ * Reconciles the per-turn changed-files summary in place. Live
+ * frames refresh the current rows, settlement replaces them with the
+ * authoritative list, and an empty settlement removes a reverted
+ * turn from the transcript.
  */
-export function appendTurnChanges(
+export function reconcileTurnChanges(
   state: HostTranscriptState,
   turnId: string,
   files: readonly ChangedFileSummary[],
 ): HostTranscriptState {
-  if (files.length === 0) {
-    return state;
-  }
   const id = stableTranscriptId('changes', turnId);
-  if (state.transcript.some((item) => item.id === id)) {
-    return state;
+  const index = state.transcript.findIndex((item) => item.id === id);
+  if (files.length === 0) {
+    if (index < 0) {
+      return state;
+    }
+    return {
+      ...state,
+      transcript: state.transcript.filter(
+        (_item, itemIndex) => itemIndex !== index,
+      ),
+    };
   }
-  return appendItem(state, {
+  const nextFiles = files.slice(0, MAX_CHANGED_FILES_PER_TURN);
+  const nextItem: SessionTranscriptItem = {
     id,
     kind: 'changes',
     turnId,
-    files: files.slice(0, MAX_CHANGED_FILES_PER_TURN),
-  });
+    files: nextFiles,
+  };
+  if (index < 0) {
+    return appendItem(state, nextItem);
+  }
+  const existing = state.transcript[index];
+  if (
+    existing?.kind === 'changes' &&
+    existing.files.length === nextFiles.length &&
+    existing.files.every((file, fileIndex) => {
+      const next = nextFiles[fileIndex];
+      return (
+        next !== undefined &&
+        file.path === next.path &&
+        file.additions === next.additions &&
+        file.deletions === next.deletions
+      );
+    })
+  ) {
+    return state;
+  }
+  return replaceItem(state, index, nextItem);
 }
 
 export function projectHostTranscriptMessage(

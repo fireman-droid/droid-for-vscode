@@ -21,9 +21,9 @@ import {
 } from '../turnActivityState';
 import {
   appendAcceptedUserPrompt,
-  appendTurnChanges,
   attachUserMessageId,
   projectHostTranscriptMessage,
+  reconcileTurnChanges,
   stableTranscriptId,
   type HostTranscriptState,
 } from '../hostTranscriptState';
@@ -644,39 +644,42 @@ export function finishSpecHandoff(
  * Publishes the settled changed-files ledger for a finished turn.
  * Git trees are the authority when a before-snapshot exists; the
  * in-memory baseline remains the fallback. Settlement is dropped
- * when the session changes before stats arrive.
- */
+ * when the session changes before stats arrive. */
 export function publishTurnChanges(
-  ctl: ChatControllerInternals,
-  sessionId: string, turnId: string): void {
+  ctl: ChatControllerInternals, sessionId: string, turnId: string,
+): void {
     if (
       ctl.sessionId !== sessionId ||
       ctl.turn?.turnId !== turnId
     ) {
       return;
     }
-    // From here the reconciliation owns the stream: pending debounce
-    // reads must not publish a stale `writing` frame after `settled`.
+    // Settlement owns the stream; pending reads must not publish after it.
     ctl.turn.changesLedger?.cancel();
     const toolPaths = collectToolFilePaths(ctl.turn.activity);
+    if (toolPaths.length === 0) {
+      return;
+    }
     const runtimeGeneration = ctl.runtimeGeneration;
     void resolveSettledChangeFiles(ctl, sessionId, turnId, toolPaths).then(
       async (files) => {
         if (ctl.disposed || ctl.sessionId !== sessionId ||
-          ctl.runtimeGeneration !== runtimeGeneration || files.length === 0) {
+          ctl.runtimeGeneration !== runtimeGeneration) {
           return;
         }
-        await ctl.turnSnapshots?.rememberFiles({ sessionId, turnId }, files);
+        if (files.length > 0) {
+          await ctl.turnSnapshots?.rememberFiles({ sessionId, turnId }, files);
+        }
         if (ctl.disposed || ctl.sessionId !== sessionId ||
           ctl.runtimeGeneration !== runtimeGeneration) {
           return;
         }
-        const next = appendTurnChanges(ctl.transcript, turnId, files);
-        if (next === ctl.transcript) {
-          return;
+        const next = reconcileTurnChanges(ctl.transcript, turnId, files);
+        if (next !== ctl.transcript) {
+          ctl.transcript = next;
+          scheduleRecoveryCheckpoint(ctl);
         }
-        ctl.transcript = next;
-        scheduleRecoveryCheckpoint(ctl);
+        ctl.reviewCoordinator?.settleWritingTurn(sessionId, turnId, files);
         ctl.emit({
           type: 'changes.update',
           sessionId,

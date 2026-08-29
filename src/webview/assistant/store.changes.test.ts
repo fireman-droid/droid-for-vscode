@@ -200,4 +200,41 @@ describe('assistantWebviewReducer changes ledger', () => {
     ).toHaveLength(1);
     expect(other.sequence).toBe(8);
   });
+
+  it('restores live state from a host snapshot and clears reverted changes', () => {
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: {
+        ...snapshot(),
+        turn: { turnId: 'turn-a', status: 'streaming' },
+        transcript: [
+          {
+            id: 'changes:turn-a',
+            kind: 'changes',
+            turnId: 'turn-a',
+            files: [
+              { path: 'src/app.ts', additions: 1, deletions: 0 },
+            ],
+          },
+        ],
+      },
+    });
+    expect(state.transcript[0]).toMatchObject({
+      kind: 'changes',
+      writing: true,
+    });
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'changes.update',
+        sequence: 1,
+        sessionId: 'session-a',
+        turnId: 'turn-a',
+        state: 'settled',
+        files: [],
+      },
+    });
+    expect(state.transcript).toEqual([]);
+  });
 });

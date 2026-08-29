@@ -138,6 +138,9 @@ export function createVscodeAttachmentSources(
           startLine,
           endLine,
           text,
+          ...(diff === undefined
+            ? {}
+            : { sourceSessionId: diff.sessionId }),
         }),
       });
     },

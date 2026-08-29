@@ -19,6 +19,10 @@ import { EMPTY_SESSION_TOKEN_USAGE, type SessionTokenUsageState } from '../../sh
 import { isTransientRuntimeDiagnostic } from '../../shared/transientDiagnostics';
 import { initialGitCommitFlowState, type GitCommitFlowState } from './gitCommitStore';
 import {
+  hydrateChangesTranscript,
+  reconcileChangesTranscript,
+} from './storeChanges';
+import {
   reduceInteractionClosed,
   reducePlanDocumentState,
   type PendingInteraction,
@@ -561,7 +565,7 @@ export function assistantWebviewReducer(
           state.queueEditing,
           event.queue ?? EMPTY_SESSION_QUEUE_STATE,
         ),
-        transcript: event.transcript,
+        transcript: hydrateChangesTranscript(event.transcript, event.turn),
         historyStatus: event.historyStatus,
         truncated: event.truncated,
         interactions: [],
@@ -988,28 +992,9 @@ export function assistantWebviewReducer(
       ) {
         return advance(state, event.sequence);
       }
-      // The ledger keeps its first-appearance position and id: later
-      // frames replace files in place so DOM keys stay stable and
-      // rows never replay their entry animation.
-      const index = state.transcript.findIndex(
-        (item) =>
-          item.kind === 'changes' && item.turnId === event.turnId,
-      );
-      const existing = state.transcript[index];
-      const item: SessionTranscriptItem = {
-        id: existing?.id ?? `changes:${event.turnId}`,
-        kind: 'changes',
-        turnId: event.turnId,
-        files: event.files,
-        ...(event.state === 'writing' ? { writing: true } : {}),
-      };
       return boundTranscript(
         { ...state, sequence: event.sequence },
-        existing === undefined
-          ? [...state.transcript, item]
-          : state.transcript.map((entry, entryIndex) =>
-              entryIndex === index ? item : entry,
-            ),
+        reconcileChangesTranscript(state.transcript, event),
       );
     }
     case 'runtime.diagnostic':
