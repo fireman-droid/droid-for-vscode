@@ -167,6 +167,33 @@ describe('ChatController', () => {
     });
   });
 
+  it('routes Review file selection to the coordinator', async () => {
+    const { controller, messages } = createController(
+      () => createMockRuntime(),
+    );
+    const handle = vi.fn();
+    Object.defineProperty(controller, 'reviewCoordinator', {
+      value: {
+        handle,
+        replay: vi.fn(async () => {}),
+        dispose: vi.fn(),
+      },
+    });
+    ready(controller);
+    await waitForConnected(messages);
+
+    const message = {
+      type: 'review.selectFile' as const,
+      sessionId: 'session-1',
+      reviewScopeId: 'scope-1',
+      baseline: 'baseline-1',
+      path: 'src/app.ts',
+    };
+    controller.handleMessage(message);
+
+    expect(handle).toHaveBeenCalledWith(message);
+  });
+
   it('uses the retained commit only for the latest Changes turn after Reload', async () => {
     const openDiff = vi.fn(
       async (): Promise<FileDiffOutcome> => 'opened-diff',

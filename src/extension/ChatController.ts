@@ -666,6 +666,7 @@ export class ChatController {
         return;
       case 'review.open':
       case 'review.navigate':
+      case 'review.selectFile':
       case 'review.markReviewed':
       case 'review.refresh':
       case 'review.restorePreview':

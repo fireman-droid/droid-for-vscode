@@ -69,7 +69,7 @@ import { createMissionControlSetupProjection } from './chat/mission/setupProject
 import { SessionViewerPanelController } from './SessionViewerPanelController';
 import { MissionControlPanelController } from './MissionControlPanelController';
 import { SubagentTranscriptService } from './SubagentTranscriptService';
-import { BrowserDevBridge, registerBrowserDevCommands } from './BrowserDevBridge';
+import { BrowserDevBridge, readBrowserDevSourceRoot, registerBrowserDevCommands } from './BrowserDevBridge';
 import { createReviewFeature, createReviewFoundation } from './createReviewFeature';
 const focusViewCommand = 'droidvisx.focusView';
 const openLogsCommand = 'droidvisx.openLogs';
@@ -744,7 +744,7 @@ export function activate(context: vscode.ExtensionContext): void {
     subagentTranscripts,
     missionControl,
     browserDevBridge,
-    ...registerBrowserDevCommands(browserDevBridge),
+    ...registerBrowserDevCommands(browserDevBridge, () => readBrowserDevSourceRoot(context)),
     diagnostics,
     attachmentSources,
     vscode.window.registerWebviewViewProvider(

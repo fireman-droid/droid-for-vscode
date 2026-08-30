@@ -113,8 +113,10 @@ Diff 审查链路已经接通。`0.7.89` 新版 VSIX 已覆盖安装；Cursor �
 
 ### 真实浏览器联调
 
-- `DroidVisX: Start Browser Dev Client` 从当前源码 workspace 自动启动 Vite、
-  本机 Bridge 并优先在 Cursor Browser 打开 `/live`
+- `DroidVisX: Start Browser Dev Client` 从机器级
+  `droidvisx.browserDev.sourceRoot`（开发 Host 可回退到扩展源码目录）启动
+  Vite 和本机 Bridge；当前 workspace 独立作为真实 Runtime cwd，`/live`
+  一次性连接 URL 写入剪贴板供隔离的 `agent-browser` 会话打开
 - `/live` 直接渲染生产 `App`，与 Cursor 侧栏共享唯一 `ChatController`、当前
   Session、真实 Runtime 和全部现有操作
 - Host 增量同步给浏览器和侧栏；每个客户端 Reload 使用定向 Snapshot，不让另一端

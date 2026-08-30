@@ -106,6 +106,12 @@
           "default": "daemon",
           "description": "How DroidVisX executes Droid sessions. Changing this requires a window reload. Daemon is strict by default; per-window subprocesses are used only when Process is explicitly selected."
         },
+        "droidvisx.browserDev.sourceRoot": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Absolute path to the DroidVisX source repository used by the Browser Dev Client. Development hosts fall back to their extension source path."
+        },
         "droidvisx.theme": {
           "type": "string",
           "enum": [

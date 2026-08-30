@@ -16,6 +16,7 @@ import type { RuntimeDiagnosticSink } from '../runtime/runtimeDiagnostics';
 import type { HostToWebviewMessage } from '../shared/bridgeMessages';
 import type { ChatController } from './ChatController';
 import type { MissionControlPanelController } from './MissionControlPanelController';
+import { resolveBrowserDevSourceRoot } from './browserDevSourceRoot';
 import { routeWebviewMessage } from './webviewMessageRouter';
 import {
   readWebviewBootTheme,
@@ -52,7 +53,7 @@ export class BrowserDevBridge implements vscode.Disposable {
 
   async start(sourceRoot: string): Promise<void> {
     if (this.run !== null) {
-      await this.open(this.run.url);
+      await this.copyUrl(this.run.url);
       return;
     }
     if (this.starting !== null) {
@@ -169,7 +170,7 @@ export class BrowserDevBridge implements vscode.Disposable {
           'DroidVisX browser dev client stopped because Vite exited.',
         );
       });
-      await this.open(url);
+      await this.copyUrl(url);
       this.diagnostics?.record({
         level: 'info',
         name: 'host.browser-dev.started',
@@ -299,34 +300,24 @@ export class BrowserDevBridge implements vscode.Disposable {
     } satisfies Extract<HostToWebviewMessage, { type: 'ui.theme' }>);
   }
 
-  private async open(url: string): Promise<void> {
-    try {
-      await vscode.commands.executeCommand(
-        'cursor.browserView.newTab',
-        url,
-        { position: 'active' },
-      );
-      return;
-    } catch {
-      // VS Code does not provide Cursor's Browser editor.
-    }
-    const opened = await vscode.env.openExternal(vscode.Uri.parse(url, true));
-    if (!opened) {
-      throw new Error('The browser dev client URL could not be opened.');
-    }
+  private async copyUrl(url: string): Promise<void> {
+    await vscode.env.clipboard.writeText(url);
+    void vscode.window.showInformationMessage(
+      'DroidVisX browser dev client URL copied to the clipboard.',
+    );
   }
 }
 
 export function registerBrowserDevCommands(
   bridge: BrowserDevBridge,
+  readSourceRoot: () => string | null,
 ): readonly vscode.Disposable[] {
   return [
     vscode.commands.registerCommand(START_COMMAND, async () => {
-      const sourceRoot =
-        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (sourceRoot === undefined) {
+      const sourceRoot = readSourceRoot();
+      if (sourceRoot === null) {
         void vscode.window.showErrorMessage(
-          'Open the DroidVisX source repository before starting the browser dev client.',
+          'Configure droidvisx.browserDev.sourceRoot to the DroidVisX source repository.',
         );
         return;
       }
@@ -344,6 +335,19 @@ export function registerBrowserDevCommands(
   ];
 }
 
+export function readBrowserDevSourceRoot(
+  context: vscode.ExtensionContext,
+): string | null {
+  return resolveBrowserDevSourceRoot(
+    vscode.workspace
+      .getConfiguration('droidvisx')
+      .get<string>('browserDev.sourceRoot'),
+    context.extensionMode === vscode.ExtensionMode.Development
+      ? context.extensionPath
+      : null,
+  );
+}
+
 async function assertSourceRoot(sourceRoot: string): Promise<void> {
   const packagePath = join(sourceRoot, 'package.json');
   const packageJson = JSON.parse(await readFile(packagePath, 'utf8')) as {
@@ -351,7 +355,7 @@ async function assertSourceRoot(sourceRoot: string): Promise<void> {
   };
   if (packageJson.name !== 'droidvisx') {
     throw new Error(
-      'Open the DroidVisX source repository as the current workspace.',
+      'The configured Browser Dev source directory is not the DroidVisX repository.',
     );
   }
 }

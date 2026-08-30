@@ -241,13 +241,14 @@ flowchart LR
 
 ### 启动与生命周期
 
-- 用户在 DroidVisX 源码 workspace 中执行
-  `DroidVisX: Start Browser Dev Client`。
-- 命令根据 workspace 根目录 `package.json` 的 `name: droidvisx` 确认源码
-  位置，不扫描或猜测其他目录。
+- 用户执行 `DroidVisX: Start Browser Dev Client`。安装版从机器级设置
+  `droidvisx.browserDev.sourceRoot` 读取 DroidVisX 源码位置，扩展开发 Host
+  未配置时回退到当前扩展开发目录。
+- workspace 根目录独立作为 ChatController 的真实 Runtime cwd，可用于联调
+  其他项目。
 - Extension Host 启动只监听 `127.0.0.1` 随机端口的 Browser Dev Bridge，
-  再从源码 workspace 自动启动固定端口 4173 的 Vite，并优先在 Cursor Browser
-  打开 `/live`；非 Cursor 环境回退系统浏览器。
+  再从源码 workspace 自动启动固定端口 4173 的 Vite，并把 `/live` 一次性连接
+  URL 写入剪贴板，由隔离的外部浏览器测试会话打开，不使用 Cursor Browser。
 - 每次启动生成临时连接令牌。令牌放在 URL fragment，只由浏览器 JavaScript
   读取并发给 Bridge，不出现在 Vite HTTP 请求中。
 - 再次执行 Start 时复用本次实例并重新打开当前地址，不启动第二套 Host 或 Vite。
