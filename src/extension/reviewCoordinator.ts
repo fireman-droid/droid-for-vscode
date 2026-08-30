@@ -274,9 +274,9 @@ export class ReviewCoordinator implements vscode.Disposable {
     this.active = loaded;
     await this.refreshVersions(loaded);
     this.publishState(loaded);
-    if (!(await this.openCurrent(loaded, false))) {
-      this.publishState(loaded);
-    }
+    (await this.openCurrent(loaded, false))
+      ? this.result(loaded.sessionId, loaded.reviewScopeId, 'open', true, 'Review opened.')
+      : this.publishState(loaded);
     await this.persistScope(loaded);
   }
 

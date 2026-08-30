@@ -53,7 +53,7 @@ function createCoordinator(
 }
 
 describe('ReviewCoordinator reload recovery', () => {
-  it('publishes Branch commit count before its native Diff opens', async () => {
+  it('publishes Branch state before Diff and reports when it opens', async () => {
     const persistence: ChangeStatsPersistence = {
       get: <T,>() => undefined as T | undefined,
       update: vi.fn(() => Promise.resolve()),
@@ -110,11 +110,25 @@ describe('ReviewCoordinator reload recovery', () => {
     });
     expect(readBranchDiff).toHaveBeenCalledOnce();
     expect(openDiff).toHaveBeenCalledOnce();
+    expect(publish).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'review.operationResult',
+        operation: 'open',
+        ok: true,
+      }),
+    );
 
     resolveOpen?.('opened-diff');
     await coordinator.replay('session-1');
 
     expect(readBranchDiff).toHaveBeenCalledOnce();
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'review.operationResult',
+        operation: 'open',
+        ok: true,
+      }),
+    );
     coordinator.dispose();
   });
 

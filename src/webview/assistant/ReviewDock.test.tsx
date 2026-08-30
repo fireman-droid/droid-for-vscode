@@ -98,7 +98,7 @@ describe('ReviewDock', () => {
     expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull();
   });
 
-  it('shows pending scope feedback until matching state arrives', async () => {
+  it('moves from scope loading to native Diff opening feedback', async () => {
     const user = userEvent.setup();
     const props = callbacks();
     const { rerender } = render(
@@ -142,7 +142,35 @@ describe('ReviewDock', () => {
     );
 
     expect(screen.queryByText('Loading…')).toBeNull();
+    expect(screen.getByRole('status').textContent).toContain('Opening diff…');
     expect(screen.getByRole('button', { name: 'Branch' }).disabled).toBe(false);
+
+    rerender(
+      <ReviewDock
+        changes={changes}
+        review={{
+          ...historicalReview,
+          reviewScopeId: 'scope-workspace',
+          scopeKind: 'workspace',
+          baseline: 'head',
+          baselineLabel: 'HEAD',
+        }}
+        restorePreview={null}
+        operation={{
+          type: 'review.operationResult',
+          sequence: 1,
+          sessionId: 'session-1',
+          reviewScopeId: 'scope-workspace',
+          operation: 'open',
+          ok: true,
+          message: 'Review opened.',
+        }}
+        agent={null}
+        {...props}
+      />,
+    );
+
+    expect(screen.queryByText('Opening diff…')).toBeNull();
   });
 
   it('clears pending scope feedback when opening fails', async () => {

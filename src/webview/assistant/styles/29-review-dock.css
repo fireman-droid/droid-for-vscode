@@ -157,11 +157,37 @@
 }
 
 .dvx-review-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin-left: auto;
   color: var(--dvx-muted);
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.dvx-review-progress-spinner {
+  width: 8px;
+  height: 8px;
+  border: 1px solid currentcolor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: dvx-review-progress-spin 650ms linear infinite;
+}
+
+@keyframes dvx-review-progress-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-review-progress-spinner {
+    border-right-color: currentcolor;
+    animation: none;
+    opacity: 0.55;
+  }
 }
 
 .dvx-review-current {

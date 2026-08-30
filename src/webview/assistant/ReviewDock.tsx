@@ -51,6 +51,10 @@ export function ReviewDock({
     readonly turnId?: string;
     readonly operationSequence: number;
   } | null>(null);
+  const [openingDiff, setOpeningDiff] = useState<{
+    readonly reviewScopeId: string;
+    readonly operationSequence: number;
+  } | null>(null);
   const bodyId = useId();
   const moreMenuId = useId();
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
@@ -73,6 +77,10 @@ export function ReviewDock({
       review?.scopeKind === pendingScope.kind &&
       (pendingScope.kind !== "turn" || review.turnId === pendingScope.turnId)
     ) {
+      setOpeningDiff({
+        reviewScopeId: review.reviewScopeId,
+        operationSequence: pendingScope.operationSequence,
+      });
       setPendingScope(null);
     }
   }, [pendingScope, review]);
@@ -86,6 +94,16 @@ export function ReviewDock({
       setPendingScope(null);
     }
   }, [operation, pendingScope]);
+  useEffect(() => {
+    if (
+      openingDiff !== null &&
+      operation?.operation === "open" &&
+      operation.sequence > openingDiff.operationSequence &&
+      operation.reviewScopeId === openingDiff.reviewScopeId
+    ) {
+      setOpeningDiff(null);
+    }
+  }, [openingDiff, operation]);
   useEffect(() => {
     if (!moreOpen) {
       return undefined;
@@ -214,9 +232,13 @@ export function ReviewDock({
                       : "Branch"}
                 </button>
               ))}
-              {pendingScope !== null ? (
+              {pendingScope !== null || openingDiff !== null ? (
                 <span className="dvx-review-progress" role="status">
-                  Loading…
+                  <span
+                    className="dvx-review-progress-spinner"
+                    aria-hidden="true"
+                  />
+                  {pendingScope !== null ? "Loading…" : "Opening diff…"}
                 </span>
               ) : review !== null ? (
                 <span className="dvx-review-progress">
