@@ -272,8 +272,11 @@ export class ReviewCoordinator implements vscode.Disposable {
   private async open(message: ReviewOpenMessage): Promise<void> {
     const loaded = await this.loadScope(message);
     this.active = loaded;
-    await this.openCurrent(loaded);
+    await this.refreshVersions(loaded);
     this.publishState(loaded);
+    if (!(await this.openCurrent(loaded, false))) {
+      this.publishState(loaded);
+    }
     await this.persistScope(loaded);
   }
 
@@ -298,12 +301,10 @@ export class ReviewCoordinator implements vscode.Disposable {
     if (source === undefined) {
       return unavailableScope(message, 'Branch comparison is unavailable.');
     }
-    return createActiveScope(
-      message,
-      source.baseline,
-      source.diff.baseBranch,
-      source.diff.files,
-      this.persisted,
+    return Object.assign(
+      createActiveScope(message, source.baseline, source.diff.baseBranch,
+        source.diff.files, this.persisted),
+      { branchCommitCount: source.diff.commitCount },
     );
   }
 
@@ -452,15 +453,11 @@ export class ReviewCoordinator implements vscode.Disposable {
     this.publishState(scope);
   }
 
-  private async openCurrent(scope: ActiveScope): Promise<void> {
-    if (scope.currentIndex === null) {
-      return;
-    }
-    await this.refreshVersions(scope);
+  private async openCurrent(scope: ActiveScope, refresh = true): Promise<boolean> {
+    if (scope.currentIndex === null) return true;
+    if (refresh) await this.refreshVersions(scope);
     const file = scope.files[scope.currentIndex];
-    if (file === undefined) {
-      return;
-    }
+    if (file === undefined) return true;
     const outcome =
       scope.scopeKind === 'turn'
         ? await this.options.fileDiff.openDiff(file.path, {
@@ -491,17 +488,22 @@ export class ReviewCoordinator implements vscode.Disposable {
           ? `${file.path} no longer exists.`
           : `A reliable Diff could not be opened for ${file.path}.`,
       );
+      return false;
     }
+    return true;
   }
 
   private async refreshVersions(scope: ActiveScope): Promise<void> {
-    for (const file of scope.files) {
-      if (!file.comparable) {
-        continue;
-      }
-      const version = await this.fileVersion(scope, file.path);
-      file.version = version;
-    }
+    const comparable = scope.files.filter(({ comparable }) => comparable);
+    const workers = Math.min(6, comparable.length);
+    await Promise.all(
+      Array.from({ length: workers }, async (_, worker) => {
+        for (let index = worker; index < comparable.length; index += workers) {
+          const file = comparable[index]!;
+          file.version = await this.fileVersion(scope, file.path);
+        }
+      }),
+    );
     scope.lifecycle = this.scopeLifecycle(scope);
   }
 
@@ -564,6 +566,9 @@ export class ReviewCoordinator implements vscode.Disposable {
         currentIndex: scope.currentIndex,
         reviewedCount,
         reviewableCount,
+        ...(scope.branchCommitCount === undefined
+          ? {}
+          : { branchCommitCount: scope.branchCommitCount }),
         ...(scope.message === undefined ? {} : { message: scope.message }),
       },
     });

@@ -38,6 +38,7 @@ export interface ActiveScope {
   files: ScopeFile[];
   currentIndex: number | null;
   reviewed: Map<string, string>;
+  branchCommitCount?: number;
   message?: string;
 }
 

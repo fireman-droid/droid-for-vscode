@@ -1358,7 +1358,6 @@ export function App(): React.JSX.Element {
               restorePreview={state.review.restorePreview}
               operation={state.review.operation}
               agent={state.review.agent}
-              branchDiff={state.branchDiff}
             />
           }
           transientDiagnostic={selectVisibleNotice(transientDiagnostic, sessionId, turnId, active)}

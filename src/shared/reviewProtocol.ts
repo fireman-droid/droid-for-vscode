@@ -48,6 +48,7 @@ export interface ReviewScopeState {
   readonly currentIndex: number | null;
   readonly reviewedCount: number;
   readonly reviewableCount: number;
+  readonly branchCommitCount?: number;
   readonly newerChangesAvailable?: boolean;
   readonly message?: string;
 }
@@ -426,7 +427,12 @@ function isReviewState(value: unknown): value is ReviewScopeState {
     'reviewedCount',
     'reviewableCount',
   ];
-  const optional = ['turnId', 'newerChangesAvailable', 'message'];
+  const optional = [
+    'turnId',
+    'branchCommitCount',
+    'newerChangesAvailable',
+    'message',
+  ];
   if (
     !hasOnlyKeys(value, required, optional) ||
     !strings(value, [
@@ -453,6 +459,8 @@ function isReviewState(value: unknown): value is ReviewScopeState {
   }
   return (
     (value.turnId === undefined || typeof value.turnId === 'string') &&
+    (value.branchCommitCount === undefined ||
+      isCount(value.branchCommitCount)) &&
     (value.newerChangesAvailable === undefined ||
       typeof value.newerChangesAvailable === 'boolean') &&
     (value.message === undefined || typeof value.message === 'string')

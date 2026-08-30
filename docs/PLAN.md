@@ -294,7 +294,7 @@ push 必须绕过用户请求 guard；目前这些差异依靠手写子集和注
 - 旧数据仍可读取，但不会再次写入两个来源；
 - 任一 durable write 失败不会产生两个“都成功”的分叉状态。
 
-### M3：打开 Branch Review 会读取两次相同 Git Diff
+### M3：打开 Branch Review 会读取两次相同 Git Diff（已完成）
 
 证据路径：
 
@@ -303,16 +303,11 @@ push 必须绕过用户请求 guard；目前这些差异依靠手写子集和注
 - `src/webview/assistant/reviewDockSlot.tsx` 在 branch scope 激活后再次发送
   `git.requestBranchDiff`，主要用于 commit count/summary。
 
-问题：
+已完成：
 
-一次用户操作跨两条 Host 路径重复读取相同 branch diff，增加 daemon/SDK 请求、状态竞态和
-Bridge 状态拼接。
-
-最小收敛：
-
-- 从第一次 `RuntimeGitDiff` 结果投影 Review 所需的 branch summary；
-- 通过同一 Review state 或同一 Host 缓存发布；
-- 移除 branch scope 激活后的第二次请求。
+Branch `RuntimeGitDiff` 的 commit count 已投影进同一次 Review state，并在 Bridge
+边界按非负安全整数解析；ReviewDock 直接渲染该值，已移除 branch scope 激活后的
+`git.requestBranchDiff`。一次 Branch Review open 只读取一次 Git diff。
 
 验收：
 
@@ -320,26 +315,25 @@ Bridge 状态拼接。
 - 文件列表、baseline 和 commit count 来自同一结果；
 - refresh 明确触发一次新的读取。
 
-### M4：Review Watcher 可累计 Reload，且版本刷新串行读取全部文件
+### M4：Review Watcher 可累计 Reload，且版本刷新串行读取全部文件（部分完成）
 
 证据路径：
 
 - `src/extension/reviewCoordinator.ts`
   - `noteWorkspaceChange()` 每个 debounce 周期向 `operation` 追加一次
-    `reloadActive()`；
-  - in-flight reload 期间的新事件可继续累积后续 reload；
-  - `refreshVersions()` 对 scope 中全部 comparable files 逐个串行 `readFile()`。
+    `reloadActive()`；in-flight reload 期间的新事件仍可继续累积后续 reload；
+  - `refreshVersions()` 已改为固定最多 6 个并发 `readFile()`，不再串行读取全部文件。
 
 问题：
 
-大型 Review 或文件事件风暴会积累重复的全 scope reload，并把全部文件 I/O 串行放入同一
-operation queue。UI 状态更新延迟，且扩大 P2-1 队列失败的影响。
+大型 Review 的版本读取已缩短为有界并发；文件事件风暴仍会积累重复的全 scope reload，
+并扩大 P2-1 队列失败的影响。Watcher coalescing 和 queue resilience 仍待处理。
 
 最小收敛：
 
 - watcher refresh 使用一个 pending/in-flight 状态，事件风暴最多合并为当前执行和一次补跑；
 - 记录受影响路径，能局部刷新时不重读整个 scope；
-- 确需全量刷新时使用现有资源范围内的有界并发；
+- 全量刷新已使用现有资源范围内固定 6 个并发；
 - 不引入新的 watcher 或缓存框架。
 
 验收：

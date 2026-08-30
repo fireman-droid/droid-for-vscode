@@ -87,7 +87,6 @@ describe('ReviewDock', () => {
           restorePreview={null}
           operation={null}
           agent={null}
-          branchDiff={null}
           {...callbacks()}
         />
       </GitCommitFlowContext.Provider>,
@@ -99,7 +98,94 @@ describe('ReviewDock', () => {
     expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull();
   });
 
-  it('requests and renders Branch commit count', async () => {
+  it('shows pending scope feedback until matching state arrives', async () => {
+    const user = userEvent.setup();
+    const props = callbacks();
+    const { rerender } = render(
+      <ReviewDock
+        changes={changes}
+        review={historicalReview}
+        restorePreview={null}
+        operation={null}
+        agent={null}
+        {...props}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /1 file changed/ }));
+    await user.click(screen.getByRole('button', { name: 'Workspace' }));
+
+    expect(props.onOpenScope).toHaveBeenCalledWith('workspace', undefined);
+    expect(
+      screen.getByRole('button', { name: 'Workspace' }).getAttribute(
+        'aria-pressed',
+      ),
+    ).toBe('true');
+    expect(screen.getByRole('status').textContent).toContain('Loading…');
+    expect(screen.getByRole('button', { name: 'Branch' }).disabled).toBe(true);
+
+    rerender(
+      <ReviewDock
+        changes={changes}
+        review={{
+          ...historicalReview,
+          reviewScopeId: 'scope-workspace',
+          scopeKind: 'workspace',
+          baseline: 'head',
+          baselineLabel: 'HEAD',
+        }}
+        restorePreview={null}
+        operation={null}
+        agent={null}
+        {...props}
+      />,
+    );
+
+    expect(screen.queryByText('Loading…')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Branch' }).disabled).toBe(false);
+  });
+
+  it('clears pending scope feedback when opening fails', async () => {
+    const user = userEvent.setup();
+    const props = callbacks();
+    const { rerender } = render(
+      <ReviewDock
+        changes={changes}
+        review={historicalReview}
+        restorePreview={null}
+        operation={null}
+        agent={null}
+        {...props}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /1 file changed/ }));
+    await user.click(screen.getByRole('button', { name: 'Branch' }));
+
+    rerender(
+      <ReviewDock
+        changes={changes}
+        review={historicalReview}
+        restorePreview={null}
+        operation={{
+          type: 'review.operationResult',
+          sequence: 1,
+          sessionId: 'session-1',
+          reviewScopeId: 'scope-branch',
+          operation: 'open',
+          ok: false,
+          message: 'Branch comparison is unavailable.',
+        }}
+        agent={null}
+        {...props}
+      />,
+    );
+
+    expect(screen.queryByText('Loading…')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Workspace' }).disabled).toBe(false);
+  });
+
+  it('renders Branch commit count from Review state without requesting Git diff', async () => {
     const user = userEvent.setup();
     const postMessage = vi.fn();
     render(
@@ -113,18 +199,11 @@ describe('ReviewDock', () => {
           scopeKind: 'branch',
           baseline: 'main',
           baselineLabel: 'main',
+          branchCommitCount: 2,
         }}
         restorePreview={null}
         operation={null}
         agent={null}
-        branchDiff={{
-          branch: 'feature/review',
-          baseBranch: 'main',
-          files: [{ path: 'src/app.ts', additions: 3, deletions: 1 }],
-          additions: 3,
-          deletions: 1,
-          commitCount: 2,
-        }}
       />,
     );
 
@@ -139,9 +218,6 @@ describe('ReviewDock', () => {
       sessionId: 'session-1',
       scopeKind: 'branch',
     });
-    expect(postMessage).toHaveBeenCalledWith({
-      type: 'git.requestBranchDiff',
-      sessionId: 'session-1',
-    });
+    expect(postMessage).toHaveBeenCalledTimes(1);
   });
 });

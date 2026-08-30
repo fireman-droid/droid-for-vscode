@@ -2,7 +2,6 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import type {
   ChangesTranscriptItem,
-  GitBranchDiffState,
   ReviewAgentStateMessage,
   ReviewOperationResultMessage,
   ReviewRestorePreviewStateMessage,
@@ -19,7 +18,6 @@ interface ReviewDockProps {
   readonly restorePreview: ReviewRestorePreviewStateMessage | null;
   readonly operation: ReviewOperationResultMessage | null;
   readonly agent: ReviewAgentStateMessage | null;
-  readonly branchDiff: GitBranchDiffState | null;
   readonly onOpenScope: (kind: ReviewScopeKind, turnId?: string) => void;
   readonly onSelectFile: (path: string) => void;
   readonly onNavigate: (direction: "previous" | "next") => void;
@@ -36,7 +34,6 @@ export function ReviewDock({
   restorePreview,
   operation,
   agent,
-  branchDiff,
   onOpenScope,
   onSelectFile,
   onNavigate,
@@ -49,6 +46,11 @@ export function ReviewDock({
   const [expanded, setExpanded] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [ready, setReady] = useState(!deferMount);
+  const [pendingScope, setPendingScope] = useState<{
+    readonly kind: ReviewScopeKind;
+    readonly turnId?: string;
+    readonly operationSequence: number;
+  } | null>(null);
   const bodyId = useId();
   const moreMenuId = useId();
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
@@ -65,6 +67,25 @@ export function ReviewDock({
       setMoreOpen(false);
     }
   }, [expanded]);
+  useEffect(() => {
+    if (
+      pendingScope !== null &&
+      review?.scopeKind === pendingScope.kind &&
+      (pendingScope.kind !== "turn" || review.turnId === pendingScope.turnId)
+    ) {
+      setPendingScope(null);
+    }
+  }, [pendingScope, review]);
+  useEffect(() => {
+    if (
+      pendingScope !== null &&
+      operation?.operation === "open" &&
+      !operation.ok &&
+      operation.sequence > pendingScope.operationSequence
+    ) {
+      setPendingScope(null);
+    }
+  }, [operation, pendingScope]);
   useEffect(() => {
     if (!moreOpen) {
       return undefined;
@@ -112,6 +133,24 @@ export function ReviewDock({
   const count = `${changes.files.length} ${
     changes.files.length === 1 ? "file" : "files"
   } changed`;
+  const isSelectedScope = (kind: ReviewScopeKind): boolean =>
+    pendingScope !== null
+      ? pendingScope.kind === kind &&
+        (kind !== "turn" || pendingScope.turnId === changes.turnId)
+      : kind === "turn"
+        ? ownsLatestTurn
+        : review?.scopeKind === kind;
+  const openScope = (kind: ReviewScopeKind, turnId?: string): void => {
+    if (pendingScope !== null) {
+      return;
+    }
+    setPendingScope({
+      kind,
+      ...(turnId === undefined ? {} : { turnId }),
+      operationSequence: operation?.sequence ?? -1,
+    });
+    onOpenScope(kind, turnId);
+  };
   return (
     <section className="dvx-review-dock" aria-label="Review changes">
       <div className="dvx-review-dock-head">
@@ -137,8 +176,9 @@ export function ReviewDock({
             className="dvx-review-dock-review"
             onClick={() => {
               setExpanded(true);
-              onOpenScope("turn", changes.turnId);
+              openScope("turn", changes.turnId);
             }}
+            disabled={pendingScope !== null}
           >
             {writing ? "View live" : "Review"}
           </button>
@@ -158,13 +198,10 @@ export function ReviewDock({
                   key={kind}
                   type="button"
                   className="dvx-review-scope"
-                  aria-pressed={
-                    kind === "turn"
-                      ? ownsLatestTurn
-                      : review?.scopeKind === kind
-                  }
+                  aria-pressed={isSelectedScope(kind)}
+                  disabled={pendingScope !== null}
                   onClick={() =>
-                    onOpenScope(
+                    openScope(
                       kind,
                       kind === "turn" ? changes.turnId : undefined,
                     )
@@ -177,14 +214,18 @@ export function ReviewDock({
                       : "Branch"}
                 </button>
               ))}
-              {review !== null ? (
+              {pendingScope !== null ? (
+                <span className="dvx-review-progress" role="status">
+                  Loading…
+                </span>
+              ) : review !== null ? (
                 <span className="dvx-review-progress">
                   {newerChanges
                     ? "Newer changes available"
                     : review.scopeKind === "branch" &&
-                        branchDiff?.baseBranch === review.baselineLabel
-                      ? `${branchDiff.commitCount} ${
-                          branchDiff.commitCount === 1
+                        review.branchCommitCount !== undefined
+                      ? `${review.branchCommitCount} ${
+                          review.branchCommitCount === 1
                             ? "commit"
                             : "commits"
                         } · ${review.reviewedCount} of ${review.reviewableCount} reviewed`

@@ -92,6 +92,7 @@ describe('review protocol', () => {
         currentIndex: 0,
         reviewedCount: 0,
         reviewableCount: 1,
+        branchCommitCount: 2,
       },
     };
     expect(parseReviewHostMessage(message)).toEqual(message);
@@ -99,6 +100,12 @@ describe('review protocol', () => {
       parseReviewHostMessage({
         ...message,
         state: { ...message.state, approved: true },
+      }),
+    ).toBeUndefined();
+    expect(
+      parseReviewHostMessage({
+        ...message,
+        state: { ...message.state, branchCommitCount: -1 },
       }),
     ).toBeUndefined();
   });

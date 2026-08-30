@@ -53,6 +53,71 @@ function createCoordinator(
 }
 
 describe('ReviewCoordinator reload recovery', () => {
+  it('publishes Branch commit count before its native Diff opens', async () => {
+    const persistence: ChangeStatsPersistence = {
+      get: <T,>() => undefined as T | undefined,
+      update: vi.fn(() => Promise.resolve()),
+    };
+    const publish = vi.fn();
+    let resolveOpen: ((outcome: 'opened-diff') => void) | undefined;
+    const openDiff = vi.fn<FileDiffOpener['openDiff']>(
+      () =>
+        new Promise((resolve) => {
+          resolveOpen = resolve;
+        }),
+    );
+    const readBranchDiff = vi.fn(async () => ({
+      baseline: 'branch-baseline',
+      diff: {
+        branch: 'feature/review',
+        baseBranch: 'main',
+        files: [{ path: 'old.txt', additions: 1, deletions: 0 }],
+        additions: 1,
+        deletions: 0,
+        commitCount: 2,
+      },
+    }));
+    const coordinator = new ReviewCoordinator({
+      getWorkspaceRoot: () => 'Z:\\missing-review-workspace',
+      snapshots: {} as TurnSnapshotStore,
+      fileDiff: { openDiff },
+      persistence,
+      storageDir: 'Z:\\missing-review-storage',
+      publish,
+      readWorkspaceFiles: async () => ({
+        baseline: 'head-baseline',
+        files,
+      }),
+      readBranchDiff,
+    });
+
+    coordinator.handle({
+      type: 'review.open',
+      sessionId: 'session-1',
+      scopeKind: 'branch',
+    });
+
+    await vi.waitFor(() => {
+      expect(publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'review.state',
+          state: expect.objectContaining({
+            scopeKind: 'branch',
+            branchCommitCount: 2,
+          }),
+        }),
+      );
+    });
+    expect(readBranchDiff).toHaveBeenCalledOnce();
+    expect(openDiff).toHaveBeenCalledOnce();
+
+    resolveOpen?.('opened-diff');
+    await coordinator.replay('session-1');
+
+    expect(readBranchDiff).toHaveBeenCalledOnce();
+    coordinator.dispose();
+  });
+
   it('restores the current Session latest scope without reopening Diff', async () => {
     const currentScopeId = scopeId(
       {
