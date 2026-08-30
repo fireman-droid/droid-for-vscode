@@ -45,7 +45,16 @@ export function reduceReviewUiMessage(
     case 'review.restorePreview':
       return { ...state, restorePreview: message };
     case 'review.operationResult':
-      return { ...state, operation: message };
+      return {
+        ...state,
+        operation: message,
+        restorePreview:
+          (message.operation === 'restore-file' ||
+            message.operation === 'restore-turn') &&
+          message.reviewScopeId === state.restorePreview?.reviewScopeId
+            ? null
+            : state.restorePreview,
+      };
     case 'review.agentReviewState':
       return { ...state, agent: message };
   }

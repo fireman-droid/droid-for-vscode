@@ -185,13 +185,9 @@ export function ToolActivityRow({
           <ToolFilePath
             path={activity.filePath}
             turnId={activity.turnId}
+            interactive={false}
           />
         )}
-        {activity.filePath !== null &&
-        activity.status === "completed" &&
-        isPreviewableFilePath(activity.filePath) ? (
-          <PreviewChip path={activity.filePath} />
-        ) : null}
         {showActivityState ? (
           <span
             className={`dvx-activity-state${
@@ -206,11 +202,27 @@ export function ToolActivityRow({
               : ` · ${formatDuration(activity.durationMs)}`}
           </span>
         ) : null}
-        {isCommand ? (
-          <CommandCardMenu command={activity.detail ?? ""} />
-        ) : null}
         {isCommand ? null : <ActivityChevron />}
       </summary>
+      {activity.filePath !== null || isCommand ? (
+        <div className="dvx-tool-row-actions">
+          {activity.filePath === null ? null : (
+            <ToolFilePath
+              path={activity.filePath}
+              turnId={activity.turnId}
+              showStats={false}
+            />
+          )}
+          {activity.filePath !== null &&
+          activity.status === "completed" &&
+          isPreviewableFilePath(activity.filePath) ? (
+            <PreviewChip path={activity.filePath} />
+          ) : null}
+          {isCommand ? (
+            <CommandCardMenu command={activity.detail ?? ""} />
+          ) : null}
+        </div>
+      ) : null}
       {activity.detailKind === "plan" && activity.detail !== null ? (
         <TaskPlan detail={activity.detail} />
       ) : isCommand ? (

@@ -158,7 +158,7 @@
 
 .dvx-review-progress {
   margin-left: auto;
-  color: var(--dvx-subtle);
+  color: var(--dvx-muted);
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -181,7 +181,7 @@
 }
 
 .dvx-review-baseline {
-  color: var(--dvx-subtle);
+  color: var(--dvx-muted);
   font-size: 9.5px;
   text-transform: uppercase;
   letter-spacing: 0.04em;

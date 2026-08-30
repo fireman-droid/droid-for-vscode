@@ -1,7 +1,8 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 
 import type {
   ChangesTranscriptItem,
+  GitBranchDiffState,
   ReviewAgentStateMessage,
   ReviewOperationResultMessage,
   ReviewRestorePreviewStateMessage,
@@ -28,6 +29,7 @@ export function ReviewDockSlot({
   restorePreview,
   operation,
   agent,
+  branchDiff,
 }: {
   readonly changes: ChangesTranscriptItem | null;
   readonly sessionId: string | null;
@@ -36,6 +38,7 @@ export function ReviewDockSlot({
   readonly restorePreview: ReviewRestorePreviewStateMessage | null;
   readonly operation: ReviewOperationResultMessage | null;
   readonly agent: ReviewAgentStateMessage | null;
+  readonly branchDiff: GitBranchDiffState | null;
 }): React.JSX.Element | null {
   const postReview = useCallback(
     (message: Sessionless<ReviewWebviewMessage>): void => {
@@ -45,10 +48,18 @@ export function ReviewDockSlot({
     },
     [sessionId, vscode],
   );
+  const scope = review?.sessionId === sessionId ? review : null;
+  useEffect(() => {
+    if (scope?.scopeKind === "branch" && sessionId !== null) {
+      vscode.postMessage({
+        type: "git.requestBranchDiff",
+        sessionId,
+      });
+    }
+  }, [scope?.reviewScopeId, scope?.scopeKind, sessionId, vscode]);
   if (changes === null || changes.files.length === 0) {
     return null;
   }
-  const scope = review?.sessionId === sessionId ? review : null;
   return (
     <ReviewDock
       key={`${sessionId ?? "none"}:${changes.turnId}`}
@@ -57,13 +68,14 @@ export function ReviewDockSlot({
       restorePreview={restorePreview}
       operation={operation}
       agent={agent}
-      onOpenScope={(scopeKind: ReviewScopeKind, turnId?: string) =>
+      branchDiff={branchDiff}
+      onOpenScope={(scopeKind: ReviewScopeKind, turnId?: string) => {
         postReview({
           type: "review.open",
           scopeKind,
           ...(turnId === undefined ? {} : { turnId }),
-        })
-      }
+        });
+      }}
       onSelectFile={(path) => {
         if (scope !== null) {
           postReview({

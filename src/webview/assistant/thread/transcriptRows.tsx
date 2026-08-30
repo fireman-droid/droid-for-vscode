@@ -42,9 +42,13 @@ const EMPTY_REASONING_PART = {
 export function ToolFilePath({
   path,
   turnId,
+  interactive = true,
+  showStats = true,
 }: {
   readonly path: string;
   readonly turnId: string | null;
+  readonly interactive?: boolean;
+  readonly showStats?: boolean;
 }): React.JSX.Element {
   const openPath = useContext(OpenPathContext);
   const toolChanges = useContext(ToolChangesContext);
@@ -59,20 +63,21 @@ export function ToolFilePath({
   const fileName = path.split("/").at(-1) ?? path;
   return (
     <>
-      <button
-        type="button"
-        className="dvx-tool-file"
-        title={`Open ${path}`}
-        onClick={(event) => {
-          // Keep the surrounding <details> row from toggling.
-          event.preventDefault();
-          event.stopPropagation();
-          openPath?.({ path });
-        }}
-      >
-        {fileName}
-      </button>
-      {hasAdditions || hasDeletions ? (
+      {interactive ? (
+        <button
+          type="button"
+          className="dvx-tool-file"
+          title={`Open ${path}`}
+          onClick={() => openPath?.({ path })}
+        >
+          {fileName}
+        </button>
+      ) : (
+        <span className="dvx-tool-file dvx-tool-file-static" title={path}>
+          {fileName}
+        </span>
+      )}
+      {showStats && (hasAdditions || hasDeletions) ? (
         <span
           className="dvx-tool-file-stats"
           aria-label={[

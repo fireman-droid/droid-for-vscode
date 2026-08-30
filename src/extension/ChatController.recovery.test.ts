@@ -30,6 +30,7 @@ import {
   waitForConnected,
   waitForInteraction,
 } from './controllerTestHarness';
+import type { TurnSnapshotStore } from './turnSnapshots';
 
 describe('ChatController', () => {
   it('resumes only a catalog-validated recovered session and restores its transcript', async () => {
@@ -77,6 +78,51 @@ describe('ChatController', () => {
         }),
       ],
     });
+  });
+
+  it('restores missing turn snapshot files from recovered Changes', async () => {
+    const persistence = createMemoryPersistence();
+    const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
+    seed.writeSession('saved-session', {
+      transcript: [
+        {
+          id: 'changes-saved-turn',
+          kind: 'changes',
+          turnId: 'saved-turn',
+          files: [
+            { path: 'src/app.ts', additions: 3, deletions: 1 },
+          ],
+        },
+      ],
+      historyStatus: 'complete',
+      truncated: false,
+    });
+    seed.selectSession('saved-session');
+    await seed.flush();
+    const rememberFiles = vi.fn(async () => undefined);
+    const snapshotsStore = {
+      read: vi.fn(() => ({ turnId: 'saved-turn' })),
+      rememberFiles,
+    } as unknown as TurnSnapshotStore;
+    const runtime = createMockRuntime();
+    runtime.initialize.mockResolvedValue(available('saved-session'));
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('saved-session')]),
+      new SessionRecoveryStore(persistence, 'recovery', 0),
+    );
+    Object.defineProperty(controller, 'turnSnapshots', {
+      value: snapshotsStore,
+    });
+
+    ready(controller);
+    await waitForConnected(messages);
+
+    expect(rememberFiles).toHaveBeenCalledWith(
+      { sessionId: 'saved-session', turnId: 'saved-turn' },
+      [{ path: 'src/app.ts', additions: 3, deletions: 1 }],
+    );
   });
 
   it('emits an early connecting snapshot from the recovery checkpoint before runtime activation completes', async () => {

@@ -35,6 +35,7 @@ import {
   emitEarlyRecoverySnapshot,
   flushRecoveryCheckpoint,
   reconcileDaemonTurn,
+  recoverTurnSnapshotFiles,
   recoveryTurnId,
 } from './recovery';
 import { armReplayedSubagentWatch } from './subagentWatch';
@@ -435,12 +436,18 @@ export async function prepareActivationTranscript(
     }
 
     const recovered = ctl.recoveryStore.readSession(target.sessionId);
+    const restoreSnapshotFiles = recoverTurnSnapshotFiles(
+      ctl,
+      target.sessionId,
+      recovered,
+    );
     const historyStartedAt = performance.now();
     const loaded = await loadHistoryTimed(
       ctl,
       target.cwd,
       target.sessionId,
     );
+    await restoreSnapshotFiles;
     if (phases !== undefined) {
       phases.historyMs = elapsedMs(historyStartedAt);
     }

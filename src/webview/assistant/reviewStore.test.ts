@@ -38,4 +38,46 @@ describe('review webview state', () => {
       ),
     ).toBe(EMPTY_REVIEW_UI_STATE);
   });
+
+  it('clears a restore preview after its restore operation settles', () => {
+    const preview = {
+      type: 'review.restorePreview' as const,
+      sequence: 1,
+      sessionId: 'session-1',
+      reviewScopeId: 'scope-1',
+      previewId: 'preview-1',
+      target: 'turn' as const,
+      restorable: ['src/app.ts'],
+      conflicted: [],
+      created: [],
+      deleted: [],
+    };
+    const state = reduceReviewUiMessage(
+      EMPTY_REVIEW_UI_STATE,
+      preview,
+      'session-1',
+    );
+
+    expect(
+      reduceReviewUiMessage(
+        state,
+        {
+          type: 'review.operationResult',
+          sequence: 2,
+          sessionId: 'session-1',
+          reviewScopeId: 'scope-1',
+          operation: 'restore-turn',
+          ok: false,
+          message: 'The restore preview is stale.',
+        },
+        'session-1',
+      ),
+    ).toMatchObject({
+      restorePreview: null,
+      operation: {
+        operation: 'restore-turn',
+        ok: false,
+      },
+    });
+  });
 });

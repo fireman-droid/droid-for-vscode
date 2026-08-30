@@ -7,6 +7,7 @@ import type {
 import { createTurnActivityState } from '../turnActivityState';
 import { reconcileSessionHistory } from '../reconcileSessionHistory';
 import { SESSION_RECOVERY_DEBOUNCE_MS } from '../SessionRecoveryStore';
+import type { HostTranscriptState } from '../hostTranscriptState';
 import { setSessionRunning } from './sessionRunning';
 import { loadHistoryTimed } from './runtimeLifecycle';
 import {
@@ -75,6 +76,28 @@ export function emitEarlyRecoverySnapshot(ctl: ChatControllerInternals): void {
       },
     });
     ctl.emitSnapshot();
+}
+
+export async function recoverTurnSnapshotFiles(
+  ctl: ChatControllerInternals,
+  sessionId: string,
+  recovered: HostTranscriptState | undefined,
+): Promise<void> {
+    if (ctl.turnSnapshots === undefined || recovered === undefined) {
+      return;
+    }
+    for (const item of recovered.transcript) {
+      if (
+        item.kind !== 'changes' ||
+        ctl.turnSnapshots.read(sessionId, item.turnId)?.files !== undefined
+      ) {
+        continue;
+      }
+      await ctl.turnSnapshots.rememberFiles(
+        { sessionId, turnId: item.turnId },
+        item.files,
+      );
+    }
 }
 
 /**

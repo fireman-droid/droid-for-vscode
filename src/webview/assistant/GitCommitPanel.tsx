@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -195,16 +196,55 @@ function GitCommitPanel({
     });
   };
 
-  const failure =
+  const failedResult =
     state.lastResult !== null &&
     !state.lastResult.ok &&
     state.commitTurnId === turnId
-      ? state.lastResult.error
+      ? state.lastResult
       : null;
+  const failure = failedResult?.error ?? null;
+  const refreshedFailureRef =
+    useRef<GitCommitFlowState["lastResult"]>(null);
+  useEffect(() => {
+    if (failedResult === null) {
+      refreshedFailureRef.current = null;
+      return;
+    }
+    if (
+      state.statusPending ||
+      refreshedFailureRef.current === failedResult
+    ) {
+      return;
+    }
+    refreshedFailureRef.current = failedResult;
+    flow.onRequestStatus(turnId);
+  }, [
+    failedResult,
+    flow.onRequestStatus,
+    state.statusPending,
+    turnId,
+  ]);
+  useEffect(() => {
+    if (!initialized || state.statusPending) {
+      return;
+    }
+    const availablePaths = new Set(state.files.map((file) => file.path));
+    setSelected((current) => {
+      const next = new Set(
+        [...current].filter((path) => availablePaths.has(path)),
+      );
+      return next.size === current.size ? current : next;
+    });
+  }, [initialized, state.files, state.statusPending]);
+  const selectedFilesAreCurrent = [...selected].every((path) =>
+    state.files.some((file) => file.path === path),
+  );
   const canCommit =
     initialized &&
+    !state.statusPending &&
     !state.commitPending &&
     selected.size > 0 &&
+    selectedFilesAreCurrent &&
     message.trim() !== "";
 
   let body: React.JSX.Element;

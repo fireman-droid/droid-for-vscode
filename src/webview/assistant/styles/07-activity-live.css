@@ -575,6 +575,26 @@
   color: var(--dvx-ink);
 }
 
+.dvx-tool-file-static {
+  cursor: default;
+}
+
+.dvx-tool-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 5px;
+}
+
+.dvx-command-card > .dvx-tool-row-actions {
+  justify-content: flex-end;
+  padding: 4px 8px 0;
+}
+
+.dvx-tool-row-actions .dvx-tool-file {
+  max-width: none;
+}
+
 .dvx-tool-file-stats {
   display: inline-flex;
   flex: 0 0 auto;

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import type {
   ChangesTranscriptItem,
+  GitBranchDiffState,
   ReviewAgentStateMessage,
   ReviewOperationResultMessage,
   ReviewRestorePreviewStateMessage,
@@ -18,6 +19,7 @@ interface ReviewDockProps {
   readonly restorePreview: ReviewRestorePreviewStateMessage | null;
   readonly operation: ReviewOperationResultMessage | null;
   readonly agent: ReviewAgentStateMessage | null;
+  readonly branchDiff: GitBranchDiffState | null;
   readonly onOpenScope: (kind: ReviewScopeKind, turnId?: string) => void;
   readonly onSelectFile: (path: string) => void;
   readonly onNavigate: (direction: "previous" | "next") => void;
@@ -34,6 +36,7 @@ export function ReviewDock({
   restorePreview,
   operation,
   agent,
+  branchDiff,
   onOpenScope,
   onSelectFile,
   onNavigate,
@@ -178,7 +181,14 @@ export function ReviewDock({
                 <span className="dvx-review-progress">
                   {newerChanges
                     ? "Newer changes available"
-                    : `${review.reviewedCount} of ${review.reviewableCount} reviewed`}
+                    : review.scopeKind === "branch" &&
+                        branchDiff?.baseBranch === review.baselineLabel
+                      ? `${branchDiff.commitCount} ${
+                          branchDiff.commitCount === 1
+                            ? "commit"
+                            : "commits"
+                        } · ${review.reviewedCount} of ${review.reviewableCount} reviewed`
+                      : `${review.reviewedCount} of ${review.reviewableCount} reviewed`}
                 </span>
               ) : null}
             </div>
@@ -287,7 +297,7 @@ export function ReviewDock({
                       data-open={moreOpen ? "true" : "false"}
                       aria-hidden={!moreOpen}
                     >
-                      {!writing ? (
+                      {!writing && ownsLatestTurn ? (
                         <ChangesCommitEntry
                           key={changes.turnId}
                           turnId={changes.turnId}
