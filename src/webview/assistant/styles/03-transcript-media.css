@@ -488,12 +488,50 @@
   margin-bottom: 0;
 }
 
-.dvx-runtime-pulse {
-  width: 7px;
-  height: 7px;
+.dvx-runtime-grid {
+  display: grid;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(3, 2px);
+  grid-template-rows: repeat(3, 2px);
+  gap: 2px;
+}
+
+.dvx-runtime-grid-dot {
+  width: 2px;
+  height: 2px;
   border-radius: 50%;
   background: var(--dvx-accent);
-  animation: dvx-seam-pulse 1.4s ease-in-out infinite;
+  opacity: 0.18;
+  transform: scale(0.8);
+  animation: dvx-runtime-grid-step 900ms linear infinite;
+}
+
+.dvx-runtime-grid-dot:nth-child(2) { animation-delay: 100ms; }
+.dvx-runtime-grid-dot:nth-child(3) { animation-delay: 200ms; }
+.dvx-runtime-grid-dot:nth-child(4) { animation-delay: 300ms; }
+.dvx-runtime-grid-dot:nth-child(5) { animation-delay: 400ms; }
+.dvx-runtime-grid-dot:nth-child(6) { animation-delay: 500ms; }
+.dvx-runtime-grid-dot:nth-child(7) { animation-delay: 600ms; }
+.dvx-runtime-grid-dot:nth-child(8) { animation-delay: 700ms; }
+.dvx-runtime-grid-dot:nth-child(9) { animation-delay: 800ms; }
+
+@keyframes dvx-runtime-grid-step {
+  0%, 100% {
+    opacity: 0.18;
+    transform: scale(0.8);
+  }
+
+  5% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  16% {
+    opacity: 0.42;
+    transform: scale(0.9);
+  }
 }
 
 /* While an activity row carries the live shimmer, the pending status
@@ -502,8 +540,18 @@
   color: #6b6259;
 }
 
-.dvx-pending-quiet .dvx-runtime-pulse {
+.dvx-pending-quiet .dvx-runtime-grid-dot {
   animation: none;
+  opacity: 0.42;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-runtime-grid-dot {
+    animation: none;
+    opacity: 0.42;
+    transform: none;
+  }
 }
 
 .dvx-empty-state {

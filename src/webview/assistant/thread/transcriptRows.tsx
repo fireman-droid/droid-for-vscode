@@ -596,7 +596,11 @@ export function PendingResponse({
       role="status"
       aria-live="polite"
     >
-      <span className="dvx-runtime-pulse" aria-hidden="true" />
+      <span className="dvx-runtime-grid" aria-hidden="true">
+        {Array.from({ length: 9 }, (_, index) => (
+          <span className="dvx-runtime-grid-dot" key={index} />
+        ))}
+      </span>
       <span className={activityLive ? "dvx-pending-label" : "dvx-shimmer-text"}>
         {activity === "working" ? "Droid is working" : "Droid is responding"}
       </span>
