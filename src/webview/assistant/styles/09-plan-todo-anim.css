@@ -198,7 +198,7 @@
     forced-color-adjust: auto;
   }
 
-  .dvx-status-seam, .dvx-composer-seam, .dvx-runtime-grid-dot {
+  .dvx-status-seam, .dvx-composer-seam, .dvx-runtime-grid-dot, .dvx-runtime-status-dot {
     background: Highlight;
   }
 

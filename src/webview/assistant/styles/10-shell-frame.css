@@ -59,13 +59,13 @@ body {
   gap: 0;
 }
 
-/* One-line brand row (spec §2.3): title and connection status share
-   the 40px bar on a common baseline instead of stacking two lines. */
+/* Compact product lockup: the full runtime and Mission identity remain
+   available through the adjacent status dot without crowding the bar. */
 .dvx-brand > div {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   min-width: 0;
-  gap: 8px;
+  gap: 6px;
 }
 
 .dvx-title {
@@ -73,18 +73,44 @@ body {
   font-size: 13px;
   font-weight: 650;
   line-height: 17.5px;
-  letter-spacing: 0;
+  letter-spacing: -0.01em;
 }
 
 .dvx-runtime-status {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  gap: 5px;
-  margin-top: 0;
-  color: var(--dvx-muted);
-  font-size: 11px;
-  line-height: 16.5px;
+  display: inline-grid;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.dvx-runtime-status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dvx-subtle);
+}
+
+.dvx-runtime-status[data-status='connected'] .dvx-runtime-status-dot {
+  background: var(
+    --vscode-testing-iconPassed,
+    var(--vscode-gitDecoration-addedResourceForeground, #3f9d5f)
+  );
+}
+
+.dvx-runtime-status[data-status='connecting'] .dvx-runtime-status-dot {
+  background: var(--vscode-charts-yellow, #cca700);
+  animation: dvx-seam-pulse 1.4s ease-in-out infinite;
+}
+
+.dvx-runtime-status[data-status='unavailable'] .dvx-runtime-status-dot {
+  background: var(--dvx-danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-runtime-status[data-status='connecting'] .dvx-runtime-status-dot {
+    animation: none;
+  }
 }
 
 .dvx-header-actions {

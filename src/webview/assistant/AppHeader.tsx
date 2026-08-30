@@ -41,6 +41,10 @@ export function AppHeader({
   readonly onSearchContent: (query: string) => void;
 }): React.JSX.Element {
   const connectionLabel = formatConnectionStatus(state.connection.status);
+  const runtimeLabel =
+    state.mission === null
+      ? connectionLabel
+      : `${connectionLabel} · ${formatMissionIdentity(state.mission)}`;
   const ordinarySessions = useMemo(
     () => ({
       ...state.sessions,
@@ -91,19 +95,17 @@ export function AppHeader({
       <div className="dvx-brand">
         <div>
           <div className="dvx-title">Droid</div>
-          <div
+          <span
             className="dvx-runtime-status"
+            data-status={state.connection.status}
             role={
               state.connection.status === 'unavailable' ? 'alert' : 'status'
             }
+            title={runtimeLabel}
           >
-            <span>{connectionLabel}</span>
-            {/* Quiet read-only mission identity; same muted style as
-                the connection label (UI restraint: no new element). */}
-            {state.mission !== null ? (
-              <span>{`· ${formatMissionIdentity(state.mission)}`}</span>
-            ) : null}
-          </div>
+            <span className="dvx-runtime-status-dot" aria-hidden="true" />
+            <span className="dvx-visually-hidden">{runtimeLabel}</span>
+          </span>
         </div>
       </div>
       <div className="dvx-header-actions">
