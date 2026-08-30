@@ -505,19 +505,24 @@
   background: var(--dvx-accent);
   opacity: 0.18;
   transform: scale(0.8);
-  animation: dvx-runtime-grid-step 900ms linear infinite;
+  animation: dvx-runtime-grid-ripple 1.2s ease-out infinite;
 }
 
-.dvx-runtime-grid-dot:nth-child(2) { animation-delay: 100ms; }
-.dvx-runtime-grid-dot:nth-child(3) { animation-delay: 200ms; }
-.dvx-runtime-grid-dot:nth-child(4) { animation-delay: 300ms; }
-.dvx-runtime-grid-dot:nth-child(5) { animation-delay: 400ms; }
-.dvx-runtime-grid-dot:nth-child(6) { animation-delay: 500ms; }
-.dvx-runtime-grid-dot:nth-child(7) { animation-delay: 600ms; }
-.dvx-runtime-grid-dot:nth-child(8) { animation-delay: 700ms; }
-.dvx-runtime-grid-dot:nth-child(9) { animation-delay: 800ms; }
+.dvx-runtime-grid-dot:nth-child(2),
+.dvx-runtime-grid-dot:nth-child(4),
+.dvx-runtime-grid-dot:nth-child(6),
+.dvx-runtime-grid-dot:nth-child(8) {
+  animation-delay: 300ms;
+}
 
-@keyframes dvx-runtime-grid-step {
+.dvx-runtime-grid-dot:nth-child(1),
+.dvx-runtime-grid-dot:nth-child(3),
+.dvx-runtime-grid-dot:nth-child(7),
+.dvx-runtime-grid-dot:nth-child(9) {
+  animation-delay: 600ms;
+}
+
+@keyframes dvx-runtime-grid-ripple {
   0%, 100% {
     opacity: 0.18;
     transform: scale(0.8);
@@ -528,9 +533,14 @@
     transform: scale(1);
   }
 
-  16% {
-    opacity: 0.42;
+  22% {
+    opacity: 0.52;
     transform: scale(0.9);
+  }
+
+  32% {
+    opacity: 0.18;
+    transform: scale(0.8);
   }
 }
 
