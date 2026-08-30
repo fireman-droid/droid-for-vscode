@@ -341,9 +341,12 @@
 }
 
 .dvx-review-more-menu {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  bottom: calc(100% + 4px);
   display: none;
   width: min(230px, calc(100vw - 32px));
-  margin: 0 0 4px;
   padding: 4px;
   border: 1px solid var(--dvx-border);
   border-radius: 8px;

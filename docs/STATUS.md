@@ -63,6 +63,7 @@ Diff 审查链路已经接通。`0.7.89` 新版 VSIX 已覆盖安装；Cursor �
   base branch 和相对该基线的 commit 数，无法建立可靠基线的文件降级为 Open only
 - reviewed 只由明确按钮产生，按文件版本持久化；当前 Session 最近打开的 scope
   在 Reload 后重建并验证版本，文件再次变化时显示 changed-after-review，不计入完成率
+- Review 的 More 菜单作为按钮上方的悬浮层打开，不改变 Dock 或控制栏高度
 - Turn 提供 Restore file / Restore turn 双重预检；展开的文件清单保持路径和
   created 标记可读；未保存编辑、after-state
   不匹配或快照缺失都会阻止写入，整 Turn 任一冲突则全部不写；操作成功或 preview
