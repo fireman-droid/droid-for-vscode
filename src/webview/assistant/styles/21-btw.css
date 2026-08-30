@@ -223,6 +223,15 @@
   background: var(--dvx-raised);
 }
 
+.dvx-btw-input-row:focus-within {
+  border-color: var(--dvx-border-strong);
+  box-shadow: 0 0 0 1px color-mix(
+    in srgb,
+    var(--dvx-border-strong) 38%,
+    transparent
+  );
+}
+
 .dvx-btw-input {
   min-width: 0;
   max-height: 64px;
@@ -238,6 +247,12 @@
   font-size: 12px;
   line-height: 18px;
   user-select: text;
+}
+
+.dvx-btw-input:focus,
+.dvx-btw-input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .dvx-btw-input::placeholder { color: var(--dvx-subtle); }

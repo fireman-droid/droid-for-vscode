@@ -145,8 +145,18 @@
   white-space: nowrap;
 }
 
-/* File rows themselves reuse `.dvx-review-dock-row`/`-path` verbatim
-   (29-review-dock.css); only the "new" tag is specific to restore. */
+/* Review rows reserve a leading status-dot column. Restore rows have
+   only a path and optional "new" tag, so they need their own two-column
+   grid or the path is squeezed into the 8px status slot. */
+.dvx-restore-dock .dvx-review-dock-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  cursor: default;
+}
+
+.dvx-restore-dock .dvx-review-dock-row:hover {
+  background: transparent;
+}
+
 .dvx-restore-file-tag {
   flex: 0 0 auto;
   color: var(--dvx-muted);

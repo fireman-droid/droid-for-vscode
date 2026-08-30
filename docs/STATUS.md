@@ -31,7 +31,8 @@ Diff 审查链路已经接通。`0.7.89` 新版 VSIX 已覆盖安装；Cursor �
 ### BTW 旁问
 
 - 右侧使用可拖拽宽度的轻量旁注流，回答继续支持 Markdown、代码和长文本
-- 输入框自动增长到三行，Enter 发送、Shift+Enter 换行，排队问题贴近输入区
+- 输入框自动增长到三行，Enter 发送、Shift+Enter 换行，排队问题贴近输入区；聚焦时
+  使用输入容器的中性边线，不继承编辑器主题的彩色 textarea 轮廓
 - 主对话正文选区提供 `Add to Chat` 和 `By the Way`，均只预填引用、不自动发送
 - 同一主对话内关闭只隐藏并保留旁问上下文；切换主对话或 Reload 后清空
 
@@ -62,7 +63,8 @@ Diff 审查链路已经接通。`0.7.89` 新版 VSIX 已覆盖安装；Cursor �
   base branch 和相对该基线的 commit 数，无法建立可靠基线的文件降级为 Open only
 - reviewed 只由明确按钮产生，按文件版本持久化；当前 Session 最近打开的 scope
   在 Reload 后重建并验证版本，文件再次变化时显示 changed-after-review，不计入完成率
-- Turn 提供 Restore file / Restore turn 双重预检；未保存编辑、after-state
+- Turn 提供 Restore file / Restore turn 双重预检；展开的文件清单保持路径和
+  created 标记可读；未保存编辑、after-state
   不匹配或快照缺失都会阻止写入，整 Turn 任一冲突则全部不写；操作成功或 preview
   已失效后会清除旧确认状态
 - Tool 明确命名的 Git ignored 文件也会进入 before / after 精确快照，可正常
