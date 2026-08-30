@@ -264,7 +264,7 @@ export function VirtualizedMessages({
     virtualizer.getTotalSize() -
       ((items.at(-1)?.end ?? scrollMargin) - scrollMargin),
   );
-  const pinCandidate = virtualizer.getVirtualItemForOffset(scrollTop);
+  const pinCandidate = virtualizer.getVirtualItemForOffset(scrollTop + 1);
   const pinnedTurn =
     pinCandidate !== undefined &&
     pinCandidate.start <= scrollTop + 1

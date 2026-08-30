@@ -10,6 +10,7 @@ import { VirtualizedMessages } from "./VirtualizedMessages";
 
 const mocks = vi.hoisted(() => ({
   scrollToIndex: vi.fn(),
+  getVirtualItemForOffset: vi.fn(() => undefined),
   scrollToFn: null as null | ((
     offset: number,
     options: { adjustments?: number; behavior?: ScrollBehavior },
@@ -48,7 +49,7 @@ vi.mock("@tanstack/react-virtual", () => ({
     mocks.scrollToFn = options.scrollToFn;
     return {
       getTotalSize: () => 240,
-      getVirtualItemForOffset: () => undefined,
+      getVirtualItemForOffset: mocks.getVirtualItemForOffset,
       getVirtualItems: () => [],
       measureElement: vi.fn(),
       measurementsCache: [
@@ -64,10 +65,25 @@ vi.mock("@tanstack/react-virtual", () => ({
 afterEach(() => {
   cleanup();
   mocks.scrollToIndex.mockClear();
+  mocks.getVirtualItemForOffset.mockClear();
   mocks.scrollToFn = null;
 });
 
 describe("VirtualizedMessages question navigation", () => {
+  it("uses the sticky entry tolerance when choosing a boundary turn", () => {
+    const scroller = document.createElement("div");
+    scroller.scrollTop = 120;
+
+    render(
+      <VirtualizedMessages
+        getScroller={() => scroller}
+        followingRef={{ current: createFollowState() }}
+      />,
+    );
+
+    expect(mocks.getVirtualItemForOffset).toHaveBeenCalledWith(121);
+  });
+
   it("uses one deterministic top-snap path and releases bottom follow", () => {
     const scroller = document.createElement("div");
     scroller.scrollTop = 40;
