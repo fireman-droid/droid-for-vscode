@@ -221,10 +221,11 @@ body {
   height: 100%;
   padding: 0 var(--dvx-column-pad);
   pointer-events: none;
+  will-change: transform;
 }
 
 .dvx-pinned-user-layer-content {
-  max-width: calc(var(--dvx-column-max) + 2 * var(--dvx-column-pad));
+  max-width: var(--dvx-column-max);
   max-height: 100%;
   margin: 0 auto;
   overflow-y: auto;

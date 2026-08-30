@@ -6,7 +6,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createFollowState } from "../followScroll";
 import type { TranscriptVirtualizerApi } from "./buildTurns";
-import { VirtualizedMessages } from "./VirtualizedMessages";
+import {
+  pinnedPushOffset,
+  VirtualizedMessages,
+} from "./VirtualizedMessages";
 
 const mocks = vi.hoisted(() => ({
   scrollToIndex: vi.fn(),
@@ -70,6 +73,13 @@ afterEach(() => {
 });
 
 describe("VirtualizedMessages question navigation", () => {
+  it("lets the next question push the pinned surface out of the viewport", () => {
+    expect(pinnedPushOffset(undefined, 100, 80)).toBe(0);
+    expect(pinnedPushOffset(200, 100, 80)).toBe(0);
+    expect(pinnedPushOffset(160, 100, 80)).toBe(-20);
+    expect(pinnedPushOffset(121, 100, 80)).toBe(-59);
+  });
+
   it("uses the sticky entry tolerance when choosing a boundary turn", () => {
     const scroller = document.createElement("div");
     scroller.scrollTop = 120;

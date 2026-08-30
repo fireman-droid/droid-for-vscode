@@ -41,6 +41,17 @@ type MessageComponents = {
   readonly AssistantMessage: ComponentType;
 };
 
+export function pinnedPushOffset(
+  nextQuestionTop: number | undefined,
+  scrollTop: number,
+  pinnedHeight: number,
+): number {
+  if (nextQuestionTop === undefined || pinnedHeight <= 0) {
+    return 0;
+  }
+  return Math.min(0, nextQuestionTop - scrollTop - pinnedHeight);
+}
+
 function releaseFollowForJump(
   follow: { following: boolean } | null,
   scrollTop: number,
@@ -109,6 +120,16 @@ export function VirtualizedMessages({
     () => questionTurnRows(turns, roleById),
     [roleById, turns],
   );
+  const nextQuestionByTurn = useMemo(() => {
+    const nextByTurn = new Map<number, number>();
+    questions.indexes.forEach((turnIndex, index) => {
+      const next = questions.indexes[index + 1];
+      if (next !== undefined) {
+        nextByTurn.set(turnIndex, next);
+      }
+    });
+    return nextByTurn;
+  }, [questions]);
   const listRef = useRef<HTMLDivElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
@@ -274,6 +295,13 @@ export function VirtualizedMessages({
     pinnedTurn === -1
       ? null
       : (turns[pinnedTurn]?.messageIds[0] ?? null);
+  const nextQuestionTurn = nextQuestionByTurn.get(pinnedTurn);
+  const nextQuestionTop =
+    nextQuestionTurn === undefined
+      ? undefined
+      : virtualizer.measurementsCache[nextQuestionTurn]?.start;
+  const pinnedContentRef = useRef<HTMLDivElement | null>(null);
+  const [pinnedHeight, setPinnedHeight] = useState(0);
   const editingMessageId = chrome?.editingMessageId ?? null;
   const [editingPinnedMessageId, setEditingPinnedMessageId] =
     useState<string | null>(null);
@@ -290,6 +318,27 @@ export function VirtualizedMessages({
           ? naturalPinnedMessageId
           : (editingPinnedMessageId ?? naturalPinnedMessageId))
       : null;
+  useLayoutEffect(() => {
+    const content = pinnedContentRef.current;
+    if (content === null || displayedMessageId === null) {
+      setPinnedHeight(0);
+      return undefined;
+    }
+    const measure = (): void => {
+      const height = content.getBoundingClientRect().height;
+      setPinnedHeight((previous) =>
+        Math.abs(previous - height) < 0.5 ? previous : height,
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [displayedMessageId]);
+  const pushOffset =
+    editingMessageId === null
+      ? pinnedPushOffset(nextQuestionTop, scrollTop, pinnedHeight)
+      : 0;
 
   if (turns.length === 0) {
     return null;
@@ -300,8 +349,14 @@ export function VirtualizedMessages({
       {displayedMessageId !== null && floatingHost !== null
         ? createPortal(
             <MessageSurfaceContext.Provider value="pinned">
-              <div className="dvx-pinned-user-layer">
-                <div className="dvx-pinned-user-layer-content">
+              <div
+                className="dvx-pinned-user-layer"
+                style={{ transform: `translateY(${pushOffset}px)` }}
+              >
+                <div
+                  className="dvx-pinned-user-layer-content"
+                  ref={pinnedContentRef}
+                >
                   <ThreadPrimitive.Unstable_MessageById
                     messageId={displayedMessageId}
                     components={components}
