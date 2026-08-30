@@ -52,7 +52,8 @@ Diff 审查链路已经接通。`0.7.89` 新版 VSIX 已覆盖安装；Cursor �
 - 后续纯聊天回合不会清空最近一次实际改动的 Latest Turn Dock；新的改动回合
   仍会替换它，Commit 继续绑定该改动回合，Session 切换按各自 transcript 隔离
 - 实时 Changes 同步写入 Host transcript；已打开的 writing Review scope 会随新增文件
-  刷新并在 turn 结束后切换到 settled snapshot，最终无净改动时清除临时 Dock
+  在同一 scope 身份内刷新，并在 turn 结束后切换到 settled snapshot；Reload
+  保留完整 settled 文件集，最终无净改动时清除临时 Dock
 - Latest Turn 缺少完整 before/after snapshot 时，使用已记录的文件清单回退到
   HEAD ↔ Working Diff；该回退只读，不提供 Restore
 - 历史 Changes、Workspace 和 Branch 使用同一 ReviewDock；Branch 明确显示

@@ -62,14 +62,15 @@ export function refreshWritingTurn(
     active.currentIndex === null
       ? undefined
       : active.files[active.currentIndex]?.path;
-  const record = host.snapshots.read(sessionId, turnId);
+  const hasBefore =
+    host.snapshots.read(sessionId, turnId)?.before !== undefined;
   const refreshed = createActiveScope(
     turnMessage(sessionId, turnId),
-    record?.before ?? active.baseline,
+    active.baseline,
     active.baselineLabel,
     files,
     host.persisted,
-    record?.before !== undefined,
+    hasBefore || active.files.every(({ comparable }) => comparable),
   );
   refreshed.lifecycle = 'writing';
   refreshed.reviewed = active.reviewed;

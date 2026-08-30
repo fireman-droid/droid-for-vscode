@@ -251,10 +251,10 @@ describe('ReviewCoordinator reload recovery', () => {
       get: <T,>() => undefined as T | undefined,
       update: vi.fn(() => Promise.resolve()),
     };
-    let settled = false;
+    let snapshotState: 'missing' | 'before' | 'settled' = 'missing';
     const snapshots = {
       read: () =>
-        settled
+        snapshotState === 'settled'
           ? {
               turnId: 'turn-1',
               before: 'before-tree',
@@ -263,7 +263,9 @@ describe('ReviewCoordinator reload recovery', () => {
                 { path: 'latest.txt', additions: 2, deletions: 1 },
               ],
             }
-          : { turnId: 'turn-1', before: 'before-tree' },
+          : snapshotState === 'before'
+            ? { turnId: 'turn-1', before: 'before-tree' }
+            : { turnId: 'turn-1' },
     } as unknown as TurnSnapshotStore;
     const publish = vi.fn();
     const openDiff = vi.fn<FileDiffOpener['openDiff']>(
@@ -279,6 +281,8 @@ describe('ReviewCoordinator reload recovery', () => {
     coordinator.openWritingTurn('session-1', 'turn-1', [
       { path: 'old.txt', additions: null, deletions: null },
     ]);
+    const writingState = publish.mock.calls.at(-1)?.[0]?.state;
+    snapshotState = 'before';
     coordinator.refreshWritingTurn('session-1', 'turn-1', [
       { path: 'old.txt', additions: 1, deletions: 0 },
       { path: 'latest.txt', additions: null, deletions: null },
@@ -287,6 +291,8 @@ describe('ReviewCoordinator reload recovery', () => {
       expect.objectContaining({
         type: 'review.state',
         state: expect.objectContaining({
+          reviewScopeId: writingState.reviewScopeId,
+          baseline: writingState.baseline,
           lifecycle: 'writing',
           files: [
             expect.objectContaining({ path: 'old.txt' }),
@@ -295,8 +301,21 @@ describe('ReviewCoordinator reload recovery', () => {
         }),
       }),
     );
+    coordinator.handle({
+      type: 'review.selectFile',
+      sessionId: 'session-1',
+      reviewScopeId: writingState.reviewScopeId,
+      baseline: writingState.baseline,
+      path: 'latest.txt',
+    });
+    await coordinator.replay('session-1');
+    expect(openDiff).toHaveBeenCalledWith(
+      'latest.txt',
+      { sessionId: 'session-1', turnId: 'turn-1' },
+      undefined,
+    );
 
-    settled = true;
+    snapshotState = 'settled';
     coordinator.settleWritingTurn('session-1', 'turn-1', [
       { path: 'latest.txt', additions: 2, deletions: 1 },
     ]);
@@ -309,7 +328,6 @@ describe('ReviewCoordinator reload recovery', () => {
         }),
       }),
     );
-    expect(openDiff).not.toHaveBeenCalled();
     coordinator.dispose();
   });
 

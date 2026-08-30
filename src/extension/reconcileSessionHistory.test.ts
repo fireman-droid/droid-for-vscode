@@ -716,7 +716,7 @@ describe('recovered rich-state enrichment (bug #36)', () => {
     expect(merged.transcript[1]).toBe(loaded.transcript[1]);
   });
 
-  it('restores measured changes line counts onto synthesized rows', () => {
+  it('restores the complete recovered changes list on Reload', () => {
     const recovered = state([
       anchored('cached-u', 'Edit files', 'mid-1'),
       {
@@ -746,6 +746,7 @@ describe('recovered rich-state enrichment (bug #36)', () => {
     }
     expect(row.files).toEqual([
       { path: 'src/a.ts', additions: 12, deletions: 3 },
+      { path: 'src/gone.ts', additions: 1, deletions: 1 },
       { path: 'src/b.ts', additions: null, deletions: null },
     ]);
   });

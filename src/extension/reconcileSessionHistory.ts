@@ -374,33 +374,39 @@ function enrichSegmentChanges(
       return;
     }
     cursor += 1;
-    const counts = new Map(
-      candidate.files.map((file) => [
-        file.path,
-        { additions: file.additions, deletions: file.deletions },
-      ]),
+    const loadedByPath = new Map(
+      item.files.map((file) => [file.path, file]),
     );
-    let fileChanged = false;
-    const files = item.files.map((file) => {
-      const measured = counts.get(file.path);
-      if (
-        measured === undefined ||
-        (file.additions !== null || file.deletions !== null) ||
-        (measured.additions === null && measured.deletions === null)
-      ) {
-        return file;
-      }
-      fileChanged = true;
-      return {
-        ...file,
-        additions: measured.additions,
-        deletions: measured.deletions,
-      };
-    });
-    if (fileChanged) {
+    const recoveredPaths = new Set(
+      candidate.files.map(({ path }) => path),
+    );
+    const files = [
+      ...candidate.files.map((file) => {
+        const loadedFile = loadedByPath.get(file.path);
+        return file.additions === null &&
+          file.deletions === null &&
+          loadedFile !== undefined
+          ? loadedFile
+          : file;
+      }),
+      ...item.files.filter(({ path }) => !recoveredPaths.has(path)),
+    ];
+    if (!sameChangedFiles(item.files, files)) {
       replace(index, { ...item, files });
     }
   }
+}
+
+function sameChangedFiles(
+  left: Extract<SessionTranscriptItem, { kind: 'changes' }>['files'],
+  right: Extract<SessionTranscriptItem, { kind: 'changes' }>['files'],
+): boolean {
+  return left.length === right.length && left.every((file, index) => {
+    const other = right[index];
+    return other !== undefined && file.path === other.path &&
+      file.additions === other.additions &&
+      file.deletions === other.deletions;
+  });
 }
 
 function enrichSegmentThinking(
