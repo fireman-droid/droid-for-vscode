@@ -30,7 +30,9 @@ import {
   type StudioViewportWidth,
 } from './studioRuntime';
 import { createBrowserRuntime } from './browserRuntime';
+import { CustomModelsWorkbenchPreview } from './CustomModelsWorkbenchPreview';
 import './preview.css';
+import './custom-models-workbench.css';
 
 const provider = {
   id: 'preview-provider',
@@ -221,6 +223,8 @@ function Preview(): React.JSX.Element {
       onTestAll={noop}
       onDelete={noop}
     />
+  ) : path === '/custom-models/workbench' ? (
+    <CustomModelsWorkbenchPreview />
   ) : (
     <ModelsPage onClose={noop} />
   );
