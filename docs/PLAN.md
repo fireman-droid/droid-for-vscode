@@ -1,5 +1,7 @@
 # DroidVisX 可靠性与维护性修复计划
 
+完成状态：**2026-08-31 全部完成**
+
 ## 1. 计划定位
 
 本计划记录对当前生产代码完成的只读全仓审计结果，并给出最小、依赖有序的修复路线。
@@ -19,11 +21,12 @@
 - 确认 4 个 P2 正确性风险；
 - 确认 6 项具有重复成本或行为漂移风险的维护债务。
 
-本次更新只写计划，不修改生产代码。下列事项必须按独立任务分批实现、验证和提交。
+计划已按独立任务、依赖顺序和原子提交完成。M3 保留既有实现并只执行回归保护；
+其余 P1、P2、M1、M2、M4、M5、M6 以及单次 preparation 发布链路均已落地。
 
 ## 2. 已确认的正确性与安全风险
 
-### P1-1：共享 Daemon 在验证监听者身份前发送登录凭据
+### P1-1：共享 Daemon 在验证监听者身份前发送登录凭据（已完成）
 
 证据路径：
 
@@ -55,7 +58,7 @@
 - 已验证的真实 daemon 仍可复用；
 - Windows shell wrapper 已退出时仍能通过监听 PID 恢复真实 daemon。
 
-### P1-2：损坏的 Session Lease Registry 被当作空表，导致并发所有权失效
+### P1-2：损坏的 Session Lease Registry 被当作空表，导致并发所有权失效（已完成）
 
 证据路径：
 
@@ -82,7 +85,7 @@
 - 两个并发调用不能同时获得同一 session；
 - 死进程 lease 可被安全接管。
 
-### P1-3：恢复与 Turn Snapshot 持久化失败被报告为成功
+### P1-3：恢复与 Turn Snapshot 持久化失败被报告为成功（已完成）
 
 证据路径：
 
@@ -114,7 +117,7 @@ Reload 恢复记录、Review baseline、Restore 所需树信息或 changed-file 
 - snapshot capture/remember 的 durable write 失败可被调用方观察；
 - dispose 不会静默确认未写入的数据。
 
-### P2-1：Review 内部任务拒绝后可污染串行队列并阻断 Replay
+### P2-1：Review 内部任务拒绝后可污染串行队列并阻断 Replay（已完成）
 
 证据路径：
 
@@ -144,7 +147,7 @@ watcher reload 和后续内部任务也会从 rejected promise 继续链式失�
 - 排队顺序不改变；
 - 不产生 unhandled rejection。
 
-### P2-2：Recovered Turn 的最终 History 读取失败仍标记 Completed
+### P2-2：Recovered Turn 的最终 History 读取失败仍标记 Completed（已完成）
 
 证据路径：
 
@@ -171,7 +174,7 @@ daemon 已报告 idle，但最终 session history 不可读时，完整 assistan
 - Stop 竞态仍产生 interrupted；
 - Reload 后不会把 failed recovery 投影回 completed。
 
-### P2-3：Process 与 Daemon Session 的部分创建和替换缺少完整回滚
+### P2-3：Process 与 Daemon Session 的部分创建和替换缺少完整回滚（已完成）
 
 证据路径：
 
@@ -203,7 +206,7 @@ attachment 或跨窗口 lease。后续初始化可能被幽灵所有权阻塞，
 - 成功路径仍只关闭旧 handle 一次并保留新 session；
 - 原始业务错误不被 cleanup 错误覆盖。
 
-### P2-4：Browser Dev 在异步 Startup 期间不能可靠 Stop 或 Dispose
+### P2-4：Browser Dev 在异步 Startup 期间不能可靠 Stop 或 Dispose（已完成）
 
 证据路径：
 
@@ -235,7 +238,7 @@ attachment 或跨窗口 lease。后续初始化可能被幽灵所有权阻塞，
 
 ## 3. 已确认的维护债务
 
-### M1：Session 操作资格由多组重叠布尔 Guard 重复拼装
+### M1：Session 操作资格由多组重叠布尔 Guard 重复拼装（已完成）
 
 证据路径：
 
@@ -264,7 +267,7 @@ push 必须绕过用户请求 guard；目前这些差异依靠手写子集和注
 - 必要例外有测试覆盖；
 - 相同 operation class 不再散布重叠布尔子集。
 
-### M2：Settled Changed Files 存在两个 Durable Truth Source
+### M2：Settled Changed Files 存在两个 Durable Truth Source（已完成）
 
 证据路径：
 
@@ -315,7 +318,7 @@ Branch `RuntimeGitDiff` 的 commit count 已投影进同一次 Review state，�
 - 文件列表、baseline 和 commit count 来自同一结果；
 - refresh 明确触发一次新的读取。
 
-### M4：Review Watcher 可累计 Reload，且版本刷新串行读取全部文件（部分完成）
+### M4：Review Watcher 可累计 Reload，且版本刷新串行读取全部文件（已完成）
 
 证据路径：
 
@@ -326,8 +329,9 @@ Branch `RuntimeGitDiff` 的 commit count 已投影进同一次 Review state，�
 
 问题：
 
-大型 Review 的版本读取已缩短为有界并发；文件事件风暴仍会积累重复的全 scope reload，
-并扩大 P2-1 队列失败的影响。Watcher coalescing 和 queue resilience 仍待处理。
+已完成：文件事件按 affected path 合并，任一时刻最多一个 running refresh 和一个
+pending supplemental run；Turn 保留 canonical membership，Workspace/Branch 重读
+membership 并复用未变化版本，baseline 变化时继续以最多 6 并发全量刷新。
 
 最小收敛：
 
@@ -343,7 +347,7 @@ Branch `RuntimeGitDiff` 的 commit count 已投影进同一次 Review state，�
 - 全量刷新保持确定顺序和同一 lifecycle 结果；
 - dispose 后不会执行补跑。
 
-### M5：Bridge Union 与手写 Parser Dispatch 没有编译期穷尽关系
+### M5：Bridge Union 与手写 Parser Dispatch 没有编译期穷尽关系（已完成）
 
 证据路径：
 
@@ -371,7 +375,7 @@ Branch `RuntimeGitDiff` 的 commit count 已投影进同一次 Review state，�
 - 未知外部 message 仍返回 undefined；
 - 现有 strict key、长度和路径验证不放宽。
 
-### M6：Question 边界的 1px 所有权规则在两个模块重复
+### M6：Question 边界的 1px 所有权规则在两个模块重复（已完成）
 
 证据路径：
 
@@ -399,7 +403,7 @@ Navigator 选中 question 12 而 Sticky Question 显示 question 11 的真实缺
 
 ## 4. 依赖有序的实施顺序
 
-### 批次 1：关闭本地信任边界
+### 批次 1：关闭本地信任边界（已完成）
 
 实施：
 
@@ -417,7 +421,7 @@ Navigator 选中 question 12 而 Sticky Question 显示 question 11 的真实缺
 - `pnpm run typecheck`；
 - `pnpm run lint:budgets`。
 
-### 批次 2：修正 Durable Success 语义并统一 Changed Files 真相
+### 批次 2：修正 Durable Success 语义并统一 Changed Files 真相（已完成）
 
 实施：
 
@@ -435,7 +439,7 @@ Navigator 选中 question 12 而 Sticky Question 显示 question 11 的真实缺
 - `pnpm run typecheck`；
 - `pnpm run lint:budgets`。
 
-### 批次 3：完成 Session 与 Browser Dev 生命周期
+### 批次 3：完成 Session 与 Browser Dev 生命周期（已完成）
 
 实施：
 
@@ -451,7 +455,7 @@ Navigator 选中 question 12 而 Sticky Question 显示 question 11 的真实缺
 - `pnpm run typecheck`；
 - `pnpm run lint:budgets`。
 
-### 批次 4：让 Review 状态与 I/O 收敛
+### 批次 4：让 Review 状态与 I/O 收敛（已完成）
 
 实施：
 
@@ -470,7 +474,7 @@ Navigator 选中 question 12 而 Sticky Question 显示 question 11 的真实缺
 - `pnpm run typecheck`；
 - `pnpm run lint:budgets`。
 
-### 批次 5：收敛 Guard、Bridge 契约和 Question 坐标规则
+### 批次 5：收敛 Guard、Bridge 契约和 Question 坐标规则（已完成）
 
 实施：
 
@@ -489,7 +493,7 @@ Navigator 选中 question 12 而 Sticky Question 显示 question 11 的真实缺
 - `pnpm run typecheck`；
 - `pnpm run lint:budgets`。
 
-## 5. 全计划退出条件
+## 5. 全计划退出条件（已满足）
 
 全部批次完成后：
 
@@ -504,7 +508,7 @@ Navigator 选中 question 12 而 Sticky Question 显示 question 11 的真实缺
 
 ## 6. 明确非目标
 
-- 不在本计划提交中实现任何生产修复；
+- 不扩展本计划列出的生产修复、必要回归和发布结果；
 - 不因文件超过 1000 行就进行无行为目标的拆分；
 - 不重写整个 ChatController 或 Runtime 状态机；
 - 不创建通用 storage、migration、queue 或 watcher 框架；

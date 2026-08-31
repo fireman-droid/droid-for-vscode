@@ -1,6 +1,6 @@
 # 当前状态
 
-最后更新：2026-08-30
+最后更新：2026-08-31
 包版本：`0.7.89`
 
 ## 总结
@@ -8,6 +8,29 @@
 主聊天、新版 Mission Control、实时子代理只读对话、真实浏览器联调和统一
 Diff 审查链路已经接通。`0.7.89` 新版 VSIX 已覆盖安装；Cursor 内真实行为
 和视觉仍以用户验收为准。
+
+### 可靠性、安全与维护性
+
+- 共享 Daemon 在解析并校验真实 listener PID 与 Droid daemon 命令身份后，才允许
+  读取凭据并执行认证连接；Session Lease 仅把缺失文件视为空表，损坏或不可读状态
+  fail closed
+- Recovery Store 与 Turn Snapshot Store 只在 durable write 成功后确认 revision；
+  同步 throw、异步 rejection、flush、dispose 和后续重试使用一致失败语义
+- settled changed-file rows 只由 transcript canonical settlement 持久化；snapshot
+  保存 before/after tree、bytes 和 Restore metadata，snapshot-v1 files 仅只读兼容
+- recovered turn 只有最终 history 可用且 reconcile 完成后才进入 completed；Process、
+  Daemon replacement/close 和 Browser Dev startup 都有明确的临时所有权、取消与回滚
+- Review queue 的共享 tail 始终可继续；Watcher 最多一个 running 和一个 pending
+  refresh，按 affected path 选择性刷新，baseline 变化时以最多 6 并发全量重算，
+  Branch open/replay/explicit refresh 保持一次 Runtime diff 语义
+- 用户面板、session replacement 和 turn dispatch 使用语义化 operation eligibility；
+  两个 Bridge 方向使用 union discriminant 约束的 typed parser registry，未知、
+  prototype-named 和 inherited type 均在信任边界拒绝
+- Navigator 与 Sticky Question 共用 1px question-entry helper；bottom ownership、
+  overflow、push-off、follow 和编辑固定行为保持独立
+- `package:vsix` 只调用 vsce；`vscode:prepublish` 只调用一次
+  `package:prepare`，后者依次执行 typecheck、budgets 和 production build；
+  `verify:vsix` 同时校验精确 inventory 与 manifest name/publisher/version
 
 ## 已接通
 
