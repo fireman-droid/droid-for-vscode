@@ -41,6 +41,7 @@ import {
   isEnumValue,
   type ChatControllerInternals,
 } from './internals';
+import type { CapturedSessionIdentity } from './operationEligibility';
 import { emitMissionSetupCapabilities } from './mission/setupProjection';
 
 export const SKILLS_UNSUPPORTED_MESSAGE =
@@ -201,7 +202,7 @@ export function handleSkillsRefresh(
       );
       return;
     }
-    pushSkills(ctl, 
+    loadSkills(ctl,
       runtime,
       ctl.runtimeGeneration,
       sessionId,
@@ -210,17 +211,38 @@ export function handleSkillsRefresh(
 }
 
 /**
- * Loads and emits the skills catalog. Called from the user-request
- * guard chain and directly from session activation
- * (`loadSessionMetadata`), where `sessionOperationInProgress` is
- * still set and the request guard would wrongly drop the push.
+ * Loads activation metadata only for the session identity captured by
+ * `loadSessionMetadata`. User requests take the normal panel path.
  */
-export function pushSkills(
+export function pushActivationSkills(
   ctl: ChatControllerInternals,
-    runtime: DroidRuntime,
-    generation: number,
-    sessionId: string,
-    cwd: string,
+  identity: CapturedSessionIdentity,
+): void {
+  if (
+    !ctl.isCurrentSessionOperation(
+      identity.runtime,
+      identity.generation,
+      identity.sessionId,
+      identity.cwd,
+    )
+  ) {
+    return;
+  }
+  loadSkills(
+    ctl,
+    identity.runtime,
+    identity.generation,
+    identity.sessionId,
+    identity.cwd,
+  );
+}
+
+function loadSkills(
+  ctl: ChatControllerInternals,
+  runtime: DroidRuntime,
+  generation: number,
+  sessionId: string,
+  cwd: string,
   ): void {
     if (typeof runtime.listSkills !== 'function') {
       emitSkills(ctl, sessionId, {
@@ -466,13 +488,11 @@ export function handleCommandsRefresh(
   ctl: ChatControllerInternals,
   sessionId: string): void {
     const runtime = ctl.runtime;
+    const dropReason = ctl.sessionRequestDropReason(sessionId);
     if (
-      sessionId !== ctl.sessionId ||
+      dropReason !== null ||
       runtime === null ||
-      ctl.connection.status !== 'connected' ||
-      ctl.sessionOperationInProgress ||
-      ctl.commandsRefreshGeneration === ctl.runtimeGeneration ||
-      !ensureActiveRuntimeWorkspaceCurrent(ctl)
+      ctl.commandsRefreshGeneration === ctl.runtimeGeneration
     ) {
       return;
     }

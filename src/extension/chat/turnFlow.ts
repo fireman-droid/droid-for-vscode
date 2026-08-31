@@ -69,6 +69,10 @@ import {
   replaceRuntime,
   startReplacement,
 } from './runtimeLifecycle';
+import {
+  evaluateActiveSessionTransform,
+  evaluateTurnStart,
+} from './operationEligibility';
 import { flushRecoveryCheckpointOrReport, scheduleRecoveryCheckpoint } from './recovery';
 import {
   discardPendingThinking,
@@ -122,25 +126,22 @@ export function handleSend(
     kind: 'send' | 'edit-resend' | 'queued' = 'send',
     attachmentsOverride?: readonly PendingAttachment[],
   ): void {
-    const runtime = ctl.runtime;
-    if (
-      runtime !== null &&
-      !ensureActiveRuntimeWorkspaceCurrent(ctl)
-    ) {
+    const eligibility = evaluateTurnStart({
+      requestedSessionId: sessionId,
+      activeSessionId: ctl.sessionId,
+      runtime: ctl.runtime,
+      connectionStatus: ctl.connection.status,
+      isWorkspaceCurrent: () => ensureActiveRuntimeWorkspaceCurrent(ctl),
+      text,
+      turnId,
+      turn: ctl.turn,
+      sessionOperationInProgress: ctl.sessionOperationInProgress,
+      settingsUpdateInProgress: ctl.settingsUpdate !== null,
+    });
+    if (eligibility.kind !== 'eligible') {
       return;
     }
-    if (
-      runtime === null ||
-      ctl.connection.status !== 'connected' ||
-      sessionId !== ctl.sessionId ||
-      text.trim().length === 0 ||
-      ctl.turn?.turnId === turnId ||
-      isTurnActive(ctl.turn) ||
-      ctl.sessionOperationInProgress ||
-      ctl.settingsUpdate !== null
-    ) {
-      return;
-    }
+    const runtime = eligibility.runtime;
 
     const runtimeGeneration = ctl.runtimeGeneration;
     const turnGeneration = ++ctl.turnGeneration;
@@ -190,7 +191,7 @@ export function handleSend(
       consumed === undefined || consumed.length === 0
         ? null
         : { turnId, attachments: consumed };
-    void consumeTurn(ctl, 
+    void consumeTurn(ctl,
       runtime,
       runtimeGeneration,
       turnGeneration,
@@ -787,11 +788,13 @@ export function handleSessionCompact(
       return;
     }
     if (
-      isTurnActive(ctl.turn) ||
-      ctl.interactions.hasPending() ||
-      ctl.sessionOperationInProgress ||
-      ctl.refreshInProgress ||
-      ctl.settingsUpdate !== null
+      evaluateActiveSessionTransform({
+        turn: ctl.turn,
+        hasPendingInteractions: ctl.interactions.hasPending(),
+        sessionOperationInProgress: ctl.sessionOperationInProgress,
+        refreshInProgress: ctl.refreshInProgress,
+        settingsUpdateInProgress: ctl.settingsUpdate !== null,
+      }).kind !== 'eligible'
     ) {
       ctl.emitSessionDiagnostic(
         'session-compact-blocked',

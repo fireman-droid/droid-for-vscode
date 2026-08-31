@@ -14,6 +14,7 @@ import {
   formatUnknownError,
   type ChatControllerInternals,
 } from './internals';
+import type { CapturedSessionIdentity } from './operationEligibility';
 
 export const MCP_UNSUPPORTED_MESSAGE =
   'This Droid runtime does not expose MCP servers.';
@@ -80,7 +81,7 @@ export function handleMcpRefresh(
       );
       return;
     }
-    pushMcp(ctl, 
+    loadMcp(ctl,
       runtime,
       ctl.runtimeGeneration,
       sessionId,
@@ -89,16 +90,38 @@ export function handleMcpRefresh(
 }
 
 /**
- * Loads and emits the MCP server catalog. Shares the activation
- * push path with `pushSkills`; see that method for why this skips
- * the user-request guard chain.
+ * Loads activation metadata only for the session identity captured by
+ * `loadSessionMetadata`. User requests take the normal panel path.
  */
-export function pushMcp(
+export function pushActivationMcp(
   ctl: ChatControllerInternals,
-    runtime: DroidRuntime,
-    generation: number,
-    sessionId: string,
-    cwd: string,
+  identity: CapturedSessionIdentity,
+): void {
+  if (
+    !ctl.isCurrentSessionOperation(
+      identity.runtime,
+      identity.generation,
+      identity.sessionId,
+      identity.cwd,
+    )
+  ) {
+    return;
+  }
+  loadMcp(
+    ctl,
+    identity.runtime,
+    identity.generation,
+    identity.sessionId,
+    identity.cwd,
+  );
+}
+
+function loadMcp(
+  ctl: ChatControllerInternals,
+  runtime: DroidRuntime,
+  generation: number,
+  sessionId: string,
+  cwd: string,
   ): void {
     if (typeof runtime.listMcpServers !== 'function') {
       emitMcp(ctl, sessionId, {

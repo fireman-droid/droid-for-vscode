@@ -3,16 +3,17 @@ import {
   emitModelCatalog,
   MODEL_CATALOG_FAILED_MESSAGE,
   projectModelCatalog,
-  pushSkills,
+  pushActivationSkills,
   refreshContext,
 } from './capabilityPanels';
-import { pushMcp } from './mcp';
+import { pushActivationMcp } from './mcp';
 import {
   emitSettings,
   projectConfirmedSettings,
   SETTINGS_READ_FAILED_MESSAGE,
 } from './settings';
 import type { ChatControllerInternals } from './internals';
+import type { CapturedSessionIdentity } from './operationEligibility';
 import {
   elapsedMs,
   finishSessionSwitchTiming,
@@ -87,10 +88,17 @@ export function loadSessionMetadata(
           recordSwitchTiming(ctl, timings);
         },
   );
-  // A session switch resets these catalogs to idle. Pushing them on
-  // activation converges a panel whose mid-switch refresh was dropped.
-  pushSkills(ctl, runtime, generation, sessionId, cwd);
-  pushMcp(ctl, runtime, generation, sessionId, cwd);
+  // A session switch resets these catalogs to idle. The captured
+  // activation identity lets only these metadata pushes bypass the
+  // user-panel eligibility while replacement is still settling.
+  const activation: CapturedSessionIdentity = {
+    runtime,
+    generation,
+    sessionId,
+    cwd,
+  };
+  pushActivationSkills(ctl, activation);
+  pushActivationMcp(ctl, activation);
 }
 
 /** Marks activation complete; context may have settled first. */

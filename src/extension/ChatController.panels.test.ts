@@ -20,8 +20,51 @@ import {
   turnStates,
   waitForConnected,
 } from './controllerTestHarness';
+import { pushActivationSkills } from './chat/capabilityPanels';
+import { pushActivationMcp } from './chat/mcp';
 
 describe('ChatController', () => {
+  it('orders user panel eligibility reasons once for representative handlers', async () => {
+    const workspace = {
+      cwd: 'C:\\workspace',
+      trusted: true,
+    };
+    const runtime = createMockRuntime();
+    const { controller, messages } = createController(
+      () => runtime,
+      workspace,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+
+    expect(
+      controller.sessionRequestDropReason('session-other'),
+    ).toBe('session-mismatch');
+
+    controller.runtime = null;
+    expect(
+      controller.sessionRequestDropReason('session-1'),
+    ).toBe('no-runtime');
+
+    controller.runtime = runtime;
+    controller.connection = { status: 'unavailable', message: 'offline' };
+    controller.sessionOperationInProgress = true;
+    expect(
+      controller.sessionRequestDropReason('session-1'),
+    ).toBe('not-connected');
+
+    controller.connection = { status: 'connected' };
+    expect(
+      controller.sessionRequestDropReason('session-1'),
+    ).toBe('operation-in-progress');
+
+    controller.sessionOperationInProgress = false;
+    workspace.cwd = 'C:\\other-workspace';
+    expect(
+      controller.sessionRequestDropReason('session-1'),
+    ).toBe('workspace-changed');
+  });
+
   it('lists skills on request and re-lists after a toggle', async () => {
     const runtime = Object.assign(createMockRuntime(), {
       // First read is consumed by the activation-time catalog push,
@@ -714,7 +757,7 @@ describe('ChatController', () => {
     });
   });
 
-  it('pushes skills and MCP catalogs once a session becomes available', async () => {
+  it('limits activation Skills and MCP pushes to their captured identity', async () => {
     const runtime = Object.assign(createMockRuntime(), {
       listSkills: vi.fn(async () => [
         {
@@ -754,6 +797,38 @@ describe('ChatController', () => {
     });
     expect(runtime.listSkills).toHaveBeenCalledTimes(1);
     expect(runtime.listMcpServers).toHaveBeenCalledTimes(1);
+
+    const activation = {
+      runtime,
+      generation: controller.runtimeGeneration,
+      sessionId: controller.sessionId!,
+      cwd: controller.activeRuntimeCwd!,
+    };
+    controller.sessionOperationInProgress = true;
+    controller.handleMessage({
+      type: 'skills.refresh',
+      sessionId: 'session-1',
+    });
+    controller.handleMessage({
+      type: 'mcp.refresh',
+      sessionId: 'session-1',
+    });
+    expect(runtime.listSkills).toHaveBeenCalledTimes(1);
+    expect(runtime.listMcpServers).toHaveBeenCalledTimes(1);
+
+    pushActivationSkills(controller, activation);
+    pushActivationMcp(controller, activation);
+    await vi.waitFor(() => {
+      expect(runtime.listSkills).toHaveBeenCalledTimes(2);
+      expect(runtime.listMcpServers).toHaveBeenCalledTimes(2);
+    });
+
+    controller.runtimeGeneration += 1;
+    pushActivationSkills(controller, activation);
+    pushActivationMcp(controller, activation);
+    await Promise.resolve();
+    expect(runtime.listSkills).toHaveBeenCalledTimes(2);
+    expect(runtime.listMcpServers).toHaveBeenCalledTimes(2);
   });
 
   it('logs a local diagnostic when the archived list load fails', async () => {

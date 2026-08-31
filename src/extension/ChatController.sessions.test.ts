@@ -93,7 +93,14 @@ describe('ChatController', () => {
         await release.promise;
         yield successfulTurn();
       }),
-      { supportsBackgroundTurns: () => true },
+      {
+        supportsBackgroundTurns: () => true,
+        compact: vi.fn(async () => ({
+          sessionId: 'session-compacted',
+          removedCount: 1,
+        })),
+        fork: vi.fn(async () => ({ sessionId: 'session-fork' })),
+      },
     );
     const replacement = createMockRuntime();
     replacement.initialize.mockResolvedValue(available('session-2'));
@@ -130,6 +137,19 @@ describe('ChatController', () => {
         messages.some((message) => message.type === 'assistant.delta'),
       ).toBe(true);
     });
+
+    // Background-turn support is replacement-only: transforms still
+    // require an idle session.
+    controller.handleMessage({
+      type: 'session.compact',
+      sessionId: 'session-1',
+    });
+    controller.handleMessage({
+      type: 'session.fork',
+      sessionId: 'session-1',
+    });
+    expect(runtime.compact).not.toHaveBeenCalled();
+    expect(runtime.fork).not.toHaveBeenCalled();
 
     // Switching away no longer blocks: disposal detaches the turn
     // instead of interrupting it.

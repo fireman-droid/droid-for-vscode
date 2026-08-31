@@ -57,6 +57,10 @@ import {
   SESSION_OPERATION_BLOCKED_MESSAGE,
   type ChatControllerInternals,
 } from './internals';
+import {
+  evaluateSessionReplacement,
+  type SessionReplacementEligibility,
+} from './operationEligibility';
 import { recoverMissionProjection } from './mission/recovery';
 
 export const SESSION_CLOSE_FAILED_MESSAGE =
@@ -148,30 +152,29 @@ export async function handleReady(ctl: ChatControllerInternals): Promise<void> {
     }
 }
 
+export function sessionReplacementEligibility(
+  ctl: ChatControllerInternals,
+): SessionReplacementEligibility {
+  return evaluateSessionReplacement({
+    runtime: ctl.runtime,
+    turn: ctl.turn,
+    hasPendingInteractions: ctl.interactions.hasPending(),
+    connectionStatus: ctl.connection.status,
+    sessionOperationInProgress: ctl.sessionOperationInProgress,
+    refreshInProgress: ctl.refreshInProgress,
+    settingsUpdateInProgress: ctl.settingsUpdate !== null,
+  });
+}
+
 export function canReplaceSession(ctl: ChatControllerInternals): boolean {
-    // A running daemon-backed turn no longer blocks switching:
-    // replaceRuntime detaches it and the turn continues on the daemon
-    // (the drawer row then carries the quiet running indicator). A
-    // process-mode turn still blocks — disposal would kill it. An
-    // unanswered interaction always blocks: it must be settled first.
-    const turnBlocks =
-      isTurnActive(ctl.turn) &&
-      ctl.runtime?.supportsBackgroundTurns?.() !== true;
-    if (
-      turnBlocks ||
-      ctl.interactions.hasPending() ||
-      ctl.connection.status === 'connecting' ||
-      ctl.sessionOperationInProgress ||
-      ctl.refreshInProgress ||
-      ctl.settingsUpdate !== null
-    ) {
-      ctl.emitSessionDiagnostic(
-        'session-operation-blocked',
-        SESSION_OPERATION_BLOCKED_MESSAGE,
-      );
-      return false;
-    }
+  if (sessionReplacementEligibility(ctl).kind === 'eligible') {
     return true;
+  }
+  ctl.emitSessionDiagnostic(
+    'session-operation-blocked',
+    SESSION_OPERATION_BLOCKED_MESSAGE,
+  );
+  return false;
 }
 
 export function startReplacement(

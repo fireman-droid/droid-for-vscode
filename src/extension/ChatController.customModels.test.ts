@@ -44,6 +44,7 @@ import type {
 } from '../shared/customModelsProtocol';
 import type { ProviderRegistry } from './chat/providerRegistry';
 import { resetSessionMetadata } from './chat/runtimeLifecycle';
+import { enqueuePrompt } from './queuedPromptsState';
 
 /** One masked row exactly as the probe captured it. */
 function probeRow(
@@ -821,6 +822,41 @@ describe('ChatController custom models', () => {
       expect(events).toContain('host.customModels.reload-skipped');
     });
     expect(events).not.toContain('host.customModels.reload');
+  });
+
+  it('keeps queued prompts when a successful custom-model save skips reload', async () => {
+    const events: string[] = [];
+    const diagnostics: RuntimeDiagnosticSink = {
+      record: (event) => {
+        events.push(event.name);
+      },
+    };
+    const { host, runtime } = await connectedHost({ diagnostics });
+    const queued = enqueuePrompt(host.queuedPrompts, {
+      queueId: 'queued-1',
+      text: 'Keep this prompt',
+      attachments: [],
+    });
+    expect(queued.accepted).toBe(true);
+    if (!queued.accepted) {
+      return;
+    }
+    host.queuedPrompts = {
+      ...queued.state,
+      paused: 'stopped',
+    };
+
+    handleCustomModelSave(host, saveMessage);
+
+    await vi.waitFor(() => {
+      expect(events).toContain('host.customModels.reload-skipped');
+    });
+    expect(events).not.toContain('host.customModels.reload');
+    expect(runtime.initialize).toHaveBeenCalledOnce();
+    expect(host.queuedPrompts).toMatchObject({
+      items: [{ queueId: 'queued-1', text: 'Keep this prompt' }],
+      paused: 'stopped',
+    });
   });
 });
 

@@ -37,13 +37,13 @@ import {
   startReplacement,
 } from './runtimeLifecycle';
 import { flushRecoveryCheckpointOrReport } from './recovery';
+import { evaluateActiveSessionTransform } from './operationEligibility';
 import {
   daemonFailureMessage,
   DAEMON_UNAVAILABLE_MESSAGE,
   forkTitleFromText,
   formatUnknownError,
   isSafeBridgeId,
-  isTurnActive,
   isUsableWorkspace,
   SESSION_OPERATION_BLOCKED_MESSAGE,
   type ChatControllerInternals,
@@ -661,11 +661,13 @@ export function handleSessionFork(
       return;
     }
     if (
-      isTurnActive(ctl.turn) ||
-      ctl.interactions.hasPending() ||
-      ctl.sessionOperationInProgress ||
-      ctl.refreshInProgress ||
-      ctl.settingsUpdate !== null
+      evaluateActiveSessionTransform({
+        turn: ctl.turn,
+        hasPendingInteractions: ctl.interactions.hasPending(),
+        sessionOperationInProgress: ctl.sessionOperationInProgress,
+        refreshInProgress: ctl.refreshInProgress,
+        settingsUpdateInProgress: ctl.settingsUpdate !== null,
+      }).kind !== 'eligible'
     ) {
       ctl.emitSessionDiagnostic(
         'session-fork-blocked',

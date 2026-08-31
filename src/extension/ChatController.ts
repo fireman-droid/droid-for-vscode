@@ -97,9 +97,9 @@ import {
 } from '../runtime/history/SessionHistory';
 import { applySubagentSettlement, collectRunningSubagentRows, collectToolFilePaths, collectTranscriptSubagentRows, createTurnActivityState, hasSubagentRows, projectAssistantDelta, projectSubagentStarted, projectThinkingComplete, projectThinkingDelta, projectToolEvent, reconcileSubagentSummaries, settleZombieSubagents, thinkingSegmentKey, type PendingSubagentRow, type TurnActivityState } from './turnActivityState';
 import { handleQueueAdd, handleQueueUpdate, handleQueueRemove, handleQueueResume, handleQueuePromote, handleQueueClear, settleQueueAfterTurn, discardQueuedPrompts } from './chat/queue';
-import { handleMcpRefresh, pushMcp, handleMcpServerToggle, handleMcpServerAdd, handleMcpServerRemove, handleMcpServerAuthenticate } from './chat/mcp';
+import { handleMcpRefresh, handleMcpServerToggle, handleMcpServerAdd, handleMcpServerRemove, handleMcpServerAuthenticate } from './chat/mcp';
 import { dispatchCustomModels, type CustomModelsGateway } from './chat/customModels'; import type { CustomModelDiscoveryGateway } from './chat/modelDiscovery'; import type { ProviderRegistry } from './chat/providerRegistry';
-import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRefresh, pushSkills, handleSkillToggle, handlePluginsRefresh, handleCommandsRefresh, recordRecentCommand, emitModelCatalog, projectModelCatalog, MODEL_CATALOG_FAILED_MESSAGE } from './chat/capabilityPanels';
+import { handleContextRefresh, refreshContext, updateTokenUsage, handleSkillsRefresh, handleSkillToggle, handlePluginsRefresh, handleCommandsRefresh, recordRecentCommand, emitModelCatalog, projectModelCatalog, MODEL_CATALOG_FAILED_MESSAGE } from './chat/capabilityPanels';
 import { handleAttachmentPick, handleAttachmentCapture, handleAttachmentAddPath, handleAttachmentAddUris, handleAttachmentAddTextFile, handleAttachmentRemove, stageCapturedSelectionOutcome, takePendingAttachments, clearPendingAttachments, retainSentAttachments, emitEditAttachments, echoUserImageAttachments, sentAttachmentSummaries } from './chat/attachments';
 import { handleAttachmentAddImage, handleAttachmentAddPdf, handleAttachmentAddRemoteImage, handleAttachmentReadImage } from './chat/attachmentImages';
 import { handleSettingUpdate, emitSettings, refreshSettingsAfterRuntimeEvent, projectConfirmedSettings, SETTINGS_READ_FAILED_MESSAGE } from './chat/settings';
@@ -117,6 +117,10 @@ import { handleReady, startReplacement, replaceRuntime, loadHistoryTimed, resetS
 import { handleSend, handleStop, handleRetry, handleSessionCompact, projectTranscript } from './chat/turnFlow';
 import { handleMissionCommand, handleMissionStart } from './chat/mission/controller';
 import { handlePermissionResponse, handlePlanDocumentOpen } from './chat/interactionResponses';
+import {
+  evaluateUserPanelRequest,
+  type UserPanelRequestDropReason,
+} from './chat/operationEligibility';
 import type { MissionGateway } from './chat/mission/MissionGateway';
 import type { MissionSnapshotReducer } from './chat/mission/MissionSnapshotReducer';
 import { PendingInteractionCoordinator } from './pendingInteractionCoordinator';
@@ -1010,23 +1014,20 @@ export class ChatController {
    * the guard chain the MCP/Skills handlers share; the caller must
    * treat a non-null reason as a hard stop.
    */
-  sessionRequestDropReason(sessionId: string): string | null {
-    if (sessionId !== this.sessionId) {
-      return 'session-mismatch';
-    }
-    if (this.runtime === null) {
-      return 'no-runtime';
-    }
-    if (this.connection.status !== 'connected') {
-      return 'not-connected';
-    }
-    if (this.sessionOperationInProgress) {
-      return 'operation-in-progress';
-    }
-    if (!ensureActiveRuntimeWorkspaceCurrent(this)) {
-      return 'workspace-changed';
-    }
-    return null;
+  sessionRequestDropReason(
+    sessionId: string,
+  ): UserPanelRequestDropReason | null {
+    const eligibility = evaluateUserPanelRequest({
+      requestedSessionId: sessionId,
+      activeSessionId: this.sessionId,
+      runtime: this.runtime,
+      connectionStatus: this.connection.status,
+      sessionOperationInProgress: this.sessionOperationInProgress,
+      runtimeGeneration: this.runtimeGeneration,
+      activeRuntimeCwd: this.activeRuntimeCwd,
+      isWorkspaceCurrent: () => ensureActiveRuntimeWorkspaceCurrent(this),
+    });
+    return eligibility.kind === 'blocked' ? eligibility.reason : null;
   }
   /**
    * Logs a panel request the guard chain dropped. These drops used to
