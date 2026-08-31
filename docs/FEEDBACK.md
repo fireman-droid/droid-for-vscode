@@ -42,6 +42,25 @@
   Review、Composer 等单一界面。
 - 截图或日志：2026-08-31 Live Webview 快照，224 个可交互节点。
 
+### 同路径 Live URL 只更新 hash 时不会重新初始化
+
+- 类型：Bug
+- 状态：未处理
+- 版本：cursor-browszer-mcp 1.2.3
+- 现象：当前标签页已经位于 `/live` 时，再用 `browser_open` 打开同一路径、
+  但携带新 Bridge 连接片段的 URL，浏览器只更新 hash，不重新执行页面
+  Runtime。工具调用返回成功，但页面仍连接旧 Bridge，表现为初始化状态不再
+  推进。
+- 复现步骤：
+  1. 在同一 Browser 标签页打开一个 `/live` Bridge URL。
+  2. 停止并重新启动 Browser Dev Client，获得新的 Bridge URL。
+  3. 对同一标签页调用 `browser_open` 打开新 URL。
+  4. 观察地址片段已变化，但网络仍访问旧 Bridge；显式 reload 后才切换到
+     新 Bridge。
+- 期望：`browser_open` 在连接片段变化时支持强制重新加载，或明确提示这是
+  同页 hash 导航，并建议立即调用 reload。
+- 截图或日志：2026-08-31 Live Webview 调试时复现；连接凭据不写入文档。
+
 ### Plan 操作菜单超出可用边界
 
 - 类型：Bug
