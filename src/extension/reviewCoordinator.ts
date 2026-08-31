@@ -15,6 +15,11 @@ import { toWorkspaceRelativePath } from '../runtime/toolFilePath';
 import type { ChangeStatsPersistence, CommittedFileStat } from './changeStats';
 import type { FileDiffOpener } from './fileDiffOpener';
 import type { TurnSnapshotStore } from './turnSnapshots';
+import {
+  refreshScopeVersions,
+  ReviewWatcherRefresh,
+  watcherOpenMessage,
+} from './reviewWatcherRefresh';
 import { runAgentReview, type ReviewAgentRunner } from './reviewAgent';
 import {
   digest,
@@ -85,10 +90,10 @@ export class ReviewCoordinator implements vscode.Disposable {
   private readonly persisted: Map<string, PersistedScope>;
   private readonly previews = new Map<string, RestorePreview>();
   private readonly disposables: vscode.Disposable[];
-  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private operation: Promise<void> = Promise.resolve();
   private disposed = false;
   private readonly writingScopes: ReviewWritingScopeHost;
+  private readonly watcherRefresh: ReviewWatcherRefresh;
 
   constructor(private readonly options: ReviewCoordinatorOptions) {
     this.persisted = readPersistedScopes(
@@ -109,6 +114,14 @@ export class ReviewCoordinator implements vscode.Disposable {
       persist: (scope) => this.persistScope(scope),
       enqueue: (task) => this.enqueue(task, true),
     };
+    this.watcherRefresh = new ReviewWatcherRefresh({
+      getActive: () => this.active,
+      setActive: (scope) => { if (!this.disposed) this.active = scope; },
+      loadScope: (scope) => this.loadScope(watcherOpenMessage(scope)),
+      refreshVersions: (scope, paths) => this.refreshVersions(scope, paths),
+      publish: (scope) => this.publishState(scope),
+      enqueue: (task) => this.enqueue(task, true),
+    });
     const watcher = vscode.workspace.createFileSystemWatcher('**/*');
     this.disposables = [
       watcher,
@@ -196,7 +209,7 @@ export class ReviewCoordinator implements vscode.Disposable {
   }
   dispose(): void {
     this.disposed = true;
-    if (this.refreshTimer !== null) clearTimeout(this.refreshTimer);
+    this.watcherRefresh.dispose();
     for (const disposable of this.disposables) {
       disposable.dispose();
     }
@@ -473,18 +486,14 @@ export class ReviewCoordinator implements vscode.Disposable {
     }
     return true;
   }
-  private async refreshVersions(scope: ActiveScope): Promise<void> {
-    const comparable = scope.files.filter(({ comparable }) => comparable);
-    const workers = Math.min(6, comparable.length);
-    await Promise.all(
-      Array.from({ length: workers }, async (_, worker) => {
-        for (let index = worker; index < comparable.length; index += workers) {
-          const file = comparable[index]!;
-          const version = await this.fileVersion(scope, file.path);
-          if (this.disposed) return;
-          file.version = version;
-        }
-      }),
+  private async refreshVersions(
+    scope: ActiveScope,
+    affectedPaths?: ReadonlySet<string>,
+  ): Promise<void> {
+    await refreshScopeVersions(
+      scope, affectedPaths,
+      (path) => this.fileVersion(scope, path),
+      () => this.disposed,
     );
     if (this.disposed) return;
     scope.lifecycle = this.scopeLifecycle(scope);
@@ -855,21 +864,9 @@ export class ReviewCoordinator implements vscode.Disposable {
 
   private noteWorkspaceChange(uri: vscode.Uri): void {
     if (this.disposed) return;
-    const root = this.options.getWorkspaceRoot();
-    if (
-      this.active === null ||
-      root === undefined ||
-      toWorkspaceRelativePath(root, uri.fsPath) === undefined
-    ) {
-      return;
-    }
-    if (this.refreshTimer !== null) {
-      clearTimeout(this.refreshTimer);
-    }
-    this.refreshTimer = setTimeout(() => {
-      this.refreshTimer = null;
-      void this.enqueue(() => this.reloadActive(), true);
-    }, 120);
+    if (this.active !== null) this.watcherRefresh.noteWorkspacePath(
+      this.options.getWorkspaceRoot(), uri.fsPath,
+    );
   }
 
   private result(

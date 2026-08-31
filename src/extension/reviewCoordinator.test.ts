@@ -135,6 +135,20 @@ describe('ReviewCoordinator reload recovery', () => {
         ok: true,
       }),
     );
+    coordinator.handle({
+      type: 'review.refresh',
+      sessionId: 'session-1',
+      reviewScopeId: scopeId(
+        {
+          type: 'review.open',
+          sessionId: 'session-1',
+          scopeKind: 'branch',
+        },
+        'branch-baseline',
+      ),
+    });
+    await coordinator.replay('session-1');
+    expect(readBranchDiff).toHaveBeenCalledTimes(2);
     coordinator.dispose();
   });
 
