@@ -116,6 +116,7 @@ export async function createDaemonDroidSession(options: {
         callbacks,
         lease,
         availableModels,
+        options.diagnostics,
       );
       attachment = undefined;
       leaseOwned = false;
@@ -169,6 +170,7 @@ export async function createDaemonDroidSession(options: {
       callbacks,
       lease,
       availableModels,
+      options.diagnostics,
     );
     attachmentOwned = false;
     leaseOwned = false;
@@ -235,6 +237,50 @@ function recordProvisionalCleanupFailure(
   }
 }
 
+type ReplacementResource =
+  | 'successor-attachment'
+  | 'successor-lease'
+  | 'source-lease';
+
+async function detachReplacementSuccessor(
+  successor: ConnectedDroidSession,
+  diagnostics: Pick<RuntimeDiagnosticSink, 'record'> | undefined,
+): Promise<void> {
+  try {
+    await successor.detach();
+  } catch {
+    recordReplacementCleanupFailure(diagnostics, 'successor-attachment');
+  }
+}
+
+function releaseReplacementLease(
+  lease: SessionLeaseHooks,
+  sessionId: string,
+  resource: Extract<ReplacementResource, `${string}-lease`>,
+  diagnostics: Pick<RuntimeDiagnosticSink, 'record'> | undefined,
+): void {
+  try {
+    lease.release(sessionId);
+  } catch {
+    recordReplacementCleanupFailure(diagnostics, resource);
+  }
+}
+
+function recordReplacementCleanupFailure(
+  diagnostics: Pick<RuntimeDiagnosticSink, 'record'> | undefined,
+  resource: ReplacementResource,
+): void {
+  try {
+    diagnostics?.record({
+      level: 'warn',
+      name: 'daemon.session.replacement-cleanup-failed',
+      attributes: { resource },
+    });
+  } catch {
+    // Cleanup diagnostics must not replace the replacement outcome.
+  }
+}
+
 /**
  * Reads the connection-level model catalog. The daemon refreshes
  * `availableModels` on custom-model CRUD, so a fresh read per session
@@ -298,6 +344,7 @@ export function adaptConnectedDaemonSession(
   interactionHandler: RuntimeInteractionHandler,
   lease: SessionLeaseHooks,
   availableModels?: readonly AvailableModelConfig[],
+  diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>,
 ): FactoryDroidSession {
   const outcome = lease.acquire(session.id);
   if (!outcome.acquired) {
@@ -309,6 +356,7 @@ export function adaptConnectedDaemonSession(
     createRuntimeInteractionCallbacks(interactionHandler),
     lease,
     availableModels,
+    diagnostics,
   );
 }
 
@@ -318,6 +366,7 @@ function adaptDaemonSession(
   callbacks: RuntimeInteractionCallbacks,
   lease: SessionLeaseHooks,
   availableModels?: readonly AvailableModelConfig[],
+  diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>,
 ): FactoryDroidSession {
   // The daemon confirms `updateSettings` before the `settings_updated`
   // notification refreshes the handle's snapshot, so successful updates
@@ -334,32 +383,58 @@ function adaptDaemonSession(
   const attachReplacement = async (
     newSessionId: string,
   ): Promise<FactoryDroidSession> => {
+    const source = session;
+    const sourceSessionId = source.id;
     // The daemon replaces the old session with the new one, but the
     // replacement id still needs an explicit claim before attachment.
     const leaseOutcome = lease.acquire(newSessionId);
     if (!leaseOutcome.acquired) {
       throw leaseConflictError(leaseOutcome.heldByPid);
     }
-    let next: ConnectedDroidSession;
+    let successorLeaseOwned = true;
+    let successor: ConnectedDroidSession;
     try {
-      next = await droid.sessions.resume(newSessionId, {
+      successor = await droid.sessions.resume(newSessionId, {
         ...callbacks,
       });
     } catch (error) {
-      lease.release(newSessionId);
+      successorLeaseOwned = false;
+      releaseReplacementLease(
+        lease,
+        newSessionId,
+        'successor-lease',
+        diagnostics,
+      );
       throw error;
     }
-    const oldSessionId = session.id;
-    await session.detach();
-    lease.release(oldSessionId);
+
+    try {
+      await source.detach();
+    } catch (error) {
+      await detachReplacementSuccessor(successor, diagnostics);
+      if (successorLeaseOwned) {
+        successorLeaseOwned = false;
+        releaseReplacementLease(
+          lease,
+          newSessionId,
+          'successor-lease',
+          diagnostics,
+        );
+      }
+      throw error;
+    }
+
+    successorLeaseOwned = false;
+    releaseReplacementLease(lease, sourceSessionId, 'source-lease', diagnostics);
     // The replacement keeps the already-read catalog (same connection,
     // no custom-model change happened inside rewind/compact/fork).
     return adaptDaemonSession(
       droid,
-      next,
+      successor,
       callbacks,
       lease,
       availableModels,
+      diagnostics,
     );
   };
 

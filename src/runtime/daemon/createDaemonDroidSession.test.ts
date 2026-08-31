@@ -768,6 +768,164 @@ describe('createDaemonDroidSession', () => {
     expect(lease.release).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['rewind', 'a successor lease conflict', 'lease-conflict'],
+    ['compact', 'a successor lease throw', 'lease-throw'],
+    ['fork', 'a successor resume failure', 'resume-failure'],
+    ['rewind', 'a source detach failure', 'source-detach-failure'],
+    [
+      'compact',
+      'source detach and successor cleanup failures',
+      'source-detach-cleanup-failure',
+    ],
+    [
+      'fork',
+      'an old-source lease release failure',
+      'source-lease-release-failure',
+    ],
+  ] as const)(
+    'keeps shared replacement ownership coherent after %s hits %s',
+    async (operation, _description, failure) => {
+      const mock = createDroidMock();
+      const successor = createDaemonSessionMock('session-2');
+      const primary = new Error('primary replacement failure');
+      const cleanupFailure = new Error('cleanup failure');
+      const diagnostics = { record: vi.fn() };
+      const lease = {
+        acquire: vi.fn<
+          (
+            sessionId: string,
+          ) =>
+            | { acquired: true }
+            | { acquired: false; heldByPid: number }
+        >((sessionId) => {
+          if (sessionId === 'session-2') {
+            if (failure === 'lease-conflict') {
+              return { acquired: false, heldByPid: 4242 };
+            }
+            if (failure === 'lease-throw') {
+              throw primary;
+            }
+          }
+          return { acquired: true };
+        }),
+        release: vi.fn<(sessionId: string) => void>((sessionId) => {
+          if (
+            (failure === 'resume-failure' && sessionId === 'session-2') ||
+            (failure === 'source-detach-cleanup-failure' &&
+              sessionId === 'session-2') ||
+            (failure === 'source-lease-release-failure' &&
+              sessionId === 'session-1')
+          ) {
+            throw cleanupFailure;
+          }
+        }),
+      };
+      if (failure === 'resume-failure') {
+        mock.sessions.resume.mockRejectedValue(primary);
+      } else if (
+        failure === 'source-detach-failure' ||
+        failure === 'source-detach-cleanup-failure'
+      ) {
+        mock.sessions.resume.mockResolvedValue(successor);
+        mock.created.detach.mockRejectedValue(primary);
+        if (failure === 'source-detach-cleanup-failure') {
+          successor.detach.mockRejectedValue(cleanupFailure);
+        }
+      } else if (failure === 'source-lease-release-failure') {
+        mock.sessions.resume.mockResolvedValue(successor);
+      }
+      const runtime = new FactoryDroidRuntime({
+        interactionHandler: cancellingRuntimeInteractionHandler,
+        createSdkSession: createDaemonSessionFactory(
+          async () => mock.droid,
+          lease,
+          diagnostics,
+        ),
+      });
+      await runtime.initialize('C:\\workspace');
+      const replace = () => {
+        switch (operation) {
+          case 'rewind':
+            return runtime.rewind({
+              messageId: 'message-9',
+              forkTitle: 'Rewound',
+            });
+          case 'compact':
+            return runtime.compact();
+          case 'fork':
+            return runtime.fork('Branch');
+        }
+      };
+
+      if (failure === 'source-lease-release-failure') {
+        await expect(replace()).resolves.toMatchObject({
+          sessionId: 'session-2',
+        });
+        await runtime.interruptSession();
+        expect(successor.interrupt).toHaveBeenCalledOnce();
+        expect(mock.created.interrupt).not.toHaveBeenCalled();
+        expect(mock.created.detach).toHaveBeenCalledOnce();
+        expect(successor.detach).not.toHaveBeenCalled();
+        expect(lease.release).toHaveBeenCalledExactlyOnceWith('session-1');
+        expect(diagnostics.record).toHaveBeenCalledExactlyOnceWith({
+          level: 'warn',
+          name: 'daemon.session.replacement-cleanup-failed',
+          attributes: { resource: 'source-lease' },
+        });
+        return;
+      }
+
+      if (failure === 'lease-conflict') {
+        await expect(replace()).rejects.toThrow(
+          'open in another window (pid 4242)',
+        );
+      } else {
+        await expect(replace()).rejects.toBe(primary);
+      }
+      await runtime.interruptSession();
+      expect(mock.created.interrupt).toHaveBeenCalledOnce();
+      expect(successor.interrupt).not.toHaveBeenCalled();
+
+      if (failure === 'lease-conflict' || failure === 'lease-throw') {
+        expect(mock.sessions.resume).not.toHaveBeenCalled();
+        expect(mock.created.detach).not.toHaveBeenCalled();
+        expect(lease.release).not.toHaveBeenCalled();
+        expect(diagnostics.record).not.toHaveBeenCalled();
+        return;
+      }
+
+      if (failure === 'resume-failure') {
+        expect(mock.created.detach).not.toHaveBeenCalled();
+        expect(lease.release).toHaveBeenCalledExactlyOnceWith('session-2');
+        expect(diagnostics.record).toHaveBeenCalledExactlyOnceWith({
+          level: 'warn',
+          name: 'daemon.session.replacement-cleanup-failed',
+          attributes: { resource: 'successor-lease' },
+        });
+        return;
+      }
+
+      expect(mock.created.detach).toHaveBeenCalledOnce();
+      expect(successor.detach).toHaveBeenCalledOnce();
+      expect(lease.release).toHaveBeenCalledExactlyOnceWith('session-2');
+      if (failure === 'source-detach-failure') {
+        expect(diagnostics.record).not.toHaveBeenCalled();
+      } else {
+        expect(diagnostics.record).toHaveBeenNthCalledWith(1, {
+          level: 'warn',
+          name: 'daemon.session.replacement-cleanup-failed',
+          attributes: { resource: 'successor-attachment' },
+        });
+        expect(diagnostics.record).toHaveBeenNthCalledWith(2, {
+          level: 'warn',
+          name: 'daemon.session.replacement-cleanup-failed',
+          attributes: { resource: 'successor-lease' },
+        });
+      }
+    },
+  );
+
   it('releases the lease on close', async () => {
     const mock = createDroidMock();
     const lease = {
