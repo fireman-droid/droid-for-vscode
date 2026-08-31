@@ -31,6 +31,7 @@ import {
   waitForInteraction,
 } from './controllerTestHarness';
 import type { TurnSnapshotStore } from './turnSnapshots';
+import { RECOVERED_FINAL_HISTORY_TIMEOUT_MS } from './chat/recovery';
 
 describe('ChatController', () => {
   it('contains a rejected recovered-turn snapshot before capture', async () => {
@@ -404,6 +405,301 @@ describe('ChatController', () => {
     });
   });
 
+  it.each([
+    ['unavailable', () => Promise.resolve(unavailableSessionHistory())],
+    [
+      'malformed',
+      () =>
+        Promise.resolve({
+          status: 'available',
+          state: {
+            transcript: [
+              {
+                kind: 'assistant',
+                turnId: 'daemon-turn',
+                text: 'Late answer',
+              },
+            ],
+            historyStatus: 'complete',
+            truncated: false,
+          },
+        } as never),
+    ],
+    [
+      'partial',
+      () =>
+        Promise.resolve({
+          status: 'available',
+          state: {
+            transcript: [
+              {
+                id: 'assistant-1',
+                kind: 'assistant',
+                turnId: 'daemon-turn',
+                text: 'Cached partial answer',
+              },
+            ],
+            historyStatus: 'partial',
+            truncated: false,
+          },
+        } as never),
+    ],
+    ['rejected', () => Promise.reject(new Error('history rejected'))],
+  ] as const)(
+    'fails a recovered idle turn when final history is %s',
+    async (_outcome, loadFinalHistory) => {
+      const recovery = await seededRecoveryStore('saved-session');
+      const history: SessionHistoryLoader = {
+        loadHistory: vi
+          .fn<SessionHistoryLoader['loadHistory']>()
+          .mockResolvedValueOnce(recoveredInitialHistory())
+          .mockImplementationOnce(loadFinalHistory),
+      };
+      const runtime = createMockRuntime();
+      runtime.initialize.mockResolvedValue(available('saved-session'));
+      runtime.readSessionWorkingState = vi
+        .fn<() => Promise<RuntimeSessionWorkingState>>()
+        .mockResolvedValueOnce('running')
+        .mockResolvedValue('idle');
+      const { controller, messages } = createController(
+        () => runtime,
+        undefined,
+        createCatalog([catalogEntry('saved-session')]),
+        recovery,
+        history,
+      );
+
+      ready(controller);
+      await waitForConnected(messages);
+      await vi.waitFor(
+        () => {
+          expect(turnStates(messages).at(-1)?.status).toBe('failed');
+        },
+        { timeout: 5000 },
+      );
+
+      expect(turnStates(messages).map(({ status }) => status)).not.toContain(
+        'completed',
+      );
+      expect(
+        messages.filter(
+          (message) =>
+            message.type === 'runtime.diagnostic' &&
+            message.code === 'recovered-turn-history-failed',
+        ),
+      ).toHaveLength(1);
+    },
+  );
+
+  it('fails a recovered idle turn when final history exceeds its deadline and suppresses its late result', async () => {
+    vi.useFakeTimers();
+    try {
+      const recovery = await seededRecoveryStore('saved-session');
+      const finalHistory = deferred<
+        Awaited<ReturnType<SessionHistoryLoader['loadHistory']>>
+      >();
+      const history: SessionHistoryLoader = {
+        loadHistory: vi
+          .fn<SessionHistoryLoader['loadHistory']>()
+          .mockResolvedValueOnce(recoveredInitialHistory())
+          .mockImplementationOnce(() => finalHistory.promise),
+      };
+      const runtime = createMockRuntime();
+      runtime.initialize.mockResolvedValue(available('saved-session'));
+      runtime.readSessionWorkingState = vi
+        .fn<() => Promise<RuntimeSessionWorkingState>>()
+        .mockResolvedValueOnce('running')
+        .mockResolvedValue('idle');
+      const { controller, messages } = createController(
+        () => runtime,
+        undefined,
+        createCatalog([catalogEntry('saved-session')]),
+        recovery,
+        history,
+      );
+
+      ready(controller);
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(
+        RECOVERED_FINAL_HISTORY_TIMEOUT_MS,
+      );
+
+      expect(turnStates(messages).at(-1)?.status).toBe('failed');
+      finalHistory.resolve({
+        status: 'available',
+        state: {
+          transcript: [
+            { id: 'user-1', kind: 'user', text: 'Long task' },
+            {
+              id: 'assistant-1',
+              kind: 'assistant',
+              turnId: 'daemon-turn',
+              text: 'Late answer',
+            },
+          ],
+          historyStatus: 'complete',
+          truncated: false,
+        },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(turnStates(messages).map(({ status }) => status)).toEqual([
+        'failed',
+      ]);
+      expect(
+        snapshots(messages).at(-1)?.transcript.some(
+          (item) =>
+            item.kind === 'assistant' && item.text === 'Late answer',
+        ),
+      ).toBe(false);
+      await controller.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    [
+      'available',
+      () =>
+        Promise.resolve({
+          status: 'available' as const,
+          state: {
+            transcript: [
+              { id: 'user-1', kind: 'user' as const, text: 'Long task' },
+              {
+                id: 'assistant-1',
+                kind: 'assistant' as const,
+                turnId: 'daemon-turn',
+                text: 'Finished after Stop',
+              },
+            ],
+            historyStatus: 'complete' as const,
+            truncated: false,
+          },
+        }),
+    ],
+    ['rejected', () => Promise.reject(new Error('history rejected'))],
+  ] as const)(
+    'keeps Stop interrupted while final history later %s',
+    async (_outcome, settleFinalHistory) => {
+      const recovery = await seededRecoveryStore('saved-session');
+      const finalHistory = deferred<
+        Awaited<ReturnType<SessionHistoryLoader['loadHistory']>>
+      >();
+      const history: SessionHistoryLoader = {
+        loadHistory: vi
+          .fn<SessionHistoryLoader['loadHistory']>()
+          .mockResolvedValueOnce(recoveredInitialHistory())
+          .mockImplementationOnce(() => finalHistory.promise),
+      };
+      const runtime = createMockRuntime();
+      runtime.initialize.mockResolvedValue(available('saved-session'));
+      runtime.readSessionWorkingState = vi
+        .fn<() => Promise<RuntimeSessionWorkingState>>()
+        .mockResolvedValueOnce('running')
+        .mockResolvedValue('idle');
+      const { controller, messages } = createController(
+        () => runtime,
+        undefined,
+        createCatalog([catalogEntry('saved-session')]),
+        recovery,
+        history,
+      );
+
+      ready(controller);
+      await waitForConnected(messages);
+      await vi.waitFor(() => {
+        expect(history.loadHistory).toHaveBeenCalledTimes(2);
+      });
+      const turnId = snapshots(messages).at(-1)!.turn!.turnId;
+      stop(controller, 'saved-session', turnId);
+      finalHistory.resolve(settleFinalHistory());
+
+      await vi.waitFor(() => {
+        expect(turnStates(messages).at(-1)?.status).toBe('interrupted');
+      });
+      expect(turnStates(messages).map(({ status }) => status)).toEqual([
+        'stopping',
+        'interrupted',
+      ]);
+    },
+  );
+
+  it('retains a durably checkpointed recovered-history failure after Reload', async () => {
+    const persistence = createMemoryPersistence();
+    const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
+    seed.writeSession(
+      'saved-session',
+      appendAcceptedUserPrompt(
+        createHostTranscriptState('complete'),
+        'saved-turn',
+        'Recovered prompt',
+      ),
+    );
+    seed.selectSession('saved-session');
+    await seed.flush();
+
+    const firstHistory: SessionHistoryLoader = {
+      loadHistory: vi
+        .fn<SessionHistoryLoader['loadHistory']>()
+        .mockResolvedValueOnce(recoveredInitialHistory())
+        .mockResolvedValueOnce(unavailableSessionHistory()),
+    };
+    const firstRuntime = createMockRuntime();
+    firstRuntime.initialize.mockResolvedValue(available('saved-session'));
+    firstRuntime.readSessionWorkingState = vi
+      .fn<() => Promise<RuntimeSessionWorkingState>>()
+      .mockResolvedValueOnce('running')
+      .mockResolvedValue('idle');
+    const first = createController(
+      () => firstRuntime,
+      undefined,
+      createCatalog([catalogEntry('saved-session')]),
+      new SessionRecoveryStore(persistence, 'recovery', 0),
+      firstHistory,
+    );
+
+    ready(first.controller);
+    await waitForConnected(first.messages);
+    await vi.waitFor(() => {
+      expect(turnStates(first.messages).at(-1)?.status).toBe('failed');
+    });
+    await first.controller.dispose();
+
+    const resumedRuntime = createMockRuntime();
+    resumedRuntime.initialize.mockResolvedValue(available('saved-session'));
+    resumedRuntime.readSessionWorkingState = vi.fn<
+      () => Promise<RuntimeSessionWorkingState>
+    >(async () => 'idle');
+    const resumed = createController(
+      () => resumedRuntime,
+      undefined,
+      createCatalog([catalogEntry('saved-session')]),
+      new SessionRecoveryStore(persistence, 'recovery', 0),
+      { loadHistory: vi.fn(async () => unavailableSessionHistory()) },
+    );
+
+    ready(resumed.controller);
+    await waitForConnected(resumed.messages);
+    await vi.waitFor(() => {
+      expect(snapshots(resumed.messages).at(-1)?.turn).toMatchObject({
+        turnId: 'recovery-1',
+        status: 'failed',
+      });
+    });
+    expect(turnStates(resumed.messages)).toHaveLength(0);
+    expect(
+      snapshots(resumed.messages).at(-1)?.transcript.some(
+        (item) =>
+          item.kind === 'diagnostic' &&
+          item.code === 'recovered-turn-history-failed',
+      ),
+    ).toBe(true);
+    await resumed.controller.dispose();
+  });
+
   it('reloads recovered-turn history while the daemon is still running', async () => {
     const recovery = await seededRecoveryStore('saved-session');
     const history: SessionHistoryLoader = {
@@ -483,6 +779,36 @@ describe('ChatController', () => {
     const recovery = await seededRecoveryStore('saved-session');
     let workingState: RuntimeSessionWorkingState = 'waiting-for-user';
     let permission: Promise<RuntimePermissionResult> | null = null;
+    const history: SessionHistoryLoader = {
+      loadHistory: vi
+        .fn<SessionHistoryLoader['loadHistory']>()
+        .mockResolvedValueOnce({
+          status: 'available',
+          state: {
+            transcript: [
+              { id: 'user-1', kind: 'user', text: 'Long task' },
+            ],
+            historyStatus: 'complete',
+            truncated: false,
+          },
+        })
+        .mockResolvedValue({
+          status: 'available',
+          state: {
+            transcript: [
+              { id: 'user-1', kind: 'user', text: 'Long task' },
+              {
+                id: 'assistant-1',
+                kind: 'assistant',
+                turnId: 'daemon-turn',
+                text: 'Finished after permission',
+              },
+            ],
+            historyStatus: 'complete',
+            truncated: false,
+          },
+        }),
+    };
     const runtime = createMockRuntime();
     runtime.readSessionWorkingState = vi.fn(async () => workingState);
     // The SDK replays a daemon-side pending permission while resume()
@@ -516,6 +842,7 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('saved-session')]),
       recovery,
+      history,
     );
 
     ready(controller);
@@ -1132,3 +1459,16 @@ describe('ChatController', () => {
     });
   });
 });
+
+function recoveredInitialHistory() {
+  return {
+    status: 'available' as const,
+    state: {
+      transcript: [
+        { id: 'user-1', kind: 'user' as const, text: 'Long task' },
+      ],
+      historyStatus: 'complete' as const,
+      truncated: false,
+    },
+  };
+}

@@ -4,9 +4,20 @@ import type {
   DroidRuntime,
   RuntimeSessionWorkingState,
 } from '../../runtime/DroidRuntime';
+import type { SessionHistoryResult } from '../../runtime/history/SessionHistory';
+import { MAX_SESSION_TRANSCRIPT_ITEMS } from '../../shared/bridgeMessages';
+import {
+  hasExactKeys,
+  isExactArray,
+  isStrictRecord,
+} from '../../shared/strictValidation';
 import { createTurnActivityState } from '../turnActivityState';
 import { reconcileSessionHistory } from '../reconcileSessionHistory';
 import { SESSION_RECOVERY_DEBOUNCE_MS } from '../SessionRecoveryStore';
+import {
+  dataValue,
+  parseTranscriptItem,
+} from '../sessionRecoveryItems';
 import type { HostTranscriptState } from '../hostTranscriptState';
 import { setSessionRunning } from './sessionRunning';
 import { captureSnapshotBeforeInBackground } from './snapshotCapture';
@@ -16,6 +27,7 @@ import {
   isCurrentTurn,
   refreshContextAfterTurn,
   setTurnStatus,
+  TURN_FAILURE_MESSAGE,
 } from './turnFlow';
 import { delay, type ChatControllerInternals } from './internals';
 
@@ -54,6 +66,10 @@ const RECOVERED_TURN_HISTORY_REFRESH_POLLS = 4;
 export const RECOVERED_HISTORY_FAILED_MESSAGE =
   'The turn finished in the background, but its result could not be ' +
   'reloaded. Open the session again from History to see it.';
+
+export const RECOVERED_FINAL_HISTORY_TIMEOUT_MS = 10_000;
+
+const RECOVERED_HISTORY_FAILED_CODE = 'recovered-turn-history-failed';
 
 /**
  * Pushes the locally recovered checkpoint transcript to the webview
@@ -132,13 +148,27 @@ export function reconcileDaemonTurn(
       ) {
         return;
       }
-      // `unknown` with a replayed interaction still means a live turn
-      // (the daemon blocked on it before the state read went stale);
-      // `unknown` without one has nothing to project, so stay quiet.
       const live =
         state === 'running' ||
         state === 'waiting-for-user' ||
         (state === 'unknown' && ctl.interactions.hasPending());
+      const failedTurnId = recoveredFailureTurnId(ctl, sessionId);
+      if (!live && failedTurnId !== null) {
+        ctl.interactions.endTurn(sessionId, turnId);
+        ctl.turn = {
+          turnId: failedTurnId,
+          status: 'failed',
+          error: TURN_FAILURE_MESSAGE,
+          activity: createTurnActivityState(),
+          recovery: true,
+        };
+        setSessionRunning(ctl, sessionId, false);
+        ctl.emitSnapshot();
+        return;
+      }
+      // `unknown` with a replayed interaction still means a live turn
+      // (the daemon blocked on it before the state read went stale);
+      // `unknown` without one has nothing to project, so stay quiet.
       if (!live) {
         ctl.interactions.endTurn(sessionId, turnId);
         return;
@@ -336,7 +366,7 @@ export async function finishRecoveredTurn(
     cwd: string,
     turnId: string,
   ): Promise<void> {
-    const loaded = await loadHistoryTimed(ctl, cwd, sessionId);
+    const loaded = await loadFinalRecoveredHistory(ctl, cwd, sessionId);
     if (
       !isCurrentTurn(ctl, 
         runtime,
@@ -351,7 +381,7 @@ export async function finishRecoveredTurn(
     // Stop pressed while the history loaded still ends as interrupted.
     const interrupted = ctl.turn?.status === 'stopping';
     ctl.interactions.endTurn(sessionId, turnId);
-    if (loaded?.status === 'available') {
+    if (isFinalRecoveredHistory(loaded)) {
       ctl.mission = loaded.mission ?? null;
       ctl.tokenUsage = {
         cumulative: loaded.tokenUsage ?? ctl.tokenUsage.cumulative,
@@ -361,11 +391,17 @@ export async function finishRecoveredTurn(
         loaded.state,
         ctl.transcript,
       );
-    } else {
+    } else if (!interrupted) {
       ctl.emitSessionDiagnostic(
-        'recovered-turn-history-failed',
+        RECOVERED_HISTORY_FAILED_CODE,
         RECOVERED_HISTORY_FAILED_MESSAGE,
+        turnId,
       );
+      failTurn(ctl, sessionId, turnId, RECOVERED_HISTORY_FAILED_CODE);
+      ctl.emitSnapshot();
+      flushRecoveryCheckpointInBackground(ctl);
+      refreshContextAfterTurn(ctl, sessionId);
+      return;
     }
     setTurnStatus(ctl, 
       sessionId,
@@ -375,6 +411,89 @@ export async function finishRecoveredTurn(
     ctl.emitSnapshot();
     flushRecoveryCheckpointInBackground(ctl);
     refreshContextAfterTurn(ctl, sessionId);
+}
+
+async function loadFinalRecoveredHistory(
+  ctl: ChatControllerInternals,
+  cwd: string,
+  sessionId: string,
+): Promise<SessionHistoryResult | null> {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      loadHistoryTimed(ctl, cwd, sessionId),
+      new Promise<null>((resolve) => {
+        timeout = setTimeout(
+          () => resolve(null),
+          RECOVERED_FINAL_HISTORY_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout !== null) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+function isFinalRecoveredHistory(
+  loaded: unknown,
+): loaded is Extract<SessionHistoryResult, { status: 'available' }> {
+  if (
+    !isStrictRecord(loaded) ||
+    dataValue(loaded, 'status') !== 'available'
+  ) {
+    return false;
+  }
+  const state = dataValue(loaded, 'state');
+  if (
+    !isStrictRecord(state) ||
+    !hasExactKeys(state, ['transcript', 'historyStatus', 'truncated']) ||
+    dataValue(state, 'historyStatus') !== 'complete' ||
+    dataValue(state, 'truncated') !== false
+  ) {
+    return false;
+  }
+  const transcript = dataValue(state, 'transcript');
+  if (!isExactArray(transcript, 0, MAX_SESSION_TRANSCRIPT_ITEMS)) {
+    return false;
+  }
+
+  const ids = new Set<string>();
+  for (const value of transcript) {
+    const item = parseTranscriptItem(value);
+    if (item === undefined || ids.has(item.id)) {
+      return false;
+    }
+    ids.add(item.id);
+  }
+  return true;
+}
+
+function recoveredFailureTurnId(
+  ctl: ChatControllerInternals,
+  sessionId: string,
+): string | null {
+  const transcript =
+    ctl.recoveryStore.readSession(sessionId)?.transcript ?? [];
+  for (let index = transcript.length - 1; index >= 0; index -= 1) {
+    const item = transcript[index];
+    if (
+      item?.kind === 'diagnostic' &&
+      item.code === RECOVERED_HISTORY_FAILED_CODE &&
+      typeof item.turnId === 'string' &&
+      item.turnId.startsWith('recovery-')
+    ) {
+      return transcript.slice(index + 1).every(
+        (later) =>
+          later.kind === 'diagnostic' ||
+          (later.kind === 'changes' && later.turnId === item.turnId),
+      )
+        ? item.turnId
+        : null;
+    }
+  }
+  return null;
 }
 
 export function scheduleRecoveryCheckpoint(ctl: ChatControllerInternals): void {
