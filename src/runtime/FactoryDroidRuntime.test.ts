@@ -1877,6 +1877,7 @@ describe('createLocalDroidSession', () => {
       });
       expect(options.transport).not.toBe(transport);
       expect(options).not.toHaveProperty('apiKey');
+      session.close.mockImplementation(options.transport.close);
       return session;
     });
     const createTransport = vi.fn(() => transport);
@@ -1898,6 +1899,8 @@ describe('createLocalDroidSession', () => {
     expect(createTransport).toHaveBeenCalledWith({ cwd: 'C:\\workspace' });
     expect(calls).toEqual(['connect', 'createSession']);
     expect(transport.close).not.toHaveBeenCalled();
+    await created.close();
+    expect(transport.close).toHaveBeenCalledOnce();
   });
 
   it('rejects worktree targets fail-closed instead of degrading silently', async () => {
@@ -2071,6 +2074,7 @@ describe('createLocalDroidSession', () => {
       expect(options).not.toHaveProperty('cwd');
       permissionHandler = options.permissionHandler;
       askUserHandler = options.askUserHandler;
+      session.close.mockImplementation(options.transport.close);
       return session;
     });
     const createTransport = vi.fn(() => transport);
@@ -2093,6 +2097,8 @@ describe('createLocalDroidSession', () => {
     expect(createSession).not.toHaveBeenCalled();
     expect(calls).toEqual(['connect', 'resumeSession']);
     expect(transport.close).not.toHaveBeenCalled();
+    await resumed.close();
+    expect(transport.close).toHaveBeenCalledOnce();
 
     await expect(
       permissionHandler?.({
@@ -2171,69 +2177,63 @@ describe('createLocalDroidSession', () => {
     expect(transport.close).toHaveBeenCalledOnce();
   });
 
-  it('does not double-close transport cleanup owned by a failed SDK creation', async () => {
-    const transport = createMockTransport();
-    const failure = new ConnectionError('arbitrary SDK message');
-    const createSession = vi.fn(async () => {
-      await transport.close();
-      throw failure;
-    });
-
-    await expect(
-      createLocalDroidSession(
-        {
-          target: { kind: 'new', cwd: 'C:\\workspace' },
-          interactionHandler: cancellingRuntimeInteractionHandler,
-        },
-        {
-          createTransport: () => transport,
-          createSession,
-          resumeSession: vi.fn(),
-        },
-      ),
-    ).rejects.toBe(failure);
-
-    expect(transport.close).toHaveBeenCalledOnce();
-  });
-
-  it('does not double-close transport cleanup owned by a failed SDK resume', async () => {
-    const transport = createMockTransport();
-    const failure = new ConnectionError('arbitrary SDK message');
-    const resumeSession = vi.fn(async () => {
-      await transport.close();
-      throw failure;
-    });
-
-    await expect(
-      createLocalDroidSession(
-        {
-          target: {
-            kind: 'resume',
-            cwd: 'C:\\workspace',
-            sessionId: 'saved-session',
-          },
-          interactionHandler: cancellingRuntimeInteractionHandler,
-        },
-        {
-          createTransport: () => transport,
-          createSession: vi.fn(),
-          resumeSession,
-        },
-      ),
-    ).rejects.toBe(failure);
-
-    expect(resumeSession).toHaveBeenCalledWith(
-      'saved-session',
-      expect.objectContaining({
-        transport: expect.objectContaining({
-          send: expect.any(Function),
-        }),
-        permissionHandler: expect.any(Function),
-        askUserHandler: expect.any(Function),
-      }),
-    );
-    expect(transport.close).toHaveBeenCalledOnce();
-  });
+  it.each([
+    ['create', 'factory', false],
+    ['create', 'SDK', true],
+    ['resume', 'factory', false],
+    ['resume', 'SDK', true],
+  ] as const)(
+    'closes failed provisional transport once after %s (%s cleanup)',
+    async (operation, _cleanupOwner, sdkCloses) => {
+      const target =
+        operation === 'resume'
+          ? {
+              kind: 'resume' as const,
+              cwd: 'C:\\workspace',
+              sessionId: 'saved-session',
+            }
+          : { kind: 'new' as const, cwd: 'C:\\workspace' };
+      const transport = createMockTransport();
+      const failure = new ConnectionError('arbitrary SDK message');
+      const cleanupFailure = new Error('arbitrary cleanup failure');
+      transport.close.mockRejectedValue(cleanupFailure);
+      let sdkTransport: { close(): Promise<void> } | undefined;
+      const failAfterSdkCleanup = async (
+        capturedTransport: { close(): Promise<void> },
+      ) => {
+        sdkTransport = capturedTransport;
+        if (sdkCloses) {
+          await capturedTransport.close().catch(() => undefined);
+        }
+        throw failure;
+      };
+      const createSession = vi.fn(async ({ transport: capturedTransport }) =>
+        failAfterSdkCleanup(capturedTransport));
+      const resumeSession = vi.fn(async (_sessionId, { transport: capturedTransport }) =>
+        failAfterSdkCleanup(capturedTransport));
+      await expect(
+        createLocalDroidSession(
+          { target, interactionHandler: cancellingRuntimeInteractionHandler },
+          { createTransport: () => transport, createSession, resumeSession },
+        ),
+      ).rejects.toBe(failure);
+      expect(transport.close).toHaveBeenCalledOnce();
+      await expect(sdkTransport!.close()).rejects.toBe(cleanupFailure);
+      expect(transport.close).toHaveBeenCalledOnce();
+      expect(createSession).toHaveBeenCalledTimes(
+        operation === 'create' ? 1 : 0,
+      );
+      expect(resumeSession).toHaveBeenCalledTimes(
+        operation === 'resume' ? 1 : 0,
+      );
+      if (operation === 'resume') {
+        expect(resumeSession).toHaveBeenCalledWith(
+          'saved-session',
+          expect.objectContaining({ transport: expect.any(Object) }),
+        );
+      }
+    },
+  );
 });
 
 function createRuntime(createSdkSession: FactoryDroidSessionFactory) {

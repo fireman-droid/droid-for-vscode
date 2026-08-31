@@ -79,6 +79,10 @@ import {
 } from './modelCatalogCaptureTransport';
 import { createCapturedSessionView } from './capturedSessionView';
 import {
+  createProvisionalProcessTransport,
+  type ProcessSessionTransport,
+} from './processSessionTransport';
+import {
   classifyInvalidContextWindowSource,
   resolveContextWindow,
   type ConfirmedContextWindow,
@@ -1664,15 +1668,11 @@ function describeUnknown(value: unknown): string {
   }
 }
 
-interface LocalSessionTransport extends StringFramedDroidClientTransport {
-  connect(): Promise<void>;
-}
-
 interface LocalSessionDependencies {
   createTransport(options: {
     cwd: string;
     observability?: DroidObservability;
-  }): LocalSessionTransport;
+  }): ProcessSessionTransport;
   createSession(options: {
     cwd: string;
     transport: StringFramedDroidClientTransport;
@@ -1719,48 +1719,47 @@ export async function createLocalDroidSession(
   }
   const observabilityOptions =
     observability === undefined ? {} : { observability };
-  const transport = dependencies.createTransport({
-    cwd: target.cwd,
-    ...observabilityOptions,
-  });
+  const transport = createProvisionalProcessTransport(
+    dependencies.createTransport({
+      cwd: target.cwd,
+      ...observabilityOptions,
+    }),
+  );
 
   try {
     await transport.connect();
+
+    const interactionCallbacks =
+      createRuntimeInteractionCallbacks(interactionHandler);
+    const catalogCapture = createModelCatalogCaptureTransport(transport);
+    const session =
+      target.kind === 'resume'
+        ? await dependencies.resumeSession(target.sessionId, {
+            transport: catalogCapture.transport,
+            ...observabilityOptions,
+            ...interactionCallbacks,
+          })
+        : await dependencies.createSession({
+            cwd: target.cwd,
+            transport: catalogCapture.transport,
+            ...observabilityOptions,
+            ...interactionCallbacks,
+          });
+
+    const availableModels = catalogCapture.readAvailableModels();
+    return createCapturedSessionView(
+      session,
+      availableModels,
+      catalogCapture.readLastCallTokenUsage(),
+    );
   } catch (error) {
     try {
       await transport.close();
     } catch {
-      // Preserve the structured connection failure that initialization classifies.
+      // Preserve the connection or session-establishment failure.
     }
     throw error;
   }
-
-  const interactionCallbacks =
-    createRuntimeInteractionCallbacks(interactionHandler);
-  const catalogCapture = createModelCatalogCaptureTransport(transport);
-
-  let session: FactoryDroidSession;
-  if (target.kind === 'resume') {
-    session = await dependencies.resumeSession(target.sessionId, {
-      transport: catalogCapture.transport,
-      ...observabilityOptions,
-      ...interactionCallbacks,
-    });
-  } else {
-    session = await dependencies.createSession({
-      cwd: target.cwd,
-      transport: catalogCapture.transport,
-      ...observabilityOptions,
-      ...interactionCallbacks,
-    });
-  }
-
-  const availableModels = catalogCapture.readAvailableModels();
-  return createCapturedSessionView(
-    session,
-    availableModels,
-    catalogCapture.readLastCallTokenUsage(),
-  );
 }
 
 function normalizeSessionTarget(
