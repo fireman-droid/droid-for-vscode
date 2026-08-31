@@ -8,6 +8,7 @@ import {
   type HostTranscriptState,
 } from '../hostTranscriptState';
 import { clearPendingAttachments, emitEditAttachments } from './attachments';
+import { flushRecoveryCheckpointOrReport } from './recovery';
 import { withActiveSession } from './sessionDirectory';
 import { ensureActiveRuntimeWorkspaceCurrent } from './runtimeLifecycle';
 import { handleSend } from './turnFlow';
@@ -276,7 +277,10 @@ export async function performEditResend(
     });
     ctl.recoveryStore.writeSession(forkedSessionId, truncated);
     ctl.recoveryStore.selectSession(forkedSessionId);
-    void ctl.recoveryStore.flush();
+    if (!await flushRecoveryCheckpointOrReport(ctl)) {
+      emitEditResendRejected(ctl, sessionId, messageId, 'failed');
+      return null;
+    }
     return forkedSessionId;
 }
 

@@ -819,31 +819,173 @@ describe('SessionRecoveryStore', () => {
     }
   });
 
-  it('contains asynchronous and synchronous persistence failures', async () => {
-    const asynchronous: SessionRecoveryPersistence = {
-      get: vi.fn(() => undefined),
-      update: vi.fn(async () => {
-        throw new Error('disk details');
-      }),
-    };
-    const synchronous: SessionRecoveryPersistence = {
-      get: vi.fn(() => {
-        throw new Error('read details');
-      }),
-      update: vi.fn(() => {
-        throw new Error('write details');
-      }),
-    };
-    const asyncStore = new SessionRecoveryStore(asynchronous);
-    const syncStore = new SessionRecoveryStore(synchronous);
-    asyncStore.writeSession('session-1', cache([]));
-    syncStore.writeSession('session-1', cache([]));
+  it.each(['synchronous', 'asynchronous'] as const)(
+    'rejects %s write failures and retries the latest dirty state',
+    async (failureKind) => {
+      const failure = new Error('write failure');
+      let stored: unknown;
+      let fail = false;
+      const persistence: SessionRecoveryPersistence = {
+        get<T>(): T | undefined {
+          return stored as T | undefined;
+        },
+        update: vi.fn((_key: string, value: unknown) => {
+          if (fail) {
+            if (failureKind === 'synchronous') {
+              throw failure;
+            }
+            return Promise.reject(failure);
+          }
+          stored = value;
+          return Promise.resolve();
+        }),
+      };
+      const store = new SessionRecoveryStore(persistence);
+      store.writeSession(
+        'session-1',
+        cache([user('item-0', 'committed')]),
+      );
+      await store.flush();
+      fail = true;
+      store.writeSession(
+        'session-1',
+        cache([user('item-1', 'first')]),
+      );
 
-    await expect(asyncStore.flush()).resolves.toBeUndefined();
-    await expect(syncStore.load()).resolves.toBeUndefined();
-    syncStore.writeSession('session-1', cache([]));
-    await expect(syncStore.dispose()).resolves.toBeUndefined();
-  });
+      await expect(store.flush()).rejects.toBe(failure);
+      expect(stored).toMatchObject({
+        sessions: [
+          expect.objectContaining({
+            transcript: [user('item-0', 'committed')],
+          }),
+        ],
+      });
+
+      store.writeSession(
+        'session-1',
+        cache([user('item-2', 'latest')]),
+      );
+      fail = false;
+      await expect(store.flush()).resolves.toBeUndefined();
+
+      expect(stored).toMatchObject({
+        sessions: [
+          expect.objectContaining({
+            transcript: [user('item-2', 'latest')],
+          }),
+        ],
+      });
+    },
+  );
+
+  it.each([
+    'pending success',
+    'synchronous failure',
+    'asynchronous failure',
+  ] as const)(
+    'makes dispose join the same %s outcome',
+    async (outcome) => {
+      const failure = new Error('final write failure');
+      let stored: unknown;
+      let resolvePending!: () => void;
+      const persistence: SessionRecoveryPersistence = {
+        get<T>(): T | undefined {
+          return stored as T | undefined;
+        },
+        update: vi.fn((_key: string, value: unknown) => {
+          if (outcome === 'synchronous failure') {
+            throw failure;
+          }
+          if (outcome === 'asynchronous failure') {
+            return Promise.reject(failure);
+          }
+          return new Promise<void>((resolve) => {
+            resolvePending = () => {
+              stored = value;
+              resolve();
+            };
+          });
+        }),
+      };
+      const store = new SessionRecoveryStore(persistence);
+      store.writeSession(
+        'session-1',
+        cache([user('item-1', 'pending')]),
+      );
+
+      const first = store.dispose();
+      const joiner = store.dispose();
+      expect(joiner).toBe(first);
+
+      if (outcome === 'pending success') {
+        await Promise.resolve();
+        expect(stored).toBeUndefined();
+        resolvePending();
+        await expect(first).resolves.toBeUndefined();
+        await expect(joiner).resolves.toBeUndefined();
+        expect(stored).toMatchObject({
+          sessions: [
+            expect.objectContaining({
+              transcript: [user('item-1', 'pending')],
+            }),
+          ],
+        });
+        return;
+      }
+
+      await expect(first).rejects.toBe(failure);
+      await expect(joiner).rejects.toBe(failure);
+      expect(persistence.update).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each(['synchronous', 'asynchronous'] as const)(
+    'contains one %s background failure and leaves state retryable',
+    async (failureKind) => {
+      const failure = new Error('sensitive write failure');
+      let stored: unknown;
+      let fail = true;
+      const persistence: SessionRecoveryPersistence = {
+        get<T>(): T | undefined {
+          return stored as T | undefined;
+        },
+        update: vi.fn((_key: string, value: unknown) => {
+          if (fail) {
+            if (failureKind === 'synchronous') {
+              throw failure;
+            }
+            return Promise.reject(failure);
+          }
+          stored = value;
+          return Promise.resolve();
+        }),
+      };
+      const store = new SessionRecoveryStore(persistence);
+      const reportFailure = vi.fn();
+      store.setBackgroundFlushFailureReporter(reportFailure);
+      store.writeSession(
+        'session-1',
+        cache([user('item-1', 'retry')]),
+      );
+
+      store.flushInBackground();
+      await vi.waitFor(() => {
+        expect(reportFailure).toHaveBeenCalledOnce();
+      });
+      expect(reportFailure).toHaveBeenCalledWith();
+      expect(stored).toBeUndefined();
+
+      fail = false;
+      await store.flush();
+      expect(stored).toMatchObject({
+        sessions: [
+          expect.objectContaining({
+            transcript: [user('item-1', 'retry')],
+          }),
+        ],
+      });
+    },
+  );
 
   it('persists pending changes when disposed before the debounce fires', async () => {
     const persistence = memoryPersistence();

@@ -70,10 +70,7 @@ import {
   replaceRuntime,
   startReplacement,
 } from './runtimeLifecycle';
-import {
-  flushRecoveryCheckpoint,
-  scheduleRecoveryCheckpoint,
-} from './recovery';
+import { flushRecoveryCheckpointInBackground, flushRecoveryCheckpointOrReport, scheduleRecoveryCheckpoint } from './recovery';
 import {
   discardPendingThinking,
   flushPendingThinking,
@@ -562,7 +559,7 @@ export function handleTurnComplete(
       case 'success':
         publishTurnChanges(ctl, sessionId, turnId);
         setTurnStatus(ctl, sessionId, turnId, 'completed');
-        void flushRecoveryCheckpoint(ctl);
+        flushRecoveryCheckpointInBackground(ctl);
         settleTurnSubagents(ctl, sessionId, turnId);
         refreshContextAfterTurn(ctl, sessionId);
         finishSpecHandoff(ctl, sessionId, turnId);
@@ -570,7 +567,7 @@ export function handleTurnComplete(
       case 'interrupted':
         publishTurnChanges(ctl, sessionId, turnId);
         setTurnStatus(ctl, sessionId, turnId, 'interrupted');
-        void flushRecoveryCheckpoint(ctl);
+        flushRecoveryCheckpointInBackground(ctl);
         settleTurnSubagents(ctl, sessionId, turnId);
         refreshContextAfterTurn(ctl, sessionId);
         finishSpecHandoff(ctl, sessionId, turnId);
@@ -968,7 +965,7 @@ export async function performCompact(
       transcript ?? { ...ctl.transcript, historyStatus: 'partial' };
     ctl.recoveryStore.writeSession(compactedSessionId, ctl.transcript);
     ctl.recoveryStore.selectSession(compactedSessionId);
-    void ctl.recoveryStore.flush();
+    if (!await flushRecoveryCheckpointOrReport(ctl)) return;
     ctl.emitSnapshot();
     ctl.emit({
       type: 'runtime.diagnostic',
@@ -1016,7 +1013,7 @@ export function failTurn(
       retryable: true,
     });
     emitTurnState(ctl, sessionId, turnId, 'failed');
-    void flushRecoveryCheckpoint(ctl);
+    flushRecoveryCheckpointInBackground(ctl);
     refreshContextAfterTurn(ctl, sessionId);
 }
 

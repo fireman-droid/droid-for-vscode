@@ -34,6 +34,8 @@ import {
 import {
   emitEarlyRecoverySnapshot,
   flushRecoveryCheckpoint,
+  markRecoveryCheckpointUnavailable,
+  persistActivationRecoveryCheckpoint,
   reconcileDaemonTurn,
   recoverTurnSnapshotFiles,
   recoveryTurnId,
@@ -203,7 +205,14 @@ export async function replaceRuntime(
     ctl.turnGeneration += 1;
     resetSessionMetadata(ctl);
     ctl.interactions.cancelAll();
-    await flushRecoveryCheckpoint(ctl);
+    try {
+      await flushRecoveryCheckpoint(ctl);
+    } catch {
+      if (isCurrentRuntimeGeneration(ctl, generation)) {
+        markRecoveryCheckpointUnavailable(ctl, target.kind === 'resume' ? SESSION_RESUME_FAILED_MESSAGE : SESSION_NEW_FAILED_MESSAGE);
+      }
+      return;
+    }
     if (!isCurrentRuntimeGeneration(ctl, generation)) {
       return;
     }
@@ -352,7 +361,7 @@ export async function replaceRuntime(
       reportWorkspaceChanged(ctl, generation);
       return;
     }
-    await activateRuntime(ctl, 
+    const activated = await activateRuntime(ctl,
       target,
       activation.runtime,
       activation.id,
@@ -360,7 +369,9 @@ export async function replaceRuntime(
       transcript,
       phases,
     );
-    markSessionSwitchReady(ctl, phases);
+    if (activated) {
+      markSessionSwitchReady(ctl, phases);
+    }
 }
 
 export async function activateInitialRuntime(
@@ -659,9 +670,9 @@ export async function activateRuntime(
     generation: number,
     transcript: HostTranscriptState,
     phases?: SessionSwitchTimings,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (
-      !isActivationCandidateCurrent(ctl, 
+      !isActivationCandidateCurrent(ctl,
         runtime,
         generation,
         target.cwd,
@@ -674,39 +685,25 @@ export async function activateRuntime(
       ) {
         reportWorkspaceChanged(ctl, generation);
       }
-      return;
+      return false;
     }
-    const checkpointAccepted = ctl.recoveryStore.writeSession(
-      sessionId,
-      transcript,
-    );
-    if (!checkpointAccepted) {
-      ctl.recordHost({
-        level: 'warn',
-        name: 'host.recovery.checkpoint-rejected',
-        attributes: {
-          sessionId,
-          items: transcript.transcript.length,
-          historyStatus: transcript.historyStatus,
-        },
-      });
-    }
-    await ctl.recoveryStore.flush();
-    if (
-      !isActivationCandidateCurrent(ctl, 
-        runtime,
-        generation,
-        target.cwd,
-      )
-    ) {
+    const current = () => isActivationCandidateCurrent(ctl, runtime, generation, target.cwd);
+    const checkpoint = await persistActivationRecoveryCheckpoint(ctl, sessionId, transcript, current);
+    if (checkpoint !== 'saved') {
       await closeRuntime(ctl, runtime).catch(() => undefined);
       if (
+        checkpoint === 'stale' &&
         isCurrentRuntimeGeneration(ctl, generation) &&
         !isTargetWorkspaceCurrent(ctl, target.cwd)
       ) {
         reportWorkspaceChanged(ctl, generation);
+      } else if (
+        checkpoint === 'failed' &&
+        isCurrentRuntimeGeneration(ctl, generation)
+      ) {
+        markRecoveryCheckpointUnavailable(ctl, target.kind === 'resume' ? SESSION_RESUME_FAILED_MESSAGE : SESSION_NEW_FAILED_MESSAGE);
       }
-      return;
+      return false;
     }
 
     ctl.runtime = runtime;
@@ -728,8 +725,6 @@ export async function activateRuntime(
         : undefined,
     );
     ctl.connection = { status: 'connected' };
-    ctl.recoveryStore.selectSession(sessionId);
-    void ctl.recoveryStore.flush();
     ctl.emitSnapshot();
     recoverMissionProjection(ctl, runtime, generation, sessionId, target.cwd);
     if (target.kind === 'new' && target.worktree === true) {
@@ -755,6 +750,7 @@ export async function activateRuntime(
       // armed — a reload otherwise freezes them at "running".
       armReplayedSubagentWatch(ctl, sessionId, target.cwd, transcript);
     }
+    return true;
 }
 
 /**
@@ -865,13 +861,13 @@ export async function closeAllRuntimesForDispose(
       ctl.runtime?.supportsBackgroundTurns?.() === true;
     const preserved = keepTurn ? ctl.runtime : null;
     ctl.runtime = null;
-    await Promise.allSettled([
+    const results = await Promise.allSettled([
       ...[...ctl.managedRuntimes].map((runtime) =>
         closeRuntime(ctl, runtime, runtime === preserved),
       ),
-      ctl.recoveryStore.flush(),
+      ctl.recoveryStore.dispose(),
     ]);
-    await ctl.recoveryStore.dispose();
+    const recoveryResult = results.at(-1); if (recoveryResult?.status === 'rejected') throw recoveryResult.reason;
 }
 
 export function queueWorkspaceTransition(
@@ -923,6 +919,10 @@ export async function reconcileWorkspaceContext(
       ctl.disposed ||
       generation !== ctl.workspaceContextGeneration
     ) {
+      return;
+    }
+    if (results[0]?.status === 'rejected') {
+      markRecoveryCheckpointUnavailable(ctl, SESSION_RESUME_FAILED_MESSAGE);
       return;
     }
     if (results.slice(1).some((result) => result.status === 'rejected')) {

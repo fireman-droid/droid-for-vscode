@@ -453,6 +453,13 @@ export class ChatController {
     this.workspaceContext = {
       ...this.getWorkspaceContext(),
     };
+    this.recoveryStore.setBackgroundFlushFailureReporter(() => {
+      this.recordHost({
+        level: 'warn',
+        name: 'host.recovery.checkpoint-failed',
+        attributes: { outcome: 'failed' },
+      });
+    });
     // Mode-agnostic since the daemon port (side-question-design.md
     // §5.2, probe-btw-daemon.mjs): without a factory the snapshot
     // never advertises btwAvailable, so the webview entry stays

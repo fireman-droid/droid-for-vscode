@@ -19,7 +19,7 @@
 import type { RuntimeSessionWorkingState } from '../../runtime/DroidRuntime';
 import { reconcileSessionHistory } from '../reconcileSessionHistory';
 import { loadHistoryTimed } from './runtimeLifecycle';
-import { flushRecoveryCheckpoint } from './recovery';
+import { flushRecoveryCheckpointInBackground } from './recovery';
 import { settleTurnSubagents } from './subagentWatch';
 import { flushPendingThinking } from './thinkingBatch';
 import {
@@ -300,7 +300,7 @@ async function settleStuckTurn(
     interrupted ? 'interrupted' : 'completed',
   );
   ctl.emitSnapshot();
-  void flushRecoveryCheckpoint(ctl);
+  flushRecoveryCheckpointInBackground(ctl);
   settleTurnSubagents(ctl, sessionId, turnId);
   refreshContextAfterTurn(ctl, sessionId);
 }

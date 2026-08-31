@@ -76,6 +76,9 @@ export class SessionRecoveryStore {
   private persistedRevision = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private writeInFlight: Promise<void> | null = null;
+  private disposeOutcome: Promise<void> | null = null;
+  private backgroundFailureReported = false;
+  private onBackgroundFlushFailure: (() => void) | null = null;
   private disposed = false;
 
   constructor(
@@ -245,8 +248,45 @@ export class SessionRecoveryStore {
     return stored ? cloneCache(stored.cache) : undefined;
   }
 
-  async flush(): Promise<void> {
+  flush(): Promise<void> {
+    if (this.disposed) {
+      return this.disposeOutcome ?? Promise.resolve();
+    }
+    return this.flushPending();
+  }
+
+  flushInBackground(): void {
+    void this.flush().catch(() => {
+      if (this.backgroundFailureReported) {
+        return;
+      }
+      this.backgroundFailureReported = true;
+      try {
+        this.onBackgroundFlushFailure?.();
+      } catch {
+        // A diagnostic sink must not turn a contained background failure
+        // into an unhandled rejection.
+      }
+    });
+  }
+
+  setBackgroundFlushFailureReporter(
+    reporter: (() => void) | null,
+  ): void {
+    this.onBackgroundFlushFailure = reporter;
+  }
+
+  dispose(): Promise<void> {
+    if (this.disposeOutcome) {
+      return this.disposeOutcome;
+    }
+    this.disposed = true;
     this.clearTimer();
+    this.disposeOutcome = this.flushPending();
+    return this.disposeOutcome;
+  }
+
+  private async flushPending(): Promise<void> {
     while (this.persistedRevision < this.revision) {
       if (this.writeInFlight) {
         await this.writeInFlight;
@@ -258,12 +298,12 @@ export class SessionRecoveryStore {
         .then(() =>
           this.persistence.update(this.storageKey, snapshot),
         )
-        .catch(() => undefined)
         .then(() => {
           this.persistedRevision = Math.max(
             this.persistedRevision,
             revision,
           );
+          this.backgroundFailureReported = false;
         })
         .finally(() => {
           if (this.writeInFlight === write) {
@@ -273,14 +313,6 @@ export class SessionRecoveryStore {
       this.writeInFlight = write;
       await write;
     }
-  }
-
-  async dispose(): Promise<void> {
-    if (this.disposed) {
-      return this.writeInFlight ?? Promise.resolve();
-    }
-    this.disposed = true;
-    await this.flush();
   }
 
   private touch(sessionId: string): void {
@@ -356,7 +388,7 @@ export class SessionRecoveryStore {
     this.clearTimer();
     this.timer = setTimeout(() => {
       this.timer = null;
-      void this.flush();
+      this.flushInBackground();
     }, this.debounceMs);
   }
 

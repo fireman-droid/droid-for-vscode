@@ -246,6 +246,60 @@ describe('ChatController', () => {
     ).toBe(false);
   });
 
+  it('does not publish a replacement before its recovery checkpoint succeeds', async () => {
+    const recovery = new SessionRecoveryStore(
+      createMemoryPersistence(),
+      'recovery',
+      0,
+    );
+    const first = createMockRuntime();
+    const candidate = createMockRuntime();
+    candidate.initialize.mockResolvedValue(available('session-2'));
+    const createRuntime = vi
+      .fn<() => MockRuntime>()
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(candidate);
+    const { controller, messages } = createController(
+      createRuntime,
+      undefined,
+      createCatalog([
+        catalogEntry('session-1'),
+        catalogEntry('session-2'),
+      ]),
+      recovery,
+    );
+    ready(controller);
+    await waitForConnected(messages);
+    vi.spyOn(recovery, 'flush').mockRejectedValueOnce(
+      new Error('sensitive write failure'),
+    );
+
+    controller.handleMessage({
+      type: 'session.select',
+      sessionId: 'session-2',
+    });
+
+    await vi.waitFor(() => {
+      expect(connectionMessages(messages).at(-1)).toMatchObject({
+        connection: {
+          status: 'unavailable',
+          message: 'The selected Droid session could not be opened.',
+        },
+      });
+    });
+    expect(candidate.initialize).not.toHaveBeenCalled();
+    expect(
+      snapshots(messages).some(
+        (message) =>
+          message.sessionId === 'session-2' &&
+          message.connection.status === 'connected',
+      ),
+    ).toBe(false);
+    expect(JSON.stringify(messages)).not.toContain(
+      'sensitive write failure',
+    );
+  });
+
   it('does not commit a candidate when its workspace changes during activation recovery flush', async () => {
     const workspace = {
       cwd: 'C:\\workspace-a',

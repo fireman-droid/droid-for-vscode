@@ -601,7 +601,7 @@ async function syncParentFollowupHistory(
     ctl.transcript = transcript;
     if (changed) {
       ctl.recoveryStore.writeSession(sync.sessionId, transcript);
-      void ctl.recoveryStore.flush();
+      ctl.recoveryStore.flushInBackground();
       ctl.emitSnapshot();
     }
     if (

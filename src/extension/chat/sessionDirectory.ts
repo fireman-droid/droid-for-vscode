@@ -36,6 +36,7 @@ import {
   loadHistoryTimed,
   startReplacement,
 } from './runtimeLifecycle';
+import { flushRecoveryCheckpointOrReport } from './recovery';
 import {
   daemonFailureMessage,
   DAEMON_UNAVAILABLE_MESSAGE,
@@ -791,7 +792,7 @@ export async function performFork(
       transcript ?? { ...ctl.transcript, historyStatus: 'partial' };
     ctl.recoveryStore.writeSession(forkedSessionId, ctl.transcript);
     ctl.recoveryStore.selectSession(forkedSessionId);
-    void ctl.recoveryStore.flush();
+    if (!await flushRecoveryCheckpointOrReport(ctl)) return;
     ctl.emitSnapshot();
     ctl.emit({
       type: 'runtime.diagnostic',

@@ -26,6 +26,14 @@ export /**
  */
 const RECOVERED_TURN_POLL_MS = 500;
 
+export const RECOVERY_CHECKPOINT_FAILED_MESSAGE =
+  'DroidVisX could not save the current session state.';
+
+export type ActivationCheckpointOutcome =
+  | 'saved'
+  | 'stale'
+  | 'failed';
+
 export /**
  * Consecutive `unknown` working-state reads tolerated before a
  * recovered turn fails. `unknown` means the daemon stopped attributing
@@ -386,7 +394,7 @@ export async function finishRecoveredTurn(
       interrupted ? 'interrupted' : 'completed',
     );
     ctl.emitSnapshot();
-    void flushRecoveryCheckpoint(ctl);
+    flushRecoveryCheckpointInBackground(ctl);
     refreshContextAfterTurn(ctl, sessionId);
 }
 
@@ -432,6 +440,85 @@ export function checkpointRecoveryTranscript(ctl: ChatControllerInternals): void
 export function flushRecoveryCheckpoint(ctl: ChatControllerInternals): Promise<void> {
     checkpointRecoveryTranscript(ctl);
     return ctl.recoveryStore.flush();
+}
+
+export function flushRecoveryCheckpointInBackground(
+  ctl: ChatControllerInternals,
+): void {
+    checkpointRecoveryTranscript(ctl);
+    ctl.recoveryStore.flushInBackground();
+}
+
+export function reportRecoveryCheckpointFailure(
+  ctl: ChatControllerInternals,
+): void {
+  ctl.emitSessionDiagnostic(
+    'recovery-checkpoint-failed',
+    RECOVERY_CHECKPOINT_FAILED_MESSAGE,
+  );
+}
+
+export function markRecoveryCheckpointUnavailable(
+  ctl: ChatControllerInternals,
+  message: string,
+): void {
+  ctl.connection = { status: 'unavailable', message };
+  reportRecoveryCheckpointFailure(ctl);
+  ctl.emitSnapshot();
+}
+
+export async function flushRecoveryCheckpointOrReport(
+  ctl: ChatControllerInternals,
+): Promise<boolean> {
+  try {
+    await flushRecoveryCheckpoint(ctl);
+    return true;
+  } catch {
+    reportRecoveryCheckpointFailure(ctl);
+    return false;
+  }
+}
+
+export async function persistActivationRecoveryCheckpoint(
+  ctl: ChatControllerInternals,
+  sessionId: string,
+  transcript: HostTranscriptState,
+  isCurrent: () => boolean,
+): Promise<ActivationCheckpointOutcome> {
+  const accepted = ctl.recoveryStore.writeSession(
+    sessionId,
+    transcript,
+  );
+  if (!accepted) {
+    ctl.recordHost({
+      level: 'warn',
+      name: 'host.recovery.checkpoint-rejected',
+      attributes: {
+        sessionId,
+        items: transcript.transcript.length,
+        historyStatus: transcript.historyStatus,
+      },
+    });
+    return 'failed';
+  }
+  const previousSelectedSessionId =
+    ctl.recoveryStore.getSelectedSessionId();
+  try {
+    await ctl.recoveryStore.flush();
+  } catch {
+    return 'failed';
+  }
+  if (!isCurrent()) {
+    return 'stale';
+  }
+  ctl.recoveryStore.selectSession(sessionId);
+  try {
+    await ctl.recoveryStore.flush();
+  } catch {
+    ctl.recoveryStore.selectSession(previousSelectedSessionId);
+    return 'failed';
+  }
+  return isCurrent() ? 'saved' : 'stale';
 }
 
 export /**
