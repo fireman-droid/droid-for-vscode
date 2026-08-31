@@ -147,14 +147,28 @@ export async function ensureSharedDaemon(
   }
 
   const spawned = await d.startDaemon();
-  const record: DaemonDiscoveryRecord = {
+  const listenerPid = await resolveVerifiedListenerPid(
+    spawned.port,
+    d.host,
+    d,
+  );
+  if (listenerPid === null) {
+    await d.killProcessTree(spawned.pid).catch(() => undefined);
+    throw new Error('Droid daemon listener identity could not be verified.');
+  }
+  const verifiedSpawned = {
+    url: endpointUrl(d.host, spawned.port),
+    pid: listenerPid,
     port: spawned.port,
-    pid: spawned.pid,
+  };
+  const record: DaemonDiscoveryRecord = {
+    port: verifiedSpawned.port,
+    pid: verifiedSpawned.pid,
     version: d.cliVersion(),
     startedAt: d.now(),
   };
   if (d.writeFileExclusive(file, JSON.stringify(record))) {
-    return { ...spawned, spawned: true, versionMismatch: false };
+    return { ...verifiedSpawned, spawned: true, versionMismatch: false };
   }
 
   // Lost the spawn race: another window registered its daemon between
@@ -185,7 +199,7 @@ export async function ensureSharedDaemon(
     return endpoint;
   }
   if (d.writeFileExclusive(file, JSON.stringify(record))) {
-    return { ...spawned, spawned: true, versionMismatch: false };
+    return { ...verifiedSpawned, spawned: true, versionMismatch: false };
   }
   // A third contender slipped in. Trust it only after the same
   // pid+health checks; otherwise fail instead of returning an
@@ -231,7 +245,9 @@ export async function shutdownSharedDaemon(
     deleteFile(file);
     return false;
   }
-  const listenerPid = await resolveListenerPid(record.port, host);
+  const listenerPid = await resolveListenerPid(record.port, host).catch(
+    () => null,
+  );
   if (listenerPid === null) {
     // Never fall back to the recorded pid: it may be a dead wrapper,
     // recycled, or attacker-controlled and is not bound to this port.
@@ -261,20 +277,24 @@ async function healthyEndpoint(
   deps: DaemonDiscoveryDeps,
 ): Promise<SharedDaemonEndpoint | null> {
   const url = endpointUrl(deps.host, record.port);
+  const listenerPid = await resolveVerifiedListenerPid(
+    record.port,
+    deps.host,
+    deps,
+  );
+  if (
+    listenerPid === null ||
+    (deps.isPidAlive(record.pid) && listenerPid !== record.pid)
+  ) {
+    return null;
+  }
   const health = await deps.checkHealth(url);
   if (health === 'unreachable') {
     return null;
   }
-  // Fresh records already contain the durable listener pid. Only
-  // legacy Windows records whose cmd.exe wrapper has exited need the
-  // heavier netstat + identity lookup.
-  const listenerPid = deps.isPidAlive(record.pid)
-    ? null
-    : await deps.resolveListenerPid(record.port, deps.host);
-  const pid = listenerPid ?? record.pid;
   return {
     url,
-    pid,
+    pid: listenerPid,
     port: record.port,
     spawned: false,
     versionMismatch: isVersionMismatch(record.version, deps.cliVersion()),
@@ -290,11 +310,30 @@ async function reapUnreachableRecord(
   if (raw === null) {
     return;
   }
-  const listenerPid = await deps.resolveListenerPid(record.port, deps.host);
-  if (listenerPid !== null) {
+  const listenerPid = await resolveVerifiedListenerPid(
+    record.port,
+    deps.host,
+    deps,
+  );
+  if (
+    listenerPid !== null &&
+    (!deps.isPidAlive(record.pid) || listenerPid === record.pid)
+  ) {
     await deps.killProcessTree(listenerPid);
   }
   deps.deleteFileIfMatches(file, raw);
+}
+
+async function resolveVerifiedListenerPid(
+  port: number,
+  host: string,
+  deps: Pick<DaemonDiscoveryDeps, 'resolveListenerPid'>,
+): Promise<number | null> {
+  try {
+    return await deps.resolveListenerPid(port, host);
+  } catch {
+    return null;
+  }
 }
 
 function isVersionMismatch(recorded: string, current: string): boolean {

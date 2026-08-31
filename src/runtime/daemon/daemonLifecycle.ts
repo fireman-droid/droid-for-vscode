@@ -127,13 +127,24 @@ export async function startDetachedDaemon(
     throw error;
   }
 
+  let listenerPid: number | null;
+  try {
+    listenerPid = await resolveListenerPid(port, host, droidPath);
+  } catch {
+    listenerPid = null;
+  }
+  if (listenerPid === null) {
+    try {
+      await killProcessTree(child.pid);
+    } catch {
+      // The spawned process is already gone.
+    }
+    throw new Error('droid daemon listener identity could not be verified');
+  }
+
   return {
     url: `ws://${host}:${String(port)}`,
-    // `shell: true` returns a transient cmd.exe wrapper pid on
-    // Windows. Persist the durable listener when it can be verified.
-    pid:
-      (await resolveListenerPid(port, host, droidPath)) ??
-      child.pid,
+    pid: listenerPid,
     port,
     executable: droidPath,
   };
@@ -276,11 +287,10 @@ function looksLikeDroidDaemon(
     token.toLowerCase(),
   );
   const expected = executableStem(pathBasename(executable));
-  return (
-    tokens.some(
-      (token) => executableStem(pathBasename(token)) === expected,
-    ) &&
-    tokens.includes('daemon')
+  return tokens.some(
+    (token, index) =>
+      executableStem(pathBasename(token)) === expected &&
+      tokens[index + 1] === 'daemon',
   );
 }
 

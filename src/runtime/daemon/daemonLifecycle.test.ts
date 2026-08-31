@@ -205,13 +205,13 @@ describe('startDetachedDaemon', () => {
         spawnDetachedDaemon: spawn.spawnDaemon,
         pickFreePort: async () => 45900,
         waitForPort: async () => undefined,
-        resolveListenerPid: async () => null,
+        resolveListenerPid: async () => 7001,
       },
     );
 
     expect(endpoint).toEqual({
       url: 'ws://127.0.0.1:45900',
-      pid: 6001,
+      pid: 7001,
       port: 45900,
       executable: 'droid',
     });
@@ -239,6 +239,25 @@ describe('startDetachedDaemon', () => {
     );
 
     expect(endpoint.pid).toBe(7001);
+  });
+
+  it('reaps a fresh daemon whose listener identity cannot be verified', async () => {
+    const spawn = fakeSpawn(6001);
+    const killProcessTree = vi.fn(async () => undefined);
+
+    await expect(
+      startDetachedDaemon(
+        {},
+        {
+          spawnDetachedDaemon: spawn.spawnDaemon,
+          pickFreePort: async () => 45900,
+          waitForPort: async () => undefined,
+          resolveListenerPid: async () => null,
+          killProcessTree,
+        },
+      ),
+    ).rejects.toThrow('listener identity could not be verified');
+    expect(killProcessTree).toHaveBeenCalledExactlyOnceWith(6001);
   });
 
   it('reaps an undiscovered daemon when its listener never starts', async () => {
@@ -363,6 +382,21 @@ describe('stopDaemon', () => {
         killProcessTree,
         queryProcessCommandLine: async () =>
           'C:\\tools\\droidvisx-daemon-monitor.exe --watch',
+      },
+    );
+
+    expect(killProcessTree).not.toHaveBeenCalled();
+  });
+
+  it('requires daemon as the configured executable subcommand', async () => {
+    const killProcessTree = vi.fn(async () => undefined);
+
+    await stopDaemon(
+      { url: 'ws://127.0.0.1:40004', pid: 55 },
+      {
+        killProcessTree,
+        queryProcessCommandLine: async () =>
+          'droid --label daemon --port 40004',
       },
     );
 

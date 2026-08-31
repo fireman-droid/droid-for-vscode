@@ -1,12 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  ensureSharedDaemon,
+  ensureSharedDaemon as ensureSharedDaemonUnderTest,
   readDaemonDiscovery,
   shutdownSharedDaemon,
+  type DaemonDiscoveryDeps,
 } from './daemonDiscovery';
 
 const FILE = 'C:\\home\\.droidvisx\\daemon.json';
+
+function ensureSharedDaemon(
+  file: string,
+  deps: Partial<DaemonDiscoveryDeps> = {},
+) {
+  return ensureSharedDaemonUnderTest(file, {
+    resolveListenerPid: async (port) =>
+      port === 45900 ? 5001 : port === 45002 ? 6002 : 4242,
+    ...deps,
+  });
+}
 
 describe('readDaemonDiscovery', () => {
   it('parses a well-formed record', () => {
@@ -51,10 +63,18 @@ describe('ensureSharedDaemon', () => {
 
   it('reuses a discovered daemon that passes the health check', async () => {
     const startDaemon = vi.fn();
+    const steps: string[] = [];
     const endpoint = await ensureSharedDaemon(FILE, {
       readFile: () => healthyRecord,
-      checkHealth: vi.fn(async () => 'healthy' as const),
+      checkHealth: vi.fn(async () => {
+        steps.push('health');
+        return 'healthy' as const;
+      }),
       isPidAlive: () => true,
+      resolveListenerPid: async () => {
+        steps.push('identity');
+        return 4242;
+      },
       startDaemon,
       cliVersion: () => '0.193.0',
     });
@@ -67,7 +87,50 @@ describe('ensureSharedDaemon', () => {
       versionMismatch: false,
     });
     expect(startDaemon).not.toHaveBeenCalled();
+    expect(steps).toEqual(['identity', 'health']);
   });
+
+  it.each([
+    ['unresolvable listener', null],
+    ['listener owned by another pid', 7331],
+  ] as const)(
+    'rejects a reused record with a %s before credential-bearing health',
+    async (_case, listenerPid) => {
+      const checkHealth = vi.fn(async () => 'healthy' as const);
+      const startDaemon = vi.fn(async () => ({
+        url: 'ws://127.0.0.1:45900',
+        pid: 5001,
+        port: 45900,
+      }));
+      const writeFileExclusive = vi.fn(() => true);
+      const killProcessTree = vi.fn(async () => undefined);
+      let contents: string | null = healthyRecord;
+
+      const endpoint = await ensureSharedDaemon(FILE, {
+        readFile: () => contents,
+        checkHealth,
+        isPidAlive: () => true,
+        resolveListenerPid: async (port) =>
+          port === 45001 ? listenerPid : 5001,
+        deleteFileIfMatches: () => {
+          contents = null;
+          return true;
+        },
+        startDaemon,
+        writeFileExclusive,
+        killProcessTree,
+        cliVersion: () => '0.193.0',
+      });
+
+      expect(checkHealth).not.toHaveBeenCalled();
+      expect(killProcessTree).not.toHaveBeenCalled();
+      expect(endpoint).toMatchObject({ pid: 5001, spawned: true });
+      expect(writeFileExclusive).toHaveBeenCalledWith(
+        FILE,
+        expect.stringContaining('"pid":5001'),
+      );
+    },
+  );
 
   it('flags a version mismatch when reusing a daemon from another CLI version', async () => {
     const endpoint = await ensureSharedDaemon(FILE, {
@@ -77,6 +140,62 @@ describe('ensureSharedDaemon', () => {
       cliVersion: () => '0.200.0',
     });
     expect(endpoint.versionMismatch).toBe(true);
+  });
+
+  it('publishes only a verified fresh listener without health authentication', async () => {
+    const checkHealth = vi.fn(async () => 'healthy' as const);
+    const writeFileExclusive = vi.fn(() => true);
+
+    const endpoint = await ensureSharedDaemon(FILE, {
+      readFile: () => null,
+      checkHealth,
+      resolveListenerPid: async () => 7001,
+      writeFileExclusive,
+      startDaemon: async () => ({
+        url: 'ws://127.0.0.1:45900',
+        pid: 5001,
+        port: 45900,
+      }),
+      cliVersion: () => '0.193.0',
+      now: () => 1754956800000,
+    });
+
+    expect(checkHealth).not.toHaveBeenCalled();
+    expect(endpoint).toMatchObject({ pid: 7001, spawned: true });
+    expect(writeFileExclusive).toHaveBeenCalledWith(
+      FILE,
+      JSON.stringify({
+        port: 45900,
+        pid: 7001,
+        version: '0.193.0',
+        startedAt: 1754956800000,
+      }),
+    );
+  });
+
+  it('cleans an unverifiable fresh daemon without publication or authentication', async () => {
+    const checkHealth = vi.fn(async () => 'healthy' as const);
+    const writeFileExclusive = vi.fn(() => true);
+    const killProcessTree = vi.fn(async () => undefined);
+
+    await expect(
+      ensureSharedDaemon(FILE, {
+        readFile: () => null,
+        checkHealth,
+        resolveListenerPid: async () => null,
+        writeFileExclusive,
+        killProcessTree,
+        startDaemon: async () => ({
+          url: 'ws://127.0.0.1:45900',
+          pid: 5001,
+          port: 45900,
+        }),
+      }),
+    ).rejects.toThrow('listener identity could not be verified');
+
+    expect(checkHealth).not.toHaveBeenCalled();
+    expect(writeFileExclusive).not.toHaveBeenCalled();
+    expect(killProcessTree).toHaveBeenCalledExactlyOnceWith(5001);
   });
 
   it('replaces a stale record: delete, spawn detached, write exclusively', async () => {
@@ -334,11 +453,19 @@ describe('ensureSharedDaemon', () => {
     const startDaemon = vi.fn();
     const deleteFile = vi.fn();
     const killProcessTree = vi.fn(async () => {});
+    const steps: string[] = [];
 
     const endpoint = await ensureSharedDaemon(FILE, {
       readFile: () => healthyRecord,
-      checkHealth: async () => 'authentication-failed',
+      checkHealth: async () => {
+        steps.push('health');
+        return 'authentication-failed';
+      },
       isPidAlive: () => true,
+      resolveListenerPid: async () => {
+        steps.push('identity');
+        return 4242;
+      },
       startDaemon,
       deleteFile,
       killProcessTree,
@@ -348,6 +475,7 @@ describe('ensureSharedDaemon', () => {
     expect(startDaemon).not.toHaveBeenCalled();
     expect(deleteFile).not.toHaveBeenCalled();
     expect(killProcessTree).not.toHaveBeenCalled();
+    expect(steps).toEqual(['identity', 'health']);
   });
 });
 
