@@ -51,9 +51,9 @@ export function defaultLeaseFile(): string {
 }
 
 /**
- * Acquires (or refreshes) the lease for a session. Fails only when a
- * different, still-alive process holds it; leases from dead processes
- * are silently preempted.
+ * Acquires (or refreshes) the lease for a session. Fails when ownership
+ * is unavailable or a different, still-alive process holds it; leases
+ * from dead processes are silently preempted.
  *
  * The complete read-check-write transaction runs under an exclusive
  * sibling lock file, so two windows cannot both observe a free lease
@@ -68,6 +68,9 @@ export function acquireSessionLease(
   const owner = { pid: d.pid(), ts: d.now() };
   const locked = d.runExclusive(file, owner, () => {
     const leases = readLeases(file, d.readFile);
+    if (leases === null) {
+      return { acquired: false, heldByPid: 0 } as const;
+    }
     const existing = leases[sessionId];
     if (
       existing !== undefined &&
@@ -96,6 +99,9 @@ export function releaseSessionLease(
   const owner = { pid: d.pid(), ts: d.now() };
   d.runExclusive(file, owner, () => {
     const leases = readLeases(file, d.readFile);
+    if (leases === null) {
+      return;
+    }
     const existing = leases[sessionId];
     if (existing === undefined) {
       return;
@@ -109,15 +115,19 @@ export function releaseSessionLease(
 }
 
 /**
- * Reads and validates the lease registry. The file is an external
- * trust boundary; a corrupt or malformed file reads as empty (leases
- * then fail safe through the sibling transaction lock).
+ * Reads and validates the lease registry. Only a missing file is empty;
+ * unavailable or malformed registries are rejected without mutation.
  */
 export function readLeases(
   file: string,
   readFile: SessionLeaseDeps['readFile'] = defaultReadFile,
-): Record<string, SessionLeaseEntry> {
-  const raw = readFile(file);
+): Record<string, SessionLeaseEntry> | null {
+  let raw: string | null;
+  try {
+    raw = readFile(file);
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? {} : null;
+  }
   if (raw === null) {
     return {};
   }
@@ -125,33 +135,56 @@ export function readLeases(
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return {};
+    return null;
   }
-  if (typeof parsed !== 'object' || parsed === null) {
-    return {};
+  if (!isPlainRecord(parsed)) {
+    return null;
   }
-  const leases: Record<string, SessionLeaseEntry> = {};
-  for (const [sessionId, value] of Object.entries(parsed)) {
-    if (sessionId.length === 0 || sessionId.length > 200) {
-      continue;
+  const leases: Record<string, SessionLeaseEntry> = Object.create(null) as Record<
+    string,
+    SessionLeaseEntry
+  >;
+  const sessionIds = Object.keys(parsed);
+  if (sessionIds.length !== Reflect.ownKeys(parsed).length) {
+    return null;
+  }
+  for (const sessionId of sessionIds) {
+    const value = parsed[sessionId];
+    if (sessionId.length === 0 || !isPlainRecord(value)) {
+      return null;
     }
-    if (typeof value !== 'object' || value === null) {
-      continue;
+    const keys = Reflect.ownKeys(value);
+    if (
+      keys.length !== 2 ||
+      !keys.includes('pid') ||
+      !keys.includes('ts')
+    ) {
+      return null;
     }
-    const entry = value as Record<string, unknown>;
-    const pid = entry['pid'];
-    const ts = entry['ts'];
+    const pid = value['pid'];
+    const ts = value['ts'];
     if (
       typeof pid !== 'number' ||
-      !Number.isInteger(pid) ||
+      !Number.isSafeInteger(pid) ||
       pid < 1 ||
-      typeof ts !== 'number'
+      typeof ts !== 'number' ||
+      !Number.isFinite(ts) ||
+      ts < 0
     ) {
-      continue;
+      return null;
     }
     leases[sessionId] = { pid, ts };
   }
   return leases;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype
+  );
 }
 
 function writeLeases(
@@ -300,8 +333,11 @@ function waitSynchronously(milliseconds: number): void {
 function defaultReadFile(file: string): string | null {
   try {
     return fs.readFileSync(file, 'utf8');
-  } catch {
-    return null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null;
+    }
+    throw error;
   }
 }
 

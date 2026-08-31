@@ -215,25 +215,100 @@ describe('releaseSessionLease', () => {
   });
 });
 
+function expectUnavailableRegistry(
+  readFile: () => string | null,
+  writeFile: (file: string, contents: string) => void,
+): void {
+  const deps = {
+    readFile,
+    writeFile,
+    ...immediateLock(),
+    pid: () => 111,
+    now: () => 2,
+    isPidAlive: () => false,
+  };
+
+  expect(acquireSessionLease(FILE, 'session-1', deps)).toEqual({
+    acquired: false,
+    heldByPid: 0,
+  });
+  releaseSessionLease(FILE, 'session-1', deps);
+}
+
 describe('readLeases', () => {
   it.each([
-    ['missing file', null],
-    ['corrupt json', '{nope'],
-    ['array payload', '[1,2]'],
-  ] as const)('reads %s as empty', (_name, contents) => {
-    expect(readLeases(FILE, () => contents)).toEqual({});
+    ['missing registry', () => null],
+    [
+      'ENOENT read failure',
+      () => {
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+      },
+    ],
+  ])('reads a %s as empty', (_name, readFile) => {
+    expect(readLeases(FILE, readFile)).toEqual({});
   });
 
-  it('drops malformed entries and keeps valid ones', () => {
-    const leases = readLeases(FILE, () =>
+  it.each([
+    ['corrupt JSON', '{nope'],
+    ['array payload', '[1,2]'],
+    ['non-object payload', '42'],
+    ['empty session ID', JSON.stringify({ '': { pid: 5, ts: 1 } })],
+    [
+      'mixed valid and malformed entries',
       JSON.stringify({
         good: { pid: 5, ts: 1 },
-        'bad-pid': { pid: 'x', ts: 1 },
-        'bad-ts': { pid: 5, ts: 'later' },
-        'bad-shape': 42,
-        ['x'.repeat(201)]: { pid: 5, ts: 1 },
+        malformed: { pid: 'x', ts: 1 },
       }),
-    );
-    expect(leases).toEqual({ good: { pid: 5, ts: 1 } });
+    ],
+    ['missing entry field', JSON.stringify({ session: { pid: 5 } })],
+    [
+      'extra entry field',
+      JSON.stringify({ session: { pid: 5, ts: 1, extra: true } }),
+    ],
+    ['non-positive PID', JSON.stringify({ session: { pid: 0, ts: 1 } })],
+    ['fractional PID', JSON.stringify({ session: { pid: 1.5, ts: 1 } })],
+    [
+      'unsafe PID',
+      JSON.stringify({ session: { pid: Number.MAX_SAFE_INTEGER + 1, ts: 1 } }),
+    ],
+    ['negative timestamp', JSON.stringify({ session: { pid: 5, ts: -1 } })],
+    ['non-finite timestamp', '{"session":{"pid":5,"ts":1e309}}'],
+  ] as const)(
+    'does not mutate an unavailable registry from %s',
+    (_name, initial) => {
+      const file = memoryFile(initial);
+      const writeFile = vi.fn(file.writeFile);
+
+      expectUnavailableRegistry(file.readFile, writeFile);
+
+      expect(writeFile).not.toHaveBeenCalled();
+      expect(file.current()).toBe(initial);
+    },
+  );
+
+  it('does not mutate after a non-ENOENT read failure', () => {
+    const writeFile = vi.fn();
+
+    expectUnavailableRegistry(() => {
+      throw Object.assign(new Error('read failed'), { code: 'EACCES' });
+    }, writeFile);
+
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['non-plain registry', new Map()],
+    ['non-plain entry', { session: new Date() }],
+    [
+      'inherited entry fields',
+      { session: Object.create({ pid: 5, ts: 1 }) },
+    ],
+  ] as const)('rejects %s', (_name, parsed) => {
+    const parse = vi.spyOn(JSON, 'parse').mockReturnValue(parsed);
+    try {
+      expect(readLeases(FILE, () => '{}')).toBeNull();
+    } finally {
+      parse.mockRestore();
+    }
   });
 });
