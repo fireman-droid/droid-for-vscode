@@ -260,6 +260,71 @@ const MISSION_SESSION_ROLE_SET = new Set<MissionSessionRole>(
   MISSION_SESSION_ROLES,
 );
 
+type HostMessageType = HostToWebviewMessage['type'];
+type HostMessageParser =
+  (value: UnknownRecord) => HostToWebviewMessage | undefined;
+
+const parseReviewMessage: HostMessageParser = (value) =>
+  parseReviewHostMessage(value) ?? undefined;
+const parseCustomModelsMessage: HostMessageParser = (value) =>
+  parseCustomModelsHostMessage(value) ?? undefined;
+
+const HOST_MESSAGE_PARSERS = {
+  'host.snapshot': parseHostSnapshot,
+  'host.connection': parseHostConnection,
+  'session.settings': parseSessionSettingsMessage,
+  'session.context': parseSessionContextMessage,
+  'session.tokenUsage': parseSessionTokenUsageMessage,
+  'session.model-catalog': parseModelCatalogMessage,
+  'session.skills': parseSessionSkillsMessage,
+  'session.plugins': parseSessionPluginsMessage,
+  'session.mcp': parseSessionMcpMessage,
+  'session.commands': parseSessionCommandsMessage,
+  'mcp.auth': parseMcpAuth,
+  'session.archived': parseSessionArchivedMessage,
+  'session.running': parseSessionRunningMessage,
+  'session.searchResults': parseSessionSearchMessage,
+  'session.attachments': parseSessionAttachmentsMessage,
+  'session.attachmentImageData': parseAttachmentImageData,
+  'session.editAttachments': parseSessionEditAttachmentsMessage,
+  'turn.editResendRejected': parseTurnEditResendRejected,
+  'workspace.files': parseWorkspaceFiles,
+  'workspace.imageData': parseWorkspaceImageData,
+  'rewind.info': parseRewindInfo,
+  'assistant.delta': parseAssistantDelta,
+  'thinking.delta': parseThinkingDelta,
+  'thinking.complete': parseThinkingComplete,
+  'tool.activity': parseToolActivity,
+  'subagent.update': parseSubagentUpdate,
+  'subagent.activity': (value) =>
+    parseSubagentActivityMessage(value) ?? undefined,
+  'transcript.image': parseTranscriptImage,
+  'changes.update': parseChangesUpdate,
+  'git.status': parseGitStatus,
+  'git.branchDiff': parseGitBranchDiff,
+  'git.commitResult': parseGitCommitResult,
+  'review.state': parseReviewMessage,
+  'review.restorePreview': parseReviewMessage,
+  'review.operationResult': parseReviewMessage,
+  'review.agentReviewState': parseReviewMessage,
+  'runtime.diagnostic': parseRuntimeDiagnostic,
+  'turn.state': parseTurnState,
+  'user.message-meta': parseUserMessageMeta,
+  'turn.error': parseTurnError,
+  'interaction.request': parseInteractionRequestMessage,
+  'interaction.closed': parseInteractionClosedMessage,
+  'plan.document.state': parsePlanDocumentStateMessage,
+  'session.btw': parseSessionBtw,
+  'queue.state': parseQueueState,
+  'ui.theme': parseUiTheme,
+  'customModels.state': parseCustomModelsMessage,
+  'customModels.discovery': parseCustomModelsMessage,
+  'providerModels.state': parseCustomModelsMessage,
+  'canvas.feedbackDraft': parseCanvasFeedbackDraftMessage,
+  'mission.snapshot': parseMissionHostMessage,
+  'mission.controlResult': parseMissionHostMessage,
+} satisfies Record<HostMessageType, HostMessageParser>;
+
 export function readHostMessage(
   value: unknown,
 ): HostToWebviewMessage | undefined {
@@ -271,111 +336,9 @@ export function readHostMessage(
     if (type === undefined) {
       return undefined;
     }
-
-    switch (type) {
-      case 'host.snapshot':
-        return parseHostSnapshot(value);
-      case 'host.connection':
-        return parseHostConnection(value);
-      case 'session.settings':
-        return parseSessionSettingsMessage(value);
-      case 'session.context':
-        return parseSessionContextMessage(value);
-      case 'session.tokenUsage':
-        return parseSessionTokenUsageMessage(value);
-      case 'session.model-catalog':
-        return parseModelCatalogMessage(value);
-      case 'session.skills':
-        return parseSessionSkillsMessage(value);
-      case 'session.plugins':
-        return parseSessionPluginsMessage(value);
-      case 'session.mcp':
-        return parseSessionMcpMessage(value);
-      case 'session.commands':
-        return parseSessionCommandsMessage(value);
-      case 'mcp.auth':
-        return parseMcpAuth(value);
-      case 'session.archived':
-        return parseSessionArchivedMessage(value);
-      case 'session.running':
-        return parseSessionRunningMessage(value);
-      case 'session.searchResults':
-        return parseSessionSearchMessage(value);
-      case 'session.attachments':
-        return parseSessionAttachmentsMessage(value);
-      case 'session.attachmentImageData':
-        return parseAttachmentImageData(value);
-      case 'session.editAttachments':
-        return parseSessionEditAttachmentsMessage(value);
-      case 'turn.editResendRejected':
-        return parseTurnEditResendRejected(value);
-      case 'workspace.files':
-        return parseWorkspaceFiles(value);
-      case 'workspace.imageData':
-        return parseWorkspaceImageData(value);
-      case 'rewind.info':
-        return parseRewindInfo(value);
-      case 'assistant.delta':
-        return parseAssistantDelta(value);
-      case 'thinking.delta':
-        return parseThinkingDelta(value);
-      case 'thinking.complete':
-        return parseThinkingComplete(value);
-      case 'tool.activity':
-        return parseToolActivity(value);
-      case 'subagent.update':
-        return parseSubagentUpdate(value);
-      case 'subagent.activity':
-        return parseSubagentActivityMessage(value) ?? undefined;
-      case 'transcript.image':
-        return parseTranscriptImage(value);
-      case 'changes.update':
-        return parseChangesUpdate(value);
-      case 'git.status':
-        return parseGitStatus(value);
-      case 'git.branchDiff':
-        return parseGitBranchDiff(value);
-      case 'git.commitResult':
-        return parseGitCommitResult(value);
-      case 'review.state':
-      case 'review.restorePreview':
-      case 'review.operationResult':
-      case 'review.agentReviewState':
-        return parseReviewHostMessage(value);
-      case 'runtime.diagnostic':
-        return parseRuntimeDiagnostic(value);
-      case 'turn.state':
-        return parseTurnState(value);
-      case 'user.message-meta':
-        return parseUserMessageMeta(value);
-      case 'turn.error':
-        return parseTurnError(value);
-      case 'interaction.request':
-        return parseInteractionRequestMessage(value);
-      case 'interaction.closed':
-        return parseInteractionClosedMessage(value);
-      case 'plan.document.state':
-        return parsePlanDocumentStateMessage(value);
-      case 'session.btw':
-        return parseSessionBtw(value);
-      case 'queue.state':
-        return parseQueueState(value);
-      case 'ui.theme':
-        return parseUiTheme(value);
-      case 'customModels.state':
-      case 'customModels.discovery':
-      case 'providerModels.state':
-        // Delegated to the shared BYOK contract module; the panel's
-        // flow hook applies the same parser to its window listener.
-        return parseCustomModelsHostMessage(value) ?? undefined;
-      case 'canvas.feedbackDraft':
-        return parseCanvasFeedbackDraftMessage(value);
-      case 'mission.snapshot':
-      case 'mission.controlResult':
-        return parseMissionHostMessage(value);
-      default:
-        return undefined;
-    }
+    return Object.hasOwn(HOST_MESSAGE_PARSERS, type)
+      ? HOST_MESSAGE_PARSERS[type as HostMessageType](value)
+      : undefined;
   } catch {
     return undefined;
   }

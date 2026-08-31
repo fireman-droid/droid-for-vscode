@@ -1402,6 +1402,16 @@ describe('parseWebviewMessage', () => {
     expect(parseWebviewMessage(message)).toBeUndefined();
   });
 
+  it('rejects unknown, prototype-named, and inherited dispatch keys', () => {
+    expect(parseWebviewMessage({ type: 'unknown' })).toBeUndefined();
+    expect(parseWebviewMessage({ type: 'constructor' })).toBeUndefined();
+    const inherited = Object.assign(
+      Object.create({ type: 'turn.stop' }) as Record<string, unknown>,
+      { sessionId: 'session-1', turnId: 'turn-1' },
+    );
+    expect(parseWebviewMessage(inherited)).toBeUndefined();
+  });
+
   it('rejects symbol-keyed additions to an otherwise exact shape', () => {
     const message = {
       type: 'turn.stop',

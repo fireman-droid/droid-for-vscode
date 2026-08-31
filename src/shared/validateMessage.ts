@@ -122,186 +122,136 @@ import {
 } from './strictValidation';
 import { parsePlanDocumentOpen } from './parsePlanDocumentOpen';
 import { parseAttachmentImageMessage } from './parseAttachmentImageMessage';
+
+type WebviewMessageType = WebviewToHostMessage['type'];
+type WebviewMessageParser =
+  (value: UnknownRecord) => WebviewToHostMessage | undefined;
+
+const parseReviewMessage: WebviewMessageParser = (value) =>
+  parseReviewWebviewMessage(value, isId, isSafeWorkspaceRelativePath);
+const parseCustomModelsMessage: WebviewMessageParser = (value) =>
+  parseCustomModelsWebviewMessage(value) ?? undefined;
+const parseAttachmentImage: WebviewMessageParser = (value) =>
+  parseAttachmentImageMessage(value, isId, hasValidStage);
+const parseSubagentMessage: WebviewMessageParser = (value) =>
+  parseSubagentWebviewMessage(value) ?? undefined;
+
+const WEBVIEW_MESSAGE_PARSERS = {
+  'webview.ready': parseWebviewReady,
+  'webview.diagnostic': parseWebviewDiagnostic,
+  'turn.send': parseTurnSend,
+  'turn.stop': parseTurnStop,
+  'turn.editResend': parseTurnEditResend,
+  'rewind.info': parseRewindInfoRequest,
+  'runtime.retry': parseRuntimeRetry,
+  'permission.respond': parsePermissionRespond,
+  'ask-user.respond': parseAskUserRespond,
+  'plan.document.open': parsePlanDocumentOpen,
+  'sessions.refresh': parseSessionsRefresh,
+  'session.select': parseSessionSelect,
+  'session.new': parseSessionNew,
+  'ui.theme.set': parseUiThemeSet,
+  'worktree.createSession': parseWorktreeCreateSession,
+  'session.rename': parseSessionRename,
+  'session.favorite': parseSessionFavorite,
+  'session.archive': parseSessionArchive,
+  'session.unarchive': parseSessionUnarchive,
+  'sessions.archivedRefresh': parseSessionsArchivedRefresh,
+  'session.search': parseSessionSearch,
+  'session.context.refresh': parseSessionContextRefresh,
+  'session.compact': parseSessionCompact,
+  'session.fork': parseSessionFork,
+  'file.openDiff': parseFileOpenDiff,
+  'review.open': parseReviewMessage,
+  'review.navigate': parseReviewMessage,
+  'review.selectFile': parseReviewMessage,
+  'review.markReviewed': parseReviewMessage,
+  'review.refresh': parseReviewMessage,
+  'review.restorePreview': parseReviewMessage,
+  'review.restoreFile': parseReviewMessage,
+  'review.restoreTurn': parseReviewMessage,
+  'review.runAgentReview': parseReviewMessage,
+  'file.preview': parseFilePreview,
+  'preview.inlineHtml': parsePreviewInlineHtml,
+  'git.requestStatus': parseGitRequestStatus,
+  'git.requestBranchDiff': parseGitRequestBranchDiff,
+  'git.commit': parseGitCommitRequest,
+  'terminal.openMirror': parseTerminalOpenMirror,
+  'workspace.openPath': parseWorkspaceOpenPath,
+  'skills.refresh': parseSkillsRefresh,
+  'skill.toggle': parseSkillToggle,
+  'plugins.refresh': parsePluginsRefresh,
+  'commands.refresh': parseCommandsRefresh,
+  'mcp.refresh': parseMcpRefresh,
+  'mcp.server.toggle': parseMcpServerToggle,
+  'mcp.server.add': parseMcpServerAdd,
+  'mcp.server.remove': parseMcpServerRemove,
+  'mcp.server.authenticate': parseMcpServerAuthenticate,
+  'customModels.refresh': parseCustomModelsMessage,
+  'customModels.save': parseCustomModelsMessage,
+  'customModels.delete': parseCustomModelsMessage,
+  'customModels.discover': parseCustomModelsMessage,
+  'customModels.import': parseCustomModelsMessage,
+  'providerModels.refresh': parseCustomModelsMessage,
+  'providerModels.saveProvider': parseCustomModelsMessage,
+  'providerModels.fetch': parseCustomModelsMessage,
+  'providerModels.saveModel': parseCustomModelsMessage,
+  'providerModels.import': parseCustomModelsMessage,
+  'providerModels.test': parseCustomModelsMessage,
+  'providerModels.testAll': parseCustomModelsMessage,
+  'attachment.pick': parseAttachmentPick,
+  'attachment.addEditor': parseAttachmentAddEditor,
+  'attachment.addSelection': parseAttachmentAddSelection,
+  'attachment.addProblems': parseAttachmentAddProblems,
+  'attachment.addGitChanges': parseAttachmentAddGitChanges,
+  'attachment.addImage': parseAttachmentImage,
+  'attachment.addPdf': parseAttachmentImage,
+  'attachment.addRemoteImage': parseAttachmentImage,
+  'attachment.readImage': parseAttachmentImage,
+  'attachment.addUris': parseAttachmentAddUris,
+  'attachment.addTextFile': parseAttachmentAddTextFile,
+  'attachment.remove': parseAttachmentRemove,
+  'attachment.addPath': parseAttachmentAddPath,
+  'editStage.begin': parseEditStageBegin,
+  'editStage.cancel': parseEditStageCancel,
+  'workspace.searchFiles': parseWorkspaceSearchFiles,
+  'workspace.readImage': parseWorkspaceReadImage,
+  'session.setting.update': parseSessionSettingUpdate,
+  'btw.prepare': (value) => parseBtwPrepareMessage(value) ?? undefined,
+  'btw.ask': (value) => parseBtwAskMessage(value) ?? undefined,
+  'btw.dismiss': (value) => parseBtwDismissMessage(value) ?? undefined,
+  'btw.stop': (value) => parseBtwStopMessage(value) ?? undefined,
+  'subagent.panel': parseSubagentMessage,
+  'subagent.open': parseSubagentMessage,
+  'queue.add': (value) => parseQueueAddMessage(value) ?? undefined,
+  'queue.update': (value) => parseQueueUpdateMessage(value) ?? undefined,
+  'queue.remove': (value) => parseQueueRemoveMessage(value) ?? undefined,
+  'queue.promote': (value) => parseQueuePromoteMessage(value) ?? undefined,
+  'queue.resume': (value) => parseQueueResumeMessage(value) ?? undefined,
+  'queue.clear': (value) => parseQueueClearMessage(value) ?? undefined,
+  'mission.start': parseMissionWebviewMessage,
+  'mission.dismissSetup': parseMissionWebviewMessage,
+  'mission.pause': parseMissionWebviewMessage,
+  'mission.resume': parseMissionWebviewMessage,
+  'mission.stopCurrentFeature': parseMissionWebviewMessage,
+  'mission.refresh': parseMissionWebviewMessage,
+  'mission.disclosure.set': parseMissionWebviewMessage,
+  'mission.viewer.open': parseMissionWebviewMessage,
+  'mission.panel.open': parseMissionWebviewMessage,
+} satisfies Record<WebviewMessageType, WebviewMessageParser>;
+
 export function parseWebviewMessage(
   value: unknown,
 ): WebviewToHostMessage | undefined {
   try {
-    if (!isStrictRecord(value) || typeof value.type !== 'string') {
+    if (!isStrictRecord(value)) {
       return undefined;
     }
-
-    switch (value.type) {
-      case 'webview.ready':
-        return parseWebviewReady(value);
-      case 'webview.diagnostic':
-        return parseWebviewDiagnostic(value);
-      case 'turn.send':
-        return parseTurnSend(value);
-      case 'turn.stop':
-        return parseTurnStop(value);
-      case 'turn.editResend':
-        return parseTurnEditResend(value);
-      case 'rewind.info':
-        return parseRewindInfoRequest(value);
-      case 'runtime.retry':
-        return parseRuntimeRetry(value);
-      case 'permission.respond':
-        return parsePermissionRespond(value);
-      case 'ask-user.respond':
-        return parseAskUserRespond(value);
-      case 'plan.document.open': return parsePlanDocumentOpen(value);
-      case 'sessions.refresh':
-        return parseSessionsRefresh(value);
-      case 'session.select':
-        return parseSessionSelect(value);
-      case 'session.new':
-        return parseSessionNew(value);
-      case 'ui.theme.set':
-        return parseUiThemeSet(value);
-      case 'worktree.createSession':
-        return parseWorktreeCreateSession(value);
-      case 'session.rename':
-        return parseSessionRename(value);
-      case 'session.favorite':
-        return parseSessionFavorite(value);
-      case 'session.archive':
-        return parseSessionArchive(value);
-      case 'session.unarchive':
-        return parseSessionUnarchive(value);
-      case 'sessions.archivedRefresh':
-        return parseSessionsArchivedRefresh(value);
-      case 'session.search':
-        return parseSessionSearch(value);
-      case 'session.context.refresh':
-        return parseSessionContextRefresh(value);
-      case 'session.compact':
-        return parseSessionCompact(value);
-      case 'session.fork':
-        return parseSessionFork(value);
-      case 'file.openDiff':
-        return parseFileOpenDiff(value);
-      case 'review.open':
-      case 'review.navigate':
-      case 'review.selectFile':
-      case 'review.markReviewed':
-      case 'review.refresh':
-      case 'review.restorePreview':
-      case 'review.restoreFile':
-      case 'review.restoreTurn':
-      case 'review.runAgentReview':
-        return parseReviewWebviewMessage(
-          value,
-          isId,
-          isSafeWorkspaceRelativePath,
-        );
-      case 'file.preview':
-        return parseFilePreview(value);
-      case 'preview.inlineHtml':
-        return parsePreviewInlineHtml(value);
-      case 'git.requestStatus':
-        return parseGitRequestStatus(value);
-      case 'git.requestBranchDiff':
-        return hasExactKeys(value, ['type', 'sessionId']) &&
-          isId(value.sessionId)
-          ? { type: 'git.requestBranchDiff', sessionId: value.sessionId }
-          : undefined;
-      case 'git.commit':
-        return parseGitCommitRequest(value);
-      case 'terminal.openMirror':
-        return parseTerminalOpenMirror(value);
-      case 'workspace.openPath':
-        return parseWorkspaceOpenPath(value);
-      case 'skills.refresh':
-        return parseSkillsRefresh(value);
-      case 'skill.toggle':
-        return parseSkillToggle(value);
-      case 'plugins.refresh':
-        return parsePluginsRefresh(value);
-      case 'commands.refresh':
-        return parseCommandsRefresh(value);
-      case 'mcp.refresh':
-        return parseMcpRefresh(value);
-      case 'mcp.server.toggle':
-        return parseMcpServerToggle(value);
-      case 'mcp.server.add':
-        return parseMcpServerAdd(value);
-      case 'mcp.server.remove':
-        return parseMcpServerRemove(value);
-      case 'mcp.server.authenticate':
-        return parseMcpServerAuthenticate(value);
-      case 'customModels.refresh': case 'customModels.save':
-      case 'customModels.delete':
-      case 'customModels.discover': case 'customModels.import':
-      case 'providerModels.refresh':
-      case 'providerModels.saveProvider':
-      case 'providerModels.fetch':
-      case 'providerModels.saveModel':
-      case 'providerModels.import':
-      case 'providerModels.test':
-      case 'providerModels.testAll':
-        return parseCustomModelsWebviewMessage(value) ?? undefined;
-      case 'attachment.pick':
-        return parseAttachmentPick(value);
-      case 'attachment.addEditor':
-        return parseAttachmentAddEditor(value);
-      case 'attachment.addSelection':
-        return parseAttachmentAddSelection(value);
-      case 'attachment.addProblems':
-        return parseAttachmentAddProblems(value);
-      case 'attachment.addGitChanges':
-        return parseAttachmentAddGitChanges(value);
-      case 'attachment.addImage':
-      case 'attachment.addPdf':
-      case 'attachment.addRemoteImage':
-      case 'attachment.readImage':
-        return parseAttachmentImageMessage(value, isId, hasValidStage);
-      case 'attachment.addUris':
-        return parseAttachmentAddUris(value);
-      case 'attachment.addTextFile':
-        return parseAttachmentAddTextFile(value);
-      case 'attachment.remove':
-        return parseAttachmentRemove(value);
-      case 'attachment.addPath':
-        return parseAttachmentAddPath(value);
-      case 'editStage.begin':
-        return parseEditStageBegin(value);
-      case 'editStage.cancel':
-        return parseEditStageCancel(value);
-      case 'workspace.searchFiles':
-        return parseWorkspaceSearchFiles(value);
-      case 'workspace.readImage':
-        return parseWorkspaceReadImage(value);
-      case 'session.setting.update':
-        return parseSessionSettingUpdate(value);
-      case 'btw.prepare':
-        return parseBtwPrepareMessage(value) ?? undefined;
-      case 'btw.ask':
-        return parseBtwAskMessage(value) ?? undefined;
-      case 'btw.dismiss':
-        return parseBtwDismissMessage(value) ?? undefined;
-      case 'btw.stop':
-        return parseBtwStopMessage(value) ?? undefined;
-      case 'queue.add':
-        return parseQueueAddMessage(value) ?? undefined;
-      case 'queue.update':
-        return parseQueueUpdateMessage(value) ?? undefined;
-      case 'queue.remove':
-        return parseQueueRemoveMessage(value) ?? undefined;
-      case 'queue.promote':
-        return parseQueuePromoteMessage(value) ?? undefined;
-      case 'queue.resume':
-        return parseQueueResumeMessage(value) ?? undefined;
-      case 'queue.clear':
-        return parseQueueClearMessage(value) ?? undefined;
-      case 'mission.start': case 'mission.dismissSetup': case 'mission.pause':
-      case 'mission.resume': case 'mission.stopCurrentFeature': case 'mission.refresh':
-      case 'mission.disclosure.set':
-      case 'mission.viewer.open': case 'mission.panel.open':
-        return parseMissionWebviewMessage(value);
-      default:
-        // Panel-scoped message families delegate wholesale.
-        return parseSubagentWebviewMessage(value) ?? undefined;
-    }
+    const type = readStringDataProperty(value, 'type');
+    return type !== undefined &&
+      Object.hasOwn(WEBVIEW_MESSAGE_PARSERS, type)
+      ? WEBVIEW_MESSAGE_PARSERS[type as WebviewMessageType](value)
+      : undefined;
   } catch {
     return undefined;
   }
@@ -978,6 +928,15 @@ function parseSkillToggle(
   };
 }
 
+function parseGitRequestBranchDiff(
+  value: UnknownRecord,
+): Extract<WebviewToHostMessage, { type: 'git.requestBranchDiff' }> | undefined {
+  return hasExactKeys(value, ['type', 'sessionId']) &&
+    isId(value.sessionId)
+    ? { type: 'git.requestBranchDiff', sessionId: value.sessionId }
+    : undefined;
+}
+
 function parseCommandsRefresh(
   value: UnknownRecord,
 ): CommandsRefreshMessage | undefined {
@@ -1482,6 +1441,18 @@ function isId(value: unknown): value is string {
     value.length > 0 &&
     value.length <= MAX_BRIDGE_ID_LENGTH
   );
+}
+
+function readStringDataProperty(
+  value: UnknownRecord,
+  key: string,
+): string | undefined {
+  const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+  return descriptor !== undefined &&
+    'value' in descriptor &&
+    typeof descriptor.value === 'string'
+    ? descriptor.value
+    : undefined;
 }
 
 export function isSafeModelId(value: unknown): value is string {
