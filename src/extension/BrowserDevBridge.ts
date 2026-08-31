@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import {
   createServer,
   get as httpGet,
+  type ClientRequest,
   type IncomingMessage,
   type Server,
   type ServerResponse,
@@ -32,103 +33,221 @@ const START_COMMAND = 'droidvisx.startBrowserDevClient';
 const STOP_COMMAND = 'droidvisx.stopBrowserDevClient';
 
 interface BrowserDevRun {
+  readonly owner: BrowserDevGeneration;
   readonly bridge: Server;
   readonly vite: ChildProcess;
   readonly url: string;
   readonly subscriptions: readonly vscode.Disposable[];
   eventResponse: ServerResponse | null;
-  keepAlive: ReturnType<typeof setInterval>;
-  stopping: boolean;
+  keepAlive: ReturnType<typeof setInterval> | null;
+}
+
+interface BrowserDevGeneration {
+  readonly generation: number;
+  readonly abort: AbortController;
+  bridge: Server | null;
+  vite: ChildProcess | null;
+  run: BrowserDevRun | null;
+  cleanup: Promise<void> | null;
+}
+
+interface BrowserDevStart {
+  readonly owner: BrowserDevGeneration;
+  readonly promise: Promise<void>;
+}
+
+export interface BrowserDevBridgeDependencies {
+  readonly assertSourceRoot: (sourceRoot: string) => Promise<void>;
+  readonly createToken: () => string;
+  readonly createServer: () => Server;
+  readonly startVite: (sourceRoot: string) => ChildProcess;
+  readonly listen: (server: Server, signal: AbortSignal) => Promise<number>;
+  readonly waitForVite: (
+    process: ChildProcess,
+    readError: () => string,
+    signal: AbortSignal,
+  ) => Promise<void>;
+  readonly closeServer: (server: Server) => Promise<void>;
+  readonly stopProcess: (process: ChildProcess) => Promise<void>;
+  readonly setInterval: (
+    callback: () => void,
+    delay: number,
+  ) => ReturnType<typeof setInterval>;
+  readonly clearInterval: (
+    timer: ReturnType<typeof setInterval>,
+  ) => void;
+  readonly writeClipboard: (value: string) => Thenable<void>;
+  readonly showInformationMessage: (message: string) => Thenable<unknown>;
+  readonly onDidChangeConfiguration: (
+    listener: (event: vscode.ConfigurationChangeEvent) => void,
+  ) => vscode.Disposable;
+  readonly onDidChangeActiveColorTheme: (
+    listener: () => void,
+  ) => vscode.Disposable;
+}
+
+const browserDevDependencies: BrowserDevBridgeDependencies = {
+  assertSourceRoot,
+  createToken: () => randomBytes(32).toString('base64url'),
+  createServer,
+  startVite,
+  listen,
+  waitForVite,
+  closeServer,
+  stopProcess,
+  setInterval,
+  clearInterval,
+  writeClipboard: (value) => vscode.env.clipboard.writeText(value),
+  showInformationMessage: (message) =>
+    vscode.window.showInformationMessage(message),
+  onDidChangeConfiguration: (listener) =>
+    vscode.workspace.onDidChangeConfiguration(listener),
+  onDidChangeActiveColorTheme: (listener) =>
+    vscode.window.onDidChangeActiveColorTheme(listener),
+};
+
+class BrowserDevStartupCancelledError extends Error {
+  constructor() {
+    super('Browser Dev startup was cancelled.');
+  }
 }
 
 export class BrowserDevBridge implements vscode.Disposable {
   private run: BrowserDevRun | null = null;
-  private starting: Promise<void> | null = null;
+  private active: BrowserDevGeneration | null = null;
+  private starting: BrowserDevStart | null = null;
+  private cleanup: Promise<void> | null = null;
+  private nextGeneration = 0;
+  private disposed = false;
+  private readonly dependencies: BrowserDevBridgeDependencies;
 
   constructor(
     private readonly controller: ChatController,
     private readonly missionControl: MissionControlPanelController,
     private readonly diagnostics?: RuntimeDiagnosticSink,
-  ) {}
+    dependencies?: Partial<BrowserDevBridgeDependencies>,
+  ) {
+    this.dependencies = {
+      ...browserDevDependencies,
+      ...dependencies,
+    };
+  }
 
   async start(sourceRoot: string): Promise<void> {
-    if (this.run !== null) {
-      await this.copyUrl(this.run.url);
-      return;
+    if (this.disposed) {
+      throw new Error('Browser Dev bridge is disposed.');
     }
-    if (this.starting !== null) {
-      await this.starting;
-      return;
-    }
-    const starting = this.startRun(sourceRoot);
-    this.starting = starting;
-    try {
-      await starting;
-    } finally {
-      if (this.starting === starting) {
-        this.starting = null;
+    while (true) {
+      const cleanup = this.cleanup;
+      if (cleanup !== null) {
+        await cleanup;
+        continue;
+      }
+      if (this.disposed) {
+        throw new Error('Browser Dev bridge is disposed.');
+      }
+      const run = this.run;
+      if (run !== null) {
+        await this.copyUrl(run.owner, run.url);
+        return;
+      }
+      const starting = this.starting;
+      if (starting !== null && this.isActive(starting.owner)) {
+        await starting.promise;
+        return;
+      }
+      const owner: BrowserDevGeneration = {
+        generation: ++this.nextGeneration,
+        abort: new AbortController(),
+        bridge: null,
+        vite: null,
+        run: null,
+        cleanup: null,
+      };
+      this.active = owner;
+      const promise = this.startRun(owner, sourceRoot);
+      const nextStart = { owner, promise };
+      this.starting = nextStart;
+      try {
+        await promise;
+        return;
+      } finally {
+        if (this.starting === nextStart) {
+          this.starting = null;
+        }
       }
     }
   }
 
   async stop(): Promise<void> {
-    const run = this.run;
-    this.run = null;
-    if (run === null || run.stopping) {
+    const owner = this.active;
+    if (owner === null) {
+      await this.cleanup;
       return;
     }
-    run.stopping = true;
-    clearInterval(run.keepAlive);
-    run.eventResponse?.end();
-    for (const subscription of run.subscriptions) {
-      subscription.dispose();
+    const wasRunning = this.run?.owner === owner;
+    await this.cancel(owner);
+    if (wasRunning) {
+      this.diagnostics?.record({
+        level: 'info',
+        name: 'host.browser-dev.stopped',
+      });
     }
-    await Promise.all([
-      closeServer(run.bridge),
-      stopProcess(run.vite),
-    ]);
-    this.diagnostics?.record({
-      level: 'info',
-      name: 'host.browser-dev.stopped',
-    });
   }
 
   dispose(): void {
-    void this.stop();
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    const owner = this.active;
+    if (owner !== null) {
+      void this.cancel(owner).catch((error: unknown) => {
+        this.recordCleanupFailure(error);
+      });
+    }
   }
 
-  private async startRun(sourceRoot: string): Promise<void> {
-    await assertSourceRoot(sourceRoot);
-    const token = randomBytes(32).toString('base64url');
-    const bridge = createServer();
-    const vite = startVite(sourceRoot);
-    let viteError = '';
-    vite.stderr?.on('data', (chunk: Buffer) => {
-      viteError = `${viteError}${chunk.toString('utf8')}`.slice(-2_048);
-    });
-    const subscriptions: vscode.Disposable[] = [];
-    let run: BrowserDevRun | null = null;
-
+  private async startRun(
+    owner: BrowserDevGeneration,
+    sourceRoot: string,
+  ): Promise<void> {
     try {
-      const bridgePort = await listen(bridge);
+      await this.dependencies.assertSourceRoot(sourceRoot);
+      this.requireActive(owner);
+      const token = this.dependencies.createToken();
+      const bridge = this.dependencies.createServer();
+      owner.bridge = bridge;
+      const vite = this.dependencies.startVite(sourceRoot);
+      owner.vite = vite;
+      let viteError = '';
+      vite.stderr?.on('data', (chunk: Buffer) => {
+        viteError = `${viteError}${chunk.toString('utf8')}`.slice(-2_048);
+      });
+      const bridgePort = await this.dependencies.listen(
+        bridge,
+        owner.abort.signal,
+      );
+      this.requireActive(owner);
       const url =
         `${VITE_ORIGIN}/live#bridgePort=${bridgePort}` +
         `&token=${encodeURIComponent(token)}`;
-      run = {
+      const subscriptions: vscode.Disposable[] = [];
+      const run: BrowserDevRun = {
+        owner,
         bridge,
         vite,
         url,
         subscriptions,
         eventResponse: null,
-        keepAlive: setInterval(() => {
-          run?.eventResponse?.write(': keepalive\n\n');
-        }, 15_000),
-        stopping: false,
+        keepAlive: null,
       };
+      run.keepAlive = this.dependencies.setInterval(() => {
+        run.eventResponse?.write(': keepalive\n\n');
+      }, 15_000);
+      owner.run = run;
       bridge.on('request', (request, response) => {
-        if (run !== null) {
-          this.handleRequest(run, token, request, response);
-        }
+        this.handleRequest(run, token, request, response);
       });
       subscriptions.push(
         this.controller.subscribe((message) => {
@@ -137,26 +256,26 @@ export class BrowserDevBridge implements vscode.Disposable {
         this.missionControl.onDidChangeWorkspaceSetup((message) => {
           this.send(run, message);
         }),
-        vscode.workspace.onDidChangeConfiguration((event) => {
+        this.dependencies.onDidChangeConfiguration((event) => {
           if (event.affectsConfiguration('droidvisx.theme')) {
             this.sendTheme(run);
           }
         }),
-        vscode.window.onDidChangeActiveColorTheme(() => {
+        this.dependencies.onDidChangeActiveColorTheme(() => {
           if (readWebviewThemePreference() === 'auto') {
             this.sendTheme(run);
           }
         }),
       );
-      await waitForVite(vite, () => viteError);
+      await this.dependencies.waitForVite(
+        vite,
+        () => viteError,
+        owner.abort.signal,
+      );
+      this.requireActive(owner);
       this.run = run;
       vite.once('exit', (code) => {
-        const exitedRun = run;
-        if (
-          exitedRun === null ||
-          this.run !== exitedRun ||
-          exitedRun.stopping
-        ) {
+        if (this.run !== run || !this.isActive(owner)) {
           return;
         }
         this.diagnostics?.record({
@@ -164,29 +283,34 @@ export class BrowserDevBridge implements vscode.Disposable {
           name: 'host.browser-dev.vite-exited',
           attributes: { code: code ?? -1 },
         });
-        this.run = null;
-        void disposeRun(exitedRun);
+        void this.cancel(owner).catch((error: unknown) => {
+          this.recordCleanupFailure(error);
+        });
         void vscode.window.showErrorMessage(
           'DroidVisX browser dev client stopped because Vite exited.',
         );
       });
-      await this.copyUrl(url);
+      if (!await this.copyUrl(owner, url)) {
+        throw new BrowserDevStartupCancelledError();
+      }
+      this.requireActive(owner);
       this.diagnostics?.record({
         level: 'info',
         name: 'host.browser-dev.started',
         attributes: { bridgePort, vitePort: VITE_PORT },
       });
     } catch (error) {
-      if (this.run === run) {
-        this.run = null;
+      const cancelled =
+        error instanceof BrowserDevStartupCancelledError ||
+        owner.abort.signal.aborted ||
+        !this.isActive(owner);
+      try {
+        await this.cancel(owner);
+      } catch (cleanupError) {
+        this.recordCleanupFailure(cleanupError);
       }
-      if (run === null) {
-        await Promise.all([
-          closeServer(bridge),
-          stopProcess(vite),
-        ]);
-      } else {
-        await disposeRun(run);
+      if (cancelled) {
+        return;
       }
       this.diagnostics?.record({
         level: 'error',
@@ -195,6 +319,86 @@ export class BrowserDevBridge implements vscode.Disposable {
       });
       throw error;
     }
+  }
+
+  private isActive(owner: BrowserDevGeneration): boolean {
+    return !this.disposed &&
+      this.active?.generation === owner.generation &&
+      !owner.abort.signal.aborted;
+  }
+
+  private requireActive(owner: BrowserDevGeneration): void {
+    if (!this.isActive(owner)) {
+      throw new BrowserDevStartupCancelledError();
+    }
+  }
+
+  private cancel(owner: BrowserDevGeneration): Promise<void> {
+    owner.abort.abort();
+    if (this.active === owner) {
+      this.active = null;
+    }
+    if (this.run?.owner === owner) {
+      this.run = null;
+    }
+    if (owner.cleanup !== null) {
+      return owner.cleanup;
+    }
+    let cleanup: Promise<void>;
+    cleanup = this.disposeGeneration(owner).finally(() => {
+      if (this.cleanup === cleanup) {
+        this.cleanup = null;
+      }
+    });
+    owner.cleanup = cleanup;
+    this.cleanup = cleanup;
+    return cleanup;
+  }
+
+  private async disposeGeneration(owner: BrowserDevGeneration): Promise<void> {
+    const run = owner.run;
+    owner.run = null;
+    const bridge = owner.bridge;
+    owner.bridge = null;
+    const vite = owner.vite;
+    owner.vite = null;
+    if (run !== null) {
+      await disposeRun(run, this.dependencies);
+      return;
+    }
+    await settleBrowserDevCleanup([
+      ...(bridge === null
+        ? []
+        : [() => this.dependencies.closeServer(bridge)]),
+      ...(vite === null
+        ? []
+        : [() => this.dependencies.stopProcess(vite)]),
+    ]);
+  }
+
+  private recordCleanupFailure(error: unknown): void {
+    this.diagnostics?.record({
+      level: 'error',
+      name: 'host.browser-dev.cleanup-failed',
+      detail: formatError(error),
+    });
+  }
+
+  private async copyUrl(
+    owner: BrowserDevGeneration,
+    url: string,
+  ): Promise<boolean> {
+    if (!this.isActive(owner)) {
+      return false;
+    }
+    await this.dependencies.writeClipboard(url);
+    if (!this.isActive(owner)) {
+      return false;
+    }
+    void this.dependencies.showInformationMessage(
+      'DroidVisX browser dev client URL copied to the clipboard.',
+    );
+    return true;
   }
 
   private handleRequest(
@@ -300,12 +504,6 @@ export class BrowserDevBridge implements vscode.Disposable {
     } satisfies Extract<HostToWebviewMessage, { type: 'ui.theme' }>);
   }
 
-  private async copyUrl(url: string): Promise<void> {
-    await vscode.env.clipboard.writeText(url);
-    void vscode.window.showInformationMessage(
-      'DroidVisX browser dev client URL copied to the clipboard.',
-    );
-  }
 }
 
 export function registerBrowserDevCommands(
@@ -385,40 +583,75 @@ function startVite(sourceRoot: string): ChildProcess {
   );
 }
 
-function listen(server: Server): Promise<number> {
+function listen(server: Server, signal: AbortSignal): Promise<number> {
   return new Promise((resolve, reject) => {
-    const fail = (error: Error): void => {
-      server.off('listening', ready);
-      reject(error);
-    };
-    const ready = (): void => {
-      server.off('error', fail);
-      const address = server.address();
-      if (address === null || typeof address === 'string') {
-        reject(new Error('Browser dev bridge did not expose a TCP port.'));
+    let finished = false;
+    const finish = (error?: Error, port?: number): void => {
+      if (finished) {
         return;
       }
-      resolve(address.port);
+      finished = true;
+      server.off('error', fail);
+      server.off('listening', ready);
+      signal.removeEventListener('abort', cancelled);
+      if (error === undefined) {
+        resolve(port!);
+      } else {
+        reject(error);
+      }
     };
+    const fail = (error: Error): void => {
+      finish(error);
+    };
+    const ready = (): void => {
+      const address = server.address();
+      if (address === null || typeof address === 'string') {
+        finish(new Error('Browser dev bridge did not expose a TCP port.'));
+        return;
+      }
+      finish(undefined, address.port);
+    };
+    const cancelled = (): void => {
+      finish(new BrowserDevStartupCancelledError());
+    };
+    if (signal.aborted) {
+      cancelled();
+      return;
+    }
     server.once('error', fail);
     server.once('listening', ready);
-    server.listen(0, '127.0.0.1');
+    signal.addEventListener('abort', cancelled, { once: true });
+    try {
+      server.listen(0, '127.0.0.1');
+    } catch (error) {
+      fail(error instanceof Error ? error : new Error(String(error)));
+    }
   });
 }
 
 function waitForVite(
   process: ChildProcess,
   readError: () => string,
+  signal: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const startedAt = Date.now();
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let request: ClientRequest | null = null;
+    let finished = false;
     const finish = (error?: Error): void => {
+      if (finished) {
+        return;
+      }
+      finished = true;
       if (timer !== null) {
         clearTimeout(timer);
+        timer = null;
       }
+      request?.destroy();
       process.off('exit', exited);
       process.off('error', failed);
+      signal.removeEventListener('abort', cancelled);
       if (error === undefined) {
         resolve();
       } else {
@@ -437,28 +670,52 @@ function waitForVite(
     const failed = (error: Error): void => {
       finish(error);
     };
+    const cancelled = (): void => {
+      finish(new BrowserDevStartupCancelledError());
+    };
     const probe = (): void => {
+      if (finished) {
+        return;
+      }
       if (Date.now() - startedAt >= START_TIMEOUT_MS) {
         finish(new Error('Vite did not start within 15 seconds.'));
         return;
       }
-      const request = httpGet(`${VITE_ORIGIN}/live`, (response) => {
-        response.resume();
-        if ((response.statusCode ?? 500) < 500) {
-          finish();
-        } else {
-          timer = setTimeout(probe, 150);
-        }
-      });
-      request.once('error', () => {
-        timer = setTimeout(probe, 150);
-      });
-      request.setTimeout(1_000, () => {
-        request.destroy();
-      });
+      try {
+        const probeRequest = httpGet(`${VITE_ORIGIN}/live`, (response) => {
+          if (request === probeRequest) {
+            request = null;
+          }
+          response.resume();
+          if ((response.statusCode ?? 500) < 500) {
+            finish();
+          } else if (!finished) {
+            timer = setTimeout(probe, 150);
+          }
+        });
+        request = probeRequest;
+        probeRequest.once('error', () => {
+          if (request === probeRequest) {
+            request = null;
+          }
+          if (!finished) {
+            timer = setTimeout(probe, 150);
+          }
+        });
+        probeRequest.setTimeout(1_000, () => {
+          probeRequest.destroy();
+        });
+      } catch (error) {
+        failed(error instanceof Error ? error : new Error(String(error)));
+      }
     };
+    if (signal.aborted) {
+      cancelled();
+      return;
+    }
     process.once('exit', exited);
     process.once('error', failed);
+    signal.addEventListener('abort', cancelled, { once: true });
     probe();
   });
 }
@@ -502,20 +759,41 @@ function respond(response: ServerResponse, status: number): void {
   response.end();
 }
 
-async function disposeRun(run: BrowserDevRun): Promise<void> {
-  if (run.stopping) {
-    return;
-  }
-  run.stopping = true;
-  clearInterval(run.keepAlive);
-  run.eventResponse?.end();
-  for (const subscription of run.subscriptions) {
-    subscription.dispose();
-  }
-  await Promise.all([
-    closeServer(run.bridge),
-    stopProcess(run.vite),
+async function disposeRun(
+  run: BrowserDevRun,
+  dependencies: BrowserDevBridgeDependencies,
+): Promise<void> {
+  await settleBrowserDevCleanup([
+    () => {
+      if (run.keepAlive !== null) {
+        const timer = run.keepAlive;
+        run.keepAlive = null;
+        dependencies.clearInterval(timer);
+      }
+    },
+    () => {
+      const response = run.eventResponse;
+      run.eventResponse = null;
+      response?.end();
+    },
+    ...run.subscriptions.map((subscription) => () => subscription.dispose()),
+    () => dependencies.closeServer(run.bridge),
+    () => dependencies.stopProcess(run.vite),
   ]);
+}
+
+async function settleBrowserDevCleanup(
+  cleanup: readonly (() => void | Promise<void>)[],
+): Promise<void> {
+  const results = await Promise.allSettled(
+    cleanup.map((release) => Promise.resolve().then(release)),
+  );
+  const failure = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+  if (failure !== undefined) {
+    throw failure.reason;
+  }
 }
 
 function closeServer(server: Server): Promise<void> {

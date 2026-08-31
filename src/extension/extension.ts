@@ -893,7 +893,7 @@ export async function deactivate(): Promise<void> {
   const controller = activeController, browserDevBridge = activeBrowserDevBridge,
     disposeSidecar = disposeDaemonSidecar;
   activeController = undefined; activeBrowserDevBridge = undefined; disposeDaemonSidecar = undefined;
-  await browserDevBridge?.stop();
+  browserDevBridge?.dispose(); await browserDevBridge?.stop();
   await controller?.dispose();
   await disposeSidecar?.();
 }
