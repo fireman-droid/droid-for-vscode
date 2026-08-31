@@ -409,11 +409,13 @@ export class SessionRecoveryStore {
         // Image bytes never reach persistent storage: checkpoints keep
         // placeholder rows (metadata + byteLength) and the loadSession
         // reload path re-projects the full images.
-        transcript: cloneTranscript(session.cache.transcript).map(
+        transcript: cloneTranscript(session.cache.transcript).flatMap(
           (item) =>
-            item.kind === 'image' && item.data.length > 0
-              ? { ...item, data: '' }
-              : item,
+            item.kind === 'changes' && item.writing === true
+              ? []
+              : item.kind === 'image' && item.data.length > 0
+                ? [{ ...item, data: '' }]
+                : [item],
         ),
         historyStatus: session.cache.historyStatus,
         truncated: session.cache.truncated,

@@ -26,7 +26,16 @@ export async function resolveSettledChangeFiles(
           toolPaths,
         );
   }
-  await snapshots.capture(scope, 'after');
+  try {
+    await snapshots.capture(scope, 'after');
+  } catch {
+    return toolPaths.length === 0
+      ? []
+      : fallbackChangeFiles(
+          await ctl.changeStats.read(toolPaths, scope),
+          toolPaths,
+        );
+  }
   const record = snapshots.read(sessionId, turnId);
   if (record?.before === undefined) {
     return toolPaths.length === 0

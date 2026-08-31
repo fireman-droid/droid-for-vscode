@@ -77,6 +77,7 @@ export function recordLiveToolChanges(
           ctl.transcript,
           turnId,
           files,
+          true,
         );
         ctl.reviewCoordinator?.refreshWritingTurn(
           sessionId,

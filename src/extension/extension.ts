@@ -49,7 +49,6 @@ import {
 } from './sessionExporter';
 import { RecentCommandsStore } from './RecentCommandsStore';
 import { createGitChangeStatsReader } from './changeStats';
-import { createTurnStatsHistoryLoader } from './committedHistoryStats';
 import { createTurnSnapshotStore } from './turnSnapshots';
 import { createVscodeExternalUrlOpener } from './vscodeExternalUrlOpener';
 import { createVscodePathOpener } from './vscodePathOpener';
@@ -456,16 +455,12 @@ export function activate(context: vscode.ExtensionContext): void {
     persistence,
     turnSnapshots,
   );
-  // Daemon-first history, with per-turn snapshot counts after Reload.
-  const historyLoader = createTurnStatsHistoryLoader(
-    createDaemonFirstHistoryLoader({
-      getDroid: daemonSidecar.droid,
-      isDaemonActive: () => daemonSessionsActive(),
-      fallback: new FactorySessionHistoryLoader({ diagnostics }),
-      diagnostics,
-    }),
-    turnSnapshots,
-  );
+  const historyLoader = createDaemonFirstHistoryLoader({
+    getDroid: daemonSidecar.droid,
+    isDaemonActive: () => daemonSessionsActive(),
+    fallback: new FactorySessionHistoryLoader({ diagnostics }),
+    diagnostics,
+  });
   const { attachmentSources, fileDiff, gitWorkflow } =
     createReviewFoundation(changeStats, diagnostics);
   const sessionViewer = new SessionViewerPanelController(

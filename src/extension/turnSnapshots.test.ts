@@ -570,7 +570,7 @@ describe('createTurnSnapshotStore', () => {
     await expect(store.readTreeFile(SCOPE, '../secret')).resolves.toBeUndefined();
   });
 
-  it('drops invalid persisted turns and remembers sanitized files', async () => {
+  it('accepts bounded legacy files but never serializes them again', async () => {
     const persistence = memoryPersistence({
       version: 1,
       sessions: [
@@ -592,7 +592,24 @@ describe('createTurnSnapshotStore', () => {
         },
       ],
     });
-    const { store } = createStore(async () => gitResult(''), {}, persistence);
+    const runGit: TurnSnapshotDependencies['runGit'] = async (args) => {
+      const command = verb(args);
+      if (command === 'rev-parse') {
+        return gitResult(
+          args.includes('--absolute-git-dir')
+            ? '/workspace/.git'
+            : '/workspace/.git/objects',
+        );
+      }
+      if (command === 'add') {
+        return gitResult('');
+      }
+      if (command === 'write-tree') {
+        return gitResult(`${AFTER}\n`);
+      }
+      return gitResult('', 1);
+    };
+    const { store } = createStore(runGit, {}, persistence);
     expect(store.readTurns('session-a')).toEqual([
       {
         turnId: 'turn-ok',
@@ -600,26 +617,21 @@ describe('createTurnSnapshotStore', () => {
         files: [{ path: 'src/app.ts', additions: 2, deletions: 1 }],
       },
     ]);
-    await store.rememberFiles(
-      { sessionId: 'session-a', turnId: 'turn-ok' },
-      [{ path: 'src/app.ts', additions: 9, deletions: 3 }],
-    );
-    expect(
-      (persistence.stored as { sessions: unknown[] }).sessions,
-    ).toEqual([
-      {
-        sessionId: 'session-a',
-        turns: [
-          {
-            turnId: 'turn-ok',
-            before: BEFORE,
-            files: [{ path: 'src/app.ts', additions: 9, deletions: 3 }],
-          },
-        ],
-      },
-    ]);
-    expect(persistence.stored).toMatchObject({
+    await store.capture({ sessionId: 'session-a', turnId: 'turn-ok' }, 'after');
+    expect(persistence.stored).toEqual({
       version: 1,
+      sessions: [
+        {
+          sessionId: 'session-a',
+          turns: [
+            {
+              turnId: 'turn-ok',
+              before: BEFORE,
+              after: AFTER,
+            },
+          ],
+        },
+      ],
     });
   });
 

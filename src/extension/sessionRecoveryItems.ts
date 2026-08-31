@@ -524,16 +524,18 @@ function hasControlCharacter(value: string): boolean {
 function parseChanges(
   value: UnknownRecord,
 ): Extract<SessionTranscriptItem, { kind: 'changes' }> | undefined {
-  if (!hasExactKeys(value, ['id', 'kind', 'turnId', 'files'])) {
+  if (!hasExactKeys(value, ['id', 'kind', 'turnId', 'files'], ['writing'])) {
     return undefined;
   }
   const id = dataValue(value, 'id');
   const turnId = dataValue(value, 'turnId');
   const filesValue = dataValue(value, 'files');
+  const writing = dataValue(value, 'writing');
   if (
     !isId(id) ||
     !isId(turnId) ||
-    !isExactArray(filesValue, 1, MAX_CHANGED_FILES_PER_TURN)
+    !isExactArray(filesValue, 0, MAX_CHANGED_FILES_PER_TURN) ||
+    (writing !== undefined && writing !== true)
   ) {
     return undefined;
   }
@@ -562,7 +564,13 @@ function parseChanges(
       deletions: deletions as number | null,
     });
   }
-  return { id, kind: 'changes', turnId, files };
+  return {
+    id,
+    kind: 'changes',
+    turnId,
+    files,
+    ...(writing === true ? { writing: true } : {}),
+  };
 }
 
 function isNullableChangeCount(value: unknown): value is number | null {

@@ -48,12 +48,6 @@ export interface RecoveryEntry {
   readonly dataBase64?: string;
 }
 
-export function mapStats(
-  stats: ReadonlyMap<string, { additions: number | null; deletions: number | null }>,
-): CommittedFileStat[] {
-  return [...stats].map(([path, value]) => ({ path, ...value }));
-}
-
 export function createActiveScope(
   message: ReviewOpenMessage,
   baseline: string,

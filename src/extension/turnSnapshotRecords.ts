@@ -89,7 +89,7 @@ export function serializeSessions(
     version: TURN_SNAPSHOTS_VERSION,
     sessions: [...sessions.entries()].map(([sessionId, turns]) => ({
       sessionId,
-      turns,
+      turns: turns.map(({ files: _files, ...turn }) => turn),
     })),
   };
 }
@@ -245,7 +245,7 @@ function parseTurnEntry(entry: unknown): TurnSnapshotRecord | undefined {
     ...(snapshotPaths === undefined || snapshotPaths.length === 0
       ? {}
       : { snapshotPaths }),
-    ...(files.length === 0 ? {} : { files }),
+    files,
   };
 }
 

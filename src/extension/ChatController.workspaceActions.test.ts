@@ -7,6 +7,7 @@ import {
   createController,
   createMockRuntime,
   deferred,
+  SessionRecoveryStore,
   type FileChangeStat,
   type FileDiffOutcome,
   type GitWorkflow,
@@ -1063,7 +1064,7 @@ describe('ChatController', () => {
     });
   });
 
-  it('clears a live changes row when settlement finds no net change', async () => {
+  it('persists an empty canonical settlement when no net change remains', async () => {
     const runtime = createMockRuntime(async function* () {
       yield {
         type: 'tool-start',
@@ -1111,13 +1112,13 @@ describe('ChatController', () => {
       ).toBe(true);
     });
     expect(
-      controller.transcript.transcript.some(
+      controller.transcript.transcript.find(
         (item) => item.kind === 'changes' && item.turnId === 'turn-1',
       ),
-    ).toBe(false);
+    ).toMatchObject({ files: [] });
   });
 
-  it('skips the changes summary when no tool named a workspace file', async () => {
+  it('settles an empty canonical marker when no tool named a workspace file', async () => {
     const runtime = createMockRuntime(async function* () {
       yield {
         type: 'tool-start',
@@ -1155,10 +1156,118 @@ describe('ChatController', () => {
       expect(turnStates(messages).at(-1)?.status).toBe('completed');
     });
     expect(read).not.toHaveBeenCalled();
+    expect(lastMessage(messages, 'changes.update')).toMatchObject({
+      state: 'settled',
+      files: [],
+    });
     expect(
-      messages.find((message) => message.type === 'changes.update'),
-    ).toBeUndefined();
+      controller.transcript.transcript.find(
+        (item) => item.kind === 'changes' && item.turnId === 'turn-1',
+      ),
+    ).toMatchObject({ files: [] });
   });
+
+  it.each(['pending', 'rejected'] as const)(
+    'waits for %s canonical persistence before settled publication',
+    async (outcome) => {
+      const firstWrite = deferred<void>();
+      const retryWrite = deferred<void>();
+      let writes = 0;
+      let settlementWrites = false;
+      const recovery = new SessionRecoveryStore(
+        {
+          get: () => undefined,
+          update: vi.fn(() => {
+            if (!settlementWrites) {
+              return Promise.resolve();
+            }
+            writes += 1;
+            if (writes === 1) {
+              return outcome === 'pending'
+                ? firstWrite.promise
+                : Promise.reject(new Error('persistence failed'));
+            }
+            return retryWrite.promise;
+          }),
+        },
+        'recovery',
+        0,
+      );
+      const runtime = createMockRuntime(async function* () {
+        yield {
+          type: 'tool-start',
+          toolName: 'Edit',
+          toolUseId: 'tool-1',
+          action: 'Edited workspace files',
+          inputComplete: true,
+          filePath: 'src/app.ts',
+        };
+        yield {
+          type: 'tool-result',
+          toolName: 'Edit',
+          toolUseId: 'tool-1',
+          action: 'Edited workspace files',
+          isError: false,
+        };
+        yield successfulTurn();
+      });
+      const { controller, messages } = createController(
+        () => runtime,
+        undefined,
+        createCatalog([]),
+        recovery,
+        undefined,
+        undefined,
+        undefined,
+        {
+          read: async () =>
+            new Map([['src/app.ts', { additions: 4, deletions: 2 }]]),
+        },
+      );
+      const settleWritingTurn = vi.fn();
+      Object.defineProperty(controller, 'reviewCoordinator', {
+        value: { settleWritingTurn, replay: vi.fn(async () => {}) },
+      });
+      ready(controller);
+      await waitForConnected(messages);
+      settlementWrites = true;
+
+      send(controller, 'session-1', 'turn-1', 'Change file');
+      await vi.waitFor(() => {
+        expect(writes).toBe(outcome === 'pending' ? 1 : 2);
+      });
+      expect(
+        messages.some(
+          (message) =>
+            message.type === 'changes.update' &&
+            message.state === 'settled',
+        ),
+      ).toBe(false);
+      expect(settleWritingTurn).not.toHaveBeenCalled();
+
+      if (outcome === 'pending') {
+        firstWrite.resolve();
+      }
+      await vi.waitFor(() => {
+        expect(writes).toBe(2);
+      });
+      retryWrite.resolve();
+      await vi.waitFor(() => {
+        expect(
+          messages.filter(
+            (message) =>
+              message.type === 'changes.update' &&
+              message.state === 'settled',
+          ),
+        ).toHaveLength(1);
+      });
+      expect(settleWritingTurn).toHaveBeenCalledWith(
+        'session-1',
+        'turn-1',
+        [{ path: 'src/app.ts', additions: 4, deletions: 2 }],
+      );
+    },
+  );
 
   it('forks the session, adopts the copy, and keeps the original in the catalog', async () => {
     const runtime = Object.assign(createMockRuntime(), {

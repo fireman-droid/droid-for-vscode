@@ -163,8 +163,8 @@ interface RecoveredEnrichment {
   /** True when at least one loaded item gained a recovered field. */
   readonly changed: boolean;
   /**
-   * Recovered-only diagnostic rows to insert after the given loaded
-   * index (end of the matched turn segment), in recovered order.
+   * Recovered-only canonical settlement and diagnostic rows to insert
+   * after the given loaded index (end of the matched turn segment).
    */
   readonly insertions: ReadonlyMap<
     number,
@@ -224,7 +224,7 @@ function enrichLoadedFromRecovered(
       recoveredSegment,
       replace,
     );
-    enrichSegmentChanges(
+    const missingChanges = enrichSegmentChanges(
       loaded.transcript,
       loadedSegment,
       recoveredSegment,
@@ -241,8 +241,9 @@ function enrichLoadedFromRecovered(
       loadedSegment,
       recoveredSegment,
     );
-    if (diagnostics.length > 0) {
-      insertions.set(loadedEnd - 1, diagnostics);
+    const additions = [...missingChanges, ...diagnostics];
+    if (additions.length > 0) {
+      insertions.set(loadedEnd - 1, additions);
     }
   }
 
@@ -355,13 +356,13 @@ function enrichSegmentChanges(
   loadedSegment: readonly number[],
   recoveredSegment: readonly SessionTranscriptItem[],
   replace: (index: number, item: SessionTranscriptItem) => void,
-): void {
+): readonly Extract<SessionTranscriptItem, { kind: 'changes' }>[] {
   const recoveredChanges = recoveredSegment.filter(
     (item): item is Extract<SessionTranscriptItem, { kind: 'changes' }> =>
       item.kind === 'changes',
   );
   if (recoveredChanges.length === 0) {
-    return;
+    return [];
   }
   let cursor = 0;
   for (const index of loadedSegment) {
@@ -371,30 +372,14 @@ function enrichSegmentChanges(
     }
     const candidate = recoveredChanges[cursor];
     if (candidate === undefined) {
-      return;
+      return recoveredChanges.slice(cursor);
     }
     cursor += 1;
-    const loadedByPath = new Map(
-      item.files.map((file) => [file.path, file]),
-    );
-    const recoveredPaths = new Set(
-      candidate.files.map(({ path }) => path),
-    );
-    const files = [
-      ...candidate.files.map((file) => {
-        const loadedFile = loadedByPath.get(file.path);
-        return file.additions === null &&
-          file.deletions === null &&
-          loadedFile !== undefined
-          ? loadedFile
-          : file;
-      }),
-      ...item.files.filter(({ path }) => !recoveredPaths.has(path)),
-    ];
-    if (!sameChangedFiles(item.files, files)) {
-      replace(index, { ...item, files });
+    if (!sameChangedFiles(item.files, candidate.files)) {
+      replace(index, { ...item, files: candidate.files });
     }
   }
+  return recoveredChanges.slice(cursor);
 }
 
 function sameChangedFiles(

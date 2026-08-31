@@ -93,16 +93,7 @@ export function settleWritingTurn(
       active.currentIndex === null
         ? undefined
         : active.files[active.currentIndex]?.path;
-    const settled =
-      files.length === 0
-        ? createActiveScope(
-            turnMessage(sessionId, turnId),
-            active.baseline,
-            active.baselineLabel,
-            [],
-            host.persisted,
-          )
-        : await host.loadSettled(sessionId, turnId);
+    const settled = await host.loadSettled(sessionId, turnId);
     settled.reviewed = active.reviewed;
     preserveCurrentPath(settled, currentPath);
     host.setActive(settled);

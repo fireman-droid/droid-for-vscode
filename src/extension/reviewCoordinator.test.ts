@@ -11,6 +11,7 @@ vi.mock('vscode', () => {
         onDidDelete: vi.fn(disposable),
       })),
       onDidChangeTextDocument: vi.fn(disposable),
+      textDocuments: [],
     },
   };
 });
@@ -43,6 +44,7 @@ function createCoordinator(
     persistence,
     storageDir: 'Z:\\missing-review-storage',
     publish,
+    readCanonicalTurnFiles: () => undefined,
     readWorkspaceFiles: async () => ({
       baseline: 'head-baseline',
       files,
@@ -84,6 +86,7 @@ describe('ReviewCoordinator reload recovery', () => {
       persistence,
       storageDir: 'Z:\\missing-review-storage',
       publish,
+      readCanonicalTurnFiles: () => undefined,
       readWorkspaceFiles: async () => ({
         baseline: 'head-baseline',
         files,
@@ -404,6 +407,229 @@ describe('ReviewCoordinator reload recovery', () => {
         type: 'review.state',
         state: expect.objectContaining({
           files: [expect.objectContaining({ path: 'latest.txt' })],
+        }),
+      }),
+    );
+    coordinator.dispose();
+  });
+
+  it('uses canonical turn rows for Review and Restore bytes from snapshots', async () => {
+    const persistence: ChangeStatsPersistence = {
+      get: <T,>() => undefined as T | undefined,
+      update: vi.fn(() => Promise.resolve()),
+    };
+    const publish = vi.fn();
+    const readTreeBytes = vi.fn(async () => null);
+    const coordinator = new ReviewCoordinator({
+      getWorkspaceRoot: () => 'Z:\\missing-review-workspace',
+      snapshots: {
+        read: () => ({
+          turnId: 'turn-1',
+          before: 'before-tree',
+          after: 'after-tree',
+          snapshotPaths: ['canonical.txt'],
+          files: [{ path: 'legacy.txt', additions: 99, deletions: 99 }],
+        }),
+        readTreeBytes,
+      } as unknown as TurnSnapshotStore,
+      fileDiff: {
+        openDiff: vi.fn<FileDiffOpener['openDiff']>(
+          async () => 'opened-diff',
+        ),
+      },
+      persistence,
+      storageDir: 'Z:\\missing-review-storage',
+      publish,
+      readCanonicalTurnFiles: () => [
+        { path: 'canonical.txt', additions: 2, deletions: 1 },
+      ],
+      readWorkspaceFiles: async () => ({
+        baseline: 'head-baseline',
+        files,
+      }),
+      readBranchDiff: async () => undefined,
+    });
+
+    coordinator.handle({
+      type: 'review.open',
+      sessionId: 'session-1',
+      scopeKind: 'turn',
+      turnId: 'turn-1',
+    });
+    await coordinator.replay('session-1');
+
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'review.state',
+        state: expect.objectContaining({
+          files: [
+            expect.objectContaining({
+              path: 'canonical.txt',
+              additions: 2,
+              deletions: 1,
+            }),
+          ],
+        }),
+      }),
+    );
+    const state = publish.mock.calls.find(
+      ([message]) => message.type === 'review.state',
+    )?.[0]?.state;
+    coordinator.handle({
+      type: 'review.restorePreview',
+      sessionId: 'session-1',
+      reviewScopeId: state.reviewScopeId,
+      baseline: state.baseline,
+      target: 'turn',
+    });
+    await coordinator.replay('session-1');
+
+    expect(readTreeBytes).toHaveBeenCalledWith(
+      { sessionId: 'session-1', turnId: 'turn-1' },
+      'canonical.txt',
+      'before',
+    );
+    expect(readTreeBytes).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'legacy.txt',
+      expect.anything(),
+    );
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'review.restorePreview',
+        restorable: ['canonical.txt'],
+      }),
+    );
+    coordinator.dispose();
+  });
+
+  it('keeps canonical Review rows when snapshot metadata makes Restore unavailable', async () => {
+    const persistence: ChangeStatsPersistence = {
+      get: <T,>() => undefined as T | undefined,
+      update: vi.fn(() => Promise.resolve()),
+    };
+    const publish = vi.fn();
+    const coordinator = new ReviewCoordinator({
+      getWorkspaceRoot: () => 'Z:\\missing-review-workspace',
+      snapshots: {
+        read: () => ({
+          turnId: 'turn-1',
+          before: 'before-tree',
+          after: 'after-tree',
+        }),
+        readTreeBytes: vi.fn(async () => null),
+      } as unknown as TurnSnapshotStore,
+      fileDiff: {
+        openDiff: vi.fn<FileDiffOpener['openDiff']>(
+          async () => 'opened-diff',
+        ),
+      },
+      persistence,
+      storageDir: 'Z:\\missing-review-storage',
+      publish,
+      readCanonicalTurnFiles: () => [
+        { path: 'canonical.txt', additions: 2, deletions: 1 },
+      ],
+      readWorkspaceFiles: async () => ({
+        baseline: 'head-baseline',
+        files,
+      }),
+      readBranchDiff: async () => undefined,
+    });
+
+    coordinator.handle({
+      type: 'review.open',
+      sessionId: 'session-1',
+      scopeKind: 'turn',
+      turnId: 'turn-1',
+    });
+    await coordinator.replay('session-1');
+    const state = publish.mock.calls.find(
+      ([message]) => message.type === 'review.state',
+    )?.[0]?.state;
+    expect(state.files).toEqual([
+      expect.objectContaining({ path: 'canonical.txt' }),
+    ]);
+
+    coordinator.handle({
+      type: 'review.restorePreview',
+      sessionId: 'session-1',
+      reviewScopeId: state.reviewScopeId,
+      baseline: state.baseline,
+      target: 'turn',
+    });
+    await coordinator.replay('session-1');
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'review.restorePreview',
+        restorable: [],
+        conflicted: ['canonical.txt'],
+      }),
+    );
+    coordinator.dispose();
+  });
+
+  it('uses bounded legacy snapshot rows only without a canonical settlement', async () => {
+    const persistence: ChangeStatsPersistence = {
+      get: <T,>() => undefined as T | undefined,
+      update: vi.fn(() => Promise.resolve()),
+    };
+    const publish = vi.fn();
+    let canonical: readonly { path: string; additions: number; deletions: number }[] | undefined =
+      [];
+    const coordinator = new ReviewCoordinator({
+      getWorkspaceRoot: () => 'Z:\\missing-review-workspace',
+      snapshots: {
+        read: () => ({
+          turnId: 'turn-1',
+          before: 'before-tree',
+          after: 'after-tree',
+          files: [{ path: 'legacy.txt', additions: 9, deletions: 4 }],
+        }),
+      } as unknown as TurnSnapshotStore,
+      fileDiff: {
+        openDiff: vi.fn<FileDiffOpener['openDiff']>(
+          async () => 'opened-diff',
+        ),
+      },
+      persistence,
+      storageDir: 'Z:\\missing-review-storage',
+      publish,
+      readCanonicalTurnFiles: () => canonical,
+      readWorkspaceFiles: async () => ({
+        baseline: 'head-baseline',
+        files,
+      }),
+      readBranchDiff: async () => undefined,
+    });
+
+    coordinator.handle({
+      type: 'review.open',
+      sessionId: 'session-1',
+      scopeKind: 'turn',
+      turnId: 'turn-1',
+    });
+    await coordinator.replay('session-1');
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'review.state',
+        state: expect.objectContaining({ files: [] }),
+      }),
+    );
+
+    canonical = undefined;
+    coordinator.handle({
+      type: 'review.open',
+      sessionId: 'session-1',
+      scopeKind: 'turn',
+      turnId: 'turn-1',
+    });
+    await coordinator.replay('session-1');
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'review.state',
+        state: expect.objectContaining({
+          files: [expect.objectContaining({ path: 'legacy.txt' })],
         }),
       }),
     );

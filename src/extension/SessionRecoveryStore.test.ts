@@ -339,14 +339,6 @@ describe('SessionRecoveryStore', () => {
           id: 'changes-1',
           kind: 'changes',
           turnId: 'turn-1',
-          files: [],
-        },
-      ],
-      [
-        {
-          id: 'changes-1',
-          kind: 'changes',
-          turnId: 'turn-1',
           files: [
             { path: 'C:/absolute.ts', additions: 1, deletions: 0 },
           ],
@@ -383,6 +375,55 @@ describe('SessionRecoveryStore', () => {
       await store.load();
       expect(store.readSession('session-1')).toBeUndefined();
     }
+  });
+
+  it('round-trips an explicitly empty canonical changes settlement', async () => {
+    const persistence = memoryPersistence({
+      version: SESSION_RECOVERY_VERSION,
+      selectedSessionId: 'session-1',
+      sessions: [
+        storedSession('session-1', 1, [
+          {
+            id: 'changes-1',
+            kind: 'changes',
+            turnId: 'turn-1',
+            files: [],
+          },
+        ]),
+      ],
+    });
+    const store = new SessionRecoveryStore(persistence);
+
+    await store.load();
+
+    expect(store.readSession('session-1')?.transcript).toEqual([
+      {
+        id: 'changes-1',
+        kind: 'changes',
+        turnId: 'turn-1',
+        files: [],
+      },
+    ]);
+  });
+
+  it('does not persist a live writing changes row as canonical settlement', async () => {
+    const persistence = memoryPersistence();
+    const store = new SessionRecoveryStore(persistence);
+    store.writeSession('session-1', cache([
+      {
+        id: 'changes-1',
+        kind: 'changes',
+        turnId: 'turn-1',
+        files: [{ path: 'src/app.ts', additions: null, deletions: null }],
+        writing: true,
+      },
+    ]));
+
+    await store.flush();
+
+    expect(persistence.value).toMatchObject({
+      sessions: [expect.objectContaining({ transcript: [] })],
+    });
   });
 
   it('rejects inconsistent persisted tool progress metadata', async () => {

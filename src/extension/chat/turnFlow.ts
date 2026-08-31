@@ -10,7 +10,6 @@ import type {
 } from '../../runtime/DroidRuntime';
 import type { RuntimeEvent } from '../../runtime/runtimeEvents';
 import {
-  collectToolFilePaths,
   createTurnActivityState,
   projectAssistantDelta,
   projectSubagentStarted,
@@ -23,7 +22,6 @@ import {
   appendAcceptedUserPrompt,
   attachUserMessageId,
   projectHostTranscriptMessage,
-  reconcileTurnChanges,
   stableTranscriptId,
   type HostTranscriptState,
 } from '../hostTranscriptState';
@@ -33,7 +31,7 @@ import {
   recordLiveToolChanges,
 } from './liveChanges';
 import { captureSnapshotBeforeInBackground } from './snapshotCapture';
-import { resolveSettledChangeFiles } from './settleTurnChanges';
+import { publishTurnChanges } from './publishTurnChanges';
 import { scheduleLiveSubagentSync, settleTurnSubagents } from './subagentWatch';
 import { settleQueueAfterTurn } from './queue';
 import {
@@ -71,7 +69,7 @@ import {
   replaceRuntime,
   startReplacement,
 } from './runtimeLifecycle';
-import { flushRecoveryCheckpointInBackground, flushRecoveryCheckpointOrReport, scheduleRecoveryCheckpoint } from './recovery';
+import { flushRecoveryCheckpointOrReport, scheduleRecoveryCheckpoint } from './recovery';
 import {
   discardPendingThinking,
   flushPendingThinking,
@@ -560,7 +558,6 @@ export function handleTurnComplete(
       case 'success':
         publishTurnChanges(ctl, sessionId, turnId);
         setTurnStatus(ctl, sessionId, turnId, 'completed');
-        flushRecoveryCheckpointInBackground(ctl);
         settleTurnSubagents(ctl, sessionId, turnId);
         refreshContextAfterTurn(ctl, sessionId);
         finishSpecHandoff(ctl, sessionId, turnId);
@@ -568,7 +565,6 @@ export function handleTurnComplete(
       case 'interrupted':
         publishTurnChanges(ctl, sessionId, turnId);
         setTurnStatus(ctl, sessionId, turnId, 'interrupted');
-        flushRecoveryCheckpointInBackground(ctl);
         settleTurnSubagents(ctl, sessionId, turnId);
         refreshContextAfterTurn(ctl, sessionId);
         finishSpecHandoff(ctl, sessionId, turnId);
@@ -641,53 +637,9 @@ export function finishSpecHandoff(
 /**
  * Publishes the settled changed-files ledger for a finished turn.
  * Git trees are the authority when a before-snapshot exists; the
- * in-memory baseline remains the fallback. Settlement is dropped
- * when the session changes before stats arrive. */
-export function publishTurnChanges(
-  ctl: ChatControllerInternals, sessionId: string, turnId: string,
-): void {
-    if (
-      ctl.sessionId !== sessionId ||
-      ctl.turn?.turnId !== turnId
-    ) {
-      return;
-    }
-    // Settlement owns the stream; pending reads must not publish after it.
-    ctl.turn.changesLedger?.cancel();
-    const toolPaths = collectToolFilePaths(ctl.turn.activity);
-    if (toolPaths.length === 0) {
-      return;
-    }
-    const runtimeGeneration = ctl.runtimeGeneration;
-    void resolveSettledChangeFiles(ctl, sessionId, turnId, toolPaths).then(
-      async (files) => {
-        if (ctl.disposed || ctl.sessionId !== sessionId ||
-          ctl.runtimeGeneration !== runtimeGeneration) {
-          return;
-        }
-        if (files.length > 0) {
-          await ctl.turnSnapshots?.rememberFiles({ sessionId, turnId }, files);
-        }
-        if (ctl.disposed || ctl.sessionId !== sessionId ||
-          ctl.runtimeGeneration !== runtimeGeneration) {
-          return;
-        }
-        const next = reconcileTurnChanges(ctl.transcript, turnId, files);
-        if (next !== ctl.transcript) {
-          ctl.transcript = next;
-          scheduleRecoveryCheckpoint(ctl);
-        }
-        ctl.reviewCoordinator?.settleWritingTurn(sessionId, turnId, files);
-        ctl.emit({
-          type: 'changes.update',
-          sessionId,
-          turnId,
-          state: 'settled',
-          files,
-        });
-      },
-    );
-}
+ * in-memory baseline remains the fallback. Canonical transcript
+ * durability precedes every settled publication. */
+export { publishTurnChanges } from './publishTurnChanges';
 
 export function handleStop(
   ctl: ChatControllerInternals,
@@ -1014,7 +966,6 @@ export function failTurn(
       retryable: true,
     });
     emitTurnState(ctl, sessionId, turnId, 'failed');
-    flushRecoveryCheckpointInBackground(ctl);
     refreshContextAfterTurn(ctl, sessionId);
 }
 

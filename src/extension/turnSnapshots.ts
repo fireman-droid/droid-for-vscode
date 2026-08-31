@@ -15,7 +15,6 @@ import { toWorkspaceRelativePath } from '../runtime/toolFilePath';
 import {
   parseGitNumstat,
   type ChangeStatsPersistence,
-  type CommittedFileStat,
   type FileChangeStat,
 } from './changeStats';
 import {
@@ -23,7 +22,6 @@ import {
   cloneSessions,
   readPersistedSessions,
   readTurn,
-  sanitizeFiles,
   serializeSessions,
   type TurnSnapshotRecord,
   upsertTurn,
@@ -98,10 +96,6 @@ export interface TurnSnapshotStore {
     path: string,
     phase: 'before' | 'after',
   ): Promise<Buffer | null | undefined>;
-  rememberFiles(
-    scope: TurnSnapshotScope,
-    files: readonly CommittedFileStat[],
-  ): Promise<void>;
   read(sessionId: string, turnId?: string): TurnSnapshotRecord | undefined;
   readTurns(sessionId: string): readonly TurnSnapshotRecord[];
   prune(): Promise<void>;
@@ -581,18 +575,6 @@ export function createTurnSnapshotStore(
       return bytes.includes(0) ? undefined : bytes.toString('utf8');
     },
     readTreeBytes,
-    rememberFiles(scope, files) {
-      return enqueue(async () => {
-        if (disposed || closing) {
-          return;
-        }
-        const sanitized = sanitizeFiles(files);
-        if (sanitized === undefined) {
-          return;
-        }
-        await persistPatch(scope, { files: sanitized });
-      });
-    },
     read(sessionId, turnId) {
       return cloneRecord(readTurn(sessions, sessionId, turnId));
     },

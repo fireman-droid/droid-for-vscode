@@ -65,6 +65,18 @@ export function createReviewFeature(options: {
       'review-restore',
     ).fsPath,
     publish: (message) => options.getController().emit(message),
+    readCanonicalTurnFiles(sessionId, turnId) {
+      const controller = options.getController();
+      if (controller.sessionId !== sessionId) {
+        return undefined;
+      }
+      const changes = [...controller.transcript.transcript]
+        .reverse()
+        .find(
+          (item) => item.kind === 'changes' && item.turnId === turnId,
+        );
+      return changes?.kind === 'changes' ? changes.files : undefined;
+    },
     async readWorkspaceFiles() {
       const root = getRoot();
       if (root === undefined) return undefined;

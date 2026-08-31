@@ -19,10 +19,7 @@ import type {
   ReviewWebviewMessage,
 } from '../shared/reviewProtocol';
 import { toWorkspaceRelativePath } from '../runtime/toolFilePath';
-import type {
-  ChangeStatsPersistence,
-  CommittedFileStat,
-} from './changeStats';
+import type { ChangeStatsPersistence, CommittedFileStat } from './changeStats';
 import type { FileDiffOpener } from './fileDiffOpener';
 import type { TurnSnapshotStore } from './turnSnapshots';
 import {
@@ -35,7 +32,6 @@ import {
   isNotFound,
   isRecoveryEntry,
   latestPersistedScope,
-  mapStats,
   readPersistedScopes,
   restoreRecovery,
   sameBytes,
@@ -57,10 +53,11 @@ const REVIEW_STORAGE_VERSION = 1;
 const MAX_PERSISTED_SCOPES = 16;
 const MAX_RESTORE_BYTES = 16 * 1024 * 1024;
 const RECOVERY_LOG = 'restore-recovery.json';
-
 type Unsequenced<T> = T extends { readonly sequence: number }
   ? Omit<T, 'sequence'>
   : never;
+type CanonicalTurnFiles = (sessionId: string, turnId: string) =>
+  readonly CommittedFileStat[] | undefined;
 
 export interface ReviewCoordinatorOptions {
   readonly getWorkspaceRoot: () => string | undefined;
@@ -69,6 +66,7 @@ export interface ReviewCoordinatorOptions {
   readonly persistence: ChangeStatsPersistence;
   readonly storageDir: string;
   readonly publish: (message: Unsequenced<ReviewHostMessage>) => void;
+  readonly readCanonicalTurnFiles: CanonicalTurnFiles;
   readonly readWorkspaceFiles: () => Promise<
     | { readonly baseline: string; readonly files: readonly CommittedFileStat[] }
     | undefined
@@ -98,7 +96,6 @@ interface RestorePreview {
   readonly target: 'file' | 'turn';
   readonly entries: readonly RestoreEntry[];
 }
-
 export class ReviewCoordinator implements vscode.Disposable {
   private active: ActiveScope | null = null;
   private readonly persisted: Map<string, PersistedScope>;
@@ -310,6 +307,7 @@ export class ReviewCoordinator implements vscode.Disposable {
 
   private async loadTurnScope(sessionId: string, turnId: string): Promise<ActiveScope> {
     const record = this.options.snapshots.read(sessionId, turnId);
+    const files = this.options.readCanonicalTurnFiles(sessionId, turnId) ?? record?.files ?? [];
     const message: ReviewOpenMessage = {
       type: 'review.open',
       sessionId,
@@ -317,14 +315,13 @@ export class ReviewCoordinator implements vscode.Disposable {
       turnId,
     };
     if (record?.before === undefined || record.after === undefined) {
-      const fallbackFiles = record?.files ?? [];
-      if (fallbackFiles.length > 0) {
+      if (files.length > 0) {
         const workspace = await this.options.readWorkspaceFiles();
         const fallback = createActiveScope(
           message,
           workspace?.baseline ?? record?.before ?? `missing-${turnId}`,
           'HEAD',
-          fallbackFiles,
+          files,
           this.persisted,
           true,
           false,
@@ -340,7 +337,7 @@ export class ReviewCoordinator implements vscode.Disposable {
         message,
         record?.before ?? `missing-${turnId}`,
         'Before turn',
-        fallbackFiles,
+        files,
         this.persisted,
         false,
       );
@@ -348,12 +345,11 @@ export class ReviewCoordinator implements vscode.Disposable {
       unavailable.message = 'This turn no longer has a complete before/after snapshot.';
       return unavailable;
     }
-    const stats = record.files ?? mapStats(await this.options.snapshots.diff({ sessionId, turnId }));
     return createActiveScope(
       message,
       `${record.before}:${record.after}`,
       'Before turn',
-      stats,
+      files,
       this.persisted,
     );
   }
@@ -702,6 +698,9 @@ export class ReviewCoordinator implements vscode.Disposable {
     }
     const entries: RestoreEntry[] = [];
     for (const path of paths) {
+      const snapshotPaths = this.options.snapshots.read(
+        scope.sessionId, scope.turnId,
+      )?.snapshotPaths;
       const before = await this.options.snapshots.readTreeBytes(
         { sessionId: scope.sessionId, turnId: scope.turnId },
         path,
@@ -726,6 +725,7 @@ export class ReviewCoordinator implements vscode.Disposable {
         before !== undefined &&
         after !== undefined &&
         current !== undefined &&
+        (before !== null || after !== null || snapshotPaths?.includes(path) === true) &&
         (before?.length ?? 0) <= MAX_RESTORE_BYTES &&
         (after?.length ?? 0) <= MAX_RESTORE_BYTES;
       entries.push({

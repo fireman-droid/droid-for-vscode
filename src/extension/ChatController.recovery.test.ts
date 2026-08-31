@@ -131,7 +131,7 @@ describe('ChatController', () => {
     });
   });
 
-  it('restores missing turn snapshot files from recovered Changes', async () => {
+  it('does not backfill snapshot files from recovered canonical Changes', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
     seed.writeSession('saved-session', {
@@ -150,10 +150,8 @@ describe('ChatController', () => {
     });
     seed.selectSession('saved-session');
     await seed.flush();
-    const rememberFiles = vi.fn(async () => undefined);
     const snapshotsStore = {
       read: vi.fn(() => ({ turnId: 'saved-turn' })),
-      rememberFiles,
     } as unknown as TurnSnapshotStore;
     const runtime = createMockRuntime();
     runtime.initialize.mockResolvedValue(available('saved-session'));
@@ -170,10 +168,7 @@ describe('ChatController', () => {
     ready(controller);
     await waitForConnected(messages);
 
-    expect(rememberFiles).toHaveBeenCalledWith(
-      { sessionId: 'saved-session', turnId: 'saved-turn' },
-      [{ path: 'src/app.ts', additions: 3, deletions: 1 }],
-    );
+    expect(snapshotsStore.read).not.toHaveBeenCalled();
   });
 
   it('emits an early connecting snapshot from the recovery checkpoint before runtime activation completes', async () => {
@@ -966,6 +961,11 @@ describe('ChatController', () => {
       expect.objectContaining({
         kind: 'assistant',
         text: 'Persisted answer',
+      }),
+      expect.objectContaining({
+        kind: 'changes',
+        turnId: 'turn-persisted',
+        files: [],
       }),
     ]);
   });

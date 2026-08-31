@@ -160,34 +160,25 @@ export function truncateFromUserMessage(
 
 /**
  * Reconciles the per-turn changed-files summary in place. Live
- * frames refresh the current rows, settlement replaces them with the
- * authoritative list, and an empty settlement removes a reverted
- * turn from the transcript.
+ * frames refresh the current rows and settlement replaces them with
+ * the authoritative list. An empty settlement remains explicitly
+ * present so it is durable canonical truth rather than legacy absence.
  */
 export function reconcileTurnChanges(
   state: HostTranscriptState,
   turnId: string,
   files: readonly ChangedFileSummary[],
+  writing = false,
 ): HostTranscriptState {
   const id = stableTranscriptId('changes', turnId);
   const index = state.transcript.findIndex((item) => item.id === id);
-  if (files.length === 0) {
-    if (index < 0) {
-      return state;
-    }
-    return {
-      ...state,
-      transcript: state.transcript.filter(
-        (_item, itemIndex) => itemIndex !== index,
-      ),
-    };
-  }
   const nextFiles = files.slice(0, MAX_CHANGED_FILES_PER_TURN);
   const nextItem: SessionTranscriptItem = {
     id,
     kind: 'changes',
     turnId,
     files: nextFiles,
+    ...(writing ? { writing: true } : {}),
   };
   if (index < 0) {
     return appendItem(state, nextItem);
@@ -204,7 +195,8 @@ export function reconcileTurnChanges(
         file.additions === next.additions &&
         file.deletions === next.deletions
       );
-    })
+    }) &&
+    (existing.writing === true) === writing
   ) {
     return state;
   }

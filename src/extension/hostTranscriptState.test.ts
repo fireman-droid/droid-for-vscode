@@ -753,12 +753,12 @@ describe('hostTranscriptState', () => {
       changes?.kind === 'changes' ? changes.files : [],
     ).toHaveLength(MAX_CHANGED_FILES_PER_TURN);
 
-    const removed = reconcileTurnChanges(clipped, 'turn-1', []);
+    const settledEmpty = reconcileTurnChanges(clipped, 'turn-1', []);
     expect(
-      removed.transcript.some(
+      settledEmpty.transcript.find(
         (item) => item.kind === 'changes' && item.turnId === 'turn-1',
       ),
-    ).toBe(false);
+    ).toMatchObject({ files: [] });
   });
 
   it('never projects interaction or raw tool payload shapes', () => {

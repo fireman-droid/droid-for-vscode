@@ -62,9 +62,9 @@ Diff 审查链路已经接通。`0.7.89` 新版 VSIX 已覆盖安装；Cursor �
   仍会替换它；Commit 只在当前查看该 Latest Turn 时出现，失败后重新读取 Git
   状态并移除已不存在的选中文件，Session 切换按各自 transcript 隔离
 - 实时 Changes 同步写入 Host transcript；已打开的 writing Review scope 会随新增文件
-  在同一 scope 身份内刷新，并在 turn 结束后切换到 settled snapshot；Reload
-  会用持久化 Changes 补齐 snapshot 文件清单并保留完整 settled 文件集，最终无
-  净改动时清除临时 Dock
+  在同一 scope 身份内刷新。turn 结束后，包含空文件集的 canonical transcript
+  settlement 必须 durable 才发布 settled Review 和 Changes；Reload 不回填 snapshot
+  文件清单，snapshot-v1 文件只在 canonical settlement 缺失时只读兼容
 - Latest Turn 缺少完整 before/after snapshot 时，使用已记录的文件清单回退到
   HEAD ↔ Working Diff；该回退只读，不提供 Restore
 - 历史 Changes、Workspace 和 Branch 使用同一 ReviewDock；Branch 明确显示
@@ -78,7 +78,8 @@ Diff 审查链路已经接通。`0.7.89` 新版 VSIX 已覆盖安装；Cursor �
   在 Reload 后重建并验证版本，文件再次变化时显示 changed-after-review，不计入完成率
 - Review 的 More 菜单作为按钮上方的悬浮层打开，不改变 Dock 或控制栏高度
 - Turn 提供 Restore file / Restore turn 双重预检；展开的文件清单保持路径和
-  created 标记可读；未保存编辑、after-state
+  created 标记可读。Canonical settlement 决定 Review 和 Restore 的路径/统计，
+  before/after tree 及 snapshot path metadata 决定 Restore 是否可用；未保存编辑、after-state
   不匹配或快照缺失都会阻止写入，整 Turn 任一冲突则全部不写；操作成功或 preview
   已失效后会清除旧确认状态
 - Tool 明确命名的 Git ignored 文件也会进入 before / after 精确快照，可正常
