@@ -16,7 +16,7 @@ export interface ReviewWritingScopeHost {
   loadSettled(sessionId: string, turnId: string): Promise<ActiveScope>;
   refreshVersions(scope: ActiveScope): Promise<void>;
   persist(scope: ActiveScope): Promise<void>;
-  enqueue(task: () => Promise<void>): void;
+  enqueue(task: () => Promise<void>): Promise<void>;
 }
 
 const turnMessage = (
@@ -84,9 +84,11 @@ export function settleWritingTurn(
   sessionId: string,
   turnId: string,
   files: readonly CommittedFileStat[],
-): void {
-  if (!isWritingTurn(host.getActive(), sessionId, turnId)) return;
-  host.enqueue(async () => {
+): Promise<void> {
+  if (!isWritingTurn(host.getActive(), sessionId, turnId)) {
+    return Promise.resolve();
+  }
+  return host.enqueue(async () => {
     const active = host.getActive();
     if (!isWritingTurn(active, sessionId, turnId)) return;
     const currentPath =
@@ -96,10 +98,10 @@ export function settleWritingTurn(
     const settled = await host.loadSettled(sessionId, turnId);
     settled.reviewed = active.reviewed;
     preserveCurrentPath(settled, currentPath);
-    host.setActive(settled);
     await host.refreshVersions(settled);
-    host.publish(settled);
     await host.persist(settled);
+    host.setActive(settled);
+    host.publish(settled);
   });
 }
 

@@ -1,31 +1,21 @@
 import { randomUUID } from 'node:crypto';
-import {
-  mkdir,
-  readFile,
-  rm,
-  unlink,
-  writeFile,
-} from 'node:fs/promises';
+import { mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-
 import * as vscode from 'vscode';
 
 import type { RuntimeGitDiff } from '../runtime/DroidRuntime';
 import type {
   ReviewHostMessage,
   ReviewOpenMessage,
-  ReviewScopeKind,
   ReviewScopeState,
   ReviewWebviewMessage,
 } from '../shared/reviewProtocol';
+import type { RuntimeDiagnosticSink } from '../runtime/runtimeDiagnostics';
 import { toWorkspaceRelativePath } from '../runtime/toolFilePath';
 import type { ChangeStatsPersistence, CommittedFileStat } from './changeStats';
 import type { FileDiffOpener } from './fileDiffOpener';
 import type { TurnSnapshotStore } from './turnSnapshots';
-import {
-  runAgentReview,
-  type ReviewAgentRunner,
-} from './reviewAgent';
+import { runAgentReview, type ReviewAgentRunner } from './reviewAgent';
 import {
   digest,
   createActiveScope,
@@ -41,12 +31,7 @@ import {
   type PersistedScope,
   type RecoveryEntry,
 } from './reviewCoordinatorSupport';
-import {
-  openWritingTurn,
-  refreshWritingTurn,
-  settleWritingTurn,
-  type ReviewWritingScopeHost,
-} from './reviewWritingScopes';
+import { openWritingTurn, refreshWritingTurn, settleWritingTurn, type ReviewWritingScopeHost } from './reviewWritingScopes';
 
 const REVIEW_STORAGE_KEY = 'droidvisx.reviewState';
 const REVIEW_STORAGE_VERSION = 1;
@@ -58,7 +43,6 @@ type Unsequenced<T> = T extends { readonly sequence: number }
   : never;
 type CanonicalTurnFiles = (sessionId: string, turnId: string) =>
   readonly CommittedFileStat[] | undefined;
-
 export interface ReviewCoordinatorOptions {
   readonly getWorkspaceRoot: () => string | undefined;
   readonly snapshots: TurnSnapshotStore;
@@ -79,8 +63,8 @@ export interface ReviewCoordinatorOptions {
     | undefined
   >;
   readonly runAgentReview?: ReviewAgentRunner;
+  readonly diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>;
 }
-
 interface RestoreEntry {
   readonly path: string;
   readonly before: Buffer | null;
@@ -117,17 +101,13 @@ export class ReviewCoordinator implements vscode.Disposable {
       snapshots: options.snapshots,
       persisted: this.persisted,
       getActive: () => this.active,
-      setActive: (scope) => {
-        this.active = scope;
-      },
+      setActive: (scope) => { if (!this.disposed) this.active = scope; },
       publish: (scope) => this.publishState(scope),
       loadSettled: (sessionId, turnId) =>
         this.loadTurnScope(sessionId, turnId),
-      refreshVersions: (scope) => this.refreshVersions(scope),
+      refreshVersions: (scope) => this.disposed ? Promise.resolve() : this.refreshVersions(scope),
       persist: (scope) => this.persistScope(scope),
-      enqueue: (task) => {
-        void (this.operation = this.operation.then(task));
-      },
+      enqueue: (task) => this.enqueue(task, true),
     };
     const watcher = vscode.workspace.createFileSystemWatcher('**/*');
     this.disposables = [
@@ -141,15 +121,11 @@ export class ReviewCoordinator implements vscode.Disposable {
     ];
     void this.recoverInterruptedRestore();
   }
-
   handle(message: ReviewWebviewMessage): void {
-    if (this.disposed) {
-      return;
-    }
-    this.operation = this.operation
-      .then(() => this.handleNow(message))
+    if (this.disposed) return;
+    void this.enqueue(() => this.handleNow(message))
       .catch((error) => {
-        this.result(
+        if (!this.disposed) this.result(
           message.sessionId,
           ('reviewScopeId' in message ? message.reviewScopeId : undefined) ??
             'review',
@@ -159,76 +135,94 @@ export class ReviewCoordinator implements vscode.Disposable {
         );
       });
   }
-
   openWritingTurn(
     sessionId: string,
     turnId: string,
     files: readonly CommittedFileStat[],
   ): void {
+    if (this.disposed) return;
     openWritingTurn(this.writingScopes, sessionId, turnId, files);
   }
-
   refreshWritingTurn(
     sessionId: string,
     turnId: string,
     files: readonly CommittedFileStat[],
   ): void {
+    if (this.disposed) return;
     refreshWritingTurn(this.writingScopes, sessionId, turnId, files);
   }
-
   settleWritingTurn(
     sessionId: string,
     turnId: string,
     files: readonly CommittedFileStat[],
-  ): void {
-    settleWritingTurn(this.writingScopes, sessionId, turnId, files);
+  ): Promise<void> {
+    return this.disposed
+      ? Promise.resolve()
+      : settleWritingTurn(this.writingScopes, sessionId, turnId, files);
   }
-
   replay(sessionId: string): Promise<void> {
-    return this.replayTo(sessionId, this.options.publish);
+    return this.replayTo(sessionId, (message) => this.publish(message));
   }
-
   async replayTo(
     sessionId: string,
     publish: (message: Unsequenced<ReviewHostMessage>) => void,
   ): Promise<void> {
-    if (this.disposed) {
-      return;
-    }
-    await this.operation;
+    if (this.disposed) return;
+    return this.enqueue(() => this.replayNow(sessionId, publish));
+  }
+  private async replayNow(
+    sessionId: string,
+    publish: (message: Unsequenced<ReviewHostMessage>) => void,
+  ): Promise<void> {
+    if (this.disposed) return;
     if (this.active?.sessionId !== sessionId) {
       const saved = latestPersistedScope(this.persisted, sessionId);
       if (saved === undefined) {
         this.active = null;
         return;
       }
-      this.active = await this.loadScope({
+      const restored = await this.loadScope({
         type: 'review.open',
         sessionId,
         scopeKind: saved.scopeKind,
         ...(saved.turnId === undefined ? {} : { turnId: saved.turnId }),
       });
-      await this.refreshVersions(this.active);
+      await this.refreshVersions(restored);
+      if (this.disposed) return;
+      this.active = restored;
     }
+    if (this.disposed) return;
     this.publishState(this.active, publish);
   }
-
   dispose(): void {
     this.disposed = true;
-    if (this.refreshTimer !== null) {
-      clearTimeout(this.refreshTimer);
-    }
+    if (this.refreshTimer !== null) clearTimeout(this.refreshTimer);
     for (const disposable of this.disposables) {
       disposable.dispose();
     }
     this.previews.clear();
   }
-
+  private enqueue(
+    task: () => Promise<void>,
+    reportFailure = false,
+  ): Promise<void> {
+    const result = this.operation.then(() => this.disposed ? undefined : task());
+    this.operation = result.catch(() => undefined);
+    if (reportFailure) void result.catch(() => this.reportQueueFailure());
+    return result;
+  }
+  private reportQueueFailure(): void {
+    try {
+      this.options.diagnostics?.record({
+        level: 'warn',
+        name: 'host.review.queue-failed',
+      });
+    } catch {}
+  }
   private async handleNow(message: ReviewWebviewMessage): Promise<void> {
     switch (message.type) {
       case 'review.open':
-        await this.open(message);
-        return;
+        return this.open(message);
       case 'review.refresh':
         if (
           this.active !== null &&
@@ -240,43 +234,38 @@ export class ReviewCoordinator implements vscode.Disposable {
         }
         return;
       case 'review.navigate':
-        await this.navigate(message);
-        return;
+        return this.navigate(message);
       case 'review.selectFile':
-        await this.selectFile(message);
-        return;
+        return this.selectFile(message);
       case 'review.markReviewed':
-        await this.markReviewed(message);
-        return;
+        return this.markReviewed(message);
       case 'review.restorePreview':
-        await this.previewRestore(message);
-        return;
+        return this.previewRestore(message);
       case 'review.restoreFile':
       case 'review.restoreTurn':
-        await this.restore(message);
-        return;
+        return this.restore(message);
       case 'review.runAgentReview':
-        await runAgentReview(
+        return runAgentReview(
           this.options.runAgentReview,
-          this.options.publish,
+          (response) => this.publish(response),
           message,
           this.requireScope(message),
         );
-        return;
     }
   }
-
   private async open(message: ReviewOpenMessage): Promise<void> {
     const loaded = await this.loadScope(message);
-    this.active = loaded;
+    if (this.disposed) return;
     await this.refreshVersions(loaded);
+    if (this.disposed) return;
+    this.active = loaded;
     this.publishState(loaded);
+    if (this.disposed) return;
     (await this.openCurrent(loaded, false))
       ? this.result(loaded.sessionId, loaded.reviewScopeId, 'open', true, 'Review opened.')
       : this.publishState(loaded);
     await this.persistScope(loaded);
   }
-
   private async loadScope(message: ReviewOpenMessage): Promise<ActiveScope> {
     if (message.scopeKind === 'turn') {
       return this.loadTurnScope(message.sessionId, message.turnId!);
@@ -304,7 +293,6 @@ export class ReviewCoordinator implements vscode.Disposable {
       { branchCommitCount: source.diff.commitCount },
     );
   }
-
   private async loadTurnScope(sessionId: string, turnId: string): Promise<ActiveScope> {
     const record = this.options.snapshots.read(sessionId, turnId);
     const files = this.options.readCanonicalTurnFiles(sessionId, turnId) ?? record?.files ?? [];
@@ -353,12 +341,9 @@ export class ReviewCoordinator implements vscode.Disposable {
       this.persisted,
     );
   }
-
   private async reloadActive(): Promise<void> {
     const active = this.active;
-    if (active === null) {
-      return;
-    }
+    if (active === null || this.disposed) return;
     const reloaded = await this.loadScope({
       type: 'review.open',
       sessionId: active.sessionId,
@@ -369,11 +354,11 @@ export class ReviewCoordinator implements vscode.Disposable {
       reloaded.lifecycle = 'stale';
       reloaded.message = 'The review baseline changed. Reopen this scope.';
     }
-    this.active = reloaded;
     await this.refreshVersions(reloaded);
+    if (this.disposed) return;
+    this.active = reloaded;
     this.publishState(reloaded);
   }
-
   private async navigate(
     message: Extract<ReviewWebviewMessage, { type: 'review.navigate' }>,
   ): Promise<void> {
@@ -391,7 +376,6 @@ export class ReviewCoordinator implements vscode.Disposable {
     await this.persistScope(scope);
     this.publishState(scope);
   }
-
   private async selectFile(
     message: Extract<ReviewWebviewMessage, { type: 'review.selectFile' }>,
   ): Promise<void> {
@@ -406,7 +390,6 @@ export class ReviewCoordinator implements vscode.Disposable {
     await this.persistScope(scope);
     this.publishState(scope);
   }
-
   private async markReviewed(
     message: Extract<ReviewWebviewMessage, { type: 'review.markReviewed' }>,
   ): Promise<void> {
@@ -429,6 +412,7 @@ export class ReviewCoordinator implements vscode.Disposable {
       return;
     }
     const currentVersion = await this.fileVersion(scope, file.path);
+    if (this.disposed) return;
     if (currentVersion !== file.version) {
       file.version = currentVersion;
       scope.reviewed.delete(file.path);
@@ -448,10 +432,10 @@ export class ReviewCoordinator implements vscode.Disposable {
     await this.persistScope(scope);
     this.publishState(scope);
   }
-
   private async openCurrent(scope: ActiveScope, refresh = true): Promise<boolean> {
     if (scope.currentIndex === null) return true;
     if (refresh) await this.refreshVersions(scope);
+    if (this.disposed) return false;
     const file = scope.files[scope.currentIndex];
     if (file === undefined) return true;
     const outcome =
@@ -471,6 +455,7 @@ export class ReviewCoordinator implements vscode.Disposable {
               baselineLabel: scope.baselineLabel,
             },
           );
+    if (this.disposed) return false;
     if (outcome !== 'opened-diff') {
       file.comparable = false;
       file.restorable = false;
@@ -488,7 +473,6 @@ export class ReviewCoordinator implements vscode.Disposable {
     }
     return true;
   }
-
   private async refreshVersions(scope: ActiveScope): Promise<void> {
     const comparable = scope.files.filter(({ comparable }) => comparable);
     const workers = Math.min(6, comparable.length);
@@ -496,13 +480,15 @@ export class ReviewCoordinator implements vscode.Disposable {
       Array.from({ length: workers }, async (_, worker) => {
         for (let index = worker; index < comparable.length; index += workers) {
           const file = comparable[index]!;
-          file.version = await this.fileVersion(scope, file.path);
+          const version = await this.fileVersion(scope, file.path);
+          if (this.disposed) return;
+          file.version = version;
         }
       }),
     );
+    if (this.disposed) return;
     scope.lifecycle = this.scopeLifecycle(scope);
   }
-
   private async fileVersion(scope: ActiveScope, path: string): Promise<string> {
     const root = this.options.getWorkspaceRoot();
     if (root === undefined) {
@@ -520,12 +506,12 @@ export class ReviewCoordinator implements vscode.Disposable {
       current === null ? '<deleted>' : current,
     ]);
   }
-
   private publishState(
     scope: ActiveScope,
     publish: (message: Unsequenced<ReviewHostMessage>) => void =
       this.options.publish,
   ): void {
+    if (this.disposed) return;
     const reviewableCount = scope.files.filter(({ comparable }) => comparable).length;
     const reviewedCount = scope.files.filter(
       ({ path, version, comparable }) =>
@@ -569,7 +555,6 @@ export class ReviewCoordinator implements vscode.Disposable {
       },
     });
   }
-
   private scopeLifecycle(scope: ActiveScope): ReviewScopeState['lifecycle'] {
     if (
       scope.lifecycle === 'writing' ||
@@ -609,6 +594,7 @@ export class ReviewCoordinator implements vscode.Disposable {
   }
 
   private async persistScope(scope: ActiveScope): Promise<void> {
+    if (this.disposed) return;
     const record: PersistedScope = {
       reviewScopeId: scope.reviewScopeId,
       sessionId: scope.sessionId,
@@ -624,19 +610,23 @@ export class ReviewCoordinator implements vscode.Disposable {
       })),
       updatedAt: Date.now(),
     };
-    this.persisted.delete(record.reviewScopeId);
-    this.persisted.set(record.reviewScopeId, record);
-    while (this.persisted.size > MAX_PERSISTED_SCOPES) {
-      const oldest = this.persisted.keys().next().value as string | undefined;
+    const next = new Map(this.persisted);
+    next.delete(record.reviewScopeId);
+    next.set(record.reviewScopeId, record);
+    while (next.size > MAX_PERSISTED_SCOPES) {
+      const oldest = next.keys().next().value as string | undefined;
       if (oldest === undefined) break;
-      this.persisted.delete(oldest);
+      next.delete(oldest);
     }
     await Promise.resolve(
       this.options.persistence.update(REVIEW_STORAGE_KEY, {
         version: REVIEW_STORAGE_VERSION,
-        scopes: [...this.persisted.values()],
+        scopes: [...next.values()],
       }),
     );
+    if (this.disposed) return;
+    this.persisted.clear();
+    for (const [id, persisted] of next) this.persisted.set(id, persisted);
   }
 
   private async previewRestore(
@@ -658,6 +648,7 @@ export class ReviewCoordinator implements vscode.Disposable {
       return;
     }
     const entries = await this.preflight(scope, paths);
+    if (this.disposed) return;
     const preview: RestorePreview = {
       id: randomUUID(),
       reviewScopeId: scope.reviewScopeId,
@@ -667,7 +658,7 @@ export class ReviewCoordinator implements vscode.Disposable {
     };
     this.previews.clear();
     this.previews.set(preview.id, preview);
-    this.options.publish({
+    this.publish({
       type: 'review.restorePreview',
       sessionId: scope.sessionId,
       reviewScopeId: scope.reviewScopeId,
@@ -772,6 +763,7 @@ export class ReviewCoordinator implements vscode.Disposable {
     }
     const paths = preview.entries.map(({ path }) => path);
     const fresh = await this.preflight(scope, paths);
+    if (this.disposed) return;
     const blocked = fresh.filter(({ status }) => status !== 'restorable');
     if (blocked.length > 0) {
       for (const file of scope.files) {
@@ -788,6 +780,7 @@ export class ReviewCoordinator implements vscode.Disposable {
       return;
     }
     await this.applyRestore(scope, fresh);
+    if (this.disposed) return;
     this.previews.clear();
     await this.reloadActive();
     this.result(
@@ -834,7 +827,7 @@ export class ReviewCoordinator implements vscode.Disposable {
       await rm(recoveryPath, { force: true }).catch(() => undefined);
       throw error;
     }
-    scope.reviewed.clear();
+    if (!this.disposed) scope.reviewed.clear();
   }
 
   private async recoverInterruptedRestore(): Promise<void> {
@@ -849,6 +842,7 @@ export class ReviewCoordinator implements vscode.Disposable {
         Array.isArray(parsed.entries) &&
         parsed.entries.every(isRecoveryEntry)
       ) {
+        if (this.disposed) return;
         await restoreRecovery(parsed.root, parsed.entries);
       }
       await rm(path, { force: true });
@@ -860,6 +854,7 @@ export class ReviewCoordinator implements vscode.Disposable {
   }
 
   private noteWorkspaceChange(uri: vscode.Uri): void {
+    if (this.disposed) return;
     const root = this.options.getWorkspaceRoot();
     if (
       this.active === null ||
@@ -873,7 +868,7 @@ export class ReviewCoordinator implements vscode.Disposable {
     }
     this.refreshTimer = setTimeout(() => {
       this.refreshTimer = null;
-      this.operation = this.operation.then(() => this.reloadActive());
+      void this.enqueue(() => this.reloadActive(), true);
     }, 120);
   }
 
@@ -887,7 +882,7 @@ export class ReviewCoordinator implements vscode.Disposable {
     ok: boolean,
     message: string,
   ): void {
-    this.options.publish({
+    this.publish({
       type: 'review.operationResult',
       sessionId,
       reviewScopeId,
@@ -895,5 +890,9 @@ export class ReviewCoordinator implements vscode.Disposable {
       ok,
       message,
     });
+  }
+
+  private publish(message: Unsequenced<ReviewHostMessage>): void {
+    if (!this.disposed) this.options.publish(message);
   }
 }

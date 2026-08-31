@@ -19,6 +19,7 @@ vi.mock('vscode', () => {
 import type { ChangeStatsPersistence } from './changeStats';
 import type { FileDiffOpener } from './fileDiffOpener';
 import type { ReviewAgentRunner } from './reviewAgent';
+import type { RuntimeDiagnosticSink } from '../runtime/runtimeDiagnostics';
 import { ReviewCoordinator } from './reviewCoordinator';
 import { scopeId } from './reviewCoordinatorSupport';
 import type { TurnSnapshotStore } from './turnSnapshots';
@@ -36,6 +37,7 @@ function createCoordinator(
   ),
   snapshots = {} as TurnSnapshotStore,
   runAgentReview?: ReviewAgentRunner,
+  diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>,
 ): ReviewCoordinator {
   return new ReviewCoordinator({
     getWorkspaceRoot: () => 'Z:\\missing-review-workspace',
@@ -51,6 +53,7 @@ function createCoordinator(
     }),
     readBranchDiff: async () => undefined,
     runAgentReview,
+    diagnostics,
   });
 }
 
@@ -681,5 +684,147 @@ describe('ReviewCoordinator reload recovery', () => {
       }),
     );
     coordinator.dispose();
+  });
+
+  it('continues replay and later FIFO work after an unawaited writing settlement failure', async () => {
+    let stored: unknown;
+    let writes = 0;
+    const persistence: ChangeStatsPersistence = {
+      get: <T,>() => stored as T | undefined,
+      update: vi.fn(async (_key, value) => {
+        writes += 1;
+        if (writes === 1) {
+          throw new Error('write failed');
+        }
+        stored = value;
+      }),
+    };
+    const publish = vi.fn();
+    const diagnostics = { record: vi.fn() };
+    const snapshots = {
+      read: () => ({
+        turnId: 'turn-1',
+        before: 'before-tree',
+        after: 'after-tree',
+        files: [{ path: 'old.txt', additions: 1, deletions: 0 }],
+      }),
+    } as unknown as TurnSnapshotStore;
+    const coordinator = createCoordinator(
+      persistence,
+      publish,
+      undefined,
+      snapshots,
+      undefined,
+      diagnostics,
+    );
+    coordinator.openWritingTurn('session-1', 'turn-1', [
+      { path: 'old.txt', additions: 1, deletions: 0 },
+    ]);
+    publish.mockClear();
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+
+    try {
+      const failed = coordinator.settleWritingTurn('session-1', 'turn-1', []);
+      await expect(coordinator.replay('session-1')).resolves.toBeUndefined();
+      await expect(failed).rejects.toThrow('write failed');
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(stored).toBeUndefined();
+      expect(diagnostics.record).toHaveBeenCalledWith({
+        level: 'warn',
+        name: 'host.review.queue-failed',
+      });
+      expect(unhandled).not.toHaveBeenCalled();
+      expect(publish).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          type: 'review.state',
+          state: expect.objectContaining({
+            lifecycle: 'writing',
+            baseline: 'before-tree',
+          }),
+        }),
+      );
+      expect(publish).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'review.operationResult' }),
+      );
+
+      coordinator.settleWritingTurn('session-1', 'turn-1', []);
+      await coordinator.replay('session-1');
+
+      expect(persistence.update).toHaveBeenCalledTimes(2);
+      expect(stored).toEqual(
+        expect.objectContaining({
+          version: 1,
+          scopes: [expect.objectContaining({ baseline: 'before-tree:after-tree' })],
+        }),
+      );
+      expect(publish).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          type: 'review.state',
+          state: expect.objectContaining({ lifecycle: 'reviewing' }),
+        }),
+      );
+    } finally {
+      process.off('unhandledRejection', unhandled);
+      coordinator.dispose();
+    }
+  });
+
+  it('drops queued writing work and in-flight commits after disposal', async () => {
+    let releaseLoad:
+      | ((value: { baseline: string; files: readonly (typeof files)[number][] }) => void)
+      | undefined;
+    const pendingLoad = new Promise<{
+      baseline: string;
+      files: readonly (typeof files)[number][];
+    }>((resolve) => {
+      releaseLoad = resolve;
+    });
+    const readWorkspaceFiles = vi.fn(async () => pendingLoad);
+    const persistence: ChangeStatsPersistence = {
+      get: <T,>() => undefined as T | undefined,
+      update: vi.fn(() => Promise.resolve()),
+    };
+    const publish = vi.fn();
+    const coordinator = new ReviewCoordinator({
+      getWorkspaceRoot: () => 'Z:\\missing-review-workspace',
+      snapshots: {
+        read: () => ({
+          turnId: 'turn-1',
+          before: 'before-tree',
+          files: [{ path: 'old.txt', additions: 1, deletions: 0 }],
+        }),
+      } as unknown as TurnSnapshotStore,
+      fileDiff: {
+        openDiff: vi.fn<FileDiffOpener['openDiff']>(
+          async () => 'opened-diff',
+        ),
+      },
+      persistence,
+      storageDir: 'Z:\\missing-review-storage',
+      publish,
+      readCanonicalTurnFiles: () => undefined,
+      readWorkspaceFiles,
+      readBranchDiff: async () => undefined,
+    });
+    coordinator.openWritingTurn('session-1', 'turn-1', [
+      { path: 'old.txt', additions: 1, deletions: 0 },
+    ]);
+    publish.mockClear();
+
+    const running = coordinator.settleWritingTurn('session-1', 'turn-1', []);
+    const queued = coordinator.settleWritingTurn('session-1', 'turn-1', []);
+    await vi.waitFor(() => {
+      expect(readWorkspaceFiles).toHaveBeenCalledOnce();
+    });
+    coordinator.dispose();
+    releaseLoad?.({ baseline: 'head-baseline', files });
+    await expect(running).resolves.toBeUndefined();
+    await expect(queued).resolves.toBeUndefined();
+
+    expect(readWorkspaceFiles).toHaveBeenCalledOnce();
+    expect(persistence.update).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
   });
 });

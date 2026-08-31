@@ -101,6 +101,7 @@ export function createReviewFeature(options: {
       const baseline = await resolveReviewGitRef(root, diff.baseBranch);
       return baseline === undefined ? undefined : { baseline, diff };
     },
+    diagnostics: options.diagnostics,
     runAgentReview: {
       async run(scope) {
         const cwd = getRoot();
