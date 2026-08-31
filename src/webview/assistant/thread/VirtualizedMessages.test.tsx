@@ -5,6 +5,7 @@ import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createFollowState } from "../followScroll";
+import { findActiveQuestionIndex } from "../useQuestionNavigation";
 import type { TranscriptVirtualizerApi } from "./buildTurns";
 import {
   pinnedPushOffset,
@@ -80,19 +81,32 @@ describe("VirtualizedMessages question navigation", () => {
     expect(pinnedPushOffset(121, 100, 80)).toBe(-59);
   });
 
-  it("uses the sticky entry tolerance when choosing a boundary turn", () => {
-    const scroller = document.createElement("div");
-    scroller.scrollTop = 120;
+  it.each([
+    { scrollTop: 119, lookup: 120, activeIndex: 0 },
+    { scrollTop: 120, lookup: 121, activeIndex: 1 },
+    { scrollTop: 121, lookup: 122, activeIndex: 1 },
+  ])(
+    "shares question entry at scrollTop $scrollTop",
+    ({ scrollTop, lookup, activeIndex }) => {
+      const scroller = document.createElement("div");
+      scroller.scrollTop = scrollTop;
+      mocks.getVirtualItemForOffset.mockImplementation((offset) =>
+        offset < 121
+          ? { start: 0, end: 121, index: 0 }
+          : { start: 121, end: 240, index: 1 },
+      );
 
-    render(
-      <VirtualizedMessages
-        getScroller={() => scroller}
-        followingRef={{ current: createFollowState() }}
-      />,
-    );
+      render(
+        <VirtualizedMessages
+          getScroller={() => scroller}
+          followingRef={{ current: createFollowState() }}
+        />,
+      );
 
-    expect(mocks.getVirtualItemForOffset).toHaveBeenCalledWith(121);
-  });
+      expect(mocks.getVirtualItemForOffset).toHaveBeenCalledWith(lookup);
+      expect(findActiveQuestionIndex([0, 121], scrollTop)).toBe(activeIndex);
+    },
+  );
 
   it("uses one deterministic top-snap path and releases bottom follow", () => {
     const scroller = document.createElement("div");

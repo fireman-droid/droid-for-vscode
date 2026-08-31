@@ -9,6 +9,7 @@ import {
 
 import { readMessageText } from "./thread/readers";
 import type { TranscriptVirtualizerApi } from "./thread/buildTurns";
+import { hasQuestionEntered } from "./questionEntryBoundary";
 
 const MAX_PREVIEW_LENGTH = 180;
 
@@ -53,7 +54,7 @@ export function findActiveQuestionIndex(
   while (low <= high) {
     const index = (low + high) >> 1;
     const top = questionTops[index] ?? Number.POSITIVE_INFINITY;
-    if (top <= scrollTop + 1) {
+    if (hasQuestionEntered(top, scrollTop)) {
       activeIndex = index;
       low = index + 1;
     } else {

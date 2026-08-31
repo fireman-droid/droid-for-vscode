@@ -20,6 +20,10 @@ import { createPortal } from "react-dom";
 
 import { FOLLOW_REJOIN_PX } from "../followScroll";
 import {
+  hasQuestionEntered,
+  questionEntryOffset,
+} from "../questionEntryBoundary";
+import {
   buildTurns,
   questionTurnRows,
   turnIndexForMessage,
@@ -285,10 +289,12 @@ export function VirtualizedMessages({
     virtualizer.getTotalSize() -
       ((items.at(-1)?.end ?? scrollMargin) - scrollMargin),
   );
-  const pinCandidate = virtualizer.getVirtualItemForOffset(scrollTop + 1);
+  const pinCandidate = virtualizer.getVirtualItemForOffset(
+    questionEntryOffset(scrollTop),
+  );
   const pinnedTurn =
     pinCandidate !== undefined &&
-    pinCandidate.start <= scrollTop + 1
+    hasQuestionEntered(pinCandidate.start, scrollTop)
       ? pinCandidate.index
       : -1;
   const naturalPinnedMessageId =
