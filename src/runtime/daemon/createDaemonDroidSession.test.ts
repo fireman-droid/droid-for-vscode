@@ -926,8 +926,78 @@ describe('createDaemonDroidSession', () => {
     },
   );
 
-  it('releases the lease on close', async () => {
+  it.each([
+    ['successful cleanup', null],
+    ['a detach failure', 'detach'],
+    ['a lease release failure', 'lease'],
+    ['detach and lease release failures', 'detach-and-lease'],
+  ] as const)(
+    'tracks daemon close ownership independently after %s',
+    async (_description, failure) => {
+      const mock = createDroidMock();
+      const detachFailure = new Error('detach cleanup failure');
+      const leaseFailure = new Error('lease cleanup failure');
+      const failureStage = failure;
+      let leaseFails =
+        failureStage === 'lease' || failureStage === 'detach-and-lease';
+      const lease = {
+        acquire: vi.fn(() => ({ acquired: true }) as const),
+        release: vi.fn(() => {
+          if (leaseFails) {
+            leaseFails = false;
+            throw leaseFailure;
+          }
+        }),
+      };
+      if (
+        failureStage === 'detach' ||
+        failureStage === 'detach-and-lease'
+      ) {
+        mock.created.detach.mockRejectedValueOnce(detachFailure);
+      }
+      const session = await createDaemonDroidSession({
+        target: { kind: 'new', cwd: 'C:\\workspace' },
+        interactionHandler: cancellingRuntimeInteractionHandler,
+        getDroid: async () => mock.droid,
+        lease,
+      });
+
+      if (failureStage === null) {
+        await session.close();
+      } else {
+        await expect(session.close()).rejects.toBe(
+          failureStage === 'lease' ? leaseFailure : detachFailure,
+        );
+      }
+      expect(mock.created.detach).toHaveBeenCalledOnce();
+      expect(lease.release).toHaveBeenCalledExactlyOnceWith('session-1');
+      expect(mock.created.close).not.toHaveBeenCalled();
+
+      await session.close();
+
+      expect(mock.created.detach).toHaveBeenCalledTimes(
+        failureStage === 'detach' || failureStage === 'detach-and-lease'
+          ? 2
+          : 1,
+      );
+      expect(lease.release).toHaveBeenCalledTimes(
+        failureStage === 'lease' || failureStage === 'detach-and-lease'
+          ? 2
+          : 1,
+      );
+      expect(mock.created.close).not.toHaveBeenCalled();
+    },
+  );
+
+  it('shares concurrent daemon close cleanup without duplicate actions', async () => {
     const mock = createDroidMock();
+    let releaseDetach: (() => void) | undefined;
+    mock.created.detach.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseDetach = resolve;
+        }),
+    );
     const lease = {
       acquire: vi.fn(() => ({ acquired: true }) as const),
       release: vi.fn(),
@@ -939,8 +1009,25 @@ describe('createDaemonDroidSession', () => {
       lease,
     });
 
-    await session.close();
+    const first = session.close();
+    const second = session.close();
+    await Promise.resolve();
 
+    expect(second).toBe(first);
+    expect(mock.created.detach).toHaveBeenCalledOnce();
+    expect(lease.release).not.toHaveBeenCalled();
+    if (releaseDetach === undefined) {
+      throw new Error('detach was not started');
+    }
+    releaseDetach();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      undefined,
+      undefined,
+    ]);
+    expect(mock.created.detach).toHaveBeenCalledOnce();
+    expect(lease.release).toHaveBeenCalledExactlyOnceWith('session-1');
+
+    await session.close();
     expect(mock.created.detach).toHaveBeenCalledOnce();
     expect(lease.release).toHaveBeenCalledExactlyOnceWith('session-1');
   });
@@ -1026,19 +1113,6 @@ describe('createDaemonDroidSession', () => {
     expect(mock.created.interrupt).toHaveBeenCalledOnce();
   });
 
-  it('close detaches the handle so the session survives in the daemon', async () => {
-    const mock = createDroidMock();
-    const session = await createDaemonDroidSession({
-      target: { kind: 'new', cwd: 'C:\\workspace' },
-      interactionHandler: cancellingRuntimeInteractionHandler,
-      getDroid: async () => mock.droid,
-    });
-
-    await session.close();
-
-    expect(mock.created.detach).toHaveBeenCalledOnce();
-    expect(mock.created.close).not.toHaveBeenCalled();
-  });
 });
 
 function createDaemonSessionMock(

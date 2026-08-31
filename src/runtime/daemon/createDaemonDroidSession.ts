@@ -372,6 +372,55 @@ function adaptDaemonSession(
   // notification refreshes the handle's snapshot, so successful updates
   // are overlaid locally until the snapshot reports the same value.
   let pendingSettings: Partial<SessionSettings> = {};
+  let attachmentOwned = true;
+  let leaseOwned = true;
+  let closeInFlight: Promise<void> | undefined;
+
+  const closeOwnedResources = async (): Promise<void> => {
+    let cleanupFailed = false;
+    let cleanupError: unknown;
+    if (attachmentOwned) {
+      try {
+        await session.detach();
+        attachmentOwned = false;
+      } catch (error) {
+        cleanupFailed = true;
+        cleanupError = error;
+      }
+    }
+    if (leaseOwned) {
+      try {
+        lease.release(session.id);
+        leaseOwned = false;
+      } catch (error) {
+        if (!cleanupFailed) {
+          cleanupFailed = true;
+          cleanupError = error;
+        }
+      }
+    }
+    if (cleanupFailed) {
+      throw cleanupError;
+    }
+  };
+
+  const close = (): Promise<void> => {
+    if (closeInFlight !== undefined) {
+      return closeInFlight;
+    }
+    if (!attachmentOwned && !leaseOwned) {
+      return Promise.resolve();
+    }
+    const attempt = closeOwnedResources();
+    closeInFlight = attempt;
+    const clearCloseInFlight = () => {
+      if (closeInFlight === attempt) {
+        closeInFlight = undefined;
+      }
+    };
+    void attempt.then(clearCloseInFlight, clearCloseInFlight);
+    return attempt;
+  };
 
   /**
    * Replacement operations (rewind/compact/fork) leave the daemon-side
@@ -628,11 +677,10 @@ function adaptDaemonSession(
     },
     // `authenticateMcpServer` and `onNotification` are intentionally
     // absent: see the factory doc comment.
-    async close() {
+    close() {
       // Releasing the handle keeps the session alive in the daemon;
       // Phase 3's shared daemon lets it survive a window reload.
-      await session.detach();
-      lease.release(session.id);
+      return close();
     },
   };
 }
