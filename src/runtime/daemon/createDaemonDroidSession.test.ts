@@ -554,36 +554,134 @@ describe('createDaemonDroidSession', () => {
     expect(mock.created.detach).not.toHaveBeenCalled();
   });
 
-  it('refuses to resume a session leased to another live window', async () => {
-    const mock = createDroidMock();
+  it.each([
+    ['new lease conflict', 'new', 'conflict', false, 'attachment', false],
+    ['new lease throw', 'new', 'throw', false, null, false],
+    ['resume lease retry exhaustion', 'resume', 'conflict', false, null, true],
+    ['resume lease throw', 'resume', 'throw', false, null, false],
+    ['resume attachment failure', 'resume', 'acquired', true, 'lease', false],
+  ] as const)(
+    'cleans only acquired resources after %s',
+    async (
+      _failure,
+      targetKind,
+      acquireResult,
+      resumeFails,
+      cleanupFailureResource,
+      retries,
+    ) => {
+      const mock = createDroidMock();
+      const primary = new Error('primary establishment failure');
+      const cleanupFailure = new Error('cleanup failure');
+      const diagnostics = { record: vi.fn() };
+      const lease = {
+        acquire: vi.fn<
+          (
+            sessionId: string,
+          ) =>
+            | { acquired: true }
+            | { acquired: false; heldByPid: number }
+        >(() => {
+          if (acquireResult === 'throw') {
+            throw primary;
+          }
+          return acquireResult === 'conflict'
+            ? ({ acquired: false, heldByPid: 4242 } as const)
+            : ({ acquired: true } as const);
+        }),
+        release: vi.fn<(sessionId: string) => void>(() => {
+          if (cleanupFailureResource === 'lease') {
+            throw cleanupFailure;
+          }
+        }),
+      };
+      if (cleanupFailureResource === 'attachment') {
+        mock.created.detach.mockRejectedValue(cleanupFailure);
+      }
+      if (resumeFails) {
+        mock.sessions.resume.mockRejectedValue(primary);
+      }
+      const target =
+        targetKind === 'new'
+          ? ({ kind: 'new', cwd: 'C:\\workspace' } as const)
+          : ({
+              kind: 'resume',
+              cwd: 'C:\\workspace',
+              sessionId: 'saved-session',
+            } as const);
+      const establish = () =>
+        createDaemonDroidSession({
+          target,
+          interactionHandler: cancellingRuntimeInteractionHandler,
+          getDroid: async () => mock.droid,
+          lease,
+          diagnostics,
+        });
+      const expectPrimary = (pending: ReturnType<typeof establish>) =>
+        acquireResult === 'conflict'
+          ? expect(pending).rejects.toThrow(
+              'open in another window (pid 4242)',
+            )
+          : expect(pending).rejects.toBe(primary);
 
-    // The blocked acquire retries for LEASE_RETRY_MAX_MS before it
-    // gives up (reload-lingering holders usually die within that).
-    vi.useFakeTimers();
-    try {
-      const pending = createDaemonDroidSession({
-        target: {
-          kind: 'resume',
-          cwd: 'C:\\workspace',
-          sessionId: 'saved-session',
-        },
-        interactionHandler: cancellingRuntimeInteractionHandler,
-        getDroid: async () => mock.droid,
-        lease: {
-          acquire: () => ({ acquired: false, heldByPid: 4242 }),
-          release: vi.fn(),
-        },
-      });
-      const assertion = expect(pending).rejects.toThrow(
-        'open in another window (pid 4242)',
-      );
-      await vi.advanceTimersByTimeAsync(15_600);
-      await assertion;
-      expect(mock.sessions.resume).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+      if (retries) {
+        vi.useFakeTimers();
+        try {
+          const assertion = expectPrimary(establish());
+          await vi.advanceTimersByTimeAsync(15_600);
+          await assertion;
+        } finally {
+          vi.useRealTimers();
+        }
+      } else {
+        await expectPrimary(establish());
+      }
+
+      const sessionId = targetKind === 'new' ? 'session-1' : 'saved-session';
+      expect(
+        lease.acquire.mock.calls.every(([id]) => id === sessionId),
+      ).toBe(true);
+      if (retries) {
+        expect(lease.acquire.mock.calls.length).toBeGreaterThan(1);
+      } else {
+        expect(lease.acquire).toHaveBeenCalledOnce();
+      }
+      if (targetKind === 'new') {
+        expect(mock.sessions.create).toHaveBeenCalledOnce();
+        expect(mock.sessions.resume).not.toHaveBeenCalled();
+        expect(mock.created.detach).toHaveBeenCalledOnce();
+        expect(lease.release).not.toHaveBeenCalled();
+      } else {
+        expect(mock.sessions.create).not.toHaveBeenCalled();
+        expect(mock.created.detach).not.toHaveBeenCalled();
+        if (resumeFails) {
+          expect(lease.release).toHaveBeenCalledExactlyOnceWith(
+            'saved-session',
+          );
+          expect(mock.sessions.resume).toHaveBeenCalledOnce();
+          expect(mock.sessions.resume).toHaveBeenCalledWith(
+            'saved-session',
+            expect.anything(),
+          );
+        } else {
+          expect(lease.release).not.toHaveBeenCalled();
+          expect(mock.sessions.resume).not.toHaveBeenCalled();
+        }
+      }
+      if (cleanupFailureResource === null) {
+        expect(diagnostics.record).not.toHaveBeenCalled();
+      } else {
+        expect(diagnostics.record).toHaveBeenCalledExactlyOnceWith({
+          level: 'warn',
+          name: 'daemon.session.provisional-cleanup-failed',
+          attributes: {
+            operation: targetKind === 'new' ? 'create' : 'resume',
+            resource: cleanupFailureResource,
+          },
+        });
+      }
+    },
+  );
 
   it('resumes after a lingering holder frees the lease mid-retry', async () => {
     const mock = createDroidMock();
@@ -622,49 +720,6 @@ describe('createDaemonDroidSession', () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it('releases the lease when the leased resume fails', async () => {
-    const mock = createDroidMock();
-    mock.sessions.resume.mockRejectedValue(new Error('resume failed'));
-    const lease = {
-      acquire: vi.fn(() => ({ acquired: true }) as const),
-      release: vi.fn(),
-    };
-
-    await expect(
-      createDaemonDroidSession({
-        target: {
-          kind: 'resume',
-          cwd: 'C:\\workspace',
-          sessionId: 'saved-session',
-        },
-        interactionHandler: cancellingRuntimeInteractionHandler,
-        getDroid: async () => mock.droid,
-        lease,
-      }),
-    ).rejects.toThrow('resume failed');
-    expect(lease.acquire).toHaveBeenCalledWith('saved-session');
-    expect(lease.release).toHaveBeenCalledWith('saved-session');
-  });
-
-  it('detaches a new session when its ownership cannot be secured', async () => {
-    const mock = createDroidMock();
-    const lease = {
-      acquire: vi.fn(() => ({ acquired: false, heldByPid: 4242 }) as const),
-      release: vi.fn(),
-    };
-
-    await expect(
-      createDaemonDroidSession({
-        target: { kind: 'new', cwd: 'C:\\workspace' },
-        interactionHandler: cancellingRuntimeInteractionHandler,
-        getDroid: async () => mock.droid,
-        lease,
-      }),
-    ).rejects.toThrow('open in another window (pid 4242)');
-    expect(mock.created.detach).toHaveBeenCalledOnce();
-    expect(mock.sessions.resume).not.toHaveBeenCalled();
   });
 
   it('moves the lease from the source to the replacement on compact', async () => {

@@ -424,6 +424,7 @@ export function activate(context: vscode.ExtensionContext): void {
           factory: createDaemonSessionFactory(
             getDaemonDroid,
             sessionLease,
+            diagnostics,
           ),
         };
   /** True while this window's sessions actually run over the daemon. */
@@ -537,7 +538,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const reviewCoordinator = createReviewFeature({
     context, snapshots: turnSnapshots, fileDiff, persistence, gitWorkflow,
     diagnostics, getController: () => controller, sessionViewer,
-    createSdkSession: createDaemonSessionFactory(daemonSidecar.droid, sessionLease),
+    createSdkSession: createDaemonSessionFactory(
+      daemonSidecar.droid,
+      sessionLease,
+      diagnostics,
+    ),
   });
   const missionGateway = new MissionGateway({
     getDroid: getDaemonDroid,

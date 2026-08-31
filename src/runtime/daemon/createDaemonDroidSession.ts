@@ -13,6 +13,7 @@ import type {
   FactoryDroidSessionFactory,
 } from '../FactoryDroidRuntime';
 import type { RuntimeSessionTarget } from '../DroidRuntime';
+import type { RuntimeDiagnosticSink } from '../runtimeDiagnostics';
 import {
   createRuntimeInteractionCallbacks,
   type RuntimeInteractionCallbacks,
@@ -41,12 +42,14 @@ import {
 export function createDaemonSessionFactory(
   getDroid: () => Promise<ConnectedDroid>,
   lease?: SessionLeaseHooks,
+  diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>,
 ): FactoryDroidSessionFactory {
   return (options) =>
     createDaemonDroidSession({
       ...options,
       getDroid,
       lease,
+      diagnostics,
     });
 }
 
@@ -73,6 +76,7 @@ export async function createDaemonDroidSession(options: {
   interactionHandler: RuntimeInteractionHandler;
   getDroid: () => Promise<ConnectedDroid>;
   lease?: SessionLeaseHooks;
+  diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>;
 }): Promise<FactoryDroidSession> {
   const droid = await options.getDroid();
   const callbacks = createRuntimeInteractionCallbacks(
@@ -87,33 +91,54 @@ export async function createDaemonDroidSession(options: {
     // holder that was already on its way out). The holder releases
     // on dispose or dies and gets preempted, so a blocked acquire
     // retries briefly instead of failing the whole resume.
-    let outcome = lease.acquire(options.target.sessionId);
-    const deadline = Date.now() + LEASE_RETRY_MAX_MS;
-    while (!outcome.acquired && Date.now() < deadline) {
-      await new Promise((resolve) =>
-        setTimeout(resolve, LEASE_RETRY_INTERVAL_MS),
-      );
-      outcome = lease.acquire(options.target.sessionId);
-    }
-    if (!outcome.acquired) {
-      throw new Error(
-        `Session is open in another window (pid ${String(outcome.heldByPid)}). Close it there or wait for that window to exit.`,
-      );
-    }
+    let leaseOwned = false;
+    let attachment: ConnectedDroidSession | undefined;
     try {
-      const session = await droid.sessions.resume(options.target.sessionId, {
+      let outcome = lease.acquire(options.target.sessionId);
+      const deadline = Date.now() + LEASE_RETRY_MAX_MS;
+      while (!outcome.acquired && Date.now() < deadline) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, LEASE_RETRY_INTERVAL_MS),
+        );
+        outcome = lease.acquire(options.target.sessionId);
+      }
+      if (!outcome.acquired) {
+        throw leaseConflictError(outcome.heldByPid);
+      }
+      leaseOwned = true;
+      attachment = await droid.sessions.resume(options.target.sessionId, {
         ...callbacks,
       });
       const availableModels = await readDaemonAvailableModels(droid);
-      return adaptDaemonSession(
+      const adapted = adaptDaemonSession(
         droid,
-        session,
+        attachment,
         callbacks,
         lease,
         availableModels,
       );
+      attachment = undefined;
+      leaseOwned = false;
+      return adapted;
     } catch (error) {
-      lease.release(options.target.sessionId);
+      if (attachment !== undefined) {
+        const attached = attachment;
+        attachment = undefined;
+        await detachProvisionalAttachment(
+          attached,
+          'resume',
+          options.diagnostics,
+        );
+      }
+      if (leaseOwned) {
+        leaseOwned = false;
+        releaseProvisionalLease(
+          lease,
+          options.target.sessionId,
+          'resume',
+          options.diagnostics,
+        );
+      }
       throw error;
     }
   }
@@ -126,22 +151,88 @@ export async function createDaemonDroidSession(options: {
     ...(options.target.worktree === true ? { worktree: true } : {}),
     ...callbacks,
   });
-  // A fresh id should never be contested, but registry lock failure
-  // still means ownership was not established. Do not expose an
-  // unleased handle that another window could also attach.
-  const leaseOutcome = lease.acquire(session.id);
-  if (!leaseOutcome.acquired) {
-    await session.detach().catch(() => undefined);
-    throw leaseConflictError(leaseOutcome.heldByPid);
+  let attachmentOwned = true;
+  let leaseOwned = false;
+  try {
+    // A fresh id should never be contested, but registry lock failure
+    // still means ownership was not established. Do not expose an
+    // unleased handle that another window could also attach.
+    const leaseOutcome = lease.acquire(session.id);
+    if (!leaseOutcome.acquired) {
+      throw leaseConflictError(leaseOutcome.heldByPid);
+    }
+    leaseOwned = true;
+    const availableModels = await readDaemonAvailableModels(droid);
+    const adapted = adaptDaemonSession(
+      droid,
+      session,
+      callbacks,
+      lease,
+      availableModels,
+    );
+    attachmentOwned = false;
+    leaseOwned = false;
+    return adapted;
+  } catch (error) {
+    if (attachmentOwned) {
+      attachmentOwned = false;
+      await detachProvisionalAttachment(session, 'create', options.diagnostics);
+    }
+    if (leaseOwned) {
+      leaseOwned = false;
+      releaseProvisionalLease(
+        lease,
+        session.id,
+        'create',
+        options.diagnostics,
+      );
+    }
+    throw error;
   }
-  const availableModels = await readDaemonAvailableModels(droid);
-  return adaptDaemonSession(
-    droid,
-    session,
-    callbacks,
-    lease,
-    availableModels,
-  );
+}
+
+type ProvisionalOperation = 'create' | 'resume';
+type ProvisionalResource = 'attachment' | 'lease';
+
+async function detachProvisionalAttachment(
+  session: ConnectedDroidSession,
+  operation: ProvisionalOperation,
+  diagnostics: Pick<RuntimeDiagnosticSink, 'record'> | undefined,
+): Promise<void> {
+  try {
+    await session.detach();
+  } catch {
+    recordProvisionalCleanupFailure(diagnostics, operation, 'attachment');
+  }
+}
+
+function releaseProvisionalLease(
+  lease: SessionLeaseHooks,
+  sessionId: string,
+  operation: ProvisionalOperation,
+  diagnostics: Pick<RuntimeDiagnosticSink, 'record'> | undefined,
+): void {
+  try {
+    lease.release(sessionId);
+  } catch {
+    recordProvisionalCleanupFailure(diagnostics, operation, 'lease');
+  }
+}
+
+function recordProvisionalCleanupFailure(
+  diagnostics: Pick<RuntimeDiagnosticSink, 'record'> | undefined,
+  operation: ProvisionalOperation,
+  resource: ProvisionalResource,
+): void {
+  try {
+    diagnostics?.record({
+      level: 'warn',
+      name: 'daemon.session.provisional-cleanup-failed',
+      attributes: { operation, resource },
+    });
+  } catch {
+    // Cleanup diagnostics must not replace the establishment error.
+  }
 }
 
 /**
