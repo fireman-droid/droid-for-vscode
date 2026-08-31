@@ -132,6 +132,167 @@ describe('createTurnSnapshotStore', () => {
     expect(unlink).toHaveBeenCalled();
   });
 
+  it.each(['synchronous', 'asynchronous'] as const)(
+    'keeps %s persistence failures out of visible captures until a retry succeeds',
+    async (failureKind) => {
+      const failure = new Error('sensitive persistence failure');
+      let fail = false;
+      const persistence = memoryPersistence();
+      persistence.update = vi.fn((_key: string, value: unknown) => {
+        if (fail) {
+          if (failureKind === 'synchronous') {
+            throw failure;
+          }
+          return Promise.reject(failure);
+        }
+        persistence.stored = value;
+        return Promise.resolve();
+      });
+      const writes = [
+        BEFORE,
+        BEFORE,
+        AFTER,
+        AFTER,
+        PATH_BEFORE,
+        PATH_BEFORE,
+      ];
+      const runGit: TurnSnapshotDependencies['runGit'] = async (args) => {
+        const command = verb(args);
+        if (command === 'rev-parse') {
+          return gitResult(
+            args.includes('--absolute-git-dir')
+              ? '/workspace/.git'
+              : '/workspace/.git/objects',
+          );
+        }
+        if (command === 'add' || command === 'read-tree') {
+          return gitResult('');
+        }
+        if (command === 'write-tree') {
+          return gitResult(`${writes.shift()}\n`);
+        }
+        return gitResult('', 1);
+      };
+      const { store } = createStore(runGit, {}, persistence);
+
+      fail = true;
+      await expect(store.capture(SCOPE, 'before')).rejects.toBe(failure);
+      expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toBeUndefined();
+
+      fail = false;
+      await store.capture(SCOPE, 'before');
+      fail = true;
+      await expect(store.capture(SCOPE, 'after')).rejects.toBe(failure);
+      expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toEqual({
+        turnId: SCOPE.turnId,
+        before: BEFORE,
+      });
+
+      fail = false;
+      await store.capture(SCOPE, 'after');
+      expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toEqual({
+        turnId: SCOPE.turnId,
+        before: BEFORE,
+        after: AFTER,
+      });
+
+      const path = join('/workspace', 'ignored.txt');
+      fail = true;
+      await expect(store.capturePaths(SCOPE, [path])).rejects.toBe(failure);
+      expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toEqual({
+        turnId: SCOPE.turnId,
+        before: BEFORE,
+        after: AFTER,
+      });
+
+      fail = false;
+      await store.capturePaths(SCOPE, [path]);
+      expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toEqual({
+        turnId: SCOPE.turnId,
+        before: PATH_BEFORE,
+        after: AFTER,
+        snapshotPaths: ['ignored.txt'],
+      });
+      expect(persistence.stored).toEqual({
+        version: 1,
+        sessions: [
+          {
+            sessionId: SCOPE.sessionId,
+            turns: [
+              {
+                turnId: SCOPE.turnId,
+                before: PATH_BEFORE,
+                after: AFTER,
+                snapshotPaths: ['ignored.txt'],
+              },
+            ],
+          },
+        ],
+      });
+    },
+  );
+
+  it.each([
+    'pending success',
+    'synchronous failure',
+    'asynchronous failure',
+  ] as const)(
+    'makes dispose join the final %s snapshot write',
+    async (outcome) => {
+      const failure = new Error('final persistence failure');
+      let release!: () => void;
+      const persistence = memoryPersistence();
+      persistence.update = vi.fn(() => {
+        if (outcome === 'synchronous failure') {
+          throw failure;
+        }
+        if (outcome === 'asynchronous failure') {
+          return Promise.reject(failure);
+        }
+        return new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      });
+      const runGit: TurnSnapshotDependencies['runGit'] = async (args) => {
+        const command = verb(args);
+        if (command === 'rev-parse') {
+          return gitResult(
+            args.includes('--absolute-git-dir')
+              ? '/workspace/.git'
+              : '/workspace/.git/objects',
+          );
+        }
+        if (command === 'add') {
+          return gitResult('');
+        }
+        if (command === 'write-tree') {
+          return gitResult(`${BEFORE}\n`);
+        }
+        return gitResult('', 1);
+      };
+      const { store } = createStore(runGit, {}, persistence);
+      const capture = store.capture(SCOPE, 'before');
+      const first = store.dispose();
+      const joiner = store.dispose();
+
+      expect(joiner).toBe(first);
+      if (outcome === 'pending success') {
+        await vi.waitFor(() => {
+          expect(persistence.update).toHaveBeenCalledOnce();
+        });
+        release();
+        await expect(capture).resolves.toBe(BEFORE);
+        await expect(first).resolves.toBeUndefined();
+        await expect(joiner).resolves.toBeUndefined();
+        return;
+      }
+
+      await expect(capture).rejects.toBe(failure);
+      await expect(first).rejects.toBe(failure);
+      await expect(joiner).rejects.toBe(failure);
+    },
+  );
+
   it('force-includes tool paths in both trees even when Git ignores them', async () => {
     const path = 'artifacts/diff-review-test/a.txt';
     const toolPath = join('/workspace', ...path.split('/'));

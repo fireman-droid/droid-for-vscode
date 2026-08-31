@@ -33,6 +33,57 @@ import {
 import type { TurnSnapshotStore } from './turnSnapshots';
 
 describe('ChatController', () => {
+  it('contains a rejected recovered-turn snapshot before capture', async () => {
+    const failure = new Error('C:\\sensitive\\persistence-failure');
+    const capture = vi.fn(() => Promise.reject(failure));
+    const recovery = await seededRecoveryStore('saved-session');
+    const runtime = createMockRuntime();
+    runtime.initialize.mockResolvedValue(available('saved-session'));
+    runtime.readSessionWorkingState = vi.fn<
+      () => Promise<RuntimeSessionWorkingState>
+    >(async () => 'running');
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('saved-session')]),
+      recovery,
+    );
+    Object.defineProperty(controller, 'turnSnapshots', {
+      value: { capture } as unknown as TurnSnapshotStore,
+    });
+    const recordHost = vi.spyOn(controller, 'recordHost');
+
+    ready(controller);
+    await waitForConnected(messages);
+
+    await vi.waitFor(() => {
+      expect(capture).toHaveBeenCalledWith(
+        { sessionId: 'saved-session', turnId: 'recovery-1' },
+        'before',
+      );
+    });
+    await vi.waitFor(() => {
+      expect(recordHost).toHaveBeenCalledWith({
+        level: 'warn',
+        name: 'host.changes.snapshot-failed',
+        attributes: {
+          sessionId: 'saved-session',
+          turnId: 'recovery-1',
+          phase: 'before',
+          reason: 'persistence-failed',
+        },
+      });
+    });
+    expect(JSON.stringify(recordHost.mock.calls)).not.toContain(
+      'persistence-failure',
+    );
+    expect(
+      recordHost.mock.calls.filter(
+        ([event]) => event.name === 'host.changes.snapshot-failed',
+      ),
+    ).toHaveLength(1);
+  });
+
   it('resumes only a catalog-validated recovered session and restores its transcript', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);

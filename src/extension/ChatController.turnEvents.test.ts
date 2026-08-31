@@ -32,8 +32,51 @@ import {
   waitForConnected,
 } from './controllerTestHarness';
 import { MAX_THINKING_DELTA_LENGTH } from '../shared/bridgeMessages';
+import type { TurnSnapshotStore } from './turnSnapshots';
 
 describe('ChatController', () => {
+  it('contains a rejected normal-turn snapshot before capture', async () => {
+    const failure = new Error('C:\\sensitive\\persistence-failure');
+    const capture = vi.fn(() => Promise.reject(failure));
+    const runtime = createMockRuntime();
+    const { controller, messages } = createController(() => runtime);
+    Object.defineProperty(controller, 'turnSnapshots', {
+      value: { capture } as unknown as TurnSnapshotStore,
+    });
+    const recordHost = vi.spyOn(controller, 'recordHost');
+
+    ready(controller);
+    await waitForConnected(messages);
+    send(controller, 'session-1', 'turn-1', 'Capture safely');
+
+    await vi.waitFor(() => {
+      expect(capture).toHaveBeenCalledWith(
+        { sessionId: 'session-1', turnId: 'turn-1' },
+        'before',
+      );
+    });
+    await vi.waitFor(() => {
+      expect(recordHost).toHaveBeenCalledWith({
+        level: 'warn',
+        name: 'host.changes.snapshot-failed',
+        attributes: {
+          sessionId: 'session-1',
+          turnId: 'turn-1',
+          phase: 'before',
+          reason: 'persistence-failed',
+        },
+      });
+    });
+    expect(JSON.stringify(recordHost.mock.calls)).not.toContain(
+      'persistence-failure',
+    );
+    expect(
+      recordHost.mock.calls.filter(
+        ([event]) => event.name === 'host.changes.snapshot-failed',
+      ),
+    ).toHaveLength(1);
+  });
+
   it('initializes one runtime on repeated ready messages and keeps sequences monotonic', async () => {
     const runtime = createMockRuntime();
     const createRuntime = vi.fn(() => runtime);

@@ -8,29 +8,38 @@ import {
   unlink as fsUnlink,
 } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
-import {
-  MAX_BRIDGE_ID_LENGTH,
-  MAX_CHANGED_FILES_PER_TURN,
-} from '../shared/bridgeMessages';
+import { MAX_CHANGED_FILES_PER_TURN } from '../shared/bridgeMessages';
 import { isSafeWorkspaceRelativePath } from '../shared/validateMessage';
 import type { RuntimeDiagnosticEvent } from '../runtime/runtimeDiagnostics';
 import { toWorkspaceRelativePath } from '../runtime/toolFilePath';
 import {
   parseGitNumstat,
   type ChangeStatsPersistence,
-  type ChangeStatsScope,
   type CommittedFileStat,
   type FileChangeStat,
 } from './changeStats';
+import {
+  cloneRecord,
+  cloneSessions,
+  readPersistedSessions,
+  readTurn,
+  sanitizeFiles,
+  serializeSessions,
+  type TurnSnapshotRecord,
+  upsertTurn,
+} from './turnSnapshotRecords';
+export {
+  MAX_SNAPSHOT_SESSIONS,
+  MAX_SNAPSHOT_TURNS_PER_SESSION,
+  TURN_SNAPSHOTS_VERSION,
+  type TurnSnapshotRecord,
+} from './turnSnapshotRecords';
 
 export const SNAPSHOT_TIMEOUT_MS = 10_000;
-export const MAX_SNAPSHOT_SESSIONS = 8;
-export const MAX_SNAPSHOT_TURNS_PER_SESSION = 24;
 export const MAX_SNAPSHOT_OBJECT_BYTES = 256 * 1024 * 1024;
 export const MAX_NUMSTAT_OUTPUT_BYTES = 1024 * 1024;
 export const MAX_OPEN_BASELINE_BYTES = 16 * 1024 * 1024;
 export const TURN_SNAPSHOTS_STORAGE_KEY = 'droidvisx.turnSnapshots';
-export const TURN_SNAPSHOTS_VERSION = 1;
 const TREE_OID = /^[0-9a-f]{40}$/;
 const GIT_CONFIG_ARGS = [
   '-c',
@@ -44,13 +53,6 @@ export interface TurnSnapshotScope {
   readonly turnId: string;
 }
 
-export interface TurnSnapshotRecord {
-  readonly turnId: string;
-  readonly before?: string;
-  readonly after?: string;
-  readonly snapshotPaths?: readonly string[];
-  readonly files?: readonly CommittedFileStat[];
-}
 export interface GitRunResult {
   readonly stdout: Buffer;
   readonly code: number | null;
@@ -103,7 +105,7 @@ export interface TurnSnapshotStore {
   read(sessionId: string, turnId?: string): TurnSnapshotRecord | undefined;
   readTurns(sessionId: string): readonly TurnSnapshotRecord[];
   prune(): Promise<void>;
-  dispose(): void;
+  dispose(): Promise<void>;
 }
 
 interface GitLayout {
@@ -131,12 +133,17 @@ export function createTurnSnapshotStore(
     ...overrides,
   };
   const objectsDir = join(storageDir, 'objects');
-  const sessions = readPersistedSessions(persistence);
+  let sessions = readPersistedSessions(persistence);
+  let pendingSessions: Map<string, TurnSnapshotRecord[]> | undefined;
   const disabledSessions = new Set<string>();
   let storeDisabled = false;
   let layout: GitLayout | undefined;
   let indexSeq = 0;
   let queue: Promise<void> = Promise.resolve();
+  let persistenceFailure: unknown | undefined;
+  let persistenceFailed = false;
+  let disposeOutcome: Promise<void> | undefined;
+  let closing = false;
   let disposed = false;
 
   const enqueue = <T,>(work: () => Promise<T>): Promise<T> => {
@@ -148,10 +155,43 @@ export function createTurnSnapshotStore(
     return run;
   };
 
-  const persist = async (): Promise<void> => {
-    await Promise.resolve(
-      persistence.update(TURN_SNAPSHOTS_STORAGE_KEY, serializeSessions(sessions)),
-    ).catch(() => undefined);
+  const persist = async (
+    nextSessions: Map<string, TurnSnapshotRecord[]>,
+  ): Promise<void> => {
+    try {
+      await Promise.resolve().then(() =>
+        persistence.update(
+          TURN_SNAPSHOTS_STORAGE_KEY,
+          serializeSessions(nextSessions),
+        ),
+      );
+    } catch (error) {
+      pendingSessions = nextSessions;
+      persistenceFailure = error;
+      persistenceFailed = true;
+      throw error;
+    }
+    sessions = nextSessions;
+    pendingSessions = undefined;
+    persistenceFailure = undefined;
+    persistenceFailed = false;
+  };
+
+  const flushPending = async (): Promise<void> => {
+    const pending = pendingSessions;
+    if (pending !== undefined) {
+      await persist(pending);
+    }
+  };
+
+  const persistPatch = async (
+    scope: TurnSnapshotScope,
+    patch: Partial<Omit<TurnSnapshotRecord, 'turnId'>>,
+  ): Promise<void> => {
+    await flushPending();
+    const nextSessions = cloneSessions(sessions);
+    upsertTurn(nextSessions, scope, patch);
+    await persist(nextSessions);
   };
 
   const failCapture = (
@@ -263,6 +303,7 @@ export function createTurnSnapshotStore(
     if (disposed || storeDisabled || disabledSessions.has(scope.sessionId)) {
       return undefined;
     }
+    await flushPending();
     const root = getWorkspaceRoot();
     if (root === undefined) {
       return undefined;
@@ -292,7 +333,11 @@ export function createTurnSnapshotStore(
         );
       }
       const snapshotPaths = phase === 'after'
-        ? readTurn(sessions, scope.sessionId, scope.turnId)?.snapshotPaths
+        ? readTurn(
+            pendingSessions ?? sessions,
+            scope.sessionId,
+            scope.turnId,
+          )?.snapshotPaths
         : undefined;
       if (snapshotPaths !== undefined && snapshotPaths.length > 0) {
         const added = await addSnapshotPaths(root, snapshotPaths, env, deadline);
@@ -314,10 +359,12 @@ export function createTurnSnapshotStore(
       if (!TREE_OID.test(oid)) {
         return failCapture(scope, phase, 'invalid-tree-oid');
       }
-      upsertTurn(sessions, scope, { [phase]: oid });
-      await persist();
+      await persistPatch(scope, { [phase]: oid });
       return oid;
     } catch (error) {
+      if (persistenceFailed) {
+        throw error;
+      }
       return failCapture(
         scope,
         phase,
@@ -333,7 +380,11 @@ export function createTurnSnapshotStore(
     paths: readonly string[],
   ): Promise<void> => {
     if (disposed || storeDisabled || disabledSessions.has(scope.sessionId)) return;
-    const record = readTurn(sessions, scope.sessionId, scope.turnId);
+    const record = readTurn(
+      sessions,
+      scope.sessionId,
+      scope.turnId,
+    );
     if (record?.before === undefined) return;
     const root = getWorkspaceRoot();
     if (root === undefined) return;
@@ -343,18 +394,24 @@ export function createTurnSnapshotStore(
       .filter((path) => !captured.has(path))
       .slice(0, Math.max(0, MAX_CHANGED_FILES_PER_TURN - captured.size));
     if (additions.length === 0) return;
-    const deadline = dependencies.now() + SNAPSHOT_TIMEOUT_MS;
-    const resolved = await resolveLayout(root, deadline);
-    if (resolved === undefined) return void failCapture(
-      scope, 'before', 'not-a-git-workspace',
-    );
-    const indexFile = join(storageDir, `index-${++indexSeq}`);
+    let indexFile: string | undefined;
     try {
+      await flushPending();
+      const persistedRecord = readTurn(sessions, scope.sessionId, scope.turnId);
+      if (persistedRecord?.before === undefined) {
+        return;
+      }
+      const deadline = dependencies.now() + SNAPSHOT_TIMEOUT_MS;
+      const resolved = await resolveLayout(root, deadline);
+      if (resolved === undefined) {
+        return failCapture(scope, 'before', 'not-a-git-workspace');
+      }
+      indexFile = join(storageDir, `index-${++indexSeq}`);
       await dependencies.mkdir(objectsDir);
       const env = snapshotEnv(indexFile, resolved.repoObjectsDir);
       const loaded = await git(
         root,
-        ['read-tree', record.before],
+        ['read-tree', persistedRecord.before],
         env,
         deadline,
         4096,
@@ -380,19 +437,23 @@ export function createTurnSnapshotStore(
       if (!TREE_OID.test(oid)) return void failCapture(
         scope, 'before', 'invalid-tree-oid',
       );
-      upsertTurn(sessions, scope, {
+      await persistPatch(scope, {
         before: oid,
         snapshotPaths: [...captured, ...additions],
       });
-      await persist();
     } catch (error) {
+      if (persistenceFailed) {
+        throw error;
+      }
       return void failCapture(
         scope,
         'before',
         error instanceof Error ? error.message : 'capture-paths-failed',
       );
     } finally {
-      await dependencies.unlink(indexFile).catch(() => undefined);
+      if (indexFile !== undefined) {
+        await dependencies.unlink(indexFile).catch(() => undefined);
+      }
     }
   };
 
@@ -446,9 +507,15 @@ export function createTurnSnapshotStore(
 
   return {
     capture(scope, phase) {
+      if (closing) {
+        return Promise.resolve(undefined);
+      }
       return enqueue(() => captureNow(scope, phase));
     },
     capturePaths(scope, paths) {
+      if (closing) {
+        return Promise.resolve();
+      }
       return enqueue(() => capturePathsNow(scope, paths));
     },
     async diff(scope) {
@@ -516,15 +583,14 @@ export function createTurnSnapshotStore(
     readTreeBytes,
     rememberFiles(scope, files) {
       return enqueue(async () => {
-        if (disposed) {
+        if (disposed || closing) {
           return;
         }
         const sanitized = sanitizeFiles(files);
         if (sanitized === undefined) {
           return;
         }
-        upsertTurn(sessions, scope, { files: sanitized });
-        await persist();
+        await persistPatch(scope, { files: sanitized });
       });
     },
     read(sessionId, turnId) {
@@ -537,10 +603,11 @@ export function createTurnSnapshotStore(
     },
     prune() {
       return enqueue(async () => {
-        if (disposed) {
+        if (disposed || closing) {
           return;
         }
-        const empty = sessions.size === 0;
+        const snapshotSessions = pendingSessions ?? sessions;
+        const empty = snapshotSessions.size === 0;
         const bytes = empty
           ? 0
           : await directoryBytes(objectsDir, dependencies);
@@ -548,270 +615,27 @@ export function createTurnSnapshotStore(
           return;
         }
         await dependencies.rm(objectsDir).catch(() => undefined);
-        sessions.clear();
-        await persist();
+        await flushPending();
+        await persist(new Map());
       });
     },
     dispose() {
-      disposed = true;
-      sessions.clear();
-      disabledSessions.clear();
-      layout = undefined;
-    },
-  };
-}
-
-function readTurn(
-  sessions: Map<string, TurnSnapshotRecord[]>,
-  sessionId: string,
-  turnId?: string,
-): TurnSnapshotRecord | undefined {
-  const turns = sessions.get(sessionId);
-  if (turns === undefined || turns.length === 0) {
-    return undefined;
-  }
-  if (turnId === undefined) {
-    return turns[turns.length - 1];
-  }
-  return turns.find((turn) => turn.turnId === turnId);
-}
-
-function upsertTurn(
-  sessions: Map<string, TurnSnapshotRecord[]>,
-  scope: ChangeStatsScope,
-  patch: Partial<Omit<TurnSnapshotRecord, 'turnId'>>,
-): void {
-  let turns = sessions.get(scope.sessionId);
-  if (turns === undefined) {
-    while (sessions.size >= MAX_SNAPSHOT_SESSIONS) {
-      const oldest = sessions.keys().next().value as string | undefined;
-      if (oldest === undefined) {
-        break;
+      if (disposeOutcome !== undefined) {
+        return disposeOutcome;
       }
-      sessions.delete(oldest);
-    }
-    turns = [];
-    sessions.set(scope.sessionId, turns);
-  }
-  const index = turns.findIndex((turn) => turn.turnId === scope.turnId);
-  if (index === -1) {
-    turns.push({ turnId: scope.turnId, ...patch });
-    if (turns.length > MAX_SNAPSHOT_TURNS_PER_SESSION) {
-      turns.splice(0, turns.length - MAX_SNAPSHOT_TURNS_PER_SESSION);
-    }
-    return;
-  }
-  turns[index] = { ...turns[index]!, ...patch };
-}
-
-function serializeSessions(
-  sessions: Map<string, TurnSnapshotRecord[]>,
-): {
-  readonly version: typeof TURN_SNAPSHOTS_VERSION;
-  readonly sessions: ReadonlyArray<{
-    readonly sessionId: string;
-    readonly turns: readonly TurnSnapshotRecord[];
-  }>;
-} {
-  return {
-    version: TURN_SNAPSHOTS_VERSION,
-    sessions: [...sessions.entries()].map(([sessionId, turns]) => ({
-      sessionId,
-      turns,
-    })),
-  };
-}
-
-function readPersistedSessions(
-  persistence: ChangeStatsPersistence,
-): Map<string, TurnSnapshotRecord[]> {
-  const records = new Map<string, TurnSnapshotRecord[]>();
-  const value = persistence.get<unknown>(TURN_SNAPSHOTS_STORAGE_KEY);
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    (value as { version?: unknown }).version !== TURN_SNAPSHOTS_VERSION ||
-    !Array.isArray((value as { sessions?: unknown }).sessions)
-  ) {
-    return records;
-  }
-  for (const entry of (value as { sessions: unknown[] }).sessions.slice(
-    -MAX_SNAPSHOT_SESSIONS,
-  )) {
-    const parsed = parseSessionEntry(entry);
-    if (parsed === undefined) {
-      continue;
-    }
-    records.set(parsed.sessionId, parsed.turns);
-  }
-  return records;
-}
-
-function parseSessionEntry(
-  entry: unknown,
-): { readonly sessionId: string; readonly turns: TurnSnapshotRecord[] } | undefined {
-  if (typeof entry !== 'object' || entry === null) {
-    return undefined;
-  }
-  const sessionId = (entry as { sessionId?: unknown }).sessionId;
-  const turnsValue = (entry as { turns?: unknown }).turns;
-  if (
-    !isBridgeId(sessionId) ||
-    !Array.isArray(turnsValue) ||
-    turnsValue.length > MAX_SNAPSHOT_TURNS_PER_SESSION
-  ) {
-    return undefined;
-  }
-  const turns: TurnSnapshotRecord[] = [];
-  for (const turn of turnsValue) {
-    const parsed = parseTurnEntry(turn);
-    if (parsed === undefined) {
-      continue;
-    }
-    turns.push(parsed);
-  }
-  return turns.length === 0 ? undefined : { sessionId, turns };
-}
-
-function parseTurnEntry(entry: unknown): TurnSnapshotRecord | undefined {
-  if (typeof entry !== 'object' || entry === null) {
-    return undefined;
-  }
-  const turnId = (entry as { turnId?: unknown }).turnId;
-  if (!isBridgeId(turnId)) {
-    return undefined;
-  }
-  const before = optionalOid((entry as { before?: unknown }).before);
-  const after = optionalOid((entry as { after?: unknown }).after);
-  if (before === 'invalid' || after === 'invalid') {
-    return undefined;
-  }
-  const filesValue = (entry as { files?: unknown }).files;
-  const snapshotPathsValue = (entry as { snapshotPaths?: unknown }).snapshotPaths;
-  const snapshotPaths = snapshotPathsValue === undefined
-    ? undefined
-    : sanitizeSnapshotPaths(snapshotPathsValue);
-  if (snapshotPathsValue !== undefined && snapshotPaths === undefined) {
-    return undefined;
-  }
-  if (filesValue === undefined) {
-    return {
-      turnId,
-      ...(before === undefined ? {} : { before }),
-      ...(after === undefined ? {} : { after }),
-      ...(snapshotPaths === undefined || snapshotPaths.length === 0
-        ? {}
-        : { snapshotPaths }),
-    };
-  }
-  if (
-    !Array.isArray(filesValue) ||
-    filesValue.length > MAX_CHANGED_FILES_PER_TURN
-  ) {
-    return undefined;
-  }
-  const files = sanitizeFiles(filesValue);
-  if (files === undefined || files.length !== filesValue.length) {
-    return undefined;
-  }
-  return {
-    turnId,
-    ...(before === undefined ? {} : { before }),
-    ...(after === undefined ? {} : { after }),
-    ...(snapshotPaths === undefined || snapshotPaths.length === 0
-      ? {}
-      : { snapshotPaths }),
-    ...(files.length === 0 ? {} : { files }),
-  };
-}
-
-function optionalOid(value: unknown): string | undefined | 'invalid' {
-  if (value === undefined) {
-    return undefined;
-  }
-  return typeof value === 'string' && TREE_OID.test(value.toLowerCase())
-    ? value.toLowerCase()
-    : 'invalid';
-}
-
-function sanitizeFiles(
-  values: readonly unknown[],
-): CommittedFileStat[] | undefined {
-  if (values.length > MAX_CHANGED_FILES_PER_TURN) {
-    return undefined;
-  }
-  const files: CommittedFileStat[] = [];
-  const seen = new Set<string>();
-  for (const value of values) {
-    if (typeof value !== 'object' || value === null) {
-      return undefined;
-    }
-    const candidate = value as {
-      path?: unknown;
-      additions?: unknown;
-      deletions?: unknown;
-    };
-    if (
-      !isSafeWorkspaceRelativePath(candidate.path) ||
-      seen.has(candidate.path) ||
-      !isNullableCount(candidate.additions) ||
-      !isNullableCount(candidate.deletions)
-    ) {
-      return undefined;
-    }
-    seen.add(candidate.path);
-    files.push({
-      path: candidate.path,
-      additions: candidate.additions,
-      deletions: candidate.deletions,
-    });
-  }
-  return files;
-}
-
-function sanitizeSnapshotPaths(value: unknown): string[] | undefined {
-  if (!Array.isArray(value) || value.length > MAX_CHANGED_FILES_PER_TURN) return;
-  const paths: string[] = [];
-  const seen = new Set<string>();
-  for (const path of value) {
-    if (!isSafeWorkspaceRelativePath(path) || seen.has(path)) return;
-    seen.add(path);
-    paths.push(path);
-  }
-  return paths;
-}
-
-function isNullableCount(value: unknown): value is number | null {
-  return (
-    value === null ||
-    (Number.isSafeInteger(value) && (value as number) >= 0)
-  );
-}
-
-function isBridgeId(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= MAX_BRIDGE_ID_LENGTH
-  );
-}
-
-function cloneRecord(
-  record: TurnSnapshotRecord | undefined,
-): TurnSnapshotRecord | undefined {
-  if (record === undefined) {
-    return undefined;
-  }
-  return {
-    turnId: record.turnId,
-    ...(record.before === undefined ? {} : { before: record.before }),
-    ...(record.after === undefined ? {} : { after: record.after }),
-    ...(record.snapshotPaths === undefined
-      ? {}
-      : { snapshotPaths: [...record.snapshotPaths] }),
-    ...(record.files === undefined
-      ? {}
-      : { files: record.files.map((file) => ({ ...file })) }),
+      closing = true;
+      disposeOutcome = queue.then(async () => {
+        disposed = true;
+        disabledSessions.clear();
+        layout = undefined;
+        if (persistenceFailed) {
+          throw persistenceFailure;
+        }
+        sessions.clear();
+        pendingSessions = undefined;
+      });
+      return disposeOutcome;
+    },
   };
 }
 

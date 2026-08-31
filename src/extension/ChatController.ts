@@ -937,7 +937,7 @@ export class ChatController {
     this.mcpAuthServerName = null;
     clearZombieSubagentWatch(this); clearTurnWatchdog(this);
     this.fileDiff.dispose?.(); this.changeStats.dispose?.();
-    this.turnSnapshots?.dispose();
+    const snapshotDisposal = this.turnSnapshots?.dispose();
     this.reviewCoordinator?.dispose();
     this.planDocuments.dispose();
     this.disposed = true;
@@ -948,7 +948,10 @@ export class ChatController {
     this.settingsUpdate = null; this.listeners.clear();
     // Detaches a running daemon-side turn instead of interrupting it
     // (Reload survival); see closeAllRuntimesForDispose.
-    this.disposal = closeAllRuntimesForDispose(this);
+    this.disposal = Promise.all([
+      closeAllRuntimesForDispose(this),
+      snapshotDisposal ?? Promise.resolve(),
+    ]).then(() => undefined);
     return this.disposal;
   }
   emitSnapshot(): void {

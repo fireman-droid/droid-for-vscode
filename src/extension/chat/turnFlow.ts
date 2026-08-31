@@ -32,6 +32,7 @@ import {
   capturePreToolBaseline,
   recordLiveToolChanges,
 } from './liveChanges';
+import { captureSnapshotBeforeInBackground } from './snapshotCapture';
 import { resolveSettledChangeFiles } from './settleTurnChanges';
 import { scheduleLiveSubagentSync, settleTurnSubagents } from './subagentWatch';
 import { settleQueueAfterTurn } from './queue';
@@ -163,7 +164,7 @@ export function handleSend(
       status: 'submitting',
       activity: createTurnActivityState(),
     };
-    void ctl.turnSnapshots?.capture({ sessionId, turnId }, 'before');
+    captureSnapshotBeforeInBackground(ctl, sessionId, turnId);
     armTurnWatchdog(ctl, sessionId, turnId);
     ctl.interactions.beginTurn(sessionId, turnId);
     // Edit-resend consumes the edit staging area passed in by the

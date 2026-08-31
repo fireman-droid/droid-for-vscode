@@ -9,6 +9,7 @@ import { reconcileSessionHistory } from '../reconcileSessionHistory';
 import { SESSION_RECOVERY_DEBOUNCE_MS } from '../SessionRecoveryStore';
 import type { HostTranscriptState } from '../hostTranscriptState';
 import { setSessionRunning } from './sessionRunning';
+import { captureSnapshotBeforeInBackground } from './snapshotCapture';
 import { loadHistoryTimed } from './runtimeLifecycle';
 import {
   failTurn,
@@ -174,7 +175,7 @@ export function reconcileDaemonTurn(
         activity: createTurnActivityState(),
         recovery: true,
       };
-      void ctl.turnSnapshots?.capture({ sessionId, turnId }, 'before');
+      captureSnapshotBeforeInBackground(ctl, sessionId, turnId);
       ctl.recordHost({
         level: 'info',
         name: 'host.reload.turn-recovered',
