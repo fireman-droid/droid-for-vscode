@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const vsixPath = path.resolve(process.argv[2] ?? 'dist/droidvisx.vsix');
+const repositoryManifest = JSON.parse(readFileSync('package.json', 'utf8'));
 const expectedEntries = [
   '[Content_Types].xml',
   'extension.vsixmanifest',
@@ -40,6 +42,13 @@ assert.deepEqual(
 );
 
 const manifest = JSON.parse(readEntry('extension/package.json'));
+for (const key of ['name', 'publisher', 'version']) {
+  assert.equal(
+    manifest[key],
+    repositoryManifest[key],
+    `VSIX manifest ${key} must match package.json`,
+  );
+}
 assert.equal(manifest.main, './dist/extension/extension.cjs');
 assert.ok(
   manifest.contributes.commands.some(

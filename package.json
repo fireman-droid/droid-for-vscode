@@ -144,9 +144,9 @@
     "typecheck": "tsc -p tsconfig.extension.json --noEmit && tsc -p tsconfig.webview.json --noEmit && pnpm run typecheck:webview",
     "lint:budgets": "node scripts/checkFileBudgets.mjs",
     "package:prepare": "pnpm run typecheck && pnpm run lint:budgets && pnpm run build",
-    "package:vsix": "pnpm run package:prepare && vsce package --no-dependencies --out dist/droidvisx.vsix",
+    "package:vsix": "vsce package --no-dependencies --out dist/droidvisx.vsix",
     "verify:vsix": "node src/integration/verifyVsix.mjs dist/droidvisx.vsix",
-    "vscode:prepublish": "pnpm run build"
+    "vscode:prepublish": "pnpm run package:prepare"
   },
   "dependencies": {
     "@assistant-ui/react": "0.15.12",
