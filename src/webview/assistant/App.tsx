@@ -1011,6 +1011,7 @@ export function App(): React.JSX.Element {
         sessionId,
         scopeKind: 'turn',
         turnId: reviewTurnId,
+        openCurrent: true,
       });
     },
     [sessionId, connectionStatus, vscode],

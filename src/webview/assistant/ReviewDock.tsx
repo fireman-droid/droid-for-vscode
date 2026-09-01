@@ -18,7 +18,11 @@ interface ReviewDockProps {
   readonly restorePreview: ReviewRestorePreviewStateMessage | null;
   readonly operation: ReviewOperationResultMessage | null;
   readonly agent: ReviewAgentStateMessage | null;
-  readonly onOpenScope: (kind: ReviewScopeKind, turnId?: string) => void;
+  readonly onOpenScope: (
+    kind: ReviewScopeKind,
+    turnId?: string,
+    openCurrent?: true,
+  ) => void;
   readonly onSelectFile: (path: string) => void;
   readonly onNavigate: (direction: "previous" | "next") => void;
   readonly onMarkReviewed: (advance: boolean) => void;
@@ -54,10 +58,6 @@ export function ReviewDock({
     readonly turnId?: string;
     readonly operationSequence: number;
   } | null>(null);
-  const [openingDiff, setOpeningDiff] = useState<{
-    readonly reviewScopeId: string;
-    readonly operationSequence: number;
-  } | null>(null);
   const bodyId = useId();
   const moreMenuId = useId();
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
@@ -80,10 +80,6 @@ export function ReviewDock({
       review?.scopeKind === pendingScope.kind &&
       (pendingScope.kind !== "turn" || review.turnId === pendingScope.turnId)
     ) {
-      setOpeningDiff({
-        reviewScopeId: review.reviewScopeId,
-        operationSequence: pendingScope.operationSequence,
-      });
       setPendingScope(null);
     }
   }, [pendingScope, review]);
@@ -97,16 +93,6 @@ export function ReviewDock({
       setPendingScope(null);
     }
   }, [operation, pendingScope]);
-  useEffect(() => {
-    if (
-      openingDiff !== null &&
-      operation?.operation === "open" &&
-      operation.sequence > openingDiff.operationSequence &&
-      operation.reviewScopeId === openingDiff.reviewScopeId
-    ) {
-      setOpeningDiff(null);
-    }
-  }, [openingDiff, operation]);
   useEffect(() => {
     if (!moreOpen) {
       return undefined;
@@ -178,7 +164,11 @@ export function ReviewDock({
       : kind === "turn"
         ? ownsLatestTurn
         : review?.scopeKind === kind;
-  const openScope = (kind: ReviewScopeKind, turnId?: string): void => {
+  const openScope = (
+    kind: ReviewScopeKind,
+    turnId?: string,
+    openCurrent?: true,
+  ): void => {
     if (pendingScope !== null) {
       return;
     }
@@ -187,7 +177,7 @@ export function ReviewDock({
       ...(turnId === undefined ? {} : { turnId }),
       operationSequence: operation?.sequence ?? -1,
     });
-    onOpenScope(kind, turnId);
+    onOpenScope(kind, turnId, openCurrent);
   };
   return (
     <section className="dvx-review-dock" aria-label="Review changes">
@@ -219,7 +209,7 @@ export function ReviewDock({
             className="dvx-review-dock-review"
             onClick={() => {
               setExpanded(true);
-              openScope("turn", changes.turnId);
+              openScope("turn", changes.turnId, true);
             }}
             disabled={pendingScope !== null}
           >
@@ -257,13 +247,13 @@ export function ReviewDock({
                       : "Branch"}
                 </button>
               ))}
-              {pendingScope !== null || openingDiff !== null ? (
+              {pendingScope !== null ? (
                 <span className="dvx-review-progress" role="status">
                   <span
                     className="dvx-review-progress-spinner"
                     aria-hidden="true"
                   />
-                  {pendingScope !== null ? "Loading…" : "Opening diff…"}
+                  Loading…
                 </span>
               ) : review !== null ? (
                 <span className="dvx-review-progress">

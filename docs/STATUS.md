@@ -108,10 +108,9 @@ Cursor 内真实行为和视觉仍以用户验收为准。
 - 历史 Changes、Workspace 和 Branch 使用同一 ReviewDock；Branch 明确显示
   base branch 和相对该基线的 commit 数，无法建立可靠基线的文件降级为 Open only
 - Scope 切换会立即选中目标并显示 Loading，直到匹配的 Review state 或打开失败结果抵达；
-  Host 以最多 6 个并发文件版本读取先发布 Review state，再等待原生 Diff 打开，Branch
-  commit 数随该 Review state 一次读取投影，不再触发重复 Git diff 请求；新范围内容
-  到达后立即可交互，原生 Diff 尚未完成时由 Dock 内 spinner 和 `Opening diff…`
-  继续承接等待反馈
+  Scope 标签只切换文件列表，不自动打开原生 Diff。点击 Review、历史 Changes、文件行
+  或 Previous / Next 才会显式打开当前 Diff；Host 以最多 6 个并发文件版本读取投影
+  Review state，Branch commit 数随该 state 一次读取，不再触发重复 Git diff 请求
 - reviewed 只由明确按钮产生，按文件版本持久化；当前 Session 最近打开的 scope
   在 Reload 后重建并验证版本，文件再次变化时显示 changed-after-review，不计入完成率
 - Review 的 More 菜单作为按钮上方的悬浮层打开，不改变 Dock 或控制栏高度

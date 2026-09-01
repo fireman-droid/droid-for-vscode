@@ -57,11 +57,16 @@ export function ReviewDockSlot({
       restorePreview={restorePreview}
       operation={operation}
       agent={agent}
-      onOpenScope={(scopeKind: ReviewScopeKind, turnId?: string) => {
+      onOpenScope={(
+        scopeKind: ReviewScopeKind,
+        turnId?: string,
+        openCurrent?: true,
+      ) => {
         postReview({
           type: "review.open",
           scopeKind,
           ...(turnId === undefined ? {} : { turnId }),
+          ...(openCurrent === true ? { openCurrent } : {}),
         });
       }}
       onSelectFile={(path) => {

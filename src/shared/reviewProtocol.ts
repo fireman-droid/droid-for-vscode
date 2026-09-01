@@ -58,6 +58,7 @@ export type ReviewOpenMessage = {
   readonly sessionId: string;
   readonly scopeKind: ReviewScopeKind;
   readonly turnId?: string;
+  readonly openCurrent?: true;
 };
 
 export type ReviewNavigateMessage = {
@@ -283,14 +284,14 @@ function parseOpen(
   value: UnknownRecord,
   isId: (value: unknown) => value is string,
 ): ReviewOpenMessage | undefined {
+  const required = ['type', 'sessionId', 'scopeKind'];
+  const optional = ['turnId', 'openCurrent'];
   if (
-    !(
-      hasExactKeys(value, ['type', 'sessionId', 'scopeKind']) ||
-      hasExactKeys(value, ['type', 'sessionId', 'scopeKind', 'turnId'])
-    ) ||
+    !hasOnlyKeys(value, required, optional) ||
     !isId(value.sessionId) ||
     !isReviewScopeKind(value.scopeKind) ||
     (value.turnId !== undefined && !isId(value.turnId)) ||
+    (value.openCurrent !== undefined && value.openCurrent !== true) ||
     (value.scopeKind === 'turn' && value.turnId === undefined) ||
     (value.scopeKind !== 'turn' && value.turnId !== undefined)
   ) {

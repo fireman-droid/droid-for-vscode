@@ -98,7 +98,7 @@ describe('ReviewDock', () => {
     expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull();
   });
 
-  it('moves from scope loading to native Diff opening feedback', async () => {
+  it('loads a scope without requesting a native Diff', async () => {
     const user = userEvent.setup();
     const props = callbacks();
     const { rerender } = render(
@@ -115,7 +115,11 @@ describe('ReviewDock', () => {
     await user.click(screen.getByRole('button', { name: /1 file changed/ }));
     await user.click(screen.getByRole('button', { name: 'Workspace' }));
 
-    expect(props.onOpenScope).toHaveBeenCalledWith('workspace', undefined);
+    expect(props.onOpenScope).toHaveBeenCalledWith(
+      'workspace',
+      undefined,
+      undefined,
+    );
     expect(
       screen.getByRole('button', { name: 'Workspace' }).getAttribute(
         'aria-pressed',
@@ -142,35 +146,31 @@ describe('ReviewDock', () => {
     );
 
     expect(screen.queryByText('Loading…')).toBeNull();
-    expect(screen.getByRole('status').textContent).toContain('Opening diff…');
     expect(screen.getByRole('button', { name: 'Branch' }).disabled).toBe(false);
+    expect(screen.queryByText('Opening diff…')).toBeNull();
+  });
 
-    rerender(
+  it('keeps the Review button as an explicit open-current action', async () => {
+    const user = userEvent.setup();
+    const props = callbacks();
+    render(
       <ReviewDock
         changes={changes}
-        review={{
-          ...historicalReview,
-          reviewScopeId: 'scope-workspace',
-          scopeKind: 'workspace',
-          baseline: 'head',
-          baselineLabel: 'HEAD',
-        }}
+        review={historicalReview}
         restorePreview={null}
-        operation={{
-          type: 'review.operationResult',
-          sequence: 1,
-          sessionId: 'session-1',
-          reviewScopeId: 'scope-workspace',
-          operation: 'open',
-          ok: true,
-          message: 'Review opened.',
-        }}
+        operation={null}
         agent={null}
         {...props}
       />,
     );
 
-    expect(screen.queryByText('Opening diff…')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Review' }));
+
+    expect(props.onOpenScope).toHaveBeenCalledWith(
+      'turn',
+      'turn-latest',
+      true,
+    );
   });
 
   it('clears pending scope feedback when opening fails', async () => {
@@ -247,5 +247,31 @@ describe('ReviewDock', () => {
       scopeKind: 'branch',
     });
     expect(postMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('posts explicit open-current intent from the Review button', async () => {
+    const user = userEvent.setup();
+    const postMessage = vi.fn();
+    render(
+      <ReviewDockSlot
+        changes={changes}
+        sessionId="session-1"
+        vscode={{ postMessage }}
+        review={historicalReview}
+        restorePreview={null}
+        operation={null}
+        agent={null}
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Review' }));
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'review.open',
+      sessionId: 'session-1',
+      scopeKind: 'turn',
+      turnId: 'turn-latest',
+      openCurrent: true,
+    });
   });
 });

@@ -10,6 +10,30 @@ const isId = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0;
 
 describe('review protocol', () => {
+  it('accepts only an explicit true open-current intent', () => {
+    const message = {
+      type: 'review.open',
+      sessionId: 'session-1',
+      scopeKind: 'turn',
+      turnId: 'turn-1',
+      openCurrent: true,
+    } as const;
+    expect(
+      parseReviewWebviewMessage(
+        message,
+        isId,
+        isSafeWorkspaceRelativePath,
+      ),
+    ).toEqual(message);
+    expect(
+      parseReviewWebviewMessage(
+        { ...message, openCurrent: false },
+        isId,
+        isSafeWorkspaceRelativePath,
+      ),
+    ).toBeUndefined();
+  });
+
   it('accepts exact review intents and rejects stale or surplus fields', () => {
     const message = {
       type: 'review.markReviewed',

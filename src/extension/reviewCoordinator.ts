@@ -79,7 +79,6 @@ interface RestoreEntry {
   readonly current: Buffer | null;
   readonly status: 'restorable' | 'conflicted' | 'unsupported';
 }
-
 interface RestorePreview {
   readonly id: string;
   readonly reviewScopeId: string;
@@ -276,9 +275,11 @@ export class ReviewCoordinator implements vscode.Disposable {
     this.active = loaded;
     this.publishState(loaded);
     if (this.disposed) return;
-    (await this.openCurrent(loaded, false))
-      ? this.result(loaded.sessionId, loaded.reviewScopeId, 'open', true, 'Review opened.')
-      : this.publishState(loaded);
+    if (message.openCurrent === true) {
+      (await this.openCurrent(loaded, false))
+        ? this.result(loaded.sessionId, loaded.reviewScopeId, 'open', true, 'Review opened.')
+        : this.publishState(loaded);
+    }
     await this.persistScope(loaded);
   }
   private async loadScope(message: ReviewOpenMessage): Promise<ActiveScope> {
@@ -587,7 +588,6 @@ export class ReviewCoordinator implements vscode.Disposable {
         ? 'settled'
         : 'reviewing';
   }
-
   private requireScope(message: {
     readonly sessionId: string;
     readonly reviewScopeId: string;

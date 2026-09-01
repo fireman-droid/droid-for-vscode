@@ -58,18 +58,14 @@ function createCoordinator(
 }
 
 describe('ReviewCoordinator reload recovery', () => {
-  it('publishes Branch state before Diff and reports when it opens', async () => {
+  it('loads Branch state without opening Diff and refreshes explicitly', async () => {
     const persistence: ChangeStatsPersistence = {
       get: <T,>() => undefined as T | undefined,
       update: vi.fn(() => Promise.resolve()),
     };
     const publish = vi.fn();
-    let resolveOpen: ((outcome: 'opened-diff') => void) | undefined;
     const openDiff = vi.fn<FileDiffOpener['openDiff']>(
-      () =>
-        new Promise((resolve) => {
-          resolveOpen = resolve;
-        }),
+      async () => 'opened-diff',
     );
     const readBranchDiff = vi.fn(async () => ({
       baseline: 'branch-baseline',
@@ -115,7 +111,7 @@ describe('ReviewCoordinator reload recovery', () => {
       );
     });
     expect(readBranchDiff).toHaveBeenCalledOnce();
-    expect(openDiff).toHaveBeenCalledOnce();
+    expect(openDiff).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'review.operationResult',
@@ -124,17 +120,8 @@ describe('ReviewCoordinator reload recovery', () => {
       }),
     );
 
-    resolveOpen?.('opened-diff');
     await coordinator.replay('session-1');
-
     expect(readBranchDiff).toHaveBeenCalledOnce();
-    expect(publish).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'review.operationResult',
-        operation: 'open',
-        ok: true,
-      }),
-    );
     coordinator.handle({
       type: 'review.refresh',
       sessionId: 'session-1',
@@ -218,7 +205,7 @@ describe('ReviewCoordinator reload recovery', () => {
     coordinator.dispose();
   });
 
-  it('opens the current Diff when a scope is opened', async () => {
+  it('opens the current Diff only when explicitly requested', async () => {
     const update = vi.fn(() => Promise.resolve());
     const persistence: ChangeStatsPersistence = {
       get: <T,>() => undefined as T | undefined,
@@ -241,6 +228,7 @@ describe('ReviewCoordinator reload recovery', () => {
       type: 'review.open',
       sessionId: 'session-1',
       scopeKind: 'workspace',
+      openCurrent: true,
     });
     await coordinator.replay('session-1');
 
@@ -319,6 +307,7 @@ describe('ReviewCoordinator reload recovery', () => {
       sessionId: 'session-1',
       scopeKind: 'turn',
       turnId: 'turn-1',
+      openCurrent: true,
     });
     await coordinator.replay('session-1');
 
