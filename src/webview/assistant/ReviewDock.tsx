@@ -157,13 +157,13 @@ export function ReviewDock({
     operation.ok &&
     operation.sequence === openNoticeSequence &&
     operation.reviewScopeId === review?.reviewScopeId;
-  const isSelectedScope = (kind: ReviewScopeKind): boolean =>
-    pendingScope !== null
-      ? pendingScope.kind === kind &&
-        (kind !== "turn" || pendingScope.turnId === changes.turnId)
-      : kind === "turn"
-        ? ownsLatestTurn
-        : review?.scopeKind === kind;
+  const selectedScope =
+    pendingScope?.kind ??
+    (ownsLatestTurn
+      ? "turn"
+      : review?.scopeKind === "workspace" || review?.scopeKind === "branch"
+        ? review.scopeKind
+        : "none");
   const openScope = (
     kind: ReviewScopeKind,
     turnId?: string,
@@ -195,7 +195,15 @@ export function ReviewDock({
             <span className="dvx-review-dock-notice" aria-hidden="true">
               {operation.message}
             </span>
-          ) : null}
+          ) : (
+            <span className="dvx-review-dock-status">
+              {writing
+                ? "Writing changes"
+                : review?.lifecycle === "complete"
+                  ? "Review complete"
+                  : "Ready to review"}
+            </span>
+          )}
           {writing ? (
             <span className="dvx-review-dock-writing" role="status">
               <span aria-hidden="true" />
@@ -226,27 +234,33 @@ export function ReviewDock({
         >
           <div className="dvx-review-dock-body-inner">
             <div className="dvx-review-scope-row">
-              {(["turn", "workspace", "branch"] as const).map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  className="dvx-review-scope"
-                  aria-pressed={isSelectedScope(kind)}
-                  disabled={pendingScope !== null}
-                  onClick={() =>
-                    openScope(
-                      kind,
-                      kind === "turn" ? changes.turnId : undefined,
-                    )
-                  }
-                >
-                  {kind === "turn"
-                    ? "Latest Turn"
-                    : kind === "workspace"
-                      ? "Workspace"
-                      : "Branch"}
-                </button>
-              ))}
+              <div
+                className="dvx-review-scope-switch"
+                data-scope={selectedScope}
+              >
+                <span className="dvx-review-scope-slider" aria-hidden="true" />
+                {(["turn", "workspace", "branch"] as const).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className="dvx-review-scope"
+                    aria-pressed={selectedScope === kind}
+                    disabled={pendingScope !== null}
+                    onClick={() =>
+                      openScope(
+                        kind,
+                        kind === "turn" ? changes.turnId : undefined,
+                      )
+                    }
+                  >
+                    {kind === "turn"
+                      ? "Latest Turn"
+                      : kind === "workspace"
+                        ? "Workspace"
+                        : "Branch"}
+                  </button>
+                ))}
+              </div>
               {pendingScope !== null ? (
                 <span className="dvx-review-progress" role="status">
                   <span
@@ -254,19 +268,6 @@ export function ReviewDock({
                     aria-hidden="true"
                   />
                   Loading…
-                </span>
-              ) : review !== null ? (
-                <span className="dvx-review-progress">
-                  {newerChanges
-                    ? "Newer changes available"
-                    : review.scopeKind === "branch" &&
-                        review.branchCommitCount !== undefined
-                      ? `${review.branchCommitCount} ${
-                          review.branchCommitCount === 1
-                            ? "commit"
-                            : "commits"
-                        } · ${review.reviewedCount} of ${review.reviewableCount} reviewed`
-                      : `${review.reviewedCount} of ${review.reviewableCount} reviewed`}
                 </span>
               ) : null}
             </div>
@@ -290,24 +291,43 @@ export function ReviewDock({
                       {current?.path ?? "No comparable files"}
                     </span>
                   </div>
-                  <div className="dvx-review-nav">
-                    <button
-                      type="button"
-                      disabled={review.currentIndex === null || review.currentIndex === 0}
-                      onClick={() => onNavigate("previous")}
-                    >
-                      Previous
-                    </button>
-                    <button
-                      type="button"
-                      disabled={
-                        review.currentIndex === null ||
-                        review.currentIndex >= review.files.length - 1
-                      }
-                      onClick={() => onNavigate("next")}
-                    >
-                      Next
-                    </button>
+                  <div className="dvx-review-current-side">
+                    <span className="dvx-review-progress">
+                      {newerChanges
+                        ? "Newer changes available"
+                        : review.scopeKind === "branch" &&
+                            review.branchCommitCount !== undefined
+                          ? `${review.branchCommitCount} ${
+                              review.branchCommitCount === 1
+                                ? "commit"
+                                : "commits"
+                            } · ${review.reviewedCount} / ${review.reviewableCount} reviewed`
+                          : `${review.reviewedCount} / ${review.reviewableCount} reviewed`}
+                    </span>
+                    {review.files.length > 1 ? (
+                      <div className="dvx-review-nav">
+                        <button
+                          type="button"
+                          disabled={
+                            review.currentIndex === null ||
+                            review.currentIndex === 0
+                          }
+                          onClick={() => onNavigate("previous")}
+                        >
+                          Previous
+                        </button>
+                        <button
+                          type="button"
+                          disabled={
+                            review.currentIndex === null ||
+                            review.currentIndex >= review.files.length - 1
+                          }
+                          onClick={() => onNavigate("next")}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
                 <ul className="dvx-review-dock-files">
@@ -365,7 +385,7 @@ export function ReviewDock({
                     }
                     onClick={() => onMarkReviewed(true)}
                   >
-                    Mark reviewed &amp; Next
+                    Mark &amp; Next
                   </button>
                   <span className="dvx-review-controls-spacer" />
                   <div className="dvx-review-more-wrap" ref={moreMenuRef}>

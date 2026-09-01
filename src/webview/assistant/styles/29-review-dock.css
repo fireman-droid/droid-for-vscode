@@ -1,46 +1,78 @@
 /* Host-owned sequential Diff review. The Dock controls scope, order,
    progress and safe actions; code remains in Cursor's native Diff. */
 .dvx-review-dock {
+  --dvx-review-accent: #48646c;
+  --dvx-review-accent-hover: #3c565d;
+  --dvx-review-on-accent: #fff;
+  --dvx-review-accent-soft: color-mix(
+    in srgb,
+    var(--dvx-review-accent) 10%,
+    transparent
+  );
+  --dvx-review-surface: color-mix(
+    in srgb,
+    var(--dvx-raised) 94%,
+    #f4efe5
+  );
+  --dvx-review-track: color-mix(
+    in srgb,
+    var(--dvx-soft) 72%,
+    #e9e3d8
+  );
   box-sizing: border-box;
   width: 100%;
   max-width: var(--dvx-column-max);
   margin: 0 auto 8px;
   overflow: hidden;
-  border: 1px solid var(--dvx-border);
-  border-radius: 10px;
-  background: var(--dvx-raised);
-  box-shadow: none;
+  border: 1px solid color-mix(
+    in srgb,
+    var(--dvx-border-strong) 72%,
+    #a59d8e
+  );
+  border-radius: 16px;
+  background: var(--dvx-review-surface);
+  box-shadow: 0 10px 28px -25px rgb(47 41 31 / 54%);
   user-select: none;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-review-dock {
+  --dvx-review-accent: #5f8588;
+  --dvx-review-accent-hover: #72979a;
+  --dvx-review-on-accent: #fff;
+  --dvx-review-accent-soft: rgb(95 133 136 / 16%);
+  --dvx-review-surface: #11110f;
+  --dvx-review-track: #1b1a17;
+  box-shadow: 0 12px 28px -22px rgb(0 0 0 / 72%);
 }
 
 .dvx-review-dock-head {
   display: grid;
-  min-height: 32px;
+  min-height: 68px;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 8px;
-  padding: 3px 5px 3px 8px;
+  gap: 14px;
+  padding: 10px 15px 10px 18px;
 }
 
 .dvx-review-dock-toggle {
   display: flex;
   min-width: 0;
-  height: 26px;
+  height: 42px;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--dvx-muted);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 14px;
   text-align: left;
   cursor: pointer;
 }
 
 .dvx-review-dock-toggle .dvx-activity-chevron {
-  width: 13px;
-  height: 13px;
+  width: 16px;
+  height: 16px;
   flex: 0 0 auto;
   transition: transform var(--dvx-duration-normal) ease;
 }
@@ -53,7 +85,7 @@
   overflow: hidden;
   min-width: 0;
   color: var(--dvx-ink);
-  font-weight: 540;
+  font-weight: 640;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -63,6 +95,15 @@
   color: var(--dvx-subtle);
   font-size: 10.5px;
   font-weight: 400;
+  white-space: nowrap;
+}
+
+.dvx-review-dock-status {
+  overflow: hidden;
+  color: var(--dvx-muted);
+  font-size: 12px;
+  font-weight: 430;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -95,24 +136,29 @@
 
 .dvx-shell .dvx-review-dock-review {
   display: inline-flex;
-  height: 24px;
+  height: 40px;
   grid-column: 2;
   align-items: center;
   justify-content: center;
-  padding: 0 10px;
-  border: 1px solid var(--dvx-ink);
-  border-radius: 6px;
-  background: var(--dvx-ink);
-  color: var(--dvx-surface);
+  padding: 0 16px;
+  border: 1px solid var(--dvx-review-accent);
+  border-radius: 10px;
+  background: var(--dvx-review-accent);
+  color: var(--dvx-review-on-accent);
   font: inherit;
-  font-size: 11px;
-  font-weight: 580;
+  font-size: 13px;
+  font-weight: 650;
   cursor: pointer;
+  transition:
+    border-color var(--dvx-duration-fast) ease,
+    background var(--dvx-duration-fast) ease,
+    transform var(--dvx-duration-fast) ease;
 }
 
 .dvx-review-dock-review:hover {
-  border-color: var(--dvx-text-strong);
-  background: var(--dvx-text-strong);
+  border-color: var(--dvx-review-accent-hover);
+  background: var(--dvx-review-accent-hover);
+  transform: translateY(-1px);
 }
 
 .dvx-review-dock-body {
@@ -129,30 +175,92 @@
 .dvx-review-dock-body-inner {
   min-height: 0;
   overflow: hidden;
-  border-top: 1px solid var(--dvx-border);
+  border-top: 1px solid color-mix(
+    in srgb,
+    var(--dvx-border) 78%,
+    #b6ad9e
+  );
 }
 
 .dvx-review-scope-row {
   display: flex;
-  min-height: 30px;
+  min-height: 74px;
   align-items: center;
-  gap: 2px;
-  padding: 3px 7px;
-  border-bottom: 1px solid var(--dvx-border);
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid color-mix(
+    in srgb,
+    var(--dvx-border) 82%,
+    #b6ad9e
+  );
+}
+
+.dvx-review-scope-switch {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  flex: 1 1 auto;
+  align-items: center;
+  padding: 4px;
+  overflow: hidden;
+  border: 1px solid color-mix(
+    in srgb,
+    var(--dvx-border) 88%,
+    #aaa292
+  );
+  border-radius: 14px;
+  background: var(--dvx-review-track);
+  box-shadow: inset 0 1px 2px rgb(64 54 39 / 7%);
+}
+
+.dvx-review-scope-slider {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 8px) / 3);
+  border: 1px solid color-mix(
+    in srgb,
+    var(--dvx-review-accent) 20%,
+    var(--dvx-border)
+  );
+  border-radius: 10px;
+  background: var(--dvx-review-surface);
+  box-shadow: 0 1px 3px rgb(54 46 34 / 11%);
+  pointer-events: none;
+  transition:
+    transform var(--dvx-duration-normal) var(--dvx-easing-out-strong),
+    opacity var(--dvx-duration-fast) ease;
+}
+
+.dvx-review-scope-switch[data-scope='workspace']
+  .dvx-review-scope-slider {
+  transform: translateX(100%);
+}
+
+.dvx-review-scope-switch[data-scope='branch'] .dvx-review-scope-slider {
+  transform: translateX(200%);
+}
+
+.dvx-review-scope-switch[data-scope='none'] .dvx-review-scope-slider {
+  opacity: 0;
 }
 
 .dvx-review-scope,
 .dvx-review-nav button,
 .dvx-review-controls button,
 .dvx-review-confirm button {
-  height: 23px;
-  padding: 0 7px;
+  height: 36px;
+  padding: 0 12px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 9px;
   background: transparent;
   color: var(--dvx-muted);
   font: inherit;
-  font-size: 10.5px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -165,9 +273,28 @@
 }
 
 .dvx-review-scope[aria-pressed='true'] {
-  border-color: var(--dvx-border-strong);
-  background: var(--dvx-soft);
+  border-color: transparent;
+  background: transparent;
   color: var(--dvx-ink);
+  font-weight: 640;
+}
+
+.dvx-review-scope {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  padding-inline: 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.dvx-review-scope:hover {
+  border-color: transparent;
+  background: color-mix(
+    in srgb,
+    var(--dvx-review-accent-soft) 52%,
+    transparent
+  );
 }
 
 .dvx-review-progress {
@@ -176,7 +303,7 @@
   gap: 4px;
   margin-left: auto;
   color: var(--dvx-muted);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -206,10 +333,10 @@
 
 .dvx-review-current {
   display: flex;
-  min-height: 34px;
+  min-height: 52px;
   align-items: center;
-  gap: 8px;
-  padding: 4px 7px 2px 10px;
+  gap: 14px;
+  padding: 10px 18px 7px 20px;
 }
 
 .dvx-review-current-meta {
@@ -217,28 +344,37 @@
   min-width: 0;
   flex: 1;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
 }
 
 .dvx-review-baseline {
-  color: var(--dvx-muted);
-  font-size: 9.5px;
+  color: var(--dvx-review-accent);
+  font-size: 10.5px;
+  font-weight: 680;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
 }
 
 .dvx-review-current-path {
   overflow: hidden;
   color: var(--dvx-ink);
   font-family: var(--dvx-mono);
-  font-size: 10.5px;
+  font-size: 11.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.dvx-review-current-side {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
 .dvx-review-nav {
   display: flex;
-  gap: 2px;
+  gap: 4px;
 }
 
 .dvx-review-nav button:disabled,
@@ -251,7 +387,7 @@
 .dvx-review-dock-files {
   max-height: min(32vh, 240px);
   margin: 0;
-  padding: 2px 6px 4px;
+  padding: 0 16px 11px;
   overflow-y: auto;
   list-style: none;
   overscroll-behavior: contain;
@@ -261,13 +397,13 @@
   display: grid;
   min-width: 0;
   width: 100%;
-  height: 23px;
+  min-height: 41px;
   grid-template-columns: 8px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 7px;
-  padding: 0 4px;
-  border: 0;
-  border-radius: 4px;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -278,12 +414,17 @@
 .dvx-review-dock-row:hover,
 .dvx-review-dock-row:focus-visible,
 .dvx-review-dock-row[data-current='true'] {
-  background: var(--dvx-soft);
+  border-color: color-mix(
+    in srgb,
+    var(--dvx-review-accent) 12%,
+    transparent
+  );
+  background: var(--dvx-review-accent-soft);
 }
 
 .dvx-review-file-state {
-  width: 5px;
-  height: 5px;
+  width: 7px;
+  height: 7px;
   border: 1px solid var(--dvx-border-strong);
   border-radius: 50%;
 }
@@ -294,8 +435,13 @@
 }
 
 .dvx-review-file-state[data-state='current'] {
-  border-color: var(--dvx-accent);
-  background: var(--dvx-accent);
+  border-color: var(--dvx-review-accent);
+  background: var(--dvx-review-accent);
+  box-shadow: 0 0 0 3px color-mix(
+    in srgb,
+    var(--dvx-review-accent) 10%,
+    transparent
+  );
 }
 
 .dvx-review-file-state[data-state='changed-after-review'],
@@ -313,7 +459,7 @@
   min-width: 0;
   color: var(--dvx-muted);
   font-family: var(--dvx-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -322,20 +468,44 @@
   display: inline-flex;
   gap: 4px;
   color: var(--dvx-subtle);
-  font-size: 10px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
 .dvx-review-controls {
   display: flex;
+  min-height: 62px;
   align-items: center;
-  gap: 2px;
-  padding: 4px 8px 7px;
-  border-top: 1px solid var(--dvx-border);
+  gap: 9px;
+  padding: 11px 16px;
+  border-top: 1px solid color-mix(
+    in srgb,
+    var(--dvx-border) 82%,
+    #b6ad9e
+  );
 }
 
-.dvx-review-controls button:nth-child(-n + 2) {
-  color: var(--dvx-ink);
+.dvx-review-controls > button:first-child {
+  border-color: var(--dvx-review-accent);
+  background: var(--dvx-review-accent);
+  color: var(--dvx-review-on-accent);
+  font-weight: 640;
+}
+
+.dvx-review-controls > button:first-child:hover:not(:disabled) {
+  border-color: var(--dvx-review-accent-hover);
+  background: var(--dvx-review-accent-hover);
+  color: var(--dvx-review-on-accent);
+}
+
+.dvx-review-controls > button:nth-child(2) {
+  border-color: var(--dvx-border);
+  background: color-mix(
+    in srgb,
+    var(--dvx-review-surface) 76%,
+    transparent
+  );
+  color: var(--dvx-muted);
 }
 
 .dvx-review-controls-spacer {
@@ -352,14 +522,14 @@
 
 .dvx-review-more-trigger,
 .dvx-review-more-item {
-  height: 23px;
-  padding: 0 7px;
+  height: 36px;
+  padding: 0 10px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 9px;
   background: transparent;
   color: var(--dvx-muted);
   font: inherit;
-  font-size: 10.5px;
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
@@ -532,6 +702,21 @@
     display: none;
   }
 
+  .dvx-review-scope-switch {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dvx-review-dock-head {
+    min-height: 54px;
+    padding: 7px 10px 7px 12px;
+  }
+
+  .dvx-review-scope-row {
+    min-height: 60px;
+    padding: 9px 10px;
+  }
+
   .dvx-review-scope,
   .dvx-review-controls button {
     padding-inline: 5px;
@@ -540,7 +725,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .dvx-review-dock-toggle .dvx-activity-chevron,
-  .dvx-review-dock-body {
+  .dvx-review-dock-body,
+  .dvx-review-scope-slider,
+  .dvx-shell .dvx-review-dock-review {
     transition: none;
   }
 }
@@ -555,5 +742,10 @@
     border-color: ButtonText;
     background: ButtonFace;
     color: ButtonText;
+  }
+
+  .dvx-review-scope-slider {
+    border-color: CanvasText;
+    background: Canvas;
   }
 }

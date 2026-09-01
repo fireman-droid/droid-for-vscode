@@ -238,7 +238,7 @@ describe('ReviewDock', () => {
     await user.click(
       await screen.findByRole('button', { name: /1 file changed/ }),
     );
-    expect(screen.getByText('2 commits · 0 of 1 reviewed')).toBeDefined();
+    expect(screen.getByText('2 commits · 0 / 1 reviewed')).toBeDefined();
     await user.click(screen.getByRole('button', { name: 'Branch' }));
 
     expect(postMessage).toHaveBeenCalledWith({
