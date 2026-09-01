@@ -1,23 +1,28 @@
 # 当前状态
 
 最后更新：2026-09-01
-包版本：`0.7.90`
+包版本：`0.8.0`
 
 ## 总结
 
 主聊天、新版 Mission Control、实时子代理只读对话、真实浏览器联调和统一
-Diff 审查链路已经接通。`0.7.90` 修复 Spec Handoff 通知抢跑、空 Changes
-恢复兼容和一组 Live Webview 布局问题；Cursor 内真实行为和视觉仍以用户验收为准。
+Diff 审查链路已经接通。`0.8.0` 把本地恢复升级为 Conversation canonical
+Store：Reload 先精确恢复最后 durable 可见状态，daemon history 只追加或补全；
+Cursor 内真实行为和视觉仍以用户验收为准。
 
 ### 可靠性、安全与维护性
 
 - 共享 Daemon 在解析并校验真实 listener PID 与 Droid daemon 命令身份后，才允许
   读取凭据并执行认证连接；Session Lease 仅把缺失文件视为空表，损坏或不可读状态
   fail closed
+- Recovery Store V2 以产品 Conversation 为 owner，显式保存 root、fork、rewind、
+  compact 和 handoff lineage；Compact/Handoff 更换 backend Session 时不拆分可见对话
+- Display Snapshot、active logical Turn 和 managed image artifacts 在 early paint 前
+  恢复；缺失图片保留原行和顺序并把 history 标记为 partial
+- settled changed files 由 logical Turn ledger 独立持久化；Review、Restore、Git
+  status、commit 和 Webview draft 不再依赖 transcript 中是否保留 Changes row
 - Recovery Store 与 Turn Snapshot Store 只在 durable write 成功后确认 revision；
   同步 throw、异步 rejection、flush、dispose 和后续重试使用一致失败语义
-- settled changed-file rows 只由 transcript canonical settlement 持久化；snapshot
-  保存 before/after tree、bytes 和 Restore metadata，snapshot-v1 files 仅只读兼容
 - recovered turn 只有最终 history 可用且 reconcile 完成后才进入 completed；Process、
   Daemon replacement/close 和 Browser Dev startup 都有明确的临时所有权、取消与回滚
 - Review queue 的共享 tail 始终可继续；Watcher 最多一个 running 和一个 pending
@@ -37,6 +42,10 @@ Diff 审查链路已经接通。`0.7.90` 修复 Spec Handoff 通知抢跑、空 
 ### 聊天与会话
 
 - 新建、恢复、切换、重命名、Fork、Compact 和 Rewind
+- New、Fork、Rewind 创建独立 Conversation；Compact 和 Spec Handoff 在同一
+  Conversation 内采用 successor backend Session，Sessions 目录按 Conversation 去重
+- Reload 首屏直接使用 canonical Display Snapshot；daemon history 只能 enrich
+  已有行或追加可信的新 Turn，不能删除、替换或重排关闭前可见内容
 - 顶部 Header 仅显示 `Droid` 和连接状态点；完整 Runtime 与 Mission 状态通过
   tooltip 和无障碍文本保留，不再占用可见工具栏空间
 - daemon 历史加载、本地恢复检查点和长会话虚拟化；问题导航与顶部吸附问题使用
@@ -81,13 +90,13 @@ Diff 审查链路已经接通。`0.7.90` 修复 Spec Handoff 通知抢跑、空 
 - Latest Turn、Workspace 和 Branch 只在 ReviewDock 内切换文件列表；点击 Review
   直接打开当前待审文件并复用一个 Cursor 原生 preview Diff，文件行或 Previous /
   Next 继续切换当前 Diff
-- 后续纯聊天回合不会清空最近一次实际改动的 Latest Turn Dock；新的改动回合
+- 后续纯聊天回合不会清空最近一次实际改动的 Latest Turn Dock；新的 settled 回合
   仍会替换它；Commit 只在当前查看该 Latest Turn 时出现，失败后重新读取 Git
-  状态并移除已不存在的选中文件，Session 切换按各自 transcript 隔离
-- 实时 Changes 同步写入 Host transcript；已打开的 writing Review scope 会随新增文件
-  在同一 scope 身份内刷新。turn 结束后，包含空文件集的 canonical transcript
-  settlement 必须 durable 才发布 settled Review 和 Changes；Reload 不回填 snapshot
-  文件清单，snapshot-v1 文件只在 canonical settlement 缺失时只读兼容
+  状态并移除已不存在的选中文件，Conversation 切换按各自 Turn ledger 隔离
+- 实时 Changes 继续投影到 Host transcript；已打开的 writing Review scope 会随新增文件
+  在同一 scope 身份内刷新。turn 结束后，包含空文件集的 logical Turn settlement
+  必须 durable 才发布 settled Review 和 Changes；Host snapshot 通过 `latestChanges`
+  只暴露最新 canonical DTO，不暴露完整 ledger
 - Latest Turn 缺少完整 before/after snapshot 时，使用已记录的文件清单回退到
   HEAD ↔ Working Diff；该回退只读，不提供 Restore
 - 历史 Changes、Workspace 和 Branch 使用同一 ReviewDock；Branch 明确显示

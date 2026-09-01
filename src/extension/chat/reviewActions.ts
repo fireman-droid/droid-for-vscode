@@ -1,4 +1,5 @@
 import type { ReviewWebviewMessage } from '../../shared/reviewProtocol';
+import { readConversationTurnChanges } from './conversationChanges';
 import { isTurnActive, type ChatControllerInternals } from './internals';
 
 export function handleReviewMessage(
@@ -17,16 +18,11 @@ export function handleReviewMessage(
     ctl.turn?.turnId === message.turnId &&
     isTurnActive(ctl.turn)
   ) {
-    const changes = [...ctl.transcript.transcript]
-      .reverse()
-      .find(
-        (item) =>
-          item.kind === 'changes' && item.turnId === message.turnId,
-      );
+    const changes = readConversationTurnChanges(ctl, message.turnId!);
     ctl.reviewCoordinator?.openWritingTurn(
       message.sessionId,
       message.turnId!,
-      changes?.kind === 'changes' ? changes.files : [],
+      changes?.files ?? [],
     );
     return;
   }

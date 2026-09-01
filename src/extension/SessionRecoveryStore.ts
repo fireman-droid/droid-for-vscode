@@ -1,37 +1,42 @@
 import {
-  MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_TURN_TEXT_LENGTH,
-  SESSION_HISTORY_STATUSES,
-  type SessionHistoryStatus,
-  type SessionTranscriptItem,
+  type ChangedFileSummary,
+  type TurnStatus,
 } from '../shared/bridgeMessages';
 import { MAX_QUEUED_MESSAGES } from '../shared/queueProtocol';
+import { transcriptItemTextUnits } from '../shared/transcriptLimits';
 import {
-  hasExactKeys,
-  isExactArray,
-  isStrictRecord,
-} from '../shared/strictValidation';
+  MAX_RECOVERY_TEXT_UNITS,
+  parseConversationRecoveryState,
+  parseRecoveryTranscript,
+} from './conversationRecoveryParser';
+import type { ConversationImageArtifactStore } from './conversationImageArtifacts';
 import {
-  MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
-  transcriptItemTextUnits,
-} from '../shared/transcriptLimits';
+  CONVERSATION_RECOVERY_VERSION,
+  MAX_RECOVERY_CONVERSATIONS,
+  adoptConversationSuccessor,
+  cloneConversation,
+  cloneTranscriptState,
+  createRootConversation,
+  forkConversation,
+  readLatestConversationChanges,
+  recordSettledTurn,
+  writeConversationDisplay,
+  type ConversationDisplaySnapshot,
+  type ConversationRecoveryRecord,
+  type ConversationTurnRecord,
+} from './conversationRecoveryState';
 import {
-  hydrateHostTranscriptState,
+  createHostTranscriptState,
   type HostTranscriptState,
 } from './hostTranscriptState';
-import {
-  dataValue,
-  isId,
-  isOneOf,
-  parseTranscriptItem,
-} from './sessionRecoveryItems';
 
-export const SESSION_RECOVERY_VERSION = 1;
+export const SESSION_RECOVERY_VERSION =
+  CONVERSATION_RECOVERY_VERSION;
 export const SESSION_RECOVERY_STORAGE_KEY =
   'droidvisx.sessionRecovery';
-export const MAX_RECOVERY_SESSIONS = 8;
-export const MAX_RECOVERY_TEXT_UNITS =
-  MAX_SESSION_TRANSCRIPT_TEXT_UNITS;
+export const MAX_RECOVERY_SESSIONS = MAX_RECOVERY_CONVERSATIONS;
+export { MAX_RECOVERY_TEXT_UNITS };
 export const SESSION_RECOVERY_DEBOUNCE_MS = 250;
 
 export interface SessionRecoveryPersistence {
@@ -41,36 +46,13 @@ export interface SessionRecoveryPersistence {
 
 export type SessionRecoveryCache = HostTranscriptState;
 
-interface StoredSession {
-  readonly sessionId: string;
-  readonly lastAccess: number;
-  readonly transcript: readonly SessionTranscriptItem[];
-  readonly historyStatus: SessionHistoryStatus;
-  readonly truncated: boolean;
-  /**
-   * Queued prompt texts alive when the window died (queue attachments
-   * are never persisted). Restored as a paused queue after a reload so
-   * typed prompts do not silently evaporate.
-   */
-  readonly queuedTexts: readonly string[];
-}
-
-interface StoredState {
-  readonly version: typeof SESSION_RECOVERY_VERSION;
-  readonly selectedSessionId: string | null;
-  readonly sessions: readonly StoredSession[];
-}
-
-interface MutableSession {
-  sessionId: string;
-  lastAccess: number;
-  cache: SessionRecoveryCache;
-  queuedTexts: readonly string[];
-}
-
 export class SessionRecoveryStore {
-  private selectedSessionId: string | null = null;
-  private readonly sessions = new Map<string, MutableSession>();
+  private selectedConversationId: string | null = null;
+  private readonly conversations = new Map<
+    string,
+    ConversationRecoveryRecord
+  >();
+  private readonly sessionOwners = new Map<string, string>();
   private accessSequence = 0;
   private revision = 0;
   private persistedRevision = 0;
@@ -79,173 +61,351 @@ export class SessionRecoveryStore {
   private disposeOutcome: Promise<void> | null = null;
   private backgroundFailureReported = false;
   private onBackgroundFlushFailure: (() => void) | null = null;
+  private readonly pendingArtifactDeletes = new Set<string>();
   private disposed = false;
 
   constructor(
     private readonly persistence: SessionRecoveryPersistence,
     private readonly storageKey = SESSION_RECOVERY_STORAGE_KEY,
     private readonly debounceMs = SESSION_RECOVERY_DEBOUNCE_MS,
+    private readonly imageArtifacts: ConversationImageArtifactStore | null =
+      null,
   ) {}
 
   async load(): Promise<void> {
     if (this.disposed) {
       return;
     }
-
-    let parsed: StoredState | undefined;
-    try {
-      parsed = parseStoredState(
-        this.persistence.get<unknown>(this.storageKey),
-      );
-    } catch {
-      parsed = undefined;
-    }
-
-    this.sessions.clear();
-    this.selectedSessionId = parsed?.selectedSessionId ?? null;
+    const parsed = parseConversationRecoveryState(
+      this.persistence.get<unknown>(this.storageKey),
+    );
+    this.conversations.clear();
+    this.sessionOwners.clear();
+    this.selectedConversationId =
+      parsed?.selectedConversationId ?? null;
     this.accessSequence = 0;
-    if (parsed) {
-      for (const session of parsed.sessions) {
-        this.sessions.set(session.sessionId, {
-          sessionId: session.sessionId,
-          lastAccess: session.lastAccess,
-          cache: hydrateHostTranscriptState({
-            transcript: session.transcript,
-            historyStatus: session.historyStatus,
-            truncated: session.truncated,
-          }),
-          queuedTexts: session.queuedTexts,
-        });
-        this.accessSequence = Math.max(
-          this.accessSequence,
-          session.lastAccess,
-        );
-      }
+    const hydrated =
+      this.imageArtifacts === null
+        ? { conversations: parsed?.conversations ?? [], missing: 0 }
+        : await this.imageArtifacts.hydrate(
+            parsed?.conversations ?? [],
+          );
+    for (const conversation of hydrated.conversations) {
+      const cloned = cloneConversation(conversation);
+      this.conversations.set(cloned.conversationId, cloned);
+      this.indexConversation(cloned);
+      this.accessSequence = Math.max(
+        this.accessSequence,
+        cloned.lastAccess,
+      );
     }
+    await this.imageArtifacts?.prune([
+      ...this.conversations.values(),
+    ]);
     this.revision = 0;
     this.persistedRevision = 0;
   }
 
-  getSelectedSessionId(): string | null {
-    return this.selectedSessionId;
+  getSelectedConversationId(): string | null {
+    return this.selectedConversationId;
   }
 
-  selectSession(sessionId: string | null): void {
+  getSelectedSessionId(): string | null {
+    if (this.selectedConversationId === null) {
+      return null;
+    }
+    return (
+      this.conversations.get(this.selectedConversationId)
+        ?.activeSessionId ?? null
+    );
+  }
+
+  resolveConversationId(sessionId: string): string | undefined {
+    return this.sessionOwners.get(sessionId);
+  }
+
+  selectConversation(conversationId: string | null): void {
     if (
       this.disposed ||
-      (sessionId !== null && !isId(sessionId)) ||
-      this.selectedSessionId === sessionId
+      (conversationId !== null &&
+        !this.conversations.has(conversationId)) ||
+      this.selectedConversationId === conversationId
     ) {
       return;
     }
-    this.selectedSessionId = sessionId;
-    if (sessionId !== null) {
-      this.touch(sessionId);
+    this.selectedConversationId = conversationId;
+    if (conversationId !== null) {
+      this.touch(conversationId);
     }
     this.enforceLimits();
     this.changed();
   }
 
-  readSession(sessionId: string): SessionRecoveryCache | undefined {
-    if (this.disposed || !isId(sessionId)) {
+  readConversation(
+    conversationId: string,
+  ): ConversationRecoveryRecord | undefined {
+    if (this.disposed || !isRecoveryId(conversationId)) {
       return undefined;
     }
-    const session = this.sessions.get(sessionId);
-    if (!session) {
+    const conversation = this.conversations.get(conversationId);
+    if (conversation === undefined) {
       return undefined;
     }
-    session.lastAccess = this.nextAccess();
+    this.touch(conversationId);
     this.changed();
-    return cloneCache(session.cache);
+    return cloneConversation(conversation);
   }
 
-  writeSession(
+  readDisplay(
+    conversationId: string,
+  ): ConversationDisplaySnapshot | undefined {
+    const conversation = this.readConversation(conversationId);
+    return conversation?.display;
+  }
+
+  writeActiveDisplay(
+    conversationId: string,
     sessionId: string,
     cache: SessionRecoveryCache,
+    turn: ConversationDisplaySnapshot['turn'],
   ): boolean {
-    if (this.disposed || !isId(sessionId)) {
+    if (
+      this.disposed ||
+      !isRecoveryId(conversationId) ||
+      !isRecoveryId(sessionId)
+    ) {
       return false;
     }
-    const safeCache = parseCache(cache);
-    if (!safeCache) {
+    const safeCache = parseRecoveryTranscript(cache);
+    const conversation = this.conversations.get(conversationId);
+    if (safeCache === undefined || conversation === undefined) {
       return false;
     }
-    this.sessions.set(sessionId, {
+    const next = writeConversationDisplay(
+      conversation,
       sessionId,
-      lastAccess: this.nextAccess(),
-      cache: safeCache,
-      queuedTexts: this.sessions.get(sessionId)?.queuedTexts ?? [],
-    });
+      safeCache,
+      this.nextAccess(),
+      turn,
+    );
+    if (next === undefined) {
+      return false;
+    }
+    this.storeConversation(next);
     this.enforceLimits();
     this.changed();
     return true;
   }
 
-  /** Queued prompt texts persisted for this session (may be empty). */
-  readQueuedTexts(sessionId: string): readonly string[] {
-    if (this.disposed || !isId(sessionId)) {
-      return [];
+  createConversation(
+    sessionId: string,
+    cache: SessionRecoveryCache,
+  ): string | undefined {
+    if (
+      this.disposed ||
+      !isRecoveryId(sessionId) ||
+      this.sessionOwners.has(sessionId)
+    ) {
+      return undefined;
     }
-    return this.sessions.get(sessionId)?.queuedTexts ?? [];
+    const safeCache = parseRecoveryTranscript(cache);
+    if (safeCache === undefined) {
+      return undefined;
+    }
+    const conversation = createRootConversation(
+      sessionId,
+      safeCache,
+      this.nextAccess(),
+    );
+    this.storeConversation(conversation);
+    this.enforceLimits();
+    this.changed();
+    return conversation.conversationId;
   }
 
-  /**
-   * Persists the session's queued prompt texts (attachments never
-   * persist). Bounded by the queue protocol caps; a session without a
-   * transcript checkpoint keeps no queue either.
-   */
-  writeQueuedTexts(
+  forkConversation(
+    sourceConversationId: string,
+    sourceSessionId: string,
+    successorSessionId: string,
+    relation: 'fork' | 'rewind',
+    cache: SessionRecoveryCache,
+    anchorTurnId?: string,
+  ): string | undefined {
+    if (
+      this.disposed ||
+      this.sessionOwners.has(successorSessionId) ||
+      !isRecoveryId(successorSessionId)
+    ) {
+      return undefined;
+    }
+    const source = this.conversations.get(sourceConversationId);
+    const safeCache = parseRecoveryTranscript(cache);
+    if (
+      source === undefined ||
+      safeCache === undefined ||
+      !source.nodes.some((node) => node.sessionId === sourceSessionId)
+    ) {
+      return undefined;
+    }
+    const forked = forkConversation(
+      source,
+      sourceSessionId,
+      successorSessionId,
+      relation,
+      safeCache,
+      this.nextAccess(),
+      anchorTurnId,
+    );
+    this.storeConversation(forked);
+    this.enforceLimits();
+    this.changed();
+    return forked.conversationId;
+  }
+
+  adoptSuccessor(
+    conversationId: string,
+    sourceSessionId: string,
+    successorSessionId: string,
+    relation: 'compact' | 'handoff',
+    anchorTurnId?: string,
+  ): boolean {
+    if (
+      this.disposed ||
+      !isRecoveryId(successorSessionId) ||
+      this.sessionOwners.has(successorSessionId)
+    ) {
+      return false;
+    }
+    const conversation = this.conversations.get(conversationId);
+    if (
+      conversation === undefined ||
+      conversation.activeSessionId !== sourceSessionId
+    ) {
+      return false;
+    }
+    this.storeConversation(
+      adoptConversationSuccessor(
+        conversation,
+        sourceSessionId,
+        successorSessionId,
+        relation,
+        this.nextAccess(),
+        anchorTurnId,
+      ),
+    );
+    this.enforceLimits();
+    this.changed();
+    return true;
+  }
+
+  recordSettledTurn(
+    conversationId: string,
     sessionId: string,
-    texts: readonly string[],
+    turnId: string,
+    prompt: string | null,
+    files: readonly ChangedFileSummary[],
+    status: TurnStatus,
+    messageId?: string,
+  ): boolean {
+    if (this.disposed) {
+      return false;
+    }
+    const conversation = this.conversations.get(conversationId);
+    if (conversation === undefined) {
+      return false;
+    }
+    const next = recordSettledTurn(
+      conversation,
+      sessionId,
+      turnId,
+      prompt,
+      files,
+      status,
+      this.nextAccess(),
+      messageId,
+    );
+    if (next === undefined) {
+      return false;
+    }
+    this.storeConversation(next);
+    this.enforceLimits();
+    this.changed();
+    return true;
+  }
+
+  readTurn(
+    conversationId: string,
+    turnId: string,
+  ): ConversationTurnRecord | undefined {
+    return this.readConversation(conversationId)?.turns.find(
+      (turn) => turn.turnId === turnId,
+    );
+  }
+
+  readLatestChanges(
+    conversationId: string,
+  ): ConversationTurnRecord | undefined {
+    const conversation = this.readConversation(conversationId);
+    return conversation === undefined
+      ? undefined
+      : readLatestConversationChanges(conversation);
+  }
+
+  restoreConversation(
+    conversation: ConversationRecoveryRecord,
   ): void {
-    if (this.disposed || !isId(sessionId)) {
+    if (this.disposed) {
       return;
     }
-    const session = this.sessions.get(sessionId);
-    if (!session) {
+    this.storeConversation(conversation);
+    this.enforceLimits();
+    this.changed();
+  }
+
+  discardConversation(conversationId: string): void {
+    if (
+      this.disposed ||
+      !this.conversations.has(conversationId)
+    ) {
+      return;
+    }
+    this.deleteConversation(conversationId);
+    this.changed();
+  }
+
+  readConversationQueuedTexts(conversationId: string): readonly string[] {
+    const conversation = this.conversations.get(conversationId);
+    return conversation === undefined
+      ? []
+      : [...conversation.queuedTexts];
+  }
+
+  writeConversationQueuedTexts(
+    conversationId: string,
+    texts: readonly string[],
+  ): void {
+    if (this.disposed) {
+      return;
+    }
+    const conversation = this.conversations.get(conversationId);
+    if (conversation === undefined) {
       return;
     }
     const safe = sanitizeQueuedTexts(texts);
     if (
-      safe.length === session.queuedTexts.length &&
-      safe.every((text, index) => text === session.queuedTexts[index])
+      safe.length === conversation.queuedTexts.length &&
+      safe.every(
+        (text, index) => text === conversation.queuedTexts[index],
+      )
     ) {
       return;
     }
-    session.queuedTexts = safe;
-    this.changed();
-  }
-
-  updateSession(
-    sessionId: string,
-    update: (
-      cache: SessionRecoveryCache | undefined,
-    ) => SessionRecoveryCache,
-  ): SessionRecoveryCache | undefined {
-    if (this.disposed || !isId(sessionId)) {
-      return undefined;
-    }
-    const current = this.sessions.get(sessionId);
-    let next: SessionRecoveryCache;
-    try {
-      next = update(current ? cloneCache(current.cache) : undefined);
-    } catch {
-      return current ? cloneCache(current.cache) : undefined;
-    }
-    const safeCache = parseCache(next);
-    if (!safeCache) {
-      return current ? cloneCache(current.cache) : undefined;
-    }
-    this.sessions.set(sessionId, {
-      sessionId,
+    this.storeConversation({
+      ...conversation,
       lastAccess: this.nextAccess(),
-      cache: safeCache,
-      queuedTexts: current?.queuedTexts ?? [],
+      queuedTexts: safe,
     });
-    this.enforceLimits();
     this.changed();
-    const stored = this.sessions.get(sessionId);
-    return stored ? cloneCache(stored.cache) : undefined;
   }
 
   flush(): Promise<void> {
@@ -264,8 +424,7 @@ export class SessionRecoveryStore {
       try {
         this.onBackgroundFlushFailure?.();
       } catch {
-        // A diagnostic sink must not turn a contained background failure
-        // into an unhandled rejection.
+        // Diagnostic reporting must not create an unhandled rejection.
       }
     });
   }
@@ -277,7 +436,7 @@ export class SessionRecoveryStore {
   }
 
   dispose(): Promise<void> {
-    if (this.disposeOutcome) {
+    if (this.disposeOutcome !== null) {
       return this.disposeOutcome;
     }
     this.disposed = true;
@@ -288,12 +447,17 @@ export class SessionRecoveryStore {
 
   private async flushPending(): Promise<void> {
     while (this.persistedRevision < this.revision) {
-      if (this.writeInFlight) {
+      if (this.writeInFlight !== null) {
         await this.writeInFlight;
         continue;
       }
       const revision = this.revision;
+      const conversations = this.sortedConversations();
+      if (this.imageArtifacts !== null) {
+        await this.imageArtifacts.persist(conversations);
+      }
       const snapshot = this.serialize();
+      const artifactDeletes = [...this.pendingArtifactDeletes];
       const write = Promise.resolve()
         .then(() =>
           this.persistence.update(this.storageKey, snapshot),
@@ -304,6 +468,12 @@ export class SessionRecoveryStore {
             revision,
           );
           this.backgroundFailureReported = false;
+          return this.imageArtifacts?.remove(artifactDeletes);
+        })
+        .then(() => {
+          artifactDeletes.forEach((artifactId) =>
+            this.pendingArtifactDeletes.delete(artifactId),
+          );
         })
         .finally(() => {
           if (this.writeInFlight === write) {
@@ -315,18 +485,78 @@ export class SessionRecoveryStore {
     }
   }
 
-  private touch(sessionId: string): void {
-    const session = this.sessions.get(sessionId);
-    if (session) {
-      session.lastAccess = this.nextAccess();
+  private findBySession(
+    sessionId: string,
+  ): ConversationRecoveryRecord | undefined {
+    if (!isRecoveryId(sessionId)) {
+      return undefined;
+    }
+    const owner = this.sessionOwners.get(sessionId);
+    return owner === undefined
+      ? undefined
+      : this.conversations.get(owner);
+  }
+
+  private storeConversation(
+    conversation: ConversationRecoveryRecord,
+  ): void {
+    const previous = this.conversations.get(
+      conversation.conversationId,
+    );
+    if (previous !== undefined) {
+      const nextArtifactIds = new Set(
+        conversation.display.images.map(
+          (artifact) => artifact.artifactId,
+        ),
+      );
+      previous.display.images.forEach((artifact) => {
+        if (!nextArtifactIds.has(artifact.artifactId)) {
+          this.pendingArtifactDeletes.add(artifact.artifactId);
+        }
+      });
+      for (const node of previous.nodes) {
+        if (
+          this.sessionOwners.get(node.sessionId) ===
+          previous.conversationId
+        ) {
+          this.sessionOwners.delete(node.sessionId);
+        }
+      }
+    }
+    const cloned = cloneConversation(conversation);
+    this.conversations.set(cloned.conversationId, cloned);
+    this.indexConversation(cloned);
+  }
+
+  private indexConversation(
+    conversation: ConversationRecoveryRecord,
+  ): void {
+    for (const node of conversation.nodes) {
+      this.sessionOwners.set(
+        node.sessionId,
+        conversation.conversationId,
+      );
+    }
+  }
+
+  private touch(conversationId: string): void {
+    const conversation = this.conversations.get(conversationId);
+    if (conversation !== undefined) {
+      this.conversations.set(conversationId, {
+        ...conversation,
+        lastAccess: this.nextAccess(),
+      });
     }
   }
 
   private nextAccess(): number {
     if (this.accessSequence >= Number.MAX_SAFE_INTEGER) {
-      const ordered = this.sortedSessions();
-      ordered.forEach((session, index) => {
-        session.lastAccess = index + 1;
+      const ordered = this.sortedConversations();
+      ordered.forEach((conversation, index) => {
+        this.conversations.set(conversation.conversationId, {
+          ...conversation,
+          lastAccess: index + 1,
+        });
       });
       this.accessSequence = ordered.length;
     }
@@ -335,51 +565,78 @@ export class SessionRecoveryStore {
   }
 
   private enforceLimits(): void {
-    while (this.sessions.size > MAX_RECOVERY_SESSIONS) {
+    while (
+      this.conversations.size > MAX_RECOVERY_CONVERSATIONS
+    ) {
       this.evictLeastRecentlyUsed();
     }
-
     while (this.totalTextUnits() > MAX_RECOVERY_TEXT_UNITS) {
-      const leastRecent = this.sortedSessions()[0];
-      if (!leastRecent) {
+      const leastRecent = this.sortedConversations()[0];
+      if (leastRecent === undefined) {
         break;
       }
-      if (leastRecent.cache.transcript.length === 0) {
-        this.sessions.delete(leastRecent.sessionId);
+      const transcript = leastRecent.display.transcript.transcript;
+      if (transcript.length === 0) {
+        this.deleteConversation(leastRecent.conversationId);
         continue;
       }
-      leastRecent.cache = {
-        transcript: leastRecent.cache.transcript.slice(1),
-        historyStatus: 'partial',
-        truncated: true,
-      };
+      const next = writeConversationDisplay(
+        leastRecent,
+        leastRecent.activeSessionId,
+        {
+          transcript: transcript.slice(1),
+          historyStatus: 'partial',
+          truncated: true,
+        },
+        leastRecent.lastAccess,
+      );
+      if (next === undefined) {
+        this.deleteConversation(leastRecent.conversationId);
+      } else {
+        this.storeConversation(next);
+      }
     }
   }
 
   private totalTextUnits(): number {
-    let total = this.selectedSessionId?.length ?? 0;
-    for (const session of this.sessions.values()) {
-      total += sessionTextUnits({
-        sessionId: session.sessionId,
-        transcript: session.cache.transcript,
-        historyStatus: session.cache.historyStatus,
-      });
+    let total = this.selectedConversationId?.length ?? 0;
+    for (const conversation of this.conversations.values()) {
+      total += conversationTextUnits(conversation);
     }
     return total;
   }
 
   private evictLeastRecentlyUsed(): void {
-    const leastRecent = this.sortedSessions()[0];
-    if (leastRecent) {
-      this.sessions.delete(leastRecent.sessionId);
+    const leastRecent = this.sortedConversations()[0];
+    if (leastRecent !== undefined) {
+      this.deleteConversation(leastRecent.conversationId);
     }
   }
 
-  private sortedSessions(): MutableSession[] {
-    return [...this.sessions.values()].sort(
+  private deleteConversation(conversationId: string): void {
+    const conversation = this.conversations.get(conversationId);
+    if (conversation === undefined) {
+      return;
+    }
+    this.conversations.delete(conversationId);
+    conversation.display.images.forEach((artifact) =>
+      this.pendingArtifactDeletes.add(artifact.artifactId),
+    );
+    for (const node of conversation.nodes) {
+      if (this.sessionOwners.get(node.sessionId) === conversationId) {
+        this.sessionOwners.delete(node.sessionId);
+      }
+    }
+    if (this.selectedConversationId === conversationId) {
+      this.selectedConversationId = null;
+    }
+  }
+
+  private sortedConversations(): ConversationRecoveryRecord[] {
+    return [...this.conversations.values()].sort(
       (left, right) =>
         left.lastAccess - right.lastAccess ||
-        left.sessionId.localeCompare(right.sessionId),
+        left.conversationId.localeCompare(right.conversationId),
     );
   }
 
@@ -393,33 +650,33 @@ export class SessionRecoveryStore {
   }
 
   private clearTimer(): void {
-    if (this.timer) {
+    if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
     }
   }
 
-  private serialize(): StoredState {
+  private serialize(): unknown {
     return {
       version: SESSION_RECOVERY_VERSION,
-      selectedSessionId: this.selectedSessionId,
-      sessions: this.sortedSessions().map((session) => ({
-        sessionId: session.sessionId,
-        lastAccess: session.lastAccess,
-        // Image bytes never reach persistent storage: checkpoints keep
-        // placeholder rows (metadata + byteLength) and the loadSession
-        // reload path re-projects the full images.
-        transcript: cloneTranscript(session.cache.transcript).flatMap(
-          (item) =>
-            item.kind === 'changes' && item.writing === true
-              ? []
-              : item.kind === 'image' && item.data.length > 0
-                ? [{ ...item, data: '' }]
-                : [item],
-        ),
-        historyStatus: session.cache.historyStatus,
-        truncated: session.cache.truncated,
-        queuedTexts: [...session.queuedTexts],
+      selectedConversationId: this.selectedConversationId,
+      conversations: this.sortedConversations().map((conversation) => ({
+        ...cloneConversation(conversation),
+        display: {
+          ...conversation.display,
+          transcript: {
+            ...conversation.display.transcript,
+            transcript:
+              conversation.display.transcript.transcript.flatMap(
+                (item) =>
+                  item.kind === 'changes' && item.writing === true
+                    ? []
+                    : item.kind === 'image' && item.data.length > 0
+                      ? [{ ...item, data: '' }]
+                      : [{ ...item }],
+              ),
+          },
+        },
       })),
     };
   }
@@ -445,189 +702,42 @@ function sanitizeQueuedTexts(
   return safe;
 }
 
-function parseStoredState(value: unknown): StoredState | undefined {
-  try {
-    if (
-      !isStrictRecord(value) ||
-      !hasExactKeys(value, [
-        'version',
-        'selectedSessionId',
-        'sessions',
-      ]) ||
-      dataValue(value, 'version') !== SESSION_RECOVERY_VERSION
-    ) {
-      return undefined;
-    }
-    const selectedSessionId = dataValue(value, 'selectedSessionId');
-    const sessionsValue = dataValue(value, 'sessions');
-    if (
-      (selectedSessionId !== null && !isId(selectedSessionId)) ||
-      !isExactArray(sessionsValue, 0, MAX_RECOVERY_SESSIONS)
-    ) {
-      return undefined;
-    }
-
-    const sessions: StoredSession[] = [];
-    const ids = new Set<string>();
-    for (let index = 0; index < sessionsValue.length; index += 1) {
-      const session = parseStoredSession(
-        dataValue(sessionsValue, String(index)),
-      );
-      if (!session || ids.has(session.sessionId)) {
-        continue;
-      }
-      ids.add(session.sessionId);
-      sessions.push(session);
-    }
-    if (
-      (selectedSessionId?.length ?? 0) +
-        sessions.reduce(
-          (total, session) => total + sessionTextUnits(session),
-          0,
-        ) >
-        MAX_RECOVERY_TEXT_UNITS
-    ) {
-      return undefined;
-    }
-    return {
-      version: SESSION_RECOVERY_VERSION,
-      selectedSessionId,
-      sessions,
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-function parseStoredSession(value: unknown): StoredSession | undefined {
-  if (
-    !isStrictRecord(value) ||
-    // `queuedTexts` is optional so pre-existing persisted state (which
-    // predates queue persistence) still hydrates.
-    !hasExactKeys(
-      value,
-      [
-        'sessionId',
-        'lastAccess',
-        'transcript',
-        'historyStatus',
-        'truncated',
-      ],
-      ['queuedTexts'],
-    )
-  ) {
-    return undefined;
-  }
-  const sessionId = dataValue(value, 'sessionId');
-  const lastAccess = dataValue(value, 'lastAccess');
-  const cache = parseCache({
-    transcript: dataValue(value, 'transcript'),
-    historyStatus: dataValue(value, 'historyStatus'),
-    truncated: dataValue(value, 'truncated'),
-  });
-  if (
-    !isId(sessionId) ||
-    !Number.isSafeInteger(lastAccess) ||
-    (lastAccess as number) < 0 ||
-    !cache
-  ) {
-    return undefined;
-  }
-  const queuedTextsValue = dataValue(value, 'queuedTexts');
-  if (
-    queuedTextsValue !== undefined &&
-    !isExactArray(queuedTextsValue, 0, MAX_QUEUED_MESSAGES)
-  ) {
-    return undefined;
-  }
-  return {
-    sessionId,
-    lastAccess: lastAccess as number,
-    ...cache,
-    queuedTexts:
-      queuedTextsValue === undefined
-        ? []
-        : sanitizeQueuedTexts(queuedTextsValue),
-  };
-}
-
-function parseCache(value: unknown): SessionRecoveryCache | undefined {
-  try {
-    if (
-      !isStrictRecord(value) ||
-      !hasExactKeys(value, [
-        'transcript',
-        'historyStatus',
-        'truncated',
-      ])
-    ) {
-      return undefined;
-    }
-    const transcriptValue = dataValue(value, 'transcript');
-    const historyStatus = dataValue(value, 'historyStatus');
-    const truncated = dataValue(value, 'truncated');
-    if (
-      !isExactArray(
-        transcriptValue,
-        0,
-        MAX_SESSION_TRANSCRIPT_ITEMS,
-      ) ||
-      !isOneOf(historyStatus, SESSION_HISTORY_STATUSES) ||
-      typeof truncated !== 'boolean'
-    ) {
-      return undefined;
-    }
-
-    const transcript: SessionTranscriptItem[] = [];
-    const ids = new Set<string>();
-    for (let index = 0; index < transcriptValue.length; index += 1) {
-      const item = parseTranscriptItem(
-        dataValue(transcriptValue, String(index)),
-      );
-      if (!item || ids.has(item.id)) {
-        return undefined;
-      }
-      ids.add(item.id);
-      transcript.push(item);
-    }
-    if (
-      historyStatus === 'unavailable' &&
-      (transcript.length > 0 || truncated)
-    ) {
-      return undefined;
-    }
-    return { transcript, historyStatus, truncated };
-  } catch {
-    return undefined;
-  }
-}
-
-function sessionTextUnits(
-  session: Pick<
-    StoredSession,
-    'sessionId' | 'transcript' | 'historyStatus'
-  >,
+function conversationTextUnits(
+  conversation: ConversationRecoveryRecord,
 ): number {
+  let total =
+    conversation.conversationId.length +
+    conversation.activeSessionId.length +
+    conversation.display.transcript.historyStatus.length;
+  for (const item of conversation.display.transcript.transcript) {
+    total += transcriptItemTextUnits(item);
+  }
+  for (const node of conversation.nodes) {
+    total +=
+      node.sessionId.length +
+      (node.parentConversationId?.length ?? 0) +
+      (node.parentSessionId?.length ?? 0) +
+      (node.anchorTurnId?.length ?? 0);
+  }
+  for (const turn of conversation.turns) {
+    total +=
+      turn.turnId.length +
+      turn.sessionId.length +
+      (turn.prompt?.length ?? 0) +
+      (turn.messageId?.length ?? 0);
+    for (const file of turn.files) {
+      total += file.path.length;
+    }
+  }
   return (
-    session.sessionId.length +
-    session.historyStatus.length +
-    session.transcript.reduce(
-      (total, item) => total + transcriptItemTextUnits(item),
+    total +
+    conversation.queuedTexts.reduce(
+      (sum, text) => sum + text.length,
       0,
     )
   );
 }
 
-function cloneCache(cache: SessionRecoveryCache): SessionRecoveryCache {
-  return {
-    transcript: cloneTranscript(cache.transcript),
-    historyStatus: cache.historyStatus,
-    truncated: cache.truncated,
-  };
-}
-
-function cloneTranscript(
-  transcript: readonly SessionTranscriptItem[],
-): SessionTranscriptItem[] {
-  return transcript.map((item) => ({ ...item }));
+function isRecoveryId(value: string): boolean {
+  return value.length > 0 && value.length <= 256;
 }

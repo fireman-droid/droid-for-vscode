@@ -1,8 +1,3 @@
-import type {
-  ChangesTranscriptItem,
-  SessionTranscriptItem,
-} from '../../shared/bridgeMessages';
-
 /**
  * Local commit-message drafting for the inline commit panel (slice A
  * of the git/PR workflow design): the draft is assembled from the
@@ -33,51 +28,4 @@ export function buildCommitMessageDraft(
     fileCount === 1 ? 'file' : 'files'
   }`;
   return subject === '' ? trailer : `${subject}\n\n${trailer}`;
-}
-
-export interface LatestChangesContext {
-  /** Turn whose changes card carries the commit entry. */
-  readonly turnId: string;
-  /** The prompt that produced that turn, when it is in the transcript. */
-  readonly prompt: string | null;
-}
-
-/** Returns the newest turn-scoped Changes projection, if one exists. */
-export function findLatestChangesItem(
-  transcript: readonly SessionTranscriptItem[],
-): ChangesTranscriptItem | null {
-  for (let index = transcript.length - 1; index >= 0; index -= 1) {
-    const item = transcript[index];
-    if (item !== undefined && item.kind === 'changes') {
-      return item;
-    }
-  }
-  return null;
-}
-
-/**
- * Finds the transcript's last changes card and the user prompt that
- * preceded it. User items carry no turnId, so the nearest preceding
- * user item stands in for the turn's prompt.
- */
-export function findLatestChangesContext(
-  transcript: readonly SessionTranscriptItem[],
-): LatestChangesContext | null {
-  for (let index = transcript.length - 1; index >= 0; index -= 1) {
-    const item = transcript[index];
-    if (item === undefined) {
-      continue;
-    }
-    if (item.kind !== 'changes') {
-      continue;
-    }
-    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-      const candidate = transcript[cursor];
-      if (candidate !== undefined && candidate.kind === 'user') {
-        return { turnId: item.turnId, prompt: candidate.text };
-      }
-    }
-    return { turnId: item.turnId, prompt: null };
-  }
-  return null;
 }

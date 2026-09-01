@@ -32,6 +32,7 @@ import {
   sameBytes,
   scopeId,
   unavailableScope,
+  withSnapshotSession,
   type ActiveScope,
   type PersistedScope,
   type RecoveryEntry,
@@ -56,6 +57,7 @@ export interface ReviewCoordinatorOptions {
   readonly storageDir: string;
   readonly publish: (message: Unsequenced<ReviewHostMessage>) => void;
   readonly readCanonicalTurnFiles: CanonicalTurnFiles;
+  readonly resolveCanonicalTurnSessionId?: (sessionId: string, turnId: string) => string | undefined;
   readonly readWorkspaceFiles: () => Promise<
     | { readonly baseline: string; readonly files: readonly CommittedFileStat[] }
     | undefined
@@ -307,7 +309,8 @@ export class ReviewCoordinator implements vscode.Disposable {
     );
   }
   private async loadTurnScope(sessionId: string, turnId: string): Promise<ActiveScope> {
-    const record = this.options.snapshots.read(sessionId, turnId);
+    const snapshotSessionId = this.options.resolveCanonicalTurnSessionId?.(sessionId, turnId) ?? sessionId;
+    const record = this.options.snapshots.read(snapshotSessionId, turnId);
     const files = this.options.readCanonicalTurnFiles(sessionId, turnId) ?? record?.files ?? [];
     const message: ReviewOpenMessage = {
       type: 'review.open',
@@ -332,7 +335,7 @@ export class ReviewCoordinator implements vscode.Disposable {
           workspace === undefined
             ? 'This turn has no complete snapshot. Review is read-only.'
             : 'This turn has no complete snapshot. Showing HEAD vs working tree.';
-        return fallback;
+        return withSnapshotSession(fallback, snapshotSessionId);
       }
       const unavailable = createActiveScope(
         message,
@@ -344,15 +347,15 @@ export class ReviewCoordinator implements vscode.Disposable {
       );
       unavailable.lifecycle = 'unavailable';
       unavailable.message = 'This turn no longer has a complete before/after snapshot.';
-      return unavailable;
+      return withSnapshotSession(unavailable, snapshotSessionId);
     }
-    return createActiveScope(
+    return withSnapshotSession(createActiveScope(
       message,
       `${record.before}:${record.after}`,
       'Before turn',
       files,
       this.persisted,
-    );
+    ), snapshotSessionId);
   }
   private async reloadActive(): Promise<void> {
     const active = this.active;
@@ -698,16 +701,17 @@ export class ReviewCoordinator implements vscode.Disposable {
     }
     const entries: RestoreEntry[] = [];
     for (const path of paths) {
+      const snapshotSessionId = scope.snapshotSessionId ?? scope.sessionId;
       const snapshotPaths = this.options.snapshots.read(
-        scope.sessionId, scope.turnId,
+        snapshotSessionId, scope.turnId,
       )?.snapshotPaths;
       const before = await this.options.snapshots.readTreeBytes(
-        { sessionId: scope.sessionId, turnId: scope.turnId },
+        { sessionId: snapshotSessionId, turnId: scope.turnId },
         path,
         'before',
       );
       const after = await this.options.snapshots.readTreeBytes(
-        { sessionId: scope.sessionId, turnId: scope.turnId },
+        { sessionId: snapshotSessionId, turnId: scope.turnId },
         path,
         'after',
       );

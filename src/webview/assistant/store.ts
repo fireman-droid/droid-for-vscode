@@ -31,6 +31,7 @@ import {
   reduceAttachmentMessage,
   type AttachmentImageEntry,
 } from './attachmentImageStore';
+import { reduceHostConnection } from './storeIdentity';
 export type { AttachmentImageEntry } from './attachmentImageStore';
 
 export { initialGitCommitFlowState } from './gitCommitStore';
@@ -57,7 +58,14 @@ export interface LocalImageEntry {
 }
 export interface AssistantWebviewState {
   readonly sequence: number;
+  readonly conversationId: string | null;
   readonly sessionId: string | null;
+  readonly latestChanges: NonNullable<
+    Extract<
+      HostToWebviewMessage,
+      { type: 'host.snapshot' }
+    >['latestChanges']
+  > | null;
   readonly connection: Extract<
     HostToWebviewMessage,
     { type: 'host.connection' }
@@ -243,7 +251,9 @@ export type AssistantWebviewAction =
 
 export const initialAssistantWebviewState: AssistantWebviewState = {
   sequence: -1,
+  conversationId: null,
   sessionId: null,
+  latestChanges: null,
   connection: { status: 'idle' },
   turn: null,
   sessions: { status: 'idle', items: [] },
@@ -476,10 +486,15 @@ export function assistantWebviewReducer(
   }
 
   switch (event.type) {
-    case 'host.snapshot':
+    case 'host.snapshot': {
+      const sameConversation =
+        event.conversationId === state.conversationId;
+      const sameSession = event.sessionId === state.sessionId;
       return {
         sequence: event.sequence,
+        conversationId: event.conversationId,
         sessionId: event.sessionId,
+        latestChanges: event.latestChanges ?? null,
         connection: event.connection,
         turn:
           event.turn === null
@@ -497,50 +512,49 @@ export function assistantWebviewReducer(
         modelCatalog: event.modelCatalog,
         // Snapshots do not carry skills/MCP; keep them for the same session.
         skills:
-          event.sessionId === state.sessionId
+          sameSession
             ? state.skills
             : { status: 'idle', items: [] },
         mcp:
-          event.sessionId === state.sessionId
+          sameSession
             ? state.mcp
             : { status: 'idle', items: [] },
         plugins:
-          event.sessionId === state.sessionId
+          sameSession
             ? state.plugins
             : { status: 'idle', items: [] },
         commands:
-          event.sessionId === state.sessionId
+          sameSession
             ? state.commands
             : { status: 'idle', items: [], recent: [] },
-        mcpAuth:
-          event.sessionId === state.sessionId ? state.mcpAuth : null,
+        mcpAuth: sameSession ? state.mcpAuth : null,
         attachments:
-          event.sessionId === state.sessionId ? state.attachments : [],
+          sameConversation ? state.attachments : [],
         attachmentImages:
-          event.sessionId === state.sessionId
+          sameConversation
             ? state.attachmentImages
             : {},
         fileSearch:
-          event.sessionId === state.sessionId ? state.fileSearch : null,
+          sameConversation ? state.fileSearch : null,
         localImages:
-          event.sessionId === state.sessionId ? state.localImages : {},
+          sameConversation ? state.localImages : {},
         // Archived list and content search are workspace-level, not
         // session-level; they survive session switches.
         archived: state.archived,
         sessionSearch: state.sessionSearch,
         rewindInfo: null,
         branchDiff:
-          event.sessionId === state.sessionId ? state.branchDiff : null,
-        review: event.sessionId === state.sessionId
+          sameConversation ? state.branchDiff : null,
+        review: sameConversation
           ? state.review : EMPTY_REVIEW_UI_STATE,
         // A snapshot means the session identity may have changed (e.g.
         // an adopted edit-resend fork); any in-progress edit is stale.
         editAttachments:
-          event.sessionId === state.sessionId
+          sameConversation
             ? state.editAttachments
             : null,
         editResendRejection:
-          event.sessionId === state.sessionId
+          sameConversation
             ? state.editResendRejection
             : null,
         worktreeCreateAvailable: event.worktreeCreateAvailable === true,
@@ -548,15 +562,15 @@ export function assistantWebviewReducer(
         backgroundTurnsAvailable:
           event.backgroundTurnsAvailable === true,
         btw:
-          event.sessionId === state.sessionId
+          sameSession
             ? state.btw
             : EMPTY_SESSION_BTW_STATE,
         workspaceRoot: event.workspaceRoot ?? null,
         mission: event.mission ?? null,
         missionSnapshot:
-          event.sessionId === state.sessionId ? state.missionSnapshot : null,
+          sameSession ? state.missionSnapshot : null,
         missionControlResult:
-          event.sessionId === state.sessionId
+          sameSession
             ? state.missionControlResult
             : null,
         tokenUsage: event.tokenUsage ?? EMPTY_SESSION_TOKEN_USAGE,
@@ -575,49 +589,13 @@ export function assistantWebviewReducer(
             : null,
         // Git status is workspace-level; a fresh status arrives on demand.
         git:
-          event.sessionId === state.sessionId
+          sameConversation
             ? state.git
             : initialGitCommitFlowState,
       };
-    case 'host.connection': {
-      const changed = event.sessionId !== state.sessionId;
-      return {
-        ...state,
-        sequence: event.sequence,
-        sessionId: event.sessionId,
-        connection: event.connection,
-        ...(changed
-          ? {
-              turn: null,
-              mission: null,
-              missionSnapshot: null,
-              missionControlResult: null,
-              btw: EMPTY_SESSION_BTW_STATE,
-              tokenUsage: EMPTY_SESSION_TOKEN_USAGE,
-              queue: EMPTY_SESSION_QUEUE_STATE,
-              queueEditing: null,
-              transcript: [],
-              historyStatus: null,
-              truncated: false,
-              settings: { status: 'loading', value: null },
-              context: { status: 'loading', value: null },
-              modelCatalog: { status: 'loading', items: [] },
-              skills: { status: 'idle', items: [] },
-              mcp: { status: 'idle', items: [] },
-              plugins: { status: 'idle', items: [] },
-              commands: { status: 'idle', items: [], recent: [] },
-              mcpAuth: null,
-              attachments: [],
-              attachmentImages: {},
-              editAttachments: null,
-              editResendRejection: null,
-              interactions: [],
-              terminalTurnId: null,
-              review: EMPTY_REVIEW_UI_STATE,
-            }
-          : {}),
-      };
     }
+    case 'host.connection':
+      return reduceHostConnection(state, event);
     case 'session.settings':
       return event.sessionId === state.sessionId
         ? {

@@ -599,8 +599,21 @@ async function syncParentFollowupHistory(
     ctl.mission = mission;
     ctl.tokenUsage = tokenUsage;
     ctl.transcript = transcript;
-    if (changed) {
-      ctl.recoveryStore.writeSession(sync.sessionId, transcript);
+    if (changed && ctl.conversationId !== null) {
+      ctl.recoveryStore.writeActiveDisplay(
+        ctl.conversationId,
+        sync.sessionId,
+        transcript,
+        ctl.turn === null
+          ? null
+          : {
+              turnId: ctl.turn.turnId,
+              status: ctl.turn.status,
+              ...(ctl.turn.error === undefined
+                ? {}
+                : { error: ctl.turn.error }),
+            },
+      );
       ctl.recoveryStore.flushInBackground();
       ctl.emitSnapshot();
     }

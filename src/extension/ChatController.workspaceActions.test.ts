@@ -25,7 +25,7 @@ import {
 import { createTurnActivityState } from './turnActivityState';
 
 describe('ChatController', () => {
-  it('compacts the session, adopts the continuation, and reloads its transcript', async () => {
+  it('compacts the session without replacing the canonical Conversation', async () => {
     const runtime = Object.assign(createMockRuntime(), {
       compact: vi.fn(async () => ({
         sessionId: 'session-compacted',
@@ -67,6 +67,10 @@ describe('ChatController', () => {
     );
     ready(controller);
     await waitForConnected(messages);
+    send(controller, 'session-1', 'turn-before-compact', 'Original question');
+    await vi.waitFor(() => {
+      expect(turnStates(messages).at(-1)?.status).toBe('completed');
+    });
 
     controller.handleMessage({
       type: 'session.compact',
@@ -74,25 +78,38 @@ describe('ChatController', () => {
     });
     await vi.waitFor(() => {
       expect(snapshots(messages).at(-1)).toMatchObject({
+        conversationId: 'session-1',
         sessionId: 'session-compacted',
-        transcript: [{ kind: 'assistant', text: 'Summary of earlier work' }],
       });
     });
+    expect(
+      snapshots(messages)
+        .at(-1)!
+        .transcript.some(
+          (item) =>
+            item.kind === 'user' &&
+            item.text === 'Original question',
+        ),
+    ).toBe(true);
+    expect(
+      snapshots(messages)
+        .at(-1)!
+        .transcript.some(
+          (item) =>
+            item.kind === 'assistant' &&
+            item.text === 'Summary of earlier work',
+        ),
+    ).toBe(false);
     expect(runtime.compact).toHaveBeenCalledOnce();
     expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
       severity: 'info',
       code: 'session-compacted',
       message: expect.stringContaining('5'),
-      // The pre-compaction session backs "View full history".
-      relatedSessionId: 'session-1',
     });
-    // The compacted session stays selectable next to the continuation:
-    // its file keeps the full pre-compaction history on disk.
+    // Compact/Handoff lineage projects as one selectable Conversation.
     const sessions = snapshots(messages).at(-1)!.sessions;
-    expect(
-      sessions.items.filter(({ id }) => id === 'session-1'),
-    ).toHaveLength(1);
-    expect(sessions.items.at(-1)).toMatchObject({
+    expect(sessions.items).toHaveLength(1);
+    expect(sessions.items[0]).toMatchObject({
       id: 'session-compacted',
       active: true,
     });
@@ -219,17 +236,18 @@ describe('ChatController', () => {
     );
     ready(controller);
     await waitForConnected(messages);
+    expect(
+      controller.recoveryStore.recordSettledTurn(
+        controller.conversationId!,
+        'session-1',
+        'history-turn',
+        null,
+        [{ path: 'src/app.ts', additions: null, deletions: null }],
+        'completed',
+      ),
+    ).toBe(true);
     controller.transcript = {
-      transcript: [
-        {
-          id: 'changes:history-turn',
-          kind: 'changes',
-          turnId: 'history-turn',
-          files: [
-            { path: 'src/app.ts', additions: null, deletions: null },
-          ],
-        },
-      ],
+      transcript: [],
       historyStatus: 'complete',
       truncated: false,
     };
@@ -588,16 +606,19 @@ describe('ChatController', () => {
     );
     ready(controller);
     await waitForConnected(messages);
+    expect(controller.conversationId).not.toBeNull();
+    expect(
+      controller.recoveryStore.recordSettledTurn(
+        controller.conversationId!,
+        'session-1',
+        'turn-a',
+        'Change the app',
+        [{ path: 'src/app.ts', additions: 1, deletions: 1 }],
+        'completed',
+      ),
+    ).toBe(true);
     controller.transcript = {
       transcript: [
-        {
-          id: 'changes:turn-a',
-          kind: 'changes',
-          turnId: 'turn-a',
-          files: [
-            { path: 'src/app.ts', additions: 1, deletions: 1 },
-          ],
-        },
         {
           id: 'user:turn-chat',
           kind: 'user',
@@ -734,20 +755,16 @@ describe('ChatController', () => {
     );
     ready(controller);
     await waitForConnected(messages);
-    controller.transcript = {
-      transcript: [
-        {
-          id: 'changes:turn-a',
-          kind: 'changes',
-          turnId: 'turn-a',
-          files: [
-            { path: 'src/app.ts', additions: 1, deletions: 1 },
-          ],
-        },
-      ],
-      historyStatus: 'complete',
-      truncated: false,
-    };
+    expect(
+      controller.recoveryStore.recordSettledTurn(
+        controller.conversationId!,
+        'session-1',
+        'turn-a',
+        'Change the app',
+        [{ path: 'src/app.ts', additions: 1, deletions: 1 }],
+        'completed',
+      ),
+    ).toBe(true);
 
     controller.handleMessage({
       type: 'git.requestStatus',
@@ -811,20 +828,16 @@ describe('ChatController', () => {
     );
     ready(controller);
     await waitForConnected(messages);
-    controller.transcript = {
-      transcript: [
-        {
-          id: 'changes:turn-a',
-          kind: 'changes',
-          turnId: 'turn-a',
-          files: [
-            { path: 'src/app.ts', additions: 2, deletions: 1 },
-          ],
-        },
-      ],
-      historyStatus: 'complete',
-      truncated: false,
-    };
+    expect(
+      controller.recoveryStore.recordSettledTurn(
+        controller.conversationId!,
+        'session-1',
+        'turn-a',
+        'Fix the app',
+        [{ path: 'src/app.ts', additions: 2, deletions: 1 }],
+        'completed',
+      ),
+    ).toBe(true);
 
     controller.handleMessage({
       type: 'git.commit',
@@ -1062,6 +1075,23 @@ describe('ChatController', () => {
         { path: 'docs/new.md', additions: null, deletions: null },
       ],
     });
+    expect(
+      controller.recoveryStore.readLatestChanges(
+        controller.conversationId!,
+      ),
+    ).toMatchObject({
+      turnId: 'turn-1',
+      prompt: 'Change files',
+      changesSettled: true,
+      files: [
+        { path: 'src/app.ts', additions: 3, deletions: 1 },
+        { path: 'docs/new.md', additions: null, deletions: null },
+      ],
+    });
+    expect(snapshots(messages).at(-1)?.latestChanges).toMatchObject({
+      turnId: 'turn-1',
+      prompt: 'Change files',
+    });
   });
 
   it('persists an empty canonical settlement when no net change remains', async () => {
@@ -1116,6 +1146,15 @@ describe('ChatController', () => {
         (item) => item.kind === 'changes' && item.turnId === 'turn-1',
       ),
     ).toMatchObject({ files: [] });
+    expect(
+      controller.recoveryStore.readLatestChanges(
+        controller.conversationId!,
+      ),
+    ).toMatchObject({
+      turnId: 'turn-1',
+      changesSettled: true,
+      files: [],
+    });
   });
 
   it('settles an empty canonical marker when no tool named a workspace file', async () => {

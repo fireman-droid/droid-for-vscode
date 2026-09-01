@@ -8,7 +8,7 @@ import {
   type HostTranscriptState,
 } from '../hostTranscriptState';
 import { clearPendingAttachments, emitEditAttachments } from './attachments';
-import { flushRecoveryCheckpointOrReport } from './recovery';
+import { createDurableForkConversation } from './conversationLineage';
 import { withActiveSession } from './sessionDirectory';
 import { ensureActiveRuntimeWorkspaceCurrent } from './runtimeLifecycle';
 import { handleSend } from './turnFlow';
@@ -215,7 +215,8 @@ export async function performEditResend(
   ): Promise<string | null> {
     const generation = ctl.runtimeGeneration;
     const cwd = ctl.activeRuntimeCwd;
-    if (cwd === null) {
+    const sourceConversationId = ctl.conversationId;
+    if (cwd === null || sourceConversationId === null) {
       return null;
     }
 
@@ -263,6 +264,24 @@ export async function performEditResend(
       return null;
     }
 
+    const forkedConversationId = await createDurableForkConversation(
+      ctl,
+      sourceConversationId,
+      sessionId,
+      forkedSessionId,
+      'rewind',
+      truncated,
+    );
+    if (forkedConversationId === null) {
+      ctl.emitSessionDiagnostic(
+        'edit-resend-failed',
+        EDIT_RESEND_FAILED_MESSAGE,
+      );
+      emitEditResendRejected(ctl, sessionId, messageId, 'failed');
+      return null;
+    }
+
+    ctl.conversationId = forkedConversationId;
     ctl.sessionId = forkedSessionId;
     ctl.transcript = truncated;
     ctl.turn = null;
@@ -275,12 +294,6 @@ export async function performEditResend(
       active: true,
       isFavorite: false,
     });
-    ctl.recoveryStore.writeSession(forkedSessionId, truncated);
-    ctl.recoveryStore.selectSession(forkedSessionId);
-    if (!await flushRecoveryCheckpointOrReport(ctl)) {
-      emitEditResendRejected(ctl, sessionId, messageId, 'failed');
-      return null;
-    }
     return forkedSessionId;
 }
 

@@ -5,14 +5,17 @@ import type {
   RuntimeSessionWorkingState,
 } from '../../runtime/DroidRuntime';
 import type { SessionHistoryResult } from '../../runtime/history/SessionHistory';
-import { MAX_SESSION_TRANSCRIPT_ITEMS } from '../../shared/bridgeMessages';
+import {
+  MAX_SESSION_TRANSCRIPT_ITEMS,
+  type TurnStatus,
+} from '../../shared/bridgeMessages';
 import {
   hasExactKeys,
   isExactArray,
   isStrictRecord,
 } from '../../shared/strictValidation';
 import { createTurnActivityState } from '../turnActivityState';
-import { reconcileSessionHistory } from '../reconcileSessionHistory';
+import { ingestConversationHistory } from '../ingestConversationHistory';
 import { SESSION_RECOVERY_DEBOUNCE_MS } from '../SessionRecoveryStore';
 import {
   dataValue,
@@ -79,25 +82,45 @@ const RECOVERED_HISTORY_FAILED_CODE = 'recovered-turn-history-failed';
  * authoritative activation snapshot replaces this one wholesale.
  */
 export function emitEarlyRecoverySnapshot(ctl: ChatControllerInternals): void {
-    const sessionId = ctl.recoveryStore.getSelectedSessionId();
-    if (sessionId === null) {
+    const conversationId =
+      ctl.recoveryStore.getSelectedConversationId();
+    if (conversationId === null) {
       return;
     }
-    const checkpoint = ctl.recoveryStore.readSession(sessionId);
+    const conversation =
+      ctl.recoveryStore.readConversation(conversationId);
+    if (conversation === undefined) {
+      return;
+    }
+    const sessionId = conversation.activeSessionId;
+    const checkpoint = conversation.display;
     if (
-      checkpoint === undefined ||
-      checkpoint.transcript.length === 0
+      checkpoint.transcript.transcript.length === 0 &&
+      checkpoint.turn === null
     ) {
       return;
     }
+    ctl.conversationId = conversationId;
     ctl.sessionId = sessionId;
-    ctl.transcript = checkpoint;
+    ctl.transcript = checkpoint.transcript;
+    ctl.turn =
+      checkpoint.turn === null
+        ? null
+        : {
+            ...checkpoint.turn,
+            activity: createTurnActivityState(),
+            ...(checkpoint.turn.status === 'submitting' ||
+            checkpoint.turn.status === 'streaming' ||
+            checkpoint.turn.status === 'stopping'
+              ? { recovery: true as const }
+              : {}),
+          };
     ctl.recordHost({
       level: 'info',
       name: 'host.perf.early-snapshot',
       attributes: {
         sessionId,
-        items: checkpoint.transcript.length,
+        items: checkpoint.transcript.transcript.length,
       },
     });
     ctl.emitSnapshot();
@@ -124,7 +147,7 @@ export function reconcileDaemonTurn(
     sessionId: string,
     cwd: string,
   ): void {
-    const turnId = recoveryTurnId(generation);
+    const turnId = recoveryTurnId(ctl, generation, sessionId);
     if (typeof runtime.readSessionWorkingState !== 'function') {
       ctl.interactions.endTurn(sessionId, turnId);
       return;
@@ -137,6 +160,11 @@ export function reconcileDaemonTurn(
         ctl.interactions.endTurn(sessionId, turnId);
         return;
       }
+      const existingRecoveryTurn =
+        ctl.turn?.turnId === turnId &&
+        ctl.turn.recovery === true
+          ? ctl.turn
+          : null;
       if (
         !ctl.isCurrentSessionOperation(
           runtime,
@@ -144,7 +172,7 @@ export function reconcileDaemonTurn(
           sessionId,
           cwd,
         ) ||
-        ctl.turn !== null
+        (ctl.turn !== null && existingRecoveryTurn === null)
       ) {
         return;
       }
@@ -171,19 +199,42 @@ export function reconcileDaemonTurn(
       // `unknown` without one has nothing to project, so stay quiet.
       if (!live) {
         ctl.interactions.endTurn(sessionId, turnId);
+        if (
+          existingRecoveryTurn !== null &&
+          (existingRecoveryTurn.status === 'submitting' ||
+            existingRecoveryTurn.status === 'streaming' ||
+            existingRecoveryTurn.status === 'stopping')
+        ) {
+          await finishRecoveredTurn(
+            ctl,
+            runtime,
+            generation,
+            ctl.turnGeneration,
+            sessionId,
+            cwd,
+            turnId,
+          );
+        }
         return;
       }
 
-      const turnGeneration = ++ctl.turnGeneration;
-      ctl.diagnostics?.beginTurnScope?.(turnId);
-      ctl.turnIo = { counts: new Map(), bytes: 0 };
-      ctl.turn = {
-        turnId,
-        status: 'streaming',
-        activity: createTurnActivityState(),
-        recovery: true,
-      };
-      captureSnapshotBeforeInBackground(ctl, sessionId, turnId);
+      const turnGeneration =
+        existingRecoveryTurn === null
+          ? ++ctl.turnGeneration
+          : ctl.turnGeneration;
+      if (existingRecoveryTurn === null) {
+        ctl.diagnostics?.beginTurnScope?.(turnId);
+        ctl.turnIo = { counts: new Map(), bytes: 0 };
+        ctl.turn = {
+          turnId,
+          status: 'streaming',
+          activity: createTurnActivityState(),
+          recovery: true,
+        };
+        captureSnapshotBeforeInBackground(ctl, sessionId, turnId);
+      } else {
+        existingRecoveryTurn.status = 'streaming';
+      }
       ctl.recordHost({
         level: 'info',
         name: 'host.reload.turn-recovered',
@@ -322,7 +373,10 @@ async function refreshRecoveredTurnTranscript(
   ) {
     return;
   }
-  const next = reconcileSessionHistory(loaded.state, ctl.transcript);
+  const next = ingestConversationHistory(
+    ctl.transcript,
+    loaded.state,
+  );
   if (!recoveredTranscriptAdvanced(previous, next.transcript)) {
     return;
   }
@@ -387,9 +441,9 @@ export async function finishRecoveredTurn(
         cumulative: loaded.tokenUsage ?? ctl.tokenUsage.cumulative,
         lastTurn: ctl.tokenUsage.lastTurn,
       };
-      ctl.transcript = reconcileSessionHistory(
-        loaded.state,
+      ctl.transcript = ingestConversationHistory(
         ctl.transcript,
+        loaded.state,
       );
     } else if (!interrupted) {
       ctl.emitSessionDiagnostic(
@@ -474,8 +528,13 @@ function recoveredFailureTurnId(
   ctl: ChatControllerInternals,
   sessionId: string,
 ): string | null {
+  const conversationId =
+    ctl.recoveryStore.resolveConversationId(sessionId);
   const transcript =
-    ctl.recoveryStore.readSession(sessionId)?.transcript ?? [];
+    (conversationId === undefined
+      ? undefined
+      : ctl.recoveryStore.readDisplay(conversationId)?.transcript
+          .transcript) ?? [];
   for (let index = transcript.length - 1; index >= 0; index -= 1) {
     const item = transcript[index];
     if (
@@ -498,10 +557,12 @@ function recoveredFailureTurnId(
 
 export function scheduleRecoveryCheckpoint(ctl: ChatControllerInternals): void {
     const sessionId = ctl.sessionId;
-    if (sessionId === null) {
+    const conversationId = ctl.conversationId;
+    if (sessionId === null || conversationId === null) {
       return;
     }
     ctl.pendingRecoveryCheckpoint = {
+      conversationId,
       sessionId,
       cache: ctl.transcript,
     };
@@ -513,9 +574,11 @@ export function scheduleRecoveryCheckpoint(ctl: ChatControllerInternals): void {
       const checkpoint = ctl.pendingRecoveryCheckpoint;
       ctl.pendingRecoveryCheckpoint = null;
       if (checkpoint) {
-        ctl.recoveryStore.writeSession(
+        ctl.recoveryStore.writeActiveDisplay(
+          checkpoint.conversationId,
           checkpoint.sessionId,
           checkpoint.cache,
+          displayTurn(ctl),
         );
       }
     }, SESSION_RECOVERY_DEBOUNCE_MS);
@@ -527,10 +590,12 @@ export function checkpointRecoveryTranscript(ctl: ChatControllerInternals): void
       ctl.recoveryCheckpointTimer = null;
     }
     ctl.pendingRecoveryCheckpoint = null;
-    if (ctl.sessionId !== null) {
-      ctl.recoveryStore.writeSession(
+    if (ctl.sessionId !== null && ctl.conversationId !== null) {
+      ctl.recoveryStore.writeActiveDisplay(
+        ctl.conversationId,
         ctl.sessionId,
         ctl.transcript,
+        displayTurn(ctl),
       );
     }
 }
@@ -581,12 +646,29 @@ export async function persistActivationRecoveryCheckpoint(
   ctl: ChatControllerInternals,
   sessionId: string,
   transcript: HostTranscriptState,
+  turn: {
+    readonly turnId: string;
+    readonly status: TurnStatus;
+    readonly error?: string;
+  } | null,
   isCurrent: () => boolean,
 ): Promise<ActivationCheckpointOutcome> {
-  const accepted = ctl.recoveryStore.writeSession(
-    sessionId,
-    transcript,
-  );
+  let conversationId =
+    ctl.recoveryStore.resolveConversationId(sessionId);
+  if (conversationId === undefined) {
+    conversationId = ctl.recoveryStore.createConversation(
+      sessionId,
+      transcript,
+    );
+  }
+  const accepted =
+    conversationId !== undefined &&
+    ctl.recoveryStore.writeActiveDisplay(
+      conversationId,
+      sessionId,
+      transcript,
+      turn,
+    );
   if (!accepted) {
     ctl.recordHost({
       level: 'warn',
@@ -599,8 +681,8 @@ export async function persistActivationRecoveryCheckpoint(
     });
     return 'failed';
   }
-  const previousSelectedSessionId =
-    ctl.recoveryStore.getSelectedSessionId();
+  const previousSelectedConversationId =
+    ctl.recoveryStore.getSelectedConversationId();
   try {
     await ctl.recoveryStore.flush();
   } catch {
@@ -609,14 +691,37 @@ export async function persistActivationRecoveryCheckpoint(
   if (!isCurrent()) {
     return 'stale';
   }
-  ctl.recoveryStore.selectSession(sessionId);
+  if (conversationId === undefined) {
+    return 'failed';
+  }
+  ctl.recoveryStore.selectConversation(conversationId);
   try {
     await ctl.recoveryStore.flush();
   } catch {
-    ctl.recoveryStore.selectSession(previousSelectedSessionId);
+    ctl.recoveryStore.selectConversation(
+      previousSelectedConversationId,
+    );
     return 'failed';
   }
   return isCurrent() ? 'saved' : 'stale';
+}
+
+function displayTurn(
+  ctl: ChatControllerInternals,
+): {
+  readonly turnId: string;
+  readonly status: TurnStatus;
+  readonly error?: string;
+} | null {
+  return ctl.turn === null
+    ? null
+    : {
+        turnId: ctl.turn.turnId,
+        status: ctl.turn.status,
+        ...(ctl.turn.error === undefined
+          ? {}
+          : { error: ctl.turn.error }),
+      };
 }
 
 export /**
@@ -624,6 +729,22 @@ export /**
  * runtime generation is unique per activation, so recovery turns never
  * collide with each other or with webview-generated turn ids.
  */
-function recoveryTurnId(generation: number): string {
-  return `recovery-${generation}`;
+function recoveryTurnId(
+  ctl: ChatControllerInternals,
+  generation: number,
+  sessionId: string,
+): string {
+  const conversationId =
+    ctl.recoveryStore.resolveConversationId(sessionId);
+  const turn =
+    conversationId === undefined
+      ? undefined
+      : ctl.recoveryStore.readDisplay(conversationId)?.turn;
+  return turn !== undefined &&
+    turn !== null &&
+    (turn.status === 'submitting' ||
+      turn.status === 'streaming' ||
+      turn.status === 'stopping')
+    ? turn.turnId
+    : `recovery-${generation}`;
 }

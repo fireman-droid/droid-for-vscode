@@ -45,6 +45,7 @@ describe('readHostMessage', () => {
     {
       type: 'host.snapshot',
       sequence: 0,
+      conversationId: null,
       sessionId: null,
       connection: { status: 'idle' },
       turn: null,
@@ -59,6 +60,7 @@ describe('readHostMessage', () => {
     {
       type: 'host.snapshot',
       sequence: 1,
+      conversationId: null,
       sessionId: null,
       connection: { status: 'unavailable' },
       turn: null,
@@ -89,6 +91,7 @@ describe('readHostMessage', () => {
     {
       type: 'host.snapshot',
       sequence: 2,
+      conversationId: 'conversation-1',
       sessionId: 'session-1',
       connection: { status: 'connected' },
       turn: null,
@@ -172,10 +175,12 @@ describe('readHostMessage', () => {
       ],
       historyStatus: 'partial',
       truncated: true,
+      latestChanges: { turnId: 'turn-1', prompt: 'Implement sessions.', files: [{ path: 'src/app.ts', additions: 3, deletions: 1 }] },
     },
     {
       type: 'host.connection',
       sequence: 1,
+      conversationId: 'conversation-1',
       sessionId: 'session-1',
       connection: { status: 'connected' },
     },
@@ -2595,6 +2600,7 @@ describe('readHostMessage', () => {
     const message = {
       type: 'host.snapshot',
       sequence: Number.MAX_SAFE_INTEGER,
+      conversationId: 'conversation-0',
       sessionId: 'session-0',
       connection: { status: 'connected' },
       turn: null,
@@ -4617,7 +4623,6 @@ describe('readHostMessage', () => {
     }
   });
 });
-
 function createSessionSnapshot(): Extract<
   HostToWebviewMessage,
   { type: 'host.snapshot' }
@@ -4625,6 +4630,7 @@ function createSessionSnapshot(): Extract<
   return {
     type: 'host.snapshot',
     sequence: 0,
+    conversationId: 'conversation-1',
     sessionId: 'session-1',
     connection: { status: 'connected' },
     turn: null,
@@ -4649,7 +4655,6 @@ function createSessionSnapshot(): Extract<
     truncated: false,
   };
 }
-
 function tokenUsageFixture() {
   // Live values from artifacts/probe-token-usage.out.json.
   return {

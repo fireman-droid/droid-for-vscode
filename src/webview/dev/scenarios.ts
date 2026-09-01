@@ -52,6 +52,7 @@ function baseSnapshot(
   return {
     type: 'host.snapshot',
     sequence: nextSequence(),
+    conversationId: SESSION_ID,
     sessionId: SESSION_ID,
     connection: options.connection ?? { status: 'connected' },
     turn: options.turn ?? null,
@@ -561,6 +562,7 @@ function failure(
     {
       type: 'host.connection',
       sequence: nextSequence(),
+      conversationId: SESSION_ID,
       sessionId: SESSION_ID,
       connection: {
         status: 'unavailable',

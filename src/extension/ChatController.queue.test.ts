@@ -104,7 +104,7 @@ describe('ChatController queued messages', () => {
     await waitForConnected(messages);
     send(controller, 'session-1', 'turn-1', 'Long turn');
     queueAdd(controller, 'session-1', 'queued-1', 'First queued');
-    expect(recovery.readQueuedTexts('session-1')).toEqual([
+    expect(recovery.readConversationQueuedTexts('session-1')).toEqual([
       'First queued',
     ]);
     // Stop pauses the queue with its items retained, freeing the
@@ -124,7 +124,7 @@ describe('ChatController queued messages', () => {
     await vi.waitFor(() => {
       expect(snapshots(messages).at(-1)?.sessionId).toBe('session-2');
     });
-    expect(recovery.readQueuedTexts('session-1')).toEqual([]);
+    expect(recovery.readConversationQueuedTexts('session-1')).toEqual([]);
   });
 
   it('queues prompts during a turn and auto-dispatches them in order after completed', async () => {

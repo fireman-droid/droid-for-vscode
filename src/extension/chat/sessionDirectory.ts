@@ -14,13 +14,8 @@ import {
   MAX_ARCHIVED_SESSION_ITEMS,
   MAX_SESSION_CATALOG_ITEMS as SESSION_CATALOG_LIMIT,
   MAX_SESSION_SEARCH_RESULTS,
-  MAX_SESSION_TITLE_LENGTH as SESSION_TITLE_LIMIT,
 } from '../../shared/bridgeMessages';
-import { sanitizeSessionTitle } from '../../shared/validateMessage';
-import type {
-  SessionCatalogEntry,
-  SessionCatalogResult,
-} from '../../runtime/SessionCatalog';
+import type { SessionCatalogResult } from '../../runtime/SessionCatalog';
 import type { RuntimeSessionTarget } from '../../runtime/DroidRuntime';
 import {
   appendWorktreeSessions,
@@ -36,6 +31,12 @@ import {
   loadHistoryTimed,
   startReplacement,
 } from './runtimeLifecycle';
+import { ingestConversationHistory } from '../ingestConversationHistory';
+import { createDurableForkConversation } from './conversationLineage';
+import {
+  collapseStoredConversationCatalog,
+  projectCatalogEntries,
+} from './sessionCatalogProjection';
 import { flushRecoveryCheckpointOrReport } from './recovery';
 import { evaluateActiveSessionTransform } from './operationEligibility';
 import {
@@ -598,9 +599,16 @@ export function handleSessionSelect(
       startCatalogRefresh(ctl, workspace.cwd);
       return;
     }
+    const conversationId =
+      ctl.recoveryStore.resolveConversationId(sessionId);
+    const targetSessionId =
+      conversationId === undefined
+        ? sessionId
+        : (ctl.recoveryStore.readConversation(conversationId)
+            ?.activeSessionId ?? sessionId);
     if (
       ctl.sessions.status !== 'ready' ||
-      !hasCatalogSession(ctl, sessionId, workspace.cwd)
+      !hasCatalogSession(ctl, targetSessionId, workspace.cwd)
     ) {
       ctl.emitSessionDiagnostic(
         'session-selection-invalid',
@@ -609,7 +617,7 @@ export function handleSessionSelect(
       return;
     }
     if (
-      sessionId === ctl.sessionId &&
+      targetSessionId === ctl.sessionId &&
       ctl.activeRuntimeCwd === workspace.cwd
     ) {
       ctl.emitSnapshot();
@@ -618,7 +626,7 @@ export function handleSessionSelect(
     startReplacement(ctl, {
       kind: 'resume',
       cwd: workspace.cwd,
-      sessionId,
+      sessionId: targetSessionId,
     });
 }
 
@@ -704,6 +712,14 @@ export async function performFork(
     if (cwd === null) {
       return;
     }
+  const sourceConversationId = ctl.conversationId;
+  if (sourceConversationId === null) {
+    ctl.emitSessionDiagnostic(
+      'session-fork-failed',
+      FORK_FAILED_MESSAGE,
+    );
+    return;
+  }
 
     const previousTitle =
       activeSessionSummary(ctl)?.title ?? 'Current session';
@@ -750,8 +766,25 @@ export async function performFork(
       return;
     }
 
+    const forkedConversationId = await createDurableForkConversation(
+      ctl,
+      sourceConversationId,
+      sessionId,
+      forkedSessionId,
+      'fork',
+      ctl.transcript,
+    );
+    if (forkedConversationId === null) {
+      ctl.emitSessionDiagnostic(
+        'session-fork-failed',
+        FORK_FAILED_MESSAGE,
+      );
+      return;
+    }
+
     // Unlike compaction, the forked-from session remains valid and
     // stays in the catalog; only the active marker moves to the fork.
+    ctl.conversationId = forkedConversationId;
     ctl.sessionId = forkedSessionId;
     ctl.turn = null;
     clearPendingAttachments(ctl);
@@ -772,7 +805,10 @@ export async function performFork(
     {
       const loaded = await loadHistoryTimed(ctl, cwd, forkedSessionId);
       if (loaded?.status === 'available') {
-        transcript = loaded.state;
+        transcript = ingestConversationHistory(
+          ctl.transcript,
+          loaded.state,
+        );
         mission = loaded.mission ?? null;
         tokenUsage = loaded.tokenUsage ?? null;
       }
@@ -792,8 +828,12 @@ export async function performFork(
     ctl.tokenUsage = { cumulative: tokenUsage, lastTurn: null };
     ctl.transcript =
       transcript ?? { ...ctl.transcript, historyStatus: 'partial' };
-    ctl.recoveryStore.writeSession(forkedSessionId, ctl.transcript);
-    ctl.recoveryStore.selectSession(forkedSessionId);
+    ctl.recoveryStore.writeActiveDisplay(
+      forkedConversationId,
+      forkedSessionId,
+      ctl.transcript,
+      null,
+    );
     if (!await flushRecoveryCheckpointOrReport(ctl)) return;
     ctl.emitSnapshot();
     ctl.emit({
@@ -873,25 +913,26 @@ export async function loadCatalog(
         message: CATALOG_ERROR_MESSAGE,
       };
     }
-    const items = projectCatalogEntries(result.sessions);
+    let items: readonly SessionSummary[] =
+      projectCatalogEntries(result.sessions);
     const feature = ctl.worktreeSessions;
-    if (feature?.enabled !== true) {
-      return { status: 'ready', items };
-    }
-    // Worktree sessions list under their worktree cwd, never under the
-    // workspace cwd (probe: artifacts/probe-worktree-catalog.mjs), so
-    // the registry re-attaches them here.
-    return {
-      status: 'ready',
-      items: await appendWorktreeSessions({
+    if (feature?.enabled === true) {
+      // Worktree sessions list under their worktree cwd, never under the
+      // workspace cwd (probe: artifacts/probe-worktree-catalog.mjs), so
+      // the registry re-attaches them here.
+      items = await appendWorktreeSessions({
         cwd,
         items,
         store: feature.store,
         listSessions: (worktreeCwd) =>
           ctl.sessionCatalog.listSessions(worktreeCwd),
         project: projectCatalogEntries,
-      }),
-    };
+      });
+    }
+    return collapseStoredConversationCatalog(
+      { status: 'ready', items },
+      ctl.recoveryStore,
+    );
 }
 
 export function hasCatalogSession(
@@ -1072,39 +1113,4 @@ export function touchActiveSession(ctl: ChatControllerInternals): void {
           : item,
       ),
     };
-}
-
-export function projectCatalogEntries(
-  entries: readonly SessionCatalogEntry[],
-): SessionSummary[] {
-  const items: SessionSummary[] = [];
-  const ids = new Set<string>();
-  for (const entry of entries) {
-    if (
-      items.length >= SESSION_CATALOG_LIMIT ||
-      !isSafeBridgeId(entry.id) ||
-      ids.has(entry.id) ||
-      !Number.isSafeInteger(entry.messageCount) ||
-      entry.messageCount < 0
-    ) {
-      continue;
-    }
-    const modified = new Date(entry.modifiedTime);
-    if (!Number.isFinite(modified.getTime())) {
-      continue;
-    }
-    ids.add(entry.id);
-    items.push({
-      id: entry.id,
-      title: sanitizeSessionTitle(entry.title, SESSION_TITLE_LIMIT),
-      messageCount: entry.messageCount,
-      modifiedTime: modified.toISOString(),
-      active: false,
-      isFavorite: entry.isFavorite === true,
-      ...(entry.missionRole === undefined
-        ? {}
-        : { missionRole: entry.missionRole }),
-    });
-  }
-  return items;
 }

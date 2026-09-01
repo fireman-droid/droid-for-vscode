@@ -94,6 +94,15 @@ export function handleMissionStart(
         historyStatus: 'unavailable',
         truncated: false,
       };
+      const conversationId = ctl.recoveryStore.createConversation(
+        result.sessionId,
+        ctl.transcript,
+      );
+      if (conversationId === undefined) {
+        emitRejected(ctl, message.requestId, 'unavailable');
+        return;
+      }
+      ctl.conversationId = conversationId;
       ctl.sessions = {
         status: ctl.sessions.status,
         items: [
@@ -112,8 +121,7 @@ export function handleMissionStart(
           },
         ],
       };
-      ctl.recoveryStore.writeSession(result.sessionId, ctl.transcript);
-      ctl.recoveryStore.selectSession(result.sessionId);
+      ctl.recoveryStore.selectConversation(conversationId);
       await ctl.recoveryStore.flush();
       if (ctl.disposed || ctl.sessionId !== result.sessionId) {
         return;

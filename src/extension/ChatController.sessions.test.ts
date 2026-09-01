@@ -26,6 +26,7 @@ import {
   waitForConnected,
   worktreeFeature,
 } from './controllerTestHarness';
+import { writeRecoverySession } from './recoveryStoreTestSupport';
 
 describe('ChatController', () => {
   it('blocks session replacement during an active turn and rejects forged session ids', async () => {
@@ -201,7 +202,7 @@ describe('ChatController', () => {
     };
     const seed = new SessionRecoveryStore(persistence);
     await seed.load();
-    seed.writeSession('session-2', {
+    writeRecoverySession(seed, 'session-2', {
       transcript: [
         { id: 'u1', kind: 'user', text: 'Recovered prompt' },
       ],

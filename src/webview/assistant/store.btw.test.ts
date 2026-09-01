@@ -22,6 +22,7 @@ function snapshot(
   return {
     type: 'host.snapshot',
     sequence,
+    conversationId: sessionId,
     sessionId,
     connection: { status: 'connected' },
     turn: null,
@@ -133,6 +134,7 @@ describe('assistantWebviewReducer /btw', () => {
     state = reduce(state, {
       type: 'host.connection',
       sequence: 2,
+      conversationId: 'session-b',
       sessionId: 'session-b',
       connection: { status: 'connected' },
     });

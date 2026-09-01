@@ -149,6 +149,7 @@ describe('DroidViewProvider', () => {
     const snapshot: HostToWebviewMessage = {
       type: 'host.snapshot',
       sequence: 0,
+      conversationId: null,
       sessionId: null,
       connection: { status: 'idle' },
       turn: null,
@@ -319,6 +320,7 @@ describe('DroidViewProvider', () => {
     const snapshot: HostToWebviewMessage = {
       type: 'host.snapshot',
       sequence: 0,
+      conversationId: null,
       sessionId: null,
       connection: { status: 'idle' },
       turn: null,

@@ -5,11 +5,11 @@ import type {
   RuntimeSessionTarget,
 } from '../../runtime/DroidRuntime';
 import type { RuntimeAvailability } from '../../runtime/runtimeEvents';
-import type { SessionHistoryLoader } from '../../runtime/history/SessionHistory';
 import {
   createHostTranscriptState,
   type HostTranscriptState,
 } from '../hostTranscriptState';
+import { createTurnActivityState } from '../turnActivityState';
 import { EMPTY_SESSION_TOKEN_USAGE } from '../../shared/tokenUsage';
 import { reconcileSessionHistory } from '../reconcileSessionHistory';
 import { recordCreatedWorktreeSession } from '../worktreeSessions';
@@ -56,12 +56,22 @@ import {
   isUsableWorkspace,
   SESSION_OPERATION_BLOCKED_MESSAGE,
   type ChatControllerInternals,
+  type CurrentTurn,
 } from './internals';
 import {
   evaluateSessionReplacement,
   type SessionReplacementEligibility,
 } from './operationEligibility';
 import { recoverMissionProjection } from './mission/recovery';
+import {
+  loadHistoryTimed,
+  prepareActivationTranscript,
+} from './activationTranscript';
+
+export {
+  loadHistoryTimed,
+  prepareActivationTranscript,
+} from './activationTranscript';
 
 export const SESSION_CLOSE_FAILED_MESSAGE =
   'The current Droid session could not be closed.';
@@ -203,9 +213,16 @@ export async function replaceRuntime(
       ctl.runtime.supportsBackgroundTurns?.() === true
         ? ctl.sessionId
         : null;
+    const targetConversationId =
+      target.kind === 'resume'
+        ? ctl.recoveryStore.resolveConversationId(target.sessionId)
+        : undefined;
+    const preserveConversationState =
+      targetConversationId !== undefined &&
+      targetConversationId === ctl.conversationId;
     const generation = ++ctl.runtimeGeneration;
     ctl.turnGeneration += 1;
-    resetSessionMetadata(ctl);
+    resetSessionMetadata(ctl, preserveConversationState);
     ctl.interactions.cancelAll();
     try {
       await flushRecoveryCheckpoint(ctl);
@@ -276,16 +293,30 @@ export async function replaceRuntime(
     // keeps every mutating handler rejected until the authoritative
     // activation snapshot replaces this one in place.
     if (target.kind === 'resume') {
-      const checkpoint = ctl.recoveryStore.readSession(
-        target.sessionId,
-      );
+      const conversationId =
+        ctl.recoveryStore.resolveConversationId(target.sessionId);
+      const checkpoint =
+        conversationId === undefined
+          ? undefined
+          : ctl.recoveryStore.readDisplay(conversationId);
       if (
         checkpoint !== undefined &&
-        checkpoint.transcript.length > 0
+        (checkpoint.transcript.transcript.length > 0 ||
+          checkpoint.turn !== null)
       ) {
+        ctl.conversationId = conversationId!;
         ctl.sessionId = target.sessionId;
-        ctl.transcript = checkpoint;
-        ctl.turn = null;
+        ctl.transcript = checkpoint.transcript;
+        ctl.turn =
+          checkpoint.turn === null
+            ? null
+            : {
+                ...checkpoint.turn,
+                activity: createTurnActivityState(),
+                ...(isTurnActiveStatus(checkpoint.turn.status)
+                  ? { recovery: true as const }
+                  : {}),
+              };
         ctl.mission = null;
         ctl.tokenUsage = EMPTY_SESSION_TOKEN_USAGE;
         ctl.sessions = withActiveSession(ctl, ctl.sessions);
@@ -294,7 +325,7 @@ export async function replaceRuntime(
           name: 'host.perf.early-snapshot',
           attributes: {
             sessionId: target.sessionId,
-            items: checkpoint.transcript.length,
+            items: checkpoint.transcript.transcript.length,
             phase: 'switch',
           },
         });
@@ -405,12 +436,19 @@ export async function activateInitialRuntime(
     }
     if (activation.status === 'failed') {
       if (failedResumeId) {
+        ctl.conversationId =
+          ctl.recoveryStore.resolveConversationId(failedResumeId) ??
+          null;
         ctl.sessionId = failedResumeId;
         ctl.transcript =
-          ctl.recoveryStore.readSession(failedResumeId) ??
+          (ctl.conversationId === null
+            ? undefined
+            : ctl.recoveryStore.readDisplay(ctl.conversationId)
+                ?.transcript) ??
           createHostTranscriptState('unavailable');
         ctl.sessions = withActiveSession(ctl, ctl.sessions);
       } else {
+        ctl.conversationId = null;
         ctl.sessionId = null;
         ctl.mission = null;
         ctl.tokenUsage = EMPTY_SESSION_TOKEN_USAGE;
@@ -434,119 +472,6 @@ export async function activateInitialRuntime(
       generation,
       transcript,
     );
-}
-
-export async function prepareActivationTranscript(
-  ctl: ChatControllerInternals,
-    target: RuntimeSessionTarget,
-    generation: number,
-    phases?: SessionSwitchTimings,
-  ): Promise<HostTranscriptState | null> {
-    if (target.kind === 'new') {
-      ctl.mission = null;
-      ctl.tokenUsage = EMPTY_SESSION_TOKEN_USAGE;
-      return createHostTranscriptState('complete');
-    }
-
-    const recovered = ctl.recoveryStore.readSession(target.sessionId);
-    const historyStartedAt = performance.now();
-    const loaded = await loadHistoryTimed(
-      ctl,
-      target.cwd,
-      target.sessionId,
-    );
-    if (phases !== undefined) {
-      phases.historyMs = elapsedMs(historyStartedAt);
-    }
-    if (
-      !isCurrentRuntimeGeneration(ctl, generation) ||
-      !isTargetWorkspaceCurrent(ctl, target.cwd)
-    ) {
-      return null;
-    }
-    ctl.mission =
-      loaded?.status === 'available' ? (loaded.mission ?? null) : null;
-    // Cumulative usage persists in the session file; `lastTurn` does
-    // not (history carries no per-turn usage), so it starts null.
-    ctl.tokenUsage = {
-      cumulative:
-        loaded?.status === 'available'
-          ? (loaded.tokenUsage ?? null)
-          : null,
-      lastTurn: null,
-    };
-    if (loaded?.status === 'available') {
-      const reconcileStart = performance.now();
-      const reconciled = reconcileSessionHistory(
-        loaded.state,
-        recovered,
-        { authoritativeLoaded: true },
-      );
-      // Recovery reconciliation accounting (P7): a merge that degrades
-      // to concatenation (reconciled ≈ recovered + loaded) is the
-      // signature of the duplicate-transcript / duplicate-toolUseId
-      // class of bugs.
-      ctl.recordHost({
-        level: 'info',
-        name: 'host.perf.recovery',
-        attributes: {
-          sessionId: target.sessionId,
-          recovered: recovered?.transcript.length ?? 0,
-          loaded: loaded.state.transcript.length,
-          reconciled: reconciled.transcript.length,
-          reconcileMs: Math.round(
-            performance.now() - reconcileStart,
-          ),
-        },
-      });
-      return reconciled;
-    }
-    return recovered ?? createHostTranscriptState('unavailable');
-}
-
-/** Timed history load with a structured log record (P6). */
-export async function loadHistoryTimed(
-  ctl: ChatControllerInternals,
-    cwd: string,
-    sessionId: string,
-  ): Promise<Awaited<
-    ReturnType<SessionHistoryLoader['loadHistory']>
-  > | null> {
-    const startedAt = performance.now();
-    try {
-      const loaded = await ctl.sessionHistory.loadHistory({
-        cwd,
-        sessionId,
-      });
-      ctl.recordHost({
-        level: 'info',
-        name: 'runtime.history.finished',
-        attributes: {
-          durationMs: Math.round(performance.now() - startedAt),
-          outcome: loaded.status,
-          sessionId,
-          ...(loaded.status === 'available'
-            ? {
-                items: loaded.state.transcript.length,
-                historyStatus: loaded.state.historyStatus,
-              }
-            : {}),
-        },
-      });
-      return loaded;
-    } catch (error) {
-      ctl.recordHost({
-        level: 'error',
-        name: 'runtime.history.finished',
-        attributes: {
-          durationMs: Math.round(performance.now() - startedAt),
-          outcome: 'failed',
-          sessionId,
-        },
-        detail: formatUnknownError(error),
-      });
-      return null;
-    }
 }
 
 export async function createInitializedRuntime(
@@ -585,14 +510,14 @@ export async function createInitializedRuntime(
       if (target.kind === 'resume') {
         ctl.interactions.endTurn(
           target.sessionId,
-          recoveryTurnId(generation),
+          recoveryTurnId(ctl, generation, target.sessionId),
         );
       }
     };
     if (target.kind === 'resume') {
       ctl.interactions.beginTurn(
         target.sessionId,
-        recoveryTurnId(generation),
+        recoveryTurnId(ctl, generation, target.sessionId),
       );
     }
 
@@ -684,7 +609,19 @@ export async function activateRuntime(
       return false;
     }
     const current = () => isActivationCandidateCurrent(ctl, runtime, generation, target.cwd);
-    const checkpoint = await persistActivationRecoveryCheckpoint(ctl, sessionId, transcript, current);
+    const conversationId =
+      ctl.recoveryStore.resolveConversationId(sessionId);
+    const recoveredDisplay =
+      target.kind === 'resume' && conversationId !== undefined
+        ? ctl.recoveryStore.readDisplay(conversationId)
+        : undefined;
+    const checkpoint = await persistActivationRecoveryCheckpoint(
+      ctl,
+      sessionId,
+      transcript,
+      recoveredDisplay?.turn ?? null,
+      current,
+    );
     if (checkpoint !== 'saved') {
       await closeRuntime(ctl, runtime).catch(() => undefined);
       if (
@@ -704,8 +641,20 @@ export async function activateRuntime(
 
     ctl.runtime = runtime;
     ctl.activeRuntimeCwd = target.cwd;
+    ctl.conversationId =
+      ctl.recoveryStore.resolveConversationId(sessionId) ?? sessionId;
     ctl.sessionId = sessionId;
-    ctl.turn = null;
+    ctl.turn =
+      recoveredDisplay?.turn === undefined ||
+      recoveredDisplay.turn === null
+        ? null
+        : {
+            ...recoveredDisplay.turn,
+            activity: createTurnActivityState(),
+            ...(isTurnActiveStatus(recoveredDisplay.turn.status)
+              ? { recovery: true as const }
+              : {}),
+          };
     ctl.transcript = transcript;
     ctl.sessions = withActiveSession(ctl, 
       ctl.sessions,
@@ -747,6 +696,16 @@ export async function activateRuntime(
       armReplayedSubagentWatch(ctl, sessionId, target.cwd, transcript);
     }
     return true;
+}
+
+function isTurnActiveStatus(
+  status: CurrentTurn['status'],
+): boolean {
+  return (
+    status === 'submitting' ||
+    status === 'streaming' ||
+    status === 'stopping'
+  );
 }
 
 /**
@@ -793,7 +752,10 @@ export function bindWorktreeSessionMetadata(
     });
 }
 
-export function resetSessionMetadata(ctl: ChatControllerInternals): void {
+export function resetSessionMetadata(
+  ctl: ChatControllerInternals,
+  preserveConversationState = false,
+): void {
     ctl.missionRuntime = null;
     if (ctl.customModelsDiscoveryAbort !== null) {
       ctl.customModelsDiscoveryAbort.abort();
@@ -806,7 +768,9 @@ export function resetSessionMetadata(ctl: ChatControllerInternals): void {
     ctl.settings = { status: 'loading', value: null };
     ctl.context = { status: 'loading', value: null };
     ctl.modelCatalog = { status: 'loading', items: [] };
-    clearPendingAttachments(ctl);
+    if (!preserveConversationState) {
+      clearPendingAttachments(ctl);
+    }
     // Runs while sessionId still names the old session, so the
     // discard diagnostic lands on the session that owned the queue.
     discardQueuedPrompts(ctl);

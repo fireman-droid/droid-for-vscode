@@ -65,17 +65,29 @@ export function createReviewFeature(options: {
       'review-restore',
     ).fsPath,
     publish: (message) => options.getController().emit(message),
+    resolveCanonicalTurnSessionId(_sessionId, turnId) {
+      const controller = options.getController();
+      if (controller.conversationId === null) {
+        return undefined;
+      }
+      return controller.recoveryStore.readTurn(
+        controller.conversationId,
+        turnId,
+      )?.sessionId;
+    },
     readCanonicalTurnFiles(sessionId, turnId) {
       const controller = options.getController();
       if (controller.sessionId !== sessionId) {
         return undefined;
       }
-      const changes = [...controller.transcript.transcript]
-        .reverse()
-        .find(
-          (item) => item.kind === 'changes' && item.turnId === turnId,
-        );
-      return changes?.kind === 'changes' ? changes.files : undefined;
+      if (controller.conversationId === null) {
+        return undefined;
+      }
+      const turn = controller.recoveryStore.readTurn(
+        controller.conversationId,
+        turnId,
+      );
+      return turn?.changesSettled === true ? turn.files : undefined;
     },
     async readWorkspaceFiles() {
       const root = getRoot();

@@ -19,6 +19,7 @@ function snapshot(
   return {
     type: 'host.snapshot',
     sequence,
+    conversationId: sessionId,
     sessionId,
     connection: { status: 'connected' },
     turn: null,

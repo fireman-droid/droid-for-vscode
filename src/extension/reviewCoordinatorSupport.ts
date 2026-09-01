@@ -29,6 +29,7 @@ export interface ScopeFile extends CommittedFileStat {
 export interface ActiveScope {
   reviewScopeId: string;
   sessionId: string;
+  snapshotSessionId?: string;
   scopeKind: ReviewScopeKind;
   turnId?: string;
   baseline: string;
@@ -46,6 +47,14 @@ export interface RecoveryEntry {
   readonly path: string;
   readonly existed: boolean;
   readonly dataBase64?: string;
+}
+
+export function withSnapshotSession(
+  scope: ActiveScope,
+  sessionId: string,
+): ActiveScope {
+  scope.snapshotSessionId = sessionId;
+  return scope;
 }
 
 export function createActiveScope(

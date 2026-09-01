@@ -408,7 +408,7 @@ describe('ChatController', () => {
       'recovery',
       0,
     );
-    const writeSession = vi.spyOn(recovery, 'writeSession');
+    const writeSession = vi.spyOn(recovery, 'writeActiveDisplay');
     const { controller, messages } = createController(
       () => runtime,
       workspace,
@@ -895,7 +895,7 @@ describe('ChatController', () => {
       'recovery',
       0,
     );
-    const writeSession = vi.spyOn(recovery, 'writeSession');
+    const writeSession = vi.spyOn(recovery, 'writeActiveDisplay');
     const { controller, messages } = createController(
       () => runtime,
       undefined,
@@ -914,8 +914,9 @@ describe('ChatController', () => {
     expect(writeSession).toHaveBeenCalledTimes(2);
     expect(writeSession).toHaveBeenLastCalledWith(
       'session-1',
+      'session-1',
       expect.objectContaining({
-        transcript: [
+        transcript: expect.arrayContaining([
           expect.objectContaining({
             kind: 'user',
             text: 'Stream',
@@ -924,8 +925,9 @@ describe('ChatController', () => {
             kind: 'assistant',
             text: 'x'.repeat(100),
           }),
-        ],
+        ]),
       }),
+      null,
     );
   });
 

@@ -251,6 +251,7 @@ export class ChatController {
   };
   transcript: HostTranscriptState =
     createHostTranscriptState('unavailable');
+  conversationId: string | null = null;
   sessionId: string | null = null;
   subagentTranscripts: SubagentTranscriptService | null = null; // Host-only child registry/store.
   /** Read-only mission identity of the active session, from the last
@@ -370,6 +371,7 @@ export class ChatController {
   disposed = false;
   disposal: Promise<void> | null = null;
   pendingRecoveryCheckpoint: {
+    readonly conversationId: string;
     readonly sessionId: string;
     readonly cache: HostTranscriptState;
   } | null = null;

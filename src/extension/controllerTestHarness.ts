@@ -426,7 +426,7 @@ export async function seededRecoveryStore(
 ): Promise<SessionRecoveryStore> {
   const persistence = createMemoryPersistence();
   const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-  seed.writeSession(
+  const conversationId = seed.createConversation(
     sessionId,
     appendAcceptedUserPrompt(
       createHostTranscriptState('complete'),
@@ -434,7 +434,7 @@ export async function seededRecoveryStore(
       'Recovered prompt',
     ),
   );
-  seed.selectSession(sessionId);
+  seed.selectConversation(conversationId ?? null);
   await seed.flush();
   return new SessionRecoveryStore(persistence, 'recovery', 0);
 }

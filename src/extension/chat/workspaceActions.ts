@@ -22,6 +22,10 @@ import {
   isTurnActive,
   type ChatControllerInternals,
 } from './internals';
+import {
+  readConversationTurnChanges,
+  readLatestConversationChanges,
+} from './conversationChanges';
 
 /**
  * Names the offending path and the failure mode so repeated clicks on
@@ -60,19 +64,26 @@ export function handleFileOpenDiff(
       return;
     }
     const requestedTurnId = ctl.turn?.turnId ?? null;
+    const turnChanges = readConversationTurnChanges(ctl, turnId);
     const latestChanges = latestTurnChanges(ctl);
-    const committed = ctl.changeStats.readCommittedTurn?.(sessionId);
+    const committed = ctl.changeStats.readCommittedTurn?.(
+      latestChanges?.sessionId ?? sessionId,
+    );
     const committedRef =
       latestChanges?.turnId === turnId &&
       committed !== undefined &&
       committed.paths.includes(path.replaceAll('\\', '/'))
         ? committed.hash
         : undefined;
+    const diffScope = {
+      sessionId: turnChanges?.sessionId ?? sessionId,
+      turnId,
+    };
     const open = committedRef === undefined
-      ? ctl.fileDiff.openDiff(path, { sessionId, turnId })
+      ? ctl.fileDiff.openDiff(path, diffScope)
       : ctl.fileDiff.openDiff(
           path,
-          { sessionId, turnId },
+          diffScope,
           { committedRef },
         );
     void open.then((outcome) => {
@@ -188,16 +199,7 @@ export function latestTurnChangePaths(
   );
 }
 
-function latestTurnChanges(ctl: ChatControllerInternals) {
-  const items = ctl.transcript.transcript;
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const item = items[index];
-    if (item?.kind === 'changes') {
-      return item;
-    }
-  }
-  return undefined;
-}
+const latestTurnChanges = readLatestConversationChanges;
 
 export function handleGitRequestStatus(
   ctl: ChatControllerInternals,
@@ -232,7 +234,9 @@ export function handleGitRequestStatus(
         return;
       }
       if (status.available) {
-        const committed = ctl.changeStats.readCommittedTurn?.(sessionId);
+        const committed = ctl.changeStats.readCommittedTurn?.(
+          latestChanges?.sessionId ?? sessionId,
+        );
         const committedHash =
           committed !== undefined &&
           inTurn.size > 0 &&
@@ -353,8 +357,7 @@ export function handleGitCommit(
     return;
   }
   const commitChanges = latestTurnChanges(ctl);
-  const commitTurnId = commitChanges?.turnId;
-  if (commitTurnId !== turnId) {
+  if (commitChanges === undefined || commitChanges.turnId !== turnId) {
     ctl.emit({
       type: 'git.commitResult',
       sessionId,
@@ -364,6 +367,7 @@ export function handleGitCommit(
     });
     return;
   }
+  const commitTurnId = commitChanges.turnId;
   ctl.recordHost({
     level: 'info',
     name: 'host.git.commit.started',
@@ -395,7 +399,10 @@ export function handleGitCommit(
         commitTurnId !== undefined
       ) {
         await ctl.changeStats.rememberCommittedTurn?.(
-          { sessionId, turnId: commitTurnId },
+          {
+            sessionId: commitChanges.sessionId,
+            turnId: commitTurnId,
+          },
           outcome.hash,
           normalizedPaths,
           committedStats,

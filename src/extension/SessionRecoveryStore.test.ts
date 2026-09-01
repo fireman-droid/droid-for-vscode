@@ -13,12 +13,154 @@ import {
   type SessionRecoveryCache,
   type SessionRecoveryPersistence,
 } from './SessionRecoveryStore';
+import { LEGACY_SESSION_RECOVERY_VERSION } from './conversationRecoveryState';
+import {
+  readRecoverySession,
+  selectRecoverySession,
+  updateRecoverySession,
+  writeRecoverySession,
+} from './recoveryStoreTestSupport';
 
 describe('SessionRecoveryStore', () => {
+  it('keeps compact successors in one conversation with the same display', async () => {
+    const persistence = memoryPersistence();
+    const store = new SessionRecoveryStore(persistence);
+    writeRecoverySession(store,
+      'session-root',
+      cache([user('user-root', 'Visible before compact')]),
+    );
+    selectRecoverySession(store, 'session-root');
+    const conversationId =
+      store.resolveConversationId('session-root')!;
+
+    expect(
+      store.adoptSuccessor(
+        conversationId,
+        'session-root',
+        'session-compact',
+        'compact',
+      ),
+    ).toBe(true);
+    expect(store.getSelectedConversationId()).toBe(conversationId);
+    expect(store.getSelectedSessionId()).toBe('session-compact');
+    expect(readRecoverySession(store, 'session-compact')?.transcript).toEqual([
+      user('user-root', 'Visible before compact'),
+    ]);
+
+    await store.flush();
+    const reloaded = new SessionRecoveryStore(persistence);
+    await reloaded.load();
+    expect(reloaded.getSelectedConversationId()).toBe(conversationId);
+    expect(reloaded.getSelectedSessionId()).toBe('session-compact');
+    expect(
+      reloaded.readConversation(conversationId)?.nodes,
+    ).toMatchObject([
+      { sessionId: 'session-root', relation: 'root' },
+      {
+        sessionId: 'session-compact',
+        relation: 'compact',
+        parentSessionId: 'session-root',
+      },
+    ]);
+  });
+
+  it('forks a new conversation without mutating the source display', () => {
+    const store = new SessionRecoveryStore(memoryPersistence());
+    writeRecoverySession(store,
+      'session-root',
+      cache([user('user-root', 'Original')]),
+    );
+    const sourceConversationId =
+      store.resolveConversationId('session-root')!;
+    const forkConversationId = store.forkConversation(
+      sourceConversationId,
+      'session-root',
+      'session-fork',
+      'fork',
+      cache([user('user-root', 'Original')]),
+    );
+
+    expect(forkConversationId).toBe('session-fork');
+    writeRecoverySession(store,
+      'session-fork',
+      cache([
+        user('user-root', 'Original'),
+        user('user-fork', 'Only in fork'),
+      ]),
+    );
+    expect(readRecoverySession(store, 'session-root')?.transcript).toEqual([
+      user('user-root', 'Original'),
+    ]);
+    expect(readRecoverySession(store, 'session-fork')?.transcript).toEqual([
+      user('user-root', 'Original'),
+      user('user-fork', 'Only in fork'),
+    ]);
+  });
+
+  it('records an empty settled turn without falling back to older changes', () => {
+    const store = new SessionRecoveryStore(memoryPersistence());
+    writeRecoverySession(store, 'session-1', cache([]));
+    const conversationId =
+      store.resolveConversationId('session-1')!;
+    expect(
+      store.recordSettledTurn(
+        conversationId,
+        'session-1',
+        'turn-1',
+        'First',
+        [{ path: 'src/a.ts', additions: 1, deletions: 0 }],
+        'completed',
+      ),
+    ).toBe(true);
+    expect(
+      store.recordSettledTurn(
+        conversationId,
+        'session-1',
+        'turn-2',
+        'Second',
+        [],
+        'completed',
+      ),
+    ).toBe(true);
+
+    expect(store.readLatestChanges(conversationId)).toMatchObject({
+      turnId: 'turn-2',
+      changesSettled: true,
+      files: [],
+    });
+  });
+
+  it('round-trips the exact active turn in a V2 display snapshot', async () => {
+    const persistence = memoryPersistence();
+    const store = new SessionRecoveryStore(persistence);
+    writeRecoverySession(store,
+      'session-1',
+      cache([user('user-1', 'Still running')]),
+    );
+    const conversationId =
+      store.resolveConversationId('session-1')!;
+    expect(
+      store.writeActiveDisplay(
+        conversationId,
+        'session-1',
+        cache([user('user-1', 'Still running')]),
+        { turnId: 'turn-live', status: 'streaming' },
+      ),
+    ).toBe(true);
+    await store.flush();
+
+    const reloaded = new SessionRecoveryStore(persistence);
+    await reloaded.load();
+    expect(reloaded.readDisplay(conversationId)?.turn).toEqual({
+      turnId: 'turn-live',
+      status: 'streaming',
+    });
+  });
+
   it('persists exact AskUser answer and cancellation records', async () => {
     const persistence = memoryPersistence();
     const store = new SessionRecoveryStore(persistence);
-    store.writeSession(
+    writeRecoverySession(store,
       'session-1',
       cache([
         {
@@ -40,7 +182,7 @@ describe('SessionRecoveryStore', () => {
 
     const reloaded = new SessionRecoveryStore(persistence);
     await reloaded.load();
-    expect(reloaded.readSession('session-1')?.transcript).toEqual([
+    expect(readRecoverySession(reloaded, 'session-1')?.transcript).toEqual([
       {
         id: 'ask-result-1',
         kind: 'ask-user-result',
@@ -59,7 +201,7 @@ describe('SessionRecoveryStore', () => {
 
   it('loads only exact, versioned safe projections and normalizes restart state', async () => {
     const persistence = memoryPersistence({
-      version: SESSION_RECOVERY_VERSION,
+      version: LEGACY_SESSION_RECOVERY_VERSION,
       selectedSessionId: 'session-1',
       sessions: [
         storedSession('session-1', 7, [
@@ -87,7 +229,7 @@ describe('SessionRecoveryStore', () => {
     await store.load();
 
     expect(store.getSelectedSessionId()).toBe('session-1');
-    expect(store.readSession('session-1')).toEqual({
+    expect(readRecoverySession(store, 'session-1')).toEqual({
       historyStatus: 'partial',
       truncated: false,
       transcript: [
@@ -108,7 +250,7 @@ describe('SessionRecoveryStore', () => {
 
   it('round-trips tool file paths and per-turn changes summaries', async () => {
     const persistence = memoryPersistence({
-      version: SESSION_RECOVERY_VERSION,
+      version: LEGACY_SESSION_RECOVERY_VERSION,
       selectedSessionId: 'session-1',
       sessions: [
         storedSession('session-1', 3, [
@@ -142,7 +284,7 @@ describe('SessionRecoveryStore', () => {
 
     await store.load();
 
-    expect(store.readSession('session-1')).toMatchObject({
+    expect(readRecoverySession(store, 'session-1')).toMatchObject({
       transcript: [
         expect.objectContaining({
           kind: 'tool',
@@ -167,7 +309,7 @@ describe('SessionRecoveryStore', () => {
       { kind: 'pdf', name: 'spec.pdf', sizeBytes: 2048 },
     ];
     const persistence = memoryPersistence({
-      version: SESSION_RECOVERY_VERSION,
+      version: LEGACY_SESSION_RECOVERY_VERSION,
       selectedSessionId: 'session-1',
       sessions: [
         storedSession('session-1', 3, [
@@ -211,7 +353,7 @@ describe('SessionRecoveryStore', () => {
 
     await store.load();
 
-    expect(store.readSession('session-1')?.transcript).toEqual([
+    expect(readRecoverySession(store, 'session-1')?.transcript).toEqual([
       expect.objectContaining({
         kind: 'user',
         text: 'With chips',
@@ -219,8 +361,7 @@ describe('SessionRecoveryStore', () => {
       }),
     ]);
     expect(
-      store
-        .readSession('session-2')
+      readRecoverySession(store, 'session-2')
         ?.transcript.filter((item) => item.kind === 'user') ?? [],
     ).toHaveLength(0);
   });
@@ -240,38 +381,34 @@ describe('SessionRecoveryStore', () => {
       byteLength: 5,
     } as const;
 
-    store.updateSession('session-1', () =>
+    updateRecoverySession(store, 'session-1', () =>
       cache([user('user-1', 'Take a screenshot'), image]),
     );
     // The live cache keeps the bytes so the webview can render them.
-    expect(store.readSession('session-1')?.transcript[1]).toMatchObject({
+    expect(readRecoverySession(store, 'session-1')?.transcript[1]).toMatchObject({
       kind: 'image',
       data: 'aGVsbG8=',
     });
 
     await store.flush();
     expect(JSON.stringify(persistence.value)).not.toContain('aGVsbG8=');
-    expect(persistence.value).toMatchObject({
-      sessions: [
-        expect.objectContaining({
-          transcript: [
-            expect.objectContaining({ kind: 'user' }),
-            expect.objectContaining({
-              kind: 'image',
-              data: '',
-              byteLength: 5,
-              mediaType: 'image/png',
-            }),
-          ],
-        }),
-      ],
-    });
+    expect(
+      storedV2Transcript(persistence.value, 'session-1').transcript,
+    ).toEqual([
+      expect.objectContaining({ kind: 'user' }),
+      expect.objectContaining({
+        kind: 'image',
+        data: '',
+        byteLength: 5,
+        mediaType: 'image/png',
+      }),
+    ]);
 
     // A persisted placeholder loads back as-is.
     const reloaded = new SessionRecoveryStore(persistence);
     await reloaded.load();
     expect(
-      reloaded.readSession('session-1')?.transcript[1],
+      readRecoverySession(reloaded, 'session-1')?.transcript[1],
     ).toMatchObject({ kind: 'image', data: '', byteLength: 5 });
   });
 
@@ -294,13 +431,13 @@ describe('SessionRecoveryStore', () => {
       { ...image, extra: true },
     ]) {
       const persistence = memoryPersistence({
-        version: SESSION_RECOVERY_VERSION,
+        version: LEGACY_SESSION_RECOVERY_VERSION,
         selectedSessionId: null,
         sessions: [storedSession('session-1', 1, [hostile])],
       });
       const store = new SessionRecoveryStore(persistence);
       await store.load();
-      expect(store.readSession('session-1')).toBeUndefined();
+      expect(readRecoverySession(store, 'session-1')).toBeUndefined();
     }
   });
 
@@ -361,7 +498,7 @@ describe('SessionRecoveryStore', () => {
       ],
     ]) {
       const persistence = memoryPersistence({
-        version: SESSION_RECOVERY_VERSION,
+        version: LEGACY_SESSION_RECOVERY_VERSION,
         selectedSessionId: 'session-1',
         sessions: [
           storedSession(
@@ -373,13 +510,13 @@ describe('SessionRecoveryStore', () => {
       });
       const store = new SessionRecoveryStore(persistence);
       await store.load();
-      expect(store.readSession('session-1')).toBeUndefined();
+      expect(readRecoverySession(store, 'session-1')).toBeUndefined();
     }
   });
 
   it('round-trips an explicitly empty canonical changes settlement', async () => {
     const persistence = memoryPersistence({
-      version: SESSION_RECOVERY_VERSION,
+      version: LEGACY_SESSION_RECOVERY_VERSION,
       selectedSessionId: 'session-1',
       sessions: [
         storedSession('session-1', 1, [
@@ -396,7 +533,7 @@ describe('SessionRecoveryStore', () => {
 
     await store.load();
 
-    expect(store.readSession('session-1')?.transcript).toEqual([
+    expect(readRecoverySession(store, 'session-1')?.transcript).toEqual([
       {
         id: 'changes-1',
         kind: 'changes',
@@ -409,7 +546,7 @@ describe('SessionRecoveryStore', () => {
   it('does not persist a live writing changes row as canonical settlement', async () => {
     const persistence = memoryPersistence();
     const store = new SessionRecoveryStore(persistence);
-    store.writeSession('session-1', cache([
+    writeRecoverySession(store, 'session-1', cache([
       {
         id: 'changes-1',
         kind: 'changes',
@@ -421,14 +558,14 @@ describe('SessionRecoveryStore', () => {
 
     await store.flush();
 
-    expect(persistence.value).toMatchObject({
-      sessions: [expect.objectContaining({ transcript: [] })],
-    });
+    expect(
+      storedV2Transcript(persistence.value, 'session-1').transcript,
+    ).toEqual([]);
   });
 
   it('rejects inconsistent persisted tool progress metadata', async () => {
     const persistence = memoryPersistence({
-      version: SESSION_RECOVERY_VERSION,
+      version: LEGACY_SESSION_RECOVERY_VERSION,
       selectedSessionId: 'session-1',
       sessions: [
         storedSession('session-1', 1, [
@@ -450,7 +587,7 @@ describe('SessionRecoveryStore', () => {
 
     await store.load();
 
-    expect(store.readSession('session-1')).toBeUndefined();
+    expect(readRecoverySession(store, 'session-1')).toBeUndefined();
   });
 
   it('round-trips subagent summaries on persisted tool rows', async () => {
@@ -462,7 +599,7 @@ describe('SessionRecoveryStore', () => {
       durationMs: 4_200,
     } as const;
     const persistence = memoryPersistence({
-      version: SESSION_RECOVERY_VERSION,
+      version: LEGACY_SESSION_RECOVERY_VERSION,
       selectedSessionId: 'session-1',
       sessions: [
         storedSession('session-1', 1, [
@@ -485,7 +622,7 @@ describe('SessionRecoveryStore', () => {
 
     await store.load();
 
-    expect(store.readSession('session-1')).toMatchObject({
+    expect(readRecoverySession(store, 'session-1')).toMatchObject({
       transcript: [
         expect.objectContaining({ kind: 'tool', subagent }),
       ],
@@ -494,7 +631,7 @@ describe('SessionRecoveryStore', () => {
 
   it('drops execute output tails when reading persisted tool rows', async () => {
     const persistence = memoryPersistence({
-      version: SESSION_RECOVERY_VERSION,
+      version: LEGACY_SESSION_RECOVERY_VERSION,
       selectedSessionId: 'session-1',
       sessions: [
         storedSession('session-1', 1, [
@@ -518,7 +655,7 @@ describe('SessionRecoveryStore', () => {
     await store.load();
 
     // The row survives, but its command output never replays.
-    const session = store.readSession('session-1');
+    const session = readRecoverySession(store, 'session-1');
     expect(session?.transcript).toEqual([
       expect.objectContaining({ kind: 'tool', status: 'completed' }),
     ]);
@@ -539,7 +676,7 @@ describe('SessionRecoveryStore', () => {
       'not-a-record',
     ]) {
       const persistence = memoryPersistence({
-        version: SESSION_RECOVERY_VERSION,
+        version: LEGACY_SESSION_RECOVERY_VERSION,
         selectedSessionId: 'session-1',
         sessions: [
           storedSession('session-1', 1, [
@@ -560,13 +697,13 @@ describe('SessionRecoveryStore', () => {
       });
       const store = new SessionRecoveryStore(persistence);
       await store.load();
-      expect(store.readSession('session-1')).toBeUndefined();
+      expect(readRecoverySession(store, 'session-1')).toBeUndefined();
     }
   });
 
   it('round-trips background hints on persisted tool rows', async () => {
     const persistence = memoryPersistence({
-      version: SESSION_RECOVERY_VERSION,
+      version: LEGACY_SESSION_RECOVERY_VERSION,
       selectedSessionId: 'session-1',
       sessions: [
         storedSession('session-1', 1, [
@@ -589,7 +726,7 @@ describe('SessionRecoveryStore', () => {
 
     await store.load();
 
-    expect(store.readSession('session-1')).toMatchObject({
+    expect(readRecoverySession(store, 'session-1')).toMatchObject({
       transcript: [
         expect.objectContaining({
           kind: 'tool',
@@ -608,7 +745,7 @@ describe('SessionRecoveryStore', () => {
       42,
     ]) {
       const persistence = memoryPersistence({
-        version: SESSION_RECOVERY_VERSION,
+        version: LEGACY_SESSION_RECOVERY_VERSION,
         selectedSessionId: 'session-1',
         sessions: [
           storedSession('session-1', 1, [
@@ -629,16 +766,16 @@ describe('SessionRecoveryStore', () => {
       });
       const store = new SessionRecoveryStore(persistence);
       await store.load();
-      expect(store.readSession('session-1')).toBeUndefined();
+      expect(readRecoverySession(store, 'session-1')).toBeUndefined();
     }
   });
 
-  it('keeps live complete caches and downgrades empty complete caches only after restart', async () => {
+  it('preserves an exact V2 complete display snapshot after restart', async () => {
     const persistence = memoryPersistence();
     const live = new SessionRecoveryStore(persistence);
-    live.writeSession('session-1', cache([]));
+    writeRecoverySession(live, 'session-1', cache([]));
 
-    expect(live.readSession('session-1')).toMatchObject({
+    expect(readRecoverySession(live, 'session-1')).toMatchObject({
       historyStatus: 'complete',
       transcript: [],
     });
@@ -647,8 +784,8 @@ describe('SessionRecoveryStore', () => {
     const restarted = new SessionRecoveryStore(persistence);
     await restarted.load();
 
-    expect(restarted.readSession('session-1')).toMatchObject({
-      historyStatus: 'unavailable',
+    expect(readRecoverySession(restarted, 'session-1')).toMatchObject({
+      historyStatus: 'complete',
       transcript: [],
     });
   });
@@ -661,28 +798,28 @@ describe('SessionRecoveryStore', () => {
         sessions: [],
       },
       {
-        version: SESSION_RECOVERY_VERSION,
+        version: LEGACY_SESSION_RECOVERY_VERSION,
         selectedSessionId: null,
         sessions: [],
         extra: true,
       },
       Object.assign(
         {
-          version: SESSION_RECOVERY_VERSION,
+          version: LEGACY_SESSION_RECOVERY_VERSION,
           selectedSessionId: null,
           sessions: [],
         },
         { [Symbol('hostile')]: 'secret' },
       ),
       {
-        version: SESSION_RECOVERY_VERSION,
+        version: LEGACY_SESSION_RECOVERY_VERSION,
         selectedSessionId: null,
         get sessions() {
           throw new Error('accessor executed');
         },
       },
       {
-        version: SESSION_RECOVERY_VERSION,
+        version: LEGACY_SESSION_RECOVERY_VERSION,
         selectedSessionId: null,
         sessions: Array.from(
           { length: MAX_RECOVERY_SESSIONS + 1 },
@@ -696,14 +833,14 @@ describe('SessionRecoveryStore', () => {
       const store = new SessionRecoveryStore(persistence);
       await expect(store.load()).resolves.toBeUndefined();
       expect(store.getSelectedSessionId()).toBeNull();
-      expect(store.readSession('session-1')).toBeUndefined();
+      expect(readRecoverySession(store, 'session-1')).toBeUndefined();
       expect(persistence.get).toHaveBeenCalledOnce();
     }
   });
 
   it('drops malformed session entries without exposing raw payloads', async () => {
     const persistence = memoryPersistence({
-      version: SESSION_RECOVERY_VERSION,
+      version: LEGACY_SESSION_RECOVERY_VERSION,
       selectedSessionId: 'safe',
       sessions: [
         storedSession('safe', 1, [user('safe-item', 'Visible')]),
@@ -725,10 +862,10 @@ describe('SessionRecoveryStore', () => {
 
     await store.load();
 
-    expect(store.readSession('safe')?.transcript).toEqual([
+    expect(readRecoverySession(store, 'safe')?.transcript).toEqual([
       user('safe-item', 'Visible'),
     ]);
-    expect(store.readSession('raw')).toBeUndefined();
+    expect(readRecoverySession(store, 'raw')).toBeUndefined();
     await store.flush();
     expect(JSON.stringify(persistence.value)).not.toContain('raw-');
   });
@@ -749,7 +886,7 @@ describe('SessionRecoveryStore', () => {
     truncated,
   }) => {
     const persistence = memoryPersistence({
-      version: SESSION_RECOVERY_VERSION,
+      version: LEGACY_SESSION_RECOVERY_VERSION,
       selectedSessionId: 'session-1',
       sessions: [
         {
@@ -763,35 +900,35 @@ describe('SessionRecoveryStore', () => {
 
     await store.load();
 
-    expect(store.readSession('session-1')).toBeUndefined();
+    expect(readRecoverySession(store, 'session-1')).toBeUndefined();
   });
 
   it('enforces deterministic LRU session limits', async () => {
     const persistence = memoryPersistence();
     const store = new SessionRecoveryStore(persistence);
     for (let index = 0; index < MAX_RECOVERY_SESSIONS; index += 1) {
-      store.writeSession(
+      writeRecoverySession(store,
         `session-${index}`,
         cache([user(`item-${index}`, String(index))]),
       );
     }
-    expect(store.readSession('session-0')).toBeDefined();
+    expect(readRecoverySession(store, 'session-0')).toBeDefined();
 
-    store.writeSession(
+    writeRecoverySession(store,
       'session-new',
       cache([user('item-new', 'new')]),
     );
 
-    expect(store.readSession('session-0')).toBeDefined();
-    expect(store.readSession('session-1')).toBeUndefined();
-    expect(store.readSession('session-new')).toBeDefined();
+    expect(readRecoverySession(store, 'session-0')).toBeDefined();
+    expect(readRecoverySession(store, 'session-1')).toBeUndefined();
+    expect(readRecoverySession(store, 'session-new')).toBeDefined();
   });
 
   it('bounds total UTF-16 text and marks affected history partial', async () => {
     const persistence = memoryPersistence();
     const store = new SessionRecoveryStore(persistence);
     for (let index = 0; index < 6; index += 1) {
-      store.writeSession(
+      writeRecoverySession(store,
         `session-${index}`,
         cache([
           user(
@@ -805,18 +942,23 @@ describe('SessionRecoveryStore', () => {
     await store.flush();
 
     const serialized = persistence.value as {
-      sessions: Array<{
-        historyStatus: string;
-        truncated: boolean;
-        transcript: SessionTranscriptItem[];
+      conversations: Array<{
+        display: {
+          transcript: {
+            historyStatus: string;
+            truncated: boolean;
+            transcript: SessionTranscriptItem[];
+          };
+        };
       }>;
     };
     const units = countStringValues(serialized);
     expect(units).toBeLessThanOrEqual(MAX_RECOVERY_TEXT_UNITS);
     expect(
-      serialized.sessions.some(
-        (session) =>
-          session.historyStatus === 'partial' && session.truncated,
+      serialized.conversations.some(
+        ({ display }) =>
+          display.transcript.historyStatus === 'partial' &&
+          display.transcript.truncated,
       ),
     ).toBe(true);
   });
@@ -830,12 +972,12 @@ describe('SessionRecoveryStore', () => {
         SESSION_RECOVERY_STORAGE_KEY,
         250,
       );
-      store.writeSession(
+      writeRecoverySession(store,
         'session-1',
         cache([user('item-1', 'one')]),
       );
-      store.selectSession('session-1');
-      store.updateSession('session-1', (current) => ({
+      selectRecoverySession(store, 'session-1');
+      updateRecoverySession(store, 'session-1', (current) => ({
         ...current!,
         transcript: [...current!.transcript, user('item-2', 'two')],
       }));
@@ -846,14 +988,14 @@ describe('SessionRecoveryStore', () => {
       expect(persistence.update).toHaveBeenCalledOnce();
       expect(persistence.value).toMatchObject({
         version: SESSION_RECOVERY_VERSION,
-        selectedSessionId: 'session-1',
+        selectedConversationId: 'session-1',
       });
 
-      store.selectSession(null);
+      selectRecoverySession(store, null);
       await store.flush();
       expect(persistence.update).toHaveBeenCalledTimes(2);
       expect(persistence.value).toMatchObject({
-        selectedSessionId: null,
+        selectedConversationId: null,
       });
     } finally {
       vi.useRealTimers();
@@ -882,40 +1024,32 @@ describe('SessionRecoveryStore', () => {
         }),
       };
       const store = new SessionRecoveryStore(persistence);
-      store.writeSession(
+      writeRecoverySession(store,
         'session-1',
         cache([user('item-0', 'committed')]),
       );
       await store.flush();
       fail = true;
-      store.writeSession(
+      writeRecoverySession(store,
         'session-1',
         cache([user('item-1', 'first')]),
       );
 
       await expect(store.flush()).rejects.toBe(failure);
-      expect(stored).toMatchObject({
-        sessions: [
-          expect.objectContaining({
-            transcript: [user('item-0', 'committed')],
-          }),
-        ],
-      });
+      expect(
+        storedV2Transcript(stored, 'session-1').transcript,
+      ).toEqual([user('item-0', 'committed')]);
 
-      store.writeSession(
+      writeRecoverySession(store,
         'session-1',
         cache([user('item-2', 'latest')]),
       );
       fail = false;
       await expect(store.flush()).resolves.toBeUndefined();
 
-      expect(stored).toMatchObject({
-        sessions: [
-          expect.objectContaining({
-            transcript: [user('item-2', 'latest')],
-          }),
-        ],
-      });
+      expect(
+        storedV2Transcript(stored, 'session-1').transcript,
+      ).toEqual([user('item-2', 'latest')]);
     },
   );
 
@@ -949,7 +1083,7 @@ describe('SessionRecoveryStore', () => {
         }),
       };
       const store = new SessionRecoveryStore(persistence);
-      store.writeSession(
+      writeRecoverySession(store,
         'session-1',
         cache([user('item-1', 'pending')]),
       );
@@ -964,13 +1098,9 @@ describe('SessionRecoveryStore', () => {
         resolvePending();
         await expect(first).resolves.toBeUndefined();
         await expect(joiner).resolves.toBeUndefined();
-        expect(stored).toMatchObject({
-          sessions: [
-            expect.objectContaining({
-              transcript: [user('item-1', 'pending')],
-            }),
-          ],
-        });
+        expect(
+          storedV2Transcript(stored, 'session-1').transcript,
+        ).toEqual([user('item-1', 'pending')]);
         return;
       }
 
@@ -1004,7 +1134,7 @@ describe('SessionRecoveryStore', () => {
       const store = new SessionRecoveryStore(persistence);
       const reportFailure = vi.fn();
       store.setBackgroundFlushFailureReporter(reportFailure);
-      store.writeSession(
+      writeRecoverySession(store,
         'session-1',
         cache([user('item-1', 'retry')]),
       );
@@ -1018,13 +1148,9 @@ describe('SessionRecoveryStore', () => {
 
       fail = false;
       await store.flush();
-      expect(stored).toMatchObject({
-        sessions: [
-          expect.objectContaining({
-            transcript: [user('item-1', 'retry')],
-          }),
-        ],
-      });
+      expect(
+        storedV2Transcript(stored, 'session-1').transcript,
+      ).toEqual([user('item-1', 'retry')]);
     },
   );
 
@@ -1035,7 +1161,7 @@ describe('SessionRecoveryStore', () => {
       SESSION_RECOVERY_STORAGE_KEY,
       60_000,
     );
-    store.writeSession(
+    writeRecoverySession(store,
       'session-1',
       cache([user('item-1', 'pending')]),
     );
@@ -1043,32 +1169,57 @@ describe('SessionRecoveryStore', () => {
     await store.dispose();
 
     expect(persistence.update).toHaveBeenCalledOnce();
-    expect(persistence.value).toMatchObject({
-      sessions: [
-        expect.objectContaining({
-          sessionId: 'session-1',
-          transcript: [user('item-1', 'pending')],
-        }),
-      ],
-    });
+    expect(
+      storedV2Transcript(persistence.value, 'session-1').transcript,
+    ).toEqual([user('item-1', 'pending')]);
   });
 
   it('does not allow callers to mutate stored projections by reference', () => {
     const store = new SessionRecoveryStore(memoryPersistence());
     const original = cache([user('item-1', 'safe')]);
-    store.writeSession('session-1', original);
+    writeRecoverySession(store, 'session-1', original);
 
     (
       original.transcript[0] as { text: string }
     ).text = 'caller mutation';
-    const read = store.readSession('session-1')!;
+    const read = readRecoverySession(store, 'session-1')!;
     (read.transcript[0] as { text: string }).text = 'read mutation';
 
-    expect(store.readSession('session-1')?.transcript).toEqual([
+    expect(readRecoverySession(store, 'session-1')?.transcript).toEqual([
       user('item-1', 'safe'),
     ]);
   });
 });
+
+function storedV2Transcript(
+  value: unknown,
+  conversationId: string,
+): {
+  readonly historyStatus: string;
+  readonly truncated: boolean;
+  readonly transcript: readonly SessionTranscriptItem[];
+} {
+  const state = value as {
+    readonly conversations?: readonly {
+      readonly conversationId?: string;
+      readonly display?: {
+        readonly transcript?: {
+          readonly historyStatus: string;
+          readonly truncated: boolean;
+          readonly transcript: readonly SessionTranscriptItem[];
+        };
+      };
+    }[];
+  };
+  const transcript = state.conversations?.find(
+    (conversation) =>
+      conversation.conversationId === conversationId,
+  )?.display?.transcript;
+  if (transcript === undefined) {
+    throw new Error(`Missing stored conversation ${conversationId}`);
+  }
+  return transcript;
+}
 
 function memoryPersistence(initial?: unknown) {
   const persistence = {

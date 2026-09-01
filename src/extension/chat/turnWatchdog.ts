@@ -292,7 +292,12 @@ async function settleStuckTurn(
       { preserveLocalTail: true },
     );
   }
-  publishTurnChanges(ctl, sessionId, turnId);
+  publishTurnChanges(
+    ctl,
+    sessionId,
+    turnId,
+    interrupted ? 'interrupted' : 'completed',
+  );
   setTurnStatus(
     ctl,
     sessionId,

@@ -1,6 +1,7 @@
 import type { HostToWebviewMessage } from '../../shared/bridgeMessages';
 import { projectQueueState } from './queue';
 import { withActiveSession } from './sessionDirectory';
+import { collapseStoredConversationCatalog } from './sessionCatalogProjection';
 import { stampRunningFlags } from './sessionRunning';
 import type { ChatControllerInternals } from './internals';
 
@@ -17,11 +18,19 @@ export function buildHostSnapshot(
   }
   const sessions = stampRunningFlags(
     ctl,
-    withActiveSession(ctl, ctl.sessions),
+    collapseStoredConversationCatalog(
+      withActiveSession(ctl, ctl.sessions),
+      ctl.recoveryStore,
+    ),
   );
   const workspaceRoot = ctl.getWorkspaceContext().cwd;
+  const latestChanges =
+    ctl.conversationId === null
+      ? undefined
+      : ctl.recoveryStore.readLatestChanges(ctl.conversationId);
   const snapshot = {
     type: 'host.snapshot',
+    conversationId: ctl.conversationId,
     sessionId: ctl.sessionId,
     connection: ctl.connection,
     turn:
@@ -41,6 +50,15 @@ export function buildHostSnapshot(
     transcript: ctl.transcript.transcript,
     historyStatus: ctl.transcript.historyStatus,
     truncated: ctl.transcript.truncated,
+    ...(latestChanges === undefined
+      ? {}
+      : {
+          latestChanges: {
+            turnId: latestChanges.turnId,
+            prompt: latestChanges.prompt,
+            files: latestChanges.files,
+          },
+        }),
     ...(ctl.mission === null || ctl.sessionId === null
       ? {}
       : { mission: ctl.mission }),

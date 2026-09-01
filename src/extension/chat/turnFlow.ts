@@ -4,10 +4,7 @@ import type {
   SessionMissionSummary,
   TurnStatus,
 } from '../../shared/bridgeMessages';
-import type {
-  DroidRuntime,
-  RuntimeAttachment,
-} from '../../runtime/DroidRuntime';
+import type { DroidRuntime, RuntimeAttachment } from '../../runtime/DroidRuntime';
 import type { RuntimeEvent } from '../../runtime/runtimeEvents';
 import {
   createTurnActivityState,
@@ -23,19 +20,14 @@ import {
   attachUserMessageId,
   projectHostTranscriptMessage,
   stableTranscriptId,
-  type HostTranscriptState,
 } from '../hostTranscriptState';
 import type { TokenUsageBreakdown } from '../../shared/tokenUsage';
-import {
-  capturePreToolBaseline,
-  recordLiveToolChanges,
-} from './liveChanges';
+import { capturePreToolBaseline, recordLiveToolChanges } from './liveChanges';
 import { captureSnapshotBeforeInBackground } from './snapshotCapture';
 import { publishTurnChanges } from './publishTurnChanges';
 import { scheduleLiveSubagentSync, settleTurnSubagents } from './subagentWatch';
 import { settleQueueAfterTurn } from './queue';
 import {
-  clearPendingAttachments,
   echoUserImageAttachments,
   retainSentAttachments,
   sentAttachmentSummaries,
@@ -46,6 +38,7 @@ import {
   refreshContext,
   updateTokenUsage,
 } from './capabilityPanels';
+import { adoptDurableSuccessor } from './conversationLineage';
 import { refreshSettingsAfterRuntimeEvent } from './settings';
 import {
   activeSessionSummary,
@@ -557,14 +550,14 @@ export function handleTurnComplete(
     }
     switch (event.outcome) {
       case 'success':
-        publishTurnChanges(ctl, sessionId, turnId);
+        publishTurnChanges(ctl, sessionId, turnId, 'completed');
         setTurnStatus(ctl, sessionId, turnId, 'completed');
         settleTurnSubagents(ctl, sessionId, turnId);
         refreshContextAfterTurn(ctl, sessionId);
         finishSpecHandoff(ctl, sessionId, turnId);
         return;
       case 'interrupted':
-        publishTurnChanges(ctl, sessionId, turnId);
+        publishTurnChanges(ctl, sessionId, turnId, 'interrupted');
         setTurnStatus(ctl, sessionId, turnId, 'interrupted');
         settleTurnSubagents(ctl, sessionId, turnId);
         refreshContextAfterTurn(ctl, sessionId);
@@ -628,11 +621,57 @@ export function finishSpecHandoff(
         implementationSessionId: handoff.implementationSessionId,
       },
     });
-    startReplacement(ctl, {
-      kind: 'resume',
-      cwd,
-      sessionId: handoff.implementationSessionId,
+    const conversationId = ctl.conversationId;
+    if (conversationId === null) {
+      ctl.emitSessionDiagnostic(
+        'spec-handoff-blocked',
+        SPEC_HANDOFF_BLOCKED_MESSAGE,
+      );
+      return;
+    }
+    ctl.sessionOperationInProgress = true;
+    void adoptSpecHandoff(
+      ctl,
+      conversationId,
+      sessionId,
+      handoff.implementationSessionId,
+    ).then((adopted) => {
+      ctl.sessionOperationInProgress = false;
+      if (adopted) {
+        startReplacement(ctl, {
+          kind: 'resume',
+          cwd,
+          sessionId: handoff.implementationSessionId,
+        });
+      }
     });
+}
+
+async function adoptSpecHandoff(
+  ctl: ChatControllerInternals,
+  conversationId: string,
+  planningSessionId: string,
+  implementationSessionId: string,
+): Promise<boolean> {
+  if (!await flushRecoveryCheckpointOrReport(ctl)) {
+    return false;
+  }
+  if (
+    !await adoptDurableSuccessor(
+      ctl,
+      conversationId,
+      planningSessionId,
+      implementationSessionId,
+      'handoff',
+    )
+  ) {
+    ctl.emitSessionDiagnostic(
+      'spec-handoff-blocked',
+      SPEC_HANDOFF_BLOCKED_MESSAGE,
+    );
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -827,7 +866,8 @@ export async function performCompact(
   ): Promise<void> {
     const generation = ctl.runtimeGeneration;
     const cwd = ctl.activeRuntimeCwd;
-    if (cwd === null) {
+    const conversationId = ctl.conversationId;
+    if (cwd === null || conversationId === null) {
       return;
     }
 
@@ -873,12 +913,26 @@ export async function performCompact(
 
     const previousTitle =
       activeSessionSummary(ctl)?.title ?? 'Current session';
+    if (
+      !await adoptDurableSuccessor(
+        ctl,
+        conversationId,
+        sessionId,
+        compactedSessionId,
+        'compact',
+      )
+    ) {
+      ctl.emitSessionDiagnostic(
+        'session-compact-failed',
+        COMPACT_FAILED_MESSAGE,
+      );
+      return;
+    }
     // The compacted session stays in the catalog: its file remains on
     // disk with the full pre-compaction history, and the compaction
     // divider's "View full history" jump needs it selectable.
     ctl.sessionId = compactedSessionId;
     ctl.turn = null;
-    clearPendingAttachments(ctl);
     ctl.sessions = withActiveSession(ctl, ctl.sessions, {
       id: compactedSessionId,
       title: previousTitle,
@@ -888,7 +942,6 @@ export async function performCompact(
       isFavorite: false,
     });
 
-    let transcript: HostTranscriptState | null = null;
     let mission: SessionMissionSummary | null = null;
     let tokenUsage: TokenUsageBreakdown | null = null;
     {
@@ -897,7 +950,6 @@ export async function performCompact(
         compactedSessionId,
       );
       if (loaded?.status === 'available') {
-        transcript = loaded.state;
         mission = loaded.mission ?? null;
         tokenUsage = loaded.tokenUsage ?? null;
       }
@@ -915,12 +967,7 @@ export async function performCompact(
     ctl.mission = mission;
     // The compacted successor is a new session; its counters restart.
     ctl.tokenUsage = { cumulative: tokenUsage, lastTurn: null };
-    // If the summarized history cannot be read, keep the previous
-    // transcript visible; the runtime context is compacted either way.
-    ctl.transcript =
-      transcript ?? { ...ctl.transcript, historyStatus: 'partial' };
-    ctl.recoveryStore.writeSession(compactedSessionId, ctl.transcript);
-    ctl.recoveryStore.selectSession(compactedSessionId);
+    ctl.recoveryStore.selectConversation(conversationId);
     if (!await flushRecoveryCheckpointOrReport(ctl)) return;
     ctl.emitSnapshot();
     ctl.emit({
@@ -933,9 +980,6 @@ export async function performCompact(
         removedCount > 0
           ? `Conversation compacted: ${removedCount} earlier messages summarized.`
           : 'Conversation compacted.',
-      // The pre-compaction session backs the divider's
-      // "View full history" jump.
-      relatedSessionId: sessionId,
     });
     refreshContextAfterTurn(ctl, compactedSessionId);
 }
@@ -957,7 +1001,7 @@ export function failTurn(
     ctl.interactions.endTurn(sessionId, turnId);
     ctl.terminalMirror?.settleAll();
     ctl.turn.changesLedger?.cancel();
-    publishTurnChanges(ctl, sessionId, turnId);
+    publishTurnChanges(ctl, sessionId, turnId, 'failed');
     ctl.turn.status = 'failed';
     ctl.turn.error = TURN_FAILURE_MESSAGE;
     ctl.emit({

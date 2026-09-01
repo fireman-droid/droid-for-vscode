@@ -382,8 +382,11 @@ export function emitQueueState(ctl: ChatControllerInternals): void {
     // Every queue mutation funnels through here, so the recovery
     // checkpoint always mirrors the live queue: a reload restores the
     // texts (restoreQueuedPrompts) instead of silently dropping them.
-    ctl.recoveryStore.writeQueuedTexts(
-      ctl.sessionId,
+    if (ctl.conversationId === null) {
+      return;
+    }
+    ctl.recoveryStore.writeConversationQueuedTexts(
+      ctl.conversationId,
       ctl.queuedPrompts.items.map((item) => item.text),
     );
 }
@@ -407,7 +410,12 @@ export function restoreQueuedPrompts(
     ) {
       return;
     }
-    const texts = ctl.recoveryStore.readQueuedTexts(sessionId);
+    if (ctl.conversationId === null) {
+      return;
+    }
+    const texts = ctl.recoveryStore.readConversationQueuedTexts(
+      ctl.conversationId,
+    );
     if (texts.length === 0) {
       return;
     }

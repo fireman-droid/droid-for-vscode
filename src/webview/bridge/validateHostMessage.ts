@@ -353,6 +353,7 @@ function parseHostSnapshot(
       [
         'type',
         'sequence',
+        'conversationId',
         'sessionId',
         'connection',
         'turn',
@@ -372,10 +373,13 @@ function parseHostSnapshot(
         'tokenUsage',
         'workspaceRoot',
         'queue',
+        'latestChanges',
       ],
     ) ||
     !isSequence(value.sequence) ||
+    !isNullableId(value.conversationId) ||
     !isNullableId(value.sessionId) ||
+    ((value.conversationId === null) !== (value.sessionId === null)) ||
     !isSessionHistoryStatus(value.historyStatus) ||
     typeof value.truncated !== 'boolean' ||
     // Hosts omit the flag when unavailable instead of sending false.
@@ -426,6 +430,16 @@ function parseHostSnapshot(
   ) {
     return undefined;
   }
+  const latestChanges =
+    value.latestChanges === undefined
+      ? undefined
+      : parseLatestConversationChanges(value.latestChanges);
+  if (
+    (value.latestChanges !== undefined && latestChanges === undefined) ||
+    (latestChanges !== undefined && value.sessionId === null)
+  ) {
+    return undefined;
+  }
 
   const connection = parseConnection(value.connection);
   if (connection === undefined) {
@@ -466,6 +480,7 @@ function parseHostSnapshot(
   return {
     type: 'host.snapshot',
     sequence: value.sequence,
+    conversationId: value.conversationId,
     sessionId: value.sessionId,
     connection,
     turn,
@@ -486,10 +501,29 @@ function parseHostSnapshot(
       : { backgroundTurnsAvailable: true }),
     ...(tokenUsage === undefined ? {} : { tokenUsage }),
     ...(queue === undefined ? {} : { queue }),
+    ...(latestChanges === undefined ? {} : { latestChanges }),
     ...(value.workspaceRoot === undefined
       ? {}
       : { workspaceRoot: value.workspaceRoot }),
   };
+}
+
+function parseLatestConversationChanges(
+  value: unknown,
+): Extract<HostToWebviewMessage, { type: 'host.snapshot' }>['latestChanges'] {
+  if (
+    !isStrictRecord(value) ||
+    !hasExactKeys(value, ['turnId', 'prompt', 'files']) ||
+    !isId(value.turnId) ||
+    (value.prompt !== null &&
+      !isBoundedString(value.prompt, MAX_TURN_TEXT_LENGTH))
+  ) {
+    return undefined;
+  }
+  const files = parseChangedFiles(value.files, 0);
+  return files === undefined
+    ? undefined
+    : { turnId: value.turnId, prompt: value.prompt, files };
 }
 
 function parseSessionMission(
@@ -699,9 +733,14 @@ function parseHostConnection(
   value: UnknownRecord,
 ): Extract<HostToWebviewMessage, { type: 'host.connection' }> | undefined {
   if (
-    !hasExactKeys(value, ['type', 'sequence', 'sessionId', 'connection']) ||
+    !hasExactKeys(
+      value,
+      ['type', 'sequence', 'conversationId', 'sessionId', 'connection'],
+    ) ||
     !isSequence(value.sequence) ||
-    !isNullableId(value.sessionId)
+    !isNullableId(value.conversationId) ||
+    !isNullableId(value.sessionId) ||
+    ((value.conversationId === null) !== (value.sessionId === null))
   ) {
     return undefined;
   }
@@ -714,6 +753,7 @@ function parseHostConnection(
   return {
     type: 'host.connection',
     sequence: value.sequence,
+    conversationId: value.conversationId,
     sessionId: value.sessionId,
     connection,
   };

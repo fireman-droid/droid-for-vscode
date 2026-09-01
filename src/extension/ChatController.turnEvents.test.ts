@@ -31,6 +31,7 @@ import {
   usageFixture,
   waitForConnected,
 } from './controllerTestHarness';
+import { selectRecoverySession } from './recoveryStoreTestSupport';
 import { MAX_THINKING_DELTA_LENGTH } from '../shared/bridgeMessages';
 import type { TurnSnapshotStore } from './turnSnapshots';
 
@@ -815,7 +816,14 @@ describe('ChatController', () => {
 
       expect(loadHistory).toHaveBeenCalledOnce();
       expect(
-        snapshots(messages).at(-1)?.transcript.at(-1),
+        snapshots(messages)
+          .at(-1)
+          ?.transcript.find(
+            (item) =>
+              item.kind === 'assistant' &&
+              item.text ===
+                'Here is the completed research summary.',
+          ),
       ).toMatchObject({
         kind: 'assistant',
         text: 'Here is the completed research summary.',
@@ -1004,7 +1012,7 @@ describe('ChatController', () => {
     // running on screen forever.
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.selectSession('replay-session');
+    selectRecoverySession(seed, 'replay-session');
     await seed.flush();
     const completed = {
       type: 'explore',
@@ -1125,7 +1133,7 @@ describe('ChatController', () => {
   it('surfaces the read-only mission identity of a resumed session', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.selectSession('mission-session');
+    selectRecoverySession(seed, 'mission-session');
     await seed.flush();
     const history: SessionHistoryLoader = {
       loadHistory: vi.fn(async () => ({
@@ -1221,7 +1229,7 @@ describe('ChatController', () => {
   it('seeds cumulative token usage from history when resuming a session', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.selectSession('usage-session');
+    selectRecoverySession(seed, 'usage-session');
     await seed.flush();
     const cumulative = usageFixture({ factoryCredits: 2 });
     const history: SessionHistoryLoader = {

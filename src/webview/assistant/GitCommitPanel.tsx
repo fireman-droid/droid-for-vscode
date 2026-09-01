@@ -23,9 +23,9 @@ import type { GitCommitFlowState } from "./store";
 
 export interface GitCommitFlowContextValue {
   readonly state: GitCommitFlowState;
-  /** Turn of the transcript's latest changes card, if any. */
+  /** Turn of the Conversation's canonical latest Changes, if any. */
   readonly latestChangesTurnId: string | null;
-  /** Prompt that produced the latest changes card. */
+  /** Canonical prompt that produced the latest settled Changes. */
   readonly promptText: string | null;
   readonly onRequestStatus: (turnId: string) => void;
   readonly onCommit: (

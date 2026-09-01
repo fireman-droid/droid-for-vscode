@@ -30,6 +30,11 @@ import {
   waitForConnected,
   waitForInteraction,
 } from './controllerTestHarness';
+import {
+  readRecoverySession,
+  selectRecoverySession,
+  writeRecoverySession,
+} from './recoveryStoreTestSupport';
 import type { TurnSnapshotStore } from './turnSnapshots';
 import { RECOVERED_FINAL_HISTORY_TIMEOUT_MS } from './chat/recovery';
 
@@ -88,7 +93,7 @@ describe('ChatController', () => {
   it('resumes only a catalog-validated recovered session and restores its transcript', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.writeSession(
+    writeRecoverySession(seed,
       'saved-session',
       appendAcceptedUserPrompt(
         createHostTranscriptState('complete'),
@@ -96,7 +101,7 @@ describe('ChatController', () => {
         'Recovered prompt',
       ),
     );
-    seed.selectSession('saved-session');
+    selectRecoverySession(seed, 'saved-session');
     await seed.flush();
     const recovery = new SessionRecoveryStore(
       persistence,
@@ -122,7 +127,7 @@ describe('ChatController', () => {
     });
     expect(snapshots(messages).at(-1)).toMatchObject({
       sessionId: 'saved-session',
-      historyStatus: 'partial',
+      historyStatus: 'complete',
       transcript: [
         expect.objectContaining({
           kind: 'user',
@@ -135,7 +140,7 @@ describe('ChatController', () => {
   it('does not backfill snapshot files from recovered canonical Changes', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.writeSession('saved-session', {
+    writeRecoverySession(seed, 'saved-session', {
       transcript: [
         {
           id: 'changes-saved-turn',
@@ -149,7 +154,7 @@ describe('ChatController', () => {
       historyStatus: 'complete',
       truncated: false,
     });
-    seed.selectSession('saved-session');
+    selectRecoverySession(seed, 'saved-session');
     await seed.flush();
     const snapshotsStore = {
       read: vi.fn(() => ({ turnId: 'saved-turn' })),
@@ -175,7 +180,7 @@ describe('ChatController', () => {
   it('emits an early connecting snapshot from the recovery checkpoint before runtime activation completes', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.writeSession(
+    writeRecoverySession(seed,
       'saved-session',
       appendAcceptedUserPrompt(
         createHostTranscriptState('complete'),
@@ -183,7 +188,7 @@ describe('ChatController', () => {
         'Recovered prompt',
       ),
     );
-    seed.selectSession('saved-session');
+    selectRecoverySession(seed, 'saved-session');
     await seed.flush();
     const activation = deferred<RuntimeAvailability>();
     const runtime = createMockRuntime();
@@ -227,7 +232,7 @@ describe('ChatController', () => {
   it('does not emit an early snapshot without a recovered checkpoint transcript', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.selectSession('saved-session');
+    selectRecoverySession(seed, 'saved-session');
     await seed.flush();
     const runtime = createMockRuntime();
     runtime.initialize.mockResolvedValue(available('saved-session'));
@@ -246,10 +251,10 @@ describe('ChatController', () => {
     });
   });
 
-  it('persists complete public history as authoritative before activation commit', async () => {
+  it('keeps canonical recovery when public history has no trusted prefix', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.writeSession(
+    writeRecoverySession(seed,
       'saved-session',
       appendAcceptedUserPrompt(
         createHostTranscriptState('partial'),
@@ -257,7 +262,7 @@ describe('ChatController', () => {
         'Cached fallback',
       ),
     );
-    seed.selectSession('saved-session');
+    selectRecoverySession(seed, 'saved-session');
     await seed.flush();
     const recovery = new SessionRecoveryStore(
       persistence,
@@ -287,7 +292,10 @@ describe('ChatController', () => {
         state: historyState,
       })),
     };
-    const writeSession = vi.spyOn(recovery, 'writeSession');
+    const writeDisplay = vi.spyOn(
+      recovery,
+      'writeActiveDisplay',
+    );
     const runtime = createMockRuntime();
     runtime.initialize.mockResolvedValue(available('saved-session'));
     const { controller, messages } = createController(
@@ -307,22 +315,39 @@ describe('ChatController', () => {
     });
     expect(snapshots(messages).at(-1)).toMatchObject({
       sessionId: 'saved-session',
-      historyStatus: 'complete',
+      historyStatus: 'partial',
       truncated: false,
-      transcript: historyState.transcript,
+      transcript: [
+        expect.objectContaining({
+          kind: 'user',
+          text: 'Cached fallback',
+        }),
+      ],
     });
-    expect(writeSession).toHaveBeenCalledWith(
+    expect(writeDisplay).toHaveBeenCalledWith(
+      'saved-session',
       'saved-session',
       expect.objectContaining({
-        historyStatus: 'complete',
+        historyStatus: 'partial',
         truncated: false,
-        transcript: historyState.transcript,
+        transcript: [
+          expect.objectContaining({
+            kind: 'user',
+            text: 'Cached fallback',
+          }),
+        ],
       }),
+      null,
     );
-    expect(recovery.readSession('saved-session')).toMatchObject({
-      historyStatus: 'complete',
+    expect(readRecoverySession(recovery, 'saved-session')).toMatchObject({
+      historyStatus: 'partial',
       truncated: false,
-      transcript: historyState.transcript,
+      transcript: [
+        expect.objectContaining({
+          kind: 'user',
+          text: 'Cached fallback',
+        }),
+      ],
     });
   });
 
@@ -337,7 +362,11 @@ describe('ChatController', () => {
           status: 'available',
           state: {
             transcript: [
-              { id: 'user-1', kind: 'user', text: 'Long task' },
+              {
+                id: 'user-1',
+                kind: 'user',
+                text: 'Recovered prompt',
+              },
             ],
             historyStatus: 'complete',
             truncated: false,
@@ -347,7 +376,11 @@ describe('ChatController', () => {
           status: 'available',
           state: {
             transcript: [
-              { id: 'user-1', kind: 'user', text: 'Long task' },
+              {
+                id: 'user-1',
+                kind: 'user',
+                text: 'Recovered prompt',
+              },
               {
                 id: 'assistant-1',
                 kind: 'assistant',
@@ -630,7 +663,7 @@ describe('ChatController', () => {
   it('retains a durably checkpointed recovered-history failure after Reload', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.writeSession(
+    writeRecoverySession(seed,
       'saved-session',
       appendAcceptedUserPrompt(
         createHostTranscriptState('complete'),
@@ -638,7 +671,7 @@ describe('ChatController', () => {
         'Recovered prompt',
       ),
     );
-    seed.selectSession('saved-session');
+    selectRecoverySession(seed, 'saved-session');
     await seed.flush();
 
     const firstHistory: SessionHistoryLoader = {
@@ -709,7 +742,11 @@ describe('ChatController', () => {
           status: 'available',
           state: {
             transcript: [
-              { id: 'user-1', kind: 'user', text: 'Long task' },
+              {
+                id: 'user-1',
+                kind: 'user',
+                text: 'Recovered prompt',
+              },
             ],
             historyStatus: 'complete',
             truncated: false,
@@ -719,7 +756,11 @@ describe('ChatController', () => {
           status: 'available',
           state: {
             transcript: [
-              { id: 'user-1', kind: 'user', text: 'Long task' },
+              {
+                id: 'user-1',
+                kind: 'user',
+                text: 'Recovered prompt',
+              },
               {
                 id: 'assistant-1',
                 kind: 'assistant',
@@ -976,7 +1017,7 @@ describe('ChatController', () => {
   it('falls back to recovery when public old-session history is unavailable', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.writeSession(
+    writeRecoverySession(seed,
       'saved-session',
       appendAcceptedUserPrompt(
         createHostTranscriptState('partial'),
@@ -984,7 +1025,7 @@ describe('ChatController', () => {
         'Cached fallback',
       ),
     );
-    seed.selectSession('saved-session');
+    selectRecoverySession(seed, 'saved-session');
     await seed.flush();
     const history: SessionHistoryLoader = {
       loadHistory: vi.fn(async () => {
@@ -1014,7 +1055,7 @@ describe('ChatController', () => {
   it('starts the resume runtime while history is still loading', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.selectSession('saved-session');
+    selectRecoverySession(seed, 'saved-session');
     await seed.flush();
     const pendingHistory = deferred<{
       readonly status: 'available';
@@ -1060,14 +1101,14 @@ describe('ChatController', () => {
     };
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.selectSession('saved-session');
+    selectRecoverySession(seed, 'saved-session');
     await seed.flush();
     const recovery = new SessionRecoveryStore(
       persistence,
       'recovery',
       0,
     );
-    const writeSession = vi.spyOn(recovery, 'writeSession');
+    const writeSession = vi.spyOn(recovery, 'writeActiveDisplay');
     const staleHistory = deferred<{
       readonly status: 'available';
       readonly state: ReturnType<typeof createHostTranscriptState>;
@@ -1128,7 +1169,11 @@ describe('ChatController', () => {
     expect(candidate.dispose).toHaveBeenCalled();
     expect(candidate.sendTurn).not.toHaveBeenCalled();
     expect(writeSession).not.toHaveBeenCalled();
-    expect(recovery.readSession('saved-session')).toBeUndefined();
+    expect(readRecoverySession(recovery, 'saved-session')).toEqual({
+      transcript: [],
+      historyStatus: 'unavailable',
+      truncated: false,
+    });
     await controller.dispose();
   });
 
@@ -1202,7 +1247,7 @@ describe('ChatController', () => {
   it('falls back to a new session when recovery is missing from the latest catalog', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.selectSession('forged-or-stale');
+    selectRecoverySession(seed, 'forged-or-stale');
     await seed.flush();
     const runtime = createMockRuntime();
     runtime.initialize.mockResolvedValue(available('fresh-session'));
@@ -1394,7 +1439,7 @@ describe('ChatController', () => {
   it('marks an uncached external session unavailable then partial after an observed turn', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.selectSession('external-session');
+    selectRecoverySession(seed, 'external-session');
     await seed.flush();
     const recovery = new SessionRecoveryStore(
       persistence,
@@ -1429,7 +1474,7 @@ describe('ChatController', () => {
   it('preserves a recovered partial-history cache', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
-    seed.writeSession(
+    writeRecoverySession(seed,
       'partial-session',
       appendAcceptedUserPrompt(
         createHostTranscriptState('partial'),
@@ -1437,7 +1482,7 @@ describe('ChatController', () => {
         'Cached fragment',
       ),
     );
-    seed.selectSession('partial-session');
+    selectRecoverySession(seed, 'partial-session');
     await seed.flush();
     const runtime = createMockRuntime();
     runtime.initialize.mockResolvedValue(available('partial-session'));

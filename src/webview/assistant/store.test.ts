@@ -13,6 +13,7 @@ function snapshot(
   return {
     type: 'host.snapshot',
     sequence,
+    conversationId: sessionId,
     sessionId,
     connection: { status: 'connected' },
     turn: null,
@@ -99,6 +100,29 @@ describe('assistantWebviewReducer', () => {
       message: snapshot(1),
     });
     expect(state.backgroundTurnsAvailable).toBe(false);
+  });
+
+  it('tracks canonical latest Changes independently of transcript rows', () => {
+    const state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: {
+        ...snapshot(0),
+        transcript: [],
+        latestChanges: {
+          turnId: 'turn-a',
+          prompt: 'Change the app',
+          files: [
+            { path: 'src/app.ts', additions: 2, deletions: 1 },
+          ],
+        },
+      },
+    });
+    expect(state.transcript).toEqual([]);
+    expect(state.latestChanges).toEqual({
+      turnId: 'turn-a',
+      prompt: 'Change the app',
+      files: [{ path: 'src/app.ts', additions: 2, deletions: 1 }],
+    });
   });
 
   it('flips one catalog row on session.running without a refresh', () => {
@@ -493,6 +517,7 @@ describe('assistantWebviewReducer', () => {
       message: {
         type: 'host.connection',
         sequence: 3,
+        conversationId: 'session-b',
         sessionId: 'session-b',
         connection: { status: 'connecting' },
       },
@@ -551,11 +576,54 @@ describe('assistantWebviewReducer', () => {
       message: {
         type: 'host.connection',
         sequence: 3,
+        conversationId: 'session-b',
         sessionId: 'session-b',
         connection: { status: 'connecting' },
       },
     });
     expect(state.tokenUsage).toEqual({ cumulative: null, lastTurn: null });
+  });
+
+  it('preserves Conversation-scoped state across a backend session change', () => {
+    const transcript = [
+      { id: 'user-1', kind: 'user' as const, text: 'Keep this.' },
+    ];
+    let state = assistantWebviewReducer(initialAssistantWebviewState, {
+      type: 'host.message',
+      message: {
+        ...snapshot(0),
+        conversationId: 'conversation-a',
+        transcript,
+      },
+    });
+    state = {
+      ...state,
+      attachments: [
+        {
+          id: 'attachment-1',
+          kind: 'text',
+          name: 'notes.md',
+          sizeBytes: 12,
+          truncated: false,
+        },
+      ],
+    };
+
+    state = assistantWebviewReducer(state, {
+      type: 'host.message',
+      message: {
+        type: 'host.connection',
+        sequence: 1,
+        conversationId: 'conversation-a',
+        sessionId: 'session-b',
+        connection: { status: 'connecting' },
+      },
+    });
+
+    expect(state.sessionId).toBe('session-b');
+    expect(state.transcript).toEqual(transcript);
+    expect(state.attachments).toHaveLength(1);
+    expect(state.settings.status).toBe('loading');
   });
 
   it('upgrades a Task row with a subagent summary and settles it', () => {

@@ -40,9 +40,9 @@ import { exportDiagnosticsBundle } from './exportDiagnostics';
 import { LocalDiagnostics } from './LocalDiagnostics';
 import {
   SESSION_RECOVERY_STORAGE_KEY,
-  SessionRecoveryStore,
   type SessionRecoveryPersistence,
 } from './SessionRecoveryStore';
+import { createPersistentSessionRecoveryStore } from './createPersistentSessionRecoveryStore';
 import {
   exportActiveSessionAsMarkdown,
   readPersistedSelectedSessionId,
@@ -432,7 +432,7 @@ export function activate(context: vscode.ExtensionContext): void {
     daemonSessions !== null;
   // Shared with the export command, which reads the same recovery
   // store, catalog, and history loader the controller uses.
-  const recoveryStore = new SessionRecoveryStore(persistence);
+  const recoveryStore = createPersistentSessionRecoveryStore(persistence, context.globalStorageUri);
   const sessionCatalog = new FactorySessionCatalog();
   const previewController = new PreviewPanelController(diagnostics);
   // Read-only terminal mirror of execute-command output; takeover is

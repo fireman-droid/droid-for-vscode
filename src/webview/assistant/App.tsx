@@ -23,7 +23,6 @@ import { DroidThread, ToolChangesContext } from './Thread';
 import { GitCommitFlowContext, type GitCommitFlowContextValue } from './GitCommitPanel';
 import { CustomModelsContext, useCustomModelsFlow } from './customModelsFlow';
 import { ModelsPage } from './ModelsPage';
-import { findLatestChangesContext, findLatestChangesItem } from './gitCommitDraft';
 import { selectPlanAnchors } from './planAnchor';
 import { QueuedMessages } from './QueuedMessages';
 import { ReviewDockSlot } from './reviewDockSlot';
@@ -790,13 +789,17 @@ export function App(): React.JSX.Element {
     },
     [connectionStatus, sessionId, vscode],
   );
-  const changesContext = useMemo(
-    () => findLatestChangesContext(state.transcript),
-    [state.transcript],
-  );
   const latestChanges = useMemo(
-    () => findLatestChangesItem(state.transcript),
-    [state.transcript],
+    () =>
+      state.latestChanges === null
+        ? null
+        : {
+            id: `changes-ledger:${state.latestChanges.turnId}`,
+            kind: 'changes' as const,
+            turnId: state.latestChanges.turnId,
+            files: state.latestChanges.files,
+          },
+    [state.latestChanges],
   );
   const toolChanges = useMemo(
     () => ({
@@ -817,14 +820,14 @@ export function App(): React.JSX.Element {
   const gitFlow = useMemo<GitCommitFlowContextValue>(
     () => ({
       state: state.git,
-      latestChangesTurnId: changesContext?.turnId ?? null,
-      promptText: changesContext?.prompt ?? null,
+      latestChangesTurnId: state.latestChanges?.turnId ?? null,
+      promptText: state.latestChanges?.prompt ?? null,
       onRequestStatus: handleGitRequestStatus,
       onCommit: handleGitCommit,
     }),
     [
       state.git,
-      changesContext,
+      state.latestChanges,
       handleGitRequestStatus,
       handleGitCommit,
     ],

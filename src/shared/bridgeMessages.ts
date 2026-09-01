@@ -215,7 +215,7 @@ export {
 // results, and synchronizes editable Plan documents with Cursor; v29
 // adds staged-image preview, replacement, and public HTTPS ingestion;
 // v30 adds Host-owned sequential Diff review and safe Turn restore.
-export const BRIDGE_PROTOCOL_VERSION = 30 as const;
+export const BRIDGE_PROTOCOL_VERSION = 31 as const;
 export const MAX_TURN_TEXT_LENGTH = 200_000;
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 export const MAX_THINKING_DELTA_LENGTH = 16_384;
@@ -1604,10 +1604,11 @@ export type SessionTranscriptItem =
   | AskUserResultTranscriptItem
   | DiagnosticTranscriptItem
   | ImageTranscriptItem;
-
+export interface LatestConversationChanges { readonly turnId: string; readonly prompt: string | null; readonly files: readonly ChangedFileSummary[]; }
 export interface HostSnapshotMessage {
   readonly type: 'host.snapshot';
   readonly sequence: number;
+  readonly conversationId: string | null;
   readonly sessionId: string | null;
   readonly connection: ConnectionState;
   readonly turn: {
@@ -1622,6 +1623,7 @@ export interface HostSnapshotMessage {
   readonly transcript: readonly SessionTranscriptItem[];
   readonly historyStatus: SessionHistoryStatus;
   readonly truncated: boolean;
+  readonly latestChanges?: LatestConversationChanges;
   /**
    * Absolute workspace folder the host is bound to. The webview uses
    * it to rebase absolute transcript paths into workspace-relative
@@ -1668,10 +1670,10 @@ export interface HostSnapshotMessage {
    */
   readonly backgroundTurnsAvailable?: boolean;
 }
-
 export interface HostConnectionMessage {
   readonly type: 'host.connection';
   readonly sequence: number;
+  readonly conversationId: string | null;
   readonly sessionId: string | null;
   readonly connection: ConnectionState;
 }
