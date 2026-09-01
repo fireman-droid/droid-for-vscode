@@ -53,17 +53,17 @@
 
 .dvx-review-dock-head {
   display: grid;
-  min-height: 42px;
+  min-height: 34px;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
-  padding: 5px 8px 5px 10px;
+  padding: 3px 8px 3px 10px;
 }
 
 .dvx-review-dock-toggle {
   display: flex;
   min-width: 0;
-  height: 30px;
+  height: 24px;
   align-items: center;
   gap: 7px;
   padding: 0;
@@ -142,7 +142,7 @@
 
 .dvx-shell .dvx-review-dock-review {
   display: inline-flex;
-  height: 28px;
+  height: 24px;
   grid-column: 2;
   align-items: center;
   justify-content: center;
@@ -691,8 +691,8 @@
   }
 
   .dvx-review-dock-head {
-    min-height: 38px;
-    padding: 4px 7px 4px 9px;
+    min-height: 32px;
+    padding: 2px 7px 2px 9px;
   }
 
   .dvx-review-scope-row {
