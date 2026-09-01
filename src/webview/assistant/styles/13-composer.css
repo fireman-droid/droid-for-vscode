@@ -249,7 +249,7 @@
 
 .dvx-shell .dvx-mode-popover {
   left: auto;
-  width: 168px;
+  width: 148px;
   max-width: calc(100% - 8px);
   padding: 6px;
   border: 1px solid color-mix(in srgb, var(--dvx-border-strong) 72%, transparent);
