@@ -261,15 +261,6 @@ export function ReviewDock({
                   </button>
                 ))}
               </div>
-              {pendingScope !== null ? (
-                <span className="dvx-review-progress" role="status">
-                  <span
-                    className="dvx-review-progress-spinner"
-                    aria-hidden="true"
-                  />
-                  Loading…
-                </span>
-              ) : null}
             </div>
             {review === null ? (
               <div className="dvx-review-dock-branch-note">

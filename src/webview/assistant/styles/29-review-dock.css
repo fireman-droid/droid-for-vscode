@@ -1,78 +1,84 @@
 /* Host-owned sequential Diff review. The Dock controls scope, order,
    progress and safe actions; code remains in Cursor's native Diff. */
 .dvx-review-dock {
-  --dvx-review-accent: #48646c;
-  --dvx-review-accent-hover: #3c565d;
+  --dvx-review-accent: #4b4b4b;
+  --dvx-review-accent-hover: #363636;
   --dvx-review-on-accent: #fff;
   --dvx-review-accent-soft: color-mix(
     in srgb,
-    var(--dvx-review-accent) 10%,
+    var(--dvx-ink) 7%,
     transparent
   );
   --dvx-review-surface: color-mix(
     in srgb,
-    var(--dvx-raised) 94%,
-    #f4efe5
+    var(--dvx-raised) 96%,
+    var(--dvx-soft)
   );
   --dvx-review-track: color-mix(
     in srgb,
-    var(--dvx-soft) 72%,
-    #e9e3d8
+    var(--dvx-soft) 82%,
+    var(--dvx-raised)
+  );
+  --dvx-review-line: color-mix(
+    in srgb,
+    var(--dvx-border) 66%,
+    transparent
+  );
+  --dvx-review-line-strong: color-mix(
+    in srgb,
+    var(--dvx-border-strong) 58%,
+    transparent
   );
   box-sizing: border-box;
   width: 100%;
   max-width: var(--dvx-column-max);
   margin: 0 auto 8px;
   overflow: hidden;
-  border: 1px solid color-mix(
-    in srgb,
-    var(--dvx-border-strong) 72%,
-    #a59d8e
-  );
-  border-radius: 16px;
+  border: 1px solid var(--dvx-review-line-strong);
+  border-radius: 12px;
   background: var(--dvx-review-surface);
-  box-shadow: 0 10px 28px -25px rgb(47 41 31 / 54%);
+  box-shadow: 0 10px 28px -25px rgb(0 0 0 / 24%);
   user-select: none;
 }
 
 .dvx-shell[data-theme='dark'] .dvx-review-dock {
-  --dvx-review-accent: #5f8588;
-  --dvx-review-accent-hover: #72979a;
-  --dvx-review-on-accent: #fff;
-  --dvx-review-accent-soft: rgb(95 133 136 / 16%);
-  --dvx-review-surface: #11110f;
-  --dvx-review-track: #1b1a17;
-  box-shadow: 0 12px 28px -22px rgb(0 0 0 / 72%);
+  --dvx-review-accent: #c9c9c9;
+  --dvx-review-accent-hover: #dedede;
+  --dvx-review-on-accent: #171717;
+  --dvx-review-accent-soft: rgb(255 255 255 / 7%);
+  --dvx-review-surface: #141414;
+  --dvx-review-track: #1d1d1d;
+  box-shadow: 0 12px 28px -22px rgb(0 0 0 / 48%);
 }
 
 .dvx-review-dock-head {
   display: grid;
-  min-height: 68px;
+  min-height: 42px;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 14px;
-  padding: 10px 15px 10px 18px;
+  gap: 8px;
+  padding: 5px 8px 5px 10px;
 }
 
 .dvx-review-dock-toggle {
   display: flex;
   min-width: 0;
-  height: 42px;
+  height: 30px;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--dvx-muted);
   font: inherit;
-  font-size: 14px;
+  font-size: 11.5px;
   text-align: left;
   cursor: pointer;
 }
 
 .dvx-review-dock-toggle .dvx-activity-chevron {
-  width: 16px;
-  height: 16px;
+  width: 13px;
+  height: 13px;
   flex: 0 0 auto;
   transition: transform var(--dvx-duration-normal) ease;
 }
@@ -101,7 +107,7 @@
 .dvx-review-dock-status {
   overflow: hidden;
   color: var(--dvx-muted);
-  font-size: 12px;
+  font-size: 10.5px;
   font-weight: 430;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -136,17 +142,17 @@
 
 .dvx-shell .dvx-review-dock-review {
   display: inline-flex;
-  height: 40px;
+  height: 28px;
   grid-column: 2;
   align-items: center;
   justify-content: center;
-  padding: 0 16px;
+  padding: 0 12px;
   border: 1px solid var(--dvx-review-accent);
-  border-radius: 10px;
+  border-radius: 7px;
   background: var(--dvx-review-accent);
   color: var(--dvx-review-on-accent);
   font: inherit;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 650;
   cursor: pointer;
   transition:
@@ -175,24 +181,16 @@
 .dvx-review-dock-body-inner {
   min-height: 0;
   overflow: hidden;
-  border-top: 1px solid color-mix(
-    in srgb,
-    var(--dvx-border) 78%,
-    #b6ad9e
-  );
+  border-top: 1px solid var(--dvx-review-line);
 }
 
 .dvx-review-scope-row {
   display: flex;
-  min-height: 74px;
+  min-height: 44px;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-bottom: 1px solid color-mix(
-    in srgb,
-    var(--dvx-border) 82%,
-    #b6ad9e
-  );
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--dvx-review-line);
 }
 
 .dvx-review-scope-switch {
@@ -200,36 +198,48 @@
   display: grid;
   width: 100%;
   min-width: 0;
-  height: 48px;
+  height: 30px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   flex: 1 1 auto;
   align-items: center;
-  padding: 4px;
+  padding: 3px;
   overflow: hidden;
-  border: 1px solid color-mix(
-    in srgb,
-    var(--dvx-border) 88%,
-    #aaa292
-  );
-  border-radius: 14px;
+  border: 1px solid var(--dvx-review-line-strong);
+  border-radius: 9px;
   background: var(--dvx-review-track);
-  box-shadow: inset 0 1px 2px rgb(64 54 39 / 7%);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 4%);
+}
+
+.dvx-review-scope-switch::before,
+.dvx-review-scope-switch::after {
+  position: absolute;
+  z-index: 1;
+  top: 5px;
+  bottom: 5px;
+  width: 1px;
+  background: var(--dvx-review-line);
+  content: "";
+  pointer-events: none;
+}
+
+.dvx-review-scope-switch::before {
+  left: calc(33.333333% + 1px);
+}
+
+.dvx-review-scope-switch::after {
+  left: calc(66.666667% - 1px);
 }
 
 .dvx-review-scope-slider {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: 4px;
-  width: calc((100% - 8px) / 3);
-  border: 1px solid color-mix(
-    in srgb,
-    var(--dvx-review-accent) 20%,
-    var(--dvx-border)
-  );
-  border-radius: 10px;
+  z-index: 0;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / 3);
+  border: 0;
+  border-radius: 6px;
   background: var(--dvx-review-surface);
-  box-shadow: 0 1px 3px rgb(54 46 34 / 11%);
   pointer-events: none;
   transition:
     transform var(--dvx-duration-normal) var(--dvx-easing-out-strong),
@@ -253,14 +263,14 @@
 .dvx-review-nav button,
 .dvx-review-controls button,
 .dvx-review-confirm button {
-  height: 36px;
-  padding: 0 12px;
+  height: 23px;
+  padding: 0 7px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 5px;
   background: transparent;
   color: var(--dvx-muted);
   font: inherit;
-  font-size: 12px;
+  font-size: 10.5px;
   cursor: pointer;
 }
 
@@ -281,10 +291,10 @@
 
 .dvx-review-scope {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: 100%;
-  padding-inline: 8px;
-  border-radius: 10px;
+  padding-inline: 5px;
+  border-radius: 6px;
   white-space: nowrap;
 }
 
@@ -303,40 +313,17 @@
   gap: 4px;
   margin-left: auto;
   color: var(--dvx-muted);
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.dvx-review-progress-spinner {
-  width: 8px;
-  height: 8px;
-  border: 1px solid currentcolor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: dvx-review-progress-spin 650ms linear infinite;
-}
-
-@keyframes dvx-review-progress-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dvx-review-progress-spinner {
-    border-right-color: currentcolor;
-    animation: none;
-    opacity: 0.55;
-  }
-}
-
 .dvx-review-current {
   display: flex;
-  min-height: 52px;
+  min-height: 38px;
   align-items: center;
-  gap: 14px;
-  padding: 10px 18px 7px 20px;
+  gap: 8px;
+  padding: 5px 10px 4px 12px;
 }
 
 .dvx-review-current-meta {
@@ -344,22 +331,22 @@
   min-width: 0;
   flex: 1;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
 }
 
 .dvx-review-baseline {
   color: var(--dvx-review-accent);
-  font-size: 10.5px;
+  font-size: 9px;
   font-weight: 680;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.05em;
 }
 
 .dvx-review-current-path {
   overflow: hidden;
   color: var(--dvx-ink);
   font-family: var(--dvx-mono);
-  font-size: 11.5px;
+  font-size: 10.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -369,12 +356,12 @@
   flex: 0 0 auto;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: 2px;
 }
 
 .dvx-review-nav {
   display: flex;
-  gap: 4px;
+  gap: 2px;
 }
 
 .dvx-review-nav button:disabled,
@@ -387,7 +374,7 @@
 .dvx-review-dock-files {
   max-height: min(32vh, 240px);
   margin: 0;
-  padding: 0 16px 11px;
+  padding: 2px 9px 6px;
   overflow-y: auto;
   list-style: none;
   overscroll-behavior: contain;
@@ -397,13 +384,13 @@
   display: grid;
   min-width: 0;
   width: 100%;
-  min-height: 41px;
+  min-height: 27px;
   grid-template-columns: 8px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
+  gap: 7px;
+  padding: 3px 7px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 7px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -423,15 +410,15 @@
 }
 
 .dvx-review-file-state {
-  width: 7px;
-  height: 7px;
+  width: 5px;
+  height: 5px;
   border: 1px solid var(--dvx-border-strong);
   border-radius: 50%;
 }
 
 .dvx-review-file-state[data-state='reviewed'] {
-  border-color: var(--dvx-success);
-  background: var(--dvx-success);
+  border-color: var(--dvx-muted);
+  background: var(--dvx-muted);
 }
 
 .dvx-review-file-state[data-state='current'] {
@@ -459,7 +446,7 @@
   min-width: 0;
   color: var(--dvx-muted);
   font-family: var(--dvx-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -468,21 +455,17 @@
   display: inline-flex;
   gap: 4px;
   color: var(--dvx-subtle);
-  font-size: 11px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
 
 .dvx-review-controls {
   display: flex;
-  min-height: 62px;
+  min-height: 42px;
   align-items: center;
-  gap: 9px;
-  padding: 11px 16px;
-  border-top: 1px solid color-mix(
-    in srgb,
-    var(--dvx-border) 82%,
-    #b6ad9e
-  );
+  gap: 4px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--dvx-review-line);
 }
 
 .dvx-review-controls > button:first-child {
@@ -499,7 +482,7 @@
 }
 
 .dvx-review-controls > button:nth-child(2) {
-  border-color: var(--dvx-border);
+  border-color: var(--dvx-review-line-strong);
   background: color-mix(
     in srgb,
     var(--dvx-review-surface) 76%,
@@ -522,14 +505,14 @@
 
 .dvx-review-more-trigger,
 .dvx-review-more-item {
-  height: 36px;
-  padding: 0 10px;
+  height: 23px;
+  padding: 0 7px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 5px;
   background: transparent;
   color: var(--dvx-muted);
   font: inherit;
-  font-size: 12px;
+  font-size: 10.5px;
   text-align: left;
   cursor: pointer;
 }
@@ -563,7 +546,7 @@
   display: none;
   width: min(230px, calc(100vw - 32px));
   padding: 4px;
-  border: 1px solid var(--dvx-border);
+  border: 1px solid var(--dvx-review-line-strong);
   border-radius: 8px;
   background: var(--dvx-raised);
   box-shadow: 0 7px 20px -12px rgb(0 0 0 / 28%);
@@ -708,13 +691,13 @@
   }
 
   .dvx-review-dock-head {
-    min-height: 54px;
-    padding: 7px 10px 7px 12px;
+    min-height: 38px;
+    padding: 4px 7px 4px 9px;
   }
 
   .dvx-review-scope-row {
-    min-height: 60px;
-    padding: 9px 10px;
+    min-height: 40px;
+    padding: 5px 7px;
   }
 
   .dvx-review-scope,
@@ -745,7 +728,8 @@
   }
 
   .dvx-review-scope-slider {
-    border-color: CanvasText;
+    outline: 1px solid CanvasText;
+    outline-offset: -1px;
     background: Canvas;
   }
 }

@@ -125,7 +125,7 @@ describe('ReviewDock', () => {
         'aria-pressed',
       ),
     ).toBe('true');
-    expect(screen.getByRole('status').textContent).toContain('Loading…');
+    expect(screen.queryByText('Loading…')).toBeNull();
     expect(screen.getByRole('button', { name: 'Branch' }).disabled).toBe(true);
 
     rerender(
@@ -173,7 +173,7 @@ describe('ReviewDock', () => {
     );
   });
 
-  it('clears pending scope feedback when opening fails', async () => {
+  it('clears the pending scope lock when opening fails', async () => {
     const user = userEvent.setup();
     const props = callbacks();
     const { rerender } = render(
