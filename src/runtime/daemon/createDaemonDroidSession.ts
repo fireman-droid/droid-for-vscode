@@ -562,8 +562,6 @@ function adaptDaemonSession(
       return result;
     },
     async getContextStats() {
-      // Retained for the SDK-compatible session facade and capability
-      // probing. These cumulative totals do not drive DroidVisX's meter.
       const breakdown = await droid.sessions.getContextBreakdown(
         session.id,
       );
@@ -575,19 +573,14 @@ function adaptDaemonSession(
         updatedAt: new Date().toISOString(),
       };
     },
-    async readContextWindowSource() {
+    async readContextBreakdown() {
       const breakdown = await droid.sessions.getContextBreakdown(
         session.id,
       );
-      const lastCall = breakdown.lastCallCompactionTokens;
-      // Range and rounding belong to projectContextWindow, which owns
-      // the same normalization for both runtime modes.
       return {
+        used: breakdown.usedTokens,
+        remaining: breakdown.freeTokens,
         limit: breakdown.contextBudget,
-        lastCallTokenUsage:
-          lastCall === undefined
-            ? { status: 'missing' }
-            : { status: 'available', used: lastCall },
       };
     },
     async rewind(params) {

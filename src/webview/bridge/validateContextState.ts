@@ -64,9 +64,8 @@ function parseContextStats(
   if (availability === 'unavailable') {
     if (
       !hasExactKeys(value, ['availability', 'reason']) ||
-      (value.reason !== 'no-last-call' &&
-        value.reason !== 'invalid-last-call' &&
-        value.reason !== 'invalid-budget')
+      (value.reason !== 'unsupported' &&
+        value.reason !== 'invalid-breakdown')
     ) {
       return undefined;
     }
@@ -75,23 +74,14 @@ function parseContextStats(
       reason: value.reason,
     };
   }
-  const hasCompactionDetected =
-    Object.prototype.hasOwnProperty.call(value, 'compactionDetected');
   if (
     availability !== 'available' ||
-    !hasExactKeys(
-      value,
-      hasCompactionDetected
-        ? [
-            'availability',
-            'used',
-            'remaining',
-            'limit',
-            'compactionDetected',
-          ]
-        : ['availability', 'used', 'remaining', 'limit'],
-    ) ||
-    (hasCompactionDetected && value.compactionDetected !== true) ||
+    !hasExactKeys(value, [
+      'availability',
+      'used',
+      'remaining',
+      'limit',
+    ]) ||
     !isContextNumber(value.used) ||
     !isContextNumber(value.remaining) ||
     !isContextNumber(value.limit) ||
@@ -106,7 +96,6 @@ function parseContextStats(
     used: value.used,
     remaining: value.remaining,
     limit: value.limit,
-    ...(hasCompactionDetected ? { compactionDetected: true } : {}),
   };
 }
 

@@ -927,7 +927,7 @@ describe('FactoryDroidRuntime', () => {
       status: 'unavailable',
     });
   });
-  it('uses only last-call usage even when SDK totals exceed the budget', async () => {
+  it('uses the official Context Breakdown instead of SDK token totals', async () => {
     const session = createMockSession(async function* () {});
     session.getContextStats.mockResolvedValue({
       used: 101,
@@ -935,6 +935,11 @@ describe('FactoryDroidRuntime', () => {
       limit: 100,
       accuracy: ContextStatsAccuracy.Estimated,
       updatedAt: new Date().toISOString(),
+    });
+    session.readContextBreakdown.mockResolvedValue({
+      used: 63,
+      remaining: 37,
+      limit: 100,
     });
     const diagnostics = { record: vi.fn() };
     const runtime = new FactoryDroidRuntime({
@@ -946,36 +951,35 @@ describe('FactoryDroidRuntime', () => {
 
     await expect(runtime.readContextWindow()).resolves.toEqual({
       availability: 'available',
-      used: 40,
-      remaining: 60,
+      used: 63,
+      remaining: 37,
       limit: 100,
     });
+    expect(session.getContextStats).not.toHaveBeenCalled();
     expect(diagnostics.record).toHaveBeenCalledWith({
       level: 'info',
       name: 'runtime.context.finished',
       attributes: {
         durationMs: expect.any(Number),
         outcome: 'available',
-        source: 'last-call',
-        used: 40,
+        source: 'context-breakdown',
+        used: 63,
+        remaining: 37,
         limit: 100,
       },
     });
   });
-  it('holds the confirmed window across a small auxiliary call', async () => {
-    const session = createMockSession(async function* () {});
-    const source = (used: number) => ({
-      limit: 1000,
-      lastCallTokenUsage: { status: 'available' as const, used },
-    });
-    session.readContextWindowSource.mockResolvedValue(source(800));
+  it('reports Context unavailable when the Runtime has no official breakdown', async () => {
+    const session: FactoryDroidSession = createMockSession(
+      async function* () {},
+    );
+    session.readContextBreakdown = undefined;
     const runtime = createRuntime(async () => session);
     await runtime.initialize('C:\\workspace');
-    await runtime.readContextWindow();
-    session.readContextWindowSource.mockResolvedValue(source(73));
 
-    await expect(runtime.readContextWindow()).resolves.toMatchObject({
-      used: 800,
+    await expect(runtime.readContextWindow()).resolves.toEqual({
+      availability: 'unavailable',
+      reason: 'unsupported',
     });
   });
   it('projects only BYOK models from the real startup catalog', async () => {
@@ -1074,16 +1078,14 @@ describe('FactoryDroidRuntime', () => {
       'Droid returned invalid session settings.',
     );
     session.settings.interactionMode = DroidInteractionMode.Auto;
-    session.readContextWindowSource.mockResolvedValue({
+    session.readContextBreakdown.mockResolvedValue({
+      used: 0,
+      remaining: 0,
       limit: -1,
-      lastCallTokenUsage: {
-        status: 'available',
-        used: 0,
-      },
     });
     await expect(runtime.readContextWindow()).resolves.toEqual({
       availability: 'unavailable',
-      reason: 'invalid-budget',
+      reason: 'invalid-breakdown',
     });
     expect(diagnostics.record).toHaveBeenCalledWith({
       level: 'info',
@@ -1091,9 +1093,7 @@ describe('FactoryDroidRuntime', () => {
       attributes: {
         durationMs: expect.any(Number),
         outcome: 'unavailable',
-        reason: 'invalid-budget',
-        budget: -1,
-        lastCall: 0,
+        reason: 'invalid-breakdown',
       },
     });
     await expect(
@@ -1119,7 +1119,7 @@ describe('FactoryDroidRuntime', () => {
 
   it('replaces SDK read and update errors with generic runtime failures', async () => {
     const session = createMockSession(async function* () {});
-    session.readContextWindowSource.mockRejectedValue(
+    session.readContextBreakdown.mockRejectedValue(
       new Error('sensitive context failure'),
     );
     session.updateSettings.mockRejectedValue(
@@ -2272,14 +2272,12 @@ function createMockSession(
         updatedAt: new Date().toISOString(),
       }),
     ),
-    readContextWindowSource: vi.fn<
-      NonNullable<FactoryDroidSession['readContextWindowSource']>
+    readContextBreakdown: vi.fn<
+      NonNullable<FactoryDroidSession['readContextBreakdown']>
     >(async () => ({
+      used: 40,
+      remaining: 60,
       limit: 100,
-      lastCallTokenUsage: {
-        status: 'available',
-        used: 40,
-      },
     })),
     close: vi.fn(async () => {}),
   };

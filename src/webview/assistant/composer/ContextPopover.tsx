@@ -133,31 +133,22 @@ function ContextUsage({
 }): React.JSX.Element {
   if (stats.availability === 'unavailable') {
     const detail =
-      stats.reason === 'no-last-call'
-        ? 'Droid has not reported a provider call for this session yet.'
-        : stats.reason === 'invalid-budget'
-          ? 'The model context budget could not be validated.'
-          : 'The latest provider-call usage could not be validated.';
+      stats.reason === 'unsupported'
+        ? 'This Runtime does not expose the official current Context Breakdown.'
+        : 'The current Context Breakdown could not be validated.';
     return (
       <div className="dvx-context-usage dvx-context-usage-unavailable">
         <div className="dvx-context-usage-summary">
           <strong>Current window unavailable</strong>
         </div>
         <p className="dvx-context-usage-note">
-          {detail} The meter appears only when an exact latest-call
-          numerator is available.
+          {detail}
         </p>
       </div>
     );
   }
   const usedPercent = (stats.used / stats.limit) * 100;
   const roundedPercent = Math.round(usedPercent);
-  const windowNote =
-    stats.compactionDetected === true
-      ? 'Automatic compaction detected. The meter now reflects the compacted model call.'
-      : roundedPercent >= 100
-        ? 'This is the latest completed model call. Automatic compaction is checked when the next model call starts.'
-        : null;
   // Legend scope: session totals when the SDK reported them, else the
   // last turn (history sessions carry no per-turn usage and fresh
   // sessions may carry only one scope).
@@ -206,11 +197,6 @@ function ContextUsage({
           }}
         />
       </div>
-      {windowNote === null ? null : (
-        <p className="dvx-context-usage-note" role="status">
-          {windowNote}
-        </p>
-      )}
       {legend.length === 0 ? null : (
         <ul className="dvx-context-legend" aria-label="Session token totals">
           {legend.map((category) => (
@@ -254,7 +240,7 @@ function ContextUsage({
         <p className="dvx-context-usage-note">
           {lastTurn === null
             ? 'Per-turn detail appears after the next completed turn.'
-            : 'Category counts are session totals. The meter is the latest call.'}
+            : 'Category counts are session totals. The meter is the current Context Breakdown.'}
         </p>
       ) : null}
     </div>

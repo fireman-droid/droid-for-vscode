@@ -191,7 +191,8 @@ Cursor 内真实行为和视觉仍以用户验收为准。
 
 - 插件面板目前以读取状态为主
 - 子代理只展示公开通知和持久化历史能证明的内容，不构造团队树
-- Context 只展示可信的最新调用窗口数据，缺失时显示不可用
+- Context 使用 daemon 官方 Context Breakdown 的 `usedTokens`、`freeTokens` 和
+  `contextBudget`，百分比与 Droid CLI 状态栏一致；Process 模式没有同等来源时显示不可用
 
 ## 不可用或受限
 

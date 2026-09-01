@@ -33,15 +33,6 @@ describe('createModelCatalogCaptureTransport', () => {
           reasoningEffort: ReasoningEffort.Medium,
         },
         availableModels: [availableModel()],
-        ...(responseKind === 'session'
-          ? {
-              lastCallTokenUsage: {
-                inputTokens: 40,
-                cacheReadTokens: 50,
-                outputTokens: 10,
-              },
-            }
-          : {}),
         ...(responseKind === 'sessionId'
           ? { sessionId: 'session-1' }
           : {}),
@@ -56,67 +47,9 @@ describe('createModelCatalogCaptureTransport', () => {
       source.receive(message);
 
       expect(capture.readAvailableModels()).toEqual([availableModel()]);
-      expect(capture.readLastCallTokenUsage()).toEqual(
-        responseKind === 'session'
-          ? {
-              status: 'available',
-              used: 100,
-            }
-          : { status: 'missing' },
-      );
       expect(forwarded).toHaveBeenCalledWith(message);
     },
   );
-
-  it.each([
-    {
-      inputTokens: -1,
-      cacheReadTokens: 0,
-      outputTokens: 0,
-    },
-    {
-      inputTokens: 1.5,
-      cacheReadTokens: 0,
-      outputTokens: 0,
-    },
-    {
-      inputTokens: Number.MAX_SAFE_INTEGER,
-      cacheReadTokens: 1,
-      outputTokens: 0,
-    },
-  ])('fails closed for invalid last-call usage', async (usage) => {
-    const source = createTransportHarness();
-    const capture = createModelCatalogCaptureTransport(source.transport);
-    capture.transport.onMessage(vi.fn());
-
-    await capture.transport.send(
-      JSON.stringify({
-        type: 'request',
-        id: 'request-1',
-        method: 'droid.load_session',
-      }),
-    );
-    source.receive(
-      JSON.stringify({
-        jsonrpc: '2.0',
-        factoryApiVersion: '1.0.0',
-        type: 'response',
-        id: 'request-1',
-        result: {
-          session: { messages: [] },
-          settings: {
-            modelId: 'model-sol',
-            reasoningEffort: ReasoningEffort.Medium,
-          },
-          lastCallTokenUsage: usage,
-        },
-      }),
-    );
-
-    expect(capture.readLastCallTokenUsage()).toEqual({
-      status: 'invalid',
-    });
-  });
 
   it('ignores unrelated, malformed, and schema-invalid messages', async () => {
     const source = createTransportHarness();
@@ -143,9 +76,6 @@ describe('createModelCatalogCaptureTransport', () => {
     );
 
     expect(capture.readAvailableModels()).toBeUndefined();
-    expect(capture.readLastCallTokenUsage()).toEqual({
-      status: 'missing',
-    });
     expect(forwarded).toHaveBeenCalledTimes(2);
   });
 });

@@ -688,7 +688,7 @@ describe('ChatController', () => {
     });
     runtime.readContextWindow.mockResolvedValueOnce({
       availability: 'unavailable',
-      reason: 'invalid-last-call',
+      reason: 'invalid-breakdown',
     });
     controller.handleMessage({
       type: 'session.context.refresh',
@@ -702,7 +702,7 @@ describe('ChatController', () => {
           status: 'ready',
           value: {
             availability: 'unavailable',
-            reason: 'invalid-last-call',
+            reason: 'invalid-breakdown',
           },
         },
       });

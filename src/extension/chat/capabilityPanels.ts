@@ -631,9 +631,8 @@ export function projectContextWindow(
 ): SessionContextStats {
   if (context.availability === 'unavailable') {
     if (
-      context.reason !== 'no-last-call' &&
-      context.reason !== 'invalid-last-call' &&
-      context.reason !== 'invalid-budget'
+      context.reason !== 'unsupported' &&
+      context.reason !== 'invalid-breakdown'
     ) {
       throw new Error('Invalid runtime context window.');
     }
@@ -658,9 +657,6 @@ export function projectContextWindow(
     used: context.used,
     remaining: context.remaining,
     limit: context.limit,
-    ...(context.compactionDetected === true
-      ? { compactionDetected: true }
-      : {}),
   };
 }
 

@@ -344,7 +344,7 @@ describe('createDaemonDroidSession', () => {
     });
   });
 
-  it('uses daemon last-call tokens instead of cumulative breakdown totals', async () => {
+  it('uses the official daemon Context Breakdown totals', async () => {
     const mock = createDroidMock();
     const runtime = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
@@ -356,8 +356,8 @@ describe('createDaemonDroidSession', () => {
 
     await expect(runtime.readContextWindow()).resolves.toEqual({
       availability: 'available',
-      used: 25000,
-      remaining: 75000,
+      used: 40000,
+      remaining: 60000,
       limit: 100000,
     });
     expect(mock.sessions.getContextBreakdown).toHaveBeenCalledWith(
@@ -365,7 +365,7 @@ describe('createDaemonDroidSession', () => {
     );
   });
 
-  it('rounds fractional daemon last-call estimates', async () => {
+  it('rounds fractional daemon Context Breakdown values', async () => {
     const mock = createDroidMock();
     mock.sessions.getContextBreakdown.mockResolvedValueOnce({
       modelId: 'model-1',
@@ -389,13 +389,13 @@ describe('createDaemonDroidSession', () => {
 
     await expect(runtime.readContextWindow()).resolves.toEqual({
       availability: 'available',
-      used: 25000,
-      remaining: 75000,
+      used: 40000,
+      remaining: 60000,
       limit: 100000,
     });
   });
 
-  it('fails closed when daemon last-call usage is missing', async () => {
+  it('does not depend on daemon last-call usage', async () => {
     const mock = createDroidMock();
     mock.sessions.getContextBreakdown.mockResolvedValueOnce({
       modelId: 'model-1',
@@ -418,8 +418,10 @@ describe('createDaemonDroidSession', () => {
     await runtime.initialize('C:\\workspace');
 
     await expect(runtime.readContextWindow()).resolves.toEqual({
-      availability: 'unavailable',
-      reason: 'no-last-call',
+      availability: 'available',
+      used: 40000,
+      remaining: 60000,
+      limit: 100000,
     });
   });
 

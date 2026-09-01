@@ -11,30 +11,22 @@ describe('parseSessionContext', () => {
         used: 25,
         remaining: 75,
         limit: 100,
-        compactionDetected: true,
       },
     },
     {
       status: 'ready',
       value: {
         availability: 'unavailable',
-        reason: 'no-last-call',
+        reason: 'unsupported',
       },
     },
     {
       status: 'error',
       value: {
         availability: 'unavailable',
-        reason: 'invalid-last-call',
+        reason: 'invalid-breakdown',
       },
       message: 'Refresh failed.',
-    },
-    {
-      status: 'ready',
-      value: {
-        availability: 'unavailable',
-        reason: 'invalid-budget',
-      },
     },
   ])('accepts an explicit Context state', (value) => {
     expect(parseSessionContext(value)).toBeDefined();
@@ -84,7 +76,7 @@ describe('parseSessionContext', () => {
         used: 25,
         remaining: 75,
         limit: 100,
-        compactionDetected: false,
+        extra: true,
       },
     },
     {

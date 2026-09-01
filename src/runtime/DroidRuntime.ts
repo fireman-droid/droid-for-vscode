@@ -98,15 +98,10 @@ export type RuntimeContextWindow =
       readonly used: number;
       readonly remaining: number;
       readonly limit: number;
-      /** A same-session high-water drop confirmed automatic compaction. */
-      readonly compactionDetected?: true;
     }
   | {
       readonly availability: 'unavailable';
-      readonly reason:
-        | 'no-last-call'
-        | 'invalid-last-call'
-        | 'invalid-budget';
+      readonly reason: 'unsupported' | 'invalid-breakdown';
     };
 
 export interface RuntimeModelCatalogUnavailable {

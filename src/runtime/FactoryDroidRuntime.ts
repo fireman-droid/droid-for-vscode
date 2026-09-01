@@ -83,10 +83,8 @@ import {
   type ProcessSessionTransport,
 } from './processSessionTransport';
 import {
-  classifyInvalidContextWindowSource,
-  resolveContextWindow,
-  type ConfirmedContextWindow,
-  type FactoryContextWindowSource,
+  projectContextWindow,
+  type FactoryContextBreakdown,
 } from './contextWindow';
 import type { RuntimeAvailability, RuntimeEvent } from './runtimeEvents';
 import {
@@ -184,12 +182,11 @@ export interface FactoryDroidSession {
   ): Promise<unknown>;
   getContextStats(): Promise<GetContextStatsResult>;
   /**
-   * Runtime-owned current-window source. Process sessions combine the
-   * public context limit with captured last-call notifications; daemon
-   * sessions read both fields from the public context breakdown.
+   * Official current Context Breakdown exposed by daemon sessions.
+   * Process sessions omit it because their public SDK totals do not
+   * match the CLI's current-context meter.
    */
-  readContextWindowSource?(): Promise<FactoryContextWindowSource>;
-  releaseContextWindowSource?(): void;
+  readContextBreakdown?(): Promise<FactoryContextBreakdown>;
   rewind?(
     params: FactoryDroidSessionRewindParams,
   ): Promise<{ session: FactoryDroidSession }>;
@@ -286,13 +283,6 @@ export class FactoryDroidRuntime implements DroidRuntime {
    * subagent always spawns under a running parent Task tool.
    */
   private subagentWatchUnsubscribe: (() => void) | null = null;
-  /**
-   * Highest context numerator confirmed for one session id, held as
-   * the floor {@link projectContextWindow} needs. Session replacement
-   * drops it with the id; an observed automatic-compaction drop resets
-   * it in place and remains visible until the session changes.
-   */
-  private confirmedContextUsed: ConfirmedContextWindow | null = null;
   /** Runtime events queued for the active turn's stream to yield. */
   private pendingTurnEvents: RuntimeEvent[] = [];
 
@@ -568,17 +558,25 @@ export class FactoryDroidRuntime implements DroidRuntime {
       level: 'debug',
       name: 'runtime.context.started',
     });
-    let source: FactoryContextWindowSource;
+    if (typeof session.readContextBreakdown !== 'function') {
+      const result: RuntimeContextWindow = {
+        availability: 'unavailable',
+        reason: 'unsupported',
+      };
+      this.recordDiagnostic({
+        level: 'info',
+        name: 'runtime.context.finished',
+        attributes: {
+          durationMs: Math.round(performance.now() - startedAt),
+          outcome: result.availability,
+          reason: result.reason,
+        },
+      });
+      return result;
+    }
+    let breakdown: FactoryContextBreakdown;
     try {
-      if (typeof session.readContextWindowSource === 'function') {
-        source = await session.readContextWindowSource();
-      } else {
-        const stats = await session.getContextStats();
-        source = {
-          limit: stats.limit,
-          lastCallTokenUsage: { status: 'missing' },
-        };
-      }
+      breakdown = await session.readContextBreakdown();
     } catch {
       this.recordDiagnostic({
         level: 'error',
@@ -590,54 +588,24 @@ export class FactoryDroidRuntime implements DroidRuntime {
       });
       throw new Error('Droid context statistics could not be read.');
     }
-    try {
-      const resolved = resolveContextWindow(
-        source,
-        session.id,
-        this.confirmedContextUsed,
-      );
-      this.confirmedContextUsed = resolved.confirmed;
-      const result = resolved.window;
-      this.recordDiagnostic({
-        level: 'info',
-        name: 'runtime.context.finished',
-        attributes: {
-          durationMs: Math.round(performance.now() - startedAt),
-          outcome: result.availability,
-          ...(result.availability === 'available'
-            ? {
-                source: 'last-call',
-                used: result.used,
-                limit: result.limit,
-                ...(result.compactionDetected === true
-                  ? { compactionDetected: true }
-                  : {}),
-              }
-            : {
-                reason: result.reason,
-                // The rejected numbers: the only way to tell which
-                // daemon field went bad on a real session.
-                budget: source.limit,
-                lastCall:
-                  source.lastCallTokenUsage.status === 'available'
-                    ? source.lastCallTokenUsage.used
-                    : source.lastCallTokenUsage.status,
-              }),
-        },
-      });
-      return result;
-    } catch {
-      this.recordDiagnostic({
-        level: 'error',
-        name: 'runtime.context.finished',
-        attributes: {
-          durationMs: Math.round(performance.now() - startedAt),
-          outcome: 'invalid-source',
-          reason: classifyInvalidContextWindowSource(source),
-        },
-      });
-      throw new Error('Droid context statistics could not be read.');
-    }
+    const result = projectContextWindow(breakdown);
+    this.recordDiagnostic({
+      level: 'info',
+      name: 'runtime.context.finished',
+      attributes: {
+        durationMs: Math.round(performance.now() - startedAt),
+        outcome: result.availability,
+        ...(result.availability === 'available'
+          ? {
+              source: 'context-breakdown',
+              used: result.used,
+              remaining: result.remaining,
+              limit: result.limit,
+            }
+          : { reason: result.reason }),
+      },
+    });
+    return result;
   }
 
   async readModelCatalog(): Promise<RuntimeModelCatalog> {
@@ -762,9 +730,8 @@ export class FactoryDroidRuntime implements DroidRuntime {
     }
 
     // The SDK replaces the rewound session in place; re-apply captured
-    // session metadata so the model catalog and Context source survive.
+    // session metadata so the model catalog survives.
     const availableModels = session.availableModels;
-    session.releaseContextWindowSource?.();
     this.session = createCapturedSessionView(
       nextSession,
       availableModels,
@@ -848,9 +815,8 @@ export class FactoryDroidRuntime implements DroidRuntime {
     }
 
     // Compaction continues in a new session; re-apply captured session
-    // metadata so the model catalog and Context source survive.
+    // metadata so the model catalog survives.
     const availableModels = session.availableModels;
-    session.releaseContextWindowSource?.();
     this.session = createCapturedSessionView(
       nextSession,
       availableModels,
@@ -909,7 +875,6 @@ export class FactoryDroidRuntime implements DroidRuntime {
     // Forking replaces the SDK session handle in place; re-apply
     // captured session metadata.
     const availableModels = session.availableModels;
-    session.releaseContextWindowSource?.();
     this.session = createCapturedSessionView(
       nextSession,
       availableModels,
@@ -1713,7 +1678,6 @@ export async function createLocalDroidSession(
     return createCapturedSessionView(
       session,
       availableModels,
-      catalogCapture.readLastCallTokenUsage(),
     );
   } catch (error) {
     try {

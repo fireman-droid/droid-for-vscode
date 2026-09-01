@@ -13,25 +13,13 @@ type CatalogRequestKind = 'initialize' | 'load';
 export interface ModelCatalogCaptureTransport {
   readonly transport: StringFramedDroidClientTransport;
   readAvailableModels(): readonly AvailableModelConfig[] | undefined;
-  readLastCallTokenUsage(): CapturedLastCallTokenUsage;
 }
-
-export type CapturedLastCallTokenUsage =
-  | { readonly status: 'missing' }
-  | { readonly status: 'invalid' }
-  | {
-      readonly status: 'available';
-      readonly used: number;
-    };
 
 export function createModelCatalogCaptureTransport(
   source: StringFramedDroidClientTransport,
 ): ModelCatalogCaptureTransport {
   const requests = new Map<string, CatalogRequestKind>();
   let availableModels: readonly AvailableModelConfig[] | undefined;
-  let lastCallTokenUsage: CapturedLastCallTokenUsage = {
-    status: 'missing',
-  };
 
   const captureRequest = (message: string): void => {
     const envelope = parseJsonObject(message);
@@ -61,9 +49,6 @@ export function createModelCatalogCaptureTransport(
         ? InitializeSessionResponseSchema.safeParse(envelope)
         : LoadSessionResponseSchema.safeParse(envelope);
     if (!response.success || !('result' in response.data)) {
-      if (request === 'load' && hasLastCallTokenUsage(envelope.result)) {
-        lastCallTokenUsage = { status: 'invalid' };
-      }
       return;
     }
     const result =
@@ -72,19 +57,6 @@ export function createModelCatalogCaptureTransport(
         : LoadSessionResultSchema.safeParse(response.data.result);
     if (result.success) {
       availableModels = result.data.availableModels;
-      lastCallTokenUsage =
-        request === 'load'
-          ? captureLastCallTokenUsage(
-              'lastCallTokenUsage' in result.data
-                ? result.data.lastCallTokenUsage
-                : undefined,
-            )
-          : { status: 'missing' };
-    } else if (
-      request === 'load' &&
-      hasLastCallTokenUsage(response.data.result)
-    ) {
-      lastCallTokenUsage = { status: 'invalid' };
     }
   };
 
@@ -115,52 +87,7 @@ export function createModelCatalogCaptureTransport(
         ? undefined
         : [...availableModels];
     },
-    readLastCallTokenUsage() {
-      return { ...lastCallTokenUsage };
-    },
   };
-}
-
-/**
- * Reduces the provider's latest-call fields to the bounded numerator
- * used by the Context meter. Cumulative token totals never enter this
- * projection.
- */
-export function captureLastCallTokenUsage(
-  value: unknown,
-): CapturedLastCallTokenUsage {
-  if (value === undefined) {
-    return { status: 'missing' };
-  }
-  if (typeof value !== 'object' || value === null) {
-    return { status: 'invalid' };
-  }
-  const record = value as Record<string, unknown>;
-  const outputTokens = record.outputTokens ?? 0;
-  if (
-    !isSafeTokenCount(record.inputTokens) ||
-    !isSafeTokenCount(record.cacheReadTokens) ||
-    !isSafeTokenCount(outputTokens)
-  ) {
-    return { status: 'invalid' };
-  }
-  const used =
-    record.inputTokens + record.cacheReadTokens + outputTokens;
-  return Number.isSafeInteger(used)
-    ? { status: 'available', used }
-    : { status: 'invalid' };
-}
-
-function hasLastCallTokenUsage(value: unknown): boolean {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    Object.prototype.hasOwnProperty.call(value, 'lastCallTokenUsage')
-  );
-}
-
-function isSafeTokenCount(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
 function parseJsonObject(

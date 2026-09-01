@@ -12,7 +12,7 @@ SDK 中出现接口就自动成为产品功能。
 | 历史与长会话 | 已接通 | daemon 分页、对账和虚拟化 |
 | 权限与 AskUser | 已接通 | 严格绑定当前请求 |
 | TodoWrite Plan | 已接通 | 标题来自步骤，不伪造 |
-| 设置与 Context | 已接通 | 缺少可信值时显示不可用 |
+| 设置与 Context | 已接通 | daemon 官方 Context Breakdown；无同等来源时显示不可用 |
 | 模型与 Reasoning | 已接通 | 运行时目录，不硬编码 |
 | 自定义 Provider / Model | 已接通 | Host 侧处理密钥 |
 | 文件与图片附件 | 已接通 | 内容不进入 Webview |
