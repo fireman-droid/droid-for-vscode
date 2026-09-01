@@ -1,6 +1,6 @@
 # DroidVisX Conversation 过场循环实施计划
 
-计划状态：**待用户确认，尚未开始实现**
+计划状态：**已实现、已打包安装，待 Cursor 视觉验收**
 
 设计依据：`docs/DESIGN.md` 的“Conversation 恢复与切换过场”。
 
@@ -109,8 +109,8 @@ Conversation 的 checkpoint-first Snapshot 到达后立即完成完整过场，�
 - Draft、附件、滚动位置和旧 Transcript 不清空；
 - 不修改 Store 中的 Conversation 状态。
 
-`App.tsx` 当前超过普通 TSX 文件预算。实施时把现有 handshake timeout 逻辑一并
-收进新的控制器模块，使 `App.tsx` 总行数只减不增。
+`App.tsx` 保持在其现有 ratchet ceiling 内；新增逻辑集中于控制器模块，避免把
+过场状态机扩散到已有 Runtime、Bridge 或 Store 代码。
 
 ## 6. 失败处理
 
@@ -170,6 +170,7 @@ Conversation Snapshot，旧 Conversation、Draft 和 Transcript 保持原状。
 - `src/webview/assistant/conversationTransition.tsx`
 - `src/webview/assistant/App.tsx`
 - `src/webview/assistant/AppHeader.tsx`
+- `src/webview/assistant/thread/transcriptRows.tsx`
 - `src/webview/assistant/styles/34-conversation-transition.css`
 - `src/webview/assistant/styles.css`
 - `docs/STATUS.md`

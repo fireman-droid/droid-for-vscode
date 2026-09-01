@@ -18,6 +18,7 @@ import {
 import { useMissionControl } from './mission/useMissionControl';
 import { canSendMessage, DEFAULT_MESSAGE_WINDOW, MESSAGE_WINDOW_STEP, shouldQueueMessage, useDroidExternalStoreRuntime } from './runtimeAdapter';
 import { AppHeader } from './AppHeader';
+import { useConversationTransition } from './conversationTransition';
 import { assistantWebviewReducer, initialAssistantWebviewState, isTurnActive, type PendingInteraction, type StoreHostMessage } from './store';
 import { DroidThread, ToolChangesContext } from './Thread';
 import { GitCommitFlowContext, type GitCommitFlowContextValue } from './GitCommitPanel';
@@ -57,6 +58,19 @@ export function App(): React.JSX.Element {
     assistantWebviewReducer,
     initialAssistantWebviewState,
   );
+  const {
+    beginSwitch: beginConversationSwitch,
+    observeHostMessage: observeTransitionMessage,
+    phase: conversationTransitionPhase,
+    blocking: conversationTransitionBlocking,
+    contentEntering: conversationContentEntering,
+    overlay: conversationTransitionOverlay,
+  } = useConversationTransition({
+    sequence: state.sequence,
+    conversationId: state.conversationId,
+    sessionId: state.sessionId,
+    connectionStatus: state.connection.status,
+  });
   const missionControl = useMissionControl(vscode, createTurnId);
   const [transientDiagnostic, setTransientDiagnostic] =
     useState<TransientDiagnostic | null>(null);
@@ -198,6 +212,7 @@ export function App(): React.JSX.Element {
         );
         return;
       }
+      observeTransitionMessage(message);
       if (isTransientNoticeLifecycleMessage(message)) {
         setTransientDiagnostic((current) =>
           reduceTransientDiagnostic(current, message),
@@ -215,8 +230,14 @@ export function App(): React.JSX.Element {
       window.removeEventListener('message', handleMessage);
       flush();
     };
-    // applyHostTheme is stable across renders.
-  }, [applyHostTheme, initialDraft, replaceComposerDraft, vscode]);
+  // applyHostTheme is stable across renders.
+  }, [
+    applyHostTheme,
+    initialDraft,
+    observeTransitionMessage,
+    replaceComposerDraft,
+    vscode,
+  ]);
 
   // One-shot beacon proving the first non-empty transcript reached the
   // DOM; its absence in the logs isolates a render-phase hang.
@@ -341,7 +362,7 @@ export function App(): React.JSX.Element {
   const interactionCount = state.interactions.length;
   const queuedCount = state.queue.items.length;
   const queueEditingId = state.queueEditing?.queueId ?? null;
-  const sendDisabled = !canSendMessage(
+  const sendDisabled = conversationTransitionBlocking || !canSendMessage(
     {
       connectionStatus,
       sessionId,
@@ -378,6 +399,7 @@ export function App(): React.JSX.Element {
     if (
       sessionId === null ||
       connectionStatus !== 'connected' ||
+      conversationTransitionBlocking ||
       compactPending
     ) {
       return;
@@ -385,7 +407,14 @@ export function App(): React.JSX.Element {
     compactBaselineRef.current = { sessionId, signal: compactSignal };
     setCompactPending(true);
     post(vscode, { type: 'session.compact', sessionId });
-  }, [compactPending, compactSignal, connectionStatus, sessionId, vscode]);
+  }, [
+    compactPending,
+    compactSignal,
+    connectionStatus,
+    conversationTransitionBlocking,
+    sessionId,
+    vscode,
+  ]);
   useEffect(() => {
     if (!compactPending) {
       return undefined;
@@ -410,6 +439,9 @@ export function App(): React.JSX.Element {
 
   const handleSend = useCallback(
     async (text: string): Promise<void> => {
+      if (conversationTransitionBlocking) {
+        return;
+      }
       // "Edit Queued" mode: the send replaces the queued prompt in
       // place (same queue position) instead of starting or queueing
       // a turn. Text is treated literally — no slash routing.
@@ -446,6 +478,7 @@ export function App(): React.JSX.Element {
         if (builtin.kind === 'compact') {
           handleCompact();
         } else if (builtin.kind === 'new') {
+          beginConversationSwitch('new');
           post(vscode, { type: 'session.new' });
         } else if (builtin.kind === 'navigate') {
           handleSlashNavigate(builtin.target);
@@ -519,8 +552,10 @@ export function App(): React.JSX.Element {
       persistDraft(vscode, '');
     },
     [
+      beginConversationSwitch,
       btwAvailable,
       connectionStatus,
+      conversationTransitionBlocking,
       handleBtwAsk,
       handleCompact,
       handleMissionOpen,
@@ -658,6 +693,7 @@ export function App(): React.JSX.Element {
       const trimmed = text.trim();
       if (
         sessionId === null ||
+        conversationTransitionBlocking ||
         connectionStatus !== 'connected' ||
         isTurnActive(state.turn) ||
         interactionCount > 0 ||
@@ -666,6 +702,7 @@ export function App(): React.JSX.Element {
       ) {
         return;
       }
+      beginConversationSwitch('rewind');
       post(vscode, {
         type: 'turn.editResend',
         sessionId,
@@ -676,7 +713,9 @@ export function App(): React.JSX.Element {
       });
     },
     [
+      beginConversationSwitch,
       connectionStatus,
+      conversationTransitionBlocking,
       interactionCount,
       sessionId,
       state.turn,
@@ -839,19 +878,24 @@ export function App(): React.JSX.Element {
     });
   }, [state.sessionId, vscode]);
   const handleNewSession = useCallback((): void => {
+    beginConversationSwitch('new');
     post(vscode, { type: 'session.new' });
-  }, [vscode]);
+  }, [beginConversationSwitch, vscode]);
   const handleCreateWorktreeSession = useCallback((): void => {
+    beginConversationSwitch('worktree');
     post(vscode, { type: 'worktree.createSession' });
-  }, [vscode]);
+  }, [beginConversationSwitch, vscode]);
   const handleSelectSession = useCallback(
     (nextSessionId: string): void => {
+      if (nextSessionId !== sessionId) {
+        beginConversationSwitch('resume');
+      }
       post(vscode, {
         type: 'session.select',
         sessionId: nextSessionId,
       });
     },
-    [vscode],
+    [beginConversationSwitch, sessionId, vscode],
   );
   const handleRenameSession = useCallback(
     (targetSessionId: string, title: string): void => {
@@ -904,12 +948,13 @@ export function App(): React.JSX.Element {
   );
   const handleForkSession = useCallback(
     (targetSessionId: string): void => {
+      beginConversationSwitch('fork');
       post(vscode, {
         type: 'session.fork',
         sessionId: targetSessionId,
       });
     },
-    [vscode],
+    [beginConversationSwitch, vscode],
   );
   // "Fork chat" on the last assistant message branches the current
   // session from its present state (the SDK has no per-message fork
@@ -1147,6 +1192,7 @@ export function App(): React.JSX.Element {
   // no longer blocks session actions. Pending interactions still do:
   // an unanswered permission/plan request must be settled first.
   const sessionActionsDisabled =
+    conversationTransitionBlocking ||
     state.connection.status !== 'connected' ||
     (active && !state.backgroundTurnsAvailable) ||
     hasInteraction;
@@ -1187,10 +1233,8 @@ export function App(): React.JSX.Element {
   const app = (
     <AssistantRuntimeProvider runtime={runtime}>
       <DraftSynchronizer command={draftCommand} />
-      {/* Entry animations are opt-in per streaming design item D:
-          only a live turn on a connected session animates; recovered
-          snapshots, session switches, reconcile replacements and
-          Show earlier all mount without the class and stay silent. */}
+      {/* Live turn entry animation remains separate from the localized
+          Conversation recovery and switching transition below. */}
       <div
         className={`dvx-shell${
           connectionStatus === 'connected' && generating
@@ -1217,6 +1261,17 @@ export function App(): React.JSX.Element {
           onRefreshArchived={handleRefreshArchived}
           onSearchContent={handleSearchContent}
         />
+        <div
+          className="dvx-conversation-surface"
+          data-transition-phase={conversationTransitionPhase}
+          data-content-entering={conversationContentEntering || undefined}
+          aria-busy={
+            !showHandshakeNotice &&
+            conversationTransitionPhase !== 'idle'
+              ? true
+              : undefined
+          }
+        >
         {showHandshakeNotice ? (
           <aside
             className="dvx-history-notice dvx-handshake-notice"
@@ -1249,6 +1304,7 @@ export function App(): React.JSX.Element {
           stopping={state.turn?.status === 'stopping'}
           interactionPending={hasInteraction}
           controlsDisabled={
+            conversationTransitionBlocking ||
             state.connection.status !== 'connected' ||
             state.sessionId === null
           }
@@ -1324,6 +1380,7 @@ export function App(): React.JSX.Element {
           onEditAttachmentRemove={handleEditAttachmentRemove}
           onRegenerate={
             connectionStatus === 'connected' &&
+            !conversationTransitionBlocking &&
             !active &&
             !hasInteraction &&
             regenerateAnchor !== null
@@ -1332,6 +1389,7 @@ export function App(): React.JSX.Element {
           }
           onForkSession={
             connectionStatus === 'connected' &&
+            !conversationTransitionBlocking &&
             !active &&
             !hasInteraction &&
             sessionId !== null
@@ -1346,6 +1404,7 @@ export function App(): React.JSX.Element {
           onOpenTerminalMirror={handleOpenTerminalMirror}
           editResendEnabled={
             connectionStatus === 'connected' &&
+            !conversationTransitionBlocking &&
             !active &&
             !hasInteraction
           }
@@ -1386,6 +1445,8 @@ export function App(): React.JSX.Element {
           onQueueEditCancel={handleQueueEditCancel}
         />
         )}
+        {showHandshakeNotice ? null : conversationTransitionOverlay}
+        </div>
         {/* Full-height side question pane living in the shell's
             second grid column beside the main conversation (Claude
             Code split-pane form factor). */}

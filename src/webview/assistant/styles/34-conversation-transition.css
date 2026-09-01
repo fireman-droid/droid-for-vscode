@@ -1,0 +1,185 @@
+.dvx-conversation-surface {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.dvx-conversation-surface > .dvx-thread,
+.dvx-conversation-surface > .dvx-models-page {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.dvx-shell-split > .dvx-conversation-surface {
+  grid-column: 1;
+}
+
+.dvx-conversation-surface[data-transition-phase='switching'] > .dvx-thread {
+  opacity: 0.32;
+  filter: blur(1.5px);
+  transition:
+    opacity var(--dvx-duration-normal) ease,
+    filter var(--dvx-duration-normal) ease;
+}
+
+.dvx-conversation-surface[data-content-entering='true'] > .dvx-thread {
+  animation: dvx-conversation-content-enter var(--dvx-duration-normal) ease-out both;
+}
+
+.dvx-conversation-transition-overlay {
+  position: absolute;
+  z-index: 8;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 11px;
+  padding: 24px;
+  background: color-mix(in srgb, var(--dvx-surface) 82%, transparent);
+  backdrop-filter: blur(2px);
+  color: var(--dvx-ink);
+  pointer-events: auto;
+  animation: dvx-conversation-transition-enter var(--dvx-duration-normal) ease-out both;
+}
+
+.dvx-conversation-transition-overlay[data-phase='leaving'] {
+  animation: dvx-conversation-transition-leave var(--dvx-duration-normal) ease-in both;
+}
+
+.dvx-conversation-transition-label {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 18px;
+  letter-spacing: -0.01em;
+}
+
+.dvx-conversation-transition-copy {
+  color: var(--dvx-muted);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.dvx-droid-signal-grid {
+  --dvx-signal-dot: 6px;
+  --dvx-signal-gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(3, var(--dvx-signal-dot));
+  grid-template-rows: repeat(3, var(--dvx-signal-dot));
+  gap: var(--dvx-signal-gap);
+}
+
+.dvx-droid-signal-grid i {
+  display: block;
+  width: var(--dvx-signal-dot);
+  height: var(--dvx-signal-dot);
+  border-radius: 50%;
+  background: var(--dvx-accent);
+  opacity: 0.16;
+  transform: scale(0.8);
+  animation: dvx-droid-signal 1.2s ease-out infinite;
+}
+
+.dvx-droid-signal-grid i:nth-child(2),
+.dvx-droid-signal-grid i:nth-child(4),
+.dvx-droid-signal-grid i:nth-child(6),
+.dvx-droid-signal-grid i:nth-child(8) {
+  animation-delay: 240ms;
+}
+
+.dvx-droid-signal-grid i:nth-child(1),
+.dvx-droid-signal-grid i:nth-child(3),
+.dvx-droid-signal-grid i:nth-child(7),
+.dvx-droid-signal-grid i:nth-child(9) {
+  animation-delay: 480ms;
+}
+
+.dvx-droid-signal-grid-compact {
+  --dvx-signal-dot: 3px;
+  --dvx-signal-gap: 2px;
+}
+
+.dvx-droid-signal-grid-inline {
+  --dvx-signal-dot: 2px;
+  --dvx-signal-gap: 2px;
+}
+
+@keyframes dvx-droid-signal {
+  0%,
+  100% {
+    opacity: 0.16;
+    transform: scale(0.8);
+  }
+
+  10% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+
+  28% {
+    opacity: 0.52;
+    transform: scale(0.95);
+  }
+
+  42% {
+    opacity: 0.16;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes dvx-conversation-transition-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dvx-conversation-transition-leave {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dvx-conversation-content-enter {
+  from {
+    opacity: 0.5;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-conversation-surface[data-transition-phase='switching'] > .dvx-thread {
+    filter: none;
+    transition: none;
+  }
+
+  .dvx-conversation-surface[data-content-entering='true'] > .dvx-thread,
+  .dvx-conversation-transition-overlay,
+  .dvx-conversation-transition-overlay[data-phase='leaving'],
+  .dvx-droid-signal-grid i {
+    animation: none;
+  }
+
+  .dvx-droid-signal-grid i {
+    opacity: 0.52;
+    transform: none;
+  }
+
+  .dvx-conversation-transition-overlay[data-phase='leaving'] {
+    visibility: hidden;
+  }
+}

@@ -4,6 +4,7 @@
 
 import { useMemo } from 'react';
 
+import { DroidSignalGrid } from './conversationTransition';
 import { SessionDrawer } from './SessionDrawer';
 import type { AssistantWebviewState } from './store';
 
@@ -103,7 +104,11 @@ export function AppHeader({
             }
             title={runtimeLabel}
           >
-            <span className="dvx-runtime-status-dot" aria-hidden="true" />
+            {state.connection.status === 'connecting' ? (
+              <DroidSignalGrid size="compact" />
+            ) : (
+              <span className="dvx-runtime-status-dot" aria-hidden="true" />
+            )}
             <span className="dvx-visually-hidden">{runtimeLabel}</span>
           </span>
         </div>
