@@ -114,6 +114,41 @@ export function appendAcceptedUserPrompt(
   );
 }
 
+/**
+ * Adds an already-sanitized user message received outside the main composer,
+ * such as a child session's Task invocation.
+ */
+export function appendExternalUserMessage(
+  state: HostTranscriptState,
+  id: string,
+  text: string,
+  messageId?: string,
+): HostTranscriptState {
+  if (
+    (messageId !== undefined &&
+      state.transcript.some(
+        (item) => item.kind === 'user' && item.messageId === messageId,
+      )) ||
+    state.transcript.some((item) => item.id === id)
+  ) {
+    return state;
+  }
+  const boundedText = text.slice(0, MAX_TURN_TEXT_LENGTH);
+  if (boundedText.length === 0) {
+    return state;
+  }
+  return appendItem(
+    state,
+    {
+      id,
+      kind: 'user',
+      text: boundedText,
+      ...(messageId === undefined ? {} : { messageId }),
+    },
+    boundedText.length < text.length,
+  );
+}
+
 export function attachUserMessageId(
   state: HostTranscriptState,
   turnId: string,

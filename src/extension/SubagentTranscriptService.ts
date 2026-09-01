@@ -11,6 +11,7 @@ import type {
 import type { HostTranscriptState } from '../shared/hostTranscriptState';
 import type { SubagentActivityItem } from '../shared/subagentProtocol';
 import type { SessionHistoryLoader } from '../runtime/history/SessionHistory';
+import { sanitizeNonAssistantText } from '../runtime/history/projectSessionHistory';
 import {
   normalizeSdkEvent,
   normalizeSdkEventImages,
@@ -22,6 +23,7 @@ import {
   type SubagentInvocationRecord,
 } from '../runtime/subagentSummary';
 import {
+  appendExternalUserMessage,
   createHostTranscriptState,
   projectHostTranscriptMessage,
   stableTranscriptId,
@@ -63,6 +65,7 @@ interface ChildEntry {
   readonly rows: Map<string, SubagentParentRow>;
   state: HostTranscriptState;
   activity: TurnActivityState;
+  activeTurnId: string | null;
   running: boolean;
   lifecycle: SubagentViewerSnapshot['lifecycle'];
   loading: Promise<void> | null;
@@ -359,6 +362,7 @@ export class SubagentTranscriptService {
       rows: new Map([[key, row]]),
       state: createHostTranscriptState('unavailable'),
       activity: createTurnActivityState(),
+      activeTurnId: null,
       running:
         value.lifecycle === 'starting' || value.lifecycle === 'working',
       lifecycle: value.lifecycle,
@@ -418,9 +422,40 @@ export class SubagentTranscriptService {
         : Array.isArray(converted)
           ? converted
           : [converted];
+    const assistant = messages
+      .map((message) => readLiveAssistantTurn(message as DroidStreamEvent))
+      .find(
+        (
+          message,
+        ): message is { readonly messageId: string } => message !== null,
+      );
+    if (assistant !== undefined) {
+      this.startAssistantTurn(entry, assistant.messageId);
+    }
     let changed = false;
     for (const message of messages) {
       const sdkEvent = message as DroidStreamEvent;
+      const assistantTurn = readLiveAssistantTurn(sdkEvent);
+      if (assistantTurn !== null) {
+        this.startAssistantTurn(entry, assistantTurn.messageId);
+      }
+      const user = readLiveUserMessage(sdkEvent);
+      if (user !== null) {
+        entry.activeTurnId = null;
+        entry.activity = createTurnActivityState();
+        entry.state = appendExternalUserMessage(
+          entry.state,
+          stableTranscriptId(
+            'user',
+            'subagent-live',
+            entry.childSessionId,
+            user.messageId,
+          ),
+          user.text,
+          user.messageId,
+        );
+        changed = true;
+      }
       const event = normalizeSdkEvent(sdkEvent, entry.cwd);
       if (event !== undefined) {
         changed = this.applyRuntimeEvent(entry, event) || changed;
@@ -438,13 +473,12 @@ export class SubagentTranscriptService {
     entry: ChildEntry,
     event: RuntimeEvent,
   ): boolean {
-    const turnId = stableTranscriptId(
-      'assistant',
-      'subagent-live',
-      entry.childSessionId,
-    );
     switch (event.type) {
       case 'text-delta': {
+        const turnId = entry.activeTurnId;
+        if (turnId === null) {
+          return false;
+        }
         const projected = projectAssistantDelta(entry.activity, event.text);
         entry.activity = projected.state;
         if (projected.projection === null) {
@@ -460,6 +494,10 @@ export class SubagentTranscriptService {
         return true;
       }
       case 'thinking-delta': {
+        const turnId = entry.activeTurnId;
+        if (turnId === null) {
+          return false;
+        }
         const projected = projectThinkingDelta(
           entry.activity,
           event.text,
@@ -481,6 +519,10 @@ export class SubagentTranscriptService {
         return true;
       }
       case 'thinking-complete': {
+        const turnId = entry.activeTurnId;
+        if (turnId === null) {
+          return false;
+        }
         const projected = projectThinkingComplete(
           entry.activity,
           thinkingSegmentKey(event),
@@ -501,6 +543,10 @@ export class SubagentTranscriptService {
       case 'tool-start':
       case 'tool-progress':
       case 'tool-result': {
+        const turnId = entry.activeTurnId;
+        if (turnId === null) {
+          return false;
+        }
         const existing = entry.activity.tools.get(event.toolUseId);
         if (event.type !== 'tool-start' && existing === undefined) {
           return false;
@@ -529,7 +575,11 @@ export class SubagentTranscriptService {
         );
         return true;
       }
-      case 'image-block':
+      case 'image-block': {
+        const turnId = entry.activeTurnId;
+        if (turnId === null) {
+          return false;
+        }
         entry.state = projectHostTranscriptMessage(entry.state, {
           type: 'transcript.image',
           sequence: 0,
@@ -552,6 +602,7 @@ export class SubagentTranscriptService {
           },
         });
         return true;
+      }
       case 'working-state':
         if (event.isWorking) {
           entry.running = true;
@@ -561,6 +612,23 @@ export class SubagentTranscriptService {
       default:
         return false;
     }
+  }
+
+  private startAssistantTurn(
+    entry: ChildEntry,
+    messageId: string,
+  ): void {
+    const turnId = stableTranscriptId(
+      'assistant',
+      'subagent-live',
+      entry.childSessionId,
+      messageId,
+    );
+    if (entry.activeTurnId === turnId) {
+      return;
+    }
+    entry.activeTurnId = turnId;
+    entry.activity = createTurnActivityState();
   }
 
   private async reconcileTerminal(entry: ChildEntry): Promise<void> {
@@ -696,6 +764,42 @@ function safeId(value: unknown): string | null {
     !/[\u0000-\u001f\u007f-\u009f]/u.test(value)
     ? value
     : null;
+}
+
+function readLiveAssistantTurn(
+  event: DroidStreamEvent,
+): { readonly messageId: string } | null {
+  switch (event.type) {
+    case 'assistant':
+      return safeId(event.message.id) === null
+        ? null
+        : { messageId: event.message.id };
+    case 'assistant_text_delta':
+    case 'thinking_text_delta':
+    case 'thinking_text_complete':
+      return safeId(event.messageId) === null
+        ? null
+        : { messageId: event.messageId };
+    default:
+      return null;
+  }
+}
+
+function readLiveUserMessage(
+  event: DroidStreamEvent,
+): { readonly messageId: string; readonly text: string } | null {
+  if (event.type !== 'user' || safeId(event.message.id) === null) {
+    return null;
+  }
+  const rawText = event.message.content
+    .flatMap((block) =>
+      block.type === 'text' ? [block.text] : [],
+    )
+    .join('');
+  const text = sanitizeNonAssistantText(rawText);
+  return text === null || text.length === 0
+    ? null
+    : { messageId: event.message.id, text };
 }
 
 function viewerTitle(type: string, description: string): string {

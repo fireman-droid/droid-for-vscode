@@ -427,7 +427,7 @@ function appendText(
   );
 }
 
-function sanitizeNonAssistantText(rawText: string): string | null {
+export function sanitizeNonAssistantText(rawText: string): string | null {
   const possibleTags =
     /<[^>]*(?:system-reminder|system-notification)[^>]*(?:>|$)/g;
   for (const match of rawText.matchAll(possibleTags)) {

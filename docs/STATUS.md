@@ -165,7 +165,7 @@ Cursor 内真实行为和视觉仍以用户验收为准。
 - Task 卡与 Viewer 消费同一 Store，多个 child 使用独立 Editor 标签页
 - resumed Task 可共享同一 child transcript，每张父 Task 卡仍保留独立打开映射
 - Viewer 复用主聊天消息、Thinking、Tool 和图片组件，无 Composer、Diff、Stop 或写操作
-- Viewer 使用与主聊天一致的 Cursor 版心；首条 Task Invocation 显示委派摘要并可展开原文
+- Viewer 使用与主聊天一致的 Cursor 版心；每条实时 Task Invocation 都立即显示委派摘要并可展开原文，且按真实消息边界拆分探索活动
 - Webview 只能按父 Session、Turn 和 Task `toolUseId` 请求打开，Host 校验后解析 child
 
 ### 真实浏览器联调
