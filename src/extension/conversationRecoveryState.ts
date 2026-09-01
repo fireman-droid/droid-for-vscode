@@ -309,7 +309,11 @@ export function readLatestConversationChanges(
 ): ConversationTurnRecord | undefined {
   for (let index = conversation.turns.length - 1; index >= 0; index -= 1) {
     const turn = conversation.turns[index];
-    if (turn !== undefined && turn.changesSettled) {
+    if (
+      turn !== undefined &&
+      turn.changesSettled &&
+      turn.files.length > 0
+    ) {
       return cloneTurn(turn);
     }
   }

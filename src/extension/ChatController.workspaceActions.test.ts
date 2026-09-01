@@ -1147,8 +1147,9 @@ describe('ChatController', () => {
       ),
     ).toMatchObject({ files: [] });
     expect(
-      controller.recoveryStore.readLatestChanges(
+      controller.recoveryStore.readTurn(
         controller.conversationId!,
+        'turn-1',
       ),
     ).toMatchObject({
       turnId: 'turn-1',

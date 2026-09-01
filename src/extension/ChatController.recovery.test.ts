@@ -137,6 +137,54 @@ describe('ChatController', () => {
     });
   });
 
+  it('keeps the latest actual changes after Reload settles a pure chat turn', async () => {
+    const persistence = createMemoryPersistence();
+    const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
+    writeRecoverySession(
+      seed,
+      'saved-session',
+      createHostTranscriptState('complete'),
+    );
+    const conversationId =
+      seed.resolveConversationId('saved-session')!;
+    seed.recordSettledTurn(
+      conversationId,
+      'saved-session',
+      'changes-turn',
+      'Change the app',
+      [{ path: 'src/app.ts', additions: 3, deletions: 1 }],
+      'completed',
+    );
+    seed.recordSettledTurn(
+      conversationId,
+      'saved-session',
+      'chat-turn',
+      'Explain the app',
+      [],
+      'completed',
+    );
+    selectRecoverySession(seed, 'saved-session');
+    await seed.flush();
+
+    const runtime = createMockRuntime();
+    runtime.initialize.mockResolvedValue(available('saved-session'));
+    const { controller, messages } = createController(
+      () => runtime,
+      undefined,
+      createCatalog([catalogEntry('saved-session')]),
+      new SessionRecoveryStore(persistence, 'recovery', 0),
+    );
+
+    ready(controller);
+    await waitForConnected(messages);
+
+    expect(snapshots(messages).at(-1)?.latestChanges).toEqual({
+      turnId: 'changes-turn',
+      prompt: 'Change the app',
+      files: [{ path: 'src/app.ts', additions: 3, deletions: 1 }],
+    });
+  });
+
   it('does not backfill snapshot files from recovered canonical Changes', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);

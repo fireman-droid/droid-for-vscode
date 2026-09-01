@@ -97,7 +97,7 @@ describe('SessionRecoveryStore', () => {
     ]);
   });
 
-  it('records an empty settled turn without falling back to older changes', () => {
+  it('keeps the latest actual changes after an empty settled turn', () => {
     const store = new SessionRecoveryStore(memoryPersistence());
     writeRecoverySession(store, 'session-1', cache([]));
     const conversationId =
@@ -124,7 +124,11 @@ describe('SessionRecoveryStore', () => {
     ).toBe(true);
 
     expect(store.readLatestChanges(conversationId)).toMatchObject({
-      turnId: 'turn-2',
+      turnId: 'turn-1',
+      changesSettled: true,
+      files: [{ path: 'src/a.ts', additions: 1, deletions: 0 }],
+    });
+    expect(store.readTurn(conversationId, 'turn-2')).toMatchObject({
       changesSettled: true,
       files: [],
     });
