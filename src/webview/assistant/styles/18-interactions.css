@@ -452,9 +452,14 @@
   right: 0;
   bottom: calc(100% + 6px);
   z-index: 2;
-  min-width: 174px;
-  max-width: min(340px, 86vw);
-  overflow: hidden;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: min(174px, calc(100vw - 24px));
+  max-width: min(340px, calc(100vw - 24px));
+  max-height: min(320px, calc(100vh - 96px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 6px;
   border: 1px solid color-mix(in srgb, var(--dvx-border-strong) 72%, transparent);
   border-radius: 8px;
@@ -479,6 +484,7 @@
   font-weight: 500;
   line-height: 17px;
   text-align: left;
+  white-space: normal;
   transition: background-color var(--dvx-duration-fast) ease, color var(--dvx-duration-fast) ease;
 }
 

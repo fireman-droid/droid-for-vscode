@@ -10,6 +10,14 @@
 - 删除过时设计、日期交接、验收流水和归档 Markdown。
 - 测试不再是默认打包门禁，并删除低价值 UI 与自证型测试。
 
+## 0.7.90
+
+### Fixed
+
+- 提前捕获 ExitSpecMode 新会话通知，避免 implementation session 在权限返回前创建时丢失自动切换。
+- 修复 Live snapshot 中空 Changes settlement 导致整份转录被拒绝的问题。
+- 收紧 Plan、Answers、Exploring、命令卡和 Review Dock 的布局与反馈位置。
+
 ## 0.7.89
 
 ### Changed

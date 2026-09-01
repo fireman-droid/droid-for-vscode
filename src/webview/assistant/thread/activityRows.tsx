@@ -29,7 +29,6 @@ import {
   CommandCardLeading,
   CommandCardMenu,
   CommandTerminalContent,
-  ExecuteMirrorEntry,
 } from "./commandCard";
 import { ActivityChevron } from "./icons";
 import {
@@ -202,24 +201,26 @@ export function ToolActivityRow({
               : ` · ${formatDuration(activity.durationMs)}`}
           </span>
         ) : null}
-        {isCommand ? null : <ActivityChevron />}
+        {isCommand ? (
+          <CommandCardMenu
+            command={activity.detail ?? ""}
+            terminalMirrorAvailable={running}
+          />
+        ) : (
+          <ActivityChevron />
+        )}
       </summary>
-      {activity.filePath !== null || isCommand ? (
+      {activity.filePath !== null ? (
         <div className="dvx-tool-row-actions">
-          {activity.filePath === null ? null : (
-            <ToolFilePath
-              path={activity.filePath}
-              turnId={activity.turnId}
-              showStats={false}
-            />
-          )}
+          <ToolFilePath
+            path={activity.filePath}
+            turnId={activity.turnId}
+            showStats={false}
+          />
           {activity.filePath !== null &&
           activity.status === "completed" &&
           isPreviewableFilePath(activity.filePath) ? (
             <PreviewChip path={activity.filePath} />
-          ) : null}
-          {isCommand ? (
-            <CommandCardMenu command={activity.detail ?? ""} />
           ) : null}
         </div>
       ) : null}
@@ -245,10 +246,6 @@ export function ToolActivityRow({
           open={open}
         />
       )}
-      <ExecuteMirrorEntry
-        status={activity.status}
-        detailKind={activity.detailKind}
-      />
       {activity.status === "failed" &&
       activity.errorMessage !== null &&
       commandError === null ? (

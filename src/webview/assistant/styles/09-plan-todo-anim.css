@@ -60,7 +60,8 @@
 .dvx-plan-step-completed .dvx-plan-text {
   color: var(--dvx-muted);
   text-decoration: line-through;
-  text-decoration-color: rgb(0 0 0 / 25%);
+  text-decoration-color: color-mix(in srgb, currentColor 68%, transparent);
+  text-decoration-thickness: 1px;
 }
 
 .dvx-plan-step-in_progress .dvx-plan-text {

@@ -3274,7 +3274,7 @@ function parseChangesTranscriptItem(
   ) {
     return undefined;
   }
-  const files = parseChangedFiles(value.files);
+  const files = parseChangedFiles(value.files, 0);
   return files === undefined
     ? undefined
     : {

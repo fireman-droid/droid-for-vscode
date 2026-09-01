@@ -428,31 +428,10 @@
   user-select: text;
 }
 
-/* Terminal mirror entry (native-terminal slice A): a quiet text
-   action under the live output preview — plain subtle text, accent
-   only on hover. */
-.dvx-terminal-mirror-entry {
-  display: inline-block;
-  margin: 4px 0 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--dvx-subtle);
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 18px;
-  transition: color var(--dvx-duration-fast) ease;
-}
-
-.dvx-terminal-mirror-entry:hover,
-.dvx-terminal-mirror-entry:focus-visible {
-  color: var(--dvx-accent-strong);
-}
-
 /* ---- Cursor-style terminal card -----------------------------------
    One continuous frame owns the collapsed header and expanded body.
-   Existing details behavior, output pinning, copy menu and terminal
-   mirror entry remain unchanged. */
+   Existing details behavior, output pinning and header action menu
+   remain unchanged. */
 .dvx-activity-row.dvx-command-card {
   overflow: visible;
   margin: 4px 0 12px;

@@ -99,6 +99,10 @@ import {
   type RuntimeInteractionHandler,
 } from './runtimeInteractions';
 import type { RuntimeDiagnosticSink } from './runtimeDiagnostics';
+import {
+  createSpecHandoffWatch,
+  type SpecHandoffWatch,
+} from './specHandoffWatch';
 
 /** How long to wait for the OAuth URL notification after an accepted
  * MCP authentication request. */
@@ -236,12 +240,6 @@ export type FactoryDroidSessionFactory = (options: {
   interactionHandler: RuntimeInteractionHandler;
 }) => Promise<FactoryDroidSession>;
 
-interface SpecHandoffWatch {
-  reasonSeen: boolean;
-  candidateSessionId: string | null;
-  unsubscribe: () => void;
-}
-
 export interface FactoryDroidRuntimeOptions {
   readonly interactionHandler: RuntimeInteractionHandler;
   readonly createSdkSession?: FactoryDroidSessionFactory;
@@ -302,9 +300,15 @@ export class FactoryDroidRuntime implements DroidRuntime {
     const handler = options.interactionHandler;
     this.interactionHandler = {
       requestPermission: async (request) => {
-        const result = await handler.requestPermission(request);
-        this.observePermissionResult(request, result);
-        return result;
+        const handoffWatch = this.beginSpecHandoffWatch(request);
+        try {
+          const result = await handler.requestPermission(request);
+          handoffWatch?.resolve(result);
+          return result;
+        } catch (error) {
+          handoffWatch?.dispose();
+          throw error;
+        }
       },
       askUser: (request) => handler.askUser(request),
       // Auto-cancelled interactions used to leave zero trace, which
@@ -1272,64 +1276,22 @@ export class FactoryDroidRuntime implements DroidRuntime {
     }
   }
 
-  private observePermissionResult(
+  private beginSpecHandoffWatch(
     request: Parameters<RuntimeInteractionHandler['requestPermission']>[0],
-    result: Awaited<
-      ReturnType<RuntimeInteractionHandler['requestPermission']>
-    >,
-  ): void {
-    if (
-      typeof result?.selectedOption === 'string' &&
-      result.selectedOption.startsWith('proceed_new_session') &&
-      request.toolUses.some(
-        ({ confirmationKind }) => confirmationKind === 'exit_spec_mode',
-      )
-    ) {
-      this.armSpecHandoffWatch();
+  ): SpecHandoffWatch | null {
+    if (this.disposed || this.specHandoffWatch !== null) {
+      return null;
     }
-  }
-
-  private armSpecHandoffWatch(): void {
-    const session = this.session;
-    if (
-      this.disposed ||
-      this.specHandoffWatch !== null ||
-      session === null ||
-      typeof session.onNotification !== 'function'
-    ) {
-      return;
-    }
-    const planningSessionId = session.id;
-    const watch: SpecHandoffWatch = {
-      reasonSeen: false,
-      candidateSessionId: null,
-      unsubscribe: () => {},
-    };
-    watch.unsubscribe = session.onNotification((notification) => {
-      if (this.specHandoffWatch !== watch) {
-        return;
-      }
-      const envelope = readSessionNotificationEnvelope(notification);
-      if (envelope === null) {
-        return;
-      }
-      if (
-        envelope.type === 'agent_turn_completed' &&
-        envelope.reason === 'spec_handoff'
-      ) {
-        watch.reasonSeen = true;
-      }
-      if (
-        watch.candidateSessionId === null &&
-        envelope.sessionId !== undefined &&
-        envelope.sessionId !== planningSessionId &&
-        isSafeSessionId(envelope.sessionId)
-      ) {
-        watch.candidateSessionId = envelope.sessionId;
-      }
-      if (watch.reasonSeen && watch.candidateSessionId !== null) {
-        const implementationSessionId = watch.candidateSessionId;
-        this.disarmSpecHandoffWatch();
+    let watch: SpecHandoffWatch | null = null;
+    watch = createSpecHandoffWatch({
+      request,
+      session: this.session,
+      onClosed: () => {
+        if (this.specHandoffWatch === watch) {
+          this.specHandoffWatch = null;
+        }
+      },
+      onHandoff: (planningSessionId, implementationSessionId) => {
         this.pendingTurnEvents.push({
           type: 'spec-handoff',
           implementationSessionId,
@@ -1342,9 +1304,10 @@ export class FactoryDroidRuntime implements DroidRuntime {
             implementationSessionId,
           },
         });
-      }
+      },
     });
     this.specHandoffWatch = watch;
+    return watch;
   }
 
   private disarmSpecHandoffWatch(): void {
@@ -1353,7 +1316,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
       return;
     }
     this.specHandoffWatch = null;
-    watch.unsubscribe();
+    watch.dispose();
   }
 
   private armSubagentWatch(): void {
@@ -1989,35 +1952,6 @@ function isSafeSessionId(value: unknown): value is string {
     value.trim() === value &&
     !/[\u0000-\u001f\u007f-\u009f]/.test(value)
   );
-}
-
-/**
- * Reads the fields of a `droid.session_notification` JSON-RPC envelope
- * (`params.sessionId` plus `params.notification.type`/`reason`) that
- * spec-handoff detection needs. Mirrors the SDK's own
- * `SessionNotificationSchema` shape without pulling in zod.
- */
-function readSessionNotificationEnvelope(
-  raw: Record<string, unknown>,
-): {
-  sessionId?: string;
-  type?: string;
-  reason?: string;
-} | null {
-  const params = raw['params'];
-  if (typeof params !== 'object' || params === null) {
-    return null;
-  }
-  const { sessionId, notification } = params as Record<string, unknown>;
-  if (typeof notification !== 'object' || notification === null) {
-    return null;
-  }
-  const { type, reason } = notification as Record<string, unknown>;
-  return {
-    ...(typeof sessionId === 'string' ? { sessionId } : {}),
-    ...(typeof type === 'string' ? { type } : {}),
-    ...(typeof reason === 'string' ? { reason } : {}),
-  };
 }
 
 /**

@@ -228,13 +228,15 @@
 }
 
 .dvx-activity-group-current-slot {
+  display: flex;
   min-width: 0;
-  height: 17px;
+  height: 21px;
+  align-items: baseline;
   overflow: hidden;
   color: var(--dvx-subtle);
   font-size: 11px;
   font-weight: 400;
-  line-height: 17px;
+  line-height: 21.125px;
   white-space: nowrap;
 }
 
@@ -248,8 +250,8 @@
   display: inline-flex;
   max-width: calc(100% - 12px);
   min-width: 0;
+  align-items: baseline;
   gap: 6px;
-  vertical-align: top;
   animation: dvx-activity-group-current-in 190ms
     cubic-bezier(0.22, 0.75, 0.3, 1) both;
 }

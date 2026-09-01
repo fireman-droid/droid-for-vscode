@@ -46,6 +46,9 @@ export function ReviewDock({
   const [expanded, setExpanded] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [ready, setReady] = useState(!deferMount);
+  const [openNoticeSequence, setOpenNoticeSequence] = useState<number | null>(
+    null,
+  );
   const [pendingScope, setPendingScope] = useState<{
     readonly kind: ReviewScopeKind;
     readonly turnId?: string;
@@ -131,6 +134,18 @@ export function ReviewDock({
       document.removeEventListener("keydown", closeOnOutsideOrEscape);
     };
   }, [moreOpen]);
+  useEffect(() => {
+    if (operation?.operation !== "open" || !operation.ok) {
+      return undefined;
+    }
+    setOpenNoticeSequence(operation.sequence);
+    const timer = window.setTimeout(() => {
+      setOpenNoticeSequence((current) =>
+        current === operation.sequence ? null : current,
+      );
+    }, 1_800);
+    return () => window.clearTimeout(timer);
+  }, [operation]);
   const body = useDeferredDisclosure(expanded);
   if (changes.files.length === 0 || !ready) {
     return null;
@@ -151,6 +166,11 @@ export function ReviewDock({
   const count = `${changes.files.length} ${
     changes.files.length === 1 ? "file" : "files"
   } changed`;
+  const showOpenNotice =
+    operation?.operation === "open" &&
+    operation.ok &&
+    operation.sequence === openNoticeSequence &&
+    operation.reviewScopeId === review?.reviewScopeId;
   const isSelectedScope = (kind: ReviewScopeKind): boolean =>
     pendingScope !== null
       ? pendingScope.kind === kind &&
@@ -181,6 +201,11 @@ export function ReviewDock({
         >
           <ActivityChevron />
           <span className="dvx-review-dock-count">{count}</span>
+          {showOpenNotice ? (
+            <span className="dvx-review-dock-notice" aria-hidden="true">
+              {operation.message}
+            </span>
+          ) : null}
           {writing ? (
             <span className="dvx-review-dock-writing" role="status">
               <span aria-hidden="true" />
@@ -451,7 +476,8 @@ export function ReviewDock({
                     </button>
                   </div>
                 ) : null}
-                {operation?.reviewScopeId === review.reviewScopeId ? (
+                {operation?.reviewScopeId === review.reviewScopeId &&
+                (operation.operation !== "open" || !operation.ok) ? (
                   <div
                     className="dvx-review-result"
                     data-ok={operation.ok ? "true" : "false"}

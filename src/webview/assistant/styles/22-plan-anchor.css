@@ -246,7 +246,8 @@
 .dvx-plan-line-step-completed .dvx-plan-line-text {
   color: var(--dvx-muted);
   text-decoration: line-through;
-  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-decoration-color: color-mix(in srgb, currentColor 68%, transparent);
+  text-decoration-thickness: 1px;
 }
 
 /* The ring's hollow→filled check flip pops briefly; gated on the

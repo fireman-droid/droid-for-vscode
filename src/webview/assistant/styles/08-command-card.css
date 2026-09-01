@@ -259,11 +259,6 @@
   font-style: italic;
 }
 
-/* Quiet actions that follow the well sit on the card's white apron. */
-.dvx-command-card .dvx-terminal-mirror-entry {
-  margin: 6px 2px 8px;
-}
-
 .dvx-command-card .dvx-tool-error {
   margin: 7px 10px 9px;
 }

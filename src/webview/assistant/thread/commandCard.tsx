@@ -95,11 +95,14 @@ export function CommandTerminalContent({
  */
 export function CommandCardMenu({
   command,
+  terminalMirrorAvailable,
 }: {
   readonly command: string;
+  readonly terminalMirrorAvailable: boolean;
 }): React.JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const openMirror = useContext(TerminalMirrorContext);
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -179,42 +182,22 @@ export function CommandCardMenu({
           >
             {copied ? "Copied" : "Copy Command"}
           </button>
+          {terminalMirrorAvailable && openMirror !== null ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setMenuOpen(false);
+                openMirror();
+              }}
+            >
+              在终端中查看
+            </button>
+          ) : null}
         </div>
       ) : null}
     </span>
-  );
-}
-
-/**
- * Quiet expanded-area action on a live execute row: reveal the
- * read-only terminal mirror (native-terminal design slice A). Only
- * running rows qualify — history and replay rows are never
- * "running", so playback stays entryless by construction. Exported
- * for focused visibility and wiring tests.
- */
-export function ExecuteMirrorEntry({
-  status,
-  detailKind,
-}: {
-  readonly status: ToolActivityPresentation["status"];
-  readonly detailKind: ToolActivityPresentation["detailKind"];
-}): React.JSX.Element | null {
-  const openMirror = useContext(TerminalMirrorContext);
-  if (
-    openMirror === null ||
-    status !== "running" ||
-    detailKind !== "command"
-  ) {
-    return null;
-  }
-  return (
-    <button
-      type="button"
-      className="dvx-terminal-mirror-entry"
-      title="在只读镜像终端中实时查看命令输出"
-      onClick={openMirror}
-    >
-      在终端中查看
-    </button>
   );
 }
