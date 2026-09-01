@@ -49,6 +49,62 @@
 5. 长标题、长路径、长计划和多问题不会溢出。
 6. 动画不制造重复内容、布局跳动或滚动抢夺。
 
+## Conversation 恢复与切换过场
+
+最后确认：2026-09-01
+
+### 目标
+
+启动、Reload 和真实 Conversation 切换期间使用同一套 Droid 循环信号，明确表达
+“正在恢复或交接”，减少空白等待。过场只反映真实等待，不展示百分比、骨架屏或
+无法验证的阶段，也不能为了播放动画而延迟已经可用的持久化内容。
+
+视觉沿用 Factory/Droid 的克制黑白语言和现有 Runtime 3×3 点阵。循环从中心点
+扩散到十字，再扩散到四角，约 1.2 秒完成一次。点阵使用当前主题的前景与表面
+Token，不增加品牌色、Spinner、Banner 或填充式状态组件。
+
+### 状态与触发
+
+- 初始化 Webview、尚未收到首个权威 `host.snapshot` 时进入 `restoring`。
+- `restoring` 持续 120ms 仍未完成时，才在聊天区中央显示完整点阵和
+  `Restoring conversation`，避免快速恢复产生闪烁。
+- 首个持久化 Conversation 快照到达后立即渲染真实 Transcript；完整过场以
+  150ms 淡出，不设置最短展示时间。
+- 快照已经可读但 Runtime 仍为 `connecting` 时，只在标题旁显示缩小的同款循环，
+  Transcript 保持可读，Composer 根据现有连接规则保持不可发送。
+- 用户选择另一 Conversation 或创建新 Conversation 时立即进入 `switching`。
+  旧 Transcript 留在原位并降低透明度、轻微模糊，完整点阵和
+  `Switching conversation` 覆盖聊天区。目标 Conversation 的权威快照到达后，
+  新内容替换旧内容并在 150ms 内显现。
+- Compact、Handoff 或其他只更换后端 Session、但 `conversationId` 不变的操作
+  不进入完整过场；仅在 `sessionId` 更新且连接未完成时显示标题旁的小点阵。
+- 非用户发起、直到快照到达才可知的 Conversation 变化不先制造等待，只对新内容
+  执行短暂显现。
+
+过场是 Webview 本地的表现状态，使用现有 `conversationId`、`sessionId`、
+`connection.status` 和快照时序判断，不新增 Runtime 进度、Bridge 百分比或持久化
+动画状态。真实内容和连接状态仍以 Host Snapshot 为权威。
+
+### 完成、失败与可访问性
+
+- 收到目标 Conversation 快照即完成完整过场；Runtime 连接完成后停止标题点阵。
+- 切换失败或 Runtime 变为 `unavailable` 时停止循环，保留最后一个可信
+  Conversation、草稿和现有错误/重试入口，不切换到空白页。
+- 过场文字使用 `role="status"` 和 polite live region，但循环帧不重复播报。
+- `prefers-reduced-motion: reduce` 下禁用点阵循环、模糊和位移动画，显示静态点阵
+  并直接切换内容。
+- 过场覆盖聊天区期间不改变滚动位置，不挂载重复 Transcript，也不把焦点移出用户
+  当前控件。
+
+### 验收
+
+1. 快于 120ms 的 Reload 不出现完整过场或闪屏。
+2. 慢 Reload 在首个快照前持续循环，快照到达后立即显示真实历史。
+3. Runtime 慢于历史恢复时，历史保持可读且只有标题点阵继续循环。
+4. 真实 Conversation 切换期间保留旧内容作为背景，目标快照到达后只显示新内容。
+5. Compact/Handoff 不触发全区遮罩。
+6. 失败、Reduced Motion、320px 宽度以及 Light、Dark、Auto 主题行为符合上述规则。
+
 ## Mission 工作区
 
 最后确认：2026-08-26
