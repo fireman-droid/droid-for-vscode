@@ -48,11 +48,12 @@ Cursor 内真实行为和视觉仍以用户验收为准。
   已有行或追加可信的新 Turn，不能删除、替换或重排关闭前可见内容
 - 顶部 Header 仅显示 `Droid` 和连接状态点；完整 Runtime 与 Mission 状态通过
   tooltip 和无障碍文本保留，不再占用可见工具栏空间
-- 初始化、Reload 和真实 Conversation 切换使用同一套 Droid 3×3 循环信号：
-  快恢复不闪屏，慢恢复在首个权威 Snapshot 前显示完整过场，checkpoint 可读后立即
-  显示真实 Transcript；同一 Conversation 的 Compact/Handoff 只保留 Header 小信号
+- 初始化、Reload 和 Sessions 目录中的已有 Conversation 切换使用同一套 Droid
+  3×3 循环信号：快恢复不闪屏，checkpoint 可先更新过场后的真实 Transcript，但
+  完整过场持续到 Runtime connected 且 Composer 具备发送前置条件
 - 完整过场只覆盖 Conversation 区域，保留旧 Transcript 作为切换背景；失败后停止循环
-  并保留最后可信 Conversation 与草稿，Reduced Motion 使用静态点阵直接切换
+  并保留最后可信 Conversation 与草稿；New、Fork、Rewind、Compact/Handoff 不触发
+  本过场，Reduced Motion 使用静态点阵
 - daemon 历史加载、本地恢复检查点和长会话虚拟化；问题导航与顶部吸附问题使用
   同一像素边界判定
 - 下一条用户问题接近顶部时，会在自然滚动中逐像素推走旧吸顶问题，再接管为新的

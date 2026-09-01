@@ -12,65 +12,42 @@ type TransitionPhase =
   | 'leaving'
   | 'idle';
 
-export type ConversationSwitchKind =
-  | 'new'
-  | 'resume'
-  | 'worktree'
-  | 'fork'
-  | 'rewind';
-
 interface TransitionState {
   readonly sequence: number;
-  readonly conversationId: string | null;
   readonly sessionId: string | null;
   readonly connectionStatus: 'idle' | 'connecting' | 'connected' | 'unavailable';
 }
 
 interface PendingSwitch {
-  readonly conversationId: string | null;
-  readonly sessionId: string | null;
   readonly sequence: number;
-  readonly kind: ConversationSwitchKind;
+  readonly targetSessionId: string;
+  readonly snapshotSequence: number | null;
 }
 
-const FAILURE_CODES: Readonly<Record<ConversationSwitchKind, readonly string[]>> = {
-  new: ['session-operation-blocked', 'session-new-failed'],
-  resume: [
-    'session-selection-invalid',
-    'session-operation-blocked',
-    'session-resume-failed',
-    'session-close-failed',
-  ],
-  worktree: ['worktree-create-unavailable', 'session-new-failed'],
-  fork: [
-    'session-fork-blocked',
-    'session-fork-unsupported',
-    'session-fork-failed',
-  ],
-  rewind: ['edit-resend-blocked', 'edit-resend-unsupported', 'edit-resend-failed'],
-};
+const SELECT_FAILURE_CODES = [
+  'session-selection-invalid',
+  'session-operation-blocked',
+  'session-resume-failed',
+  'session-close-failed',
+] as const;
 
 export function useConversationTransition({
   sequence,
-  conversationId,
   sessionId,
   connectionStatus,
 }: TransitionState): {
-  readonly beginSwitch: (kind: ConversationSwitchKind) => void;
+  readonly beginSwitch: (targetSessionId: string) => void;
   readonly observeHostMessage: (message: StoreHostMessage) => void;
   readonly phase: TransitionPhase;
   readonly blocking: boolean;
-  readonly contentEntering: boolean;
   readonly overlay: React.JSX.Element | null;
 } {
   const [phase, setPhase] = useState<TransitionPhase>('boot-pending');
-  const [contentEntering, setContentEntering] = useState(false);
   const [firstSnapshotSequence, setFirstSnapshotSequence] = useState<
     number | null
   >(null);
   const phaseRef = useRef(phase);
-  const initialSnapshotSeenRef = useRef(false);
-  const observedConversationRef = useRef<string | null | undefined>(undefined);
+  const bootReadyRef = useRef(false);
   const pendingSwitchRef = useRef<PendingSwitch | null>(null);
 
   const transitionTo = useCallback((next: TransitionPhase): void => {
@@ -84,25 +61,56 @@ export function useConversationTransition({
   }, [transitionTo]);
 
   useEffect(() => {
-    if (
-      initialSnapshotSeenRef.current ||
-      (firstSnapshotSequence !== null && sequence >= firstSnapshotSequence)
-    ) {
-      initialSnapshotSeenRef.current = true;
+    bootReadyRef.current =
+      firstSnapshotSequence !== null &&
+      sequence >= firstSnapshotSequence &&
+      connectionStatus === 'connected' &&
+      sessionId !== null;
+  }, [
+    connectionStatus,
+    firstSnapshotSequence,
+    sequence,
+    sessionId,
+  ]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!bootReadyRef.current && phaseRef.current === 'boot-pending') {
+        transitionTo('restoring');
+      }
+    }, BOOT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [transitionTo]);
+
+  useEffect(() => {
+    const firstSnapshotCommitted =
+      firstSnapshotSequence !== null && sequence >= firstSnapshotSequence;
+    if (!firstSnapshotCommitted) {
+      return;
+    }
+    if (connectionStatus === 'unavailable') {
       if (phaseRef.current === 'boot-pending') {
         transitionTo('idle');
       } else if (phaseRef.current === 'restoring') {
         finish();
       }
-      return undefined;
+      return;
     }
-    const timer = setTimeout(() => {
-      if (!initialSnapshotSeenRef.current) {
-        transitionTo('restoring');
+    if (connectionStatus === 'connected' && sessionId !== null) {
+      if (phaseRef.current === 'boot-pending') {
+        transitionTo('idle');
+      } else if (phaseRef.current === 'restoring') {
+        finish();
       }
-    }, BOOT_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [finish, firstSnapshotSequence, sequence, transitionTo]);
+    }
+  }, [
+    connectionStatus,
+    finish,
+    firstSnapshotSequence,
+    sequence,
+    sessionId,
+    transitionTo,
+  ]);
 
   useEffect(() => {
     const pending = pendingSwitchRef.current;
@@ -114,20 +122,15 @@ export function useConversationTransition({
       return;
     }
     if (
-      sequence > pending.sequence &&
-      (
-        (conversationId !== null &&
-          conversationId !== pending.conversationId) ||
-        (conversationId === pending.conversationId &&
-          sessionId !== null &&
-          sessionId !== pending.sessionId)
-      )
+      pending.snapshotSequence !== null &&
+      sequence >= pending.snapshotSequence &&
+      connectionStatus === 'connected' &&
+      sessionId === pending.targetSessionId
     ) {
       finish();
     }
   }, [
     connectionStatus,
-    conversationId,
     finish,
     phase,
     sequence,
@@ -142,56 +145,45 @@ export function useConversationTransition({
     return () => clearTimeout(timer);
   }, [phase, transitionTo]);
 
-  useEffect(() => {
-    if (!initialSnapshotSeenRef.current || conversationId === null) {
-      return undefined;
-    }
-    if (observedConversationRef.current === undefined) {
-      observedConversationRef.current = conversationId;
-      return undefined;
-    }
-    if (observedConversationRef.current === conversationId) {
-      return undefined;
-    }
-    observedConversationRef.current = conversationId;
-    if (pendingSwitchRef.current !== null || phaseRef.current !== 'idle') {
-      return undefined;
-    }
-    setContentEntering(true);
-    const timer = setTimeout(() => setContentEntering(false), LEAVE_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [conversationId]);
-
   const beginSwitch = useCallback(
-    (kind: ConversationSwitchKind): void => {
-      if (!initialSnapshotSeenRef.current || phaseRef.current === 'switching') {
+    (targetSessionId: string): void => {
+      if (phaseRef.current !== 'idle') {
         return;
       }
-      pendingSwitchRef.current = { conversationId, sessionId, sequence, kind };
+      pendingSwitchRef.current = {
+        sequence,
+        targetSessionId,
+        snapshotSequence: null,
+      };
       transitionTo('switching');
     },
-    [conversationId, sequence, sessionId, transitionTo],
+    [sequence, transitionTo],
   );
 
   const observeHostMessage = useCallback(
     (message: StoreHostMessage): void => {
       if (message.type === 'host.snapshot') {
         setFirstSnapshotSequence((current) => current ?? message.sequence);
+        const pending = pendingSwitchRef.current;
+        if (
+          pending !== null &&
+          message.sequence > pending.sequence &&
+          message.sessionId === pending.targetSessionId
+        ) {
+          pendingSwitchRef.current = {
+            ...pending,
+            snapshotSequence: message.sequence,
+          };
+        }
         return;
       }
       const pending = pendingSwitchRef.current;
       if (pending === null) {
         return;
       }
-      if (message.type === 'turn.editResendRejected') {
-        if (pending.kind === 'rewind') {
-          finish();
-        }
-        return;
-      }
       if (
         message.type === 'runtime.diagnostic' &&
-        FAILURE_CODES[pending.kind].includes(message.code)
+        SELECT_FAILURE_CODES.some((code) => code === message.code)
       ) {
         finish();
       }
@@ -199,40 +191,22 @@ export function useConversationTransition({
     [finish],
   );
 
-  const fullOverlay = phase === 'restoring' || phase === 'switching' || phase === 'leaving';
+  const fullOverlay =
+    phase === 'restoring' || phase === 'switching' || phase === 'leaving';
   return {
     beginSwitch,
     observeHostMessage,
     phase,
-    blocking: phase === 'switching' || phase === 'leaving',
-    contentEntering,
+    blocking: phase !== 'idle',
     overlay: fullOverlay ? <ConversationTransitionOverlay phase={phase} /> : null,
   };
 }
 
-export function DroidSignalGrid({
-  size = 'full',
-  className,
-}: {
-  readonly size?: 'full' | 'inline' | 'compact';
-  readonly className?: string;
-}): React.JSX.Element {
+export function DroidSignalGrid(): React.JSX.Element {
   return (
-    <span
-      className={[
-        'dvx-droid-signal-grid',
-        `dvx-droid-signal-grid-${size}`,
-        className,
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      aria-hidden="true"
-    >
+    <span className="dvx-droid-signal-grid" aria-hidden="true">
       {Array.from({ length: 9 }, (_, index) => (
-        <i
-          className={size === 'inline' ? 'dvx-runtime-grid-dot' : undefined}
-          key={index}
-        />
+        <i key={index} />
       ))}
     </span>
   );

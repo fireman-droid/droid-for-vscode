@@ -24,10 +24,6 @@
     filter var(--dvx-duration-normal) ease;
 }
 
-.dvx-conversation-surface[data-content-entering='true'] > .dvx-thread {
-  animation: dvx-conversation-content-enter var(--dvx-duration-normal) ease-out both;
-}
-
 .dvx-conversation-transition-overlay {
   position: absolute;
   z-index: 8;
@@ -96,16 +92,6 @@
   animation-delay: 480ms;
 }
 
-.dvx-droid-signal-grid-compact {
-  --dvx-signal-dot: 3px;
-  --dvx-signal-gap: 2px;
-}
-
-.dvx-droid-signal-grid-inline {
-  --dvx-signal-dot: 2px;
-  --dvx-signal-gap: 2px;
-}
-
 @keyframes dvx-droid-signal {
   0%,
   100% {
@@ -149,25 +135,12 @@
   }
 }
 
-@keyframes dvx-conversation-content-enter {
-  from {
-    opacity: 0.5;
-    transform: translateY(4px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .dvx-conversation-surface[data-transition-phase='switching'] > .dvx-thread {
     filter: none;
     transition: none;
   }
 
-  .dvx-conversation-surface[data-content-entering='true'] > .dvx-thread,
   .dvx-conversation-transition-overlay,
   .dvx-conversation-transition-overlay[data-phase='leaving'],
   .dvx-droid-signal-grid i {

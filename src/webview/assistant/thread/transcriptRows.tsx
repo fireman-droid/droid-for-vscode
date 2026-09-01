@@ -12,7 +12,6 @@ import {
 } from "react";
 
 import type { SessionHistoryStatus } from "../../../shared/bridgeMessages";
-import { DroidSignalGrid } from "../conversationTransition";
 import { OpenPathContext } from "../MarkdownText";
 import {
   FileDiffContext,
@@ -597,7 +596,11 @@ export function PendingResponse({
       role="status"
       aria-live="polite"
     >
-      <DroidSignalGrid className="dvx-runtime-grid" size="inline" />
+      <span className="dvx-runtime-grid" aria-hidden="true">
+        {Array.from({ length: 9 }, (_, index) => (
+          <span className="dvx-runtime-grid-dot" key={index} />
+        ))}
+      </span>
       <span className={activityLive ? "dvx-pending-label" : "dvx-shimmer-text"}>
         {activity === "working" ? "Droid is working" : "Droid is responding"}
       </span>

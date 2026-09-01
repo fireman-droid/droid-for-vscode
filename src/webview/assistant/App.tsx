@@ -63,11 +63,9 @@ export function App(): React.JSX.Element {
     observeHostMessage: observeTransitionMessage,
     phase: conversationTransitionPhase,
     blocking: conversationTransitionBlocking,
-    contentEntering: conversationContentEntering,
     overlay: conversationTransitionOverlay,
   } = useConversationTransition({
     sequence: state.sequence,
-    conversationId: state.conversationId,
     sessionId: state.sessionId,
     connectionStatus: state.connection.status,
   });
@@ -478,7 +476,6 @@ export function App(): React.JSX.Element {
         if (builtin.kind === 'compact') {
           handleCompact();
         } else if (builtin.kind === 'new') {
-          beginConversationSwitch('new');
           post(vscode, { type: 'session.new' });
         } else if (builtin.kind === 'navigate') {
           handleSlashNavigate(builtin.target);
@@ -552,7 +549,6 @@ export function App(): React.JSX.Element {
       persistDraft(vscode, '');
     },
     [
-      beginConversationSwitch,
       btwAvailable,
       connectionStatus,
       conversationTransitionBlocking,
@@ -702,7 +698,6 @@ export function App(): React.JSX.Element {
       ) {
         return;
       }
-      beginConversationSwitch('rewind');
       post(vscode, {
         type: 'turn.editResend',
         sessionId,
@@ -713,7 +708,6 @@ export function App(): React.JSX.Element {
       });
     },
     [
-      beginConversationSwitch,
       connectionStatus,
       conversationTransitionBlocking,
       interactionCount,
@@ -878,17 +872,15 @@ export function App(): React.JSX.Element {
     });
   }, [state.sessionId, vscode]);
   const handleNewSession = useCallback((): void => {
-    beginConversationSwitch('new');
     post(vscode, { type: 'session.new' });
-  }, [beginConversationSwitch, vscode]);
+  }, [vscode]);
   const handleCreateWorktreeSession = useCallback((): void => {
-    beginConversationSwitch('worktree');
     post(vscode, { type: 'worktree.createSession' });
-  }, [beginConversationSwitch, vscode]);
+  }, [vscode]);
   const handleSelectSession = useCallback(
     (nextSessionId: string): void => {
       if (nextSessionId !== sessionId) {
-        beginConversationSwitch('resume');
+        beginConversationSwitch(nextSessionId);
       }
       post(vscode, {
         type: 'session.select',
@@ -948,13 +940,12 @@ export function App(): React.JSX.Element {
   );
   const handleForkSession = useCallback(
     (targetSessionId: string): void => {
-      beginConversationSwitch('fork');
       post(vscode, {
         type: 'session.fork',
         sessionId: targetSessionId,
       });
     },
-    [beginConversationSwitch, vscode],
+    [vscode],
   );
   // "Fork chat" on the last assistant message branches the current
   // session from its present state (the SDK has no per-message fork
@@ -1264,7 +1255,6 @@ export function App(): React.JSX.Element {
         <div
           className="dvx-conversation-surface"
           data-transition-phase={conversationTransitionPhase}
-          data-content-entering={conversationContentEntering || undefined}
           aria-busy={
             !showHandshakeNotice &&
             conversationTransitionPhase !== 'idle'
