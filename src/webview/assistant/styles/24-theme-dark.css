@@ -369,7 +369,35 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
 
 /* ---- 17-skills-mcp ------------------------------------------------------ */
 .dvx-shell[data-theme='dark'] .dvx-skill-switch {
-  background: rgb(255 255 255 / 16%);
+  border-color: rgb(255 255 255 / 14%);
+  background: rgb(255 255 255 / 8%);
+}
+
+.dvx-shell[data-theme='dark'] .dvx-skill-switch-thumb {
+  background: #8f8f8f;
+}
+
+.dvx-shell[data-theme='dark']
+  .dvx-skill-switch[aria-checked='true'] {
+  border-color: rgb(255 255 255 / 26%);
+  background: rgb(255 255 255 / 22%);
+}
+
+.dvx-shell[data-theme='dark']
+  .dvx-skill-switch[aria-checked='true']
+  .dvx-skill-switch-thumb {
+  background: #d0d0d0;
+}
+
+.dvx-shell[data-theme='dark'] .dvx-skill-switch:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 20%);
+  background: rgb(255 255 255 / 12%);
+}
+
+.dvx-shell[data-theme='dark']
+  .dvx-skill-switch[aria-checked='true']:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 32%);
+  background: rgb(255 255 255 / 27%);
 }
 
 .dvx-shell[data-theme='dark'] .dvx-mcp-status-connected {
