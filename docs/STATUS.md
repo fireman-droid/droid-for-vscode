@@ -15,6 +15,8 @@ Cursor 内真实行为和视觉仍以用户验收为准。
 - 共享 Daemon 在解析并校验真实 listener PID 与 Droid daemon 命令身份后，才允许
   读取凭据并执行认证连接；Session Lease 仅把缺失文件视为空表，损坏或不可读状态
   fail closed
+- Daemon 模式在扩展激活时预热共享 Sidecar；子进程提前退出会立即停止 listener
+  等待，失败后最多后台重试一次，复用 daemon 的健康检查连接直接交给 Runtime
 - Recovery Store V2 以产品 Conversation 为 owner，显式保存 root、fork、rewind、
   compact 和 handoff lineage；Compact/Handoff 更换 backend Session 时不拆分可见对话
 - Display Snapshot、active logical Turn 和 managed image artifacts 在 early paint 前

@@ -54,6 +54,8 @@ export interface DaemonDiscoveryDeps {
     url: string;
     pid: number;
     port: number;
+    /** The starter already verified that this pid owns the listener. */
+    listenerVerified?: boolean;
   }>;
   readonly checkHealth: (url: string) => Promise<DaemonHealth>;
   readonly resolveListenerPid: (
@@ -147,11 +149,13 @@ export async function ensureSharedDaemon(
   }
 
   const spawned = await d.startDaemon();
-  const listenerPid = await resolveVerifiedListenerPid(
-    spawned.port,
-    d.host,
-    d,
-  );
+  const listenerPid = spawned.listenerVerified === true
+    ? spawned.pid
+    : await resolveVerifiedListenerPid(
+        spawned.port,
+        d.host,
+        d,
+      );
   if (listenerPid === null) {
     await d.killProcessTree(spawned.pid).catch(() => undefined);
     throw new Error('Droid daemon listener identity could not be verified.');

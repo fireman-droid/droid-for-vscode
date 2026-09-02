@@ -4,7 +4,7 @@ import process from 'node:process';
 
 /** How long we wait for a freshly spawned daemon to start listening. */
 const DAEMON_LISTEN_TIMEOUT_MS = 30_000;
-const PORT_POLL_INTERVAL_MS = 500;
+const PORT_POLL_INTERVAL_MS = 100;
 /** Last stretch of daemon stderr kept for start-failure reports. */
 const STDERR_TAIL_MAX_CHARS = 2048;
 /** Cap on the pre-kill identity query; unverifiable means no kill. */
@@ -52,6 +52,7 @@ export interface DaemonLifecycleDeps {
     port: number,
     host: string,
     timeoutMs: number,
+    signal?: AbortSignal,
   ) => Promise<void>;
   /** Resolves and verifies the process listening on a daemon port. */
   readonly resolveListenerPid: (
@@ -83,7 +84,12 @@ export async function startDetachedDaemon(
       | 'killProcessTree'
     >
   > = {},
-): Promise<DaemonEndpoint & { readonly port: number }> {
+): Promise<
+  DaemonEndpoint & {
+    readonly port: number;
+    readonly listenerVerified: true;
+  }
+> {
   const droidPath = options.droidPath ?? 'droid';
   const host = options.host ?? '127.0.0.1';
   const spawnDetached =
@@ -107,12 +113,16 @@ export async function startDetachedDaemon(
   }
 
   let exited: number | null | undefined;
-  child.onExit((code) => {
-    exited = code ?? -1;
-  });
-
   try {
-    await waitForPort(port, host, DAEMON_LISTEN_TIMEOUT_MS);
+    await waitForDaemonPort(
+      child,
+      port,
+      host,
+      waitForPort,
+      (code) => {
+        exited = code ?? -1;
+      },
+    );
   } catch (error) {
     if (exited !== undefined) {
       throw new Error(
@@ -147,6 +157,7 @@ export async function startDetachedDaemon(
     pid: listenerPid,
     port,
     executable: droidPath,
+    listenerVerified: true,
   };
 }
 
@@ -185,12 +196,16 @@ export async function ensurePrivateDaemon(
     }
 
     let exited: number | null | undefined;
-    child.onExit((code) => {
-      exited = code ?? -1;
-    });
-
     try {
-      await waitForPort(port, host, DAEMON_LISTEN_TIMEOUT_MS);
+      await waitForDaemonPort(
+        child,
+        port,
+        host,
+        waitForPort,
+        (code) => {
+          exited = code ?? -1;
+        },
+      );
     } catch (error) {
       const tail = child.stderrTail?.().trim() ?? '';
       const stderrSuffix = tail === '' ? '' : `; stderr: ${tail}`;
@@ -426,30 +441,82 @@ function defaultWaitForPort(
   port: number,
   host: string,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<void> {
   const started = Date.now();
   return new Promise((resolve, reject) => {
-    const tryOnce = (): void => {
-      const socket = net.connect({ port, host });
-      socket.once('connect', () => {
-        socket.destroy();
+    let socket: net.Socket | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let settled = false;
+    const finish = (error?: Error): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      socket?.destroy();
+      signal?.removeEventListener('abort', onAbort);
+      if (error === undefined) {
         resolve();
+      } else {
+        reject(error);
+      }
+    };
+    const onAbort = (): void => {
+      finish(new Error('daemon process exited before listening'));
+    };
+    const tryOnce = (): void => {
+      if (settled) {
+        return;
+      }
+      if (signal?.aborted === true) {
+        onAbort();
+        return;
+      }
+      socket = net.connect({ port, host });
+      socket.once('connect', () => {
+        finish();
       });
       socket.once('error', () => {
-        socket.destroy();
+        if (settled) {
+          return;
+        }
+        socket?.destroy();
+        socket = undefined;
         if (Date.now() - started > timeoutMs) {
-          reject(
+          finish(
             new Error(
               `daemon port ${String(port)} not listening after ${String(timeoutMs)}ms`,
             ),
           );
         } else {
-          setTimeout(tryOnce, PORT_POLL_INTERVAL_MS);
+          timer = setTimeout(tryOnce, PORT_POLL_INTERVAL_MS);
         }
       });
     };
+    signal?.addEventListener('abort', onAbort, { once: true });
     tryOnce();
   });
+}
+
+async function waitForDaemonPort(
+  child: DaemonSpawnHandle,
+  port: number,
+  host: string,
+  waitForPort: DaemonLifecycleDeps['waitForPort'],
+  onExit: (code: number | null) => void,
+): Promise<void> {
+  const controller = new AbortController();
+  child.onExit((code) => {
+    onExit(code);
+    controller.abort();
+  });
+  await waitForPort(
+    port,
+    host,
+    DAEMON_LISTEN_TIMEOUT_MS,
+    controller.signal,
+  );
 }
 
 /**

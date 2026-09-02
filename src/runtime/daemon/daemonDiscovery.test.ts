@@ -145,22 +145,25 @@ describe('ensureSharedDaemon', () => {
   it('publishes only a verified fresh listener without health authentication', async () => {
     const checkHealth = vi.fn(async () => 'healthy' as const);
     const writeFileExclusive = vi.fn(() => true);
+    const resolveListenerPid = vi.fn(async () => 7331);
 
     const endpoint = await ensureSharedDaemon(FILE, {
       readFile: () => null,
       checkHealth,
-      resolveListenerPid: async () => 7001,
+      resolveListenerPid,
       writeFileExclusive,
       startDaemon: async () => ({
         url: 'ws://127.0.0.1:45900',
-        pid: 5001,
+        pid: 7001,
         port: 45900,
+        listenerVerified: true,
       }),
       cliVersion: () => '0.193.0',
       now: () => 1754956800000,
     });
 
     expect(checkHealth).not.toHaveBeenCalled();
+    expect(resolveListenerPid).not.toHaveBeenCalled();
     expect(endpoint).toMatchObject({ pid: 7001, spawned: true });
     expect(writeFileExclusive).toHaveBeenCalledWith(
       FILE,

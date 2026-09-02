@@ -67,7 +67,12 @@ describe('ensurePrivateDaemon', () => {
         ],
       },
     ]);
-    expect(waitForPort).toHaveBeenCalledWith(45678, '127.0.0.1', 30000);
+    expect(waitForPort).toHaveBeenCalledWith(
+      45678,
+      '127.0.0.1',
+      30000,
+      expect.any(AbortSignal),
+    );
   });
 
   it('defaults the parent pid to the current process', async () => {
@@ -107,6 +112,26 @@ describe('ensurePrivateDaemon', () => {
         },
       }),
     ).rejects.toThrow('exited before listening (code 3)');
+  });
+
+  it('stops waiting as soon as the daemon process exits', async () => {
+    const spawn = fakeSpawn(78);
+
+    await expect(
+      ensurePrivateDaemon(undefined, {
+        spawnDaemon: spawn.spawnDaemon,
+        pickFreePort: async () => 40004,
+        waitForPort: (_port, _host, _timeout, signal) =>
+          new Promise((_, reject) => {
+            signal?.addEventListener(
+              'abort',
+              () => reject(new Error('aborted')),
+              { once: true },
+            );
+            spawn.exit(4);
+          }),
+      }),
+    ).rejects.toThrow('exited before listening (code 4)');
   });
 
   it('retries once on a fresh port after a lost port race', async () => {
@@ -214,6 +239,7 @@ describe('startDetachedDaemon', () => {
       pid: 7001,
       port: 45900,
       executable: 'droid',
+      listenerVerified: true,
     });
     expect(spawn.calls[0]?.args).toEqual([
       'daemon',
