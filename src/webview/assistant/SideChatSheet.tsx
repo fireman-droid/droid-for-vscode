@@ -121,7 +121,7 @@ export function SideChatSheet({
       return;
     }
     input.style.height = "0";
-    input.style.height = `${Math.min(input.scrollHeight, 64)}px`;
+    input.style.height = `${Math.min(input.scrollHeight, 96)}px`;
   }, [draft]);
 
   useEffect(() => {
@@ -205,7 +205,12 @@ export function SideChatSheet({
         }}
       />
       <header className="dvx-btw-header">
-        <h2 className="dvx-btw-title">BTW</h2>
+        <div>
+          <h2 className="dvx-btw-title">BTW</h2>
+          <p className="dvx-btw-subtitle">
+            Side chat · doesn’t change the main conversation
+          </p>
+        </div>
         <button
           type="button"
           className="dvx-btw-close"
@@ -223,15 +228,27 @@ export function SideChatSheet({
           {state.entries.length === 0 && state.status === "forking" ? (
             <p className="dvx-btw-status">Preparing…</p>
           ) : null}
+          {state.entries.length === 0 && state.status === "ready" ? (
+            <p className="dvx-btw-empty">
+              Ask a quick question without interrupting your main chat.
+            </p>
+          ) : null}
           {state.entries.map((entry) => (
             <article key={entry.id} className="dvx-btw-entry">
-              <SideQuestion text={entry.question} />
-              <div className="dvx-btw-answer">
-                {entry.answer.length === 0 && entry.state === "streaming" ? (
-                  <span className="dvx-btw-status">Thinking…</span>
-                ) : (
-                  <DroidMarkdownContent text={entry.answer} />
-                )}
+              <div className="dvx-btw-message dvx-btw-message-user">
+                <span className="dvx-btw-role">You</span>
+                <SideQuestion text={entry.question} />
+              </div>
+              <div className="dvx-btw-message dvx-btw-message-droid">
+                <span className="dvx-btw-role">Droid</span>
+                <div className="dvx-btw-answer">
+                  {entry.answer.length === 0 &&
+                  entry.state === "streaming" ? (
+                    <span className="dvx-btw-status">Thinking…</span>
+                  ) : (
+                    <DroidMarkdownContent text={entry.answer} />
+                  )}
+                </div>
               </div>
               {entry.message === null ? null : (
                 <p className="dvx-btw-error">{entry.message}</p>
@@ -278,6 +295,11 @@ export function SideChatSheet({
               }
             }}
           />
+        </div>
+        <div className="dvx-btw-input-actions">
+          <span className="dvx-btw-input-hint">
+            Enter to send · Shift+Enter for a new line
+          </span>
           {streaming ? (
             <button
               type="button"
@@ -285,7 +307,7 @@ export function SideChatSheet({
               onClick={onStop}
               aria-label="Stop side answer"
             >
-              ■
+              Stop
             </button>
           ) : (
             <button
@@ -296,6 +318,7 @@ export function SideChatSheet({
               aria-label="Send side question"
             >
               <SendIcon />
+              <span>Send</span>
             </button>
           )}
         </div>
