@@ -1,7 +1,7 @@
 # 主聊天过程与视觉减重实施计划
 
 计划日期：2026-09-05
-计划状态：**代码与文档已完成，类型检查、预算和生产构建通过；待安装与动态验收**。
+计划状态：**代码与文档已完成，检查、VSIX 校验和 Cursor 安装通过；待 Reload 后动态验收**。
 设计依据：`DESIGN.md` 的“主聊天过程、流式输出与视觉减重”。
 
 ## 1. 目标与授权
@@ -10,7 +10,7 @@
 克制的流式与展开动效、统一的主聊天控件状态和三主题配色。
 
 用户已授权自主取舍、完成设计文档后直接写代码，不需要逐项确认。本轮由当前代理
-串行完成，不委派子代理。安装扩展和远端发布不在当前授权内。
+串行完成，不委派子代理。用户随后明确授权安装扩展，远端发布仍不在授权内。
 
 当前只完成设计不算产品能力上线。代码、类型检查、预算和生产构建完成后记录工程
 验证结果；VSIX 安装及真实 Cursor 行为/视觉验收另行进行，不能提前报告已安装完成。
@@ -151,9 +151,10 @@ git diff --check
 本轮精确路径及 staged diff，提交一个本地原子提交，不包含 dist、VSIX、日志、
 截图、凭据或其他用户改动，不 push。
 
-### 安装阶段（不在当前授权内）
+### 安装阶段（已按用户追加授权完成）
 
-用户明确要求安装后，才依次执行 `pnpm run package:vsix`、`pnpm run verify:vsix`、
-`cursor --install-extension dist/droidvisx.vsix --force` 并告知 Reload Window。
+已依次执行 `pnpm run package:vsix`、`pnpm run verify:vsix`、
+`cursor --install-extension dist/droidvisx.vsix --force`；75 项 VSIX 校验通过，Cursor
+确认安装 `droidvisx.droidvisx@0.8.0`，已告知用户 Reload Window。
 `package:vsix` 的现有 prepublish 会串行执行 package:prepare，不并发启动构建。
 真实 Cursor 交互、视觉和主题验收通过前，不宣称功能已经完成安装验收。

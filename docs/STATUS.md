@@ -10,7 +10,7 @@ Diff 审查链路已经接通。`0.8.0` 把本地恢复升级为 Conversation ca
 Store：Reload 先精确恢复最后 durable 可见状态，daemon history 只追加或补全；
 Cursor 内真实行为和视觉仍以用户验收为准。
 
-### 主聊天体验改造（代码已接通，待安装验收）
+### 主聊天体验改造（已安装，待真实交互验收）
 
 - Thinking 与相邻探索从第一项稳定成组，不再因字数、行数或工具数量突然拆分；
   展开选择保存在当前消息列表范围，详情按需挂载，虚拟列表返回后保留选择
@@ -29,7 +29,8 @@ Cursor 内真实行为和视觉仍以用户验收为准。
   深色回退、输入表面及高对比边界，保留主题更新与 Portal 同步链路
 - 最终版本已通过 `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run build`
   和 `git diff --check`。未运行测试套件、浏览器 smoke、截图或真实 Cursor 动态验收；
-  未打包、安装或远端发布
+  用户随后授权安装，`package:vsix` 与 `verify:vsix` 通过（75 项），Cursor 已确认
+  安装 `droidvisx.droidvisx@0.8.0`；待 Reload Window 后验收，未远端发布
 
 ### 可靠性、安全与维护性
 
