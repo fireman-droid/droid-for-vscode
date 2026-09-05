@@ -686,7 +686,7 @@ function SettingsDropdown<Value extends string>({
         type="button"
         className="dvx-popover-row"
         aria-expanded={expanded}
-        aria-controls={expanded ? id : undefined}
+        aria-controls={id}
         onClick={onToggle}
       >
         <span className="dvx-popover-row-copy">
@@ -695,32 +695,38 @@ function SettingsDropdown<Value extends string>({
         <span className="dvx-popover-row-value">{currentLabel}</span>
         <ChevronDownIcon />
       </button>
-      {expanded ? (
-        <div
-          id={id}
-          className="dvx-settings-select-options"
-          role="radiogroup"
-          aria-label={`${title} options`}
-        >
-          {options.map((option) => {
-            const checked = option.value === current;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                className="dvx-settings-select-option"
-                role="radio"
-                aria-checked={checked}
-                disabled={disabled}
-                onClick={() => onSelect(option.value)}
-              >
-                <span>{option.label}</span>
-                {checked ? <CheckIcon /> : null}
-              </button>
-            );
-          })}
+      <div
+        id={id}
+        className="dvx-settings-select-motion"
+        aria-hidden={!expanded}
+        inert={!expanded}
+      >
+        <div className="dvx-settings-select-clip">
+          <div
+            className="dvx-settings-select-options"
+            role="radiogroup"
+            aria-label={`${title} options`}
+          >
+            {options.map((option) => {
+              const checked = option.value === current;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  className="dvx-settings-select-option"
+                  role="radio"
+                  aria-checked={checked}
+                  disabled={disabled}
+                  onClick={() => onSelect(option.value)}
+                >
+                  <span>{option.label}</span>
+                  {checked ? <CheckIcon /> : null}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }

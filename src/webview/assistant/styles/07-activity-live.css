@@ -455,9 +455,9 @@
 }
 
 .dvx-activity-row.dvx-command-card > summary {
-  min-height: 38px;
+  min-height: 30px;
   gap: 7px;
-  padding: 7px 8px 7px 10px;
+  padding: 4px 8px;
   border-radius: 7px;
   background: color-mix(
     in srgb,

@@ -318,7 +318,11 @@ html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb:hover {
 }
 
 .dvx-shell[data-dvx-theme-preference='auto'] .dvx-composer:focus-within {
-  border-color: var(--dvx-focus);
+  border-color: color-mix(
+    in srgb,
+    var(--vscode-input-border, var(--dvx-border)) 75%,
+    var(--dvx-border-strong)
+  );
 }
 
 body:is(.vscode-high-contrast, .vscode-high-contrast-light)

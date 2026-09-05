@@ -419,6 +419,12 @@ export function Diagnostic({ data }: { readonly data: unknown }): React.JSX.Elem
       title={`${diagnostic.code}: ${diagnostic.message}`}
     >
       <code aria-hidden="true">{diagnostic.code}</code>
+      {diagnostic.code === "history-partial" ? <HistoryNoticeIcon /> : null}
+      {diagnostic.code === "queue-paused" ? (
+        <svg className="dvx-queue-paused-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M5.5 3.5v9M10.5 3.5v9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      ) : null}
       <span>{diagnostic.message}</span>
     </div>
   );
@@ -524,6 +530,15 @@ export function PendingResponse({
   );
 }
 
+function HistoryNoticeIcon(): React.JSX.Element {
+  return (
+    <svg className="dvx-history-notice-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M8 7v4M8 5v.25" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function HistoryNotice({
   historyStatus,
   truncated,
@@ -531,24 +546,19 @@ export function HistoryNotice({
   readonly historyStatus: SessionHistoryStatus | null;
   readonly truncated: boolean;
 }): React.JSX.Element | null {
-  if (historyStatus === "unavailable") {
-    return (
-      <aside className="dvx-history-notice" role="note">
-        Earlier CLI messages are unavailable here. You can continue this
-        session.
-      </aside>
-    );
-  }
-  if (historyStatus === "partial" || truncated) {
-    return (
-      <aside className="dvx-history-notice" role="note">
-        {historyStatus === "partial" && truncated
-          ? "Some earlier session content is unavailable, and older locally retained messages were trimmed."
-          : historyStatus === "partial"
-            ? "Some earlier session content is unavailable through the public Droid history."
-            : "Older messages were trimmed from the local display."}
-      </aside>
-    );
-  }
-  return null;
+  const message = historyStatus === "unavailable"
+    ? "Earlier CLI messages are unavailable here. You can continue this session."
+    : historyStatus === "partial" && truncated
+      ? "Some earlier session content is unavailable, and older locally retained messages were trimmed."
+      : historyStatus === "partial"
+        ? "Some earlier session content is unavailable through the public Droid history."
+        : truncated
+          ? "Older messages were trimmed from the local display."
+          : null;
+  return message === null ? null : (
+    <aside className="dvx-history-notice" role="note">
+      <HistoryNoticeIcon />
+      <span>{message}</span>
+    </aside>
+  );
 }

@@ -34,7 +34,7 @@
 }
 
 .dvx-composer:focus-within {
-  border-color: var(--dvx-border-strong);
+  border-color: color-mix(in srgb, var(--dvx-border) 75%, var(--dvx-border-strong));
   box-shadow: none;
 }
 

@@ -15,6 +15,7 @@ import {
   type PermissionInteractionRequest,
 } from '../../shared/bridgeMessages';
 import { DroidMarkdownContent } from './MarkdownText';
+import { PermissionAllowGroup } from './PermissionAllowGroup';
 import type { PendingInteraction } from './store';
 
 interface InteractionPanelProps {
@@ -177,9 +178,11 @@ export function PermissionRequestCard({
           </>
         ) : (
           <>
-            <span className="dvx-interaction-eyebrow">
-              {requestPresentation.eyebrow}
-            </span>
+            {requestPresentation.kind !== 'permission' ? (
+              <span className="dvx-interaction-eyebrow">
+                {requestPresentation.eyebrow}
+              </span>
+            ) : null}
             <h2 id={titleId}>{requestPresentation.title}</h2>
           </>
         )}
@@ -194,7 +197,9 @@ export function PermissionRequestCard({
             aria-label={tool.toolName}
           >
             <div className="dvx-permission-tool-meta">
-              <code>{tool.toolName}</code>
+              {requestPresentation.kind !== 'permission' ? (
+                <code>{tool.toolName}</code>
+              ) : null}
               <span>{formatConfirmationKind(tool.confirmationKind)}</span>
             </div>
             <strong>{tool.title}</strong>
@@ -427,106 +432,6 @@ export function PermissionRequestCard({
         )}
       </div>
     </section>
-  );
-}
-
-interface IndexedPermissionOption {
-  readonly option: PermissionInteractionRequest['options'][number];
-  readonly index: number;
-}
-
-function PermissionAllowGroup({
-  options,
-  expanded,
-  disabled,
-  primaryLabel,
-  menuLabel = 'More permission options',
-  onExpandedChange,
-  onEdit,
-  onRespond,
-}: {
-  readonly options: readonly IndexedPermissionOption[];
-  readonly expanded: boolean;
-  readonly disabled: boolean;
-  readonly primaryLabel?: string;
-  readonly menuLabel?: string;
-  readonly onExpandedChange: (expanded: boolean) => void;
-  readonly onEdit: (index: number) => void;
-  readonly onRespond: (value: string) => void;
-}): React.JSX.Element | null {
-  const primary = options[0];
-  if (primary === undefined) {
-    return null;
-  }
-
-  const select = ({ option, index }: IndexedPermissionOption): void => {
-    onExpandedChange(false);
-    if (option.requiresEditedSpec) {
-      onEdit(index);
-      return;
-    }
-    onRespond(option.value);
-  };
-
-  return (
-    <div className="dvx-permission-allow-group">
-      <button
-        className="dvx-button dvx-button-primary dvx-permission-primary"
-        type="button"
-        disabled={disabled}
-        onClick={() => select(primary)}
-      >
-        {primaryLabel ?? primary.option.label}
-      </button>
-      {options.length > 1 ? (
-        <>
-          <button
-            className="dvx-button dvx-button-primary dvx-permission-more"
-            type="button"
-            aria-label={menuLabel}
-            aria-expanded={expanded}
-            disabled={disabled}
-            onClick={() => onExpandedChange(!expanded)}
-          >
-            <PermissionMenuChevron />
-          </button>
-          {expanded ? (
-            <div className="dvx-permission-menu" role="menu">
-              {options.slice(1).map((option) => (
-                <button
-                  type="button"
-                  role="menuitem"
-                  key={option.index}
-                  disabled={disabled}
-                  onClick={() => select(option)}
-                >
-                  {option.option.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-function PermissionMenuChevron(): React.JSX.Element {
-  return (
-    <svg
-      className="dvx-permission-chevron"
-      viewBox="0 0 14 14"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="m4.25 5.75 2.75 2.75 2.75-2.75"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
 
@@ -850,7 +755,7 @@ function getPermissionPresentation(
   return {
     kind: 'permission',
     eyebrow: 'Permission request',
-    title: `Droid requests ${request.tools.length} ${
+    title: `Review ${request.tools.length} ${
       request.tools.length === 1 ? 'action' : 'actions'
     }`,
   };

@@ -40,8 +40,6 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
   // ends, so its fade keys off "was live in this mount" instead —
   // recovered history can never satisfy that.
   const running = useAuiState((s) => s.message.status?.type === "running");
-  // The newest reply keeps its action bar quietly visible
-  // (dvx-message-last); earlier ones reveal it on hover.
   const isLast = useAuiState((s) => s.message.isLast);
   const messageId = useAuiState((s) => s.message.id);
   const gitFlow = useContext(GitCommitFlowContext);
@@ -66,6 +64,11 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
     const value = s.message.metadata.custom?.replyCopyText;
     return typeof value === "string" ? value : null;
   });
+  const diagnosticOnly = useAuiState((s) =>
+    s.message.content.length > 0 && s.message.content.every(
+      (part) => part.type === "data" && part.name === "droid-diagnostic",
+    ),
+  );
   const wasRunningRef = useRef(false);
   if (running) {
     wasRunningRef.current = true;
@@ -78,11 +81,12 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
         replyTail ? "" : " dvx-message-cont"
       }`}
       data-aui-quote-selectable="false"
-      aria-label="Droid"
+      aria-label={diagnosticOnly ? "System notice" : "Droid"}
     >
       <AssistantMessageParts includeChanges={includeChanges} />
-      {replyTail && !running ? (
+      {replyTail && !running && !diagnosticOnly ? (
         <ActionBarPrimitive.Root
+          autohide="never"
           className={`dvx-assistant-actions${
             !running && wasRunningRef.current ? " dvx-actions-entry" : ""
           }`}
@@ -94,6 +98,7 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
             <ActionBarPrimitive.Copy
               className="dvx-message-action dvx-copy-action"
               aria-label="Copy response"
+              title="Copy response"
               copiedDuration={1500}
             >
               <CopyActionContent />
@@ -209,14 +214,24 @@ export function ReplyCopyAction({
     <button
       type="button"
       className="dvx-message-action dvx-copy-action"
-      aria-label="Copy response"
+      aria-label={copied ? "Copied response" : "Copy response"}
+      title={copied ? "Copied response" : "Copy response"}
       {...(copied ? { "data-copied": "true" } : {})}
-      onClick={() => {
-        void navigator.clipboard?.writeText(text);
-        setCopied(true);
+      onClick={async (event) => {
+        const button = event.currentTarget;
+        setCopied(false);
         if (resetRef.current !== null) {
           clearTimeout(resetRef.current);
         }
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          return;
+        }
+        if (!button.isConnected) {
+          return;
+        }
+        setCopied(true);
         resetRef.current = setTimeout(() => setCopied(false), 1500);
       }}
     >
@@ -245,6 +260,7 @@ export function RegenerateAction(): React.JSX.Element | null {
       className="dvx-message-action"
       type="button"
       aria-label={busy ? "Regenerating response" : "Regenerate response"}
+      title={busy ? "Regenerating response" : "Regenerate response"}
       aria-busy={busy}
       disabled={busy}
       onClick={() => {
@@ -259,8 +275,7 @@ export function RegenerateAction(): React.JSX.Element | null {
         busyResetRef.current = setTimeout(() => setBusy(false), 8000);
       }}
     >
-      <RegenerateIcon />
-      <span>Regenerate</span>
+      {busy ? <span className="dvx-action-spinner" aria-hidden="true" /> : <RegenerateIcon />}
     </button>
   );
 }
@@ -284,8 +299,9 @@ export function ForkAction(): React.JSX.Element | null {
     <button
       className="dvx-message-action"
       type="button"
-      aria-label="Fork chat"
-      title="Branch a new session from this point"
+      aria-label={busy ? "Forking chat" : "Fork chat"}
+      title={busy ? "Forking chat" : "Branch a new session from this point"}
+      aria-busy={busy}
       disabled={busy}
       onClick={() => {
         setBusy(true);
@@ -299,8 +315,7 @@ export function ForkAction(): React.JSX.Element | null {
         busyResetRef.current = setTimeout(() => setBusy(false), 8000);
       }}
     >
-      <ForkIcon />
-      <span>{busy ? "Forking…" : "Fork chat"}</span>
+      {busy ? <span className="dvx-action-spinner" aria-hidden="true" /> : <ForkIcon />}
     </button>
   );
 }

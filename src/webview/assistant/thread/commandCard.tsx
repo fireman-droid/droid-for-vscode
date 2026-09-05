@@ -10,6 +10,7 @@ import {
 
 import { tokenizeCommand } from "../commandCard";
 import { TerminalMirrorContext } from "../Thread";
+import { CheckIcon, CopyIcon } from "./icons";
 import type { ToolActivityPresentation } from "./readers";
 
 /** Cursor-style terminal marker: prompt at rest, disclosure on hover/open. */
@@ -165,22 +166,33 @@ export function CommandCardMenu({
           <button
             type="button"
             role="menuitem"
-            onClick={(event) => {
+            aria-label={copied ? "Command copied" : "Copy Command"}
+            onClick={async (event) => {
               event.preventDefault();
               event.stopPropagation();
-              void navigator.clipboard?.writeText(command);
+              try {
+                await navigator.clipboard.writeText(command);
+              } catch {
+                setCopied(false);
+                return;
+              }
+              if (rootRef.current === null) {
+                return;
+              }
               setCopied(true);
               if (closeTimerRef.current !== null) {
                 clearTimeout(closeTimerRef.current);
               }
-              // A beat of "Copied" feedback, then the menu retires.
               closeTimerRef.current = setTimeout(() => {
                 setMenuOpen(false);
                 setCopied(false);
               }, 900);
             }}
           >
-            {copied ? "Copied" : "Copy Command"}
+            <span className="dvx-command-copy-icon" aria-hidden="true">
+              {copied ? <CheckIcon /> : <CopyIcon />}
+            </span>
+            Copy Command
           </button>
           {terminalMirrorAvailable && openMirror !== null ? (
             <button

@@ -68,13 +68,11 @@ export function CopyIcon(): React.JSX.Element {
 export function CopyActionContent(): React.JSX.Element {
   return (
     <>
-      <span className="dvx-copy-idle">
+      <span className="dvx-copy-idle" aria-hidden="true">
         <CopyIcon />
-        <span>Copy</span>
       </span>
       <span className="dvx-copy-done" aria-hidden="true">
         <CheckIcon />
-        <span>Copied</span>
       </span>
     </>
   );

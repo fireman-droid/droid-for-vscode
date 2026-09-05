@@ -11,20 +11,6 @@
   align-items: center;
   gap: 2px;
   margin-top: 2px;
-  opacity: 0;
-  transform: translateY(-2px);
-  transition: opacity 120ms ease, transform 120ms ease;
-}
-
-.dvx-message-assistant:hover .dvx-assistant-actions, .dvx-message-assistant:focus-within .dvx-assistant-actions {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-/* The newest reply keeps its bar quietly visible (Cursor behavior);
-   earlier messages stay hover-revealed. hideWhenRunning already
-   keeps it out of a streaming turn. */
-.dvx-message-last .dvx-assistant-actions {
   opacity: 1;
   transform: none;
 }
@@ -56,6 +42,33 @@
   font-size: 11px;
   line-height: 16px;
   cursor: pointer;
+}
+
+.dvx-assistant-actions .dvx-message-action {
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  justify-content: center;
+  padding: 0;
+}
+
+.dvx-action-spinner {
+  box-sizing: border-box;
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid var(--dvx-border);
+  border-top-color: var(--dvx-ink);
+  border-radius: 50%;
+  animation: dvx-action-spin 800ms linear infinite;
+}
+
+@keyframes dvx-action-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-action-spinner { animation: none; }
 }
 
 .dvx-message-action:hover:not(:disabled), .dvx-message-action:focus-visible {

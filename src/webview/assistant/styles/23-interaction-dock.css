@@ -239,42 +239,48 @@
   border-radius: 0 6px 6px 0;
 }
 
-/* A regular permission request already owns one bordered action
-   surface. Remove the generic interaction rails around that surface. */
+/* The card owns the border; its menu must escape the Composer dock. */
 .dvx-interaction-panel:has(> .dvx-permission-permission) {
-  margin-top: 16px;
+  margin-top: 12px;
   padding: 0;
+  overflow: visible;
   border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .dvx-interaction-panel:has(> .dvx-permission-permission)
   > .dvx-permission-permission {
-  padding-top: 0;
-}
-
-.dvx-permission-permission .dvx-interaction-eyebrow::before {
-  width: 5px;
-  height: 5px;
-  background: var(--dvx-muted);
+  padding: 12px;
+  overflow: visible;
+  border: 1px solid var(--dvx-border);
+  border-radius: 8px;
+  background: var(--dvx-raised);
 }
 
 .dvx-permission-permission .dvx-interaction-heading h2 {
-  margin-top: 3px;
+  margin: 0;
   font-size: 13px;
-  line-height: 19px;
+  font-weight: 600;
+  line-height: 20px;
 }
 
 .dvx-permission-permission .dvx-permission-tools {
+  min-height: 0;
+  max-height: min(36vh, 320px);
   gap: 0;
-  margin-top: 8px;
-  overflow: hidden;
+  margin-top: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 0;
   border-radius: 0;
   background: transparent;
 }
 
 .dvx-permission-permission .dvx-permission-tool {
-  padding: 8px 0;
+  min-width: 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--dvx-border);
 }
 
@@ -301,15 +307,17 @@
 }
 
 .dvx-permission-permission .dvx-permission-tool strong {
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
 }
 
 .dvx-permission-permission .dvx-permission-tool pre {
   margin-top: 4px;
   color: var(--dvx-text-secondary);
-  font-size: 12px;
-  line-height: 19px;
+  font-family: var(--dvx-mono);
+  font-size: 11px;
+  line-height: 18px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -323,8 +331,19 @@
 
 .dvx-permission-permission .dvx-interaction-actions {
   min-height: 28px;
-  gap: 6px;
-  padding: 8px 0 0;
+  flex: none;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--dvx-border);
+}
+
+.dvx-permission-permission .dvx-interaction-actions > .dvx-button {
+  flex: 0 1 auto;
+}
+
+.dvx-permission-permission .dvx-interaction-actions > .dvx-button:first-child {
+  margin-right: auto;
 }
 
 .dvx-permission-permission .dvx-button {
@@ -335,15 +354,20 @@
 }
 
 .dvx-permission-permission .dvx-button-danger {
-  border-color: transparent;
+  border: 1px solid var(--dvx-border);
   color: var(--dvx-text-secondary);
   background: transparent;
 }
 
 .dvx-permission-permission .dvx-button-danger:hover:not(:disabled) {
-  border-color: transparent;
+  border-color: var(--dvx-border-hover);
   color: var(--dvx-ink);
-  background: transparent;
+  background: var(--dvx-soft);
+}
+
+.dvx-permission-permission .dvx-button:focus-visible {
+  outline: 1px solid var(--dvx-focus);
+  outline-offset: 2px;
 }
 
 .dvx-permission-permission .dvx-permission-allow-group {

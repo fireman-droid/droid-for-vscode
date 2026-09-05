@@ -104,9 +104,43 @@
   transform: rotate(180deg);
 }
 
+.dvx-settings-select > .dvx-popover-row > .dvx-chevron-down {
+  transition: transform 180ms var(--dvx-easing-out-strong);
+}
+
+.dvx-settings-select-motion {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 180ms var(--dvx-easing-out-strong),
+    opacity 180ms ease,
+    visibility 0s linear 180ms;
+}
+
+.dvx-settings-select[data-expanded="true"] > .dvx-settings-select-motion {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.dvx-settings-select-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .dvx-settings-select-options {
   display: grid;
   padding: 4px 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvx-settings-select-motion,
+  .dvx-settings-select > .dvx-popover-row > .dvx-chevron-down {
+    transition: none;
+  }
 }
 
 .dvx-settings-select-option {
