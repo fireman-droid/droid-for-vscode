@@ -30,7 +30,7 @@ describe('projectSessionHistory', () => {
                 name: 'AskUser',
                 input: {
                   questionnaire:
-                    '1. [question] Which library?\n[topic] Library\n[option] React\n[option] Vue',
+                    '1. [question] Which library?\nPlease consider the existing application.\n[topic] Library\n[option] React\n[option] Vue',
                 },
               },
               {
@@ -75,7 +75,11 @@ describe('projectSessionHistory', () => {
       expect.objectContaining({
         kind: 'ask-user-result',
         status: 'answered',
-        answers: [{ topic: 'Library', answer: 'React' }],
+        answers: [{
+          topic: 'Library',
+          question: 'Which library?\nPlease consider the existing application.',
+          answer: 'React',
+        }],
       }),
       expect.objectContaining({
         kind: 'ask-user-result',

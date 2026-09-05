@@ -10,6 +10,7 @@ export const STUDIO_SCENARIO_IDS = [
   'streaming',
   'plan',
   'ask-user',
+  'ask-user-result',
   'review',
   'subagent',
   'permission',
@@ -597,6 +598,37 @@ export const STUDIO_SCENARIOS: readonly StudioScenario[] = [
     label: 'AskUser',
     description: 'Single, multi-select, and open-response questions',
     build: askUser,
+  },
+  {
+    id: 'ask-user-result',
+    label: 'Answers',
+    description: 'Complete questions and answers with role labels',
+    build: (nextSequence) => [baseSnapshot(nextSequence, [
+      {
+        id: 'answers-prompt',
+        kind: 'user',
+        messageId: 'message-answers',
+        text: '请确认这次界面检查的范围。',
+      },
+      {
+        id: 'answers-result',
+        kind: 'ask-user-result',
+        turnId: 'answers-turn',
+        status: 'answered',
+        answers: [
+          {
+            topic: '修改范围',
+            question: '这次是否只调整问答记录的边框、角色标注和上下排版，并保留现有的提问与回答流程？',
+            answer: '按这个范围实施。',
+          },
+          {
+            topic: '验收方式',
+            question: '你希望在哪些主题和侧栏宽度下检查效果？\n请特别说明长问题是否需要完整显示。',
+            answer: '检查浅色和深色主题，以及 320px 和 480px 侧栏。\n问题和回答都完整显示，不要摘要。',
+          },
+        ],
+      },
+    ])],
   },
   {
     id: 'review',

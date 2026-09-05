@@ -1,16 +1,22 @@
 import {
   MAX_ASK_USER_ANSWER_LENGTH,
   MAX_ASK_USER_ANSWERS,
+  MAX_ASK_USER_QUESTION_LENGTH,
   MAX_ASK_USER_TOPIC_LENGTH,
   type AskUserInteractionResult,
   type AskUserResultTranscriptItem,
 } from '../../shared/bridgeMessages';
 import { isStrictRecord } from '../../shared/strictValidation';
 
-export function readAskUserTopics(
+export interface AskUserHistoryQuestion {
+  readonly topic: string;
+  readonly question?: string;
+}
+
+export function readAskUserQuestions(
   toolName: string,
   input: unknown,
-): readonly string[] | undefined {
+): readonly AskUserHistoryQuestion[] | undefined {
   if (
     toolName.toLowerCase().replaceAll('-', '').replaceAll('_', '') !==
       'askuser' ||
@@ -19,32 +25,54 @@ export function readAskUserTopics(
   ) {
     return undefined;
   }
-  const topics: string[] = [];
+  const questions: AskUserHistoryQuestion[] = [];
+  let questionLines: string[] | null = null;
+  const finishQuestion = (): void => {
+    const current = questions[questions.length - 1];
+    const question = questionLines?.join('\n').trim();
+    if (
+      current !== undefined && question !== undefined &&
+      question.length > 0 && question.length <= MAX_ASK_USER_QUESTION_LENGTH
+    ) {
+      questions[questions.length - 1] = { ...current, question };
+    }
+    questionLines = null;
+  };
   for (const line of input.questionnaire.split(/\r?\n/)) {
-    if (/^\s*(?:\d+\.\s*)?\[question\]\s*(.*)$/i.test(line)) {
-      if (topics.length >= MAX_ASK_USER_ANSWERS) {
+    const question = line.match(/^\s*(?:\d+\.\s*)?\[question\]\s*(.*)$/i);
+    if (question !== null) {
+      finishQuestion();
+      if (questions.length >= MAX_ASK_USER_ANSWERS) {
         return undefined;
       }
-      topics.push(`Question ${topics.length + 1}`);
+      questions.push({ topic: `Question ${questions.length + 1}` });
+      questionLines = [question[1] ?? ''];
       continue;
     }
-    const topic = line.match(/^\s*\[topic\]\s*(.*)$/i)?.[1]?.trim();
-    if (topic !== undefined && topic.length > 0 && topics.length > 0) {
-      topics[topics.length - 1] = topic.slice(
-        0,
-        MAX_ASK_USER_TOPIC_LENGTH,
-      );
+    if (/^\s*\[(?:topic|option)\]/i.test(line)) {
+      finishQuestion();
+      const topic = line.match(/^\s*\[topic\]\s*(.*)$/i)?.[1]?.trim();
+      const current = questions[questions.length - 1];
+      if (topic !== undefined && topic.length > 0 && current !== undefined) {
+        questions[questions.length - 1] = {
+          ...current,
+          topic: topic.slice(0, MAX_ASK_USER_TOPIC_LENGTH),
+        };
+      }
+    } else {
+      questionLines?.push(line);
     }
   }
-  return topics.length === 0 ? undefined : topics;
+  finishQuestion();
+  return questions.length === 0 ? undefined : questions;
 }
 
 export function projectAskUserHistoryResult(
-  topics: readonly string[] | undefined,
+  questions: readonly AskUserHistoryQuestion[] | undefined,
   text: string | undefined,
   isError: boolean,
 ): AskUserInteractionResult | undefined {
-  if (topics === undefined || text === undefined) {
+  if (questions === undefined || text === undefined) {
     return undefined;
   }
   if (isError) {
@@ -65,26 +93,26 @@ export function projectAskUserHistoryResult(
       answers.push(answer.slice(0, MAX_ASK_USER_ANSWER_LENGTH));
     }
   }
-  if (answers.length === 0 || answers.length !== topics.length) {
+  if (answers.length === 0 || answers.length !== questions.length) {
     return undefined;
   }
   return {
     status: 'answered',
     answers: answers.map((answer, index) => ({
-      topic: topics[index] ?? `Question ${index + 1}`,
+      ...questions[index]!,
       answer,
     })),
   };
 }
 
 export function projectAskUserHistoryItem(
-  topics: readonly string[] | undefined,
+  questions: readonly AskUserHistoryQuestion[] | undefined,
   text: string | undefined,
   isError: boolean,
   id: string,
   turnId: string,
 ): AskUserResultTranscriptItem | undefined {
-  const result = projectAskUserHistoryResult(topics, text, isError);
+  const result = projectAskUserHistoryResult(questions, text, isError);
   if (result === undefined) {
     return undefined;
   }

@@ -669,8 +669,9 @@ function mapItemToPart(
             ? { status: "cancelled" }
             : {
                 status: "answered",
-                answers: item.answers.map(({ topic, answer }) => ({
+                answers: item.answers.map(({ topic, question, answer }) => ({
                   topic,
+                  ...(question === undefined ? {} : { question }),
                   answer,
                 })),
               },

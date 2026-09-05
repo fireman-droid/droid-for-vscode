@@ -5,13 +5,26 @@ import { ingestConversationHistory } from './ingestConversationHistory';
 
 describe('ingestConversationHistory', () => {
   it('keeps canonical ids and order while enriching existing content', () => {
+    const answer = {
+      id: 'canonical-ask',
+      kind: 'ask-user-result',
+      turnId: 'turn-live',
+      status: 'answered',
+      answers: [{ topic: 'Library', answer: 'React' }],
+    } as const;
+    const completeAnswer = {
+      ...answer,
+      answers: [{ ...answer.answers[0], question: 'Which library?' }],
+    };
     const canonical = state([
       user('canonical-user', 'Question'),
       assistant('canonical-answer', 'turn-live', 'Part'),
+      answer,
     ]);
     const loaded = state([
       user('loaded-user', 'Question'),
       assistant('loaded-answer', 'projected-turn', 'Part complete'),
+      { ...completeAnswer, id: 'loaded-ask', turnId: 'projected-turn' },
     ]);
 
     expect(ingestConversationHistory(canonical, loaded)).toEqual({
@@ -21,6 +34,7 @@ describe('ingestConversationHistory', () => {
           ...canonical.transcript[1],
           text: 'Part complete',
         },
+        completeAnswer,
       ],
       historyStatus: 'complete',
       truncated: false,

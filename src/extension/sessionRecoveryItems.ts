@@ -6,6 +6,8 @@ import {
   MAX_ASK_USER_ANSWERS,
   MAX_ASK_USER_ANSWER_LENGTH,
   MAX_ASK_USER_TOPIC_LENGTH,
+  MAX_ASK_USER_QUESTION_LENGTH,
+  type AskUserResultAnswer,
   MAX_ASSISTANT_TEXT_LENGTH,
   MAX_ATTACHMENT_NAME_LENGTH,
   MAX_PENDING_ATTACHMENTS,
@@ -113,21 +115,24 @@ function parseAskUserResult(
   ) {
     return undefined;
   }
-  const answers: Array<{ topic: string; answer: string }> = [];
+  const answers: AskUserResultAnswer[] = [];
   for (const answerValue of answersValue) {
     if (!isStrictRecord(answerValue)) {
       return undefined;
     }
     const topic = dataValue(answerValue, 'topic');
+    const question = dataValue(answerValue, 'question');
     const answer = dataValue(answerValue, 'answer');
     if (
-      !hasExactKeys(answerValue, ['topic', 'answer']) ||
+      !hasExactKeys(answerValue, ['topic', 'answer'], ['question']) ||
       !isNonEmptyBoundedString(topic, MAX_ASK_USER_TOPIC_LENGTH) ||
-      !isNonEmptyBoundedString(answer, MAX_ASK_USER_ANSWER_LENGTH)
+      !isNonEmptyBoundedString(answer, MAX_ASK_USER_ANSWER_LENGTH) ||
+      (question !== undefined &&
+        !isNonEmptyBoundedString(question, MAX_ASK_USER_QUESTION_LENGTH))
     ) {
       return undefined;
     }
-    answers.push({ topic, answer });
+    answers.push({ topic, answer, ...(question === undefined ? {} : { question }) });
   }
   return {
     id,

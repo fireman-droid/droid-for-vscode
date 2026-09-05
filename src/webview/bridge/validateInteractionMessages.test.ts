@@ -37,6 +37,15 @@ describe('interaction Host message validation', () => {
       answers: [{ topic: 'Library', answer: 'React' }],
     };
     expect(parseSessionTranscript([row])).toEqual([row]);
+    const withQuestion = {
+      ...row,
+      answers: [{ ...row.answers[0], question: 'Which library?' }],
+    };
+    expect(parseSessionTranscript([withQuestion])).toEqual([withQuestion]);
+    expect(parseSessionTranscript([{
+      ...row,
+      answers: [{ ...row.answers[0], question: 42 }],
+    }])).toBeUndefined();
     expect(
       parseSessionTranscript([
         { ...row, status: 'cancelled', answers: row.answers },

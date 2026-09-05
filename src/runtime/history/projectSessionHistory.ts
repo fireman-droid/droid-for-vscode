@@ -50,7 +50,7 @@ import {
 import { readSessionMission } from './sessionMission';
 import {
   projectAskUserHistoryItem,
-  readAskUserTopics,
+  readAskUserQuestions,
 } from './askUserHistory';
 import { historyToolFilePaths } from './historyToolPaths';
 
@@ -78,7 +78,7 @@ interface Projection {
     string,
     {
       readonly transcriptId: string;
-      readonly askUserTopics?: readonly string[];
+      readonly askUserQuestions?: ReturnType<typeof readAskUserQuestions>;
     }
   >;
   readonly toolIdentities: Map<string, string>;
@@ -694,10 +694,10 @@ function appendTool(
     (projection.toolCounts.get(turnId) ?? 0) + 1,
   );
   if (!projection.tools.has(rawToolIdentity)) {
-    const askUserTopics = readAskUserTopics(toolName, block.input);
+    const askUserQuestions = readAskUserQuestions(toolName, block.input);
     projection.tools.set(rawToolIdentity, {
       transcriptId,
-      ...(askUserTopics === undefined ? {} : { askUserTopics }),
+      ...(askUserQuestions === undefined ? {} : { askUserQuestions }),
     });
     projection.toolIdentities.set(transcriptId, rawToolIdentity);
   }
@@ -769,7 +769,7 @@ function completeTool(
   projection.transcriptTextUnits +=
     transcriptItemTextUnits(updated) - transcriptItemTextUnits(existing);
   const askUserResult = projectAskUserHistoryItem(
-    tool.askUserTopics,
+    tool.askUserQuestions,
     extractToolResultText(block.content),
     block.isError === true,
     stableTranscriptId(

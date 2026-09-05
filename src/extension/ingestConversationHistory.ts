@@ -217,6 +217,25 @@ function enrichItem(
         toolUseId: canonical.toolUseId,
       };
     }
+    case 'ask-user-result': {
+      if (
+        loaded.kind !== 'ask-user-result' ||
+        canonical.status !== 'answered' || loaded.status !== 'answered' ||
+        canonical.answers.length !== loaded.answers.length ||
+        !canonical.answers.every((answer, index) =>
+          answer.topic === loaded.answers[index]?.topic &&
+          answer.answer === loaded.answers[index]?.answer)
+      ) {
+        return canonical;
+      }
+      return {
+        ...canonical,
+        answers: canonical.answers.map((answer, index) => {
+          const question = answer.question ?? loaded.answers[index]?.question;
+          return question === undefined ? answer : { ...answer, question };
+        }),
+      };
+    }
     case 'image': {
       const candidate = loaded as Extract<
         SessionTranscriptItem,

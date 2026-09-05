@@ -87,7 +87,8 @@ export function transcriptItemTextUnits(
         (item.status === 'answered'
           ? item.answers.reduce(
               (total, answer) =>
-                total + answer.topic.length + answer.answer.length,
+                total + answer.topic.length + (answer.question?.length ?? 0) +
+                answer.answer.length,
               0,
             )
           : 0)

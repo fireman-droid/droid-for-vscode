@@ -269,8 +269,8 @@ describe('PendingInteractionCoordinator', () => {
         result: {
           status: 'answered',
           answers: [
-            { topic: 'Decision', answer: 'First' },
-            { topic: 'Decision', answer: 'Second' },
+            { topic: 'Decision', question: 'First?', answer: 'First' },
+            { topic: 'Decision', question: 'Second?', answer: 'Second' },
           ],
         },
       },

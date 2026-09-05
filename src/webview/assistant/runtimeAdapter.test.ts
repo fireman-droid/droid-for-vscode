@@ -47,7 +47,7 @@ describe('Droid external-store adapter', () => {
           kind: 'ask-user-result',
           turnId: 'turn-a',
           status: 'answered',
-          answers: [{ topic: 'Library', answer: 'React' }],
+          answers: [{ topic: 'Library', question: 'Which library?', answer: 'React' }],
         },
       ],
       null,
@@ -59,7 +59,7 @@ describe('Droid external-store adapter', () => {
         name: 'droid-ask-user-result',
         data: {
           status: 'answered',
-          answers: [{ topic: 'Library', answer: 'React' }],
+          answers: [{ topic: 'Library', question: 'Which library?', answer: 'React' }],
         },
       },
     ]);

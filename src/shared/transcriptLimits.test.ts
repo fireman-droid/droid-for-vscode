@@ -75,5 +75,12 @@ describe('transcriptTextUnits', () => {
     expect(
       transcriptTextUnits([filled]) - transcriptTextUnits([base]),
     ).toBe('LibraryReact'.length);
+    const withQuestion = {
+      ...filled,
+      answers: [{ ...filled.answers[0], question: 'Which library?' }],
+    };
+    expect(
+      transcriptTextUnits([withQuestion]) - transcriptTextUnits([filled]),
+    ).toBe('Which library?'.length);
   });
 });

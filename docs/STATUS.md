@@ -32,6 +32,21 @@ Cursor 内真实行为和视觉仍以用户验收为准。
   用户随后授权安装，`package:vsix` 与 `verify:vsix` 通过（75 项），Cursor 已确认
   安装 `droidvisx.droidvisx@0.8.0`；待 Reload Window 后验收，未远端发布
 
+### AskUser 问答记录（已实现与静态验证，尚未安装）
+
+- 结果改为单层 1px 中性边框，每组依次显示 `AI`、完整问题、`我`、回答；
+  多组细线分隔，移除 Answers 标题及圆点，正文保留换行并自然折行
+- 完整问题已接通 Host 实时回执、Bridge 校验、历史 questionnaire 解析、
+  assistant-ui data part 与恢复持久化，并计入 transcript 文本预算
+- 旧记录继续可读；主题与回答匹配时由原始历史补齐缺失问题，不覆盖已有原文；
+  确实缺失时显示说明，不用主题冒充完整问题
+- Studio 新增 `Answers` 场景，可通过 `?scenario=ask-user-result` 刷新复现；
+  已检查 Light 480px、Dark 320px、Auto 400px 的边框、角色顺序、纵向排版、
+  换行和横向溢出，截图使用模拟数据；Auto 只验证 Studio 模拟的编辑器深色变量
+- 7 个相关测试文件、96 项测试通过；首轮两处旧预期未包含问题字段，更新后复跑通过。
+  `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run build` 与
+  `git diff --check` 通过；未跑全量测试，未重新生成/安装 VSIX，真实 Cursor 待验收
+
 ### 可靠性、安全与维护性
 
 - 共享 Daemon 在解析并校验真实 listener PID 与 Droid daemon 命令身份后，才允许

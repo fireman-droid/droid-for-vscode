@@ -172,7 +172,10 @@ describe('SessionRecoveryStore', () => {
           kind: 'ask-user-result',
           turnId: 'turn-1',
           status: 'answered',
-          answers: [{ topic: 'Library', answer: 'React' }],
+          answers: [
+            { topic: 'Library', question: 'Which library?', answer: 'React' },
+            { topic: 'Legacy', answer: 'Original answer' },
+          ],
         },
         {
           id: 'ask-result-2',
@@ -192,7 +195,10 @@ describe('SessionRecoveryStore', () => {
         kind: 'ask-user-result',
         turnId: 'turn-1',
         status: 'answered',
-        answers: [{ topic: 'Library', answer: 'React' }],
+        answers: [
+            { topic: 'Library', question: 'Which library?', answer: 'React' },
+            { topic: 'Legacy', answer: 'Original answer' },
+          ],
       },
       {
         id: 'ask-result-2',

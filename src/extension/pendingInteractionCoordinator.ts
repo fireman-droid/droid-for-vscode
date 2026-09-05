@@ -222,6 +222,7 @@ export class PendingInteractionCoordinator {
           status: 'answered',
           answers: entry.runtimeRequest.questions.map((question) => ({
             topic: question.topic,
+            question: question.question,
             answer:
               message.answers.find(({ index }) => index === question.index)
                 ?.answer ?? '',

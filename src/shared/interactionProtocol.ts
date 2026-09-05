@@ -52,6 +52,7 @@ export interface PlanDocumentOpenMessage {
 
 export interface AskUserResultAnswer {
   readonly topic: string;
+  readonly question?: string;
   readonly answer: string;
 }
 

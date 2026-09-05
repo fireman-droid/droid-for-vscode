@@ -1,5 +1,6 @@
 interface AskUserResultRow {
   readonly topic: string;
+  readonly question?: string;
   readonly answer: string;
 }
 
@@ -24,16 +25,18 @@ export function AskUserResult({
     );
   }
   return (
-    <section className="dvx-ask-result" aria-label="Your answers">
-      <header>
-        <span className="dvx-ask-result-dot" aria-hidden="true" />
-        <span>Answers</span>
-      </header>
+    <section className="dvx-ask-result" aria-label="问答记录">
       <dl>
-        {result.answers.map(({ topic, answer }, index) => (
-          <div key={`${topic}:${index}`}>
-            <dt>{topic}</dt>
-            <dd>{answer}</dd>
+        {result.answers.map(({ topic, question, answer }, index) => (
+          <div className="dvx-ask-result-pair" key={`${topic}:${index}`}>
+            <dt>
+              <span className="dvx-ask-result-role">AI</span>
+              <p>{question ?? `完整问题未保存在此记录中（主题：${topic}）`}</p>
+            </dt>
+            <dd>
+              <span className="dvx-ask-result-role">我</span>
+              <p>{answer}</p>
+            </dd>
           </div>
         ))}
       </dl>
@@ -69,11 +72,13 @@ function readAskUserResult(
       return null;
     }
     const topic = Reflect.get(raw, 'topic');
+    const question = Reflect.get(raw, 'question');
     const answer = Reflect.get(raw, 'answer');
-    if (typeof topic !== 'string' || typeof answer !== 'string') {
+    if (typeof topic !== 'string' || typeof answer !== 'string' ||
+        (question !== undefined && typeof question !== 'string')) {
       return null;
     }
-    answers.push({ topic, answer });
+    answers.push({ topic, answer, ...(question === undefined ? {} : { question }) });
   }
   return { status, answers };
 }
