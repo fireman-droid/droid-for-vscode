@@ -35,6 +35,11 @@ import { highlightCode } from './highlightCode';
 import { MermaidBlock } from './MermaidBlock';
 import { MessageStreamingContext } from './messageStreaming';
 import {
+  rehypeStreamingText,
+  StreamingSpan,
+  StreamingTextBoundary,
+} from './streamingText';
+import {
   detectPathLink,
   toWorkspaceRelativePath,
   type PathLink,
@@ -747,7 +752,9 @@ const COMPONENTS = {
 const TRANSCRIPT_COMPONENTS = {
   ...COMPONENTS,
   pre: TranscriptCodeBlock,
+  span: StreamingSpan,
 };
+const STREAM_REHYPE_PLUGINS = [...REHYPE_PLUGINS, rehypeStreamingText];
 
 // ```mermaid fences render as diagrams once their message finishes
 // streaming (MermaidBlock lazy-loads the separate mermaid bundle).
@@ -783,22 +790,26 @@ export const DroidMarkdownText = memo(function DroidMarkdownText():
   const running = useAuiState(
     (state) => state.message.status?.type === 'running',
   );
+  const text = useAuiState((state) => state.part.type === 'text' ? state.part.text : '');
+  const [initialLength] = useState(() => normalizeMathDelimiters(text).length);
   return (
     <MessageStreamingContext.Provider value={running}>
-      <div data-aui-quote-selectable>
-        <MarkdownTextPrimitive
-          className="dvx-markdown"
-          remarkPlugins={REMARK_PLUGINS}
-          rehypePlugins={REHYPE_PLUGINS}
-          preprocess={normalizeMathDelimiters}
-          components={TRANSCRIPT_COMPONENTS}
-          componentsByLanguage={COMPONENTS_BY_LANGUAGE}
-          skipHtml
-          urlTransform={markdownUrlTransform}
-          smooth={false}
-          defer
-        />
-      </div>
+      <StreamingTextBoundary initialLength={initialLength} running={running}>
+        <div data-aui-quote-selectable>
+          <MarkdownTextPrimitive
+            className="dvx-markdown"
+            remarkPlugins={REMARK_PLUGINS}
+            rehypePlugins={STREAM_REHYPE_PLUGINS}
+            preprocess={normalizeMathDelimiters}
+            components={TRANSCRIPT_COMPONENTS}
+            componentsByLanguage={COMPONENTS_BY_LANGUAGE}
+            skipHtml
+            urlTransform={markdownUrlTransform}
+            smooth={false}
+            defer
+          />
+        </div>
+      </StreamingTextBoundary>
     </MessageStreamingContext.Provider>
   );
 });

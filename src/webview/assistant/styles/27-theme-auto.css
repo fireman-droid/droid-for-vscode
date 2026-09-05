@@ -16,9 +16,9 @@ html[data-dvx-theme-preference='auto'] .dvx-slash-tooltip,
 html[data-dvx-theme-preference='auto'] .dvx-selection-toolbar {
   --dvx-surface: var(
     --vscode-sideBar-background,
-    var(--vscode-editor-background, #fff)
+    var(--vscode-editor-background, var(--dvx-base-surface, var(--dvx-page-surface)))
   );
-  --dvx-ink: var(--vscode-foreground, #262626);
+  --dvx-ink: var(--vscode-foreground, var(--dvx-base-ink));
   --dvx-raised: var(--vscode-sideBar-background, var(--dvx-surface));
   --dvx-overlay: var(
     --vscode-editorWidget-background,
@@ -42,10 +42,7 @@ html[data-dvx-theme-preference='auto'] .dvx-selection-toolbar {
     --vscode-descriptionForeground,
     var(--vscode-foreground, var(--dvx-ink))
   );
-  --dvx-subtle: var(
-    --vscode-disabledForeground,
-    var(--vscode-descriptionForeground, var(--dvx-ink))
-  );
+  --dvx-subtle: var(--vscode-descriptionForeground, var(--dvx-ink));
 
   /* Some editor themes explicitly define panel/widget borders as
      transparent, which prevents var() fallbacks from activating.
@@ -87,12 +84,12 @@ html[data-dvx-theme-preference='auto'] .dvx-selection-toolbar {
     --vscode-list-inactiveSelectionBackground,
     var(--vscode-list-hoverBackground, transparent)
   );
-  --dvx-on-accent: var(--vscode-button-foreground, #fff);
+  --dvx-on-accent: var(--vscode-button-foreground, var(--dvx-base-surface));
 
-  --dvx-danger: var(--vscode-errorForeground, #c93a4a);
+  --dvx-danger: var(--vscode-errorForeground, light-dark(#b52c40, #f08088));
   --dvx-warning: var(
     --vscode-editorWarning-foreground,
-    var(--vscode-descriptionForeground, var(--dvx-ink))
+    light-dark(#805d17, #d8b66c)
   );
   --dvx-diff-add: var(
     --vscode-gitDecoration-addedResourceForeground,
@@ -106,24 +103,8 @@ html[data-dvx-theme-preference='auto'] .dvx-selection-toolbar {
   --dvx-shadow: 0 12px 30px -14px
     var(--vscode-widget-shadow, rgb(0 0 0 / 32%));
 
-  --dvx-hl-comment: var(
-    --vscode-editorCodeLens-foreground,
-    var(--dvx-muted)
-  );
-  --dvx-hl-keyword: var(--vscode-symbolIcon-keywordForeground, #a626a4);
-  --dvx-hl-string: var(--vscode-symbolIcon-stringForeground, #50a14f);
-  --dvx-hl-number: var(--vscode-symbolIcon-numberForeground, #b25a00);
-  --dvx-hl-title: var(--vscode-symbolIcon-functionForeground, #4078f2);
-  --dvx-hl-type: var(--vscode-symbolIcon-classForeground, #c18401);
-  --dvx-hl-attr: var(--vscode-symbolIcon-propertyForeground, #986801);
-  --dvx-hl-deletion: var(
-    --vscode-gitDecoration-deletedResourceForeground,
-    #c03d33
-  );
-  --dvx-hl-meta: var(
-    --vscode-editorCodeLens-foreground,
-    var(--dvx-muted)
-  );
+  /* Symbol-icon colors are not syntax tokens. Keep the resolved palette's
+     readable highlighting instead of applying light fallbacks to dark code. */
 }
 
 html[data-dvx-theme-preference='auto'],
@@ -131,7 +112,7 @@ html[data-dvx-theme-preference='auto'] body,
 html[data-dvx-theme-preference='auto'] #root {
   background: var(
     --vscode-sideBar-background,
-    var(--vscode-editor-background, #fff)
+    var(--vscode-editor-background, var(--dvx-base-surface, var(--dvx-page-surface)))
   );
 }
 
@@ -209,7 +190,7 @@ html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb:hover {
   .dvx-diagnostic:not([data-diagnostic-code='queue-paused']):not(
     [data-diagnostic-code='history-partial']
   ) {
-  background: var(--dvx-raised);
+  background: transparent;
   box-shadow: none;
 }
 
@@ -322,6 +303,40 @@ html[data-dvx-theme-preference='auto'] *::-webkit-scrollbar-thumb:hover {
   textarea::placeholder,
 .dvx-shell[data-dvx-theme-preference='auto']
   .dvx-ask-user
-  input[type='text']::placeholder {
+  input[type='text']::placeholder,
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-composer-input::placeholder {
   color: var(--vscode-input-placeholderForeground, var(--dvx-subtle));
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-composer {
+  background: var(--vscode-input-background, var(--dvx-raised));
+  border-color: var(--vscode-input-border, var(--dvx-border));
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-composer-input {
+  color: var(--vscode-input-foreground, var(--dvx-ink));
+}
+
+.dvx-shell[data-dvx-theme-preference='auto'] .dvx-composer:focus-within {
+  border-color: var(--dvx-focus);
+}
+
+body:is(.vscode-high-contrast, .vscode-high-contrast-light)
+  .dvx-shell[data-dvx-theme-preference='auto'] {
+  --dvx-border: var(--vscode-contrastBorder, var(--dvx-focus));
+  --dvx-border-strong: var(--vscode-contrastBorder, var(--dvx-focus));
+  --dvx-muted: var(--vscode-foreground, var(--dvx-base-ink));
+  --dvx-subtle: var(--vscode-foreground, var(--dvx-base-ink));
+}
+
+body:is(.vscode-high-contrast, .vscode-high-contrast-light)
+  .dvx-shell[data-dvx-theme-preference='auto']
+  :is(button:focus-visible, summary:focus-visible, [role='radio'][aria-checked='true']) {
+  outline: 1px solid var(--vscode-focusBorder, var(--dvx-ink));
+  outline-offset: -1px;
+}
+
+body:is(.vscode-high-contrast, .vscode-high-contrast-light)
+  .dvx-shell[data-dvx-theme-preference='auto'] .dvx-stream-in {
+  animation: none;
 }

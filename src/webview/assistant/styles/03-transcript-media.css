@@ -85,10 +85,10 @@
   align-items: flex-start;
   gap: 9px;
   margin: 8px 0;
-  padding: 7px 13px 7px 12px;
-  border: 1px solid var(--dvx-border);
-  border-radius: 9px;
-  background: var(--dvx-raised);
+  padding: 4px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
   color: var(--dvx-muted);
   font-size: 11.5px;
@@ -97,32 +97,21 @@
   overflow-wrap: anywhere;
 }
 
-.dvx-diagnostic::before {
+.dvx-diagnostic::before { display: none; }
+
+.dvx-diagnostic-warning::before, .dvx-diagnostic-error::before {
+  display: block;
   flex: none;
-  width: 6px;
-  height: 6px;
-  /* Centers the dot on the first 17px text line. */
-  margin-top: 5.5px;
-  border-radius: 999px;
-  background: var(--dvx-subtle);
-  box-shadow: 0 0 0 3px var(--dvx-soft);
-  content: "";
+  color: currentcolor;
+  font-weight: 600;
+  content: "!";
 }
 
 .dvx-diagnostic code {
   display: none;
 }
 
-.dvx-diagnostic-warning {
-  border-color: color-mix(in srgb, var(--dvx-warning) 18%, var(--dvx-border));
-  background: var(--dvx-raised);
-  color: color-mix(in srgb, var(--dvx-warning) 52%, var(--dvx-muted));
-}
-
-.dvx-diagnostic-warning::before {
-  background: var(--dvx-warning);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dvx-warning) 13%, transparent);
-}
+.dvx-diagnostic-warning { color: var(--dvx-warning); }
 
 .dvx-diagnostic[data-diagnostic-code="queue-paused"],
 .dvx-diagnostic[data-diagnostic-code="history-partial"] {
@@ -152,16 +141,7 @@
   display: none;
 }
 
-.dvx-diagnostic-error {
-  border-color: color-mix(in srgb, var(--dvx-danger) 20%, var(--dvx-border));
-  background: var(--dvx-raised);
-  color: color-mix(in srgb, var(--dvx-danger) 78%, #4a3b3b);
-}
-
-.dvx-diagnostic-error::before {
-  background: var(--dvx-danger);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dvx-danger) 12%, transparent);
-}
+.dvx-diagnostic-error { color: var(--dvx-danger); }
 
 /* Block-level: one image per row (旧账 33 — the old inline-flex let
    two transcript images share a line). Natural width up to the

@@ -10,10 +10,10 @@
   display: grid;
   border-color: var(--dvx-border);
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-  min-height: 87px;
-  padding: 10px;
+  min-height: 80px;
+  padding: 8px;
   border: 1px solid var(--dvx-border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--dvx-raised);
   /* Cards carry no shadow — hairline only (spec §1.2); the big
      throw stays reserved for floating overlays. */
@@ -34,7 +34,7 @@
 }
 
 .dvx-composer:focus-within {
-  border-color: var(--dvx-border);
+  border-color: var(--dvx-border-strong);
   box-shadow: none;
 }
 
@@ -116,7 +116,7 @@
   min-width: 0;
   overflow-wrap: anywhere;
   margin-top: 2px;
-  color: #b45309;
+  color: var(--dvx-warning);
   font-size: 11px;
   line-height: 1.35;
 }
@@ -125,8 +125,8 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  min-height: 38px;
-  gap: 10px;
+  min-height: 32px;
+  gap: 4px;
   padding-top: 6px;
 }
 
@@ -135,14 +135,14 @@
   align-items: center;
   min-width: 0;
   flex: 1;
-  gap: 8px;
+  gap: 4px;
 }
 
 .dvx-composer-control-left {
   display: flex;
   align-items: center;
   flex: 0 0 auto;
-  gap: 8px;
+  gap: 4px;
 }
 
 .dvx-composer-tool-button {
@@ -153,25 +153,40 @@
   color: var(--dvx-muted);
   background: transparent;
   cursor: pointer;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  transition: color var(--dvx-duration-fast) ease;
 }
 
 .dvx-plus-button {
-  font-weight: 360;
-  border-color: var(--dvx-border);
-  border: 1px solid var(--dvx-border);
-  background: var(--dvx-raised);
-  font-size: 19px;
+  font-weight: 400;
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+}
+
+.dvx-shell :is(.dvx-composer-tool-button, .dvx-mode-trigger, .dvx-model-trigger):focus-visible {
+  outline: 1px solid var(--dvx-focus);
+  outline-offset: 2px;
+}
+
+.dvx-shell :is(.dvx-mode-trigger, .dvx-model-trigger) {
+  transition: color var(--dvx-duration-fast) ease;
+}
+
+.dvx-shell :is(.dvx-mode-trigger, .dvx-model-trigger) > .dvx-chevron-down {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
 }
 
 .dvx-context-ring {
   overflow: visible;
   transform: rotate(-90deg);
   transition: transform 150ms ease;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .dvx-context-ring-track, .dvx-context-ring-value {
@@ -209,10 +224,11 @@
   align-items: center;
   flex: 0 0 auto;
   margin-left: auto;
-  gap: 3px;
-  padding: 5px 4px;
+  height: 26px;
+  gap: 4px;
+  padding: 0 6px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 4px;
   color: var(--dvx-text-secondary);
   background: transparent;
   font-size: 12px;
@@ -232,7 +248,7 @@
 
 .dvx-shell .dvx-mode-trigger:hover:not(:disabled) {
   color: var(--dvx-ink);
-  background: var(--dvx-soft);
+  background: transparent;
 }
 
 .dvx-shell .dvx-mode-trigger-spec:hover:not(:disabled) {
@@ -300,19 +316,23 @@
 }
 
 .dvx-shell .dvx-model-trigger {
-  /* Let long configured display names breathe while the percentage
-     cap and flex shrink preserve the narrow secondary sidebar. */
+  min-width: 0;
   max-width: min(230px, 56%);
-  margin-left: 8px;
-  padding: 0;
+  height: 26px;
+  margin-left: 0;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
   color: var(--dvx-text-secondary);
   font-size: 12px;
   font-weight: 400;
   line-height: 18px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 4px;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .dvx-model-trigger > span {
@@ -321,8 +341,7 @@
   text-overflow: ellipsis;
 }
 
-/* Effort suffix on the trigger ("Fable 5 Max"): quiet grey, never
-   truncates — the model name span yields instead. */
+/* Name and effort share one truncation box; the chevron never shrinks. */
 .dvx-model-trigger .dvx-model-trigger-effort {
   flex: none;
   overflow: visible;
@@ -370,10 +389,10 @@
 
 .dvx-shell .dvx-send-action,
 .dvx-shell .dvx-stop-action {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  min-height: 24px;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px;
   display: grid;
   place-items: center;
   padding: 0;

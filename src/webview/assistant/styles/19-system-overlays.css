@@ -16,16 +16,22 @@
 }
 
 .dvx-shell .dvx-markdown blockquote {
-  padding: 0 0 0 10px;
-  border-left: 2px solid rgb(38 33 27 / 18%);
-  color: #6b6259;
-  background: transparent !important;
+  padding: 0 0 0 12px;
+  border: 0;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  background: transparent;
+}
+
+.dvx-shell .dvx-markdown blockquote blockquote {
+  padding-left: 0;
 }
 
 .dvx-shell .dvx-markdown pre {
   border: 1px solid var(--dvx-border);
   background: var(--dvx-code) !important;
-  color: #37312c !important;
+  color: var(--dvx-ink) !important;
 }
 
 .dvx-shell .dvx-markdown pre code {

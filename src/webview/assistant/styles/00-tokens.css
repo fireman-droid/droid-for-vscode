@@ -1,156 +1,112 @@
-/* Design tokens — single definition site (moved verbatim from the
-   .dvx-shell rule in 10-shell-frame.css; custom properties have one
-   definition in the whole sheet, so hoisting them into this earlier
-   file cannot change the cascade). The light values below are the
-   product's pure-white monochrome baseline; the dark theme overrides only token
-   values via `.dvx-shell[data-theme="dark"]`
-   (docs/product/theme-switching-design.md §2.1), plus the literal
-   dark skin in 24-theme-dark.css. Auto is a final editor-variable
-   scope in 27-theme-auto.css; explicit Light/Dark keep these values.
-
-   The lightbox and the slash tooltip portal to <body>, outside
-   .dvx-shell — they must sit in the token scope explicitly or their
-   var() references never resolve. */
+/* Portalled content needs the same token scope as the chat surface. */
 .dvx-shell,
 .dvx-image-lightbox,
 .dvx-slash-tooltip,
 .dvx-selection-toolbar {
-  /* Motion tokens (streaming-experience-design): every new animation
-     references these; legacy animations migrate opportunistically. */
-  --dvx-duration-instant: 50ms;   /* hover yield, instant feedback */
-  --dvx-duration-fast: 100ms;     /* fades */
-  --dvx-duration-normal: 150ms;   /* collapse/expand, chevron */
-  --dvx-duration-slow: 200ms;     /* per-item fade-in, block entry */
-  --dvx-duration-slower: 300ms;   /* large block entry ceiling */
+  --dvx-duration-instant: 80ms;
+  --dvx-duration-fast: 120ms;
+  --dvx-duration-normal: 150ms;
+  --dvx-duration-slow: 200ms;
+  --dvx-duration-slower: 300ms;
   --dvx-easing-out-strong: cubic-bezier(0.215, 0.61, 0.355, 1);
 
-  /* Persistent surfaces stay pure white. Code and terminal wells are
-     the sole recessed exception. */
-  --dvx-surface: #fff;
+  --dvx-base-surface: #fafafa;
+  --dvx-base-ink: #292929;
+  --dvx-surface: var(--dvx-base-surface);
   --dvx-raised: #fff;
-  --dvx-code: #f6f6f6;
+  --dvx-code: #f4f4f5;
   --dvx-overlay: #fff;
-  --dvx-well: #f6f6f6;
+  --dvx-well: #f4f4f5;
 
-  /* Text (ink → text-secondary → muted → subtle, darkest first) */
-  --dvx-ink: #000;
-  --dvx-text-strong: #171717;
-  --dvx-text-secondary: #404040;
-  --dvx-muted: #737373;
-  --dvx-subtle: #a3a3a3;
+  --dvx-ink: #292929;
+  --dvx-text-strong: #202024;
+  --dvx-text-secondary: #57575c;
+  --dvx-muted: #6b6b70;
+  --dvx-subtle: #6b6b70;
 
-  /* Lines and washes: translucent black hairlines over pure white. */
-  --dvx-border: rgb(0 0 0 / 14%);
-  --dvx-border-strong: rgb(0 0 0 / 24%);
-  --dvx-border-hover: #a3a3a3;
-  --dvx-soft: rgb(0 0 0 / 5%);
-
-  /* Fixed themes are monochrome. Auto replaces these with editor
-     button, link, selection and focus tokens. */
-  --dvx-accent: #000;
-  --dvx-accent-strong: #1a1a1a;
-  --dvx-accent-deep: #000;
-  --dvx-accent-soft: rgb(0 0 0 / 6%);
+  --dvx-border: #dedee2;
+  --dvx-border-strong: #85858d;
+  --dvx-border-hover: #85858d;
+  --dvx-soft: rgb(0 0 0 / 4%);
+  --dvx-accent: #292929;
+  --dvx-accent-strong: #202024;
+  --dvx-accent-deep: #292929;
+  --dvx-accent-soft: rgb(0 0 0 / 5%);
   --dvx-on-accent: #fff;
 
-  /* Semantics */
-  /* Calm crimson: reads as danger without the neon-pink plastic
-     sting of the old #ec003f (visual-bar decision, 2026-08-12). */
-  --dvx-danger: #c93a4a;
-  --dvx-warning: #525252;
+  --dvx-danger: #b52c40;
+  --dvx-warning: #805d17;
   --dvx-diff-add: #1a7f37;
   --dvx-diff-del: #cf222e;
-  /* Focus follows the fixed monochrome foreground. */
-  --dvx-focus: #737373;
+  --dvx-focus: #65656c;
+  --dvx-shadow: 0 8px 24px -10px rgb(0 0 0 / 22%);
 
-  /* Elevation */
-  --dvx-shadow: 0 16px 40px -14px rgb(0 0 0 / 28%);
-
-  /* Context Usage stays distinguishable without introducing chrome
-     accent colors into the fixed theme. */
   --dvx-ctx-1: #262626;
   --dvx-ctx-2: #525252;
   --dvx-ctx-3: #737373;
   --dvx-ctx-4: #a3a3a3;
   --dvx-ctx-5: #d4d4d4;
-
-  /* Type */
   --dvx-mono: ui-monospace, monospace;
 
-  /* Syntax highlighting (One-Light derived; the dark theme swaps the
-     whole group) */
-  --dvx-hl-comment: #918a80;
+  --dvx-hl-comment: #6b6b70;
   --dvx-hl-keyword: #a626a4;
-  --dvx-hl-string: #50a14f;
-  --dvx-hl-number: #b25a00;
-  --dvx-hl-title: #4078f2;
-  --dvx-hl-type: #c18401;
-  --dvx-hl-attr: #986801;
-  --dvx-hl-deletion: #c03d33;
-  --dvx-hl-meta: #7a6a56;
+  --dvx-hl-string: #387a37;
+  --dvx-hl-number: #925000;
+  --dvx-hl-title: #315fc2;
+  --dvx-hl-type: #876000;
+  --dvx-hl-attr: #876000;
+  --dvx-hl-deletion: #b52c40;
+  --dvx-hl-meta: #6b6b70;
 }
 
-/* ==== Dark theme (pure-black monochrome) ============================
-   Persistent surfaces stay black and separate through white
-   hairlines, typography and spacing. */
 .dvx-shell[data-theme='dark'],
 html[data-dvx-theme='dark'] .dvx-image-lightbox,
 html[data-dvx-theme='dark'] .dvx-slash-tooltip,
 html[data-dvx-theme='dark'] .dvx-selection-toolbar {
   color-scheme: dark;
+  --dvx-base-surface: #1e1e20;
+  --dvx-base-ink: #e4e4e7;
+  --dvx-surface: var(--dvx-base-surface);
+  --dvx-raised: #242427;
+  --dvx-code: #262629;
+  --dvx-overlay: #2a2a2e;
+  --dvx-well: #262629;
 
-  /* Code and terminal wells are the sole recessed exception. */
-  --dvx-surface: #000;
-  --dvx-raised: #000;
-  --dvx-code: #080808;
-  --dvx-overlay: #000;
-  --dvx-well: #101010;
+  --dvx-ink: #e4e4e7;
+  --dvx-text-strong: #f0f0f2;
+  --dvx-text-secondary: #b6b6bd;
+  --dvx-muted: #a1a1aa;
+  --dvx-subtle: #a1a1aa;
+  --dvx-border: #3e3e44;
+  --dvx-border-strong: #777780;
+  --dvx-border-hover: #777780;
+  --dvx-soft: rgb(255 255 255 / 5%);
+  --dvx-accent: #e4e4e7;
+  --dvx-accent-strong: #f0f0f2;
+  --dvx-accent-deep: #e4e4e7;
+  --dvx-accent-soft: rgb(255 255 255 / 6%);
+  --dvx-on-accent: #1e1e20;
 
-  /* Text */
-  --dvx-ink: #fff;
-  --dvx-text-strong: #e8e8e8;
-  --dvx-text-secondary: #d6d6d6;
-  --dvx-muted: #a3a3a3;
-  --dvx-subtle: #737373;
+  --dvx-danger: #f08088;
+  --dvx-warning: #d8b66c;
+  --dvx-diff-add: #70bd75;
+  --dvx-diff-del: #f08088;
+  --dvx-focus: #a1a1aa;
+  --dvx-shadow: 0 8px 24px -10px rgb(0 0 0 / 45%);
 
-  /* Lines and washes (translucent white; hover = brighter) */
-  --dvx-border: rgb(255 255 255 / 18%);
-  --dvx-border-strong: rgb(255 255 255 / 28%);
-  --dvx-border-hover: #737373;
-  --dvx-soft: rgb(255 255 255 / 7%);
-
-  /* Primary controls invert to a white fill with black content. */
-  --dvx-accent: #fff;
-  --dvx-accent-strong: #e6e6e6;
-  --dvx-accent-deep: #fff;
-  --dvx-accent-soft: rgb(255 255 255 / 8%);
-  --dvx-on-accent: #000;
-
-  /* Semantics (lifted for dark ground) */
-  --dvx-danger: #e5484d;
-  --dvx-warning: #bdbdbd;
-  --dvx-diff-add: #57ab5a;
-  --dvx-diff-del: #f47067;
-  --dvx-focus: #a3a3a3;
-
-  /* Elevation: shorter throw, deeper ink */
-  --dvx-shadow: 0 12px 28px -12px rgb(0 0 0 / 55%);
-
-  /* Context Usage uses a lifted grayscale ladder. */
   --dvx-ctx-1: #d4d4d4;
   --dvx-ctx-2: #a3a3a3;
   --dvx-ctx-3: #737373;
   --dvx-ctx-4: #525252;
   --dvx-ctx-5: #262626;
 
-  /* Syntax highlighting (VS Code Dark+ derived) */
-  --dvx-hl-comment: #6a9955;
-  --dvx-hl-keyword: #c586c0;
+  --dvx-hl-comment: #a1a1aa;
+  --dvx-hl-keyword: #cfa0cf;
   --dvx-hl-string: #ce9178;
   --dvx-hl-number: #b5cea8;
   --dvx-hl-title: #dcdcaa;
   --dvx-hl-type: #4ec9b0;
   --dvx-hl-attr: #9cdcfe;
-  --dvx-hl-deletion: #d16969;
-  --dvx-hl-meta: #a0937d;
+  --dvx-hl-deletion: #f08088;
+  --dvx-hl-meta: #a1a1aa;
 }

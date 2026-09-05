@@ -1,10 +1,3 @@
-// Model picker popover (spec §5.1, cursor/模型卡片.png): borderless
-// search crown, quiet 27px rows with the check on the right edge and
-// the effort pencil riding the name, a reasoning flyout, a drill-in
-// sub-view for the spec drafting override, and a fixed "Add models"
-// foot that opens the full-page model manager. Also exports the
-// model-name helpers the trigger consumes.
-
 import { useContext, useMemo, useState } from 'react';
 
 import type {
@@ -85,6 +78,31 @@ export function ModelPopover({
     );
   }, [modelCatalog, query]);
 
+  const selectEffort = (effort: SessionReasoningEffort | null): void => {
+    if (isSpecView) onUpdate({ field: 'specModeReasoningEffort', value: effort });
+    else if (effort !== null) onUpdate({ field: 'reasoningEffort', value: effort });
+  };
+
+  if (editingReasoning && selected !== undefined) {
+    return (
+      <div id={id} className="dvx-composer-popover dvx-model-popover" role="dialog" aria-label="Reasoning effort">
+        <div className="dvx-model-panel">
+          <div className="dvx-panel-head">
+            <button type="button" className="dvx-panel-back" autoFocus onClick={() => setEditingReasoning(false)}>
+              <ChevronLeftIcon /><span className="dvx-panel-title">Back to models</span>
+            </button>
+          </div>
+          <div className="dvx-reasoning-flyout">
+            <ReasoningEditor model={selected} current={scopedReasoning} disabled={disabled}
+              {...(isSpecView ? { defaultOptionLabel: 'Model default' } : {})}
+              onSelect={selectEffort} />
+          </div>
+          <SettingsStatus settings={settings} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       id={id}
@@ -94,30 +112,6 @@ export function ModelPopover({
     >
       {modelCatalog.status === 'ready' ? (
         <>
-          {editingReasoning && selected !== undefined ? (
-            <div className="dvx-reasoning-flyout">
-              <ReasoningEditor
-                model={selected}
-                current={scopedReasoning}
-                disabled={disabled}
-                defaultOptionLabel={
-                  isSpecView ? 'Model default' : undefined
-                }
-                onSelect={(effort) =>
-                  isSpecView
-                    ? onUpdate({
-                        field: 'specModeReasoningEffort',
-                        value: effort,
-                      })
-                    : effort !== null &&
-                      onUpdate({
-                        field: 'reasoningEffort',
-                        value: effort,
-                      })
-                }
-              />
-            </div>
-          ) : null}
           <div className="dvx-model-panel">
             {isSpecView ? (
               <div className="dvx-panel-head">
@@ -139,6 +133,7 @@ export function ModelPopover({
               id={`${id}-search`}
               className="dvx-model-search"
               type="search"
+              autoFocus
               value={query}
               placeholder="Search models"
               autoComplete="off"

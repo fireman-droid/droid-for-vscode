@@ -1,6 +1,6 @@
 .dvx-markdown h1, .dvx-markdown h2, .dvx-markdown h3, .dvx-markdown h4 {
   margin: 1.45em 0 0.58em;
-  color: #211f1c;
+  color: var(--dvx-text-strong);
   font-size: 1em;
   font-weight: 700;
   line-height: 1.35;
@@ -47,8 +47,8 @@
 .dvx-markdown :not(pre) > code {
   padding: 0 0.3em;
   border-radius: 4px;
-  background: rgb(69 54 37 / 6.5%);
-  color: #3b342f;
+  background: var(--dvx-code);
+  color: var(--dvx-ink);
   font-size: 0.92em;
 }
 
@@ -111,7 +111,7 @@
   justify-content: space-between;
   gap: 8px;
   padding: 2px 6px 2px 10px;
-  border-bottom: 1px solid #e7e0d6;
+  border-bottom: 0;
 }
 
 .dvx-code-block-language {
@@ -127,11 +127,11 @@
 
 .dvx-code-block-copy {
   display: inline-flex;
-  min-height: 20px;
+  min-height: 24px;
   flex: 0 0 auto;
   align-items: center;
   gap: 4px;
-  padding: 1px 6px;
+  padding: 1px 4px;
   border: 0;
   border-radius: 5px;
   color: var(--dvx-muted);
@@ -142,15 +142,16 @@
   cursor: pointer;
 }
 
-.dvx-code-block-copy:hover, .dvx-code-block-copy:focus-visible {
+.dvx-code-block-copy:hover:not(:disabled), .dvx-code-block-copy:focus-visible {
   color: var(--dvx-ink);
-  background: rgb(0 0 0 / 5%);
-  outline: none;
+  background: transparent;
 }
 
 .dvx-code-block-copy:focus-visible {
   box-shadow: 0 0 0 1px var(--dvx-focus);
 }
+
+.dvx-code-block-copy:last-child { min-width: 60px; }
 
 .dvx-code-block-copy svg {
   width: 12px;
@@ -317,13 +318,12 @@
   font-weight: 600;
 }
 
-/* Quotes are content, not emphasis: a neutral warm-grey hairline and
-   secondary warm ink (user report, 2026-08-12). System notices use
-   plain text instead of reusing this left-rail treatment. */
 .dvx-markdown blockquote {
-  padding-left: 10px;
-  border-left: 2px solid rgb(38 33 27 / 18%);
-  color: #6b6259;
+  padding-left: 12px;
+  border: 0;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
 }
 
 .dvx-markdown table {

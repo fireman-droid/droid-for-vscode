@@ -19,6 +19,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { FOLLOW_REJOIN_PX } from "../followScroll";
+import { ProcessPresentationProvider } from "../processPresentation";
 import {
   hasQuestionEntered,
   questionEntryOffset,
@@ -115,6 +116,7 @@ export function VirtualizedMessages({
 }): React.JSX.Element | null {
   const chrome = useContext(ThreadMessageChromeContext);
   const rows = useThreadMessageRows();
+  const messageIds = useMemo(() => rows.map((row) => row.id), [rows]);
   const turns = useMemo(() => buildTurns(rows), [rows]);
   const roleById = useMemo(
     () => new Map(rows.map((row) => [row.id, row.role])),
@@ -232,6 +234,11 @@ export function VirtualizedMessages({
       element.scrollTop = top;
     },
   });
+
+  // A turn can start above the viewport while its expanded row is still visible.
+  // Compensate only for turns entirely above the reader, not every visible resize.
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) =>
+    followingRef.current?.following !== true && item.end <= (instance.scrollOffset ?? 0);
 
   useLayoutEffect(() => {
     if (apiRef === undefined) {
@@ -351,6 +358,7 @@ export function VirtualizedMessages({
   }
 
   return (
+    <ProcessPresentationProvider messageIds={messageIds} followingRef={followingRef}>
     <PinnedMessageContext.Provider value={{ messageId: displayedMessageId }}>
       {displayedMessageId !== null && floatingHost !== null
         ? createPortal(
@@ -403,5 +411,6 @@ export function VirtualizedMessages({
         </div>
       </div>
     </PinnedMessageContext.Provider>
+    </ProcessPresentationProvider>
   );
 }

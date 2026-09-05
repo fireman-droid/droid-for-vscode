@@ -13,7 +13,7 @@
 html[data-dvx-theme='dark'],
 html[data-dvx-theme='dark'] body,
 html[data-dvx-theme='dark'] #root {
-  background: #000;
+  background: #1e1e20;
 }
 
 /* ---- 01-base: scrollbars flip to translucent white --------------- */
@@ -45,8 +45,8 @@ html[data-dvx-theme='dark'] *::-webkit-scrollbar-thumb:hover {
 }
 
 .dvx-shell[data-theme='dark'] .dvx-markdown :not(pre) > code {
-  background: rgb(255 255 255 / 8%);
-  color: #d6d6d6;
+  background: var(--dvx-code);
+  color: var(--dvx-ink);
 }
 
 .dvx-shell[data-theme='dark'] .dvx-path-link {
@@ -65,7 +65,7 @@ html[data-dvx-theme='dark'] *::-webkit-scrollbar-thumb:hover {
 .dvx-shell[data-theme='dark'] .dvx-markdown pre,
 .dvx-shell[data-theme='dark'] .dvx-activity-row pre,
 .dvx-shell[data-theme='dark'] .dvx-permission-tool pre {
-  color: #d4d4d4 !important;
+  color: var(--dvx-ink) !important;
 }
 
 .dvx-shell[data-theme='dark'] .dvx-code-block-header {
@@ -74,12 +74,11 @@ html[data-dvx-theme='dark'] *::-webkit-scrollbar-thumb:hover {
 
 .dvx-shell[data-theme='dark'] .dvx-code-block-copy:hover,
 .dvx-shell[data-theme='dark'] .dvx-code-block-copy:focus-visible {
-  background: rgb(255 255 255 / 8%);
+  background: transparent;
 }
 
 .dvx-shell[data-theme='dark'] .dvx-markdown blockquote {
-  border-left-color: rgb(255 255 255 / 18%);
-  color: var(--dvx-muted);
+  color: inherit;
 }
 
 /* ---- 03-transcript-media ------------------------------------------ */
@@ -87,12 +86,12 @@ html[data-dvx-theme='dark'] *::-webkit-scrollbar-thumb:hover {
   .dvx-diagnostic:not([data-diagnostic-code='queue-paused']):not(
     [data-diagnostic-code='history-partial']
   ) {
-  background: var(--dvx-raised);
+  background: transparent;
   box-shadow: none;
 }
 
 .dvx-shell[data-theme='dark'] .dvx-diagnostic-error {
-  color: color-mix(in srgb, var(--dvx-danger) 70%, #e8e8e8);
+  color: var(--dvx-danger);
 }
 
 .dvx-shell[data-theme='dark'] .dvx-image-placeholder {
@@ -115,13 +114,12 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
 
 /* ---- 04-chrome-popovers ------------------------------------------- */
 .dvx-shell[data-theme='dark'] .dvx-stop-action {
-  border-color: rgb(229 72 77 / 42%);
-  background: rgb(229 72 77 / 10%);
+  border-color: var(--dvx-border-strong);
+  background: transparent;
 }
 
-/* The shared composer rules own the neutral foreground/background. */
 .dvx-shell[data-theme='dark'] .dvx-send-action {
-  box-shadow: 0 1px 2px rgb(0 0 0 / 35%);
+  box-shadow: none;
 }
 
 .dvx-shell[data-theme='dark'] .dvx-popover-row-icon {
@@ -144,16 +142,13 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
 /* ---- 05-message-cards --------------------------------------------- */
 .dvx-shell[data-theme='dark'] .dvx-copy-action .dvx-copy-done,
 .dvx-shell[data-theme='dark'] .dvx-copy-action[data-copied] {
-  color: #52a678;
+  color: var(--dvx-ink);
 }
 
-.dvx-shell[data-theme='dark'] .dvx-tool-file {
-  background: rgb(255 255 255 / 7%);
-}
-
+.dvx-shell[data-theme='dark'] .dvx-tool-file,
 .dvx-shell[data-theme='dark'] .dvx-tool-file:hover,
 .dvx-shell[data-theme='dark'] .dvx-tool-file:focus-visible {
-  background: rgb(255 255 255 / 12%);
+  background: transparent;
   color: var(--dvx-ink);
 }
 
@@ -259,7 +254,7 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
 
 /* ---- 10-shell-frame ------------------------------------------------ */
 .dvx-shell[data-theme='dark'] .dvx-pinned-user-layer .dvx-message-user {
-  box-shadow: 0 6px 12px -8px rgb(0 0 0 / 60%);
+  box-shadow: none;
 }
 
 /* ---- 11-user-edit --------------------------------------------------
@@ -457,7 +452,7 @@ html[data-dvx-theme='dark'] .dvx-image-lightbox-close {
 }
 
 .dvx-shell[data-theme='dark'] .dvx-permission-more {
-  border-left-color: rgb(0 0 0 / 25%);
+  border-left-color: var(--dvx-border);
 }
 
 /* ---- 21-btw: the panel gradient is token-driven in its home file

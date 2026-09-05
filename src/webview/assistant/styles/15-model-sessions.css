@@ -9,15 +9,13 @@
   display: flex;
   flex-direction: column;
   width: 208px;
-  max-width: calc(100vw - 20px);
+  max-width: calc(100vw - 16px);
   padding: 0;
-  overflow: visible;
-  border: 1px solid color-mix(in srgb, var(--dvx-border-strong) 72%, transparent);
-  border-radius: 8px;
+  overflow: auto;
+  border: 1px solid var(--dvx-border);
+  border-radius: 6px;
   background: var(--dvx-overlay);
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 7%),
-    0 8px 24px -8px rgb(0 0 0 / 40%);
+  box-shadow: var(--dvx-shadow);
 }
 
 .dvx-model-panel {
@@ -260,21 +258,14 @@
   margin-left: 0;
 }
 
-/* Effort flyout: a sibling overlay beside the list, bottom-aligned
-   (Cursor's hover submenu placement); same finish as the popover. */
+/* Effort shares the picker footprint instead of overflowing a narrow sidebar. */
 .dvx-reasoning-flyout {
-  position: absolute;
-  right: calc(100% + 8px);
-  bottom: 0;
-  width: 168px;
+  min-height: 0;
+  width: 100%;
   padding: 4px;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--dvx-border-strong) 72%, transparent);
-  border-radius: 8px;
-  background: var(--dvx-overlay);
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 7%),
-    0 8px 24px -8px rgb(0 0 0 / 40%);
+  overflow: auto;
+  border: 0;
+  background: transparent;
 }
 
 .dvx-reasoning-heading {

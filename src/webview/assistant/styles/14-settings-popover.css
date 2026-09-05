@@ -47,9 +47,9 @@
 
 .dvx-settings-select {
   overflow: hidden;
-  border: 1px solid var(--dvx-border);
-  border-radius: 8px;
-  background: var(--dvx-raised);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .dvx-popover-row {
@@ -69,7 +69,7 @@
 }
 
 .dvx-settings-select[data-expanded="true"] .dvx-popover-row {
-  border-bottom: 1px solid var(--dvx-border);
+  color: var(--dvx-ink);
 }
 
 .dvx-popover-row-icon, .dvx-popover-row-copy span {
@@ -114,8 +114,8 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  min-height: 27px;
-  padding: 4px 10px;
+  min-height: 28px;
+  padding: 4px 8px;
   border: 0;
   background: transparent;
   color: var(--dvx-text-secondary);

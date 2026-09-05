@@ -19,6 +19,7 @@ import {
 } from "../activityGrouping";
 import { commandCardTitle, commandChips } from "../commandCard";
 import { parsePlanSteps } from "../planAnchor";
+import { ProcessGroupContext, useProcessDisclosure } from "../processPresentation";
 import {
   useSubagentActivity,
   useOpenSubagent,
@@ -470,13 +471,7 @@ export function formatSubagentSummary(subagent: {
   return pieces.filter((piece) => piece.length > 0).join(" · ");
 }
 
-/**
- * A coalesced run of exploration tools (and swallowed short Thinking).
- * The collapsed group is one real button: while active it shows the
- * latest member in a clipped text slot; once finished the same row
- * becomes an "Explored 3 files, 2 searches" summary. Expanding the
- * group exposes the original interactive rows, including Thinking.
- */
+/** A continuous reasoning/exploration run, independent of its growing content. */
 export function ActivityGroup({
   indices,
   children,
@@ -496,7 +491,9 @@ export function ActivityGroup({
     return found;
   }, [parts, indices]);
   const summary = useMemo(() => summarizeActivityGroup(members), [members]);
-  const [expanded, setExpanded] = useState(false);
+  const messageId = useAuiState((s) => s.message.id);
+  const disclosure = useProcessDisclosure(messageId, indices[0] ?? 0);
+  const { expanded, mounted, visible, toggle, buttonRef, contentRef } = disclosure;
   const activeIndex = activeActivityIndex(members);
   const activeMember = members[activeIndex];
   const activeActivity =
@@ -511,22 +508,23 @@ export function ActivityGroup({
   const groupClosed =
     !messageRunning ||
     (indices[indices.length - 1] ?? -1) < parts.length - 1;
-  const running = !groupClosed || summary.anyRunning;
-
-  if (!summary.renderAsGroup) {
-    return <>{children}</>;
-  }
-
+  const incomplete = useAuiState((s) => s.message.status?.type === "incomplete"
+    ? s.message.status.reason : null);
+  const running = incomplete === null && (!groupClosed || summary.runningCount > 0);
+  const tail = (indices.at(-1) ?? -1) === parts.length - 1;
+  const stopped = summary.stoppedCount > 0 || (tail && incomplete === "cancelled");
+  const action = summary.runningCount > 0
+    ? activeActivity.action
+    : running ? "Waiting for model" : summary.toolCount === 0 ? "Thought" : "Explored";
   const stateBits: string[] = [];
   if (summary.failedCount > 0) {
     stateBits.push(`${summary.failedCount} failed`);
+  } else if (tail && incomplete === "error") {
+    stateBits.push("failed");
   }
-  if (summary.stoppedCount > 0) {
-    stateBits.push("stopped");
-  }
-  if (summary.durationMs !== null) {
-    stateBits.push(formatDuration(summary.durationMs));
-  }
+  if (stopped) stateBits.push("stopped");
+  if (summary.truncated) stateBits.push("reasoning limit reached");
+  if (running && summary.runningCount > 1) stateBits.push(`${summary.runningCount} running`);
   return (
     <div
       className={`dvx-activity-group${
@@ -538,44 +536,33 @@ export function ActivityGroup({
         className={`dvx-activity-group-summary${
           running ? "" : " dvx-activity-group-summary-completed"
         }`}
+        ref={buttonRef}
         aria-expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
+        onClick={toggle}
       >
         <ActivityChevron />
         {running ? (
           <>
             <span className="dvx-activity-group-title">
-              <span className="dvx-activity-group-running-dot" />
-              <span>Exploring</span>
+              <span className="dvx-activity-group-running-dot" aria-hidden="true" />
+              <span key={action} className="dvx-activity-group-current">{action}</span>
             </span>
             <span className="dvx-activity-group-current-slot">
-              <span
-                key={`${activeIndex}:${activeActivity.action}:${
-                  activeActivity.target ?? ""
-                }`}
-                className="dvx-activity-group-current"
-              >
-                <span>{activeActivity.action}</span>
-                {activeActivity.target === null ? null : (
-                  <span
-                    className="dvx-activity-group-current-target"
-                    title={activeActivity.target}
-                  >
-                    {activeActivity.target}
-                  </span>
-                )}
-              </span>
+              {summary.runningCount > 0 && activeActivity.target !== null ? (
+                <span key={activeActivity.target} className="dvx-activity-group-current-target"
+                  title={activeActivity.target}>{activeActivity.target}</span>
+              ) : null}
             </span>
           </>
         ) : (
           <span className="dvx-tool-action">
-            Explored {summary.countsLabel}
+            {summary.toolCount === 0 ? "Thought" : `Explored ${summary.countsLabel}`}
           </span>
         )}
-        {!running && stateBits.length > 0 ? (
+        {stateBits.length > 0 ? (
           <span
             className={`dvx-activity-state${
-              summary.failedCount > 0
+              summary.failedCount > 0 || (tail && incomplete === "error")
                 ? " dvx-activity-state-failed"
                 : ""
             }`}
@@ -585,13 +572,16 @@ export function ActivityGroup({
         ) : null}
       </button>
       <div
+        ref={contentRef}
         className={`dvx-activity-group-details${
-          expanded ? " dvx-activity-group-details-open" : ""
+          visible ? " dvx-activity-group-details-open" : ""
         }`}
         aria-hidden={!expanded}
         inert={expanded ? undefined : true}
       >
-        <div className="dvx-activity-group-details-inner">{children}</div>
+        <div className="dvx-activity-group-details-inner">
+          {mounted ? <ProcessGroupContext.Provider value={true}>{children}</ProcessGroupContext.Provider> : null}
+        </div>
       </div>
     </div>
   );

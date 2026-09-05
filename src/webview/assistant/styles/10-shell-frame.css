@@ -1,15 +1,17 @@
-/* Outside .dvx-shell scope: tokens do not resolve on body/#root;
-   keep literals equal to --dvx-surface (see 01-base.css note). */
+html { --dvx-page-surface: #fafafa; }
+html[data-dvx-theme='dark'] { --dvx-page-surface: #1e1e20; }
+
+/* Page grounds also cover the area outside the shell. */
 body {
   overflow: clip;
-  background: #fff;
+  background: #fafafa;
 }
 
 #root {
   box-sizing: border-box;
   display: block;
   padding: 0;
-  background: #fff;
+  background: #fafafa;
 }
 
 .dvx-shell {
@@ -261,7 +263,7 @@ body {
 .dvx-pinned-user-layer .dvx-message-user {
   position: relative;
   background: var(--dvx-surface);
-  box-shadow: 0 6px 12px -8px rgb(0 0 0 / 25%);
+  box-shadow: none;
 }
 
 .dvx-message-user[data-pinned-placeholder] {

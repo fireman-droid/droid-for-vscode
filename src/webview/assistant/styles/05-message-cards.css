@@ -46,9 +46,10 @@
   min-height: 24px;
   align-items: center;
   gap: 4px;
-  padding: 2px 6px;
+  padding: 2px 4px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 3px;
+  transition: color var(--dvx-duration-fast) ease;
   color: var(--dvx-muted);
   background: transparent;
   font: inherit;
@@ -57,10 +58,18 @@
   cursor: pointer;
 }
 
-.dvx-message-action:hover, .dvx-message-action:focus-visible {
+.dvx-message-action:hover:not(:disabled), .dvx-message-action:focus-visible {
   color: var(--dvx-ink);
-  background: var(--dvx-soft);
-  outline: none;
+  background: transparent;
+}
+
+.dvx-message-action:active:not(:disabled) {
+  color: var(--dvx-text-strong);
+}
+
+.dvx-message-action:disabled {
+  color: var(--dvx-subtle);
+  cursor: default;
 }
 
 .dvx-message-action:focus-visible {
@@ -77,29 +86,20 @@
   display: none;
 }
 
+.dvx-copy-action { display: inline-grid; }
+
 .dvx-copy-action .dvx-copy-idle,
 .dvx-copy-action .dvx-copy-done {
+  grid-area: 1 / 1;
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
-.dvx-copy-action .dvx-copy-done {
-  display: none;
-  color: #2f7d4f;
-}
-
-.dvx-copy-action[data-copied] .dvx-copy-idle {
-  display: none;
-}
-
-.dvx-copy-action[data-copied] .dvx-copy-done {
-  display: inline-flex;
-}
-
-.dvx-copy-action[data-copied] {
-  color: #2f7d4f;
-}
+.dvx-copy-action .dvx-copy-done,
+.dvx-copy-action[data-copied] .dvx-copy-idle { visibility: hidden; }
+.dvx-copy-action[data-copied] .dvx-copy-done { visibility: visible; }
+.dvx-copy-action[data-copied] { color: var(--dvx-ink); }
 
 .dvx-message-assistant .dvx-assistant-actions:has(.dvx-copy-action[data-copied]) {
   opacity: 1;
@@ -120,7 +120,7 @@
   padding: 0 5px;
   border: 0;
   border-radius: 4px;
-  background: rgb(0 0 0 / 5%);
+  background: transparent;
   color: var(--dvx-muted);
   font-family: var(--dvx-mono, ui-monospace, monospace);
   font-size: 11px;
@@ -132,8 +132,8 @@
 
 .dvx-tool-file:hover,
 .dvx-tool-file:focus-visible {
-  background: rgb(0 0 0 / 9%);
-  color: var(--dvx-text);
+  background: transparent;
+  color: var(--dvx-ink);
   text-decoration: underline;
 }
 

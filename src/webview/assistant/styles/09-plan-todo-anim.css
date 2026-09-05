@@ -169,12 +169,7 @@
   }
 }
 
-.dvx-anim-live .dvx-message-live .dvx-markdown {
-  animation: dvx-entry-rise var(--dvx-duration-slow) ease-out;
-}
-
-.dvx-anim-live .dvx-message-live .dvx-activity-row,
-.dvx-anim-live .dvx-message-live .dvx-activity-group {
+.dvx-anim-live .dvx-message-live .dvx-activity-row {
   animation: dvx-entry-fade var(--dvx-duration-fast) ease-out;
 }
 

@@ -467,8 +467,8 @@ export function ComposerControls({
       <button
         type="button"
         className="dvx-model-trigger"
-        aria-label={`Model: ${modelName}`}
-        title={specOverrideModelId ?? confirmed?.modelId}
+        aria-label={`Model: ${modelName}${triggerReasoning === undefined ? '' : `, ${formatReasoningLabel(triggerReasoning)}`}${specOverrideModelId === null ? '' : ', Spec drafting'}`}
+        title={`${modelName}${triggerReasoning === undefined ? '' : ` · ${formatReasoningLabel(triggerReasoning)}`}`}
         aria-expanded={openPanel === 'model'}
         aria-controls={
           openPanel === 'model' ? `${panelId}-model` : undefined
@@ -476,18 +476,17 @@ export function ComposerControls({
         disabled={disabled || confirmed === null}
         onClick={() => toggle('model')}
       >
-        <span>{modelName}</span>
-        {/* Cursor-style "Fable 5 Max" readout (2026-08-13). */}
-        {triggerReasoning !== undefined ? (
-          <span className="dvx-model-trigger-effort" aria-hidden="true">
-            {formatReasoningLabel(triggerReasoning)}
-          </span>
-        ) : null}
-        {specOverrideModelId !== null ? (
-          <span className="dvx-model-trigger-scope" aria-hidden="true">
-            spec
-          </span>
-        ) : null}
+        <span className="dvx-model-trigger-label">
+          {modelName}
+          {triggerReasoning !== undefined ? (
+            <span className="dvx-model-trigger-effort">
+              {' '}{formatReasoningLabel(triggerReasoning)}
+            </span>
+          ) : null}
+          {specOverrideModelId !== null ? (
+            <span className="dvx-model-trigger-scope"> spec</span>
+          ) : null}
+        </span>
         <ChevronDownIcon />
       </button>
 

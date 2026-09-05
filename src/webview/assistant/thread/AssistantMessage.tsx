@@ -244,7 +244,8 @@ export function RegenerateAction(): React.JSX.Element | null {
     <button
       className="dvx-message-action"
       type="button"
-      aria-label="Regenerate response"
+      aria-label={busy ? "Regenerating response" : "Regenerate response"}
+      aria-busy={busy}
       disabled={busy}
       onClick={() => {
         setBusy(true);
@@ -259,7 +260,7 @@ export function RegenerateAction(): React.JSX.Element | null {
       }}
     >
       <RegenerateIcon />
-      <span>{busy ? "Regenerating…" : "Regenerate"}</span>
+      <span>Regenerate</span>
     </button>
   );
 }

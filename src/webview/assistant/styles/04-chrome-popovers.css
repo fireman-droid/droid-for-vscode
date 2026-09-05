@@ -18,7 +18,7 @@
 
 .dvx-composer-tool-button:hover:not(:disabled), .dvx-model-trigger:hover:not(:disabled), .dvx-popover-back:hover:not(:disabled), .dvx-popover-refresh:hover:not(:disabled), .dvx-model-edit:hover:not(:disabled) {
   color: var(--dvx-ink);
-  background: var(--dvx-soft);
+  background: transparent;
 }
 
 .dvx-popover-row-icon svg {

@@ -266,19 +266,15 @@
 
 .dvx-permission-permission .dvx-permission-tools {
   gap: 0;
-  margin-top: 7px;
+  margin-top: 8px;
   overflow: hidden;
-  border: 1px solid var(--dvx-border);
-  border-radius: 7px;
-  background: color-mix(
-    in srgb,
-    var(--dvx-surface) 34%,
-    var(--dvx-raised)
-  );
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .dvx-permission-permission .dvx-permission-tool {
-  padding: 8px 10px;
+  padding: 8px 0;
   border-bottom: 1px solid var(--dvx-border);
 }
 
@@ -310,19 +306,19 @@
 }
 
 .dvx-permission-permission .dvx-permission-tool pre {
-  margin-top: 1px;
-  color: var(--dvx-muted);
-  font-size: 11px;
-  line-height: 16px;
+  margin-top: 4px;
+  color: var(--dvx-text-secondary);
+  font-size: 12px;
+  line-height: 19px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .dvx-permission-permission .dvx-permission-risk {
-  margin-top: 2px;
-  color: var(--dvx-muted);
-  font-size: 10.5px;
-  line-height: 15px;
+  margin-top: 4px;
+  color: var(--dvx-warning);
+  font-size: 12px;
+  line-height: 19px;
 }
 
 .dvx-permission-permission .dvx-interaction-actions {
@@ -339,15 +335,15 @@
 }
 
 .dvx-permission-permission .dvx-button-danger {
-  border-color: var(--dvx-border);
+  border-color: transparent;
   color: var(--dvx-text-secondary);
-  background: var(--dvx-raised);
+  background: transparent;
 }
 
 .dvx-permission-permission .dvx-button-danger:hover:not(:disabled) {
-  border-color: var(--dvx-border-hover);
+  border-color: transparent;
   color: var(--dvx-ink);
-  background: var(--dvx-soft);
+  background: transparent;
 }
 
 .dvx-permission-permission .dvx-permission-allow-group {
@@ -386,11 +382,10 @@
 .dvx-ask-result {
   max-width: 560px;
   margin: 8px 0;
-  padding: 10px 11px 9px;
-  border: 1px solid
-    color-mix(in srgb, var(--dvx-border-strong) 68%, var(--dvx-border));
-  border-radius: 8px;
-  background: var(--dvx-raised);
+  padding: 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
 }
 
