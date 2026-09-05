@@ -12,6 +12,11 @@
 | [`CAPABILITIES.md`](./CAPABILITIES.md) | Droid 能力来源与产品支持矩阵 |
 | [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md) | 日志位置和排障步骤 |
 | [`FEEDBACK.md`](./FEEDBACK.md) | Bug、样式和功能反馈模板 |
+| [`ARCHITECTURE_SDK_REVIEW.md`](./ARCHITECTURE_SDK_REVIEW.md) | 用户要求的架构、状态所有权与安装版 SDK 对比报告；建议未实施 |
+| [`RUNTIME_CORRECTNESS_REVIEW.md`](./RUNTIME_CORRECTNESS_REVIEW.md) | 用户要求的运行正确性报告；静态问题、候选、覆盖缺口与整改顺序 |
+
+换电脑的依赖安装、构建、静态预览与本机配置边界见根目录 [`README.md`](../README.md)。
+报告中的绝对路径是原审查机器的证据定位，换电脑后以仓库相对路径定位，不要求相同盘符。
 
 工作方式、验证和交付规则只看根目录 [`AGENTS.md`](../AGENTS.md)。
 

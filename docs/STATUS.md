@@ -45,7 +45,25 @@ Cursor 内真实行为和视觉仍以用户验收为准。
   换行和横向溢出，截图使用模拟数据；Auto 只验证 Studio 模拟的编辑器深色变量
 - 7 个相关测试文件、96 项测试通过；首轮两处旧预期未包含问题字段，更新后复跑通过。
   `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run build` 与
-  `git diff --check` 通过；未跑全量测试，未重新生成/安装 VSIX，真实 Cursor 待验收
+  `git diff --check` 通过；未跑全量测试、未重新安装扩展，真实 Cursor 待验收。
+  后续干净目录打包验证见下节
+
+### 审查与跨电脑接续
+
+- 两个 heavy worker 均正常完成报告：`ARCHITECTURE_SDK_REVIEW.md` 与
+  `RUNTIME_CORRECTNESS_REVIEW.md`。没有生产代码整改；合并去重后列出 9 个静态
+  判定缺陷（2 P1、7 P2），候选与架构建议另计，尚未动态复现。审查基线为 `a29dec1`
+- 官方 SDK 已对照安装版 0.7.0 的公开声明、关键发布实现和文档；未取得完整原始
+  TypeScript 实现源码，最新 npm 版本未确认，不能宣称全仓/SDK 全量审计通过
+- 为换电脑接续，已仅从 Git 提交 `0d49192` 导出源码到不同路径的空目录，使用
+  Windows、Node 24.13.1、pnpm 10.2.0 执行 `pnpm install --frozen-lockfile`，
+  类型/预算检查、生产构建、VSIX 打包及 75 项 inventory 校验全部通过；未安装扩展
+- 首次干净目录 VSIX 校验发现本次导出的临时 source.tar 被额外打包，移除该测试产物
+  后复验通过，未修改业务代码。pnpm 安装脚本提示、package.json 缺 repository 字段及
+  缺 LICENSE 文件的打包警告仍存在，本次未阻断验证
+- 根 README 已包含新电脑配置、安装、静态预览和 Git 不迁移的数据范围；
+  锁文件、源码和开发入口可重建，不上传 node_modules、dist、VSIX、凭据、真实历史或缓存。
+  本机认证、个人路由/工具和 Cursor/Droid 本地数据仍需在新电脑另行处理；未验证其他操作系统
 
 ### 可靠性、安全与维护性
 
