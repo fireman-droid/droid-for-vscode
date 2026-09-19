@@ -1,6 +1,25 @@
 # DroidVisX 架构、状态所有权与官方 SDK 对比调查
 
-> 状态：静态调查报告已完成；覆盖有明确边界。四层架构、主要状态链路和要求的 SDK 能力类别均已调查；未完成全仓逐文件审计、SDK 原始 TypeScript 全量源码审计、最新 npm 发布验证或动态验证。以下计划未实施。
+> 2026-09-06 实施对照：用户已批准并实施 A–F 及功能目录整理。以下原调查保留其日期、
+> 路径和当时的证据边界，不代表当前代码仍有这些问题。当前架构见 `ARCHITECTURE.md`，
+> 自动验证、安装及尚待用户验收的内容见 `STATUS.md`。
+
+## 当前实施对照
+
+| 原建议 | 当前结果 |
+| --- | --- |
+| A：图片缓存、Mission provisional handle | 已修复，保留可见访问重取及未交接 attachment 的 detach |
+| B：daemon commands | 使用同一连接的公开 commands.list，无额外进程 |
+| C：SDK 边界 | Host 仅消费 Runtime 自有通知；未声明 controller 字段访问已消除 |
+| D：纯逻辑复用 | 主输入/历史编辑共享附件 preparation；Host/UI 共享工具字段、pending activity 结算和尾部诊断去重 |
+| E：职责与状态归属 | Host 分域状态、readonly 读取和窄操作接口；Webview 分域 reducer、输入流、功能动作和独立消息 Context |
+| F：SDK 路线 | 保留 0.7.0，Runtime 直接持有公开 DaemonSessionController/MultiSessionStateManager，统一 handle/权限/stream cleanup |
+| 目录及可读性 | 功能实现、契约、状态和测试就近组织；移除 Thread 大段 Composer 参数透传及重复类型，收紧预算 |
+
+补充版本事实：已通过 npm 元数据确认并只读检查 0.9.1 tarball 声明，其高级 daemon
+facade 仍未提供所需通知订阅，因此未升级依赖。没有获得 SDK 原始 TypeScript
+全量源码，也没有进行跨版本真实 CLI/模型验收。SDK 公开 API 的使用不等于
+已经证明所有 CLI 版本兼容；daemon MCP OAuth 完成链继续明确不可用。
 
 ## 1. 基线、权限与官方资料获取
 
@@ -273,7 +292,7 @@ flowchart LR
 - 不声称实时 subagent、Mission、reload、性能、视觉已在 Cursor 验证。
 - 没有读取当前 CLI 版本、真实模型 ID 或协议握手；是否支持某 SDK 原语仍需后续明确授权的兼容验证。
 
-## 8. 分阶段整改计划（仅计划，需下一轮批准）
+## 8. 原分阶段整改计划（历史内容，实施状态见开头）
 
 ### 8.1 原则与依赖
 
@@ -383,4 +402,4 @@ flowchart TD
 - SDK token usage terminal 缺省、daemon Spec handoff、raw notification 兼容、disconnect/reconnect 细节需后续明确授权的定向验证。
 - 未核对 Git diff/status；其他 worker 可能同时修改它被授权的报告。本 worker 仅主动写入 `D:\E\前端好玩的东西\droidvisx\docs\ARCHITECTURE_SDK_REVIEW.md`，未提交。
 
-**下一轮最小建议：先批准阶段 A 和 B，修复已证明的所有权问题并替换一条明确冗余的 daemon commands 读取；SDK 连接重构与 App/Host 大范围拆分单独审批。**
+上述分阶段建议已由后续用户批准的完整计划覆盖；不再作为重新审批或只做 A/B 的要求。
