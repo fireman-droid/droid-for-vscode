@@ -12,6 +12,8 @@ export interface WindowDaemonRecord {
   readonly ownerPid: number;
   readonly cwd: string;
   readonly idePort: number | null;
+  /** Absent on legacy shared daemons and the window's metadata-only daemon. */
+  readonly rootSessionId?: string;
 }
 
 const root = join(homedir(), '.droidvisx', 'window-daemons');
@@ -82,6 +84,8 @@ async function readRecord(file: string): Promise<WindowDaemonRecord | null> {
       typeof value.id !== 'string' || !instanceId.test(value.id) ||
       !validPort(value.port) || !validPid(value.pid) || !validPid(value.ownerPid) ||
       typeof value.cwd !== 'string' || value.cwd.length > 32_768 ||
+      (value.rootSessionId !== undefined &&
+        (typeof value.rootSessionId !== 'string' || !isSafeSessionIdentifier(value.rootSessionId))) ||
       (value.idePort !== null && !validPort(value.idePort))) {
     throw new Error('Invalid window daemon discovery record.');
   }

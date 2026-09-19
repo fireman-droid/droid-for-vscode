@@ -17,6 +17,7 @@ import {
   releaseSessionLease,
 } from '../runtime/daemon/sessionLease';
 import { ChatController } from './chat/ChatController';
+import { emitIdeState } from './chat/ideIntegration';
 import { DroidViewProvider } from './webview/DroidViewProvider';
 import { exportDiagnosticsBundle } from './diagnostics/exportDiagnostics';
 import { LocalDiagnostics } from './diagnostics/LocalDiagnostics';
@@ -414,24 +415,16 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   reviewFeature.start();
   const missionSetupProjection = createMissionControlSetupProjection(controller);
-  if (windowDaemon) controller.nativeIde = {
-    read(sessionId) {
-      const preparation = windowDaemon.pool.preparation;
-      if (!preparation) return { status: 'preparing', message: 'Preparing the official IDE service for this window.' };
-      if (preparation.port === null) return {
-        status: 'unavailable', message: preparation.detail ?? 'The official IDE service is unavailable. Chat remains available.',
-      };
-      if (sessionId && windowDaemon.pool.needsReconnect(sessionId)) return {
-        status: 'reconnect-required', message: 'This session uses an earlier IDE binding. Reconnect when idle.',
-      };
-      return {
-        status: 'prepared-unconfirmed',
-        message: 'The native IDE endpoint is prepared for this window. The SDK does not report a confirmed IDE connection.',
-      };
-    },
-    reconnect: (sessionId, current, onClosingSource) =>
-      windowDaemon.pool.reconnectIdle(sessionId, current, onClosingSource),
-  };
+  if (windowDaemon) {
+    controller.nativeIde = {
+      read: (sessionId) => windowDaemon.pool.readIde(sessionId),
+      reconnect: (sessionId, current, onClosingSource) =>
+        windowDaemon.pool.reconnectIdle(sessionId, current, onClosingSource),
+    };
+    context.subscriptions.push({
+      dispose: windowDaemon.pool.onIdeChange(() => emitIdeState(controller)),
+    });
+  }
   const missionControl = new MissionControlPanelController(
     context.extensionUri,
     {
@@ -650,11 +643,11 @@ export function activate(context: vscode.ExtensionContext): void {
       // purpose, so this terminates the discovered pid directly and
       // clears the discovery file. Live windows re-spawn on next use.
       if (windowDaemon && await vscode.window.showWarningMessage(
-        'Stop the daemon created by this window? Its tasks will stop. Restored sessions on earlier daemons are not stopped.',
+        'Stop this chat’s dedicated backend? Its tasks will stop. Other chats and restored backends are not stopped.',
         { modal: true }, 'Stop daemon',
       ) !== 'Stop daemon') return;
       const stopped = windowDaemon
-        ? await windowDaemon.pool.shutdownCurrent()
+        ? await windowDaemon.pool.shutdownCurrent(controller.sessionState.sessionId)
         : await shutdownSharedDroidVisxDaemon();
       diagnostics.record({
         level: 'info',

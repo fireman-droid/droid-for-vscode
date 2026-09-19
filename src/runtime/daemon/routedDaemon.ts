@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import type { DaemonApi, DaemonNotification, DaemonTerminalEvent } from './api';
 import type { WindowDaemonPool, WindowDaemonEntry } from './windowDaemonPool';
+import { bindSessionIde } from './ideSessionHandle';
 
 /** Keep the existing session-scoped SDK resources on the session's actual daemon. */
 export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
@@ -48,7 +50,13 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
     entry: WindowDaemonEntry,
     handle: Awaited<ReturnType<DaemonApi['sessions']['create']>>,
   ) => {
-    try { await pool.remember(handle.id, entry, handle); return handle; }
+    try {
+      const bound = await pool.isDelegatedSession(handle.id, entry)
+        ? handle
+        : bindSessionIde(handle, (signal) => pool.waitForIde(handle.id, signal));
+      await pool.remember(handle.id, entry, bound);
+      return bound;
+    }
     catch (error) { await handle.detach(); throw error; }
   };
   return {
@@ -69,12 +77,22 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
         return groups.flat();
       },
       async create(options) {
-        const entry = await pool.current();
-        return rememberHandle(entry, await entry.connection.droid.sessions.create(options));
+        const sessionId = options.sessionId ?? randomUUID();
+        const entry = await pool.allocate(sessionId, options.cwd);
+        return rememberHandle(entry, await entry.connection.droid.sessions.create({ ...options, sessionId }));
       },
       async resume(id, options) {
-        const entry = await pool.forSession(id);
-        return rememberHandle(entry, await entry.connection.droid.sessions.resume(id, options));
+        const entry = await pool.forSession(id, true);
+        const handle = await rememberHandle(entry, await entry.connection.droid.sessions.resume(id, options));
+        try {
+          const rebound = await pool.rebindIdleAttachment(id, entry);
+          return rebound === entry
+            ? handle
+            : rememberHandle(rebound, await rebound.connection.droid.sessions.resume(id, options));
+        } catch (error) {
+          await handle.detach();
+          throw error;
+        }
       },
     },
     settings: resource('settings', noId),

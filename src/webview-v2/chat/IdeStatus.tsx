@@ -6,12 +6,13 @@ import { Button } from '../ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
 
 const labels: Record<IdeState['status'], string> = {
-  preparing: 'Preparing',
-  'prepared-unconfirmed': 'Prepared · unconfirmed',
+  preparing: 'Connecting',
+  connected: 'Connected',
+  disconnected: 'Disconnected',
   unavailable: 'Unavailable',
   'reconnect-required': 'Reconnect required',
   reconnecting: 'Reconnecting',
-  error: 'Reconnect failed',
+  error: 'Connection failed',
 };
 
 export function IdeStatus({ ide, sessionId, blocked, port }: {
@@ -31,7 +32,7 @@ export function IdeStatus({ ide, sessionId, blocked, port }: {
     <PopoverTrigger asChild>
       <Button variant="ghost" size="sm" className="h-7 gap-1 px-1.5 text-xs text-muted-foreground"
         aria-label={`IDE: ${labels[ide.status]}`} title={`IDE: ${labels[ide.status]}`}>
-        <Monitor className="size-3.5" /><span>IDE</span>
+        <Monitor className="size-3.5" /><span className="max-w-28 truncate">IDE · {labels[ide.status]}</span>
       </Button>
     </PopoverTrigger>
     <PopoverContent align="end" className="w-72 space-y-3 p-3">

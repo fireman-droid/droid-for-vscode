@@ -202,7 +202,8 @@ import type { ToolActivityMessage } from './protocol/toolProtocol';
 // v41 exposes the runtime's explicit conversation-compaction phase.
 // v46 separates per-file Diff invalidation from the cumulative changes ledger.
 // v47 separates operation evidence, execution phases and workspace comparisons.
-export const BRIDGE_PROTOCOL_VERSION = 47 as const;
+// v48 reports confirmed native IDE connection and disconnection.
+export const BRIDGE_PROTOCOL_VERSION = 48 as const;
 
 export type WebviewToHostMessage =
   | IdeReconnectMessage

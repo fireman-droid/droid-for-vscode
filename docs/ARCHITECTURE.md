@@ -65,7 +65,7 @@ flowchart LR
 
 ## Webview V2 边界
 
-当前主 Bridge 为 47，Mission Panel 协议为 2。IDE 状态／重连通过独立的
+当前主 Bridge 为 48，Mission Panel 协议为 2。IDE 状态／重连通过独立的
 `host.ide`、`ide.refresh`、`ide.reconnect` 与快照字段传递。Skills 原生管理和交互终端
 只在 Webview 中提供已验证的管理入口，不新增传输正文／路径／终端输入的消息。
 
@@ -149,14 +149,19 @@ flowchart TD
 
 ### SDK 通知与命令边界
 
-- `extension/ide/officialIdeConnection.ts` 只准备当前窗口官方原生 IDE 服务；
-  `WindowDaemonSidecar` 与 `windowDaemonPool.ts` 按窗口启动实例隔离 daemon，
-  `windowDaemonRegistry.ts` 保存实例／会话归属，旧共享实例只读兼容。
-  `routedDaemon.ts` 按会话选择实际连接并汇合通知，公共资源保持原有 SDK 契约。
-- 原生 IDE 由 Droid worker 消费，不重新拼接编辑器上下文或注册通用 MCP 服务器。
-  SDK 未提供原生连接回执，UI 只显示准备／待确认。显式空闲重连先关闭原进程，
-  再恢复同一历史；`replaceRuntime` 的保留模式不清除队列附件或侧聊展示状态。
-  Reload 的活跃会话继续留原实例，不因 IDE 端口变化被强制重启。
+- `extension/ide/officialIdeConnection.ts` 准备当前窗口官方原生 IDE 服务。
+  `windowDaemonPool.ts` 为每个主聊天分配独立 daemon 与 IDE relay，窗口后台只
+  处理全局元数据；`windowDaemonRegistry.ts` 持久化实例及根会话归属，兼容旧记录。
+  `routedDaemon.ts` 按实际会话路由，侧聊与原生子任务继续使用父后台。
+- `runtime/ide/nativeIdeRelay.ts` 仅在 127.0.0.1 上透传官方 MCP 协议，不拼接
+  编辑器上下文，不记录消息正文。专属后台首个原生 Droid 客户端被固定为根连接；
+  子客户端不能覆盖其身份。initialize、initialized、工具发现及初始编辑器通知
+  完成后才报连接，流关闭／错误及原生心跳失效会使状态失效。
+- `ideSessionHandle.ts` 在发送前等待对应通道，等待支持取消、失败和关闭。
+  Bridge 48 将连接／断开／失败实时投影到 IDE 控件，不使用端口存在或日志作回执。
+  空闲历史会话在保留持久化内容、确认无活动任务及受管终端后迁移到专属后台。
+  Reload 的活跃任务继续留原实例，空草稿不通过关闭迁移；显式重连保留历史、
+  附件和队列，尚未就绪时不偷偷发送缺少 IDE 上下文的问题。
 - `daemon/daemonNotificationSource.ts` 统一 process/daemon 子代理通知的解析、工具结果
   采集和事件转换。Host 只接收 `SubagentEvent`，不再读取 SDK controller 或调用 SDK converter。
 - `daemon/connectPublicDaemon.ts` 直接持有 SDK 0.7.0 公开导出的
