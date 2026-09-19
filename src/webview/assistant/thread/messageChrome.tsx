@@ -1,25 +1,18 @@
-import { useAuiState } from "@assistant-ui/react";
-import {
-  createContext,
-  useContext,
-  type ReactNode,
-} from "react";
+import { useAuiState } from '@assistant-ui/react';
+import { createContext, useContext, type ReactNode } from 'react';
 
-import { isPlanLive, type PlanAnchorState } from "../planAnchor";
-import { PlanLine } from "../PlanLine";
-import type {
-  EditResendRejection,
-  EditStageState,
-  RewindFileInfo,
-  UserEditorEnv,
-} from "../Thread";
-import { AssistantMessage } from "./AssistantMessage";
+import { isPlanLive, type PlanAnchorState } from '../transcript/planAnchor';
+import { PlanLine } from '../transcript/PlanLine';
 import {
-  readMessageText,
-  readUserAttachments,
-  readUserMessageId,
-} from "./readers";
-import { UserMessage } from "./UserMessage";
+  type EditResendRejection,
+  type EditStageState,
+  type RewindFileInfo,
+} from '../editing/editTypes';
+import { type UserEditorEnv } from '../editing/userEditorEnv';
+import type { MessageEditor } from '../editing/useMessageEditor';
+import { AssistantMessage } from './AssistantMessage';
+import { readMessageText, readUserAttachments, readUserMessageId } from './readers';
+import { UserMessage } from './UserMessage';
 
 /**
  * Per-thread chrome the virtualizer's module-level UserMessage
@@ -29,38 +22,27 @@ export interface ThreadMessageChrome {
   readonly planAnchors: ReadonlyMap<string, PlanAnchorState> | null;
   readonly running: boolean;
   readonly activeTurnId: string | null;
-  readonly editingMessageId: string | null;
+  readonly editor: MessageEditor;
   readonly editStage: EditStageState | null;
   readonly rejection: EditResendRejection | null;
   readonly editorEnv: UserEditorEnv;
   readonly editResendEnabled: boolean;
   readonly rewindInfo: RewindFileInfo | null;
-  readonly onRequestRewindInfo: (messageId: string) => void;
-  readonly onEditResend: (
-    messageId: string,
-    text: string,
-    restoreFiles?: boolean,
-  ) => void;
-  readonly onBeginEdit: (messageId: string) => void;
-  readonly onCancelEdit: () => void;
-  readonly onSubmitEdit: () => void;
-  readonly onReopenEdit: (messageId: string) => void;
 }
 
-export const ThreadMessageChromeContext =
-  createContext<ThreadMessageChrome | null>(null);
+export const ThreadMessageChromeContext = createContext<ThreadMessageChrome | null>(null);
 
 export interface PinnedMessageLayout {
   readonly messageId: string | null;
+  readonly messageHeight: number;
 }
 
-export const PinnedMessageContext =
-  createContext<PinnedMessageLayout>({
-    messageId: null,
-  });
+export const PinnedMessageContext = createContext<PinnedMessageLayout>({
+  messageId: null,
+  messageHeight: 0,
+});
 
-export const MessageSurfaceContext =
-  createContext<"flow" | "pinned">("flow");
+export const MessageSurfaceContext = createContext<'flow' | 'pinned'>('flow');
 
 function ThreadUserMessage(): ReactNode {
   const chrome = useContext(ThreadMessageChromeContext);
@@ -73,19 +55,19 @@ function ThreadUserMessage(): ReactNode {
   const content = Array.isArray(message.content) ? message.content : [];
   const messageId = readUserMessageId(message.metadata);
   const isPinnedMessage = pinned.messageId === message.id;
-  const pinnedPlaceholder = surface === "flow" && isPinnedMessage;
+  const pinnedPlaceholder = surface === 'flow' && isPinnedMessage;
   const plan = chrome.planAnchors?.get(message.id);
   const hasImage = content.some(
     (part) =>
-      typeof part === "object" &&
+      typeof part === 'object' &&
       part !== null &&
-      "type" in part &&
-      part.type === "data" &&
-      "name" in part &&
-      part.name === "droid-image",
+      'type' in part &&
+      part.type === 'data' &&
+      'name' in part &&
+      part.name === 'droid-image',
   );
   const attachments = readUserAttachments(message.metadata).filter(
-    (item) => !hasImage || item.kind !== "image",
+    (item) => !hasImage || item.kind !== 'image',
   );
   return (
     <UserMessage
@@ -101,23 +83,14 @@ function ThreadUserMessage(): ReactNode {
           />
         )
       }
-      editing={
-        !pinnedPlaceholder &&
-        messageId !== null &&
-        messageId === chrome.editingMessageId
-      }
+      editor={chrome.editor}
       pinnedPlaceholder={pinnedPlaceholder}
+      placeholderHeight={pinned.messageHeight}
       editStage={chrome.editStage}
       rejection={chrome.rejection}
       editorEnv={chrome.editorEnv}
       editResendEnabled={chrome.editResendEnabled}
       rewindInfo={chrome.rewindInfo}
-      onRequestRewindInfo={chrome.onRequestRewindInfo}
-      onEditResend={chrome.onEditResend}
-      onBeginEdit={chrome.onBeginEdit}
-      onCancelEdit={chrome.onCancelEdit}
-      onSubmitEdit={chrome.onSubmitEdit}
-      onReopenEdit={chrome.onReopenEdit}
     />
   );
 }

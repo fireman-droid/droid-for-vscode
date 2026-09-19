@@ -15,9 +15,9 @@
   width: 100%;
   flex-direction: column;
   gap: 6px;
-  padding: 10px;
+  padding: 8px;
   border: 1px solid var(--dvx-border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--dvx-raised);
   box-shadow: none;
 }
@@ -25,9 +25,9 @@
 .dvx-user-edit-input {
   box-sizing: border-box;
   width: 100%;
-  min-height: 42px;
-  max-height: 69px;
-  padding: 2px 2px 4px;
+  min-height: 27px;
+  max-height: 168px;
+  padding: 0 2px;
   overflow-y: auto;
   overscroll-behavior: contain;
   border: none;
@@ -314,22 +314,6 @@
   flex-wrap: wrap;
   justify-content: flex-start;
   gap: 6px;
-}
-
-.dvx-user-edit-attachments {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.dvx-user-edit-images {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.dvx-user-edit-images:empty {
-  display: none;
 }
 
 .dvx-attachment-unrestorable .dvx-attachment-thumb-file,

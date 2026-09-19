@@ -3,8 +3,8 @@ import { useEffect, useState } from 'react';
 import type {
   MissionControlSetupDraft,
   MissionControlSetupSnapshotMessage,
-} from '../../shared/missionControlSetupProtocol';
-import { MAX_MISSION_TASK_LENGTH } from '../../shared/missionProtocol';
+} from '../../shared/protocol/missionControlSetupProtocol';
+import { MAX_MISSION_TASK_LENGTH } from '../../shared/protocol/missionProtocol';
 
 interface NewMissionDraftProps {
   readonly snapshot: MissionControlSetupSnapshotMessage | null;
@@ -25,19 +25,14 @@ export function NewMissionDraft({
   const status = snapshot === null ? null : describeAvailability(snapshot);
   return (
     <main className="mission-control-page mission-control-route mission-new">
-      <button
-        type="button"
-        className="mission-control-back"
-        onClick={onBack}
-      >
+      <button type="button" className="mission-control-back" onClick={onBack}>
         Back to Missions
       </button>
       <header className="mission-new-header">
         <p className="mission-new-kicker">New Mission</p>
         <h1 tabIndex={-1}>Shape the work before it starts</h1>
         <p>
-          Review the task and inherited roles here. Nothing starts from this
-          screen yet.
+          Review the task and inherited roles here. Nothing starts from this screen yet.
         </p>
       </header>
       {draft === null ? (
@@ -98,9 +93,7 @@ function RoleRow({
   );
 }
 
-function describeAvailability(
-  snapshot: MissionControlSetupSnapshotMessage,
-): string {
+function describeAvailability(snapshot: MissionControlSetupSnapshotMessage): string {
   if (snapshot.availability === 'ready') {
     return 'Setup is ready for review.';
   }

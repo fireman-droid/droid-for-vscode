@@ -14,8 +14,8 @@ import {
   isExactArray,
   isStrictRecord,
   type UnknownRecord,
-} from '../../shared/strictValidation';
-import { isSafeWorkspaceRelativePath } from '../../shared/validateMessage';
+} from '../../shared/validation/strictValidation';
+import { isSafeWorkspaceRelativePath } from '../../shared/validation/guards';
 
 export function parseGitBranchDiff(
   value: UnknownRecord,
@@ -23,8 +23,17 @@ export function parseGitBranchDiff(
   if (
     !hasExactKeys(
       value,
-      ['type', 'sequence', 'sessionId', 'branch', 'baseBranch', 'files',
-        'additions', 'deletions', 'commitCount'],
+      [
+        'type',
+        'sequence',
+        'sessionId',
+        'branch',
+        'baseBranch',
+        'files',
+        'additions',
+        'deletions',
+        'commitCount',
+      ],
       ['unavailableReason'],
     ) ||
     !isCount(value.sequence) ||
@@ -93,9 +102,7 @@ function isCount(value: unknown): value is number {
 
 function isBoundedId(value: unknown): value is string {
   return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= MAX_BRIDGE_ID_LENGTH
+    typeof value === 'string' && value.length > 0 && value.length <= MAX_BRIDGE_ID_LENGTH
   );
 }
 
@@ -108,10 +115,6 @@ function isBranchName(value: unknown): value is string | null {
   );
 }
 
-function isUnavailableReason(
-  value: unknown,
-): value is GitBranchDiffUnavailableReason {
-  return (GIT_BRANCH_DIFF_UNAVAILABLE_REASONS as readonly unknown[]).includes(
-    value,
-  );
+function isUnavailableReason(value: unknown): value is GitBranchDiffUnavailableReason {
+  return (GIT_BRANCH_DIFF_UNAVAILABLE_REASONS as readonly unknown[]).includes(value);
 }

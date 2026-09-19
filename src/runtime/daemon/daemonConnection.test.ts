@@ -1,15 +1,13 @@
+import type { DaemonApi } from './api';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ConnectedDroid, connectToDaemon } from '@factory/droid-sdk';
+import type { connectPublicDaemon } from './connectPublicDaemon';
 
-import {
-  DaemonAvailabilityError,
-  openDaemonConnection,
-} from './daemonConnection';
+import { DaemonAvailabilityError, openDaemonConnection } from './daemonConnection';
 import type { resolveFactoryAccessCredential } from './factoryTokenRefresh';
 
 type ResolveCredential = typeof resolveFactoryAccessCredential;
-type Connect = typeof connectToDaemon;
+type Connect = typeof connectPublicDaemon;
 
 const ENDPOINT = { url: 'ws://127.0.0.1:41000' };
 
@@ -28,10 +26,10 @@ function okCredential(token: string): Awaited<ReturnType<ResolveCredential>> {
   };
 }
 
-function fakeDroid(): ConnectedDroid {
+function fakeDroid(): DaemonApi {
   return {
     disconnect: vi.fn(),
-  } as unknown as ConnectedDroid;
+  } as unknown as DaemonApi;
 }
 
 describe('openDaemonConnection', () => {
@@ -74,9 +72,7 @@ describe('openDaemonConnection', () => {
 
     expect(connect).toHaveBeenCalledOnce();
     const options = (
-      connect.mock.calls[0] as unknown as [
-        { url: string; auth: { apiKey: string } },
-      ]
+      connect.mock.calls[0] as unknown as [{ url: string; auth: { apiKey: string } }]
     )[0];
     expect(options.url).toBe(ENDPOINT.url);
     expect(options.auth).toEqual({ apiKey: 'jwt-token-value' });
@@ -104,9 +100,7 @@ describe('openDaemonConnection', () => {
   it('flips status on authentication errors from the SDK', async () => {
     let authCallback: ((error: Error) => void) | undefined;
     const connect = vi.fn(
-      async (options: {
-        onAuthenticationError?: (error: Error) => void;
-      }) => {
+      async (options: { onAuthenticationError?: (error: Error) => void }) => {
         authCallback = options.onAuthenticationError;
         return fakeDroid();
       },

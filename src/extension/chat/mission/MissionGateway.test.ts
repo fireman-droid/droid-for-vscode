@@ -1,11 +1,7 @@
+import type { DaemonApi } from '../../../runtime/daemon/api';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ConnectedDroid } from '@factory/droid-sdk';
-
-import {
-  MissionGateway,
-  type MissionGatewayRuntime,
-} from './MissionGateway';
+import { MissionGateway, type MissionGatewayRuntime } from './MissionGateway';
 import type {
   DaemonMissionCatalogPage,
   DaemonMissionCatalogRuntime,
@@ -78,7 +74,7 @@ function catalogGateway(
     return page;
   });
   const gateway = new MissionGateway({
-    getDroid: async () => ({}) as ConnectedDroid,
+    getDroid: async () => ({}) as DaemonApi,
     preferences: createPreferences(),
     createRuntime: () => ({
       runtime: {} as never,
@@ -200,31 +196,28 @@ describe('MissionGateway', () => {
       completedFeatures: undefined,
       totalFeatures: Number.POSITIVE_INFINITY,
     },
-  ])(
-    'projects unavailable progress for optional counts %#',
-    async (progress) => {
-      const { gateway } = catalogGateway([
-        {
-          rows: [
-            {
-              sessionId: 'optional-progress',
-              updatedAt: 1_777_000_000,
-              mission: {
-                state: 'running',
-                ...progress,
-              },
+  ])('projects unavailable progress for optional counts %#', async (progress) => {
+    const { gateway } = catalogGateway([
+      {
+        rows: [
+          {
+            sessionId: 'optional-progress',
+            updatedAt: 1_777_000_000,
+            mission: {
+              state: 'running',
+              ...progress,
             },
-          ],
-          hasMore: false,
-        },
-      ]);
+          },
+        ],
+        hasMore: false,
+      },
+    ]);
 
-      await expect(gateway.listCatalog()).resolves.toMatchObject({
-        status: 'ready',
-        rows: [{ progress: null }],
-      });
-    },
-  );
+    await expect(gateway.listCatalog()).resolves.toMatchObject({
+      status: 'ready',
+      rows: [{ progress: null }],
+    });
+  });
 
   it.each([
     { completedFeatures: 0, totalFeatures: 0 },
@@ -459,28 +452,25 @@ describe('MissionGateway', () => {
     'e\u0301//Users',
     'version2//mission',
     'scope‿//tmp',
-  ])(
-    'rejects repeated slash runs after identifier continuation %s',
-    async (title) => {
-      const { gateway } = catalogGateway([
-        {
-          rows: [
-            {
-              sessionId: 'unsafe-composed-slash-run',
-              updatedAt: 1_777_000_000,
-              mission: { state: 'running', title },
-            },
-          ],
-          hasMore: false,
-        },
-      ]);
+  ])('rejects repeated slash runs after identifier continuation %s', async (title) => {
+    const { gateway } = catalogGateway([
+      {
+        rows: [
+          {
+            sessionId: 'unsafe-composed-slash-run',
+            updatedAt: 1_777_000_000,
+            mission: { state: 'running', title },
+          },
+        ],
+        hasMore: false,
+      },
+    ]);
 
-      await expect(gateway.listCatalog()).resolves.toMatchObject({
-        status: 'error',
-        code: 'invalid-data',
-      });
-    },
-  );
+    await expect(gateway.listCatalog()).resolves.toMatchObject({
+      status: 'error',
+      code: 'invalid-data',
+    });
+  });
 
   it('deduplicates by newest Mission update then daemon update and sorts deterministically', async () => {
     const candidates = [
@@ -519,9 +509,7 @@ describe('MissionGateway', () => {
         },
       },
     ] as const;
-    const first = catalogGateway([
-      { rows: candidates, hasMore: false },
-    ]).gateway;
+    const first = catalogGateway([{ rows: candidates, hasMore: false }]).gateway;
     const second = catalogGateway([
       { rows: [...candidates].reverse(), hasMore: false },
     ]).gateway;
@@ -598,10 +586,7 @@ describe('MissionGateway', () => {
   ])('fails the whole catalog on $name', async ({ page }) => {
     const pages =
       page.nextCursor === 50
-        ? [
-            { rows: [], hasMore: true, nextCursor: 50 },
-            page,
-          ]
+        ? [{ rows: [], hasMore: true, nextCursor: 50 }, page]
         : [page];
     const { gateway } = catalogGateway(pages);
 
@@ -670,11 +655,9 @@ describe('MissionGateway', () => {
 
   it('times out an incomplete read without returning partial rows', async () => {
     vi.useFakeTimers();
-    const listPage = vi.fn(
-      () => new Promise<DaemonMissionCatalogPage>(() => undefined),
-    );
+    const listPage = vi.fn(() => new Promise<DaemonMissionCatalogPage>(() => undefined));
     const gateway = new MissionGateway({
-      getDroid: async () => ({}) as ConnectedDroid,
+      getDroid: async () => ({}) as DaemonApi,
       preferences: createPreferences(),
       createRuntime: () => ({
         runtime: {} as never,
@@ -711,7 +694,7 @@ describe('MissionGateway', () => {
       userTestingEnabled: true,
     });
     const gateway = new MissionGateway({
-      getDroid: async () => ({}) as ConnectedDroid,
+      getDroid: async () => ({}) as DaemonApi,
       preferences,
       createRuntime: () => ({
         runtime: {} as never,
@@ -774,6 +757,7 @@ describe('MissionGateway', () => {
     const session = {
       id: 'orchestrator-1',
       settings: { missionSettings: requestedSettings },
+      detach: vi.fn(async () => {}),
     };
     const create = vi.fn(async () => {
       calls.push('create');
@@ -794,7 +778,7 @@ describe('MissionGateway', () => {
       getDroid: async () =>
         ({
           sessions: { create, updateSettings },
-        }) as unknown as ConnectedDroid,
+        }) as unknown as DaemonApi,
       preferences: createPreferences(),
       createRuntime,
     });
@@ -812,6 +796,7 @@ describe('MissionGateway', () => {
       runtime,
     });
     expect(calls).toEqual(['create', 'updateSettings', 'initialize']);
+    expect(session.detach).not.toHaveBeenCalled();
     expect(updateSettings).toHaveBeenCalledWith('orchestrator-1', {
       missionSettings: requestedSettings,
     });
@@ -822,11 +807,38 @@ describe('MissionGateway', () => {
     );
   });
 
+  it('detaches a created attachment once when initial settings fail', async () => {
+    const detach = vi.fn(async () => {});
+    const createRuntime = vi.fn();
+    const gateway = new MissionGateway({
+      getDroid: async () =>
+        ({
+          sessions: {
+            create: async () => ({ id: 'provisional', detach }),
+            updateSettings: async () => {
+              throw new Error('failed');
+            },
+          },
+        }) as unknown as DaemonApi,
+      preferences: createPreferences(),
+      createRuntime,
+    });
+    await expect(
+      gateway.start({
+        workspaceId: 'workspace-a',
+        cwd: 'C:\\workspace-a',
+        message,
+        catalog,
+      }),
+    ).resolves.toEqual({ status: 'rejected', code: 'daemon-unavailable' });
+    expect(detach).toHaveBeenCalledTimes(1);
+    expect(createRuntime).not.toHaveBeenCalled();
+  });
+
   it('rejects each stale settings value before creating a Session', async () => {
     const create = vi.fn();
     const gateway = new MissionGateway({
-      getDroid: async () =>
-        ({ sessions: { create } }) as unknown as ConnectedDroid,
+      getDroid: async () => ({ sessions: { create } }) as unknown as DaemonApi,
       preferences: createPreferences(),
       createRuntime: () => ({
         runtime: {} as never,
@@ -862,56 +874,53 @@ describe('MissionGateway', () => {
     'validationWorkerReasoningEffort',
     'skipScrutiny',
     'skipUserTesting',
-  ] as const)(
-    'blocks the task when durable settings differ by %s',
-    async (property) => {
-      const expected = {
-        workerModel: 'model-worker',
-        workerReasoningEffort: 'medium',
-        validationWorkerModel: 'model-validator',
-        validationWorkerReasoningEffort: 'high',
-        skipScrutiny: true,
-        skipUserTesting: false,
-      };
-      const session = {
-        id: 'orchestrator-1',
-        detach: vi.fn(async () => {}),
-        settings: {
-          missionSettings: {
-            ...expected,
-            [property]:
-              property === 'skipScrutiny' || property === 'skipUserTesting'
-                ? !expected[property]
-                : 'mismatch',
-          },
+  ] as const)('blocks the task when durable settings differ by %s', async (property) => {
+    const expected = {
+      workerModel: 'model-worker',
+      workerReasoningEffort: 'medium',
+      validationWorkerModel: 'model-validator',
+      validationWorkerReasoningEffort: 'high',
+      skipScrutiny: true,
+      skipUserTesting: false,
+    };
+    const session = {
+      id: 'orchestrator-1',
+      detach: vi.fn(async () => {}),
+      settings: {
+        missionSettings: {
+          ...expected,
+          [property]:
+            property === 'skipScrutiny' || property === 'skipUserTesting'
+              ? !expected[property]
+              : 'mismatch',
         },
-      };
-      const create = vi.fn(async () => session);
-      const initialize = vi.fn(async () => {});
-      const gateway = new MissionGateway({
-        getDroid: async () =>
-          ({
-            sessions: {
-              create,
-              updateSettings: vi.fn(async () => ({})),
-            },
-          }) as unknown as ConnectedDroid,
-        preferences: createPreferences(),
-        createRuntime: () => ({ runtime: {} as never, initialize }),
-      });
+      },
+    };
+    const create = vi.fn(async () => session);
+    const initialize = vi.fn(async () => {});
+    const gateway = new MissionGateway({
+      getDroid: async () =>
+        ({
+          sessions: {
+            create,
+            updateSettings: vi.fn(async () => ({})),
+          },
+        }) as unknown as DaemonApi,
+      preferences: createPreferences(),
+      createRuntime: () => ({ runtime: {} as never, initialize }),
+    });
 
-      await expect(
-        gateway.start({
-          workspaceId: 'workspace-a',
-          cwd: 'C:\\workspace-a',
-          message,
-          catalog,
-        }),
-      ).resolves.toEqual({
-        status: 'rejected',
-        code: 'settings-mismatch',
-      });
-      expect(initialize).not.toHaveBeenCalled();
-    },
-  );
+    await expect(
+      gateway.start({
+        workspaceId: 'workspace-a',
+        cwd: 'C:\\workspace-a',
+        message,
+        catalog,
+      }),
+    ).resolves.toEqual({
+      status: 'rejected',
+      code: 'settings-mismatch',
+    });
+    expect(initialize).not.toHaveBeenCalled();
+  });
 });

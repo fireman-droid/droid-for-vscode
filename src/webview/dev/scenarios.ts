@@ -1,11 +1,12 @@
-import type {
-  HostToWebviewMessage,
-  SessionTranscriptItem,
-} from '../../shared/bridgeMessages';
+import { type HostToWebviewMessage } from '../../shared/bridgeMessages';
+import { UNAVAILABLE_IDE } from '../../shared/protocol/ideProtocol';
+import { type SessionTranscriptItem } from '../../shared/protocol/transcript';
 import { createAcceptanceScenarios } from './acceptanceScenarios';
+import { chatRegionTranscript } from '../../webview-v2/dev/chatRegionScenario';
 
 export const STUDIO_SCENARIO_IDS = [
   'full-workflow',
+  'chat-region',
   'conversation',
   'streaming',
   'plan',
@@ -27,18 +28,13 @@ export interface StudioScenario {
   readonly id: StudioScenarioId;
   readonly label: string;
   readonly description: string;
-  readonly build: (
-    nextSequence: StudioSequence,
-  ) => readonly HostToWebviewMessage[];
+  readonly build: (nextSequence: StudioSequence) => readonly HostToWebviewMessage[];
 }
 
 const SESSION_ID = 'studio-session';
 const MODEL_ID = 'factory/gpt-5.6';
 
-type SnapshotMessage = Extract<
-  HostToWebviewMessage,
-  { type: 'host.snapshot' }
->;
+type SnapshotMessage = Extract<HostToWebviewMessage, { type: 'host.snapshot' }>;
 
 function baseSnapshot(
   nextSequence: StudioSequence,
@@ -56,6 +52,7 @@ function baseSnapshot(
     conversationId: SESSION_ID,
     sessionId: SESSION_ID,
     connection: options.connection ?? { status: 'connected' },
+    ide: UNAVAILABLE_IDE,
     turn: options.turn ?? null,
     sessions: {
       status: 'ready',
@@ -122,9 +119,7 @@ function baseSnapshot(
   };
 }
 
-function conversation(
-  nextSequence: StudioSequence,
-): readonly HostToWebviewMessage[] {
+function conversation(nextSequence: StudioSequence): readonly HostToWebviewMessage[] {
   const transcript: SessionTranscriptItem[] = [
     {
       id: 'conversation-user-1',
@@ -164,9 +159,7 @@ function conversation(
   return [baseSnapshot(nextSequence, transcript)];
 }
 
-function streaming(
-  nextSequence: StudioSequence,
-): readonly HostToWebviewMessage[] {
+function streaming(nextSequence: StudioSequence): readonly HostToWebviewMessage[] {
   const turnId = 'streaming-turn';
   return [
     baseSnapshot(
@@ -186,7 +179,8 @@ function streaming(
       sequence: nextSequence(),
       sessionId: SESSION_ID,
       turnId,
-      delta: 'I am tracing the existing bridge and identifying the smallest reusable transport.',
+      delta:
+        'I am tracing the existing bridge and identifying the smallest reusable transport.',
       truncated: false,
       segmentIndex: 0,
     },
@@ -218,7 +212,8 @@ function streaming(
       latestUpdateKind: 'status',
       detailKind: 'command',
       detail: 'pnpm exec tsc -p src/webview/tsconfig.json --noEmit',
-      outputTail: '> droidvisx@0.7.89 typecheck:webview\n> tsc -p src/webview/tsconfig.json --noEmit\n',
+      outputTail:
+        '> droidvisx@0.7.89 typecheck:webview\n> tsc -p src/webview/tsconfig.json --noEmit\n',
     },
     {
       type: 'assistant.delta',
@@ -230,9 +225,7 @@ function streaming(
   ];
 }
 
-function plan(
-  nextSequence: StudioSequence,
-): readonly HostToWebviewMessage[] {
+function plan(nextSequence: StudioSequence): readonly HostToWebviewMessage[] {
   const turnId = 'plan-turn';
   const transcript: SessionTranscriptItem[] = [
     {
@@ -309,9 +302,7 @@ function plan(
   ];
 }
 
-function askUser(
-  nextSequence: StudioSequence,
-): readonly HostToWebviewMessage[] {
+function askUser(nextSequence: StudioSequence): readonly HostToWebviewMessage[] {
   const turnId = 'ask-user-turn';
   const transcript: SessionTranscriptItem[] = [
     {
@@ -368,9 +359,7 @@ function askUser(
   ];
 }
 
-function review(
-  nextSequence: StudioSequence,
-): readonly HostToWebviewMessage[] {
+function review(nextSequence: StudioSequence): readonly HostToWebviewMessage[] {
   const turnId = 'review-turn';
   const transcript: SessionTranscriptItem[] = [
     {
@@ -430,9 +419,7 @@ function review(
   return [baseSnapshot(nextSequence, transcript)];
 }
 
-function subagent(
-  nextSequence: StudioSequence,
-): readonly HostToWebviewMessage[] {
+function subagent(nextSequence: StudioSequence): readonly HostToWebviewMessage[] {
   const turnId = 'subagent-turn';
   return [
     baseSnapshot(
@@ -472,7 +459,7 @@ function subagent(
       turnId,
       toolUseId: 'subagent-task-tool',
       activities: [
-        { action: 'Reading', target: 'src/webview/assistant/Thread.tsx' },
+        { action: 'Reading', target: 'src/webview/assistant/thread/Thread.tsx' },
         { action: 'Inspecting', target: 'assistant styles' },
         { action: 'Comparing', target: 'narrow and wide layouts' },
       ],
@@ -480,9 +467,7 @@ function subagent(
   ];
 }
 
-function longHistory(
-  nextSequence: StudioSequence,
-): readonly HostToWebviewMessage[] {
+function longHistory(nextSequence: StudioSequence): readonly HostToWebviewMessage[] {
   const transcript: SessionTranscriptItem[] = Array.from(
     { length: 90 },
     (_, index): SessionTranscriptItem[] => [
@@ -508,9 +493,7 @@ function longHistory(
   return [baseSnapshot(nextSequence, transcript)];
 }
 
-function failure(
-  nextSequence: StudioSequence,
-): readonly HostToWebviewMessage[] {
+function failure(nextSequence: StudioSequence): readonly HostToWebviewMessage[] {
   const turnId = 'failure-turn';
   const transcript: SessionTranscriptItem[] = [
     {
@@ -576,6 +559,12 @@ function failure(
 export const STUDIO_SCENARIOS: readonly StudioScenario[] = [
   ...createAcceptanceScenarios(baseSnapshot, SESSION_ID),
   {
+    id: 'chat-region',
+    label: 'Chat region',
+    description: 'Controlled Markdown, inline activity, terminal and operation Diff comparison',
+    build: (nextSequence) => [baseSnapshot(nextSequence, chatRegionTranscript())],
+  },
+  {
     id: 'conversation',
     label: 'Conversation',
     description: 'Messages, Markdown, actions, and Composer',
@@ -603,32 +592,37 @@ export const STUDIO_SCENARIOS: readonly StudioScenario[] = [
     id: 'ask-user-result',
     label: 'Answers',
     description: 'Complete questions and answers with role labels',
-    build: (nextSequence) => [baseSnapshot(nextSequence, [
-      {
-        id: 'answers-prompt',
-        kind: 'user',
-        messageId: 'message-answers',
-        text: '请确认这次界面检查的范围。',
-      },
-      {
-        id: 'answers-result',
-        kind: 'ask-user-result',
-        turnId: 'answers-turn',
-        status: 'answered',
-        answers: [
-          {
-            topic: '修改范围',
-            question: '这次是否只调整问答记录的边框、角色标注和上下排版，并保留现有的提问与回答流程？',
-            answer: '按这个范围实施。',
-          },
-          {
-            topic: '验收方式',
-            question: '你希望在哪些主题和侧栏宽度下检查效果？\n请特别说明长问题是否需要完整显示。',
-            answer: '检查浅色和深色主题，以及 320px 和 480px 侧栏。\n问题和回答都完整显示，不要摘要。',
-          },
-        ],
-      },
-    ])],
+    build: (nextSequence) => [
+      baseSnapshot(nextSequence, [
+        {
+          id: 'answers-prompt',
+          kind: 'user',
+          messageId: 'message-answers',
+          text: '请确认这次界面检查的范围。',
+        },
+        {
+          id: 'answers-result',
+          kind: 'ask-user-result',
+          turnId: 'answers-turn',
+          status: 'answered',
+          answers: [
+            {
+              topic: '修改范围',
+              question:
+                '这次是否只调整问答记录的边框、角色标注和上下排版，并保留现有的提问与回答流程？',
+              answer: '按这个范围实施。',
+            },
+            {
+              topic: '验收方式',
+              question:
+                '你希望在哪些主题和侧栏宽度下检查效果？\n请特别说明长问题是否需要完整显示。',
+              answer:
+                '检查浅色和深色主题，以及 320px 和 480px 侧栏。\n问题和回答都完整显示，不要摘要。',
+            },
+          ],
+        },
+      ]),
+    ],
   },
   {
     id: 'review',
@@ -656,9 +650,7 @@ export const STUDIO_SCENARIOS: readonly StudioScenario[] = [
   },
 ];
 
-export function isStudioScenarioId(
-  value: string,
-): value is StudioScenarioId {
+export function isStudioScenarioId(value: string): value is StudioScenarioId {
   return (STUDIO_SCENARIO_IDS as readonly string[]).includes(value);
 }
 

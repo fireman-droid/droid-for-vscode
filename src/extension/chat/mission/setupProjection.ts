@@ -1,9 +1,8 @@
-import type { MissionSetupCapabilities } from '../../../shared/missionProtocol';
-import type { MissionControlSetupAuthority } from '../../MissionControlPanelController';
-import type { ChatController } from '../../ChatController';
-import type { ChatControllerInternals } from '../internals';
+import type { MissionSetupCapabilities } from '../../../shared/protocol/missionProtocol';
+import type { MissionControlSetupAuthority } from '../../panels/mission/MissionControlPanelController';
+import type { SetupProjectionPort } from './setupProjectionMissionPort';
 
-export function createMissionControlSetupProjection(ctl: ChatController): {
+export function createMissionControlSetupProjection(ctl: SetupProjectionPort): {
   readonly read: () => MissionControlSetupAuthority;
   readonly subscribe: (listener: () => void) => { dispose(): void };
 } {
@@ -34,34 +33,32 @@ export function createMissionControlSetupProjection(ctl: ChatController): {
 }
 
 export function readMissionControlSetupAuthority(
-  ctl: ChatControllerInternals,
+  ctl: SetupProjectionPort,
 ): MissionControlSetupAuthority {
   const revisions = {
-    workspaceAuthorityRevision: ctl.workspaceContextGeneration,
-    chatOwnerRevision: ctl.runtimeGeneration,
+    workspaceAuthorityRevision: ctl.sessionState.workspaceContextGeneration,
+    chatOwnerRevision: ctl.sessionState.runtimeGeneration,
   };
   if (ctl.missionGateway === undefined) {
     return unavailable(revisions, 'gateway-unavailable');
   }
-  const workspace = ctl.workspaceContext;
+  const workspace = ctl.sessionState.workspaceContext;
   if (workspace.cwd === null || !workspace.trusted) {
     return unavailable(revisions, 'workspace-unavailable');
   }
   if (
-    ctl.connection.status !== 'connected' ||
-    ctl.runtime === null ||
-    ctl.sessionId === null
+    ctl.sessionState.connection.status !== 'connected' ||
+    ctl.sessionState.runtime === null ||
+    ctl.sessionState.sessionId === null
   ) {
     return unavailable(revisions, 'selected-chat-unavailable');
   }
-  const settings = ctl.settings.value;
+  const settings = ctl.metadata.settings.value;
   if (settings === null) {
     return unavailable(
       revisions,
-      ctl.settings.status === 'loading'
-        ? 'settings-loading'
-        : 'settings-error',
-      ctl.settings.status === 'loading' ? 'loading' : 'error',
+      ctl.metadata.settings.status === 'loading' ? 'settings-loading' : 'settings-error',
+      ctl.metadata.settings.status === 'loading' ? 'loading' : 'error',
     );
   }
   const capabilities = ctl.missionGateway.setupCapabilitiesFor(
@@ -71,17 +68,19 @@ export function readMissionControlSetupAuthority(
       reasoningEffort: settings.reasoningEffort,
     },
     {
-      status: ctl.modelCatalog.status,
+      status: ctl.metadata.modelCatalog.status,
       items:
-        ctl.modelCatalog.status === 'ready' ? ctl.modelCatalog.items : [],
+        ctl.metadata.modelCatalog.status === 'ready'
+          ? ctl.metadata.modelCatalog.items
+          : [],
     },
   );
   if (
-    ctl.settingsUpdate !== null ||
-    ctl.sessionOperationInProgress ||
-    ctl.refreshInProgress ||
-    ctl.missionStartInProgress ||
-    ctl.turn !== null
+    ctl.metadata.settingsUpdate !== null ||
+    ctl.sessionState.sessionOperationInProgress ||
+    ctl.catalogState.refreshInProgress ||
+    ctl.missionState.missionStartInProgress ||
+    ctl.turnState.turn !== null
   ) {
     return {
       ...revisions,
@@ -112,11 +111,9 @@ export function readMissionControlSetupAuthority(
   };
 }
 
-export function emitMissionSetupCapabilities(
-  ctl: ChatControllerInternals,
-): void {
+export function emitMissionSetupCapabilities(ctl: SetupProjectionPort): void {
   const workspace = ctl.getWorkspaceContext();
-  const settings = ctl.settings.value;
+  const settings = ctl.metadata.settings.value;
   if (
     ctl.missionGateway === undefined ||
     workspace.cwd === null ||
@@ -129,13 +126,13 @@ export function emitMissionSetupCapabilities(
     readonly status: MissionSetupCapabilities['catalogStatus'];
     readonly items: MissionSetupCapabilities['catalog'];
   } =
-    ctl.modelCatalog.status === 'ready'
+    ctl.metadata.modelCatalog.status === 'ready'
       ? {
           status: 'ready',
-          items: ctl.modelCatalog.items,
+          items: ctl.metadata.modelCatalog.items,
         }
       : {
-          status: ctl.modelCatalog.status,
+          status: ctl.metadata.modelCatalog.status,
           items: [],
         };
   const setup = ctl.missionGateway.setupCapabilitiesFor(
@@ -152,7 +149,8 @@ export function emitMissionSetupCapabilities(
     scope: 'selected-chat',
     revision: 0,
     availability:
-      ctl.connection.status === 'connected' && ctl.runtime !== null
+      ctl.sessionState.connection.status === 'connected' &&
+      ctl.sessionState.runtime !== null
         ? 'attached'
         : 'detached',
     features: [],
@@ -186,27 +184,24 @@ function unavailable(
   };
 }
 
-function setupAuthorityKey(ctl: ChatController): readonly unknown[] {
+function setupAuthorityKey(ctl: SetupProjectionPort): readonly unknown[] {
   return [
-    ctl.workspaceContextGeneration,
-    ctl.runtimeGeneration,
-    ctl.connection.status,
-    ctl.runtime,
-    ctl.sessionId,
-    ctl.settings.status,
-    ctl.settings.value,
-    ctl.modelCatalog,
-    ctl.settingsUpdate !== null,
-    ctl.sessionOperationInProgress,
-    ctl.refreshInProgress,
-    ctl.missionStartInProgress,
-    ctl.turn !== null,
+    ctl.sessionState.workspaceContextGeneration,
+    ctl.sessionState.runtimeGeneration,
+    ctl.sessionState.connection.status,
+    ctl.sessionState.runtime,
+    ctl.sessionState.sessionId,
+    ctl.metadata.settings.status,
+    ctl.metadata.settings.value,
+    ctl.metadata.modelCatalog,
+    ctl.metadata.settingsUpdate !== null,
+    ctl.sessionState.sessionOperationInProgress,
+    ctl.catalogState.refreshInProgress,
+    ctl.missionState.missionStartInProgress,
+    ctl.turnState.turn !== null,
   ];
 }
 
-function sameAuthorityKey(
-  left: readonly unknown[],
-  right: readonly unknown[],
-): boolean {
+function sameAuthorityKey(left: readonly unknown[], right: readonly unknown[]): boolean {
   return left.every((value, index) => Object.is(value, right[index]));
 }

@@ -1,7 +1,4 @@
-import {
-  extractToolFilePaths,
-  toWorkspaceRelativePath,
-} from '../toolFilePath';
+import { extractToolFilePaths, toWorkspaceRelativePath } from '../tools/toolFilePath';
 
 export function historyToolFilePaths(
   workspaceRoot: string | undefined,

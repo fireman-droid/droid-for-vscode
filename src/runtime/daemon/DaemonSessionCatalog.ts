@@ -1,17 +1,14 @@
+import type { DaemonApi } from './api';
 import path from 'node:path';
 import process from 'node:process';
 
-import {
-  hasSubagentSessionTag,
-  type ConnectedDroid,
-  type SessionTag,
-} from '@factory/droid-sdk';
+import { hasSubagentSessionTag, type SessionTag } from '@factory/droid-sdk';
 
-import { sanitizeSessionTitle } from '../../shared/validateMessage';
+import { sanitizeSessionTitle } from '../../shared/validation/guards';
 import {
   isSafeSessionIdentifier,
   MAX_SESSION_CATALOG_TITLE_LENGTH,
-} from '../SessionCatalog';
+} from '../catalog/SessionCatalog';
 
 /** Most archived sessions projected for the drawer. */
 export const DAEMON_ARCHIVED_LIST_LIMIT = 50;
@@ -53,9 +50,9 @@ export interface SessionSearchMatch {
  * in Phase 1.
  */
 export class DaemonSessionCatalog {
-  private readonly droid: ConnectedDroid;
+  private readonly droid: DaemonApi;
 
-  constructor(droid: ConnectedDroid) {
+  constructor(droid: DaemonApi) {
     this.droid = droid;
   }
 
@@ -95,20 +92,13 @@ export class DaemonSessionCatalog {
         // Subagent child sessions stay out of the drawer (playback
         // design §5). The daemon exposes Task parent identity and
         // session tags, including Mission decomposition roles.
-        hasWorkerSessionMetadata(
-          row.parentSessionId,
-          row.parentToolUseId,
-          row.tags,
-        )
+        hasWorkerSessionMetadata(row.parentSessionId, row.parentToolUseId, row.tags)
       ) {
         continue;
       }
       entries.push({
         id: row.id,
-        title: sanitizeSessionTitle(
-          row.title ?? '',
-          MAX_SESSION_CATALOG_TITLE_LENGTH,
-        ),
+        title: sanitizeSessionTitle(row.title ?? '', MAX_SESSION_CATALOG_TITLE_LENGTH),
         modifiedTime,
         archivedTime,
       });
@@ -155,10 +145,7 @@ export class DaemonSessionCatalog {
       }
       matches.push({
         id: row.id,
-        title: sanitizeSessionTitle(
-          row.title ?? '',
-          MAX_SESSION_CATALOG_TITLE_LENGTH,
-        ),
+        title: sanitizeSessionTitle(row.title ?? '', MAX_SESSION_CATALOG_TITLE_LENGTH),
         modifiedTime: projectDate(row.modifiedTime),
         snippet: projectSnippet(row.hits),
       });
@@ -191,9 +178,7 @@ function hasWorkerSessionMetadata(
     // against the external CLI process, 探索 #31).
     tags?.some((tag) => tag.name === 'exec') === true ||
     tags?.some(
-      (tag) =>
-        tag.name === 'decompSessionType' &&
-        tag.metadata?.value === 'worker',
+      (tag) => tag.name === 'decompSessionType' && tag.metadata?.value === 'worker',
     ) === true
   );
 }
@@ -225,10 +210,7 @@ export function belongsToWorkspace(
   rowCwd: string | undefined,
   rowRepoRoot: string | undefined,
 ): boolean {
-  return (
-    sameDirectory(workspaceCwd, rowCwd) ||
-    sameDirectory(workspaceCwd, rowRepoRoot)
-  );
+  return sameDirectory(workspaceCwd, rowCwd) || sameDirectory(workspaceCwd, rowRepoRoot);
 }
 
 function sameDirectory(left: string, right: string | undefined): boolean {

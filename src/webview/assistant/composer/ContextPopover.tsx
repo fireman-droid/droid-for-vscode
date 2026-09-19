@@ -6,12 +6,15 @@
 // Remaining/Source stat pair and two-scope table retired; per-turn
 // detail lives on in each legend row's hover title.
 
-import type { SessionContextState } from '../../../shared/bridgeMessages';
+import { type SessionContextState } from '../../../shared/protocol/settings';
+import { Button } from '../../../webview-v2/ui/button';
 import type {
   SessionTokenUsageState,
   TokenUsageBreakdown,
-} from '../../../shared/tokenUsage';
+} from '../../../shared/protocol/tokenUsage';
 import { formatCount } from './shared';
+import { formatCompactTokens, formatCredits, hasUsableContextRatio } from './contextPresentation';
+export { formatCompactTokens, getContextPercent, getContextLabel, hasUsableContextRatio } from './contextPresentation';
 
 /** Legend rows: our real categories mapped onto the five ctx colors. */
 const CONTEXT_CATEGORIES: readonly {
@@ -61,51 +64,45 @@ export function ContextPopover({
       <div className="dvx-context-head">
         <span className="dvx-context-head-title">Context Usage</span>
         <div className="dvx-context-head-actions">
-          <button
+          <Button variant="plain" size="none"
             type="button"
             className="dvx-context-icon-button"
             aria-label="Refresh"
-            title={
-              context.status === 'loading' ? 'Refreshing…' : 'Refresh'
-            }
+            title={context.status === 'loading' ? 'Refreshing…' : 'Refresh'}
             disabled={disabled}
             onClick={onRefresh}
           >
             <RefreshIcon spinning={context.status === 'loading'} />
-          </button>
+          </Button>
           {onClose === undefined ? null : (
-            <button
+            <Button variant="plain" size="none"
               type="button"
               className="dvx-context-icon-button"
               aria-label="Close"
               onClick={onClose}
             >
               <CloseIcon />
-            </button>
+            </Button>
           )}
         </div>
       </div>
       {context.value !== null ? (
         <ContextUsage stats={context.value} usage={tokenUsage} />
-      ) : (
-        context.status === 'loading' ? (
-          <p className="dvx-popover-message" role="status">
-            Loading context usage…
-          </p>
-        ) : null
-      )}
+      ) : context.status === 'loading' ? (
+        <p className="dvx-popover-message" role="status">
+          Loading context usage…
+        </p>
+      ) : null}
       {context.status === 'error' ? (
         <p className="dvx-popover-message dvx-error-text" role="alert">
           {context.message}
         </p>
       ) : null}
       <div className="dvx-context-compact">
-        <p className="dvx-context-compact-note">
-          Summarizes earlier messages to free up context.
-        </p>
-        <button
+        <Button variant="plain" size="none"
           type="button"
           className="dvx-context-compact-button"
+          title="Summarizes earlier messages to free up context."
           disabled={disabled || compactPending}
           aria-busy={compactPending}
           onClick={compactPending ? undefined : onCompact}
@@ -118,7 +115,7 @@ export function ContextPopover({
           ) : (
             'Compact conversation'
           )}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -131,24 +128,37 @@ function ContextUsage({
   readonly stats: NonNullable<SessionContextState['value']>;
   readonly usage: SessionTokenUsageState | undefined;
 }): React.JSX.Element {
+  const estimateNote =
+    stats.estimatedTokens === undefined ? null : (
+      <p className="dvx-context-usage-note">
+        Estimated content size: ~{formatCompactTokens(stats.estimatedTokens)} tokens. This
+        character-based estimate is separate from compaction progress.
+      </p>
+    );
   if (stats.availability === 'unavailable') {
     const detail =
-      stats.reason === 'unsupported'
-        ? 'This Runtime does not expose the official current Context Breakdown.'
-        : 'The current Context Breakdown could not be validated.';
+      stats.reason === 'awaiting-usage'
+        ? 'Compaction progress appears after the first model response reports token usage.'
+        : stats.reason === 'unsupported'
+          ? 'This Runtime does not expose the official compaction statistics.'
+          : 'The current compaction statistics could not be validated.';
     return (
       <div className="dvx-context-usage dvx-context-usage-unavailable">
         <div className="dvx-context-usage-summary">
-          <strong>Current window unavailable</strong>
+          <strong>
+            {stats.reason === 'awaiting-usage'
+              ? 'Waiting for model usage'
+              : 'Compaction progress unavailable'}
+          </strong>
         </div>
-        <p className="dvx-context-usage-note">
-          {detail}
-        </p>
+        <p className="dvx-context-usage-note">{detail}</p>
+        {estimateNote}
       </div>
     );
   }
-  const usedPercent = (stats.used / stats.limit) * 100;
+  const usedPercent = Math.min(100, (stats.used / stats.limit) * 100);
   const roundedPercent = Math.round(usedPercent);
+  const percentLabel = roundedPercent === 0 ? '<1%' : `${roundedPercent}%`;
   // Legend scope: session totals when the SDK reported them, else the
   // last turn (history sessions carry no per-turn usage and fresh
   // sessions may carry only one scope).
@@ -157,37 +167,31 @@ function ContextUsage({
   const breakdownTotal =
     breakdown === null
       ? 0
-      : CONTEXT_CATEGORIES.reduce(
-          (sum, category) => sum + breakdown[category.field],
-          0,
-        );
+      : CONTEXT_CATEGORIES.reduce((sum, category) => sum + breakdown[category.field], 0);
   const legend =
     breakdown === null || breakdownTotal === 0
       ? []
-      : CONTEXT_CATEGORIES.filter(
-          (category) => breakdown[category.field] > 0,
-        );
+      : CONTEXT_CATEGORIES.filter((category) => breakdown[category.field] > 0);
   const credits = breakdown?.factoryCredits ?? 0;
 
   return (
     <div className="dvx-context-usage">
       <div className="dvx-context-usage-summary">
-        <strong>{roundedPercent}% Full</strong>
+        <strong>{percentLabel} to compaction</strong>
         <span>
-          ~{formatCompactTokens(stats.used)} /{' '}
-          {formatCompactTokens(stats.limit)} Tokens
+          ~{formatCompactTokens(stats.used)} / {formatCompactTokens(stats.limit)} Tokens
         </span>
       </div>
       <div
         className="dvx-context-bar"
         role="progressbar"
-        aria-label="Context used"
+        aria-label="Compaction progress"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={roundedPercent}
-        aria-valuetext={`${roundedPercent}% used (${formatCount(
+        aria-valuetext={`${percentLabel} of compaction threshold (${formatCount(
           stats.used,
-        )} of ${formatCount(stats.limit)})`}
+        )} of ${formatCount(stats.limit)} adjusted tokens)`}
       >
         <span
           className="dvx-context-bar-segment"
@@ -197,8 +201,18 @@ function ContextUsage({
           }}
         />
       </div>
+      <p className="dvx-context-usage-note"
+        title="Based on the last model response, adjusted like the Droid CLI meter. Automatic compaction is controlled by Droid.">
+        Last response · Auto-compaction by Droid
+      </p>
+      {estimateNote}
       {legend.length === 0 ? null : (
-        <ul className="dvx-context-legend" aria-label="Session token totals">
+        <ul
+          className="dvx-context-legend"
+          aria-label={
+            usage?.cumulative ? 'Session token totals' : 'Last turn token totals'
+          }
+        >
           {legend.map((category) => (
             <li
               key={category.field}
@@ -214,9 +228,7 @@ function ContextUsage({
                 style={{ background: `var(${category.colorVar})` }}
                 aria-hidden="true"
               />
-              <span className="dvx-context-legend-label">
-                {category.label}
-              </span>
+              <span className="dvx-context-legend-label">{category.label}</span>
               <span className="dvx-context-legend-value">
                 {formatCompactTokens(breakdown![category.field])}
               </span>
@@ -224,60 +236,25 @@ function ContextUsage({
           ))}
           {credits > 0 ? (
             <li className="dvx-context-legend-row dvx-context-legend-credits">
-              <span
-                className="dvx-context-legend-swatch"
-                aria-hidden="true"
-              />
+              <span className="dvx-context-legend-swatch" aria-hidden="true" />
               <span className="dvx-context-legend-label">Credits</span>
-              <span className="dvx-context-legend-value">
-                {formatCredits(credits)}
-              </span>
+              <span className="dvx-context-legend-value">{formatCredits(credits)}</span>
             </li>
           ) : null}
         </ul>
       )}
       {breakdown !== null ? (
         <p className="dvx-context-usage-note">
-          {lastTurn === null
-            ? 'Per-turn detail appears after the next completed turn.'
-            : 'Category counts are session totals. The meter is the current Context Breakdown.'}
+          {usage?.cumulative
+            ? 'Token counts above are session totals, not current compaction usage.'
+            : 'Token counts above are from the last turn, not current compaction usage.'}
         </p>
       ) : null}
     </div>
   );
 }
 
-/**
- * Cursor-style compact token counts ("115.6K", "1M"). One decimal at
- * most, trailing zeros trimmed; plain counts below a thousand.
- */
-export function formatCompactTokens(value: number): string {
-  if (value >= 1_000_000) {
-    return `${trimDecimal(value / 1_000_000)}M`;
-  }
-  if (value >= 1_000) {
-    return `${trimDecimal(value / 1_000)}K`;
-  }
-  return String(value);
-}
-
-function trimDecimal(value: number): string {
-  const rounded = Math.round(value * 10) / 10;
-  return Number.isInteger(rounded)
-    ? String(rounded)
-    : rounded.toFixed(1);
-}
-
-/** Factory credits may be fractional; token counts never are. */
-function formatCredits(value: number): string {
-  return value.toLocaleString(undefined, { maximumFractionDigits: 3 });
-}
-
-function RefreshIcon({
-  spinning,
-}: {
-  readonly spinning: boolean;
-}): React.JSX.Element {
+function RefreshIcon({ spinning }: { readonly spinning: boolean }): React.JSX.Element {
   return (
     <svg
       className={
@@ -311,37 +288,4 @@ function CloseIcon(): React.JSX.Element {
       />
     </svg>
   );
-}
-
-export function getContextPercent(context: SessionContextState): number {
-  if (
-    context.value === null ||
-    !hasUsableContextRatio(context.value)
-  ) {
-    return 0;
-  }
-  return (context.value.used / context.value.limit) * 100;
-}
-
-export function getContextLabel(context: SessionContextState): string {
-  if (context.value === null) {
-    return context.status === 'loading'
-      ? 'Context usage loading'
-      : 'Context usage unavailable';
-  }
-  if (!hasUsableContextRatio(context.value)) {
-    return 'Current context window unavailable';
-  }
-  return `Context used ${formatCount(context.value.used)} of ${formatCount(
-    context.value.limit,
-  )}`;
-}
-
-export function hasUsableContextRatio(
-  stats: NonNullable<SessionContextState['value']>,
-): stats is Extract<
-  NonNullable<SessionContextState['value']>,
-  { availability: 'available' }
-> {
-  return stats.availability === 'available';
 }

@@ -1,7 +1,4 @@
-import type {
-  ConnectedDroid,
-  ConnectedDroidSession,
-} from '@factory/droid-sdk';
+import type { DaemonApi, DaemonSessionHandle } from '../../../runtime/daemon/api';
 
 import type { DroidRuntime } from '../../../runtime/DroidRuntime';
 import {
@@ -12,9 +9,9 @@ import type {
   MissionReasoningEffort,
   MissionSetupCapabilities,
   MissionStartMessage,
-} from '../../../shared/missionProtocol';
-import type { MissionReadinessWarning } from '../../../shared/missionControlSetupProtocol';
-import { resolveMissionProfile } from '../../../shared/missionProtocol';
+} from '../../../shared/protocol/missionProtocol';
+import type { MissionReadinessWarning } from '../../../shared/protocol/missionControlSetupProtocol';
+import { resolveMissionProfile } from '../../../shared/protocol/missionProtocol';
 import {
   listMissionCatalog,
   type MissionCatalogProjectionOptions,
@@ -62,11 +59,11 @@ export type MissionGatewayResult =
     };
 
 export interface MissionGatewayOptions extends MissionCatalogProjectionOptions {
-  readonly getDroid: () => Promise<ConnectedDroid>;
+  readonly getDroid: () => Promise<DaemonApi>;
   readonly preferences: MissionPreferenceStore;
   readonly createRuntime: (
-    session: ConnectedDroidSession,
-    droid: ConnectedDroid,
+    session: DaemonSessionHandle,
+    droid: DaemonApi,
     orchestrator: MissionProfilePair,
   ) => MissionGatewayRuntime;
   readonly openWorkerViewer?: (target: {
@@ -127,8 +124,7 @@ export class MissionGateway {
         status: 'ready',
         warning: {
           state: warning.state,
-          level:
-            typeof warning.level === 'number' ? warning.level : null,
+          level: typeof warning.level === 'number' ? warning.level : null,
         },
       };
     } catch {
@@ -148,10 +144,7 @@ export class MissionGateway {
 
   async start(input: MissionGatewayStart): Promise<MissionGatewayResult> {
     const requestedPreferences: MissionWorkspacePreferences = {
-      worker: resolveMissionProfile(
-        input.message.worker,
-        input.message.orchestrator,
-      ),
+      worker: resolveMissionProfile(input.message.worker, input.message.orchestrator),
       validator: resolveMissionProfile(
         input.message.validator,
         input.message.orchestrator,
@@ -168,14 +161,15 @@ export class MissionGateway {
       return { status: 'rejected', code: effective.reason };
     }
 
-    let droid: ConnectedDroid;
+    let droid: DaemonApi;
     try {
       droid = await this.options.getDroid();
     } catch {
       return { status: 'rejected', code: 'daemon-unavailable' };
     }
     const settings = toMissionSettings(effective.value);
-    let session: ConnectedDroidSession;
+    let session: DaemonSessionHandle | undefined;
+    let adopted = false;
     try {
       session = await createMissionOrchestrator({
         droid,
@@ -191,16 +185,10 @@ export class MissionGateway {
       await droid.sessions.updateSettings(session.id, {
         missionSettings: settings as never,
       });
-    } catch {
-      return { status: 'rejected', code: 'daemon-unavailable' };
-    }
+      if (!(await hasDurableMissionSettings(session, settings))) {
+        return { status: 'rejected', code: 'settings-mismatch' };
+      }
 
-    if (!(await hasDurableMissionSettings(session, settings))) {
-      await session.detach().catch(() => undefined);
-      return { status: 'rejected', code: 'settings-mismatch' };
-    }
-
-    try {
       const runtime = this.options.createRuntime(
         session,
         droid,
@@ -208,10 +196,14 @@ export class MissionGateway {
       );
       await runtime.initialize();
       await this.options.preferences.save(input.workspaceId, effective.value);
+      adopted = true;
       return { status: 'ready', sessionId: session.id, runtime, settings };
     } catch {
-      await session.detach().catch(() => undefined);
       return { status: 'rejected', code: 'daemon-unavailable' };
+    } finally {
+      if (session !== undefined && !adopted) {
+        await session.detach().catch(() => undefined);
+      }
     }
   }
 
@@ -245,10 +237,7 @@ export class MissionGateway {
   ): Promise<boolean> {
     try {
       const droid = await this.options.getDroid();
-      await droid.sessions.killWorker(
-        orchestratorSessionId,
-        workerSessionId,
-      );
+      await droid.sessions.killWorker(orchestratorSessionId, workerSessionId);
       return true;
     } catch {
       return false;
@@ -277,7 +266,6 @@ export class MissionGateway {
     this.options.openWorkerViewer(target);
     return true;
   }
-
 }
 
 export interface MissionSettings {
@@ -306,9 +294,7 @@ function validateStart(
   return validatePreferences(preferences, catalog);
 }
 
-function toMissionSettings(
-  preferences: MissionWorkspacePreferences,
-): MissionSettings {
+function toMissionSettings(preferences: MissionWorkspacePreferences): MissionSettings {
   return {
     workerModel: preferences.worker.modelId,
     workerReasoningEffort: preferences.worker.reasoningEffort,
@@ -319,10 +305,7 @@ function toMissionSettings(
   };
 }
 
-function sameMissionSettings(
-  actual: unknown,
-  expected: MissionSettings,
-): boolean {
+function sameMissionSettings(actual: unknown, expected: MissionSettings): boolean {
   if (actual === null || typeof actual !== 'object' || Array.isArray(actual)) {
     return false;
   }
@@ -331,15 +314,14 @@ function sameMissionSettings(
     value.workerModel === expected.workerModel &&
     value.workerReasoningEffort === expected.workerReasoningEffort &&
     value.validationWorkerModel === expected.validationWorkerModel &&
-    value.validationWorkerReasoningEffort ===
-      expected.validationWorkerReasoningEffort &&
+    value.validationWorkerReasoningEffort === expected.validationWorkerReasoningEffort &&
     value.skipScrutiny === expected.skipScrutiny &&
     value.skipUserTesting === expected.skipUserTesting
   );
 }
 
 async function hasDurableMissionSettings(
-  session: ConnectedDroidSession,
+  session: DaemonSessionHandle,
   expected: MissionSettings,
 ): Promise<boolean> {
   for (let attempt = 0; attempt < 10; attempt += 1) {

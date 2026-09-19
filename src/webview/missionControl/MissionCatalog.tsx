@@ -2,23 +2,9 @@ import {
   MISSION_CONTROL_CATALOG_FILTERS,
   type MissionControlCatalogFilter,
   type MissionControlCatalogRow,
-} from '../../shared/missionControlPanelProtocol';
-
-export type MissionCatalogState =
-  | { readonly status: 'loading'; readonly rows: readonly MissionControlCatalogRow[] }
-  | { readonly status: 'refreshing'; readonly rows: readonly MissionControlCatalogRow[] }
-  | { readonly status: 'ready'; readonly rows: readonly MissionControlCatalogRow[] }
-  | {
-      readonly status: 'error';
-      readonly rows: readonly MissionControlCatalogRow[];
-      readonly message: string;
-      readonly retryable: boolean;
-    };
-
-export type MissionCatalogNavigation =
-  | { readonly route: 'catalog' }
-  | { readonly route: 'new-mission' }
-  | { readonly route: 'detail'; readonly catalogId: string };
+} from '../../shared/protocol/missionControlPanelProtocol';
+import { matchesFilter, readRowAccessibleNames, readCatalogStatus as readStatus, formatFilter, nextFilter, formatLifecycle, formatProgress, formatCreated, type MissionCatalogState, type MissionCatalogNavigation } from './catalogPresentation';
+export type { MissionCatalogState, MissionCatalogNavigation } from './catalogPresentation';
 
 export function MissionCatalog({
   state,
@@ -104,11 +90,7 @@ export function MissionCatalog({
         aria-labelledby={`mission-filter-${filter}`}
       >
         {state.status === 'error' && state.retryable ? (
-          <button
-            type="button"
-            className="mission-control-retry"
-            onClick={onRefresh}
-          >
+          <button type="button" className="mission-control-retry" onClick={onRefresh}>
             Retry
           </button>
         ) : null}
@@ -154,28 +136,6 @@ export function MissionCatalog({
   );
 }
 
-function readRowAccessibleNames(
-  rows: readonly MissionControlCatalogRow[],
-): readonly string[] {
-  const baseNames = rows.map(
-    (row) => `Open Mission “${row.title}” in ${row.workspaceLabel}`,
-  );
-  const totals = new Map<string, number>();
-  for (const name of baseNames) {
-    totals.set(name, (totals.get(name) ?? 0) + 1);
-  }
-  const positions = new Map<string, number>();
-  return baseNames.map((name) => {
-    const total = totals.get(name) ?? 1;
-    if (total === 1) {
-      return name;
-    }
-    const position = (positions.get(name) ?? 0) + 1;
-    positions.set(name, position);
-    return `${name}, item ${position} of ${total}`;
-  });
-}
-
 function MissionValue({
   label,
   value,
@@ -189,104 +149,4 @@ function MissionValue({
       <span>{value}</span>
     </span>
   );
-}
-
-function matchesFilter(
-  row: MissionControlCatalogRow,
-  filter: MissionControlCatalogFilter,
-): boolean {
-  if (filter === 'all') {
-    return true;
-  }
-  if (filter === 'paused' || filter === 'completed') {
-    return row.lifecycle === filter;
-  }
-  return (
-    row.lifecycle === 'planning' ||
-    row.lifecycle === 'awaiting_input' ||
-    row.lifecycle === 'initializing' ||
-    row.lifecycle === 'running' ||
-    row.lifecycle === 'orchestrator_turn'
-  );
-}
-
-function readStatus(
-  state: MissionCatalogState,
-  count: number,
-  filter: MissionControlCatalogFilter,
-): string {
-  if (state.status === 'loading') {
-    return 'Loading Missions…';
-  }
-  if (state.status === 'refreshing') {
-    return 'Refreshing Missions…';
-  }
-  if (state.status === 'error') {
-    return state.message;
-  }
-  if (count === 0) {
-    return filter === 'all'
-      ? 'No Missions found.'
-      : `No ${formatFilter(filter).toLowerCase()} Missions found.`;
-  }
-  return `${count} ${count === 1 ? 'Mission' : 'Missions'}`;
-}
-
-function formatFilter(filter: MissionControlCatalogFilter): string {
-  return filter[0]!.toUpperCase() + filter.slice(1);
-}
-
-function nextFilter(
-  current: MissionControlCatalogFilter,
-  key: string,
-): MissionControlCatalogFilter | null {
-  const index = MISSION_CONTROL_CATALOG_FILTERS.indexOf(current);
-  if (key === 'Home') {
-    return MISSION_CONTROL_CATALOG_FILTERS[0];
-  }
-  if (key === 'End') {
-    return MISSION_CONTROL_CATALOG_FILTERS.at(-1) ?? null;
-  }
-  if (key === 'ArrowRight' || key === 'ArrowDown') {
-    return MISSION_CONTROL_CATALOG_FILTERS[
-      (index + 1) % MISSION_CONTROL_CATALOG_FILTERS.length
-    ];
-  }
-  if (key === 'ArrowLeft' || key === 'ArrowUp') {
-    return MISSION_CONTROL_CATALOG_FILTERS[
-      (index - 1 + MISSION_CONTROL_CATALOG_FILTERS.length) %
-        MISSION_CONTROL_CATALOG_FILTERS.length
-    ];
-  }
-  return null;
-}
-
-function formatLifecycle(
-  lifecycle: MissionControlCatalogRow['lifecycle'],
-): string {
-  switch (lifecycle) {
-    case 'awaiting_input':
-      return 'Awaiting input';
-    case 'orchestrator_turn':
-      return 'Orchestrating';
-    default:
-      return lifecycle[0]!.toUpperCase() + lifecycle.slice(1);
-  }
-}
-
-function formatProgress(row: MissionControlCatalogRow): string {
-  return row.progress === null
-    ? '—'
-    : `${row.progress.completed} of ${row.progress.total}`;
-}
-
-function formatCreated(createdAt: string | null): string {
-  if (createdAt === null) {
-    return '—';
-  }
-  return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(createdAt));
 }

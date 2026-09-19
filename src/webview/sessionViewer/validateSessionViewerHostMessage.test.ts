@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { SESSION_VIEWER_PROTOCOL_VERSION } from '../../shared/sessionViewerProtocol';
+import { SESSION_VIEWER_PROTOCOL_VERSION } from '../../shared/protocol/sessionViewerProtocol';
 import { parseSessionViewerHostMessage } from './validateSessionViewerHostMessage';
 
 const target = {
@@ -17,6 +17,7 @@ const snapshot = {
   items: [{ id: 'u1', kind: 'user', text: 'Investigate' }],
   truncated: false,
   running: true,
+  lifecycle: 'working',
   stopping: false,
   stopError: false,
 } as const;
@@ -32,6 +33,7 @@ describe('parseSessionViewerHostMessage', () => {
         target,
         reason: 'This session transcript is unavailable.',
         running: false,
+        lifecycle: 'completed',
         stopping: false,
         stopError: false,
       }),

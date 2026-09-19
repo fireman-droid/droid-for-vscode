@@ -35,4 +35,10 @@ if (typeof document !== 'undefined') {
 }
 
 // The dynamic import above needs this file to be a module.
+// Radix Select uses pointer capture; jsdom does not implement it.
+if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.hasPointerCapture) {
+  HTMLElement.prototype.hasPointerCapture = () => false;
+  HTMLElement.prototype.setPointerCapture = () => {};
+  HTMLElement.prototype.releasePointerCapture = () => {};
+}
 export {};

@@ -1,10 +1,8 @@
 import { FactoryDroidRuntime } from './FactoryDroidRuntime';
-import { cancellingRuntimeInteractionHandler } from './runtimeInteractions';
+import { cancellingRuntimeInteractionHandler } from './events/runtimeInteractions';
 
 if (process.env.DROIDVISX_RUN_SMOKE !== '1') {
-  console.error(
-    'Runtime smoke is opt-in. Set DROIDVISX_RUN_SMOKE=1 to run it locally.',
-  );
+  console.error('Runtime smoke is opt-in. Set DROIDVISX_RUN_SMOKE=1 to run it locally.');
   process.exitCode = 2;
 } else {
   await runSmoke();

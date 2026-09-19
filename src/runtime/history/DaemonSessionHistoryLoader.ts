@@ -1,32 +1,28 @@
+import type { DaemonApi } from '../daemon/api';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import {
-  type ConnectedDroid,
-  type SessionMessage,
-} from '@factory/droid-sdk';
+import { type SessionMessage } from '@factory/droid-sdk';
 
-import type {
-  SessionMissionSummary,
-  ToolSubagentSummary,
-} from '../../shared/bridgeMessages';
-import { isStrictRecord } from '../../shared/strictValidation';
+import { type SessionMissionSummary } from '../../shared/protocol/sessions';
+import { type ToolSubagentSummary } from '../../shared/protocol/transcript';
+import { isStrictRecord } from '../../shared/validation/strictValidation';
 import {
   readTokenUsageBreakdown,
   type TokenUsageBreakdown,
-} from '../../shared/tokenUsage';
+} from '../../shared/protocol/tokenUsage';
 import {
   readBoundedSessionSettings,
   workspaceSessionsDirectory,
-} from '../FactorySessionCatalog';
-import { isSafeSessionIdentifier } from '../SessionCatalog';
-import { defaultSessionsDirectory } from '../sessionFavorites';
+} from '../catalog/FactorySessionCatalog';
+import { isSafeSessionIdentifier } from '../catalog/SessionCatalog';
+import { defaultSessionsDirectory } from '../catalog/sessionFavorites';
 import type { RuntimeDiagnosticSink } from '../runtimeDiagnostics';
 import {
   readSubagentInvocationRecords,
   type SubagentInvocationRecord,
-} from '../subagentSummary';
+} from '../subagents/subagentSummary';
 import { projectSessionMessages } from './projectSessionHistory';
 import type {
   SessionHistoryLoader,
@@ -56,7 +52,7 @@ import type {
  *   serves the 5s/2.5s subagent watch/panel polls.
  */
 export interface DaemonFirstHistoryLoaderOptions {
-  readonly getDroid: () => Promise<ConnectedDroid>;
+  readonly getDroid: () => Promise<DaemonApi>;
   /** True while this window actually runs sessions over the daemon. */
   readonly isDaemonActive: () => boolean;
   /** Spawn-based loader used for process mode and daemon failures. */
@@ -88,14 +84,10 @@ export function defaultTaskInvocationsFile(): string {
 export function createDaemonFirstHistoryLoader(
   options: DaemonFirstHistoryLoaderOptions,
 ): SessionHistoryLoader {
-  const sessionsDirectory =
-    options.sessionsDirectory ?? defaultSessionsDirectory();
-  const taskInvocationsFile =
-    options.taskInvocationsFile ?? defaultTaskInvocationsFile();
+  const sessionsDirectory = options.sessionsDirectory ?? defaultSessionsDirectory();
+  const taskInvocationsFile = options.taskInvocationsFile ?? defaultTaskInvocationsFile();
 
-  const record = (
-    event: Parameters<RuntimeDiagnosticSink['record']>[0],
-  ): void => {
+  const record = (event: Parameters<RuntimeDiagnosticSink['record']>[0]): void => {
     try {
       options.diagnostics?.record(event);
     } catch {
@@ -112,12 +104,10 @@ export function createDaemonFirstHistoryLoader(
     const startedAt = performance.now();
     try {
       const droid = await options.getDroid();
-      const fetched = await fetchSessionMessages(
-        droid,
-        request.sessionId,
-      );
+      const fetched = await fetchSessionMessages(droid, request.sessionId);
       const projected = projectSessionMessages(fetched.messages, {
         workspaceRoot: request.cwd,
+        sourceSessionId: request.sessionId,
       });
       if (projected.status !== 'available') {
         throw new Error('daemon message projection unavailable');
@@ -142,12 +132,8 @@ export function createDaemonFirstHistoryLoader(
       return {
         status: 'available',
         state: projected.state,
-        ...(sidecar.mission === undefined
-          ? {}
-          : { mission: sidecar.mission }),
-        ...(sidecar.tokenUsage === undefined
-          ? {}
-          : { tokenUsage: sidecar.tokenUsage }),
+        ...(sidecar.mission === undefined ? {} : { mission: sidecar.mission }),
+        ...(sidecar.tokenUsage === undefined ? {} : { tokenUsage: sidecar.tokenUsage }),
       };
     } catch (error) {
       record({
@@ -158,10 +144,7 @@ export function createDaemonFirstHistoryLoader(
           outcome: 'failed',
           sessionId: request.sessionId,
         },
-        detail:
-          error instanceof Error
-            ? (error.stack ?? error.message)
-            : String(error),
+        detail: error instanceof Error ? (error.stack ?? error.message) : String(error),
       });
       return options.fallback.loadHistory(request);
     }
@@ -185,10 +168,7 @@ export function createDaemonFirstHistoryLoader(
         sessionId: request.sessionId,
       },
     });
-    return (
-      options.fallback.loadSubagentInvocations?.(request) ??
-      Promise.resolve(null)
-    );
+    return options.fallback.loadSubagentInvocations?.(request) ?? Promise.resolve(null);
   };
 
   return {
@@ -197,9 +177,7 @@ export function createDaemonFirstHistoryLoader(
       request: SessionHistoryRequest,
     ): Promise<readonly ToolSubagentSummary[] | null> {
       const records = await loadInvocations(request);
-      return records === null
-        ? null
-        : records.map((entry) => entry.summary);
+      return records === null ? null : records.map((entry) => entry.summary);
     },
     loadSubagentInvocations: loadInvocations,
   };
@@ -215,35 +193,25 @@ export function createDaemonFirstHistoryLoader(
  * transcript bottom after compaction or rewind.
  */
 async function fetchSessionMessages(
-  droid: ConnectedDroid,
+  droid: DaemonApi,
   sessionId: string,
 ): Promise<{ readonly messages: unknown[]; readonly pages: number }> {
   const window: SessionMessage[] = [];
   let cursor: string | undefined;
   let pages = 0;
   while (pages < MAX_MESSAGE_PAGES) {
-    const batch = await droid.sessions.getMessages(
-      sessionId,
-      {
-        limit: MESSAGES_PAGE_LIMIT,
-        ...(cursor === undefined ? {} : { cursor }),
-      },
-    );
+    const batch = await droid.sessions.getMessages(sessionId, {
+      limit: MESSAGES_PAGE_LIMIT,
+      ...(cursor === undefined ? {} : { cursor }),
+    });
     if (!Array.isArray(batch)) {
       throw new Error('daemon getMessages returned a non-array');
     }
     pages += 1;
     window.push(...batch);
-    if (
-      window.length >
-      MAX_RAW_MESSAGE_WINDOW + RAW_MESSAGE_TRIM_HEADROOM
-    ) {
+    if (window.length > MAX_RAW_MESSAGE_WINDOW + RAW_MESSAGE_TRIM_HEADROOM) {
       const ordered = orderMessagesChronologically(window);
-      window.splice(
-        0,
-        window.length,
-        ...ordered.slice(-MAX_RAW_MESSAGE_WINDOW),
-      );
+      window.splice(0, window.length, ...ordered.slice(-MAX_RAW_MESSAGE_WINDOW));
     }
     if (batch.length < MESSAGES_PAGE_LIMIT) {
       break;
@@ -255,9 +223,7 @@ async function fetchSessionMessages(
     cursor = nextCursor;
   }
   return {
-    messages: orderMessagesChronologically(window).slice(
-      -MAX_RAW_MESSAGE_WINDOW,
-    ),
+    messages: orderMessagesChronologically(window).slice(-MAX_RAW_MESSAGE_WINDOW),
     pages,
   };
 }
@@ -300,10 +266,7 @@ async function readSessionSidecar(
   if (!isSafeSessionIdentifier(sessionId) || /[\\/]/.test(sessionId)) {
     return {};
   }
-  const workspaceDirectory = await workspaceSessionsDirectory(
-    sessionsDirectory,
-    cwd,
-  );
+  const workspaceDirectory = await workspaceSessionsDirectory(sessionsDirectory, cwd);
   const directories =
     workspaceDirectory === sessionsDirectory
       ? [sessionsDirectory]
@@ -318,8 +281,7 @@ async function readSessionSidecar(
     const role = settings.tags?.find(
       (tag) =>
         tag.name === 'decompSessionType' &&
-        (tag.metadata?.value === 'orchestrator' ||
-          tag.metadata?.value === 'worker'),
+        (tag.metadata?.value === 'orchestrator' || tag.metadata?.value === 'worker'),
     )?.metadata?.value as 'orchestrator' | 'worker' | undefined;
     const tokenUsage = readTokenUsageBreakdown(
       (settings as Record<string, unknown>).tokenUsage,
@@ -328,9 +290,7 @@ async function readSessionSidecar(
       ...(tokenUsage === undefined ? {} : { tokenUsage }),
       // The sidecar has no mission STATE; role alone still lets the
       // header show the decomposition identity.
-      ...(role === undefined
-        ? {}
-        : { mission: { state: null, role } }),
+      ...(role === undefined ? {} : { mission: { state: null, role } }),
     };
   }
   return {};
@@ -378,8 +338,7 @@ export async function readTaskInvocationLedger(
 }
 
 function readTime(entry: Record<string, unknown>): number {
-  return typeof entry.createdAt === 'number' &&
-    Number.isFinite(entry.createdAt)
+  return typeof entry.createdAt === 'number' && Number.isFinite(entry.createdAt)
     ? entry.createdAt
     : 0;
 }

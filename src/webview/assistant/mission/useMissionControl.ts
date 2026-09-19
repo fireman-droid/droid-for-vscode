@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 
 import type { WebviewToHostMessage } from '../../../shared/bridgeMessages';
-import { MISSION_BRIDGE_PROTOCOL_VERSION } from '../../../shared/missionProtocol';
+import { MISSION_BRIDGE_PROTOCOL_VERSION } from '../../../shared/protocol/missionProtocol';
 import type { MissionMessagePoster } from './missionStart';
 
 export type MissionUiCommand =
@@ -34,9 +34,9 @@ export type MissionUiCommand =
 export function useMissionControl(
   poster: MissionMessagePoster,
   createRequestId: () => string,
-): (command: MissionUiCommand) => void {
+): (command: MissionUiCommand) => string {
   return useCallback(
-    (command: MissionUiCommand): void => {
+    (command: MissionUiCommand): string => {
       const envelope = {
         protocolVersion: MISSION_BRIDGE_PROTOCOL_VERSION,
         requestId: createRequestId(),
@@ -47,9 +47,7 @@ export function useMissionControl(
         message = {
           ...envelope,
           type: command.type,
-          ...(command.target === undefined
-            ? {}
-            : { target: command.target }),
+          ...(command.target === undefined ? {} : { target: command.target }),
           ...(command.task === undefined ? {} : { task: command.task }),
         };
       } else if (command.type === 'mission.dismissSetup') {
@@ -75,6 +73,7 @@ export function useMissionControl(
         };
       }
       poster.postMessage(message);
+      return envelope.requestId;
     },
     [createRequestId, poster],
   );

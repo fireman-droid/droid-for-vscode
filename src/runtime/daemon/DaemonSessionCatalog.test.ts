@@ -1,6 +1,5 @@
+import type { DaemonApi } from './api';
 import { describe, expect, it, vi } from 'vitest';
-
-import type { ConnectedDroid } from '@factory/droid-sdk';
 
 import {
   DAEMON_ARCHIVED_LIST_LIMIT,
@@ -12,8 +11,8 @@ import {
 
 const CWD = 'D:\\workspace\\project';
 
-function droidWith(sessions: Record<string, unknown>): ConnectedDroid {
-  return { sessions } as unknown as ConnectedDroid;
+function droidWith(sessions: Record<string, unknown>): DaemonApi {
+  return { sessions } as unknown as DaemonApi;
 }
 
 describe('DaemonSessionCatalog', () => {
@@ -108,26 +107,19 @@ describe('DaemonSessionCatalog', () => {
     // silently dark again.
     expect(DAEMON_LIST_FETCH_LIMIT).toBeLessThanOrEqual(100);
     // The workspace filter needs headroom over the projected cap.
-    expect(DAEMON_LIST_FETCH_LIMIT).toBeGreaterThanOrEqual(
-      DAEMON_ARCHIVED_LIST_LIMIT,
-    );
+    expect(DAEMON_LIST_FETCH_LIMIT).toBeGreaterThanOrEqual(DAEMON_ARCHIVED_LIST_LIMIT);
   });
 
   it('caps the archived projection', async () => {
-    const rows = Array.from(
-      { length: DAEMON_ARCHIVED_LIST_LIMIT + 5 },
-      (_, index) => ({
-        id: `archived-${index}`,
-        title: `Archived ${index}`,
-        messageCount: 0,
-        modifiedTime: new Date('2026-08-09T12:00:00.000Z'),
-        archivedTime: new Date('2026-08-10T09:30:00.000Z'),
-        cwd: CWD,
-      }),
-    );
-    const catalog = new DaemonSessionCatalog(
-      droidWith({ list: async () => rows }),
-    );
+    const rows = Array.from({ length: DAEMON_ARCHIVED_LIST_LIMIT + 5 }, (_, index) => ({
+      id: `archived-${index}`,
+      title: `Archived ${index}`,
+      messageCount: 0,
+      modifiedTime: new Date('2026-08-09T12:00:00.000Z'),
+      archivedTime: new Date('2026-08-10T09:30:00.000Z'),
+      cwd: CWD,
+    }));
+    const catalog = new DaemonSessionCatalog(droidWith({ list: async () => rows }));
 
     await expect(catalog.listArchived(CWD)).resolves.toHaveLength(
       DAEMON_ARCHIVED_LIST_LIMIT,
@@ -217,9 +209,7 @@ describe('DaemonSessionCatalog', () => {
           id: 'hit-1',
           title: '  Refactor\u0000 store ',
           modifiedTime: new Date('2026-08-09T12:00:00.000Z'),
-          hits: [
-            { snippets: ['', `line\r\none ${'x'.repeat(400)}`] },
-          ],
+          hits: [{ snippets: ['', `line\r\none ${'x'.repeat(400)}`] }],
         },
         {
           id: 'hit-2',
@@ -248,9 +238,7 @@ describe('DaemonSessionCatalog', () => {
       modifiedTime: '2026-08-09T12:00:00.000Z',
     });
     expect(matches[0]?.snippet?.startsWith('line one')).toBe(true);
-    expect(matches[0]?.snippet?.length).toBeLessThanOrEqual(
-      DAEMON_SEARCH_SNIPPET_LIMIT,
-    );
+    expect(matches[0]?.snippet?.length).toBeLessThanOrEqual(DAEMON_SEARCH_SNIPPET_LIMIT);
     expect(matches[0]?.snippet).not.toMatch(/[\r\n]/);
     expect(matches[1]).toEqual({
       id: 'hit-2',
@@ -261,16 +249,14 @@ describe('DaemonSessionCatalog', () => {
   });
 
   it('caps search matches at the session limit', async () => {
-    const rows = Array.from(
-      { length: DAEMON_SEARCH_SESSION_LIMIT + 5 },
-      (_, index) => ({ id: `hit-${index}`, hits: [] }),
-    );
+    const rows = Array.from({ length: DAEMON_SEARCH_SESSION_LIMIT + 5 }, (_, index) => ({
+      id: `hit-${index}`,
+      hits: [],
+    }));
     const catalog = new DaemonSessionCatalog(
       droidWith({ search: async () => ({ query: 'q', sessions: rows }) }),
     );
 
-    await expect(catalog.search('q')).resolves.toHaveLength(
-      DAEMON_SEARCH_SESSION_LIMIT,
-    );
+    await expect(catalog.search('q')).resolves.toHaveLength(DAEMON_SEARCH_SESSION_LIMIT);
   });
 });

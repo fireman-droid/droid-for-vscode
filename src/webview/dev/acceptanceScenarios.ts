@@ -1,16 +1,8 @@
-import type {
-  HostToWebviewMessage,
-  SessionTranscriptItem,
-} from '../../shared/bridgeMessages';
-import type {
-  StudioScenario,
-  StudioSequence,
-} from './scenarios';
+import { type HostToWebviewMessage } from '../../shared/bridgeMessages';
+import { type SessionTranscriptItem } from '../../shared/protocol/transcript';
+import type { StudioScenario, StudioSequence } from './scenarios';
 
-type SnapshotMessage = Extract<
-  HostToWebviewMessage,
-  { type: 'host.snapshot' }
->;
+type SnapshotMessage = Extract<HostToWebviewMessage, { type: 'host.snapshot' }>;
 
 export type StudioSnapshotBuilder = (
   nextSequence: StudioSequence,
@@ -32,22 +24,19 @@ export function createAcceptanceScenarios(
       id: 'full-workflow',
       label: 'Full workflow',
       description: 'Dense end-to-end work with tools, Plan, Subagent, Changes, and queue',
-      build: (nextSequence) =>
-        fullWorkflow(snapshot, sessionId, nextSequence),
+      build: (nextSequence) => fullWorkflow(snapshot, sessionId, nextSequence),
     },
     {
       id: 'permission',
       label: 'Permission',
       description: 'Multi-tool confirmation with risk and approval options',
-      build: (nextSequence) =>
-        permission(snapshot, sessionId, nextSequence),
+      build: (nextSequence) => permission(snapshot, sessionId, nextSequence),
     },
     {
       id: 'queued-attachments',
       label: 'Queue + files',
       description: 'Paused queued prompts and staged attachment chips',
-      build: (nextSequence) =>
-        queuedAttachments(snapshot, sessionId, nextSequence),
+      build: (nextSequence) => queuedAttachments(snapshot, sessionId, nextSequence),
     },
     {
       id: 'empty',
@@ -253,9 +242,7 @@ function fullWorkflow(
           {
             queueId: 'workflow-queue-two',
             text: 'Then compare the 320px and 480px layouts.',
-            attachments: [
-              { kind: 'image', name: 'reference.png', sizeBytes: 148_220 },
-            ],
+            attachments: [{ kind: 'image', name: 'reference.png', sizeBytes: 148_220 }],
           },
         ],
         paused: null,
@@ -409,9 +396,7 @@ function queuedAttachments(
           {
             queueId: 'queue-summary',
             text: 'Summarize the final visual differences.',
-            attachments: [
-              { kind: 'text', name: 'review-notes.md', sizeBytes: 6_420 },
-            ],
+            attachments: [{ kind: 'text', name: 'review-notes.md', sizeBytes: 6_420 }],
           },
         ],
         paused: 'turn-failed',

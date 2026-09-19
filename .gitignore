@@ -11,3 +11,15 @@ artifacts/
 .claude/*.log
 .cursor/*.log
 .factory/tmp/
+/.factory/chat-region-20260910-1734/
+/.factory/footer-20260910/
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.log
+*.jsonl
+droidvisx-diagnostics-*.zip
+**/settings.local.json

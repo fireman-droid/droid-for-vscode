@@ -1,11 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
-import {
-  SESSION_VIEWER_PROTOCOL_VERSION,
-  type SessionViewerSnapshotMessage,
-} from '../../shared/sessionViewerProtocol';
-import { ReadOnlyTranscript } from '../assistant/ReadOnlyTranscript';
-import { parseSessionViewerHostMessage } from './validateSessionViewerHostMessage';
+import { type SessionViewerSnapshotMessage } from '../../shared/protocol/sessionViewerProtocol';
+import { ReadOnlyTranscript } from '../assistant/transcript/ReadOnlyTranscript';
+import { useSessionViewer } from './useSessionViewer';
 
 interface SessionViewerPort {
   postMessage(message: unknown): void;
@@ -16,48 +13,10 @@ export function SessionViewerApp({
 }: {
   readonly vscode: SessionViewerPort;
 }): React.JSX.Element {
-  const [snapshot, setSnapshot] =
-    useState<SessionViewerSnapshotMessage | null>(null);
-  const [theme, setTheme] = useState(() => ({
-    resolved:
-      document.documentElement.dataset.dvxTheme === 'dark'
-        ? ('dark' as const)
-        : ('light' as const),
-    preference: readThemePreference(),
-  }));
+  const { snapshot, theme, canStop, stop } = useSessionViewer(vscode);
   const viewportRef = useRef<HTMLElement>(null);
   const followRef = useRef({ following: true });
-  const getScroller = useCallback(
-    (): HTMLElement | null => viewportRef.current,
-    [],
-  );
-
-  useEffect(() => {
-    const onMessage = (event: MessageEvent<unknown>): void => {
-      const message = parseSessionViewerHostMessage(event.data);
-      if (message === null) {
-        return;
-      }
-      if (message.type === 'sessionViewer.theme') {
-        document.documentElement.dataset.dvxTheme = message.resolved;
-        document.documentElement.dataset.dvxThemePreference =
-          message.preference;
-        setTheme({
-          resolved: message.resolved,
-          preference: message.preference,
-        });
-        return;
-      }
-      setSnapshot(message);
-    };
-    window.addEventListener('message', onMessage);
-    vscode.postMessage({
-      type: 'sessionViewer.ready',
-      protocolVersion: SESSION_VIEWER_PROTOCOL_VERSION,
-    });
-    window.__dvxBooted = true;
-    return () => window.removeEventListener('message', onMessage);
-  }, [vscode]);
+  const getScroller = useCallback((): HTMLElement | null => viewportRef.current, []);
 
   useEffect(() => {
     if (!followRef.current.following) {
@@ -71,9 +30,6 @@ export function SessionViewerApp({
 
   const title = snapshot?.target.title ?? 'Session activity';
   const running = snapshot?.running === true;
-  const readOnly =
-    snapshot?.target.mode === 'mission-readonly' ||
-    snapshot?.target.mode === 'subagent-readonly';
   return (
     <main
       className="dvx-shell dvx-session-viewer"
@@ -88,21 +44,16 @@ export function SessionViewerApp({
             {snapshot === null
               ? 'Loading'
               : snapshot.stopping
-              ? 'Stopping…'
-              : lifecycleLabel(snapshot.lifecycle)}
+                ? 'Stopping…'
+                : lifecycleLabel(snapshot.lifecycle)}
           </span>
         </div>
-        {running && !readOnly ? (
+        {canStop ? (
           <button
             type="button"
             className="dvx-session-viewer-stop"
             disabled={snapshot?.stopping === true}
-            onClick={() => {
-              vscode.postMessage({
-                type: 'sessionViewer.stop',
-                protocolVersion: SESSION_VIEWER_PROTOCOL_VERSION,
-              });
-            }}
+            onClick={stop}
           >
             Stop
           </button>
@@ -120,21 +71,14 @@ export function SessionViewerApp({
         onScroll={(event) => {
           const element = event.currentTarget;
           followRef.current.following =
-            element.scrollHeight -
-              element.scrollTop -
-              element.clientHeight <
-            48;
+            element.scrollHeight - element.scrollTop - element.clientHeight < 48;
         }}
       >
         <div className="dvx-session-viewer-content">
           {snapshot === null ? (
-            <p className="dvx-session-viewer-status">
-              Loading session…
-            </p>
+            <p className="dvx-session-viewer-status">Loading session…</p>
           ) : snapshot.status === 'unavailable' ? (
-            <p className="dvx-session-viewer-status">
-              {snapshot.reason}
-            </p>
+            <p className="dvx-session-viewer-status">{snapshot.reason}</p>
           ) : (
             <>
               {snapshot.truncated ? (
@@ -157,16 +101,6 @@ export function SessionViewerApp({
   );
 }
 
-function lifecycleLabel(
-  lifecycle: SessionViewerSnapshotMessage['lifecycle'],
-): string {
+function lifecycleLabel(lifecycle: SessionViewerSnapshotMessage['lifecycle']): string {
   return lifecycle.charAt(0).toUpperCase() + lifecycle.slice(1);
-}
-
-function readThemePreference(): 'light' | 'dark' | 'auto' {
-  const preference =
-    document.documentElement.dataset.dvxThemePreference;
-  return preference === 'light' || preference === 'dark'
-    ? preference
-    : 'auto';
 }

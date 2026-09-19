@@ -6,10 +6,10 @@ import {
   type SessionViewerHostMessage,
   type SessionViewerLifecycle,
   type SessionViewerTarget,
-} from '../../shared/sessionViewerProtocol';
-import { MAX_BRIDGE_ID_LENGTH } from '../../shared/interactionProtocol';
-import { hasExactKeys, isStrictRecord } from '../../shared/strictValidation';
-import { parseSessionTranscript } from '../bridge/validateHostMessage';
+} from '../../shared/protocol/sessionViewerProtocol';
+import { MAX_BRIDGE_ID_LENGTH } from '../../shared/protocol/interactionProtocol';
+import { hasExactKeys, isStrictRecord } from '../../shared/validation/strictValidation';
+import { parseSessionTranscript } from '../bridge/host/transcript';
 
 export function parseSessionViewerHostMessage(
   value: unknown,
@@ -115,9 +115,7 @@ export function parseSessionViewerHostMessage(
   };
 }
 
-function isLifecycle(
-  value: unknown,
-): value is SessionViewerLifecycle {
+function isLifecycle(value: unknown): value is SessionViewerLifecycle {
   return (
     value === 'starting' ||
     value === 'working' ||
@@ -139,10 +137,7 @@ function parseTarget(value: unknown): SessionViewerTarget | null {
   ) {
     return null;
   }
-  if (
-    value.mode === 'mission-readonly' ||
-    value.mode === 'subagent-readonly'
-  ) {
+  if (value.mode === 'mission-readonly' || value.mode === 'subagent-readonly') {
     return hasExactKeys(value, ['kind', 'mode', 'title'])
       ? {
           kind: value.kind as SessionViewerTarget['kind'],

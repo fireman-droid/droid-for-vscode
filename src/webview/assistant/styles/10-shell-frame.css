@@ -164,6 +164,10 @@ body {
   flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
+  /* The virtualizer and follow coordinator own scroll corrections. Native
+     anchoring can move the viewport back across an editor's pin boundary
+     while its flow placeholder is being measured, causing a render loop. */
+  overflow-anchor: none;
   height: auto;
   background: var(--dvx-surface);
   scrollbar-width: none;
@@ -246,7 +250,9 @@ body {
 .dvx-pinned-user-layer {
   box-sizing: border-box;
   width: 100%;
+  max-width: calc(var(--dvx-column-max) + 2 * var(--dvx-column-pad));
   height: 100%;
+  margin: 0 auto;
   padding: 0 var(--dvx-column-pad);
   pointer-events: none;
   will-change: transform;

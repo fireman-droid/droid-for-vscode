@@ -1,16 +1,12 @@
-import {
-  MAX_TURN_TEXT_LENGTH,
-  type SessionContextState,
-} from '../../shared/bridgeMessages';
+import { MAX_TURN_TEXT_LENGTH } from '../../shared/protocol/bounds';
+import { type SessionContextState } from '../../shared/protocol/settings';
 import {
   hasExactKeys,
   isStrictRecord,
   type UnknownRecord,
-} from '../../shared/strictValidation';
+} from '../../shared/validation/strictValidation';
 
-export function parseSessionContext(
-  value: unknown,
-): SessionContextState | undefined {
+export function parseSessionContext(value: unknown): SessionContextState | undefined {
   if (!isStrictRecord(value)) {
     return undefined;
   }
@@ -26,8 +22,7 @@ export function parseSessionContext(
     ) {
       return undefined;
     }
-    const context =
-      value.value === null ? null : parseContextStats(value.value);
+    const context = value.value === null ? null : parseContextStats(value.value);
     return context === undefined
       ? undefined
       : { status: 'error', value: context, message: value.message };
@@ -38,20 +33,14 @@ export function parseSessionContext(
   ) {
     return undefined;
   }
-  const context =
-    value.value === null ? null : parseContextStats(value.value);
-  if (
-    context === undefined ||
-    (status === 'ready' && context === null)
-  ) {
+  const context = value.value === null ? null : parseContextStats(value.value);
+  if (context === undefined || (status === 'ready' && context === null)) {
     return undefined;
   }
   if (status === 'loading') {
     return { status: 'loading', value: context };
   }
-  return context === null
-    ? undefined
-    : { status: 'ready', value: context };
+  return context === null ? undefined : { status: 'ready', value: context };
 }
 
 function parseContextStats(
@@ -60,11 +49,19 @@ function parseContextStats(
   if (!isStrictRecord(value)) {
     return undefined;
   }
+  if (value.estimatedTokens !== undefined && !isContextNumber(value.estimatedTokens)) {
+    return undefined;
+  }
+  const estimate =
+    value.estimatedTokens === undefined
+      ? {}
+      : { estimatedTokens: value.estimatedTokens as number };
   const availability = readStringDataProperty(value, 'availability');
   if (availability === 'unavailable') {
     if (
-      !hasExactKeys(value, ['availability', 'reason']) ||
+      !hasExactKeys(value, ['availability', 'reason'], ['estimatedTokens']) ||
       (value.reason !== 'unsupported' &&
+        value.reason !== 'awaiting-usage' &&
         value.reason !== 'invalid-breakdown')
     ) {
       return undefined;
@@ -72,22 +69,21 @@ function parseContextStats(
     return {
       availability: 'unavailable',
       reason: value.reason,
+      ...estimate,
     };
   }
   if (
     availability !== 'available' ||
-    !hasExactKeys(value, [
-      'availability',
-      'used',
-      'remaining',
-      'limit',
-    ]) ||
+    !hasExactKeys(
+      value,
+      ['availability', 'used', 'remaining', 'limit'],
+      ['estimatedTokens'],
+    ) ||
     !isContextNumber(value.used) ||
     !isContextNumber(value.remaining) ||
     !isContextNumber(value.limit) ||
     value.limit === 0 ||
-    value.used > value.limit ||
-    value.remaining !== value.limit - value.used
+    value.remaining !== Math.max(0, value.limit - value.used)
   ) {
     return undefined;
   }
@@ -96,13 +92,11 @@ function parseContextStats(
     used: value.used,
     remaining: value.remaining,
     limit: value.limit,
+    ...estimate,
   };
 }
 
-function readStringDataProperty(
-  value: UnknownRecord,
-  key: string,
-): string | undefined {
+function readStringDataProperty(value: UnknownRecord, key: string): string | undefined {
   const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
   return descriptor !== undefined &&
     'value' in descriptor &&
@@ -116,8 +110,5 @@ function isContextNumber(value: unknown): value is number {
 }
 
 function isBoundedString(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length <= MAX_TURN_TEXT_LENGTH
-  );
+  return typeof value === 'string' && value.length <= MAX_TURN_TEXT_LENGTH;
 }

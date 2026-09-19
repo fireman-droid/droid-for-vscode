@@ -1,16 +1,27 @@
 {
   "name": "droidvisx",
   "displayName": "DroidVisX",
-  "description": "A secure VS Code chat surface for Factory Droid.",
+  "description": "An unofficial local workspace UI for the Factory Droid CLI.",
   "version": "0.8.0",
   "publisher": "droidvisx",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
+  "icon": "resources/droidvisx.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fireman-droid/droid-for-vscode.git"
+  },
+  "homepage": "https://github.com/fireman-droid/droid-for-vscode#readme",
+  "bugs": {
+    "url": "https://github.com/fireman-droid/droid-for-vscode/issues"
+  },
+  "keywords": ["droid", "factory", "ai", "chat", "coding", "agent"],
   "engines": {
     "vscode": "^1.108.0"
   },
   "categories": [
+    "AI",
     "Other"
   ],
   "main": "./dist/extension/extension.cjs",
@@ -21,11 +32,22 @@
     "onCommand:droidvisx.exportDiagnostics",
     "onCommand:droidvisx.addSelectionToChat",
     "onCommand:droidvisx.openMissionControl",
+    "onCommand:droidvisx.openModels",
+    "onCommand:droidvisx.manageCapabilities",
+    "onCommand:droidvisx.openReview",
     "onCommand:droidvisx.startBrowserDevClient",
     "onCommand:droidvisx.stopBrowserDevClient"
   ],
   "contributes": {
     "commands": [
+      {
+        "command": "droidvisx.manageCapabilities",
+        "title": "DroidVisX: Manage Droid Capabilities"
+      },
+      {
+        "command": "droidvisx.openReview",
+        "title": "DroidVisX: Review Changes"
+      },
       {
         "command": "droidvisx.focusView",
         "title": "DroidVisX: Open Chat"
@@ -53,6 +75,10 @@
       {
         "command": "droidvisx.openMissionControl",
         "title": "DroidVisX: Open Mission Control"
+      },
+      {
+        "command": "droidvisx.openModels",
+        "title": "DroidVisX: Manage Models"
       },
       {
         "command": "droidvisx.startBrowserDevClient",
@@ -132,8 +158,14 @@
   },
   "packageManager": "pnpm@10.2.0",
   "scripts": {
+    "build:chat-ui": "pnpm --filter @droidvisx/chat-ui build",
+    "package:chat-ui": "pnpm run build:chat-ui && pnpm --dir packages/chat-ui pack --pack-destination ../../dist",
+    "typecheck:chat-ui": "pnpm --filter @droidvisx/chat-ui typecheck",
     "build": "node esbuild.mjs",
     "dev:webview": "vite --config vite.webview.config.ts",
+    "dev:webview-v2": "vite --config vite.webview-v2.config.ts",
+    "build:webview-v2": "node scripts/buildWebviewV2.mjs",
+    "typecheck:webview-v2": "tsc -p src/webview-v2/tsconfig.json --noEmit",
     "test:extension": "vitest run src/shared src/extension",
     "test:webview": "vitest run src/webview",
     "test:integration": "pnpm run build && node src/integration/runTest.mjs",
@@ -141,31 +173,41 @@
     "smoke:capabilities": "tsx src/runtime/capabilities/capabilitySmoke.ts",
     "test": "vitest run",
     "typecheck:webview": "tsc -p src/webview/tsconfig.json --noEmit",
-    "typecheck": "tsc -p tsconfig.extension.json --noEmit && tsc -p tsconfig.webview.json --noEmit && pnpm run typecheck:webview",
+    "typecheck": "pnpm run typecheck:chat-ui && tsc -p tsconfig.extension.json --noEmit && tsc -p tsconfig.webview.json --noEmit && pnpm run typecheck:webview && pnpm run typecheck:webview-v2",
     "lint:budgets": "node scripts/checkFileBudgets.mjs",
-    "package:prepare": "pnpm run typecheck && pnpm run lint:budgets && pnpm run build",
-    "package:vsix": "vsce package --no-dependencies --out dist/droidvisx.vsix",
+    "package:prepare": "pnpm run typecheck && pnpm run lint:budgets && pnpm run build:chat-ui && pnpm run build",
+    "package:vsix": "vsce package --no-dependencies --baseContentUrl https://github.com/fireman-droid/droid-for-vscode/blob/main --baseImagesUrl https://raw.githubusercontent.com/fireman-droid/droid-for-vscode/main --out dist/droidvisx.vsix",
+    "package:vsix:preview": "pnpm run package:vsix --pre-release",
     "verify:vsix": "node src/integration/verifyVsix.mjs dist/droidvisx.vsix",
     "vscode:prepublish": "pnpm run package:prepare"
   },
   "dependencies": {
-    "@assistant-ui/react": "0.15.12",
-    "@assistant-ui/react-markdown": "0.14.10",
+    "@droidvisx/chat-ui": "workspace:*",
     "@factory/droid-sdk": "0.7.0",
-    "@fontsource-variable/inter": "^5.3.0",
     "@tanstack/react-virtual": "^3.14.9",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.47",
+    "lucide-react": "1.43.0",
     "mermaid": "^11.16.1",
+    "radix-ui": "1.6.7",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-markdown": "10.1.0",
     "rehype-katex": "^7.0.1",
     "remark-gfm": "4.0.1",
     "remark-math": "^6.0.0",
-    "yazl": "^3.3.1"
+    "tailwind-merge": "3.6.0",
+    "yazl": "^3.3.1",
+    "zustand": "5.0.15"
   },
   "devDependencies": {
+    "@assistant-ui/react": "0.15.12",
+    "@assistant-ui/react-markdown": "0.14.10",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@tailwindcss/cli": "4.3.3",
+    "@tailwindcss/vite": "4.3.3",
     "@testing-library/react": "16.3.0",
     "@testing-library/user-event": "14.6.1",
     "@types/node": "^24.10.1",
@@ -177,6 +219,7 @@
     "@vscode/vsce": "3.9.2",
     "esbuild": "^0.27.0",
     "jsdom": "27.2.0",
+    "tailwindcss": "4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^8.2.1",

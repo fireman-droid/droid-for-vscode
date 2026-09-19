@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
 
 import { App } from './assistant/App';
-import { AppErrorBoundary } from './assistant/AppErrorBoundary';
+import { AppErrorBoundary } from './assistant/shell/AppErrorBoundary';
 
 const rootElement = document.getElementById('root');
 

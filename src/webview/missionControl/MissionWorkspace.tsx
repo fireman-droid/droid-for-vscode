@@ -1,13 +1,14 @@
 import { useMemo } from 'react';
+import { createMissionRequestId as createRequestId, describeReadinessWarning, describeSetupStatus, formatFeatureStatus, formatPhase } from './workspacePresentation';
 
-import { MISSION_CONTROL_PANEL_PROTOCOL_VERSION } from '../../shared/missionControlPanelProtocol';
+import { MISSION_CONTROL_PANEL_PROTOCOL_VERSION } from '../../shared/protocol/missionControlPanelProtocol';
 import {
   MISSION_BRIDGE_PROTOCOL_VERSION,
   type MissionControlResultMessage,
   type MissionSnapshotMessage,
   type MissionStartMessage,
-} from '../../shared/missionProtocol';
-import type { MissionControlSetupSnapshotMessage } from '../../shared/missionControlSetupProtocol';
+} from '../../shared/protocol/missionProtocol';
+import type { MissionControlSetupSnapshotMessage } from '../../shared/protocol/missionControlSetupProtocol';
 import { MissionSetup } from '../assistant/mission/MissionSetup';
 import type { MissionSetupSubmission } from '../assistant/mission/missionStart';
 import {
@@ -83,9 +84,8 @@ function SetupInspector({
           status: result.status,
         }
       : null;
-  const status = snapshot === null
-    ? 'Loading Mission setup…'
-    : describeSetupStatus(snapshot);
+  const status =
+    snapshot === null ? 'Loading Mission setup…' : describeSetupStatus(snapshot);
 
   const start = (submission: MissionSetupSubmission): string | null => {
     if (snapshot?.availability !== 'ready') {
@@ -147,8 +147,7 @@ function SetupInspector({
             result={setupResult}
             startDisabled={
               snapshot?.availability !== 'ready' ||
-              (snapshot.phase !== 'draft' &&
-                snapshot.phase !== 'indeterminate')
+              (snapshot.phase !== 'draft' && snapshot.phase !== 'indeterminate')
             }
           />
         )}
@@ -174,10 +173,7 @@ function MissionInspector({
   const total = snapshot?.features.length ?? 0;
   const completed = snapshot?.completedFeatureCount ?? 0;
   const progress = total === 0 ? 0 : Math.round((completed / total) * 100);
-  const features = useMemo(
-    () => snapshot?.features ?? [],
-    [snapshot?.features],
-  );
+  const features = useMemo(() => snapshot?.features ?? [], [snapshot?.features]);
 
   return (
     <>
@@ -195,7 +191,9 @@ function MissionInspector({
             <section className="mission-progress-card" aria-label="Mission progress">
               <div>
                 <span>Progress</span>
-                <strong>{completed} of {total}</strong>
+                <strong>
+                  {completed} of {total}
+                </strong>
               </div>
               <div
                 className="mission-progress-track"
@@ -221,9 +219,7 @@ function MissionInspector({
                       key={feature.id}
                       data-active={feature.id === snapshot.currentFeatureId}
                     >
-                      <span className="mission-feature-index">
-                        {feature.order + 1}
-                      </span>
+                      <span className="mission-feature-index">{feature.order + 1}</span>
                       <span className="mission-feature-copy">
                         <strong>{feature.title}</strong>
                         <small>{formatFeatureStatus(feature.status)}</small>
@@ -365,70 +361,4 @@ function MissionActions({
       {busy ? <span role="status">Updating…</span> : null}
     </div>
   );
-}
-
-function describeSetupStatus(
-  snapshot: MissionControlSetupSnapshotMessage,
-): string {
-  if (snapshot.phase === 'inspecting') {
-    return 'Inspecting repository readiness…';
-  }
-  if (snapshot.phase === 'advisory') {
-    return 'Review the repository warning before continuing.';
-  }
-  if (snapshot.phase === 'starting') {
-    return 'Starting Mission…';
-  }
-  if (snapshot.phase === 'indeterminate') {
-    return 'Readiness could not be confirmed. Retry when ready.';
-  }
-  if (snapshot.availability === 'ready') {
-    return 'Ready to inspect repository readiness and start.';
-  }
-  if (snapshot.availability === 'busy') {
-    return 'Finish the current chat activity before starting.';
-  }
-  if (snapshot.availability === 'loading') {
-    return 'Loading the selected chat setup…';
-  }
-  if (snapshot.availability === 'error') {
-    return 'Mission setup could not be loaded.';
-  }
-  return 'Select an available chat and trusted workspace to continue.';
-}
-
-function describeReadinessWarning(
-  warning: NonNullable<
-    MissionControlSetupSnapshotMessage['readiness']
-  >['warning'],
-): string {
-  switch (warning) {
-    case 'no_git':
-      return 'This workspace is not a Git repository.';
-    case 'no_remote':
-      return 'This repository has no configured remote.';
-    case 'no_report':
-      return 'No Agent Readiness report is available for this repository.';
-    case 'low_score':
-      return 'The latest Agent Readiness score is below the recommended level.';
-  }
-}
-
-function formatPhase(snapshot: MissionSnapshotMessage): string {
-  if (snapshot.availability === 'detached') return 'Detached';
-  if (snapshot.lifecycle === undefined) return 'Loading Mission state…';
-  if (snapshot.lifecycle === 'awaiting_input') return 'Awaiting input';
-  if (snapshot.lifecycle === 'orchestrator_turn') return 'Orchestrating';
-  return snapshot.lifecycle[0]!.toUpperCase() + snapshot.lifecycle.slice(1);
-}
-
-function formatFeatureStatus(
-  status: MissionSnapshotMessage['features'][number]['status'],
-): string {
-  if (status === 'in_progress') return 'In progress';
-  return status[0]!.toUpperCase() + status.slice(1);
-}
-
-function createRequestId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }

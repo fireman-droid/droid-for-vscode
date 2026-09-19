@@ -17,13 +17,13 @@ import {
 } from '@factory/droid-sdk/node';
 import { describe, expect, it, vi } from 'vitest';
 
+import { FactoryDroidRuntime } from './FactoryDroidRuntime';
+import { createLocalDroidSession } from './process/createLocalDroidSession';
 import {
-  FactoryDroidRuntime,
-  createLocalDroidSession,
   type FactoryDroidSession,
   type FactoryDroidSessionFactory,
-} from './FactoryDroidRuntime';
-import { cancellingRuntimeInteractionHandler } from './runtimeInteractions';
+} from './session/sessionTypes';
+import { cancellingRuntimeInteractionHandler } from './events/runtimeInteractions';
 
 describe('FactoryDroidRuntime', () => {
   it('creates one cwd-scoped session and streams a text turn', async () => {
@@ -110,16 +110,12 @@ describe('FactoryDroidRuntime', () => {
   });
 
   it('interruptSession is a no-op before initialization', async () => {
-    const runtime = createRuntime(async () =>
-      createMockSession(async function* () {}),
-    );
+    const runtime = createRuntime(async () => createMockSession(async function* () {}));
     await expect(runtime.interruptSession()).resolves.toBeUndefined();
   });
 
   it('treats worktree and plain targets as different sessions', async () => {
-    const factory = vi.fn(async () =>
-      createMockSession(async function* () {}),
-    );
+    const factory = vi.fn(async () => createMockSession(async function* () {}));
     const runtime = createRuntime(factory);
 
     await runtime.initialize({ kind: 'new', cwd: 'C:\\workspace' });
@@ -258,9 +254,9 @@ describe('FactoryDroidRuntime', () => {
       name: `file-${index}.txt`,
     }));
 
-    await expect(
-      collect(runtime.sendTurn('too many', oversized)),
-    ).rejects.toThrow('Too many attachments');
+    await expect(collect(runtime.sendTurn('too many', oversized))).rejects.toThrow(
+      'Too many attachments',
+    );
     expect(session.stream).not.toHaveBeenCalled();
   });
 
@@ -339,23 +335,30 @@ describe('FactoryDroidRuntime', () => {
       id: 'session-fork',
     };
     const info = {
-      availableFiles: [{ filePath: 'src/app.ts', contentHash: 'a', size: 10 },
-        { filePath: '../outside.ts', contentHash: 'b', size: 4 }],
+      availableFiles: [
+        { filePath: 'src/app.ts', contentHash: 'a', size: 10 },
+        { filePath: '../outside.ts', contentHash: 'b', size: 4 },
+      ],
       createdFiles: [{ filePath: 'docs/new.md' }],
       evictedFiles: [{ filePath: 'src/big.bin', reason: 'size-limit' }],
     };
-    const session = Object.assign(createMockSession(async function* () {}), {
-      rewind: vi.fn(async () => ({ session: forked })),
-      getRewindInfo: vi.fn(async () => info),
-    });
+    const session = Object.assign(
+      createMockSession(async function* () {}),
+      {
+        rewind: vi.fn(async () => ({ session: forked })),
+        getRewindInfo: vi.fn(async () => info),
+      },
+    );
     const runtime = createRuntime(async () => session);
     await runtime.initialize('C:\\workspace');
 
-    await expect(
-      runtime.getRewindInfo('sdk-msg-1'),
-    ).resolves.toEqual({ restorableCount: 2, createdCount: 1,
-      restorablePaths: ['src/app.ts'], createdPaths: ['docs/new.md'],
-      evictedFiles: [{ path: 'src/big.bin', reason: 'size-limit' }] });
+    await expect(runtime.getRewindInfo('sdk-msg-1')).resolves.toMatchObject({
+      restorableCount: 2,
+      createdCount: 1,
+      restorablePaths: ['src/app.ts'],
+      createdPaths: ['docs/new.md'],
+      evictedFiles: [{ path: 'src/big.bin', reason: 'size-limit' }],
+    });
     expect(session.getRewindInfo).toHaveBeenCalledWith({
       messageId: 'sdk-msg-1',
     });
@@ -419,13 +422,9 @@ describe('FactoryDroidRuntime', () => {
       { type: 'turn-complete', outcome: 'success' },
     ]);
 
-    const bare = createRuntime(async () =>
-      createMockSession(async function* () {}),
-    );
+    const bare = createRuntime(async () => createMockSession(async function* () {}));
     await bare.initialize('C:\\workspace');
-    await expect(bare.compact()).rejects.toThrow(
-      'does not support compaction',
-    );
+    await expect(bare.compact()).rejects.toThrow('does not support compaction');
   });
 
   it('forks the session and adopts the copy', async () => {
@@ -461,13 +460,9 @@ describe('FactoryDroidRuntime', () => {
       { type: 'turn-complete', outcome: 'success' },
     ]);
 
-    const bare = createRuntime(async () =>
-      createMockSession(async function* () {}),
-    );
+    const bare = createRuntime(async () => createMockSession(async function* () {}));
     await bare.initialize('C:\\workspace');
-    await expect(bare.fork('Title')).rejects.toThrow(
-      'does not support fork',
-    );
+    await expect(bare.fork('Title')).rejects.toThrow('does not support fork');
   });
 
   it('projects only safe skill fields and enforces toggle success', async () => {
@@ -521,21 +516,17 @@ describe('FactoryDroidRuntime', () => {
     expect(JSON.stringify(skills)).not.toContain('secret');
     expect(JSON.stringify(skills)).not.toContain('SECRET BODY');
 
-    await expect(
-      runtime.setSkillDisabled('code-review', true),
-    ).rejects.toThrow('refused');
+    await expect(runtime.setSkillDisabled('code-review', true)).rejects.toThrow(
+      'refused',
+    );
     expect(session.setSkillDisabled).toHaveBeenCalledWith({
       skillName: 'code-review',
       disabled: true,
     });
 
-    const bare = createRuntime(async () =>
-      createMockSession(async function* () {}),
-    );
+    const bare = createRuntime(async () => createMockSession(async function* () {}));
     await bare.initialize('C:\\workspace');
-    await expect(bare.listSkills()).rejects.toThrow(
-      'does not support skills',
-    );
+    await expect(bare.listSkills()).rejects.toThrow('does not support skills');
   });
 
   it('lists commands through the injected catalog loader', async () => {
@@ -549,8 +540,7 @@ describe('FactoryDroidRuntime', () => {
     ]);
     const runtime = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
-      createSdkSession: async () =>
-        createMockSession(async function* () {}),
+      createSdkSession: async () => createMockSession(async function* () {}),
       loadSessionCommands,
     });
     await runtime.initialize('C:\\workspace');
@@ -571,8 +561,7 @@ describe('FactoryDroidRuntime', () => {
 
     const failing = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
-      createSdkSession: async () =>
-        createMockSession(async function* () {}),
+      createSdkSession: async () => createMockSession(async function* () {}),
       loadSessionCommands: vi.fn(async () => {
         throw new Error('list failed');
       }),
@@ -673,22 +662,16 @@ describe('FactoryDroidRuntime', () => {
     expect(JSON.stringify(servers)).not.toContain('SECRET');
     expect(JSON.stringify(servers)).not.toContain('secret.example');
 
-    await expect(
-      runtime.setMcpServerEnabled('linear', false),
-    ).rejects.toThrow('refused');
+    await expect(runtime.setMcpServerEnabled('linear', false)).rejects.toThrow('refused');
     expect(session.toggleMcpServer).toHaveBeenCalledWith({
       serverName: 'linear',
       enabled: false,
       settingsLevel: 'user',
     });
 
-    const bare = createRuntime(async () =>
-      createMockSession(async function* () {}),
-    );
+    const bare = createRuntime(async () => createMockSession(async function* () {}));
     await bare.initialize('C:\\workspace');
-    await expect(bare.listMcpServers()).rejects.toThrow(
-      'does not support MCP',
-    );
+    await expect(bare.listMcpServers()).rejects.toThrow('does not support MCP');
   });
 
   it('caps a hung MCP toggle with its own timeout', async () => {
@@ -769,13 +752,9 @@ describe('FactoryDroidRuntime', () => {
       }),
     ).rejects.toThrow('refused');
     session.removeMcpServer.mockResolvedValueOnce({ success: false });
-    await expect(runtime.removeMcpServer('broken')).rejects.toThrow(
-      'refused',
-    );
+    await expect(runtime.removeMcpServer('broken')).rejects.toThrow('refused');
 
-    const bare = createRuntime(async () =>
-      createMockSession(async function* () {}),
-    );
+    const bare = createRuntime(async () => createMockSession(async function* () {}));
     await bare.initialize('C:\\workspace');
     await expect(
       bare.addMcpServer({
@@ -784,41 +763,31 @@ describe('FactoryDroidRuntime', () => {
         url: 'https://example.com',
       }),
     ).rejects.toThrow('does not support adding');
-    await expect(bare.removeMcpServer('x')).rejects.toThrow(
-      'does not support removing',
-    );
+    await expect(bare.removeMcpServer('x')).rejects.toThrow('does not support removing');
   });
 
   it('starts MCP authentication and reports the OAuth URL and outcome', async () => {
-    type NotificationListener = (
-      notification: Record<string, unknown>,
-    ) => void;
+    type NotificationListener = (notification: Record<string, unknown>) => void;
     const listeners = new Map<string, NotificationListener[]>();
     const session = Object.assign(
       createMockSession(async function* () {}),
       {
-        authenticateMcpServer: vi.fn(
-          async (params: { serverName: string }) => {
-            queueMicrotask(() => {
-              for (const listener of listeners.get('mcp_auth_required') ??
-                []) {
-                listener({
-                  type: 'mcp_auth_required',
-                  serverName: params.serverName,
-                  authUrl: 'https://auth.example/flow',
-                  message: 'Sign in',
-                  state: 'abc',
-                });
-              }
-            });
-            return { success: true };
-          },
-        ),
+        authenticateMcpServer: vi.fn(async (params: { serverName: string }) => {
+          queueMicrotask(() => {
+            for (const listener of listeners.get('mcp_auth_required') ?? []) {
+              listener({
+                type: 'mcp_auth_required',
+                serverName: params.serverName,
+                authUrl: 'https://auth.example/flow',
+                message: 'Sign in',
+                state: 'abc',
+              });
+            }
+          });
+          return { success: true };
+        }),
         onNotification: vi.fn(
-          (
-            listener: NotificationListener,
-            filter?: { type?: string },
-          ) => {
+          (listener: NotificationListener, filter?: { type?: string }) => {
             const key = filter?.type ?? '*';
             const bucket = listeners.get(key) ?? [];
             bucket.push(listener);
@@ -838,10 +807,7 @@ describe('FactoryDroidRuntime', () => {
     await runtime.initialize('C:\\workspace');
 
     const onCompleted = vi.fn();
-    const start = await runtime.authenticateMcpServer(
-      'sentry',
-      onCompleted,
-    );
+    const start = await runtime.authenticateMcpServer('sentry', onCompleted);
     expect(start).toEqual({ authUrl: 'https://auth.example/flow' });
     expect(session.authenticateMcpServer).toHaveBeenCalledWith({
       serverName: 'sentry',
@@ -874,13 +840,11 @@ describe('FactoryDroidRuntime', () => {
     // The URL listener is released once the start call resolves.
     expect(listeners.get('mcp_auth_required') ?? []).toHaveLength(0);
 
-    const bare = createRuntime(async () =>
-      createMockSession(async function* () {}),
-    );
+    const bare = createRuntime(async () => createMockSession(async function* () {}));
     await bare.initialize('C:\\workspace');
-    await expect(
-      bare.authenticateMcpServer('sentry', vi.fn()),
-    ).rejects.toThrow('does not support MCP authentication');
+    await expect(bare.authenticateMcpServer('sentry', vi.fn())).rejects.toThrow(
+      'does not support MCP authentication',
+    );
   });
 
   it('renames the active session through the SDK', async () => {
@@ -899,9 +863,7 @@ describe('FactoryDroidRuntime', () => {
     const bare = createMockSession(async function* () {});
     const bareRuntime = createRuntime(async () => bare);
     await bareRuntime.initialize('C:\\workspace');
-    await expect(bareRuntime.rename('Nope')).rejects.toThrow(
-      'does not support rename',
-    );
+    await expect(bareRuntime.rename('Nope')).rejects.toThrow('does not support rename');
   });
 
   it('projects settings and context through runtime-owned DTOs', async () => {
@@ -922,6 +884,7 @@ describe('FactoryDroidRuntime', () => {
       used: 40,
       remaining: 60,
       limit: 100,
+      estimatedTokens: 40,
     });
     await expect(runtime.readModelCatalog()).resolves.toEqual({
       status: 'unavailable',
@@ -937,9 +900,10 @@ describe('FactoryDroidRuntime', () => {
       updatedAt: new Date().toISOString(),
     });
     session.readContextBreakdown.mockResolvedValue({
-      used: 63,
-      remaining: 37,
-      limit: 100,
+      used: 500000,
+      remaining: 0,
+      limit: 11100,
+      lastCallCompactionTokens: 11063,
     });
     const diagnostics = { record: vi.fn() };
     const runtime = new FactoryDroidRuntime({
@@ -954,6 +918,7 @@ describe('FactoryDroidRuntime', () => {
       used: 63,
       remaining: 37,
       limit: 100,
+      estimatedTokens: 500000,
     });
     expect(session.getContextStats).not.toHaveBeenCalled();
     expect(diagnostics.record).toHaveBeenCalledWith({
@@ -970,9 +935,7 @@ describe('FactoryDroidRuntime', () => {
     });
   });
   it('reports Context unavailable when the Runtime has no official breakdown', async () => {
-    const session: FactoryDroidSession = createMockSession(
-      async function* () {},
-    );
+    const session: FactoryDroidSession = createMockSession(async function* () {});
     session.readContextBreakdown = undefined;
     const runtime = createRuntime(async () => session);
     await runtime.initialize('C:\\workspace');
@@ -990,9 +953,7 @@ describe('FactoryDroidRuntime', () => {
         ReasoningEffort.Medium,
         ReasoningEffort.High,
       ]),
-      availableModel('custom:model-pro', 'Model Pro', [
-        ReasoningEffort.None,
-      ]),
+      availableModel('custom:model-pro', 'Model Pro', [ReasoningEffort.None]),
     ];
     const runtime = createRuntime(async () => session);
     await runtime.initialize('C:\\workspace');
@@ -1122,9 +1083,7 @@ describe('FactoryDroidRuntime', () => {
     session.readContextBreakdown.mockRejectedValue(
       new Error('sensitive context failure'),
     );
-    session.updateSettings.mockRejectedValue(
-      new Error('sensitive settings failure'),
-    );
+    session.updateSettings.mockRejectedValue(new Error('sensitive settings failure'));
     const runtime = createRuntime(async () => session);
     await runtime.initialize('C:\\workspace');
 
@@ -1136,9 +1095,7 @@ describe('FactoryDroidRuntime', () => {
         field: 'autonomyLevel',
         value: 'high',
       }),
-    ).rejects.toThrow(
-      'Droid session settings could not be updated.',
-    );
+    ).rejects.toThrow('Droid session settings could not be updated.');
   });
 
   it('yields only defined semantic events from the SDK stream', async () => {
@@ -1245,9 +1202,7 @@ describe('FactoryDroidRuntime', () => {
       value: { type: 'turn-complete', outcome: 'success' },
     });
     await expect(first.next()).resolves.toMatchObject({ done: true });
-    await expect(collect(runtime.sendTurn('Third turn'))).resolves.toHaveLength(
-      2,
-    );
+    await expect(collect(runtime.sendTurn('Third turn'))).resolves.toHaveLength(2);
   });
 
   it('updates authoritative session settings during an active stream', async () => {
@@ -1355,11 +1310,7 @@ describe('FactoryDroidRuntime', () => {
   it('emits spec-handoff before turn completion after a ProceedNewSession approval', async () => {
     type Listener = (notification: Record<string, unknown>) => void;
     const listeners: Listener[] = [];
-    const notify = (
-      sessionId: string,
-      type: string,
-      reason?: string,
-    ) => {
+    const notify = (sessionId: string, type: string, reason?: string) => {
       for (const listener of [...listeners]) {
         listener({
           method: 'droid.session_notification',
@@ -1433,12 +1384,8 @@ describe('FactoryDroidRuntime', () => {
     await runtime.initialize('C:\\workspace');
 
     const events = await collect(runtime.sendTurn('draft a plan'));
-    const handoffIndex = events.findIndex(
-      (event) => event.type === 'spec-handoff',
-    );
-    const completeIndex = events.findIndex(
-      (event) => event.type === 'turn-complete',
-    );
+    const handoffIndex = events.findIndex((event) => event.type === 'spec-handoff');
+    const completeIndex = events.findIndex((event) => event.type === 'turn-complete');
     expect(events[handoffIndex]).toEqual({
       type: 'spec-handoff',
       implementationSessionId: 'session-2',
@@ -1501,9 +1448,7 @@ describe('FactoryDroidRuntime', () => {
     await runtime.initialize('C:\\workspace');
 
     const events = await collect(runtime.sendTurn('draft a plan'));
-    expect(
-      events.some((event) => event.type === 'spec-handoff'),
-    ).toBe(false);
+    expect(events.some((event) => event.type === 'spec-handoff')).toBe(false);
     // No spec watch is armed without a proceed_new_session approval;
     // the single subscription is the session-lifetime subagent watch.
     expect(session.onNotification).toHaveBeenCalledTimes(1);
@@ -1556,9 +1501,7 @@ describe('FactoryDroidRuntime', () => {
     await runtime.initialize('C:\\workspace');
 
     const events = await collect(runtime.sendTurn('delegate this'));
-    const started = events.filter(
-      (event) => event.type === 'subagent-started',
-    );
+    const started = events.filter((event) => event.type === 'subagent-started');
     expect(started).toEqual([
       {
         type: 'subagent-started',
@@ -1573,9 +1516,7 @@ describe('FactoryDroidRuntime', () => {
         description: '',
       },
     ]);
-    const completeIndex = events.findIndex(
-      (event) => event.type === 'turn-complete',
-    );
+    const completeIndex = events.findIndex((event) => event.type === 'turn-complete');
     expect(events.indexOf(started[1]!)).toBeLessThan(completeIndex);
     // The child session id never leaves the runtime.
     expect(JSON.stringify(events)).not.toContain('child-abc');
@@ -1623,9 +1564,7 @@ describe('FactoryDroidRuntime', () => {
     }
 
     const events = await collect(runtime.sendTurn('plain turn'));
-    expect(
-      events.some((event) => event.type === 'subagent-started'),
-    ).toBe(false);
+    expect(events.some((event) => event.type === 'subagent-started')).toBe(false);
     // The watch lives for the whole session, not one turn.
     expect(listeners).toHaveLength(1);
 
@@ -1815,10 +1754,7 @@ describe('FactoryDroidRuntime', () => {
 
   it('reports structured initialization failures without parsing messages', async () => {
     const invalidCwd = createRuntime(async ({ target }) => {
-      throw new InvalidSessionCwdError(
-        target.cwd,
-        'arbitrary SDK message',
-      );
+      throw new InvalidSessionCwdError(target.cwd, 'arbitrary SDK message');
     });
     const missingCli = createRuntime(async () => {
       throw new ConnectionError('arbitrary SDK message', {
@@ -1836,16 +1772,12 @@ describe('FactoryDroidRuntime', () => {
       reason: 'invalid-cwd',
       authenticationStatus: 'unknown',
     });
-    await expect(missingCli.initialize('C:\\workspace')).resolves.toMatchObject(
-      {
-        status: 'unavailable',
-        reason: 'cli-not-found',
-        authenticationStatus: 'unknown',
-      },
-    );
-    await expect(
-      unknownFailure.initialize('C:\\workspace'),
-    ).resolves.toMatchObject({
+    await expect(missingCli.initialize('C:\\workspace')).resolves.toMatchObject({
+      status: 'unavailable',
+      reason: 'cli-not-found',
+      authenticationStatus: 'unknown',
+    });
+    await expect(unknownFailure.initialize('C:\\workspace')).resolves.toMatchObject({
       status: 'unavailable',
       reason: 'initialization-failed',
       message: 'The Droid SDK could not initialize a session.',
@@ -2198,9 +2130,9 @@ describe('createLocalDroidSession', () => {
       const cleanupFailure = new Error('arbitrary cleanup failure');
       transport.close.mockRejectedValue(cleanupFailure);
       let sdkTransport: { close(): Promise<void> } | undefined;
-      const failAfterSdkCleanup = async (
-        capturedTransport: { close(): Promise<void> },
-      ) => {
+      const failAfterSdkCleanup = async (capturedTransport: {
+        close(): Promise<void>;
+      }) => {
         sdkTransport = capturedTransport;
         if (sdkCloses) {
           await capturedTransport.close().catch(() => undefined);
@@ -2208,9 +2140,11 @@ describe('createLocalDroidSession', () => {
         throw failure;
       };
       const createSession = vi.fn(async ({ transport: capturedTransport }) =>
-        failAfterSdkCleanup(capturedTransport));
+        failAfterSdkCleanup(capturedTransport),
+      );
       const resumeSession = vi.fn(async (_sessionId, { transport: capturedTransport }) =>
-        failAfterSdkCleanup(capturedTransport));
+        failAfterSdkCleanup(capturedTransport),
+      );
       await expect(
         createLocalDroidSession(
           { target, interactionHandler: cancellingRuntimeInteractionHandler },
@@ -2220,12 +2154,8 @@ describe('createLocalDroidSession', () => {
       expect(transport.close).toHaveBeenCalledOnce();
       await expect(sdkTransport!.close()).rejects.toBe(cleanupFailure);
       expect(transport.close).toHaveBeenCalledOnce();
-      expect(createSession).toHaveBeenCalledTimes(
-        operation === 'create' ? 1 : 0,
-      );
-      expect(resumeSession).toHaveBeenCalledTimes(
-        operation === 'resume' ? 1 : 0,
-      );
+      expect(createSession).toHaveBeenCalledTimes(operation === 'create' ? 1 : 0);
+      expect(resumeSession).toHaveBeenCalledTimes(operation === 'resume' ? 1 : 0);
       if (operation === 'resume') {
         expect(resumeSession).toHaveBeenCalledWith(
           'saved-session',
@@ -2260,25 +2190,22 @@ function createMockSession(
     } as SessionSettings,
     stream: vi.fn(streamImplementation),
     interrupt: vi.fn(async () => {}),
-    updateSettings: vi.fn<FactoryDroidSession['updateSettings']>(
-      async () => ({}),
-    ),
-    getContextStats: vi.fn<FactoryDroidSession['getContextStats']>(
-      async () => ({
-        used: 40,
-        remaining: 60,
-        limit: 100,
-        accuracy: ContextStatsAccuracy.Exact,
-        updatedAt: new Date().toISOString(),
-      }),
-    ),
-    readContextBreakdown: vi.fn<
-      NonNullable<FactoryDroidSession['readContextBreakdown']>
-    >(async () => ({
+    updateSettings: vi.fn<FactoryDroidSession['updateSettings']>(async () => ({})),
+    getContextStats: vi.fn<FactoryDroidSession['getContextStats']>(async () => ({
       used: 40,
       remaining: 60,
       limit: 100,
+      accuracy: ContextStatsAccuracy.Exact,
+      updatedAt: new Date().toISOString(),
     })),
+    readContextBreakdown: vi.fn<NonNullable<FactoryDroidSession['readContextBreakdown']>>(
+      async () => ({
+        used: 40,
+        remaining: 11060,
+        limit: 11100,
+        lastCallCompactionTokens: 11040,
+      }),
+    ),
     close: vi.fn(async () => {}),
   };
 }
@@ -2294,8 +2221,7 @@ function availableModel(
     shortDisplayName: displayName,
     modelProvider: ModelProvider.FACTORY,
     supportedReasoningEfforts: [...supportedReasoningEfforts],
-    defaultReasoningEffort:
-      supportedReasoningEfforts[0] ?? ReasoningEffort.Medium,
+    defaultReasoningEffort: supportedReasoningEfforts[0] ?? ReasoningEffort.Medium,
     isCustom: id.startsWith('custom:'),
   };
 }
@@ -2329,10 +2255,7 @@ function toolCall(toolUseId: string, name: string): DroidStreamEvent {
   };
 }
 
-function toolResult(
-  toolUseId: string,
-  toolName: string,
-): DroidStreamEvent {
+function toolResult(toolUseId: string, toolName: string): DroidStreamEvent {
   return {
     type: 'tool_result',
     toolUseId,

@@ -1,21 +1,11 @@
 import type { RuntimeAvailability, RuntimeEvent } from './runtimeEvents';
+import type { RewindDetailFields } from '../shared/protocol/rewindDetails';
 
-export const RUNTIME_INTERACTION_MODES = [
-  'auto',
-  'spec',
-  'mission',
-] as const;
-export type RuntimeInteractionMode =
-  (typeof RUNTIME_INTERACTION_MODES)[number];
+export const RUNTIME_INTERACTION_MODES = ['auto', 'spec', 'mission'] as const;
+export type RuntimeInteractionMode = (typeof RUNTIME_INTERACTION_MODES)[number];
 
-export const RUNTIME_AUTONOMY_LEVELS = [
-  'off',
-  'low',
-  'medium',
-  'high',
-] as const;
-export type RuntimeAutonomyLevel =
-  (typeof RUNTIME_AUTONOMY_LEVELS)[number];
+export const RUNTIME_AUTONOMY_LEVELS = ['off', 'low', 'medium', 'high'] as const;
+export type RuntimeAutonomyLevel = (typeof RUNTIME_AUTONOMY_LEVELS)[number];
 
 export const RUNTIME_REASONING_EFFORTS = [
   'none',
@@ -28,8 +18,7 @@ export const RUNTIME_REASONING_EFFORTS = [
   'xhigh',
   'max',
 ] as const;
-export type RuntimeReasoningEffort =
-  (typeof RUNTIME_REASONING_EFFORTS)[number];
+export type RuntimeReasoningEffort = (typeof RUNTIME_REASONING_EFFORTS)[number];
 
 export const MAX_RUNTIME_MODEL_ID_LENGTH = 256;
 export const MAX_RUNTIME_MODEL_DISPLAY_NAME_LENGTH = 128;
@@ -89,20 +78,10 @@ export const RUNTIME_SESSION_WORKING_STATES = [
   'waiting-for-user',
   'unknown',
 ] as const;
-export type RuntimeSessionWorkingState =
-  (typeof RUNTIME_SESSION_WORKING_STATES)[number];
+export type RuntimeSessionWorkingState = (typeof RUNTIME_SESSION_WORKING_STATES)[number];
 
 export type RuntimeContextWindow =
-  | {
-      readonly availability: 'available';
-      readonly used: number;
-      readonly remaining: number;
-      readonly limit: number;
-    }
-  | {
-      readonly availability: 'unavailable';
-      readonly reason: 'unsupported' | 'invalid-breakdown';
-    };
+  import('../shared/protocol/contextState').SessionContextStats;
 
 export interface RuntimeModelCatalogUnavailable {
   readonly status: 'unavailable';
@@ -159,8 +138,7 @@ export const RUNTIME_SKILL_LOCATIONS = [
   'builtin',
   'automation',
 ] as const;
-export type RuntimeSkillLocation =
-  (typeof RUNTIME_SKILL_LOCATIONS)[number];
+export type RuntimeSkillLocation = (typeof RUNTIME_SKILL_LOCATIONS)[number];
 
 export interface RuntimeSkill {
   readonly name: string;
@@ -199,8 +177,7 @@ export const RUNTIME_MCP_SERVER_STATUSES = [
   'failed',
   'disabled',
 ] as const;
-export type RuntimeMcpServerStatus =
-  (typeof RUNTIME_MCP_SERVER_STATUSES)[number];
+export type RuntimeMcpServerStatus = (typeof RUNTIME_MCP_SERVER_STATUSES)[number];
 
 export interface RuntimeMcpTool {
   readonly name: string;
@@ -219,13 +196,8 @@ export interface RuntimeMcpServer {
   readonly tools: readonly RuntimeMcpTool[];
 }
 
-export const RUNTIME_MCP_SERVER_TYPES = [
-  'stdio',
-  'http',
-  'sse',
-] as const;
-export type RuntimeMcpServerType =
-  (typeof RUNTIME_MCP_SERVER_TYPES)[number];
+export const RUNTIME_MCP_SERVER_TYPES = ['stdio', 'http', 'sse'] as const;
+export type RuntimeMcpServerType = (typeof RUNTIME_MCP_SERVER_TYPES)[number];
 
 export interface RuntimeMcpServerAddParams {
   readonly name: string;
@@ -237,13 +209,8 @@ export interface RuntimeMcpServerAddParams {
   readonly url?: string;
 }
 
-export const RUNTIME_MCP_AUTH_OUTCOMES = [
-  'success',
-  'cancelled',
-  'failed',
-] as const;
-export type RuntimeMcpAuthOutcome =
-  (typeof RUNTIME_MCP_AUTH_OUTCOMES)[number];
+export const RUNTIME_MCP_AUTH_OUTCOMES = ['success', 'cancelled', 'failed'] as const;
+export type RuntimeMcpAuthOutcome = (typeof RUNTIME_MCP_AUTH_OUTCOMES)[number];
 
 /** Longest accepted OAuth URL for an MCP authentication flow. */
 export const MAX_RUNTIME_MCP_AUTH_URL_LENGTH = 2048;
@@ -270,8 +237,7 @@ export const RUNTIME_IMAGE_MEDIA_TYPES = [
   'image/gif',
   'image/webp',
 ] as const;
-export type RuntimeImageMediaType =
-  (typeof RUNTIME_IMAGE_MEDIA_TYPES)[number];
+export type RuntimeImageMediaType = (typeof RUNTIME_IMAGE_MEDIA_TYPES)[number];
 
 export type RuntimeAttachment =
   | {
@@ -312,7 +278,7 @@ export interface RuntimeRewindEvictedFile {
 }
 
 /** How a rewind would affect workspace files. */
-export interface RuntimeRewindInfo {
+export interface RuntimeRewindInfo extends RewindDetailFields {
   /** Files Droid changed after the anchor that a rewind can restore. */
   readonly restorableCount: number;
   /** Files Droid created after the anchor that a rewind can delete. */
@@ -339,6 +305,15 @@ export interface RuntimeGitDiffFile {
   readonly deletions: number;
 }
 
+export interface RuntimeGitDiffOptions {
+  readonly includePatch?: boolean;
+}
+
+export interface RuntimeGitDiffSection {
+  readonly files: readonly (RuntimeGitDiffFile & { readonly status: string })[];
+  readonly patch: string;
+}
+
 /**
  * The session branch measured against its base branch, committed and
  * uncommitted together. Scope is the branch, not one turn.
@@ -350,6 +325,11 @@ export interface RuntimeGitDiff {
   readonly additions: number;
   readonly deletions: number;
   readonly commitCount: number;
+  /** Present when full patches were requested from a capable backend. */
+  readonly comparisons?: {
+    readonly branch: RuntimeGitDiffSection;
+    readonly workspace: RuntimeGitDiffSection;
+  };
 }
 
 export interface RuntimeCompactResult {
@@ -362,9 +342,7 @@ export interface RuntimeForkResult {
 }
 
 export interface DroidRuntime {
-  initialize(
-    target: RuntimeSessionTarget | string,
-  ): Promise<RuntimeAvailability>;
+  initialize(target: RuntimeSessionTarget | string): Promise<RuntimeAvailability>;
   /**
    * Actual working directory of the active session as reported by the
    * session backend, or null when unknown. For daemon worktree
@@ -425,7 +403,9 @@ export interface DroidRuntime {
    * absent when the session backend exposes no git RPC (process mode).
    * Rejects when the backend cannot read the repository.
    */
-  readGitDiff?(): Promise<RuntimeGitDiff>;
+  readGitDiff?(options?: RuntimeGitDiffOptions): Promise<RuntimeGitDiff>;
+  /** Explicit backend capability; process sessions have no Git RPC. */
+  supportsGitDiff?(): boolean;
   /**
    * Compacts the active session's context: Droid summarizes older
    * messages into a continuation session that this runtime then

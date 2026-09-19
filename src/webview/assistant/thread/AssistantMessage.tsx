@@ -1,36 +1,23 @@
 // AssistantMessage: moved verbatim from Thread.tsx (structure-only refactor).
 
-import {
-  ActionBarPrimitive,
-  MessagePrimitive,
-  useAuiState,
-} from "@assistant-ui/react";
-import {
-  memo,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { ActionBarPrimitive, MessagePrimitive, useAuiState } from '@assistant-ui/react';
+import { memo, useContext, useEffect, useRef, useState } from 'react';
 
-import {
-  ACTIVITY_GROUP_KEY,
-  activityGroupBy,
-} from "../activityGrouping";
-import { AskUserResult } from "../AskUserResult";
-import { GitCommitFlowContext } from "../GitCommitPanel";
-import { DroidMarkdownText } from "../MarkdownText";
-import { MessageTimestamp } from "../MessageTimestamp";
-import { TranscriptImage } from "../TranscriptImage";
-import { ForkContext, RegenerateContext } from "../Thread";
-import { ActivityGroup, ToolActivityRow } from "./activityRows";
-import { CopyActionContent, ForkIcon, RegenerateIcon } from "./icons";
+import { ACTIVITY_GROUP_KEY, activityGroupBy } from '../transcript/activityGrouping';
+import { AskUserResult } from '../interactions/AskUserResult';
+import { GitCommitFlowContext } from '../changes/GitCommitPanel';
+import { DroidMarkdownText } from '../markdown/MarkdownText';
+import { MessageTimestamp } from '../transcript/MessageTimestamp';
+import { TranscriptImage } from '../images/TranscriptImage';
+import { ForkContext, RegenerateContext } from './messageContexts';
+import { ActivityGroup, ToolActivityRow } from '../transcript/activity/activityRows';
+import { CopyActionContent, ForkIcon, RegenerateIcon } from './icons';
 import {
   readReasoningDuration,
   readReasoningTruncated,
   readToolActivity,
-} from "./readers";
-import { ChangesSummary, Diagnostic, ThinkingRow } from "./transcriptRows";
+} from './readers';
+import { ChangesSummary, Diagnostic, ThinkingRow } from './transcriptRows';
 
 export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Element {
   // Entry animations are double-gated: the shell needs dvx-anim-live
@@ -39,7 +26,7 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
   // replays history rows. The action bar mounts after streaming
   // ends, so its fade keys off "was live in this mount" instead —
   // recovered history can never satisfy that.
-  const running = useAuiState((s) => s.message.status?.type === "running");
+  const running = useAuiState((s) => s.message.status?.type === 'running');
   const isLast = useAuiState((s) => s.message.isLast);
   const messageId = useAuiState((s) => s.message.id);
   const gitFlow = useContext(GitCommitFlowContext);
@@ -52,22 +39,22 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
   // bar simply shows no age.
   const completedAt = useAuiState((s) => {
     const value = s.message.metadata.custom?.completedAt;
-    return typeof value === "number" ? value : null;
+    return typeof value === 'number' ? value : null;
   });
   // Interactions split one visible reply across several turnIds; only
   // the run's tail message wears the action bar, middle segments keep
   // the compact body rhythm (user report batch 2 §6).
-  const replyTail = useAuiState(
-    (s) => s.message.metadata.custom?.replyTail !== false,
-  );
+  const replyTail = useAuiState((s) => s.message.metadata.custom?.replyTail !== false);
   const replyCopyText = useAuiState((s) => {
     const value = s.message.metadata.custom?.replyCopyText;
-    return typeof value === "string" ? value : null;
+    return typeof value === 'string' ? value : null;
   });
-  const diagnosticOnly = useAuiState((s) =>
-    s.message.content.length > 0 && s.message.content.every(
-      (part) => part.type === "data" && part.name === "droid-diagnostic",
-    ),
+  const diagnosticOnly = useAuiState(
+    (s) =>
+      s.message.content.length > 0 &&
+      s.message.content.every(
+        (part) => part.type === 'data' && part.name === 'droid-diagnostic',
+      ),
   );
   const wasRunningRef = useRef(false);
   if (running) {
@@ -76,19 +63,17 @@ export const AssistantMessage = memo(function AssistantMessage(): React.JSX.Elem
   return (
     <MessagePrimitive.Root
       className={`dvx-message dvx-message-assistant${
-        running ? " dvx-message-live" : ""
-      }${isLast ? " dvx-message-last" : ""}${
-        replyTail ? "" : " dvx-message-cont"
-      }`}
+        running ? ' dvx-message-live' : ''
+      }${isLast ? ' dvx-message-last' : ''}${replyTail ? '' : ' dvx-message-cont'}`}
       data-aui-quote-selectable="false"
-      aria-label={diagnosticOnly ? "System notice" : "Droid"}
+      aria-label={diagnosticOnly ? 'System notice' : 'Droid'}
     >
       <AssistantMessageParts includeChanges={includeChanges} />
       {replyTail && !running && !diagnosticOnly ? (
         <ActionBarPrimitive.Root
           autohide="never"
           className={`dvx-assistant-actions${
-            !running && wasRunningRef.current ? " dvx-actions-entry" : ""
+            !running && wasRunningRef.current ? ' dvx-actions-entry' : ''
           }`}
         >
           <MessageTimestamp completedAt={completedAt} />
@@ -121,19 +106,14 @@ export function AssistantMessageParts({
   readonly includeChanges: boolean;
 }): React.JSX.Element {
   return (
-    <MessagePrimitive.GroupedParts
-      groupBy={activityGroupBy}
-      indicator="never"
-    >
+    <MessagePrimitive.GroupedParts groupBy={activityGroupBy} indicator="never">
       {({ part, children }) => {
         switch (part.type) {
           case ACTIVITY_GROUP_KEY:
-            return (
-              <ActivityGroup indices={part.indices}>{children}</ActivityGroup>
-            );
-          case "text":
+            return <ActivityGroup indices={part.indices}>{children}</ActivityGroup>;
+          case 'text':
             return <DroidMarkdownText />;
-          case "reasoning":
+          case 'reasoning':
             return (
               <ThinkingRow
                 statusType={part.status?.type}
@@ -141,7 +121,7 @@ export function AssistantMessageParts({
                 truncated={readReasoningTruncated(part)}
               />
             );
-          case "tool-call":
+          case 'tool-call':
             return (
               <ToolActivityRow
                 activity={readToolActivity(part)}
@@ -149,17 +129,17 @@ export function AssistantMessageParts({
                 toolUseId={part.toolCallId}
               />
             );
-          case "data":
-            if (part.name === "droid-diagnostic") {
+          case 'data':
+            if (part.name === 'droid-diagnostic') {
               return <Diagnostic data={part.data} />;
             }
-            if (part.name === "droid-changes") {
+            if (part.name === 'droid-changes') {
               return includeChanges ? <ChangesSummary data={part.data} /> : null;
             }
-            if (part.name === "droid-image") {
+            if (part.name === 'droid-image') {
               return <TranscriptImage data={part.data} />;
             }
-            if (part.name === "droid-ask-user-result") {
+            if (part.name === 'droid-ask-user-result') {
               return <AskUserResult data={part.data} />;
             }
             return null;
@@ -173,14 +153,10 @@ export function AssistantMessageParts({
 
 /** Child-session assistant message: identical body, no reply actions. */
 export function ReadOnlyAssistantMessage(): React.JSX.Element {
-  const running = useAuiState(
-    (state) => state.message.status?.type === "running",
-  );
+  const running = useAuiState((state) => state.message.status?.type === 'running');
   return (
     <MessagePrimitive.Root
-      className={`dvx-message dvx-message-assistant${
-        running ? " dvx-message-live" : ""
-      }`}
+      className={`dvx-message dvx-message-assistant${running ? ' dvx-message-live' : ''}`}
       aria-label="Subagent"
       data-aui-quote-selectable="false"
     >
@@ -195,11 +171,7 @@ export function ReadOnlyAssistantMessage(): React.JSX.Element {
  * message's text. Mirrors ActionBarPrimitive.Copy's visuals via the
  * same classes and data-copied attribute.
  */
-export function ReplyCopyAction({
-  text,
-}: {
-  readonly text: string;
-}): React.JSX.Element {
+export function ReplyCopyAction({ text }: { readonly text: string }): React.JSX.Element {
   const [copied, setCopied] = useState(false);
   const resetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -214,9 +186,9 @@ export function ReplyCopyAction({
     <button
       type="button"
       className="dvx-message-action dvx-copy-action"
-      aria-label={copied ? "Copied response" : "Copy response"}
-      title={copied ? "Copied response" : "Copy response"}
-      {...(copied ? { "data-copied": "true" } : {})}
+      aria-label={copied ? 'Copied response' : 'Copy response'}
+      title={copied ? 'Copied response' : 'Copy response'}
+      {...(copied ? { 'data-copied': 'true' } : {})}
       onClick={async (event) => {
         const button = event.currentTarget;
         setCopied(false);
@@ -259,8 +231,8 @@ export function RegenerateAction(): React.JSX.Element | null {
     <button
       className="dvx-message-action"
       type="button"
-      aria-label={busy ? "Regenerating response" : "Regenerate response"}
-      title={busy ? "Regenerating response" : "Regenerate response"}
+      aria-label={busy ? 'Regenerating response' : 'Regenerate response'}
+      title={busy ? 'Regenerating response' : 'Regenerate response'}
       aria-busy={busy}
       disabled={busy}
       onClick={() => {
@@ -275,7 +247,11 @@ export function RegenerateAction(): React.JSX.Element | null {
         busyResetRef.current = setTimeout(() => setBusy(false), 8000);
       }}
     >
-      {busy ? <span className="dvx-action-spinner" aria-hidden="true" /> : <RegenerateIcon />}
+      {busy ? (
+        <span className="dvx-action-spinner" aria-hidden="true" />
+      ) : (
+        <RegenerateIcon />
+      )}
     </button>
   );
 }
@@ -299,8 +275,8 @@ export function ForkAction(): React.JSX.Element | null {
     <button
       className="dvx-message-action"
       type="button"
-      aria-label={busy ? "Forking chat" : "Fork chat"}
-      title={busy ? "Forking chat" : "Branch a new session from this point"}
+      aria-label={busy ? 'Forking chat' : 'Fork chat'}
+      title={busy ? 'Forking chat' : 'Branch a new session from this point'}
       aria-busy={busy}
       disabled={busy}
       onClick={() => {

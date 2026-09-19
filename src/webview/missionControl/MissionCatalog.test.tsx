@@ -4,8 +4,9 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { MissionControlCatalogRow } from '../../shared/missionControlPanelProtocol';
-import { MissionCatalog } from './MissionCatalog';
+import type { MissionControlCatalogRow } from '../../shared/protocol/missionControlPanelProtocol';
+import { MissionCatalog as V1MissionCatalog } from './MissionCatalog';
+import { MissionCatalog as V2MissionCatalog } from '../../webview-v2/mission/MissionCatalog';
 
 const rows: readonly MissionControlCatalogRow[] = [
   row('mission-safe-alpha', 'Duplicate title', 'running', 'Repository one'),
@@ -19,7 +20,7 @@ const rows: readonly MissionControlCatalogRow[] = [
 
 afterEach(cleanup);
 
-describe('MissionCatalog', () => {
+describe.each([['V1', V1MissionCatalog], ['V2', V2MissionCatalog]] as const)('%s MissionCatalog', (_version, MissionCatalog) => {
   it('classifies every official lifecycle without inventing states', async () => {
     const user = userEvent.setup();
     const onFilter = vi.fn();
@@ -33,9 +34,7 @@ describe('MissionCatalog', () => {
       />,
     );
 
-    expect(screen.getAllByRole('button', { name: /Open Mission/ })).toHaveLength(
-      7,
-    );
+    expect(screen.getAllByRole('button', { name: /Open Mission/ })).toHaveLength(7);
     await user.click(screen.getByRole('tab', { name: 'Running' }));
     expect(onFilter).toHaveBeenCalledWith('running');
 
@@ -49,15 +48,9 @@ describe('MissionCatalog', () => {
         onNavigate={vi.fn()}
       />,
     );
-    expect(screen.getAllByRole('button', { name: /Open Mission/ })).toHaveLength(
-      5,
-    );
-    expect(
-      screen.queryByRole('button', { name: 'Open Mission “Paused”' }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole('button', { name: 'Open Mission “Completed”' }),
-    ).toBeNull();
+    expect(screen.getAllByRole('button', { name: /Open Mission/ })).toHaveLength(5);
+    expect(screen.queryByRole('button', { name: 'Open Mission “Paused”' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open Mission “Completed”' })).toBeNull();
   });
 
   it('moves semantic filter tabs with arrow keys', async () => {

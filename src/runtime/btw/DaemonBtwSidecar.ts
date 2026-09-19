@@ -1,7 +1,5 @@
-import {
-  ToolConfirmationOutcome,
-  type ConnectedDroid,
-} from '@factory/droid-sdk';
+import type { DaemonApi } from '../daemon/api';
+import { ToolConfirmationOutcome } from '@factory/droid-sdk';
 
 import {
   BTW_FORK_TAG,
@@ -49,7 +47,7 @@ export interface DaemonBtwFork {
 
 /**
  * Minimal daemon surface the sidecar needs. The default adapter maps
- * a `ConnectedDroid` onto it; tests inject fakes via `createClient`.
+ * a `DaemonApi` onto it; tests inject fakes via `createClient`.
  */
 export interface DaemonBtwClient {
   fork(
@@ -64,17 +62,14 @@ export interface DaemonBtwClient {
    * `onPermissionDenied` fires whenever a permission request was
    * cancelled during a turn.
    */
-  attach(
-    forkSessionId: string,
-    onPermissionDenied: () => void,
-  ): Promise<DaemonBtwFork>;
+  attach(forkSessionId: string, onPermissionDenied: () => void): Promise<DaemonBtwFork>;
 }
 
 export type DaemonBtwClientFactory = () => Promise<DaemonBtwClient>;
 
 export async function createDaemonBtwSidecar(options: {
   readonly mainSessionId: string;
-  readonly getDroid?: () => Promise<ConnectedDroid>;
+  readonly getDroid?: () => Promise<DaemonApi>;
   readonly createClient?: DaemonBtwClientFactory;
 }): Promise<BtwSidecar> {
   const createClient =
@@ -82,9 +77,7 @@ export async function createDaemonBtwSidecar(options: {
     (() => {
       const getDroid = options.getDroid;
       if (getDroid === undefined) {
-        throw new Error(
-          'createDaemonBtwSidecar needs getDroid or createClient.',
-        );
+        throw new Error('createDaemonBtwSidecar needs getDroid or createClient.');
       }
       return createConnectedDroidBtwClient(getDroid);
     });
@@ -105,7 +98,7 @@ export async function createDaemonBtwSidecar(options: {
 }
 
 async function createConnectedDroidBtwClient(
-  getDroid: () => Promise<ConnectedDroid>,
+  getDroid: () => Promise<DaemonApi>,
 ): Promise<DaemonBtwClient> {
   const droid = await getDroid();
   return {
@@ -126,8 +119,7 @@ async function createConnectedDroidBtwClient(
         askUserHandler: () => ({ cancelled: true, answers: [] }),
       });
       return {
-        stream: (text) =>
-          session.stream(text, { includePartialMessages: true }),
+        stream: (text) => session.stream(text, { includePartialMessages: true }),
         interrupt: () => session.interrupt(),
         close: () => session.close(),
       };
@@ -227,9 +219,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
   }
 
   /** Maps one raw stream event onto an answer event. */
-  private projectStreamEvent(
-    raw: DaemonBtwStreamEvent,
-  ): BtwAnswerEvent | null {
+  private projectStreamEvent(raw: DaemonBtwStreamEvent): BtwAnswerEvent | null {
     switch (raw.type) {
       case 'assistant_text_delta':
         return typeof raw.text === 'string' && raw.text.length > 0
@@ -243,8 +233,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
           ? { kind: 'done' }
           : {
               kind: 'error',
-              message:
-                'Droid reported an error answering the side question.',
+              message: 'Droid reported an error answering the side question.',
             };
       case 'error':
         return {

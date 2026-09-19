@@ -1,0 +1,58 @@
+{
+  "name": "@droidvisx/chat-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Reusable React chat presentation without CLI or editor dependencies.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fireman-droid/droid-for-vscode.git",
+    "directory": "packages/chat-ui"
+  },
+  "files": ["dist", "LICENSE", "THIRD_PARTY_LICENSES.txt"],
+  "sideEffects": ["**/*.css"],
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/types/*.d.ts",
+      "import": "./dist/*.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "node build.mjs && tsc -p tsconfig.json --emitDeclarationOnly"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "@tanstack/react-virtual": "^3.14.9",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.16.47",
+    "lucide-react": "1.43.0",
+    "mermaid": "^11.16.1",
+    "radix-ui": "1.6.7",
+    "react-markdown": "10.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "4.0.1",
+    "remark-math": "6.0.0",
+    "tailwind-merge": "3.6.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.3.3",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
+    "esbuild": "^0.27.0",
+    "postcss": "8.5.26",
+    "tailwindcss": "4.3.3",
+    "typescript": "^5.9.3"
+  }
+}

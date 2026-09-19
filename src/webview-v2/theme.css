@@ -1,0 +1,63 @@
+@import '../../packages/chat-ui/src/theme.css';
+@import './styles/webview-host.css';
+@import './styles/models.css';
+@import './styles/mission.css';
+@source './**/*.{ts,tsx}';
+@source '../webview/assistant/composer/SettingsPopover.tsx';
+@source '../webview/assistant/composer/ModelPopover.tsx';
+@source '../webview/assistant/composer/ContextPopover.tsx';
+
+@layer base {
+  :root {
+    --chat-font-sans: var(--vscode-font-family, 'Segoe UI');
+    --chat-font-mono: var(--vscode-editor-font-family, Consolas);
+  }
+  :root[data-theme-preference='auto'] {
+    /* Editor text and its background are a pair. Workbench descriptions and
+       button fills are not suitable text/surface tokens for a transcript. */
+    --surface: var(--vscode-editor-background, light-dark(#fafafa, #1e1e20));
+    --ink: var(--vscode-editor-foreground, light-dark(#292929, #ececf1));
+    --strong-ink: var(--ink);
+    --secondary-ink: color-mix(in srgb, var(--ink) 94%, var(--surface));
+    --muted-ink: color-mix(in srgb, var(--ink) 85%, var(--surface));
+    --soft-surface: color-mix(in srgb, var(--ink) 7%, var(--surface));
+    --overlay-surface: color-mix(in srgb, var(--ink) 6%, var(--surface));
+    --hover-surface: color-mix(in srgb, var(--ink) 11%, var(--surface));
+    --field-surface: color-mix(in srgb, var(--ink) 4%, var(--surface));
+    --code-surface: color-mix(in srgb, var(--ink) 3%, var(--surface));
+    --well-surface: var(--code-surface);
+    --edge: color-mix(in srgb, var(--ink) 22%, var(--surface));
+    --field-edge: var(--edge);
+    --edge-strong: color-mix(in srgb, var(--ink) 45%, var(--surface));
+    --action: var(--vscode-button-background, light-dark(#006ab1, #315b85));
+    --action-ink: var(--vscode-button-foreground, #ffffff);
+    --focus: var(--vscode-focusBorder, light-dark(#006ab1, #91caff));
+    --error-ink: light-dark(#b52c40, #ffa0a8);
+    --link-ink: light-dark(#005a99, #91caff);
+    --syntax-keyword: light-dark(#7621a8, #d5b5ff);
+    --syntax-string: light-dark(#942b1c, #f2b696);
+    --syntax-number: light-dark(#12682c, #c0dfa9);
+    --command-string: var(--syntax-number);
+  }
+
+  html, body, #root {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+  body {
+    overflow: hidden;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--vscode-font-family, 'Segoe UI'), sans-serif;
+    font-size: 13px;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--edge) transparent;
+  }
+  button, input, textarea, select { font: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: default; }
+}

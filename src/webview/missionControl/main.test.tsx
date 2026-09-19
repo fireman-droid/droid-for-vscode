@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
   type MissionControlCatalogRow,
-} from '../../shared/missionControlPanelProtocol';
+} from '../../shared/protocol/missionControlPanelProtocol';
 
 const staleRow = row('mission-safe-stale', 'Stale Mission');
 const currentRow = row('mission-safe-current', 'Current Mission');
@@ -18,8 +18,8 @@ beforeEach(() => {
   delete window.__dvxBooted;
 });
 
-describe('Mission Control Webview route ownership', () => {
-  it('keeps stale rows and binds Back to the replacement catalog request', async () => {
+describe.each(['V1', 'V2'] as const)('%s Mission Control Webview route ownership', (version) => {
+  it('keeps the catalog visible during workspace navigation and rejects stale refresh results', async () => {
     const posted: unknown[] = [];
     window.__dvxApi = {
       postMessage: (message) => {
@@ -27,7 +27,8 @@ describe('Mission Control Webview route ownership', () => {
       },
     };
     await act(async () => {
-      await import('./main');
+      if (version === 'V1') await import('./main');
+      else await import('../../webview-v2/mission/main');
     });
     const user = userEvent.setup();
 
@@ -36,11 +37,11 @@ describe('Mission Control Webview route ownership', () => {
       protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
     });
     await user.click(screen.getByRole('button', { name: 'New Mission' }));
-    await user.click(screen.getByRole('button', { name: 'Back to Missions' }));
-    const initialBack = lastNavigation(posted, 'catalog');
+    lastNavigation(posted, 'new-mission');
+    expect(screen.queryByRole('button', { name: 'Back to Missions' })).toBeNull();
     expect(screen.getByRole('status').textContent).toBe('Loading Missions…');
 
-    publishCatalog(initialBack.requestId, [staleRow]);
+    publishCatalog('host-initial-catalog', [staleRow]);
     expect(
       screen.getByRole('button', {
         name: 'Open Mission “Stale Mission” in Workspace',
@@ -54,12 +55,11 @@ describe('Mission Control Webview route ownership', () => {
         name: 'Open Mission “Stale Mission” in Workspace',
       }),
     );
-    await user.click(screen.getByRole('button', { name: 'Back to Missions' }));
-    const refreshBack = lastNavigation(posted, 'catalog');
+    lastNavigation(posted, 'detail');
+    await user.click(screen.getByRole('button', { name: 'Refresh' }));
+    const refreshBack = lastCatalogRequest(posted);
 
-    expect(screen.getByRole('status').textContent).toBe(
-      'Refreshing Missions…',
-    );
+    expect(screen.getByRole('status').textContent).toBe('Refreshing Missions…');
     expect(screen.getByText('Stale Mission')).toBeDefined();
 
     publishCatalog(canceledRefresh.requestId, [
@@ -98,7 +98,7 @@ function publishCatalog(
 
 function lastNavigation(
   posted: readonly unknown[],
-  route: 'catalog',
+  route: 'new-mission' | 'detail',
 ): { readonly requestId: string } {
   const message = posted.findLast(
     (value) =>
@@ -110,12 +110,9 @@ function lastNavigation(
   return message as { readonly requestId: string };
 }
 
-function lastCatalogRequest(
-  posted: readonly unknown[],
-): { readonly requestId: string } {
+function lastCatalogRequest(posted: readonly unknown[]): { readonly requestId: string } {
   const message = posted.findLast(
-    (value) =>
-      isRecord(value) && value.type === 'missionControl.catalog.request',
+    (value) => isRecord(value) && value.type === 'missionControl.catalog.request',
   );
   expect(message).toBeDefined();
   return message as { readonly requestId: string };
@@ -125,10 +122,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function row(
-  catalogId: string,
-  title: string,
-): MissionControlCatalogRow {
+function row(catalogId: string, title: string): MissionControlCatalogRow {
   return {
     catalogId,
     title,

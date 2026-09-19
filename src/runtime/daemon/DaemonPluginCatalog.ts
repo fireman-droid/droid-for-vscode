@@ -1,4 +1,4 @@
-import type { ConnectedDroid } from '@factory/droid-sdk';
+import type { DaemonApi } from './api';
 
 /**
  * One installed plugin as reported by the daemon, before the host
@@ -28,9 +28,9 @@ export interface PluginCatalogSnapshot {
  * sidecar daemon alone can serve them in process runtime mode.
  */
 export class DaemonPluginCatalog {
-  private readonly droid: ConnectedDroid;
+  private readonly droid: DaemonApi;
 
-  constructor(droid: ConnectedDroid) {
+  constructor(droid: DaemonApi) {
     this.droid = droid;
   }
 

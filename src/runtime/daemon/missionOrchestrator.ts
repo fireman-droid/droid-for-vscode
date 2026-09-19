@@ -1,11 +1,10 @@
+import type { DaemonApi, DaemonSessionHandle } from './api';
 import { randomUUID } from 'node:crypto';
 
-import type { ConnectedDroid, ConnectedDroidSession } from '@factory/droid-sdk';
-
-import type { MissionReasoningEffort } from '../../shared/missionProtocol';
+import type { MissionReasoningEffort } from '../../shared/protocol/missionProtocol';
 
 export interface MissionOrchestratorCreateOptions {
-  readonly droid: ConnectedDroid;
+  readonly droid: DaemonApi;
   readonly cwd: string;
   readonly modelId: string;
   readonly reasoningEffort: MissionReasoningEffort;
@@ -32,7 +31,7 @@ export function createMissionOrchestratorIdentity(): string {
  */
 export async function createMissionOrchestrator(
   options: MissionOrchestratorCreateOptions,
-): Promise<ConnectedDroidSession> {
+): Promise<DaemonSessionHandle> {
   return options.droid.sessions.create({
     cwd: options.cwd,
     modelId: options.modelId,

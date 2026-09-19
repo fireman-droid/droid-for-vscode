@@ -1,3 +1,4 @@
+import type { DaemonApi } from './api';
 import {
   AutonomyLevel,
   DroidInteractionMode,
@@ -5,7 +6,6 @@ import {
   ReasoningEffort,
   ToolConfirmationOutcome,
   ToolConfirmationType,
-  type ConnectedDroid,
   type DroidStreamEvent,
   type SessionSettings,
 } from '@factory/droid-sdk';
@@ -16,7 +16,7 @@ import type {
 import { describe, expect, it, vi } from 'vitest';
 
 import { FactoryDroidRuntime } from '../FactoryDroidRuntime';
-import { cancellingRuntimeInteractionHandler } from '../runtimeInteractions';
+import { cancellingRuntimeInteractionHandler } from '../events/runtimeInteractions';
 import {
   createDaemonDroidSession,
   createDaemonSessionFactory,
@@ -40,9 +40,7 @@ describe('createDaemonDroidSession', () => {
     expect(mock.sessions.resume).not.toHaveBeenCalled();
     expect(session.id).toBe('session-1');
     expect(session.settings).toEqual(mock.created.settings);
-    // Remaining fail-closed daemon divergence: no session
-    // notification channel for browser MCP auth.
-    expect(session.onNotification).toBeUndefined();
+    expect(session.onNotification).toBeTypeOf('function');
     expect(session.authenticateMcpServer).toBeUndefined();
   });
 
@@ -75,9 +73,7 @@ describe('createDaemonDroidSession', () => {
     // A defaults read failure degrades the catalog only; the session
     // itself is still created.
     const failing = createDroidMock();
-    failing.settings.getDefaults.mockRejectedValue(
-      new Error('defaults unavailable'),
-    );
+    failing.settings.getDefaults.mockRejectedValue(new Error('defaults unavailable'));
     const session = await createDaemonDroidSession({
       target: { kind: 'new', cwd: 'C:\\workspace' },
       interactionHandler: cancellingRuntimeInteractionHandler,
@@ -91,9 +87,7 @@ describe('createDaemonDroidSession', () => {
     const mock = createDroidMock();
     const runtime = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
-      createSdkSession: createDaemonSessionFactory(
-        async () => mock.droid,
-      ),
+      createSdkSession: createDaemonSessionFactory(async () => mock.droid),
     });
     await runtime.initialize('C:\\workspace');
 
@@ -122,9 +116,10 @@ describe('createDaemonDroidSession', () => {
     const replaced = await session.compact?.({});
 
     expect(mock.settings.getDefaults).toHaveBeenCalledOnce();
-    expect(
-      replaced?.session.availableModels?.map(({ id }) => id),
-    ).toEqual(['model-1', 'custom:Probe-0']);
+    expect(replaced?.session.availableModels?.map(({ id }) => id)).toEqual([
+      'model-1',
+      'custom:Probe-0',
+    ]);
   });
 
   it('passes worktree: true to daemon create only when the target asks for it', async () => {
@@ -149,8 +144,7 @@ describe('createDaemonDroidSession', () => {
     // The daemon runs worktree sessions in the worktree directory, not
     // the requested cwd; the adapter must surface that actual cwd so
     // the host can bind worktree metadata to it.
-    (mock.created as { cwd: string }).cwd =
-      'C:\\workspace-wt-main-wt';
+    (mock.created as { cwd: string }).cwd = 'C:\\workspace-wt-main-wt';
 
     const session = await createDaemonDroidSession({
       target: { kind: 'new', cwd: 'C:\\workspace', worktree: true },
@@ -174,13 +168,10 @@ describe('createDaemonDroidSession', () => {
       getDroid: async () => mock.droid,
     });
 
-    expect(mock.sessions.resume).toHaveBeenCalledExactlyOnceWith(
-      'saved-session',
-      {
-        permissionHandler: expect.any(Function),
-        askUserHandler: expect.any(Function),
-      },
-    );
+    expect(mock.sessions.resume).toHaveBeenCalledExactlyOnceWith('saved-session', {
+      permissionHandler: expect.any(Function),
+      askUserHandler: expect.any(Function),
+    });
     expect(mock.sessions.create).not.toHaveBeenCalled();
     expect(session.id).toBe('saved-session');
   });
@@ -243,9 +234,7 @@ describe('createDaemonDroidSession', () => {
         ],
       }),
     ).resolves.toEqual({
-      answers: [
-        { index: 4, question: 'Which language?', answer: 'TypeScript' },
-      ],
+      answers: [{ index: 4, question: 'Which language?', answer: 'TypeScript' }],
     });
     expect(interactionHandler.requestPermission).toHaveBeenCalledOnce();
     expect(interactionHandler.askUser).toHaveBeenCalledOnce();
@@ -258,9 +247,7 @@ describe('createDaemonDroidSession', () => {
     });
     const runtime = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
-      createSdkSession: createDaemonSessionFactory(
-        async () => mock.droid,
-      ),
+      createSdkSession: createDaemonSessionFactory(async () => mock.droid),
     });
 
     const availability = await runtime.initialize('C:\\workspace');
@@ -344,25 +331,22 @@ describe('createDaemonDroidSession', () => {
     });
   });
 
-  it('uses the official daemon Context Breakdown totals', async () => {
+  it('uses the daemon last-call compaction meter rather than category estimates', async () => {
     const mock = createDroidMock();
     const runtime = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
-      createSdkSession: createDaemonSessionFactory(
-        async () => mock.droid,
-      ),
+      createSdkSession: createDaemonSessionFactory(async () => mock.droid),
     });
     await runtime.initialize('C:\\workspace');
 
     await expect(runtime.readContextWindow()).resolves.toEqual({
       availability: 'available',
-      used: 40000,
-      remaining: 60000,
-      limit: 100000,
+      used: 14000,
+      remaining: 75000,
+      limit: 89000,
+      estimatedTokens: 40000,
     });
-    expect(mock.sessions.getContextBreakdown).toHaveBeenCalledWith(
-      'session-1',
-    );
+    expect(mock.sessions.getContextBreakdown).toHaveBeenCalledWith('session-1');
   });
 
   it('rounds fractional daemon Context Breakdown values', async () => {
@@ -381,21 +365,20 @@ describe('createDaemonDroidSession', () => {
     });
     const runtime = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
-      createSdkSession: createDaemonSessionFactory(
-        async () => mock.droid,
-      ),
+      createSdkSession: createDaemonSessionFactory(async () => mock.droid),
     });
     await runtime.initialize('C:\\workspace');
 
     await expect(runtime.readContextWindow()).resolves.toEqual({
       availability: 'available',
-      used: 40000,
-      remaining: 60000,
-      limit: 100000,
+      used: 14000,
+      remaining: 75000,
+      limit: 89000,
+      estimatedTokens: 40000,
     });
   });
 
-  it('does not depend on daemon last-call usage', async () => {
+  it('waits for daemon last-call usage instead of falling back to the estimate', async () => {
     const mock = createDroidMock();
     mock.sessions.getContextBreakdown.mockResolvedValueOnce({
       modelId: 'model-1',
@@ -411,17 +394,14 @@ describe('createDaemonDroidSession', () => {
     });
     const runtime = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
-      createSdkSession: createDaemonSessionFactory(
-        async () => mock.droid,
-      ),
+      createSdkSession: createDaemonSessionFactory(async () => mock.droid),
     });
     await runtime.initialize('C:\\workspace');
 
     await expect(runtime.readContextWindow()).resolves.toEqual({
-      availability: 'available',
-      used: 40000,
-      remaining: 60000,
-      limit: 100000,
+      availability: 'unavailable',
+      reason: 'awaiting-usage',
+      estimatedTokens: 40000,
     });
   });
 
@@ -435,10 +415,9 @@ describe('createDaemonDroidSession', () => {
 
     await session.updateSettings({ modelId: 'model-2' });
 
-    expect(mock.sessions.updateSettings).toHaveBeenCalledWith(
-      'session-1',
-      { modelId: 'model-2' },
-    );
+    expect(mock.sessions.updateSettings).toHaveBeenCalledWith('session-1', {
+      modelId: 'model-2',
+    });
     // The daemon handle's snapshot has not seen the notification yet.
     expect(mock.created.settings.modelId).toBe('model-1');
     expect(session.settings.modelId).toBe('model-2');
@@ -466,10 +445,9 @@ describe('createDaemonDroidSession', () => {
     });
 
     await session.updateSettings({ specModeModelId: 'model-2' });
-    expect(mock.sessions.updateSettings).toHaveBeenCalledWith(
-      'session-1',
-      { specModeModelId: 'model-2' },
-    );
+    expect(mock.sessions.updateSettings).toHaveBeenCalledWith('session-1', {
+      specModeModelId: 'model-2',
+    });
     expect(session.settings.specModeModelId).toBe('model-2');
 
     // null is a reset, not "no change": it must reach the daemon, and
@@ -478,10 +456,10 @@ describe('createDaemonDroidSession', () => {
       specModeModelId: null,
       specModeReasoningEffort: null,
     });
-    expect(mock.sessions.updateSettings).toHaveBeenLastCalledWith(
-      'session-1',
-      { specModeModelId: null, specModeReasoningEffort: null },
-    );
+    expect(mock.sessions.updateSettings).toHaveBeenLastCalledWith('session-1', {
+      specModeModelId: null,
+      specModeReasoningEffort: null,
+    });
     mock.created.settings = { ...mock.created.settings };
     expect(session.settings.specModeModelId ?? null).toBeNull();
     mock.created.settings = {
@@ -495,9 +473,7 @@ describe('createDaemonDroidSession', () => {
     const mock = createDroidMock();
     const runtime = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
-      createSdkSession: createDaemonSessionFactory(
-        async () => mock.droid,
-      ),
+      createSdkSession: createDaemonSessionFactory(async () => mock.droid),
     });
     await runtime.initialize('C:\\workspace');
 
@@ -517,9 +493,7 @@ describe('createDaemonDroidSession', () => {
     const mock = createDroidMock();
     const runtime = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
-      createSdkSession: createDaemonSessionFactory(
-        async () => mock.droid,
-      ),
+      createSdkSession: createDaemonSessionFactory(async () => mock.droid),
     });
     await runtime.initialize('C:\\workspace');
 
@@ -540,9 +514,7 @@ describe('createDaemonDroidSession', () => {
 
   it('forks and keeps the source handle when the replacement resume fails', async () => {
     const mock = createDroidMock();
-    mock.sessions.resume.mockRejectedValue(
-      new Error('arbitrary resume failure'),
-    );
+    mock.sessions.resume.mockRejectedValue(new Error('arbitrary resume failure'));
     const session = await createDaemonDroidSession({
       target: { kind: 'new', cwd: 'C:\\workspace' },
       interactionHandler: cancellingRuntimeInteractionHandler,
@@ -580,9 +552,7 @@ describe('createDaemonDroidSession', () => {
         acquire: vi.fn<
           (
             sessionId: string,
-          ) =>
-            | { acquired: true }
-            | { acquired: false; heldByPid: number }
+          ) => { acquired: true } | { acquired: false; heldByPid: number }
         >(() => {
           if (acquireResult === 'throw') {
             throw primary;
@@ -621,9 +591,7 @@ describe('createDaemonDroidSession', () => {
         });
       const expectPrimary = (pending: ReturnType<typeof establish>) =>
         acquireResult === 'conflict'
-          ? expect(pending).rejects.toThrow(
-              'open in another window (pid 4242)',
-            )
+          ? expect(pending).rejects.toThrow('open in another window (pid 4242)')
           : expect(pending).rejects.toBe(primary);
 
       if (retries) {
@@ -640,9 +608,7 @@ describe('createDaemonDroidSession', () => {
       }
 
       const sessionId = targetKind === 'new' ? 'session-1' : 'saved-session';
-      expect(
-        lease.acquire.mock.calls.every(([id]) => id === sessionId),
-      ).toBe(true);
+      expect(lease.acquire.mock.calls.every(([id]) => id === sessionId)).toBe(true);
       if (retries) {
         expect(lease.acquire.mock.calls.length).toBeGreaterThan(1);
       } else {
@@ -657,9 +623,7 @@ describe('createDaemonDroidSession', () => {
         expect(mock.sessions.create).not.toHaveBeenCalled();
         expect(mock.created.detach).not.toHaveBeenCalled();
         if (resumeFails) {
-          expect(lease.release).toHaveBeenCalledExactlyOnceWith(
-            'saved-session',
-          );
+          expect(lease.release).toHaveBeenCalledExactlyOnceWith('saved-session');
           expect(mock.sessions.resume).toHaveBeenCalledOnce();
           expect(mock.sessions.resume).toHaveBeenCalledWith(
             'saved-session',
@@ -780,11 +744,7 @@ describe('createDaemonDroidSession', () => {
       'source detach and successor cleanup failures',
       'source-detach-cleanup-failure',
     ],
-    [
-      'fork',
-      'an old-source lease release failure',
-      'source-lease-release-failure',
-    ],
+    ['fork', 'an old-source lease release failure', 'source-lease-release-failure'],
   ] as const)(
     'keeps shared replacement ownership coherent after %s hits %s',
     async (operation, _description, failure) => {
@@ -797,9 +757,7 @@ describe('createDaemonDroidSession', () => {
         acquire: vi.fn<
           (
             sessionId: string,
-          ) =>
-            | { acquired: true }
-            | { acquired: false; heldByPid: number }
+          ) => { acquired: true } | { acquired: false; heldByPid: number }
         >((sessionId) => {
           if (sessionId === 'session-2') {
             if (failure === 'lease-conflict') {
@@ -814,10 +772,8 @@ describe('createDaemonDroidSession', () => {
         release: vi.fn<(sessionId: string) => void>((sessionId) => {
           if (
             (failure === 'resume-failure' && sessionId === 'session-2') ||
-            (failure === 'source-detach-cleanup-failure' &&
-              sessionId === 'session-2') ||
-            (failure === 'source-lease-release-failure' &&
-              sessionId === 'session-1')
+            (failure === 'source-detach-cleanup-failure' && sessionId === 'session-2') ||
+            (failure === 'source-lease-release-failure' && sessionId === 'session-1')
           ) {
             throw cleanupFailure;
           }
@@ -879,9 +835,7 @@ describe('createDaemonDroidSession', () => {
       }
 
       if (failure === 'lease-conflict') {
-        await expect(replace()).rejects.toThrow(
-          'open in another window (pid 4242)',
-        );
+        await expect(replace()).rejects.toThrow('open in another window (pid 4242)');
       } else {
         await expect(replace()).rejects.toBe(primary);
       }
@@ -940,8 +894,7 @@ describe('createDaemonDroidSession', () => {
       const detachFailure = new Error('detach cleanup failure');
       const leaseFailure = new Error('lease cleanup failure');
       const failureStage = failure;
-      let leaseFails =
-        failureStage === 'lease' || failureStage === 'detach-and-lease';
+      let leaseFails = failureStage === 'lease' || failureStage === 'detach-and-lease';
       const lease = {
         acquire: vi.fn(() => ({ acquired: true }) as const),
         release: vi.fn(() => {
@@ -951,10 +904,7 @@ describe('createDaemonDroidSession', () => {
           }
         }),
       };
-      if (
-        failureStage === 'detach' ||
-        failureStage === 'detach-and-lease'
-      ) {
+      if (failureStage === 'detach' || failureStage === 'detach-and-lease') {
         mock.created.detach.mockRejectedValueOnce(detachFailure);
       }
       const session = await createDaemonDroidSession({
@@ -978,14 +928,10 @@ describe('createDaemonDroidSession', () => {
       await session.close();
 
       expect(mock.created.detach).toHaveBeenCalledTimes(
-        failureStage === 'detach' || failureStage === 'detach-and-lease'
-          ? 2
-          : 1,
+        failureStage === 'detach' || failureStage === 'detach-and-lease' ? 2 : 1,
       );
       expect(lease.release).toHaveBeenCalledTimes(
-        failureStage === 'lease' || failureStage === 'detach-and-lease'
-          ? 2
-          : 1,
+        failureStage === 'lease' || failureStage === 'detach-and-lease' ? 2 : 1,
       );
       expect(mock.created.close).not.toHaveBeenCalled();
     },
@@ -1022,10 +968,7 @@ describe('createDaemonDroidSession', () => {
       throw new Error('detach was not started');
     }
     releaseDetach();
-    await expect(Promise.all([first, second])).resolves.toEqual([
-      undefined,
-      undefined,
-    ]);
+    await expect(Promise.all([first, second])).resolves.toEqual([undefined, undefined]);
     expect(mock.created.detach).toHaveBeenCalledOnce();
     expect(lease.release).toHaveBeenCalledExactlyOnceWith('session-1');
 
@@ -1061,28 +1004,16 @@ describe('createDaemonDroidSession', () => {
     const mock = createDroidMock();
     const runtime = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
-      createSdkSession: createDaemonSessionFactory(
-        async () => mock.droid,
-      ),
+      createSdkSession: createDaemonSessionFactory(async () => mock.droid),
     });
     await runtime.initialize('C:\\workspace');
 
-    const expectProjection = async (
-      workingState: string,
-      projected: string,
-    ) => {
-      mock.sessions.listOpened.mockResolvedValue([
-        { id: 'session-1', workingState },
-      ]);
-      await expect(runtime.readSessionWorkingState()).resolves.toBe(
-        projected,
-      );
+    const expectProjection = async (workingState: string, projected: string) => {
+      mock.sessions.listOpened.mockResolvedValue([{ id: 'session-1', workingState }]);
+      await expect(runtime.readSessionWorkingState()).resolves.toBe(projected);
     };
     await expectProjection('idle', 'idle');
-    await expectProjection(
-      'waiting_for_tool_confirmation',
-      'waiting-for-user',
-    );
+    await expectProjection('waiting_for_tool_confirmation', 'waiting-for-user');
     await expectProjection('thinking', 'running');
     await expectProjection('streaming_assistant_message', 'running');
     await expectProjection('executing_tool', 'running');
@@ -1091,18 +1022,14 @@ describe('createDaemonDroidSession', () => {
     // `unknown` instead of reading as idle.
     await expectProjection('some_future_state', 'unknown');
     mock.sessions.listOpened.mockResolvedValue([]);
-    await expect(runtime.readSessionWorkingState()).resolves.toBe(
-      'unknown',
-    );
+    await expect(runtime.readSessionWorkingState()).resolves.toBe('unknown');
   });
 
   it('interruptSession interrupts the daemon turn without a local turn', async () => {
     const mock = createDroidMock();
     const runtime = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
-      createSdkSession: createDaemonSessionFactory(
-        async () => mock.droid,
-      ),
+      createSdkSession: createDaemonSessionFactory(async () => mock.droid),
     });
     await runtime.initialize('C:\\workspace');
 
@@ -1114,7 +1041,6 @@ describe('createDaemonDroidSession', () => {
     await runtime.interruptSession();
     expect(mock.created.interrupt).toHaveBeenCalledOnce();
   });
-
 });
 
 function createDaemonSessionMock(
@@ -1145,18 +1071,14 @@ function createDaemonSessionMock(
       failedRestoreCount: 0,
       failedDeleteCount: 0,
     })),
+    onNotification: vi.fn(() => () => undefined),
     detach: vi.fn(async () => {}),
     close: vi.fn(async () => {}),
   };
 }
 
-function createDroidMock(
-  streamImplementation?: () => AsyncGenerator<DroidStreamEvent>,
-) {
-  const created = createDaemonSessionMock(
-    'session-1',
-    streamImplementation,
-  );
+function createDroidMock(streamImplementation?: () => AsyncGenerator<DroidStreamEvent>) {
+  const created = createDaemonSessionMock('session-1', streamImplementation);
   const sessions = {
     create: vi.fn(
       async (_options: {
@@ -1165,12 +1087,8 @@ function createDroidMock(
         askUserHandler?: ClientAskUserHandler;
       }) => created,
     ),
-    resume: vi.fn(async (sessionId: string) =>
-      createDaemonSessionMock(sessionId),
-    ),
-    listOpened: vi.fn(
-      async (): Promise<{ id: string; workingState: string }[]> => [],
-    ),
+    resume: vi.fn(async (sessionId: string) => createDaemonSessionMock(sessionId)),
+    listOpened: vi.fn(async (): Promise<{ id: string; workingState: string }[]> => []),
     updateSettings: vi.fn(async () => ({})),
     getContextBreakdown: vi.fn(async () => ({
       modelId: 'model-1',
@@ -1237,7 +1155,7 @@ function createDroidMock(
       skills,
       mcp,
       settings,
-    } as unknown as ConnectedDroid,
+    } as unknown as DaemonApi,
   };
 }
 
@@ -1251,10 +1169,7 @@ function catalogModel(overrides: {
   return {
     shortDisplayName: overrides.displayName,
     modelProvider: ModelProvider.ANTHROPIC,
-    supportedReasoningEfforts: [
-      ReasoningEffort.Off,
-      ReasoningEffort.High,
-    ],
+    supportedReasoningEfforts: [ReasoningEffort.Off, ReasoningEffort.High],
     defaultReasoningEffort: ReasoningEffort.High,
     ...overrides,
   };

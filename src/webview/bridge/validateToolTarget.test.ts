@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_TOOL_TARGET_LENGTH } from '../../shared/bridgeMessages';
-import {
-  parseSessionTranscript,
-  readHostMessage,
-} from './validateHostMessage';
+import { MAX_TOOL_TARGET_LENGTH } from '../../shared/protocol/bounds';
+import { parseSessionTranscript } from './host/transcript';
+import { readHostMessage } from './validateHostMessage';
 import { isValidToolTarget } from './validateToolTarget';
 
 describe('isValidToolTarget', () => {

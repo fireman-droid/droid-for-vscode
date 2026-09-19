@@ -6,9 +6,7 @@ import {
   MAX_ASK_USER_QUESTIONS,
   MAX_ASK_USER_QUESTION_LENGTH,
   MAX_ASK_USER_TOPIC_LENGTH,
-  MAX_ASSISTANT_TEXT_LENGTH,
   MAX_BRIDGE_ID_LENGTH,
-  MAX_CHANGED_FILES_PER_TURN,
   MAX_EDITED_SPEC_LENGTH,
   MAX_INTERACTION_DETAIL_LENGTH,
   MAX_INTERACTION_TITLE_LENGTH,
@@ -18,6 +16,15 @@ import {
   MAX_PERMISSION_RISK_NOTE_LENGTH,
   MAX_PERMISSION_TOOLS,
   MAX_PERMISSION_TOOL_NAME_LENGTH,
+  MAX_SESSION_TRANSCRIPT_ITEMS,
+  MAX_SPEC_PLAN_LENGTH,
+  MAX_TOOL_OUTPUT_TAIL_LENGTH,
+  PERMISSION_CONFIRMATION_KINDS,
+  type HostToWebviewMessage,
+} from '../../shared/bridgeMessages';
+import {
+  MAX_ASSISTANT_TEXT_LENGTH,
+  MAX_CHANGED_FILES_PER_TURN,
   MAX_SESSION_CATALOG_ITEMS,
   MAX_SESSION_SEARCH_QUERY_LENGTH,
   MAX_SESSION_SEARCH_SNIPPET_LENGTH,
@@ -25,19 +32,14 @@ import {
   MAX_SESSION_TITLE_LENGTH,
   MAX_WORKTREE_BRANCH_LENGTH,
   MAX_WORKTREE_PATH_LENGTH,
-  MAX_SESSION_TRANSCRIPT_ITEMS,
-  MAX_SPEC_PLAN_LENGTH,
   MAX_SUBAGENT_DESCRIPTION_LENGTH,
   MAX_SUBAGENT_TYPE_LENGTH,
   MAX_THINKING_DELTA_LENGTH,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ERROR_MESSAGE_LENGTH,
-  MAX_TOOL_OUTPUT_TAIL_LENGTH,
   MAX_TOOL_NAME_LENGTH,
   MAX_TURN_TEXT_LENGTH,
-  PERMISSION_CONFIRMATION_KINDS,
-  type HostToWebviewMessage,
-} from '../../shared/bridgeMessages';
+} from '../../shared/protocol/bounds';
 import { readHostMessage } from './validateHostMessage';
 
 describe('readHostMessage', () => {
@@ -175,7 +177,11 @@ describe('readHostMessage', () => {
       ],
       historyStatus: 'partial',
       truncated: true,
-      latestChanges: { turnId: 'turn-1', prompt: 'Implement sessions.', files: [{ path: 'src/app.ts', additions: 3, deletions: 1 }] },
+      latestChanges: {
+        turnId: 'turn-1',
+        prompt: 'Implement sessions.',
+        files: [{ path: 'src/app.ts', additions: 3, deletions: 1 }],
+      },
     },
     {
       type: 'host.connection',
@@ -651,9 +657,7 @@ describe('readHostMessage', () => {
       sessionId: 'session-1',
       turnId: 'turn-1',
       state: 'writing',
-      files: [
-        { path: 'src/app.ts', additions: null, deletions: null },
-      ],
+      files: [{ path: 'src/app.ts', additions: null, deletions: null }],
     },
     {
       type: 'changes.update',
@@ -666,8 +670,14 @@ describe('readHostMessage', () => {
         { path: 'docs/new.md', additions: null, deletions: null },
       ],
     },
-    { type: 'changes.update', sequence: 7, sessionId: 'session-1',
-      turnId: 'turn-1', state: 'settled', files: [] },
+    {
+      type: 'changes.update',
+      sequence: 7,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      state: 'settled',
+      files: [],
+    },
     {
       type: 'git.status',
       sequence: 7,
@@ -982,10 +992,7 @@ describe('readHostMessage', () => {
       sessionId: 'session-1',
       modelCatalog: {
         status: 'ready',
-        items: [
-          ...readyModelCatalog().items,
-          ...readyModelCatalog().items,
-        ],
+        items: [...readyModelCatalog().items, ...readyModelCatalog().items],
       },
     },
     {
@@ -1982,8 +1989,14 @@ describe('readHostMessage', () => {
       latestUpdateKind: null,
       filePath: '',
     },
-    { type: 'changes.update', sequence: 5, sessionId: 'session-1',
-      turnId: 'turn-1', state: 'writing', files: [] },
+    {
+      type: 'changes.update',
+      sequence: 5,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      state: 'writing',
+      files: [],
+    },
     // A legacy pre-v10 summary shape (no state) must not validate.
     {
       type: 'changes.update',
@@ -2163,9 +2176,7 @@ describe('readHostMessage', () => {
       sessionId: 'session-1',
       turnId: 'turn-1',
       state: 'settled',
-      files: [
-        { path: 'src/app.ts', additions: -1, deletions: 0 },
-      ],
+      files: [{ path: 'src/app.ts', additions: -1, deletions: 0 }],
     },
     {
       type: 'changes.update',
@@ -2574,21 +2585,14 @@ describe('readHostMessage', () => {
   });
 
   it('accepts exact session snapshot boundaries', () => {
-    const sessions = Array.from(
-      { length: MAX_SESSION_CATALOG_ITEMS },
-      (_, index) => ({
-        id: `session-${index}`,
-        title:
-          index === 0
-            ? 't'.repeat(MAX_SESSION_TITLE_LENGTH)
-            : `Session ${index}`,
-        messageCount:
-          index === 0 ? Number.MAX_SAFE_INTEGER : index,
-        modifiedTime: '2026-08-09T09:00:00.000Z',
-        active: index === 0,
-        isFavorite: index % 2 === 0,
-      }),
-    );
+    const sessions = Array.from({ length: MAX_SESSION_CATALOG_ITEMS }, (_, index) => ({
+      id: `session-${index}`,
+      title: index === 0 ? 't'.repeat(MAX_SESSION_TITLE_LENGTH) : `Session ${index}`,
+      messageCount: index === 0 ? Number.MAX_SAFE_INTEGER : index,
+      modifiedTime: '2026-08-09T09:00:00.000Z',
+      active: index === 0,
+      isFavorite: index % 2 === 0,
+    }));
     const transcript = Array.from(
       { length: MAX_SESSION_TRANSCRIPT_ITEMS },
       (_, index) => ({
@@ -2712,22 +2716,20 @@ describe('readHostMessage', () => {
 
   it('accepts the btw capability flag with the omit-when-false contract', () => {
     const snapshot = createSessionSnapshot();
-    expect(
-      readHostMessage({ ...snapshot, btwAvailable: true }),
-    ).toEqual({ ...snapshot, btwAvailable: true });
-    expect(
-      readHostMessage({ ...snapshot, btwAvailable: false }),
-    ).toBeUndefined();
-    expect(
-      readHostMessage({ ...snapshot, btwAvailable: 'yes' }),
-    ).toBeUndefined();
+    expect(readHostMessage({ ...snapshot, btwAvailable: true })).toEqual({
+      ...snapshot,
+      btwAvailable: true,
+    });
+    expect(readHostMessage({ ...snapshot, btwAvailable: false })).toBeUndefined();
+    expect(readHostMessage({ ...snapshot, btwAvailable: 'yes' })).toBeUndefined();
   });
 
   it('accepts the background-turns flag and per-row running markers', () => {
     const snapshot = createSessionSnapshot();
-    expect(
-      readHostMessage({ ...snapshot, backgroundTurnsAvailable: true }),
-    ).toEqual({ ...snapshot, backgroundTurnsAvailable: true });
+    expect(readHostMessage({ ...snapshot, backgroundTurnsAvailable: true })).toEqual({
+      ...snapshot,
+      backgroundTurnsAvailable: true,
+    });
     // Omit-when-false contract, like the other capability flags.
     expect(
       readHostMessage({ ...snapshot, backgroundTurnsAvailable: false }),
@@ -2766,18 +2768,10 @@ describe('readHostMessage', () => {
     const cleared = { ...message, sequence: 8, running: false };
     expect(readHostMessage(cleared)).toEqual(cleared);
 
-    expect(
-      readHostMessage({ ...message, sequence: -1 }),
-    ).toBeUndefined();
-    expect(
-      readHostMessage({ ...message, sessionId: '' }),
-    ).toBeUndefined();
-    expect(
-      readHostMessage({ ...message, running: 'yes' }),
-    ).toBeUndefined();
-    expect(
-      readHostMessage({ ...message, extra: true }),
-    ).toBeUndefined();
+    expect(readHostMessage({ ...message, sequence: -1 })).toBeUndefined();
+    expect(readHostMessage({ ...message, sessionId: '' })).toBeUndefined();
+    expect(readHostMessage({ ...message, running: 'yes' })).toBeUndefined();
+    expect(readHostMessage({ ...message, extra: true })).toBeUndefined();
   });
 
   it('accepts session.btw card states and rejects malformed ones', () => {
@@ -2817,9 +2811,7 @@ describe('readHostMessage', () => {
       },
     });
 
-    expect(
-      readHostMessage({ ...message, sequence: -1 }),
-    ).toBeUndefined();
+    expect(readHostMessage({ ...message, sequence: -1 })).toBeUndefined();
     expect(
       readHostMessage({
         ...message,
@@ -2880,9 +2872,7 @@ describe('readHostMessage', () => {
     },
   ])('rejects hostile workspace roots ($name)', ({ workspaceRoot }) => {
     const snapshot = createSessionSnapshot();
-    expect(
-      readHostMessage({ ...snapshot, workspaceRoot }),
-    ).toBeUndefined();
+    expect(readHostMessage({ ...snapshot, workspaceRoot })).toBeUndefined();
   });
 
   it('accepts session token usage on snapshots and as a state message', () => {
@@ -2966,9 +2956,7 @@ describe('readHostMessage', () => {
     'rejects malformed token usage on snapshots and messages ($name)',
     ({ tokenUsage }) => {
       const snapshot = createSessionSnapshot();
-      expect(
-        readHostMessage({ ...snapshot, tokenUsage }),
-      ).toBeUndefined();
+      expect(readHostMessage({ ...snapshot, tokenUsage })).toBeUndefined();
       expect(
         readHostMessage({
           type: 'session.tokenUsage',
@@ -2987,9 +2975,7 @@ describe('readHostMessage', () => {
         {
           queueId: 'queue-1',
           text: 'Follow-up prompt.',
-          attachments: [
-            { kind: 'text', name: 'notes.md', sizeBytes: 120 },
-          ],
+          attachments: [{ kind: 'text', name: 'notes.md', sizeBytes: 120 }],
         },
         { queueId: 'queue-2', text: 'Another one.', attachments: [] },
       ],
@@ -3008,9 +2994,7 @@ describe('readHostMessage', () => {
       paused: null,
     };
     expect(readHostMessage(message)).toEqual(message);
-    expect(
-      readHostMessage({ ...message, sequence: -1 }),
-    ).toBeUndefined();
+    expect(readHostMessage({ ...message, sequence: -1 })).toBeUndefined();
   });
 
   it.each([
@@ -3082,26 +3066,23 @@ describe('readHostMessage', () => {
         paused: null,
       },
     },
-  ])(
-    'rejects malformed queue state on snapshots and messages ($name)',
-    ({ queue }) => {
-      const snapshot = createSessionSnapshot();
-      expect(readHostMessage({ ...snapshot, queue })).toBeUndefined();
-      // Cases with both members also cover the flattened message
-      // shape; the structural cases only exist on the snapshot field.
-      if (typeof queue === 'object' && 'paused' in queue) {
-        expect(
-          readHostMessage({
-            type: 'queue.state',
-            sequence: 5,
-            sessionId: 'session-1',
-            items: queue.items,
-            paused: queue.paused,
-          }),
-        ).toBeUndefined();
-      }
-    },
-  );
+  ])('rejects malformed queue state on snapshots and messages ($name)', ({ queue }) => {
+    const snapshot = createSessionSnapshot();
+    expect(readHostMessage({ ...snapshot, queue })).toBeUndefined();
+    // Cases with both members also cover the flattened message
+    // shape; the structural cases only exist on the snapshot field.
+    if (typeof queue === 'object' && 'paused' in queue) {
+      expect(
+        readHostMessage({
+          type: 'queue.state',
+          sequence: 5,
+          sessionId: 'session-1',
+          items: queue.items,
+          paused: queue.paused,
+        }),
+      ).toBeUndefined();
+    }
+  });
 
   it('defaults a missing favorite flag to false', () => {
     const snapshot = createSessionSnapshot();
@@ -3198,16 +3179,13 @@ describe('readHostMessage', () => {
         ...snapshot,
         sessions: {
           ...snapshot.sessions,
-          items: Array.from(
-            { length: MAX_SESSION_CATALOG_ITEMS + 1 },
-            (_, index) => ({
-              id: `session-${index}`,
-              title: `Session ${index}`,
-              messageCount: 0,
-              modifiedTime: '2026-08-09T09:00:00.000Z',
-              active: index === 0,
-            }),
-          ),
+          items: Array.from({ length: MAX_SESSION_CATALOG_ITEMS + 1 }, (_, index) => ({
+            id: `session-${index}`,
+            title: `Session ${index}`,
+            messageCount: 0,
+            modifiedTime: '2026-08-09T09:00:00.000Z',
+            active: index === 0,
+          })),
         },
       }),
     },
@@ -3358,9 +3336,7 @@ describe('readHostMessage', () => {
           id: 'user-1',
           kind: 'user',
           text: 'Prompt',
-          attachments: [
-            { kind: 'archive', name: 'a.zip', sizeBytes: 1 },
-          ],
+          attachments: [{ kind: 'archive', name: 'a.zip', sizeBytes: 1 }],
         },
       ],
       [
@@ -3368,9 +3344,7 @@ describe('readHostMessage', () => {
           id: 'user-1',
           kind: 'user',
           text: 'Prompt',
-          attachments: [
-            { kind: 'text', name: 'a.md', sizeBytes: 1, data: 'raw' },
-          ],
+          attachments: [{ kind: 'text', name: 'a.md', sizeBytes: 1, data: 'raw' }],
         },
       ],
       [
@@ -3378,9 +3352,7 @@ describe('readHostMessage', () => {
           id: 'user-1',
           kind: 'user',
           text: 'Prompt',
-          attachments: [
-            { kind: 'text', name: '', sizeBytes: 1 },
-          ],
+          attachments: [{ kind: 'text', name: '', sizeBytes: 1 }],
         },
       ],
       [
@@ -3415,9 +3387,9 @@ describe('readHostMessage', () => {
       filePath: 'src/app.ts',
       additionalFileCount: 2,
     };
-    expect(
-      readHostMessage({ ...snapshot, transcript: [tool] }),
-    ).toMatchObject({ transcript: [tool] });
+    expect(readHostMessage({ ...snapshot, transcript: [tool] })).toMatchObject({
+      transcript: [tool],
+    });
 
     for (const invalid of [
       { ...tool, additionalFileCount: 0 },
@@ -3429,9 +3401,7 @@ describe('readHostMessage', () => {
         return withoutPath;
       })(),
     ]) {
-      expect(
-        readHostMessage({ ...snapshot, transcript: [invalid] }),
-      ).toBeUndefined();
+      expect(readHostMessage({ ...snapshot, transcript: [invalid] })).toBeUndefined();
     }
   });
 
@@ -3473,9 +3443,7 @@ describe('readHostMessage', () => {
       { ...item, extra: true },
       { ...item, kind: 'document' },
     ]) {
-      expect(
-        readHostMessage({ ...message, item: hostileItem }),
-      ).toBeUndefined();
+      expect(readHostMessage({ ...message, item: hostileItem })).toBeUndefined();
     }
 
     // Snapshot transcripts reject image items the same way and cap the
@@ -3494,9 +3462,7 @@ describe('readHostMessage', () => {
       data: oneMegaChars,
       byteLength: 1_500_000,
     }));
-    expect(
-      readHostMessage({ ...snapshot, transcript: overBudget }),
-    ).toBeUndefined();
+    expect(readHostMessage({ ...snapshot, transcript: overBudget })).toBeUndefined();
     expect(
       readHostMessage({
         ...snapshot,
@@ -3545,9 +3511,7 @@ describe('readHostMessage', () => {
     expect(
       readHostMessage({ ...snapshot, transcript: [transcriptAccessor] }),
     ).toBeUndefined();
-    expect(
-      readHostMessage({ ...snapshot, transcript: [kindAccessor] }),
-    ).toBeUndefined();
+    expect(readHostMessage({ ...snapshot, transcript: [kindAccessor] })).toBeUndefined();
     expect(kindAccessorCalls).toBe(0);
     expect(() =>
       readHostMessage({
@@ -3659,33 +3623,18 @@ describe('readHostMessage', () => {
           toolUseId: `tool-${index}`,
           toolName: 'n'.repeat(MAX_PERMISSION_TOOL_NAME_LENGTH),
           confirmationKind: 'exit_spec_mode',
-          title:
-            index === 0
-              ? 't'.repeat(MAX_INTERACTION_TITLE_LENGTH)
-              : 'Confirm',
-          detail:
-            index === 0
-              ? 'd'.repeat(MAX_INTERACTION_DETAIL_LENGTH)
-              : undefined,
-          riskNote:
-            index === 0
-              ? 'r'.repeat(MAX_PERMISSION_RISK_NOTE_LENGTH)
-              : undefined,
+          title: index === 0 ? 't'.repeat(MAX_INTERACTION_TITLE_LENGTH) : 'Confirm',
+          detail: index === 0 ? 'd'.repeat(MAX_INTERACTION_DETAIL_LENGTH) : undefined,
+          riskNote: index === 0 ? 'r'.repeat(MAX_PERMISSION_RISK_NOTE_LENGTH) : undefined,
         })),
-        options: Array.from(
-          { length: MAX_PERMISSION_OPTIONS },
-          (_, index) => ({
-            label:
-              index === 0
-                ? 'l'.repeat(MAX_PERMISSION_OPTION_LABEL_LENGTH)
-                : 'Allow',
-            value:
-              index === 0
-                ? 'v'.repeat(MAX_PERMISSION_OPTION_VALUE_LENGTH)
-                : `value-${index}`,
-            requiresEditedSpec: index === 0,
-          }),
-        ),
+        options: Array.from({ length: MAX_PERMISSION_OPTIONS }, (_, index) => ({
+          label: index === 0 ? 'l'.repeat(MAX_PERMISSION_OPTION_LABEL_LENGTH) : 'Allow',
+          value:
+            index === 0
+              ? 'v'.repeat(MAX_PERMISSION_OPTION_VALUE_LENGTH)
+              : `value-${index}`,
+          requiresEditedSpec: index === 0,
+        })),
         editableSpecContent: 'e'.repeat(MAX_EDITED_SPEC_LENGTH),
       },
     };
@@ -3698,31 +3647,17 @@ describe('readHostMessage', () => {
         requestId: 'request-1',
         kind: 'ask-user',
         toolCallId: 'c'.repeat(MAX_BRIDGE_ID_LENGTH),
-        questions: Array.from(
-          { length: MAX_ASK_USER_QUESTIONS },
-          (_, index) => ({
-            index:
-              index === MAX_ASK_USER_QUESTIONS - 1
-                ? Number.MAX_SAFE_INTEGER
-                : index,
-            topic:
-              index === 0
-                ? 't'.repeat(MAX_ASK_USER_TOPIC_LENGTH)
-                : 'Topic',
-            question:
-              index === 0
-                ? 'q'.repeat(MAX_ASK_USER_QUESTION_LENGTH)
-                : 'Question?',
-            options: Array.from(
-              { length: MAX_ASK_USER_OPTIONS },
-              (__, optionIndex) =>
-                index === 0 && optionIndex === 0
-                  ? 'o'.repeat(MAX_ASK_USER_OPTION_LENGTH)
-                  : `Option ${optionIndex}`,
-            ),
-            multiSelect: index % 2 === 0,
-          }),
-        ),
+        questions: Array.from({ length: MAX_ASK_USER_QUESTIONS }, (_, index) => ({
+          index: index === MAX_ASK_USER_QUESTIONS - 1 ? Number.MAX_SAFE_INTEGER : index,
+          topic: index === 0 ? 't'.repeat(MAX_ASK_USER_TOPIC_LENGTH) : 'Topic',
+          question: index === 0 ? 'q'.repeat(MAX_ASK_USER_QUESTION_LENGTH) : 'Question?',
+          options: Array.from({ length: MAX_ASK_USER_OPTIONS }, (__, optionIndex) =>
+            index === 0 && optionIndex === 0
+              ? 'o'.repeat(MAX_ASK_USER_OPTION_LENGTH)
+              : `Option ${optionIndex}`,
+          ),
+          multiSelect: index % 2 === 0,
+        })),
       },
     };
 
@@ -3832,9 +3767,7 @@ describe('readHostMessage', () => {
       [
         {
           ...permissionTool,
-          toolName: 'n'.repeat(
-            MAX_PERMISSION_TOOL_NAME_LENGTH + 1,
-          ),
+          toolName: 'n'.repeat(MAX_PERMISSION_TOOL_NAME_LENGTH + 1),
         },
       ],
       [
@@ -3854,9 +3787,7 @@ describe('readHostMessage', () => {
       [
         {
           ...permissionTool,
-          riskNote: 'r'.repeat(
-            MAX_PERMISSION_RISK_NOTE_LENGTH + 1,
-          ),
+          riskNote: 'r'.repeat(MAX_PERMISSION_RISK_NOTE_LENGTH + 1),
         },
       ],
     ]) {
@@ -3871,17 +3802,13 @@ describe('readHostMessage', () => {
       [
         {
           ...permissionOption,
-          label: 'l'.repeat(
-            MAX_PERMISSION_OPTION_LABEL_LENGTH + 1,
-          ),
+          label: 'l'.repeat(MAX_PERMISSION_OPTION_LABEL_LENGTH + 1),
         },
       ],
       [
         {
           ...permissionOption,
-          value: 'v'.repeat(
-            MAX_PERMISSION_OPTION_VALUE_LENGTH + 1,
-          ),
+          value: 'v'.repeat(MAX_PERMISSION_OPTION_VALUE_LENGTH + 1),
         },
       ],
     ]) {
@@ -3897,9 +3824,7 @@ describe('readHostMessage', () => {
         ...permission,
         request: {
           ...permission.request,
-          options: Array(MAX_PERMISSION_OPTIONS + 1).fill(
-            permissionOption,
-          ),
+          options: Array(MAX_PERMISSION_OPTIONS + 1).fill(permissionOption),
         },
       }),
     ).toBeUndefined();
@@ -3935,9 +3860,7 @@ describe('readHostMessage', () => {
         ...permission,
         request: {
           ...permission.request,
-          editableSpecContent: 'e'.repeat(
-            MAX_EDITED_SPEC_LENGTH + 1,
-          ),
+          editableSpecContent: 'e'.repeat(MAX_EDITED_SPEC_LENGTH + 1),
         },
       }),
     ).toBeUndefined();
@@ -4152,12 +4075,8 @@ describe('readHostMessage', () => {
         errorMessage: 'x'.repeat(MAX_TOOL_ERROR_MESSAGE_LENGTH + 1),
       }),
     ).toBeUndefined();
-    expect(
-      readHostMessage({ ...failed, errorMessage: '' }),
-    ).toBeUndefined();
-    expect(
-      readHostMessage({ ...failed, errorMessage: 42 }),
-    ).toBeUndefined();
+    expect(readHostMessage({ ...failed, errorMessage: '' })).toBeUndefined();
+    expect(readHostMessage({ ...failed, errorMessage: 42 })).toBeUndefined();
 
     // Snapshot transcript items accept the same optional field.
     const snapshot = createSessionSnapshot();
@@ -4206,12 +4125,8 @@ describe('readHostMessage', () => {
         outputTail: 'x'.repeat(MAX_TOOL_OUTPUT_TAIL_LENGTH + 1),
       }),
     ).toBeUndefined();
-    expect(
-      readHostMessage({ ...running, outputTail: '' }),
-    ).toBeUndefined();
-    expect(
-      readHostMessage({ ...running, outputTail: 42 }),
-    ).toBeUndefined();
+    expect(readHostMessage({ ...running, outputTail: '' })).toBeUndefined();
+    expect(readHostMessage({ ...running, outputTail: 42 })).toBeUndefined();
 
     // Snapshot transcript items accept the same optional field, so a
     // completed execute row keeps its final tail across re-renders.
@@ -4449,9 +4364,7 @@ describe('readHostMessage', () => {
         status: 'completed',
       },
     };
-    expect(
-      readHostMessage({ ...update, status: 'completed' }),
-    ).toBeUndefined();
+    expect(readHostMessage({ ...update, status: 'completed' })).toBeUndefined();
     const { toolUseId: _dropped, ...withoutToolUseId } = update;
     expect(readHostMessage(withoutToolUseId)).toBeUndefined();
     expect(readHostMessage({ ...update, toolUseId: '' })).toBeUndefined();
@@ -4583,9 +4496,7 @@ describe('readHostMessage', () => {
     { state: 'running' },
     { state: 'running', role: null, extra: true },
   ])('rejects malformed mission summaries %#', (mission) => {
-    expect(
-      readHostMessage({ ...createSessionSnapshot(), mission }),
-    ).toBeUndefined();
+    expect(readHostMessage({ ...createSessionSnapshot(), mission })).toBeUndefined();
   });
 
   it('rejects mission identity without an active session', () => {

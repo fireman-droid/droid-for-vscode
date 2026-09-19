@@ -2,9 +2,9 @@ import type {
   MissionControlMessage,
   MissionDisclosureMessage,
   MissionViewerOpenMessage,
-} from '../../../shared/missionProtocol';
-import { isTurnActive, type ChatControllerInternals } from '../internals';
-import { handleSend } from '../turnFlow';
+} from '../../../shared/protocol/missionProtocol';
+import { isTurnActive } from '../internals';
+import type { ControlsPort } from './controlsMissionPort';
 
 const MISSION_CONTROL_SETTLE_MS = 30_000;
 
@@ -13,16 +13,13 @@ type MissionCommand =
   | MissionDisclosureMessage
   | MissionViewerOpenMessage;
 
-export function handleMissionCommand(
-  ctl: ChatControllerInternals,
-  message: MissionCommand,
-): void {
+export function handleMissionCommand(ctl: ControlsPort, message: MissionCommand): void {
   if (message.type === 'mission.disclosure.set') {
     emitResult(ctl, message.requestId, 'set-disclosure', 'accepted');
     return;
   }
   if (message.type === 'mission.viewer.open') {
-    const mission = ctl.missionRuntime;
+    const mission = ctl.missionState.missionRuntime;
     const snapshot = mission?.snapshot();
     const feature = snapshot?.features.find(({ id }) => id === message.featureId);
     const workerSessionId = mission?.workerSessionIdForFeature(message.featureId);
@@ -38,9 +35,12 @@ export function handleMissionCommand(
       emitResult(ctl, message.requestId, 'open-viewer', 'rejected', 'stale');
       return;
     }
-    if (!ctl.missionGateway.openWorkerViewer({
-      sessionId: workerSessionId, title: feature.title,
-    })) {
+    if (
+      !ctl.missionGateway.openWorkerViewer({
+        sessionId: workerSessionId,
+        title: feature.title,
+      })
+    ) {
       emitResult(ctl, message.requestId, 'open-viewer', 'rejected', 'unavailable');
       return;
     }
@@ -51,10 +51,10 @@ export function handleMissionCommand(
     emitResult(ctl, message.requestId, 'dismiss-setup', 'accepted');
     return;
   }
-  const mission = ctl.missionRuntime;
+  const mission = ctl.missionState.missionRuntime;
   if (
     mission === null ||
-    ctl.sessionId === null ||
+    ctl.sessionState.sessionId === null ||
     message.snapshotRevision !== mission.currentRevision()
   ) {
     emitResult(ctl, message.requestId, toAction(message.type), 'rejected', 'stale');
@@ -73,14 +73,14 @@ export function handleMissionCommand(
   if (
     message.type === 'mission.pause' &&
     snapshot.controls.canPause &&
-    typeof ctl.runtime?.interruptSession === 'function'
+    typeof ctl.sessionState.runtime?.interruptSession === 'function'
   ) {
     mission.setBusyAction('pause');
     ctl.emit(mission.snapshot());
     scheduleBusyTimeout(ctl, mission, 'pause');
-    void ctl.runtime.interruptSession().then(
+    void ctl.sessionState.runtime.interruptSession().then(
       () => {
-        if (ctl.missionRuntime === mission) {
+        if (ctl.missionState.missionRuntime === mission) {
           emitResult(ctl, message.requestId, 'pause', 'accepted');
         }
       },
@@ -91,17 +91,16 @@ export function handleMissionCommand(
   if (
     message.type === 'mission.resume' &&
     snapshot.controls.canResume &&
-    ctl.runtime !== null &&
-    !isTurnActive(ctl.turn) &&
+    ctl.sessionState.runtime !== null &&
+    !isTurnActive(ctl.turnState.turn) &&
     !ctl.interactions.hasPending()
   ) {
     mission.setBusyAction('resume');
     ctl.emit(mission.snapshot());
     scheduleBusyTimeout(ctl, mission, 'resume');
     emitResult(ctl, message.requestId, 'resume', 'accepted');
-    handleSend(
-      ctl,
-      ctl.sessionId,
+    ctl.effects.handleSend(
+      ctl.sessionState.sessionId,
       `mission-resume:${message.requestId}`,
       'Resume the current Mission from its paused state.',
     );
@@ -118,42 +117,31 @@ export function handleMissionCommand(
       ctl.emit(mission.snapshot());
       scheduleBusyTimeout(ctl, mission, 'stop');
       void ctl.missionGateway
-        .killWorker(ctl.sessionId, workerSessionId)
+        .killWorker(ctl.sessionState.sessionId, workerSessionId)
         .then((accepted) => {
-          if (ctl.missionRuntime !== mission) {
+          if (ctl.missionState.missionRuntime !== mission) {
             return;
           }
           if (accepted) {
             emitResult(ctl, message.requestId, 'stop-current-feature', 'accepted');
           } else {
-            rejectOperation(
-              ctl,
-              mission,
-              message.requestId,
-              'stop-current-feature',
-            );
+            rejectOperation(ctl, mission, message.requestId, 'stop-current-feature');
           }
         });
       return;
     }
   }
-  emitResult(
-    ctl,
-    message.requestId,
-    toAction(message.type),
-    'rejected',
-    'unavailable',
-  );
+  emitResult(ctl, message.requestId, toAction(message.type), 'rejected', 'unavailable');
 }
 
 function scheduleBusyTimeout(
-  ctl: ChatControllerInternals,
-  mission: NonNullable<ChatControllerInternals['missionRuntime']>,
+  ctl: ControlsPort,
+  mission: NonNullable<ControlsPort['missionState']['missionRuntime']>,
   action: 'pause' | 'resume' | 'stop',
 ): void {
   setTimeout(() => {
     if (
-      ctl.missionRuntime !== mission ||
+      ctl.missionState.missionRuntime !== mission ||
       mission.snapshot().controls.busyAction !== action
     ) {
       return;
@@ -168,12 +156,12 @@ function scheduleBusyTimeout(
 }
 
 function rejectOperation(
-  ctl: ChatControllerInternals,
-  mission: NonNullable<ChatControllerInternals['missionRuntime']>,
+  ctl: ControlsPort,
+  mission: NonNullable<ControlsPort['missionState']['missionRuntime']>,
   requestId: string,
   action: 'pause' | 'stop-current-feature',
 ): void {
-  if (ctl.missionRuntime !== mission) {
+  if (ctl.missionState.missionRuntime !== mission) {
     return;
   }
   mission.setBusyAction(undefined);
@@ -182,7 +170,7 @@ function rejectOperation(
 }
 
 function emitResult(
-  ctl: ChatControllerInternals,
+  ctl: ControlsPort,
   requestId: string,
   action:
     | 'dismiss-setup'
@@ -208,12 +196,7 @@ function emitResult(
 
 function toAction(
   type: MissionControlMessage['type'],
-):
-  | 'dismiss-setup'
-  | 'pause'
-  | 'resume'
-  | 'stop-current-feature'
-  | 'refresh' {
+): 'dismiss-setup' | 'pause' | 'resume' | 'stop-current-feature' | 'refresh' {
   switch (type) {
     case 'mission.dismissSetup':
       return 'dismiss-setup';

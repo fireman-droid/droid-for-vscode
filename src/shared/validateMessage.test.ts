@@ -8,18 +8,18 @@ import {
   MAX_BRIDGE_ID_LENGTH,
   MAX_BTW_TEXT_LENGTH,
   MAX_EDITED_SPEC_LENGTH,
+  MAX_PERMISSION_OPTION_VALUE_LENGTH,
+} from './bridgeMessages';
+import {
   MAX_MODEL_ID_LENGTH,
   MAX_OPEN_PATH_LENGTH,
   MAX_OPEN_PATH_POSITION,
-  MAX_PERMISSION_OPTION_VALUE_LENGTH,
   MAX_SESSION_SEARCH_QUERY_LENGTH,
   MAX_SESSION_TITLE_LENGTH,
   MAX_TURN_TEXT_LENGTH,
-} from './bridgeMessages';
-import {
-  isWebviewToHostMessage,
-  parseWebviewMessage,
-} from './validateMessage';
+} from './protocol/bounds';
+import { isWebviewToHostMessage } from './validation/guards';
+import { parseWebviewMessage } from './validateMessage';
 
 describe('parseWebviewMessage', () => {
   it('accepts only exact Plan document open identities', () => {
@@ -31,9 +31,7 @@ describe('parseWebviewMessage', () => {
     };
     expect(parseWebviewMessage(message)).toEqual(message);
     expect(parseWebviewMessage({ ...message, extra: true })).toBeUndefined();
-    expect(
-      parseWebviewMessage({ ...message, requestId: '' }),
-    ).toBeUndefined();
+    expect(parseWebviewMessage({ ...message, requestId: '' })).toBeUndefined();
   });
 
   it.each([
@@ -310,7 +308,7 @@ describe('parseWebviewMessage', () => {
     {
       type: 'workspace.openPath',
       sessionId: 'session-1',
-      path: 'src/extension/ChatController.ts',
+      path: 'src/extension/chat/ChatController.ts',
       line: 42,
     },
     {
@@ -352,7 +350,7 @@ describe('parseWebviewMessage', () => {
     {
       type: 'attachment.addPath',
       sessionId: 'session-1',
-      path: 'src/webview/assistant/Thread.tsx',
+      path: 'src/webview/assistant/thread/Thread.tsx',
     },
     {
       type: 'attachment.pick',
@@ -679,14 +677,49 @@ describe('parseWebviewMessage', () => {
     { type: 'session.fork', sessionId: 'session-1', extra: true },
     { type: 'file.openDiff', sessionId: 'session-1', turnId: '', path: 'a.ts' },
     { type: 'file.openDiff', sessionId: 'session-1', turnId: 'turn-1', path: '' },
-    { type: 'file.openDiff', sessionId: 'session-1', turnId: 'turn-1', path: '../secrets.env' },
-    { type: 'file.openDiff', sessionId: 'session-1', turnId: 'turn-1', path: 'src/../../out.ts' },
-    { type: 'file.openDiff', sessionId: 'session-1', turnId: 'turn-1', path: '/etc/passwd' },
-    { type: 'file.openDiff', sessionId: 'session-1', turnId: 'turn-1', path: 'C:/Windows/win.ini' },
-    { type: 'file.openDiff', sessionId: 'session-1', turnId: 'turn-1', path: 'src\\app.ts' },
-    { type: 'file.openDiff', sessionId: 'session-1', turnId: 'turn-1', path: 'src/\u0000.ts' },
+    {
+      type: 'file.openDiff',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      path: '../secrets.env',
+    },
+    {
+      type: 'file.openDiff',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      path: 'src/../../out.ts',
+    },
+    {
+      type: 'file.openDiff',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      path: '/etc/passwd',
+    },
+    {
+      type: 'file.openDiff',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      path: 'C:/Windows/win.ini',
+    },
+    {
+      type: 'file.openDiff',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      path: 'src\\app.ts',
+    },
+    {
+      type: 'file.openDiff',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      path: 'src/\u0000.ts',
+    },
     { type: 'file.openDiff', sessionId: 'session-1', turnId: 'turn-1', path: 'a//b.ts' },
-    { type: 'file.openDiff', sessionId: 'session-1', turnId: 'turn-1', path: 'x'.repeat(513) },
+    {
+      type: 'file.openDiff',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      path: 'x'.repeat(513),
+    },
     { type: 'file.openDiff', sessionId: 'session-1' },
     {
       type: 'file.openDiff',
@@ -828,10 +861,7 @@ describe('parseWebviewMessage', () => {
     {
       type: 'git.commit',
       sessionId: 'session-1',
-      paths: Array.from(
-        { length: 101 },
-        (_, index) => `src/file-${index}.ts`,
-      ),
+      paths: Array.from({ length: 101 }, (_, index) => `src/file-${index}.ts`),
       message: 'msg',
     },
     {
@@ -1110,10 +1140,7 @@ describe('parseWebviewMessage', () => {
       // Above the per-message URI count cap.
       type: 'attachment.addUris',
       sessionId: 'session-1',
-      uris: Array.from(
-        { length: 9 },
-        (_, index) => `file:///d%3A/repo/file-${index}.ts`,
-      ),
+      uris: Array.from({ length: 9 }, (_, index) => `file:///d%3A/repo/file-${index}.ts`),
     },
     {
       // Overlong URI.
@@ -1561,16 +1588,10 @@ describe('parseWebviewMessage', () => {
         turnId: 'turn-1',
         requestId: 'request-1',
         cancelled: false,
-        answers: Array.from(
-          { length: MAX_ASK_USER_ANSWERS },
-          (_, index) => ({
-            index:
-              index === MAX_ASK_USER_ANSWERS - 1
-                ? Number.MAX_SAFE_INTEGER
-                : index,
-            answer: 'a'.repeat(MAX_ASK_USER_ANSWER_LENGTH),
-          }),
-        ),
+        answers: Array.from({ length: MAX_ASK_USER_ANSWERS }, (_, index) => ({
+          index: index === MAX_ASK_USER_ANSWERS - 1 ? Number.MAX_SAFE_INTEGER : index,
+          answer: 'a'.repeat(MAX_ASK_USER_ANSWER_LENGTH),
+        })),
       }),
     ).toBeDefined();
   });
@@ -1601,9 +1622,7 @@ describe('parseWebviewMessage', () => {
     expect(
       parseWebviewMessage({
         ...permission,
-        selectedOption: 'o'.repeat(
-          MAX_PERMISSION_OPTION_VALUE_LENGTH + 1,
-        ),
+        selectedOption: 'o'.repeat(MAX_PERMISSION_OPTION_VALUE_LENGTH + 1),
       }),
     ).toBeUndefined();
     expect(
@@ -1615,10 +1634,10 @@ describe('parseWebviewMessage', () => {
     expect(
       parseWebviewMessage({
         ...askUser,
-        answers: Array.from(
-          { length: MAX_ASK_USER_ANSWERS + 1 },
-          (_, index) => ({ index, answer: 'answer' }),
-        ),
+        answers: Array.from({ length: MAX_ASK_USER_ANSWERS + 1 }, (_, index) => ({
+          index,
+          answer: 'answer',
+        })),
       }),
     ).toBeUndefined();
     expect(
@@ -1670,9 +1689,7 @@ describe('parseWebviewMessage', () => {
     expect(parseWebviewMessage({ ...base, answers })).toBeUndefined();
 
     const sparseAnswers = new Array(1);
-    expect(
-      parseWebviewMessage({ ...base, answers: sparseAnswers }),
-    ).toBeUndefined();
+    expect(parseWebviewMessage({ ...base, answers: sparseAnswers })).toBeUndefined();
   });
 
   it('rejects interaction symbols, accessors, and proxies without throwing', () => {
@@ -1813,16 +1830,15 @@ describe('parseWebviewMessage', () => {
 
   it('accepts theme preference updates and rejects malformed ones', () => {
     for (const preference of ['auto', 'light', 'dark'] as const) {
-      expect(
-        parseWebviewMessage({ type: 'ui.theme.set', preference }),
-      ).toEqual({ type: 'ui.theme.set', preference });
+      expect(parseWebviewMessage({ type: 'ui.theme.set', preference })).toEqual({
+        type: 'ui.theme.set',
+        preference,
+      });
     }
     expect(
       parseWebviewMessage({ type: 'ui.theme.set', preference: 'sepia' }),
     ).toBeUndefined();
-    expect(
-      parseWebviewMessage({ type: 'ui.theme.set' }),
-    ).toBeUndefined();
+    expect(parseWebviewMessage({ type: 'ui.theme.set' })).toBeUndefined();
     expect(
       parseWebviewMessage({
         type: 'ui.theme.set',
@@ -1887,12 +1903,13 @@ describe('parseWebviewMessage', () => {
       sessionId: 'session-1',
       queueId: 'queue-1',
     });
-    expect(
-      parseWebviewMessage({ type: 'queue.resume', sessionId: 'session-1' }),
-    ).toEqual({ type: 'queue.resume', sessionId: 'session-1' });
-    expect(
-      parseWebviewMessage({ type: 'queue.clear', sessionId: 'session-1' }),
-    ).toEqual({ type: 'queue.clear', sessionId: 'session-1' });
+    expect(parseWebviewMessage({ type: 'queue.resume', sessionId: 'session-1' })).toEqual(
+      { type: 'queue.resume', sessionId: 'session-1' },
+    );
+    expect(parseWebviewMessage({ type: 'queue.clear', sessionId: 'session-1' })).toEqual({
+      type: 'queue.clear',
+      sessionId: 'session-1',
+    });
 
     // Shape violations fall back to undefined like every channel.
     expect(
@@ -1927,11 +1944,7 @@ describe('parseWebviewMessage', () => {
         extra: true,
       }),
     ).toBeUndefined();
-    expect(
-      parseWebviewMessage({ type: 'queue.resume' }),
-    ).toBeUndefined();
-    expect(
-      parseWebviewMessage({ type: 'queue.clear', sessionId: 42 }),
-    ).toBeUndefined();
+    expect(parseWebviewMessage({ type: 'queue.resume' })).toBeUndefined();
+    expect(parseWebviewMessage({ type: 'queue.clear', sessionId: 42 })).toBeUndefined();
   });
 });

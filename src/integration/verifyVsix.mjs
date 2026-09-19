@@ -11,19 +11,26 @@ const expectedEntries = [
   // Shown as the Changelog tab on the extension details page; vsce
   // lowercases the entry name inside the archive.
   'extension/changelog.md',
+  // Root LICENSE ships as LICENSE.txt alongside the manifest.
+  'extension/LICENSE.txt',
   'extension/dist/extension/extension.cjs',
+  // Notices for the dependencies bundled into the extension host entry.
+  'extension/dist/extension/THIRD_PARTY_LICENSES.txt',
   // Lazily injected mermaid bundle; ships alongside webview.js but is
   // only loaded when a completed ```mermaid block needs rendering.
   'extension/dist/webview/mermaid.js',
-  'extension/dist/webview/mission-control.css',
   'extension/dist/webview/mission-control.js',
+  'extension/dist/webview/models.js',
   'extension/dist/webview/session-viewer.js',
+  'extension/dist/webview/review.js',
   'extension/dist/webview/webview.css',
   'extension/dist/webview/webview.js',
+  'extension/dist/webview/THIRD_PARTY_LICENSES.txt',
   // Shipped so "Export Diagnostics Bundle" can include troubleshooting help.
   'extension/docs/TROUBLESHOOTING.md',
   'extension/package.json',
   'extension/readme.md',
+  'extension/resources/droidvisx.png',
   'extension/resources/droidvisx.svg',
 ].sort();
 
@@ -50,6 +57,8 @@ for (const key of ['name', 'publisher', 'version']) {
   );
 }
 assert.equal(manifest.main, './dist/extension/extension.cjs');
+assert.equal(manifest.dependencies['@assistant-ui/react'], undefined);
+assert.equal(manifest.dependencies['@assistant-ui/react-markdown'], undefined);
 assert.ok(
   manifest.contributes.commands.some(
     (entry) => entry.command === 'droidvisx.focusView',
@@ -78,12 +87,6 @@ assert.deepEqual(
   assetEntries,
   referencedAssets,
   'VSIX webview assets must exactly match CSS references',
-);
-assert.ok(
-  assetEntries.includes(
-    'extension/dist/webview/assets/inter-latin-wght-normal.woff2',
-  ),
-  'VSIX must include the Inter webfont',
 );
 assert.ok(
   assetEntries.some((entry) => entry.includes('/KaTeX_')),
@@ -140,6 +143,15 @@ assert.doesNotMatch(sessionViewerBundle, /\beval\s*\(/u);
 assert.doesNotMatch(sessionViewerBundle, /\bnew\s+Function\s*\(/u);
 
 const icon = readEntry('extension/resources/droidvisx.svg');
+for (const filename of ['webview', 'models', 'mission-control', 'session-viewer']) {
+  const bundle = readEntry(`extension/dist/webview/${filename}.js`);
+  assert.deepEqual([...staticRequires(bundle)], [], `${filename} must have no runtime externals`);
+  assert.doesNotMatch(bundle, /@assistant-ui|@factory\/droid-sdk|assistant-cloud|sourceMappingURL|\beval\s*\(|\bnew\s+Function\s*\(/u);
+}
+const modelsBundle = readEntry('extension/dist/webview/models.js');
+assert.deepEqual([...staticRequires(modelsBundle)], [], 'Models must have no runtime externals');
+assert.doesNotMatch(modelsBundle, /@factory\/droid-sdk|assistant-cloud|\beval\s*\(|\bnew\s+Function\s*\(/u);
+assert.ok(manifest.contributes.commands.some((entry) => entry.command === 'droidvisx.openModels'));
 assert.doesNotMatch(icon, /<script\b/iu);
 assert.doesNotMatch(icon, /\bon\w+\s*=/iu);
 

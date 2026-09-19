@@ -1,6 +1,7 @@
+import { getHistoryNotice } from '../shell/statusMessage';
 // transcriptRows: moved verbatim from Thread.tsx (structure-only refactor).
 
-import { useAuiState } from "@assistant-ui/react";
+import { useAuiState } from '@assistant-ui/react';
 import {
   useContext,
   useDeferredValue,
@@ -8,21 +9,21 @@ import {
   useMemo,
   startTransition,
   useState,
-} from "react";
+} from 'react';
 
-import type { SessionHistoryStatus } from "../../../shared/bridgeMessages";
-import { OpenPathContext } from "../MarkdownText";
-import { ProcessGroupContext } from "../processPresentation";
-import { FadingText, StreamingTextBoundary } from "../streamingText";
+import { type SessionHistoryStatus } from '../../../shared/protocol/sessions';
+import { DroidThinkingMarkdown, OpenPathContext } from '../markdown/MarkdownText';
+import { ProcessGroupContext } from '../transcript/processPresentation';
+import { StreamingTextBoundary } from '../transcript/streamingText';
 import {
   FileDiffContext,
   PreviewContext,
   ReviewTurnContext,
   SelectSessionContext,
   ToolChangesContext,
-} from "../Thread";
-import { ActivityChevron } from "./icons";
-import { formatThinkingLabel, readDiagnostic } from "./readers";
+} from './messageContexts';
+import { ActivityChevron } from './icons';
+import { formatThinkingLabel, readDiagnostic } from './readers';
 
 export const THINKING_WAITING_AFTER_MS = 10_000;
 export const THINKING_RENDER_CHUNK_SIZE = 16_384;
@@ -42,14 +43,12 @@ export function ToolFilePath({
   const openPath = useContext(OpenPathContext);
   const toolChanges = useContext(ToolChangesContext);
   const changedFile =
-    toolChanges.turnId === turnId
-      ? toolChanges.filesByPath.get(path)
-      : undefined;
+    toolChanges.turnId === turnId ? toolChanges.filesByPath.get(path) : undefined;
   const additions = changedFile?.additions;
   const deletions = changedFile?.deletions;
   const hasAdditions = additions !== null && additions !== undefined;
   const hasDeletions = deletions !== null && deletions !== undefined;
-  const fileName = path.split("/").at(-1) ?? path;
+  const fileName = path.split('/').at(-1) ?? path;
   return (
     <>
       {interactive ? (
@@ -72,14 +71,10 @@ export function ToolFilePath({
           aria-label={[
             ...(hasAdditions ? [`${additions} lines added`] : []),
             ...(hasDeletions ? [`${deletions} lines removed`] : []),
-          ].join(", ")}
+          ].join(', ')}
         >
-          {hasAdditions ? (
-            <span className="dvx-changes-add">+{additions}</span>
-          ) : null}
-          {hasDeletions ? (
-            <span className="dvx-changes-del">−{deletions}</span>
-          ) : null}
+          {hasAdditions ? <span className="dvx-changes-add">+{additions}</span> : null}
+          {hasDeletions ? <span className="dvx-changes-del">−{deletions}</span> : null}
         </span>
       ) : null}
     </>
@@ -122,26 +117,23 @@ export function ThinkingRow({
   const [expanded, setExpanded] = useState(false);
   const grouped = useContext(ProcessGroupContext);
   const textLength = useAuiState((state) =>
-    state.part.type === "reasoning" ? state.part.text.length : 0,
+    state.part.type === 'reasoning' ? state.part.text.length : 0,
   );
   const [waiting, setWaiting] = useState(false);
   useEffect(() => {
-    if (statusType !== "running" || truncated) {
+    if (statusType !== 'running' || truncated) {
       setWaiting(false);
       return undefined;
     }
     setWaiting(false);
-    const timer = setTimeout(
-      () => setWaiting(true),
-      THINKING_WAITING_AFTER_MS,
-    );
+    const timer = setTimeout(() => setWaiting(true), THINKING_WAITING_AFTER_MS);
     return () => clearTimeout(timer);
   }, [statusType, textLength, truncated]);
   const liveState = truncated
-    ? "Safety limit reached"
+    ? 'Safety limit reached'
     : waiting
-      ? "Waiting for model"
-      : "Receiving";
+      ? 'Waiting for model'
+      : 'Receiving';
   if (grouped) {
     return <ThinkingContent truncated={truncated} />;
   }
@@ -153,7 +145,7 @@ export function ThinkingRow({
     >
       <summary>
         <span className="dvx-activity-indicator" />
-        {statusType === "running" ? (
+        {statusType === 'running' ? (
           <>
             <span className="dvx-shimmer-text">Thinking</span>
             <span className="dvx-thinking-live-state">· {liveState}</span>
@@ -162,22 +154,20 @@ export function ThinkingRow({
           <>
             {formatThinkingLabel(statusType, durationMs)}
             {truncated ? (
-              <span className="dvx-thinking-live-state">
-                · Safety limit reached
-              </span>
+              <span className="dvx-thinking-live-state">· Safety limit reached</span>
             ) : null}
           </>
         )}
         <ActivityChevron />
       </summary>
-      {expanded ? (
-        <ThinkingContent truncated={truncated} />
-      ) : null}
+      {expanded ? <ThinkingContent truncated={truncated} /> : null}
     </details>
   );
 }
 
-function ThinkingContent({ truncated }: {
+function ThinkingContent({
+  truncated,
+}: {
   readonly truncated: boolean;
 }): React.JSX.Element {
   return (
@@ -185,8 +175,7 @@ function ThinkingContent({ truncated }: {
       <ProgressiveThinkingText />
       {truncated ? (
         <p className="dvx-thinking-limit-note" role="note">
-          Thinking reached the local safety limit; later reasoning is not
-          retained.
+          Thinking reached the local safety limit; later reasoning is not retained.
         </p>
       ) : null}
     </div>
@@ -195,9 +184,9 @@ function ThinkingContent({ truncated }: {
 
 function ProgressiveThinkingText(): React.JSX.Element {
   const text = useAuiState((state) =>
-    state.part.type === "reasoning" ? state.part.text : "",
+    state.part.type === 'reasoning' ? state.part.text : '',
   );
-  const running = useAuiState((state) => state.part.status?.type === "running");
+  const running = useAuiState((state) => state.part.status?.type === 'running');
   const [initialLength] = useState(() => text.length);
   const visibleText = useProgressiveThinkingText(text);
   const chunks = useMemo(() => {
@@ -205,19 +194,22 @@ function ProgressiveThinkingText(): React.JSX.Element {
     return splitThinkingText(visibleText).map((value) => {
       const start = offset;
       offset += value.length;
-      return { value, start, end: offset };
+      return { value, start };
     });
   }, [visibleText]);
   return (
-    <StreamingTextBoundary initialLength={initialLength} running={running}>
-      <pre className="dvx-thinking-content">
-        {chunks.map((chunk) => (
-          <span className="dvx-thinking-chunk" key={chunk.start}>
-            <FadingText text={chunk.value} start={chunk.start} end={chunk.end} />
-          </span>
-        ))}
-      </pre>
-    </StreamingTextBoundary>
+    <div className="dvx-thinking-content">
+      {chunks.map((chunk) => (
+        <div className="dvx-thinking-chunk" key={chunk.start}>
+          <StreamingTextBoundary
+            initialLength={Math.max(0, initialLength - chunk.start)}
+            running={running}
+          >
+            <DroidThinkingMarkdown text={chunk.value} />
+          </StreamingTextBoundary>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -239,9 +231,7 @@ function useProgressiveThinkingText(text: string): string {
         setVisibleLength((current) =>
           Math.min(
             targetLength,
-            current +
-              THINKING_RENDER_CHUNK_SIZE *
-                THINKING_RENDER_CHUNKS_PER_FRAME,
+            current + THINKING_RENDER_CHUNK_SIZE * THINKING_RENDER_CHUNKS_PER_FRAME,
           ),
         );
       });
@@ -261,17 +251,14 @@ function useProgressiveThinkingText(text: string): string {
 
 export function splitThinkingText(text: string): readonly string[] {
   if (text.length === 0) {
-    return [""];
+    return [''];
   }
   const chunks: string[] = [];
   for (let offset = 0; offset < text.length; ) {
-    let end = Math.min(
-      offset + THINKING_RENDER_CHUNK_SIZE,
-      text.length,
-    );
+    let end = Math.min(offset + THINKING_RENDER_CHUNK_SIZE, text.length);
     if (end < text.length) {
-      const newline = text.lastIndexOf("\n", end - 1);
-      const space = text.lastIndexOf(" ", end - 1);
+      const newline = text.lastIndexOf('\n', end - 1);
+      const space = text.lastIndexOf(' ', end - 1);
       const naturalBreak = Math.max(newline, space);
       if (naturalBreak > offset + THINKING_RENDER_CHUNK_SIZE / 2) {
         end = naturalBreak + 1;
@@ -297,7 +284,7 @@ export interface ChangedFileEntry {
 
 export function readChangedFiles(data: unknown): readonly ChangedFileEntry[] {
   if (
-    typeof data !== "object" ||
+    typeof data !== 'object' ||
     data === null ||
     !Array.isArray((data as { files?: unknown }).files)
   ) {
@@ -306,9 +293,9 @@ export function readChangedFiles(data: unknown): readonly ChangedFileEntry[] {
   const files: ChangedFileEntry[] = [];
   for (const entry of (data as { files: unknown[] }).files) {
     if (
-      typeof entry !== "object" ||
+      typeof entry !== 'object' ||
       entry === null ||
-      typeof (entry as { path?: unknown }).path !== "string"
+      typeof (entry as { path?: unknown }).path !== 'string'
     ) {
       continue;
     }
@@ -319,24 +306,24 @@ export function readChangedFiles(data: unknown): readonly ChangedFileEntry[] {
     };
     files.push({
       path,
-      additions: typeof additions === "number" ? additions : null,
-      deletions: typeof deletions === "number" ? deletions : null,
+      additions: typeof additions === 'number' ? additions : null,
+      deletions: typeof deletions === 'number' ? deletions : null,
     });
   }
   return files;
 }
 
 export function readChangesTurnId(data: unknown): string | null {
-  if (typeof data !== "object" || data === null) {
+  if (typeof data !== 'object' || data === null) {
     return null;
   }
   const turnId = (data as { turnId?: unknown }).turnId;
-  return typeof turnId === "string" && turnId !== "" ? turnId : null;
+  return typeof turnId === 'string' && turnId !== '' ? turnId : null;
 }
 
 export function readChangesWriting(data: unknown): boolean {
   return (
-    typeof data === "object" &&
+    typeof data === 'object' &&
     data !== null &&
     (data as { writing?: unknown }).writing === true
   );
@@ -354,15 +341,9 @@ export function ChangesSummary({
   if (files.length === 0) {
     return null;
   }
-  const count = `${files.length} ${files.length === 1 ? "file" : "files"}`;
-  const additions = files.reduce(
-    (total, file) => total + (file.additions ?? 0),
-    0,
-  );
-  const deletions = files.reduce(
-    (total, file) => total + (file.deletions ?? 0),
-    0,
-  );
+  const count = `${files.length} ${files.length === 1 ? 'file' : 'files'}`;
+  const additions = files.reduce((total, file) => total + (file.additions ?? 0), 0);
+  const deletions = files.reduce((total, file) => total + (file.deletions ?? 0), 0);
   const hasAdditions = files.some((file) => file.additions !== null);
   const hasDeletions = files.some((file) => file.deletions !== null);
   return (
@@ -387,9 +368,7 @@ export function ChangesSummary({
               {hasAdditions ? (
                 <span className="dvx-changes-add">+{additions}</span>
               ) : null}
-              {hasAdditions && hasDeletions ? (
-                <span aria-hidden="true">/</span>
-              ) : null}
+              {hasAdditions && hasDeletions ? <span aria-hidden="true">/</span> : null}
               {hasDeletions ? (
                 <span className="dvx-changes-del">−{deletions}</span>
               ) : null}
@@ -403,7 +382,7 @@ export function ChangesSummary({
 
 export function Diagnostic({ data }: { readonly data: unknown }): React.JSX.Element {
   const diagnostic = readDiagnostic(data);
-  if (diagnostic.code === "session-compacted") {
+  if (diagnostic.code === 'session-compacted') {
     return (
       <CompactDivider
         message={diagnostic.message}
@@ -415,14 +394,24 @@ export function Diagnostic({ data }: { readonly data: unknown }): React.JSX.Elem
     <div
       className={`dvx-diagnostic dvx-diagnostic-${diagnostic.severity}`}
       data-diagnostic-code={diagnostic.code}
-      role={diagnostic.severity === "error" ? "alert" : "status"}
+      role={diagnostic.severity === 'error' ? 'alert' : 'status'}
       title={`${diagnostic.code}: ${diagnostic.message}`}
     >
       <code aria-hidden="true">{diagnostic.code}</code>
-      {diagnostic.code === "history-partial" ? <HistoryNoticeIcon /> : null}
-      {diagnostic.code === "queue-paused" ? (
-        <svg className="dvx-queue-paused-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M5.5 3.5v9M10.5 3.5v9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      {diagnostic.code === 'history-partial' ? <HistoryNoticeIcon /> : null}
+      {diagnostic.code === 'queue-paused' ? (
+        <svg
+          className="dvx-queue-paused-icon"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M5.5 3.5v9M10.5 3.5v9"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
         </svg>
       ) : null}
       <span>{diagnostic.message}</span>
@@ -438,10 +427,10 @@ export function Diagnostic({ data }: { readonly data: unknown }): React.JSX.Elem
 export function formatCompactDividerLabel(message: string): string {
   const match = /(\d+) earlier message/.exec(message);
   if (match === null) {
-    return "Conversation summarized";
+    return 'Conversation summarized';
   }
   const count = Number(match[1]);
-  return `Summarized ${count} earlier ${count === 1 ? "message" : "messages"}`;
+  return `Summarized ${count} earlier ${count === 1 ? 'message' : 'messages'}`;
 }
 
 /**
@@ -483,7 +472,7 @@ export function CompactDivider({
         {formatCompactDividerLabel(message)}
         {previousSessionId !== null && selectSession !== null ? (
           <>
-            {" · "}
+            {' · '}
             <button
               type="button"
               className="dvx-compact-divider-link"
@@ -502,7 +491,7 @@ export function PendingResponse({
   activity,
   activityLive = false,
 }: {
-  readonly activity?: "working" | "responding";
+  readonly activity?: 'working' | 'responding';
   /**
    * True while some transcript activity row (running tool, streaming
    * thinking) is already shimmering; the pending row then renders
@@ -513,7 +502,7 @@ export function PendingResponse({
   return (
     <div
       className={`dvx-message dvx-message-assistant dvx-pending${
-        activityLive ? " dvx-pending-quiet" : ""
+        activityLive ? ' dvx-pending-quiet' : ''
       }`}
       role="status"
       aria-live="polite"
@@ -523,8 +512,8 @@ export function PendingResponse({
           <span className="dvx-runtime-grid-dot" key={index} />
         ))}
       </span>
-      <span className={activityLive ? "dvx-pending-label" : "dvx-shimmer-text"}>
-        {activity === "working" ? "Droid is working" : "Droid is responding"}
+      <span className={activityLive ? 'dvx-pending-label' : 'dvx-shimmer-text'}>
+        {activity === 'working' ? 'Droid is working' : 'Droid is responding'}
       </span>
     </div>
   );
@@ -532,9 +521,19 @@ export function PendingResponse({
 
 function HistoryNoticeIcon(): React.JSX.Element {
   return (
-    <svg className="dvx-history-notice-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <svg
+      className="dvx-history-notice-icon"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
       <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M8 7v4M8 5v.25" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path
+        d="M8 7v4M8 5v.25"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -546,15 +545,7 @@ export function HistoryNotice({
   readonly historyStatus: SessionHistoryStatus | null;
   readonly truncated: boolean;
 }): React.JSX.Element | null {
-  const message = historyStatus === "unavailable"
-    ? "Earlier CLI messages are unavailable here. You can continue this session."
-    : historyStatus === "partial" && truncated
-      ? "Some earlier session content is unavailable, and older locally retained messages were trimmed."
-      : historyStatus === "partial"
-        ? "Some earlier session content is unavailable through the public Droid history."
-        : truncated
-          ? "Older messages were trimmed from the local display."
-          : null;
+  const message = getHistoryNotice(historyStatus, truncated);
   return message === null ? null : (
     <aside className="dvx-history-notice" role="note">
       <HistoryNoticeIcon />

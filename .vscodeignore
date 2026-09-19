@@ -11,6 +11,8 @@ design/**
 docs/**
 !docs/TROUBLESHOOTING.md
 src/**
+packages/**
+pnpm-workspace.yaml
 scripts/**
 node_modules/**
 dist/**
@@ -23,5 +25,13 @@ esbuild.mjs
 pnpm-lock.yaml
 tsconfig*.json
 vitest.config.ts
-vite.webview.config.ts
+vite.webview*.config.ts
 *.log
+.env
+.env.*
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*.jsonl
+**/settings.local.json
+droidvisx-diagnostics-*.zip

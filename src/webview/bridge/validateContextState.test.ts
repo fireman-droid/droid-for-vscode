@@ -35,6 +35,26 @@ describe('parseSessionContext', () => {
   it.each([
     {
       status: 'ready',
+      value: { availability: 'available', used: 125, remaining: 1, limit: 100 },
+    },
+    {
+      status: 'ready',
+      value: {
+        availability: 'unavailable',
+        reason: 'awaiting-usage',
+        estimatedTokens: -1,
+      },
+    },
+    {
+      status: 'ready',
+      value: {
+        availability: 'unavailable',
+        reason: 'awaiting-usage',
+        estimatedTokens: Number.POSITIVE_INFINITY,
+      },
+    },
+    {
+      status: 'ready',
       value: {
         availability: 'available',
         used: -1,

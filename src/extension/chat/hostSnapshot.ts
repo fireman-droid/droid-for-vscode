@@ -1,83 +1,83 @@
 import type { HostToWebviewMessage } from '../../shared/bridgeMessages';
-import { projectQueueState } from './queue';
-import { withActiveSession } from './sessionDirectory';
-import { collapseStoredConversationCatalog } from './sessionCatalogProjection';
-import { stampRunningFlags } from './sessionRunning';
-import type { ChatControllerInternals } from './internals';
+import type { HostSnapshotPort } from './hostSnapshotPort';
+import { collapseStoredConversationCatalog } from './sessions/sessionCatalogProjection';
 
 export type HostSnapshotProjection = Omit<
   Extract<HostToWebviewMessage, { type: 'host.snapshot' }>,
   'sequence'
 >;
 
-export function buildHostSnapshot(
-  ctl: ChatControllerInternals,
-): HostSnapshotProjection {
-  if (ctl.turn === null) {
+export function buildHostSnapshot(ctl: HostSnapshotPort): HostSnapshotProjection {
+  if (ctl.turnState.turn === null) {
     ctl.diagnostics?.endTurnScope?.();
   }
-  const sessions = stampRunningFlags(
-    ctl,
+  const sessions = ctl.effects.stampRunningFlags(
     collapseStoredConversationCatalog(
-      withActiveSession(ctl, ctl.sessions),
+      ctl.effects.withActiveSession(ctl.catalogState.sessions),
       ctl.recoveryStore,
     ),
   );
   const workspaceRoot = ctl.getWorkspaceContext().cwd;
   const latestChanges =
-    ctl.conversationId === null
+    ctl.sessionState.conversationId === null
       ? undefined
-      : ctl.recoveryStore.readLatestChanges(ctl.conversationId);
+      : ctl.recoveryStore.readLatestChanges(ctl.sessionState.conversationId);
+  const latestPrompt = latestChanges?.messageId === undefined ? undefined :
+    ctl.recoveryState.transcript.transcript.find(
+      (item) => item.kind === 'user' && item.messageId === latestChanges.messageId,
+    );
   const snapshot = {
     type: 'host.snapshot',
-    conversationId: ctl.conversationId,
-    sessionId: ctl.sessionId,
-    connection: ctl.connection,
+    conversationId: ctl.sessionState.conversationId,
+    sessionId: ctl.sessionState.sessionId,
+    connection: ctl.sessionState.connection,
+    ...(ctl.readIdeState ? { ide: ctl.readIdeState() } : {}),
     turn:
-      ctl.turn === null
+      ctl.turnState.turn === null
         ? null
         : {
-            turnId: ctl.turn.turnId,
-            status: ctl.turn.status,
-            ...(ctl.turn.error === undefined
+            turnId: ctl.turnState.turn.turnId,
+            status: ctl.turnState.turn.status,
+            ...(ctl.turnState.turn.compacting === true ? { compacting: true } : {}),
+            ...(ctl.turnState.turn.error === undefined
               ? {}
-              : { error: ctl.turn.error }),
+              : { error: ctl.turnState.turn.error }),
           },
     sessions,
-    settings: ctl.settings,
-    context: ctl.context,
-    modelCatalog: ctl.modelCatalog,
-    transcript: ctl.transcript.transcript,
-    historyStatus: ctl.transcript.historyStatus,
-    truncated: ctl.transcript.truncated,
+    settings: ctl.metadata.settings,
+    context: ctl.metadata.context,
+    modelCatalog: ctl.metadata.modelCatalog,
+    transcript: ctl.recoveryState.transcript.transcript,
+    historyStatus: ctl.recoveryState.transcript.historyStatus,
+    truncated: ctl.recoveryState.transcript.truncated,
     ...(latestChanges === undefined
       ? {}
       : {
           latestChanges: {
             turnId: latestChanges.turnId,
-            prompt: latestChanges.prompt,
+            prompt: latestPrompt?.kind === 'user' ? latestPrompt.text : null,
             files: latestChanges.files,
           },
         }),
-    ...(ctl.mission === null || ctl.sessionId === null
+    ...(ctl.missionState.mission === null || ctl.sessionState.sessionId === null
       ? {}
-      : { mission: ctl.mission }),
-    ...(ctl.worktreeCreateAvailable
+      : { mission: ctl.missionState.mission }),
+    ...(ctl.catalogState.worktreeCreateAvailable
       ? { worktreeCreateAvailable: true }
       : {}),
     ...(ctl.btwSideChat === null ? {} : { btwAvailable: true }),
-    ...(ctl.runtime?.supportsBackgroundTurns?.() === true
+    ...(ctl.sessionState.runtime?.supportsBackgroundTurns?.() === true
       ? { backgroundTurnsAvailable: true }
       : {}),
-    ...(ctl.sessionId === null ||
-    (ctl.tokenUsage.cumulative === null &&
-      ctl.tokenUsage.lastTurn === null)
+    ...(ctl.sessionState.sessionId === null ||
+    (ctl.metadata.tokenUsage.cumulative === null &&
+      ctl.metadata.tokenUsage.lastTurn === null)
       ? {}
-      : { tokenUsage: ctl.tokenUsage }),
-    ...(ctl.sessionId === null ||
-    ctl.queuedPrompts.items.length === 0
+      : { tokenUsage: ctl.metadata.tokenUsage }),
+    ...(ctl.sessionState.sessionId === null ||
+    ctl.queueState.queuedPrompts.items.length === 0
       ? {}
-      : { queue: projectQueueState(ctl) }),
+      : { queue: ctl.effects.projectQueueState() }),
     ...(workspaceRoot === null ? {} : { workspaceRoot }),
   } satisfies HostSnapshotProjection;
   try {
@@ -86,7 +86,12 @@ export function buildHostSnapshot(
       name: 'host.perf.snapshot',
       attributes: {
         bytes: JSON.stringify(snapshot).length,
-        items: ctl.transcript.transcript.length,
+        items: ctl.recoveryState.transcript.transcript.length,
+        sessionId: ctl.sessionState.sessionId,
+        currentTurnId: ctl.turnState.turn?.turnId ?? null,
+        latestChangesTurnId: latestChanges?.turnId ?? null,
+        latestChangesFileCount: latestChanges?.files.length ?? 0,
+        changesSource: 'latest-nonempty-settled-turn',
       },
     });
   } catch {

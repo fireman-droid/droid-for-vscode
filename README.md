@@ -1,8 +1,25 @@
 # DroidVisX
 
-DroidVisX 是 Factory Droid 在 Cursor / VS Code 中的本地可视化工作台。
+DroidVisX 是 Factory Droid CLI 在 Cursor / VS Code 中的非官方本地可视化工作台。
 它复用本机 Droid CLI/SDK 的会话、模型、权限、工具与认证，不建立第二套
 AI 后端。
+
+本项目不由 Factory 官方发布、维护或背书。Factory 和 Droid 名称属于各自权利人；
+开源许可证不授予其商标使用权。扩展不包含 Droid 服务订阅，也不提供免费的模型额度。
+
+## 安装与开始使用
+
+1. 使用支持 VS Code API `^1.108.0` 的编辑器。
+2. 按 [Droid CLI 快速开始](https://docs.factory.ai/droid-cli/quickstart.md)
+   安装官方 CLI，并在本机完成认证。模型可用性和费用由 Factory／模型服务商决定；
+   BYOK 见 [官方说明](https://docs.factory.ai/model-independence/byok.md)。
+3. 在编辑器扩展面板选择 **Install from VSIX**，安装本地构建的 `dist/droidvisx.vsix`。
+   当前是发布准备阶段，没有可承诺的 Marketplace 或 GitHub Release 下载入口。
+4. 执行 **Developer: Reload Window**，打开 DroidVisX 侧栏，选择工作区和模型。
+   仅在理解执行范围后批准工具权限；交互终端的直接输入不经过模型权限流程。
+
+默认 `daemon` 模式让会话在窗口 Reload 后继续运行；也可在设置中明确选择
+`process` 模式，每窗口运行独立进程。关闭面板或编辑器不代表 daemon 任务已停止。
 
 ## 当前状态
 
@@ -10,9 +27,42 @@ AI 后端。
 - 主聊天、会话恢复、权限、AskUser、计划、附件、Review、Canvas、
   Skills、MCP、自定义模型和子代理展示已接入
 - Mission Control 已接通聊天、独立 Session、readiness、进度和 Worker
-- 最新问答记录显示 AI／我、完整问题和回答；源码已完成，安装后仍需真实验收
-- 两份架构/SDK 与运行正确性报告已完成，报告发现的问题尚未整改；不能把
-  构建通过或报告完成理解为全项目没有已知缺陷
+- Chat、Models、Mission、Viewer、Review 共用 React 19 / Tailwind 4 前端；
+  通用界面另行提供 [`@droidvisx/chat-ui`](packages/chat-ui/README.md)
+- 当前交付验证以 Windows / Cursor 为主；干净 VS Code、macOS、Linux、
+  Remote SSH、WSL 和容器环境未完成本轮验收，不作完整兼容保证
+- 真实运行、恢复和视觉仍需人工验收；已知限制及审查问题以 `docs/STATUS.md`
+  为准，构建通过不等于没有缺陷。独立 UI 包不包含 Claude Code／Codex CLI 接入
+
+## 数据处理与诊断
+
+- 会话中的提示词、附件、工作区及工具内容可能通过 Droid CLI／SDK、所选模型、
+  MCP 或插件发往相应服务。其认证、保留策略及服务条款由对应服务决定。
+- 扩展会在编辑器的本地存储中保留恢复快照、会话状态和托管图片附件；
+  它们不是 Git 仓库的一部分，也不承诺随卸载扩展自动清除。
+- Host／SDK 诊断写入 `DroidVisX Logs` 输出频道和扩展 global storage 下的
+  `logs` 目录。日志可能包含提示词、工具输入输出、命令、文件路径、会话标识、
+  错误和堆栈。凭据形状会脱敏，但不能保证消除所有敏感内容。
+- 日志按 UTC 日期轮转，默认总预算为 200 MiB，尽力删除最旧的往日日志。
+  当前日文件保留，因此可能超过预算；这不是固定保留天数。
+- 在已检查的扩展诊断链路中没有自动上传器。**Export Diagnostics Bundle**
+  需要手动执行并选择保存位置，ZIP 包含全部现存诊断日志、环境及工作区路径
+  元数据和排障说明。默认建议保存到首个工作区，无工作区时使用 global storage。
+  导出命令不自动发送文件；分享前必须人工审阅并移除敏感内容。
+
+勿将诊断 ZIP、真实会话、截图、密钥或个人配置直接附到公开 Issue。
+位置和排障步骤见 [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)。
+
+## 许可证与反馈
+
+原创代码使用 [MIT](LICENSE)。适配源码和依赖保留原许可证；VSIX 的
+`dist/extension/THIRD_PARTY_LICENSES.txt` 与 `dist/webview/THIRD_PARTY_LICENSES.txt`
+包含对应构建的第三方条款，公共 UI 包附带独立声明。
+构建会阻止缺少许可证材料的分发，但不替代法律或供应链审查。
+
+仓库公开后可通过 [GitHub Issues](https://github.com/fireman-droid/droid-for-vscode/issues)
+提交去敏后的问题，格式见 [`docs/FEEDBACK.md`](docs/FEEDBACK.md)。
+公开前这些链接只对有仓库权限的人可用。
 
 ## 换电脑继续开发
 
@@ -20,8 +70,9 @@ AI 后端。
 
 建议先复用已验证的 Windows 环境：
 
-- Git，以及 PATH 中可用的 `tar`（VSIX 内容校验使用）。
-- Node.js 24；本次干净目录验证使用 `24.13.1`。
+- Git，以及用于只读查看分发包内容的 `tar`。
+- 建议 Node.js 24 LTS。历史干净目录验证使用 `24.13.1`；
+  本轮构建环境和实际验证结果以 `docs/STATUS.md` 为准。
 - pnpm `10.2.0`，与 `package.json` 的 `packageManager` 一致。
   未安装时可执行 `npm install --global pnpm@10.2.0`。
 - Cursor 或 VS Code；扩展要求 VS Code API `^1.108.0`。
@@ -34,7 +85,7 @@ AI 后端。
 
 ### 拉取与安装依赖
 
-首次克隆：
+取得仓库访问权限后首次克隆：
 
 ```powershell
 git clone https://github.com/fireman-droid/droid-for-vscode.git droidvisx
@@ -50,7 +101,6 @@ pnpm install --frozen-lockfile
 
 ```powershell
 pnpm run package:vsix
-pnpm run verify:vsix
 cursor --install-extension dist/droidvisx.vsix --force
 ```
 
@@ -58,9 +108,14 @@ VS Code 使用 `code --install-extension dist/droidvisx.vsix --force`；如果�
 命令不在 PATH，也可通过扩展面板的 **Install from VSIX** 选择生成文件。
 随后执行 **Developer: Reload Window**。
 
-`package:vsix` 的 `vscode:prepublish` 会串行执行 typecheck、文件预算检查和
-production build，不需要再并发或重复启动构建。`dist/`、`node_modules/` 和
+`package:vsix` 的 `vscode:prepublish` 会串行执行 typecheck、文件预算检查、
+独立 UI 构建和 production build，不需要再并发启动构建。`dist/`、`node_modules/` 和
 VSIX 都是可重新生成的产物，不纳入 Git。
+
+`pnpm run package:vsix:preview` 生成带预发布标记的同名本地 VSIX，不执行发布。
+`pnpm run package:chat-ui` 生成独立 UI tarball。发布前还需许可证来源复核、
+拟公开内容审阅、完整源码提交、干净 VS Code 验收及发布者权限确认；
+详见 `docs/STATUS.md`。本轮不运行 `verify:vsix` 或任何自动测试。
 
 pnpm 10 可能提示忽略部分依赖的安装脚本；本次 Windows 干净安装在该提示下
 仍成功构建和打包，不需要为此默认批准所有脚本。
@@ -68,15 +123,36 @@ pnpm 10 可能提示忽略部分依赖的安装脚本；本次 Windows 干净安
 ### 只看 UI，不连接真实 Runtime
 
 ```powershell
-pnpm run dev:webview
+pnpm run dev:webview-v2
 ```
 
-打开 <http://127.0.0.1:4173/app?scenario=ask-user-result&theme=light&width=480>。
-顶部可以切换场景、主题和宽度。`/` 与 `/app` 使用模拟数据，不要求登录或模型密钥；
-不要把它当成真实会话。`/live` 是另外的真实联调入口。
+打开 <http://127.0.0.1:4176/?scenario=ask-user-result&theme=light&width=480>。
+通过查询参数选择场景、主题和宽度。非 `/live` 路径使用模拟数据，不要求登录或
+模型密钥，不要把它当成真实会话。
 
 需要真实浏览器联调时，在新电脑的编辑器设置中将机器级
 `droidvisx.browserDev.sourceRoot` 指向当地源码目录，不照抄旧电脑绝对路径。
+执行 **DroidVisX: Start Browser Dev Client**，打开它复制的新链接。该命令使用
+V2 配置在 `4173/live` 挂载与侧栏相同的 `ChatApp`，连接当前 Host 的真实会话；
+不使用固定预览宽度或模拟数据。独立 `4176` 预览不能替代这个启动流程。
+升级扩展后先 **Developer: Reload Window**，再重新执行 Start；不要复用旧标签页链接。
+
+### Webview V2
+
+Chat、Models、Mission Control、Viewer 和 Review 的生产构建已统一使用 V2。
+安装状态见 `docs/STATUS.md`；可单独预览：
+
+```powershell
+pnpm run dev:webview-v2
+pnpm run build:webview-v2
+```
+
+预览地址为 `http://127.0.0.1:4176/?scenario=conversation&theme=dark&width=400`。
+使用模拟数据，不连接模型；添加 `view=models`、`view=mission` 或 `view=viewer`
+可预览其他页面。单独构建输出在 `dist/webview-v2/`；`pnpm run build`
+把五页生产资源输出到 `dist/webview/`，由 VSIX 收录。界面在 Cursor 内由用户验收。
+旧 V1 的 `pnpm run dev:webview`／`4173/app` 仅留作开发/回归参考，
+不再由 Browser Dev Client 命令启动，不进入生产包。
 
 ### Git 不会迁移的内容
 
@@ -97,8 +173,8 @@ pnpm run lint:budgets
 pnpm run build
 ```
 
-测试不是默认门禁，具体授权、提交及协作规则见根目录 `AGENTS.md`。
-最新问答改动的 7 个文件、96 项定向测试已通过，命令入口见 `docs/PLAN.md`。
+测试不是默认门禁，未经明确授权不新增、修改或运行测试、浏览器探测或模型请求。
+具体授权、提交及协作规则见根目录 `AGENTS.md`。
 
 ## 文档
 

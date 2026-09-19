@@ -28,25 +28,29 @@ describe('Mission Control setup projection', () => {
       },
     };
     const controller = {
-      workspaceContextGeneration: 2,
-      runtimeGeneration: 3,
-      workspaceContext: { cwd: 'D:\\workspace', trusted: true },
-      connection: { status: 'connected' },
-      runtime: {},
-      sessionId: 'session-private',
-      settings: {
-        status: 'ready',
-        value: {
-          modelId: 'orchestrator-model',
-          reasoningEffort: 'high',
-        },
+      sessionState: {
+        workspaceContextGeneration: 2,
+        runtimeGeneration: 3,
+        workspaceContext: { cwd: 'D:\\workspace', trusted: true },
+        connection: { status: 'connected' },
+        runtime: {},
+        sessionId: 'session-private',
+        sessionOperationInProgress: false,
       },
-      modelCatalog: { status: 'ready', items: [] },
-      settingsUpdate: null,
-      sessionOperationInProgress: false,
-      refreshInProgress: false,
-      missionStartInProgress: false,
-      turn: null,
+      metadata: {
+        settings: {
+          status: 'ready',
+          value: {
+            modelId: 'orchestrator-model',
+            reasoningEffort: 'high',
+          },
+        },
+        modelCatalog: { status: 'ready', items: [] },
+        settingsUpdate: null,
+      },
+      catalogState: { refreshInProgress: false },
+      missionState: { missionStartInProgress: false },
+      turnState: { turn: null },
       missionGateway: {
         setupCapabilitiesFor: vi.fn(() => capabilities),
       },
@@ -55,9 +59,7 @@ describe('Mission Control setup projection', () => {
         return { dispose: () => undefined };
       },
     };
-    const projection = createMissionControlSetupProjection(
-      controller as never,
-    );
+    const projection = createMissionControlSetupProjection(controller as never);
     const onChange = vi.fn();
     projection.subscribe(onChange);
 
@@ -70,7 +72,7 @@ describe('Mission Control setup projection', () => {
     controllerListeners[0]?.();
     expect(onChange).not.toHaveBeenCalled();
 
-    controller.turn = {} as never;
+    controller.turnState.turn = {} as never;
     controllerListeners[0]?.();
     expect(onChange).toHaveBeenCalledOnce();
     expect(projection.read()).toMatchObject({

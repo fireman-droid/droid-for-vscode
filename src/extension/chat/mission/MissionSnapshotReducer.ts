@@ -1,19 +1,16 @@
 import type {
   MissionFeatureSnapshot,
   MissionSnapshotMessage,
-} from '../../../shared/missionProtocol';
+} from '../../../shared/protocol/missionProtocol';
 import type {
   MissionProgressSummary,
   MissionRuntimeFeature,
   RuntimeEvent,
 } from '../../../runtime/runtimeEvents';
-import { normalizeMissionEvent } from '../../../runtime/normalizeMissionEvent';
-import { isStrictRecord } from '../../../shared/strictValidation';
+import { normalizeMissionEvent } from '../../../runtime/events/normalizeMissionEvent';
+import { isStrictRecord } from '../../../shared/validation/strictValidation';
 
-type MissionRuntimeEvent = Extract<
-  RuntimeEvent,
-  { type: `mission-${string}` }
->;
+type MissionRuntimeEvent = Extract<RuntimeEvent, { type: `mission-${string}` }>;
 
 export interface MissionValidatorState {
   readonly scrutinyEnabled: boolean;
@@ -96,9 +93,7 @@ export class MissionSnapshotReducer {
     }
   }
 
-  setBusyAction(
-    action: MissionSnapshotMessage['controls']['busyAction'],
-  ): boolean {
+  setBusyAction(action: MissionSnapshotMessage['controls']['busyAction']): boolean {
     if (this.busyAction === action) {
       return false;
     }
@@ -107,9 +102,7 @@ export class MissionSnapshotReducer {
     return true;
   }
 
-  setAvailability(
-    availability: MissionSnapshotMessage['availability'],
-  ): boolean {
+  setAvailability(availability: MissionSnapshotMessage['availability']): boolean {
     if (this.availability === availability) {
       return false;
     }
@@ -132,9 +125,7 @@ export class MissionSnapshotReducer {
   }
 
   activeWorkerSessionId(): string | null {
-    const active = [...this.workers.entries()].filter(
-      ([, state]) => state.active,
-    );
+    const active = [...this.workers.entries()].filter(([, state]) => state.active);
     return active.length === 1 ? active[0]![0] : null;
   }
 
@@ -167,15 +158,13 @@ export class MissionSnapshotReducer {
       ...(this.title === undefined ? {} : { title: this.title }),
       features,
       ...(currentFeatureId === undefined ? {} : { currentFeatureId }),
-      completedFeatureCount: features.filter(
-        ({ status }) => status === 'completed',
-      ).length,
+      completedFeatureCount: features.filter(({ status }) => status === 'completed')
+        .length,
       controls: {
         canPause:
           attached &&
           !busy &&
-          (this.lifecycle === 'running' ||
-            this.lifecycle === 'orchestrator_turn'),
+          (this.lifecycle === 'running' || this.lifecycle === 'orchestrator_turn'),
         canResume: attached && !busy && this.lifecycle === 'paused',
         canStopCurrentFeature:
           attached &&
@@ -183,9 +172,7 @@ export class MissionSnapshotReducer {
           this.lifecycle === 'running' &&
           currentFeatureId !== undefined &&
           this.activeWorkerSessionId() !== null,
-        ...(this.busyAction === undefined
-          ? {}
-          : { busyAction: this.busyAction }),
+        ...(this.busyAction === undefined ? {} : { busyAction: this.busyAction }),
       },
       validator: this.validator,
     };
@@ -218,9 +205,7 @@ export class MissionSnapshotReducer {
     return true;
   }
 
-  private reconcileProgress(
-    entries: readonly MissionProgressSummary[],
-  ): boolean {
+  private reconcileProgress(entries: readonly MissionProgressSummary[]): boolean {
     const prefixLength = Math.min(this.progress.length, entries.length);
     for (let index = 0; index < prefixLength; index += 1) {
       if (!sameProgressEntry(this.progress[index]!, entries[index]!)) {
@@ -250,16 +235,15 @@ export class MissionSnapshotReducer {
       return;
     }
     if (
-      (entry.type === 'worker_started' ||
-        entry.type === 'worker_selected_feature') &&
+      (entry.type === 'worker_started' || entry.type === 'worker_selected_feature') &&
       entry.workerSessionId !== undefined
     ) {
       const current = this.workers.get(entry.workerSessionId);
       this.workers.set(entry.workerSessionId, {
         active: true,
-        ...(entry.featureId ?? current?.featureId) === undefined
+        ...((entry.featureId ?? current?.featureId) === undefined
           ? {}
-          : { featureId: entry.featureId ?? current?.featureId },
+          : { featureId: entry.featureId ?? current?.featureId }),
       });
       return;
     }
@@ -272,9 +256,9 @@ export class MissionSnapshotReducer {
       const current = this.workers.get(entry.workerSessionId);
       this.workers.set(entry.workerSessionId, {
         active: false,
-        ...(entry.featureId ?? current?.featureId) === undefined
+        ...((entry.featureId ?? current?.featureId) === undefined
           ? {}
-          : { featureId: entry.featureId ?? current?.featureId },
+          : { featureId: entry.featureId ?? current?.featureId }),
       });
     }
   }
@@ -286,9 +270,7 @@ export class MissionSnapshotReducer {
     }
     this.workers.set(workerSessionId, {
       active: true,
-      ...(current?.featureId === undefined
-        ? {}
-        : { featureId: current.featureId }),
+      ...(current?.featureId === undefined ? {} : { featureId: current.featureId }),
     });
     this.revision += 1;
     return true;
@@ -301,9 +283,7 @@ export class MissionSnapshotReducer {
     }
     this.workers.set(workerSessionId, {
       active: false,
-      ...(current.featureId === undefined
-        ? {}
-        : { featureId: current.featureId }),
+      ...(current.featureId === undefined ? {} : { featureId: current.featureId }),
     });
     if (this.busyAction === 'stop') {
       this.busyAction = undefined;
@@ -321,15 +301,12 @@ export class MissionSnapshotReducer {
     if (
       worker?.featureId !== undefined &&
       this.features.some(
-        ({ id, status }) =>
-          id === worker.featureId && status === 'in_progress',
+        ({ id, status }) => id === worker.featureId && status === 'in_progress',
       )
     ) {
       return worker.featureId;
     }
-    const running = this.features.filter(
-      ({ status }) => status === 'in_progress',
-    );
+    const running = this.features.filter(({ status }) => status === 'in_progress');
     return running.length === 1 ? running[0]!.id : undefined;
   }
 
@@ -337,9 +314,7 @@ export class MissionSnapshotReducer {
     feature: MissionRuntimeFeature,
     order: number,
   ): MissionFeatureSnapshot {
-    const hasWorker = [...this.workers.values()].some(
-      ({ featureId }) => featureId === feature.id,
-    );
+    const hasWorker = this.workerSessionIdForFeature(feature.id) !== null;
     const title = feature.description.slice(0, 512);
     return {
       id: feature.id,
@@ -375,9 +350,7 @@ export class MissionSnapshotReducer {
 
 function ownValue(value: object, key: string): unknown {
   const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-  return descriptor !== undefined && 'value' in descriptor
-    ? descriptor.value
-    : undefined;
+  return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
 }
 
 function sameFeatures(

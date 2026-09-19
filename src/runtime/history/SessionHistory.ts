@@ -1,10 +1,8 @@
-import type {
-  SessionMissionSummary,
-  ToolSubagentSummary,
-} from '../../shared/bridgeMessages';
-import type { HostTranscriptState } from '../../shared/hostTranscriptState';
-import type { TokenUsageBreakdown } from '../../shared/tokenUsage';
-import type { SubagentInvocationRecord } from '../subagentSummary';
+import { type SessionMissionSummary } from '../../shared/protocol/sessions';
+import { type ToolSubagentSummary } from '../../shared/protocol/transcript';
+import type { HostTranscriptState } from '../../shared/transcript/hostTranscriptState';
+import type { TokenUsageBreakdown } from '../../shared/protocol/tokenUsage';
+import type { SubagentInvocationRecord } from '../subagents/subagentSummary';
 
 export const SESSION_HISTORY_UNAVAILABLE_MESSAGE =
   'Saved Droid session history could not be loaded.';
@@ -39,9 +37,7 @@ export type SessionHistoryResult =
     };
 
 export interface SessionHistoryLoader {
-  loadHistory(
-    request: SessionHistoryRequest,
-  ): Promise<SessionHistoryResult>;
+  loadHistory(request: SessionHistoryRequest): Promise<SessionHistoryResult>;
   /**
    * Optional: final subagent invocation summaries for one session,
    * from `loadSession().subagentInvocations`. Used after a turn that

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { MissionStartMessage } from '../../../shared/missionProtocol';
+import type { MissionStartMessage } from '../../../shared/protocol/missionProtocol';
 import { handleMissionStart } from './controller';
 
 const message: MissionStartMessage = {
@@ -36,19 +36,23 @@ describe('handleMissionStart', () => {
             resolveStart = resolve;
           }),
       },
-      connection: { status: 'connected' },
-      runtime: { dispose: vi.fn(async () => {}) },
-      sessionId: 'chat-1',
-      modelCatalog: { status: 'ready', items: [] },
-      turn: null,
+      sessionState: {
+        connection: { status: 'connected' },
+        runtime: { dispose: vi.fn(async () => {}) },
+        sessionId: 'chat-1',
+        runtimeGeneration: 1,
+        disposed: false,
+      },
+      metadata: { modelCatalog: { status: 'ready', items: [] } },
+      turnState: { turn: null },
       interactions: { hasPending: () => false },
-      missionStartInProgress: false,
-      runtimeGeneration: 1,
-      disposed: false,
+      missionState: { missionStartInProgress: false },
       isCurrentSessionOperation: () => false,
-      closedRuntimes: new WeakSet(),
-      runtimeClosures: new Map(),
-      managedRuntimes: new Set(),
+      effects: {
+        closeRuntime: (runtime: typeof missionRuntime) => runtime.dispose(),
+      },
+      emit: vi.fn(),
+      emitSessionDiagnostic: vi.fn(),
     };
 
     handleMissionStart(ctl as never, message);
@@ -67,8 +71,8 @@ describe('handleMissionStart', () => {
     });
     await vi.waitFor(() => {
       expect(missionRuntime.dispose).toHaveBeenCalledOnce();
-      expect(ctl.missionStartInProgress).toBe(false);
+      expect(ctl.missionState.missionStartInProgress).toBe(false);
     });
-    expect(ctl.runtime.dispose).not.toHaveBeenCalled();
+    expect(ctl.sessionState.runtime.dispose).not.toHaveBeenCalled();
   });
 });

@@ -22,6 +22,8 @@ export interface DaemonEndpoint {
 export interface DaemonLifecycleOptions {
   readonly droidPath?: string;
   readonly host?: string;
+  readonly cwd?: string;
+  readonly env?: NodeJS.ProcessEnv;
   /**
    * Phase 1 always guards the private daemon with the extension host
    * pid so the daemon exits when the extension host dies. Detached
@@ -46,6 +48,7 @@ export interface DaemonLifecycleDeps {
   readonly spawnDetachedDaemon: (
     droidPath: string,
     args: readonly string[],
+    options?: Pick<DaemonLifecycleOptions, 'cwd' | 'env'>,
   ) => DaemonSpawnHandle;
   readonly pickFreePort: () => Promise<number>;
   readonly waitForPort: (
@@ -73,7 +76,7 @@ export interface DaemonLifecycleDeps {
  * (`stopDaemon` / the shutdown command); nothing here reaps it.
  */
 export async function startDetachedDaemon(
-  options: Pick<DaemonLifecycleOptions, 'droidPath' | 'host'> = {},
+  options: Pick<DaemonLifecycleOptions, 'droidPath' | 'host' | 'cwd' | 'env'> = {},
   deps: Partial<
     Pick<
       DaemonLifecycleDeps,
@@ -101,13 +104,16 @@ export async function startDetachedDaemon(
   const killProcessTree = deps.killProcessTree ?? defaultKillProcessTree;
 
   const port = await pickFreePort();
-  const child = spawnDetached(droidPath, [
+  const args = [
     'daemon',
     '--port',
     String(port),
     '--host',
     host,
-  ]);
+  ];
+  const child = options.cwd === undefined && options.env === undefined
+    ? spawnDetached(droidPath, args)
+    : spawnDetached(droidPath, args, { cwd: options.cwd, env: options.env });
   if (child.pid === undefined) {
     throw new Error('droid daemon process failed to spawn');
   }
@@ -410,8 +416,12 @@ function defaultSpawnDaemon(
 function defaultSpawnDetachedDaemon(
   droidPath: string,
   args: readonly string[],
+  options?: Pick<DaemonLifecycleOptions, 'cwd' | 'env'>,
 ): DaemonSpawnHandle {
-  const child = spawn(droidPath, [...args], detachedDaemonSpawnOptions());
+  const child = spawn(droidPath, [...args], {
+    ...detachedDaemonSpawnOptions(),
+    ...options,
+  });
   child.unref();
   return {
     pid: child.pid,

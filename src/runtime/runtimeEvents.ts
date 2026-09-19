@@ -1,13 +1,17 @@
+import { type ImageMediaType, type ImageOrigin } from '../shared/protocol/attachments';
+import {
+  type ToolBackgroundHint,
+  type ToolDetailKind,
+  type ToolSubagentSummary,
+} from '../shared/protocol/transcript';
+import type { ToolActivityUpdateKind } from '../shared/transcript/toolActivity';
+import type { ToolResultPreview } from '../shared/transcript/toolResultPreview';
+import type { TokenUsageBreakdown } from '../shared/protocol/tokenUsage';
+import type { MissionLifecycle } from '../shared/protocol/missionProtocol';
 import type {
-  ImageMediaType,
-  ImageOrigin,
-  ToolBackgroundHint,
-  ToolDetailKind,
-  ToolSubagentSummary,
-} from '../shared/bridgeMessages';
-import type { ToolActivityUpdateKind } from '../shared/toolActivity';
-import type { TokenUsageBreakdown } from '../shared/tokenUsage';
-import type { MissionLifecycle } from '../shared/missionProtocol';
+  OperationDiff,
+  ToolExecutionPhase,
+} from '../shared/protocol/operationDiff';
 
 export interface MissionRuntimeFeature {
   readonly id: string;
@@ -151,6 +155,14 @@ export type RuntimeEvent =
        * (probed 2026-08-13, 39s after tool-start).
        */
       subagent?: ToolSubagentSummary;
+      /** Non-authoritative proposal from one complete native tool input. */
+      operationDiff?: OperationDiff;
+    }
+  | {
+      type: 'tool-execution-phase';
+      toolUseId: string;
+      toolName: string;
+      phase: ToolExecutionPhase;
     }
   | {
       type: 'tool-progress';
@@ -174,6 +186,8 @@ export type RuntimeEvent =
       isError: boolean;
       /** Bounded text excerpt from a failed tool_result's content. */
       errorText?: string;
+      resultPreview?: ToolResultPreview;
+      operationDiff?: OperationDiff;
     }
   | {
       type: 'user-message';
@@ -199,6 +213,7 @@ export type RuntimeEvent =
   | {
       type: 'working-state';
       isWorking: boolean;
+      compacting?: boolean;
     }
   | {
       type: 'settings-updated';

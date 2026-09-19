@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DaemonAvailabilityError } from './daemon/daemonConnection';
 import { FactoryDroidRuntime } from './FactoryDroidRuntime';
-import { cancellingRuntimeInteractionHandler } from './runtimeInteractions';
+import { cancellingRuntimeInteractionHandler } from './events/runtimeInteractions';
 
 describe('FactoryDroidRuntime daemon availability', () => {
   it.each([

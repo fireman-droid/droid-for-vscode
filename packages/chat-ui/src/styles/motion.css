@@ -1,0 +1,35 @@
+@layer components {
+  .dvx-stream-in { animation: v2-stream-reveal 160ms ease-out; }
+  @keyframes v2-stream-reveal { from { opacity: .55; } to { opacity: 1; } }
+  .v2-popover { transform-origin: var(--radix-popover-content-transform-origin); }
+  .v2-popover[data-state='open'], .v2-dialog[data-state='open'] { animation: v2-overlay-open 150ms ease-out; }
+  .v2-popover[data-state='closed'], .v2-dialog[data-state='closed'] { animation: v2-overlay-close 100ms ease-in; }
+  .v2-dialog-overlay[data-state='open'] { animation: v2-fade-in 150ms ease-out; }
+  .v2-dialog-overlay[data-state='closed'] { animation: v2-fade-in 100ms ease-in reverse; }
+  @keyframes v2-overlay-open {
+    from { opacity: 0; transform: translateY(3px) scale(.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes v2-overlay-close {
+    from { opacity: 1; transform: scale(1); }
+    to { opacity: 0; transform: scale(.98); }
+  }
+  @keyframes v2-fade-in { from { opacity: 0; } to { opacity: 1; } }
+  .v2-tool-content[data-state='open'] {
+    animation: v2-collapse-open 220ms cubic-bezier(.215,.61,.355,1);
+  }
+  .v2-tool-content[data-state='closed'] {
+    animation: v2-collapse-close 180ms cubic-bezier(.4,0,.6,1);
+  }
+  @keyframes v2-collapse-open {
+    from { height: 0; opacity: 0; }
+    to { height: var(--radix-collapsible-content-height); opacity: 1; }
+  }
+  @keyframes v2-collapse-close {
+    from { height: var(--radix-collapsible-content-height); opacity: 1; }
+    to { height: 0; opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dvx-stream-in, .v2-tool-content, .v2-popover, .v2-dialog, .v2-dialog-overlay { animation: none !important; }
+  }
+}

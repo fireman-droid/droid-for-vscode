@@ -1,241 +1,87 @@
 import {
-  ConnectionError,
   InvalidSessionCwdError,
-  ProcessTransport,
   SDK_VERSION,
-  createSession,
-  resumeSession,
   type AvailableModelConfig,
-  type AutonomyLevel,
-  type Base64ImageSource,
-  type DocumentSource,
-  type DroidSessionUpdateSettingsOptions,
-  type DroidInteractionMode,
   type DroidObservability,
-  type DroidStreamEvent,
-  type GetContextStatsResult,
-  type ReasoningEffort,
-  type SessionSettings,
-  type StringFramedDroidClientTransport,
 } from '@factory/droid-sdk/node';
-
+import { projectGitDiff } from './capabilities/gitBranchDiff';
 import {
-  MAX_RUNTIME_MODEL_CATALOG_ITEMS,
-  MAX_RUNTIME_MODEL_DISPLAY_NAME_LENGTH,
-  MAX_RUNTIME_MCP_AUTH_URL_LENGTH,
-  MAX_RUNTIME_MCP_NAME_LENGTH,
-  MAX_RUNTIME_MCP_SERVERS,
-  MAX_RUNTIME_MCP_TOOLS_PER_SERVER,
-  MAX_RUNTIME_MCP_TOOL_DESCRIPTION_LENGTH,
-  MAX_RUNTIME_SKILL_DESCRIPTION_LENGTH,
-  MAX_RUNTIME_SKILL_ITEMS,
-  MAX_RUNTIME_SKILL_NAME_LENGTH,
-  RUNTIME_AUTONOMY_LEVELS,
-  RUNTIME_INTERACTION_MODES,
-  RUNTIME_MCP_SERVER_STATUSES,
-  RUNTIME_REASONING_EFFORTS,
-  RUNTIME_SKILL_LOCATIONS,
-  MAX_RUNTIME_ATTACHMENTS,
-  MAX_RUNTIME_IMAGE_BASE64_LENGTH,
-  MAX_RUNTIME_PDF_BASE64_LENGTH,
-  MAX_RUNTIME_TEXT_ATTACHMENT_LENGTH,
+  addMcpServer,
+  authenticateMcpServer,
+  listMcpServers,
+  listSkills,
+  removeMcpServer,
+  setMcpServerEnabled,
+  setSkillDisabled,
+} from './capabilities/sessionCapabilities';
+import { loadSessionCommands } from './commands/FactoryCommandCatalog';
+import { DaemonAvailabilityError } from './daemon/daemonConnection';
+import {
   type DroidRuntime,
   type RuntimeAttachment,
-  type RuntimeDisposeOptions,
+  type RuntimeCommand,
   type RuntimeCompactResult,
+  type RuntimeContextWindow,
+  type RuntimeDisposeOptions,
   type RuntimeForkResult,
   type RuntimeGitDiff,
-  type RuntimeRewindInfo,
-  type RuntimeRewindParams,
-  type RuntimeRewindResult,
-  type RuntimeContextWindow,
-  type RuntimeModelCatalog,
-  type RuntimeModelCatalogItem,
-  type RuntimeSessionSettings,
-  type RuntimeSessionSettingUpdate,
-  type RuntimeSessionTarget,
-  type RuntimeSessionWorkingState,
+  type RuntimeGitDiffOptions,
   type RuntimeMcpAuthOutcome,
   type RuntimeMcpAuthStart,
   type RuntimeMcpServer,
   type RuntimeMcpServerAddParams,
-  type RuntimeMcpServerStatus,
-  type RuntimeMcpTool,
-  type RuntimeCommand,
+  type RuntimeModelCatalog,
+  type RuntimeRewindInfo,
+  type RuntimeRewindParams,
+  type RuntimeRewindResult,
+  type RuntimeSessionSettingUpdate,
+  type RuntimeSessionSettings,
+  type RuntimeSessionTarget,
+  type RuntimeSessionWorkingState,
   type RuntimeSkill,
-  type RuntimeSkillLocation,
 } from './DroidRuntime';
-import { isSafeModelId } from '../shared/validateMessage';
-import { projectGitDiff } from './gitBranchDiff';
-import { projectRewindInfo } from './rewindInfo';
-import { DaemonAvailabilityError } from './daemon/daemonConnection';
-import { loadSessionCommands } from './commands/FactoryCommandCatalog';
-import {
-  normalizeSdkEvent,
-  normalizeSdkEventImages,
-} from './normalizeSdkEvent';
-import {
-  createModelCatalogCaptureTransport,
-} from './modelCatalogCaptureTransport';
-import { createCapturedSessionView } from './capturedSessionView';
-import {
-  createProvisionalProcessTransport,
-  type ProcessSessionTransport,
-} from './processSessionTransport';
-import {
-  projectContextWindow,
-  type FactoryContextBreakdown,
-} from './contextWindow';
-import type { RuntimeAvailability, RuntimeEvent } from './runtimeEvents';
-import {
-  sanitizeSubagentDescription,
-  sanitizeSubagentType,
-} from './subagentSummary';
-import {
-  createRuntimeInteractionCallbacks,
-  type RuntimeInteractionCallbacks,
-  type RuntimeInteractionHandler,
-} from './runtimeInteractions';
+import { normalizeSdkEvent, normalizeSdkEventImages } from './events/normalizeSdkEvent';
+import { type RuntimeInteractionHandler } from './events/runtimeInteractions';
+import { ToolExecutionPhaseBuffer } from './events/toolExecutionPhases';
+import { createLocalDroidSession } from './process/createLocalDroidSession';
 import type { RuntimeDiagnosticSink } from './runtimeDiagnostics';
+import type { RuntimeAvailability, RuntimeEvent } from './runtimeEvents';
+import { createCapturedSessionView } from './session/capturedSessionView';
+import {
+  readContextWindow,
+  readMissionSettings,
+  readModelCatalog,
+  readSessionSettings,
+  readSessionWorkingState,
+  updateSessionSetting,
+} from './session/metadata';
+import { projectStreamAttachments } from './session/projections';
+import {
+  compact,
+  fork,
+  rename,
+  rewind,
+  type ReplacementContext,
+} from './session/replacements';
+import { projectRewindInfo } from './session/rewindInfo';
+import {
+  daemonInitializationFailure,
+  describeUnknown,
+  isMissingCliError,
+  normalizeSessionTarget,
+  readSubagentStartedNotification,
+  sameSessionTarget,
+} from './session/sessionSupport';
+import type {
+  FactoryDroidSession,
+  FactoryDroidSessionFactory,
+} from './session/sessionTypes';
 import {
   createSpecHandoffWatch,
   type SpecHandoffWatch,
-} from './specHandoffWatch';
-
-/** How long to wait for the OAuth URL notification after an accepted
- * MCP authentication request. */
-const MCP_AUTH_URL_WAIT_MS = 15_000;
-/** How long the one-shot MCP auth completion subscription stays alive
- * before it is dropped without an outcome. */
-const MCP_AUTH_COMPLETION_SUBSCRIPTION_MS = 10 * 60_000;
-/**
- * Self-imposed cap on one MCP server toggle. Droid writes the config
- * immediately but only replies after its internal connect attempt
- * gives up, which rides the SDK's generic 30s request timeout; a
- * failing server otherwise leaves the panel waiting 30-60s.
- */
-const MCP_TOGGLE_TIMEOUT_MS = 12_000;
-
-export interface FactoryDroidSessionRewindParams {
-  readonly messageId: string;
-  readonly filesToRestore: Array<{
-    filePath: string;
-    contentHash: string;
-    size: number;
-  }>;
-  readonly filesToDelete: Array<{ filePath: string }>;
-  readonly forkTitle: string;
-}
-
-export interface FactoryDroidSessionRewindInfo {
-  readonly availableFiles: Array<{
-    filePath: string;
-    contentHash: string;
-    size: number;
-  }>;
-  readonly createdFiles: Array<{ filePath: string }>;
-  readonly evictedFiles: Array<{ filePath: string; reason: string }>;
-}
-
-/** The daemon's branch-versus-base git report, as the facade sees it. */
-export interface FactoryDroidSessionGitDiff {
-  readonly branch: string;
-  readonly baseBranch: string;
-  readonly files: ReadonlyArray<{
-    path: string;
-    additions: number;
-    deletions: number;
-  }>;
-  readonly totalAdditions: number;
-  readonly totalDeletions: number;
-  readonly commitCount: number;
-}
-
-export interface FactoryDroidSession {
-  readonly id: string;
-  readonly settings: Readonly<SessionSettings>;
-  readonly availableModels?: readonly AvailableModelConfig[];
-  /**
-   * Actual session working directory when the backend reports one.
-   * Daemon sessions expose it (worktree sessions run in the worktree
-   * path rather than the requested cwd); process sessions omit it.
-   */
-  readonly cwd?: string;
-  stream(
-    prompt: string,
-    options: {
-      includePartialMessages: true;
-      images?: Base64ImageSource[];
-      files?: DocumentSource[];
-    },
-  ): AsyncIterable<DroidStreamEvent>;
-  interrupt(): Promise<void>;
-  /**
-   * Raw backend working-state string for this session, or null when
-   * the backend no longer lists the session. Daemon sessions implement
-   * it from the daemon's opened-session registry; process sessions
-   * omit it (their turns cannot outlive the window).
-   */
-  readWorkingState?(): Promise<string | null>;
-  updateSettings(
-    params: DroidSessionUpdateSettingsOptions,
-  ): Promise<unknown>;
-  getContextStats(): Promise<GetContextStatsResult>;
-  /**
-   * Official current Context Breakdown exposed by daemon sessions.
-   * Process sessions omit it because their public SDK totals do not
-   * match the CLI's current-context meter.
-   */
-  readContextBreakdown?(): Promise<FactoryContextBreakdown>;
-  rewind?(
-    params: FactoryDroidSessionRewindParams,
-  ): Promise<{ session: FactoryDroidSession }>;
-  getRewindInfo?(params: {
-    messageId: string;
-  }): Promise<FactoryDroidSessionRewindInfo>;
-  getGitDiff?(): Promise<FactoryDroidSessionGitDiff>;
-  compact?(params?: {
-    customInstructions?: string;
-  }): Promise<{ session: FactoryDroidSession; removedCount: number }>;
-  fork?(params?: { title?: string }): Promise<FactoryDroidSession>;
-  rename?(params: { title: string }): Promise<void>;
-  listSkills?(): Promise<{ skills: unknown[] }>;
-  setSkillDisabled?(params: {
-    skillName: string;
-    disabled: boolean;
-  }): Promise<{ success: boolean }>;
-  listMcpServers?(): Promise<{ servers: unknown[] }>;
-  listMcpTools?(): Promise<unknown[]>;
-  toggleMcpServer?(params: {
-    serverName: string;
-    enabled: boolean;
-    settingsLevel: 'user';
-  }): Promise<{ success: boolean }>;
-  addMcpServer?(params: {
-    name: string;
-    type: 'stdio' | 'http' | 'sse';
-    command?: string;
-    args?: string[];
-    url?: string;
-  }): Promise<{ success: boolean }>;
-  removeMcpServer?(params: {
-    serverName: string;
-    settingsLevel: 'user';
-  }): Promise<{ success: boolean }>;
-  authenticateMcpServer?(params: {
-    serverName: string;
-  }): Promise<{ success: boolean }>;
-  onNotification?(
-    callback: (notification: Record<string, unknown>) => void,
-    filter?: { type?: string },
-  ): () => void;
-  close(): Promise<void>;
-}
-
-export type FactoryDroidSessionFactory = (options: {
-  target: RuntimeSessionTarget;
-  interactionHandler: RuntimeInteractionHandler;
-}) => Promise<FactoryDroidSession>;
+} from './session/specHandoffWatch';
+import { createToolResultCollector } from './tools/toolResultPreview';
+import { createOperationDiffCollector } from './tools/operationDiff';
 
 export interface FactoryDroidRuntimeOptions {
   readonly interactionHandler: RuntimeInteractionHandler;
@@ -247,7 +93,10 @@ export interface FactoryDroidRuntimeOptions {
    * defaults to the short-lived public-client catalog loader.
    */
   readonly loadSessionCommands?: typeof loadSessionCommands;
-  readonly onSessionNotification?: (parentSessionId: string, notification: Record<string, unknown>) => void;
+  readonly onSessionNotification?: (
+    parentSessionId: string,
+    notification: Record<string, unknown>,
+  ) => void;
 }
 
 export class FactoryDroidRuntime implements DroidRuntime {
@@ -285,6 +134,8 @@ export class FactoryDroidRuntime implements DroidRuntime {
   private subagentWatchUnsubscribe: (() => void) | null = null;
   /** Runtime events queued for the active turn's stream to yield. */
   private pendingTurnEvents: RuntimeEvent[] = [];
+  private readonly toolExecutionPhases = new ToolExecutionPhaseBuffer();
+  private activeTurnAbort: AbortController | null = null;
 
   constructor(options: FactoryDroidRuntimeOptions) {
     const handler = options.interactionHandler;
@@ -312,8 +163,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
       },
     };
     this.diagnostics = options.diagnostics;
-    this.loadSessionCommands =
-      options.loadSessionCommands ?? loadSessionCommands;
+    this.loadSessionCommands = options.loadSessionCommands ?? loadSessionCommands;
     this.onSessionNotification = options.onSessionNotification;
     this.createSdkSession =
       options.createSdkSession ??
@@ -385,6 +235,8 @@ export class FactoryDroidRuntime implements DroidRuntime {
 
     const turn = Symbol('droid-turn');
     this.activeTurn = turn;
+    const cancellation = new AbortController();
+    this.activeTurnAbort = cancellation;
     const startedAt = performance.now();
     let projectedEventCount = 0;
     let toolStartCount = 0;
@@ -393,6 +245,12 @@ export class FactoryDroidRuntime implements DroidRuntime {
     let outcome = 'stream-ended';
     let failureDetail: string | undefined;
     const startedTools = new Set<string>();
+    const collectResult = createToolResultCollector(this.sessionTarget?.cwd);
+    const collectOperation = createOperationDiffCollector(
+      this.sessionTarget?.cwd,
+      session.id,
+    );
+    this.toolExecutionPhases.reset();
     this.recordDiagnostic({
       level: 'info',
       name: 'runtime.turn.started',
@@ -406,6 +264,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
     try {
       for await (const sdkEvent of session.stream(text, {
         includePartialMessages: true,
+        abortSignal: cancellation.signal,
         ...projectStreamAttachments(attachments),
       })) {
         if (this.disposed || this.activeTurn !== turn) {
@@ -420,10 +279,11 @@ export class FactoryDroidRuntime implements DroidRuntime {
           projectedEventCount += 1;
           yield pending;
         }
-
         const event = normalizeSdkEvent(
           sdkEvent,
           this.sessionTarget?.cwd,
+          collectResult(sdkEvent),
+          collectOperation(sdkEvent),
         );
         if (event) {
           projectedEventCount += 1;
@@ -442,13 +302,9 @@ export class FactoryDroidRuntime implements DroidRuntime {
                     tool: event.toolName,
                     toolUseId: event.toolUseId,
                     action: event.action,
-                    ...(event.filePath === undefined
-                      ? {}
-                      : { filePath: event.filePath }),
+                    ...(event.filePath === undefined ? {} : { filePath: event.filePath }),
                   },
-                  ...(event.detail === undefined
-                    ? {}
-                    : { detail: event.detail }),
+                  ...(event.detail === undefined ? {} : { detail: event.detail }),
                 });
               }
               break;
@@ -479,6 +335,12 @@ export class FactoryDroidRuntime implements DroidRuntime {
             outcome = event.outcome;
           }
           yield event;
+          if (event.type === 'tool-start') {
+            for (const phase of this.toolExecutionPhases.start(event.toolUseId)) {
+              projectedEventCount += 1;
+              yield phase;
+            }
+          }
         }
 
         // Image blocks travel on events whose main projection is a
@@ -489,9 +351,14 @@ export class FactoryDroidRuntime implements DroidRuntime {
           yield imageEvent;
         }
       }
+      while (this.pendingTurnEvents.length > 0 && outcome === 'stream-ended') {
+        projectedEventCount += 1;
+        yield this.pendingTurnEvents.shift()!;
+      }
     } catch (error) {
-      outcome = 'failed';
-      failureDetail = describeUnknown(error);
+      outcome = cancellation.signal.aborted ? 'interrupted' : 'failed';
+      failureDetail = cancellation.signal.aborted ? undefined : describeUnknown(error);
+      if (cancellation.signal.aborted) throw new DOMException('Droid turn interrupted.', 'AbortError');
       throw error;
     } finally {
       this.recordDiagnostic({
@@ -511,134 +378,56 @@ export class FactoryDroidRuntime implements DroidRuntime {
           toolProgressCount,
           toolResultCount,
         },
-        ...(failureDetail === undefined
-          ? {}
-          : { detail: failureDetail }),
+        ...(failureDetail === undefined ? {} : { detail: failureDetail }),
       });
       this.disarmSpecHandoffWatch();
       this.pendingTurnEvents = [];
+      this.toolExecutionPhases.reset();
       if (this.activeTurn === turn) {
         this.activeTurn = null;
+        this.activeTurnAbort = null;
       }
     }
   }
 
-  async readSessionSettings(): Promise<RuntimeSessionSettings> {
-    const session = this.requireSession();
-    try {
-      return projectSessionSettings(session.settings);
-    } catch {
-      throw new Error('Droid returned invalid session settings.');
-    }
+  readSessionSettings(): Promise<RuntimeSessionSettings> {
+    return readSessionSettings({
+      session: this.requireSession(),
+      recordDiagnostic: (event) => this.recordDiagnostic(event),
+    });
   }
 
   readMissionSettings(): import('./DroidRuntime').RuntimeMissionSettings | null {
-    const settings = this.requireSession().settings.missionSettings;
-    if (
-      settings === null ||
-      typeof settings !== 'object' ||
-      Array.isArray(settings) ||
-      !('skipScrutiny' in settings) ||
-      typeof settings.skipScrutiny !== 'boolean' ||
-      !('skipUserTesting' in settings) ||
-      typeof settings.skipUserTesting !== 'boolean'
-    ) {
-      return null;
-    }
-    return {
-      scrutinyEnabled: !settings.skipScrutiny,
-      userTestingEnabled: !settings.skipUserTesting,
-    };
-  }
-
-  async readContextWindow(): Promise<RuntimeContextWindow> {
-    const session = this.requireSession();
-    const startedAt = performance.now();
-    this.recordDiagnostic({
-      level: 'debug',
-      name: 'runtime.context.started',
+    return readMissionSettings({
+      session: this.requireSession(),
+      recordDiagnostic: (event) => this.recordDiagnostic(event),
     });
-    if (typeof session.readContextBreakdown !== 'function') {
-      const result: RuntimeContextWindow = {
-        availability: 'unavailable',
-        reason: 'unsupported',
-      };
-      this.recordDiagnostic({
-        level: 'info',
-        name: 'runtime.context.finished',
-        attributes: {
-          durationMs: Math.round(performance.now() - startedAt),
-          outcome: result.availability,
-          reason: result.reason,
-        },
-      });
-      return result;
-    }
-    let breakdown: FactoryContextBreakdown;
-    try {
-      breakdown = await session.readContextBreakdown();
-    } catch {
-      this.recordDiagnostic({
-        level: 'error',
-        name: 'runtime.context.finished',
-        attributes: {
-          durationMs: Math.round(performance.now() - startedAt),
-          outcome: 'sdk-error',
-        },
-      });
-      throw new Error('Droid context statistics could not be read.');
-    }
-    const result = projectContextWindow(breakdown);
-    this.recordDiagnostic({
-      level: 'info',
-      name: 'runtime.context.finished',
-      attributes: {
-        durationMs: Math.round(performance.now() - startedAt),
-        outcome: result.availability,
-        ...(result.availability === 'available'
-          ? {
-              source: 'context-breakdown',
-              used: result.used,
-              remaining: result.remaining,
-              limit: result.limit,
-            }
-          : { reason: result.reason }),
-      },
+  }
+
+  readContextWindow(): Promise<RuntimeContextWindow> {
+    return readContextWindow({
+      session: this.requireSession(),
+      recordDiagnostic: (event) => this.recordDiagnostic(event),
     });
-    return result;
   }
 
-  async readModelCatalog(): Promise<RuntimeModelCatalog> {
-    const models = this.requireSession().availableModels;
-    if (models === undefined) {
-      return { status: 'unavailable' };
-    }
-    try {
-      return {
-        status: 'available',
-        items: projectModelCatalog(models),
-      };
-    } catch {
-      throw new Error('Droid returned an invalid model catalog.');
-    }
+  readModelCatalog(): Promise<RuntimeModelCatalog> {
+    return readModelCatalog({
+      session: this.requireSession(),
+      recordDiagnostic: (event) => this.recordDiagnostic(event),
+    });
   }
 
-  async updateSessionSetting(
+  updateSessionSetting(
     update: RuntimeSessionSettingUpdate,
   ): Promise<RuntimeSessionSettings> {
-    const session = this.requireSession();
-    let params: DroidSessionUpdateSettingsOptions;
-    try {
-      params = projectSettingsUpdate(update);
-    } catch {
-      throw new Error('Invalid session setting update.');
-    }
-    try {
-      await session.updateSettings(params);
-      return projectSessionSettings(session.settings);
-    } catch {
-      throw new Error('Droid session settings could not be updated.');
-    }
+    return updateSessionSetting(
+      {
+        session: this.requireSession(),
+        recordDiagnostic: (event) => this.recordDiagnostic(event),
+      },
+      update,
+    );
   }
 
   async interrupt(): Promise<void> {
@@ -646,7 +435,9 @@ export class FactoryDroidRuntime implements DroidRuntime {
       return;
     }
 
+    const cancellation = this.activeTurnAbort;
     await this.session.interrupt();
+    cancellation?.abort();
   }
 
   async interruptSession(): Promise<void> {
@@ -654,17 +445,16 @@ export class FactoryDroidRuntime implements DroidRuntime {
       return;
     }
 
+    const cancellation = this.activeTurnAbort;
     await this.session.interrupt();
+    cancellation?.abort();
   }
 
-  async readSessionWorkingState(): Promise<RuntimeSessionWorkingState> {
-    const session = this.requireSession();
-    if (typeof session.readWorkingState !== 'function') {
-      throw new Error(
-        'The Droid session does not report a working state.',
-      );
-    }
-    return projectWorkingState(await session.readWorkingState());
+  readSessionWorkingState(): Promise<RuntimeSessionWorkingState> {
+    return readSessionWorkingState({
+      session: this.requireSession(),
+      recordDiagnostic: (event) => this.recordDiagnostic(event),
+    });
   }
 
   supportsBackgroundTurns(): boolean {
@@ -675,293 +465,49 @@ export class FactoryDroidRuntime implements DroidRuntime {
     );
   }
 
-  async rewind(
-    params: RuntimeRewindParams,
-  ): Promise<RuntimeRewindResult> {
-    const session = this.requireSession();
-    if (this.activeTurn) {
-      throw new Error(
-        'Droid runtime cannot rewind while a turn is active.',
-      );
-    }
-    if (typeof session.rewind !== 'function') {
-      throw new Error('The Droid session does not support rewind.');
-    }
-
-    const startedAt = performance.now();
-    this.recordDiagnostic({
-      level: 'info',
-      name: 'runtime.rewind.started',
-    });
-
-    let nextSession: FactoryDroidSession;
-    try {
-      let filesToRestore: FactoryDroidSessionRewindParams['filesToRestore'] =
-        [];
-      let filesToDelete: FactoryDroidSessionRewindParams['filesToDelete'] =
-        [];
-      if (
-        params.restoreFiles === true &&
-        typeof session.getRewindInfo === 'function'
-      ) {
-        const info = await session.getRewindInfo({
-          messageId: params.messageId,
-        });
-        filesToRestore = info.availableFiles;
-        filesToDelete = info.createdFiles;
-      }
-      const outcome = await session.rewind({
-        messageId: params.messageId,
-        filesToRestore,
-        filesToDelete,
-        forkTitle: params.forkTitle,
-      });
-      nextSession = outcome.session;
-    } catch (error) {
-      this.recordDiagnostic({
-        level: 'error',
-        name: 'runtime.rewind.finished',
-        attributes: {
-          durationMs: Math.round(performance.now() - startedAt),
-          outcome: 'sdk-error',
-        },
-      });
-      throw error;
-    }
-
-    // The SDK replaces the rewound session in place; re-apply captured
-    // session metadata so the model catalog survives.
-    const availableModels = session.availableModels;
-    this.session = createCapturedSessionView(
-      nextSession,
-      availableModels,
-    );
-    if (this.sessionTarget) {
-      this.sessionTarget = {
-        kind: 'resume',
-        cwd: this.sessionTarget.cwd,
-        sessionId: nextSession.id,
-      };
-    }
-
-    this.recordDiagnostic({
-      level: 'info',
-      name: 'runtime.rewind.finished',
-      attributes: {
-        durationMs: Math.round(performance.now() - startedAt),
-        outcome: 'success',
-      },
-    });
-    return { sessionId: nextSession.id };
+  rewind(params: RuntimeRewindParams): Promise<RuntimeRewindResult> {
+    return rewind(this.replacementContext(), params);
   }
 
   async getRewindInfo(messageId: string): Promise<RuntimeRewindInfo> {
     const session = this.requireSession();
     if (typeof session.getRewindInfo !== 'function') {
-      throw new Error(
-        'The Droid session does not report rewind file info.',
-      );
+      throw new Error('The Droid session does not report rewind file info.');
     }
     const info = await session.getRewindInfo({ messageId });
     return projectRewindInfo(info, this.sessionTarget?.cwd ?? null);
   }
 
-  async readGitDiff(): Promise<RuntimeGitDiff> {
+  supportsGitDiff(): boolean {
+    return !this.disposed && typeof this.session?.getGitDiff === 'function';
+  }
+
+  async readGitDiff(options?: RuntimeGitDiffOptions): Promise<RuntimeGitDiff> {
     const session = this.requireSession();
     if (typeof session.getGitDiff !== 'function') {
       throw new Error('The Droid session does not report a git diff.');
     }
-    return projectGitDiff(
-      await session.getGitDiff(),
-      this.sessionTarget?.cwd ?? null,
-    );
+    return projectGitDiff(await session.getGitDiff(options), this.getSessionCwd() ?? this.sessionTarget?.cwd ?? null);
   }
 
-  async compact(): Promise<RuntimeCompactResult> {
-    const session = this.requireSession();
-    if (this.activeTurn) {
-      throw new Error(
-        'Droid runtime cannot compact while a turn is active.',
-      );
-    }
-    if (typeof session.compact !== 'function') {
-      throw new Error('The Droid session does not support compaction.');
-    }
-
-    const startedAt = performance.now();
-    this.recordDiagnostic({
-      level: 'info',
-      name: 'runtime.compact.started',
-    });
-
-    let nextSession: FactoryDroidSession;
-    let removedCount: number;
-    try {
-      const outcome = await session.compact();
-      nextSession = outcome.session;
-      removedCount = Number.isSafeInteger(outcome.removedCount)
-        ? outcome.removedCount
-        : 0;
-    } catch (error) {
-      this.recordDiagnostic({
-        level: 'error',
-        name: 'runtime.compact.finished',
-        attributes: {
-          durationMs: Math.round(performance.now() - startedAt),
-          outcome: 'sdk-error',
-        },
-      });
-      throw error;
-    }
-
-    // Compaction continues in a new session; re-apply captured session
-    // metadata so the model catalog survives.
-    const availableModels = session.availableModels;
-    this.session = createCapturedSessionView(
-      nextSession,
-      availableModels,
-    );
-    if (this.sessionTarget) {
-      this.sessionTarget = {
-        kind: 'resume',
-        cwd: this.sessionTarget.cwd,
-        sessionId: nextSession.id,
-      };
-    }
-
-    this.recordDiagnostic({
-      level: 'info',
-      name: 'runtime.compact.finished',
-      attributes: {
-        durationMs: Math.round(performance.now() - startedAt),
-        outcome: 'success',
-      },
-    });
-    return { sessionId: nextSession.id, removedCount };
+  compact(): Promise<RuntimeCompactResult> {
+    return compact(this.replacementContext());
   }
 
-  async fork(title: string): Promise<RuntimeForkResult> {
-    const session = this.requireSession();
-    if (this.activeTurn) {
-      throw new Error(
-        'Droid runtime cannot fork while a turn is active.',
-      );
-    }
-    if (typeof session.fork !== 'function') {
-      throw new Error('The Droid session does not support fork.');
-    }
-
-    const startedAt = performance.now();
-    this.recordDiagnostic({
-      level: 'info',
-      name: 'runtime.fork.started',
-    });
-
-    let nextSession: FactoryDroidSession;
-    try {
-      nextSession = await session.fork({ title });
-    } catch (error) {
-      this.recordDiagnostic({
-        level: 'error',
-        name: 'runtime.fork.finished',
-        attributes: {
-          durationMs: Math.round(performance.now() - startedAt),
-          outcome: 'sdk-error',
-        },
-      });
-      throw error;
-    }
-
-    // Forking replaces the SDK session handle in place; re-apply
-    // captured session metadata.
-    const availableModels = session.availableModels;
-    this.session = createCapturedSessionView(
-      nextSession,
-      availableModels,
-    );
-    if (this.sessionTarget) {
-      this.sessionTarget = {
-        kind: 'resume',
-        cwd: this.sessionTarget.cwd,
-        sessionId: nextSession.id,
-      };
-    }
-
-    this.recordDiagnostic({
-      level: 'info',
-      name: 'runtime.fork.finished',
-      attributes: {
-        durationMs: Math.round(performance.now() - startedAt),
-        outcome: 'success',
-      },
-    });
-    return { sessionId: nextSession.id };
+  fork(title: string): Promise<RuntimeForkResult> {
+    return fork(this.replacementContext(), title);
   }
 
-  async rename(title: string): Promise<void> {
-    const session = this.requireSession();
-    if (typeof session.rename !== 'function') {
-      throw new Error('The Droid session does not support rename.');
-    }
-
-    const startedAt = performance.now();
-    try {
-      await session.rename({ title });
-    } catch (error) {
-      this.recordDiagnostic({
-        level: 'error',
-        name: 'runtime.rename.finished',
-        attributes: {
-          durationMs: Math.round(performance.now() - startedAt),
-          outcome: 'sdk-error',
-        },
-      });
-      throw error;
-    }
-    this.recordDiagnostic({
-      level: 'info',
-      name: 'runtime.rename.finished',
-      attributes: {
-        durationMs: Math.round(performance.now() - startedAt),
-        outcome: 'success',
-      },
-    });
+  rename(title: string): Promise<void> {
+    return rename(this.replacementContext(), title);
   }
 
-  async listSkills(): Promise<readonly RuntimeSkill[]> {
-    const session = this.requireSession();
-    if (typeof session.listSkills !== 'function') {
-      throw new Error('The Droid session does not support skills.');
-    }
-    const result = await session.listSkills();
-    if (!Array.isArray(result.skills)) {
-      throw new Error('Droid returned an invalid skill list.');
-    }
-    const skills: RuntimeSkill[] = [];
-    for (const raw of result.skills.slice(0, MAX_RUNTIME_SKILL_ITEMS)) {
-      const skill = projectSkill(raw);
-      if (skill !== null) {
-        skills.push(skill);
-      }
-    }
-    return skills;
+  listSkills(): Promise<readonly RuntimeSkill[]> {
+    return listSkills(this.requireSession());
   }
 
-  async setSkillDisabled(
-    name: string,
-    disabled: boolean,
-  ): Promise<void> {
-    const session = this.requireSession();
-    if (typeof session.setSkillDisabled !== 'function') {
-      throw new Error('The Droid session does not support skills.');
-    }
-    const result = await session.setSkillDisabled({
-      skillName: name,
-      disabled,
-    });
-    if (result.success !== true) {
-      throw new Error('Droid refused to update the skill.');
-    }
+  setSkillDisabled(name: string, disabled: boolean): Promise<void> {
+    return setSkillDisabled(this.requireSession(), name, disabled);
   }
 
   async listCommands(): Promise<readonly RuntimeCommand[]> {
@@ -974,10 +520,11 @@ export class FactoryDroidRuntime implements DroidRuntime {
     const startedAt = performance.now();
     let commands: readonly RuntimeCommand[];
     try {
-      commands = await this.loadSessionCommands({
-        cwd: target.cwd,
-        sessionId: session.id,
-      });
+      commands = await (session.listCommands?.() ??
+        this.loadSessionCommands({
+          cwd: target.cwd,
+          sessionId: session.id,
+        }));
     } catch (error) {
       this.recordDiagnostic({
         level: 'error',
@@ -1001,244 +548,27 @@ export class FactoryDroidRuntime implements DroidRuntime {
     return commands;
   }
 
-  async listMcpServers(): Promise<readonly RuntimeMcpServer[]> {
-    const session = this.requireSession();
-    if (
-      typeof session.listMcpServers !== 'function' ||
-      typeof session.listMcpTools !== 'function'
-    ) {
-      throw new Error('The Droid session does not support MCP.');
-    }
-    const [serversResult, toolsResult] = await Promise.all([
-      session.listMcpServers(),
-      session.listMcpTools(),
-    ]);
-    if (
-      !Array.isArray(serversResult.servers) ||
-      !Array.isArray(toolsResult)
-    ) {
-      throw new Error('Droid returned an invalid MCP catalog.');
-    }
-
-    const toolsByServer = new Map<string, RuntimeMcpTool[]>();
-    const seenToolNames = new Map<string, Set<string>>();
-    for (const raw of toolsResult) {
-      const projected = projectMcpTool(raw);
-      if (projected === null) {
-        continue;
-      }
-      const seen =
-        seenToolNames.get(projected.serverName) ?? new Set<string>();
-      if (seen.has(projected.tool.name)) {
-        continue;
-      }
-      seen.add(projected.tool.name);
-      seenToolNames.set(projected.serverName, seen);
-      const bucket = toolsByServer.get(projected.serverName) ?? [];
-      if (bucket.length < MAX_RUNTIME_MCP_TOOLS_PER_SERVER) {
-        bucket.push(projected.tool);
-        toolsByServer.set(projected.serverName, bucket);
-      }
-    }
-
-    const servers: RuntimeMcpServer[] = [];
-    const seenServerNames = new Set<string>();
-    for (const raw of serversResult.servers.slice(
-      0,
-      MAX_RUNTIME_MCP_SERVERS,
-    )) {
-      const server = projectMcpServer(raw, toolsByServer);
-      if (server !== null && !seenServerNames.has(server.name)) {
-        seenServerNames.add(server.name);
-        servers.push(server);
-      }
-    }
-    return servers;
+  listMcpServers(): Promise<readonly RuntimeMcpServer[]> {
+    return listMcpServers(this.requireSession());
   }
 
-  async setMcpServerEnabled(
-    name: string,
-    enabled: boolean,
-  ): Promise<void> {
-    const session = this.requireSession();
-    if (typeof session.toggleMcpServer !== 'function') {
-      throw new Error('The Droid session does not support MCP.');
-    }
-    // The config write lands before Droid's connect attempt resolves,
-    // so a timeout here must be followed by a fresh list: the server's
-    // own status badge (connecting/failed) is the reliable signal.
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => {
-        reject(
-          new Error(
-            `The MCP server did not finish ${
-              enabled ? 'starting' : 'stopping'
-            } within ${Math.round(MCP_TOGGLE_TIMEOUT_MS / 1000)}s.`,
-          ),
-        );
-      }, MCP_TOGGLE_TIMEOUT_MS);
-    });
-    try {
-      const result = await Promise.race([
-        session.toggleMcpServer({
-          serverName: name,
-          enabled,
-          settingsLevel: 'user',
-        }),
-        timeout,
-      ]);
-      if (result.success !== true) {
-        throw new Error('Droid refused to update the MCP server.');
-      }
-    } finally {
-      if (timer !== null) {
-        clearTimeout(timer);
-      }
-    }
+  setMcpServerEnabled(name: string, enabled: boolean): Promise<void> {
+    return setMcpServerEnabled(this.requireSession(), name, enabled);
   }
 
-  async addMcpServer(params: RuntimeMcpServerAddParams): Promise<void> {
-    const session = this.requireSession();
-    if (typeof session.addMcpServer !== 'function') {
-      throw new Error(
-        'The Droid session does not support adding MCP servers.',
-      );
-    }
-    const request: Parameters<
-      NonNullable<FactoryDroidSession['addMcpServer']>
-    >[0] = {
-      name: params.name,
-      type: params.serverType,
-    };
-    if (params.serverType === 'stdio') {
-      request.command = params.command;
-      if (params.args !== undefined && params.args.length > 0) {
-        request.args = [...params.args];
-      }
-    } else {
-      request.url = params.url;
-    }
-    const result = await session.addMcpServer(request);
-    if (result.success !== true) {
-      throw new Error('Droid refused to add the MCP server.');
-    }
+  addMcpServer(params: RuntimeMcpServerAddParams): Promise<void> {
+    return addMcpServer(this.requireSession(), params);
   }
 
-  async removeMcpServer(name: string): Promise<void> {
-    const session = this.requireSession();
-    if (typeof session.removeMcpServer !== 'function') {
-      throw new Error(
-        'The Droid session does not support removing MCP servers.',
-      );
-    }
-    const result = await session.removeMcpServer({
-      serverName: name,
-      settingsLevel: 'user',
-    });
-    if (result.success !== true) {
-      throw new Error('Droid refused to remove the MCP server.');
-    }
+  removeMcpServer(name: string): Promise<void> {
+    return removeMcpServer(this.requireSession(), name);
   }
 
-  async authenticateMcpServer(
+  authenticateMcpServer(
     name: string,
     onCompleted: (outcome: RuntimeMcpAuthOutcome) => void,
   ): Promise<RuntimeMcpAuthStart> {
-    const session = this.requireSession();
-    if (
-      typeof session.authenticateMcpServer !== 'function' ||
-      typeof session.onNotification !== 'function'
-    ) {
-      throw new Error(
-        'The Droid session does not support MCP authentication.',
-      );
-    }
-
-    let authUrl: string | null = null;
-    let resolveUrl: (() => void) | null = null;
-    const urlArrived = new Promise<void>((resolve) => {
-      resolveUrl = resolve;
-    });
-    const unsubscribeRequired = session.onNotification(
-      (notification) => {
-        if (notification['serverName'] !== name) {
-          return;
-        }
-        const url = notification['authUrl'];
-        if (
-          typeof url === 'string' &&
-          url.length > 0 &&
-          url.length <= MAX_RUNTIME_MCP_AUTH_URL_LENGTH &&
-          /^https?:\/\//.test(url)
-        ) {
-          authUrl = url;
-        }
-        resolveUrl?.();
-      },
-      { type: 'mcp_auth_required' },
-    );
-
-    let completionDone = false;
-    let completionTimer: ReturnType<typeof setTimeout> | null = null;
-    let unsubscribeCompleted = () => {};
-    const finishCompletion = () => {
-      if (completionDone) {
-        return;
-      }
-      completionDone = true;
-      if (completionTimer !== null) {
-        clearTimeout(completionTimer);
-        completionTimer = null;
-      }
-      unsubscribeCompleted();
-    };
-    unsubscribeCompleted = session.onNotification(
-      (notification) => {
-        if (notification['serverName'] !== name || completionDone) {
-          return;
-        }
-        const outcome = notification['outcome'];
-        if (
-          outcome === 'success' ||
-          outcome === 'cancelled' ||
-          outcome === 'failed'
-        ) {
-          finishCompletion();
-          onCompleted(outcome);
-        }
-      },
-      { type: 'mcp_auth_completed' },
-    );
-    // Stop listening eventually so an abandoned browser flow does not
-    // leave a subscription behind for the session's whole lifetime.
-    completionTimer = setTimeout(
-      finishCompletion,
-      MCP_AUTH_COMPLETION_SUBSCRIPTION_MS,
-    );
-
-    try {
-      const result = await session.authenticateMcpServer({
-        serverName: name,
-      });
-      if (result.success !== true) {
-        throw new Error('Droid refused to start MCP authentication.');
-      }
-      // The OAuth URL arrives as a separate notification shortly after
-      // the request is accepted; wait briefly for it.
-      await Promise.race([
-        urlArrived,
-        new Promise<void>((resolve) => {
-          setTimeout(resolve, MCP_AUTH_URL_WAIT_MS);
-        }),
-      ]);
-      return { authUrl };
-    } catch (error) {
-      finishCompletion();
-      throw error;
-    } finally {
-      unsubscribeRequired();
-    }
+    return authenticateMcpServer(this.requireSession(), name, onCompleted);
   }
 
   private beginSpecHandoffWatch(
@@ -1284,6 +614,22 @@ export class FactoryDroidRuntime implements DroidRuntime {
     watch.dispose();
   }
 
+  private adoptSession(
+    nextSession: FactoryDroidSession,
+    availableModels?: readonly AvailableModelConfig[],
+  ): void {
+    this.disarmSubagentWatch();
+    this.session = createCapturedSessionView(nextSession, availableModels);
+    if (this.sessionTarget !== null) {
+      this.sessionTarget = {
+        kind: 'resume',
+        cwd: this.sessionTarget.cwd,
+        sessionId: nextSession.id,
+      };
+    }
+    this.armSubagentWatch();
+  }
+
   private armSubagentWatch(): void {
     const session = this.session;
     if (
@@ -1294,35 +640,38 @@ export class FactoryDroidRuntime implements DroidRuntime {
     ) {
       return;
     }
-    this.subagentWatchUnsubscribe = session.onNotification(
-      (notification) => {
-        this.onSessionNotification?.(session.id, notification);
-        const started = readSubagentStartedNotification(notification);
-        if (started === null) {
-          return;
-        }
-        // A subagent only spawns under a running parent Task tool, so
-        // a notification outside an active turn has no row to attach
-        // to and is dropped.
-        if (this.activeTurn === null) {
-          return;
-        }
-        this.pendingTurnEvents.push({
-          type: 'subagent-started',
-          toolUseId: started.toolUseId,
+    this.subagentWatchUnsubscribe = session.onNotification((notification) => {
+      this.onSessionNotification?.(session.id, notification);
+      const phase =
+        this.activeTurn === null
+          ? undefined
+          : this.toolExecutionPhases.observe(notification, session.id);
+      if (phase !== undefined) this.pendingTurnEvents.push(phase);
+      const started = readSubagentStartedNotification(notification);
+      if (started === null) {
+        return;
+      }
+      // A subagent only spawns under a running parent Task tool, so
+      // a notification outside an active turn has no row to attach
+      // to and is dropped.
+      if (this.activeTurn === null) {
+        return;
+      }
+      this.pendingTurnEvents.push({
+        type: 'subagent-started',
+        toolUseId: started.toolUseId,
+        subagentType: started.subagentType,
+        description: started.description,
+      });
+      this.recordDiagnostic({
+        level: 'info',
+        name: 'runtime.subagent.started',
+        attributes: {
           subagentType: started.subagentType,
-          description: started.description,
-        });
-        this.recordDiagnostic({
-          level: 'info',
-          name: 'runtime.subagent.started',
-          attributes: {
-            subagentType: started.subagentType,
-            hasToolUseId: started.toolUseId !== null,
-          },
-        });
-      },
-    );
+          hasToolUseId: started.toolUseId !== null,
+        },
+      });
+    });
   }
 
   private disarmSubagentWatch(): void {
@@ -1354,9 +703,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
     return disposal;
   }
 
-  private async create(
-    target: RuntimeSessionTarget,
-  ): Promise<RuntimeAvailability> {
+  private async create(target: RuntimeSessionTarget): Promise<RuntimeAvailability> {
     const startedAt = performance.now();
     this.recordDiagnostic({
       level: 'info',
@@ -1372,20 +719,11 @@ export class FactoryDroidRuntime implements DroidRuntime {
     } catch (error) {
       if (error instanceof DaemonAvailabilityError) {
         const [reason, message] = daemonInitializationFailure(error.reason);
-        this.recordInitializationFinished(
-          startedAt,
-          reason,
-          'error',
-          error,
-        );
+        this.recordInitializationFinished(startedAt, reason, 'error', error);
         return this.unavailable(reason, message);
       }
       if (error instanceof InvalidSessionCwdError) {
-        this.recordInitializationFinished(
-          startedAt,
-          'invalid-cwd',
-          'warn',
-        );
+        this.recordInitializationFinished(startedAt, 'invalid-cwd', 'warn');
         return this.unavailable(
           'invalid-cwd',
           'Droid rejected the requested working directory.',
@@ -1393,11 +731,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
       }
 
       if (isMissingCliError(error)) {
-        this.recordInitializationFinished(
-          startedAt,
-          'cli-not-found',
-          'warn',
-        );
+        this.recordInitializationFinished(startedAt, 'cli-not-found', 'warn');
         return this.unavailable(
           'cli-not-found',
           'The Droid CLI executable was not found.',
@@ -1424,11 +758,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
         this.session = null;
         this.sessionTarget = null;
       }
-      this.recordInitializationFinished(
-        startedAt,
-        'disposed',
-        'warn',
-      );
+      this.recordInitializationFinished(startedAt, 'disposed', 'warn');
       return this.unavailable(
         'initialization-failed',
         'Droid runtime was disposed during initialization.',
@@ -1442,9 +772,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
     return this.available(session);
   }
 
-  private async disposeOwnedSession(
-    preserveBackendTurn = false,
-  ): Promise<void> {
+  private async disposeOwnedSession(preserveBackendTurn = false): Promise<void> {
     await this.initialization?.promise;
 
     const session = this.session;
@@ -1457,8 +785,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
     // interrupt when the caller asked to preserve it. Process
     // sessions cannot continue detached; they interrupt as before.
     const preserve =
-      preserveBackendTurn &&
-      typeof session.readWorkingState === 'function';
+      preserveBackendTurn && typeof session.readWorkingState === 'function';
     let interruptError: unknown;
     if (this.activeTurn && !preserve) {
       try {
@@ -1527,646 +854,42 @@ export class FactoryDroidRuntime implements DroidRuntime {
     // The failure reason rides along (bounded): a bare outcome made
     // the 2026-08-13 "session could not be opened" hunt needlessly
     // blind.
-    const reason =
-      error instanceof Error ? error.message : undefined;
+    const reason = error instanceof Error ? error.message : undefined;
     this.recordDiagnostic({
       level,
       name: 'runtime.initialize.finished',
       attributes: {
         durationMs: Math.round(performance.now() - startedAt),
         outcome,
-        ...(reason === undefined
-          ? {}
-          : { reason: reason.slice(0, 300) }),
+        ...(reason === undefined ? {} : { reason: reason.slice(0, 300) }),
       },
     });
   }
 
-  private recordDiagnostic(
-    event: Parameters<RuntimeDiagnosticSink['record']>[0],
-  ): void {
+  private recordDiagnostic(event: Parameters<RuntimeDiagnosticSink['record']>[0]): void {
     try {
       this.diagnostics?.record(event);
     } catch {
       // Diagnostics must never alter Runtime behavior.
     }
   }
-}
-
-function daemonInitializationFailure(
-  reason: DaemonAvailabilityError['reason'],
-): [
-  Extract<RuntimeAvailability, { status: 'unavailable' }>['reason'],
-  string,
-] {
-  switch (reason) {
-    case 'not-logged-in':
-      return [
-        'daemon-not-logged-in',
-        'Sign in with the droid CLI, then retry the daemon connection.',
-      ];
-    case 'credentials-unreadable':
-      return [
-        'daemon-credentials-unreadable',
-        'DroidVisX could not read the current Droid CLI sign-in.',
-      ];
-    case 'refresh-failed':
-    case 'authentication-failed':
-      return [
-        'daemon-refresh-failed',
-        'The Droid CLI sign-in could not authenticate the local daemon.',
-      ];
-    case 'connect-failed':
-      return [
-        'daemon-unavailable',
-        'The local droid daemon could not be reached.',
-      ];
-  }
-}
-
-/** Renders an unknown value (SDK event or thrown error) for the log. */
-function describeUnknown(value: unknown): string {
-  if (value instanceof Error) {
-    return value.stack ?? `${value.name}: ${value.message}`;
-  }
-  try {
-    return JSON.stringify(value) ?? String(value);
-  } catch {
-    return String(value);
-  }
-}
-
-interface LocalSessionDependencies {
-  createTransport(options: {
-    cwd: string;
-    observability?: DroidObservability;
-  }): ProcessSessionTransport;
-  createSession(options: {
-    cwd: string;
-    transport: StringFramedDroidClientTransport;
-    observability?: DroidObservability;
-    permissionHandler: RuntimeInteractionCallbacks['permissionHandler'];
-    askUserHandler: RuntimeInteractionCallbacks['askUserHandler'];
-  }): Promise<FactoryDroidSession>;
-  resumeSession(
-    sessionId: string,
-    options: {
-      transport: StringFramedDroidClientTransport;
-      observability?: DroidObservability;
-      permissionHandler: RuntimeInteractionCallbacks['permissionHandler'];
-      askUserHandler: RuntimeInteractionCallbacks['askUserHandler'];
-    },
-  ): Promise<FactoryDroidSession>;
-}
-
-const localSessionDependencies: LocalSessionDependencies = {
-  createTransport: (options) => new ProcessTransport(options),
-  createSession,
-  resumeSession,
-};
-
-export async function createLocalDroidSession(
-  {
-    target,
-    interactionHandler,
-    observability,
-  }: {
-    target: RuntimeSessionTarget;
-    interactionHandler: RuntimeInteractionHandler;
-    observability?: DroidObservability;
-  },
-  dependencies: LocalSessionDependencies = localSessionDependencies,
-): Promise<FactoryDroidSession> {
-  if (target.kind === 'new' && target.worktree === true) {
-    // Only the daemon has the native create-worktree-and-run channel;
-    // reaching this factory with a worktree target is a wiring bug and
-    // must not silently produce a plain session in the workspace.
-    throw new Error(
-      'Worktree sessions require the daemon runtime mode.',
-    );
-  }
-  const observabilityOptions =
-    observability === undefined ? {} : { observability };
-  const transport = createProvisionalProcessTransport(
-    dependencies.createTransport({
-      cwd: target.cwd,
-      ...observabilityOptions,
-    }),
-  );
-
-  try {
-    await transport.connect();
-
-    const interactionCallbacks =
-      createRuntimeInteractionCallbacks(interactionHandler);
-    const catalogCapture = createModelCatalogCaptureTransport(transport);
-    const session =
-      target.kind === 'resume'
-        ? await dependencies.resumeSession(target.sessionId, {
-            transport: catalogCapture.transport,
-            ...observabilityOptions,
-            ...interactionCallbacks,
-          })
-        : await dependencies.createSession({
-            cwd: target.cwd,
-            transport: catalogCapture.transport,
-            ...observabilityOptions,
-            ...interactionCallbacks,
-          });
-
-    const availableModels = catalogCapture.readAvailableModels();
-    return createCapturedSessionView(
-      session,
-      availableModels,
-    );
-  } catch (error) {
-    try {
-      await transport.close();
-    } catch {
-      // Preserve the connection or session-establishment failure.
-    }
-    throw error;
-  }
-}
-
-function normalizeSessionTarget(
-  target: RuntimeSessionTarget | string,
-): RuntimeSessionTarget {
-  return typeof target === 'string'
-    ? { kind: 'new', cwd: target }
-    : target;
-}
-
-function sameSessionTarget(
-  left: RuntimeSessionTarget,
-  right: RuntimeSessionTarget | null,
-): boolean {
-  return (
-    right !== null &&
-    left.kind === right.kind &&
-    left.cwd === right.cwd &&
-    (left.kind === 'new'
-      ? right.kind === 'new' &&
-        (left.worktree === true) === (right.worktree === true)
-      : right.kind === 'resume' && left.sessionId === right.sessionId)
-  );
-}
-
-function isMissingCliError(error: unknown): boolean {
-  if (!(error instanceof ConnectionError)) {
-    return false;
-  }
-
-  return (
-    hasErrorCode(error.cause, 'ENOENT') ||
-    hasErrorCode(error.metadata?.error, 'ENOENT')
-  );
-}
-
-function hasErrorCode(error: unknown, expectedCode: string): boolean {
-  return (
-    error instanceof Error &&
-    'code' in error &&
-    error.code === expectedCode
-  );
-}
-
-function projectSessionSettings(
-  settings: Readonly<SessionSettings>,
-): RuntimeSessionSettings {
-  const interactionMode = projectEnum(
-    settings.interactionMode,
-    RUNTIME_INTERACTION_MODES,
-  );
-  const autonomyLevel = projectEnum(
-    settings.autonomyLevel,
-    RUNTIME_AUTONOMY_LEVELS,
-  );
-  const reasoningEffort = projectEnum(
-    settings.reasoningEffort,
-    RUNTIME_REASONING_EFFORTS,
-  );
-  // Droid reports a reset spec field as absent (never null), so
-  // undefined projects to null ("unset") here.
-  const specModeModelId = settings.specModeModelId;
-  const specModeReasoningEffort =
-    settings.specModeReasoningEffort === undefined
-      ? null
-      : projectEnum(
-          settings.specModeReasoningEffort,
-          RUNTIME_REASONING_EFFORTS,
-        );
-  if (
-    interactionMode === undefined ||
-    autonomyLevel === undefined ||
-    reasoningEffort === undefined ||
-    !isSafeModelId(settings.modelId) ||
-    (specModeModelId !== undefined && !isSafeModelId(specModeModelId)) ||
-    specModeReasoningEffort === undefined
-  ) {
-    throw new Error('Invalid session settings.');
-  }
-
-  return {
-    interactionMode,
-    modelId: settings.modelId,
-    reasoningEffort,
-    autonomyLevel,
-    specModeModelId: specModeModelId ?? null,
-    specModeReasoningEffort,
-  };
-}
-
-function projectModelCatalog(
-  models: readonly AvailableModelConfig[],
-): RuntimeModelCatalogItem[] {
-  if (
-    !Array.isArray(models) ||
-    models.length > MAX_RUNTIME_MODEL_CATALOG_ITEMS
-  ) {
-    throw new Error('Invalid model catalog.');
-  }
-  const ids = new Set<string>();
-  const projected = models.map((model) => {
-    if (
-      !isSafeModelId(model.id) ||
-      ids.has(model.id) ||
-      !isSafeModelDisplayName(model.displayName)
-    ) {
-      throw new Error('Invalid model catalog item.');
-    }
-    const efforts = model.supportedReasoningEfforts;
-    if (
-      !Array.isArray(efforts) ||
-      efforts.length === 0 ||
-      efforts.length > RUNTIME_REASONING_EFFORTS.length
-    ) {
-      throw new Error('Invalid model reasoning efforts.');
-    }
-    const projectedEfforts = efforts.map((effort) =>
-      projectEnum(effort, RUNTIME_REASONING_EFFORTS),
-    );
-    if (
-      projectedEfforts.some((effort) => effort === undefined) ||
-      new Set(projectedEfforts).size !== projectedEfforts.length
-    ) {
-      throw new Error('Invalid model reasoning efforts.');
-    }
-    ids.add(model.id);
+  private replacementContext(): ReplacementContext {
     return {
-      isCustom: model.isCustom,
-      item: {
-        id: model.id,
-        displayName: model.displayName,
-        supportedReasoningEfforts:
-          projectedEfforts as RuntimeModelCatalogItem['supportedReasoningEfforts'],
-      },
+      session: this.requireSession(),
+      active: this.activeTurn !== null,
+      recordDiagnostic: (event) => this.recordDiagnostic(event),
+      adoptSession: (session, models) => this.adoptSession(session, models),
     };
-  });
-  return projected
-    .filter(({ isCustom }) => isCustom)
-    .map(({ item }) => item);
-}
-
-function projectSettingsUpdate(
-  update: RuntimeSessionSettingUpdate,
-): DroidSessionUpdateSettingsOptions {
-  if (
-    typeof update !== 'object' ||
-    update === null ||
-    Reflect.ownKeys(update).length !== 2 ||
-    !Object.hasOwn(update, 'field') ||
-    !Object.hasOwn(update, 'value')
-  ) {
-    throw new Error('Invalid session setting update.');
-  }
-
-  switch (update.field) {
-    case 'interactionMode':
-      if (!isEnumValue(update.value, RUNTIME_INTERACTION_MODES)) {
-        break;
-      }
-      return {
-        interactionMode: update.value as DroidInteractionMode,
-      };
-    case 'modelId':
-      if (!isSafeModelId(update.value)) {
-        break;
-      }
-      return { modelId: update.value };
-    case 'reasoningEffort':
-      if (!isEnumValue(update.value, RUNTIME_REASONING_EFFORTS)) {
-        break;
-      }
-      return {
-        reasoningEffort: update.value as ReasoningEffort,
-      };
-    case 'autonomyLevel':
-      if (!isEnumValue(update.value, RUNTIME_AUTONOMY_LEVELS)) {
-        break;
-      }
-      return {
-        autonomyLevel: update.value as AutonomyLevel,
-      };
-    case 'specModeModelId':
-      // null resets Droid to drafting with the session model.
-      if (update.value !== null && !isSafeModelId(update.value)) {
-        break;
-      }
-      return { specModeModelId: update.value };
-    case 'specModeReasoningEffort':
-      if (
-        update.value !== null &&
-        !isEnumValue(update.value, RUNTIME_REASONING_EFFORTS)
-      ) {
-        break;
-      }
-      return {
-        specModeReasoningEffort: update.value as ReasoningEffort | null,
-      };
-  }
-
-  throw new Error('Invalid session setting update.');
-}
-
-function projectEnum<const Values extends readonly string[]>(
-  value: unknown,
-  values: Values,
-): Values[number] | undefined {
-  return isEnumValue(value, values)
-    ? (value as Values[number])
-    : undefined;
-}
-
-function isEnumValue(
-  value: unknown,
-  values: readonly string[],
-): value is string {
-  return typeof value === 'string' && values.includes(value);
-}
-
-/** Longest session id accepted from a notification envelope. */
-const MAX_SESSION_ID_LENGTH = 256;
-
-function isSafeSessionId(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= MAX_SESSION_ID_LENGTH &&
-    value.trim() === value &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
-  );
-}
-
-/**
- * Reads a `child_session_available` session notification into the
- * bounded fields the `subagent-started` runtime event carries. The
- * `childSessionId` in the payload is intentionally never read so it
- * cannot leave the Runtime. Returns null for any other notification.
- */
-function readSubagentStartedNotification(
-  raw: Record<string, unknown>,
-): {
-  toolUseId: string | null;
-  subagentType: string;
-  description: string;
-} | null {
-  const params = raw['params'];
-  if (typeof params !== 'object' || params === null) {
-    return null;
-  }
-  const { notification } = params as Record<string, unknown>;
-  if (typeof notification !== 'object' || notification === null) {
-    return null;
-  }
-  const { type, toolUseId, subagentType, description } =
-    notification as Record<string, unknown>;
-  if (type !== 'child_session_available') {
-    return null;
-  }
-  return {
-    toolUseId: isSafeSessionId(toolUseId) ? toolUseId : null,
-    subagentType: sanitizeSubagentType(subagentType) ?? 'unknown',
-    description: sanitizeSubagentDescription(description),
-  };
-}
-
-function isSafeModelDisplayName(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= MAX_RUNTIME_MODEL_DISPLAY_NAME_LENGTH &&
-    value.trim() === value &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
-  );
-}
-
-/**
- * Projects the SDK's `DroidWorkingState` string onto the runtime enum.
- * Null (session no longer listed by the backend) and unrecognized
- * values both project to `unknown` so callers never mistake a lost
- * session or a new SDK state for an idle one.
- */
-function projectWorkingState(
-  raw: string | null,
-): RuntimeSessionWorkingState {
-  switch (raw) {
-    case 'idle':
-      return 'idle';
-    case 'waiting_for_tool_confirmation':
-      return 'waiting-for-user';
-    case 'thinking':
-    case 'streaming_assistant_message':
-    case 'executing_tool':
-    case 'compacting_conversation':
-      return 'running';
-    default:
-      return 'unknown';
   }
 }
 
-/**
- * Projects an SDK skill record to safe display fields, dropping
- * filesystem paths, raw content, and resources.
- */
-/**
- * Maps validated runtime attachments onto the SDK stream options.
- * Oversized or excess attachments are rejected here so the SDK only
- * ever sees bounded payloads.
- */
-function projectStreamAttachments(
-  attachments: readonly RuntimeAttachment[] | undefined,
-): { images?: Base64ImageSource[]; files?: DocumentSource[] } {
-  if (attachments === undefined || attachments.length === 0) {
-    return {};
-  }
-  if (attachments.length > MAX_RUNTIME_ATTACHMENTS) {
-    throw new Error('Too many attachments for one Droid turn.');
-  }
-  const images: Base64ImageSource[] = [];
-  const files: DocumentSource[] = [];
-  for (const attachment of attachments) {
-    switch (attachment.kind) {
-      case 'image':
-        if (attachment.data.length > MAX_RUNTIME_IMAGE_BASE64_LENGTH) {
-          throw new Error('Image attachment is too large.');
-        }
-        images.push({
-          type: 'base64',
-          data: attachment.data,
-          mediaType: attachment.mediaType,
-        });
-        break;
-      case 'pdf':
-        if (attachment.data.length > MAX_RUNTIME_PDF_BASE64_LENGTH) {
-          throw new Error('PDF attachment is too large.');
-        }
-        files.push({
-          type: 'base64',
-          mediaType: 'application/pdf',
-          data: attachment.data,
-          name: attachment.name,
-        });
-        break;
-      case 'text':
-        if (
-          attachment.data.length > MAX_RUNTIME_TEXT_ATTACHMENT_LENGTH
-        ) {
-          throw new Error('Text attachment is too large.');
-        }
-        files.push({
-          type: 'text',
-          mediaType: 'text/plain',
-          data: attachment.data,
-          name: attachment.name,
-        });
-        break;
-    }
-  }
-  return {
-    ...(images.length > 0 ? { images } : {}),
-    ...(files.length > 0 ? { files } : {}),
-  };
-}
-
-function projectSkill(raw: unknown): RuntimeSkill | null {
-  if (typeof raw !== 'object' || raw === null) {
-    return null;
-  }
-  const record = raw as Record<string, unknown>;
-  const name = record.name;
-  const location = record.location;
-  if (
-    typeof name !== 'string' ||
-    name.length === 0 ||
-    name.length > MAX_RUNTIME_SKILL_NAME_LENGTH ||
-    !isRuntimeSkillLocation(location)
-  ) {
-    return null;
-  }
-  const description =
-    typeof record.description === 'string' &&
-    record.description.length > 0
-      ? record.description.slice(0, MAX_RUNTIME_SKILL_DESCRIPTION_LENGTH)
-      : null;
-  return {
-    name,
-    description,
-    location,
-    enabled: record.enabled !== false,
-    userInvocable: record.userInvocable === true,
-  };
-}
-
-function isRuntimeSkillLocation(
-  value: unknown,
-): value is RuntimeSkillLocation {
-  return (
-    typeof value === 'string' &&
-    (RUNTIME_SKILL_LOCATIONS as readonly string[]).includes(value)
-  );
-}
-
-/**
- * Projects an SDK MCP server record to safe display fields, dropping
- * connection errors, auth URLs, and configuration sources.
- */
-function projectMcpServer(
-  raw: unknown,
-  toolsByServer: ReadonlyMap<string, readonly RuntimeMcpTool[]>,
-): RuntimeMcpServer | null {
-  if (typeof raw !== 'object' || raw === null) {
-    return null;
-  }
-  const record = raw as Record<string, unknown>;
-  const name = record.name;
-  const status = record.status;
-  if (
-    typeof name !== 'string' ||
-    name.length === 0 ||
-    name.length > MAX_RUNTIME_MCP_NAME_LENGTH ||
-    !isRuntimeMcpServerStatus(status)
-  ) {
-    return null;
-  }
-  const toolCount =
-    Number.isSafeInteger(record.toolCount) &&
-    (record.toolCount as number) >= 0
-      ? (record.toolCount as number)
-      : null;
-  return {
-    name,
-    status,
-    toolCount,
-    requiresAuth: record.requiresAuth === true,
-    hasAuthTokens: record.hasAuthTokens === true,
-    tools: toolsByServer.get(name) ?? [],
-  };
-}
-
-function projectMcpTool(
-  raw: unknown,
-): { serverName: string; tool: RuntimeMcpTool } | null {
-  if (typeof raw !== 'object' || raw === null) {
-    return null;
-  }
-  const record = raw as Record<string, unknown>;
-  const serverName = record.serverName;
-  const name = record.name;
-  if (
-    typeof serverName !== 'string' ||
-    serverName.length === 0 ||
-    serverName.length > MAX_RUNTIME_MCP_NAME_LENGTH ||
-    typeof name !== 'string' ||
-    name.length === 0 ||
-    name.length > MAX_RUNTIME_MCP_NAME_LENGTH
-  ) {
-    return null;
-  }
-  const description =
-    typeof record.description === 'string' &&
-    record.description.length > 0
-      ? record.description.slice(
-          0,
-          MAX_RUNTIME_MCP_TOOL_DESCRIPTION_LENGTH,
-        )
-      : null;
-  return {
-    serverName,
-    tool: {
-      name,
-      description,
-      enabled: record.isEnabled !== false,
-      readOnly: record.isReadOnly === true,
-    },
-  };
-}
-
-function isRuntimeMcpServerStatus(
-  value: unknown,
-): value is RuntimeMcpServerStatus {
-  return (
-    typeof value === 'string' &&
-    (RUNTIME_MCP_SERVER_STATUSES as readonly string[]).includes(value)
-  );
-}
+export { createLocalDroidSession } from './process/createLocalDroidSession';
+export type {
+  FactoryDroidSessionGitDiff,
+  FactoryDroidSessionRewindInfo,
+  FactoryDroidSessionRewindParams,
+} from './session/replacementTypes';
+export type {
+  FactoryDroidSession,
+  FactoryDroidSessionFactory,
+} from './session/sessionTypes';

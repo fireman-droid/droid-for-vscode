@@ -1,6 +1,10 @@
 // readers: moved verbatim from Thread.tsx (structure-only refactor).
 
-import type { SentAttachmentSummary } from "../../../shared/bridgeMessages";
+import { type SentAttachmentSummary } from '../../../shared/protocol/attachments';
+import {
+  isToolResultPreview,
+  type ToolResultPreview,
+} from '../../../shared/transcript/toolResultPreview';
 
 export interface ToolActivityPresentation {
   readonly turnId: string | null;
@@ -10,7 +14,7 @@ export interface ToolActivityPresentation {
   readonly latestUpdateKind: string | null;
   readonly durationMs: number | null;
   readonly filePath: string | null;
-  readonly detailKind: "command" | "plan" | null;
+  readonly detailKind: 'command' | 'plan' | null;
   readonly detail: string | null;
   readonly target: string | null;
   /** Error excerpt from a failed tool_result, shown when expanded. */
@@ -21,6 +25,7 @@ export interface ToolActivityPresentation {
    * it — so playback stays previewless by construction.
    */
   readonly outputTail: string | null;
+  readonly resultPreview?: ToolResultPreview | null;
   /**
    * True when the CLI launched this execute call as a detached
    * background process (fireAndForget). Display-only: the GUI holds
@@ -46,8 +51,8 @@ export interface ToolActivityPresentation {
 export function readToolActivity(part: unknown): ToolActivityPresentation {
   const fallback: ToolActivityPresentation = {
     turnId: null,
-    action: "Used a workspace tool",
-    status: "completed",
+    action: 'Used a workspace tool',
+    status: 'completed',
     progressCount: 0,
     latestUpdateKind: null,
     durationMs: null,
@@ -63,69 +68,67 @@ export function readToolActivity(part: unknown): ToolActivityPresentation {
   const metadata = readDroidvisxMetadata(part);
   if (
     metadata !== null &&
-    "action" in metadata &&
-    typeof metadata.action === "string" &&
-    "status" in metadata &&
-    typeof metadata.status === "string" &&
-    "progressCount" in metadata &&
+    'action' in metadata &&
+    typeof metadata.action === 'string' &&
+    'status' in metadata &&
+    typeof metadata.status === 'string' &&
+    'progressCount' in metadata &&
     Number.isSafeInteger(metadata.progressCount) &&
-    "latestUpdateKind" in metadata &&
-    (metadata.latestUpdateKind === null ||
-      typeof metadata.latestUpdateKind === "string")
+    'latestUpdateKind' in metadata &&
+    (metadata.latestUpdateKind === null || typeof metadata.latestUpdateKind === 'string')
   ) {
     const detailKind =
-      metadata["detailKind"] === "command" || metadata["detailKind"] === "plan"
-        ? metadata["detailKind"]
+      metadata['detailKind'] === 'command' || metadata['detailKind'] === 'plan'
+        ? metadata['detailKind']
         : null;
     return {
       ...(metadata as Omit<
         ToolActivityPresentation,
-        | "durationMs"
-        | "turnId"
-        | "filePath"
-        | "detailKind"
-        | "detail"
-        | "target"
-        | "errorMessage"
-        | "outputTail"
-        | "background"
-        | "subagent"
+        | 'durationMs'
+        | 'turnId'
+        | 'filePath'
+        | 'detailKind'
+        | 'detail'
+        | 'target'
+        | 'errorMessage'
+        | 'outputTail'
+        | 'background'
+        | 'subagent'
       >),
       turnId:
-        typeof metadata["turnId"] === "string" &&
-        metadata["turnId"].length > 0
-          ? metadata["turnId"]
+        typeof metadata['turnId'] === 'string' && metadata['turnId'].length > 0
+          ? metadata['turnId']
           : null,
       durationMs: readMetadataDuration(metadata),
       filePath:
-        typeof metadata["filePath"] === "string" &&
-        metadata["filePath"].length > 0
-          ? metadata["filePath"]
+        typeof metadata['filePath'] === 'string' && metadata['filePath'].length > 0
+          ? metadata['filePath']
           : null,
       detailKind,
       detail:
         detailKind !== null &&
-        typeof metadata["detail"] === "string" &&
-        metadata["detail"].length > 0
-          ? metadata["detail"]
+        typeof metadata['detail'] === 'string' &&
+        metadata['detail'].length > 0
+          ? metadata['detail']
           : null,
       target:
-        typeof metadata["target"] === "string" &&
-        metadata["target"].length > 0
-          ? metadata["target"]
+        typeof metadata['target'] === 'string' && metadata['target'].length > 0
+          ? metadata['target']
           : null,
       errorMessage:
-        typeof metadata["errorMessage"] === "string" &&
-        metadata["errorMessage"].length > 0
-          ? metadata["errorMessage"]
+        typeof metadata['errorMessage'] === 'string' &&
+        metadata['errorMessage'].length > 0
+          ? metadata['errorMessage']
           : null,
       outputTail:
-        typeof metadata["outputTail"] === "string" &&
-        metadata["outputTail"].length > 0
-          ? metadata["outputTail"]
+        typeof metadata['outputTail'] === 'string' && metadata['outputTail'].length > 0
+          ? metadata['outputTail']
           : null,
-      background: readMetadataBackground(metadata["backgroundHint"]),
-      subagent: readMetadataSubagent(metadata["subagent"]),
+      resultPreview: isToolResultPreview(metadata['resultPreview'])
+        ? metadata['resultPreview']
+        : null,
+      background: readMetadataBackground(metadata['backgroundHint']),
+      subagent: readMetadataSubagent(metadata['subagent']),
     };
   }
   return fallback;
@@ -134,24 +137,24 @@ export function readToolActivity(part: unknown): ToolActivityPresentation {
 /** Fail-soft: only `{ fireAndForget: true }` marks a row. */
 export function readMetadataBackground(value: unknown): boolean {
   return (
-    typeof value === "object" &&
+    typeof value === 'object' &&
     value !== null &&
-    "fireAndForget" in value &&
+    'fireAndForget' in value &&
     value.fireAndForget === true
   );
 }
 
 export function readMetadataSubagent(
   value: unknown,
-): ToolActivityPresentation["subagent"] {
+): ToolActivityPresentation['subagent'] {
   if (
-    typeof value !== "object" ||
+    typeof value !== 'object' ||
     value === null ||
-    !("type" in value) ||
-    typeof value.type !== "string" ||
+    !('type' in value) ||
+    typeof value.type !== 'string' ||
     value.type.length === 0 ||
-    !("description" in value) ||
-    typeof value.description !== "string"
+    !('description' in value) ||
+    typeof value.description !== 'string'
   ) {
     return null;
   }
@@ -159,26 +162,25 @@ export function readMetadataSubagent(
   return {
     type: value.type,
     description: value.description,
-    status:
-      typeof record["status"] === "string" ? record["status"] : null,
-    toolUseCount: Number.isSafeInteger(record["toolUseCount"])
-      ? (record["toolUseCount"] as number)
+    status: typeof record['status'] === 'string' ? record['status'] : null,
+    toolUseCount: Number.isSafeInteger(record['toolUseCount'])
+      ? (record['toolUseCount'] as number)
       : null,
-    durationMs: Number.isSafeInteger(record["durationMs"])
-      ? (record["durationMs"] as number)
+    durationMs: Number.isSafeInteger(record['durationMs'])
+      ? (record['durationMs'] as number)
       : null,
   };
 }
 
 export function readDroidvisxMetadata(part: unknown): Record<string, unknown> | null {
   if (
-    typeof part === "object" &&
+    typeof part === 'object' &&
     part !== null &&
-    "providerMetadata" in part &&
-    typeof part.providerMetadata === "object" &&
+    'providerMetadata' in part &&
+    typeof part.providerMetadata === 'object' &&
     part.providerMetadata !== null &&
-    "droidvisx" in part.providerMetadata &&
-    typeof part.providerMetadata.droidvisx === "object" &&
+    'droidvisx' in part.providerMetadata &&
+    typeof part.providerMetadata.droidvisx === 'object' &&
     part.providerMetadata.droidvisx !== null
   ) {
     return part.providerMetadata.droidvisx as Record<string, unknown>;
@@ -186,13 +188,11 @@ export function readDroidvisxMetadata(part: unknown): Record<string, unknown> | 
   return null;
 }
 
-export function readMetadataDuration(
-  metadata: Record<string, unknown>,
-): number | null {
-  return typeof metadata["durationMs"] === "number" &&
-    Number.isFinite(metadata["durationMs"]) &&
-    metadata["durationMs"] >= 0
-    ? metadata["durationMs"]
+export function readMetadataDuration(metadata: Record<string, unknown>): number | null {
+  return typeof metadata['durationMs'] === 'number' &&
+    Number.isFinite(metadata['durationMs']) &&
+    metadata['durationMs'] >= 0
+    ? metadata['durationMs']
     : null;
 }
 
@@ -203,11 +203,11 @@ export function readReasoningDuration(part: unknown): number | null {
 
 export function readReasoningTruncated(part: unknown): boolean {
   const metadata = readDroidvisxMetadata(part);
-  return metadata?.["truncated"] === true;
+  return metadata?.['truncated'] === true;
 }
 
 export function firstLine(text: string): string {
-  const line = text.split("\n", 1)[0] ?? text;
+  const line = text.split('\n', 1)[0] ?? text;
   return line.length > 120 ? `${line.slice(0, 119)}…` : line;
 }
 
@@ -218,14 +218,14 @@ export function formatThinkingLabel(
   statusType: string | undefined,
   durationMs: number | null,
 ): string {
-  if (statusType === "incomplete") {
-    return "Thinking stopped";
+  if (statusType === 'incomplete') {
+    return 'Thinking stopped';
   }
   if (durationMs === null) {
-    return "Thought";
+    return 'Thought';
   }
   if (durationMs < 500) {
-    return "Thought briefly";
+    return 'Thought briefly';
   }
   if (durationMs < 1_000) {
     return `Thought for ${(durationMs / 1_000).toFixed(1)}s`;
@@ -258,51 +258,51 @@ export function formatDuration(durationMs: number): string {
 
 export function formatToolLifecycle(status: string): string {
   switch (status) {
-    case "running":
-      return "Working";
-    case "failed":
-      return "Failed";
-    case "stopped":
-      return "Stopped";
+    case 'running':
+      return 'Working';
+    case 'failed':
+      return 'Failed';
+    case 'stopped':
+      return 'Stopped';
     default:
-      return "Completed";
+      return 'Completed';
   }
 }
 
-export function formatToolProgress(activity: ToolActivityPresentation): string {
+export function formatToolProgress(activity: Pick<ToolActivityPresentation, 'progressCount' | 'latestUpdateKind' | 'status'>): string {
   if (activity.progressCount === 0 || activity.latestUpdateKind === null) {
     return `Lifecycle: ${formatToolLifecycle(activity.status)}`;
   }
   const count = `${activity.progressCount} progress ${
-    activity.progressCount === 1 ? "update" : "updates"
+    activity.progressCount === 1 ? 'update' : 'updates'
   }`;
   return `${count} · Latest: ${formatUpdateKind(activity.latestUpdateKind)}`;
 }
 
 export function formatUpdateKind(kind: string): string {
   switch (kind) {
-    case "tool-call":
-      return "tool started";
-    case "tool-result":
-      return "tool result";
-    case "error":
-      return "error";
-    case "status":
-      return "status";
+    case 'tool-call':
+      return 'tool started';
+    case 'tool-result':
+      return 'tool result';
+    case 'error':
+      return 'error';
+    case 'status':
+      return 'status';
     default:
-      return "message";
+      return 'message';
   }
 }
 
 export function readUserMessageId(metadata: unknown): string | null {
   if (
-    typeof metadata === "object" &&
+    typeof metadata === 'object' &&
     metadata !== null &&
-    "custom" in metadata &&
-    typeof metadata.custom === "object" &&
+    'custom' in metadata &&
+    typeof metadata.custom === 'object' &&
     metadata.custom !== null &&
-    "messageId" in metadata.custom &&
-    typeof metadata.custom.messageId === "string" &&
+    'messageId' in metadata.custom &&
+    typeof metadata.custom.messageId === 'string' &&
     metadata.custom.messageId.length > 0
   ) {
     return metadata.custom.messageId;
@@ -310,16 +310,14 @@ export function readUserMessageId(metadata: unknown): string | null {
   return null;
 }
 
-export function readUserAttachments(
-  metadata: unknown,
-): readonly SentAttachmentSummary[] {
+export function readUserAttachments(metadata: unknown): readonly SentAttachmentSummary[] {
   if (
-    typeof metadata === "object" &&
+    typeof metadata === 'object' &&
     metadata !== null &&
-    "custom" in metadata &&
-    typeof metadata.custom === "object" &&
+    'custom' in metadata &&
+    typeof metadata.custom === 'object' &&
     metadata.custom !== null &&
-    "attachments" in metadata.custom &&
+    'attachments' in metadata.custom &&
     Array.isArray(metadata.custom.attachments)
   ) {
     return metadata.custom.attachments as readonly SentAttachmentSummary[];
@@ -333,41 +331,41 @@ export function readMessageText(content: readonly unknown[]): string {
       (
         part,
       ): part is {
-        readonly type: "text";
+        readonly type: 'text';
         readonly text: string;
       } =>
-        typeof part === "object" &&
+        typeof part === 'object' &&
         part !== null &&
-        "type" in part &&
-        part.type === "text" &&
-        "text" in part &&
-        typeof part.text === "string",
+        'type' in part &&
+        part.type === 'text' &&
+        'text' in part &&
+        typeof part.text === 'string',
     )
     .map((part) => part.text)
-    .join("");
+    .join('');
 }
 
 export function readDiagnostic(data: unknown): {
-  readonly severity: "info" | "warning" | "error";
+  readonly severity: 'info' | 'warning' | 'error';
   readonly code: string;
   readonly message: string;
   readonly relatedSessionId: string | null;
 } {
   if (
-    typeof data === "object" &&
+    typeof data === 'object' &&
     data !== null &&
-    "severity" in data &&
-    (data.severity === "info" ||
-      data.severity === "warning" ||
-      data.severity === "error") &&
-    "code" in data &&
-    typeof data.code === "string" &&
-    "message" in data &&
-    typeof data.message === "string"
+    'severity' in data &&
+    (data.severity === 'info' ||
+      data.severity === 'warning' ||
+      data.severity === 'error') &&
+    'code' in data &&
+    typeof data.code === 'string' &&
+    'message' in data &&
+    typeof data.message === 'string'
   ) {
     const relatedSessionId =
-      "relatedSessionId" in data &&
-      typeof data.relatedSessionId === "string" &&
+      'relatedSessionId' in data &&
+      typeof data.relatedSessionId === 'string' &&
       data.relatedSessionId.length > 0
         ? data.relatedSessionId
         : null;
@@ -379,9 +377,9 @@ export function readDiagnostic(data: unknown): {
     };
   }
   return {
-    severity: "warning",
-    code: "DIAGNOSTIC_UNAVAILABLE",
-    message: "Diagnostic details are unavailable.",
+    severity: 'warning',
+    code: 'DIAGNOSTIC_UNAVAILABLE',
+    message: 'Diagnostic details are unavailable.',
     relatedSessionId: null,
   };
 }

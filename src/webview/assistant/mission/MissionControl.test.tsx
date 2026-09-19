@@ -4,7 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { MissionSnapshotMessage } from '../../../shared/missionProtocol';
+import type { MissionSnapshotMessage } from '../../../shared/protocol/missionProtocol';
 import { MissionControl } from './MissionControl';
 
 const snapshot: MissionSnapshotMessage = {
@@ -53,16 +53,10 @@ describe('MissionControl', () => {
     render(<MissionControl snapshot={snapshot} onCommand={onCommand} />);
 
     expect(screen.queryByRole('list')).toBeNull();
-    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe(
-      '1',
-    );
-    await user.click(screen.getByRole('button', { name: 'Pause' }));
-    await user.click(
-      screen.getByRole('button', { name: 'Stop current feature' }),
-    );
-    await user.click(
-      screen.getByRole('button', { name: 'Open Mission Control' }),
-    );
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('1');
+    await user.click(screen.getByRole('button', { name: 'Pause activity' }));
+    await user.click(screen.getByRole('button', { name: 'Stop current feature' }));
+    await user.click(screen.getByRole('button', { name: 'Open Mission Control' }));
     expect(onCommand).toHaveBeenNthCalledWith(1, {
       type: 'mission.pause',
       revision: 3,
@@ -80,9 +74,7 @@ describe('MissionControl', () => {
     const user = userEvent.setup();
     const onCommand = vi.fn();
     render(<MissionControl snapshot={snapshot} onCommand={onCommand} />);
-    await user.click(
-      screen.getByRole('button', { name: /Ship Mission controls/ }),
-    );
+    await user.click(screen.getByRole('button', { name: /Ship Mission controls/ }));
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(onCommand).toHaveBeenCalledWith({
       type: 'mission.disclosure.set',

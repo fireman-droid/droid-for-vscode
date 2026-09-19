@@ -1,4 +1,5 @@
-import { connectToDaemon, type ConnectedDroid } from '@factory/droid-sdk';
+import type { DaemonApi } from './api';
+import { connectPublicDaemon } from './connectPublicDaemon';
 
 import { resolveFactoryAccessCredential } from './factoryTokenRefresh';
 
@@ -27,14 +28,14 @@ export class DaemonAvailabilityError extends Error {
 export type DaemonConnectionStatus = 'connected' | 'auth-error' | 'failed';
 
 export interface DaemonConnection {
-  readonly droid: ConnectedDroid;
+  readonly droid: DaemonApi;
   status(): DaemonConnectionStatus;
   dispose(): void;
 }
 
 export interface DaemonConnectionDeps {
   readonly resolveCredential: typeof resolveFactoryAccessCredential;
-  readonly connect: typeof connectToDaemon;
+  readonly connect: typeof connectPublicDaemon;
 }
 
 /**
@@ -48,9 +49,8 @@ export async function openDaemonConnection(
   endpoint: { readonly url: string },
   deps: Partial<DaemonConnectionDeps> = {},
 ): Promise<DaemonConnection> {
-  const resolveCredential =
-    deps.resolveCredential ?? resolveFactoryAccessCredential;
-  const connect = deps.connect ?? connectToDaemon;
+  const resolveCredential = deps.resolveCredential ?? resolveFactoryAccessCredential;
+  const connect = deps.connect ?? connectPublicDaemon;
 
   const credential = await resolveCredential();
   if (credential.status === 'not-logged-in') {
@@ -77,7 +77,7 @@ export async function openDaemonConnection(
   const connectionState: { status: DaemonConnectionStatus } = {
     status: 'connected',
   };
-  let droid: ConnectedDroid;
+  let droid: DaemonApi;
   try {
     droid = await connect({
       url: endpoint.url,

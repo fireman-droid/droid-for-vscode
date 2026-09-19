@@ -1,0 +1,29 @@
+/* Cursor injects unlayered defaults. Reset those properties to our layers,
+   while overriding the host's initial page background after the theme loads. */
+html[data-theme] {
+  background: var(--surface);
+}
+
+html[data-theme] body {
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+html[data-theme] :is(a, code, blockquote) {
+  color: revert-layer;
+  background: revert-layer;
+  border-color: revert-layer;
+  border-radius: revert-layer;
+  padding: revert-layer;
+  font-family: revert-layer;
+}
+
+html[data-theme] :is(a, input, select, textarea):focus {
+  outline: revert-layer;
+  outline-offset: revert-layer;
+}

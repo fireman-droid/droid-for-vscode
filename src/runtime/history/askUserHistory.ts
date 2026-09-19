@@ -6,7 +6,7 @@ import {
   type AskUserInteractionResult,
   type AskUserResultTranscriptItem,
 } from '../../shared/bridgeMessages';
-import { isStrictRecord } from '../../shared/strictValidation';
+import { isStrictRecord } from '../../shared/validation/strictValidation';
 
 export interface AskUserHistoryQuestion {
   readonly topic: string;
@@ -18,8 +18,7 @@ export function readAskUserQuestions(
   input: unknown,
 ): readonly AskUserHistoryQuestion[] | undefined {
   if (
-    toolName.toLowerCase().replaceAll('-', '').replaceAll('_', '') !==
-      'askuser' ||
+    toolName.toLowerCase().replaceAll('-', '').replaceAll('_', '') !== 'askuser' ||
     !isStrictRecord(input) ||
     typeof input.questionnaire !== 'string'
   ) {
@@ -31,8 +30,10 @@ export function readAskUserQuestions(
     const current = questions[questions.length - 1];
     const question = questionLines?.join('\n').trim();
     if (
-      current !== undefined && question !== undefined &&
-      question.length > 0 && question.length <= MAX_ASK_USER_QUESTION_LENGTH
+      current !== undefined &&
+      question !== undefined &&
+      question.length > 0 &&
+      question.length <= MAX_ASK_USER_QUESTION_LENGTH
     ) {
       questions[questions.length - 1] = { ...current, question };
     }

@@ -1,12 +1,16 @@
-// The `+` settings popover: attach rows, inline setting dropdowns,
-// capability drill-in links, and the action search. Moved verbatim
-// from ComposerControls.tsx (structure-only split).
+// The `+` popover keeps attachments, session settings and capability search together.
 
 import { useRef, useState } from 'react';
+import { Button } from '../../../webview-v2/ui/button';
+import { Input } from '../../../webview-v2/ui/input';
+import { AnimatedCollapsibleContent, Collapsible, CollapsibleTrigger } from '../../../webview-v2/ui/collapsible';
+import { RadioGroup, RadioGroupItem } from '../../../webview-v2/ui/controls';
+import { rankNameMatches } from './settingsSearch';
+export { rankNameMatches } from './settingsSearch';
 
-import type { SessionSettingsState } from '../../../shared/bridgeMessages';
-import { useTheme } from '../theme';
-import type { SessionSettingSelection } from '../useOptimisticSetting';
+import { type SessionSettingsState } from '../../../shared/protocol/settings';
+import { useTheme } from '../shell/theme';
+import type { SessionSettingSelection } from './useOptimisticSetting';
 import { McpPanel, PluginsPanel, SkillsPanel } from './capabilityPanels';
 import {
   AUTONOMY_OPTIONS,
@@ -14,7 +18,6 @@ import {
   MODE_OPTIONS,
   SettingsStatus,
   THEME_OPTIONS,
-  formatLabel,
   type AttachSource,
   type McpAuthProgress,
   type McpPanelState,
@@ -46,6 +49,7 @@ export function SettingsPopover({
   onPluginsRefresh,
   onNewSession,
   onAttach,
+  showModeControl = true,
 }: {
   readonly id: string;
   readonly view: SettingsView;
@@ -73,6 +77,7 @@ export function SettingsPopover({
   readonly onPluginsRefresh: () => void;
   readonly onNewSession?: () => void;
   readonly onAttach: (source: AttachSource) => void;
+  readonly showModeControl?: boolean;
 }): React.JSX.Element {
   const [query, setQuery] = useState('');
   const theme = useTheme();
@@ -84,19 +89,14 @@ export function SettingsPopover({
   // going back from the left. The first mount plays neither — the
   // popover itself already animates in.
   const group: 'root' | 'skills' | 'mcp' | 'plugins' =
-    view === 'skills' || view === 'mcp' || view === 'plugins'
-      ? view
-      : 'root';
+    view === 'skills' || view === 'mcp' || view === 'plugins' ? view : 'root';
   const previousGroupRef = useRef(group);
   const directionRef = useRef<'forward' | 'back' | null>(null);
   if (previousGroupRef.current !== group) {
     directionRef.current = group === 'root' ? 'back' : 'forward';
     previousGroupRef.current = group;
   }
-  const shell = (
-    label: string,
-    content: React.JSX.Element,
-  ): React.JSX.Element => (
+  const shell = (label: string, content: React.JSX.Element): React.JSX.Element => (
     <div
       id={id}
       className="dvx-composer-popover dvx-settings-popover"
@@ -131,18 +131,13 @@ export function SettingsPopover({
     );
   }
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const showMode =
-    normalizedQuery.length === 0 || 'mode'.includes(normalizedQuery);
+  const showMode = showModeControl && (normalizedQuery.length === 0 || 'mode'.includes(normalizedQuery));
   const showAutonomy =
     normalizedQuery.length === 0 || 'autonomy'.includes(normalizedQuery);
-  const showTheme =
-    normalizedQuery.length === 0 || 'theme'.includes(normalizedQuery);
-  const showSkills =
-    normalizedQuery.length === 0 || 'skills'.includes(normalizedQuery);
-  const showMcp =
-    normalizedQuery.length === 0 || 'mcp servers'.includes(normalizedQuery);
-  const showPlugins =
-    normalizedQuery.length === 0 || 'plugins'.includes(normalizedQuery);
+  const showTheme = normalizedQuery.length === 0 || 'theme'.includes(normalizedQuery);
+  const showSkills = normalizedQuery.length === 0 || 'skills'.includes(normalizedQuery);
+  const showMcp = normalizedQuery.length === 0 || 'mcp servers'.includes(normalizedQuery);
+  const showPlugins = normalizedQuery.length === 0 || 'plugins'.includes(normalizedQuery);
   const showAttach =
     normalizedQuery.length === 0 ||
     'attach files editor selection context'.includes(normalizedQuery);
@@ -152,35 +147,31 @@ export function SettingsPopover({
   // in unrelated entries (searching "figma" surfaced agent-browser
   // because its description mentions Figma) with no visible reason.
   const matchedSkills =
-    normalizedQuery.length === 0
-      ? []
-      : rankNameMatches(skills.items, normalizedQuery, 5);
+    normalizedQuery.length === 0 ? [] : rankNameMatches(skills.items, normalizedQuery, 5);
   const matchedServers =
-    normalizedQuery.length === 0
-      ? []
-      : rankNameMatches(mcp.items, normalizedQuery, 5);
+    normalizedQuery.length === 0 ? [] : rankNameMatches(mcp.items, normalizedQuery, 5);
 
   if (view === 'skills') {
     return shell(
       'Skills',
-        <SkillsPanel
-          skills={skills}
-          disabled={disabled}
-          onBack={() => onViewChange('root')}
-          onRefresh={onSkillsRefresh}
-          onToggle={onSkillToggle}
-          // Starting a new session leaves the old catalog behind;
-          // return to the root controls so the popover tracks the new
-          // session instead of a stale skills list.
-          onNewSession={
-            onNewSession === undefined
-              ? undefined
-              : () => {
-                  onNewSession();
-                  onViewChange('root');
-                }
-          }
-        />,
+      <SkillsPanel
+        skills={skills}
+        disabled={disabled}
+        onBack={() => onViewChange('root')}
+        onRefresh={onSkillsRefresh}
+        onToggle={onSkillToggle}
+        // Starting a new session leaves the old catalog behind;
+        // return to the root controls so the popover tracks the new
+        // session instead of a stale skills list.
+        onNewSession={
+          onNewSession === undefined
+            ? undefined
+            : () => {
+                onNewSession();
+                onViewChange('root');
+              }
+        }
+      />,
     );
   }
 
@@ -220,9 +211,9 @@ export function SettingsPopover({
       </label>
       <div className="dvx-settings-search-shell">
         <SearchIcon />
-        <input
+        <Input
           id={`${id}-action-search`}
-          className="dvx-settings-search"
+          className="dvx-settings-search h-9 rounded-none border-0 bg-transparent p-0 text-[13px] focus-visible:border-transparent"
           type="search"
           value={query}
           placeholder="Search actions, skills, MCP…"
@@ -257,9 +248,7 @@ export function SettingsPopover({
           current={confirmed.interactionMode}
           options={MODE_OPTIONS}
           disabled={disabled}
-          onToggle={() =>
-            onViewChange(view === 'mode' ? 'root' : 'mode')
-          }
+          onToggle={() => onViewChange(view === 'mode' ? 'root' : 'mode')}
           onSelect={(value) => {
             onViewChange('root');
             if (value !== confirmed.interactionMode) {
@@ -276,9 +265,7 @@ export function SettingsPopover({
           current={confirmed.autonomyLevel}
           options={AUTONOMY_OPTIONS}
           disabled={disabled}
-          onToggle={() =>
-            onViewChange(view === 'autonomy' ? 'root' : 'autonomy')
-          }
+          onToggle={() => onViewChange(view === 'autonomy' ? 'root' : 'autonomy')}
           onSelect={(value) => {
             onViewChange('root');
             if (value !== confirmed.autonomyLevel) {
@@ -296,9 +283,7 @@ export function SettingsPopover({
           options={THEME_OPTIONS}
           // Pure webview appearance — never blocked by a running turn.
           disabled={false}
-          onToggle={() =>
-            onViewChange(view === 'theme' ? 'root' : 'theme')
-          }
+          onToggle={() => onViewChange(view === 'theme' ? 'root' : 'theme')}
           onSelect={(value) => {
             onViewChange('root');
             if (value !== theme.preference) {
@@ -309,7 +294,7 @@ export function SettingsPopover({
       ) : null}
       {showSkills || showMcp ? <div className="dvx-settings-divider" /> : null}
       {showSkills ? (
-        <button
+        <Button variant="plain" size="none"
           type="button"
           className="dvx-popover-row dvx-settings-link-row"
           onClick={() => {
@@ -331,10 +316,10 @@ export function SettingsPopover({
               : ''}
           </span>
           <ChevronDownIcon />
-        </button>
+        </Button>
       ) : null}
       {showMcp ? (
-        <button
+        <Button variant="plain" size="none"
           type="button"
           className="dvx-popover-row dvx-settings-link-row"
           onClick={() => {
@@ -348,16 +333,16 @@ export function SettingsPopover({
           </span>
           <span className="dvx-popover-row-value">
             {mcp.status === 'ready'
-              ? `${mcp.items.filter(
-                  (server) => server.status !== 'disabled',
-                ).length}/${mcp.items.length} on`
+              ? `${
+                  mcp.items.filter((server) => server.status !== 'disabled').length
+                }/${mcp.items.length} on`
               : ''}
           </span>
           <ChevronDownIcon />
-        </button>
+        </Button>
       ) : null}
       {showPlugins ? (
-        <button
+        <Button variant="plain" size="none"
           type="button"
           className="dvx-popover-row dvx-settings-link-row"
           onClick={() => {
@@ -372,18 +357,16 @@ export function SettingsPopover({
             <strong>Plugins</strong>
           </span>
           <span className="dvx-popover-row-value">
-            {plugins.status === 'ready'
-              ? `${plugins.items.length} installed`
-              : ''}
+            {plugins.status === 'ready' ? `${plugins.items.length} installed` : ''}
           </span>
           <ChevronDownIcon />
-        </button>
+        </Button>
       ) : null}
       {matchedSkills.length > 0 || matchedServers.length > 0 ? (
         <>
           <div className="dvx-settings-divider" />
           {matchedSkills.map((skill) => (
-            <button
+            <Button variant="plain" size="none"
               key={`skill:${skill.name}`}
               type="button"
               className="dvx-popover-row dvx-settings-link-row"
@@ -395,15 +378,13 @@ export function SettingsPopover({
               <SettingsInfoIcon kind="skills" />
               <span className="dvx-popover-row-copy">
                 <strong>{skill.name}</strong>
-                {skill.description !== null ? (
-                  <span>{skill.description}</span>
-                ) : null}
+                {skill.description !== null ? <span>{skill.description}</span> : null}
               </span>
               <span className="dvx-popover-row-value">Skill</span>
-            </button>
+            </Button>
           ))}
           {matchedServers.map((server) => (
-            <button
+            <Button variant="plain" size="none"
               key={`mcp:${server.name}`}
               type="button"
               className="dvx-popover-row dvx-settings-link-row"
@@ -417,7 +398,7 @@ export function SettingsPopover({
                 <strong>{server.name}</strong>
               </span>
               <span className="dvx-popover-row-value">MCP</span>
-            </button>
+            </Button>
           ))}
         </>
       ) : null}
@@ -442,29 +423,6 @@ export function SettingsPopover({
   );
 }
 
-/**
- * Filters entries whose name contains the query and ranks prefix
- * hits above substring hits (ties keep catalog order). Descriptions
- * are deliberately not searched — see the settings search comment.
- */
-export function rankNameMatches<T extends { readonly name: string }>(
-  items: readonly T[],
-  normalizedQuery: string,
-  limit: number,
-): readonly T[] {
-  const prefix: T[] = [];
-  const substring: T[] = [];
-  for (const item of items) {
-    const name = item.name.toLocaleLowerCase();
-    if (name.startsWith(normalizedQuery)) {
-      prefix.push(item);
-    } else if (name.includes(normalizedQuery)) {
-      substring.push(item);
-    }
-  }
-  return [...prefix, ...substring].slice(0, limit);
-}
-
 function AttachRows({
   disabled,
   onAttach,
@@ -474,75 +432,71 @@ function AttachRows({
 }): React.JSX.Element {
   return (
     <div className="dvx-attach-rows">
-      <button
+      <Button variant="plain" size="none"
         type="button"
         className="dvx-popover-row dvx-attach-row"
+        title="Images, PDFs, or text files"
         disabled={disabled}
         onClick={() => onAttach('files')}
       >
         <AttachIcon kind="files" />
         <span className="dvx-popover-row-copy">
           <strong>Attach files…</strong>
-          <small>Images, PDFs, or text files</small>
         </span>
-      </button>
-      <button
+      </Button>
+      <Button variant="plain" size="none"
         type="button"
         className="dvx-popover-row dvx-attach-row"
+        title="Current file contents"
         disabled={disabled}
         onClick={() => onAttach('editor')}
       >
         <AttachIcon kind="editor" />
         <span className="dvx-popover-row-copy">
           <strong>Attach active editor</strong>
-          <small>Current file contents</small>
         </span>
-      </button>
-      <button
+      </Button>
+      <Button variant="plain" size="none"
         type="button"
         className="dvx-popover-row dvx-attach-row"
+        title="Highlighted editor text"
         disabled={disabled}
         onClick={() => onAttach('selection')}
       >
         <AttachIcon kind="selection" />
         <span className="dvx-popover-row-copy">
           <strong>Attach selection</strong>
-          <small>Highlighted editor text</small>
         </span>
-      </button>
-      <button
+      </Button>
+      <Button variant="plain" size="none"
         type="button"
         className="dvx-popover-row dvx-attach-row"
+        title="Workspace errors and warnings"
         disabled={disabled}
         onClick={() => onAttach('problems')}
       >
         <AttachIcon kind="problems" />
         <span className="dvx-popover-row-copy">
           <strong>Attach problems</strong>
-          <small>Workspace errors and warnings</small>
         </span>
-      </button>
-      <button
+      </Button>
+      <Button variant="plain" size="none"
         type="button"
         className="dvx-popover-row dvx-attach-row"
+        title="Uncommitted diff vs HEAD"
         disabled={disabled}
         onClick={() => onAttach('git-changes')}
       >
         <AttachIcon kind="git-changes" />
         <span className="dvx-popover-row-copy">
           <strong>Attach git changes</strong>
-          <small>Uncommitted diff vs HEAD</small>
         </span>
-      </button>
+      </Button>
     </div>
   );
 }
 
-function AttachIcon({
-  kind,
-}: {
-  readonly kind: AttachSource;
-}): React.JSX.Element {
+function AttachIcon({ kind }: { readonly kind: AttachSource }): React.JSX.Element {
   if (kind === 'files') {
     return (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -604,27 +558,9 @@ function AttachIcon({
   if (kind === 'git-changes') {
     return (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <circle
-          cx="4.5"
-          cy="4"
-          r="1.5"
-          stroke="currentColor"
-          strokeWidth="1.2"
-        />
-        <circle
-          cx="4.5"
-          cy="12"
-          r="1.5"
-          stroke="currentColor"
-          strokeWidth="1.2"
-        />
-        <circle
-          cx="11.5"
-          cy="7"
-          r="1.5"
-          stroke="currentColor"
-          strokeWidth="1.2"
-        />
+        <circle cx="4.5" cy="4" r="1.5" stroke="currentColor" strokeWidth="1.2" />
+        <circle cx="4.5" cy="12" r="1.5" stroke="currentColor" strokeWidth="1.2" />
+        <circle cx="11.5" cy="7" r="1.5" stroke="currentColor" strokeWidth="1.2" />
         <path
           d="M4.5 5.5v5M11.5 8.5c0 2-2 2.5-4 2.7"
           stroke="currentColor"
@@ -677,57 +613,35 @@ function SettingsDropdown<Value extends string>({
   readonly onToggle: () => void;
   readonly onSelect: (value: Value) => void;
 }): React.JSX.Element {
-  const currentLabel =
-    options.find((option) => option.value === current)?.label ??
-    formatLabel(current);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const select = (value: Value) => {
+    onSelect(value);
+    trigger.current?.focus({ preventScroll: true });
+  };
   return (
-    <div className="dvx-settings-select" data-expanded={expanded}>
-      <button
-        type="button"
-        className="dvx-popover-row"
-        aria-expanded={expanded}
-        aria-controls={id}
-        onClick={onToggle}
-      >
-        <span className="dvx-popover-row-copy">
-          <strong>{title}</strong>
-        </span>
-        <span className="dvx-popover-row-value">{currentLabel}</span>
-        <ChevronDownIcon />
-      </button>
-      <div
-        id={id}
-        className="dvx-settings-select-motion"
-        aria-hidden={!expanded}
-        inert={!expanded}
-      >
-        <div className="dvx-settings-select-clip">
-          <div
-            className="dvx-settings-select-options"
-            role="radiogroup"
-            aria-label={`${title} options`}
-          >
-            {options.map((option) => {
-              const checked = option.value === current;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  className="dvx-settings-select-option"
-                  role="radio"
-                  aria-checked={checked}
-                  disabled={disabled}
-                  onClick={() => onSelect(option.value)}
-                >
-                  <span>{option.label}</span>
-                  {checked ? <CheckIcon /> : null}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    </div>
+    <Collapsible className="dvx-settings-select" data-expanded={expanded} open={expanded}
+      onOpenChange={(open) => { if (open !== expanded) onToggle(); }}>
+      <CollapsibleTrigger asChild>
+        <Button ref={trigger} variant="plain" size="none" className="dvx-popover-row"
+          aria-label={title} aria-controls={id} disabled={disabled}>
+          <span className="dvx-popover-row-copy"><strong>{title}</strong></span>
+          <span className="dvx-popover-row-value">{options.find((option) => option.value === current)?.label ?? current}</span>
+          <ChevronDownIcon />
+        </Button>
+      </CollapsibleTrigger>
+      <AnimatedCollapsibleContent id={id} open={expanded}>
+        <RadioGroup className="dvx-settings-select-options" aria-label={`${title} options`}
+          value={current} disabled={disabled} onValueChange={(value) => select(value as Value)}>
+          {options.map((option) => (
+            <label key={option.value} className="dvx-option-row dvx-settings-inline-option">
+              <span>{option.label}</span>
+              <RadioGroupItem value={option.value} aria-label={option.label}
+                onClick={() => { if (option.value === current) select(current); }} />
+            </label>
+          ))}
+        </RadioGroup>
+      </AnimatedCollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -779,19 +693,8 @@ function SettingsInfoIcon({
 
 function SearchIcon(): React.JSX.Element {
   return (
-    <svg
-      className="dvx-search-icon"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
-      <circle
-        cx="7"
-        cy="7"
-        r="3.5"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
+    <svg className="dvx-search-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="1.2" />
       <path
         d="m9.6 9.6 2.9 2.9"
         stroke="currentColor"
@@ -802,21 +705,3 @@ function SearchIcon(): React.JSX.Element {
   );
 }
 
-function CheckIcon(): React.JSX.Element {
-  return (
-    <svg
-      className="dvx-check-icon"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="m4 8.25 2.4 2.4L12 5.25"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}

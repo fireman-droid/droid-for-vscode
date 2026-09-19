@@ -1,0 +1,1 @@
+export const MISSION_CONTROL_PANEL_PROTOCOL_VERSION = 2 as const;

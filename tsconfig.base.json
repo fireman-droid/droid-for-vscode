@@ -3,6 +3,10 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "paths": {
+      "@droidvisx/chat-ui": ["./packages/chat-ui/src/index.ts"],
+      "@droidvisx/chat-ui/*": ["./packages/chat-ui/src/*"]
+    },
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,

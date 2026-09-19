@@ -1,10 +1,10 @@
 import type { RuntimeEvent } from '../../../runtime/runtimeEvents';
-import type { ChatControllerInternals } from '../internals';
+import type { RuntimeEventsPort } from './runtimeEventsMissionPort';
 
 type TurnRuntimeEvent = Exclude<RuntimeEvent, { type: 'turn-complete' }>;
 
 export function handleMissionRuntimeEvent(
-  ctl: ChatControllerInternals,
+  ctl: RuntimeEventsPort,
   event: TurnRuntimeEvent,
 ): boolean {
   switch (event.type) {
@@ -14,14 +14,14 @@ export function handleMissionRuntimeEvent(
     case 'mission-heartbeat':
     case 'mission-worker-started':
     case 'mission-worker-completed':
-      if (ctl.missionRuntime?.apply(event) === true) {
+      if (ctl.missionState.missionRuntime?.apply(event) === true) {
         if (event.type === 'mission-state') {
-          ctl.mission = {
+          ctl.missionState.mission = {
             state: event.lifecycle,
-            role: ctl.mission?.role ?? 'orchestrator',
+            role: ctl.missionState.mission?.role ?? 'orchestrator',
           };
         }
-        ctl.emit(ctl.missionRuntime.snapshot());
+        ctl.emit(ctl.missionState.missionRuntime.snapshot());
       }
       return true;
     default:

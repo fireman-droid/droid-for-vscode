@@ -1,11 +1,5 @@
-import {
-  ThreadPrimitive,
-  useAuiState,
-} from "@assistant-ui/react";
-import {
-  observeElementRect,
-  useVirtualizer,
-} from "@tanstack/react-virtual";
+import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
+import { observeElementRect, useVirtualizer } from '@tanstack/react-virtual';
 import {
   useContext,
   useLayoutEffect,
@@ -15,28 +9,30 @@ import {
   useSyncExternalStore,
   type ComponentType,
   type RefObject,
-} from "react";
-import { createPortal } from "react-dom";
+} from 'react';
+import { createPortal } from 'react-dom';
 
-import { FOLLOW_REJOIN_PX } from "../followScroll";
-import { ProcessPresentationProvider } from "../processPresentation";
+import { FOLLOW_REJOIN_PX } from './navigation/followScroll';
+import {
+  ProcessConversationContext,
+  ProcessPresentationProvider,
+} from '../transcript/processPresentation';
 import {
   hasQuestionEntered,
   questionEntryOffset,
-} from "../questionEntryBoundary";
+} from './navigation/questionEntryBoundary';
 import {
   buildTurns,
   questionTurnRows,
   turnIndexForMessage,
   type MessageRow,
   type TranscriptVirtualizerApi,
-} from "./buildTurns";
+} from './buildTurns';
 import {
   MessageSurfaceContext,
   PinnedMessageContext,
-  ThreadMessageChromeContext,
   THREAD_MESSAGE_COMPONENTS,
-} from "./messageChrome";
+} from './messageChrome';
 
 const ESTIMATED_MESSAGE_HEIGHT = 120;
 const OVERSCAN = 8;
@@ -65,7 +61,7 @@ function releaseFollowForJump(
     return;
   }
   follow.following = false;
-  if ("pendingProgrammaticTop" in follow) {
+  if ('pendingProgrammaticTop' in follow) {
     (
       follow as { following: boolean; pendingProgrammaticTop: number | null }
     ).pendingProgrammaticTop = scrollTop;
@@ -82,9 +78,7 @@ function useThreadMessageRows(): readonly MessageRow[] {
       prev.every((row, index) => {
         const message = messages[index];
         return (
-          message !== undefined &&
-          row.id === message.id &&
-          row.role === message.role
+          message !== undefined && row.id === message.id && row.role === message.role
         );
       })
     ) {
@@ -114,18 +108,12 @@ export function VirtualizedMessages({
   readonly enablePinnedSurface?: boolean;
   readonly floatingHost?: HTMLElement | null;
 }): React.JSX.Element | null {
-  const chrome = useContext(ThreadMessageChromeContext);
+  const conversation = useContext(ProcessConversationContext);
   const rows = useThreadMessageRows();
   const messageIds = useMemo(() => rows.map((row) => row.id), [rows]);
   const turns = useMemo(() => buildTurns(rows), [rows]);
-  const roleById = useMemo(
-    () => new Map(rows.map((row) => [row.id, row.role])),
-    [rows],
-  );
-  const questions = useMemo(
-    () => questionTurnRows(turns, roleById),
-    [roleById, turns],
-  );
+  const roleById = useMemo(() => new Map(rows.map((row) => [row.id, row.role])), [rows]);
+  const questions = useMemo(() => questionTurnRows(turns, roleById), [roleById, turns]);
   const nextQuestionByTurn = useMemo(() => {
     const nextByTurn = new Map<number, number>();
     questions.indexes.forEach((turnIndex, index) => {
@@ -140,16 +128,17 @@ export function VirtualizedMessages({
   const [scrollMargin, setScrollMargin] = useState(0);
 
   const subscribeToScroll = useMemo(
-    () => (onStoreChange: () => void): (() => void) => {
-      const scroller = getScroller();
-      if (scroller === null) {
-        return () => undefined;
-      }
-      scroller.addEventListener("scroll", onStoreChange, {
-        passive: true,
-      });
-      return () => scroller.removeEventListener("scroll", onStoreChange);
-    },
+    () =>
+      (onStoreChange: () => void): (() => void) => {
+        const scroller = getScroller();
+        if (scroller === null) {
+          return () => undefined;
+        }
+        scroller.addEventListener('scroll', onStoreChange, {
+          passive: true,
+        });
+        return () => scroller.removeEventListener('scroll', onStoreChange);
+      },
     [getScroller],
   );
   const getScrollSnapshot = useMemo(
@@ -227,7 +216,7 @@ export function VirtualizedMessages({
         }
       }
       releaseFollowForJump(followingRef.current, top);
-      if (typeof element.scrollTo === "function") {
+      if (typeof element.scrollTo === 'function') {
         element.scrollTo({ top, behavior });
         return;
       }
@@ -253,8 +242,8 @@ export function VirtualizedMessages({
         }
         releaseFollowForJump(followingRef.current, element.scrollTop);
         virtualizer.scrollToIndex(index, {
-          align: "start",
-          behavior: "auto",
+          align: 'start',
+          behavior: 'auto',
         });
       },
       questionTops: () => {
@@ -262,11 +251,7 @@ export function VirtualizedMessages({
         const total = virtualizer.getTotalSize();
         return questions.indexes.map((index) => {
           const start = measured[index]?.start;
-          return (
-            start ??
-            scrollMargin +
-              (index / Math.max(turns.length - 1, 1)) * total
-          );
+          return start ?? scrollMargin + (index / Math.max(turns.length - 1, 1)) * total;
         });
       },
     };
@@ -276,71 +261,59 @@ export function VirtualizedMessages({
         apiRef.current = null;
       }
     };
-  }, [
-    apiRef,
-    followingRef,
-    getScroller,
-    questions,
-    scrollMargin,
-    turns,
-    virtualizer,
-  ]);
+  }, [apiRef, followingRef, getScroller, questions, scrollMargin, turns, virtualizer]);
 
   const items = virtualizer.getVirtualItems();
-  const paddingTop = Math.max(
-    0,
-    (items[0]?.start ?? scrollMargin) - scrollMargin,
-  );
+  const paddingTop = Math.max(0, (items[0]?.start ?? scrollMargin) - scrollMargin);
   const paddingBottom = Math.max(
     0,
-    virtualizer.getTotalSize() -
-      ((items.at(-1)?.end ?? scrollMargin) - scrollMargin),
+    virtualizer.getTotalSize() - ((items.at(-1)?.end ?? scrollMargin) - scrollMargin),
   );
   const pinCandidate = virtualizer.getVirtualItemForOffset(
     questionEntryOffset(scrollTop),
   );
   const pinnedTurn =
-    pinCandidate !== undefined &&
-    hasQuestionEntered(pinCandidate.start, scrollTop)
+    pinCandidate !== undefined && hasQuestionEntered(pinCandidate.start, scrollTop)
       ? pinCandidate.index
       : -1;
+  const pinnedLeadId = turns[pinnedTurn]?.messageIds[0];
   const naturalPinnedMessageId =
-    pinnedTurn === -1
-      ? null
-      : (turns[pinnedTurn]?.messageIds[0] ?? null);
+    pinnedLeadId !== undefined && roleById.get(pinnedLeadId) === 'user'
+      ? pinnedLeadId
+      : null;
   const nextQuestionTurn = nextQuestionByTurn.get(pinnedTurn);
   const nextQuestionTop =
     nextQuestionTurn === undefined
       ? undefined
       : virtualizer.measurementsCache[nextQuestionTurn]?.start;
   const pinnedContentRef = useRef<HTMLDivElement | null>(null);
-  const [pinnedHeight, setPinnedHeight] = useState(0);
-  const editingMessageId = chrome?.editingMessageId ?? null;
-  const [editingPinnedMessageId, setEditingPinnedMessageId] =
-    useState<string | null>(null);
-  useLayoutEffect(() => {
-    if (editingMessageId === null) {
-      setEditingPinnedMessageId(null);
-    } else if (editingPinnedMessageId === null && naturalPinnedMessageId !== null) {
-      setEditingPinnedMessageId(naturalPinnedMessageId);
-    }
-  }, [editingMessageId, editingPinnedMessageId, naturalPinnedMessageId]);
+  const [pinnedSize, setPinnedSize] = useState({
+    messageId: null as string | null,
+    height: 0,
+    messageHeight: 0,
+  });
   const displayedMessageId =
-    enablePinnedSurface && floatingHost !== null
-      ? (editingMessageId === null
-          ? naturalPinnedMessageId
-          : (editingPinnedMessageId ?? naturalPinnedMessageId))
-      : null;
+    enablePinnedSurface && floatingHost !== null ? naturalPinnedMessageId : null;
   useLayoutEffect(() => {
     const content = pinnedContentRef.current;
     if (content === null || displayedMessageId === null) {
-      setPinnedHeight(0);
+      setPinnedSize((previous) =>
+        previous.messageId === null
+          ? previous
+          : { messageId: null, height: 0, messageHeight: 0 },
+      );
       return undefined;
     }
     const measure = (): void => {
       const height = content.getBoundingClientRect().height;
-      setPinnedHeight((previous) =>
-        Math.abs(previous - height) < 0.5 ? previous : height,
+      const messageHeight =
+        content.querySelector('.dvx-message-user')?.getBoundingClientRect().height ?? 0;
+      setPinnedSize((previous) =>
+        previous.messageId === displayedMessageId &&
+        Math.abs(previous.height - height) < 0.5 &&
+        Math.abs(previous.messageHeight - messageHeight) < 0.5
+          ? previous
+          : { messageId: displayedMessageId, height, messageHeight },
       );
     };
     measure();
@@ -348,69 +321,70 @@ export function VirtualizedMessages({
     observer.observe(content);
     return () => observer.disconnect();
   }, [displayedMessageId]);
-  const pushOffset =
-    editingMessageId === null
-      ? pinnedPushOffset(nextQuestionTop, scrollTop, pinnedHeight)
-      : 0;
+  const measuredHeight =
+    pinnedSize.messageId === displayedMessageId ? pinnedSize.height : 0;
+  const messageHeight =
+    pinnedSize.messageId === displayedMessageId ? pinnedSize.messageHeight : 0;
+  const pushOffset = pinnedPushOffset(nextQuestionTop, scrollTop, measuredHeight);
 
   if (turns.length === 0) {
     return null;
   }
 
   return (
-    <ProcessPresentationProvider messageIds={messageIds} followingRef={followingRef}>
-    <PinnedMessageContext.Provider value={{ messageId: displayedMessageId }}>
-      {displayedMessageId !== null && floatingHost !== null
-        ? createPortal(
-            <MessageSurfaceContext.Provider value="pinned">
-              <div
-                className="dvx-pinned-user-layer"
-                style={{ transform: `translateY(${pushOffset}px)` }}
-              >
+    <ProcessPresentationProvider
+      key={conversation}
+      messageIds={messageIds}
+      followingRef={followingRef}
+    >
+      <PinnedMessageContext.Provider
+        value={{ messageId: displayedMessageId, messageHeight }}
+      >
+        {displayedMessageId !== null && floatingHost !== null
+          ? createPortal(
+              <MessageSurfaceContext.Provider value="pinned">
                 <div
-                  className="dvx-pinned-user-layer-content"
-                  ref={pinnedContentRef}
+                  className="dvx-pinned-user-layer"
+                  style={{ transform: `translateY(${pushOffset}px)` }}
                 >
-                  <ThreadPrimitive.Unstable_MessageById
-                    messageId={displayedMessageId}
-                    components={components}
-                  />
+                  <div className="dvx-pinned-user-layer-content" ref={pinnedContentRef}>
+                    <ThreadPrimitive.Unstable_MessageById
+                      messageId={displayedMessageId}
+                      components={components}
+                    />
+                  </div>
                 </div>
-              </div>
-            </MessageSurfaceContext.Provider>,
-            floatingHost,
-          )
-        : null}
-      <div className="dvx-virtual-turns" ref={listRef}>
-        <div
-          className="dvx-virtual-turns-window"
-          style={{ paddingTop, paddingBottom }}
-        >
-          {items.map((item) => {
-            const turn = turns[item.index];
-            if (turn === undefined) {
-              return null;
-            }
-            return (
-              <div
-                key={item.key}
-                data-index={item.index}
-                ref={virtualizer.measureElement}
-                className="dvx-virtual-turn"
-              >
-                {turn.messageIds.map((messageId) => (
-                  <ThreadPrimitive.Unstable_MessageById
-                    key={messageId}
-                    messageId={messageId}
-                    components={components}
-                  />
-                ))}
-              </div>
-            );
-          })}
+              </MessageSurfaceContext.Provider>,
+              floatingHost,
+            )
+          : null}
+        <div className="dvx-virtual-turns" ref={listRef}>
+          <div className="dvx-virtual-turns-window" style={{ paddingTop, paddingBottom }}>
+            {items.map((item) => {
+              const turn = turns[item.index];
+              if (turn === undefined) {
+                return null;
+              }
+              return (
+                <div
+                  key={item.key}
+                  data-index={item.index}
+                  ref={virtualizer.measureElement}
+                  className="dvx-virtual-turn"
+                >
+                  {turn.messageIds.map((messageId) => (
+                    <ThreadPrimitive.Unstable_MessageById
+                      key={messageId}
+                      messageId={messageId}
+                      components={components}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
-    </PinnedMessageContext.Provider>
+      </PinnedMessageContext.Provider>
     </ProcessPresentationProvider>
   );
 }

@@ -4,11 +4,12 @@
 // keeps the thin accent check on the right (.dvx-radio-mark glyph).
 // Selection side effects stay with the parent via onSelect.
 
-import type {
-  SessionInteractionMode,
-  SessionSettingsState,
-} from '../../../shared/bridgeMessages';
+import {
+  type SessionInteractionMode,
+  type SessionSettingsState,
+} from '../../../shared/protocol/settings';
 import { MODE_OPTIONS, SettingsStatus } from './shared';
+import { RadioGroup, RadioGroupItem } from '../../../webview-v2/ui/controls';
 
 export function ModePopover({
   id,
@@ -31,28 +32,21 @@ export function ModePopover({
       role="dialog"
       aria-label="Mode"
     >
-      <div
-        className="dvx-option-list"
-        role="radiogroup"
-        aria-label="Mode options"
-      >
+      <RadioGroup className="dvx-option-list" aria-label="Mode options" value={shownMode} disabled={disabled}
+        onValueChange={(value) => onSelect(value as SessionInteractionMode)}>
         {MODE_OPTIONS.map((option) => (
-          <button
+          <label
             key={option.value}
-            type="button"
             className="dvx-option-row dvx-mode-option"
-            role="radio"
-            aria-checked={option.value === shownMode}
             title={option.description}
-            disabled={disabled}
-            onClick={() => onSelect(option.value)}
           >
             <ModeIcon mode={option.value} />
             <span className="dvx-mode-option-label">{option.label}</span>
-            <span className="dvx-radio-mark" aria-hidden="true" />
-          </button>
+            <RadioGroupItem value={option.value} aria-label={option.label}
+              onClick={() => { if (option.value === 'mission' && shownMode === 'mission') onSelect('mission'); }} />
+          </label>
         ))}
-      </div>
+      </RadioGroup>
       <SettingsStatus settings={settings} />
       {disabled && settings.status === 'ready' ? (
         <p className="dvx-popover-message" role="status">

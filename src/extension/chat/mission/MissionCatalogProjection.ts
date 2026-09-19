@@ -1,7 +1,6 @@
+import type { DaemonApi } from '../../../runtime/daemon/api';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-
-import type { ConnectedDroid } from '@factory/droid-sdk';
 
 import {
   DAEMON_MISSION_CATALOG_PAGE_SIZE,
@@ -15,22 +14,19 @@ import {
   MAX_MISSION_CONTROL_LABEL_LENGTH,
   MAX_MISSION_CONTROL_TITLE_LENGTH,
   type MissionControlCatalogRow,
-} from '../../../shared/missionControlPanelProtocol';
+} from '../../../shared/protocol/missionControlPanelProtocol';
 import {
   containsRepeatedBoundarySlashRun,
   isSafePresentationText,
-} from '../../../shared/presentationSafety';
+} from '../../../shared/validation/presentationSafety';
 
 export interface MissionCatalogProjectionOptions {
-  readonly getDroid: () => Promise<ConnectedDroid>;
+  readonly getDroid: () => Promise<DaemonApi>;
   readonly catalogRuntime?: DaemonMissionCatalogRuntime;
   readonly resolveComputerLabel?: (hostId: string) => string | undefined;
   readonly getAttachedSessionId?: () => string | undefined;
   readonly timeoutMs?: number;
-  readonly rememberCatalogTarget?: (
-    catalogId: string,
-    sessionId: string,
-  ) => void;
+  readonly rememberCatalogTarget?: (catalogId: string, sessionId: string) => void;
 }
 
 export type MissionCatalogResult =
@@ -48,8 +44,7 @@ const MISSION_CATALOG_TIMEOUT_MS = 15_000;
 const MISSION_CATALOG_MAX_PAGES = Math.ceil(
   MAX_MISSION_CONTROL_CATALOG_ROWS / DAEMON_MISSION_CATALOG_PAGE_SIZE,
 );
-const INCOMPLETE_CATALOG_MESSAGE =
-  'The complete Mission catalog could not be loaded.';
+const INCOMPLETE_CATALOG_MESSAGE = 'The complete Mission catalog could not be loaded.';
 const INVALID_CATALOG_MESSAGE = 'Mission catalog data was invalid.';
 
 export async function listMissionCatalog(
@@ -99,13 +94,10 @@ async function readCompleteCatalog(
 
   for (let pageIndex = 0; pageIndex < MISSION_CATALOG_MAX_PAGES; pageIndex += 1) {
     const page =
-      cursor === undefined
-        ? await runtime.listPage()
-        : await runtime.listPage(cursor);
+      cursor === undefined ? await runtime.listPage() : await runtime.listPage(cursor);
     if (
       page.rows.length > DAEMON_MISSION_CATALOG_PAGE_SIZE ||
-      candidates.length + page.rows.length >
-        MAX_MISSION_CONTROL_CATALOG_ROWS
+      candidates.length + page.rows.length > MAX_MISSION_CONTROL_CATALOG_ROWS
     ) {
       throw new IncompleteCatalogError();
     }
@@ -158,10 +150,7 @@ function projectCatalogCandidate(
   const title =
     raw.mission.title === undefined
       ? 'Untitled Mission'
-      : requirePresentationText(
-          raw.mission.title,
-          MAX_MISSION_CONTROL_TITLE_LENGTH,
-        );
+      : requirePresentationText(raw.mission.title, MAX_MISSION_CONTROL_TITLE_LENGTH);
   const createdAt = projectIsoDate(raw.mission.createdAt);
   const updatedAt = projectIsoDate(raw.mission.updatedAt);
   const progress = projectProgress(
@@ -188,8 +177,7 @@ function projectCatalogCandidate(
   return {
     sourceId: raw.sessionId,
     row,
-    missionUpdatedTime:
-      updatedAt === null ? null : new Date(updatedAt).getTime(),
+    missionUpdatedTime: updatedAt === null ? null : new Date(updatedAt).getTime(),
     daemonUpdatedTime: raw.updatedAt,
     stableKey: JSON.stringify(row),
   };
@@ -208,13 +196,9 @@ function finalizeCatalog(
   return [...newest.values()]
     .sort((left, right) => {
       const leftCreated =
-        left.row.createdAt === null
-          ? null
-          : new Date(left.row.createdAt).getTime();
+        left.row.createdAt === null ? null : new Date(left.row.createdAt).getTime();
       const rightCreated =
-        right.row.createdAt === null
-          ? null
-          : new Date(right.row.createdAt).getTime();
+        right.row.createdAt === null ? null : new Date(right.row.createdAt).getTime();
       if (leftCreated !== rightCreated) {
         if (leftCreated === null) return 1;
         if (rightCreated === null) return -1;
@@ -225,10 +209,7 @@ function finalizeCatalog(
     .map(({ row }) => row);
 }
 
-function compareCandidate(
-  left: CatalogCandidate,
-  right: CatalogCandidate,
-): number {
+function compareCandidate(left: CatalogCandidate, right: CatalogCandidate): number {
   const missionDifference =
     (left.missionUpdatedTime ?? -1) - (right.missionUpdatedTime ?? -1);
   if (missionDifference !== 0) {
@@ -251,11 +232,7 @@ function projectProgress(
   if (completed === undefined || total === undefined) {
     return null;
   }
-  if (
-    !isFeatureCount(completed) ||
-    !isFeatureCount(total) ||
-    completed > total
-  ) {
+  if (!isFeatureCount(completed) || !isFeatureCount(total) || completed > total) {
     throw new InvalidCatalogError();
   }
   return { completed, total };
@@ -303,13 +280,10 @@ function projectWorkspaceLabel(repoRoot: string | undefined): string {
   ) {
     return '—';
   }
-  const label =
-    repoRoot.includes('\\')
-      ? path.win32.basename(repoRoot)
-      : path.posix.basename(repoRoot);
-  return isSafePresentationText(label, MAX_MISSION_CONTROL_LABEL_LENGTH)
-    ? label
-    : '—';
+  const label = repoRoot.includes('\\')
+    ? path.win32.basename(repoRoot)
+    : path.posix.basename(repoRoot);
+  return isSafePresentationText(label, MAX_MISSION_CONTROL_LABEL_LENGTH) ? label : '—';
 }
 
 function projectComputerLabel(
@@ -335,9 +309,7 @@ function requirePresentationText(value: string, maximum: number): string {
 
 function isSafeSourceId(value: string): boolean {
   return (
-    value.length > 0 &&
-    value.length <= 512 &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
+    value.length > 0 && value.length <= 512 && !/[\u0000-\u001f\u007f-\u009f]/.test(value)
   );
 }
 

@@ -12,23 +12,12 @@ const TEST_BUDGET = 2000;
 
 // Ratchet allowlist: path -> ceiling. Only ever lower these numbers.
 const ALLOWLIST = new Map(Object.entries({
-  'src/webview/bridge/validateHostMessage.test.ts': 4707,
-  'src/webview/bridge/validateHostMessage.ts': 3887,
-  'src/webview/assistant/store.test.ts': 2486,
-  'src/runtime/FactoryDroidRuntime.test.ts': 2402,
-  'src/runtime/FactoryDroidRuntime.ts': 2276,
-  'src/shared/bridgeMessages.ts': 2202,
-  'src/webview/assistant/App.tsx': 1748,
-  'src/webview/assistant/store.ts': 1635,
-  'src/shared/validateMessage.ts': 1593,
-  'src/extension/__fixtures__/reconcileRealSession.ts': 1246,
-  'src/webview/assistant/thread/Composer.tsx': 1233,
-  'src/extension/chat/turnFlow.ts': 1156,
-  'src/extension/ChatController.ts': 1123,
-  'src/extension/chat/sessionDirectory.ts': 1130,
-  'src/extension/chat/runtimeLifecycle.ts': 1102,
-  'src/runtime/history/projectSessionHistory.ts': 1042,
-  'src/webview/assistant/Thread.tsx': 983,
+  'src/webview/bridge/validateHostMessage.test.ts': 4618,
+  'src/webview/assistant/state/store.test.ts': 2419,
+  'src/runtime/FactoryDroidRuntime.test.ts': 2322,
+  'src/extension/__fixtures__/reconcileRealSession.ts': 1219,
+  'src/extension/chat/sessions/runtimeLifecycle.ts': 934,
+  'src/runtime/history/projectSessionHistory.ts': 953,
 }));
 
 function suggestion(file) {
@@ -41,7 +30,7 @@ function suggestion(file) {
   if (file.endsWith('.tsx')) {
     return 'extract cohesive components into sibling modules (see thread/)';
   }
-  return 'extract free-function domains onto an Internals interface (see extension/chat/)';
+  return 'split cohesive feature responsibilities and keep state access scoped';
 }
 
 const failures = [];
@@ -76,6 +65,7 @@ function walk(dir) {
 }
 
 walk('src');
+walk('packages/chat-ui/src');
 
 for (const { rel, lines, limit, budget } of failures) {
   console.error(

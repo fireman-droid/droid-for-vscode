@@ -2,24 +2,24 @@
 // out of ChatController.ts (structure-only refactor; bodies moved
 // verbatim). Everything here is internal to the chat directory plus
 // ChatController.ts itself — nothing is a Bridge or extension API.
-import type {
-  AttachmentSummary,
-  EditAttachmentSummary,
-  HostToWebviewMessage,
-  TurnStatus,
-} from '../../shared/bridgeMessages';
+import {
+  type AttachmentSummary,
+  type EditAttachmentSummary,
+} from '../../shared/protocol/attachments';
+import { type HostToWebviewMessage } from '../../shared/bridgeMessages';
+import { type TurnStatus } from '../../shared/protocol/turns';
 import { MAX_BRIDGE_ID_LENGTH } from '../../shared/bridgeMessages';
 import type { RuntimeAttachment } from '../../runtime/DroidRuntime';
-import type { SessionCatalog } from '../../runtime/SessionCatalog';
-import type { TurnActivityState } from '../turnActivityState';
-import type { TurnChangesLedger } from '../turnChangesLedger';
-import type { HostTranscriptProjectionMessage } from '../hostTranscriptState';
+import type { SessionCatalog } from '../../runtime/catalog/SessionCatalog';
+import type { TurnActivityState } from './turns/turnActivityState';
+import type { TurnChangesLedger } from '../changes/turnChangesLedger';
+import type { HostTranscriptProjectionMessage } from '../recovery/hostTranscriptState';
 import {
   SessionRecoveryStore,
   type SessionRecoveryPersistence,
-} from '../SessionRecoveryStore';
+} from '../recovery/SessionRecoveryStore';
 import { DaemonAvailabilityError } from '../../runtime/daemon/daemonConnection';
-import type { ChatController, WorkspaceContext } from '../ChatController';
+import type { WorkspaceContext } from './hostTypes';
 
 /**
  * The visible face the extracted chat/ modules operate on. The
@@ -28,11 +28,11 @@ import type { ChatController, WorkspaceContext } from '../ChatController';
  * src/extension/chat/ may consume this type — it is not part of the
  * extension's public API surface.
  */
-export type ChatControllerInternals = ChatController;
 
 export interface CurrentTurn {
   readonly turnId: string;
   status: TurnStatus;
+  compacting?: boolean;
   error?: string;
   activity: TurnActivityState;
   /**
@@ -78,8 +78,7 @@ export const SESSION_OPERATION_BLOCKED_MESSAGE =
   'Finish the current Droid activity before changing sessions.';
 export const DAEMON_NOT_LOGGED_IN_MESSAGE =
   'Sign in with the droid CLI to archive and search sessions.';
-export const DAEMON_UNAVAILABLE_MESSAGE =
-  'The local droid daemon is unavailable.';
+export const DAEMON_UNAVAILABLE_MESSAGE = 'The local droid daemon is unavailable.';
 export const DAEMON_CREDENTIALS_UNREADABLE_MESSAGE =
   'DroidVisX could not read the current Droid CLI sign-in.';
 export const DAEMON_REFRESH_FAILED_MESSAGE =
@@ -114,10 +113,7 @@ export function isEnumValue<const Values extends readonly string[]>(
   value: unknown,
   values: Values,
 ): value is Values[number] {
-  return (
-    typeof value === 'string' &&
-    (values as readonly string[]).includes(value)
-  );
+  return typeof value === 'string' && (values as readonly string[]).includes(value);
 }
 
 const MAX_FORK_TITLE_LENGTH = 60;
@@ -158,8 +154,7 @@ export function isTranscriptProjection(
     message.type === 'subagent.update' ||
     message.type === 'transcript.image' ||
     message.type === 'runtime.diagnostic' ||
-    (message.type === 'interaction.closed' &&
-      message.result !== undefined) ||
+    (message.type === 'interaction.closed' && message.result !== undefined) ||
     message.type === 'turn.state'
   );
 }

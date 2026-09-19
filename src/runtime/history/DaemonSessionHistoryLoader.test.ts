@@ -1,10 +1,9 @@
+import type { DaemonApi } from '../daemon/api';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
-import type { ConnectedDroid } from '@factory/droid-sdk';
 
 import {
   createDaemonFirstHistoryLoader,
@@ -22,9 +21,7 @@ afterEach(() => {
 });
 
 function tempDir(): string {
-  const root = mkdtempSync(
-    path.join(os.tmpdir(), 'dvx-daemon-history-'),
-  );
+  const root = mkdtempSync(path.join(os.tmpdir(), 'dvx-daemon-history-'));
   tempRoots.push(root);
   return root;
 }
@@ -34,9 +31,8 @@ function droidWithMessages(
     sessionId: string,
     options?: { limit?: number; cursor?: string },
   ) => Promise<unknown[]>,
-): () => Promise<ConnectedDroid> {
-  return async () =>
-    ({ sessions: { getMessages } }) as unknown as ConnectedDroid;
+): () => Promise<DaemonApi> {
+  return async () => ({ sessions: { getMessages } }) as unknown as DaemonApi;
 }
 
 function textMessage(
@@ -87,9 +83,10 @@ describe('createDaemonFirstHistoryLoader.loadHistory', () => {
     if (loaded.status !== 'available') {
       return;
     }
-    expect(
-      loaded.state.transcript.map((item) => item.kind),
-    ).toEqual(['user', 'assistant']);
+    expect(loaded.state.transcript.map((item) => item.kind)).toEqual([
+      'user',
+      'assistant',
+    ]);
     expect(loaded.state.historyStatus).toBe('complete');
     expect(getMessages).toHaveBeenCalledTimes(1);
     expect(getMessages).toHaveBeenCalledWith('session-1', {
@@ -105,9 +102,7 @@ describe('createDaemonFirstHistoryLoader.loadHistory', () => {
       textMessage('m4', 'assistant', 'latest answer', 4, 'm3'),
     ];
     const loader = createDaemonFirstHistoryLoader({
-      getDroid: droidWithMessages(async () =>
-        chronological.slice().reverse(),
-      ),
+      getDroid: droidWithMessages(async () => chronological.slice().reverse()),
       isDaemonActive: () => true,
       fallback: fallbackLoader(),
       sessionsDirectory: tempDir(),
@@ -124,16 +119,9 @@ describe('createDaemonFirstHistoryLoader.loadHistory', () => {
     }
     expect(
       loaded.state.transcript.map((item) =>
-        item.kind === 'user' || item.kind === 'assistant'
-          ? item.text
-          : item.kind,
+        item.kind === 'user' || item.kind === 'assistant' ? item.text : item.kind,
       ),
-    ).toEqual([
-      'oldest question',
-      'oldest answer',
-      'latest question',
-      'latest answer',
-    ]);
+    ).toEqual(['oldest question', 'oldest answer', 'latest question', 'latest answer']);
   });
 
   it('pages newest-first with the last message id as cursor', async () => {
@@ -148,9 +136,8 @@ describe('createDaemonFirstHistoryLoader.loadHistory', () => {
     );
     const pageOne = chronological.slice(1).reverse();
     const pageTwo = chronological.slice(0, 1);
-    const getMessages = vi.fn(
-      async (_id: string, options?: { cursor?: string }) =>
-        options?.cursor === undefined ? pageOne : pageTwo,
+    const getMessages = vi.fn(async (_id: string, options?: { cursor?: string }) =>
+      options?.cursor === undefined ? pageOne : pageTwo,
     );
     const loader = createDaemonFirstHistoryLoader({
       getDroid: droidWithMessages(getMessages),
@@ -210,9 +197,7 @@ describe('createDaemonFirstHistoryLoader.loadHistory', () => {
     }
     expect(
       loaded.state.transcript.map((item) =>
-        item.kind === 'user' || item.kind === 'assistant'
-          ? item.text
-          : item.kind,
+        item.kind === 'user' || item.kind === 'assistant' ? item.text : item.kind,
       ),
     ).toEqual([
       'earlier question',
@@ -291,9 +276,7 @@ describe('createDaemonFirstHistoryLoader.loadHistory', () => {
       }),
     );
     const loader = createDaemonFirstHistoryLoader({
-      getDroid: droidWithMessages(async () => [
-        textMessage('m1', 'user', 'hi'),
-      ]),
+      getDroid: droidWithMessages(async () => [textMessage('m1', 'user', 'hi')]),
       isDaemonActive: () => true,
       fallback: fallbackLoader(),
       sessionsDirectory,
@@ -362,9 +345,7 @@ describe('task-invocation ledger reads', () => {
       },
     ]);
 
-    await expect(
-      readTaskInvocationLedger(file, 'parent-1'),
-    ).resolves.toEqual([
+    await expect(readTaskInvocationLedger(file, 'parent-1')).resolves.toEqual([
       {
         summary: {
           type: 'worker',
@@ -388,18 +369,13 @@ describe('task-invocation ledger reads', () => {
 
   it('resolves null for a missing or malformed file', async () => {
     await expect(
-      readTaskInvocationLedger(
-        path.join(tempDir(), 'missing.json'),
-        'parent-1',
-      ),
+      readTaskInvocationLedger(path.join(tempDir(), 'missing.json'), 'parent-1'),
     ).resolves.toBeNull();
 
     const dir = tempDir();
     const malformed = path.join(dir, 'task-invocations.json');
     writeFileSync(malformed, '{not json');
-    await expect(
-      readTaskInvocationLedger(malformed, 'parent-1'),
-    ).resolves.toBeNull();
+    await expect(readTaskInvocationLedger(malformed, 'parent-1')).resolves.toBeNull();
   });
 
   it('serves loadSubagentSummaries without touching the daemon', async () => {
@@ -426,9 +402,7 @@ describe('task-invocation ledger reads', () => {
         cwd: 'C:\\workspace',
         sessionId: 'parent-1',
       }),
-    ).resolves.toEqual([
-      { type: 'explore', description: 'scan', status: 'completed' },
-    ]);
+    ).resolves.toEqual([{ type: 'explore', description: 'scan', status: 'completed' }]);
     expect(getMessages).not.toHaveBeenCalled();
   });
 

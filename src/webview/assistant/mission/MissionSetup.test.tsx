@@ -4,8 +4,9 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { MissionSetupCapabilities } from '../../../shared/missionProtocol';
-import { MissionSetup } from './MissionSetup';
+import type { MissionSetupCapabilities } from '../../../shared/protocol/missionProtocol';
+import { MissionSetup as V1MissionSetup } from './MissionSetup';
+import { MissionSetup as V2MissionSetup } from '../../../webview-v2/mission/MissionSetup';
 
 const capabilities: MissionSetupCapabilities = {
   currentChat: {
@@ -51,8 +52,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('MissionSetup', () => {
-  it('opens a compact picker above controls near the viewport edge', async () => {
+describe.each([['V1', V1MissionSetup], ['V2', V2MissionSetup]] as const)('%s MissionSetup', (version, MissionSetup) => {
+  it.runIf(version === 'V1')('opens a compact picker above controls near the viewport edge', async () => {
     const user = userEvent.setup();
     render(
       <MissionSetup
@@ -100,60 +101,35 @@ describe('MissionSetup', () => {
     );
 
     expect(screen.queryByLabelText('Worker model')).toBeNull();
-    await user.click(
-      screen.getByRole('button', { name: 'Advanced Mission settings' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'Advanced Mission settings' }));
     expect(
-      screen.getByText(
-        'Both checks use the shared Validator profile configured above.',
-      ),
+      screen.getByText('Both checks use the shared Validator profile configured above.'),
     ).toBeDefined();
 
-    expect(
-      screen.getByRole('combobox', { name: 'Orchestrator reasoning' })
-        .tagName,
-    ).toBe('BUTTON');
-    await user.click(
-      screen.getByRole('combobox', { name: 'Worker inheritance' }),
+    expect(screen.getByRole('combobox', { name: 'Orchestrator reasoning' }).tagName).toBe(
+      'BUTTON',
     );
-    await user.click(
-      screen.getByRole('option', { name: 'Choose independently' }),
-    );
+    await user.click(screen.getByRole('combobox', { name: 'Worker inheritance' }));
+    await user.click(screen.getByRole('option', { name: 'Choose independently' }));
     await user.click(screen.getByRole('combobox', { name: 'Worker model' }));
-    expect(
-      screen.getByRole('listbox', { name: 'Worker model options' }),
-    ).toBeDefined();
-    expect(
-      screen.getByRole('option', { name: 'Worker B' }).tabIndex,
-    ).toBe(-1);
+    expect(screen.getByRole('listbox', { name: 'Worker model options' })).toBeDefined();
+    if (version === 'V1') expect(screen.getByRole('option', { name: 'Worker B' }).tabIndex).toBe(-1);
     await user.keyboard('{ArrowDown}{Enter}');
-    await user.click(
-      screen.getByRole('combobox', { name: 'Worker reasoning' }),
-    );
+    await user.click(screen.getByRole('combobox', { name: 'Worker reasoning' }));
     await user.click(screen.getByRole('option', { name: 'Medium' }));
-    await user.click(
-      screen.getByRole('combobox', { name: 'Validator inheritance' }),
-    );
-    await user.click(
-      screen.getByRole('option', { name: 'Choose independently' }),
-    );
-    await user.click(
-      screen.getByRole('combobox', { name: 'Validator model' }),
-    );
+    await user.click(screen.getByRole('combobox', { name: 'Validator inheritance' }));
+    await user.click(screen.getByRole('option', { name: 'Choose independently' }));
+    await user.click(screen.getByRole('combobox', { name: 'Validator model' }));
     await user.click(screen.getByRole('option', { name: 'Validator C' }));
-    await user.click(
-      screen.getByRole('button', { name: 'Advanced Mission settings' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'Advanced Mission settings' }));
     await waitFor(() => {
       expect(screen.queryByLabelText('Validator model')).toBeNull();
     });
-    await user.click(
-      screen.getByRole('button', { name: 'Advanced Mission settings' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'Advanced Mission settings' }));
     expect(
       screen.getByRole('combobox', { name: 'Validator model' }).textContent,
     ).toContain('Validator C');
-    await user.click(screen.getByRole('checkbox', { name: 'Run Scrutiny' }));
+    await user.click(screen.getByRole(version === 'V1' ? 'checkbox' : 'switch', { name: 'Run Scrutiny' }));
     await user.click(screen.getByRole('button', { name: 'Start Mission' }));
 
     expect(onStart).toHaveBeenCalledWith({
@@ -195,18 +171,12 @@ describe('MissionSetup', () => {
           onDismiss={vi.fn()}
         />,
       );
-      await user.click(
-        screen.getByRole('button', { name: 'Advanced Mission settings' }),
-      );
+      await user.click(screen.getByRole('button', { name: 'Advanced Mission settings' }));
       if (!scrutinyEnabled) {
-        await user.click(
-          screen.getByRole('checkbox', { name: 'Run Scrutiny' }),
-        );
+        await user.click(screen.getByRole(version === 'V1' ? 'checkbox' : 'switch', { name: 'Run Scrutiny' }));
       }
       if (!userTestingEnabled) {
-        await user.click(
-          screen.getByRole('checkbox', { name: 'Run User Testing' }),
-        );
+        await user.click(screen.getByRole(version === 'V1' ? 'checkbox' : 'switch', { name: 'Run User Testing' }));
       }
       await user.click(screen.getByRole('button', { name: 'Start Mission' }));
 
@@ -244,9 +214,9 @@ describe('MissionSetup', () => {
     await user.type(task, 'Implement it');
     await user.dblClick(start);
     expect(onStart).toHaveBeenCalledTimes(1);
-    expect(
-      (screen.getByLabelText('Mission task') as HTMLTextAreaElement).disabled,
-    ).toBe(true);
+    expect((screen.getByLabelText('Mission task') as HTMLTextAreaElement).disabled).toBe(
+      true,
+    );
     expect(
       (
         screen.getByRole('button', {
@@ -267,12 +237,12 @@ describe('MissionSetup', () => {
         }}
       />,
     );
-    expect(
-      (screen.getByLabelText('Mission task') as HTMLTextAreaElement).disabled,
-    ).toBe(false);
-    expect(
-      (screen.getByLabelText('Mission task') as HTMLTextAreaElement).value,
-    ).toBe('Implement it');
+    expect((screen.getByLabelText('Mission task') as HTMLTextAreaElement).disabled).toBe(
+      false,
+    );
+    expect((screen.getByLabelText('Mission task') as HTMLTextAreaElement).value).toBe(
+      'Implement it',
+    );
   });
 
   it('reports every stale pair without fallback', () => {
@@ -320,16 +290,16 @@ describe('MissionSetup', () => {
     expect(screen.getByRole('status').textContent).toContain(
       'The Validator reasoning is unavailable for this model.',
     );
-    expect(
-      (screen.getByLabelText('Mission task') as HTMLTextAreaElement).value,
-    ).toBe('Keep exact task!');
+    expect((screen.getByLabelText('Mission task') as HTMLTextAreaElement).value).toBe(
+      'Keep exact task!',
+    );
   });
 
   it('blocks task text the Bridge cannot represent', () => {
     render(
       <MissionSetup
         capabilities={capabilities}
-        initialTask="Inspect C:\\repo\\secret.ts"
+        initialTask={'Inspect\u0000unsupported'}
         onStart={vi.fn()}
         onDismiss={vi.fn()}
       />,

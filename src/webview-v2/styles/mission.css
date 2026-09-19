@@ -1,0 +1,129 @@
+.v2-chat-layout { container: mission-layout / inline-size; }
+.v2-mission-workspace { width: clamp(360px, 42%, 480px); }
+.v2-mission-chat-toggle { display: none; }
+@container mission-layout (max-width: 799px) {
+  .v2-chat-layout[data-mission-open='true']:not([data-mission-chat='true']) > .v2-chat-surface { display: none; }
+  .v2-chat-layout[data-mission-chat='true'] > .v2-mission-workspace { display: none; }
+  .v2-mission-workspace { width: 100%; border-left: 0; }
+  .v2-mission-chat-toggle { display: inline-flex; }
+}
+
+/* Mission status tone system. Tones reuse theme ink tokens so the catalog,
+   workspace hero, and feature timeline read consistently in both themes. */
+:root {
+  --mission-tone-active: var(--link-ink);
+  --mission-tone-attention: light-dark(#9a6700, #e3b341);
+  --mission-tone-paused: var(--muted-ink);
+  --mission-tone-done: var(--syntax-number);
+  --mission-tone-muted: var(--muted-ink);
+}
+
+.v2-mission-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  border: 1px solid color-mix(in srgb, var(--mission-tone) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mission-tone) 10%, transparent);
+  color: var(--mission-tone);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+.v2-mission-pill[data-tone='active'] { --mission-tone: var(--mission-tone-active); }
+.v2-mission-pill[data-tone='attention'] { --mission-tone: var(--mission-tone-attention); }
+.v2-mission-pill[data-tone='paused'] { --mission-tone: var(--mission-tone-paused); }
+.v2-mission-pill[data-tone='done'] { --mission-tone: var(--mission-tone-done); }
+.v2-mission-pill[data-tone='muted'] { --mission-tone: var(--mission-tone-muted); }
+
+.v2-mission-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--mission-tone, var(--muted-ink));
+}
+.v2-mission-dot[data-tone='active'] { --mission-tone: var(--mission-tone-active); }
+.v2-mission-dot[data-tone='attention'] { --mission-tone: var(--mission-tone-attention); }
+.v2-mission-dot[data-tone='paused'] { --mission-tone: var(--mission-tone-paused); }
+.v2-mission-dot[data-tone='done'] { --mission-tone: var(--mission-tone-done); }
+.v2-mission-dot[data-tone='muted'] { --mission-tone: var(--mission-tone-muted); }
+.v2-mission-pill[data-tone] .v2-mission-dot { background: currentColor; }
+@media (prefers-reduced-motion: no-preference) {
+  .v2-mission-dot[data-pulse='true'] { animation: v2-mission-pulse 1.6s ease-in-out infinite; }
+}
+@keyframes v2-mission-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--mission-tone) 45%, transparent); }
+  50% { box-shadow: 0 0 0 4px transparent; }
+}
+
+/* Catalog cards */
+.v2-mission-card {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: left;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .v2-mission-card { transition: none; }
+}
+.v2-mission-card:hover { background: var(--hover-surface); border-color: var(--edge-strong); }
+.v2-mission-card:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--focus); }
+
+/* Attention-stripped inline banner (readiness advisory, awaiting input) */
+.v2-mission-banner {
+  border: 1px solid color-mix(in srgb, var(--mission-tone, var(--muted-ink)) 40%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mission-tone, var(--muted-ink)) 8%, transparent);
+  color: var(--mission-tone, var(--muted-ink));
+}
+.v2-mission-banner[data-tone='attention'] { --mission-tone: var(--mission-tone-attention); }
+
+/* Feature timeline in Mission details */
+.v2-mission-timeline { position: relative; }
+.v2-mission-timeline > li { position: relative; }
+.v2-mission-timeline > li:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 23.5px;
+  top: 38px;
+  bottom: -10px;
+  width: 1px;
+  background: var(--edge);
+}
+.v2-mission-node {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: var(--surface);
+  color: var(--muted-ink);
+}
+.v2-mission-node[data-tone='active'] { border-color: color-mix(in srgb, var(--mission-tone-active) 45%, transparent); color: var(--mission-tone-active); }
+.v2-mission-node[data-tone='done'] { border-color: color-mix(in srgb, var(--mission-tone-done) 45%, transparent); color: var(--mission-tone-done); }
+.v2-mission-node[data-tone='muted'] { color: var(--muted-ink); }
+
+/* Setup step index chip */
+.v2-mission-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--soft-surface);
+  color: var(--secondary-ink);
+  font-size: 11px;
+  font-weight: 600;
+}

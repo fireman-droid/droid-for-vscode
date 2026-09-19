@@ -2,7 +2,7 @@ import {
   BRIDGE_PROTOCOL_VERSION,
   type WebviewToHostMessage,
 } from '../../shared/bridgeMessages';
-import { isStrictRecord } from '../../shared/strictValidation';
+import { isStrictRecord } from '../../shared/validation/strictValidation';
 
 export { readHostMessage } from './validateHostMessage';
 
@@ -29,9 +29,7 @@ let api: VsCodeApi | undefined;
 export function getVsCodeApi(): VsCodeApi {
   // The boot beacon script in the webview HTML acquires the API first
   // (it can only be acquired once per page) and shares it here.
-  api ??=
-    (globalThis as { __dvxApi?: VsCodeApi }).__dvxApi ??
-    acquireVsCodeApi();
+  api ??= (globalThis as { __dvxApi?: VsCodeApi }).__dvxApi ?? acquireVsCodeApi();
   return api;
 }
 
@@ -53,10 +51,7 @@ export function announceBooted(vscode: VsCodeApi): void {
  * Reports that the first non-empty transcript committed to the DOM.
  * `renderMs` measures timeOrigin -> first non-empty commit (P1).
  */
-export function announceRendered(
-  vscode: VsCodeApi,
-  itemCount: number,
-): void {
+export function announceRendered(vscode: VsCodeApi, itemCount: number): void {
   vscode.postMessage({
     type: 'webview.diagnostic',
     kind: 'render-ok',
@@ -72,10 +67,7 @@ export function announceRendered(
  * side). Best effort: a stale host also rejects this beacon, but it
  * still surfaces in its `host.bridge.rejected` log.
  */
-export function announceHandshakeTimeout(
-  vscode: VsCodeApi,
-  waitedMs: number,
-): void {
+export function announceHandshakeTimeout(vscode: VsCodeApi, waitedMs: number): void {
   vscode.postMessage({
     type: 'webview.diagnostic',
     kind: 'handshake-timeout',

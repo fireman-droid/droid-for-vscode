@@ -1,24 +1,24 @@
+import type { DaemonApi, DaemonSessionHandle } from './api';
 import {
   ContextStatsAccuracy,
   SettingsLevel,
   type AvailableModelConfig,
-  type ConnectedDroid,
-  type ConnectedDroidSession,
   type SessionSettings,
   type UpdateSessionSettingsOptions,
 } from '@factory/droid-sdk';
 
-import type {
-  FactoryDroidSession,
-  FactoryDroidSessionFactory,
-} from '../FactoryDroidRuntime';
+import {
+  type FactoryDroidSession,
+  type FactoryDroidSessionFactory,
+} from '../session/sessionTypes';
 import type { RuntimeSessionTarget } from '../DroidRuntime';
+import { projectCommandRows } from '../commands/FactoryCommandCatalog';
 import type { RuntimeDiagnosticSink } from '../runtimeDiagnostics';
 import {
   createRuntimeInteractionCallbacks,
   type RuntimeInteractionCallbacks,
   type RuntimeInteractionHandler,
-} from '../runtimeInteractions';
+} from '../events/runtimeInteractions';
 
 /**
  * Daemon-backed counterpart of `createLocalDroidSession` (daemon
@@ -27,10 +27,8 @@ import {
  * adapted onto the same `FactoryDroidSession` interface so
  * `FactoryDroidRuntime` runs unchanged.
  *
- * Known Phase 2 divergence from process mode (fails closed):
- * - No `onNotification`/`authenticateMcpServer`: the daemon facade
- *   exposes no session-notification subscription, so browser MCP
- *   OAuth is unsupported (list/toggle/add/remove still work).
+ * Raw notifications use the same public controller as the retained session.
+ * Browser MCP OAuth remains unavailable until its complete flow is enabled.
  *
  * The model catalog comes from `settings.getDefaults()`, whose
  * `availableModels` carries the same full metadata process mode
@@ -40,7 +38,7 @@ import {
  * session.
  */
 export function createDaemonSessionFactory(
-  getDroid: () => Promise<ConnectedDroid>,
+  getDroid: () => Promise<DaemonApi>,
   lease?: SessionLeaseHooks,
   diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>,
 ): FactoryDroidSessionFactory {
@@ -60,9 +58,7 @@ export function createDaemonSessionFactory(
  * Absent hooks (Phase 2 private daemon) everything runs unguarded.
  */
 export interface SessionLeaseHooks {
-  acquire(
-    sessionId: string,
-  ): { acquired: true } | { acquired: false; heldByPid: number };
+  acquire(sessionId: string): { acquired: true } | { acquired: false; heldByPid: number };
   release(sessionId: string): void;
 }
 
@@ -74,14 +70,12 @@ export const LEASE_RETRY_INTERVAL_MS = 500;
 export async function createDaemonDroidSession(options: {
   target: RuntimeSessionTarget;
   interactionHandler: RuntimeInteractionHandler;
-  getDroid: () => Promise<ConnectedDroid>;
+  getDroid: () => Promise<DaemonApi>;
   lease?: SessionLeaseHooks;
   diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>;
 }): Promise<FactoryDroidSession> {
   const droid = await options.getDroid();
-  const callbacks = createRuntimeInteractionCallbacks(
-    options.interactionHandler,
-  );
+  const callbacks = createRuntimeInteractionCallbacks(options.interactionHandler);
   const lease = options.lease ?? noopLease;
 
   if (options.target.kind === 'resume') {
@@ -92,14 +86,12 @@ export async function createDaemonDroidSession(options: {
     // on dispose or dies and gets preempted, so a blocked acquire
     // retries briefly instead of failing the whole resume.
     let leaseOwned = false;
-    let attachment: ConnectedDroidSession | undefined;
+    let attachment: DaemonSessionHandle | undefined;
     try {
       let outcome = lease.acquire(options.target.sessionId);
       const deadline = Date.now() + LEASE_RETRY_MAX_MS;
       while (!outcome.acquired && Date.now() < deadline) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, LEASE_RETRY_INTERVAL_MS),
-        );
+        await new Promise((resolve) => setTimeout(resolve, LEASE_RETRY_INTERVAL_MS));
         outcome = lease.acquire(options.target.sessionId);
       }
       if (!outcome.acquired) {
@@ -125,11 +117,7 @@ export async function createDaemonDroidSession(options: {
       if (attachment !== undefined) {
         const attached = attachment;
         attachment = undefined;
-        await detachProvisionalAttachment(
-          attached,
-          'resume',
-          options.diagnostics,
-        );
+        await detachProvisionalAttachment(attached, 'resume', options.diagnostics);
       }
       if (leaseOwned) {
         leaseOwned = false;
@@ -182,12 +170,7 @@ export async function createDaemonDroidSession(options: {
     }
     if (leaseOwned) {
       leaseOwned = false;
-      releaseProvisionalLease(
-        lease,
-        session.id,
-        'create',
-        options.diagnostics,
-      );
+      releaseProvisionalLease(lease, session.id, 'create', options.diagnostics);
     }
     throw error;
   }
@@ -197,7 +180,7 @@ type ProvisionalOperation = 'create' | 'resume';
 type ProvisionalResource = 'attachment' | 'lease';
 
 async function detachProvisionalAttachment(
-  session: ConnectedDroidSession,
+  session: DaemonSessionHandle,
   operation: ProvisionalOperation,
   diagnostics: Pick<RuntimeDiagnosticSink, 'record'> | undefined,
 ): Promise<void> {
@@ -237,13 +220,10 @@ function recordProvisionalCleanupFailure(
   }
 }
 
-type ReplacementResource =
-  | 'successor-attachment'
-  | 'successor-lease'
-  | 'source-lease';
+type ReplacementResource = 'successor-attachment' | 'successor-lease' | 'source-lease';
 
 async function detachReplacementSuccessor(
-  successor: ConnectedDroidSession,
+  successor: DaemonSessionHandle,
   diagnostics: Pick<RuntimeDiagnosticSink, 'record'> | undefined,
 ): Promise<void> {
   try {
@@ -289,7 +269,7 @@ function recordReplacementCleanupFailure(
  * session: model selection is secondary to the chat itself.
  */
 async function readDaemonAvailableModels(
-  droid: ConnectedDroid,
+  droid: DaemonApi,
 ): Promise<readonly AvailableModelConfig[] | undefined> {
   try {
     const models = (await droid.settings.getDefaults()).availableModels;
@@ -322,9 +302,7 @@ type SupportedSettingsUpdate = Pick<
  * Overlay shape for a confirmed update: a spec override is reset by
  * writing null, but the snapshot reports an unset field as absent.
  */
-function toSettingsOverlay(
-  update: SupportedSettingsUpdate,
-): Partial<SessionSettings> {
+function toSettingsOverlay(update: SupportedSettingsUpdate): Partial<SessionSettings> {
   const { specModeModelId, specModeReasoningEffort, ...rest } = update;
   return {
     ...rest,
@@ -339,8 +317,8 @@ function toSettingsOverlay(
 
 /** Adapts a retained daemon handle without creating or resuming another one. */
 export function adaptConnectedDaemonSession(
-  droid: ConnectedDroid,
-  session: ConnectedDroidSession,
+  droid: DaemonApi,
+  session: DaemonSessionHandle,
   interactionHandler: RuntimeInteractionHandler,
   lease: SessionLeaseHooks,
   availableModels?: readonly AvailableModelConfig[],
@@ -361,8 +339,8 @@ export function adaptConnectedDaemonSession(
 }
 
 function adaptDaemonSession(
-  droid: ConnectedDroid,
-  session: ConnectedDroidSession,
+  droid: DaemonApi,
+  session: DaemonSessionHandle,
   callbacks: RuntimeInteractionCallbacks,
   lease: SessionLeaseHooks,
   availableModels?: readonly AvailableModelConfig[],
@@ -441,19 +419,14 @@ function adaptDaemonSession(
       throw leaseConflictError(leaseOutcome.heldByPid);
     }
     let successorLeaseOwned = true;
-    let successor: ConnectedDroidSession;
+    let successor: DaemonSessionHandle;
     try {
       successor = await droid.sessions.resume(newSessionId, {
         ...callbacks,
       });
     } catch (error) {
       successorLeaseOwned = false;
-      releaseReplacementLease(
-        lease,
-        newSessionId,
-        'successor-lease',
-        diagnostics,
-      );
+      releaseReplacementLease(lease, newSessionId, 'successor-lease', diagnostics);
       throw error;
     }
 
@@ -463,12 +436,7 @@ function adaptDaemonSession(
       await detachReplacementSuccessor(successor, diagnostics);
       if (successorLeaseOwned) {
         successorLeaseOwned = false;
-        releaseReplacementLease(
-          lease,
-          newSessionId,
-          'successor-lease',
-          diagnostics,
-        );
+        releaseReplacementLease(lease, newSessionId, 'successor-lease', diagnostics);
       }
       throw error;
     }
@@ -488,20 +456,18 @@ function adaptDaemonSession(
   };
 
   return {
+    onNotification: (listener) => session.onNotification(listener),
+    listCommands: async () => projectCommandRows(await droid.commands.list(session.id)),
     get id() {
       return session.id;
     },
-    ...(availableModels === undefined
-      ? {}
-      : { availableModels: [...availableModels] }),
+    ...(availableModels === undefined ? {} : { availableModels: [...availableModels] }),
     get cwd(): string | undefined {
       return session.cwd;
     },
     get settings(): Readonly<SessionSettings> {
       const snapshot = session.settings;
-      for (const key of Object.keys(
-        pendingSettings,
-      ) as (keyof SessionSettings)[]) {
+      for (const key of Object.keys(pendingSettings) as (keyof SessionSettings)[]) {
         if (snapshot[key] === pendingSettings[key]) {
           delete pendingSettings[key];
         }
@@ -530,9 +496,7 @@ function adaptDaemonSession(
         ...(params.interactionMode === undefined
           ? {}
           : { interactionMode: params.interactionMode }),
-        ...(params.modelId === undefined
-          ? {}
-          : { modelId: params.modelId }),
+        ...(params.modelId === undefined ? {} : { modelId: params.modelId }),
         ...(params.reasoningEffort === undefined
           ? {}
           : { reasoningEffort: params.reasoningEffort }),
@@ -551,10 +515,7 @@ function adaptDaemonSession(
           ? {}
           : { missionSettings: params.missionSettings }),
       };
-      const result = await droid.sessions.updateSettings(
-        session.id,
-        update,
-      );
+      const result = await droid.sessions.updateSettings(session.id, update);
       pendingSettings = {
         ...pendingSettings,
         ...toSettingsOverlay(update),
@@ -562,9 +523,7 @@ function adaptDaemonSession(
       return result;
     },
     async getContextStats() {
-      const breakdown = await droid.sessions.getContextBreakdown(
-        session.id,
-      );
+      const breakdown = await droid.sessions.getContextBreakdown(session.id);
       return {
         used: Math.round(breakdown.usedTokens),
         remaining: Math.round(breakdown.freeTokens),
@@ -574,13 +533,14 @@ function adaptDaemonSession(
       };
     },
     async readContextBreakdown() {
-      const breakdown = await droid.sessions.getContextBreakdown(
-        session.id,
-      );
+      const breakdown = await droid.sessions.getContextBreakdown(session.id);
       return {
         used: breakdown.usedTokens,
         remaining: breakdown.freeTokens,
         limit: breakdown.contextBudget,
+        ...(breakdown.lastCallCompactionTokens === undefined
+          ? {}
+          : { lastCallCompactionTokens: breakdown.lastCallCompactionTokens }),
       };
     },
     async rewind(params) {
@@ -590,12 +550,10 @@ function adaptDaemonSession(
     async getRewindInfo(params) {
       return droid.sessions.getRewindInfo(session.id, params.messageId);
     },
-    async getGitDiff() {
-      // statsOnly keeps the full diff text off the wire; DroidVisX
-      // opens native diffs per file instead of rendering patch text.
+    async getGitDiff(options) {
       const result = await droid.git.getDiff({
         sessionId: session.id,
-        statsOnly: true,
+        statsOnly: options?.includePatch !== true,
       });
       if (!result.success) {
         throw new Error(result.unavailableReason);
@@ -607,6 +565,14 @@ function adaptDaemonSession(
         totalAdditions: result.data.totalAdditions,
         totalDeletions: result.data.totalDeletions,
         commitCount: result.data.commits.length,
+        ...(options?.includePatch === true ? {
+          comparisons: {
+            branch: { files: result.data.committedFiles, patch: result.data.committedDiff },
+            // Despite its name, the daemon's unstaged section is HEAD → worktree,
+            // including staged changes and nonignored untracked files.
+            workspace: { files: result.data.unstagedFiles, patch: result.data.unstagedDiff },
+          },
+        } : {}),
       };
     },
     async compact(params) {
@@ -654,9 +620,7 @@ function adaptDaemonSession(
         sessionId: session.id,
         name: params.name,
         type: params.type,
-        ...(params.command === undefined
-          ? {}
-          : { command: params.command }),
+        ...(params.command === undefined ? {} : { command: params.command }),
         ...(params.args === undefined ? {} : { args: [...params.args] }),
         ...(params.url === undefined ? {} : { url: params.url }),
       });
@@ -668,8 +632,8 @@ function adaptDaemonSession(
         settingsLevel: SettingsLevel.User,
       });
     },
-    // `authenticateMcpServer` and `onNotification` are intentionally
-    // absent: see the factory doc comment.
+    // Daemon OAuth uses mcpAuthentication.ts with native Host callback handling;
+    // the Process-shaped session adapter deliberately does not own that flow.
     close() {
       // Releasing the handle keeps the session alive in the daemon;
       // Phase 3's shared daemon lets it survive a window reload.
@@ -683,7 +647,5 @@ function leaseConflictError(heldByPid: number): Error {
     ? new Error(
         `Session is open in another window (pid ${String(heldByPid)}). Close it there or wait for that window to exit.`,
       )
-    : new Error(
-        'Session ownership could not be secured. Wait briefly and try again.',
-      );
+    : new Error('Session ownership could not be secured. Wait briefly and try again.');
 }

@@ -1,15 +1,12 @@
-import {
-  DroidClient,
-  ProcessTransport,
-} from '@factory/droid-sdk/node';
+import { DroidClient, ProcessTransport } from '@factory/droid-sdk/node';
 
-import type { ToolSubagentSummary } from '../../shared/bridgeMessages';
+import { type ToolSubagentSummary } from '../../shared/protocol/transcript';
 import type { RuntimeDiagnosticSink } from '../runtimeDiagnostics';
 import {
   readSubagentInvocationRecords,
   readSubagentInvocations,
   type SubagentInvocationRecord,
-} from '../subagentSummary';
+} from '../subagents/subagentSummary';
 import {
   type SessionHistoryLoader,
   type SessionHistoryResult,
@@ -22,18 +19,14 @@ export interface FactoryHistoryClient {
   close(): Promise<void>;
 }
 
-export type FactoryHistoryClientFactory = (
-  cwd: string,
-) => Promise<FactoryHistoryClient>;
+export type FactoryHistoryClientFactory = (cwd: string) => Promise<FactoryHistoryClient>;
 
 export interface FactorySessionHistoryLoaderOptions {
   readonly createClient?: FactoryHistoryClientFactory;
   readonly diagnostics?: RuntimeDiagnosticSink;
 }
 
-export class FactorySessionHistoryLoader
-  implements SessionHistoryLoader
-{
+export class FactorySessionHistoryLoader implements SessionHistoryLoader {
   private readonly createClient: FactoryHistoryClientFactory;
   private readonly diagnostics: RuntimeDiagnosticSink | undefined;
 
@@ -53,7 +46,10 @@ export class FactorySessionHistoryLoader
     if (loaded === LOAD_FAILED) {
       return unavailableSessionHistory();
     }
-    return projectSessionHistory(loaded, { workspaceRoot: cwd });
+    return projectSessionHistory(loaded, {
+      workspaceRoot: cwd,
+      sourceSessionId: sessionId,
+    });
   }
 
   async loadSubagentSummaries({
@@ -84,10 +80,7 @@ export class FactorySessionHistoryLoader
     return readSubagentInvocationRecords(loaded);
   }
 
-  private async loadSessionEnvelope(
-    cwd: string,
-    sessionId: string,
-  ): Promise<unknown> {
+  private async loadSessionEnvelope(cwd: string, sessionId: string): Promise<unknown> {
     // Each load spawns (and tears down) its own droid CLI process; the
     // spawn cost dominates session-switch latency, so it gets its own
     // timing record next to `runtime.history.finished`.
@@ -130,9 +123,7 @@ export class FactorySessionHistoryLoader
           ? {}
           : {
               detail:
-                error instanceof Error
-                  ? (error.stack ?? error.message)
-                  : String(error),
+                error instanceof Error ? (error.stack ?? error.message) : String(error),
             }),
       });
     } catch {
@@ -144,9 +135,7 @@ export class FactorySessionHistoryLoader
 /** Sentinel distinguishing a failed load from any loaded payload. */
 const LOAD_FAILED = Symbol('load-failed');
 
-async function createLocalHistoryClient(
-  cwd: string,
-): Promise<FactoryHistoryClient> {
+async function createLocalHistoryClient(cwd: string): Promise<FactoryHistoryClient> {
   const transport = new ProcessTransport({ cwd });
   try {
     await transport.connect();

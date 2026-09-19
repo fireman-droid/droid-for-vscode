@@ -1,6 +1,6 @@
 import { DroidClient, ProcessTransport } from '@factory/droid-sdk/node';
 
-import { isSafeCommandName } from '../../shared/validateMessage';
+import { isSafeCommandName } from '../../shared/validation/guards';
 import {
   MAX_RUNTIME_COMMAND_ARGUMENT_HINT_LENGTH,
   MAX_RUNTIME_COMMAND_DESCRIPTION_LENGTH,
@@ -45,9 +45,7 @@ export async function loadSessionCommands(options: {
   }
 }
 
-async function createLocalCommandsClient(
-  cwd: string,
-): Promise<FactoryCommandsClient> {
+async function createLocalCommandsClient(cwd: string): Promise<FactoryCommandsClient> {
   const transport = new ProcessTransport({ cwd });
   try {
     await transport.connect();
@@ -58,13 +56,14 @@ async function createLocalCommandsClient(
   }
 }
 
-function projectCommandList(
-  response: unknown,
-): readonly RuntimeCommand[] {
+function projectCommandList(response: unknown): readonly RuntimeCommand[] {
   if (!isRecord(response) || !isRecord(response.result)) {
     throw new Error('Droid returned an invalid command list.');
   }
-  const rawCommands = response.result.commands;
+  return projectCommandRows(response.result.commands);
+}
+
+export function projectCommandRows(rawCommands: unknown): readonly RuntimeCommand[] {
   if (!Array.isArray(rawCommands)) {
     throw new Error('Droid returned an invalid command list.');
   }
@@ -99,14 +98,8 @@ function projectCommand(raw: unknown): RuntimeCommand | null {
   }
   return {
     name,
-    description: projectText(
-      raw.description,
-      MAX_RUNTIME_COMMAND_DESCRIPTION_LENGTH,
-    ),
-    argumentHint: projectText(
-      raw.argumentHint,
-      MAX_RUNTIME_COMMAND_ARGUMENT_HINT_LENGTH,
-    ),
+    description: projectText(raw.description, MAX_RUNTIME_COMMAND_DESCRIPTION_LENGTH),
+    argumentHint: projectText(raw.argumentHint, MAX_RUNTIME_COMMAND_ARGUMENT_HINT_LENGTH),
     isExecutable: raw.isExecutable === true,
   };
 }
@@ -116,15 +109,10 @@ function projectText(value: unknown, maximumLength: number): string | null {
     return null;
   }
   const flattened = value.replace(/\s+/g, ' ').trim();
-  if (
-    flattened.length === 0 ||
-    /[\u0000-\u001f\u007f]/.test(flattened)
-  ) {
+  if (flattened.length === 0 || /[\u0000-\u001f\u007f]/.test(flattened)) {
     return null;
   }
-  return flattened.length > maximumLength
-    ? flattened.slice(0, maximumLength)
-    : flattened;
+  return flattened.length > maximumLength ? flattened.slice(0, maximumLength) : flattened;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

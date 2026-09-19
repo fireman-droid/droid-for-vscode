@@ -1,28 +1,18 @@
 // commandCard: moved verbatim from Thread.tsx (structure-only refactor).
 
-import {
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import { tokenizeCommand } from "../commandCard";
-import { TerminalMirrorContext } from "../Thread";
-import { CheckIcon, CopyIcon } from "./icons";
-import type { ToolActivityPresentation } from "./readers";
+import { tokenizeCommand } from '../composer/commandCard';
+import { TerminalMirrorContext } from './messageContexts';
+import { CheckIcon, CopyIcon } from './icons';
+import type { ToolActivityPresentation } from './readers';
 
 /** Cursor-style terminal marker: prompt at rest, disclosure on hover/open. */
 export function CommandCardLeading(): React.JSX.Element {
   return (
     <span className="dvx-command-leading" aria-hidden="true">
       <span className="dvx-command-leading-prompt">&gt;_</span>
-      <svg
-        className="dvx-command-leading-chevron"
-        viewBox="0 0 12 12"
-        fill="none"
-      >
+      <svg className="dvx-command-leading-chevron" viewBox="0 0 12 12" fill="none">
         <path
           d="M4.5 2.5 8 6 4.5 9.5"
           stroke="currentColor"
@@ -62,8 +52,7 @@ export function CommandTerminalContent({
       className="dvx-command-well"
       onScroll={(event) => {
         const pre = event.currentTarget;
-        pinnedRef.current =
-          pre.scrollHeight - pre.scrollTop - pre.clientHeight < 8;
+        pinnedRef.current = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 8;
       }}
     >
       <span className="dvx-command-entry">
@@ -72,7 +61,7 @@ export function CommandTerminalContent({
         </span>
         <code className="dvx-command-code">
           {tokens.map((token, index) =>
-            token.kind === "text" ? (
+            token.kind === 'text' ? (
               token.text
             ) : (
               <span key={index} className={`dvx-cmd-${token.kind}`}>
@@ -121,16 +110,16 @@ export function CommandCardMenu({
       }
     };
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         setMenuOpen(false);
         setCopied(false);
       }
     };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
     };
   }, [menuOpen]);
   useEffect(
@@ -166,7 +155,7 @@ export function CommandCardMenu({
           <button
             type="button"
             role="menuitem"
-            aria-label={copied ? "Command copied" : "Copy Command"}
+            aria-label={copied ? 'Command copied' : 'Copy Command'}
             onClick={async (event) => {
               event.preventDefault();
               event.stopPropagation();

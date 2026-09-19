@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { MissionControlResultMessage } from '../../../shared/missionProtocol';
+import type { MissionControlResultMessage } from '../../../shared/protocol/missionProtocol';
 import {
   postMissionStartTracked,
   type MissionMessagePoster,
@@ -22,9 +22,7 @@ export function useMissionEntry(
 ) {
   const entryCounterRef = useRef(0);
   const requestsRef = useRef(new Map<string, PendingMissionStart>());
-  const timersRef = useRef(
-    new Map<string, ReturnType<typeof setTimeout>>(),
-  );
+  const timersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const [setupEntry, setSetupEntry] = useState<MissionSetupEntry | null>(null);
 
   const openSetup = useCallback(
@@ -91,10 +89,7 @@ export function useMissionEntry(
   }, [openSetup, result]);
 
   const start = useCallback(
-    (
-      submission: MissionSetupSubmission,
-      fromSetup: boolean,
-    ): string | null =>
+    (submission: MissionSetupSubmission, fromSetup: boolean): string | null =>
       sessionId === null
         ? null
         : postMissionStartTracked(
@@ -110,13 +105,11 @@ export function useMissionEntry(
     [createRequestId, openSetup, poster, sessionId],
   );
   const startDirect = useCallback(
-    (submission: MissionSetupSubmission): string | null =>
-      start(submission, false),
+    (submission: MissionSetupSubmission): string | null => start(submission, false),
     [start],
   );
   const startFromSetup = useCallback(
-    (submission: MissionSetupSubmission): string | null =>
-      start(submission, true),
+    (submission: MissionSetupSubmission): string | null => start(submission, true),
     [start],
   );
   const dismissSetup = useCallback((): void => {

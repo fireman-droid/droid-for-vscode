@@ -1,11 +1,11 @@
 import type {
   MissionProfile,
   MissionReasoningEffort,
-} from '../../../shared/missionProtocol';
+} from '../../../shared/protocol/missionProtocol';
 import {
   missionPairError,
   resolveMissionProfile,
-} from '../../../shared/missionProtocol';
+} from '../../../shared/protocol/missionProtocol';
 
 const STORAGE_KEY = 'droidvisx.mission.preferences.v1';
 
@@ -43,9 +43,7 @@ export type MissionPreferenceValidation =
  * deliberately supplied at read time, so preferences cannot replace it.
  */
 export class MissionPreferenceStore {
-  constructor(
-    private readonly persistence: MissionPreferencePersistence,
-  ) {}
+  constructor(private readonly persistence: MissionPreferencePersistence) {}
 
   read(
     workspaceId: string,
@@ -54,9 +52,7 @@ export class MissionPreferenceStore {
     const stored = this.persistence.get<unknown>(STORAGE_KEY);
     const saved =
       stored !== null && typeof stored === 'object' && !Array.isArray(stored)
-        ? parsePreferences(
-            (stored as Readonly<Record<string, unknown>>)[workspaceId],
-          )
+        ? parsePreferences((stored as Readonly<Record<string, unknown>>)[workspaceId])
         : undefined;
     return saved === undefined
       ? defaults(orchestrator)
@@ -119,9 +115,7 @@ export function validatePair(
   return reason === undefined ? undefined : { valid: false, reason };
 }
 
-function defaults(
-  orchestrator: MissionProfilePair,
-): MissionWorkspacePreferences {
+function defaults(orchestrator: MissionProfilePair): MissionWorkspacePreferences {
   return {
     worker: { mode: 'same-as-orchestrator', ...orchestrator },
     validator: { mode: 'same-as-orchestrator', ...orchestrator },
@@ -182,8 +176,7 @@ function parseProfile(value: unknown): MissionProfile | undefined {
   }
   const candidate = value as Partial<MissionProfile>;
   if (
-    (candidate.mode !== 'same-as-orchestrator' &&
-      candidate.mode !== 'override') ||
+    (candidate.mode !== 'same-as-orchestrator' && candidate.mode !== 'override') ||
     typeof candidate.modelId !== 'string' ||
     typeof candidate.reasoningEffort !== 'string'
   ) {

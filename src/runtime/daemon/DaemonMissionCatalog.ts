@@ -1,6 +1,6 @@
-import type { ConnectedDroid } from '@factory/droid-sdk';
+import type { DaemonApi } from './api';
 
-import type { MissionLifecycle } from '../../shared/missionProtocol';
+import type { MissionLifecycle } from '../../shared/protocol/missionProtocol';
 
 export const DAEMON_MISSION_CATALOG_PAGE_SIZE = 100;
 
@@ -61,12 +61,11 @@ export interface DaemonMissionCatalogRuntime {
 export class DaemonMissionCatalog implements DaemonMissionCatalogRuntime {
   constructor(private readonly transport: DaemonMissionCatalogTransport) {}
 
-  static fromConnectedDroid(droid: ConnectedDroid): DaemonMissionCatalog {
+  static fromConnectedDroid(droid: DaemonApi): DaemonMissionCatalog {
     const sessions = droid.sessions as unknown as {
       readonly controller?: Partial<DaemonMissionCatalogTransport>;
     };
-    const listAvailableSessions =
-      sessions.controller?.listAvailableSessions;
+    const listAvailableSessions = sessions.controller?.listAvailableSessions;
     if (typeof listAvailableSessions !== 'function') {
       throw new Error('Mission catalog pagination is unavailable');
     }
@@ -87,9 +86,7 @@ export class DaemonMissionCatalog implements DaemonMissionCatalogRuntime {
     return {
       rows: result.sessions,
       hasMore: result.hasMore,
-      ...(result.nextCursor === undefined
-        ? {}
-        : { nextCursor: result.nextCursor }),
+      ...(result.nextCursor === undefined ? {} : { nextCursor: result.nextCursor }),
     };
   }
 }

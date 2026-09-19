@@ -1,4 +1,4 @@
-import type { ConnectionState } from '../../shared/bridgeMessages';
+import { type ConnectionState } from '../../shared/protocol/shell';
 import type { DroidRuntime } from '../../runtime/DroidRuntime';
 import type { CurrentTurn } from './internals';
 import { isTurnActive } from './internals';
@@ -50,10 +50,7 @@ export function evaluateUserPanelRequest(
   if (state.sessionOperationInProgress) {
     return { kind: 'blocked', reason: 'operation-in-progress' };
   }
-  if (
-    state.activeRuntimeCwd === null ||
-    !state.isWorkspaceCurrent()
-  ) {
+  if (state.activeRuntimeCwd === null || !state.isWorkspaceCurrent()) {
     return { kind: 'blocked', reason: 'workspace-changed' };
   }
   return {
@@ -91,10 +88,7 @@ export interface SessionReplacementState {
 export function evaluateSessionReplacement(
   state: SessionReplacementState,
 ): SessionReplacementEligibility {
-  if (
-    isTurnActive(state.turn) &&
-    state.runtime?.supportsBackgroundTurns?.() !== true
-  ) {
+  if (isTurnActive(state.turn) && state.runtime?.supportsBackgroundTurns?.() !== true) {
     return { kind: 'blocked', reason: 'process-turn-active' };
   }
   if (state.hasPendingInteractions) {
@@ -203,9 +197,7 @@ export interface TurnStartState {
   readonly settingsUpdateInProgress: boolean;
 }
 
-export function evaluateTurnStart(
-  state: TurnStartState,
-): TurnStartEligibility {
+export function evaluateTurnStart(state: TurnStartState): TurnStartEligibility {
   if (state.requestedSessionId !== state.activeSessionId) {
     return { kind: 'blocked', reason: 'session-mismatch' };
   }

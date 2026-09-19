@@ -3,18 +3,18 @@
 // ComposerControls.tsx (structure-only split: mode / context / model /
 // settings each own a sibling module).
 
-import type {
-  McpAuthPhase,
-  McpServerType,
-  SessionAutonomyLevel,
-  SessionInteractionMode,
-  SessionMcpState,
-  SessionPluginsState,
-  SessionReasoningEffort,
-  SessionSettingsState,
-  SessionSkillsState,
-  ThemePreference,
-} from '../../../shared/bridgeMessages';
+import {
+  type McpAuthPhase,
+  type McpServerType,
+  type SessionAutonomyLevel,
+  type SessionInteractionMode,
+  type SessionMcpState,
+  type SessionPluginsState,
+  type SessionReasoningEffort,
+  type SessionSettingsState,
+  type SessionSkillsState,
+} from '../../../shared/protocol/settings';
+import { type ThemePreference } from '../../../shared/protocol/shell';
 
 export type SettingsView =
   | 'root'
@@ -25,12 +25,7 @@ export type SettingsView =
   | 'mcp'
   | 'plugins';
 
-export type AttachSource =
-  | 'files'
-  | 'editor'
-  | 'selection'
-  | 'problems'
-  | 'git-changes';
+export type AttachSource = 'files' | 'editor' | 'selection' | 'problems' | 'git-changes';
 
 export type SkillsPanelState =
   | SessionSkillsState
@@ -168,12 +163,7 @@ export function Stat({
 
 export function ChevronDownIcon(): React.JSX.Element {
   return (
-    <svg
-      className="dvx-chevron-down"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg className="dvx-chevron-down" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path
         d="m5 6.5 3 3 3-3"
         stroke="currentColor"
@@ -193,9 +183,7 @@ export function formatLabel(value: string): string {
   return value.charAt(0).toLocaleUpperCase() + value.slice(1);
 }
 
-export function formatReasoningLabel(
-  value: SessionReasoningEffort | undefined,
-): string {
+export function formatReasoningLabel(value: SessionReasoningEffort | undefined): string {
   if (value === undefined) {
     return '';
   }

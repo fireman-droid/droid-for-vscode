@@ -1,15 +1,17 @@
 import {
   IMAGE_MEDIA_TYPES,
-  MAX_ATTACHMENT_IMAGE_BASE64_LENGTH,
   MAX_ATTACHMENT_NAME_LENGTH,
+} from '../../shared/protocol/bounds';
+import {
+  MAX_ATTACHMENT_IMAGE_BASE64_LENGTH,
   MAX_BRIDGE_ID_LENGTH,
-  type ImageMediaType,
   type SessionAttachmentImageDataMessage,
 } from '../../shared/bridgeMessages';
+import { type ImageMediaType } from '../../shared/protocol/attachments';
 import {
   hasExactKeys,
   type UnknownRecord,
-} from '../../shared/strictValidation';
+} from '../../shared/validation/strictValidation';
 
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
 
@@ -94,7 +96,6 @@ function isBoundedName(value: unknown): value is string {
 
 function isImageMediaType(value: unknown): value is ImageMediaType {
   return (
-    typeof value === 'string' &&
-    (IMAGE_MEDIA_TYPES as readonly string[]).includes(value)
+    typeof value === 'string' && (IMAGE_MEDIA_TYPES as readonly string[]).includes(value)
   );
 }

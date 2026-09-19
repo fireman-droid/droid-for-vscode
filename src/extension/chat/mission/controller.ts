@@ -1,7 +1,5 @@
-import type { MissionStartMessage } from '../../../shared/missionProtocol';
-import type { ChatControllerInternals } from '../internals';
-import { closeRuntime } from '../runtimeLifecycle';
-import { handleSend } from '../turnFlow';
+import type { MissionStartMessage } from '../../../shared/protocol/missionProtocol';
+import type { ControllerPort } from './controllerMissionPort';
 import { MissionSnapshotReducer } from './MissionSnapshotReducer';
 
 export { handleMissionCommand } from './controls';
@@ -9,32 +7,32 @@ export { handleMissionCommand } from './controls';
 const MISSION_START_BLOCKED = 'Mission setup is still starting.';
 
 export function handleMissionStart(
-  ctl: ChatControllerInternals,
+  ctl: ControllerPort,
   message: MissionStartMessage,
 ): void {
   const workspace = ctl.getWorkspaceContext();
-  const catalog = ctl.modelCatalog;
+  const catalog = ctl.metadata.modelCatalog;
   if (
     ctl.missionGateway === undefined ||
     workspace.cwd === null ||
     !workspace.trusted ||
-    ctl.connection.status !== 'connected' ||
-    ctl.runtime === null ||
-    ctl.sessionId === null ||
+    ctl.sessionState.connection.status !== 'connected' ||
+    ctl.sessionState.runtime === null ||
+    ctl.sessionState.sessionId === null ||
     catalog.status !== 'ready' ||
-    ctl.turn !== null ||
+    ctl.turnState.turn !== null ||
     ctl.interactions.hasPending() ||
-    ctl.missionStartInProgress
+    ctl.missionState.missionStartInProgress
   ) {
     emitRejected(ctl, message.requestId, 'unavailable');
     return;
   }
 
-  const ownerRuntime = ctl.runtime;
-  const ownerSessionId = ctl.sessionId!;
-  const ownerGeneration = ctl.runtimeGeneration;
+  const ownerRuntime = ctl.sessionState.runtime;
+  const ownerSessionId = ctl.sessionState.sessionId!;
+  const ownerGeneration = ctl.sessionState.runtimeGeneration;
   const ownerCwd = workspace.cwd;
-  ctl.missionStartInProgress = true;
+  ctl.missionState.missionStartInProgress = true;
   void ctl.missionGateway
     .start({
       workspaceId: ownerCwd,
@@ -44,7 +42,7 @@ export function handleMissionStart(
     })
     .then(async (result) => {
       const ownerIsCurrent = () =>
-        !ctl.disposed &&
+        !ctl.sessionState.disposed &&
         ctl.isCurrentSessionOperation(
           ownerRuntime,
           ownerGeneration,
@@ -53,7 +51,7 @@ export function handleMissionStart(
         );
       if (!ownerIsCurrent()) {
         if (result.status === 'ready') {
-          await closeRuntime(ctl, result.runtime.runtime).catch(() => undefined);
+          await ctl.effects.closeRuntime(result.runtime.runtime).catch(() => undefined);
         }
         return;
       }
@@ -61,52 +59,52 @@ export function handleMissionStart(
         emitRejected(ctl, message.requestId, 'invalid');
         return;
       }
-      const oldRuntime = ctl.runtime;
+      const oldRuntime = ctl.sessionState.runtime;
       if (oldRuntime === null) {
         emitRejected(ctl, message.requestId, 'unavailable');
         return;
       }
       try {
-        await closeRuntime(ctl, oldRuntime);
+        await ctl.effects.closeRuntime(oldRuntime);
       } catch {
-        await closeRuntime(ctl, result.runtime.runtime).catch(() => undefined);
+        await ctl.effects.closeRuntime(result.runtime.runtime).catch(() => undefined);
         emitRejected(ctl, message.requestId, 'unavailable');
         return;
       }
       if (!ownerIsCurrent()) {
-        await closeRuntime(ctl, result.runtime.runtime).catch(() => undefined);
+        await ctl.effects.closeRuntime(result.runtime.runtime).catch(() => undefined);
         return;
       }
 
-      ctl.runtimeGeneration += 1;
-      ctl.runtime = result.runtime.runtime;
-      ctl.managedRuntimes.add(result.runtime.runtime);
-      ctl.activeRuntimeCwd = ownerCwd;
-      ctl.sessionId = result.sessionId;
-      ctl.turn = null;
-      ctl.mission = { state: null, role: 'orchestrator' };
-      ctl.missionRuntime = new MissionSnapshotReducer({
+      ctl.sessionState.runtimeGeneration += 1;
+      ctl.sessionState.runtime = result.runtime.runtime;
+      ctl.sessionState.managedRuntimes.add(result.runtime.runtime);
+      ctl.sessionState.activeRuntimeCwd = ownerCwd;
+      ctl.sessionState.sessionId = result.sessionId;
+      ctl.turnState.turn = null;
+      ctl.missionState.mission = { state: null, role: 'orchestrator' };
+      ctl.missionState.missionRuntime = new MissionSnapshotReducer({
         scrutinyEnabled: !result.settings.skipScrutiny,
         userTestingEnabled: !result.settings.skipUserTesting,
       });
-      ctl.transcript = {
+      ctl.recoveryState.transcript = {
         transcript: [],
         historyStatus: 'unavailable',
         truncated: false,
       };
       const conversationId = ctl.recoveryStore.createConversation(
         result.sessionId,
-        ctl.transcript,
+        ctl.recoveryState.transcript,
       );
       if (conversationId === undefined) {
         emitRejected(ctl, message.requestId, 'unavailable');
         return;
       }
-      ctl.conversationId = conversationId;
-      ctl.sessions = {
-        status: ctl.sessions.status,
+      ctl.sessionState.conversationId = conversationId;
+      ctl.catalogState.sessions = {
+        status: ctl.catalogState.sessions.status,
         items: [
-          ...ctl.sessions.items.map((entry) => ({
+          ...ctl.catalogState.sessions.items.map((entry) => ({
             ...entry,
             active: false,
           })),
@@ -123,12 +121,12 @@ export function handleMissionStart(
       };
       ctl.recoveryStore.selectConversation(conversationId);
       await ctl.recoveryStore.flush();
-      if (ctl.disposed || ctl.sessionId !== result.sessionId) {
+      if (ctl.sessionState.disposed || ctl.sessionState.sessionId !== result.sessionId) {
         return;
       }
 
       ctl.emitSnapshot();
-      ctl.emit(ctl.missionRuntime.snapshot());
+      ctl.emit(ctl.missionState.missionRuntime.snapshot());
       ctl.emit({
         type: 'mission.controlResult',
         protocolVersion: 25,
@@ -137,8 +135,7 @@ export function handleMissionStart(
         action: 'start',
         status: 'accepted',
       });
-      handleSend(
-        ctl,
+      ctl.effects.handleSend(
         result.sessionId,
         `mission:${message.requestId}`,
         message.task,
@@ -148,12 +145,13 @@ export function handleMissionStart(
       emitRejected(ctl, message.requestId, 'unavailable');
     })
     .finally(() => {
-      ctl.missionStartInProgress = false;
+      ctl.missionState.missionStartInProgress = false;
+      if (!ctl.sessionState.disposed) ctl.emitSnapshot();
     });
 }
 
 function emitRejected(
-  ctl: ChatControllerInternals,
+  ctl: ControllerPort,
   requestId: string,
   rejectionCode: 'invalid' | 'unavailable',
 ): void {

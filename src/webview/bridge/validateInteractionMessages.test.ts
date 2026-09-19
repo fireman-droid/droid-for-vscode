@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { MAX_EDITED_SPEC_LENGTH } from '../../shared/bridgeMessages';
-import {
-  parseSessionTranscript,
-  readHostMessage,
-} from './validateHostMessage';
+import { parseSessionTranscript } from './host/transcript';
+import { readHostMessage } from './validateHostMessage';
 
 describe('interaction Host message validation', () => {
   it('accepts exact AskUser settlement results', () => {
@@ -42,14 +40,16 @@ describe('interaction Host message validation', () => {
       answers: [{ ...row.answers[0], question: 'Which library?' }],
     };
     expect(parseSessionTranscript([withQuestion])).toEqual([withQuestion]);
-    expect(parseSessionTranscript([{
-      ...row,
-      answers: [{ ...row.answers[0], question: 42 }],
-    }])).toBeUndefined();
     expect(
       parseSessionTranscript([
-        { ...row, status: 'cancelled', answers: row.answers },
+        {
+          ...row,
+          answers: [{ ...row.answers[0], question: 42 }],
+        },
       ]),
+    ).toBeUndefined();
+    expect(
+      parseSessionTranscript([{ ...row, status: 'cancelled', answers: row.answers }]),
     ).toBeUndefined();
   });
 

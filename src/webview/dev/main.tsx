@@ -1,20 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import type {
-  HostToWebviewMessage,
-  ThemePreference,
-  WebviewToHostMessage,
-} from '../../shared/bridgeMessages';
-import { App } from '../assistant/App';
 import {
-  ModelsPage,
-  ProviderEditor,
-} from '../assistant/ModelsPage';
+  type HostToWebviewMessage,
+  type WebviewToHostMessage,
+} from '../../shared/bridgeMessages';
+import { type ThemePreference } from '../../shared/protocol/shell';
+import { App } from '../assistant/App';
+import { ModelsPage, ProviderEditor } from '../assistant/models/ModelsPage';
 import {
   CustomModelsContext,
   type CustomModelsFlowValue,
-} from '../assistant/customModelsFlow';
+} from '../assistant/models/customModelsFlow';
 import '../assistant/styles.css';
 import { type StudioScenarioId } from './scenarios';
 import { StudioControls } from './StudioControls';
@@ -31,6 +28,7 @@ import {
 } from './studioRuntime';
 import { createBrowserRuntime } from './browserRuntime';
 import { CustomModelsWorkbenchPreview } from './CustomModelsWorkbenchPreview';
+import { ModelsPreview } from './ModelsPreview';
 import './preview.css';
 import './custom-models-workbench.css';
 
@@ -130,9 +128,7 @@ function handlePreviewPostMessage(
     const previous =
       message.providerId === undefined
         ? undefined
-        : previewProviders.find(
-            (candidate) => candidate.id === message.providerId,
-          );
+        : previewProviders.find((candidate) => candidate.id === message.providerId);
     const saved = {
       id: previous?.id ?? 'preview-created-provider',
       displayName: message.displayName,
@@ -194,16 +190,19 @@ const runtime = live
       onPostMessage: handlePreviewPostMessage,
     });
 
-(globalThis as {
-  acquireVsCodeApi?: () => typeof runtime;
-  __dvxApi?: typeof runtime;
-}).acquireVsCodeApi = () => runtime;
+(
+  globalThis as {
+    acquireVsCodeApi?: () => typeof runtime;
+    __dvxApi?: typeof runtime;
+  }
+).acquireVsCodeApi = () => runtime;
 
 function Preview(): React.JSX.Element {
   if (live) {
     return <App />;
   }
   const path = window.location.pathname;
+  if (path === '/models') return <ModelsPreview />;
   if (path === '/' || path === '/app') {
     return <Studio />;
   }

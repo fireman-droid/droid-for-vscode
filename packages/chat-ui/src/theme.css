@@ -1,0 +1,150 @@
+@import 'tailwindcss' source(none);
+@import 'katex/dist/katex.min.css';
+@import './styles/composer-panels.css';
+@import './styles/transcript-cards.css';
+@import './styles/btw.css';
+@import './styles/review.css';
+@import './styles/motion.css';
+@import './styles/droid-motion.css';
+@import './styles/chat-region.css';
+@source './**/*.{ts,tsx}';
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@layer components {
+  .markdown-prose {
+    color: var(--ink);
+    font-size: 13px;
+    line-height: 1.625;
+  }
+  .markdown-prose :is(h1, h2, h3, h4, h5, h6) {
+    margin: 1.45em 0 0.58em;
+    color: var(--strong-ink);
+    font-size: 1em;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+  .markdown-prose h1 { font-size: 1.18em; }
+  .markdown-prose h2 { font-size: 1.08em; }
+  .markdown-prose :is(p, ul, ol, blockquote) { margin: 0 0 12px; }
+  .markdown-prose :is(ul, ol) { padding-left: 24px; }
+  .markdown-prose ul { list-style-type: disc; }
+  .markdown-prose ol { list-style-type: decimal; }
+  .markdown-prose li + li { margin-top: 8px; }
+  .markdown-prose strong { font-weight: 700; }
+  .markdown-prose blockquote { padding-left: 12px; }
+  .markdown-prose > :first-child { margin-top: 0; }
+  .markdown-prose > :last-child { margin-bottom: 0; }
+
+  .markdown-content .hljs-comment,
+  .markdown-content .hljs-quote { color: var(--muted-ink); font-style: italic; }
+  .markdown-content .hljs-keyword,
+  .markdown-content .hljs-selector-tag,
+  .markdown-content .hljs-literal { color: var(--syntax-keyword); }
+  .markdown-content .hljs-string,
+  .markdown-content .hljs-attr { color: var(--syntax-string); }
+  .markdown-content .hljs-number,
+  .markdown-content .hljs-symbol { color: var(--syntax-number); }
+  .markdown-content .hljs-title,
+  .markdown-content .hljs-built_in { color: var(--link-ink); }
+  .markdown-content .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+}
+
+@theme inline {
+  --color-background: var(--surface);
+  --color-foreground: var(--ink);
+  --color-muted: var(--soft-surface);
+  --color-muted-foreground: var(--muted-ink);
+  --color-popover: var(--overlay-surface);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--action);
+  --color-primary-foreground: var(--action-ink);
+  --color-secondary: var(--soft-surface);
+  --color-secondary-foreground: var(--ink);
+  --color-accent: var(--hover-surface);
+  --color-accent-foreground: var(--ink);
+  --color-border: var(--edge);
+  --color-input: var(--field-edge);
+  --color-input-background: var(--field-surface);
+  --color-ring: var(--focus);
+  --color-destructive: var(--error-ink);
+  --color-link: var(--link-ink);
+  --font-sans: var(--chat-font-sans, 'Segoe UI'), sans-serif;
+  --font-mono: var(--chat-font-mono, Consolas), monospace;
+}
+
+@layer base {
+  :root, .agent-chat-ui {
+    color-scheme: light;
+    --surface: #fafafa;
+    --ink: #292929;
+    --muted-ink: #6b6b70;
+    --soft-surface: #f0f0f0;
+    --overlay-surface: #ffffff;
+    --hover-surface: #e8e8e8;
+    --action: #292929;
+    --action-ink: #ffffff;
+    --edge: #dedee2;
+    --field-edge: #dedee2;
+    --field-surface: #ffffff;
+    --strong-ink: #202024;
+    --secondary-ink: #57575c;
+    --edge-strong: #85858d;
+    --code-surface: #f4f4f5;
+    --well-surface: #f4f4f5;
+    --command-string: #4f7e3e;
+    --focus: #65656c;
+    --error-ink: #b52c40;
+    --link-ink: #006ab1;
+    --syntax-keyword: #7b2cbf;
+    --syntax-string: #a31515;
+    --syntax-number: #087f23;
+  }
+
+  :root[data-theme='dark'], .agent-chat-ui[data-theme='dark'] {
+    color-scheme: dark;
+    --surface: #1e1e20;
+    --ink: #e4e4e7;
+    --muted-ink: #a1a1aa;
+    --soft-surface: #2a2a2d;
+    --overlay-surface: #2a2a2e;
+    --hover-surface: #2a2d2e;
+    --action: #3b4858;
+    --action-ink: #e1e5eb;
+    --edge: #3e3e44;
+    --field-edge: #3e3e44;
+    --field-surface: #242427;
+    --strong-ink: #f0f0f2;
+    --secondary-ink: #b6b6bd;
+    --edge-strong: #777780;
+    --code-surface: #262629;
+    --well-surface: #262629;
+    --command-string: #b3bd8f;
+    --focus: #66788a;
+    --error-ink: #f08088;
+    --link-ink: #4daafc;
+    --syntax-keyword: #b180d7;
+    --syntax-string: #ce9178;
+    --syntax-number: #b5cea8;
+  }
+
+  .agent-chat-ui {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+  .agent-chat-ui {
+    overflow: hidden;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--chat-font-sans, 'Segoe UI'), sans-serif;
+    font-size: 13px;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--edge) transparent;
+  }
+  button, input, textarea, select { font: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: default; }
+}

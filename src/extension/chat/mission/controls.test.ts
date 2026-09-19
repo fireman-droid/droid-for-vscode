@@ -21,10 +21,12 @@ describe('handleMissionCommand', () => {
     mission.apply({ type: 'mission-state', lifecycle: 'running' });
     const emitted: unknown[] = [];
     const ctl = {
-      missionRuntime: mission,
-      sessionId: 'mission-1',
-      runtime: { interruptSession: () => pause },
-      turn: null,
+      missionState: { missionRuntime: mission },
+      sessionState: {
+        sessionId: 'mission-1',
+        runtime: { interruptSession: () => pause },
+      },
+      turnState: { turn: null },
       interactions: { hasPending: () => false },
       emit: (value: unknown) => emitted.push(value),
       emitSessionDiagnostic: vi.fn(),
@@ -43,7 +45,7 @@ describe('handleMissionCommand', () => {
       scrutinyEnabled: true,
       userTestingEnabled: true,
     });
-    ctl.missionRuntime = replacement;
+    ctl.missionState.missionRuntime = replacement;
     rejectPause();
     await Promise.resolve();
 
@@ -60,10 +62,12 @@ describe('handleMissionCommand', () => {
     mission.apply({ type: 'mission-state', lifecycle: 'running' });
     const emitted: unknown[] = [];
     const ctl = {
-      missionRuntime: mission,
-      sessionId: 'mission-1',
-      runtime: { interruptSession: () => new Promise<void>(() => {}) },
-      turn: null,
+      missionState: { missionRuntime: mission },
+      sessionState: {
+        sessionId: 'mission-1',
+        runtime: { interruptSession: () => new Promise<void>(() => {}) },
+      },
+      turnState: { turn: null },
       interactions: { hasPending: () => false },
       emit: (value: unknown) => emitted.push(value),
       emitSessionDiagnostic: vi.fn(),

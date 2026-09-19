@@ -4,7 +4,7 @@ import {
   type MissionProfile,
   type MissionReasoningEffort,
   type MissionStartMessage,
-} from '../../../shared/missionProtocol';
+} from '../../../shared/protocol/missionProtocol';
 
 export interface MissionSetupSubmission {
   readonly task: string;

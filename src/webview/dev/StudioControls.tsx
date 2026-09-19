@@ -1,4 +1,4 @@
-import type { ThemePreference } from '../../shared/bridgeMessages';
+import { type ThemePreference } from '../../shared/protocol/shell';
 import { STUDIO_SCENARIOS, type StudioScenarioId } from './scenarios';
 import {
   STUDIO_VIEWPORT_WIDTHS,
@@ -60,9 +60,7 @@ export function StudioControls({
           id="dvx-studio-width"
           value={config.width}
           onChange={(event) =>
-            onWidthChange(
-              Number(event.currentTarget.value) as StudioViewportWidth,
-            )
+            onWidthChange(Number(event.currentTarget.value) as StudioViewportWidth)
           }
         >
           {STUDIO_VIEWPORT_WIDTHS.map((width) => (
@@ -72,16 +70,10 @@ export function StudioControls({
           ))}
         </select>
       </div>
-      <button
-        type="button"
-        className="dvx-studio-reset"
-        onClick={onReset}
-      >
+      <button type="button" className="dvx-studio-reset" onClick={onReset}>
         Reset
       </button>
-      <p className="dvx-studio-description">
-        {activeScenario?.description}
-      </p>
+      <p className="dvx-studio-description">{activeScenario?.description}</p>
     </header>
   );
 }

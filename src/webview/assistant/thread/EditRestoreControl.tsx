@@ -6,10 +6,10 @@
 // composer's floating popovers — an inline expand cannot clip or
 // overlap the transcript the way a positioned popover did.
 
-import { useId, useState } from "react";
+import { useId, useState } from 'react';
 
-import { ActivityChevron } from "./icons";
-import { useDeferredDisclosure } from "../useDeferredDisclosure";
+import { ActivityChevron } from './icons';
+import { useDeferredDisclosure } from '../transcript/useDeferredDisclosure';
 
 interface EditRestorePath {
   readonly path: string;
@@ -52,12 +52,10 @@ export function EditRestoreControl({
       <div
         className="dvx-restore-evicted"
         role="status"
-        title={evictedFiles
-          .map((file) => `${file.path} — ${file.reason}`)
-          .join("\n")}
+        title={evictedFiles.map((file) => `${file.path} — ${file.reason}`).join('\n')}
       >
-        {evictedFiles.length}{" "}
-        {evictedFiles.length === 1 ? "file" : "files"} cannot be restored
+        {evictedFiles.length} {evictedFiles.length === 1 ? 'file' : 'files'} cannot be
+        restored
       </div>
     );
   }
@@ -68,16 +66,14 @@ export function EditRestoreControl({
         <label
           className="dvx-user-edit-restore"
           title={`Resending rewinds the conversation to this message. Also restore the ${affectedFiles} workspace ${
-            affectedFiles === 1 ? "file" : "files"
+            affectedFiles === 1 ? 'file' : 'files'
           } Droid changed after it.`}
         >
           <input
             type="checkbox"
             className="dvx-restore-input"
             checked={restoreFiles}
-            onChange={(event) =>
-              onRestoreFilesChange(event.currentTarget.checked)
-            }
+            onChange={(event) => onRestoreFilesChange(event.currentTarget.checked)}
           />
           <span className="dvx-restore-box" aria-hidden="true">
             <svg viewBox="0 0 10 10" fill="none">
@@ -91,8 +87,8 @@ export function EditRestoreControl({
             </svg>
           </span>
           <span className="dvx-restore-copy">
-            Restore {affectedFiles} {affectedFiles === 1 ? "file" : "files"}{" "}
-            changed after this point
+            Restore {affectedFiles} {affectedFiles === 1 ? 'file' : 'files'} changed after
+            this point
           </span>
         </label>
         <button
@@ -110,14 +106,14 @@ export function EditRestoreControl({
         <div
           className="dvx-review-dock-body"
           id={filesId}
-          data-open={restore.open ? "true" : "false"}
+          data-open={restore.open ? 'true' : 'false'}
           aria-hidden={!expanded}
         >
           <div className="dvx-review-dock-body-inner">
             <ul className="dvx-review-dock-files">
               {affectedPaths.map(({ path, created }) => (
                 <li
-                  key={`${created ? "c" : "r"}:${path}`}
+                  key={`${created ? 'c' : 'r'}:${path}`}
                   className="dvx-review-dock-row"
                   title={
                     created
@@ -126,9 +122,7 @@ export function EditRestoreControl({
                   }
                 >
                   <span className="dvx-review-dock-path">{path}</span>
-                  {created ? (
-                    <span className="dvx-restore-file-tag">new</span>
-                  ) : null}
+                  {created ? <span className="dvx-restore-file-tag">new</span> : null}
                 </li>
               ))}
             </ul>
@@ -138,11 +132,10 @@ export function EditRestoreControl({
                 role="status"
                 title={evictedFiles
                   .map((file) => `${file.path} — ${file.reason}`)
-                  .join("\n")}
+                  .join('\n')}
               >
-                {evictedFiles.length}{" "}
-                {evictedFiles.length === 1 ? "file" : "files"} cannot be
-                restored
+                {evictedFiles.length} {evictedFiles.length === 1 ? 'file' : 'files'}{' '}
+                cannot be restored
               </div>
             ) : null}
           </div>

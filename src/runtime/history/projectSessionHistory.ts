@@ -1,58 +1,61 @@
 import {
   MAX_ASSISTANT_TEXT_LENGTH,
-  MAX_BRIDGE_ID_LENGTH,
-  MAX_CHANGED_FILES_PER_TURN,
   MAX_IMAGE_DATA_LENGTH,
   MAX_IMAGES_PER_TURN,
-  MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_ACTIVITIES_PER_TURN,
   MAX_TOOL_NAME_LENGTH,
   MAX_TURN_TEXT_LENGTH,
-  type ImageOrigin,
+} from '../../shared/protocol/bounds';
+import {
+  MAX_BRIDGE_ID_LENGTH,
+  MAX_SESSION_TRANSCRIPT_ITEMS,
+} from '../../shared/bridgeMessages';
+import { type ImageOrigin } from '../../shared/protocol/attachments';
+import {
   type SessionTranscriptItem,
   type ToolSubagentSummary,
-} from '../../shared/bridgeMessages';
+} from '../../shared/protocol/transcript';
 import {
   stableTranscriptId,
   type HostTranscriptState,
-} from '../../shared/hostTranscriptState';
-import { isStrictRecord } from '../../shared/strictValidation';
+} from '../../shared/transcript/hostTranscriptState';
+import { isStrictRecord } from '../../shared/validation/strictValidation';
 import {
   MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
   base64ByteLength,
   enforceTranscriptImageBudget,
   transcriptItemTextUnits,
-} from '../../shared/transcriptLimits';
-import { summarizeToolAction } from '../../shared/toolActivity';
-import { readTokenUsageBreakdown } from '../../shared/tokenUsage';
+} from '../../shared/transcript/transcriptLimits';
+import { summarizeToolAction } from '../../shared/transcript/toolActivity';
+import { readTokenUsageBreakdown } from '../../shared/protocol/tokenUsage';
+import { extractToolResultText, readSdkImageBlock } from '../events/normalizeSdkEvent';
+import { enforceToolResultBudget } from '../../shared/transcript/toolResultPreview';
 import {
-  extractToolResultText,
-  readSdkImageBlock,
-} from '../normalizeSdkEvent';
+  completeHistoryToolItem,
+  historyOperationDiff,
+  historyResultOperationDiff,
+  historyResultSource,
+} from './toolResultHistory';
+import { operationDiffFields } from '../../shared/protocol/operationDiff';
 import {
   createSubagentQueues,
   readSubagentInvocations,
   readTaskDelegation,
   takeSubagentSummary,
   type SubagentSummaryQueues,
-} from '../subagentSummary';
-import { extractToolBackgroundHint } from '../toolBackgroundHint';
+} from '../subagents/subagentSummary';
+import { extractToolBackgroundHint } from '../tools/toolBackgroundHint';
 import {
   extractExecuteSummary,
   extractToolDetail,
   extractToolTarget,
-} from '../toolDetail';
-import {
-  type SessionHistoryResult,
-  unavailableSessionHistory,
-} from './SessionHistory';
+} from '../tools/toolDetail';
+import { type SessionHistoryResult, unavailableSessionHistory } from './SessionHistory';
 import { readSessionMission } from './sessionMission';
-import {
-  projectAskUserHistoryItem,
-  readAskUserQuestions,
-} from './askUserHistory';
+import { projectAskUserHistoryItem, readAskUserQuestions } from './askUserHistory';
 import { historyToolFilePaths } from './historyToolPaths';
+import { appendHistoryTurnChanges } from './historyTurnChanges';
 
 const MAX_RAW_MESSAGES_TO_PROJECT = 10_000;
 const MAX_RAW_BLOCKS_PER_MESSAGE = 1_000;
@@ -71,6 +74,7 @@ const SYSTEM_MARKER_TAGS = new Set([
 
 interface Projection {
   readonly workspaceRoot: string | undefined;
+  readonly sourceSessionId: string | undefined;
   readonly transcript: Array<SessionTranscriptItem | undefined>;
   readonly positions: Map<string, number>;
   readonly ids: Set<string>;
@@ -79,6 +83,11 @@ interface Projection {
     {
       readonly transcriptId: string;
       readonly askUserQuestions?: ReturnType<typeof readAskUserQuestions>;
+      readonly resultSource?: ReturnType<typeof historyResultSource>;
+      readonly operationDiff?: ReturnType<typeof historyOperationDiff>;
+      readonly toolName: string;
+      readonly input: unknown;
+      readonly callId: string;
     }
   >;
   readonly toolIdentities: Map<string, string>;
@@ -97,7 +106,10 @@ interface Projection {
 
 export function projectSessionHistory(
   loaded: unknown,
-  options?: { readonly workspaceRoot?: string },
+  options?: {
+    readonly workspaceRoot?: string;
+    readonly sourceSessionId?: string;
+  },
 ): SessionHistoryResult {
   try {
     const messages = readLoadedMessages(loaded);
@@ -107,6 +119,7 @@ export function projectSessionHistory(
 
     const projection: Projection = {
       workspaceRoot: options?.workspaceRoot,
+      sourceSessionId: options?.sourceSessionId,
       transcript: new Array(MAX_SESSION_TRANSCRIPT_ITEMS),
       positions: new Map(),
       ids: new Set(),
@@ -115,19 +128,14 @@ export function projectSessionHistory(
       multiFileTools: new Map(),
       toolCounts: new Map(),
       imageCounts: new Map(),
-      subagentQueues: createSubagentQueues(
-        readSubagentInvocations(loaded),
-      ),
+      subagentQueues: createSubagentQueues(readSubagentInvocations(loaded)),
       transcriptHead: 0,
       transcriptSize: 0,
       transcriptTextUnits: 0,
       rawBlocksProcessed: 0,
       partial: messages.length > MAX_RAW_MESSAGES_TO_PROJECT,
     };
-    const firstMessage = Math.max(
-      0,
-      messages.length - MAX_RAW_MESSAGES_TO_PROJECT,
-    );
+    const firstMessage = Math.max(0, messages.length - MAX_RAW_MESSAGES_TO_PROJECT);
     for (
       let messageIndex = firstMessage;
       messageIndex < messages.length;
@@ -170,12 +178,12 @@ export function projectSessionHistory(
  */
 export function projectSessionMessages(
   messages: unknown,
-  options?: { readonly workspaceRoot?: string },
+  options?: {
+    readonly workspaceRoot?: string;
+    readonly sourceSessionId?: string;
+  },
 ): SessionHistoryResult {
-  return projectSessionHistory(
-    { result: { session: { messages } } },
-    options,
-  );
+  return projectSessionHistory({ result: { session: { messages } } }, options);
 }
 
 function readLoadedMessages(value: unknown): readonly unknown[] | null {
@@ -257,11 +265,7 @@ function projectMessage(
   if (blockCount < value.content.length) {
     projection.partial = true;
   }
-  for (
-    let blockIndex = 0;
-    blockIndex < blockCount;
-    blockIndex += 1
-  ) {
+  for (let blockIndex = 0; blockIndex < blockCount; blockIndex += 1) {
     const block = value.content[blockIndex];
     if (!isStrictRecord(block) || typeof block.type !== 'string') {
       projection.partial = true;
@@ -328,14 +332,7 @@ function projectBlock(
       return;
     case 'tool_use':
       if (role === 'assistant') {
-        appendTool(
-          projection,
-          block,
-          messageIdentity,
-          turnId,
-          messageIndex,
-          blockIndex,
-        );
+        appendTool(projection, block, messageIdentity, turnId, messageIndex, blockIndex);
       }
       return;
     case 'tool_result':
@@ -384,18 +381,12 @@ function appendText(
   blockIndex: number,
   sdkMessageId: string | undefined,
 ): void {
-  const safeText =
-    role === 'assistant'
-      ? rawText
-      : sanitizeNonAssistantText(rawText);
+  const safeText = role === 'assistant' ? rawText : sanitizeNonAssistantText(rawText);
   if (safeText === null) {
     projection.partial = true;
     return;
   }
-  const limit =
-    role === 'user'
-      ? MAX_TURN_TEXT_LENGTH
-      : MAX_ASSISTANT_TEXT_LENGTH;
+  const limit = role === 'user' ? MAX_TURN_TEXT_LENGTH : MAX_ASSISTANT_TEXT_LENGTH;
   const text = safeText.slice(0, limit);
   if (text.length < safeText.length) {
     projection.partial = true;
@@ -419,25 +410,21 @@ function appendText(
           id,
           kind: 'user',
           text,
-          ...(sdkMessageId === undefined
-            ? {}
-            : { messageId: sdkMessageId }),
+          ...(sdkMessageId === undefined ? {} : { messageId: sdkMessageId }),
         }
       : { id, kind: 'assistant', turnId, text },
   );
 }
 
 export function sanitizeNonAssistantText(rawText: string): string | null {
-  const possibleTags =
-    /<[^>]*(?:system-reminder|system-notification)[^>]*(?:>|$)/g;
+  const possibleTags = /<[^>]*(?:system-reminder|system-notification)[^>]*(?:>|$)/g;
   for (const match of rawText.matchAll(possibleTags)) {
     if (!SYSTEM_MARKER_TAGS.has(match[0])) {
       return null;
     }
   }
 
-  const markerTags =
-    /<\/?system-(?:reminder|notification)>/g;
+  const markerTags = /<\/?system-(?:reminder|notification)>/g;
   let activeMarker: 'reminder' | 'notification' | null = null;
   let cursor = 0;
   let foundMarker = false;
@@ -446,9 +433,7 @@ export function sanitizeNonAssistantText(rawText: string): string | null {
   for (const match of rawText.matchAll(markerTags)) {
     const tag = match[0];
     const index = match.index;
-    const marker = tag.includes('reminder')
-      ? 'reminder'
-      : 'notification';
+    const marker = tag.includes('reminder') ? 'reminder' : 'notification';
     const isClosing = tag.startsWith('</');
     foundMarker = true;
 
@@ -577,11 +562,7 @@ function appendToolResultImages(
   if (!Array.isArray(content)) {
     return;
   }
-  for (
-    let contentIndex = 0;
-    contentIndex < content.length;
-    contentIndex += 1
-  ) {
+  for (let contentIndex = 0; contentIndex < content.length; contentIndex += 1) {
     const entry: unknown = content[contentIndex];
     if (
       !isStrictRecord(entry) ||
@@ -641,62 +622,50 @@ function appendTool(
     String(messageIndex),
     String(blockIndex),
   );
-  const transcriptId = uniqueTranscriptId(
-    projection,
-    'tool',
-    turnId,
-    toolUseId,
-  );
-  const filePaths = historyToolFilePaths(
-    projection.workspaceRoot,
-    toolName,
-    block.input,
-  );
+  const transcriptId = uniqueTranscriptId(projection, 'tool', turnId, toolUseId);
+  const filePaths = historyToolFilePaths(projection.workspaceRoot, toolName, block.input);
   if (filePaths.length > 1) {
     projection.multiFileTools.set(transcriptId, filePaths);
   }
   const detail = extractToolDetail(toolName, block.input);
-  const target = extractToolTarget(
-    toolName,
+  const target = extractToolTarget(toolName, block.input, projection.workspaceRoot);
+  const backgroundHint = extractToolBackgroundHint(toolName, block.input);
+  const subagent = historyToolSubagent(projection, toolName, block.input);
+  const operationDiff = historyOperationDiff(
+    block.name,
     block.input,
     projection.workspaceRoot,
+    block.id,
+    projection.sourceSessionId,
   );
-  const backgroundHint = extractToolBackgroundHint(
-    toolName,
-    block.input,
-  );
-  const subagent = historyToolSubagent(projection, toolName, block.input);
   appendTranscriptItem(projection, {
     id: transcriptId,
     kind: 'tool',
     turnId,
     toolUseId,
     toolName,
-    action:
-      extractExecuteSummary(toolName, block.input) ??
-      summarizeToolAction(toolName),
+    action: extractExecuteSummary(toolName, block.input) ?? summarizeToolAction(toolName),
     status: 'stopped',
     progressCount: 0,
     latestUpdateKind: null,
     ...(filePaths.length === 0 ? {} : { filePath: filePaths[0] }),
-    ...(filePaths.length <= 1
-      ? {}
-      : { additionalFileCount: filePaths.length - 1 }),
-    ...(detail === undefined
-      ? {}
-      : { detailKind: detail.kind, detail: detail.text }),
+    ...(filePaths.length <= 1 ? {} : { additionalFileCount: filePaths.length - 1 }),
+    ...(detail === undefined ? {} : { detailKind: detail.kind, detail: detail.text }),
     ...(target === undefined ? {} : { target }),
     ...(backgroundHint === undefined ? {} : { backgroundHint }),
     ...(subagent === undefined ? {} : { subagent }),
+    ...operationDiffFields({ operationDiff }),
   });
-  projection.toolCounts.set(
-    turnId,
-    (projection.toolCounts.get(turnId) ?? 0) + 1,
-  );
+  projection.toolCounts.set(turnId, (projection.toolCounts.get(turnId) ?? 0) + 1);
   if (!projection.tools.has(rawToolIdentity)) {
     const askUserQuestions = readAskUserQuestions(toolName, block.input);
     projection.tools.set(rawToolIdentity, {
       transcriptId,
+      resultSource: historyResultSource(block.name, block.input, projection.workspaceRoot, block.id),
+      operationDiff,
+      toolName: block.name,
+      input: block.input,
+      callId: block.id,
       ...(askUserQuestions === undefined ? {} : { askUserQuestions }),
     });
     projection.toolIdentities.set(transcriptId, rawToolIdentity);
@@ -728,23 +697,15 @@ function historyToolSubagent(
   );
 }
 
-function completeTool(
-  projection: Projection,
-  block: Record<string, unknown>,
-): void {
+function completeTool(projection: Projection, block: Record<string, unknown>): void {
   if (typeof block.toolUseId !== 'string') {
     return;
   }
-  if (
-    block.isError !== undefined &&
-    typeof block.isError !== 'boolean'
-  ) {
+  if (block.isError !== undefined && typeof block.isError !== 'boolean') {
     projection.partial = true;
     return;
   }
-  const tool = projection.tools.get(
-    boundedIdentity(block.toolUseId, 0),
-  );
+  const tool = projection.tools.get(boundedIdentity(block.toolUseId, 0));
   if (!tool) {
     return;
   }
@@ -756,27 +717,37 @@ function completeTool(
   if (existing?.kind !== 'tool') {
     return;
   }
-  const errorMessage =
-    block.isError === true
-      ? extractToolResultText(block.content)
-      : undefined;
-  const updated: SessionTranscriptItem = {
-    ...existing,
-    status: block.isError === true ? 'failed' : 'completed',
-    ...(errorMessage === undefined ? {} : { errorMessage }),
-  };
+  const updated = completeHistoryToolItem(
+    existing,
+    block.content,
+    block.isError === true,
+    tool.resultSource,
+    historyResultOperationDiff(
+      tool.toolName,
+      tool.input,
+      block.content,
+      block.isError === true,
+      projection.workspaceRoot,
+      tool.callId,
+      projection.sourceSessionId,
+    ) ?? tool.operationDiff,
+  );
   projection.transcript[index] = updated;
+  const budget = enforceToolResultBudget(readTranscript(projection));
+  if (budget.evicted)
+    for (const item of budget.items) {
+      const position = projection.positions.get(item.id);
+      if (position !== undefined) projection.transcript[position] = item;
+    }
   projection.transcriptTextUnits +=
     transcriptItemTextUnits(updated) - transcriptItemTextUnits(existing);
   const askUserResult = projectAskUserHistoryItem(
     tool.askUserQuestions,
-    extractToolResultText(block.content),
+    tool.askUserQuestions === undefined
+      ? undefined
+      : extractToolResultText(block.content),
     block.isError === true,
-    stableTranscriptId(
-      'ask-user-result',
-      'history',
-      tool.transcriptId,
-    ),
+    stableTranscriptId('ask-user-result', 'history', tool.transcriptId),
     existing.turnId,
   );
   if (askUserResult !== undefined) {
@@ -802,8 +773,7 @@ function isVisibleMessage(
     (value.visibility !== undefined &&
       value.visibility !== 'both' &&
       value.visibility !== 'user_only') ||
-    (value.isUserVisible !== undefined &&
-      typeof value.isUserVisible !== 'boolean') ||
+    (value.isUserVisible !== undefined && typeof value.isUserVisible !== 'boolean') ||
     (value.hiddenFromUserViews !== undefined &&
       typeof value.hiddenFromUserViews !== 'boolean')
   ) {
@@ -835,20 +805,13 @@ function uniqueTranscriptId(
   let id = stableTranscriptId(kind, ...identity);
   while (projection.ids.has(id)) {
     collision += 1;
-    id = stableTranscriptId(
-      kind,
-      ...identity,
-      String(collision),
-    );
+    id = stableTranscriptId(kind, ...identity, String(collision));
   }
   projection.ids.add(id);
   return id;
 }
 
-function appendTranscriptItem(
-  projection: Projection,
-  item: SessionTranscriptItem,
-): void {
+function appendTranscriptItem(projection: Projection, item: SessionTranscriptItem): void {
   let index =
     (projection.transcriptHead + projection.transcriptSize) %
     MAX_SESSION_TRANSCRIPT_ITEMS;
@@ -856,8 +819,7 @@ function appendTranscriptItem(
     index = projection.transcriptHead;
     evictTranscriptItem(projection, index);
     projection.transcriptHead =
-      (projection.transcriptHead + 1) %
-      MAX_SESSION_TRANSCRIPT_ITEMS;
+      (projection.transcriptHead + 1) % MAX_SESSION_TRANSCRIPT_ITEMS;
     projection.partial = true;
   } else {
     projection.transcriptSize += 1;
@@ -867,24 +829,19 @@ function appendTranscriptItem(
   projection.transcriptTextUnits += transcriptItemTextUnits(item);
   while (
     projection.transcriptSize > 0 &&
-    projection.transcriptTextUnits >
-      MAX_SESSION_TRANSCRIPT_TEXT_UNITS
+    projection.transcriptTextUnits > MAX_SESSION_TRANSCRIPT_TEXT_UNITS
   ) {
     const evictedIndex = projection.transcriptHead;
     evictTranscriptItem(projection, evictedIndex);
     projection.transcript[evictedIndex] = undefined;
     projection.transcriptHead =
-      (projection.transcriptHead + 1) %
-      MAX_SESSION_TRANSCRIPT_ITEMS;
+      (projection.transcriptHead + 1) % MAX_SESSION_TRANSCRIPT_ITEMS;
     projection.transcriptSize -= 1;
     projection.partial = true;
   }
 }
 
-function evictTranscriptItem(
-  projection: Projection,
-  index: number,
-): void {
+function evictTranscriptItem(projection: Projection, index: number): void {
   const item = projection.transcript[index];
   if (item === undefined) {
     return;
@@ -908,113 +865,24 @@ function evictTranscriptItem(
   const rawToolIdentity = projection.toolIdentities.get(item.id);
   if (rawToolIdentity !== undefined) {
     projection.toolIdentities.delete(item.id);
-    if (
-      projection.tools.get(rawToolIdentity)?.transcriptId === item.id
-    ) {
+    if (projection.tools.get(rawToolIdentity)?.transcriptId === item.id) {
       projection.tools.delete(rawToolIdentity);
     }
   }
 }
 
-function readTranscript(
-  projection: Projection,
-): SessionTranscriptItem[] {
+function readTranscript(projection: Projection): SessionTranscriptItem[] {
   const transcript: SessionTranscriptItem[] = [];
   for (let offset = 0; offset < projection.transcriptSize; offset += 1) {
     const item =
       projection.transcript[
-        (projection.transcriptHead + offset) %
-          MAX_SESSION_TRANSCRIPT_ITEMS
+        (projection.transcriptHead + offset) % MAX_SESSION_TRANSCRIPT_ITEMS
       ];
     if (item !== undefined) {
       transcript.push(item);
     }
   }
   return transcript;
-}
-
-/**
- * Inserts a per-turn changed-files summary after each history turn
- * whose tools named workspace files. Line counts are unknown for
- * history, so they stay null. Synthesis stops when the transcript
- * would exceed its item or text-unit budget.
- */
-function appendHistoryTurnChanges(
-  transcript: readonly SessionTranscriptItem[],
-  usedTextUnits: number,
-  multiFileTools: ReadonlyMap<string, readonly string[]>,
-): SessionTranscriptItem[] {
-  const filesByTurn = new Map<string, string[]>();
-  for (const item of transcript) {
-    if (item.kind !== 'tool' || item.filePath === undefined) {
-      continue;
-    }
-    const itemPaths = multiFileTools.get(item.id) ?? [item.filePath];
-    const files = filesByTurn.get(item.turnId) ?? [];
-    for (const path of itemPaths) {
-      if (
-        !files.includes(path) &&
-        files.length < MAX_CHANGED_FILES_PER_TURN
-      ) {
-        files.push(path);
-      }
-    }
-    filesByTurn.set(item.turnId, files);
-  }
-  if (filesByTurn.size === 0) {
-    return [...transcript];
-  }
-
-  const lastTurnIndex = new Map<string, number>();
-  transcript.forEach((item, index) => {
-    if (item.kind !== 'user' && item.turnId !== null) {
-      lastTurnIndex.set(item.turnId, index);
-    }
-  });
-
-  const ids = new Set(transcript.map((item) => item.id));
-  let remainingItems =
-    MAX_SESSION_TRANSCRIPT_ITEMS - transcript.length;
-  let remainingUnits =
-    MAX_SESSION_TRANSCRIPT_TEXT_UNITS - usedTextUnits;
-  const result: SessionTranscriptItem[] = [];
-  transcript.forEach((item, index) => {
-    result.push(item);
-    if (item.kind === 'user' || item.turnId === null) {
-      return;
-    }
-    const files = filesByTurn.get(item.turnId);
-    if (
-      files === undefined ||
-      lastTurnIndex.get(item.turnId) !== index ||
-      remainingItems <= 0
-    ) {
-      return;
-    }
-    const id = stableTranscriptId('changes', item.turnId);
-    if (ids.has(id)) {
-      return;
-    }
-    const changes: SessionTranscriptItem = {
-      id,
-      kind: 'changes',
-      turnId: item.turnId,
-      files: files.map((path) => ({
-        path,
-        additions: null,
-        deletions: null,
-      })),
-    };
-    const units = transcriptItemTextUnits(changes);
-    if (units > remainingUnits) {
-      return;
-    }
-    remainingItems -= 1;
-    remainingUnits -= units;
-    ids.add(id);
-    result.push(changes);
-  });
-  return result;
 }
 
 function boundedIdentity(value: unknown, fallback: number): string {

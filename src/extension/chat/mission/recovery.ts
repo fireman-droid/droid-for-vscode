@@ -1,16 +1,16 @@
 import type { DroidRuntime } from '../../../runtime/DroidRuntime';
-import type { ChatControllerInternals } from '../internals';
+import type { RecoveryPort } from './recoveryMissionPort';
 import { MissionSnapshotReducer } from './MissionSnapshotReducer';
 
 export function recoverMissionProjection(
-  ctl: ChatControllerInternals,
+  ctl: RecoveryPort,
   runtime: DroidRuntime,
   generation: number,
   sessionId: string,
   cwd: string,
 ): void {
-  if (ctl.mission?.role !== 'orchestrator') {
-    ctl.missionRuntime = null;
+  if (ctl.missionState.mission?.role !== 'orchestrator') {
+    ctl.missionState.missionRuntime = null;
     return;
   }
   const validator = runtime.readMissionSettings?.() ?? {
@@ -22,18 +22,21 @@ export function recoverMissionProjection(
       return;
     }
     if (recovered !== null && recovered !== undefined) {
-      ctl.missionRuntime = recovered;
+      ctl.missionState.missionRuntime = recovered;
     } else {
       const detached = new MissionSnapshotReducer(validator);
-      if (ctl.mission?.state !== null && ctl.mission?.state !== undefined) {
+      if (
+        ctl.missionState.mission?.state !== null &&
+        ctl.missionState.mission?.state !== undefined
+      ) {
         detached.apply({
           type: 'mission-state',
-          lifecycle: ctl.mission.state,
+          lifecycle: ctl.missionState.mission.state,
         });
       }
       detached.setAvailability('detached');
-      ctl.missionRuntime = detached;
+      ctl.missionState.missionRuntime = detached;
     }
-    ctl.emit(ctl.missionRuntime.snapshot());
+    ctl.emit(ctl.missionState.missionRuntime.snapshot());
   });
 }

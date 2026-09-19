@@ -9,15 +9,15 @@ import {
   PLAN_DOCUMENT_STATUSES,
   type AskUserInteractionResult,
   type AskUserResultTranscriptItem,
-  type InteractionClosedMessage,
   type PlanDocumentStateMessage,
 } from '../../shared/bridgeMessages';
+import { type InteractionClosedMessage } from '../../shared/protocol/interactions';
 import {
   hasExactKeys,
   isExactArray,
   isStrictRecord,
   type UnknownRecord,
-} from '../../shared/strictValidation';
+} from '../../shared/validation/strictValidation';
 
 export function parseInteractionClosedMessage(
   value: unknown,
@@ -37,9 +37,7 @@ export function parseInteractionClosedMessage(
     return undefined;
   }
   const result =
-    value.result === undefined
-      ? undefined
-      : parseAskUserInteractionResult(value.result);
+    value.result === undefined ? undefined : parseAskUserInteractionResult(value.result);
   if (value.result !== undefined && result === undefined) {
     return undefined;
   }
@@ -101,11 +99,7 @@ export function parseAskUserResultTranscriptItem(
   value: UnknownRecord,
 ): AskUserResultTranscriptItem | undefined {
   if (
-    !hasExactKeys(
-      value,
-      ['id', 'kind', 'turnId', 'status'],
-      ['answers'],
-    ) ||
+    !hasExactKeys(value, ['id', 'kind', 'turnId', 'status'], ['answers']) ||
     !isId(value.id) ||
     !isId(value.turnId)
   ) {
@@ -141,9 +135,7 @@ function parseAskUserInteractionResult(
     return undefined;
   }
   if (value.status === 'cancelled') {
-    return hasExactKeys(value, ['status'])
-      ? { status: 'cancelled' }
-      : undefined;
+    return hasExactKeys(value, ['status']) ? { status: 'cancelled' } : undefined;
   }
   if (
     value.status !== 'answered' ||
@@ -174,35 +166,19 @@ function parseAskUserInteractionResult(
 }
 
 function isSequence(value: unknown): value is number {
-  return (
-    typeof value === 'number' &&
-    Number.isSafeInteger(value) &&
-    value >= 0
-  );
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
 function isId(value: unknown): value is string {
   return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= MAX_BRIDGE_ID_LENGTH
+    typeof value === 'string' && value.length > 0 && value.length <= MAX_BRIDGE_ID_LENGTH
   );
 }
 
-function isBoundedString(
-  value: unknown,
-  maximumLength: number,
-): value is string {
+function isBoundedString(value: unknown, maximumLength: number): value is string {
   return typeof value === 'string' && value.length <= maximumLength;
 }
 
-function isNonEmptyBoundedString(
-  value: unknown,
-  maximumLength: number,
-): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= maximumLength
-  );
+function isNonEmptyBoundedString(value: unknown, maximumLength: number): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= maximumLength;
 }

@@ -7,7 +7,7 @@ import {
   createMockRuntime,
   ready,
   waitForConnected,
-} from '../extension/controllerTestHarness';
+} from '../extension/chat/controllerTestHarness';
 
 const startMessage = {
   type: 'mission.start' as const,
@@ -107,7 +107,7 @@ describe('Mission entry contract', () => {
     );
     ready(controller);
     await waitForConnected(messages);
-    controller.modelCatalog = {
+    controller.metadata.modelCatalog = {
       status: 'ready',
       items: [
         {
@@ -117,7 +117,7 @@ describe('Mission entry contract', () => {
         },
       ],
     };
-    controller.settings = {
+    controller.metadata.settings = {
       status: 'ready',
       value: {
         interactionMode: 'auto',
@@ -167,23 +167,20 @@ describe('Mission entry contract', () => {
           workspaceId: 'C:\\workspace',
         }),
       );
-      expect(controller.sessionId).toBe('orchestrator-2');
-      expect(controller.recoveryStore.getSelectedSessionId()).toBe(
-        'orchestrator-2',
-      );
-      expect(controller.managedRuntimes.has(missionRuntime)).toBe(true);
+      expect(controller.sessionState.sessionId).toBe('orchestrator-2');
+      expect(controller.recoveryStore.getSelectedSessionId()).toBe('orchestrator-2');
+      expect(controller.sessionState.managedRuntimes.has(missionRuntime)).toBe(true);
     });
     expect(
       messages.find(
         (message) =>
-          message.type === 'mission.controlResult' &&
-          message.status === 'accepted',
+          message.type === 'mission.controlResult' && message.status === 'accepted',
       ),
     ).toMatchObject({
       requestId: 'mission-start-1',
       action: 'start',
     });
-    expect(controller.transcript.transcript[0]).toMatchObject({
+    expect(controller.recoveryState.transcript.transcript[0]).toMatchObject({
       kind: 'user',
       text: startMessage.task,
     });

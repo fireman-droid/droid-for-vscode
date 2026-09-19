@@ -1,16 +1,13 @@
+import { MISSION_SESSION_ROLES, MISSION_STATES } from '../../shared/protocol/bounds';
 import {
-  MISSION_SESSION_ROLES,
-  MISSION_STATES,
   type MissionSessionRole,
   type MissionState,
   type SessionMissionSummary,
-} from '../../shared/bridgeMessages';
-import { isStrictRecord } from '../../shared/strictValidation';
+} from '../../shared/protocol/sessions';
+import { isStrictRecord } from '../../shared/validation/strictValidation';
 
 const MISSION_STATE_SET: ReadonlySet<string> = new Set(MISSION_STATES);
-const MISSION_SESSION_ROLE_SET: ReadonlySet<string> = new Set(
-  MISSION_SESSION_ROLES,
-);
+const MISSION_SESSION_ROLE_SET: ReadonlySet<string> = new Set(MISSION_SESSION_ROLES);
 
 /**
  * Reads the read-only mission identity of a loaded session from a
@@ -18,9 +15,7 @@ const MISSION_SESSION_ROLE_SET: ReadonlySet<string> = new Set(
  * Unknown values project to null fields; a summary with no known
  * field at all projects to null so callers can omit it entirely.
  */
-export function readSessionMission(
-  loaded: unknown,
-): SessionMissionSummary | null {
+export function readSessionMission(loaded: unknown): SessionMissionSummary | null {
   if (!isStrictRecord(loaded)) {
     return null;
   }

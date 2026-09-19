@@ -1,14 +1,9 @@
-import type {
-  ConnectedDroid,
-  ConnectedDroidSession,
-} from '@factory/droid-sdk';
+import type { DaemonApi, DaemonSessionHandle } from '../../../runtime/daemon/api';
 
-import {
-  FactoryDroidRuntime,
-} from '../../../runtime/FactoryDroidRuntime';
+import { FactoryDroidRuntime } from '../../../runtime/FactoryDroidRuntime';
 import { adaptConnectedDaemonSession } from '../../../runtime/daemon/createDaemonDroidSession';
 import type { SessionLeaseHooks } from '../../../runtime/daemon/createDaemonDroidSession';
-import type { RuntimeInteractionHandler } from '../../../runtime/runtimeInteractions';
+import type { RuntimeInteractionHandler } from '../../../runtime/events/runtimeInteractions';
 import type { MissionProfilePair } from './MissionPreferences';
 import type { MissionGatewayRuntime } from './MissionGateway';
 
@@ -18,8 +13,8 @@ import type { MissionGatewayRuntime } from './MissionGateway';
  * initialization depends on in-memory settings retained by this attachment.
  */
 export function createMissionRuntime(
-  session: ConnectedDroidSession,
-  droid: ConnectedDroid,
+  session: DaemonSessionHandle,
+  droid: DaemonApi,
   interactionHandler: RuntimeInteractionHandler,
   _orchestrator: MissionProfilePair,
   lease: SessionLeaseHooks,

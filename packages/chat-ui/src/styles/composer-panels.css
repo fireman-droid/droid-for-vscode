@@ -1,0 +1,161 @@
+@layer components {
+  .v2-composer-panel {
+    --dvx-accent: var(--focus);
+    --dvx-ctx-1: #262626;
+    --dvx-ctx-2: #525252;
+    --dvx-ctx-3: #737373;
+    --dvx-ctx-4: #a3a3a3;
+    --dvx-ctx-5: #d4d4d4;
+    @apply text-[13px] leading-normal;
+  }
+  [data-theme='dark'] .v2-composer-panel {
+    --dvx-ctx-1: #d4d4d4;
+    --dvx-ctx-2: #a3a3a3;
+    --dvx-ctx-3: #737373;
+    --dvx-ctx-4: #525252;
+    --dvx-ctx-5: #262626;
+  }
+  .v2-composer-panel .dvx-visually-hidden { @apply sr-only; }
+  .v2-composer-panel .dvx-composer-popover { @apply min-w-0; }
+  .v2-composer-panel .dvx-settings-popover,
+  .v2-composer-panel .dvx-mode-popover { @apply p-1.5; }
+  .v2-composer-panel .dvx-settings-view { @apply grid min-w-0 gap-px; }
+  .v2-composer-panel button { @apply outline-none focus-visible:ring-1 focus-visible:ring-ring; }
+  .v2-composer-panel button:disabled { @apply cursor-default; }
+  .v2-composer-panel button:hover:not(:disabled) { @apply bg-muted; }
+  .v2-composer-panel .dvx-popover-message { @apply m-[5px] break-words text-xs text-muted-foreground; }
+  .v2-composer-panel .dvx-error-text { @apply text-destructive; }
+  .v2-composer-panel .dvx-settings-divider { @apply mx-0.5 my-[5px] h-px bg-border; }
+  .v2-composer-panel .dvx-settings-search-shell,
+  .v2-composer-panel .dvx-model-search-shell { @apply grid min-w-0 shrink-0 grid-cols-[14px_minmax(0,1fr)] items-center gap-2 border-b border-border bg-popover px-2 text-muted-foreground; }
+  .v2-composer-panel .dvx-model-search-shell { @apply mx-1.5 mt-1.5; }
+  .v2-composer-panel .dvx-settings-search-shell:focus-within,
+  .v2-composer-panel .dvx-model-search-shell:focus-within { @apply border-ring; }
+  .v2-composer-panel .dvx-settings-search-shell .dvx-search-icon,
+  .v2-composer-panel .dvx-model-search-shell > svg { @apply pointer-events-none size-3.5; }
+  .v2-composer-panel .dvx-settings-search,
+  .v2-composer-panel .dvx-model-search { @apply min-w-0 appearance-none outline-none; }
+  .v2-composer-panel .dvx-popover-row { @apply grid min-h-8 w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_16px] items-center gap-1.5 rounded px-2.5 py-1.5 text-left; }
+  .v2-composer-panel .dvx-popover-row-copy { @apply grid min-w-0; }
+  .v2-composer-panel .dvx-popover-row-copy strong { @apply truncate text-[13px] font-normal; }
+  .v2-composer-panel .dvx-popover-row-copy > span { @apply line-clamp-1 text-[11px] text-muted-foreground; }
+  .v2-composer-panel .dvx-popover-row-copy small { @apply text-[11px] leading-[1.4] text-muted-foreground; }
+  .v2-composer-panel .dvx-popover-row-value { @apply max-w-[120px] truncate text-xs text-muted-foreground; }
+  .v2-composer-panel .dvx-chevron-down { @apply block size-4 shrink-0 text-muted-foreground; }
+  .v2-composer-panel .dvx-popover-row-icon { @apply hidden; }
+  .v2-composer-panel .dvx-attach-row { @apply min-h-8 grid-cols-[16px_minmax(0,1fr)] gap-2 px-2; }
+  .v2-composer-panel .dvx-attach-row > svg { @apply size-3.5 text-muted-foreground; }
+  .v2-composer-panel .dvx-attach-rows { @apply grid gap-px py-1; }
+  .v2-composer-panel .dvx-settings-link-row { @apply grid-cols-[14px_minmax(0,1fr)_auto_16px] gap-2 px-2; }
+  .v2-composer-panel .dvx-settings-link-row > svg { @apply size-3.5 text-muted-foreground; }
+  .v2-composer-panel .dvx-settings-link-row .dvx-chevron-down { @apply -rotate-90; }
+  .v2-composer-panel .dvx-settings-select-motion { @apply grid grid-rows-[0fr] invisible opacity-0 transition-all duration-150; }
+  .v2-composer-panel [data-expanded='true'] > .dvx-settings-select-motion { @apply visible grid-rows-[1fr] opacity-100; }
+  .v2-composer-panel [data-expanded='true'] > .dvx-popover-row .dvx-chevron-down { @apply rotate-180; }
+  .v2-composer-panel .dvx-settings-select-clip { @apply min-h-0 overflow-hidden; }
+  .v2-composer-panel .dvx-settings-select-options { @apply grid py-1; }
+  .v2-composer-panel .dvx-settings-inline-option { @apply pl-5; }
+  .v2-composer-panel .dvx-settings-inline-option:has([data-state='checked']) { @apply bg-muted; }
+  .v2-composer-panel .dvx-settings-select-option { @apply flex min-h-7 w-full items-center justify-between px-2 py-1 text-left text-xs text-muted-foreground; }
+  .v2-composer-panel .dvx-check-icon { @apply size-4; }
+  .v2-composer-panel .dvx-option-list { @apply grid gap-px; }
+  .v2-composer-panel .dvx-option-row { @apply flex min-h-8 w-full items-center justify-between gap-2 rounded px-2 text-left text-[13px]; }
+  .v2-composer-panel .dvx-mode-option-icon { @apply size-3.5 shrink-0 text-muted-foreground; }
+  .v2-composer-panel .dvx-mode-option-label { @apply min-w-0 flex-1 truncate font-medium; }
+  .v2-composer-panel .dvx-radio-mark { @apply relative size-3 shrink-0; }
+  .v2-composer-panel [aria-checked='true'] .dvx-radio-mark::after {
+    content: '';
+    @apply absolute left-[3px] top-px h-2 w-[4.5px] rotate-[42deg] border-b-[1.6px] border-r-[1.6px] border-foreground;
+  }
+  .v2-composer-panel .dvx-model-panel { @apply flex min-h-0 flex-col; }
+  .v2-composer-panel .dvx-model-list { @apply grid max-h-[280px] min-h-0 gap-px overflow-y-auto overscroll-contain p-1.5; }
+  .v2-composer-panel .dvx-model-row { @apply flex min-h-8 min-w-0 items-center gap-1 rounded pr-1 hover:bg-muted; }
+  .v2-composer-panel .dvx-model-row[aria-current='true'] { @apply bg-muted; }
+  .v2-composer-panel .dvx-model-choice { @apply flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 gap-y-0 py-1.5 pl-2 pr-1 text-left; }
+  .v2-composer-panel .dvx-model-row:not([aria-current='true']) .dvx-model-choice { @apply flex-1; }
+  .v2-composer-panel .dvx-model-name { @apply min-w-0 break-words text-[13px] font-normal leading-[19px]; overflow-wrap: anywhere; }
+  .v2-composer-panel .dvx-model-effort-suffix { @apply shrink-0 whitespace-nowrap text-[11px] text-muted-foreground; }
+  .v2-composer-panel .dvx-model-edit { @apply ml-auto grid size-6 shrink-0 place-items-center rounded text-muted-foreground; }
+  .v2-composer-panel .dvx-model-row:hover .dvx-model-edit,
+  .v2-composer-panel .dvx-model-row:focus-within .dvx-model-edit { @apply opacity-100; }
+  .v2-composer-panel .dvx-pencil-icon,
+  .v2-composer-panel .dvx-model-check { @apply size-3.5 shrink-0 text-muted-foreground; }
+  .v2-composer-panel .dvx-model-check { @apply ml-auto mr-1; }
+  .v2-composer-panel .dvx-model-row .dvx-model-check { @apply ml-0; }
+  .v2-composer-panel .dvx-model-spec-row { @apply flex min-h-[30px] w-full items-center justify-between gap-2 border-t border-border px-2.5 py-1.5 text-left text-xs; }
+  .v2-composer-panel .dvx-model-spec-row-label { @apply shrink-0 whitespace-nowrap; }
+  .v2-composer-panel .dvx-model-spec-row-right { @apply flex min-w-0 items-center gap-1 overflow-hidden; }
+  .v2-composer-panel .dvx-model-spec-row-value { @apply truncate text-[11px] text-muted-foreground; }
+  .v2-composer-panel .dvx-model-spec-row .dvx-chevron-down { @apply -rotate-90; }
+  .v2-composer-panel .dvx-model-add-row { @apply flex min-h-9 w-full items-center gap-2 border-t border-border px-3 py-1.5 text-left text-[13px] text-muted-foreground; }
+  .v2-composer-panel .dvx-model-add-row svg { @apply size-3.5; }
+  .v2-composer-panel label.dvx-option-row { @apply cursor-pointer hover:bg-muted; }
+  .v2-composer-panel label.dvx-option-row:has(button:disabled) { @apply cursor-default opacity-50 hover:bg-transparent; }
+  .v2-composer-panel .dvx-reasoning-flyout { @apply min-h-0 overflow-auto p-1; }
+  .v2-composer-panel .dvx-reasoning-heading { @apply px-1.5 py-1 text-[11px] font-medium text-muted-foreground; }
+  .v2-composer-panel .dvx-reasoning-option { @apply min-h-[27px] px-1.5 text-[12.5px]; }
+  .v2-composer-panel .dvx-reasoning-label { @apply truncate; }
+  .v2-composer-panel .dvx-popover-heading { @apply px-4 pt-3 text-[11px]; }
+  .v2-composer-panel .dvx-current-model { @apply grid grid-cols-2 gap-1.5 p-1.5 text-xs; }
+  .v2-composer-panel .dvx-current-model > div { @apply min-w-0 px-2 py-1; }
+  .v2-composer-panel .dvx-current-model dt { @apply text-muted-foreground; }
+  .v2-composer-panel .dvx-current-model dd { @apply truncate; }
+  .v2-composer-panel .dvx-context-head { @apply flex min-h-8 items-center justify-between gap-2 px-3 pt-1; }
+  .v2-composer-panel .dvx-context-head-title { @apply text-[13px] font-medium leading-5; }
+  .v2-composer-panel .dvx-context-head-actions { @apply inline-flex items-center gap-0.5; }
+  .v2-composer-panel .dvx-context-icon-button { @apply grid size-6 place-items-center rounded text-muted-foreground disabled:opacity-50; }
+  .v2-composer-panel .dvx-context-icon-button svg { @apply size-3.5; }
+  .v2-composer-panel .dvx-context-refresh-spinning,
+  .v2-composer-panel .dvx-compact-spinner { @apply animate-spin motion-reduce:animate-none; }
+  .v2-composer-panel .dvx-context-usage { @apply px-3 pt-1; }
+  .v2-composer-panel .dvx-context-usage-summary { @apply flex items-baseline justify-between gap-2.5; }
+  .v2-composer-panel .dvx-context-usage-summary strong { @apply text-[13px] font-medium leading-5; }
+  .v2-composer-panel .dvx-context-usage-summary > span { @apply text-xs tabular-nums text-muted-foreground; }
+  .v2-composer-panel .dvx-context-bar { @apply my-2 flex h-1 gap-0.5 overflow-hidden rounded-sm bg-border; }
+  .v2-composer-panel .dvx-context-bar-segment { @apply block h-full min-w-0 shrink-0 rounded-sm; }
+  .v2-composer-panel .dvx-context-usage-note { @apply mb-2 mt-1 text-[11px] leading-[15px] text-muted-foreground; }
+  .v2-composer-panel .dvx-context-legend { @apply mb-1 grid list-none p-0; }
+  .v2-composer-panel .dvx-context-legend-row { @apply flex min-h-[26px] items-center gap-2; }
+  .v2-composer-panel .dvx-context-legend-swatch { @apply block size-2.5 shrink-0 rounded-sm; }
+  .v2-composer-panel .dvx-context-legend-credits .dvx-context-legend-swatch { @apply bg-muted-foreground; }
+  .v2-composer-panel .dvx-context-legend-label { @apply min-w-0 flex-1 truncate text-[13px] text-muted-foreground; }
+  .v2-composer-panel .dvx-context-legend-value { @apply shrink-0 text-xs tabular-nums text-muted-foreground; }
+  .v2-composer-panel .dvx-context-compact { @apply border-t border-border p-1; }
+  .v2-composer-panel .dvx-context-compact-button { @apply flex min-h-7 w-full items-center justify-center gap-1.5 rounded px-2 py-1 text-xs disabled:opacity-50; }
+  .v2-composer-panel .dvx-panel-head { @apply flex min-h-10 items-center justify-between gap-2 border-b border-border px-3 py-2; }
+  .v2-composer-panel .dvx-panel-title { @apply min-w-0 truncate text-[13px] font-semibold; }
+  .v2-composer-panel .dvx-panel-back { @apply -ml-1.5 inline-flex min-w-0 items-center gap-[5px] rounded-md py-[3px] pl-1 pr-2; }
+  .v2-composer-panel .dvx-panel-back svg { @apply size-[15px] text-muted-foreground; }
+  .v2-composer-panel .dvx-panel-actions { @apply inline-flex items-center gap-0.5; }
+  .v2-composer-panel .dvx-panel-action { @apply rounded-md px-[9px] py-[3px] text-[11px] font-medium text-muted-foreground disabled:opacity-50; }
+  .v2-composer-panel .dvx-skills-panel { @apply flex min-h-0 flex-col gap-1.5; }
+  .v2-composer-panel .dvx-skills-panel .dvx-panel-head { @apply -mx-1.5 -mt-1.5; }
+  .v2-composer-panel .dvx-skill-list { @apply m-0 max-h-[260px] list-none overflow-auto p-0; }
+  .v2-composer-panel .dvx-skill-row { @apply flex items-center gap-2.5 border-b border-border px-0.5 py-[7px] last:border-b-0; }
+  .v2-composer-panel .dvx-skill-copy { @apply flex min-w-0 flex-1 flex-col gap-0.5; }
+  .v2-composer-panel .dvx-skill-name { @apply flex items-center gap-1.5 text-xs font-medium; }
+  .v2-composer-panel .dvx-skill-location { @apply rounded-full border border-border px-1.5 py-px text-[10px] font-normal text-muted-foreground; }
+  .v2-composer-panel .dvx-skill-description { @apply line-clamp-2 text-[11px] leading-[1.35] text-muted-foreground; }
+  .v2-composer-panel .dvx-skill-switch { @apply relative h-4 w-7 shrink-0 rounded-full border border-border bg-muted disabled:opacity-50; }
+  .v2-composer-panel .dvx-skill-switch[aria-checked='true'] { @apply border-ring bg-primary; }
+  .v2-composer-panel .dvx-skill-switch-thumb { @apply absolute left-px top-px size-3 rounded-full bg-muted-foreground transition-transform; }
+  .v2-composer-panel .dvx-skill-switch[aria-checked='true'] .dvx-skill-switch-thumb { @apply translate-x-3 bg-primary-foreground; }
+  .v2-composer-panel .dvx-mcp-status { @apply size-[7px] shrink-0 rounded-full bg-muted-foreground; }
+  .v2-composer-panel .dvx-mcp-status-connected { background: #3f9d5f; }
+  .v2-composer-panel .dvx-mcp-status-failed { @apply bg-destructive; }
+  .v2-composer-panel .dvx-mcp-tools-toggle,
+  .v2-composer-panel .dvx-skills-apply-new { @apply self-start text-[11px] hover:underline; }
+  .v2-composer-panel .dvx-skills-session-note { @apply border-t border-border pt-1 text-[11px]; }
+  .v2-composer-panel .dvx-mcp-auth-button { @apply mt-0.5 self-start rounded-full border border-border bg-background px-2.5 py-[3px] text-[11px] font-medium disabled:opacity-50; }
+  .v2-composer-panel .dvx-mcp-auth-status,
+  .v2-composer-panel .dvx-mcp-remove { @apply text-[11px] text-muted-foreground; }
+  .v2-composer-panel .dvx-mcp-row-actions { @apply flex items-center gap-2.5; }
+  .v2-composer-panel .dvx-mcp-remove-confirm { @apply font-semibold text-destructive; }
+  .v2-composer-panel .dvx-mcp-add-form { @apply mb-2 flex flex-col gap-1.5 border-b border-border px-1 pb-2.5 pt-1; }
+  .v2-composer-panel .dvx-mcp-add-input { @apply rounded-md border border-border bg-muted px-2 py-[5px] text-xs outline-none focus:border-ring; }
+  .v2-composer-panel .dvx-mcp-add-types { @apply flex gap-1; }
+  .v2-composer-panel .dvx-mcp-add-type { @apply inline-flex items-center justify-center rounded-full border border-border px-2.5 py-[3px] text-[11px] text-muted-foreground; }
+  .v2-composer-panel .dvx-mcp-add-type:has(input:checked) { @apply border-ring bg-muted font-semibold text-foreground; }
+  .v2-composer-panel .dvx-mcp-add-actions { @apply flex justify-end gap-1; }
+  .v2-composer-panel .dvx-mcp-add-submit { @apply rounded-md border border-border px-2.5 py-1 text-xs disabled:opacity-50; }
+}

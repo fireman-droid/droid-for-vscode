@@ -1,17 +1,16 @@
+import type { DaemonApi } from './api';
 import { describe, expect, it, vi } from 'vitest';
-
-import type { ConnectedDroid } from '@factory/droid-sdk';
 
 import { DaemonPluginCatalog } from './DaemonPluginCatalog';
 
 function droidWith(
   listInstalled: (sessionId: string) => Promise<unknown[]>,
   list: (sessionId: string) => Promise<unknown[]>,
-): ConnectedDroid {
+): DaemonApi {
   return {
     plugins: { listInstalled },
     marketplaces: { list },
-  } as unknown as ConnectedDroid;
+  } as unknown as DaemonApi;
 }
 
 /** The probe-recorded row shape of `plugins.listInstalled`. */
@@ -95,10 +94,7 @@ describe('DaemonPluginCatalog', () => {
   it('treats a missing active flag as inactive and skips empty ids', async () => {
     const catalog = new DaemonPluginCatalog(
       droidWith(
-        async () => [
-          installedRow({ active: undefined }),
-          installedRow({ id: '' }),
-        ],
+        async () => [installedRow({ active: undefined }), installedRow({ id: '' })],
         async () => [],
       ),
     );
@@ -125,9 +121,7 @@ describe('DaemonPluginCatalog', () => {
         },
       ),
     );
-    await expect(
-      withFailingMarketplaces.snapshot('session-1'),
-    ).rejects.toBe(rpcError);
+    await expect(withFailingMarketplaces.snapshot('session-1')).rejects.toBe(rpcError);
 
     const withFailingPlugins = new DaemonPluginCatalog(
       droidWith(
@@ -137,8 +131,6 @@ describe('DaemonPluginCatalog', () => {
         async () => [],
       ),
     );
-    await expect(withFailingPlugins.snapshot('session-1')).rejects.toBe(
-      rpcError,
-    );
+    await expect(withFailingPlugins.snapshot('session-1')).rejects.toBe(rpcError);
   });
 });

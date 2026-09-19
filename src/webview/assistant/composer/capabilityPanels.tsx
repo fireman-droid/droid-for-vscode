@@ -2,14 +2,15 @@
 // Moved verbatim from ComposerControls.tsx (structure-only split).
 
 import { useEffect, useState } from 'react';
+import { readMcpServerDraft } from './mcpServerDraft';
 
-import { MCP_SERVER_TYPES } from '../../../shared/bridgeMessages';
-import type {
-  McpServerSummary,
-  McpServerType,
-  PluginSummary,
-  SkillSummary,
-} from '../../../shared/bridgeMessages';
+import { MCP_SERVER_TYPES } from '../../../shared/protocol/bounds';
+import {
+  type McpServerSummary,
+  type McpServerType,
+  type PluginSummary,
+  type SkillSummary,
+} from '../../../shared/protocol/settings';
 import {
   formatLabel,
   type McpAuthProgress,
@@ -119,11 +120,7 @@ export function SkillsPanel({
         {changed && onNewSession !== undefined ? (
           <>
             {' '}
-            <button
-              type="button"
-              className="dvx-skills-apply-new"
-              onClick={onNewSession}
-            >
+            <button type="button" className="dvx-skills-apply-new" onClick={onNewSession}>
               Start a new session
             </button>
           </>
@@ -218,8 +215,7 @@ export function McpPanel({
     }
   }, [mcp.status, onRefresh]);
   const authPending =
-    auth !== null &&
-    (auth.phase === 'started' || auth.phase === 'browser');
+    auth !== null && (auth.phase === 'started' || auth.phase === 'browser');
   return (
     <div className="dvx-skills-panel">
       <div className="dvx-panel-head">
@@ -289,9 +285,7 @@ export function McpPanel({
               server={server}
               auth={auth?.serverName === server.name ? auth : null}
               disabled={disabled}
-              pendingOp={
-                pending?.name === server.name ? pending.op : null
-              }
+              pendingOp={pending?.name === server.name ? pending.op : null}
               authDisabled={disabled || busy || authPending}
               onToggle={(name, enabled) => {
                 setPending({
@@ -334,50 +328,22 @@ function McpAddServerForm({
   const [name, setName] = useState('');
   const [serverType, setServerType] = useState<McpServerType>('stdio');
   const [target, setTarget] = useState('');
-  const trimmedName = name.trim();
-  const trimmedTarget = target.trim();
-  const targetValid =
-    serverType === 'stdio'
-      ? trimmedTarget.length > 0
-      : /^https?:\/\//.test(trimmedTarget);
-  const canSubmit =
-    !disabled && trimmedName.length > 0 && targetValid;
-  // Empty fields just keep the button disabled (quiet); a filled but
-  // malformed URL earns the one hint that explains the disabled state.
-  const shapeHint =
-    serverType !== 'stdio' && trimmedTarget.length > 0 && !targetValid
-      ? 'Enter a URL starting with http:// or https://.'
-      : null;
+  const { draft, targetHint: shapeHint } = readMcpServerDraft(name, serverType, target);
+  const canSubmit = !disabled && draft !== null;
   const submit = (): void => {
     if (!canSubmit) {
       return;
     }
-    if (serverType === 'stdio') {
-      const [command = '', ...args] = trimmedTarget.split(/\s+/);
-      onSubmit({
-        name: trimmedName,
-        serverType,
-        command,
-        ...(args.length > 0 ? { args } : {}),
-      });
-    } else {
-      onSubmit({ name: trimmedName, serverType, url: trimmedTarget });
-    }
+    onSubmit(draft);
   };
-  const submitOnEnter = (
-    event: React.KeyboardEvent<HTMLInputElement>,
-  ): void => {
+  const submitOnEnter = (event: React.KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === 'Enter') {
       event.preventDefault();
       submit();
     }
   };
   return (
-    <div
-      className="dvx-mcp-add-form"
-      role="form"
-      aria-label="Add MCP server"
-    >
+    <div className="dvx-mcp-add-form" role="form" aria-label="Add MCP server">
       <input
         className="dvx-mcp-add-input"
         type="text"
@@ -478,12 +444,11 @@ function McpServerRow({
           ? 'Removing…'
           : null;
   const authPending =
-    auth !== null &&
-    (auth.phase === 'started' || auth.phase === 'browser');
+    auth !== null && (auth.phase === 'started' || auth.phase === 'browser');
   const authStatusText =
     auth === null
       ? null
-      : auth.message ??
+      : (auth.message ??
         (auth.phase === 'started'
           ? 'Starting authentication…'
           : auth.phase === 'success'
@@ -492,7 +457,7 @@ function McpServerRow({
               ? 'Authentication was cancelled.'
               : auth.phase === 'failed'
                 ? 'Authentication failed.'
-                : null);
+                : null));
   return (
     <li className="dvx-skill-row dvx-mcp-row">
       <div className="dvx-skill-copy">
@@ -503,9 +468,7 @@ function McpServerRow({
             aria-hidden="true"
           />
           {server.name}
-          <span className="dvx-skill-location">
-            {formatLabel(server.status)}
-          </span>
+          <span className="dvx-skill-location">{formatLabel(server.status)}</span>
           {needsAuth ? (
             <span className="dvx-skill-location">needs auth</span>
           ) : server.requiresAuth ? (
@@ -530,8 +493,7 @@ function McpServerRow({
         {authStatusText !== null ? (
           <span
             className={`dvx-mcp-auth-status${
-              auth !== null &&
-              (auth.phase === 'failed' || auth.phase === 'error')
+              auth !== null && (auth.phase === 'failed' || auth.phase === 'error')
                 ? ' dvx-error-text'
                 : ''
             }`}
@@ -551,9 +513,7 @@ function McpServerRow({
               {expanded ? 'Hide tools' : `Show ${toolCount} tools`}
             </button>
           ) : (
-            <span className="dvx-skill-description">
-              {toolCount} tools
-            </span>
+            <span className="dvx-skill-description">{toolCount} tools</span>
           )}
           <button
             type="button"
@@ -582,15 +542,10 @@ function McpServerRow({
                   {tool.readOnly ? (
                     <span className="dvx-skill-location">read-only</span>
                   ) : null}
-                  {!tool.enabled ? (
-                    <span className="dvx-skill-location">off</span>
-                  ) : null}
+                  {!tool.enabled ? <span className="dvx-skill-location">off</span> : null}
                 </span>
                 {tool.description !== null ? (
-                  <span
-                    className="dvx-skill-description"
-                    title={tool.description}
-                  >
+                  <span className="dvx-skill-description" title={tool.description}>
                     {tool.description}
                   </span>
                 ) : null}
@@ -690,9 +645,7 @@ export function PluginsPanel({
       <p className="dvx-popover-message dvx-skills-session-note">
         {plugins.status === 'ready'
           ? `${plugins.marketplaceCount} ${
-              plugins.marketplaceCount === 1
-                ? 'marketplace'
-                : 'marketplaces'
+              plugins.marketplaceCount === 1 ? 'marketplace' : 'marketplaces'
             } registered. `
           : ''}
         Manage plugins with the droid CLI.
@@ -701,11 +654,7 @@ export function PluginsPanel({
   );
 }
 
-function PluginRow({
-  plugin,
-}: {
-  readonly plugin: PluginSummary;
-}): React.JSX.Element {
+function PluginRow({ plugin }: { readonly plugin: PluginSummary }): React.JSX.Element {
   return (
     <li className="dvx-skill-row">
       <div className="dvx-skill-copy">
@@ -717,21 +666,14 @@ function PluginRow({
           {plugin.version}
         </span>
       </div>
-      <span className="dvx-popover-row-value">
-        {plugin.active ? 'Active' : 'Off'}
-      </span>
+      <span className="dvx-popover-row-value">{plugin.active ? 'Active' : 'Off'}</span>
     </li>
   );
 }
 
 function ChevronLeftIcon(): React.JSX.Element {
   return (
-    <svg
-      className="dvx-chevron-left"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg className="dvx-chevron-left" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path
         d="m9.5 4.5-3.5 3.5 3.5 3.5"
         stroke="currentColor"

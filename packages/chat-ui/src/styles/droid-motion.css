@@ -1,0 +1,106 @@
+@layer components {
+  .droid-activity {
+    --droid-cycle: 1440ms;
+    display: inline-grid;
+    width: 13px;
+    height: 13px;
+    flex: none;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 2px;
+    color: var(--muted-ink);
+    vertical-align: middle;
+  }
+  .droid-pixel {
+    border-radius: 1px;
+    background: currentColor;
+    opacity: .35;
+    animation: droid-pixel-travel var(--droid-cycle) ease-in-out infinite;
+    animation-delay: calc(var(--droid-step) * 120ms - 1440ms);
+  }
+  .droid-activity[data-phase='thinking'] { --droid-cycle: 2600ms; }
+  .droid-activity[data-phase='thinking'] .droid-pixel {
+    animation-name: droid-pixel-think;
+    animation-delay: calc(var(--droid-step) * 80ms - 2600ms);
+  }
+  .droid-activity[data-phase='loading'] { --droid-cycle: 1800ms; }
+  .droid-activity-large { width: 32px; height: 32px; gap: 4px; }
+  .droid-activity-large .droid-pixel { border-radius: 2px; }
+  @keyframes droid-pixel-travel {
+    0%, 65%, 100% { opacity: .28; transform: scale(.78); }
+    22% { opacity: 1; transform: scale(1); }
+    42% { opacity: .6; transform: scale(.9); }
+  }
+  @keyframes droid-pixel-think {
+    0%, 100% { opacity: .35; transform: scale(.82); }
+    45%, 55% { opacity: .85; transform: scale(1); }
+  }
+  .droid-connection-dot {
+    position: relative;
+    display: block;
+    width: 5px;
+    height: 5px;
+    flex: none;
+    border-radius: 50%;
+    color: var(--muted-ink);
+    background: currentColor;
+  }
+  .droid-connection-dot[data-state='connected'] {
+    color: var(--vscode-testing-iconPassed, #3f9d5f);
+    animation: droid-connected-breathe 3600ms ease-in-out infinite;
+  }
+  .droid-connection-dot[data-state='connecting'] {
+    color: var(--vscode-charts-yellow, #cca700);
+    animation: droid-connecting 1600ms ease-in-out infinite;
+  }
+  .droid-connection-dot[data-state='unavailable'] { color: var(--error-ink); }
+  .droid-connection-dot[data-working='true'] { animation: none; }
+  .droid-connection-dot[data-working='true']::after {
+    position: absolute;
+    inset: -2px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    content: '';
+    animation: droid-connection-wave 2000ms ease-out infinite;
+  }
+  @keyframes droid-connected-breathe {
+    0%, 100% { opacity: .7; }
+    50% { opacity: 1; }
+  }
+  @keyframes droid-connecting {
+    0%, 100% { opacity: .35; transform: scale(.85); }
+    50% { opacity: 1; transform: scale(1); }
+  }
+  @keyframes droid-connection-wave {
+    0% { opacity: .5; transform: scale(.65); }
+    75%, 100% { opacity: 0; transform: scale(1.55); }
+  }
+  .droid-loading {
+    display: flex;
+    min-width: 0;
+    min-height: 160px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 24px 12px;
+    text-align: center;
+    animation: droid-loading-enter 200ms ease-out;
+  }
+  .droid-loading-copy { display: grid; max-width: 320px; gap: 6px; }
+  .droid-loading-label { margin: 0; color: var(--ink); font-size: 13px; font-weight: 500; line-height: 20px; }
+  .droid-loading-detail { margin: 0; color: var(--muted-ink); font-size: 11px; line-height: 17px; }
+  @keyframes droid-loading-enter {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .droid-pixel, .droid-connection-dot, .droid-connection-dot::after, .droid-loading {
+      animation: none !important;
+      transform: none;
+    }
+    .droid-pixel { opacity: .65; }
+    .droid-pixel:nth-child(5), .droid-connection-dot { opacity: 1; }
+    .droid-connection-dot::after { display: none; }
+  }
+}

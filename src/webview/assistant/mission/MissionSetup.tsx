@@ -1,7 +1,6 @@
 import {
   useEffect,
   useId,
-  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -9,88 +8,16 @@ import {
 
 import {
   MAX_MISSION_TASK_LENGTH,
-  isMissionTaskText,
-  missionPairError,
-  resolveMissionProfile,
   type MissionProfile,
   type MissionReasoningEffort,
   type MissionSetupCapabilities,
-} from '../../../shared/missionProtocol';
-import type { MissionSetupSubmission } from './missionStart';
-
-export interface MissionSetupResult {
-  readonly requestId: string;
-  readonly status: 'accepted' | 'rejected';
-}
-
-interface MissionSetupProps {
-  readonly capabilities: MissionSetupCapabilities;
-  readonly initialTask: string;
-  readonly onStart: (submission: MissionSetupSubmission) => string | null;
-  readonly onDismiss: () => void;
-  readonly result?: MissionSetupResult | null;
-  readonly startDisabled?: boolean;
-}
-
-interface Pair {
-  readonly modelId: string;
-  readonly reasoningEffort: MissionReasoningEffort;
-}
+} from '../../../shared/protocol/missionProtocol';
+import { useMissionSetupFlow, type MissionSetupProps, type MissionPair as Pair } from './missionSetupFlow';
+export { createMissionSetupSubmission, validateMissionSetupSubmission, type MissionSetupResult } from './missionSetupFlow';
 
 interface MissionSelectOption {
   readonly value: string;
   readonly label: string;
-}
-
-interface Validation {
-  readonly errors: readonly string[];
-  readonly submission: MissionSetupSubmission;
-}
-
-export function createMissionSetupSubmission(
-  capabilities: MissionSetupCapabilities,
-  task: string,
-): MissionSetupSubmission {
-  const orchestrator = capabilities.currentChat;
-  return {
-    task: task.trim(),
-    orchestrator,
-    worker: resolveMissionProfile(capabilities.preferences.worker, orchestrator),
-    validator: resolveMissionProfile(
-      capabilities.preferences.validator,
-      orchestrator,
-    ),
-    scrutinyEnabled: capabilities.preferences.scrutinyEnabled,
-    userTestingEnabled: capabilities.preferences.userTestingEnabled,
-  };
-}
-
-export function validateMissionSetupSubmission(
-  capabilities: MissionSetupCapabilities,
-  submission: MissionSetupSubmission,
-): readonly string[] {
-  const errors: string[] = [];
-  if (submission.task.length === 0) {
-    errors.push('Enter a Mission task.');
-  } else if (submission.task.length > MAX_MISSION_TASK_LENGTH) {
-    errors.push('The Mission task is too long.');
-  } else if (!isMissionTaskText(submission.task)) {
-    errors.push(
-      'The Mission task contains unsupported control characters or a filesystem path.',
-    );
-  }
-  if (capabilities.catalogStatus !== 'ready') {
-    errors.push('The Mission model catalog is unavailable.');
-  }
-  validatePair(
-    'Orchestrator',
-    submission.orchestrator,
-    capabilities,
-    errors,
-  );
-  validatePair('Worker', submission.worker, capabilities, errors);
-  validatePair('Validator', submission.validator, capabilities, errors);
-  return errors;
 }
 
 export function MissionSetup({
@@ -101,39 +28,12 @@ export function MissionSetup({
   result = null,
   startDisabled = false,
 }: MissionSetupProps): React.JSX.Element {
-  const [task, setTask] = useState(initialTask);
-  const [orchestrator, setOrchestrator] = useState<Pair>(
-    capabilities.currentChat,
-  );
-  const [worker, setWorker] = useState<MissionProfile>(
-    capabilities.preferences.worker,
-  );
-  const [validator, setValidator] = useState<MissionProfile>(
-    capabilities.preferences.validator,
-  );
-  const [scrutinyEnabled, setScrutinyEnabled] = useState(
-    capabilities.preferences.scrutinyEnabled,
-  );
-  const [userTestingEnabled, setUserTestingEnabled] = useState(
-    capabilities.preferences.userTestingEnabled,
-  );
+  const { task, setTask, orchestrator, setOrchestrator, worker, setWorker, validator, setValidator,
+    scrutinyEnabled, setScrutinyEnabled, userTestingEnabled, setUserTestingEnabled,
+    pending, controlsDisabled, visibleErrors, status, enabledValidationCount, validation, submit } =
+    useMissionSetupFlow({ capabilities, initialTask, onStart, onDismiss, result, startDisabled });
   const [advanced, setAdvanced] = useState(false);
   const [advancedMounted, setAdvancedMounted] = useState(false);
-  const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
-  const [settlement, setSettlement] = useState('');
-
-  useEffect(() => {
-    if (
-      pendingRequestId !== null &&
-      result?.requestId === pendingRequestId &&
-      result.status === 'rejected'
-    ) {
-      setPendingRequestId(null);
-      setSettlement(
-        'Mission could not start. Review the unchanged settings and try again.',
-      );
-    }
-  }, [pendingRequestId, result]);
 
   useEffect(() => {
     if (advanced || !advancedMounted) {
@@ -149,49 +49,6 @@ export function MissionSetup({
     return () => window.clearTimeout(timer);
   }, [advanced, advancedMounted]);
 
-  const validation = useMemo<Validation>(() => {
-    const submission: MissionSetupSubmission = {
-      task: task.trim(),
-      orchestrator,
-      worker: resolveMissionProfile(worker, orchestrator),
-      validator: resolveMissionProfile(validator, orchestrator),
-      scrutinyEnabled,
-      userTestingEnabled,
-    };
-    return {
-      submission,
-      errors: validateMissionSetupSubmission(capabilities, submission),
-    };
-  }, [
-    capabilities,
-    orchestrator,
-    scrutinyEnabled,
-    task,
-    userTestingEnabled,
-    validator,
-    worker,
-  ]);
-  const pending = pendingRequestId !== null;
-  const controlsDisabled = pending;
-  const visibleErrors = validation.errors.filter(
-    (error) => error !== 'Enter a Mission task.',
-  );
-  const status = visibleErrors.length > 0
-    ? visibleErrors.join(' ')
-    : settlement;
-  const enabledValidationCount =
-    Number(scrutinyEnabled) + Number(userTestingEnabled);
-
-  const submit = (): void => {
-    if (pending || startDisabled || validation.errors.length > 0) {
-      return;
-    }
-    const requestId = onStart(validation.submission);
-    if (requestId !== null) {
-      setSettlement('Starting Mission…');
-      setPendingRequestId(requestId);
-    }
-  };
 
   return (
     <section className="dvx-mission-setup" aria-labelledby="dvx-mission-title">
@@ -268,10 +125,7 @@ export function MissionSetup({
           label="Orchestrator"
           detail={`${readModelLabel(capabilities, orchestrator.modelId)} · ${formatEffort(orchestrator.reasoningEffort)}`}
         />
-        <ExecutionStep
-          label="Worker"
-          detail={readProfileSummary(capabilities, worker)}
-        />
+        <ExecutionStep label="Worker" detail={readProfileSummary(capabilities, worker)} />
         <ExecutionStep
           label="Validation"
           detail={`${enabledValidationCount} ${enabledValidationCount === 1 ? 'check' : 'checks'} enabled`}
@@ -298,7 +152,9 @@ export function MissionSetup({
         <span className="dvx-mission-advanced-hint">
           Worker, Validator, and quality checks
         </span>
-        <span className="dvx-mission-chevron" aria-hidden="true">›</span>
+        <span className="dvx-mission-chevron" aria-hidden="true">
+          ›
+        </span>
       </button>
 
       {advancedMounted ? (
@@ -325,9 +181,7 @@ export function MissionSetup({
             />
             <fieldset className="dvx-mission-quality">
               <legend>Validation checks</legend>
-              <p>
-                Both checks use the shared Validator profile configured above.
-              </p>
+              <p>Both checks use the shared Validator profile configured above.</p>
               <MissionToggle
                 label="Run Scrutiny"
                 description="Review the completed feature for implementation risks."
@@ -432,9 +286,7 @@ function ProfileFields({
             pair={profile}
             capabilities={capabilities}
             disabled={disabled}
-            onChange={(reasoningEffort) =>
-              onChange({ ...profile, reasoningEffort })
-            }
+            onChange={(reasoningEffort) => onChange({ ...profile, reasoningEffort })}
           />
         </div>
       )}
@@ -555,9 +407,7 @@ export function CompactSelect({
     const triggerBounds = triggerRef.current?.getBoundingClientRect();
     if (triggerBounds) {
       const spaceBelow = window.innerHeight - triggerBounds.bottom;
-      setPlacement(
-        spaceBelow < 164 && triggerBounds.top > spaceBelow ? 'top' : 'bottom',
-      );
+      setPlacement(spaceBelow < 164 && triggerBounds.top > spaceBelow ? 'top' : 'bottom');
     }
     setActiveIndex(index);
     setOpen(true);
@@ -582,10 +432,7 @@ export function CompactSelect({
         }
         return;
       }
-      if (
-        event.target instanceof Node &&
-        !rootRef.current?.contains(event.target)
-      ) {
+      if (event.target instanceof Node && !rootRef.current?.contains(event.target)) {
         closeMenu();
       }
     };
@@ -618,9 +465,7 @@ export function CompactSelect({
     closeMenu(true);
   };
 
-  const handleKeyDown = (
-    event: ReactKeyboardEvent<HTMLButtonElement>,
-  ): void => {
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>): void => {
     const lastIndex = options.length - 1;
     if (lastIndex < 0) {
       return;
@@ -662,8 +507,7 @@ export function CompactSelect({
         const nextTarget = event.relatedTarget;
         if (
           open &&
-          (!(nextTarget instanceof Node) ||
-            !event.currentTarget.contains(nextTarget))
+          (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget))
         ) {
           closeMenu();
         }
@@ -680,9 +524,7 @@ export function CompactSelect({
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={open ? listboxId : undefined}
-          aria-activedescendant={
-            open ? `${listboxId}-option-${activeIndex}` : undefined
-          }
+          aria-activedescendant={open ? `${listboxId}-option-${activeIndex}` : undefined}
           disabled={disabled || options.length === 0}
           onClick={() => {
             if (open) {
@@ -784,26 +626,10 @@ function readProfileSummary(
     : `${readModelLabel(capabilities, profile.modelId)} · ${formatEffort(profile.reasoningEffort)}`;
 }
 
-function readModelLabel(
-  capabilities: MissionSetupCapabilities,
-  modelId: string,
-): string {
-  return capabilities.catalog.find((model) => model.id === modelId)
-    ?.displayName ?? modelId;
-}
-
-function validatePair(
-  label: string,
-  pair: Pair,
-  capabilities: MissionSetupCapabilities,
-  errors: string[],
-): void {
-  const error = missionPairError(pair, capabilities.catalog);
-  if (error === 'unavailable-model') {
-    errors.push(`The ${label} model is unavailable.`);
-  } else if (error === 'unsupported-reasoning') {
-    errors.push(`The ${label} reasoning is unavailable for this model.`);
-  }
+function readModelLabel(capabilities: MissionSetupCapabilities, modelId: string): string {
+  return (
+    capabilities.catalog.find((model) => model.id === modelId)?.displayName ?? modelId
+  );
 }
 
 function formatEffort(value: string): string {

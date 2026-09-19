@@ -4,18 +4,17 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   MAX_ASSISTANT_TEXT_LENGTH,
-  MAX_BRIDGE_ID_LENGTH,
-  MAX_SESSION_TRANSCRIPT_ITEMS,
   MAX_THINKING_TEXT_LENGTH,
   MAX_TOOL_NAME_LENGTH,
   MAX_TURN_TEXT_LENGTH,
+} from '../../shared/protocol/bounds';
+import {
+  MAX_BRIDGE_ID_LENGTH,
+  MAX_SESSION_TRANSCRIPT_ITEMS,
 } from '../../shared/bridgeMessages';
 import { FactorySessionHistoryLoader } from './FactorySessionHistoryLoader';
 import { SESSION_HISTORY_UNAVAILABLE_MESSAGE } from './SessionHistory';
-import {
-  projectSessionHistory,
-  projectSessionMessages,
-} from './projectSessionHistory';
+import { projectSessionHistory, projectSessionMessages } from './projectSessionHistory';
 
 describe('projectSessionHistory', () => {
   it('reconstructs answered and cancelled AskUser results from public tool history', () => {
@@ -48,8 +47,7 @@ describe('projectSessionHistory', () => {
                 type: 'tool_result',
                 toolUseId: 'ask-1',
                 isError: false,
-                content:
-                  '[question] Which library?\n[answer] React',
+                content: '[question] Which library?\n[answer] React',
               },
               {
                 type: 'tool_result',
@@ -68,18 +66,18 @@ describe('projectSessionHistory', () => {
       return;
     }
     expect(
-      result.state.transcript.filter(
-        ({ kind }) => kind === 'ask-user-result',
-      ),
+      result.state.transcript.filter(({ kind }) => kind === 'ask-user-result'),
     ).toEqual([
       expect.objectContaining({
         kind: 'ask-user-result',
         status: 'answered',
-        answers: [{
-          topic: 'Library',
-          question: 'Which library?\nPlease consider the existing application.',
-          answer: 'React',
-        }],
+        answers: [
+          {
+            topic: 'Library',
+            question: 'Which library?\nPlease consider the existing application.',
+            answer: 'React',
+          },
+        ],
       }),
       expect.objectContaining({
         kind: 'ask-user-result',
@@ -90,9 +88,7 @@ describe('projectSessionHistory', () => {
 
   it('projects a public daemon message snapshot through the same path', () => {
     const result = projectSessionMessages([
-      message('user-live', 'user', [
-        { type: 'text', text: 'Inspect live state' },
-      ]),
+      message('user-live', 'user', [{ type: 'text', text: 'Inspect live state' }]),
       message('assistant-live', 'assistant', [
         { type: 'text', text: 'First complete message' },
       ]),
@@ -114,9 +110,7 @@ describe('projectSessionHistory', () => {
 
   it('projects visible text, thinking, and safe tool lifecycle in order', () => {
     const loaded = response([
-      message('raw-user-id', 'user', [
-        { type: 'text', text: 'Question' },
-      ]),
+      message('raw-user-id', 'user', [{ type: 'text', text: 'Question' }]),
       message('raw-assistant-id', 'assistant', [
         {
           type: 'thinking',
@@ -215,15 +209,12 @@ describe('projectSessionHistory', () => {
           { kind: 'tool', toolName: 'Read' },
           {
             kind: 'changes',
-            files: [
-              { path: 'src/app.ts', additions: null, deletions: null },
-            ],
+            files: [{ path: 'src/app.ts', additions: null, deletions: null }],
           },
         ],
       },
     });
-    const transcript =
-      result.status === 'available' ? result.state.transcript : [];
+    const transcript = result.status === 'available' ? result.state.transcript : [];
     expect(transcript[1]).not.toHaveProperty('filePath');
     expect(transcript[2]).not.toHaveProperty('filePath');
     expect(transcript[2]).toMatchObject({ target: 'src/app.ts' });
@@ -307,8 +298,7 @@ describe('projectSessionHistory', () => {
         ],
       },
     });
-    const transcript =
-      result.status === 'available' ? result.state.transcript : [];
+    const transcript = result.status === 'available' ? result.state.transcript : [];
     expect(transcript[1]).not.toHaveProperty('backgroundHint');
     expect(transcript[2]).not.toHaveProperty('backgroundHint');
   });
@@ -325,9 +315,7 @@ describe('projectSessionHistory', () => {
         },
         { type: 'text', text: 'First turn summary.' },
       ]),
-      message('user-1', 'user', [
-        { type: 'text', text: 'Next question' },
-      ]),
+      message('user-1', 'user', [{ type: 'text', text: 'Next question' }]),
       message('assistant-2', 'assistant', [
         {
           type: 'tool_use',
@@ -348,8 +336,7 @@ describe('projectSessionHistory', () => {
       workspaceRoot: root,
     });
     expect(result.status).toBe('available');
-    const transcript =
-      result.status === 'available' ? result.state.transcript : [];
+    const transcript = result.status === 'available' ? result.state.transcript : [];
     const kinds = transcript.map((item) => item.kind);
     expect(kinds).toEqual([
       'tool',
@@ -360,9 +347,7 @@ describe('projectSessionHistory', () => {
       'tool',
       'changes',
     ]);
-    const summaries = transcript.filter(
-      (item) => item.kind === 'changes',
-    );
+    const summaries = transcript.filter((item) => item.kind === 'changes');
     expect(summaries[0]).toMatchObject({
       files: [{ path: 'src/a.ts', additions: null, deletions: null }],
     });
@@ -426,14 +411,10 @@ describe('projectSessionHistory', () => {
   it('omits hidden content and marks visible attachment omissions partial', () => {
     const loaded = response([
       {
-        ...message('system', 'system', [
-          { type: 'text', text: 'system secret' },
-        ]),
+        ...message('system', 'system', [{ type: 'text', text: 'system secret' }]),
       },
       {
-        ...message('llm-only', 'assistant', [
-          { type: 'text', text: 'llm secret' },
-        ]),
+        ...message('llm-only', 'assistant', [{ type: 'text', text: 'llm secret' }]),
         visibility: 'llm_only',
       },
       {
@@ -443,15 +424,11 @@ describe('projectSessionHistory', () => {
         isUserVisible: false,
       },
       {
-        ...message('hidden', 'assistant', [
-          { type: 'text', text: 'hidden secret' },
-        ]),
+        ...message('hidden', 'assistant', [{ type: 'text', text: 'hidden secret' }]),
         hiddenFromUserViews: true,
       },
       {
-        ...message('hook', 'assistant', [
-          { type: 'text', text: 'hook secret' },
-        ]),
+        ...message('hook', 'assistant', [{ type: 'text', text: 'hook secret' }]),
         hookEventName: 'SessionStart',
       },
       message('visible', 'assistant', [
@@ -501,10 +478,7 @@ describe('projectSessionHistory', () => {
           type: 'tool_result',
           toolUseId: 'raw-tool-id',
           isError: false,
-          content: [
-            { type: 'text', text: 'took screenshot' },
-            image('c2NyZWVu'),
-          ],
+          content: [{ type: 'text', text: 'took screenshot' }, image('c2NyZWVu')],
         },
       ]),
     ]);
@@ -626,13 +600,11 @@ describe('projectSessionHistory', () => {
           { type: 'text', text: 'First visible block' },
           {
             type: 'text',
-            text:
-              '<system-notification>second secret</system-notification>',
+            text: '<system-notification>second secret</system-notification>',
           },
           {
             type: 'text',
-            text:
-              '<system-reminder>third secret</system-reminder>Second visible block',
+            text: '<system-reminder>third secret</system-reminder>Second visible block',
           },
         ]),
       ]),
@@ -724,9 +696,7 @@ describe('projectSessionHistory', () => {
       state: {
         historyStatus: 'complete',
         truncated: false,
-        transcript: [
-          { kind: 'user', text: 'Visible after hidden span' },
-        ],
+        transcript: [{ kind: 'user', text: 'Visible after hidden span' }],
       },
     });
     const serialized = JSON.stringify(result);
@@ -796,9 +766,7 @@ describe('projectSessionHistory', () => {
     if (result.status !== 'available') {
       throw new Error('Expected projected history.');
     }
-    expect(result.state.transcript).toHaveLength(
-      MAX_SESSION_TRANSCRIPT_ITEMS,
-    );
+    expect(result.state.transcript).toHaveLength(MAX_SESSION_TRANSCRIPT_ITEMS);
     expect(result.state).toMatchObject({
       historyStatus: 'partial',
       truncated: true,
@@ -806,23 +774,15 @@ describe('projectSessionHistory', () => {
     for (const item of result.state.transcript) {
       expect(item.id.length).toBeLessThanOrEqual(MAX_BRIDGE_ID_LENGTH);
       if ('turnId' in item && typeof item.turnId === 'string') {
-        expect(item.turnId.length).toBeLessThanOrEqual(
-          MAX_BRIDGE_ID_LENGTH,
-        );
+        expect(item.turnId.length).toBeLessThanOrEqual(MAX_BRIDGE_ID_LENGTH);
       }
       if (item.kind === 'tool') {
-        expect(item.toolUseId.length).toBeLessThanOrEqual(
-          MAX_BRIDGE_ID_LENGTH,
-        );
-        expect(item.toolName.length).toBeLessThanOrEqual(
-          MAX_TOOL_NAME_LENGTH,
-        );
+        expect(item.toolUseId.length).toBeLessThanOrEqual(MAX_BRIDGE_ID_LENGTH);
+        expect(item.toolName.length).toBeLessThanOrEqual(MAX_TOOL_NAME_LENGTH);
       }
     }
     expect(
-      result.state.transcript.find(
-        (item) => item.kind === 'assistant',
-      ),
+      result.state.transcript.find((item) => item.kind === 'assistant'),
     ).toMatchObject({
       text: 'a'.repeat(MAX_ASSISTANT_TEXT_LENGTH),
     });
@@ -891,9 +851,7 @@ describe('projectSessionHistory', () => {
           {
             id: 'message',
             role: 'user',
-            content: [
-              Object.assign([], { type: 'text', text: 'hidden' }),
-            ],
+            content: [Object.assign([], { type: 'text', text: 'hidden' })],
           },
         ]),
       ),
@@ -912,12 +870,8 @@ describe('projectSessionHistory', () => {
       message('old-tool-message', 'assistant', [
         { type: 'tool_use', id: 'shared-tool-id', name: 'OldTool' },
       ]),
-      ...Array.from(
-        { length: MAX_SESSION_TRANSCRIPT_ITEMS },
-        (_, index) =>
-          message(`filler-${index}`, 'user', [
-            { type: 'text', text: `Filler ${index}` },
-          ]),
+      ...Array.from({ length: MAX_SESSION_TRANSCRIPT_ITEMS }, (_, index) =>
+        message(`filler-${index}`, 'user', [{ type: 'text', text: `Filler ${index}` }]),
       ),
       message('new-tool-message', 'assistant', [
         { type: 'tool_use', id: 'shared-tool-id', name: 'NewTool' },
@@ -943,12 +897,8 @@ describe('projectSessionHistory', () => {
     if (result.status !== 'available') {
       throw new Error('Expected projected history.');
     }
-    expect(result.state.transcript).toHaveLength(
-      MAX_SESSION_TRANSCRIPT_ITEMS,
-    );
-    expect(
-      result.state.transcript.filter((item) => item.kind === 'tool'),
-    ).toMatchObject([
+    expect(result.state.transcript).toHaveLength(MAX_SESSION_TRANSCRIPT_ITEMS);
+    expect(result.state.transcript.filter((item) => item.kind === 'tool')).toMatchObject([
       { toolName: 'NewTool', status: 'completed' },
       { toolName: 'Check', status: 'failed' },
     ]);
@@ -1012,9 +962,7 @@ describe('projectSessionHistory', () => {
     if (result.status !== 'available') {
       throw new Error('Expected projected history.');
     }
-    expect(
-      result.state.transcript.filter((item) => item.kind === 'tool'),
-    ).toMatchObject([
+    expect(result.state.transcript.filter((item) => item.kind === 'tool')).toMatchObject([
       {
         toolName: 'Task',
         subagent: {
@@ -1052,9 +1000,7 @@ describe('projectSessionHistory', () => {
       },
       { toolName: 'Read' },
     ]);
-    const tools = result.state.transcript.filter(
-      (item) => item.kind === 'tool',
-    );
+    const tools = result.state.transcript.filter((item) => item.kind === 'tool');
     expect(
       tools[3] !== undefined &&
         'subagent' in tools[3] &&
@@ -1091,9 +1037,7 @@ describe('projectSessionHistory', () => {
 
     const plain = projectSessionHistory(response([]));
     expect(plain.status).toBe('available');
-    expect(
-      plain.status === 'available' && 'mission' in plain,
-    ).toBe(false);
+    expect(plain.status === 'available' && 'mission' in plain).toBe(false);
   });
 
   it('projects the cumulative session token usage from the load envelope', () => {
@@ -1106,21 +1050,20 @@ describe('projectSessionHistory', () => {
       thinkingTokens: 62,
       factoryCredits: 0,
     };
-    expect(
-      projectSessionHistory(responseWith([], { tokenUsage: usage })),
-    ).toMatchObject({ status: 'available', tokenUsage: usage });
+    expect(projectSessionHistory(responseWith([], { tokenUsage: usage }))).toMatchObject({
+      status: 'available',
+      tokenUsage: usage,
+    });
 
     const withoutUsage = projectSessionHistory(response([]));
-    expect(
-      withoutUsage.status === 'available' && 'tokenUsage' in withoutUsage,
-    ).toBe(false);
+    expect(withoutUsage.status === 'available' && 'tokenUsage' in withoutUsage).toBe(
+      false,
+    );
 
     const malformed = projectSessionHistory(
       responseWith([], { tokenUsage: { inputTokens: 'many' } }),
     );
-    expect(
-      malformed.status === 'available' && 'tokenUsage' in malformed,
-    ).toBe(false);
+    expect(malformed.status === 'available' && 'tokenUsage' in malformed).toBe(false);
   });
 });
 
@@ -1151,11 +1094,7 @@ describe('FactorySessionHistoryLoader', () => {
       status: 'available',
       state: { historyStatus: 'complete', transcript: [] },
     });
-    expect(calls).toEqual([
-      'create:C:\\workspace',
-      'load:saved-session',
-      'close',
-    ]);
+    expect(calls).toEqual(['create:C:\\workspace', 'load:saved-session', 'close']);
     expect(client.loadSession).toHaveBeenCalledWith({
       sessionId: 'saved-session',
     });

@@ -9,7 +9,8 @@
   pointer-events: none;
 }
 
-.dvx-thread:has(> .dvx-question-nav) .dvx-reading-column {
+.dvx-thread:has(> .dvx-question-nav) .dvx-reading-column,
+.dvx-thread:has(> .dvx-question-nav) .dvx-pinned-user-layer {
   padding-right: calc(var(--dvx-column-pad) + 10px);
 }
 

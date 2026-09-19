@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import type { MissionSnapshotMessage } from '../../../shared/missionProtocol';
+import type { MissionSnapshotMessage } from '../../../shared/protocol/missionProtocol';
 import type { MissionUiCommand } from './useMissionControl';
 
 export function MissionControl({
@@ -35,7 +35,9 @@ export function MissionControl({
           <strong>{snapshot.title ?? 'Mission'}</strong>
           <small>{`${phase} · ${completed}/${total} features`}</small>
         </span>
-        <span aria-hidden="true" className="dvx-mission-chevron">›</span>
+        <span aria-hidden="true" className="dvx-mission-chevron">
+          ›
+        </span>
       </button>
       {expanded ? (
         <div className="dvx-mission-control-body">

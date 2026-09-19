@@ -1,1 +1,1 @@
-export { isValidToolTarget } from '../../shared/validateToolTarget';
+export { isValidToolTarget } from '../../shared/validation/validateToolTarget';

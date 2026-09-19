@@ -1,9 +1,9 @@
 import {
   BRIDGE_PROTOCOL_VERSION,
   type HostToWebviewMessage,
-  type ThemePreference,
   type WebviewToHostMessage,
 } from '../../shared/bridgeMessages';
+import { type ThemePreference } from '../../shared/protocol/shell';
 import {
   getStudioScenario,
   isStudioScenarioId,
@@ -11,8 +11,7 @@ import {
 } from './scenarios';
 
 export const STUDIO_VIEWPORT_WIDTHS = [320, 400, 480, 760] as const;
-export type StudioViewportWidth =
-  (typeof STUDIO_VIEWPORT_WIDTHS)[number];
+export type StudioViewportWidth = (typeof STUDIO_VIEWPORT_WIDTHS)[number];
 
 export interface StudioConfig {
   readonly scenario: StudioScenarioId;
@@ -64,14 +63,10 @@ export function parseStudioConfig(search: string): StudioConfig {
           ? 'long-history'
           : DEFAULT_CONFIG.scenario,
     theme:
-      themeValue === 'light' ||
-      themeValue === 'dark' ||
-      themeValue === 'auto'
+      themeValue === 'light' || themeValue === 'dark' || themeValue === 'auto'
         ? themeValue
         : DEFAULT_CONFIG.theme,
-    width: isStudioViewportWidth(widthValue)
-      ? widthValue
-      : DEFAULT_CONFIG.width,
+    width: isStudioViewportWidth(widthValue) ? widthValue : DEFAULT_CONFIG.width,
   };
 }
 
@@ -172,31 +167,23 @@ export function createStudioRuntime(
   return runtime;
 }
 
-export function isStudioViewportWidth(
-  value: number,
-): value is StudioViewportWidth {
+export function isStudioViewportWidth(value: number): value is StudioViewportWidth {
   return (STUDIO_VIEWPORT_WIDTHS as readonly number[]).includes(value);
 }
 
-export function assertStudioScenario(
-  value: string,
-): asserts value is StudioScenarioId {
+export function assertStudioScenario(value: string): asserts value is StudioScenarioId {
   if (!isStudioScenarioId(value)) {
     throw new Error(`Unknown DroidVisX Studio scenario: ${value}`);
   }
 }
 
-export function assertStudioTheme(
-  value: string,
-): asserts value is ThemePreference {
+export function assertStudioTheme(value: string): asserts value is ThemePreference {
   if (value !== 'auto' && value !== 'light' && value !== 'dark') {
     throw new Error(`Unknown DroidVisX Studio theme: ${value}`);
   }
 }
 
-export function assertStudioWidth(
-  value: number,
-): asserts value is StudioViewportWidth {
+export function assertStudioWidth(value: number): asserts value is StudioViewportWidth {
   if (!isStudioViewportWidth(value)) {
     throw new Error(`Unsupported DroidVisX Studio width: ${value}`);
   }

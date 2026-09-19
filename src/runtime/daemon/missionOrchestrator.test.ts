@@ -1,4 +1,5 @@
-import type { ConnectedDroid } from '@factory/droid-sdk';
+import type { DaemonApi } from './api';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -13,7 +14,7 @@ describe('createMissionOrchestrator', () => {
     expect(first).not.toBe(second);
 
     const create = vi.fn(async () => ({ id: 'mission-session-1' }));
-    const droid = { sessions: { create } } as unknown as ConnectedDroid;
+    const droid = { sessions: { create } } as unknown as DaemonApi;
 
     await createMissionOrchestrator({
       droid,
