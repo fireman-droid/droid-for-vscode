@@ -59,26 +59,29 @@ export function ComposerView({
     const element = input.current;
     if (element === null) return;
     const row = element.parentElement!;
+    let rowWidth = 0;
+    let inputWidth = 0;
     const resize = () => {
-      const { multiline, height } = measureComposerInput(row, element);
+      const { multiline, height, scrollable } = measureComposerInput(row, element);
       const previousHeight = element.getBoundingClientRect().height;
       const previousMultiline = row.dataset.multiline === 'true';
       if (row.dataset.multiline !== String(multiline)) row.dataset.multiline = String(multiline);
       if (element.style.height !== `${height}px`) element.style.height = `${height}px`;
+      element.style.overflowY = scrollable ? 'auto' : 'hidden';
+      rowWidth = row.getBoundingClientRect().width;
+      inputWidth = element.getBoundingClientRect().width;
       if (previousMultiline !== multiline || Math.abs(previousHeight - height) > 0.5)
         onLayout?.({ width: row.clientWidth, previousHeight, height, previousMultiline, multiline });
     };
     resize();
-    let width = row.getBoundingClientRect().width;
     const observer = new ResizeObserver(() => {
-      const nextWidth = row.getBoundingClientRect().width;
-      if (nextWidth === width) return;
-      width = nextWidth;
+      if (row.getBoundingClientRect().width === rowWidth && element.getBoundingClientRect().width === inputWidth) return;
       resize();
     });
     observer.observe(row);
+    observer.observe(element);
     return () => observer.disconnect();
-  }, [value, inputReplacement, onLayout]);
+  }, [value, inputReplacement, placeholder, assistantName, onLayout]);
   const submit = () => { if (!sendDisabled) onSend(); };
   const editor = inputReplacement ?? <Textarea variant="plain" ref={input} data-composer-input="" aria-label={`Message ${assistantName}`}
     aria-autocomplete={suggestionsListId ? 'list' : undefined}
@@ -91,7 +94,7 @@ export function ComposerView({
       if (event.defaultPrevented) return;
       if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); }
     }}
-    onPaste={onPaste} className="min-h-[18px] max-h-42 resize-none rounded-none border-0 bg-transparent p-0 text-[13px] leading-[18px] focus-visible:ring-0" />;
+    onPaste={onPaste} className="min-h-[20px] max-h-42 resize-none rounded-none border-0 bg-transparent p-0 text-[14px] leading-[20px] focus-visible:ring-0" />;
   const action = running && onStop ? <Button size="icon-sm" variant="plain" className="v2-composer-send" aria-label={stopLabel} title={stopLabel} onClick={onStop}><Square className="size-3 fill-current" /></Button>
     : <Button size="icon-sm" variant="plain" className="v2-composer-send" type="submit" aria-label={sendLabel} disabled={sendDisabled}><ArrowUp className="size-3.5" /></Button>;
   return <Popover open={suggestionsOpen} onOpenChange={onSuggestionsOpenChange}>

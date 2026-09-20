@@ -1,10 +1,11 @@
+import { BookOpen, Folder, GitCompare } from 'lucide-react';
 import type { AssistantWebviewState } from '../../webview/assistant/state/types';
 import { Button } from '../ui/button';
 import { DroidActivity } from '../ui/droid-motion';
 
 const starters = [
-  { label: 'Understand this project', prompt: 'Explain this codebase: identify the main entry points and how the key modules fit together. Do not change files.' },
-  { label: 'Review current changes', prompt: 'Review the current workspace changes for bugs and regressions. Explain your findings without changing files.' },
+  { label: 'Understand this project', icon: BookOpen, prompt: 'Explain this codebase: identify the main entry points and how the key modules fit together. Do not change files.' },
+  { label: 'Review current changes', icon: GitCompare, prompt: 'Review the current workspace changes for bugs and regressions. Explain your findings without changing files.' },
 ];
 
 export function ChatStartup({ state, blocked, onDraftSuggestion }: {
@@ -27,19 +28,21 @@ export function ChatStartup({ state, blocked, onDraftSuggestion }: {
     : settings.status === 'updating' ? `Updating session settings${modelName ? ` · ${modelName}` : ''}…`
     : settings.status === 'error' ? settings.message : modelName ?? 'No model reported';
   const ready = settings.status === 'ready';
-  return <section className="mx-auto max-w-md space-y-3 px-3 py-12 text-center" aria-label="Start a conversation">
-    <h2 className="text-sm font-medium">{ready ? 'Ready in your workspace' : 'Droid connected'}</h2>
-    <dl className="space-y-1 text-xs leading-relaxed text-muted-foreground">
-      <div><dt className="inline">Workspace: </dt><dd className="inline break-all">{state.workspaceRoot ?? 'Not reported by the extension'}</dd></div>
-      <div><dt className="inline">Model: </dt><dd className="inline break-words" role={settings.status === 'error' ? 'status' : undefined}>{modelStatus}</dd></div>
-    </dl>
-    <p className="text-xs leading-relaxed text-muted-foreground">{state.historyStatus === 'unavailable'
+  const workspaceName = state.workspaceRoot?.replace(/[\\/]+$/, '').split(/[\\/]/).at(-1);
+  return <section className="v2-chat-startup" aria-label="Start a conversation">
+    <p className="v2-startup-workspace" title={state.workspaceRoot ?? undefined}>
+      <Folder aria-hidden="true" /><span>{workspaceName || 'Your workspace'}</span>
+    </p>
+    <h2>{ready ? 'What can I help with?' : 'Getting your session ready'}</h2>
+    <p className="v2-startup-description">{state.historyStatus === 'unavailable'
       ? 'Earlier messages are unavailable here. You can continue this session.'
-      : 'Describe a task below. Use @ to add workspace files, and choose the model and mode beside the message field.'}</p>
-    {ready && onDraftSuggestion && !blocked ? <div className="space-y-1">
-      <div className="flex flex-wrap justify-center gap-x-3 gap-y-1">{starters.map((starter) => <Button key={starter.label} variant="link" size="sm"
-        className="h-auto px-0 py-1 text-xs" title="Add this task to the draft" onClick={() => onDraftSuggestion(starter.prompt)}>{starter.label}</Button>)}</div>
-      <p className="text-[11px] text-muted-foreground">Adds a draft for you to review; nothing is sent.</p>
+      : 'Ask about your code, or describe a change.'}</p>
+    {!ready ? <p role="status" className="v2-startup-description">{modelStatus}</p> : null}
+    {ready && onDraftSuggestion && !blocked ? <div className="v2-startup-actions">
+      {starters.map(({ icon: Icon, ...starter }) => <Button key={starter.label} variant="plain" size="none"
+        className="v2-startup-action" title="Add this task to the draft" onClick={() => onDraftSuggestion(starter.prompt)}>
+        <Icon aria-hidden="true" /><span>{starter.label}</span>
+      </Button>)}
     </div> : null}
   </section>;
 }

@@ -13,11 +13,18 @@ export function measureComposerInput(row: HTMLElement, input: HTMLTextAreaElemen
   measured.removeAttribute('data-composer-input');
   measured.value = input.value;
   measured.style.height = 'auto';
+  measured.style.overflowY = 'hidden';
   row.parentElement!.appendChild(shadow);
   try {
-    const multiline = input.value.length > 0 && (input.value.includes('\n') || measured.scrollHeight > 18);
+    const style = getComputedStyle(measured);
+    const lineHeight = Number.parseFloat(style.lineHeight) || 20;
+    const parsedMaxHeight = Number.parseFloat(style.maxHeight);
+    const maxHeight = Number.isFinite(parsedMaxHeight) ? parsedMaxHeight : Infinity;
+    const multiline = input.value.includes('\n') || measured.scrollHeight > Math.ceil(lineHeight);
     shadow.dataset.multiline = String(multiline);
-    return { multiline, height: multiline ? Math.min(168, Math.max(36, measured.scrollHeight)) : 18 };
+    const contentHeight = measured.scrollHeight;
+    const height = Math.min(maxHeight, Math.max(multiline ? lineHeight * 2 : lineHeight, contentHeight));
+    return { multiline, height, scrollable: contentHeight > maxHeight };
   } finally {
     shadow.remove();
   }
