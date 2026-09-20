@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { ComponentProps } from 'react';
-import type { ChangesTranscriptItem } from '../../shared/protocol/transcript';
+import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import type { ChatPort } from '../../webview/assistant/shell/chatIntent';
+import type { ChatState, ChatStore } from './store';
+import { summarizeOperations } from './AiOperationSummary';
 import { useReviewScopeFlow, type ReviewDockProps } from '../../webview/assistant/changes/useReviewScopeFlow';
 import { Tool, ToolContent } from '../ai-elements/tool';
 import { Button } from '../ui/button';
@@ -11,7 +13,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { ChangesCommitEntry } from './GitCommitPanel';
 import { cn } from '../ui/cn';
 import { ChevronDown, ChevronRight, FileDiff } from 'lucide-react';
-import { MAX_CHANGED_FILES_PER_TURN } from '../../shared/protocol/bounds';
 
 export function ReviewDock(props: ReviewDockProps) {
   const { changes, review, restorePreview, operation, agent } = props;
@@ -95,25 +96,38 @@ export function ReviewDock(props: ReviewDockProps) {
   </section>;
 }
 
-export function ReviewDockSlot({ changes, currentTurnId, sessionId, vscode, ...state }: {
-  readonly changes: ChangesTranscriptItem | null;
-  readonly currentTurnId: string | null;
-  readonly sessionId: string | null;
+function selectOperationReview({ state }: ChatState) {
+  let turnId = state.turn?.turnId ?? null;
+  if (turnId === null) {
+    for (let index = state.transcript.length - 1; index >= 0; index--) {
+      const item = state.transcript[index]!;
+      if (item.kind === 'user') break;
+      if (item.kind === 'changes' || item.kind === 'image' && item.origin === 'user') continue;
+      if (item.turnId !== null) { turnId = item.turnId; break; }
+    }
+  }
+  const count = turnId === null ? 0 : summarizeOperations(state.transcript, turnId).get(turnId)?.files.size ?? 0;
+  const sessionId = state.connection.status === 'connected' ? state.sessionId : null;
+  const review = state.review.scope;
+  const complete = review?.sessionId === sessionId && review.scopeKind === 'operations' &&
+    review.turnId === turnId && review.lifecycle === 'complete';
+  return { turnId, count, sessionId, complete };
+}
+
+export function ReviewDockSlot({ store, vscode }: {
+  readonly store: ChatStore;
   readonly vscode: ChatPort;
-} & Pick<ComponentProps<typeof ReviewDock>, 'review' | 'restorePreview' | 'operation' | 'agent'>) {
-  if (changes === null || changes.files.length === 0 ||
-    (currentTurnId !== null && currentTurnId !== changes.turnId)) return null;
-  const count = changes.files.length;
-  const matchingReview = state.review?.sessionId === sessionId && state.review.scopeKind === 'turn' &&
-    state.review.turnId === changes.turnId;
-  const status = changes.writing ? 'Updating…' : matchingReview && state.review?.lifecycle === 'complete' ? 'Review complete' : null;
+}) {
+  const { turnId, count, sessionId, complete } = useStore(store, useShallow(selectOperationReview));
+  if (turnId === null || count === 0) return null;
+  const status = complete ? 'Review complete' : null;
   return <Button variant="plain" size="none" className="review-launcher" aria-label="Open Review" disabled={sessionId === null} onClick={() => vscode.postMessage({
-    type: 'review.panel.open', sessionId: sessionId!, scopeKind: 'turn', turnId: changes.turnId,
+    type: 'review.panel.open', sessionId: sessionId!, scopeKind: 'operations', turnId,
   })}>
     <FileDiff className="review-launcher-icon" aria-hidden="true" />
     <span className="review-launcher-summary">
-      <strong>Review workspace changes</strong>
-      <span role={status ? 'status' : undefined} title={`${count} ${count === 1 ? 'file' : 'files'} ${count === MAX_CHANGED_FILES_PER_TURN ? 'shown' : 'changed'}${status ? ` · ${status}` : ''}`}>{count} {count === 1 ? 'file' : 'files'} {count === MAX_CHANGED_FILES_PER_TURN ? 'shown' : 'changed'}{status ? ` · ${status}` : ''}</span>
+      <strong>Review AI changes</strong>
+      <span role={status ? 'status' : undefined}>{count} directly confirmed {count === 1 ? 'file' : 'files'}{status ? ` · ${status}` : ''}</span>
     </span>
     <ChevronRight className="review-launcher-chevron" aria-hidden="true" />
   </Button>;

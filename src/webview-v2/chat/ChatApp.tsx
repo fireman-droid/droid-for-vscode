@@ -14,7 +14,7 @@ import { useConversationTransition } from '../../webview/assistant/shell/convers
 import { Button } from '../ui/button';
 import { DroidConnectionDot } from '../ui/droid-motion';
 import { useWebviewTheme } from '../shell/theme';
-import { createChatStore, selectChatShell, selectCurrentTurnChanges } from './store';
+import { createChatStore, selectChatShell } from './store';
 import { LiveTranscript } from './Transcript';
 import { useMessageActions } from '../../webview/assistant/editing/useMessageActions';
 import { InteractionPanel } from './InteractionPanel';
@@ -43,7 +43,7 @@ import { isFooterInteraction } from '../../webview/assistant/interactions/intera
 import { useMissionControl } from '../../webview/assistant/mission/useMissionControl';
 import { normalizeMissionTaskText } from '../../shared/protocol/missionProtocol';
 import { MissionWorkspace } from '../mission/MissionWorkspace';
-import { SelectSessionContext, ToolChangesContext } from '../../webview/assistant/thread/messageContexts';
+import { SelectSessionContext } from '../../webview/assistant/thread/messageContexts';
 import { stableTranscriptId } from '../../shared/transcript/hostTranscriptState';
 import { IdeStatus } from './IdeStatus';
 import { ConversationWait, SessionRecovery } from './ConnectionFeedback';
@@ -84,12 +84,6 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
     openTerminalMirror: workspace.handleOpenTerminalMirror,
     openSubagent: subagents.openSubagent,
   } : {}, [state.sessionId, state.connection.status, workspace.handleOpenPath, workspace.handleOpenFileDiff, workspace.handleOpenReviewTurn, workspace.handleOpenTerminalMirror, subagents.openSubagent]);
-  const currentChanges = selectCurrentTurnChanges(state);
-  const latestChanges = currentChanges?.kind === 'changes' ? currentChanges : null;
-  const toolChanges = useMemo(() => ({
-    turnId: latestChanges?.turnId ?? null,
-    filesByPath: new Map(latestChanges?.files.map((file) => [file.path, file]) ?? []),
-  }), [latestChanges]);
   const gitFlow = useMemo(() => ({
     state: state.git, latestChangesTurnId: state.latestChanges?.turnId ?? null,
     promptText: state.latestChanges?.prompt ?? null,
@@ -214,11 +208,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
       </>}
       footer={<>
         <GitCommitFlowContext.Provider value={gitFlow}>
-          <ReviewDockSlot changes={latestChanges} currentTurnId={state.turn?.turnId ??
-            [...state.transcript].reverse().find((item) => item.kind !== 'user')?.turnId ?? null}
-            sessionId={state.connection.status === 'connected' ? state.sessionId : null}
-            vscode={port} review={state.review.scope} restorePreview={state.review.restorePreview}
-            operation={state.review.operation} agent={state.review.agent} />
+          <ReviewDockSlot store={store} vscode={port} />
         </GitCommitFlowContext.Provider>
         {footerInteraction ? interaction : null}
         {host.showHandshakeNotice && transition.overlay === null ? <p role="status" className="text-xs text-muted-foreground">Still waiting for the extension. Use the editor’s Reload Window command if it remains unresponsive.</p> : null}
@@ -240,7 +230,6 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
       </>}>
 
         <ToolActionsContext.Provider value={toolActions}>
-          <ToolChangesContext.Provider value={toolChanges}>
           <InlineDiffContext.Provider value={inlineDiff}>
             <SubagentActivityStoreContext.Provider value={subagents.activityStore}>
               <SelectSessionContext.Provider value={sessions.handleSelectSession}>
@@ -256,7 +245,6 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
               </SelectSessionContext.Provider>
             </SubagentActivityStoreContext.Provider>
           </InlineDiffContext.Provider>
-          </ToolChangesContext.Provider>
         </ToolActionsContext.Provider>
     </ChatLayout>
     {host.missionWorkspaceRoute !== null ? <MissionWorkspace key={state.conversationId} route={host.missionWorkspaceRoute} setup={host.missionSetup} mission={state.missionSnapshot} result={state.missionControlResult} vscode={port}

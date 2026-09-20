@@ -3,6 +3,32 @@
 最后更新：2026-09-20
 包版本：`0.8.0`
 
+## 聊天 Diff 手动编辑误归因（已安装，本地回归通过，待 Cursor 验收）
+
+- 用户反馈 AI 解释代码时手动修改也出现在回复中。根因是 `changes` 条目直接
+  展开整轮工作区前后快照；提示“可能包含手动修改”并没有满足聊天归因要求。
+- 回复分组和行渲染不再展示这类工作区条目，涵盖实时消息、历史恢复与 Viewer。
+  原始工作区账本继续供独立 Review 使用，不删除历史或用户文件。
+- 聊天操作 Diff 仅展示 `tool-result`／`applied` 的原始补丁；同文件手动修改
+  不会通过工作区快照混入。输入片段、失败或未确认结果不展示为已发生的修改；
+  已确认写入但没有完整补丁时明确提示缺失，不从当前文件反推。
+- 底部修改入口改为当前回合的已确认 AI 操作计数并打开 AI operations；
+  工作区比较通过独立 Review 主动选择。Execute 或缺失工具结果不猜测 AI 归因。
+- 用户明确授权本次本地回归，43 项通过：新增归因用例 10 项，直接受影响的
+  ToolRow／ReviewDock 用例 14 项，共享分组与工作区账本用例 19 项。覆盖纯手动
+  保存、同文件中 AI／用户补丁隔离、缺失／旧输入／不确定证据、确认写入但无
+  补丁、操作 Review 路由以及历史恢复后不出现工作区回复块。
+- 首次共享分组验证有一条旧用例仍要求复制栏留在最后正文行；现有生产规则
+  是最后工具行保留整篇复制入口。已对齐该用例的既有行为，未改变复制逻辑；
+  随后 19 项通过。没有运行浏览器自动化或真实模型会话。
+- 执行命令：`pnpm exec vitest run src/webview-v2/chat/changeAttribution.test.tsx`；
+  `pnpm exec vitest run src/webview-v2/chat/ToolRow.test.tsx src/webview/assistant/changes/ReviewDock.test.tsx`；
+  `pnpm exec vitest run src/webview/assistant/transcript/runtimeAdapter.test.ts src/webview/assistant/state/store.changes.test.ts`。
+- `pnpm run package:vsix` 的完整类型、预算、共享 UI／生产构建通过；
+  `pnpm run verify:vsix` 确认 79 个条目，3,560,677 字节修复包已安装 Cursor。
+  构建标识为 `v2-2026-09-20T04:02:58.652Z`。CLI 弃用提示未阻塞安装；
+  Reload Window 后按原截图场景验收实际表现。
+
 ## 状态反馈与使用体验（已安装，本地验证通过，待 Cursor 验收）
 
 - 空聊天按真实连接和设置状态展示；不可用不再显示 Ready。连接成功后显示

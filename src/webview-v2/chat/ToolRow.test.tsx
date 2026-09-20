@@ -10,7 +10,7 @@ import { SubagentActivityStoreContext, useSubagentPanelFlow } from '../../webvie
 import { ContentProvider } from '../content/context';
 import { ToolActionsContext, type ToolActions } from '../content/toolActions';
 import { ToolRow } from './ToolRow';
-import { Changes } from './Changes';
+import { TranscriptRow } from './TranscriptRow';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 const postMessage = vi.fn((_message: WebviewToHostMessage) => undefined);
@@ -73,8 +73,8 @@ it('does not substitute a turn Diff for missing operation evidence and keeps Can
   expect(preview).toHaveBeenCalledExactlyOnceWith('src/app.html');
   expect(postMessage).not.toHaveBeenCalled();
   expect(screen.getByText('This operation’s Diff was not recorded.')).toBeDefined();
-  fireEvent.click(screen.getByRole('button', { name: 'Review turn' }));
-  expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'review.panel.open', scopeKind: 'turn', turnId: 'turn-1' }));
+  expect(screen.queryByRole('button', { name: /Review/ })).toBeNull();
+  expect(postMessage).not.toHaveBeenCalled();
 });
 
 it('offers command copy and the live terminal mirror without inventing a background stop action', async () => {
@@ -109,13 +109,15 @@ it('uses the host-owned subagent row identity and live feed, without exposing ch
   expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'subagent.open', sessionId: 'session-1', turnId: 'turn-1', toolUseId: 'tool-1' });
 });
 
-it('opens historical changes in the original turn review rather than a second file ledger', () => {
+it('does not display historical workspace snapshots as assistant changes', () => {
   const openFileDiff = vi.fn();
   const openReviewTurn = vi.fn();
   render(<ToolActionsContext.Provider value={{ openFileDiff, openReviewTurn }}>
-    <Changes messageId="message-1" item={{ kind: 'changes', id: 'changes-1', turnId: 'turn-1', files: [{ path: 'src/app.ts', additions: 2, deletions: 1 }] }} />
+    <TranscriptRow messageId="message-1" streaming={false} grouped={false}
+      item={{ kind: 'changes', id: 'changes-1', turnId: 'turn-1', files: [{ path: 'src/app.ts', additions: 2, deletions: 1 }] }} />
   </ToolActionsContext.Provider>);
-  fireEvent.click(screen.getByRole('button', { name: /Changes/ }));
+  expect(screen.queryByText('src/app.ts')).toBeNull();
+  expect(screen.queryByRole('button', { name: /changes/i })).toBeNull();
   expect(openFileDiff).not.toHaveBeenCalled();
-  expect(openReviewTurn).toHaveBeenCalledExactlyOnceWith('turn-1');
+  expect(openReviewTurn).not.toHaveBeenCalled();
 });

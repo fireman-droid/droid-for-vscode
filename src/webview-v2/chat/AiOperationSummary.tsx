@@ -1,5 +1,6 @@
 import { useContext } from 'react';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
+import { isConfirmedOperationFile } from '../../shared/protocol/operationDiff';
 import { InlineDiffContext } from '../../webview/assistant/changes/useInlineDiff';
 import { Button } from '../ui/button';
 
@@ -11,19 +12,19 @@ export interface OperationSummary {
   readonly delegated: boolean;
 }
 
-export function summarizeOperations(items: readonly SessionTranscriptItem[]): ReadonlyMap<string, OperationSummary> {
+export function summarizeOperations(items: readonly SessionTranscriptItem[], turnId?: string): ReadonlyMap<string, OperationSummary> {
   const summaries = new Map<string, { turnId: string; files: Set<string>; calls: Set<string>; unconfirmed: number; delegated: boolean }>();
   for (const item of items) {
-    if (item.kind !== 'tool') continue;
+    if (item.kind !== 'tool' || turnId !== undefined && item.turnId !== turnId) continue;
     const summary = summaries.get(item.turnId) ?? { turnId: item.turnId, files: new Set<string>(), calls: new Set<string>(), unconfirmed: 0, delegated: false };
     if (item.subagent !== undefined) { summary.delegated = true; summaries.set(item.turnId, summary); }
-    if (item.operationDiff?.status !== 'ready' || item.operationDiff.source !== 'tool-result') continue;
     const diff = item.operationDiff;
+    if (diff?.status !== 'ready' || diff.source !== 'tool-result') continue;
     const identity = JSON.stringify([diff.sourceSessionId ?? '', diff.callId ?? item.toolUseId]);
     if (summary.calls.has(identity)) continue;
     summary.calls.add(identity);
     for (const file of diff.files) {
-      if (file.outcome === 'applied') summary.files.add(file.path);
+      if (isConfirmedOperationFile(diff, file)) summary.files.add(file.path);
       else summary.unconfirmed += 1;
     }
     summaries.set(item.turnId, summary);

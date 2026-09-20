@@ -8,6 +8,8 @@ import { GitCommitFlowContext, type GitCommitFlowContextValue } from './GitCommi
 import { ReviewDock as LegacyReviewDock } from './ReviewDock';
 import { ReviewDockSlot as LegacyReviewDockSlot } from './reviewDockSlot';
 import { ReviewDockSlot as V2ReviewDockSlot } from '../../../webview-v2/chat/ReviewDock';
+import { createChatStore } from '../../../webview-v2/chat/store';
+import { initialAssistantWebviewState } from '../state/initialState';
 import { initialGitCommitFlowState } from '../state/store';
 
 afterEach(cleanup);
@@ -290,13 +292,22 @@ describe.each([
   });
 });
 
-it('V2 launches the independent Review tab instead of duplicating review controls in Chat', async () => {
+it('V2 counts confirmed AI files and opens their operation review independently of workspace changes', async () => {
   const postMessage = vi.fn();
-  render(<V2ReviewDockSlot changes={changes} sessionId="session-1" vscode={{ postMessage }}
-    review={historicalReview} restorePreview={null} operation={null} agent={null} />);
+  const store = createChatStore({ ...initialAssistantWebviewState, sessionId: 'session-1', connection: { status: 'connected' }, transcript: [
+    { ...changes, files: [...changes.files, { path: 'manual.txt', additions: 1, deletions: 0 }] },
+    { kind: 'tool', id: 'edit-1', toolUseId: 'edit-1', turnId: 'turn-latest', toolName: 'Edit', action: 'Edited',
+      status: 'completed', progressCount: 0, latestUpdateKind: null,
+      operationDiff: { status: 'ready', source: 'tool-result', callId: 'edit-1', files: [
+        { path: 'src/app.ts', kind: 'modified', outcome: 'applied', patch: '@@ -1 +1 @@\n-before\n+after' },
+        { path: 'uncertain.txt', kind: 'modified', outcome: 'uncertain', patch: '' },
+      ] } },
+  ], review: { ...initialAssistantWebviewState.review, scope: historicalReview } });
+  render(<V2ReviewDockSlot store={store} vscode={{ postMessage }} />);
+  expect(screen.getByText('1 directly confirmed file')).toBeDefined();
   await userEvent.setup().click(screen.getByRole('button', { name: 'Open Review' }));
   expect(postMessage).toHaveBeenCalledExactlyOnceWith({
-    type: 'review.panel.open', sessionId: 'session-1', scopeKind: 'turn', turnId: 'turn-latest',
+    type: 'review.panel.open', sessionId: 'session-1', scopeKind: 'operations', turnId: 'turn-latest',
   });
   expect(screen.queryByRole('button', { name: 'Restore file' })).toBeNull();
 });

@@ -38,6 +38,8 @@ export function describeTranscript(transcript: readonly SessionTranscriptItem[],
     pendingUserImages = [];
   };
   for (const item of transcript) {
+    // Workspace snapshots include manual edits; they belong to Review, not an AI reply.
+    if (item.kind === 'changes') continue;
     if (item.kind === 'user') {
       descriptors.push({ kind: 'user', item, images: pendingUserImages });
       pendingUserImages = [];

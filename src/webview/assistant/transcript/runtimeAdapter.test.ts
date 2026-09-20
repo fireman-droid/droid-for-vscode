@@ -261,7 +261,7 @@ describe('Droid external-store adapter', () => {
     expect(turnC!.replyCopyText).toBe('Anytime.');
   });
 
-  it('hangs the bar on the last text-bearing turn of a run', () => {
+  it('keeps complete reply actions on the final turn even when it contains only tools', () => {
     const messages = mapTranscriptToRuntimeMessages(
       [
         { id: 'user-a', kind: 'user', text: 'Do it' },
@@ -271,8 +271,8 @@ describe('Droid external-store adapter', () => {
           turnId: 'turn-a',
           text: 'All done.',
         },
-        // A trailing text-less turn (tool-only follow-up) must not
-        // steal the bar from the reply text…
+        // A restored reply may finish with tools; its actions stay at
+        // the end while copying all preceding response text.
         {
           id: 'tool-b1',
           kind: 'tool',
@@ -287,9 +287,10 @@ describe('Droid external-store adapter', () => {
       ],
       null,
     );
-    expect(messages[1]!.replyTail).toBe(true);
-    expect(messages[1]!.replyCopyText).toBe('All done.');
-    expect(messages[2]!.replyTail).toBe(false);
+    expect(messages[1]!.replyTail).toBe(false);
+    expect(messages[1]!.replyCopyText).toBeUndefined();
+    expect(messages[2]!.replyTail).toBe(true);
+    expect(messages[2]!.replyCopyText).toBe('All done.');
 
     // …but a run with no text at all keeps its last message as tail
     // so Regenerate/Fork stay reachable.
