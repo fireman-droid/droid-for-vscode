@@ -44,6 +44,34 @@ const present = (
   });
 
 describe('Activity state and grouping', () => {
+  it('names browser actions in old records and keeps their failures visible in the settled summary', () => {
+    const snapshot = tool('browser_snapshot', 'completed', { action: 'Verified the interface', target: undefined });
+    const click = tool('browser_click', 'running', { action: 'Verified the interface', target: undefined });
+    expect(present([snapshot, click], { messageRunning: true })).toMatchObject({
+      action: 'Click element', target: null, running: true, summary: 'Inspect page, Click element',
+    });
+    const failed = tool('browser_click', 'failed', { action: 'Verified the interface', target: undefined });
+    expect(present([snapshot, failed])).toMatchObject({
+      action: 'Inspect page, Click element', facts: ['1 failed'], running: false,
+    });
+  });
+
+  it('includes commands and unknown tools in mixed activity summaries', () => {
+    const result = present([tool('Read'), tool('Execute', 'completed', { action: 'Ran a local command' }),
+      tool('mcp__design__measure_layout', 'completed', { action: undefined })]);
+    expect(result.summary).toBe('1 read, Run command, Measure layout');
+    expect(result.action).toBe(result.summary);
+  });
+
+  it('retains specific actions extracted from browser input in the group summary', () => {
+    const result = present([
+      tool('browser_action', 'completed', { action: 'Click element' }),
+      tool('browser_action', 'completed', { action: 'Click element' }),
+      tool('browser_action', 'completed', { action: 'Scroll page' }),
+    ]);
+    expect(result.summary).toBe('Click element × 2, Scroll page');
+  });
+
   it('counts repeated Read calls rather than guessed distinct files and keeps grouping boundaries', () => {
     const parts = [
       thinking('complete'),

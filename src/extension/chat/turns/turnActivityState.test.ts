@@ -26,6 +26,46 @@ import {
 } from './turnActivityState';
 
 describe('turnActivityState', () => {
+  it.each([false, true])('keeps an input-specific action through progress and settlement (error: %s)', (isError) => {
+    const tool = { toolName: 'Execute', toolUseId: 'specific-command' };
+    let result = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start', ...tool, action: 'Calculate six times seven',
+    }, 10);
+    result = projectToolEvent(result.state, {
+      type: 'tool-progress', ...tool, action: 'Run command', updateKind: 'status',
+    }, 20);
+    expect(result.projection).toMatchObject({ action: 'Calculate six times seven', status: 'running' });
+    result = projectToolEvent(result.state, {
+      type: 'tool-execution-phase', ...tool, phase: 'executing',
+    }, 30);
+    expect(result.projection?.action).toBe('Calculate six times seven');
+    result = projectToolEvent(result.state, {
+      type: 'tool-result', ...tool, action: 'Run command', isError,
+    }, 40);
+    expect(result.projection).toMatchObject({
+      action: 'Calculate six times seven', status: isError ? 'failed' : 'completed',
+    });
+  });
+
+  it('refines an action when streamed input arrives without losing it to a generic update', () => {
+    const tool = { toolName: 'Execute', toolUseId: 'streamed-command' };
+    let result = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-execution-phase', ...tool, phase: 'streaming_input',
+    });
+    result = projectToolEvent(result.state, {
+      type: 'tool-start', ...tool, action: 'Calculate six',
+    });
+    expect(result.projection?.action).toBe('Calculate six');
+    result = projectToolEvent(result.state, {
+      type: 'tool-start', ...tool, action: 'Calculate six times seven',
+    });
+    expect(result.projection?.action).toBe('Calculate six times seven');
+    result = projectToolEvent(result.state, {
+      type: 'tool-start', ...tool, action: 'Run command', detailKind: 'command', detail: '6 * 7',
+    });
+    expect(result.projection).toMatchObject({ action: 'Calculate six times seven', detail: '6 * 7' });
+  });
+
   it('caps assistant deltas and reports clipping exactly once', () => {
     const initial = createTurnActivityState();
     const empty = projectAssistantDelta(initial, '');

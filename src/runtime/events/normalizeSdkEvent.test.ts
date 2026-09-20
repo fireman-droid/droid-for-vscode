@@ -16,6 +16,25 @@ import {
 import { normalizeSdkEvent, normalizeSdkEventImages } from './normalizeSdkEvent';
 
 describe('normalizeSdkEvent', () => {
+  it('projects documented browser action titles in complete and partial tool calls', () => {
+    const input = { action: { kind: 'fill', value: 'PRIVATE_VALUE', target: { selector: 'PRIVATE_TARGET' } } };
+    const complete = normalizeSdkEvent(sdkEvent('tool_call', {
+      name: 'browser_action', toolUseId: 'browser-1', input,
+    }));
+    const partial = normalizeSdkEvent(sdkEvent('tool_call_delta', {
+      toolUse: { name: 'browser_action', id: 'browser-1', input },
+    }));
+    expect(complete).toMatchObject({ type: 'tool-start', action: 'Fill field', inputComplete: true });
+    expect(partial).toMatchObject({ type: 'tool-start', action: 'Fill field' });
+    expect(JSON.stringify([complete, partial])).not.toContain('PRIVATE_');
+    expect(normalizeSdkEvent(sdkEvent('tool_call', {
+      name: 'browser_get', toolUseId: 'browser-2', input: { kind: 'title', target: 'PRIVATE_TARGET' },
+    }))).toMatchObject({ action: 'Read page title' });
+    expect(normalizeSdkEvent(sdkEvent('tool_call', {
+      name: 'browser_action', toolUseId: 'browser-3', input: { action: { kind: 'PRIVATE_ACTION' } },
+    }))).toMatchObject({ action: 'Run browser action' });
+  });
+
   it('normalizes streamed text deltas', () => {
     const event: DroidStreamEvent = {
       type: 'assistant_text_delta',
@@ -165,14 +184,14 @@ describe('normalizeSdkEvent', () => {
       type: 'tool-start',
       toolName: 'Read',
       toolUseId: 'tool-1',
-      action: 'Read workspace files',
+      action: 'Read file',
       inputComplete: true,
     });
     expect(normalizeSdkEvent(toolCallDelta)).toEqual({
       type: 'tool-start',
       toolName: 'Execute',
       toolUseId: 'tool-2',
-      action: 'Ran a local command',
+      action: 'Run command',
       detailKind: 'command',
       detail: 'sensitive command',
     });
@@ -181,7 +200,7 @@ describe('normalizeSdkEvent', () => {
       type: 'tool-progress',
       toolName: 'Search',
       toolUseId: 'tool-3',
-      action: 'Used Search',
+      action: 'Search',
       updateKind: 'message',
     });
     // A failed tool_result deliberately surfaces its text as the
@@ -190,7 +209,7 @@ describe('normalizeSdkEvent', () => {
       type: 'tool-result',
       toolName: 'Read',
       toolUseId: 'tool-4',
-      action: 'Read workspace files',
+      action: 'Read file',
       isError: true,
       errorText: 'sensitive file contents',
     });
@@ -239,7 +258,7 @@ describe('normalizeSdkEvent', () => {
           input: { command: 'git status' },
         }),
       ),
-    ).toMatchObject({ action: 'Ran a local command' });
+    ).toMatchObject({ action: 'Run command' });
   });
 
   it('projects safe Read, Grep, and Glob targets with live tool starts', () => {
@@ -468,7 +487,7 @@ describe('normalizeSdkEvent', () => {
       type: 'tool-start',
       toolName: 'Edit',
       toolUseId: 'tool-edit',
-      action: 'Updated workspace files',
+      action: 'Edit file',
       inputComplete: true,
       filePath: 'src/app.ts',
     });
@@ -545,7 +564,7 @@ describe('normalizeSdkEvent', () => {
       type: 'tool-start',
       toolName: 'ApplyPatch',
       toolUseId: 'tool-patch-single',
-      action: 'Updated workspace files',
+      action: 'Apply patch',
       inputComplete: true,
       filePath: 'src/page.html',
     });
@@ -639,7 +658,7 @@ describe('normalizeSdkEvent', () => {
       type: 'tool-start',
       toolName: 'x'.repeat(80),
       toolUseId: 'tool-1',
-      action: `Used ${'x'.repeat(80)}`,
+      action: `X${'x'.repeat(79)}`,
       inputComplete: true,
     });
     expect(
@@ -655,7 +674,7 @@ describe('normalizeSdkEvent', () => {
       type: 'tool-progress',
       toolName: 'Tool',
       toolUseId: 'tool-2',
-      action: 'Used Tool',
+      action: 'Tool',
       updateKind: 'status',
     });
   });
@@ -705,7 +724,7 @@ describe('normalizeSdkEvent', () => {
       type: 'tool-start',
       toolName: 'Read',
       toolUseId,
-      action: 'Read workspace files',
+      action: 'Read file',
       inputComplete: true,
     });
   });
@@ -729,7 +748,7 @@ describe('normalizeSdkEvent', () => {
       type: 'tool-progress',
       toolName: 'Execute',
       toolUseId: 'tool-exec',
-      action: 'Ran a local command',
+      action: 'Run command',
       updateKind: 'status',
       outputTail: 'line-1\nline-2\nline-3',
     });
@@ -789,6 +808,7 @@ describe('normalizeSdkEvent', () => {
     expect(normalizeSdkEvent(workingState)).toEqual({
       type: 'working-state',
       isWorking: true,
+      compacting: false,
     });
     expect(
       normalizeSdkEvent({
@@ -798,6 +818,7 @@ describe('normalizeSdkEvent', () => {
     ).toEqual({
       type: 'working-state',
       isWorking: false,
+      compacting: false,
     });
     expect(normalizeSdkEvent(error)).toEqual({
       type: 'error',

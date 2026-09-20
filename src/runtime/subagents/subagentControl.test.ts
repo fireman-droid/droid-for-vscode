@@ -7,6 +7,22 @@ import {
 import { readSubagentInvocationRecords } from './subagentSummary';
 
 describe('projectSubagentActivities', () => {
+  it('retains concrete browser, Figma, and custom command actions without raw arguments', () => {
+    const activities = projectSubagentActivities([{ content: [
+      { type: 'tool_use', name: 'browser_targets', input: {} },
+      { type: 'tool_use', name: 'mcp__figma__get_design_context', input: { nodeId: 'PRIVATE_NODE' } },
+      { type: 'tool_use', name: 'browser_action', input: { action: { kind: 'fill', value: 'PRIVATE_VALUE' } } },
+      { type: 'tool_use', name: 'Execute', input: { summary: 'Check production types', command: 'pnpm typecheck PRIVATE_COMMAND' } },
+    ] }], 'd:/work');
+    expect(activities).toEqual([
+      { action: 'Check production types', target: 'TypeScript check' },
+      { action: 'Fill field', target: null },
+      { action: 'Figma · Get design context', target: null },
+      { action: 'Browser tabs', target: null },
+    ]);
+    expect(JSON.stringify(activities)).not.toContain('PRIVATE_');
+  });
+
   it('returns the latest semantic activity and three preceding activities', () => {
     expect(
       projectSubagentActivities(
@@ -49,14 +65,14 @@ describe('projectSubagentActivities', () => {
         'd:/work',
       ),
     ).toEqual([
-      { action: 'Ran a local command', target: 'Tests' },
+      { action: 'Run command', target: 'Tests' },
       {
-        action: 'Searched workspace content',
+        action: 'Search files',
         target: 'SSE · src',
       },
-      { action: 'Read workspace files', target: 'src/app.ts' },
+      { action: 'Read file', target: 'src/app.ts' },
       {
-        action: 'Loaded workflow guidance',
+        action: 'Load skill',
         target: 'frontend-design',
       },
     ]);
@@ -89,8 +105,8 @@ describe('projectSubagentActivities', () => {
         'd:/work',
       ),
     ).toEqual([
-      { action: 'Continued delegated work', target: null },
-      { action: 'Read workspace files', target: null },
+      { action: 'Weird Tool', target: null },
+      { action: 'Read file', target: null },
     ]);
     expect(
       projectSubagentActivities(
@@ -135,11 +151,11 @@ describe('projectSubagentActivities', () => {
       ),
     ).toEqual([
       {
-        action: 'Updated the task plan',
+        action: 'Update task plan',
         target: 'Implement semantic activity',
       },
       {
-        action: 'Updated workspace files',
+        action: 'Edit file',
         target: 'src/app.ts',
       },
     ]);
@@ -164,7 +180,7 @@ describe('createDaemonSubagentControl', () => {
     );
     await expect(gateway.sampleActivities('child-1', 'd:/work')).resolves.toEqual([
       {
-        action: 'Inspected workspace structure',
+        action: 'Find files',
         target: '**/*.ts · src',
       },
     ]);

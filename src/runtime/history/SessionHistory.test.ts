@@ -17,6 +17,29 @@ import { SESSION_HISTORY_UNAVAILABLE_MESSAGE } from './SessionHistory';
 import { projectSessionHistory, projectSessionMessages } from './projectSessionHistory';
 
 describe('projectSessionHistory', () => {
+  it('restores concrete browser actions and custom command summaries without raw input', () => {
+    const result = projectSessionHistory(response([
+      message('assistant-actions', 'assistant', [
+        { type: 'tool_use', id: 'browser-action', name: 'browser_action', input: { action: { kind: 'fill', value: 'PRIVATE_VALUE' } } },
+        { type: 'tool_use', id: 'browser-get', name: 'browser_get', input: { kind: 'text', target: 'PRIVATE_TARGET' } },
+        { type: 'tool_use', id: 'execute-action', name: 'Execute', input: { summary: 'Inspect local history', command: 'git log -1' } },
+      ]),
+      message('action-results', 'tool', [
+        { type: 'tool_result', toolUseId: 'browser-action', content: 'Cancelled', isError: true },
+        { type: 'tool_result', toolUseId: 'browser-get', content: 'PRIVATE_RESULT', isError: false },
+        { type: 'tool_result', toolUseId: 'execute-action', content: 'result', isError: false },
+      ]),
+    ]));
+    expect(result.status).toBe('available');
+    if (result.status !== 'available') throw new Error('Expected projected public history.');
+    expect(result.state.transcript.filter((item) => item.kind === 'tool')).toMatchObject([
+      { action: 'Fill field', status: 'failed' },
+      { action: 'Read page text', status: 'completed' },
+      { action: 'Inspect local history', status: 'completed' },
+    ]);
+    expect(JSON.stringify(result)).not.toContain('PRIVATE_');
+  });
+
   it('reconstructs answered and cancelled AskUser results from public tool history', () => {
     const result = projectSessionHistory({
       result: {

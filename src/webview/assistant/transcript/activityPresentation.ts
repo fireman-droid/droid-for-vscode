@@ -4,6 +4,7 @@ import {
   type GroupCandidatePart,
 } from './activityGrouping';
 import { readToolActivity } from '../thread/readers';
+import { resolveToolAction } from '../../../shared/transcript/toolActivity';
 
 export interface ProcessWaiting {
   readonly turnId: string;
@@ -72,7 +73,9 @@ export function presentActivity({
           ? 'Waiting for answer'
           : 'Waiting for confirmation';
   } else if (running) {
-    action = summary.runningCount > 0 ? (activeTool?.action ?? 'Thinking') : 'Processing';
+    action = summary.runningCount > 0
+      ? activeTool ? resolveToolAction(active?.toolName ?? '', activeTool.action) : 'Thinking'
+      : 'Processing';
   } else {
     action = summary.toolCount === 0 ? 'Thought' : summary.countsLabel;
   }
@@ -96,6 +99,7 @@ export function presentActivity({
   return {
     running,
     action,
+    summary: summary.countsLabel,
     target:
       running && wait === null && summary.runningCount > 0
         ? (activeTool?.target ?? null)

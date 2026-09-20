@@ -12,6 +12,44 @@ import { toWorkspaceRelativePath } from './toolFilePath';
 const MAX_TOOL_TARGET_INPUT_SCAN_LENGTH = MAX_TOOL_TARGET_LENGTH * 8;
 const MAX_TOOL_TARGET_PATTERN_ITEMS = 32;
 
+const BROWSER_INPUT_ACTIONS: Readonly<Record<string, string>> = {
+  click: 'Click element', dblclick: 'Double-click element', rightclick: 'Right-click element',
+  hover: 'Hover element', focus: 'Focus element', fill: 'Fill field', type: 'Type text',
+  check: 'Check element', uncheck: 'Uncheck element', select: 'Select option', press: 'Press key',
+  scroll: 'Scroll page', drag: 'Drag element', dialog: 'Handle dialog',
+  highlight: 'Highlight element', inspectTarget: 'Inspect element', pick: 'Pick element',
+  navigate: 'Navigate page',
+};
+const BROWSER_READ_ACTIONS: Readonly<Record<string, string>> = {
+  text: 'Read page text', value: 'Read element value', attribute: 'Read element attribute',
+  style: 'Read element style', count: 'Count elements', state: 'Read element state',
+  box: 'Read element bounds', url: 'Read page URL', title: 'Read page title',
+};
+
+/** Only model summaries and documented browser action enums become titles. */
+export function extractToolAction(toolName: string, input: unknown): string | undefined {
+  const summary = extractExecuteSummary(toolName, input);
+  if (summary !== undefined) return summary;
+  if (typeof input !== 'object' || input === null) return undefined;
+  const record = input as Record<string, unknown>;
+  const leaf = toolName.split(/[.:/]|__+/u).at(-1);
+  let kind: unknown;
+  if (leaf === 'execute_browser_action') {
+    kind = record['action'];
+    if (kind !== 'click' && kind !== 'type' && kind !== 'scroll' && kind !== 'navigate') return undefined;
+  } else if (leaf === 'browser_action') {
+    const action = record['action'];
+    kind = typeof action === 'object' && action !== null ? (action as Record<string, unknown>)['kind'] : undefined;
+    if (kind === 'navigate') return undefined;
+  } else if (leaf === 'browser_get') {
+    kind = record['kind'];
+    return typeof kind === 'string' && Object.hasOwn(BROWSER_READ_ACTIONS, kind)
+      ? BROWSER_READ_ACTIONS[kind] : undefined;
+  } else return undefined;
+  return typeof kind === 'string' && Object.hasOwn(BROWSER_INPUT_ACTIONS, kind)
+    ? BROWSER_INPUT_ACTIONS[kind] : undefined;
+}
+
 export interface ToolDetail {
   readonly kind: ToolDetailKind;
   readonly text: string;
@@ -57,6 +95,9 @@ export function extractToolTarget(
   }
   const record = input as Record<string, unknown>;
   const names = toolNameCandidates(toolName);
+  if (names.includes('skill')) {
+    return readTargetText(record, ['skill']);
+  }
   if (names.includes('read')) {
     return readWorkspacePath(record, ['file_path', 'filePath', 'path'], workspaceRoot);
   }

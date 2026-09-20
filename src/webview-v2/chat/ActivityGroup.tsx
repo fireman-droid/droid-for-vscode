@@ -39,9 +39,8 @@ export function ActivityGroup({ messageId, cluster, turnId, running, tail, incom
   readonly children: ReactNode;
 }) {
   const members = useMemo(() => cluster.items.map(candidate), [cluster.items]);
-  if (members.length === 1) return <>{children}</>;
+  if (members.length === 1 || cluster.items.every((item) => item.kind === 'thinking')) return <>{children}</>;
   const presentation = presentActivity({ members, messageRunning: running, tail, incomplete, turnId, waiting });
-  const toolCount = cluster.items.filter((item) => item.kind === 'tool').length;
   return <ActivityGroupView messageId={messageId} groupId={cluster.id} incomplete={incomplete}
-    presentation={{ ...presentation, action: presentation.action || `${toolCount} ${toolCount === 1 ? 'tool' : 'tools'}` }}>{children}</ActivityGroupView>;
+    presentation={presentation}>{children}</ActivityGroupView>;
 }

@@ -23,7 +23,7 @@ import { readTokenUsageBreakdown } from '../../shared/protocol/tokenUsage';
 import { readTaskDelegation } from '../subagents/subagentSummary';
 import { extractToolBackgroundHint } from '../tools/toolBackgroundHint';
 import {
-  extractExecuteSummary,
+  extractToolAction,
   extractToolDetail,
   extractToolTarget,
 } from '../tools/toolDetail';
@@ -405,7 +405,7 @@ function withToolInputContext(
   const backgroundHint = extractToolBackgroundHint(activity.toolName, input);
   // An Execute call's own `summary` beats the generic verb phrase as
   // the row action; the command card shows it as its title.
-  const summary = extractExecuteSummary(activity.toolName, input);
+  const summary = extractToolAction(activity.toolName, input);
   const subagent = readTaskDelegation(activity.toolName, input);
   return {
     ...activity,

@@ -11,7 +11,7 @@ import {
   toolNameCandidates,
 } from '../../shared/transcript/toolActivity';
 import { extractToolFilePaths, toWorkspaceRelativePath } from '../tools/toolFilePath';
-import { extractToolTarget, normalizeTodoDetail } from '../tools/toolDetail';
+import { extractToolAction, extractToolTarget, normalizeTodoDetail } from '../tools/toolDetail';
 
 /**
  * Host-facing observation surface for inline Task subagent cards.
@@ -105,9 +105,8 @@ function activityOf(block: unknown, workspaceRoot: string): SubagentActivityItem
     return null;
   }
   const input = (block as { input?: unknown }).input;
-  const summarized = summarizeToolAction(toolName);
   const action = boundedText(
-    summarized.startsWith('Used ') ? 'Continued delegated work' : summarized,
+    extractToolAction(toolName, input) ?? summarizeToolAction(toolName),
     MAX_SUBAGENT_ACTIVITY_LENGTH,
   );
   if (action === null) {

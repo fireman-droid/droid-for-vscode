@@ -1,4 +1,4 @@
-import { toolNameCandidates } from '../../../shared/transcript/toolActivity';
+import { resolveToolAction, toolNameCandidates } from '../../../shared/transcript/toolActivity';
 import type { ToolResultPreview } from '../../../shared/transcript/toolResultPreview';
 
 export const ACTIVITY_GROUP_KEY = 'group-explore' as const;
@@ -62,6 +62,7 @@ export interface GroupSummary {
 }
 
 interface MemberMetadata {
+  readonly action: string | undefined;
   readonly status: string | null;
   readonly resultPreview: ToolResultPreview | null;
   readonly truncated: boolean;
@@ -78,6 +79,7 @@ function readMemberMetadata(part: GroupCandidatePart): MemberMetadata {
       ? (provider.droidvisx as Record<string, unknown>)
       : null;
   return {
+    action: typeof metadata?.['action'] === 'string' ? metadata['action'] : undefined,
     status: typeof metadata?.['status'] === 'string' ? metadata['status'] : null,
     resultPreview:
       (metadata?.['resultPreview'] as ToolResultPreview | null | undefined) ?? null,
@@ -122,6 +124,7 @@ export function summarizeActivityGroup(
   let failedCount = 0;
   let stoppedCount = 0;
   let truncated = false;
+  const otherActions = new Map<string, number>();
   const counts: Record<ExploreCategory, number> = {
     file: 0,
     search: 0,
@@ -149,6 +152,10 @@ export function summarizeActivityGroup(
     if (metadata.resultPreview?.availability === 'unavailable') unavailableCount += 1;
     const category = classifyExploreTool(part.toolName ?? '');
     if (category !== null) counts[category] += 1;
+    else {
+      const action = resolveToolAction(part.toolName ?? '', metadata.action);
+      otherActions.set(action, (otherActions.get(action) ?? 0) + 1);
+    }
   }
   const segments: string[] = [];
   for (const category of Object.keys(CATEGORY_NOUNS) as ExploreCategory[]) {
@@ -157,6 +164,9 @@ export function summarizeActivityGroup(
       const nouns = CATEGORY_NOUNS[category];
       segments.push(`${count} ${count === 1 ? nouns[0] : nouns[1]}`);
     }
+  }
+  for (const [action, count] of otherActions) {
+    segments.push(count > 1 ? `${action} × ${count}` : action);
   }
   return {
     toolCount,

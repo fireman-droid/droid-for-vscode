@@ -24,15 +24,15 @@ export const SubagentRow = memo(function SubagentRow({ item, variant = 'card' }:
     const timer = setInterval(() => tick((value) => value + 1), 1000);
     return () => clearInterval(timer);
   }, [status, subagent.durationMs]);
-  const elapsed = subagent.durationMs !== undefined ? formatDuration(subagent.durationMs) : status === 'running' ? formatElapsed(Date.now() - started.current) : '—';
+  const elapsed = subagent.durationMs !== undefined ? formatDuration(subagent.durationMs) : status === 'running' ? formatElapsed(Date.now() - started.current) : undefined;
   return <Button variant="plain" size="none" disabled={!actions.openSubagent} onClick={() => actions.openSubagent?.(item.turnId, item.toolUseId)}
     className={`block space-y-1 rounded px-2 py-2 text-left text-xs outline-none hover:bg-[var(--control-surface-hover)] active:bg-[var(--control-surface-active)] focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none ${variant === 'card' ? 'ml-4 w-[calc(100%-16px)] border border-[var(--panel-edge)] bg-input-background' : 'w-full'}`}>
     <span className="flex items-center gap-1.5">{status === 'running' ? <LoaderCircle className="size-3 shrink-0 motion-safe:animate-spin" /> : null}<span className="min-w-0 flex-1 truncate">{subagent.type} subagent</span><span className="text-[10px] text-muted-foreground">{label}</span><ChevronRight className="size-3" /></span>
     {subagent.description ? <span className="block break-words">{subagent.description}</span> : null}
     {extras?.activities[0] ? <span className="block truncate text-muted-foreground" title={extras.activities[0].target ?? undefined}>{extras.activities[0].action}{extras.activities[0].target ? ` · ${extras.activities[0].target}` : ''}</span>
-      : <span className="block text-[11px] text-muted-foreground">{(subagent.toolUseCount ?? 0) > 0
+      : (subagent.toolUseCount ?? 0) > 0 || status === 'running' ? <span className="block text-[11px] text-muted-foreground">{(subagent.toolUseCount ?? 0) > 0
         ? 'Tool calls reported · Open to view activity'
-        : status === 'running' ? 'Waiting for activity…' : 'No activity details available'}</span>}
-    <span className="block text-[11px] text-muted-foreground">Elapsed {elapsed}{subagent.toolUseCount === undefined ? '' : ` · Tools ${subagent.toolUseCount}`}</span>
+        : 'Waiting for activity…'}</span> : null}
+    {elapsed !== undefined || subagent.toolUseCount !== undefined ? <span className="block text-[11px] text-muted-foreground">{[elapsed === undefined ? '' : `Elapsed ${elapsed}`, subagent.toolUseCount === undefined ? '' : `Tools ${subagent.toolUseCount}`].filter(Boolean).join(' · ')}</span> : null}
   </Button>;
 });

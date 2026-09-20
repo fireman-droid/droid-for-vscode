@@ -47,7 +47,7 @@ import {
 } from '../subagents/subagentSummary';
 import { extractToolBackgroundHint } from '../tools/toolBackgroundHint';
 import {
-  extractExecuteSummary,
+  extractToolAction,
   extractToolDetail,
   extractToolTarget,
 } from '../tools/toolDetail';
@@ -644,7 +644,7 @@ function appendTool(
     turnId,
     toolUseId,
     toolName,
-    action: extractExecuteSummary(toolName, block.input) ?? summarizeToolAction(toolName),
+    action: extractToolAction(toolName, block.input) ?? summarizeToolAction(toolName),
     status: 'stopped',
     progressCount: 0,
     latestUpdateKind: null,

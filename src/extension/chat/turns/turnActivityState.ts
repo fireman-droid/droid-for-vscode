@@ -307,6 +307,8 @@ export function projectToolEvent(
       // equal-or-more-complete input, so input-derived fields take
       // the latest value instead of pinning the first one.
       if (event.type === 'tool-start') {
+        const updatesAction = event.action !== existing.action &&
+          event.action !== summarizeToolAction(event.toolName);
         const updatesFilePath =
           event.filePath !== undefined && existing.filePath !== event.filePath;
         const updatesFilePaths =
@@ -332,6 +334,7 @@ export function projectToolEvent(
           event.operationDiff !== undefined &&
           event.operationDiff !== existing.operationDiff;
         if (
+          updatesAction ||
           updatesFilePath ||
           updatesFilePaths ||
           updatesDetail ||
@@ -342,6 +345,7 @@ export function projectToolEvent(
         ) {
           const entry: ToolActivityEntry = {
             ...existing,
+            ...(updatesAction ? { action: event.action } : {}),
             ...(updatesFilePath ? { filePath: event.filePath } : {}),
             ...(updatesFilePaths ? { filePaths: event.filePaths } : {}),
             ...(updatesDetail
@@ -480,7 +484,7 @@ function projectEntry(
   return {
     toolUseId: event.toolUseId,
     toolName: event.toolName,
-    action: event.action,
+    action: entry.action,
     status: entry.status,
     progressCount: entry.progressCount,
     latestUpdateKind: entry.latestUpdateKind,

@@ -8,24 +8,26 @@ import { AssistantReply } from './AssistantReply';
 
 afterEach(cleanup);
 
-it('keeps the process disclosure across virtual unmounts and pauses following on a reader toggle', async () => {
+it('opens a single tool detail directly and keeps the reader choice across virtual unmounts', async () => {
   const user = userEvent.setup();
   const following = { current: { following: true } };
   const descriptor: AssistantGroupDescriptor = {
     kind: 'assistant', id: 'reply', turnId: 'turn',
-    items: [{ kind: 'tool', id: 'read', turnId: 'turn', toolUseId: 'tool', toolName: 'Read', action: 'Read source', status: 'completed', progressCount: 1, latestUpdateKind: null }],
+    items: [{ kind: 'tool', id: 'read', turnId: 'turn', toolUseId: 'tool', toolName: 'Read', action: 'Read source', status: 'completed', progressCount: 1, latestUpdateKind: null,
+      target: 'src/app.ts', resultPreview: { availability: 'available', source: { tool: 'Read', path: 'src/app.ts', callId: 'tool' }, text: 'const directDetail = true;', truncated: false } }],
   };
   const view = (visible: boolean) => <ProcessPresentationProvider messageIds={['reply']} followingRef={following}>
-    {visible ? <AssistantReply descriptor={descriptor} status={{ type: 'complete', reason: 'stop' }} waiting={null} replyText={undefined} completedAt={undefined} regenerate={undefined} fork={undefined} renderItem={() => <p>Read detail</p>} /> : null}
+    {visible ? <AssistantReply descriptor={descriptor} status={{ type: 'complete', reason: 'stop' }} waiting={null} replyText={undefined} completedAt={undefined} regenerate={undefined} fork={undefined} /> : null}
   </ProcessPresentationProvider>;
   const { rerender } = render(view(true));
-  await user.click(screen.getByRole('button', { name: /1 read/ }));
-  expect(screen.getByText('Read detail')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /Activity/ })).toBeNull();
+  await user.click(screen.getByRole('button', { name: /Read.*src\/app\.ts/ }));
+  expect(screen.getByRole('region', { name: 'Source preview' }).textContent).toContain('const directDetail = true;');
   expect(following.current.following).toBe(false);
   rerender(view(false));
   rerender(view(true));
-  expect(screen.getByRole('button', { name: /1 read/ }).getAttribute('aria-expanded')).toBe('true');
-  expect(screen.getByText('Read detail')).toBeTruthy();
+  expect(screen.getByRole('button', { name: /Read.*src\/app\.ts/ }).getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByRole('region', { name: 'Source preview' }).textContent).toContain('const directDetail = true;');
 });
 
 it('keeps independent inline activity disclosures across eviction without moving the reader', async () => {
@@ -66,7 +68,7 @@ it('keeps independent inline activity disclosures across eviction without moving
   expect(screen.getByRole('region', { name: 'Directory listing' })).toBeTruthy();
 });
 
-it('includes commands in the work disclosure and retains failures after the turn settles', async () => {
+it('keeps a single command directly accessible and retains failures after the turn settles', async () => {
   const user = userEvent.setup();
   const descriptor: AssistantGroupDescriptor = {
     kind: 'assistant', id: 'reply', turnId: 'turn',
@@ -83,9 +85,63 @@ it('includes commands in the work disclosure and retains failures after the turn
   const rendered = render(view(true));
   expect(screen.getByLabelText('Command and output').textContent).toContain('Checking fixture');
   rendered.rerender(view(false));
-  await user.click(screen.getByRole('button', { name: /Worked.*1 tool.*1 failed/ }));
+  expect(screen.queryByRole('button', { name: /Activity/ })).toBeNull();
   await user.click(screen.getByRole('button', { name: /Run fixture/ }));
   expect(screen.getByLabelText('Command and output').textContent).toContain('Module not found');
+});
+
+it.each([1, 2])('opens each of %s reasoning segments with one disclosure and no outer Thinking group', async (count) => {
+  const user = userEvent.setup();
+  const descriptor: AssistantGroupDescriptor = { kind: 'assistant', id: 'reply', turnId: 'turn',
+    items: Array.from({ length: count }, (_, index) => ({ kind: 'thinking', id: `thinking-${index}`, turnId: 'turn',
+      text: `Reasoning segment ${index + 1}`, status: 'active', truncated: false })) };
+  render(<ProcessPresentationProvider messageIds={['reply']} followingRef={{ current: { following: true } }}>
+    <AssistantReply descriptor={descriptor} status={{ type: 'running' }} waiting={null} replyText={undefined}
+      completedAt={undefined} regenerate={undefined} fork={undefined} />
+  </ProcessPresentationProvider>);
+  const thinking = screen.getAllByRole('button', { name: /^Thinking/ });
+  expect(thinking).toHaveLength(count);
+  expect(screen.queryByRole('button', { name: /Activity/ })).toBeNull();
+  for (const [index, trigger] of thinking.entries()) {
+    expect(screen.queryByText(`Reasoning segment ${index + 1}`)).toBeNull();
+    await user.click(trigger);
+    expect(screen.getByText(`Reasoning segment ${index + 1}`)).toBeTruthy();
+  }
+});
+
+it('retains explicit reasoning disclosure through appended text, completion and virtual eviction inside mixed activity', async () => {
+  const user = userEvent.setup();
+  const following = { current: { following: true } };
+  const view = (text: string, running = true, visible = true) => {
+    const descriptor: AssistantGroupDescriptor = { kind: 'assistant', id: 'reply', turnId: 'turn', items: [
+      { kind: 'thinking', id: 'reasoning', turnId: 'turn', text, status: running ? 'active' : 'complete', durationMs: 2_000, truncated: false },
+      { kind: 'tool', id: 'read', turnId: 'turn', toolUseId: 'read-call', toolName: 'Read', action: 'Read file', status: 'completed',
+        progressCount: 0, latestUpdateKind: null, filePath: 'src/app.ts' },
+    ] };
+    return <ProcessPresentationProvider messageIds={['reply']} followingRef={following}>
+      {visible ? <AssistantReply descriptor={descriptor} status={running ? { type: 'running' } : { type: 'complete', reason: 'stop' }}
+        waiting={null} replyText={undefined} completedAt={undefined} regenerate={undefined} fork={undefined} /> : null}
+    </ProcessPresentationProvider>;
+  };
+  const rendered = render(view('Initial reasoning.'));
+  const activity = screen.getByRole('button', { name: /Activity/ });
+  expect(activity.getAttribute('aria-expanded')).toBe('false');
+  expect(screen.queryByRole('button', { name: /^Thinking/ })).toBeNull();
+  await user.click(activity);
+  expect(activity.textContent).not.toContain('Thinking');
+  expect(screen.getAllByRole('button', { name: /^Thinking/ })).toHaveLength(1);
+  await user.click(screen.getByRole('button', { name: /^Thinking/ }));
+  expect(screen.getByText('Initial reasoning.')).toBeTruthy();
+  rendered.rerender(view('Initial reasoning. More evidence.'));
+  expect(screen.getByRole('button', { name: /^Thinking/ }).getAttribute('aria-expanded')).toBe('true');
+  expect(rendered.container.textContent).toContain('Initial reasoning. More evidence.');
+  rendered.rerender(view('Initial reasoning. More evidence.', false));
+  expect(screen.getByRole('button', { name: /Thought for 2s/ }).getAttribute('aria-expanded')).toBe('true');
+  rendered.rerender(view('Initial reasoning. More evidence.', false, false));
+  rendered.rerender(view('Initial reasoning. More evidence.', false));
+  expect(rendered.container.textContent).toContain('Initial reasoning. More evidence.');
+  expect(screen.getByRole('button', { name: /Thought for 2s/ }).getAttribute('aria-expanded')).toBe('true');
+  expect(following.current.following).toBe(false);
 });
 
 it('copies the whole reply and omits timestamps for already-settled history', async () => {
