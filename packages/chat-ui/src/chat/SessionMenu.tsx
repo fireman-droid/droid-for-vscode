@@ -54,7 +54,6 @@ export function SessionMenu({ state, actions, disabled, open, openSignal, onOpen
       <PopoverContent align="end" aria-label="Session history" className="w-72 space-y-2 p-1.5">
         <div className="flex items-center gap-1">
           <Input ref={searchInput} type="search" aria-label="Search sessions" placeholder={actions.handleSearchContent ? 'Search chats · Enter searches content' : 'Search chats'}
-            className="focus-visible:border-[color-mix(in_srgb,var(--edge)_75%,var(--muted-ink)_25%)]"
             maxLength={maxSearchLength} value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); searchContent(); }
           }} />

@@ -79,7 +79,7 @@ export function ComposerView({
     return () => observer.disconnect();
   }, [value, inputReplacement, onLayout]);
   const submit = () => { if (!sendDisabled) onSend(); };
-  const editor = inputReplacement ?? <Textarea ref={input} data-composer-input="" aria-label={`Message ${assistantName}`}
+  const editor = inputReplacement ?? <Textarea variant="plain" ref={input} data-composer-input="" aria-label={`Message ${assistantName}`}
     aria-autocomplete={suggestionsListId ? 'list' : undefined}
     aria-controls={suggestionsOpen ? suggestionsListId : undefined} aria-activedescendant={suggestionsOpen ? activeSuggestionId : undefined}
     placeholder={placeholder ?? `Message ${assistantName}`} rows={1} maxLength={maxLength} value={value}

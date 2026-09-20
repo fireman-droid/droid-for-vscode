@@ -147,9 +147,10 @@
     border: 1px solid var(--edge);
     border-radius: 12px;
     background: var(--field-surface);
-    transition: border-color 120ms ease;
+    transition: border-color var(--motion-normal) var(--motion-ease), box-shadow var(--motion-normal) var(--motion-ease);
   }
-  .v2-btw-composer:focus-within { border-color: color-mix(in srgb, var(--edge) 75%, var(--muted-ink) 25%); }
+  .v2-btw-composer:hover { border-color: var(--control-border-hover); }
+  .v2-btw-composer:focus-within { border-color: var(--focus); box-shadow: var(--control-focus-shadow); }
   .v2-btw-input {
     display: block;
     width: 100%;
@@ -180,9 +181,11 @@
     border-radius: 50%;
     background: var(--ink);
     color: var(--surface);
+    transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), scale var(--motion-fast) var(--motion-ease);
   }
   .v2-btw-send > svg { width: 14px; height: 14px; }
-  .v2-btw-send:hover { background: var(--strong-ink); }
+  .v2-btw-send:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 85%, var(--surface)); }
+  .v2-btw-send:active:not(:disabled) { scale: .92; }
   .v2-btw-send:disabled { background: var(--soft-surface); color: var(--muted-ink); opacity: 1; }
   .v2-btw-quote {
     min-width: 0;
@@ -214,6 +217,7 @@
   .v2-btw-quote-toggle[data-state='open'] .v2-btw-quote-chevron { transform: rotate(90deg); }
   .v2-btw-quote-body { max-height: 112px; margin: 0; padding: 4px 8px 8px; overflow: auto; color: var(--ink); font-size: 12px; line-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
   @media (prefers-reduced-motion: reduce) {
-    .v2-btw-composer, .v2-btw-quote-chevron { transition: none; }
+    .v2-btw-composer, .v2-btw-quote-chevron, .v2-btw-send { transition: none; }
+    .v2-btw-send:active:not(:disabled) { scale: none; }
   }
 }

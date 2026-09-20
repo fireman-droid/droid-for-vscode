@@ -1,5 +1,6 @@
 @import 'tailwindcss' source(none);
 @import 'katex/dist/katex.min.css';
+@import './styles/controls.css';
 @import './styles/composer-panels.css';
 @import './styles/transcript-cards.css';
 @import './styles/btw.css';
@@ -75,6 +76,14 @@
 @layer base {
   :root, .agent-chat-ui {
     color-scheme: light;
+    --motion-fast: 120ms;
+    --motion-normal: 180ms;
+    --motion-exit: 100ms;
+    --motion-ease: cubic-bezier(.2, .8, .2, 1);
+    --control-radius: 6px;
+    --control-border-hover: color-mix(in srgb, var(--field-edge) 55%, var(--muted-ink));
+    --control-focus-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 14%, transparent);
+    --overlay-shadow: 0 2px 6px rgb(0 0 0 / 6%), 0 12px 32px rgb(0 0 0 / 12%);
     --surface: #fafafa;
     --ink: #292929;
     --muted-ink: #6b6b70;

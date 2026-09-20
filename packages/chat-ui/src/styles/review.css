@@ -123,6 +123,10 @@
   .review-launcher-summary > span { min-width: 0; overflow: hidden; color: var(--muted-ink); font-size: 12px; line-height: 18px; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
   .review-launcher-chevron { width: 12px; height: 12px; color: var(--muted-ink); transition: transform 140ms ease, color 140ms ease; }
   .review-launcher:hover:not(:disabled) .review-launcher-chevron { color: var(--ink); transform: translateX(1px); }
+  @media (prefers-reduced-motion: reduce) {
+    .review-launcher, .review-launcher-chevron { transition: none; }
+    .review-launcher:hover:not(:disabled) .review-launcher-chevron { transform: none; }
+  }
   .operation-diff { margin: 5px 0 10px; overflow: hidden; border-block: 1px solid var(--edge); }
   .operation-diff-file + .operation-diff-file { border-top: 1px solid var(--edge); }
   .operation-diff-file > header { display: flex; align-items: center; gap: 8px; padding: 4px 7px; font-size: 10px; }

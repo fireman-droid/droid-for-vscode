@@ -214,9 +214,12 @@
     gap: 6px;
     padding: 8px;
     border: 1px solid var(--edge);
-    border-radius: 8px;
+    border-radius: 12px;
     background: var(--field-surface);
+    transition: border-color var(--motion-normal) var(--motion-ease), box-shadow var(--motion-normal) var(--motion-ease);
   }
+  .v2-user-edit-card:hover { border-color: var(--control-border-hover); }
+  .v2-user-edit-card:focus-within { border-color: var(--focus); box-shadow: var(--control-focus-shadow); }
   .v2-user-edit-input {
     min-height: 27px;
     max-height: 168px;
@@ -263,7 +266,10 @@
     border-radius: 6px;
     background: color-mix(in srgb, var(--ink) 8%, var(--field-surface));
     color: var(--ink);
+    transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), scale var(--motion-fast) var(--motion-ease);
   }
+  .v2-user-edit-send:hover:not(:disabled) { background: var(--hover-surface); border-color: var(--control-border-hover); }
+  .v2-user-edit-send:active:not(:disabled) { scale: .94; }
   .v2-user-edit-send svg { width: 14px; height: 14px; }
   .v2-user-edit-send:disabled { opacity: 1; color: color-mix(in srgb, var(--ink) 56%, var(--field-surface)); }
   .v2-sent-attachments { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -319,6 +325,8 @@
   .v2-attachment-thumb > button:focus-visible,
   .v2-user-edit-send:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) {
-    .v2-command-card, .v2-command-chevron, .v2-command-body, .v2-user-message, .v2-attachment-remove { transition: none; }
+    .v2-command-card, .v2-command-chevron, .v2-command-body, .v2-user-message, .v2-attachment-remove,
+    .v2-user-edit-card, .v2-user-edit-send { transition: none; }
+    .v2-user-edit-send:active:not(:disabled) { scale: none; }
   }
 }

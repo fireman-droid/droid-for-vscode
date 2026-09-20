@@ -19,9 +19,16 @@
     position: relative;
     container-type: inline-size;
     min-width: 0;
-    border: 1px solid var(--chat-edge);
-    border-radius: 16px;
+    border: 1px solid var(--chat-edge, var(--field-edge));
+    border-radius: 18px;
     background: var(--field-surface);
+    box-shadow: 0 2px 6px rgb(0 0 0 / 3%);
+    transition: border-color var(--motion-normal) var(--motion-ease), box-shadow var(--motion-normal) var(--motion-ease);
+  }
+  .v2-chat-composer:hover { border-color: var(--control-border-hover); }
+  .v2-chat-composer:focus-within {
+    border-color: var(--focus);
+    box-shadow: var(--control-focus-shadow), 0 2px 6px rgb(0 0 0 / 3%);
   }
   .v2-composer-input-row {
     display: flex;
@@ -32,7 +39,10 @@
     padding: 8px;
   }
   .v2-composer-input-row textarea { flex: 1 1 0; min-width: 60px; }
+  .v2-composer-input-row textarea:focus-visible { box-shadow: none; }
   .v2-composer-input-row .v2-composer-add { border-radius: 50%; background: var(--soft-surface); }
+  .v2-composer-input-row .v2-composer-add:hover:not(:disabled),
+  .v2-composer-input-row .v2-composer-add[data-state='open'] { background: var(--hover-surface); }
   .v2-composer-input-row .v2-composer-model { flex: 0 1 auto; max-width: 34%; padding-inline: 2px; }
   .v2-composer-input-row .v2-composer-mode { display: none; }
   .v2-composer-input-row .v2-composer-context svg { width: 18px; height: 18px; }
@@ -59,8 +69,16 @@
     border-radius: 50%;
     background: var(--ink);
     color: var(--surface);
+    transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), scale var(--motion-fast) var(--motion-ease);
   }
+  .v2-composer-send:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 85%, var(--surface)); }
+  .v2-composer-send:active:not(:disabled) { scale: .92; }
+  .v2-composer-send:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; }
   .v2-composer-send:disabled { background: var(--soft-surface); color: var(--muted-ink); opacity: 1; }
+  @media (prefers-reduced-motion: reduce) {
+    .v2-chat-composer, .v2-composer-send { transition: none; }
+    .v2-composer-send:active:not(:disabled) { scale: none; }
+  }
   .v2-chat-composer > .v2-staged-attachments { padding: 10px 12px 0; }
   .v2-chat-surface .v2-user-message {
     border-color: var(--chat-edge);

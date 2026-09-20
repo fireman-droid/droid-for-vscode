@@ -68,13 +68,14 @@
   border-radius: 12px;
   background: var(--surface);
   text-align: left;
-  transition: border-color 120ms ease, background-color 120ms ease;
+  transition: border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease);
 }
 @media (prefers-reduced-motion: reduce) {
   .v2-mission-card { transition: none; }
 }
-.v2-mission-card:hover { background: var(--hover-surface); border-color: var(--edge-strong); }
-.v2-mission-card:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--focus); }
+.v2-mission-card:hover:not(:disabled) { background: var(--hover-surface); border-color: var(--control-border-hover); }
+.v2-mission-card:active:not(:disabled) { background: color-mix(in srgb, var(--ink) 5%, var(--hover-surface)); }
+.v2-mission-card:focus-visible { outline: none; border-color: var(--focus); box-shadow: var(--control-focus-shadow); }
 
 /* Attention-stripped inline banner (readiness advisory, awaiting input) */
 .v2-mission-banner {

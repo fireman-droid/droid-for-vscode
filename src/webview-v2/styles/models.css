@@ -20,9 +20,10 @@
   .models-interface { display: flex; min-width: 0; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--edge); border-radius: 8px; background: color-mix(in srgb, var(--soft-surface) 35%, var(--surface)); }
   .models-interface-toolbar { display: flex; min-width: 0; align-items: flex-end; gap: 12px; }
   .models-interface-toolbar > button { flex-shrink: 0; }
-  .models-search { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--field-edge); border-radius: 7px; background: var(--field-surface); }
+  .models-search { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--field-edge); border-radius: 7px; background: var(--field-surface); transition: border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease); }
   .models-search > svg { width: 14px; height: 14px; color: var(--muted-ink); }
-  .models-search:focus-within { border-color: color-mix(in srgb, var(--edge) 65%, var(--muted-ink)); }
+  .models-search:hover { border-color: var(--control-border-hover); }
+  .models-search:focus-within { border-color: var(--focus); box-shadow: var(--control-focus-shadow); }
   .models-list { border-top: 1px solid var(--edge); }
   .models-model-row { display: flex; align-items: flex-start; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--edge); }
   .models-row-actions { display: flex; flex-shrink: 0; align-items: center; gap: 5px; }
@@ -33,12 +34,10 @@
   .models-empty h3 { font-size: 14px; font-weight: 500; }
   .models-empty-compact { min-height: 190px; padding-block: 12px; }
   .models-form { min-width: 0; }
-  .models-panel { --focus: color-mix(in srgb, var(--edge) 65%, var(--muted-ink)); }
   .models-field { display: block; font-size: 13px; font-weight: 500; }
   .models-field > input, .models-field > button, .models-field > .models-help { display: block; margin-top: 8px; }
   .models-field > button { display: flex; }
   .models-field > input, .models-field > button { min-height: 34px; font-weight: 400; border-radius: 6px; }
-  .models-field > input:focus-visible { border-color: color-mix(in srgb, var(--edge) 65%, var(--muted-ink)); }
   .models-optional { margin-left: 4px; font-size: 11px; font-weight: 400; color: var(--muted-ink); }
   .models-key-note { padding: 12px; border-radius: 7px; background: var(--soft-surface); }
   .models-advanced { border-block: 1px solid var(--edge); }
@@ -55,6 +54,9 @@
   .models-discovery-row > button { margin-top: 2px; }
   .models-feedback { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 10px 12px; border-radius: 7px; background: var(--soft-surface); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
   .models-panel > .models-feedback { margin-bottom: 16px; }
+  @media (prefers-reduced-motion: reduce) {
+    .models-search { transition: none; }
+  }
   @media (max-width: 760px) {
     .models-workspace { grid-template-columns: 156px minmax(0, 1fr); }
     .models-main { padding: 24px 20px; }

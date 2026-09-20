@@ -36,11 +36,12 @@ export function PopoverContent({
     <PopoverPrimitive.Portal container={container}>
       <PopoverPrimitive.Content
         data-webview-overlay=""
+        data-slot="popover-content"
         align={align}
         sideOffset={sideOffset}
         collisionPadding={8}
         className={cn(
-          'v2-popover z-40 max-h-[var(--radix-popover-content-available-height)] max-w-[calc(100vw-16px)] overflow-auto rounded-md border border-border bg-popover p-2 text-popover-foreground shadow-md outline-none',
+          'dvx-overlay-surface v2-popover z-40 max-h-[var(--radix-popover-content-available-height)] max-w-[calc(100vw-16px)] overflow-auto rounded-lg border border-border bg-popover p-2 text-popover-foreground outline-none',
           className,
         )}
         {...props}
@@ -65,10 +66,11 @@ export function DialogContent({
   const container = usePortalContainer();
   return (
     <DialogPrimitive.Portal container={container}>
-      <DialogPrimitive.Overlay data-webview-overlay="" className="v2-dialog-overlay fixed inset-0 z-40 bg-black/30" />
+      <DialogPrimitive.Overlay data-webview-overlay="" data-slot="dialog-overlay" className="v2-dialog-overlay fixed inset-0 z-40 bg-black/30" />
       <DialogPrimitive.Content
         data-webview-overlay=""
-        className={cn('v2-dialog fixed inset-x-2 top-[10%] z-50 mx-auto max-h-[80%] max-w-lg overflow-auto rounded-md border border-border bg-popover p-4 text-popover-foreground shadow-lg outline-none', className)}
+        data-slot="dialog-content"
+        className={cn('dvx-overlay-surface v2-dialog fixed inset-x-2 top-[10%] z-50 mx-auto max-h-[80%] max-w-lg overflow-auto rounded-xl border border-border bg-popover p-4 text-popover-foreground outline-none', className)}
         {...props}
       >
         {children}
@@ -91,9 +93,10 @@ export function Tooltip({ children, content }: { readonly children: ReactNode; r
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal container={container}>
         <TooltipPrimitive.Content
+          data-slot="tooltip-content"
           sideOffset={5}
           collisionPadding={8}
-          className="z-50 max-w-64 rounded border border-border bg-popover px-2 py-1 text-xs text-popover-foreground shadow"
+          className="dvx-overlay-surface z-50 max-w-64 rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground"
         >
           {content}
         </TooltipPrimitive.Content>

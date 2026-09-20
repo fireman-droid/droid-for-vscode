@@ -138,7 +138,7 @@ export function ModelsApp({ transport }: { readonly transport: ModelsTransport }
               </p>
               <p className="models-help">此处只切换查看接口，点击模型旁的“使用此模型”才会切换当前聊天。</p>
             </div>
-            <div className="models-search"><Search aria-hidden /><Input type="search" className="h-[34px] rounded-none border-0 bg-transparent px-0 focus-visible:border-transparent" aria-label="搜索已配置模型" placeholder="搜索模型名称或 Model ID" value={page.search} onChange={(event) => page.setSearch(event.target.value)} /></div>
+            <div className="models-search"><Search aria-hidden /><Input type="search" className="h-[34px] rounded-none border-0 bg-transparent px-0 focus-visible:border-transparent focus-visible:ring-0" aria-label="搜索已配置模型" placeholder="搜索模型名称或 Model ID" value={page.search} onChange={(event) => page.setSearch(event.target.value)} /></div>
             {!snapshot.canApply && snapshot.applyMessage ? <p role="status" className="models-help">暂时无法切换模型：{snapshot.applyMessage}</p> : null}
             <ModelList models={visible} snapshot={snapshot} disabled={disabled} onAction={(action) => { void run(action); }}
               onRename={(model) => { manager.setNotice(null); setAlias({ kind: 'model', model }); }}

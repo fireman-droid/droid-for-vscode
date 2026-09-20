@@ -12,9 +12,9 @@ export function isTextSelectionClick(event: { readonly detail: number; readonly 
     selection.getRangeAt(0).intersectsNode(event.currentTarget);
 }
 
-const layout = 'inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded text-[13px] [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0';
+const layout = 'dvx-pressable inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--control-radius)] text-[13px] [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0';
 export const buttonVariants = cva(
-  'select-none outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-45',
+  'dvx-control select-none disabled:pointer-events-none disabled:opacity-45',
   {
     variants: {
       variant: {

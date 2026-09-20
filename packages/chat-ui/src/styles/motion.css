@@ -2,12 +2,28 @@
   .dvx-stream-in { animation: v2-stream-reveal 160ms ease-out; }
   @keyframes v2-stream-reveal { from { opacity: .55; } to { opacity: 1; } }
   .v2-popover { transform-origin: var(--radix-popover-content-transform-origin); }
-  .v2-popover[data-state='open'], .v2-dialog[data-state='open'] { animation: v2-overlay-open 150ms ease-out; }
-  .v2-popover[data-state='closed'], .v2-dialog[data-state='closed'] { animation: v2-overlay-close 100ms ease-in; }
-  .v2-dialog-overlay[data-state='open'] { animation: v2-fade-in 150ms ease-out; }
-  .v2-dialog-overlay[data-state='closed'] { animation: v2-fade-in 100ms ease-in reverse; }
+  [data-slot='dropdown-menu-content'] { transform-origin: var(--radix-dropdown-menu-content-transform-origin); }
+  [data-slot='select-content'] { transform-origin: var(--radix-select-content-transform-origin); }
+  [data-slot='tooltip-content'] { transform-origin: var(--radix-tooltip-content-transform-origin); }
+  :is(.v2-popover, .v2-dialog, [data-slot='dropdown-menu-content'], [data-slot='select-content'], [data-slot='tooltip-content']) {
+    --overlay-enter-x: 0px;
+    --overlay-enter-y: 4px;
+    box-shadow: var(--overlay-shadow);
+  }
+  :is(.v2-popover, [data-slot='dropdown-menu-content'], [data-slot='select-content'], [data-slot='tooltip-content'])[data-side='bottom'] { --overlay-enter-y: -4px; }
+  :is(.v2-popover, [data-slot='dropdown-menu-content'], [data-slot='select-content'], [data-slot='tooltip-content'])[data-side='left'] { --overlay-enter-x: 4px; --overlay-enter-y: 0px; }
+  :is(.v2-popover, [data-slot='dropdown-menu-content'], [data-slot='select-content'], [data-slot='tooltip-content'])[data-side='right'] { --overlay-enter-x: -4px; --overlay-enter-y: 0px; }
+  :is(.v2-popover, .v2-dialog, [data-slot='dropdown-menu-content'], [data-slot='select-content'])[data-state='open'],
+  [data-slot='tooltip-content']:is([data-state='delayed-open'], [data-state='instant-open']) {
+    animation: v2-overlay-open var(--motion-normal) var(--motion-ease);
+  }
+  :is(.v2-popover, .v2-dialog, [data-slot='dropdown-menu-content'], [data-slot='select-content'], [data-slot='tooltip-content'])[data-state='closed'] {
+    animation: v2-overlay-close var(--motion-exit) ease-in;
+  }
+  .v2-dialog-overlay[data-state='open'] { animation: v2-fade-in var(--motion-normal) var(--motion-ease); }
+  .v2-dialog-overlay[data-state='closed'] { animation: v2-fade-in var(--motion-exit) ease-in reverse; }
   @keyframes v2-overlay-open {
-    from { opacity: 0; transform: translateY(3px) scale(.98); }
+    from { opacity: 0; transform: translate(var(--overlay-enter-x), var(--overlay-enter-y)) scale(.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
   @keyframes v2-overlay-close {
@@ -30,6 +46,7 @@
     to { height: 0; opacity: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .dvx-stream-in, .v2-tool-content, .v2-popover, .v2-dialog, .v2-dialog-overlay { animation: none !important; }
+    .dvx-stream-in, .v2-tool-content, .v2-popover, .v2-dialog, .v2-dialog-overlay,
+    [data-slot='dropdown-menu-content'], [data-slot='select-content'], [data-slot='tooltip-content'] { animation: none !important; }
   }
 }

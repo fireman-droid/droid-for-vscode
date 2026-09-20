@@ -90,7 +90,7 @@ function DiscoveredModels({ page, onDone }: { readonly page: ModelsPageState; re
   const { connection, discovered, models, chosen, busy } = page;
   const filtered = discovered?.filter((item) => item.model.toLowerCase().includes(search.trim().toLowerCase())) ?? [];
   return <div className="space-y-3">
-    <div className="models-search"><Search aria-hidden /><Input type="search" className="h-[34px] rounded-none border-0 bg-transparent px-0 focus-visible:border-transparent" aria-label="筛选发现的模型" placeholder="搜索 Model ID…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
+    <div className="models-search"><Search aria-hidden /><Input type="search" className="h-[34px] rounded-none border-0 bg-transparent px-0 focus-visible:border-transparent focus-visible:ring-0" aria-label="筛选发现的模型" placeholder="搜索 Model ID…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
     <p className="models-help">已获取 {discovered?.length ?? 0} 个模型，选择需要添加的项。每次最多 100 个。</p>
     <div className="models-discovery-list">{filtered.map((item) => {
       const exists = models.some((model) => model.model === item.model);
