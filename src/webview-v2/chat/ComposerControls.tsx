@@ -76,7 +76,7 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
       {!editorOwner && kind !== 'model' ? <PopoverAnchor virtualRef={composer} /> : null}
       <PopoverTrigger asChild><Button ref={(node) => { triggers.current[kind] = node; }} variant="ghost" size="sm"
         aria-label={label} title={label} disabled={disabled || ((kind === 'mode' || kind === 'model') && confirmed === null)}
-        className={`h-[26px] min-w-0 gap-1 px-1.5 text-xs font-normal text-muted-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground ${className}`}>
+        className={`h-[26px] min-w-0 gap-1 px-1.5 text-xs font-normal text-muted-foreground data-[state=open]:bg-[var(--control-surface-active)] data-[state=open]:text-foreground ${className}`}>
         {children}
       </Button></PopoverTrigger>
       <PopoverContent side="top" align={kind === 'model' ? 'end' : 'start'} sideOffset={8}

@@ -26,29 +26,29 @@ export function MissionSetup(props: MissionSetupProps) {
         <span className="flex justify-between gap-3 text-xs text-muted-foreground"><span>Describe the outcome and any constraints.</span><span className="shrink-0 tabular-nums">{flow.task.length.toLocaleString()} / {MAX_MISSION_TASK_LENGTH.toLocaleString()}</span></span>
       </label>
     </div>
-    <section className="space-y-5 rounded-xl border border-border p-5">
+    <section className="v2-mission-panel space-y-5 rounded-xl border border-border p-5">
       <StepHeading step={2} title="Orchestrator" detail="Owns the plan. These settings apply to the selected chat when the Mission starts." />
       <PairFields name="Orchestrator" pair={flow.orchestrator} capabilities={capabilities} disabled={flow.controlsDisabled} onChange={flow.setOrchestrator} />
     </section>
-    <dl aria-label="Mission execution flow" className="grid gap-px overflow-hidden rounded-xl border border-border bg-border text-xs @min-[480px]:grid-cols-3 [&>div]:min-w-0 [&>div]:bg-background [&>div]:p-4 [&_dt]:mb-1.5 [&_dt]:text-muted-foreground [&_dd]:break-words [&_dd]:font-medium">
+    <dl aria-label="Mission execution flow" className="v2-mission-flow grid gap-px overflow-hidden rounded-xl border border-border text-xs @min-[480px]:grid-cols-3 [&>div]:min-w-0 [&>div]:bg-background [&>div]:p-4 [&_dt]:mb-1.5 [&_dt]:text-muted-foreground [&_dd]:break-words [&_dd]:font-medium">
       <div><dt>Orchestrator</dt><dd title={`${capabilities.catalog.find((model) => model.id === flow.orchestrator.modelId)?.displayName ?? flow.orchestrator.modelId} · ${effortLabel(flow.orchestrator.reasoningEffort)}`}>{capabilities.catalog.find((model) => model.id === flow.orchestrator.modelId)?.displayName ?? flow.orchestrator.modelId} · {effortLabel(flow.orchestrator.reasoningEffort)}</dd></div>
       <div><dt>Worker</dt><dd>{flow.worker.mode === 'same-as-orchestrator' ? 'Inherits orchestrator' : `${capabilities.catalog.find((model) => model.id === flow.worker.modelId)?.displayName ?? flow.worker.modelId} · ${effortLabel(flow.worker.reasoningEffort)}`}</dd></div>
       <div><dt>Validation</dt><dd>{flow.enabledValidationCount} {flow.enabledValidationCount === 1 ? 'check' : 'checks'} enabled</dd></div>
     </dl>
     <Collapsible open={advanced} onOpenChange={setAdvanced} disabled={flow.controlsDisabled}>
-    <CollapsibleTrigger asChild><Button variant="ghost" className="h-auto w-full justify-between gap-3 rounded-xl border border-border p-4 text-left whitespace-normal" aria-label="Advanced Mission settings" disabled={flow.controlsDisabled}>
+    <CollapsibleTrigger asChild><Button variant="ghost" className="v2-mission-settings-trigger h-auto w-full justify-between gap-3 rounded-xl border border-border p-4 text-left whitespace-normal" aria-label="Advanced Mission settings" disabled={flow.controlsDisabled}>
       <span className="flex items-start gap-2.5"><span aria-hidden="true" className="v2-mission-step mt-0.5">3</span><span><span className="block font-medium text-foreground">Execution settings</span><span className="mt-1 block text-xs font-normal text-muted-foreground">Worker, Validator, and quality checks</span></span></span><ChevronRight className={`mt-1 size-4 transition-transform motion-reduce:transition-none ${advanced ? 'rotate-90' : ''}`} />
     </Button></CollapsibleTrigger>
     <CollapsibleContent className="grid grid-cols-1 gap-4 pt-4 @min-[560px]:grid-cols-2">
       <ProfileFields name="Worker" profile={flow.worker} capabilities={capabilities} disabled={flow.controlsDisabled} onChange={flow.setWorker} />
       <ProfileFields name="Validator" profile={flow.validator} capabilities={capabilities} disabled={flow.controlsDisabled} onChange={flow.setValidator} />
-      <fieldset className="col-span-full min-w-0 rounded-lg border border-border p-5"><legend className="px-1 font-medium">Validation checks</legend>
+      <fieldset className="v2-mission-panel col-span-full min-w-0 rounded-lg border border-border p-5"><legend className="px-1 font-medium">Validation checks</legend>
         <p className="mb-3 text-xs text-muted-foreground">Both checks use the shared Validator profile configured above.</p>
         <MissionToggle label="Run Scrutiny" description="Review the completed feature for implementation risks." checked={flow.scrutinyEnabled} disabled={flow.controlsDisabled} onChange={flow.setScrutinyEnabled} />
         <MissionToggle label="Run User Testing" description="Validate the finished flow through its user-facing surface." checked={flow.userTestingEnabled} disabled={flow.controlsDisabled} onChange={flow.setUserTestingEnabled} />
       </fieldset>
     </CollapsibleContent></Collapsible>
-    <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
+    <div className="v2-mission-setup-actions flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
       <p role="status" aria-live="polite" aria-label="Mission setup status" className={`min-w-40 flex-1 text-xs ${flow.visibleErrors.length > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{flow.status}</p>
       <Button className="h-9 min-w-32 rounded-md" disabled={flow.pending || startDisabled || flow.validation.errors.length > 0} onClick={flow.submit}><Play />{flow.pending ? 'Starting…' : 'Start Mission'}</Button>
     </div>
@@ -80,7 +80,7 @@ function ProfileFields({ name, profile, capabilities, disabled, onChange }: {
   readonly name: 'Worker' | 'Validator'; readonly profile: MissionProfile; readonly capabilities: MissionSetupCapabilities;
   readonly disabled: boolean; readonly onChange: (value: MissionProfile) => void;
 }) {
-  return <fieldset className="min-w-0 space-y-3 rounded-lg border border-border p-5 [&_.mission-pair]:grid-cols-1"><legend className="px-1 font-medium">{name}</legend>
+  return <fieldset className="v2-mission-panel min-w-0 space-y-3 rounded-lg border border-border p-5 [&_.mission-pair]:grid-cols-1"><legend className="px-1 font-medium">{name}</legend>
     <p className="text-xs text-muted-foreground">{name === 'Worker' ? 'Executes one feature at a time under the Orchestrator.' : 'Provides the shared profile for all quality checks.'}</p>
     <MissionSelect label={`${name} inheritance`} fieldLabel="Configuration" value={profile.mode} disabled={disabled}
       options={[{ value: 'same-as-orchestrator', label: 'Same as orchestrator' }, { value: 'override', label: 'Choose independently' }]}
@@ -93,7 +93,7 @@ function MissionToggle({ label, description, checked, disabled, onChange }: {
   readonly label: string; readonly description: string; readonly checked: boolean;
   readonly disabled: boolean; readonly onChange: (value: boolean) => void;
 }) {
-  return <label className="relative flex cursor-pointer items-center gap-3 border-t border-border py-3.5">
+  return <label className="v2-mission-toggle relative flex items-center gap-3 border-t border-border py-3.5">
     <span className={`min-w-0 flex-1 ${disabled ? 'opacity-50' : ''}`}><strong className="block font-medium">{label}</strong><small className="mt-1 block text-xs text-muted-foreground">{description}</small></span>
     <Switch aria-label={label} checked={checked} disabled={disabled} onCheckedChange={onChange} />
   </label>;

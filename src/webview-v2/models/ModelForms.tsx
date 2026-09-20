@@ -47,7 +47,7 @@ export function ConnectionForm({ connection, defaults, busy, onSave, onCancel }:
         <p className="models-help">{protocolHints[protocol]}</p>
       </div>
       <div className="models-key-note">
-        <label className="flex items-center gap-2 text-[13px]"><Checkbox disabled={busy} checked={setApiKey} onCheckedChange={(checked) => setSetApiKey(checked === true)} />
+        <label className="models-check-label flex items-center gap-2 text-[13px]"><Checkbox disabled={busy} checked={setApiKey} onCheckedChange={(checked) => setSetApiKey(checked === true)} />
           {connection?.hasKey ? '保存时更换 API Key' : '保存后输入 API Key'}
         </label>
         <p className="models-help mt-2">{connection?.hasKey ? '已有密钥不会显示在此页面。不勾选则保留原密钥。' : '如果接口无需密钥，可取消勾选。'}
@@ -107,13 +107,13 @@ export function ModelForm({ model, connection, busy, onSave, onCancel }: {
         <span className="models-help">按你填写的名称显示，不自动添加后缀。不同接口的模型请使用不同别名，供 Droid 识别。</span>
       </label>
       <Collapsible open={advanced} onOpenChange={setAdvanced} className="models-advanced">
-        <CollapsibleTrigger asChild><Button disabled={busy} variant="plain" size="none" className="flex w-full items-center justify-between py-2 text-[13px] text-muted-foreground">
-          高级设置 <ChevronDown className={`size-3.5 transition-transform ${advanced ? 'rotate-180' : ''}`} />
+        <CollapsibleTrigger asChild><Button disabled={busy} variant="plain" size="none" className="models-advanced-trigger flex w-full items-center justify-between py-2 text-[13px] text-muted-foreground">
+          高级设置 <ChevronDown className={`size-3.5 transition-transform motion-reduce:transition-none ${advanced ? 'rotate-180' : ''}`} />
         </Button></CollapsibleTrigger>
         <CollapsibleContent forceMount hidden={!advanced}>
           <div className="space-y-4 pb-2 pt-3">
             <label className="models-field">最大输出 Token <span className="models-optional">可选</span><Input type="number" min={1} max={MAX_CUSTOM_MODEL_OUTPUT_TOKENS} step={1} value={tokens} placeholder="使用 Droid 默认值" onChange={(event) => setTokens(event.target.value)} onInvalid={() => setAdvanced(true)} /></label>
-            <label className="flex items-center gap-2 text-[13px]"><Checkbox disabled={busy} checked={noImages} onCheckedChange={(checked) => setNoImages(checked === true)} />此模型不支持图片输入</label>
+            <label className="models-check-label flex items-center gap-2 text-[13px]"><Checkbox disabled={busy} checked={noImages} onCheckedChange={(checked) => setNoImages(checked === true)} />此模型不支持图片输入</label>
             <Button variant="outline" type="submit" value="verify" size="sm">保存并验证…</Button>
             <p className="models-help">验证会请求一次真实模型回复，由 Droid 确认后执行。</p>
           </div>

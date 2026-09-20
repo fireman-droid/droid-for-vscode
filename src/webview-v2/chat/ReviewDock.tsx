@@ -29,23 +29,23 @@ export function ReviewDock(props: ReviewDockProps) {
   const selected = pendingScope?.kind ?? (ownsLatest ? 'turn' : review?.scopeKind === 'workspace' || review?.scopeKind === 'branch' ? review.scopeKind : 'none');
   const agentRunning = agent?.reviewScopeId === review?.reviewScopeId && (agent?.status === 'starting' || agent?.status === 'running');
   const locked = writing || current === null || current.status === 'open-only' || current.status === 'reviewed';
-  return <section aria-label="Review changes" className="overflow-hidden rounded-xl border border-border bg-input-background">
+  return <section aria-label="Review changes" className="overflow-hidden rounded-xl border border-[var(--panel-edge)] bg-input-background">
     <Tool open={expanded} onOpenChange={setExpanded}>
       <div className="flex min-h-[34px] min-w-0 items-center gap-2 py-[3px] pr-2 pl-2.5">
-        <CollapsibleTrigger asChild><Button variant="plain" size="none" className="flex h-6 min-w-0 flex-1 items-center gap-[7px] text-left">
-          <ChevronDown className={`size-[13px] shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        <CollapsibleTrigger asChild><Button variant="plain" size="none" className="v2-chat-disclosure flex h-6 min-w-0 flex-1 items-center gap-[7px] text-left">
+          <ChevronDown className={`size-[13px] shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`} />
           <span className="truncate text-[11.5px] font-semibold">{changes.files.length} {changes.files.length === 1 ? 'file' : 'files'} changed</span>
           <span className="truncate text-[10.5px] text-muted-foreground">{showOpenNotice ? operation.message : writing ? 'Writing changes' : review?.lifecycle === 'complete' ? 'Review complete' : 'Ready to review'}</span>
           {writing ? <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground"><span className="size-1 rounded-full bg-primary" />writing</span> : null}
         </Button></CollapsibleTrigger>
         <Button size="sm" className="h-6 rounded-[7px] px-3 text-[11px]" disabled={pendingScope !== null} onClick={() => { setExpanded(true); openScope('turn', changes.turnId, true); }}>{writing ? 'View live' : 'Review'}</Button>
       </div>
-      <ToolContent className="max-h-[45vh] space-y-2 overflow-auto border-t border-border px-2.5 pt-[7px] pb-2 text-[11px]">
+      <ToolContent className="max-h-[45vh] space-y-2 overflow-auto border-t border-[var(--panel-edge)] px-2.5 pt-[7px] pb-2 text-[11px]">
         <ToggleGroup type="single" value={selected} onValueChange={(value) => {
           if (value) { const kind = value as 'turn' | 'workspace' | 'branch'; openScope(kind, kind === 'turn' ? changes.turnId : undefined); }
         }} className="grid grid-cols-3 gap-0.5" aria-label="Review scope">
           {(['turn', 'workspace', 'branch'] as const).map((kind) => <ToggleGroupItem key={kind} value={kind}
-            className={`h-6 min-w-0 px-1 text-[10.5px] ${selected === kind ? 'bg-muted text-foreground' : 'text-muted-foreground'}`}
+            className={`h-6 min-w-0 px-1 text-[10.5px] ${selected === kind ? 'bg-[var(--control-surface-active)] text-foreground' : 'text-muted-foreground'}`}
             disabled={pendingScope !== null}>
             {kind === 'turn' ? 'Latest Turn' : kind === 'workspace' ? 'Workspace' : 'Branch'}
           </ToggleGroupItem>)}
@@ -53,7 +53,7 @@ export function ReviewDock(props: ReviewDockProps) {
         {review === null ? <p>Choose Review to open the latest Turn.</p>
           : review.lifecycle === 'unavailable' || review.lifecycle === 'stale' ? <p role="status">{review.message ?? 'This review scope is unavailable.'}</p>
           : <>
-            <div className="flex items-start justify-between gap-3 border-y border-border py-2">
+            <div className="flex items-start justify-between gap-3 border-y border-[var(--panel-edge)] py-2">
               <div className="min-w-0"><span className="text-[10px] text-muted-foreground">{review.baselineLabel}</span><p className="truncate" title={current?.path}>{current?.path ?? 'No comparable files'}</p></div>
               <div className="shrink-0 text-right"><span className="text-[10px] text-muted-foreground">{newerChanges ? 'Newer changes available' : `${review.scopeKind === 'branch' && review.branchCommitCount !== undefined ? `${review.branchCommitCount} ${review.branchCommitCount === 1 ? 'commit' : 'commits'} · ` : ''}${review.reviewedCount} / ${review.reviewableCount} reviewed`}</span>
             {review.files.length > 1 ? <div className="flex justify-end gap-1">
@@ -63,14 +63,14 @@ export function ReviewDock(props: ReviewDockProps) {
             <ul className="max-h-48 space-y-1 overflow-auto">
               {review.files.map((file, index) => <li key={file.path}>
                 <Button variant="plain" size="none" aria-label={`Open diff for ${file.path}`} onClick={() => props.onSelectFile(file.path)}
-                  className={cn('flex w-full min-w-0 items-center gap-2 rounded px-1 py-1 text-left outline-none hover:bg-muted focus-visible:ring-1 focus-visible:ring-ring', index === review.currentIndex && 'bg-muted')}>
+                  className={cn('flex w-full min-w-0 items-center gap-2 rounded px-1 py-1 text-left outline-none hover:bg-[var(--control-surface-hover)] focus-visible:ring-1 focus-visible:ring-ring', index === review.currentIndex && 'bg-[var(--control-surface-active)]')}>
                   <span role="img" aria-label={file.status} title={file.status} className={`size-1.5 shrink-0 rounded-full ${file.status === 'reviewed' ? 'bg-muted-foreground' : file.status === 'open-only' ? 'border border-muted-foreground' : 'bg-primary'}`} />
                   <span className="min-w-0 flex-1 truncate" title={file.path}>{file.path}</span>
                   <span className="flex shrink-0 gap-1.5 text-[11px]"><span className="text-[var(--vscode-gitDecoration-addedResourceForeground,#3f9d5f)]">{file.additions === null ? '' : `+${file.additions}`}</span><span className="text-destructive">{file.deletions === null ? '' : `−${file.deletions}`}</span></span>
                 </Button>
               </li>)}
             </ul>
-            <div className="flex flex-wrap items-center gap-1 border-t border-border pt-2 [&>button]:h-6 [&>button]:px-2 [&>button]:text-[10.5px]">
+            <div className="flex flex-wrap items-center gap-1 border-t border-[var(--panel-edge)] pt-2 [&>button]:h-6 [&>button]:px-2 [&>button]:text-[10.5px]">
               <Button variant="outline" size="sm" disabled={locked} onClick={() => props.onMarkReviewed(false)}>Mark reviewed</Button>
               <Button variant="outline" size="sm" disabled={locked} onClick={() => props.onMarkReviewed(true)}>Mark &amp; Next</Button>
               <Popover open={moreOpen} onOpenChange={setMoreOpen}>
@@ -84,7 +84,7 @@ export function ReviewDock(props: ReviewDockProps) {
               </Popover>
             </div>
             {agentRunning ? <p role="status">{agent?.message ?? 'Agent Review running'}</p> : null}
-            {preview !== null ? <div role="status" className="space-y-2 border-t border-border pt-2">
+            {preview !== null ? <div role="status" className="space-y-2 border-t border-[var(--panel-edge)] pt-2">
               <p>{preview.conflicted.length > 0 ? `${preview.conflicted.length} conflict(s), restore is blocked.` : `${preview.restorable.length} file(s) can be restored.`}</p>
               <Button variant="outline" size="sm" disabled={preview.conflicted.length > 0} onClick={() => props.onConfirmRestore(preview.target, preview.previewId)}>Confirm restore</Button>
             </div> : null}

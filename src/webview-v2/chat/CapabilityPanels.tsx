@@ -29,7 +29,7 @@ export function SkillsPanel({ skills, disabled, onRefresh, onToggle, onNewSessio
     {skills.status === 'ready' && items.length === 0 ? <p role="status" className="text-muted-foreground">{skills.items.length === 0 ? 'No skills found.' : 'No matching skills.'}</p> : null}
     <ul className="space-y-3">
       {items.map((skill) => <li key={skill.name}>
-        <label className="flex items-start gap-2">
+        <label className="v2-chat-choice flex items-start gap-2 rounded">
           <Checkbox checked={skill.enabled} aria-label={`Enable ${skill.name}`} disabled={disabled || busy} onCheckedChange={(checked) => {
             setPending(skill.name);
             setChanged(true);

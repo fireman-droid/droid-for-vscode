@@ -66,7 +66,7 @@ export function SessionMenu({ state, actions, disabled, open, openSignal, onOpen
               {group.items.map((entry) => <SessionRow key={entry.id} entry={entry} maxTitleLength={maxTitleLength} disabled={controlsDisabled} actions={actions} runOnce={runOnce} onSelect={() => select(entry.id)} />)}
             </section>)}
             {groups.length === 0 && state.sessions.status !== 'loading' ? <p className="p-2 text-xs text-muted-foreground">{search.trim() ? 'No sessions match your search.' : state.sessions.status === 'ready' ? `No ${assistantName} sessions found.` : 'Session history has not loaded yet.'}</p> : null}
-          {state.sessionSearch === null ? null : <section aria-label="Content matches" className="space-y-2 border-t border-border pt-2 text-xs">
+          {state.sessionSearch === null ? null : <section aria-label="Content matches" className="space-y-2 border-t border-[var(--panel-edge)] pt-2 text-xs">
             <h3 className="font-medium">Content matches · “{state.sessionSearch.query}”</h3>
             {state.sessionSearch.status === 'error' ? <p role="alert" className="text-destructive">{state.sessionSearch.message}</p> : state.sessionSearch.items.length === 0 ? <p className="text-muted-foreground">No content matches.</p> : state.sessionSearch.items.map((hit) => {
               const body = <><span>{hit.title}</span>{hit.snippet === null ? null : <span className="line-clamp-3 text-xs text-muted-foreground">{hit.snippet}</span>}</>;
@@ -78,8 +78,8 @@ export function SessionMenu({ state, actions, disabled, open, openSignal, onOpen
           {actions.handleRefreshArchived ? <Collapsible open={archived} onOpenChange={(open) => {
             setArchived(open);
             if (open && state.archived.status === 'idle') actions.handleRefreshArchived?.();
-          }} asChild><section aria-label="Archived sessions" className="border-t border-border pt-1">
-            <CollapsibleTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-full justify-start px-1 text-[11px] text-muted-foreground"><ChevronRight className={`size-3 transition-transform ${archived ? 'rotate-90' : ''}`} />Archived{state.archived.status === 'ready' && archivedEntries.length ? ` (${archivedEntries.length})` : ''}</Button></CollapsibleTrigger>
+          }} asChild><section aria-label="Archived sessions" className="border-t border-[var(--panel-edge)] pt-1">
+            <CollapsibleTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-full justify-start px-1 text-[11px] text-muted-foreground"><ChevronRight className={`size-3 transition-transform motion-reduce:transition-none ${archived ? 'rotate-90' : ''}`} />Archived{state.archived.status === 'ready' && archivedEntries.length ? ` (${archivedEntries.length})` : ''}</Button></CollapsibleTrigger>
             <CollapsibleContent>
               {state.archived.status === 'error' ? <p role="alert" className="text-xs text-destructive">{state.archived.message}</p> : null}
               {state.archived.status === 'loading' || state.archived.status === 'idle' ? <p role="status" className="text-xs text-muted-foreground">Loading archived sessions…</p> : null}
@@ -112,7 +112,7 @@ function SessionRow({ entry, maxTitleLength, disabled, actions, runOnce, onSelec
     if (title.trim() && title.trim() !== entry.title) actions.handleRenameSession?.(entry.id, title.trim());
     else setTitle(entry.title);
   };
-  return <div className="group relative flex min-h-7 min-w-0 items-center rounded hover:bg-accent [&_svg]:size-3">
+  return <div className="v2-session-row group relative flex min-h-7 min-w-0 items-center rounded [&_svg]:size-3" data-current={entry.active || undefined}>
     {renaming ? <form className="flex w-full gap-1 p-1" onSubmit={(event) => {
       event.preventDefault();
       submitRename();
@@ -122,13 +122,13 @@ function SessionRow({ entry, maxTitleLength, disabled, actions, runOnce, onSelec
         if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault();
       }} />
     </form> : <>
-      <Button variant="ghost" className="h-7 min-w-0 flex-1 justify-start pl-1 pr-8 hover:bg-transparent" aria-current={entry.active ? 'true' : undefined} title={entry.modifiedTime} disabled={disabled || entry.active} onClick={onSelect}>
-        {entry.running ? <><LoaderCircle className="size-3 animate-spin" /><span className="sr-only">Turn still running. </span></> : <CheckCircle className="size-3 shrink-0 text-muted-foreground" />}
+      <Button variant="ghost" className="h-7 min-w-0 flex-1 justify-start pl-1 pr-8 hover:bg-transparent aria-[current=true]:opacity-100" aria-current={entry.active ? 'true' : undefined} title={entry.modifiedTime} disabled={disabled || entry.active} onClick={onSelect}>
+        {entry.running ? <><LoaderCircle className="size-3 motion-safe:animate-spin" /><span className="sr-only">Turn still running. </span></> : <CheckCircle className="size-3 shrink-0 text-muted-foreground" />}
         <span className="truncate">{entry.title}</span>
         {entry.worktree ? <span title={entry.worktree.path} className="truncate text-[11px] text-muted-foreground">worktree{entry.worktree.branch ? ` · ${entry.worktree.branch}` : ''}</span> : null}
         {entry.badge ? <span className="text-[11px] text-muted-foreground">{entry.badge}</span> : null}
       </Button>
-      <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded group-hover:bg-accent group-focus-within:bg-accent [&>button]:pointer-events-none [&>button]:opacity-0 group-hover:[&>button]:pointer-events-auto group-hover:[&>button]:opacity-100 group-focus-within:[&>button]:pointer-events-auto group-focus-within:[&>button]:opacity-100 [&>button[aria-pressed=true]]:pointer-events-auto [&>button[aria-pressed=true]]:opacity-100">
+      <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded group-hover:bg-[var(--control-surface-hover)] group-focus-within:bg-[var(--control-surface-hover)] [&>button]:pointer-events-none [&>button]:opacity-0 group-hover:[&>button]:pointer-events-auto group-hover:[&>button]:opacity-100 group-focus-within:[&>button]:pointer-events-auto group-focus-within:[&>button]:opacity-100 [&>button[aria-pressed=true]]:pointer-events-auto [&>button[aria-pressed=true]]:opacity-100">
       {entry.active ? <>
         {actions.handleRenameSession ? <Button variant="ghost" size="icon-sm" aria-label={`Rename ${entry.title}`} disabled={disabled} onClick={() => { setTitle(entry.title); setRenaming(true); }}><Pencil /></Button> : null}
         {actions.handleForkSession ? <Button variant="ghost" size="icon-sm" aria-label={`Fork ${entry.title}`} disabled={disabled} onClick={() => runOnce(() => actions.handleForkSession?.(entry.id))}><GitBranch /></Button> : null}

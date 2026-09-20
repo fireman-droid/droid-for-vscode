@@ -119,7 +119,7 @@ export function ComposerSuggestions({ suggestions, state }: {
         return <div key={`${entry.kind}:${name}`}>
           {previous === undefined || group(previous) !== group(entry) ? <p className="px-2 py-1 text-[10px] text-muted-foreground">{entry.kind === 'command' ? 'Commands (.factory/commands)' : entry.kind === 'skill' ? 'Skills (inserts a prompt)' : 'Built-in'}</p> : null}
           <Button variant="plain" size="none" id={`${suggestions.listId}-${index}`} role="option" aria-selected={index === activeIndex} tabIndex={-1} title={description ?? undefined}
-            className={cn('block w-full rounded px-2 py-1 text-left text-xs outline-none hover:bg-muted focus-visible:ring-1 focus-visible:ring-ring', index === activeIndex && 'bg-muted')}
+            className={cn('block w-full rounded px-2 py-1 text-left text-xs outline-none hover:bg-[var(--control-surface-hover)] focus-visible:ring-1 focus-visible:ring-ring', index === activeIndex && 'bg-[var(--control-surface-active)]')}
             onMouseDown={(event) => event.preventDefault()} onClick={() => suggestions.selectSlash(entry)} onMouseEnter={() => suggestions.setIndex(index)}>
             <span>{entry.kind === 'skill' ? name : `/${name}`}</span>
             {entry.kind === 'command' && entry.command.argumentHint ? <span className="ml-2 text-muted-foreground">{entry.command.argumentHint}</span> : null}
@@ -131,7 +131,7 @@ export function ComposerSuggestions({ suggestions, state }: {
         {results.map((path, index) => {
           const split = splitMentionPath(path);
           return <Button key={path} variant="plain" size="none" id={`${suggestions.listId}-${index}`} role="option" aria-selected={index === activeIndex} tabIndex={-1} title={path}
-            className={cn('flex w-full min-w-0 gap-2 rounded px-2 py-1 text-left text-xs outline-none hover:bg-muted focus-visible:ring-1 focus-visible:ring-ring', index === activeIndex && 'bg-muted')}
+            className={cn('flex w-full min-w-0 gap-2 rounded px-2 py-1 text-left text-xs outline-none hover:bg-[var(--control-surface-hover)] focus-visible:ring-1 focus-visible:ring-ring', index === activeIndex && 'bg-[var(--control-surface-active)]')}
             onMouseDown={(event) => event.preventDefault()} onClick={() => suggestions.selectMention(path)} onMouseEnter={() => suggestions.setIndex(index)}>
             <span className="truncate">{split.name}</span><span className="min-w-0 truncate text-muted-foreground">{split.directory}</span>
           </Button>;
@@ -145,7 +145,7 @@ export function ComposerSuggestions({ suggestions, state }: {
           : slash.query === '' ? 'No custom commands (.factory/commands)' : 'No matching commands'}
       </p> : null}
     </div>
-    {slash !== null && current?.kind === 'skill' && current.description ? <div className="max-h-32 overflow-auto border-t border-border p-2 text-xs">
+    {slash !== null && current?.kind === 'skill' && current.description ? <div className="max-h-32 overflow-auto border-t border-[var(--panel-edge)] p-2 text-xs">
       <p className="font-medium">{current.name} · Skill</p><p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">{current.description}</p>
     </div> : null}
   </PopoverContent>;

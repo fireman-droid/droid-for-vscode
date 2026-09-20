@@ -19,7 +19,7 @@ function GitCommitPanel({ flow, turnId, onClose }: { readonly flow: GitCommitFlo
     <header className="flex items-center gap-2"><span className="font-medium">Commit</span>{state.branch === null ? null : <span className="text-[11px] text-muted-foreground">on {state.branch}</span>}</header>
     {!draft.initialized ? <p role="status">Reading git status…</p> : state.files.length === 0 ? <p>No uncommitted changes.</p> : <>
       <div role="group" aria-label="Files to commit" className="max-h-60 space-y-2 overflow-auto">
-        {state.files.map((file) => <label key={file.path} className="flex items-start gap-2">
+        {state.files.map((file) => <label key={file.path} className="v2-chat-choice flex items-start gap-2 rounded">
           <Checkbox className="mt-0.5" checked={draft.selected.has(file.path)} disabled={state.commitPending} onCheckedChange={() => draft.toggle(file.path)} />
           <span className="min-w-0 flex-1 break-words">{file.path}</span>
           <span className="shrink-0 text-muted-foreground">{GIT_FILE_STATUS_LABELS[file.status]}{file.staged ? ' · staged' : ''}</span>

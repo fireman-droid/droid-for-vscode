@@ -8,6 +8,7 @@
 @import './styles/motion.css';
 @import './styles/droid-motion.css';
 @import './styles/chat-region.css';
+@import './styles/content.css';
 @source './**/*.{ts,tsx}';
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
@@ -81,15 +82,18 @@
     --motion-exit: 100ms;
     --motion-ease: cubic-bezier(.2, .8, .2, 1);
     --control-radius: 6px;
-    --control-border-hover: color-mix(in srgb, var(--field-edge) 55%, var(--muted-ink));
-    --control-focus-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 14%, transparent);
-    --overlay-shadow: 0 2px 6px rgb(0 0 0 / 6%), 0 12px 32px rgb(0 0 0 / 12%);
+    --control-border-hover: color-mix(in srgb, var(--ink) 18%, var(--surface));
+    --control-border-focus: color-mix(in srgb, var(--ink) 24%, var(--surface));
+    --control-surface-hover: color-mix(in srgb, var(--ink) 6%, var(--surface));
+    --control-surface-active: color-mix(in srgb, var(--ink) 9%, var(--surface));
+    --panel-edge: color-mix(in srgb, var(--edge) 75%, var(--surface));
+    --overlay-shadow: 0 2px 5px rgb(0 0 0 / 4%), 0 8px 24px rgb(0 0 0 / 8%);
     --surface: #fafafa;
     --ink: #292929;
     --muted-ink: #6b6b70;
     --soft-surface: #f0f0f0;
     --overlay-surface: #ffffff;
-    --hover-surface: #e8e8e8;
+    --hover-surface: var(--control-surface-hover);
     --action: #292929;
     --action-ink: #ffffff;
     --edge: #dedee2;
@@ -116,7 +120,6 @@
     --muted-ink: #a1a1aa;
     --soft-surface: #2a2a2d;
     --overlay-surface: #2a2a2e;
-    --hover-surface: #2a2d2e;
     --action: #3b4858;
     --action-ink: #e1e5eb;
     --edge: #3e3e44;

@@ -2,10 +2,12 @@
 @import './styles/webview-host.css';
 @import './styles/models.css';
 @import './styles/mission.css';
+@import './styles/viewer.css';
 @source './**/*.{ts,tsx}';
 @source '../webview/assistant/composer/SettingsPopover.tsx';
 @source '../webview/assistant/composer/ModelPopover.tsx';
 @source '../webview/assistant/composer/ContextPopover.tsx';
+@source '../webview/assistant/composer/capabilityPanels.tsx';
 
 @layer base {
   :root {
@@ -22,11 +24,11 @@
     --muted-ink: color-mix(in srgb, var(--ink) 85%, var(--surface));
     --soft-surface: color-mix(in srgb, var(--ink) 7%, var(--surface));
     --overlay-surface: color-mix(in srgb, var(--ink) 6%, var(--surface));
-    --hover-surface: color-mix(in srgb, var(--ink) 11%, var(--surface));
+    --hover-surface: var(--control-surface-hover);
     --field-surface: color-mix(in srgb, var(--ink) 4%, var(--surface));
     --code-surface: color-mix(in srgb, var(--ink) 3%, var(--surface));
     --well-surface: var(--code-surface);
-    --edge: color-mix(in srgb, var(--ink) 22%, var(--surface));
+    --edge: color-mix(in srgb, var(--ink) 14%, var(--surface));
     --field-edge: var(--edge);
     --edge-strong: color-mix(in srgb, var(--ink) 45%, var(--surface));
     --action: var(--vscode-button-background, light-dark(#006ab1, #315b85));

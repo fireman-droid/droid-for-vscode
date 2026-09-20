@@ -39,7 +39,7 @@ export function ReviewFiles({ files, selected, onSelect }: {
           {collapsed.has(directory) ? <ChevronRight /> : <ChevronDown />}<Folder /><span title={directory}>{directory}</span>
         </Button></CollapsibleTrigger> : null}
         <CollapsibleContent>{rows.map((file) => <Button key={file.path} variant="plain" size="none" className="review-file"
-          aria-current={selected === file.path ? 'true' : undefined} onClick={() => onSelect(file.path)} title={file.path}>
+          data-review-status={file.status} aria-current={selected === file.path ? 'true' : undefined} onClick={() => onSelect(file.path)} title={file.path}>
           {file.status === 'reviewed' ? <Check className="review-file-check" /> : <FileCode2 />}
           <span className="review-file-name">{tree ? file.path.split('/').at(-1) : file.path}
             {file.status === 'changed-after-review' ? <small>Changed since review</small> : null}

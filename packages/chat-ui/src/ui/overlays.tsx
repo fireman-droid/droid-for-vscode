@@ -66,7 +66,7 @@ export function DialogContent({
   const container = usePortalContainer();
   return (
     <DialogPrimitive.Portal container={container}>
-      <DialogPrimitive.Overlay data-webview-overlay="" data-slot="dialog-overlay" className="v2-dialog-overlay fixed inset-0 z-40 bg-black/30" />
+      <DialogPrimitive.Overlay data-webview-overlay="" data-slot="dialog-overlay" className="v2-dialog-overlay fixed inset-0 z-40 bg-black/20" />
       <DialogPrimitive.Content
         data-webview-overlay=""
         data-slot="dialog-content"

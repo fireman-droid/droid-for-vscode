@@ -25,7 +25,7 @@ export function WorkingSubagents({ state, flow }: {
   const ids = new Set(working.map((item) => item.toolUseId));
   return <Popover>
     <PopoverTrigger asChild><Button variant="ghost" size="sm">{working.length} Working</Button></PopoverTrigger>
-    <PopoverContent align="end" className="w-[280px] divide-y divide-border p-1">
+    <PopoverContent align="end" className="w-[280px] divide-y divide-[var(--panel-edge)] p-1">
       <SubagentActivityStoreContext.Provider value={flow.activityStore}>
         <ToolActionsContext.Provider value={{ openSubagent: flow.openSubagent }}>
           {state.transcript.flatMap((item) => item.kind === 'tool' && ids.has(item.toolUseId) ? [<SubagentRow key={item.toolUseId} item={item} variant="row" />] : [])}

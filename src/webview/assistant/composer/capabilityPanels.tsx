@@ -1,7 +1,10 @@
 // Skills / MCP / Plugins drill-in panels of the `+` settings popover.
-// Moved verbatim from ComposerControls.tsx (structure-only split).
 
 import { useEffect, useState } from 'react';
+import { Button } from '../../../webview-v2/ui/button';
+import { Input } from '../../../webview-v2/ui/input';
+import { RadioGroup, RadioGroupItem, Switch } from '../../../webview-v2/ui/controls';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../webview-v2/ui/collapsible';
 import { readMcpServerDraft } from './mcpServerDraft';
 
 import { MCP_SERVER_TYPES } from '../../../shared/protocol/bounds';
@@ -58,7 +61,7 @@ export function SkillsPanel({
   return (
     <div className="dvx-skills-panel">
       <div className="dvx-panel-head">
-        <button
+        <Button variant="plain" size="none"
           type="button"
           className="dvx-panel-back"
           aria-label="Back to session controls"
@@ -66,16 +69,16 @@ export function SkillsPanel({
         >
           <ChevronLeftIcon />
           <span className="dvx-panel-title">Skills</span>
-        </button>
+        </Button>
         <div className="dvx-panel-actions">
-          <button
+          <Button variant="plain" size="none"
             type="button"
             className="dvx-panel-action"
             disabled={skills.status === 'loading'}
             onClick={onRefresh}
           >
             Refresh
-          </button>
+          </Button>
         </div>
       </div>
       {skills.status === 'unsupported' || skills.status === 'error' ? (
@@ -120,9 +123,9 @@ export function SkillsPanel({
         {changed && onNewSession !== undefined ? (
           <>
             {' '}
-            <button type="button" className="dvx-skills-apply-new" onClick={onNewSession}>
+            <Button variant="plain" size="none" type="button" className="dvx-skills-apply-new" onClick={onNewSession}>
               Start a new session
-            </button>
+            </Button>
           </>
         ) : null}
       </p>
@@ -159,17 +162,13 @@ function SkillRow({
           </span>
         ) : null}
       </div>
-      <button
-        type="button"
-        role="switch"
-        className="dvx-skill-switch"
+      <Switch
+        className="dvx-skill-switch h-4 w-7 px-px [&>span]:size-3"
         aria-label={`${skill.name} enabled`}
-        aria-checked={skill.enabled}
+        checked={skill.enabled}
         disabled={disabled || pending}
-        onClick={() => onToggle(skill.name, skill.enabled)}
-      >
-        <span className="dvx-skill-switch-thumb" aria-hidden="true" />
-      </button>
+        onCheckedChange={(enabled) => onToggle(skill.name, !enabled)}
+      />
     </li>
   );
 }
@@ -219,7 +218,7 @@ export function McpPanel({
   return (
     <div className="dvx-skills-panel">
       <div className="dvx-panel-head">
-        <button
+        <Button variant="plain" size="none"
           type="button"
           className="dvx-panel-back"
           aria-label="Back to session controls"
@@ -227,9 +226,9 @@ export function McpPanel({
         >
           <ChevronLeftIcon />
           <span className="dvx-panel-title">MCP servers</span>
-        </button>
+        </Button>
         <div className="dvx-panel-actions">
-          <button
+          <Button variant="plain" size="none"
             type="button"
             className="dvx-panel-action"
             disabled={disabled || busy}
@@ -237,15 +236,15 @@ export function McpPanel({
             onClick={() => setAdding((current) => !current)}
           >
             {adding ? 'Close' : 'Add'}
-          </button>
-          <button
+          </Button>
+          <Button variant="plain" size="none"
             type="button"
             className="dvx-panel-action"
             disabled={mcp.status === 'loading'}
             onClick={onRefresh}
           >
             Refresh
-          </button>
+          </Button>
         </div>
       </div>
       {adding ? (
@@ -344,8 +343,8 @@ function McpAddServerForm({
   };
   return (
     <div className="dvx-mcp-add-form" role="form" aria-label="Add MCP server">
-      <input
-        className="dvx-mcp-add-input"
+      <Input
+        className="dvx-mcp-add-input h-auto text-xs"
         type="text"
         placeholder="Server name"
         aria-label="Server name"
@@ -354,22 +353,20 @@ function McpAddServerForm({
         onChange={(event) => setName(event.currentTarget.value)}
         onKeyDown={submitOnEnter}
       />
-      <div className="dvx-mcp-add-types" role="radiogroup" aria-label="Server type">
+      <RadioGroup className="dvx-mcp-add-types" aria-label="Server type" value={serverType} disabled={disabled}
+        onValueChange={(value) => setServerType(value as McpServerType)}>
         {MCP_SERVER_TYPES.map((type) => (
-          <button
+          <RadioGroupItem
             key={type}
-            type="button"
-            role="radio"
             className="dvx-mcp-add-type"
-            aria-checked={serverType === type}
-            onClick={() => setServerType(type)}
+            value={type}
           >
             {type}
-          </button>
+          </RadioGroupItem>
         ))}
-      </div>
-      <input
-        className="dvx-mcp-add-input"
+      </RadioGroup>
+      <Input
+        className="dvx-mcp-add-input h-auto text-xs"
         type="text"
         placeholder={
           serverType === 'stdio'
@@ -387,14 +384,14 @@ function McpAddServerForm({
           {shapeHint}
         </p>
       ) : null}
-      <button
+      <Button variant="plain" size="none"
         type="button"
         className="dvx-mcp-add-submit"
         disabled={!canSubmit}
         onClick={submit}
       >
         Add server
-      </button>
+      </Button>
     </div>
   );
 }
@@ -459,7 +456,7 @@ function McpServerRow({
                 ? 'Authentication failed.'
                 : null));
   return (
-    <li className="dvx-skill-row dvx-mcp-row">
+    <Collapsible open={expanded} onOpenChange={setExpanded} asChild><li className="dvx-skill-row dvx-mcp-row">
       <div className="dvx-skill-copy">
         <span className="dvx-skill-name">
           <span
@@ -481,14 +478,14 @@ function McpServerRow({
           ) : null}
         </span>
         {needsAuth ? (
-          <button
+          <Button variant="plain" size="none"
             type="button"
             className="dvx-mcp-auth-button"
             disabled={authDisabled}
             onClick={() => onAuthenticate(server.name)}
           >
             {authPending ? 'Authenticating…' : 'Authenticate in browser'}
-          </button>
+          </Button>
         ) : null}
         {authStatusText !== null ? (
           <span
@@ -504,18 +501,16 @@ function McpServerRow({
         ) : null}
         <span className="dvx-mcp-row-actions">
           {server.tools.length > 0 ? (
-            <button
+            <CollapsibleTrigger asChild><Button variant="plain" size="none"
               type="button"
               className="dvx-mcp-tools-toggle"
-              aria-expanded={expanded}
-              onClick={() => setExpanded((current) => !current)}
             >
               {expanded ? 'Hide tools' : `Show ${toolCount} tools`}
-            </button>
+            </Button></CollapsibleTrigger>
           ) : (
             <span className="dvx-skill-description">{toolCount} tools</span>
           )}
-          <button
+          <Button variant="plain" size="none"
             type="button"
             className={`dvx-mcp-remove${
               confirmingRemove ? ' dvx-mcp-remove-confirm' : ''
@@ -531,9 +526,9 @@ function McpServerRow({
             }}
           >
             {confirmingRemove ? 'Confirm remove' : 'Remove'}
-          </button>
+          </Button>
         </span>
-        {expanded ? (
+        <CollapsibleContent>
           <ul className="dvx-mcp-tool-list" aria-label={`${server.name} tools`}>
             {server.tools.map((tool) => (
               <li key={tool.name} className="dvx-mcp-tool">
@@ -552,20 +547,16 @@ function McpServerRow({
               </li>
             ))}
           </ul>
-        ) : null}
+        </CollapsibleContent>
       </div>
-      <button
-        type="button"
-        role="switch"
-        className="dvx-skill-switch"
+      <Switch
+        className="dvx-skill-switch h-4 w-7 px-px [&>span]:size-3"
         aria-label={`${server.name} enabled`}
-        aria-checked={enabled}
+        checked={enabled}
         disabled={rowDisabled}
-        onClick={() => onToggle(server.name, !enabled)}
-      >
-        <span className="dvx-skill-switch-thumb" aria-hidden="true" />
-      </button>
-    </li>
+        onCheckedChange={(next) => onToggle(server.name, next)}
+      />
+    </li></Collapsible>
   );
 }
 
@@ -595,7 +586,7 @@ export function PluginsPanel({
   return (
     <div className="dvx-skills-panel">
       <div className="dvx-panel-head">
-        <button
+        <Button variant="plain" size="none"
           type="button"
           className="dvx-panel-back"
           aria-label="Back to session controls"
@@ -603,16 +594,16 @@ export function PluginsPanel({
         >
           <ChevronLeftIcon />
           <span className="dvx-panel-title">Plugins</span>
-        </button>
+        </Button>
         <div className="dvx-panel-actions">
-          <button
+          <Button variant="plain" size="none"
             type="button"
             className="dvx-panel-action"
             disabled={plugins.status === 'loading'}
             onClick={onRefresh}
           >
             Refresh
-          </button>
+          </Button>
         </div>
       </div>
       {plugins.status === 'unsupported' || plugins.status === 'error' ? (

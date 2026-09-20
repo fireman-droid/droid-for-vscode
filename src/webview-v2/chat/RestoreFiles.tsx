@@ -19,18 +19,18 @@ export function RestoreFiles({ impact, checked, onChange, openDisabled = false }
   const count = impact.restorableCount + impact.createdCount;
   const { details, unavailableCount, omittedAffected, omittedUnavailable } = rewindDetailSummary(impact);
   if (count === 0 && unavailableCount === 0) return null;
-  return <Collapsible open={expanded} onOpenChange={setExpanded} asChild><section data-transcript-selection-exclude="" className="mt-2 select-none overflow-hidden rounded-[10px] border border-border bg-input-background text-[11.5px]" aria-label="File restoration">
+  return <Collapsible open={expanded} onOpenChange={setExpanded} asChild><section data-transcript-selection-exclude="" className="mt-2 select-none overflow-hidden rounded-[10px] border border-[var(--panel-edge)] bg-input-background text-[11.5px]" aria-label="File restoration">
     <div className="flex min-h-8 items-center justify-between gap-2 px-3 py-1.5">
-      {count > 0 ? <label className="flex min-w-0 items-center gap-2">
+      {count > 0 ? <label className="v2-chat-choice flex min-w-0 items-center gap-2 rounded">
         <Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />
         <span>Restore {count} {count === 1 ? 'file' : 'files'} changed after this point</span>
       </label> : <span>{unavailableCount} {unavailableCount === 1 ? 'file' : 'files'} cannot be restored</span>}
-      <CollapsibleTrigger asChild><Button variant="plain" size="none" aria-label="Restorable files" aria-controls={id} className="shrink-0 rounded">
-        <ChevronDown className={`size-[13px] text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      <CollapsibleTrigger asChild><Button variant="plain" size="none" aria-label="Restorable files" aria-controls={id} className="v2-chat-disclosure shrink-0 rounded">
+        <ChevronDown className={`size-[13px] text-muted-foreground transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`} />
       </Button></CollapsibleTrigger>
     </div>
     <AnimatedCollapsibleContent id={id} open={expanded}>
-      <ul className="max-h-36 space-y-1 overflow-auto border-t border-border px-3 py-2 text-[11px]">
+      <ul className="max-h-36 space-y-1 overflow-auto border-t border-[var(--panel-edge)] px-3 py-2 text-[11px]">
         {details.map((file, index) => <li key={`${file.action}:${file.label}:${index}`} className="flex min-w-0 items-start justify-between gap-2">
           <span className="min-w-0">
             {file.location === 'workspace' && actions?.openPath ? <Button textSelectable variant="link" size="none"

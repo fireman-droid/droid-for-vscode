@@ -103,7 +103,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
         }} /> : null}
         <section className="review-code">
           <div className="review-file-toolbar">
-            <Button variant="ghost" size="icon-sm" aria-label="Toggle files" onClick={() => setShowFiles(!showFiles)}><PanelLeft /></Button>
+            <Button variant="ghost" size="icon-sm" className="review-files-toggle" aria-label="Toggle files" aria-pressed={showFiles} onClick={() => setShowFiles(!showFiles)}><PanelLeft /></Button>
             <span className="review-current-path" title={path ?? ''}>{path ?? 'No file selected'}</span>
             {flow.fileRefreshing && file && !operationOnly ? <span role="status" className="review-muted">Updating…</span> : null}
             <Button variant="ghost" size="icon-sm" aria-label="Open current file" disabled={!path} onClick={() => port.postMessage({ type: 'reviewPanel.openPath', path })}><ExternalLink /></Button>
@@ -116,14 +116,14 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
               <ToggleGroupItem value="split">Split</ToggleGroupItem>
             </ToggleGroup>
             {!readOnly && !operationsScope ? <Select value={String(flow.context)} onValueChange={(value) => flow.setContext(Number(value) as 3 | 20 | 100)}>
-              <SelectTrigger aria-label="Context lines" className="h-6 w-32 border-0 bg-transparent text-[10px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Context lines" className="review-context h-6 w-32 border-0 bg-transparent text-[10px]"><SelectValue /></SelectTrigger>
               <SelectContent>{[3, 20, 100].map((lines) => <SelectItem key={lines} value={String(lines)} className="text-[10px]">{lines} context lines</SelectItem>)}</SelectContent>
             </Select> : null}
             <span className="review-top-spacer" />
             <Button variant="ghost" size="icon-sm" aria-label="Previous change" disabled={!hasHunks || flow.scopePending} onClick={() => hunk(-1)}><ArrowUp /></Button>
             <Button variant="ghost" size="icon-sm" aria-label="Next change" disabled={!hasHunks || flow.scopePending} onClick={() => hunk(1)}><ArrowDown /></Button>
           </div>
-          {flow.fileError && !operationOnly ? <div className="review-notice" role="status">
+          {flow.fileError && !operationOnly ? <div className="review-notice review-error" role="status">
             {flow.fileError}{file && !file.error ? ' Showing the previous diff.' : ''}
             <Button variant="ghost" size="sm" onClick={flow.retryFile}>Retry</Button>
           </div> : null}
@@ -171,13 +171,13 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
       </div> : null}
     </>}
     <Dialog open={commit && valid} onOpenChange={setCommit}>
-      <DialogContent className="max-w-2xl"><DialogTitle>Commit</DialogTitle><DialogDescription>Choose the files to commit. Existing staged files require explicit selection.</DialogDescription>
+      <DialogContent className="max-w-2xl border-[var(--panel-edge)]"><DialogTitle className="review-dialog-title">Commit</DialogTitle><DialogDescription className="review-dialog-description">Choose the files to commit. Existing staged files require explicit selection.</DialogDescription>
         {target?.sessionId ? <ReviewCommit port={port} sessionId={target.sessionId} onClose={closeCommit} /> : null}
       </DialogContent>
     </Dialog>
     <Dialog open={!!flow.preview && flow.preview.reviewScopeId === review?.reviewScopeId && valid} onOpenChange={(open) => { if (!open) flow.setPreview(null); }}>
-      <DialogContent><DialogTitle>Undo confirmed AI operations?</DialogTitle><DialogDescription>Applies exact inverse changes from recorded tool results. Unrelated edits are preserved. Unsaved edits, ambiguous context or conflicting changes block undo. Workspace snapshots and legacy excerpts are not undo evidence.</DialogDescription>
-        {flow.preview ? <><ul className="review-restore-files">{[...flow.preview.restorable, ...flow.preview.conflicted].map((path) => <li key={path}>{path}{flow.preview!.conflicted.includes(path) ? ' · conflict' : ''}</li>)}</ul>
+      <DialogContent className="border-[var(--panel-edge)]"><DialogTitle className="review-dialog-title">Undo confirmed AI operations?</DialogTitle><DialogDescription className="review-dialog-description">Applies exact inverse changes from recorded tool results. Unrelated edits are preserved. Unsaved edits, ambiguous context or conflicting changes block undo. Workspace snapshots and legacy excerpts are not undo evidence.</DialogDescription>
+        {flow.preview ? <><ul className="review-restore-files">{[...flow.preview.restorable, ...flow.preview.conflicted].map((path) => <li key={path} data-conflict={flow.preview!.conflicted.includes(path)}>{path}{flow.preview!.conflicted.includes(path) ? ' · conflict' : ''}</li>)}</ul>
           <div className="review-dialog-actions"><Button variant="ghost" onClick={() => flow.setPreview(null)}>Cancel</Button>
             <Button disabled={!!flow.preview.conflicted.length || !flow.preview.restorable.length} onClick={() => actions.onConfirmRestore(flow.preview!.target, flow.preview!.previewId)}>Confirm restore</Button>
           </div></> : null}

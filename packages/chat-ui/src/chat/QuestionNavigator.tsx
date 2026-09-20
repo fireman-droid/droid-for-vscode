@@ -23,10 +23,10 @@ export function QuestionNavigator({ items, activeIndex, onNavigate }: {
           aria-current={index === current ? 'true' : undefined}
           onClick={() => onNavigate(item.key)}
           className="group relative grid h-2 w-[18px] shrink-0 place-items-center outline-none focus-visible:ring-1 focus-visible:ring-ring">
-          <span aria-hidden className={cn('size-[7px] scale-[0.43] rounded-full bg-current opacity-50 transition-[transform,opacity,color] duration-200 motion-reduce:transition-none group-hover:scale-[0.71] group-hover:text-foreground group-hover:opacity-100',
+          <span aria-hidden className={cn('size-[3px] rounded-full bg-current opacity-50 transition-[opacity,color] duration-150 motion-reduce:transition-none group-hover:text-foreground group-hover:opacity-100',
             Math.abs(index - current) === 1 && 'opacity-75',
-            index === current && 'scale-100 text-[var(--focus)] opacity-100 ring-2 ring-ring/20 group-hover:scale-100')} />
-          <span aria-hidden className="pointer-events-none absolute top-1/2 right-[calc(100%+8px)] line-clamp-3 w-max max-w-[min(280px,calc(100vw-54px))] -translate-y-1/2 rounded-[9px] border border-border bg-popover px-2.5 py-[7px] text-left text-[11.5px] leading-[17px] text-foreground opacity-0 shadow-md transition-opacity duration-150 motion-reduce:transition-none group-hover:opacity-100 group-focus-visible:opacity-100">{item.preview}</span>
+            index === current && 'size-[7px] text-foreground opacity-100')} />
+          <span aria-hidden className="pointer-events-none absolute top-1/2 right-[calc(100%+8px)] line-clamp-3 w-max max-w-[min(280px,calc(100vw-54px))] -translate-y-1/2 rounded-[9px] border border-[var(--panel-edge)] bg-popover px-2.5 py-[7px] text-left text-[11.5px] leading-[17px] text-foreground opacity-0 shadow-sm transition-opacity duration-150 motion-reduce:transition-none group-hover:opacity-100 group-focus-visible:opacity-100">{item.preview}</span>
         </Button>
       ))}
     </div>

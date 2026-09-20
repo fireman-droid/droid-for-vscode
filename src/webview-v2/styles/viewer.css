@@ -1,0 +1,12 @@
+@layer utilities {
+  .v2-session-viewer > header { border-color: var(--panel-edge); }
+  .v2-viewer-question {
+    border-color: var(--panel-edge);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--soft-surface) 55%, var(--surface));
+  }
+  .v2-viewer-details { border-color: var(--panel-edge); }
+  .v2-viewer-details-trigger { border-radius: var(--control-radius); }
+  .v2-viewer-details-trigger:is(:hover, [data-state='open']) { color: var(--ink); }
+  .v2-viewer-details-trigger:active { color: var(--secondary-ink); }
+}

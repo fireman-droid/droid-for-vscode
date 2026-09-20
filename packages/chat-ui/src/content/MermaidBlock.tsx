@@ -25,7 +25,7 @@ export function MermaidBlock({ text }: { readonly text: string }) {
     {outcome?.ok === false ? <p role="status" className="text-xs text-muted-foreground">Diagram could not be rendered; showing the source.</p> : null}
   </>;
   return <div className="my-3 space-y-1">
-    {source ? <CodeBlock text={text} language="mermaid" /> : <Button variant="plain" size="none" aria-label="Enlarge diagram" className="block w-full overflow-hidden rounded border border-border p-2 outline-none focus-visible:ring-1 focus-visible:ring-ring" onClick={() => setOpen(true)}>
+    {source ? <CodeBlock text={text} language="mermaid" /> : <Button variant="plain" size="none" aria-label="Enlarge diagram" className="v2-media-trigger v2-diagram-trigger block w-full overflow-hidden rounded border border-border p-2" onClick={() => setOpen(true)}>
       <DiagramFigure svg={outcome.svg} css={outcome.css} onSize={setSize} />
     </Button>}
     <Button variant="ghost" size="sm" onClick={() => setSource(!source)}>{source ? 'Hide source' : 'View source'}</Button>

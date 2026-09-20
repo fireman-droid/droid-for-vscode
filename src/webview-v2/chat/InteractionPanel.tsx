@@ -23,7 +23,7 @@ export function InteractionPanel({ requests, actions }: { readonly requests: rea
   useEffect(() => { if (active) root.current?.focus({ preventScroll: true }); }, [active?.request.requestId]);
   if (!active) return null;
   return (
-    <aside ref={root} tabIndex={-1} aria-label="Droid input request" className="flex max-h-[min(52vh,520px)] min-h-0 flex-col overflow-hidden rounded-[10px] border border-border bg-input-background px-3 pt-[11px] outline-none">
+    <aside ref={root} tabIndex={-1} aria-label="Droid input request" className="flex max-h-[min(52vh,520px)] min-h-0 flex-col overflow-hidden rounded-[10px] border border-[var(--panel-edge)] bg-input-background px-3 pt-[11px] outline-none">
       {requests.length > 1 ? <p className="mb-2 text-xs text-muted-foreground">{requests.length - 1} requests queued</p> : null}
       {active.request.kind === 'permission'
         ? <PermissionCard key={active.request.requestId} interaction={active} request={active.request} actions={actions} />
@@ -58,7 +58,7 @@ function PermissionCard({ request, interaction, actions }: {
         {canOpenPlan ? <Button variant="link" size="sm" disabled={waiting} onClick={() => actions.onOpenPlan(interaction)}>Open in editor</Button> : null}
       </div>
       <div className="min-h-0 overflow-y-auto">{request.tools.map((tool) => (
-        <article key={tool.toolUseId} aria-label={tool.toolName} className="space-y-1 border-b border-border py-3 last:border-0">
+        <article key={tool.toolUseId} aria-label={tool.toolName} className="space-y-1 border-b border-[var(--panel-edge)] py-3 last:border-0">
           <p className="text-[10.5px] text-muted-foreground">{presentation.kind === 'permission' ? '' : `${tool.toolName} · `}{tool.confirmationKind.replaceAll('_', ' ')}</p>
           <h3 className="text-[13px]">{tool.title}</h3>
           {tool.detail ? <pre className="max-h-52 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-[18px]">{tool.detail}</pre> : null}
@@ -82,7 +82,7 @@ function PermissionCard({ request, interaction, actions }: {
           </div>
         </div>
       )}
-      <div className="shrink-0 border-t border-border pt-2 pb-[9px]"><PermissionOptions options={request.options} plan={presentation.kind === 'plan'}
+      <div className="shrink-0 border-t border-[var(--panel-edge)] pt-2 pb-[9px]"><PermissionOptions options={request.options} plan={presentation.kind === 'plan'}
         disabled={(option) => waiting || (presentation.kind === 'plan' && plan?.status === 'too-large' && !isNegativePermissionOption(option)) || (option.requiresEditedSpec && (plan?.status === 'too-large' || request.editableSpecContent === undefined))}
         onSelect={(option) => {
               if (!option.requiresEditedSpec) respond(option.value);
@@ -128,7 +128,7 @@ function Questionnaire({ interaction, questions, actions }: {
           <Input aria-label={`Own answer for ${question.topic}`} placeholder={question.options.length ? 'Or enter a custom answer…' : 'Enter your answer…'} maxLength={MAX_ASK_USER_ANSWER_LENGTH} value={custom[question.index] ?? ''} onChange={(event) => setCustom((previous) => ({ ...previous, [question.index]: event.target.value }))} />
         </fieldset>
       ))}</div>
-      <div className="flex shrink-0 justify-end gap-2 border-t border-border pt-2 pb-[9px]">
+      <div className="flex shrink-0 justify-end gap-2 border-t border-[var(--panel-edge)] pt-2 pb-[9px]">
         <Button variant="outline" size="sm" disabled={waiting} onClick={() => respond(true)}>Cancel</Button>
         <Button type="submit" size="sm" disabled={waiting || answers.some((answer) => !answer.answer || answer.answer.length > MAX_ASK_USER_ANSWER_LENGTH)}>Submit answers</Button>
       </div>
@@ -142,7 +142,7 @@ function QuestionOptions({ question, selected, disabled, onChange }: {
   question: AskUserQuestion; selected: readonly number[]; disabled: boolean; onChange(values: readonly number[]): void;
 }) {
   const options = question.options.map((option, index) => <label key={option}
-    className="flex min-h-9 cursor-pointer items-start gap-2 rounded-lg border border-transparent bg-background/50 px-[9px] py-[7px] text-xs hover:border-border has-[[data-state=checked]]:border-primary/40 has-[[data-state=checked]]:bg-primary/5">
+    className="v2-chat-choice flex min-h-9 items-start gap-2 rounded-lg border border-transparent bg-background/50 px-[9px] py-[7px] text-xs">
     {question.multiSelect ? <Checkbox className="mt-0.5" disabled={disabled} checked={selected.includes(index)}
       onCheckedChange={(checked) => onChange(checked === true ? [...selected, index] : selected.filter((value) => value !== index))} />
       : <RadioGroupItem className="mt-0.5" value={String(index)} />}

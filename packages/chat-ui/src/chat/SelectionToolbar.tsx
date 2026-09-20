@@ -78,7 +78,7 @@ export function SelectionToolbar({ viewport, selectionRoot = viewport, onQuote, 
     setSelection(null);
   };
   return createPortal(<div ref={toolbar} role="toolbar" aria-label="Selected text actions" data-webview-overlay=""
-    className="fixed z-30 flex max-w-[calc(100vw-16px)] flex-wrap select-none gap-1 rounded border border-border bg-popover p-1 shadow-md"
+    className="fixed z-30 flex max-w-[calc(100vw-16px)] flex-wrap select-none gap-1 rounded border border-[var(--panel-edge)] bg-popover p-1 shadow-sm"
     style={{ left: selection.left, top: selection.top }} onMouseDown={(event) => event.preventDefault()}>
     <Button size="sm" variant="ghost" onClick={() => {
       const current = readTranscriptSelection(selectionRoot.current);

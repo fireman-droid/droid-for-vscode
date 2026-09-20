@@ -12,17 +12,17 @@ export function isTextSelectionClick(event: { readonly detail: number; readonly 
     selection.getRangeAt(0).intersectsNode(event.currentTarget);
 }
 
-const layout = 'dvx-pressable inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--control-radius)] text-[13px] [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0';
+const layout = 'inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--control-radius)] text-[13px] [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0';
 export const buttonVariants = cva(
   'dvx-control select-none disabled:pointer-events-none disabled:opacity-45',
   {
     variants: {
       variant: {
-        default: `${layout} bg-primary text-primary-foreground hover:bg-primary/90`,
-        secondary: `${layout} bg-secondary text-secondary-foreground hover:bg-accent`,
-        outline: `${layout} border border-border bg-background hover:bg-accent`,
-        ghost: `${layout} text-muted-foreground hover:bg-accent hover:text-foreground`,
-        destructive: `${layout} text-destructive hover:bg-destructive/10`,
+        default: `${layout} bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80`,
+        secondary: `${layout} bg-secondary text-secondary-foreground hover:bg-accent active:bg-[var(--control-surface-active)]`,
+        outline: `${layout} border border-[var(--panel-edge)] bg-background hover:bg-accent active:bg-[var(--control-surface-active)]`,
+        ghost: `${layout} text-muted-foreground hover:bg-accent hover:text-foreground active:bg-[var(--control-surface-active)]`,
+        destructive: `${layout} text-destructive hover:bg-destructive/5 active:bg-destructive/10`,
         link: `${layout} text-link hover:underline`,
         plain: '',
       },

@@ -43,7 +43,7 @@ export function ContextPanel({ context, usage, disabled, compactPending, onRefre
       </dl>
       <p className="text-muted-foreground">Token counts are {usage.cumulative ? 'session totals' : 'from the last turn'}, not current compaction usage.</p>
     </>}
-    <div className="flex flex-wrap gap-1 border-t border-border pt-2">
+    <div className="flex flex-wrap gap-1 border-t border-[var(--panel-edge)] pt-2">
       <Button variant="outline" size="sm" disabled={disabled || context.status === 'loading'} onClick={onRefresh}>Refresh</Button>
       <Button variant="outline" size="sm" disabled={disabled || context.status === 'loading' || compactPending} onClick={onCompact}>{compactPending ? 'Compacting…' : 'Compact conversation'}</Button>
     </div>

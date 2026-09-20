@@ -43,7 +43,7 @@ export function ReadOnlyTranscriptView({ messages, truncated = false, renderMess
     <div ref={viewport} aria-label="Read-only session transcript" className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-gutter:stable]">
       <div ref={content} className="mx-auto min-h-full max-w-[784px] px-3 pt-6 pb-16 max-[520px]:pt-[18px] max-[520px]:pb-11">
         <div ref={leading} className="flow-root">
-          {truncated ? <p role="note" className="mb-4 border-b border-border/65 pb-2 text-center text-[11px] text-muted-foreground">Older transcript items were omitted.</p> : null}
+          {truncated ? <p role="note" className="mb-4 border-b border-[var(--panel-edge)] pb-2 text-center text-[11px] text-muted-foreground">Older transcript items were omitted.</p> : null}
         </div>
         <ProcessPresentationProvider messageIds={ids} followingRef={scrolling.follow}>
           <div style={{ paddingTop: Math.max(0, (visible[0]?.start ?? scrollMargin) - scrollMargin), paddingBottom: Math.max(0, virtualizer.getTotalSize() - ((visible.at(-1)?.end ?? scrollMargin) - scrollMargin)) }}>

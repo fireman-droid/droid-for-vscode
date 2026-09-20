@@ -27,13 +27,13 @@
   .droid-activity-large { width: 32px; height: 32px; gap: 4px; }
   .droid-activity-large .droid-pixel { border-radius: 2px; }
   @keyframes droid-pixel-travel {
-    0%, 65%, 100% { opacity: .28; transform: scale(.78); }
-    22% { opacity: 1; transform: scale(1); }
-    42% { opacity: .6; transform: scale(.9); }
+    0%, 65%, 100% { opacity: .28; }
+    22% { opacity: 1; }
+    42% { opacity: .6; }
   }
   @keyframes droid-pixel-think {
-    0%, 100% { opacity: .35; transform: scale(.82); }
-    45%, 55% { opacity: .85; transform: scale(1); }
+    0%, 100% { opacity: .35; }
+    45%, 55% { opacity: .85; }
   }
   .droid-connection-dot {
     position: relative;
@@ -47,7 +47,6 @@
   }
   .droid-connection-dot[data-state='connected'] {
     color: var(--vscode-testing-iconPassed, #3f9d5f);
-    animation: droid-connected-breathe 3600ms ease-in-out infinite;
   }
   .droid-connection-dot[data-state='connecting'] {
     color: var(--vscode-charts-yellow, #cca700);
@@ -63,17 +62,13 @@
     content: '';
     animation: droid-connection-wave 2000ms ease-out infinite;
   }
-  @keyframes droid-connected-breathe {
-    0%, 100% { opacity: .7; }
+  @keyframes droid-connecting {
+    0%, 100% { opacity: .35; }
     50% { opacity: 1; }
   }
-  @keyframes droid-connecting {
-    0%, 100% { opacity: .35; transform: scale(.85); }
-    50% { opacity: 1; transform: scale(1); }
-  }
   @keyframes droid-connection-wave {
-    0% { opacity: .5; transform: scale(.65); }
-    75%, 100% { opacity: 0; transform: scale(1.55); }
+    0%, 100% { opacity: .2; }
+    50% { opacity: .6; }
   }
   .droid-loading {
     display: flex;
@@ -91,8 +86,8 @@
   .droid-loading-label { margin: 0; color: var(--ink); font-size: 13px; font-weight: 500; line-height: 20px; }
   .droid-loading-detail { margin: 0; color: var(--muted-ink); font-size: 11px; line-height: 17px; }
   @keyframes droid-loading-enter {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
   @media (prefers-reduced-motion: reduce) {
     .droid-pixel, .droid-connection-dot, .droid-connection-dot::after, .droid-loading {

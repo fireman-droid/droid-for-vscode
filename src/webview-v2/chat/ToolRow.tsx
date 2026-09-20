@@ -66,7 +66,7 @@ export function ToolRow({ item, messageId, grouped = false }: { readonly item: T
   </>;
   const activityDetail = available !== null || !!output || !!errorMessage ? <>
     {available ? <ActivityResult preview={available} /> : null}
-    {output ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border/80 bg-muted/25 p-2.5 font-mono text-[11px] leading-[18px]">{output}</pre> : null}
+    {output ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-[var(--panel-edge)] bg-muted/25 p-2.5 font-mono text-[11px] leading-[18px]">{output}</pre> : null}
     {errorMessage ? <pre role="status" className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-destructive/40 bg-destructive/5 p-2.5 font-mono text-[11px] leading-[18px] text-destructive">{errorMessage}</pre> : null}
   </> : undefined;
   if (item.detailKind === 'plan' && item.detail) {

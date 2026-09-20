@@ -43,7 +43,7 @@ export function ActivityItem({
   return <Collapsible open={selected} className="min-w-0">
     <div className="flex min-w-0 items-center gap-1">
       <CollapsibleTrigger asChild><Button textSelectable={textSelectable} ref={disclosure.buttonRef} variant="plain" size="none" aria-controls={detailsId} onClick={disclosure.toggle}
-        className={cn('flex min-h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left', !textSelectable && 'select-none')}>
+        className={cn('v2-chat-disclosure flex min-h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left', !textSelectable && 'select-none')}>
         <ChevronRight className={cn('size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none', selected && 'rotate-90')} />
         {labels}
       </Button></CollapsibleTrigger>

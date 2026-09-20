@@ -15,14 +15,14 @@ export function PlanLine({ anchor, running, override, onToggle }: {
   const expanded = override ?? (running && !anchor.allCompleted);
   const building = running && !anchor.allCompleted;
   const current = anchor.steps.find((step) => step.status === 'in_progress')?.text ?? anchor.steps.find((step) => step.status === 'pending')?.text ?? anchor.title;
-  return <Collapsible open={expanded} onOpenChange={(open) => onToggle(anchor.id, open)} asChild><section aria-label={`Implementation plan, ${anchor.completedCount} of ${anchor.totalCount} done`} className="mt-1 overflow-hidden rounded-lg border border-border bg-input-background text-xs">
+  return <Collapsible open={expanded} onOpenChange={(open) => onToggle(anchor.id, open)} asChild><section aria-label={`Implementation plan, ${anchor.completedCount} of ${anchor.totalCount} done`} className="mt-1 overflow-hidden rounded-lg border border-[var(--panel-edge)] bg-input-background text-xs">
     <CollapsibleTrigger asChild><Button variant="ghost" size="sm" className="h-[22px] w-full gap-2 rounded-none px-3 text-left text-[11.5px]" aria-controls={id}>
       <span aria-hidden className={`size-[5px] shrink-0 rounded-full ${anchor.allCompleted ? 'bg-muted-foreground' : 'bg-primary'} ${building ? 'motion-safe:animate-pulse' : ''}`} />
       <span className="min-w-0 flex-1 truncate">{expanded ? 'Implementation plan' : `Plan · ${current}`}</span>
       <span className="shrink-0 text-muted-foreground">{anchor.completedCount} / {anchor.totalCount}</span>
-      <ChevronDown className={`size-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      <ChevronDown className={`size-3.5 transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`} />
     </Button></CollapsibleTrigger>
-    <div className="h-0.5 bg-muted"><div className={`h-full transition-[width] ${anchor.allCompleted ? 'bg-muted-foreground' : 'bg-primary'}`} style={{ width: `${anchor.totalCount === 0 ? 0 : anchor.completedCount / anchor.totalCount * 100}%` }} /></div>
+    <div className="h-0.5 bg-muted"><div className={`h-full transition-[width] motion-reduce:transition-none ${anchor.allCompleted ? 'bg-muted-foreground' : 'bg-primary'}`} style={{ width: `${anchor.totalCount === 0 ? 0 : anchor.completedCount / anchor.totalCount * 100}%` }} /></div>
     <AnimatedCollapsibleContent id={id} open={expanded}>
     <PlanSteps steps={anchor.steps} /></AnimatedCollapsibleContent>
   </section></Collapsible>;

@@ -1,0 +1,26 @@
+@layer utilities {
+  .v2-code-block { border-color: var(--panel-edge); border-radius: 8px; }
+  .v2-code-toolbar, .v2-code-preview-head {
+    border-color: var(--panel-edge);
+    background: color-mix(in srgb, var(--soft-surface) 55%, var(--surface));
+  }
+  .v2-media-preview > header, .v2-media-actions { border-color: var(--panel-edge); }
+  .v2-media-toolbar {
+    border-color: var(--panel-edge);
+    box-shadow: var(--overlay-shadow);
+  }
+  .v2-media-trigger {
+    outline-offset: 2px;
+    transition: outline-color var(--motion-fast) var(--motion-ease),
+      border-color var(--motion-fast) var(--motion-ease);
+  }
+  .v2-diagram-trigger { border-color: var(--panel-edge); border-radius: 8px; }
+  @media (hover: hover) {
+    .v2-media-trigger:hover:not(:focus-visible) { outline: 1px solid var(--control-border-hover); }
+    .v2-diagram-trigger:hover { border-color: var(--control-border-hover); }
+  }
+  .markdown-content a:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    .v2-media-trigger { transition: none; }
+  }
+}

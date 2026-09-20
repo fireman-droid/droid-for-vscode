@@ -23,9 +23,9 @@ export function MissionCatalog({ state, filter, navigationError, onFilter, onRef
       </div>
     </header>
     <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
-      <TabsList aria-label="Mission filters" className="inline-flex flex-wrap gap-0.5 rounded-lg border-0 bg-muted p-0.5">
+      <TabsList aria-label="Mission filters" className="v2-mission-filters inline-flex flex-wrap gap-0.5 rounded-lg border-0 p-0.5">
         {MISSION_CONTROL_CATALOG_FILTERS.map((value) => <TabsTrigger key={value} value={value}
-          className="flex items-center gap-1.5 rounded-md border-0 px-2.5 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">{formatFilter(value)}<span aria-hidden="true" className="rounded-full border border-border px-1.5 py-0.5 text-[11px] leading-none tabular-nums text-muted-foreground">{state.rows.filter((row) => matchesFilter(row, value)).length}</span></TabsTrigger>)}
+          className="flex items-center gap-1.5 rounded-md border-0 px-2.5 py-1.5">{formatFilter(value)}<span aria-hidden="true" className="v2-mission-filter-count rounded-full border border-border px-1.5 py-0.5 text-[11px] leading-none tabular-nums text-muted-foreground">{state.rows.filter((row) => matchesFilter(row, value)).length}</span></TabsTrigger>)}
       </TabsList>
     </div>
     {state.status === 'loading' && state.rows.length === 0 ? <DroidLoading label="Loading Missions…" detail="Reading the local Droid catalog." />
@@ -33,9 +33,9 @@ export function MissionCatalog({ state, filter, navigationError, onFilter, onRef
         {refreshing ? <DroidActivity phase="loading" /> : null}
         {readCatalogStatus(state, rows.length, filter)}</p>}
     <TabsContent value={filter} className="outline-none focus-visible:ring-1 focus-visible:ring-ring">
-      {navigationError ? <p role="alert" className="mb-4 rounded-lg border border-destructive/30 p-3 text-xs text-destructive">{navigationError}</p> : null}
+      {navigationError ? <p role="alert" className="v2-mission-feedback mb-4 rounded-lg border border-destructive/30 p-3 text-xs text-destructive">{navigationError}</p> : null}
       {state.status === 'error' && state.retryable ? <Button variant="outline" onClick={onRefresh}>Retry</Button> : null}
-      {!refreshing && state.status !== 'error' && rows.length === 0 ? <section className="grid justify-items-center gap-3 rounded-xl border border-dashed border-border px-6 py-14 text-center">
+      {!refreshing && state.status !== 'error' && rows.length === 0 ? <section className="v2-mission-empty grid justify-items-center gap-3 rounded-xl border border-dashed border-border px-6 py-14 text-center">
         <span className="grid size-10 place-items-center rounded-full bg-muted"><FolderGit2 className="size-5 text-muted-foreground" aria-hidden="true" /></span>
         <h2 className="text-sm font-medium">{state.rows.length === 0 ? 'No Missions yet' : `No ${formatFilter(filter).toLowerCase()} Missions`}</h2>
         <p className="max-w-sm text-muted-foreground">{state.rows.length === 0 ? 'Start with a concrete outcome. Your Mission plan and feature progress will appear here.' : 'Choose another filter to see the other Missions in this catalog.'}</p>
@@ -57,7 +57,7 @@ function MissionCard({ row, name, onOpen }: {
   return <li>
     <Button variant="plain" size="none" aria-label={name} onClick={onOpen} className="v2-mission-card group px-4 py-3.5">
       <span className="flex items-start gap-3">
-        <span aria-hidden="true" className="v2-mission-dot mt-[7px]" data-tone={tone} data-pulse={tone === 'active' || tone === 'attention' || undefined} />
+        <span aria-hidden="true" className="v2-mission-dot mt-[7px]" data-tone={tone} />
         <span className="min-w-0 flex-1">
           <span className="flex items-center justify-between gap-3">
             <strong className="min-w-0 whitespace-normal break-words font-medium">{row.title}</strong>
@@ -77,7 +77,7 @@ function MissionCard({ row, name, onOpen }: {
             {row.attached ? <span className="v2-mission-pill" data-tone="active"><span aria-hidden="true" className="v2-mission-dot" />Attached</span> : null}
           </span>
         </span>
-        <ChevronRight aria-hidden="true" className="mt-1 size-4 shrink-0 text-muted-foreground transition-opacity motion-reduce:transition-none max-[819px]:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100" />
+        <ChevronRight aria-hidden="true" className="mt-1 size-4 shrink-0 text-muted-foreground transition-opacity motion-reduce:transition-none max-[819px]:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-visible:opacity-100" />
       </span>
     </Button>
   </li>;

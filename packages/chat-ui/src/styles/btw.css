@@ -7,7 +7,7 @@
     min-height: 0;
     flex-shrink: 0;
     grid-template-rows: 44px minmax(0, 1fr) auto;
-    border-left: 1px solid var(--edge);
+    border-left: 1px solid var(--panel-edge);
     background: var(--surface);
   }
   .v2-btw-resizer {
@@ -23,19 +23,20 @@
     position: absolute;
     inset: 0 auto 0 3px;
     width: 2px;
-    background: var(--focus);
+    background: var(--control-border-focus);
     opacity: 0;
     content: '';
+    transition: opacity var(--motion-fast) var(--motion-ease);
   }
-  .v2-btw-resizer:hover::after,
-  .v2-btw-resizer:focus-visible::after { opacity: .7; }
+  .v2-btw-resizer:hover::after { opacity: 1; }
+  .v2-btw-resizer:focus-visible::after { background: var(--focus); opacity: 1; }
   .v2-btw-header {
     display: flex;
     min-width: 0;
     align-items: center;
     gap: 8px;
     padding: 0 8px 0 12px;
-    border-bottom: 1px solid var(--edge);
+    border-bottom: 1px solid var(--panel-edge);
   }
   .v2-btw-heading { min-width: 0; flex: 1; }
   .v2-btw-heading h2 {
@@ -95,7 +96,7 @@
   .v2-btw-question {
     min-width: 0;
     padding: 10px;
-    border: 1px solid color-mix(in srgb, var(--edge) 65%, transparent);
+    border: 1px solid var(--panel-edge);
     border-radius: 10px;
     background: color-mix(in srgb, var(--soft-surface) 60%, var(--surface));
     font-size: 13px;
@@ -144,13 +145,13 @@
   .v2-btw-composer {
     margin-top: 6px;
     padding: 10px;
-    border: 1px solid var(--edge);
+    border: 1px solid var(--panel-edge);
     border-radius: 12px;
     background: var(--field-surface);
-    transition: border-color var(--motion-normal) var(--motion-ease), box-shadow var(--motion-normal) var(--motion-ease);
+    transition: border-color var(--motion-normal) var(--motion-ease);
   }
   .v2-btw-composer:hover { border-color: var(--control-border-hover); }
-  .v2-btw-composer:focus-within { border-color: var(--focus); box-shadow: var(--control-focus-shadow); }
+  .v2-btw-composer:focus-within { border-color: var(--control-border-focus); }
   .v2-btw-input {
     display: block;
     width: 100%;
@@ -179,13 +180,14 @@
     place-items: center;
     padding: 0;
     border-radius: 50%;
-    background: var(--ink);
-    color: var(--surface);
-    transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), scale var(--motion-fast) var(--motion-ease);
+    border: 1px solid var(--panel-edge);
+    background: var(--control-surface-hover);
+    color: var(--ink);
+    transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
   }
   .v2-btw-send > svg { width: 14px; height: 14px; }
-  .v2-btw-send:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 85%, var(--surface)); }
-  .v2-btw-send:active:not(:disabled) { scale: .92; }
+  .v2-btw-send:hover:not(:disabled) { background: var(--control-surface-active); border-color: var(--control-border-hover); }
+  .v2-btw-send:active:not(:disabled) { border-color: var(--control-border-focus); }
   .v2-btw-send:disabled { background: var(--soft-surface); color: var(--muted-ink); opacity: 1; }
   .v2-btw-quote {
     min-width: 0;
@@ -211,13 +213,13 @@
   .v2-btw-quote-toggle > svg { width: 12px; height: 12px; flex: none; }
   .v2-btw-quote-label { flex: none; font-size: 10px; font-weight: 500; line-height: 16px; }
   .v2-btw-quote-preview { min-width: 0; flex: 1; overflow: hidden; font-size: 11px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
-  .v2-btw-quote-toggle:hover { color: var(--ink); }
+  .v2-btw-quote-toggle:hover { color: var(--ink); background: var(--control-surface-hover); }
+  .v2-btw-quote-toggle:active { background: var(--control-surface-active); }
   .v2-btw-quote-toggle:focus-visible { outline: 1px solid var(--focus); outline-offset: 1px; }
-  .v2-btw-quote-chevron { transition: transform 120ms ease; }
+  .v2-btw-quote-chevron { transition: transform var(--motion-fast) var(--motion-ease); }
   .v2-btw-quote-toggle[data-state='open'] .v2-btw-quote-chevron { transform: rotate(90deg); }
   .v2-btw-quote-body { max-height: 112px; margin: 0; padding: 4px 8px 8px; overflow: auto; color: var(--ink); font-size: 12px; line-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
   @media (prefers-reduced-motion: reduce) {
-    .v2-btw-composer, .v2-btw-quote-chevron, .v2-btw-send { transition: none; }
-    .v2-btw-send:active:not(:disabled) { scale: none; }
+    .v2-btw-composer, .v2-btw-quote-chevron, .v2-btw-send, .v2-btw-resizer::after { transition: none; }
   }
 }

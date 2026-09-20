@@ -22,13 +22,11 @@
     border: 1px solid var(--chat-edge, var(--field-edge));
     border-radius: 18px;
     background: var(--field-surface);
-    box-shadow: 0 2px 6px rgb(0 0 0 / 3%);
-    transition: border-color var(--motion-normal) var(--motion-ease), box-shadow var(--motion-normal) var(--motion-ease);
+    transition: border-color var(--motion-fast) var(--motion-ease);
   }
   .v2-chat-composer:hover { border-color: var(--control-border-hover); }
   .v2-chat-composer:focus-within {
-    border-color: var(--focus);
-    box-shadow: var(--control-focus-shadow), 0 2px 6px rgb(0 0 0 / 3%);
+    border-color: var(--control-border-focus);
   }
   .v2-composer-input-row {
     display: flex;
@@ -69,15 +67,14 @@
     border-radius: 50%;
     background: var(--ink);
     color: var(--surface);
-    transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), scale var(--motion-fast) var(--motion-ease);
+    transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
   }
   .v2-composer-send:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 85%, var(--surface)); }
-  .v2-composer-send:active:not(:disabled) { scale: .92; }
+  .v2-composer-send:active:not(:disabled) { background: color-mix(in srgb, var(--ink) 75%, var(--surface)); }
   .v2-composer-send:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; }
   .v2-composer-send:disabled { background: var(--soft-surface); color: var(--muted-ink); opacity: 1; }
   @media (prefers-reduced-motion: reduce) {
     .v2-chat-composer, .v2-composer-send { transition: none; }
-    .v2-composer-send:active:not(:disabled) { scale: none; }
   }
   .v2-chat-composer > .v2-staged-attachments { padding: 10px 12px 0; }
   .v2-chat-surface .v2-user-message {
@@ -162,6 +159,7 @@
     border-radius: 4px;
     background: var(--chat-code-surface);
     opacity: 0;
+    transition: opacity var(--motion-fast) var(--motion-ease);
   }
   .v2-chat-surface .v2-code-block:hover .v2-code-toolbar,
   .v2-chat-surface .v2-code-block:focus-within .v2-code-toolbar { opacity: 1; }
@@ -233,5 +231,8 @@
   .v2-chat-surface .operation-diff footer { font-size: 11px; }
   @media (hover: none) {
     .v2-chat-surface .v2-code-toolbar { opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .v2-chat-surface .v2-code-toolbar { transition: none; }
   }
 }

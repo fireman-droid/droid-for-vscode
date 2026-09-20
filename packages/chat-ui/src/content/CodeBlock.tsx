@@ -22,7 +22,7 @@ export function CodeBlock({ text, language }: { readonly text: string; readonly 
     ? null : highlightCode(text, language), [text, language, streaming]);
   const preview = actions?.previewHtml !== undefined && !streaming && !thinking && isInlineHtmlPreviewCandidate(language, text);
   return <div className="v2-code-block my-3 min-w-0 overflow-hidden rounded border border-border">
-    {preview ? <div data-transcript-selection-exclude="" className="flex select-none items-center justify-between gap-2 border-b border-border bg-muted px-2 py-1.5">
+    {preview ? <div data-transcript-selection-exclude="" className="v2-code-preview-head flex select-none items-center justify-between gap-2 border-b border-border bg-muted px-2 py-1.5">
       <span className="min-w-0 text-xs"><span className="block truncate">{readCanvasTitle(text)}</span><span className="block text-[11px] text-muted-foreground">{previewHtmlDescription ?? 'HTML preview'}</span></span>
       <Button variant="outline" size="sm" disabled={maxPreviewHtmlLength !== undefined && text.length > maxPreviewHtmlLength} onClick={() => actions.previewHtml?.(text, { artifactId: `inline:${stableSourceId(text)}`, title: readCanvasTitle(text) })}>Open Canvas</Button>
     </div> : null}
@@ -38,7 +38,7 @@ export function CodeBlock({ text, language }: { readonly text: string; readonly 
       }}>{copied ? <Check /> : <Copy />}</Button>
     </header>
     <pre tabIndex={0} role="region" aria-label={`${language ?? 'Plain text'} code`}
-      className="max-h-[480px] max-w-full overflow-auto overscroll-x-contain bg-muted/40 p-2.5 text-xs leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-ring">
+      className="max-h-[480px] max-w-full overflow-auto overscroll-x-contain bg-muted/40 p-2.5 text-xs leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring">
       {html === null ? <code>{text}</code> : <code dangerouslySetInnerHTML={{ __html: html }} />}
     </pre>
     </div>

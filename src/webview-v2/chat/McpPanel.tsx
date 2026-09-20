@@ -67,7 +67,7 @@ function McpServerForm({ disabled, onAdd }: {
   const [target, setTarget] = useState('');
   const { draft, targetHint } = readMcpServerDraft(name, serverType, target);
   const submit = () => { if (!disabled && draft !== null) onAdd(draft); };
-  return <div role="form" aria-label="Add MCP server" className="space-y-2 border-b border-border pb-3" onKeyDown={(event) => {
+  return <div role="form" aria-label="Add MCP server" className="space-y-2 border-b border-[var(--panel-edge)] pb-3" onKeyDown={(event) => {
     if (event.key === 'Enter' && event.target instanceof HTMLInputElement && !event.nativeEvent.isComposing && event.keyCode !== 229) {
       event.preventDefault();
       submit();
@@ -98,7 +98,7 @@ function McpServerRow({ server, auth, disabled, authDisabled, onToggle, onRemove
   }, [confirming]);
   const authPending = auth?.phase === 'started' || auth?.phase === 'browser';
   const needsAuth = server.requiresAuth && !server.hasAuthTokens;
-  return <li className="space-y-2 border-b border-border pb-2">
+  return <li className="space-y-2 border-b border-[var(--panel-edge)] pb-2">
     <div><p className="break-words font-medium">{server.name}</p><p className="text-muted-foreground">{server.status} · {server.toolCount ?? '?'} tools{server.requiresAuth ? needsAuth ? ' · needs auth' : ' · authenticated' : ''}</p></div>
     <div className="flex flex-wrap gap-1">
       <Button variant="outline" size="sm" disabled={disabled} onClick={onToggle}>{server.status === 'disabled' ? 'Enable' : 'Disable'}</Button>

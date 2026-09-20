@@ -20,7 +20,7 @@ export function MediaPreview({ label, size, onClose, children, actions, onEscape
   const opener = useRef(returnFocus ?? document.activeElement);
   const dialog = useRef<HTMLDivElement>(null);
   return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-    <DialogContent ref={dialog} className="inset-2 top-2 flex h-[calc(100vh-16px)] max-h-none max-w-none flex-col overflow-hidden rounded-xl p-0"
+    <DialogContent ref={dialog} className="v2-media-preview inset-2 top-2 flex h-[calc(100vh-16px)] max-h-none max-w-none flex-col overflow-hidden rounded-xl p-0"
       onOpenAutoFocus={(event) => {
         event.preventDefault();
         dialog.current?.querySelector<HTMLElement>('[data-media-viewport]')?.focus({ preventScroll: true });
@@ -144,7 +144,7 @@ function MediaViewport({ size, children, actions }: { readonly size: MediaSize |
       <div ref={stage} className="absolute left-0 top-0 origin-top-left"
         style={size ? { width: size.width, height: size.height } : undefined}>{children}</div>
     </div>
-    <div role="group" aria-label="Media controls" className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border border-border bg-popover/95 p-1 shadow-lg backdrop-blur-sm">
+    <div role="group" aria-label="Media controls" className="v2-media-toolbar absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border border-border bg-popover/95 p-1 backdrop-blur-sm">
       <Button variant="ghost" size="icon" aria-label="Zoom out" title="Zoom out" disabled={!size || percent <= Math.round(Math.min(0.25, view.current.fit) * 100)} onClick={() => step(-1)}><Minus /></Button>
       <span className="w-11 text-center text-[11px] tabular-nums text-muted-foreground" aria-live="polite">{percent}%</span>
       <Button variant="ghost" size="icon" aria-label="Zoom in" title="Zoom in" disabled={!size || percent >= 800} onClick={() => step(1)}><Plus /></Button>
@@ -153,7 +153,7 @@ function MediaViewport({ size, children, actions }: { readonly size: MediaSize |
       <Button variant="ghost" size="icon" aria-label="Actual size" title="Actual size" disabled={!size} className="text-[11px]" onClick={() => reset(true)}>1:1</Button>
     </div>
     </div>
-    {actions ? <div className="shrink-0 border-t border-border px-3 py-2">{actions}</div> : null}
+    {actions ? <div className="v2-media-actions shrink-0 border-t border-border px-3 py-2">{actions}</div> : null}
   </div>;
 }
 
@@ -161,7 +161,7 @@ export function ImageContent({ src, alt, generated = false, thumbnail = false }:
   const [open, setOpen] = useState(false);
   const [size, setSize] = useState<MediaSize | null>(null);
   return <span className={thumbnail ? 'inline-block' : 'my-2 block'}>
-    <Button variant="plain" size="none" aria-label={`Enlarge ${alt}`} className="block min-h-7 min-w-7 max-w-full rounded outline-none focus-visible:ring-1 focus-visible:ring-ring" onClick={(event) => { event.stopPropagation(); setOpen(true); }}>
+    <Button variant="plain" size="none" aria-label={`Enlarge ${alt}`} className="v2-media-trigger block min-h-7 min-w-7 max-w-full rounded" onClick={(event) => { event.stopPropagation(); setOpen(true); }}>
       <img src={src} alt={alt} className={thumbnail ? 'size-12 rounded-[7px] object-cover' : 'max-h-64 max-w-full rounded object-contain'} loading="lazy" onLoad={(event) => setSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} />
     </Button>
     {generated ? <span className="text-[11px] text-muted-foreground">Generated</span> : null}

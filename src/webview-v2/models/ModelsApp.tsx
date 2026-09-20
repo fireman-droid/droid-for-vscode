@@ -152,7 +152,7 @@ export function ModelsApp({ transport }: { readonly transport: ModelsTransport }
         </div>
       </section>
     </div>
-      <DialogContent className="models-panel top-[6%] w-[calc(100%-32px)] max-h-[88%] max-w-[560px] rounded-xl p-6 max-[540px]:w-[calc(100%-16px)] max-[540px]:p-4" closeDisabled={busy} closeLabel="关闭面板"
+      <DialogContent className="models-panel top-[6%] w-[calc(100%-32px)] max-h-[88%] max-w-[560px] rounded-xl border-[var(--panel-edge)] p-6 max-[540px]:w-[calc(100%-16px)] max-[540px]:p-4" closeDisabled={busy} closeLabel="关闭面板"
         onInteractOutside={(event) => event.preventDefault()}>
         <header className="mb-5 pr-7"><DialogTitle className="text-lg font-semibold">{panelTitle}</DialogTitle><DialogDescription className="models-help mt-1.5">{panelDescription}</DialogDescription></header>
         <ModelsFeedback page={page} />

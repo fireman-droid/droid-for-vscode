@@ -42,14 +42,14 @@ export function MissionDetails({ mission, result, vscode }: {
   const current = mission.features.find((feature) => feature.id === mission.currentFeatureId);
   const tone = phaseTone(mission);
   return <div className="space-y-5 text-[13px] leading-5">
-    <section aria-label="Mission progress" className="space-y-3 rounded-xl border border-border bg-muted/40 p-4">
+    <section aria-label="Mission progress" className="v2-mission-panel space-y-3 rounded-xl border border-border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="v2-mission-pill" data-tone={tone}><span aria-hidden="true" className="v2-mission-dot" data-pulse={tone === 'active' || tone === 'attention' || undefined} />{formatPhase(mission)}</span>
+        <span className="v2-mission-pill" data-tone={tone}><span aria-hidden="true" className="v2-mission-dot" />{formatPhase(mission)}</span>
         <span className="text-xs tabular-nums text-muted-foreground">{completed} / {total} features</span>
       </div>
       <Progress aria-label="Completed Mission features" value={completed} max={Math.max(1, total)} aria-valuetext={total === 0 ? 'Waiting for a feature plan' : `${completed} of ${total} features completed`} />
       {current ? <p className="break-words text-xs text-muted-foreground">Current feature <span className="font-medium text-foreground">{current.title}</span></p> : null}
-      {mission.availability === 'detached' ? <p role="status" className="flex items-start gap-2 rounded-md border border-border bg-background p-2.5 text-xs text-muted-foreground"><Unplug aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />This Mission is detached from the current runtime. Live controls are unavailable.</p> : null}
+      {mission.availability === 'detached' ? <p role="status" className="v2-mission-feedback flex items-start gap-2 rounded-md border border-border p-2.5 text-xs text-muted-foreground"><Unplug aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />This Mission is detached from the current runtime. Live controls are unavailable.</p> : null}
       {mission.lifecycle === 'awaiting_input' ? <p role="status" data-tone="attention" className="v2-mission-banner flex items-start gap-2 p-2.5 text-xs"><CircleHelp aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />Droid needs your input. Answer the pending request in the Mission chat.</p> : null}
     </section>
     <div aria-label="Mission controls" className="flex flex-wrap gap-2">
@@ -58,18 +58,18 @@ export function MissionDetails({ mission, result, vscode }: {
       {mission.controls.canStopCurrentFeature ? <Button className="h-8" variant="destructive" disabled={busy} onClick={() => setConfirmStop(mission.revision)}><Square />Stop feature</Button> : null}
       <Button className="ml-auto h-8" variant="ghost" disabled={busy} onClick={() => send({ type: 'mission.refresh', revision: mission.revision })}><RefreshCw />Refresh</Button>
     </div>
-    {request ? <p role={request.status === 'rejected' ? 'alert' : 'status'} aria-live="polite" className={`rounded-md border p-3 text-xs ${request.status === 'rejected' ? 'border-destructive/30 text-destructive' : 'border-border text-muted-foreground'}`}>{request.text}</p>
+    {request ? <p role={request.status === 'rejected' ? 'alert' : 'status'} aria-live="polite" className={`v2-mission-feedback rounded-md border p-3 text-xs ${request.status === 'rejected' ? 'border-destructive/30 text-destructive' : 'border-border text-muted-foreground'}`}>{request.text}</p>
       : mission.controls.busyAction ? <p role="status" className="text-xs text-muted-foreground">Updating Mission…</p> : null}
     <Tabs defaultValue="features">
       <TabsList aria-label="Mission details" className="mb-4"><TabsTrigger value="features">Features ({total})</TabsTrigger><TabsTrigger value="validation">Validation</TabsTrigger></TabsList>
       <TabsContent value="features" className="outline-none focus-visible:ring-1 focus-visible:ring-ring">
-        {total === 0 ? <p className="rounded-lg border border-dashed border-border p-4 text-xs text-muted-foreground">Droid has not published the feature plan yet. Planning and clarification happen in chat.</p> : null}
+        {total === 0 ? <p className="v2-mission-empty rounded-lg border border-dashed border-border p-4 text-xs text-muted-foreground">Droid has not published the feature plan yet. Planning and clarification happen in chat.</p> : null}
         <ol className="v2-mission-timeline space-y-2.5">{mission.features.map((feature) => <FeatureRow key={feature.id} feature={feature} current={feature.id === mission.currentFeatureId} busy={busy}
           onView={() => send({ type: 'mission.viewer.open', revision: mission.revision, featureId: feature.id })} />)}</ol>
       </TabsContent>
       <TabsContent value="validation" className="space-y-3 outline-none focus-visible:ring-1 focus-visible:ring-ring">
         <p className="text-xs text-muted-foreground">Configured checks for this Mission. Enabled checks are not evidence that validation has passed.</p>
-        <dl className="divide-y divide-border rounded-lg border border-border px-4">
+        <dl className="v2-mission-validation divide-y divide-border rounded-lg border border-border px-4">
           <div className="flex items-center justify-between gap-3 py-3">
             <dt className="flex items-center gap-2"><ShieldCheck aria-hidden="true" className="size-4 text-muted-foreground" />Scrutiny</dt>
             <dd><span className="v2-mission-pill" data-tone={mission.validator.scrutinyEnabled ? 'active' : 'muted'}>{mission.validator.scrutinyEnabled ? 'Enabled' : 'Disabled'}</span></dd>
@@ -82,7 +82,7 @@ export function MissionDetails({ mission, result, vscode }: {
         <p className="text-xs text-muted-foreground">Open a feature's Worker transcript to inspect the work and any reported checks.</p>
       </TabsContent>
     </Tabs>
-    <Dialog open={confirmStop !== null} onOpenChange={(open) => { if (!open) setConfirmStop(null); }}><DialogContent>
+    <Dialog open={confirmStop !== null} onOpenChange={(open) => { if (!open) setConfirmStop(null); }}><DialogContent className="v2-mission-dialog">
       <DialogTitle className="pr-8 text-sm font-semibold">Stop the current feature?</DialogTitle>
       <DialogDescription className="mt-3 text-xs text-muted-foreground">This interrupts the active Worker. Completed edits are not rolled back. The action applies only if the Mission state is still current.</DialogDescription>
       {confirmStop !== null && confirmStop !== mission.revision ? <p role="status" className="mt-3 text-xs text-muted-foreground">Mission state changed. Close this dialog and review the current feature before retrying.</p> : null}
@@ -96,16 +96,16 @@ function FeatureRow({ feature, current, busy, onView }: {
   readonly feature: MissionFeatureSnapshot; readonly current: boolean; readonly busy: boolean; readonly onView: () => void;
 }) {
   const StatusIcon = feature.status === 'completed' ? Check : feature.status === 'in_progress' ? CircleDot : feature.status === 'cancelled' ? X : Circle;
-  return <li className={`min-w-0 rounded-lg border ${current ? 'border-ring/50 bg-muted/50' : 'border-border'}`}>
+  return <li className="v2-mission-feature min-w-0 rounded-lg border border-border" data-current={current || undefined}>
     <Collapsible>
       <div className="flex items-start gap-2.5 p-3">
         <span aria-hidden="true" className="v2-mission-node mt-0.5" data-tone={featureTone(feature.status)}><StatusIcon className="size-3.5" /></span>
-        <CollapsibleTrigger asChild><Button variant="plain" size="none" className="group flex min-w-0 flex-1 items-start gap-2 rounded text-left">
+        <CollapsibleTrigger asChild><Button variant="plain" size="none" className="v2-mission-feature-trigger group flex min-w-0 flex-1 items-start gap-2 rounded text-left">
           <span className="min-w-0 flex-1"><span className="block break-words font-medium">{feature.title}</span><span className="mt-1 block text-xs text-muted-foreground">{feature.order + 1} · {formatFeatureStatus(feature.status)}{current ? ' · Current' : ''}</span></span>
           <ChevronRight className="mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none" />
         </Button></CollapsibleTrigger>
       </div>
-      <CollapsibleContent className="space-y-3 border-t border-border p-3">
+      <CollapsibleContent className="v2-mission-feature-content space-y-3 border-t border-border p-3">
         <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">{feature.description || 'No additional description was published for this feature.'}</p>
         {feature.milestone ? <p className="break-words text-xs"><span className="text-muted-foreground">Milestone: </span>{feature.milestone}</p> : null}
         {feature.workerViewAvailable ? <Button variant="outline" className="h-8" disabled={busy} onClick={onView}><ExternalLink />View</Button>

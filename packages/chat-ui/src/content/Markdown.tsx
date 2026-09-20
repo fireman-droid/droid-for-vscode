@@ -53,7 +53,7 @@ function InlineCode({ children }: ComponentProps<'code'>) {
         </a>
       </Button> : children}
     </code>
-    {preview && actions ? <Button variant="plain" size="none" className="ml-1 rounded border border-border px-1 text-[11px] text-muted-foreground" title={`Open ${preview} in Canvas`} onClick={() => actions.previewFile?.(preview)}>Canvas</Button> : null}
+    {preview && actions ? <Button variant="plain" size="none" className="ml-1 rounded border border-[var(--panel-edge)] px-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground active:bg-[var(--control-surface-active)]" title={`Open ${preview} in Canvas`} onClick={() => actions.previewFile?.(preview)}>Canvas</Button> : null}
   </>;
 }
 

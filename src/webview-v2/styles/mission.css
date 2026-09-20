@@ -1,5 +1,5 @@
 .v2-chat-layout { container: mission-layout / inline-size; }
-.v2-mission-workspace { width: clamp(360px, 42%, 480px); }
+.v2-mission-workspace { width: clamp(360px, 42%, 480px); border-color: var(--panel-edge); }
 .v2-mission-chat-toggle { display: none; }
 @container mission-layout (max-width: 799px) {
   .v2-chat-layout[data-mission-open='true']:not([data-mission-chat='true']) > .v2-chat-surface { display: none; }
@@ -23,9 +23,9 @@
   align-items: center;
   gap: 6px;
   max-width: 100%;
-  border: 1px solid color-mix(in srgb, var(--mission-tone) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mission-tone) 20%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--mission-tone) 10%, transparent);
+  background: color-mix(in srgb, var(--mission-tone) 5%, transparent);
   color: var(--mission-tone);
   font-size: 11px;
   font-weight: 500;
@@ -52,36 +52,26 @@
 .v2-mission-dot[data-tone='done'] { --mission-tone: var(--mission-tone-done); }
 .v2-mission-dot[data-tone='muted'] { --mission-tone: var(--mission-tone-muted); }
 .v2-mission-pill[data-tone] .v2-mission-dot { background: currentColor; }
-@media (prefers-reduced-motion: no-preference) {
-  .v2-mission-dot[data-pulse='true'] { animation: v2-mission-pulse 1.6s ease-in-out infinite; }
-}
-@keyframes v2-mission-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--mission-tone) 45%, transparent); }
-  50% { box-shadow: 0 0 0 4px transparent; }
-}
 
 /* Catalog cards */
 .v2-mission-card {
   display: block;
   width: 100%;
-  border: 1px solid var(--edge);
+  border: 1px solid var(--panel-edge);
   border-radius: 12px;
   background: var(--surface);
   text-align: left;
-  transition: border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease);
+  transition: border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease);
 }
-@media (prefers-reduced-motion: reduce) {
-  .v2-mission-card { transition: none; }
-}
-.v2-mission-card:hover:not(:disabled) { background: var(--hover-surface); border-color: var(--control-border-hover); }
-.v2-mission-card:active:not(:disabled) { background: color-mix(in srgb, var(--ink) 5%, var(--hover-surface)); }
-.v2-mission-card:focus-visible { outline: none; border-color: var(--focus); box-shadow: var(--control-focus-shadow); }
+.v2-mission-card:hover:not(:disabled) { background: var(--control-surface-hover); border-color: var(--control-border-hover); }
+.v2-mission-card:active:not(:disabled) { background: var(--control-surface-active); }
+.v2-mission-card:focus-visible { outline: none; border-color: var(--focus); box-shadow: none; }
 
 /* Attention-stripped inline banner (readiness advisory, awaiting input) */
 .v2-mission-banner {
-  border: 1px solid color-mix(in srgb, var(--mission-tone, var(--muted-ink)) 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mission-tone, var(--muted-ink)) 25%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--mission-tone, var(--muted-ink)) 8%, transparent);
+  background: color-mix(in srgb, var(--mission-tone, var(--muted-ink)) 4%, transparent);
   color: var(--mission-tone, var(--muted-ink));
 }
 .v2-mission-banner[data-tone='attention'] { --mission-tone: var(--mission-tone-attention); }
@@ -96,7 +86,7 @@
   top: 38px;
   bottom: -10px;
   width: 1px;
-  background: var(--edge);
+  background: var(--panel-edge);
 }
 .v2-mission-node {
   display: inline-flex;
@@ -106,12 +96,12 @@
   height: 24px;
   flex-shrink: 0;
   border-radius: 999px;
-  border: 1px solid var(--edge);
+  border: 1px solid var(--panel-edge);
   background: var(--surface);
   color: var(--muted-ink);
 }
-.v2-mission-node[data-tone='active'] { border-color: color-mix(in srgb, var(--mission-tone-active) 45%, transparent); color: var(--mission-tone-active); }
-.v2-mission-node[data-tone='done'] { border-color: color-mix(in srgb, var(--mission-tone-done) 45%, transparent); color: var(--mission-tone-done); }
+.v2-mission-node[data-tone='active'] { border-color: color-mix(in srgb, var(--mission-tone-active) 25%, transparent); color: var(--mission-tone-active); }
+.v2-mission-node[data-tone='done'] { border-color: color-mix(in srgb, var(--mission-tone-done) 25%, transparent); color: var(--mission-tone-done); }
 .v2-mission-node[data-tone='muted'] { color: var(--muted-ink); }
 
 /* Setup step index chip */
@@ -123,8 +113,50 @@
   height: 20px;
   flex-shrink: 0;
   border-radius: 999px;
-  background: var(--soft-surface);
+  background: var(--control-surface-hover);
   color: var(--secondary-ink);
   font-size: 11px;
   font-weight: 600;
+}
+
+/* Keep dense work surfaces quiet; state is conveyed by labels and a soft fill. */
+.v2-mission-workspace-header, .v2-mission-setup-status, .v2-mission-setup-actions,
+.v2-mission-panel, .v2-mission-flow, .v2-mission-validation,
+.v2-mission-validation > div, .v2-mission-dialog { border-color: var(--panel-edge); }
+.v2-mission-panel, .v2-mission-setup-status, .v2-mission-empty {
+  background: color-mix(in srgb, var(--soft-surface) 20%, var(--surface));
+}
+.v2-mission-flow { background: var(--panel-edge); }
+.v2-mission-empty { border-color: var(--panel-edge); }
+.v2-mission-filters { background: color-mix(in srgb, var(--soft-surface) 35%, var(--surface)); }
+.v2-mission-filters [role='tab']:is(:hover, [data-state='active']):not(:disabled) { background: var(--control-surface-hover); }
+.v2-mission-filters [role='tab']:active:not(:disabled) { background: var(--control-surface-active); }
+.v2-mission-filter-count { border-color: var(--panel-edge); }
+.v2-mission-filters [data-state='active'] .v2-mission-filter-count { color: var(--ink); }
+.v2-mission-feedback { border-color: var(--panel-edge); background: var(--control-surface-hover); }
+.v2-mission-feedback[role='alert'] {
+  border-color: color-mix(in srgb, var(--error-ink) 24%, transparent);
+  background: color-mix(in srgb, var(--error-ink) 4%, var(--surface));
+}
+.v2-mission-feature { border-color: var(--panel-edge); background: var(--surface); }
+.v2-mission-feature[data-current='true'] { background: var(--control-surface-hover); }
+.v2-mission-feature-trigger { border-radius: var(--control-radius); }
+.v2-mission-feature-trigger:hover:not(:disabled),
+.v2-mission-feature-trigger[data-state='open'] { background: var(--control-surface-hover); }
+.v2-mission-feature-trigger:active:not(:disabled) { background: var(--control-surface-active); }
+.v2-mission-feature-content { border-color: var(--panel-edge); }
+.v2-mission-settings-trigger { border-color: var(--panel-edge); }
+.v2-mission-settings-trigger:hover:not(:disabled),
+.v2-mission-settings-trigger[data-state='open'] { border-color: var(--control-border-hover); background: var(--control-surface-hover); }
+.v2-mission-settings-trigger:active:not(:disabled) { background: var(--control-surface-active); }
+.v2-mission-toggle { border-color: var(--panel-edge); cursor: pointer; }
+.v2-mission-toggle:hover:not(:has(:disabled)), .v2-mission-toggle:focus-within { background: var(--control-surface-hover); }
+.v2-mission-toggle:active:not(:has(:disabled)) { background: var(--control-surface-active); }
+.v2-mission-toggle:has(:disabled) { cursor: default; }
+.v2-mission-feature, .v2-mission-feature-trigger, .v2-mission-settings-trigger, .v2-mission-toggle {
+  transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  .v2-mission-card, .v2-mission-feature, .v2-mission-feature-trigger,
+  .v2-mission-settings-trigger, .v2-mission-toggle { transition: none; }
 }

@@ -1,15 +1,31 @@
 @layer components {
+  .v2-chat-disclosure,
+  .v2-chat-choice,
+  .v2-session-row {
+    transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+  }
+  .v2-chat-disclosure { border-radius: var(--control-radius); }
+  .v2-chat-disclosure:hover:not(:disabled),
+  .v2-chat-choice:hover:has(button:enabled),
+  .v2-session-row:hover:has(button:enabled) { background: var(--control-surface-hover); }
+  .v2-chat-disclosure:active:not(:disabled),
+  .v2-chat-choice:has([data-state='checked']),
+  .v2-session-row[data-current='true'] { background: var(--control-surface-active); }
+  .v2-chat-choice:has(button:enabled) { cursor: pointer; }
+  .v2-chat-choice:has(button:disabled) { opacity: .6; }
+  .v2-chat-choice:has(button:focus-visible) { outline: 1px solid var(--focus); outline-offset: -1px; }
+  .v2-chat-choice > button:focus-visible { outline: none; }
   .v2-command-card {
     margin: 4px 0 12px;
     overflow: visible;
-    border: 1px solid var(--edge);
+    border: 1px solid var(--panel-edge);
     border-radius: 8px;
-    background: color-mix(in srgb, var(--well-surface) 95%, var(--ink) 5%);
-    transition: border-color 140ms ease;
+    background: var(--well-surface);
+    transition: border-color var(--motion-fast) var(--motion-ease);
   }
   .v2-command-card:hover,
   .v2-user-message:has([data-transcript-selectable]:enabled):hover {
-    border-color: color-mix(in srgb, var(--edge-strong) 55%, var(--edge));
+    border-color: var(--control-border-hover);
   }
   .v2-command-head {
     display: flex;
@@ -20,7 +36,7 @@
     border-radius: 7px;
   }
   .v2-command-card[data-state='open'] > .v2-command-head {
-    border-bottom: 1px solid var(--edge);
+    border-bottom: 1px solid var(--panel-edge);
     border-radius: 7px 7px 0 0;
   }
   .v2-command-toggle {
@@ -36,7 +52,11 @@
     text-align: left;
     cursor: pointer;
     user-select: text;
+    border-radius: 4px;
+    transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
   }
+  .v2-command-toggle:hover { background: var(--control-surface-hover); }
+  .v2-command-toggle:active { background: var(--control-surface-active); }
   .v2-command-labels {
     display: flex;
     flex: 1;
@@ -63,11 +83,13 @@
     display: none;
     width: 12px;
     height: 12px;
-    transition: transform 150ms cubic-bezier(.215,.61,.355,1);
+    transition: transform var(--motion-fast) var(--motion-ease);
   }
   .v2-command-card:hover .v2-command-prompt-icon,
+  .v2-command-card:focus-within .v2-command-prompt-icon,
   .v2-command-card[data-state='open'] .v2-command-prompt-icon { display: none; }
   .v2-command-card:hover .v2-command-chevron,
+  .v2-command-card:focus-within .v2-command-chevron,
   .v2-command-card[data-state='open'] .v2-command-chevron { display: block; }
   .v2-command-card[data-state='open'] .v2-command-chevron { transform: rotate(90deg); }
   .v2-command-title {
@@ -111,10 +133,12 @@
     border-radius: 5px;
     background: transparent;
     color: var(--muted-ink);
+    transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
   }
   .v2-command-menu-trigger svg { width: 14px; height: 14px; }
   .v2-command-menu-trigger:hover,
-  .v2-command-menu-trigger[aria-expanded='true'] { color: var(--ink); background: var(--soft-surface); }
+  .v2-command-menu-trigger[aria-expanded='true'] { color: var(--ink); background: var(--control-surface-hover); }
+  .v2-command-menu-trigger:active { background: var(--control-surface-active); }
   .v2-command-menu {
     width: max-content;
     min-width: 130px;
@@ -136,7 +160,8 @@
     font-weight: 400;
   }
   .v2-command-menu-item svg { width: 13px; height: 13px; }
-  .v2-command-menu-item:hover { background: var(--hover-surface); }
+  .v2-command-menu-item:hover { background: var(--control-surface-hover); }
+  .v2-command-menu-item:active { background: var(--control-surface-active); }
   .v2-command-menu-item:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
   .v2-command-body {
     display: grid;
@@ -145,7 +170,7 @@
     border-radius: 0 0 7px 7px;
     opacity: 0;
     background: var(--well-surface);
-    transition: grid-template-rows 300ms cubic-bezier(.215,.61,.355,1), opacity 200ms ease;
+    transition: grid-template-rows var(--motion-normal) var(--motion-ease), opacity var(--motion-fast) var(--motion-ease);
   }
   .v2-command-body[data-state='open'] { grid-template-rows: 1fr; opacity: 1; }
   .v2-command-body-inner { min-height: 0; overflow: hidden; }
@@ -183,11 +208,11 @@
     align-items: stretch;
     gap: 8px;
     padding: 10px 12px;
-    border: 1px solid var(--edge);
+    border: 1px solid var(--panel-edge);
     border-radius: 8px;
     background: var(--field-surface);
     text-align: left;
-    transition: border-color 160ms ease;
+    transition: border-color var(--motion-fast) var(--motion-ease);
   }
   .v2-user-message:has([data-transcript-selectable]:enabled) { cursor: pointer; }
   .v2-user-message > .v2-user-copy,
@@ -213,13 +238,13 @@
     flex-direction: column;
     gap: 6px;
     padding: 8px;
-    border: 1px solid var(--edge);
+    border: 1px solid var(--panel-edge);
     border-radius: 12px;
     background: var(--field-surface);
-    transition: border-color var(--motion-normal) var(--motion-ease), box-shadow var(--motion-normal) var(--motion-ease);
+    transition: border-color var(--motion-normal) var(--motion-ease);
   }
   .v2-user-edit-card:hover { border-color: var(--control-border-hover); }
-  .v2-user-edit-card:focus-within { border-color: var(--focus); box-shadow: var(--control-focus-shadow); }
+  .v2-user-edit-card:focus-within { border-color: var(--control-border-focus); }
   .v2-user-edit-input {
     min-height: 27px;
     max-height: 168px;
@@ -252,7 +277,8 @@
     font-size: 18px;
     line-height: 1;
   }
-  .v2-user-edit-attach:hover { color: var(--ink); }
+  .v2-user-edit-attach:hover:not(:disabled) { color: var(--ink); background: var(--control-surface-hover); }
+  .v2-user-edit-attach:active:not(:disabled) { background: var(--control-surface-active); }
   .v2-user-edit-attach:disabled { opacity: .45; }
   .v2-user-edit-send {
     display: grid;
@@ -262,14 +288,14 @@
     margin-left: auto;
     place-items: center;
     padding: 0;
-    border: 1px solid var(--edge);
+    border: 1px solid var(--panel-edge);
     border-radius: 6px;
-    background: color-mix(in srgb, var(--ink) 8%, var(--field-surface));
+    background: var(--control-surface-hover);
     color: var(--ink);
-    transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), scale var(--motion-fast) var(--motion-ease);
+    transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
   }
-  .v2-user-edit-send:hover:not(:disabled) { background: var(--hover-surface); border-color: var(--control-border-hover); }
-  .v2-user-edit-send:active:not(:disabled) { scale: .94; }
+  .v2-user-edit-send:hover:not(:disabled) { background: var(--control-surface-active); border-color: var(--control-border-hover); }
+  .v2-user-edit-send:active:not(:disabled) { border-color: var(--control-border-focus); }
   .v2-user-edit-send svg { width: 14px; height: 14px; }
   .v2-user-edit-send:disabled { opacity: 1; color: color-mix(in srgb, var(--ink) 56%, var(--field-surface)); }
   .v2-sent-attachments { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -285,12 +311,17 @@
     justify-content: center;
     gap: 2px;
     padding: 4px 2px 3px;
-    border: 1px solid var(--edge);
+    border: 1px solid var(--panel-edge);
     border-radius: 7px;
     background: var(--code-surface);
     color: var(--muted-ink);
     cursor: zoom-in;
+    transition: border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease);
   }
+  .v2-attachment-file:hover:not(:disabled),
+  .v2-attachment-image:hover:not(:disabled) { border-color: var(--control-border-hover); }
+  .v2-attachment-file:active:not(:disabled),
+  .v2-attachment-image:active:not(:disabled) { border-color: var(--control-border-focus); background: var(--control-surface-active); }
   .v2-attachment-file > svg { width: 16px; height: 16px; flex: none; }
   .v2-attachment-badge { max-width: 42px; overflow: hidden; color: var(--secondary-ink); font-size: 9px; font-weight: 650; line-height: 1; letter-spacing: .03em; white-space: nowrap; text-overflow: ellipsis; }
   .v2-attachment-image { overflow: hidden; padding: 0; }
@@ -305,7 +336,7 @@
     height: 18px;
     place-items: center;
     padding: 0;
-    border: 1px solid var(--edge);
+    border: 1px solid var(--panel-edge);
     border-radius: 50%;
     background: var(--field-surface);
     color: var(--muted-ink);
@@ -313,11 +344,13 @@
     line-height: 1;
     opacity: 0;
     box-shadow: 0 1px 3px rgb(0 0 0 / 15%);
-    transition: opacity 120ms ease;
+    transition: opacity var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease);
   }
   .v2-attachment-thumb:hover .v2-attachment-remove,
+  .v2-attachment-thumb:focus-within .v2-attachment-remove,
   .v2-attachment-remove:focus-visible { opacity: 1; }
-  .v2-attachment-remove:hover { color: var(--error-ink); }
+  .v2-attachment-remove:hover:not(:disabled) { color: var(--error-ink); background: var(--control-surface-hover); }
+  .v2-attachment-remove:active:not(:disabled) { background: var(--control-surface-active); }
   .v2-command-toggle:focus-visible,
   .v2-user-copy:focus-visible,
   .v2-command-menu-trigger:focus-visible,
@@ -325,8 +358,9 @@
   .v2-attachment-thumb > button:focus-visible,
   .v2-user-edit-send:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) {
+    .v2-chat-disclosure, .v2-chat-choice, .v2-session-row { transition: none; }
     .v2-command-card, .v2-command-chevron, .v2-command-body, .v2-user-message, .v2-attachment-remove,
-    .v2-user-edit-card, .v2-user-edit-send { transition: none; }
-    .v2-user-edit-send:active:not(:disabled) { scale: none; }
+    .v2-user-edit-card, .v2-user-edit-send, .v2-command-toggle, .v2-command-menu-trigger,
+    .v2-attachment-file, .v2-attachment-image { transition: none; }
   }
 }

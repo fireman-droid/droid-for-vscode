@@ -28,19 +28,19 @@ export function ReviewCommit({ port, sessionId, onClose }: { port: ReviewPort; s
     return () => window.removeEventListener('message', receive);
   }, [port, sessionId, onClose]);
   const unselectedStaged = status?.files.filter((file) => file.staged && !selected.has(file.path)) ?? [];
-  return <section className="review-commit" role="group" aria-label="Commit changes">
+  return <section className="review-commit" role="group" aria-label="Commit changes" aria-busy={pending}>
     <header><strong>Commit changes</strong><span>{status?.branch ?? ''}</span></header>
-    {!status ? <p role="status">Reading Git status…</p> : status.unavailableReason ? <p role="alert">Git unavailable: {status.unavailableReason}</p> : <>
-      <div className="review-commit-files">{status.files.map((file) => <label key={file.path}>
+    {!status ? <p className="review-commit-notice" role="status">Reading Git status…</p> : status.unavailableReason ? <p className="review-commit-notice review-error" role="alert">Git unavailable: {status.unavailableReason}</p> : <>
+      <div className="review-commit-files">{status.files.map((file) => <label key={file.path} data-selected={selected.has(file.path)} data-disabled={pending}>
         <Checkbox checked={selected.has(file.path)} disabled={pending} onCheckedChange={() => setSelected((old) => {
           const next = new Set(old); if (next.has(file.path)) next.delete(file.path); else next.add(file.path); return next;
         })} /><span>{file.path}</span><small>{file.status}{file.staged ? ' · staged' : ''}</small>
       </label>)}</div>
       <p className="review-muted">Selected files will be staged in full and committed locally. Nothing is pushed.</p>
       <Textarea aria-label="Commit message" placeholder="Commit message" rows={3} maxLength={4_000} disabled={pending} value={message} onChange={(event) => setMessage(event.target.value)} />
-      {unselectedStaged.length ? <p role="status">Include the {unselectedStaged.length} already-staged file(s), or adjust the index before committing.</p> : null}
+      {unselectedStaged.length ? <p className="review-commit-notice" role="status">Include the {unselectedStaged.length} already-staged file(s), or adjust the index before committing.</p> : null}
     </>}
-    {failure ? <p role="alert" className="review-error">{failure}</p> : null}
+    {failure ? <p role="alert" className="review-commit-notice review-error">{failure}</p> : null}
     <footer><Button variant="ghost" disabled={pending} onClick={onClose}>Cancel</Button>
       <Button disabled={pending || !message.trim() || !selected.size || unselectedStaged.length > 0 || !!status?.unavailableReason} onClick={() => {
         setPending(true); setFailure(null); port.postMessage({ type: 'reviewPanel.commit', paths: [...selected], message });
