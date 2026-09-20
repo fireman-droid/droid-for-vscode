@@ -6,14 +6,14 @@ import type { ChatPort } from '../../webview/assistant/shell/chatIntent';
 import { Button } from '../ui/button';
 import { DroidActivity } from '../ui/droid-motion';
 
-function useLongWait(waiting: boolean) {
+function useLongWait(waiting: boolean, delay = 5_000) {
   const [elapsed, setElapsed] = useState(false);
   useEffect(() => {
     setElapsed(false);
     if (!waiting) return;
-    const timer = setTimeout(() => setElapsed(true), 5_000);
+    const timer = setTimeout(() => setElapsed(true), delay);
     return () => clearTimeout(timer);
-  }, [waiting]);
+  }, [waiting, delay]);
   return waiting && elapsed;
 }
 
