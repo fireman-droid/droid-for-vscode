@@ -117,7 +117,7 @@ function Questionnaire({ interaction, questions, actions }: {
     actions.onAnswer(interaction, cancelled, cancelled ? [] : answers);
   };
   return (
-    <form className="flex min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); respond(false); }}>
+    <form aria-busy={waiting} className="flex min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); respond(false); }}>
       <header className="shrink-0"><p className="text-[10px] text-muted-foreground">AskUser</p><h2 className="text-[14px] font-semibold leading-[21px]">Droid has {questions.length} {questions.length === 1 ? 'question' : 'questions'} for you</h2></header>
       <div className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
       {displayed.map((question) => (
@@ -142,7 +142,7 @@ function QuestionOptions({ question, selected, disabled, onChange }: {
   question: AskUserQuestion; selected: readonly number[]; disabled: boolean; onChange(values: readonly number[]): void;
 }) {
   const options = question.options.map((option, index) => <label key={option}
-    className="v2-chat-choice flex min-h-9 items-start gap-2 rounded-lg border border-transparent bg-background/50 px-[9px] py-[7px] text-xs">
+    className="v2-chat-choice v2-question-option flex min-h-9 items-start gap-2 rounded-lg border border-transparent px-[9px] py-[7px] text-xs">
     {question.multiSelect ? <Checkbox className="mt-0.5" disabled={disabled} checked={selected.includes(index)}
       onCheckedChange={(checked) => onChange(checked === true ? [...selected, index] : selected.filter((value) => value !== index))} />
       : <RadioGroupItem className="mt-0.5" value={String(index)} />}

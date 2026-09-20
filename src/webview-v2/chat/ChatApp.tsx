@@ -12,7 +12,7 @@ import { useComposerFlow } from '../../webview/assistant/composer/useComposerFlo
 import { useHostMessageFlow } from '../../webview/assistant/shell/useHostMessageFlow';
 import { useConversationTransition } from '../../webview/assistant/shell/conversationTransition';
 import { Button } from '../ui/button';
-import { DroidConnectionDot, DroidLoading } from '../ui/droid-motion';
+import { DroidConnectionDot } from '../ui/droid-motion';
 import { useWebviewTheme } from '../shell/theme';
 import { createChatStore, selectChatShell, selectCurrentTurnChanges } from './store';
 import { LiveTranscript } from './Transcript';
@@ -46,6 +46,8 @@ import { MissionWorkspace } from '../mission/MissionWorkspace';
 import { SelectSessionContext, ToolChangesContext } from '../../webview/assistant/thread/messageContexts';
 import { stableTranscriptId } from '../../shared/transcript/hostTranscriptState';
 import { IdeStatus } from './IdeStatus';
+import { ConversationWait, SessionRecovery } from './ConnectionFeedback';
+import { AppInfo } from './AppInfo';
 
 export function ChatApp({ port }: { readonly port: ChatPort }) {
   const [store] = useState(createChatStore);
@@ -194,7 +196,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
     <div className="v2-chat-layout flex h-full min-w-0" data-mission-open={host.missionWorkspaceRoute !== null || undefined} data-mission-chat={missionChat || undefined}>
     <ChatLayout data-transition-phase={transition.phase} aria-busy={transition.blocking}
       header={<>
-        <div className="flex min-w-0 items-center gap-1.5"><span className="text-[13px] font-semibold tracking-[-0.01em]">Droid</span>
+        <div className="flex min-w-0 items-center gap-1.5"><AppInfo />
           <span role={state.connection.status === 'unavailable' ? 'alert' : 'status'} title={`Local runtime ${state.connection.status}${state.mission ? ` · ${state.mission.role === 'worker' ? 'Mission worker' : 'Mission'}${state.mission.state ? ` · ${state.mission.state}` : ''}` : ''}`} className="grid size-3.5 place-items-center">
             <DroidConnectionDot state={state.connection.status} working={running} />
             <span className="sr-only">{`Local runtime ${state.connection.status}`}</span>
@@ -219,10 +221,10 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
             operation={state.review.operation} agent={state.review.agent} />
         </GitCommitFlowContext.Provider>
         {footerInteraction ? interaction : null}
-        {host.showHandshakeNotice ? <p role="alert" className="text-xs text-destructive">Waiting for the extension host. Reload Window if it does not connect.</p> : null}
+        {host.showHandshakeNotice && transition.overlay === null ? <p role="status" className="text-xs text-muted-foreground">Still waiting for the extension. Use the editor’s Reload Window command if it remains unresponsive.</p> : null}
         {notice ? <TransientNotice key={notice.sequence} diagnostic={notice} /> : null}
         {statusMessage && !running ? <p role="status" className="text-xs text-muted-foreground">{statusMessage}</p> : null}
-        {state.connection.status === 'unavailable' || state.turn?.status === 'failed' ? <Button variant="outline" size="sm" onClick={sessions.handleRetry}>Retry</Button> : null}
+        <SessionRecovery state={state} blocked={transition.blocking} onReconnect={sessions.handleRetry} port={port} />
         <QueueBar queue={state.queue} flow={composer} />
         {composer.queueEditingId === null ? null : <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>Editing queued message</span><Button variant="ghost" size="sm" onClick={composer.handleQueueEditCancel}>Cancel edit</Button>
@@ -233,11 +235,8 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
             onMissionOpen={openMission} missionActive={host.missionWorkspaceRoute === 'detail'} />} />
       </>}
       overlay={<>
-      {transition.overlay !== null ? <div
-        className="absolute inset-x-0 bottom-0 top-10 z-20 grid place-content-center gap-2 bg-background/95 p-4 text-center text-xs">
-        <DroidLoading label={transition.phase === 'restoring' ? 'Restoring conversation' : 'Switching conversation'}
-          detail={transition.phase === 'restoring' ? 'Loading saved state' : 'Droid is reconnecting the thread'} />
-      </div> : null}
+      {transition.overlay !== null ? <ConversationWait phase={transition.phase} hasSnapshot={transition.hasSnapshot}
+        handshakeTimedOut={host.showHandshakeNotice} connection={state.connection} port={port} sequence={state.sequence} /> : null}
       </>}>
 
         <ToolActionsContext.Provider value={toolActions}>
@@ -247,6 +246,8 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
               <SelectSessionContext.Provider value={sessions.handleSelectSession}>
               <LiveTranscript ref={transcript} store={store} port={port} blocked={transition.blocking} sendSignal={composer.sendSignal} onFork={sessions.handleForkCurrentSession}
                 onEditBegin={composer.queueEditingId === null ? undefined : composer.handleQueueEditCancel}
+                onDraftSuggestion={!transition.blocking && !composer.draft.trim() && composer.queueEditingId === null && !running && state.interactions.length === 0
+                  ? composer.appendCanvasDraft : undefined}
                 onQuote={quoteIntoChat}
                 onBtwQuote={state.btwAvailable ? btw.openWithQuote : undefined}
                 interaction={footerInteraction ? null : interaction}

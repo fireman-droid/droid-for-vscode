@@ -3,6 +3,50 @@
 最后更新：2026-09-20
 包版本：`0.8.0`
 
+## 状态反馈与使用体验（已安装，本地验证通过，待 Cursor 验收）
+
+- 空聊天按真实连接和设置状态展示；不可用不再显示 Ready。连接成功后显示
+  实际工作区和模型，示例任务仅填入空草稿，由用户确认发送。
+- 等待阶段与恢复动作分开描述，状态刷新不销毁 Webview 中的草稿和附件；
+  会话重连明确不会重新发送上一条消息。
+- 工具标题复用透明展开控件，标题／图标继承轻量悬停色；修复 AskUser
+  闲置背景覆盖选中反馈，补充真实等待状态的无障碍标记。
+- Markdown 先延后原文再归一化显示串，相同文本跳过重复解析；保持完整
+  Markdown 树和 streaming context。每个新显示串仍整段解析；本地基准显示
+  重复工作减少，128 KiB 仍有明显长任务，尚不能宣称超长回复完全流畅。
+- Droid 标题可查看 `0.8.0` 及本次构建标识；版本来自包清单，同一次生产
+  构建共用时间标识，浏览器开发模式单独标识，入口不依赖 Runtime 就绪。
+- 用户已明确授权本轮本地用例与性能测量，验证仅使用合成内容和本地依赖，
+  不连接真实模型。状态刷新／重连 4 个用例通过；相关 Markdown、高亮、图表、
+  Canvas、完整正文和复制共 12 个用例通过，36 个无关用例按名称过滤跳过。
+- `pnpm run package:vsix` 内类型、预算及共享 UI／生产构建全部通过；
+  `pnpm run verify:vsix` 确认 79 个条目，3,580,570 字节 VSIX 已成功安装 Cursor。
+  构建标识为 `v2-2026-09-20T03:35:57.070Z`，Reload Window 后生效。
+- 测试初次遇到 jsdom 的 MathML 可见性查询错误及状态 fixture 不符合 Bridge
+  校验；修正测试查询与 fixture 后通过，未为测试放宽生产协议。
+  Cursor CLI 的 `url.parse()` 弃用提示未阻塞安装，真实显示与会话仍待用户验收。
+
+本轮性能对照使用 Chrome `142.0.7444.176`、生产 React、相同依赖和样式，
+固定基线 `eb6091991eb97fbbceb89cba9a0161ef3c2e028f`，深色主题、608px 正文宽。
+合成 Markdown 每 50ms 追加 1 KiB，每组交替执行三轮，下表取中位数。
+总耗时包含合成输入时间，截止最终提交后的两帧，仅测共享 Markdown 渲染器。
+
+| 内容量 | 总耗时：修改前 → 后 | 超过 50ms 的长任务数 | 帧间隔 p95 |
+| --- | --- | --- | --- |
+| 32 KiB | 1854.6 → 1683.0 ms（减少 9.3%） | 1 → 0 | 33.4 → 16.9 ms |
+| 128 KiB | 17782.4 → 10501.1 ms（减少 40.9%） | 139 → 70 | 133.3 → 100.1 ms |
+
+- 结束流式后的完成耗时分别由 67.6／192.6ms 降至 27.3／54.0ms。
+  16 份最终输出的文本和结构均与完整静态解析一致，浏览器运行异常为 0。
+- 初次完整性比较因 KaTeX 遗留的空 `style` 属性返回失败；限定移除 KaTeX
+  后代与 display 容器自身的空属性后，对保存的全部原始 HTML 离线精确比对
+  通过，未忽略其他属性、节点或正文。保留原始报告，计时数据没有改写。
+- 新增基准脚本与独立开发入口；补跑完整类型与预算检查通过。专用浏览器和
+  本地服务已关闭，原始结果写入系统临时目录；没有进行真实模型或完整 Chat 测量。
+- 用例命令：`pnpm exec vitest run src/webview-v2/chat/ConnectionFeedback.test.tsx`；
+  `pnpm exec vitest run src/webview-v2/content/Markdown.test.tsx src/webview/assistant/markdown/MarkdownText.test.tsx src/webview-v2/chat/AssistantReply.test.tsx -t "V2 Markdown|copies the whole reply"`。
+- 基准复现：`node scripts/benchmarkMarkdown.mjs --baseline=eb60919 --runs=3`。
+
 ## 全部生产界面的柔和样式与交互（已安装，待 Cursor 验收）
 
 - 根据用户截图继续收敛思考、命令及同类展开标题：去掉悬停／按下的整块底色，

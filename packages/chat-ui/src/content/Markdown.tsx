@@ -83,13 +83,22 @@ const components: Components = {
   table: ({ children }) => <div className="v2-markdown-table my-3 max-w-full overflow-x-auto"><table className="w-full border-collapse text-xs">{children}</table></div>,
 };
 
+// ReactMarkdown parses synchronously; unchanged deferred text must skip that work.
+const ParsedMarkdown = memo(function ParsedMarkdown({ text, thinking }: {
+  readonly text: string;
+  readonly thinking: boolean;
+}) {
+  return <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components} skipHtml urlTransform={thinking ? safeMarkdownUrlTransform : markdownUrlTransform}>{text}</ReactMarkdown>;
+});
+
 export const Markdown = memo(function Markdown({ text, streaming = false, thinking = false }: {
   readonly text: string;
   readonly streaming?: boolean;
   readonly thinking?: boolean;
 }) {
-  const normalized = useMemo(() => normalizeMathDelimiters(text), [text]);
-  const deferred = useDeferredValue(normalized);
+  const deferred = useDeferredValue(text);
+  const displayed = streaming ? deferred : text;
+  const normalized = useMemo(() => normalizeMathDelimiters(displayed), [displayed]);
   const [initialLength] = useState(normalized.length);
   const markdownState = useMemo(() => ({ streaming, thinking }), [streaming, thinking]);
   const typography = thinking
@@ -98,7 +107,7 @@ export const Markdown = memo(function Markdown({ text, streaming = false, thinki
   return <MarkdownState.Provider value={markdownState}>
     <StreamingTextBoundary initialLength={initialLength} running={streaming}>
     <div className={`markdown-content min-w-0 break-words ${typography} [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1`}>
-      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components} skipHtml urlTransform={thinking ? safeMarkdownUrlTransform : markdownUrlTransform}>{streaming ? deferred : normalized}</ReactMarkdown>
+      <ParsedMarkdown text={normalized} thinking={thinking} />
     </div>
     </StreamingTextBoundary>
   </MarkdownState.Provider>;

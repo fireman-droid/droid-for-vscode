@@ -9,6 +9,7 @@
     transition: color var(--motion-fast) var(--motion-ease);
   }
   .v2-chat-disclosure:hover:not(:disabled) { color: var(--ink); }
+  .v2-question-option { background: color-mix(in srgb, var(--surface) 50%, transparent); }
   .v2-chat-choice:hover:has(button:enabled),
   .v2-session-row:hover:has(button:enabled) { background: var(--control-surface-hover); }
   .v2-chat-choice:has([data-state='checked']),

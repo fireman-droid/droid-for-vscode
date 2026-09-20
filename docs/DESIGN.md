@@ -6,6 +6,10 @@ Activity Bar 继续使用 `resources/droidvisx.svg`。Marketplace 的
 `resources/droidvisx.png` 是同一 24×24 路径等比转换的 256×256 黑色透明底图，
 不替换界面图标、不改变现有布局，也不引入 Factory 官方背书标识。
 
+聊天头部的 Droid 标题提供版本弹层，显示 package.json 版本和本次构建标识；
+同一生产构建的各入口共用一个标识，浏览器开发版明确显示 browser-dev。
+入口不依赖 Runtime 连接，不增加常驻版本行，更新后须 Reload Window 加载新构建。
+
 ## 可复用前端边界
 
 - 公共视觉与交互唯一实现位于 `packages/chat-ui`；抽包不改变现有布局、尺寸、
@@ -27,6 +31,8 @@ Activity Bar 继续使用 `resources/droidvisx.svg`。Marketplace 的
   模型、模式及设置入口的打开态使用轻底色，选中状态保留勾选、文字等既有标识。
 - 聊天中的思考、活动、命令及同类展开标题保持透明背景；悬停和按下均不铺整行
   色块，命令外框不随悬停加深。展开箭头和键盘焦点仍清晰可见。
+- 同类工具标题复用共享 Button 的单线键盘焦点，标题与图标随父级轻量变色；
+  AskUser 选项的闲置底色不覆盖悬停和真实选中状态，等待期间保持禁用并标识 busy。
 - `--control-surface-hover`／`--control-surface-active` 从正文色与背景派生 6%／9%
   状态层；分隔用 `--panel-edge`，悬停与输入聚焦边线分别使用 18%／24% 混色。
   Auto 基础边线为 14% 混色。只降低装饰对比，正文、错误和状态标签保持可读。

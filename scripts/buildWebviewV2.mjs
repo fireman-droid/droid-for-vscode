@@ -9,6 +9,8 @@ import { createThirdPartyNotices } from '../packages/chat-ui/scripts/thirdPartyN
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(repository, 'dist', process.argv.includes('--production') ? 'webview' : 'webview-v2');
 const require = createRequire(import.meta.url);
+const version = require('../package.json').version;
+const buildId = `v2-${new Date().toISOString()}`;
 const notices = createThirdPartyNotices(repository, path.join(repository, 'packages/chat-ui/THIRD_PARTY_LICENSES.txt'));
 await notices.addPreprocessedPackage(path.dirname(require.resolve('tailwindcss/package.json')));
 const tailwind = path.join(path.dirname(require.resolve('@tailwindcss/cli/package.json')), 'dist/index.mjs');
@@ -64,7 +66,8 @@ for (const [entryPoint, filename] of [
     minify: true,
     define: {
       'process.env.NODE_ENV': '"production"',
-      __DVX_BUILD_ID__: JSON.stringify(`v2-${new Date().toISOString()}`),
+      __DVX_BUILD_ID__: JSON.stringify(buildId),
+      __DVX_VERSION__: JSON.stringify(version),
     },
     metafile: true,
     sourcemap: false,

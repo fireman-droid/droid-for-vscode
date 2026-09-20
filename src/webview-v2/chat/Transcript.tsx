@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode, type Ref } from 'react';
 import { useStore } from 'zustand';
 import type { ChatStore } from './store';
-import { DroidActivity, DroidLoading } from '../ui/droid-motion';
+import { DroidActivity } from '../ui/droid-motion';
 import { buildTurns } from '../../webview/assistant/thread/buildTurns';
 import { useMessageEditor } from '../../webview/assistant/editing/useMessageEditor';
 import { useMessageActions } from '../../webview/assistant/editing/useMessageActions';
@@ -17,6 +17,7 @@ import { useEditAttachmentIngress } from './useEditAttachmentIngress';
 import { getHistoryNotice } from '../../webview/assistant/shell/statusMessage';
 import { isPlanLive, selectPlanAnchors } from '../../webview/assistant/transcript/planAnchor';
 import { AiOperationSummary, summarizeOperations } from './AiOperationSummary';
+import { ChatStartup } from './ChatStartup';
 
 import { TranscriptView, type TranscriptHandle } from '@droidvisx/chat-ui/chat/TranscriptView';
 export function LiveTranscript({ store, ...props }: { readonly store: ChatStore } & Omit<ComponentProps<typeof Transcript>, 'state'>) {
@@ -35,6 +36,7 @@ export function Transcript({
   onBtwQuote,
   interaction,
   onEditBegin,
+  onDraftSuggestion,
   ref,
 }: {
   readonly state: AssistantWebviewState;
@@ -47,6 +49,7 @@ export function Transcript({
   readonly onBtwQuote?: (text: string) => void;
   readonly interaction?: ReactNode;
   readonly onEditBegin?: () => void;
+  readonly onDraftSuggestion?: (prompt: string) => void;
   readonly ref?: Ref<TranscriptHandle>;
 }) {
   const items = state.transcript;
@@ -143,9 +146,7 @@ export function Transcript({
     sendSignal={sendSignal} reportLayout={reportLayout} onQuote={onQuote} onBtwQuote={onBtwQuote}
     leadingContent={<>
       {historyNotice ? <p role="note" className="mb-2 text-xs text-muted-foreground">{historyNotice}</p> : null}
-      {items.length === 0 ? state.connection.status === 'idle' || state.connection.status === 'connecting'
-        ? <DroidLoading label="Connecting to Droid…" detail="Waiting for the local runtime." />
-        : <div className="py-12 text-center"><h2 className="text-sm font-medium">Ready in your workspace</h2><p className="mt-2 text-xs text-muted-foreground">{state.historyStatus === 'unavailable' ? 'Start a new message to continue this session.' : 'Ask Droid to explain, inspect, or change your code.'}</p></div> : null}
+      {items.length === 0 ? <ChatStartup state={state} blocked={blocked} onDraftSuggestion={onDraftSuggestion} /> : null}
     </>}
     trailingContent={<>{interaction}{running && state.interactions.length === 0 ? <div role="status" aria-live="polite" className="flex select-none items-center gap-2 py-1 text-xs text-muted-foreground">
       <DroidActivity phase={state.turn?.compacting ? 'loading' : toolWorking ? 'working' : 'thinking'} />

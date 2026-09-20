@@ -36,6 +36,7 @@ export function useConversationTransition({
   readonly beginSwitch: (targetSessionId: string) => void;
   readonly observeHostMessage: (message: StoreHostMessage) => void;
   readonly phase: TransitionPhase;
+  readonly hasSnapshot: boolean;
   readonly blocking: boolean;
   readonly overlay: React.JSX.Element | null;
 } {
@@ -181,6 +182,7 @@ export function useConversationTransition({
     beginSwitch,
     observeHostMessage,
     phase,
+    hasSnapshot: firstSnapshotSequence !== null && sequence >= firstSnapshotSequence,
     blocking: phase !== 'idle',
     overlay: fullOverlay ? <ConversationTransitionOverlay phase={phase} /> : null,
   };

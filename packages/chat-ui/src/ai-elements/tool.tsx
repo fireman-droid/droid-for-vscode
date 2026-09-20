@@ -6,6 +6,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '../ui/colla
 import { ChevronRight } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 import { cn } from '../ui/cn';
+import { Button } from '../ui/button';
 
 export function Tool({ className, ...props }: ComponentProps<typeof Collapsible>) {
   return <Collapsible className={cn('group/tool min-w-0', className)} {...props} />;
@@ -24,15 +25,14 @@ export function ToolHeader({
   readonly icon?: ReactNode;
 }) {
   return (
-    <CollapsibleTrigger
-      className={cn('flex w-full min-w-0 select-none items-center gap-1.5 rounded py-1 text-left text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring', className)}
-      {...props}
-      onClick={onClick}
-    >
-      <ChevronRight className="size-3 shrink-0 transition-transform group-data-[state=open]/tool:rotate-90 motion-reduce:transition-none" />
-      {icon}
-      <span className="min-w-0 flex-1 truncate" title={title}>{title}</span>
-      <span className="shrink-0 text-[11px]">{status}</span>
+    <CollapsibleTrigger {...props} onClick={onClick} asChild>
+      <Button variant="plain" size="none"
+        className={cn('v2-chat-disclosure flex w-full min-w-0 select-none items-center gap-1.5 rounded py-1 text-left text-xs text-muted-foreground hover:text-foreground', className)}>
+        <ChevronRight className="size-3 shrink-0 transition-transform group-data-[state=open]/tool:rotate-90 motion-reduce:transition-none" />
+        {icon}
+        <span className="min-w-0 flex-1 truncate" title={title}>{title}</span>
+        <span className="shrink-0 text-[11px] text-muted-foreground">{status}</span>
+      </Button>
     </CollapsibleTrigger>
   );
 }
