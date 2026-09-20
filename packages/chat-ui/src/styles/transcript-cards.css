@@ -1,14 +1,16 @@
 @layer components {
-  .v2-chat-disclosure,
   .v2-chat-choice,
   .v2-session-row {
     transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
   }
-  .v2-chat-disclosure { border-radius: var(--control-radius); }
-  .v2-chat-disclosure:hover:not(:disabled),
+  .v2-chat-disclosure {
+    border-radius: var(--control-radius);
+    background: transparent;
+    transition: color var(--motion-fast) var(--motion-ease);
+  }
+  .v2-chat-disclosure:hover:not(:disabled) { color: var(--ink); }
   .v2-chat-choice:hover:has(button:enabled),
   .v2-session-row:hover:has(button:enabled) { background: var(--control-surface-hover); }
-  .v2-chat-disclosure:active:not(:disabled),
   .v2-chat-choice:has([data-state='checked']),
   .v2-session-row[data-current='true'] { background: var(--control-surface-active); }
   .v2-chat-choice:has(button:enabled) { cursor: pointer; }
@@ -23,7 +25,6 @@
     background: var(--well-surface);
     transition: border-color var(--motion-fast) var(--motion-ease);
   }
-  .v2-command-card:hover,
   .v2-user-message:has([data-transcript-selectable]:enabled):hover {
     border-color: var(--control-border-hover);
   }
@@ -53,10 +54,8 @@
     cursor: pointer;
     user-select: text;
     border-radius: 4px;
-    transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+    transition: color var(--motion-fast) var(--motion-ease);
   }
-  .v2-command-toggle:hover { background: var(--control-surface-hover); }
-  .v2-command-toggle:active { background: var(--control-surface-active); }
   .v2-command-labels {
     display: flex;
     flex: 1;
