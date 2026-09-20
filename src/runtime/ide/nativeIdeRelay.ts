@@ -67,11 +67,14 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
   private readonly listeners = new Set<() => void>();
   private readonly sockets = new Set<Socket>();
   private readonly upstreamRequests = new Set<ClientRequest>();
+  private readonly rootEventStreams = new Set<RelayRequest>();
   private readonly upstreamAgent = new Agent({ keepAlive: true });
   private readonly server;
   private readonly timeout: NodeJS.Timeout;
   private readonly heartbeat: NodeJS.Timeout;
   private disposed = false;
+  private rootTerminated = false;
+  private handshakeTimedOut = false;
   private rootClaimed = false;
   private rootSessionId: string | undefined;
   private rootLastActivity = 0;
@@ -92,7 +95,10 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     this.server = server;
     this.timeout = setTimeout(() => {
       if (this.state.status === 'connecting') {
-        this.fail('Timed out waiting for the native IDE handshake.');
+        // Allocation can precede daemon startup and old-session closure. Fail
+        // current waiters on time, but accept a subsequently confirmed handshake.
+        this.handshakeTimedOut = true;
+        this.update({ status: 'error', message: 'Timed out waiting for the native IDE handshake.' });
       }
     }, timeoutMs);
     this.timeout.unref();
@@ -156,12 +162,14 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
+    this.rootTerminated = true;
     clearTimeout(this.timeout);
     clearInterval(this.heartbeat);
     for (const request of this.upstreamRequests) request.destroy();
     this.upstreamAgent.destroy();
     for (const socket of this.sockets) socket.destroy();
     this.upstreamRequests.clear();
+    this.rootEventStreams.clear();
     this.sockets.clear();
     await new Promise<void>((resolve) => {
       if (!this.server.listening) {
@@ -215,6 +223,10 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     upstream.on('error', () => {
       if (!response.headersSent) respond(response, 502, 'IDE service unavailable');
       else response.destroy();
+      if (relayRequest.rootRequest && method === 'GET') {
+        this.rootEventStreams.delete(relayRequest);
+        if (this.rootEventStreams.size > 0) return;
+      }
       if (relayRequest.rootCandidate || relayRequest.rootRequest) {
         this.fail('The native IDE transport failed.');
       } else if (!this.rootClaimed) {
@@ -258,14 +270,21 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     const controlResponse = relayRequest.rootCandidate
       || (relayRequest.rootRequest && isHandshakeMethod(envelope));
     const responseCapture = controlResponse ? boundedCapture(upstreamResponse) : undefined;
-    if (relayRequest.rootRequest &&
-        headerValue(upstreamResponse.headers['content-type'])?.includes('text/event-stream')) {
+    const liveRootSse = relayRequest.rootRequest &&
+      (upstreamResponse.statusCode ?? 0) >= 200 && (upstreamResponse.statusCode ?? 0) < 300 &&
+      headerValue(upstreamResponse.headers['content-type'])?.includes('text/event-stream');
+    const rootEventStream = liveRootSse && relayRequest.method === 'GET';
+    if (rootEventStream) this.rootEventStreams.add(relayRequest);
+    if (liveRootSse) {
       observeSse(upstreamResponse, (notification) => {
-        if (notification.method === 'notifications/heartbeat') this.touchRoot();
+        if (notification.method === 'notifications/heartbeat') {
+          this.touchRoot();
+          this.maybeReady(true);
+        }
         if (notification.method === 'notifications/activeFile' ||
             notification.method === 'notifications/openFiles') {
           this.initialContextForwarded = true;
-          this.maybeReady();
+          this.maybeReady(true);
         }
       });
     }
@@ -275,25 +294,38 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     );
     upstreamResponse.pipe(relayRequest.response);
 
+    const endRootStream = (message: string, failed = false) => {
+      if (rootEventStream) {
+        this.rootEventStreams.delete(relayRequest);
+        // MCP may replace an SSE stream before its predecessor finishes closing.
+        if (this.rootEventStreams.size > 0) return;
+      }
+      if (failed) this.fail(message);
+      else this.disconnect(message);
+    };
     const failRootStream = () => {
       if (
         (relayRequest.rootCandidate || relayRequest.rootRequest)
         && !relayRequest.upstreamEnded
       ) {
-        this.disconnect('The native IDE transport closed.');
+        endRootStream('The native IDE transport closed.');
       }
     };
-    upstreamResponse.once('aborted', failRootStream);
+    upstreamResponse.once('aborted', () => {
+      failRootStream();
+      relayRequest.response.destroy();
+    });
     upstreamResponse.once('error', () => {
       if (relayRequest.rootCandidate || relayRequest.rootRequest) {
-        this.fail('The native IDE transport failed.');
+        endRootStream('The native IDE transport failed.', true);
       }
+      relayRequest.response.destroy();
     });
     upstreamResponse.once('end', () => {
       relayRequest.upstreamEnded = true;
       if (relayRequest.rootCandidate || relayRequest.rootRequest) {
         if (relayRequest.method === 'GET') {
-          this.disconnect('The native IDE event stream closed.');
+          endRootStream('The native IDE event stream closed.');
         }
       }
     });
@@ -307,6 +339,7 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     relayRequest.response.once('finish', async () => {
       if (!(relayRequest.rootCandidate || relayRequest.rootRequest)) return;
       if (relayRequest.method === 'DELETE') {
+        this.rootTerminated = true;
         this.disconnect('The native IDE connection closed.');
         return;
       }
@@ -363,9 +396,12 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     this.maybeReady();
   }
 
-  private maybeReady(): void {
+  private maybeReady(liveRootEvidence = false): void {
     if (
-      this.state.status === 'connecting'
+      !this.rootTerminated
+      && (this.state.status === 'connecting' ||
+        (this.state.status === 'error' && this.handshakeTimedOut) ||
+        (liveRootEvidence && this.state.status === 'disconnected'))
       && this.initializeForwarded
       && this.initializedForwarded
       && this.toolsForwarded
@@ -385,10 +421,12 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
   }
 
   private fail(message: string): void {
-    if (this.disposed || this.state.status === 'error' || this.state.status === 'disconnected') {
+    if (this.disposed || this.state.status === 'disconnected') {
       return;
     }
     clearTimeout(this.timeout);
+    this.rootTerminated = true;
+    if (this.state.status === 'error') return;
     this.update({ status: 'error', message });
   }
 

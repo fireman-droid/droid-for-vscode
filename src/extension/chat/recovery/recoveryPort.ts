@@ -35,5 +35,6 @@ export interface RecoveryPort
     | 'refreshContextAfterTurn'
     | 'setTurnStatus'
     | 'startLiveChanges'
+    | 'reconnectRecoveredIde'
   >;
 }

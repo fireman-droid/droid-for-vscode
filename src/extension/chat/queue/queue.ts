@@ -224,6 +224,7 @@ export function handleQueueClear(ctl: QueuePort, sessionId: string): void {
  * state instead of silently losing the prompt.
  */
 export function maybeDispatchQueue(ctl: QueuePort): void {
+  if (ctl.ideReconnectInProgress) return;
   const decision = evaluateQueueDispatch(ctl.queueState.queuedPrompts, {
     turnActive: isTurnActive(ctl.turnState.turn),
     connected: ctl.sessionState.connection.status === 'connected',

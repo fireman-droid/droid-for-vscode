@@ -664,6 +664,7 @@ export function handleRetry(ctl: TurnFlowPort, sessionId: string | null): void {
     ctl.sessionState.sessionOperationInProgress = true;
     void retryAfterWorkspaceBecomesAvailable(ctl, workspace.cwd).finally(() => {
       ctl.sessionState.sessionOperationInProgress = false;
+      ctl.effects.resumeRecoveredIdeReconnect();
     });
     return;
   }

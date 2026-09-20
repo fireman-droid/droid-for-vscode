@@ -16,7 +16,7 @@ import { historyWithLocalChanges } from '../../recovery/historyWithLocalChanges'
 import { dataValue, parseTranscriptItem } from '../../recovery/sessionRecoveryItems';
 import { SESSION_RECOVERY_DEBOUNCE_MS } from '../../recovery/SessionRecoveryStore';
 import { createTurnActivityState } from '../turns/turnActivityState';
-import { delay } from '../internals';
+import { delay, isTurnActive } from '../internals';
 import { captureSnapshotBeforeInBackground } from '../changes/snapshotCapture';
 import { TURN_FAILURE_MESSAGE } from '../turns/turnFlow';
 
@@ -95,10 +95,11 @@ export function reconcileDaemonTurn(
       ctl.turnState.turn?.turnId === turnId && ctl.turnState.turn.recovery === true
         ? ctl.turnState.turn
         : null;
-    if (
-      !ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd) ||
-      (ctl.turnState.turn !== null && existingRecoveryTurn === null)
-    ) {
+    if (!ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) return;
+    if (ctl.turnState.turn !== null && existingRecoveryTurn === null) {
+      if (state === 'idle' && !isTurnActive(ctl.turnState.turn)) {
+        ctl.effects.reconnectRecoveredIde(runtime, generation, sessionId, cwd);
+      }
       return;
     }
     const live =
@@ -117,6 +118,7 @@ export function reconcileDaemonTurn(
       };
       ctl.effects.setSessionRunning(sessionId, false);
       ctl.emitSnapshot();
+      if (state === 'idle') ctl.effects.reconnectRecoveredIde(runtime, generation, sessionId, cwd);
       return;
     }
     // `unknown` with a replayed interaction still means a live turn
@@ -138,7 +140,10 @@ export function reconcileDaemonTurn(
           sessionId,
           cwd,
           turnId,
+          state === 'idle',
         );
+      } else if (state === 'idle') {
+        ctl.effects.reconnectRecoveredIde(runtime, generation, sessionId, cwd);
       }
       return;
     }
@@ -257,6 +262,7 @@ export async function pollRecoveredTurn(
         sessionId,
         cwd,
         turnId,
+        true,
       );
       return;
     }
@@ -348,6 +354,7 @@ export async function finishRecoveredTurn(
   sessionId: string,
   cwd: string,
   turnId: string,
+  confirmedIdle: boolean,
 ): Promise<void> {
   const loaded = await loadFinalRecoveredHistory(ctl, cwd, sessionId);
   if (
@@ -389,6 +396,7 @@ export async function finishRecoveredTurn(
   ctl.emitSnapshot();
   flushRecoveryCheckpointInBackground(ctl);
   ctl.effects.refreshContextAfterTurn(sessionId);
+  if (confirmedIdle) ctl.effects.reconnectRecoveredIde(runtime, runtimeGeneration, sessionId, cwd);
 }
 
 async function loadFinalRecoveredHistory(

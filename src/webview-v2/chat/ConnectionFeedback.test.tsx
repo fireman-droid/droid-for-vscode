@@ -130,4 +130,34 @@ describe('session connection recovery', () => {
     receive({ ...snapshot(store.getState().state, 12), sessions: { status: 'ready', items: [] } });
     expect(screen.getByRole('button', { name: 'Reconnect Droid session' }).hasAttribute('disabled')).toBe(false);
   });
+
+  it.each(['connected', 'unavailable'] as const)('keeps the draft through IDE preparation and restoration, then handles %s', status => {
+    const { store, port } = fixture({ status: 'connected' });
+    render(<Harness store={store} port={port} recovery />);
+    port.postMessage.mockClear();
+    const attachments = store.getState().state.attachments;
+    receive({ type: 'host.ide', sequence: 11, conversationId: 'conversation-a', sessionId: 'session-a',
+      ide: { status: 'reconnecting', canReconnect: false, message: 'Reconnecting this conversation to the IDE…' } });
+    expect(screen.getByText('Reconnecting this conversation to the IDE…')).toBeTruthy();
+    act(() => vi.advanceTimersByTime(20_000));
+    expect(screen.queryByRole('button', { name: 'Refresh session state' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reconnect Droid session' })).toBeNull();
+    receive({ ...snapshot(store.getState().state, 12), connection: { status: 'connecting' },
+      ide: { status: 'reconnecting', canReconnect: false, message: 'Restoring this conversation on its new IDE connection…' } });
+    expect(screen.getByText('Restoring this conversation on its new IDE connection…')).toBeTruthy();
+    expect(screen.queryByText('Waiting for the Droid session…')).toBeNull();
+    act(() => vi.advanceTimersByTime(40_000));
+    expect(screen.getByRole('button', { name: 'Refresh session state' })).toBeTruthy();
+    receive({ ...snapshot(store.getState().state, 13), connection: { status },
+      ide: status === 'connected' ? { status: 'connected', canReconnect: true, message: 'Connected to IDE.' }
+        : { status: 'error', canReconnect: false, message: 'Could not restore the session. Retry to restore it.' } });
+    expect(screen.queryByText('Restoring this conversation on its new IDE connection…')).toBeNull();
+    if (status === 'unavailable') {
+      fireEvent.click(screen.getByRole('button', { name: 'Reconnect Droid session' }));
+      expect(port.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'runtime.retry', sessionId: 'session-a' });
+    } else expect(port.postMessage).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Draft').textContent).toBe('Unsent work');
+    expect(store.getState().state.attachments).toBe(attachments);
+    expect(port.setState).not.toHaveBeenCalled();
+  });
 });

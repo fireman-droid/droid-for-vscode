@@ -418,8 +418,8 @@ export function activate(context: vscode.ExtensionContext): void {
   if (windowDaemon) {
     controller.nativeIde = {
       read: (sessionId) => windowDaemon.pool.readIde(sessionId),
-      reconnect: (sessionId, current, onClosingSource) =>
-        windowDaemon.pool.reconnectIdle(sessionId, current, onClosingSource),
+      reconnect: (sessionId, current, onClosingSource, deferIfBlocked) =>
+        windowDaemon.pool.reconnectIdle(sessionId, current, onClosingSource, deferIfBlocked),
     };
     context.subscriptions.push({
       dispose: windowDaemon.pool.onIdeChange(() => emitIdeState(controller)),

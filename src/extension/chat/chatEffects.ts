@@ -1,4 +1,5 @@
 import type { ChatController } from './ChatController';
+import { reconnectRecoveredIde, resumeRecoveredIdeReconnect } from './ideIntegration';
 import {
   loadHistoryTimed,
   prepareActivationTranscript,
@@ -165,6 +166,8 @@ export interface ChatEffects {
   loadSessionMetadata: BoundEffect<typeof loadSessionMetadata>;
   restoreQueuedPrompts: BoundEffect<typeof restoreQueuedPrompts>;
   reconcileDaemonTurn: BoundEffect<typeof reconcileDaemonTurn>;
+  reconnectRecoveredIde: BoundEffect<typeof reconnectRecoveredIde>;
+  resumeRecoveredIdeReconnect: BoundEffect<typeof resumeRecoveredIdeReconnect>;
   armReplayedSubagentWatch: BoundEffect<typeof armReplayedSubagentWatch>;
   discardQueuedPrompts: BoundEffect<typeof discardQueuedPrompts>;
   canReplaceSession: BoundEffect<typeof canReplaceSession>;
@@ -263,6 +266,8 @@ export function createChatEffects(controller: ChatController): ChatEffects {
     loadSessionMetadata: (...args) => loadSessionMetadata(controller, ...args),
     restoreQueuedPrompts: (...args) => restoreQueuedPrompts(controller, ...args),
     reconcileDaemonTurn: (...args) => reconcileDaemonTurn(controller, ...args),
+    reconnectRecoveredIde: (...args) => reconnectRecoveredIde(controller, ...args),
+    resumeRecoveredIdeReconnect: () => resumeRecoveredIdeReconnect(controller),
     armReplayedSubagentWatch: (...args) => armReplayedSubagentWatch(controller, ...args),
     discardQueuedPrompts: (...args) => discardQueuedPrompts(controller, ...args),
     canReplaceSession: (...args) => canReplaceSession(controller, ...args),

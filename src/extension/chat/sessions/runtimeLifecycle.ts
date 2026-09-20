@@ -156,6 +156,7 @@ export function startReplacement(
   ctl.emitSnapshot();
   void replaceRuntime(ctl, target).finally(() => {
     ctl.sessionState.sessionOperationInProgress = false;
+    ctl.effects.resumeRecoveredIdeReconnect();
   });
 }
 

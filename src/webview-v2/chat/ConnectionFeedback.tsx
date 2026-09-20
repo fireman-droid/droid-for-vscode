@@ -68,7 +68,7 @@ export function ConversationWait({ phase, hasSnapshot, handshakeTimedOut, connec
 }
 
 export function SessionRecovery({ state, blocked, onReconnect, port }: {
-  readonly state: Pick<AssistantWebviewState, 'sequence' | 'connection' | 'sessionId' | 'turn' | 'sessions'>;
+  readonly state: Pick<AssistantWebviewState, 'sequence' | 'connection' | 'sessionId' | 'turn' | 'sessions' | 'ide'>;
   readonly blocked: boolean;
   readonly onReconnect: () => void;
   readonly port: ChatPort;
@@ -84,14 +84,15 @@ export function SessionRecovery({ state, blocked, onReconnect, port }: {
     }
   }), []);
   const connecting = state.connection.status === 'connecting';
+  const reconnectingIde = state.ide.status === 'reconnecting';
   const loadingCatalog = state.sessions.status === 'loading';
-  const longWait = useLongWait(pending || connecting);
+  const longWait = useLongWait(pending || connecting || reconnectingIde, reconnectingIde ? 60_000 : 5_000);
   const failed = state.connection.status === 'unavailable' || state.turn?.status === 'failed';
   const working = state.turn?.status === 'submitting' || state.turn?.status === 'streaming' || state.turn?.status === 'stopping';
-  if (blocked || (!failed && !pending && !connecting)) return null;
+  if (blocked || (!failed && !pending && !connecting && !reconnectingIde)) return null;
   return <div className="space-y-1 text-xs text-muted-foreground">
-    {pending || connecting ? <p role="status" className="flex items-center gap-2"><DroidActivity phase="loading" />Waiting for the Droid session…</p> : null}
-    {failed ? <>
+    {pending || connecting || reconnectingIde ? <p role="status" className="flex items-center gap-2"><DroidActivity phase="loading" />{reconnectingIde ? state.ide.message : 'Waiting for the Droid session…'}</p> : null}
+    {failed && !reconnectingIde ? <>
       <Button variant="link" size="sm" className="h-auto px-0 py-1 text-xs" disabled={pending || connecting || working || loadingCatalog} onClick={() => {
         if (pendingAfter.current !== null || connecting || working || loadingCatalog) return;
         pendingAfter.current = state.sequence;

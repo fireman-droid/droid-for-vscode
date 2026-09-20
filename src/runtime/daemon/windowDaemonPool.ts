@@ -21,7 +21,10 @@ export interface WindowDaemonEntry {
 }
 export interface WindowDaemonPoolOptions {
   prepare(): Promise<WindowDaemonBinding>;
-  record(event: { level: 'info' | 'warn' | 'error'; name: string; detail?: string }): void;
+  record(event: {
+    level: 'info' | 'warn' | 'error'; name: string;
+    attributes?: Record<string, string | number | boolean>; detail?: string;
+  }): void;
 }
 
 /** Session ownership is independent of the currently selected chat or window. */
@@ -37,6 +40,7 @@ export class WindowDaemonPool {
   private readonly allocations = new Map<string, Promise<WindowDaemonEntry>>();
   private readonly ideListeners = new Set<() => void>();
   private readonly ideSubscriptions = new Map<string, () => void>();
+  private nextIdeRelay = 0;
   private disposed = false;
   private binding: WindowDaemonBinding | undefined;
 
@@ -51,6 +55,24 @@ export class WindowDaemonPool {
 
   private emitIdeChange(): void {
     for (const listener of this.ideListeners) listener();
+  }
+
+  private observeIde(ide: NativeIdeRelay): () => void {
+    const relay = ++this.nextIdeRelay;
+    const startedAt = Date.now();
+    const recordState = () => {
+      const state = ide.read();
+      this.options.record({
+        level: state.status === 'error' || state.status === 'disconnected' ? 'warn' : 'info',
+        name: 'ide.native.relay-state',
+        attributes: { relay, status: state.status, durationMs: Date.now() - startedAt },
+        // Relay messages are fixed lifecycle explanations, never request payloads.
+        detail: state.message,
+      });
+    };
+    const unsubscribe = ide.subscribe(() => { recordState(); this.emitIdeChange(); });
+    recordState();
+    return unsubscribe;
   }
 
   readIde(sessionId: string | null): Pick<IdeState, 'status' | 'message'> {
@@ -200,35 +222,48 @@ export class WindowDaemonPool {
     sessionId: string,
     isCurrent: () => boolean,
     onClosingSource: () => void,
-  ): Promise<void> {
+    deferIfBlocked = false,
+  ): Promise<boolean> {
+    const blocked = (message: string): false => {
+      if (!deferIfBlocked) throw new Error(message);
+      return false;
+    };
     const source = await this.forSession(sessionId);
     const preparation = await this.options.prepare();
     this.binding = preparation;
-    if (preparation.port === null) throw new Error(preparation.detail ?? 'The IDE service is unavailable.');
+    if (preparation.port === null) return blocked(preparation.detail ?? 'The IDE service is unavailable.');
     const droid = source.connection.droid;
     const opened = await droid.sessions.listOpened({ filter: { includeBtwForks: true } });
     const session = opened.find(({ id }) => id === sessionId);
     if (!session || busySessionTree(opened, sessionId)) {
-      throw new Error('Wait for the session and its child tasks to finish before reconnecting IDE.');
+      return blocked('Wait for the session and its child tasks to finish before reconnecting IDE.');
     }
     if ((await droid.terminals.list(sessionId, {})).length > 0) {
-      throw new Error('Close this session’s managed terminals before reconnecting IDE.');
+      return blocked('Close this session’s managed terminals before reconnecting IDE.');
     }
     const history = await droid.sessions.getMessages(sessionId, { limit: 100 });
     if (!hasDurablePrompt(history)) {
       // Native close may delete an empty draft; do not risk its identity.
-      throw new Error('Could not confirm durable user content. Use a new chat for IDE integration.');
+      return blocked('Could not confirm durable user content. Use a new chat for IDE integration.');
     }
     const handle = this.handles.get(sessionId);
-    if (!handle) throw new Error('The active session must be attached before reconnecting IDE.');
+    if (!handle) return blocked('The active session must be attached before reconnecting IDE.');
     // Never move the live worker in place. Its replacement receives a fresh relay.
     this.allocations.delete(sessionId);
-    const target = await this.allocate(sessionId, source.record.cwd);
+    const allocation = this.allocate(sessionId, source.record.cwd);
+    const target = await allocation;
     const latest = await droid.sessions.listOpened({ filter: { includeBtwForks: true } });
-    if (!latest.some(({ id }) => id === sessionId) || busySessionTree(latest, sessionId)) {
-      throw new Error('The session became active. IDE reconnection was cancelled.');
+    const unsafe = !latest.some(({ id }) => id === sessionId) || busySessionTree(latest, sessionId)
+      ? 'The session became active. IDE reconnection was cancelled.'
+      : (await droid.terminals.list(sessionId, {})).length > 0
+        ? 'Close this session’s managed terminals before reconnecting IDE.'
+        : !isCurrent() ? 'The selected session changed. IDE reconnection was cancelled.' : null;
+    if (unsafe !== null) {
+      if (this.allocations.get(sessionId) === allocation) this.allocations.delete(sessionId);
+      try { await this.retireEmpty(target); }
+      catch { this.options.record({ level: 'warn', name: 'daemon.session.cleanup-deferred' }); }
+      return blocked(unsafe);
     }
-    if (!isCurrent()) throw new Error('The selected session changed. IDE reconnection was cancelled.');
     onClosingSource();
     await handle.close();
     this.handles.delete(sessionId);
@@ -238,6 +273,7 @@ export class WindowDaemonPool {
     await this.remember(sessionId, target);
     try { await this.retireEmpty(source); }
     catch { this.options.record({ level: 'warn', name: 'daemon.session.cleanup-deferred' }); }
+    return true;
   }
 
   async dispose(): Promise<void> {
@@ -311,11 +347,13 @@ export class WindowDaemonPool {
     const ide = sessionId && binding.port !== null
       ? await createNativeIdeRelay({ sessionId, upstreamPort: binding.port, timeoutMs: 60_000 })
       : undefined;
+    const unsubscribeIde = ide ? this.observeIde(ide) : undefined;
     if (ide) env.FACTORY_VSCODE_MCP_PORT = String(ide.port);
     let endpoint: Awaited<ReturnType<typeof startDetachedDaemon>>;
     try {
       endpoint = await startDetachedDaemon({ cwd: cwd ?? binding.cwd, env });
     } catch (error) {
+      unsubscribeIde?.();
       await ide?.dispose();
       throw error;
     }
@@ -332,7 +370,7 @@ export class WindowDaemonPool {
         throw new Error('Window daemon is disposed.');
       }
       const entry: WindowDaemonEntry = { record, connection, ...(ide ? { ide } : {}) };
-      if (ide) this.ideSubscriptions.set(record.id, ide.subscribe(() => this.emitIdeChange()));
+      if (unsubscribeIde) this.ideSubscriptions.set(record.id, unsubscribeIde);
       this.owned.add(record.id);
       for (const listener of this.listeners) listener(entry);
       this.options.record({ level: 'info', name: 'daemon.window.started' });
@@ -343,6 +381,8 @@ export class WindowDaemonPool {
       return await pending;
     } catch (error) {
       this.connections.delete(record.id);
+      unsubscribeIde?.();
+      this.ideSubscriptions.delete(record.id);
       await ide?.dispose();
       await stopDaemon(endpoint);
       await removeWindowDaemon(record);

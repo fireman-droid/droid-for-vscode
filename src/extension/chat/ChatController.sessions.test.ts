@@ -115,7 +115,7 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('session-1'), catalogEntry('session-2')]),
       undefined,
-      undefined,
+      { loadHistory: async () => ({ status: 'available', state: { transcript: [], historyStatus: 'complete', truncated: false } }) },
       undefined,
       undefined,
       undefined,
@@ -178,9 +178,7 @@ describe('ChatController', () => {
     release.resolve();
   });
 
-  it('paints the recovered checkpoint immediately on switch, before history loads', async () => {
-    // Bug #37 checkpoint-first rendering: the switch used to leave
-    // the old transcript on screen for the full ~5-8s history spawn.
+  it('starts history and runtime recovery together and publishes the resumed session only with complete history', async () => {
     const values = new Map<string, unknown>();
     const persistence: SessionRecoveryPersistence = {
       get: <T>(key: string) => values.get(key) as T | undefined,
@@ -229,16 +227,19 @@ describe('ChatController', () => {
       type: 'session.select',
       sessionId: 'session-2',
     });
-    // The checkpoint snapshot arrives while both the history load and
-    // the runtime initialize are still pending.
+    // Neither the cached checkpoint nor the initialized runtime can
+    // publish a partial target transcript while history is still loading.
     await vi.waitFor(() => {
+      expect(history.loadHistory).toHaveBeenCalledOnce();
+      expect(replacement.initialize).toHaveBeenCalledOnce();
       const latest = snapshots(messages).at(-1);
-      expect(latest?.sessionId).toBe('session-2');
+      expect(latest?.sessionId).toBe('session-1');
       expect(latest?.connection.status).toBe('connecting');
-      expect(latest?.transcript).toEqual([
-        { id: 'u1', kind: 'user', text: 'Recovered prompt' },
-      ]);
+      expect(latest?.transcript).not.toContainEqual({ id: 'u1', kind: 'user', text: 'Recovered prompt' });
     });
+    initDeferred.resolve();
+    await replacement.initialize.mock.results[0]!.value;
+    expect(snapshots(messages).at(-1)?.sessionId).toBe('session-1');
 
     historyDeferred.resolve({
       status: 'available',
@@ -261,7 +262,6 @@ describe('ChatController', () => {
         truncated: false,
       },
     });
-    initDeferred.resolve();
     await vi.waitFor(() => {
       const latest = snapshots(messages).at(-1);
       expect(latest?.connection.status).toBe('connected');

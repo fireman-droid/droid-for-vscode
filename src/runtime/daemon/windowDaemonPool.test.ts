@@ -6,6 +6,7 @@ const fake = vi.hoisted(() => ({
   records: [] as Array<Record<string, unknown>>,
   opened: [] as Array<Record<string, unknown>>,
   messages: [] as Array<Record<string, unknown>>,
+  terminals: [] as Array<Record<string, unknown>>,
   spawn: vi.fn(),
   close: vi.fn(),
   wait: vi.fn(async () => {}),
@@ -46,7 +47,7 @@ vi.mock('./daemonConnection', () => ({
         listOpened: async () => url.endsWith(':43000') ? fake.opened : [],
         getMessages: async () => fake.messages,
       },
-      terminals: { list: async () => [] },
+      terminals: { list: async () => url.endsWith(':43000') ? fake.terminals : [] },
     },
   }),
 }));
@@ -76,6 +77,7 @@ beforeEach(() => {
   fake.records = [];
   fake.opened = [];
   fake.messages = [];
+  fake.terminals = [];
   fake.count = 0;
   fake.relays = 0;
   fake.spawn.mockImplementation(async () => {
@@ -126,6 +128,39 @@ describe('dedicated chat daemon ownership', () => {
     });
     await expect(value.rebindIdleAttachment('old-chat', entry)).rejects.toThrow('became active');
     expect(fake.close).not.toHaveBeenCalled();
+    await value.dispose();
+  });
+
+  it.each(['child', 'terminal', 'empty-draft'] as const)('defers automatic migration without closing the source when blocked by %s', async reason => {
+    const value = pool();
+    await original(value, 'idle');
+    fake.messages = reason === 'empty-draft' ? [] : [{ role: 'user', content: [{ type: 'text', text: 'retained prompt' }] }];
+    if (reason === 'child') fake.opened.push({ id: 'child', parentSessionId: 'old-chat', workingState: 'working' });
+    if (reason === 'terminal') fake.terminals.push({ id: 'managed-terminal' });
+    const closing = vi.fn();
+    expect(await value.reconnectIdle('old-chat', () => true, closing, true)).toBe(false);
+    expect(closing).not.toHaveBeenCalled();
+    expect(fake.close).not.toHaveBeenCalled();
+    expect(fake.spawn).toHaveBeenCalledOnce();
+    expect(value.readIde('old-chat').status).toBe('reconnect-required');
+    await value.dispose();
+  });
+
+  it.each(['child', 'terminal'] as const)('rechecks a newly started %s after allocating the replacement and preserves the source', async reason => {
+    const value = pool();
+    await original(value, 'idle');
+    fake.messages = [{ role: 'user', content: [{ type: 'text', text: 'retained prompt' }] }];
+    fake.spawn.mockImplementationOnce(async () => {
+      if (reason === 'child') fake.opened.push({ id: 'child', parentSessionId: 'old-chat', workingState: 'working' });
+      else fake.terminals.push({ id: 'managed-terminal' });
+      return { port: 47000, pid: 47001, url: 'ws://127.0.0.1:47000', listenerVerified: true };
+    });
+    const closing = vi.fn();
+    expect(await value.reconnectIdle('old-chat', () => true, closing, true)).toBe(false);
+    expect(closing).not.toHaveBeenCalled();
+    expect(fake.close).not.toHaveBeenCalled();
+    expect(fake.stop).toHaveBeenCalledWith({ url: 'ws://127.0.0.1:47000', pid: 47001 });
+    expect(value.readIde('old-chat').status).toBe('reconnect-required');
     await value.dispose();
   });
 });

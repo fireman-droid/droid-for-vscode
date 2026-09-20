@@ -6,8 +6,10 @@ import { createNativeIdeRelay } from './nativeIdeRelay';
 
 interface Fixture {
   readonly port: number;
-  readonly closeRootStream: () => void;
+  readonly closeRootStream: (index?: number) => void;
+  readonly destroyRootStream: (index?: number) => void;
   readonly heartbeat: () => void;
+  readonly failNextToolList: () => void;
   readonly close: () => Promise<void>;
 }
 
@@ -143,6 +145,35 @@ describe('native IDE relay', () => {
     });
   });
 
+  it('recovers a transient root stream disconnect only after the same root delivers live IDE evidence', async () => {
+    const fixture = await createFixture();
+    const relay = await createNativeIdeRelay({ sessionId: 'root-chat', upstreamPort: fixture.port });
+    disposals.push(() => relay.dispose(), fixture.close);
+    await handshake(relay.port, 'factory-cli-mcp-client', 'root-upstream');
+    await openStream(relay.port, 'root-upstream');
+    fixture.closeRootStream();
+    await waitFor(() => relay.read().status === 'disconnected');
+
+    await rpc(relay.port, { jsonrpc: '2.0', id: 95, method: 'ping' }, 'root-upstream');
+    expect(relay.read().status).toBe('disconnected');
+    let received!: () => void;
+    const heartbeat = new Promise<void>((resolve) => { received = resolve; });
+    await openStream(relay.port, 'root-upstream', (text) => {
+      if (text.includes('notifications/heartbeat')) received();
+    });
+    expect(relay.read().status).toBe('disconnected');
+    fixture.heartbeat();
+    await heartbeat;
+    expect(relay.read().status).toBe('connected');
+    await expect(relay.waitUntilReady()).resolves.toBeUndefined();
+
+    await http(relay.port, 'DELETE', undefined, 'root-upstream');
+    const lateHeartbeat = new Promise<void>((resolve) => { received = resolve; });
+    fixture.heartbeat();
+    await lateHeartbeat;
+    expect(relay.read().status).toBe('disconnected');
+  });
+
   it('bounds readiness timeout and supports waiter-local abort cancellation', async () => {
     const fixture = await createFixture();
     const relay = await createNativeIdeRelay({
@@ -161,6 +192,63 @@ describe('native IDE relay', () => {
       'Timed out waiting for the native IDE handshake.',
     );
     expect(relay.read().status).toBe('error');
+  });
+
+  it('accepts a confirmed late handshake after the original readiness waiter times out', async () => {
+    const fixture = await createFixture();
+    const relay = await createNativeIdeRelay({ sessionId: 'root-chat', upstreamPort: fixture.port, timeoutMs: 30 });
+    disposals.push(() => relay.dispose(), fixture.close);
+    await expect(relay.waitUntilReady()).rejects.toThrow('Timed out');
+    expect(relay.read().status).toBe('error');
+
+    await handshake(relay.port, 'factory-cli-mcp-client', 'root-upstream');
+    expect(relay.read().status).toBe('connected');
+    await expect(relay.waitUntilReady()).resolves.toBeUndefined();
+  });
+
+  it('does not revive an explicit handshake failure when later valid context arrives', async () => {
+    const fixture = await createFixture();
+    const relay = await createNativeIdeRelay({ sessionId: 'root-chat', upstreamPort: fixture.port });
+    disposals.push(() => relay.dispose(), fixture.close);
+    fixture.failNextToolList();
+    await handshake(relay.port, 'factory-cli-mcp-client', 'root-upstream');
+    await expect(relay.waitUntilReady()).rejects.toThrow('handshake failed');
+    await rpc(relay.port, { jsonrpc: '2.0', id: 91, method: 'tools/list', params: {} }, 'root-upstream');
+    expect(relay.read().status).toBe('error');
+  });
+
+  it.each(['end', 'destroy'] as const)('keeps a replacement root stream connected when the earlier stream closes late via %s', async (closure) => {
+    const fixture = await createFixture();
+    const relay = await createNativeIdeRelay({ sessionId: 'root-chat', upstreamPort: fixture.port });
+    disposals.push(() => relay.dispose(), fixture.close);
+    await handshake(relay.port, 'factory-cli-mcp-client', 'root-upstream');
+    let ended!: () => void;
+    const oldStreamEnded = new Promise<void>((resolve) => { ended = resolve; });
+    await openStream(relay.port, 'root-upstream', undefined, ended);
+    let received!: () => void;
+    const heartbeat = new Promise<void>((resolve) => { received = resolve; });
+    await openStream(relay.port, 'root-upstream', (text) => {
+      if (text.includes('notifications/heartbeat')) received();
+    });
+    fixture.heartbeat();
+    await heartbeat;
+    if (closure === 'destroy') fixture.destroyRootStream(0);
+    else fixture.closeRootStream(0);
+    await oldStreamEnded;
+    expect(relay.read().status).toBe('connected');
+    fixture.closeRootStream();
+    await waitFor(() => relay.read().status === 'disconnected');
+  });
+
+  it('rejects pending and future readiness waits after disposal', async () => {
+    const fixture = await createFixture();
+    const relay = await createNativeIdeRelay({ sessionId: 'root-chat', upstreamPort: fixture.port });
+    disposals.push(() => relay.dispose(), fixture.close);
+    const pending = expect(relay.waitUntilReady()).rejects.toThrow('disposed');
+    await relay.dispose();
+    await pending;
+    expect(relay.read().status).toBe('disconnected');
+    await expect(relay.waitUntilReady()).rejects.toThrow('disposed');
   });
 
   it('requires initial IDE context in addition to successful tool discovery', async () => {
@@ -192,6 +280,10 @@ describe('native IDE relay', () => {
     await rpc(relay.port, { jsonrpc: '2.0', id: 95, method: 'ping' }, 'root-upstream');
     vi.advanceTimersByTime(20_000);
     expect(relay.read()).toEqual({ status: 'disconnected', message: 'The native IDE heartbeat expired.' });
+    const resumedHeartbeat = new Promise<void>((resolve) => { received = resolve; });
+    fixture.heartbeat();
+    await resumedHeartbeat;
+    expect(relay.read().status).toBe('connected');
   });
 });
 
@@ -199,6 +291,8 @@ async function createFixture(includeContext = true): Promise<Fixture> {
   let nextSession = 0;
   const sessions = new Set<string>();
   let rootStream: ServerResponse | undefined;
+  const rootStreams: ServerResponse[] = [];
+  let failToolList = false;
   const server = createServer(async (request, response) => {
     const body = await readJson(request);
     const method = body?.method;
@@ -233,6 +327,7 @@ async function createFixture(includeContext = true): Promise<Fixture> {
       });
       response.write(': connected\n\n');
       rootStream = response;
+      rootStreams.push(response);
       return;
     }
     if (request.method === 'DELETE') {
@@ -247,6 +342,11 @@ async function createFixture(includeContext = true): Promise<Fixture> {
       return;
     }
     if (method === 'tools/list') {
+      if (failToolList) {
+        failToolList = false;
+        json(response, { error: 'fixture handshake failure' }, 500);
+        return;
+      }
       sse(response, [
         ...(includeContext ? [{ jsonrpc: '2.0', method: 'notifications/openFiles', params: { files: [] } }] : []),
         {
@@ -264,13 +364,15 @@ async function createFixture(includeContext = true): Promise<Fixture> {
   if (address === null || typeof address === 'string') throw new Error('Fixture failed to bind.');
   return {
     port: address.port,
-    closeRootStream: () => rootStream?.end(),
+    closeRootStream: (index = -1) => rootStreams.at(index)?.end(),
+    destroyRootStream: (index = -1) => rootStreams.at(index)?.destroy(),
+    failNextToolList: () => { failToolList = true; },
     heartbeat: () => {
       rootStream?.write('event: message\r\n');
       rootStream?.write('data: {"jsonrpc":"2.0","method":"notifications/heartbeat","params":{"timestamp":1}}\r\n\r\n');
     },
     close: () => {
-      rootStream?.end();
+      for (const stream of rootStreams) stream.end();
       return new Promise((resolve) => server.close(() => resolve()));
     },
   };
@@ -358,7 +460,7 @@ function http(
   });
 }
 
-function openStream(port: number, session: string, onData?: (text: string) => void): Promise<void> {
+function openStream(port: number, session: string, onData?: (text: string) => void, onEnd?: () => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const outgoing = request({
       host: '127.0.0.1',
@@ -372,6 +474,8 @@ function openStream(port: number, session: string, onData?: (text: string) => vo
       },
     }, (response) => {
       if (onData) response.on('data', (chunk: Buffer) => onData(chunk.toString('utf8')));
+      if (onEnd) response.once('close', onEnd);
+      response.on('error', reject);
       response.resume();
       resolve();
     });

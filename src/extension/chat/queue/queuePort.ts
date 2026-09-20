@@ -15,6 +15,7 @@ export interface QueuePort
     | 'emit'
     | 'recoveryStore'
   > {
+  readonly ideReconnectInProgress?: boolean;
   readonly sessionState: Readonly<
     Pick<
       SessionLifecycleState,

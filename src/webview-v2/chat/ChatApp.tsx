@@ -99,9 +99,11 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
   const setNavigation = useCallback((page: string | null) => {
     setNavigationState((current) => ({ page, id: current.id + 1 }));
   }, []);
+  const ideReconnecting = state.ide.status === 'reconnecting';
+  const operationsBlocked = transition.blocking || ideReconnecting;
   const sessions = useSessionActions({
     vscode: port, sessionId: state.sessionId, connectionStatus: state.connection.status,
-    transcript: state.transcript, conversationTransitionBlocking: transition.blocking,
+    transcript: state.transcript, conversationTransitionBlocking: operationsBlocked,
     beginConversationSwitch: transition.beginSwitch,
   });
   const compact = sessions.handleCompact;
@@ -113,12 +115,12 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
     if (state.sessionId !== null) port.postMessage({ type: 'btw.dismiss', sessionId: state.sessionId });
   }, [btw.dismiss, state.sessionId, port]);
   const routes = useMemo(() => ({
-    blocked: transition.blocking,
+    blocked: operationsBlocked,
     compact,
     navigate: setNavigation,
     openBtw,
     askBtw,
-  }), [transition.blocking, compact, openBtw, askBtw, setNavigation]);
+  }), [operationsBlocked, compact, openBtw, askBtw, setNavigation]);
   const composer = useComposerFlow(port, state, dispatch, routes);
   const missionControl = useMissionControl(port, createTurnId);
   const [missionChat, setMissionChat] = useState(false);
@@ -138,7 +140,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
     vscode: port,
     sessionId: state.sessionId,
     connectionStatus: state.connection.status,
-    conversationTransitionBlocking: transition.blocking,
+    conversationTransitionBlocking: operationsBlocked,
     interactionCount: state.interactions.length,
     turn: state.turn,
     transcript: state.transcript,
@@ -169,7 +171,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
   const running = state.turn?.status === 'submitting' || state.turn?.status === 'streaming';
   const notice = selectVisibleNotice(host.transientDiagnostic, state.sessionId, state.turn?.turnId ?? null, running || state.turn?.status === 'stopping');
   const statusMessage = getStatusMessage(state, composer.draft);
-  const sessionActionsDisabled = transition.blocking || state.connection.status !== 'connected' ||
+  const sessionActionsDisabled = operationsBlocked || state.connection.status !== 'connected' ||
     ((running || state.turn?.status === 'stopping') && !state.backgroundTurnsAvailable) || state.interactions.length > 0;
   const interaction = <InteractionPanel requests={state.interactions} actions={{
     onPermission: messageActions.handlePermissionRespond,
@@ -213,15 +215,15 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
         {footerInteraction ? interaction : null}
         {host.showHandshakeNotice && transition.overlay === null ? <p role="status" className="text-xs text-muted-foreground">Still waiting for the extension. Use the editor’s Reload Window command if it remains unresponsive.</p> : null}
         {notice ? <TransientNotice key={notice.sequence} diagnostic={notice} /> : null}
-        {statusMessage && !running ? <p role="status" className="text-xs text-muted-foreground">{statusMessage}</p> : null}
+        {statusMessage && !running && !ideReconnecting ? <p role="status" className="text-xs text-muted-foreground">{statusMessage}</p> : null}
         <SessionRecovery state={state} blocked={transition.blocking} onReconnect={sessions.handleRetry} port={port} />
         <QueueBar queue={state.queue} flow={composer} />
         {composer.queueEditingId === null ? null : <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>Editing queued message</span><Button variant="ghost" size="sm" onClick={composer.handleQueueEditCancel}>Cancel edit</Button>
         </div>}
-        <Composer key={state.conversationId ?? 'none'} state={state} port={port} flow={composer} blocked={transition.blocking}
+        <Composer key={state.conversationId ?? 'none'} state={state} port={port} flow={composer} blocked={operationsBlocked}
           onFileSearch={workspace.handleFileSearch} onNavigate={setNavigation} onBtwOpen={openBtw}
-          renderInputRow={(input, action) => <ComposerControls input={input} action={action} state={state} port={port} blocked={transition.blocking} page={navigation.page} navigationId={navigation.id} onPageChange={setNavigation} onCompact={compact} compactPending={sessions.compactPending} theme={theme.context} onNewSession={sessions.handleNewSession}
+          renderInputRow={(input, action) => <ComposerControls input={input} action={action} state={state} port={port} blocked={operationsBlocked} page={navigation.page} navigationId={navigation.id} onPageChange={setNavigation} onCompact={compact} compactPending={sessions.compactPending} theme={theme.context} onNewSession={sessions.handleNewSession}
             onMissionOpen={openMission} missionActive={host.missionWorkspaceRoute === 'detail'} />} />
       </>}
       overlay={<>
@@ -233,14 +235,14 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
           <InlineDiffContext.Provider value={inlineDiff}>
             <SubagentActivityStoreContext.Provider value={subagents.activityStore}>
               <SelectSessionContext.Provider value={sessions.handleSelectSession}>
-              <LiveTranscript ref={transcript} store={store} port={port} blocked={transition.blocking} sendSignal={composer.sendSignal} onFork={sessions.handleForkCurrentSession}
+              <LiveTranscript ref={transcript} store={store} port={port} blocked={operationsBlocked} sendSignal={composer.sendSignal} onFork={sessions.handleForkCurrentSession}
                 onEditBegin={composer.queueEditingId === null ? undefined : composer.handleQueueEditCancel}
-                onDraftSuggestion={!transition.blocking && !composer.draft.trim() && composer.queueEditingId === null && !running && state.interactions.length === 0
+                onDraftSuggestion={!operationsBlocked && !composer.draft.trim() && composer.queueEditingId === null && !running && state.interactions.length === 0
                   ? composer.appendCanvasDraft : undefined}
                 onQuote={quoteIntoChat}
                 onBtwQuote={state.btwAvailable ? btw.openWithQuote : undefined}
                 interaction={footerInteraction ? null : interaction}
-                renderEditorSettings={(owner) => <ComposerControls editorOwner={owner} state={state} port={port} blocked={transition.blocking}
+                renderEditorSettings={(owner) => <ComposerControls editorOwner={owner} state={state} port={port} blocked={operationsBlocked}
                   theme={theme.context} onMissionOpen={openMission} missionActive={host.missionWorkspaceRoute === 'detail'} />} />
               </SelectSessionContext.Provider>
             </SubagentActivityStoreContext.Provider>

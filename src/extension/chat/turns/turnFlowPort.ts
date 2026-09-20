@@ -68,6 +68,7 @@ export interface TurnFlowPort
     | 'publishTurnChanges'
     | 'settleTurnSubagents'
     | 'startReplacement'
+    | 'resumeRecoveredIdeReconnect'
     | 'flushRecoveryCheckpointOrReport'
     | 'adoptDurableSuccessor'
     | 'markStopRequested'

@@ -78,6 +78,7 @@ export interface RuntimeLifecyclePort
     | 'loadSessionMetadata'
     | 'restoreQueuedPrompts'
     | 'reconcileDaemonTurn'
+    | 'resumeRecoveredIdeReconnect'
     | 'armReplayedSubagentWatch'
     | 'clearPendingAttachments'
     | 'discardQueuedPrompts'

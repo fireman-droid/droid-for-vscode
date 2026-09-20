@@ -19,7 +19,12 @@ import {
   successfulTurn,
   turnStates,
   waitForConnected,
+  type SessionHistoryLoader,
 } from './controllerTestHarness';
+
+const emptyHistory: SessionHistoryLoader = { loadHistory: async () => ({
+  status: 'available', state: { transcript: [], historyStatus: 'complete', truncated: false },
+}) };
 
 describe('ChatController queued messages', () => {
   it('restores queued prompts as a paused queue after a reload', async () => {
@@ -51,6 +56,7 @@ describe('ChatController queued messages', () => {
       undefined,
       createCatalog([catalogEntry('session-1')]),
       new SessionRecoveryStore(persistence, 'recovery', 0),
+      emptyHistory,
     );
     ready(second.controller);
     await waitForConnected(second.messages);
@@ -96,6 +102,7 @@ describe('ChatController queued messages', () => {
       undefined,
       createCatalog([catalogEntry('session-1'), catalogEntry('session-2')]),
       recovery,
+      emptyHistory,
     );
     ready(controller);
     await waitForConnected(messages);
@@ -133,6 +140,7 @@ describe('ChatController queued messages', () => {
     await waitForConnected(messages);
 
     send(controller, 'session-1', 'turn-1', 'Long turn');
+    await vi.waitFor(() => expect(runtime.sendTurn).toHaveBeenCalledOnce());
     queueAdd(controller, 'session-1', 'queued-1', 'First queued');
     queueAdd(controller, 'session-1', 'queued-2', 'Second queued');
 
@@ -239,6 +247,7 @@ describe('ChatController queued messages', () => {
     await waitForConnected(messages);
 
     send(controller, 'session-1', 'turn-1', 'Long turn');
+    await vi.waitFor(() => expect(runtime.sendTurn).toHaveBeenCalledOnce());
     queueAdd(controller, 'session-1', 'queued-1', 'Queued behind stop');
     stop(controller, 'session-1', 'turn-1');
     await vi.waitFor(() => {
@@ -283,6 +292,7 @@ describe('ChatController queued messages', () => {
     await waitForConnected(messages);
 
     send(controller, 'session-1', 'turn-1', 'Long turn');
+    await vi.waitFor(() => expect(runtime.sendTurn).toHaveBeenCalledOnce());
     queueAdd(controller, 'session-1', 'queued-1', 'First queued');
     queueAdd(controller, 'session-1', 'queued-2', 'Second queued');
     queueAdd(controller, 'session-1', 'queued-3', 'Third queued');
@@ -329,12 +339,12 @@ describe('ChatController queued messages', () => {
     expect(queueStates(messages).some(({ paused }) => paused === 'stopped')).toBe(false);
   });
 
-  it('falls back to a paused queue when send-now interruption fails', async () => {
+  it('keeps a rejected send-now interruption waiting until the stream confirms failure, then pauses the queue', async () => {
     const release = deferred<void>();
     const runtime = createMockRuntime(async function* () {
       yield { type: 'text-delta', text: 'working' };
       await release.promise;
-      yield successfulTurn();
+      throw new Error('The running turn failed after interruption was rejected.');
     });
     runtime.interrupt.mockRejectedValue(new Error('interrupt failed'));
     const { controller, messages } = createController(() => runtime);
@@ -342,6 +352,7 @@ describe('ChatController queued messages', () => {
     await waitForConnected(messages);
 
     send(controller, 'session-1', 'turn-1', 'Long turn');
+    await vi.waitFor(() => expect(runtime.sendTurn).toHaveBeenCalledOnce());
     queueAdd(controller, 'session-1', 'queued-1', 'Send me now');
     controller.handleMessage({
       type: 'queue.promote',
@@ -350,16 +361,19 @@ describe('ChatController queued messages', () => {
     });
 
     await vi.waitFor(() => {
-      expect(queueStates(messages).at(-1)?.paused).toBe('turn-failed');
+      expect(messages).toContainEqual(expect.objectContaining({
+        type: 'runtime.diagnostic', code: 'turn-stop-unconfirmed',
+      }));
     });
+    expect(turnStates(messages).at(-1)?.status).toBe('stopping');
+    expect(queueStates(messages).at(-1)).toMatchObject({ items: [{ queueId: 'queued-1' }], paused: null });
     expect(runtime.sendTurn).toHaveBeenCalledOnce();
-    expect(messages).toContainEqual(
-      expect.objectContaining({
-        type: 'turn.error',
-        code: 'runtime-interrupt-failed',
-      }),
-    );
+    expect(messages.some(message => message.type === 'turn.error')).toBe(false);
     release.resolve();
+    await vi.waitFor(() => expect(queueStates(messages).at(-1)).toMatchObject({
+      items: [{ queueId: 'queued-1' }], paused: 'turn-failed',
+    }));
+    expect(runtime.sendTurn).toHaveBeenCalledOnce();
   });
 
   it('resumes a paused queue when a prompt is promoted', async () => {
@@ -379,6 +393,7 @@ describe('ChatController queued messages', () => {
     await waitForConnected(messages);
 
     send(controller, 'session-1', 'turn-1', 'Long turn');
+    await vi.waitFor(() => expect(runtime.sendTurn).toHaveBeenCalledOnce());
     queueAdd(controller, 'session-1', 'queued-1', 'First queued');
     queueAdd(controller, 'session-1', 'queued-2', 'Second queued');
     stop(controller, 'session-1', 'turn-1');

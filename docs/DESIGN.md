@@ -811,6 +811,11 @@ Token，不增加品牌色、Spinner、Banner 或填充式状态组件。
   `Restoring conversation`，避免快速恢复产生闪烁。
 - 首个持久化 Conversation 快照到达后立即在过场后渲染真实 Transcript；Runtime
   仍为 `connecting` 时完整过场继续循环。
+- IDE 重连区分建立连接与恢复对话两阶段，底部复用轻量点阵并展示实际阶段，
+  暂时禁用发送、新会话、历史重发和设置操作，保留草稿和附件；恢复期间不显示
+  上轮 Stopped。持续一分钟才提供状态刷新，失败后恢复对应重试入口。
+  Reload 恢复的后台任务仍在执行时不迁移，确认结束后才自动尝试重连；
+  子任务或受管终端等条件不允许迁移时保留原后台与人工入口。
 - 用户选择另一已有 Conversation 时立即进入 `switching`。
   旧 Transcript 留在原位并降低透明度、轻微模糊，完整点阵和
   `Switching conversation` 覆盖聊天区。目标 Conversation 的权威快照可以先替换
