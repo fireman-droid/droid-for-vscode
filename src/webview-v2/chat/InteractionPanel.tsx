@@ -44,6 +44,10 @@ function PermissionCard({ request, interaction, actions }: {
   const [preview, setPreview] = useState(false);
   const presentation = getPermissionPresentation(request);
   const plan = interaction.planDocument;
+  const planContent = plan?.content ?? presentation.planPreview;
+  const planTools = request.tools.filter((tool) => tool.confirmationKind === 'exit_spec_mode');
+  const previewedTool = planContent !== undefined ? planTools.find((tool) => tool.detail === request.editableSpecContent)
+    ?? (planTools.length === 1 ? planTools[0] : undefined) : undefined;
   const canOpenPlan = request.editableSpecContent !== undefined && request.options.filter((option) => option.requiresEditedSpec).length === 1;
   const respond = (value: string, content?: string) => {
     if (sent.current) return;
@@ -53,19 +57,21 @@ function PermissionCard({ request, interaction, actions }: {
   };
   return (
     <section aria-busy={waiting} className="flex min-h-0 flex-col gap-2 overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div>{presentation.kind === 'permission' ? null : <p className="text-[10px] text-muted-foreground">{presentation.eyebrow}</p>}<h2 className="text-[14px] font-semibold leading-[21px]">{presentation.title}</h2></div>
         {canOpenPlan ? <Button variant="link" size="sm" disabled={waiting} onClick={() => actions.onOpenPlan(interaction)}>Open in editor</Button> : null}
       </div>
-      <div className="min-h-0 overflow-y-auto">{request.tools.map((tool) => (
+      <div className="min-h-0 overflow-y-auto overscroll-contain">{request.tools.map((tool) => tool === previewedTool
+        ? tool.riskNote ? <p key={tool.toolUseId} className="text-xs text-destructive">{tool.riskNote}</p> : null : (
         <article key={tool.toolUseId} aria-label={tool.toolName} className="space-y-1 border-b border-[var(--panel-edge)] py-3 last:border-0">
           <p className="text-[10.5px] text-muted-foreground">{presentation.kind === 'permission' ? '' : `${tool.toolName} · `}{tool.confirmationKind.replaceAll('_', ' ')}</p>
           <h3 className="text-[13px]">{tool.title}</h3>
           {tool.detail ? <pre className="max-h-52 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-[18px]">{tool.detail}</pre> : null}
           {tool.riskNote ? <p className="text-xs text-destructive">{tool.riskNote}</p> : null}
         </article>
-      ))}</div>
-      {editingOption === null && (plan?.content ?? presentation.planPreview) ? <div className="max-h-[min(30vh,260px)] min-h-0 overflow-auto px-0.5 py-1"><Markdown text={(plan?.content ?? presentation.planPreview)!} /></div> : null}
+      ))}
+      {editingOption === null && planContent ? <div className="px-0.5 py-1"><Markdown text={planContent} /></div> : null}
+      </div>
       {plan?.status === 'too-large' ? <p role="alert" className="text-xs text-destructive">Shorten the edited plan in Cursor before approving.</p> : null}
       {plan?.status === 'failed' ? <p role="alert" className="text-xs text-destructive">The plan document could not be opened.</p> : null}
       {plan?.status === 'closed' ? <p className="text-xs text-muted-foreground">Plan editor closed. Open it again to continue editing.</p> : null}
