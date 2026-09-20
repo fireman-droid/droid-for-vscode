@@ -21,6 +21,7 @@ export function useTranscriptScroll(
   const [away, setAway] = useState(false);
   const navigation = useRef<(() => number | undefined) | null>(null);
   const navigationTop = useRef<number | null>(null);
+  const bottomNavigation = useRef(false);
   const frame = useRef<number | null>(null);
   const lastFrame = useRef(0);
   const scheduleUpdate = useRef<() => void>(() => {});
@@ -30,6 +31,7 @@ export function useTranscriptScroll(
     lastFrame.current = 0;
     navigation.current = null;
     navigationTop.current = null;
+    bottomNavigation.current = false;
   }, []);
   const stopFollowing = useCallback(() => {
     cancelAnimation();
@@ -66,11 +68,12 @@ export function useTranscriptScroll(
     if (previous !== null && bounded !== previous) writeTop(element.scrollTop + bounded - previous);
   }, [viewport, writeTop]);
   useLayoutEffect(() => { compensateNavigation(); });
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     cancelAnimation();
     const element = viewport.current;
     readTranscriptSelection(element?.parentElement ?? null)?.removeAllRanges();
     follow.current.following = true;
+    bottomNavigation.current = behavior === 'smooth';
     if (element !== null && behavior !== 'smooth') writeTop(Math.max(0, element.scrollHeight - element.clientHeight));
     setAway(false);
     scheduleUpdate.current();
@@ -96,7 +99,7 @@ export function useTranscriptScroll(
       const bottom = Math.max(0, element.scrollHeight - element.clientHeight);
       if (selecting()) stopFollowing();
       const readTarget = navigation.current;
-      const waitingForMarkdown = readTarget !== null && column.querySelector('[data-markdown-pending]') !== null;
+      const waitingForMarkdown = () => readTarget !== null && column.querySelector('[data-markdown-pending]') !== null;
       if (readTarget) compensateNavigation();
       const target = readTarget ? readTarget() : follow.current.following ? bottom : undefined;
       if (target !== undefined) {
@@ -112,8 +115,8 @@ export function useTranscriptScroll(
           // Chromium can clamp/quantize scrollTop before the integer geometry
           // target is reached. A blocked write must not keep an idle RAF alive.
           if (Math.abs(element.scrollTop - previousTop) > 0.01) schedule();
-          else if (!waitingForMarkdown) { navigation.current = null; navigationTop.current = null; }
-        } else if (waitingForMarkdown) {
+          else if (!waitingForMarkdown()) { navigation.current = null; navigationTop.current = null; bottomNavigation.current = false; }
+        } else if (waitingForMarkdown()) {
           // Worker results and incremental DOM mounts can arrive after the
           // usual three frames. Keep this target until their layout settles;
           // observers wake it, so waiting does not spin an animation loop.
@@ -124,11 +127,13 @@ export function useTranscriptScroll(
         } else {
           navigation.current = null;
           navigationTop.current = null;
+          bottomNavigation.current = false;
           settledFrames = 0;
         }
       } else {
         navigation.current = null;
         navigationTop.current = null;
+        bottomNavigation.current = false;
         settledFrames = 0;
       }
       lastFrame.current = frame.current === null ? 0 : time;
@@ -205,7 +210,7 @@ export function useTranscriptScroll(
         maxHeight = Math.max(maxHeight, height);
         // Composer/window layout changes preserve the bottom immediately.
         // Only transcript growth and explicit navigation use the eased target.
-        if (follow.current.following && navigation.current === null && !selecting()) {
+        if (follow.current.following && navigation.current === null && !bottomNavigation.current && !selecting()) {
           writeTop(Math.max(0, element.scrollHeight - height));
         }
         if (reportLayout && diagnosticTimer === undefined) {

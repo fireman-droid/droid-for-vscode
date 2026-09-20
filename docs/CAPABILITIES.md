@@ -31,7 +31,7 @@ SDK 中出现接口就自动成为产品功能。
 | 普通目录轮次快照 | 已安装，待真实验收 | 私有 Git 快照支持非 Git 根目录及其中的嵌套项目；不修改项目 index，仍需本机 Git；旧回合缺失基线无法补回 |
 | 操作级 Diff | 已安装，待 Cursor 验收 | 进行中逐文件展开详情，结束后每轮一张汇总卡，默认三个文件、支持更多与 Review 定位；Undo…走既有预览确认。统计仅使用已确认工具结果，累计操作行数不等于净差；拟议、失败和未知副作用不算成功，Viewer 可读保留片段 |
 | 终端／代码／回复／选区复制 | 已接通 | Host 原生剪贴板及成功回执；选区浮条 Copy 保留原始空白和页面选区，文本标题拖选不触发点击动作 |
-| 独立 Review 工作台 | 归因改造已安装，待 Cursor 验收 | 新增 AI operations，与回合工作区／Workspace／Branch／Staged／Unstaged 分开；快照只用于比较，不再据此撤销 AI 修改 |
+| 独立 Review 工作台 | 大列表与长 Diff 优化，待 Cursor 验收 | AI operations 与回合工作区／Workspace／Branch／Staged／Unstaged 分开；完整文件清单支持可视区域渲染，长 Diff 分块加载。快照只用于比较；整轮操作撤销最多 200 文件，超量可逐文件撤销 |
 | 安全操作撤销 | 保守支持，待 Cursor 验收 | 仅完整可逆 ApplyPatch 文本更新；精确反向匹配、预览及字节复核，保留不冲突编辑。同轮明确 unchanged 不阻止其他完整操作；Edit／Create／删除／移动、缺证据、链接、未保存编辑与歧义均拒绝自动撤销 |
 | Review 的 SDK Git Diff | 已安装，待 Cursor 验收 | daemon Branch 使用 committed 数据，Workspace 使用官方 unstaged 数据（含暂存、未暂存及未跟踪文件）；默认补丁来自 SDK，扩大上下文／原生 Diff 使用固定基线与 SDK 补丁。Staged／Unstaged 保留本地 Git，Process Workspace 保留原路径；不改变逐轮归属和恢复 |
 | Review Agent | 已接通，受限 | 复用独立 `/review` 会话与 Viewer 报告；不宣称精确审阅单次操作或 Index，不替用户执行 push |

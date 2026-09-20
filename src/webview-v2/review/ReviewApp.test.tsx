@@ -6,8 +6,11 @@ import { ReviewApp } from './ReviewApp';
 import { ReviewCommit } from './ReviewCommit';
 import { ReviewFiles } from './ReviewFiles';
 import type { ReviewScopeState } from '../../shared/protocol/reviewProtocol';
-afterEach(cleanup);
-beforeEach(() => { HTMLElement.prototype.scrollTo = vi.fn(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+beforeEach(() => {
+  HTMLElement.prototype.scrollTo = vi.fn();
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false, addEventListener() {}, removeEventListener() {} })));
+});
 function send(data: unknown) { act(() => window.dispatchEvent(new MessageEvent('message', { data }))); }
 const target = { type: 'reviewPanel.context', sessionId: 's1', valid: true, latestTurnId: 't1', operation: null, operationPath: null };
 const scope: ReviewScopeState = {
@@ -80,18 +83,25 @@ it('requires explicit staged selection and preserves the commit draft after a fa
   expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('true');
   expect(screen.getByRole('alert').textContent).toBe('Hook failed');
 });
-it('requires a conflict-free preview before restoring the exact reviewed turn version', () => {
+it('offers undo only for AI operations and requires a conflict-free preview for the recorded version', () => {
   const port = { postMessage: vi.fn() };
   render(<ReviewApp port={port} />);
   send(target);
-  const turn = { ...scope, scopeKind: 'turn', turnId: 't1', files: [
+  send({ type: 'review.state', sequence: 1, state: scope });
+  expect(screen.queryByRole('button', { name: 'Undo file operations…' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Undo turn operations…' })).toBeNull();
+  const turn = { ...scope, scopeKind: 'operations', baseline: 'operations-t1', turnId: 't1', files: [
     { ...scope.files[0]!, restorable: true },
   ], reviewableCount: 1 };
-  send({ type: 'review.state', sequence: 1, state: turn });
-  fireEvent.click(screen.getByRole('button', { name: 'Restore file…' }));
+  send({ type: 'review.state', sequence: 2, state: turn });
+  const request = port.postMessage.mock.calls.filter(([entry]) => entry.type === 'reviewPanel.readFile').at(-1)![0];
+  send({ type: 'reviewPanel.file', requestId: request.requestId, reviewScopeId: turn.reviewScopeId,
+    path: 'a.ts', version: 'a.ts', patch: '', truncated: false, error: null,
+    recordedOperations: [{ toolUseId: 'applied', source: 'tool-result', outcome: 'applied', patch: '@@ -1 +1 @@\n-before\n+after' }] });
+  fireEvent.click(screen.getByRole('button', { name: 'Undo file operations…' }));
   expect(port.postMessage).toHaveBeenCalledWith({
     type: 'review.restorePreview', sessionId: 's1', reviewScopeId: 'scope1',
-    baseline: 'head:worktree', target: 'file', path: 'a.ts', version: 'a.ts',
+    baseline: 'operations-t1', target: 'file', path: 'a.ts', version: 'a.ts',
   });
   const preview = { type: 'review.restorePreview', sequence: 2, sessionId: 's1', reviewScopeId: 'scope1',
     previewId: 'preview1', target: 'file', restorable: [], conflicted: ['a.ts'], created: [], deleted: [] };
@@ -100,7 +110,7 @@ it('requires a conflict-free preview before restoring the exact reviewed turn ve
   send({ ...preview, sequence: 3, restorable: ['a.ts'], conflicted: [] });
   fireEvent.click(screen.getByRole('button', { name: 'Confirm restore' }));
   expect(port.postMessage).toHaveBeenCalledWith({
-    type: 'review.restoreFile', sessionId: 's1', reviewScopeId: 'scope1', baseline: 'head:worktree', previewId: 'preview1',
+    type: 'review.restoreFile', sessionId: 's1', reviewScopeId: 'scope1', baseline: 'operations-t1', previewId: 'preview1',
   });
 });
 it('shows historical excerpts with working change navigation instead of inapplicable actions', () => {
@@ -114,14 +124,16 @@ it('shows historical excerpts with working change navigation instead of inapplic
   send({ type: 'reviewPanel.file', requestId: request.requestId, reviewScopeId: scope.reviewScopeId,
     path: 'a.ts', version: 'excerpts', patch: '', truncated: false, error: null,
     recordedOperations: [
-      { toolUseId: 'first', patch: '@@ -1 +1 @@\n-before\n+middle' },
-      { toolUseId: 'second', patch: '@@ -1 +1 @@\n-middle\n+after' },
+      { toolUseId: 'first', source: 'tool-result', outcome: 'applied', patch: '@@ -1 +1 @@\n-before\n+middle' },
+      { toolUseId: 'second', source: 'tool-input', patch: '@@ -1 +1 @@\n-middle\n+proposed' },
+      { toolUseId: 'legacy', patch: '@@ -1 +1 @@\n-older\n+after' },
     ] });
-  expect(screen.getByText('Recorded operation 1 · successful tool input · excerpt')).toBeDefined();
-  expect(screen.getByText('Recorded operation 2 · successful tool input · excerpt')).toBeDefined();
+  expect(screen.getByText('Recorded operation 1 · confirmed tool result')).toBeDefined();
+  expect(screen.getByText('Recorded operation 2 · proposed edit, not confirmed')).toBeDefined();
+  expect(screen.getByText('Recorded operation 3 · legacy input excerpt, not verified execution')).toBeDefined();
   expect(screen.getByText('before')).toBeDefined();
   expect(screen.getByText('after')).toBeDefined();
-  for (const name of ['Native Diff', 'Restore file…', 'Restore turn…', 'Mark & next'])
+  for (const name of ['Native Diff', 'Undo file operations…', 'Undo turn operations…', 'Mark & next'])
     expect(screen.queryByRole('button', { name })).toBeNull();
   expect(screen.queryByRole('combobox', { name: 'Context lines' })).toBeNull();
   expect(screen.getByText('Saved operation excerpts · full turn snapshot unavailable')).toBeDefined();

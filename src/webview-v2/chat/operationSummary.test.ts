@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import type { OperationDiff, OperationDiffFile } from '../../shared/protocol/operationDiff';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
-import { summarizeOperations } from './operationSummary';
+import { createOperationSummarySelector, summarizeOperations } from './operationSummary';
 
 const file: OperationDiffFile = { path: 'src/shared.ts', kind: 'modified', outcome: 'applied', patch: '@@ -1 +1 @@\n-original\n+first' };
 function operation(callId: string, files: readonly OperationDiffFile[], overrides: Partial<ToolTranscriptItem> = {}): ToolTranscriptItem {
@@ -41,4 +41,34 @@ it('excludes unchanged and unconfirmed files and keeps unknown line totals unkno
   expect(summary.unconfirmed).toBe(2);
   expect(summary.calls.size).toBe(2);
   expect(summary.files.get(file.path)).toMatchObject({ additions: null, deletions: null, records: [file, missing] });
+});
+
+it('updates cached operation evidence without mixing removed turns after a rewind or history replacement', () => {
+  const select = createOperationSummarySelector();
+  const first = operation('call-1', [file]);
+  const second = operation('call-2', [{ ...file, path: 'second.ts' }], { turnId: 'turn-2' });
+  select([first, second]);
+  const streamed = { kind: 'assistant' as const, id: 'reply', turnId: 'turn-2', text: 'Still working' };
+  expect(select([first, second, streamed]).get('turn-2')?.files.get('second.ts')?.additions).toBe(1);
+  expect([...select([first]).keys()]).toEqual(['turn-1']);
+  const replacementFile = { ...file, patch: '@@ -1 +1,2 @@\n-original\n+replacement\n+extra' };
+  const replaced = operation('call-1', [replacementFile]);
+  const summary = select([replaced]).get('turn-1')!;
+  expect(summary.files.get(file.path)).toMatchObject({ additions: 2, deletions: 1, records: [replacementFile] });
+  expect(select([]).size).toBe(0);
+  expect(select([second]).get('turn-2')?.files.has('second.ts')).toBe(true);
+  expect(select([second]).has('turn-1')).toBe(false);
+});
+
+it('recalculates confirmation, delegation and duplicate identities when an existing tool row changes', () => {
+  const select = createOperationSummarySelector();
+  const proposed = operation('call-1', [file], { operationDiff: { status: 'ready', source: 'tool-input', files: [file] } });
+  expect(select([proposed]).size).toBe(0);
+  const confirmed = operation('call-1', [file]);
+  expect(select([confirmed, { ...confirmed, id: 'replayed' }]).get('turn-1')?.calls.size).toBe(1);
+  const failed = operation('call-1', [{ ...file, outcome: 'failed' }], { subagent: { type: 'worker', description: 'Child edit' } });
+  expect(select([failed]).get('turn-1')).toMatchObject({ delegated: true, unconfirmed: 1 });
+  expect(select([failed]).get('turn-1')?.files.size).toBe(0);
+  expect(select([confirmed]).get('turn-1')).toMatchObject({ delegated: false, unconfirmed: 0 });
+  expect(select([confirmed]).get('turn-1')?.files.get(file.path)?.records).toEqual([file]);
 });

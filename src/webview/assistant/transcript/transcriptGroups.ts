@@ -15,11 +15,25 @@ export interface AssistantGroupDescriptor {
 
 export type TranscriptDescriptor = UserMessageDescriptor | AssistantGroupDescriptor;
 
-/** Shared grouping before either UI projects rows: images stay with prompts, one copy/action tail per reply. */
-export function describeTranscript(transcript: readonly SessionTranscriptItem[], { includePlanSnapshots = false }: { readonly includePlanSnapshots?: boolean } = {}): {
+interface TranscriptDescription {
   readonly descriptors: readonly TranscriptDescriptor[];
   readonly replyTails: ReadonlyMap<string, string>;
-} {
+}
+interface ReplyRun { readonly groups: readonly AssistantGroupDescriptor[]; readonly text: string }
+interface TranscriptProjection extends TranscriptDescription { readonly runs: ReadonlyMap<string, ReplyRun> }
+const groupText = new WeakMap<AssistantGroupDescriptor, string>();
+const sameItems = <T>(before: readonly T[], after: readonly T[]) =>
+  before.length === after.length && before.every((item, index) => item === after[index]);
+function replyText(group: AssistantGroupDescriptor): string {
+  const cached = groupText.get(group);
+  if (cached !== undefined) return cached;
+  const text = group.items.flatMap((item) => item.kind === 'assistant' && item.text.length > 0 ? [item.text] : []).join('\n\n');
+  groupText.set(group, text);
+  return text;
+}
+
+/** Shared grouping before either UI projects rows: images stay with prompts, one copy/action tail per reply. */
+function projectTranscript(transcript: readonly SessionTranscriptItem[], includePlanSnapshots: boolean, previous?: TranscriptProjection): TranscriptProjection {
   const descriptors: TranscriptDescriptor[] = [];
   const groups = new Map<string, AssistantGroupDescriptor>();
   const appendToGroup = (item: Exclude<SessionTranscriptItem, { kind: 'user' }>): void => {
@@ -58,16 +72,30 @@ export function describeTranscript(transcript: readonly SessionTranscriptItem[],
   }
   flushPendingUserImages();
 
+  if (previous) {
+    const byId = new Map(previous.descriptors.map((descriptor) => [descriptor.kind === 'user' ? descriptor.item.id : descriptor.id, descriptor]));
+    for (let index = 0; index < descriptors.length; index++) {
+      const descriptor = descriptors[index]!;
+      const cached = byId.get(descriptor.kind === 'user' ? descriptor.item.id : descriptor.id);
+      if (descriptor.kind === 'user' && cached?.kind === 'user' && descriptor.item === cached.item && sameItems(descriptor.images, cached.images) ||
+        descriptor.kind === 'assistant' && cached?.kind === 'assistant' && descriptor.turnId === cached.turnId && sameItems(descriptor.items, cached.items)) {
+        descriptors[index] = cached!;
+      }
+    }
+  }
+
   const replyTails = new Map<string, string>();
+  const runs = new Map<string, ReplyRun>();
   let run: AssistantGroupDescriptor[] = [];
   const flushRun = (): void => {
     if (run.length === 0) return;
     // Restored replies can end with tool-only groups after their last text.
     const tail = run[run.length - 1]!;
-    const text = run.flatMap((descriptor) => descriptor.items
-      .filter((item): item is Extract<SessionTranscriptItem, { kind: 'assistant' }> => item.kind === 'assistant')
-      .map((item) => item.text)).filter((text) => text.length > 0).join('\n\n');
-    replyTails.set(tail.id, text);
+    const cached = previous?.runs.get(tail.id);
+    const entry = cached && sameItems(cached.groups, run) ? cached
+      : { groups: run, text: run.map(replyText).filter((text) => text.length > 0).join('\n\n') };
+    runs.set(tail.id, entry);
+    replyTails.set(tail.id, entry.text);
     run = [];
   };
   for (const descriptor of descriptors) {
@@ -75,5 +103,31 @@ export function describeTranscript(transcript: readonly SessionTranscriptItem[],
     else flushRun();
   }
   flushRun();
+  const previousTails = previous && [...previous.replyTails];
+  return {
+    descriptors: previous && sameItems(previous.descriptors, descriptors) ? previous.descriptors : descriptors,
+    replyTails: previous && previous.replyTails.size === replyTails.size &&
+      [...replyTails].every(([id, text], index) => previousTails![index]?.[0] === id && previousTails![index]?.[1] === text) ? previous.replyTails : replyTails,
+    runs,
+  };
+}
+
+export function describeTranscript(transcript: readonly SessionTranscriptItem[], { includePlanSnapshots = false }: { readonly includePlanSnapshots?: boolean } = {}): TranscriptDescription {
+  const { descriptors, replyTails } = projectTranscript(transcript, includePlanSnapshots);
   return { descriptors, replyTails };
+}
+
+/** Retains only the current projection; rewinds and history replacements drop removed groups. */
+export function createTranscriptSelector({ includePlanSnapshots = false }: { readonly includePlanSnapshots?: boolean } = {}) {
+  let input: readonly SessionTranscriptItem[] | undefined;
+  let projection: TranscriptProjection | undefined;
+  let result: TranscriptDescription | undefined;
+  return (transcript: readonly SessionTranscriptItem[]): TranscriptDescription => {
+    if (transcript !== input) {
+      projection = projectTranscript(transcript, includePlanSnapshots, projection);
+      result = { descriptors: projection.descriptors, replyTails: projection.replyTails };
+      input = transcript;
+    }
+    return result!;
+  };
 }

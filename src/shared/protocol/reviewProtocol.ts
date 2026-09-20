@@ -6,6 +6,7 @@ import {
 
 export const REVIEW_SCOPE_KINDS = ['operations', 'turn', 'workspace', 'branch', 'unstaged', 'staged'] as const;
 export type ReviewScopeKind = (typeof REVIEW_SCOPE_KINDS)[number];
+export const MAX_REVIEW_UNDO_FILES = 200;
 
 export const REVIEW_LIFECYCLES = [
   'writing',
@@ -405,7 +406,6 @@ function isReviewState(value: unknown): value is ReviewScopeState {
     !isReviewScopeKind(value.scopeKind) ||
     !enumIncludes(REVIEW_LIFECYCLES, value.lifecycle) ||
     !Array.isArray(value.files) ||
-    value.files.length > 200 ||
     !value.files.every(isReviewFile) ||
     !(
       value.currentIndex === null ||
@@ -485,7 +485,7 @@ function strings(value: UnknownRecord, keys: readonly string[]): boolean {
 function pathArray(value: unknown): boolean {
   return (
     Array.isArray(value) &&
-    value.length <= 200 &&
+    value.length <= MAX_REVIEW_UNDO_FILES &&
     value.every((entry) => typeof entry === 'string')
   );
 }

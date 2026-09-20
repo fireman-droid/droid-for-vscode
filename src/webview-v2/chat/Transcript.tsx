@@ -2,22 +2,22 @@ import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, 
 import { useStore } from 'zustand';
 import type { ChatStore } from './store';
 import { DroidActivity } from '../ui/droid-motion';
-import { buildTurns } from '../../webview/assistant/thread/buildTurns';
 import { useMessageEditor } from '../../webview/assistant/editing/useMessageEditor';
 import { useMessageActions } from '../../webview/assistant/editing/useMessageActions';
 import { useAttachmentActions } from '../../webview/assistant/attachments/useAttachmentActions';
 import type { ChatPort } from '../../webview/assistant/shell/chatIntent';
 import type { AssistantWebviewState } from '../../webview/assistant/state/types';
 import { QuestionCard } from './QuestionCard';
-import { describeTranscript } from '../../webview/assistant/transcript/transcriptGroups';
+import { createTranscriptSelector } from '../../webview/assistant/transcript/transcriptGroups';
 import { observeCompletion, resolveAssistantStatus, type CompletionClock } from '../../webview/assistant/transcript/transcriptStatus';
 import { currentProcessWaiting } from '../../webview/assistant/transcript/activityPresentation';
 import { AssistantReply } from './AssistantReply';
 import { useEditAttachmentIngress } from './useEditAttachmentIngress';
 import { getHistoryNotice } from '../../webview/assistant/shell/statusMessage';
 import { isPlanLive, selectPlanAnchors } from '../../webview/assistant/transcript/planAnchor';
-import { summarizeOperations } from './operationSummary';
+import { createOperationSummarySelector } from './operationSummary';
 import { ChatStartup } from './ChatStartup';
+import { createTranscriptMessagesSelector, createTranscriptStructureSelector } from './transcriptProjection';
 
 import { TranscriptView, type TranscriptHandle } from '@droidvisx/chat-ui/chat/TranscriptView';
 export function LiveTranscript({ store, ...props }: { readonly store: ChatStore } & Omit<ComponentProps<typeof Transcript>, 'state'>) {
@@ -104,7 +104,9 @@ export function Transcript({
     settings: editor.draft?.phase === 'editing' ? renderEditorSettings?.(editor.draft.messageId) : null,
     ...ingress,
   };
-  const { descriptors: allDescriptors, replyTails } = useMemo(() => describeTranscript(items), [items]);
+  const selectors = useMemo(() => ({ transcript: createTranscriptSelector(), operations: createOperationSummarySelector(),
+    structure: createTranscriptStructureSelector(), messages: createTranscriptMessagesSelector() }), [state.conversationId]);
+  const { descriptors, replyTails } = useMemo(() => selectors.transcript(items), [items, selectors]);
   const plans = useMemo(() => selectPlanAnchors(items), [items]);
   const [planChoice, setPlanChoice] = useState<{ conversationId: string | null; id: string; expanded: boolean } | null>(null);
   const currentPlanChoice = planChoice?.conversationId === state.conversationId ? planChoice : null;
@@ -112,15 +114,9 @@ export function Transcript({
     stopFollowing();
     setPlanChoice({ conversationId: state.conversationId, id, expanded });
   }, [state.conversationId, stopFollowing]);
-  const descriptors = allDescriptors;
-  const operationSummaries = useMemo(() => summarizeOperations(items), [items]);
-  const lastTurnRows = useMemo(() => new Map(descriptors.flatMap((entry) =>
-    entry.kind === 'assistant' ? [[entry.turnId, entry.id] as const] : [])), [descriptors]);
+  const operationSummaries = useMemo(() => selectors.operations(items), [items, selectors]);
+  const { ids, turns, lastTurnRows } = useMemo(() => selectors.structure(descriptors), [descriptors, selectors]);
   const byId = useMemo(() => new Map(descriptors.map((item) => [item.kind === 'user' ? item.item.id : item.id, item])), [descriptors]);
-  const ids = useMemo(() => [...byId.keys()], [byId]);
-  const turns = useMemo(() => buildTurns(descriptors.map((item) => ({
-    id: item.kind === 'user' ? item.item.id : item.id, role: item.kind,
-  }))), [descriptors]);
   const pendingReplyRow = useMemo(() => running || state.turn?.status === 'stopping'
     ? (turns.find((row) => row.messageIds.some((id) => {
       const descriptor = byId.get(id)!;
@@ -136,12 +132,7 @@ export function Transcript({
   const toolWorking = useMemo(() => items.some((item) =>
     item.kind === 'tool' && item.status === 'running' && item.turnId === state.turn?.turnId), [items, state.turn?.turnId]);
   const pendingIds = useMemo(() => new Set(turns.find((row) => row.id === pendingReplyRow)?.messageIds ?? []), [turns, pendingReplyRow]);
-  const messages = useMemo(() => descriptors.map((message) => ({
-    id: message.kind === 'user' ? message.item.id : message.id,
-    role: message.kind,
-    text: message.kind === 'user' ? message.item.text : undefined,
-    replyEnd: message.kind === 'assistant' && replyTails.has(message.id) && !pendingIds.has(message.id),
-  })), [descriptors, replyTails, pendingIds]);
+  const messages = useMemo(() => selectors.messages(descriptors, replyTails, pendingIds), [descriptors, replyTails, pendingIds, selectors]);
   return <TranscriptView ref={view} messages={messages} conversationId={state.conversationId} sessionKey={state.sessionId}
     sendSignal={sendSignal} reportLayout={reportLayout} onQuote={onQuote} onBtwQuote={onBtwQuote}
     leadingContent={<>

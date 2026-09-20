@@ -135,7 +135,7 @@ it('keeps applied rows live through stopping, then folds only AI patches into a 
   expect(screen.queryByRole('region', { name: 'Changes in 1 file' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: `Show changes to ${path}` }));
   expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).toContain('AI_ONLY_CHANGE');
-  fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+  fireEvent.click(screen.getByRole('button', { name: `Review changes to ${path}` }));
   expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId, toolUseId: 'edit-call', path });
   await expectNoWorkspaceDiff(current.port);
   receive(current.store, { type: 'turn.state', sessionId, turnId, sequence: 3, status: 'stopping' });

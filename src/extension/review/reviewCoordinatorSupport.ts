@@ -102,7 +102,6 @@ export function createActiveScope(
   );
   const files = stats
     .filter(({ path }) => isSafeWorkspaceRelativePath(path))
-    .slice(0, 200)
     .map((file) => ({
       ...file,
       version: '',

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 
 import type { RuntimeGitDiff } from '../../runtime/DroidRuntime';
+import { MAX_REVIEW_UNDO_FILES } from '../../shared/protocol/reviewProtocol';
 import type {
   ReviewHostMessage,
   ReviewOpenMessage,
@@ -109,6 +110,7 @@ export class ReviewCoordinator implements vscode.Disposable {
   private active: ActiveScope | null = null;
   private readonly persisted: Map<string, PersistedScope>;
   private readonly previews = new Map<string, RestorePreview>();
+  private readonly pendingOperationRefreshes = new Set<string>();
   private readonly disposables: vscode.Disposable[];
   private operation: Promise<void> = Promise.resolve();
   private disposed = false;
@@ -218,7 +220,13 @@ export class ReviewCoordinator implements vscode.Disposable {
       this.active.sessionId !== sessionId ||
       this.active.turnId !== turnId
     ) return;
+    const key = JSON.stringify([sessionId, turnId]);
+    if (this.pendingOperationRefreshes.has(key)) return;
+    this.pendingOperationRefreshes.add(key);
     void this.enqueue(async () => {
+      // Read the latest evidence once for each queued burst. Updates arriving during
+      // this refresh may append one follow-up, behind already queued user actions.
+      this.pendingOperationRefreshes.delete(key);
       const current = this.active;
       if (
         current?.scopeKind !== 'operations' ||
@@ -278,6 +286,7 @@ export class ReviewCoordinator implements vscode.Disposable {
       disposable.dispose();
     }
     this.previews.clear();
+    this.pendingOperationRefreshes.clear();
   }
   private enqueue(task: () => Promise<void>, reportFailure = false): Promise<void> {
     const result = this.operation.then(() => (this.disposed ? undefined : task()));
@@ -701,6 +710,9 @@ export class ReviewCoordinator implements vscode.Disposable {
       message.target === 'file' && message.path !== undefined
         ? [message.path]
         : scope.files.map(({ path }) => path);
+    if (paths.length > MAX_REVIEW_UNDO_FILES) {
+      throw new Error(`Automatic undo supports up to ${MAX_REVIEW_UNDO_FILES} files at a time. Undo individual files instead.`);
+    }
     if (
       message.target === 'file' &&
       scope.files.find(({ path }) => path === message.path)?.version !== message.version

@@ -3,6 +3,7 @@ import { join, relative, resolve } from 'node:path';
 import * as vscode from 'vscode';
 import { isSafeWorkspaceRelativePath } from '../../shared/validation/guards';
 import type { OperationRestoreEntry } from './reviewOperationScope';
+import { MAX_REVIEW_UNDO_FILES } from '../../shared/protocol/reviewProtocol';
 
 const JOURNAL = 'restore-recovery.json';
 const MAX_BYTES = 32 * 1024 * 1024;
@@ -74,7 +75,7 @@ export async function recoverOperationUndo(storageDir: string, root: string | un
   const journal = value as Journal;
   const canonicalRoot = await realpath(root);
   if (journal.version !== 3 || journal.root !== canonicalRoot || !Array.isArray(journal.entries) ||
-    journal.entries.length > 200 || !journal.entries.every((entry) => typeof entry === 'object' && entry !== null &&
+    journal.entries.length > MAX_REVIEW_UNDO_FILES || !journal.entries.every((entry) => typeof entry === 'object' && entry !== null &&
       isSafeWorkspaceRelativePath(entry.path) && typeof entry.before === 'string' && typeof entry.after === 'string'))
     throw new Error('An older or different-workspace recovery journal requires manual recovery.');
   for (const entry of journal.entries) {
@@ -98,6 +99,8 @@ export async function applyOperationUndo(
   try {
     if (!entries.length || entries.some((entry) => entry.status !== 'restorable' || entry.current === null || entry.after === null))
       throw new Error('No complete operation undo plan is available.');
+    if (entries.length > MAX_REVIEW_UNDO_FILES)
+      throw new Error(`Automatic undo supports up to ${MAX_REVIEW_UNDO_FILES} files at a time. Undo individual files instead.`);
     if (entries.reduce((bytes, entry) => bytes + entry.current!.length + entry.after!.length, 0) > MAX_BYTES)
       throw new Error('The selected undo exceeds the safe size limit.');
     await mkdir(storageDir, { recursive: true });

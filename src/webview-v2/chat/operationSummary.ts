@@ -1,7 +1,7 @@
 import type { ChangeFile } from '@droidvisx/chat-ui/chat/changePresentation';
 import { inlineDiffLines } from '@droidvisx/chat-ui/review/inlineDiffLines';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
-import { isConfirmedOperationFile, operationDiffWithChanges, type OperationDiffFile } from '../../shared/protocol/operationDiff';
+import { isConfirmedOperationFile, operationDiffWithChanges, type OperationDiff, type OperationDiffFile } from '../../shared/protocol/operationDiff';
 
 export interface OperationSummaryFile extends ChangeFile {
   readonly records: readonly OperationDiffFile[];
@@ -14,18 +14,29 @@ export interface OperationSummary {
   readonly delegated: boolean;
 }
 
+const fileStats = new WeakMap<OperationDiffFile, ChangeFile>();
+const changedDiffs = new WeakMap<OperationDiff, OperationDiff>();
+function changedDiff(diff: OperationDiff): OperationDiff {
+  let changed = changedDiffs.get(diff);
+  if (!changed) { changed = operationDiffWithChanges(diff); changedDiffs.set(diff, changed); }
+  return changed;
+}
 export function operationFileStats(file: OperationDiffFile): ChangeFile {
+  const cached = fileStats.get(file);
+  if (cached) return cached;
   const lines = file.patch && file.patch !== '@@' ? inlineDiffLines(file.patch) : null;
-  return { path: file.path, kind: file.kind,
+  const stats = { path: file.path, kind: file.kind,
     additions: lines ? lines.filter((line) => line.kind === 'add').length : null,
     deletions: lines ? lines.filter((line) => line.kind === 'remove').length : null };
+  fileStats.set(file, stats);
+  return stats;
 }
 
 /** Successful edit rows become the turn card; failures and commands retain their activity. */
 export function isFoldableFileOperation(item: SessionTranscriptItem): boolean {
   if (item.kind !== 'tool' || item.status !== 'completed' || item.errorMessage || item.subagent ||
     item.detailKind === 'command' || !['applypatch', 'create', 'edit', 'write'].includes(item.toolName.toLowerCase())) return false;
-  const diff = item.operationDiff && operationDiffWithChanges(item.operationDiff);
+  const diff = item.operationDiff && changedDiff(item.operationDiff);
   return diff?.status === 'ready' && diff.files.length > 0 && diff.files.every((file) => isConfirmedOperationFile(diff, file));
 }
 
@@ -36,7 +47,7 @@ export function summarizeOperations(items: readonly SessionTranscriptItem[], tur
     if (item.kind !== 'tool' || turnId !== undefined && item.turnId !== turnId) continue;
     const summary = summaries.get(item.turnId) ?? { turnId: item.turnId, files: new Map(), calls: new Set(), unconfirmed: 0, delegated: false };
     if (item.subagent !== undefined) { summary.delegated = true; summaries.set(item.turnId, summary); }
-    const diff = item.operationDiff && operationDiffWithChanges(item.operationDiff);
+    const diff = item.operationDiff && changedDiff(item.operationDiff);
     if (diff?.status !== 'ready' || diff.source !== 'tool-result') continue;
     const identity = JSON.stringify([diff.sourceSessionId ?? '', diff.callId ?? item.toolUseId]);
     if (summary.calls.has(identity)) continue;
@@ -53,4 +64,42 @@ export function summarizeOperations(items: readonly SessionTranscriptItem[], tur
     summaries.set(item.turnId, summary);
   }
   return summaries;
+}
+
+type ToolItem = Extract<SessionTranscriptItem, { kind: 'tool' }>;
+function sameEvidence(before: readonly ToolItem[], after: readonly ToolItem[]): boolean {
+  return before.length === after.length && before.every((item, index) => {
+    const next = after[index]!;
+    return item.operationDiff === next.operationDiff && item.toolUseId === next.toolUseId &&
+      (item.subagent !== undefined) === (next.subagent !== undefined);
+  });
+}
+
+/** Session-local derivation: streaming prose never reparses settled tool evidence. */
+export function createOperationSummarySelector() {
+  let previous = new Map<string, { items: readonly ToolItem[]; summary: OperationSummary | undefined }>();
+  let summaries: ReadonlyMap<string, OperationSummary> = new Map();
+  return (items: readonly SessionTranscriptItem[]): ReadonlyMap<string, OperationSummary> => {
+    const turns = new Map<string, ToolItem[]>();
+    for (const item of items) {
+      if (item.kind !== 'tool' || !item.operationDiff && item.subagent === undefined) continue;
+      let tools = turns.get(item.turnId);
+      if (!tools) { tools = []; turns.set(item.turnId, tools); }
+      tools.push(item);
+    }
+    const next = new Map<string, { items: readonly ToolItem[]; summary: OperationSummary | undefined }>();
+    const result = new Map<string, OperationSummary>();
+    for (const [turnId, tools] of turns) {
+      const cached = previous.get(turnId);
+      const entry = cached && sameEvidence(cached.items, tools) ? cached
+        : { items: tools, summary: summarizeOperations(tools, turnId).get(turnId) };
+      next.set(turnId, entry);
+      if (entry.summary) result.set(turnId, entry.summary);
+    }
+    previous = next;
+    const previousSummaries = [...summaries];
+    if (summaries.size !== result.size || [...result].some(([id, summary], index) =>
+      previousSummaries[index]?.[0] !== id || previousSummaries[index]?.[1] !== summary)) summaries = result;
+    return summaries;
+  };
 }

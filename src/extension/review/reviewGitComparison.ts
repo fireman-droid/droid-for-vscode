@@ -76,7 +76,7 @@ export async function loadReviewGitScope(
   }
   return {
     baseline: `${before}:${after}`, label, comparison: { before, after },
-    files: files.sort((a, b) => a.path.localeCompare(b.path)).slice(0, 200),
+    files: files.sort((a, b) => a.path.localeCompare(b.path)),
     ...(commitCount === undefined ? {} : { commitCount }),
   };
 }

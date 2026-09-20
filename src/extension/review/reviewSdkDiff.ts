@@ -24,7 +24,7 @@ export async function loadReviewSdkScope(
     const changeKind: ReviewFile['changeKind'] = file.status === 'added' ? 'added' :
       file.status === 'deleted' ? 'deleted' : 'modified';
     return { path: file.path, additions: file.additions, deletions: file.deletions, changeKind };
-  }).sort((left, right) => left.path.localeCompare(right.path)).slice(0, 200);
+  }).sort((left, right) => left.path.localeCompare(right.path));
   return {
     baseline: `${before}:${after}`,
     label: kind === 'branch' ? `${report.baseBranch} merge-base → HEAD` : 'HEAD → working tree',

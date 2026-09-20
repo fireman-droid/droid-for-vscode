@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, CheckCheck, ChevronLeft, ChevronRight, ExternalLink, GitCompareArrows, PanelLeft, RefreshCw } from 'lucide-react';
-import { REVIEW_SCOPE_KINDS, type ReviewScopeKind } from '../../shared/protocol/reviewProtocol';
+import { MAX_REVIEW_UNDO_FILES, REVIEW_SCOPE_KINDS, type ReviewScopeKind } from '../../shared/protocol/reviewProtocol';
 import { Button } from '../ui/button';
 import { DroidLoading } from '../ui/droid-motion';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/selection';
@@ -29,24 +29,30 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
   const operationFile = operation?.files.find((entry) => entry.path === (operationPath ?? target?.operationPath)) ?? operation?.files[0];
   const path = operationFile?.path ?? current?.path ?? null;
   const patch = operationFile?.patch ?? file?.patch ?? '';
-  const files = operation ? operation.files.map((entry) => ({
+  const files = useMemo(() => operation ? operation.files.map((entry) => ({
     path: entry.path, additions: null, deletions: null, status: 'open-only' as const, version: 'operation', restorable: false,
-  })) : review?.files ?? [];
+  })) : review?.files ?? [], [operation, review?.files]);
   const additions = files.reduce((sum, entry) => sum + (entry.additions ?? 0), 0);
   const deletions = files.reduce((sum, entry) => sum + (entry.deletions ?? 0), 0);
   const completeCounts = files.every((entry) => entry.additions !== null && entry.deletions !== null);
   const operationIndex = operationFile ? operation!.files.indexOf(operationFile) : -1;
+  const selectFile = useCallback((value: string) => {
+    if (operation) setOperationPath(value); else actions.onSelectFile(value);
+  }, [operation, actions.onSelectFile]);
+  useLayoutEffect(() => {
+    scroll.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [path, review?.reviewScopeId, operation?.callId]);
   const navigateFile = (direction: 'previous' | 'next') => {
     if (operation) {
       const next = operation.files[operationIndex + (direction === 'next' ? 1 : -1)];
       if (next) setOperationPath(next.path);
     } else actions.onNavigate(direction);
-    if (scroll.current) scroll.current.scrollTop = 0;
   };
   const valid = target?.valid === true;
   const writing = review?.lifecycle === 'writing';
   const operationOnly = target?.operation != null;
   const operationsScope = review?.scopeKind === 'operations';
+  const turnUndoTooLarge = operationsScope && files.length > MAX_REVIEW_UNDO_FILES;
   const missingSnapshot = !operationOnly && !operationsScope && review?.recordedOnly === true;
   const readOnly = operationOnly || missingSnapshot || current?.status === 'open-only';
   const readOnlyMessage = missingSnapshot ? 'Saved operation excerpts · full turn snapshot unavailable'
@@ -64,7 +70,8 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
     const top = container.getBoundingClientRect().top;
     const next = direction > 0 ? hunks.find((entry) => entry.getBoundingClientRect().top > top + 8)
       : hunks.reverse().find((entry) => entry.getBoundingClientRect().top < top - 8);
-    if (next) container.scrollBy({ top: next.getBoundingClientRect().top - top, behavior: 'smooth' });
+    if (next) container.scrollBy({ top: next.getBoundingClientRect().top - top,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   };
   return <main className="review-workbench">
     <header className="review-topbar">
@@ -97,10 +104,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
         ? <p className="review-notice" role="status">{flow.operation.message}</p> : null}
       {review?.message && !target?.operation ? <p className="review-notice" role="status">{review.message}</p> : null}
       <div className={`review-body ${showFiles ? '' : 'files-hidden'}`}>
-        {showFiles ? <ReviewFiles files={files} selected={path} onSelect={(value) => {
-          if (operation) setOperationPath(value); else actions.onSelectFile(value);
-          scroll.current?.scrollTo({ top: 0 });
-        }} /> : null}
+        {showFiles ? <ReviewFiles files={files} selected={path} onSelect={selectFile} /> : null}
         <section className="review-code">
           <div className="review-file-toolbar">
             <Button variant="ghost" size="icon-sm" className="review-files-toggle" aria-label="Toggle files" aria-pressed={showFiles} onClick={() => setShowFiles(!showFiles)}><PanelLeft /></Button>
@@ -148,21 +152,26 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
               : 'Preview limit reached. Open Native Diff to read the complete comparison.'}</p> : null}
           </div>
           <footer className="review-bottom">
+            <div className="review-navigation">
             <Button variant="ghost" size="icon-sm" aria-label="Previous file" disabled={operation ? operationIndex <= 0 : !review || review.currentIndex === null || review.currentIndex === 0} onClick={() => navigateFile('previous')}><ChevronLeft /></Button>
             <Button variant="ghost" size="icon-sm" aria-label="Next file" disabled={operation ? operationIndex >= operation.files.length - 1 : !review || review.currentIndex === null || review.currentIndex >= review.files.length - 1} onClick={() => navigateFile('next')}><ChevronRight /></Button>
             <span className="review-muted min-w-0 truncate" role="status" title={readOnly ? readOnlyMessage : undefined}>{readOnly ? readOnlyMessage
               : writing ? 'Live changes · review actions wait for completion'
+              : turnUndoTooLarge ? `Over ${MAX_REVIEW_UNDO_FILES} files · undo files individually`
               : operationsScope && current && !current.restorable ? 'Undo unavailable: complete reversible evidence is required'
               : current?.status === 'reviewed' ? 'Reviewed' : ''}</span>
-            <span className="review-top-spacer" />
+            </div>
+            <div className="review-actions">
             {!readOnly && current && operationsScope ? <>
               <Button variant="ghost" size="sm" disabled={writing || flow.scopePending || flow.fileRefreshing || !!flow.fileError || !current?.restorable} onClick={() => actions.onPreviewRestore('file')}>Undo file operations…</Button>
-              <Button variant="ghost" size="sm" disabled={writing || flow.scopePending || !review.files.length || !review.files.every((entry) => entry.restorable)} onClick={() => actions.onPreviewRestore('turn')}>Undo turn operations…</Button>
+              <Button variant="ghost" size="sm" title={turnUndoTooLarge ? `Turn undo supports up to ${MAX_REVIEW_UNDO_FILES} files. Undo individual files instead.` : undefined}
+                disabled={writing || flow.scopePending || turnUndoTooLarge || !review.files.length || !review.files.every((entry) => entry.restorable)} onClick={() => actions.onPreviewRestore('turn')}>Undo turn operations…</Button>
             </> : null}
             {!readOnly && current ? <>
               <Button variant="outline" size="sm" disabled={!canMark} onClick={() => actions.onMarkReviewed(false)}><CheckCheck />Reviewed</Button>
               <Button size="sm" disabled={!canMark} onClick={() => actions.onMarkReviewed(true)}>Mark &amp; next</Button>
             </> : null}
+            </div>
           </footer>
         </section>
       </div>

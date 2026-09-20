@@ -63,7 +63,12 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     return () => observer.disconnect();
   }, []);
   const scrolling = useTranscriptScroll(viewport, content, conversationId, sendSignal, reportLayout, clearBottomJump);
-  const lastQuestionId = [...messages].reverse().find((message) => message.role === 'user')?.id;
+  const lastQuestionId = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index].role === 'user') return messages[index].id;
+    }
+    return undefined;
+  }, [messages]);
   const previousQuestion = useRef(lastQuestionId);
   useLayoutEffect(() => {
     // Queueing/editing also changes sendSignal. Follow only when a new

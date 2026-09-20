@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown } from 'lucide-react';
 import { ProcessPresentationProvider } from './processPresentation';
@@ -24,7 +24,7 @@ export function ReadOnlyTranscriptView({ messages, truncated = false, renderMess
     return () => observer.disconnect();
   }, [truncated]);
   const descriptors = messages;
-  const ids = messages.map((message) => message.id);
+  const ids = useMemo(() => messages.map((message) => message.id), [messages]);
   const getScroller = useCallback(() => viewport.current, []);
   const virtualizer = useVirtualizer({
     count: descriptors.length, getScrollElement: getScroller, getItemKey: (index) => ids[index],

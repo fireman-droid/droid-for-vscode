@@ -1,8 +1,9 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { act, cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterAll, afterEach, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { ReviewApp } from './ReviewApp';
 import { ReviewCoordinator } from '../../extension/review/reviewCoordinator';
 import { createTurnSnapshotStore, type TurnSnapshotStore } from '../../extension/changes/turnSnapshots';
@@ -10,6 +11,7 @@ import type { ChangeStatsPersistence } from '../../extension/changes/changeStats
 import { parseReviewWebviewMessage, type ReviewScopeState } from '../../shared/protocol/reviewProtocol';
 import { parseReviewPanelRequest } from '../../shared/protocol/reviewPanelProtocol';
 import { isId, isSafeWorkspaceRelativePath } from '../../shared/validation/guards';
+import type { RecordedOperation } from '../../extension/review/reviewOperationScope';
 
 // Keep Host imports in Node mode; provide a DOM only for the React workbench.
 const environment = await vi.hoisted(async () => {
@@ -18,6 +20,14 @@ const environment = await vi.hoisted(async () => {
 });
 afterAll(() => environment.teardown(globalThis));
 configure({ asyncUtilTimeout: 5_000 });
+beforeEach(() => {
+  // This Node/Host suite creates its DOM after setupFiles, so install its browser APIs here.
+  HTMLElement.prototype.scrollTo = vi.fn();
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+  HTMLElement.prototype.hasPointerCapture = () => false;
+  HTMLElement.prototype.setPointerCapture = () => {};
+  HTMLElement.prototype.releasePointerCapture = () => {};
+});
 
 vi.mock('vscode', () => {
   const disposable = () => ({ dispose() {} });
@@ -36,10 +46,15 @@ afterEach(async () => {
   await Promise.allSettled(pending);
   coordinator?.dispose();
   await snapshots?.dispose();
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  for (const root of roots.splice(0)) {
+    if (resolve(dirname(root)) !== resolve(tmpdir()) || !basename(root).startsWith('dvx-review-flow-'))
+      throw new Error('Unexpected review test directory.');
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
-it('round-trips real snapshot Diff, mark-and-next and guarded restore through the workbench', async () => {
+it('round-trips snapshot review and guarded confirmed-operation undo through Host, UI and real files', async () => {
+  const user = userEvent.setup();
   const directory = await mkdtemp(join(tmpdir(), 'dvx-review-flow-'));
   roots.push(directory);
   const root = join(directory, 'workspace');
@@ -59,6 +74,13 @@ it('round-trips real snapshot Diff, mark-and-next and guarded restore through th
   await writeFile(a, 'changed a\n');
   await writeFile(b, 'changed b\n');
   expect(await snapshots.capture(turn, 'after')).toBeDefined();
+  const operations: RecordedOperation[] = ['a', 'b'].map((name, index) => ({
+    sequence: index + 1, sessionId: 's1', toolUseId: `edit-${name}`, toolName: 'ApplyPatch',
+    operationDiff: { status: 'ready', source: 'tool-result', files: [{
+      path: `${name}.ts`, kind: 'modified', outcome: 'applied', reversible: true,
+      patch: `@@ -1 +1 @@\n-original ${name}\n+changed ${name}`,
+    }] },
+  }));
   let state: ReviewScopeState | undefined;
   let sequence = 0;
   const deliver = (message: unknown) => act(() => { window.dispatchEvent(new MessageEvent('message', { data: message })); });
@@ -67,6 +89,7 @@ it('round-trips real snapshot Diff, mark-and-next and guarded restore through th
     openSelectionInEditor: false,
     fileDiff: { openDiff: async () => 'opened-diff' },
     readCanonicalTurnFiles: () => ['a.ts', 'b.ts'].map((path) => ({ path, additions: 1, deletions: 1 })),
+    readTurnOperations: () => operations,
     readWorkspaceFiles: async () => undefined, readBranchDiff: async () => undefined,
     publish(message) {
       if (message.type === 'review.state') state = message.state;
@@ -98,22 +121,34 @@ it('round-trips real snapshot Diff, mark-and-next and guarded restore through th
   await screen.findByText('changed b');
   expect(state?.reviewedCount).toBe(1);
   expect(state?.currentIndex).toBe(1);
-  fireEvent.click(screen.getByRole('button', { name: 'Restore file…' }));
+  expect(screen.queryByRole('button', { name: 'Undo file operations…' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Undo turn operations…' })).toBeNull();
+  await user.click(screen.getByRole('combobox', { name: 'Comparison scope' }));
+  await user.click(screen.getByRole('option', { name: 'AI operations', exact: true }));
+  await screen.findByText('changed a');
+  expect(state?.scopeKind).toBe('operations');
+  await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Mark & next' }).disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button', { name: 'Mark & next' }));
+  await screen.findByText('changed b');
+  expect(state?.reviewedCount).toBe(1);
+  expect(state?.currentIndex).toBe(1);
+  await writeFile(b, 'changed b\nmanual note\n');
+  fireEvent.click(screen.getByRole('button', { name: 'Undo file operations…' }));
   await screen.findByRole('button', { name: 'Confirm restore' });
   await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Confirm restore' }).disabled).toBe(false));
   fireEvent.click(screen.getByRole('button', { name: 'Confirm restore' }));
-  await screen.findByText('File restored to its before-turn state.');
-  expect(await readFile(b, 'utf8')).toBe('original b\n');
+  await screen.findByText('The confirmed file operation was undone.');
+  expect(await readFile(b, 'utf8')).toBe('original b\nmanual note\n');
   expect(await readFile(a, 'utf8')).toBe('changed a\n');
-  // The displayed comparison remains frozen after the worktree restore.
+  // Recorded evidence stays readable after undo; unrelated manual text is preserved.
   await screen.findByText('changed b');
   fireEvent.click(screen.getByRole('button', { name: 'Previous file' }));
   await screen.findByText('changed a');
-  fireEvent.click(screen.getByRole('button', { name: 'Restore file…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Undo file operations…' }));
   await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Confirm restore' }).disabled).toBe(false));
   await writeFile(a, 'newer user edit\n');
   fireEvent.click(screen.getByRole('button', { name: 'Confirm restore' }));
-  await screen.findByText('Restore stopped because 1 file(s) changed or are unavailable.');
+  await screen.findByText('Undo stopped because 1 file(s) changed or are unavailable. Preview again.');
   expect(await readFile(a, 'utf8')).toBe('newer user edit\n');
   await coordinator.replay('s1');
   await Promise.all(pending);
