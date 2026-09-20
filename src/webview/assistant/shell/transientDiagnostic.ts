@@ -1,11 +1,11 @@
 import type { HostToWebviewMessage } from '../../../shared/bridgeMessages';
-import { isTransientRuntimeDiagnostic } from '../../../shared/protocol/transientDiagnostics';
+import { isTransientRuntimeDiagnostic, type TransientDiagnosticCode } from '../../../shared/protocol/transientDiagnostics';
 
 export const TRANSIENT_NOTICE_TIMEOUT_MS = 4_000;
 export type TransientDiagnostic = Extract<
   HostToWebviewMessage,
   { type: 'runtime.diagnostic' }
-> & { readonly code: 'file-not-ready' };
+> & { readonly code: TransientDiagnosticCode };
 
 export type TransientNoticeLifecycleMessage =
   | TransientDiagnostic

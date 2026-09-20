@@ -76,7 +76,7 @@ export function getWebviewHtml(
   <meta charset="UTF-8">
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}'; font-src ${webview.cspSource}; connect-src 'none';"
+    content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}'; worker-src blob:; font-src ${webview.cspSource}; connect-src 'none';"
   >
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DroidVisX</title>

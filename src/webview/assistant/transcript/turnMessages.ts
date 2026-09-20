@@ -1,4 +1,5 @@
 import { MAX_IMAGES_PER_TURN } from '../../../shared/protocol/bounds';
+import { TURN_SEND_REJECTED_CODE } from '../../../shared/protocol/turns';
 import { isTransientRuntimeDiagnostic } from '../../../shared/protocol/transientDiagnostics';
 import { stableTranscriptId } from '../../../shared/transcript/hostTranscriptState';
 import { reconcileChangesTranscript } from '../changes/storeChanges';
@@ -262,7 +263,8 @@ export function reduceTurnsMessage(
       );
 
     case 'turn.error':
-      if (event.sessionId !== state.sessionId) {
+      if (event.sessionId !== state.sessionId ||
+        (event.code === TURN_SEND_REJECTED_CODE && !matchesTurn(state, event.sessionId, event.turnId))) {
         return advance(state, event.sequence);
       }
       const turnErrorBase: AssistantWebviewState = {

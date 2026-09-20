@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
+import { UiEnvironmentProvider } from '@droidvisx/chat-ui/environment';
 import type { AssistantWebviewState } from '../../webview/assistant/state/types';
 import { initialAssistantWebviewState } from '../../webview/assistant/state/initialState';
 import { useComposerFlow } from '../../webview/assistant/composer/useComposerFlow';
@@ -12,8 +13,11 @@ vi.mock('../../webview/assistant/attachments/attachmentIngress', async (original
   ...await original<typeof import('../../webview/assistant/attachments/attachmentIngress')>(),
   prepareAttachment: vi.fn(),
 }));
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.mocked(prepareAttachment).mockReset(); });
 const port = { postMessage: vi.fn(), getState: () => ({}), setState: vi.fn() };
+// Layout telemetry is independent of the user intents these regressions exercise.
+const intents = () => port.postMessage.mock.calls.map(([message]) => message)
+  .filter((message) => message.type !== 'webview.diagnostic');
 const routes = { blocked: false, compact: vi.fn(), navigate: vi.fn(), openBtw: vi.fn(), askBtw: vi.fn() };
 const onFileSearch = vi.fn();
 const state: AssistantWebviewState = {
@@ -21,8 +25,11 @@ const state: AssistantWebviewState = {
 };
 function Harness({ current = state }: { current?: AssistantWebviewState }) {
   const flow = useComposerFlow(port, current, vi.fn(), routes);
-  return <Composer key={current.conversationId} state={current} port={port} flow={flow} blocked={false} renderInputRow={(input, action) => <>{input}{action}</>}
-    onFileSearch={onFileSearch} onNavigate={routes.navigate} onBtwOpen={routes.openBtw} />;
+  // Match the environment supplied by the production Webview mount.
+  return <UiEnvironmentProvider value={{ assistantName: 'Droid', copyText: async () => undefined }}>
+    <Composer key={current.conversationId} state={current} port={port} flow={flow} blocked={false} renderInputRow={(input, action) => <>{input}{action}</>}
+      onFileSearch={onFileSearch} onNavigate={routes.navigate} onBtwOpen={routes.openBtw} />
+  </UiEnvironmentProvider>;
 }
 
 it('keeps Slash choices local, filters unsupported entries, and does not select or send during IME composition', async () => {
@@ -42,10 +49,10 @@ it('keeps Slash choices local, filters unsupported entries, and does not select 
   fireEvent.change(input, { target: { value: '/front' } });
   fireEvent.keyDown(input, { key: 'Enter', isComposing: true, keyCode: 229 });
   expect((input as HTMLTextAreaElement).value).toBe('/front');
-  expect(port.postMessage).not.toHaveBeenCalled();
+  expect(intents()).toEqual([]);
   await user.keyboard('{Enter}');
   expect((input as HTMLTextAreaElement).value).toBe('Use the "frontend-design" skill: ');
-  expect(port.postMessage).not.toHaveBeenCalled();
+  expect(intents()).toEqual([]);
   fireEvent.change(input, { target: { value: '/model' } });
   await user.keyboard('{Tab}');
   expect(routes.navigate).toHaveBeenCalledExactlyOnceWith('model');
@@ -56,7 +63,7 @@ it('keeps Slash choices local, filters unsupported entries, and does not select 
   expect((input as HTMLTextAreaElement).value).toBe('/compact ');
   await user.keyboard('{Enter}');
   expect(routes.compact).toHaveBeenCalledOnce();
-  expect(port.postMessage).not.toHaveBeenCalled();
+  expect(intents()).toEqual([]);
 });
 
 it('correlates mention results and attaches the selected path without sending the draft', async () => {
@@ -74,7 +81,7 @@ it('correlates mention results and attaches the selected path without sending th
   const second = onFileSearch.mock.calls.at(-1)![0];
   view.rerender(<Harness current={{ ...state, fileSearch: { requestId: second, status: 'ok', files: ['docs/notes.md', 'docs/notes-2.md'] } }} />);
   await user.keyboard('{ArrowDown}{Enter}');
-  expect(port.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'attachment.addPath', sessionId: 'session-1', path: 'docs/notes-2.md' });
+  expect(intents()).toEqual([{ type: 'attachment.addPath', sessionId: 'session-1', path: 'docs/notes-2.md' }]);
   expect((input as HTMLTextAreaElement).value).toBe('');
   expect(screen.queryByRole('listbox')).toBeNull();
 });
@@ -88,9 +95,9 @@ it.each(['send', 'conversation switch'])('stages each paste once in the composer
   const file = new File(['image'], 'shot.png', { type: 'image/png' });
   const paste = { clipboardData: { files: [file], getData: () => 'keep native text' } };
   expect(fireEvent.paste(input, paste)).toBe(true);
-  await waitFor(() => expect(port.postMessage).toHaveBeenCalledExactlyOnceWith({
+  await waitFor(() => expect(intents()).toEqual([{
     type: 'attachment.addImage', sessionId: 'session-1', name: 'shot.png', mediaType: 'image/png', dataBase64: 'aW1hZ2U=',
-  }));
+  }]));
   fireEvent.drop(input, { dataTransfer: { files: [file], getData: () => '' } });
   if (reset === 'send') {
     fireEvent.change(input, { target: { value: 'Send before the file has finished loading' } });
@@ -121,4 +128,14 @@ it('removes quoted context without changing the message body', async () => {
   expect((input as HTMLTextAreaElement).value).toBe('My follow-up question');
   await user.click(screen.getByRole('button', { name: 'Send' }));
   expect(port.postMessage).toHaveBeenCalledWith({ type: 'turn.send', sessionId: 'session-1', turnId: expect.any(String), text: 'My follow-up question' });
+});
+
+it('keeps Retry Stop clickable while confirmation is pending and still queues Enter', async () => {
+  const user = userEvent.setup();
+  render(<Harness current={{ ...state, turn: { turnId: 'turn-1', status: 'stopping' } }} />);
+  await user.click(screen.getByRole('button', { name: 'Retry Stop' }));
+  expect(port.postMessage).toHaveBeenCalledWith({ type: 'turn.stop', sessionId: 'session-1', turnId: 'turn-1' });
+  await user.type(screen.getByRole('textbox', { name: 'Message Droid' }), 'After stopping{Enter}');
+  expect(port.postMessage).toHaveBeenCalledWith({ type: 'queue.add', sessionId: 'session-1', queueId: expect.any(String), text: 'After stopping' });
+  expect(port.postMessage.mock.calls.some(([message]) => message.type === 'turn.send')).toBe(false);
 });

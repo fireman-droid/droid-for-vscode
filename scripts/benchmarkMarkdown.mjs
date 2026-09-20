@@ -1,5 +1,5 @@
 // Local-only production-renderer benchmark. No Host, Runtime, model, or remote content.
-// Run: node scripts/benchmarkMarkdown.mjs --baseline=eb60919 [--runs=3] [--chrome=C:/path/chrome.exe]
+// Run: node scripts/benchmarkMarkdown.mjs --baseline=74c3ea6 [--runs=3] [--chrome=C:/path/chrome.exe]
 import { build } from 'esbuild';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -9,19 +9,24 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createMarkdownWorkerBuild } from '../packages/chat-ui/scripts/markdownWorkerBuild.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const argument = (name) => process.argv.find((value) => value.startsWith(`--${name}=`))?.split('=').slice(1).join('=');
 const runs = Number(argument('runs') ?? 3);
 const sizes = argument('bytes') ? [Number(argument('bytes'))] : [32768, 131072];
-const baselineRef = argument('baseline') ?? 'eb60919';
+const baselineRef = argument('baseline') ?? '74c3ea6';
 const chromePath = argument('chrome') ?? path.join(process.env.LOCALAPPDATA, 'Google/Chrome/Application/chrome.exe');
 const temporary = await mkdtemp(path.join(tmpdir(), 'droidvisx-markdown-benchmark-'));
 const sourcePath = path.join(repository, 'packages/chat-ui/src/content/Markdown.tsx');
 const baseline = execFileSync('git', ['show', `${baselineRef}:packages/chat-ui/src/content/Markdown.tsx`], { cwd: repository, encoding: 'utf8' });
 const current = await readFile(sourcePath, 'utf8');
 const sourceHash = (text) => createHash('sha256').update(text).digest('hex');
+const packageSources = [...new Set(execFileSync('git', ['ls-files', '-co', '--exclude-standard', 'packages/chat-ui/src'],
+  { cwd: repository, encoding: 'utf8' }).trim().split(/\r?\n/u))].sort();
+const currentPackageSourcesHash = sourceHash(JSON.stringify(await Promise.all(packageSources.map(async (file) =>
+  [file, sourceHash(await readFile(path.join(repository, file), 'utf8'))]))));
 await writeFile(path.join(temporary, 'Markdown.HEAD.tsx'), baseline);
 await writeFile(path.join(temporary, 'Markdown.current.tsx'), current);
 await mkdir(path.join(temporary, 'site'));
@@ -30,8 +35,11 @@ const metadata = {
   head: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repository, encoding: 'utf8' }).trim(),
   baselineRef, baselineCommit: execFileSync('git', ['rev-parse', baselineRef], { cwd: repository, encoding: 'utf8' }).trim(),
   baselineHash: sourceHash(baseline), currentHash: sourceHash(current),
+  baselinePackageTree: execFileSync('git', ['rev-parse', `${baselineRef}:packages/chat-ui/src`], { cwd: repository, encoding: 'utf8' }).trim(),
+  currentPackageSourcesHash,
+  lockHash: sourceHash(await readFile(path.join(repository, 'pnpm-lock.yaml'), 'utf8')),
   node: process.version, chromePath, viewport: { width: 1000, height: 800 },
-  fixture: 'ASCII mixed Markdown; 1024 bytes per 50ms; final streaming=false after one further 50ms; 640px content width',
+  fixture: 'ASCII mixed Markdown; static uses fresh component mount; stream 1024 bytes per 50ms and final streaming=false after one further 50ms; final parse and DOM mount included; 640px content width',
   runs, temporary,
 };
 const tailwind = path.join(path.dirname(require.resolve('@tailwindcss/cli/package.json')), 'dist/index.mjs');
@@ -44,21 +52,22 @@ await build({ entryPoints: [path.join(temporary, 'theme.css')], outfile: path.jo
     }));
   } }], logLevel: 'silent' });
 for (const variant of ['baseline', 'current']) {
+  const worker = createMarkdownWorkerBuild();
   await build({ absWorkingDir: repository, entryPoints: ['src/webview-v2/dev/markdownBenchmark.tsx'],
     outfile: path.join(site, `${variant}.js`), bundle: true, minify: true, platform: 'browser', format: 'iife',
     jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' }, logLevel: 'silent',
     plugins: [{ name: 'isolated-markdown-source', setup(builder) {
-      builder.onLoad({ filter: /packages[\\/]chat-ui[\\/]src[\\/]content[\\/]Markdown\.tsx$/ }, async () => ({
-        contents: await readFile(path.join(temporary, variant === 'baseline' ? 'Markdown.HEAD.tsx' : 'Markdown.current.tsx'), 'utf8'),
-        loader: 'tsx', resolveDir: path.dirname(sourcePath),
+      if (variant === 'baseline') builder.onLoad({ filter: /packages[\\/]chat-ui[\\/]src[\\/].*\.(?:ts|tsx)$/ }, (args) => ({
+        contents: execFileSync('git', ['show', `${baselineRef}:${path.relative(repository, args.path).replaceAll('\\', '/')}`], { cwd: repository, encoding: 'utf8' }),
+        loader: args.path.endsWith('.tsx') ? 'tsx' : 'ts', resolveDir: path.dirname(args.path),
       }));
-    } }],
+    } }, worker.esbuild],
   });
 }
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, 'http://localhost');
   const filename = path.basename(url.pathname);
-  response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'none'; img-src 'none'");
+  response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; worker-src blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'none'; img-src 'none'");
   if (filename === 'baseline' || filename === 'current') {
     response.setHeader('Content-Type', 'text/html');
     response.end(`<!doctype html><html data-theme="dark"><meta charset="utf-8"><link rel="stylesheet" href="/theme.css"><style>body{margin:0;background:var(--surface)}#root{width:640px;margin:0 auto;padding:16px}</style><div id="root" class="agent-chat-ui" data-theme="dark"></div><script src="/${filename}.js"></script></html>`);
@@ -100,7 +109,11 @@ socket.addEventListener('message', ({ data }) => {
     if (message.error) waiter?.reject(new Error(message.error.message));
     else waiter?.resolve(message.result);
   }
-  if (message.method === 'Runtime.exceptionThrown') failures.push(message.params.exceptionDetails.text);
+  if (message.method === 'Runtime.exceptionThrown') {
+    const detail = message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text;
+    failures.push(detail);
+    console.error(detail);
+  }
 });
 function command(method, params = {}, sessionId) {
   const id = ++sequence;
@@ -109,6 +122,10 @@ function command(method, params = {}, sessionId) {
     socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
   });
 }
+socket.addEventListener('close', () => {
+  for (const waiter of pending.values()) waiter.reject(new Error('Dedicated Chrome connection closed'));
+  pending.clear();
+});
 const results = [];
 try {
   metadata.browser = await command('Browser.getVersion');
@@ -135,10 +152,11 @@ try {
     await command('Target.closeTarget', { targetId });
   }
   for (const bytes of sizes) {
-    for (const variant of ['baseline', 'current']) await measure(variant, bytes, 'static', 0);
     for (let repetition = 1; repetition <= runs; repetition += 1) {
       const variants = repetition % 2 === 1 ? ['baseline', 'current'] : ['current', 'baseline'];
-      for (const variant of variants) await measure(variant, bytes, 'stream', repetition);
+      for (const mode of ['static', 'stream']) {
+        for (const variant of variants) await measure(variant, bytes, mode, repetition);
+      }
     }
   }
   for (const result of results) {

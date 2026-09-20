@@ -96,6 +96,7 @@ export function useTranscriptScroll(
       const bottom = Math.max(0, element.scrollHeight - element.clientHeight);
       if (selecting()) stopFollowing();
       const readTarget = navigation.current;
+      const waitingForMarkdown = readTarget !== null && column.querySelector('[data-markdown-pending]') !== null;
       if (readTarget) compensateNavigation();
       const target = readTarget ? readTarget() : follow.current.following ? bottom : undefined;
       if (target !== undefined) {
@@ -111,7 +112,12 @@ export function useTranscriptScroll(
           // Chromium can clamp/quantize scrollTop before the integer geometry
           // target is reached. A blocked write must not keep an idle RAF alive.
           if (Math.abs(element.scrollTop - previousTop) > 0.01) schedule();
-          else { navigation.current = null; navigationTop.current = null; }
+          else if (!waitingForMarkdown) { navigation.current = null; navigationTop.current = null; }
+        } else if (waitingForMarkdown) {
+          // Worker results and incremental DOM mounts can arrive after the
+          // usual three frames. Keep this target until their layout settles;
+          // observers wake it, so waiting does not spin an animation loop.
+          settledFrames = 0;
         } else if (readTarget && ++settledFrames < 3) {
           // Let newly mounted virtual rows report their final measurements.
           schedule();
@@ -217,6 +223,8 @@ export function useTranscriptScroll(
     });
     observer.observe(element);
     observer.observe(column);
+    const pendingMarkdown = new MutationObserver(() => { if (navigation.current !== null) schedule(); });
+    pendingMarkdown.observe(column, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-markdown-pending'] });
     element.addEventListener('scroll', onScroll, { passive: true });
     element.addEventListener('scrollend', onScrollEnd, { passive: true });
     selectionRoot?.addEventListener('wheel', onWheel, { passive: true, capture: true });
@@ -229,6 +237,7 @@ export function useTranscriptScroll(
       scheduleUpdate.current = () => {};
       if (diagnosticTimer !== undefined) clearTimeout(diagnosticTimer);
       observer.disconnect();
+      pendingMarkdown.disconnect();
       element.removeEventListener('scroll', onScroll);
       element.removeEventListener('scrollend', onScrollEnd);
       selectionRoot?.removeEventListener('wheel', onWheel, true);

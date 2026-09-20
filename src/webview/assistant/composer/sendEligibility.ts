@@ -10,6 +10,7 @@ export interface SendEligibility {
   readonly interactionCount: number;
   readonly queuedCount: number;
   readonly queueEditing: boolean;
+  readonly settingsUpdating?: boolean;
 }
 
 /** A paused queue must stay ordered; a new prompt cannot overtake it. */
@@ -32,6 +33,7 @@ export function canSendMessage(
   if (
     eligibility.connectionStatus !== 'connected' ||
     eligibility.sessionId === null ||
+    eligibility.settingsUpdating === true ||
     additionallyDisabled
   ) {
     return false;

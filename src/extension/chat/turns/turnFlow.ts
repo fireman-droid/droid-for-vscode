@@ -28,6 +28,9 @@ import {
   thinkingSegmentKey,
 } from './turnActivityState';
 import type { TurnFlowPort } from './turnFlowPort';
+import { CATALOG_ERROR_MESSAGE } from '../sessions/sessionCatalog';
+import { STOP_TIMEOUT_MESSAGE } from './turnWatchdog';
+import { reportSendRejection } from './turnSendFeedback';
 
 export const TURN_FAILURE_MESSAGE =
   'Droid could not complete this turn. Retry to start a fresh session.';
@@ -68,6 +71,7 @@ export function handleSend(
     settingsUpdateInProgress: ctl.metadata.settingsUpdate !== null,
   });
   if (eligibility.kind !== 'eligible') {
+    if (kind === 'send') reportSendRejection(ctl, sessionId, turnId, eligibility.reason);
     return;
   }
   const runtime = eligibility.runtime;
@@ -596,10 +600,15 @@ export function handleStop(ctl: TurnFlowPort, sessionId: string, turnId: string)
     sessionId !== ctl.sessionState.sessionId ||
     ctl.turnState.turn?.turnId !== turnId ||
     (ctl.turnState.turn.status !== 'submitting' &&
-      ctl.turnState.turn.status !== 'streaming')
+      ctl.turnState.turn.status !== 'streaming' &&
+      ctl.turnState.turn.status !== 'stopping')
   ) {
     return;
   }
+
+  const turnGeneration = ctl.turnState.turnGeneration;
+  if (ctl.turnState.stopRequestGeneration === turnGeneration) return;
+  ctl.turnState.stopRequestGeneration = turnGeneration;
 
   // A recovery turn runs daemon-side with no locally streaming turn;
   // interrupt() would no-op there, interruptSession() reaches the
@@ -613,12 +622,20 @@ export function handleStop(ctl: TurnFlowPort, sessionId: string, turnId: string)
   setTurnStatus(ctl, sessionId, turnId, 'stopping');
   ctl.effects.markStopRequested(sessionId, turnId); // stop-settle deadline (#32)
   const runtimeGeneration = ctl.sessionState.runtimeGeneration;
-  const turnGeneration = ctl.turnState.turnGeneration;
   void interruptTurn().catch(() => {
     if (
       isCurrentTurn(ctl, runtime, runtimeGeneration, turnGeneration, sessionId, turnId)
     ) {
-      failTurn(ctl, sessionId, turnId, 'runtime-interrupt-failed');
+      // Rejection does not establish that the backend stopped. Keep the
+      // execution lock and watchdog until the stream releases ownership.
+      ctl.emit({
+        type: 'runtime.diagnostic', sessionId, turnId, severity: 'warning',
+        code: 'turn-stop-unconfirmed', message: STOP_TIMEOUT_MESSAGE,
+      });
+    }
+  }).finally(() => {
+    if (ctl.turnState.stopRequestGeneration === turnGeneration) {
+      ctl.turnState.stopRequestGeneration = null;
     }
   });
 }
@@ -641,6 +658,7 @@ export function handleRetry(ctl: TurnFlowPort, sessionId: string | null): void {
   }
   if (
     ctl.catalogState.sessions.status === 'idle' ||
+    ctl.catalogState.sessions.status === 'error' ||
     ctl.catalogState.catalogCwd !== workspace.cwd
   ) {
     ctl.sessionState.sessionOperationInProgress = true;
@@ -683,8 +701,13 @@ export async function retryAfterWorkspaceBecomesAvailable(
     return;
   }
   ctl.catalogState.sessions = catalog;
+  if (catalog.status === 'error') {
+    ctl.sessionState.connection = { status: 'unavailable', message: CATALOG_ERROR_MESSAGE };
+    ctl.emitSnapshot();
+    return;
+  }
   ctl.effects.seedBackgroundRunning(cwd);
-  const selectedSessionId = ctl.recoveryStore.getSelectedSessionId();
+  const selectedSessionId = ctl.sessionState.sessionId ?? ctl.recoveryStore.getSelectedSessionId();
   await ctl.effects.replaceRuntime(
     selectedSessionId !== null && ctl.effects.hasCatalogSession(selectedSessionId, cwd)
       ? {

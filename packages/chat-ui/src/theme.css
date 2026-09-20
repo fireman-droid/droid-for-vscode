@@ -13,6 +13,7 @@
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 @layer components {
+  [data-markdown-row]:has([data-markdown-pending]) { min-height: var(--markdown-row-height); }
   .markdown-prose {
     color: var(--ink);
     font-size: 13px;

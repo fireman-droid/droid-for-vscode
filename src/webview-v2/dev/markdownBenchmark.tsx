@@ -2,7 +2,7 @@ import { useLayoutEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Markdown } from '../../../packages/chat-ui/src/content/Markdown';
 
-type Payload = { text: string; streaming: boolean; finished: boolean };
+type Payload = { text: string; streaming: boolean; finished: boolean; mount: number };
 type LongTask = { duration: number; startTime: number };
 
 function fixture(bytes: number) {
@@ -41,10 +41,10 @@ function summarize(values: readonly number[]) {
 let update: (payload: Payload) => void;
 let committed: () => void = () => {};
 function BenchmarkView() {
-  const [payload, setPayload] = useState<Payload>({ text: '', streaming: false, finished: false });
+  const [payload, setPayload] = useState<Payload>({ text: '', streaming: false, finished: false, mount: 0 });
   update = setPayload;
   useLayoutEffect(() => { if (payload.finished) committed(); }, [payload]);
-  return <Markdown text={payload.text} streaming={payload.streaming} />;
+  return <Markdown key={payload.mount} text={payload.text} streaming={payload.streaming} />;
 }
 const root = createRoot(document.getElementById('root')!);
 root.render(<BenchmarkView />);
@@ -53,10 +53,10 @@ const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => r
 async function run(bytes: number, mode: 'stream' | 'static') {
   await document.fonts.ready;
   await frame();
-  update({ text: 'Warm up **local** Markdown with `code` and $x + 1$.', streaming: false, finished: false });
+  update({ text: 'Warm up **local** Markdown with `code` and $x + 1$.', streaming: false, finished: false, mount: 0 });
   await frame();
   await frame();
-  update({ text: '', streaming: true, finished: false });
+  update({ text: '', streaming: true, finished: false, mount: 1 });
   await frame();
   await frame();
   const source = fixture(bytes);
@@ -83,7 +83,8 @@ async function run(bytes: number, mode: 'stream' | 'static') {
     committed = () => { void frame().then(frame).then(resolve); };
   });
   if (mode === 'static') {
-    update({ text: source.text, streaming: false, finished: true });
+    // A fresh history mount must not inherit offloading from a prior stream.
+    update({ text: source.text, streaming: false, finished: true, mount: 2 });
   } else {
     await new Promise<void>((resolve) => {
       let length = 0;
@@ -91,19 +92,32 @@ async function run(bytes: number, mode: 'stream' | 'static') {
         length = Math.min(bytes, length + 1024);
         lastChunk = performance.now();
         deliveries.push(lastChunk - started);
-        update({ text: source.text.slice(0, length), streaming: true, finished: false });
+        update({ text: source.text.slice(0, length), streaming: true, finished: false, mount: 1 });
         if (length === bytes) {
           clearInterval(timer);
           setTimeout(() => {
             stopped = performance.now();
-            update({ text: source.text, streaming: false, finished: true });
+            update({ text: source.text, streaming: false, finished: true, mount: 1 });
             resolve();
           }, 50);
         }
       }, 50);
     });
   }
-  await complete;
+  let timeout: ReturnType<typeof setTimeout>;
+  try {
+    await Promise.race([complete, new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => reject(new Error('Final Markdown render did not commit')), 30_000);
+    })]);
+  } finally { clearTimeout(timeout!); }
+  // Completion includes the authoritative final worker revision, not only the
+  // parent stopping its stream; otherwise async parsing appears falsely fast.
+  const parseDeadline = performance.now() + 30_000;
+  while (document.querySelector('.markdown-content')?.getAttribute('aria-busy') === 'true') {
+    if (performance.now() > parseDeadline) throw new Error('Final Markdown parsing did not finish');
+    await frame();
+  }
+  await frame();
   const finished = performance.now();
   running = false;
   for (const entry of observer.takeRecords()) tasks.push({ duration: entry.duration, startTime: entry.startTime });

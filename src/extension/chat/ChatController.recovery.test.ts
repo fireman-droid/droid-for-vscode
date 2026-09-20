@@ -14,6 +14,7 @@ import {
   deferred,
   type MockRuntime,
   ready,
+  retry,
   type RuntimeAvailability,
   type RuntimeInteractionHandler,
   type RuntimePermissionResult,
@@ -37,6 +38,7 @@ import {
 } from '../recovery/recoveryStoreTestSupport';
 import type { TurnSnapshotStore } from '../changes/turnSnapshots';
 import { RECOVERED_FINAL_HISTORY_TIMEOUT_MS } from './recovery/recovery';
+import { TURN_FAILURE_MESSAGE } from './turns/turnFlow';
 
 describe('ChatController', () => {
   it('contains a rejected recovered-turn snapshot before capture', async () => {
@@ -53,9 +55,10 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('saved-session')]),
       recovery,
+      authoritativeHistory(recoveredInitialHistory().state),
     );
     Object.defineProperty(controller, 'turnSnapshots', {
-      value: { capture } as unknown as TurnSnapshotStore,
+      value: { capture, read: () => undefined, dispose: async () => undefined } as unknown as TurnSnapshotStore,
     });
     const recordHost = vi.spyOn(controller, 'recordHost');
 
@@ -86,6 +89,7 @@ describe('ChatController', () => {
         ([event]) => event.name === 'host.changes.snapshot-failed',
       ),
     ).toHaveLength(1);
+    await controller.dispose();
   });
 
   it('resumes only a catalog-validated recovered session and restores its transcript', async () => {
@@ -110,6 +114,7 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('saved-session')]),
       recovery,
+      authoritativeHistory(appendAcceptedUserPrompt(createHostTranscriptState('complete'), 'saved-turn', 'Recovered prompt')),
     );
 
     ready(controller);
@@ -144,6 +149,7 @@ describe('ChatController', () => {
       'Change the app',
       [{ path: 'src/app.ts', additions: 3, deletions: 1 }],
       'completed',
+      'message-changes',
     );
     seed.recordSettledTurn(
       conversationId,
@@ -152,6 +158,7 @@ describe('ChatController', () => {
       'Explain the app',
       [],
       'completed',
+      'message-chat',
     );
     selectRecoverySession(seed, 'saved-session');
     await seed.flush();
@@ -163,6 +170,13 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('saved-session')]),
       new SessionRecoveryStore(persistence, 'recovery', 0),
+      authoritativeHistory({
+        transcript: [
+          { id: 'public-change-prompt', kind: 'user', messageId: 'message-changes', text: 'Change the app' },
+          { id: 'public-chat-prompt', kind: 'user', messageId: 'message-chat', text: 'Explain the app' },
+        ],
+        historyStatus: 'complete', truncated: false,
+      }),
     );
 
     ready(controller);
@@ -202,6 +216,7 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('saved-session')]),
       new SessionRecoveryStore(persistence, 'recovery', 0),
+      authoritativeHistory(),
     );
     Object.defineProperty(controller, 'turnSnapshots', {
       value: snapshotsStore,
@@ -213,7 +228,7 @@ describe('ChatController', () => {
     expect(snapshotsStore.read).not.toHaveBeenCalled();
   });
 
-  it('emits an early connecting snapshot from the recovery checkpoint before runtime activation completes', async () => {
+  it('keeps recovered content and sends blocked until authoritative history and runtime activation complete', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
     writeRecoverySession(
@@ -235,25 +250,15 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('saved-session')]),
       new SessionRecoveryStore(persistence, 'recovery', 0),
+      authoritativeHistory(appendAcceptedUserPrompt(createHostTranscriptState('complete'), 'saved-turn', 'Public history prompt')),
     );
 
     ready(controller);
 
-    await vi.waitFor(() => {
-      expect(snapshots(messages).length).toBeGreaterThan(0);
-    });
-    expect(snapshots(messages)[0]).toMatchObject({
-      sessionId: 'saved-session',
-      connection: { status: 'connecting' },
-      transcript: [
-        expect.objectContaining({
-          kind: 'user',
-          text: 'Recovered prompt',
-        }),
-      ],
-    });
+    await vi.waitFor(() => expect(runtime.initialize).toHaveBeenCalled());
+    expect(snapshots(messages)).toHaveLength(0);
 
-    // The early snapshot must not unlock mutating handlers.
+    // Neither stored metadata nor an initialized history source unlocks sends.
     send(controller, 'saved-session', 'turn-early', 'too soon');
     expect(turnStates(messages)).toHaveLength(0);
     expect(runtime.sendTurn).not.toHaveBeenCalled();
@@ -263,6 +268,7 @@ describe('ChatController', () => {
     expect(snapshots(messages).at(-1)).toMatchObject({
       sessionId: 'saved-session',
       connection: { status: 'connected' },
+      transcript: [expect.objectContaining({ kind: 'user', text: 'Public history prompt' })],
     });
   });
 
@@ -278,6 +284,7 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('saved-session')]),
       new SessionRecoveryStore(persistence, 'recovery', 0),
+      authoritativeHistory(),
     );
 
     ready(controller);
@@ -288,7 +295,7 @@ describe('ChatController', () => {
     });
   });
 
-  it('keeps canonical recovery when public history has no trusted prefix', async () => {
+  it('uses authoritative public history when old recovery text has no matching prefix', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
     writeRecoverySession(
@@ -346,40 +353,16 @@ describe('ChatController', () => {
     });
     expect(snapshots(messages).at(-1)).toMatchObject({
       sessionId: 'saved-session',
-      historyStatus: 'partial',
-      truncated: false,
-      transcript: [
-        expect.objectContaining({
-          kind: 'user',
-          text: 'Cached fallback',
-        }),
-      ],
+      ...historyState,
     });
     expect(writeDisplay).toHaveBeenCalledWith(
       'saved-session',
       'saved-session',
-      expect.objectContaining({
-        historyStatus: 'partial',
-        truncated: false,
-        transcript: [
-          expect.objectContaining({
-            kind: 'user',
-            text: 'Cached fallback',
-          }),
-        ],
-      }),
+      historyState,
       null,
     );
-    expect(readRecoverySession(recovery, 'saved-session')).toMatchObject({
-      historyStatus: 'partial',
-      truncated: false,
-      transcript: [
-        expect.objectContaining({
-          kind: 'user',
-          text: 'Cached fallback',
-        }),
-      ],
-    });
+    expect(recovery.getSelectedSessionId()).toBe('saved-session');
+    expect(readRecoverySession(recovery, 'saved-session')?.transcript).toEqual([]);
   });
 
   it('projects an in-flight daemon turn as a recovery placeholder and replaces it with the completed result', async () => {
@@ -736,7 +719,7 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('saved-session')]),
       new SessionRecoveryStore(persistence, 'recovery', 0),
-      { loadHistory: vi.fn(async () => unavailableSessionHistory()) },
+      authoritativeHistory(recoveredInitialHistory().state),
     );
 
     ready(resumed.controller);
@@ -745,17 +728,11 @@ describe('ChatController', () => {
       expect(snapshots(resumed.messages).at(-1)?.turn).toMatchObject({
         turnId: 'recovery-1',
         status: 'failed',
+        error: TURN_FAILURE_MESSAGE,
       });
     });
     expect(turnStates(resumed.messages)).toHaveLength(0);
-    expect(
-      snapshots(resumed.messages)
-        .at(-1)
-        ?.transcript.some(
-          (item) =>
-            item.kind === 'diagnostic' && item.code === 'recovered-turn-history-failed',
-        ),
-    ).toBe(true);
+    expect(snapshots(resumed.messages).at(-1)?.transcript).toEqual(recoveredInitialHistory().state.transcript);
     await resumed.controller.dispose();
   });
 
@@ -956,6 +933,7 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('saved-session')]),
       recovery,
+      authoritativeHistory(recoveredInitialHistory().state),
     );
 
     ready(controller);
@@ -989,6 +967,7 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('saved-session')]),
       recovery,
+      authoritativeHistory(recoveredInitialHistory().state),
     );
 
     ready(controller);
@@ -1014,6 +993,7 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('saved-session')]),
       recovery,
+      authoritativeHistory(recoveredInitialHistory().state),
     );
 
     ready(controller);
@@ -1036,7 +1016,7 @@ describe('ChatController', () => {
     expect(turnStates(messages).at(-1)?.status).toBe('failed');
   });
 
-  it('falls back to recovery when public old-session history is unavailable', async () => {
+  it('keeps a selected session unavailable when public history fails without exposing cached text', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
     writeRecoverySession(
@@ -1066,13 +1046,19 @@ describe('ChatController', () => {
     );
 
     ready(controller);
-    await waitForConnected(messages);
+    await vi.waitFor(() => expect(snapshots(messages).at(-1)?.connection.status).toBe('unavailable'));
 
     expect(snapshots(messages).at(-1)).toMatchObject({
-      historyStatus: 'partial',
-      transcript: [{ kind: 'user', text: 'Cached fallback' }],
+      sessionId: 'saved-session',
+      connection: { status: 'unavailable', message: 'Droid session history could not be loaded. Retry to open this session.' },
     });
+    expect(snapshots(messages).at(-1)?.transcript.some((item) => item.kind === 'user' && item.text === 'Cached fallback')).toBe(false);
+    send(controller, 'saved-session', 'blocked-turn', 'Do not send without history');
+    expect(runtime.sendTurn).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(runtime.dispose).toHaveBeenCalledOnce());
+    expect(controller.recoveryStore.getSelectedSessionId()).toBe('saved-session');
     expect(JSON.stringify(messages)).not.toContain('raw-history-error');
+    await controller.dispose();
   });
 
   it('starts the resume runtime while history is still loading', async () => {
@@ -1187,7 +1173,7 @@ describe('ChatController', () => {
     expect(writeSession).not.toHaveBeenCalled();
     expect(readRecoverySession(recovery, 'saved-session')).toEqual({
       transcript: [],
-      historyStatus: 'unavailable',
+      historyStatus: 'complete',
       truncated: false,
     });
     await controller.dispose();
@@ -1210,7 +1196,7 @@ describe('ChatController', () => {
       .mockReturnValueOnce(first)
       .mockReturnValueOnce(second);
     const history = {
-      loadHistory: vi.fn(async () => unavailableSessionHistory()),
+      ...authoritativeHistory(),
       loadSubagentSummaries: vi.fn(async () => []),
     };
     const { controller, messages } = createController(
@@ -1286,7 +1272,7 @@ describe('ChatController', () => {
     });
   });
 
-  it('recovers cached transcript after controller recreation with the same persistence', async () => {
+  it('reopens the persisted session and reconstructs its transcript from public history', async () => {
     const persistence = createMemoryPersistence();
     const firstRuntime = createMockRuntime(async function* () {
       yield { type: 'text-delta', text: 'Persisted answer' };
@@ -1309,11 +1295,20 @@ describe('ChatController', () => {
 
     const resumedRuntime = createMockRuntime();
     resumedRuntime.initialize.mockResolvedValue(available('session-1'));
+    const publicTranscript = {
+      transcript: [
+        { id: 'public-user', kind: 'user' as const, text: 'Persisted prompt' },
+        { id: 'public-answer', kind: 'assistant' as const, turnId: 'public-turn', text: 'Persisted answer' },
+      ],
+      historyStatus: 'complete' as const, truncated: false,
+    };
+    const history = authoritativeHistory(publicTranscript);
     const second = createController(
       () => resumedRuntime,
       undefined,
       createCatalog([catalogEntry('session-1')]),
       new SessionRecoveryStore(persistence, 'recovery', 0),
+      history,
     );
     ready(second.controller);
     await waitForConnected(second.messages);
@@ -1323,24 +1318,12 @@ describe('ChatController', () => {
       cwd: 'C:\\workspace',
       sessionId: 'session-1',
     });
-    expect(snapshots(second.messages).at(-1)?.transcript).toEqual([
-      expect.objectContaining({
-        kind: 'user',
-        text: 'Persisted prompt',
-      }),
-      expect.objectContaining({
-        kind: 'assistant',
-        text: 'Persisted answer',
-      }),
-      expect.objectContaining({
-        kind: 'changes',
-        turnId: 'turn-persisted',
-        files: [],
-      }),
-    ]);
+    expect(history.loadHistory).toHaveBeenCalledWith({ cwd: 'C:\\workspace', sessionId: 'session-1' });
+    expect(snapshots(second.messages).at(-1)?.transcript).toEqual(publicTranscript.transcript);
+    await second.controller.dispose();
   });
 
-  it('creates a fresh runtime when catalog loading fails and reports history error', async () => {
+  it('does not create a runtime when catalog loading fails', async () => {
     const runtime = createMockRuntime();
     const catalog = createCatalogResult({
       status: 'unavailable',
@@ -1350,25 +1333,84 @@ describe('ChatController', () => {
     const { controller, messages } = createController(() => runtime, undefined, catalog);
 
     ready(controller);
-    await waitForConnected(messages);
-
-    expect(runtime.initialize).toHaveBeenCalledWith({
-      kind: 'new',
-      cwd: 'C:\\workspace',
-    });
+    await vi.waitFor(() => expect(snapshots(messages).at(-1)?.connection.status).toBe('unavailable'));
+    expect(runtime.initialize).not.toHaveBeenCalled();
     expect(snapshots(messages).at(-1)).toMatchObject({
       sessions: {
         status: 'error',
         message: 'Saved Droid sessions could not be loaded.',
-        items: [
-          expect.objectContaining({
-            id: 'session-1',
-            active: true,
-          }),
-        ],
+        items: [],
       },
     });
     expect(JSON.stringify(messages)).not.toContain('sensitive backend failure');
+    await controller.dispose();
+  });
+
+  it('preserves the selected session across catalog failures and resumes it after Retry', async () => {
+    const recovery = await seededRecoveryStore('saved-session');
+    const catalog = createCatalog([catalogEntry('saved-session')]);
+    vi.mocked(catalog.listSessions).mockResolvedValueOnce({ status: 'unavailable', reason: 'catalog-failed', message: 'offline' })
+      .mockResolvedValueOnce({ status: 'unavailable', reason: 'catalog-failed', message: 'offline' });
+    const runtime = createMockRuntime();
+    runtime.initialize.mockResolvedValue(available('saved-session'));
+    const history: SessionHistoryLoader = { loadHistory: vi.fn(async () => ({
+      status: 'available' as const,
+      state: appendAcceptedUserPrompt(createHostTranscriptState('complete'), 'saved-turn', 'Recovered prompt'),
+    })) };
+    const { controller, messages } = createController(() => runtime, undefined, catalog, recovery, history);
+    ready(controller);
+    await vi.waitFor(() => expect(snapshots(messages).at(-1)?.connection.status).toBe('unavailable'));
+    expect(recovery.getSelectedSessionId()).toBe('saved-session');
+    expect(runtime.initialize).not.toHaveBeenCalled();
+    retry(controller, null);
+    await vi.waitFor(() => {
+      expect(catalog.listSessions).toHaveBeenCalledTimes(2);
+      expect(controller.sessionState.sessionOperationInProgress).toBe(false);
+    });
+    expect(recovery.getSelectedSessionId()).toBe('saved-session');
+    expect(runtime.initialize).not.toHaveBeenCalled();
+    retry(controller, null);
+    await waitForConnected(messages);
+    expect(runtime.initialize).toHaveBeenCalledExactlyOnceWith({ kind: 'resume', cwd: 'C:\\workspace', sessionId: 'saved-session' });
+    expect(recovery.getSelectedSessionId()).toBe('saved-session');
+    await controller.dispose();
+  });
+
+  it('does not replace an active session when reconnect catalog reads fail', async () => {
+    const catalog = createCatalog([catalogEntry('session-1')]);
+    const first = createMockRuntime(async function* () { throw new Error('Stream failed'); });
+    const resumed = createMockRuntime();
+    const createRuntime = vi.fn<() => MockRuntime>().mockReturnValueOnce(first).mockReturnValueOnce(resumed);
+    const history: SessionHistoryLoader = { loadHistory: vi.fn(async () => ({
+      status: 'available' as const, state: createHostTranscriptState('complete'),
+    })) };
+    const { controller, messages } = createController(createRuntime, undefined, catalog, undefined, history);
+    ready(controller);
+    await waitForConnected(messages);
+    send(controller, 'session-1', 'failed-turn', 'Run');
+    await vi.waitFor(() => expect(turnStates(messages).at(-1)?.status).toBe('failed'));
+    vi.mocked(catalog.listSessions).mockResolvedValueOnce({ status: 'unavailable', reason: 'catalog-failed', message: 'offline' })
+      .mockResolvedValueOnce({ status: 'unavailable', reason: 'catalog-failed', message: 'offline' });
+    controller.handleMessage({ type: 'sessions.refresh' });
+    await vi.waitFor(() => {
+      expect(controller.catalogState.sessions.status).toBe('error');
+      expect(controller.catalogState.refreshInProgress).toBe(false);
+    });
+    retry(controller, 'session-1');
+    await vi.waitFor(() => {
+      expect(catalog.listSessions).toHaveBeenCalledTimes(3);
+      expect(controller.sessionState.sessionOperationInProgress).toBe(false);
+    });
+    expect(first.dispose).not.toHaveBeenCalled();
+    expect(createRuntime).toHaveBeenCalledOnce();
+    expect(controller.sessionState.sessionId).toBe('session-1');
+    expect(controller.recoveryStore.getSelectedSessionId()).toBe('session-1');
+    retry(controller, 'session-1');
+    await vi.waitFor(() => expect(resumed.initialize).toHaveBeenCalledExactlyOnceWith({
+      kind: 'resume', cwd: 'C:\\workspace', sessionId: 'session-1',
+    }));
+    await waitForConnected(messages);
+    await controller.dispose();
   });
 
   it('snapshots the active transcript before replaying pending interactions on reload', async () => {
@@ -1428,7 +1470,7 @@ describe('ChatController', () => {
     });
   });
 
-  it('marks an uncached external session unavailable then partial after an observed turn', async () => {
+  it('keeps an uncached external session history partial after an observed turn', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
     selectRecoverySession(seed, 'external-session');
@@ -1441,11 +1483,12 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('external-session')]),
       recovery,
+      authoritativeHistory(createHostTranscriptState('partial')),
     );
     ready(controller);
     await waitForConnected(messages);
     expect(snapshots(messages).at(-1)).toMatchObject({
-      historyStatus: 'unavailable',
+      historyStatus: 'partial',
       transcript: [],
     });
 
@@ -1459,7 +1502,7 @@ describe('ChatController', () => {
     });
   });
 
-  it('preserves a recovered partial-history cache', async () => {
+  it('preserves the partial status and fragment reported by public history', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
     writeRecoverySession(
@@ -1480,6 +1523,7 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('partial-session')]),
       new SessionRecoveryStore(persistence, 'recovery', 0),
+      authoritativeHistory(appendAcceptedUserPrompt(createHostTranscriptState('partial'), 'older-turn', 'Public history fragment')),
     );
 
     ready(controller);
@@ -1487,10 +1531,14 @@ describe('ChatController', () => {
 
     expect(snapshots(messages).at(-1)).toMatchObject({
       historyStatus: 'partial',
-      transcript: [expect.objectContaining({ text: 'Cached fragment' })],
+      transcript: [expect.objectContaining({ text: 'Public history fragment' })],
     });
   });
 });
+
+function authoritativeHistory(state = createHostTranscriptState('complete')): SessionHistoryLoader {
+  return { loadHistory: vi.fn(async () => ({ status: 'available' as const, state })) };
+}
 
 function recoveredInitialHistory() {
   return {

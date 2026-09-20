@@ -1,4 +1,6 @@
 export const FILE_NOT_READY_DIAGNOSTIC_CODE = 'file-not-ready';
+export const STOP_UNCONFIRMED_DIAGNOSTIC_CODE = 'turn-stop-unconfirmed';
+export type TransientDiagnosticCode = typeof FILE_NOT_READY_DIAGNOSTIC_CODE | typeof STOP_UNCONFIRMED_DIAGNOSTIC_CODE;
 
 /**
  * Runtime diagnostics that are immediate interaction feedback rather
@@ -7,6 +9,6 @@ export const FILE_NOT_READY_DIAGNOSTIC_CODE = 'file-not-ready';
  */
 export function isTransientRuntimeDiagnostic(
   code: string,
-): code is typeof FILE_NOT_READY_DIAGNOSTIC_CODE {
-  return code === FILE_NOT_READY_DIAGNOSTIC_CODE;
+): code is TransientDiagnosticCode {
+  return code === FILE_NOT_READY_DIAGNOSTIC_CODE || code === STOP_UNCONFIRMED_DIAGNOSTIC_CODE;
 }

@@ -13,42 +13,7 @@ import {
 import type { ExtraProps } from 'react-markdown';
 import { useReducedMotion } from './processPresentation';
 
-type ElementNode = NonNullable<ExtraProps['node']>;
-interface TextTree {
-  type: string;
-  tagName?: string | undefined;
-  value?: string | undefined;
-  children?: TextTree[] | undefined;
-  properties?: Record<string, unknown> | undefined;
-  position?: ElementNode['position'];
-}
-
-const SKIP = new Set(['pre', 'code', 'table', 'svg', 'math', 'span']);
-
-export function rehypeStreamingText() {
-  return (tree: TextTree): void => {
-    const visit = (node: TextTree, prose: boolean): void => {
-      if (SKIP.has(node.tagName ?? '') || node.children === undefined) return;
-      const eligible = prose || node.tagName === 'p' || node.tagName === 'li';
-      node.children = node.children.map((child) => {
-        if (eligible && child.type === 'text' && child.value?.trim()) {
-          return {
-            type: 'element',
-            tagName: 'span',
-            properties: {
-              'data-stream-start': child.position?.start.offset ?? -1,
-              'data-stream-end': child.position?.end.offset ?? -1,
-            },
-            children: [child],
-          };
-        }
-        visit(child, eligible);
-        return child;
-      });
-    };
-    visit(tree, false);
-  };
-}
+export { rehypeStreamingText } from '../markdown/streamingTree';
 
 interface StreamState {
   readonly running: boolean;

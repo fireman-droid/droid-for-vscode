@@ -3,6 +3,9 @@ import type { RewindDetailFields } from './rewindDetails';
 
 export type TurnStatus = (typeof TURN_STATUSES)[number];
 
+/** A direct send was never accepted. Correlate the existing turn.error envelope by turnId. */
+export const TURN_SEND_REJECTED_CODE = 'turn-send-rejected';
+
 export interface TurnSendMessage {
   readonly type: 'turn.send';
   readonly sessionId: string;

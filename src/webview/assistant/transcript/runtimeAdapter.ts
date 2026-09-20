@@ -106,6 +106,7 @@ export function createRuntimeAdapter(
     interactionCount: state.interactions.length,
     queuedCount: state.queue.items.length,
     queueEditing: state.queueEditing !== null,
+    settingsUpdating: state.settings.status === 'updating',
   };
   return {
     messages,

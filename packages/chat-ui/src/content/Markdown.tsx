@@ -1,10 +1,10 @@
 import { Fragment, isValidElement, memo, useContext, useDeferredValue, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
-import ReactMarkdown, { type Components } from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import type { Components } from 'react-markdown';
+import type { RootContent } from 'hast';
+import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
+import { jsx, jsxs } from 'react/jsx-runtime';
 import { normalizeMathDelimiters } from '../markdown/mathNormalization';
-import { decodeImagePath, isSafeMarkdownUrl, markdownUrlTransform, previewablePathOf, safeMarkdownUrlTransform } from '../markdown/markdownPolicy';
+import { decodeImagePath, isSafeMarkdownUrl, previewablePathOf } from '../markdown/markdownPolicy';
 import { detectPathLink } from '../markdown/pathLink';
 import { useLocalImageVisit } from './useLocalImageVisit';
 import { CodeBlock } from './CodeBlock';
@@ -12,10 +12,9 @@ import { MermaidBlock } from './MermaidBlock';
 import { MarkdownState, useContent } from './context';
 import { ImageContent } from './MediaPreview';
 import { Button, isTextSelectionClick } from '../ui/button';
-import { rehypeStreamingText, StreamingSpan, StreamingTextBoundary } from '../chat/streamingText';
-
-const remarkPlugins = [remarkGfm, [remarkMath, { singleDollarTextMath: true }] as [typeof remarkMath, { singleDollarTextMath: boolean }]];
-const rehypePlugins = [rehypeKatex, rehypeStreamingText];
+import { StreamingSpan, StreamingTextBoundary } from '../chat/streamingText';
+import { useParsedMarkdown } from '../markdown/useParsedMarkdown';
+import { useMarkdownMount } from '../markdown/useMarkdownMount';
 
 function SafeLink({ href, children }: ComponentProps<'a'>) {
   return isSafeMarkdownUrl(href) ? <a href={href} target="_blank" rel="noreferrer noopener" draggable={false}
@@ -83,12 +82,8 @@ const components: Components = {
   table: ({ children }) => <div className="v2-markdown-table my-3 max-w-full overflow-x-auto"><table className="w-full border-collapse text-xs">{children}</table></div>,
 };
 
-// ReactMarkdown parses synchronously; unchanged deferred text must skip that work.
-const ParsedMarkdown = memo(function ParsedMarkdown({ text, thinking }: {
-  readonly text: string;
-  readonly thinking: boolean;
-}) {
-  return <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components} skipHtml urlTransform={thinking ? safeMarkdownUrlTransform : markdownUrlTransform}>{text}</ReactMarkdown>;
+const ParsedNode = memo(function ParsedNode({ node }: { readonly node: RootContent }) {
+  return toJsxRuntime(node, { Fragment, components, ignoreInvalidStyle: true, jsx, jsxs, passKeys: true, passNode: true });
 });
 
 export const Markdown = memo(function Markdown({ text, streaming = false, thinking = false }: {
@@ -99,15 +94,20 @@ export const Markdown = memo(function Markdown({ text, streaming = false, thinki
   const deferred = useDeferredValue(text);
   const displayed = streaming ? deferred : text;
   const normalized = useMemo(() => normalizeMathDelimiters(displayed), [displayed]);
+  const parsed = useParsedMarkdown(normalized, thinking, streaming);
+  const mounted = useMarkdownMount(parsed.nodes, parsed.background, normalized);
+  const pending = parsed.pending || mounted.pending;
   const [initialLength] = useState(normalized.length);
-  const markdownState = useMemo(() => ({ streaming, thinking }), [streaming, thinking]);
+  const renderingStream = streaming || pending;
+  const markdownState = useMemo(() => ({ streaming: renderingStream, thinking }), [renderingStream, thinking]);
   const typography = thinking
     ? 'text-[13px] leading-[1.625] [&_p]:my-1.5 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_blockquote]:my-2 [&_blockquote]:pl-3 [&_h1]:my-3 [&_h1]:text-base [&_h2]:my-3 [&_h2]:font-semibold [&_h3]:my-2 [&_h3]:font-semibold'
     : 'markdown-prose';
   return <MarkdownState.Provider value={markdownState}>
-    <StreamingTextBoundary initialLength={initialLength} running={streaming}>
-    <div className={`markdown-content min-w-0 break-words ${typography} [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1`}>
-      <ParsedMarkdown text={normalized} thinking={thinking} />
+    <StreamingTextBoundary initialLength={initialLength} running={renderingStream}>
+    <div aria-busy={pending || undefined} data-markdown-pending={pending || undefined} className={`markdown-content min-w-0 break-words ${typography} [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1`}>
+      {mounted.nodes.map((node, index) => <ParsedNode key={index} node={node} />)}
+      {pending && !streaming ? <div role="status" className="py-2 text-xs text-muted-foreground">Preparing reply…</div> : null}
     </div>
     </StreamingTextBoundary>
   </MarkdownState.Provider>;

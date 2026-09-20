@@ -27,14 +27,18 @@ vi.mock('@tanstack/react-virtual', () => ({
   },
 }));
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-it('pins the selected late question even when the remaining transcript is shorter than the viewport', async () => {
+it('clamps late questions to the real content boundary and pins questions as they enter the viewport', async () => {
+  // JSDOM has no media-query API; the production scrolling hook observes this
+  // browser preference even when the test controls viewport geometry itself.
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
   const isViewport = (element: HTMLElement) => element.getAttribute('aria-label') === 'Chat transcript';
-  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) { return isViewport(this) ? 400 : 0; });
+  let viewportHeight = 400;
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) { return isViewport(this) ? viewportHeight : 0; });
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) { return Number.parseFloat(this.style.height) || 0; });
   vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) {
-    return isViewport(this) ? 860 + (this.querySelector<HTMLElement>('[data-question-scroll-space]')?.offsetHeight ?? 0) : 0;
+    return isViewport(this) ? 860 : 0;
   });
   const scrollTo = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo');
   Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
@@ -59,21 +63,29 @@ it('pins the selected late question even when the remaining transcript is shorte
     for (const index of [1, 2, 0]) {
       fireEvent.click(screen.getByRole('button', { name: `Jump to question ${index + 1}: Question ${index + 1}` }));
       await waitFor(() => {
-        expect(viewport.scrollTop).toBe([20, 620, 720][index]);
+        expect(viewport.scrollTop).toBe([8, 460, 460][index]);
+        expect(view.container.querySelector('[data-pinned-question]')?.getAttribute('data-pinned-question')).toBe('question-0');
+        expect(screen.getByRole('button', { name: 'Jump to question 1: Question 1' }).getAttribute('aria-current')).toBe('true');
+      });
+    }
+    // With enough actual scroll range, later questions reach the 12px pin gap.
+    viewportHeight = 100;
+    fireEvent.scroll(viewport);
+    for (const index of [1, 2]) {
+      fireEvent.click(screen.getByRole('button', { name: `Jump to question ${index + 1}: Question ${index + 1}` }));
+      await waitFor(() => {
+        expect(viewport.scrollTop).toBe([8, 608, 708][index]);
         expect(view.container.querySelector('[data-pinned-question]')?.getAttribute('data-pinned-question')).toBe(`question-${index}`);
         expect(screen.getByRole('button', { name: `Jump to question ${index + 1}: Question ${index + 1}` }).getAttribute('aria-current')).toBe('true');
       });
     }
-    fireEvent.click(screen.getByRole('button', { name: 'Jump to question 3: Question 3' }));
-    await waitFor(() => expect(viewport.scrollTop).toBe(720));
     for (const [top, question] of [[606, 'question-0'], [607, 'question-1']] as const) {
       act(() => viewport.scrollTo({ top }));
       await waitFor(() => expect(view.container.querySelector('[data-pinned-question]')?.getAttribute('data-pinned-question')).toBe(question));
     }
     fireEvent.click(screen.getByRole('button', { name: 'Scroll to bottom' }));
-    await waitFor(() => expect(view.container.querySelector<HTMLElement>('[data-question-scroll-space]')?.style.height).toBe('0px'));
     await act(async () => { await new Promise((resolve) => requestAnimationFrame(resolve)); });
-    expect(viewport.scrollTop).toBe(460);
+    expect(viewport.scrollTop).toBe(760);
   } finally {
     if (scrollTo) Object.defineProperty(HTMLElement.prototype, 'scrollTo', scrollTo);
     else Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');

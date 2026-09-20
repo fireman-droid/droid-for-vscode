@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown } from 'lucide-react';
 import { ProcessPresentationProvider } from './processPresentation';
@@ -49,7 +49,7 @@ export function ReadOnlyTranscriptView({ messages, truncated = false, renderMess
           <div style={{ paddingTop: Math.max(0, (visible[0]?.start ?? scrollMargin) - scrollMargin), paddingBottom: Math.max(0, virtualizer.getTotalSize() - ((visible.at(-1)?.end ?? scrollMargin) - scrollMargin)) }}>
             {visible.map((row) => {
               const descriptor = descriptors[row.index];
-              return <div key={row.key} ref={virtualizer.measureElement} data-index={row.index} className="flow-root pb-3">{renderMessage(descriptor.id, scrolling.stopFollowing)}</div>;
+              return <div key={row.key} ref={virtualizer.measureElement} data-index={row.index} data-markdown-row="" style={{ '--markdown-row-height': `${row.size}px` } as CSSProperties} className="flow-root pb-3">{renderMessage(descriptor.id, scrolling.stopFollowing)}</div>;
             })}
           </div>
         </ProcessPresentationProvider>

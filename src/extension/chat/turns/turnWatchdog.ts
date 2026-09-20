@@ -42,7 +42,7 @@ export const TURN_IDLE_CONFIRM_READS = 3;
 
 export const STOP_TIMEOUT_MESSAGE =
   'Droid has not confirmed the stop. The turn remains blocked to avoid ' +
-  'starting another task concurrently. Retry Stop or reconnect the session.';
+  'starting another task concurrently. Use Retry Stop to request it again.';
 
 /** Watchdog state held on the controller while a turn is watched. */
 export interface TurnWatchdogState {

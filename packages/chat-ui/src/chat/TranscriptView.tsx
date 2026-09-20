@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode, type Ref } from 'react';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -234,8 +234,8 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
           <ProcessPresentationProvider key={conversationId} messageIds={ids} followingRef={scrolling.follow}>
           <div style={{ paddingTop: Math.max(0, (virtualItems[0]?.start ?? scrollMargin) - scrollMargin), paddingBottom: Math.max(0, virtualizer.getTotalSize() - ((virtualItems.at(-1)?.end ?? scrollMargin) - scrollMargin)) }}>
             {virtualItems.map((row, index) => (
-              <div key={row.key} ref={virtualizer.measureElement} data-index={row.index} className="flow-root"
-                style={{ marginTop: index === 0 ? 0 : Math.max(0, row.start - virtualItems[index - 1]!.end) }}>
+              <div key={row.key} ref={virtualizer.measureElement} data-index={row.index} data-markdown-row="" className="flow-root"
+                style={{ '--markdown-row-height': `${row.size}px`, marginTop: index === 0 ? 0 : Math.max(0, row.start - virtualItems[index - 1]!.end) } as CSSProperties}>
                 {turns[row.index].messageIds.map((id) => {
                   const message = byId.get(id)!;
                   return <div key={id} className={message.replyEnd ? 'pb-6' : 'pb-2'}>

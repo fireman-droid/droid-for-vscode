@@ -3,6 +3,117 @@
 最后更新：2026-09-20
 包版本：`0.8.0`
 
+## 已发现问题收尾（已安装，待 Cursor 验收）
+
+- 用户要求继续处理上一轮遇到的问题。回合事件与恢复测试共 72 项通过，原有
+  20 项失败已清除；随后六文件合并回归 92 项全部通过。
+- 回合事件 fixture 补齐快照存储方法及恢复会话要求的 SDK 历史；恢复 fixture
+  明确区分成功、不可用、延迟与工作区失效。过时的缓存正文权威断言更新为
+  公开历史权威，仍验证失败时禁止发送、候选 Runtime 清理、会话选择和修改账本。
+  未修改生产恢复策略或共享 harness，未跳过原有场景。
+- 另修正原导航测试缺失的浏览器媒体查询夹具，以及历史记录中已注明过时的
+  尾部补白断言。现在验证实际内容边界、12px 吸顶间距、可达目标与返回真实底部，
+  保留此前移除尾部空白的生产行为；相关架构文档也移除过时描述。
+- 长静态历史和长流式回复共用一个 Worker 队列，避免历史多块同时创建线程。
+  全文 AST 解析后每帧挂载至多 64 个顶层节点；正文替换重置呈现批次，排队或
+  在途任务卸载时取消，活动流保留线程，任务和活动流均结束后释放线程。
+- 等待期间有轻量状态反馈，虚拟历史行保留已知高度；问题导航等待最终布局，
+  用布局／状态变更唤醒而不空转，手动滚动立即取消且不会被迟到正文拉回。
+  原回归发现的最终流式版本提前释放线程也已修正。
+- 最终相关 11 文件共 113 项通过：上轮六文件 92 项，以及 Composer、Markdown、
+  Worker、原导航和新异步导航五文件 21 项。覆盖多个历史任务、引用定义隔离、
+  取消、替换、完整文本／复制、代码高亮、Mermaid 和迟到布局。
+  `pnpm run typecheck`、`pnpm run lint:budgets` 与独立共享包构建均通过。
+- 已执行 `pnpm exec vitest run` 的新增导航文件为
+  `src/webview-v2/chat/Transcript.navigation.test.tsx` 和
+  `src/webview-v2/chat/Transcript.pendingMarkdown.test.tsx`；其余相关文件见下方首轮记录。
+  当前没有已知未处理的本轮验证失败；未运行全仓测试或真实模型请求。
+
+最终性能命令仍为 `node scripts/benchmarkMarkdown.mjs --baseline=74c3ea6 --runs=3`，
+基准现为真正重新挂载静态正文，每个尺寸的静态／流式均交替测量三轮。环境与
+下方首轮相同；24 个样本的完整文本、标准化 HTML、2,529／9,798 个节点均一致，
+无浏览器异常。新版所有样本均无长任务及超过 50ms 的帧，下面为三轮中位数：
+
+| 场景 | 帧间隔 p95，基线→修复后 | 主线程阻塞，基线→修复后 | 完整就绪，基线→修复后 |
+| --- | ---: | ---: | ---: |
+| 32 KiB 静态 | 100→16.9ms | 40→0ms | 136→281ms |
+| 128 KiB 静态 | 316.6→16.8ms | 243→0ms | 360→826ms |
+| 32 KiB 流式 | 16.8→16.9ms | 0→0ms | 1699→1699ms |
+| 128 KiB 流式 | 99.8→16.9ms | 2259→0ms | 9698→6619ms |
+
+静态 128 KiB 完整呈现为 807–841ms；分批呈现延长总等待时间以保持交互响应。
+流式 128 KiB 收尾为 149–172ms，中位 164.3ms。结果只代表此混合正文 fixture，
+单个极大的顶层节点仍需一次挂载，不能据此保证任意结构或整套 Chat 均无卡顿。
+原始报告为 `%TEMP%/droidvisx-markdown-benchmark-CTspFh/results.json`；结果记录
+完整源码树和 lock hash。
+
+最终 `pnpm run package:vsix` 与 `pnpm run verify:vsix` 均通过；构建标识为
+`v2-2026-09-20T05:49:57.914Z`，VSIX 为 3,945,746 字节、79 个条目。
+已通过 Cursor CLI 强制安装成功，需 Reload Window 加载新版。本轮实现、必要文档
+与前轮同任务修复一并创建本地提交，不 push；真实交互由用户在 Cursor 中验收。
+
+## 发送、停止、恢复与长回复修复（首轮安装记录，收尾结果见上）
+
+- 设置更新期间保留输入并禁用直接发送；竞态请求被 Host 拒绝时，通过现有
+  `turn.error` 按 Session／Turn 返回未发送原因，退出假运行状态。仅输入未被
+  后续编辑时恢复被拒绝的草稿，不自动补发或覆盖新输入。
+- 编辑排队消息先保存普通草稿，保存、取消、队列移除后恢复；临时编辑稿不
+  覆盖 Webview 中的持久普通草稿，编辑期间 Reload 也能恢复原稿。
+- Stop RPC 失败不提前结算回合或清除 watchdog；保持停止中并提供 Retry Stop。
+  未确认提示单独展示，成功结算或切换会话后清理，不写入历史正文。
+- 启动／重连遇到会话目录错误时显示不可用并保留恢复目标；重试先重新读取
+  目录，成功后恢复原会话，不把读取失败当作会话不存在。
+- Review 将明确 `unchanged` 与证据缺失分开，允许同轮其他完整可逆补丁撤销。
+  实际逆补丁保留无关手动文本；缺失／失败不明／子证据不完整仍阻止自动撤销。
+- 首轮对超过 8,192 字符的流式 Markdown 使用包内 Worker 完整解析，只回传变化节点；
+  收尾等待最终解析后恢复代码高亮和 Mermaid，保留全文复制和跨段引用语义。
+  首轮首次静态长历史仍同步解析；Worker 不可用时回退同步，不能据此宣称所有长文本
+  场景均无卡顿。Worker 由本地构建静态内联，CSP 仅增加 `worker-src blob:`。
+- 首轮获准本地回归与合成性能测量，不调用真实模型。可靠性六文件运行
+  92 项，其中 72 通过、20 失败；独立 worktree 固定修改前 `74c3ea6` 运行原有
+  turnEvents／recovery 两文件得到 70 项、50 通过、20 失败，失败名称完全一致。
+  当时保留了集中于恢复历史／快照的既有失败，现已在本页顶部收尾处理中清除。
+  本轮曾发现重复 Stop RPC 回归，修正请求去重后已通过，未列入旧失败。
+- Markdown 现有 5 项与新增 Worker 5 项通过，Composer 7 项通过；合计当前
+  九文件 109 项中曾为 89 通过、20 个上述既有失败。Composer 测试补齐生产环境
+  Provider、隔离布局诊断与附件 mock 残留后通过，未改业务发送或附件行为。
+  StopFeedback 另补迟到正文／思考／工具消息，确认停止中继续锁定直至终态。
+- 已运行 `pnpm exec vitest run` 的文件集：
+  `ChatController.sendRejection.test.ts`、`ChatController.turnEvents.test.ts`、
+  `ChatController.recovery.test.ts`、`operationUndoEvidence.test.ts`、
+  `useComposerFlow.recovery.test.tsx`、`StopFeedback.test.tsx`；再运行
+  `src/webview-v2/chat/Composer.test.tsx`、`src/webview-v2/content/Markdown.test.tsx`、
+  `src/webview-v2/content/Markdown.worker.test.tsx`。完整 `pnpm run typecheck` 通过。
+  当时因保留上述既有测试失败，遵守 AGENTS.md“验证失败不得提交”，未创建
+  Git 提交或 push；后续收尾的最终提交状态以本页顶部为准。
+- `pnpm run package:vsix` 完成完整类型、文件预算、共享 UI 声明与生产构建；
+  `pnpm run verify:vsix` 校验 79 项内容与打包外部依赖通过。3,944,051 字节
+  VSIX 已通过 Cursor CLI `--install-extension dist/droidvisx.vsix --force` 安装成功；
+  CLI 的 `url.parse()` 弃用提示未阻塞安装。构建标识
+  `v2-2026-09-20T04:44:23.957Z`，Reload Window 后生效。
+  真实会话交互仍由用户在 Cursor 验收，本轮未调用真实模型。
+
+首轮流式性能对照执行 `node scripts/benchmarkMarkdown.mjs --baseline=74c3ea6 --runs=3`：
+固定基线整个 `packages/chat-ui/src`，记录源码树及 lock hash；Windows、本地
+Chrome 142.0.7444.176、Node 22.23.2、1000×800 视口、640px 内容容器，ASCII
+混合 Markdown 每 50ms 追加 1KiB。每种尺寸交替测量三轮；不并行构建或跑测试。
+计时包含最终 Worker 解析和渲染，16 个静态／流式样本的全文、标准化 HTML
+与节点数全部匹配，无浏览器异常，不连接真实模型。
+
+| 三轮流式中位数 | 基线 | 修复后 |
+| --- | ---: | ---: |
+| 32 KiB 帧间隔 p95 | 16.9ms | 16.8ms |
+| 32 KiB 总耗时 | 1716ms | 1699ms |
+| 128 KiB 帧间隔 p95 | 99.9ms | 16.8ms |
+| 128 KiB 主线程总阻塞 | 6229ms | 0ms |
+| 128 KiB 总耗时 | 13778ms | 6741ms |
+
+128 KiB 当前三轮 p95 范围 16.8–33.2ms，阻塞范围 0–142ms；流结束后的收尾
+延迟 220–676.5ms，中位 275.4ms（基线 265.5ms）。重解析仍需时间，优化主要
+减少主线程阻塞。静态 128 KiB 首次挂载样本约 436ms，当时尚未优化；这些数值
+不代表完整 Chat 或真实模型速度。原始结果保留于本机
+`%TEMP%/droidvisx-markdown-benchmark-4ssU10/results.json`。
+
 ## 聊天 Diff 手动编辑误归因（已安装，本地回归通过，待 Cursor 验收）
 
 - 用户反馈 AI 解释代码时手动修改也出现在回复中。根因是 `changes` 条目直接

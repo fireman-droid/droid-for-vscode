@@ -82,7 +82,7 @@ Chat、Models、Mission Control、Session Viewer、Review 共用语义 CSS，独
 主壳订阅控制状态和消息到达，流式正文由独立 Transcript 订阅；切换仍读取最新权威 sequence。
 
 主聊天的 `useTranscriptScroll` 统一协调到底部、流式跟随和问题导航的逐帧写入。
-Transcript 提供动态目标位置及必要的尾部空间；导航期间屏蔽虚拟器独立补偿，
+Transcript 提供动态目标位置并限制在真实内容范围内；导航期间屏蔽虚拟器独立补偿，
 手动手势和文本选择取消动画。没有第二个平滑滚动所有者，也不修改 Runtime／Bridge。
 导航中的虚拟测量位移在布局提交时同步补偿到当前坐标，缓动只负责剩余导航距离，
 不让目标位置变化引入反向缓动。
@@ -428,7 +428,9 @@ Webview 出站 parser 在 `bridge/host/` 按域组织。Host 与 UI 共享纯更
   flush 并取消旧调度，避免隐藏页积压逐 token 重放造成长历史的重复扫描。
   Custom Models、Subagent 各自保留身份和状态规则，不把它们的所有 payload 放进根 reducer。
 - `composer/useComposerFlow.tsx` 持有草稿、发送锁、发送/队列/slash 操作和 composer 命令同步；
-  文本替换、清空和持久化共用入口。Session、Workspace、Capabilities、Message actions
+  文本替换、清空和持久化共用入口，队列编辑期间持久化原普通草稿。
+  设置更新阻止直接发送；Host 通过既有 `turn.error` 的 `turn-send-rejected` 代码
+  关联未接受的请求，输入版本未变化才恢复被拒绝的草稿。Session、Workspace、Capabilities、Message actions
   分别在专属 Hook 中组合，V2 `ChatApp.tsx` 负责顶层状态、页面和 provider 装配。
 - `state/store.ts` 只负责 sequence 入口、身份路由和 reducer 装配；snapshot、
   optimistic intent、capability、workspace、interaction、turn 更新有各自模块。
@@ -444,6 +446,18 @@ Webview 出站 parser 在 `bridge/host/` 按域组织。Host 与 UI 共享纯更
 - `images/localImageSource.tsx` 合并同路径 pending 请求并在响应时结算；字节缓存继续遵守
   reducer 的 24 项限制。可见访问触发读取，淘汰时不反复自动请求，离开后重入可重取；
   会话切换重建请求协调器，不把旧响应当作新会话结果。
+- 共享 Markdown 对较长的流式正文和静态历史完整解析 GFM、数学及引用定义，
+  不按空行切割文档。每个 Webview 共用一个 Worker 和公平队列，各正文只保留
+  一个在途解析并合并后续追加；切换正文身份时重置节点差量，避免串用解析结果。
+  Worker 逐顶层节点比较精确序列化结果，只回传变化节点，主线程复用未变节点。
+  完整解析得到的顶层节点分批挂载，全部呈现后才清除等待状态；不截断源文本。
+  活动流保留空闲线程以便追加，完成／替换／卸载释放自身任务，队列和活动流均
+  为空时终止线程。短正文及无法创建 Worker 的环境保留同步解析，解析错误明确抛出。
+  解析线程不持有 Host／Runtime 状态。
+- 历史虚拟行在 Markdown 等待期间保留已知行高；导航等待异步内容的最终布局，
+  通过布局／状态变更唤醒，不持续轮询。用户手动滚动仍立即取消导航和跟随。
+  Worker 源码在包、生产及 Vite 构建中静态内联，Webview 仅增加 `worker-src blob:`，
+  保留原脚本 nonce、零网络和原始 HTML 禁用规则；独立解析产物依赖也纳入许可证清单。
 
 ### 目录与可读性约束
 

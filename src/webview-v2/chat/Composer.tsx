@@ -47,13 +47,14 @@ export function Composer({ state, port, flow, blocked, renderInputRow, onFileSea
   const reportLayout = useCallback((sample: ComposerLayout) => {
     port.postMessage({ type: 'webview.diagnostic', kind: 'perf-batch', detail: JSON.stringify({ source: 'composer.layout', sessionId: state.sessionId, ...sample }) });
   }, [port, state.sessionId]);
-  const running = state.turn?.status === 'submitting' || state.turn?.status === 'streaming';
+  const running = state.turn?.status === 'submitting' || state.turn?.status === 'streaming' || state.turn?.status === 'stopping';
   const quote = parseSelectionQuote(flow.draft);
   const quotePrefixLength = quote ? flow.draft.length - quote.body.length : 0;
   const submit = () => { if (!flow.callbacks.isSendDisabled) void flow.callbacks.onSend(flow.draft); };
   return <ComposerView value={quote?.body ?? flow.draft} quote={quote?.quote} onQuoteClear={quote ? () => flow.handleDraftChange(quote.body) : undefined}
     onChange={(value, cursor) => suggestions.change(quote ? formatSelectionQuote(quote.quote, value) : value, cursor + quotePrefixLength)}
     onSend={submit} onStop={() => void flow.callbacks.onCancel()} running={running} sendDisabled={flow.callbacks.isSendDisabled}
+    stopLabel={state.turn?.status === 'stopping' ? 'Retry Stop' : 'Stop'}
     sendLabel={flow.queueEditingId !== null ? 'Save queued message' : state.turn?.status === 'stopping' || flow.queuedCount > 0 ? 'Queue message' : 'Send'}
     placeholder={state.transcript.length ? 'Add a follow up' : 'Ask Droid about your workspace'} maxLength={MAX_TURN_TEXT_LENGTH - quotePrefixLength}
     focusSignal={flow.draftCommand.id} notice={notice} onLayout={reportLayout}

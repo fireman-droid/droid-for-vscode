@@ -64,7 +64,7 @@ describe('ChatController', () => {
     const runtime = createMockRuntime();
     const { controller, messages } = createController(() => runtime);
     Object.defineProperty(controller, 'turnSnapshots', {
-      value: { capture } as unknown as TurnSnapshotStore,
+      value: { capture, read: () => undefined, dispose: async () => undefined } as unknown as TurnSnapshotStore,
     });
     const recordHost = vi.spyOn(controller, 'recordHost');
 
@@ -96,6 +96,9 @@ describe('ChatController', () => {
         ([event]) => event.name === 'host.changes.snapshot-failed',
       ),
     ).toHaveLength(1);
+    await vi.waitFor(() => expect(lastMessage(messages, 'turn.state')?.status).toBe('completed'));
+    expect(runtime.sendTurn).toHaveBeenCalledExactlyOnceWith('Capture safely', undefined);
+    await controller.dispose();
   });
 
   it('initializes one runtime on repeated ready messages and keeps sequences monotonic', async () => {
@@ -1709,7 +1712,14 @@ describe('ChatController', () => {
       .fn<() => MockRuntime>()
       .mockReturnValueOnce(first)
       .mockReturnValueOnce(second);
-    const { controller, messages } = createController(createRuntime);
+    // A resumed runtime needs authoritative session history, independent of disposal.
+    const history: SessionHistoryLoader = {
+      loadHistory: vi.fn(async () => ({ status: 'available' as const, state: {
+        transcript: [{ id: 'sdk-user-1', kind: 'user' as const, text: 'Fail', messageId: 'sdk-user-1' }],
+        historyStatus: 'complete' as const, truncated: false,
+      } })),
+    };
+    const { controller, messages } = createController(createRuntime, undefined, undefined, undefined, history);
     ready(controller);
     await waitForConnected(messages);
     send(controller, 'session-1', 'turn-1', 'Fail');
@@ -1738,16 +1748,20 @@ describe('ChatController', () => {
       cwd: 'C:\\workspace',
       sessionId: 'session-1',
     });
+    expect(history.loadHistory).toHaveBeenCalledExactlyOnceWith({ cwd: 'C:\\workspace', sessionId: 'session-1' });
+    await controller.dispose();
   });
 
-  it('fails a stopped turn safely when interrupt rejects and drops late events', async () => {
+  it('keeps a rejected Stop locked until a retried interrupt releases the stream', async () => {
     const release = deferred<void>();
+    const firstStop = deferred<void>();
     const runtime = createMockRuntime(async function* () {
       yield { type: 'text-delta', text: 'before stop' };
       await release.promise;
-      yield { type: 'text-delta', text: 'late sensitive content' };
+      throw new DOMException('Stopped', 'AbortError');
     });
-    runtime.interrupt.mockRejectedValue(new Error('sensitive interrupt failure'));
+    runtime.interrupt.mockImplementationOnce(() => firstStop.promise)
+      .mockImplementationOnce(async () => { release.resolve(); });
     const { controller, messages } = createController(() => runtime);
     ready(controller);
     await waitForConnected(messages);
@@ -1757,24 +1771,28 @@ describe('ChatController', () => {
     });
 
     stop(controller, 'session-1', 'turn-1');
+    stop(controller, 'session-1', 'turn-1');
+    await Promise.resolve();
+    stop(controller, 'session-1', 'turn-1');
+    expect(runtime.interrupt).toHaveBeenCalledOnce();
+    firstStop.reject(new Error('sensitive interrupt failure'));
 
     await vi.waitFor(() => {
-      expect(turnStates(messages).at(-1)?.status).toBe('failed');
+      expect(messages).toContainEqual(expect.objectContaining({
+        type: 'runtime.diagnostic', code: 'turn-stop-unconfirmed',
+      }));
     });
-    expect(messages).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: 'turn.error',
-          code: 'runtime-interrupt-failed',
-          retryable: true,
-        }),
-      ]),
-    );
-    release.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(JSON.stringify(messages)).not.toContain('late sensitive content');
+    expect(turnStates(messages).at(-1)?.status).toBe('stopping');
+    expect(controller.turnState.turnWatchdog).not.toBeNull();
+    send(controller, 'session-1', 'turn-2', 'Must not start concurrently');
+    expect(runtime.sendTurn).toHaveBeenCalledOnce();
+    expect(turnStates(messages)).not.toContainEqual(expect.objectContaining({ turnId: 'turn-2' }));
+    stop(controller, 'session-1', 'turn-1');
+    await vi.waitFor(() => expect(turnStates(messages).at(-1)?.status).toBe('interrupted'));
+    expect(runtime.interrupt).toHaveBeenCalledTimes(2);
+    expect(controller.turnState.turnWatchdog).toBeNull();
     expect(JSON.stringify(messages)).not.toContain('sensitive interrupt failure');
+    await controller.dispose();
   });
 
   it('reports cleanup failure and allows a later retry with a fresh runtime', async () => {
@@ -1789,7 +1807,13 @@ describe('ChatController', () => {
       .fn<() => MockRuntime>()
       .mockReturnValueOnce(first)
       .mockReturnValueOnce(second);
-    const { controller, messages } = createController(createRuntime);
+    const history: SessionHistoryLoader = {
+      loadHistory: vi.fn(async () => ({ status: 'available' as const, state: {
+        transcript: [{ id: 'sdk-user-1', kind: 'user' as const, text: 'Fail', messageId: 'sdk-user-1' }],
+        historyStatus: 'complete' as const, truncated: false,
+      } })),
+    };
+    const { controller, messages } = createController(createRuntime, undefined, undefined, undefined, history);
     ready(controller);
     await waitForConnected(messages);
     send(controller, 'session-1', 'turn-1', 'Fail');
@@ -1809,6 +1833,7 @@ describe('ChatController', () => {
     });
     expect(createRuntime).toHaveBeenCalledOnce();
     expect(JSON.stringify(messages)).not.toContain('sensitive cleanup failure');
+    expect(history.loadHistory).not.toHaveBeenCalled();
 
     retry(controller, 'session-1');
     await vi.waitFor(() => {
@@ -1818,6 +1843,8 @@ describe('ChatController', () => {
         connection: { status: 'connected' },
       });
     });
+    expect(history.loadHistory).toHaveBeenCalledExactlyOnceWith({ cwd: 'C:\\workspace', sessionId: 'session-1' });
+    await controller.dispose();
   });
 
   it('does not create a replacement runtime when disposed during retry cleanup', async () => {

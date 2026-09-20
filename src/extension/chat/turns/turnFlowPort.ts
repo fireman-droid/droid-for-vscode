@@ -26,21 +26,20 @@ export interface TurnFlowPort
     Pick<
       SessionLifecycleState,
       | 'runtime'
-      | 'connection'
       | 'conversationId'
       | 'runtimeGeneration'
       | 'activeRuntimeCwd'
       | 'disposed'
     >
   > &
-    Pick<SessionLifecycleState, 'sessionId' | 'sessionOperationInProgress'>;
+    Pick<SessionLifecycleState, 'sessionId' | 'sessionOperationInProgress' | 'connection'>;
   readonly catalogState: Readonly<
     Pick<SessionDirectoryState, 'catalogCwd' | 'refreshInProgress'>
   > &
     Pick<SessionDirectoryState, 'sessions'>;
   readonly turnState: Pick<
     TurnState,
-    'turn' | 'turnGeneration' | 'specHandoff' | 'turnIo'
+    'turn' | 'turnGeneration' | 'stopRequestGeneration' | 'specHandoff' | 'turnIo'
   >;
   readonly attachmentState: Pick<AttachmentStagingState, 'pendingSentAttachments'>;
   readonly recoveryState: Pick<ConversationRecoveryState, 'transcript'>;

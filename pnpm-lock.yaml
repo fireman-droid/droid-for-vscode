@@ -135,15 +135,24 @@ importers:
       '@tanstack/react-virtual':
         specifier: ^3.14.9
         version: 3.14.9(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      '@types/hast':
+        specifier: 3.0.5
+        version: 3.0.5
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
       clsx:
         specifier: 2.1.1
         version: 2.1.1
+      hast-util-to-jsx-runtime:
+        specifier: 2.3.6
+        version: 2.3.6
       highlight.js:
         specifier: ^11.11.1
         version: 11.11.1
+      html-url-attributes:
+        specifier: 3.0.1
+        version: 3.0.1
       katex:
         specifier: ^0.16.47
         version: 0.16.47
@@ -174,9 +183,24 @@ importers:
       remark-math:
         specifier: 6.0.0
         version: 6.0.0
+      remark-parse:
+        specifier: 11.0.0
+        version: 11.0.0
+      remark-rehype:
+        specifier: 11.1.2
+        version: 11.1.2
       tailwind-merge:
         specifier: 3.6.0
         version: 3.6.0
+      unified:
+        specifier: 11.0.5
+        version: 11.0.5
+      unist-util-visit:
+        specifier: 5.1.0
+        version: 5.1.0
+      vfile:
+        specifier: 6.0.3
+        version: 6.0.3
     devDependencies:
       '@tailwindcss/cli':
         specifier: 4.3.3

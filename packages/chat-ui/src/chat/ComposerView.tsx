@@ -14,6 +14,7 @@ export interface ComposerViewProps {
   readonly running?: boolean;
   readonly sendDisabled?: boolean;
   readonly sendLabel?: string;
+  readonly stopLabel?: string;
   readonly placeholder?: string;
   readonly maxLength?: number;
   readonly focusSignal?: number;
@@ -44,7 +45,7 @@ export interface ComposerLayout {
 }
 
 export function ComposerView({
-  value, onChange, onSend, onStop, running, sendDisabled, sendLabel = 'Send', placeholder,
+  value, onChange, onSend, onStop, running, sendDisabled, sendLabel = 'Send', stopLabel = 'Stop', placeholder,
   maxLength, focusSignal = 0, quote, onQuoteClear, notice, inputReplacement, attachments,
   suggestions, suggestionsOpen = false, onSuggestionsOpenChange, suggestionsListId, activeSuggestionId,
   onKeyDown, onPaste, onDrop, onDragOver, renderInputRow, onLayout,
@@ -91,7 +92,7 @@ export function ComposerView({
       if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); }
     }}
     onPaste={onPaste} className="min-h-[18px] max-h-42 resize-none rounded-none border-0 bg-transparent p-0 text-[13px] leading-[18px] focus-visible:ring-0" />;
-  const action = running && onStop ? <Button size="icon-sm" variant="plain" className="v2-composer-send" aria-label="Stop" title="Stop" onClick={onStop}><Square className="size-3 fill-current" /></Button>
+  const action = running && onStop ? <Button size="icon-sm" variant="plain" className="v2-composer-send" aria-label={stopLabel} title={stopLabel} onClick={onStop}><Square className="size-3 fill-current" /></Button>
     : <Button size="icon-sm" variant="plain" className="v2-composer-send" type="submit" aria-label={sendLabel} disabled={sendDisabled}><ArrowUp className="size-3.5" /></Button>;
   return <Popover open={suggestionsOpen} onOpenChange={onSuggestionsOpenChange}>
     <PopoverAnchor asChild>

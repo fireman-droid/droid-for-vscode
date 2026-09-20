@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postcss from 'postcss';
 import { createThirdPartyNotices } from './scripts/thirdPartyNotices.mjs';
+import { createMarkdownWorkerBuild } from './scripts/markdownWorkerBuild.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const source = path.join(root, 'src');
@@ -15,6 +16,7 @@ const notices = createThirdPartyNotices(process.cwd(), path.join(root, 'THIRD_PA
 await notices.addPreprocessedPackage(path.dirname(require.resolve('tailwindcss/package.json')));
 const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
 const dependencies = new Set(Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies }));
+const markdownWorker = createMarkdownWorkerBuild();
 const entries = {};
 async function collect(dir) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -32,8 +34,10 @@ const result = await build({
   entryPoints: entries, outdir: out, bundle: true, splitting: true,
   packages: 'external', format: 'esm', platform: 'browser', target: 'es2022',
   metafile: true, legalComments: 'eof', logLevel: 'info',
+  plugins: [markdownWorker.esbuild],
 });
 await notices.add(result.metafile);
+await markdownWorker.addNotices(notices);
 for (const input of Object.keys(result.metafile.inputs)) {
   const relative = path.relative(source, path.resolve(input));
   if (relative.startsWith('..') || path.isAbsolute(relative)) {

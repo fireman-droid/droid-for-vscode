@@ -3,6 +3,7 @@ import { type TurnWatchdogState } from './turnWatchdog';
 export class TurnState {
   turn: CurrentTurn | null = null;
   turnGeneration = 0;
+  stopRequestGeneration: number | null = null;
   specHandoff:
     | { readonly turnId: string; readonly status: 'expected' }
     | {

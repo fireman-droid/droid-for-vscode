@@ -21,6 +21,7 @@ import {
   type SessionReplacementEligibility,
 } from '../operationEligibility';
 import { SESSION_NEW_FAILED_MESSAGE } from './sessionDirectory';
+import { CATALOG_ERROR_MESSAGE } from './sessionCatalog';
 import {
   createSessionSwitchTimings,
   elapsedMs,
@@ -70,6 +71,11 @@ export async function startup(ctl: RuntimeLifecyclePort): Promise<void> {
       continue;
     }
     ctl.catalogState.sessions = catalog;
+    if (catalog.status === 'error') {
+      ctl.sessionState.connection = { status: 'unavailable', message: CATALOG_ERROR_MESSAGE };
+      ctl.emitSnapshot();
+      return;
+    }
     ctl.effects.seedBackgroundRunning(workspace.cwd);
 
     const selectedSessionId = ctl.recoveryStore.getSelectedSessionId();

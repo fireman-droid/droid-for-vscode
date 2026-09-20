@@ -7,7 +7,8 @@ Factory SDK 或 Droid Bridge；接入项目提供状态、回调和业务插槽�
 
 项目原创代码使用 MIT，见 `LICENSE`。适配源码保留原始许可证，完整条款见
 `THIRD_PARTY_LICENSES.txt`；构建附带的 Tailwind 样式和 KaTeX 字体条款见
-`dist/THIRD_PARTY_LICENSES.txt`。其他 npm 运行依赖不打入 ESM，仍适用各自许可证。
+`dist/THIRD_PARTY_LICENSES.txt`；内联 Markdown Worker 的解析依赖条款也包含其中。
+其余外部 npm 运行依赖仍适用各自许可证。
 构建脚本和补充许可证均位于包内，复制整个源码目录即可保留独立构建能力。
 
 ## 构建与使用
@@ -117,6 +118,12 @@ export function ChatPane(props: {
 - 普通浏览器可从 `@droidvisx/chat-ui/markdown/mermaidRenderer` 导入
   `renderMermaid`，交给 `ContentProvider.renderDiagram`；此入口延迟加载 Mermaid。
   严格 CSP 的 Webview 可以注入自己的带 nonce 资源加载器。未提供渲染器时保留源码。
+- 较长的流式 Markdown 和静态历史由包内共享 Worker 排队解析，完整保留跨段语义；
+  解析后的顶层节点分批呈现，卸载取消任务，全部任务和活动流结束后释放线程。
+  宿主 CSP 需允许 `worker-src blob:`，无需开放网络或 eval。无 Worker、创建被阻止
+  或短正文采用同步解析，这类环境不承诺同等性能。
+  直接消费未构建源码时须接入包内 `scripts/markdownWorkerBuild.mjs`
+  插件，分发 ESM 已包含内联线程源码。
 - `UiRoot` 提供 light/dark、字体变量 `--chat-font-sans`／`--chat-font-mono`
   和内部 Portal 容器。分发 CSS 的选择器及 reset 限定在 `.agent-chat-ui`；
   字体资源随包提供，不依赖用户工程扫描本包 Tailwind 类名。公共 `@font-face`
@@ -129,8 +136,10 @@ export function ChatPane(props: {
 
 Droid 的五个生产入口使用本包。旧组件路径保留薄 re-export，业务包装层只做
 Droid 状态投影、Bridge 回调和专属页面组合；没有第二份公共组件实现。
-当前 Droid 构建从包源码生成单文件 IIFE，继续使用原 CSP／宿主主题；
+当前 Droid 构建从包源码生成单文件 IIFE，保留脚本 nonce／宿主主题，
+仅为内联 Markdown 线程允许 `worker-src blob:`；
 其他项目消费分发包的 ESM、声明和 scoped CSS。
 
 类型检查与包构建检查外部依赖和源码边界。真实行为仍需在接入项目中验收；
-本次没有运行测试、浏览器探测或任何 CLI／模型请求。
+长流式解析有本地回归与隔离浏览器性能对照，结果见仓库 `docs/STATUS.md`；
+这些验证不调用真实模型，也不代替接入项目的完整交互验收。

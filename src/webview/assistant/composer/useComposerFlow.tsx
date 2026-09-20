@@ -1,7 +1,9 @@
-import { useCallback, useMemo, useRef, useState, type Dispatch } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch } from 'react';
 import { MAX_TURN_TEXT_LENGTH } from '../../../shared/protocol/bounds';
+import { TURN_SEND_REJECTED_CODE } from '../../../shared/protocol/turns';
 import { persistDraft, restoreDraft } from '../../bridge/vscode';
 import { createTurnId, post, type ChatPort } from '../shell/chatIntent';
+import { subscribeHostMessages } from '../shell/hostMessageSource';
 import { canSendMessage, shouldQueueMessage } from './sendEligibility';
 import {
   CANVAS_REQUEST_TEMPLATE,
@@ -19,6 +21,7 @@ type InputState = Pick<
   | 'queue'
   | 'queueEditing'
   | 'btwAvailable'
+  | 'settings'
 >;
 
 export function useComposerFlow(
@@ -38,15 +41,51 @@ export function useComposerFlow(
   const [draftCommand, setDraftCommand] = useState({ id: 0, text: draft });
   const [sendSignal, setSendSignal] = useState(0);
   const pending = useRef(false);
+  const draftRevision = useRef(0);
+  const pendingSend = useRef<{ sessionId: string; turnId: string; text: string; revision: number } | null>(null);
+  const previousDraft = useRef<string | null>(null);
+  const currentSession = useRef(state.sessionId);
+  if (currentSession.current !== state.sessionId) {
+    currentSession.current = state.sessionId;
+    pendingSend.current = null;
+  }
   const writeDraft = useCallback(
     (text: string, replaceComposer = false): void => {
+      draftRevision.current += 1;
       draftValue.current = text;
       setDraft(text);
       if (replaceComposer) setDraftCommand((command) => ({ id: command.id + 1, text }));
-      persistDraft(vscode, text);
+      // Queue edits are temporary; reloading must still restore the ordinary draft.
+      persistDraft(vscode, previousDraft.current ?? text);
     },
     [vscode],
   );
+  useEffect(() => subscribeHostMessages((message) => {
+    const sent = pendingSend.current;
+    if (sent === null) return;
+    if ((message.type === 'host.snapshot' || message.type === 'host.connection') && message.sessionId !== sent.sessionId) {
+      pendingSend.current = null;
+      return;
+    }
+    if ((message.type !== 'turn.error' && message.type !== 'turn.state') ||
+      message.sessionId !== sent.sessionId || message.turnId !== sent.turnId) return;
+    pendingSend.current = null;
+    pending.current = false;
+    if (message.type === 'turn.error' && message.code === TURN_SEND_REJECTED_CODE &&
+      currentSession.current === sent.sessionId && draftRevision.current === sent.revision) {
+      writeDraft(sent.text, true);
+    }
+  }), [writeDraft]);
+  const finishQueueEdit = useCallback(() => {
+    dispatch({ type: 'queue.editEnd' });
+    if (previousDraft.current === null) return;
+    const original = previousDraft.current;
+    previousDraft.current = null;
+    writeDraft(original, true);
+  }, [dispatch, writeDraft]);
+  useEffect(() => {
+    if (state.queueEditing === null && previousDraft.current !== null) finishQueueEdit();
+  }, [state.queueEditing, finishQueueEdit]);
   const handleDraftChange = useCallback((text: string) => writeDraft(text), [writeDraft]);
   const appendCanvasDraft = useCallback(
     (text: string): void => {
@@ -69,10 +108,11 @@ export function useComposerFlow(
   const queuedCount = state.queue.items.length;
   const connectionStatus = state.connection.status;
   const interactionCount = state.interactions.length;
+  const settingsUpdating = state.settings.status === 'updating';
   const { blocked, compact, navigate, openBtw, askBtw } = routes;
   const handleSend = useCallback(
     async (text: string): Promise<void> => {
-      if (blocked) return;
+      if (blocked || settingsUpdating) return;
       if (queueEditingId !== null) {
         if (
           sessionId !== null &&
@@ -87,8 +127,7 @@ export function useComposerFlow(
             text,
           });
         }
-        dispatch({ type: 'queue.editEnd' });
-        writeDraft('');
+        finishQueueEdit();
         return;
       }
       const builtin = resolveBuiltinSlash(text, { btwEnabled: state.btwAvailable });
@@ -121,6 +160,8 @@ export function useComposerFlow(
       };
       const queueRoute = shouldQueueMessage(eligibility);
       if (!canSendMessage(eligibility, text, !queueRoute && pending.current)) return;
+      setSendSignal((value) => value + 1);
+      writeDraft('');
       if (queueRoute) {
         const queueId = createTurnId();
         dispatch({ type: 'queue.add', queueId, text });
@@ -141,6 +182,7 @@ export function useComposerFlow(
       } else {
         pending.current = true;
         const nextTurnId = createTurnId();
+        pendingSend.current = { sessionId: eligibility.sessionId, turnId: nextTurnId, text, revision: draftRevision.current };
         dispatch({ type: 'turn.send', turnId: nextTurnId, text });
         post(vscode, {
           type: 'turn.send',
@@ -149,11 +191,11 @@ export function useComposerFlow(
           text,
         });
       }
-      setSendSignal((value) => value + 1);
-      writeDraft('');
     },
     [
       blocked,
+      settingsUpdating,
+      finishQueueEdit,
       queueEditingId,
       sessionId,
       connectionStatus,
@@ -183,6 +225,7 @@ export function useComposerFlow(
     (queueId: string): void => {
       const item = state.queue.items.find((entry) => entry.queueId === queueId);
       if (sessionId === null || item === undefined) return;
+      if (previousDraft.current === null) previousDraft.current = draftValue.current;
       dispatch({ type: 'queue.editBegin', queueId });
       setSendSignal((value) => value + 1);
       writeDraft(item.text, true);
@@ -191,9 +234,8 @@ export function useComposerFlow(
   );
   const handleQueueEditCancel = useCallback((): void => {
     if (queueEditingId === null) return;
-    dispatch({ type: 'queue.editEnd' });
-    writeDraft('', true);
-  }, [queueEditingId, dispatch, writeDraft]);
+    finishQueueEdit();
+  }, [queueEditingId, finishQueueEdit]);
   const handleQueueRemove = useCallback(
     (queueId: string): void => {
       if (sessionId === null) return;
@@ -216,7 +258,7 @@ export function useComposerFlow(
     if (
       sessionId === null ||
       turnId === null ||
-      (turnStatus !== 'submitting' && turnStatus !== 'streaming')
+      (turnStatus !== 'submitting' && turnStatus !== 'streaming' && turnStatus !== 'stopping')
     )
       return;
     post(vscode, { type: 'turn.stop', sessionId, turnId });
@@ -232,6 +274,7 @@ export function useComposerFlow(
         interactionCount,
         queuedCount,
         queueEditing: queueEditingId !== null,
+        settingsUpdating,
       },
       draft,
     );

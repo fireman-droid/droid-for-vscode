@@ -44,7 +44,7 @@ export function loadOperationReviewScope(
   const recordedOperations = flattenOperations(operations);
   const baseline = digest([message.sessionId, 'operations', message.turnId!]);
   const operationUndoBlocked = notices.length > 0 ? notices.join(' ').slice(0, 2_000) :
-    operations.some((operation) => operation.operationDiff.status !== 'ready')
+    operations.some(({ operationDiff }) => operationDiff.status === 'unavailable' && operationDiff.reason !== 'unchanged')
       ? 'Some operation evidence is unavailable. Automatic undo is blocked.' : undefined;
   const reviewScopeId = digest([
     message.sessionId,

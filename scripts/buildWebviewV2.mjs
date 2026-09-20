@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createThirdPartyNotices } from '../packages/chat-ui/scripts/thirdPartyNotices.mjs';
+import { createMarkdownWorkerBuild } from '../packages/chat-ui/scripts/markdownWorkerBuild.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(repository, 'dist', process.argv.includes('--production') ? 'webview' : 'webview-v2');
@@ -12,6 +13,7 @@ const require = createRequire(import.meta.url);
 const version = require('../package.json').version;
 const buildId = `v2-${new Date().toISOString()}`;
 const notices = createThirdPartyNotices(repository, path.join(repository, 'packages/chat-ui/THIRD_PARTY_LICENSES.txt'));
+const markdownWorker = createMarkdownWorkerBuild();
 await notices.addPreprocessedPackage(path.dirname(require.resolve('tailwindcss/package.json')));
 const tailwind = path.join(path.dirname(require.resolve('@tailwindcss/cli/package.json')), 'dist/index.mjs');
 await rm(output, { recursive: true, force: true });
@@ -73,6 +75,7 @@ for (const [entryPoint, filename] of [
     sourcemap: false,
     legalComments: 'eof',
     logLevel: 'info',
+    plugins: [markdownWorker.esbuild],
   });
   await notices.add(result.metafile);
   let usesChatUi = false;
@@ -92,4 +95,5 @@ for (const [entryPoint, filename] of [
   }
   if (filename !== 'mermaid' && !usesChatUi) throw new Error(`Production view does not consume chat-ui: ${filename}`);
 }
+await markdownWorker.addNotices(notices);
 await notices.write(path.join(output, 'THIRD_PARTY_LICENSES.txt'));
