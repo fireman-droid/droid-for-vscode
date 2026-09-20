@@ -454,6 +454,11 @@ Webview 出站 parser 在 `bridge/host/` 按域组织。Host 与 UI 共享纯更
   活动流保留空闲线程以便追加，完成／替换／卸载释放自身任务，队列和活动流均
   为空时终止线程。短正文及无法创建 Worker 的环境保留同步解析，解析错误明确抛出。
   解析线程不持有 Host／Runtime 状态。
+- Droid 适配层按 `turnId` 汇总已确认的工具结果，以会话／调用身份去重并合并文件路径。
+  进行中的 `FileChangeView` 与完成后的 `ChangeSummaryView` 只接收展示数据及回调；
+  不改变 Runtime 操作账本。累计行数来自记录补丁，工作区快照不参与 AI 归因。
+  Review 的可选打开意图 `action: undo` 仅限整轮 operations；Host 在本次打开之后
+  的队列屏障消费一次文件定位／撤销预览，绑定打开代际并复用现有确认写入流程。
 - 历史虚拟行在 Markdown 等待期间保留已知行高；导航等待异步内容的最终布局，
   通过布局／状态变更唤醒，不持续轮询。用户手动滚动仍立即取消导航和跟随。
   Worker 源码在包、生产及 Vite 构建中静态内联，Webview 仅增加 `worker-src blob:`，

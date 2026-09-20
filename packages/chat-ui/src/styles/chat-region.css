@@ -229,6 +229,68 @@
   .v2-chat-surface .operation-diff .diff-number { font-size: 11px; }
   .v2-chat-surface .operation-diff .review-hunk { font-size: 11px; }
   .v2-chat-surface .operation-diff footer { font-size: 11px; }
+  .dvx-change-summary {
+    min-width: 0;
+    margin-block: 12px 4px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--ink) 9%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ink) 2%, transparent);
+    color: var(--ink);
+    font-size: 13px;
+  }
+  .dvx-change-summary-header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; }
+  .dvx-change-summary-icon { width: 18px; height: 18px; flex: 0 0 auto; color: var(--muted-ink); }
+  .dvx-change-summary-heading { display: flex; flex: 1 1 auto; flex-direction: column; gap: 4px; min-width: 0; }
+  .dvx-change-summary-title { font-weight: 500; overflow-wrap: anywhere; }
+  .dvx-change-summary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-left: auto; }
+  .dvx-change-action {
+    display: inline-flex; min-height: 28px; align-items: center; gap: 4px; padding: 4px 8px;
+    border: 1px solid transparent; border-radius: 8px; color: var(--muted-ink); white-space: nowrap;
+  }
+  .dvx-change-action svg { width: 12px; height: 12px; }
+  .dvx-change-review { border-color: color-mix(in srgb, var(--ink) 10%, transparent); }
+  .dvx-change-file-list { min-width: 0; padding-block: 4px; border-top: 1px solid color-mix(in srgb, var(--ink) 6%, transparent); }
+  .dvx-change-file, .dvx-change-details { min-width: 0; }
+  .dvx-change-file-header { display: flex; min-width: 0; align-items: center; gap: 4px; }
+  .dvx-change-file-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
+  .dvx-change-row {
+    display: flex; width: 100%; min-width: 0; min-height: 32px; align-items: center; gap: 8px;
+    padding: 4px 8px; border-radius: 6px; color: var(--muted-ink); text-align: left;
+  }
+  .dvx-change-summary .dvx-change-row { padding-inline: 12px; border-radius: 0; }
+  .dvx-change-label { flex: 0 0 auto; }
+  .dvx-change-label:empty { display: none; }
+  .dvx-change-path { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dvx-change-stats { display: inline-flex; flex: 0 0 auto; gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .dvx-change-added { color: light-dark(#007041, #86b896); }
+  .dvx-change-removed { color: light-dark(#be1744, #d99598); }
+  .dvx-change-chevron { width: 12px; height: 12px; flex: 0 0 auto; }
+  .dvx-change-row[data-state='open'] > .dvx-change-chevron { rotate: 90deg; }
+  .dvx-change-more[data-state='open'] > .dvx-change-chevron { rotate: 180deg; }
+  .dvx-change-more {
+    display: flex; width: 100%; min-height: 32px; align-items: center; gap: 8px;
+    padding: 4px 12px; color: var(--muted-ink); text-align: left;
+  }
+  .dvx-change-details { padding-block: 4px 8px; overflow-x: auto; }
+  .dvx-change-summary .dvx-change-details { padding-inline: 8px; }
+  .dvx-change-note { padding: 8px 12px; border-top: 1px solid color-mix(in srgb, var(--ink) 6%, transparent); color: var(--muted-ink); font-size: 12px; overflow-wrap: anywhere; }
+  .dvx-change-action, .dvx-change-row:not(.dvx-change-row-static), .dvx-change-more {
+    transform: none;
+    transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+  }
+  .dvx-change-action:hover:not(:disabled), .dvx-change-row:not(.dvx-change-row-static):hover, .dvx-change-more:hover {
+    background: color-mix(in srgb, var(--ink) 4%, transparent); color: var(--ink);
+  }
+  .dvx-change-action:active:not(:disabled), .dvx-change-row:not(.dvx-change-row-static):active, .dvx-change-more:active {
+    transform: none; background: color-mix(in srgb, var(--ink) 6%, transparent);
+  }
+  .dvx-change-action:focus-visible, .dvx-change-row:focus-visible, .dvx-change-more:focus-visible {
+    outline: 1px solid var(--focus); outline-offset: -2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dvx-change-action, .dvx-change-row, .dvx-change-more { transition: none; }
+  }
   @media (hover: none) {
     .v2-chat-surface .v2-code-toolbar { opacity: 1; }
   }

@@ -11,6 +11,7 @@ import { isTurnActive } from '../../chat/internals';
 import type { SessionViewerPanelController } from '../sessionViewer/SessionViewerPanelController';
 import { MAX_GIT_COMMIT_SUBJECT_LENGTH } from '../../../shared/protocol/gitCommitFlow';
 import { operationDiffWithChanges } from '../../../shared/protocol/operationDiff';
+import type { ReviewScopeState } from '../../../shared/protocol/reviewProtocol';
 
 export class ReviewPanelController implements vscode.Disposable {
   private panel: vscode.WebviewPanel | null = null;
@@ -19,6 +20,8 @@ export class ReviewPanelController implements vscode.Disposable {
   private committing = false;
   private invalidated = false;
   private pendingOpen: ReviewPanelOpen | null = null;
+  private openGeneration = 0;
+  private pendingIntent: { generation: number; request: ReviewPanelOpen } | null = null;
   private agentTarget: { sessionId: string; reviewSessionId: string; root: string } | null = null;
   private readonly subscriptions: vscode.Disposable[];
   constructor(
@@ -35,8 +38,11 @@ export class ReviewPanelController implements vscode.Disposable {
         if (message.type === 'host.snapshot') {
           if (this.target && (this.target.sessionId !== controller.sessionState.sessionId || this.target.root !== controller.sessionState.activeRuntimeCwd))
             this.invalidated = true;
+          if (!this.current()) this.cancelPendingOpen();
           this.postContext();
         }
+        if (message.type === 'review.operationResult' && message.sessionId === this.target?.sessionId &&
+          message.operation === 'open' && !message.ok) this.pendingIntent = null;
         if ('sessionId' in message && message.sessionId === this.target?.sessionId &&
           message.type.startsWith('review.')) this.post(message);
         if (message.type === 'review.state' && message.state.sessionId === this.target?.sessionId) this.post(message);
@@ -52,6 +58,7 @@ export class ReviewPanelController implements vscode.Disposable {
     if (!sessionId || !root || (message && message.sessionId !== sessionId)) return;
     const latestOperation = this.latestOperationTurn();
     const latest = this.controller.effects.readLatestConversationChanges();
+    this.cancelPendingOpen();
     this.target = { sessionId, root,
       ...(message?.turnId ? { turnId: message.turnId } : {}),
       ...(message?.toolUseId ? { toolUseId: message.toolUseId } : {}),
@@ -76,7 +83,7 @@ export class ReviewPanelController implements vscode.Disposable {
     const receive = panel.webview.onDidReceiveMessage((value) => { void this.handle(value).catch((error) => this.postError(error)); });
     const dispose = panel.onDidDispose(() => {
       receive.dispose(); dispose.dispose();
-      if (this.panel === panel) { this.panel = null; this.ready = false; this.target = null; }
+      if (this.panel === panel) { this.panel = null; this.ready = false; this.target = null; this.cancelPendingOpen(); }
     });
     const dist = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview');
     panel.webview.html = getWebviewHtml(panel.webview, {
@@ -84,6 +91,7 @@ export class ReviewPanelController implements vscode.Disposable {
     }, undefined, readWebviewBootTheme());
   }
   dispose(): void {
+    this.cancelPendingOpen();
     this.panel?.dispose();
     this.subscriptions.forEach((subscription) => subscription.dispose());
   }
@@ -97,8 +105,60 @@ export class ReviewPanelController implements vscode.Disposable {
     this.postTheme(); this.postContext();
     const message = this.pendingOpen;
     this.pendingOpen = null;
+    const intent = message.toolUseId === undefined && (message.path !== undefined || message.action !== undefined)
+      ? { generation: this.openGeneration, request: message } : null;
+    if (intent) { void this.openWithIntent(intent); return; }
     this.controller.handleMessage({ type: 'review.open', sessionId: message.sessionId, scopeKind: message.scopeKind,
       ...(message.turnId ? { turnId: message.turnId } : {}) });
+  }
+  private async openWithIntent(intent: NonNullable<ReviewPanelController['pendingIntent']>): Promise<void> {
+    const message = intent.request;
+    try {
+      // Drain earlier opens and their failures before arming this request's intent.
+      await this.review.replayTo(message.sessionId, () => {});
+      if (intent.generation !== this.openGeneration || !this.current()) return;
+      this.pendingIntent = intent;
+      this.controller.handleMessage({ type: 'review.open', sessionId: message.sessionId, scopeKind: message.scopeKind,
+        ...(message.turnId ? { turnId: message.turnId } : {}) });
+      // This queued replay follows this open; an earlier broadcast for the same turn cannot consume it.
+      await this.review.replayTo(message.sessionId, (response) => {
+        if (response.type === 'review.state') this.completeOpenIntent(intent, response.state);
+      });
+    } catch (error) {
+      if (intent.generation !== this.openGeneration || !this.current()) return;
+      this.pendingIntent = null;
+      this.postError(error);
+    }
+  }
+  private cancelPendingOpen(): void {
+    this.openGeneration += 1;
+    this.pendingOpen = null;
+    this.pendingIntent = null;
+  }
+  private completeOpenIntent(intent: NonNullable<ReviewPanelController['pendingIntent']>, state: ReviewScopeState): void {
+    const request = intent.request;
+    if (this.pendingIntent !== intent || intent.generation !== this.openGeneration || !this.current() ||
+      state.sessionId !== request.sessionId || state.scopeKind !== request.scopeKind || state.turnId !== request.turnId) return;
+    this.pendingIntent = null;
+    const scope = { sessionId: state.sessionId, reviewScopeId: state.reviewScopeId, baseline: state.baseline };
+    if (request.path !== undefined) {
+      if (!state.files.some((file) => file.path === request.path)) {
+        this.postError(new Error('This file is no longer available in the selected review.'));
+        return;
+      }
+      this.controller.handleMessage({ type: 'review.selectFile', ...scope, path: request.path });
+    }
+    if (request.action === 'undo') {
+      if (state.lifecycle === 'writing') {
+        this.postError(new Error('Wait for this turn and its delegated operations to finish before undoing changes.'));
+        return;
+      }
+      if (state.files.length === 0) {
+        this.postError(new Error('No recorded operations are available to undo for this turn.'));
+        return;
+      }
+      this.controller.handleMessage({ type: 'review.restorePreview', ...scope, target: 'turn' });
+    }
   }
   private postContext(): void {
     const target = this.target;
@@ -190,6 +250,7 @@ export class ReviewPanelController implements vscode.Disposable {
     const action = parseWebviewMessage(value);
     if (action && action.type.startsWith('review.') && 'sessionId' in action && action.sessionId === target.sessionId) {
       if (action.type === 'review.open') {
+        this.cancelPendingOpen();
         this.target = { sessionId: target.sessionId, root: target.root };
         this.postContext();
       }

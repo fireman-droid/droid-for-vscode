@@ -11,6 +11,9 @@ export { PlanLine, PlanSteps, type PlanPresentation, type PlanStep } from './cha
 export { ActivityItem } from './chat/ActivityItem';
 export { ActivityGroupView, type ActivityPresentation } from './chat/ActivityGroupView';
 export { ActivityResult } from './chat/ActivityResult';
+export { ChangeSummaryView, type ChangeSummaryViewProps } from './chat/ChangeSummaryView';
+export { FileChangeView, type FileChangeViewProps } from './chat/FileChangeView';
+export type { ChangeFile } from './chat/changePresentation';
 export { CommandCard, type CommandCardProps } from './chat/CommandCard';
 export { CommandActions, CommandOutput } from './chat/CommandOutput';
 export { SideChatSheet } from './chat/SideChatSheet';

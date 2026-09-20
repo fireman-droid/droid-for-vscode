@@ -7,10 +7,12 @@ import { AssistantReply } from '../chat/AssistantReply';
 import { ReadOnlyQuestion } from './ReadOnlyQuestion';
 import { isPlanLive, selectPlanAnchors } from '../../webview/assistant/transcript/planAnchor';
 import { PlanLine } from '../chat/PlanLine';
+import { summarizeOperations } from '../chat/operationSummary';
 
 export function ReadOnlyTranscript({ items, running, truncated = false }: { readonly items: readonly SessionTranscriptItem[]; readonly running: boolean; readonly truncated?: boolean }) {
   const { descriptors, replyTails } = useMemo(() => describeTranscript(items), [items]);
   const plans = useMemo(() => selectPlanAnchors(items), [items]);
+  const operationSummaries = useMemo(() => summarizeOperations(items), [items]);
   const [planChoice, setPlanChoice] = useState<{ id: string; expanded: boolean } | null>(null);
   const ids = useMemo(() => descriptors.map((item) => item.kind === 'user' ? item.item.id : item.id), [descriptors]);
   const clock = useRef<CompletionClock>(new Map());
@@ -36,6 +38,7 @@ export function ReadOnlyTranscript({ items, running, truncated = false }: { read
     }
     const status = resolveAssistantStatus(descriptor.items, descriptor.turnId, active);
     return <AssistantReply descriptor={descriptor} status={status} waiting={null} replyText={replyTails.get(descriptor.id)} readOnly
+      operationSummary={operationSummaries.get(descriptor.turnId)} operationsLive={status.type === 'running'} onInteract={stopFollowing}
       completedAt={observeCompletion(clock.current, descriptor.id, status.type === 'running')} regenerate={undefined} fork={undefined} />;
   }} />;
 }

@@ -16,7 +16,7 @@ import { AssistantReply } from './AssistantReply';
 import { useEditAttachmentIngress } from './useEditAttachmentIngress';
 import { getHistoryNotice } from '../../webview/assistant/shell/statusMessage';
 import { isPlanLive, selectPlanAnchors } from '../../webview/assistant/transcript/planAnchor';
-import { AiOperationSummary, summarizeOperations } from './AiOperationSummary';
+import { summarizeOperations } from './operationSummary';
 import { ChatStartup } from './ChatStartup';
 
 import { TranscriptView, type TranscriptHandle } from '@droidvisx/chat-ui/chat/TranscriptView';
@@ -163,10 +163,12 @@ export function Transcript({
       const replyPending = pendingIds.has(id);
       const status = resolveAssistantStatus(message.items, message.turnId, state.turn);
       const summary = lastTurnRows.get(message.turnId) === message.id ? operationSummaries.get(message.turnId) : undefined;
-      return <><AssistantReply descriptor={message} status={status} waiting={waiting} replyText={replyPending ? undefined : replyTails.get(message.id)}
+      const operationsLive = state.turn?.turnId === message.turnId
+        ? running || state.turn.status === 'stopping' : status.type === 'running';
+      return <AssistantReply descriptor={message} status={status} waiting={waiting} replyText={replyPending ? undefined : replyTails.get(message.id)}
+        operationSummary={summary} operationsLive={operationsLive} onInteract={stopFollowing}
         completedAt={observeCompletion(completionClock.current, message.id, replyPending || status.type === 'running')}
         regenerate={message.id === lastReplyId && canResend && actions.regenerateAnchor !== null ? actions.handleRegenerate : undefined}
-        fork={message.id === lastReplyId && canResend ? onFork : undefined} />
-        {summary ? <AiOperationSummary summary={summary} /> : null}</>;
+        fork={message.id === lastReplyId && canResend ? onFork : undefined} />;
     }} />;
 }

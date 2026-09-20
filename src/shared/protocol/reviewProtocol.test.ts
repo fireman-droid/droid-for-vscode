@@ -2,12 +2,28 @@ import { describe, expect, it } from 'vitest';
 
 import { parseReviewHostMessage, parseReviewWebviewMessage } from './reviewProtocol';
 import { isSafeWorkspaceRelativePath } from '../validation/guards';
-import { isReviewPanelFile } from './reviewPanelProtocol';
+import { isReviewPanelFile, parseReviewPanelRequest } from './reviewPanelProtocol';
 
 const isId = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0;
 
 describe('review protocol', () => {
+  it('accepts turn operation undo entry and rejects incompatible or unknown actions', () => {
+    const request = { type: 'review.panel.open', sessionId: 'session-1', scopeKind: 'operations', turnId: 'turn-1', action: 'undo' };
+    expect(parseReviewPanelRequest(request)).toEqual(request);
+    expect(parseReviewPanelRequest({ ...request, path: 'src/main.ts' })).toBeDefined();
+    for (const invalid of [
+      { ...request, scopeKind: 'turn' },
+      { ...request, scopeKind: 'workspace', turnId: undefined },
+      { ...request, turnId: undefined },
+      { ...request, toolUseId: 'tool-1' },
+      { ...request, action: 'restore' },
+      { ...request, action: true },
+      { ...request, path: '../outside.ts' },
+      { ...request, confirmed: true },
+    ]) expect(parseReviewPanelRequest(invalid)).toBeUndefined();
+  });
+
   it('accepts bounded operation excerpts and rejects surplus fields and oversized payloads', () => {
     const operation = { toolUseId: 'tool-1', patch: '@@ -1 +1 @@\n-old\n+new' };
     const message = { type: 'reviewPanel.file', requestId: 'request-1', reviewScopeId: 'scope-1',

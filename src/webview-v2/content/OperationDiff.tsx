@@ -1,11 +1,11 @@
-import { useContext, useState } from 'react';
+import { useContext } from 'react';
+import { FileChangeView } from '@droidvisx/chat-ui/chat/FileChangeView';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
 import { InlineDiffContext } from '../../webview/assistant/changes/useInlineDiff';
 import { DiffView } from '../review/DiffView';
 import { Button } from '../ui/button';
-import { useToolActions } from './toolActions';
-import { isConfirmedOperationFile, operationDiffWithChanges } from '../../shared/protocol/operationDiff';
-import { inlineDiffLines } from '../../webview/assistant/changes/inlineDiffLines';
+import { isConfirmedOperationFile, operationDiffWithChanges, type OperationDiffFile } from '../../shared/protocol/operationDiff';
+import { operationFileStats } from '../chat/operationSummary';
 import { operationLabel } from './operationPresentation';
 export const OPERATION_UNAVAILABLE = {
   'not-recorded': 'This operation’s Diff was not recorded.',
@@ -16,51 +16,36 @@ export const OPERATION_UNAVAILABLE = {
   'evicted': 'This operation’s Diff is no longer retained.',
   'unchanged': 'No changes in this operation.',
 };
-export function OperationDiff({ item }: { item: ToolTranscriptItem }) {
+
+export function OperationFileDetails({ file }: { readonly file: OperationDiffFile }) {
+  return <div className="operation-diff">
+    {file.previousPath ? <p className="operation-diff-note">Moved from {file.previousPath}</p> : null}
+    {file.message ? <p role="status" className="operation-diff-note">{file.message}</p> : null}
+    {!file.patch || file.patch === '@@' ? <p className="operation-diff-note">No complete text Diff was recorded for this result.</p>
+      : <DiffView patch={file.patch} path={file.path} />}
+  </div>;
+}
+
+export function OperationDiff({ item, hideConfirmed = false, onInteract }: { item: ToolTranscriptItem; readonly hideConfirmed?: boolean; readonly onInteract?: () => void }) {
   const context = useContext(InlineDiffContext);
-  const actions = useToolActions();
-  const [expanded, setExpanded] = useState(false);
   const result = item.operationDiff ? operationDiffWithChanges(item.operationDiff) : undefined;
   const hasToolResult = result?.status === 'ready' && result.source === 'tool-result';
-  const open = (path?: string) => {
-    if (context?.sessionId && context.connected) context.port.postMessage({
-      type: 'review.panel.open', sessionId: context.sessionId,
-      scopeKind: 'operations', turnId: item.turnId,
-      ...(path ? { path } : {}),
-    });
-  };
   if ((item.status === 'running' || item.status === 'stopping') && !hasToolResult) return null;
   if (result?.status === 'unavailable' && result.reason === 'unchanged') return null;
-  if (result?.status !== 'ready') return <div className="operation-diff-unavailable">
-    <span>{OPERATION_UNAVAILABLE[result?.reason ?? 'not-recorded']}</span>
-  </div>;
+  if (result?.status !== 'ready') return <p className="operation-diff-unavailable">{OPERATION_UNAVAILABLE[result?.reason ?? 'not-recorded']}</p>;
   if (result.source !== 'tool-result') return <p className="operation-diff-unavailable" role="status">
     {operationLabel(result)}. No confirmed changes were recorded.
   </p>;
-  return <section className="operation-diff" aria-label={operationLabel(result)}>
-    <p className="operation-diff-note" role="status">{operationLabel(result)}</p>
-    {result.files.map((file) => {
-      const confirmed = isConfirmedOperationFile(result, file);
-      const lines = confirmed ? inlineDiffLines(file.patch) : [];
-      const added = lines.filter((line) => line.kind === 'add').length;
-      const removed = lines.filter((line) => line.kind === 'remove').length;
-      return <div key={file.path} className="operation-diff-file">
-      <header>
-        <Button variant="plain" size="none" title={file.path} disabled={!actions.openPath} onClick={() => actions.openPath?.({ path: file.path })}>{file.path}</Button>
-        {(added || removed) && confirmed
-          ? <span className="operation-diff-stats" aria-label={`${added} operation lines added, ${removed} operation lines removed`}><i>+{added}</i><b>−{removed}</b></span> : null}
-        <span>{file.kind}{file.outcome ? ` · ${file.outcome === 'uncertain' ? 'side effects unconfirmed' : file.outcome}` : ''}</span>
-        {confirmed ? <Button variant="link" size="sm" disabled={!context?.connected || !context.sessionId} onClick={() => open(file.path)}>Review</Button> : null}
-      </header>
-      {file.previousPath ? <p className="operation-diff-note">Moved from {file.previousPath}</p> : null}
-      {file.message ? <p role="status" className="operation-diff-note">{file.message}</p> : null}
-      {!confirmed ? <p className="operation-diff-note">No confirmed change to display for this file.</p>
-        : !file.patch || file.patch === '@@' ? <p className="operation-diff-note">No complete text Diff was recorded for this result.</p>
-        : <DiffView patch={file.patch} path={file.path} limit={expanded ? undefined : 14} />}
-    </div>;
-    })}
-    <footer><span>Operation record · not the current workspace Diff</span>
-      {result.files.some((file) => isConfirmedOperationFile(result, file) && file.patch.split('\n').length > 14) ? <Button variant="plain" size="none" onClick={() => setExpanded(!expanded)}>{expanded ? 'Show less' : 'Show all changes'}</Button> : null}
-    </footer>
-  </section>;
+  const files = result.files.filter((file) => !hideConfirmed || !isConfirmedOperationFile(result, file));
+  if (!files.length) return null;
+  return <div aria-label="File operations" className="my-1 min-w-0">
+    {files.map((file) => isConfirmedOperationFile(result, file)
+      ? <FileChangeView key={file.path} file={operationFileStats(file)} onInteract={onInteract} label={file.kind === 'added' ? 'Created' : file.kind === 'deleted' ? 'Deleted' : file.kind === 'renamed' ? 'Renamed' : 'Edited'}
+        actions={context?.connected && context.sessionId ? <Button variant="ghost" size="sm" onClick={() => { onInteract?.(); context.port.postMessage({
+          type: 'review.panel.open', sessionId: context.sessionId!, scopeKind: 'operations', turnId: item.turnId, toolUseId: item.toolUseId, path: file.path,
+        }); }}>Review</Button> : undefined}>
+        <OperationFileDetails file={file} />
+      </FileChangeView>
+      : <p key={file.path} role="status" className="operation-diff-note">{file.path} · {file.outcome === 'failed' ? 'Operation failed' : 'Changes unconfirmed'}{file.message ? ` · ${file.message}` : ''}</p>)}
+  </div>;
 }

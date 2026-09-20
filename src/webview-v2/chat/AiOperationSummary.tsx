@@ -1,47 +1,29 @@
 import { useContext } from 'react';
-import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
-import { isConfirmedOperationFile } from '../../shared/protocol/operationDiff';
+import { ChangeSummaryView } from '@droidvisx/chat-ui/chat/ChangeSummaryView';
 import { InlineDiffContext } from '../../webview/assistant/changes/useInlineDiff';
-import { Button } from '../ui/button';
+import { OperationFileDetails } from '../content/OperationDiff';
+import type { OperationSummary } from './operationSummary';
+export { summarizeOperations, type OperationSummary } from './operationSummary';
 
-export interface OperationSummary {
-  readonly turnId: string;
-  readonly files: ReadonlySet<string>;
-  readonly calls: ReadonlySet<string>;
-  readonly unconfirmed: number;
-  readonly delegated: boolean;
-}
-
-export function summarizeOperations(items: readonly SessionTranscriptItem[], turnId?: string): ReadonlyMap<string, OperationSummary> {
-  const summaries = new Map<string, { turnId: string; files: Set<string>; calls: Set<string>; unconfirmed: number; delegated: boolean }>();
-  for (const item of items) {
-    if (item.kind !== 'tool' || turnId !== undefined && item.turnId !== turnId) continue;
-    const summary = summaries.get(item.turnId) ?? { turnId: item.turnId, files: new Set<string>(), calls: new Set<string>(), unconfirmed: 0, delegated: false };
-    if (item.subagent !== undefined) { summary.delegated = true; summaries.set(item.turnId, summary); }
-    const diff = item.operationDiff;
-    if (diff?.status !== 'ready' || diff.source !== 'tool-result') continue;
-    const identity = JSON.stringify([diff.sourceSessionId ?? '', diff.callId ?? item.toolUseId]);
-    if (summary.calls.has(identity)) continue;
-    summary.calls.add(identity);
-    for (const file of diff.files) {
-      if (isConfirmedOperationFile(diff, file)) summary.files.add(file.path);
-      else summary.unconfirmed += 1;
-    }
-    summaries.set(item.turnId, summary);
-  }
-  return summaries;
-}
-
-export function AiOperationSummary({ summary }: { readonly summary: OperationSummary }) {
+export function AiOperationSummary({ summary, onInteract }: { readonly summary: OperationSummary; readonly onInteract?: () => void }) {
   const context = useContext(InlineDiffContext);
-  return <div className="my-2 text-[11px] text-muted-foreground" role="group" aria-label="AI operation summary">
-    <Button variant="plain" size="none" className="text-left hover:text-foreground" disabled={!context?.connected || !context.sessionId}
-      onClick={() => context?.sessionId && context.port.postMessage({
-        type: 'review.panel.open', sessionId: context.sessionId, scopeKind: 'operations', turnId: summary.turnId,
-      })}>
-      AI operations · {summary.files.size} directly confirmed {summary.files.size === 1 ? 'file' : 'files'} · {summary.calls.size} tool {summary.calls.size === 1 ? 'result' : 'results'}
-      {summary.unconfirmed ? ` · ${summary.unconfirmed} failed or unconfirmed file results` : ''}
-    </Button>
-    <p>{summary.delegated ? 'Delegated results are resolved in Review and are not included in these direct counts. ' : ''}Recorded tool results, separate from workspace net changes.</p>
-  </div>;
+  if (summary.files.size === 0) return null;
+  const connected = context?.connected && context.sessionId;
+  const open = (path?: string, action?: 'undo') => {
+    if (context?.connected && context.sessionId) context.port.postMessage({
+      type: 'review.panel.open', sessionId: context.sessionId, scopeKind: 'operations', turnId: summary.turnId,
+      ...(path ? { path } : {}), ...(action ? { action } : {}),
+    });
+  };
+  return <ChangeSummaryView files={[...summary.files.values()]} onInteract={onInteract}
+    onReview={connected ? () => open() : undefined} onUndo={connected ? () => open(undefined, 'undo') : undefined}
+    onSelectFile={connected ? (path) => open(path) : undefined}
+    renderFileDetails={(path) => summary.files.get(path)?.records.map((file, index) => <div key={index}>
+      {summary.files.get(path)!.records.length > 1 ? <p className="operation-diff-note">Recorded operation {index + 1}</p> : null}
+      <OperationFileDetails file={file} />
+    </div>)}
+    note={summary.unconfirmed || summary.delegated ? <>
+      {summary.unconfirmed ? `${summary.unconfirmed} failed or unconfirmed file results are excluded. ` : ''}
+      {summary.delegated ? 'Delegated results are available in Review and excluded from these counts.' : ''}
+    </> : undefined} />;
 }

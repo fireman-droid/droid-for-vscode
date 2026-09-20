@@ -3,6 +3,33 @@
 最后更新：2026-09-20
 包版本：`0.8.0`
 
+## 按轮次收拢 AI 修改（已安装，待 Cursor 验收）
+
+- 生成中显示可展开的单文件修改行；完成、失败或中断后，已确认的修改收进各自
+  `turnId` 的汇总卡。停止请求尚未确认时仍保留进行态。每张卡默认三个文件，
+  同一路径合并展示，支持展开更多与收起，位置在该轮回复正文后、复制操作之前。
+- 仅统计 `tool-result` 中 `applied` 的文件，去除重复工具结果和无变化操作。
+  `+/-` 是累计记录的操作行数，不是工作区净差；缺少补丁时不编造行数。
+  手动修改不进入卡片，失败／不确定操作继续保留提示，子代理仍在 Review 解析。
+- 文件行打开 Review 后定位到所点路径；“Undo…”只打开该轮操作的撤销预览，
+  冲突检查与最终确认仍由现有 Review 流程负责。重开、断连、切换范围或关闭
+  面板取消旧意图，生成中不可撤销。只读 Viewer／离线历史可以展开保留的操作片段。
+- 使用共享 `ChangeSummaryView`／`FileChangeView`，轻边框、低对比背景、无按压缩放，
+  保留 Radix 折叠和键盘交互。参照本机 Codex 扩展 `26.908.40401` 的逐轮卡片行为。
+- 本轮获准的五文件本地回归共 43 项通过：
+  `pnpm exec vitest run src/extension/panels/review/ReviewPanelController.test.ts src/shared/protocol/reviewProtocol.test.ts`（18 项），
+  `pnpm exec vitest run src/webview-v2/chat/changeAttribution.test.tsx src/webview-v2/chat/operationSummary.test.ts`（17 项），
+  `pnpm exec vitest run src/webview/assistant/changes/ReviewDock.test.tsx`（8 项）。
+  已复现并修复旧 Review 打开失败取消新撤销意图的问题；本次打开失败也不会误用旧范围预览。
+- 深浅主题 × 320／600px 的四组独立 Chrome 模拟验证共 52 项检查通过，零浏览器异常；
+  覆盖键盘展开、三文件／更多、各轮动作归属、新轮保留旧卡和页面无横向溢出。
+  已人工查看截图；临时结果位于 `%TEMP%/droidvisx-diff-ui-9546acb7`。
+  不调用真实模型或执行真实撤销，未运行全仓测试。
+- `pnpm run package:vsix` 完成类型、文件预算、共享包独立构建与生产构建；
+  `pnpm run verify:vsix` 校验 79 个条目及打包依赖通过。VSIX 为 3,949,935 字节，
+  构建标识 `v2-2026-09-20T06:33:12.642Z`，已通过 Cursor CLI 强制安装成功。
+  Reload Window 后验收真实交互；本轮实现、必要文档与回归一并本地提交，不 push。
+
 ## 已发现问题收尾（已安装，待 Cursor 验收）
 
 - 用户要求继续处理上一轮遇到的问题。回合事件与恢复测试共 72 项通过，原有

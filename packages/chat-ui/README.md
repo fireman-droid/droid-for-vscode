@@ -124,6 +124,9 @@ export function ChatPane(props: {
   或短正文采用同步解析，这类环境不承诺同等性能。
   直接消费未构建源码时须接入包内 `scripts/markdownWorkerBuild.mjs`
   插件，分发 ESM 已包含内联线程源码。
+- `FileChangeView` 提供单文件折叠行与详情插槽；`ChangeSummaryView` 默认显示三个
+  文件并可展开更多，接收文件统计、Review／Undo／选中文件回调及只读详情插槽。
+  没有回调就不显示对应动作；缺失行数保持未知。归因、回合归属及撤销确认由宿主处理。
 - `UiRoot` 提供 light/dark、字体变量 `--chat-font-sans`／`--chat-font-mono`
   和内部 Portal 容器。分发 CSS 的选择器及 reset 限定在 `.agent-chat-ui`；
   字体资源随包提供，不依赖用户工程扫描本包 Tailwind 类名。公共 `@font-face`

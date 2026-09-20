@@ -7,6 +7,7 @@ export type ReviewPanelOpen = {
   readonly type: 'review.panel.open'; readonly sessionId: string;
   readonly scopeKind: ReviewScopeKind; readonly turnId?: string;
   readonly toolUseId?: string; readonly path?: string;
+  readonly action?: 'undo';
 };
 export type ReviewPanelRequest = ReviewPanelOpen | { readonly type: 'reviewPanel.ready' } |
   { readonly type: 'reviewPanel.readFile' | 'reviewPanel.openNative'; readonly requestId: string;
@@ -33,11 +34,12 @@ export type ReviewPanelFile = {
 export function parseReviewPanelRequest(value: unknown): ReviewPanelRequest | undefined {
   if (!isStrictRecord(value)) return undefined;
   if (value.type === 'review.panel.open') {
-    return hasExactKeys(value, ['type', 'sessionId', 'scopeKind'], ['turnId', 'toolUseId', 'path']) &&
+    return hasExactKeys(value, ['type', 'sessionId', 'scopeKind'], ['turnId', 'toolUseId', 'path', 'action']) &&
       isId(value.sessionId) && REVIEW_SCOPE_KINDS.includes(value.scopeKind as ReviewScopeKind) &&
       (value.scopeKind === 'turn' || value.scopeKind === 'operations' ? isId(value.turnId) : value.turnId === undefined) &&
       (value.toolUseId === undefined || ((value.scopeKind === 'turn' || value.scopeKind === 'operations') && isId(value.toolUseId))) &&
-      (value.path === undefined || isSafeWorkspaceRelativePath(value.path))
+      (value.path === undefined || isSafeWorkspaceRelativePath(value.path)) &&
+      (value.action === undefined || value.action === 'undo' && value.scopeKind === 'operations' && value.toolUseId === undefined)
       ? value as ReviewPanelOpen : undefined;
   }
   if (value.type === 'reviewPanel.ready' || value.type === 'reviewPanel.gitStatus' || value.type === 'reviewPanel.openAgent')

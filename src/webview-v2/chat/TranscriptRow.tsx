@@ -8,14 +8,16 @@ import { ThinkingRow } from './ThinkingRow';
 import { SelectSessionContext } from '../../webview/assistant/thread/messageContexts';
 import { Button } from '../ui/button';
 
-export const TranscriptRow = memo(function TranscriptRow({ item, streaming, grouped, messageId, readOnly = false }: {
+export const TranscriptRow = memo(function TranscriptRow({ item, streaming, grouped, messageId, readOnly = false, hideConfirmedOperations = false, onInteract }: {
   readonly item: SessionTranscriptItem; readonly streaming: boolean; readonly grouped: boolean; readonly messageId: string; readonly readOnly?: boolean;
+  readonly hideConfirmedOperations?: boolean;
+  readonly onInteract?: () => void;
 }) {
   const selectSession = useContext(SelectSessionContext);
   if (item.kind === 'user') return <Message from="user" className="rounded-md border border-[var(--panel-edge)] bg-muted/40 p-2.5"><MessageContent className="whitespace-pre-wrap">{item.text}</MessageContent></Message>;
   if (item.kind === 'assistant') return <Message from="assistant"><MessageContent><Markdown text={item.text} streaming={streaming} /></MessageContent></Message>;
   if (item.kind === 'thinking') return <ThinkingRow item={item} messageId={messageId} grouped={grouped} streaming={streaming} />;
-  if (item.kind === 'tool') return <ToolRow item={item} messageId={messageId} grouped={grouped} />;
+  if (item.kind === 'tool') return <ToolRow item={item} messageId={messageId} grouped={grouped} hideConfirmedOperations={hideConfirmedOperations} onInteract={onInteract} />;
   if (item.kind === 'diagnostic') {
     if (item.code === 'session-compacted') {
       const count = /(\d+) earlier message/.exec(item.message)?.[1];

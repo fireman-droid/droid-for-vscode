@@ -3,6 +3,7 @@ import { ActivityGroupView } from '@droidvisx/chat-ui/chat/ActivityGroupView';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
 import { presentActivity, type ProcessWaiting } from '../../webview/assistant/transcript/activityPresentation';
 import { type GroupCandidatePart } from '../../webview/assistant/transcript/activityGrouping';
+import { isFoldableFileOperation } from './operationSummary';
 
 export type ActivityItem = Extract<SessionTranscriptItem, { kind: 'tool' | 'thinking' }>;
 export interface ActivityCluster { readonly id: string; readonly items: readonly SessionTranscriptItem[]; readonly grouped: boolean }
@@ -10,7 +11,7 @@ export interface ActivityCluster { readonly id: string; readonly items: readonly
 export function clusterActivity(items: readonly SessionTranscriptItem[]): readonly ActivityCluster[] {
   const groups: { id: string; items: SessionTranscriptItem[]; grouped: boolean }[] = [];
   for (const item of items) {
-    const grouped = item.kind === 'thinking' || item.kind === 'tool';
+    const grouped = item.kind === 'thinking' || item.kind === 'tool' && !isFoldableFileOperation(item);
     const prior = groups.at(-1);
     if (grouped && prior?.grouped) prior.items.push(item);
     else groups.push({ id: item.id, items: [item], grouped });

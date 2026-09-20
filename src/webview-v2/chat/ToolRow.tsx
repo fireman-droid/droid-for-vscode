@@ -20,6 +20,7 @@ import { ActivityItem } from './ActivityItem';
 import { ActivityResult } from './ActivityResult';
 import { parsePlanSteps } from '../../webview/assistant/transcript/planAnchor';
 import { PlanSteps } from './PlanLine';
+import { isFoldableFileOperation } from './operationSummary';
 
 function activityIcon(category: ReturnType<typeof classifyExploreTool>) {
   if (category === 'file') return <FileText />;
@@ -30,7 +31,7 @@ function activityIcon(category: ReturnType<typeof classifyExploreTool>) {
   return <ListChecks />;
 }
 
-export function ToolRow({ item, messageId, grouped = false }: { readonly item: ToolTranscriptItem; readonly messageId: string; readonly grouped?: boolean }) {
+export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperations = false, onInteract }: { readonly item: ToolTranscriptItem; readonly messageId: string; readonly grouped?: boolean; readonly hideConfirmedOperations?: boolean; readonly onInteract?: () => void }) {
   const actions = useToolActions();
   const content = useContent();
   const inlineDiff = useContext(InlineDiffContext);
@@ -69,6 +70,7 @@ export function ToolRow({ item, messageId, grouped = false }: { readonly item: T
     {output ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-[var(--panel-edge)] bg-muted/25 p-2.5 font-mono text-[11px] leading-[18px]">{output}</pre> : null}
     {errorMessage ? <pre role="status" className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-destructive/40 bg-destructive/5 p-2.5 font-mono text-[11px] leading-[18px] text-destructive">{errorMessage}</pre> : null}
   </> : undefined;
+  if (isFoldableFileOperation(item)) return hideConfirmedOperations ? null : <OperationDiff item={item} onInteract={onInteract} />;
   if (item.detailKind === 'plan' && item.detail) {
     const steps = parsePlanSteps(item.detail);
     return <ActivityItem id={item.id} messageId={messageId} icon={<ListChecks />} title="Updated todos"
@@ -82,7 +84,7 @@ export function ToolRow({ item, messageId, grouped = false }: { readonly item: T
       status={[status, unavailable?.label].filter(Boolean).join(' · ') || undefined} actions={activityActions}>
       {activityDetail}
     </ActivityItem>
-    {diff ? <OperationDiff item={item} /> : null}
+    {diff ? <OperationDiff item={item} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
     {item.backgroundHint?.fireAndForget ? <p className="pl-6 text-[10.5px] text-muted-foreground">Background process · Keeps running until you stop it manually</p> : null}
     {item.subagent ? <SubagentRow item={item} /> : null}
   </div>;
@@ -101,7 +103,7 @@ export function ToolRow({ item, messageId, grouped = false }: { readonly item: T
         {errorMessage ? <p role="status" className="whitespace-pre-wrap break-words text-destructive">{errorMessage}</p> : null}
       </ToolContent>
     </Tool>}
-    {diff ? <OperationDiff item={item} /> : null}
+    {diff ? <OperationDiff item={item} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
     {item.backgroundHint?.fireAndForget ? <p className="pl-4 text-[11px] text-muted-foreground">Background process · Keeps running until you stop it manually</p> : null}
     {item.subagent ? <SubagentRow item={item} /> : null}
   </div>;
