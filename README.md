@@ -122,7 +122,8 @@ VSIX 都是可重新生成的产物，不纳入 Git。
 
 `.github/workflows/release.yml` 为 VS Code Marketplace 和 Open VSX 共用一个
 经过类型、预算、构建和包内容校验的 VSIX。Cursor 使用 Open VSX 的第三方扩展库。
-工作流配置已准备，正式上架前需完成以下平台配置与仅构建验收。
+工作流已通过 GitHub Actions 的 Windows 仅构建验收，产物可从运行页面下载；
+正式上架前仍需完成以下发布者与凭据配置。
 
 首次启用需要完成以下配置：
 
