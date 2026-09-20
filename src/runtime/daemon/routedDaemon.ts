@@ -12,7 +12,7 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
     for (const unsubscribe of unsubscribes.get(entry.record.id) ?? []) unsubscribe();
     unsubscribes.set(entry.record.id, [
       entry.connection.droid.notifications.subscribe((event) => {
-        if (!pool.observeSession(event.sessionId, entry)) return;
+        if (!pool.observeSession(event.sessionId, entry, event.notification)) return;
         for (const listener of notifications) listener(event);
       }),
       entry.connection.droid.notifications.subscribeTerminal((event) => {

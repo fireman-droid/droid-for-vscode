@@ -21,6 +21,7 @@ export interface NativeIdeRelay {
   read(): NativeIdeRelayState;
   subscribe(listener: () => void): () => void;
   waitUntilReady(signal?: AbortSignal): Promise<void>;
+  resetForSessionRestart(): void;
   dispose(): Promise<void>;
 }
 
@@ -46,6 +47,7 @@ interface RequestEvidence {
 }
 
 interface RelayRequest {
+  readonly generation: number;
   readonly evidence: Promise<RequestEvidence>;
   readonly method: string;
   readonly downstream: IncomingMessage;
@@ -70,9 +72,11 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
   private readonly rootEventStreams = new Set<RelayRequest>();
   private readonly upstreamAgent = new Agent({ keepAlive: true });
   private readonly server;
-  private readonly timeout: NodeJS.Timeout;
+  private timeout: NodeJS.Timeout | undefined;
   private readonly heartbeat: NodeJS.Timeout;
   private disposed = false;
+  private generation = 0;
+  private awaitingRootRestart = false;
   private rootTerminated = false;
   private handshakeTimedOut = false;
   private rootClaimed = false;
@@ -87,21 +91,13 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     port: number,
     sessionId: string,
     private readonly upstreamPort: number,
-    timeoutMs: number,
+    private readonly timeoutMs: number,
     server: ReturnType<typeof createServer>,
   ) {
     this.port = port;
     this.sessionId = sessionId;
     this.server = server;
-    this.timeout = setTimeout(() => {
-      if (this.state.status === 'connecting') {
-        // Allocation can precede daemon startup and old-session closure. Fail
-        // current waiters on time, but accept a subsequently confirmed handshake.
-        this.handshakeTimedOut = true;
-        this.update({ status: 'error', message: 'Timed out waiting for the native IDE handshake.' });
-      }
-    }, timeoutMs);
-    this.timeout.unref();
+    this.armReadyTimeout();
     this.heartbeat = setInterval(() => {
       if (
         this.rootSessionId !== undefined
@@ -122,6 +118,19 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     server.on('request', (request, response) => this.handle(request, response));
   }
 
+  private armReadyTimeout(): void {
+    clearTimeout(this.timeout);
+    this.timeout = setTimeout(() => {
+      if (this.state.status === 'connecting') {
+        // Allocation can precede daemon startup and old-session closure. Fail
+        // current waiters on time, but accept a subsequently confirmed handshake.
+        this.handshakeTimedOut = true;
+        this.update({ status: 'error', message: 'Timed out waiting for the native IDE handshake.' });
+      }
+    }, this.timeoutMs);
+    this.timeout.unref();
+  }
+
   read(): NativeIdeRelayState {
     return this.state;
   }
@@ -131,8 +140,36 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     return () => this.listeners.delete(listener);
   }
 
+  /** Only the owning daemon's root-session inactivity notification authorizes this. */
+  resetForSessionRestart(): void {
+    if (this.disposed) return;
+    ++this.generation;
+    clearTimeout(this.timeout);
+    this.rootEventStreams.clear();
+    this.rootClaimed = false;
+    this.rootSessionId = undefined;
+    this.rootLastActivity = 0;
+    this.rootTerminated = false;
+    this.handshakeTimedOut = false;
+    this.initializeForwarded = false;
+    this.initializedForwarded = false;
+    this.toolsForwarded = false;
+    this.initialContextForwarded = false;
+    this.awaitingRootRestart = true;
+    this.update({ status: 'disconnected',
+      message: 'This session is idle. IDE reconnects automatically when the conversation resumes.' });
+  }
+
+  private beginRootRestart(): void {
+    if (this.disposed || this.rootTerminated || !this.awaitingRootRestart || this.state.status === 'connecting') return;
+    this.handshakeTimedOut = false;
+    this.update({ status: 'connecting', message: 'Restoring this session’s native IDE connection.' });
+    this.armReadyTimeout();
+  }
+
   waitUntilReady(signal?: AbortSignal): Promise<void> {
     if (signal?.aborted) return Promise.reject(abortReason(signal));
+    this.beginRootRestart();
     if (this.state.status === 'connected') return Promise.resolve();
     if (this.state.status !== 'connecting') {
       return Promise.reject(new Error(this.state.message));
@@ -206,6 +243,7 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
       agent: this.upstreamAgent,
     });
     const relayRequest: RelayRequest = {
+      generation: this.generation,
       evidence: capture.evidence,
       method,
       downstream: request,
@@ -223,6 +261,7 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     upstream.on('error', () => {
       if (!response.headersSent) respond(response, 502, 'IDE service unavailable');
       else response.destroy();
+      if (relayRequest.generation !== this.generation) return;
       if (relayRequest.rootRequest && method === 'GET') {
         this.rootEventStreams.delete(relayRequest);
         if (this.rootEventStreams.size > 0) return;
@@ -236,9 +275,12 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
 
     request.pipe(upstream);
     void relayRequest.evidence.then((evidence) => {
+      if (relayRequest.generation !== this.generation) return;
       const envelope = evidence.envelope;
       const sessionHeader = headerValue(request.headers['mcp-session-id']);
       if (!this.rootClaimed && isNativeInitialize(envelope)) {
+        this.beginRootRestart();
+        this.awaitingRootRestart = false;
         this.rootClaimed = true;
         relayRequest.rootCandidate = true;
         this.touchRoot();
@@ -263,20 +305,22 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     const evidence = await relayRequest.evidence;
     const envelope = evidence.envelope;
     const sessionHeader = headerValue(relayRequest.downstream.headers['mcp-session-id']);
-    if (sessionHeader !== undefined && sessionHeader === this.rootSessionId) {
+    if (relayRequest.generation === this.generation &&
+        sessionHeader !== undefined && sessionHeader === this.rootSessionId) {
       relayRequest.rootRequest = true;
     }
 
     const controlResponse = relayRequest.rootCandidate
       || (relayRequest.rootRequest && isHandshakeMethod(envelope));
     const responseCapture = controlResponse ? boundedCapture(upstreamResponse) : undefined;
-    const liveRootSse = relayRequest.rootRequest &&
+    const liveRootSse = relayRequest.generation === this.generation && relayRequest.rootRequest &&
       (upstreamResponse.statusCode ?? 0) >= 200 && (upstreamResponse.statusCode ?? 0) < 300 &&
       headerValue(upstreamResponse.headers['content-type'])?.includes('text/event-stream');
     const rootEventStream = liveRootSse && relayRequest.method === 'GET';
     if (rootEventStream) this.rootEventStreams.add(relayRequest);
     if (liveRootSse) {
       observeSse(upstreamResponse, (notification) => {
+        if (relayRequest.generation !== this.generation) return;
         if (notification.method === 'notifications/heartbeat') {
           this.touchRoot();
           this.maybeReady(true);
@@ -295,6 +339,7 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     upstreamResponse.pipe(relayRequest.response);
 
     const endRootStream = (message: string, failed = false) => {
+      if (relayRequest.generation !== this.generation) return;
       if (rootEventStream) {
         this.rootEventStreams.delete(relayRequest);
         // MCP may replace an SSE stream before its predecessor finishes closing.
@@ -337,6 +382,7 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
       }
     });
     relayRequest.response.once('finish', async () => {
+      if (relayRequest.generation !== this.generation) return;
       if (!(relayRequest.rootCandidate || relayRequest.rootRequest)) return;
       if (relayRequest.method === 'DELETE') {
         this.rootTerminated = true;
@@ -363,6 +409,7 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     headers: IncomingHttpHeaders,
     response: RequestEvidence | null,
   ): void {
+    if (request.generation !== this.generation) return;
     if (statusCode < 200 || statusCode >= 300 || response?.overflowed) {
       if (request.rootCandidate || isHandshakeMethod(envelope)) {
         this.fail('The native IDE handshake failed.');

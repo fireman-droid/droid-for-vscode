@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DaemonSessionHandle } from './api';
+import type { DaemonNotification, DaemonSessionHandle } from './api';
 import { WindowDaemonPool } from './windowDaemonPool';
 
 const fake = vi.hoisted(() => ({
@@ -10,6 +10,7 @@ const fake = vi.hoisted(() => ({
   spawn: vi.fn(),
   close: vi.fn(),
   wait: vi.fn(async () => {}),
+  resetRoot: vi.fn(),
   stop: vi.fn(async () => {}),
   count: 0,
   relays: 0,
@@ -22,6 +23,7 @@ vi.mock('../ide/nativeIdeRelay', () => ({
     read: () => ({ status: 'connected', message: 'Native handshake complete' }),
     subscribe: () => () => {},
     waitUntilReady: fake.wait,
+    resetForSessionRestart: fake.resetRoot,
     dispose: async () => {},
   })),
 }));
@@ -87,6 +89,26 @@ beforeEach(() => {
 });
 
 describe('dedicated chat daemon ownership', () => {
+  it('releases root IDE identity only for inactivity on the current owning root session', async () => {
+    const value = pool();
+    const first = await value.allocate('first-chat');
+    const second = await value.allocate('second-chat');
+    await value.remember('first-chat', first);
+    type Inactive = Extract<DaemonNotification['notification'], { type: 'session_inactivity' }>;
+    // The SDK exposes this notification type but does not export its enum value.
+    const inactive: Inactive = { type: 'session_inactivity' as Inactive['type'],
+      message: 'Idle', timestamp: Date.now(), timeoutSeconds: 1800 };
+    expect(value.observeSession('first-chat', second, inactive)).toBe(false);
+    value.observeSession('child-chat', first, inactive);
+    expect(fake.resetRoot).not.toHaveBeenCalled();
+    value.observeSession('first-chat', first, inactive);
+    expect(fake.resetRoot).toHaveBeenCalledOnce();
+    expect(await value.forSession('first-chat')).toBe(first);
+    expect(fake.close).not.toHaveBeenCalled();
+    expect(fake.spawn).toHaveBeenCalledTimes(2);
+    await value.dispose();
+  });
+
   it('allocates a distinct IDE relay and daemon for each root chat', async () => {
     const value = pool();
     const first = await value.allocate('first-chat', 'C:/first');

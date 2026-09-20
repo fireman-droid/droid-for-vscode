@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { IdeState } from '../../shared/protocol/ideProtocol';
 import { createNativeIdeRelay, type NativeIdeRelay } from '../ide/nativeIdeRelay';
-import type { DaemonApi, DaemonSessionHandle } from './api';
+import type { DaemonApi, DaemonNotification, DaemonSessionHandle } from './api';
 import { openDaemonConnection, type DaemonConnection } from './daemonConnection';
 import { resolveDaemonListenerPid, startDetachedDaemon, stopDaemon } from './daemonLifecycle';
 import {
@@ -210,11 +210,16 @@ export class WindowDaemonPool {
       entry.record.idePort !== this.binding?.port || entry.record.idePort === null);
   }
 
-  observeSession(sessionId: string, entry: WindowDaemonEntry): boolean {
+  observeSession(sessionId: string, entry: WindowDaemonEntry, notification?: DaemonNotification['notification']): boolean {
     const owner = this.owners.get(sessionId);
     if (owner && owner.record.id !== entry.record.id) return false;
     this.owners.set(sessionId, entry);
     if (this.owned.has(entry.record.id)) this.used.add(entry.record.id);
+    if (notification?.type === 'session_inactivity' && entry.record.rootSessionId === sessionId) {
+      entry.ide?.resetForSessionRestart();
+      this.options.record({ level: 'info', name: 'ide.native.session-idle',
+        detail: 'The daemon released the idle worker. Its next load will establish a new native IDE connection.' });
+    }
     return true;
   }
 

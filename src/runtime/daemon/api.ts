@@ -24,6 +24,7 @@ export type DaemonStreamOptions = Omit<
 };
 
 export interface DaemonSessionHandle extends ConnectedDroidSession {
+  ensureLoaded(signal?: AbortSignal): Promise<void>;
   onNotification(listener: (notification: Record<string, unknown>) => void): () => void;
 }
 

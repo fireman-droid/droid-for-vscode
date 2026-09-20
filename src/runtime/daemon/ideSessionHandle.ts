@@ -13,6 +13,8 @@ export function bindSessionIde(
     if (options.abortSignal?.aborted) abort();
     pending.add(cancellation);
     try {
+      await session.ensureLoaded(cancellation.signal);
+      cancellation.signal.throwIfAborted();
       await wait(cancellation.signal);
       cancellation.signal.throwIfAborted();
       if (options.includePartialMessages) {

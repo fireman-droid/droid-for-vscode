@@ -3,12 +3,14 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createNativeIdeRelay } from './nativeIdeRelay';
+import { bindSessionIde } from '../daemon/ideSessionHandle';
+import type { DaemonSessionHandle } from '../daemon/api';
 
 interface Fixture {
   readonly port: number;
   readonly closeRootStream: (index?: number) => void;
   readonly destroyRootStream: (index?: number) => void;
-  readonly heartbeat: () => void;
+  readonly heartbeat: (index?: number) => void;
   readonly failNextToolList: () => void;
   readonly close: () => Promise<void>;
 }
@@ -21,6 +23,105 @@ afterEach(async () => {
 });
 
 describe('native IDE relay', () => {
+  it('resumes an idle worker before waiting for its real new IDE handshake and submits the prompt exactly once', async () => {
+    const fixture = await createFixture();
+    const relay = await createNativeIdeRelay({ sessionId: 'root-chat', upstreamPort: fixture.port });
+    disposals.push(() => relay.dispose(), fixture.close);
+    await handshake(relay.port, 'factory-cli-mcp-client', 'root-upstream');
+    relay.resetForSessionRestart();
+    let finishLoad!: () => void;
+    const loaded = new Promise<void>((resolve) => { finishLoad = resolve; });
+    const stream = vi.fn(async function* () { yield { type: 'assistant', text: 'resumed' }; });
+    const handle = bindSessionIde({
+      ensureLoaded: async () => {
+        await rpc(relay.port, nativeInitialize(20));
+        finishLoad();
+      }, stream,
+    } as unknown as DaemonSessionHandle, (signal) => relay.waitUntilReady(signal));
+    const messages = handle.stream('continue the same conversation');
+    const first = messages.next();
+    await loaded;
+    expect(stream).not.toHaveBeenCalled();
+    await rpc(relay.port, { jsonrpc: '2.0', method: 'notifications/initialized' }, 'child-2');
+    expect(stream).not.toHaveBeenCalled();
+    await rpc(relay.port, { jsonrpc: '2.0', id: 21, method: 'tools/list', params: {} }, 'child-2');
+    expect(await first).toMatchObject({ value: { text: 'resumed' } });
+    await messages.next();
+    expect(stream).toHaveBeenCalledExactlyOnceWith('continue the same conversation', { includePartialMessages: false });
+    expect(relay.read().status).toBe('connected');
+  });
+
+  it('accepts a fresh root handshake after confirmed worker inactivity, including a load started by metadata reads', async () => {
+    const fixture = await createFixture();
+    const relay = await createNativeIdeRelay({ sessionId: 'root-chat', upstreamPort: fixture.port, timeoutMs: 100 });
+    disposals.push(() => relay.dispose(), fixture.close);
+    await handshake(relay.port, 'factory-cli-mcp-client', 'root-upstream');
+    await openStream(relay.port, 'root-upstream');
+    relay.resetForSessionRestart();
+
+    // An idle worker has no running handshake deadline, however long it stays idle.
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    await vi.advanceTimersByTimeAsync(35 * 60_000);
+    expect(relay.read()).toMatchObject({ status: 'disconnected', message: expect.stringContaining('idle') });
+    vi.useRealTimers();
+
+    // No send/readiness waiter has run yet: an ordinary SDK metadata request may
+    // auto-load the worker and establish the new root before the next prompt.
+    await handshake(relay.port, 'factory-cli-mcp-client', 'child-2', 20);
+    await expect(relay.waitUntilReady()).resolves.toBeUndefined();
+    fixture.destroyRootStream(0);
+    await rpc(relay.port, { jsonrpc: '2.0', id: 22, method: 'ping' }, 'child-2');
+    expect(relay.read().status).toBe('connected');
+
+    relay.resetForSessionRestart();
+    await handshake(relay.port, 'factory-cli-mcp-client', 'child-3', 30);
+    await expect(relay.waitUntilReady()).resolves.toBeUndefined();
+  });
+
+  it('waits for all new root evidence and ignores previous-generation heartbeat, DELETE and closure', async () => {
+    const fixture = await createFixture();
+    const relay = await createNativeIdeRelay({ sessionId: 'root-chat', upstreamPort: fixture.port });
+    disposals.push(() => relay.dispose(), fixture.close);
+    await handshake(relay.port, 'factory-cli-mcp-client', 'root-upstream');
+    let received!: () => void;
+    await openStream(relay.port, 'root-upstream', (text) => {
+      if (text.includes('notifications/heartbeat')) received?.();
+    });
+    relay.resetForSessionRestart();
+    let ready = false;
+    const pending = relay.waitUntilReady().then(() => { ready = true; });
+    const oldHeartbeat = new Promise<void>((resolve) => { received = resolve; });
+    fixture.heartbeat(0);
+    await oldHeartbeat;
+    expect(ready).toBe(false);
+    await http(relay.port, 'DELETE', undefined, 'root-upstream');
+    await rpc(relay.port, nativeInitialize(20));
+    await rpc(relay.port, { jsonrpc: '2.0', method: 'notifications/initialized' }, 'child-2');
+    expect(ready).toBe(false);
+    await rpc(relay.port, { jsonrpc: '2.0', id: 21, method: 'tools/list', params: {} }, 'child-2');
+    await pending;
+    fixture.closeRootStream(0);
+    await rpc(relay.port, { jsonrpc: '2.0', id: 22, method: 'ping' }, 'child-2');
+    expect(relay.read().status).toBe('connected');
+  });
+
+  it('bounds a restarted handshake and keeps cancellation local to its waiter', async () => {
+    const fixture = await createFixture();
+    const relay = await createNativeIdeRelay({ sessionId: 'root-chat', upstreamPort: fixture.port, timeoutMs: 50 });
+    disposals.push(() => relay.dispose(), fixture.close);
+    await handshake(relay.port, 'factory-cli-mcp-client', 'root-upstream');
+    relay.resetForSessionRestart();
+    const controller = new AbortController();
+    const canceled = expect(relay.waitUntilReady(controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    const timedOut = expect(relay.waitUntilReady()).rejects.toThrow('Timed out');
+    controller.abort();
+    await canceled;
+    await timedOut;
+    expect(relay.read().status).toBe('error');
+    await relay.dispose();
+    await expect(relay.waitUntilReady()).rejects.toThrow();
+  });
+
   it('gates readiness on the native initialize, initialized, and tool discovery sequence', async () => {
     const fixture = await createFixture();
     const relay = await createNativeIdeRelay({
@@ -367,9 +468,10 @@ async function createFixture(includeContext = true): Promise<Fixture> {
     closeRootStream: (index = -1) => rootStreams.at(index)?.end(),
     destroyRootStream: (index = -1) => rootStreams.at(index)?.destroy(),
     failNextToolList: () => { failToolList = true; },
-    heartbeat: () => {
-      rootStream?.write('event: message\r\n');
-      rootStream?.write('data: {"jsonrpc":"2.0","method":"notifications/heartbeat","params":{"timestamp":1}}\r\n\r\n');
+    heartbeat: (index) => {
+      const stream = index === undefined ? rootStream : rootStreams.at(index);
+      stream?.write('event: message\r\n');
+      stream?.write('data: {"jsonrpc":"2.0","method":"notifications/heartbeat","params":{"timestamp":1}}\r\n\r\n');
     },
     close: () => {
       for (const stream of rootStreams) stream.end();

@@ -48,6 +48,31 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
     this.pendingCwd = undefined;
   }
 
+  async ensureLoaded(signal?: AbortSignal): Promise<void> {
+    this.assertAttached();
+    signal?.throwIfAborted();
+    // The SDK shares in-flight loads. Cancelling one admission wait must not
+    // interrupt a load used by another reader or send any user message.
+    const loading = this.controller.ensureSessionLoaded(this.id);
+    let abort: (() => void) | undefined;
+    try {
+      if (signal) {
+        await Promise.race([
+          loading,
+          new Promise<never>((_resolve, reject) => {
+            abort = () => reject(signal.reason);
+            signal.addEventListener('abort', abort, { once: true });
+            if (signal.aborted) abort();
+          }),
+        ]);
+      } else await loading;
+      signal?.throwIfAborted();
+      this.assertAttached();
+    } finally {
+      if (abort) signal?.removeEventListener('abort', abort);
+    }
+  }
+
   observe(notification: DaemonNotification['notification']): void {
     const parsed = SessionNotificationPayloadSchema.safeParse(notification);
     if (!parsed.success) return;
