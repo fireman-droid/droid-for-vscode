@@ -5,6 +5,7 @@
 .codex/**
 .claude/**
 .git/**
+.github/**
 .gitignore
 artifacts/**
 design/**

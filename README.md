@@ -115,7 +115,56 @@ VSIX 都是可重新生成的产物，不纳入 Git。
 `pnpm run package:vsix:preview` 生成带预发布标记的同名本地 VSIX，不执行发布。
 `pnpm run package:chat-ui` 生成独立 UI tarball。发布前还需许可证来源复核、
 拟公开内容审阅、完整源码提交、干净 VS Code 验收及发布者权限确认；
-详见 `docs/STATUS.md`。本轮不运行 `verify:vsix` 或任何自动测试。
+详见 `docs/STATUS.md`。`pnpm run verify:vsix` 检查包内文件与 manifest；
+自动化测试须按项目规则另行获得许可，不属于默认发布工作流。
+
+### 双市场自动发布
+
+`.github/workflows/release.yml` 为 VS Code Marketplace 和 Open VSX 共用一个
+经过类型、预算、构建和包内容校验的 VSIX。Cursor 使用 Open VSX 的第三方扩展库。
+当前仅完成工作流配置，尚未上传工作流或公开发布扩展。
+
+首次启用需要完成以下配置：
+
+1. 在 [Visual Studio Marketplace](https://marketplace.visualstudio.com/manage/publishers/)
+   建立或确认 `droidvisx` 发布者及发布权限；按
+   [官方发布说明](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
+   配置发布凭据。
+2. 按 [Open VSX 发布说明](https://github.com/eclipse-openvsx/openvsx/wiki/Publishing-Extensions)
+   注册并关联账号、接受 Publisher Agreement、建立 `droidvisx` namespace。
+   两边的扩展 ID 均应为 `droidvisx.droidvisx`；命名空间占用情况须先在平台确认。
+3. 在仓库 **Settings → Environments** 创建 `marketplace`，添加 Environment Secrets
+   `VSCE_PAT` 和 `OVSX_PAT`。密钥只填平台 Secrets，不写入代码、命令参数或聊天。
+   可在该环境配置发布审批；工作流本身不会自动创建审批规则。
+4. 将工作流与依赖锁文件提交到默认分支。当前源码仓库仍为私有，发布前须确认
+   Marketplace 展示的 README、仓库及问题反馈链接对目标用户可用；工作流不会
+   自动改变仓库可见性。首次只构建验收通过后，在仓库 Actions Variables 设置
+   `MARKETPLACE_AUTO_PUBLISH=true` 才启用标签自动上传；未设置时标签只构建。
+
+每次正式发版先修改根 `package.json` 的版本，并将对应变更整理到
+`CHANGELOG.md` 的 `## x.y.z` 段落。可用以下命令只递增补丁版本，不自动提交或打标签：
+
+```powershell
+npm version patch --no-git-tag-version
+pnpm run release:check
+```
+
+确认版本及改动提交后，创建并推送同名标签，例如 `v0.8.1`。**启用自动上传后，推送
+版本标签会触发公开发布**：先构建，再由两个独立发布任务上传相同 VSIX。标签必须与 package.json
+版本完全一致，并且有对应版本的变更记录。已发布版本不能覆盖或移动标签，修复应发
+新版本。普通分支 push 不触发发布。
+
+需要只构建时，在 Actions 的 **Release extension → Run workflow** 填写已经存在的
+版本标签，保持 `publish=false`。构建产物 `droidvisx-vx.y.z` 保留 30 天，运行摘要
+显示 SHA256。要上传则显式设置 `publish=true`；一次运行始终只构建一份安装包。
+首次可在未设置 `MARKETPLACE_AUTO_PUBLISH` 时推送标签，只生成待检查的安装包。
+不要用正式版本标签推送去试跑已启用的自动发布入口。
+
+一个市场失败时，在原运行中选择 **Re-run failed jobs**，复用原构建产物；
+成功市场不回滚，也不重新打包。不要使用 **Re-run all jobs** 或重新手动发起工作流
+补发已部分发布的版本。上传工具跳过已存在的版本，其他错误正常报失败。
+如果原产物已过期，重新准备新版本；不要另开一次构建给同一版本补发不同的安装包。
+手动模式只支持稳定版，现有 `package:vsix:preview` 仍仅生成本地预发布包。
 
 pnpm 10 可能提示忽略部分依赖的安装脚本；本次 Windows 干净安装在该提示下
 仍成功构建和打包，不需要为此默认批准所有脚本。

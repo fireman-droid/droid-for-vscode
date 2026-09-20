@@ -1,0 +1,124 @@
+name: Release extension
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag, for example v0.8.1
+        required: true
+        type: string
+      publish:
+        description: Publish the verified VSIX (false builds an artifact only)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      extensionId: ${{ steps.metadata.outputs.extensionId }}
+      sourceSha: ${{ steps.metadata.outputs.sourceSha }}
+      sha256: ${{ steps.digest.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Check release version and changelog
+        id: metadata
+        run: node scripts/checkRelease.mjs
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck, enforce budgets and build VSIX
+        run: pnpm run package:vsix
+      - name: Verify packaged contents
+        run: pnpm run verify:vsix
+      - name: Record VSIX digest
+        id: digest
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -LiteralPath dist/droidvisx.vsix -Algorithm SHA256).Hash.ToLowerInvariant()
+          "sha256=$hash" >> $env:GITHUB_OUTPUT
+          "### $env:RELEASE_TAG" >> $env:GITHUB_STEP_SUMMARY
+          "VSIX SHA256: $hash" >> $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: droidvisx-${{ env.RELEASE_TAG }}
+          path: dist/droidvisx.vsix
+          if-no-files-found: error
+          retention-days: 30
+          archive: true
+
+  publish:
+    needs: build
+    if: (github.event_name == 'push' && vars.MARKETPLACE_AUTO_PUBLISH == 'true') || (github.event_name == 'workflow_dispatch' && inputs.publish)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    environment: marketplace
+    strategy:
+      fail-fast: false
+      matrix:
+        market: [vscode, openvsx]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.sourceSha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: droidvisx-${{ env.RELEASE_TAG }}
+          path: dist
+      - name: Verify the exact build artifact
+        shell: pwsh
+        env:
+          EXPECTED_SHA256: ${{ needs.build.outputs.sha256 }}
+        run: |
+          $actual = (Get-FileHash -LiteralPath dist/droidvisx.vsix -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $env:EXPECTED_SHA256) { throw 'VSIX digest does not match the verified build.' }
+          pnpm run verify:vsix
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish to Visual Studio Marketplace
+        if: matrix.market == 'vscode'
+        shell: pwsh
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if (-not $env:VSCE_PAT) { throw 'Add VSCE_PAT to the marketplace environment secrets.' }
+          pnpm exec vsce publish --packagePath dist/droidvisx.vsix --skip-duplicate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish to Open VSX
+        if: matrix.market == 'openvsx'
+        shell: pwsh
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if (-not $env:OVSX_PAT) { throw 'Add OVSX_PAT to the marketplace environment secrets.' }
+          pnpm exec ovsx publish dist/droidvisx.vsix --skip-duplicate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

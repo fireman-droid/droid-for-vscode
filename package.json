@@ -179,6 +179,7 @@
     "package:vsix": "vsce package --no-dependencies --baseContentUrl https://github.com/fireman-droid/droid-for-vscode/blob/main --baseImagesUrl https://raw.githubusercontent.com/fireman-droid/droid-for-vscode/main --out dist/droidvisx.vsix",
     "package:vsix:preview": "pnpm run package:vsix --pre-release",
     "verify:vsix": "node src/integration/verifyVsix.mjs dist/droidvisx.vsix",
+    "release:check": "node scripts/checkRelease.mjs",
     "vscode:prepublish": "pnpm run package:prepare"
   },
   "dependencies": {
@@ -219,6 +220,7 @@
     "@vscode/vsce": "3.9.2",
     "esbuild": "^0.27.0",
     "jsdom": "27.2.0",
+    "ovsx": "1.2.0",
     "tailwindcss": "4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
