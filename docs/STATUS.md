@@ -9,10 +9,16 @@
   一份 VSIX，两个市场下载同一产物并校验 SHA256，独立发布且保留失败状态。
   手动默认只构建，标签上传须显式启用 MARKETPLACE_AUTO_PUBLISH；失败发布任务
   可重跑并复用原产物，不自动执行项目测试。
-- 版本标签须与 manifest 一致且有对应 CHANGELOG；新增 `release:check`，
-  工作流文件从 VSIX 排除。未递增版本、创建标签、推送源码或执行公开发布。
-- GitHub 只读核对：仓库私有、Actions 已启用、有管理权限，目前无仓库 Secrets
-  或 Environments。发布者注册／命名空间及凭据尚未确认，市场尚未启用。
+- 正式发布的标签须与 manifest 一致且有对应 CHANGELOG；`release:check` 提供
+  元数据校验，工作流文件从 VSIX 排除。手动仅构建可省略标签，直接检查所选分支；
+  手动发布缺少标签时明确失败，不为试构建提前创建正式版本标签。
+- GitHub 仓库仍私有，Actions 已启用；marketplace 环境已创建，
+  MARKETPLACE_AUTO_PUBLISH=false，两市场 Secrets 仍为空。
+  发布者注册／命名空间及凭据尚未确认，未递增版本或执行公开发布。
+- 用户已授权推送原有 14 个提交及必要后续改动；AGENTS 已移除普通 push 的重复
+  审批限制，保留公开发布与破坏性操作的明确授权。首次推送因缺 workflow scope
+  被 GitHub 拒绝；补充设备授权后已推送至 main（769cdda），无标签手动入口已通过
+  actionlint、元数据、语法、类型与预算复验，待远端仅构建验收。
 - `release:check`、Node 语法检查、actionlint 1.7.12、类型检查、文件预算、生产构建
   与 79 条目 VSIX 校验通过；未运行项目测试或远端工作流。仅修改发布配置及开发
   依赖，未覆盖当前 Cursor 安装。此次配置提交前，本地已有 13 个未推送提交。

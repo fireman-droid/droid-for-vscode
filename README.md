@@ -122,7 +122,7 @@ VSIX 都是可重新生成的产物，不纳入 Git。
 
 `.github/workflows/release.yml` 为 VS Code Marketplace 和 Open VSX 共用一个
 经过类型、预算、构建和包内容校验的 VSIX。Cursor 使用 Open VSX 的第三方扩展库。
-当前仅完成工作流配置，尚未上传工作流或公开发布扩展。
+工作流配置已准备，正式上架前需完成以下平台配置与仅构建验收。
 
 首次启用需要完成以下配置：
 
@@ -154,10 +154,11 @@ pnpm run release:check
 版本完全一致，并且有对应版本的变更记录。已发布版本不能覆盖或移动标签，修复应发
 新版本。普通分支 push 不触发发布。
 
-需要只构建时，在 Actions 的 **Release extension → Run workflow** 填写已经存在的
-版本标签，保持 `publish=false`。构建产物 `droidvisx-vx.y.z` 保留 30 天，运行摘要
-显示 SHA256。要上传则显式设置 `publish=true`；一次运行始终只构建一份安装包。
-首次可在未设置 `MARKETPLACE_AUTO_PUBLISH` 时推送标签，只生成待检查的安装包。
+需要只构建时，在 Actions 的 **Release extension → Run workflow** 保持 `publish=false`，
+标签留空便构建所选分支，也可填写已有版本标签。构建产物 `droidvisx-vx.y.z` 保留
+30 天，运行摘要显示 SHA256。上传必须填写已有版本标签并显式设置 `publish=true`；
+缺少标签时明确失败，一次运行始终只构建一份安装包。首次直接试构建 main 即可，
+无需提前创建正式版本标签。
 不要用正式版本标签推送去试跑已启用的自动发布入口。
 
 一个市场失败时，在原运行中选择 **Re-run failed jobs**，复用原构建产物；

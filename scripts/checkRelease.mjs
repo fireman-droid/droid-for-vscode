@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 
 const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
-const tag = process.argv[2] ?? process.env.RELEASE_TAG ?? `v${manifest.version}`;
+const tag = process.argv[2] ?? (process.env.RELEASE_TAG || `v${manifest.version}`);
 assert.match(tag, /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u,
   'Release tag must be a stable version such as v0.8.1.');
 assert.equal(tag, `v${manifest.version}`, 'Release tag must match package.json version.');
