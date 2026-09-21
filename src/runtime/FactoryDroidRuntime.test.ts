@@ -64,7 +64,7 @@ describe('FactoryDroidRuntime', () => {
       }),
     });
     expect(session.stream).toHaveBeenCalledWith('Say hello', {
-      includePartialMessages: true,
+      includePartialMessages: true, abortSignal: expect.any(AbortSignal),
     });
     expect(events).toEqual([
       { type: 'text-delta', text: 'hello' },
@@ -224,7 +224,7 @@ describe('FactoryDroidRuntime', () => {
     );
 
     expect(session.stream).toHaveBeenCalledWith('describe these', {
-      includePartialMessages: true,
+      includePartialMessages: true, abortSignal: expect.any(AbortSignal),
       images: [{ type: 'base64', data: 'aW1n', mediaType: 'image/png' }],
       files: [
         {
@@ -320,7 +320,7 @@ describe('FactoryDroidRuntime', () => {
 
     const events = await collect(runtime.sendTurn('again'));
     expect(forked.stream).toHaveBeenCalledWith('again', {
-      includePartialMessages: true,
+      includePartialMessages: true, abortSignal: expect.any(AbortSignal),
     });
     expect(session.stream).not.toHaveBeenCalled();
     expect(events).toEqual([
@@ -414,7 +414,7 @@ describe('FactoryDroidRuntime', () => {
 
     const events = await collect(runtime.sendTurn('next'));
     expect(continuation.stream).toHaveBeenCalledWith('next', {
-      includePartialMessages: true,
+      includePartialMessages: true, abortSignal: expect.any(AbortSignal),
     });
     expect(session.stream).not.toHaveBeenCalled();
     expect(events).toEqual([
@@ -452,7 +452,7 @@ describe('FactoryDroidRuntime', () => {
 
     const events = await collect(runtime.sendTurn('next'));
     expect(copy.stream).toHaveBeenCalledWith('next', {
-      includePartialMessages: true,
+      includePartialMessages: true, abortSignal: expect.any(AbortSignal),
     });
     expect(session.stream).not.toHaveBeenCalled();
     expect(events).toEqual([
@@ -1136,7 +1136,7 @@ describe('FactoryDroidRuntime', () => {
         type: 'tool-progress',
         toolUseId: 'tool-1',
         toolName: 'Read',
-        action: 'Read workspace files',
+        action: 'Read file',
         updateKind: 'message',
       },
     ]);

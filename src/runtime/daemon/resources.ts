@@ -4,14 +4,13 @@ import type { DaemonApi } from './api';
 export function createDaemonResources(
   controller: DaemonSessionController,
   assertConnected: () => void,
+  waitUntilReady: () => Promise<void> = async () => {},
 ) {
-  const call = <T>(operation: () => Promise<T>): Promise<T> => {
-    try {
-      assertConnected();
-      return operation();
-    } catch (error) {
-      return Promise.reject(error);
-    }
+  const call = async <T>(operation: () => Promise<T>): Promise<T> => {
+    assertConnected();
+    await waitUntilReady();
+    assertConnected();
+    return operation();
   };
   const sessions: Omit<DaemonApi['sessions'], 'create' | 'resume'> = {
     list: (options) =>

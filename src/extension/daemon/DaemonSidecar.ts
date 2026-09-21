@@ -49,6 +49,8 @@ interface DaemonLifecycleStrategy {
 export interface DaemonSidecarController {
   provider(): Promise<DaemonSessionCatalog>;
   droid(): Promise<DaemonApi>;
+  /** Establish a real connection when droid() returns a lazy routing facade. */
+  warmup?(): Promise<void>;
   plugins(): Promise<DaemonPluginCatalog>;
   dispose(): Promise<void>;
 }
@@ -275,13 +277,13 @@ export function createDaemonSidecar(
  * perpetual restart loop.
  */
 export function warmDaemonSidecar(
-  sidecar: Pick<DaemonSidecarController, 'droid'>,
+  sidecar: Pick<DaemonSidecarController, 'droid' | 'warmup'>,
   diagnostics: DiagnosticsSink,
 ): () => void {
   let cancelled = false;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   const warm = (attempt: 1 | 2): void => {
-    void sidecar.droid().then(
+    void (sidecar.warmup ? sidecar.warmup() : sidecar.droid()).then(
       () => {
         if (!cancelled) {
           diagnostics.record({

@@ -105,6 +105,7 @@ import {
   isCurrentTurn,
   refreshContextAfterTurn,
   setTurnStatus,
+  handleTurnComplete,
 } from './turns/turnFlow';
 import {
   armTurnWatchdog,
@@ -142,6 +143,7 @@ export interface ChatEffects {
   loadHistoryTimed: BoundEffect<typeof loadHistoryTimed>;
   refreshContextAfterTurn: BoundEffect<typeof refreshContextAfterTurn>;
   setTurnStatus: BoundEffect<typeof setTurnStatus>;
+  handleTurnComplete: BoundEffect<typeof handleTurnComplete>;
   readConversationTurnChanges: BoundEffect<typeof readConversationTurnChanges>;
   readLatestConversationChanges: () => ReturnType<typeof readLatestConversationChanges>;
   clearCatalog: BoundEffect<typeof clearCatalog>;
@@ -241,6 +243,7 @@ export function createChatEffects(controller: ChatController): ChatEffects {
     loadHistoryTimed: (...args) => loadHistoryTimed(controller, ...args),
     refreshContextAfterTurn: (...args) => refreshContextAfterTurn(controller, ...args),
     setTurnStatus: (...args) => setTurnStatus(controller, ...args),
+    handleTurnComplete: (...args) => handleTurnComplete(controller, ...args),
     readConversationTurnChanges: (...args) =>
       readConversationTurnChanges(controller, ...args),
     readLatestConversationChanges: () => readLatestConversationChanges(controller),

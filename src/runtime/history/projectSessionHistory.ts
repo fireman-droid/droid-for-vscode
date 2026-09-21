@@ -56,6 +56,7 @@ import { readSessionMission } from './sessionMission';
 import { projectAskUserHistoryItem, readAskUserQuestions } from './askUserHistory';
 import { historyToolFilePaths } from './historyToolPaths';
 import { appendHistoryTurnChanges } from './historyTurnChanges';
+import { sessionMessageTurnId } from '../../shared/transcript/sessionMessageIdentity';
 
 const MAX_RAW_MESSAGES_TO_PROJECT = 10_000;
 const MAX_RAW_BLOCKS_PER_MESSAGE = 1_000;
@@ -91,6 +92,7 @@ interface Projection {
     }
   >;
   readonly toolIdentities: Map<string, string>;
+  readonly rawToolIds: Set<string>;
   /** Every path of a multi-file call, used by Changes synthesis. */
   readonly multiFileTools: Map<string, readonly string[]>;
   readonly toolCounts: Map<string, number>;
@@ -125,6 +127,7 @@ export function projectSessionHistory(
       ids: new Set(),
       tools: new Map(),
       toolIdentities: new Map(),
+      rawToolIds: new Set(),
       multiFileTools: new Map(),
       toolCounts: new Map(),
       imageCounts: new Map(),
@@ -247,7 +250,9 @@ function projectMessage(
     value.id.length <= MAX_BRIDGE_ID_LENGTH
       ? value.id
       : undefined;
-  const turnId = stableTranscriptId(
+  const turnId = projection.sourceSessionId && typeof value.id === 'string' &&
+    value.id.length > 0 && value.id.length <= MAX_BRIDGE_ID_LENGTH
+    ? sessionMessageTurnId(projection.sourceSessionId, value.id) : stableTranscriptId(
     'assistant',
     'history-turn',
     messageIdentity,
@@ -614,7 +619,11 @@ function appendTool(
   }
 
   const rawToolIdentity = boundedIdentity(block.id, blockIndex);
-  const toolUseId = stableTranscriptId(
+  const duplicate = projection.rawToolIds.has(block.id);
+  projection.rawToolIds.add(block.id);
+  if (duplicate) projection.partial = true;
+  const toolUseId = block.id.length > 0 && block.id.length <= MAX_BRIDGE_ID_LENGTH && !duplicate
+    ? block.id : stableTranscriptId(
     'tool',
     'history-tool-use',
     rawToolIdentity,

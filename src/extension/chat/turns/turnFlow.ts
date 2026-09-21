@@ -1,5 +1,6 @@
 import type { DroidRuntime, RuntimeAttachment } from '../../../runtime/DroidRuntime';
 import type { RuntimeEvent } from '../../../runtime/runtimeEvents';
+import { recoverTransportTurn } from '../recovery/recoverTransportTurn';
 import { type HostToWebviewMessage } from '../../../shared/bridgeMessages';
 import { type TurnStatus } from '../../../shared/protocol/turns';
 import {
@@ -31,9 +32,7 @@ import type { TurnFlowPort } from './turnFlowPort';
 import { CATALOG_ERROR_MESSAGE } from '../sessions/sessionCatalog';
 import { STOP_TIMEOUT_MESSAGE } from './turnWatchdog';
 import { reportSendRejection } from './turnSendFeedback';
-
-export const TURN_FAILURE_MESSAGE =
-  'Droid could not complete this turn. Retry to start a fresh session.';
+export const TURN_FAILURE_MESSAGE = 'Droid could not complete this turn. Retry to start a fresh session.';
 
 export const RUNTIME_EVENT_ERROR_MESSAGE =
   'Droid reported a runtime error while processing this turn.';
@@ -207,6 +206,7 @@ export async function consumeTurn(
       ctl.effects.flushPendingThinking(sessionId, turnId);
       completeEvent = null;
       terminalEventSeen = true;
+      if (recoverTransportTurn(ctl, runtime, runtimeGeneration, sessionId, turnId, error)) return;
       if (ctl.turnState.turn?.status === 'stopping' && error instanceof Error && error.name === 'AbortError')
         completeEvent = { type: 'turn-complete', outcome: 'interrupted' };
       else failTurn(ctl, sessionId, turnId, 'runtime-stream-failed');
@@ -742,6 +742,7 @@ export function failTurn(
   ctl.interactions.endTurn(sessionId, turnId);
   ctl.terminalMirror?.settleAll();
   ctl.turnState.turn.changesLedger?.cancel();
+  ctl.turnState.turn.transportRecovery?.dispose();
   ctl.effects.publishTurnChanges(sessionId, turnId, 'failed');
   ctl.turnState.turn.status = 'failed';
   ctl.turnState.turn.compacting = false;

@@ -5,6 +5,7 @@ import {
 import { type SessionTranscriptItem } from '../../../shared/protocol/transcript';
 import type { SubagentActivityItem } from '../../../shared/protocol/subagentProtocol';
 import type { SubagentPanelPort } from './subagentPanelPort';
+import type { SubagentViewerSnapshot } from './SubagentTranscriptService';
 
 interface SubagentPanelState {
   sessionId: string | null;
@@ -50,22 +51,19 @@ export function handleSubagentPanel(
     state.lastEmitted.clear();
     return;
   }
-  void ensureMapping(ctl).then(() => {
-    if (
-      ctl.sessionState.disposed ||
-      ctl.sessionState.sessionId !== sessionId ||
-      ctl.subagentState.subagentTranscripts === null ||
-      state.unsubscribe !== null
-    ) {
-      return;
-    }
+  if (!ctl.sessionState.disposed && ctl.subagentState.subagentTranscripts !== null && state.unsubscribe === null) {
+    state.unsubscribe = () => undefined;
     state.unsubscribe = ctl.subagentState.subagentTranscripts.subscribeParent(
       sessionId,
-      (turnId, toolUseId, activities) => {
-        emitActivity(ctl, sessionId, turnId, toolUseId, activities);
+      (turnId, toolUseId, activities, lifecycle) => {
+        if (!ctl.sessionState.disposed && ctl.sessionState.sessionId === sessionId) {
+          emitLifecycle(ctl, sessionId, turnId, toolUseId, lifecycle);
+          emitActivity(ctl, sessionId, turnId, toolUseId, activities);
+        }
       },
     );
-  });
+  }
+  void ensureMapping(ctl);
 }
 
 export function handleSubagentOpen(
@@ -228,4 +226,17 @@ function emitActivity(
     toolUseId,
     activities,
   });
+}
+
+function emitLifecycle(
+  ctl: SubagentPanelPort, sessionId: string, turnId: string, toolUseId: string,
+  lifecycle: SubagentViewerSnapshot['lifecycle'] | undefined,
+): void {
+  if (lifecycle === undefined || lifecycle === 'starting') return;
+  const row = ctl.recoveryState.transcript.transcript.find((item) =>
+    item.kind === 'tool' && item.toolUseId === toolUseId && item.turnId === turnId);
+  const status = lifecycle === 'working' ? 'running' : lifecycle;
+  if (row?.kind !== 'tool' || row.subagent === undefined || row.subagent.status === status) return;
+  ctl.emit({ type: 'subagent.update', sessionId, turnId, toolUseId,
+    subagent: { ...row.subagent, status } });
 }

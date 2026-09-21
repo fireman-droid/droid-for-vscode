@@ -16,7 +16,8 @@ export function createWindowDaemonSidecar(
   const droid = createRoutedDaemon(pool);
   return {
     pool,
-    async droid() { await pool.current(); return droid; },
+    async droid() { return droid; },
+    async warmup() { await pool.current(); },
     provider: async () => new DaemonSessionCatalog(droid),
     plugins: async () => new DaemonPluginCatalog(droid),
     async dispose() {

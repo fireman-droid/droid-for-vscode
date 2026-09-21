@@ -16,6 +16,7 @@ import {
 } from './capabilities/sessionCapabilities';
 import { loadSessionCommands } from './commands/FactoryCommandCatalog';
 import { DaemonAvailabilityError } from './daemon/daemonConnection';
+import { recoveredTurnError } from './turnRecovery';
 import {
   type DroidRuntime,
   type RuntimeAttachment,
@@ -356,6 +357,9 @@ export class FactoryDroidRuntime implements DroidRuntime {
         yield this.pendingTurnEvents.shift()!;
       }
     } catch (error) {
+      const recovered = recoveredTurnError(error, this.sessionTarget?.cwd);
+      if (recovered && !cancellation.signal.aborted) { outcome = 'transport-recovered'; throw recovered; }
+      recovered?.dispose();
       outcome = cancellation.signal.aborted ? 'interrupted' : 'failed';
       failureDetail = cancellation.signal.aborted ? undefined : describeUnknown(error);
       if (cancellation.signal.aborted) throw new DOMException('Droid turn interrupted.', 'AbortError');

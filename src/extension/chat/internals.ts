@@ -10,6 +10,7 @@ import { type HostToWebviewMessage } from '../../shared/bridgeMessages';
 import { type TurnStatus } from '../../shared/protocol/turns';
 import { MAX_BRIDGE_ID_LENGTH } from '../../shared/bridgeMessages';
 import type { RuntimeAttachment } from '../../runtime/DroidRuntime';
+import type { RuntimeEvent } from '../../runtime/runtimeEvents';
 import type { SessionCatalog } from '../../runtime/catalog/SessionCatalog';
 import type { TurnActivityState } from './turns/turnActivityState';
 import type { TurnChangesLedger } from '../changes/turnChangesLedger';
@@ -47,6 +48,11 @@ export interface CurrentTurn {
    * working-state polling and Stop must use `interruptSession()`.
    */
   readonly recovery?: true;
+  readonly transportRecovery?: {
+    readonly messageId: string;
+    readonly completion?: Extract<RuntimeEvent, { type: 'turn-complete' }>;
+    readonly dispose: () => void;
+  };
 }
 
 export interface PendingAttachment {

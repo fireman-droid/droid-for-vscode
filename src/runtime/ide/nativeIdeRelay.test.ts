@@ -12,6 +12,9 @@ interface Fixture {
   readonly destroyRootStream: (index?: number) => void;
   readonly heartbeat: (index?: number) => void;
   readonly failNextToolList: () => void;
+  readonly rejectNextRootStream: () => void;
+  readonly writeRootStream: (frame: string) => void;
+  readonly streamRequests: Array<{ readonly lastEventId: string | undefined }>;
   readonly close: () => Promise<void>;
 }
 
@@ -226,7 +229,7 @@ describe('native IDE relay', () => {
     });
   });
 
-  it('reports closure of the root SSE transport without using child activity as liveness', async () => {
+  it('requires a new native session when an upstream recovery GET rejects the old session', async () => {
     const fixture = await createFixture();
     const relay = await createNativeIdeRelay({
       sessionId: 'root-chat',
@@ -235,43 +238,45 @@ describe('native IDE relay', () => {
     });
     disposals.push(() => relay.dispose(), fixture.close);
     await handshake(relay.port, 'factory-cli-mcp-client', 'root-upstream');
-    await openStream(relay.port, 'root-upstream');
+    const ended = vi.fn();
+    await openStream(relay.port, 'root-upstream', undefined, ended);
 
+    fixture.rejectNextRootStream();
     fixture.closeRootStream();
     await waitFor(() => relay.read().status === 'disconnected');
 
     expect(relay.read()).toEqual({
       status: 'disconnected',
-      message: 'The native IDE event stream closed.',
+      message: 'The native IDE event stream could not be restored.',
     });
+    await waitFor(() => ended.mock.calls.length === 1);
+    expect(relay.requiresSessionRestart()).toBe(true);
+    expect(fixture.streamRequests).toHaveLength(2);
   });
 
-  it('recovers a transient root stream disconnect only after the same root delivers live IDE evidence', async () => {
+  it.each(['end', 'destroy'] as const)('restores an upstream %s on the same downstream native connection', async closure => {
     const fixture = await createFixture();
     const relay = await createNativeIdeRelay({ sessionId: 'root-chat', upstreamPort: fixture.port });
     disposals.push(() => relay.dispose(), fixture.close);
     await handshake(relay.port, 'factory-cli-mcp-client', 'root-upstream');
-    await openStream(relay.port, 'root-upstream');
-    fixture.closeRootStream();
-    await waitFor(() => relay.read().status === 'disconnected');
-
-    await rpc(relay.port, { jsonrpc: '2.0', id: 95, method: 'ping' }, 'root-upstream');
-    expect(relay.read().status).toBe('disconnected');
-    let received!: () => void;
-    const heartbeat = new Promise<void>((resolve) => { received = resolve; });
-    await openStream(relay.port, 'root-upstream', (text) => {
-      if (text.includes('notifications/heartbeat')) received();
-    });
-    expect(relay.read().status).toBe('disconnected');
+    const ended = vi.fn();
+    let text = '';
+    await openStream(relay.port, 'root-upstream', chunk => { text += chunk; }, ended);
+    if (closure === 'end') fixture.closeRootStream();
+    else fixture.destroyRootStream();
+    await waitFor(() => relay.read().status === 'connecting');
+    expect(relay.requiresSessionRestart()).toBe(false);
+    await waitFor(() => fixture.streamRequests.length === 2 && relay.read().status === 'connected');
     fixture.heartbeat();
-    await heartbeat;
+    await waitFor(() => text.includes('notifications/heartbeat'));
+    expect(ended).not.toHaveBeenCalled();
     expect(relay.read().status).toBe('connected');
     await expect(relay.waitUntilReady()).resolves.toBeUndefined();
 
     await http(relay.port, 'DELETE', undefined, 'root-upstream');
-    const lateHeartbeat = new Promise<void>((resolve) => { received = resolve; });
+    text = '';
     fixture.heartbeat();
-    await lateHeartbeat;
+    await waitFor(() => text.includes('notifications/heartbeat'));
     expect(relay.read().status).toBe('disconnected');
   });
 
@@ -281,6 +286,7 @@ describe('native IDE relay', () => {
     disposals.push(() => relay.dispose(), fixture.close);
     await handshake(relay.port, 'factory-cli-mcp-client', 'root-upstream');
     await openStream(relay.port, 'root-upstream');
+    fixture.rejectNextRootStream();
     fixture.destroyRootStream();
     await waitFor(() => relay.read().status === 'disconnected' || relay.read().status === 'error');
     let received!: () => void;
@@ -359,7 +365,28 @@ describe('native IDE relay', () => {
     await oldStreamEnded;
     expect(relay.read().status).toBe('connected');
     fixture.closeRootStream();
-    await waitFor(() => relay.read().status === 'disconnected');
+    await waitFor(() => fixture.streamRequests.length === 3 && relay.read().status === 'connected');
+  });
+
+  it('resumes after the last complete event without forwarding a truncated event', async () => {
+    const fixture = await createFixture();
+    const relay = await createNativeIdeRelay({ sessionId: 'root-chat', upstreamPort: fixture.port });
+    disposals.push(() => relay.dispose(), fixture.close);
+    await handshake(relay.port, 'factory-cli-mcp-client', 'root-upstream');
+    let text = '';
+    const ended = vi.fn();
+    await openStream(relay.port, 'root-upstream', chunk => { text += chunk; }, ended);
+    fixture.writeRootStream('id: complete-1\ndata: {"value":"完整"}\n\n');
+    await waitFor(() => text.includes('完整'));
+    fixture.writeRootStream('id: partial-2\ndata: {"value":"fragment');
+    fixture.closeRootStream();
+    await waitFor(() => fixture.streamRequests.length === 2 && relay.read().status === 'connected');
+    expect(fixture.streamRequests[1]?.lastEventId).toBe('complete-1');
+    expect(text).not.toContain('fragment');
+    fixture.writeRootStream('id: complete-2\ndata: {"value":"restored"}\n\n');
+    await waitFor(() => text.includes('restored'));
+    expect(text.match(/id: complete-1/gu)).toHaveLength(1);
+    expect(ended).not.toHaveBeenCalled();
   });
 
   it('rejects pending and future readiness waits after disposal', async () => {
@@ -416,6 +443,8 @@ async function createFixture(includeContext = true): Promise<Fixture> {
   let rootStream: ServerResponse | undefined;
   const rootStreams: ServerResponse[] = [];
   let failToolList = false;
+  let rejectRootStream = false;
+  const streamRequests: Fixture['streamRequests'] = [];
   const server = createServer(async (request, response) => {
     const body = await readJson(request);
     const method = body?.method;
@@ -444,6 +473,12 @@ async function createFixture(includeContext = true): Promise<Fixture> {
       return;
     }
     if (request.method === 'GET') {
+      streamRequests.push({ lastEventId: firstHeader(request.headers['last-event-id']) });
+      if (rejectRootStream) {
+        rejectRootStream = false;
+        json(response, { error: 'expired session' }, 404);
+        return;
+      }
       response.writeHead(200, {
         'content-type': 'text/event-stream',
         'cache-control': 'no-cache',
@@ -490,6 +525,9 @@ async function createFixture(includeContext = true): Promise<Fixture> {
     closeRootStream: (index = -1) => rootStreams.at(index)?.end(),
     destroyRootStream: (index = -1) => rootStreams.at(index)?.destroy(),
     failNextToolList: () => { failToolList = true; },
+    rejectNextRootStream: () => { rejectRootStream = true; },
+    writeRootStream: frame => { rootStream?.write(frame); },
+    streamRequests,
     heartbeat: (index) => {
       const stream = index === undefined ? rootStream : rootStreams.at(index);
       stream?.write('event: message\r\n');

@@ -25,11 +25,12 @@ export class DaemonAvailabilityError extends Error {
   }
 }
 
-export type DaemonConnectionStatus = 'connected' | 'auth-error' | 'failed';
+export type DaemonConnectionStatus = 'connected' | 'recovering' | 'auth-error' | 'failed';
 
 export interface DaemonConnection {
   readonly droid: DaemonApi;
   status(): DaemonConnectionStatus;
+  waitUntilReady?(signal?: AbortSignal): Promise<void>;
   dispose(): void;
 }
 
@@ -82,13 +83,16 @@ export async function openDaemonConnection(
     droid = await connect({
       url: endpoint.url,
       auth: { apiKey: credential.credential.token },
+      getAccessToken: async () => {
+        const latest = await resolveCredential();
+        return latest.status === 'ok' ? latest.credential.token : null;
+      },
       onAuthenticationError: () => {
         connectionState.status = 'auth-error';
       },
-      onError: () => {
-        if (connectionState.status === 'connected') {
-          connectionState.status = 'failed';
-        }
+      onConnectionState: (status) => {
+        if (connectionState.status !== 'auth-error' || status === 'connected')
+          connectionState.status = status;
       },
     });
   } catch {
@@ -107,6 +111,7 @@ export async function openDaemonConnection(
   return {
     droid,
     status: () => connectionState.status,
+    waitUntilReady: (signal) => droid.waitUntilReady?.(signal) ?? Promise.resolve(),
     dispose: () => {
       connectionState.status = 'failed';
       try {

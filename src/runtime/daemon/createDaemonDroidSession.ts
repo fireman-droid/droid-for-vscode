@@ -77,6 +77,9 @@ export async function createDaemonDroidSession(options: {
   const droid = await options.getDroid();
   const callbacks = createRuntimeInteractionCallbacks(options.interactionHandler);
   const lease = options.lease ?? noopLease;
+  // Catalog reads use the metadata daemon and are independent of the session's
+  // worker startup and native IDE handshake. The reader contains its failure.
+  const modelCatalog = readDaemonAvailableModels(droid);
 
   if (options.target.kind === 'resume') {
     // A window reload leaves the previous extension host process
@@ -101,7 +104,7 @@ export async function createDaemonDroidSession(options: {
       attachment = await droid.sessions.resume(options.target.sessionId, {
         ...callbacks,
       });
-      const availableModels = await readDaemonAvailableModels(droid);
+      const availableModels = await modelCatalog;
       const adapted = adaptDaemonSession(
         droid,
         attachment,
@@ -151,7 +154,7 @@ export async function createDaemonDroidSession(options: {
       throw leaseConflictError(leaseOutcome.heldByPid);
     }
     leaseOwned = true;
-    const availableModels = await readDaemonAvailableModels(droid);
+    const availableModels = await modelCatalog;
     const adapted = adaptDaemonSession(
       droid,
       session,

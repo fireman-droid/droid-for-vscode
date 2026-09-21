@@ -40,11 +40,14 @@ vi.mock('../ide/nativeIdeRelay', () => ({
 vi.mock('./daemonLifecycle', () => ({
   startDetachedDaemon: fake.spawn,
   resolveDaemonListenerPid: async (port: number) => port === 43000 ? 43001 : port + 1,
+  verifyDaemonListeners: async (records: readonly { port: number; pid: number }[]) =>
+    new Map(records.map(record => [record.port, { status: 'verified', pid: record.pid }])),
   stopDaemon: fake.stop,
 }));
 vi.mock('./windowDaemonRegistry', () => ({
   listWindowDaemons: async () => fake.records,
   readSessionDaemon: async () => 'legacy-owner',
+  readWindowDaemon: async (id: string) => fake.records.find(record => record.id === id) ?? null,
   writeSessionDaemon: async () => {},
   writeWindowDaemon: async () => {},
   removeWindowDaemon: async () => {},

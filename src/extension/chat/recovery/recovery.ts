@@ -1,4 +1,5 @@
 import type { RecoveryPort } from './recoveryPort';
+import { isDeepStrictEqual } from 'node:util';
 import type {
   DroidRuntime,
   RuntimeSessionWorkingState,
@@ -19,6 +20,7 @@ import { createTurnActivityState } from '../turns/turnActivityState';
 import { delay, isTurnActive } from '../internals';
 import { captureSnapshotBeforeInBackground } from '../changes/snapshotCapture';
 import { TURN_FAILURE_MESSAGE } from '../turns/turnFlow';
+import { recoveredHistoryForCurrentTurn } from './recoveredHistoryForCurrentTurn';
 
 export /**
  * Poll cadence for a daemon-side turn recovered after a reload. The
@@ -88,8 +90,11 @@ export function reconcileDaemonTurn(
     try {
       state = await runtime.readSessionWorkingState!();
     } catch {
-      ctl.interactions.endTurn(sessionId, turnId);
-      return;
+      if (ctl.turnState.turn?.transportRecovery) state = 'unknown';
+      else {
+        ctl.interactions.endTurn(sessionId, turnId);
+        return;
+      }
     }
     const existingRecoveryTurn =
       ctl.turnState.turn?.turnId === turnId && ctl.turnState.turn.recovery === true
@@ -105,7 +110,7 @@ export function reconcileDaemonTurn(
     const live =
       state === 'running' ||
       state === 'waiting-for-user' ||
-      (state === 'unknown' && ctl.interactions.hasPending());
+      (state === 'unknown' && (ctl.interactions.hasPending() || existingRecoveryTurn?.transportRecovery !== undefined));
     const failedTurnId = recoveredFailureTurnId(ctl, sessionId);
     if (!live && failedTurnId !== null) {
       ctl.interactions.endTurn(sessionId, turnId);
@@ -165,7 +170,7 @@ export function reconcileDaemonTurn(
         ctl.effects.startLiveChanges(sessionId, turnId);
       });
     } else {
-      existingRecoveryTurn.status = 'streaming';
+      if (existingRecoveryTurn.status !== 'stopping') existingRecoveryTurn.status = 'streaming';
       ctl.effects.startLiveChanges(sessionId, turnId);
     }
     ctl.recordHost({
@@ -183,6 +188,12 @@ export function reconcileDaemonTurn(
     // Interactions replayed during resume were published before the
     // webview knew the recovery turn; publish them again now.
     ctl.interactions.replayPending();
+
+    // Activation already loaded history. Only a live transport handoff needs an
+    // immediate catch-up; do not delay the first idle check with a second read.
+    if (existingRecoveryTurn?.transportRecovery) {
+      await refreshRecoveredTurnTranscript(ctl, runtime, generation, turnGeneration, sessionId, cwd, turnId);
+    }
 
     await pollRecoveredTurn(
       ctl,
@@ -247,6 +258,7 @@ export async function pollRecoveredTurn(
     if (state === 'unknown') {
       unknownReads += 1;
       if (unknownReads >= RECOVERED_TURN_MAX_UNKNOWN_READS) {
+        ctl.turnState.turn?.transportRecovery?.dispose();
         ctl.effects.failTurn(sessionId, turnId, 'recovered-turn-lost');
         return;
       }
@@ -296,7 +308,7 @@ async function refreshRecoveredTurnTranscript(
   turnId: string,
 ): Promise<void> {
   const previous = ctl.recoveryState.transcript.transcript;
-  const loaded = await ctl.effects.loadHistoryTimed(cwd, sessionId);
+  const loaded = await loadBoundedRecoveryHistory(ctl, cwd, sessionId);
   if (
     !ctl.effects.isCurrentTurn(
       runtime,
@@ -309,8 +321,9 @@ async function refreshRecoveredTurnTranscript(
   ) {
     return;
   }
-  const next = historyWithLocalChanges(loaded.state, ctl.sessionState.conversationId === null
-    ? undefined : ctl.recoveryStore.readConversation(ctl.sessionState.conversationId));
+  const next = recoveredHistoryForCurrentTurn(ctl, historyWithLocalChanges(loaded.state,
+    ctl.sessionState.conversationId === null ? undefined :
+      ctl.recoveryStore.readConversation(ctl.sessionState.conversationId)));
   if (!recoveredTranscriptAdvanced(previous, next.transcript)) {
     return;
   }
@@ -326,18 +339,9 @@ function recoveredTranscriptAdvanced(
   }[],
   next: readonly { readonly id: string; readonly kind: string; readonly text?: string }[],
 ): boolean {
-  if (next.length !== previous.length) {
-    return true;
-  }
-  const prevLast = previous.at(-1);
-  const nextLast = next.at(-1);
-  if (prevLast?.id !== nextLast?.id) {
-    return true;
-  }
-  if (prevLast?.kind === 'assistant' && nextLast?.kind === 'assistant') {
-    return (nextLast.text?.length ?? 0) > (prevLast.text?.length ?? 0);
-  }
-  return false;
+  // Tool status, output and pending interaction changes can keep both ids and
+  // transcript length unchanged. They still need to reach a recovered view.
+  return !isDeepStrictEqual(previous, next);
 }
 
 /**
@@ -356,7 +360,7 @@ export async function finishRecoveredTurn(
   turnId: string,
   confirmedIdle: boolean,
 ): Promise<void> {
-  const loaded = await loadFinalRecoveredHistory(ctl, cwd, sessionId);
+  const loaded = await loadBoundedRecoveryHistory(ctl, cwd, sessionId);
   if (
     !ctl.effects.isCurrentTurn(
       runtime,
@@ -377,9 +381,9 @@ export async function finishRecoveredTurn(
       cumulative: loaded.tokenUsage ?? ctl.metadata.tokenUsage.cumulative,
       lastTurn: ctl.metadata.tokenUsage.lastTurn,
     };
-    ctl.recoveryState.transcript = historyWithLocalChanges(loaded.state,
+    ctl.recoveryState.transcript = recoveredHistoryForCurrentTurn(ctl, historyWithLocalChanges(loaded.state,
       ctl.sessionState.conversationId === null ? undefined :
-        ctl.recoveryStore.readConversation(ctl.sessionState.conversationId));
+        ctl.recoveryStore.readConversation(ctl.sessionState.conversationId)));
   } else if (!interrupted) {
     ctl.emitSessionDiagnostic(
       RECOVERED_HISTORY_FAILED_CODE,
@@ -392,14 +396,26 @@ export async function finishRecoveredTurn(
     ctl.effects.refreshContextAfterTurn(sessionId);
     return;
   }
-  ctl.effects.setTurnStatus(sessionId, turnId, interrupted ? 'interrupted' : 'completed');
+  const transportRecovery = ctl.turnState.turn?.transportRecovery;
+  transportRecovery?.dispose();
+  if (transportRecovery?.completion && !interrupted) {
+    ctl.effects.handleTurnComplete(sessionId, turnId, transportRecovery.completion);
+  } else {
+    if (transportRecovery && !interrupted) ctl.emit({
+      type: 'runtime.diagnostic', sessionId, turnId, severity: 'info',
+      code: 'transport-recovered-outcome-unconfirmed',
+      message: 'The connection and session history were restored. This turn has ended, but its completion status was not received.',
+    });
+    if (transportRecovery) ctl.effects.publishTurnChanges(sessionId, turnId, interrupted ? 'interrupted' : 'completed');
+    ctl.effects.setTurnStatus(sessionId, turnId, interrupted ? 'interrupted' : 'completed');
+  }
   ctl.emitSnapshot();
   flushRecoveryCheckpointInBackground(ctl);
   ctl.effects.refreshContextAfterTurn(sessionId);
   if (confirmedIdle) ctl.effects.reconnectRecoveredIde(runtime, runtimeGeneration, sessionId, cwd);
 }
 
-async function loadFinalRecoveredHistory(
+async function loadBoundedRecoveryHistory(
   ctl: RecoveryPort,
   cwd: string,
   sessionId: string,
@@ -626,6 +642,8 @@ function recoveryTurnId(
   generation: number,
   sessionId: string,
 ): string {
+  if (ctl.turnState.turn?.recovery && ctl.turnState.turn.transportRecovery)
+    return ctl.turnState.turn.turnId;
   const conversationId = ctl.recoveryStore.resolveConversationId(sessionId);
   const turn =
     conversationId === undefined

@@ -236,20 +236,20 @@ describe('public daemon ownership', () => {
     source.watch('live', 'C:/test', true);
     source.bindDaemon(first.api);
     source.bindDaemon(first.api);
-    expect(first.controller.ensureChildSessionAttached).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(first.controller.ensureChildSessionAttached).toHaveBeenCalledOnce());
     source.bindDaemon(second.api);
     first.notify('parent', {
       type: 'child_session_available',
       childSessionId: 'child',
       toolUseId: 'tool',
     });
-    expect(listener).not.toHaveBeenCalled();
+    expect(listener.mock.calls.filter(([event]) => event.type === 'child-available')).toHaveLength(0);
     second.notify('parent', {
       type: 'child_session_available',
       childSessionId: 'child',
       toolUseId: 'tool',
     });
-    expect(listener).toHaveBeenCalledOnce();
+    expect(listener.mock.calls.filter(([event]) => event.type === 'child-available')).toHaveLength(1);
     source.dispose();
     first.api.disconnect();
     second.api.disconnect();

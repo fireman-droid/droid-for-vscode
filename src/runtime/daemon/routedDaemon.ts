@@ -7,6 +7,7 @@ import { bindSessionIde } from './ideSessionHandle';
 export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
   const notifications = new Set<(event: DaemonNotification) => void>();
   const terminals = new Set<(event: DaemonTerminalEvent) => void>();
+  const recoveries = new Set<() => void>();
   const unsubscribes = new Map<string, (() => void)[]>();
   const unbind = pool.onConnection((entry) => {
     for (const unsubscribe of unsubscribes.get(entry.record.id) ?? []) unsubscribe();
@@ -18,6 +19,9 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
       entry.connection.droid.notifications.subscribeTerminal((event) => {
         for (const listener of terminals) listener(event);
       }),
+      entry.connection.droid.notifications.subscribeRecovery?.(() => {
+        for (const listener of recoveries) listener();
+      }) ?? (() => {}),
     ]);
   });
   const choose = async (sessionId?: string): Promise<DaemonApi> =>
@@ -44,17 +48,33 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
     return value?.sessionId;
   };
   const noId = () => undefined;
+  // The daemon reads message history from disk; no worker ownership or
+  // subscription is involved. History must not scan or revive session owners.
   const sessionResources = resource('sessions', (method, args) =>
-    ['list', 'search'].includes(method) ? undefined : firstId(method, args));
+    ['list', 'search', 'getMessages'].includes(method) ? undefined : firstId(method, args));
   const rememberHandle = async (
     entry: WindowDaemonEntry,
     handle: Awaited<ReturnType<DaemonApi['sessions']['create']>>,
+    resumeOptions: Parameters<DaemonApi['sessions']['resume']>[1],
   ) => {
     try {
+      let currentEntry = entry;
       const bound = await pool.isDelegatedSession(handle.id, entry)
         ? handle
-        : bindSessionIde(handle, (signal) => pool.waitForIde(handle.id, signal));
-      await pool.remember(handle.id, entry, bound);
+        : bindSessionIde(handle, (signal) => pool.waitForIde(handle.id, signal), async (current, signal) => {
+          const rebound = await pool.rebindIdleAttachment(handle.id, currentEntry, () => !signal.aborted);
+          if (rebound === currentEntry) return current;
+          // Once the source is closed, finish attaching even if Stop arrives.
+          // The stable handle consumes cancellation before sending the prompt.
+          const next = await rebound.connection.droid.sessions.resume(handle.id, resumeOptions);
+          try { await pool.remember(handle.id, rebound, next); }
+          catch (error) { await next.detach(); throw error; }
+          currentEntry = rebound;
+          return next;
+        });
+      // The pool closes physical workers; the logical wrapper owns the pending
+      // prompt and must survive that close until its replacement is attached.
+      await pool.remember(handle.id, entry, handle);
       return bound;
     }
     catch (error) { await handle.detach(); throw error; }
@@ -79,15 +99,20 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
       async create(options) {
         const sessionId = options.sessionId ?? randomUUID();
         const entry = await pool.allocate(sessionId, options.cwd);
-        return rememberHandle(entry, await entry.connection.droid.sessions.create({ ...options, sessionId }));
+        const { disabledToolIds, mcpServers, autoRejectPermissionRequests, disableBuiltinSkills,
+          structuredOutputFormat, permissionHandler, askUserHandler } = options;
+        return rememberHandle(entry, await entry.connection.droid.sessions.create({ ...options, sessionId }), {
+          disabledToolIds, mcpServers, autoRejectPermissionRequests, disableBuiltinSkills,
+          structuredOutputFormat, permissionHandler, askUserHandler,
+        });
       },
       async resume(id, options) {
         const entry = await pool.forSession(id, true);
-        let handle = await rememberHandle(entry, await entry.connection.droid.sessions.resume(id, options));
+        let handle = await rememberHandle(entry, await entry.connection.droid.sessions.resume(id, options), options);
         try {
           const rebound = await pool.rebindIdleAttachment(id, entry);
           if (rebound !== entry) {
-            handle = await rememberHandle(rebound, await rebound.connection.droid.sessions.resume(id, options));
+            handle = await rememberHandle(rebound, await rebound.connection.droid.sessions.resume(id, options), options);
           }
           // Restoring the handle alone does not repair a disconnected IDE client.
           // Only report a repaired root attachment after its real handshake;
@@ -127,6 +152,7 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
       acknowledgeReadinessWarning: async (cwd) => (await choose()).unstable.missions.acknowledgeReadinessWarning(cwd),
     } },
     notifications: {
+      subscribeRecovery: (listener) => { recoveries.add(listener); return () => { recoveries.delete(listener); }; },
       subscribe: (listener) => { notifications.add(listener); return () => { notifications.delete(listener); }; },
       subscribeTerminal: (listener) => { terminals.add(listener); return () => { terminals.delete(listener); }; },
       attachChild: async (id) => (await choose(id)).notifications.attachChild(id),
@@ -137,6 +163,7 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
       unsubscribes.clear();
       notifications.clear();
       terminals.clear();
+      recoveries.clear();
     },
   };
 }

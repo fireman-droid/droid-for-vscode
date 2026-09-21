@@ -46,7 +46,7 @@ describe('native IDE turn admission', () => {
     await value.handle.interrupt();
     await rejected;
     value.release();
-    expect(value.interrupt).toHaveBeenCalledOnce();
+    expect(value.interrupt).not.toHaveBeenCalled();
     expect(value.stream).not.toHaveBeenCalled();
   });
 

@@ -10,6 +10,7 @@ export interface RecoveryPort
     | 'recoveryStore'
     | 'recordHost'
     | 'emitSnapshot'
+    | 'emit'
     | 'interactions'
     | 'isCurrentSessionOperation'
     | 'diagnostics'
@@ -34,6 +35,8 @@ export interface RecoveryPort
     | 'loadHistoryTimed'
     | 'refreshContextAfterTurn'
     | 'setTurnStatus'
+    | 'handleTurnComplete'
+    | 'publishTurnChanges'
     | 'startLiveChanges'
     | 'reconnectRecoveredIde'
   >;

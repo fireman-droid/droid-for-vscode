@@ -35,6 +35,19 @@ export async function removeWindowDaemon(record: WindowDaemonRecord): Promise<vo
   await unlink(file);
 }
 
+export async function readWindowDaemon(id: string): Promise<WindowDaemonRecord | null> {
+  if (id === 'legacy') {
+    const legacy = readDaemonDiscovery(defaultDiscoveryFile());
+    return legacy ? {
+      id, port: legacy.port, pid: legacy.pid, ownerPid: 0, cwd: '', idePort: null,
+    } : null;
+  }
+  if (!instanceId.test(id)) throw new Error('Invalid daemon instance identity.');
+  const record = await readRecord(join(root, `${id}.json`));
+  if (record && record.id !== id) throw new Error('Daemon discovery identity does not match its file.');
+  return record;
+}
+
 export async function listWindowDaemons(): Promise<WindowDaemonRecord[]> {
   let names: string[];
   try { names = await readdir(root); }
@@ -42,17 +55,13 @@ export async function listWindowDaemons(): Promise<WindowDaemonRecord[]> {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') names = [];
     else throw error;
   }
-  const records: WindowDaemonRecord[] = [];
-  for (const name of names) {
-    if (!name.endsWith('.json') || !instanceId.test(name.slice(0, -5))) continue;
-    const record = await readRecord(join(root, name));
-    if (record && record.id === name.slice(0, -5)) records.push(record);
-  }
+  const records = (await Promise.all(names
+    .filter((name) => name.endsWith('.json') && instanceId.test(name.slice(0, -5)))
+    .map((name) => readWindowDaemon(name.slice(0, -5)))))
+    .filter((record): record is WindowDaemonRecord => record !== null);
   // Read-only compatibility with the previously shared daemon.
-  const legacy = readDaemonDiscovery(defaultDiscoveryFile());
-  if (legacy) records.push({
-    id: 'legacy', port: legacy.port, pid: legacy.pid, ownerPid: 0, cwd: '', idePort: null,
-  });
+  const legacy = await readWindowDaemon('legacy');
+  if (legacy) records.push(legacy);
   return records;
 }
 

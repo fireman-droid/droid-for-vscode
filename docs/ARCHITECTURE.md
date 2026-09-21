@@ -158,20 +158,28 @@ flowchart TD
   `windowDaemonPool.ts` 为每个主聊天分配独立 daemon 与 IDE relay，窗口后台只
   处理全局元数据；`windowDaemonRegistry.ts` 持久化实例及根会话归属，兼容旧记录。
   `routedDaemon.ts` 按实际会话路由，侧聊与原生子任务继续使用父后台。
+  首次归属发现保留全局重复 worker 检查，但整批共用监听表／进程身份查询，连接和
+  开放会话查询各最多 6 并发；并发消费者共享本轮扫描，分配仍按各自 attach 意图决定。
+  不把活进程不可达或身份未知视为可新建，仅清理已确认死亡且 PID／端口仍匹配的记录。
+  消息历史由元数据 daemon 直接读磁盘，不扫描或加载所属 worker；路由对象立即可用，
+  元数据预热、历史与主会话启动并行，模型目录也不再排在 IDE 握手之后。预热完成事件
+  仍等待真实元数据连接，`daemon.discovery.finished` 记录数量与耗时，不含会话正文。
 - `runtime/ide/nativeIdeRelay.ts` 仅在 127.0.0.1 上透传官方 MCP 协议，不拼接
   编辑器上下文，不记录消息正文。专属后台首个原生 Droid 客户端被固定为根连接；
   子客户端不能覆盖其身份。initialize、initialized、工具发现及初始编辑器通知
-  完成后才报连接，流关闭／错误及原生心跳失效会使状态失效。
-  已确认根通道的有效 SSE 心跳／上下文通知可恢复临时断连；迟到但完整的初始化
-  可恢复握手超时状态，已拒绝的发送不重放。活动根流独立追踪，旧流关闭不会覆盖
-  新流，异常上游会同步结束对应下游。DELETE、dispose 及明确握手失败仍为终止。
+  完成后才报连接。根 GET 短暂中断由 `recoverableIdeEventStream.ts` 在保留下游
+  通道的前提下有限续接，只转发完整 SSE 帧并使用最后已交付事件 ID；不重放 POST。
+  恢复 HTTP 连接不伪造原生心跳；心跳过期、会话拒绝或续接耗尽才终止原通道。
+  迟到但完整的初始化可恢复握手超时状态，已拒绝的发送不重放。活动根流独立追踪，
+  旧流关闭不会覆盖新流。DELETE、dispose 及明确握手失败仍为终止。
   Pool 从 relay 创建时记录静态状态、原因与耗时，不采集 MCP 正文或认证头。
 - daemon 明确通知根会话 `session_inactivity` 时，Pool 在转发通知前重置该会话
   relay 的根连接代际；旧请求的关闭、心跳及握手结果不影响新代际。空闲期间
   不运行握手倒计时，新根 initialize 或实际等待就绪时才开始有界等待。
   这也覆盖 Context 等元数据 RPC 先于用户发送而自动加载 worker 的情况。
 - `ideSessionHandle.ts` 在发送前先调用 SDK `ensureSessionLoaded` 恢复原 daemon
-  上的原会话，再等待对应 IDE 通道完整握手；随后只提交一次用户消息。取消只
+  上的原会话；失效的空闲 IDE attachment 自动重建，再等待完整握手。逻辑 handle
+  保留原订阅和权限回调，Pool 只持有实际物理 handle；随后只提交一次用户消息。取消只
   结束当前等待，不取消其他读取共享的 SDK 加载，也不会在加载完成后补发。
   Bridge 48 将连接／断开／失败实时投影到 IDE 控件，不使用端口存在或日志作回执。
   空闲历史会话在保留持久化内容、确认无活动任务及受管终端后迁移到专属后台。
@@ -183,7 +191,7 @@ flowchart TD
   重连结束负责释放自身会话锁，不以旧 Runtime 代际判断锁的归属。
 - 同一 owner 的 relay 断线／错误也可触发空闲 attachment 重建，复用原安全条件，
   新 handle 返回前等待完整 IDE 握手。idle worker 等待正常重载与失效客户端分开处理；
-  原生客户端异常断流／心跳过期后不凭迟到心跳恢复，普通 SSE 结束仍可原通道恢复。
+  原生客户端明确失效／心跳过期后不凭迟到心跳恢复，短暂 SSE 结束优先原通道续接。
 - 手动 `runtime.retry` 携带失败轮次标识；activation 确认恢复和 IDE 就绪后，仅解除
   对应当前失败并写入恢复检查点，保留 transcript，不重发用户消息。
   Windows 会话租约文件的原子替换在原独占锁内有限重试共享冲突，保留旧记录。
@@ -192,6 +200,16 @@ flowchart TD
 - `daemon/connectPublicDaemon.ts` 直接持有 SDK 0.7.0 公开导出的
   `DaemonSessionController` 与 `MultiSessionStateManager`，不再读取
   `.sessions.controller`，也不创建第二条竞争连接。
+- `transportRecovery.ts` 区分 SDK 正在恢复与最终失败；认证成功后重新加载保留的
+  根会话和原配置，再解除发送／交互等待并通知子会话重附。凭据在认证时重新读取。
+  泛化 SDK error 不再永久污染连接状态；恢复有独立 45 秒总时限，不依赖 socket
+  刚打开就重置的重试计数。已提交轮次不重发、不因断流自动中断，Host 保留原 turn
+  和 messageId，立即补齐历史并按约 2 秒间隔跟踪；真实终态按对应调用身份保留，
+  断线期间确实缺失的终态明确标记未确认，不从 idle 推断模型成功或编造用量。
+- 子代理映射先接实时事件，历史在旁路补齐；提前到达的 child_available 等待父行。
+  历史保留有效原始 toolUseId，消息 turnId 按 sourceSessionId／messageId 生成，
+  快照与实时行按身份合并，不按相似文本认领。加载中与加载失败分离；当前证据
+  限制留在 Review，旧的瞬时映射／历史提示不作为永久聊天记录恢复。
 - `daemon/api.ts` 仅暴露生产消费者使用的资源。`sessionHandle.ts` 管理唯一 attached
   handle、metadata 和 replacement；`permissionDispatch.ts` 管理权限/AskUser 的
   原会话及关联父会话路由，缺失或失败的 handler 默认取消。

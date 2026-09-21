@@ -5,10 +5,7 @@ import type { SessionTranscriptItem } from '../../../shared/protocol/transcript'
 import { stableTranscriptId } from '../../recovery/hostTranscriptState';
 import type { ChatController } from '../ChatController';
 import type { ReviewCoordinator } from '../../review/reviewCoordinator';
-import type {
-  ParentSubagentEvidence,
-  SubagentEvidenceNotice,
-} from './SubagentTranscriptService';
+import type { ParentSubagentEvidence } from './SubagentTranscriptService';
 
 export interface ReviewChildOperation {
   readonly sequence: number;
@@ -34,7 +31,6 @@ export class SubagentReviewEvidence implements vscode.Disposable {
     | null = null;
   private parentSessionId: string | null = null;
   private unsubscribe: (() => void) | null = null;
-  private readonly reported = new Set<string>();
   private readonly scopeNotices = new Map<string, readonly string[]>();
   private controllerSubscription: vscode.Disposable | null = null;
   private disposed = false;
@@ -76,8 +72,8 @@ export class SubagentReviewEvidence implements vscode.Disposable {
     const transcript = controller.recoveryState.transcript.transcript;
     const key = `${sessionId}\u0000${cwd}\u0000${transcriptMarker(transcript)}`;
     if (this.mapping?.key !== key) {
-      const promise = service
-        .ensureParentMapping(sessionId, cwd, transcript)
+      const promise = Promise.resolve()
+        .then(() => service.ensureParentMapping(sessionId, cwd, transcript))
         .then((evidence) => {
           if (
             this.disposed ||
@@ -98,12 +94,7 @@ export class SubagentReviewEvidence implements vscode.Disposable {
             this.getController().sessionState.sessionId !== sessionId) return;
           this.mapping.pending = false;
           this.scopeNotices.set(`${sessionId}\u0000${turnId}`, ['Child operation evidence could not be loaded.']);
-          this.reportNotice(sessionId, {
-            turnId,
-            toolUseId: 'subagent-history',
-            reason: 'history-unavailable',
-            message: 'Child operation evidence could not be loaded.',
-          });
+          this.getReview()?.refreshOperationsTurn(sessionId, turnId);
         });
       this.mapping = { key, promise, pending: true };
     }
@@ -136,7 +127,6 @@ export class SubagentReviewEvidence implements vscode.Disposable {
     this.unsubscribe = null;
     this.parentSessionId = null;
     this.mapping = null;
-    this.reported.clear();
     this.scopeNotices.clear();
     this.controllerSubscription?.dispose();
   }
@@ -145,9 +135,10 @@ export class SubagentReviewEvidence implements vscode.Disposable {
     if (this.parentSessionId === sessionId && this.unsubscribe !== null) return;
     this.unsubscribe?.();
     this.scopeNotices.clear();
-    this.reported.clear();
     this.mapping = null;
     this.parentSessionId = sessionId;
+    // subscribeParent synchronously publishes existing rows.
+    this.unsubscribe = () => undefined;
     const service = this.getController().subagentState.subagentTranscripts;
     this.unsubscribe =
       service?.subscribeParent(sessionId, (turnId) => {
@@ -162,37 +153,16 @@ export class SubagentReviewEvidence implements vscode.Disposable {
     sessionId: string,
     evidence: ParentSubagentEvidence,
   ): void {
-    for (const notice of evidence.notices) {
-      this.reportNotice(sessionId, notice);
-    }
-  }
-
-  private reportNotice(
-    sessionId: string,
-    notice: SubagentEvidenceNotice,
-  ): void {
-    const key =
-      `${sessionId}\u0000${notice.turnId}\u0000${notice.toolUseId}\u0000${notice.reason}`;
-    if (this.reported.has(key)) return;
-    this.reported.add(key);
-    const controller = this.getController();
-    if (controller.sessionState.sessionId !== sessionId) return;
-    controller.emit({
-      type: 'runtime.diagnostic',
-      sessionId,
-      turnId: notice.turnId,
-      severity: 'warning',
-      code: `subagent-operation-evidence-${notice.reason}`,
-      message: notice.message,
-    });
+    // Evidence availability is current Review state, not permanent chat history.
+    const turns = new Set(evidence.notices.map((notice) => notice.turnId));
+    for (const turnId of turns) this.scopeNotices.set(`${sessionId}\u0000${turnId}`,
+      evidence.notices.filter((notice) => notice.turnId === turnId).map((notice) => notice.message));
   }
 }
 
 function transcriptMarker(
   transcript: readonly SessionTranscriptItem[],
 ): string {
-  const taskRows = transcript.filter(
-    (item) => item.kind === 'tool' && item.subagent !== undefined,
-  );
-  return `${taskRows.length}:${taskRows.at(-1)?.id ?? ''}`;
+  return transcript.flatMap((item) => item.kind === 'tool' && item.subagent !== undefined
+    ? [`${item.toolUseId}:${item.status}:${item.subagent.status ?? 'dispatching'}`] : []).join('|');
 }

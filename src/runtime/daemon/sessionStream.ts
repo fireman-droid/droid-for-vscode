@@ -5,11 +5,19 @@ import {
   StreamStateTracker,
   type DaemonSessionController,
   type DroidStreamEvent,
+  type DroidResultMessage,
 } from '@factory/droid-sdk';
 import { ProtocolError } from '@factory/droid-sdk/node';
 import type { DaemonNotification, DaemonStreamOptions } from './api';
+import { RecoveredDaemonTurn } from './recoveredTurn';
 
 type InternalMessage = Parameters<StreamStateTracker['processMessage']>[0];
+export class DaemonStreamRecoveryError extends Error {
+  constructor(readonly messageId: string, readonly recovery: RecoveredDaemonTurn) {
+    super('Droid session subscription was restored after transport loss.');
+    this.name = 'DaemonStreamRecoveryError';
+  }
+}
 function isStreamEvent(message: InternalMessage): message is DroidStreamEvent {
   return (
     message.type !== 'structured_output' &&
@@ -31,6 +39,8 @@ export class DaemonTurnStream {
   private releaseAfterCompletion = false;
   private interruptPromise: Promise<void> | undefined;
   private interrupted = false;
+  private transportSuspended = false;
+  private recoveredCompletion: DroidResultMessage | undefined;
   private readonly turnId = randomUUID();
   private readonly tracker: StreamStateTracker;
   private readonly donePromise: Promise<void>;
@@ -41,6 +51,8 @@ export class DaemonTurnStream {
     private readonly sessionId: string,
     private readonly options: DaemonStreamOptions,
     private readonly onRelease: () => void,
+    private readonly waitUntilReady: () => Promise<void> = async () => {},
+    private readonly retainRecovery: (recovery: RecoveredDaemonTurn) => () => void = () => () => {},
   ) {
     this.tracker = new StreamStateTracker({
       sessionId,
@@ -51,8 +63,6 @@ export class DaemonTurnStream {
       this.resolveDone = resolve;
     });
     controller.on('sessionNotification', this.observe);
-    controller.on('error', this.fail);
-    controller.on('disconnected', this.disconnected);
   }
 
   private readonly observe = ({ sessionId, notification }: DaemonNotification): void => {
@@ -67,13 +77,18 @@ export class DaemonTurnStream {
         );
       } else if (inner.turnId === this.turnId) {
         this.completed = true;
-        this.queue.push(this.tracker.completeTurn(inner));
+        const result = this.tracker.completeTurn(inner);
+        if (this.transportSuspended) {
+          this.recoveredCompletion = { ...result, tokenUsage: inner.tokenUsage ?? null };
+          return;
+        }
+        this.queue.push(result);
         this.finish();
         if (this.releaseAfterCompletion) this.release();
       }
       return;
     }
-    if (this.done) return;
+    if (this.done || this.transportSuspended) return;
     const converted = convertNotificationToStreamMessage(inner);
     for (const input of converted === null
       ? []
@@ -102,9 +117,27 @@ export class DaemonTurnStream {
     this.wake?.();
   };
 
-  private readonly disconnected = (): void => {
-    this.fail(new Error('Droid connection disconnected'));
-  };
+  suspendTransport(): void { this.transportSuspended = true; }
+
+  restoreTransport(messages?: readonly { readonly id: string }[]): void {
+    if (!this.transportSuspended || this.done) return;
+    if (messages !== undefined && !messages.some((message) => message.id === this.turnId)) {
+      this.failTransport(new Error('The session was restored, but delivery of this message could not be confirmed.'));
+      return;
+    }
+    this.detached = true;
+    let release = () => {};
+    const recovery = new RecoveredDaemonTurn(this.controller, this.sessionId, this.turnId,
+      this.tracker, this.recoveredCompletion, () => release());
+    release = this.retainRecovery(recovery);
+    this.fail(new DaemonStreamRecoveryError(this.turnId, recovery));
+  }
+
+  failTransport(error: Error): void {
+    // Transport loss is not a request to cancel work on the daemon.
+    this.detached = true;
+    this.fail(error);
+  }
 
   readonly fail = (error: unknown): void => {
     this.failed = true;
@@ -128,14 +161,13 @@ export class DaemonTurnStream {
     if (this.released) return;
     this.released = true;
     this.controller.off('sessionNotification', this.observe);
-    this.controller.off('error', this.fail);
-    this.controller.off('disconnected', this.disconnected);
     this.onRelease();
   }
 
   interrupt(): Promise<void> {
     if (this.interruptPromise) return this.interruptPromise;
-    const pending = this.controller.interruptSession(this.sessionId).then(() => {
+    const pending = this.waitUntilReady().then(async () => {
+      if (!this.completed) await this.controller.interruptSession(this.sessionId);
       this.interrupted = true;
       this.finish();
     });
@@ -168,6 +200,10 @@ export class DaemonTurnStream {
           userMessageSource: 'api' as Parameters<
             DaemonSessionController['addUserMessage']
           >[1]['userMessageSource'],
+        }).catch(async (error: unknown) => {
+          if (!this.transportSuspended) throw error;
+          await this.waitUntilReady();
+          this.restoreTransport();
         }),
         this.donePromise,
       ]);

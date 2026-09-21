@@ -551,6 +551,79 @@ export async function resolveDaemonListenerPid(
     : null;
 }
 
+export type DaemonListenerVerification =
+  | { readonly status: 'verified'; readonly pid: number }
+  | { readonly status: 'not-listening' }
+  | { readonly status: 'unverified' };
+
+/**
+ * Verify a discovery batch using one listener-table read and one process query.
+ * Results are keyed by port and carry the actual listener PID: callers must
+ * compare it with their recorded PID. A missing listener is not proof that the
+ * recorded worker died; an unavailable query is never reported as missing.
+ * This snapshot is for discovery only, never authority to terminate a process.
+ */
+export async function verifyDaemonListeners(
+  targets: readonly { readonly port: number; readonly pid: number }[],
+  host = '127.0.0.1',
+  executable = 'droid',
+): Promise<ReadonlyMap<number, DaemonListenerVerification>> {
+  const results = new Map<number, DaemonListenerVerification>();
+  if (targets.length === 0) return results;
+  const [command, args] = process.platform === 'win32'
+    ? (['netstat.exe', ['-ano', '-p', 'tcp']] as const)
+    : (['ss', ['-ltnp']] as const);
+  const output = await runBoundedCommandOutput(command, args, true);
+  const listeners = new Map<number, number>();
+  for (const { port } of targets) {
+    const pid = output === null ? 'unverified'
+      : parseListeningIdentity(output, port, host, process.platform);
+    if (typeof pid === 'number') listeners.set(port, pid);
+    else results.set(port, { status: pid === null ? 'not-listening' : 'unverified' });
+  }
+  if (listeners.size === 0) return results;
+  const commands = await queryProcessCommandLines([...new Set(listeners.values())]);
+  for (const [port, pid] of listeners) {
+    const commandLine = commands?.get(pid);
+    results.set(port, commandLine !== undefined && looksLikeDroidDaemon(commandLine, executable)
+      ? { status: 'verified', pid } : { status: 'unverified' });
+  }
+  return results;
+}
+
+async function queryProcessCommandLines(pids: readonly number[]): Promise<ReadonlyMap<number, string> | null> {
+  // PIDs originate in the parsed system listener table and are positive safe
+  // integers. Neither paths nor untrusted command-line text enter the query.
+  const [command, args] = process.platform === 'win32'
+    ? (['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ' +
+      'ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process -ErrorAction Stop -Filter "' +
+      pids.map(pid => `ProcessId=${String(pid)}`).join(' OR ') +
+      '" | Select-Object ProcessId,CommandLine)']] as const)
+    : (['ps', ['-p', pids.join(','), '-o', 'pid=,args=']] as const);
+  const output = await runBoundedCommandOutput(command, args, true);
+  if (output === null) return null;
+  const commands = new Map<number, string>();
+  if (process.platform !== 'win32') {
+    for (const line of output.split(/\r?\n/u)) {
+      const match = /^\s*(\d+)\s+(.+)$/u.exec(line);
+      if (match && pids.includes(Number(match[1]))) commands.set(Number(match[1]), match[2]!);
+    }
+    return commands;
+  }
+  let rows: unknown;
+  try { rows = JSON.parse(output); } catch { return null; }
+  if (!Array.isArray(rows)) return null;
+  for (const row of rows) {
+    if (typeof row !== 'object' || row === null) return null;
+    const value = row as { ProcessId?: unknown; CommandLine?: unknown };
+    if (typeof value.ProcessId !== 'number' || !Number.isSafeInteger(value.ProcessId) ||
+        !pids.includes(value.ProcessId)) return null;
+    if (typeof value.CommandLine === 'string') commands.set(value.ProcessId, value.CommandLine);
+  }
+  return commands;
+}
+
 async function queryListeningPid(
   port: number,
   host: string,
@@ -571,11 +644,21 @@ function parseListeningPid(
   host: string,
   platform: NodeJS.Platform,
 ): number | null {
+  const identity = parseListeningIdentity(output, port, host, platform);
+  return typeof identity === 'number' ? identity : null;
+}
+
+function parseListeningIdentity(
+  output: string,
+  port: number,
+  host: string,
+  platform: NodeJS.Platform,
+): number | null | 'unverified' {
   for (const line of output.split(/\r?\n/u)) {
     const columns = line.trim().split(/\s+/u);
     if (platform === 'win32') {
       if (
-        columns.length < 5 ||
+        columns.length < 4 ||
         columns[0]?.toUpperCase() !== 'TCP' ||
         columns[3]?.toUpperCase() !== 'LISTENING' ||
         !matchesEndpoint(columns[1] ?? '', host, port)
@@ -586,10 +669,10 @@ function parseListeningPid(
       if (Number.isSafeInteger(pid) && pid > 0) {
         return pid;
       }
-      continue;
+      return 'unverified';
     }
     if (
-      columns.length < 6 ||
+      columns.length < 5 ||
       columns[0]?.toUpperCase() !== 'LISTEN' ||
       !matchesEndpoint(columns[3] ?? '', host, port)
     ) {
@@ -600,6 +683,7 @@ function parseListeningPid(
     if (Number.isSafeInteger(pid) && pid > 0) {
       return pid;
     }
+    return 'unverified';
   }
   return null;
 }
@@ -645,6 +729,7 @@ function defaultQueryProcessCommandLine(pid: number): Promise<string | null> {
 function runBoundedCommandOutput(
   command: string,
   args: readonly string[],
+  completeSnapshot = false,
 ): Promise<string | null> {
   return new Promise((resolve) => {
     let settled = false;
@@ -687,9 +772,11 @@ function runBoundedCommandOutput(
     child.once('error', () => {
       finish(null);
     });
-    child.once('exit', () => {
+    // Batch JSON may span stdout chunks after the child exit event. Snapshot
+    // callers require fully closed stdio and a successful system query.
+    child.once(completeSnapshot ? 'close' : 'exit', (code: number | null) => {
       const trimmed = output.trim();
-      finish(trimmed === '' ? null : trimmed);
+      finish((completeSnapshot && code !== 0) || trimmed === '' ? null : trimmed);
     });
   });
 }

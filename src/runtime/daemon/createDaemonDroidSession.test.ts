@@ -23,6 +23,39 @@ import {
 } from './createDaemonDroidSession';
 
 describe('createDaemonDroidSession', () => {
+  it.each(['new', 'resume'] as const)('starts the %s worker and model catalog concurrently', async (kind) => {
+    const mock = createDroidMock();
+    let finishCatalog!: (value: Awaited<ReturnType<typeof mock.settings.getDefaults>>) => void;
+    let finishWorker!: (value: typeof mock.created) => void;
+    mock.settings.getDefaults.mockImplementation(() => new Promise(resolve => { finishCatalog = resolve; }));
+    const worker = new Promise<typeof mock.created>(resolve => { finishWorker = resolve; });
+    if (kind === 'new') mock.sessions.create.mockImplementation(() => worker);
+    else mock.sessions.resume.mockImplementation(() => worker);
+    let settled = false;
+    const pending = createDaemonDroidSession({
+      target: kind === 'new' ? { kind, cwd: 'C:/workspace' } : { kind, cwd: 'C:/workspace', sessionId: 'session-1' },
+      interactionHandler: cancellingRuntimeInteractionHandler, getDroid: async () => mock.droid,
+    }).then(value => { settled = true; return value; });
+    await vi.waitFor(() => expect(mock.sessions[kind === 'new' ? 'create' : 'resume']).toHaveBeenCalledOnce());
+    expect(mock.settings.getDefaults).toHaveBeenCalledOnce();
+    expect(settled).toBe(false);
+    finishCatalog({});
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    finishWorker(mock.created);
+    expect((await pending).id).toBe('session-1');
+  });
+
+  it('preserves a worker startup failure when the concurrent catalog also fails', async () => {
+    const mock = createDroidMock();
+    mock.settings.getDefaults.mockRejectedValue(new Error('catalog unavailable'));
+    mock.sessions.resume.mockRejectedValue(new Error('worker failed'));
+    await expect(createDaemonDroidSession({
+      target: { kind: 'resume', cwd: 'C:/workspace', sessionId: 'session-1' },
+      interactionHandler: cancellingRuntimeInteractionHandler, getDroid: async () => mock.droid,
+    })).rejects.toThrow('worker failed');
+    expect(mock.settings.getDefaults).toHaveBeenCalledOnce();
+  });
   it('creates a cwd-scoped daemon session with interaction handlers', async () => {
     const mock = createDroidMock();
 
@@ -259,6 +292,7 @@ describe('createDaemonDroidSession', () => {
     });
     expect(mock.created.stream).toHaveBeenCalledWith('Say hello', {
       includePartialMessages: true,
+      abortSignal: expect.any(AbortSignal),
     });
     expect(events).toEqual([
       { type: 'text-delta', text: 'hello' },

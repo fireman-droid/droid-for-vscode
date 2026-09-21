@@ -11,6 +11,7 @@ import type { RuntimeEvent } from '../runtimeEvents';
 import { ToolExecutionPhaseBuffer } from '../events/toolExecutionPhases';
 
 export type SubagentEvent =
+  | { readonly type: 'resync'; readonly sessionId: string }
   | {
       readonly type: 'child-available';
       readonly sessionId: string;
@@ -56,14 +57,24 @@ export function createSubagentEventSource() {
   >();
   const listeners = new Set<(event: SubagentEvent) => void>();
   let unbind: (() => void) | undefined;
+  let unbindRecovery: (() => void) | undefined;
   let boundDroid: DaemonApi | null = null;
   let disposed = false;
   const emit = (event: SubagentEvent): void => {
     for (const listener of listeners) listener(event);
   };
   const attach = (sessionId: string): void => {
-    // History remains available if this connection cannot attach a live child.
-    void boundDroid?.notifications.attachChild(sessionId).catch(() => undefined);
+    const droid = boundDroid;
+    if (droid === null) return;
+    // Subscribe before reading the snapshot; live events continue while it loads.
+    void droid.notifications.attachChild(sessionId).then(() => {
+      if (!disposed && boundDroid === droid && children.has(sessionId))
+        emit({ type: 'resync', sessionId });
+    }).catch(() => {
+      // A failed attachment still needs an authoritative history reconciliation.
+      if (!disposed && boundDroid === droid && children.has(sessionId))
+        emit({ type: 'resync', sessionId });
+    });
   };
   const observe = ({ sessionId, notification }: Notification): void => {
     if (disposed) return;
@@ -134,6 +145,7 @@ export function createSubagentEventSource() {
         child.collectOperation(message),
       );
       if (event !== undefined) {
+        if (event.type === 'working-state' && event.isWorking) child.live = true;
         emit({ type: 'runtime', sessionId, event });
         if (event.type === 'tool-start') {
           for (const buffered of child.phases.start(event.toolUseId)) {
@@ -153,7 +165,13 @@ export function createSubagentEventSource() {
       };
     },
     watch(sessionId: string, cwd: string, live: boolean): void {
-      if (children.has(sessionId)) return;
+      const existing = children.get(sessionId);
+      if (existing !== undefined) {
+        const attachNeeded = live && !existing.live;
+        existing.live = live;
+        if (attachNeeded) attach(sessionId);
+        return;
+      }
       children.set(sessionId, {
         cwd,
         live,
@@ -167,8 +185,12 @@ export function createSubagentEventSource() {
       if (disposed) return false;
       if (boundDroid === droid) return true;
       unbind?.();
+      unbindRecovery?.();
       boundDroid = droid;
       unbind = droid.notifications.subscribe(observe);
+      unbindRecovery = droid.notifications.subscribeRecovery?.(() => {
+        for (const [sessionId, child] of children) if (child.live) attach(sessionId);
+      });
       for (const [sessionId, child] of children) if (child.live) attach(sessionId);
       return true;
     },
@@ -189,7 +211,9 @@ export function createSubagentEventSource() {
     dispose(): void {
       disposed = true;
       unbind?.();
+      unbindRecovery?.();
       unbind = undefined;
+      unbindRecovery = undefined;
       boundDroid = null;
       children.clear();
       listeners.clear();

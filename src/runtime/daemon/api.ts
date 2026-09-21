@@ -30,6 +30,7 @@ export interface DaemonSessionHandle extends ConnectedDroidSession {
 
 /** Only the resources used by this extension, on one Runtime-owned connection. */
 export interface DaemonApi {
+  waitUntilReady?(signal?: AbortSignal): Promise<void>;
   readonly sessions: Pick<
     ConnectedDroid['sessions'],
     | 'list'
@@ -83,6 +84,7 @@ export interface DaemonApi {
   readonly git: ConnectedDroid['git'];
   readonly unstable: Pick<ConnectedDroid['unstable'], 'missions'>;
   readonly notifications: {
+    subscribeRecovery?(listener: () => void): () => void;
     subscribe(listener: (notification: DaemonNotification) => void): () => void;
     subscribeTerminal(listener: (event: DaemonTerminalEvent) => void): () => void;
     attachChild(sessionId: string): Promise<void>;

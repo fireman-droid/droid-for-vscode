@@ -116,6 +116,41 @@ describe('openDaemonConnection', () => {
     expect(connection.status()).toBe('auth-error');
   });
 
+  it('re-reads credentials for reconnect and never reuses a token after sign-out', async () => {
+    const resolveCredential = vi.fn<ResolveCredential>()
+      .mockResolvedValueOnce(okCredential('initial-test-token'))
+      .mockResolvedValueOnce(okCredential('refreshed-test-token'))
+      .mockResolvedValueOnce({ status: 'not-logged-in' });
+    let reconnectToken!: NonNullable<Parameters<Connect>[0]['getAccessToken']>;
+    const connection = await openDaemonConnection(ENDPOINT, {
+      resolveCredential,
+      connect: async (options) => {
+        reconnectToken = options.getAccessToken!;
+        return fakeDroid();
+      },
+    });
+    await expect(reconnectToken()).resolves.toBe('refreshed-test-token');
+    await expect(reconnectToken()).resolves.toBeNull();
+    expect(resolveCredential).toHaveBeenCalledTimes(3);
+    connection.dispose();
+  });
+
+  it('keeps authentication failure until a restored connection is authenticated', async () => {
+    let callbacks!: Parameters<Connect>[0];
+    const connection = await openDaemonConnection(ENDPOINT, {
+      resolveCredential: async () => okCredential('test-only'),
+      connect: async (options) => { callbacks = options; return fakeDroid(); },
+    });
+    callbacks.onConnectionState?.('recovering');
+    expect(connection.status()).toBe('recovering');
+    callbacks.onAuthenticationError?.(new Error('expired'));
+    callbacks.onConnectionState?.('recovering');
+    expect(connection.status()).toBe('auth-error');
+    callbacks.onConnectionState?.('connected');
+    expect(connection.status()).toBe('connected');
+    connection.dispose();
+  });
+
   it('disconnects and reports failed after dispose', async () => {
     const droid = fakeDroid();
     const connection = await openDaemonConnection(ENDPOINT, {

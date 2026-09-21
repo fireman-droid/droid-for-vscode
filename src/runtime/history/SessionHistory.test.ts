@@ -181,6 +181,8 @@ describe('projectSessionHistory', () => {
           },
           {
             kind: 'tool',
+            // The opaque SDK call id now joins history, live updates and Task ledgers.
+            toolUseId: 'raw-tool-id',
             toolName: 'Read',
             status: 'completed',
           },
@@ -190,8 +192,11 @@ describe('projectSessionHistory', () => {
     });
     const serialized = JSON.stringify(first);
     expect(serialized).not.toContain('raw-assistant-id');
-    expect(serialized).not.toContain('raw-tool-id');
     expect(serialized).not.toContain('private');
+    const projectedTool = first.status === 'available'
+      ? first.state.transcript.find(item => item.kind === 'tool') : undefined;
+    expect(projectedTool).not.toHaveProperty('input');
+    expect(projectedTool).not.toHaveProperty('thoughtSignature');
   });
 
   it('projects workspace-relative file paths for file-modifying history tools', () => {
@@ -241,11 +246,50 @@ describe('projectSessionHistory', () => {
     expect(transcript[1]).not.toHaveProperty('filePath');
     expect(transcript[2]).not.toHaveProperty('filePath');
     expect(transcript[2]).toMatchObject({ target: 'src/app.ts' });
-    expect(JSON.stringify(result)).not.toContain('outside');
+    expect(transcript[1]).toMatchObject({ toolUseId: 'tool-outside' });
+    expect(transcript[1]).not.toHaveProperty('target');
+    expect(transcript[1]).not.toHaveProperty('input');
+    expect(JSON.stringify(result)).not.toContain('outside.ts');
 
     // Without a workspace root no paths are projected at all.
     const rootless = projectSessionHistory(loaded);
     expect(JSON.stringify(rootless)).not.toContain('app.ts');
+  });
+
+  it.each([
+    { label: 'empty', rawId: '' },
+    { label: 'overlong', rawId: 'x'.repeat(MAX_BRIDGE_ID_LENGTH + 1) },
+  ])('uses a bounded fallback for an $label raw tool id', ({ rawId }) => {
+    const result = projectSessionHistory(response([message('assistant-invalid-id', 'assistant', [
+      { type: 'tool_use', id: rawId, name: 'Read', input: { secret: 'PRIVATE_ARGUMENT' } },
+    ])]));
+    expect(result.status).toBe('available');
+    if (result.status !== 'available') throw new Error('Expected projected history.');
+    const row = result.state.transcript.find(item => item.kind === 'tool');
+    expect(row?.kind).toBe('tool');
+    if (row?.kind !== 'tool') throw new Error('Expected projected tool.');
+    expect(row.toolUseId).not.toBe(rawId);
+    expect(row.toolUseId.length).toBeGreaterThan(0);
+    expect(row.toolUseId.length).toBeLessThanOrEqual(MAX_BRIDGE_ID_LENGTH);
+    expect(JSON.stringify(result)).not.toContain('PRIVATE_ARGUMENT');
+  });
+
+  it('keeps duplicate raw calls distinct and marks their history incomplete', () => {
+    const loaded = response([message('assistant-duplicate-id', 'assistant', [
+      { type: 'tool_use', id: 'duplicate-call', name: 'Read', input: { secret: 'PRIVATE_FIRST' } },
+      { type: 'tool_use', id: 'duplicate-call', name: 'Read', input: { secret: 'PRIVATE_SECOND' } },
+    ])]);
+    const result = projectSessionHistory(loaded);
+    expect(result).toEqual(projectSessionHistory(loaded));
+    expect(result.status).toBe('available');
+    if (result.status !== 'available') throw new Error('Expected projected history.');
+    const tools = result.state.transcript.filter(item => item.kind === 'tool');
+    expect(tools).toHaveLength(2);
+    expect(tools[0]?.toolUseId).toBe('duplicate-call');
+    expect(tools[1]?.toolUseId).not.toBe('duplicate-call');
+    expect(new Set(tools.map(item => item.toolUseId)).size).toBe(2);
+    expect(result.state).toMatchObject({ historyStatus: 'partial', truncated: true });
+    expect(JSON.stringify(result)).not.toContain('PRIVATE_');
   });
 
   it('projects meaningful targets for historical search tools', () => {

@@ -84,6 +84,7 @@ export interface TurnFlowPort
     | 'withActiveSession'
     | 'loadHistoryTimed'
     | 'clearTurnWatchdog'
+    | 'reconcileDaemonTurn'
     | 'settleQueueAfterTurn'
     | 'setSessionRunning'
     | 'isCurrentRuntime'

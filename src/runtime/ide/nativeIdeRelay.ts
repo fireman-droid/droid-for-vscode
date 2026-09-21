@@ -7,6 +7,7 @@ import type {
 } from 'node:http';
 import type { Socket } from 'node:net';
 import { StringDecoder } from 'node:string_decoder';
+import { forwardRecoverableIdeEvents } from './recoverableIdeEventStream';
 
 export type NativeIdeRelayStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -57,6 +58,7 @@ interface RelayRequest {
   rootCandidate: boolean;
   rootRequest: boolean;
   upstreamEnded: boolean;
+  managedEventStream?: boolean;
 }
 
 class NativeIdeRelayImpl implements NativeIdeRelay {
@@ -71,6 +73,7 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
   private readonly sockets = new Set<Socket>();
   private readonly upstreamRequests = new Set<ClientRequest>();
   private readonly rootEventStreams = new Set<RelayRequest>();
+  private readonly recoveringEventStreams = new Set<RelayRequest>();
   private readonly upstreamAgent = new Agent({ keepAlive: true });
   private readonly server;
   private timeout: NodeJS.Timeout | undefined;
@@ -155,6 +158,7 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     ++this.generation;
     clearTimeout(this.timeout);
     this.rootEventStreams.clear();
+    this.recoveringEventStreams.clear();
     this.rootClaimed = false;
     this.rootSessionId = undefined;
     this.rootLastActivity = 0;
@@ -216,6 +220,7 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     for (const socket of this.sockets) socket.destroy();
     this.upstreamRequests.clear();
     this.rootEventStreams.clear();
+    this.recoveringEventStreams.clear();
     this.sockets.clear();
     await new Promise<void>((resolve) => {
       if (!this.server.listening) {
@@ -268,6 +273,7 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
       void this.forwardResponse(relayRequest, upstreamResponse);
     });
     upstream.on('error', () => {
+      if (relayRequest.managedEventStream) return;
       if (!response.headersSent) respond(response, 502, 'IDE service unavailable');
       else response.destroy();
       if (relayRequest.generation !== this.generation) return;
@@ -326,7 +332,10 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
       (upstreamResponse.statusCode ?? 0) >= 200 && (upstreamResponse.statusCode ?? 0) < 300 &&
       headerValue(upstreamResponse.headers['content-type'])?.includes('text/event-stream');
     const rootEventStream = liveRootSse && relayRequest.method === 'GET';
-    if (rootEventStream) this.rootEventStreams.add(relayRequest);
+    if (rootEventStream) {
+      this.forwardRootEvents(relayRequest, upstreamResponse);
+      return;
+    }
     if (liveRootSse) {
       observeSse(upstreamResponse, (notification) => {
         if (relayRequest.generation !== this.generation) return;
@@ -349,11 +358,6 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
 
     const endRootStream = (message: string, failed = false, terminated = false) => {
       if (relayRequest.generation !== this.generation) return;
-      if (rootEventStream) {
-        this.rootEventStreams.delete(relayRequest);
-        // MCP may replace an SSE stream before its predecessor finishes closing.
-        if (this.rootEventStreams.size > 0) return;
-      }
       if (terminated) this.rootTerminated = true;
       if (failed) this.fail(message);
       else this.disconnect(message);
@@ -412,6 +416,62 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     });
   }
 
+  private forwardRootEvents(request: RelayRequest, response: IncomingMessage): void {
+    request.managedEventStream = true;
+    this.rootEventStreams.add(request);
+    request.response.writeHead(response.statusCode ?? 200, relayHeaders(response.headers));
+    const current = () => !this.disposed && request.generation === this.generation && !this.rootTerminated;
+    forwardRecoverableIdeEvents({
+      initial: response, request: request.upstream, downstream: request.response,
+      recoveryTimeoutMs: this.timeoutMs,
+      lastEventId: headerValue(request.downstream.headers['last-event-id']),
+      canRecover: () => current() && this.rootEventStreams.size === 1 &&
+        Date.now() - this.rootLastActivity < ROOT_HEARTBEAT_EXPIRY_MS,
+      connect: (lastEventId) => {
+        const headers = upstreamHeaders(request.downstream.headers, this.upstreamPort);
+        if (lastEventId) headers['last-event-id'] = lastEventId;
+        else delete headers['last-event-id'];
+        const retry = httpRequest({ host: '127.0.0.1', port: this.upstreamPort,
+          path: '/mcp', method: 'GET', headers, agent: this.upstreamAgent });
+        this.upstreamRequests.add(retry);
+        retry.once('close', () => this.upstreamRequests.delete(retry));
+        return retry;
+      },
+      interrupted: () => {
+        if (!current()) return;
+        this.recoveringEventStreams.add(request);
+        this.update({ status: 'connecting', message: 'Restoring the native IDE event stream.' });
+      },
+      restored: () => {
+        this.recoveringEventStreams.delete(request);
+        if (current()) this.maybeReady(true, false);
+      },
+      frame: (frame) => {
+        if (!current()) return;
+        const notification = parseSseEnvelope(frame);
+        if (notification?.method === 'notifications/heartbeat') {
+          this.touchRoot();
+          this.maybeReady(true);
+        }
+        if (notification?.method === 'notifications/activeFile' || notification?.method === 'notifications/openFiles') {
+          this.initialContextForwarded = true;
+          this.maybeReady(true);
+        }
+      },
+      closed: () => {
+        this.rootEventStreams.delete(request);
+        this.recoveringEventStreams.delete(request);
+        if (!current()) return;
+        if (this.rootEventStreams.size > 0) {
+          this.maybeReady(true, false);
+          return;
+        }
+        this.rootTerminated = true;
+        this.disconnect('The native IDE event stream could not be restored.');
+      },
+    });
+  }
+
   private observeHandshake(
     request: RelayRequest,
     envelope: JsonRpcEnvelope | null,
@@ -453,9 +513,10 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     this.maybeReady();
   }
 
-  private maybeReady(liveRootEvidence = false): void {
+  private maybeReady(liveRootEvidence = false, activityObserved = true): void {
     if (
       !this.rootTerminated
+      && (this.rootEventStreams.size === 0 || this.rootEventStreams.size > this.recoveringEventStreams.size)
       && (this.state.status === 'connecting' ||
         (this.state.status === 'error' && this.handshakeTimedOut) ||
         (liveRootEvidence && this.state.status === 'disconnected'))
@@ -465,7 +526,7 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
       && this.initialContextForwarded
     ) {
       clearTimeout(this.timeout);
-      this.touchRoot();
+      if (activityObserved) this.touchRoot();
       this.update({
         status: 'connected',
         message: 'Native IDE tools are connected.',

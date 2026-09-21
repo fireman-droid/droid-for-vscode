@@ -7,6 +7,20 @@ describe('warmDaemonSidecar', () => {
     vi.useRealTimers();
   });
 
+  it('waits for a lazy facade’s real warmup before reporting readiness', async () => {
+    let ready!: () => void;
+    const warmup = vi.fn(() => new Promise<void>(resolve => { ready = resolve; }));
+    const droid = vi.fn();
+    const record = vi.fn();
+    warmDaemonSidecar({ droid, warmup }, { record });
+    await Promise.resolve();
+    expect(warmup).toHaveBeenCalledOnce();
+    expect(droid).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+    ready();
+    await vi.waitFor(() => expect(record).toHaveBeenCalledWith(expect.objectContaining({ name: 'daemon.sidecar.warmed' })));
+  });
+
   it('retries one failed warmup once', async () => {
     vi.useFakeTimers();
     const droid = vi

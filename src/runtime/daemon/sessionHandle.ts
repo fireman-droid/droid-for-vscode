@@ -14,6 +14,7 @@ import type {
   DaemonStreamOptions,
 } from './api';
 import { DaemonTurnStream } from './sessionStream';
+import type { RecoveredDaemonTurn } from './recoveredTurn';
 
 export class RetainedDaemonSession implements DaemonSessionHandle {
   private snapshot: SessionSettings | undefined;
@@ -22,6 +23,8 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
   private pendingCwd: string | undefined;
   private status: 'attached' | 'replacing' | 'detached' = 'attached';
   private active: DaemonTurnStream | undefined;
+  private admission: AbortController | undefined;
+  private readonly recovered = new Set<RecoveredDaemonTurn>();
   private readonly subscriptions = new Set<() => void>();
 
   constructor(
@@ -29,6 +32,7 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
     readonly id: string,
     readonly handlers: DaemonHandlers,
     private readonly unregister: () => void,
+    private readonly waitUntilReady: (signal?: AbortSignal) => Promise<void> = async () => {},
   ) {}
 
   get settings(): Readonly<SessionSettings> {
@@ -51,6 +55,7 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
   async ensureLoaded(signal?: AbortSignal): Promise<void> {
     this.assertAttached();
     signal?.throwIfAborted();
+    await this.waitUntilReady(signal);
     // The SDK shares in-flight loads. Cancelling one admission wait must not
     // interrupt a load used by another reader or send any user message.
     const loading = this.controller.ensureSessionLoaded(this.id);
@@ -129,9 +134,24 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
   ): AsyncGenerator<DroidStreamEvent> {
     this.assertAttached();
     options.abortSignal?.throwIfAborted();
-    if (this.active !== undefined) throw new ConcurrentStreamError(this.id);
+    if (this.active !== undefined || this.admission !== undefined) throw new ConcurrentStreamError(this.id);
+    const admission = new AbortController();
+    this.admission = admission;
+    const aborted = () => admission.abort(options.abortSignal?.reason);
+    options.abortSignal?.addEventListener('abort', aborted, { once: true });
+    try {
+      await this.waitUntilReady(admission.signal);
+      admission.signal.throwIfAborted();
+      this.assertAttached();
+    } finally {
+      options.abortSignal?.removeEventListener('abort', aborted);
+      if (this.admission === admission) this.admission = undefined;
+    }
     const active = new DaemonTurnStream(this.controller, this.id, options, () => {
       if (this.active === active) this.active = undefined;
+    }, () => this.waitUntilReady(), (recovery) => {
+      this.recovered.add(recovery);
+      return () => { this.recovered.delete(recovery); };
     });
     this.active = active;
     yield* active.messages(prompt);
@@ -139,6 +159,11 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
 
   async interrupt(): Promise<void> {
     this.assertAttached();
+    if (this.admission) {
+      this.admission.abort(new DOMException('Droid turn interrupted.', 'AbortError'));
+      return;
+    }
+    await this.waitUntilReady();
     if (this.active) await this.active.interrupt();
     else await this.controller.interruptSession(this.id);
   }
@@ -156,6 +181,8 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
   async detach(): Promise<void> {
     if (this.status === 'detached') return;
     this.status = 'detached';
+    this.admission?.abort(new Error('Session handle is detached'));
+    for (const recovery of this.recovered) recovery.dispose();
     this.active?.detach();
     for (const unsubscribe of this.subscriptions) unsubscribe();
     this.pendingSettings = {};
@@ -175,9 +202,13 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
     this.active?.fail(error);
   }
 
+  suspendTransport(): void { this.active?.suspendTransport(); }
+  restoreTransport(messages: readonly { readonly id: string }[]): void { this.active?.restoreTransport(messages); }
+  failTransport(error: Error): void { this.active?.failTransport(error); }
+
   private async replace<T>(operation: () => Promise<T>): Promise<T> {
     this.assertAttached();
-    if (this.active !== undefined) throw new ConcurrentStreamError(this.id);
+    if (this.active !== undefined || this.admission !== undefined) throw new ConcurrentStreamError(this.id);
     this.status = 'replacing';
     try {
       return await operation();

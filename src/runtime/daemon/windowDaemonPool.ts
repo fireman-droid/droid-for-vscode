@@ -3,9 +3,12 @@ import type { IdeState } from '../../shared/protocol/ideProtocol';
 import { createNativeIdeRelay, type NativeIdeRelay } from '../ide/nativeIdeRelay';
 import type { DaemonApi, DaemonNotification, DaemonSessionHandle } from './api';
 import { openDaemonConnection, type DaemonConnection } from './daemonConnection';
-import { resolveDaemonListenerPid, startDetachedDaemon, stopDaemon } from './daemonLifecycle';
 import {
-  listWindowDaemons, readSessionDaemon, removeWindowDaemon, windowDaemonUrl,
+  resolveDaemonListenerPid, startDetachedDaemon, stopDaemon,
+  verifyDaemonListeners, type DaemonListenerVerification,
+} from './daemonLifecycle';
+import {
+  listWindowDaemons, readSessionDaemon, readWindowDaemon, removeWindowDaemon, windowDaemonUrl,
   writeSessionDaemon, writeWindowDaemon, type WindowDaemonRecord,
 } from './windowDaemonRegistry';
 
@@ -38,6 +41,11 @@ export class WindowDaemonPool {
   private readonly owned = new Set<string>();
   private readonly used = new Set<string>();
   private readonly allocations = new Map<string, Promise<WindowDaemonEntry>>();
+  private discovery: Promise<WindowDaemonEntry[]> | undefined;
+  private openedDiscovery: Promise<{
+    entry: WindowDaemonEntry;
+    opened: Awaited<ReturnType<DaemonApi['sessions']['listOpened']>>;
+  }[]> | undefined;
   private readonly ideListeners = new Set<() => void>();
   private readonly ideSubscriptions = new Map<string, () => void>();
   private nextIdeRelay = 0;
@@ -112,15 +120,20 @@ export class WindowDaemonPool {
     return row?.parentSessionId != null || row?.tags?.some((tag) => tag.name === 'btw-fork') === true;
   }
 
-  async rebindIdleAttachment(sessionId: string, source: WindowDaemonEntry): Promise<WindowDaemonEntry> {
-    if ((!this.needsReconnect(sessionId) && !source.ide?.requiresSessionRestart()) || this.binding?.port === null ||
+  async rebindIdleAttachment(
+    sessionId: string,
+    source: WindowDaemonEntry,
+    isCurrent: () => boolean = () => true,
+  ): Promise<WindowDaemonEntry> {
+    if (!isCurrent() || (!this.needsReconnect(sessionId) && !source.ide?.requiresSessionRestart()) || this.binding?.port === null ||
         await this.isDelegatedSession(sessionId, source)) return source;
     const opened = await source.connection.droid.sessions.listOpened({ filter: { includeBtwForks: true } });
     if (!opened.some((session) => session.id === sessionId) || busySessionTree(opened, sessionId)) return source;
     if ((await source.connection.droid.terminals.list(sessionId, {})).length > 0) return source;
     const history = await source.connection.droid.sessions.getMessages(sessionId, { limit: 100 });
     if (!hasDurablePrompt(history)) return source;
-    await this.reconnectIdle(sessionId, () => !this.disposed && this.owners.get(sessionId) === source, () => {});
+    await this.reconnectIdle(sessionId,
+      () => !this.disposed && isCurrent() && this.owners.get(sessionId) === source, () => {});
     return this.owners.get(sessionId)!;
   }
 
@@ -151,6 +164,7 @@ export class WindowDaemonPool {
     }
     const pending = this.currentEntry;
     const entry = await pending;
+    if (entry.connection.status() === 'recovering') await entry.connection.waitUntilReady?.();
     if (entry.connection.status() === 'connected') return entry;
     if (this.currentEntry !== pending) return this.current();
     const reconnect = this.existing(entry.record).then((restored) => restored ?? this.start());
@@ -161,23 +175,22 @@ export class WindowDaemonPool {
 
   async forSession(sessionId: string, attach = false): Promise<WindowDaemonEntry> {
     const cached = this.owners.get(sessionId);
+    if (cached?.connection.status() === 'recovering') await cached.connection.waitUntilReady?.();
     if (cached && cached.connection.status() === 'connected') return cached;
     const ownerId = await readSessionDaemon(sessionId);
-    const records = await listWindowDaemons();
-    // Inspect known original owners first; never resume on two live daemons.
-    records.sort((a, b) => Number(b.id === ownerId) - Number(a.id === ownerId));
+    const [owner, discovered] = await Promise.all([
+      ownerId ? readWindowDaemon(ownerId) : null, this.discoverOpened(),
+    ]);
+    // Initial attachment still checks every live daemon for duplicate ownership.
+    // Historical reads use the metadata daemon and never enter this discovery.
     let found: WindowDaemonEntry | undefined;
-    for (const record of records) {
-      const entry = await this.existing(record);
-      if (!entry) continue;
-      const opened = await entry.connection.droid.sessions.listOpened({ filter: { includeBtwForks: true } });
+    for (const { entry, opened } of discovered) {
       if (!opened.some((session) => session.id === sessionId)) continue;
       if (found && found.record.id !== entry.record.id) {
         throw new Error('This session is open on multiple daemons. Resolve its ownership before continuing.');
       }
       found = entry;
     }
-    const owner = ownerId ? records.find((record) => record.id === ownerId) : undefined;
     const entry = found ?? (attach
       ? await this.allocate(sessionId, owner?.cwd)
       : (owner ? await this.existing(owner) : null) ?? await this.current());
@@ -186,13 +199,41 @@ export class WindowDaemonPool {
   }
 
   async all(): Promise<WindowDaemonEntry[]> {
-    const current = await this.current();
+    const [current, discovered] = await Promise.all([this.current(), this.discoverEntries()]);
     const entries = new Map<string, WindowDaemonEntry>([[current.record.id, current]]);
-    for (const record of await listWindowDaemons()) {
-      const entry = await this.existing(record);
-      if (entry) entries.set(record.id, entry);
-    }
+    for (const entry of discovered) entries.set(entry.record.id, entry);
     return [...entries.values()];
+  }
+
+  private discoverEntries(): Promise<WindowDaemonEntry[]> {
+    if (this.discovery) return this.discovery;
+    const pending = (async () => {
+      const startedAt = Date.now();
+      const records = await listWindowDaemons();
+      const uncached = records.filter((record) => !this.connections.has(record.id));
+      const verified = await verifyDaemonListeners(uncached);
+      const entries = await mapConcurrent(records, (record) => this.existing(record, verified.get(record.port)));
+      const connected = entries.filter((entry): entry is WindowDaemonEntry => entry !== null);
+      this.options.record({ level: 'info', name: 'daemon.discovery.finished', attributes: {
+        records: records.length, connected: connected.length, durationMs: Date.now() - startedAt,
+      } });
+      return connected;
+    })();
+    this.discovery = pending;
+    const clear = () => { if (this.discovery === pending) this.discovery = undefined; };
+    void pending.then(clear, clear);
+    return pending;
+  }
+
+  private discoverOpened(): NonNullable<WindowDaemonPool['openedDiscovery']> {
+    if (this.openedDiscovery) return this.openedDiscovery;
+    const pending = this.discoverEntries().then((entries) => mapConcurrent(entries, async (entry) => ({
+      entry, opened: await entry.connection.droid.sessions.listOpened({ filter: { includeBtwForks: true } }),
+    })));
+    this.openedDiscovery = pending;
+    const clear = () => { if (this.openedDiscovery === pending) this.openedDiscovery = undefined; };
+    void pending.then(clear, clear);
+    return pending;
   }
 
   async remember(sessionId: string, entry: WindowDaemonEntry, handle?: DaemonSessionHandle): Promise<void> {
@@ -253,6 +294,7 @@ export class WindowDaemonPool {
     }
     const handle = this.handles.get(sessionId);
     if (!handle) return blocked('The active session must be attached before reconnecting IDE.');
+    if (!isCurrent()) return blocked('The selected session changed. IDE reconnection was cancelled.');
     // Never move the live worker in place. Its replacement receives a fresh relay.
     this.allocations.delete(sessionId);
     const allocation = this.allocate(sessionId, source.record.cwd);
@@ -411,27 +453,31 @@ export class WindowDaemonPool {
     this.ideSubscriptions.delete(entry.record.id);
   }
 
-  private existing(record: WindowDaemonRecord): Promise<WindowDaemonEntry | null> {
+  private existing(record: WindowDaemonRecord, verified?: DaemonListenerVerification): Promise<WindowDaemonEntry | null> {
     const current = this.connecting.get(record.id);
     if (current) return current;
-    const pending = this.restoreConnection(record);
+    const pending = this.restoreConnection(record, verified);
     this.connecting.set(record.id, pending);
     const clear = () => { if (this.connecting.get(record.id) === pending) this.connecting.delete(record.id); };
     void pending.then(clear, clear);
     return pending;
   }
 
-  private async restoreConnection(record: WindowDaemonRecord): Promise<WindowDaemonEntry | null> {
+  private async restoreConnection(
+    record: WindowDaemonRecord, verified?: DaemonListenerVerification,
+  ): Promise<WindowDaemonEntry | null> {
     const cached = this.connections.get(record.id);
     let ide: NativeIdeRelay | undefined;
     if (cached) {
       const entry = await cached;
+      if (entry.connection.status() === 'recovering') await entry.connection.waitUntilReady?.();
       if (entry.connection.status() === 'connected') return entry;
       ide = entry.ide;
       entry.connection.dispose();
       this.connections.delete(record.id);
     }
-    const pid = await resolveDaemonListenerPid(record.port, '127.0.0.1');
+    const pid = verified ? (verified.status === 'verified' ? verified.pid : null)
+      : await resolveDaemonListenerPid(record.port, '127.0.0.1');
     if (pid === null) {
       // An alive owner with an unreachable service is not proof its work stopped.
       if (!isProcessAlive(record.pid)) {
@@ -442,6 +488,8 @@ export class WindowDaemonPool {
             this.allocations.delete(record.rootSessionId);
           }
         }
+        // Only a confirmed dead PID permits removing its exact registry record.
+        await removeWindowDaemon(record);
         return null;
       }
       throw new Error('An existing session daemon is unavailable. Retry without starting a duplicate session.');
@@ -456,6 +504,23 @@ export class WindowDaemonPool {
     try { return await pending; }
     catch (error) { this.connections.delete(record.id); throw error; }
   }
+}
+
+async function mapConcurrent<T, R>(values: readonly T[], operation: (value: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let next = 0;
+  let failed = false;
+  let failure: unknown;
+  await Promise.all(Array.from({ length: Math.min(6, values.length) }, async () => {
+    while (!failed) {
+      const index = next++;
+      if (index >= values.length) return;
+      try { results[index] = await operation(values[index]!); }
+      catch (error) { failed = true; failure = error; }
+    }
+  }));
+  if (failed) throw failure;
+  return results;
 }
 
 function isProcessAlive(pid: number): boolean {
