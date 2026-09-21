@@ -71,6 +71,7 @@ describe('readSubagentInvocations', () => {
           status: 'completed',
           toolUseCount: 12,
           durationMs: 377050,
+          createdAt: 1_789_976_666_681,
         },
         {
           childSessionId: 'child-2',
@@ -88,6 +89,7 @@ describe('readSubagentInvocations', () => {
         status: 'completed',
         toolUseCount: 12,
         durationMs: 377050,
+        startedAt: 1_789_976_666_681,
       },
       {
         type: 'explore',
@@ -132,6 +134,7 @@ describe('readSubagentInvocations', () => {
           status: 'cancelled',
           toolUseCount: -3,
           durationMs: Number.NaN,
+          createdAt: '1789976666681',
         },
       ]),
     );

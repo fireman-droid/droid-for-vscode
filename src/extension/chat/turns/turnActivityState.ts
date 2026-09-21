@@ -529,6 +529,7 @@ export function projectSubagentStarted(
     readonly toolUseId: string | null;
     readonly subagentType: string;
     readonly description: string;
+    readonly startedAt?: number;
   },
 ): ActivityProjectionResult<ToolActivityProjection> {
   const toolUseId = resolveSubagentTarget(state, started.toolUseId);
@@ -548,6 +549,7 @@ export function projectSubagentStarted(
       type: started.subagentType,
       description: started.description,
       status: 'running',
+      ...(started.startedAt === undefined ? {} : { startedAt: started.startedAt }),
     },
   };
   const tools = new Map(state.tools);
@@ -617,10 +619,11 @@ export function reconcileSubagentSummaries(
   for (const [toolUseId, entry] of rows.reverse()) {
     const subagent = entry.subagent!;
     const settled = takeSubagentSummaryLast(queues, subagent.type, subagent.description);
-    if (settled === undefined || settled.status === subagent.status) {
+    if (settled === undefined || (settled.status === subagent.status &&
+      (settled.startedAt === undefined || settled.startedAt === subagent.startedAt))) {
       continue;
     }
-    updates.push([toolUseId, { ...entry, subagent: settled }]);
+    updates.push([toolUseId, { ...entry, subagent: { ...subagent, ...settled } }]);
   }
   if (updates.length === 0) {
     return { state, projections: [] };

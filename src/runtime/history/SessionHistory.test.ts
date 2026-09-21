@@ -17,6 +17,22 @@ import { SESSION_HISTORY_UNAVAILABLE_MESSAGE } from './SessionHistory';
 import { projectSessionHistory, projectSessionMessages } from './projectSessionHistory';
 
 describe('projectSessionHistory', () => {
+  it('identifies external child reads without exposing directories or file contents', () => {
+    const root = resolve('workspace-root');
+    const result = projectSessionHistory(response([
+      message('assistant-read', 'assistant', [{ type: 'tool_use', id: 'external-read', name: 'Read',
+        input: { file_path: resolve(root, '../PRIVATE_DIRECTORY/handlers.ts') } }]),
+      message('read-result', 'tool', [{ type: 'tool_result', toolUseId: 'external-read', content: 'PRIVATE_CONTENT' }]),
+    ]), { workspaceRoot: root });
+    expect(result).toMatchObject({ status: 'available', state: { transcript: [
+      { kind: 'tool', toolName: 'Read', status: 'completed', target: 'handlers.ts · outside workspace',
+        resultPreview: { availability: 'unavailable', reason: 'restricted' } },
+    ] } });
+    expect(JSON.stringify(result)).not.toContain('PRIVATE_');
+    const row = result.status === 'available' ? result.state.transcript[0] : undefined;
+    expect(row).not.toHaveProperty('filePath');
+  });
+
   it('restores concrete browser actions and custom command summaries without raw input', () => {
     const result = projectSessionHistory(response([
       message('assistant-actions', 'assistant', [

@@ -12,10 +12,19 @@ export interface SessionHistoryRequest {
   readonly sessionId: string;
 }
 
+/** Host-only identity graph. Hidden message content is never retained here. */
+export interface HistoryMessageAncestry {
+  readonly messageId: string;
+  readonly parentId: string | null;
+  readonly projectedTurnId: string;
+  readonly startsTurn: boolean;
+}
+
 export type SessionHistoryResult =
   | {
       readonly status: 'available';
       readonly state: HostTranscriptState;
+      readonly messageAncestry?: readonly HistoryMessageAncestry[];
       /**
        * Read-only mission identity from `loadSession()`
        * (`mission.state` + `decompSessionType`); absent when the

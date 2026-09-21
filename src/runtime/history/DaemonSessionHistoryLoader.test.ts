@@ -351,6 +351,7 @@ describe('task-invocation ledger reads', () => {
           type: 'worker',
           description: 'first',
           status: 'running',
+          startedAt: 100,
           toolUseCount: 3,
           durationMs: 1200,
         },
@@ -361,6 +362,7 @@ describe('task-invocation ledger reads', () => {
           type: 'worker',
           description: 'second',
           status: 'completed',
+          startedAt: 200,
         },
         childSessionId: 'child-2',
       },
@@ -402,7 +404,7 @@ describe('task-invocation ledger reads', () => {
         cwd: 'C:\\workspace',
         sessionId: 'parent-1',
       }),
-    ).resolves.toEqual([{ type: 'explore', description: 'scan', status: 'completed' }]);
+    ).resolves.toEqual([{ type: 'explore', description: 'scan', status: 'completed', startedAt: 1 }]);
     expect(getMessages).not.toHaveBeenCalled();
   });
 

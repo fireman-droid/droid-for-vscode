@@ -108,6 +108,7 @@ export function readSubagentInvocationRecords(
     }
     const toolUseCount = readCount(entry.toolUseCount);
     const durationMs = readCount(entry.durationMs);
+    const startedAt = readSubagentTimestamp(entry.createdAt);
     records.push({
       summary: {
         type,
@@ -115,6 +116,7 @@ export function readSubagentInvocationRecords(
         status: status as SubagentStatus,
         ...(toolUseCount === undefined ? {} : { toolUseCount }),
         ...(durationMs === undefined ? {} : { durationMs }),
+        ...(startedAt === undefined ? {} : { startedAt }),
       },
       childSessionId:
         typeof entry.childSessionId === 'string' &&
@@ -144,6 +146,12 @@ function readCount(value: unknown): number | undefined {
   }
   const rounded = Math.round(value);
   return Number.isSafeInteger(rounded) ? rounded : undefined;
+}
+
+/** Recorded CLI timestamps are integer Unix milliseconds; absent data stays absent. */
+export function readSubagentTimestamp(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value : undefined;
 }
 
 /**

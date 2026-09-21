@@ -323,7 +323,7 @@ async function refreshRecoveredTurnTranscript(
   }
   const next = recoveredHistoryForCurrentTurn(ctl, historyWithLocalChanges(loaded.state,
     ctl.sessionState.conversationId === null ? undefined :
-      ctl.recoveryStore.readConversation(ctl.sessionState.conversationId)));
+      ctl.recoveryStore.readConversation(ctl.sessionState.conversationId)), loaded.messageAncestry);
   if (!recoveredTranscriptAdvanced(previous, next.transcript)) {
     return;
   }
@@ -383,7 +383,7 @@ export async function finishRecoveredTurn(
     };
     ctl.recoveryState.transcript = recoveredHistoryForCurrentTurn(ctl, historyWithLocalChanges(loaded.state,
       ctl.sessionState.conversationId === null ? undefined :
-        ctl.recoveryStore.readConversation(ctl.sessionState.conversationId)));
+        ctl.recoveryStore.readConversation(ctl.sessionState.conversationId)), loaded.messageAncestry);
   } else if (!interrupted) {
     ctl.emitSessionDiagnostic(
       RECOVERED_HISTORY_FAILED_CODE,

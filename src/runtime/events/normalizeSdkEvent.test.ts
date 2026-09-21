@@ -288,7 +288,7 @@ describe('normalizeSdkEvent', () => {
       targetOf('Read', 'read-outside', {
         file_path: join(root, '..', 'secret.txt'),
       }),
-    ).not.toHaveProperty('target');
+    ).toMatchObject({ target: 'secret.txt · outside workspace' });
   });
 
   it('bounds and shapes the failed tool_result error excerpt', () => {

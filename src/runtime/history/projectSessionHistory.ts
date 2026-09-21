@@ -57,6 +57,7 @@ import { projectAskUserHistoryItem, readAskUserQuestions } from './askUserHistor
 import { historyToolFilePaths } from './historyToolPaths';
 import { appendHistoryTurnChanges } from './historyTurnChanges';
 import { sessionMessageTurnId } from '../../shared/transcript/sessionMessageIdentity';
+import { historyMessageAncestry } from './historyMessageAncestry';
 
 const MAX_RAW_MESSAGES_TO_PROJECT = 10_000;
 const MAX_RAW_BLOCKS_PER_MESSAGE = 1_000;
@@ -167,6 +168,9 @@ export function projectSessionHistory(
     return {
       status: 'available',
       state,
+      ...(options?.sourceSessionId === undefined ? {} : {
+        messageAncestry: historyMessageAncestry(messages, firstMessage, options.sourceSessionId),
+      }),
       ...(mission === null ? {} : { mission }),
       ...(tokenUsage === undefined ? {} : { tokenUsage }),
     };

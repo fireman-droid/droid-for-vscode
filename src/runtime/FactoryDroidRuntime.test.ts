@@ -1507,13 +1507,13 @@ describe('FactoryDroidRuntime', () => {
         type: 'subagent-started',
         toolUseId: 'call_task_1',
         subagentType: 'explore agent',
-        description: 'Find the API usage',
+        description: 'Find the API usage', startedAt: 1,
       },
       {
         type: 'subagent-started',
         toolUseId: null,
         subagentType: 'unknown',
-        description: '',
+        description: '', startedAt: 1,
       },
     ]);
     const completeIndex = events.findIndex((event) => event.type === 'turn-complete');

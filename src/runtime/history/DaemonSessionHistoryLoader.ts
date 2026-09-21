@@ -143,6 +143,7 @@ export function createDaemonFirstHistoryLoader(
       return {
         status: 'available',
         state: projected.state,
+        ...(projected.messageAncestry === undefined ? {} : { messageAncestry: projected.messageAncestry }),
         ...(sidecar.mission === undefined ? {} : { mission: sidecar.mission }),
         ...(sidecar.tokenUsage === undefined ? {} : { tokenUsage: sidecar.tokenUsage }),
       };

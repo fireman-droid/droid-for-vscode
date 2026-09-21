@@ -1,9 +1,7 @@
 import type { SubagentWatchPort } from './subagentWatchPort';
-import type { RuntimeSessionWorkingState } from '../../../runtime/DroidRuntime';
+import { clearParentFollowupSync, hasParentFollowupSync, startParentFollowupSync, syncParentFollowupHistory } from './parentFollowupHistory';
 import type { SessionHistoryLoader } from '../../../runtime/history/SessionHistory';
-import type { SessionTokenUsageState } from '../../../shared/protocol/tokenUsage';
 import type { HostTranscriptState } from '../../recovery/hostTranscriptState';
-import { reconcileSessionHistory } from '../../recovery/reconcileSessionHistory';
 import {
   applySubagentSettlement,
   collectRunningSubagentRows,
@@ -13,7 +11,6 @@ import {
   settleZombieSubagents,
   type PendingSubagentRow,
 } from '../turns/turnActivityState';
-import { isTurnActive } from '../internals';
 
 export /**
  * Poll cadence of the post-turn zombie-subagent reconcile. Each tick
@@ -33,23 +30,6 @@ export const LIVE_SUBAGENT_SYNC_DELAY_MS = 1_500;
 /** One retry, for a ledger row that lands late. */
 const LIVE_SUBAGENT_SYNC_RETRY_MS = 4_000;
 
-/**
- * A child can settle just before its hidden completion notification
- * starts the parent's automatic follow-up turn. Do not read the
- * history during that short idle gap or the eventual aggregate answer
- * will still be missed.
- */
-const PARENT_FOLLOWUP_IDLE_GRACE_MS = 10_000;
-
-/**
- * Process sessions cannot report their working state. In that mode,
- * keep reloading the bounded public history for a short window after
- * settlement; the final read closes the same projection gap without
- * leaving an unbounded poll behind.
- */
-const PARENT_FOLLOWUP_FALLBACK_MAX_MS = 30_000;
-const PARENT_FOLLOWUP_HARD_MAX_MS = 10 * 60_000;
-
 interface LiveSubagentSync {
   key: string;
   attempt: number;
@@ -57,19 +37,6 @@ interface LiveSubagentSync {
 }
 
 const liveSubagentSyncs = new WeakMap<object, LiveSubagentSync>();
-
-interface ParentFollowupSync {
-  readonly sessionId: string;
-  readonly runtimeGeneration: number;
-  readonly assistantMarker: string;
-  readonly settledAt: number;
-  readonly fallbackDeadlineAt: number;
-  readonly hardDeadlineAt: number;
-  sawRunning: boolean;
-  lastRunningAt: number | null;
-}
-
-const parentFollowupSyncs = new WeakMap<object, ParentFollowupSync>();
 
 /** Watches whose ledger read already logged a failure (log dedupe). */
 const failedWatchReads = new WeakSet<object>();
@@ -79,14 +46,9 @@ const failedWatchReads = new WeakSet<object>();
  * 2026-08-13 evening: five parallel Task dispatches completed in ~5s
  * and the UI showed nothing running).
  *
- * The authoritative `child_session_available` notification never
- * fires in daemon mode — the daemon session facade exposes no
- * `onNotification` — so a dispatched row would stay statusless until
- * turn end. This reads `subagentInvocations` from the session ledger
- * shortly after a Task tool result lands and reconciles the turn's
- * rows in place: paired running entries light the row (Working badge,
- * panel polling, per-row Stop), terminal entries settle it outright.
- * Mode-agnostic — both history loaders serve the ledger.
+ * Complements live child notifications with the durable invocation ledger.
+ * A late or missed spawn notification must not leave a dispatched Task
+ * statusless until turn end. Both runtime modes share this fallback.
  */
 export function scheduleLiveSubagentSync(
   ctl: SubagentWatchPort,
@@ -206,13 +168,6 @@ function armLiveSubagentTimer(
   }, delayMs);
 }
 
-export /**
- * Upper bound on the post-turn reconcile window. Rows that outlive
- * it stay "running in background" in the UI until the next session
- * load re-reads the ledger.
- */
-const ZOMBIE_SUBAGENT_WATCH_MAX_MS = 10 * 60_000;
-
 /** Cancels a pending mid-turn ledger sync (turn end supersedes it). */
 export function clearLiveSubagentSync(ctl: SubagentWatchPort): void {
   const state = liveSubagentSyncs.get(ctl);
@@ -318,7 +273,7 @@ export function armZombieSubagentWatch(
   if (current !== null) {
     // New background work supersedes an older post-settlement wait;
     // the next all-settled point establishes a fresh baseline.
-    parentFollowupSyncs.delete(ctl);
+    clearParentFollowupSync(ctl);
     const known = new Set(current.rows.map((row) => `${row.turnId}:${row.toolUseId}`));
     current.rows = [
       ...current.rows,
@@ -329,7 +284,6 @@ export function armZombieSubagentWatch(
   const watch = {
     sessionId,
     rows,
-    deadlineAt: Date.now() + ZOMBIE_SUBAGENT_WATCH_MAX_MS,
     ticking: false,
     timer: setInterval(() => {
       void tickZombieSubagentWatch(ctl, cwd, loadSummaries);
@@ -345,7 +299,7 @@ export function armZombieSubagentWatch(
 
 export function clearZombieSubagentWatch(ctl: SubagentWatchPort): void {
   const watch = ctl.subagentState.zombieSubagentWatch;
-  parentFollowupSyncs.delete(ctl);
+  clearParentFollowupSync(ctl);
   if (watch === null) {
     return;
   }
@@ -364,8 +318,7 @@ export async function tickZombieSubagentWatch(
   }
   if (
     ctl.sessionState.disposed ||
-    ctl.sessionState.sessionId !== watch.sessionId ||
-    (Date.now() > watch.deadlineAt && parentFollowupSyncs.get(ctl) === undefined)
+    ctl.sessionState.sessionId !== watch.sessionId
   ) {
     clearZombieSubagentWatch(ctl);
     return;
@@ -423,26 +376,12 @@ export async function tickZombieSubagentWatch(
         });
       }
       if (settled.length > 0 && pending.length === 0) {
-        const now = Date.now();
-        parentFollowupSyncs.set(ctl, {
-          sessionId: watch.sessionId,
-          runtimeGeneration: ctl.sessionState.runtimeGeneration,
-          assistantMarker: transcriptAssistantMarker(
-            ctl.recoveryState.transcript.transcript,
-          ),
-          settledAt: now,
-          fallbackDeadlineAt: now + PARENT_FOLLOWUP_FALLBACK_MAX_MS,
-          hardDeadlineAt: now + PARENT_FOLLOWUP_HARD_MAX_MS,
-          // A newer child settlement may start a newer automatic
-          // parent turn, so its working-state observation starts fresh.
-          sawRunning: false,
-          lastRunningAt: null,
-        });
+        startParentFollowupSync(ctl, watch.sessionId);
       } else if (settled.length > 0) {
         // The eventual final settlement establishes the baseline for
         // the aggregate parent answer. Earlier completion turns may
         // emit interim progress, but must not end the watch first.
-        parentFollowupSyncs.delete(ctl);
+        clearParentFollowupSync(ctl);
       }
     }
 
@@ -450,7 +389,7 @@ export async function tickZombieSubagentWatch(
     if (
       ctl.subagentState.zombieSubagentWatch === watch &&
       watch.rows.length === 0 &&
-      parentFollowupSyncs.get(ctl) === undefined
+      !hasParentFollowupSync(ctl)
     ) {
       clearZombieSubagentWatch(ctl);
     }
@@ -459,225 +398,6 @@ export async function tickZombieSubagentWatch(
       watch.ticking = false;
     }
   }
-}
-
-/**
- * Background Task completion notifications run a new parent agent
- * turn after the foreground stream has already closed. Those events
- * cannot arrive through the old `session.stream()`, so once a child
- * settles we wait for the parent to go idle and then replace the
- * current transcript from public session history.
- */
-async function syncParentFollowupHistory(
-  ctl: SubagentWatchPort,
-  watch: NonNullable<SubagentWatchPort['subagentState']['zombieSubagentWatch']>,
-  cwd: string,
-): Promise<void> {
-  const sync = parentFollowupSyncs.get(ctl);
-  if (sync === undefined || sync.sessionId !== watch.sessionId) {
-    return;
-  }
-  if (ctl.sessionState.runtimeGeneration !== sync.runtimeGeneration) {
-    parentFollowupSyncs.delete(ctl);
-    return;
-  }
-  if (Date.now() >= sync.hardDeadlineAt) {
-    parentFollowupSyncs.delete(ctl);
-    return;
-  }
-  // A user-started foreground turn owns transcript projection until
-  // it settles. The parent follow-up history read can safely wait.
-  if (ctl.sessionState.sessionOperationInProgress || isTurnActive(ctl.turnState.turn)) {
-    return;
-  }
-
-  const runtime = ctl.sessionState.runtime;
-  let workingState: RuntimeSessionWorkingState | null = null;
-  if (runtime !== null && runtime.readSessionWorkingState !== undefined) {
-    try {
-      workingState = await runtime.readSessionWorkingState();
-    } catch {
-      // Process sessions expose the Runtime method but cannot report
-      // backend state. Treat that as the bounded fallback path.
-      workingState = 'unknown';
-    }
-    if (
-      ctl.subagentState.zombieSubagentWatch !== watch ||
-      ctl.sessionState.runtime !== runtime ||
-      ctl.sessionState.disposed ||
-      ctl.sessionState.sessionId !== sync.sessionId
-    ) {
-      return;
-    }
-    if (workingState === 'running' || workingState === 'waiting-for-user') {
-      sync.sawRunning = true;
-      sync.lastRunningAt = Date.now();
-      return;
-    }
-    if (
-      workingState === 'idle' &&
-      ((!sync.sawRunning &&
-        Date.now() - sync.settledAt < PARENT_FOLLOWUP_IDLE_GRACE_MS) ||
-        (sync.lastRunningAt !== null &&
-          Date.now() - sync.lastRunningAt < PARENT_FOLLOWUP_IDLE_GRACE_MS))
-    ) {
-      return;
-    }
-    if (
-      workingState === 'unknown' &&
-      Date.now() - sync.settledAt < PARENT_FOLLOWUP_IDLE_GRACE_MS
-    ) {
-      return;
-    }
-  } else if (Date.now() - sync.settledAt < PARENT_FOLLOWUP_IDLE_GRACE_MS) {
-    return;
-  }
-
-  const loaded = await ctl.sessionHistory
-    .loadHistory({ cwd, sessionId: sync.sessionId })
-    .catch(() => null);
-  const currentSync = parentFollowupSyncs.get(ctl);
-  if (
-    ctl.subagentState.zombieSubagentWatch !== watch ||
-    ctl.sessionState.disposed ||
-    ctl.sessionState.sessionId !== sync.sessionId ||
-    ctl.sessionState.runtimeGeneration !== sync.runtimeGeneration ||
-    currentSync !== sync
-  ) {
-    return;
-  }
-  const available = loaded?.status === 'available';
-  let visibleAnswerChanged = false;
-  if (available) {
-    const mission = loaded.mission ?? null;
-    const tokenUsage: SessionTokenUsageState = {
-      cumulative: loaded.tokenUsage ?? ctl.metadata.tokenUsage.cumulative,
-      lastTurn: ctl.metadata.tokenUsage.lastTurn,
-    };
-    const transcript = reconcileSessionHistory(
-      loaded.state,
-      ctl.recoveryState.transcript,
-      { preserveLocalTail: true },
-    );
-    visibleAnswerChanged =
-      transcriptAssistantMarker(transcript.transcript) !== sync.assistantMarker;
-    const changed =
-      !sameTranscriptState(transcript, ctl.recoveryState.transcript) ||
-      !sameMission(mission, ctl.missionState.mission) ||
-      !sameTokenUsage(tokenUsage, ctl.metadata.tokenUsage);
-    ctl.missionState.mission = mission;
-    ctl.metadata.tokenUsage = tokenUsage;
-    ctl.recoveryState.transcript = transcript;
-    if (changed && ctl.sessionState.conversationId !== null) {
-      ctl.recoveryStore.writeActiveDisplay(
-        ctl.sessionState.conversationId,
-        sync.sessionId,
-        transcript,
-        ctl.turnState.turn === null
-          ? null
-          : {
-              turnId: ctl.turnState.turn.turnId,
-              status: ctl.turnState.turn.status,
-              ...(ctl.turnState.turn.error === undefined
-                ? {}
-                : { error: ctl.turnState.turn.error }),
-            },
-      );
-      ctl.recoveryStore.flushInBackground();
-      ctl.emitSnapshot();
-    }
-    if (visibleAnswerChanged && workingState === 'idle' && sync.sawRunning) {
-      parentFollowupSyncs.delete(ctl);
-    }
-  }
-  ctl.recordHost({
-    level: available ? 'info' : 'warn',
-    name: 'host.subagent.parent-history-sync',
-    attributes: {
-      outcome: available ? 'ok' : 'failed',
-      sessionId: sync.sessionId,
-      ...(available ? { items: ctl.recoveryState.transcript.transcript.length } : {}),
-    },
-  });
-
-  if (
-    parentFollowupSyncs.get(ctl) === sync &&
-    Date.now() >=
-      Math.max(
-        sync.fallbackDeadlineAt,
-        (sync.lastRunningAt ?? 0) + PARENT_FOLLOWUP_FALLBACK_MAX_MS,
-      )
-  ) {
-    // A turn too short to observe can start after the first idle
-    // history read. Keep the no-running/unknown fallback alive for
-    // the full bounded window, then stop permanent background I/O.
-    parentFollowupSyncs.delete(ctl);
-  }
-}
-
-/**
- * Content-only marker for user-visible assistant output. History
- * projection synthesizes different ids than the live stream, so ids
- * cannot prove that the automatic parent turn added an answer.
- */
-function transcriptAssistantMarker(
-  transcript: HostTranscriptState['transcript'],
-): string {
-  let count = 0;
-  let lastText = '';
-  for (const item of transcript) {
-    if (item.kind !== 'assistant') {
-      continue;
-    }
-    count += 1;
-    lastText = item.text;
-  }
-  return JSON.stringify([count, lastText]);
-}
-
-function sameMission(
-  left: SubagentWatchPort['missionState']['mission'],
-  right: SubagentWatchPort['missionState']['mission'],
-): boolean {
-  if (left === null || right === null) {
-    return left === right;
-  }
-  return left.state === right.state && left.role === right.role;
-}
-
-function sameTokenUsage(
-  left: SessionTokenUsageState,
-  right: SessionTokenUsageState,
-): boolean {
-  return (
-    sameTokenBreakdown(left.cumulative, right.cumulative) &&
-    sameTokenBreakdown(left.lastTurn, right.lastTurn)
-  );
-}
-
-function sameTranscriptState(
-  left: HostTranscriptState,
-  right: HostTranscriptState,
-): boolean {
-  return (
-    left.historyStatus === right.historyStatus &&
-    left.truncated === right.truncated &&
-    JSON.stringify(left.transcript) === JSON.stringify(right.transcript)
-  );
-}
-
-function sameTokenBreakdown(
-  left: SessionTokenUsageState['cumulative'],
-  right: SessionTokenUsageState['cumulative'],
-): boolean {
-  return (
-    left?.inputTokens === right?.inputTokens &&
-    left?.outputTokens === right?.outputTokens &&
-    left?.cacheReadTokens === right?.cacheReadTokens &&
-    left?.cacheCreationTokens === right?.cacheCreationTokens &&
-    left?.thinkingTokens === right?.thinkingTokens &&
-    left?.factoryCredits === right?.factoryCredits
-  );
 }
 
 /**

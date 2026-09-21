@@ -1,5 +1,14 @@
 # 设计规则
 
+## 子代理进度
+
+- 任务卡片展示实际生命周期与最新活动；未知状态不伪装 Pending，未知起始时间不
+  从组件挂载时间计时。运行时使用记录的 startedAt，终态使用实际 durationMs。
+- 当前回合全部活跃工具均为委派时显示 Waiting for subagent(s)；普通工具并行或
+  父会话正在继续回复时保留对应工作状态，后台任务不把父会话永久标成等待。
+- 外部只读文件显示文件名和 outside workspace，活动目标与可打开路径严格分开。
+  长描述可换行，状态保持可见，沿用原有轻量卡片、共享按钮和主题。
+
 ## 分发标识
 
 Activity Bar 继续使用 `resources/droidvisx.svg`。Marketplace 的

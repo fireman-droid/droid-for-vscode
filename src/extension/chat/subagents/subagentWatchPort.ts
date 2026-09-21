@@ -26,7 +26,7 @@ export interface SubagentWatchPort
       | 'disposed'
     >
   >;
-  readonly turnState: Readonly<Pick<TurnState, 'turn'>>;
+  readonly turnState: Readonly<Pick<TurnState, 'turn' | 'turnGeneration'>>;
   readonly recoveryState: Pick<ConversationRecoveryState, 'transcript'>;
   readonly missionState: Pick<MissionSessionState, 'mission'>;
   readonly subagentState: Pick<SubagentWatchState, 'zombieSubagentWatch'>;

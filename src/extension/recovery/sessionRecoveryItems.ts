@@ -454,7 +454,7 @@ function parseSubagent(value: unknown): ToolSubagentSummary | undefined {
     !hasExactKeys(
       value,
       ['type', 'description'],
-      ['status', 'toolUseCount', 'durationMs'],
+      ['status', 'toolUseCount', 'durationMs', 'startedAt'],
     )
   ) {
     return undefined;
@@ -464,6 +464,7 @@ function parseSubagent(value: unknown): ToolSubagentSummary | undefined {
   const status = dataValue(value, 'status');
   const toolUseCount = dataValue(value, 'toolUseCount');
   const durationMs = dataValue(value, 'durationMs');
+  const startedAt = dataValue(value, 'startedAt');
   return isNonEmptyBoundedString(type, MAX_SUBAGENT_TYPE_LENGTH) &&
     !hasControlCharacter(type) &&
     isBoundedString(description, MAX_SUBAGENT_DESCRIPTION_LENGTH) &&
@@ -472,13 +473,15 @@ function parseSubagent(value: unknown): ToolSubagentSummary | undefined {
     (toolUseCount === undefined ||
       (Number.isSafeInteger(toolUseCount) && (toolUseCount as number) >= 0)) &&
     (durationMs === undefined ||
-      (Number.isSafeInteger(durationMs) && (durationMs as number) >= 0))
+      (Number.isSafeInteger(durationMs) && (durationMs as number) >= 0)) &&
+    (startedAt === undefined || (Number.isSafeInteger(startedAt) && (startedAt as number) > 0))
     ? {
         type,
         description,
         ...(status === undefined ? {} : { status }),
         ...(toolUseCount === undefined ? {} : { toolUseCount: toolUseCount as number }),
         ...(durationMs === undefined ? {} : { durationMs: durationMs as number }),
+        ...(startedAt === undefined ? {} : { startedAt: startedAt as number }),
       }
     : undefined;
 }

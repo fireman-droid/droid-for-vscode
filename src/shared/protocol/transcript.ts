@@ -51,6 +51,8 @@ export interface ToolSubagentSummary {
   readonly toolUseCount?: number;
   /** Subagent run duration; only when the SDK reported it. */
   readonly durationMs?: number;
+  /** Recorded invocation start time in Unix milliseconds, never a UI mount time. */
+  readonly startedAt?: number;
 }
 
 export type WebviewDiagnosticKind = (typeof WEBVIEW_DIAGNOSTIC_KINDS)[number];

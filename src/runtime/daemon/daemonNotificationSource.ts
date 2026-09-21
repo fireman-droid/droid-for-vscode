@@ -9,6 +9,8 @@ import { createToolResultCollector } from '../tools/toolResultPreview';
 import { createOperationDiffCollector } from '../tools/operationDiff';
 import type { RuntimeEvent } from '../runtimeEvents';
 import { ToolExecutionPhaseBuffer } from '../events/toolExecutionPhases';
+import { ParentSessionEvents, type ParentSessionEvent } from './parentSessionEvents';
+import { MAX_TOOL_ACTIVITIES_PER_TURN } from '../../shared/protocol/bounds';
 
 export type SubagentEvent =
   | { readonly type: 'resync'; readonly sessionId: string }
@@ -53,8 +55,10 @@ export function createSubagentEventSource() {
       collect: ReturnType<typeof createToolResultCollector>;
       collectOperation: ReturnType<typeof createOperationDiffCollector>;
       phases: ToolExecutionPhaseBuffer;
+      toolNames: Map<string, string>;
     }
   >();
+  const parents = new Map<string, Set<ParentSessionEvents>>();
   const listeners = new Set<(event: SubagentEvent) => void>();
   let unbind: (() => void) | undefined;
   let unbindRecovery: (() => void) | undefined;
@@ -78,6 +82,7 @@ export function createSubagentEventSource() {
   };
   const observe = ({ sessionId, notification }: Notification): void => {
     if (disposed) return;
+    for (const parent of parents.get(sessionId) ?? []) parent.observe(notification);
     if (notification.type === 'child_session_available') {
       const childSessionId = safeId(notification.childSessionId);
       const toolUseId = safeId(notification.toolUseId);
@@ -122,7 +127,7 @@ export function createSubagentEventSource() {
     const firstAssistant = messages.map(assistantId).find((id) => id !== null);
     if (firstAssistant !== undefined)
       emit({ type: 'assistant-turn', sessionId, messageId: firstAssistant });
-    for (const message of messages) {
+    for (let message of messages) {
       const messageId = assistantId(message);
       if (messageId !== null) emit({ type: 'assistant-turn', sessionId, messageId });
       if (message.type === 'user' && safeId(message.message.id) !== null) {
@@ -135,8 +140,17 @@ export function createSubagentEventSource() {
           child.collect = createToolResultCollector(child.cwd);
           child.collectOperation = createOperationDiffCollector(child.cwd, sessionId);
           child.phases.reset();
+          child.toolNames.clear();
           emit({ type: 'user', sessionId, messageId: message.message.id, text });
         }
+      }
+      if (message.type === 'tool_call' || message.type === 'tool_call_delta') {
+        const id = message.type === 'tool_call' ? message.toolUseId : message.toolUse.id;
+        const name = message.type === 'tool_call' ? message.name : message.toolUse.name;
+        if (child.toolNames.has(id) || child.toolNames.size < MAX_TOOL_ACTIVITIES_PER_TURN)
+          child.toolNames.set(id, name);
+      } else if (message.type === 'tool_result' && message.toolName.length === 0) {
+        message = { ...message, toolName: child.toolNames.get(message.toolUseId) ?? '' };
       }
       const event = normalizeSdkEvent(
         message,
@@ -158,6 +172,16 @@ export function createSubagentEventSource() {
     }
   };
   return {
+    watchParent(sessionId: string, cwd: string, listener: (event: ParentSessionEvent) => void): () => void {
+      const parent = new ParentSessionEvents(sessionId, cwd, listener);
+      const observers = parents.get(sessionId) ?? new Set<ParentSessionEvents>();
+      observers.add(parent);
+      parents.set(sessionId, observers);
+      return () => {
+        observers.delete(parent);
+        if (observers.size === 0) parents.delete(sessionId);
+      };
+    },
     subscribe(listener: (event: SubagentEvent) => void): () => void {
       listeners.add(listener);
       return () => {
@@ -178,6 +202,7 @@ export function createSubagentEventSource() {
         collect: createToolResultCollector(cwd),
         collectOperation: createOperationDiffCollector(cwd, sessionId),
         phases: new ToolExecutionPhaseBuffer(),
+        toolNames: new Map(),
       });
       if (live) attach(sessionId);
     },
@@ -190,6 +215,7 @@ export function createSubagentEventSource() {
       unbind = droid.notifications.subscribe(observe);
       unbindRecovery = droid.notifications.subscribeRecovery?.(() => {
         for (const [sessionId, child] of children) if (child.live) attach(sessionId);
+        for (const observers of parents.values()) for (const parent of observers) parent.resync();
       });
       for (const [sessionId, child] of children) if (child.live) attach(sessionId);
       return true;
@@ -216,6 +242,7 @@ export function createSubagentEventSource() {
       unbindRecovery = undefined;
       boundDroid = null;
       children.clear();
+      parents.clear();
       listeners.clear();
     },
   };

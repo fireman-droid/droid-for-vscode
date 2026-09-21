@@ -5,6 +5,7 @@ import type { RuntimeAvailability } from '../runtimeEvents';
 import {
   sanitizeSubagentDescription,
   sanitizeSubagentType,
+  readSubagentTimestamp,
 } from '../subagents/subagentSummary';
 import { MAX_TOOL_NAME_LENGTH } from '../../shared/protocol/bounds';
 import {
@@ -105,6 +106,7 @@ export function readSubagentStartedNotification(raw: Record<string, unknown>): {
   toolUseId: string | null;
   subagentType: string;
   description: string;
+  startedAt?: number;
 } | null {
   const params = raw['params'];
   if (typeof params !== 'object' || params === null) {
@@ -114,17 +116,19 @@ export function readSubagentStartedNotification(raw: Record<string, unknown>): {
   if (typeof notification !== 'object' || notification === null) {
     return null;
   }
-  const { type, toolUseId, subagentType, description } = notification as Record<
+  const { type, toolUseId, subagentType, description, timestamp } = notification as Record<
     string,
     unknown
   >;
   if (type !== 'child_session_available') {
     return null;
   }
+  const startedAt = readSubagentTimestamp(timestamp);
   return {
     toolUseId: isSafeSessionId(toolUseId) ? toolUseId : null,
     subagentType: sanitizeSubagentType(subagentType) ?? 'unknown',
     description: sanitizeSubagentDescription(description),
+    ...(startedAt === undefined ? {} : { startedAt }),
   };
 }
 

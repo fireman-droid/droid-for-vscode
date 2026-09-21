@@ -129,8 +129,10 @@ export function Transcript({
   }, [ids]);
   const waiting = useMemo(() => currentProcessWaiting(state.sessionId, state.turn, state.interactions), [state.sessionId, state.turn, state.interactions]);
   const lastReplyId = [...replyTails.keys()].at(-1);
-  const toolWorking = useMemo(() => items.some((item) =>
+  const activeTools = useMemo(() => items.filter((item) =>
     item.kind === 'tool' && item.status === 'running' && item.turnId === state.turn?.turnId), [items, state.turn?.turnId]);
+  const waitingForSubagents = activeTools.length > 0 && activeTools.every((item) => item.kind === 'tool' && item.subagent !== undefined &&
+    (item.subagent.status === undefined || item.subagent.status === 'running' || item.subagent.status === 'pending'));
   const pendingIds = useMemo(() => new Set(turns.find((row) => row.id === pendingReplyRow)?.messageIds ?? []), [turns, pendingReplyRow]);
   const messages = useMemo(() => selectors.messages(descriptors, replyTails, pendingIds), [descriptors, replyTails, pendingIds, selectors]);
   return <TranscriptView ref={view} messages={messages} conversationId={state.conversationId} sessionKey={state.sessionId}
@@ -140,8 +142,10 @@ export function Transcript({
       {items.length === 0 ? <ChatStartup state={state} blocked={blocked} onDraftSuggestion={onDraftSuggestion} /> : null}
     </>}
     trailingContent={<>{interaction}{running && state.interactions.length === 0 ? <div role="status" aria-live="polite" className="flex select-none items-center gap-2 py-1 text-xs text-muted-foreground">
-      <DroidActivity phase={state.turn?.compacting ? 'loading' : toolWorking ? 'working' : 'thinking'} />
-      <span>{state.turn?.compacting ? 'Compacting conversation…' : `Droid is ${state.turn?.activity === 'working' ? 'working' : 'responding'}`}</span>
+      <DroidActivity phase={state.turn?.compacting ? 'loading' : activeTools.length > 0 ? 'working' : 'thinking'} />
+      <span>{state.turn?.compacting ? 'Compacting conversation…' : waitingForSubagents
+        ? `Waiting for ${activeTools.length === 1 ? 'subagent' : `${activeTools.length} subagents`}…`
+        : `Droid is ${state.turn?.activity === 'working' ? 'working' : 'responding'}`}</span>
     </div> : null}</>}
     renderMessage={(id, presentation) => {
       const message = byId.get(id)!;

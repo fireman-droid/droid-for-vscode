@@ -5,7 +5,6 @@ export class SubagentWatchState {
   zombieSubagentWatch: {
     readonly sessionId: string;
     rows: readonly PendingSubagentRow[];
-    readonly deadlineAt: number;
     readonly timer: ReturnType<typeof setInterval>;
     /** Serializes ticks so a slow ledger read never overlaps. */
     ticking: boolean;

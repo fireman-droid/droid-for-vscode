@@ -60,6 +60,7 @@ import { SessionViewerPanelController } from './panels/sessionViewer/SessionView
 import { MissionControlPanelController } from './panels/mission/MissionControlPanelController';
 import { ReviewPanelController } from './panels/review/ReviewPanelController';
 import { SubagentTranscriptService } from './chat/subagents/SubagentTranscriptService';
+import { ParentFollowup } from './chat/subagents/ParentFollowup';
 import { createSubagentEventSource } from '../runtime/daemon/daemonNotificationSource';
 import {
   BrowserDevBridge,
@@ -522,6 +523,7 @@ export function activate(context: vscode.ExtensionContext): void {
   activeBrowserDevBridge = browserDevBridge;
   const reviewPanel = new ReviewPanelController(context.extensionUri, controller, reviewCoordinator, gitWorkflow, sessionViewer);
   controller.subagentState.subagentTranscripts = subagentTranscripts;
+  const parentFollowup = new ParentFollowup(controller, subagentSource);
   const provider = new DroidViewProvider(
     context.extensionUri,
     controller,
@@ -557,6 +559,7 @@ export function activate(context: vscode.ExtensionContext): void {
     terminalMirror,
     sessionViewer,
     subagentTranscripts,
+    parentFollowup,
     missionControl,
     modelsPanel,
     browserDevBridge,

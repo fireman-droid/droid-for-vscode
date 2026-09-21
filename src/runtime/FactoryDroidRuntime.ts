@@ -655,9 +655,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
       if (started === null) {
         return;
       }
-      // A subagent only spawns under a running parent Task tool, so
-      // a notification outside an active turn has no row to attach
-      // to and is dropped.
+      // A notification outside an active turn has no parent Task row to attach to.
       if (this.activeTurn === null) {
         return;
       }
@@ -666,6 +664,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
         toolUseId: started.toolUseId,
         subagentType: started.subagentType,
         description: started.description,
+        ...(started.startedAt === undefined ? {} : { startedAt: started.startedAt }),
       });
       this.recordDiagnostic({
         level: 'info',

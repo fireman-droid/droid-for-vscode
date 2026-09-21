@@ -239,6 +239,7 @@ export type RuntimeEvent =
       toolUseId: string | null;
       subagentType: string;
       description: string;
+      startedAt?: number;
     }
   | {
       /**

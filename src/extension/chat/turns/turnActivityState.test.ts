@@ -834,6 +834,7 @@ describe('turnActivityState', () => {
       toolUseId: 'task-1',
       subagentType: 'explore',
       description: 'Survey the auth module',
+      startedAt: 1_789_976_671_463,
     });
     const duplicate = projectSubagentStarted(upgraded.state, {
       toolUseId: 'task-1',
@@ -852,6 +853,7 @@ describe('turnActivityState', () => {
         type: 'explore',
         description: 'Survey the auth module',
         status: 'running',
+        startedAt: 1_789_976_671_463,
       },
     });
     expect(hasSubagentRows(started.state)).toBe(false);
@@ -894,6 +896,24 @@ describe('turnActivityState', () => {
     });
     expect(noTarget.projection).toBeNull();
     expect(noTarget.state.tools.size).toBe(0);
+  });
+
+  it('reconciles the persisted dispatch time without resetting an already-running child timer', () => {
+    const subagent = { type: 'scout', description: 'Read handlers', status: 'running' as const,
+      startedAt: 1_789_976_671_463 };
+    let state = projectToolEvent(createTurnActivityState(), {
+      type: 'tool-start', toolName: 'Task', toolUseId: 'task-time', action: 'Delegate task', subagent,
+    }).state;
+    state = projectToolEvent(state, {
+      type: 'tool-result', toolName: 'Task', toolUseId: 'task-time', action: 'Delegate task', isError: false,
+    }).state;
+    const running = reconcileSubagentSummaries(state, [{ ...subagent, startedAt: 1_789_976_666_681 }]);
+    expect(running.projections[0]?.subagent).toMatchObject({ status: 'running', startedAt: 1_789_976_666_681 });
+    const completed = reconcileSubagentSummaries(running.state, [
+      { type: subagent.type, description: subagent.description, status: 'completed', durationMs: 30_794 },
+    ]);
+    expect(completed.projections[0]?.subagent).toMatchObject({ status: 'completed', startedAt: 1_789_976_666_681,
+      durationMs: 30_794 });
   });
 
   it('adopts the delegation identity tool-start carries, then upgrades it', () => {

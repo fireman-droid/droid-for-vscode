@@ -1,3 +1,4 @@
+import { basename, isAbsolute, relative, resolve } from 'node:path';
 import {
   MAX_TOOL_DETAIL_LENGTH,
   MAX_TOOL_TARGET_LENGTH,
@@ -83,7 +84,7 @@ export function extractToolDetail(
 /**
  * Extracts the small, display-only input context that explains a
  * non-mutating workspace tool. Raw input and output never cross the
- * Bridge. Paths are exposed only after resolving inside the workspace.
+ * Bridge. Workspace targets are relative; external targets expose only a name.
  */
 export function extractToolTarget(
   toolName: string,
@@ -141,9 +142,14 @@ function readWorkspacePath(
     return undefined;
   }
   const rawPath = readTargetText(record, keys);
-  return rawPath === undefined
-    ? undefined
-    : toWorkspaceRelativePath(workspaceRoot, rawPath);
+  if (rawPath === undefined) return undefined;
+  const workspacePath = toWorkspaceRelativePath(workspaceRoot, rawPath);
+  if (workspacePath !== undefined) return workspacePath;
+  const absolute = resolve(workspaceRoot, rawPath);
+  const outside = relative(workspaceRoot, absolute);
+  if (!isAbsolute(outside) && !/^\.\.(?:[\\/]|$)/u.test(outside)) return undefined;
+  const name = normalizeTargetText(basename(absolute));
+  return name === undefined ? undefined : `${name} · outside workspace`.slice(0, MAX_TOOL_TARGET_LENGTH);
 }
 
 function readTargetText(

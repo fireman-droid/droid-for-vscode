@@ -5,13 +5,15 @@ import { extractExecuteSummary, extractToolAction, extractToolTarget } from './t
 const workspace = resolve('workspace');
 
 describe('tool display input boundaries', () => {
-  it('shows only workspace-relative Read and LS targets from their supported fields', () => {
+  it('identifies Read and LS targets while external directories stay private', () => {
     expect(extractToolTarget('Read', { file_path: resolve(workspace, 'src/app.ts') }, workspace))
       .toBe('src/app.ts');
     expect(extractToolTarget('Read', { filePath: 'src/app.ts' }, workspace)).toBe('src/app.ts');
     expect(extractToolTarget('LS', { directory_path: resolve(workspace, 'src') }, workspace)).toBe('src');
     expect(extractToolTarget('Read', { file_path: resolve(workspace, '../outside') }, workspace))
-      .toBeUndefined();
+      .toBe('outside · outside workspace');
+    expect(extractToolTarget('Read', { file_path: resolve(workspace, '../private/folder/config.ts') }, workspace))
+      .toBe('config.ts · outside workspace');
     expect(extractToolTarget('Read', { file_path: 'src/app.ts' })).toBeUndefined();
   });
 

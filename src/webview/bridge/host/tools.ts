@@ -187,7 +187,7 @@ export function parseToolSubagent(value: unknown): ToolSubagentSummary | undefin
     !hasExactKeys(
       value,
       ['type', 'description'],
-      ['status', 'toolUseCount', 'durationMs'],
+      ['status', 'toolUseCount', 'durationMs', 'startedAt'],
     ) ||
     !isNonEmptyBoundedString(value.type, MAX_SUBAGENT_TYPE_LENGTH) ||
     hasControlCharacter(value.type) ||
@@ -195,7 +195,8 @@ export function parseToolSubagent(value: unknown): ToolSubagentSummary | undefin
     hasControlCharacter(value.description) ||
     (value.status !== undefined && !isSubagentStatus(value.status)) ||
     (value.toolUseCount !== undefined && !isCount(value.toolUseCount)) ||
-    (value.durationMs !== undefined && !isCount(value.durationMs))
+    (value.durationMs !== undefined && !isCount(value.durationMs)) ||
+    (value.startedAt !== undefined && (!isCount(value.startedAt) || value.startedAt === 0))
   ) {
     return undefined;
   }
@@ -205,6 +206,7 @@ export function parseToolSubagent(value: unknown): ToolSubagentSummary | undefin
     ...(value.status === undefined ? {} : { status: value.status }),
     ...(value.toolUseCount === undefined ? {} : { toolUseCount: value.toolUseCount }),
     ...(value.durationMs === undefined ? {} : { durationMs: value.durationMs }),
+    ...(value.startedAt === undefined ? {} : { startedAt: value.startedAt }),
   };
 }
 

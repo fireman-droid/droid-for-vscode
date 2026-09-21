@@ -216,6 +216,18 @@ flowchart TD
   历史保留有效原始 toolUseId，消息 turnId 按 sourceSessionId／messageId 生成，
   快照与实时行按身份合并，不按相似文本认领。加载中与加载失败分离；当前证据
   限制留在 Review，旧的瞬时映射／历史提示不作为永久聊天记录恢复。
+  子代理结果按调用 ID 恢复 SDK 转换后缺失的工具名，再进入同一有界预览投影；
+  工作区外只读目标仅显示文件名与外部标记，不生成可打开路径或扩大内容预览。
+  `startedAt` 来自通知 timestamp／账本 createdAt，贯穿 Runtime、Host、Bridge 和
+  历史解码；未知时间保持缺失，最终时长仍以已报告 durationMs 为准。
+- `parentSessionEvents.ts` 被动观察会话通知，仅自动系统回合使用完整流式投影。
+  `ParentFollowup` 复用 Host 原有回合处理、停止与恢复流程，不提交新 prompt；
+  前台与自动回合交叠时有界暂存，代际变化或溢出改走历史恢复。正常前台内容不
+  重复解析。后台账本核对随任务状态结束，不在 10 分钟后丢弃仍运行的任务；
+  `parentFollowupHistory.ts` 仅负责遗漏事件的最终补齐，读取中出现新回合则延后合并。
+  历史加载附带 Host-only `messageAncestry`，仅保存有界消息 ID／parentId／投影
+  身份和请求边界；恢复时沿隐藏请求父链映射原 UI 回合，涵盖断流未见的工具与
+  Diff，遇新 user／system 请求停止继承。没有额外 I/O，隐藏正文不跨 Bridge。
 - `daemon/api.ts` 仅暴露生产消费者使用的资源。`sessionHandle.ts` 管理唯一 attached
   handle、metadata 和 replacement；`permissionDispatch.ts` 管理权限/AskUser 的
   原会话及关联父会话路由，缺失或失败的 handler 默认取消。
