@@ -42,7 +42,6 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
   useLayoutEffect(() => {
     composer.current = frame.current?.closest<HTMLElement>('[data-composer-surface]') ?? frame.current;
   }, []);
-  const triggers = useRef<Partial<Record<Panel, HTMLButtonElement | null>>>({});
   const actions = useCapabilityActions({ vscode: port, sessionId: state.sessionId, connectionStatus: state.connection.status });
   const attachments = useAttachmentActions(port, state.sessionId, state.connection.status);
   const disabled = blocked || state.sessionId === null || state.connection.status !== 'connected';
@@ -74,15 +73,14 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
   const button = (kind: Panel, label: string, children: React.ReactNode, className = '') => {
     return <Popover open={panel === kind} onOpenChange={(value) => value ? open(kind) : close()}>
       {!editorOwner && kind !== 'model' ? <PopoverAnchor virtualRef={composer} /> : null}
-      <PopoverTrigger asChild><Button ref={(node) => { triggers.current[kind] = node; }} variant="ghost" size="sm"
+      <PopoverTrigger asChild><Button variant="ghost" size="sm"
         aria-label={label} title={label} disabled={disabled || ((kind === 'mode' || kind === 'model') && confirmed === null)}
         className={`h-[26px] min-w-0 gap-1 px-1.5 text-xs font-normal text-muted-foreground data-[state=open]:bg-[var(--control-surface-active)] data-[state=open]:text-foreground ${className}`}>
         {children}
       </Button></PopoverTrigger>
       <PopoverContent side="top" align={kind === 'model' ? 'end' : 'start'} sideOffset={8}
         className={`v2-composer-panel overflow-y-auto rounded-xl p-0 max-h-[min(520px,var(--radix-popover-content-available-height))] ${kind === 'mode' ? 'w-[160px]' : kind === 'model' ? 'w-[240px]' : 'w-[var(--radix-popover-trigger-width)]'}`}
-        data-editor-popup-owner={editorOwner}
-        onCloseAutoFocus={(event) => { event.preventDefault(); triggers.current[kind]?.focus({ preventScroll: true }); }}>
+        data-editor-popup-owner={editorOwner}>
         {kind === 'settings' ? <SettingsPopover id={`${id}-settings`} view={view} settings={state.settings} skills={state.skills} mcp={state.mcp} plugins={state.plugins} showModeControl={false}
           disabled={settingsDisabled} attachDisabled={disabled || state.interactions.length > 0} onViewChange={setView} onUpdate={pickSetting}
           onSkillsRefresh={actions.handleSkillsRefresh} onSkillToggle={actions.handleSkillToggle}
