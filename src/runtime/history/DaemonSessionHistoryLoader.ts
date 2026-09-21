@@ -24,6 +24,7 @@ import {
   type SubagentInvocationRecord,
 } from '../subagents/subagentSummary';
 import { projectSessionMessages } from './projectSessionHistory';
+import { readPersistedSessionMessages } from './persistedSessionMessages';
 import type {
   SessionHistoryLoader,
   SessionHistoryRequest,
@@ -31,8 +32,8 @@ import type {
 } from './SessionHistory';
 
 /**
- * Daemon-first session history loader (bug #37): serves history from
- * the already-connected daemon's `sessions.getMessages` (paged,
+ * Daemon-mode history loader: reads a single persisted JSONL snapshot when
+ * its format is recognized, otherwise uses `sessions.getMessages` (paged,
  * with `cursor` = the id of the last message of the previous page)
  * instead of spawning a droid CLI process per load (~5s fixed tax).
  * Daemon versions may return pages newest-first or oldest-first, so
@@ -103,12 +104,20 @@ export function createDaemonFirstHistoryLoader(
     }
     const startedAt = performance.now();
     try {
-      const droid = await options.getDroid();
-      const fetched = await fetchSessionMessages(droid, request.sessionId);
-      const projected = projectSessionMessages(fetched.messages, {
+      let persisted = await readPersistedSessionMessages(sessionsDirectory, request.sessionId);
+      let fetched = persisted === null
+        ? await fetchSessionMessages(await options.getDroid(), request.sessionId)
+        : { messages: orderMessagesChronologically(persisted.messages).slice(-MAX_RAW_MESSAGE_WINDOW), pages: 0 };
+      const project = (messages: unknown[]) => projectSessionMessages(messages, {
         workspaceRoot: request.cwd,
         sourceSessionId: request.sessionId,
       });
+      let projected = project(fetched.messages);
+      if (projected.status !== 'available' && persisted !== null) {
+        persisted = null;
+        fetched = await fetchSessionMessages(await options.getDroid(), request.sessionId);
+        projected = project(fetched.messages);
+      }
       if (projected.status !== 'available') {
         throw new Error('daemon message projection unavailable');
       }
@@ -126,6 +135,8 @@ export function createDaemonFirstHistoryLoader(
           sessionId: request.sessionId,
           messages: fetched.messages.length,
           pages: fetched.pages,
+          source: persisted === null ? 'daemon-pages' : 'persisted-snapshot',
+          ...(persisted === null ? {} : { bytes: persisted.bytes }),
           items: projected.state.transcript.length,
         },
       });

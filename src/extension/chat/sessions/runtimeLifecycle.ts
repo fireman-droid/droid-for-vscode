@@ -254,11 +254,9 @@ export async function replaceRuntime(
     }
   }
 
-  // The transcript projection and the runtime resume each spawn their
-  // own droid CLI process and stay independent until activateRuntime
-  // consumes both; running them serially doubled session-switch
-  // latency (9-12s observed). Neither branch throws: both funnel
-  // failures into their return values.
+  // Read persisted history alongside the native session handshake. Activation
+  // owns their common commit boundary; neither branch publishes a ready session
+  // alone, and both funnel failures into their return values.
   const [transcript, activation] = await Promise.all([
     prepareHistory(ctl, target, generation, phases),
     createInitializedRuntime(ctl, target, generation, phases),
@@ -326,12 +324,12 @@ export async function activateInitialRuntime(
   target: RuntimeSessionTarget,
   failedResumeId: string | null,
 ): Promise<void> {
+  const phases = createSessionSwitchTimings(target.kind);
   const generation = ++ctl.sessionState.runtimeGeneration;
-  // Same parallel activation as replaceRuntime: history projection
-  // and runtime resume are independent droid CLI processes.
+  // History reading and the session's native handshake run independently.
   const [transcript, activation] = await Promise.all([
-    prepareHistory(ctl, target, generation),
-    createInitializedRuntime(ctl, target, generation),
+    prepareHistory(ctl, target, generation, phases),
+    createInitializedRuntime(ctl, target, generation, phases),
   ]);
   if (
     transcript === null ||
@@ -380,6 +378,7 @@ export async function activateInitialRuntime(
     activation.id,
     generation,
     transcript,
+    phases,
   );
 }
 
@@ -602,6 +601,10 @@ export async function activateRuntime(
       : undefined,
   );
   ctl.sessionState.connection = { status: 'connected' };
+  if (phases) ctl.recordHost({ level: 'info', name: 'host.perf.activation-ready', attributes: {
+    kind: target.kind, sessionId, durationMs: elapsedMs(phases.startedAt),
+    initializeMs: phases.initializeMs ?? 0, historyMs: phases.historyMs ?? 0,
+  } });
   ctl.emitSnapshot();
   ctl.effects.recoverMissionProjection(runtime, generation, sessionId, target.cwd);
   if (target.kind === 'new' && target.worktree === true) {

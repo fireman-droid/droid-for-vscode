@@ -164,6 +164,12 @@ flowchart TD
   消息历史由元数据 daemon 直接读磁盘，不扫描或加载所属 worker；路由对象立即可用，
   元数据预热、历史与主会话启动并行，模型目录也不再排在 IDE 握手之后。预热完成事件
   仍等待真实元数据连接，`daemon.discovery.finished` 记录数量与耗时，不含会话正文。
+  `persistedSessionMessages.ts` 为本机已核实的 version-2 私有 JSONL 提供只读快路径：
+  固定起始大小、分块读取并验证头部／文件身份，复用公开 SDK 父链修复，按 CLI
+  规则转换内容、替换重复 ID 后进入同一受限投影。未知格式或无法确认的读取回到
+  原 daemon 分页，不写入会话文件，也不因快路径改变历史的完整／部分状态语义。
+  Host 仍在权威历史与会话握手共同完成后提交恢复状态和开放发送；
+  `host.perf.activation-ready` 记录该边界，不等待后续 context 元数据。
 - `runtime/ide/nativeIdeRelay.ts` 仅在 127.0.0.1 上透传官方 MCP 协议，不拼接
   编辑器上下文，不记录消息正文。专属后台首个原生 Droid 客户端被固定为根连接；
   子客户端不能覆盖其身份。initialize、initialized、工具发现及初始编辑器通知
