@@ -1,26 +1,37 @@
 import { useEffect, useLayoutEffect, useRef, type PointerEvent } from 'react';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '../ui/collapsible';
-import { ArrowUp, ChevronRight, Clock3, MessageSquare, Quote, Square, X } from 'lucide-react';
+import { ArrowUp, Clock3, MessageSquare, Quote, Square, X } from 'lucide-react';
 import type { SideChatProps } from './sideChat';
 import { useUiEnvironment } from '../environment';
-import { formatSelectionQuote, parseSelectionQuote } from './selectionQuote';
+import { formatSelectionQuotes, parseSelectionQuotes } from './selectionQuote';
 import { useSmoothFollowScroll } from '../navigation/useSmoothFollowScroll';
 import { Button } from '../ui/button';
 import { DroidActivity } from '../ui/droid-motion';
 import { Textarea } from '../ui/input';
 import { Markdown } from '../content/Markdown';
+import { QuoteChips } from './QuoteChips';
 
-export function SideChatSheet({ state, draft, quote, width, onDraftChange, onQuoteClear, onWidthChange, onDismiss, onAsk, onStop, maxTextLength }: SideChatProps) {
+const PROGRESS_LABELS = {
+  waiting: 'Waiting for reply…', thinking: 'Thinking…', tool: 'Using tools…', answering: 'Receiving reply…',
+};
+
+export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDraftChange, onQuoteClear, onQuoteRemove, onWidthChange, onDismiss, onAsk, onStop, maxTextLength }: SideChatProps) {
   const { assistantName } = useUiEnvironment();
   const panel = useRef<HTMLElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const opener = useRef(document.activeElement);
   const resize = useRef<{ id: number; x: number; width: number } | null>(null);
-  const streaming = state.entries.some((entry) => entry.state === 'streaming');
+  const activeEntry = state.entries.find((entry) => entry.state === 'streaming');
+  const streaming = activeEntry !== undefined;
+  const activeProgress = activeEntry?.progress ?? (activeEntry?.answer ? 'answering' : 'waiting');
   const unavailable = state.status === 'unsupported' || state.status === 'error';
   const canAsk = !unavailable && state.pendingQuestion === null;
   const preparing = state.status === 'preparing';
-  const maxLength = Math.max(0, maxTextLength - (quote ? formatSelectionQuote(quote, '').length + 2 : 0));
+  const quotedContext = quotes ?? (quote ? [quote] : []);
+  const removeQuote = onQuoteRemove ?? (quotes === undefined ? onQuoteClear : undefined);
+  const quotePrefix = formatSelectionQuotes(quotedContext, '');
+  const maxLength = Math.max(0, maxTextLength - quotePrefix.length);
+  const pendingQuote = state.pendingQuestion ? parseSelectionQuotes(state.pendingQuestion) : null;
+  const pendingBody = pendingQuote?.body ?? state.pendingQuestion;
   const follow = useSmoothFollowScroll<HTMLDivElement>();
   useEffect(() => { follow.followNewest(); }, [follow.followNewest, state.entries, state.pendingQuestion]);
   useLayoutEffect(() => {
@@ -63,7 +74,7 @@ export function SideChatSheet({ state, draft, quote, width, onDraftChange, onQuo
   };
   const send = () => {
     if (!canAsk || !draft.trim() || draft.length > maxLength) return;
-    onAsk(formatSelectionQuote(quote ?? '', draft.trim()));
+    onAsk(formatSelectionQuotes(quotedContext, draft.trim()));
     onDraftChange('');
     onQuoteClear();
     follow.followNewest(true);
@@ -85,14 +96,15 @@ export function SideChatSheet({ state, draft, quote, width, onDraftChange, onQuo
         <p>Side conversation</p>
       </div>
       <span role="status" className="v2-btw-status" data-unavailable={unavailable || undefined}>
-        {streaming || preparing ? <DroidActivity phase={preparing ? 'loading' : 'thinking'} /> : null}
-        {unavailable ? 'Unavailable' : preparing ? 'Preparing' : streaming ? 'Answering' : null}
+        {streaming || preparing ? <DroidActivity phase={preparing || activeProgress === 'waiting' ? 'loading' : activeProgress === 'thinking' ? 'thinking' : 'working'} /> : null}
+        {unavailable ? 'Unavailable' : preparing ? 'Preparing' : streaming
+          ? activeProgress === 'waiting' ? 'Waiting' : activeProgress === 'thinking' ? 'Thinking' : activeProgress === 'tool' ? 'Using tools' : 'Answering' : null}
       </span>
       <Button variant="ghost" size="icon-sm" aria-label="Close By the Way" title="Close side conversation" onClick={onDismiss}><X /></Button>
     </header>
     <div ref={follow.viewportRef} aria-label="Side conversation" className="v2-btw-viewport">
       <div ref={follow.contentRef} className="v2-btw-transcript">
-        {state.entries.length === 0 && !unavailable ? <div className="v2-btw-empty">
+        {state.entries.length === 0 && !unavailable && !preparing ? <div className="v2-btw-empty">
           <MessageSquare className="v2-btw-empty-mark" aria-hidden="true" />
           <p>A question on the side.</p>
           <span>Explore a detail without interrupting your main conversation.</span>
@@ -100,18 +112,23 @@ export function SideChatSheet({ state, draft, quote, width, onDraftChange, onQuo
             <span>Select text in the main chat to use it here as context.</span>
           </div>
         </div> : null}
+        {state.entries.length === 0 && preparing ? <p role="status" className="v2-btw-progress"><DroidActivity phase="loading" />Preparing side conversation…</p> : null}
         {state.entries.map((entry) => {
-          const parsed = parseSelectionQuote(entry.question);
+          const parsed = parseSelectionQuotes(entry.question);
+          const progress = entry.progress ?? (entry.answer ? 'answering' : 'waiting');
           return <article key={entry.id} className="v2-btw-turn">
             <div aria-label="Your question" className="v2-btw-question">
               <div className="v2-btw-speaker">You</div>
-              {parsed ? <BtwQuote text={parsed.quote} /> : null}
+              {parsed ? <QuoteChips quotes={parsed.quotes} className="mb-2" /> : null}
               <p>{parsed?.body ?? entry.question}</p>
             </div>
             <div aria-label={`${assistantName} answer`} className="v2-btw-answer">
               <div className="v2-btw-speaker">{assistantName}</div>
-              {entry.answer.length === 0 && entry.state === 'streaming' ? <p className="v2-btw-thinking">Thinking…</p>
-                : <Markdown text={entry.answer} streaming={entry.state === 'streaming'} />}
+              {entry.answer.length > 0 ? <Markdown text={entry.answer} streaming={entry.state === 'streaming'} /> : null}
+              {entry.state === 'streaming' ? <p role="status" aria-live="polite" className="v2-btw-progress">
+                <DroidActivity phase={preparing || progress === 'waiting' ? 'loading' : progress === 'thinking' ? 'thinking' : 'working'} />
+                {preparing ? 'Preparing side conversation…' : PROGRESS_LABELS[progress]}
+              </p> : null}
             </div>
             {entry.message ? <p role="alert" className="v2-btw-error">{entry.message}</p> : null}
           </article>;
@@ -120,16 +137,18 @@ export function SideChatSheet({ state, draft, quote, width, onDraftChange, onQuo
     </div>
     <footer className="v2-btw-footer">
       {state.pendingQuestion ? <div className="v2-btw-queued" role="status">
-        <Clock3 aria-hidden="true" /><p title={parseSelectionQuote(state.pendingQuestion)?.body ?? state.pendingQuestion}>
-          <span>Queued</span>{parseSelectionQuote(state.pendingQuestion)?.body ?? state.pendingQuestion}
-        </p>
+        <Clock3 aria-hidden="true" /><div className="min-w-0 flex-1 space-y-1">
+          <p title={pendingBody ?? undefined}><span>Queued</span>{pendingBody}</p>
+          {pendingQuote ? <QuoteChips quotes={pendingQuote.quotes} /> : null}
+        </div>
       </div> : null}
       {state.message ? <p role="alert" className="v2-btw-error">{state.message}</p> : null}
       <div className="v2-btw-composer">
-        {quote ? <BtwQuote key={quote} text={quote} onClear={onQuoteClear} /> : null}
+        <QuoteChips quotes={quotedContext} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="mb-2" />
         <Textarea variant="plain" ref={input} className="dvx-btw-input v2-btw-input" rows={2} value={draft} maxLength={maxLength} disabled={unavailable}
           aria-label="By the Way question" placeholder={state.entries.length ? 'Ask a follow-up…' : 'Ask a side question…'} onChange={(event) => onDraftChange(event.target.value)}
           onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} />
+        {notice ? <p role="status" className="mt-1 text-[11px] leading-4 text-muted-foreground">{notice}</p> : null}
         <div className="v2-btw-compose-actions">
           <span className="v2-btw-compose-hint">{maxLength - draft.length < 200 ? `${maxLength - draft.length} left`
             : state.pendingQuestion ? 'Continue drafting' : streaming ? 'Enter to queue follow-up' : 'Shift + Enter for a new line'}</span>
@@ -140,19 +159,4 @@ export function SideChatSheet({ state, draft, quote, width, onDraftChange, onQuo
       </div>
     </footer>
   </aside>;
-}
-
-function BtwQuote({ text, onClear }: { readonly text: string; readonly onClear?: () => void }) {
-  return <Collapsible className="v2-btw-quote">
-    <div className="v2-btw-quote-head">
-      <CollapsibleTrigger asChild><Button variant="plain" size="none" className="v2-btw-quote-toggle" aria-label="Quoted context">
-        <Quote aria-hidden="true" />
-        <span className="v2-btw-quote-label">Quote</span>
-        <span className="v2-btw-quote-preview">{text}</span>
-        <ChevronRight className="v2-btw-quote-chevron" aria-hidden="true" />
-      </Button></CollapsibleTrigger>
-      {onClear ? <Button variant="ghost" size="icon-sm" aria-label="Remove quoted context" onClick={onClear}><X /></Button> : null}
-    </div>
-    <CollapsibleContent><blockquote className="v2-btw-quote-body">{text}</blockquote></CollapsibleContent>
-  </Collapsible>;
 }

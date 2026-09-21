@@ -1,4 +1,5 @@
 import { DroidClient, ProcessTransport } from '@factory/droid-sdk/node';
+import type { BtwEntryProgress } from '../../shared/protocol/btwProtocol';
 
 /**
  * Hidden-fork sidecar behind the `/btw` Side Chat card
@@ -26,6 +27,7 @@ export const BTW_PERMISSION_GUIDANCE =
 
 export type BtwAnswerEvent =
   | { readonly kind: 'delta'; readonly text: string }
+  | { readonly kind: 'progress'; readonly progress: BtwEntryProgress }
   | { readonly kind: 'done' }
   | { readonly kind: 'error'; readonly message: string };
 
@@ -201,7 +203,7 @@ class BtwForkSidecar implements BtwSidecar {
           continue;
         }
         yield event;
-        if (event.kind !== 'delta') {
+        if (event.kind === 'done' || event.kind === 'error') {
           return;
         }
       }
@@ -252,6 +254,11 @@ class BtwForkSidecar implements BtwSidecar {
       ? params.notification
       : params;
     switch (notification.type) {
+      case 'thinking_text_delta':
+        return { kind: 'progress', progress: 'thinking' };
+      case 'tool_call':
+      case 'tool_progress_update':
+        return { kind: 'progress', progress: 'tool' };
       case 'assistant_text_delta':
         return typeof notification.textDelta === 'string' &&
           notification.textDelta.length > 0

@@ -1,5 +1,11 @@
 # 架构
 
+多段引用由公共 `chat/selectionQuote.ts` 编解码普通 Markdown 引用块，保留旧单引用
+API；业务 draft／queue／resend 仍传完整 text。共享 QuoteChips 仅接展示文本和删除
+回调，Runtime／Host 身份不进入公共组件。BTW 的可选 progress 枚举由两种 Runtime
+活动事件生成，Host 去重并沿现有 50ms 合并消息链路发布；等待条目先于异步 fork
+创建，Stop／失败负责结算，原有正文 delta 和终态协议继续生效。
+
 ## 长会话结算与滚动所有权
 
 异步 Changes 结算只能合并对应 turn 的行，持久化之后不得用旧转录覆盖新消息，

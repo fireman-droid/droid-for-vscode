@@ -5,6 +5,7 @@ export interface SideConversation {
     readonly question: string;
     readonly answer: string;
     readonly state: 'streaming' | 'done' | 'error';
+    readonly progress?: 'waiting' | 'thinking' | 'tool' | 'answering';
     readonly message: string | null;
   }[];
   readonly message: string | null;
@@ -14,11 +15,14 @@ export interface SideConversation {
 export interface SideChatProps {
   readonly state: SideConversation;
   readonly draft: string;
-  readonly quote: string | null;
+  readonly quote?: string | null;
+  readonly quotes?: readonly string[];
+  readonly notice?: string | null;
   readonly width: number;
   readonly maxTextLength: number;
   readonly onDraftChange: (draft: string) => void;
   readonly onQuoteClear: () => void;
+  readonly onQuoteRemove?: (index: number) => void;
   readonly onWidthChange: (width: number) => void;
   readonly onDismiss: () => void;
   readonly onAsk: (text: string) => void;

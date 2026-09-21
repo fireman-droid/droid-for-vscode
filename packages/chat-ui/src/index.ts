@@ -2,6 +2,7 @@ export { UiRoot } from './UiRoot';
 export { UiEnvironmentProvider, useUiEnvironment, type UiEnvironment } from './environment';
 export { ChatLayout } from './chat/ChatLayout';
 export { ComposerView, type ComposerViewProps } from './chat/ComposerView';
+export { QuoteChips, type QuoteChipsProps } from './chat/QuoteChips';
 export { TranscriptView, type TranscriptViewProps, type TranscriptMessage, type TranscriptHandle } from './chat/TranscriptView';
 export { ReadOnlyTranscriptView } from './chat/ReadOnlyTranscriptView';
 export { QuestionCardView, type QuestionCardViewProps, type QuestionEditor } from './chat/QuestionCardView';

@@ -32,7 +32,7 @@ import { GitCommitFlowContext } from '../../webview/assistant/changes/gitCommitF
 import { ReviewDockSlot } from './ReviewDock';
 import { Composer } from './Composer';
 import { MAX_TURN_TEXT_LENGTH } from '../../shared/protocol/bounds';
-import { fitSelectionQuote, formatSelectionQuote, parseSelectionQuote } from '../../webview/assistant/btw/selectionQuote';
+import { appendSelectionQuote } from '../../webview/assistant/btw/selectionQuote';
 import { useBtwPanel } from '../../webview/assistant/btw/useBtwPanel';
 import { SideChatSheet } from './SideChatSheet';
 import { WorkingSubagents } from './WorkingSubagents';
@@ -122,6 +122,8 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
     askBtw,
   }), [operationsBlocked, compact, openBtw, askBtw, setNavigation]);
   const composer = useComposerFlow(port, state, dispatch, routes);
+  const [quoteNotice, setQuoteNotice] = useState<string | null>(null);
+  useEffect(() => setQuoteNotice(null), [composer.draft, state.sessionId]);
   const missionControl = useMissionControl(port, createTurnId);
   const [missionChat, setMissionChat] = useState(false);
   const openMission = () => {
@@ -130,10 +132,10 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
     missionControl({ type: 'mission.panel.open', target: 'setup', ...(task === undefined ? {} : { task }) });
   };
   const quoteIntoChat = (text: string) => {
-    const body = parseSelectionQuote(composer.draft)?.body ?? composer.draft;
-    const quote = fitSelectionQuote(text, Math.max(0, MAX_TURN_TEXT_LENGTH - body.length - 2));
-    if (!quote) return;
-    composer.handleDraftChange(formatSelectionQuote(quote, body));
+    const next = appendSelectionQuote(composer.draft, text, MAX_TURN_TEXT_LENGTH);
+    if (next === null) { setQuoteNotice('This selection is too long to add in full. Select less text or remove another quote.'); return; }
+    setQuoteNotice(null);
+    composer.handleDraftChange(next);
     requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('[data-composer-input]')?.focus({ preventScroll: true }));
   };
   const messageActions = useMessageActions({
@@ -221,7 +223,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
         {composer.queueEditingId === null ? null : <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>Editing queued message</span><Button variant="ghost" size="sm" onClick={composer.handleQueueEditCancel}>Cancel edit</Button>
         </div>}
-        <Composer key={state.conversationId ?? 'none'} state={state} port={port} flow={composer} blocked={operationsBlocked}
+        <Composer key={state.conversationId ?? 'none'} state={state} port={port} flow={composer} blocked={operationsBlocked} quoteNotice={quoteNotice}
           onFileSearch={workspace.handleFileSearch} onNavigate={setNavigation} onBtwOpen={openBtw}
           renderInputRow={(input, action) => <ComposerControls input={input} action={action} state={state} port={port} blocked={operationsBlocked} page={navigation.page} navigationId={navigation.id} onPageChange={setNavigation} onCompact={compact} compactPending={sessions.compactPending} theme={theme.context} onNewSession={sessions.handleNewSession}
             onMissionOpen={openMission} missionActive={host.missionWorkspaceRoute === 'detail'} />} />
@@ -251,8 +253,8 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
     </ChatLayout>
     {host.missionWorkspaceRoute !== null ? <MissionWorkspace key={state.conversationId} route={host.missionWorkspaceRoute} setup={host.missionSetup} mission={state.missionSnapshot} result={state.missionControlResult} vscode={port}
       onShowChat={() => setMissionChat(true)} onCatalog={() => missionControl({ type: 'mission.panel.open', target: 'catalog' })} onClose={() => missionControl({ type: 'mission.dismissSetup' })} /> : null}
-    {host.missionWorkspaceRoute === null && btw.open && state.btwAvailable && state.sessionId !== null ? <SideChatSheet state={state.btw} draft={btw.draft} quote={btw.quote} width={btw.width}
-      onDraftChange={btw.setDraft} onQuoteClear={btw.clearQuote} onWidthChange={btw.setWidth} onAsk={btw.ask} onStop={btw.stop} onDismiss={dismissBtw} /> : null}
+    {host.missionWorkspaceRoute === null && btw.open && state.btwAvailable && state.sessionId !== null ? <SideChatSheet state={state.btw} draft={btw.draft} quote={btw.quote} quotes={btw.quotes} notice={btw.notice} width={btw.width}
+      onDraftChange={btw.setDraft} onQuoteClear={btw.clearQuote} onQuoteRemove={btw.removeQuote} onWidthChange={btw.setWidth} onAsk={btw.ask} onStop={btw.stop} onDismiss={dismissBtw} /> : null}
     </div>
     </ContentProvider>
   );

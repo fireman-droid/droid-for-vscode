@@ -10,13 +10,14 @@ import type { SlashNavTarget } from '../../webview/assistant/composer/slashBuilt
 import { StagedAttachments } from './EditAttachments';
 import { useAttachmentIngress } from './useAttachmentIngress';
 import { ComposerSuggestions, useComposerSuggestions } from './ComposerSuggestions';
-import { formatSelectionQuote, parseSelectionQuote } from '../../webview/assistant/btw/selectionQuote';
+import { formatSelectionQuotes, parseSelectionQuotes } from '../../webview/assistant/btw/selectionQuote';
 
-export function Composer({ state, port, flow, blocked, renderInputRow, onFileSearch, onNavigate, onBtwOpen }: {
+export function Composer({ state, port, flow, blocked, quoteNotice, renderInputRow, onFileSearch, onNavigate, onBtwOpen }: {
   readonly state: AssistantWebviewState;
   readonly port: ChatPort;
   readonly flow: ReturnType<typeof useComposerFlow>;
   readonly blocked: boolean;
+  readonly quoteNotice?: string | null;
   readonly renderInputRow: (input: ReactNode, action: ReactNode) => ReactNode;
   readonly onFileSearch: (id: string, query: string) => void;
   readonly onNavigate: (page: SlashNavTarget) => void;
@@ -32,8 +33,11 @@ export function Composer({ state, port, flow, blocked, renderInputRow, onFileSea
     count: state.attachments.length, disabled, onNotice: setNotice,
     actions: { image: attachments.handleAttachImage, pdf: attachments.handleAttachPdf, text: attachments.handleAttachTextFile, uris: attachments.handleAttachUris, remoteImage: attachments.handleAttachRemoteImage },
   });
+  const quote = parseSelectionQuotes(flow.draft);
+  const body = quote?.body ?? flow.draft;
+  const changeBody = (value: string) => flow.handleDraftChange(formatSelectionQuotes(quote?.quotes ?? [], value));
   const suggestions = useComposerSuggestions({
-    state, draft: flow.draft, disabled, onChange: flow.handleDraftChange,
+    state, draft: body, disabled, onChange: changeBody,
     onFileSearch, onAttachPath: attachments.handleAttachPath,
     onCommandsRefresh: capabilities.handleCommandsRefresh, onSkillsRefresh: capabilities.handleSkillsRefresh,
     onNavigate, onBtwOpen,
@@ -48,16 +52,16 @@ export function Composer({ state, port, flow, blocked, renderInputRow, onFileSea
     port.postMessage({ type: 'webview.diagnostic', kind: 'perf-batch', detail: JSON.stringify({ source: 'composer.layout', sessionId: state.sessionId, ...sample }) });
   }, [port, state.sessionId]);
   const running = state.turn?.status === 'submitting' || state.turn?.status === 'streaming' || state.turn?.status === 'stopping';
-  const quote = parseSelectionQuote(flow.draft);
-  const quotePrefixLength = quote ? flow.draft.length - quote.body.length : 0;
+  const quotePrefixLength = formatSelectionQuotes(quote?.quotes ?? [], '').length;
   const submit = () => { if (!flow.callbacks.isSendDisabled) void flow.callbacks.onSend(flow.draft); };
-  return <ComposerView value={quote?.body ?? flow.draft} quote={quote?.quote} onQuoteClear={quote ? () => flow.handleDraftChange(quote.body) : undefined}
-    onChange={(value, cursor) => suggestions.change(quote ? formatSelectionQuote(quote.quote, value) : value, cursor + quotePrefixLength)}
+  return <ComposerView value={body} quotes={quote?.quotes}
+    onQuoteRemove={quote ? (index) => { suggestions.dismiss(); flow.handleDraftChange(formatSelectionQuotes(quote.quotes.filter((_, position) => position !== index), body)); } : undefined}
+    onChange={suggestions.change}
     onSend={submit} onStop={() => void flow.callbacks.onCancel()} running={running} sendDisabled={flow.callbacks.isSendDisabled}
     stopLabel={state.turn?.status === 'stopping' ? 'Retry Stop' : 'Stop'}
     sendLabel={flow.queueEditingId !== null ? 'Save queued message' : state.turn?.status === 'stopping' || flow.queuedCount > 0 ? 'Queue message' : 'Send'}
-    placeholder={state.transcript.length ? 'Add a follow up' : 'Ask Droid about your workspace'} maxLength={MAX_TURN_TEXT_LENGTH - quotePrefixLength}
-    focusSignal={flow.draftCommand.id} notice={notice} onLayout={reportLayout}
+    placeholder={state.transcript.length ? 'Add a follow up' : 'Ask Droid about your workspace'} maxLength={Math.max(0, MAX_TURN_TEXT_LENGTH - quotePrefixLength)}
+    focusSignal={flow.draftCommand.id} notice={notice ?? quoteNotice} onLayout={reportLayout}
     inputReplacement={state.interactions.length ? <p className="min-w-0 flex-1 text-xs text-muted-foreground">Answer Droid’s request to continue.</p> : undefined}
     attachments={<StagedAttachments attachments={state.attachments} images={state.attachmentImages} actions={attachments} disabled={disabled} />}
     suggestionsOpen={suggestions.open} onSuggestionsOpenChange={(open) => { if (!open) suggestions.dismiss(); }}

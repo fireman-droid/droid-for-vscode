@@ -171,7 +171,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
           if (event === null) {
             continue;
           }
-          if (event.kind === 'delta') {
+          if (event.kind === 'delta' || event.kind === 'progress') {
             yield event;
             continue;
           }
@@ -221,6 +221,12 @@ class DaemonBtwForkSidecar implements BtwSidecar {
   /** Maps one raw stream event onto an answer event. */
   private projectStreamEvent(raw: DaemonBtwStreamEvent): BtwAnswerEvent | null {
     switch (raw.type) {
+      case 'thinking_text_delta':
+        return { kind: 'progress', progress: 'thinking' };
+      case 'tool_call':
+      case 'tool_call_delta':
+      case 'tool_progress':
+        return { kind: 'progress', progress: 'tool' };
       case 'assistant_text_delta':
         return typeof raw.text === 'string' && raw.text.length > 0
           ? { kind: 'delta', text: raw.text }

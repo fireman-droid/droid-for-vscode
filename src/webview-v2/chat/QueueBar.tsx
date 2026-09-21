@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowUp, ChevronDown, Pencil, Trash2 } from 'lucide-react';
+import { QuoteChips } from '@droidvisx/chat-ui/chat/QuoteChips';
 import { MAX_QUEUED_MESSAGES, type QueuePausedReason, type SessionQueueState } from '../../shared/protocol/queueProtocol';
 import type { useComposerFlow } from '../../webview/assistant/composer/useComposerFlow';
+import { parseSelectionQuotes } from '../../webview/assistant/btw/selectionQuote';
 import { Button } from '../ui/button';
 import { Collapsible, CollapsibleTrigger, AnimatedCollapsibleContent } from '../ui/collapsible';
 
@@ -27,9 +29,13 @@ export function QueueBar({ queue, flow }: {
   useEffect(() => {
     if (!expanded) return;
     const onPointer = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest('[data-webview-overlay]')) return;
       if (event.target instanceof Node && !container.current?.contains(event.target)) setExpanded(false);
     };
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setExpanded(false); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented &&
+        !(event.target instanceof Element && event.target.closest('[data-webview-overlay]'))) setExpanded(false);
+    };
     document.addEventListener('pointerdown', onPointer, true);
     document.addEventListener('keydown', onKey);
     return () => {
@@ -50,19 +56,24 @@ export function QueueBar({ queue, flow }: {
       </Button></CollapsibleTrigger>
       <AnimatedCollapsibleContent id={id} open={expanded}>
         <div className="max-h-56 overflow-y-auto px-3 pb-2">
-          {queue.items.map((item) => (
-            <div key={item.queueId} className="group flex items-center gap-1 border-t border-[var(--panel-edge)] py-1 text-[11.5px] [&_button]:size-6 [&_svg]:size-3">
-              <div className="min-w-0 flex-1 truncate" title={item.text}>
-                {item.attachments.map((attachment, index) => <span key={index} title={attachment.name} className="mr-1 text-[10px] text-muted-foreground">{markers[attachment.kind]}</span>)}
-                {item.text}
+          {queue.items.map((item) => {
+            const parsed = parseSelectionQuotes(item.text);
+            const body = parsed?.body ?? item.text;
+            return <div key={item.queueId} className="group flex items-center gap-1 border-t border-[var(--panel-edge)] py-1 text-[11.5px]">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="truncate" title={body}>
+                  {item.attachments.map((attachment, index) => <span key={index} title={attachment.name} className="mr-1 text-[10px] text-muted-foreground">{markers[attachment.kind]}</span>)}
+                  {body}
+                </div>
+                {parsed ? <QuoteChips quotes={parsed.quotes} /> : null}
               </div>
-              {flow.queueEditingId === item.queueId ? <span className="text-[10px] text-muted-foreground">Editing</span> : <div className="flex opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100">
+              {flow.queueEditingId === item.queueId ? <span className="text-[10px] text-muted-foreground">Editing</span> : <div className="flex shrink-0 opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 [&_button]:size-6 [&_svg]:size-3">
                 <Button variant="ghost" size="icon-sm" aria-label="Edit queued message" onClick={() => flow.handleQueueEditBegin(item.queueId)}><Pencil /></Button>
                 <Button variant="ghost" size="icon-sm" aria-label="Send queued message now" onClick={() => flow.handleQueuePromote(item.queueId)}><ArrowUp /></Button>
                 <Button variant="ghost" size="icon-sm" aria-label="Remove queued message" onClick={() => flow.handleQueueRemove(item.queueId)}><Trash2 /></Button>
               </div>}
-            </div>
-          ))}
+            </div>;
+          })}
           <div className="flex items-center gap-2 border-t border-[var(--panel-edge)] pt-1 text-[10px] text-muted-foreground">
             <span className="flex-1">{queue.paused !== null ? 'Automatic sending is paused' : 'Sends after the current turn · text restores after reload'}</span>
             {queue.paused !== null ? <>

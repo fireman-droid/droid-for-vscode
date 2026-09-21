@@ -1,6 +1,7 @@
 import {
   MAX_BTW_ANSWER_LENGTH,
   MAX_BTW_ENTRIES,
+  type BtwEntryProgress,
   type BtwStatus,
   type SessionBtwState,
 } from '../../shared/protocol/btwProtocol';
@@ -37,7 +38,14 @@ export function appendBtwQuestion(
 ): SessionBtwState {
   const entries = [
     ...state.entries,
-    { id, question, answer: '', state: 'streaming' as const, message: null },
+    {
+      id,
+      question,
+      answer: '',
+      state: 'streaming' as const,
+      progress: 'waiting' as const,
+      message: null,
+    },
   ];
   return {
     ...state,
@@ -46,6 +54,22 @@ export function appendBtwQuestion(
         ? entries.slice(entries.length - MAX_BTW_ENTRIES)
         : entries,
   };
+}
+
+export function setBtwEntryProgress(
+  state: SessionBtwState,
+  id: string,
+  progress: BtwEntryProgress,
+): SessionBtwState {
+  let changed = false;
+  const entries = state.entries.map((entry) => {
+    if (entry.id !== id || entry.state !== 'streaming' || entry.progress === progress) {
+      return entry;
+    }
+    changed = true;
+    return { ...entry, progress };
+  });
+  return changed ? { ...state, entries } : state;
 }
 
 /** Grows one entry's answer, truncating at the answer cap. */
@@ -63,6 +87,7 @@ export function appendBtwAnswerDelta(
     return {
       ...entry,
       answer: (entry.answer + text).slice(0, MAX_BTW_ANSWER_LENGTH),
+      progress: 'answering' as const,
     };
   });
   return changed ? { ...state, entries } : state;
@@ -71,9 +96,13 @@ export function appendBtwAnswerDelta(
 export function completeBtwEntry(state: SessionBtwState, id: string): SessionBtwState {
   return {
     ...state,
-    entries: state.entries.map((entry) =>
-      entry.id === id ? { ...entry, state: 'done' as const } : entry,
-    ),
+    entries: state.entries.map((entry) => {
+      if (entry.id !== id) {
+        return entry;
+      }
+      const { progress: _progress, ...settled } = entry;
+      return { ...settled, state: 'done' as const };
+    }),
   };
 }
 
@@ -84,8 +113,12 @@ export function failBtwEntry(
 ): SessionBtwState {
   return {
     ...state,
-    entries: state.entries.map((entry) =>
-      entry.id === id ? { ...entry, state: 'error' as const, message } : entry,
-    ),
+    entries: state.entries.map((entry) => {
+      if (entry.id !== id) {
+        return entry;
+      }
+      const { progress: _progress, ...settled } = entry;
+      return { ...settled, state: 'error' as const, message };
+    }),
   };
 }

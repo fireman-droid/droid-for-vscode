@@ -6,7 +6,7 @@ import {
   type BtwPrepareMessage,
   type BtwStopMessage,
 } from '../../../shared/protocol/btwProtocol';
-import { fitSelectionQuote } from './selectionQuote';
+import { formatSelectionQuotes } from './selectionQuote';
 
 interface MessagePort {
   postMessage(message: BtwPrepareMessage | BtwAskMessage | BtwStopMessage): void;
@@ -15,13 +15,13 @@ interface MessagePort {
 export function useBtwPanel(vscode: MessagePort, sessionId: string | null) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
-  const [quote, setQuote] = useState<string | null>(null);
+  const [selection, setSelection] = useState<{ quotes: readonly string[]; notice: string | null }>({ quotes: [], notice: null });
   const [width, setWidth] = useState(320);
 
   useEffect(() => {
     setOpen(false);
     setDraft('');
-    setQuote(null);
+    setSelection({ quotes: [], notice: null });
   }, [sessionId]);
 
   const openPanel = useCallback(() => {
@@ -34,13 +34,19 @@ export function useBtwPanel(vscode: MessagePort, sessionId: string | null) {
 
   const openWithQuote = useCallback(
     (text: string) => {
-      setQuote(fitSelectionQuote(text, MAX_BTW_TEXT_LENGTH - 512 - 2));
+      setSelection((current) => {
+        const quotes = text.trim() ? [...current.quotes, text] : current.quotes;
+        const next = formatSelectionQuotes(quotes, draft);
+        return next.length > MAX_BTW_TEXT_LENGTH - Math.max(0, 512 - draft.length)
+          ? { ...current, notice: 'This selection is too long to add in full. Select less text or remove another quote.' }
+          : { quotes, notice: null };
+      });
       openPanel();
       requestAnimationFrame(() => {
         document.querySelector<HTMLTextAreaElement>('.dvx-btw-input')?.focus();
       });
     },
-    [openPanel],
+    [openPanel, draft],
   );
 
   const ask = useCallback(
@@ -57,17 +63,23 @@ export function useBtwPanel(vscode: MessagePort, sessionId: string | null) {
       vscode.postMessage({ type: 'btw.stop', sessionId });
     }
   }, [sessionId, vscode]);
-  const clearQuote = useCallback(() => setQuote(null), []);
+  const clearQuote = useCallback(() => setSelection({ quotes: [], notice: null }), []);
+  const removeQuote = useCallback((index: number) => setSelection((current) => ({
+    quotes: current.quotes.filter((_, position) => position !== index), notice: null,
+  })), []);
   const dismiss = useCallback(() => setOpen(false), []);
 
   return {
     open,
     draft,
-    quote,
+    quote: selection.quotes.length ? selection.quotes.join('\n\n') : null,
+    quotes: selection.quotes,
+    notice: selection.notice,
     width,
     setDraft,
     setWidth,
     clearQuote,
+    removeQuote,
     openPanel,
     openWithQuote,
     dismiss,

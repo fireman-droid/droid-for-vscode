@@ -5,6 +5,7 @@ import { Textarea } from '../ui/input';
 import { Popover, PopoverAnchor } from '../ui/overlays';
 import { useUiEnvironment } from '../environment';
 import { measureComposerInput } from './measureComposerInput';
+import { QuoteChips } from './QuoteChips';
 
 export interface ComposerViewProps {
   readonly value: string;
@@ -20,6 +21,8 @@ export interface ComposerViewProps {
   readonly focusSignal?: number;
   readonly quote?: string;
   readonly onQuoteClear?: () => void;
+  readonly quotes?: readonly string[];
+  readonly onQuoteRemove?: (index: number) => void;
   readonly notice?: string | null;
   readonly inputReplacement?: ReactNode;
   readonly attachments?: ReactNode;
@@ -46,11 +49,13 @@ export interface ComposerLayout {
 
 export function ComposerView({
   value, onChange, onSend, onStop, running, sendDisabled, sendLabel = 'Send', stopLabel = 'Stop', placeholder,
-  maxLength, focusSignal = 0, quote, onQuoteClear, notice, inputReplacement, attachments,
+  maxLength, focusSignal = 0, quote, onQuoteClear, quotes, onQuoteRemove, notice, inputReplacement, attachments,
   suggestions, suggestionsOpen = false, onSuggestionsOpenChange, suggestionsListId, activeSuggestionId,
   onKeyDown, onPaste, onDrop, onDragOver, renderInputRow, onLayout,
 }: ComposerViewProps) {
   const { assistantName } = useUiEnvironment();
+  const quotedContext = quotes ?? (quote ? [quote] : []);
+  const removeQuote = onQuoteRemove ?? (quotes === undefined ? onQuoteClear : undefined);
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (focusSignal > 0) input.current?.focus({ preventScroll: true });
@@ -102,10 +107,7 @@ export function ComposerView({
       <form data-composer-surface="" className="v2-chat-composer" onDrop={onDrop} onDragOver={onDragOver}
         onSubmit={(event) => { event.preventDefault(); submit(); }}>
         {inputReplacement == null ? <>
-          {quote ? <div className="flex min-w-0 items-start gap-2 px-3 pt-2 text-[11px] text-muted-foreground">
-            <span className="line-clamp-2 min-w-0 flex-1 break-words">{quote}</span>
-            {onQuoteClear ? <Button size="icon-sm" variant="ghost" className="size-4 shrink-0" aria-label="Remove quoted context" onClick={onQuoteClear}>×</Button> : null}
-          </div> : null}
+          <QuoteChips quotes={quotedContext} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="px-3 pt-2" />
           {attachments}
         </> : null}
         {renderInputRow ? renderInputRow(editor, action) : <div className="v2-composer-input-row">{editor}{action}</div>}

@@ -8,6 +8,7 @@ import {
   appendBtwQuestion,
   completeBtwEntry,
   failBtwEntry,
+  setBtwEntryProgress,
   setBtwPendingQuestion,
   setBtwStatus,
 } from './btwCardState';
@@ -87,33 +88,49 @@ export class BtwSideChat {
     const generation = this.generation;
     this.asking = true;
     try {
+      let question = text;
+      let entryId = `btw-${(this.entryCounter += 1)}`;
+      this.setState(appendBtwQuestion(this.state, entryId, question), true);
       const sidecar = await this.ensureSidecar(cwd, mainSessionId, generation);
-      if (sidecar === null) {
+      if (this.generation !== generation) {
         return;
       }
-      let question = text;
+      if (sidecar === null) {
+        this.setState(
+          this.stopping
+            ? completeBtwEntry(this.state, entryId)
+            : failBtwEntry(this.state, entryId, BTW_START_FAILED_MESSAGE),
+          true,
+        );
+        return;
+      }
       while (this.generation === generation) {
-        const entryId = `btw-${(this.entryCounter += 1)}`;
-        this.setState(appendBtwQuestion(this.state, entryId, question), true);
         let settled = false;
         try {
-          for await (const event of sidecar.ask(question)) {
-            if (this.generation !== generation) {
-              return;
+          // Stop can arrive while the fork is preparing, before any
+          // question has been dispatched to the sidecar.
+          if (!this.stopping) {
+            for await (const event of sidecar.ask(question)) {
+              if (this.generation !== generation) {
+                return;
+              }
+              if (event.kind === 'delta') {
+                this.setState(appendBtwAnswerDelta(this.state, entryId, event.text), false);
+                continue;
+              }
+              if (event.kind === 'progress') {
+                this.setState(setBtwEntryProgress(this.state, entryId, event.progress), false);
+                continue;
+              }
+              if (event.kind === 'done' || this.stopping) {
+                // Stop preserves whatever partial answer arrived.
+                this.setState(completeBtwEntry(this.state, entryId), true);
+              } else {
+                this.setState(failBtwEntry(this.state, entryId, event.message), true);
+              }
+              settled = true;
+              break;
             }
-            if (event.kind === 'delta') {
-              this.setState(appendBtwAnswerDelta(this.state, entryId, event.text), false);
-              continue;
-            }
-            if (event.kind === 'done' || this.stopping) {
-              // A user-initiated Stop keeps the partial answer as a
-              // settled entry instead of styling it as a failure.
-              this.setState(completeBtwEntry(this.state, entryId), true);
-            } else {
-              this.setState(failBtwEntry(this.state, entryId, event.message), true);
-            }
-            settled = true;
-            break;
           }
           if (!settled && this.generation === generation) {
             this.setState(completeBtwEntry(this.state, entryId), true);
@@ -140,6 +157,8 @@ export class BtwSideChat {
         // streaming entry publishes the consumed slot atomically.
         this.state = setBtwPendingQuestion(this.state, null);
         question = pendingQuestion;
+        entryId = `btw-${(this.entryCounter += 1)}`;
+        this.setState(appendBtwQuestion(this.state, entryId, question), true);
       }
     } finally {
       if (this.generation === generation) {
@@ -160,15 +179,20 @@ export class BtwSideChat {
       this.boundSessionId !== sessionId ||
       !this.asking ||
       this.stopping ||
-      sidecar?.interrupt === undefined
+      (sidecar !== null && sidecar.interrupt === undefined)
     ) {
       return;
     }
     this.stopping = true;
-    if (this.state.pendingQuestion !== null) {
-      this.setState(setBtwPendingQuestion(this.state, null), true);
+    let state = setBtwPendingQuestion(this.state, null);
+    if (sidecar === null) {
+      const preparing = state.entries.find((entry) => entry.state === 'streaming');
+      if (preparing !== undefined) {
+        state = completeBtwEntry(state, preparing.id);
+      }
     }
-    void sidecar.interrupt().catch(() => undefined);
+    this.setState(state, true);
+    void sidecar?.interrupt?.().catch(() => undefined);
   }
 
   /** Card closed in the webview: discard the fork and every entry. */

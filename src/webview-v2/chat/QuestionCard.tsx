@@ -11,7 +11,7 @@ import { EDIT_REJECT_COPY, type EditResendRejection, type EditStageState, type R
 import type { AttachmentImageEntry } from '../../webview/assistant/attachments/attachmentImageStore';
 import { StagedAttachments, SentAttachments, type AttachmentActions } from './EditAttachments';
 import { RestoreFiles } from './RestoreFiles';
-import { parseSelectionQuote } from '../../webview/assistant/btw/selectionQuote';
+import { parseSelectionQuotes } from '../../webview/assistant/btw/selectionQuote';
 
 export interface QuestionEditing {
   readonly stage: EditStageState | null;
@@ -66,7 +66,7 @@ export function QuestionCard({
     {item.attachments?.some((attachment) => attachment.kind !== 'image')
       ? <SentAttachments attachments={item.attachments} /> : null}
   </>;
-  return <QuestionCardView item={item} editor={editor} quote={parseSelectionQuote(item.text)} placeholder={placeholder} placeholderHeight={placeholderHeight}
+  return <QuestionCardView item={item} editor={editor} quote={parseSelectionQuotes(item.text)} placeholder={placeholder} placeholderHeight={placeholderHeight}
     canResend={canResend} maxLength={MAX_TURN_TEXT_LENGTH} originalAttachments={originalAttachments}
     stagedAttachments={stage === null ? originalAttachments : stage.attachments.length ? <StagedAttachments stage="edit" attachments={stage.attachments} images={edit.images} actions={edit.actions} disabled={attachmentDisabled} /> : null}
     editSettings={edit.settings} editDisabled={attachmentDisabled} onAttach={edit.actions.handleEditAttachFiles} rejection={rejection}

@@ -1,8 +1,9 @@
 import { memo } from 'react';
+import { QuoteChips } from '@droidvisx/chat-ui/chat/QuoteChips';
 import type { ImageTranscriptItem } from '../../shared/protocol/attachments';
 import type { UserTranscriptItem } from '../../shared/protocol/transcript';
 import { parseDelegatedTask } from '../../webview/assistant/transcript/delegatedTask';
-import { parseSelectionQuote } from '../../webview/assistant/btw/selectionQuote';
+import { parseSelectionQuotes } from '../../webview/assistant/btw/selectionQuote';
 import { SentAttachments } from '../chat/EditAttachments';
 import { ImageContent } from '../content/MediaPreview';
 import { Button } from '../ui/button';
@@ -13,7 +14,7 @@ export const ReadOnlyQuestion = memo(function ReadOnlyQuestion({ item, images }:
   readonly images: readonly ImageTranscriptItem[];
 }) {
   const delegated = parseDelegatedTask(item.text);
-  const quote = parseSelectionQuote(item.text);
+  const quote = parseSelectionQuotes(item.text);
   return <div className="v2-viewer-question space-y-2 overflow-hidden rounded-lg border border-border bg-input-background px-3.5 py-3 text-xs">
     {images.map((image) => image.data ? <ImageContent key={image.id} src={`data:${image.mediaType};base64,${image.data}`} alt="Message attachment" thumbnail /> : <p key={image.id}>Image preview unavailable</p>)}
     {delegated ? <div aria-label="Delegated task" className="grid gap-2">
@@ -26,7 +27,7 @@ export const ReadOnlyQuestion = memo(function ReadOnlyQuestion({ item, images }:
         </CollapsibleContent>
       </Collapsible>
     </div> : <>
-      {quote ? <blockquote className="border-l-2 border-border pl-2 text-muted-foreground">{quote.quote}</blockquote> : null}
+      {quote ? <QuoteChips quotes={quote.quotes} /> : null}
       <p className="whitespace-pre-wrap break-words">{quote?.body ?? item.text}</p>
     </>}
     {item.attachments ? <SentAttachments attachments={item.attachments.filter((attachment) => attachment.kind !== 'image')} /> : null}

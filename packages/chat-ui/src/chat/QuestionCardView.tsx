@@ -4,6 +4,8 @@ import { cn } from '../ui/cn';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/input';
 import { UserMessageBubble } from './UserMessageView';
+import { QuoteChips } from './QuoteChips';
+import { formatSelectionQuotes, parseSelectionQuotes } from './selectionQuote';
 export interface QuestionEditor {
   readonly draft: { readonly messageId: string; readonly text: string; readonly phase: 'editing' | 'resending'; readonly notice: string | null } | null;
   readonly selection: RefObject<{ messageId: string; start: number; end: number; direction: 'forward' | 'backward' | 'none'; scrollTop: number; focused: boolean } | null>;
@@ -14,7 +16,7 @@ export interface QuestionEditor {
 export interface QuestionCardViewProps {
   readonly item: { readonly id: string; readonly text: string; readonly messageId?: string };
   readonly editor: QuestionEditor;
-  readonly quote?: { readonly quote: string; readonly body: string } | null;
+  readonly quote?: { readonly quote?: string; readonly quotes?: readonly string[]; readonly body: string } | null;
   readonly placeholder?: boolean;
   readonly placeholderHeight?: number;
   readonly canResend: boolean;
@@ -34,6 +36,9 @@ export interface QuestionCardViewProps {
 }
 export function QuestionCardView({ item, editor, quote, placeholder, placeholderHeight, canResend, originalAttachments, stagedAttachments, editSettings, restoreFiles, plan, onResend, onAttach, editDisabled, rejection, maxLength, onPaste, onDrop, onDragOver }: QuestionCardViewProps) {
   const draft = editor.draft?.messageId === item.messageId ? editor.draft : null;
+  const draftQuote = draft ? parseSelectionQuotes(draft.text) : null;
+  const draftBody = draftQuote?.body ?? draft?.text ?? '';
+  const draftPrefixLength = formatSelectionQuotes(draftQuote?.quotes ?? [], '').length;
 
   const editing = draft?.phase === 'editing' && !placeholder;
   const editable = item.messageId !== undefined && draft?.phase !== 'resending';
@@ -80,10 +85,9 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
     return () => document.removeEventListener('pointerdown', outside);
   }, [editing, editor.cancel, messageId]);
   const submit = () => { if (canResend && draft?.text.trim()) onResend(); };
-  const messageCopy = <>
-    {quote && draft?.phase !== 'resending' ? <span className="mb-[5px] block max-h-[2lh] overflow-hidden text-[11px] leading-[1.42] text-muted-foreground">{quote.quote}</span> : null}
-    <span className="block max-h-[4lh] overflow-hidden">{draft?.phase === 'resending' ? draft.text : quote?.body ?? item.text}</span>
-  </>;
+  const shownQuote = draft?.phase === 'resending' ? draftQuote : quote;
+  const shownQuotes = shownQuote?.quotes ?? (draft?.phase !== 'resending' && quote?.quote ? [quote.quote] : []);
+  const messageCopy = <span className="block max-h-[4lh] overflow-hidden">{draft?.phase === 'resending' ? draftBody : quote?.body ?? item.text}</span>;
   return (
     <div
       ref={card}
@@ -99,15 +103,19 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
       {editing && draft !== null ? (
         <div data-composer-surface="" className="v2-user-edit-card">
           {stagedAttachments}
+          <QuoteChips quotes={draftQuote?.quotes ?? []} onRemove={(index) => {
+            editor.update(draft.messageId, { text: formatSelectionQuotes(draftQuote?.quotes.filter((_, position) => position !== index) ?? [], draftBody) });
+            input.current?.focus({ preventScroll: true });
+          }} className="mb-1" />
           <Textarea variant="plain"
             ref={input}
             aria-label="Edit message and resend"
             rows={1}
-            value={draft.text}
-            maxLength={maxLength}
+            value={draftBody}
+            maxLength={maxLength === undefined ? undefined : Math.max(0, maxLength - draftPrefixLength)}
             className="v2-user-edit-input"
             onChange={(event) => {
-              editor.update(draft.messageId, { text: event.currentTarget.value });
+              editor.update(draft.messageId, { text: formatSelectionQuotes(draftQuote?.quotes ?? [], event.currentTarget.value) });
               remember(event.currentTarget);
             }}
             onSelect={(event) => remember(event.currentTarget)}
@@ -134,6 +142,7 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
       ) : (
         <UserMessageBubble pending={draft?.phase === 'resending'} placeholder={placeholder}
           attachments={draft?.phase !== 'resending' ? originalAttachments : null}
+          context={<QuoteChips quotes={shownQuotes} className="mb-1" />}
           onEdit={editable ? () => { if (messageId !== undefined) editor.begin(messageId, item.text); } : undefined}>
           {messageCopy}
         </UserMessageBubble>

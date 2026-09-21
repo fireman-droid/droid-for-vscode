@@ -26,6 +26,9 @@ export type BtwStatus = (typeof BTW_STATUSES)[number];
 export const BTW_ENTRY_STATES = ['streaming', 'done', 'error'] as const;
 export type BtwEntryState = (typeof BTW_ENTRY_STATES)[number];
 
+export const BTW_ENTRY_PROGRESS = ['waiting', 'thinking', 'tool', 'answering'] as const;
+export type BtwEntryProgress = (typeof BTW_ENTRY_PROGRESS)[number];
+
 /** One question/answer pair on the side-chat card. */
 export interface BtwEntry {
   readonly id: string;
@@ -33,6 +36,8 @@ export interface BtwEntry {
   /** Accumulated answer text, bounded to MAX_BTW_ANSWER_LENGTH. */
   readonly answer: string;
   readonly state: BtwEntryState;
+  /** Current activity only; thinking content never crosses the Bridge. */
+  readonly progress?: BtwEntryProgress;
   /** Quiet error copy for `state: 'error'` (e.g. permission guidance). */
   readonly message: string | null;
 }
@@ -160,7 +165,7 @@ export function parseBtwStopMessage(value: unknown): BtwStopMessage | null {
 function parseBtwEntry(value: unknown, seenIds: Set<string>): BtwEntry | null {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message']) ||
+    !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message', 'progress']) ||
     !isId(value.id) ||
     seenIds.has(value.id) ||
     !isNonEmptyBoundedString(value.question, MAX_BTW_TEXT_LENGTH) ||
@@ -178,12 +183,19 @@ function parseBtwEntry(value: unknown, seenIds: Set<string>): BtwEntry | null {
   ) {
     return null;
   }
+  if (
+    value.progress !== undefined &&
+    !BTW_ENTRY_PROGRESS.includes(value.progress as BtwEntryProgress)
+  ) {
+    return null;
+  }
   seenIds.add(value.id);
   return {
     id: value.id,
     question: value.question,
     answer: value.answer,
     state: value.state as BtwEntryState,
+    ...(value.progress === undefined ? {} : { progress: value.progress as BtwEntryProgress }),
     message: value.message ?? null,
   };
 }
