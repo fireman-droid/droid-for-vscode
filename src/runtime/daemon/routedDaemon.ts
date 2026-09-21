@@ -83,12 +83,20 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
       },
       async resume(id, options) {
         const entry = await pool.forSession(id, true);
-        const handle = await rememberHandle(entry, await entry.connection.droid.sessions.resume(id, options));
+        let handle = await rememberHandle(entry, await entry.connection.droid.sessions.resume(id, options));
         try {
           const rebound = await pool.rebindIdleAttachment(id, entry);
-          return rebound === entry
-            ? handle
-            : rememberHandle(rebound, await rebound.connection.droid.sessions.resume(id, options));
+          if (rebound !== entry) {
+            handle = await rememberHandle(rebound, await rebound.connection.droid.sessions.resume(id, options));
+          }
+          // Restoring the handle alone does not repair a disconnected IDE client.
+          // Only report a repaired root attachment after its real handshake;
+          // blocked/running sessions remain attached to their original worker.
+          if (rebound !== entry || (rebound.record.rootSessionId === id && rebound.ide &&
+              !pool.needsReconnect(id) && !rebound.ide.requiresSessionRestart())) {
+            await pool.waitForIde(id, new AbortController().signal);
+          }
+          return handle;
         } catch (error) {
           await handle.detach();
           throw error;

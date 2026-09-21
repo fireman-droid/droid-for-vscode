@@ -21,6 +21,7 @@ export interface NativeIdeRelay {
   read(): NativeIdeRelayState;
   subscribe(listener: () => void): () => void;
   waitUntilReady(signal?: AbortSignal): Promise<void>;
+  requiresSessionRestart(): boolean;
   resetForSessionRestart(): void;
   dispose(): Promise<void>;
 }
@@ -105,6 +106,9 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
         && this.state.status !== 'error'
         && Date.now() - this.rootLastActivity > ROOT_HEARTBEAT_EXPIRY_MS
       ) {
+        // The native client drops its IDE binding after heartbeat expiry;
+        // subsequent transport heartbeats cannot restore that client binding.
+        this.rootTerminated = true;
         this.disconnect('The native IDE heartbeat expired.');
       }
     }, HEARTBEAT_CHECK_MS);
@@ -133,6 +137,11 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
 
   read(): NativeIdeRelayState {
     return this.state;
+  }
+
+  requiresSessionRestart(): boolean {
+    return this.state.status === 'error' ||
+      (this.state.status === 'disconnected' && !this.awaitingRootRestart);
   }
 
   subscribe(listener: () => void): () => void {
@@ -338,13 +347,14 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
     );
     upstreamResponse.pipe(relayRequest.response);
 
-    const endRootStream = (message: string, failed = false) => {
+    const endRootStream = (message: string, failed = false, terminated = false) => {
       if (relayRequest.generation !== this.generation) return;
       if (rootEventStream) {
         this.rootEventStreams.delete(relayRequest);
         // MCP may replace an SSE stream before its predecessor finishes closing.
         if (this.rootEventStreams.size > 0) return;
       }
+      if (terminated) this.rootTerminated = true;
       if (failed) this.fail(message);
       else this.disconnect(message);
     };
@@ -353,7 +363,7 @@ class NativeIdeRelayImpl implements NativeIdeRelay {
         (relayRequest.rootCandidate || relayRequest.rootRequest)
         && !relayRequest.upstreamEnded
       ) {
-        endRootStream('The native IDE transport closed.');
+        endRootStream('The native IDE transport closed.', false, true);
       }
     };
     upstreamResponse.once('aborted', () => {

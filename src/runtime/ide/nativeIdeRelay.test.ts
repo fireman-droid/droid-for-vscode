@@ -275,6 +275,27 @@ describe('native IDE relay', () => {
     expect(relay.read().status).toBe('disconnected');
   });
 
+  it('does not claim an abruptly disconnected native client recovered from late transport heartbeats', async () => {
+    const fixture = await createFixture();
+    const relay = await createNativeIdeRelay({ sessionId: 'root-chat', upstreamPort: fixture.port });
+    disposals.push(() => relay.dispose(), fixture.close);
+    await handshake(relay.port, 'factory-cli-mcp-client', 'root-upstream');
+    await openStream(relay.port, 'root-upstream');
+    fixture.destroyRootStream();
+    await waitFor(() => relay.read().status === 'disconnected' || relay.read().status === 'error');
+    let received!: () => void;
+    const heartbeat = new Promise<void>(resolve => { received = resolve; });
+    await openStream(relay.port, 'root-upstream', text => {
+      if (text.includes('notifications/heartbeat')) received();
+    });
+    fixture.heartbeat();
+    await heartbeat;
+    await expect(relay.waitUntilReady()).rejects.toThrow();
+    relay.resetForSessionRestart();
+    await handshake(relay.port, 'factory-cli-mcp-client', 'child-2', 20);
+    await expect(relay.waitUntilReady()).resolves.toBeUndefined();
+  });
+
   it('bounds readiness timeout and supports waiter-local abort cancellation', async () => {
     const fixture = await createFixture();
     const relay = await createNativeIdeRelay({
@@ -384,7 +405,8 @@ describe('native IDE relay', () => {
     const resumedHeartbeat = new Promise<void>((resolve) => { received = resolve; });
     fixture.heartbeat();
     await resumedHeartbeat;
-    expect(relay.read().status).toBe('connected');
+    expect(relay.read().status).toBe('disconnected');
+    await expect(relay.waitUntilReady()).rejects.toThrow('heartbeat expired');
   });
 });
 

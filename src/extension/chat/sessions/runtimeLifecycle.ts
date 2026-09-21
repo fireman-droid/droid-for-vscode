@@ -42,6 +42,11 @@ export const SESSION_RESUME_FAILED_MESSAGE =
 export const WORKSPACE_CHANGED_MESSAGE =
   'The workspace changed before the Droid session could be opened.';
 
+export interface RuntimeReplacementOptions {
+  readonly preserveSessionWork?: boolean;
+  readonly acknowledgeFailedTurnId?: string;
+}
+
 export async function startup(ctl: RuntimeLifecyclePort): Promise<void> {
   let recoveryLoaded = false;
   while (!ctl.sessionState.disposed) {
@@ -150,11 +155,12 @@ export function canReplaceSession(ctl: RuntimeLifecyclePort): boolean {
 export function startReplacement(
   ctl: RuntimeLifecyclePort,
   target: RuntimeSessionTarget,
+  options: RuntimeReplacementOptions = {},
 ): void {
   ctl.sessionState.sessionOperationInProgress = true;
   ctl.sessionState.connection = { status: 'connecting' };
   ctl.emitSnapshot();
-  void replaceRuntime(ctl, target).finally(() => {
+  void replaceRuntime(ctl, target, options).finally(() => {
     ctl.sessionState.sessionOperationInProgress = false;
     ctl.effects.resumeRecoveredIdeReconnect();
   });
@@ -163,7 +169,7 @@ export function startReplacement(
 export async function replaceRuntime(
   ctl: RuntimeLifecyclePort,
   target: RuntimeSessionTarget,
-  options: { preserveSessionWork?: boolean } = {},
+  options: RuntimeReplacementOptions = {},
 ): Promise<void> {
   const phases = createSessionSwitchTimings(target.kind);
   // Captured before any state reset: a live daemon-backed turn
@@ -308,7 +314,7 @@ export async function replaceRuntime(
     generation,
     transcript,
     phases,
-    options.preserveSessionWork === true,
+    options,
   );
   if (activated) {
     ctl.effects.markSessionSwitchReady(phases);
@@ -516,7 +522,7 @@ export async function activateRuntime(
   generation: number,
   transcript: HostTranscriptState,
   phases?: SessionSwitchTimings,
-  preserveSessionWork = false,
+  options: RuntimeReplacementOptions = {},
 ): Promise<boolean> {
   if (!isActivationCandidateCurrent(ctl, runtime, generation, target.cwd)) {
     await closeRuntime(ctl, runtime).catch(() => undefined);
@@ -535,10 +541,17 @@ export async function activateRuntime(
     target.kind === 'resume' && conversationId !== undefined
       ? ctl.recoveryStore.readDisplay(conversationId)
       : undefined;
+  // A successful explicit reconnect acknowledges the old failed turn.
+  // Keep its transcript, but do not restore it as the current session failure.
+  const recoveredTurn = recoveredDisplay?.turn;
+  const ideStatus = ctl.nativeIde?.read(sessionId).status;
+  const readyToAcknowledge = ideStatus === undefined || ideStatus === 'connected' || ideStatus === 'unavailable';
+  const restoredTurn = readyToAcknowledge && recoveredTurn?.status === 'failed' &&
+    recoveredTurn.turnId === options.acknowledgeFailedTurnId ? null : recoveredTurn ?? null;
   const checkpoint = await ctl.effects.persistActivationRecoveryCheckpoint(
     sessionId,
     transcript,
-    recoveredDisplay?.turn ?? null,
+    restoredTurn,
     current,
   );
   if (checkpoint !== 'saved') {
@@ -565,12 +578,12 @@ export async function activateRuntime(
     ctl.recoveryStore.resolveConversationId(sessionId) ?? sessionId;
   ctl.sessionState.sessionId = sessionId;
   ctl.turnState.turn =
-    recoveredDisplay?.turn === undefined || recoveredDisplay.turn === null
+    restoredTurn === null
       ? null
       : {
-          ...recoveredDisplay.turn,
+          ...restoredTurn,
           activity: createTurnActivityState(),
-          ...(isTurnActiveStatus(recoveredDisplay.turn.status)
+          ...(isTurnActiveStatus(restoredTurn.status)
             ? { recovery: true as const }
             : {}),
         };
@@ -596,7 +609,7 @@ export async function activateRuntime(
   }
   ctl.effects.loadSessionMetadata(runtime, generation, sessionId, target.cwd, phases);
   if (target.kind === 'resume') {
-    if (!preserveSessionWork) ctl.effects.restoreQueuedPrompts(sessionId);
+    if (!options.preserveSessionWork) ctl.effects.restoreQueuedPrompts(sessionId);
     ctl.effects.reconcileDaemonTurn(runtime, generation, sessionId, target.cwd);
     // Replayed rows the ledger still reported live at load time
     // need the same post-turn ledger poll a live turn would have

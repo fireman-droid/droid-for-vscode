@@ -213,6 +213,7 @@ function withDefaults(deps: Partial<SessionLeaseDeps>): SessionLeaseDeps {
 const REGISTRY_LOCK_SUFFIX = '.lock';
 const REGISTRY_LOCK_ATTEMPTS = 8;
 const REGISTRY_LOCK_WAIT_MS = 4;
+const REGISTRY_RENAME_RETRY_DELAYS_MS = [10, 20, 40, 80] as const;
 
 function defaultRunExclusive<T>(
   file: string,
@@ -344,8 +345,34 @@ function defaultReadFile(file: string): string | null {
 function defaultWriteFile(file: string, contents: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${String(process.pid)}.tmp`;
-  fs.writeFileSync(tmp, contents);
-  fs.renameSync(tmp, file);
+  try {
+    fs.writeFileSync(tmp, contents);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        fs.renameSync(tmp, file);
+        return;
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        const delay = REGISTRY_RENAME_RETRY_DELAYS_MS[attempt];
+        if (
+          process.platform !== 'win32' ||
+          (code !== 'EPERM' && code !== 'EACCES' && code !== 'EBUSY') ||
+          delay === undefined
+        ) {
+          throw error;
+        }
+        // Windows readers can briefly deny replacement. Keep the registry lock
+        // and its old contents intact until the atomic rename succeeds.
+        waitSynchronously(delay);
+      }
+    }
+  } finally {
+    try {
+      fs.unlinkSync(tmp);
+    } catch {
+      // Already renamed, or unavailable for cleanup after the original error.
+    }
+  }
 }
 
 function defaultIsPidAlive(pid: number): boolean {

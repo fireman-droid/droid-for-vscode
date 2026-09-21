@@ -1,31 +1,41 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DaemonNotification, DaemonSessionHandle } from './api';
 import { WindowDaemonPool } from './windowDaemonPool';
+import { createRoutedDaemon } from './routedDaemon';
 
 const fake = vi.hoisted(() => ({
   records: [] as Array<Record<string, unknown>>,
   opened: [] as Array<Record<string, unknown>>,
+  openedByUrl: new Map<string, Array<Record<string, unknown>>>(),
   messages: [] as Array<Record<string, unknown>>,
   terminals: [] as Array<Record<string, unknown>>,
   spawn: vi.fn(),
   close: vi.fn(),
+  detach: vi.fn(async () => {}),
+  resume: vi.fn(),
+  stream: vi.fn(),
   wait: vi.fn(async () => {}),
   resetRoot: vi.fn(),
   stop: vi.fn(async () => {}),
   count: 0,
   relays: 0,
+  failedRelay: 0,
 }));
 
 vi.mock('../ide/nativeIdeRelay', () => ({
-  createNativeIdeRelay: vi.fn(async ({ sessionId }: { sessionId: string }) => ({
-    port: 45000 + ++fake.relays,
-    sessionId,
-    read: () => ({ status: 'connected', message: 'Native handshake complete' }),
-    subscribe: () => () => {},
-    waitUntilReady: fake.wait,
-    resetForSessionRestart: fake.resetRoot,
-    dispose: async () => {},
-  })),
+  createNativeIdeRelay: vi.fn(async ({ sessionId }: { sessionId: string }) => {
+    const index = ++fake.relays;
+    return {
+      port: 45000 + index,
+      sessionId,
+      read: () => ({ status: 'connected', message: 'Native handshake complete' }),
+      subscribe: () => () => {},
+      waitUntilReady: fake.wait,
+      requiresSessionRestart: () => index === fake.failedRelay,
+      resetForSessionRestart: fake.resetRoot,
+      dispose: async () => {},
+    };
+  }),
 }));
 vi.mock('./daemonLifecycle', () => ({
   startDetachedDaemon: fake.spawn,
@@ -46,10 +56,12 @@ vi.mock('./daemonConnection', () => ({
     dispose: () => {},
     droid: {
       sessions: {
-        listOpened: async () => url.endsWith(':43000') ? fake.opened : [],
+        listOpened: async () => url.endsWith(':43000') ? fake.opened : fake.openedByUrl.get(url) ?? [],
         getMessages: async () => fake.messages,
+        resume: fake.resume,
       },
       terminals: { list: async () => url.endsWith(':43000') ? fake.terminals : [] },
+      notifications: { subscribe: () => () => {}, subscribeTerminal: () => () => {} },
     },
   }),
 }));
@@ -78,10 +90,19 @@ beforeEach(() => {
   vi.clearAllMocks();
   fake.records = [];
   fake.opened = [];
+  fake.openedByUrl.clear();
   fake.messages = [];
   fake.terminals = [];
   fake.count = 0;
   fake.relays = 0;
+  fake.failedRelay = 0;
+  fake.wait.mockImplementation(async () => {});
+  fake.close.mockImplementation(async () => {});
+  fake.stream.mockImplementation(async function* () { yield { type: 'assistant', text: 'continued' }; });
+  fake.resume.mockImplementation(async (id: string) => ({
+    id, close: fake.close, detach: fake.detach, stream: fake.stream,
+    ensureLoaded: async () => {},
+  }));
   fake.spawn.mockImplementation(async () => {
     const port = 46000 + 2 * ++fake.count;
     return { port, pid: port + 1, url: `ws://127.0.0.1:${port}`, listenerVerified: true };
@@ -89,6 +110,87 @@ beforeEach(() => {
 });
 
 describe('dedicated chat daemon ownership', () => {
+  it.each(['disconnected', 'error'] as const)('repairs a %s IDE on the same owner and waits for its replacement before continuing', async status => {
+    const value = pool();
+    const routed = createRoutedDaemon(value);
+    const source = await value.allocate('root-chat');
+    await value.remember('root-chat', source);
+    const sourceUrl = `ws://127.0.0.1:${source.record.port}`;
+    fake.openedByUrl.set(sourceUrl, [{ id: 'root-chat', workingState: 'idle' }]);
+    fake.messages = [{ role: 'user', content: [{ type: 'text', text: 'retained prompt' }] }];
+    fake.close.mockImplementation(async () => { fake.openedByUrl.set(sourceUrl, []); });
+    vi.spyOn(source.ide!, 'requiresSessionRestart').mockReturnValue(true);
+    vi.spyOn(source.ide!, 'read').mockReturnValue({ status, message: 'IDE transport lost' });
+    expect(value.needsReconnect('root-chat')).toBe(false);
+    let ready!: () => void;
+    fake.wait.mockImplementation(() => new Promise<void>(resolve => { ready = resolve; }));
+    let restored = false;
+    const pending = routed.sessions.resume('root-chat').then(handle => { restored = true; return handle; });
+    await vi.waitFor(() => expect(fake.wait).toHaveBeenCalledOnce());
+    expect(restored).toBe(false);
+    expect(fake.close).toHaveBeenCalledOnce();
+    expect(fake.stream).not.toHaveBeenCalled();
+    expect(fake.resume.mock.calls.map(call => call[0])).toEqual(['root-chat', 'root-chat']);
+    expect((await value.forSession('root-chat')).record.id).not.toBe(source.record.id);
+    ready();
+    const handle = await pending;
+    fake.wait.mockImplementation(async () => {});
+    const messages = handle.stream('continue once');
+    await messages.next();
+    await messages.next();
+    expect(fake.stream).toHaveBeenCalledExactlyOnceWith('continue once', { includePartialMessages: false });
+    routed.disconnect();
+    await value.dispose();
+  });
+
+  it('keeps a running root on its original worker despite a disconnected IDE', async () => {
+    const value = pool();
+    const routed = createRoutedDaemon(value);
+    const source = await value.allocate('root-chat');
+    await value.remember('root-chat', source);
+    fake.openedByUrl.set(`ws://127.0.0.1:${source.record.port}`, [{ id: 'root-chat', workingState: 'working' }]);
+    vi.spyOn(source.ide!, 'requiresSessionRestart').mockReturnValue(true);
+    await routed.sessions.resume('root-chat');
+    expect(fake.close).not.toHaveBeenCalled();
+    expect(fake.wait).not.toHaveBeenCalled();
+    expect(await value.forSession('root-chat')).toBe(source);
+    routed.disconnect();
+    await value.dispose();
+  });
+
+  it.each([false, true])('reports a failed replacement handshake without sending, already failed before wait=%s', async failedBeforeWait => {
+    const value = pool();
+    const routed = createRoutedDaemon(value);
+    const source = await value.allocate('root-chat');
+    await value.remember('root-chat', source);
+    const sourceUrl = `ws://127.0.0.1:${source.record.port}`;
+    fake.openedByUrl.set(sourceUrl, [{ id: 'root-chat', workingState: 'idle' }]);
+    fake.messages = [{ role: 'user', content: [{ type: 'text', text: 'retained prompt' }] }];
+    fake.close.mockImplementation(async () => { fake.openedByUrl.set(sourceUrl, []); });
+    vi.spyOn(source.ide!, 'requiresSessionRestart').mockReturnValue(true);
+    if (failedBeforeWait) fake.failedRelay = 2;
+    fake.wait.mockRejectedValueOnce(new Error('Handshake failed'));
+    await expect(routed.sessions.resume('root-chat')).rejects.toThrow('Handshake failed');
+    expect(fake.detach).toHaveBeenCalledOnce();
+    expect(fake.stream).not.toHaveBeenCalled();
+    routed.disconnect();
+    await value.dispose();
+  });
+
+  it('waits for an idle worker reload without needlessly moving its healthy relay', async () => {
+    const value = pool();
+    const routed = createRoutedDaemon(value);
+    const source = await value.allocate('root-chat');
+    await value.remember('root-chat', source);
+    vi.spyOn(source.ide!, 'read').mockReturnValue({ status: 'disconnected', message: 'Idle worker released' });
+    await routed.sessions.resume('root-chat');
+    expect(fake.close).not.toHaveBeenCalled();
+    expect(fake.spawn).toHaveBeenCalledOnce();
+    expect(fake.wait).toHaveBeenCalledOnce();
+    routed.disconnect();
+    await value.dispose();
+  });
+
   it('releases root IDE identity only for inactivity on the current owning root session', async () => {
     const value = pool();
     const first = await value.allocate('first-chat');

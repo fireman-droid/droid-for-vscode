@@ -6,6 +6,7 @@ import type { MissionSessionState } from '../mission/MissionSessionState';
 import type { SessionDirectoryState } from './SessionDirectoryState';
 import type { SessionLifecycleState } from './SessionLifecycleState';
 import type { TurnState } from '../turns/TurnState';
+import type { NativeIdeBackend } from '../ideIntegration';
 export interface RuntimeLifecyclePort
   extends Pick<
     HostOperations,
@@ -25,6 +26,7 @@ export interface RuntimeLifecyclePort
     | 'btwSideChat'
     | 'handleWorkspaceContextChanged'
   > {
+  readonly nativeIde?: Pick<NativeIdeBackend, 'read'>;
   readonly sessionState: Readonly<
     Pick<
       SessionLifecycleState,

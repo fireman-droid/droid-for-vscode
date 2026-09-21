@@ -113,7 +113,7 @@ export class WindowDaemonPool {
   }
 
   async rebindIdleAttachment(sessionId: string, source: WindowDaemonEntry): Promise<WindowDaemonEntry> {
-    if (!this.needsReconnect(sessionId) || this.binding?.port === null ||
+    if ((!this.needsReconnect(sessionId) && !source.ide?.requiresSessionRestart()) || this.binding?.port === null ||
         await this.isDelegatedSession(sessionId, source)) return source;
     const opened = await source.connection.droid.sessions.listOpened({ filter: { includeBtwForks: true } });
     if (!opened.some((session) => session.id === sessionId) || busySessionTree(opened, sessionId)) return source;

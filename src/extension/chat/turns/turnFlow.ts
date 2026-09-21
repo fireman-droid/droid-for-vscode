@@ -656,13 +656,15 @@ export function handleRetry(ctl: TurnFlowPort, sessionId: string | null): void {
     ctl.effects.emitWorkspaceUnavailable(workspace);
     return;
   }
+  const retryOptions = ctl.turnState.turn?.status === 'failed'
+    ? { acknowledgeFailedTurnId: ctl.turnState.turn.turnId } : {};
   if (
     ctl.catalogState.sessions.status === 'idle' ||
     ctl.catalogState.sessions.status === 'error' ||
     ctl.catalogState.catalogCwd !== workspace.cwd
   ) {
     ctl.sessionState.sessionOperationInProgress = true;
-    void retryAfterWorkspaceBecomesAvailable(ctl, workspace.cwd).finally(() => {
+    void retryAfterWorkspaceBecomesAvailable(ctl, workspace.cwd, retryOptions).finally(() => {
       ctl.sessionState.sessionOperationInProgress = false;
       ctl.effects.resumeRecoveredIdeReconnect();
     });
@@ -681,12 +683,14 @@ export function handleRetry(ctl: TurnFlowPort, sessionId: string | null): void {
           cwd: workspace.cwd,
           sessionId: resumableId,
         },
+    retryOptions,
   );
 }
 
 export async function retryAfterWorkspaceBecomesAvailable(
   ctl: TurnFlowPort,
   cwd: string,
+  retryOptions: { readonly acknowledgeFailedTurnId?: string } = {},
 ): Promise<void> {
   const catalogRequest = ctl.effects.beginCatalogLoad(cwd);
   ctl.emitSnapshot();
@@ -717,6 +721,7 @@ export async function retryAfterWorkspaceBecomesAvailable(
           sessionId: selectedSessionId,
         }
       : { kind: 'new', cwd },
+    retryOptions,
   );
 }
 

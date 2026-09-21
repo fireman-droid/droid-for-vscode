@@ -181,6 +181,12 @@ flowchart TD
   尚持有会话锁则记录意图，在解锁边界消费。关闭源前重新核对任务树、终端及会话
   身份，安全条件不足正常延后；队列等待重连完成，失败或延后保留队列并暂停。
   重连结束负责释放自身会话锁，不以旧 Runtime 代际判断锁的归属。
+- 同一 owner 的 relay 断线／错误也可触发空闲 attachment 重建，复用原安全条件，
+  新 handle 返回前等待完整 IDE 握手。idle worker 等待正常重载与失效客户端分开处理；
+  原生客户端异常断流／心跳过期后不凭迟到心跳恢复，普通 SSE 结束仍可原通道恢复。
+- 手动 `runtime.retry` 携带失败轮次标识；activation 确认恢复和 IDE 就绪后，仅解除
+  对应当前失败并写入恢复检查点，保留 transcript，不重发用户消息。
+  Windows 会话租约文件的原子替换在原独占锁内有限重试共享冲突，保留旧记录。
 - `daemon/daemonNotificationSource.ts` 统一 process/daemon 子代理通知的解析、工具结果
   采集和事件转换。Host 只接收 `SubagentEvent`，不再读取 SDK controller 或调用 SDK converter。
 - `daemon/connectPublicDaemon.ts` 直接持有 SDK 0.7.0 公开导出的
