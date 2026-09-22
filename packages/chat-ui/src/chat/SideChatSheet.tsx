@@ -143,7 +143,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
         </div>
       </div> : null}
       {state.message ? <p role="alert" className="v2-btw-error">{state.message}</p> : null}
-      <div className="v2-btw-composer">
+      <div data-composer-surface="" className="v2-btw-composer">
         <QuoteChips quotes={quotedContext} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="mb-2" />
         <Textarea variant="plain" ref={input} className="dvx-btw-input v2-btw-input" rows={2} value={draft} maxLength={maxLength} disabled={unavailable}
           aria-label="By the Way question" placeholder={state.entries.length ? 'Ask a follow-up…' : 'Ask a side question…'} onChange={(event) => onDraftChange(event.target.value)}
