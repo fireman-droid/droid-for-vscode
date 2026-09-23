@@ -5,6 +5,7 @@ import {
   type BtwAskMessage,
   type BtwPrepareMessage,
   type BtwStopMessage,
+  type BtwAskOptions,
 } from '../../../shared/protocol/btwProtocol';
 import { formatSelectionQuotes } from './selectionQuote';
 
@@ -50,9 +51,9 @@ export function useBtwPanel(vscode: MessagePort, sessionId: string | null) {
   );
 
   const ask = useCallback(
-    (text: string) => {
+    (text: string, options?: BtwAskOptions) => {
       if (sessionId !== null) {
-        vscode.postMessage({ type: 'btw.ask', sessionId, text });
+        vscode.postMessage({ type: 'btw.ask', sessionId, text, ...options });
       }
     },
     [sessionId, vscode],

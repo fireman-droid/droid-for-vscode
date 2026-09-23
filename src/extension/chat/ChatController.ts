@@ -17,6 +17,7 @@ import {
   type AttachmentSources,
 } from '../attachments/attachmentSources';
 import { BtwSideChat, type BtwSidecarFactory } from '../btw/btwSideChat';
+import type { BtwAskOptions } from '../../shared/protocol/btwProtocol';
 import {
   createUnavailableChangeStatsReader,
   type ChangeStatsReader,
@@ -249,7 +250,7 @@ export class ChatController {
         this.handleBtwPrepare(message.sessionId);
         return;
       case 'btw.ask':
-        this.handleBtwAsk(message.sessionId, message.text);
+        this.handleBtwAsk(message.sessionId, message.text, { images: message.images, modelId: message.modelId });
         return;
       default:
         dispatchChatMessage(this, message);
@@ -480,10 +481,10 @@ export class ChatController {
       isTargetWorkspaceCurrent(this, cwd)
     );
   }
-  private handleBtwAsk(sessionId: string, text: string): void {
+  private handleBtwAsk(sessionId: string, text: string, options: BtwAskOptions): void {
     this.withBtwSession(
       sessionId,
-      (sideChat, cwd) => void sideChat.handleAsk(cwd, sessionId, text),
+      (sideChat, cwd) => void sideChat.handleAsk(cwd, sessionId, text, options),
     );
   }
   private handleBtwPrepare(sessionId: string): void {

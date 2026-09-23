@@ -1,7 +1,8 @@
-import type { BtwAnswerEvent } from '../../runtime/btw/BtwSidecar';
+import type { BtwAnswerEvent, BtwPromptOptions } from '../../runtime/btw/BtwSidecar';
 import {
   EMPTY_SESSION_BTW_STATE,
   type SessionBtwState,
+  type BtwAskOptions,
 } from '../../shared/protocol/btwProtocol';
 import {
   appendBtwAnswerDelta,
@@ -27,7 +28,7 @@ import {
 
 /** Sidecar surface consumed here; `BtwSidecar` satisfies it. */
 export interface BtwSideChatSidecar {
-  ask(text: string): AsyncGenerator<BtwAnswerEvent, void>;
+  ask(text: string, options?: BtwPromptOptions): AsyncGenerator<BtwAnswerEvent, void>;
   /** Optional: interrupts the streaming answer (side-pane Stop). */
   interrupt?(): Promise<void>;
   dispose(): Promise<void>;
@@ -56,6 +57,7 @@ export class BtwSideChat {
   /** Bumped by every teardown; async continuations check it. */
   private generation = 0;
   private asking = false;
+  private pendingRequest: { text: string; options: BtwAskOptions } | null = null;
   /** A user-initiated Stop is in flight for the current entry. */
   private stopping = false;
   private entryCounter = 0;
@@ -77,10 +79,11 @@ export class BtwSideChat {
    * ask occupies the card's one-item pending slot and is dispatched
    * automatically after the current answer settles.
    */
-  async handleAsk(cwd: string, mainSessionId: string, text: string): Promise<void> {
+  async handleAsk(cwd: string, mainSessionId: string, text: string, options: BtwAskOptions = {}): Promise<void> {
     if (this.asking) {
       if (this.boundSessionId === mainSessionId) {
-        this.setState(setBtwPendingQuestion(this.state, text), true);
+        this.pendingRequest = { text, options };
+        this.setState(setBtwPendingQuestion(this.state, text, options), true);
       }
       return;
     }
@@ -89,13 +92,15 @@ export class BtwSideChat {
     this.asking = true;
     try {
       let question = text;
+      let questionOptions = options;
       let entryId = `btw-${(this.entryCounter += 1)}`;
-      this.setState(appendBtwQuestion(this.state, entryId, question), true);
+      this.setState(appendBtwQuestion(this.state, entryId, question, questionOptions), true);
       const sidecar = await this.ensureSidecar(cwd, mainSessionId, generation);
       if (this.generation !== generation) {
         return;
       }
       if (sidecar === null) {
+        this.pendingRequest = null;
         this.setState(
           this.stopping
             ? completeBtwEntry(this.state, entryId)
@@ -110,7 +115,12 @@ export class BtwSideChat {
           // Stop can arrive while the fork is preparing, before any
           // question has been dispatched to the sidecar.
           if (!this.stopping) {
-            for await (const event of sidecar.ask(question)) {
+            for await (const event of sidecar.ask(question, {
+              ...(questionOptions.modelId === undefined ? {} : { modelId: questionOptions.modelId }),
+              ...(questionOptions.images?.length ? { images: questionOptions.images.map((image) => ({
+                type: 'base64' as const, mediaType: image.mediaType, data: image.dataBase64,
+              })) } : {}),
+            })) {
               if (this.generation !== generation) {
                 return;
               }
@@ -149,16 +159,18 @@ export class BtwSideChat {
           return;
         }
         this.stopping = false;
-        const pendingQuestion = this.state.pendingQuestion;
-        if (pendingQuestion === null) {
+        const pending = this.pendingRequest;
+        if (pending === null) {
           return;
         }
         // Clear without an intermediate emit: appending the next
         // streaming entry publishes the consumed slot atomically.
         this.state = setBtwPendingQuestion(this.state, null);
-        question = pendingQuestion;
+        this.pendingRequest = null;
+        question = pending.text;
+        questionOptions = pending.options;
         entryId = `btw-${(this.entryCounter += 1)}`;
-        this.setState(appendBtwQuestion(this.state, entryId, question), true);
+        this.setState(appendBtwQuestion(this.state, entryId, question, questionOptions), true);
       }
     } finally {
       if (this.generation === generation) {
@@ -184,6 +196,7 @@ export class BtwSideChat {
       return;
     }
     this.stopping = true;
+    this.pendingRequest = null;
     let state = setBtwPendingQuestion(this.state, null);
     if (sidecar === null) {
       const preparing = state.entries.find((entry) => entry.state === 'streaming');
@@ -222,6 +235,7 @@ export class BtwSideChat {
     this.boundSessionId = null;
     this.state = EMPTY_SESSION_BTW_STATE;
     this.asking = false;
+    this.pendingRequest = null;
     this.stopping = false;
     if (sidecar !== null) {
       // Best-effort: the fork and its subprocess die with the close.

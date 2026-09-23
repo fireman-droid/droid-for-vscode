@@ -3,6 +3,25 @@
 最后更新：2026-09-23
 包版本：`0.8.0`
 
+## BTW 图片与独立模型（已安装，待 Cursor 验收）
+
+- BTW 可粘贴、拖入或选择 PNG／JPEG／GIF／WebP，提供缩略图、放大预览和移除；
+  支持仅图片提问，沿用每张 4 MB、每条最多 8 张的附件限制。模型下拉复用会话
+  目录与共享 Select，默认采用主聊天当前模型，可为 BTW 的后续问题单独选择。
+- Bridge 严格校验图片与模型字段；Host 将排队问题、图片和模型作为同一次请求保存。
+  Process 与 daemon 仅更新隐藏分支的模型，发送图片到 SDK 原生 images 参数；
+  停止／关闭会清理排队请求，模型设置等待期间取消也不会再发出问题。
+- 流式快照只含图片标识及名称，正文增量不重复传 base64。Webview 预览缓存限制为
+  24 张／32 MB 原图容量，关闭时释放；预览淘汰后保留图片名称。公共 chat-ui 仅
+  接收展示数据、附件插槽与回调，不引用 Droid Bridge 或 SDK。
+- 本轮未收到回归许可，未新增、修改或运行测试，也未读取剪贴板或调用模型验证；
+  粘贴、预览和实际模型回复由用户在 Cursor 中验收。
+- 初次类型检查发现 Process 权限回调与 daemon 设置方法的 SDK 适配问题，修正后
+  `pnpm.cmd run typecheck` 及 `pnpm.cmd run package:vsix` 内的类型、文件预算、
+  公共包与生产构建全部通过；`pnpm.cmd run verify:vsix` 校验 79 条目通过。
+  已安装 Cursor，Host、Chat JS／CSS、Viewer 与安装包哈希一致；构建
+  `v2-2026-09-23T08:26:40.663Z`，VSIX 4,003,731 字节，需 Reload Window。
+
 ## 工具结果 diff 的部分有效记录（已安装，待 Cursor 验收）
 
 - 已核对用户指向的真实会话与业务文件：首次 ApplyPatch 返回的三个 diff 块中，

@@ -7,6 +7,7 @@ import {
   BTW_PERMISSION_GUIDANCE,
   type BtwAnswerEvent,
   type BtwSidecar,
+  type BtwPromptOptions,
 } from './BtwSidecar';
 
 /**
@@ -38,7 +39,7 @@ export interface DaemonBtwStreamEvent {
 /** Attached fork surface consumed by the sidecar. */
 export interface DaemonBtwFork {
   /** Streams one turn; ends after the terminal result event. */
-  stream(text: string): AsyncIterable<DaemonBtwStreamEvent>;
+  stream(text: string, options?: BtwPromptOptions & { signal?: AbortSignal }): AsyncIterable<DaemonBtwStreamEvent>;
   /** Interrupts the streaming turn (side-pane Stop). */
   interrupt(): Promise<void>;
   /** Ends the fork session in the daemon, then detaches. */
@@ -119,7 +120,11 @@ async function createConnectedDroidBtwClient(
         askUserHandler: () => ({ cancelled: true, answers: [] }),
       });
       return {
-        stream: (text) => session.stream(text, { includePartialMessages: true }),
+        async *stream(text, options = {}) {
+          if (options.modelId !== undefined) await droid.sessions.updateSettings(forkSessionId, { modelId: options.modelId, specModeModelId: null });
+          options.signal?.throwIfAborted();
+          yield* session.stream(text, { includePartialMessages: true, images: options.images, abortSignal: options.signal });
+        },
         interrupt: () => session.interrupt(),
         close: () => session.close(),
       };
@@ -143,6 +148,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
   private disposed = false;
 
   private asking = false;
+  private abortAsk: AbortController | null = null;
 
   constructor(
     private readonly fork: DaemonBtwFork,
@@ -151,7 +157,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
     private readonly denied: { value: boolean },
   ) {}
 
-  async *ask(text: string): AsyncGenerator<BtwAnswerEvent, void> {
+  async *ask(text: string, options: BtwPromptOptions = {}): AsyncGenerator<BtwAnswerEvent, void> {
     if (this.disposed) {
       throw new Error('The side chat sidecar is disposed.');
     }
@@ -159,11 +165,12 @@ class DaemonBtwForkSidecar implements BtwSidecar {
       throw new Error('A side question is already streaming.');
     }
     this.asking = true;
+    this.abortAsk = new AbortController();
     this.denied.value = false;
     try {
       let terminal: BtwAnswerEvent | null = null;
       try {
-        for await (const raw of this.fork.stream(text)) {
+        for await (const raw of this.fork.stream(text, { ...options, signal: this.abortAsk.signal })) {
           if (this.disposed) {
             return;
           }
@@ -196,6 +203,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
           : { kind: 'done' });
     } finally {
       this.asking = false;
+      this.abortAsk = null;
     }
   }
 
@@ -203,6 +211,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
     if (this.disposed || !this.asking) {
       return;
     }
+    this.abortAsk?.abort();
     // The interrupted turn still terminates its own stream (result
     // event), which settles the in-flight ask.
     await this.fork.interrupt().catch(() => undefined);
@@ -213,6 +222,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
       return;
     }
     this.disposed = true;
+    this.abortAsk?.abort();
     // daemon.close_session: CLI teardownFork semantics — the fork
     // jsonl stays in sessions/btw/ (probe finding). Best-effort.
     await this.fork.close().catch(() => undefined);

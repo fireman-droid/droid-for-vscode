@@ -1,5 +1,12 @@
 import { MAX_BRIDGE_ID_LENGTH } from './interactionProtocol';
 import { hasExactKeys } from '../validation/strictValidation';
+import { isSafeModelId } from '../validation/guards';
+import { isBtwImages, isBtwImageSummaries, type BtwImage, type BtwImageSummary } from './btwAttachments';
+
+export interface BtwAskOptions {
+  readonly images?: readonly BtwImage[];
+  readonly modelId?: string;
+}
 
 /**
  * `/btw` Side Chat bridge contract (side-question-design.md §5.4).
@@ -33,6 +40,8 @@ export type BtwEntryProgress = (typeof BTW_ENTRY_PROGRESS)[number];
 export interface BtwEntry {
   readonly id: string;
   readonly question: string;
+  readonly images?: readonly BtwImageSummary[];
+  readonly modelId?: string;
   /** Accumulated answer text, bounded to MAX_BTW_ANSWER_LENGTH. */
   readonly answer: string;
   readonly state: BtwEntryState;
@@ -49,6 +58,8 @@ export interface SessionBtwState {
   readonly message: string | null;
   /** At most one follow-up waiting for the streaming answer to settle. */
   readonly pendingQuestion: string | null;
+  readonly pendingImages?: readonly BtwImageSummary[];
+  readonly pendingModelId?: string;
 }
 
 /** Webview → Host: prepare the hidden fork when the pane opens. */
@@ -58,7 +69,7 @@ export interface BtwPrepareMessage {
 }
 
 /** Webview → Host: ask one side question (prepares as a fallback). */
-export interface BtwAskMessage {
+export interface BtwAskMessage extends BtwAskOptions {
   readonly type: 'btw.ask';
   readonly sessionId: string;
   readonly text: string;
@@ -113,9 +124,12 @@ export function parseBtwAskMessage(value: unknown): BtwAskMessage | null {
   if (
     !isRecord(value) ||
     value.type !== 'btw.ask' ||
-    !hasExactKeys(value, ['type', 'sessionId', 'text']) ||
+    !hasExactKeys(value, ['type', 'sessionId', 'text'], ['images', 'modelId']) ||
     !isId(value.sessionId) ||
-    !isNonEmptyBoundedString(value.text, MAX_BTW_TEXT_LENGTH)
+    !isBoundedString(value.text, MAX_BTW_TEXT_LENGTH) ||
+    (value.images !== undefined && !isBtwImages(value.images)) ||
+    (value.modelId !== undefined && !isSafeModelId(value.modelId)) ||
+    (!value.text.trim() && !(Array.isArray(value.images) && value.images.length))
   ) {
     return null;
   }
@@ -123,6 +137,8 @@ export function parseBtwAskMessage(value: unknown): BtwAskMessage | null {
     type: 'btw.ask',
     sessionId: value.sessionId,
     text: value.text,
+    ...(value.images === undefined ? {} : { images: value.images as readonly BtwImage[] }),
+    ...(value.modelId === undefined ? {} : { modelId: value.modelId as string }),
   };
 }
 
@@ -165,10 +181,13 @@ export function parseBtwStopMessage(value: unknown): BtwStopMessage | null {
 function parseBtwEntry(value: unknown, seenIds: Set<string>): BtwEntry | null {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message', 'progress']) ||
+    !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message', 'progress', 'images', 'modelId']) ||
     !isId(value.id) ||
     seenIds.has(value.id) ||
-    !isNonEmptyBoundedString(value.question, MAX_BTW_TEXT_LENGTH) ||
+    !isBoundedString(value.question, MAX_BTW_TEXT_LENGTH) ||
+    (value.images !== undefined && !isBtwImageSummaries(value.images)) ||
+    (value.modelId !== undefined && !isSafeModelId(value.modelId)) ||
+    (!value.question.length && !(Array.isArray(value.images) && value.images.length)) ||
     !isBoundedString(value.answer, MAX_BTW_ANSWER_LENGTH) ||
     !BTW_ENTRY_STATES.includes(value.state as BtwEntryState)
   ) {
@@ -193,6 +212,8 @@ function parseBtwEntry(value: unknown, seenIds: Set<string>): BtwEntry | null {
   return {
     id: value.id,
     question: value.question,
+    ...(value.images === undefined ? {} : { images: value.images as readonly BtwImageSummary[] }),
+    ...(value.modelId === undefined ? {} : { modelId: value.modelId as string }),
     answer: value.answer,
     state: value.state as BtwEntryState,
     ...(value.progress === undefined ? {} : { progress: value.progress as BtwEntryProgress }),
@@ -214,7 +235,7 @@ export function parseSessionBtwMessage(value: unknown): SessionBtwMessage | null
   const btw = value.btw;
   if (
     !isRecord(btw) ||
-    !hasExactKeys(btw, ['status', 'entries'], ['message', 'pendingQuestion']) ||
+    !hasExactKeys(btw, ['status', 'entries'], ['message', 'pendingQuestion', 'pendingImages', 'pendingModelId']) ||
     !BTW_STATUSES.includes(btw.status as BtwStatus) ||
     !Array.isArray(btw.entries) ||
     btw.entries.length > MAX_BTW_ENTRIES
@@ -240,10 +261,13 @@ export function parseSessionBtwMessage(value: unknown): SessionBtwMessage | null
   if (
     btw.pendingQuestion !== undefined &&
     btw.pendingQuestion !== null &&
-    !isNonEmptyBoundedString(btw.pendingQuestion, MAX_BTW_TEXT_LENGTH)
+    !isBoundedString(btw.pendingQuestion, MAX_BTW_TEXT_LENGTH)
   ) {
     return null;
   }
+  if ((btw.pendingImages !== undefined && !isBtwImageSummaries(btw.pendingImages)) ||
+    (btw.pendingModelId !== undefined && !isSafeModelId(btw.pendingModelId)) ||
+    (btw.pendingQuestion === '' && !(Array.isArray(btw.pendingImages) && btw.pendingImages.length))) return null;
   return {
     type: 'session.btw',
     sequence: value.sequence,
@@ -253,6 +277,8 @@ export function parseSessionBtwMessage(value: unknown): SessionBtwMessage | null
       entries,
       message: btw.message ?? null,
       pendingQuestion: btw.pendingQuestion ?? null,
+      ...(btw.pendingImages === undefined ? {} : { pendingImages: btw.pendingImages as readonly BtwImageSummary[] }),
+      ...(btw.pendingModelId === undefined ? {} : { pendingModelId: btw.pendingModelId as string }),
     },
   };
 }

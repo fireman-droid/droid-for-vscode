@@ -15,7 +15,8 @@ const PROGRESS_LABELS = {
   waiting: 'Waiting for reply…', thinking: 'Thinking…', tool: 'Using tools…', answering: 'Receiving reply…',
 };
 
-export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDraftChange, onQuoteClear, onQuoteRemove, onWidthChange, onDismiss, onAsk, onStop, maxTextLength }: SideChatProps) {
+export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDraftChange, onQuoteClear, onQuoteRemove, onWidthChange, onDismiss, onAsk, onStop, maxTextLength,
+  attachments, composerActions, hasAttachments = false, sendDisabled = false, onPaste, onDrop, onDragOver, renderImages }: SideChatProps) {
   const { assistantName } = useUiEnvironment();
   const panel = useRef<HTMLElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -74,7 +75,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
     event.currentTarget.releasePointerCapture(event.pointerId);
   };
   const send = () => {
-    if (!canAsk || !draft.trim() || draft.length > maxLength) return;
+    if (!canAsk || sendDisabled || (!draft.trim() && !hasAttachments) || draft.length > maxLength) return;
     onAsk(formatSelectionQuotes(quotedContext, draft.trim()));
     onDraftChange('');
     onQuoteClear();
@@ -122,6 +123,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
               <UserMessageBubble>
                 <div role="region" aria-label="Your question" tabIndex={0} className="v2-btw-question-content">
                   {parsed ? <QuoteChips quotes={parsed.quotes} className="mb-2" /> : null}
+                  {entry.images?.length ? renderImages?.(entry.images) : null}
                   <p>{parsed?.body ?? entry.question}</p>
                 </div>
               </UserMessageBubble>
@@ -139,25 +141,31 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
       </div>
     </div>
     <footer className="v2-btw-footer">
-      {state.pendingQuestion ? <div className="v2-btw-queued" role="status">
+      {state.pendingQuestion !== null ? <div className="v2-btw-queued" role="status">
         <Clock3 aria-hidden="true" /><div className="min-w-0 flex-1 space-y-1">
           <p title={pendingBody ?? undefined}><span>Queued</span>{pendingBody}</p>
           {pendingQuote ? <QuoteChips quotes={pendingQuote.quotes} /> : null}
         </div>
       </div> : null}
       {state.message ? <p role="alert" className="v2-btw-error">{state.message}</p> : null}
-      <div data-composer-surface="" className="v2-btw-composer">
+      {state.pendingImages?.length ? renderImages?.(state.pendingImages) : null}
+      <div data-composer-surface="" className="v2-btw-composer" onDrop={onDrop} onDragOver={onDragOver}>
+        {attachments}
         <QuoteChips quotes={quotedContext} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="mb-2" />
         <Textarea variant="plain" ref={input} className="dvx-btw-input v2-btw-input" rows={2} value={draft} maxLength={maxLength} disabled={unavailable}
           aria-label="By the Way question" placeholder={state.entries.length ? 'Ask a follow-up…' : 'Ask a side question…'} onChange={(event) => onDraftChange(event.target.value)}
+          onPaste={onPaste}
           onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} />
         {notice ? <p role="status" className="mt-1 text-[11px] leading-4 text-muted-foreground">{notice}</p> : null}
+        {composerActions ? <div className="v2-btw-compose-hint">{state.pendingQuestion !== null ? 'Continue drafting' : streaming ? 'Enter to queue follow-up' : 'Shift + Enter for a new line'}</div> : null}
         <div className="v2-btw-compose-actions">
+          {composerActions}
+          {!composerActions ?
           <span className="v2-btw-compose-hint">{maxLength - draft.length < 200 ? `${maxLength - draft.length} left`
-            : state.pendingQuestion ? 'Continue drafting' : streaming ? 'Enter to queue follow-up' : 'Shift + Enter for a new line'}</span>
+            : state.pendingQuestion !== null ? 'Continue drafting' : streaming ? 'Enter to queue follow-up' : 'Shift + Enter for a new line'}</span> : null}
           {streaming ? <Button size="none" variant="plain" className="v2-btw-send" aria-label="Stop side answer" title="Stop side answer" onClick={onStop}><Square className="fill-current" /></Button>
             : <Button size="none" variant="plain" className="v2-btw-send" aria-label="Send side question"
-              title="Send · Enter" disabled={!canAsk || !draft.trim() || draft.length > maxLength} onClick={send}><ArrowUp /></Button>}
+              title="Send · Enter" disabled={!canAsk || sendDisabled || (!draft.trim() && !hasAttachments) || draft.length > maxLength} onClick={send}><ArrowUp /></Button>}
         </div>
       </div>
     </footer>

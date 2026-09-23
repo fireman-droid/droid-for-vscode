@@ -4,7 +4,9 @@ import {
   type BtwEntryProgress,
   type BtwStatus,
   type SessionBtwState,
+  type BtwAskOptions,
 } from '../../shared/protocol/btwProtocol';
+import { btwImageSummaries } from '../../shared/protocol/btwAttachments';
 
 /**
  * Pure bounded projection of the `/btw` side-chat card the host
@@ -26,8 +28,11 @@ export function setBtwStatus(
 export function setBtwPendingQuestion(
   state: SessionBtwState,
   pendingQuestion: string | null,
+  options: BtwAskOptions = {},
 ): SessionBtwState {
-  return { ...state, pendingQuestion };
+  const { pendingImages: _images, pendingModelId: _model, ...rest } = state;
+  return { ...rest, pendingQuestion, ...(options.images?.length ? { pendingImages: btwImageSummaries(options.images) } : {}),
+    ...(options.modelId === undefined ? {} : { pendingModelId: options.modelId }) };
 }
 
 /** Appends one streaming question, evicting the oldest beyond cap. */
@@ -35,12 +40,15 @@ export function appendBtwQuestion(
   state: SessionBtwState,
   id: string,
   question: string,
+  options: BtwAskOptions = {},
 ): SessionBtwState {
   const entries = [
     ...state.entries,
     {
       id,
       question,
+      ...(options.images?.length ? { images: btwImageSummaries(options.images) } : {}),
+      ...(options.modelId === undefined ? {} : { modelId: options.modelId }),
       answer: '',
       state: 'streaming' as const,
       progress: 'waiting' as const,

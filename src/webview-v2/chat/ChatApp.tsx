@@ -253,7 +253,9 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
     </ChatLayout>
     {host.missionWorkspaceRoute !== null ? <MissionWorkspace key={state.conversationId} route={host.missionWorkspaceRoute} setup={host.missionSetup} mission={state.missionSnapshot} result={state.missionControlResult} vscode={port}
       onShowChat={() => setMissionChat(true)} onCatalog={() => missionControl({ type: 'mission.panel.open', target: 'catalog' })} onClose={() => missionControl({ type: 'mission.dismissSetup' })} /> : null}
-    {host.missionWorkspaceRoute === null && btw.open && state.btwAvailable && state.sessionId !== null ? <SideChatSheet state={state.btw} draft={btw.draft} quote={btw.quote} quotes={btw.quotes} notice={btw.notice} width={btw.width}
+    {host.missionWorkspaceRoute === null && btw.open && state.btwAvailable && state.sessionId !== null ? <SideChatSheet key={state.sessionId} state={state.btw} draft={btw.draft} quote={btw.quote} quotes={btw.quotes} notice={btw.notice} width={btw.width}
+      modelCatalog={state.modelCatalog} defaultModelId={state.settings.value?.interactionMode === 'spec'
+        ? state.settings.value.specModeModelId ?? state.settings.value.modelId : state.settings.value?.modelId}
       onDraftChange={btw.setDraft} onQuoteClear={btw.clearQuote} onQuoteRemove={btw.removeQuote} onWidthChange={btw.setWidth} onAsk={btw.ask} onStop={btw.stop} onDismiss={dismissBtw} /> : null}
     </div>
     </ContentProvider>

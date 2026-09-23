@@ -1,4 +1,4 @@
-import { DroidClient, ProcessTransport } from '@factory/droid-sdk/node';
+import { DroidClient, ProcessTransport, ToolConfirmationOutcome, type Base64ImageSource } from '@factory/droid-sdk/node';
 import type { BtwEntryProgress } from '../../shared/protocol/btwProtocol';
 
 /**
@@ -31,6 +31,11 @@ export type BtwAnswerEvent =
   | { readonly kind: 'done' }
   | { readonly kind: 'error'; readonly message: string };
 
+export interface BtwPromptOptions {
+  readonly images?: Base64ImageSource[];
+  readonly modelId?: string;
+}
+
 /**
  * Minimal public-API surface the sidecar needs. Mirrors
  * `FactoryCommandsClient` with the streaming additions; tests inject
@@ -42,7 +47,8 @@ export interface BtwSidecarClient {
     title?: string;
     tags?: { name: string }[];
   }): Promise<unknown>;
-  addUserMessage(params: { text: string }): Promise<unknown>;
+  /** Applies the fork-only model choice before submitting the message. */
+  addUserMessage(params: { text: string; signal?: AbortSignal } & BtwPromptOptions): Promise<unknown>;
   /** Interrupts the fork's streaming turn (side-pane Stop). */
   interruptSession?(params?: object): Promise<unknown>;
   onNotification(
@@ -67,7 +73,7 @@ export interface BtwSidecar {
    * Streams one side question. Yields answer deltas, then exactly one
    * terminal `done`/`error` event. One question at a time.
    */
-  ask(text: string): AsyncGenerator<BtwAnswerEvent, void>;
+  ask(text: string, options?: BtwPromptOptions): AsyncGenerator<BtwAnswerEvent, void>;
   /**
    * Optional: interrupts the streaming answer (side-pane Stop). The
    * in-flight ask still terminates through its own event stream.
@@ -108,7 +114,25 @@ async function createLocalBtwClient(
   const transport = new ProcessTransport({ cwd });
   try {
     await transport.connect();
-    return new DroidClient({ transport }) as unknown as BtwSidecarClient;
+    const client = new DroidClient({ transport });
+    return {
+      loadSession: (params) => client.loadSession(params),
+      forkSession: (params) => client.forkSession(params),
+      addUserMessage: async ({ modelId, signal, ...params }) => {
+        if (modelId !== undefined) await client.updateSessionSettings({ modelId, specModeModelId: null });
+        signal?.throwIfAborted();
+        return client.addUserMessage(params);
+      },
+      interruptSession: (params) => client.interruptSession(params),
+      onNotification: (callback) => client.onNotification(callback),
+      onError: (callback) => client.onError(callback),
+      setPermissionHandler: (handler) => client.setPermissionHandler(() => {
+        handler();
+        return ToolConfirmationOutcome.Cancel;
+      }),
+      closeSession: () => client.closeSession(),
+      close: () => client.close(),
+    };
   } catch (error) {
     await transport.close().catch(() => undefined);
     throw error;
@@ -139,6 +163,7 @@ class BtwForkSidecar implements BtwSidecar {
   private disposed = false;
 
   private asking = false;
+  private abortAsk: AbortController | null = null;
 
   /** Wakes the in-flight ask loop so disposal can end it promptly. */
   private interruptAsk: (() => void) | null = null;
@@ -159,7 +184,7 @@ class BtwForkSidecar implements BtwSidecar {
     });
   }
 
-  async *ask(text: string): AsyncGenerator<BtwAnswerEvent, void> {
+  async *ask(text: string, options: BtwPromptOptions = {}): AsyncGenerator<BtwAnswerEvent, void> {
     if (this.disposed) {
       throw new Error('The side chat sidecar is disposed.');
     }
@@ -167,6 +192,7 @@ class BtwForkSidecar implements BtwSidecar {
       throw new Error('A side question is already streaming.');
     }
     this.asking = true;
+    this.abortAsk = new AbortController();
     this.permissionDenied = false;
 
     const queue: BtwAnswerEvent[] = [];
@@ -193,7 +219,7 @@ class BtwForkSidecar implements BtwSidecar {
     });
 
     try {
-      await this.client.addUserMessage({ text });
+      await this.client.addUserMessage({ text, ...options, signal: this.abortAsk.signal });
       while (!this.disposed) {
         const event = queue.shift();
         if (event === undefined) {
@@ -213,6 +239,7 @@ class BtwForkSidecar implements BtwSidecar {
       wake = null;
       this.interruptAsk = null;
       this.asking = false;
+      this.abortAsk = null;
     }
   }
 
@@ -220,6 +247,7 @@ class BtwForkSidecar implements BtwSidecar {
     if (this.disposed || !this.asking) {
       return;
     }
+    this.abortAsk?.abort();
     // The interrupted turn still ends through the notification
     // stream (agent_turn_completed), which terminates the ask loop.
     await this.client
@@ -232,6 +260,7 @@ class BtwForkSidecar implements BtwSidecar {
       return;
     }
     this.disposed = true;
+    this.abortAsk?.abort();
     this.interruptAsk?.();
     // closeSession terminates the sidecar subprocess (probe finding);
     // both steps are best-effort on an already-dying process.

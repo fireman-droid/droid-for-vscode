@@ -1,8 +1,13 @@
+import type { ClipboardEventHandler, DragEventHandler, ReactNode } from 'react';
+
+export interface SideChatImage { readonly id: string; readonly name: string }
+
 export interface SideConversation {
   readonly status: 'idle' | 'preparing' | 'ready' | 'error' | 'unsupported';
   readonly entries: readonly {
     readonly id: string;
     readonly question: string;
+    readonly images?: readonly SideChatImage[];
     readonly answer: string;
     readonly state: 'streaming' | 'done' | 'error';
     readonly progress?: 'waiting' | 'thinking' | 'tool' | 'answering';
@@ -10,6 +15,7 @@ export interface SideConversation {
   }[];
   readonly message: string | null;
   readonly pendingQuestion: string | null;
+  readonly pendingImages?: readonly SideChatImage[];
 }
 
 export interface SideChatProps {
@@ -27,4 +33,12 @@ export interface SideChatProps {
   readonly onDismiss: () => void;
   readonly onAsk: (text: string) => void;
   readonly onStop: () => void;
+  readonly attachments?: ReactNode;
+  readonly composerActions?: ReactNode;
+  readonly hasAttachments?: boolean;
+  readonly sendDisabled?: boolean;
+  readonly onPaste?: ClipboardEventHandler<HTMLTextAreaElement>;
+  readonly onDrop?: DragEventHandler;
+  readonly onDragOver?: DragEventHandler;
+  readonly renderImages?: (images: readonly SideChatImage[]) => ReactNode;
 }
