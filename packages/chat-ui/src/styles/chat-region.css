@@ -57,19 +57,19 @@
   .v2-composer-input-row .v2-composer-model { flex: 0 1 auto; max-width: 34%; padding-inline: 2px; }
   .v2-composer-input-row .v2-composer-mode { display: none; }
   .v2-composer-input-row .v2-composer-context svg { width: 18px; height: 18px; }
-  .v2-composer-input-row[data-multiline='true'] { flex-wrap: wrap; align-items: flex-end; }
-  .v2-composer-input-row[data-multiline='true'] textarea {
+  .v2-composer-input-row:is([data-multiline='true'], :has(> .v2-composer-replacement)) { flex-wrap: wrap; align-items: flex-end; }
+  .v2-composer-input-row:is([data-multiline='true'], :has(> .v2-composer-replacement)) > :is(textarea, .v2-composer-replacement) {
     order: -1;
     flex: 1 0 100%;
     width: 100%;
     min-width: 0;
   }
-  .v2-composer-input-row[data-multiline='true'] .v2-composer-mode { display: inline-flex; padding-inline: 2px; }
-  .v2-composer-input-row[data-multiline='true'] .v2-composer-context { margin-left: auto; }
-  .v2-composer-input-row[data-multiline='true'] .v2-composer-model { max-width: 45%; }
+  .v2-composer-input-row:is([data-multiline='true'], :has(> .v2-composer-replacement)) .v2-composer-mode { display: inline-flex; padding-inline: 2px; }
+  .v2-composer-input-row:is([data-multiline='true'], :has(> .v2-composer-replacement)) .v2-composer-context { margin-left: auto; }
+  .v2-composer-input-row:is([data-multiline='true'], :has(> .v2-composer-replacement)) .v2-composer-model { max-width: 45%; }
   @container (max-width: 520px) {
     .v2-composer-input-row { flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; }
-    .v2-composer-input-row textarea {
+    .v2-composer-input-row > :is(textarea, .v2-composer-replacement) {
       order: -1;
       flex: 1 0 100%;
       width: 100%;
