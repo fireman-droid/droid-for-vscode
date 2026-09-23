@@ -132,6 +132,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
             <Button variant="ghost" size="sm" onClick={flow.retryFile}>Retry</Button>
           </div> : null}
           <div className="review-code-scroll" ref={scroll}>
+            {operationFile?.message ? <p className="review-notice" role="status">{operationFile.message}</p> : null}
             {target?.operation?.status === 'unavailable' ? <p className="review-empty">{OPERATION_UNAVAILABLE[target.operation.reason]}</p>
               : flow.scopePending ? <DroidLoading label="Loading comparison…" />
               : !path ? <p className="review-empty">No changes in this comparison.</p>

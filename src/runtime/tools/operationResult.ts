@@ -228,11 +228,17 @@ function parseApplyPatchResult(
       continue;
     }
     let patch = '';
+    let reversible = false;
+    let message: string | undefined;
     if (raw.display_operation === 'update') {
       if (typeof raw.diff !== 'string') return 'not-recorded';
       const normalized = normalizeUnifiedPatch(raw.diff);
       if (normalized === undefined) return 'not-recorded';
-      patch = normalized;
+      patch = normalized.patch;
+      reversible = normalized.complete && movedTo === undefined;
+      if (!normalized.complete) message =
+        'The tool reported this file as changed, but its diff line counts are inconsistent. ' +
+        'Showing the recorded lines; the diff may be incomplete and automatic undo is unavailable.';
     } else if (raw.display_operation === 'create') {
       if (typeof raw.content !== 'string') return 'not-recorded';
       patch = addedContentPatch(raw.content);
@@ -243,7 +249,8 @@ function parseApplyPatchResult(
       kind,
       patch,
       outcome: 'applied',
-      reversible: raw.display_operation === 'update' && movedTo === undefined,
+      reversible,
+      ...(message === undefined ? {} : { message }),
     });
   }
   for (const missing of remaining.values()) {
@@ -458,10 +465,11 @@ function isContinuous(
   );
 }
 
-function normalizeUnifiedPatch(source: string): string | undefined {
+function normalizeUnifiedPatch(source: string): { patch: string; complete: boolean } | undefined {
   if (source.length > MAX_OPERATION_DIFF_UNITS) return undefined;
   const lines = source.replace(/\r\n?/gu, '\n').split('\n');
   const hunks: string[] = [];
+  let complete = true;
   let index = 0;
   while (index < lines.length && !lines[index]!.startsWith('@@')) index += 1;
   while (index < lines.length) {
@@ -498,13 +506,15 @@ function normalizeUnifiedPatch(source: string): string | undefined {
       }
       index += 1;
     }
-    if (oldCount !== oldExpected || newCount !== newExpected) return undefined;
+    // A result can contain useful recorded changes without being safe to undo.
+    // Keep every reported hunk verbatim; do not invent missing lines or counts.
+    if (oldCount !== oldExpected || newCount !== newExpected) complete = false;
   }
   const patch = hunks.join('\n');
   return hunks.length > 0 &&
     patch.length <= MAX_OPERATION_DIFF_UNITS &&
     !isRestrictedToolContent(patch)
-    ? patch
+    ? { patch, complete }
     : undefined;
 }
 
