@@ -3,6 +3,14 @@
 最后更新：2026-09-23
 包版本：`0.8.0`
 
+## BTW 输入提示精简（已安装，待 Cursor 验收）
+
+- 移除 BTW 输入框常驻的 `Shift + Enter for a new line` 提示及其独立占位行；
+  Shift+Enter 换行行为不变，流式排队和接近字数上限时的提示保留。
+- 本轮未新增、修改或运行测试；实际视觉由用户在 Cursor 中验收。
+- `pnpm.cmd run package:vsix` 内的类型检查、文件预算及生产构建通过，
+  `pnpm.cmd run verify:vsix` 校验 79 条目通过，已安装 Cursor；需 Reload Window。
+
 ## BTW 已发送问题复制（已安装，待 Cursor 验收）
 
 - 已定位 BTW 复用 UserMessageBubble 后继承 `select-none`，导致已发送的问题

@@ -28,6 +28,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
   const unavailable = state.status === 'unsupported' || state.status === 'error';
   const canAsk = !unavailable && state.pendingQuestion === null;
   const preparing = state.status === 'preparing';
+  const composeHint = state.pendingQuestion !== null ? 'Continue drafting' : streaming ? 'Enter to queue follow-up' : null;
   const quotedContext = quotes ?? (quote ? [quote] : []);
   const removeQuote = onQuoteRemove ?? (quotes === undefined ? onQuoteClear : undefined);
   const quotePrefix = formatSelectionQuotes(quotedContext, '');
@@ -157,12 +158,12 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
           onPaste={onPaste}
           onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} />
         {notice ? <p role="status" className="mt-1 text-[11px] leading-4 text-muted-foreground">{notice}</p> : null}
-        {composerActions ? <div className="v2-btw-compose-hint">{state.pendingQuestion !== null ? 'Continue drafting' : streaming ? 'Enter to queue follow-up' : 'Shift + Enter for a new line'}</div> : null}
+        {composerActions && composeHint ? <div className="v2-btw-compose-hint">{composeHint}</div> : null}
         <div className="v2-btw-compose-actions">
           {composerActions}
           {!composerActions ?
           <span className="v2-btw-compose-hint">{maxLength - draft.length < 200 ? `${maxLength - draft.length} left`
-            : state.pendingQuestion !== null ? 'Continue drafting' : streaming ? 'Enter to queue follow-up' : 'Shift + Enter for a new line'}</span> : null}
+            : composeHint}</span> : null}
           {streaming ? <Button size="none" variant="plain" className="v2-btw-send" aria-label="Stop side answer" title="Stop side answer" onClick={onStop}><Square className="fill-current" /></Button>
             : <Button size="none" variant="plain" className="v2-btw-send" aria-label="Send side question"
               title="Send · Enter" disabled={!canAsk || sendDisabled || (!draft.trim() && !hasAttachments) || draft.length > maxLength} onClick={send}><ArrowUp /></Button>}
