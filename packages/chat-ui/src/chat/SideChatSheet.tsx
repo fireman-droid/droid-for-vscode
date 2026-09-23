@@ -124,7 +124,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
                 <div role="region" aria-label="Your question" tabIndex={0} className="v2-btw-question-content">
                   {parsed ? <QuoteChips quotes={parsed.quotes} className="mb-2" /> : null}
                   {entry.images?.length ? renderImages?.(entry.images) : null}
-                  <p>{parsed?.body ?? entry.question}</p>
+                  <p className="select-text">{parsed?.body ?? entry.question}</p>
                 </div>
               </UserMessageBubble>
             </div>

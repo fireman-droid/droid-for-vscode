@@ -3,6 +3,16 @@
 最后更新：2026-09-23
 包版本：`0.8.0`
 
+## BTW 已发送问题复制（已安装，待 Cursor 验收）
+
+- 已定位 BTW 复用 UserMessageBubble 后继承 `select-none`，导致已发送的问题
+  无法拖选。现仅对问题正文显式启用文本选择，支持原生选区与 Ctrl+C；引用预览
+  保持原有可选择行为，图片按钮、标题和输入提示不扩大选择范围。
+- 本轮未新增、修改或运行测试；实际拖选与复制由用户在 Cursor 中验收。
+- `pnpm.cmd run package:vsix` 内的类型检查、文件预算、公共包及生产构建通过；
+  `pnpm.cmd run verify:vsix` 校验 79 条目通过，Cursor 安装成功，Host 与 Chat
+  JS／CSS 的安装文件哈希一致。构建 `v2-2026-09-23T09:02:51.931Z`，需 Reload Window。
+
 ## BTW 图片与独立模型（已安装，待 Cursor 验收）
 
 - BTW 可粘贴、拖入或选择 PNG／JPEG／GIF／WebP，提供缩略图、放大预览和移除；
