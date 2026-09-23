@@ -9,6 +9,7 @@ import { DroidActivity } from '../ui/droid-motion';
 import { Textarea } from '../ui/input';
 import { Markdown } from '../content/Markdown';
 import { QuoteChips } from './QuoteChips';
+import { UserMessageBubble } from './UserMessageView';
 
 const PROGRESS_LABELS = {
   waiting: 'Waiting for reply…', thinking: 'Thinking…', tool: 'Using tools…', answering: 'Receiving reply…',
@@ -81,7 +82,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
     input.current?.focus({ preventScroll: true });
   };
   return <aside ref={panel} aria-label="By the Way side chat" data-webview-overlay=""
-    className="v2-btw-panel"
+    className="v2-btw-panel v2-chat-surface"
     style={{ width: `min(${width}px,calc(100vw - 160px))` }}>
     <div role="separator" aria-label="Resize By the Way panel" aria-orientation="vertical" aria-valuemin={220} aria-valuemax={520} aria-valuenow={width} tabIndex={0}
       className="v2-btw-resizer"
@@ -117,13 +118,15 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
           const parsed = parseSelectionQuotes(entry.question);
           const progress = entry.progress ?? (entry.answer ? 'answering' : 'waiting');
           return <article key={entry.id} className="v2-btw-turn">
-            <div aria-label="Your question" className="v2-btw-question">
-              <div className="v2-btw-speaker">You</div>
-              {parsed ? <QuoteChips quotes={parsed.quotes} className="mb-2" /> : null}
-              <p>{parsed?.body ?? entry.question}</p>
+            <div className="v2-btw-question">
+              <UserMessageBubble>
+                <div role="region" aria-label="Your question" tabIndex={0} className="v2-btw-question-content">
+                  {parsed ? <QuoteChips quotes={parsed.quotes} className="mb-2" /> : null}
+                  <p>{parsed?.body ?? entry.question}</p>
+                </div>
+              </UserMessageBubble>
             </div>
             <div aria-label={`${assistantName} answer`} className="v2-btw-answer">
-              <div className="v2-btw-speaker">{assistantName}</div>
               {entry.answer.length > 0 ? <Markdown text={entry.answer} streaming={entry.state === 'streaming'} /> : null}
               {entry.state === 'streaming' ? <p role="status" aria-live="polite" className="v2-btw-progress">
                 <DroidActivity phase={preparing || progress === 'waiting' ? 'loading' : progress === 'thinking' ? 'thinking' : 'working'} />

@@ -1,12 +1,22 @@
 @layer components {
   .dvx-control {
     outline: none;
+    user-select: none;
     transition: background-color var(--motion-fast) var(--motion-ease),
       border-color var(--motion-fast) var(--motion-ease),
       color var(--motion-fast) var(--motion-ease),
       box-shadow var(--motion-fast) var(--motion-ease),
       opacity var(--motion-fast) var(--motion-ease);
   }
+  [data-composer-surface],
+  [data-slot='dropdown-menu-content'],
+  [data-slot='select-content'],
+  [data-slot='tooltip-content'] { user-select: none; }
+  :is([data-slot='input'], [data-slot='textarea']) { user-select: text; }
+  /* Empty editors contain a hint, not selectable user content. */
+  :is([data-slot='input'], [data-slot='textarea']):placeholder-shown { user-select: none; }
+  :is([data-slot='input'], [data-slot='textarea'])::placeholder { user-select: none; }
+  :is([data-slot='input'], [data-slot='textarea']):placeholder-shown::selection { background: transparent; }
   .dvx-control:focus-visible {
     outline: 1px solid var(--focus);
     outline-offset: 0;

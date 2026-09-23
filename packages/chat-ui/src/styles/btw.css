@@ -37,6 +37,7 @@
     gap: 8px;
     padding: 0 8px 0 12px;
     border-bottom: 1px solid var(--panel-edge);
+    user-select: none;
   }
   .v2-btw-heading { min-width: 0; flex: 1; }
   .v2-btw-heading h2 {
@@ -75,8 +76,8 @@
     overflow-anchor: none;
     scrollbar-gutter: stable;
   }
-  .v2-btw-transcript { min-width: 0; padding: 16px 12px 24px; }
-  .v2-btw-empty { max-width: 280px; padding: 20px 4px; }
+  .v2-btw-transcript { min-width: 0; padding: 8px 12px 24px; }
+  .v2-btw-empty { max-width: 280px; padding: 20px 4px; user-select: none; }
   .v2-btw-empty-mark { width: 20px; height: 20px; margin-bottom: 12px; color: var(--muted-ink); stroke-width: 1.5; }
   .v2-btw-empty > p { margin-bottom: 6px; font-size: 13px; font-weight: 600; line-height: 20px; }
   .v2-btw-empty > span { display: block; color: var(--muted-ink); font-size: 12px; line-height: 20px; }
@@ -91,29 +92,25 @@
   }
   .v2-btw-empty-tip > svg { width: 12px; height: 12px; flex: none; margin-top: 2px; }
   .v2-btw-turn { min-width: 0; }
-  .v2-btw-turn + .v2-btw-turn { margin-top: 24px; }
-  .v2-btw-speaker { margin-bottom: 6px; color: var(--muted-ink); font-size: 11px; font-weight: 500; line-height: 16px; }
+  .v2-btw-turn + .v2-btw-turn { margin-top: 16px; }
   .v2-btw-question {
+    position: sticky;
+    top: 0;
+    z-index: 2;
     min-width: 0;
-    padding: 10px;
-    border: 1px solid var(--panel-edge);
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--soft-surface) 60%, var(--surface));
-    font-size: 13px;
-    line-height: 21px;
+    padding-block: 8px;
+    background: var(--surface);
   }
-  .v2-btw-question > p { white-space: pre-wrap; overflow-wrap: anywhere; }
-  .v2-btw-answer { min-width: 0; padding: 12px 2px 0; }
-  .v2-btw-answer .markdown-prose { font-size: 13px; line-height: 21px; }
-  .v2-btw-answer .markdown-prose :is(p, ul, ol, blockquote) { margin-bottom: 8px; }
-  .v2-btw-answer .markdown-prose :is(ul, ol) { padding-left: 20px; }
-  .v2-btw-answer .markdown-prose li + li { margin-top: 4px; }
-  .v2-btw-answer .markdown-prose :is(h1, h2, h3, h4, h5, h6) { margin: 16px 0 8px; font-weight: 600; line-height: 21px; }
-  .v2-btw-answer .markdown-prose :is(h1, h2) { font-size: 14px; }
-  .v2-btw-answer .markdown-prose strong { font-weight: 600; }
-  .v2-btw-answer .markdown-prose > :first-child { margin-top: 0; }
-  .v2-btw-answer .markdown-prose > :last-child { margin-bottom: 0; }
-  .v2-btw-progress { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--muted-ink); font-size: 12px; line-height: 20px; }
+  .v2-btw-question-content {
+    max-height: min(160px, 30vh);
+    overflow: auto;
+    overscroll-behavior: contain;
+    border-radius: 2px;
+    outline: none;
+  }
+  .v2-btw-question-content:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
+  .v2-btw-answer { min-width: 0; padding: 4px 2px 0; }
+  .v2-btw-progress { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--muted-ink); font-size: 12px; line-height: 20px; user-select: none; }
   .v2-btw-error { margin-top: 6px; color: var(--error-ink); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
   .v2-btw-footer {
     min-width: 0;
