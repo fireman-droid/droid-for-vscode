@@ -208,6 +208,12 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   const push = selecting && lastPush.current.conversationId === conversationId && lastPush.current.questionId === pinned?.id
     ? lastPush.current.value : livePush;
   const pinnedOverlay = useRef<HTMLDivElement>(null);
+  const setPinnedOverlay = useCallback((element: HTMLDivElement | null) => {
+    pinnedOverlay.current = element;
+    if (element === null) return;
+    const releaseWheel = scrolling.wheelOverlayRef(element);
+    return () => { releaseWheel?.(); pinnedOverlay.current = null; };
+  }, [scrolling.wheelOverlayRef]);
   useLayoutEffect(() => {
     const element = viewport.current, overlay = pinnedOverlay.current;
     if (!element || !overlay) return;
@@ -230,7 +236,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   }, [conversationId, pinned?.id, pinnedHeight, nextQuestion, nextTop, virtualizer, selecting]);
   return (
     <div ref={selectionRoot} className="relative min-h-0 select-text overflow-hidden" data-text-selecting={selecting || undefined}>
-      <div ref={viewport} data-transcript-scrollbar="" className="h-full overflow-x-hidden overflow-y-auto [overflow-anchor:none] [scrollbar-width:none] [&::-webkit-scrollbar]:w-0" aria-label="Chat transcript">
+      <div ref={viewport} data-transcript-scrollbar="" className="h-full overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-width:none] [&::-webkit-scrollbar]:w-0" aria-label="Chat transcript">
         <div ref={content} className="v2-chat-rail min-h-full pb-3 pt-5">
           <div ref={leading} className="flow-root">
             {leadingContent}
@@ -255,17 +261,17 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
         </div>
       </div>
       {pinned === null ? null : <>
-        <div ref={pinnedOverlay} className="v2-chat-rail pointer-events-none absolute inset-x-0 bottom-0 z-10" style={{ top: PINNED_QUESTION_GAP, transform: `translateY(${push}px)`, visibility: pinEntered ? 'visible' : 'hidden' }} inert={!pinEntered || undefined} aria-hidden={!pinEntered || undefined}>
+        <div ref={setPinnedOverlay} className="v2-chat-rail pointer-events-none absolute inset-x-0 bottom-0 z-10" style={{ top: PINNED_QUESTION_GAP, transform: `translateY(${push}px)`, visibility: pinEntered ? 'visible' : 'hidden' }} inert={!pinEntered || undefined} aria-hidden={!pinEntered || undefined}>
           <div ref={pin} data-pinned-question={pinned.id} data-selection-turn={candidate?.index} className="pointer-events-auto max-h-full overflow-y-auto bg-background">
             {renderMessage(pinned.id, { placeholder: false, placeholderHeight: 0 })}
           </div>
         </div>
-        <div data-pinned-top-mask="" aria-hidden="true" className="absolute inset-x-0 top-0 z-10 bg-background" style={{ height: PINNED_QUESTION_GAP, visibility: pinEntered ? 'visible' : 'hidden' }} />
+        <div data-pinned-top-mask="" aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-background" style={{ height: PINNED_QUESTION_GAP, visibility: pinEntered ? 'visible' : 'hidden' }} />
       </>}
-      {showNavigator ? <QuestionNavigator items={questions} activeIndex={activeQuestion} onNavigate={navigateQuestion} /> : null}
+      {showNavigator ? <QuestionNavigator ref={scrolling.wheelOverlayRef} items={questions} activeIndex={activeQuestion} onNavigate={navigateQuestion} /> : null}
       {onQuote ? <SelectionToolbar viewport={viewport} selectionRoot={selectionRoot} onQuote={onQuote} onBtwQuote={onBtwQuote} /> : null}
       {scrolling.away ? (
-        <Button variant="outline" size="icon-sm" aria-label="Scroll to bottom" className="absolute bottom-2 right-4 z-20 rounded-full" onClick={returnToBottom}><ArrowDown /></Button>
+        <Button ref={scrolling.wheelOverlayRef} variant="outline" size="icon-sm" aria-label="Scroll to bottom" className="absolute bottom-2 right-4 z-20 rounded-full" onClick={returnToBottom}><ArrowDown /></Button>
       ) : null}
     </div>
   );

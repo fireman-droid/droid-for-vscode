@@ -1,4 +1,8 @@
 @layer utilities {
+  /* Inner transcript content hands vertical scrolling back at its boundary. */
+  .v2-code-block pre, .v2-activity-result pre, .dvx-plan-steps, .v2-user-edit-input {
+    overscroll-behavior-y: auto;
+  }
   .v2-chat-surface {
     --chat-code-surface: light-dark(#fcfcfc, #252527);
     --chat-edge: color-mix(in srgb, var(--ink) 12%, transparent);

@@ -1,18 +1,20 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import type { Ref } from 'react';
 import { visibleQuestionItems, type QuestionNavigationItem } from '../navigation/questionNavigation';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
 
-export function QuestionNavigator({ items, activeIndex, onNavigate }: {
+export function QuestionNavigator({ items, activeIndex, onNavigate, ref }: {
   readonly items: readonly QuestionNavigationItem[];
   readonly activeIndex: number;
   readonly onNavigate: (id: string) => void;
+  readonly ref?: Ref<HTMLElement>;
 }) {
   if (items.length === 0) return null;
   const current = Math.min(Math.max(activeIndex, 0), items.length - 1);
   const visible = visibleQuestionItems(items, current);
   const dense = items.length > 6;
-  return <nav aria-label="Question navigation" className="absolute right-0 top-1/2 z-20 flex max-h-[min(52%,246px)] w-[18px] -translate-y-1/2 flex-col items-center text-muted-foreground"
+  return <nav ref={ref} aria-label="Question navigation" className="absolute right-0 top-1/2 z-20 flex max-h-[min(52%,246px)] w-[18px] -translate-y-1/2 flex-col items-center text-muted-foreground"
     style={{ height: Math.max(4, (visible.length - 1) * (dense ? 10 : 14) + 4) + 42 }}>
     <Button variant="ghost" size="icon-sm" className="size-[18px] shrink-0 p-0 [&_svg]:size-2.5" aria-label="Previous question" disabled={current === 0}
       onClick={() => onNavigate(items[current - 1]!.key)}><ChevronUp /></Button>

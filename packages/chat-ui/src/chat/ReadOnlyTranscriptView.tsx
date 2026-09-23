@@ -55,7 +55,7 @@ export function ReadOnlyTranscriptView({ messages, truncated = false, renderMess
         </ProcessPresentationProvider>
       </div>
     </div>
-    {scrolling.away ? <Button variant="outline" size="icon-sm" aria-label="Scroll to bottom"
+    {scrolling.away ? <Button ref={scrolling.wheelOverlayRef} variant="outline" size="icon-sm" aria-label="Scroll to bottom"
       className="absolute bottom-3 right-4 rounded-full" onClick={() => scrolling.scrollToBottom()}><ArrowDown /></Button> : null}
   </div>;
 }

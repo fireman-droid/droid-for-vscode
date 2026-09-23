@@ -94,8 +94,8 @@ export function useSmoothFollowScroll<T extends HTMLElement>(): SmoothFollowScro
       }
     };
     const onWheel = (event: WheelEvent): void => {
-      if (event.ctrlKey) return;
-      if (isNestedScrollTarget(viewport, event.target)) {
+      if (event.ctrlKey || event.shiftKey || event.deltaY === 0) return;
+      if (isNestedScrollTarget(viewport, event.target, event.deltaY)) {
         follow.following = false;
         follow.pendingProgrammaticTop = null;
         cancelFrame();

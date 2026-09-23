@@ -39,6 +39,22 @@ export function useTranscriptScroll(
     follow.current.pendingProgrammaticTop = null;
     userScrolling.current = false;
   }, [cancelAnimation]);
+  // Floating controls are siblings of the viewport, so native scroll chaining
+  // cannot reach it. Keep the non-passive listener on those overlays only.
+  const wheelOverlayRef = useCallback((overlay: HTMLElement | null) => {
+    if (overlay === null) return;
+    const onWheel = (event: WheelEvent) => {
+      const element = viewport.current;
+      if (element === null || event.defaultPrevented || !event.cancelable || event.ctrlKey || event.shiftKey || event.deltaY === 0 ||
+        isNestedScrollTarget(overlay, event.target, event.deltaY)) return;
+      event.preventDefault();
+      const unit = event.deltaMode === 1 ? parseFloat(getComputedStyle(element).lineHeight) || 20
+        : event.deltaMode === 2 ? element.clientHeight : 1;
+      element.scrollBy({ top: event.deltaY * unit, behavior: 'instant' });
+    };
+    overlay.addEventListener('wheel', onWheel, { passive: false });
+    return () => overlay.removeEventListener('wheel', onWheel);
+  }, [viewport]);
   const scrollToTarget = useCallback((readTarget: () => number | undefined) => {
     stopFollowing();
     navigation.current = readTarget;
@@ -171,9 +187,9 @@ export function useTranscriptScroll(
       }
     };
     const onWheel = (event: WheelEvent) => {
-      if (event.ctrlKey) return;
-      if (isNestedScrollTarget(element, event.target)) { stopFollowing(); return; }
-      if (event.deltaY === 0) return;
+      if (event.ctrlKey || event.shiftKey || event.deltaY === 0) return;
+      const boundary = event.target instanceof Node && element.contains(event.target) ? element : selectionRoot;
+      if (boundary && isNestedScrollTarget(boundary, event.target, event.deltaY)) { stopFollowing(); return; }
       const wasFollowing = follow.current.following;
       cancelAnimation();
       applyFollowWheelIntent(follow.current, event.deltaY, sample());
@@ -253,5 +269,5 @@ export function useTranscriptScroll(
       cancelAnimation();
     };
   }, [viewport, content, writeTop, stopFollowing, cancelAnimation, compensateNavigation, reportLayout, onReachedBottom]);
-  return { follow, away, navigation, stopFollowing, scrollToBottom, scrollToTarget, writeTop };
+  return { follow, away, navigation, stopFollowing, scrollToBottom, scrollToTarget, writeTop, wheelOverlayRef };
 }
