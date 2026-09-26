@@ -115,7 +115,6 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
             <span>Select text in the main chat to use it here as context.</span>
           </div>
         </div> : null}
-        {state.entries.length === 0 && preparing ? <p role="status" className="v2-btw-progress"><DroidActivity phase="loading" />Preparing side conversation…</p> : null}
         {state.entries.map((entry) => {
           const parsed = parseSelectionQuotes(entry.question);
           const progress = entry.progress ?? (entry.answer ? 'answering' : 'waiting');
@@ -131,9 +130,9 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
             </div>
             <div aria-label={`${assistantName} answer`} className="v2-btw-answer">
               {entry.answer.length > 0 ? <Markdown text={entry.answer} streaming={entry.state === 'streaming'} /> : null}
-              {entry.state === 'streaming' ? <p role="status" aria-live="polite" className="v2-btw-progress">
-                <DroidActivity phase={preparing || progress === 'waiting' ? 'loading' : progress === 'thinking' ? 'thinking' : 'working'} />
-                {preparing ? 'Preparing side conversation…' : PROGRESS_LABELS[progress]}
+              {entry.state === 'streaming' && !preparing ? <p role="status" aria-live="polite" className="v2-btw-progress">
+                <DroidActivity phase={progress === 'waiting' ? 'loading' : progress === 'thinking' ? 'thinking' : 'working'} />
+                {PROGRESS_LABELS[progress]}
               </p> : null}
             </div>
             {entry.message ? <p role="alert" className="v2-btw-error">{entry.message}</p> : null}
