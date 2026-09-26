@@ -3,6 +3,7 @@ import type { IdeState } from '../../shared/protocol/ideProtocol';
 import { createNativeIdeRelay, type NativeIdeRelay } from '../ide/nativeIdeRelay';
 import type { DaemonApi, DaemonNotification, DaemonSessionHandle } from './api';
 import { openDaemonConnection, type DaemonConnection } from './daemonConnection';
+import { prepareIdeDaemonEnvironment, removeIdeDaemonSnapshot } from './ideDaemonFeatures';
 import {
   resolveDaemonListenerPid, startDetachedDaemon, stopDaemon,
   verifyDaemonListeners, type DaemonListenerVerification,
@@ -389,6 +390,7 @@ export class WindowDaemonPool {
     this.binding = binding;
     if (this.disposed) throw new Error('Window daemon is disposed.');
     const env = { ...process.env };
+    const instanceId = randomUUID();
     delete env.FACTORY_VSCODE_MCP_PORT;
     delete env.FACTORY_JETBRAINS_MCP_PORT;
     const ide = sessionId && binding.port !== null
@@ -398,14 +400,17 @@ export class WindowDaemonPool {
     if (ide) env.FACTORY_VSCODE_MCP_PORT = String(ide.port);
     let endpoint: Awaited<ReturnType<typeof startDetachedDaemon>>;
     try {
-      endpoint = await startDetachedDaemon({ cwd: cwd ?? binding.cwd, env });
+      const daemonEnv = ide ? await prepareIdeDaemonEnvironment(instanceId, env) : env;
+      endpoint = await startDetachedDaemon({ cwd: cwd ?? binding.cwd, env: daemonEnv });
     } catch (error) {
       unsubscribeIde?.();
       await ide?.dispose();
+      try { await removeIdeDaemonSnapshot(instanceId); }
+      catch { this.options.record({ level: 'warn', name: 'daemon.feature-snapshot.cleanup-failed' }); }
       throw error;
     }
     const record: WindowDaemonRecord = {
-      id: randomUUID(), port: endpoint.port, pid: endpoint.pid, ownerPid: process.pid,
+      id: instanceId, port: endpoint.port, pid: endpoint.pid, ownerPid: process.pid,
       cwd: cwd ?? binding.cwd, idePort: sessionId ? binding.port : null,
       ...(sessionId ? { rootSessionId: sessionId } : {}),
     };
@@ -433,6 +438,8 @@ export class WindowDaemonPool {
       await ide?.dispose();
       await stopDaemon(endpoint);
       await removeWindowDaemon(record);
+      // Registration may have failed before its file existed.
+      if (!isProcessAlive(endpoint.pid)) await removeIdeDaemonSnapshot(instanceId);
       throw error;
     }
   }

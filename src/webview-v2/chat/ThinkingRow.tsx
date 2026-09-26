@@ -16,7 +16,7 @@ export function ThinkingRow({ item, messageId, grouped, streaming }: { readonly 
     const timer = setTimeout(() => setWaiting(true), 10_000);
     return () => clearTimeout(timer);
   }, [running, item.text.length, item.truncated]);
-  const text = item.text.replace(/(?<=\S)\*{4}(?=\S)/gu, '** **');
+  const text = item.text.replace(/(?<=\S)\*{4}(?=\S)/gu, '**\n\n**');
   const body = <div className="v2-thinking-detail select-none text-muted-foreground [&_*]:select-none"><Markdown text={text} streaming={running} thinking />
     {item.truncated ? <p role="note" className="mt-2 text-[11px]">Thinking reached the local safety limit; later reasoning is not retained.</p> : null}
   </div>;

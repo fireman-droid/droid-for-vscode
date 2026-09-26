@@ -44,7 +44,8 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const available = item.resultPreview?.availability === 'available' ? item.resultPreview : null;
   const errorMessage = item.errorMessage?.replace(/^([ \t]*Error:[ \t]*)(?:Error:[ \t]*)+/i, '$1');
   const target = item.filePath ?? item.target ?? item.resultPreview?.source?.path;
-  const action = exploration && category && target ? EXPLORE_ACTIONS[category] : resolveToolAction(item.toolName, item.action);
+  const remoteResult = item.toolName === 'WebSearch' || item.toolName === 'github___get_file_contents';
+  const action = exploration && category && target && !remoteResult ? EXPLORE_ACTIONS[category] : resolveToolAction(item.toolName, item.action);
   const currentFile = item.filePath ?? (available?.source.tool === 'Read' ? available.source.path : undefined);
   const unavailable = item.resultPreview?.availability === 'unavailable' ? RESULT_UNAVAILABLE_COPY[item.resultPreview.reason]
     : !item.resultPreview && item.status === 'completed' && !errorMessage && RESULT_TOOLS.some((name) => name === item.toolName) ? RESULT_UNAVAILABLE_COPY['not-saved'] : null;
@@ -52,7 +53,7 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const output = command !== undefined && item.status === 'failed' && errorMessage
     ? item.outputTail ? `${item.outputTail}\n${errorMessage.split(/\r?\n/, 1)[0]}` : errorMessage
     : item.outputTail;
-  const hasDetails = command !== undefined || available !== null || !!output || !!errorMessage || (!exploration && !!item.detail);
+  const hasDetails = command !== undefined || available !== null || unavailable !== null || !!output || !!errorMessage || (!exploration && !!item.detail);
   const state = executionLabel(item) ?? (item.status === 'completed' ? '' : item.status === 'stopping' ? 'Stopping' : formatToolLifecycle(item.status));
   const status = [state, item.durationMs === undefined ? '' : formatDuration(item.durationMs)].filter(Boolean).join(' · ');
   const title = `${action}${target ? ` · ${target}` : ''}`;
@@ -66,7 +67,7 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
     {currentFile && actions.openPath ? <Button variant="link" size="sm" className="h-auto select-none px-1 text-[11px]" title={`Open ${currentFile}`} aria-label="Open current file" onClick={() => actions.openPath!({ path: currentFile })}>{currentFile.split(/[\\/]/).at(-1)}</Button> : null}
     {item.filePath && item.status === 'completed' && isPreviewableFilePath(item.filePath) && content.actions?.previewFile ? <Button variant="ghost" size="sm" onClick={() => content.actions!.previewFile?.(item.filePath!)}>Canvas</Button> : null}
   </>;
-  const activityDetail = available !== null || !!output || !!errorMessage ? <>
+  const activityDetail = available !== null || unavailable !== null || !!output || !!errorMessage ? <>
     {available ? <ActivityResult preview={available} /> : null}
     {output ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-[var(--panel-edge)] bg-muted/25 p-2.5 font-mono text-[11px] leading-[18px]">{output}</pre> : null}
     {errorMessage ? <pre role="status" className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-destructive/40 bg-destructive/5 p-2.5 font-mono text-[11px] leading-[18px] text-destructive">{errorMessage}</pre> : null}
@@ -98,7 +99,7 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
         {fileActions}
       </div>
       <ToolContent className="space-y-1 pb-1">
-        {available ? <div><p className="mb-1 select-none text-[11px]">Result snippet{available.truncated ? ' · truncated' : ''}</p><pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono">{available.text}</pre></div> : null}
+        {available ? <ActivityResult preview={available} /> : null}
         {!exploration && item.detail ? <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre> : null}
         {output ? <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono">{output}</pre> : null}
         {errorMessage ? <p role="status" className="whitespace-pre-wrap break-words text-destructive">{errorMessage}</p> : null}

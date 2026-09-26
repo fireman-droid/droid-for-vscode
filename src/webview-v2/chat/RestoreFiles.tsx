@@ -7,10 +7,12 @@ import { Collapsible, CollapsibleTrigger, AnimatedCollapsibleContent } from '../
 import { rewindDetailSummary } from '../../shared/protocol/rewindDetails';
 import { useContent } from '../content/context';
 
-export function RestoreFiles({ impact, checked, onChange, openDisabled = false }: {
+export function RestoreFiles({ impact, checked, onChange, disabled = false, restored = false, openDisabled = false }: {
   readonly impact: RewindFileInfo;
   readonly checked: boolean;
   readonly onChange: (checked: boolean) => void;
+  readonly disabled?: boolean;
+  readonly restored?: boolean;
   readonly openDisabled?: boolean;
 }) {
   const { actions } = useContent();
@@ -22,8 +24,8 @@ export function RestoreFiles({ impact, checked, onChange, openDisabled = false }
   return <Collapsible open={expanded} onOpenChange={setExpanded} asChild><section data-transcript-selection-exclude="" className="mt-2 select-none overflow-hidden rounded-[10px] border border-[var(--panel-edge)] bg-input-background text-[11.5px]" aria-label="File restoration">
     <div className="flex min-h-8 items-center justify-between gap-2 px-3 py-1.5">
       {count > 0 ? <label className="v2-chat-choice flex min-w-0 items-center gap-2 rounded">
-        <Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />
-        <span>Restore {count} {count === 1 ? 'file' : 'files'} changed after this point</span>
+        <Checkbox checked={checked} disabled={disabled} onCheckedChange={(value) => onChange(value === true)} />
+        <span>{restored ? 'File restore will not be repeated when reconnecting' : `Restore ${count} ${count === 1 ? 'file' : 'files'} changed after this point`}</span>
       </label> : <span>{unavailableCount} {unavailableCount === 1 ? 'file' : 'files'} cannot be restored</span>}
       <CollapsibleTrigger asChild><Button variant="plain" size="none" aria-label="Restorable files" aria-controls={id} className="v2-chat-disclosure shrink-0 rounded">
         <ChevronDown className={`size-[13px] text-muted-foreground transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`} />

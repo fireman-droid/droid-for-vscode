@@ -8,6 +8,8 @@ import {
 import type { RuntimeDiagnosticSink } from '../runtimeDiagnostics';
 import type { FactoryDroidSession } from './sessionTypes';
 import { type FactoryDroidSessionRewindParams } from './replacementTypes';
+import { RewindAnchorConflictError, RewindAttachmentError } from './rewindErrors';
+const pendingRewinds = new WeakMap<FactoryDroidSession, { messageId: string }>();
 export interface ReplacementContext {
   readonly session: FactoryDroidSession;
   recordDiagnostic(event: Parameters<RuntimeDiagnosticSink['record']>[0]): void;
@@ -38,9 +40,13 @@ export async function rewind(
 
   let nextSession: FactoryDroidSession;
   try {
+    const pending = pendingRewinds.get(session);
+    if (pending !== undefined && pending.messageId !== params.messageId) {
+      throw new RewindAnchorConflictError(pending.messageId);
+    }
     let filesToRestore: FactoryDroidSessionRewindParams['filesToRestore'] = [];
     let filesToDelete: FactoryDroidSessionRewindParams['filesToDelete'] = [];
-    if (params.restoreFiles === true && typeof session.getRewindInfo === 'function') {
+    if (pending === undefined && params.restoreFiles === true && typeof session.getRewindInfo === 'function') {
       const info = await session.getRewindInfo({
         messageId: params.messageId,
       });
@@ -54,13 +60,16 @@ export async function rewind(
       forkTitle: params.forkTitle,
     });
     nextSession = outcome.session;
+    pendingRewinds.delete(session);
   } catch (error) {
+    if (error instanceof RewindAttachmentError) pendingRewinds.set(session, { messageId: error.messageId });
     context.recordDiagnostic({
       level: 'error',
       name: 'runtime.rewind.finished',
       attributes: {
         durationMs: Math.round(performance.now() - startedAt),
-        outcome: 'sdk-error',
+        outcome: error instanceof RewindAttachmentError ? 'attachment-error'
+          : error instanceof RewindAnchorConflictError ? 'anchor-conflict' : 'sdk-error',
       },
     });
     throw error;

@@ -12,6 +12,7 @@ import {
   type FactoryDroidSessionFactory,
 } from '../session/sessionTypes';
 import type { RuntimeSessionTarget } from '../DroidRuntime';
+import { RewindAnchorConflictError, RewindAttachmentError } from '../session/rewindErrors';
 import { projectCommandRows } from '../commands/FactoryCommandCatalog';
 import type { RuntimeDiagnosticSink } from '../runtimeDiagnostics';
 import {
@@ -356,6 +357,7 @@ function adaptDaemonSession(
   let attachmentOwned = true;
   let leaseOwned = true;
   let closeInFlight: Promise<void> | undefined;
+  let pendingRewind: { newSessionId: string; messageId: string } | undefined;
 
   const closeOwnedResources = async (): Promise<void> => {
     let cleanupFailed = false;
@@ -424,7 +426,8 @@ function adaptDaemonSession(
     let successorLeaseOwned = true;
     let successor: DaemonSessionHandle;
     try {
-      successor = await droid.sessions.resume(newSessionId, {
+      const resume = droid.sessions.resumeReplacement?.bind(droid.sessions) ?? droid.sessions.resume.bind(droid.sessions);
+      successor = await resume(newSessionId, {
         ...callbacks,
       });
     } catch (error) {
@@ -547,8 +550,21 @@ function adaptDaemonSession(
       };
     },
     async rewind(params) {
-      const result = await session.rewind(params);
-      return { session: await attachReplacement(result.newSessionId) };
+      if (pendingRewind !== undefined && pendingRewind.messageId !== params.messageId) {
+        throw new RewindAnchorConflictError(pendingRewind.messageId);
+      }
+      if (pendingRewind === undefined) {
+        const result = await session.rewind(params);
+        pendingRewind = { newSessionId: result.newSessionId, messageId: params.messageId };
+      }
+      const completed = pendingRewind;
+      try {
+        const replacement = await attachReplacement(completed.newSessionId);
+        pendingRewind = undefined;
+        return { session: replacement };
+      } catch (error) {
+        throw new RewindAttachmentError(completed.newSessionId, completed.messageId, error);
+      }
     },
     async getRewindInfo(params) {
       return droid.sessions.getRewindInfo(session.id, params.messageId);

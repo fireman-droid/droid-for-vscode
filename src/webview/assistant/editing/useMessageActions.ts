@@ -25,7 +25,7 @@ export function useMessageActions({
   transcript: AssistantWebviewState['transcript'];
 }) {
   const handleEditResend = useCallback(
-    (messageId: string, text: string, restoreFiles = false): void => {
+    (messageId: string, text: string, restoreFiles = false): boolean => {
       const trimmed = text.trim();
       if (
         sessionId === null ||
@@ -36,7 +36,7 @@ export function useMessageActions({
         trimmed.length === 0 ||
         text.length > MAX_TURN_TEXT_LENGTH
       ) {
-        return;
+        return false;
       }
       post(vscode, {
         type: 'turn.editResend',
@@ -46,6 +46,7 @@ export function useMessageActions({
         text,
         ...(restoreFiles ? { restoreFiles: true } : {}),
       });
+      return true;
     },
     [
       connectionStatus,

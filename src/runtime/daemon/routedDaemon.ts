@@ -127,6 +127,12 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
           throw error;
         }
       },
+      async resumeReplacement(id, options) {
+        const entry = await pool.forSession(id, true);
+        // Files and history have already been rewound. Adopt this session now;
+        // bindSessionIde still gates the next prompt on its actual IDE handshake.
+        return rememberHandle(entry, await entry.connection.droid.sessions.resume(id, options), options);
+      },
     },
     settings: resource('settings', noId),
     customModels: resource('customModels', noId),

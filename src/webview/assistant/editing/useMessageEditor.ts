@@ -7,6 +7,8 @@ interface MessageEditDraft {
   readonly restoreFiles: boolean;
   readonly phase: 'editing' | 'resending';
   readonly notice: string | null;
+  readonly rejectionSequence: number;
+  readonly resumeOnly: boolean;
 }
 
 export interface MessageEditSelection {
@@ -48,19 +50,22 @@ export function useMessageEditor({
   readonly onStageBegin: (messageId: string) => void;
   readonly onStageCancel: () => void;
   readonly onRequestRewindInfo: (messageId: string) => void;
-  readonly onResend: (messageId: string, text: string, restoreFiles: boolean) => void;
+  readonly onResend: (messageId: string, text: string, restoreFiles: boolean) => boolean | void;
 }): MessageEditor {
   const [owner, setOwner] = useState(conversationId);
   const [draft, setDraft] = useState<MessageEditDraft | null>(null);
   const selection = useRef<MessageEditSelection | null>(null);
+  const submitted = useRef<{ messageId: string; rejectionSequence: number } | null>(null);
   if (owner !== conversationId) {
     setOwner(conversationId);
     setDraft(null);
     selection.current = null;
+    submitted.current = null;
   }
 
   const begin = useCallback(
     (messageId: string, text: string): void => {
+      if (submitted.current !== null) return;
       if (draft?.messageId === messageId && draft.phase === 'editing') return;
       if (draft?.phase === 'editing') onStageCancel();
       onBegin();
@@ -72,13 +77,14 @@ export function useMessageEditor({
         scrollTop: 0,
         focused: true,
       };
-      setDraft({ messageId, text, restoreFiles: false, phase: 'editing', notice: null });
+      setDraft({ messageId, text, restoreFiles: false, phase: 'editing', notice: null, rejectionSequence: rejection?.sequence ?? -1, resumeOnly: false });
       onStageBegin(messageId);
       onRequestRewindInfo(messageId);
     },
-    [draft, onBegin, onStageBegin, onStageCancel, onRequestRewindInfo],
+    [draft, rejection, onBegin, onStageBegin, onStageCancel, onRequestRewindInfo],
   );
   const cancel = useCallback((): void => {
+    if (submitted.current !== null) return;
     if (draft?.phase === 'editing') onStageCancel();
     selection.current = null;
     setDraft(null);
@@ -92,11 +98,16 @@ export function useMessageEditor({
   }, []);
   const submit = useCallback(
     (messageId: string, restoreFiles: boolean): void => {
-      if (draft?.messageId !== messageId || draft.phase !== 'editing') return;
-      setDraft({ ...draft, phase: 'resending' });
-      onResend(messageId, draft.text, restoreFiles);
+      if (submitted.current !== null || draft?.messageId !== messageId || draft.phase !== 'editing') return;
+      const rejectionSequence = rejection?.sequence ?? -1;
+      submitted.current = { messageId, rejectionSequence };
+      if (onResend(messageId, draft.text, !draft.resumeOnly && restoreFiles) === false) {
+        submitted.current = null;
+        return;
+      }
+      setDraft({ ...draft, restoreFiles, phase: 'resending', notice: null, rejectionSequence });
     },
-    [draft, onResend],
+    [draft, rejection, onResend],
   );
 
   // A new send abandons an open historical edit, but never a submitted resend.
@@ -108,21 +119,15 @@ export function useMessageEditor({
   }, [sendSignal, draft, cancel]);
 
   useEffect(() => {
-    if (rejection === null) return;
+    const pending = submitted.current;
+    if (rejection === null || pending === null || rejection.messageId !== pending.messageId || rejection.sequence <= pending.rejectionSequence) return;
+    submitted.current = null;
     setDraft((current) =>
       current?.phase === 'resending' && current.messageId === rejection.messageId
-        ? { ...current, phase: 'editing' }
+        ? { ...current, phase: 'editing', resumeOnly: current.resumeOnly || rejection.reason === 'resume-failed' }
         : current,
     );
   }, [rejection]);
-
-  useEffect(() => {
-    if (draft?.phase !== 'resending') return;
-    const timer = setTimeout(() => {
-      setDraft((current) => (current === draft ? null : current));
-    }, 8000);
-    return () => clearTimeout(timer);
-  }, [draft]);
 
   return useMemo(
     () => ({ draft, selection, begin, cancel, submit, update }),

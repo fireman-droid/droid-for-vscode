@@ -9,6 +9,8 @@ export function AiOperationSummary({ summary, onInteract }: { readonly summary: 
   const context = useContext(InlineDiffContext);
   if (summary.files.size === 0) return null;
   const connected = context?.connected && context.sessionId;
+  const contentRestricted = [...summary.files.values()].some((file) =>
+    file.records.some((record) => record.contentRestricted));
   const open = (path?: string, action?: 'undo') => {
     if (context?.connected && context.sessionId) context.port.postMessage({
       type: 'review.panel.open', sessionId: context.sessionId, scopeKind: 'operations', turnId: summary.turnId,
@@ -17,6 +19,8 @@ export function AiOperationSummary({ summary, onInteract }: { readonly summary: 
   };
   return <ChangeSummaryView files={[...summary.files.values()]} onInteract={onInteract}
     onReview={connected ? () => open() : undefined} onUndo={connected ? () => open(undefined, 'undo') : undefined}
+    undoDisabled={contentRestricted}
+    undoReason={contentRestricted ? 'Some file content is restricted. Review individual files to undo available operations.' : undefined}
     onSelectFile={connected ? (path) => open(path) : undefined}
     renderFileDetails={(path) => summary.files.get(path)?.records.map((file, index) => <div key={index}>
       {summary.files.get(path)!.records.length > 1 ? <p className="operation-diff-note">Recorded operation {index + 1}</p> : null}

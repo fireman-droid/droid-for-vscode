@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { isSafeSessionIdentifier } from '../catalog/SessionCatalog';
 import { defaultDiscoveryFile, readDaemonDiscovery } from './daemonDiscovery';
+import { removeIdeDaemonSnapshot } from './ideDaemonFeatures';
 
 export interface WindowDaemonRecord {
   readonly id: string;
@@ -32,6 +33,7 @@ export async function removeWindowDaemon(record: WindowDaemonRecord): Promise<vo
   const file = join(root, `${record.id}.json`);
   const value = await readRecord(file);
   if (value?.pid !== record.pid || value.port !== record.port) return;
+  await removeIdeDaemonSnapshot(record.id);
   await unlink(file);
 }
 

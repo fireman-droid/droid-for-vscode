@@ -384,6 +384,7 @@ function mapItemToPart(
                 path: file.path, kind: file.kind, patch: file.patch,
                 previousPath: file.previousPath ?? null, outcome: file.outcome ?? null,
                 message: file.message ?? null, reversible: file.reversible ?? false,
+                contentRestricted: file.contentRestricted ?? false,
               })),
             } : item.operationDiff ? { status: item.operationDiff.status, reason: item.operationDiff.reason } : null,
             durationMs: item.durationMs ?? null,

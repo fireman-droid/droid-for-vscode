@@ -9,6 +9,7 @@ import {
   toolNameCandidates,
 } from '../../shared/transcript/toolActivity';
 import { toWorkspaceRelativePath } from './toolFilePath';
+import { isRestrictedToolContent, readGitHubResultPath } from './toolResultPreview';
 
 const MAX_TOOL_TARGET_INPUT_SCAN_LENGTH = MAX_TOOL_TARGET_LENGTH * 8;
 const MAX_TOOL_TARGET_PATTERN_ITEMS = 32;
@@ -83,8 +84,8 @@ export function extractToolDetail(
 
 /**
  * Extracts the small, display-only input context that explains a
- * non-mutating workspace tool. Raw input and output never cross the
- * Bridge. Workspace targets are relative; external targets expose only a name.
+ * supported read-only tool. Workspace targets are relative; remote tools
+ * expose only their bounded query or repository path, not arbitrary arguments.
  */
 export function extractToolTarget(
   toolName: string,
@@ -96,6 +97,11 @@ export function extractToolTarget(
   }
   const record = input as Record<string, unknown>;
   const names = toolNameCandidates(toolName);
+  if (toolName === 'github___get_file_contents') return readGitHubResultPath(record);
+  if (toolName === 'WebSearch') {
+    const query = readTargetText(record, ['query']);
+    return query === undefined || isRestrictedToolContent(query) ? undefined : query;
+  }
   if (names.includes('skill')) {
     return readTargetText(record, ['skill']);
   }

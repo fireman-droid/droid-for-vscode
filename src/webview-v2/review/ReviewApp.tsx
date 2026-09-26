@@ -144,9 +144,10 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
                   : entry.source === 'tool-input' ? 'proposed edit, not confirmed' : 'legacy input excerpt, not verified execution'}</p>
                 {entry.message ? <p className="review-notice" role="status">{entry.message}</p> : null}
                 {entry.patch && entry.patch !== '@@' ? <DiffView patch={entry.patch} path={path} split={split} />
-                  : <p className="review-notice">Text changes were not retained for this operation.</p>}
+                  : entry.message ? null : <p className="review-notice">Text changes were not retained for this operation.</p>}
               </section>)
               : patch && patch !== '@@' ? <DiffView patch={patch} path={path} split={split} />
+              : operationFile?.contentRestricted ? null
               : <p className="review-empty">{operationFile ? `File ${operationFile.kind}. Text changes were not recorded.` : operationsScope ? 'No text Diff evidence is available.' : 'No net text changes.'}</p>}
             {file?.truncated && !operation ? <p className="review-notice">{file.recordedOperations
               ? 'Some saved operation excerpts exceed the preview limit.'

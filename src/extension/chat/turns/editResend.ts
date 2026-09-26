@@ -1,5 +1,6 @@
 import type { EditResendPort } from './editResendPort';
 import type { DroidRuntime } from '../../../runtime/DroidRuntime';
+import { RewindAnchorConflictError, RewindAttachmentError } from '../../../runtime/session/rewindErrors';
 import { MAX_PENDING_ATTACHMENTS } from '../../../shared/protocol/bounds';
 import { type EditResendRejectReason } from '../../../shared/protocol/turns';
 import {
@@ -25,6 +26,14 @@ export const EDIT_RESEND_UNSUPPORTED_MESSAGE =
 
 export const EDIT_RESEND_FAILED_MESSAGE =
   'Droid could not rewind the session to that message.';
+
+const EDIT_RESEND_RESUME_FAILED_MESSAGE =
+  'The rewind completed, but its conversation could not be opened. Retry from the same message to resume it without restoring files again.';
+const EDIT_RESEND_PENDING_MESSAGE =
+  'A previous rewind already completed. Retry the original edited message before editing a different message.';
+const pendingRewinds = new WeakMap<DroidRuntime, {
+  sessionId: string; messageId: string; newSessionId: string;
+}>();
 
 export function handleRewindInfo(
   ctl: EditResendPort,
@@ -82,6 +91,7 @@ export function handleEditResend(
 ): void {
   const runtime = ctl.sessionState.runtime;
   if (runtime !== null && !ctl.effects.ensureActiveRuntimeWorkspaceCurrent()) {
+    emitEditResendRejected(ctl, sessionId, messageId, 'failed');
     return;
   }
   if (
@@ -91,6 +101,9 @@ export function handleEditResend(
     text.trim().length === 0 ||
     ctl.turnState.turn?.turnId === turnId
   ) {
+    if (sessionId === ctl.sessionState.sessionId && ctl.turnState.turn?.turnId !== turnId) {
+      emitEditResendRejected(ctl, sessionId, messageId, 'failed');
+    }
     return;
   }
   if (
@@ -147,6 +160,7 @@ export function handleEditResend(
       : [];
 
   ctl.sessionState.sessionOperationInProgress = true;
+  const generation = ctl.sessionState.runtimeGeneration;
   void performEditResend(
     ctl,
     runtime,
@@ -155,9 +169,11 @@ export function handleEditResend(
     text,
     truncated,
     restoreFiles,
-  ).then((forkedSessionId) => {
-    ctl.sessionState.sessionOperationInProgress = false;
-    if (forkedSessionId === null) {
+  ).finally(() => {
+    if (ctl.sessionState.runtimeGeneration === generation) ctl.sessionState.sessionOperationInProgress = false;
+  }).then((forkedSessionId) => {
+    if (forkedSessionId === null || ctl.sessionState.runtime !== runtime ||
+      ctl.sessionState.runtimeGeneration !== generation || ctl.sessionState.sessionId !== forkedSessionId) {
       return;
     }
     // Send first, then snapshot: the single snapshot then carries the
@@ -166,6 +182,13 @@ export function handleEditResend(
     // atomically.
     ctl.effects.handleSend(forkedSessionId, turnId, text, 'edit-resend', editAttachments);
     ctl.emitSnapshot();
+  }).catch((error: unknown) => {
+    ctl.diagnostics?.record({ level: 'error', name: 'host.edit-resend.failed',
+      detail: error instanceof Error ? error.stack ?? error.message : String(error) });
+    if (ctl.sessionState.runtime !== runtime || ctl.sessionState.runtimeGeneration !== generation) return;
+    const completed = pendingRewinds.has(runtime);
+    ctl.emitSessionDiagnostic('edit-resend-failed', completed ? EDIT_RESEND_RESUME_FAILED_MESSAGE : EDIT_RESEND_FAILED_MESSAGE);
+    emitEditResendRejected(ctl, sessionId, messageId, completed ? 'resume-failed' : 'failed');
   });
 }
 
@@ -201,21 +224,27 @@ export async function performEditResend(
   const cwd = ctl.sessionState.activeRuntimeCwd;
   const sourceConversationId = ctl.sessionState.conversationId;
   if (cwd === null || sourceConversationId === null) {
+    emitEditResendRejected(ctl, sessionId, messageId, 'unsupported');
     return null;
   }
 
   let forkedSessionId: string;
   try {
-    const result = await runtime.rewind!({
-      messageId,
-      forkTitle: forkTitleFromText(text),
-      restoreFiles,
-    });
-    forkedSessionId = result.sessionId;
-  } catch {
+    const pending = pendingRewinds.get(runtime);
+    if (pending !== undefined && (pending.sessionId !== sessionId || pending.messageId !== messageId)) {
+      throw new RewindAnchorConflictError(pending.messageId);
+    }
+    forkedSessionId = pending?.newSessionId ?? (await runtime.rewind!({
+      messageId, forkTitle: forkTitleFromText(text), restoreFiles,
+    })).sessionId;
+    if (isSafeBridgeId(forkedSessionId)) pendingRewinds.set(runtime, { sessionId, messageId, newSessionId: forkedSessionId });
+  } catch (error) {
     if (ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) {
-      ctl.emitSessionDiagnostic('edit-resend-failed', EDIT_RESEND_FAILED_MESSAGE);
-      emitEditResendRejected(ctl, sessionId, messageId, 'failed');
+      const reason = error instanceof RewindAttachmentError ? 'resume-failed'
+        : error instanceof RewindAnchorConflictError ? 'rewind-pending' : 'failed';
+      ctl.emitSessionDiagnostic('edit-resend-failed', reason === 'resume-failed' ? EDIT_RESEND_RESUME_FAILED_MESSAGE
+        : reason === 'rewind-pending' ? EDIT_RESEND_PENDING_MESSAGE : EDIT_RESEND_FAILED_MESSAGE);
+      emitEditResendRejected(ctl, sessionId, messageId, reason);
     }
     return null;
   }
@@ -235,9 +264,10 @@ export async function performEditResend(
     'rewind',
     truncated,
   );
+  if (!ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) return null;
   if (forkedConversationId === null) {
-    ctl.emitSessionDiagnostic('edit-resend-failed', EDIT_RESEND_FAILED_MESSAGE);
-    emitEditResendRejected(ctl, sessionId, messageId, 'failed');
+    ctl.emitSessionDiagnostic('edit-resend-failed', EDIT_RESEND_RESUME_FAILED_MESSAGE);
+    emitEditResendRejected(ctl, sessionId, messageId, 'resume-failed');
     return null;
   }
 
@@ -254,6 +284,7 @@ export async function performEditResend(
     active: true,
     isFavorite: false,
   });
+  pendingRewinds.delete(runtime);
   return forkedSessionId;
 }
 

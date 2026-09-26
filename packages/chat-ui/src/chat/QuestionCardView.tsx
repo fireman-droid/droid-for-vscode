@@ -3,11 +3,12 @@ import { ArrowUp } from 'lucide-react';
 import { cn } from '../ui/cn';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/input';
+import { DroidActivity } from '../ui/droid-motion';
 import { UserMessageBubble } from './UserMessageView';
 import { QuoteChips } from './QuoteChips';
 import { formatSelectionQuotes, parseSelectionQuotes } from './selectionQuote';
 export interface QuestionEditor {
-  readonly draft: { readonly messageId: string; readonly text: string; readonly phase: 'editing' | 'resending'; readonly notice: string | null } | null;
+  readonly draft: { readonly messageId: string; readonly text: string; readonly phase: 'editing' | 'resending'; readonly notice: string | null; readonly restoreFiles?: boolean; readonly resumeOnly?: boolean } | null;
   readonly selection: RefObject<{ messageId: string; start: number; end: number; direction: 'forward' | 'backward' | 'none'; scrollTop: number; focused: boolean } | null>;
   readonly begin: (id: string, text: string) => void;
   readonly cancel: () => void;
@@ -41,7 +42,7 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
   const draftPrefixLength = formatSelectionQuotes(draftQuote?.quotes ?? [], '').length;
 
   const editing = draft?.phase === 'editing' && !placeholder;
-  const editable = item.messageId !== undefined && draft?.phase !== 'resending';
+  const editable = item.messageId !== undefined && editor.draft?.phase !== 'resending';
   const input = useRef<HTMLTextAreaElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const messageId = item.messageId;
@@ -95,6 +96,7 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
       data-question-card=""
       inert={placeholder || undefined}
       aria-hidden={placeholder || undefined}
+      aria-busy={draft?.phase === 'resending' || undefined}
       style={placeholder && draft?.phase === 'editing' && placeholderHeight ? { height: placeholderHeight } : undefined}
       className={cn('min-w-0', placeholder && 'invisible pointer-events-none')}
       onDragOver={editing ? onDragOver : undefined}
@@ -147,8 +149,8 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
           {messageCopy}
         </UserMessageBubble>
       )}
-      {editing ? restoreFiles : null}
-      {draft?.phase === 'resending' ? <p role="status" className="mt-1 text-xs text-muted-foreground">Resending from here…</p> : null}
+      {draft !== null && !placeholder ? restoreFiles : null}
+      {draft?.phase === 'resending' ? <p role="status" className="mt-1 flex items-center gap-2 text-xs text-muted-foreground"><DroidActivity phase="loading" />{draft.resumeOnly ? 'Reconnecting the restored conversation…' : draft.restoreFiles ? 'Restoring files and preparing the conversation…' : 'Preparing the conversation to resend…'}</p> : null}
       {draft?.phase !== 'resending' ? plan : null}
     </div>
   );

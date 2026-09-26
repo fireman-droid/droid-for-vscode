@@ -21,7 +21,7 @@ export function OperationFileDetails({ file }: { readonly file: OperationDiffFil
   return <div className="operation-diff">
     {file.previousPath ? <p className="operation-diff-note">Moved from {file.previousPath}</p> : null}
     {file.message ? <p role="status" className="operation-diff-note">{file.message}</p> : null}
-    {!file.patch || file.patch === '@@' ? <p className="operation-diff-note">No complete text Diff was recorded for this result.</p>
+    {!file.patch || file.patch === '@@' ? file.contentRestricted ? null : <p className="operation-diff-note">No complete text Diff was recorded for this result.</p>
       : <DiffView patch={file.patch} path={file.path} />}
   </div>;
 }

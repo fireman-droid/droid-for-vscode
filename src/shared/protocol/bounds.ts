@@ -296,7 +296,7 @@ export const MAX_IMAGE_DATA_LENGTH = 2_800_000;
 export const MAX_IMAGES_PER_TURN = 8;
 
 /** Why the host declined an edit-and-resend request. */
-export const EDIT_RESEND_REJECT_REASONS = ['busy', 'unsupported', 'failed'] as const;
+export const EDIT_RESEND_REJECT_REASONS = ['busy', 'unsupported', 'failed', 'resume-failed', 'rewind-pending'] as const;
 
 export const MAX_REWIND_INFO_FILES = 40;
 

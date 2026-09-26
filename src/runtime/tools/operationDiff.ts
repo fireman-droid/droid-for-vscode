@@ -4,12 +4,12 @@ import {
   operationDiffWithChanges, type OperationDiff,
 } from '../../shared/protocol/operationDiff';
 import { MAX_TOOL_ACTIVITIES_PER_TURN } from '../../shared/protocol/bounds';
-import { isRestrictedToolContent, readResultSource } from './toolResultPreview';
 import { toolNameCandidates } from '../../shared/transcript/toolActivity';
 import { MAX_BRIDGE_ID_LENGTH } from '../../shared/protocol/interactionProtocol';
 import {
   parseOperationResult,
   readDeclaredFiles,
+  redactOperationFile,
   type OperationTool,
 } from './operationResult';
 
@@ -76,18 +76,12 @@ export function describeOperation(
 ): OperationDiff {
   const tool = operationToolName(name);
   if (!workspace || !tool) return unavailable('not-recorded');
-  const files = readDeclaredFiles(tool, rawInput, workspace);
-  if (!files) return unavailable('unattributed');
+  const declared = readDeclaredFiles(tool, rawInput, workspace);
+  if (!declared) return unavailable('unattributed');
+  const files = declared.map((file) => redactOperationFile(file, workspace));
   if (!files.length) return unavailable('not-recorded');
   if (files.length > MAX_OPERATION_DIFF_FILES || files.reduce((size, file) => size + file.patch.length, 0) > MAX_OPERATION_DIFF_UNITS)
     return unavailable('too-large');
-  for (const file of files) {
-    const source = readResultSource('Read', { file_path: file.path }, workspace, 'operation');
-    if (typeof source === 'string' || isRestrictedToolContent(file.patch))
-      return unavailable('restricted');
-    if (file.previousPath && typeof readResultSource('Read', { file_path: file.previousPath }, workspace, 'operation') === 'string')
-      return unavailable('restricted');
-  }
   const identity =
     callId &&
     callId.length <= MAX_BRIDGE_ID_LENGTH &&

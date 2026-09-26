@@ -38,25 +38,6 @@ export function parseOperationResult(
   }
   const declared = readDeclaredFiles(tool, input, workspace);
   if (declared === null) return unavailable('unattributed');
-  if (
-    declared.some(
-      (file) =>
-        typeof readResultSource(
-          'Read',
-          { file_path: file.path },
-          workspace,
-          'operation',
-        ) === 'string' ||
-        (file.previousPath !== undefined &&
-          typeof readResultSource(
-            'Read',
-            { file_path: file.previousPath },
-            workspace,
-            'operation',
-          ) === 'string'),
-    )
-  )
-    return unavailable('restricted');
   const parsed =
     tool === 'edit'
       ? parseEditResult(value, declared, workspace)
@@ -64,18 +45,19 @@ export function parseOperationResult(
         ? parseApplyPatchResult(value, declared, workspace)
         : parseCreateResult(value, declared, workspace);
   if (typeof parsed === 'string') return unavailable(parsed);
-  const files = eventIsError
-    ? parsed.map((file) =>
-        file.outcome === 'applied'
-          ? {
-              ...file,
-              outcome: 'uncertain' as const,
-              reversible: false,
-              message: 'The SDK marked this tool result as failed.',
-            }
-          : file,
-      )
-    : parsed;
+  const files = parsed.map((file) =>
+    redactOperationFile(
+      eventIsError && file.outcome === 'applied'
+        ? {
+            ...file,
+            outcome: 'uncertain' as const,
+            reversible: false,
+            message: 'The SDK marked this tool result as failed.',
+          }
+        : file,
+      workspace,
+    ),
+  );
   if (!files.length) return unavailable(eventIsError ? 'failed' : 'not-recorded');
   if (
     files.length > MAX_OPERATION_DIFF_FILES ||
@@ -83,20 +65,29 @@ export function parseOperationResult(
       MAX_OPERATION_DIFF_UNITS
   )
     return unavailable('too-large');
-  if (
-    files.some(
-      (file) =>
-        isRestrictedToolContent(file.patch) ||
-        (file.message !== undefined && isRestrictedToolContent(file.message)),
-    )
-  )
-    return unavailable('restricted');
   return operationDiffWithChanges({
     status: 'ready',
     source: 'tool-result',
     ...safeIdentity(callId, sourceSessionId),
     files,
   });
+}
+
+/** A restricted file must not hide unrelated files from the same tool operation. */
+export function redactOperationFile(file: OperationDiffFile, workspace: string): OperationDiffFile {
+  const restrictedPath = (path: string) =>
+    typeof readResultSource('Read', { file_path: path }, workspace, 'operation') === 'string';
+  if (!restrictedPath(file.path) &&
+    (!file.previousPath || !restrictedPath(file.previousPath)) &&
+    !isRestrictedToolContent(file.patch) &&
+    (file.message === undefined || !isRestrictedToolContent(file.message))) return file;
+  return {
+    ...file,
+    patch: '',
+    contentRestricted: true,
+    reversible: false,
+    message: 'This file’s content is restricted. Automatic undo is unavailable.',
+  };
 }
 
 export function readDeclaredFiles(
@@ -363,8 +354,7 @@ function editDiffLinesPatch(lines: readonly unknown[]): string | undefined {
       !isStrictRecord(raw) ||
       !['added', 'removed', 'unchanged'].includes(String(raw.type)) ||
       typeof raw.content !== 'string' ||
-      raw.content.includes('\n') ||
-      isRestrictedToolContent(raw.content)
+      raw.content.includes('\n')
     )
       return undefined;
     const numbers = raw.lineNumber;
@@ -511,9 +501,7 @@ function normalizeUnifiedPatch(source: string): { patch: string; complete: boole
     if (oldCount !== oldExpected || newCount !== newExpected) complete = false;
   }
   const patch = hunks.join('\n');
-  return hunks.length > 0 &&
-    patch.length <= MAX_OPERATION_DIFF_UNITS &&
-    !isRestrictedToolContent(patch)
+  return hunks.length > 0 && patch.length <= MAX_OPERATION_DIFF_UNITS
     ? { patch, complete }
     : undefined;
 }

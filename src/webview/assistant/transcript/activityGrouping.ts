@@ -24,6 +24,7 @@ const TOOL_CATEGORIES: Readonly<Record<string, ExploreCategory>> = {
 };
 
 export function classifyExploreTool(toolName: string): ExploreCategory | null {
+  if (toolName === 'github___get_file_contents') return 'fetch';
   for (const candidate of toolNameCandidates(toolName)) {
     const category = TOOL_CATEGORIES[candidate];
     if (category !== undefined) return category;

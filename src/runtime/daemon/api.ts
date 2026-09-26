@@ -50,6 +50,11 @@ export interface DaemonApi {
       id: string,
       options?: ResumeDaemonSessionOptions,
     ): Promise<DaemonSessionHandle>;
+    /** A committed rewind must be adopted before waiting for IDE readiness. */
+    resumeReplacement?(
+      id: string,
+      options?: ResumeDaemonSessionOptions,
+    ): Promise<DaemonSessionHandle>;
   };
   readonly settings: ConnectedDroid['settings'];
   readonly terminals: ConnectedDroid['terminals'];

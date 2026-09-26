@@ -88,7 +88,7 @@ export function Transcript({
     onResend: actions.handleEditResend,
   });
   const canResend =
-    !blocked && !running && state.turn?.status !== 'stopping' &&
+    editor.draft?.phase !== 'resending' && !blocked && !running && state.turn?.status !== 'stopping' &&
     state.connection.status === 'connected' && state.sessionId !== null &&
     state.interactions.length === 0 && state.settings.status !== 'updating';
   const currentStage = state.editAttachments?.messageId === editor.draft?.messageId ? state.editAttachments : null;

@@ -31,6 +31,19 @@ export function nativeResultTool(name: string): ResultTool | undefined {
   return RESULT_TOOLS.find((tool) => tool === name);
 }
 
+export function readGitHubResultPath(input: Record<string, unknown>): string | undefined {
+  const { owner, repo, path } = input;
+  if (typeof owner !== 'string' || typeof repo !== 'string' || typeof path !== 'string' ||
+    owner.length > MAX_TOOL_RESULT_SOURCE_LENGTH || repo.length > MAX_TOOL_RESULT_SOURCE_LENGTH ||
+    !/^[A-Za-z0-9_-]+$/u.test(owner) || !/^[A-Za-z0-9_.-]+$/u.test(repo) ||
+    repo === '.' || repo === '..' || path.length > MAX_TOOL_RESULT_SOURCE_LENGTH ||
+    /[\\\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(path)) return undefined;
+  const repositoryPath = path.replace(/^\/+|\/+$/gu, '');
+  if (repositoryPath.split('/').some((part) => part === '.' || part === '..')) return undefined;
+  const source = `${owner}/${repo}${repositoryPath ? `/${repositoryPath}` : ''}`;
+  return source.length <= MAX_TOOL_RESULT_SOURCE_LENGTH ? source : undefined;
+}
+
 export function readResultSource(
   tool: ResultTool,
   input: unknown,
@@ -38,13 +51,23 @@ export function readResultSource(
   callId: string,
 ): ResultSource {
   if (
-    !workspace ||
     !isStrictRecord(input) ||
     !callId ||
     callId.length > MAX_BRIDGE_ID_LENGTH ||
     /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(callId)
   )
     return 'untrusted';
+  if (tool === 'WebSearch') {
+    if (typeof input.query !== 'string' || !input.query.trim() ||
+      input.query.length > MAX_SOURCE_INPUT_LENGTH) return 'untrusted';
+    return isRestrictedToolContent(input.query) ? 'restricted' : { tool, path: 'Web search', callId };
+  }
+  if (tool === 'github___get_file_contents') {
+    const path = readGitHubResultPath(input);
+    if (path === undefined) return 'untrusted';
+    return SENSITIVE_PATH.test(path) ? 'restricted' : { tool, path, callId };
+  }
+  if (!workspace) return 'untrusted';
   const raw =
     tool === 'Read'
       ? (input.file_path ?? input.filePath)

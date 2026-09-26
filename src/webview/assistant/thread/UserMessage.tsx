@@ -110,7 +110,7 @@ export function UserMessage({
     // Restoring focus can synchronously report the new element's default selection.
     editor.selection.current = selection;
   }, [editing, editor.selection, messageId]);
-  const editable = messageId !== null && !resending;
+  const editable = messageId !== null && editor.draft?.phase !== 'resending';
   // Clicking anywhere outside the edit card cancels the edit without
   // a confirmation (Cursor's light dismissal; Escape does the same
   // from the textarea). A popover open inside the card (mode/model
@@ -197,7 +197,7 @@ export function UserMessage({
       ? editStage.attachments
       : [];
   const rejectionCopy =
-    editing && rejection !== null && rejection.messageId === messageId
+    editing && rejection !== null && rejection.messageId === messageId && rejection.sequence > draft.rejectionSequence
       ? EDIT_REJECT_COPY[rejection.reason]
       : null;
   const settingsUpdating = editorEnv.settings.status === 'updating';

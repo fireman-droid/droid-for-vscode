@@ -7,7 +7,7 @@ export const MAX_TOOL_RESULT_TEXT_UNITS = 8_000;
 export const MAX_TOOL_RESULT_LINES = 120;
 export const MAX_CONVERSATION_TOOL_RESULT_UNITS = 128_000;
 export const MAX_TOOL_RESULT_SOURCE_LENGTH = 512;
-export const RESULT_TOOLS = ['Read', 'Grep', 'Glob', 'LS'] as const;
+export const RESULT_TOOLS = ['Read', 'Grep', 'Glob', 'LS', 'WebSearch', 'github___get_file_contents'] as const;
 export type ResultTool = (typeof RESULT_TOOLS)[number];
 export const RESULT_UNAVAILABLE_REASONS = [
   'empty',
@@ -21,6 +21,7 @@ export type ResultUnavailableReason = (typeof RESULT_UNAVAILABLE_REASONS)[number
 
 export interface ToolResultSource {
   readonly tool: ResultTool;
+  /** Workspace-relative path, repository path, or a fixed remote-search label. */
   readonly path: string;
   readonly callId: string;
 }

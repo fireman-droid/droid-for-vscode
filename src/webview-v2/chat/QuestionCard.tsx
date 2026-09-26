@@ -55,8 +55,9 @@ export function QuestionCard({
   const stage = edit.stage?.messageId === messageId ? edit.stage : null;
   const impact = edit.impact?.messageId === messageId ? edit.impact : null;
   const draft = editor.draft?.messageId === messageId ? editor.draft : null;
-  const attachmentDisabled = edit.disabled || stage === null;
-  const rejection = edit.rejection !== null && edit.rejection.messageId === messageId ? EDIT_REJECT_COPY[edit.rejection.reason] : null;
+  const pending = draft?.phase === 'resending';
+  const attachmentDisabled = edit.disabled || stage === null || pending;
+  const rejection = draft && edit.rejection !== null && edit.rejection.messageId === messageId && edit.rejection.sequence > draft.rejectionSequence ? EDIT_REJECT_COPY[edit.rejection.reason] : null;
   const originalAttachments = <>
     {images.length ? <div className="v2-sent-attachments">
       {images.map((image) => image.data.length === 0
@@ -72,6 +73,6 @@ export function QuestionCard({
     editSettings={edit.settings} editDisabled={attachmentDisabled} onAttach={edit.actions.handleEditAttachFiles} rejection={rejection}
     onPaste={edit.onPaste} onDrop={edit.onDrop} onDragOver={edit.onDragOver}
     onResend={() => { if (messageId && draft) editor.submit(messageId, draft.restoreFiles && impact !== null && impact.restorableCount + impact.createdCount > 0); }}
-    restoreFiles={draft && impact ? <RestoreFiles impact={impact} checked={draft.restoreFiles} openDisabled={edit.disabled} onChange={(restoreFiles) => editor.update(draft.messageId, { restoreFiles })} /> : null}
+    restoreFiles={draft && impact ? <RestoreFiles impact={impact} checked={draft.restoreFiles} disabled={pending || draft.resumeOnly} restored={draft.resumeOnly && draft.restoreFiles} openDisabled={edit.disabled || pending} onChange={(restoreFiles) => editor.update(draft.messageId, { restoreFiles })} /> : null}
     plan={plan && onPlanToggle ? <PlanLine key={plan.anchorToolUseId} anchor={plan} running={planRunning} override={planChoice?.id === plan.anchorToolUseId ? planChoice.expanded : null} onToggle={onPlanToggle} /> : null} />;
 }
