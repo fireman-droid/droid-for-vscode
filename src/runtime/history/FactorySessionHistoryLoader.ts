@@ -12,7 +12,7 @@ import {
   type SessionHistoryResult,
   unavailableSessionHistory,
 } from './SessionHistory';
-import { projectSessionHistory } from './projectSessionHistory';
+import { projectSessionHistoryAsync } from './asyncHistoryProjection';
 
 export interface FactoryHistoryClient {
   loadSession(params: { sessionId: string }): Promise<unknown>;
@@ -46,7 +46,7 @@ export class FactorySessionHistoryLoader implements SessionHistoryLoader {
     if (loaded === LOAD_FAILED) {
       return unavailableSessionHistory();
     }
-    return projectSessionHistory(loaded, {
+    return projectSessionHistoryAsync(loaded, {
       workspaceRoot: cwd,
       sourceSessionId: sessionId,
     });

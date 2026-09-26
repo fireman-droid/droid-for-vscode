@@ -109,11 +109,22 @@ interface Projection {
 
 export function projectSessionHistory(
   loaded: unknown,
+  options?: { readonly workspaceRoot?: string; readonly sourceSessionId?: string },
+): SessionHistoryResult {
+  const steps = projectSessionHistorySteps(loaded, options);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+/** One message per step lets asynchronous history readers share this projection. */
+export function* projectSessionHistorySteps(
+  loaded: unknown,
   options?: {
     readonly workspaceRoot?: string;
     readonly sourceSessionId?: string;
   },
-): SessionHistoryResult {
+): Generator<void, SessionHistoryResult> {
   try {
     const messages = readLoadedMessages(loaded);
     if (!messages) {
@@ -146,6 +157,7 @@ export function projectSessionHistory(
       messageIndex += 1
     ) {
       projectMessage(projection, messages[messageIndex], messageIndex);
+      yield;
     }
 
     const truncated = projection.partial;

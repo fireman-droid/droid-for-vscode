@@ -86,7 +86,7 @@ export function collapseStoredConversationCatalog(
       if (conversationId === undefined) {
         return undefined;
       }
-      const conversation = store.readConversation(conversationId);
+      const conversation = store.readConversationIdentity(conversationId);
       return conversation === undefined
         ? undefined
         : {

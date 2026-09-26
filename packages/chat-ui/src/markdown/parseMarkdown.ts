@@ -28,8 +28,9 @@ export function parseMarkdown(text: string, thinking: boolean): readonly RootCon
       return index;
     }
     if (node.type !== 'element') return;
-    for (const [key, tags] of Object.entries(urlAttributes)) {
-      if (Object.hasOwn(node.properties, key) && (tags === null || tags.includes(node.tagName))) {
+    for (const key of Object.keys(node.properties)) {
+      const tags = Object.hasOwn(urlAttributes, key) ? urlAttributes[key] : undefined;
+      if (tags === null || tags?.includes(node.tagName)) {
         const value = String(node.properties[key] || '');
         node.properties[key] = thinking ? safeMarkdownUrlTransform(value) : markdownUrlTransform(value, key);
       }

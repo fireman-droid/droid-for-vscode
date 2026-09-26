@@ -5,6 +5,7 @@ import { FactoryDroidRuntime } from '../runtime/FactoryDroidRuntime';
 import { createBtwSidecar } from '../runtime/btw/BtwSidecar';
 import { createDaemonBtwSidecar } from '../runtime/btw/DaemonBtwSidecar';
 import { FactorySessionCatalog } from '../runtime/catalog/FactorySessionCatalog';
+import { SessionCatalogReader } from '../runtime/catalog/SessionCatalogReader';
 import { FactorySessionHistoryLoader } from '../runtime/history/FactorySessionHistoryLoader';
 import { createDaemonFirstHistoryLoader } from '../runtime/history/DaemonSessionHistoryLoader';
 import {
@@ -213,7 +214,9 @@ export function activate(context: vscode.ExtensionContext): void {
     persistence,
     context.globalStorageUri,
   );
-  const sessionCatalog = new FactorySessionCatalog();
+  const catalogReader = new SessionCatalogReader(context.asAbsolutePath('dist/extension/sessionCatalogWorker.cjs'));
+  context.subscriptions.push(catalogReader);
+  const sessionCatalog = new FactorySessionCatalog({ listSdkSessions: catalogReader.list });
   const previewController = new PreviewPanelController(diagnostics);
   // Read-only terminal mirror of execute-command output; takeover is
   // fail-closed by design (native-terminal design slice A).

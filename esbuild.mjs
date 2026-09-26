@@ -30,6 +30,23 @@ const extensionResult = await build({
 
 const notices = createThirdPartyNotices(process.cwd());
 await notices.add(extensionResult.metafile);
+const catalogWorkerResult = await build({
+  entryPoints: ['src/runtime/catalog/sessionCatalogWorker.ts'],
+  outfile: 'dist/extension/sessionCatalogWorker.cjs',
+  bundle: true,
+  external: optionalWsAddons,
+  packages: 'bundle',
+  platform: 'node',
+  format: 'cjs',
+  target: 'node20',
+  minify: true,
+  keepNames: true,
+  sourcemap: false,
+  legalComments: 'eof',
+  metafile: true,
+  logLevel: 'info',
+});
+await notices.add(catalogWorkerResult.metafile);
 await notices.write('dist/extension/THIRD_PARTY_LICENSES.txt');
 
 execFileSync(process.execPath, ['scripts/buildWebviewV2.mjs', '--production'], { stdio: 'inherit' });
@@ -40,6 +57,10 @@ assertExpectedExternals(extensionResult.metafile, {
     path === 'vscode' ||
     isBuiltin(path) ||
     optionalWsAddons.includes(path),
+});
+assertExpectedExternals(catalogWorkerResult.metafile, {
+  required: new Set(),
+  allowed: (path) => isBuiltin(path) || optionalWsAddons.includes(path),
 });
 
 function assertExpectedExternals(metafile, expectation) {

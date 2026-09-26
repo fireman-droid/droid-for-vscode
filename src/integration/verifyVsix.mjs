@@ -14,6 +14,7 @@ const expectedEntries = [
   // Root LICENSE ships as LICENSE.txt alongside the manifest.
   'extension/LICENSE.txt',
   'extension/dist/extension/extension.cjs',
+  'extension/dist/extension/sessionCatalogWorker.cjs',
   // Notices for the dependencies bundled into the extension host entry.
   'extension/dist/extension/THIRD_PARTY_LICENSES.txt',
   // Lazily injected mermaid bundle; ships alongside webview.js but is
@@ -105,6 +106,9 @@ assert.doesNotMatch(
   'Factory Droid SDK must be bundled into the extension',
 );
 assert.doesNotMatch(extensionBundle, /sourceMappingURL/u);
+const catalogWorkerBundle = readEntry('extension/dist/extension/sessionCatalogWorker.cjs');
+assert.doesNotMatch(catalogWorkerBundle, /\brequire\(["']@factory\/droid-sdk/u);
+assert.doesNotMatch(catalogWorkerBundle, /sourceMappingURL/u);
 
 const webviewBundle = readEntry('extension/dist/webview/webview.js');
 assert.deepEqual(

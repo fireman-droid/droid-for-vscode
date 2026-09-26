@@ -15,6 +15,7 @@ import {
   MAX_RECOVERY_CONVERSATIONS,
   adoptConversationSuccessor,
   cloneConversation,
+  cloneTurn,
   cloneTranscriptState,
   createRootConversation,
   forkConversation,
@@ -130,6 +131,13 @@ export class SessionRecoveryStore {
     return cloneConversation(conversation);
   }
 
+  readConversationIdentity(conversationId: string): Pick<ConversationRecoveryRecord, 'conversationId' | 'activeSessionId'> | undefined {
+    const conversation = this.disposed ? undefined : this.conversations.get(conversationId);
+    return conversation === undefined ? undefined : {
+      conversationId: conversation.conversationId, activeSessionId: conversation.activeSessionId,
+    };
+  }
+
   readDisplay(conversationId: string): ConversationDisplaySnapshot | undefined {
     const conversation = this.readConversation(conversationId);
     return conversation?.display;
@@ -173,12 +181,13 @@ export class SessionRecoveryStore {
         ? []
         : conversation.turns.find(({ turnId }) => turnId === activeTurn.turnId)
             ?.toolOperations ?? [];
+    const mergedOperations = mergeToolOperations(existingOperations, toolOperations);
     if (
       conversation.activeSessionId === sessionId &&
       previousTurn?.turnId === turn?.turnId &&
       previousTurn?.status === turn?.status &&
       previousTurn?.error === turn?.error &&
-      JSON.stringify(existingOperations) === JSON.stringify(mergeToolOperations(existingOperations, toolOperations))
+      mergedOperations === existingOperations
     ) return true;
     let next = writeConversationDisplay(
       conversation,
@@ -196,7 +205,7 @@ export class SessionRecoveryStore {
         sessionId,
         activeTurn.turnId,
         activeTurn.status,
-        toolOperations,
+        mergedOperations,
       );
     }
     this.storeConversation(next);
@@ -328,25 +337,27 @@ export class SessionRecoveryStore {
   }
 
   readTurn(conversationId: string, turnId: string): ConversationTurnRecord | undefined {
-    return this.readConversation(conversationId)?.turns.find(
+    const conversation = this.disposed ? undefined : this.conversations.get(conversationId);
+    const turn = conversation?.turns.find(
       (turn) => turn.turnId === turnId,
     );
+    return turn === undefined ? undefined : cloneTurn(turn);
   }
 
   readLatestChanges(conversationId: string): ConversationTurnRecord | undefined {
-    const conversation = this.readConversation(conversationId);
+    const conversation = this.disposed ? undefined : this.conversations.get(conversationId);
     return conversation === undefined
       ? undefined
       : readLatestConversationChanges(conversation);
   }
 
   readLatestOperations(conversationId: string): ConversationTurnRecord | undefined {
-    const conversation = this.readConversation(conversationId);
+    const conversation = this.disposed ? undefined : this.conversations.get(conversationId);
     if (conversation === undefined) return undefined;
     for (let index = conversation.turns.length - 1; index >= 0; index -= 1) {
       const turn = conversation.turns[index];
       if (turn !== undefined && (turn.toolOperations?.length ?? 0) > 0) {
-        return turn;
+        return cloneTurn(turn);
       }
     }
     return undefined;
@@ -361,7 +372,7 @@ export class SessionRecoveryStore {
     const turn = conversation?.turns.find((entry) => entry.turnId === turnId);
     if (!conversation || !turn || turn.sessionId !== sessionId) return false;
     const merged = mergeToolOperations(turn.toolOperations ?? [], operations);
-    if (JSON.stringify(merged) === JSON.stringify(turn.toolOperations ?? [])) return true;
+    if (merged === turn.toolOperations) return true;
     this.storeConversation(recordTurnToolEvidence(conversation, sessionId, turnId, turn.status, merged));
     this.enforceLimits();
     this.changed();

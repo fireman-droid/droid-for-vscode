@@ -481,7 +481,7 @@ function mergeDerivedTurns(
   return boundTurns([...turns.values()]);
 }
 
-function cloneTurn(turn: ConversationTurnRecord): ConversationTurnRecord {
+export function cloneTurn(turn: ConversationTurnRecord): ConversationTurnRecord {
   return {
     ...turn,
     files: turn.files.map((file) => ({ ...file })),

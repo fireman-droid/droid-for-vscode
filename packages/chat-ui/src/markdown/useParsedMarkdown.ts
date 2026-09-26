@@ -6,6 +6,9 @@ import type { MarkdownParseRequest, MarkdownParseResponse } from './markdownWork
 import { createMarkdownParser } from './markdownParserQueue';
 
 const BACKGROUND_THRESHOLD = 8_192;
+// Streams reparse on every appended batch. Move medium replies off the UI
+// thread before their repeated parses consume most of a 16 ms frame.
+const STREAM_BACKGROUND_THRESHOLD = 2_048;
 const canUseWorker = () => typeof Worker !== 'undefined' && markdownWorkerSource !== undefined;
 type Parsed = { text: string; thinking: boolean; nodes: readonly RootContent[] };
 
@@ -18,7 +21,8 @@ export function useParsedMarkdown(text: string, thinking: boolean, streaming: bo
   latest.current = { text, thinking, streaming };
   const request = useRef<(() => void) | null>(null);
   const lastVisible = useRef<Parsed>({ text: '', thinking, nodes: [] });
-  const offload = !unavailable && (background || text.length >= BACKGROUND_THRESHOLD && canUseWorker());
+  const threshold = streaming ? STREAM_BACKGROUND_THRESHOLD : BACKGROUND_THRESHOLD;
+  const offload = !unavailable && (background || text.length >= threshold && canUseWorker());
   if (offload && !background) setBackground(true);
   const synchronous = useMemo(() => offload ? null : parseMarkdown(text, thinking), [offload, text, thinking]);
 

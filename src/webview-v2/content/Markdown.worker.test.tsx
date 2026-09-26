@@ -37,6 +37,28 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
+it('keeps a medium streamed reply responsive while preserving its visible prefix and final references', async () => {
+  const prefix = 'Visible before background parsing.\n\n[Earlier reference][docs]\n\n';
+  const medium = `${prefix}${padding.slice(0, 3_000)}\n\n`;
+  const complete = `${medium}Final sentence.\n\n[docs]: https://example.invalid/medium`;
+  const { rerender, container } = render(<Markdown text={prefix} streaming />);
+  expect(ControlledWorker.instances).toHaveLength(0);
+  expect(container.textContent).toContain('Visible before background parsing.');
+  rerender(<Markdown text={medium} streaming />);
+  const worker = ControlledWorker.instances[0]!;
+  expect(worker.requests).toHaveLength(1);
+  expect(container.textContent).toContain('Visible before background parsing.');
+  rerender(<Markdown text={complete} streaming={false} />);
+  expect(worker.requests).toHaveLength(1);
+  act(() => worker.complete());
+  expect(worker.requests[1]?.text).toBe(complete);
+  act(() => worker.complete());
+  await waitFor(() => expect(container.querySelector('[data-markdown-pending]')).toBeNull());
+  expect(screen.getByRole('link', { name: 'Earlier reference' }).getAttribute('href')).toBe('https://example.invalid/medium');
+  expect(container.textContent).toContain('Final sentence.');
+  expect(worker.terminated).toBe(true);
+});
+
 it('coalesces appends and resolves whole-document references, loose lists, tables, math, code and copied source at completion', async () => {
   const prefix = `[Earlier reference][docs]\n\n${padding}\n\n- First paragraph\n\n  Continued in the same item\n\n- Second item\n\n`;
   const text = `${prefix}| Column | Value |\n| --- | --- |\n| Kept | Whole |\n\nFormula $x^2$.\n\n\`\`\`typescript\nconst finalValue = 42;\n\`\`\`\n\n[docs]: https://example.invalid/final\n\n<script>unsafe()</script>`;

@@ -23,7 +23,7 @@ import {
   readSubagentInvocationRecords,
   type SubagentInvocationRecord,
 } from '../subagents/subagentSummary';
-import { projectSessionMessages } from './projectSessionHistory';
+import { projectSessionMessagesAsync } from './asyncHistoryProjection';
 import { readPersistedSessionMessages } from './persistedSessionMessages';
 import type {
   SessionHistoryLoader,
@@ -108,15 +108,15 @@ export function createDaemonFirstHistoryLoader(
       let fetched = persisted === null
         ? await fetchSessionMessages(await options.getDroid(), request.sessionId)
         : { messages: orderMessagesChronologically(persisted.messages).slice(-MAX_RAW_MESSAGE_WINDOW), pages: 0 };
-      const project = (messages: unknown[]) => projectSessionMessages(messages, {
+      const project = (messages: unknown[]) => projectSessionMessagesAsync(messages, {
         workspaceRoot: request.cwd,
         sourceSessionId: request.sessionId,
       });
-      let projected = project(fetched.messages);
+      let projected = await project(fetched.messages);
       if (projected.status !== 'available' && persisted !== null) {
         persisted = null;
         fetched = await fetchSessionMessages(await options.getDroid(), request.sessionId);
-        projected = project(fetched.messages);
+        projected = await project(fetched.messages);
       }
       if (projected.status !== 'available') {
         throw new Error('daemon message projection unavailable');

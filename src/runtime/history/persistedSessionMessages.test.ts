@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DaemonApi } from '../daemon/api';
 import { createDaemonFirstHistoryLoader } from './DaemonSessionHistoryLoader';
 import { readPersistedSessionMessages } from './persistedSessionMessages';
-import * as historyProjection from './projectSessionHistory';
+import * as historyProjection from './asyncHistoryProjection';
 import { unavailableSessionHistory } from './SessionHistory';
 
 const directories: string[] = [];
@@ -133,7 +133,7 @@ describe('persisted history snapshot', () => {
 
   it('tries the public daemon before the process fallback when snapshot projection is unavailable', async () => {
     const { directory } = await fixture([message('first', 'user', text('snapshot'))]);
-    vi.spyOn(historyProjection, 'projectSessionMessages').mockReturnValueOnce(unavailableSessionHistory());
+    vi.spyOn(historyProjection, 'projectSessionMessagesAsync').mockResolvedValueOnce(unavailableSessionHistory());
     const getMessages = vi.fn(async () => [{ id: 'daemon', role: 'user', content: text('public history'), createdAt: 1 }]);
     const read = loader(directory, getMessages);
     expect(await read.load.loadHistory(request)).toMatchObject({ status: 'available', state: {
