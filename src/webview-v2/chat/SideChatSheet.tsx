@@ -21,6 +21,7 @@ export function SideChatSheet({ state, onAsk, modelCatalog, defaultModelId, ...p
   const images = useBtwImages(unavailable);
   const picker = useRef<HTMLInputElement>(null);
   const models = modelCatalog?.items ?? [];
+  const modelLabel = models.find((model) => model.id === selectedModel)?.displayName ?? selectedModel ?? 'Model';
   const missingModel = selectedModel !== undefined && !models.some((model) => model.id === selectedModel);
   return <SideChatView {...props} state={{ ...state, status: state.status === 'forking' ? 'preparing' : state.status }} maxTextLength={MAX_BTW_TEXT_LENGTH}
     notice={images.reading ? 'Preparing images…' : images.notice ?? props.notice}
@@ -34,10 +35,10 @@ export function SideChatSheet({ state, onAsk, modelCatalog, defaultModelId, ...p
       }} />
       <Button variant="ghost" size="icon-sm" disabled={unavailable} title="Attach images" aria-label="Attach images to side question" onClick={() => picker.current?.click()}><ImagePlus /></Button>
       <Select value={selectedModel ?? ''} onValueChange={setChosenModel} disabled={unavailable || !models.length}>
-        <SelectTrigger aria-label="Side conversation model" title="Model for side questions" className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1 text-xs">
+        <SelectTrigger aria-label="Side conversation model" title={`Model for side questions: ${modelLabel}`} className="ml-auto h-7 min-w-0 max-w-[180px] flex-initial gap-1 border-0 bg-transparent px-1 text-xs">
           <SelectValue placeholder="Model" />
         </SelectTrigger>
-        <SelectContent side="top" align="end" className="max-h-80 max-w-[min(360px,calc(100vw-24px))]">
+        <SelectContent side="top" align="end" className="max-h-80 w-[240px] max-w-[min(360px,calc(100vw-24px))]">
           {missingModel ? <SelectItem value={selectedModel!}>{selectedModel}</SelectItem> : null}
           {models.map((model) => <SelectItem key={model.id} value={model.id}>{model.displayName}</SelectItem>)}
         </SelectContent>
