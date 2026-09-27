@@ -1,4 +1,4 @@
-# DroidVisX 项目规则
+# Droid 项目规则
 
 ## 范围与事实
 

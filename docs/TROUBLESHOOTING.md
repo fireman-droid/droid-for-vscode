@@ -11,7 +11,7 @@ Diff 文件数可能因真实净变化还原而减少，不能只凭数字判断
 `host.changes.settled` 来源、文件数和 `host.changes.snapshot.diff`；没有快照时还要
 区分读取未知与确认无变化。故障报告请给出会话、问题文本和发生时间，先去敏。
 
-1. 运行 `DroidVisX: Open Logs`。
+1. 运行 `Droid: Open Logs`。
 2. 确认最近一次 `extension.activated`。
 3. 找同一个 `act` 的 `webview.boot-ok`、`runtime.initialize.finished`
    和 `webview.render-ok`。
@@ -44,10 +44,10 @@ global storage 路径，不要直接套用上面的 Cursor Windows 路径。
 
 ## 常用命令
 
-- `DroidVisX: Open Logs`
-- `DroidVisX: Export Diagnostics Bundle`
-- `DroidVisX: Shut Down Background Daemon`
-- `DroidVisX: Manage Droid Capabilities`
+- `Droid: Open Logs`
+- `Droid: Export Diagnostics Bundle`
+- `Droid: Shut Down Background Daemon`
+- `Droid: Manage Droid Capabilities`
 
 ### Plugins、MCP 与默认设置管理
 

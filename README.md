@@ -1,6 +1,6 @@
-# DroidVisX
+# Droid
 
-DroidVisX 是 Factory Droid CLI 在 Cursor / VS Code 中的非官方本地可视化工作台。
+Droid 是 Factory Droid CLI 在 Cursor / VS Code 中的非官方本地可视化工作台。
 它复用本机 Droid CLI/SDK 的会话、模型、权限、工具与认证，不建立第二套
 AI 后端。
 
@@ -15,8 +15,11 @@ AI 后端。
    BYOK 见 [官方说明](https://docs.factory.ai/model-independence/byok.md)。
 3. 在编辑器扩展面板选择 **Install from VSIX**，安装本地构建的 `dist/droidvisx.vsix`。
    当前是发布准备阶段，没有可承诺的 Marketplace 或 GitHub Release 下载入口。
-4. 执行 **Developer: Reload Window**，打开 DroidVisX 侧栏，选择工作区和模型。
+4. 执行 **Developer: Reload Window**，打开 Droid 侧栏，选择工作区和模型。
    仅在理解执行范围后批准工具权限；交互终端的直接输入不经过模型权限流程。
+
+展示名称已改为 Droid；扩展标识 `droidvisx.droidvisx`、命令／配置前缀与安装包
+路径保持原样，覆盖安装继续使用既有设置与会话。
 
 默认 `daemon` 模式让会话在窗口 Reload 后继续运行；也可在设置中明确选择
 `process` 模式，每窗口运行独立进程。关闭面板或编辑器不代表 daemon 任务已停止。
@@ -40,7 +43,7 @@ AI 后端。
   MCP 或插件发往相应服务。其认证、保留策略及服务条款由对应服务决定。
 - 扩展会在编辑器的本地存储中保留恢复快照、会话状态和托管图片附件；
   它们不是 Git 仓库的一部分，也不承诺随卸载扩展自动清除。
-- Host／SDK 诊断写入 `DroidVisX Logs` 输出频道和扩展 global storage 下的
+- Host／SDK 诊断写入 `Droid Logs` 输出频道和扩展 global storage 下的
   `logs` 目录。日志可能包含提示词、工具输入输出、命令、文件路径、会话标识、
   错误和堆栈。凭据形状会脱敏，但不能保证消除所有敏感内容。
 - 日志按 UTC 日期轮转，默认总预算为 200 MiB，尽力删除最旧的往日日志。
@@ -171,39 +174,36 @@ pnpm run release:check
 pnpm 10 可能提示忽略部分依赖的安装脚本；本次 Windows 干净安装在该提示下
 仍成功构建和打包，不需要为此默认批准所有脚本。
 
-### 只看 UI，不连接真实 Runtime
+### 前端开发与预览
+
+Chat、Models、Mission、Viewer 和 Review 统一在 `src/webview-v2/`，只维护这一套前端。
+开发入口使用 `vite.webview-v2.config.ts`；目录和配置名保留，命令统一如下：
 
 ```powershell
-pnpm run dev:webview-v2
+pnpm run dev:webview
 ```
 
 打开 <http://127.0.0.1:4176/?scenario=ask-user-result&theme=light&width=480>。
 通过查询参数选择场景、主题和宽度。非 `/live` 路径使用模拟数据，不要求登录或
-模型密钥，不要把它当成真实会话。
+模型密钥，不要把它当成真实会话。添加 `view=models`、`view=mission` 或 `view=viewer`
+可预览其他页面。
+
+单独检查或构建前端：
+
+```powershell
+pnpm run typecheck:webview
+pnpm run build:webview
+```
+
+单独构建输出在 `dist/webview-v2/`；`pnpm run build` 把五页生产资源输出到
+`dist/webview/`，由 VSIX 收录。安装状态见 `docs/STATUS.md`，界面在 Cursor 内由用户验收。
 
 需要真实浏览器联调时，在新电脑的编辑器设置中将机器级
 `droidvisx.browserDev.sourceRoot` 指向当地源码目录，不照抄旧电脑绝对路径。
-执行 **DroidVisX: Start Browser Dev Client**，打开它复制的新链接。该命令使用
-V2 配置在 `4173/live` 挂载与侧栏相同的 `ChatApp`，连接当前 Host 的真实会话；
+执行 **Droid: Start Browser Dev Client**，打开它复制的新链接。该命令使用
+同一前端配置在 `4173/live` 挂载与侧栏相同的 `ChatApp`，连接当前 Host 的真实会话；
 不使用固定预览宽度或模拟数据。独立 `4176` 预览不能替代这个启动流程。
 升级扩展后先 **Developer: Reload Window**，再重新执行 Start；不要复用旧标签页链接。
-
-### Webview V2
-
-Chat、Models、Mission Control、Viewer 和 Review 的生产构建已统一使用 V2。
-安装状态见 `docs/STATUS.md`；可单独预览：
-
-```powershell
-pnpm run dev:webview-v2
-pnpm run build:webview-v2
-```
-
-预览地址为 `http://127.0.0.1:4176/?scenario=conversation&theme=dark&width=400`。
-使用模拟数据，不连接模型；添加 `view=models`、`view=mission` 或 `view=viewer`
-可预览其他页面。单独构建输出在 `dist/webview-v2/`；`pnpm run build`
-把五页生产资源输出到 `dist/webview/`，由 VSIX 收录。界面在 Cursor 内由用户验收。
-旧 V1 的 `pnpm run dev:webview`／`4173/app` 仅留作开发/回归参考，
-不再由 Browser Dev Client 命令启动，不进入生产包。
 
 ### Git 不会迁移的内容
 

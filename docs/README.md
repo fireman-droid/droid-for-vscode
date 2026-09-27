@@ -1,20 +1,23 @@
-# DroidVisX 文档
+# Droid 文档
 
 文档只保留当前有效信息。历史设计、验收记录和施工流水从 Git 历史查看，
 不在仓库里维护第二份。
+
+第一次读代码从 [架构与代码导航](./ARCHITECTURE.md) 开始，按其中的源码阅读顺序和修改定位表查找。
+前端源码统一在 `src/webview-v2/`；预览、构建和类型检查命令见根目录
+[`README.md`](../README.md#前端开发与预览)。
 
 | 文件 | 内容 |
 | --- | --- |
 | [`PLAN.md`](./PLAN.md) | 当前目标、执行顺序和明确不做的内容 |
 | [`STATUS.md`](./STATUS.md) | 已完成、进行中、受限和未实现能力 |
-| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | 四层架构、关键文件和安全边界 |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | 源码阅读顺序、目录职责、发送/恢复流程与修改定位 |
 | [`DESIGN.md`](./DESIGN.md) | UI 视觉与交互规则 |
 | [`chat-ui`](../packages/chat-ui/README.md) | 独立前端包的分发、接口和其他项目接入示例 |
 | [`CAPABILITIES.md`](./CAPABILITIES.md) | Droid 能力来源与产品支持矩阵 |
 | [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md) | 日志位置和排障步骤 |
 | [`FEEDBACK.md`](./FEEDBACK.md) | Bug、样式和功能反馈模板 |
-| [`ARCHITECTURE_SDK_REVIEW.md`](./ARCHITECTURE_SDK_REVIEW.md) | 原调查及 A–F 实施对照；当前结构见 ARCHITECTURE，交付事实见 STATUS |
-| [`RUNTIME_CORRECTNESS_REVIEW.md`](./RUNTIME_CORRECTNESS_REVIEW.md) | 用户要求的运行正确性报告；静态问题、候选、覆盖缺口与整改顺序 |
+| [`RUNTIME_CORRECTNESS_REVIEW.md`](./RUNTIME_CORRECTNESS_REVIEW.md) | 旧基线审查与未复核候选；当前结论以 `STATUS.md` 为准 |
 
 换电脑的依赖安装、构建、静态预览与本机配置边界见根目录 [`README.md`](../README.md)。
 安装、非官方声明、MIT 与数据处理说明也在该入口；本地发布准备和人工发布阻塞
