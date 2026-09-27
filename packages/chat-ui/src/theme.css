@@ -8,6 +8,8 @@
 @import './styles/motion.css';
 @import './styles/droid-motion.css';
 @import './styles/chat-region.css';
+@import './styles/composer-queue.css';
+@import './styles/composer-changes.css';
 @import './styles/plan.css';
 @import './styles/content.css';
 @source './**/*.{ts,tsx}';

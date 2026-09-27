@@ -35,7 +35,7 @@ export function UserMessageView({ id, text, quote, attachments, onEdit, placehol
   readonly plan?: ReactNode;
 }) {
   return <div data-question-id={id} data-question-card="" inert={placeholder || undefined} aria-hidden={placeholder || undefined}
-    className={cn('min-w-0', placeholder && 'invisible pointer-events-none')}>
+    className={cn('min-w-0', Boolean(plan) && 'dvx-question-plan-card', placeholder && 'invisible pointer-events-none')}>
     <UserMessageBubble attachments={attachments} onEdit={onEdit} placeholder={placeholder}>
       {quote ? <span className="mb-[5px] block max-h-[2lh] overflow-hidden text-[11px] leading-[1.42] text-muted-foreground">{quote}</span> : null}
       <span className="block max-h-[4lh] overflow-hidden">{text}</span>

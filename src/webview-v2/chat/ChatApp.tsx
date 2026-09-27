@@ -19,6 +19,7 @@ import { LiveTranscript } from './Transcript';
 import { useMessageActions } from './editing/useMessageActions';
 import { InteractionPanel } from './InteractionPanel';
 import { QueueBar } from './QueueBar';
+import { ComposerChanges } from './ComposerChanges';
 import { SessionMenu } from './SessionMenu';
 import { useSessionActions } from './sessions/useSessionActions';
 import { ComposerControls } from './ComposerControls';
@@ -193,14 +194,17 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
         {notice ? <TransientNotice key={notice.sequence} diagnostic={notice} /> : null}
         {statusMessage && !running && !ideReconnecting ? <p role="status" className="text-xs text-muted-foreground">{statusMessage}</p> : null}
         <SessionRecovery state={state} blocked={transition.blocking} onReconnect={sessions.handleRetry} port={port} />
-        <QueueBar queue={state.queue} flow={composer} />
-        {composer.queueEditingId === null ? null : <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="v2-composer-dock">
+        <QueueBar key={state.conversationId ?? 'none'} queue={state.queue} flow={composer} />
+        <ComposerChanges store={store} port={port} blocked={operationsBlocked} onStop={() => void composer.callbacks.onCancel()} />
+        {composer.queueEditingId === null ? null : <div className="v2-composer-queue-edit flex items-center justify-between text-xs text-muted-foreground">
           <span>Editing queued message</span><Button variant="ghost" size="sm" onClick={composer.handleQueueEditCancel}>Cancel edit</Button>
         </div>}
         <Composer key={state.conversationId ?? 'none'} state={state} port={port} flow={composer} blocked={operationsBlocked} quoteNotice={quoteNotice}
           onFileSearch={workspace.handleFileSearch} onNavigate={setNavigation} onBtwOpen={openBtw}
           renderInputRow={(input, action) => <ComposerControls input={input} action={action} state={state} port={port} blocked={operationsBlocked} page={navigation.page} navigationId={navigation.id} onPageChange={setNavigation} onCompact={compact} compactPending={sessions.compactPending} theme={theme.context} onNewSession={sessions.handleNewSession}
             onMissionOpen={openMission} missionActive={host.missionWorkspaceRoute === 'detail'} />} />
+        </div>
       </>}
       overlay={<>
       {transition.overlay !== null ? <ConversationWait phase={transition.phase} hasSnapshot={transition.hasSnapshot}

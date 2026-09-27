@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ArrowUp, ChevronDown, Pencil, Trash2 } from 'lucide-react';
+import { ChevronRight, Circle, CornerDownLeft, Ellipsis, Pencil, Trash2 } from 'lucide-react';
 import { QuoteChips } from '@droidvisx/chat-ui/chat/QuoteChips';
 import { MAX_QUEUED_MESSAGES, type QueuePausedReason, type SessionQueueState } from '../../shared/protocol/queueProtocol';
 import type { useComposerFlow } from './composer/useComposerFlow';
 import { parseSelectionQuotes } from '@droidvisx/chat-ui/chat/selectionQuote';
 import { Button } from '../ui/button';
 import { Collapsible, CollapsibleTrigger, AnimatedCollapsibleContent } from '../ui/collapsible';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 
 const pausedCopy: Record<QueuePausedReason, string> = {
   stopped: 'paused after stop',
@@ -18,70 +19,60 @@ export function QueueBar({ queue, flow }: {
   readonly flow: Pick<ReturnType<typeof useComposerFlow>,
     'queueEditingId' | 'handleQueueEditBegin' | 'handleQueuePromote' | 'handleQueueRemove' | 'handleQueueResume' | 'handleQueueClear'>;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const id = useId();
   const previousPause = useRef(queue.paused);
-  const container = useRef<HTMLElement>(null);
   useEffect(() => {
     if (queue.paused !== null && previousPause.current === null) setExpanded(true);
     previousPause.current = queue.paused;
   }, [queue.paused]);
-  useEffect(() => {
-    if (!expanded) return;
-    const onPointer = (event: PointerEvent) => {
-      if (event.target instanceof Element && event.target.closest('[data-webview-overlay]')) return;
-      if (event.target instanceof Node && !container.current?.contains(event.target)) setExpanded(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !event.defaultPrevented &&
-        !(event.target instanceof Element && event.target.closest('[data-webview-overlay]'))) setExpanded(false);
-    };
-    document.addEventListener('pointerdown', onPointer, true);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onPointer, true);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [expanded]);
   if (queue.items.length === 0) return null;
-  const meta = queue.paused !== null ? pausedCopy[queue.paused] : queue.items.length >= MAX_QUEUED_MESSAGES ? 'queue full' : '⏎ to Send';
+  const meta = queue.paused !== null ? pausedCopy[queue.paused] : queue.items.length >= MAX_QUEUED_MESSAGES ? 'Queue full' : '';
+  const label = `${queue.items.length} Queued ${queue.items.length === 1 ? 'Message' : 'Messages'}`;
   const markers = { image: '[image]', pdf: '[pdf]', text: '[file]', editor: '[editor]', selection: '[selection]' };
   return (
-    <Collapsible open={expanded} onOpenChange={setExpanded} asChild><section ref={container} aria-label="Queued messages" className="overflow-hidden rounded-[10px] border border-[var(--panel-edge)] bg-input-background">
-      <span aria-live="polite" className="sr-only">{queue.items.length} messages queued, {meta}</span>
-      <CollapsibleTrigger asChild><Button variant="plain" size="none" aria-controls={id} className="v2-chat-disclosure flex h-8 w-full items-center gap-2 px-3 text-[11.5px]">
-        <span className="flex-1 text-left">{queue.items.length} Queued</span>
-        <span className="text-[10px] text-muted-foreground">{meta}</span>
-        <ChevronDown className={`size-3 transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`} />
-      </Button></CollapsibleTrigger>
+    <Collapsible open={expanded} onOpenChange={setExpanded} asChild><section aria-label="Queued messages" className="v2-composer-queue">
+      <span aria-live="polite" className="sr-only">{label}{meta ? `, ${meta}` : ''}</span>
+      <div className="v2-queue-heading">
+        <CollapsibleTrigger asChild><Button variant="plain" size="none" aria-controls={id} className="v2-queue-toggle"
+          title={meta || 'Sends after the current turn. Queued text restores after reload.'}>
+          <ChevronRight aria-hidden="true" className="v2-queue-chevron" />
+          <span>{label}</span>
+          {meta ? <span className="v2-queue-status">{meta}</span> : null}
+        </Button></CollapsibleTrigger>
+        <DropdownMenu><DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm" className="v2-queue-menu" aria-label="Queued message actions"><Ellipsis aria-hidden="true" /></Button>
+        </DropdownMenuTrigger><DropdownMenuContent align="end">
+          {queue.paused !== null ? <DropdownMenuItem onSelect={flow.handleQueueResume}>Resume sending</DropdownMenuItem> : null}
+          <DropdownMenuItem onSelect={flow.handleQueueClear}><Trash2 aria-hidden="true" className="size-3.5" />Clear queued messages</DropdownMenuItem>
+        </DropdownMenuContent></DropdownMenu>
+      </div>
       <AnimatedCollapsibleContent id={id} open={expanded}>
-        <div className="max-h-56 overflow-y-auto px-3 pb-2">
+        <div className="v2-queue-list" role="list">
           {queue.items.map((item) => {
             const parsed = parseSelectionQuotes(item.text);
             const body = parsed?.body ?? item.text;
-            return <div key={item.queueId} className="group flex items-center gap-1 border-t border-[var(--panel-edge)] py-1 text-[11.5px]">
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="truncate" title={body}>
-                  {item.attachments.map((attachment, index) => <span key={index} title={attachment.name} className="mr-1 text-[10px] text-muted-foreground">{markers[attachment.kind]}</span>)}
+            return <div key={item.queueId} role="listitem" className="v2-queue-item" data-editing={flow.queueEditingId === item.queueId || undefined}>
+              <Circle aria-hidden="true" className="v2-queue-marker" />
+              <div className="v2-queue-message">
+                <div className="v2-queue-preview" title={body}>
+                  {item.attachments.map((attachment, index) => <span key={index} title={attachment.name} className="v2-queue-attachment">{markers[attachment.kind]}</span>)}
                   {body}
                 </div>
                 {parsed ? <QuoteChips quotes={parsed.quotes} /> : null}
               </div>
-              {flow.queueEditingId === item.queueId ? <span className="text-[10px] text-muted-foreground">Editing</span> : <div className="flex shrink-0 opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 [&_button]:size-6 [&_svg]:size-3">
-                <Button variant="ghost" size="icon-sm" aria-label="Edit queued message" onClick={() => flow.handleQueueEditBegin(item.queueId)}><Pencil /></Button>
-                <Button variant="ghost" size="icon-sm" aria-label="Send queued message now" onClick={() => flow.handleQueuePromote(item.queueId)}><ArrowUp /></Button>
-                <Button variant="ghost" size="icon-sm" aria-label="Remove queued message" onClick={() => flow.handleQueueRemove(item.queueId)}><Trash2 /></Button>
+              {flow.queueEditingId === item.queueId ? <span className="v2-queue-editing">Editing</span> : <div className="v2-queue-actions">
+                <Button variant="ghost" size="sm" className="v2-queue-send" aria-label="Send queued message now" onClick={() => flow.handleQueuePromote(item.queueId)}><span>Send Now</span><CornerDownLeft aria-hidden="true" /></Button>
+                <Button variant="ghost" size="icon-sm" aria-label="Edit queued message" onClick={() => flow.handleQueueEditBegin(item.queueId)}><Pencil aria-hidden="true" /></Button>
+                <Button variant="ghost" size="icon-sm" aria-label="Remove queued message" onClick={() => flow.handleQueueRemove(item.queueId)}><Trash2 aria-hidden="true" /></Button>
               </div>}
             </div>;
           })}
-          <div className="flex items-center gap-2 border-t border-[var(--panel-edge)] pt-1 text-[10px] text-muted-foreground">
-            <span className="flex-1">{queue.paused !== null ? 'Automatic sending is paused' : 'Sends after the current turn · text restores after reload'}</span>
-            {queue.paused !== null ? <>
-              <Button variant="link" size="sm" className="h-auto p-0 text-[10px]" onClick={flow.handleQueueResume}>Send now</Button>
-              <Button variant="link" size="sm" className="h-auto p-0 text-[10px]" onClick={flow.handleQueueClear}>Clear</Button>
-            </> : null}
-          </div>
         </div>
+        {queue.paused !== null ? <div className="v2-queue-paused">
+          <span>Automatic sending is paused</span>
+          <Button variant="ghost" size="sm" onClick={flow.handleQueueResume}>Resume</Button>
+        </div> : null}
       </AnimatedCollapsibleContent>
     </section></Collapsible>
   );

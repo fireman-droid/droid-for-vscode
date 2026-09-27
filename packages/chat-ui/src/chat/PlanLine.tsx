@@ -25,7 +25,7 @@ export function PlanLine({ anchor, running, override, onToggle }: {
           aria-label={`${expanded ? 'Hide' : 'Show'} plan steps: ${title}. ${progress}`} title={title}>
           <span aria-hidden="true" className="dvx-plan-marker"><Check /></span>
           <span className="dvx-plan-title"><span key={title} className="dvx-plan-title-text">{title}</span></span>
-          {!anchor.allCompleted ? <span className="dvx-plan-count" aria-hidden="true">{anchor.completedCount}/{anchor.totalCount}</span> : null}
+          <span className="dvx-plan-count" aria-hidden="true">{anchor.completedCount} / {anchor.totalCount}</span>
           <ChevronDown aria-hidden="true" className="dvx-plan-chevron" />
         </Button>
       </CollapsibleTrigger>

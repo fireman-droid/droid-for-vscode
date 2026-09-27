@@ -21,14 +21,11 @@
     padding-inline: 9px;
   }
   .v2-chat-footer { padding-block: 4px 12px; }
-  .v2-chat-footer > .review-launcher:has(+ .v2-chat-composer) {
-    width: calc(100% - 16px);
-    margin-inline: 8px;
-    margin-block-end: -1px;
-    border-bottom: 0;
-    border-radius: 9px 9px 0 0;
-  }
-  .v2-chat-footer > .review-launcher + .v2-chat-composer { margin-block-start: 0; }
+  .v2-composer-dock { min-width: 0; }
+  .v2-composer-dock > :is(.v2-composer-queue, .v2-composer-changes) { margin-inline: 12px; border-inline: 1px solid var(--chat-edge); }
+  .v2-composer-dock > :is(.v2-composer-queue, .v2-composer-changes):first-child { border-top: 1px solid var(--chat-edge); border-radius: 8px 8px 0 0; }
+  .v2-composer-queue + .v2-composer-changes { border-top: 1px solid color-mix(in srgb, var(--ink) 6%, transparent); }
+  .v2-composer-queue-edit { padding: 4px 12px; }
   .v2-chat-rail:has(.v2-chat-startup) { display: flex; flex-direction: column; justify-content: center; padding-block: 32px; }
   .v2-chat-startup { width: 100%; max-width: 320px; margin-inline: auto; padding: 16px 8px; }
   .v2-startup-workspace { display: flex; min-width: 0; align-items: center; gap: 8px; margin-bottom: 16px; color: var(--muted-ink); font-size: 12px; }
