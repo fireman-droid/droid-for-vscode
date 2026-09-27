@@ -4,23 +4,22 @@ import { parseMarkdown } from './parseMarkdown';
 import { markdownWorkerSource } from './markdownWorkerSource';
 import type { MarkdownParseRequest, MarkdownParseResponse } from './markdownWorkerProtocol';
 import { createMarkdownParser } from './markdownParserQueue';
+import { recallMarkdown, retainMarkdown, type ParsedMarkdown } from './markdownRenderCache';
 
 const BACKGROUND_THRESHOLD = 8_192;
 // Streams reparse on every appended batch. Move medium replies off the UI
 // thread before their repeated parses consume most of a 16 ms frame.
 const STREAM_BACKGROUND_THRESHOLD = 2_048;
 const canUseWorker = () => typeof Worker !== 'undefined' && markdownWorkerSource !== undefined;
-type Parsed = { text: string; thinking: boolean; nodes: readonly RootContent[] };
-
 export function useParsedMarkdown(text: string, thinking: boolean, streaming: boolean) {
   const [background, setBackground] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
-  const [parsed, setParsed] = useState<Parsed | null>(null);
+  const [parsed, setParsed] = useState(() => recallMarkdown(text, thinking));
   const [error, setError] = useState<Error | null>(null);
   const latest = useRef({ text, thinking, streaming });
   latest.current = { text, thinking, streaming };
   const request = useRef<(() => void) | null>(null);
-  const lastVisible = useRef<Parsed>({ text: '', thinking, nodes: [] });
+  const lastVisible = useRef<ParsedMarkdown>(parsed ?? { text: '', thinking, nodes: [] });
   const threshold = streaming ? STREAM_BACKGROUND_THRESHOLD : BACKGROUND_THRESHOLD;
   const offload = !unavailable && (background || text.length >= threshold && canUseWorker());
   if (offload && !background) setBackground(true);
@@ -31,7 +30,7 @@ export function useParsedMarkdown(text: string, thinking: boolean, streaming: bo
     let worker: ReturnType<typeof createMarkdownParser> | null = null;
     let id = 0;
     let active: MarkdownParseRequest | null = null;
-    let completed: { text: string; thinking: boolean } | null = null;
+    let completed: { text: string; thinking: boolean } | null = parsed;
     let nodes: readonly { version: number; node: RootContent }[] = [];
     const release = () => {
       worker?.terminate();
@@ -72,7 +71,9 @@ export function useParsedMarkdown(text: string, thinking: boolean, streaming: bo
       // Replacements (for example a different reply) never flash an obsolete
       // result; append-only streams can show the completed prefix immediately.
       if (latest.current.thinking === result.thinking && latest.current.text.startsWith(result.text)) {
-        setParsed({ text: result.text, thinking: result.thinking, nodes: nodes.map((entry) => entry.node) });
+        const rendered = { text: result.text, thinking: result.thinking, nodes: nodes.map((entry) => entry.node) };
+        retainMarkdown(rendered);
+        setParsed(rendered);
       }
       send();
     };
@@ -82,7 +83,7 @@ export function useParsedMarkdown(text: string, thinking: boolean, streaming: bo
   }, [background, unavailable]);
   useEffect(() => { request.current?.(); }, [text, thinking, streaming]);
   if (error) throw error;
-  const compatible = (value: Parsed) => value.thinking === thinking && text.startsWith(value.text);
+  const compatible = (value: ParsedMarkdown) => value.thinking === thinking && text.startsWith(value.text);
   const result = synchronous ? { text, thinking, nodes: synchronous }
     : parsed && compatible(parsed) ? parsed : compatible(lastVisible.current) ? lastVisible.current : { text: '', thinking, nodes: [] };
   const visible = result.nodes;
