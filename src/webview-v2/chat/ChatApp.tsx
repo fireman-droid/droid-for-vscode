@@ -28,8 +28,6 @@ import { ContentProvider } from '../content/context';
 import { ToolActionsContext } from '../content/toolActions';
 import { InlineDiffContext } from '../review/useInlineDiff';
 import { SubagentActivityStoreContext, useSubagentPanelFlow } from './subagents/subagentPanelFlow';
-import { GitCommitFlowContext } from '../review/gitCommitFlow';
-import { ReviewDockSlot } from './ReviewDock';
 import { Composer } from './Composer';
 import { MAX_TURN_TEXT_LENGTH } from '../../shared/protocol/bounds';
 import { appendSelectionQuote } from '@droidvisx/chat-ui/chat/selectionQuote';
@@ -81,11 +79,6 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
     openTerminalMirror: workspace.handleOpenTerminalMirror,
     openSubagent: subagents.openSubagent,
   } : {}, [state.sessionId, state.connection.status, workspace.handleOpenPath, workspace.handleOpenFileDiff, workspace.handleOpenReviewTurn, workspace.handleOpenTerminalMirror, subagents.openSubagent]);
-  const gitFlow = useMemo(() => ({
-    state: state.git, latestChangesTurnId: state.latestChanges?.turnId ?? null,
-    promptText: state.latestChanges?.prompt ?? null,
-    onRequestStatus: workspace.handleGitRequestStatus, onCommit: workspace.handleGitCommit,
-  }), [state.git, state.latestChanges, workspace.handleGitRequestStatus, workspace.handleGitCommit]);
   const transition = useConversationTransition({
     sequence: state.sequence,
     getSequence,
@@ -204,9 +197,6 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
         {composer.queueEditingId === null ? null : <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>Editing queued message</span><Button variant="ghost" size="sm" onClick={composer.handleQueueEditCancel}>Cancel edit</Button>
         </div>}
-        <GitCommitFlowContext.Provider value={gitFlow}>
-          <ReviewDockSlot store={store} vscode={port} />
-        </GitCommitFlowContext.Provider>
         <Composer key={state.conversationId ?? 'none'} state={state} port={port} flow={composer} blocked={operationsBlocked} quoteNotice={quoteNotice}
           onFileSearch={workspace.handleFileSearch} onNavigate={setNavigation} onBtwOpen={openBtw}
           renderInputRow={(input, action) => <ComposerControls input={input} action={action} state={state} port={port} blocked={operationsBlocked} page={navigation.page} navigationId={navigation.id} onPageChange={setNavigation} onCompact={compact} compactPending={sessions.compactPending} theme={theme.context} onNewSession={sessions.handleNewSession}
