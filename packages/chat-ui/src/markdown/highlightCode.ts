@@ -1,104 +1,49 @@
-import hljs from 'highlight.js/lib/core';
-import bash from 'highlight.js/lib/languages/bash';
-import c from 'highlight.js/lib/languages/c';
-import cpp from 'highlight.js/lib/languages/cpp';
-import csharp from 'highlight.js/lib/languages/csharp';
-import css from 'highlight.js/lib/languages/css';
-import diff from 'highlight.js/lib/languages/diff';
-import go from 'highlight.js/lib/languages/go';
-import java from 'highlight.js/lib/languages/java';
-import javascript from 'highlight.js/lib/languages/javascript';
-import json from 'highlight.js/lib/languages/json';
-import kotlin from 'highlight.js/lib/languages/kotlin';
-import markdown from 'highlight.js/lib/languages/markdown';
-import php from 'highlight.js/lib/languages/php';
-import python from 'highlight.js/lib/languages/python';
-import ruby from 'highlight.js/lib/languages/ruby';
-import rust from 'highlight.js/lib/languages/rust';
-import sql from 'highlight.js/lib/languages/sql';
-import swift from 'highlight.js/lib/languages/swift';
-import typescript from 'highlight.js/lib/languages/typescript';
-import xml from 'highlight.js/lib/languages/xml';
-import yaml from 'highlight.js/lib/languages/yaml';
+import { codeLanguageForPath, embeddedLanguages, highlighter, resolveCodeLanguage, detectionLanguages } from './codeLanguages';
 
-hljs.registerLanguage('bash', bash);
-hljs.registerLanguage('c', c);
-hljs.registerLanguage('cpp', cpp);
-hljs.registerLanguage('csharp', csharp);
-hljs.registerLanguage('css', css);
-hljs.registerLanguage('diff', diff);
-hljs.registerLanguage('go', go);
-hljs.registerLanguage('java', java);
-hljs.registerLanguage('javascript', javascript);
-hljs.registerLanguage('json', json);
-hljs.registerLanguage('kotlin', kotlin);
-hljs.registerLanguage('markdown', markdown);
-hljs.registerLanguage('php', php);
-hljs.registerLanguage('python', python);
-hljs.registerLanguage('ruby', ruby);
-hljs.registerLanguage('rust', rust);
-hljs.registerLanguage('sql', sql);
-hljs.registerLanguage('swift', swift);
-hljs.registerLanguage('typescript', typescript);
-hljs.registerLanguage('xml', xml);
-hljs.registerLanguage('yaml', yaml);
-
-const LANGUAGE_ALIASES: Readonly<Record<string, string>> = {
-  cjs: 'javascript',
-  'c#': 'csharp',
-  'c++': 'cpp',
-  cs: 'csharp',
-  h: 'c',
-  hpp: 'cpp',
-  htm: 'xml',
-  html: 'xml',
-  js: 'javascript',
-  jsx: 'javascript',
-  kt: 'kotlin',
-  md: 'markdown',
-  mjs: 'javascript',
-  patch: 'diff',
-  ps: 'bash',
-  ps1: 'bash',
-  powershell: 'bash',
-  py: 'python',
-  rb: 'ruby',
-  rs: 'rust',
-  sh: 'bash',
-  shell: 'bash',
-  svg: 'xml',
-  ts: 'typescript',
-  tsx: 'typescript',
-  vue: 'xml',
-  yml: 'yaml',
-  zsh: 'bash',
-};
-
-/** Resolve file previews through the same language registry as fenced code. */
-export function codeLanguageForPath(path: string): string | undefined {
-  const extension = path.match(/\.([^./\\]+)$/)?.[1]?.toLocaleLowerCase();
-  if (extension === undefined) return undefined;
-  const language = LANGUAGE_ALIASES[extension] ?? extension;
-  return hljs.getLanguage(language) === undefined ? undefined : language;
+export interface CodeHighlightHints {
+  readonly language?: string | null;
+  readonly path?: string;
+  /** Disable guessing for non-source tool output and individual diff lines. */
+  readonly detect?: boolean;
 }
 
-/**
- * Highlights code and returns HTML produced by highlight.js, or null when
- * the language is unknown. highlight.js escapes all input text, so the
- * returned HTML only contains the escaped code plus `span.hljs-*` wrappers.
- */
-export function highlightCode(code: string, language: string): string | null {
-  const normalized = language.toLocaleLowerCase();
-  const resolved = LANGUAGE_ALIASES[normalized] ?? normalized;
-  if (hljs.getLanguage(resolved) === undefined) {
-    return null;
+const MAX_HIGHLIGHT_CHARACTERS = 32_000;
+const MAX_DETECTION_CHARACTERS = 4_096;
+const MIN_DETECTION_RELEVANCE = 3;
+
+function detectLanguage(code: string, candidates: readonly string[]): string | undefined {
+  // Score grammars on a bounded sample, then render the full text once.
+  const sample = code.slice(0, MAX_DETECTION_CHARACTERS);
+  const result = highlighter.highlightAuto(sample, [...candidates]);
+  if (!result.language || result.relevance < MIN_DETECTION_RELEVANCE || result.errorRaised) return undefined;
+  const runnerUp = result.secondBest;
+  // Accept tied grammars only when their token rendering actually agrees.
+  if (runnerUp && result.relevance - runnerUp.relevance < 1 && result.value !== runnerUp.value) return undefined;
+  return result.language;
+}
+
+/** HTML comes exclusively from highlight.js, which escapes the source. Unknown
+ * or ambiguous languages stay plain text; source and copy data are never changed. */
+export function highlightCode(code: string, hints: CodeHighlightHints = {}): string | null {
+  if (!code.trim() || code.length > MAX_HIGHLIGHT_CHARACTERS) return null;
+  const explicit = resolveCodeLanguage(hints.language);
+  // Never override an explicit unsupported fence (for example diagram syntax)
+  // with an unrelated language guessed from a few matching keywords.
+  if (hints.language?.trim() && !explicit) return null;
+  const fromPath = hints.path ? codeLanguageForPath(hints.path) : undefined;
+  let language = explicit ?? fromPath;
+  if (language === 'plaintext') return null;
+
+  if (hints.detect !== false) {
+    if (!language) language = detectLanguage(code, detectionLanguages);
+    // Fences are authoritative. A Read excerpt may start inside an embedded
+    // language, so the file extension alone is only an outer-language hint.
+    else if (!explicit) {
+      const embedded = embeddedLanguages(language);
+      if (embedded.length) language = detectLanguage(code, [language, ...embedded]) ?? language;
+    }
   }
-  try {
-    return hljs.highlight(code, {
-      language: resolved,
-      ignoreIllegals: true,
-    }).value;
-  } catch {
-    return null;
-  }
+  if (!language) return null;
+  const result = highlighter.highlight(code, { language, ignoreIllegals: true });
+  return result.errorRaised ? null : result.value;
 }

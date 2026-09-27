@@ -1,12 +1,13 @@
 import { memo, useMemo, useRef } from 'react';
 import { formatDiffHunkHeader, inlineDiffLines, type InlineDiffLine } from './inlineDiffLines';
-import { codeLanguageForPath, highlightCode } from '../markdown/highlightCode';
+import { highlightCode } from '../markdown/highlightCode';
+import { codeLanguageForPath } from '../markdown/codeLanguages';
 import { DeferredDiffChunk, useDeferredDiff } from './deferredDiff';
 
 const Code = memo(function Code({ text, language }: { text: string; language?: string }) {
   // Minified/generated lines remain complete without spending a frame on a
   // syntax grammar for thousands of characters in one line.
-  const html = useMemo(() => language && text.length <= 2_000 ? highlightCode(text, language) : null, [text, language]);
+  const html = useMemo(() => language && text.length <= 2_000 ? highlightCode(text, { language, detect: false }) : null, [text, language]);
   return html === null ? <code>{text || ' '}</code> : <code dangerouslySetInnerHTML={{ __html: html || ' ' }} />;
 });
 export interface DiffRow { left: InlineDiffLine | null; right: InlineDiffLine | null; header?: string }

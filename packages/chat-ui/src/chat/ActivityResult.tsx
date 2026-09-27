@@ -1,6 +1,6 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
-import { codeLanguageForPath, highlightCode } from '../markdown/highlightCode';
+import { CodeSyntax } from '../content/CodeSyntax';
 import { useUiEnvironment } from '../environment';
 import { Button } from '../ui/button';
 
@@ -12,8 +12,6 @@ export const ActivityResult = memo(function ActivityResult({ preview }: {
   const [copyError, setCopyError] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
-  const language = preview.sourcePath ? codeLanguageForPath(preview.sourcePath) : undefined;
-  const html = useMemo(() => language === undefined ? null : highlightCode(preview.text, language), [language, preview.text]);
   return <section aria-label={preview.label} className="v2-activity-result overflow-hidden rounded-md border border-[var(--panel-edge)] bg-muted/25">
     <header className="flex min-h-7 select-none items-center gap-2 border-b border-[var(--panel-edge)] px-2">
       <span className="min-w-0 flex-1 text-[10.5px] font-medium text-muted-foreground">{preview.label}</span>
@@ -27,7 +25,7 @@ export const ActivityResult = memo(function ActivityResult({ preview }: {
       }}>{copied ? <Check className="size-3" /> : <Copy className="size-3" />}</Button>
     </header>
     <pre className="markdown-content max-h-64 overflow-auto overscroll-contain whitespace-pre p-2.5 font-mono text-[11px] leading-[18px] [scrollbar-gutter:stable]">
-      {html === null ? <code>{preview.text}</code> : <code dangerouslySetInnerHTML={{ __html: html }} />}
+      <CodeSyntax text={preview.text} path={preview.sourcePath} detect={Boolean(preview.sourcePath)} />
     </pre>
     {copyError ? <p role="alert" className="border-t border-[var(--panel-edge)] px-2 py-1 text-[10.5px] text-destructive">Could not copy result.</p> : null}
   </section>;

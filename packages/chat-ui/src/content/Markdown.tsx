@@ -8,6 +8,7 @@ import { decodeImagePath, isSafeMarkdownUrl, previewablePathOf } from '../markdo
 import { detectPathLink } from '../markdown/pathLink';
 import { useLocalImageVisit } from './useLocalImageVisit';
 import { CodeBlock } from './CodeBlock';
+import { CodeSyntax } from './CodeSyntax';
 import { MermaidBlock } from './MermaidBlock';
 import { MarkdownState, useContent } from './context';
 import { ImageContent } from './MediaPreview';
@@ -30,11 +31,11 @@ function nodeText(node: ReactNode): string {
 }
 
 function MarkdownPre({ children }: ComponentProps<'pre'>) {
-  const { thinking } = useContext(MarkdownState);
+  const { thinking, streaming } = useContext(MarkdownState);
   const child = Array.isArray(children) ? children[0] : children;
   const language = isValidElement<{ className?: string }>(child) ? /language-([\w#+-]+)/u.exec(child.props.className ?? '')?.[1] ?? null : null;
   const text = nodeText(children);
-  if (thinking) return <pre className="max-w-full overflow-auto rounded bg-muted p-2"><code>{text}</code></pre>;
+  if (thinking) return <pre className="max-w-full overflow-auto rounded bg-muted p-2"><CodeSyntax text={text} language={language} streaming={streaming} /></pre>;
   return language === 'mermaid' ? <MermaidBlock text={text} /> : <CodeBlock text={text} language={language} />;
 }
 

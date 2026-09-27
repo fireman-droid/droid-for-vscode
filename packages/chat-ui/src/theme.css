@@ -45,13 +45,16 @@
   .markdown-content .hljs-quote { color: var(--muted-ink); font-style: italic; }
   .markdown-content .hljs-keyword,
   .markdown-content .hljs-selector-tag,
+  .markdown-content .hljs-name,
+  .markdown-content .hljs-type,
   .markdown-content .hljs-literal { color: var(--syntax-keyword); }
   .markdown-content .hljs-string,
   .markdown-content .hljs-attr { color: var(--syntax-string); }
   .markdown-content .hljs-number,
   .markdown-content .hljs-symbol { color: var(--syntax-number); }
   .markdown-content .hljs-title,
-  .markdown-content .hljs-built_in { color: var(--link-ink); }
+  .markdown-content .hljs-built_in,
+  .markdown-content .hljs-meta { color: var(--link-ink); }
   .markdown-content .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
 }
 
