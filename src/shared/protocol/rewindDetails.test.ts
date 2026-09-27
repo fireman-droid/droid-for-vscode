@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { readHostMessage } from '../../webview/bridge/validateHostMessage';
+import { readHostMessage } from '../../webview-v2/bridge/validateHostMessage';
 import { rewindDetailSummary } from './rewindDetails';
 import { projectRewindInfo } from '../../runtime/session/rewindInfo';
 

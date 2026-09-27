@@ -1,8 +1,8 @@
 import { useMemo, type ReactNode } from 'react';
 import { ActivityGroupView } from '@droidvisx/chat-ui/chat/ActivityGroupView';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
-import { presentActivity, type ProcessWaiting } from '../../webview/assistant/transcript/activityPresentation';
-import { type GroupCandidatePart } from '../../webview/assistant/transcript/activityGrouping';
+import { presentActivity, type ProcessWaiting } from './transcript/activityPresentation';
+import { type GroupCandidatePart } from './transcript/activityGrouping';
 import { isFoldableFileOperation } from './operationSummary';
 
 export type ActivityItem = Extract<SessionTranscriptItem, { kind: 'tool' | 'thinking' }>;

@@ -1,6 +1,10 @@
 import type { DaemonApi } from './api';
 
 import { describe, expect, it, vi } from 'vitest';
+import {
+  cancellingRuntimeInteractionHandler,
+  createRuntimeInteractionCallbacks,
+} from '../events/runtimeInteractions';
 
 import {
   createMissionOrchestrator,
@@ -16,7 +20,11 @@ describe('createMissionOrchestrator', () => {
     const create = vi.fn(async () => ({ id: 'mission-session-1' }));
     const droid = { sessions: { create } } as unknown as DaemonApi;
 
+    const callbacks = createRuntimeInteractionCallbacks(
+      cancellingRuntimeInteractionHandler,
+    );
     await createMissionOrchestrator({
+      callbacks,
       droid,
       cwd: 'C:\\workspace',
       modelId: 'model-orchestrator',
@@ -25,6 +33,7 @@ describe('createMissionOrchestrator', () => {
     });
 
     expect(create).toHaveBeenCalledExactlyOnceWith({
+      ...callbacks,
       cwd: 'C:\\workspace',
       modelId: 'model-orchestrator',
       reasoningEffort: 'high',

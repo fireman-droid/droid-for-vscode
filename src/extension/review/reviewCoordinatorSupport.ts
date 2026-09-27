@@ -49,6 +49,7 @@ export interface ActiveScope {
     path: string;
     previousPath?: string;
     patch: string;
+    submittedContent?: string;
     kind: OperationDiffFile['kind'];
     outcome?: OperationDiffFile['outcome'];
     message?: string;

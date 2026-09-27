@@ -7,6 +7,7 @@ import { handleWebviewClipboard } from './webviewClipboard';
 import { routeWebviewMessage } from './webviewMessageRouter';
 import { readWebviewBootTheme, readWebviewThemePreference } from './webviewTheme';
 import type { ReviewPanelOpen } from '../../shared/protocol/reviewPanelProtocol';
+import { createWebviewStateDelivery } from './webviewStateDelivery';
 
 export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   static readonly viewType = 'droidvisx.chat';
@@ -18,6 +19,7 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
   private colorThemeListener: vscode.Disposable | undefined;
   private missionSetupListener: vscode.Disposable | undefined;
   private controllerSubscription: vscode.Disposable | undefined;
+  private stateDelivery: ReturnType<typeof createWebviewStateDelivery> | undefined;
   private webviewView: vscode.WebviewView | undefined;
   private disposed = false;
 
@@ -59,16 +61,6 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
         vscode.Uri.joinPath(this.extensionUri, 'resources'),
       ],
     };
-
-    webviewView.webview.html = getWebviewHtml(
-      webviewView.webview,
-      {
-        script: vscode.Uri.joinPath(webviewDistUri, 'webview.js'),
-        style: vscode.Uri.joinPath(webviewDistUri, 'webview.css'),
-      },
-      undefined,
-      readWebviewBootTheme(),
-    );
 
     const postTheme = (): void => {
       const theme = readWebviewBootTheme();
@@ -112,15 +104,15 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
       }
     });
 
-    this.controllerSubscription = this.controller.subscribe((message) => {
-      if (this.webviewView !== webviewView) {
-        return;
-      }
-      void webviewView.webview.postMessage(message).then(
-        () => undefined,
-        () => undefined,
-      );
+    const delivery = createWebviewStateDelivery({
+      isCurrent: () => this.webviewView === webviewView,
+      isVisible: () => webviewView.visible,
+      postMessage: (message) => webviewView.webview.postMessage(message),
+      replayTo: (listener) => this.controller.replayTo(listener),
+      ...(this.diagnostics === undefined ? {} : { diagnostics: this.diagnostics }),
     });
+    this.stateDelivery = delivery;
+    this.controllerSubscription = this.controller.subscribe(delivery.post);
     this.messageListener = webviewView.webview.onDidReceiveMessage(
       (untrustedMessage: unknown) => {
         if (handleWebviewClipboard(untrustedMessage, webviewView.webview)) return;
@@ -137,16 +129,8 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
           ...(this.openModels === undefined ? {} : { openModels: this.openModels }),
           ...(this.openReview === undefined ? {} : { openReview: this.openReview }),
           ...(this.authenticateMcp === undefined ? {} : { authenticateMcp: this.authenticateMcp }),
-          onReady: () => {
-            void this.controller.replayTo((message) => {
-              if (this.webviewView === webviewView) {
-                void webviewView.webview.postMessage(message).then(
-                  () => undefined,
-                  () => undefined,
-                );
-              }
-            });
-          },
+          onReady: delivery.onReady,
+          onStateApplied: delivery.onStateApplied,
         });
       },
     );
@@ -160,11 +144,9 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
     // With retainContextWhenHidden the view survives tab switches
     // (no reboot, no re-resolve), so hide/show becomes a visibility
     // flip. The visibility log is the observable proof that a
-    // switch-back happened without a webview.boot-ok. Re-show only
-    // refreshes the theme: a repeated webview.ready would dump a
-    // full snapshot and remount the live assistant message, which
-    // looked like the reply streaming from scratch. Deltas posted
-    // while hidden stay in the webview message queue.
+    // switch-back happened without a webview.boot-ok. Re-show catches up
+    // state updated while hidden or explicitly missed in delivery; a
+    // healthy view with no intervening updates keeps its existing state.
     this.visibilityListener = webviewView.onDidChangeVisibility(() => {
       if (this.webviewView !== webviewView) {
         return;
@@ -176,8 +158,19 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
       });
       if (webviewView.visible) {
         postTheme();
+        delivery.onVisible();
       }
     });
+    // Install receive and state listeners before the page can send its first ready message.
+    webviewView.webview.html = getWebviewHtml(
+      webviewView.webview,
+      {
+        script: vscode.Uri.joinPath(webviewDistUri, 'webview.js'),
+        style: vscode.Uri.joinPath(webviewDistUri, 'webview.css'),
+      },
+      undefined,
+      readWebviewBootTheme(),
+    );
   }
 
   dispose(): void {
@@ -191,6 +184,8 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
   }
 
   private disposeViewSubscriptions(): void {
+    this.stateDelivery?.dispose();
+    this.stateDelivery = undefined;
     this.messageListener?.dispose();
     this.messageListener = undefined;
     this.viewDisposalListener?.dispose();

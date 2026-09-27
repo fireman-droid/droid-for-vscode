@@ -1,5 +1,5 @@
-import { createStudioRuntime, parseStudioConfig } from '../../webview/dev/studioRuntime';
-import { createBrowserRuntime } from '../../webview/dev/browserRuntime';
+import { createStudioRuntime, parseStudioConfig } from './studioRuntime';
+import { createBrowserRuntime } from './browserRuntime';
 import { ChatApp } from '../chat/ChatApp';
 import { mountWebview } from '../shell/mount';
 import { ModelsPreview } from './ModelsPreview';
@@ -16,7 +16,7 @@ function mountLiveChat(): void {
   } catch {
     mountWebview(<main className="space-y-2 p-4">
       <h1 className="text-sm font-medium">Browser connection unavailable</h1>
-      <p className="text-xs text-muted-foreground">Run DroidVisX: Start Browser Dev Client in Cursor, then open the newly copied URL.</p>
+      <p className="text-xs text-muted-foreground">Run Droid: Start Browser Dev Client in Cursor, then open the newly copied URL.</p>
     </main>, (detail) => console.error(detail));
     return;
   }

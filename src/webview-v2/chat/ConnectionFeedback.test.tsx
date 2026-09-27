@@ -3,12 +3,12 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useStore } from 'zustand';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BRIDGE_PROTOCOL_VERSION, type HostSnapshotMessage, type HostToWebviewMessage } from '../../shared/bridgeMessages';
-import { useComposerFlow } from '../../webview/assistant/composer/useComposerFlow';
-import { useSessionActions } from '../../webview/assistant/sessions/useSessionActions';
-import { useHostMessageFlow } from '../../webview/assistant/shell/useHostMessageFlow';
-import type { ChatPort } from '../../webview/assistant/shell/chatIntent';
-import { initialAssistantWebviewState } from '../../webview/assistant/state/initialState';
-import type { AssistantWebviewState } from '../../webview/assistant/state/types';
+import { useComposerFlow } from './composer/useComposerFlow';
+import { useSessionActions } from './sessions/useSessionActions';
+import { useHostMessageFlow } from '../host/useHostMessageFlow';
+import type { ChatPort } from '../host/chatIntent';
+import { initialAssistantWebviewState } from '../state/initialState';
+import type { AssistantWebviewState } from '../state/types';
 import { ConversationWait, SessionRecovery } from './ConnectionFeedback';
 import { createChatStore, type ChatStore } from './store';
 
@@ -51,6 +51,10 @@ function receive(message: HostToWebviewMessage) {
   });
 }
 
+function requests(port: ReturnType<typeof fixture>['port']) {
+  return port.postMessage.mock.calls.map(([message]) => message).filter((message) => message.type !== 'webview.state-applied');
+}
+
 function Harness({ store, port, recovery = false }: { store: ChatStore; port: ChatPort; recovery?: boolean }) {
   const { state, dispatch } = useStore(store);
   const composer = useComposerFlow(port, state, dispatch, {
@@ -62,13 +66,14 @@ function Harness({ store, port, recovery = false }: { store: ChatStore; port: Ch
   });
   useHostMessageFlow(port, state, {
     dispatch, observeTransitionMessage: () => {}, applyHostTheme: () => {},
+    getSequence: () => store.getState().state.sequence,
     appendCanvasDraft: composer.appendCanvasDraft, settleSend: composer.settleSend,
   });
   return <>
     <output aria-label="Draft">{composer.draft}</output>
     <output aria-label="Attachments">{state.attachments.map((attachment) => attachment.name).join(', ')}</output>
     {recovery ? <SessionRecovery state={state} blocked={false} onReconnect={sessions.handleRetry} port={port} />
-      : <ConversationWait phase="restoring" hasSnapshot handshakeTimedOut connection={state.connection} port={port} sequence={state.sequence} />}
+      : <ConversationWait phase="restoring" hasSnapshot handshakeTimedOut connection={state.connection} port={port} sequence={state.sequence} conversationId={state.conversationId} sessionId={state.sessionId} />}
   </>;
 }
 
@@ -79,11 +84,14 @@ describe('session connection recovery', () => {
     port.postMessage.mockClear();
     const draft = screen.getByLabelText('Draft');
     const attachments = store.getState().state.attachments;
+    expect(screen.queryByRole('button', { name: 'Refresh session state' })).toBeNull();
+    act(() => vi.advanceTimersByTime(60_000));
+    port.postMessage.mockClear();
     const refresh = screen.getByRole('button', { name: 'Refresh session state' });
     fireEvent.click(refresh);
     fireEvent.click(refresh);
-    act(() => vi.advanceTimersByTime(60_000));
-    expect(port.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'webview.ready', protocolVersion: BRIDGE_PROTOCOL_VERSION });
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(port.postMessage).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ type: 'webview.ready', protocolVersion: BRIDGE_PROTOCOL_VERSION }));
     expect(refresh.hasAttribute('disabled')).toBe(true);
     receive(snapshot(store.getState().state, 11));
     expect(screen.getByRole('button', { name: 'Refresh session state' }).hasAttribute('disabled')).toBe(false);
@@ -93,6 +101,69 @@ describe('session connection recovery', () => {
     expect(store.getState().state.attachments).toBe(attachments);
     expect(screen.getByLabelText('Attachments').textContent).toBe('notes.md');
     expect(port.setState).not.toHaveBeenCalled();
+  });
+
+  it('ends an unanswered refresh after ten seconds and retries only on another click', () => {
+    const { store, port } = fixture({ status: 'unavailable' });
+    const state = store.getState().state;
+    render(<ConversationWait phase="restoring" hasSnapshot handshakeTimedOut={false} connection={state.connection}
+      port={port} sequence={state.sequence} conversationId={state.conversationId} sessionId={state.sessionId} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh session state' }));
+    act(() => vi.advanceTimersByTime(9_999));
+    expect(screen.getByRole('button', { name: 'Waiting for session state…' }).hasAttribute('disabled')).toBe(true);
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByText('No session state received after 10 seconds. You can refresh again.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Refresh session state' }).hasAttribute('disabled')).toBe(false);
+    act(() => vi.advanceTimersByTime(20_000));
+    expect(port.postMessage).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh session state' }));
+    expect(screen.queryByText('No session state received after 10 seconds. You can refresh again.')).toBeNull();
+    expect(port.postMessage).toHaveBeenCalledTimes(2);
+    expect(port.postMessage.mock.calls.every(([message]) => message.type === 'webview.ready')).toBe(true);
+    receive(snapshot(state, state.sequence));
+    receive({ ...snapshot(state, state.sequence + 1), sessionId: 'another-session', sessions: { status: 'ready', items: [] } });
+    expect(screen.getByRole('button', { name: 'Waiting for session state…' }).hasAttribute('disabled')).toBe(true);
+    receive(snapshot(state, state.sequence + 2));
+    expect(screen.getByText('Latest host state received.')).toBeTruthy();
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(screen.queryByText('No session state received after 10 seconds. You can refresh again.')).toBeNull();
+    expect(port.postMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['sessionId', 'conversationId'] as const)('cancels the old refresh when %s changes', (field) => {
+    const { store, port } = fixture({ status: 'unavailable' });
+    const state = store.getState().state;
+    const view = (identity: Pick<AssistantWebviewState, 'conversationId' | 'sessionId'>) =>
+      <ConversationWait phase="restoring" hasSnapshot handshakeTimedOut={false} connection={state.connection}
+        port={port} sequence={state.sequence} {...identity} />;
+    const { rerender } = render(view(state));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh session state' }));
+    act(() => vi.advanceTimersByTime(5_000));
+    const next = { ...state, [field]: 'new-identity', sessions: { status: 'ready' as const, items: [] } };
+    rerender(view(next));
+    expect(screen.getByRole('button', { name: 'Refresh session state' }).hasAttribute('disabled')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh session state' }));
+    receive(snapshot(state, state.sequence + 1));
+    act(() => vi.advanceTimersByTime(5_000));
+    expect(screen.getByRole('button', { name: 'Waiting for session state…' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.queryByText('Latest host state received.')).toBeNull();
+    receive(snapshot(next, state.sequence + 2));
+    expect(screen.getByText('Latest host state received.')).toBeTruthy();
+    expect(port.postMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancels the refresh timeout and subscription when the view unmounts', () => {
+    const { store, port } = fixture({ status: 'unavailable' });
+    const state = store.getState().state;
+    const { unmount } = render(<ConversationWait phase="restoring" hasSnapshot handshakeTimedOut={false}
+      connection={state.connection} port={port} sequence={state.sequence}
+      conversationId={state.conversationId} sessionId={state.sessionId} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh session state' }));
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    receive(snapshot(state, state.sequence + 1));
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(port.postMessage).toHaveBeenCalledTimes(1);
   });
 
   it.each(['connected', 'unavailable'] as const)('releases reconnect after a %s outcome without resending the previous message', (status) => {
@@ -113,7 +184,7 @@ describe('session connection recovery', () => {
     if (status === 'unavailable') expect(screen.getByRole('button', { name: 'Reconnect Droid session' }).hasAttribute('disabled')).toBe(false);
     else expect(screen.queryByRole('button', { name: 'Reconnect Droid session' })).toBeNull();
     expect(store.getState().state.transcript).toEqual([{ id: 'user-a', kind: 'user', text: 'Existing message' }]);
-    expect(port.postMessage).toHaveBeenCalledTimes(1);
+    expect(requests(port)).toEqual([{ type: 'runtime.retry', sessionId: 'session-a' }]);
     expect(port.setState).not.toHaveBeenCalled();
   });
 
@@ -126,7 +197,7 @@ describe('session connection recovery', () => {
     const reconnect = screen.getByRole('button', { name: 'Reconnect Droid session' });
     expect(reconnect.hasAttribute('disabled')).toBe(true);
     fireEvent.click(reconnect);
-    expect(port.postMessage).toHaveBeenCalledTimes(1);
+    expect(requests(port)).toEqual([{ type: 'runtime.retry', sessionId: 'session-a' }]);
     receive({ ...snapshot(store.getState().state, 12), sessions: { status: 'ready', items: [] } });
     expect(screen.getByRole('button', { name: 'Reconnect Droid session' }).hasAttribute('disabled')).toBe(false);
   });
@@ -154,8 +225,8 @@ describe('session connection recovery', () => {
     expect(screen.queryByText('Restoring this conversation on its new IDE connection…')).toBeNull();
     if (status === 'unavailable') {
       fireEvent.click(screen.getByRole('button', { name: 'Reconnect Droid session' }));
-      expect(port.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'runtime.retry', sessionId: 'session-a' });
-    } else expect(port.postMessage).not.toHaveBeenCalled();
+      expect(requests(port)).toEqual([{ type: 'runtime.retry', sessionId: 'session-a' }]);
+    } else expect(requests(port)).toEqual([]);
     expect(screen.getByLabelText('Draft').textContent).toBe('Unsent work');
     expect(store.getState().state.attachments).toBe(attachments);
     expect(port.setState).not.toHaveBeenCalled();

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Settings } from 'lucide-react';
-import type { AssistantWebviewState } from '../../webview/assistant/state/types';
-import type { ChatPort } from '../../webview/assistant/shell/chatIntent';
-import { useCapabilityActions } from '../../webview/assistant/composer/useCapabilityActions';
-import type { ThemeContextValue } from '../../webview/assistant/shell/theme';
+import type { AssistantWebviewState } from '../state/types';
+import type { ChatPort } from '../host/chatIntent';
+import { useCapabilityActions } from './composer/useCapabilityActions';
+import type { ThemeContextValue } from '../shell/themeController';
 import { Button } from '../ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { SessionSettingsPanel, SettingChoice } from './SessionSettingsPanel';
@@ -12,8 +12,8 @@ import { McpPanel } from './McpPanel';
 import { PluginsPanel, SkillsPanel } from './CapabilityPanels';
 import { Input } from '../ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/selection';
-import { rankNameMatches } from '../../webview/assistant/composer/settingsSearch';
-import { useAttachmentActions } from '../../webview/assistant/attachments/useAttachmentActions';
+import { rankNameMatches } from './composer/settingsSearch';
+import { useAttachmentActions } from './attachments/useAttachmentActions';
 
 const pages = ['settings', 'model', 'context', 'skills', 'mcp', 'plugins', 'runtime'];
 

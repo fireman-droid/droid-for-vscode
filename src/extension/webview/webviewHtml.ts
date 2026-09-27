@@ -19,7 +19,7 @@ export interface WebviewAssets {
 /**
  * Painted by an inline nonce'd style before the external stylesheet
  * and React load, so the panel never flashes white. Explicit themes
- * use the fixed DroidVisX grounds; Auto uses the editor's injected
+ * use the fixed Droid grounds; Auto uses the editor's injected
  * CSS variable from the first frame.
  */
 const INITIAL_BACKGROUNDS = {
@@ -79,7 +79,7 @@ export function getWebviewHtml(
     content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}'; worker-src blob:; font-src ${webview.cspSource}; connect-src 'none';"
   >
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DroidVisX</title>
+  <title>Droid</title>
   <style nonce="${nonce}">html,body{background:${initialBackground}}</style>
   <link rel="stylesheet" href="${styleUri}">
 </head>
@@ -137,8 +137,8 @@ const BOOT_BEACON_SCRIPT = /* js */ `
     if (root && !root.firstChild) {
       root.style.cssText =
         'padding:16px;font-family:sans-serif;font-size:13px;';
-      root.textContent = 'DroidVisX failed to start. Fully quit and ' +
-        'restart Cursor, then check the "DroidVisX Logs" output channel.';
+      root.textContent = 'Droid failed to start. Fully quit and ' +
+        'restart Cursor, then check the "Droid Logs" output channel.';
     }
   }, 10000);
 })();

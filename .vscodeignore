@@ -16,6 +16,7 @@ packages/**
 pnpm-workspace.yaml
 scripts/**
 node_modules/**
+.pnpm-store/**
 dist/**
 !dist/extension/**
 !dist/webview/**

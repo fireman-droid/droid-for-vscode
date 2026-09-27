@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { createModelsPreviewTransport } from '../../webview/dev/modelsPreviewTransport';
+import { createModelsPreviewTransport } from './modelsPreviewTransport';
 import { ModelsApp } from '../models/ModelsApp';
 import { Button } from '../ui/button';
 import { Checkbox } from '../ui/selection';

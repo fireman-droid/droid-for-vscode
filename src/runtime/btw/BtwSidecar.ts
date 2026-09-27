@@ -19,7 +19,7 @@ import type { BtwEntryProgress } from '../../shared/protocol/btwProtocol';
  */
 
 export const BTW_FORK_TAG = 'btw-fork';
-export const BTW_FORK_TITLE = 'DroidVisX side chat';
+export const BTW_FORK_TITLE = 'Droid side chat';
 
 /** Quiet guidance when a side question hits a permission request. */
 export const BTW_PERMISSION_GUIDANCE =

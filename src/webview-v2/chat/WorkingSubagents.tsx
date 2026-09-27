@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
-import type { AssistantWebviewState } from '../../webview/assistant/state/types';
-import { selectWorkingSubagents } from '../../webview/assistant/subagents/subagentWorking';
-import { SubagentActivityStoreContext, type useSubagentPanelFlow } from '../../webview/assistant/subagents/subagentPanelFlow';
+import type { AssistantWebviewState } from '../state/types';
+import { selectWorkingSubagents } from './subagents/subagentWorking';
+import { SubagentActivityStoreContext, type useSubagentPanelFlow } from './subagents/subagentPanelFlow';
 import { ToolActionsContext } from '../content/toolActions';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { Button } from '../ui/button';

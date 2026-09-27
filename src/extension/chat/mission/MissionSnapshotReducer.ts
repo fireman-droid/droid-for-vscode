@@ -65,14 +65,35 @@ export class MissionSnapshotReducer {
     ) {
       return false;
     }
-    this.apply(state);
-    this.apply(features);
-    this.apply(progress);
+    const next = new MissionSnapshotReducer(this.validator);
+    next.apply(state);
+    next.apply(features);
+    next.apply(progress);
     const title = ownValue(value, 'title');
     if (typeof title === 'string' && title.length > 0) {
-      this.title = title.slice(0, 256);
+      next.title = title.replace(/\s+/g, ' ').slice(0, 256);
     }
-    this.hydrateWorkers(ownValue(value, 'workerStates'));
+    next.hydrateWorkers(ownValue(value, 'workerStates'));
+    const changed = this.lifecycle !== next.lifecycle || this.title !== next.title ||
+      !sameFeatures(this.features, next.features) ||
+      JSON.stringify(this.progress) !== JSON.stringify(next.progress) ||
+      JSON.stringify([...this.workers]) !== JSON.stringify([...next.workers]);
+    const activeWorker = this.activeWorkerSessionId();
+    const settlesBusy =
+      (this.busyAction !== undefined && next.lifecycle === 'completed') ||
+      (this.busyAction === 'pause' && next.lifecycle === 'paused') ||
+      (this.busyAction === 'resume' && next.lifecycle === 'running') ||
+      (this.busyAction === 'stop' && (next.lifecycle === 'paused' ||
+        (activeWorker !== null && next.workers.get(activeWorker)?.active === false)));
+    this.lifecycle = next.lifecycle;
+    this.title = next.title;
+    this.features = next.features;
+    this.progress = next.progress;
+    this.workers.clear();
+    for (const [id, worker] of next.workers) this.workers.set(id, worker);
+    this.needsRefresh = false;
+    if (settlesBusy) this.busyAction = undefined;
+    if (changed || settlesBusy) this.revision += 1;
     return true;
   }
 
@@ -130,9 +151,14 @@ export class MissionSnapshotReducer {
   }
 
   workerSessionIdForFeature(featureId: string): string | null {
-    if (!this.features.some(({ id }) => id === featureId)) {
+    const feature = this.features.find(({ id }) => id === featureId);
+    if (feature === undefined) {
       return null;
     }
+    const explicit = feature.currentWorkerSessionId ?? feature.completedWorkerSessionId;
+    if (explicit) return explicit;
+    if (feature.workerSessionIds?.length === 1) return feature.workerSessionIds[0]!;
+    if ((feature.workerSessionIds?.length ?? 0) > 1) return null;
     const matches = [...this.workers.entries()].filter(
       ([, state]) => state.featureId === featureId,
     );
@@ -315,7 +341,7 @@ export class MissionSnapshotReducer {
     order: number,
   ): MissionFeatureSnapshot {
     const hasWorker = this.workerSessionIdForFeature(feature.id) !== null;
-    const title = feature.description.slice(0, 512);
+    const title = feature.description.replace(/\s+/g, ' ').slice(0, 512);
     return {
       id: feature.id,
       order,
@@ -329,6 +355,18 @@ export class MissionSnapshotReducer {
   }
 
   private hydrateWorkers(value: unknown): void {
+    for (const feature of this.features) {
+      for (const id of feature.workerSessionIds ?? []) {
+        const current = this.workers.get(id);
+        this.workers.set(id, { featureId: feature.id, active: current?.active ?? false });
+      }
+      if (feature.currentWorkerSessionId) {
+        this.workers.set(feature.currentWorkerSessionId, { featureId: feature.id, active: true });
+      }
+      if (feature.completedWorkerSessionId && feature.completedWorkerSessionId !== feature.currentWorkerSessionId) {
+        this.workers.set(feature.completedWorkerSessionId, { featureId: feature.id, active: false });
+      }
+    }
     if (!isStrictRecord(value)) {
       return;
     }
@@ -367,7 +405,10 @@ function sameFeatures(
         feature.description === candidate.description &&
         feature.status === candidate.status &&
         feature.skillName === candidate.skillName &&
-        feature.milestone === candidate.milestone
+        feature.milestone === candidate.milestone &&
+        feature.currentWorkerSessionId === candidate.currentWorkerSessionId &&
+        feature.completedWorkerSessionId === candidate.completedWorkerSessionId &&
+        JSON.stringify(feature.workerSessionIds) === JSON.stringify(candidate.workerSessionIds)
       );
     })
   );

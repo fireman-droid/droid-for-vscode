@@ -72,6 +72,8 @@ export interface UserTranscriptItem {
   readonly id: string;
   readonly kind: 'user';
   readonly text: string;
+  /** Recorded message time in Unix milliseconds; absent when the source has no time. */
+  readonly timestamp?: number;
   /** SDK message id; present when this message can anchor a rewind. */
   readonly messageId?: string;
   /** Attachments this message was sent with; metadata only. */
@@ -83,6 +85,8 @@ export interface AssistantTranscriptItem {
   readonly kind: 'assistant';
   readonly turnId: string;
   readonly text: string;
+  /** Recorded message time in Unix milliseconds, preserved across history and recovery. */
+  readonly timestamp?: number;
 }
 
 export interface ThinkingTranscriptItem {
@@ -153,6 +157,8 @@ export interface AssistantDeltaMessage {
   readonly sessionId: string;
   readonly turnId: string;
   readonly delta: string;
+  /** Host-observed content time in Unix milliseconds, never assigned by the Webview. */
+  readonly timestamp?: number;
 }
 
 export interface ThinkingDeltaMessage {

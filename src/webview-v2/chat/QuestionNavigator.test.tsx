@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { findActiveQuestionIndex, questionPreview } from '../../webview/assistant/thread/navigation/questionNavigation';
+import { findActiveQuestionIndex, questionPreview } from '@droidvisx/chat-ui/navigation/questionNavigation';
 import { QuestionNavigator } from './QuestionNavigator';
 
 afterEach(cleanup);

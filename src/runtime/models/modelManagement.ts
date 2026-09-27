@@ -122,7 +122,7 @@ async function verifyThroughDroid(
     session = await daemon.sessions.create({
       cwd,
       modelId: runtimeId,
-      title: 'DroidVisX model verification',
+      title: 'Droid model verification',
       interactionMode: DroidInteractionMode.Auto,
       autonomyLevel: AutonomyLevel.Off,
       autoRejectPermissionRequests: true,

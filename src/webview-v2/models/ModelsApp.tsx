@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Check, Pencil, Plus, RefreshCw, Search, Settings2, SlidersHorizontal } from 'lucide-react';
 import type { ManagedModel, ModelConnection } from '../../shared/protocol/modelManagerProtocol';
-import type { ModelsTransport } from '../../webview/models/useModels';
-import { useModelsPage } from '../../webview/models/useModelsPage';
-import { PROTOCOLS } from '../../webview/models/protocols';
-import { readBootThemePreference } from '../../webview/assistant/shell/theme';
+import type { ModelsTransport } from './useModels';
+import { useModelsPage } from './useModelsPage';
+import { PROTOCOLS } from './protocols';
+import { readBootThemePreference } from '../shell/themeController';
 import { applyTheme } from '../shell/theme';
 import { Button } from '../ui/button';
 import { DroidActivity, DroidLoading } from '../ui/droid-motion';
@@ -39,7 +39,7 @@ export function ModelsApp({ transport }: { readonly transport: ModelsTransport }
   };
   const startAdding = () => {
     manager.setNotice(null);
-    setAddStep('source');
+    setAddStep(connection ? 'models' : 'source');
     page.setDiscovery(null);
     page.setChosen(new Set());
     setAdding(true);
@@ -59,7 +59,7 @@ export function ModelsApp({ transport }: { readonly transport: ModelsTransport }
   const panelDescription = alias !== null ? '名称和连接配置分别管理。'
     : page.connectionForm !== null ? '同一域名的接口归到同一服务商；每个接口独立保存地址和密钥。'
     : page.modelForm !== null ? '修改本地模型配置，保存后由 Droid 重新加载。'
-    : '先选择服务商和兼容接口，再添加需要的模型。';
+    : '复用接口连接，选择需要的模型。保存后可在聊天中选用。';
 
   return <Dialog open={panelOpen} onOpenChange={(open) => { if (!open && !busy) closePanel(); }}><main className="models-page">
     <header className="models-page-header">
@@ -152,9 +152,12 @@ export function ModelsApp({ transport }: { readonly transport: ModelsTransport }
         </div>
       </section>
     </div>
-      <DialogContent className="models-panel top-[6%] w-[calc(100%-32px)] max-h-[88%] max-w-[560px] rounded-xl border-[var(--panel-edge)] p-6 max-[540px]:w-[calc(100%-16px)] max-[540px]:p-4" closeDisabled={busy} closeLabel="关闭面板"
+      <DialogContent className="models-panel flex top-[5%] w-[calc(100%-32px)] max-h-[90dvh] max-w-[640px] flex-col overflow-hidden border-[var(--panel-edge)] p-0 max-[540px]:top-[3%] max-[540px]:w-[calc(100%-16px)] max-[540px]:max-h-[94dvh]" closeDisabled={busy} closeLabel="关闭面板"
         onInteractOutside={(event) => event.preventDefault()}>
-        <header className="mb-5 pr-7"><DialogTitle className="text-lg font-semibold">{panelTitle}</DialogTitle><DialogDescription className="models-help mt-1.5">{panelDescription}</DialogDescription></header>
+        <header className="models-panel-header"><span className="models-panel-symbol"><SlidersHorizontal aria-hidden /></span>
+          <div><DialogTitle>{panelTitle}</DialogTitle><DialogDescription className="models-help">{panelDescription}</DialogDescription></div>
+        </header>
+        <div className="models-panel-body">
         <ModelsFeedback page={page} />
         {alias !== null ? <AliasForm key={alias.kind === 'provider' ? alias.host : `${alias.model.rawIndex}:${alias.model.model}`}
           name={alias.kind === 'provider' ? alias.name : alias.model.displayName} label={alias.kind === 'provider' ? '服务商别名' : '模型别名'}
@@ -173,11 +176,12 @@ export function ModelsApp({ transport }: { readonly transport: ModelsTransport }
             }}>移除这个空接口</Button>
           </div> : null}
         </> : page.modelForm !== null && connection ? <ModelForm key={page.modelForm.model?.rawIndex ?? 'new'}
-          model={page.modelForm.model} connection={connection} busy={busy} onCancel={closePanel}
+          model={page.modelForm.model} connection={connection} busy={busy} existingModels={snapshot?.models} onCancel={closePanel}
           onSave={(draft, verify) => { void page.saveModel(draft, verify); }} />
         : adding ? <AddModels page={page} step={addStep} onStepChange={setAddStep} onDone={closePanel}
             onNewConnection={() => newConnection()} />
         : null}
+        </div>
       </DialogContent>
   </main></Dialog>;
 }
@@ -195,7 +199,7 @@ function ModelsFeedback({ page }: { readonly page: ModelsPageState }) {
     {notice ? <p role={notice.ok ? 'status' : 'alert'} className={`models-feedback ${notice.ok ? '' : 'text-destructive'}`}>
       <span className="font-medium">{notice.ok ? '已完成' : '操作未完成'}</span><span>{notice.message}</span>
     </p> : null}
-    {pending && (pending !== 'refresh' || page.manager.snapshot !== null) ? <div role="status" className="models-feedback"><DroidActivity phase="loading" /><span className="flex-1">{labels[pending] ?? '等待 Droid 确认…'}</span>
+    {pending && (pending !== 'refresh' || page.manager.snapshot !== null) ? <div role="status" className="models-feedback models-feedback-pending"><DroidActivity phase="loading" /><span className="flex-1">{labels[pending] ?? '等待 Droid 确认…'}</span>
       <Button variant="ghost" size="sm" onClick={cancel}>取消操作</Button>
     </div> : null}
   </>;

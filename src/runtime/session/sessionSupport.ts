@@ -27,7 +27,7 @@ export function daemonInitializationFailure(
     case 'credentials-unreadable':
       return [
         'daemon-credentials-unreadable',
-        'DroidVisX could not read the current Droid CLI sign-in.',
+        'Droid could not read the current Droid CLI sign-in.',
       ];
     case 'refresh-failed':
     case 'authentication-failed':

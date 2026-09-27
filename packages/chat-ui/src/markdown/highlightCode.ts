@@ -74,6 +74,14 @@ const LANGUAGE_ALIASES: Readonly<Record<string, string>> = {
   zsh: 'bash',
 };
 
+/** Resolve file previews through the same language registry as fenced code. */
+export function codeLanguageForPath(path: string): string | undefined {
+  const extension = path.match(/\.([^./\\]+)$/)?.[1]?.toLocaleLowerCase();
+  if (extension === undefined) return undefined;
+  const language = LANGUAGE_ALIASES[extension] ?? extension;
+  return hljs.getLanguage(language) === undefined ? undefined : language;
+}
+
 /**
  * Highlights code and returns HTML produced by highlight.js, or null when
  * the language is unknown. highlight.js escapes all input text, so the

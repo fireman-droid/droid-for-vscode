@@ -68,7 +68,7 @@ export interface GitStatusMessage {
   readonly turnId: string;
   readonly branch: string | null;
   readonly files: readonly GitStatusFile[];
-  /** Latest Changes turn was committed through DroidVisX. */
+  /** Latest Changes turn was committed through Droid. */
   readonly committedHash?: string;
   readonly unavailableReason?: GitUnavailableReason;
 }

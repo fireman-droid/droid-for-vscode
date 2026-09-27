@@ -54,6 +54,7 @@ import { DroidManagement } from './management/DroidManagement';
 import { ModelsPanelController } from './models/ModelsPanelController';
 import { applyModelToChat, readModelApplyState } from './models/modelChatApply';
 import { MissionGateway } from './chat/mission/MissionGateway';
+import { openCatalogMission } from './chat/mission/catalogSession';
 import { MissionPreferenceStore } from './chat/mission/MissionPreferences';
 import { createMissionRuntime } from './chat/mission/MissionRuntime';
 import { createMissionControlSetupProjection } from './chat/mission/setupProjection';
@@ -137,7 +138,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const logDirectory = vscode.Uri.joinPath(context.globalStorageUri, 'logs').fsPath;
   const diagnostics = new LocalDiagnostics({
     directory: logDirectory,
-    output: vscode.window.createOutputChannel('DroidVisX Logs'),
+    output: vscode.window.createOutputChannel('Droid Logs'),
     workspace: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
   });
   diagnostics.record({
@@ -338,11 +339,12 @@ export function activate(context: vscode.ExtensionContext): void {
     getDroid: getDaemonDroid,
     getAttachedSessionId: () => controller?.sessionState.sessionId ?? undefined,
     preferences: new MissionPreferenceStore(persistence),
-    createRuntime: (session, droid, orchestrator) =>
+    prepareInteractions: () => controller.interactions.prepareRuntimeHandler(),
+    createRuntime: (session, droid, orchestrator, interactions) =>
       createMissionRuntime(
         session,
         droid,
-        controller.interactions.createRuntimeHandler(),
+        interactions,
         orchestrator,
         sessionLease,
       ),
@@ -439,18 +441,7 @@ export function activate(context: vscode.ExtensionContext): void {
       inspectReadiness: (cwd) => missionGateway.inspectReadiness(cwd),
       acknowledgeReadinessWarning: (cwd) =>
         missionGateway.acknowledgeReadinessWarning(cwd),
-      openCatalogMission: (catalogId) => {
-        const sessionId = missionGateway.sessionIdForCatalogId(catalogId);
-        if (
-          sessionId === null ||
-          controller.catalogState.sessions.status !== 'ready' ||
-          !controller.catalogState.sessions.items.some((item) => item.id === sessionId)
-        ) {
-          return null;
-        }
-        controller.handleMessage({ type: 'session.select', sessionId });
-        return sessionId;
-      },
+      openCatalogMission: (catalogId) => openCatalogMission(controller, catalogId),
       readActiveSession: () => {
         const summary = controller.catalogState.sessions.items.find(
           (item) => item.id === controller.sessionState.sessionId,
@@ -634,7 +625,7 @@ export function activate(context: vscode.ExtensionContext): void {
         attributes: { waitedMs: Date.now() - startedAt },
       });
       void vscode.window.showWarningMessage(
-        'DroidVisX could not add the selection: the chat session did not connect within 60 seconds.',
+        'Droid could not add the selection: the chat session did not connect within 60 seconds.',
       );
     }),
     vscode.commands.registerCommand(openLogsCommand, () => {
@@ -662,8 +653,8 @@ export function activate(context: vscode.ExtensionContext): void {
       });
       void vscode.window.showInformationMessage(
         stopped
-          ? 'DroidVisX daemon stopped. Reload the window to start a fresh one.'
-          : 'No running DroidVisX daemon was found.',
+          ? 'Droid daemon stopped. Reload the window to start a fresh one.'
+          : 'No running Droid daemon was found.',
       );
     }),
     vscode.commands.registerCommand(exportSessionCommand, () =>
@@ -692,7 +683,7 @@ export function activate(context: vscode.ExtensionContext): void {
           detail: error instanceof Error ? (error.stack ?? error.message) : String(error),
         });
         void vscode.window.showErrorMessage(
-          'DroidVisX diagnostics export failed. See DroidVisX Logs.',
+          'Droid diagnostics export failed. See Droid Logs.',
         );
       }
     }),

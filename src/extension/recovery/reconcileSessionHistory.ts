@@ -67,7 +67,7 @@ function reconcileByUserAnchors(
   // Sent-attachment chip metadata only exists on the recovered side
   // (loadSession cannot attribute non-image attachment blocks back to
   // chips), so matched anchors adopt it onto the authoritative items.
-  loaded = withRecoveredAttachments(loaded, recovered.transcript, matches);
+  loaded = withRecoveredUserMetadata(loaded, recovered.transcript, matches);
   // Live-only rich state (outputTail, tool durations, measured
   // changes line counts) merges back onto the authoritative loaded
   // rows instead of being discarded with the recovered mid-region
@@ -198,6 +198,7 @@ function enrichLoadedFromRecovered(
       replace,
     );
     enrichSegmentThinking(loaded.transcript, loadedSegment, recoveredSegment, replace);
+    enrichSegmentMessageTimes(loaded.transcript, loadedSegment, recoveredSegment, replace);
     const diagnostics = segmentDiagnostics(
       loaded.transcript,
       loadedSegment,
@@ -426,11 +427,10 @@ function segmentDiagnostics(
 }
 
 /**
- * Copies `attachments` metadata from matched recovered user anchors
- * onto the corresponding loaded items that lack it, so chips survive a
- * restart even though loaded history cannot reconstruct them.
+ * Copies attachments and observed times from matched recovered user anchors
+ * when authoritative history lacks them, without replacing recorded metadata.
  */
-function withRecoveredAttachments(
+function withRecoveredUserMetadata(
   loaded: HostTranscriptState,
   recovered: readonly SessionTranscriptItem[],
   matches: readonly AnchorMatch[],
@@ -441,20 +441,48 @@ function withRecoveredAttachments(
     const loadedItem = loaded.transcript[match.loadedIndex];
     if (
       recoveredItem?.kind !== 'user' ||
-      loadedItem?.kind !== 'user' ||
-      recoveredItem.attachments === undefined ||
-      recoveredItem.attachments.length === 0 ||
-      loadedItem.attachments !== undefined
+      loadedItem?.kind !== 'user'
     ) {
       continue;
     }
+    const attachments = loadedItem.attachments === undefined && recoveredItem.attachments?.length
+      ? { attachments: recoveredItem.attachments } : {};
+    const timestamp = loadedItem.timestamp === undefined && recoveredItem.timestamp !== undefined
+      ? { timestamp: recoveredItem.timestamp } : {};
+    if (Object.keys(attachments).length === 0 && Object.keys(timestamp).length === 0) continue;
     transcript ??= [...loaded.transcript];
     transcript[match.loadedIndex] = {
       ...loadedItem,
-      attachments: recoveredItem.attachments,
+      ...attachments,
+      ...timestamp,
     };
   }
   return transcript === null ? loaded : { ...loaded, transcript };
+}
+
+/** Only exact replies inside a matched user turn may recover their observed time. */
+function enrichSegmentMessageTimes(
+  loaded: readonly SessionTranscriptItem[],
+  loadedSegment: readonly number[],
+  recoveredSegment: readonly SessionTranscriptItem[],
+  replace: (index: number, item: SessionTranscriptItem) => void,
+): void {
+  type Reply = Extract<SessionTranscriptItem, { kind: 'assistant' }>;
+  const replies = new Map<string, Reply[]>();
+  for (const item of recoveredSegment) {
+    if (item.kind !== 'assistant') continue;
+    const queue = replies.get(item.text) ?? [];
+    queue.push(item);
+    replies.set(item.text, queue);
+  }
+  for (const index of loadedSegment) {
+    const item = loaded[index];
+    if (item?.kind !== 'assistant') continue;
+    const candidate = replies.get(item.text)?.shift();
+    if (item.timestamp === undefined && candidate?.timestamp !== undefined) {
+      replace(index, { ...item, timestamp: candidate.timestamp });
+    }
+  }
 }
 
 /** Returns the proven missing suffix after the final shared user anchor. */

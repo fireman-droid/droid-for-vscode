@@ -1,9 +1,10 @@
 import { Check, ChevronDown, Circle } from 'lucide-react';
+import { useId } from 'react';
+import { Button } from '../ui/button';
+import { Collapsible, CollapsibleTrigger, AnimatedCollapsibleContent } from '../ui/collapsible';
+
 export interface PlanStep { readonly text: string; readonly status: 'pending' | 'in_progress' | 'completed' }
 export interface PlanPresentation { readonly id: string; readonly title: string; readonly steps: readonly PlanStep[]; readonly completedCount: number; readonly totalCount: number; readonly allCompleted: boolean }
-import { Button } from '../ui/button';
-import { useId } from 'react';
-import { Collapsible, CollapsibleTrigger, AnimatedCollapsibleContent } from '../ui/collapsible';
 
 export function PlanLine({ anchor, running, override, onToggle }: {
   readonly anchor: PlanPresentation;
@@ -12,25 +13,36 @@ export function PlanLine({ anchor, running, override, onToggle }: {
   readonly onToggle: (id: string, expanded: boolean) => void;
 }) {
   const id = useId();
-  const expanded = override ?? (running && !anchor.allCompleted);
-  const building = running && !anchor.allCompleted;
+  const expanded = override ?? false;
+  const live = running && !anchor.allCompleted;
   const current = anchor.steps.find((step) => step.status === 'in_progress')?.text ?? anchor.steps.find((step) => step.status === 'pending')?.text ?? anchor.title;
-  return <Collapsible open={expanded} onOpenChange={(open) => onToggle(anchor.id, open)} asChild><section aria-label={`Implementation plan, ${anchor.completedCount} of ${anchor.totalCount} done`} className="mt-1 overflow-hidden rounded-lg border border-[var(--panel-edge)] bg-input-background text-xs">
-    <CollapsibleTrigger asChild><Button variant="ghost" size="sm" className="h-[22px] w-full gap-2 rounded-none px-3 text-left text-[11.5px]" aria-controls={id}>
-      <span aria-hidden className={`size-[5px] shrink-0 rounded-full ${anchor.allCompleted ? 'bg-muted-foreground' : 'bg-primary'} ${building ? 'motion-safe:animate-pulse' : ''}`} />
-      <span className="min-w-0 flex-1 truncate">{expanded ? 'Implementation plan' : `Plan · ${current}`}</span>
-      <span className="shrink-0 text-muted-foreground">{anchor.completedCount} / {anchor.totalCount}</span>
-      <ChevronDown className={`size-3.5 transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`} />
-    </Button></CollapsibleTrigger>
-    <div className="h-0.5 bg-muted"><div className={`h-full transition-[width] motion-reduce:transition-none ${anchor.allCompleted ? 'bg-muted-foreground' : 'bg-primary'}`} style={{ width: `${anchor.totalCount === 0 ? 0 : anchor.completedCount / anchor.totalCount * 100}%` }} /></div>
-    <AnimatedCollapsibleContent id={id} open={expanded}>
-    <PlanSteps steps={anchor.steps} /></AnimatedCollapsibleContent>
-  </section></Collapsible>;
+  const title = anchor.allCompleted ? `Completed ${anchor.totalCount} ${anchor.totalCount === 1 ? 'step' : 'steps'}` : current;
+  const progress = `${anchor.completedCount} of ${anchor.totalCount} steps completed`;
+  return <Collapsible open={expanded} onOpenChange={(open) => onToggle(anchor.id, open)} asChild>
+    <section aria-label={`Task plan, ${progress}`} className="dvx-plan" data-live={live} data-complete={anchor.allCompleted}>
+      <CollapsibleTrigger asChild>
+        <Button variant="plain" size="none" className="dvx-plan-trigger" aria-controls={id}
+          aria-label={`${expanded ? 'Hide' : 'Show'} plan steps: ${title}. ${progress}`} title={title}>
+          <span aria-hidden="true" className="dvx-plan-marker"><Check /></span>
+          <span className="dvx-plan-title"><span key={title} className="dvx-plan-title-text">{title}</span></span>
+          {!anchor.allCompleted ? <span className="dvx-plan-count" aria-hidden="true">{anchor.completedCount}/{anchor.totalCount}</span> : null}
+          <ChevronDown aria-hidden="true" className="dvx-plan-chevron" />
+        </Button>
+      </CollapsibleTrigger>
+      <AnimatedCollapsibleContent id={id} open={expanded} className="dvx-plan-details">
+        <PlanSteps steps={anchor.steps} />
+      </AnimatedCollapsibleContent>
+    </section>
+  </Collapsible>;
 }
 
 export function PlanSteps({ steps }: { readonly steps: readonly PlanStep[] }) {
-  return <ol className="max-h-[min(160px,25vh)] space-y-1.5 overflow-y-auto px-3 py-2">{steps.map((step, index) => <li key={index} className="flex items-start gap-2 text-[13px] leading-[18px]">
-      {step.status === 'completed' ? <span className="mt-0.5 grid size-3 shrink-0 place-items-center rounded-full bg-muted-foreground/40"><Check className="size-2 text-background" /></span> : <Circle className={`mt-0.5 size-3 shrink-0 ${step.status === 'in_progress' ? 'fill-primary text-primary' : 'text-muted-foreground'}`} />}
-      <span className={step.status === 'completed' ? 'text-muted-foreground' : undefined}>{step.text}</span>
-    </li>)}</ol>;
+  return <ol className="dvx-plan-steps" aria-label="Plan steps">
+    {steps.map((step, index) => <li key={`${index}:${step.text}`} className="dvx-plan-step" data-status={step.status}
+      aria-current={step.status === 'in_progress' ? 'step' : undefined}>
+      <span aria-hidden="true" className="dvx-plan-step-marker"><Circle /><Check /></span>
+      <span className="sr-only">{step.status === 'completed' ? 'Completed: ' : step.status === 'in_progress' ? 'In progress: ' : 'Pending: '}</span>
+      <span>{step.text}</span>
+    </li>)}
+  </ol>;
 }

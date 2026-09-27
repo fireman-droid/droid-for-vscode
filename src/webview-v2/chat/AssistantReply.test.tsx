@@ -2,8 +2,8 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { ProcessPresentationProvider } from '../../webview/assistant/transcript/processPresentation';
-import type { AssistantGroupDescriptor } from '../../webview/assistant/transcript/transcriptGroups';
+import { ProcessPresentationProvider } from './transcript/processPresentation';
+import type { AssistantGroupDescriptor } from './transcript/transcriptGroups';
 import { AssistantReply } from './AssistantReply';
 
 afterEach(cleanup);

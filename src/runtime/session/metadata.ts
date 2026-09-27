@@ -58,7 +58,15 @@ export function readMissionSettings(
 export async function readModelCatalog(
   context: MetadataContext,
 ): Promise<RuntimeModelCatalog> {
-  const models = context.session.availableModels;
+  let models: FactoryDroidSession['availableModels'];
+  try {
+    models = context.session.readAvailableModels
+      ? await context.session.readAvailableModels()
+      : context.session.availableModels;
+  } catch {
+    context.recordDiagnostic({ level: 'error', name: 'runtime.models.read-failed' });
+    throw new Error('Droid model catalog could not be loaded.');
+  }
   if (models === undefined) {
     return { status: 'unavailable' };
   }

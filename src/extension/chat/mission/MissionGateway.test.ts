@@ -1,5 +1,6 @@
 import type { DaemonApi } from '../../../runtime/daemon/api';
 import { describe, expect, it, vi } from 'vitest';
+import { cancellingRuntimeInteractionHandler } from '../../../runtime/events/runtimeInteractions';
 
 import { MissionGateway, type MissionGatewayRuntime } from './MissionGateway';
 import type {
@@ -50,6 +51,10 @@ const message = {
   userTestingEnabled: true,
 };
 
+function prepareInteractions() {
+  return { handler: cancellingRuntimeInteractionHandler, activate() {} };
+}
+
 function createPreferences(): MissionPreferenceStore {
   const values = new Map<string, unknown>();
   const persistence: MissionPreferencePersistence = {
@@ -71,9 +76,12 @@ function catalogGateway(
   const listPage = vi.fn(async () => {
     const page = pages[listPage.mock.calls.length - 1];
     if (page === undefined) throw new Error('unexpected page');
-    return page;
+    // These fixtures represent actual session rows, which the daemon marks with
+    // host/session fields. Metadata-only Mission records are tested separately.
+    return { ...page, rows: page.rows.map(row => ({ hostId: 'test-host', ...row })) };
   });
   const gateway = new MissionGateway({
+    prepareInteractions,
     getDroid: async () => ({}) as DaemonApi,
     preferences: createPreferences(),
     createRuntime: () => ({
@@ -657,6 +665,7 @@ describe('MissionGateway', () => {
     vi.useFakeTimers();
     const listPage = vi.fn(() => new Promise<DaemonMissionCatalogPage>(() => undefined));
     const gateway = new MissionGateway({
+      prepareInteractions,
       getDroid: async () => ({}) as DaemonApi,
       preferences: createPreferences(),
       createRuntime: () => ({
@@ -694,6 +703,7 @@ describe('MissionGateway', () => {
       userTestingEnabled: true,
     });
     const gateway = new MissionGateway({
+      prepareInteractions,
       getDroid: async () => ({}) as DaemonApi,
       preferences,
       createRuntime: () => ({
@@ -775,6 +785,7 @@ describe('MissionGateway', () => {
     };
     const createRuntime = vi.fn(() => runtime);
     const gateway = new MissionGateway({
+      prepareInteractions,
       getDroid: async () =>
         ({
           sessions: { create, updateSettings },
@@ -804,6 +815,9 @@ describe('MissionGateway', () => {
       expect.objectContaining({ id: 'orchestrator-1' }),
       expect.anything(),
       message.orchestrator,
+      expect.objectContaining({
+        callbacks: { permissionHandler: expect.any(Function), askUserHandler: expect.any(Function) },
+      }),
     );
   });
 
@@ -811,6 +825,7 @@ describe('MissionGateway', () => {
     const detach = vi.fn(async () => {});
     const createRuntime = vi.fn();
     const gateway = new MissionGateway({
+      prepareInteractions,
       getDroid: async () =>
         ({
           sessions: {
@@ -838,6 +853,7 @@ describe('MissionGateway', () => {
   it('rejects each stale settings value before creating a Session', async () => {
     const create = vi.fn();
     const gateway = new MissionGateway({
+      prepareInteractions,
       getDroid: async () => ({ sessions: { create } }) as unknown as DaemonApi,
       preferences: createPreferences(),
       createRuntime: () => ({
@@ -899,6 +915,7 @@ describe('MissionGateway', () => {
     const create = vi.fn(async () => session);
     const initialize = vi.fn(async () => {});
     const gateway = new MissionGateway({
+      prepareInteractions,
       getDroid: async () =>
         ({
           sessions: {

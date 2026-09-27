@@ -1,5 +1,5 @@
 import { UiEnvironmentProvider } from '@droidvisx/chat-ui/environment';
-import { copyText } from '../../webview/bridge/clipboard';
+import { copyText } from '../bridge/clipboard';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Button } from '../ui/button';
@@ -29,7 +29,7 @@ class RenderBoundary extends Component<
 
 export function mountWebview(children: ReactNode, report: (message: string) => void): void {
   const element = document.getElementById('root');
-  if (element === null) throw new Error('DroidVisX root element is missing.');
+  if (element === null) throw new Error('Droid root element is missing.');
   // Radix's style singleton reads this hook before injecting dialog scroll-lock CSS.
   const nonce = document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce;
   if (nonce) (globalThis as { __webpack_nonce__?: string }).__webpack_nonce__ = nonce;

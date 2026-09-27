@@ -5,6 +5,6 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["react", "react-dom"]
   },
-  "include": ["./**/*.ts", "./**/*.tsx"],
+  "include": ["./**/*.ts", "./**/*.tsx", "../test/setup.ts"],
   "exclude": ["./**/*.test.ts", "./**/*.test.tsx"]
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Brain } from 'lucide-react';
 import type { ThinkingTranscriptItem } from '../../shared/protocol/transcript';
-import { formatThinkingLabel } from '../../webview/assistant/thread/readers';
+import { formatThinkingLabel } from './thread/readers';
 import { Tool, ToolContent, ToolHeader } from '../ai-elements/tool';
 import { Markdown } from '../content/Markdown';
 import { ActivityItem } from './ActivityItem';

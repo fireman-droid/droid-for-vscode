@@ -2,8 +2,8 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { GitCommitFlowContext, type GitCommitFlowContextValue } from '../../webview/assistant/changes/gitCommitFlow';
-import { initialGitCommitFlowState } from '../../webview/assistant/changes/gitCommitStore';
+import { GitCommitFlowContext, type GitCommitFlowContextValue } from '../review/gitCommitFlow';
+import { initialGitCommitFlowState } from '../review/gitCommitStore';
 import { ReviewDock } from './ReviewDock';
 
 afterEach(cleanup);

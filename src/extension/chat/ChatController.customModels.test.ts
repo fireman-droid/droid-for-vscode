@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createController,
+  createMemoryPersistence,
   createMockRuntime,
   DaemonAvailabilityError,
   ready,
@@ -42,9 +43,18 @@ import type {
   CustomModelsStateMessage,
   ProviderModelsStateMessage,
 } from '../../shared/protocol/customModelsProtocol';
-import type { ProviderRegistry } from './models/providerRegistry';
-import { resetSessionMetadata } from './sessions/runtimeLifecycle';
+import { ProviderRegistry } from './models/providerRegistry';
+import { resetSessionMetadata } from './sessions/sessionCleanup';
 import { enqueuePrompt } from './queue/queuedPromptsState';
+
+function createProviderRegistry(): ProviderRegistry {
+  const keys = new Map<string, string>();
+  return new ProviderRegistry(createMemoryPersistence(), {
+    get: async (key) => keys.get(key),
+    store: async (key, value) => { keys.set(key, value); },
+    delete: async (key) => { keys.delete(key); },
+  });
+}
 
 /** One masked row exactly as the probe captured it. */
 function probeRow(overrides: Partial<DaemonCustomModelRow> = {}): DaemonCustomModelRow {
@@ -260,22 +270,15 @@ describe('ChatController custom models', () => {
     const { host, controller, messages } = await connectedHost({
       discovery: { discover: vi.fn(async () => []) },
     });
-    host.providerRegistry = {
-      get: vi.fn(() => ({
-        id: 'provider-a',
-        displayName: 'Gateway',
-        protocol: 'openai',
-        rootUrl: 'https://api.example.com',
-        apiBaseUrl: 'https://api.example.com/v1',
-        secretKey: 'secret-a',
-      })),
-      apiKey: vi.fn(async () => undefined),
-    } as unknown as NonNullable<CustomModelsHost['providerRegistry']>;
+    host.providerRegistry = createProviderRegistry();
+    const provider = await host.providerRegistry.save({
+      displayName: 'Gateway', protocol: 'openai', rootUrl: 'https://api.example.com',
+    });
     const providerCount = providerMessages(messages).length;
     dispatchCustomModels(host, {
       type: 'providerModels.fetch',
       sessionId: 'session-1',
-      providerId: 'provider-a',
+      providerId: provider.id,
     });
     await vi.waitFor(() =>
       expect(discoveryMessages(messages).at(-1)?.discovery).toMatchObject({
@@ -857,26 +860,18 @@ describe('provider model writes and tests', () => {
   it('upserts the typed domain root without concatenating /v1', async () => {
     const gateway = createGateway();
     const { host } = await connectedHost({ gateway });
-    const provider = {
-      id: 'provider-a',
+    host.providerRegistry = createProviderRegistry();
+    const provider = await host.providerRegistry.save({
       displayName: 'Imported connection',
       protocol: 'anthropic' as const,
       rootUrl: 'http://38.47.121.18:8080',
-      apiBaseUrl: 'http://38.47.121.18:8080/v1',
-    };
-    host.providerRegistry = {
-      get: () => provider,
-      list: () => [provider],
-      apiKey: async () => 'sk-test-key',
-      hasApiKey: async () => true,
-      save: async () => provider,
-      delete: async () => {},
-    } as unknown as ProviderRegistry;
+      apiKey: 'sk-test-key',
+    });
 
     dispatchCustomModels(host, {
       type: 'providerModels.saveModel',
       sessionId: 'session-1',
-      providerId: 'provider-a',
+      providerId: provider.id,
       model: 'claude-sonnet-5',
       displayName: 'Claude Sonnet 5',
       maxOutputTokens: 16384,
@@ -910,16 +905,7 @@ describe('provider model writes and tests', () => {
       }),
     ]);
     const { host, messages } = await connectedHost({ gateway });
-    host.providerRegistry = {
-      get: () => null,
-      list: () => [],
-      apiKey: async () => undefined,
-      hasApiKey: async () => false,
-      save: async () => {
-        throw new Error('imported connections are not in the registry');
-      },
-      delete: async () => {},
-    } as unknown as ProviderRegistry;
+    host.providerRegistry = createProviderRegistry();
     host.promptProviderApiKey = async () => 'prompted-key';
 
     dispatchCustomModels(host, {
@@ -970,26 +956,18 @@ describe('provider model writes and tests', () => {
       }),
     ]);
     const { host, messages } = await connectedHost({ gateway });
-    const provider = {
-      id: 'provider-a',
+    host.providerRegistry = createProviderRegistry();
+    const provider = await host.providerRegistry.save({
       displayName: 'Gateway',
       protocol: 'anthropic' as const,
-      rootUrl: 'http://38.47.121.18:8080',
-      apiBaseUrl: 'http://38.47.121.18:8080/v1',
-    };
-    host.providerRegistry = {
-      get: () => provider,
-      list: () => [provider],
-      apiKey: async () => 'sk-test-key',
-      hasApiKey: async () => true,
-      save: async () => provider,
-      delete: async () => {},
-    } as unknown as ProviderRegistry;
+      rootUrl: 'http://38.47.121.18:8080/v1',
+      apiKey: 'sk-test-key',
+    });
 
     dispatchCustomModels(host, {
       type: 'providerModels.testAll',
       sessionId: 'session-1',
-      providerId: 'provider-a',
+      providerId: provider.id,
     });
     await vi.waitFor(() => {
       expect(latestProviders(messages)?.[0]?.latestTest).toMatchObject({

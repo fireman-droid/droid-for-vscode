@@ -1,6 +1,6 @@
 import { useContext, useMemo } from 'react';
-import { inlineDiffLines } from '../../webview/assistant/changes/inlineDiffLines';
-import { INLINE_DIFF_UNAVAILABLE, InlineDiffContext, useInlineDiff } from '../../webview/assistant/changes/useInlineDiff';
+import { formatDiffHunkHeader, inlineDiffLines } from '@droidvisx/chat-ui/review/inlineDiffLines';
+import { INLINE_DIFF_UNAVAILABLE, InlineDiffContext, useInlineDiff } from '../review/useInlineDiff';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
 
@@ -35,7 +35,7 @@ export function InlineFileDiff({ path, turnId, expanded }: {
             {lines.map((line, index) => <span key={index} className={cn('block',
               line.kind === 'add' && 'bg-[var(--vscode-diffEditor-insertedLineBackground,rgba(46,160,67,0.12))]',
               line.kind === 'remove' && 'bg-[var(--vscode-diffEditor-removedLineBackground,rgba(248,81,73,0.12))]')}>
-              {line.kind === 'hunk' || line.kind === 'note' ? <span className="block px-2 text-muted-foreground">{line.text}</span>
+              {line.kind === 'hunk' || line.kind === 'note' ? <span className="block px-2 text-muted-foreground" title={line.text}>{formatDiffHunkHeader(line.text)}</span>
                 : <span className="grid grid-cols-[4ch_4ch_2ch_auto] gap-1 pr-2">
                   <span aria-hidden className="text-right text-muted-foreground">{line.before}</span>
                   <span aria-hidden className="text-right text-muted-foreground">{line.after}</span>

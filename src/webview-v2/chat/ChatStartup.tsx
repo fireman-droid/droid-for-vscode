@@ -1,5 +1,5 @@
 import { BookOpen, Folder, GitCompare } from 'lucide-react';
-import type { AssistantWebviewState } from '../../webview/assistant/state/types';
+import type { AssistantWebviewState } from '../state/types';
 import { Button } from '../ui/button';
 import { DroidActivity } from '../ui/droid-motion';
 

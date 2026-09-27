@@ -5,7 +5,7 @@ import { Markdown } from '../content/Markdown';
 import { ImageContent } from '../content/MediaPreview';
 import { ToolRow } from './ToolRow';
 import { ThinkingRow } from './ThinkingRow';
-import { SelectSessionContext } from '../../webview/assistant/thread/messageContexts';
+import { SelectSessionContext } from './thread/messageContexts';
 import { Button } from '../ui/button';
 
 export const TranscriptRow = memo(function TranscriptRow({ item, streaming, grouped, messageId, readOnly = false, hideConfirmedOperations = false, onInteract }: {

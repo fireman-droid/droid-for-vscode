@@ -34,7 +34,7 @@ export interface ControllerPort
   readonly recoveryState: Pick<ConversationRecoveryState, 'transcript'>;
   readonly missionState: Pick<
     MissionSessionState,
-    'mission' | 'missionRuntime' | 'missionStartInProgress'
+    'mission' | 'missionRuntime' | 'missionStartInProgress' | 'stopMissionSubscription'
   >;
-  readonly effects: Pick<ChatEffects, 'closeRuntime' | 'handleSend'>;
+  readonly effects: Pick<ChatEffects, 'closeRuntime' | 'handleSend' | 'loadSessionMetadata'>;
 }

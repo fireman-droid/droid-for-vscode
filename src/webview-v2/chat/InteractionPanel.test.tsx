@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { PendingInteraction } from '../../webview/assistant/interactions/interactionStore';
+import type { PendingInteraction } from './interactions/interactionStore';
 import { InteractionPanel } from './InteractionPanel';
 
 afterEach(cleanup);

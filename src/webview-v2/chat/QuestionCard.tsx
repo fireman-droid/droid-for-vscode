@@ -1,23 +1,25 @@
 import type { ClipboardEventHandler, DragEventHandler, ReactNode } from 'react';
 import { QuestionCardView } from '@droidvisx/chat-ui/chat/QuestionCardView';
 import type { UserTranscriptItem } from '../../shared/protocol/transcript';
-import type { MessageEditor } from '../../webview/assistant/editing/useMessageEditor';
+import type { MessageEditor } from './editing/useMessageEditor';
 import { MAX_TURN_TEXT_LENGTH } from '../../shared/protocol/bounds';
 import type { ImageTranscriptItem } from '../../shared/protocol/attachments';
-import type { PlanAnchorState } from '../../webview/assistant/transcript/planAnchor';
+import type { PlanAnchorState } from './transcript/planAnchor';
 import { ImageContent } from '../content/MediaPreview';
 import { PlanLine } from './PlanLine';
-import { EDIT_REJECT_COPY, type EditResendRejection, type EditStageState, type RewindFileInfo } from '../../webview/assistant/editing/editTypes';
-import type { AttachmentImageEntry } from '../../webview/assistant/attachments/attachmentImageStore';
+import { EDIT_REJECT_COPY, type EditResendRejection, type EditStageState, type RewindFileInfo } from './editing/editTypes';
+import type { AttachmentImageEntry } from './attachments/attachmentImageStore';
 import { StagedAttachments, SentAttachments, type AttachmentActions } from './EditAttachments';
 import { RestoreFiles } from './RestoreFiles';
-import { parseSelectionQuotes } from '../../webview/assistant/btw/selectionQuote';
+import { parseSelectionQuotes } from '@droidvisx/chat-ui/chat/selectionQuote';
 
 export interface QuestionEditing {
   readonly stage: EditStageState | null;
   readonly images: Readonly<Record<string, AttachmentImageEntry>>;
   readonly actions: AttachmentActions;
   readonly disabled: boolean;
+  readonly preparing: number;
+  readonly isPreparing: () => boolean;
   readonly impact: RewindFileInfo | null;
   readonly rejection: EditResendRejection | null;
   readonly onPaste: ClipboardEventHandler<HTMLTextAreaElement>;
@@ -67,12 +69,13 @@ export function QuestionCard({
     {item.attachments?.some((attachment) => attachment.kind !== 'image')
       ? <SentAttachments attachments={item.attachments} /> : null}
   </>;
-  return <QuestionCardView item={item} editor={editor} quote={parseSelectionQuotes(item.text)} placeholder={placeholder} placeholderHeight={placeholderHeight}
-    canResend={canResend} maxLength={MAX_TURN_TEXT_LENGTH} originalAttachments={originalAttachments}
+  const displayEditor = draft && edit.preparing > 0 ? { ...editor, draft: { ...draft, notice: 'Preparing attachments…' } } : editor;
+  return <QuestionCardView item={item} editor={displayEditor} quote={parseSelectionQuotes(item.text)} placeholder={placeholder} placeholderHeight={placeholderHeight}
+    canResend={canResend && edit.preparing === 0} maxLength={MAX_TURN_TEXT_LENGTH} originalAttachments={originalAttachments}
     stagedAttachments={stage === null ? originalAttachments : stage.attachments.length ? <StagedAttachments stage="edit" attachments={stage.attachments} images={edit.images} actions={edit.actions} disabled={attachmentDisabled} /> : null}
     editSettings={edit.settings} editDisabled={attachmentDisabled} onAttach={edit.actions.handleEditAttachFiles} rejection={rejection}
     onPaste={edit.onPaste} onDrop={edit.onDrop} onDragOver={edit.onDragOver}
-    onResend={() => { if (messageId && draft) editor.submit(messageId, draft.restoreFiles && impact !== null && impact.restorableCount + impact.createdCount > 0); }}
+    onResend={() => { if (messageId && draft && !edit.isPreparing()) editor.submit(messageId, draft.restoreFiles && impact !== null && impact.restorableCount + impact.createdCount > 0); }}
     restoreFiles={draft && impact ? <RestoreFiles impact={impact} checked={draft.restoreFiles} disabled={pending || draft.resumeOnly} restored={draft.resumeOnly && draft.restoreFiles} openDisabled={edit.disabled || pending} onChange={(restoreFiles) => editor.update(draft.messageId, { restoreFiles })} /> : null}
     plan={plan && onPlanToggle ? <PlanLine key={plan.anchorToolUseId} anchor={plan} running={planRunning} override={planChoice?.id === plan.anchorToolUseId ? planChoice.expanded : null} onToggle={onPlanToggle} /> : null} />;
 }

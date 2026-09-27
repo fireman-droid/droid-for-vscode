@@ -574,6 +574,7 @@ export class SubagentTranscriptService {
           ),
           notification.text,
           notification.messageId,
+          Date.now(),
         );
         this.publish(entry);
         break;
@@ -601,6 +602,7 @@ export class SubagentTranscriptService {
           sessionId: entry.childSessionId,
           turnId,
           delta: projected.projection.delta,
+          timestamp: Date.now(),
         });
         return true;
       }

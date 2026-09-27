@@ -5,7 +5,8 @@ import { reconcileSessionHistory } from '../../recovery/reconcileSessionHistory'
 import type { ChatController } from '../ChatController';
 import { isTurnActive } from '../internals';
 import { createTurnActivityState } from '../turns/turnActivityState';
-import { handleRuntimeEvent, handleTurnComplete } from '../turns/turnFlow';
+import { handleRuntimeEvent } from '../turns/turnRuntimeEvents';
+import { handleTurnComplete } from '../turns/turnSettlement';
 
 type Completion = Extract<RuntimeEvent, { type: 'turn-complete' }>;
 interface ObservedTurn {

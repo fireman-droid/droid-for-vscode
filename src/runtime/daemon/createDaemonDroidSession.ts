@@ -33,10 +33,8 @@ import {
  *
  * The model catalog comes from `settings.getDefaults()`, whose
  * `availableModels` carries the same full metadata process mode
- * captures from initialize/load responses (probe:
- * artifacts/probe-daemon-model-catalog.mjs, 2026-08-13). A defaults
- * read failure leaves the catalog `unavailable` without failing the
- * session.
+ * captures from initialize/load responses. Catalog reads happen separately
+ * from session startup, so a failed read can be retried on the same session.
  */
 export function createDaemonSessionFactory(
   getDroid: () => Promise<DaemonApi>,
@@ -78,9 +76,6 @@ export async function createDaemonDroidSession(options: {
   const droid = await options.getDroid();
   const callbacks = createRuntimeInteractionCallbacks(options.interactionHandler);
   const lease = options.lease ?? noopLease;
-  // Catalog reads use the metadata daemon and are independent of the session's
-  // worker startup and native IDE handshake. The reader contains its failure.
-  const modelCatalog = readDaemonAvailableModels(droid);
 
   if (options.target.kind === 'resume') {
     // A window reload leaves the previous extension host process
@@ -105,13 +100,12 @@ export async function createDaemonDroidSession(options: {
       attachment = await droid.sessions.resume(options.target.sessionId, {
         ...callbacks,
       });
-      const availableModels = await modelCatalog;
       const adapted = adaptDaemonSession(
         droid,
         attachment,
         callbacks,
         lease,
-        availableModels,
+        undefined,
         options.diagnostics,
       );
       attachment = undefined;
@@ -155,13 +149,12 @@ export async function createDaemonDroidSession(options: {
       throw leaseConflictError(leaseOutcome.heldByPid);
     }
     leaseOwned = true;
-    const availableModels = await modelCatalog;
     const adapted = adaptDaemonSession(
       droid,
       session,
       callbacks,
       lease,
-      availableModels,
+      undefined,
       options.diagnostics,
     );
     attachmentOwned = false;
@@ -266,23 +259,16 @@ function recordReplacementCleanupFailure(
 }
 
 /**
- * Reads the connection-level model catalog. The daemon refreshes
- * `availableModels` on custom-model CRUD, so a fresh read per session
- * creation matches process mode's per-initialize/load capture. Any
- * failure degrades to an `unavailable` catalog instead of failing the
- * session: model selection is secondary to the chat itself.
+ * Reads the connection-level model catalog, including custom-model changes.
+ * Failures reach the model-list caller without replacing the chat session.
  */
 async function readDaemonAvailableModels(
   droid: DaemonApi,
 ): Promise<readonly AvailableModelConfig[] | undefined> {
-  try {
-    const models = (await droid.settings.getDefaults()).availableModels;
-    // Rows the daemon marks disabled are not selectable; drop them
-    // rather than surfacing dead picker entries.
-    return models?.filter((model) => model.disabled !== true);
-  } catch {
-    return undefined;
-  }
+  const models = (await droid.settings.getDefaults()).availableModels;
+  // Rows the daemon marks disabled are not selectable; drop them
+  // rather than surfacing dead picker entries.
+  return models?.filter((model) => model.disabled !== true);
 }
 
 const noopLease: SessionLeaseHooks = {
@@ -323,7 +309,7 @@ function toSettingsOverlay(update: SupportedSettingsUpdate): Partial<SessionSett
 export function adaptConnectedDaemonSession(
   droid: DaemonApi,
   session: DaemonSessionHandle,
-  interactionHandler: RuntimeInteractionHandler,
+  callbacks: RuntimeInteractionCallbacks,
   lease: SessionLeaseHooks,
   availableModels?: readonly AvailableModelConfig[],
   diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>,
@@ -335,7 +321,7 @@ export function adaptConnectedDaemonSession(
   return adaptDaemonSession(
     droid,
     session,
-    createRuntimeInteractionCallbacks(interactionHandler),
+    callbacks,
     lease,
     availableModels,
     diagnostics,
@@ -449,8 +435,7 @@ function adaptDaemonSession(
 
     successorLeaseOwned = false;
     releaseReplacementLease(lease, sourceSessionId, 'source-lease', diagnostics);
-    // The replacement keeps the already-read catalog (same connection,
-    // no custom-model change happened inside rewind/compact/fork).
+    // Keep the last catalog; the replacement also retains its fresh reader.
     return adaptDaemonSession(
       droid,
       successor,
@@ -463,11 +448,19 @@ function adaptDaemonSession(
 
   return {
     onNotification: (listener) => session.onNotification(listener),
+    readMissionSnapshot: () => session.readMissionSnapshot(),
+    subscribeMissionSnapshot: (listener) => session.subscribeMissionSnapshot(listener),
     listCommands: async () => projectCommandRows(await droid.commands.list(session.id)),
     get id() {
       return session.id;
     },
-    ...(availableModels === undefined ? {} : { availableModels: [...availableModels] }),
+    get availableModels() {
+      return availableModels === undefined ? undefined : [...availableModels];
+    },
+    async readAvailableModels() {
+      availableModels = await readDaemonAvailableModels(droid);
+      return availableModels;
+    },
     get cwd(): string | undefined {
       return session.cwd;
     },

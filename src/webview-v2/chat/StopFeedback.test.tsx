@@ -2,13 +2,13 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createHostTranscriptState, projectHostTranscriptMessage } from '../../extension/recovery/hostTranscriptState';
-import { initialAssistantWebviewState } from '../../webview/assistant/state/initialState';
-import { assistantWebviewReducer } from '../../webview/assistant/state/store';
-import type { StoreHostMessage } from '../../webview/assistant/state/types';
+import { initialAssistantWebviewState } from '../state/initialState';
+import { assistantWebviewReducer } from '../state/store';
+import type { StoreHostMessage } from '../state/types';
 import {
   isTransientNoticeLifecycleMessage, reduceTransientDiagnostic, selectVisibleNotice,
   type TransientDiagnostic,
-} from '../../webview/assistant/shell/transientDiagnostic';
+} from '../host/transientDiagnostic';
 import { TransientNotice } from './TransientNotice';
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });

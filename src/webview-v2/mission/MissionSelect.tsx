@@ -12,7 +12,7 @@ export function MissionSelect({ label, fieldLabel = label, value, options, disab
 }) {
   const [open, setOpen] = useState(false);
   useEffect(() => { if (disabled || options.length === 0) setOpen(false); }, [disabled, options.length]);
-  return <label className="block min-w-0 space-y-1.5 text-xs"><span className="text-muted-foreground">{fieldLabel}</span>
+  return <label className="grid min-w-0 gap-1.5 text-xs"><span className="text-muted-foreground">{fieldLabel}</span>
     <Select open={open} onOpenChange={setOpen} value={options.some((item) => item.value === value) ? value : ''} disabled={disabled || options.length === 0} onValueChange={onChange}>
       <SelectTrigger aria-label={label} className="h-8 w-full rounded-md"><SelectValue placeholder={placeholder} /></SelectTrigger>
       <SelectContent aria-label={`${label} options`} className="max-h-52">

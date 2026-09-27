@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import { CommandCard as CommandView } from '@droidvisx/chat-ui/chat/CommandCard';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
-import { commandCardTitle, commandChips } from '../../webview/assistant/composer/commandCard';
-import { formatDuration, formatToolLifecycle } from '../../webview/assistant/thread/readers';
+import { commandCardTitle, commandChips } from './composer/commandCard';
+import { formatDuration, formatToolLifecycle } from './thread/readers';
 import { executionLabel } from '../content/operationPresentation';
 
 export function CommandCard({ item, command, output, open, onOpenChange, fileActions }: {

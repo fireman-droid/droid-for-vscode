@@ -16,6 +16,7 @@ export interface HostSnapshotPort
     | 'metadata'
     | 'btwSideChat'
     | 'recordHost'
+    | 'interactions'
   > {
   readIdeState?(): IdeState;
   readonly sessionState: Readonly<

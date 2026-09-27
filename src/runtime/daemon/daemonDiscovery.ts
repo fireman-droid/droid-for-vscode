@@ -5,7 +5,7 @@ import process from 'node:process';
 
 /**
  * Self-built service discovery for the shared detached daemon (daemon
- * Phase 3). The droid CLI has no discovery convention, so DroidVisX
+ * Phase 3). The droid CLI has no discovery convention, so Droid
  * keeps one well-known file under the user profile:
  *
  *   ~/.droidvisx/daemon.json  ->  { port, pid, version, startedAt }

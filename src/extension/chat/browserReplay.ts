@@ -11,7 +11,6 @@ export async function replayControllerTo(
       type: 'webview.ready',
       protocolVersion: BRIDGE_PROTOCOL_VERSION,
     });
-    return;
   }
   await ctl.sessionState.initialization;
   await ctl.effects.waitForWorkspaceTransition();
@@ -19,6 +18,9 @@ export async function replayControllerTo(
     return;
   }
   ctl.emitTo(listener, ctl.effects.buildHostSnapshot());
+  if (ctl.missionState.missionRuntime) {
+    ctl.emitTo(listener, ctl.missionState.missionRuntime.snapshot());
+  }
   if (ctl.sessionState.sessionId !== null) {
     await ctl.reviewCoordinator?.replayTo(ctl.sessionState.sessionId, (message) =>
       ctl.emitTo(listener, message),

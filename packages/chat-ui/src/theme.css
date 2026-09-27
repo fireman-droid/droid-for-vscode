@@ -8,6 +8,7 @@
 @import './styles/motion.css';
 @import './styles/droid-motion.css';
 @import './styles/chat-region.css';
+@import './styles/plan.css';
 @import './styles/content.css';
 @source './**/*.{ts,tsx}';
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));

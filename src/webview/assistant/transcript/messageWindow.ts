@@ -1,2 +1,0 @@
-export const DEFAULT_MESSAGE_WINDOW = 60;
-export const MESSAGE_WINDOW_STEP = 120;

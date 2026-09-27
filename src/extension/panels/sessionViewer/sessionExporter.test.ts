@@ -27,14 +27,17 @@ const metadata = (
 const user = (
   text: string,
   extra: Partial<Extract<SessionTranscriptItem, { kind: 'user' }>> = {},
-): SessionTranscriptItem => ({
+): Extract<SessionTranscriptItem, { kind: 'user' }> => ({
   id: `user-${text.slice(0, 8)}`,
   kind: 'user',
   text,
   ...extra,
 });
 
-const assistant = (text: string, id = 'a1'): SessionTranscriptItem => ({
+const assistant = (
+  text: string,
+  id = 'a1',
+): Extract<SessionTranscriptItem, { kind: 'assistant' }> => ({
   id,
   kind: 'assistant',
   turnId: 'turn-1',
@@ -57,6 +60,41 @@ const tool = (
 });
 
 describe('renderSessionMarkdown', () => {
+  it('exports each message timestamp with seconds and a UTC offset, including consecutive assistant messages', () => {
+    const markdown = renderSessionMarkdown(metadata(), [
+      user('Start work.', { timestamp: new Date(2026, 8, 26, 18, 47, 2).getTime() }),
+      { ...assistant('First update.'), timestamp: new Date(2026, 8, 26, 18, 48, 3).getTime() },
+      tool(),
+      { ...assistant('Second update.', 'a2'), timestamp: new Date(2026, 8, 26, 18, 49, 4).getTime() },
+    ]);
+
+    expect(markdown).toContain('- **Time zone:** local time; each timestamp includes its UTC offset.');
+    expect(markdown).toMatch(/\*Sent: 2026-09-26 18:47:02 UTC[+-]\d{2}:\d{2}\*\n\nStart work\./u);
+    expect(markdown).toMatch(/\*Recorded: 2026-09-26 18:48:03 UTC[+-]\d{2}:\d{2}\*\n\nFirst update\./u);
+    expect(markdown).toMatch(/\*Recorded: 2026-09-26 18:49:04 UTC[+-]\d{2}:\d{2}\*\n\nSecond update\./u);
+    expect(markdown.match(/## Assistant/gu)).toHaveLength(1);
+    expect(markdown.indexOf('First update.')).toBeLessThan(markdown.indexOf('**`Edit`**'));
+    expect(markdown.indexOf('**`Edit`**')).toBeLessThan(markdown.indexOf('Second update.'));
+  });
+
+  it.each([undefined, 0, -1, Number.NaN, Number.POSITIVE_INFINITY, 8_640_000_000_000_001])(
+    'marks unavailable message timestamps without substituting the export date (%s)',
+    (timestamp) => {
+      const markdown = renderSessionMarkdown(metadata(), [
+        user('Question.', { timestamp }),
+        { ...assistant('Answer.'), ...(timestamp === undefined ? {} : { timestamp }) },
+      ]);
+      const messages = markdown.slice(markdown.indexOf('## User'));
+
+      expect(messages).toContain('*Time unavailable*\n\nQuestion.');
+      expect(messages).toContain('*Time unavailable*\n\nAnswer.');
+      expect(messages).not.toContain('2026-08-12');
+      expect(messages).not.toContain('Invalid Date');
+      expect(messages).not.toContain('*Sent:');
+      expect(messages).not.toContain('*Recorded:');
+    },
+  );
+
   it('renders header, ordered user/assistant sections, and verbatim assistant markdown', () => {
     const markdown = renderSessionMarkdown(metadata(), [
       user('Please fix the login bug.'),

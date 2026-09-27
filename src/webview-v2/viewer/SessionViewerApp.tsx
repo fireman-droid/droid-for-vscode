@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
-import { renderMermaid } from '../../webview/assistant/markdown/mermaidRenderer';
-import { useSessionViewer } from '../../webview/sessionViewer/useSessionViewer';
+import { renderMermaid } from '../content/mermaidRenderer';
+import { useSessionViewer } from './useSessionViewer';
 import { ContentProvider } from '../content/context';
 import { applyTheme } from '../shell/theme';
 import { Button } from '../ui/button';

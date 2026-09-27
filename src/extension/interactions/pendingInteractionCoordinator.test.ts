@@ -22,7 +22,7 @@ import {
   createRuntimeInteractionCallbacks,
   type RuntimeInteractionHandler,
 } from '../../runtime/events/runtimeInteractions';
-import { readHostMessage } from '../../webview/bridge/validateHostMessage';
+import { readHostMessage } from '../../webview-v2/bridge/validateHostMessage';
 import {
   MAX_PENDING_INTERACTIONS,
   PendingInteractionCoordinator,

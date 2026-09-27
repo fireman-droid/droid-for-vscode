@@ -58,6 +58,7 @@ import { historyToolFilePaths } from './historyToolPaths';
 import { appendHistoryTurnChanges } from './historyTurnChanges';
 import { sessionMessageTurnId } from '../../shared/transcript/sessionMessageIdentity';
 import { historyMessageAncestry } from './historyMessageAncestry';
+import { isMessageTimestamp } from '../../shared/protocol/messageTimestamp';
 
 const MAX_RAW_MESSAGES_TO_PROJECT = 10_000;
 const MAX_RAW_BLOCKS_PER_MESSAGE = 1_000;
@@ -259,6 +260,7 @@ function projectMessage(
   }
 
   const messageIdentity = boundedIdentity(value.id, messageIndex);
+  const timestamp = isMessageTimestamp(value.createdAt) ? value.createdAt : undefined;
   const sdkMessageId =
     role === 'user' &&
     typeof value.id === 'string' &&
@@ -301,6 +303,7 @@ function projectMessage(
       messageIndex,
       blockIndex,
       sdkMessageId,
+      timestamp,
     );
   }
   projection.rawBlocksProcessed += blockCount;
@@ -315,6 +318,7 @@ function projectBlock(
   messageIndex: number,
   blockIndex: number,
   sdkMessageId: string | undefined,
+  timestamp: number | undefined,
 ): void {
   switch (block.type) {
     case 'text':
@@ -334,6 +338,7 @@ function projectBlock(
         messageIndex,
         blockIndex,
         sdkMessageId,
+        timestamp,
       );
       return;
     case 'thinking':
@@ -401,6 +406,7 @@ function appendText(
   messageIndex: number,
   blockIndex: number,
   sdkMessageId: string | undefined,
+  timestamp: number | undefined,
 ): void {
   const safeText = role === 'assistant' ? rawText : sanitizeNonAssistantText(rawText);
   if (safeText === null) {
@@ -432,8 +438,9 @@ function appendText(
           kind: 'user',
           text,
           ...(sdkMessageId === undefined ? {} : { messageId: sdkMessageId }),
+          ...(timestamp === undefined ? {} : { timestamp }),
         }
-      : { id, kind: 'assistant', turnId, text },
+      : { id, kind: 'assistant', turnId, text, ...(timestamp === undefined ? {} : { timestamp }) },
   );
 }
 

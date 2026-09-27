@@ -38,7 +38,7 @@ export function CodeBlock({ text, language }: { readonly text: string; readonly 
       }}>{copied ? <Check /> : <Copy />}</Button>
     </header>
     <pre tabIndex={0} role="region" aria-label={`${language ?? 'Plain text'} code`}
-      className="max-h-[480px] max-w-full overflow-auto overscroll-x-contain bg-muted/40 p-2.5 text-xs leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring">
+      className="max-h-[480px] max-w-full overflow-auto overscroll-contain bg-muted/40 p-2.5 text-xs leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring">
       {html === null ? <code>{text}</code> : <code dangerouslySetInnerHTML={{ __html: html }} />}
     </pre>
     </div>

@@ -104,29 +104,13 @@
 .v2-mission-node[data-tone='done'] { border-color: color-mix(in srgb, var(--mission-tone-done) 25%, transparent); color: var(--mission-tone-done); }
 .v2-mission-node[data-tone='muted'] { color: var(--muted-ink); }
 
-/* Setup step index chip */
-.v2-mission-step {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  border-radius: 999px;
-  background: var(--control-surface-hover);
-  color: var(--secondary-ink);
-  font-size: 11px;
-  font-weight: 600;
-}
-
 /* Keep dense work surfaces quiet; state is conveyed by labels and a soft fill. */
-.v2-mission-workspace-header, .v2-mission-setup-status, .v2-mission-setup-actions,
-.v2-mission-panel, .v2-mission-flow, .v2-mission-validation,
+.v2-mission-workspace-header, .v2-mission-setup-actions,
+.v2-mission-panel, .v2-mission-validation,
 .v2-mission-validation > div, .v2-mission-dialog { border-color: var(--panel-edge); }
-.v2-mission-panel, .v2-mission-setup-status, .v2-mission-empty {
+.v2-mission-panel, .v2-mission-empty {
   background: color-mix(in srgb, var(--soft-surface) 20%, var(--surface));
 }
-.v2-mission-flow { background: var(--panel-edge); }
 .v2-mission-empty { border-color: var(--panel-edge); }
 .v2-mission-filters { background: color-mix(in srgb, var(--soft-surface) 35%, var(--surface)); }
 .v2-mission-filters [role='tab']:is(:hover, [data-state='active']):not(:disabled) { background: var(--control-surface-hover); }
@@ -145,7 +129,6 @@
 .v2-mission-feature-trigger[data-state='open'] { background: var(--control-surface-hover); }
 .v2-mission-feature-trigger:active:not(:disabled) { background: var(--control-surface-active); }
 .v2-mission-feature-content { border-color: var(--panel-edge); }
-.v2-mission-settings-trigger { border-color: var(--panel-edge); }
 .v2-mission-settings-trigger:hover:not(:disabled),
 .v2-mission-settings-trigger[data-state='open'] { border-color: var(--control-border-hover); background: var(--control-surface-hover); }
 .v2-mission-settings-trigger:active:not(:disabled) { background: var(--control-surface-active); }
@@ -159,4 +142,65 @@
 @media (prefers-reduced-motion: reduce) {
   .v2-mission-card, .v2-mission-feature, .v2-mission-feature-trigger,
   .v2-mission-settings-trigger, .v2-mission-toggle { transition: none; }
+}
+
+/* A fixed action area and one scroll owner keep setup usable in a narrow sidebar. */
+.v2-mission-setup {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.v2-mission-setup-body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scroll-padding-block: 16px;
+  padding: 20px 16px;
+}
+.v2-mission-setup-body > * + * { margin-top: 20px; }
+.v2-mission-setup-section { display: grid; min-width: 0; gap: 12px; }
+.v2-mission-section-heading { display: flex; align-items: flex-start; gap: 10px; }
+.v2-mission-section-icon { display: inline-flex; flex-shrink: 0; color: var(--muted-ink); }
+.v2-mission-section-heading .v2-mission-section-icon { margin-top: 2px; }
+.v2-mission-section-icon, .v2-mission-section-icon svg { width: 16px; height: 16px; }
+.v2-mission-task { min-height: 112px; max-height: 208px; border-radius: 8px; padding: 12px; line-height: 1.6; }
+.v2-mission-task-meta { display: flex; justify-content: space-between; gap: 12px; color: var(--muted-ink); font-size: 12px; }
+.v2-mission-task-meta > :last-child { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.v2-mission-orchestrator { padding-top: 20px; border-top: 1px solid var(--panel-edge); }
+.v2-mission-setup .mission-pair { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.v2-mission-execution { overflow: hidden; border: 1px solid var(--panel-edge); border-radius: 10px; background: color-mix(in srgb, var(--soft-surface) 18%, var(--surface)); }
+.v2-mission-settings-trigger { width: 100%; height: auto; justify-content: flex-start; gap: 10px; padding: 12px; border-radius: 0; text-align: left; white-space: normal; }
+.v2-mission-settings-chevron { width: 14px; height: 14px; flex-shrink: 0; color: var(--muted-ink); transition: transform var(--motion-normal) var(--motion-ease); }
+.v2-mission-settings-trigger[data-state='open'] .v2-mission-settings-chevron { transform: rotate(180deg); }
+.v2-mission-settings-content { overflow: hidden; }
+.v2-mission-settings-content[data-state='open'] { animation: mission-settings-open 180ms var(--motion-ease); }
+.v2-mission-settings-content[data-state='closed'] { animation: mission-settings-close 140ms var(--motion-ease); }
+.v2-mission-settings-fields { display: grid; gap: 20px; padding: 4px 12px 12px; }
+.v2-mission-profile, .v2-mission-checks { border-top: 1px solid var(--panel-edge); padding-top: 12px; }
+.v2-mission-profile legend, .v2-mission-checks legend { padding-right: 8px; }
+.v2-mission-profile-fields { display: grid; gap: 10px; }
+.v2-mission-setup-actions { flex-shrink: 0; padding: 12px 16px; border-top: 1px solid var(--panel-edge); background: var(--surface); }
+.v2-mission-setup-feedback { max-height: 6em; overflow-y: auto; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
+.v2-mission-setup-feedback:not(:empty) { margin-bottom: 10px; }
+@container (min-width: 380px) {
+  .v2-mission-setup .mission-pair { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+}
+@keyframes mission-settings-open {
+  from { height: 0; opacity: 0; }
+  to { height: var(--radix-collapsible-content-height); opacity: 1; }
+}
+@keyframes mission-settings-close {
+  from { height: var(--radix-collapsible-content-height); opacity: 1; }
+  to { height: 0; opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .v2-mission-settings-content { animation: none !important; }
+  .v2-mission-settings-chevron { transition: none; }
 }

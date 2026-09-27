@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
-import type { ChatPort } from '../../webview/assistant/shell/chatIntent';
+import type { ChatPort } from '../host/chatIntent';
 import type { ChatState, ChatStore } from './store';
 import { summarizeOperations } from './AiOperationSummary';
-import { useReviewScopeFlow, type ReviewDockProps } from '../../webview/assistant/changes/useReviewScopeFlow';
+import { useReviewScopeFlow, type ReviewDockProps } from '../review/useReviewScopeFlow';
 import { Tool, ToolContent } from '../ai-elements/tool';
 import { Button } from '../ui/button';
 import { CollapsibleTrigger } from '../ui/collapsible';
@@ -12,7 +12,7 @@ import { ToggleGroup, ToggleGroupItem } from '../ui/controls';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { ChangesCommitEntry } from './GitCommitPanel';
 import { cn } from '../ui/cn';
-import { ChevronDown, ChevronRight, FileDiff } from 'lucide-react';
+import { ChevronDown, FileDiff } from 'lucide-react';
 
 export function ReviewDock(props: ReviewDockProps) {
   const { changes, review, restorePreview, operation, agent } = props;
@@ -121,14 +121,16 @@ export function ReviewDockSlot({ store, vscode }: {
   const { turnId, count, sessionId, complete } = useStore(store, useShallow(selectOperationReview));
   if (turnId === null || count === 0) return null;
   const status = complete ? 'Review complete' : null;
-  return <Button variant="plain" size="none" className="review-launcher" aria-label="Open Review" disabled={sessionId === null} onClick={() => vscode.postMessage({
+  return <Button variant="plain" size="none" className="review-launcher" aria-label="Open Review"
+    title={`${count} directly confirmed ${count === 1 ? 'file' : 'files'} in this turn${status ? ` · ${status}` : ''}`}
+    disabled={sessionId === null} onClick={() => vscode.postMessage({
     type: 'review.panel.open', sessionId: sessionId!, scopeKind: 'operations', turnId,
   })}>
     <FileDiff className="review-launcher-icon" aria-hidden="true" />
     <span className="review-launcher-summary">
-      <strong>Review AI changes</strong>
-      <span role={status ? 'status' : undefined}>{count} directly confirmed {count === 1 ? 'file' : 'files'}{status ? ` · ${status}` : ''}</span>
+      <strong>{count} {count === 1 ? 'File' : 'Files'}</strong>
+      <span role={status ? 'status' : undefined}>{status ?? 'This turn'}</span>
     </span>
-    <ChevronRight className="review-launcher-chevron" aria-hidden="true" />
+    <span className="review-launcher-action" aria-hidden="true">Review</span>
   </Button>;
 }

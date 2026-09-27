@@ -2,13 +2,13 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { useMessageEditor } from '../../webview/assistant/editing/useMessageEditor';
-import type { EditResendRejection, EditStageState, RewindFileInfo } from '../../webview/assistant/editing/editTypes';
+import { useMessageEditor } from './editing/useMessageEditor';
+import type { EditResendRejection, EditStageState, RewindFileInfo } from './editing/editTypes';
 import type { SentAttachmentSummary } from '../../shared/protocol/attachments';
-import { useAttachmentActions } from '../../webview/assistant/attachments/useAttachmentActions';
+import { useAttachmentActions } from './attachments/useAttachmentActions';
 import { QuestionCard } from './QuestionCard';
 import { EditorSettings } from './SettingsMenu';
-import { initialAssistantWebviewState } from '../../webview/assistant/state/initialState';
+import { initialAssistantWebviewState } from '../state/initialState';
 
 afterEach(cleanup);
 
@@ -63,7 +63,7 @@ function Harness({ surface = 'flow', events, rejection = null, rewind = impact, 
     item: { kind: 'user' as const, id: 'question-1', messageId: 'message-1', text: 'Original question', attachments: sentAttachments },
     editor, canResend: true, planChoice: null, onPlanToggle: vi.fn(),
     edit: {
-      actions, disabled: false, impact: rewind, rejection, images: {},
+      actions, disabled: false, preparing: 0, isPreparing: () => false, impact: rewind, rejection, images: {},
       stage: stage === undefined ? { messageId: stageOwner, attachments: [{ id: 'file', name: 'notes.txt', kind: 'text' as const, sizeBytes: 10, truncated: false, restorable: true }] } : stage,
       onDrop: vi.fn(), onDragOver: vi.fn(), onPaste: vi.fn(),
       settings: <EditorSettings owner="message-1" port={port} blocked={false} state={{

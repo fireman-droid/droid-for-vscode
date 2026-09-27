@@ -11,7 +11,11 @@ export function measureComposerInput(row: HTMLElement, input: HTMLTextAreaElemen
   shadow.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
   const measured = shadow.querySelector<HTMLTextAreaElement>('[data-composer-input]')!;
   measured.removeAttribute('data-composer-input');
-  measured.value = input.value;
+  // Height is capped: lay out only enough text to reach the cap. The live input
+  // keeps the complete value; laying out a second full draft is unnecessary.
+  const text = input.value;
+  let measuredLength = Math.min(text.length, 256);
+  measured.value = text.slice(0, measuredLength);
   measured.style.height = 'auto';
   measured.style.overflowY = 'hidden';
   row.parentElement!.appendChild(shadow);
@@ -20,9 +24,18 @@ export function measureComposerInput(row: HTMLElement, input: HTMLTextAreaElemen
     const lineHeight = Number.parseFloat(style.lineHeight) || 20;
     const parsedMaxHeight = Number.parseFloat(style.maxHeight);
     const maxHeight = Number.isFinite(parsedMaxHeight) ? parsedMaxHeight : Infinity;
-    const multiline = input.value.includes('\n') || measured.scrollHeight > Math.ceil(lineHeight);
+    const measureUntil = (limit: number) => {
+      let contentHeight = measured.scrollHeight;
+      while (contentHeight <= limit && measuredLength < text.length) {
+        measuredLength = Math.min(text.length, measuredLength * 4);
+        measured.value = text.slice(0, measuredLength);
+        contentHeight = measured.scrollHeight;
+      }
+      return contentHeight;
+    };
+    const multiline = text.includes('\n') || measureUntil(Math.ceil(lineHeight)) > Math.ceil(lineHeight);
     shadow.dataset.multiline = String(multiline);
-    const contentHeight = measured.scrollHeight;
+    const contentHeight = measureUntil(maxHeight);
     const height = Math.min(maxHeight, Math.max(multiline ? lineHeight * 2 : lineHeight, contentHeight));
     return { multiline, height, scrollable: contentHeight > maxHeight };
   } finally {

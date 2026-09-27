@@ -5,6 +5,12 @@ import { useState } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { EMPTY_SESSION_BTW_STATE, type SessionBtwState } from '../../shared/protocol/btwProtocol';
 import { SideChatSheet } from './SideChatSheet';
+import type { useBtwImages } from './useBtwImages';
+
+const images: ReturnType<typeof useBtwImages> = {
+  images: [], previews: new Map(), notice: null, reading: 0,
+  add: vi.fn(), isReading: () => false, remove: vi.fn(), sent: vi.fn(), onPaste: vi.fn(), onDrop: vi.fn(), onDragOver: vi.fn(),
+};
 
 afterEach(cleanup);
 it('sends quoted side questions without touching main chat and preserves IME input', async () => {
@@ -13,13 +19,13 @@ it('sends quoted side questions without touching main chat and preserves IME inp
   function Harness() {
     const [draft, setDraft] = useState('');
     const [quote, setQuote] = useState<string | null>('Selected context');
-    return <SideChatSheet state={{ ...EMPTY_SESSION_BTW_STATE, status: 'ready' }} draft={draft} quote={quote} width={320}
-      onDraftChange={setDraft} onQuoteClear={() => setQuote(null)} onAsk={ask} onStop={vi.fn()} onDismiss={vi.fn()} onWidthChange={vi.fn()} />;
+    return <SideChatSheet state={{ ...EMPTY_SESSION_BTW_STATE, status: 'ready' }} draft={draft} quote={quote} width={320} images={images} onModelChange={vi.fn()}
+      onDraftChange={setDraft} onQuoteClear={() => setQuote(null)} onAsk={(text) => { ask(text); setDraft(''); setQuote(null); }} onStop={vi.fn()} onDismiss={vi.fn()} onWidthChange={vi.fn()} />;
   }
   render(<Harness />);
   const input = screen.getByRole('textbox', { name: 'By the Way question' });
-  await user.click(screen.getByRole('button', { name: 'Quoted context' }));
-  expect(screen.getByRole('button', { name: 'Quoted context' }).getAttribute('aria-expanded')).toBe('true');
+  await user.click(screen.getByRole('button', { name: 'View quoted context: Selected context' }));
+  expect(screen.getByLabelText('Full quoted text').textContent).toBe('Selected context');
   await user.type(input, 'Explain this part');
   fireEvent.keyDown(input, { key: 'Enter', isComposing: true, keyCode: 229 });
   expect(ask).not.toHaveBeenCalled();
@@ -36,7 +42,7 @@ it('keeps drafting available while a follow-up is queued and preserves stop and 
     entries: [{ id: 'side-1', question: 'Question', answer: '', state: 'streaming', message: null }] };
   function Harness({ state }: { state: SessionBtwState }) {
     const [draft, setDraft] = useState('');
-    return <SideChatSheet state={state} draft={draft} quote={null} width={320} onDraftChange={setDraft} onQuoteClear={vi.fn()}
+    return <SideChatSheet state={state} draft={draft} quote={null} width={320} images={images} onModelChange={vi.fn()} onDraftChange={setDraft} onQuoteClear={vi.fn()}
       onAsk={onAsk} onStop={onStop} onDismiss={onDismiss} onWidthChange={onWidthChange} />;
   }
   const view = render(<Harness state={state} />);
@@ -46,11 +52,12 @@ it('keeps drafting available while a follow-up is queued and preserves stop and 
   await user.type(input, 'Keep this next question{Enter}');
   expect(input.value).toBe('Keep this next question');
   expect(onAsk).not.toHaveBeenCalled();
-  expect((screen.getByRole('button', { name: 'Send side question' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByRole('button', { name: 'Send side question' })).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Stop side answer' }));
   expect(onStop).toHaveBeenCalledOnce();
   view.rerender(<Harness state={{ ...state, pendingQuestion: null }} />);
-  await user.click(screen.getByRole('button', { name: 'Send side question' }));
+  await user.click(input);
+  await user.keyboard('{Enter}');
   expect(onAsk).toHaveBeenCalledExactlyOnceWith('Keep this next question');
   expect(document.activeElement).toBe(input);
   fireEvent.keyDown(screen.getByRole('separator'), { key: 'ArrowLeft' });
@@ -65,7 +72,7 @@ it('does not dismiss BTW when Escape belongs to the main chat or an IME composit
   render(<textarea aria-label="Main chat draft" />);
   const mainInput = screen.getByRole('textbox', { name: 'Main chat draft' });
   mainInput.focus();
-  const view = render(<SideChatSheet state={EMPTY_SESSION_BTW_STATE} draft="" quote={null} width={320}
+  const view = render(<SideChatSheet state={EMPTY_SESSION_BTW_STATE} draft="" quote={null} width={320} images={images} onModelChange={vi.fn()}
     onDraftChange={vi.fn()} onQuoteClear={vi.fn()} onAsk={vi.fn()} onStop={vi.fn()} onDismiss={onDismiss} onWidthChange={vi.fn()} />);
   const input = screen.getByRole('textbox', { name: 'By the Way question' });
   fireEvent.keyDown(input, { key: 'Escape', isComposing: true });

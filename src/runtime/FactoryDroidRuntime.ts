@@ -48,6 +48,7 @@ import { createLocalDroidSession } from './process/createLocalDroidSession';
 import type { RuntimeDiagnosticSink } from './runtimeDiagnostics';
 import type { RuntimeAvailability, RuntimeEvent } from './runtimeEvents';
 import { createCapturedSessionView } from './session/capturedSessionView';
+import { RuntimeMissionSnapshots } from './session/runtimeMissionSnapshots';
 import {
   readContextWindow,
   readMissionSettings,
@@ -107,6 +108,9 @@ export class FactoryDroidRuntime implements DroidRuntime {
   private readonly loadSessionCommands: typeof loadSessionCommands;
   private readonly onSessionNotification?: FactoryDroidRuntimeOptions['onSessionNotification'];
   private session: FactoryDroidSession | null = null;
+  private readonly missionSnapshots = new RuntimeMissionSnapshots();
+  readonly readMissionSnapshot = this.missionSnapshots.read;
+  readonly subscribeMissionSnapshot = this.missionSnapshots.subscribe;
   private sessionTarget: RuntimeSessionTarget | null = null;
   private initialization:
     | {
@@ -117,14 +121,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
   private activeTurn: symbol | null = null;
   private disposed = false;
   private disposal: Promise<void> | null = null;
-  /**
-   * Armed after the user approves an ExitSpecMode plan with a
-   * `proceed_new_session*` outcome: watches session notifications for
-   * the dual handoff signal (an `agent_turn_completed` notification
-   * with reason `spec_handoff`, plus a notification envelope scoped to
-   * a different session id, which is the SDK's documented proxy for
-   * the implementation session).
-   */
+  /** Watches approved ExitSpecMode handoffs for spec_handoff + a new session id. */
   private specHandoffWatch: SpecHandoffWatch | null = null;
   /**
    * Session-lifetime watch for `child_session_available` notifications
@@ -624,6 +621,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
   ): void {
     this.disarmSubagentWatch();
     this.session = createCapturedSessionView(nextSession, availableModels);
+    this.missionSnapshots.attach(this.session);
     if (this.sessionTarget !== null) {
       this.sessionTarget = {
         kind: 'resume',
@@ -692,6 +690,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
     }
 
     this.disposed = true;
+    this.missionSnapshots.dispose();
     this.disarmSpecHandoffWatch();
     this.disarmSubagentWatch();
     const disposal = this.disposeOwnedSession(
@@ -770,6 +769,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
 
     this.session = session;
     this.sessionTarget = target;
+    this.missionSnapshots.attach(session);
     this.armSubagentWatch();
     this.recordInitializationFinished(startedAt, 'available', 'info');
     return this.available(session);

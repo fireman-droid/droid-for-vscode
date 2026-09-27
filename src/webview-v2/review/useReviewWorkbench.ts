@@ -4,9 +4,9 @@ import {
   type ReviewRestorePreviewStateMessage, type ReviewScopeKind, type ReviewScopeState,
 } from '../../shared/protocol/reviewProtocol';
 import { isReviewPanelContext, isReviewPanelFile, type ReviewPanelContext, type ReviewPanelFile } from '../../shared/protocol/reviewPanelProtocol';
-import { readHostMessage } from '../../webview/bridge/validateHostMessage';
-import { useReviewActions } from '../../webview/assistant/changes/useReviewActions';
-import { createDiffRefreshQueue } from '../../webview/assistant/changes/diffRefreshQueue';
+import { readHostMessage } from '../bridge/validateHostMessage';
+import { useReviewActions } from './useReviewActions';
+import { createDiffRefreshQueue } from './diffRefreshQueue';
 import { applyTheme } from '../shell/theme';
 export interface ReviewPort { postMessage(message: unknown): void }
 

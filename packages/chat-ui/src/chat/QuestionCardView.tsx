@@ -15,7 +15,7 @@ export interface QuestionEditor {
   readonly update: (id: string, patch: { text: string }) => void;
 }
 export interface QuestionCardViewProps {
-  readonly item: { readonly id: string; readonly text: string; readonly messageId?: string };
+  readonly item: { readonly id: string; readonly text: string; readonly messageId?: string; readonly timestamp?: number };
   readonly editor: QuestionEditor;
   readonly quote?: { readonly quote?: string; readonly quotes?: readonly string[]; readonly body: string } | null;
   readonly placeholder?: boolean;
@@ -142,7 +142,7 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
           </div>
         </div>
       ) : (
-        <UserMessageBubble pending={draft?.phase === 'resending'} placeholder={placeholder}
+        <UserMessageBubble pending={draft?.phase === 'resending'} placeholder={placeholder} timestamp={item.timestamp ?? null}
           attachments={draft?.phase !== 'resending' ? originalAttachments : null}
           context={<QuoteChips quotes={shownQuotes} className="mb-1" />}
           onEdit={editable ? () => { if (messageId !== undefined) editor.begin(messageId, item.text); } : undefined}>

@@ -1,6 +1,6 @@
 import { MISSION_CONTROL_CATALOG_FILTERS, type MissionControlCatalogRow } from '../../shared/protocol/missionControlPanelProtocol';
-import { matchesFilter, readRowAccessibleNames, readCatalogStatus, formatFilter, formatLifecycle, formatProgress, formatCreated, lifecycleTone, type MissionCatalogProps } from '../../webview/missionControl/catalogPresentation';
-import { formatElapsed } from '../../webview/assistant/subagents/subagentWorking';
+import { matchesFilter, readRowAccessibleNames, readCatalogStatus, formatFilter, formatLifecycle, formatProgress, formatCreated, lifecycleTone, type MissionCatalogProps } from './catalogPresentation';
+import { formatElapsed } from '../chat/subagents/subagentWorking';
 import { Button } from '../ui/button';
 import { DroidActivity, DroidLoading } from '../ui/droid-motion';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/selection';

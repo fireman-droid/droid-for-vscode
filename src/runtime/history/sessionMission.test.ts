@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { readSessionMission } from './sessionMission';
+import { readMissionRoleFromTags, readSessionMission } from './sessionMission';
 
 describe('readSessionMission', () => {
   const envelope = (
@@ -56,5 +56,29 @@ describe('readSessionMission', () => {
     expect(readSessionMission(envelope({ mission: null }))).toBeNull();
     expect(readSessionMission({})).toBeNull();
     expect(readSessionMission(undefined)).toBeNull();
+  });
+});
+
+describe('durable Mission identity tags', () => {
+  it('recognizes official Mission roles and retains explicit worker identity', () => {
+    expect(readMissionRoleFromTags([
+      { name: 'mission-session', metadata: { role: 'orchestrator', missionId: 'mission-1' } },
+    ])).toBe('orchestrator');
+    expect(readMissionRoleFromTags([{ name: 'mission-orchestrator' }])).toBe('orchestrator');
+    expect(readMissionRoleFromTags([
+      { name: 'mission-orchestrator' },
+      { name: 'mission-session', metadata: { role: 'worker', missionId: 'mission-1' } },
+    ])).toBe('worker');
+    expect(readMissionRoleFromTags([
+      { name: 'mission-session', metadata: { role: 'orchestrator' } },
+      { name: 'decompSessionType', metadata: { value: 'worker' } },
+    ])).toBe('worker');
+  });
+
+  it('does not infer an orchestrator from a Mission association alone', () => {
+    expect(readMissionRoleFromTags([
+      { name: 'mission-session', metadata: { missionId: 'mission-1' } },
+    ])).toBeNull();
+    expect(readMissionRoleFromTags(undefined)).toBeNull();
   });
 });

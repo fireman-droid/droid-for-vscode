@@ -7,12 +7,12 @@ import type { HostSnapshotMessage, WebviewToHostMessage } from '../../shared/bri
 import type { OperationDiff } from '../../shared/protocol/operationDiff';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
-import { InlineDiffContext } from '../../webview/assistant/changes/useInlineDiff';
-import { initialAssistantWebviewState } from '../../webview/assistant/state/initialState';
-import type { StoreHostMessage } from '../../webview/assistant/state/types';
-import { ProcessPresentationProvider } from '../../webview/assistant/transcript/processPresentation';
-import { describeTranscript } from '../../webview/assistant/transcript/transcriptGroups';
-import { resolveAssistantStatus } from '../../webview/assistant/transcript/transcriptStatus';
+import { InlineDiffContext } from '../review/useInlineDiff';
+import { initialAssistantWebviewState } from '../state/initialState';
+import type { StoreHostMessage } from '../state/types';
+import { ProcessPresentationProvider } from './transcript/processPresentation';
+import { describeTranscript } from './transcript/transcriptGroups';
+import { resolveAssistantStatus } from './transcript/transcriptStatus';
 import { ToolActionsContext } from '../content/toolActions';
 import { AiOperationSummary, summarizeOperations } from './AiOperationSummary';
 import { AssistantReply } from './AssistantReply';

@@ -82,23 +82,14 @@ import {
 import { QueueState } from './queue/QueueState';
 import { ConversationRecoveryState } from './recovery/ConversationRecoveryState';
 import { checkpointRecoveryTranscript } from './recovery/recovery';
-import {
-  closeAllRuntimesForDispose,
-  emitWorkspaceUnavailable,
-  ensureActiveRuntimeWorkspaceCurrent,
-  isCurrentRuntime,
-  isSameWorkspaceContext,
-  isTargetWorkspaceCurrent,
-  queueWorkspaceTransition,
-  resetSessionMetadata,
-  WORKSPACE_CHANGED_MESSAGE,
-} from './sessions/runtimeLifecycle';
-import { bindCatalogViewToWorkspace, clearCatalog } from './sessions/sessionCatalog';
+import { closeAllRuntimesForDispose } from './sessions/sessionCleanup';
+import { ensureActiveRuntimeWorkspaceCurrent, handleWorkspaceContextChanged } from './sessions/workspaceLifecycle';
+import { isCurrentRuntime, isTargetWorkspaceCurrent } from './sessions/sessionGuards';
 import { SessionDirectoryState } from './sessions/SessionDirectoryState';
 import { SessionLifecycleState } from './sessions/SessionLifecycleState';
 import { clearZombieSubagentWatch } from './subagents/subagentWatch';
 import { SubagentWatchState } from './subagents/SubagentWatchState';
-import { projectTranscript } from './turns/turnFlow';
+import { projectTranscript } from './turns/turnRuntimeEvents';
 import { TurnState } from './turns/TurnState';
 import { clearTurnWatchdog } from './turns/turnWatchdog';
 export type {
@@ -257,44 +248,7 @@ export class ChatController {
     }
   }
   handleWorkspaceContextChanged(): void {
-    if (this.sessionState.disposed) {
-      return;
-    }
-    const workspace = this.getWorkspaceContext();
-    if (isSameWorkspaceContext(this.sessionState.workspaceContext, workspace)) {
-      return;
-    }
-    this.sessionState.workspaceContext = { ...workspace };
-    if (this.sessionState.initialization === null) {
-      return;
-    }
-    const generation = ++this.sessionState.workspaceContextGeneration;
-    const staleRuntimes = [...this.sessionState.managedRuntimes];
-    this.sessionState.runtimeGeneration += 1;
-    this.turnState.turnGeneration += 1;
-    resetSessionMetadata(this);
-    if (
-      this.recoveryState.recoveryCheckpointTimer !== null ||
-      this.recoveryState.pendingRecoveryCheckpoint !== null
-    ) {
-      checkpointRecoveryTranscript(this);
-    }
-    this.sessionState.runtime = null;
-    this.sessionState.activeRuntimeCwd = null;
-    this.turnState.turn = null;
-    this.interactions.cancelAll();
-    if (isUsableWorkspace(workspace)) {
-      bindCatalogViewToWorkspace(this, workspace.cwd);
-      this.sessionState.connection = {
-        status: 'unavailable',
-        message: WORKSPACE_CHANGED_MESSAGE,
-      };
-      this.emitSnapshot();
-    } else {
-      clearCatalog(this);
-      emitWorkspaceUnavailable(this, workspace);
-    }
-    queueWorkspaceTransition(this, generation, staleRuntimes);
+    handleWorkspaceContextChanged(this);
   }
   /**
    * Editor-side entry for `droidvisx.addSelectionToChat`: stages a
@@ -463,7 +417,7 @@ export class ChatController {
   }
   private nextSequence(): number {
     if (this.sequence >= Number.MAX_SAFE_INTEGER) {
-      throw new Error('DroidVisX host message sequence was exhausted.');
+      throw new Error('Droid host message sequence was exhausted.');
     }
     this.sequence += 1;
     return this.sequence;

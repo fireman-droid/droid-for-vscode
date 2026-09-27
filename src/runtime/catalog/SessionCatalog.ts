@@ -30,6 +30,8 @@ export type SessionCatalogResult =
 
 export interface SessionCatalog {
   listSessions(cwd: string): Promise<SessionCatalogResult>;
+  /** Verify one persisted selection outside the recent list against its recorded workspace. */
+  canResumeSession?(cwd: string, sessionId: string): Promise<boolean>;
   /**
    * Marks or unmarks one session as favorite. Optional because the
    * write path is a CLI private-file contract, not a session RPC.

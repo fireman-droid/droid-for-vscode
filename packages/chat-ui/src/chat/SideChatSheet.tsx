@@ -78,8 +78,6 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
   const send = () => {
     if (!canAsk || sendDisabled || (!draft.trim() && !hasAttachments) || draft.length > maxLength) return;
     onAsk(formatSelectionQuotes(quotedContext, draft.trim()));
-    onDraftChange('');
-    onQuoteClear();
     follow.followNewest(true);
     input.current?.focus({ preventScroll: true });
   };

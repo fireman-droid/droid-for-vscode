@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { SESSION_AUTONOMY_LEVELS } from '../../shared/protocol/bounds';
 import type { ModelCatalogState, SessionSettingsState } from '../../shared/protocol/settings';
-import type { SessionSettingSelection } from '../../webview/assistant/composer/useOptimisticSetting';
+import type { SessionSettingSelection } from './composer/useOptimisticSetting';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/selection';

@@ -69,6 +69,7 @@ import {
   parseMcpServerToggle,
   parsePluginsRefresh,
   parseSessionContextRefresh,
+  parseModelCatalogRefresh,
   parseSessionSettingUpdate,
   parseSkillToggle,
   parseSkillsRefresh,
@@ -77,6 +78,7 @@ import {
   parseUiThemeSet,
   parseWebviewDiagnostic,
   parseWebviewReady,
+  parseWebviewStateApplied,
 } from './validation/shell';
 import {
   parseRewindInfoRequest,
@@ -127,6 +129,7 @@ const WEBVIEW_MESSAGE_PARSERS = {
   'models.open': (value) =>
     hasExactKeys(value, ['type']) ? { type: 'models.open' } : undefined,
   'webview.ready': parseWebviewReady,
+  'webview.state-applied': parseWebviewStateApplied,
   'webview.diagnostic': parseWebviewDiagnostic,
   'turn.send': parseTurnSend,
   'turn.stop': parseTurnStop,
@@ -148,6 +151,7 @@ const WEBVIEW_MESSAGE_PARSERS = {
   'sessions.archivedRefresh': parseSessionsArchivedRefresh,
   'session.search': parseSessionSearch,
   'session.context.refresh': parseSessionContextRefresh,
+  'session.model-catalog.refresh': parseModelCatalogRefresh,
   'session.compact': parseSessionCompact,
   'session.fork': parseSessionFork,
   'file.openDiff': parseFileOpenDiff,

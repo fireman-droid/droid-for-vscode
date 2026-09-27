@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import * as vscode from 'vscode';
 
 import { MAX_BRIDGE_ID_LENGTH } from '../../../shared/bridgeMessages';
+import { isMessageTimestamp } from '../../../shared/protocol/messageTimestamp';
 import { type SessionTranscriptItem } from '../../../shared/protocol/transcript';
 import { isStrictRecord } from '../../../shared/validation/strictValidation';
 import type { SessionCatalogResult } from '../../../runtime/catalog/SessionCatalog';
@@ -46,12 +47,13 @@ export function renderSessionMarkdown(
     lines.push(`- **Created:** ${formatDateTime(created)}`);
   }
   lines.push(`- **Exported:** ${formatDateTime(metadata.exportedAt)}`);
+  lines.push('- **Time zone:** local time; each timestamp includes its UTC offset.');
   if (metadata.workspacePath !== null) {
     lines.push(`- **Workspace:** ${inlineCode(metadata.workspacePath)}`);
   }
   lines.push('');
   lines.push(
-    '> Exported by DroidVisX. Thinking blocks are omitted, tool calls',
+    '> Exported by Droid. Thinking blocks are omitted, tool calls',
     '> are collapsed to one-line records, images are placeholders, and',
     '> credential-shaped values are replaced with `[REDACTED]`.',
   );
@@ -76,6 +78,7 @@ export function renderSessionMarkdown(
     switch (item.kind) {
       case 'user': {
         ensureSection('user');
+        lines.push('', messageTime(item.timestamp, 'Sent'));
         if (item.text.length > 0) {
           lines.push('', item.text);
         }
@@ -92,6 +95,7 @@ export function renderSessionMarkdown(
       }
       case 'assistant':
         ensureSection('assistant');
+        lines.push('', messageTime(item.timestamp, 'Recorded'));
         if (item.text.length > 0) {
           lines.push('', item.text);
         }
@@ -203,7 +207,7 @@ export interface SessionExportDependencies {
 }
 
 /**
- * `DroidVisX: Export Session as Markdown`. Loads the active session's
+ * `Droid: Export Session as Markdown`. Loads the active session's
  * saved history through the existing loader pipeline, renders it, and
  * writes it to a user-chosen path.
  */
@@ -213,7 +217,7 @@ export async function exportActiveSessionAsMarkdown(
   const sessionId = deps.getActiveSessionId();
   if (sessionId === null) {
     void vscode.window.showInformationMessage(
-      'No active Droid session to export. Open the DroidVisX chat and select a session first.',
+      'No active Droid session to export. Open the Droid chat and select a session first.',
     );
     return;
   }
@@ -300,7 +304,7 @@ export async function exportActiveSessionAsMarkdown(
       detail: error instanceof Error ? (error.stack ?? error.message) : String(error),
     });
     void vscode.window.showErrorMessage(
-      'DroidVisX session export failed. See DroidVisX Logs.',
+      'Droid session export failed. See Droid Logs.',
     );
   }
 }
@@ -319,7 +323,15 @@ function parseIsoDate(value: string | undefined): Date | null {
 
 function formatDateTime(date: Date): string {
   const pad = (part: number): string => String(part).padStart(2, '0');
-  return `${String(date.getFullYear()).padStart(4, '0')}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const offset = -date.getTimezoneOffset();
+  const offsetText = `UTC${offset >= 0 ? '+' : '-'}${pad(Math.floor(Math.abs(offset) / 60))}:${pad(Math.abs(offset) % 60)}`;
+  return `${String(date.getFullYear()).padStart(4, '0')}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())} ${offsetText}`;
+}
+
+function messageTime(timestamp: number | undefined, label: 'Sent' | 'Recorded'): string {
+  return isMessageTimestamp(timestamp)
+    ? `*${label}: ${formatDateTime(new Date(timestamp))}*`
+    : '*Time unavailable*';
 }
 
 function formatBytes(bytes: number): string {

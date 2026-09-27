@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { UiEnvironmentProvider } from '@droidvisx/chat-ui/environment';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { HostSnapshotMessage, HostToWebviewMessage } from '../../shared/bridgeMessages';
-import { initialAssistantWebviewState } from '../../webview/assistant/state/initialState';
+import { initialAssistantWebviewState } from '../state/initialState';
 import { ChatApp } from './ChatApp';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });

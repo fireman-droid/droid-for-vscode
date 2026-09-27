@@ -1,7 +1,7 @@
 /**
  * Read-only VS Code terminal mirror of Droid's execute-tool output
  * (native-terminal design §4.2, slice A). One lazily created
- * pseudoterminal named `DroidVisX: 命令输出` aggregates every execute
+ * pseudoterminal named `Droid: 命令输出` aggregates every execute
  * command of the active session; keyboard input is discarded
  * (takeover is fail-closed by design).
  *
@@ -21,13 +21,13 @@
  * the transcript output preview).
  */
 
-const MIRROR_TERMINAL_NAME = 'DroidVisX: 命令输出';
+const MIRROR_TERMINAL_NAME = 'Droid: 命令输出';
 
 /** Dim-gray decoration for mirror-authored lines (UI restraint). */
 const DIM = '\u001b[2m';
 const RESET = '\u001b[0m';
 
-const READ_ONLY_BANNER = `${DIM}[DroidVisX 镜像终端 · 只读]${RESET}\r\n`;
+const READ_ONLY_BANNER = `${DIM}[Droid 镜像终端 · 只读]${RESET}\r\n`;
 const INPUT_DISCARDED_HINT = `\r\n${DIM}[只读镜像 · 输入已忽略]${RESET}\r\n`;
 const NO_OUTPUT_NOTE = `${DIM}[无输出流]${RESET}\r\n`;
 const GAP_NOTE = `${DIM}[输出间隔未镜像]${RESET}\r\n`;

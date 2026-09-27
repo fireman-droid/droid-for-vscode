@@ -4,10 +4,6 @@
 @import './styles/mission.css';
 @import './styles/viewer.css';
 @source './**/*.{ts,tsx}';
-@source '../webview/assistant/composer/SettingsPopover.tsx';
-@source '../webview/assistant/composer/ModelPopover.tsx';
-@source '../webview/assistant/composer/ContextPopover.tsx';
-@source '../webview/assistant/composer/capabilityPanels.tsx';
 
 @layer base {
   :root {

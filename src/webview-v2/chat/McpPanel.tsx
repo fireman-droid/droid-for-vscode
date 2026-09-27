@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { MCP_SERVER_TYPES } from '../../shared/protocol/bounds';
 import type { McpServerSummary, McpServerType } from '../../shared/protocol/settings';
-import type { McpAuthProgress, McpPanelState } from '../../webview/assistant/composer/shared';
-import { readMcpServerDraft, type McpServerDraft } from '../../webview/assistant/composer/mcpServerDraft';
+import type { McpAuthProgress, McpPanelState } from './composer/shared';
+import { readMcpServerDraft, type McpServerDraft } from './composer/mcpServerDraft';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '../ui/collapsible';

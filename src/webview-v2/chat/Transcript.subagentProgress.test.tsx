@@ -2,8 +2,8 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
-import { initialAssistantWebviewState } from '../../webview/assistant/state/initialState';
-import type { AssistantWebviewState } from '../../webview/assistant/state/types';
+import { initialAssistantWebviewState } from '../state/initialState';
+import type { AssistantWebviewState } from '../state/types';
 import { Transcript } from './Transcript';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });

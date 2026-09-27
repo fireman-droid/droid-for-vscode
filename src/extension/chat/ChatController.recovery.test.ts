@@ -38,7 +38,7 @@ import {
 } from '../recovery/recoveryStoreTestSupport';
 import type { TurnSnapshotStore } from '../changes/turnSnapshots';
 import { RECOVERED_FINAL_HISTORY_TIMEOUT_MS } from './recovery/recovery';
-import { TURN_FAILURE_MESSAGE } from './turns/turnFlow';
+import { TURN_FAILURE_MESSAGE } from './turns/turnSettlement';
 
 describe('ChatController', () => {
   it('contains a rejected recovered-turn snapshot before capture', async () => {

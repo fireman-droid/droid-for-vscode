@@ -6,6 +6,7 @@ import { type FactoryDroidSessionFactory } from '../../runtime/session/sessionTy
 import { cancellingRuntimeInteractionHandler } from '../../runtime/events/runtimeInteractions';
 import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
 import type { ReviewHostMessage } from '../../shared/protocol/reviewProtocol';
+import { enrichOperationDiff } from '../../shared/protocol/operationDiff';
 import type { ChangeStatsPersistence } from '../changes/changeStats';
 import type { FileDiffOpener } from '../changes/fileDiffOpener';
 import type { GitWorkflow } from '../workspace/gitWorkflow';
@@ -23,6 +24,7 @@ import { loadReviewGitScope } from './reviewGitComparison';
 import { loadReviewSdkScope } from './reviewSdkDiff';
 import { isTurnActive } from '../chat/internals';
 import { SubagentReviewEvidence } from '../chat/subagents/SubagentReviewEvidence';
+import type { RecordedOperation } from './reviewOperationScope';
 
 type UnsequencedReviewMessage = ReviewHostMessage extends infer Message
   ? Message extends { readonly sequence: number }
@@ -110,23 +112,8 @@ export function createReviewFeature(options: {
             : turn.sessionId,
         ...operation,
       })) ?? [];
-      const parent = [...live, ...persisted];
       const child = childEvidence.read(sessionId, turnId);
-      const dedupe = new Set<string>();
-      return [...parent, ...child].filter((operation) => {
-        const diff = operation.operationDiff;
-        const sourceSessionId =
-          diff.status === 'ready'
-            ? diff.sourceSessionId ?? operation.sessionId
-            : operation.sessionId;
-        const identity =
-          diff.status === 'ready' && diff.callId !== undefined
-            ? `${sourceSessionId}\u0000${diff.callId}`
-            : `${sourceSessionId}\u0000${operation.toolUseId}`;
-        if (dedupe.has(identity)) return false;
-        dedupe.add(identity);
-        return true;
-      }).map((operation, sequence) => ({ ...operation, sequence }));
+      return mergeReviewOperations(persisted, live, child);
     },
     openSelectionInEditor: false,
     async readGitScope(kind) {
@@ -240,4 +227,44 @@ export function createReviewFeature(options: {
       childEvidence.start();
     },
   };
+}
+
+function mergeReviewOperations(
+  persisted: readonly RecordedOperation[],
+  live: readonly RecordedOperation[],
+  child: readonly RecordedOperation[],
+): readonly RecordedOperation[] {
+  const operations = new Map<string, RecordedOperation>();
+  const identities = new Map<string, string>();
+  const byTool = new Map<string, Set<string>>();
+  // The persisted order survives transcript windowing. Updates replace evidence
+  // in place; newly observed calls follow in their source's existing order.
+  for (const operation of [...persisted, ...live, ...child]) {
+    const diff = operation.operationDiff;
+    const sourceSessionId = diff.status === 'ready'
+      ? diff.sourceSessionId ?? operation.sessionId
+      : operation.sessionId;
+    const callId = diff.status === 'ready' ? diff.callId ?? operation.toolUseId : operation.toolUseId;
+    const identity = `${sourceSessionId}\u0000${callId}`;
+    const toolIdentity = `${sourceSessionId}\u0000${operation.toolUseId}`;
+    const candidates = [...(byTool.get(toolIdentity) ?? [])].filter((key) =>
+      diff.status === 'unavailable' || operations.get(key)?.operationDiff.status === 'unavailable');
+    // Unavailable evidence has no call ID. Match only one exact tool ID in the
+    // same session, and remember the richer identity for subsequent updates.
+    const key = identities.get(identity) ?? (candidates.length === 1 ? candidates[0]! : identity);
+    const saved = operations.get(key);
+    const operationDiff = enrichOperationDiff(saved?.operationDiff, diff)!;
+    // Keep metadata attached to the retained evidence if the live excerpt is
+    // older, incomplete, or only describes proposed input.
+    operations.set(key, saved !== undefined && operationDiff === saved.operationDiff ? saved : {
+      ...operation,
+      operationDiff,
+    });
+    identities.set(identity, key);
+    const toolKeys = byTool.get(toolIdentity) ?? new Set<string>();
+    toolKeys.add(key);
+    byTool.set(toolIdentity, toolKeys);
+  }
+  // Sequence is a display position, not a cross-session execution chronology.
+  return [...operations.values()].map((operation, sequence) => ({ ...operation, sequence }));
 }

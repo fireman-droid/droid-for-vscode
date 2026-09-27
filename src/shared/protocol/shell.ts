@@ -6,6 +6,16 @@ export type ConnectionStatus = (typeof CONNECTION_STATUSES)[number];
 export interface WebviewReadyMessage {
   readonly type: 'webview.ready';
   readonly protocolVersion: typeof BRIDGE_PROTOCOL_VERSION;
+  /** Chat pages opt into state application receipts; auxiliary panels do not. */
+  readonly pageId?: string;
+}
+
+export interface WebviewStateAppliedMessage {
+  readonly type: 'webview.state-applied';
+  readonly pageId: string;
+  /** Exact applied messages, not a cumulative acknowledgement across possible gaps. */
+  readonly sequences: readonly number[];
+  readonly snapshotSequence: number | null;
 }
 
 export interface RuntimeRetryMessage {
@@ -61,4 +71,6 @@ export interface UserMessageMetaMessage {
   readonly sessionId: string;
   readonly turnId: string;
   readonly messageId: string;
+  /** Time the Host accepted this prompt, in Unix milliseconds. */
+  readonly timestamp?: number;
 }

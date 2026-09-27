@@ -22,5 +22,5 @@ export interface SetupProjectionPort
   >;
   readonly catalogState: Readonly<Pick<SessionDirectoryState, 'refreshInProgress'>>;
   readonly turnState: Readonly<Pick<TurnState, 'turn'>>;
-  readonly missionState: Readonly<Pick<MissionSessionState, 'missionStartInProgress'>>;
+  readonly missionState: Readonly<Pick<MissionSessionState, 'missionStartInProgress' | 'missionRuntime'>>;
 }

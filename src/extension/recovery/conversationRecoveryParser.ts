@@ -710,6 +710,7 @@ function recoveryTextUnits(
               file.path.length +
               (file.previousPath?.length ?? 0) +
               file.patch.length +
+              (file.submittedContent?.length ?? 0) +
               (file.message?.length ?? 0);
           }
         }

@@ -12,6 +12,7 @@ const READ_CHUNK_BYTES = 1024 * 1024;
 export interface PersistedSessionMessages {
   readonly messages: SessionMessage[];
   readonly bytes: number;
+  readonly file: string;
 }
 
 /** Read the same version-2 JSONL consumed by CLI get_session_messages once.
@@ -24,7 +25,7 @@ export async function readPersistedSessionMessages(
 ): Promise<PersistedSessionMessages | null> {
   if (!isSafeSessionIdentifier(sessionId) || /[\\/]/.test(sessionId)) return null;
   try {
-    const file = await locateSessionFile(sessionsDirectory, sessionId);
+    const file = await locatePersistedSessionFile(sessionsDirectory, sessionId);
     if (file === null) return null;
     const handle = await fs.open(file, 'r');
     try {
@@ -72,7 +73,7 @@ export async function readPersistedSessionMessages(
       // then return newest first. Keep its tie order before the loader's sort.
       const unique = new Map<string, SessionMessage>();
       for (const message of repairParentChainCorruption(messages)) unique.set(message.id, message);
-      return { messages: [...unique.values()].reverse(), bytes: initial.size };
+      return { messages: [...unique.values()].reverse(), bytes: initial.size, file };
     } finally { await handle.close(); }
   } catch {
     // Private persistence format is an optional fast path. The caller preserves
@@ -81,7 +82,7 @@ export async function readPersistedSessionMessages(
   }
 }
 
-async function locateSessionFile(directory: string, sessionId: string): Promise<string | null> {
+export async function locatePersistedSessionFile(directory: string, sessionId: string): Promise<string | null> {
   const exists = async (file: string) => fs.stat(file).then(stats => stats.isFile(), () => false);
   for (const parent of [directory, path.join(directory, 'btw')]) {
     const file = path.join(parent, `${sessionId}.jsonl`);

@@ -2,9 +2,9 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { initialAssistantWebviewState } from '../../webview/assistant/state/initialState';
+import { initialAssistantWebviewState } from '../state/initialState';
 import { ComposerControls } from './ComposerControls';
-import { getContextLabel } from '../../webview/assistant/composer/contextPresentation';
+import { getContextLabel } from './composer/contextPresentation';
 
 afterEach(cleanup);
 

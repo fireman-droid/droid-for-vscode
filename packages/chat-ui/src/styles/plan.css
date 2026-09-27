@@ -1,0 +1,39 @@
+@layer components {
+  .dvx-plan { min-width: 0; margin-top: 4px; border-radius: 8px; color: var(--muted-ink); animation: dvx-plan-enter 180ms var(--motion-ease); }
+  .dvx-plan-trigger { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; min-height: 32px; padding: 6px 8px; border-radius: 8px; text-align: left; font-size: 12px; line-height: 20px; transition: background-color 120ms var(--motion-ease), color 120ms var(--motion-ease); }
+  .dvx-plan-trigger:hover { background: var(--control-surface-hover); color: var(--ink); }
+  .dvx-plan-trigger:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
+  .dvx-plan-title { min-width: 0; flex: 1; overflow: hidden; }
+  .dvx-plan-title-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; animation: dvx-plan-label-in 160ms ease-out; }
+  .dvx-plan[data-live='true'] .dvx-plan-title { color: var(--ink); }
+  .dvx-plan-count { flex-shrink: 0; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .dvx-plan-marker { position: relative; display: grid; width: 12px; height: 12px; flex-shrink: 0; place-items: center; }
+  .dvx-plan-marker::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .65; transition: opacity 180ms ease-out; }
+  .dvx-plan-marker > svg { position: absolute; width: 12px; height: 12px; opacity: 0; transform: scale(.7); transition: opacity 180ms ease-out, transform 180ms var(--motion-ease); }
+  .dvx-plan[data-live='true'] .dvx-plan-marker { color: var(--link-ink); }
+  .dvx-plan[data-live='true'] .dvx-plan-marker::before { animation: dvx-plan-breathe 1800ms ease-in-out infinite; }
+  .dvx-plan[data-complete='true'] .dvx-plan-marker::before { opacity: 0; }
+  .dvx-plan[data-complete='true'] .dvx-plan-marker > svg { opacity: 1; transform: scale(1); }
+  .dvx-plan-chevron { width: 12px; height: 12px; flex-shrink: 0; transition: transform 200ms var(--motion-ease); }
+  .dvx-plan[data-state='open'] .dvx-plan-chevron { transform: rotate(180deg); }
+  .dvx-plan-details { transition-property: grid-template-rows, opacity; transition-duration: 200ms; transition-timing-function: var(--motion-ease); }
+  .dvx-plan-details[data-state='closed'] { opacity: 0; }
+  .dvx-plan-details[data-state='open'] { opacity: 1; }
+  .dvx-plan-steps { max-height: min(220px, 30vh); margin: 0; padding: 2px 8px 8px; overflow-y: auto; overscroll-behavior: contain; list-style: none; }
+  .dvx-plan-step { display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding: 4px 0; font-size: 12px; line-height: 20px; color: var(--muted-ink); transition: color 180ms ease-out; }
+  .dvx-plan-step > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+  .dvx-plan-step[data-status='in_progress'] { color: var(--ink); }
+  .dvx-plan-step-marker { position: relative; width: 12px; height: 12px; flex-shrink: 0; margin-top: 4px; }
+  .dvx-plan-step-marker > svg { position: absolute; width: 12px; height: 12px; transition: opacity 180ms ease-out, transform 180ms var(--motion-ease), fill 180ms ease-out; }
+  .dvx-plan-step-marker > svg:first-child { opacity: .6; }
+  .dvx-plan-step-marker > svg:last-child { opacity: 0; transform: scale(.7); }
+  .dvx-plan-step[data-status='in_progress'] .dvx-plan-step-marker > svg:first-child { fill: currentColor; opacity: 1; transform: scale(.65); }
+  .dvx-plan-step[data-status='completed'] .dvx-plan-step-marker > svg:first-child { opacity: 0; }
+  .dvx-plan-step[data-status='completed'] .dvx-plan-step-marker > svg:last-child { opacity: 1; transform: scale(1); }
+  @keyframes dvx-plan-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes dvx-plan-label-in { from { opacity: .3; } to { opacity: 1; } }
+  @keyframes dvx-plan-breathe { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    .dvx-plan, .dvx-plan *, .dvx-plan-marker::before { animation: none !important; transition: none !important; }
+  }
+}

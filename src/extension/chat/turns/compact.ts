@@ -3,8 +3,8 @@ import { type SessionMissionSummary } from '../../../shared/protocol/sessions';
 import type { TokenUsageBreakdown } from '../../../shared/protocol/tokenUsage';
 import { isSafeBridgeId } from '../internals';
 import { evaluateActiveSessionTransform } from '../operationEligibility';
-import { refreshContextAfterTurn } from './turnFlow';
-import type { TurnFlowPort } from './turnFlowPort';
+import { refreshContextAfterTurn } from './turnSettlement';
+import type { CompactPort } from './turnFlowPort';
 
 export const COMPACT_BLOCKED_MESSAGE =
   'Droid cannot compact right now. Wait for the current activity to finish.';
@@ -14,7 +14,7 @@ export const COMPACT_UNSUPPORTED_MESSAGE =
 
 export const COMPACT_FAILED_MESSAGE = 'Droid could not compact the conversation.';
 
-export function handleSessionCompact(ctl: TurnFlowPort, sessionId: string): void {
+export function handleSessionCompact(ctl: CompactPort, sessionId: string): void {
   const runtime = ctl.sessionState.runtime;
   if (runtime !== null && !ctl.effects.ensureActiveRuntimeWorkspaceCurrent()) {
     return;
@@ -54,7 +54,7 @@ export function handleSessionCompact(ctl: TurnFlowPort, sessionId: string): void
  * that Droid returns, reloading its summarized transcript.
  */
 export async function performCompact(
-  ctl: TurnFlowPort,
+  ctl: CompactPort,
   runtime: DroidRuntime,
   sessionId: string,
 ): Promise<void> {

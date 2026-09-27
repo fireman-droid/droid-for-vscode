@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { PluginsPanelState, SkillsPanelState } from '../../webview/assistant/composer/shared';
+import type { PluginsPanelState, SkillsPanelState } from './composer/shared';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/selection';

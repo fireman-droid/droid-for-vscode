@@ -102,6 +102,24 @@ describe('persisted history snapshot', () => {
       { id: 'inner-second', parentId: 'inner-first', createdAt: 103, updatedAt: 2 },
       { id: 'inner-first', createdAt: 101, updatedAt: 102 },
     ]);
+    const history = await loader(directory).load.loadHistory(request);
+    expect(history).toMatchObject({ status: 'available', state: { transcript: [
+      { kind: 'user', text: 'first', timestamp: 101 },
+      { kind: 'assistant', text: 'second', timestamp: 103 },
+    ] } });
+  });
+
+  it('projects the JSONL event timestamp when no nested creation time is recorded', async () => {
+    const timestamp = Date.parse('2026-09-26T10:01:02.000Z');
+    const { directory } = await fixture([
+      message('prompt', 'user', text('Question'), timestamp),
+      message('answer', 'assistant', text('Answer'), timestamp + 30_000, 'prompt'),
+    ]);
+    const history = await loader(directory).load.loadHistory(request);
+    expect(history).toMatchObject({ status: 'available', state: { transcript: [
+      { kind: 'user', text: 'Question', timestamp },
+      { kind: 'assistant', text: 'Answer', timestamp: timestamp + 30_000 },
+    ] } });
   });
 
   it.each(['partial tail', 'invalid header', 'invalid record'])('retains daemon pagination for %s', async (kind) => {

@@ -146,7 +146,7 @@ describe('ChatController', () => {
       sessionId: null,
       connection: {
         status: 'unavailable',
-        message: 'Open a workspace folder to use DroidVisX.',
+        message: 'Open a workspace folder to use Droid.',
       },
     });
     expect(untrusted.messages.at(-1)).toMatchObject({

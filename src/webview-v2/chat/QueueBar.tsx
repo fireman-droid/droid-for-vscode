@@ -2,8 +2,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowUp, ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import { QuoteChips } from '@droidvisx/chat-ui/chat/QuoteChips';
 import { MAX_QUEUED_MESSAGES, type QueuePausedReason, type SessionQueueState } from '../../shared/protocol/queueProtocol';
-import type { useComposerFlow } from '../../webview/assistant/composer/useComposerFlow';
-import { parseSelectionQuotes } from '../../webview/assistant/btw/selectionQuote';
+import type { useComposerFlow } from './composer/useComposerFlow';
+import { parseSelectionQuotes } from '@droidvisx/chat-ui/chat/selectionQuote';
 import { Button } from '../ui/button';
 import { Collapsible, CollapsibleTrigger, AnimatedCollapsibleContent } from '../ui/collapsible';
 

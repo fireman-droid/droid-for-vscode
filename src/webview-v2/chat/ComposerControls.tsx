@@ -1,17 +1,17 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Plus } from 'lucide-react';
-import type { AssistantWebviewState } from '../../webview/assistant/state/types';
-import type { ChatPort } from '../../webview/assistant/shell/chatIntent';
-import { useCapabilityActions } from '../../webview/assistant/composer/useCapabilityActions';
-import { useAttachmentActions } from '../../webview/assistant/attachments/useAttachmentActions';
-import { useOptimisticSettingPick } from '../../webview/assistant/composer/useOptimisticSetting';
-import { ContextPopover } from '../../webview/assistant/composer/ContextPopover';
-import { ModePopover } from '../../webview/assistant/composer/ModePopover';
-import { ModelPopover, getModelName } from '../../webview/assistant/composer/ModelPopover';
-import { SettingsPopover } from '../../webview/assistant/composer/SettingsPopover';
-import { getContextLabel, getContextPercent, hasUsableContextRatio } from '../../webview/assistant/composer/contextPresentation';
-import { MODE_OPTIONS, formatReasoningLabel, type SettingsView } from '../../webview/assistant/composer/shared';
-import { ThemeContext, type ThemeContextValue } from '../../webview/assistant/shell/theme';
+import type { AssistantWebviewState } from '../state/types';
+import type { ChatPort } from '../host/chatIntent';
+import { useCapabilityActions } from './composer/useCapabilityActions';
+import { useAttachmentActions } from './attachments/useAttachmentActions';
+import { useOptimisticSettingPick } from './composer/useOptimisticSetting';
+import { ContextPopover } from './composer/ContextPopover';
+import { ModePopover } from './composer/ModePopover';
+import { ModelPopover, getModelName } from './composer/ModelPopover';
+import { SettingsPopover } from './composer/SettingsPopover';
+import { getContextLabel, getContextPercent, hasUsableContextRatio } from './composer/contextPresentation';
+import { MODE_OPTIONS, formatReasoningLabel, type SettingsView } from './composer/shared';
+import { ThemeContext, type ThemeContextValue } from '../shell/themeController';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { Button } from '../ui/button';
 
@@ -58,6 +58,9 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
     setView('root'); setPanel(next);
     if (next === 'context' && panel !== 'context' && !disabled && state.context.status !== 'loading')
       actions.handleContextRefresh();
+    if (next === 'model' && panel !== 'model' && !disabled &&
+      (state.modelCatalog.status === 'error' || state.modelCatalog.status === 'unsupported'))
+      actions.handleModelCatalogRefresh();
   };
   const close = () => { setPanel(null); onPageChange?.(null); };
   useEffect(() => {
@@ -94,6 +97,7 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
         {kind === 'mode' ? <ModePopover id={`${id}-mode`} settings={state.settings} shownMode={mode ?? 'auto'} disabled={settingsDisabled}
           onSelect={(value) => { close(); if (value === 'mission') onMissionOpen?.(); else if (value !== confirmed?.interactionMode) pickSetting({ field: 'interactionMode', value }); }} /> : null}
         {kind === 'model' ? <ModelPopover id={`${id}-model`} settings={state.settings} modelCatalog={state.modelCatalog} disabled={settingsDisabled}
+          refreshDisabled={disabled} onRefresh={actions.handleModelCatalogRefresh}
           onUpdate={(update) => { pickSetting(update); close(); }} onManageModels={close} onOpenModels={() => port.postMessage({ type: 'models.open' })} /> : null}
       </PopoverContent>
     </Popover>;

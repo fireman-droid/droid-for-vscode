@@ -117,8 +117,10 @@ vi.mock('vscode', () => vscodeMock);
 
 import {
   MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+  parseMissionControlPanelHostMessage,
   type MissionControlCatalogRow,
 } from '../../../shared/protocol/missionControlPanelProtocol';
+import type { ControllerHostMessage } from '../../chat/ChatController';
 import { LocalDiagnostics } from '../../diagnostics/LocalDiagnostics';
 import { MissionControlPanelController } from './MissionControlPanelController';
 
@@ -653,6 +655,45 @@ describe('MissionControlPanelController', () => {
     });
     controller.dispose();
   });
+
+  it.each(['cold recovery', 'open active Mission', 'accepted start'] as const)(
+    'sends and replays a detail route the real Webview decoder accepts after %s', entry => {
+      const sessionId = '1f7962f5-cad9-42ba-b943-05f5fbc3deaa';
+      let receive!: (message: ControllerHostMessage) => void;
+      const controller = new MissionControlPanelController(
+        new vscodeMock.Uri('/extension') as never,
+        {
+          listCatalog: vi.fn(),
+          readActiveSession: () => ({ sessionId, missionRole: 'orchestrator' }),
+          chatController: { subscribe: (listener: typeof receive) => {
+            receive = listener;
+            return { dispose: vi.fn() };
+          } } as never,
+        },
+      );
+      const posted: unknown[] = [];
+      controller.onDidChangeWorkspaceSetup(message => posted.push(message));
+      if (entry === 'cold recovery') {
+        receive({ type: 'host.snapshot', sequence: 1, sessionId,
+          mission: { role: 'orchestrator', state: 'awaiting_input' },
+          sessions: { status: 'ready', items: [] } } as unknown as ControllerHostMessage);
+      } else if (entry === 'open active Mission') {
+        controller.openMission();
+      } else {
+        receive({ type: 'mission.controlResult', sequence: 1, protocolVersion: 25,
+          scope: 'selected-chat', requestId: 'start-1', action: 'start', status: 'accepted' });
+      }
+
+      const decoded = parseMissionControlPanelHostMessage(posted.at(-1));
+      expect(decoded).toMatchObject({ type: 'missionControl.route', route: 'detail' });
+      expect(JSON.stringify(posted)).not.toContain(sessionId);
+      const replayed: unknown[] = [];
+      controller.replayWorkspaceSetupTo(message => replayed.push(message));
+      expect(parseMissionControlPanelHostMessage(replayed[0])).toEqual(decoded);
+      expect(controller.routeState()).toMatchObject({ route: 'detail' });
+      controller.dispose();
+    },
+  );
 });
 
 async function settle(): Promise<void> {

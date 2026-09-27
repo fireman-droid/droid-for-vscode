@@ -1,8 +1,8 @@
 import { performance } from 'node:perf_hooks';
 import { describe, expect, it } from 'vitest';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
-import { assistantWebviewReducer, initialAssistantWebviewState } from '../../webview/assistant/state/store';
-import type { AssistantWebviewState } from '../../webview/assistant/state/types';
+import { assistantWebviewReducer, initialAssistantWebviewState } from '../../webview-v2/state/store';
+import type { AssistantWebviewState } from '../../webview-v2/state/types';
 import type { ConversationToolOperation } from './conversationRecoveryState';
 import { hydrateHostTranscriptState, projectHostTranscriptMessage } from './hostTranscriptState';
 import { mergeToolOperations } from './operationEvidenceState';

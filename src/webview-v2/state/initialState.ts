@@ -1,0 +1,54 @@
+import { EMPTY_SESSION_BTW_STATE } from '../../shared/protocol/btwProtocol';
+import { UNAVAILABLE_IDE } from '../../shared/protocol/ideProtocol';
+import { EMPTY_SESSION_QUEUE_STATE } from '../../shared/protocol/queueProtocol';
+import { EMPTY_SESSION_TOKEN_USAGE } from '../../shared/protocol/tokenUsage';
+import { initialGitCommitFlowState } from '../review/gitCommitStore';
+import { EMPTY_REVIEW_UI_STATE } from '../review/reviewStore';
+import type { AssistantWebviewState } from './types';
+
+export const initialAssistantWebviewState: AssistantWebviewState = {
+  ide: UNAVAILABLE_IDE,
+  sequence: -1,
+  conversationId: null,
+  sessionId: null,
+  latestChanges: null,
+  connection: { status: 'idle' },
+  turn: null,
+  sessions: { status: 'idle', items: [] },
+  settings: { status: 'loading', value: null },
+  context: { status: 'loading', value: null },
+  modelCatalog: { status: 'loading', items: [] },
+  skills: { status: 'idle', items: [] },
+  mcp: { status: 'idle', items: [] },
+  plugins: { status: 'idle', items: [] },
+  commands: { status: 'idle', items: [], recent: [] },
+  mcpAuth: null,
+  attachments: [],
+  attachmentImages: {},
+  fileSearch: null,
+  localImages: {},
+  archived: { status: 'idle', items: [] },
+  sessionSearch: null,
+  rewindInfo: null,
+  branchDiff: null,
+  review: EMPTY_REVIEW_UI_STATE,
+  editAttachments: null,
+  editResendRejection: null,
+  worktreeCreateAvailable: false,
+  btwAvailable: false,
+  backgroundTurnsAvailable: false,
+  btw: EMPTY_SESSION_BTW_STATE,
+  workspaceRoot: null,
+  mission: null,
+  missionSnapshot: null,
+  missionControlResult: null,
+  tokenUsage: EMPTY_SESSION_TOKEN_USAGE,
+  queue: EMPTY_SESSION_QUEUE_STATE,
+  queueEditing: null,
+  transcript: [],
+  historyStatus: null,
+  truncated: false,
+  interactions: [],
+  terminalTurnId: null,
+  git: initialGitCommitFlowState,
+};

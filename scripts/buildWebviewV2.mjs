@@ -54,7 +54,7 @@ for (const [entryPoint, filename] of [
   ['src/webview-v2/mission/main.tsx', 'mission-control'],
   ['src/webview-v2/viewer/main.tsx', 'session-viewer'],
   ['src/webview-v2/review/main.tsx', 'review'],
-  ['src/webview/mermaidRuntime.ts', 'mermaid'],
+  ['src/webview-v2/content/mermaidRuntime.ts', 'mermaid'],
 ]) {
   const result = await build({
     absWorkingDir: repository,

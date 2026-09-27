@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { initialAssistantWebviewState } from '../../webview/assistant/state/initialState';
-import type { StoreHostMessage } from '../../webview/assistant/state/types';
+import { initialAssistantWebviewState } from '../state/initialState';
+import type { StoreHostMessage } from '../state/types';
 import { createChatStore } from './store';
 
 describe('V2 panel state ownership', () => {

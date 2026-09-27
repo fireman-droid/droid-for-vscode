@@ -1,8 +1,9 @@
 import { useContext } from 'react';
 import { FileChangeView } from '@droidvisx/chat-ui/chat/FileChangeView';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
-import { InlineDiffContext } from '../../webview/assistant/changes/useInlineDiff';
+import { InlineDiffContext } from '../review/useInlineDiff';
 import { DiffView } from '../review/DiffView';
+import { RecordedSource } from '../review/RecordedSource';
 import { Button } from '../ui/button';
 import { isConfirmedOperationFile, operationDiffWithChanges, type OperationDiffFile } from '../../shared/protocol/operationDiff';
 import { operationFileStats } from '../chat/operationSummary';
@@ -21,7 +22,10 @@ export function OperationFileDetails({ file }: { readonly file: OperationDiffFil
   return <div className="operation-diff">
     {file.previousPath ? <p className="operation-diff-note">Moved from {file.previousPath}</p> : null}
     {file.message ? <p role="status" className="operation-diff-note">{file.message}</p> : null}
-    {!file.patch || file.patch === '@@' ? file.contentRestricted ? null : <p className="operation-diff-note">No complete text Diff was recorded for this result.</p>
+    {file.submittedContent !== undefined ? <>
+      <p className="operation-diff-note">Write succeeded. Showing submitted content; the previous version was not recorded.</p>
+      <RecordedSource content={file.submittedContent} path={file.path} label="Submitted file" />
+    </> : !file.patch || file.patch === '@@' ? file.contentRestricted ? null : <p className="operation-diff-note">No complete text Diff was recorded for this result.</p>
       : <DiffView patch={file.patch} path={file.path} />}
   </div>;
 }
@@ -40,7 +44,7 @@ export function OperationDiff({ item, hideConfirmed = false, onInteract }: { ite
   if (!files.length) return null;
   return <div aria-label="File operations" className="my-1 w-full min-w-0">
     {files.map((file) => isConfirmedOperationFile(result, file)
-      ? <FileChangeView key={file.path} file={operationFileStats(file)} onInteract={onInteract} label={file.kind === 'added' ? 'Created' : file.kind === 'deleted' ? 'Deleted' : file.kind === 'renamed' ? 'Renamed' : 'Edited'}
+      ? <FileChangeView key={file.path} file={operationFileStats(file)} onInteract={onInteract} label={file.submittedContent !== undefined ? 'Written' : file.kind === 'added' ? 'Created' : file.kind === 'deleted' ? 'Deleted' : file.kind === 'renamed' ? 'Renamed' : 'Edited'}
         actions={context?.connected && context.sessionId ? <Button variant="plain" size="none" className="dvx-change-file-action" aria-label={`Review changes to ${file.path}`} onClick={() => { onInteract?.(); context.port.postMessage({
           type: 'review.panel.open', sessionId: context.sessionId!, scopeKind: 'operations', turnId: item.turnId, toolUseId: item.toolUseId, path: file.path,
         }); }}>Review</Button> : undefined}>

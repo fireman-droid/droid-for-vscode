@@ -26,7 +26,7 @@ export async function exportDiagnosticsBundle(
       ),
     ),
     filters: { 'Zip archive': ['zip'] },
-    title: 'Export DroidVisX Diagnostics Bundle',
+    title: 'Export Droid Diagnostics Bundle',
   });
   if (target === undefined) {
     return;
@@ -89,7 +89,7 @@ export async function exportDiagnosticsBundle(
   });
 
   const action = await vscode.window.showInformationMessage(
-    `DroidVisX diagnostics bundle exported (${logCount} log file${logCount === 1 ? '' : 's'}).`,
+    `Droid diagnostics bundle exported (${logCount} log file${logCount === 1 ? '' : 's'}).`,
     'Reveal in Explorer',
   );
   if (action === 'Reveal in Explorer') {

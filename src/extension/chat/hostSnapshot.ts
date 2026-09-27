@@ -48,6 +48,9 @@ export function buildHostSnapshot(ctl: HostSnapshotPort): HostSnapshotProjection
     context: ctl.metadata.context,
     modelCatalog: ctl.metadata.modelCatalog,
     transcript: ctl.recoveryState.transcript.transcript,
+    interactions: ctl.interactions.snapshotPending().filter((pending) =>
+      pending.sessionId === ctl.sessionState.sessionId && pending.turnId === ctl.turnState.turn?.turnId &&
+      (ctl.turnState.turn.status === 'submitting' || ctl.turnState.turn.status === 'streaming')),
     historyStatus: ctl.recoveryState.transcript.historyStatus,
     truncated: ctl.recoveryState.transcript.truncated,
     ...(latestChanges === undefined

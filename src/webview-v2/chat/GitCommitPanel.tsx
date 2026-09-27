@@ -1,5 +1,5 @@
 import { MAX_GIT_COMMIT_MESSAGE_LENGTH } from '../../shared/protocol/gitCommitFlow';
-import { GIT_FILE_STATUS_LABELS, useGitCommitDraft, useGitCommitEntry, type GitCommitFlowContextValue } from '../../webview/assistant/changes/gitCommitFlow';
+import { GIT_FILE_STATUS_LABELS, useGitCommitDraft, useGitCommitEntry, type GitCommitFlowContextValue } from '../review/gitCommitFlow';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/input';
 import { Checkbox } from '../ui/selection';

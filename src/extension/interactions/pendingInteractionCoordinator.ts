@@ -6,8 +6,10 @@ import {
   type PermissionRespondMessage,
 } from '../../shared/bridgeMessages';
 import {
+  MAX_PENDING_INTERACTIONS,
   type AskUserInteractionRequest,
   type InteractionRequest,
+  type PendingInteractionSnapshot,
   type PermissionInteractionRequest,
 } from '../../shared/protocol/interactions';
 import {
@@ -19,7 +21,7 @@ import {
   type RuntimePermissionResult,
 } from '../../runtime/events/runtimeInteractions';
 
-export const MAX_PENDING_INTERACTIONS = 16;
+export { MAX_PENDING_INTERACTIONS } from '../../shared/protocol/interactions';
 
 interface InteractionContext {
   readonly sessionId: string;
@@ -67,12 +69,25 @@ export class PendingInteractionCoordinator {
   ) {}
 
   createRuntimeHandler(): RuntimeInteractionHandler {
+    const owner = this.prepareRuntimeHandler();
+    owner.activate();
+    return owner.handler;
+  }
+
+  prepareRuntimeHandler(): {
+    readonly handler: RuntimeInteractionHandler;
+    activate(): void;
+  } {
     const runtime = Symbol('runtime');
-    this.cancelAll();
-    this.activeRuntime = runtime;
     return {
-      requestPermission: (request) => this.requestPermissionForRuntime(runtime, request),
-      askUser: (request) => this.askUserForRuntime(runtime, request),
+      handler: {
+        requestPermission: (request) => this.requestPermissionForRuntime(runtime, request),
+        askUser: (request) => this.askUserForRuntime(runtime, request),
+      },
+      activate: () => {
+        this.cancelAll();
+        this.activeRuntime = runtime;
+      },
     };
   }
 
@@ -239,6 +254,10 @@ export class PendingInteractionCoordinator {
     for (const entry of [...this.pending.values()]) {
       this.publish(entry);
     }
+  }
+
+  snapshotPending(): readonly PendingInteractionSnapshot[] {
+    return [...this.pending.values()].map(({ context, request }) => ({ ...context, request }));
   }
 
   replayPendingTo(listener: (projection: PendingInteractionProjection) => void): void {

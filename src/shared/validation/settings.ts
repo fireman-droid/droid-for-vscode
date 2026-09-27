@@ -18,6 +18,7 @@ import {
   type McpServerRemoveMessage,
   type McpServerToggleMessage,
   type McpServerType,
+  type ModelCatalogRefreshMessage,
   type PluginsRefreshMessage,
   type SessionContextRefreshMessage,
   type SessionSettingUpdateMessage,
@@ -38,6 +39,15 @@ export function parseSessionContextRefresh(
     type: 'session.context.refresh',
     sessionId: value.sessionId,
   };
+}
+
+export function parseModelCatalogRefresh(
+  value: UnknownRecord,
+): ModelCatalogRefreshMessage | undefined {
+  if (!hasExactKeys(value, ['type', 'sessionId']) || !isId(value.sessionId)) {
+    return undefined;
+  }
+  return { type: 'session.model-catalog.refresh', sessionId: value.sessionId };
 }
 
 export function parseSkillsRefresh(

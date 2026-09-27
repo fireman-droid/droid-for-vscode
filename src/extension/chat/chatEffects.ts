@@ -44,6 +44,7 @@ import {
   settleQueueAfterTurn,
 } from './queue/queue';
 import {
+  checkpointRecoveryTranscript,
   flushRecoveryCheckpoint,
   flushRecoveryCheckpointInBackground,
   flushRecoveryCheckpointOrReport,
@@ -53,20 +54,14 @@ import {
   recoveryTurnId,
   scheduleRecoveryCheckpoint,
 } from './recovery/recovery';
-import {
-  canReplaceSession,
-  closeRuntime,
-  emitWorkspaceUnavailable,
-  ensureActiveRuntimeWorkspaceCurrent,
-  isCurrentRuntime,
-  isTargetWorkspaceCurrent,
-  replaceRuntime,
-  startReplacement,
-  waitForWorkspaceTransition,
-} from './sessions/runtimeLifecycle';
+import { canReplaceSession, replaceRuntime, startReplacement, startup } from './sessions/runtimeLifecycle';
+import { closeRuntime, resetSessionMetadata } from './sessions/sessionCleanup';
+import { emitWorkspaceUnavailable, ensureActiveRuntimeWorkspaceCurrent, waitForWorkspaceTransition } from './sessions/workspaceLifecycle';
+import { isCurrentRuntime, isTargetWorkspaceCurrent } from './sessions/sessionGuards';
 import {
   activeSessionSummary,
   beginCatalogLoad,
+  bindCatalogViewToWorkspace,
   clearCatalog,
   discardCatalogRequest,
   hasCatalogSession,
@@ -98,15 +93,9 @@ import {
   flushPendingThinking,
   queueThinkingProjection,
 } from './turns/thinkingBatch';
-import {
-  failTurn,
-  handleSend,
-  handleStop,
-  isCurrentTurn,
-  refreshContextAfterTurn,
-  setTurnStatus,
-  handleTurnComplete,
-} from './turns/turnFlow';
+import { failTurn, handleStop, refreshContextAfterTurn, setTurnStatus, handleTurnComplete } from './turns/turnSettlement';
+import { handleSend } from './turns/turnFlow';
+import { isCurrentTurn } from './turns/turnIdentity';
 import {
   armTurnWatchdog,
   clearTurnWatchdog,
@@ -116,6 +105,10 @@ type BoundEffect<F> = F extends (owner: never, ...args: infer A) => infer R
   ? (...args: A) => R
   : never;
 export interface ChatEffects {
+  startup: BoundEffect<typeof startup>;
+  resetSessionMetadata: BoundEffect<typeof resetSessionMetadata>;
+  checkpointRecoveryTranscript: BoundEffect<typeof checkpointRecoveryTranscript>;
+  bindCatalogViewToWorkspace: BoundEffect<typeof bindCatalogViewToWorkspace>;
   canStageAttachments: BoundEffect<typeof canStageAttachments>;
   stagedCount: BoundEffect<typeof stagedCount>;
   stageAttachmentPayloads: BoundEffect<typeof stageAttachmentPayloads>;
@@ -214,6 +207,10 @@ export interface ChatEffects {
 }
 export function createChatEffects(controller: ChatController): ChatEffects {
   return {
+    startup: () => startup(controller),
+    resetSessionMetadata: (...args) => resetSessionMetadata(controller, ...args),
+    checkpointRecoveryTranscript: () => checkpointRecoveryTranscript(controller),
+    bindCatalogViewToWorkspace: (...args) => bindCatalogViewToWorkspace(controller, ...args),
     canStageAttachments: (...args) => canStageAttachments(controller, ...args),
     stagedCount: (...args) => stagedCount(controller, ...args),
     stageAttachmentPayloads: (...args) => stageAttachmentPayloads(controller, ...args),

@@ -51,7 +51,7 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
   // The daemon reads message history from disk; no worker ownership or
   // subscription is involved. History must not scan or revive session owners.
   const sessionResources = resource('sessions', (method, args) =>
-    ['list', 'search', 'getMessages'].includes(method) ? undefined : firstId(method, args));
+    ['list', 'listPage', 'search', 'getMessages'].includes(method) ? undefined : firstId(method, args));
   const rememberHandle = async (
     entry: WindowDaemonEntry,
     handle: Awaited<ReturnType<DaemonApi['sessions']['create']>>,
@@ -82,6 +82,7 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
   return {
     sessions: {
       list: (...args) => sessionResources.list(...args),
+      listPage: (...args) => sessionResources.listPage(...args),
       search: (...args) => sessionResources.search(...args),
       archive: (...args) => sessionResources.archive(...args),
       unarchive: (...args) => sessionResources.unarchive(...args),

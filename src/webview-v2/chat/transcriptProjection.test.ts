@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
-import { createTranscriptSelector } from '../../webview/assistant/transcript/transcriptGroups';
+import { createTranscriptSelector, describeTranscript } from './transcript/transcriptGroups';
 import { createTranscriptMessagesSelector, createTranscriptStructureSelector } from './transcriptProjection';
 
 const user = (id: string, text = id) => ({ kind: 'user' as const, id, text });
@@ -63,4 +63,39 @@ it('keeps the latest copy and regenerate target in restored reply order', () => 
   const second = [user('second-question'), assistant('second', 'Second answer')];
   expect([...select([...first, ...second]).replyTails.keys()].at(-1)).toBe('assistant-turn:second');
   expect([...select([...second, ...first]).replyTails.keys()].at(-1)).toBe('assistant-turn:first');
+});
+
+it('keeps recorded reply times after history is restored into a fresh transcript selector', () => {
+  const timestamp = Date.parse('2026-09-26T10:01:02.000Z');
+  const items: SessionTranscriptItem[] = [user('question'), { ...assistant('turn', 'Recorded reply'), timestamp }];
+  const select = createTranscriptSelector();
+  expect(select(items).replyTimestamps.get('assistant-turn:turn')).toBe(timestamp);
+  const restored: SessionTranscriptItem[] = JSON.parse(JSON.stringify(items));
+  expect(createTranscriptSelector()(restored).replyTimestamps.get('assistant-turn:turn')).toBe(timestamp);
+  expect(describeTranscript(restored).replyTimestamps.get('assistant-turn:turn')).toBe(timestamp);
+  // A later authoritative snapshot can correct metadata without changing the reply text.
+  expect(select([items[0]!, { ...assistant('turn', 'Recorded reply'), timestamp: timestamp + 5_000 }])
+    .replyTimestamps.get('assistant-turn:turn')).toBe(timestamp + 5_000);
+});
+
+it('places the latest assistant message time on a trailing tool-only reply group', () => {
+  const timestamp = Date.parse('2026-09-26T10:01:02.000Z');
+  const projection = describeTranscript([
+    user('question'), { ...assistant('first', 'Before tools'), timestamp },
+    { ...assistant('last', 'First text'), timestamp: timestamp + 10_000 },
+    { ...assistant('last', 'Latest text'), id: 'latest-text', timestamp: timestamp + 20_000 }, tool,
+  ]);
+  expect([...projection.replyTimestamps]).toEqual([['assistant-turn:tool-only', timestamp + 20_000]]);
+  expect(projection.replyTails.get('assistant-turn:tool-only')).toBe('Before tools\n\nFirst text\n\nLatest text');
+});
+
+it('does not substitute an earlier message time when the final assistant message has no recorded time', () => {
+  const projection = describeTranscript([
+    user('question'), { ...assistant('first', 'Has time'), timestamp: 1_790_000_000_000 },
+    assistant('last', 'Old reply with unknown time'), tool,
+    user('tool-only-question'), { ...tool, id: 'only-tool', turnId: 'without-answer' },
+  ]);
+  expect([...projection.replyTimestamps]).toEqual([
+    ['assistant-turn:tool-only', undefined], ['assistant-turn:without-answer', undefined],
+  ]);
 });

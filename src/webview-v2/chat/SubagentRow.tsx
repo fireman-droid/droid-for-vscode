@@ -1,8 +1,8 @@
 import { memo, useEffect, useState } from 'react';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
-import { useSubagentActivity } from '../../webview/assistant/subagents/subagentPanelFlow';
-import { formatElapsed } from '../../webview/assistant/subagents/subagentWorking';
-import { formatDuration } from '../../webview/assistant/thread/readers';
+import { useSubagentActivity } from './subagents/subagentPanelFlow';
+import { formatElapsed } from './subagents/subagentWorking';
+import { formatDuration } from './thread/readers';
 import { useToolActions } from '../content/toolActions';
 import { ChevronRight, LoaderCircle } from 'lucide-react';
 import { Button } from '../ui/button';

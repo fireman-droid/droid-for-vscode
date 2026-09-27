@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { initialAssistantWebviewState } from '../../webview/assistant/state/initialState';
-import type { AssistantWebviewState } from '../../webview/assistant/state/types';
+import { initialAssistantWebviewState } from '../state/initialState';
+import type { AssistantWebviewState } from '../state/types';
 import { Transcript } from './Transcript';
 
 vi.mock('@tanstack/react-virtual', () => ({

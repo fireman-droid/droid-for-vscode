@@ -1,6 +1,6 @@
 {
   "name": "droidvisx",
-  "displayName": "DroidVisX",
+  "displayName": "Droid",
   "description": "An unofficial local workspace UI for the Factory Droid CLI.",
   "version": "0.8.0",
   "publisher": "droidvisx",
@@ -16,7 +16,14 @@
   "bugs": {
     "url": "https://github.com/fireman-droid/droid-for-vscode/issues"
   },
-  "keywords": ["droid", "factory", "ai", "chat", "coding", "agent"],
+  "keywords": [
+    "droid",
+    "factory",
+    "ai",
+    "chat",
+    "coding",
+    "agent"
+  ],
   "engines": {
     "vscode": "^1.108.0"
   },
@@ -42,51 +49,51 @@
     "commands": [
       {
         "command": "droidvisx.manageCapabilities",
-        "title": "DroidVisX: Manage Droid Capabilities"
+        "title": "Droid: Manage Droid Capabilities"
       },
       {
         "command": "droidvisx.openReview",
-        "title": "DroidVisX: Review Changes"
+        "title": "Droid: Review Changes"
       },
       {
         "command": "droidvisx.focusView",
-        "title": "DroidVisX: Open Chat"
+        "title": "Droid: Open Chat"
       },
       {
         "command": "droidvisx.openLogs",
-        "title": "DroidVisX: Open Logs"
+        "title": "Droid: Open Logs"
       },
       {
         "command": "droidvisx.exportDiagnostics",
-        "title": "DroidVisX: Export Diagnostics Bundle"
+        "title": "Droid: Export Diagnostics Bundle"
       },
       {
         "command": "droidvisx.shutdownDaemon",
-        "title": "DroidVisX: Shut Down Background Daemon"
+        "title": "Droid: Shut Down Background Daemon"
       },
       {
         "command": "droidvisx.exportSessionMarkdown",
-        "title": "DroidVisX: Export Session as Markdown"
+        "title": "Droid: Export Session as Markdown"
       },
       {
         "command": "droidvisx.addSelectionToChat",
-        "title": "DroidVisX: Add Selection to Chat"
+        "title": "Droid: Add Selection to Chat"
       },
       {
         "command": "droidvisx.openMissionControl",
-        "title": "DroidVisX: Open Mission Control"
+        "title": "Droid: Open Mission Control"
       },
       {
         "command": "droidvisx.openModels",
-        "title": "DroidVisX: Manage Models"
+        "title": "Droid: Manage Models"
       },
       {
         "command": "droidvisx.startBrowserDevClient",
-        "title": "DroidVisX: Start Browser Dev Client"
+        "title": "Droid: Start Browser Dev Client"
       },
       {
         "command": "droidvisx.stopBrowserDevClient",
-        "title": "DroidVisX: Stop Browser Dev Client"
+        "title": "Droid: Stop Browser Dev Client"
       }
     ],
     "menus": {
@@ -102,7 +109,7 @@
       "activitybar": [
         {
           "id": "droidvisx",
-          "title": "DroidVisX",
+          "title": "Droid",
           "icon": "resources/droidvisx.svg"
         }
       ]
@@ -111,13 +118,13 @@
       "droidvisx": [
         {
           "id": "droidvisx.chat",
-          "name": "DroidVisX",
+          "name": "Droid",
           "type": "webview"
         }
       ]
     },
     "configuration": {
-      "title": "DroidVisX",
+      "title": "Droid",
       "properties": {
         "droidvisx.runtime.mode": {
           "type": "string",
@@ -130,13 +137,13 @@
             "Sessions run over a persistent local droid daemon connection, so tasks survive window reloads (default)."
           ],
           "default": "daemon",
-          "description": "How DroidVisX executes Droid sessions. Changing this requires a window reload. Daemon is strict by default; per-window subprocesses are used only when Process is explicitly selected."
+          "description": "How the extension runs Droid sessions. Changing this requires a window reload. Daemon is strict by default; per-window subprocesses are used only when Process is explicitly selected."
         },
         "droidvisx.browserDev.sourceRoot": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Absolute path to the DroidVisX source repository used by the Browser Dev Client. Development hosts fall back to their extension source path."
+          "description": "Absolute path to the Droid source repository used by the Browser Dev Client. Development hosts fall back to their extension source path."
         },
         "droidvisx.theme": {
           "type": "string",
@@ -151,7 +158,7 @@
             "Always use the dark theme."
           ],
           "default": "auto",
-          "description": "Color theme for the DroidVisX panel. Takes effect immediately."
+          "description": "Color theme for the Droid panel. Takes effect immediately."
         }
       }
     }
@@ -162,25 +169,23 @@
     "package:chat-ui": "pnpm run build:chat-ui && pnpm --dir packages/chat-ui pack --pack-destination ../../dist",
     "typecheck:chat-ui": "pnpm --filter @droidvisx/chat-ui typecheck",
     "build": "node esbuild.mjs",
-    "dev:webview": "vite --config vite.webview.config.ts",
-    "dev:webview-v2": "vite --config vite.webview-v2.config.ts",
-    "build:webview-v2": "node scripts/buildWebviewV2.mjs",
-    "typecheck:webview-v2": "tsc -p src/webview-v2/tsconfig.json --noEmit",
+    "dev:webview": "vite --config vite.webview-v2.config.ts",
     "test:extension": "vitest run src/shared src/extension",
-    "test:webview": "vitest run src/webview",
+    "test:webview": "vitest run src/webview-v2",
     "test:integration": "pnpm run build && node src/integration/runTest.mjs",
     "smoke:runtime": "tsx src/runtime/runtimeSmoke.ts",
     "smoke:capabilities": "tsx src/runtime/capabilities/capabilitySmoke.ts",
     "test": "vitest run",
-    "typecheck:webview": "tsc -p src/webview/tsconfig.json --noEmit",
-    "typecheck": "pnpm run typecheck:chat-ui && tsc -p tsconfig.extension.json --noEmit && tsc -p tsconfig.webview.json --noEmit && pnpm run typecheck:webview && pnpm run typecheck:webview-v2",
+    "typecheck:webview": "tsc -p src/webview-v2/tsconfig.json --noEmit",
+    "typecheck": "pnpm run typecheck:chat-ui && tsc -p tsconfig.extension.json --noEmit && tsc -p tsconfig.webview.json --noEmit && pnpm run typecheck:webview",
     "lint:budgets": "node scripts/checkFileBudgets.mjs",
     "package:prepare": "pnpm run typecheck && pnpm run lint:budgets && pnpm run build:chat-ui && pnpm run build",
     "package:vsix": "vsce package --no-dependencies --baseContentUrl https://github.com/fireman-droid/droid-for-vscode/blob/main --baseImagesUrl https://raw.githubusercontent.com/fireman-droid/droid-for-vscode/main --out dist/droidvisx.vsix",
     "package:vsix:preview": "pnpm run package:vsix --pre-release",
     "verify:vsix": "node src/integration/verifyVsix.mjs dist/droidvisx.vsix",
     "release:check": "node scripts/checkRelease.mjs",
-    "vscode:prepublish": "pnpm run package:prepare"
+    "vscode:prepublish": "pnpm run package:prepare",
+    "build:webview": "node scripts/buildWebviewV2.mjs"
   },
   "dependencies": {
     "@droidvisx/chat-ui": "workspace:*",
@@ -204,9 +209,6 @@
     "zustand": "5.0.15"
   },
   "devDependencies": {
-    "@assistant-ui/react": "0.15.12",
-    "@assistant-ui/react-markdown": "0.14.10",
-    "@fontsource-variable/inter": "^5.3.0",
     "@tailwindcss/cli": "4.3.3",
     "@tailwindcss/vite": "4.3.3",
     "@testing-library/react": "16.3.0",

@@ -3,6 +3,7 @@ import {
   DaemonSessionController,
   LOCAL_MACHINE_ID,
   MachineType,
+  MultiMissionStateManager,
   MultiSessionStateManager,
   SDK_TAG,
   SessionPlatform,
@@ -32,9 +33,13 @@ export async function connectPublicDaemon(
   options: PublicDaemonOptions,
 ): Promise<DaemonApi> {
   const state = new MultiSessionStateManager();
+  const missions = new MultiMissionStateManager();
   const controller = new DaemonSessionController({
     sessionStateManager: state,
+    missionStateManager: missions,
     config: {
+      getMissionStore: (sessionId) => missions.getMissionStore(sessionId),
+      getMissionStoreIfKnown: (sessionId) => missions.getMissionStoreIfKnown(sessionId),
       machineId: LOCAL_MACHINE_ID,
       machineType: MachineType.Local,
       url: options.url,
@@ -53,7 +58,7 @@ export async function connectPublicDaemon(
   });
   try {
     await controller.attemptInitialConnection();
-    return retainDaemonController(controller, options);
+    return retainDaemonController(controller, options, missions);
   } catch (error) {
     controller.destroy();
     state.clear();
@@ -64,6 +69,7 @@ export async function connectPublicDaemon(
 export function retainDaemonController(
   controller: DaemonSessionController,
   options: PublicDaemonOptions,
+  missions?: MultiMissionStateManager,
 ): DaemonApi {
   const handles = new Map<string, RetainedDaemonSession>();
   const reloadOptions = new Map<string, ResumeDaemonSessionOptions>();
@@ -136,6 +142,7 @@ export function retainDaemonController(
         reloadOptions.delete(id);
       },
       (signal) => recovery.waitUntilReady(signal),
+      missions,
     );
     handles.set(id, handle);
     return handle;

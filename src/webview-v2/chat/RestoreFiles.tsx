@@ -1,4 +1,4 @@
-import type { RewindFileInfo } from '../../webview/assistant/editing/editTypes';
+import type { RewindFileInfo } from './editing/editTypes';
 import { useId, useState } from 'react';
 import { ChevronDown, ExternalLink } from 'lucide-react';
 import { Checkbox } from '../ui/selection';

@@ -61,6 +61,11 @@ export function handleMissionCommand(ctl: ControlsPort, message: MissionCommand)
     return;
   }
   if (message.type === 'mission.refresh') {
+    if (!mission.hydrate(ctl.sessionState.runtime?.readMissionSnapshot?.())) {
+      emitResult(ctl, message.requestId, 'refresh', 'rejected', 'unavailable');
+      return;
+    }
+    mission.setAvailability('attached');
     ctl.emit(mission.snapshot());
     emitResult(ctl, message.requestId, 'refresh', 'accepted');
     return;

@@ -125,4 +125,39 @@ describe('normalizeMissionEvent', () => {
     ).toBeUndefined();
     expect(normalizeMissionEvent({ type: 'mission_worker_retried' })).toBeUndefined();
   });
+
+  it.each(['description', 'preconditions', 'expectedBehavior'] as const)(
+    'accepts SDK feature prose with line breaks and tabs in %s', field => {
+      const prose = 'Build the library\n\tThen verify the CLI\r\nKeep the existing API';
+      const value = { ...feature, [field]: field === 'description' ? prose : [prose] };
+      expect(normalizeMissionEvent({ type: 'mission_features_changed', features: [value] }))
+        .toMatchObject({ type: 'mission-features', features: [{ id: feature.id,
+          description: field === 'description' ? prose : feature.description }] });
+    },
+  );
+
+  it.each([
+    { currentWorkerSessionId: 'worker-active', completedWorkerSessionId: null },
+    { currentWorkerSessionId: null, completedWorkerSessionId: 'worker-completed' },
+  ])('preserves explicit current, completed, and past worker bindings: %o', bindings => {
+    const workers = { workerSessionIds: ['worker-previous', 'worker-active'], ...bindings };
+    expect(normalizeMissionEvent({ type: 'mission_features_changed',
+      features: [{ ...feature, ...workers }] }))
+      .toEqual({ type: 'mission-features', features: [{ id: feature.id,
+        description: feature.description, status: feature.status, skillName: feature.skillName,
+        ...workers }] });
+  });
+
+  it.each([
+    { description: 'invalid\u0000text' },
+    { preconditions: ['invalid\u001btext'] },
+    { expectedBehavior: ['invalid\u0008text'] },
+    { skillName: 'worker\nname' },
+    { workerSessionIds: ['worker-valid', 'worker\ninvalid'] },
+    { currentWorkerSessionId: '' },
+    { completedWorkerSessionId: '../other' },
+  ])('still rejects invalid feature text or worker identity: %o', invalid => {
+    expect(normalizeMissionEvent({ type: 'mission_features_changed',
+      features: [{ ...feature, ...invalid }] })).toBeUndefined();
+  });
 });

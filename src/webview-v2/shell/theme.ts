@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { ThemePreference } from '../../shared/protocol/shell';
-import { useThemeController } from '../../webview/assistant/shell/theme';
+import { useThemeController } from './themeController';
 
 export function useWebviewTheme(persistPreference: (preference: ThemePreference) => void) {
   const controller = useThemeController(persistPreference);
@@ -14,7 +14,7 @@ export function applyTheme(preference: ThemePreference, resolved: 'light' | 'dar
   const root = document.documentElement;
   root.dataset.theme = resolved;
   root.dataset.themePreference = preference;
-  // Host boot markup still uses this contract during the parallel migration.
+  // Keep the Host boot attributes in sync with the shared UI theme attributes.
   root.dataset.dvxTheme = resolved;
   root.dataset.dvxThemePreference = preference;
 }

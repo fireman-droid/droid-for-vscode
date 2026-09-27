@@ -23,6 +23,8 @@ for (const variant of variants) {
       if (variant !== 'baseline') return;
       builder.onLoad({ filter: /(?:src|packages)[\\/].*\.(?:ts|tsx)$/ }, async (args) => {
         if (args.path.includes('node_modules')) return;
+        // Both variants use the same measurement controls and synthetic fixtures.
+        if (path.relative(root, args.path).replaceAll('\\', '/').startsWith('src/webview-v2/dev/performance')) return;
         const file = path.join(baseline, path.relative(root, args.path));
         try { await stat(file); } catch (error) { if (error.code === 'ENOENT') return; throw error; }
         return { contents: await readFile(file, 'utf8'), loader: args.path.endsWith('tsx') ? 'tsx' : 'ts', resolveDir: path.dirname(args.path) };

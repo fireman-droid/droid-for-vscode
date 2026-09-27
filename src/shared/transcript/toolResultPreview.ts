@@ -116,7 +116,8 @@ export function enforceToolResultBudget<T extends object>(
     const operation = (item as { operationDiff?: OperationDiff }).operationDiff;
     if (operation?.status === 'ready') {
       const size = operation.files.reduce((sum, file) =>
-        sum + file.patch.length + file.path.length + (file.previousPath?.length ?? 0) + (file.message?.length ?? 0), 0);
+        sum + file.patch.length + (file.submittedContent?.length ?? 0) + file.path.length +
+        (file.previousPath?.length ?? 0) + (file.message?.length ?? 0), 0);
       if (operationUnits + size > MAX_CONVERSATION_TOOL_RESULT_UNITS) {
         result ??= [...items];
         result[index] = { ...item, operationDiff: { status: 'unavailable', reason: 'evicted' } };

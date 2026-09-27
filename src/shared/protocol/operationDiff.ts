@@ -34,6 +34,8 @@ export interface OperationDiffFile {
   readonly reversible?: boolean;
   /** @@ without coordinates means the tool did not record absolute line numbers. */
   readonly patch: string;
+  /** Content submitted to a successful Create/Write call; not a before/after diff or a file snapshot. */
+  readonly submittedContent?: string;
 }
 export function isOperationDiff(value: unknown): value is OperationDiff {
   if (!isStrictRecord(value)) return false;
@@ -48,7 +50,7 @@ export function isOperationDiff(value: unknown): value is OperationDiff {
       !/[\u0000-\u001f\u007f]/u.test(value.sourceSessionId)) && Array.isArray(value.files) &&
     value.files.length > 0 && value.files.length <= MAX_OPERATION_DIFF_FILES &&
     value.files.every((file) => isStrictRecord(file) &&
-      hasExactKeys(file, ['path', 'kind', 'patch'], ['previousPath', 'outcome', 'message', 'reversible', 'contentRestricted']) &&
+      hasExactKeys(file, ['path', 'kind', 'patch'], ['previousPath', 'outcome', 'message', 'reversible', 'contentRestricted', 'submittedContent']) &&
       isSafeWorkspaceRelativePath(file.path) &&
       (file.previousPath === undefined || isSafeWorkspaceRelativePath(file.previousPath)) &&
       ['added', 'modified', 'deleted', 'renamed'].includes(String(file.kind)) &&
@@ -56,12 +58,20 @@ export function isOperationDiff(value: unknown): value is OperationDiff {
       (file.message === undefined || typeof file.message === 'string' && file.message.length <= 2_000 &&
         !/[\u0000-\u0008\u000b-\u001f\u007f]/u.test(file.message)) &&
       (file.reversible === undefined || typeof file.reversible === 'boolean') &&
-      (file.contentRestricted === undefined || file.contentRestricted === true && file.patch === '' && file.reversible === false) &&
+      (file.contentRestricted === undefined || file.contentRestricted === true && file.patch === '' &&
+        file.submittedContent === undefined && file.reversible === false) &&
+      (file.submittedContent === undefined || value.source === 'tool-result' && file.outcome === 'applied' &&
+        file.reversible === false && file.patch === '' && isSafeOperationText(file.submittedContent)) &&
       (value.source !== 'tool-result' || file.outcome !== undefined) &&
       (file.reversible !== true || value.source === 'tool-result' && file.outcome === 'applied') &&
-      typeof file.patch === 'string' && file.patch.length <= MAX_OPERATION_DIFF_UNITS &&
-      !/[\u0000-\u0008\u000b-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(file.patch)) &&
-    value.files.reduce((size, file: OperationDiffFile) => size + file.patch.length, 0) <= MAX_OPERATION_DIFF_UNITS;
+      isSafeOperationText(file.patch)) &&
+    value.files.reduce((size, file: OperationDiffFile) =>
+      size + file.patch.length + (file.submittedContent?.length ?? 0), 0) <= MAX_OPERATION_DIFF_UNITS;
+}
+
+export function isSafeOperationText(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= MAX_OPERATION_DIFF_UNITS &&
+    !/[\u0000-\u0008\u000b-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(value);
 }
 export function operationDiffFields(value: { readonly operationDiff?: OperationDiff }) {
   return value.operationDiff === undefined ? {} : { operationDiff: value.operationDiff };
@@ -99,7 +109,27 @@ export function operationDiffWithChanges(value: OperationDiff): OperationDiff {
 export function enrichOperationDiff(saved: OperationDiff | undefined, incoming: OperationDiff | undefined): OperationDiff | undefined {
   if (saved === undefined) return incoming;
   if (incoming === undefined) return saved;
-  if (saved.status === 'ready' && saved.source === 'tool-result') return saved;
+  if (saved.status === 'unavailable' && (saved.reason === 'restricted' || saved.reason === 'evicted')) return saved;
+  if (saved.status === 'ready' && incoming.status === 'ready' &&
+    (saved.callId !== undefined && incoming.callId !== undefined && saved.callId !== incoming.callId ||
+      saved.sourceSessionId !== undefined && incoming.sourceSessionId !== undefined &&
+      saved.sourceSessionId !== incoming.sourceSessionId)) return saved;
+  if (saved.status === 'ready' && saved.source === 'tool-result') {
+    if (incoming.status !== 'ready' || incoming.source !== 'tool-result' || saved.callId === undefined ||
+      saved.callId !== incoming.callId || saved.sourceSessionId !== incoming.sourceSessionId) return saved;
+    const files = saved.files.map((file) => {
+      if (file.contentRestricted || file.outcome !== 'applied' || file.patch !== '' ||
+        file.submittedContent !== undefined) return file;
+      const complete = incoming.files.find((candidate) => candidate.path === file.path &&
+        candidate.previousPath === file.previousPath && candidate.kind === file.kind &&
+        candidate.outcome === 'applied' && !candidate.contentRestricted &&
+        (candidate.patch !== '' || candidate.submittedContent !== undefined));
+      return complete ?? file;
+    });
+    if (files.every((file, index) => file === saved.files[index])) return saved;
+    const enriched = { ...saved, files };
+    return isOperationDiff(enriched) ? enriched : saved;
+  }
   if (incoming.status === 'ready' && incoming.source === 'tool-result') return incoming;
   if (saved.status === 'ready' && saved.source === 'tool-input') return incoming;
   return saved.status === 'unavailable' && (saved.reason === 'not-recorded' || saved.reason === 'unattributed') &&

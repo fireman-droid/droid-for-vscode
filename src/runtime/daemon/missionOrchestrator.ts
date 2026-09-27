@@ -2,6 +2,7 @@ import type { DaemonApi, DaemonSessionHandle } from './api';
 import { randomUUID } from 'node:crypto';
 
 import type { MissionReasoningEffort } from '../../shared/protocol/missionProtocol';
+import type { RuntimeInteractionCallbacks } from '../events/runtimeInteractions';
 
 export interface MissionOrchestratorCreateOptions {
   readonly droid: DaemonApi;
@@ -13,6 +14,7 @@ export interface MissionOrchestratorCreateOptions {
    * scope or a Webview-controlled target.
    */
   readonly missionId: string;
+  readonly callbacks: RuntimeInteractionCallbacks;
 }
 
 /**
@@ -33,6 +35,7 @@ export async function createMissionOrchestrator(
   options: MissionOrchestratorCreateOptions,
 ): Promise<DaemonSessionHandle> {
   return options.droid.sessions.create({
+    ...options.callbacks,
     cwd: options.cwd,
     modelId: options.modelId,
     reasoningEffort: options.reasoningEffort as never,

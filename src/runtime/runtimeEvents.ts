@@ -19,6 +19,9 @@ export interface MissionRuntimeFeature {
   readonly status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   readonly skillName: string;
   readonly milestone?: string;
+  readonly workerSessionIds?: readonly string[];
+  readonly currentWorkerSessionId?: string | null;
+  readonly completedWorkerSessionId?: string | null;
 }
 
 export interface MissionProgressSummary {

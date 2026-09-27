@@ -1,6 +1,6 @@
 import type { SessionContextState } from '../../shared/protocol/settings';
 import type { SessionTokenUsageState, TokenUsageBreakdown } from '../../shared/protocol/tokenUsage';
-import { formatCompactTokens, formatCredits, getContextLabel, getContextPercent } from '../../webview/assistant/composer/contextPresentation';
+import { formatCompactTokens, formatCredits, getContextLabel, getContextPercent } from './composer/contextPresentation';
 import { Button } from '../ui/button';
 
 const categories: readonly { field: Exclude<keyof TokenUsageBreakdown, 'factoryCredits'>; label: string }[] = [

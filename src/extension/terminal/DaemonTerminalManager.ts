@@ -183,7 +183,7 @@ class DaemonTerminal implements vscode.Pseudoterminal {
   }
 
   private note(text: string): void {
-    if (this.opened && !this.closed) this.output.fire(`\r\n\x1b[2m[DroidVisX] ${text}\x1b[0m\r\n`);
+    if (this.opened && !this.closed) this.output.fire(`\r\n\x1b[2m[Droid] ${text}\x1b[0m\r\n`);
   }
 
   private stop(message?: string, code?: number): void {

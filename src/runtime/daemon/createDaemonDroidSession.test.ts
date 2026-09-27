@@ -1106,6 +1106,8 @@ function createDaemonSessionMock(
       failedDeleteCount: 0,
     })),
     onNotification: vi.fn(() => () => undefined),
+    readMissionSnapshot: () => null,
+    subscribeMissionSnapshot: () => () => {},
     detach: vi.fn(async () => {}),
     close: vi.fn(async () => {}),
   };

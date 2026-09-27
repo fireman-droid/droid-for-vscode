@@ -14,6 +14,7 @@ export function handleMissionRuntimeEvent(
     case 'mission-heartbeat':
     case 'mission-worker-started':
     case 'mission-worker-completed':
+      if (ctl.missionState.stopMissionSubscription) return true;
       if (ctl.missionState.missionRuntime?.apply(event) === true) {
         if (event.type === 'mission-state') {
           ctl.missionState.mission = {

@@ -3,6 +3,7 @@ import type {
   ConnectedDroidSession,
   ConnectToDaemonOptions,
   CreateDaemonSessionOptions,
+  DaemonSessionController,
   FactoryDroidEvents,
   ResumeDaemonSessionOptions,
 } from '@factory/droid-sdk';
@@ -26,6 +27,8 @@ export type DaemonStreamOptions = Omit<
 export interface DaemonSessionHandle extends ConnectedDroidSession {
   ensureLoaded(signal?: AbortSignal): Promise<void>;
   onNotification(listener: (notification: Record<string, unknown>) => void): () => void;
+  readMissionSnapshot(): unknown;
+  subscribeMissionSnapshot(listener: (snapshot: unknown) => void): () => void;
 }
 
 /** Only the resources used by this extension, on one Runtime-owned connection. */
@@ -45,6 +48,9 @@ export interface DaemonApi {
     | 'fork'
     | 'killWorker'
   > & {
+    listPage(
+      options?: Parameters<ConnectedDroid['sessions']['list']>[0],
+    ): ReturnType<DaemonSessionController['listAvailableSessions']>;
     create(options: CreateDaemonSessionOptions): Promise<DaemonSessionHandle>;
     resume(
       id: string,

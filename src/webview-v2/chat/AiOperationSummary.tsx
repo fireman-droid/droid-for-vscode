@@ -1,6 +1,6 @@
 import { useContext } from 'react';
 import { ChangeSummaryView } from '@droidvisx/chat-ui/chat/ChangeSummaryView';
-import { InlineDiffContext } from '../../webview/assistant/changes/useInlineDiff';
+import { InlineDiffContext } from '../review/useInlineDiff';
 import { OperationFileDetails } from '../content/OperationDiff';
 import type { OperationSummary } from './operationSummary';
 export { summarizeOperations, type OperationSummary } from './operationSummary';

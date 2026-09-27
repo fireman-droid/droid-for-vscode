@@ -6,6 +6,7 @@ import {
   type DroidStreamEvent,
   type DroidStreamMessage,
   type SessionSettings,
+  type MultiMissionStateManager,
 } from '@factory/droid-sdk';
 import type {
   DaemonHandlers,
@@ -33,6 +34,7 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
     readonly handlers: DaemonHandlers,
     private readonly unregister: () => void,
     private readonly waitUntilReady: (signal?: AbortSignal) => Promise<void> = async () => {},
+    private readonly missions?: MultiMissionStateManager,
   ) {}
 
   get settings(): Readonly<SessionSettings> {
@@ -117,6 +119,43 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
     };
     this.subscriptions.add(unsubscribe);
     this.controller.on('sessionNotification', receive);
+    return unsubscribe;
+  }
+
+  readMissionSnapshot(): unknown {
+    this.assertAttached();
+    return this.missions?.getMissionStoreIfKnown(this.id)?.getSnapshot() ?? null;
+  }
+
+  subscribeMissionSnapshot(listener: (snapshot: unknown) => void): () => void {
+    this.assertAttached();
+    let store = this.missions?.getMissionStoreIfKnown(this.id) ?? null;
+    const publish = () => listener(store?.getSnapshot() ?? null);
+    let unsubscribeStore = store?.subscribe(publish);
+    let refreshing = false;
+    const unsubscribeManager = this.missions?.subscribe(() => {
+      // SDK store creation notifies before the session association is set.
+      // Reading a known association can itself create its store, so a nested
+      // manager notification must leave the outer refresh in control.
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const next = this.missions?.getMissionStoreIfKnown(this.id) ?? null;
+        if (next === store) return;
+        unsubscribeStore?.();
+        store = next;
+        unsubscribeStore = store?.subscribe(publish);
+        publish();
+      } finally {
+        refreshing = false;
+      }
+    });
+    const unsubscribe = () => {
+      unsubscribeManager?.();
+      unsubscribeStore?.();
+      this.subscriptions.delete(unsubscribe);
+    };
+    this.subscriptions.add(unsubscribe);
     return unsubscribe;
   }
 

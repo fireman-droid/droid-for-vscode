@@ -43,25 +43,22 @@ export function parseOperationResult(
       ? parseEditResult(value, declared, workspace)
       : tool === 'applypatch'
         ? parseApplyPatchResult(value, declared, workspace)
-        : parseCreateResult(value, declared, workspace);
+        : parseCreateResult(value, declared, workspace, input);
   if (typeof parsed === 'string') return unavailable(parsed);
-  const files = parsed.map((file) =>
-    redactOperationFile(
-      eventIsError && file.outcome === 'applied'
-        ? {
-            ...file,
-            outcome: 'uncertain' as const,
-            reversible: false,
-            message: 'The SDK marked this tool result as failed.',
-          }
-        : file,
-      workspace,
-    ),
-  );
+  const files = parsed.map((file) => {
+    if (!eventIsError || file.outcome !== 'applied') return redactOperationFile(file, workspace);
+    const { submittedContent: _submittedContent, ...metadata } = file;
+    return redactOperationFile({
+      ...metadata,
+      outcome: 'uncertain',
+      reversible: false,
+      message: 'The SDK marked this tool result as failed.',
+    }, workspace);
+  });
   if (!files.length) return unavailable(eventIsError ? 'failed' : 'not-recorded');
   if (
     files.length > MAX_OPERATION_DIFF_FILES ||
-    files.reduce((total, file) => total + file.patch.length, 0) >
+    files.reduce((total, file) => total + file.patch.length + (file.submittedContent?.length ?? 0), 0) >
       MAX_OPERATION_DIFF_UNITS
   )
     return unavailable('too-large');
@@ -80,9 +77,11 @@ export function redactOperationFile(file: OperationDiffFile, workspace: string):
   if (!restrictedPath(file.path) &&
     (!file.previousPath || !restrictedPath(file.previousPath)) &&
     !isRestrictedToolContent(file.patch) &&
+    (file.submittedContent === undefined || !isRestrictedToolContent(file.submittedContent)) &&
     (file.message === undefined || !isRestrictedToolContent(file.message))) return file;
+  const { submittedContent: _submittedContent, ...metadata } = file;
   return {
-    ...file,
+    ...metadata,
     patch: '',
     contentRestricted: true,
     reversible: false,
@@ -260,6 +259,7 @@ function parseCreateResult(
   value: unknown,
   declared: readonly OperationDiffFile[],
   workspace: string,
+  input: unknown,
 ): OperationDiffFile[] | UnavailableReason {
   if (
     !isStrictRecord(value) ||
@@ -270,7 +270,12 @@ function parseCreateResult(
   const path = toWorkspaceRelativePath(workspace, value.file_path);
   if (!path || declared.length !== 1 || path !== declared[0]!.path)
     return 'unattributed';
-  return [{ path, kind: 'added', patch: '', outcome: 'applied', reversible: false }];
+  if (!isStrictRecord(input)) return 'unattributed';
+  const content = input.content ?? input.file_text ?? input.text;
+  if (typeof content !== 'string') return 'not-recorded';
+  const submittedContent = content.replace(/\r\n?/gu, '\n');
+  if (submittedContent.length > MAX_OPERATION_DIFF_UNITS) return 'too-large';
+  return [{ path, kind: 'added', patch: '', submittedContent, outcome: 'applied', reversible: false }];
 }
 
 function readApplyPatchDeclarations(

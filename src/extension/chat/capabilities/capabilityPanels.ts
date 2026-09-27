@@ -60,12 +60,12 @@ export const SKILL_REQUEST_DROPPED_MESSAGE =
   'Droid could not accept that skill change right now. Retry in a moment.';
 
 export const CONTEXT_READ_FAILED_MESSAGE =
-  'Droid did not return context usage. Retry, then open DroidVisX Logs if this continues.';
+  'Droid did not return context usage. Retry, then open Droid Logs if this continues.';
 
 export const MODEL_CATALOG_UNSUPPORTED_MESSAGE =
-  'Model selection is unavailable in this Droid runtime.';
+  'Droid did not provide a model list for this session.';
 
-export const MODEL_CATALOG_FAILED_MESSAGE = 'Droid models could not be loaded.';
+export const MODEL_CATALOG_FAILED_MESSAGE = 'Could not load models. Retry to load the list.';
 
 export function handleContextRefresh(ctl: CapabilitiesHostPort, sessionId: string): void {
   if (

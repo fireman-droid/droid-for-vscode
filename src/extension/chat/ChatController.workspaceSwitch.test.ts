@@ -6,6 +6,7 @@ import {
   connectionMessages,
   createCatalog,
   createController,
+  createHostTranscriptState,
   createMemoryPersistence,
   createMockRuntime,
   deferred,
@@ -17,6 +18,7 @@ import {
   type RuntimePermissionResult,
   send,
   type SessionCatalogResult,
+  type SessionHistoryLoader,
   SessionRecoveryStore,
   snapshots,
   successfulTurn,
@@ -24,6 +26,10 @@ import {
   waitForConnected,
   waitForInteraction,
 } from './controllerTestHarness';
+
+function availableHistory(): SessionHistoryLoader {
+  return { loadHistory: vi.fn(async () => ({ status: 'available' as const, state: createHostTranscriptState('complete') })) };
+}
 
 describe('ChatController', () => {
   it('clears stale catalog rows before loading a changed workspace', async () => {
@@ -300,6 +306,7 @@ describe('ChatController', () => {
       workspace,
       catalog,
       recovery,
+      availableHistory(),
     );
     ready(controller);
     await waitForConnected(messages);
@@ -599,7 +606,7 @@ describe('ChatController', () => {
     expect(createRuntime).toHaveBeenCalledOnce();
     expect(snapshots(messages).at(-1)?.connection).toMatchObject({
       status: 'unavailable',
-      message: 'Open a workspace folder to use DroidVisX.',
+      message: 'Open a workspace folder to use Droid.',
     });
 
     workspace.cwd = 'C:\\workspace-b';
@@ -659,7 +666,7 @@ describe('ChatController', () => {
       .fn<() => MockRuntime>()
       .mockReturnValueOnce(first)
       .mockReturnValueOnce(second);
-    const { controller, messages } = createController(createRuntime, workspace, catalog);
+    const { controller, messages } = createController(createRuntime, workspace, catalog, undefined, availableHistory());
     ready(controller);
     await waitForConnected(messages);
 
@@ -709,6 +716,7 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('session-1'), catalogEntry('session-2')]),
       recovery,
+      availableHistory(),
     );
     ready(controller);
     await waitForConnected(messages);
@@ -761,6 +769,7 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('session-1'), catalogEntry('session-2')]),
       recovery,
+      availableHistory(),
     );
     ready(controller);
     await waitForConnected(messages);
@@ -810,7 +819,7 @@ describe('ChatController', () => {
     });
     expect(writeSession).toHaveBeenCalledTimes(2);
     expect(writeSession).toHaveBeenLastCalledWith(
-      'session-1',
+      recovery.getSelectedConversationId(),
       'session-1',
       expect.objectContaining({
         transcript: expect.arrayContaining([
@@ -824,7 +833,7 @@ describe('ChatController', () => {
           }),
         ]),
       }),
-      null,
+      { turnId: 'turn-1', status: 'completed' },
     );
   });
 

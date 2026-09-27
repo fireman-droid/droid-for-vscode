@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { WebviewToHostMessage } from '../../shared/bridgeMessages';
-import { InlineDiffContext } from '../../webview/assistant/changes/useInlineDiff';
+import { InlineDiffContext } from '../review/useInlineDiff';
 import { InlineFileDiff } from './InlineFileDiff';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });

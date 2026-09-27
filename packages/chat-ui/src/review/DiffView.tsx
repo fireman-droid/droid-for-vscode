@@ -1,12 +1,8 @@
 import { memo, useMemo, useRef } from 'react';
-import { inlineDiffLines, type InlineDiffLine } from './inlineDiffLines';
-import { highlightCode } from '../markdown/highlightCode';
+import { formatDiffHunkHeader, inlineDiffLines, type InlineDiffLine } from './inlineDiffLines';
+import { codeLanguageForPath, highlightCode } from '../markdown/highlightCode';
 import { DeferredDiffChunk, useDeferredDiff } from './deferredDiff';
 
-const languages: Record<string, string> = {
-  ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript', json: 'json',
-  css: 'css', html: 'xml', py: 'python', sh: 'bash', md: 'markdown', yml: 'yaml', yaml: 'yaml',
-};
 const Code = memo(function Code({ text, language }: { text: string; language?: string }) {
   // Minified/generated lines remain complete without spending a frame on a
   // syntax grammar for thousands of characters in one line.
@@ -73,10 +69,23 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   const blocks = useMemo(() => split
     ? diffBlocks(splitDiffRows(lines), (row) => row.header)
     : diffBlocks(lines, (line) => line.kind === 'hunk' || line.kind === 'note' ? line.text : undefined), [lines, split]);
-  const widthText = useMemo(() => split ? '' : lines.map((line) => line.text).join('\n'), [lines, split]);
+  const widthText = useMemo(() => {
+    if (split) return '';
+    let longestAscii = '';
+    const other: string[] = [];
+    for (const { text } of lines) {
+      // Printable ASCII has fixed character width in the diff's monospace font.
+      // One representative avoids laying out the entire offscreen patch just
+      // to size its scrollbar. Keep tabs and other scripts for native shaping.
+      if (/^[\x20-\x7e]*$/.test(text)) {
+        if (text.length > longestAscii.length) longestAscii = text;
+      } else other.push(text);
+    }
+    return [longestAscii, ...other].join('\n');
+  }, [lines, split]);
   const defer = lines.length > 128;
   const observe = useDeferredDiff(root, defer);
-  const language = languages[path.split('.').at(-1) ?? ''];
+  const language = codeLanguageForPath(path);
   return <div ref={root} className="review-diff markdown-content" data-layout={split ? 'split' : 'unified'}
     role="region" aria-label={`Diff for ${path}`} tabIndex={0}>
     {split ? <div className="review-split-labels"><span>Before</span><span>After</span></div> : null}
@@ -84,7 +93,7 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
       {!split ? <div aria-hidden className="review-diff-width" style={{ height: 0, overflow: 'hidden', visibility: 'hidden',
         whiteSpace: 'pre', paddingLeft: '13ch', paddingRight: 16, userSelect: 'none' }}>{widthText}</div> : null}
       {blocks.map((block) => 'header' in block
-        ? <div key={block.index} data-diff-hunk className="review-hunk">{block.header}</div>
+        ? <div key={block.index} data-diff-hunk className="review-hunk" title={block.header}>{formatDiffHunkHeader(block.header)}</div>
         : <DeferredDiffChunk key={block.index} count={block.rows.length} defer={defer} split={split} observe={observe}>
           {() => block.rows.map((row, index) => split
             ? <SplitRow key={index} row={row as DiffRow} language={language} />

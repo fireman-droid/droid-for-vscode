@@ -19,6 +19,7 @@ import type { ChatController } from '../chat/ChatController';
 import type { MissionControlPanelController } from '../panels/mission/MissionControlPanelController';
 import { resolveBrowserDevSourceRoot } from './browserDevSourceRoot';
 import { routeWebviewMessage } from '../webview/webviewMessageRouter';
+import { createWebviewStateDelivery } from '../webview/webviewStateDelivery';
 import {
   readWebviewBootTheme,
   readWebviewThemePreference,
@@ -40,6 +41,7 @@ interface BrowserDevRun {
   readonly subscriptions: readonly vscode.Disposable[];
   eventResponse: ServerResponse | null;
   keepAlive: ReturnType<typeof setInterval> | null;
+  delivery: ReturnType<typeof createWebviewStateDelivery> | null;
 }
 
 interface BrowserDevGeneration {
@@ -231,7 +233,15 @@ export class BrowserDevBridge implements vscode.Disposable {
         subscriptions,
         eventResponse: null,
         keepAlive: null,
+        delivery: null,
       };
+      run.delivery = createWebviewStateDelivery({
+        isCurrent: () => this.isActive(owner),
+        isVisible: () => run.eventResponse !== null,
+        postMessage: async (message) => this.send(run, message),
+        replayTo: (listener) => this.controller.replayTo(listener),
+        ...(this.diagnostics === undefined ? {} : { diagnostics: this.diagnostics }),
+      });
       run.keepAlive = this.dependencies.setInterval(() => {
         run.eventResponse?.write(': keepalive\n\n');
       }, 15_000);
@@ -241,7 +251,7 @@ export class BrowserDevBridge implements vscode.Disposable {
       });
       subscriptions.push(
         this.controller.subscribe((message) => {
-          this.send(run, message);
+          run.delivery?.post(message);
         }),
         this.missionControl.onDidChangeWorkspaceSetup((message) => {
           this.send(run, message);
@@ -273,7 +283,7 @@ export class BrowserDevBridge implements vscode.Disposable {
           this.recordCleanupFailure(error);
         });
         void vscode.window.showErrorMessage(
-          'DroidVisX browser dev client stopped because Vite exited.',
+          'Droid browser dev client stopped because Vite exited.',
         );
       });
       if (!(await this.copyUrl(owner, url))) {
@@ -377,7 +387,7 @@ export class BrowserDevBridge implements vscode.Disposable {
       return false;
     }
     void this.dependencies.showInformationMessage(
-      'DroidVisX browser dev client URL copied to the clipboard.',
+      'Droid browser dev client URL copied to the clipboard.',
     );
     return true;
   }
@@ -413,6 +423,7 @@ export class BrowserDevBridge implements vscode.Disposable {
       });
       response.write(': connected\n\n');
       run.eventResponse = response;
+      run.delivery?.onVisible();
       request.on('close', () => {
         if (run.eventResponse === response) {
           run.eventResponse = null;
@@ -445,11 +456,8 @@ export class BrowserDevBridge implements vscode.Disposable {
             postTheme: () => {
               this.sendTheme(run);
             },
-            onReady: () => {
-              void this.controller.replayTo((item) => {
-                this.send(run, item);
-              });
-            },
+            onReady: (message) => run.delivery?.onReady(message),
+            onStateApplied: (message) => run.delivery?.onStateApplied(message),
           });
           respond(response, 204);
         },
@@ -462,15 +470,17 @@ export class BrowserDevBridge implements vscode.Disposable {
     respond(response, 404);
   }
 
-  private send(run: BrowserDevRun | null, message: unknown): void {
+  private send(run: BrowserDevRun | null, message: unknown): boolean {
     if (run?.eventResponse === null || run?.eventResponse === undefined) {
-      return;
+      return false;
     }
     try {
       run.eventResponse.write(`data: ${JSON.stringify(message)}\n\n`);
+      return true;
     } catch {
       run.eventResponse.end();
       run.eventResponse = null;
+      return false;
     }
   }
 
@@ -492,7 +502,7 @@ export function registerBrowserDevCommands(
       const sourceRoot = readSourceRoot();
       if (sourceRoot === null) {
         void vscode.window.showErrorMessage(
-          'Configure droidvisx.browserDev.sourceRoot to the DroidVisX source repository.',
+          'Configure droidvisx.browserDev.sourceRoot to the Droid source repository.',
         );
         return;
       }
@@ -500,7 +510,7 @@ export function registerBrowserDevCommands(
         await bridge.start(sourceRoot);
       } catch {
         void vscode.window.showErrorMessage(
-          'DroidVisX browser dev client failed to start. See DroidVisX Logs.',
+          'Droid browser dev client failed to start. See Droid Logs.',
         );
       }
     }),
@@ -528,7 +538,7 @@ async function assertSourceRoot(sourceRoot: string): Promise<void> {
   };
   if (packageJson.name !== 'droidvisx') {
     throw new Error(
-      'The configured Browser Dev source directory is not the DroidVisX repository.',
+      'The configured Browser Dev source directory is not the Droid repository.',
     );
   }
 }
@@ -739,6 +749,8 @@ async function disposeRun(
   run: BrowserDevRun,
   dependencies: BrowserDevBridgeDependencies,
 ): Promise<void> {
+  run.delivery?.dispose();
+  run.delivery = null;
   await settleBrowserDevCleanup([
     () => {
       if (run.keepAlive !== null) {

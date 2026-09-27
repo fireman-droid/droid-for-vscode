@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { GitStatusMessage } from '../../shared/protocol/gitCommitFlow';
-import { readHostMessage } from '../../webview/bridge/validateHostMessage';
+import { readHostMessage } from '../bridge/validateHostMessage';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/input';
 import { Checkbox } from '../ui/selection';

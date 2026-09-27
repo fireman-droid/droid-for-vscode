@@ -8,16 +8,19 @@ import {
   type ThemePreference,
   type UiThemeSetMessage,
   type WebviewReadyMessage,
+  type WebviewStateAppliedMessage,
 } from '../protocol/shell';
 import {
   type WebviewDiagnosticKind,
   type WebviewDiagnosticMessage,
 } from '../protocol/transcript';
-import { hasExactKeys, type UnknownRecord } from './strictValidation';
+import { hasExactKeys, isExactArray, type UnknownRecord } from './strictValidation';
+import { isId } from './guards';
 
 export function parseWebviewReady(value: UnknownRecord): WebviewReadyMessage | undefined {
   if (
-    !hasExactKeys(value, ['type', 'protocolVersion']) ||
+    !hasExactKeys(value, ['type', 'protocolVersion'], ['pageId']) ||
+    (value.pageId !== undefined && !isId(value.pageId)) ||
     value.protocolVersion !== BRIDGE_PROTOCOL_VERSION
   ) {
     return undefined;
@@ -26,7 +29,18 @@ export function parseWebviewReady(value: UnknownRecord): WebviewReadyMessage | u
   return {
     type: 'webview.ready',
     protocolVersion: BRIDGE_PROTOCOL_VERSION,
+    ...(value.pageId === undefined ? {} : { pageId: value.pageId as string }),
   };
+}
+
+export function parseWebviewStateApplied(value: UnknownRecord): WebviewStateAppliedMessage | undefined {
+  const sequence = (item: unknown): item is number => typeof item === 'number' && Number.isSafeInteger(item) && item >= 0;
+  if (!hasExactKeys(value, ['type', 'pageId', 'sequences', 'snapshotSequence']) ||
+      !isId(value.pageId) || !isExactArray(value.sequences, 1, 256) ||
+      !value.sequences.every(sequence) ||
+      !(value.snapshotSequence === null || (sequence(value.snapshotSequence) && value.sequences.includes(value.snapshotSequence)))) return undefined;
+  return { type: 'webview.state-applied', pageId: value.pageId, sequences: value.sequences,
+    snapshotSequence: value.snapshotSequence };
 }
 
 export function parseWebviewDiagnostic(

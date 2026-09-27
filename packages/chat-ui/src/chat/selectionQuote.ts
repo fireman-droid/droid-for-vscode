@@ -17,6 +17,7 @@ export function formatSelectionQuotes(quotes: readonly string[], body: string): 
 
 /** Reads both existing single quotes and multiple leading quoted passages. */
 export function parseSelectionQuotes(text: string): SelectionQuotes | null {
+  if (!text.startsWith('>')) return null;
   const lines = text.replace(/\r\n/g, '\n').split('\n');
   const quotes: string[] = [];
   let index = 0;

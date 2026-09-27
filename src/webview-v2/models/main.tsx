@@ -1,4 +1,4 @@
-import type { ModelsTransport } from '../../webview/models/useModels';
+import type { ModelsTransport } from './useModels';
 import { mountWebview } from '../shell/mount';
 import { ModelsApp } from './ModelsApp';
 

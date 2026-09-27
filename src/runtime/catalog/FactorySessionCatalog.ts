@@ -6,10 +6,12 @@ import {
   hasSubagentSessionTag,
   listSessions,
   SessionSettingsFileSchema,
+  SessionStartEventSchema,
   type SessionTag,
 } from '@factory/droid-sdk/node';
 
 import { sanitizeSessionTitle } from '../../shared/validation/guards';
+import { locatePersistedSessionFile } from '../history/persistedSessionMessages';
 import {
   isSafeSessionIdentifier,
   MAX_SESSION_CATALOG_TITLE_LENGTH,
@@ -64,6 +66,35 @@ export class FactorySessionCatalog implements SessionCatalog {
   async writeFavorite(sessionId: string, favorite: boolean): Promise<boolean> {
     try {
       return await this.writeFavoriteFile(this.sessionsDirectory, sessionId, favorite);
+    } catch {
+      return false;
+    }
+  }
+
+  async canResumeSession(cwd: string, sessionId: string): Promise<boolean> {
+    if (!isSettingsFileSessionId(sessionId)) return false;
+    try {
+      const file = await locatePersistedSessionFile(this.sessionsDirectory, sessionId);
+      if (file === null) return false;
+      const handle = await fs.open(file, 'r');
+      try {
+        const buffer = Buffer.alloc(64 * 1024);
+        const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+        const newline = buffer.subarray(0, bytesRead).indexOf(10);
+        if (newline < 0 && bytesRead === buffer.length) return false;
+        const result = SessionStartEventSchema.safeParse(JSON.parse(
+          buffer.toString('utf8', 0, newline < 0 ? bytesRead : newline),
+        ));
+        if (!result.success) return false;
+        const header = result.data;
+        if ((header.id ?? header.sessionId) !== sessionId || !header.cwd ||
+            !path.isAbsolute(header.cwd) || header.decompSessionType === 'worker' ||
+            typeof header.callingSessionId === 'string' || typeof header.callingToolUseId === 'string') return false;
+        const [current, recorded] = await Promise.all([fs.realpath(cwd), fs.realpath(header.cwd)]);
+        if (process.platform === 'win32' ? current.toLowerCase() !== recorded.toLowerCase() : current !== recorded) return false;
+        const settings = await readBoundedSessionSettings(file.replace(/\.jsonl$/, SESSION_SETTINGS_SUFFIX));
+        return settings?.archivedAt === undefined && !hasWorkerTag(settings?.tags);
+      } finally { await handle.close(); }
     } catch {
       return false;
     }

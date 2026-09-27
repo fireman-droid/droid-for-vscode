@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Check, ChevronRight, Circle, CircleDot, CircleHelp, ExternalLink, Pause, Play, RefreshCw, ShieldCheck, Square, Unplug, UserCheck, X } from 'lucide-react';
 import type { MissionControlResultMessage, MissionFeatureSnapshot, MissionSnapshotMessage } from '../../shared/protocol/missionProtocol';
-import { useMissionControl, type MissionUiCommand } from '../../webview/assistant/mission/useMissionControl';
-import { createMissionRequestId, featureTone, formatFeatureStatus, formatPhase, phaseTone } from '../../webview/missionControl/workspacePresentation';
+import { useMissionControl, type MissionUiCommand } from './useMissionControl';
+import { createMissionRequestId, featureTone, formatFeatureStatus, formatPhase, phaseTone } from './workspacePresentation';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/selection';

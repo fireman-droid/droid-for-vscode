@@ -1,5 +1,5 @@
-import { buildTurns } from '../../webview/assistant/thread/buildTurns';
-import type { TranscriptDescriptor } from '../../webview/assistant/transcript/transcriptGroups';
+import { buildTurns } from '@droidvisx/chat-ui/navigation/buildTurns';
+import type { TranscriptDescriptor } from './transcript/transcriptGroups';
 
 const rowId = (descriptor: TranscriptDescriptor) => descriptor.kind === 'user' ? descriptor.item.id : descriptor.id;
 interface RowIdentity { readonly id: string; readonly role: 'user' | 'assistant'; readonly turnId?: string }

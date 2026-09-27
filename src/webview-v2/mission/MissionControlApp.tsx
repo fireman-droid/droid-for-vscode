@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useMissionCatalog } from '../../webview/missionControl/useMissionCatalog';
+import { useMissionCatalog } from './useMissionCatalog';
 import { applyTheme } from '../shell/theme';
 import { MissionCatalog } from './MissionCatalog';
 

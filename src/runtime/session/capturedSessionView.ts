@@ -42,8 +42,17 @@ function copyOptionalSessionMethods(
   view: FactoryDroidSession,
   session: FactoryDroidSession,
 ): void {
+  if (typeof session.readAvailableModels === 'function') {
+    view.readAvailableModels = () => session.readAvailableModels!();
+  }
   if (typeof session.readWorkingState === 'function') {
     view.readWorkingState = () => session.readWorkingState!();
+  }
+  if (typeof session.readMissionSnapshot === 'function') {
+    view.readMissionSnapshot = () => session.readMissionSnapshot!();
+  }
+  if (typeof session.subscribeMissionSnapshot === 'function') {
+    view.subscribeMissionSnapshot = (listener) => session.subscribeMissionSnapshot!(listener);
   }
   if (typeof session.readContextBreakdown === 'function') {
     view.readContextBreakdown = () => session.readContextBreakdown!();

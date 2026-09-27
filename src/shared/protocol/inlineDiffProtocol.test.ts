@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseWebviewMessage } from '../validateMessage';
-import { readHostMessage } from '../../webview/bridge/validateHostMessage';
+import { readHostMessage } from '../../webview-v2/bridge/validateHostMessage';
 import { MAX_INLINE_DIFF_PATCH_LENGTH } from './inlineDiffProtocol';
 
 const identity = { sessionId: 'session-1', turnId: 'turn-1', path: 'src/app.ts' };

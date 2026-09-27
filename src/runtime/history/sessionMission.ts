@@ -9,6 +9,22 @@ import { isStrictRecord } from '../../shared/validation/strictValidation';
 const MISSION_STATE_SET: ReadonlySet<string> = new Set(MISSION_STATES);
 const MISSION_SESSION_ROLE_SET: ReadonlySet<string> = new Set(MISSION_SESSION_ROLES);
 
+/** Durable CLI tags identify the session itself; a shared Mission store does not. */
+export function readMissionRoleFromTags(tags: unknown): MissionSessionRole | null {
+  if (!Array.isArray(tags)) return null;
+  let orchestrator = false;
+  for (const tag of tags) {
+    if (!isStrictRecord(tag)) continue;
+    const metadata = isStrictRecord(tag.metadata) ? tag.metadata : undefined;
+    const role = tag.name === 'decompSessionType' ? metadata?.value
+      : tag.name === 'mission-session' ? metadata?.role : undefined;
+    // Explicit worker identity must never be promoted by an inherited marker.
+    if (role === 'worker') return 'worker';
+    if (role === 'orchestrator' || tag.name === 'mission-orchestrator') orchestrator = true;
+  }
+  return orchestrator ? 'orchestrator' : null;
+}
+
 /**
  * Reads the read-only mission identity of a loaded session from a
  * `loadSession()` envelope: `mission.state` plus `decompSessionType`.

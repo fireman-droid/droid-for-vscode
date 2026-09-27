@@ -1,3 +1,4 @@
+import type { MissionSessionState } from './mission/MissionSessionState';
 import type { ChatEffects } from './chatEffects';
 import type { HostOperations } from './hostOperations';
 import type { SessionLifecycleState } from './sessions/SessionLifecycleState';
@@ -6,6 +7,7 @@ export interface BrowserReplayPort
     HostOperations,
     'handleMessage' | 'emitTo' | 'reviewCoordinator' | 'interactions' | 'planDocuments'
   > {
+  readonly missionState: Readonly<Pick<MissionSessionState, 'missionRuntime'>>;
   readonly sessionState: Readonly<
     Pick<SessionLifecycleState, 'sessionId' | 'initialization' | 'disposed'>
   >;

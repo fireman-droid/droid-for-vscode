@@ -5,6 +5,9 @@
   }
   .v2-chat-surface {
     --chat-code-surface: light-dark(#fcfcfc, #252527);
+    --chat-message-surface: light-dark(color-mix(in srgb, var(--ink) 7%, var(--surface)), color-mix(in srgb, #000 24%, var(--surface)));
+    --chat-composer-surface: light-dark(color-mix(in srgb, var(--ink) 4%, var(--surface)), color-mix(in srgb, #000 20%, var(--surface)));
+    --chat-review-surface: light-dark(color-mix(in srgb, var(--ink) 9%, var(--surface)), color-mix(in srgb, #000 12%, var(--surface)));
     --chat-edge: color-mix(in srgb, var(--ink) 12%, transparent);
   }
   [data-theme-preference='auto'] .v2-chat-surface {
@@ -18,7 +21,14 @@
     padding-inline: 9px;
   }
   .v2-chat-footer { padding-block: 4px 12px; }
-  .v2-chat-footer > .review-launcher { margin-block-end: 4px; }
+  .v2-chat-footer > .review-launcher:has(+ .v2-chat-composer) {
+    width: calc(100% - 16px);
+    margin-inline: 8px;
+    margin-block-end: -1px;
+    border-bottom: 0;
+    border-radius: 9px 9px 0 0;
+  }
+  .v2-chat-footer > .review-launcher + .v2-chat-composer { margin-block-start: 0; }
   .v2-chat-rail:has(.v2-chat-startup) { display: flex; flex-direction: column; justify-content: center; padding-block: 32px; }
   .v2-chat-startup { width: 100%; max-width: 320px; margin-inline: auto; padding: 16px 8px; }
   .v2-startup-workspace { display: flex; min-width: 0; align-items: center; gap: 8px; margin-bottom: 16px; color: var(--muted-ink); font-size: 12px; }
@@ -38,7 +48,7 @@
     min-width: 0;
     border: 1px solid var(--chat-edge, var(--field-edge));
     border-radius: 18px;
-    background: var(--field-surface);
+    background: var(--chat-composer-surface, var(--field-surface));
     transition: border-color var(--motion-fast) var(--motion-ease);
   }
   .v2-chat-composer:hover { border-color: var(--control-border-hover); }
@@ -110,7 +120,9 @@
   .v2-chat-surface .v2-user-message {
     border-color: var(--chat-edge);
     border-radius: 12px;
-    background: color-mix(in srgb, var(--soft-surface) 55%, var(--surface));
+  }
+  .v2-chat-surface :is(.v2-user-message, .v2-user-edit-card) {
+    background: var(--chat-message-surface);
   }
   .v2-chat-surface .v2-user-copy { line-height: 19.5px; }
   .v2-chat-surface .v2-user-edit-input { line-height: 19.5px; }

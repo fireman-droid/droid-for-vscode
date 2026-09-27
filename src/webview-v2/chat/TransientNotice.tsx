@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { TRANSIENT_NOTICE_TIMEOUT_MS, type TransientDiagnostic } from '../../webview/assistant/shell/transientDiagnostic';
+import { TRANSIENT_NOTICE_TIMEOUT_MS, type TransientDiagnostic } from '../host/transientDiagnostic';
 
 export function TransientNotice({ diagnostic }: { readonly diagnostic: TransientDiagnostic }) {
   const [visible, setVisible] = useState(true);

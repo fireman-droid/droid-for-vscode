@@ -551,16 +551,22 @@ export async function resolveDaemonListenerPid(
     : null;
 }
 
-export type DaemonListenerVerification =
+export type DaemonListenerVerification = (
   | { readonly status: 'verified'; readonly pid: number }
   | { readonly status: 'not-listening' }
-  | { readonly status: 'unverified' };
+  | { readonly status: 'unverified' }
+) & {
+  /** Recorded PIDs now confirmed to belong to a different kind of process. */
+  readonly replacedPids?: readonly number[];
+};
 
 /**
  * Verify a discovery batch using one listener-table read and one process query.
  * Results are keyed by port and carry the actual listener PID: callers must
  * compare it with their recorded PID. A missing listener is not proof that the
  * recorded worker died; an unavailable query is never reported as missing.
+ * Recorded PIDs are checked in the same batch, including ports with no listener,
+ * so a PID reused by another program does not keep a stale daemon record alive.
  * This snapshot is for discovery only, never authority to terminate a process.
  */
 export async function verifyDaemonListeners(
@@ -581,19 +587,30 @@ export async function verifyDaemonListeners(
     if (typeof pid === 'number') listeners.set(port, pid);
     else results.set(port, { status: pid === null ? 'not-listening' : 'unverified' });
   }
-  if (listeners.size === 0) return results;
-  const commands = await queryProcessCommandLines([...new Set(listeners.values())]);
+  const commands = await queryProcessCommandLines([
+    ...new Set([...listeners.values(), ...targets.map(({ pid }) => pid)]),
+  ]);
   for (const [port, pid] of listeners) {
     const commandLine = commands?.get(pid);
     results.set(port, commandLine !== undefined && looksLikeDroidDaemon(commandLine, executable)
       ? { status: 'verified', pid } : { status: 'unverified' });
   }
+  for (const { port, pid } of targets) {
+    const commandLine = commands?.get(pid);
+    if (commandLine === undefined || commandLine.trim() === '' ||
+        looksLikeDroidDaemon(commandLine, executable)) continue;
+    const verification = results.get(port)!;
+    results.set(port, {
+      ...verification,
+      replacedPids: [...new Set([...(verification.replacedPids ?? []), pid])],
+    });
+  }
   return results;
 }
 
 async function queryProcessCommandLines(pids: readonly number[]): Promise<ReadonlyMap<number, string> | null> {
-  // PIDs originate in the parsed system listener table and are positive safe
-  // integers. Neither paths nor untrusted command-line text enter the query.
+  // PIDs originate in the parsed system listener table or validated daemon
+  // records. Neither paths nor untrusted command-line text enter the query.
   const [command, args] = process.platform === 'win32'
     ? (['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
       '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ' +

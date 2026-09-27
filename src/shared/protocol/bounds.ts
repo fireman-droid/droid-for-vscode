@@ -231,7 +231,7 @@ export const MAX_FILE_SEARCH_RESULTS = 20;
 export const MAX_IMAGE_PATH_LENGTH = 1024;
 
 /**
- * UI theme preference for the DroidVisX shell. 'auto' follows the
+ * UI theme preference for the Droid shell. 'auto' follows the
  * editor's current color theme kind; 'light'/'dark' pin the shell.
  * Persisted host-side as the `droidvisx.theme` user setting.
  */

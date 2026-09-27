@@ -25,11 +25,11 @@ import {
 } from './hostTranscriptState';
 import { parseRecoveryTranscript } from './conversationRecoveryParser';
 import { ingestConversationHistory } from './ingestConversationHistory';
-import { parseSessionTranscript } from '../../webview/bridge/host/transcript';
-import { readHostMessage } from '../../webview/bridge/validateHostMessage';
-import { upsertTool } from '../../webview/assistant/transcript/toolTranscript';
-import { assistantWebviewReducer } from '../../webview/assistant/state/store';
-import { initialAssistantWebviewState } from '../../webview/assistant/state/initialState';
+import { parseSessionTranscript } from '../../webview-v2/bridge/host/transcript';
+import { readHostMessage } from '../../webview-v2/bridge/validateHostMessage';
+import { upsertTool } from '../../webview-v2/chat/transcript/toolTranscript';
+import { assistantWebviewReducer } from '../../webview-v2/state/store';
+import { initialAssistantWebviewState } from '../../webview-v2/state/initialState';
 
 const preview = {
   availability: 'available' as const,

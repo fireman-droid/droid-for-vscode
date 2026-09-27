@@ -1,5 +1,5 @@
 import {
-  hasOperationChanges,
+  hasOperationTextChanges,
   isConfirmedOperationFile,
   type OperationDiff,
   type OperationDiffFile,
@@ -62,15 +62,13 @@ export function loadOperationReviewScope(
   const files: ScopeFile[] = paths.map((path) => {
     const matching = recordedOperations.filter((entry) => entry.path === path);
     const version = recordedOperationVersion(matching);
-    const kind = matching.at(-1)?.kind;
     return {
       path,
       additions: null,
       deletions: null,
-      changeKind: kind === 'renamed' ? 'modified' : kind,
       version,
       comparable: matching.some((entry) => entry.source === 'tool-result' && entry.outcome === 'applied' &&
-        hasOperationChanges({ kind: entry.kind, patch: entry.patch })),
+        (entry.submittedContent !== undefined || hasOperationTextChanges(entry.patch))),
       restorable: operationUndoBlocked === undefined && operationPathEligibility(matching) === undefined,
       restoreConflict: false,
     };
@@ -86,7 +84,7 @@ export function loadOperationReviewScope(
     scopeKind: 'operations',
     turnId: message.turnId,
     baseline,
-    baselineLabel: 'Recorded Droid operations',
+    baselineLabel: 'Recorded edits from this turn',
     lifecycle: files.length === 0 ? 'unavailable' : 'settled',
     files,
     currentIndex:
@@ -190,6 +188,7 @@ export function recordedOperationVersion(
     entry.reversible === true ? 'true' : 'false',
     entry.message ?? '',
     entry.patch,
+    entry.submittedContent ?? '',
   ]));
 }
 

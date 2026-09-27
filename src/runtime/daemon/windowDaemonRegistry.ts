@@ -19,6 +19,8 @@ export interface WindowDaemonRecord {
 
 const root = join(homedir(), '.droidvisx', 'window-daemons');
 const instanceId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+const pendingWrites = new Map<string, Promise<void>>();
+const renameRetryDelaysMs = [25, 50, 100, 200, 400] as const;
 
 export function windowDaemonUrl(record: WindowDaemonRecord): string {
   return `ws://127.0.0.1:${record.port}`;
@@ -122,14 +124,43 @@ async function readJson(file: string): Promise<Record<string, unknown> | null> {
 }
 
 async function atomicWrite(file: string, value: unknown): Promise<void> {
+  // Retried writes must keep call order, so an older owner cannot replace a
+  // newer one after a temporary Windows sharing violation clears.
+  const previous = pendingWrites.get(file) ?? Promise.resolve();
+  const pending = previous.catch(() => undefined).then(() => replaceRecord(file, value));
+  pendingWrites.set(file, pending);
+  try {
+    await pending;
+  } finally {
+    if (pendingWrites.get(file) === pending) pendingWrites.delete(file);
+  }
+}
+
+async function replaceRecord(file: string, value: unknown): Promise<void> {
   await mkdir(join(root, 'sessions'), { recursive: true });
   const temporary = `${file}.${randomUUID()}.tmp`;
   try {
     await writeFile(temporary, JSON.stringify(value), { flag: 'wx' });
-    await rename(temporary, file);
+    await replaceWithRetry(temporary, file);
   } finally {
     await unlink(temporary).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== 'ENOENT') throw error;
     });
+  }
+}
+
+async function replaceWithRetry(temporary: string, file: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(temporary, file);
+      return;
+    } catch (error) {
+      const delay = renameRetryDelaysMs[attempt];
+      const code = (error as NodeJS.ErrnoException).code;
+      if (process.platform !== 'win32' || delay === undefined ||
+          (code !== 'EPERM' && code !== 'EACCES' && code !== 'EBUSY')) throw error;
+      // Keep the previous complete record until atomic replacement succeeds.
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
   }
 }

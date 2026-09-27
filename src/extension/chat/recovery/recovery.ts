@@ -19,7 +19,7 @@ import { SESSION_RECOVERY_DEBOUNCE_MS } from '../../recovery/SessionRecoveryStor
 import { createTurnActivityState } from '../turns/turnActivityState';
 import { delay, isTurnActive } from '../internals';
 import { captureSnapshotBeforeInBackground } from '../changes/snapshotCapture';
-import { TURN_FAILURE_MESSAGE } from '../turns/turnFlow';
+import { TURN_FAILURE_MESSAGE } from '../turns/turnSettlement';
 import { recoveredHistoryForCurrentTurn } from './recoveredHistoryForCurrentTurn';
 
 export /**
@@ -31,7 +31,7 @@ export /**
 const RECOVERED_TURN_POLL_MS = 500;
 
 export const RECOVERY_CHECKPOINT_FAILED_MESSAGE =
-  'DroidVisX could not save the current session state.';
+  'Droid could not save the current session state.';
 
 export type ActivationCheckpointOutcome = 'saved' | 'stale' | 'failed';
 

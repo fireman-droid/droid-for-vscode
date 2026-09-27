@@ -19,6 +19,7 @@ import type {
 } from '../../../shared/protocol/missionProtocol';
 import type { RuntimeDiagnosticSink } from '../../../runtime/runtimeDiagnostics';
 import type { MissionCatalogResult } from '../../chat/mission/MissionGateway';
+import { createCatalogId } from '../../chat/mission/MissionCatalogProjection';
 import { MissionWorkspaceState } from '../../chat/mission/MissionWorkspaceState';
 import type { ChatController, ControllerHostMessage } from '../../chat/ChatController';
 import { getWebviewHtml } from '../../webview/webviewHtml';
@@ -136,8 +137,9 @@ export class MissionControlPanelController implements vscode.Disposable {
     const active = this.source.readActiveSession?.();
     if (active?.sessionId !== null && active?.missionRole === 'orchestrator') {
       this.workspaceState.activate(active.sessionId);
-      this.navigate('detail', active.sessionId);
-      this.postWorkspaceRoute('detail', active.sessionId);
+      const catalogId = createCatalogId(active.sessionId);
+      this.navigate('detail', catalogId);
+      this.postWorkspaceRoute('detail', catalogId);
       this.source.focusChat?.();
       return;
     }
@@ -687,9 +689,10 @@ export class MissionControlPanelController implements vscode.Disposable {
         const sessionId = this.source.readActiveSession?.().sessionId;
         if (sessionId !== null && sessionId !== undefined) {
           this.workspaceState.activate(sessionId);
+          const catalogId = createCatalogId(sessionId);
+          this.navigate('detail', catalogId);
+          this.postWorkspaceRoute('detail', catalogId);
         }
-        this.navigate('detail', 'active-mission');
-        this.postWorkspaceRoute('detail', 'active-mission');
       } else {
         this.setupPhase = readinessIndeterminate ? 'indeterminate' : 'draft';
         this.postSetupSnapshot();
@@ -797,8 +800,9 @@ export class MissionControlPanelController implements vscode.Disposable {
     const observation = this.workspaceState.observe(message);
     if (observation.kind === 'mission') {
       if (this.route === 'catalog' && this.panelEntry === null) {
-        this.navigate('detail', observation.sessionId);
-        this.postWorkspaceRoute('detail', observation.sessionId);
+        const catalogId = createCatalogId(observation.sessionId);
+        this.navigate('detail', catalogId);
+        this.postWorkspaceRoute('detail', catalogId);
       }
       return;
     }

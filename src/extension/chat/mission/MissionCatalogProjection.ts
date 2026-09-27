@@ -1,6 +1,7 @@
 import type { DaemonApi } from '../../../runtime/daemon/api';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { joinMissionCatalogRows } from './catalogRows';
 
 import {
   DAEMON_MISSION_CATALOG_PAGE_SIZE,
@@ -26,7 +27,12 @@ export interface MissionCatalogProjectionOptions {
   readonly resolveComputerLabel?: (hostId: string) => string | undefined;
   readonly getAttachedSessionId?: () => string | undefined;
   readonly timeoutMs?: number;
-  readonly rememberCatalogTarget?: (catalogId: string, sessionId: string) => void;
+  readonly rememberCatalogTarget?: (catalogId: string, target: MissionCatalogTarget) => void;
+}
+
+export interface MissionCatalogTarget {
+  readonly sessionId: string;
+  readonly cwd: string | null;
 }
 
 export type MissionCatalogResult =
@@ -88,7 +94,7 @@ async function readCompleteCatalog(
   const runtime =
     options.catalogRuntime ??
     DaemonMissionCatalog.fromConnectedDroid(await options.getDroid());
-  const candidates: CatalogCandidate[] = [];
+  const rows: DaemonMissionCatalogRow[] = [];
   const cursors = new Set<number>();
   let cursor: number | undefined;
 
@@ -97,17 +103,16 @@ async function readCompleteCatalog(
       cursor === undefined ? await runtime.listPage() : await runtime.listPage(cursor);
     if (
       page.rows.length > DAEMON_MISSION_CATALOG_PAGE_SIZE ||
-      candidates.length + page.rows.length > MAX_MISSION_CONTROL_CATALOG_ROWS
+      rows.length + page.rows.length > MAX_MISSION_CONTROL_CATALOG_ROWS
     ) {
       throw new IncompleteCatalogError();
     }
-    for (const raw of page.rows) {
-      if (raw.mission !== undefined) {
-        candidates.push(projectCatalogCandidate(raw, options));
-      }
-    }
+    rows.push(...page.rows);
     if (!page.hasMore) {
-      return finalizeCatalog(candidates);
+      return finalizeCatalog(
+        joinMissionCatalogRows(rows).map(raw => projectCatalogCandidate(raw, options)),
+        options,
+      );
     }
     const next = page.nextCursor;
     if (
@@ -126,6 +131,7 @@ async function readCompleteCatalog(
 
 interface CatalogCandidate {
   readonly sourceId: string;
+  readonly target: MissionCatalogTarget;
   readonly row: MissionControlCatalogRow;
   readonly missionUpdatedTime: number | null;
   readonly daemonUpdatedTime: number;
@@ -173,9 +179,12 @@ function projectCatalogCandidate(
     elapsedMs,
     attached: raw.sessionId === options.getAttachedSessionId?.(),
   };
-  options.rememberCatalogTarget?.(row.catalogId, raw.sessionId);
   return {
     sourceId: raw.sessionId,
+    target: {
+      sessionId: raw.sessionId,
+      cwd: raw.mission.workingDirectory ?? raw.cwd ?? null,
+    },
     row,
     missionUpdatedTime: updatedAt === null ? null : new Date(updatedAt).getTime(),
     daemonUpdatedTime: raw.updatedAt,
@@ -185,6 +194,7 @@ function projectCatalogCandidate(
 
 function finalizeCatalog(
   candidates: readonly CatalogCandidate[],
+  options: MissionCatalogProjectionOptions,
 ): MissionControlCatalogRow[] {
   const newest = new Map<string, CatalogCandidate>();
   for (const candidate of candidates) {
@@ -206,7 +216,10 @@ function finalizeCatalog(
       }
       return compareText(left.row.catalogId, right.row.catalogId);
     })
-    .map(({ row }) => row);
+    .map(({ row, target }) => {
+      options.rememberCatalogTarget?.(row.catalogId, target);
+      return row;
+    });
 }
 
 function compareCandidate(left: CatalogCandidate, right: CatalogCandidate): number {
@@ -313,7 +326,7 @@ function isSafeSourceId(value: string): boolean {
   );
 }
 
-function createCatalogId(sessionId: string): string {
+export function createCatalogId(sessionId: string): string {
   return `mission-${createHash('sha256')
     .update('droidvisx-mission-catalog\0')
     .update(sessionId)

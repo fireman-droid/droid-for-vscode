@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
-import { getStudioScenario } from '../../webview/dev/scenarios';
-import { readHostMessage } from '../../webview/bridge/validateHostMessage';
-import { describeTranscript } from '../../webview/assistant/transcript/transcriptGroups';
+import { getStudioScenario } from './scenarios';
+import { readHostMessage } from '../bridge/validateHostMessage';
+import { describeTranscript } from '../chat/transcript/transcriptGroups';
 
 it('accepts the comparison fixture through the production bridge and retains completed Todo snapshots in V2 activity', () => {
   const snapshot = readHostMessage(getStudioScenario('chat-region').build(() => 0)[0]);

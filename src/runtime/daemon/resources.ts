@@ -12,33 +12,35 @@ export function createDaemonResources(
     assertConnected();
     return operation();
   };
+  const listPage: DaemonApi['sessions']['listPage'] = (options) =>
+    call(() => controller.listAvailableSessions({
+      ...options,
+      limit: options?.limit ?? 20,
+    }));
   const sessions: Omit<DaemonApi['sessions'], 'create' | 'resume'> = {
-    list: (options) =>
-      call(async () => {
-        const result = await controller.listAvailableSessions({
-          ...options,
-          limit: options?.limit ?? 20,
-        });
-        return result.sessions.map(
-          ({
-            sessionId,
-            updatedAt,
-            messagesCount,
-            callingSessionId,
-            callingToolUseId,
-            archivedAt,
-            ...rest
-          }) => ({
-            ...rest,
-            id: sessionId,
-            modifiedTime: new Date(updatedAt * 1000),
-            messageCount: messagesCount ?? 0,
-            parentSessionId: callingSessionId,
-            parentToolUseId: callingToolUseId,
-            archivedTime: archivedAt === undefined ? undefined : new Date(archivedAt),
-          }),
-        );
-      }),
+    listPage,
+    list: async (options) => {
+      const result = await listPage(options);
+      return result.sessions.map(
+        ({
+          sessionId,
+          updatedAt,
+          messagesCount,
+          callingSessionId,
+          callingToolUseId,
+          archivedAt,
+          ...rest
+        }) => ({
+          ...rest,
+          id: sessionId,
+          modifiedTime: new Date(updatedAt * 1000),
+          messageCount: messagesCount ?? 0,
+          parentSessionId: callingSessionId,
+          parentToolUseId: callingToolUseId,
+          archivedTime: archivedAt === undefined ? undefined : new Date(archivedAt),
+        }),
+      );
+    },
     listOpened: (options) =>
       call(async () =>
         (await controller.listOpenedSessions(options)).map(

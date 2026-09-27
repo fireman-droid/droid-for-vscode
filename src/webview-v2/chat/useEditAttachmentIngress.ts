@@ -1,5 +1,5 @@
-import type { MessageEditor } from '../../webview/assistant/editing/useMessageEditor';
-import type { useAttachmentActions } from '../../webview/assistant/attachments/useAttachmentActions';
+import type { MessageEditor } from './editing/useMessageEditor';
+import type { useAttachmentActions } from './attachments/useAttachmentActions';
 import { useAttachmentIngress } from './useAttachmentIngress';
 
 export function useEditAttachmentIngress({ editor, conversationId, actions, count, disabled }: {

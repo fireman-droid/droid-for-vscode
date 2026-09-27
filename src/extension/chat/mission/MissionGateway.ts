@@ -2,6 +2,11 @@ import type { DaemonApi, DaemonSessionHandle } from '../../../runtime/daemon/api
 
 import type { DroidRuntime } from '../../../runtime/DroidRuntime';
 import {
+  createRuntimeInteractionCallbacks,
+  type RuntimeInteractionCallbacks,
+  type RuntimeInteractionHandler,
+} from '../../../runtime/events/runtimeInteractions';
+import {
   createMissionOrchestrator,
   createMissionOrchestratorIdentity,
 } from '../../../runtime/daemon/missionOrchestrator';
@@ -16,6 +21,7 @@ import {
   listMissionCatalog,
   type MissionCatalogProjectionOptions,
   type MissionCatalogResult,
+  type MissionCatalogTarget,
 } from './MissionCatalogProjection';
 import {
   validatePair,
@@ -25,14 +31,15 @@ import {
   type MissionProfilePair,
   type MissionWorkspacePreferences,
 } from './MissionPreferences';
-import {
-  MissionSnapshotReducer,
-  type MissionValidatorState,
-} from './MissionSnapshotReducer';
 
 export interface MissionGatewayRuntime {
   readonly runtime: DroidRuntime;
   initialize(): Promise<void>;
+}
+
+export interface MissionRuntimeInteractions {
+  readonly handler: RuntimeInteractionHandler;
+  readonly callbacks: RuntimeInteractionCallbacks;
 }
 
 export interface MissionGatewayStart {
@@ -48,6 +55,7 @@ export type MissionGatewayResult =
       readonly sessionId: string;
       readonly runtime: MissionGatewayRuntime;
       readonly settings: MissionSettings;
+      activateInteractions(): void;
     }
   | {
       readonly status: 'rejected';
@@ -61,10 +69,15 @@ export type MissionGatewayResult =
 export interface MissionGatewayOptions extends MissionCatalogProjectionOptions {
   readonly getDroid: () => Promise<DaemonApi>;
   readonly preferences: MissionPreferenceStore;
+  readonly prepareInteractions: () => {
+    readonly handler: RuntimeInteractionHandler;
+    activate(): void;
+  };
   readonly createRuntime: (
     session: DaemonSessionHandle,
     droid: DaemonApi,
     orchestrator: MissionProfilePair,
+    interactions: MissionRuntimeInteractions,
   ) => MissionGatewayRuntime;
   readonly openWorkerViewer?: (target: {
     readonly sessionId: string;
@@ -90,16 +103,16 @@ export type MissionReadinessResult =
  * SDK settings object while retaining the original attached handle.
  */
 export class MissionGateway {
-  private catalogTargets = new Map<string, string>();
+  private catalogTargets = new Map<string, MissionCatalogTarget>();
 
   constructor(private readonly options: MissionGatewayOptions) {}
 
   async listCatalog(): Promise<MissionCatalogResult> {
-    const targets = new Map<string, string>();
+    const targets = new Map<string, MissionCatalogTarget>();
     const result = await listMissionCatalog({
       ...this.options,
-      rememberCatalogTarget: (catalogId, sessionId) => {
-        targets.set(catalogId, sessionId);
+      rememberCatalogTarget: (catalogId, target) => {
+        targets.set(catalogId, target);
       },
     });
     if (result.status === 'ready') {
@@ -108,7 +121,7 @@ export class MissionGateway {
     return result;
   }
 
-  sessionIdForCatalogId(catalogId: string): string | null {
+  targetForCatalogId(catalogId: string): MissionCatalogTarget | null {
     return this.catalogTargets.get(catalogId) ?? null;
   }
 
@@ -171,6 +184,13 @@ export class MissionGateway {
     let session: DaemonSessionHandle | undefined;
     let adopted = false;
     try {
+      // Bind before attachment, but keep the previous chat's interaction owner
+      // until the controller has successfully adopted this Mission runtime.
+      const owner = this.options.prepareInteractions();
+      const interactions = {
+        handler: owner.handler,
+        callbacks: createRuntimeInteractionCallbacks(owner.handler),
+      };
       session = await createMissionOrchestrator({
         droid,
         cwd: input.cwd,
@@ -178,6 +198,7 @@ export class MissionGateway {
         reasoningEffort: input.message.orchestrator
           .reasoningEffort as MissionReasoningEffort,
         missionId: createMissionOrchestratorIdentity(),
+        callbacks: interactions.callbacks,
       });
       // Bridge reasoning values are catalog-validated. The SDK's public
       // daemon facade narrows this enum more than its actual 0.7.0 Mission
@@ -193,11 +214,18 @@ export class MissionGateway {
         session,
         droid,
         input.message.orchestrator,
+        interactions,
       );
       await runtime.initialize();
       await this.options.preferences.save(input.workspaceId, effective.value);
       adopted = true;
-      return { status: 'ready', sessionId: session.id, runtime, settings };
+      return {
+        status: 'ready',
+        sessionId: session.id,
+        runtime,
+        settings,
+        activateInteractions: owner.activate,
+      };
     } catch {
       return { status: 'rejected', code: 'daemon-unavailable' };
     } finally {
@@ -241,21 +269,6 @@ export class MissionGateway {
       return true;
     } catch {
       return false;
-    }
-  }
-
-  async recover(
-    sessionId: string,
-    validator: MissionValidatorState,
-  ): Promise<MissionSnapshotReducer | null> {
-    try {
-      const droid = await this.options.getDroid();
-      const rows = await droid.sessions.list({ limit: 100 });
-      const mission = rows.find((row) => row.id === sessionId)?.mission;
-      const reducer = new MissionSnapshotReducer(validator);
-      return reducer.hydrate(mission) ? reducer : null;
-    } catch {
-      return null;
     }
   }
 

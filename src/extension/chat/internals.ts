@@ -86,7 +86,7 @@ export const DAEMON_NOT_LOGGED_IN_MESSAGE =
   'Sign in with the droid CLI to archive and search sessions.';
 export const DAEMON_UNAVAILABLE_MESSAGE = 'The local droid daemon is unavailable.';
 export const DAEMON_CREDENTIALS_UNREADABLE_MESSAGE =
-  'DroidVisX could not read the current Droid CLI sign-in.';
+  'Droid could not read the current Droid CLI sign-in.';
 export const DAEMON_REFRESH_FAILED_MESSAGE =
   'The Droid CLI sign-in could not authenticate the local daemon. Sign in again, then retry.';
 

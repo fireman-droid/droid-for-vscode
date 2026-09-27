@@ -25,6 +25,12 @@ export interface SessionContextRefreshMessage {
   readonly sessionId: string;
 }
 
+/** Re-reads the active runtime's model catalog without replacing the session. */
+export interface ModelCatalogRefreshMessage {
+  readonly type: 'session.model-catalog.refresh';
+  readonly sessionId: string;
+}
+
 /** Requests the current Droid skill catalog for the session. */
 export interface SkillsRefreshMessage {
   readonly type: 'skills.refresh';

@@ -29,6 +29,7 @@ import {
   handleMcpServerToggle,
 } from './capabilities/mcp';
 import { handleSettingUpdate } from './capabilities/settings';
+import { handleModelCatalogRefresh } from './capabilities/sessionMetadata';
 import { handleReviewMessage } from './changes/reviewActions';
 import { handleFileReadDiff, handleFileOpenTurnDiff } from './changes/inlineDiffActions';
 import type { ChatController } from './ChatController';
@@ -42,10 +43,8 @@ import {
   handleQueueResume,
   handleQueueUpdate,
 } from './queue/queue';
-import {
-  ensureActiveRuntimeWorkspaceCurrent,
-  handleReady,
-} from './sessions/runtimeLifecycle';
+import { ensureActiveRuntimeWorkspaceCurrent } from './sessions/workspaceLifecycle';
+import { handleReady } from './sessions/runtimeLifecycle';
 import {
   handleArchivedRefresh,
   handleRefresh,
@@ -70,7 +69,9 @@ import {
   handlePermissionResponse,
   handlePlanDocumentOpen,
 } from './turns/interactionResponses';
-import { handleRetry, handleSend, handleStop } from './turns/turnFlow';
+import { handleRetry } from './turns/turnRetry';
+import { handleSend } from './turns/turnFlow';
+import { handleStop } from './turns/turnSettlement';
 import { handleSessionCompact } from './turns/compact';
 import {
   handleFileOpenDiff,
@@ -196,6 +197,9 @@ export function dispatchChatMessage(
       return;
     case 'session.context.refresh':
       handleContextRefresh(controller, message.sessionId);
+      return;
+    case 'session.model-catalog.refresh':
+      handleModelCatalogRefresh(controller, message.sessionId);
       return;
     case 'session.compact':
       handleSessionCompact(controller, message.sessionId);

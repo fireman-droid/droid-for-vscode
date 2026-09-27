@@ -24,7 +24,8 @@ import {
   type SubagentInvocationRecord,
 } from '../subagents/subagentSummary';
 import { projectSessionMessagesAsync } from './asyncHistoryProjection';
-import { readPersistedSessionMessages } from './persistedSessionMessages';
+import { locatePersistedSessionFile, readPersistedSessionMessages } from './persistedSessionMessages';
+import { readMissionRoleFromTags } from './sessionMission';
 import type {
   SessionHistoryLoader,
   SessionHistoryRequest,
@@ -44,8 +45,8 @@ import type {
  * Field gaps of the daemon message read versus `loadSession()`:
  * - tokenUsage: read from the session's `.settings.json` sidecar
  *   (same cumulative totals; probe §0.7.4).
- * - mission role: derived from the sidecar's `decompSessionType`
- *   tag; the live mission STATE is not persisted there, so daemon
+ * - mission role: derived from the sidecar's official Mission tags;
+ *   the live mission STATE is not persisted there, so daemon
  *   loads report `state: null` (display-only field, rare sessions).
  * - subagentInvocations: read from the CLI's durable
  *   `~/.factory/task-invocations.json` ledger — the same data the
@@ -105,6 +106,7 @@ export function createDaemonFirstHistoryLoader(
     const startedAt = performance.now();
     try {
       let persisted = await readPersistedSessionMessages(sessionsDirectory, request.sessionId);
+      const persistedFile = persisted?.file;
       let fetched = persisted === null
         ? await fetchSessionMessages(await options.getDroid(), request.sessionId)
         : { messages: orderMessagesChronologically(persisted.messages).slice(-MAX_RAW_MESSAGE_WINDOW), pages: 0 };
@@ -125,6 +127,7 @@ export function createDaemonFirstHistoryLoader(
         sessionsDirectory,
         request.cwd,
         request.sessionId,
+        persistedFile,
       );
       record({
         level: 'info',
@@ -274,15 +277,19 @@ async function readSessionSidecar(
   sessionsDirectory: string,
   cwd: string,
   sessionId: string,
+  persistedFile?: string,
 ): Promise<SessionSidecarProjection> {
   if (!isSafeSessionIdentifier(sessionId) || /[\\/]/.test(sessionId)) {
     return {};
   }
   const workspaceDirectory = await workspaceSessionsDirectory(sessionsDirectory, cwd);
-  const directories =
-    workspaceDirectory === sessionsDirectory
-      ? [sessionsDirectory]
-      : [workspaceDirectory, sessionsDirectory];
+  // Read metadata beside the same exact-id transcript, including Windows short
+  // path slugs and previous worktrees, instead of guessing only the current cwd.
+  const source = persistedFile ?? await locatePersistedSessionFile(sessionsDirectory, sessionId).catch(() => null);
+  const directories = new Set([
+    ...(source === null ? [] : [path.dirname(source)]),
+    workspaceDirectory, sessionsDirectory,
+  ]);
   for (const directory of directories) {
     const settings = await readBoundedSessionSettings(
       path.join(directory, `${sessionId}.settings.json`),
@@ -290,11 +297,7 @@ async function readSessionSidecar(
     if (settings === null) {
       continue;
     }
-    const role = settings.tags?.find(
-      (tag) =>
-        tag.name === 'decompSessionType' &&
-        (tag.metadata?.value === 'orchestrator' || tag.metadata?.value === 'worker'),
-    )?.metadata?.value as 'orchestrator' | 'worker' | undefined;
+    const role = readMissionRoleFromTags(settings.tags);
     const tokenUsage = readTokenUsageBreakdown(
       (settings as Record<string, unknown>).tokenUsage,
     );
@@ -302,7 +305,7 @@ async function readSessionSidecar(
       ...(tokenUsage === undefined ? {} : { tokenUsage }),
       // The sidecar has no mission STATE; role alone still lets the
       // header show the decomposition identity.
-      ...(role === undefined ? {} : { mission: { state: null, role } }),
+      ...(role === null ? {} : { mission: { state: null, role } }),
     };
   }
   return {};

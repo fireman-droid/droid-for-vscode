@@ -4,5 +4,10 @@
     "lib": ["ES2022"],
     "types": ["node", "vscode"]
   },
-  "include": ["src/**/*.ts"]
+  "include": [
+    "src/extension/**/*.ts",
+    "src/runtime/**/*.ts",
+    "src/shared/**/*.ts",
+    "src/integration/**/*.ts"
+  ]
 }

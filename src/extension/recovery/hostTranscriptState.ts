@@ -95,6 +95,7 @@ export function appendAcceptedUserPrompt(
   turnId: string,
   text: string,
   attachments?: readonly SentAttachmentSummary[],
+  timestamp?: number,
 ): HostTranscriptState {
   const boundedText = text.slice(0, MAX_TURN_TEXT_LENGTH);
   return appendItem(
@@ -103,6 +104,7 @@ export function appendAcceptedUserPrompt(
       id: stableTranscriptId('user', turnId),
       kind: 'user',
       text: boundedText,
+      ...(timestamp === undefined ? {} : { timestamp }),
       ...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
     },
     text.length > boundedText.length,
@@ -118,6 +120,7 @@ export function appendExternalUserMessage(
   id: string,
   text: string,
   messageId?: string,
+  timestamp?: number,
 ): HostTranscriptState {
   if (
     (messageId !== undefined &&
@@ -139,6 +142,7 @@ export function appendExternalUserMessage(
       kind: 'user',
       text: boundedText,
       ...(messageId === undefined ? {} : { messageId }),
+      ...(timestamp === undefined ? {} : { timestamp }),
     },
     boundedText.length < text.length,
   );
@@ -340,6 +344,7 @@ function projectAssistantDelta(
         kind: 'assistant',
         turnId: message.turnId,
         text,
+        ...(message.timestamp === undefined ? {} : { timestamp: message.timestamp }),
       },
       text.length < message.delta.length,
     );

@@ -56,6 +56,7 @@ import { isSafeWorkspaceRelativePath } from '../../shared/validation/guards';
 import { isOperationDiff, operationDiffFields } from '../../shared/protocol/operationDiff';
 import { isToolExecutionPhase } from '../../shared/protocol/operationDiff';
 import { isValidToolTarget } from '../../shared/validation/validateToolTarget';
+import { isMessageTimestamp } from '../../shared/protocol/messageTimestamp';
 import {
   hasValidResultPreview,
   resultPreviewFields,
@@ -203,12 +204,14 @@ function parseUser(
   const id = dataValue(value, 'id');
   const text = dataValue(value, 'text');
   const messageId = dataValue(value, 'messageId');
+  const timestamp = dataValue(value, 'timestamp');
   const attachmentsValue = dataValue(value, 'attachments');
   if (
-    !hasExactKeys(value, ['id', 'kind', 'text'], ['messageId', 'attachments']) ||
+    !hasExactKeys(value, ['id', 'kind', 'text'], ['messageId', 'attachments', 'timestamp']) ||
     !isId(id) ||
     !isBoundedString(text, MAX_TURN_TEXT_LENGTH) ||
-    (messageId !== undefined && !isId(messageId))
+    (messageId !== undefined && !isId(messageId)) ||
+    (timestamp !== undefined && !isMessageTimestamp(timestamp))
   ) {
     return undefined;
   }
@@ -231,6 +234,7 @@ function parseUser(
     kind: 'user',
     text,
     ...(messageId === undefined ? {} : { messageId }),
+    ...(timestamp === undefined ? {} : { timestamp }),
     ...(attachments === undefined ? {} : { attachments }),
   };
 }
@@ -258,11 +262,14 @@ function parseAssistant(
   const id = dataValue(value, 'id');
   const turnId = dataValue(value, 'turnId');
   const text = dataValue(value, 'text');
-  return hasExactKeys(value, ['id', 'kind', 'turnId', 'text']) &&
+  const timestamp = dataValue(value, 'timestamp');
+  return hasExactKeys(value, ['id', 'kind', 'turnId', 'text'], ['timestamp']) &&
     isId(id) &&
     isId(turnId) &&
-    isBoundedString(text, MAX_ASSISTANT_TEXT_LENGTH)
-    ? { id, kind: 'assistant', turnId, text }
+    isBoundedString(text, MAX_ASSISTANT_TEXT_LENGTH) &&
+    (timestamp === undefined || isMessageTimestamp(timestamp))
+    ? { id, kind: 'assistant', turnId, text,
+        ...(timestamp === undefined ? {} : { timestamp }) }
     : undefined;
 }
 

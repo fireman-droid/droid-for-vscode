@@ -1,6 +1,6 @@
 import type { MissionStartMessage } from '../../../shared/protocol/missionProtocol';
 import type { ControllerPort } from './controllerMissionPort';
-import { MissionSnapshotReducer } from './MissionSnapshotReducer';
+import { recoverMissionProjection } from './recovery';
 
 export { handleMissionCommand } from './controls';
 
@@ -76,6 +76,7 @@ export function handleMissionStart(
         return;
       }
 
+      result.activateInteractions();
       ctl.sessionState.runtimeGeneration += 1;
       ctl.sessionState.runtime = result.runtime.runtime;
       ctl.sessionState.managedRuntimes.add(result.runtime.runtime);
@@ -83,10 +84,10 @@ export function handleMissionStart(
       ctl.sessionState.sessionId = result.sessionId;
       ctl.turnState.turn = null;
       ctl.missionState.mission = { state: null, role: 'orchestrator' };
-      ctl.missionState.missionRuntime = new MissionSnapshotReducer({
-        scrutinyEnabled: !result.settings.skipScrutiny,
-        userTestingEnabled: !result.settings.skipUserTesting,
-      });
+      recoverMissionProjection(ctl, result.runtime.runtime,
+        ctl.sessionState.runtimeGeneration, result.sessionId, ownerCwd);
+      ctl.effects.loadSessionMetadata(result.runtime.runtime,
+        ctl.sessionState.runtimeGeneration, result.sessionId, ownerCwd);
       ctl.recoveryState.transcript = {
         transcript: [],
         historyStatus: 'unavailable',
@@ -126,7 +127,7 @@ export function handleMissionStart(
       }
 
       ctl.emitSnapshot();
-      ctl.emit(ctl.missionState.missionRuntime.snapshot());
+      if (ctl.missionState.missionRuntime) ctl.emit(ctl.missionState.missionRuntime.snapshot());
       ctl.emit({
         type: 'mission.controlResult',
         protocolVersion: 25,

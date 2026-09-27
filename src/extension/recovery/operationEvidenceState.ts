@@ -51,6 +51,6 @@ function sameDiff(left: OperationDiff, right: OperationDiff): boolean {
     const other = right.files[index]!;
     return file.path === other.path && file.previousPath === other.previousPath && file.kind === other.kind &&
       file.outcome === other.outcome && file.message === other.message && file.contentRestricted === other.contentRestricted &&
-      file.reversible === other.reversible && file.patch === other.patch;
+      file.reversible === other.reversible && file.patch === other.patch && file.submittedContent === other.submittedContent;
   });
 }

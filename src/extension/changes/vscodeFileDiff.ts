@@ -22,7 +22,7 @@ interface BaselineDocument {
 /**
  * Opens `<before this turn> ↔ <current file>` when the live turn
  * captured an in-memory baseline. A latest turn committed through
- * DroidVisX survives Reload as `<commit^> ↔ <commit>`; otherwise
+ * Droid survives Reload as `<commit^> ↔ <commit>`; otherwise
  * recovered turns fall back to `<git HEAD> ↔ <working copy>`, then
  * a plain editor when neither comparison base exists.
  */

@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PendingInteraction } from '../../webview/assistant/interactions/interactionStore';
+import type { PendingInteraction } from './interactions/interactionStore';
 import type { AskUserQuestion, PermissionInteractionRequest } from '../../shared/protocol/interactions';
 import { MAX_ASK_USER_ANSWER_LENGTH, MAX_EDITED_SPEC_LENGTH, type AskUserAnswer } from '../../shared/protocol/interactionProtocol';
 import { Button } from '../ui/button';
 import { Input, Textarea } from '../ui/input';
 import { Checkbox } from '../ui/selection';
 import { RadioGroup, RadioGroupItem, ToggleGroup, ToggleGroupItem } from '../ui/controls';
-import { presentAskUserQuestion, resolveAnswer } from '../../webview/assistant/interactions/questionAnswers';
-import { getPermissionPresentation, isNegativePermissionOption } from '../../webview/assistant/interactions/permissionPresentation';
+import { presentAskUserQuestion, resolveAnswer } from './interactions/questionAnswers';
+import { getPermissionPresentation, isNegativePermissionOption } from './interactions/permissionPresentation';
 import { Markdown } from '../content/Markdown';
 import { PermissionOptions } from './PermissionOptions';
 

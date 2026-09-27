@@ -1,4 +1,4 @@
-import { getVsCodeApi } from '../../webview/bridge/vscode';
+import { getVsCodeApi } from '../bridge/vscode';
 import { mountWebview } from '../shell/mount';
 import { ChatApp } from './ChatApp';
 

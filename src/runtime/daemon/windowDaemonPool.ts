@@ -483,22 +483,28 @@ export class WindowDaemonPool {
       entry.connection.dispose();
       this.connections.delete(record.id);
     }
-    const pid = verified ? (verified.status === 'verified' ? verified.pid : null)
-      : await resolveDaemonListenerPid(record.port, '127.0.0.1');
-    if (pid === null) {
-      // An alive owner with an unreachable service is not proof its work stopped.
-      if (!isProcessAlive(record.pid)) {
-        await ide?.dispose();
-        if (record.rootSessionId) {
-          const allocation = this.allocations.get(record.rootSessionId);
-          if (allocation && (await allocation).record.id === record.id) {
-            this.allocations.delete(record.rootSessionId);
-          }
+    const verification = verified ?? (await verifyDaemonListeners([record])).get(record.port);
+    const pid = verification?.status === 'verified' ? verification.pid : null;
+    const processReplaced = verification?.replacedPids?.includes(record.pid) === true;
+    if (processReplaced || (pid !== record.pid && !isProcessAlive(record.pid))) {
+      await ide?.dispose();
+      if (record.rootSessionId) {
+        const allocation = this.allocations.get(record.rootSessionId);
+        if (allocation && (await allocation).record.id === record.id) {
+          this.allocations.delete(record.rootSessionId);
         }
-        // Only a confirmed dead PID permits removing its exact registry record.
-        await removeWindowDaemon(record);
-        return null;
       }
+      // A reused PID belongs to another process. Retire only the stale registry
+      // entry; never stop that process or the current occupant of the old port.
+      await removeWindowDaemon(record);
+      this.options.record({ level: 'info', name: 'daemon.discovery.stale-record', attributes: {
+        instanceId: record.id, pid: record.pid, port: record.port,
+        reason: processReplaced ? 'process-replaced' : 'process-exited',
+      } });
+      return null;
+    }
+    if (pid === null) {
+      // A matching or unverifiable live worker may still own running tasks.
       throw new Error('An existing session daemon is unavailable. Retry without starting a duplicate session.');
     }
     if (pid !== record.pid) throw new Error('Daemon discovery no longer matches its listener process.');

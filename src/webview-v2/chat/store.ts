@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla';
-import { assistantWebviewReducer } from '../../webview/assistant/state/store';
-import { initialAssistantWebviewState } from '../../webview/assistant/state/initialState';
-import type { AssistantWebviewAction, AssistantWebviewState } from '../../webview/assistant/state/types';
+import { assistantWebviewReducer } from '../state/store';
+import { initialAssistantWebviewState } from '../state/initialState';
+import type { AssistantWebviewAction, AssistantWebviewState } from '../state/types';
 
 export function selectCurrentTurnChanges(state: AssistantWebviewState) {
   const turnId = state.turn?.turnId ?? [...state.transcript].reverse().find((item) => item.kind !== 'user')?.turnId;

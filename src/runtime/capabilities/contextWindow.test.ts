@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { projectContextWindow } from './contextWindow';
 import { projectContextWindow as projectHostContext } from '../../extension/chat/capabilities/capabilityPanels';
-import { parseSessionContext } from '../../webview/bridge/validateContextState';
+import { parseSessionContext } from '../../webview-v2/bridge/validateContextState';
 
 const source = {
   used: 400_000,

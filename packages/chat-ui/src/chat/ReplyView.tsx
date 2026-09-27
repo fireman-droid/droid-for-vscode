@@ -13,11 +13,14 @@ export function ReplyView({ children, replyText, running = false, completedAt, r
   const [copyError, setCopyError] = useState(false);
   const reset = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (reset.current) clearTimeout(reset.current); }, []);
+  const showActions = !readOnly && replyText !== undefined && !running && (!diagnosticOnly || replyText.length > 0);
+  const showTime = !running && !diagnosticOnly && replyText !== undefined;
   return <div className="v2-assistant-reply flex min-w-0 flex-col gap-1" aria-label={label ?? assistantName}>
     {children}
-    {!readOnly && replyText !== undefined && !running && (!diagnosticOnly || replyText.length > 0) ? (
+    {showActions || showTime ? (
       <div data-transcript-selection-exclude="" className="flex min-h-6 select-none items-center gap-0.5 text-[11px] text-muted-foreground [&_button]:size-6 [&_button]:p-0 [&_svg]:size-[13px] [&_.dvx-message-time]:pr-1.5 [&_.dvx-message-time]:text-[10.5px]">
-        <MessageTimestamp completedAt={completedAt ?? null} />
+        {showTime ? <MessageTimestamp completedAt={completedAt ?? null} /> : null}
+        {showActions ? <>
         <Button variant="ghost" size="icon-sm" aria-label={copied ? 'Copied reply' : 'Copy reply'} disabled={!replyText} onClick={() => {
           void copyText(replyText).then(() => {
             setCopied(true); setCopyError(false);
@@ -28,6 +31,7 @@ export function ReplyView({ children, replyText, running = false, completedAt, r
         {regenerate ? <ReplyAction label="Regenerate response" busyLabel="Regenerating response" action={regenerate}><RotateCcw /></ReplyAction> : null}
         {fork ? <ReplyAction label="Fork chat" busyLabel="Forking chat" action={fork}><GitBranch /></ReplyAction> : null}
         {copyError ? <span role="alert" className="text-destructive">Could not copy reply.</span> : null}
+        </> : null}
       </div>
     ) : null}
   </div>;

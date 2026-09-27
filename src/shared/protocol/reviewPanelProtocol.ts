@@ -1,6 +1,6 @@
 import { isId, isSafeWorkspaceRelativePath } from '../validation/guards';
 import { hasExactKeys, isStrictRecord } from '../validation/strictValidation';
-import { isOperationDiff, type OperationDiff } from './operationDiff';
+import { isOperationDiff, isSafeOperationText, type OperationDiff, type OperationDiffFile } from './operationDiff';
 import { REVIEW_SCOPE_KINDS, type ReviewScopeKind } from './reviewProtocol';
 
 export type ReviewPanelOpen = {
@@ -20,16 +20,31 @@ export type ReviewPanelContext = {
   readonly latestTurnId: string | null; readonly valid: boolean;
   readonly operation: OperationDiff | null; readonly operationPath: string | null;
 };
+export interface ReviewRecordedEntry {
+  readonly toolUseId: string;
+  readonly patch: string;
+  readonly source?: 'tool-input' | 'tool-result' | 'successful-tool-input';
+  readonly outcome?: 'applied' | 'failed' | 'uncertain';
+  readonly message?: string;
+  readonly toolName?: string;
+  readonly sequence?: number;
+  readonly kind?: OperationDiffFile['kind'];
+  /** Submitted text associated with a successful write, not a before/after diff. */
+  readonly submittedContent?: string;
+}
+export interface ReviewRecordedContent {
+  readonly content: string;
+  readonly sourceToolUseId: string;
+  readonly appliedEdits: number;
+  readonly remainingOperations: number;
+}
 export type ReviewPanelFile = {
   readonly type: 'reviewPanel.file'; readonly requestId: string; readonly reviewScopeId: string;
   readonly path: string; readonly version: string; readonly patch: string;
   readonly truncated: boolean; readonly error: string | null;
-  readonly recordedOperations?: readonly {
-    readonly toolUseId: string; readonly patch: string;
-    readonly source?: 'tool-input' | 'tool-result' | 'successful-tool-input';
-    readonly outcome?: 'applied' | 'failed' | 'uncertain';
-    readonly message?: string;
-  }[];
+  readonly recordedOperations?: readonly ReviewRecordedEntry[];
+  /** Reconstructed only from a saved write and exact subsequent result patches. */
+  readonly recordedContent?: ReviewRecordedContent;
 };
 export function parseReviewPanelRequest(value: unknown): ReviewPanelRequest | undefined {
   if (!isStrictRecord(value)) return undefined;
@@ -67,17 +82,29 @@ export function isReviewPanelContext(value: unknown): value is ReviewPanelContex
 }
 export function isReviewPanelFile(value: unknown): value is ReviewPanelFile {
   return isStrictRecord(value) && value.type === 'reviewPanel.file' &&
-    hasExactKeys(value, ['type', 'requestId', 'reviewScopeId', 'path', 'version', 'patch', 'truncated', 'error'], ['recordedOperations']) &&
+    hasExactKeys(value, ['type', 'requestId', 'reviewScopeId', 'path', 'version', 'patch', 'truncated', 'error'], ['recordedOperations', 'recordedContent']) &&
     isId(value.requestId) && isId(value.reviewScopeId) && isSafeWorkspaceRelativePath(value.path) &&
     typeof value.version === 'string' && typeof value.patch === 'string' && value.patch.length <= 512_000 &&
     typeof value.truncated === 'boolean' && (value.error === null || typeof value.error === 'string') &&
+    (value.recordedContent === undefined || isRecordedContent(value.recordedContent)) &&
     (value.recordedOperations === undefined || Array.isArray(value.recordedOperations) &&
       value.recordedOperations.length <= 200 &&
       value.recordedOperations.every((entry) => isStrictRecord(entry) &&
-        hasExactKeys(entry, ['toolUseId', 'patch'], ['source', 'outcome', 'message']) && isId(entry.toolUseId) &&
+        hasExactKeys(entry, ['toolUseId', 'patch'], ['source', 'outcome', 'message', 'toolName', 'sequence', 'kind', 'submittedContent']) && isId(entry.toolUseId) &&
         (entry.source === undefined || ['tool-input', 'tool-result', 'successful-tool-input'].includes(String(entry.source))) &&
         (entry.outcome === undefined || ['applied', 'failed', 'uncertain'].includes(String(entry.outcome))) &&
         (entry.message === undefined || typeof entry.message === 'string' && entry.message.length <= 2_000) &&
+        (entry.toolName === undefined || typeof entry.toolName === 'string' && entry.toolName.length <= 200) &&
+        (entry.sequence === undefined || Number.isSafeInteger(entry.sequence) && Number(entry.sequence) >= 0) &&
+        (entry.kind === undefined || ['added', 'modified', 'deleted', 'renamed'].includes(String(entry.kind))) &&
+        (entry.submittedContent === undefined || isSafeOperationText(entry.submittedContent) && entry.patch === '' && entry.source === 'tool-result' && entry.outcome === 'applied') &&
         typeof entry.patch === 'string' && entry.patch.length <= 24_000) &&
-      value.recordedOperations.reduce((sum: number, entry: { patch: string }) => sum + entry.patch.length, 0) <= 512_000);
+      value.recordedOperations.reduce((sum: number, entry: ReviewRecordedEntry) => sum + entry.patch.length + (entry.submittedContent?.length ?? 0), 0) <= 512_000);
+}
+
+function isRecordedContent(value: unknown): value is ReviewRecordedContent {
+  return isStrictRecord(value) && hasExactKeys(value, ['content', 'sourceToolUseId', 'appliedEdits', 'remainingOperations']) &&
+    typeof value.content === 'string' && value.content.length <= 512_000 && isId(value.sourceToolUseId) &&
+    Number.isSafeInteger(value.appliedEdits) && Number(value.appliedEdits) >= 0 &&
+    Number.isSafeInteger(value.remainingOperations) && Number(value.remainingOperations) >= 0;
 }

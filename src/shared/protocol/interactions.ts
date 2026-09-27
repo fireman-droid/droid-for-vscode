@@ -43,6 +43,14 @@ export interface AskUserInteractionRequest {
 
 export type InteractionRequest = PermissionInteractionRequest | AskUserInteractionRequest;
 
+export const MAX_PENDING_INTERACTIONS = 16;
+
+export interface PendingInteractionSnapshot {
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly request: InteractionRequest;
+}
+
 export interface InteractionRequestMessage {
   readonly type: 'interaction.request';
   readonly sequence: number;

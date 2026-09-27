@@ -1,29 +1,31 @@
-import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode, type Ref } from 'react';
+import { memo, useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode, type Ref } from 'react';
 import { useStore } from 'zustand';
 import type { ChatStore } from './store';
 import { DroidActivity } from '../ui/droid-motion';
-import { useMessageEditor } from '../../webview/assistant/editing/useMessageEditor';
-import { useMessageActions } from '../../webview/assistant/editing/useMessageActions';
-import { useAttachmentActions } from '../../webview/assistant/attachments/useAttachmentActions';
-import type { ChatPort } from '../../webview/assistant/shell/chatIntent';
-import type { AssistantWebviewState } from '../../webview/assistant/state/types';
+import { useMessageEditor } from './editing/useMessageEditor';
+import { useMessageActions } from './editing/useMessageActions';
+import { useAttachmentActions } from './attachments/useAttachmentActions';
+import type { ChatPort } from '../host/chatIntent';
+import type { AssistantWebviewState } from '../state/types';
 import { QuestionCard } from './QuestionCard';
-import { createTranscriptSelector } from '../../webview/assistant/transcript/transcriptGroups';
-import { observeCompletion, resolveAssistantStatus, type CompletionClock } from '../../webview/assistant/transcript/transcriptStatus';
-import { currentProcessWaiting } from '../../webview/assistant/transcript/activityPresentation';
+import { createTranscriptSelector } from './transcript/transcriptGroups';
+import { resolveAssistantStatus } from './transcript/transcriptStatus';
+import { currentProcessWaiting } from './transcript/activityPresentation';
 import { AssistantReply } from './AssistantReply';
 import { useEditAttachmentIngress } from './useEditAttachmentIngress';
-import { getHistoryNotice } from '../../webview/assistant/shell/statusMessage';
-import { isPlanLive, selectPlanAnchors } from '../../webview/assistant/transcript/planAnchor';
+import { getHistoryNotice } from '../shell/statusMessage';
+import { isPlanLive, selectPlanAnchors } from './transcript/planAnchor';
 import { createOperationSummarySelector } from './operationSummary';
 import { ChatStartup } from './ChatStartup';
 import { createTranscriptMessagesSelector, createTranscriptStructureSelector } from './transcriptProjection';
+import { useTranscriptReceipt } from './useTranscriptReceipt';
 
 import { TranscriptView, type TranscriptHandle } from '@droidvisx/chat-ui/chat/TranscriptView';
-export function LiveTranscript({ store, ...props }: { readonly store: ChatStore } & Omit<ComponentProps<typeof Transcript>, 'state'>) {
+export const LiveTranscript = memo(function LiveTranscript({ store, ...props }: { readonly store: ChatStore } & Omit<ComponentProps<typeof Transcript>, 'state'>) {
   const state = useStore(store, (value) => value.state);
+  useTranscriptReceipt(state, props.port);
   return <Transcript state={state} {...props} />;
-}
+});
 
 export function Transcript({
   state,
@@ -106,27 +108,25 @@ export function Transcript({
   };
   const selectors = useMemo(() => ({ transcript: createTranscriptSelector(), operations: createOperationSummarySelector(),
     structure: createTranscriptStructureSelector(), messages: createTranscriptMessagesSelector() }), [state.conversationId]);
-  const { descriptors, replyTails } = useMemo(() => selectors.transcript(items), [items, selectors]);
+  const { descriptors, replyTails, replyTimestamps } = useMemo(() => selectors.transcript(items), [items, selectors]);
   const plans = useMemo(() => selectPlanAnchors(items), [items]);
-  const [planChoice, setPlanChoice] = useState<{ conversationId: string | null; id: string; expanded: boolean } | null>(null);
-  const currentPlanChoice = planChoice?.conversationId === state.conversationId ? planChoice : null;
+  const [planChoices, setPlanChoices] = useState<{ conversationId: string | null; values: ReadonlyMap<string, boolean> } | null>(null);
+  const currentPlanChoices = planChoices?.conversationId === state.conversationId ? planChoices.values : null;
   const togglePlan = useCallback((id: string, expanded: boolean) => {
     stopFollowing();
-    setPlanChoice({ conversationId: state.conversationId, id, expanded });
+    setPlanChoices((previous) => ({
+      conversationId: state.conversationId,
+      values: new Map(previous?.conversationId === state.conversationId ? previous.values : []).set(id, expanded),
+    }));
   }, [state.conversationId, stopFollowing]);
   const operationSummaries = useMemo(() => selectors.operations(items), [items, selectors]);
-  const { ids, turns, lastTurnRows } = useMemo(() => selectors.structure(descriptors), [descriptors, selectors]);
+  const { turns, lastTurnRows } = useMemo(() => selectors.structure(descriptors), [descriptors, selectors]);
   const byId = useMemo(() => new Map(descriptors.map((item) => [item.kind === 'user' ? item.item.id : item.id, item])), [descriptors]);
   const pendingReplyRow = useMemo(() => running || state.turn?.status === 'stopping'
     ? (turns.find((row) => row.messageIds.some((id) => {
       const descriptor = byId.get(id)!;
       return descriptor.kind === 'assistant' && descriptor.turnId === state.turn?.turnId;
     })) ?? turns.at(-1))?.id : undefined, [running, state.turn?.status, state.turn?.turnId, turns, byId]);
-  const completionClock = useRef<CompletionClock>(new Map());
-  useEffect(() => {
-    const live = new Set(ids);
-    for (const id of completionClock.current.keys()) if (!live.has(id)) completionClock.current.delete(id);
-  }, [ids]);
   const waiting = useMemo(() => currentProcessWaiting(state.sessionId, state.turn, state.interactions), [state.sessionId, state.turn, state.interactions]);
   const lastReplyId = [...replyTails.keys()].at(-1);
   const activeTools = useMemo(() => items.filter((item) =>
@@ -151,9 +151,11 @@ export function Transcript({
       const message = byId.get(id)!;
       if (message.kind === 'user') {
         const plan = plans.get(message.item.id);
+        const expanded = plan && currentPlanChoices?.get(plan.anchorToolUseId);
         return <QuestionCard item={message.item} images={message.images} editor={editor} edit={edit}
           placeholder={presentation.placeholder} placeholderHeight={presentation.placeholderHeight} canResend={canResend}
-          plan={plan} planRunning={plan !== undefined && isPlanLive(plan, running, state.turn?.turnId ?? null)} planChoice={currentPlanChoice} onPlanToggle={togglePlan} />;
+          plan={plan} planRunning={plan !== undefined && isPlanLive(plan, running, state.turn?.turnId ?? null)}
+          planChoice={plan && expanded !== undefined ? { id: plan.anchorToolUseId, expanded } : null} onPlanToggle={togglePlan} />;
       }
       const replyPending = pendingIds.has(id);
       const status = resolveAssistantStatus(message.items, message.turnId, state.turn);
@@ -162,7 +164,7 @@ export function Transcript({
         ? running || state.turn.status === 'stopping' : status.type === 'running';
       return <AssistantReply descriptor={message} status={status} waiting={waiting} replyText={replyPending ? undefined : replyTails.get(message.id)}
         operationSummary={summary} operationsLive={operationsLive} onInteract={stopFollowing}
-        completedAt={observeCompletion(completionClock.current, message.id, replyPending || status.type === 'running')}
+        completedAt={replyPending || status.type === 'running' ? undefined : replyTimestamps.get(message.id)}
         regenerate={message.id === lastReplyId && canResend && actions.regenerateAnchor !== null ? actions.handleRegenerate : undefined}
         fork={message.id === lastReplyId && canResend ? onFork : undefined} />;
     }} />;

@@ -1,7 +1,7 @@
-import { useEffect, useRef, type ClipboardEvent, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
 import type { ImageMediaType } from '../../shared/protocol/attachments';
 import { MAX_ATTACHMENT_URI_COUNT, MAX_PENDING_ATTACHMENTS } from '../../shared/protocol/bounds';
-import { isImageMediaType, prepareAttachment, readDroppedFileUris, readDroppedRemoteImageUrl } from '../../webview/assistant/attachments/attachmentIngress';
+import { isImageMediaType, prepareAttachment, readDroppedFileUris, readDroppedRemoteImageUrl } from './attachments/attachmentIngress';
 
 interface IngressOptions {
   readonly owner: string | null;
@@ -20,20 +20,27 @@ interface IngressOptions {
 }
 
 export function useAttachmentIngress(options: IngressOptions) {
-  const { owner, conversationId, resetKey, count, disabled, actions, onNotice } = options;
-  const scope = useRef({ owner, conversationId, resetKey });
-  if (scope.current.owner !== owner || scope.current.conversationId !== conversationId || scope.current.resetKey !== resetKey) scope.current = { owner, conversationId, resetKey };
-  const requestScope = scope.current;
+  const { owner, conversationId, resetKey, disabled, actions, onNotice } = options;
+  const scope = useRef({ owner, conversationId, resetKey, pending: 0 });
+  if (scope.current.owner !== owner || scope.current.conversationId !== conversationId || scope.current.resetKey !== resetKey) scope.current = { owner, conversationId, resetKey, pending: 0 };
+  const [preparation, setPreparation] = useState({ scope: scope.current, count: 0 });
   const current = useRef(options);
   current.current = options;
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-  const remaining = Math.max(0, MAX_PENDING_ATTACHMENTS - count);
+  const remaining = () => Math.max(0, MAX_PENDING_ATTACHMENTS - current.current.count - scope.current.pending);
   const capacityNotice = () => onNotice(`Up to ${MAX_PENDING_ATTACHMENTS} attachments can be staged for one message.`);
   const stageFiles = (files: readonly File[]) => {
     if (disabled || owner === null) return;
-    if (files.length > remaining) capacityNotice();
-    for (const file of files.slice(0, remaining)) {
+    const available = remaining();
+    if (files.length > available) capacityNotice();
+    const selected = files.slice(0, available);
+    if (selected.length === 0) return;
+    const requestScope = scope.current;
+    // Reserve synchronously: Enter can follow paste before React commits the disabled button.
+    requestScope.pending += selected.length;
+    setPreparation({ scope: requestScope, count: requestScope.pending });
+    for (const file of selected) {
       void prepareAttachment(file).then((prepared) => {
         const latest = current.current;
         if (!mounted.current || latest.disabled || scope.current !== requestScope) return;
@@ -43,10 +50,17 @@ export function useAttachmentIngress(options: IngressOptions) {
           case 'pdf': latest.actions.pdf(prepared.name, prepared.data); break;
           case 'text': latest.actions.text(prepared.name, prepared.text, prepared.truncated); break;
         }
+      }).catch(() => {
+        if (mounted.current && scope.current === requestScope) current.current.onNotice(`${file.name || 'File'} could not be attached.`);
+      }).finally(() => {
+        requestScope.pending -= 1;
+        if (mounted.current && scope.current === requestScope) setPreparation({ scope: requestScope, count: requestScope.pending });
       });
     }
   };
   return {
+    preparing: preparation.scope === scope.current ? preparation.count : 0,
+    isPreparing: () => scope.current.pending > 0,
     onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => {
       const files = Array.from(event.clipboardData.files).filter((file) => isImageMediaType(file.type));
       if (files.length === 0 || disabled) return;
@@ -65,14 +79,15 @@ export function useAttachmentIngress(options: IngressOptions) {
       const remote = readDroppedRemoteImageUrl(event.dataTransfer);
       if (uris.length > 0) {
         event.preventDefault();
-        if (uris.length > remaining) capacityNotice();
-        if (remaining > 0) actions.uris(uris.slice(0, Math.min(remaining, MAX_ATTACHMENT_URI_COUNT)));
+        const available = remaining();
+        if (uris.length > available) capacityNotice();
+        if (available > 0) actions.uris(uris.slice(0, Math.min(available, MAX_ATTACHMENT_URI_COUNT)));
       } else if (files.length > 0) {
         event.preventDefault();
         stageFiles(files);
       } else if (remote !== null) {
         event.preventDefault();
-        if (remaining > 0) actions.remoteImage(remote); else capacityNotice();
+        if (remaining() > 0) actions.remoteImage(remote); else capacityNotice();
       }
     },
   };

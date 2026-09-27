@@ -22,19 +22,6 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   } as unknown as typeof ResizeObserver;
 }
 
-// The pinned question is rendered twice: its row in the list plus the
-// detached sticky clone overlaying the viewport top. Queries must not
-// match both, and the list row is the intended copy (the clone comes
-// and goes with the scroll offset).
-if (typeof document !== 'undefined') {
-  const { configure } = await import('@testing-library/react');
-  configure({
-    defaultIgnore:
-      'script, style, .dvx-virtual-detached-pin, .dvx-virtual-detached-pin *',
-  });
-}
-
-// The dynamic import above needs this file to be a module.
 // Radix Select uses pointer capture; jsdom does not implement it.
 if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.hasPointerCapture) {
   HTMLElement.prototype.hasPointerCapture = () => false;

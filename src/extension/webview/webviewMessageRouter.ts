@@ -34,6 +34,7 @@ export interface WebviewMessageRouteOptions {
   readonly onReady?: (
     message: Extract<WebviewToHostMessage, { type: 'webview.ready' }>,
   ) => void;
+  readonly onStateApplied?: (message: Extract<WebviewToHostMessage, { type: 'webview.state-applied' }>) => void;
 }
 
 export function routeWebviewMessage(
@@ -72,6 +73,10 @@ export function routeWebviewMessage(
       name: `webview.${message.kind}`,
       detail: message.detail,
     });
+    return;
+  }
+  if (message.type === 'webview.state-applied') {
+    options.onStateApplied?.(message);
     return;
   }
   if (message.type === 'ui.theme.set') {

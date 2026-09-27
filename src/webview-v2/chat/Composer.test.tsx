@@ -3,14 +3,14 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { UiEnvironmentProvider } from '@droidvisx/chat-ui/environment';
-import type { AssistantWebviewState } from '../../webview/assistant/state/types';
-import { initialAssistantWebviewState } from '../../webview/assistant/state/initialState';
-import { useComposerFlow } from '../../webview/assistant/composer/useComposerFlow';
-import { prepareAttachment, type PreparedAttachment } from '../../webview/assistant/attachments/attachmentIngress';
+import type { AssistantWebviewState } from '../state/types';
+import { initialAssistantWebviewState } from '../state/initialState';
+import { useComposerFlow } from './composer/useComposerFlow';
+import { prepareAttachment, type PreparedAttachment } from './attachments/attachmentIngress';
 import { Composer } from './Composer';
 
-vi.mock('../../webview/assistant/attachments/attachmentIngress', async (original) => ({
-  ...await original<typeof import('../../webview/assistant/attachments/attachmentIngress')>(),
+vi.mock('./attachments/attachmentIngress', async (original) => ({
+  ...await original<typeof import('./attachments/attachmentIngress')>(),
   prepareAttachment: vi.fn(),
 }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.mocked(prepareAttachment).mockReset(); });
@@ -86,7 +86,7 @@ it('correlates mention results and attaches the selected path without sending th
   expect(screen.queryByRole('listbox')).toBeNull();
 });
 
-it.each(['send', 'conversation switch'])('stages each paste once in the composer and drops unfinished reads after %s', async (reset) => {
+it('stages each paste once and drops unfinished reads without blocking the next conversation', async () => {
   let finish!: (result: PreparedAttachment) => void;
   vi.mocked(prepareAttachment).mockResolvedValueOnce({ kind: 'image', name: 'shot.png', mediaType: 'image/png', data: 'aW1hZ2U=' })
     .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
@@ -99,12 +99,59 @@ it.each(['send', 'conversation switch'])('stages each paste once in the composer
     type: 'attachment.addImage', sessionId: 'session-1', name: 'shot.png', mediaType: 'image/png', dataBase64: 'aW1hZ2U=',
   }]));
   fireEvent.drop(input, { dataTransfer: { files: [file], getData: () => '' } });
-  if (reset === 'send') {
-    fireEvent.change(input, { target: { value: 'Send before the file has finished loading' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-  } else view.rerender(<Harness current={{ ...state, sessionId: 'session-2', conversationId: 'conversation-2' }} />);
+  view.rerender(<Harness current={{ ...state, sessionId: 'session-2', conversationId: 'conversation-2' }} />);
+  const nextInput = screen.getByRole('textbox', { name: 'Message Droid' });
+  fireEvent.change(nextInput, { target: { value: 'Send from the next conversation' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(port.postMessage).toHaveBeenCalledWith({ type: 'turn.send', sessionId: 'session-2', turnId: expect.any(String), text: 'Send from the next conversation' });
   await act(async () => finish({ kind: 'text', name: 'late.txt', text: 'Must not enter the next prompt', truncated: false }));
   expect(port.postMessage.mock.calls.filter(([message]) => message.type.startsWith('attachment.'))).toHaveLength(1);
+});
+
+it.each(['send', 'queue'])('holds %s during attachment preparation, including Enter before the next render', async (route) => {
+  let finish!: (result: PreparedAttachment) => void;
+  vi.mocked(prepareAttachment).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  render(<Harness current={route === 'queue' ? { ...state, turn: { turnId: 'turn-1', status: 'streaming' } } : state} />);
+  const input = screen.getByRole('textbox', { name: 'Message Droid' });
+  fireEvent.change(input, { target: { value: 'Use this image' } });
+  act(() => {
+    fireEvent.paste(input, { clipboardData: { files: [new File(['image'], 'shot.png', { type: 'image/png' })], getData: () => '' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.submit(input.closest('form')!);
+  });
+  expect(intents()).toEqual([]);
+  expect((input as HTMLTextAreaElement).value).toBe('Use this image');
+  expect(screen.getByText('Preparing attachments…')).toBeDefined();
+  if (route === 'send') expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true);
+  else {
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    expect(intents()).toEqual([{ type: 'turn.stop', sessionId: 'session-1', turnId: 'turn-1' }]);
+  }
+  await act(async () => finish({ kind: 'image', name: 'shot.png', mediaType: 'image/png', data: 'aW1hZ2U=' }));
+  expect(screen.queryByText('Preparing attachments…')).toBeNull();
+  fireEvent.keyDown(input, { key: 'Enter' });
+  const sent = intents().filter((message) => message.type !== 'turn.stop');
+  expect(sent).toEqual([
+    { type: 'attachment.addImage', sessionId: 'session-1', name: 'shot.png', mediaType: 'image/png', dataBase64: 'aW1hZ2U=' },
+    route === 'send'
+      ? { type: 'turn.send', sessionId: 'session-1', turnId: expect.any(String), text: 'Use this image' }
+      : { type: 'queue.add', sessionId: 'session-1', queueId: expect.any(String), text: 'Use this image' },
+  ]);
+});
+
+it.each(['notice', 'rejection'])('releases the send gate and preserves the draft after an attachment %s', async (failure) => {
+  if (failure === 'notice') vi.mocked(prepareAttachment).mockResolvedValueOnce({ kind: 'notice', message: 'shot.png could not be read.' });
+  else vi.mocked(prepareAttachment).mockRejectedValueOnce(new Error('File read failed'));
+  render(<Harness />);
+  const input = screen.getByRole('textbox', { name: 'Message Droid' });
+  fireEvent.change(input, { target: { value: 'Keep this draft' } });
+  fireEvent.paste(input, { clipboardData: { files: [new File(['image'], 'shot.png', { type: 'image/png' })], getData: () => '' } });
+  await screen.findByText(failure === 'notice' ? 'shot.png could not be read.' : 'shot.png could not be attached.');
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(false));
+  expect((input as HTMLTextAreaElement).value).toBe('Keep this draft');
+  expect(intents()).toEqual([]);
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(intents()).toEqual([{ type: 'turn.send', sessionId: 'session-1', turnId: expect.any(String), text: 'Keep this draft' }]);
 });
 
 it('switches the single action button to Stop while Enter still queues during an active turn', async () => {

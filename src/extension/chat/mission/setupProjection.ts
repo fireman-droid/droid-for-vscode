@@ -143,6 +143,11 @@ export function emitMissionSetupCapabilities(ctl: SetupProjectionPort): void {
     },
     catalog,
   );
+  const active = ctl.missionState.missionRuntime?.snapshot();
+  if (active) {
+    ctl.emit({ ...active, setup });
+    return;
+  }
   ctl.emit({
     type: 'mission.snapshot',
     protocolVersion: 25,

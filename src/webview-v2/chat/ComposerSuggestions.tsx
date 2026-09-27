@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
-import type { AssistantWebviewState } from '../../webview/assistant/state/types';
-import { createTurnId } from '../../webview/assistant/shell/chatIntent';
-import { findMentionToken, findSlashToken, getSlashMatches, splitMentionPath, type MentionToken, type SlashEntry, type SlashToken } from '../../webview/assistant/composer/composerCommands';
-import { CANVAS_REQUEST_TEMPLATE, type SlashNavTarget } from '../../webview/assistant/composer/slashBuiltins';
+import type { AssistantWebviewState } from '../state/types';
+import { createTurnId } from '../host/chatIntent';
+import { findMentionToken, findSlashToken, getSlashMatches, splitMentionPath, type MentionToken, type SlashEntry, type SlashToken } from './composer/composerCommands';
+import { CANVAS_REQUEST_TEMPLATE, type SlashNavTarget } from './composer/slashBuiltins';
 import { PopoverContent } from '../ui/overlays';
 import { cn } from '../ui/cn';
 import { Button } from '../ui/button';

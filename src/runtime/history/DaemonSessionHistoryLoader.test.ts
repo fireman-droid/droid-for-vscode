@@ -304,6 +304,34 @@ describe('createDaemonFirstHistoryLoader.loadHistory', () => {
       role: 'orchestrator',
     });
   });
+
+  it.each([2, 3])('recovers official Mission tags beside the exact-id transcript in a noncanonical folder (JSONL v%s)', async version => {
+    const sessionsDirectory = tempDir();
+    const previousDirectory = path.join(sessionsDirectory, '-C-Users-ADMINI~1-old-worktree');
+    mkdirSync(previousDirectory);
+    writeFileSync(path.join(previousDirectory, 'saved-mission.jsonl'), [
+      { type: 'session_start', id: 'saved-mission', version },
+      { type: 'message', id: 'm1', timestamp: '2026-09-22T01:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Implement duration formatting' }] } },
+    ].map(value => JSON.stringify(value)).join('\n') + '\n');
+    writeFileSync(path.join(previousDirectory, 'saved-mission.settings.json'), JSON.stringify({
+      interactionMode: 'mission',
+      tags: [
+        { name: 'mission-orchestrator' },
+        { name: 'mission-session', metadata: { role: 'orchestrator', missionId: 'opaque-mission' } },
+      ],
+    }));
+    const getMessages = vi.fn(async () => [textMessage('m1', 'user', 'Implement duration formatting')]);
+    const fallback = fallbackLoader();
+    const loader = createDaemonFirstHistoryLoader({
+      sessionsDirectory, getDroid: droidWithMessages(getMessages),
+      isDaemonActive: () => true, fallback,
+    });
+    await expect(loader.loadHistory({ cwd: 'C:/different-canonical-folder', sessionId: 'saved-mission' }))
+      .resolves.toMatchObject({ status: 'available', mission: { state: null, role: 'orchestrator' } });
+    expect(fallback.loadHistory).not.toHaveBeenCalled();
+    expect(getMessages).toHaveBeenCalledTimes(version === 2 ? 0 : 1);
+  });
 });
 
 describe('task-invocation ledger reads', () => {

@@ -39,7 +39,7 @@ export async function manageTerminals(context: ManagementContext, manager: Daemo
 }
 
 export async function requestDroidUpdate(context: ManagementContext): Promise<void> {
-  if (!await confirm(context, 'Ask Droid to update itself? This is a shared local daemon operation and can affect other windows. Finish their tasks before continuing. It does not update the DroidVisX extension.')) return;
+  if (!await confirm(context, 'Ask Droid to update itself? This is a shared local daemon operation and can affect other windows. Finish their tasks before continuing. It does not update the Droid extension.')) return;
   const result = await context.droid.updates.trigger();
   if (!result.triggered) throw new ManagementError('Droid did not start an update. It may already be current or updates may be managed by policy.');
   await changed('Droid accepted the update request. This does not confirm installation has finished; reconnect after Droid completes its update.');

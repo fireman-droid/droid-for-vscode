@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ComposerView, type ComposerLayout } from '@droidvisx/chat-ui/chat/ComposerView';
-import type { AssistantWebviewState } from '../../webview/assistant/state/types';
-import type { ChatPort } from '../../webview/assistant/shell/chatIntent';
-import type { useComposerFlow } from '../../webview/assistant/composer/useComposerFlow';
-import { useCapabilityActions } from '../../webview/assistant/composer/useCapabilityActions';
-import { useAttachmentActions } from '../../webview/assistant/attachments/useAttachmentActions';
+import type { AssistantWebviewState } from '../state/types';
+import type { ChatPort } from '../host/chatIntent';
+import type { useComposerFlow } from './composer/useComposerFlow';
+import { useCapabilityActions } from './composer/useCapabilityActions';
+import { useAttachmentActions } from './attachments/useAttachmentActions';
 import { MAX_TURN_TEXT_LENGTH } from '../../shared/protocol/bounds';
-import type { SlashNavTarget } from '../../webview/assistant/composer/slashBuiltins';
+import type { SlashNavTarget } from './composer/slashBuiltins';
 import { StagedAttachments } from './EditAttachments';
 import { useAttachmentIngress } from './useAttachmentIngress';
 import { ComposerSuggestions, useComposerSuggestions } from './ComposerSuggestions';
-import { formatSelectionQuotes, parseSelectionQuotes } from '../../webview/assistant/btw/selectionQuote';
+import { formatSelectionQuotes, parseSelectionQuotes } from '@droidvisx/chat-ui/chat/selectionQuote';
 
 export function Composer({ state, port, flow, blocked, quoteNotice, renderInputRow, onFileSearch, onNavigate, onBtwOpen }: {
   readonly state: AssistantWebviewState;
@@ -33,7 +33,7 @@ export function Composer({ state, port, flow, blocked, quoteNotice, renderInputR
     count: state.attachments.length, disabled, onNotice: setNotice,
     actions: { image: attachments.handleAttachImage, pdf: attachments.handleAttachPdf, text: attachments.handleAttachTextFile, uris: attachments.handleAttachUris, remoteImage: attachments.handleAttachRemoteImage },
   });
-  const quote = parseSelectionQuotes(flow.draft);
+  const quote = useMemo(() => parseSelectionQuotes(flow.draft), [flow.draft]);
   const body = quote?.body ?? flow.draft;
   const changeBody = (value: string) => flow.handleDraftChange(formatSelectionQuotes(quote?.quotes ?? [], value));
   const suggestions = useComposerSuggestions({
@@ -53,15 +53,15 @@ export function Composer({ state, port, flow, blocked, quoteNotice, renderInputR
   }, [port, state.sessionId]);
   const running = state.turn?.status === 'submitting' || state.turn?.status === 'streaming' || state.turn?.status === 'stopping';
   const quotePrefixLength = formatSelectionQuotes(quote?.quotes ?? [], '').length;
-  const submit = () => { if (!flow.callbacks.isSendDisabled) void flow.callbacks.onSend(flow.draft); };
+  const submit = () => { if (!flow.callbacks.isSendDisabled && !ingress.isPreparing()) void flow.callbacks.onSend(flow.draft); };
   return <ComposerView value={body} quotes={quote?.quotes}
     onQuoteRemove={quote ? (index) => { suggestions.dismiss(); flow.handleDraftChange(formatSelectionQuotes(quote.quotes.filter((_, position) => position !== index), body)); } : undefined}
     onChange={suggestions.change}
-    onSend={submit} onStop={() => void flow.callbacks.onCancel()} running={running} sendDisabled={flow.callbacks.isSendDisabled}
+    onSend={submit} onStop={() => void flow.callbacks.onCancel()} running={running} sendDisabled={flow.callbacks.isSendDisabled || ingress.preparing > 0}
     stopLabel={state.turn?.status === 'stopping' ? 'Retry Stop' : 'Stop'}
     sendLabel={flow.queueEditingId !== null ? 'Save queued message' : state.turn?.status === 'stopping' || flow.queuedCount > 0 ? 'Queue message' : 'Send'}
     placeholder={state.transcript.length ? 'Add a follow up' : 'Ask Droid about your workspace'} maxLength={Math.max(0, MAX_TURN_TEXT_LENGTH - quotePrefixLength)}
-    focusSignal={flow.draftCommand.id} notice={notice ?? quoteNotice} onLayout={reportLayout}
+    focusSignal={flow.draftCommand.id} notice={ingress.preparing > 0 ? 'Preparing attachments…' : notice ?? quoteNotice} onLayout={reportLayout}
     inputReplacement={state.interactions.length ? <p className="min-w-0 flex-1 text-xs text-muted-foreground">Answer Droid’s request to continue.</p> : undefined}
     attachments={<StagedAttachments attachments={state.attachments} images={state.attachmentImages} actions={attachments} disabled={disabled} />}
     suggestionsOpen={suggestions.open} onSuggestionsOpenChange={(open) => { if (!open) suggestions.dismiss(); }}

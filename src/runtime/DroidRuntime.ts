@@ -354,6 +354,10 @@ export interface DroidRuntime {
   readSessionSettings(): Promise<RuntimeSessionSettings>;
   /** Host-only persisted Mission validator toggles, null outside Mission. */
   readMissionSettings?(): RuntimeMissionSettings | null;
+  /** Host-only SDK Mission state; the Host validates and projects this snapshot. */
+  readMissionSnapshot?(): unknown;
+  /** Changes continue while no local turn is streaming. Does not replay the initial snapshot. */
+  subscribeMissionSnapshot?(listener: (snapshot: unknown) => void): () => void;
   readContextWindow(): Promise<RuntimeContextWindow>;
   readModelCatalog(): Promise<RuntimeModelCatalog>;
   updateSessionSetting(

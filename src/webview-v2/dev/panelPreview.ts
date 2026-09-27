@@ -1,7 +1,7 @@
 import { MISSION_CONTROL_PANEL_PROTOCOL_VERSION, type MissionControlCatalogRow } from '../../shared/protocol/missionControlPanelProtocol';
 import { SESSION_VIEWER_PROTOCOL_VERSION, type SessionViewerSnapshotMessage } from '../../shared/protocol/sessionViewerProtocol';
-import { getStudioScenario } from '../../webview/dev/scenarios';
-import type { StudioConfig } from '../../webview/dev/studioRuntime';
+import { getStudioScenario } from './scenarios';
+import type { StudioConfig } from './studioRuntime';
 
 export function createPanelPreview(config: StudioConfig) {
   const posted: unknown[] = [];

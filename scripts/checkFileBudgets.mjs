@@ -1,4 +1,4 @@
-// Line-budget gate against large-file regrowth (refactor-plan.md §4).
+// Line-budget gate against large-file regrowth.
 // Budgets: TS/TSX 900, CSS 800, *.test.* 2000 lines. Files that were
 // already over budget when the gate landed are ratcheted: each is
 // allowed its recorded ceiling (2026-08-13 line count + 2%), may only
@@ -12,11 +12,10 @@ const TEST_BUDGET = 2000;
 
 // Ratchet allowlist: path -> ceiling. Only ever lower these numbers.
 const ALLOWLIST = new Map(Object.entries({
-  'src/webview/bridge/validateHostMessage.test.ts': 4618,
-  'src/webview/assistant/state/store.test.ts': 2419,
+  'src/webview-v2/bridge/validateHostMessage.test.ts': 4618,
+  'src/webview-v2/state/store.test.ts': 2419,
   'src/runtime/FactoryDroidRuntime.test.ts': 2322,
   'src/extension/__fixtures__/reconcileRealSession.ts': 1219,
-  'src/extension/chat/sessions/runtimeLifecycle.ts': 934,
   'src/runtime/history/projectSessionHistory.ts': 953,
 }));
 

@@ -1,7 +1,7 @@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { ChevronDown } from 'lucide-react';
 import type { PermissionInteractionRequest } from '../../shared/protocol/interactions';
-import { isNegativePermissionOption } from '../../webview/assistant/interactions/permissionPresentation';
+import { isNegativePermissionOption } from './interactions/permissionPresentation';
 import { Button } from '../ui/button';
 
 export function PermissionOptions({ options, plan, disabled, onSelect }: {

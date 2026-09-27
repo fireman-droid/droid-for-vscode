@@ -100,12 +100,12 @@ function readFeature(value: unknown): MissionRuntimeFeature | undefined {
       ],
     ) ||
     !isId(value.id) ||
-    !isText(value.description, MAX_MISSION_TASK_LENGTH) ||
+    !isText(value.description, MAX_MISSION_TASK_LENGTH, true) ||
     typeof value.status !== 'string' ||
     !FEATURE_STATUSES.has(value.status) ||
     !isText(value.skillName, MAX_MISSION_FEATURE_ID_LENGTH) ||
-    !isTextArray(value.preconditions, MAX_MISSION_FEATURES) ||
-    !isTextArray(value.expectedBehavior, MAX_MISSION_FEATURES) ||
+    !isTextArray(value.preconditions, MAX_MISSION_FEATURES, true) ||
+    !isTextArray(value.expectedBehavior, MAX_MISSION_FEATURES, true) ||
     (value.fulfills !== undefined &&
       !isTextArray(value.fulfills, MAX_MISSION_FEATURES)) ||
     (value.milestone !== undefined &&
@@ -126,6 +126,11 @@ function readFeature(value: unknown): MissionRuntimeFeature | undefined {
     status: value.status as MissionRuntimeFeature['status'],
     skillName: value.skillName,
     ...(value.milestone === undefined ? {} : { milestone: value.milestone }),
+    ...(value.workerSessionIds === undefined ? {} : { workerSessionIds: value.workerSessionIds }),
+    ...(value.currentWorkerSessionId === undefined
+      ? {} : { currentWorkerSessionId: value.currentWorkerSessionId }),
+    ...(value.completedWorkerSessionId === undefined
+      ? {} : { completedWorkerSessionId: value.completedWorkerSessionId }),
   };
 }
 
@@ -318,11 +323,12 @@ function normalizeWorkerCompleted(
     : undefined;
 }
 
-function isText(value: unknown, maximum: number): value is string {
+function isText(value: unknown, maximum: number, multiline = false): value is string {
   return (
     typeof value === 'string' &&
     value.length <= maximum &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
+    !(multiline ? /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/
+      : /[\u0000-\u001f\u007f-\u009f]/).test(value)
   );
 }
 
@@ -349,9 +355,9 @@ function isIdArray(value: unknown): value is string[] {
   );
 }
 
-function isTextArray(value: unknown, maximum: number): value is string[] {
+function isTextArray(value: unknown, maximum: number, multiline = false): value is string[] {
   return (
     isExactArray(value, 0, maximum) &&
-    value.every((item) => isText(item, MAX_MISSION_TASK_LENGTH))
+    value.every((item) => isText(item, MAX_MISSION_TASK_LENGTH, multiline))
   );
 }

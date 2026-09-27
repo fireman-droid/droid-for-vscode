@@ -2,7 +2,8 @@ import { UNAVAILABLE_IDE, type IdeState } from '../../shared/protocol/ideProtoco
 import type { ChatController } from './ChatController';
 import { isTurnActive } from './internals';
 import { evaluateActiveSessionTransform } from './operationEligibility';
-import { ensureActiveRuntimeWorkspaceCurrent, replaceRuntime } from './sessions/runtimeLifecycle';
+import { ensureActiveRuntimeWorkspaceCurrent } from './sessions/workspaceLifecycle';
+import { replaceRuntime } from './sessions/runtimeLifecycle';
 import type { DroidRuntime } from '../../runtime/DroidRuntime';
 import { maybeDispatchQueue, pauseQueueAsBlocked } from './queue/queue';
 
@@ -118,7 +119,7 @@ export async function reconnectControllerIde(ctl: ChatController, sessionId: str
     ctl.recordHost({ level: 'warn', name: 'ide.native.reconnect-failed',
       detail: error instanceof Error ? error.message : 'IDE reconnection failed.' });
     if (ctl.sessionState.sessionId === sessionId) {
-      ctl.ideReconnectError = { sessionId, message: 'IDE reconnection was not completed. Finish background tasks and close managed terminals, then retry. See DroidVisX Logs for details.' };
+      ctl.ideReconnectError = { sessionId, message: 'IDE reconnection was not completed. Finish background tasks and close managed terminals, then retry. See Droid Logs for details.' };
       if (closingSource && current()) {
         ctl.sessionState.connection = {
           status: 'unavailable', message: 'IDE reconnection could not finish. Retry to restore the saved session.',

@@ -67,6 +67,7 @@ import type {
 import type {
   InteractionClosedMessage,
   InteractionRequestMessage,
+  PendingInteractionSnapshot,
 } from './protocol/interactions';
 import type {
   SessionArchivedStateMessage,
@@ -99,6 +100,7 @@ import type {
   McpServerToggleMessage,
   ModelCatalogState,
   ModelCatalogStateMessage,
+  ModelCatalogRefreshMessage,
   PluginsRefreshMessage,
   SessionCommandsStateMessage,
   SessionContextRefreshMessage,
@@ -121,6 +123,7 @@ import type {
   UiThemeSetMessage,
   UserMessageMetaMessage,
   WebviewReadyMessage,
+  WebviewStateAppliedMessage,
 } from './protocol/shell';
 import type {
   AssistantDeltaMessage,
@@ -203,7 +206,9 @@ import type { ToolActivityMessage } from './protocol/toolProtocol';
 // v46 separates per-file Diff invalidation from the cumulative changes ledger.
 // v47 separates operation evidence, execution phases and workspace comparisons.
 // v48 reports confirmed native IDE connection and disconnection.
-export const BRIDGE_PROTOCOL_VERSION = 48 as const;
+// v49 includes pending interactions in authoritative conversation snapshots.
+// v50 adds a session-scoped retry for the runtime model catalog.
+export const BRIDGE_PROTOCOL_VERSION = 51 as const;
 
 export type WebviewToHostMessage =
   | IdeReconnectMessage
@@ -212,6 +217,7 @@ export type WebviewToHostMessage =
   | ModelsOpenMessage
   | ManagementOpenMessage
   | WebviewReadyMessage
+  | WebviewStateAppliedMessage
   | WebviewDiagnosticMessage
   | TurnSendMessage
   | TurnStopMessage
@@ -231,6 +237,7 @@ export type WebviewToHostMessage =
   | SessionsArchivedRefreshMessage
   | SessionSearchMessage
   | SessionContextRefreshMessage
+  | ModelCatalogRefreshMessage
   | SessionCompactMessage
   | SessionForkMessage
   | FileOpenDiffMessage
@@ -306,6 +313,8 @@ export interface HostSnapshotMessage {
   readonly context: SessionContextState;
   readonly modelCatalog: ModelCatalogState;
   readonly transcript: readonly SessionTranscriptItem[];
+  /** Authoritative pending input requests; absent means none. */
+  readonly interactions?: readonly PendingInteractionSnapshot[];
   readonly historyStatus: SessionHistoryStatus;
   readonly truncated: boolean;
   readonly latestChanges?: LatestConversationChanges;

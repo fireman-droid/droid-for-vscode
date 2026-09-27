@@ -17,6 +17,36 @@ import { SESSION_HISTORY_UNAVAILABLE_MESSAGE } from './SessionHistory';
 import { projectSessionHistory, projectSessionMessages } from './projectSessionHistory';
 
 describe('projectSessionHistory', () => {
+  it('preserves the recorded creation time of user and assistant message blocks', () => {
+    const userTime = Date.parse('2026-09-26T10:01:02.000Z');
+    const assistantTime = userTime + 30_000;
+    const result = projectSessionHistory(response([
+      { ...message('user-time', 'user', [{ type: 'text', text: 'Question' }]),
+        createdAt: userTime, updatedAt: userTime + 60_000 },
+      { ...message('assistant-time', 'assistant', [
+        { type: 'text', text: 'First block' }, { type: 'text', text: 'Second block' },
+      ]), createdAt: assistantTime, updatedAt: assistantTime + 60_000 },
+    ]));
+    expect(result).toMatchObject({ status: 'available', state: { transcript: [
+      { kind: 'user', text: 'Question', timestamp: userTime },
+      { kind: 'assistant', text: 'First block', timestamp: assistantTime },
+      { kind: 'assistant', text: 'Second block', timestamp: assistantTime },
+    ] } });
+  });
+
+  it.each([undefined, 0, -1, NaN, Infinity, 1.5, 8_640_000_000_000_001, '2026-09-26T10:01:02Z'])(
+    'does not invent a timestamp for unavailable creation time %s', (createdAt) => {
+      const result = projectSessionHistory(response(['user', 'assistant'].map(role => ({
+        ...message(`${role}-unknown-time`, role, [{ type: 'text', text: 'No recorded time' }]),
+        createdAt, updatedAt: Date.parse('2026-09-26T10:01:02.000Z'),
+      }))));
+      expect(result.status).toBe('available');
+      if (result.status !== 'available') throw new Error('Expected projected history.');
+      expect(result.state.transcript).toHaveLength(2);
+      for (const item of result.state.transcript) expect(item).not.toHaveProperty('timestamp');
+    },
+  );
+
   it('identifies external child reads without exposing directories or file contents', () => {
     const root = resolve('workspace-root');
     const result = projectSessionHistory(response([

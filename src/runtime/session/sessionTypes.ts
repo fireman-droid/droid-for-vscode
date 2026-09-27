@@ -21,6 +21,8 @@ export interface FactoryDroidSession {
   listCommands?(): Promise<readonly RuntimeCommand[]>;
   readonly settings: Readonly<SessionSettings>;
   readonly availableModels?: readonly AvailableModelConfig[];
+  /** Reads a fresh catalog without restarting or replacing the active session. */
+  readAvailableModels?(): Promise<readonly AvailableModelConfig[] | undefined>;
   /**
    * Actual session working directory when the backend reports one.
    * Daemon sessions expose it (worktree sessions run in the worktree
@@ -44,6 +46,8 @@ export interface FactoryDroidSession {
    * omit it (their turns cannot outlive the window).
    */
   readWorkingState?(): Promise<string | null>;
+  readMissionSnapshot?(): unknown;
+  subscribeMissionSnapshot?(listener: (snapshot: unknown) => void): () => void;
   updateSettings(params: DroidSessionUpdateSettingsOptions): Promise<unknown>;
   getContextStats(): Promise<GetContextStatsResult>;
   /**

@@ -12,6 +12,7 @@ import { describeDiffBytes } from '../changes/diffDiagnostics';
 import { applySdkPatch } from './reviewSdkPatch';
 import { recordedOperationVersion } from './reviewOperationScope';
 import type { ReviewPanelFile } from '../../shared/protocol/reviewPanelProtocol';
+import { recordedFileContent } from './recordedFileContent';
 
 export interface ReviewContentSource {
   readonly snapshots: TurnSnapshotStore;
@@ -82,14 +83,18 @@ export async function readReviewPatch(source: ReviewContentSource, scope: Active
     if (!matching.length) throw new Error('No saved before/after snapshot or recorded changes are available for this file. Open the current file to inspect it.');
     const recordedOperations: NonNullable<ReviewPanelFile['recordedOperations']>[number][] = [];
     let units = 0;
-    for (const { toolUseId, patch, source, outcome, message } of matching) {
-      if (recordedOperations.length === 200 || units + patch.length > 512_000) break;
-      recordedOperations.push({ toolUseId, patch, source,
+    for (const { toolUseId, toolName, sequence, kind, patch, submittedContent, source, outcome, message } of matching) {
+      const size = patch.length + (submittedContent?.length ?? 0);
+      if (recordedOperations.length === 200 || units + size > 512_000) break;
+      recordedOperations.push({ toolUseId, toolName, sequence, kind, patch, source,
+        ...(submittedContent === undefined ? {} : { submittedContent }),
         ...(outcome === undefined ? {} : { outcome }), ...(message === undefined ? {} : { message }) });
-      units += patch.length;
+      units += size;
     }
+    const content = scope.operationUndoBlocked ? undefined : recordedFileContent(matching);
     return { version: recordedOperationVersion(matching),
-      patch: '', truncated: recordedOperations.length !== matching.length, recordedOperations };
+      patch: '', truncated: recordedOperations.length !== matching.length, recordedOperations,
+      ...(content === undefined ? {} : { recordedContent: content }) };
   }
   if (scope.sdkPatches !== undefined && context === 3) {
     const entry = scope.sdkPatches.get(path);
