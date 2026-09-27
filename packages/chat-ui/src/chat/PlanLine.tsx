@@ -1,3 +1,4 @@
+import { Check, ChevronDown, Circle } from 'lucide-react';
 import { useId } from 'react';
 import { Button } from '../ui/button';
 import { Collapsible, CollapsibleTrigger, AnimatedCollapsibleContent } from '../ui/collapsible';
@@ -22,9 +23,10 @@ export function PlanLine({ anchor, running, override, onToggle }: {
       <CollapsibleTrigger asChild>
         <Button variant="plain" size="none" className="dvx-plan-trigger" aria-controls={id}
           aria-label={`${expanded ? 'Hide' : 'Show'} plan steps: ${title}. ${progress}`} title={title}>
-          <span aria-hidden="true" className="dvx-plan-marker" />
+          <span aria-hidden="true" className="dvx-plan-marker"><Check /></span>
           <span className="dvx-plan-title"><span key={title} className="dvx-plan-title-text">{title}</span></span>
-          <span className="dvx-plan-count" aria-hidden="true">{anchor.completedCount}/{anchor.totalCount}</span>
+          {!anchor.allCompleted ? <span className="dvx-plan-count" aria-hidden="true">{anchor.completedCount}/{anchor.totalCount}</span> : null}
+          <ChevronDown aria-hidden="true" className="dvx-plan-chevron" />
         </Button>
       </CollapsibleTrigger>
       <AnimatedCollapsibleContent id={id} open={expanded} className="dvx-plan-details">
@@ -38,7 +40,7 @@ export function PlanSteps({ steps }: { readonly steps: readonly PlanStep[] }) {
   return <ol className="dvx-plan-steps" aria-label="Plan steps">
     {steps.map((step, index) => <li key={`${index}:${step.text}`} className="dvx-plan-step" data-status={step.status}
       aria-current={step.status === 'in_progress' ? 'step' : undefined}>
-      <span aria-hidden="true" className="dvx-plan-step-marker" />
+      <span aria-hidden="true" className="dvx-plan-step-marker"><Circle /><Check /></span>
       <span className="sr-only">{step.status === 'completed' ? 'Completed: ' : step.status === 'in_progress' ? 'In progress: ' : 'Pending: '}</span>
       <span>{step.text}</span>
     </li>)}

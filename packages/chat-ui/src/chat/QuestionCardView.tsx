@@ -98,7 +98,7 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
       aria-hidden={placeholder || undefined}
       aria-busy={draft?.phase === 'resending' || undefined}
       style={placeholder && draft?.phase === 'editing' && placeholderHeight ? { height: placeholderHeight } : undefined}
-      className={cn('min-w-0', Boolean(plan) && draft?.phase !== 'resending' && 'dvx-question-plan-card', placeholder && 'invisible pointer-events-none')}
+      className={cn('min-w-0', placeholder && 'invisible pointer-events-none')}
       onDragOver={editing ? onDragOver : undefined}
       onDrop={editing ? onDrop : undefined}
     >
