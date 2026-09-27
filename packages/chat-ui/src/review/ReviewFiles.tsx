@@ -1,6 +1,7 @@
 import { memo, useDeferredValue, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Key } from 'react';
-import { Check, ChevronDown, ChevronRight, FileCode2, Folder, FolderTree, List, Search } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, FileCode2, Folder, FolderTree, List, Search, SlidersHorizontal } from 'lucide-react';
 export interface ReviewFile { readonly path: string; readonly status: string; readonly changeKind?: string; readonly additions: number | null; readonly deletions: number | null }
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/selection';
@@ -46,9 +47,9 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
     estimateSize: (index) => {
       const file = rows[index]?.file;
       if (!file) return 34;
-      const contentHeight = 20 + (!tree && file.path.includes('/') ? 18 : 0) + (visibleStatuses.has(file.status) ? 18 : 0);
-      // Include the row's padding, border, and vertical margins.
-      return Math.max(40, contentHeight + 18) + 8;
+      const contentHeight = 18 + (!tree && file.path.includes('/') ? 16 : 0) + (visibleStatuses.has(file.status) ? 16 : 0);
+      // Include compact row padding; actual sizes are measured after rendering.
+      return Math.max(32, contentHeight + 8);
     } });
   useLayoutEffect(() => {
     if (!selected || !tree) return;
@@ -78,17 +79,24 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
     style: { display: 'flow-root', ...(virtual ? { position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${item.start}px)` } : {}) } as CSSProperties,
   });
   return <aside className="review-files" aria-label="Changed files" style={width ? { width } : undefined}>
-    <div className="review-files-title"><strong>Files <span>{filtered.length === files.length ? files.length : `${filtered.length} / ${files.length}`}</span></strong>
-      <ToggleGroup type="single" className="review-file-layout" aria-label="File layout" value={tree ? 'tree' : 'list'}
-        onValueChange={(value) => { if (value) setTree(value === 'tree'); }}>
-        <ToggleGroupItem className="h-7 w-7 rounded-[5px] p-[5px]" value="list" aria-label="Show flat file list" title="List view"><List aria-hidden="true" /></ToggleGroupItem>
-        <ToggleGroupItem className="h-7 w-7 rounded-[5px] p-[5px]" value="tree" aria-label="Show file tree" title="Tree view"><FolderTree aria-hidden="true" /></ToggleGroupItem>
+    <div className="review-files-tools">
+      <div className="review-file-search"><Search aria-hidden="true" />
+        <Input className="h-7 pl-7 text-xs" type="search" aria-label="Filter files" placeholder="Filter files" value={filter} onChange={(event) => setFilter(event.target.value)} />
+      </div>
+      <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="File filters and width" data-active={unreviewed}><SlidersHorizontal /></Button></PopoverTrigger>
+        <PopoverContent className="review-file-options" align="start">
+          <label className="review-unreviewed"><Checkbox checked={unreviewed} onCheckedChange={(checked) => setUnreviewed(checked === true)} />Unreviewed only</label>
+          <div className="review-file-width-control"><span>Sidebar width</span>
+            <Slider className="review-file-width" aria-label="File sidebar width" min={200} max={440} step={10} value={[width ?? 224]} onValueChange={([value]) => setWidth(value)} />
+          </div>
+        </PopoverContent>
+      </Popover>
+      <ToggleGroup type="single" className="review-file-layout" aria-label="File layout" value={tree ? 'tree' : 'list'} onValueChange={(value) => { if (value) setTree(value === 'tree'); }}>
+        <ToggleGroupItem className="h-7 w-6 p-1" value="list" aria-label="Show flat file list" title="List view"><List aria-hidden="true" /></ToggleGroupItem>
+        <ToggleGroupItem className="h-7 w-6 p-1" value="tree" aria-label="Show file tree" title="Tree view"><FolderTree aria-hidden="true" /></ToggleGroupItem>
       </ToggleGroup>
     </div>
-    <div className="review-file-search"><Search aria-hidden="true" />
-      <Input className="h-[34px] pl-8 text-xs bg-[var(--review-canvas)]" type="search" aria-label="Filter files" placeholder="Find a file…" value={filter} onChange={(event) => setFilter(event.target.value)} />
-    </div>
-    <label className="review-unreviewed"><Checkbox checked={unreviewed} onCheckedChange={(checked) => setUnreviewed(checked === true)} />Unreviewed only</label>
+    <div className="review-files-title"><strong>{unreviewed ? 'Unreviewed files' : 'Changed files'}</strong><span>{filtered.length === files.length ? files.length : `${filtered.length} / ${files.length}`}</span></div>
     <div className="review-file-list" ref={list.viewport} onKeyDown={list.onKeyDown} onFocusCapture={list.onFocusCapture} onBlurCapture={list.onBlurCapture}>
       <div style={virtual ? { position: 'relative', height: list.virtualizer.getTotalSize() } : undefined}>
       {[...visibleGroups].map(([directory, items]) => <Collapsible key={directory} open={!directory || !collapsed.has(directory)} onOpenChange={(open) => setCollapsed((old) => {
@@ -122,9 +130,6 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
       {!filtered.length ? <p className="review-empty">{files.length === 0 ? 'No changed files in this scope.' : 'No matching files.'}
         {files.length > 0 ? <Button variant="link" size="sm" onClick={() => { setFilter(''); setUnreviewed(false); }}>Clear filters</Button> : null}
       </p> : null}
-    </div>
-    <div className="review-file-width-control"><span>Width</span>
-      <Slider className="review-file-width" aria-label="File sidebar width" min={200} max={440} step={10} value={[width ?? 280]} onValueChange={([value]) => setWidth(value)} />
     </div>
   </aside>;
 });

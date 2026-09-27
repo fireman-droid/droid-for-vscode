@@ -1,12 +1,12 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, History, Info } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight, Columns2, History, Info, Rows3 } from 'lucide-react';
 import type { ReviewRecordedContent, ReviewRecordedEntry } from '../../shared/protocol/reviewPanelProtocol';
 import { hasOperationTextChanges } from '../../shared/protocol/operationDiff';
 import { inlineDiffLines } from '@droidvisx/chat-ui/review/inlineDiffLines';
 import { Button } from '../ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { ToggleGroup, ToggleGroupItem } from '../ui/controls';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/selection';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { DiffView } from './DiffView';
 import { RecordedSource } from './RecordedSource';
 
@@ -17,123 +17,94 @@ function outcomeLabel(entry: ReviewRecordedEntry): string {
   if (entry.source !== 'tool-result') return 'Input only';
   return entry.outcome === 'applied' ? 'Applied' : entry.outcome === 'failed' ? 'Failed' : 'Unconfirmed';
 }
-function patchCounts(patch: string): { additions: number; deletions: number } {
-  let additions = 0, deletions = 0;
-  for (const line of inlineDiffLines(patch)) {
-    if (line.kind === 'add') additions++;
-    if (line.kind === 'remove') deletions++;
-  }
-  return { additions, deletions };
-}
 function OperationStats({ entry }: { readonly entry: ReviewRecordedEntry }) {
+  const counts = useMemo(() => {
+    let additions = 0, deletions = 0;
+    for (const line of inlineDiffLines(entry.patch)) {
+      if (line.kind === 'add') additions++;
+      if (line.kind === 'remove') deletions++;
+    }
+    return { additions, deletions };
+  }, [entry.patch]);
   if (entry.submittedContent !== undefined) return <span className="review-operation-detail">Full file · {entry.submittedContent.split('\n').length} lines</span>;
-  if (!hasOperationTextChanges(entry.patch)) return <span className="review-operation-detail">No text captured</span>;
-  const counts = patchCounts(entry.patch);
+  if (!hasOperationTextChanges(entry.patch)) return <span className="review-operation-detail">No saved text</span>;
   return <span className="review-file-stats"><i>+{counts.additions}</i><b>−{counts.deletions}</b></span>;
 }
-function SavedPatch({ entry, index, path, split, showHeader }: {
-  readonly entry: ReviewRecordedEntry; readonly index: number; readonly path: string; readonly split: boolean; readonly showHeader: boolean;
+function SavedEdit({ entry, index, path, split, showHeader = false }: {
+  readonly entry: ReviewRecordedEntry; readonly index: number; readonly path: string; readonly split: boolean; readonly showHeader?: boolean;
 }) {
   return <section className="review-recorded-patch">
     {showHeader ? <header><span className="review-operation-number">Edit {index + 1}</span><strong>{operationName(entry)}</strong><OperationStats entry={entry} /></header> : null}
     {entry.message ? <p className="review-recorded-note">{entry.message}</p> : null}
-    <DiffView patch={entry.patch} path={path} split={split} />
+    {entry.submittedContent !== undefined ? <RecordedSource content={entry.submittedContent} path={path} label="Submitted file version" />
+      : hasOperationTextChanges(entry.patch) ? <DiffView patch={entry.patch} path={path} split={split} />
+      : <div className="review-recorded-empty"><Info aria-hidden /><div><strong>No saved text for this operation</strong><p>The operation result is retained; its code changes are unavailable.</p></div></div>}
   </section>;
 }
-function OperationHistory({ entries, path, split, missing }: {
-  readonly entries: readonly ReviewRecordedEntry[]; readonly path: string; readonly split: boolean; readonly missing: number;
-}) {
-  return <Collapsible className="review-history">
-    <CollapsibleTrigger asChild><Button variant="plain" size="none" className="review-history-trigger">
-      <History aria-hidden /><strong>History</strong><span>{entries.length} {entries.length === 1 ? 'operation' : 'operations'}{missing > 0 ? ` · ${missing} without saved text` : ''}</span><ChevronRight className="review-disclosure-chevron" aria-hidden />
-    </Button></CollapsibleTrigger>
-    <CollapsibleContent className="review-disclosure-content"><div className="review-history-list">
-      {entries.map((entry, index) => {
-        const hasText = entry.submittedContent !== undefined || hasOperationTextChanges(entry.patch);
-        const summary = <><span className="review-operation-number">{index + 1}</span><strong>{operationName(entry)}</strong>
-          <span className="review-operation-outcome" data-outcome={entry.outcome}>{outcomeLabel(entry)}</span><OperationStats entry={entry} /></>;
-        return <Collapsible key={`${entry.toolUseId}:${index}`} className="review-history-entry">
-          {hasText || entry.message ? <CollapsibleTrigger asChild><Button variant="plain" size="none" className="review-history-entry-trigger">
-            {summary}<ChevronRight className="review-disclosure-chevron" aria-hidden />
-          </Button></CollapsibleTrigger> : <div className="review-history-entry-trigger">{summary}</div>}
-          <CollapsibleContent className="review-disclosure-content">
-            {entry.message ? <p className="review-recorded-note">{entry.message}</p> : null}
-            {entry.submittedContent !== undefined ? <RecordedSource content={entry.submittedContent} path={path} label="Submitted file version" />
-              : hasOperationTextChanges(entry.patch) ? <DiffView patch={entry.patch} path={path} split={split} /> : null}
-          </CollapsibleContent>
-        </Collapsible>;
-      })}
-    </div></CollapsibleContent>
-  </Collapsible>;
-}
 
-/** Recorded evidence stays separate from the current worktree and Git's net diff. */
-export function RecordedFileReview({ entries, content, path, split, onSplit, onHunk }: {
+/** Displays saved evidence without treating it as a net workspace diff. */
+export function RecordedFileReview({ entries, content, path, split, onSplit, onHunk, toolbarTarget }: {
   readonly entries: readonly ReviewRecordedEntry[]; readonly content?: ReviewRecordedContent; readonly path: string;
   readonly split: boolean; readonly onSplit: (split: boolean) => void; readonly onHunk: (direction: number) => void;
+  readonly toolbarTarget: HTMLElement | null;
 }) {
   const [view, setView] = useState('file');
   const [editKey, setEditKey] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
-  const patches = useMemo(() => entries.flatMap((entry, index) => entry.source === 'tool-result' && entry.outcome === 'applied' && hasOperationTextChanges(entry.patch) ? [{ entry, key: `${entry.toolUseId}:${index}` }] : []), [entries]);
-  const missing = entries.filter((entry) => entry.submittedContent === undefined && !hasOperationTextChanges(entry.patch)).length;
-  const activeView = content ? view : 'patches';
-  const selectedIndex = editKey === null ? patches.length - 1 : patches.findIndex(({ key }) => key === editKey);
-  const effectiveIndex = selectedIndex < 0 ? patches.length - 1 : selectedIndex;
-  const selected = patches[effectiveIndex];
-  const allEdits = editKey === 'all' && patches.length > 1;
-  const selectEdit = (index: number) => setEditKey(index === patches.length - 1 ? null : patches[index]!.key);
+  const records = useMemo(() => entries.map((entry, index) => ({ entry, key: `${entry.toolUseId}:${index}` })), [entries]);
+  const latestPatch = records.reduce((latest, { entry }, index) => entry.source === 'tool-result' && entry.outcome === 'applied' && hasOperationTextChanges(entry.patch) ? index : latest, -1);
+  const defaultIndex = latestPatch >= 0 ? latestPatch : records.length - 1;
+  const selectedIndex = editKey === null ? defaultIndex : records.findIndex(({ key }) => key === editKey);
+  const index = selectedIndex < 0 ? defaultIndex : selectedIndex;
+  const selected = records[index];
+  const activeView = content ? view : 'edits';
+  const allEdits = editKey === 'all' && records.length > 1;
+  const hasPatch = activeView === 'edits' && (allEdits ? entries.some((entry) => hasOperationTextChanges(entry.patch)) : !!selected && hasOperationTextChanges(selected.entry.patch));
+  const selectEdit = (next: number) => { setEditKey(records[next]!.key); setView('edits'); };
   useLayoutEffect(() => {
     root.current?.closest('.review-code-scroll')?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [editKey, activeView, path]);
-  const patchContent = selected ? <div className="review-recorded-patches">
-    {allEdits ? patches.map(({ entry, key }, index) => <SavedPatch key={key} entry={entry} index={index} path={path} split={split} showHeader />)
-      : <SavedPatch key={selected.key} entry={selected.entry} index={effectiveIndex} path={path} split={split} showHeader={false} />}
-  </div> : <div className="review-recorded-empty"><Info aria-hidden /><div><strong>No saved text diff</strong><p>{content ? 'The tool wrote a full file. Open File version to read it.' : 'Open History to inspect the available operation results.'}</p></div></div>;
-  return <Tabs ref={root} className="review-recorded" value={activeView} onValueChange={setView}>
-    <div className="review-recorded-toolbar">
-      <div className="review-recorded-toolbar-main">
-      {content ? <TabsList aria-label="Recorded file view" className="review-recorded-tabs border-0">
-        <TabsTrigger className="border-0 text-[13px]" value="file">File version</TabsTrigger><TabsTrigger className="border-0 text-[13px]" value="patches">Edits <span>{patches.length}</span></TabsTrigger>
-      </TabsList> : <strong className="review-recorded-heading">Edits <span>{patches.length}</span></strong>}
-      <span className="review-top-spacer" />
-      {activeView === 'patches' && patches.length > 0 ? <>
-        <ToggleGroup type="single" className="review-mode" aria-label="Diff layout" value={split ? 'split' : 'unified'} onValueChange={(value) => { if (value) onSplit(value === 'split'); }}>
-          <ToggleGroupItem className="h-8 text-[13px]" value="unified">Unified</ToggleGroupItem><ToggleGroupItem className="h-8 text-[13px]" value="split">Split</ToggleGroupItem>
-        </ToggleGroup>
-        <Button variant="ghost" size="icon-sm" aria-label="Previous change" onClick={() => onHunk(-1)}><ArrowUp /></Button>
-        <Button variant="ghost" size="icon-sm" aria-label="Next change" onClick={() => onHunk(1)}><ArrowDown /></Button>
-      </> : null}
-      </div>
-      {activeView === 'patches' && selected ? <div className="review-edit-nav">
-        <div className="review-edit-picker">
-          <Button variant="ghost" size="icon-sm" className="size-8" aria-label="Previous recorded edit" disabled={allEdits || effectiveIndex === 0} onClick={() => selectEdit(effectiveIndex - 1)}><ChevronLeft /></Button>
-          <Select value={allEdits ? 'all' : selected.key} onValueChange={(key) => setEditKey(key === patches.at(-1)?.key ? null : key)}>
-            <SelectTrigger aria-label="Choose recorded edit" className="review-edit-select h-8 bg-[var(--review-record-chrome)]"><SelectValue>{allEdits ? 'All edits' : `Edit ${effectiveIndex + 1} of ${patches.length}`}</SelectValue></SelectTrigger>
-            <SelectContent className="min-w-[220px]">
-              {patches.map(({ entry, key }, index) => <SelectItem key={key} value={key}>Edit {index + 1} · {operationName(entry)}{index === patches.length - 1 ? ' · Latest' : ''}</SelectItem>)}
-              {patches.length > 1 ? <SelectItem value="all">All edits</SelectItem> : null}
-            </SelectContent>
-          </Select>
-          <Button variant="ghost" size="icon-sm" className="size-8" aria-label="Next recorded edit" disabled={allEdits || effectiveIndex === patches.length - 1} onClick={() => selectEdit(effectiveIndex + 1)}><ChevronRight /></Button>
-        </div>
-        {allEdits ? <span className="review-edit-description">{patches.length} separate edits in order</span> : <div className="review-edit-description">
-          <strong title={operationName(selected.entry)}>{operationName(selected.entry)}</strong>
-          {effectiveIndex === patches.length - 1 ? <span className="review-edit-latest">Latest</span> : null}
-          <OperationStats entry={selected.entry} />
-        </div>}
-      </div> : null}
-    </div>
-    <div className="review-recorded-summary">
-      <Info aria-hidden /><div>
-        <p>{activeView === 'file' && content ? `Saved file${content.appliedEdits ? ` with ${content.appliedEdits} later ${content.appliedEdits === 1 ? 'edit' : 'edits'}` : ''}; the original baseline is unavailable. It may differ from your workspace.`
-          : 'Each edit is a saved tool result, not the file’s combined changes.'}</p>
-        {activeView === 'file' && content && content.remainingOperations > 0 ? <p className="review-recorded-warning"><strong>Partial version.</strong> {content.remainingOperations} later {content.remainingOperations === 1 ? 'operation is' : 'operations are'} missing from this view. Open Edits or History to inspect them.</p> : null}
-      </div>
-    </div>
-    {content ? <TabsContent value="file" className="review-recorded-panel"><RecordedSource content={content.content} path={path} /></TabsContent> : null}
-    {content ? <TabsContent value="patches" className="review-recorded-panel">{patchContent}</TabsContent>
-      : <div className="review-recorded-panel">{patchContent}</div>}
-    <OperationHistory entries={entries} path={path} split={split} missing={missing} />
-  </Tabs>;
+  const toolbar = <>
+    {content && entries.length > 0 ? <ToggleGroup type="single" className="review-mode review-recorded-tabs" aria-label="Recorded file view" value={activeView} onValueChange={(value) => { if (value) setView(value); }}>
+      <ToggleGroupItem className="h-7 text-xs" value="file">File</ToggleGroupItem><ToggleGroupItem className="h-7 text-xs" value="edits">Edits</ToggleGroupItem>
+    </ToggleGroup> : null}
+    {activeView === 'edits' && records.length > 1 ? <div className="review-edit-picker">
+      <Button variant="ghost" size="icon-sm" aria-label="Previous recorded edit" disabled={allEdits || index <= 0} onClick={() => selectEdit(index - 1)}><ChevronLeft /></Button>
+      <span className="review-edit-position">{allEdits ? 'All edits' : `Edit ${index + 1} of ${records.length}`}</span>
+      <Button variant="ghost" size="icon-sm" aria-label="Next recorded edit" disabled={allEdits || index >= records.length - 1} onClick={() => selectEdit(index + 1)}><ChevronRight /></Button>
+    </div> : null}
+    {records.length > 0 ? <DropdownMenu>
+      <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="Edit history" title="Edit history"><History /></Button></DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="review-history-menu">
+        <p className="review-history-heading">Edit history · {records.length}</p>
+        {records.map(({ entry, key }, recordIndex) => <DropdownMenuItem key={key} className="review-history-item" onSelect={() => selectEdit(recordIndex)}>
+          <span className="review-operation-number">{recordIndex + 1}</span>
+          <span className="review-history-description"><strong>{operationName(entry)}</strong><small>{outcomeLabel(entry)} · {entry.submittedContent !== undefined ? 'Saved file' : hasOperationTextChanges(entry.patch) ? 'Saved patch' : 'No saved text'}</small></span>
+          {activeView === 'edits' && !allEdits && index === recordIndex ? <Check aria-label="Selected edit" /> : null}
+        </DropdownMenuItem>)}
+        {records.length > 1 ? <DropdownMenuItem onSelect={() => { setEditKey('all'); setView('edits'); }}>Show all edits in order</DropdownMenuItem> : null}
+      </DropdownMenuContent>
+    </DropdownMenu> : null}
+    {hasPatch ? <>
+      <ToggleGroup type="single" className="review-mode" aria-label="Diff layout" value={split ? 'split' : 'unified'} onValueChange={(value) => { if (value) onSplit(value === 'split'); }}>
+        <ToggleGroupItem className="h-7 w-7 p-1.5" value="unified" aria-label="Unified view" title="Unified view"><Rows3 /></ToggleGroupItem>
+        <ToggleGroupItem className="h-7 w-7 p-1.5" value="split" aria-label="Split view" title="Split view"><Columns2 /></ToggleGroupItem>
+      </ToggleGroup>
+      <Button variant="ghost" size="icon-sm" aria-label="Previous change" onClick={() => onHunk(-1)}><ArrowUp /></Button>
+      <Button variant="ghost" size="icon-sm" aria-label="Next change" onClick={() => onHunk(1)}><ArrowDown /></Button>
+    </> : null}
+  </>;
+  return <div className="review-recorded" ref={root}>
+    {toolbarTarget ? createPortal(toolbar, toolbarTarget) : null}
+    <div className="review-recorded-summary"><Info aria-hidden /><div>
+      <p>{activeView === 'file' && content ? `Saved file${content.appliedEdits ? ` · ${content.appliedEdits} later edits included` : ''}. Original baseline unavailable; may differ from your workspace.`
+        : allEdits ? 'Saved operations in order · these are separate edits, not a combined diff.'
+          : selected ? `Edit ${index + 1} · ${operationName(selected.entry)} · ${outcomeLabel(selected.entry)}. Saved evidence, not a combined diff.` : 'No saved operations.'}</p>
+      {activeView === 'file' && content && content.remainingOperations > 0 ? <p className="review-recorded-warning">Partial version · {content.remainingOperations} later operations are not included. Check Edits or History.</p> : null}
+    </div></div>
+    {activeView === 'file' && content ? <RecordedSource content={content.content} path={path} />
+      : allEdits ? <div className="review-recorded-patches">{records.map(({ entry, key }, index) => <SavedEdit key={key} entry={entry} index={index} path={path} split={split} showHeader />)}</div>
+      : selected ? <SavedEdit entry={selected.entry} index={index} path={path} split={split} />
+      : <p className="review-empty">No saved text is available for this file.</p>}
+  </div>;
 }

@@ -1,111 +1,42 @@
 @layer components {
-  .review-recorded {
-    min-width: 0;
-    padding-bottom: 24px;
-    font-size: 13px;
-    --review-record-surface: var(--code-surface);
-    --review-record-chrome: color-mix(in srgb, var(--soft-surface) 82%, var(--surface));
-  }
-  .review-recorded-toolbar {
-    position: sticky;
-    z-index: 2;
-    top: 0;
-    min-width: 0;
-    padding: 8px 20px 12px;
-    background: var(--surface);
-    box-shadow: 0 1px 0 var(--panel-edge), 0 6px 12px color-mix(in srgb, var(--surface) 80%, transparent);
-  }
-  .review-recorded-toolbar-main { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-height: 40px; }
-  .review-recorded-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 8px; background: var(--review-record-chrome); }
-  .review-recorded-tabs > button { min-height: 32px; padding-inline: 12px; border-radius: 5px; color: var(--muted-ink); }
-  .review-recorded-tabs > button[data-state='active'] { background: var(--surface); color: var(--strong-ink); box-shadow: 0 1px 3px color-mix(in srgb, var(--strong-ink) 9%, transparent); }
-  .review-recorded-tabs > button > span, .review-recorded-heading > span { margin-left: 6px; padding: 1px 5px; border-radius: 4px; font-size: 12px; color: var(--muted-ink); font-weight: 400; font-variant-numeric: tabular-nums; background: var(--control-surface-active); }
-  .review-recorded-heading { color: var(--strong-ink); font-size: 14px; font-weight: 600; }
-  .review-edit-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 8px; }
-  .review-edit-picker { display: flex; align-items: center; flex-shrink: 0; gap: 4px; }
-  .review-edit-select { width: 156px; color: var(--strong-ink); background: var(--review-record-chrome); font-weight: 500; }
-  .review-edit-description { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; color: var(--muted-ink); font-size: 13px; }
-  .review-edit-description > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-weight: 500; }
-  .review-edit-description > .review-file-stats { margin-left: auto; gap: 8px; font-size: 13px; }
-  .review-edit-latest { flex-shrink: 0; padding: 2px 6px; border-radius: 4px; color: var(--muted-ink); background: var(--review-record-chrome); font-size: 11px; line-height: 16px; }
-  .review-recorded-summary { display: flex; align-items: flex-start; gap: 8px; padding: 12px 20px; }
-  .review-recorded-summary > svg { flex-shrink: 0; width: 14px; height: 14px; margin-top: 3px; color: var(--muted-ink); }
-  .review-recorded-summary p { margin: 0; color: var(--muted-ink); font-size: 12px; line-height: 20px; overflow-wrap: anywhere; }
+  .review-recorded { min-width: 0; font-size: 12px; --review-record-surface: var(--code-surface); --review-record-chrome: var(--review-chrome, var(--soft-surface)); }
+  .review-recorded-tabs button { width: auto; padding-inline: 8px; font-size: 11px; }
+  .review-edit-picker { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
+  .review-edit-picker button { width: 24px; }
+  .review-edit-position { color: var(--muted-ink); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .review-recorded-summary { display: flex; align-items: flex-start; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--panel-edge); background: var(--review-record-chrome); }
+  .review-recorded-summary > svg { flex-shrink: 0; width: 12px; height: 12px; margin-top: 3px; color: var(--muted-ink); }
+  .review-recorded-summary p { margin: 0; color: var(--muted-ink); font-size: 11px; line-height: 18px; overflow-wrap: anywhere; }
   .review-recorded-summary p.review-recorded-warning { margin-top: 4px; color: var(--ink); }
-  .review-recorded-summary strong { font-weight: 600; }
-  .review-recorded-panel { min-width: 0; padding: 0 20px; outline: none; }
-  .review-recorded-panel:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
-  .review-recorded-source, .review-recorded-patch { min-width: 0; border: 1px solid var(--panel-edge); border-radius: 10px; overflow: hidden; background: var(--review-record-surface, var(--code-surface)); }
-  .review-recorded-patches { display: flex; flex-direction: column; gap: 20px; }
-  .review-recorded-patch > header { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 16px; background: var(--review-record-chrome); font-size: 13px; }
+  .review-recorded-source, .review-recorded-patch { min-width: 0; background: var(--review-record-surface, var(--code-surface)); }
+  .review-recorded-patches { display: flex; flex-direction: column; }
+  .review-recorded-patch > header { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 12px; border-block: 1px solid var(--panel-edge); background: var(--review-record-chrome); font-size: 12px; }
   .review-recorded-patch > header > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-  .review-recorded-patch > header > .review-file-stats { margin-left: auto; font-size: 13px; }
+  .review-recorded-patch > header > .review-file-stats { margin-left: auto; }
   .review-recorded-patch > .review-diff { overflow-x: auto; }
-  .review-recorded-patch .review-hunk { padding-block: 8px; border-top: 0; }
-  .review-source-toolbar { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; background: var(--review-record-chrome, var(--soft-surface)); border-bottom: 1px solid var(--panel-edge); font-size: 12px; color: var(--muted-ink); user-select: none; }
-  .review-source-toolbar > :first-child { flex: 1; color: var(--ink); font-weight: 500; }
+  .review-source-toolbar { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 12px; border-bottom: 1px solid var(--panel-edge); background: var(--review-record-surface, var(--code-surface)); font-size: 11px; color: var(--muted-ink); user-select: none; }
+  .review-source-toolbar > :first-child { flex: 1; font-weight: 400; }
+  .review-source-toolbar button { width: 24px; height: 26px; min-height: 26px; }
+  .review-source-toolbar svg { width: 13px; height: 13px; }
   .review-source-size { font-variant-numeric: tabular-nums; }
-  .review-source-scroll { display: flex; min-width: 0; max-width: 100%; overflow: auto; padding-block: 12px; font: 13px/24px var(--font-mono); color: var(--ink); background: var(--code-surface); user-select: text; }
+  .review-source-scroll { display: flex; min-width: 0; max-width: 100%; overflow: auto; padding-block: 4px; font: 13px/22px var(--font-mono); color: var(--ink); background: var(--code-surface); user-select: text; }
   .review-source-scroll:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
-  .review-source-lines { position: sticky; left: 0; align-self: stretch; flex-shrink: 0; min-width: 5ch; padding: 0 16px 0 12px; color: var(--muted-ink); background: var(--code-surface); font: inherit; text-align: right; white-space: pre; user-select: none; }
-  .review-source-scroll pre { flex: 1; min-width: max-content; margin: 0; padding: 0 20px 0 4px; border: 0; border-radius: 0; background: transparent; font: inherit; white-space: pre; }
+  .review-source-lines { position: sticky; left: 0; align-self: stretch; flex-shrink: 0; min-width: 5ch; padding: 0 12px; color: var(--muted-ink); background: var(--code-surface); font: inherit; text-align: right; white-space: pre; user-select: none; }
+  .review-source-scroll pre { flex: 1; min-width: max-content; margin: 0; padding: 0 16px 0 4px; border: 0; border-radius: 0; background: transparent; font: inherit; white-space: pre; }
   .review-source-scroll code { display: block; padding: 0; border: 0; border-radius: 0; background: transparent; font: inherit; white-space: pre; }
-  .review-operation-number { flex-shrink: 0; min-width: 24px; color: var(--muted-ink); font: 12px var(--font-mono); text-align: center; user-select: none; }
-  .review-operation-detail { color: var(--muted-ink); font-size: 12px; font-weight: 400; }
-  .review-operation-outcome { padding: 2px 6px; border-radius: 4px; background: var(--control-surface-active); color: var(--muted-ink); font-size: 11px; font-weight: 400; white-space: nowrap; }
-  .review-operation-outcome[data-outcome='failed'] { color: var(--error-ink); }
-  .review-operation-outcome[data-outcome='applied'] { color: var(--diff-add-ink); }
-  .review-recorded-note { margin: 0; padding: 12px 16px; color: var(--muted-ink); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+  .review-operation-number { flex-shrink: 0; min-width: 24px; color: var(--muted-ink); font: 11px var(--font-mono); text-align: center; user-select: none; }
+  .review-operation-detail { color: var(--muted-ink); font-size: 11px; font-weight: 400; }
+  .review-recorded-note { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--panel-edge); color: var(--muted-ink); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
   .review-recorded-note.review-error { color: var(--error-ink); }
-  .review-recorded-empty { display: flex; align-items: flex-start; gap: 12px; padding: 24px; border: 1px solid var(--panel-edge); border-radius: 10px; background: var(--review-record-chrome); }
-  .review-recorded-empty > svg { flex-shrink: 0; width: 18px; height: 18px; color: var(--muted-ink); margin-top: 2px; }
-  .review-recorded-empty strong { color: var(--strong-ink); font-size: 13px; font-weight: 500; }
-  .review-recorded-empty p { max-width: 70ch; margin: 4px 0 0; color: var(--muted-ink); font-size: 13px; line-height: 1.6; }
-  .review-history { margin: 20px 20px 0; border: 1px solid var(--panel-edge); border-radius: 8px; background: var(--review-record-chrome); }
-  .review-history-trigger { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 12px 16px; border-radius: 8px; text-align: left; font-size: 13px; }
-  .review-history-trigger > svg { width: 15px; height: 15px; color: var(--muted-ink); }
-  .review-history-trigger > strong { font-weight: 500; }
-  .review-history-trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted-ink); }
-  .review-disclosure-chevron { flex-shrink: 0; width: 14px; height: 14px; margin-left: auto; color: var(--muted-ink); transition: transform var(--motion-fast) var(--motion-ease); }
-  [data-state='open'] > .review-disclosure-chevron { transform: rotate(90deg); }
-  .review-disclosure-content { overflow: hidden; }
-  .review-disclosure-content[data-state='open'] { animation: review-disclosure-open 160ms ease-out; }
-  .review-disclosure-content[data-state='closed'] { animation: review-disclosure-close 120ms ease-in; }
-  .review-history-list { padding: 0 8px 8px; }
-  .review-history-entry + .review-history-entry { margin-top: 4px; }
-  .review-history-entry-trigger { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 8px; border-radius: 6px; text-align: left; font-size: 13px; }
-  .review-history-entry-trigger > strong { min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
-  .review-history-entry-trigger > .review-operation-detail, .review-history-entry-trigger > .review-file-stats { margin-left: auto; }
-  .review-history-entry-trigger > .review-disclosure-chevron { margin-left: 0; }
-  .review-history-entry .review-source-scroll, .review-history-entry .review-diff { max-height: 480px; overflow: auto; }
-  .review-history-entry .review-recorded-source { border-radius: 6px; }
-  .review-history-entry .review-diff { border: 1px solid var(--panel-edge); border-radius: 6px; }
-  .operation-diff .review-source-scroll { max-height: 360px; }
-  @keyframes review-disclosure-open { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
-  @keyframes review-disclosure-close { from { opacity: 1; } to { opacity: 0; } }
-  @media (hover: hover) {
-    .review-history-trigger:hover:not(:active), button.review-history-entry-trigger:hover:not(:active) { background: var(--control-surface-hover); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .review-disclosure-chevron { transition: none; }
-    .review-disclosure-content { animation: none !important; }
-  }
-  @container (max-width: 560px) {
-    .review-recorded-toolbar { padding-inline: 12px; }
-    .review-edit-nav { gap: 8px 12px; }
-    .review-edit-description { flex-basis: 100%; padding-inline: 4px; }
-    .review-recorded-summary { padding-inline: 12px; }
-    .review-recorded-panel { padding-inline: 12px; }
-    .review-history { margin-inline: 12px; }
-    .review-history-entry-trigger > .review-operation-detail { flex-basis: 100%; margin-left: 32px; }
-  }
-  @container (max-width: 360px) {
-    .review-recorded-toolbar { padding-inline: 8px; }
-    .review-recorded-toolbar-main { gap: 4px; }
-    .review-recorded-toolbar-main > .review-top-spacer { flex-basis: 100%; }
-    .review-recorded-panel { padding-inline: 8px; }
-    .review-history { margin-inline: 8px; }
-    .review-source-toolbar { padding-inline: 12px; }
-    .review-source-size { display: none; }
-  }
+  .review-recorded-empty { display: flex; align-items: flex-start; gap: 8px; padding: 24px 16px; }
+  .review-recorded-empty > svg { flex-shrink: 0; width: 16px; height: 16px; color: var(--muted-ink); margin-top: 2px; }
+  .review-recorded-empty strong { color: var(--strong-ink); font-size: 12px; font-weight: 500; }
+  .review-recorded-empty p { max-width: 70ch; margin: 4px 0 0; color: var(--muted-ink); font-size: 12px; line-height: 1.6; }
+  .review-history-menu { min-width: 260px; max-width: 360px; }
+  .review-history-heading { margin: 0; padding: 8px; color: var(--muted-ink); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+  .review-history-item { gap: 8px; min-height: 44px; }
+  .review-history-description { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 2px; }
+  .review-history-description strong { overflow: hidden; font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+  .review-history-description small { color: var(--muted-ink); font-size: 10px; }
+  .review-history-item > svg { flex-shrink: 0; width: 14px; height: 14px; }
 }
