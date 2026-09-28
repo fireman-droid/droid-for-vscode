@@ -9,6 +9,8 @@ export interface SideConversation {
     readonly question: string;
     readonly images?: readonly SideChatImage[];
     readonly answer: string;
+    readonly thinking?: string;
+    readonly thinkingTruncated?: boolean;
     readonly state: 'streaming' | 'done' | 'error';
     readonly progress?: 'waiting' | 'thinking' | 'tool' | 'answering';
     readonly message: string | null;

@@ -6,8 +6,10 @@ import {
 } from '../../shared/protocol/btwProtocol';
 import {
   appendBtwAnswerDelta,
+  appendBtwThinkingDelta,
   appendBtwQuestion,
   completeBtwEntry,
+  completeBtwThinking,
   failBtwEntry,
   setBtwEntryProgress,
   setBtwPendingQuestion,
@@ -21,7 +23,8 @@ import {
  * Owns the hidden-fork sidecar lifecycle and the bounded card
  * projection; `ChatController` only routes `btw.ask`/`btw.dismiss`
  * into it, mirrors emitted card states onto the Bridge, and calls
- * `reset()` whenever the bound session changes (discard-on-close).
+ * `reset()` when the bound session changes. Panel visibility does not
+ * affect the fork or entries.
  * The fork session id never leaves this module, so no session list
  * or transcript can surface it.
  */
@@ -128,6 +131,14 @@ export class BtwSideChat {
                 this.setState(appendBtwAnswerDelta(this.state, entryId, event.text), false);
                 continue;
               }
+              if (event.kind === 'thinking-delta') {
+                this.setState(appendBtwThinkingDelta(this.state, entryId, event.text), false);
+                continue;
+              }
+              if (event.kind === 'thinking-complete') {
+                this.setState(completeBtwThinking(this.state, entryId), false);
+                continue;
+              }
               if (event.kind === 'progress') {
                 this.setState(setBtwEntryProgress(this.state, entryId, event.progress), false);
                 continue;
@@ -208,7 +219,7 @@ export class BtwSideChat {
     void sidecar?.interrupt?.().catch(() => undefined);
   }
 
-  /** Card closed in the webview: discard the fork and every entry. */
+  /** Explicit discard request; merely hiding the panel does not call this. */
   handleDismiss(sessionId: string): void {
     if (this.boundSessionId === sessionId) {
       this.teardown();

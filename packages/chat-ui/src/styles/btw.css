@@ -110,6 +110,10 @@
   }
   .v2-btw-question-content:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
   .v2-btw-answer { min-width: 0; padding: 4px 2px 0; }
+  .v2-btw-thinking { margin-bottom: 4px; }
+  .v2-btw-thinking-body { max-height: min(320px, 45vh); overflow: auto; overscroll-behavior: contain; }
+  .v2-btw-thinking-body:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
+  .v2-btw-thinking-limit { margin-top: 8px; color: var(--muted-ink); font-size: 11px; }
   .v2-btw-progress { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--muted-ink); font-size: 12px; line-height: 20px; user-select: none; }
   .v2-btw-error { margin-top: 6px; color: var(--error-ink); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
   .v2-btw-footer {

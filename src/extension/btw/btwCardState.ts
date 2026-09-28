@@ -1,5 +1,6 @@
 import {
   MAX_BTW_ANSWER_LENGTH,
+  MAX_BTW_THINKING_LENGTH,
   MAX_BTW_ENTRIES,
   type BtwEntryProgress,
   type BtwStatus,
@@ -99,6 +100,28 @@ export function appendBtwAnswerDelta(
     };
   });
   return changed ? { ...state, entries } : state;
+}
+
+/** Retains only text emitted by the SDK; separate thinking phases get a paragraph break. */
+export function appendBtwThinkingDelta(state: SessionBtwState, id: string, text: string): SessionBtwState {
+  if (!text) return state;
+  let changed = false;
+  const entries = state.entries.map((entry) => {
+    if (entry.id !== id || entry.state !== 'streaming') return entry;
+    const previous = entry.thinking ?? '';
+    const next = previous + (previous && entry.progress !== 'thinking' ? '\n\n' : '') + text;
+    const thinking = next.slice(0, MAX_BTW_THINKING_LENGTH);
+    const thinkingTruncated = entry.thinkingTruncated === true || next.length > MAX_BTW_THINKING_LENGTH;
+    if (thinking === previous && thinkingTruncated === (entry.thinkingTruncated === true) && entry.progress === 'thinking') return entry;
+    changed = true;
+    return { ...entry, thinking, ...(thinkingTruncated ? { thinkingTruncated: true } : {}), progress: 'thinking' as const };
+  });
+  return changed ? { ...state, entries } : state;
+}
+
+export function completeBtwThinking(state: SessionBtwState, id: string): SessionBtwState {
+  const entry = state.entries.find((item) => item.id === id);
+  return entry?.progress === 'thinking' ? setBtwEntryProgress(state, id, 'waiting') : state;
 }
 
 export function completeBtwEntry(state: SessionBtwState, id: string): SessionBtwState {

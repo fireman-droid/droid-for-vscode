@@ -13,7 +13,8 @@ import type { BtwEntryProgress } from '../../shared/protocol/btwProtocol';
  * `sessions/btw/`, no cloud session (probe-verified 2026-08-12,
  * `artifacts/probe-btw-sidecar.mjs`).
  *
- * Lifecycle: one sidecar per card opening; `dispose()` closes the
+ * Lifecycle: reused while the host keeps the bound main session;
+ * hiding/reopening the panel does not dispose it. `dispose()` closes the
  * fork session, which terminates the subprocess (probe finding), so
  * a disposed sidecar is never reused.
  */
@@ -27,6 +28,8 @@ export const BTW_PERMISSION_GUIDANCE =
 
 export type BtwAnswerEvent =
   | { readonly kind: 'delta'; readonly text: string }
+  | { readonly kind: 'thinking-delta'; readonly text: string }
+  | { readonly kind: 'thinking-complete' }
   | { readonly kind: 'progress'; readonly progress: BtwEntryProgress }
   | { readonly kind: 'done' }
   | { readonly kind: 'error'; readonly message: string };
@@ -284,7 +287,11 @@ class BtwForkSidecar implements BtwSidecar {
       : params;
     switch (notification.type) {
       case 'thinking_text_delta':
-        return { kind: 'progress', progress: 'thinking' };
+        return typeof notification.textDelta === 'string' && notification.textDelta.length > 0
+          ? { kind: 'thinking-delta', text: notification.textDelta }
+          : { kind: 'progress', progress: 'thinking' };
+      case 'thinking_text_complete':
+        return { kind: 'thinking-complete' };
       case 'tool_call':
       case 'tool_progress_update':
         return { kind: 'progress', progress: 'tool' };

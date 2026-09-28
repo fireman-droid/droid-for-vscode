@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type PointerEvent } from 'react';
-import { ArrowUp, Clock3, MessageSquare, Quote, Square, X } from 'lucide-react';
+import { ArrowUp, Brain, Clock3, MessageSquare, Quote, Square, X } from 'lucide-react';
 import type { SideChatProps } from './sideChat';
 import { useUiEnvironment } from '../environment';
 import { formatSelectionQuotes, parseSelectionQuotes } from './selectionQuote';
@@ -10,6 +10,7 @@ import { Textarea } from '../ui/input';
 import { Markdown } from '../content/Markdown';
 import { QuoteChips } from './QuoteChips';
 import { UserMessageBubble } from './UserMessageView';
+import { Tool, ToolHeader, ToolContent } from '../ai-elements/tool';
 
 const PROGRESS_LABELS = {
   waiting: 'Waiting for reply…', thinking: 'Thinking…', tool: 'Using tools…', answering: 'Receiving reply…',
@@ -127,8 +128,18 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
               </UserMessageBubble>
             </div>
             <div aria-label={`${assistantName} answer`} className="v2-btw-answer">
+              {entry.thinking ? <Tool className="v2-btw-thinking">
+                <ToolHeader title={entry.state === 'streaming' && progress === 'thinking' ? 'Thinking…' : 'Thoughts'}
+                  status={entry.state === 'streaming' && progress === 'thinking' ? 'Receiving' : ''} icon={<Brain className="size-3.5" />} />
+                <ToolContent>
+                  <div className="v2-btw-thinking-body" role="region" aria-label="Side answer thinking" tabIndex={0}>
+                    <Markdown text={entry.thinking} thinking streaming={entry.state === 'streaming' && progress === 'thinking' && !entry.thinkingTruncated} />
+                    {entry.thinkingTruncated ? <p className="v2-btw-thinking-limit">Thinking preview limit reached.</p> : null}
+                  </div>
+                </ToolContent>
+              </Tool> : null}
               {entry.answer.length > 0 ? <Markdown text={entry.answer} streaming={entry.state === 'streaming'} /> : null}
-              {entry.state === 'streaming' && !preparing ? <p role="status" aria-live="polite" className="v2-btw-progress">
+              {entry.state === 'streaming' && !preparing && !(entry.thinking && progress === 'thinking') ? <p role="status" aria-live="polite" className="v2-btw-progress">
                 <DroidActivity phase={progress === 'waiting' ? 'loading' : progress === 'thinking' ? 'thinking' : 'working'} />
                 {PROGRESS_LABELS[progress]}
               </p> : null}

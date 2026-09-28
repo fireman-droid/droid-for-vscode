@@ -24,6 +24,8 @@ export const MAX_BTW_TEXT_LENGTH = 4_000;
 export const MAX_BTW_ENTRIES = 20;
 /** Bounded answer projection; longer answers are truncated. */
 export const MAX_BTW_ANSWER_LENGTH = 32_000;
+/** Bounded SDK-provided thinking text, independent of the answer budget. */
+export const MAX_BTW_THINKING_LENGTH = 32_000;
 /** Longest status message shown on the card (error/unsupported). */
 export const MAX_BTW_MESSAGE_LENGTH = 512;
 
@@ -44,8 +46,10 @@ export interface BtwEntry {
   readonly modelId?: string;
   /** Accumulated answer text, bounded to MAX_BTW_ANSWER_LENGTH. */
   readonly answer: string;
+  readonly thinking?: string;
+  readonly thinkingTruncated?: boolean;
   readonly state: BtwEntryState;
-  /** Current activity only; thinking content never crosses the Bridge. */
+  /** Current activity, separate from retained thinking and answer text. */
   readonly progress?: BtwEntryProgress;
   /** Quiet error copy for `state: 'error'` (e.g. permission guidance). */
   readonly message: string | null;
@@ -75,7 +79,7 @@ export interface BtwAskMessage extends BtwAskOptions {
   readonly text: string;
 }
 
-/** Webview → Host: card closed; discard the fork and all entries. */
+/** Webview → Host: explicitly discard the fork; hiding the panel does not send this. */
 export interface BtwDismissMessage {
   readonly type: 'btw.dismiss';
   readonly sessionId: string;
@@ -181,7 +185,7 @@ export function parseBtwStopMessage(value: unknown): BtwStopMessage | null {
 function parseBtwEntry(value: unknown, seenIds: Set<string>): BtwEntry | null {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message', 'progress', 'images', 'modelId']) ||
+    !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message', 'progress', 'images', 'modelId', 'thinking', 'thinkingTruncated']) ||
     !isId(value.id) ||
     seenIds.has(value.id) ||
     !isBoundedString(value.question, MAX_BTW_TEXT_LENGTH) ||
@@ -189,6 +193,8 @@ function parseBtwEntry(value: unknown, seenIds: Set<string>): BtwEntry | null {
     (value.modelId !== undefined && !isSafeModelId(value.modelId)) ||
     (!value.question.length && !(Array.isArray(value.images) && value.images.length)) ||
     !isBoundedString(value.answer, MAX_BTW_ANSWER_LENGTH) ||
+    (value.thinking !== undefined && !isBoundedString(value.thinking, MAX_BTW_THINKING_LENGTH)) ||
+    (value.thinkingTruncated !== undefined && typeof value.thinkingTruncated !== 'boolean') ||
     !BTW_ENTRY_STATES.includes(value.state as BtwEntryState)
   ) {
     return null;
@@ -215,6 +221,8 @@ function parseBtwEntry(value: unknown, seenIds: Set<string>): BtwEntry | null {
     ...(value.images === undefined ? {} : { images: value.images as readonly BtwImageSummary[] }),
     ...(value.modelId === undefined ? {} : { modelId: value.modelId as string }),
     answer: value.answer,
+    ...(value.thinking === undefined ? {} : { thinking: value.thinking as string }),
+    ...(value.thinkingTruncated === undefined ? {} : { thinkingTruncated: value.thinkingTruncated as boolean }),
     state: value.state as BtwEntryState,
     ...(value.progress === undefined ? {} : { progress: value.progress as BtwEntryProgress }),
     message: value.message ?? null,

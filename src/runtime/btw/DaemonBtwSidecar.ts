@@ -20,7 +20,7 @@ import {
  * (probe-verified 2026-08-12, `artifacts/probe-btw-daemon.mjs`:
  * `resumePromotesFork: false`, `listLeaksFork: false`).
  *
- * Lifecycle mirrors the process sidecar: one sidecar per card opening;
+ * Lifecycle mirrors the process sidecar: reused across panel hide/reopen;
  * `dispose()` ends the fork session in the daemon
  * (`daemon.close_session`), leaving the fork jsonl in `sessions/btw/`.
  */
@@ -178,7 +178,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
           if (event === null) {
             continue;
           }
-          if (event.kind === 'delta' || event.kind === 'progress') {
+          if (event.kind === 'delta' || event.kind === 'thinking-delta' || event.kind === 'thinking-complete' || event.kind === 'progress') {
             yield event;
             continue;
           }
@@ -232,7 +232,11 @@ class DaemonBtwForkSidecar implements BtwSidecar {
   private projectStreamEvent(raw: DaemonBtwStreamEvent): BtwAnswerEvent | null {
     switch (raw.type) {
       case 'thinking_text_delta':
-        return { kind: 'progress', progress: 'thinking' };
+        return typeof raw.text === 'string' && raw.text.length > 0
+          ? { kind: 'thinking-delta', text: raw.text }
+          : { kind: 'progress', progress: 'thinking' };
+      case 'thinking_text_complete':
+        return { kind: 'thinking-complete' };
       case 'tool_call':
       case 'tool_call_delta':
       case 'tool_progress':
