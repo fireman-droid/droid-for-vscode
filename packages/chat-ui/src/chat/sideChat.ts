@@ -11,6 +11,7 @@ export interface SideConversation {
     readonly answer: string;
     readonly thinking?: string;
     readonly thinkingTruncated?: boolean;
+    readonly thinkingDurationMs?: number;
     readonly state: 'streaming' | 'done' | 'error';
     readonly progress?: 'waiting' | 'thinking' | 'tool' | 'answering';
     readonly message: string | null;

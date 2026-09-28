@@ -1,5 +1,6 @@
 import type { DaemonApi } from '../daemon/api';
 import { ToolConfirmationOutcome } from '@factory/droid-sdk';
+import { BtwThinkingProjection } from './btwThinking';
 
 import {
   BTW_FORK_TAG,
@@ -34,6 +35,10 @@ export interface DaemonBtwStreamEvent {
   readonly type?: unknown;
   readonly text?: unknown;
   readonly subtype?: unknown;
+  readonly messageId?: unknown;
+  readonly blockIndex?: unknown;
+  readonly durationMs?: unknown;
+  readonly message?: unknown;
 }
 
 /** Attached fork surface consumed by the sidecar. */
@@ -167,6 +172,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
     this.asking = true;
     this.abortAsk = new AbortController();
     this.denied.value = false;
+    const thinking = new BtwThinkingProjection();
     try {
       let terminal: BtwAnswerEvent | null = null;
       try {
@@ -174,11 +180,11 @@ class DaemonBtwForkSidecar implements BtwSidecar {
           if (this.disposed) {
             return;
           }
-          const event = this.projectStreamEvent(raw);
+          const event = thinking.project(raw) ?? this.projectStreamEvent(raw);
           if (event === null) {
             continue;
           }
-          if (event.kind === 'delta' || event.kind === 'thinking-delta' || event.kind === 'thinking-complete' || event.kind === 'progress') {
+          if (event.kind === 'delta' || event.kind === 'thinking' || event.kind === 'progress') {
             yield event;
             continue;
           }
@@ -231,12 +237,6 @@ class DaemonBtwForkSidecar implements BtwSidecar {
   /** Maps one raw stream event onto an answer event. */
   private projectStreamEvent(raw: DaemonBtwStreamEvent): BtwAnswerEvent | null {
     switch (raw.type) {
-      case 'thinking_text_delta':
-        return typeof raw.text === 'string' && raw.text.length > 0
-          ? { kind: 'thinking-delta', text: raw.text }
-          : { kind: 'progress', progress: 'thinking' };
-      case 'thinking_text_complete':
-        return { kind: 'thinking-complete' };
       case 'tool_call':
       case 'tool_call_delta':
       case 'tool_progress':

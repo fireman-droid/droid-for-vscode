@@ -1,5 +1,6 @@
 import { DroidClient, ProcessTransport, ToolConfirmationOutcome, type Base64ImageSource } from '@factory/droid-sdk/node';
 import type { BtwEntryProgress } from '../../shared/protocol/btwProtocol';
+import { BtwThinkingProjection, type BtwThinkingEvent } from './btwThinking';
 
 /**
  * Hidden-fork sidecar behind the `/btw` Side Chat card
@@ -28,8 +29,7 @@ export const BTW_PERMISSION_GUIDANCE =
 
 export type BtwAnswerEvent =
   | { readonly kind: 'delta'; readonly text: string }
-  | { readonly kind: 'thinking-delta'; readonly text: string }
-  | { readonly kind: 'thinking-complete' }
+  | BtwThinkingEvent
   | { readonly kind: 'progress'; readonly progress: BtwEntryProgress }
   | { readonly kind: 'done' }
   | { readonly kind: 'error'; readonly message: string };
@@ -199,6 +199,7 @@ class BtwForkSidecar implements BtwSidecar {
     this.permissionDenied = false;
 
     const queue: BtwAnswerEvent[] = [];
+    const thinking = new BtwThinkingProjection();
     let wake: (() => void) | null = null;
     this.interruptAsk = () => {
       wake?.();
@@ -211,7 +212,7 @@ class BtwForkSidecar implements BtwSidecar {
     };
     const unsubscribeNotifications = this.client.onNotification(
       (raw) => {
-        const event = this.projectNotification(raw);
+        const event = this.projectNotification(raw, thinking);
         if (event !== null) {
           push(event);
         }
@@ -274,6 +275,7 @@ class BtwForkSidecar implements BtwSidecar {
   /** Maps one raw session notification onto an answer event. */
   private projectNotification(
     raw: Record<string, unknown>,
+    thinking: BtwThinkingProjection,
   ): BtwAnswerEvent | null {
     const params = isRecord(raw.params) ? raw.params : raw;
     if (
@@ -285,13 +287,9 @@ class BtwForkSidecar implements BtwSidecar {
     const notification = isRecord(params.notification)
       ? params.notification
       : params;
+    const thought = thinking.project({ ...notification, text: notification.textDelta });
+    if (thought) return thought;
     switch (notification.type) {
-      case 'thinking_text_delta':
-        return typeof notification.textDelta === 'string' && notification.textDelta.length > 0
-          ? { kind: 'thinking-delta', text: notification.textDelta }
-          : { kind: 'progress', progress: 'thinking' };
-      case 'thinking_text_complete':
-        return { kind: 'thinking-complete' };
       case 'tool_call':
       case 'tool_progress_update':
         return { kind: 'progress', progress: 'tool' };

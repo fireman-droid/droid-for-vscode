@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type PointerEvent } from 'react';
 import { ArrowUp, Brain, Clock3, MessageSquare, Quote, Square, X } from 'lucide-react';
-import type { SideChatProps } from './sideChat';
+import type { SideChatProps, SideConversation } from './sideChat';
 import { useUiEnvironment } from '../environment';
 import { formatSelectionQuotes, parseSelectionQuotes } from './selectionQuote';
 import { useSmoothFollowScroll } from '../navigation/useSmoothFollowScroll';
@@ -15,6 +15,29 @@ import { Tool, ToolHeader, ToolContent } from '../ai-elements/tool';
 const PROGRESS_LABELS = {
   waiting: 'Waiting for reply…', thinking: 'Thinking…', tool: 'Using tools…', answering: 'Receiving reply…',
 };
+
+function SideThinking({ entry }: { readonly entry: SideConversation['entries'][number] }) {
+  const active = entry.state === 'streaming' && entry.progress === 'thinking';
+  const received = entry.thinking !== undefined || entry.thinkingDurationMs !== undefined;
+  if (!received && !active && entry.state !== 'done') return null;
+  const duration = entry.thinkingDurationMs;
+  const label = active ? 'Thinking…' : duration === undefined ? 'Thoughts'
+    : `Thought for ${(duration / 1000).toFixed(1).replace(/\.0$/, '')}s`;
+  if (!entry.thinking) return <p role="status" className="v2-btw-thinking flex flex-wrap items-center gap-x-1.5 gap-y-0.5 py-1 text-xs text-muted-foreground">
+    <Brain className="size-3.5 shrink-0" aria-hidden="true" />
+    <span>{received || active ? label : 'No thinking text returned'}</span>
+    {received && !active ? <span className="text-[11px]">· No thinking text returned</span> : null}
+  </p>;
+  return <Tool className="v2-btw-thinking">
+    <ToolHeader title={label} status={active ? 'Receiving' : ''} icon={<Brain className="size-3.5" aria-hidden="true" />} />
+    <ToolContent>
+      <div className="v2-btw-thinking-body" role="region" aria-label="Side answer thinking" tabIndex={0}>
+        <Markdown text={entry.thinking} thinking streaming={active && !entry.thinkingTruncated} />
+        {entry.thinkingTruncated ? <p className="v2-btw-thinking-limit">Thinking preview limit reached.</p> : null}
+      </div>
+    </ToolContent>
+  </Tool>;
+}
 
 export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDraftChange, onQuoteClear, onQuoteRemove, onWidthChange, onDismiss, onAsk, onStop, maxTextLength,
   attachments, composerActions, hasAttachments = false, sendDisabled = false, onPaste, onDrop, onDragOver, renderImages }: SideChatProps) {
@@ -128,18 +151,9 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
               </UserMessageBubble>
             </div>
             <div aria-label={`${assistantName} answer`} className="v2-btw-answer">
-              {entry.thinking ? <Tool className="v2-btw-thinking">
-                <ToolHeader title={entry.state === 'streaming' && progress === 'thinking' ? 'Thinking…' : 'Thoughts'}
-                  status={entry.state === 'streaming' && progress === 'thinking' ? 'Receiving' : ''} icon={<Brain className="size-3.5" />} />
-                <ToolContent>
-                  <div className="v2-btw-thinking-body" role="region" aria-label="Side answer thinking" tabIndex={0}>
-                    <Markdown text={entry.thinking} thinking streaming={entry.state === 'streaming' && progress === 'thinking' && !entry.thinkingTruncated} />
-                    {entry.thinkingTruncated ? <p className="v2-btw-thinking-limit">Thinking preview limit reached.</p> : null}
-                  </div>
-                </ToolContent>
-              </Tool> : null}
+              <SideThinking entry={entry} />
               {entry.answer.length > 0 ? <Markdown text={entry.answer} streaming={entry.state === 'streaming'} /> : null}
-              {entry.state === 'streaming' && !preparing && !(entry.thinking && progress === 'thinking') ? <p role="status" aria-live="polite" className="v2-btw-progress">
+              {entry.state === 'streaming' && !preparing && !(entry.thinking !== undefined && progress === 'thinking') ? <p role="status" aria-live="polite" className="v2-btw-progress">
                 <DroidActivity phase={progress === 'waiting' ? 'loading' : progress === 'thinking' ? 'thinking' : 'working'} />
                 {PROGRESS_LABELS[progress]}
               </p> : null}

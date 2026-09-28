@@ -48,6 +48,7 @@ export interface BtwEntry {
   readonly answer: string;
   readonly thinking?: string;
   readonly thinkingTruncated?: boolean;
+  readonly thinkingDurationMs?: number;
   readonly state: BtwEntryState;
   /** Current activity, separate from retained thinking and answer text. */
   readonly progress?: BtwEntryProgress;
@@ -185,7 +186,7 @@ export function parseBtwStopMessage(value: unknown): BtwStopMessage | null {
 function parseBtwEntry(value: unknown, seenIds: Set<string>): BtwEntry | null {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message', 'progress', 'images', 'modelId', 'thinking', 'thinkingTruncated']) ||
+    !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message', 'progress', 'images', 'modelId', 'thinking', 'thinkingTruncated', 'thinkingDurationMs']) ||
     !isId(value.id) ||
     seenIds.has(value.id) ||
     !isBoundedString(value.question, MAX_BTW_TEXT_LENGTH) ||
@@ -195,6 +196,7 @@ function parseBtwEntry(value: unknown, seenIds: Set<string>): BtwEntry | null {
     !isBoundedString(value.answer, MAX_BTW_ANSWER_LENGTH) ||
     (value.thinking !== undefined && !isBoundedString(value.thinking, MAX_BTW_THINKING_LENGTH)) ||
     (value.thinkingTruncated !== undefined && typeof value.thinkingTruncated !== 'boolean') ||
+    (value.thinkingDurationMs !== undefined && (typeof value.thinkingDurationMs !== 'number' || !Number.isFinite(value.thinkingDurationMs) || value.thinkingDurationMs < 0 || value.thinkingDurationMs > Number.MAX_SAFE_INTEGER)) ||
     !BTW_ENTRY_STATES.includes(value.state as BtwEntryState)
   ) {
     return null;
@@ -223,6 +225,7 @@ function parseBtwEntry(value: unknown, seenIds: Set<string>): BtwEntry | null {
     answer: value.answer,
     ...(value.thinking === undefined ? {} : { thinking: value.thinking as string }),
     ...(value.thinkingTruncated === undefined ? {} : { thinkingTruncated: value.thinkingTruncated as boolean }),
+    ...(value.thinkingDurationMs === undefined ? {} : { thinkingDurationMs: value.thinkingDurationMs as number }),
     state: value.state as BtwEntryState,
     ...(value.progress === undefined ? {} : { progress: value.progress as BtwEntryProgress }),
     message: value.message ?? null,

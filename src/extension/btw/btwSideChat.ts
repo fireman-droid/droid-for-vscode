@@ -6,10 +6,9 @@ import {
 } from '../../shared/protocol/btwProtocol';
 import {
   appendBtwAnswerDelta,
-  appendBtwThinkingDelta,
+  applyBtwThinking,
   appendBtwQuestion,
   completeBtwEntry,
-  completeBtwThinking,
   failBtwEntry,
   setBtwEntryProgress,
   setBtwPendingQuestion,
@@ -131,12 +130,8 @@ export class BtwSideChat {
                 this.setState(appendBtwAnswerDelta(this.state, entryId, event.text), false);
                 continue;
               }
-              if (event.kind === 'thinking-delta') {
-                this.setState(appendBtwThinkingDelta(this.state, entryId, event.text), false);
-                continue;
-              }
-              if (event.kind === 'thinking-complete') {
-                this.setState(completeBtwThinking(this.state, entryId), false);
+              if (event.kind === 'thinking') {
+                this.setState(applyBtwThinking(this.state, entryId, event), false);
                 continue;
               }
               if (event.kind === 'progress') {
