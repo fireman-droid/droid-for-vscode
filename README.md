@@ -26,28 +26,36 @@ Droid 是 Factory Droid CLI 在 Cursor / VS Code 中的非官方本地可视化�
 
 ## 编辑器代码补全
 
-此功能位于 `codex/droid-autocomplete` 分支，默认关闭。无需先打开 Droid 聊天。
+功能位于 `codex/droid-autocomplete` 独立分支，默认关闭，无需先打开 Droid 聊天。
 
-1. 命令面板运行 **Droid: Configure Autocomplete**，填写完整的 FIM 地址、模型和
-   API key。默认使用 Mistral 的 `https://api.mistral.ai/v1/fim/completions` 和
-   `codestral-latest`；Codestral 专用账号可按其凭据要求填写专用 FIM 地址。
-2. 配置完成后选择 **Enable autocomplete**。编辑代码时稍作停顿，灰字出现后按
-   **Tab** 接受、**Esc** 关闭；手动触发使用 **Droid: Request Code Completion**。
-3. 状态栏 **Droid Tab** 提供暂停、重试、配置和设置入口；关闭后可用
-   **Droid: Toggle Autocomplete** 重新启用。服务返回错误会在状态栏提示，自动请求
-   暂停 30 秒；手动重试不受此等待限制。
+1. 命令面板运行 **Droid: Configure Autocomplete**，选择服务，再填写完整地址、
+   FIM 模型和密钥。提供 Mistral/Codestral、DeepSeek、Ollama 和自定义 FIM 预设。
+   Ollama 默认地址是 `http://localhost:11434/api/generate`，模型为
+   `qwen2.5-coder:7b-base`，需要先自行安装该模型；本地服务可以不填密钥。
+2. 配置完成后选择 **Enable autocomplete**。稍作停顿显示灰字，**Tab** 接受、
+   **Esc** 关闭；**Droid: Request Code Completion** 可手动请求或重试。
+   语言服务候选列表打开时，AI 可继续补全选中项之后的代码。
+3. 状态栏 **Droid Tab** 提供暂停、服务配置、相关文件开关、设置和删除已存密钥；
+   关闭后用 **Droid: Toggle Autocomplete** 恢复。错误显示在状态栏，自动请求
+   暂缓 30 秒，手动重试跳过等待。
 
-补全使用当前文件未保存的光标前后文，默认最多 12,000 个 UTF-16 文本单位。
-Go、Java、TS、Vue 等走同一条文本链路，具体质量由 FIM 模型决定；首版不做
-跨文件检索或 Next Edit。普通 `/chat/completions` 服务不能直接当作 FIM 使用。
-模型服务需要独立凭据和额度，不能复用 Factory 订阅或聊天 Session。
+上下文包括当前文件的未保存前后文，以及同一工作区根内的符号定义、近期编辑和已打开
+文件片段。最多 6 个关联文件，优先保留定义和近期编辑；总请求默认限制为 12,000 个
+UTF-16 文本单位，含标头，至少 60% 可用预算留给主文件。相关文件可单独关闭。
+定义查询使用编辑器已有语言服务，Go、Java、TS、Vue 等不靠手写 import 规则；没有
+语言服务时仍可使用近期文件和当前文件。Codestral 使用多文件格式，其他模型动态读取
+已安装语言扩展的注释配置。上下文中的其他文件变化会使旧请求和旧建议缓存失效。
 
-密钥只保存在编辑器 SecretStorage，并绑定完整 endpoint；工作区配置不能覆盖目标
-地址或模型。仅可信工作区可请求，默认排除 `.env`、常见密钥文件及依赖/构建目录；
-可通过 `droidvisx.autocomplete.excludePatterns` 调整。只发送当前文件的上述片段，
-不读取剪贴板、聊天历史或其他文件，不记录代码/密钥/响应正文。补全设置集中在
-`droidvisx.autocomplete`。使用 Cursor Tab 或其他灰字补全时，选择启用一种以免竞争；
-扩展不会擅自关闭其他补全器，也不修改 Tab 快捷键。
+密钥只保存到编辑器 SecretStorage，并绑定完整 endpoint；模型和地址只取用户级配置。
+跨文件读取遵循 `.gitignore`、`.droidignore` 和 `droidvisx.autocomplete.excludePatterns`，
+跳过已识别的敏感/生成/二进制文件及工作区外链接，不扫描全仓、不读取剪贴板或聊天历史。
+设置集中在 `droidvisx.autocomplete`。模型服务独立计费或由本地运行，不使用 Factory
+订阅或聊天 Session；普通 `/chat/completions` 地址不支持该补全协议。
+
+支持原生 FIM 的 Mistral/DeepSeek 兼容接口，以及 Ollama `/api/generate` 流协议。
+选择模型时需确认其支持代码续写/FIM；Ollama 指令模型的模板可能在 EOF 空后文时进入
+聊天，默认选择 base 模型避免此问题。建议质量和延迟仍取决于实际服务及模型。
+使用 Cursor Tab 或其他灰字补全时可选择启用一种；扩展不更改其他补全器或 Tab 快捷键。
 
 ## 当前状态
 

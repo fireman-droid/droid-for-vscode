@@ -177,13 +177,13 @@
           "type": "boolean",
           "default": false,
           "scope": "resource",
-          "description": "Enable editor gray-text completions. Sends bounded cursor context from the active file to your configured FIM provider, independently of Droid chat. Requires a trusted workspace."
+          "description": "Enable editor gray-text completions. Sends bounded cursor context and, when enabled, relevant workspace snippets to the configured provider. Independent of Droid chat; requires a trusted workspace."
         },
         "droidvisx.autocomplete.endpoint": {
           "type": "string",
           "default": "https://api.mistral.ai/v1/fim/completions",
           "scope": "application",
-          "description": "Complete native FIM endpoint URL. Configure its key using Droid: Configure Autocomplete. Ordinary chat-completions endpoints do not support this protocol."
+          "description": "Complete completion URL: native FIM endpoint or Ollama /api/generate. Use Droid: Configure Autocomplete for service presets and SecretStorage keys."
         },
         "droidvisx.autocomplete.model": {
           "type": "string",
@@ -205,7 +205,7 @@
           "minimum": 1000,
           "maximum": 32000,
           "scope": "resource",
-          "description": "Maximum UTF-16 text units of cursor-adjacent prefix and suffix sent from the active document."
+          "description": "Maximum UTF-16 text units in the complete request: current-file prefix/suffix plus related snippets and their headers."
         },
         "droidvisx.autocomplete.maxTokens": {
           "type": "number",
@@ -227,7 +227,23 @@
             "**/{.git,node_modules,dist,build,vendor}/**"
           ],
           "scope": "resource",
-          "description": "Glob patterns for files excluded from autocomplete. No clipboard, other open files or chat history is sent."
+          "description": "Glob patterns excluded from completion context. Related files also respect workspace .gitignore and .droidignore. Clipboard and chat history are never read."
+        },
+        "droidvisx.autocomplete.protocol": {
+          "type": "string",
+          "enum": [
+            "fim",
+            "ollama"
+          ],
+          "default": "fim",
+          "scope": "application",
+          "description": "Native FIM (prompt/suffix, SSE) or Ollama generate (prompt/suffix, NDJSON). Choose a model that supports code completion, not a chat-only model."
+        },
+        "droidvisx.autocomplete.relatedFiles": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Include bounded snippets from definitions, recent edits and open files in the same workspace folder. Respects .gitignore, .droidignore and exclusions. Disable for current-file-only context."
         }
       }
     }
@@ -263,6 +279,8 @@
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "highlight.js": "^11.11.1",
+    "ignore": "7.0.6",
+    "jsonc-parser": "3.3.1",
     "katex": "^0.16.47",
     "lucide-react": "1.43.0",
     "mermaid": "^11.16.1",

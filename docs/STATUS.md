@@ -7,22 +7,26 @@
 
 ## 独立分支：编辑器补全
 
-`codex/droid-autocomplete` 已接通原生灰字补全、配置命令和状态栏，默认关闭。
-当前仅提供原生 FIM 协议（默认 Mistral Codestral），不借用 Droid 会话或聊天凭据。
-光标前后文共享处理 Go/Java/TS 等语言，首版没有跨文件检索和 Next Edit。
+`codex/droid-autocomplete` 已接通灰字补全、语言服务候选接续、配置向导和状态栏。
+默认关闭；独立调用原生 FIM 或 Ollama，不占用 Droid 会话或聊天凭据。
 
-用户已允许本轮定向回归：FIM 11 项、上下文/生命周期 26 项、原生建议失效 7 项，
-共 44 项通过。`pnpm run package:vsix` 中完整类型、文件预算、公共 UI 与生产构建
-通过；`pnpm run verify:vsix` 校验 80 条目。第一次打包发现取消令牌测试 mock 的
-事件签名不匹配，已修复并重跑相关 22 项用例，最终打包通过。
+当前文件前后文与关联定义/近期编辑/打开文件片段按总字符预算组装；优先未保存文本，
+最多 6 个关联文件。原生语言服务与扩展语言配置支持不同编程语言；没有语言服务时
+仍可补全当前代码。关联文件变化会使缓存/请求失效，相关文件开关可关闭额外读取。
+读取边界、模型格式、协议与源码入口见 ARCHITECTURE，用户配置方式见 README。
 
-已安装到 `%LOCALAPPDATA%/DroidAutocompletePreview` 的独立 Cursor 用户/扩展目录，
-9 个生产 JS/CSS/Worker 安装哈希一致。本机启动入口是独立工作树的
-`dist/open-autocomplete-preview.cmd`；若该试用窗口已打开，需要 Reload Window。
-日常 Cursor 扩展没有覆盖，main 的已有未提交改动不包含在此分支包内，也未被修改。
-锁定安装未改依赖或 lockfile；安装 CLI 保留 `url.parse` 弃用告警。
-未调用真实模型、未操作真实会话，也未验证原生灰字/Tab 的实际效果。默认关闭，
-用户需配置自己的原生 FIM 服务与独立 API key 后在 Cursor 验收。
+本轮 `pnpm exec vitest run src/extension/autocomplete src/runtime/autocomplete` 通过
+9 个文件、138 项定向回归；`pnpm run typecheck`、`pnpm run lint:budgets`、
+`pnpm run package:vsix` 与 `pnpm run verify:vsix` 全部通过，校验 80 个 VSIX 条目。
+首次类型检查发现候选范围测试 fixture 不完整，改用原生 Range 构造后通过。
+关联文件变化会同步取消请求、清理缓存并撤回编辑器已显示灰字；当前文件顺向输入
+仍可复用剩余建议，这两条行为均已覆盖。
+
+已安装到 `%LOCALAPPDATA%/DroidAutocompletePreview`，9 个生产文件的安装哈希一致。
+安装 CLI 提示 `url.parse()` 弃用警告，安装退出码为 0。启动入口为本工作树的
+`dist/open-autocomplete-preview.cmd`；已有试用窗口需执行 `Developer: Reload Window`。
+未连接真实模型，也未操作真实聊天；建议质量和端到端延迟待配置实际服务后验收。
+主目录 main 的未提交工作没有合入此分支包，日常 Cursor 扩展保持原样。
 
 ## 交付与验证边界
 

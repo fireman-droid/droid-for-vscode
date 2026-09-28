@@ -35,17 +35,25 @@ Viewer、Review。`chat/` 按 composer、attachments、btw、interactions、queu
 
 ### 编辑器补全的独立路径
 
-`src/extension/autocomplete/registerAutocomplete.ts` 装配 VS Code 原生
-Inline Completion Provider、状态栏和配置命令；`AutocompleteProvider.ts` 负责
-编辑器快照、350 ms 默认防抖、取消、30 秒有界缓存与文档版本/光标校验。
-`completionText.ts` 按 UTF-16 预算裁剪通用前后文，不维护各语言语法补丁。
+`src/extension/autocomplete/registerAutocomplete.ts` 装配原生 Inline Completion
+Provider、状态栏和配置向导；`AutocompleteProvider.ts` 持有编辑器快照、防抖、取消、
+文档/光标/关联上下文版本和 30 秒建议缓存，也负责接续语言服务的候选文本。
 
-`src/runtime/autocomplete/FimClient.ts` 只负责原生 FIM HTTP/SSE 协议，超时 12 秒，
-不引用 VS Code、不进入 `DroidRuntime.sendTurn` 或聊天队列。Host 即时从
-SecretStorage 读取绑定目标地址的密钥，模型和 endpoint 只读用户级配置。
-此功能直接使用编辑器 UI，不经过 Webview/Bridge，也不创建 Droid Session。
-启动事件注册补全，聊天 daemon 预热延后到聊天视图首次解析，其他管理调用保留懒加载。
-首版仅当前文件，未引入 Kilo/Continue 源码、分词器或 Tree-sitter 资源。
+`context/CompletionContextService.ts` 从定义、近期编辑和已打开文件提取片段，
+优先使用未保存内容；定义查询限时 150ms、总收集 400ms，最多 6 文件。
+`CompletionFilePolicy.ts` 负责工作区边界、真实路径、Git/Droid 忽略规则及有界读取。
+`CompletionPrompt.ts` 控制总字符预算和模型格式；`LanguageComments.ts` 从已安装
+语言扩展读取 JSONC 注释元数据（150ms 截止），不为每个编程语言编写语法分支。
+
+`src/runtime/autocomplete/requestCompletion.ts` 根据显式协议调用原生 FIM 或
+Ollama generate；`completionTransport.ts` 共用取消、12 秒超时、大小限制和固定错误。
+Runtime 不引用 VS Code；Host 即时读取按 endpoint 绑定的 SecretStorage key，地址、
+模型、协议只接受用户级配置。本地无认证服务不附认证头。
+
+补全直接使用编辑器 UI，不经过 Webview/Bridge，不进入 `DroidRuntime.sendTurn`
+或聊天队列。启动时注册补全，聊天 daemon 预热延后到聊天视图首次解析。
+相关文件开关关闭时跳过关联内容和语言元数据读取。未引入 Kilo/Continue 源码或
+Tree-sitter 资源；复用编辑器语言服务、成熟 ignore 与 JSONC 解析器。
 
 ### 第一次阅读按这个顺序
 

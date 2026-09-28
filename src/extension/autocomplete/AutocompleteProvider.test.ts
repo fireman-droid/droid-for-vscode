@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
+import { setImmediate } from 'node:timers/promises';
 
 const mocks = vi.hoisted(() => ({
   editor: undefined as unknown,
@@ -7,6 +8,11 @@ const mocks = vi.hoisted(() => ({
   config: {} as Record<string, unknown>,
   request: vi.fn(),
   secretGet: vi.fn(),
+  contextRevision: 0,
+  allowed: vi.fn(),
+  collect: vi.fn(),
+  comments: vi.fn(),
+  contextDispose: vi.fn(),
 }));
 
 vi.mock('vscode', () => {
@@ -17,6 +23,8 @@ vi.mock('vscode', () => {
   return {
     workspace: {
       isTrusted: true,
+      getWorkspaceFolder: () => ({ uri: { toString: () => 'file:///' } }),
+      asRelativePath: (uri: vscode.Uri) => uri.toString().replace(/^file:\/\/\//, ''),
       onDidChangeTextDocument: listen('text'),
       onDidChangeConfiguration: listen('configuration'),
       getConfiguration: (section: string) => ({
@@ -34,9 +42,13 @@ vi.mock('vscode', () => {
     EndOfLine: { LF: 1, CRLF: 2 },
     InlineCompletionTriggerKind: { Invoke: 0, Automatic: 1 },
     EventEmitter: class {
-      event = () => ({ dispose: vi.fn() });
-      fire() {}
-      dispose() {}
+      private readonly listeners = new Set<(event?: unknown) => void>();
+      event = (listener: (event?: unknown) => void) => {
+        this.listeners.add(listener);
+        return { dispose: () => { this.listeners.delete(listener); } };
+      };
+      fire(value?: unknown) { for (const listener of this.listeners) listener(value); }
+      dispose() { this.listeners.clear(); }
     },
     Range: class {
       constructor(public start: vscode.Position, public end: vscode.Position) {}
@@ -47,10 +59,20 @@ vi.mock('vscode', () => {
   };
 });
 
-vi.mock('../../runtime/autocomplete/FimClient', () => ({
-  requestFimCompletion: mocks.request,
-  FimCompletionError: class extends Error {},
+vi.mock('../../runtime/autocomplete/requestCompletion', () => ({ requestCompletion: mocks.request }));
+vi.mock('./context/CompletionContextService', () => ({
+  CompletionContextService: class {
+    onDidChangeContext(listener: () => void) {
+      mocks.listeners.set('context', listener);
+      return { dispose: () => { mocks.listeners.delete('context'); } };
+    }
+    revisionFor() { return mocks.contextRevision; }
+    isAllowed = mocks.allowed;
+    collect = mocks.collect;
+    dispose = mocks.contextDispose;
+  },
 }));
+vi.mock('./context/LanguageComments', () => ({ readLanguageComments: mocks.comments }));
 
 import { AutocompleteProvider } from './AutocompleteProvider';
 
@@ -73,6 +95,7 @@ function document(text = 'const answer = ', uri = 'file:///sample.ts', eol = 1) 
     version: 1,
     isClosed: false,
     eol,
+    languageId: 'typescript',
     uri: { scheme: 'file', toString: () => uri },
     getText: () => state.text,
     offsetAt: (point: vscode.Position) => {
@@ -116,7 +139,12 @@ let provider: AutocompleteProvider;
 beforeEach(() => {
   mocks.listeners.clear();
   mocks.editor = undefined;
-  mocks.config = { enabled: true, excludePatterns: [], debounceMs: 100 };
+  mocks.config = { enabled: true, relatedFiles: true, excludePatterns: [], debounceMs: 100 };
+  mocks.contextRevision = 0;
+  mocks.allowed.mockReset().mockResolvedValue(true);
+  mocks.collect.mockReset().mockResolvedValue([]);
+  mocks.comments.mockReset().mockResolvedValue({ line: '//' });
+  mocks.contextDispose.mockReset();
   mocks.request.mockReset();
   mocks.secretGet.mockReset().mockResolvedValue('synthetic-provider-key');
   provider = new AutocompleteProvider({
@@ -130,13 +158,15 @@ beforeEach(() => {
 
 afterEach(() => provider.dispose());
 
-async function requesting(file: ReturnType<typeof document>, offset?: number) {
+async function requesting(
+  file: ReturnType<typeof document>, offset?: number, completionContext = context,
+) {
   const point = file.at(offset);
   activate(file.value, point);
   const cancel = cancellation();
-  const pending = provider.provideInlineCompletionItems(file.value, point, context, cancel.token);
-  // SecretStorage lookup is the only asynchronous step before the mocked FIM request.
-  await Promise.resolve();
+  const pending = provider.provideInlineCompletionItems(file.value, point, completionContext, cancel.token);
+  // Flush asynchronous policy, SecretStorage and context work without relying on wall-clock delays.
+  await setImmediate();
   return { pending, cancel, point };
 }
 
@@ -274,5 +304,162 @@ describe('AutocompleteProvider', () => {
     mocks.request.mockResolvedValue('42');
     expect((await (await requesting(file)).pending)[0].insertText).toBe('42');
     expect(provider.lastMessage).toBeUndefined();
+  });
+
+  it('passes related-file snippets into the model prompt and reports their count', async () => {
+    const file = document('const total = calculate(');
+    mocks.collect.mockResolvedValue([{
+      uri: 'file:///math.ts', filepath: 'lib/math.ts',
+      content: 'export function calculate(value: number): number { return value * 2; }',
+      source: 'definition', version: 4,
+    }]);
+    mocks.request.mockResolvedValue('amount)');
+    const { pending, point } = await requesting(file);
+    expect((await pending)[0].insertText).toBe('amount)');
+    const sent = mocks.request.mock.calls[0][0];
+    expect(sent.prefix).toContain('+++++ lib/math.ts\nexport function calculate');
+    expect(sent.prefix).toContain('+++++ sample.ts\nconst total = calculate(');
+    expect(sent.suffix).toBe('');
+    expect(mocks.collect).toHaveBeenCalledWith(file.value, point, expect.objectContaining({
+      maxCharacters: 4800, excludePatterns: [], signal: expect.any(AbortSignal),
+    }));
+    expect(provider.lastContextFileCount).toBe(1);
+  });
+
+  it('uses installed language comment metadata when sending references to a non-Codestral model', async () => {
+    mocks.config.model = 'code-completion-model';
+    mocks.comments.mockResolvedValue({ line: '--' });
+    mocks.collect.mockResolvedValue([{
+      uri: 'file:///table.lua', filepath: 'table.lua', content: 'local answer = 42', source: 'openFile',
+    }]);
+    const file = document('return answer');
+    Object.assign(file.value, { languageId: 'lua' });
+    mocks.request.mockResolvedValue(' + 1');
+    await (await requesting(file)).pending;
+    expect(mocks.comments).toHaveBeenCalledWith('lua', mocks.request.mock.calls[0][0].signal);
+    expect(mocks.request.mock.calls[0][0].prefix).toContain('-- Reference file: table.lua\n-- local answer = 42');
+  });
+
+  it('does not collect related source files or language metadata when relatedFiles is disabled', async () => {
+    mocks.config.relatedFiles = false;
+    mocks.collect.mockResolvedValue([{
+      uri: 'file:///other.ts', filepath: 'other.ts', content: 'unrequested source', source: 'openFile',
+    }]);
+    mocks.request.mockResolvedValue('42');
+    await (await requesting(document())).pending;
+    expect(mocks.collect).not.toHaveBeenCalled();
+    expect(mocks.comments).not.toHaveBeenCalled();
+    expect(mocks.request.mock.calls[0][0].prefix).toBe('const answer = ');
+    expect(provider.lastContextFileCount).toBe(0);
+  });
+
+  it('discards a pending model response if another source file changes the context revision', async () => {
+    const response = deferred<string>();
+    const file = document();
+    mocks.request.mockReturnValueOnce(response.promise).mockResolvedValueOnce('fresh');
+    const first = await requesting(file);
+    mocks.contextRevision += 1;
+    response.resolve('stale');
+    expect(await first.pending).toEqual([]);
+    expect((await (await requesting(file)).pending)[0].insertText).toBe('fresh');
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+  });
+
+  it('invalidates a cached suggestion when the related context revision changes', async () => {
+    const file = document();
+    mocks.request.mockResolvedValueOnce('oldDefinition()').mockResolvedValueOnce('newDefinition()');
+    expect((await (await requesting(file)).pending)[0].insertText).toBe('oldDefinition()');
+    mocks.contextRevision += 1;
+    expect((await (await requesting(file)).pending)[0].insertText).toBe('newDefinition()');
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(mocks.collect).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not send a model request when the context changes while snippets are being collected', async () => {
+    const snippets = deferred<[]>();
+    mocks.collect.mockReturnValue(snippets.promise);
+    const first = await requesting(document());
+    mocks.contextRevision += 1;
+    snippets.resolve([]);
+    expect(await first.pending).toEqual([]);
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
+
+  it('extends the selected language-server item on its range and requests code after the replacement', async () => {
+    const file = document('console.lo();');
+    const selected = { range: new vscode.Range(position(0, 8), position(0, 10)), text: 'log' };
+    mocks.request.mockResolvedValue('Info');
+    const result = await (await requesting(file, 10, { ...context, selectedCompletionInfo: selected })).pending;
+    expect(mocks.request).toHaveBeenCalledWith(expect.objectContaining({ prefix: 'console.log', suffix: '();' }));
+    expect(result[0].insertText).toBe('logInfo');
+    expect(result[0].range).toBe(selected.range);
+  });
+
+  it('allows an unauthenticated local Ollama model without a stored key', async () => {
+    mocks.config.protocol = 'ollama';
+    mocks.config.endpoint = 'http://localhost:11434/api/generate';
+    mocks.config.model = 'qwen2.5-coder:7b-base';
+    mocks.secretGet.mockResolvedValue(undefined);
+    mocks.request.mockResolvedValue('42');
+    expect((await (await requesting(document())).pending)[0].insertText).toBe('42');
+    expect(mocks.request).toHaveBeenCalledWith(expect.objectContaining({
+      protocol: 'ollama', endpoint: 'http://localhost:11434/api/generate',
+      model: 'qwen2.5-coder:7b-base', apiKey: '',
+    }));
+    expect(provider.lastMessage).toBeUndefined();
+  });
+
+  it('does not read credentials, collect context or send ignored main-file contents to the model', async () => {
+    mocks.allowed.mockResolvedValue(false);
+    expect(await (await requesting(document())).pending).toEqual([]);
+    expect(mocks.secretGet).not.toHaveBeenCalled();
+    expect(mocks.collect).not.toHaveBeenCalled();
+    expect(mocks.request).not.toHaveBeenCalled();
+    expect(provider.lastMessage).toContain('excluded');
+  });
+
+  it('immediately aborts an in-flight request when external context changes', async () => {
+    const response = deferred<string>();
+    const invalidated = vi.fn();
+    provider.onDidInvalidateSuggestion(invalidated);
+    mocks.request.mockReturnValue(response.promise);
+    const first = await requesting(document());
+    const signal = mocks.request.mock.calls[0][0].signal as AbortSignal;
+    mocks.contextRevision += 1;
+    mocks.listeners.get('context')?.();
+    expect(signal.aborted).toBe(true);
+    expect(provider.isLoading).toBe(false);
+    expect(invalidated).toHaveBeenCalledOnce();
+    response.resolve('obsolete code');
+    expect(await first.pending).toEqual([]);
+  });
+
+  it('invalidates an already-issued suggestion immediately when its external context changes', async () => {
+    const invalidated = vi.fn();
+    provider.onDidInvalidateSuggestion(invalidated);
+    const file = document();
+    mocks.request.mockResolvedValueOnce('oldDefinition()').mockResolvedValueOnce('freshDefinition()');
+    expect((await (await requesting(file)).pending)[0].insertText).toBe('oldDefinition()');
+    mocks.contextRevision += 1;
+    mocks.listeners.get('context')?.();
+    expect(invalidated).toHaveBeenCalledOnce();
+    expect((await (await requesting(file)).pending)[0].insertText).toBe('freshDefinition()');
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the suggestion remainder when only the current file advances through it', async () => {
+    const invalidated = vi.fn();
+    provider.onDidInvalidateSuggestion(invalidated);
+    const file = document();
+    mocks.request.mockResolvedValue('calculate()');
+    await (await requesting(file)).pending;
+    file.state.text += 'calc';
+    Object.assign(file.value, { version: 2 });
+    // revisionFor(currentFile) excludes this file’s own edit; the context event still fires.
+    mocks.listeners.get('context')?.();
+    mocks.listeners.get('text')?.({ document: file.value });
+    expect(invalidated).not.toHaveBeenCalled();
+    expect((await (await requesting(file)).pending)[0].insertText).toBe('ulate()');
+    expect(mocks.request).toHaveBeenCalledTimes(1);
   });
 });

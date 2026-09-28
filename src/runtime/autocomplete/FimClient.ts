@@ -1,6 +1,8 @@
-const REQUEST_TIMEOUT_MS = 12_000;
-const MAX_RESPONSE_BYTES = 1_048_576;
-const MAX_COMPLETION_LENGTH = 65_536;
+import {
+  asRecord, assertCompletionLength, parsePayload, protocolError, readBody, requestCompletionTransport,
+} from './completionTransport';
+
+export { FimCompletionError } from './completionTransport';
 
 export type FimRequest = {
   readonly endpoint: string;
@@ -12,68 +14,23 @@ export type FimRequest = {
   readonly signal: AbortSignal;
 };
 
-export class FimCompletionError extends Error {
-  constructor(
-    readonly code: 'http' | 'network' | 'timeout' | 'protocol',
-    message: string,
-    readonly status?: number,
-  ) {
-    super(message);
-    this.name = 'FimCompletionError';
-  }
-}
-
 /** Native FIM transport; no chat session, editor state, or provider credentials are retained. */
 export async function requestFimCompletion(request: FimRequest): Promise<string> {
-  const controller = new AbortController();
-  const cancel = () => controller.abort();
-  request.signal.addEventListener('abort', cancel, { once: true });
-  if (request.signal.aborted) controller.abort();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, REQUEST_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(request.endpoint, {
-      method: 'POST',
-      redirect: 'error',
-      signal: controller.signal,
-      headers: {
-        'content-type': 'application/json',
-        accept: 'text/event-stream, application/json',
-        authorization: `Bearer ${request.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: request.model,
-        prompt: request.prefix,
-        suffix: request.suffix,
-        max_tokens: request.maxTokens,
-        temperature: 0,
-        stream: true,
-      }),
-    });
-    if (!response.ok) {
-      throw new FimCompletionError('http', `Completion provider returned HTTP ${response.status}.`, response.status);
-    }
+  return requestCompletionTransport(request, {
+    model: request.model,
+    prompt: request.prefix,
+    suffix: request.suffix,
+    max_tokens: request.maxTokens,
+    temperature: 0,
+    stream: true,
+  }, 'text/event-stream, application/json', async (response) => {
     const contentType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
-    if (contentType === 'text/event-stream') return await readEventStream(response);
+    if (contentType === 'text/event-stream') return readEventStream(response);
     if (contentType === 'application/json' || contentType?.endsWith('+json')) {
-      return await readJsonResponse(response);
+      return readJsonResponse(response);
     }
     throw protocolError('Completion provider returned an unsupported response format.');
-  } catch (error) {
-    if (request.signal.aborted) throw new DOMException('Completion request cancelled.', 'AbortError');
-    if (timedOut) throw new FimCompletionError('timeout', 'Completion request timed out.');
-    if (error instanceof FimCompletionError) throw error;
-    // Fetch errors and provider payloads can contain URLs or submitted code. Keep them private.
-    throw new FimCompletionError('network', 'Could not reach the completion provider.');
-  } finally {
-    clearTimeout(timer);
-    request.signal.removeEventListener('abort', cancel);
-    controller.abort();
-  }
+  });
 }
 
 async function readJsonResponse(response: Response): Promise<string> {
@@ -158,61 +115,10 @@ async function readEventStream(response: Response): Promise<string> {
   return completion;
 }
 
-/** Decode incrementally so UTF-8 characters and SSE lines may span network chunks. */
-async function readBody(response: Response, consume: (chunk: string) => boolean): Promise<void> {
-  if (!response.body) throw protocolError('Completion provider returned an empty response.');
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let bytes = 0;
-  try {
-    while (true) {
-      const result = await reader.read();
-      if (result.done) {
-        consume(decoder.decode());
-        return;
-      }
-      bytes += result.value.byteLength;
-      if (bytes > MAX_RESPONSE_BYTES) throw protocolError('Completion response exceeded the size limit.');
-      if (consume(decoder.decode(result.value, { stream: true }))) return;
-    }
-  } finally {
-    // Cancel remaining bytes after [DONE], limits, or malformed events; do not mask the original error.
-    await reader.cancel().catch(() => undefined);
-    reader.releaseLock();
-  }
-}
-
-function parsePayload(text: string): Record<string, unknown> {
-  let value: unknown;
-  try {
-    value = JSON.parse(text);
-  } catch {
-    throw protocolError('Completion provider returned invalid JSON.');
-  }
-  const payload = asRecord(value);
-  if (!payload) throw protocolError('Completion provider returned an invalid response.');
-  if (payload.error != null) throw protocolError('Completion provider reported an error.');
-  return payload;
-}
-
 function firstChoice(payload: Record<string, unknown>): Record<string, unknown> | undefined {
   if (!Array.isArray(payload.choices)) throw protocolError('Completion provider returned an invalid choices field.');
   if (payload.choices.length === 0) return undefined;
   const choice = asRecord(payload.choices[0]);
   if (!choice) throw protocolError('Completion provider returned an invalid completion choice.');
   return choice;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined;
-}
-
-function assertCompletionLength(value: string): void {
-  if (value.length > MAX_COMPLETION_LENGTH) throw protocolError('Completion text exceeded the size limit.');
-}
-
-function protocolError(message: string): FimCompletionError {
-  return new FimCompletionError('protocol', message);
 }

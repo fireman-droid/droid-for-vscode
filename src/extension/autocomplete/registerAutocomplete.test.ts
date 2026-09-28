@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   config: {} as Record<string, unknown>,
   configurationListener: undefined as ((event: { affectsConfiguration(section: string): boolean }) => void) | undefined,
   secretListener: undefined as ((event: { key: string }) => void) | undefined,
+  invalidationListener: undefined as (() => void) | undefined,
   commands: new Map<string, () => Promise<void>>(),
   executeCommand: vi.fn(),
   updateConfiguration: vi.fn(),
@@ -52,6 +53,10 @@ vi.mock('./AutocompleteProvider', () => ({
     isLoading = false;
     lastMessage = undefined;
     onDidChangeState() { return { dispose: vi.fn() }; }
+    onDidInvalidateSuggestion(listener: () => void) {
+      mocks.invalidationListener = listener;
+      return { dispose: vi.fn() };
+    }
     reset() {}
     dispose() {}
   },
@@ -70,6 +75,7 @@ beforeEach(() => {
   mocks.commands.clear();
   mocks.configurationListener = undefined;
   mocks.secretListener = undefined;
+  mocks.invalidationListener = undefined;
   mocks.config = { enabled: true, excludePatterns: [] };
   mocks.executeCommand.mockResolvedValue(undefined);
   // VS Code emits the configuration event after the persisted value changes.
@@ -119,5 +125,12 @@ describe('registered autocomplete suggestion invalidation', () => {
     mocks.secretListener?.({ key: 'droidvisx.customModelProvider.synthetic' });
     await Promise.resolve();
     expect(mocks.executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('hides the native editor-owned suggestion after provider context invalidation', async () => {
+    expect(mocks.invalidationListener).toBeTypeOf('function');
+    mocks.invalidationListener?.();
+    await Promise.resolve();
+    expect(mocks.executeCommand).toHaveBeenCalledExactlyOnceWith('editor.action.inlineSuggest.hide');
   });
 });

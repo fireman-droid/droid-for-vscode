@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { AutocompleteProvider } from './AutocompleteProvider';
 import {
-  COMPLETION_SECTION, completionDocumentBlockReason, configureCompletion,
-  readCompletionSettings, setCompletionEnabled,
+  COMPLETION_SECTION, completionDocumentBlockReason, completionSecretKey, configureCompletion,
+  readCompletionSettings, setCompletionEnabled, setRelatedFilesEnabled,
 } from './settings';
 
 export function registerAutocomplete(context: vscode.ExtensionContext): void {
@@ -24,14 +24,17 @@ export function registerAutocomplete(context: vscode.ExtensionContext): void {
       : provider.lastMessage ? '$(warning) Droid Tab'
         : blocked ? '$(circle-slash) Droid Tab' : '$(sparkle) Droid Tab';
     status.tooltip = provider.lastMessage ?? blocked ??
-      'Droid autocomplete · ' + settings.model + '\nTab accepts a suggestion. Click for options.';
+      'Droid autocomplete · ' + settings.model + '\n' +
+      (settings.relatedFiles ? provider.lastContextFileCount + ' related files found' : 'Current file only') +
+      (provider.lastLatencyMs === undefined ? '' : ' · ' + provider.lastLatencyMs + ' ms') +
+      '\nTab accepts a suggestion. Click for options.';
     status.show();
   };
   const configure = async () => {
     if (!await configureCompletion(context.secrets)) return;
     provider.reset();
     const enabled = await vscode.window.showInformationMessage(
-      'Autocomplete is configured. Enable it to send the active file’s cursor context to ' +
+      'Autocomplete is configured. Enable it to send cursor context and relevant workspace snippets to ' +
         new URL(readCompletionSettings().endpoint).host + '?',
       'Enable autocomplete',
     );
@@ -44,7 +47,7 @@ export function registerAutocomplete(context: vscode.ExtensionContext): void {
       await setCompletionEnabled(false);
     } else {
       const answer = await vscode.window.showInformationMessage(
-        'Enable Droid autocomplete? Cursor context will be sent to your configured FIM provider.',
+        'Enable Droid autocomplete? Cursor context and relevant workspace snippets will be sent to your configured provider.',
         'Enable autocomplete', 'Configure first',
       );
       if (answer === 'Configure first') await configure();
@@ -79,13 +82,24 @@ export function registerAutocomplete(context: vscode.ExtensionContext): void {
     await vscode.commands.executeCommand('editor.action.inlineSuggest.hide');
     refresh();
   });
+  const removeKey = async () => {
+    const answer = await vscode.window.showWarningMessage(
+      'Remove the saved autocomplete API key for this endpoint?', { modal: true }, 'Remove API key',
+    );
+    if (answer === 'Remove API key') {
+      await context.secrets.delete(completionSecretKey(readCompletionSettings().endpoint));
+    }
+  };
   const menu = async () => {
     const selection = await vscode.window.showQuickPick([
       { label: '$(gear) Configure model and API key', id: 'configure' },
       { label: readCompletionSettings(vscode.window.activeTextEditor?.document.uri).enabled
         ? '$(debug-pause) Pause autocomplete' : '$(play) Enable autocomplete', id: 'toggle' },
       { label: '$(refresh) Request suggestion / retry', id: 'trigger' },
+      { label: readCompletionSettings(vscode.window.activeTextEditor?.document.uri).relatedFiles
+        ? '$(check) Related workspace files: on' : 'Related workspace files: off', id: 'context' },
       { label: '$(settings-gear) Open autocomplete settings', id: 'settings' },
+      { label: '$(key) Remove saved API key', id: 'removeKey' },
     ], {
       title: 'Droid autocomplete',
       placeHolder: provider.lastMessage ?? 'Tab accepts a suggestion; Esc dismisses it.',
@@ -93,6 +107,10 @@ export function registerAutocomplete(context: vscode.ExtensionContext): void {
     if (selection?.id === 'configure') await configure();
     if (selection?.id === 'toggle') await toggle();
     if (selection?.id === 'trigger') await trigger();
+    if (selection?.id === 'removeKey') await removeKey();
+    if (selection?.id === 'context') {
+      await setRelatedFilesEnabled(!readCompletionSettings(vscode.window.activeTextEditor?.document.uri).relatedFiles);
+    }
     if (selection?.id === 'settings') {
       await vscode.commands.executeCommand('workbench.action.openSettings', COMPLETION_SECTION);
     }
@@ -103,6 +121,7 @@ export function registerAutocomplete(context: vscode.ExtensionContext): void {
       [{ scheme: 'file' }, { scheme: 'untitled' }], provider,
     ),
     provider.onDidChangeState(refresh),
+    provider.onDidInvalidateSuggestion(() => { void invalidateDisplayedSuggestion(); }),
     vscode.window.onDidChangeActiveTextEditor(refresh),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(COMPLETION_SECTION) ||
