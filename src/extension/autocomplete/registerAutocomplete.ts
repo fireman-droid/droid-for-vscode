@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
+import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
 import { AutocompleteProvider } from './AutocompleteProvider';
 import {
   COMPLETION_SECTION, completionDocumentBlockReason, completionSecretKey, configureCompletion,
   readCompletionSettings, setCompletionEnabled, setRelatedFilesEnabled,
 } from './settings';
 
-export function registerAutocomplete(context: vscode.ExtensionContext): void {
-  const provider = new AutocompleteProvider(context.secrets);
+export function registerAutocomplete(context: vscode.ExtensionContext, diagnostics?: RuntimeDiagnosticSink): void {
+  const provider = new AutocompleteProvider(context.secrets, diagnostics);
   const status = vscode.window.createStatusBarItem(
     'droidvisx.autocomplete', vscode.StatusBarAlignment.Right, 10,
   );

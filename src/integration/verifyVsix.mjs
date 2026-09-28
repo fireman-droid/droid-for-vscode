@@ -106,6 +106,7 @@ assert.doesNotMatch(
   'Factory Droid SDK must be bundled into the extension',
 );
 assert.doesNotMatch(extensionBundle, /sourceMappingURL/u);
+assertExtensionBundleLoads(extensionBundle);
 const catalogWorkerBundle = readEntry('extension/dist/extension/sessionCatalogWorker.cjs');
 assert.doesNotMatch(catalogWorkerBundle, /\brequire\(["']@factory\/droid-sdk/u);
 assert.doesNotMatch(catalogWorkerBundle, /sourceMappingURL/u);
@@ -159,7 +160,7 @@ assert.ok(manifest.contributes.commands.some((entry) => entry.command === 'droid
 assert.doesNotMatch(icon, /<script\b/iu);
 assert.doesNotMatch(icon, /\bon\w+\s*=/iu);
 
-console.log(`Verified ${entries.length} VSIX entries and bundled externals.`);
+console.log(`Verified ${entries.length} VSIX entries, bundled externals, and extension entry loading.`);
 
 function readEntry(entry) {
   return execFileSync('tar', ['-xOf', vsixPath, entry], {
@@ -174,4 +175,27 @@ function staticRequires(source) {
       (match) => match[1],
     ),
   );
+}
+
+function assertExtensionBundleLoads(bundle) {
+  // Load the packaged bytes without repository node_modules. UMD factory aliases
+  // can hide unresolved imports from both esbuild's metafile and static regexes.
+  execFileSync(process.execPath, ['--input-type=commonjs', '-e', `
+    const assert = require('node:assert/strict');
+    const { readFileSync } = require('node:fs');
+    const { Module, isBuiltin } = require('node:module');
+    const extension = new Module('extension.cjs');
+    const vscode = {};
+    extension.paths = [];
+    extension.require = (specifier) => {
+      if (specifier === 'vscode') return vscode;
+      if (isBuiltin(specifier)) return require(specifier);
+      const error = new Error('Extension bundle requires unpackaged dependency: ' + specifier);
+      error.code = 'MODULE_NOT_FOUND';
+      throw error;
+    };
+    extension._compile(readFileSync(0, 'utf8'), 'extension.cjs');
+    assert.equal(typeof extension.exports.activate, 'function');
+    assert.equal(typeof extension.exports.deactivate, 'function');
+  `], { input: bundle, encoding: 'utf8', timeout: 30_000 });
 }

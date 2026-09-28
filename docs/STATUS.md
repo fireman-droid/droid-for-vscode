@@ -15,18 +15,38 @@
 仍可补全当前代码。关联文件变化会使缓存/请求失效，相关文件开关可关闭额外读取。
 读取边界、模型格式、协议与源码入口见 ARCHITECTURE，用户配置方式见 README。
 
-本轮 `pnpm exec vitest run src/extension/autocomplete src/runtime/autocomplete` 通过
-9 个文件、174 项定向回归；`pnpm run typecheck`、`pnpm run lint:budgets`、
-`pnpm run package:vsix` 与 `pnpm run verify:vsix` 全部通过，校验 80 个 VSIX 条目。
-首次类型检查发现候选范围测试 fixture 不完整，改用原生 Range 构造后通过。
-关联文件变化会同步取消请求、清理缓存并撤回编辑器已显示灰字；当前文件顺向输入
-仍可复用剩余建议，这两条行为均已覆盖。
+当前补全定向回归为 9 个文件、192 项，覆盖协议、上下文、取消、缓存、格式和编辑器范围。
+代码与安装包均来自独立工作树；主目录 main 的未提交工作未合入，日常 Cursor 安装未改动。
+按用户后续要求，交付目标改为 VS Code；此前隔离 Cursor 预览不代表当前 VS Code 的验收。
 
-已安装到 `%LOCALAPPDATA%/DroidAutocompletePreview`，9 个生产文件的安装哈希一致。
-安装 CLI 提示 `url.parse()` 弃用警告，安装退出码为 0。启动入口为本工作树的
-`dist/open-autocomplete-preview.cmd`；已有试用窗口需执行 `Developer: Reload Window`。
-未操作真实聊天；用户随后明确授权的真实模型测试结果如下，原生 Cursor 交互仍待验收。
-主目录 main 的未提交工作没有合入此分支包，日常 Cursor 扩展保持原样。
+### 安装与原生编辑器验收
+
+已修复两处能实际阻断使用的问题：
+
+- Host 打包误选 jsonc-parser UMD 入口，旧包在 VS Code 激活时报
+  `Cannot find module './impl/format'`，导致聊天和补全命令没有注册。
+  现在仅对该依赖选择 ESM 入口；VSIX 校验会直接加载包内 CJS，阻止缺依赖的包通过。
+- 行首的空替换范围若返回末尾带换行的内容，VS Code 会把插入位置归一化到上一行，
+  随后因光标行不同过滤建议。旧包在原生编辑器中复现：普通内容可以接受，尾换行内容
+  无法接受，`chat.disableAIFeatures` 开关不影响结果。修复在同一行有原文时使用保留
+  原文的替换；完全空行只省去建议末尾连续换行，保留内部代码与缩进。缓存同步保存实际
+  插入内容，继续输入不会重新带回被省去的换行。
+
+最终生产包已通过类型、文件预算、构建、80 条目与 CJS 入口加载检查；在 VS Code
+1.108.2（最低支持系列）和 1.136.0 各通过 16/16 原生回归，进程退出码均为 0。
+覆盖自动/手动触发、LF/CRLF、EOF/已有代码、Python/Go/Java/TypeScript、临时保存文件、
+缓存续输、隐藏及过时结果取消。当前包已安装到用户 VS Code，9 个生产文件哈希一致；
+CLI 有 url.parse 弃用提示，安装退出码为 0。需要用户执行 Developer: Reload Window 生效。
+原生回归入口：`node src/integration/runAutocompleteTest.mjs <Code.exe绝对路径> [VSIX路径]`。
+Windows runner 从 VSIX 解包，在不切换的独立桌面启动全新编辑器实例；只使用临时配置、
+合成文件和本地 HTTP fixture，不操作用户窗口、不读取密钥、不发送业务源码。
+通过编辑器自动触发及 `editor.action.inlineSuggest.commit` 检查实际文本，不能只凭 HTTP
+返回或 Provider 回调成功判定补全可用。用户窗口仍需安装完成后 Reload。
+
+本地 Droid 日志记录补全的跳过、缓存、请求、结果、丢弃、取消与失败原因；只包含长度、
+阶段和原因，不记录源码、返回正文、密钥或 endpoint。用户复现日志中的 207 字符结果只
+证明 Provider 返回了内容；没有保存正文，不能将它本身作为可见性证据。文档事件取消已
+收窄到当前文档真实修改；关联文件仍走既有上下文失效链路，空事件和无关文档不再误取消。
 
 ### SiliconFlow 修复前真实模型验收
 

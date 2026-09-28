@@ -134,7 +134,6 @@ function createSessionLeaseHooks(): SessionLeaseHooks {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  registerAutocomplete(context);
   // globalStorage survives Cursor's per-boot log directory cleanup and
   // aggregates all windows into one per-day file set.
   const logDirectory = vscode.Uri.joinPath(context.globalStorageUri, 'logs').fsPath;
@@ -143,6 +142,7 @@ export function activate(context: vscode.ExtensionContext): void {
     output: vscode.window.createOutputChannel('Droid Logs'),
     workspace: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
   });
+  registerAutocomplete(context, diagnostics);
   diagnostics.record({
     level: 'info',
     name: 'extension.activated',

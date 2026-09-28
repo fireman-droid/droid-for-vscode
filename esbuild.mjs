@@ -14,6 +14,8 @@ const extensionResult = await build({
   outfile: 'dist/extension/extension.cjs',
   bundle: true,
   external: ['vscode', ...optionalWsAddons],
+  // Its UMD factory hides relative require calls from esbuild's dependency graph.
+  alias: { 'jsonc-parser': 'jsonc-parser/lib/esm/main.js' },
   packages: 'bundle',
   platform: 'node',
   format: 'cjs',
