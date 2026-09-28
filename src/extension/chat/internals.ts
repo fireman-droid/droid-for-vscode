@@ -35,6 +35,8 @@ export interface CurrentTurn {
   status: TurnStatus;
   compacting?: boolean;
   error?: string;
+  /** Display-safe cause retained until the authoritative turn outcome arrives. */
+  runtimeError?: string;
   activity: TurnActivityState;
   /**
    * Live changes ledger of this turn, created lazily when the first

@@ -157,6 +157,7 @@ export function normalizeSdkEvent(
     case 'error':
       return {
         type: 'error',
+        message: event.message,
       };
 
     case 'token_usage_update': {
@@ -173,6 +174,7 @@ export function normalizeSdkEvent(
       return {
         type: 'turn-complete',
         outcome: event.subtype,
+        ...(event.error?.message === undefined ? {} : { errorMessage: event.error.message }),
         ...(turnUsage === undefined ? {} : { turnUsage }),
       };
     }

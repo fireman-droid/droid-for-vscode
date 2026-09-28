@@ -255,6 +255,8 @@ export type RuntimeEvent =
     }
   | {
       type: 'error';
+      /** SDK error text; the Host sanitizes it before displaying it. */
+      message?: string;
     }
   | {
       type: 'turn-complete';
@@ -263,6 +265,8 @@ export type RuntimeEvent =
         | 'interrupted'
         | 'error_during_execution'
         | 'error_structured_output';
+      /** Some SDK failures only carry their cause on the final result. */
+      errorMessage?: string;
       /**
        * This turn's own consumption from `result.tokenUsage`
        * (per-turn, not cumulative). Absent when the SDK reported

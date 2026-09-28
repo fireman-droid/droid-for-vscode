@@ -5,8 +5,9 @@ import type { TurnCompletionPort, TurnFailurePort, TurnStopPort, TurnStatusPort,
 import { isCurrentTurn } from './turnIdentity';
 import { finishSpecHandoff } from './specHandoff';
 import { STOP_TIMEOUT_MESSAGE } from './turnWatchdog';
+import { formatTurnErrorMessage } from './turnErrorMessage';
 
-export const TURN_FAILURE_MESSAGE = 'Droid could not complete this turn. Retry to start a fresh session.';
+export const TURN_FAILURE_MESSAGE = 'Droid could not complete this reply. Review the error details before sending again.';
 
 export function handleTurnComplete(
   ctl: TurnCompletionPort,
@@ -38,11 +39,11 @@ export function handleTurnComplete(
       return;
     case 'error_during_execution':
       ctl.turnState.specHandoff = null;
-      failTurn(ctl, sessionId, turnId, 'runtime-execution-failed');
+      failTurn(ctl, sessionId, turnId, 'runtime-execution-failed', event.errorMessage);
       return;
     case 'error_structured_output':
       ctl.turnState.specHandoff = null;
-      failTurn(ctl, sessionId, turnId, 'runtime-structured-output-failed');
+      failTurn(ctl, sessionId, turnId, 'runtime-structured-output-failed', event.errorMessage);
       return;
   }
 }
@@ -102,6 +103,7 @@ export function failTurn(
   sessionId: string,
   turnId: string,
   code: string,
+  errorMessage?: string,
 ): void {
   ctl.effects.flushPendingThinking(sessionId, turnId);
   if (ctl.turnState.turn?.turnId !== turnId) {
@@ -118,13 +120,20 @@ export function failTurn(
   ctl.effects.publishTurnChanges(sessionId, turnId, 'failed');
   ctl.turnState.turn.status = 'failed';
   ctl.turnState.turn.compacting = false;
-  ctl.turnState.turn.error = TURN_FAILURE_MESSAGE;
+  const finalCause = formatTurnErrorMessage(errorMessage);
+  const message = finalCause ?? ctl.turnState.turn.runtimeError ?? TURN_FAILURE_MESSAGE;
+  // Retain a final-result-only cause in history as well as the failed-turn snapshot.
+  if (finalCause !== undefined && finalCause !== ctl.turnState.turn.runtimeError) {
+    ctl.emit({ type: 'runtime.diagnostic', sessionId, turnId, severity: 'error',
+      code: 'runtime-event-error', message });
+  }
+  ctl.turnState.turn.error = message;
   ctl.emit({
     type: 'turn.error',
     sessionId,
     turnId,
     code,
-    message: TURN_FAILURE_MESSAGE,
+    message,
     retryable: true,
   });
   emitTurnState(ctl, sessionId, turnId, 'failed');

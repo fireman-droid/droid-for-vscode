@@ -114,7 +114,7 @@ export function SessionRecovery({ state, blocked, onReconnect, port }: {
   const reconnectingIde = state.ide.status === 'reconnecting';
   const loadingCatalog = state.sessions.status === 'loading';
   const longWait = useLongWait(pending || connecting || reconnectingIde, reconnectingIde ? 60_000 : 5_000);
-  const failed = state.connection.status === 'unavailable' || state.turn?.status === 'failed';
+  const failed = state.connection.status === 'unavailable';
   const working = state.turn?.status === 'submitting' || state.turn?.status === 'streaming' || state.turn?.status === 'stopping';
   if (blocked || (!failed && !pending && !connecting && !reconnectingIde)) return null;
   return <div className="space-y-1 text-xs text-muted-foreground">

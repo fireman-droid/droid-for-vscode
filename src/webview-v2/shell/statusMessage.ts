@@ -2,6 +2,10 @@ import { MAX_TURN_TEXT_LENGTH } from '../../shared/protocol/bounds';
 import type { AssistantWebviewState } from '../state/types';
 
 export function getStatusMessage(state: Pick<AssistantWebviewState, 'turn' | 'connection'> & Partial<Pick<AssistantWebviewState, 'settings'>>, draft: string): string | undefined {
+  if (state.connection.status === 'unavailable') return state.connection.message ?? 'The local Droid connection is unavailable.';
+  if (state.turn?.status === 'failed' && state.connection.status === 'connected') {
+    return 'Reply failed. Review the error above; you can change the model or its provider settings before sending again.';
+  }
   if (state.turn?.error !== undefined) return state.turn.error;
   if (state.connection.message !== undefined) return state.connection.message;
   if (state.settings?.status === 'updating') return 'Updating session settings…';

@@ -7,6 +7,7 @@ import { applySubagentSettlement, projectAssistantDelta, projectSubagentStarted,
 import type { TurnRuntimeEventPort, TurnTranscriptPort } from './turnFlowPort';
 import { recordSpecHandoff } from './specHandoff';
 import { emitTurnState, startStreaming } from './turnSettlement';
+import { formatTurnErrorMessage } from './turnErrorMessage';
 
 export const RUNTIME_EVENT_ERROR_MESSAGE =
   'Droid reported a runtime error while processing this turn.';
@@ -218,16 +219,19 @@ export function handleRuntimeEvent(
     case 'spec-handoff':
       recordSpecHandoff(ctl, sessionId, turnId, event.implementationSessionId);
       return;
-    case 'error':
+    case 'error': {
+      const message = formatTurnErrorMessage(event.message) ?? RUNTIME_EVENT_ERROR_MESSAGE;
+      if (ctl.turnState.turn !== null) ctl.turnState.turn.runtimeError = message;
       ctl.emit({
         type: 'runtime.diagnostic',
         sessionId,
         turnId,
         severity: 'error',
         code: 'runtime-event-error',
-        message: RUNTIME_EVENT_ERROR_MESSAGE,
+        message,
       });
       return;
+    }
   }
 }
 
