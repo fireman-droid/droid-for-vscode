@@ -59,26 +59,10 @@ Runtime 不引用 VS Code；Host 即时读取按 endpoint 绑定的 SecretStorag
 相关文件开关关闭时跳过关联内容和语言元数据读取。未引入 Kilo/Continue 源码或
 Tree-sitter 资源；复用编辑器语言服务、成熟 ignore 与 JSONC 解析器。
 
-### 选区 Quick Edit / Ask
+### 历史内部会话过滤
 
-`src/extension/editorAssistance/EditorAssistanceController.ts` 持有选区快照、
-运行取消器和面板状态；`selection.ts` 提供内存只读 Diff 与代次清理。
-`selectionActions.ts` 只负责真实鼠标/键盘选区的延迟触发与失效清理，
-通过原生 CodeLensProvider 展示链接，不打开模型会话；令牌绑定原选区和文档版本，
-点击时才捕获源码。Add to Chat 显式点击后恢复该选区并复用现有附件命令。
-AskSelectionCard 使用原生 InputBox 提问，并以两个 HoverProvider 分别提供即刻标题和异步完整回答。
-模型正文不信任命令链接；操作链接单独设置命令白名单和不透明令牌。取消只清理所属请求，
-晚到结果不能重新打开卡片；源内容变化使卡片失效。Quick Edit 中选择 Ask 同样通过 Bridge 转交。
-只有显式 Accept 使用原生 TextEditor.edit，提交前核对原文档身份和版本，
-编辑器再原子检查版本；不会把模型输出直接写磁盘。
-
-`src/shared/protocol/editorAssistanceProtocol.ts` 校验提交和操作；
-`src/webview-v2/editor-assistance/` 使用共享 UI 与 Markdown，
-selectionId / revision 拒绝旧快照，流式状态不覆盖本地输入草稿。
-`src/runtime/editorAssistance/runEditorAssistance.ts` 使用 SDK 公开
-ProcessTransport / createSession，在独立临时目录创建进程，保留 CLI 登录，
-禁用工具后运行流式 Ask 或 JSON Schema 替换结果；取消关闭所属进程。
-单次输出超过 200,000 字符中止，不截断修改文本。
+`src/runtime/editorAssistance/sessionIdentity.ts` 仅保留旧 `droid-editor-assistance` 标签识别，
+供历史、归档和搜索过滤使用；不再注册编辑器辅助入口或创建这类请求。
 
 ### 第一次阅读按这个顺序
 
@@ -409,7 +393,7 @@ SDK 负责 transport/RPC/协议转换；项目只在以下已知边界补充产�
 - 公共 UI 包只接受 props、回调和插槽；ESM/声明构建拒绝父仓库、Node、VS Code 与
   Factory 依赖。宿主注入剪贴板、Mermaid 与 Auto 主题；纯展示层不拥有业务状态机。
 - `esbuild.mjs` 构建 Host/目录 Worker，调用 `buildWebviewV2.mjs --production` 生成
-  包括选区编辑辅助的六个页面到 `dist/webview/`。构建拒绝 UI 打入 SDK/Host/Runtime/assistant-ui，
+  Chat、Models、Mission、Viewer、Review 五个页面到 `dist/webview/`。构建拒绝 UI 打入 SDK/Host/Runtime/assistant-ui，
   保留脚本 nonce、零网络、延迟 Mermaid；Markdown Worker 仅增加 `worker-src blob:`。
 - `packages/chat-ui/scripts/thirdPartyNotices.mjs` 按实际构建依赖收集许可证，
   包内固定版本副本不能自动沿用到升级版本；法律注释、MIT、第三方条款及图标随包。

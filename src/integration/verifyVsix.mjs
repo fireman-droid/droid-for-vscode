@@ -22,7 +22,6 @@ const expectedEntries = [
   'extension/dist/webview/mermaid.js',
   'extension/dist/webview/mission-control.js',
   'extension/dist/webview/models.js',
-  'extension/dist/webview/editor-assistance.js',
   'extension/dist/webview/session-viewer.js',
   'extension/dist/webview/review.js',
   'extension/dist/webview/webview.css',
@@ -149,7 +148,7 @@ assert.doesNotMatch(sessionViewerBundle, /\beval\s*\(/u);
 assert.doesNotMatch(sessionViewerBundle, /\bnew\s+Function\s*\(/u);
 
 const icon = readEntry('extension/resources/droidvisx.svg');
-for (const filename of ['webview', 'models', 'mission-control', 'session-viewer', 'editor-assistance']) {
+for (const filename of ['webview', 'models', 'mission-control', 'session-viewer']) {
   const bundle = readEntry(`extension/dist/webview/${filename}.js`);
   assert.deepEqual([...staticRequires(bundle)], [], `${filename} must have no runtime externals`);
   assert.doesNotMatch(bundle, /@assistant-ui|@factory\/droid-sdk|assistant-cloud|sourceMappingURL|\beval\s*\(|\bnew\s+Function\s*\(/u);

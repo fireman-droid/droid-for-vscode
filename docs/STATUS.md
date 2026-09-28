@@ -5,35 +5,17 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
-## 独立分支：Quick Edit / Ask
+## 编辑器入口移除
 
-`codex/droid-autocomplete` 已接通自动选区操作行、右键/悬浮菜单、编辑器标题按钮和快捷键。
-鼠标/键盘选区稳定 160 ms 后，通过原生 CodeLens 在起始行上方显示 Quick Edit / Ask / Add to Chat；
-取消选区、编辑或离开编辑器后失效收起，不主动改变焦点，尊重 editor.codeLens 配置。
-CodeLens 使用不含源码的临时令牌，点击时验证原文档版本并捕获原选区，避免点击造成选区丢失。
-Quick Edit 使用旁侧紧凑面板；生成、停止、错误重试和模型标签通过独立 Bridge 投影。
-Ask 改用顶部原生输入条提问、原代码附近 Hover 卡片展示完整回答；两个 provider 合并静态标题与异步答案，
-生成结束不会重新弹出或抢焦点。卡片内支持复制、再次提问、失败重试和 Close；Close 取消请求，
-Esc 仅收起显示，再次悬停原选区可查看保留回答。Quick Edit 内选择 Ask 也转交该卡片。
-输入条与回答卡分开，不能嵌入 Cursor 式自定义输入框。Quick Edit 返回经校验的替换文本并打开原生只读 Diff，
-Accept 才通过带版本检查的 TextEditor.edit 应用，不自动保存，可原生 Undo。
-源文件变化、关闭、取消或切换选区不会使迟到请求覆盖代码；预览使用独立代次 URI。
+按用户要求移除 Quick Edit、Ask Droid、Add to Chat 三个编辑器功能，包括自动选区操作行、
+命令、菜单、快捷键以及专用 Host、Bridge、页面和运行时请求实现。灰字补全、聊天框普通附件、
+聊天正文引用，以及吸顶卡片边框和代码文字背景修复保留。旧内部会话标签继续从历史、归档和
+搜索结果中过滤，避免已取消功能的辅助请求混入聊天记录。
 
-运行时复用 Droid 登录与当前模型，单独 CLI 进程在临时目录执行，
-生成前列举并禁用工具，拒绝权限请求；不恢复/分叉主会话、不占用聊天回合。
-内部会话标签从历史、归档和搜索结果过滤。项目 Hooks 不从源目录加载；
-用户级 Droid 配置仍适用，不宣称进程拥有额外系统沙箱。
-单个问题不继承之前 Ask 回答；选区/上下文上限见 README。
-
-本轮 Quick Edit / Ask 尚未获测试许可，未运行新功能回归、真实模型或界面自动化；
-源码检查、pnpm run package:vsix（含 typecheck / lint:budgets / 生产构建）通过，
-pnpm run verify:vsix 校验 81 条目和包入口加载通过。已安装用户指定的 VS Code，
-10 个生产 JS/CSS/Worker 文件哈希一致；需手动 Developer: Reload Window 加载。
-最新 Ask 悬浮卡、吸顶边框与代码文字背景修改完成上述构建、81 条目包校验和 VS Code 安装，
-10 项安装哈希一致；本轮未运行交互测试或真实模型请求，需手动 Reload Window 后验收。
-此前 Quick Edit / Ask 包在隐藏隔离桌面的 VS Code 1.136.0 运行既有补全/工具栏回归，
-17/17 用例通过；未复现该命令清除建议，鼠标菜单焦点路径仍未验证。
-always 表示有建议时显示工具栏，不代表建议结束后永久显示；没有据此修改生产补全逻辑。
+已通过 pnpm run typecheck、pnpm run lint:budgets、生产构建和 80 条目 VSIX 校验，
+包括包内扩展入口加载。已覆盖安装到 VS Code，9 个生产文件哈希一致；安装目录已确认
+不含三个命令和专用页面文件。用户 Reload Window 后生效。本轮未运行测试、界面自动化
+或真实模型请求。
 
 ## 吸顶历史提问卡边框
 
@@ -61,6 +43,10 @@ VS Code 的默认 code 样式会注入行内背景，但现有 host reset 已有
 当前补全定向回归为 9 个文件、192 项，覆盖协议、上下文、取消、缓存、格式和编辑器范围。
 代码与安装包均来自独立工作树；主目录 main 的未提交工作未合入，日常 Cursor 安装未改动。
 按用户后续要求，交付目标改为 VS Code；此前隔离 Cursor 预览不代表当前 VS Code 的验收。
+
+此前在隐藏隔离桌面的 VS Code 1.136.0 运行既有补全/工具栏回归，17/17 用例通过；
+未复现 Always Show Toolbar 命令清除建议，鼠标菜单焦点路径仍未验证。
+always 仅表示有建议时显示工具栏；未据此修改生产补全逻辑。
 
 ### 安装与原生编辑器验收
 
@@ -176,7 +162,7 @@ Windows runner 从 VSIX 解包，在不切换的独立桌面启动全新编辑�
 - SDK 保持 0.7.0，使用公开 `DaemonSessionController`、`MultiSessionStateManager`
   与窄 facade；不访问 `.sessions.controller`，不为展示创建竞争会话连接。
   未完成跨 SDK/CLI 版本兼容验收，不能由类型声明推断完整产品能力。
-- Chat、Models、Mission、Viewer、Review、Editor Assistance 六个生产入口使用 V2；交互复用
+- Chat、Models、Mission、Viewer、Review 五个生产入口使用 V2；交互复用
   `packages/chat-ui/src/ui/` 的 shadcn/Radix，AI 展示复用 `ai-elements/`。
   已统一到 `src/webview-v2`，旧 `src/webview` 目录及 V1 页面、入口、样式已移除。
 - 前端状态、Host 消息接线、Bridge、聊天功能、Models/Mission/Review/Viewer 业务
@@ -312,7 +298,7 @@ Windows runner 从 VSIX 解包，在不切换的独立桌面启动全新编辑�
   同宽副本，完整正文仍保留。长草稿最大高度 168px；大粘贴仍有可测的瞬时成本。
 - 队列编辑和普通草稿独立，保存、取消或队列项移除后恢复原草稿；临时编辑稿不覆盖
   持久普通草稿。发送/停止共用同一按钮位置，IME 不误发送，Shift+Enter 仍换行。
-- Add to Chat/By the Way 支持多段引用追加、摘要块、完整原文 Popover 和逐项移除；
+- 聊天正文的 Add to Chat/By the Way 支持多段引用追加、摘要块、完整原文 Popover 和逐项移除；
   主聊天、BTW、队列、历史编辑和 Viewer 共用，保留完整发送文本和旧纯文本兼容。
 - Host 原生剪贴板负责代码、终端、回复和选区复制，按回执反馈成功/失败。
   实际输入、回答、代码、结果与引用原文可复制；控件、提示、占位和装饰不参与选择。

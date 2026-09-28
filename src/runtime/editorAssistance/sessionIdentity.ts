@@ -1,3 +1,4 @@
+// Keep previous editor-assistance requests out of chat history after removing the feature.
 export const EDITOR_ASSISTANCE_SESSION_TAG = 'droid-editor-assistance';
 
 export function isEditorAssistanceSession(

@@ -37,7 +37,6 @@
     "onCommand:droidvisx.focusView",
     "onCommand:droidvisx.openLogs",
     "onCommand:droidvisx.exportDiagnostics",
-    "onCommand:droidvisx.addSelectionToChat",
     "onCommand:droidvisx.openMissionControl",
     "onCommand:droidvisx.openModels",
     "onCommand:droidvisx.manageCapabilities",
@@ -77,10 +76,6 @@
         "title": "Droid: Export Session as Markdown"
       },
       {
-        "command": "droidvisx.addSelectionToChat",
-        "title": "Droid: Add Selection to Chat"
-      },
-      {
         "command": "droidvisx.openMissionControl",
         "title": "Droid: Open Mission Control"
       },
@@ -107,51 +102,8 @@
       {
         "command": "droidvisx.autocomplete.trigger",
         "title": "Droid: Request Code Completion"
-      },
-      {
-        "command": "droidvisx.quickEdit",
-        "title": "Droid: Quick Edit",
-        "icon": "$(edit)",
-        "enablement": "editorHasSelection && isWorkspaceTrusted && !editorReadonly"
-      },
-      {
-        "command": "droidvisx.askSelection",
-        "title": "Droid: Ask About Selection",
-        "icon": "$(comment-discussion)",
-        "enablement": "editorHasSelection && isWorkspaceTrusted"
       }
     ],
-    "menus": {
-      "editor/context": [
-        {
-          "command": "droidvisx.addSelectionToChat",
-          "when": "editorHasSelection",
-          "group": "droidvisx"
-        },
-        {
-          "command": "droidvisx.quickEdit",
-          "when": "editorHasSelection && isWorkspaceTrusted && !editorReadonly",
-          "group": "droidvisx@1"
-        },
-        {
-          "command": "droidvisx.askSelection",
-          "when": "editorHasSelection && isWorkspaceTrusted",
-          "group": "droidvisx@2"
-        }
-      ],
-      "editor/title": [
-        {
-          "command": "droidvisx.quickEdit",
-          "when": "editorHasSelection && isWorkspaceTrusted && !editorReadonly && resourceScheme != droid-quick-edit",
-          "group": "navigation@90"
-        },
-        {
-          "command": "droidvisx.askSelection",
-          "when": "editorHasSelection && isWorkspaceTrusted && resourceScheme != droid-quick-edit",
-          "group": "navigation@91"
-        }
-      ]
-    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -286,21 +238,7 @@
           "description": "Include bounded snippets from definitions, recent edits and open files in the same workspace folder. Respects .gitignore, .droidignore and exclusions. Disable for current-file-only context."
         }
       }
-    },
-    "keybindings": [
-      {
-        "command": "droidvisx.quickEdit",
-        "key": "ctrl+alt+k",
-        "mac": "cmd+alt+k",
-        "when": "editorTextFocus && editorHasSelection && isWorkspaceTrusted && !editorReadonly"
-      },
-      {
-        "command": "droidvisx.askSelection",
-        "key": "ctrl+alt+l",
-        "mac": "cmd+alt+l",
-        "when": "editorTextFocus && editorHasSelection && isWorkspaceTrusted"
-      }
-    ]
+    }
   },
   "packageManager": "pnpm@10.2.0",
   "scripts": {
