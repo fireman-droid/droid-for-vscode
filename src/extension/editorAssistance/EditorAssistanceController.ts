@@ -12,6 +12,7 @@ import { handleWebviewClipboard } from '../webview/webviewClipboard';
 import { readWebviewBootTheme } from '../webview/webviewTheme';
 import { captureSelection, EditPreview, selectionIsCurrent, type SelectionSnapshot } from './selection';
 import { registerAutomaticSelectionActions } from './selectionActions';
+import { AskSelectionCard } from './AskSelectionCard';
 
 interface Entry {
   readonly panel: vscode.WebviewPanel;
@@ -32,6 +33,7 @@ export class EditorAssistanceController implements vscode.Disposable {
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly readSettings: () => RuntimeSessionSettings | null,
+    private readonly askCard: AskSelectionCard,
     private readonly diagnostics?: RuntimeDiagnosticSink,
   ) {}
 
@@ -39,10 +41,11 @@ export class EditorAssistanceController implements vscode.Disposable {
     if (this.disposed) return;
     if (this.entry?.applying) throw new Error('Wait for the current edit to finish applying.');
     const capture = captured ?? captureSelection();
+    if (mode === 'ask') { await this.askCard.open(capture); return; }
     this.entry?.panel.dispose();
     const dist = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview');
     const panel = vscode.window.createWebviewPanel(
-      'droidvisx.editorAssistance', mode === 'edit' ? 'Quick Edit' : 'Ask Droid',
+      'droidvisx.editorAssistance', 'Quick Edit',
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [dist] },
     );
@@ -70,9 +73,12 @@ export class EditorAssistanceController implements vscode.Disposable {
           this.publish(entry); this.theme(entry); return;
         }
         if (request.selectionId !== capture.id) return;
-        const action = request.type === 'editor-assistance.submit'
-          ? () => this.submit(entry, request.mode, request.instruction)
-          : () => this.action(entry, request.action);
+        const action = request.type === 'editor-assistance.openAsk'
+          ? () => this.openAsk(entry, request.instruction)
+          : request.type === 'editor-assistance.submit'
+            ? () => request.mode === 'ask' ? this.openAsk(entry, request.instruction)
+              : this.submit(entry, request.mode, request.instruction)
+            : () => this.action(entry, request.action);
         void action().catch((error: unknown) => {
           if (this.entry === entry) this.update(entry, { message: safeError(error) });
         });
@@ -100,6 +106,14 @@ export class EditorAssistanceController implements vscode.Disposable {
       script: vscode.Uri.joinPath(dist, 'editor-assistance.js'),
       style: vscode.Uri.joinPath(dist, 'webview.css'),
     }, undefined, readWebviewBootTheme());
+  }
+
+  private async openAsk(entry: Entry, question: string): Promise<void> {
+    if (this.entry !== entry || entry.operation || entry.applying) return;
+    if (!selectionIsCurrent(entry.capture)) throw new Error('The source changed. Select the code again.');
+    entry.panel.dispose();
+    try { await this.askCard.open(entry.capture, question); }
+    catch (error) { if (!this.disposed) await vscode.window.showErrorMessage(safeError(error)); }
   }
 
   private async submit(entry: Entry, mode: EditorAssistanceMode, instruction: string): Promise<void> {
@@ -253,7 +267,8 @@ export function registerEditorAssistance(
   readSettings: () => RuntimeSessionSettings | null,
   diagnostics?: RuntimeDiagnosticSink,
 ): void {
-  const controller = new EditorAssistanceController(context.extensionUri, readSettings, diagnostics);
+  const askCard = new AskSelectionCard(readSettings, diagnostics);
+  const controller = new EditorAssistanceController(context.extensionUri, readSettings, askCard, diagnostics);
   const selectionActions = registerAutomaticSelectionActions();
   const fromToken = (token: unknown) => {
     const capture = selectionActions.capture(token);
@@ -264,7 +279,7 @@ export function registerEditorAssistance(
     try { await controller.open(mode, typeof token === 'string' ? fromToken(token) : undefined); }
     catch (error) { await vscode.window.showErrorMessage(safeError(error)); }
   };
-  context.subscriptions.push(controller, selectionActions,
+  context.subscriptions.push(controller, askCard, selectionActions,
     vscode.commands.registerCommand('droidvisx.quickEdit', open('edit')),
     vscode.commands.registerCommand('droidvisx.askSelection', open('ask')),
     vscode.commands.registerCommand('droidvisx.selectionActions.addToChat', async (token: unknown) => {
@@ -278,6 +293,7 @@ export function registerEditorAssistance(
     }),
     vscode.languages.registerHoverProvider([{ scheme: 'file' }, { scheme: 'untitled' }], {
       provideHover(document, position) {
+        if (askCard.handles(document, position)) return;
         const editor = vscode.window.activeTextEditor;
         if (!vscode.workspace.isTrusted || !editor || editor.document !== document ||
             editor.selection.isEmpty || editor.selections.length !== 1 || !editor.selection.contains(position)) return;

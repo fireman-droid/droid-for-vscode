@@ -7,5 +7,6 @@ export const CodeSyntax = memo(function CodeSyntax({ text, language, path, detec
   readonly streaming?: boolean;
 }) {
   const html = useMemo(() => streaming ? null : highlightCode(text, { language, path, detect }), [text, language, path, detect, streaming]);
-  return html === null ? <code>{text}</code> : <code dangerouslySetInnerHTML={{ __html: html }} />;
+  // Block surfaces own their background; do not inherit host inline-code fills.
+  return html === null ? <code className="bg-transparent">{text}</code> : <code className="bg-transparent" dangerouslySetInnerHTML={{ __html: html }} />;
 });

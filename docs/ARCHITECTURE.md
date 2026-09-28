@@ -66,6 +66,9 @@ Tree-sitter 资源；复用编辑器语言服务、成熟 ignore 与 JSONC 解�
 `selectionActions.ts` 只负责真实鼠标/键盘选区的延迟触发与失效清理，
 通过原生 CodeLensProvider 展示链接，不打开模型会话；令牌绑定原选区和文档版本，
 点击时才捕获源码。Add to Chat 显式点击后恢复该选区并复用现有附件命令。
+AskSelectionCard 使用原生 InputBox 提问，并以两个 HoverProvider 分别提供即刻标题和异步完整回答。
+模型正文不信任命令链接；操作链接单独设置命令白名单和不透明令牌。取消只清理所属请求，
+晚到结果不能重新打开卡片；源内容变化使卡片失效。Quick Edit 中选择 Ask 同样通过 Bridge 转交。
 只有显式 Accept 使用原生 TextEditor.edit，提交前核对原文档身份和版本，
 编辑器再原子检查版本；不会把模型输出直接写磁盘。
 

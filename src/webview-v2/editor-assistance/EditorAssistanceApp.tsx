@@ -14,7 +14,7 @@ const submitKey = /Mac|iPhone|iPad/u.test(navigator.platform) ? '⌘ Enter' : 'C
 
 export function EditorAssistanceApp({ transport }: { readonly transport: EditorAssistanceTransport }) {
   const state = useEditorAssistance(transport);
-  const { snapshot, draft, setDraft, mode, setMode, theme, busy, canSubmit, submit, action } = state;
+  const { snapshot, draft, setDraft, mode, theme, busy, canSubmit, submit, action, openAsk } = state;
   const input = useRef<HTMLTextAreaElement>(null);
   const composing = useRef(false);
   const selectionId = snapshot?.selectionId;
@@ -45,7 +45,7 @@ export function EditorAssistanceApp({ transport }: { readonly transport: EditorA
   return <ContentProvider value={{ workspaceRoot: null, theme }}>
     <main className="editor-assistance-page" aria-label="Droid editor assistance">
       <header className="editor-assistance-header">
-        <Select value={mode} disabled={busy} onValueChange={(value) => setMode(value === 'ask' ? 'ask' : 'edit')}>
+        <Select value={mode} disabled={busy || snapshot.sourceChanged} onValueChange={(value) => { if (value === 'ask') openAsk(); }}>
           <SelectTrigger aria-label="Assistance mode" className="editor-assistance-mode">
             {ask ? <MessageSquare aria-hidden="true" /> : <Pencil aria-hidden="true" />}<SelectValue />
           </SelectTrigger>

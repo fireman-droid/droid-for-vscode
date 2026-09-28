@@ -64,6 +64,12 @@ export function useEditorAssistance(transport: EditorAssistanceTransport) {
       instruction: draft.trim(),
     });
   }, [canSubmit, draft, mode, snapshot, transport]);
+  const openAsk = useCallback(() => {
+    if (!snapshot || busy || snapshot.sourceChanged || draft.length > MAX_EDITOR_INSTRUCTION) return;
+    transport.postMessage({
+      type: 'editor-assistance.openAsk', selectionId: snapshot.selectionId, instruction: draft.trim(),
+    });
+  }, [snapshot, busy, draft, transport]);
   const action = useCallback((value: Action) => {
     if (!snapshot) return;
     transport.postMessage({
@@ -72,5 +78,5 @@ export function useEditorAssistance(transport: EditorAssistanceTransport) {
       action: value,
     });
   }, [snapshot, transport]);
-  return { snapshot, draft, setDraft, mode, setMode, theme, busy, canSubmit, submit, action };
+  return { snapshot, draft, setDraft, mode, setMode, theme, busy, canSubmit, submit, action, openAsk };
 }
