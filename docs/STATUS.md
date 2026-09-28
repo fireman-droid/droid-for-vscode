@@ -7,7 +7,10 @@
 
 ## 独立分支：Quick Edit / Ask
 
-`codex/droid-autocomplete` 已接通选区悬浮入口、右键菜单、编辑器标题按钮和快捷键。
+`codex/droid-autocomplete` 已接通自动选区操作行、右键/悬浮菜单、编辑器标题按钮和快捷键。
+鼠标/键盘选区稳定 160 ms 后，通过原生 CodeLens 在起始行上方显示 Quick Edit / Ask / Add to Chat；
+取消选区、编辑或离开编辑器后失效收起，不主动改变焦点，尊重 editor.codeLens 配置。
+CodeLens 使用不含源码的临时令牌，点击时验证原文档版本并捕获原选区，避免点击造成选区丢失。
 Quick Edit / Ask 共用旁侧紧凑面板；生成、停止、错误重试和模型标签通过独立 Bridge 投影。
 Ask 流式展示回答；Quick Edit 返回经校验的替换文本并打开原生只读 Diff，
 Accept 才通过带版本检查的 TextEditor.edit 应用，不自动保存，可原生 Undo。
@@ -23,7 +26,8 @@ Accept 才通过带版本检查的 TextEditor.edit 应用，不自动保存，�
 源码检查、pnpm run package:vsix（含 typecheck / lint:budgets / 生产构建）通过，
 pnpm run verify:vsix 校验 81 条目和包入口加载通过。已安装用户指定的 VS Code，
 10 个生产 JS/CSS/Worker 文件哈希一致；需手动 Developer: Reload Window 加载。
-最终 VSIX 在隐藏隔离桌面的 VS Code 1.136.0 运行既有补全/工具栏回归，
+本次自动选区操作行同样完成上述构建、81 条目包校验和 VS Code 安装哈希检查，未运行交互测试。
+此前 Quick Edit / Ask 包在隐藏隔离桌面的 VS Code 1.136.0 运行既有补全/工具栏回归，
 17/17 用例通过；未复现该命令清除建议，鼠标菜单焦点路径仍未验证。
 always 表示有建议时显示工具栏，不代表建议结束后永久显示；没有据此修改生产补全逻辑。
 

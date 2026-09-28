@@ -63,6 +63,9 @@ Tree-sitter 资源；复用编辑器语言服务、成熟 ignore 与 JSONC 解�
 
 `src/extension/editorAssistance/EditorAssistanceController.ts` 持有选区快照、
 运行取消器和面板状态；`selection.ts` 提供内存只读 Diff 与代次清理。
+`selectionActions.ts` 只负责真实鼠标/键盘选区的延迟触发与失效清理，
+通过原生 CodeLensProvider 展示链接，不打开模型会话；令牌绑定原选区和文档版本，
+点击时才捕获源码。Add to Chat 显式点击后恢复该选区并复用现有附件命令。
 只有显式 Accept 使用原生 TextEditor.edit，提交前核对原文档身份和版本，
 编辑器再原子检查版本；不会把模型输出直接写磁盘。
 

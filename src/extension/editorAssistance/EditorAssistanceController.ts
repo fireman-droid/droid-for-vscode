@@ -11,6 +11,7 @@ import { getWebviewHtml } from '../webview/webviewHtml';
 import { handleWebviewClipboard } from '../webview/webviewClipboard';
 import { readWebviewBootTheme } from '../webview/webviewTheme';
 import { captureSelection, EditPreview, selectionIsCurrent, type SelectionSnapshot } from './selection';
+import { registerAutomaticSelectionActions } from './selectionActions';
 
 interface Entry {
   readonly panel: vscode.WebviewPanel;
@@ -34,10 +35,10 @@ export class EditorAssistanceController implements vscode.Disposable {
     private readonly diagnostics?: RuntimeDiagnosticSink,
   ) {}
 
-  async open(mode: EditorAssistanceMode): Promise<void> {
+  async open(mode: EditorAssistanceMode, captured?: SelectionSnapshot): Promise<void> {
     if (this.disposed) return;
     if (this.entry?.applying) throw new Error('Wait for the current edit to finish applying.');
-    const capture = captureSelection();
+    const capture = captured ?? captureSelection();
     this.entry?.panel.dispose();
     const dist = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview');
     const panel = vscode.window.createWebviewPanel(
@@ -253,13 +254,28 @@ export function registerEditorAssistance(
   diagnostics?: RuntimeDiagnosticSink,
 ): void {
   const controller = new EditorAssistanceController(context.extensionUri, readSettings, diagnostics);
-  const open = (mode: EditorAssistanceMode) => async () => {
-    try { await controller.open(mode); }
+  const selectionActions = registerAutomaticSelectionActions();
+  const fromToken = (token: unknown) => {
+    const capture = selectionActions.capture(token);
+    if (!capture) throw new Error('This selection changed. Select the code again.');
+    return capture;
+  };
+  const open = (mode: EditorAssistanceMode) => async (token?: unknown) => {
+    try { await controller.open(mode, typeof token === 'string' ? fromToken(token) : undefined); }
     catch (error) { await vscode.window.showErrorMessage(safeError(error)); }
   };
-  context.subscriptions.push(controller,
+  context.subscriptions.push(controller, selectionActions,
     vscode.commands.registerCommand('droidvisx.quickEdit', open('edit')),
     vscode.commands.registerCommand('droidvisx.askSelection', open('ask')),
+    vscode.commands.registerCommand('droidvisx.selectionActions.addToChat', async (token: unknown) => {
+      try {
+        const capture = fromToken(token);
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document !== capture.document) return;
+        editor.selection = new vscode.Selection(capture.range.start, capture.range.end);
+        await vscode.commands.executeCommand('droidvisx.addSelectionToChat');
+      } catch (error) { await vscode.window.showErrorMessage(safeError(error)); }
+    }),
     vscode.languages.registerHoverProvider([{ scheme: 'file' }, { scheme: 'untitled' }], {
       provideHover(document, position) {
         const editor = vscode.window.activeTextEditor;

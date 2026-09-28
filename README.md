@@ -68,8 +68,10 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 
 ## Quick Edit 与 Ask
 
-在可信工作区中选中一段代码，悬停选区、使用右键菜单，或运行 **Droid: Quick Edit** /
-**Droid: Ask About Selection**。Windows/Linux 快捷键分别为 **Ctrl+Alt+K**、**Ctrl+Alt+L**；
+在可信工作区中选中一段代码，选区稳定约 160 ms 后，上方自动显示 **Quick Edit / Ask / Add to Chat**
+可点击操作行；点击才打开面板，取消选区或继续输入时收起。沿用编辑器 CodeLens 显示设置，
+不移动光标或主动聚焦浮层。也可使用选区悬浮菜单、右键菜单，或运行
+**Droid: Quick Edit** / **Droid: Ask About Selection**。Windows/Linux 快捷键分别为 **Ctrl+Alt+K**、**Ctrl+Alt+L**；
 macOS 为 **Cmd+Option+K**、**Cmd+Option+L**，可在编辑器快捷键设置中修改。
 
 代码旁的面板提供 Quick Edit / Ask 模式、源文件位置、当前模型和输入框；

@@ -19,17 +19,19 @@ export interface SelectionSnapshot {
   readonly context: EditorAssistanceSelection;
 }
 
-export function captureSelection(): SelectionSnapshot {
+export function captureSelection(
+  editor = vscode.window.activeTextEditor,
+  selection = editor?.selection,
+): SelectionSnapshot {
   if (!vscode.workspace.isTrusted) throw new Error('Trust this workspace before using Droid editor assistance.');
-  const editor = vscode.window.activeTextEditor;
   if (!editor || !['file', 'untitled'].includes(editor.document.uri.scheme)) {
     throw new Error('Select code in a local file or untitled editor first.');
   }
-  if (editor.selections.length !== 1 || editor.selection.isEmpty) {
+  if (!selection || selection.isEmpty || editor.selections.length !== 1) {
     throw new Error('Select one continuous code range for Quick Edit or Ask.');
   }
   const document = editor.document;
-  const range = new vscode.Range(editor.selection.start, editor.selection.end);
+  const range = new vscode.Range(selection.start, selection.end);
   const original = document.getText();
   const start = document.offsetAt(range.start), end = document.offsetAt(range.end);
   if (original.length > 2_000_000 || end - start > 32_000) {
