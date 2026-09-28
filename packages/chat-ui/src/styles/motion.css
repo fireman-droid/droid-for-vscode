@@ -14,6 +14,30 @@
   .v2-dialog-overlay[data-state='open'] { animation: v2-fade-in var(--motion-normal) var(--motion-ease); }
   .v2-dialog-overlay[data-state='closed'] { animation: v2-fade-in var(--motion-exit) ease-in reverse; }
   @keyframes v2-fade-in { from { opacity: 0; } to { opacity: 1; } }
+  /* Opt in at the shared overlay boundary; Popper keeps ownership of placement. */
+  .dvx-overlay-surface[data-motion='anchored'] {
+    --overlay-enter-x: 0px; --overlay-enter-y: 0px;
+    transform-origin: var(--radix-select-content-transform-origin, var(--radix-dropdown-menu-content-transform-origin, var(--radix-popover-content-transform-origin, center)));
+  }
+  .dvx-overlay-surface[data-motion='anchored'][data-side='bottom'] { --overlay-enter-y: -4px; }
+  .dvx-overlay-surface[data-motion='anchored'][data-side='top'] { --overlay-enter-y: 4px; }
+  .dvx-overlay-surface[data-motion='anchored'][data-side='left'] { --overlay-enter-x: 4px; }
+  .dvx-overlay-surface[data-motion='anchored'][data-side='right'] { --overlay-enter-x: -4px; }
+  .dvx-overlay-surface[data-motion='anchored'][data-state='open'] {
+    animation: dvx-anchored-in 160ms var(--motion-ease) both;
+  }
+  .dvx-overlay-surface[data-motion='anchored'][data-state='closed'] {
+    animation: dvx-anchored-out var(--motion-exit) ease-in both;
+    pointer-events: none;
+  }
+  @keyframes dvx-anchored-in {
+    from { opacity: 0; transform: translate(var(--overlay-enter-x), var(--overlay-enter-y)) scale(.98); }
+    to { opacity: 1; transform: translate(0, 0) scale(1); }
+  }
+  @keyframes dvx-anchored-out {
+    from { opacity: 1; transform: translate(0, 0) scale(1); }
+    to { opacity: 0; transform: translate(var(--overlay-enter-x), var(--overlay-enter-y)) scale(.98); }
+  }
   .v2-tool-content[data-state='open'] {
     animation: v2-collapse-open 220ms cubic-bezier(.215,.61,.355,1);
   }

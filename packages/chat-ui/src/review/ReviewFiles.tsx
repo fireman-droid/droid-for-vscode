@@ -84,7 +84,7 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
         <Input className="h-7 pl-7 text-xs" type="search" aria-label="Filter files" placeholder="Filter files" value={filter} onChange={(event) => setFilter(event.target.value)} />
       </div>
       <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="File filters and width" data-active={unreviewed}><SlidersHorizontal /></Button></PopoverTrigger>
-        <PopoverContent className="review-file-options" align="start">
+        <PopoverContent className="review-file-options" data-motion="anchored" align="start" sideOffset={6}>
           <label className="review-unreviewed"><Checkbox checked={unreviewed} onCheckedChange={(checked) => setUnreviewed(checked === true)} />Unreviewed only</label>
           <div className="review-file-width-control"><span>Sidebar width</span>
             <Slider className="review-file-width" aria-label="File sidebar width" min={200} max={440} step={10} value={[width ?? 224]} onValueChange={([value]) => setWidth(value)} />

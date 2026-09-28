@@ -75,9 +75,9 @@ export function RecordedFileReview({ entries, content, path, split, onSplit, onH
     </div> : null}
     {records.length > 0 ? <DropdownMenu>
       <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="Edit history" title="Edit history"><History /></Button></DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="review-history-menu">
+      <DropdownMenuContent align="end" className="review-menu review-history-menu" data-motion="anchored" sideOffset={6}>
         <p className="review-history-heading">Edit history · {records.length}</p>
-        {records.map(({ entry, key }, recordIndex) => <DropdownMenuItem key={key} className="review-history-item" onSelect={() => selectEdit(recordIndex)}>
+        {records.map(({ entry, key }, recordIndex) => <DropdownMenuItem key={key} className="review-history-item" data-selected={activeView === 'edits' && !allEdits && index === recordIndex} onSelect={() => selectEdit(recordIndex)}>
           <span className="review-operation-number">{recordIndex + 1}</span>
           <span className="review-history-description"><strong>{operationName(entry)}</strong><small>{outcomeLabel(entry)} · {entry.submittedContent !== undefined ? 'Saved file' : hasOperationTextChanges(entry.patch) ? 'Saved patch' : 'No saved text'}</small></span>
           {activeView === 'edits' && !allEdits && index === recordIndex ? <Check aria-label="Selected edit" /> : null}

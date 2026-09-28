@@ -96,7 +96,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
       <Select disabled={!valid || flow.scopePending} value={target?.operation ? 'operation' : review?.scopeKind ?? 'workspace'}
         onValueChange={(value) => { setOperationPath(null); flow.openScope(value as ReviewScopeKind); }}>
         <SelectTrigger aria-label="Comparison scope" className="review-scope-trigger h-7 text-xs"><SelectValue /></SelectTrigger>
-        <SelectContent>
+        <SelectContent className="review-menu review-scope-menu" data-motion="anchored" align="start" sideOffset={6}>
           {target?.operation ? <SelectItem value="operation">This operation</SelectItem> : null}
           {REVIEW_SCOPE_KINDS.map((kind) => <SelectItem key={kind} value={kind} disabled={(kind === 'turn' || kind === 'operations') && !target?.latestTurnId && !review?.turnId}>{labels[kind]}</SelectItem>)}
         </SelectContent>
@@ -138,7 +138,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
             <Button variant="ghost" size="icon-sm" aria-label="Open current file" disabled={!path} onClick={() => port.postMessage({ type: 'reviewPanel.openPath', path })}><ExternalLink /></Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="More file actions"><MoreHorizontal /></Button></DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="review-undo-menu">
+              <DropdownMenuContent align="end" className="review-menu review-undo-menu" data-motion="anchored" sideOffset={6}>
                 <p className="review-undo-hint" role="status">{readOnly ? readOnlyMessage : writing ? 'Live changes · review actions wait for completion' : `File ${fileIndex + 1} of ${files.length}`}</p>
                 <DropdownMenuItem disabled={fileIndex <= 0} onSelect={() => navigateFile('previous')}><ChevronLeft />Previous file</DropdownMenuItem>
                 <DropdownMenuItem disabled={fileIndex < 0 || fileIndex >= files.length - 1} onSelect={() => navigateFile('next')}><ChevronRight />Next file</DropdownMenuItem>

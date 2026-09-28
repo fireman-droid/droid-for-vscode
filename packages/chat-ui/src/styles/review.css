@@ -1,5 +1,6 @@
 @import './review-workbench.css';
 @import './review-records.css';
+@import './review-interactions.css';
 
 @layer components {
   .review-diff {

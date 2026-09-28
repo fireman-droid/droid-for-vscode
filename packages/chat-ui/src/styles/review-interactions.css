@@ -1,0 +1,39 @@
+@layer components {
+  .review-scope-trigger { --field-surface: var(--control-surface-hover); }
+  .review-scope-trigger[data-state='open'] { --field-surface: var(--control-surface-active); color: var(--strong-ink); }
+  .review-scope-trigger .dvx-select-icon { transition-duration: 160ms; }
+  .review-scope-menu { min-width: min(max(176px, var(--radix-select-trigger-width)), calc(100vw - 16px)); padding: 4px; }
+  .review-scope-menu .dvx-menu-item { min-height: 28px; padding-left: 8px; padding-right: 24px; font-size: 12px; }
+  .review-menu .dvx-menu-item:is([data-state='checked'], [data-selected='true']) {
+    background: var(--control-surface-active); color: var(--strong-ink);
+  }
+  .review-menu .dvx-menu-item[data-highlighted]:not([data-disabled]) {
+    background: color-mix(in srgb, var(--ink) 13%, var(--overlay-surface)); color: var(--strong-ink);
+  }
+  .review-menu .dvx-menu-item:active:not([data-disabled]) {
+    background: color-mix(in srgb, var(--ink) 18%, var(--overlay-surface));
+  }
+  .review-progress { user-select: none; }
+  .review-workbench :is(.review-topbar, .review-file-toolbar, .review-files-tools) { --hover-surface: var(--control-surface-active); }
+  .review-workbench :is(.review-topbar, .review-file-toolbar, .review-files-tools) button[data-state='open'] {
+    background: var(--control-surface-active); color: var(--strong-ink);
+  }
+  .review-unreviewed { border-radius: var(--control-radius); transition: background-color var(--motion-fast) var(--motion-ease); }
+  .review-unreviewed:focus-within { background: var(--control-surface-hover); color: var(--ink); }
+  @media (hover: hover) {
+    .review-workbench :is(.review-topbar, .review-file-toolbar, .review-files-tools) button:hover:not(:disabled, [data-disabled]) {
+      background: var(--control-surface-active); color: var(--strong-ink);
+    }
+    .review-workbench .review-file:hover:not(:disabled), .review-workbench .review-directory:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--ink) 7%, var(--review-sidebar));
+    }
+    .review-workbench .review-file[aria-current='true']:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--control-border-focus) 24%, var(--review-sidebar));
+    }
+    .review-workbench :is(.review-file, .review-directory):active:not(:disabled) { background: var(--control-surface-active); }
+    .review-unreviewed:hover { background: var(--control-surface-hover); color: var(--ink); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .review-scope-trigger .dvx-select-icon, .review-unreviewed { transition: none; }
+  }
+}
