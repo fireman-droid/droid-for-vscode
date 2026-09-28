@@ -5,6 +5,25 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 独立分支：编辑器补全
+
+`codex/droid-autocomplete` 已接通原生灰字补全、配置命令和状态栏，默认关闭。
+当前仅提供原生 FIM 协议（默认 Mistral Codestral），不借用 Droid 会话或聊天凭据。
+光标前后文共享处理 Go/Java/TS 等语言，首版没有跨文件检索和 Next Edit。
+
+用户已允许本轮定向回归：FIM 11 项、上下文/生命周期 26 项、原生建议失效 7 项，
+共 44 项通过。`pnpm run package:vsix` 中完整类型、文件预算、公共 UI 与生产构建
+通过；`pnpm run verify:vsix` 校验 80 条目。第一次打包发现取消令牌测试 mock 的
+事件签名不匹配，已修复并重跑相关 22 项用例，最终打包通过。
+
+已安装到 `%LOCALAPPDATA%/DroidAutocompletePreview` 的独立 Cursor 用户/扩展目录，
+9 个生产 JS/CSS/Worker 安装哈希一致。本机启动入口是独立工作树的
+`dist/open-autocomplete-preview.cmd`；若该试用窗口已打开，需要 Reload Window。
+日常 Cursor 扩展没有覆盖，main 的已有未提交改动不包含在此分支包内，也未被修改。
+锁定安装未改依赖或 lockfile；安装 CLI 保留 `url.parse` 弃用告警。
+未调用真实模型、未操作真实会话，也未验证原生灰字/Tab 的实际效果。默认关闭，
+用户需配置自己的原生 FIM 服务与独立 API key 后在 Cursor 验收。
+
 ## 交付与验证边界
 
 - 长思考／长回复快速滚动回看：复用近期后台 Markdown 解析结果与已提交的段落数量，

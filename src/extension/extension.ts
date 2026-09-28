@@ -18,6 +18,7 @@ import {
   releaseSessionLease,
 } from '../runtime/daemon/sessionLease';
 import { ChatController } from './chat/ChatController';
+import { registerAutocomplete } from './autocomplete/registerAutocomplete';
 import { emitIdeState } from './chat/ideIntegration';
 import { DroidViewProvider } from './webview/DroidViewProvider';
 import { exportDiagnosticsBundle } from './diagnostics/exportDiagnostics';
@@ -133,6 +134,7 @@ function createSessionLeaseHooks(): SessionLeaseHooks {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  registerAutocomplete(context);
   // globalStorage survives Cursor's per-boot log directory cleanup and
   // aggregates all windows into one per-day file set.
   const logDirectory = vscode.Uri.joinPath(context.globalStorageUri, 'logs').fsPath;
@@ -187,8 +189,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }))
     : null;
   const daemonSidecar = windowDaemon ?? createDaemonSidecar(diagnostics, runtimeMode);
-  const cancelDaemonWarmup =
-    runtimeMode === 'daemon' ? warmDaemonSidecar(daemonSidecar, diagnostics) : undefined;
+  // Startup also registers editor autocomplete; only warm the chat backend when its view opens.
+  let cancelDaemonWarmup: (() => void) | undefined;
   disposeDaemonSidecar = async () => {
     cancelDaemonWarmup?.();
     await daemonSidecar.dispose();
@@ -564,7 +566,14 @@ export function activate(context: vscode.ExtensionContext): void {
     attachmentSources,
     vscode.window.registerWebviewViewProvider(
       DroidViewProvider.viewType,
-      provider,
+      {
+        resolveWebviewView: (view, viewContext, token) => {
+          if (runtimeMode === 'daemon' && !cancelDaemonWarmup) {
+            cancelDaemonWarmup = warmDaemonSidecar(daemonSidecar, diagnostics);
+          }
+          return provider.resolveWebviewView(view, viewContext, token);
+        },
+      },
       // Keep the chat iframe alive across tab switches: without
       // retention every switch-back pays a full webview reboot
       // (boot ~1.1s + re-render ~1.2s measured), which is why the

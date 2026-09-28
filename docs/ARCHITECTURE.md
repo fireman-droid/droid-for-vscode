@@ -33,6 +33,20 @@ Viewer、Review。`chat/` 按 composer、attachments、btw、interactions、queu
 `viewer/`。`state/` 保存根业务状态，`host/` 接收消息，`bridge/` 校验并发送消息，
 `shell/` 管页面挂载和主题，`content/` 接 Markdown/Mermaid，`dev/` 提供预览与真实联调。
 
+### 编辑器补全的独立路径
+
+`src/extension/autocomplete/registerAutocomplete.ts` 装配 VS Code 原生
+Inline Completion Provider、状态栏和配置命令；`AutocompleteProvider.ts` 负责
+编辑器快照、350 ms 默认防抖、取消、30 秒有界缓存与文档版本/光标校验。
+`completionText.ts` 按 UTF-16 预算裁剪通用前后文，不维护各语言语法补丁。
+
+`src/runtime/autocomplete/FimClient.ts` 只负责原生 FIM HTTP/SSE 协议，超时 12 秒，
+不引用 VS Code、不进入 `DroidRuntime.sendTurn` 或聊天队列。Host 即时从
+SecretStorage 读取绑定目标地址的密钥，模型和 endpoint 只读用户级配置。
+此功能直接使用编辑器 UI，不经过 Webview/Bridge，也不创建 Droid Session。
+启动事件注册补全，聊天 daemon 预热延后到聊天视图首次解析，其他管理调用保留懒加载。
+首版仅当前文件，未引入 Kilo/Continue 源码、分词器或 Tree-sitter 资源。
+
 ### 第一次阅读按这个顺序
 
 1. [extension.ts](../src/extension/extension.ts)：扩展启动时创建哪些服务，以及谁负责释放它们。

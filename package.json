@@ -43,7 +43,8 @@
     "onCommand:droidvisx.manageCapabilities",
     "onCommand:droidvisx.openReview",
     "onCommand:droidvisx.startBrowserDevClient",
-    "onCommand:droidvisx.stopBrowserDevClient"
+    "onCommand:droidvisx.stopBrowserDevClient",
+    "onStartupFinished"
   ],
   "contributes": {
     "commands": [
@@ -94,6 +95,18 @@
       {
         "command": "droidvisx.stopBrowserDevClient",
         "title": "Droid: Stop Browser Dev Client"
+      },
+      {
+        "command": "droidvisx.autocomplete.configure",
+        "title": "Droid: Configure Autocomplete"
+      },
+      {
+        "command": "droidvisx.autocomplete.toggle",
+        "title": "Droid: Toggle Autocomplete"
+      },
+      {
+        "command": "droidvisx.autocomplete.trigger",
+        "title": "Droid: Request Code Completion"
       }
     ],
     "menus": {
@@ -159,6 +172,62 @@
           ],
           "default": "auto",
           "description": "Color theme for the Droid panel. Takes effect immediately."
+        },
+        "droidvisx.autocomplete.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "description": "Enable editor gray-text completions. Sends bounded cursor context from the active file to your configured FIM provider, independently of Droid chat. Requires a trusted workspace."
+        },
+        "droidvisx.autocomplete.endpoint": {
+          "type": "string",
+          "default": "https://api.mistral.ai/v1/fim/completions",
+          "scope": "application",
+          "description": "Complete native FIM endpoint URL. Configure its key using Droid: Configure Autocomplete. Ordinary chat-completions endpoints do not support this protocol."
+        },
+        "droidvisx.autocomplete.model": {
+          "type": "string",
+          "default": "codestral-latest",
+          "scope": "application",
+          "description": "FIM-capable model ID on the configured provider. Independent of the chat model."
+        },
+        "droidvisx.autocomplete.debounceMs": {
+          "type": "number",
+          "default": 350,
+          "minimum": 100,
+          "maximum": 2000,
+          "scope": "resource",
+          "description": "Wait after typing before requesting a completion. Manual requests skip this wait."
+        },
+        "droidvisx.autocomplete.maxContextCharacters": {
+          "type": "number",
+          "default": 12000,
+          "minimum": 1000,
+          "maximum": 32000,
+          "scope": "resource",
+          "description": "Maximum UTF-16 text units of cursor-adjacent prefix and suffix sent from the active document."
+        },
+        "droidvisx.autocomplete.maxTokens": {
+          "type": "number",
+          "default": 256,
+          "minimum": 32,
+          "maximum": 1024,
+          "scope": "resource",
+          "description": "Maximum number of generated completion tokens per request."
+        },
+        "droidvisx.autocomplete.excludePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/.env",
+            "**/.env.*",
+            "**/*.{pem,key,p12,pfx}",
+            "**/{.git,node_modules,dist,build,vendor}/**"
+          ],
+          "scope": "resource",
+          "description": "Glob patterns for files excluded from autocomplete. No clipboard, other open files or chat history is sent."
         }
       }
     }

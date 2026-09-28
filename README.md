@@ -1,8 +1,8 @@
 # Droid
 
 Droid 是 Factory Droid CLI 在 Cursor / VS Code 中的非官方本地可视化工作台。
-它复用本机 Droid CLI/SDK 的会话、模型、权限、工具与认证，不建立第二套
-AI 后端。
+聊天复用本机 Droid CLI/SDK 的会话、模型、权限、工具与认证。可选的编辑器
+代码补全独立连接用户配置的 FIM 服务，不占用聊天会话。
 
 本项目不由 Factory 官方发布、维护或背书。Factory 和 Droid 名称属于各自权利人；
 开源许可证不授予其商标使用权。扩展不包含 Droid 服务订阅，也不提供免费的模型额度。
@@ -23,6 +23,31 @@ AI 后端。
 
 默认 `daemon` 模式让会话在窗口 Reload 后继续运行；也可在设置中明确选择
 `process` 模式，每窗口运行独立进程。关闭面板或编辑器不代表 daemon 任务已停止。
+
+## 编辑器代码补全
+
+此功能位于 `codex/droid-autocomplete` 分支，默认关闭。无需先打开 Droid 聊天。
+
+1. 命令面板运行 **Droid: Configure Autocomplete**，填写完整的 FIM 地址、模型和
+   API key。默认使用 Mistral 的 `https://api.mistral.ai/v1/fim/completions` 和
+   `codestral-latest`；Codestral 专用账号可按其凭据要求填写专用 FIM 地址。
+2. 配置完成后选择 **Enable autocomplete**。编辑代码时稍作停顿，灰字出现后按
+   **Tab** 接受、**Esc** 关闭；手动触发使用 **Droid: Request Code Completion**。
+3. 状态栏 **Droid Tab** 提供暂停、重试、配置和设置入口；关闭后可用
+   **Droid: Toggle Autocomplete** 重新启用。服务返回错误会在状态栏提示，自动请求
+   暂停 30 秒；手动重试不受此等待限制。
+
+补全使用当前文件未保存的光标前后文，默认最多 12,000 个 UTF-16 文本单位。
+Go、Java、TS、Vue 等走同一条文本链路，具体质量由 FIM 模型决定；首版不做
+跨文件检索或 Next Edit。普通 `/chat/completions` 服务不能直接当作 FIM 使用。
+模型服务需要独立凭据和额度，不能复用 Factory 订阅或聊天 Session。
+
+密钥只保存在编辑器 SecretStorage，并绑定完整 endpoint；工作区配置不能覆盖目标
+地址或模型。仅可信工作区可请求，默认排除 `.env`、常见密钥文件及依赖/构建目录；
+可通过 `droidvisx.autocomplete.excludePatterns` 调整。只发送当前文件的上述片段，
+不读取剪贴板、聊天历史或其他文件，不记录代码/密钥/响应正文。补全设置集中在
+`droidvisx.autocomplete`。使用 Cursor Tab 或其他灰字补全时，选择启用一种以免竞争；
+扩展不会擅自关闭其他补全器，也不修改 Tab 快捷键。
 
 ## 当前状态
 
