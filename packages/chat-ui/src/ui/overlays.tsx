@@ -1,4 +1,4 @@
-import { Dialog as DialogPrimitive, Popover as PopoverPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
+import { Dialog as DialogPrimitive, HoverCard as HoverCardPrimitive, Popover as PopoverPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import { createContext, useContext, type ComponentProps, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { cn } from './cn';
@@ -24,6 +24,34 @@ export const Popover = PopoverPrimitive.Root;
 export const PopoverTrigger = PopoverPrimitive.Trigger;
 export const PopoverAnchor = PopoverPrimitive.Anchor;
 export const PopoverClose = PopoverPrimitive.Close;
+
+export const HoverCard = HoverCardPrimitive.Root;
+export const HoverCardTrigger = HoverCardPrimitive.Trigger;
+
+export function HoverCardContent({
+  className,
+  align = 'start',
+  sideOffset = 8,
+  ...props
+}: ComponentProps<typeof HoverCardPrimitive.Content>) {
+  const container = usePortalContainer();
+  return (
+    <HoverCardPrimitive.Portal container={container}>
+      <HoverCardPrimitive.Content
+        data-webview-overlay=""
+        data-slot="hover-card-content"
+        align={align}
+        sideOffset={sideOffset}
+        collisionPadding={8}
+        className={cn(
+          'dvx-overlay-surface z-50 max-h-[var(--radix-hover-card-content-available-height)] max-w-[calc(100vw-16px)] overflow-auto rounded-lg border border-border bg-popover p-3 text-popover-foreground outline-none',
+          className,
+        )}
+        {...props}
+      />
+    </HoverCardPrimitive.Portal>
+  );
+}
 
 export function PopoverContent({
   className,

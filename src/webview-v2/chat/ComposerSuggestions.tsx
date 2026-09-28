@@ -6,6 +6,7 @@ import { CANVAS_REQUEST_TEMPLATE, type SlashNavTarget } from './composer/slashBu
 import { PopoverContent } from '../ui/overlays';
 import { cn } from '../ui/cn';
 import { Button } from '../ui/button';
+import { SkillSuggestion } from './composer/SkillSuggestion';
 
 export function useComposerSuggestions({ state, draft, disabled, onChange, onFileSearch, onAttachPath, onCommandsRefresh, onSkillsRefresh, onNavigate, onBtwOpen }: {
   readonly state: Pick<AssistantWebviewState, 'fileSearch' | 'commands' | 'skills' | 'btwAvailable'>;
@@ -102,14 +103,23 @@ export function ComposerSuggestions({ suggestions, state }: {
   readonly state: Pick<AssistantWebviewState, 'fileSearch' | 'commands'>;
 }) {
   const list = useRef<HTMLDivElement>(null);
+  const [preview, setPreview] = useState<{ name: string; mode: 'hover' | 'pinned' } | null>(null);
   useEffect(() => {
     list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
   }, [suggestions.activeIndex]);
   const { slash, mention, matches, results, activeIndex, searchPending } = suggestions;
-  const current = matches.entries[activeIndex];
+  useEffect(() => {
+    if (preview !== null && (slash === null || !matches.entries.some((entry) => entry.kind === 'skill' && entry.name === preview.name))) setPreview(null);
+  }, [slash, matches.entries, preview]);
+  const hoverPreview = (name: string, open: boolean) => setPreview((current) => {
+    if (current?.mode === 'pinned') return current;
+    return open ? { name, mode: 'hover' } : current?.name === name ? null : current;
+  });
+  const pinPreview = (name: string, open: boolean) => setPreview((current) =>
+    open ? { name, mode: 'pinned' } : current?.name === name ? null : current);
   return <PopoverContent side="top" sideOffset={6} className="w-[var(--radix-popover-trigger-width,320px)] p-1"
     onOpenAutoFocus={(event) => event.preventDefault()} onCloseAutoFocus={(event) => event.preventDefault()}
-    onInteractOutside={(event) => { if (event.target instanceof Element && event.target.closest('[data-composer-input]')) event.preventDefault(); }}>
+    onInteractOutside={(event) => { if (event.target instanceof Element && event.target.closest('[data-composer-input], [data-suggestion-preview]')) event.preventDefault(); }}>
     <div ref={list} id={suggestions.listId} role="listbox" aria-label={slash !== null ? 'Droid commands' : 'Attach workspace file'} className="max-h-60 overflow-auto">
       {slash !== null ? matches.entries.map((entry, index) => {
         const name = entry.kind === 'command' ? entry.command.name : entry.name;
@@ -118,13 +128,18 @@ export function ComposerSuggestions({ suggestions, state }: {
         const group = (value: SlashEntry) => value.kind === 'nav' ? 'builtin' : value.kind;
         return <div key={`${entry.kind}:${name}`}>
           {previous === undefined || group(previous) !== group(entry) ? <p className="px-2 py-1 text-[10px] text-muted-foreground">{entry.kind === 'command' ? 'Commands (.factory/commands)' : entry.kind === 'skill' ? 'Skills (inserts a prompt)' : 'Built-in'}</p> : null}
-          <Button variant="plain" size="none" id={`${suggestions.listId}-${index}`} role="option" aria-selected={index === activeIndex} tabIndex={-1} title={description ?? undefined}
+          {entry.kind === 'skill' && description ? <SkillSuggestion id={`${suggestions.listId}-${index}`}
+            name={name} description={description} selected={index === activeIndex}
+            preview={preview?.name === name ? preview.mode : null}
+            onHoverChange={(open) => hoverPreview(name, open)} onPinnedChange={(open) => pinPreview(name, open)}
+            onActivate={() => suggestions.setIndex(index)} onSelect={() => suggestions.selectSlash(entry)} />
+          : <Button variant="plain" size="none" id={`${suggestions.listId}-${index}`} role="option" aria-selected={index === activeIndex} tabIndex={-1} title={description ?? undefined}
             className={cn('block w-full rounded px-2 py-1 text-left text-xs outline-none hover:bg-[var(--control-surface-hover)] focus-visible:ring-1 focus-visible:ring-ring', index === activeIndex && 'bg-[var(--control-surface-active)]')}
             onMouseDown={(event) => event.preventDefault()} onClick={() => suggestions.selectSlash(entry)} onMouseEnter={() => suggestions.setIndex(index)}>
             <span>{entry.kind === 'skill' ? name : `/${name}`}</span>
             {entry.kind === 'command' && entry.command.argumentHint ? <span className="ml-2 text-muted-foreground">{entry.command.argumentHint}</span> : null}
             {description ? <span className="block truncate text-[11px] text-muted-foreground">{description}</span> : null}
-          </Button>
+          </Button>}
         </div>;
       }) : <>
         {mention?.query === '' && results.length > 0 ? <p className="px-2 py-1 text-[10px] text-muted-foreground">Open editors</p> : null}
@@ -145,8 +160,5 @@ export function ComposerSuggestions({ suggestions, state }: {
           : slash.query === '' ? 'No custom commands (.factory/commands)' : 'No matching commands'}
       </p> : null}
     </div>
-    {slash !== null && current?.kind === 'skill' && current.description ? <div className="max-h-32 overflow-auto border-t border-[var(--panel-edge)] p-2 text-xs">
-      <p className="font-medium">{current.name} · Skill</p><p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">{current.description}</p>
-    </div> : null}
   </PopoverContent>;
 }
