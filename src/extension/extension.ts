@@ -19,6 +19,7 @@ import {
 } from '../runtime/daemon/sessionLease';
 import { ChatController } from './chat/ChatController';
 import { registerAutocomplete } from './autocomplete/registerAutocomplete';
+import { registerEditorAssistance } from './editorAssistance/EditorAssistanceController';
 import { emitIdeState } from './chat/ideIntegration';
 import { DroidViewProvider } from './webview/DroidViewProvider';
 import { exportDiagnosticsBundle } from './diagnostics/exportDiagnostics';
@@ -543,6 +544,7 @@ export function activate(context: vscode.ExtensionContext): void {
     } : undefined,
   );
   activeController = controller;
+  registerEditorAssistance(context, () => controller.metadata.settings.value, diagnostics);
 
   context.subscriptions.push(
     droidManagement,

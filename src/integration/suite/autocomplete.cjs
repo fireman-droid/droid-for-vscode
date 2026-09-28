@@ -69,6 +69,7 @@ async function run() {
     }
     scenarios.push({ name: 'Saved Python file with related context enabled', language: 'python', location: 'blank', saved: true, relatedFiles: true, eol: '\r\n', completion: 'values.sort()\n', expectedInsertion: 'values.sort()' });
     scenarios.push({ name: 'Typing a matching character reuses the visible completion', language: 'python', location: 'blank', completion: 'values.sort()\n', expectedInsertion: 'values.sort()', behavior: 'continue' });
+    scenarios.push({ name: 'Always Show Toolbar keeps the active suggestion acceptable', language: 'python', location: 'blank', completion: 'values.sort()', expectedInsertion: 'values.sort()', behavior: 'toolbar' });
     scenarios.push({ name: 'Hide dismisses suggestion without inserting', language: 'python', location: 'blank', completion: 'values.sort()', behavior: 'hide' });
     scenarios.push({ name: 'Typing cancels a delayed stale suggestion', language: 'python', location: 'blank', completion: 'values.sort()', behavior: 'cancel', delayMs: 800 });
     for (const scenario of scenarios) {
@@ -124,6 +125,13 @@ async function run() {
             unchanged = document.getText();
             await vscode.commands.executeCommand('editor.action.inlineSuggest.hide');
             await vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+          }
+          if (activeCase.behavior === 'toolbar') {
+            await until(() => requests[beforeRequests].responded, 5000, 'Synthetic response did not finish.');
+            await delay(300);
+            await vscode.commands.executeCommand('editor.action.inlineSuggest.toggleAlwaysShowToolbar');
+            await until(() => vscode.workspace.getConfiguration('editor').get('inlineSuggest.showToolbar') === 'always', 5000, 'Toolbar preference was not saved.');
+            await delay(300);
           }
           // This is the exact editor command used by Tab, not a provider call or document edit.
           await until(async () => {

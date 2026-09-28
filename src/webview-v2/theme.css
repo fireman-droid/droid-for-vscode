@@ -1,6 +1,7 @@
 @import '../../packages/chat-ui/src/theme.css';
 @import './styles/webview-host.css';
 @import './styles/models.css';
+@import './editor-assistance/editor-assistance.css';
 @import './styles/mission.css';
 @import './styles/viewer.css';
 @source './**/*.{ts,tsx}';

@@ -11,6 +11,7 @@ import {
 } from '@factory/droid-sdk/node';
 
 import { sanitizeSessionTitle } from '../../shared/validation/guards';
+import { isEditorAssistanceSession } from '../editorAssistance/sessionIdentity';
 import { locatePersistedSessionFile } from '../history/persistedSessionMessages';
 import {
   isSafeSessionIdentifier,
@@ -222,6 +223,7 @@ export async function readBoundedSessionSettings(file: string) {
 function hasWorkerTag(tags: readonly SessionTag[] | undefined): boolean {
   return (
     hasSubagentSessionTag(tags) ||
+    isEditorAssistanceSession(tags) ||
     // Independent `droid exec` automation sessions belong in the
     // read-only Agent activity page. Resuming one from the main drawer
     // could double-write against its external CLI process.

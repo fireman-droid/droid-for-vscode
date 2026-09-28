@@ -1678,3 +1678,15 @@ Agent Review。
 - 不把 reviewed、stage、commit、恢复和质量结论合并；
 - 不覆盖 Turn 之后的用户编辑；
 - 不承诺没有公开 API 的行级 Agent / Human blame。
+
+## 选区 Quick Edit / Ask
+
+选区悬浮菜单、右键菜单、编辑器标题按钮和可重绑定快捷键打开代码旁的紧凑面板。
+不自动弹出或抢夺编辑器焦点，不注入或修改编辑器自身的 DOM/安装文件。
+新选区进入面板时聚焦输入；模式使用共享 Select，Ctrl/Cmd+Enter 发送并避开 IME，
+Escape 只在输入框内取消正在生成的请求，保留下拉菜单自身键盘行为。
+
+Ask 用共享 AI Message 与 Markdown 显示流式回答；流式更新保留正在编辑的草稿。
+Quick Edit 使用原生只读 Diff，生成中可 Stop，完成后 Review / Accept / Discard，
+接受时锁定操作，完成后显示 Undo 和保存提示。文件变化独立提示选区已过期；
+接受成功不再把预期的文件变化显示成错误。无修改结果不显示虚假的修改操作卡。

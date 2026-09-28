@@ -1,0 +1,125 @@
+@layer components {
+  .editor-assistance-page {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100%;
+    max-width: 840px;
+    margin-inline: auto;
+    padding: 14px 16px;
+    overflow: auto;
+    color: var(--ink);
+  }
+  .editor-assistance-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  .editor-assistance-mode {
+    flex: 0 0 auto;
+    width: 144px;
+    background: transparent;
+  }
+  .editor-assistance-mode svg { width: 14px; height: 14px; flex-shrink: 0; }
+  .editor-assistance-model {
+    min-width: 0;
+    margin-left: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted-ink);
+    font-size: 12px;
+  }
+  .editor-assistance-source {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+    min-width: 0;
+    padding: 3px 5px;
+    margin: -4px -5px;
+    text-align: left;
+    justify-content: flex-start;
+    border-radius: var(--control-radius);
+  }
+  .editor-assistance-file {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .editor-assistance-range {
+    flex-shrink: 0;
+    margin-left: auto;
+    color: var(--muted-ink);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .editor-assistance-composer { display: flex; flex-direction: column; gap: 7px; }
+  .editor-assistance-prompt-label { font-size: 12px; font-weight: 500; }
+  .editor-assistance-composer textarea {
+    min-height: 82px;
+    max-height: min(280px, 40vh);
+    resize: none;
+    padding: 9px 10px;
+  }
+  .editor-assistance-composer-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .editor-assistance-shortcut { color: var(--muted-ink); font-size: 12px; }
+  .editor-assistance-shortcut kbd { font: inherit; }
+  .editor-assistance-help {
+    margin: 0;
+    color: var(--muted-ink);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .editor-assistance-status, .editor-assistance-loading {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--muted-ink);
+    overflow-wrap: anywhere;
+  }
+  .editor-assistance-status > svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px; }
+  .editor-assistance-status .droid-activity { margin-top: 2px; flex-shrink: 0; }
+  .editor-assistance-error { color: var(--error-ink); }
+  .editor-assistance-notice {
+    margin: 0;
+    padding: 8px 10px;
+    border-left: 2px solid var(--focus);
+    background: var(--soft-surface);
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+  .editor-assistance-answer, .editor-assistance-result {
+    min-width: 0;
+    border-top: 1px solid var(--edge);
+    padding-top: 14px;
+  }
+  .editor-assistance-answer h1, .editor-assistance-result h1 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+  .editor-assistance-answer { padding-bottom: 16px; }
+  .editor-assistance-result-copy { display: flex; align-items: flex-start; gap: 9px; }
+  .editor-assistance-result-copy > svg { width: 16px; height: 16px; margin-top: 2px; flex-shrink: 0; color: var(--muted-ink); }
+  .editor-assistance-result-copy h1 { margin-bottom: 3px; }
+  .editor-assistance-result-copy p { margin: 0; color: var(--muted-ink); font-size: 12px; line-height: 1.5; }
+  .editor-assistance-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  @media (max-width: 360px) {
+    .editor-assistance-page { padding: 12px; gap: 10px; }
+    .editor-assistance-header { flex-wrap: wrap; gap: 6px; }
+    .editor-assistance-model { max-width: 100%; }
+    .editor-assistance-range { font-size: 11px; }
+  }
+}

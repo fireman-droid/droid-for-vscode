@@ -5,6 +5,28 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 独立分支：Quick Edit / Ask
+
+`codex/droid-autocomplete` 已接通选区悬浮入口、右键菜单、编辑器标题按钮和快捷键。
+Quick Edit / Ask 共用旁侧紧凑面板；生成、停止、错误重试和模型标签通过独立 Bridge 投影。
+Ask 流式展示回答；Quick Edit 返回经校验的替换文本并打开原生只读 Diff，
+Accept 才通过带版本检查的 TextEditor.edit 应用，不自动保存，可原生 Undo。
+源文件变化、关闭、取消或切换选区不会使迟到请求覆盖代码；预览使用独立代次 URI。
+
+运行时复用 Droid 登录与当前模型，单独 CLI 进程在临时目录执行，
+生成前列举并禁用工具，拒绝权限请求；不恢复/分叉主会话、不占用聊天回合。
+内部会话标签从历史、归档和搜索结果过滤。项目 Hooks 不从源目录加载；
+用户级 Droid 配置仍适用，不宣称进程拥有额外系统沙箱。
+单个问题不继承之前 Ask 回答；选区/上下文上限见 README。
+
+本轮 Quick Edit / Ask 尚未获测试许可，未运行新功能回归、真实模型或界面自动化；
+源码检查、pnpm run package:vsix（含 typecheck / lint:budgets / 生产构建）通过，
+pnpm run verify:vsix 校验 81 条目和包入口加载通过。已安装用户指定的 VS Code，
+10 个生产 JS/CSS/Worker 文件哈希一致；需手动 Developer: Reload Window 加载。
+最终 VSIX 在隐藏隔离桌面的 VS Code 1.136.0 运行既有补全/工具栏回归，
+17/17 用例通过；未复现该命令清除建议，鼠标菜单焦点路径仍未验证。
+always 表示有建议时显示工具栏，不代表建议结束后永久显示；没有据此修改生产补全逻辑。
+
 ## 独立分支：编辑器补全
 
 `codex/droid-autocomplete` 已接通灰字补全、语言服务候选接续、配置向导和状态栏。
@@ -133,7 +155,7 @@ Windows runner 从 VSIX 解包，在不切换的独立桌面启动全新编辑�
 - SDK 保持 0.7.0，使用公开 `DaemonSessionController`、`MultiSessionStateManager`
   与窄 facade；不访问 `.sessions.controller`，不为展示创建竞争会话连接。
   未完成跨 SDK/CLI 版本兼容验收，不能由类型声明推断完整产品能力。
-- Chat、Models、Mission、Viewer、Review 五个生产入口使用 V2；交互复用
+- Chat、Models、Mission、Viewer、Review、Editor Assistance 六个生产入口使用 V2；交互复用
   `packages/chat-ui/src/ui/` 的 shadcn/Radix，AI 展示复用 `ai-elements/`。
   已统一到 `src/webview-v2`，旧 `src/webview` 目录及 V1 页面、入口、样式已移除。
 - 前端状态、Host 消息接线、Bridge、聊天功能、Models/Mission/Review/Viewer 业务
