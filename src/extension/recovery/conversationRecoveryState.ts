@@ -59,6 +59,7 @@ export interface ConversationSessionNode {
 
 export interface ConversationTurnRecord {
   readonly turnId: string;
+  /** Canonical execution/snapshot owner; inherited turns may belong to a parent conversation. */
   readonly sessionId: string;
   readonly prompt: string | null;
   readonly messageId?: string;

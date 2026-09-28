@@ -129,6 +129,10 @@ flowchart TD
   历史正文从 Droid 来；旧 display payload 不参与按位置拼接。
 - Compact/Handoff 可换 backend session 而保留同一 Conversation；Fork/Rewind
   建立新 Conversation。历史用 SDK 消息 ID 接回本地轮次/Diff 索引，不能靠相似正文认领。
+- 轮次 `sessionId` 是执行与文件快照来源；Fork/Rewind 中继承的轮次可以指向父
+  Conversation 的会话，不把这些来源注册为新 Conversation 拥有的节点。复制时重置
+  轮次的 display revision，保留消息 ID、变更与操作证据。恢复解码对明确的 Fork/Rewind
+  记录兼容旧版源 revision；普通根会话的外部轮次和本地越界 revision 仍视为非法。
 - 恢复提交与存储写入有成功边界；未完成 durable write 不确认已保存的 revision。
   旧图片文件不再用于全文恢复，也不顺带跨工作区清扫用户文件。
 

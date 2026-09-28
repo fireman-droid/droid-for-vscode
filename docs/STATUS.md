@@ -78,6 +78,14 @@
   时剥离并写入 V3，保留 Factory 源数据、快照和既有图片文件。
 - New/Fork/Rewind 创建独立 Conversation；Compact/Spec Handoff 可在同一
   Conversation 内采用 successor backend。无可靠消息身份时保留索引但不猜展示位置。
+- Fork/Rewind 继承的轮次保留原执行会话 ID，供 Review 查找原文件快照；轮次版本号
+  按新 Conversation 重置。恢复解码接受这类跨 Conversation 的轮次来源，并修正旧版
+  复制过来的越界版本号，避免 Reload 时丢弃已选的新会话。重新生成回复也使用 Rewind。
+  62 项定向会话恢复回归、类型与文件预算检查通过；未连接真实模型或改写真实会话。
+  完整生产构建与 80 条目 VSIX 校验通过，已安装 Cursor，9 项生产文件哈希一致；
+  需 Reload Window 加载，实际会话恢复由用户验收。
+  若旧版本已丢弃并覆盖恢复索引，需要从历史列表重新选择仍保存在 Droid 中的会话；
+  不自动猜测应切换到哪个分支，也不改写 Factory 聊天文件。
 - Runtime replacement、工作区切换、请求和回合使用身份/代次检查；旧异步结算仅将
   自己的 Changes 合并到最新状态，不持有旧全文覆盖新消息。持久写入成功才确认 revision。
 - 发布给页面的边界诊断只记录类型、序号、身份、状态、长度及耗时，不记录正文、

@@ -256,15 +256,28 @@ function parseConversation(
     turns === undefined ||
     operations === undefined ||
     !nodes.some((node) => node.sessionId === activeSessionId) ||
-    nodes.some((node) => node.checkpointRevision > display.revision) ||
-    turns.some(
-      (turn) =>
-        turn.firstRevision > turn.lastRevision ||
-        turn.lastRevision > display.revision ||
-        !nodes.some((node) => node.sessionId === turn.sessionId),
-    )
+    nodes.some((node) => node.checkpointRevision > display.revision)
   ) {
     return undefined;
+  }
+  const fork = nodes.find((node) =>
+    (node.relation === 'fork' || node.relation === 'rewind') &&
+    node.parentConversationId !== null && node.parentConversationId !== conversationId &&
+    node.parentSessionId !== null,
+  );
+  const recoveredTurns: ConversationTurnRecord[] = [];
+  for (const turn of turns) {
+    if (turn.firstRevision > turn.lastRevision) return undefined;
+    const inherited = !nodes.some((node) => node.sessionId === turn.sessionId);
+    if (inherited && fork === undefined) return undefined;
+    if (turn.lastRevision > display.revision) {
+      if (!inherited) return undefined;
+      // Older forks copied source display revisions along with canonical
+      // snapshot owners. Rebase that metadata without losing the selection.
+      recoveredTurns.push({ ...turn, firstRevision: 1, lastRevision: 1 });
+    } else {
+      recoveredTurns.push(turn);
+    }
   }
   return cloneConversation({
     conversationId,
@@ -272,7 +285,7 @@ function parseConversation(
     lastAccess,
     display,
     nodes,
-    turns,
+    turns: recoveredTurns,
     operations,
     queuedTexts: sanitizeQueuedTexts(queuedTextsValue),
   });

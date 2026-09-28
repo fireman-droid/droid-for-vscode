@@ -259,7 +259,13 @@ export class SessionRecoveryStore {
     const visibleTurns = new Set(cache.transcript.flatMap((item) => item.kind === 'user' ? [] : [item.turnId]));
     this.storeConversation({
       ...forked,
-      turns: source.turns.filter((turn) => visibleTurns.has(turn.turnId)),
+      // Keep the canonical session for Review snapshots, but revisions belong
+      // to the new conversation's display, not the source display.
+      turns: source.turns.filter((turn) => visibleTurns.has(turn.turnId)).map((turn) => ({
+        ...turn,
+        firstRevision: forked.display.revision,
+        lastRevision: forked.display.revision,
+      })),
     });
     this.enforceLimits();
     this.changed();
