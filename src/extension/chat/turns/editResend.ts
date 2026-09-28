@@ -285,6 +285,7 @@ export async function performEditResend(
     isFavorite: false,
   });
   pendingRewinds.delete(runtime);
+  ctl.effects.armReplayedSubagentWatch(forkedSessionId, cwd, truncated);
   return forkedSessionId;
 }
 

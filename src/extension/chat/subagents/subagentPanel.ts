@@ -129,7 +129,10 @@ async function ensureMapping(ctl: SubagentPanelPort): Promise<void> {
     return;
   }
   const task = (async (): Promise<void> => {
-    const records = await load({ cwd, sessionId });
+    const records = await load({ cwd, sessionId,
+      parentToolUseIds: ctl.recoveryState.transcript.transcript.flatMap((item) =>
+        item.kind === 'tool' && item.subagent !== undefined ? [item.toolUseId] : []),
+    });
     if (
       records !== null &&
       !ctl.sessionState.disposed &&

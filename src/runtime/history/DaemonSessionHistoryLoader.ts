@@ -30,6 +30,7 @@ import type {
   SessionHistoryLoader,
   SessionHistoryRequest,
   SessionHistoryResult,
+  SubagentHistoryRequest,
 } from './SessionHistory';
 
 /**
@@ -49,7 +50,7 @@ import type {
  *   the live mission STATE is not persisted there, so daemon
  *   loads report `state: null` (display-only field, rare sessions).
  * - subagentInvocations: read from the CLI's durable
- *   `~/.factory/task-invocations.json` ledger — the same data the
+ *   `~/.factory/state/task-invocations.json` ledger — the same data the
  *   `loadSession()` envelope carries, without a spawn. This also
  *   serves the 5s/2.5s subagent watch/panel polls.
  */
@@ -80,7 +81,7 @@ const MAX_MESSAGE_PAGES = 1_000;
 const MAX_TASK_INVOCATIONS_BYTES = 32 * 1024 * 1024;
 
 export function defaultTaskInvocationsFile(): string {
-  return path.join(os.homedir(), '.factory', 'task-invocations.json');
+  return path.join(os.homedir(), '.factory', 'state', 'task-invocations.json');
 }
 
 export function createDaemonFirstHistoryLoader(
@@ -166,14 +167,24 @@ export function createDaemonFirstHistoryLoader(
   };
 
   const loadInvocations = async (
-    request: SessionHistoryRequest,
+    request: SubagentHistoryRequest,
   ): Promise<readonly SubagentInvocationRecord[] | null> => {
     const fromLedger = await readTaskInvocationLedger(
       taskInvocationsFile,
       request.sessionId,
+      request.parentToolUseIds,
     );
     if (fromLedger !== null) {
-      return fromLedger;
+      // CLI migration leaves older invocations in the previous location.
+      // Current records win; never let a stale running entry replace completion.
+      if (options.taskInvocationsFile !== undefined) return fromLedger;
+      const legacy = await readTaskInvocationLedger(
+        path.join(os.homedir(), '.factory', 'task-invocations.json'),
+        request.sessionId, request.parentToolUseIds,
+      );
+      const currentKeys = new Set(fromLedger.map(invocationKey));
+      return [...(legacy ?? []).filter((entry) => !currentKeys.has(invocationKey(entry))), ...fromLedger]
+        .sort((left, right) => (left.summary.startedAt ?? 0) - (right.summary.startedAt ?? 0));
     }
     record({
       level: 'warn',
@@ -189,7 +200,7 @@ export function createDaemonFirstHistoryLoader(
   return {
     loadHistory,
     async loadSubagentSummaries(
-      request: SessionHistoryRequest,
+      request: SubagentHistoryRequest,
     ): Promise<readonly ToolSubagentSummary[] | null> {
       const records = await loadInvocations(request);
       return records === null ? null : records.map((entry) => entry.summary);
@@ -313,7 +324,7 @@ async function readSessionSidecar(
 
 /**
  * Session-scoped view of the CLI's durable Task-invocation ledger
- * (`~/.factory/task-invocations.json`). A private-file contract with
+ * (`~/.factory/state/task-invocations.json`). A private-file contract with
  * precedent (`sessionFavorites.ts`): read-only, bounded, and any
  * unexpected shape reads as failure (null) so callers can fall back
  * to the authoritative spawn loader.
@@ -321,6 +332,7 @@ async function readSessionSidecar(
 export async function readTaskInvocationLedger(
   file: string,
   sessionId: string,
+  parentToolUseIds: readonly string[] = [],
 ): Promise<readonly SubagentInvocationRecord[] | null> {
   let raw: string;
   try {
@@ -341,9 +353,11 @@ export async function readTaskInvocationLedger(
   if (!isStrictRecord(parsed) || !Array.isArray(parsed.invocations)) {
     return null;
   }
+  const retainedCalls = new Set(parentToolUseIds);
   const entries = parsed.invocations.filter(
     (entry): entry is Record<string, unknown> =>
-      isStrictRecord(entry) && entry.parentSessionId === sessionId,
+      isStrictRecord(entry) && (entry.parentSessionId === sessionId ||
+        (typeof entry.parentToolUseId === 'string' && retainedCalls.has(entry.parentToolUseId))),
   );
   // Ledger order for FIFO pairing = dispatch order.
   entries.sort((left, right) => readTime(left) - readTime(right));
@@ -356,4 +370,10 @@ function readTime(entry: Record<string, unknown>): number {
   return typeof entry.createdAt === 'number' && Number.isFinite(entry.createdAt)
     ? entry.createdAt
     : 0;
+}
+
+function invocationKey(entry: SubagentInvocationRecord): string {
+  if (entry.parentToolUseId !== undefined) return `tool:${entry.parentToolUseId}`;
+  if (entry.childSessionId !== null) return `child:${entry.childSessionId}`;
+  return JSON.stringify([entry.summary.type, entry.summary.description, entry.summary.startedAt]);
 }

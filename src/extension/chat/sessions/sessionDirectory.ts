@@ -684,6 +684,7 @@ export async function performFork(
     null,
   );
   if (!(await ctl.effects.flushRecoveryCheckpointOrReport())) return;
+  ctl.effects.armReplayedSubagentWatch(forkedSessionId, cwd, ctl.recoveryState.transcript);
   ctl.emitSnapshot();
   ctl.emit({
     type: 'runtime.diagnostic',

@@ -201,7 +201,8 @@ export class SubagentTranscriptService {
         continue;
       }
       const existing = this.byChild.get(record.childSessionId);
-      if (existing !== undefined && !existing.rows.has(key) && existing.rows.size > 0) {
+      if (existing !== undefined && [...existing.rows.values()].some((row) =>
+        row.toolUseId !== item.toolUseId)) {
         this.noteIssue({
           turnId: item.turnId,
           toolUseId: item.toolUseId,
@@ -236,7 +237,10 @@ export class SubagentTranscriptService {
         'Child-session ledger history is unavailable.');
       return this.readParentOperationEvidence(parentSessionId);
     }
-    const records = await load({ cwd, sessionId: parentSessionId }).catch(() => null);
+    const records = await load({ cwd, sessionId: parentSessionId,
+      parentToolUseIds: transcript.flatMap((item) =>
+        item.kind === 'tool' && item.subagent !== undefined ? [item.toolUseId] : []),
+    }).catch(() => null);
     if (this.disposed) return { operations: [], notices: [] };
     if (records === null) {
       this.noteUnmappedRows(parentSessionId, transcript, 'history-unavailable',
@@ -418,8 +422,7 @@ export class SubagentTranscriptService {
       if (
         row !== null &&
         existing !== undefined &&
-        !existing.rows.has(rowKey(row.parentSessionId, row.toolUseId)) &&
-        existing.rows.size > 0
+        [...existing.rows.values()].some((bound) => bound.toolUseId !== row.toolUseId)
       ) {
         this.noteIssue({
           turnId: row.turnId,
@@ -534,6 +537,7 @@ export class SubagentTranscriptService {
         const row = entry.rows.values().next().value;
         const records = row === undefined ? null : await this.history.loadSubagentInvocations?.({
           cwd: entry.cwd, sessionId: row.parentSessionId,
+          parentToolUseIds: [row.toolUseId],
         }).catch(() => null);
         if (this.disposed) return;
         const record = records?.find((item) => item.childSessionId === entry.childSessionId);

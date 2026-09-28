@@ -12,6 +12,11 @@ export interface SessionHistoryRequest {
   readonly sessionId: string;
 }
 
+export interface SubagentHistoryRequest extends SessionHistoryRequest {
+  /** Exact Task calls retained by a fork/rewind, whose ledger owner stays unchanged. */
+  readonly parentToolUseIds?: readonly string[];
+}
+
 /** Host-only identity graph. Hidden message content is never retained here. */
 export interface HistoryMessageAncestry {
   readonly messageId: string;
@@ -54,7 +59,7 @@ export interface SessionHistoryLoader {
    * null on any failure instead of throwing.
    */
   loadSubagentSummaries?(
-    request: SessionHistoryRequest,
+    request: SubagentHistoryRequest,
   ): Promise<readonly ToolSubagentSummary[] | null>;
   /**
    * Optional: the same ledger with each invocation's host-only child
@@ -63,7 +68,7 @@ export interface SessionHistoryLoader {
    * null on any failure instead of throwing.
    */
   loadSubagentInvocations?(
-    request: SessionHistoryRequest,
+    request: SubagentHistoryRequest,
   ): Promise<readonly SubagentInvocationRecord[] | null>;
 }
 

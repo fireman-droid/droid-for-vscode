@@ -57,5 +57,6 @@ export interface SessionDirectoryPort
     | 'loadHistoryTimed'
     | 'flushRecoveryCheckpointOrReport'
     | 'refreshContextAfterTurn'
+    | 'armReplayedSubagentWatch'
   >;
 }

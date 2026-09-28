@@ -42,5 +42,6 @@ export interface EditResendPort
     | 'clearPendingAttachments'
     | 'withActiveSession'
     | 'emitEditAttachments'
+    | 'armReplayedSubagentWatch'
   >;
 }

@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-09-27。扩展显示名为 Droid，安装标识仍为 `droidvisx.droidvisx@0.8.0`。
+更新：2026-09-28。扩展显示名为 Droid，安装标识仍为 `droidvisx.droidvisx@0.8.0`。
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
@@ -358,6 +358,12 @@
 - 子代理卡独立于 Activity 折叠，属于原轮次，显示实际开始时间、工具进度/有界结果。
   后台父自动续写继续订阅，隐藏请求按父链归属，断线补历史不重发；长任务不使用
   固定十分钟强制终止。迟到工具事件不能把已完成 child 改回 running。
+- 子代理状态读取 CLI 当前的 `.factory/state/task-invocations.json`，合并旧目录中
+  保留的历史调用；同一调用以当前文件为准，旧 running 状态不能覆盖新终态。
+  Fork/编辑重发后，按保留的 Task 调用 ID 继续关联原 child，允许同一调用出现在
+  两个会话中，重新启动状态核对；新前台回合开始也不丢失上一轮后台任务的监听。
+  本轮依据真实会话、任务账本和扩展日志修复；类型、文件预算与生产构建通过。
+  未新增、修改或运行测试，未重演真实会话；按用户要求暂不打包安装。
 - Chat 卡/Viewer 共用 store；每 child 独立只读页面，映射由 Host 核验，页面不能猜
   child ID。工作区外只展示文件名/外部标记。历史用于初始化和终态核对，不替代实时流。
   子代理/Mission Viewer 无写操作或 Stop，普通运行 Session Viewer 可按权限 Stop。

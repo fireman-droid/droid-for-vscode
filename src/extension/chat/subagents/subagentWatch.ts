@@ -100,7 +100,8 @@ function armLiveSubagentTimer(
   state.timer = setTimeout(() => {
     state.timer = null;
     state.attempt += 1;
-    void loadSummaries({ cwd, sessionId })
+    void loadSummaries({ cwd, sessionId,
+      parentToolUseIds: [...(ctl.turnState.turn?.activity.tools.keys() ?? [])] })
       .catch(() => null)
       .then((summaries) => {
         const turn = ctl.turnState.turn;
@@ -209,7 +210,12 @@ export function settleTurnSubagents(
   ) {
     return;
   }
-  void loadSummaries({ cwd, sessionId }).then((summaries) => {
+  // A new foreground turn can start before this ledger read finishes.
+  // Retain the old turn's running rows before relinquishing its activity state.
+  armZombieSubagentWatch(ctl, sessionId, cwd, loadSummaries,
+    collectRunningSubagentRows(ctl.turnState.turn.activity, turnId));
+  void loadSummaries({ cwd, sessionId,
+    parentToolUseIds: [...ctl.turnState.turn.activity.tools.keys()] }).then((summaries) => {
     const turn = ctl.turnState.turn;
     if (
       ctl.sessionState.disposed ||
@@ -329,6 +335,7 @@ export async function tickZombieSubagentWatch(
       const summaries = await loadSummaries({
         cwd,
         sessionId: watch.sessionId,
+        parentToolUseIds: watch.rows.map((row) => row.toolUseId),
       }).catch(() => null);
       if (
         summaries === null &&
@@ -359,6 +366,10 @@ export async function tickZombieSubagentWatch(
       failedWatchReads.delete(watch);
       const { settled, pending } = settleZombieSubagents(watch.rows, summaries);
       watch.rows = pending;
+      if (settled.length > 0) ctl.recordHost({
+        level: 'info', name: 'host.subagent.zombie-watch-settled',
+        attributes: { sessionId: watch.sessionId, settled: settled.length, pending: pending.length },
+      });
       for (const { row, subagent } of settled) {
         if (ctl.turnState.turn?.turnId === row.turnId) {
           ctl.turnState.turn.activity = applySubagentSettlement(
