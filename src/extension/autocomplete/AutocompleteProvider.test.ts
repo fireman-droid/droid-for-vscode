@@ -261,6 +261,54 @@ describe('AutocompleteProvider', () => {
     expect(mocks.request).toHaveBeenCalledTimes(1);
   });
 
+  it('hides the Java trailing-fence response, caches its rejection and recovers after a manual reset', async () => {
+    const prefix = 'class CompletionSample {\n  static int weightedScore(int[] values) {\n    int total = 0;\n';
+    const suffix = '    return total;\n  }\n}';
+    const valid = '    for (int i = 0; i < values.length; i++) {\n      total += (i + 1) * values[i];\n    }\n';
+    const file = document(prefix + suffix, 'file:///CompletionSample.java');
+    Object.assign(file.value, { languageId: 'java' });
+    mocks.collect.mockResolvedValue([{
+      uri: 'file:///Score.java', filepath: 'Score.java', content: 'class Score {}', source: 'openFile',
+    }]);
+    mocks.request.mockResolvedValueOnce(valid + '\n```').mockResolvedValueOnce(valid);
+    expect(await (await requesting(file, prefix.length)).pending).toEqual([]);
+    expect(provider.lastMessage).toBe('Autocomplete response included ambiguous code fences. Suggestion hidden; use Request suggestion / retry.');
+    expect(provider.lastContextFileCount).toBe(1);
+    expect(provider.lastLatencyMs).toEqual(expect.any(Number));
+    expect(await (await requesting(file, prefix.length, { ...context, triggerKind: 1 })).pending).toEqual([]);
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    provider.reset();
+    expect((await (await requesting(file, prefix.length)).pending)[0].insertText).toBe(valid);
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(provider.lastMessage).toBeUndefined();
+  });
+
+  it.each(['changed text', 'another document'])('does not impose a global cooldown after a rejected fence for %s', async (change) => {
+    const original = document('int result = ', 'file:///Sample.java');
+    Object.assign(original.value, { languageId: 'java' });
+    mocks.request.mockResolvedValueOnce('42;\n```').mockResolvedValueOnce('42;');
+    expect(await (await requesting(original)).pending).toEqual([]);
+    const next = change === 'another document' ? document('int result = ', 'file:///Other.java') : original;
+    Object.assign(next.value, { languageId: 'java' });
+    if (change === 'changed text') {
+      original.state.text = 'int updatedResult = ';
+      Object.assign(original.value, { version: 2 });
+      mocks.listeners.get('text')?.({ document: original.value });
+    }
+    expect((await (await requesting(next, undefined, { ...context, triggerKind: 1 })).pending)[0].insertText).toBe('42;');
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(provider.lastMessage).toBeUndefined();
+  });
+
+  it('preserves a closing code fence when completing an actual Markdown code block', async () => {
+    const file = document('## Example\n\n```java\n', 'file:///example.md');
+    Object.assign(file.value, { languageId: 'markdown' });
+    const completion = 'for (int i = 0; i < values.length; i++) {\n  total += (i + 1) * values[i];\n}\n```';
+    mocks.request.mockResolvedValue(completion);
+    expect((await (await requesting(file)).pending)[0].insertText).toBe(completion);
+    expect(provider.lastMessage).toBeUndefined();
+  });
+
   it('does not repeat requests for a cached empty result', async () => {
     const file = document();
     mocks.request.mockResolvedValue('');
@@ -455,7 +503,7 @@ describe('AutocompleteProvider', () => {
     await (await requesting(file)).pending;
     file.state.text += 'calc';
     Object.assign(file.value, { version: 2 });
-    // revisionFor(currentFile) excludes this file’s own edit; the context event still fires.
+    // revisionFor(currentFile) excludes this file's own edit; the context event still fires.
     mocks.listeners.get('context')?.();
     mocks.listeners.get('text')?.({ document: file.value });
     expect(invalidated).not.toHaveBeenCalled();

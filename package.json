@@ -183,7 +183,7 @@
           "type": "string",
           "default": "https://api.mistral.ai/v1/fim/completions",
           "scope": "application",
-          "description": "Complete completion URL: native FIM endpoint or Ollama /api/generate. Use Droid: Configure Autocomplete for service presets and SecretStorage keys."
+          "description": "Complete completion URL: native FIM, Ollama /api/generate, or SiliconFlow FIM over /v1/chat/completions. Use Droid: Configure Autocomplete for service presets and SecretStorage keys."
         },
         "droidvisx.autocomplete.model": {
           "type": "string",
@@ -233,11 +233,17 @@
           "type": "string",
           "enum": [
             "fim",
-            "ollama"
+            "ollama",
+            "siliconflow-fim"
+          ],
+          "enumDescriptions": [
+            "Native FIM endpoint using prompt and suffix with an SSE response.",
+            "Ollama /api/generate using prompt and suffix with an NDJSON response.",
+            "SiliconFlow prefix/suffix FIM extension on /v1/chat/completions with an SSE response."
           ],
           "default": "fim",
           "scope": "application",
-          "description": "Native FIM (prompt/suffix, SSE) or Ollama generate (prompt/suffix, NDJSON). Choose a model that supports code completion, not a chat-only model."
+          "description": "Completion wire protocol: native FIM, Ollama generate, or SiliconFlow FIM. The selected model must support that service's prefix/suffix completion API; an ordinary chat API is insufficient."
         },
         "droidvisx.autocomplete.relatedFiles": {
           "type": "boolean",

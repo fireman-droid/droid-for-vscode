@@ -38,6 +38,9 @@ Viewer、Review。`chat/` 按 composer、attachments、btw、interactions、queu
 `src/extension/autocomplete/registerAutocomplete.ts` 装配原生 Inline Completion
 Provider、状态栏和配置向导；`AutocompleteProvider.ts` 持有编辑器快照、防抖、取消、
 文档/光标/关联上下文版本和 30 秒建议缓存，也负责接续语言服务的候选文本。
+`completionText.ts` 在插入边界以语言模式区分文本与代码：代码建议的独立反引号围栏
+返回明确拒绝值，不猜测词法状态或截断文本。Provider 将拒绝缓存为当前上下文的空结果，
+显示状态提示；手动重试清缓存，新文本/新文档不受全局冷却。
 
 `context/CompletionContextService.ts` 从定义、近期编辑和已打开文件提取片段，
 优先使用未保存内容；定义查询限时 150ms、总收集 400ms，最多 6 文件。
@@ -45,10 +48,11 @@ Provider、状态栏和配置向导；`AutocompleteProvider.ts` 持有编辑器�
 `CompletionPrompt.ts` 控制总字符预算和模型格式；`LanguageComments.ts` 从已安装
 语言扩展读取 JSONC 注释元数据（150ms 截止），不为每个编程语言编写语法分支。
 
-`src/runtime/autocomplete/requestCompletion.ts` 根据显式协议调用原生 FIM 或
-Ollama generate；`completionTransport.ts` 共用取消、12 秒超时、大小限制和固定错误。
+`src/runtime/autocomplete/requestCompletion.ts` 根据显式协议调用原生 FIM、
+Ollama generate 或 SiliconFlow 的 prefix/suffix FIM 扩展；`completionTransport.ts` 共用取消、12 秒超时、大小限制和固定错误。
 Runtime 不引用 VS Code；Host 即时读取按 endpoint 绑定的 SecretStorage key，地址、
-模型、协议只接受用户级配置。本地无认证服务不附认证头。
+模型、协议只接受用户级配置。本地无认证服务不附认证头。SiliconFlow 在 chat/completions 路径发送固定补全指令与
+顶层 prefix/suffix；显式协议决定请求格式，不根据模型名猜测。当前完整响应收齐后再返回灰字。
 
 补全直接使用编辑器 UI，不经过 Webview/Bridge，不进入 `DroidRuntime.sendTurn`
 或聊天队列。启动时注册补全，聊天 daemon 预热延后到聊天视图首次解析。

@@ -98,7 +98,7 @@ describe('buildCompletionPrompt', () => {
   });
 
   it('never splits surrogate pairs or CRLF at reference clipping edges', () => {
-    for (const content of ['馃榾'.repeat(300), 'a\r\n'.repeat(300)]) {
+    for (const content of ['\u{1F600}'.repeat(300), 'a\r\n'.repeat(300)]) {
       for (const maxCharacters of [99, 100, 101, 102, 103]) {
         const result = buildCompletionPrompt({
           ...input, text: 'a'.repeat(500), offset: 250, maxCharacters,

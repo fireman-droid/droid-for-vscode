@@ -26,13 +26,17 @@ function splitsPair(text: string, offset: number): boolean {
     || (before === 13 && after === 10);
 }
 
-/** Keep model-provided whitespace: it is part of the insertion, including indentation. */
-export function prepareCompletion(text: string, _prefix: string, suffix: string): string {
-  const fenced = /^```[a-zA-Z0-9_+.-]*[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*(?:\r?\n)?$/.exec(text);
-  const completion = fenced ? fenced[1] : text;
-  if (!completion.trim() || suffix.startsWith(completion)) return '';
+/** Keep code unchanged; undefined rejects ambiguous model formatting instead of repairing it. */
+export function prepareCompletion(
+  text: string, _prefix: string, suffix: string, languageId: string,
+): string | undefined {
+  if (!text.trim() || suffix.startsWith(text)) return '';
+  const allowsFences = ['markdown', 'mdx', 'plaintext'].includes(languageId);
+  // Without lexical state an isolated fence may be model markup or legitimate string/comment
+  // content. Suppress the whole code suggestion rather than guessing and deleting its lines.
+  if (!allowsFences && /^[ \t]*`{3,}/m.test(text)) return undefined;
   // Partial overlap (especially braces) can be valid nested code, so leave it intact.
-  return completion;
+  return text;
 }
 
 export type CachedCompletion = {

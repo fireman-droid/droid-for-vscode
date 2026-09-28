@@ -26,17 +26,56 @@ describe('completion text', () => {
     expect(buildCompletionContext('abcd\r\nXYZ', 4, 5)).toEqual({ prefix: 'abcd', suffix: '' });
   });
 
-  it('preserves indentation, inner fences, and CRLF within code', () => {
+  it('preserves code indentation and CRLF without rewriting either', () => {
     const body = '  const value = 1;\r\n  return value;';
-    expect(prepareCompletion(body, 'function run() {\r\n', '}')).toBe(body);
-    expect(prepareCompletion('```typescript\r\n' + body + '\r\n```', '', '')).toBe(body);
-    expect(prepareCompletion('  const sample = "```";', '', '')).toBe('  const sample = "```";');
+    expect(prepareCompletion(body, 'function run() {\r\n', '}', 'typescript')).toBe(body);
   });
 
-  it('rejects empty and already-present text without removing legitimate nested closing tokens', () => {
-    expect(prepareCompletion('\n  ', '', '')).toBe('');
-    expect(prepareCompletion('return value;', '', 'return value;\n}')).toBe('');
-    expect(prepareCompletion('run())', 'outer(', ')')).toBe('run())');
+  it.each(['markdown', 'mdx', 'plaintext'])('preserves complete and standalone fences in %s', (languageId) => {
+    const fenced = '```typescript\r\n  const value = 1;\r\n```';
+    expect(prepareCompletion(fenced, 'Example:\r\n', '', languageId)).toBe(fenced);
+    expect(prepareCompletion('```\n', 'End example\n', '', languageId)).toBe('```\n');
+  });
+
+  it.each([
+    ['java', 'String sample = "```";'],
+    ['typescript', '  const sample = "```";'],
+    ['go', 'sample := "```"'],
+    ['java', '// Example: ```java'],
+    ['typescript', '/* Inline ``` code marker */'],
+  ])('preserves inline fence text in %s code or comments (%#)', (languageId, text) => {
+    expect(prepareCompletion(text, '', '', languageId)).toBe(text);
+  });
+
+  it('rejects the recorded Java response with a dangling fence after its loop', () => {
+    const raw = "    for (int i = 0; i < values.length; i++) {\n      total += (i + 1) * values[i];\n    }\n    \n```";
+    const prefix = "public class CompletionSample {\n  // Sum values multiplied by their one-based array position.\n  static int weightedScore(int[] values) {\n    int total = 0;\n";
+    const suffix = "    return total;\n  }\n  public static void main(String[] args) {\n    if (weightedScore(new int[]{4, 6, 9}) != 43) throw new AssertionError(\"expected score 43\");\n    if (weightedScore(new int[]{7, -2, 5}) != 18) throw new AssertionError(\"expected score 18\");\n    if (weightedScore(new int[]{}) != 0) throw new AssertionError(\"expected score 0\");\n    System.out.println(\"PASS java-function-body 43 18 0\");\n  }\n}\n";
+    expect(prepareCompletion(raw, prefix, suffix, 'java')).toBeUndefined();
+  });
+
+  it.each(['java', 'go', 'typescript', 'python', 'rust', 'custom-language'])('uses the same isolated-fence gate for %s', (languageId) => {
+    expect(prepareCompletion('```code\nvalue\n```', '', '', languageId)).toBeUndefined();
+    expect(prepareCompletion('value\n\n```', '', '', languageId)).toBeUndefined();
+    expect(prepareCompletion('value\r\n\t  ````code\r\n', '', '', languageId)).toBeUndefined();
+  });
+
+  it.each([
+    ['java', 'String example = """\n', '\n""";'],
+    ['typescript', 'const example = String.raw`\n', '\n`;'],
+    ['go', 'var example = `\n', '\n`'],
+    ['java', '/* Example:\n', '\n*/'],
+  ])('suppresses ambiguous standalone fences without altering possible %s string/comment contents', (languageId, prefix, suffix) => {
+    // These contexts cannot be distinguished safely without lexical evidence. A missing
+    // suggestion is preferable to removing a fence from a possible literal or comment.
+    expect(prepareCompletion('```java\nexample\n```', prefix, suffix, languageId)).toBeUndefined();
+  });
+
+  it('distinguishes empty/already-present output from rejected formatting and preserves nested closing tokens', () => {
+    expect(prepareCompletion('\n  ', '', '', 'java')).toBe('');
+    expect(prepareCompletion('return value;', '', 'return value;\n}', 'java')).toBe('');
+    expect(prepareCompletion('run())', 'outer(', ')', 'typescript')).toBe('run())');
+    expect(prepareCompletion('```', '', '', 'java')).toBeUndefined();
   });
 
   const cached: CachedCompletion = {

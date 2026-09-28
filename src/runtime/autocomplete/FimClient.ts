@@ -23,14 +23,17 @@ export async function requestFimCompletion(request: FimRequest): Promise<string>
     max_tokens: request.maxTokens,
     temperature: 0,
     stream: true,
-  }, 'text/event-stream, application/json', async (response) => {
-    const contentType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
-    if (contentType === 'text/event-stream') return readEventStream(response);
-    if (contentType === 'application/json' || contentType?.endsWith('+json')) {
-      return readJsonResponse(response);
-    }
-    throw protocolError('Completion provider returned an unsupported response format.');
-  });
+  }, 'text/event-stream, application/json', readFimResponse);
+}
+
+/** Shared choices-based response format used by native and SiliconFlow FIM. */
+export async function readFimResponse(response: Response): Promise<string> {
+  const contentType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
+  if (contentType === 'text/event-stream') return readEventStream(response);
+  if (contentType === 'application/json' || contentType?.endsWith('+json')) {
+    return readJsonResponse(response);
+  }
+  throw protocolError('Completion provider returned an unsupported response format.');
 }
 
 async function readJsonResponse(response: Response): Promise<string> {

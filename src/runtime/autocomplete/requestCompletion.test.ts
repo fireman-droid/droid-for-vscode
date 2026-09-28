@@ -176,4 +176,37 @@ describe('completion protocol adapters', () => {
     expect(await pending).toMatchObject({ code: 'timeout', message: 'Completion request timed out.' });
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it('sends SiliconFlow FIM fields at the top level and reads a complete JSON answer', async () => {
+    const fetcher = mockResponse(Response.json({ choices: [{ message: { content: 'value * 2' } }] }));
+    await expect(requestCompletion(request({
+      protocol: 'siliconflow-fim', endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+      model: 'Qwen/Qwen3-Coder-30B-A3B-Instruct', apiKey: 'private-api-key', suffix: '',
+    }))).resolves.toBe('value * 2');
+    const [endpoint, init] = fetcher.mock.calls[0];
+    expect(endpoint).toBe('https://api.siliconflow.cn/v1/chat/completions');
+    expect(new Headers(init?.headers).get('authorization')).toBe('Bearer private-api-key');
+    expect(JSON.parse(String(init?.body))).toEqual({
+      model: 'Qwen/Qwen3-Coder-30B-A3B-Instruct',
+      messages: [{
+        role: 'user',
+        content: 'Complete the missing code between prefix and suffix. Return only the missing code, without explanations or markdown.',
+      }],
+      prefix: 'private-source-prefix', suffix: '', max_tokens: 128, temperature: 0, stream: true,
+    });
+  });
+
+  it('assembles SiliconFlow content deltas without mixing in reasoning text', async () => {
+    mockResponse(new Response(
+      'data: {"choices":[{"delta":{"role":"assistant","reasoning_content":"private thinking"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":"value","reasoning_content":"more thinking"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":" * 2"},"finish_reason":"stop"}]}\n\n' +
+      'data: [DONE]\n\n',
+      { headers: { 'content-type': 'text/event-stream' } },
+    ));
+    await expect(requestCompletion(request({
+      protocol: 'siliconflow-fim', endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+      model: 'Qwen/Qwen3-Coder-30B-A3B-Instruct', apiKey: 'private-api-key',
+    }))).resolves.toBe('value * 2');
+  });
 });

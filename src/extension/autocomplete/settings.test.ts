@@ -20,7 +20,9 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { configureCompletion, DEFAULT_ENDPOINT } from './settings';
+import {
+  completionNeedsKey, configureCompletion, DEFAULT_ENDPOINT, readCompletionSettings, validateCompletionEndpoint,
+} from './settings';
 
 type Preset = { label: string; protocol: string; endpoint: string; model: string };
 const secrets = { get: mocks.getSecret, store: mocks.storeSecret } as unknown as vscode.SecretStorage;
@@ -158,4 +160,72 @@ describe('autocomplete configuration workflow', () => {
     expect(mocks.global.endpoint).toBe('https://api.deepseek.com/beta/completions');
     expect(mocks.global.protocol).toBe('fim');
   });
+
+  it('saves the SiliconFlow FIM preset with a SecretStorage key and its supported Qwen model', async () => {
+    choose('SiliconFlow');
+    mocks.input.mockImplementation(async (options: vscode.InputBoxOptions) => {
+      if (!options.password) return accept(options, options.value);
+      expect(await options.validateInput?.('')).toBe('Enter the provider API key.');
+      return accept(options, ' synthetic-siliconflow-key ');
+    });
+    expect(await configureCompletion(secrets)).toBe(true);
+    expect(mocks.update.mock.calls).toEqual([
+      ['endpoint', 'https://api.siliconflow.cn/v1/chat/completions', 1],
+      ['model', 'Qwen/Qwen3-Coder-30B-A3B-Instruct', 1],
+      ['protocol', 'siliconflow-fim', 1],
+    ]);
+    expect(mocks.storeSecret).toHaveBeenCalledExactlyOnceWith(expect.any(String), 'synthetic-siliconflow-key');
+    expect(JSON.stringify(mocks.global)).not.toContain('synthetic-siliconflow-key');
+    expect(readCompletionSettings().protocol).toBe('siliconflow-fim');
+  });
+
+  it('keeps a saved SiliconFlow configuration when reopening the configuration wizard', async () => {
+    mocks.global = {
+      protocol: 'siliconflow-fim', endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+      model: 'Qwen/Qwen3-Coder-30B-A3B-Instruct',
+    };
+    choose('Current configuration');
+    useDefaults('synthetic-siliconflow-key');
+    expect(await configureCompletion(secrets)).toBe(true);
+    expect(mocks.global.protocol).toBe('siliconflow-fim');
+    expect(mocks.input.mock.calls[0][0].value).toBe('https://api.siliconflow.cn/v1/chat/completions');
+  });
+});
+
+describe('autocomplete provider settings', () => {
+  it.each(['fim', 'ollama', 'siliconflow-fim'] as const)('reads the user-selected %s protocol without workspace overrides', (protocol) => {
+    mocks.global.protocol = protocol;
+    mocks.workspace.protocol = protocol === 'fim' ? 'siliconflow-fim' : 'fim';
+    expect(readCompletionSettings().protocol).toBe(protocol);
+  });
+
+  it('falls back to native FIM for an unknown protocol', () => {
+    mocks.global.protocol = 'unrecognized';
+    expect(readCompletionSettings().protocol).toBe('fim');
+  });
+
+  it('allows the SiliconFlow chat route only with the explicit SiliconFlow FIM protocol', () => {
+    const endpoint = 'https://api.siliconflow.cn/v1/chat/completions';
+    expect(validateCompletionEndpoint(endpoint, 'siliconflow-fim')).toBeUndefined();
+    expect(validateCompletionEndpoint(endpoint)).toContain('chat endpoint');
+    expect(validateCompletionEndpoint(endpoint, 'fim')).toContain('chat endpoint');
+    expect(validateCompletionEndpoint(endpoint, 'ollama')).toContain('chat endpoint');
+    expect(validateCompletionEndpoint('http://localhost:11434/api/chat', 'siliconflow-fim'))
+      .toContain('/v1/chat/completions');
+    expect(validateCompletionEndpoint(DEFAULT_ENDPOINT, 'siliconflow-fim')).toContain('/v1/chat/completions');
+  });
+
+  it.each([
+    'http://api.siliconflow.cn/v1/chat/completions',
+    'https://key:secret@api.siliconflow.cn/v1/chat/completions',
+    'https://api.siliconflow.cn/v1/chat/completions?key=secret',
+  ])('retains URL security validation for SiliconFlow (%s)', (endpoint) => {
+    expect(validateCompletionEndpoint(endpoint, 'siliconflow-fim')).toBeDefined();
+  });
+
+  it('requires a key for the SiliconFlow service without requiring one for local endpoints', () => {
+    expect(completionNeedsKey('https://api.siliconflow.cn/v1/chat/completions')).toBe(true);
+    expect(completionNeedsKey('http://localhost:11434/api/generate')).toBe(false);
+  });
+
 });

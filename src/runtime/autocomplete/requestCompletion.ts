@@ -1,14 +1,28 @@
-import { requestFimCompletion, type FimRequest } from './FimClient';
+import { readFimResponse, requestFimCompletion, type FimRequest } from './FimClient';
 import {
   assertCompletionLength, parsePayload, protocolError, readBody, requestCompletionTransport,
 } from './completionTransport';
 
-export type CompletionProtocol = 'fim' | 'ollama';
+export type CompletionProtocol = 'fim' | 'ollama' | 'siliconflow-fim';
 export type CompletionRequest = FimRequest & { readonly protocol: CompletionProtocol };
 
-/** Both protocols use native prefix/suffix completion; the selected model must support FIM. */
+/** Each protocol uses native prefix/suffix completion; the selected model must support FIM. */
 export async function requestCompletion(request: CompletionRequest): Promise<string> {
   if (request.protocol === 'fim') return requestFimCompletion(request);
+  if (request.protocol === 'siliconflow-fim') {
+    return requestCompletionTransport(request, {
+      model: request.model,
+      messages: [{
+        role: 'user',
+        content: 'Complete the missing code between prefix and suffix. Return only the missing code, without explanations or markdown.',
+      }],
+      prefix: request.prefix,
+      suffix: request.suffix,
+      max_tokens: request.maxTokens,
+      temperature: 0,
+      stream: true,
+    }, 'text/event-stream, application/json', readFimResponse);
+  }
   return requestCompletionTransport(request, {
     model: request.model,
     prompt: request.prefix,

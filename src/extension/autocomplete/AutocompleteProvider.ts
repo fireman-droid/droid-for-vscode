@@ -106,7 +106,7 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
 
     const explicit = context.triggerKind === vscode.InlineCompletionTriggerKind.Invoke;
     if (!explicit && Date.now() < this.retryAfter) return [];
-    const endpointError = validateCompletionEndpoint(settings.endpoint);
+    const endpointError = validateCompletionEndpoint(settings.endpoint, settings.protocol);
     if (endpointError || !settings.model) {
       this.report(endpointError ?? 'Configure a FIM model in Droid autocomplete settings.');
       return [];
@@ -184,12 +184,17 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
       if (!this.isCurrent(pending, token)) return [];
       const normalized = document.eol === vscode.EndOfLine.CRLF
         ? result.replace(/\r?\n/g, '\r\n') : result.replace(/\r\n/g, '\n');
-      const suggestion = prepareCompletion(normalized, prefix, suffix);
-      this.cache = { uri: document.uri.toString(), prefix, suffix, text: suggestion, createdAt: Date.now() };
+      const suggestion = prepareCompletion(normalized, prefix, suffix, document.languageId);
+      this.cache = { uri: document.uri.toString(), prefix, suffix, text: suggestion ?? '', createdAt: Date.now() };
       this.cacheContextRevision = contextRevision;
       this.contextFileCount = snippets.length;
       this.latencyMs = Date.now() - started;
       this.retryAfter = 0;
+      if (suggestion === undefined) {
+        // Cache the rejection for this exact context; a manual retry clears it.
+        this.report('Autocomplete response included ambiguous code fences. Suggestion hidden; use Request suggestion / retry.');
+        return [];
+      }
       return suggestion ? this.items(suggestion, position, selected) : [];
     } catch (error) {
       if (!this.isCurrent(pending, token)) return [];

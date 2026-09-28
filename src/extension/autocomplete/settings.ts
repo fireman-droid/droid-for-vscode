@@ -27,9 +27,10 @@ export function readCompletionSettings(uri?: vscode.Uri): CompletionSettings {
   const userConfig = vscode.workspace.getConfiguration(COMPLETION_SECTION);
   const userValue = (key: string, fallback: string) =>
     userConfig.inspect<string>(key)?.globalValue ?? fallback;
+  const protocol = userValue('protocol', 'fim');
   return {
     enabled: config.get<boolean>('enabled', false),
-    protocol: userValue('protocol', 'fim') === 'ollama' ? 'ollama' : 'fim',
+    protocol: protocol === 'ollama' || protocol === 'siliconflow-fim' ? protocol : 'fim',
     relatedFiles: config.get<boolean>('relatedFiles', true),
     endpoint: userValue('endpoint', DEFAULT_ENDPOINT).trim(),
     model: userValue('model', 'codestral-latest').trim(),
@@ -45,7 +46,9 @@ function boundedNumber(value: unknown, fallback: number, min: number, max: numbe
     ? Math.max(min, Math.min(max, Math.round(value))) : fallback;
 }
 
-export function validateCompletionEndpoint(value: string): string | undefined {
+export function validateCompletionEndpoint(
+  value: string, protocol: CompletionProtocol = 'fim',
+): string | undefined {
   try {
     const url = new URL(value);
     const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
@@ -56,7 +59,11 @@ export function validateCompletionEndpoint(value: string): string | undefined {
       return 'Put the API key in SecretStorage, not in the endpoint URL.';
     }
     if (url.pathname === '/') return 'Enter the complete completion endpoint, including its path.';
-    if (/\/(?:chat\/completions|api\/chat)\/?$/i.test(url.pathname)) {
+    if (protocol === 'siliconflow-fim') {
+      if (!/\/chat\/completions\/?$/i.test(url.pathname)) {
+        return 'Use the SiliconFlow /v1/chat/completions endpoint for FIM.';
+      }
+    } else if (/\/(?:chat\/completions|api\/chat)\/?$/i.test(url.pathname)) {
       return 'This is a chat endpoint. Use a FIM endpoint or Ollama /api/generate.';
     }
   } catch {
@@ -71,7 +78,8 @@ export function completionSecretKey(endpoint: string): string {
 }
 
 export function completionNeedsKey(endpoint: string): boolean {
-  return ['api.mistral.ai', 'codestral.mistral.ai', 'api.deepseek.com'].includes(new URL(endpoint).hostname);
+  return ['api.mistral.ai', 'codestral.mistral.ai', 'api.deepseek.com', 'api.siliconflow.cn']
+    .includes(new URL(endpoint).hostname);
 }
 
 export async function configureCompletion(secrets: vscode.SecretStorage): Promise<boolean> {
@@ -81,6 +89,7 @@ export async function configureCompletion(secrets: vscode.SecretStorage): Promis
     { label: 'Current configuration', description: current.model, protocol: current.protocol, endpoint: current.endpoint, model: current.model },
     { label: 'Mistral / Codestral', description: 'Native cloud FIM', protocol: 'fim' as const, endpoint: DEFAULT_ENDPOINT, model: 'codestral-latest' },
     { label: 'DeepSeek', description: 'Beta FIM completions', protocol: 'fim' as const, endpoint: 'https://api.deepseek.com/beta/completions', model: 'deepseek-flash' },
+    { label: 'SiliconFlow', description: 'Qwen Coder with SiliconFlow FIM', protocol: 'siliconflow-fim' as const, endpoint: 'https://api.siliconflow.cn/v1/chat/completions', model: 'Qwen/Qwen3-Coder-30B-A3B-Instruct' },
     { label: 'Ollama', description: 'Local FIM model', protocol: 'ollama' as const, endpoint: 'http://localhost:11434/api/generate', model: 'qwen2.5-coder:7b-base' },
     { label: 'Custom FIM service', description: 'Native prompt + suffix API', protocol: 'fim' as const, endpoint: current.endpoint, model: current.model },
   ], { title: 'Droid autocomplete · Service', ignoreFocusOut: true });
@@ -88,10 +97,11 @@ export async function configureCompletion(secrets: vscode.SecretStorage): Promis
   const endpoint = await vscode.window.showInputBox({
     title: 'Droid autocomplete · Endpoint',
     prompt: preset.protocol === 'ollama' ? 'Complete Ollama /api/generate URL.'
-      : 'Complete native FIM URL. Ordinary chat-completions APIs do not accept this protocol.',
+      : preset.protocol === 'siliconflow-fim' ? 'Complete SiliconFlow /v1/chat/completions URL. Uses its FIM prefix/suffix extension.'
+        : 'Complete native FIM URL. Ordinary chat-completions APIs do not accept this protocol.',
     value: preset.endpoint,
     ignoreFocusOut: true,
-    validateInput: validateCompletionEndpoint,
+    validateInput: (value) => validateCompletionEndpoint(value, preset.protocol),
   });
   if (endpoint === undefined) return false;
   const target = endpoint.trim();
