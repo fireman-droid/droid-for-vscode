@@ -50,7 +50,10 @@ ImportDefinitionsService、RootPathContextService、可选 StaticContextService�
 getSnippets 排序裁剪、模型模板。启用补全时立即建立浏览/编辑跟踪，不等首次 FIM 请求。
 原生定义和近期修改补充与 Kilo 片段合并，按来源优先级去重后再套用模型模板与总预算。`KiloContextIde` 是唯一 Host 文件/LSP/剪贴板适配边界，
 复用 CompletionFilePolicy 的同根、真实路径、Git/Droid ignore 与大小限制，优先未保存文本。
-LSP 查询跟随请求取消；文本和外部文件变化清理检索缓存，读取到的新关联文件加入现有 watcher。
+LSP 查询跟随请求取消，从首次查询起共享 150ms 等待预算；超时来源不阻塞已就绪的其他片段，
+记录 context.timeout，下一次请求可重试，其他错误仍向调用边界传播。导入缓存每次核对语法树中的
+完整导入语句与位置，只改主体时复用；外部定义、配置或忽略规则变化清理依赖缓存，迟到结果不能
+写回新一代缓存。读取到的新关联文件加入现有 watcher。
 解析器/语法资源来自包内 `dist/extension/autocomplete`；AST/Query 由请求资源作用域释放。
 静态上下文默认关闭，仅 TS 有上游查询，候选枚举最多 2,000 个；剪贴板需要用户级显式启用。
 
@@ -58,7 +61,7 @@ LSP 查询跟随请求取消；文本和外部文件变化清理检索缓存，�
 另为 Next Edit 收集实际浏览过的其他文件（最多 5 文件/400ms，按旧→新返回，每个片段围绕
 浏览位置保留最多 20 完整行）。关闭页签保留浏览位置，重新读取磁盘保存内容并检查文件策略。
 `CompletionPrompt` 控制 FIM 最终 UTF-16 字符预算。
-Codestral 使用上游多文件模板；Mercury FIM 将关联片段作为语言注释保留在 prefix 中，
+Codestral 在文件中间和末尾均使用多文件模板保留关联定义；Mercury FIM 将关联片段作为语言注释保留在 prefix 中，
 避免上游 Mercury 模板主动丢弃 snippets。`LanguageComments` 从语言扩展 JSONC 读取元数据。
 Notebook 拼接同语言相邻单元，并将当前光标映射至虚拟上下文；缓存包含所有相关单元版本和顺序。
 

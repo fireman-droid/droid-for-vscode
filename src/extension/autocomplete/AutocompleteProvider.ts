@@ -105,7 +105,8 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
     const settings = readCompletionSettings(vscode.window.activeTextEditor?.document.uri);
     if (settings.enabled) {
       // Track context before the first request, across FIM and Next Edit switches.
-      this.kiloContext ??= new KiloContextService(uri => this.context.trackContextFile(uri));
+      this.kiloContext ??= new KiloContextService(uri => this.context.trackContextFile(uri),
+        () => this.trace('context.timeout', { source: 'language-service' }));
       this.nextEdit ??= new NextEditSupport(this.context,
         () => { this.trace('history.failed', { code: 'context' }); this.report('Autocomplete edit history could not be read. Check Droid logs.'); },
         event => this.trace('next-edit.result', event));
@@ -290,7 +291,8 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
           editableRegionEndLine: editContext.editableRegionEndLine, latencyMs: this.latencyMs,
         }) ?? [];
       }
-      const contextText = await (this.kiloContext ??= new KiloContextService(uri => this.context.trackContextFile(uri))).build({
+      const contextText = await (this.kiloContext ??= new KiloContextService(uri => this.context.trackContextFile(uri),
+        () => this.trace('context.timeout', { source: 'language-service' }))).build({
         document, text: inputText, offset, settings, signal,
         filepath: document.uri.scheme === 'file' ? vscode.workspace.asRelativePath(document.uri, false) : 'untitled',
         snippets, comments,

@@ -257,3 +257,110 @@ describe('merged Kilo and editor context', () => {
     expect(disabled.prefix).not.toContain('allowedDefinition');
   });
 });
+
+describe('context lookup quality regressions', () => {
+  const definition = (doc: vscode.TextDocument) => [{ uri: doc.uri,
+    range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } } }];
+  function change(doc: vscode.TextDocument, text: string, line = 1) {
+    Object.assign(doc, { getText: () => text, version: doc.version + 1, lineCount: text.split('\n').length });
+    emit('text', { document: doc, contentChanges: [{
+      range: new vscode.Range(new vscode.Position(line, 0), new vscode.Position(line, 0)), text,
+    }] });
+  }
+
+  it.each(['codestral-latest', 'mercury-edit-2'])('preserves closed imported definitions at EOF for %s', async model => {
+    state.config.model = model;
+    const main = await document('main.ts', "import { User } from './types';\nconst user: User = ");
+    const types = await document('types.ts', 'export type User = { closedDefinition: string };', 'typescript', false);
+    state.definitions.mockResolvedValue(definition(types));
+    const prompt = await build(main);
+    expect(prompt.prefix).toContain('closedDefinition');
+    expect(prompt.prefix.endsWith('const user: User = ')).toBe(true);
+    expect(prompt.suffix).toBe('');
+    expect(prompt.relatedFiles).toBeGreaterThan(0);
+    expect(prompt.prefix.length).toBeLessThanOrEqual(12000);
+  });
+
+  it('bounds stalled lookups, retains ready context and retries missing definitions on the next request', async () => {
+    const imports = Array.from({ length: 12 }, (_, i) => `import { User${i} } from './types';`).join('\n');
+    const main = await document('main.ts', imports + '\nconst user: User0 = ');
+    const types = await document('types.ts', 'export type User0 = { recoveredDefinition: string };', 'typescript', false);
+    await document('ready.ts', 'export const readyContext = 7;');
+    state.definitions.mockImplementation(() => new Promise(() => {}));
+    const controller = new AbortController();
+    const expired = Symbol('expired');
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await Promise.race([build(main, main.getText().length, controller.signal),
+        new Promise<typeof expired>(resolve => { timer = setTimeout(() => resolve(expired), 800); }),
+      ]);
+      expect(result, 'optional LSP context must not block completion indefinitely').not.toBe(expired);
+      if (result === expired) return;
+      expect(result.prefix).toContain('readyContext');
+      expect(result.prefix.endsWith('const user: User0 = ')).toBe(true);
+      // One deadline covers all imports; twelve unavailable definitions do not
+      // result in twelve serial timeout waits.
+      expect(state.definitions).toHaveBeenCalledTimes(1);
+    } finally { clearTimeout(timer); controller.abort(); }
+    state.definitions.mockResolvedValue(definition(types));
+    expect((await build(main)).prefix).toContain('recoveredDefinition');
+  });
+
+  it('reuses unchanged imports after a body edit but refreshes a changed import path', async () => {
+    const original = "import { User } from './types';\nconst user: User = ";
+    const main = await document('main.ts', original);
+    const types = await document('types.ts', 'export type User = { originalDefinition: string };', 'typescript', false);
+    const other = await document('other.ts', 'export type User = { changedDefinition: number };', 'typescript', false);
+    state.definitions.mockResolvedValue(definition(types));
+    expect((await build(main)).prefix).toContain('originalDefinition');
+    state.definitions.mockClear();
+    change(main, original + 'u');
+    expect((await build(main)).prefix).toContain('originalDefinition');
+    expect(state.definitions).not.toHaveBeenCalled();
+    state.definitions.mockResolvedValue(definition(other));
+    change(main, original.replace('./types', './other'), 0);
+    const changed = await build(main);
+    expect(state.definitions).toHaveBeenCalled();
+    expect(changed.prefix).toContain('changedDefinition');
+    expect(changed.prefix).not.toContain('originalDefinition');
+  });
+
+  it('discovers an import added after a previously empty import list', async () => {
+    const main = await document('main.ts', 'const value = 1;\n');
+    await build(main);
+    const types = await document('types.ts', 'export type User = { addedDefinition: string };', 'typescript', false);
+    state.definitions.mockResolvedValue(definition(types));
+    change(main, main.getText() + "import { User } from './types';\nconst user: User = ");
+    expect((await build(main)).prefix).toContain('addedDefinition');
+  });
+
+  it('refreshes cached imported contents when another file changes', async () => {
+    const main = await document('main.ts', "import { User } from './types';\nconst user: User = ");
+    const types = await document('types.ts', 'export type User = { beforeEdit: string };');
+    state.definitions.mockResolvedValue(definition(types));
+    expect((await build(main)).prefix).toContain('beforeEdit');
+    change(types, 'export type User = { afterEdit: number };', 0);
+    const prompt = await build(main);
+    expect(prompt.prefix).toContain('afterEdit');
+    expect(prompt.prefix).not.toContain('beforeEdit');
+  });
+
+  it('does not let a late lookup restore a binding invalidated by an import edit', async () => {
+    const original = "import { User } from './types';\nconst user: User = ";
+    const main = await document('main.ts', original);
+    const oldType = await document('types.ts', 'export type User = { staleDefinition: string };', 'typescript', false);
+    const newType = await document('other.ts', 'export type User = { latestDefinition: number };', 'typescript', false);
+    let entered!: () => void, finish!: (value: unknown) => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    state.definitions.mockImplementationOnce(() => { entered(); return new Promise(resolve => { finish = resolve; }); });
+    const pending = build(main);
+    await started;
+    state.definitions.mockResolvedValue(definition(newType));
+    change(main, original.replace('./types', './other'), 0);
+    expect((await build(main)).prefix).toContain('latestDefinition');
+    finish(definition(oldType)); await pending;
+    const current = await build(main);
+    expect(current.prefix).toContain('latestDefinition');
+    expect(current.prefix).not.toContain('staleDefinition');
+  });
+});

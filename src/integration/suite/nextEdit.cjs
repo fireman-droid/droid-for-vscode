@@ -14,6 +14,7 @@ async function runNextEdit() {
       let raw = ''; for await (const chunk of request) raw += chunk;
       const payload = JSON.parse(raw);
       assert.equal(payload.stream, false);
+      assert.equal(payload.max_tokens, 512, 'Use the production default output budget.');
       assert.ok(payload.messages[0].content.includes('<|!@#IS_NEXT_EDIT!@#|>'));
       lastPrompt = payload.messages[0].content;
       const current = scenario; assert.ok(current); calls++;

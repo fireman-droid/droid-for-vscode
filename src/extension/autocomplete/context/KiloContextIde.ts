@@ -6,26 +6,40 @@ import type { Range, Location, RangeInFile, SignatureHelp } from '../kilo/contin
 import { CompletionFilePolicy, inside, readContextFile } from './CompletionFilePolicy';
 import { readCompletionSettings } from '../settings';
 import { notebookUri } from '../kilo/continuedev/core/autocomplete/notebook';
+import { CONTEXT_LOOKUP_BUDGET_MS, ContextLookupTimeout } from '../kilo/continuedev/core/util/contextLookupTimeout';
+
+interface LookupScope { signal: AbortSignal; deadline?: number; timedOut?: boolean }
 
 /** Host adapter for Kilo/Continue context reads; every file passes Droid's existing policy. */
 export class KiloContextIde extends VsCodeIde implements vscode.Disposable {
-  constructor(private readonly onRead: (uri: string) => void = () => {}) { super(); }
-  private readonly request = new AsyncLocalStorage<AbortSignal>();
-  run<T>(signal: AbortSignal, action: () => Promise<T>): Promise<T> { return this.request.run(signal, action); }
-  private async wait<T>(work: Promise<T>): Promise<T> {
-    const signal = this.request.getStore() ?? this.lifetime.signal;
+  constructor(private readonly onRead: (uri: string) => void = () => {},
+    private readonly onTimeout: () => void = () => {}) { super(); }
+  private readonly request = new AsyncLocalStorage<LookupScope>();
+  run<T>(signal: AbortSignal, action: () => Promise<T>): Promise<T> { return this.request.run({ signal }, action); }
+  private async wait<T>(work: () => Promise<T>): Promise<T> {
+    const scope = this.request.getStore() ?? { signal: this.lifetime.signal };
+    const signal = AbortSignal.any([scope.signal, this.lifetime.signal]);
     signal.throwIfAborted();
+    scope.deadline ??= Date.now() + CONTEXT_LOOKUP_BUDGET_MS;
+    const remaining = scope.deadline - Date.now();
+    const timeout = () => {
+      if (!scope.timedOut) { scope.timedOut = true; this.onTimeout(); }
+      return new ContextLookupTimeout();
+    };
+    if (remaining <= 0) throw timeout();
     return new Promise<T>((resolve, reject) => {
       const abort = () => { cleanup(); reject(signal.reason); };
-      const cleanup = () => signal.removeEventListener('abort', abort);
+      const timer = setTimeout(() => { cleanup(); reject(timeout()); }, remaining);
+      const cleanup = () => { clearTimeout(timer); signal.removeEventListener('abort', abort); };
       signal.addEventListener('abort', abort, { once: true });
-      work.then(value => { cleanup(); resolve(value); }, error => { cleanup(); reject(error); });
+      Promise.resolve().then(() => { signal.throwIfAborted(); return work(); })
+        .then(value => { cleanup(); resolve(value); }, error => { cleanup(); reject(error); });
     });
   }
   private readonly policy = new CompletionFilePolicy();
   private readonly lifetime = new AbortController();
   async allowed(filepath: string): Promise<boolean> {
-    this.request.getStore()?.throwIfAborted();
+    this.request.getStore()?.signal.throwIfAborted();
     if (this.lifetime.signal.aborted || !vscode.workspace.isTrusted) return false;
     const active = vscode.window.activeTextEditor?.document;
     if (!active) return false;
@@ -73,7 +87,7 @@ export class KiloContextIde extends VsCodeIde implements vscode.Disposable {
   }
   private async definitions(location: Location, resolve: () => Promise<RangeInFile[]>): Promise<RangeInFile[]> {
     if (!await this.allowed(location.filepath)) return [];
-    const result = await this.wait(resolve());
+    const result = await this.wait(resolve);
     const access = await Promise.all(result.map(item => this.allowed(item.filepath)));
     return result.filter((_, index) => access[index]);
   }
@@ -84,7 +98,7 @@ export class KiloContextIde extends VsCodeIde implements vscode.Disposable {
     return this.definitions(location, () => super.gotoTypeDefinition(location));
   }
   override async getSignatureHelp(location: Location): Promise<SignatureHelp | null> {
-    return await this.allowed(location.filepath) ? this.wait(super.getSignatureHelp(location)) : null;
+    return await this.allowed(location.filepath) ? this.wait(() => super.getSignatureHelp(location)) : null;
   }
   override async getOpenFiles(): Promise<string[]> {
     const files = vscode.workspace.textDocuments.filter(d => d.uri.scheme === 'file').map(d => d.uri.toString());

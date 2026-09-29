@@ -88,9 +88,10 @@ describe('Mercury Next Edit boundary',()=>{
       message:{content:'```ts\nconst name = 1;\nconsole.log(name);\n```'}}]}),{headers:{'content-type':'application/json'}}));
     vi.stubGlobal('fetch',fetchMock);
     const req={endpoint:'https://api.inceptionlabs.ai/v1/edit/completions',apiKey:'synthetic',model:'mercury-edit-2',
-      maxTokens:512,signal:new AbortController().signal,context,maxContextCharacters:5000};
+      maxTokens:256,signal:new AbortController().signal,context,maxContextCharacters:5000};
     expect(await requestNextEdit(req)).toContain('const name');
     const body=JSON.parse((fetchMock.mock.calls[0] as unknown as [string,RequestInit])[1].body as string);
+    expect(body.max_tokens).toBe(512);
     expect(body.messages).toHaveLength(1);expect(body.messages[0].role).toBe('user');
     expect(body.messages[0].content).toContain('<|code_to_edit|>');expect(body.stream).toBe(false);
     fetchMock.mockImplementationOnce(async()=>new Response(JSON.stringify({choices:[{finish_reason:'length',

@@ -25,8 +25,8 @@ export class KiloContextService implements vscode.Disposable {
   private readonly visited: RecentlyVisitedRangesService;
   private readonly edited: RecentlyEditedTracker;
   private readonly subscriptions: vscode.Disposable[];
-  constructor(onRead?: (uri: string) => void) {
-    this.ide = new KiloContextIde(onRead);
+  constructor(onRead?: (uri: string) => void, onTimeout?: () => void) {
+    this.ide = new KiloContextIde(onRead, onTimeout);
     this.retrieval = new ContextRetrievalService(this.ide);
     this.visited = new RecentlyVisitedRangesService(this.ide);
     this.edited = new RecentlyEditedTracker(this.ide);
@@ -36,11 +36,13 @@ export class KiloContextService implements vscode.Disposable {
       vscode.workspace.onDidOpenTextDocument(remember),
       vscode.window.onDidChangeActiveTextEditor(editor => { if (editor) remember(editor.document); }),
       vscode.workspace.onDidCloseTextDocument(doc => openedFilesLruCache.delete(doc.uri.toString())),
-      vscode.workspace.onDidChangeTextDocument(event => { if (event.contentChanges.length) this.invalidate(); }),
+      vscode.workspace.onDidChangeTextDocument(event => {
+        if (event.contentChanges.length) this.invalidate(event.document.uri.toString());
+      }),
     ];
   }
-  invalidate(): void {
-    invalidateLspCaches(); this.ide.invalidate(); this.retrieval.dispose(); this.retrieval = new ContextRetrievalService(this.ide);
+  invalidate(changedFile?: string): void {
+    invalidateLspCaches(); this.ide.invalidate(); this.retrieval.invalidate(changedFile);
   }
   async build(input: { document: vscode.TextDocument; text: string; offset: number; filepath: string;
     settings: CompletionSettings; signal: AbortSignal; snippets: readonly ContextSnippet[]; comments?: LanguageComments }) {
@@ -83,11 +85,11 @@ export class KiloContextService implements vscode.Disposable {
       const kiloModel = /codestral/i.test(settings.model);
       if (kiloModel) {
         const template = getTemplateForModel(settings.model);
-        // Kilo applies the provider's multifile template when there is suffix context.
+        // Reference definitions are also required when completing at EOF.
         const usable = [...snippets];
         const render = (budget: number) => {
           const main = buildCompletionContext(helper.prunedPrefix + helper.prunedSuffix, helper.prunedPrefix.length, budget);
-          const [prefix, suffix] = template.compilePrefixSuffix && helper.prunedSuffix
+          const [prefix, suffix] = template.compilePrefixSuffix
             ? template.compilePrefixSuffix(main.prefix, main.suffix, filepath, '', usable, helper.workspaceUris)
             : [main.prefix, main.suffix];
           return { prefix, suffix };
@@ -99,7 +101,7 @@ export class KiloContextService implements vscode.Disposable {
           const candidate = Math.ceil((low + high) / 2), p = render(candidate);
           if (p.prefix.length + p.suffix.length <= budget) low = candidate; else high = candidate - 1;
         }
-        return { ...render(low), relatedFiles: helper.prunedSuffix ? usable.length : 0 };
+        return { ...render(low), relatedFiles: usable.length };
       }
       const contextSnippets: ContextSnippet[] = snippets.map(s => 'filepath' in s
         ? { uri: s.filepath, filepath: this.ide.relative(s.filepath), content: s.content, source: 'definition' }

@@ -161,6 +161,7 @@ async function run() {
     }
     results.push(...await require('./autocompleteNotebook.cjs').runNotebook());
     results.push(...await require('./nextEdit.cjs').runNextEdit());
+    results.push(...await require('./autocompleteContext.cjs').runContext());
   } catch (error) {
     results.push({ name: 'packaged extension setup', passed: false, error: error.message });
   } finally {

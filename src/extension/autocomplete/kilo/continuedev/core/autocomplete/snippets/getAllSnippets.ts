@@ -3,6 +3,7 @@ import { IDE } from "../../index"
 import { ContextRetrievalService } from "../context/ContextRetrievalService"
 import { HelperVars } from "../util/HelperVars"
 import { openedFilesLruCache } from "../util/openedFilesLruCache"
+import { ContextLookupTimeout } from "../../util/contextLookupTimeout"
 import {
   AutocompleteClipboardSnippet,
   AutocompleteCodeSnippet,
@@ -92,9 +93,9 @@ export const getAllSnippetsWithoutRace = async ({
       : [],
   ])
 
-  const error = results.find(result => result.status === 'rejected');
+  const error = results.find(result => result.status === 'rejected' && !(result.reason instanceof ContextLookupTimeout));
   if (error?.status === 'rejected') throw error.reason;
-  const [root, imports, clipboard, opened, staticSnippet] = results.map(result => (result as PromiseFulfilledResult<unknown>).value) as
+  const [root, imports, clipboard, opened, staticSnippet] = results.map(result => result.status === 'fulfilled' ? result.value : []) as
     [AutocompleteCodeSnippet[], AutocompleteCodeSnippet[], AutocompleteClipboardSnippet[], AutocompleteCodeSnippet[], AutocompleteStaticSnippet[]];
   return {
     rootPathSnippets: root,

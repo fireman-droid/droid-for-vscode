@@ -40,9 +40,9 @@ exports.activate = context => context.subscriptions.push(vscode.workspace.regist
 }));`);
 const isCursor = path.basename(executable).toLowerCase() === 'cursor.exe';
 const workspace = path.join(root, 'workspace');
-if (isCursor) mkdirSync(workspace);
+mkdirSync(workspace);
 const args = [
-  '--new-window', ...(isCursor ? [workspace] : ['--disable-extensions']),
+  '--new-window', workspace, ...(isCursor ? [] : ['--disable-extensions']),
   '--disable-updates', '--skip-welcome',
   '--skip-release-notes', '--no-cached-data', '--disable-workspace-trust',
   '--disable-gpu-sandbox', '--no-sandbox',

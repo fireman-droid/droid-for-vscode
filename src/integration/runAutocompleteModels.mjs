@@ -17,12 +17,12 @@ const api=await import('file:///'+path.join(output,'production.cjs').replaceAll(
 const samples=JSON.parse(readFileSync(path.join(root,'src/integration/fixtures',mode!=='next-edit'?'autocompleteSamples.json':'nextEditSamples.json'),'utf8'));
 const records=[];
 const model=mode==='fim'?'Qwen/Qwen3-Coder-30B-A3B-Instruct':'mercury-edit-2';
-let status;
+let status, outputTokenLimit;
 const original=globalThis.fetch;
-globalThis.fetch=async(...args)=>{const response=await original(...args);status=response.status;return response;};
+globalThis.fetch=async(...args)=>{outputTokenLimit=JSON.parse(args[1].body).max_tokens;const response=await original(...args);status=response.status;return response;};
 // One first attempt per scenario; there are no automatic retries.
 for(const sample of samples.filter(sample=>!withContext||sample.id.endsWith('cross-file'))){
-  const started=Date.now();status=undefined;
+  const started=Date.now();status=undefined;outputTokenLimit=undefined;
   const record={id:sample.id,language:sample.language};
   try {
     if(mode!=='next-edit'){
@@ -41,12 +41,12 @@ for(const sample of samples.filter(sample=>!withContext||sample.id.endsWith('cro
       if(record.formatAccepted)record.code=sample.prefix+record.insertion+sample.suffix;
     } else {
       const lines=sample.after.slice(0,sample.cursorOffset).split('\n');
-      record.code=await api.requestNextEdit({context:{currentFilePath:sample.entryFilepath,currentFileContent:sample.after,cursorLine:lines.length-1,cursorCharacter:lines.at(-1).length,editableRegionStartLine:0,editableRegionEndLine:sample.after.split('\n').length-1,recentlyViewedSnippets:[],editDiffHistory:[createPatch(sample.entryFilepath,sample.before,sample.after,undefined,undefined,{context:1})]},maxContextCharacters:12000,endpoint:'https://api.inceptionlabs.ai/v1/edit/completions',model,apiKey:key,maxTokens:1024,signal:new AbortController().signal});
+      record.code=await api.requestNextEdit({context:{currentFilePath:sample.entryFilepath,currentFileContent:sample.after,cursorLine:lines.length-1,cursorCharacter:lines.at(-1).length,editableRegionStartLine:0,editableRegionEndLine:sample.after.split('\n').length-1,recentlyViewedSnippets:[],editDiffHistory:[createPatch(sample.entryFilepath,sample.before,sample.after,undefined,undefined,{context:1})]},maxContextCharacters:12000,endpoint:'https://api.inceptionlabs.ai/v1/edit/completions',model,apiKey:key,maxTokens:256,signal:new AbortController().signal});
       record.formatAccepted=true;
       record.exactExpected=record.code===sample.expected;
     }
   } catch(error) {record.error={name:error.name,code:error.code,status:error.status,message:error.message.replaceAll(key,'[redacted]')};}
-  Object.assign(record,{status,elapsedMs:Date.now()-started});records.push(record);
+  Object.assign(record,{status,outputTokenLimit,elapsedMs:Date.now()-started});records.push(record);
   writeFileSync(path.join(output,'results.json'),JSON.stringify({model,firstAttemptsOnly:true,records},null,2));
   console.log(JSON.stringify({id:record.id,status,elapsedMs:record.elapsedMs,formatAccepted:record.formatAccepted,exactExpected:record.exactExpected,error:record.error}));
   if(status===401 || status===402 || status===403)break;

@@ -7,6 +7,7 @@ import { ImportDefinitionsService } from "./ImportDefinitionsService"
 import { getSymbolsForSnippet } from "./ranking"
 import { RootPathContextService } from "./root-path-context/RootPathContextService"
 import { StaticContextService } from "./static-context/StaticContextService"
+import { ContextLookupTimeout } from "../../util/contextLookupTimeout"
 
 export class ContextRetrievalService {
   private importDefinitionsService: ImportDefinitionsService
@@ -69,6 +70,12 @@ export class ContextRetrievalService {
     this.importDefinitionsService.dispose()
   }
 
+  public invalidate(changedFile?: string): void {
+    this.importDefinitionsService.invalidate(changedFile)
+    this.rootPathContextService = new RootPathContextService(this.importDefinitionsService, this.ide)
+    this.staticContextService = new StaticContextService(this.ide)
+  }
+
   /**
    * Initialize the import definitions cache for a file.
    * This is normally done automatically when the active text editor changes,
@@ -76,9 +83,9 @@ export class ContextRetrievalService {
    */
   public async initializeForFile(filepath: string): Promise<void> {
     try {
-      await this.importDefinitionsService.cache.initKey(filepath)
+      await this.importDefinitionsService.initializeForFile(filepath)
     } catch (e) {
-      console.warn(`Failed to initialize import definitions cache for ${filepath}:`, e)
+      if (!(e instanceof ContextLookupTimeout)) throw e
     }
   }
 }
