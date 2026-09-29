@@ -5,6 +5,7 @@ import { FactoryDroidRuntime } from '../runtime/FactoryDroidRuntime';
 import { createBtwSidecar } from '../runtime/btw/BtwSidecar';
 import { createDaemonBtwSidecar } from '../runtime/btw/DaemonBtwSidecar';
 import { FactorySessionCatalog } from '../runtime/catalog/FactorySessionCatalog';
+import { SessionHistoryReader } from '../runtime/history/SessionHistoryReader';
 import { SessionCatalogReader } from '../runtime/catalog/SessionCatalogReader';
 import { FactorySessionHistoryLoader } from '../runtime/history/FactorySessionHistoryLoader';
 import { createDaemonFirstHistoryLoader } from '../runtime/history/DaemonSessionHistoryLoader';
@@ -236,7 +237,10 @@ export function activate(context: vscode.ExtensionContext): void {
     turnSnapshots,
     watchWorkspaceChanges,
   );
+  const historyReader = new SessionHistoryReader(context.asAbsolutePath('dist/extension/sessionHistoryWorker.cjs'));
+  context.subscriptions.push(historyReader);
   const historyLoader = createDaemonFirstHistoryLoader({
+    readPersistedHistory: historyReader.read,
     getDroid: daemonSidecar.droid,
     isDaemonActive: () => daemonSessionsActive(),
     fallback: new FactorySessionHistoryLoader({ diagnostics }),

@@ -83,6 +83,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
   const transition = useConversationTransition({
     sequence: state.sequence,
     getSequence,
+    historyAvailable: state.historyStatus !== 'unavailable' && state.transcript.length > 0,
     sessionId: state.sessionId,
     connectionStatus: state.connection.status,
   });
@@ -193,7 +194,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
         {host.showHandshakeNotice && transition.overlay === null ? <p role="status" className="text-xs text-muted-foreground">Waiting for the extension. Session state refreshes automatically.</p> : null}
         {notice ? <TransientNotice key={notice.sequence} diagnostic={notice} /> : null}
         {statusMessage && !running && !ideReconnecting ? <p role="status" className="text-xs text-muted-foreground">{statusMessage}</p> : null}
-        <SessionRecovery state={state} blocked={transition.blocking} onReconnect={sessions.handleRetry} port={port} />
+        <SessionRecovery state={state} blocked={transition.blocking && transition.overlay !== null} onReconnect={sessions.handleRetry} port={port} />
         <div className="v2-composer-dock">
         <QueueBar key={state.conversationId ?? 'none'} queue={state.queue} flow={composer} />
         <ComposerChanges store={store} port={port} blocked={operationsBlocked} onStop={() => void composer.callbacks.onCancel()} />

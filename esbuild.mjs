@@ -63,6 +63,14 @@ const catalogWorkerResult = await build({
   logLevel: 'info',
 });
 await notices.add(catalogWorkerResult.metafile);
+const historyWorkerResult = await build({
+  entryPoints: ['src/runtime/history/sessionHistoryWorker.ts'],
+  outfile: 'dist/extension/sessionHistoryWorker.cjs',
+  bundle: true, external: optionalWsAddons, packages: 'bundle', platform: 'node',
+  format: 'cjs', target: 'node20', minify: true, keepNames: true, sourcemap: false,
+  legalComments: 'eof', metafile: true, logLevel: 'info',
+});
+await notices.add(historyWorkerResult.metafile);
 await notices.write('dist/extension/THIRD_PARTY_LICENSES.txt');
 appendFileSync('dist/extension/THIRD_PARTY_LICENSES.txt', '\nKilo Code (vendored autocomplete, 7d977bce994af36f0edf752cb53e3aefc7aeb214)\n' + readFileSync('third-party/KILO-LICENSE.txt', 'utf8'));
 
@@ -77,6 +85,9 @@ assertExpectedExternals(extensionResult.metafile, {
     path === 'vscode' ||
     isBuiltin(path) ||
     optionalWsAddons.includes(path),
+});
+assertExpectedExternals(historyWorkerResult.metafile, {
+  required: new Set(), allowed: (path) => isBuiltin(path) || optionalWsAddons.includes(path),
 });
 assertExpectedExternals(catalogWorkerResult.metafile, {
   required: new Set(),

@@ -402,8 +402,11 @@ SDK 负责 transport/RPC/协议转换；项目只在以下已知边界补充产�
   在该 daemon 生命周期内一起冻结，登记移除才清文件。依赖 CLI 私有行为，升级必须复核。
 - `persistedSessionMessages.ts` 只读已核实的 version-2 JSONL，以固定边界/文件身份
   验证并复用 SDK 转换。未知格式/不稳定读取回退 daemon 分页/Process，不改原文件。
-  `asyncHistoryProjection.ts` 让出长投影执行；目录 `SessionCatalogReader` 复用 Worker，
-  不增结果缓存。巨大单消息/整体 JSON 解析仍有同步成本，不能承诺固定延迟上界。
+  `asyncHistoryProjection.ts` 让出长投影执行；持久历史 `SessionHistoryReader` 在复用 Worker 中
+  读取、解析、修复并投影，只回传受限展示数据与分段耗时；目录 `SessionCatalogReader` 复用 Worker，
+  不增结果缓存。持久日志中的同步工作在历史 Worker 执行；不支持格式的 API 回退仍有
+  单消息解析成本，不能承诺固定延迟上界。历史先以只读状态展示，连接握手与恢复
+  检查点完成后才 ready；页面等待遮罩只覆盖尚未收到目标历史的阶段。
 - Context meter 的系统提示调整取自已核对 CLI，SDK 未提供同等公共常量；
   最近调用用量与字符估算分开，压缩只有明确 SDK 阶段才显示，自动压缩仍属于 Droid。
 - Rewind 已写文件而 attach 失败时只重试接管后继，避免二次恢复；待接管标记仅在
@@ -425,7 +428,7 @@ SDK 负责 transport/RPC/协议转换；项目只在以下已知边界补充产�
   取消不冒充已发送写入的回滚，不直接重写 settings.json。
 - 公共 UI 包只接受 props、回调和插槽；ESM/声明构建拒绝父仓库、Node、VS Code 与
   Factory 依赖。宿主注入剪贴板、Mermaid 与 Auto 主题；纯展示层不拥有业务状态机。
-- `esbuild.mjs` 构建 Host/目录 Worker，调用 `buildWebviewV2.mjs --production` 生成
+- `esbuild.mjs` 构建 Host/目录及历史 Worker，调用 `buildWebviewV2.mjs --production` 生成
   Chat、Models、Mission、Viewer、Review 五个页面到 `dist/webview/`。构建拒绝 UI 打入 SDK/Host/Runtime/assistant-ui，
   保留脚本 nonce、零网络、延迟 Mermaid；Markdown Worker 仅增加 `worker-src blob:`。
 - `packages/chat-ui/scripts/thirdPartyNotices.mjs` 按实际构建依赖收集许可证，

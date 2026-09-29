@@ -11,6 +11,7 @@ interface TransitionState {
   readonly sequence: number;
   readonly getSequence?: () => number;
   readonly sessionId: string | null;
+  readonly historyAvailable?: boolean;
   readonly connectionStatus: 'idle' | 'connecting' | 'connected' | 'unavailable';
 }
 
@@ -32,6 +33,7 @@ export function useConversationTransition({
   getSequence,
   sessionId,
   connectionStatus,
+  historyAvailable = false,
 }: TransitionState): {
   readonly beginSwitch: (targetSessionId: string) => void;
   readonly observeHostMessage: (message: StoreHostMessage) => void;
@@ -176,13 +178,18 @@ export function useConversationTransition({
     [finish],
   );
 
-  const fullOverlay =
-    phase === 'restoring' || phase === 'switching' || phase === 'leaving';
+  const hasSnapshot = firstSnapshotSequence !== null && sequence >= firstSnapshotSequence;
+  const pending = pendingSwitchRef.current;
+  const readableHistory = historyAvailable && hasSnapshot && sessionId !== null &&
+    (phase !== 'switching' || (pending !== null && pending.targetSessionId === sessionId &&
+      pending.snapshotSequence !== null && sequence >= pending.snapshotSequence));
+  const fullOverlay = !readableHistory &&
+    (phase === 'restoring' || phase === 'switching' || phase === 'leaving');
   return {
     beginSwitch,
     observeHostMessage,
     phase,
-    hasSnapshot: firstSnapshotSequence !== null && sequence >= firstSnapshotSequence,
+    hasSnapshot,
     blocking: phase !== 'idle',
     overlay: fullOverlay ? <ConversationTransitionOverlay phase={phase} /> : null,
   };

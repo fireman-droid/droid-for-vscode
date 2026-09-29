@@ -9,6 +9,7 @@ import {
 } from '../bridge/vscode';
 import type { ChatPort } from './chatIntent';
 import { subscribeHostMessages } from './hostMessageSource';
+import { observeChatLongTasks } from './observeChatLongTasks';
 import { useStartupSync } from './useStartupSync';
 import { acknowledgeAppliedState } from './stateReceipt';
 import {
@@ -110,6 +111,7 @@ export function useHostMessageFlow(
       vscode.postMessage({ type: 'webview.diagnostic', kind: 'error',
         detail: JSON.stringify({ source: 'bridge.rejected', ...message }) });
     });
+    const stopObservingLongTasks = observeChatLongTasks(vscode);
     announceBooted(vscode);
     announceReady(vscode);
     const onVisibilityChange = (): void => {
@@ -118,6 +120,7 @@ export function useHostMessageFlow(
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       unsubscribe();
+      stopObservingLongTasks();
       document.removeEventListener('visibilitychange', onVisibilityChange);
       flush();
     };

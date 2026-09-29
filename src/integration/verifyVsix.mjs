@@ -19,6 +19,7 @@ const expectedEntries = [
   'extension/third-party/TREE-SITTER-GRAMMARS-LICENSES.txt',
   'extension/dist/extension/extension.cjs',
   'extension/dist/extension/sessionCatalogWorker.cjs',
+  'extension/dist/extension/sessionHistoryWorker.cjs',
   // Notices for the dependencies bundled into the extension host entry.
   'extension/dist/extension/THIRD_PARTY_LICENSES.txt',
   // Lazily injected mermaid bundle; ships alongside webview.js but is

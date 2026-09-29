@@ -24,7 +24,8 @@ import {
   type SubagentInvocationRecord,
 } from '../subagents/subagentSummary';
 import { projectSessionMessagesAsync } from './asyncHistoryProjection';
-import { locatePersistedSessionFile, readPersistedSessionMessages } from './persistedSessionMessages';
+import { locatePersistedSessionFile } from './persistedSessionMessages';
+import { MAX_RAW_MESSAGE_WINDOW, orderMessagesChronologically, readPersistedHistory, type PersistedHistoryReader } from './persistedHistory';
 import { readMissionRoleFromTags } from './sessionMission';
 import type {
   SessionHistoryLoader,
@@ -63,16 +64,11 @@ export interface DaemonFirstHistoryLoaderOptions {
   readonly diagnostics?: RuntimeDiagnosticSink;
   readonly sessionsDirectory?: string;
   readonly taskInvocationsFile?: string;
+  readonly readPersistedHistory?: PersistedHistoryReader;
 }
 
 /** getMessages schema cap (same daemon-side zod bound as list). */
 const MESSAGES_PAGE_LIMIT = 100;
-/**
- * Newest raw messages kept for projection. One more than the
- * projector's MAX_RAW_MESSAGES_TO_PROJECT so an overlong session
- * still projects as `partial`.
- */
-const MAX_RAW_MESSAGE_WINDOW = 10_001;
 /** Extra bounded headroom so long histories normalize in batches. */
 const RAW_MESSAGE_TRIM_HEADROOM = MESSAGES_PAGE_LIMIT * 10;
 /** Hard page cap against a runaway cursor loop. */
@@ -106,21 +102,15 @@ export function createDaemonFirstHistoryLoader(
     }
     const startedAt = performance.now();
     try {
-      let persisted = await readPersistedSessionMessages(sessionsDirectory, request.sessionId);
-      const persistedFile = persisted?.file;
-      let fetched = persisted === null
-        ? await fetchSessionMessages(await options.getDroid(), request.sessionId)
-        : { messages: orderMessagesChronologically(persisted.messages).slice(-MAX_RAW_MESSAGE_WINDOW), pages: 0 };
-      const project = (messages: unknown[]) => projectSessionMessagesAsync(messages, {
-        workspaceRoot: request.cwd,
-        sourceSessionId: request.sessionId,
+      const persisted = await (options.readPersistedHistory ?? readPersistedHistory)({
+        ...request, sessionsDirectory,
       });
-      let projected = await project(fetched.messages);
-      if (projected.status !== 'available' && persisted !== null) {
-        persisted = null;
-        fetched = await fetchSessionMessages(await options.getDroid(), request.sessionId);
-        projected = await project(fetched.messages);
-      }
+      const persistedFile = persisted?.file;
+      const fetched = persisted === null
+        ? await fetchSessionMessages(await options.getDroid(), request.sessionId) : null;
+      const projected = persisted?.projected ?? await projectSessionMessagesAsync(fetched!.messages, {
+        workspaceRoot: request.cwd, sourceSessionId: request.sessionId,
+      });
       if (projected.status !== 'available') {
         throw new Error('daemon message projection unavailable');
       }
@@ -137,10 +127,11 @@ export function createDaemonFirstHistoryLoader(
           durationMs: Math.round(performance.now() - startedAt),
           outcome: 'ok',
           sessionId: request.sessionId,
-          messages: fetched.messages.length,
-          pages: fetched.pages,
+          messages: persisted?.messages ?? fetched!.messages.length,
+          pages: fetched?.pages ?? 0,
           source: persisted === null ? 'daemon-pages' : 'persisted-snapshot',
-          ...(persisted === null ? {} : { bytes: persisted.bytes }),
+          ...(persisted === null ? {} : { bytes: persisted.bytes, readMs: persisted.readMs, projectMs: persisted.projectMs,
+            isolated: options.readPersistedHistory !== undefined }),
           items: projected.state.transcript.length,
         },
       });
@@ -252,19 +243,6 @@ async function fetchSessionMessages(
     messages: orderMessagesChronologically(window).slice(-MAX_RAW_MESSAGE_WINDOW),
     pages,
   };
-}
-
-function orderMessagesChronologically(
-  messages: readonly SessionMessage[],
-): SessionMessage[] {
-  return messages
-    .map((message, fetchedIndex) => ({ message, fetchedIndex }))
-    .sort(
-      (left, right) =>
-        left.message.createdAt - right.message.createdAt ||
-        left.fetchedIndex - right.fetchedIndex,
-    )
-    .map(({ message }) => message);
 }
 
 function readMessageId(value: unknown): string | null {
