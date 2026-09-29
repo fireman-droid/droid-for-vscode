@@ -102,6 +102,14 @@
       {
         "command": "droidvisx.autocomplete.trigger",
         "title": "Droid: Request Code Completion"
+      },
+      {
+        "command": "droidvisx.autocomplete.nextEdit.acceptOrJump",
+        "title": "Droid: Next Edit - Accept or Jump"
+      },
+      {
+        "command": "droidvisx.autocomplete.nextEdit.dismiss",
+        "title": "Droid: Next Edit - Dismiss"
       }
     ],
     "viewsContainers": {
@@ -169,7 +177,7 @@
           "type": "string",
           "default": "https://api.mistral.ai/v1/fim/completions",
           "scope": "application",
-          "description": "Complete completion URL: native FIM, Ollama /api/generate, or SiliconFlow FIM over /v1/chat/completions. Use Droid: Configure Autocomplete for service presets and SecretStorage keys."
+          "description": "Complete FIM, SiliconFlow, Ollama or Mercury Next Edit endpoint URL. Service presets store API keys in SecretStorage."
         },
         "droidvisx.autocomplete.model": {
           "type": "string",
@@ -220,25 +228,45 @@
           "enum": [
             "fim",
             "ollama",
-            "siliconflow-fim"
+            "siliconflow-fim",
+            "mercury-edit"
           ],
           "enumDescriptions": [
             "Native FIM endpoint using prompt and suffix with an SSE response.",
             "Ollama /api/generate using prompt and suffix with an NDJSON response.",
-            "SiliconFlow prefix/suffix FIM extension on /v1/chat/completions with an SSE response."
+            "SiliconFlow prefix/suffix FIM extension on /v1/chat/completions with an SSE response.",
+            "Mercury Next Edit: predict replacements using editable regions and recent edit history."
           ],
           "default": "fim",
           "scope": "application",
-          "description": "Completion wire protocol: native FIM, Ollama generate, or SiliconFlow FIM. The selected model must support that service's prefix/suffix completion API; an ordinary chat API is insufficient."
+          "description": "Wire protocol for the configured model: ordinary FIM or Mercury Next Edit. Use the service preset to configure a compatible endpoint and model."
         },
         "droidvisx.autocomplete.relatedFiles": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
           "description": "Include bounded snippets from definitions, recent edits and open files in the same workspace folder. Respects .gitignore, .droidignore and exclusions. Disable for current-file-only context."
+        },
+        "droidvisx.autocomplete.adaptiveDebounce": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Adapt the typing delay to recent response latency (150-1000 ms). Disable to use debounceMs."
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "droidvisx.autocomplete.nextEdit.acceptOrJump",
+        "key": "tab",
+        "when": "editorTextFocus && !editorReadonly && !editorHasSelection && !editorTabMovesFocus && !inSnippetMode && !suggestWidgetVisible && droidvisx.nextEdit.hasPendingSuggestion"
+      },
+      {
+        "command": "droidvisx.autocomplete.nextEdit.dismiss",
+        "key": "escape",
+        "when": "editorTextFocus && droidvisx.nextEdit.hasPendingSuggestion"
+      }
+    ]
   },
   "packageManager": "pnpm@10.2.0",
   "scripts": {
@@ -270,6 +298,7 @@
     "@tanstack/react-virtual": "^3.14.9",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "diff": "8.0.4",
     "highlight.js": "^11.11.1",
     "ignore": "7.0.6",
     "jsonc-parser": "3.3.1",

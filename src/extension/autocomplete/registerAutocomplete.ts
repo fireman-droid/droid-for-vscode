@@ -13,9 +13,20 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
   );
   status.name = 'Droid Autocomplete';
   status.command = 'droidvisx.autocomplete.menu';
+  const providerNotice = () => {
+    if (/cursor/i.test(vscode.env.appName)) return 'Cursor Tab may also provide suggestions. Choose the provider you want in its settings.';
+    const document = vscode.window.activeTextEditor?.document;
+    const enabled = vscode.workspace.getConfiguration('github.copilot', document?.uri).get<Record<string, boolean>>('enable');
+    if (vscode.extensions.getExtension('GitHub.copilot')?.isActive &&
+        enabled?.[document?.languageId ?? ''] !== false && enabled?.['*'] !== false) {
+      return 'GitHub Copilot is active. Another provider may take priority over Droid suggestions.';
+    }
+    return undefined;
+  };
   const refresh = () => {
     const document = vscode.window.activeTextEditor?.document;
     const settings = readCompletionSettings(document?.uri);
+    provider.warmNextEdit();
     if (!document || !settings.enabled) {
       status.hide();
       return;
@@ -25,10 +36,10 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
       : provider.lastMessage ? '$(warning) Droid Tab'
         : blocked ? '$(circle-slash) Droid Tab' : '$(sparkle) Droid Tab';
     status.tooltip = provider.lastMessage ?? blocked ??
-      'Droid autocomplete · ' + settings.model + '\n' +
+      (settings.protocol === 'mercury-edit' ? 'Droid Next Edit · ' : 'Droid autocomplete · ') + settings.model + '\n' +
       (settings.relatedFiles ? provider.lastContextFileCount + ' related files found' : 'Current file only') +
       (provider.lastLatencyMs === undefined ? '' : ' · ' + provider.lastLatencyMs + ' ms') +
-      '\nTab accepts a suggestion. Click for options.';
+      '\nTab accepts a suggestion. Click for options.' + (providerNotice() ? '\n' + providerNotice() : '');
     status.show();
   };
   const configure = async () => {
@@ -103,7 +114,7 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
       { label: '$(key) Remove saved API key', id: 'removeKey' },
     ], {
       title: 'Droid autocomplete',
-      placeHolder: provider.lastMessage ?? 'Tab accepts a suggestion; Esc dismisses it.',
+      placeHolder: provider.lastMessage ?? providerNotice() ?? 'Tab accepts a suggestion; Esc dismisses it.',
     });
     if (selection?.id === 'configure') await configure();
     if (selection?.id === 'toggle') await toggle();
@@ -138,6 +149,15 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
     vscode.commands.registerCommand('droidvisx.autocomplete.toggle', guarded(toggle)),
     vscode.commands.registerCommand('droidvisx.autocomplete.trigger', guarded(trigger)),
     vscode.commands.registerCommand('droidvisx.autocomplete.menu', guarded(menu)),
+    vscode.commands.registerCommand('droidvisx.autocomplete.nextEdit.acceptOrJump', guarded(() => provider.acceptOrJumpNextEdit())),
+    vscode.commands.registerCommand('droidvisx.autocomplete.nextEdit.dismiss', () => provider.dismissNextEdit()),
+    vscode.commands.registerCommand('droidvisx.autocomplete.nextEdit.accepted', () => {
+      diagnostics?.record({ level: 'debug', name: 'autocomplete.next-edit.accepted', attributes: {} });
+      provider.nextEditAccepted();
+    }),
+    vscode.commands.registerCommand('droidvisx.autocomplete.accepted', () => {
+      diagnostics?.record({ level: 'debug', name: 'autocomplete.accepted', attributes: {} });
+    }),
   );
   refresh();
 }

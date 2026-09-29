@@ -12,7 +12,7 @@ const executable = path.resolve(process.argv[2] ?? '');
 const vsix = path.resolve(process.argv[3] ?? path.join(repository, 'dist/droidvisx.vsix'));
 assert.equal(process.platform, 'win32', 'This runner requires an isolated Windows desktop.');
 assert.ok(process.argv[2], 'Pass the VS Code executable path explicitly.');
-assert.equal(path.basename(executable).toLowerCase(), 'code.exe', 'Use Microsoft VS Code Code.exe.');
+assert.ok(['code.exe','cursor.exe'].includes(path.basename(executable).toLowerCase()), 'Use VS Code or Cursor explicitly.');
 const root = mkdtempSync(path.join(tmpdir(), 'droid-autocomplete-native-'));
 const extracted = path.join(root, 'package');
 const profile = path.join(root, 'user-data');
@@ -28,8 +28,12 @@ writeFileSync(path.join(profile, 'User', 'settings.json'), JSON.stringify({
   'droidvisx.autocomplete.enabled': true, 'droidvisx.autocomplete.relatedFiles': false,
   'droidvisx.autocomplete.debounceMs': 100,
 }, null, 2));
+const isCursor = path.basename(executable).toLowerCase() === 'cursor.exe';
+const workspace = path.join(root, 'workspace');
+if (isCursor) mkdirSync(workspace);
 const args = [
-  '--new-window', '--disable-extensions', '--disable-updates', '--skip-welcome',
+  '--new-window', ...(isCursor ? [workspace] : ['--disable-extensions']),
+  '--disable-updates', '--skip-welcome',
   '--skip-release-notes', '--no-cached-data', '--disable-workspace-trust',
   '--disable-gpu-sandbox', '--no-sandbox',
   `--user-data-dir=${profile}`, `--extensions-dir=${extensions}`,
@@ -41,7 +45,7 @@ function quote(argument) {
 }
 const configPath = path.join(root, 'launch.json');
 writeFileSync(configPath, JSON.stringify({ executable, commandLine: [executable, ...args].map(quote).join(' '),
-  directory: root, resultPath, timeoutMs: 120_000 }));
+  directory: root, resultPath, timeoutMs: 180_000 }));
 console.log(`Native autocomplete artifacts: ${root}`);
 const exitCode = await new Promise((resolve, reject) => {
   const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',

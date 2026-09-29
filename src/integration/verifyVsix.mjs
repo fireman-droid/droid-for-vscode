@@ -13,6 +13,7 @@ const expectedEntries = [
   'extension/changelog.md',
   // Root LICENSE ships as LICENSE.txt alongside the manifest.
   'extension/LICENSE.txt',
+  'extension/third-party/KILO-LICENSE.txt',
   'extension/dist/extension/extension.cjs',
   'extension/dist/extension/sessionCatalogWorker.cjs',
   // Notices for the dependencies bundled into the extension host entry.

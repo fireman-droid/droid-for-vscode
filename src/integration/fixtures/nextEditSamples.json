@@ -1,0 +1,122 @@
+[
+  {
+    "id": "ts-variable",
+    "language": "typescript",
+    "entryFilepath": "main.ts",
+    "before": "const userName = \"Ada\";\nconsole.log(userName);",
+    "after": "const displayName = \"Ada\";\nconsole.log(userName);",
+    "expected": "const displayName = \"Ada\";\nconsole.log(displayName);",
+    "cursorOffset": 17,
+    "expectedOutput": "Ada"
+  },
+  {
+    "id": "ts-function",
+    "language": "typescript",
+    "entryFilepath": "main.ts",
+    "before": "function double(x: number) { return x * 2; }\nconsole.log(double(3));",
+    "after": "function twice(x: number) { return x * 2; }\nconsole.log(double(3));",
+    "expected": "function twice(x: number) { return x * 2; }\nconsole.log(twice(3));",
+    "cursorOffset": 14,
+    "expectedOutput": "6"
+  },
+  {
+    "id": "ts-property",
+    "language": "typescript",
+    "entryFilepath": "main.ts",
+    "before": "const user = { name: \"Ada\" };\nconsole.log(user.name);",
+    "after": "const user = { displayName: \"Ada\" };\nconsole.log(user.name);",
+    "expected": "const user = { displayName: \"Ada\" };\nconsole.log(user.displayName);",
+    "cursorOffset": 26,
+    "expectedOutput": "Ada"
+  },
+  {
+    "id": "py-variable",
+    "language": "python",
+    "entryFilepath": "main.py",
+    "before": "user_name = \"Ada\"\nprint(user_name)",
+    "after": "display_name = \"Ada\"\nprint(user_name)",
+    "expected": "display_name = \"Ada\"\nprint(display_name)",
+    "cursorOffset": 12,
+    "expectedOutput": "Ada"
+  },
+  {
+    "id": "py-function",
+    "language": "python",
+    "entryFilepath": "main.py",
+    "before": "def double(x):\n    return x * 2\nprint(double(3))",
+    "after": "def twice(x):\n    return x * 2\nprint(double(3))",
+    "expected": "def twice(x):\n    return x * 2\nprint(twice(3))",
+    "cursorOffset": 9,
+    "expectedOutput": "6"
+  },
+  {
+    "id": "py-property",
+    "language": "python",
+    "entryFilepath": "main.py",
+    "before": "class User:\n    name = \"Ada\"\nprint(User.name)",
+    "after": "class User:\n    display_name = \"Ada\"\nprint(User.name)",
+    "expected": "class User:\n    display_name = \"Ada\"\nprint(User.display_name)",
+    "cursorOffset": 28,
+    "expectedOutput": "Ada"
+  },
+  {
+    "id": "go-variable",
+    "language": "go",
+    "entryFilepath": "main.go",
+    "before": "package main\nimport \"fmt\"\nfunc main() {\n    userName := \"Ada\"\n    fmt.Println(userName)\n}",
+    "after": "package main\nimport \"fmt\"\nfunc main() {\n    displayName := \"Ada\"\n    fmt.Println(userName)\n}",
+    "expected": "package main\nimport \"fmt\"\nfunc main() {\n    displayName := \"Ada\"\n    fmt.Println(displayName)\n}",
+    "cursorOffset": 55,
+    "expectedOutput": "Ada"
+  },
+  {
+    "id": "go-function",
+    "language": "go",
+    "entryFilepath": "main.go",
+    "before": "package main\nimport \"fmt\"\nfunc double(x int) int { return x * 2 }\nfunc main() { fmt.Println(double(3)) }",
+    "after": "package main\nimport \"fmt\"\nfunc twice(x int) int { return x * 2 }\nfunc main() { fmt.Println(double(3)) }",
+    "expected": "package main\nimport \"fmt\"\nfunc twice(x int) int { return x * 2 }\nfunc main() { fmt.Println(twice(3)) }",
+    "cursorOffset": 36,
+    "expectedOutput": "6"
+  },
+  {
+    "id": "go-property",
+    "language": "go",
+    "entryFilepath": "main.go",
+    "before": "package main\nimport \"fmt\"\ntype User struct { Name string }\nfunc main() {\n    user := User{Name: \"Ada\"}\n    fmt.Println(user.Name)\n}",
+    "after": "package main\nimport \"fmt\"\ntype User struct { DisplayName string }\nfunc main() {\n    user := User{Name: \"Ada\"}\n    fmt.Println(user.Name)\n}",
+    "expected": "package main\nimport \"fmt\"\ntype User struct { DisplayName string }\nfunc main() {\n    user := User{DisplayName: \"Ada\"}\n    fmt.Println(user.DisplayName)\n}",
+    "cursorOffset": 56,
+    "expectedOutput": "Ada"
+  },
+  {
+    "id": "java-variable",
+    "language": "java",
+    "entryFilepath": "CompletionSample.java",
+    "before": "class CompletionSample {\n  public static void main(String[] args) {\n    String userName = \"Ada\";\n    System.out.println(userName);\n  }\n}",
+    "after": "class CompletionSample {\n  public static void main(String[] args) {\n    String displayName = \"Ada\";\n    System.out.println(userName);\n  }\n}",
+    "expected": "class CompletionSample {\n  public static void main(String[] args) {\n    String displayName = \"Ada\";\n    System.out.println(displayName);\n  }\n}",
+    "cursorOffset": 90,
+    "expectedOutput": "Ada"
+  },
+  {
+    "id": "java-function",
+    "language": "java",
+    "entryFilepath": "CompletionSample.java",
+    "before": "class CompletionSample {\n  static int twice(int x) { return x * 2; }\n  public static void main(String[] args) { System.out.println(twice(3)); }\n}",
+    "after": "class CompletionSample {\n  static int doubleValue(int x) { return x * 2; }\n  public static void main(String[] args) { System.out.println(twice(3)); }\n}",
+    "expected": "class CompletionSample {\n  static int doubleValue(int x) { return x * 2; }\n  public static void main(String[] args) { System.out.println(doubleValue(3)); }\n}",
+    "cursorOffset": 49,
+    "expectedOutput": "6"
+  },
+  {
+    "id": "java-property",
+    "language": "java",
+    "entryFilepath": "CompletionSample.java",
+    "before": "class CompletionSample {\n  String name = \"Ada\";\n  public static void main(String[] args) { System.out.println(new CompletionSample().name); }\n}",
+    "after": "class CompletionSample {\n  String displayName = \"Ada\";\n  public static void main(String[] args) { System.out.println(new CompletionSample().name); }\n}",
+    "expected": "class CompletionSample {\n  String displayName = \"Ada\";\n  public static void main(String[] args) { System.out.println(new CompletionSample().displayName); }\n}",
+    "cursorOffset": 45,
+    "expectedOutput": "Ada"
+  }
+]

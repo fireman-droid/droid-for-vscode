@@ -52,6 +52,16 @@ beforeEach(() => {
 });
 
 describe('autocomplete configuration workflow', () => {
+  it('configures Mercury Next Edit with its own endpoint and secret', async () => {
+    choose('Inception / Mercury Next Edit');
+    useDefaults('synthetic-mercury-key');
+    expect(await configureCompletion(secrets)).toBe(true);
+    expect(mocks.global).toMatchObject({protocol:'mercury-edit',model:'mercury-edit-2',
+      endpoint:'https://api.inceptionlabs.ai/v1/edit/completions'});
+    expect(mocks.storeSecret).toHaveBeenCalledWith(expect.any(String),'synthetic-mercury-key');
+    expect(JSON.stringify(mocks.global)).not.toContain('synthetic-mercury-key');
+    expect(validateCompletionEndpoint('https://api.inceptionlabs.ai/v1/chat/completions','mercury-edit')).toBeTruthy();
+  });
   it('saves the Ollama protocol, complete endpoint and model together without requiring a local key', async () => {
     choose('Ollama');
     useDefaults();

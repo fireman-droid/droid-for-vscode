@@ -316,10 +316,11 @@ describe('AutocompleteProvider', () => {
     file.state.text += '4';
     Object.assign(file.value, { version: 2 });
     mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ text: '4' }] });
-    expect(mocks.request.mock.calls[0][0].signal.aborted).toBe(true);
     const next = await requesting(file);
-    expect((await next.pending)[0].insertText).toBe('42');
+    // Kilo may share the in-flight request for a forward prefix, but an incompatible
+    // answer must cause a request for the actual cursor context, never stale insertion.
     old.resolve('old answer');
+    expect((await next.pending)[0].insertText).toBe('42');
     expect(await first.pending).toEqual([]);
     expect((await (await requesting(file)).pending)[0].insertText).toBe('42');
     expect(mocks.request).toHaveBeenCalledTimes(2);
@@ -330,6 +331,9 @@ describe('AutocompleteProvider', () => {
     mocks.request.mockReturnValue(response.promise);
     const request = await requesting(document());
     request.cancel.cancel();
+    await request.pending;
+    // A 100ms handoff lets the next editor invocation share the same transport.
+    await new Promise(resolve => setTimeout(resolve, 120));
     expect(mocks.request.mock.calls[0][0].signal.aborted).toBe(true);
     response.resolve('late');
     expect(await request.pending).toEqual([]);
@@ -483,6 +487,18 @@ describe('AutocompleteProvider', () => {
     expect(provider.lastMessage).toBeUndefined();
   });
 
+  it.each(['current', 'related'])('keeps error backoff when the %s document emits a context event', async (source) => {
+    const file = document();
+    mocks.request.mockRejectedValueOnce(new Error('provider unavailable'));
+    expect(await (await requesting(file)).pending).toEqual([]);
+    file.state.text += 'x';
+    Object.assign(file.value, { version: 2 });
+    if (source === 'related') mocks.contextRevision++;
+    mocks.listeners.get('context')?.();
+    expect(await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending).toEqual([]);
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+  });
+
   it('passes related-file snippets into the model prompt and reports their count', async () => {
     const file = document('const total = calculate(');
     mocks.collect.mockResolvedValue([{
@@ -513,7 +529,7 @@ describe('AutocompleteProvider', () => {
     Object.assign(file.value, { languageId: 'lua' });
     mocks.request.mockResolvedValue(' + 1');
     await (await requesting(file)).pending;
-    expect(mocks.comments).toHaveBeenCalledWith('lua', mocks.request.mock.calls[0][0].signal);
+    expect(mocks.comments).toHaveBeenCalledWith('lua', expect.any(AbortSignal));
     expect(mocks.request.mock.calls[0][0].prefix).toContain('-- Reference file: table.lua\n-- local answer = 42');
   });
 

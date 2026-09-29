@@ -3,11 +3,12 @@ import {
   assertCompletionLength, parsePayload, protocolError, readBody, requestCompletionTransport,
 } from './completionTransport';
 
-export type CompletionProtocol = 'fim' | 'ollama' | 'siliconflow-fim';
+export type CompletionProtocol = 'fim' | 'ollama' | 'siliconflow-fim' | 'mercury-edit';
 export type CompletionRequest = FimRequest & { readonly protocol: CompletionProtocol };
 
 /** Each protocol uses native prefix/suffix completion; the selected model must support FIM. */
 export async function requestCompletion(request: CompletionRequest): Promise<string> {
+  if (request.protocol === 'mercury-edit') throw protocolError('Next Edit requires structured edit context.');
   if (request.protocol === 'fim') return requestFimCompletion(request);
   if (request.protocol === 'siliconflow-fim') {
     return requestCompletionTransport(request, {

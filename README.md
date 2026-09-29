@@ -29,7 +29,7 @@ Droid 是 Factory Droid CLI 在 Cursor / VS Code 中的非官方本地可视化�
 功能位于 `codex/droid-autocomplete` 独立分支，默认关闭，无需先打开 Droid 聊天。
 
 1. 命令面板运行 **Droid: Configure Autocomplete**，选择服务，再填写完整地址、
-   FIM 模型和密钥。提供 Mistral/Codestral、DeepSeek、SiliconFlow、Ollama 和自定义 FIM 预设。
+   模型和密钥。提供 Mistral/Codestral、DeepSeek、SiliconFlow、Ollama、自定义 FIM，以及 Inception/Mercury Next Edit 预设。
    Ollama 默认地址是 `http://localhost:11434/api/generate`，模型为
    `qwen2.5-coder:7b-base`，需要先自行安装该模型；本地服务可以不填密钥。
 2. 配置完成后选择 **Enable autocomplete**。稍作停顿显示灰字，**Tab** 接受、
@@ -37,7 +37,7 @@ Droid 是 Factory Droid CLI 在 Cursor / VS Code 中的非官方本地可视化�
    语言服务候选列表打开时，AI 可继续补全选中项之后的代码。
 3. 状态栏 **Droid Tab** 提供暂停、服务配置、相关文件开关、设置和删除已存密钥；
    关闭后用 **Droid: Toggle Autocomplete** 恢复。错误显示在状态栏，自动请求
-   暂缓 30 秒，手动重试跳过等待。
+   对 429/网络/服务错误指数退避，连续失败后暂停 5 分钟；认证/余额错误等待手动重试或重新配置。
 
 上下文包括当前文件的未保存前后文，以及同一工作区根内的符号定义、近期编辑和已打开
 文件片段。最多 6 个关联文件，优先保留定义和近期编辑；总请求默认限制为 12,000 个
@@ -58,7 +58,27 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 发送 `prefix/suffix`，使用该平台 API key，不走聊天 Session。
 选择模型时需确认其支持代码续写/FIM；Ollama 指令模型的模板可能在 EOF 空后文时进入
 聊天，默认选择 base 模型避免此问题。建议质量和延迟仍取决于实际服务及模型。
-使用 Cursor Tab 或其他灰字补全时可选择启用一种；扩展不更改其他补全器或 Tab 快捷键。
+使用 Cursor Tab 或其他灰字补全时可选择启用一种；状态栏提示可能的竞争来源，不替用户关闭其他补全器。
+
+### Next Edit 编辑预测
+
+选择 **Inception / Mercury Next Edit**，默认模型 `mercury-edit-2`，地址
+`https://api.inceptionlabs.ai/v1/edit/completions`，使用 Inception API key。
+该模式与普通 FIM 通过同一配置向导切换，密钥按地址分别保存；不会用 Qwen FIM 假装编辑预测。
+
+- 同行可续写的内容显示原生灰字；已有代码替换、删除和跨行修改显示主题化修改提示。
+- 修改位于别处时，第一次 **Tab** 跳转，第二次接受；光标已在修改处时直接接受。
+  **Esc** 丢弃，接受后可 **Undo**。Tab 接管仅在存在待接受修改且没有选区、候选列表或 snippet 时生效。
+- 预测使用光标附近可编辑区域、最多 5 段近期编辑历史和允许的相关文件。
+  文件被编辑、切换、权限/配置变化后旧建议失效；不完整或截断的回复不会应用。
+- 请求、缓存、退格复用、防抖和编辑提示部分移植自
+  [Kilo Code](https://github.com/Kilo-Org/kilocode/tree/7d977bce994af36f0edf752cb53e3aefc7aeb214)，
+  MIT 许可随包分发；Host 生命周期、读取边界和服务适配由 Droid 负责。
+- `adaptiveDebounce` 默认根据近期延迟在 150–1000ms 间调整；
+  关闭后使用 `debounceMs`。建议历史最多 20 条、30 秒，支持继续输入和退格复用。
+
+验证记录见 [STATUS](docs/STATUS.md)。真实模型小样本通过率不等于日常代码接受率，
+也没有与 Kilo 做同模型、同输入的产品胜率对比。
 
 代码文档中的模型结果若包含独立的反引号围栏行，扩展会隐藏整条建议并在状态栏提示，
 不会自动拆包或截掉那一行。相同上下文缓存拒绝结果，避免自动重复请求；通过状态栏的

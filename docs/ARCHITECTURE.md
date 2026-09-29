@@ -37,7 +37,10 @@ Viewer、Review。`chat/` 按 composer、attachments、btw、interactions、queu
 
 `src/extension/autocomplete/registerAutocomplete.ts` 装配原生 Inline Completion
 Provider、状态栏和配置向导；`AutocompleteProvider.ts` 持有编辑器快照、防抖、取消、
-文档/光标/关联上下文版本和 30 秒建议缓存，也负责接续语言服务的候选文本。
+文档/光标/关联上下文版本，也负责接续语言服务的候选文本。CompletionHistory 复用 Kilo 的
+匹配策略，保留 20 条/30 秒历史；CompletionRequests 分离调用者取消与网络取消，
+兼容请求在 100ms 交接窗口内可保留，并在新调用收集上下文时持有租约；已被输入的
+结果前缀会剔除，不匹配则按当前上下文重新请求。防抖以近期延迟限幅，错误分类退避。
 `completionText.ts` 在插入边界以语言模式区分文本与代码：代码建议的独立反引号围栏
 返回明确拒绝值，不猜测词法状态或截断文本。Provider 将拒绝缓存为当前上下文的空结果，
 显示状态提示；手动重试清缓存，新文本/新文档不受全局冷却。
@@ -56,8 +59,18 @@ Runtime 不引用 VS Code；Host 即时读取按 endpoint 绑定的 SecretStorag
 
 补全直接使用编辑器 UI，不经过 Webview/Bridge，不进入 `DroidRuntime.sendTurn`
 或聊天队列。启动时注册补全，聊天 daemon 预热延后到聊天视图首次解析。
-相关文件开关关闭时跳过关联内容和语言元数据读取。未引入 Kilo/Continue 源码或
-Tree-sitter 资源；复用编辑器语言服务、成熟 ignore 与 JSONC 解析器。
+相关文件开关关闭时跳过关联内容和语言元数据读取；复用编辑器语言服务，未引入 Tree-sitter。
+移植的 Kilo 原生代码在 autocomplete/kilo 下，固定到
+`7d977bce994af36f0edf752cb53e3aefc7aeb214`；未拷贝其 Continue 衍生子树。
+MIT 原文位于 third-party/KILO-LICENSE.txt，并并入扩展构建 notices。
+
+NextEditSupport 管理有权限过滤的 EditHistoryTracker、待接受修改和接受后的有条件继续预测。
+Runtime nextEdit.ts 使用上游 editPrompt.ts 组装 Mercury 标记格式，按整个可编辑区域裁剪
+外围上下文；通过独立 /edit/completions 请求，要求完整 fenced region 和 finish_reason=stop。
+NextEditPresenter 将纯续写交给原生 InlineCompletionItem；其他编辑用 Kilo decoration
+和 SuggestionManager 的单个待接受项。任何文档版本变化都会失效，接受前再次检查；
+实际应用通过 editor.edit，保留编辑器 Undo。LF/CRLF 在提示拆行与编辑边界分别处理。
+所有新能力仍不经过聊天 Runtime、Bridge 或 Webview。
 
 ### 历史内部会话过滤
 

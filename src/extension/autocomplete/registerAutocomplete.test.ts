@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('vscode', () => ({
+  env: { appName: 'Visual Studio Code' },
+  extensions: { getExtension: () => undefined },
   StatusBarAlignment: { Right: 2 },
   ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
   window: {
@@ -57,6 +59,7 @@ vi.mock('./AutocompleteProvider', () => ({
       mocks.invalidationListener = listener;
       return { dispose: vi.fn() };
     }
+    warmNextEdit() {}
     reset() {}
     dispose() {}
   },

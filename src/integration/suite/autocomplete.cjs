@@ -39,18 +39,27 @@ async function run() {
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   try {
-    assert.equal(vscode.workspace.workspaceFolders, undefined, 'Do not launch the chat runtime or open a real workspace.');
+    if (vscode.workspace.workspaceFolders) {
+      assert.equal(vscode.workspace.workspaceFolders.length, 1);
+      assert.equal(path.resolve(vscode.workspace.workspaceFolders[0].uri.fsPath).toLowerCase(),
+        path.resolve(path.dirname(process.env.DROID_AUTOCOMPLETE_NATIVE_RESULT),'workspace').toLowerCase(),
+        'Tests may only open their own empty temporary workspace.');
+    }
+    await until(() => !!vscode.extensions.getExtension('droidvisx.droidvisx'), 15000, 'Packaged Droid extension was not registered by the editor.');
+    const extension = vscode.extensions.getExtension('droidvisx.droidvisx');
+    await extension.activate();
+    await until(() => vscode.workspace.getConfiguration('droidvisx.autocomplete').inspect('endpoint')?.defaultValue !== undefined,
+      15000, 'Editor did not register the packaged autocomplete configuration.');
     const config = vscode.workspace.getConfiguration('droidvisx.autocomplete');
     await config.update('endpoint', 'http://127.0.0.1:' + server.address().port + '/v1/chat/completions', vscode.ConfigurationTarget.Global);
     await config.update('protocol', 'siliconflow-fim', vscode.ConfigurationTarget.Global);
     await config.update('model', 'synthetic-autocomplete', vscode.ConfigurationTarget.Global);
-    const extension = vscode.extensions.getExtension('droidvisx.droidvisx');
     assert.ok(extension, 'Packaged Droid extension must be discoverable.');
-    await extension.activate();
     assert.equal(extension.isActive, true);
     assert.ok((await vscode.commands.getCommands(true)).includes('droidvisx.autocomplete.trigger'));
     const scenarios = [];
-    for (const disableAI of [false, true]) {
+    const supportsDisableAI = vscode.workspace.getConfiguration('chat').inspect('disableAIFeatures')?.defaultValue !== undefined;
+    for (const disableAI of supportsDisableAI ? [false, true] : [false]) {
       for (const trailingNewline of [false, true]) {
         scenarios.push({ name: 'Python blank line, terminal LF=' + trailingNewline + ', AI disabled=' + disableAI,
           language: 'python', location: 'blank', completion: 'values.sort()' + (trailingNewline ? '\n' : ''),
@@ -75,7 +84,7 @@ async function run() {
     for (const scenario of scenarios) {
       activeCase = { eol: '\n', disableAI: false, delayMs: 100, ...scenario };
       try {
-        await vscode.workspace.getConfiguration('chat').update('disableAIFeatures', activeCase.disableAI, vscode.ConfigurationTarget.Global);
+        if (supportsDisableAI) await vscode.workspace.getConfiguration('chat').update('disableAIFeatures', activeCase.disableAI, vscode.ConfigurationTarget.Global);
         await config.update('relatedFiles', activeCase.relatedFiles === true, vscode.ConfigurationTarget.Global);
         const comment = (activeCase.language === 'python' ? '#' : '//') + ' Sort the values';
         const followingCode = activeCase.language === 'python' ? 'print(values)' : 'consume(values);';
@@ -150,6 +159,7 @@ async function run() {
         activeCase = undefined;
       }
     }
+    results.push(...await require('./nextEdit.cjs').runNextEdit());
   } catch (error) {
     results.push({ name: 'packaged extension setup', passed: false, error: error.message });
   } finally {
