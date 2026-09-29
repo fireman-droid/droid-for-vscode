@@ -252,6 +252,10 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 | BTW 未发送文字、引用、图片和显式模型 | `chat/btw/useBtwPanel.ts` 与其 `useBtwImages` | 当前 session 的统一 owner；面板只接受受控值和回调，关闭仅隐藏，切会话清理 |
 | 密钥、OAuth 回调和原生终端输入 | Host/SDK | 原生入口处理，不经聊天 Bridge 或诊断正文 |
 
+历史用户图片携带所属 SDK `userMessageId`，不从内容块前后位置推断所属消息。
+`shared/transcript/userImageOwners.ts` 统一阅读展示、编辑附件和重发截断的归属判断，
+保留尚无 SDK 归属的实时回显与旧快照排列；显式归属缺失时不挪到邻近消息。
+
 表中描述主要负责路径，并非所有字段已经由私有方法独占修改：`chat/ideIntegration.ts`
 仍会更新连接/操作锁，`chat/mission/controller.ts` 仍会接管 Mission 的 Runtime 与会话身份。
 这些协调路径也必须核对身份和资源顺序，不能从状态文件位置推断只有一个写入者。

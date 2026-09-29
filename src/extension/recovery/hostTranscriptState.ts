@@ -37,6 +37,7 @@ import {
   trimTranscriptToLimits,
 } from '../../shared/transcript/transcriptLimits';
 import { isTransientRuntimeDiagnostic } from '../../shared/protocol/transientDiagnostics';
+import { userImageOwners } from '../../shared/transcript/userImageOwners';
 
 export {
   stableTranscriptId,
@@ -185,8 +186,13 @@ export function truncateFromUserMessage(
   if (index < 0) {
     return null;
   }
+  const owners = userImageOwners(state.transcript);
+  const keptUsers = new Set(state.transcript.slice(0, index).filter((item) => item.kind === 'user').map((item) => item.id));
   return {
-    transcript: state.transcript.slice(0, index),
+    transcript: state.transcript.slice(0, index).filter((item) => {
+      const owner = owners.get(item.id);
+      return owner === undefined || keptUsers.has(owner);
+    }),
     historyStatus: state.historyStatus,
     truncated: state.truncated,
   };

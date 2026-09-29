@@ -61,11 +61,12 @@ export function parseImageTranscriptItem(
       'data',
       'generated',
       'byteLength',
-    ]) ||
+    ], ['userMessageId']) ||
     value.kind !== 'image' ||
     !isId(value.id) ||
     !isId(value.turnId) ||
     !isImageOrigin(value.origin) ||
+    (value.userMessageId !== undefined && (value.origin !== 'user' || !isId(value.userMessageId))) ||
     !isImageMediaType(value.mediaType) ||
     typeof value.data !== 'string' ||
     value.data.length > MAX_IMAGE_DATA_LENGTH ||
@@ -80,6 +81,7 @@ export function parseImageTranscriptItem(
     kind: 'image',
     turnId: value.turnId,
     origin: value.origin,
+    ...(value.userMessageId === undefined ? {} : { userMessageId: value.userMessageId as string }),
     mediaType: value.mediaType,
     data: value.data,
     generated: value.generated,

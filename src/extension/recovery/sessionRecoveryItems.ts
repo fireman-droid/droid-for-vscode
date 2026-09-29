@@ -165,13 +165,14 @@ function parseImage(
       'data',
       'generated',
       'byteLength',
-    ])
+    ], ['userMessageId'])
   ) {
     return undefined;
   }
   const id = dataValue(value, 'id');
   const turnId = dataValue(value, 'turnId');
   const origin = dataValue(value, 'origin');
+  const userMessageId = dataValue(value, 'userMessageId');
   const mediaType = dataValue(value, 'mediaType');
   const data = dataValue(value, 'data');
   const generated = dataValue(value, 'generated');
@@ -179,6 +180,7 @@ function parseImage(
   return isId(id) &&
     isId(turnId) &&
     isOneOf(origin, IMAGE_ORIGINS) &&
+    (userMessageId === undefined || (origin === 'user' && isId(userMessageId))) &&
     isOneOf(mediaType, IMAGE_MEDIA_TYPES) &&
     isBoundedString(data, MAX_IMAGE_DATA_LENGTH) &&
     IMAGE_BASE64_PATTERN.test(data as string) &&
@@ -190,6 +192,7 @@ function parseImage(
         kind: 'image',
         turnId,
         origin,
+        ...(userMessageId === undefined ? {} : { userMessageId: userMessageId as string }),
         mediaType,
         data,
         generated,
