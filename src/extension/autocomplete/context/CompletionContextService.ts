@@ -92,6 +92,8 @@ export class CompletionContextService implements vscode.Disposable {
     ];
   }
 
+  trackContextFile(uri: string): void { this.contextFiles.add(uri); }
+
   get revision(): number { return this.sequence; }
 
   /** Typing in the request's own document can reuse its remaining suggestion. */

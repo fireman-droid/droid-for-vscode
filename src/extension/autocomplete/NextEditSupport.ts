@@ -63,7 +63,7 @@ export class NextEditSupport implements vscode.Disposable {
     if (this.chainTimer) clearTimeout(this.chainTimer);
     this.chainTimer = setTimeout(() => {
       const current = vscode.window.activeTextEditor, settings = readCompletionSettings(document.uri);
-      if (!this.lifetime.signal.aborted && settings.enabled && settings.protocol === 'mercury-edit' &&
+      if (!this.lifetime.signal.aborted && settings.enabled && settings.autoTrigger !== false && (settings.snoozeUntil ?? 0) <= Date.now() && settings.protocol === 'mercury-edit' &&
           current?.document === document && document.version === version &&
           current.selection.isEmpty && current.selection.active.isEqual(position)) {
         void vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');

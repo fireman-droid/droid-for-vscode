@@ -9,7 +9,7 @@ const supplementalLicenses = {
 };
 
 /** Collect packages contributing bytes, not the entire installed dependency tree. */
-export function createThirdPartyNotices(baseDirectory, adaptedNoticePath) {
+export function createThirdPartyNotices(baseDirectory, adaptedNoticePath, additionalLicenses = {}) {
   const directories = new Set();
   async function owner(file) {
     let directory = path.dirname(file);
@@ -49,12 +49,12 @@ export function createThirdPartyNotices(baseDirectory, adaptedNoticePath) {
         const texts = await Promise.all(files.map(async (file) =>
           `${file}\n${(await readFile(path.join(directory, file), 'utf8')).trim()}`));
         if (!files.some((file) => /^(?:licen[sc]e|copying)(?:[.-]|$)/i.test(file))) {
-          const supplement = supplementalLicenses[name];
+          const supplement = additionalLicenses[name] ?? (supplementalLicenses[name] && new URL(`../licenses/${supplementalLicenses[name]}`, import.meta.url));
           if (!supplement || manifest.license !== 'MIT') {
             missing.push(name);
             continue;
           }
-          texts.push(await readFile(new URL(`../licenses/${supplement}`, import.meta.url), 'utf8'));
+          texts.push(await readFile(supplement, 'utf8'));
         }
         notices.set(name,
           `${name}\nDeclared license: ${typeof manifest.license === 'string' ? manifest.license : 'see documents'}\n\n${texts.join('\n\n')}`);

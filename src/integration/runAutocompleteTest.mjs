@@ -18,7 +18,8 @@ const extracted = path.join(root, 'package');
 const profile = path.join(root, 'user-data');
 const extensions = path.join(root, 'extensions');
 const resultPath = path.join(root, 'result.json');
-for (const directory of [extracted, extensions, path.join(profile, 'User')]) mkdirSync(directory, { recursive: true });
+const notebookFixture = path.join(root, 'notebook-fixture');
+for (const directory of [extracted, extensions, notebookFixture, path.join(profile, 'User')]) mkdirSync(directory, { recursive: true });
 execFileSync('tar', ['-xf', vsix, '-C', extracted, 'extension'], { windowsHide: true });
 writeFileSync(path.join(profile, 'User', 'settings.json'), JSON.stringify({
   'update.mode': 'none', 'extensions.autoCheckUpdates': false, 'extensions.autoUpdate': false,
@@ -28,6 +29,15 @@ writeFileSync(path.join(profile, 'User', 'settings.json'), JSON.stringify({
   'droidvisx.autocomplete.enabled': true, 'droidvisx.autocomplete.relatedFiles': false,
   'droidvisx.autocomplete.debounceMs': 100,
 }, null, 2));
+writeFileSync(path.join(notebookFixture, 'package.json'), JSON.stringify({
+  name: 'droid-notebook-fixture', publisher: 'droid-test', version: '1.0.0', engines: { vscode: '^1.108.0' },
+  main: './extension.cjs', activationEvents: ['onNotebook:droid-synthetic-completion'],
+  contributes: { notebooks: [{ type: 'droid-synthetic-completion', displayName: 'Synthetic Completion Notebook', selector: [{ filenamePattern: '*.droidnb' }] }] },
+}));
+writeFileSync(path.join(notebookFixture, 'extension.cjs'), `const vscode = require('vscode');
+exports.activate = context => context.subscriptions.push(vscode.workspace.registerNotebookSerializer('droid-synthetic-completion', {
+  serializeNotebook: async () => new Uint8Array(), deserializeNotebook: async () => new vscode.NotebookData([]),
+}));`);
 const isCursor = path.basename(executable).toLowerCase() === 'cursor.exe';
 const workspace = path.join(root, 'workspace');
 if (isCursor) mkdirSync(workspace);
@@ -38,7 +48,8 @@ const args = [
   '--disable-gpu-sandbox', '--no-sandbox',
   `--user-data-dir=${profile}`, `--extensions-dir=${extensions}`,
   `--extensionDevelopmentPath=${path.join(extracted, 'extension')}`,
-  `--extensionTestsPath=${path.join(repository, 'src/integration/suite/autocomplete.cjs')}`,
+  `--extensionDevelopmentPath=${notebookFixture}`,
+  `--extensionTestsPath=${path.join(repository, process.argv.includes('--notebook-only') ? 'src/integration/suite/autocompleteNotebook.cjs' : 'src/integration/suite/autocomplete.cjs')}`,
 ];
 function quote(argument) {
   return '"' + argument.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, '$1$1') + '"';

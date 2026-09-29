@@ -159,6 +159,7 @@ async function run() {
         activeCase = undefined;
       }
     }
+    results.push(...await require('./autocompleteNotebook.cjs').runNotebook());
     results.push(...await require('./nextEdit.cjs').runNextEdit());
   } catch (error) {
     results.push({ name: 'packaged extension setup', passed: false, error: error.message });

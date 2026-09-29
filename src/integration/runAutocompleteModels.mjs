@@ -5,29 +5,38 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const mode=process.argv[2];
-if(!['fim','next-edit'].includes(mode))throw new Error('Pass fim or next-edit');
+if(!['fim','mercury-fim','next-edit'].includes(mode))throw new Error('Pass fim or next-edit');
 const key=process.env[mode==='fim'?'DROID_AUTOCOMPLETE_TEST_KEY':'DROID_NEXT_EDIT_TEST_KEY'];
 if(!key)throw new Error('Model test credential is required in the environment');
-const output=path.join(root,'artifacts/autocomplete-models',mode);
+const withContext=process.argv.includes('--with-context');
+const productionContext=process.argv.includes('--production-context');
+const output=path.join(root,'artifacts/autocomplete-models',mode+(withContext?'-context':productionContext?'-complete':''));
 mkdirSync(output,{recursive:true});
-await build({stdin:{contents:'export {requestNextEdit} from "./src/runtime/autocomplete/nextEdit.ts"; export {requestCompletion} from "./src/runtime/autocomplete/requestCompletion.ts"; export {prepareCompletion} from "./src/extension/autocomplete/completionText.ts"; export {buildCompletionPrompt} from "./src/extension/autocomplete/context/CompletionPrompt.ts";',resolveDir:root,loader:'ts'},bundle:true,platform:'node',format:'cjs',outfile:path.join(output,'production.cjs'),logLevel:'silent'});
+await build({stdin:{contents:'export {requestNextEdit} from "./src/runtime/autocomplete/nextEdit.ts"; export {requestCompletion} from "./src/runtime/autocomplete/requestCompletion.ts"; export {prepareCompletion} from "./src/extension/autocomplete/completionText.ts"; export {getTemplateForModel} from "./src/extension/autocomplete/kilo/continuedev/core/autocomplete/templating/AutocompleteTemplate.ts"; export {buildCompletionPrompt} from "./src/extension/autocomplete/context/CompletionPrompt.ts";',resolveDir:root,loader:'ts'},bundle:true,platform:'node',format:'cjs',outfile:path.join(output,'production.cjs'),logLevel:'silent'});
 const api=await import('file:///'+path.join(output,'production.cjs').replaceAll('\\','/'));
-const samples=JSON.parse(readFileSync(path.join(root,'src/integration/fixtures',mode==='fim'?'autocompleteSamples.json':'nextEditSamples.json'),'utf8'));
+const samples=JSON.parse(readFileSync(path.join(root,'src/integration/fixtures',mode!=='next-edit'?'autocompleteSamples.json':'nextEditSamples.json'),'utf8'));
 const records=[];
 const model=mode==='fim'?'Qwen/Qwen3-Coder-30B-A3B-Instruct':'mercury-edit-2';
 let status;
 const original=globalThis.fetch;
 globalThis.fetch=async(...args)=>{const response=await original(...args);status=response.status;return response;};
 // One first attempt per scenario; there are no automatic retries.
-for(const sample of samples){
+for(const sample of samples.filter(sample=>!withContext||sample.id.endsWith('cross-file'))){
   const started=Date.now();status=undefined;
   const record={id:sample.id,language:sample.language};
   try {
-    if(mode==='fim'){
+    if(mode!=='next-edit'){
       const snippets=sample.references.map(ref=>({...ref,uri:ref.filepath,source:'definition'}));
-      const prompt=api.buildCompletionPrompt({text:sample.prefix+sample.suffix,offset:sample.prefix.length,maxCharacters:12000,filepath:sample.entryFilepath,model,snippets,comments:{line:sample.language==='python'?'#':'//'}});
-      const raw=await api.requestCompletion({protocol:'siliconflow-fim',endpoint:'https://api.siliconflow.cn/v1/chat/completions',model,apiKey:key,...prompt,maxTokens:256,signal:new AbortController().signal});
-      record.raw=raw;record.insertion=api.prepareCompletion(raw,sample.prefix,sample.suffix,sample.language);
+      let prompt=api.buildCompletionPrompt({text:sample.prefix+sample.suffix,offset:sample.prefix.length,maxCharacters:12000,filepath:sample.entryFilepath,model,snippets,comments:{line:sample.language==='python'?'#':'//'}});
+      if(mode==='mercury-fim') {
+        const [prefix,suffix] = sample.suffix ? api.getTemplateForModel(model).compilePrefixSuffix(sample.prefix,sample.suffix,
+          'file:///'+sample.entryFilepath,'',[],[]) : [sample.prefix,sample.suffix];
+        prompt=withContext||productionContext ? prompt : {prefix,suffix};
+      }
+      const raw=await api.requestCompletion({protocol:mode==='mercury-fim'?'fim':'siliconflow-fim',
+        endpoint:mode==='mercury-fim'?'https://api.inceptionlabs.ai/v1/fim/completions':'https://api.siliconflow.cn/v1/chat/completions',
+        model,apiKey:key,...prompt,maxTokens:256,signal:new AbortController().signal});
+      record.raw=raw;record.insertion=api.prepareCompletion(raw,sample.prefix,sample.suffix,sample.language,model);
       record.formatAccepted=record.insertion!==undefined;
       if(record.formatAccepted)record.code=sample.prefix+record.insertion+sample.suffix;
     } else {

@@ -1,0 +1,11 @@
+{
+  "go-function-body": "  for i, v := range values { total += (i+1) * v }\n",
+  "go-eof": "    sum := 0\n    for value != 0 {\n        digit := value % 10\n        if digit < 0 {\n            digit = -digit\n        }\n        sum += digit\n        value /= 10\n    }\n    return sum\n}",
+  "go-cross-file": "1250, \"remote\", true",
+  "java-expression": "width + border * 2) * (height + border * 2",
+  "java-function-body": "    for (int i = 0; i < values.length; i++) {\n      total += values[i] * (i + 1);\n    }\n",
+  "java-eof": "    int result = 0;\n    for (int i = 1; i <= n; i++) {\n      result += i * i;\n    }\n    return result;\n  }",
+  "java-cross-file": "9, 47, 12.5",
+  "typescript-eof": "    let sum = 0;\n    value = Math.abs(value); // Ignore the sign of the integer\n    while (value > 0) {\n        sum += value % 10; // Add the last digit to the sum\n        value = Math.floor(value / 10); // Remove the last digit\n    }\n    return sum;\n}\n",
+  "typescript-cross-file": "8, 129, 39, 20"
+}

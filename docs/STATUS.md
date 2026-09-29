@@ -5,55 +5,69 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
-## Kilo 补全核心与 Mercury Next Edit
+## Kilo 普通续写与 Next Edit 完整接入
 
-独立分支 `codex/droid-autocomplete` 已移植 Kilo 原生的历史匹配、退格复用、请求交接、
-自适应防抖、分类退避和 Next Edit 提示/应用代码，固定上游
-`7d977bce994af36f0edf752cb53e3aefc7aeb214`，MIT 声明随包分发。
-保留 Droid 的协议、SecretStorage、工作区读取规则、版本校验和独立聊天链路。
-普通 FIM 与 Mercury 编辑预测由配置向导显式切换，未移植 Kilo 账号/遥测/收费网关或 Continue 子树。
+独立分支 `codex/droid-autocomplete` 固定上游
+`7d977bce994af36f0edf752cb53e3aefc7aeb214`。此前只有核心移植，本轮已补齐普通续写的
+Continue 上下文链、后处理、Mercury FIM、Notebook 和状态栏控制。账号、计费和遥测
+仍使用 Droid 自己的服务边界；不恢复用户已删除的 Quick Edit / Ask / Add to Chat。
 
-Next Edit 使用官方 `mercury-edit-2` 和 `/v1/edit/completions`。输入为有界文件区域、
-允许的片段和近期修改，当前未保存文档也可跟踪；外部相关文件仍限于同一工作区根。
-原生灰字用于可续写内容，替换/删除/多行修改通过提示、Tab 跳转/接受、Esc 丢弃和 Undo 完成。
-整个文档版本变化、切换、停用和配置改变会撤回旧编辑；截断/异常回复整条拒绝。
-仅在存在待接受编辑且编辑器没有选区、snippet、候选列表或 Tab 导航时接管 Tab。
+| 上游能力 | Droid 生产入口与验收 |
+| --- | --- |
+| 普通续写触发、首行展示、缓存与退格、兼容在途请求、延迟与错误恢复 | AutocompleteProvider、CompletionHistory/Requests；Provider 与原生编辑器回归 |
+| 重叠、重复、循环及语言/模型后处理 | completionText → Kilo classic filter → Continue postprocessing；保留 Markdown、CRLF 与缩进回归 |
+| 导入定义、语法路径、近期编辑/浏览/打开文件、token 排序裁剪 | KiloContextService → 上游 ContextRetrievalService / HelperVars / getSnippets；实际 WASM、LSP 与文件策略回归 |
+| 可选静态上下文与剪贴板 | StaticContextService（TS）、KiloContextIde；默认关闭、用户显式开启，类型递归、读取排除和剪贴板授权回归 |
+| Mercury FIM 与 Next Edit 模式 | 官方 /fim/completions、/edit/completions，状态栏切换，共用官方端点凭据；协议/设置和真实模型验收 |
+| Notebook 普通续写 | 同语言相邻代码单元、位置映射、版本/顺序缓存失效；官方 Next Edit 模式下转换到 Mercury FIM |
+| Next Edit 历史、区域、提示词、预览、跳转/接受/拒绝、连续预测与 Undo | NextEditSupport → runtime nextEdit → Kilo Presenter/Manager/History；隔离原生编辑器验收 |
+| 自动/手动、暂停/定时恢复、配置、诊断、冲突提示 | registerAutocomplete 与 Provider 双侧门禁；停用保留状态栏恢复入口 |
+| 打包资源和来源 | 27 个语法 WASM、解析器与查询文件随包；Kilo MIT、Continue Apache-2.0、分词器和语法许可证随 notices 分发 |
 
-验证已获用户授权，只有合成代码，没有操作日常窗口或真实会话：
+所有关联文件读取仍执行同根、Git/Droid ignore、排除模式、真实路径与大小限制。当前文件
+优先未保存内容；默认总预算 12,000 字符，至少 60% 留给主文件。静态 TS 查询开启后可枚举
+至多 2,000 个候选，剪贴板用户级 opt-in 最多 4,000 字符，不读取聊天历史。
+普通文件按所选模式执行，Next Edit 无修改时不自动补发 FIM；Notebook 使用普通续写。
+
+有证据的上游适配包括：Mercury FIM 保留关联片段（上游模板丢弃），代码围栏整条拒绝并
+提示重试，Markdown 围栏保留，纯缩进/CRLF 保持，以及递归类型、解析资源生命周期和
+Notebook 兄弟单元变化时的失效处理。默认不把源码输出到日志，不复制上游账号/遥测网关。
+
+本轮已运行的验证（合成代码，用户明确授权，不操作日常窗口）：
 
 | 验证 | 结果 |
 | --- | --- |
-| 定向协议、配置、上下文、缓存、取消、历史生命周期回归 | 12 文件 / 211 项通过 |
-| Mercury 真实编辑预测 | 12/12 首轮匹配预期且编译/执行输出正确；另有 1 次连通探针通过 |
-| Qwen Coder 30B SiliconFlow FIM | 12 次请求；11/12 编译/执行输出正确，1 条含多余围栏被拒绝 |
-| Mercury 请求端到端耗时 | 中位数 448ms，P95 818ms |
-| Qwen FIM 请求端到端耗时 | 中位数 1622ms，P95 6936ms |
-| 类型与文件预算 | 通过 |
-| 编辑器/安装包 | VS Code 1.136.0：30/30；Cursor 3.18.25（VS Code API 1.128.0）：28/28；81 条目 VSIX 校验通过 |
+| 补全 Host/Runtime、上下文/权限、缓存/取消、模型过滤回归 | 13 文件 / 238 项通过 |
+| pnpm run typecheck / lint:budgets | 通过 |
+| Mercury FIM，上游丢弃关联片段的模板 | 12 次首轮请求均返回；8/12 编译并执行正确；3 个跨文件参数错误，1 个 Java EOF 缺闭括号 |
+| 关联片段修正的控制对照 | 原失败的 3 个跨文件样例各请求一次，3/3 编译并执行正确 |
+| Mercury FIM，完整生产模板 | 12 次独立首轮请求，11/12 编译并执行正确；Java EOF 仍少类闭括号；中位 451ms、P95 779ms |
+| 生产构建与 VSIX | 已通过构建及 164 条目校验，包含入口加载、解析资源和许可证 |
+| 原生 VS Code 1.136.0 | 30 项普通/Next Edit + 2 项 Notebook 通过 |
+| 原生 Cursor 3.18.25（API 1.128.0） | 28 项普通/Next Edit + 2 项 Notebook 通过 |
 
+原生回归使用隐藏独立桌面与临时配置，不控制日常窗口。Notebook 首次因测试提供器未注册，
+随后因未进入单元编辑状态失败；补齐测试贡献声明和原生单元焦点后单独重跑，两端各 2 项通过。
+生产包未为测试初始化问题修改。Cursor 不提供 chat.disableAIFeatures，故少两个对应变体。
 
-最终包已覆盖安装到 Microsoft VS Code；78 个载荷文件 SHA-256 完全一致，package.json
-除编辑器追加的 __metadata 外与包内清单一致，用户 Reload Window 后生效。日常 Cursor 安装未覆盖。
-分享包：`dist/droidvisx-autocomplete-kilo-0.8.0.vsix`，SHA-256：
-`d916d6d8d1029e8ffaaf7ee7e98899a5f7642f1614952dd64cb07df8767f3802`。
+最终 `dist/droidvisx-autocomplete-complete-0.8.0.vsix` 已覆盖安装到 Microsoft VS Code，
+161 个载荷文件 SHA-256 一致；package.json 除编辑器追加的 __metadata 外一致。
+最终包的 83 个 Host/解析资源与原生验收的包相同；README 等说明更新后重新打包并校验。
+SHA-256：`b1a91bddaebeed6a82e38cc8e9de11c096e8a1da9dfe631a1bdc35829470c021`。
+用户执行 Developer: Reload Window 后加载新代码；日常 Cursor 未覆盖，主分支未修改。
+配置保持原值；希望按注释续写时可在 Droid Tab 菜单切换到 Mercury Code Completion，
+需要预测已有代码的下一处修改时选择 Mercury Next Edit。没有公开发布。
 
-原生验收通过 `runAutocompleteTest.mjs <Code.exe|Cursor.exe>` 启动隐藏独立桌面和临时配置；
-Cursor 使用空临时项目以加载工作区扩展，未运行该编辑器不存在的 chat.disableAIFeatures 两个变体。
-最初空窗口/设置注册失败已修正测试初始化；最终两端退出码均为 0。新增已保存文件的
-Tab 跳转/接受验证，覆盖上下文通知，和未保存文件的历史生命周期回归。
-当前/关联文件上下文通知意外清除错误退避的问题先由新增用例复现，再修复；最终 211 项全通过。
-最终执行的 `pnpm run typecheck`、`pnpm run lint:budgets`、生产构建、`package:vsix`
-及 `verifyVsix.mjs` 均通过。没有重跑不相关聊天测试或控制日常编辑器界面。
+Next Edit 协议与提示词沿用已验收的生产实现：此前 Mercury 12/12 首轮预测符合预期且
+编译/执行正确（另 1 次连通探针），中位 448ms / P95 818ms。此前 SiliconFlow Qwen FIM
+12 次中 11/12 编译/执行正确，1 条额外围栏被拒绝，中位 1622ms / P95 6936ms；本轮没有
+新增 SiliconFlow 请求。这些为小样本，不能表示用户接受率或与 Kilo 的同条件胜率。
 
-这些是小样本首轮结果，没有重试覆盖失败。Mercury 样例为 Go/Java/TypeScript/Python 的
-变量、函数、字段重命名；FIM 样例为 Go/Java/TypeScript 的表达式、函数体、EOF 和跨文件调用。
-它们不代表用户接受率，也未进行与 Kilo 的同条件产品胜率比较。模型返回错误代码的可能性仍存在，
-接受操作由用户决定；不宣称建议语义总是正确。
-
-可复现入口：`src/integration/runAutocompleteModels.mjs fim|next-edit`（凭据仅由进程环境提供）；
-`verifyAutocompleteModels.mjs` 只执行严格匹配已审阅纯计算样例的结果，并使用精简子进程环境。
-原先直接执行生成程序的调用被自动审批拒绝，收窄到固定样例和精简环境后已通过审查并完成。
-结果留在忽略目录 `artifacts/autocomplete-models/`，没有把密钥、输出日志或 VSIX 提交到 Git。
+Java EOF 的模型不完整续写仍保留为失败，不伪造补齐括号或用重试覆盖首轮记录。可复现入口：
+`runAutocompleteModels.mjs mercury-fim --production-context`、`fim`、`next-edit`；不带
+production-context 的 mercury-fim 保留上游模板对照，`--with-context` 仅运行三个跨文件样例。
+验证脚本只编译运行严格匹配已审阅纯计算样例的结果，使用精简子进程环境。凭据仅进程环境
+传入；输出保留在忽略目录 `artifacts/autocomplete-models/`，不提交密钥、日志或 VSIX。
 
 ## 编辑器入口移除
 

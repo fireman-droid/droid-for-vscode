@@ -12,8 +12,16 @@ type PromptInput = {
   comments?: LanguageComments;
 };
 
-/** Codestral's documented multi-file prefix; other models get ordinary reference text. */
+/** Mercury keeps reference code as language comments inside the FIM prefix.
+ * This avoids the upstream Mercury template dropping all cross-file definitions. */
 export function buildCompletionPrompt(input: PromptInput): { prefix: string; suffix: string } {
+  const marker = /mercury/i.test(input.model) && input.offset < input.text.length ? '<|fim_prefix|>' : '';
+  const prompt = buildContextPrompt({ ...input, maxCharacters: Math.max(0, input.maxCharacters - marker.length) });
+  return { prefix: marker + prompt.prefix, suffix: prompt.suffix };
+}
+
+/** Codestral's documented multi-file prefix; other models get ordinary reference text. */
+function buildContextPrompt(input: PromptInput): { prefix: string; suffix: string } {
   const budget = Math.max(0, Math.trunc(input.maxCharacters));
   const plain = () => buildCompletionContext(input.text, input.offset, budget);
   if (input.snippets.length === 0) return plain();

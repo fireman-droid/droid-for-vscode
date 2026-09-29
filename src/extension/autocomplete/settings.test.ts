@@ -22,6 +22,7 @@ vi.mock('vscode', () => ({
 
 import {
   completionNeedsKey, configureCompletion, DEFAULT_ENDPOINT, readCompletionSettings, validateCompletionEndpoint,
+  readCompletionKey, completionSecretKey, MERCURY_FIM_ENDPOINT, MERCURY_EDIT_ENDPOINT, switchMercuryMode, removeCompletionKey, mercuryAlternateEndpoint,
 } from './settings';
 
 type Preset = { label: string; protocol: string; endpoint: string; model: string };
@@ -238,4 +239,34 @@ describe('autocomplete provider settings', () => {
     expect(completionNeedsKey('http://localhost:11434/api/generate')).toBe(false);
   });
 
+});
+
+describe('Mercury completion modes and credentials', () => {
+  it('switches both directions and retains the same saved Inception key', async () => {
+    choose('Inception / Mercury Code Completion'); useDefaults('example-provider-key');
+    expect(await configureCompletion(secrets)).toBe(true);
+    expect(mocks.global).toMatchObject({ endpoint: MERCURY_FIM_ENDPOINT, protocol: 'fim', model: 'mercury-edit-2' });
+    expect(await switchMercuryMode()).toBe(true);
+    expect(mocks.global).toMatchObject({ endpoint: MERCURY_EDIT_ENDPOINT, protocol: 'mercury-edit' });
+    expect(await readCompletionKey(secrets, MERCURY_EDIT_ENDPOINT)).toBe('example-provider-key');
+    expect(await switchMercuryMode()).toBe(true);
+    expect(mocks.global.endpoint).toBe(MERCURY_FIM_ENDPOINT);
+  });
+  it('reuses an existing Next Edit key for FIM without sharing it with another endpoint', async () => {
+    mocks.values.set(completionSecretKey(MERCURY_EDIT_ENDPOINT), 'existing-provider-key');
+    expect(await readCompletionKey(secrets, MERCURY_FIM_ENDPOINT)).toBe('existing-provider-key');
+    expect(await readCompletionKey(secrets, 'https://example.test/v1/fim/completions')).toBeUndefined();
+    expect(mercuryAlternateEndpoint('invalid')).toBeUndefined();
+  });
+  it('removes both mode credentials and never changes another provider key', async () => {
+    for (const endpoint of [MERCURY_FIM_ENDPOINT, MERCURY_EDIT_ENDPOINT, DEFAULT_ENDPOINT]) mocks.values.set(completionSecretKey(endpoint), 'example');
+    await removeCompletionKey({ ...secrets, delete: async key => { mocks.values.delete(key); } }, MERCURY_FIM_ENDPOINT);
+    expect(await readCompletionKey(secrets, MERCURY_FIM_ENDPOINT)).toBeUndefined();
+    expect(await readCompletionKey(secrets, MERCURY_EDIT_ENDPOINT)).toBeUndefined();
+    expect(await readCompletionKey(secrets, DEFAULT_ENDPOINT)).toBe('example');
+  });
+  it('does not let workspace settings enable clipboard reads or redirect the service', () => {
+    mocks.workspace = { includeClipboard: true, endpoint: 'https://example.test/v1/fim/completions' };
+    expect(readCompletionSettings()).toMatchObject({ includeClipboard: false, endpoint: DEFAULT_ENDPOINT });
+  });
 });

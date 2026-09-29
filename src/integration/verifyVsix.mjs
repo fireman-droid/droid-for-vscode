@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 const vsixPath = path.resolve(process.argv[2] ?? 'dist/droidvisx.vsix');
@@ -14,6 +14,9 @@ const expectedEntries = [
   // Root LICENSE ships as LICENSE.txt alongside the manifest.
   'extension/LICENSE.txt',
   'extension/third-party/KILO-LICENSE.txt',
+  'extension/third-party/CONTINUE-LICENSE.txt',
+  'extension/third-party/JS-TIKTOKEN-LICENSE.txt',
+  'extension/third-party/TREE-SITTER-GRAMMARS-LICENSES.txt',
   'extension/dist/extension/extension.cjs',
   'extension/dist/extension/sessionCatalogWorker.cjs',
   // Notices for the dependencies bundled into the extension host entry.
@@ -36,6 +39,17 @@ const expectedEntries = [
   'extension/resources/droidvisx.svg',
 ].sort();
 
+function parserAssets(directory, relative = '') {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const file = relative + entry.name;
+    return entry.isDirectory() ? parserAssets(path.join(directory, entry.name), file + '/') : [file];
+  });
+}
+const parserEntries = parserAssets('dist/extension/autocomplete').map(file => 'extension/dist/extension/autocomplete/' + file);
+assert.ok(parserEntries.some(file => file.endsWith('/grammars/tree-sitter-go.wasm')));
+assert.ok(parserEntries.some(file => file.endsWith('/grammars/tree-sitter-java.wasm')));
+assert.ok(parserEntries.some(file => file.endsWith('/queries/import-queries/typescript.scm')));
+expectedEntries.push(...parserEntries); expectedEntries.sort();
 const entries = execFileSync('tar', ['-tf', vsixPath], {
   encoding: 'utf8',
 })

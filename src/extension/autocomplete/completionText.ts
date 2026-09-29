@@ -1,3 +1,5 @@
+import { postprocessAutocompleteSuggestion } from './kilo/classic-auto-complete/uselessSuggestionFilter';
+
 /** A UTF-16 character budget matching VS Code document offsets. */
 export function buildCompletionContext(
   text: string,
@@ -28,15 +30,19 @@ function splitsPair(text: string, offset: number): boolean {
 
 /** Keep code unchanged; undefined rejects ambiguous model formatting instead of repairing it. */
 export function prepareCompletion(
-  text: string, _prefix: string, suffix: string, languageId: string,
+  text: string, prefix: string, suffix: string, languageId: string, model?: string,
 ): string | undefined {
   if (!text.trim() || suffix.startsWith(text)) return '';
   const allowsFences = ['markdown', 'mdx', 'plaintext'].includes(languageId);
   // Without lexical state an isolated fence may be model markup or legitimate string/comment
   // content. Suppress the whole code suggestion rather than guessing and deleting its lines.
   if (!allowsFences && /^[ \t]*`{3,}/m.test(text)) return undefined;
-  // Partial overlap (especially braces) can be valid nested code, so leave it intact.
-  return text;
+  // The provider supplies the model to enable Kilo's model/language-aware pipeline.
+  if (!model) return text;
+  const eol = text.includes('\r\n') || prefix.includes('\r\n') ? '\r\n' : '\n';
+  const processed = postprocessAutocompleteSuggestion({ suggestion: text.replace(/\r\n/g, '\n'),
+    prefix: prefix.replace(/\r\n/g, '\n'), suffix: suffix.replace(/\r\n/g, '\n'), languageId, model });
+  return (processed ?? '').replace(/\n/g, eol);
 }
 
 export type CachedCompletion = {

@@ -1,4 +1,6 @@
-import { appendFileSync, readFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, mkdirSync, cpSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { isBuiltin } from 'node:module';
@@ -31,8 +33,19 @@ const extensionResult = await build({
   logLevel: 'info',
 });
 
-const notices = createThirdPartyNotices(process.cwd());
+const require = createRequire(import.meta.url);
+const assetRoot = 'dist/extension/autocomplete';
+mkdirSync(assetRoot, { recursive: true });
+cpSync(path.join(path.dirname(require.resolve('web-tree-sitter')), 'tree-sitter.wasm'), path.join(assetRoot, 'tree-sitter.wasm'));
+const grammarSource = readFileSync('src/extension/autocomplete/kilo/continuedev/core/util/treeSitter.ts', 'utf8');
+const grammarNames = [...grammarSource.match(/export enum LanguageName \{([\s\S]*?)\}/)[1].matchAll(/= "([a-z_]+)"/g)].map(match => match[1]);
+const grammarPackage = path.dirname(require.resolve('tree-sitter-wasms/package.json'));
+mkdirSync(path.join(assetRoot, 'grammars'), { recursive: true });
+for (const name of grammarNames) cpSync(path.join(grammarPackage, 'out', 'tree-sitter-' + name + '.wasm'), path.join(assetRoot, 'grammars', 'tree-sitter-' + name + '.wasm'));
+cpSync('src/extension/autocomplete/kilo/continuedev/tree-sitter', path.join(assetRoot, 'queries'), { recursive: true });
+const notices = createThirdPartyNotices(process.cwd(), undefined, { 'js-tiktoken@1.0.18': new URL('./third-party/JS-TIKTOKEN-LICENSE.txt', import.meta.url) });
 await notices.add(extensionResult.metafile);
+await notices.addPreprocessedPackage(grammarPackage);
 const catalogWorkerResult = await build({
   entryPoints: ['src/runtime/catalog/sessionCatalogWorker.ts'],
   outfile: 'dist/extension/sessionCatalogWorker.cjs',
@@ -52,6 +65,9 @@ const catalogWorkerResult = await build({
 await notices.add(catalogWorkerResult.metafile);
 await notices.write('dist/extension/THIRD_PARTY_LICENSES.txt');
 appendFileSync('dist/extension/THIRD_PARTY_LICENSES.txt', '\nKilo Code (vendored autocomplete, 7d977bce994af36f0edf752cb53e3aefc7aeb214)\n' + readFileSync('third-party/KILO-LICENSE.txt', 'utf8'));
+
+appendFileSync('dist/extension/THIRD_PARTY_LICENSES.txt', '\nContinue (Apache-2.0; autocomplete code via Kilo)\n' + readFileSync('third-party/CONTINUE-LICENSE.txt', 'utf8'));
+appendFileSync('dist/extension/THIRD_PARTY_LICENSES.txt', '\n' + readFileSync('third-party/TREE-SITTER-GRAMMARS-LICENSES.txt', 'utf8'));
 
 execFileSync(process.execPath, ['scripts/buildWebviewV2.mjs', '--production'], { stdio: 'inherit' });
 

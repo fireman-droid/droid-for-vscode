@@ -4,6 +4,7 @@ import { setImmediate } from 'node:timers/promises';
 
 const mocks = vi.hoisted(() => ({
   editor: undefined as unknown,
+  notebooks: [] as vscode.NotebookDocument[],
   listeners: new Map<string, (event?: unknown) => void>(),
   config: {} as Record<string, unknown>,
   request: vi.fn(),
@@ -24,9 +25,11 @@ vi.mock('vscode', () => {
   return {
     workspace: {
       isTrusted: true,
+      get notebookDocuments() { return mocks.notebooks; },
       getWorkspaceFolder: () => ({ uri: { toString: () => 'file:///' } }),
       asRelativePath: (uri: vscode.Uri) => uri.toString().replace(/^file:\/\/\//, ''),
       onDidChangeTextDocument: listen('text'),
+      onDidChangeNotebookDocument: listen('notebook'),
       onDidChangeConfiguration: listen('configuration'),
       getConfiguration: (section: string) => ({
         get: (key: string, fallback: unknown) => section === 'editor'
@@ -40,6 +43,7 @@ vi.mock('vscode', () => {
       onDidChangeTextEditorSelection: listen('selection'),
     },
     languages: { match: () => 0 },
+    NotebookCellKind: { Markup: 1, Code: 2 },
     EndOfLine: { LF: 1, CRLF: 2 },
     InlineCompletionTriggerKind: { Invoke: 0, Automatic: 1 },
     EventEmitter: class {
@@ -77,6 +81,14 @@ vi.mock('./context/CompletionContextService', () => ({
     dispose = mocks.contextDispose;
   },
 }));
+vi.mock('./context/KiloContextService', async () => {
+  const { buildCompletionPrompt } = await import('./context/CompletionPrompt');
+  return { KiloContextService: class {
+    invalidate() {} dispose() {}
+    async build(input: any) { return { ...buildCompletionPrompt({ ...input, model: input.settings.model,
+      maxCharacters: input.settings.maxContextCharacters }), relatedFiles: input.snippets.length }; }
+  } };
+});
 vi.mock('./context/LanguageComments', () => ({ readLanguageComments: mocks.comments }));
 
 import { AutocompleteProvider } from './AutocompleteProvider';
@@ -144,7 +156,7 @@ let provider: AutocompleteProvider;
 
 beforeEach(() => {
   mocks.listeners.clear();
-  mocks.editor = undefined;
+  mocks.editor = undefined; mocks.notebooks = [];
   mocks.config = { enabled: true, relatedFiles: true, excludePatterns: [], debounceMs: 100 };
   mocks.contextRevision = 0;
   mocks.allowed.mockReset().mockResolvedValue(true);
@@ -246,7 +258,7 @@ describe('AutocompleteProvider', () => {
     mocks.request.mockResolvedValue('():\n    return 1\n');
     const item = (await (await requesting(file, undefined, { ...context, selectedCompletionInfo: { range, text: 'def run' } })).pending)[0];
     expect(item.range).toBe(range);
-    expect(item.insertText).toBe('def run():\n    return 1');
+    expect(item.insertText).toBe('def run():');
   });
 
   it.each(['metadata-only', 'another document'])('keeps the current request alive after a %s document event', async (kind) => {
@@ -654,5 +666,57 @@ describe('AutocompleteProvider', () => {
     expect(invalidated).not.toHaveBeenCalled();
     expect((await (await requesting(file)).pending)[0].insertText).toBe('ulate()');
     expect(mocks.request).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('full classic and notebook workflows', () => {
+  it('shows one line while typing and retains the remainder for the next line without another model call', async () => {
+    const file = document('const value = '); mocks.request.mockResolvedValue('compute()\nnextStatement()');
+    expect((await (await requesting(file)).pending)[0].insertText).toBe('compute()');
+    file.state.text += 'compute()\n'; Object.assign(file.value, { version: 2 });
+    expect((await (await requesting(file)).pending)[0].insertText).toBe('nextStatement()');
+    expect(mocks.request).toHaveBeenCalledOnce();
+  });
+  it('skips automatic mid-word requests but permits explicit requests', async () => {
+    const file = document('const value = cal'); mocks.request.mockResolvedValue('culate()');
+    expect(await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending).toEqual([]);
+    expect(mocks.request).not.toHaveBeenCalled();
+    expect((await (await requesting(file)).pending)[0].insertText).toBe('culate()');
+  });
+  it.each([{ autoTrigger: false }, { snoozeUntil: Date.now() + 60_000 }])('keeps manual suggestions available while automatic requests are paused: %j', async settings => {
+    Object.assign(mocks.config, settings); const file = document(); mocks.request.mockResolvedValue('42');
+    expect(await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending).toEqual([]);
+    expect(mocks.request).not.toHaveBeenCalled();
+    expect((await (await requesting(file)).pending)[0].insertText).toBe('42');
+  });
+  function notebook() {
+    const earlier = document('const limit = 5;', 'vscode-notebook-cell:///demo.ipynb#0');
+    const cell = document('const answer = ', 'vscode-notebook-cell:///demo.ipynb#1');
+    for (const d of [earlier, cell]) Object.assign(d.value.uri, { scheme: 'vscode-notebook-cell' });
+    const parent = { scheme: 'file', toString: () => 'file:///demo.ipynb', fsPath: '/demo.ipynb' } as vscode.Uri;
+    mocks.notebooks = [{ uri: parent, version: 1, getCells: () => [earlier, cell].map(d => ({ kind: 2, document: d.value })) } as vscode.NotebookDocument];
+    return { earlier, cell, parent };
+  }
+  it('uses FIM for notebook cells in Mercury Next Edit mode and includes preceding cells', async () => {
+    const { cell, parent } = notebook();
+    Object.assign(mocks.config, { protocol: 'mercury-edit', endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions', model: 'mercury-edit-2' });
+    mocks.request.mockResolvedValue('limit * 2');
+    expect((await (await requesting(cell)).pending)[0].insertText).toBe('limit * 2');
+    expect(mocks.request).toHaveBeenCalledWith(expect.objectContaining({ protocol: 'fim', endpoint: 'https://api.inceptionlabs.ai/v1/fim/completions', prefix: 'const limit = 5;\n\nconst answer = ' }));
+    expect(mocks.allowed).toHaveBeenCalledWith(expect.objectContaining({ uri: parent }), expect.any(Array), expect.any(AbortSignal));
+  });
+  it('rejects an in-flight notebook reply when a sibling cell changes', async () => {
+    const { earlier, cell } = notebook(), result = deferred<string>(); mocks.request.mockReturnValue(result.promise);
+    const pending = await requesting(cell); Object.assign(earlier.value, { version: 2 }); result.resolve('42');
+    expect(await pending.pending).toEqual([]);
+  });
+  it('does not reuse a notebook cache after a sibling changes', async () => {
+    const { earlier, cell } = notebook(); mocks.request.mockResolvedValueOnce('42').mockResolvedValueOnce('43');
+    expect((await (await requesting(cell)).pending)[0].insertText).toBe('42');
+    const hidden = vi.fn(); provider.onDidInvalidateSuggestion(hidden);
+    Object.assign(earlier.value, { version: 2 });
+    mocks.listeners.get('text')!({ document: earlier.value, contentChanges: [{}] });
+    expect(hidden).toHaveBeenCalledOnce();
+    expect((await (await requesting(cell)).pending)[0].insertText).toBe('43'); expect(mocks.request).toHaveBeenCalledTimes(2);
   });
 });

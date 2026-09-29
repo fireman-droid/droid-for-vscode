@@ -102,7 +102,7 @@ describe('registered autocomplete suggestion invalidation', () => {
     await mocks.commands.get('droidvisx.autocomplete.toggle')?.();
     expect(mocks.updateConfiguration).toHaveBeenCalledWith('enabled', false, 1);
     expect(mocks.executeCommand).toHaveBeenCalledExactlyOnceWith('editor.action.inlineSuggest.hide');
-    expect(mocks.status.hide).toHaveBeenCalled();
+    expect(mocks.status.show).toHaveBeenCalled();
   });
 
   it.each([

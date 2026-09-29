@@ -78,6 +78,27 @@ describe('completion text', () => {
     expect(prepareCompletion('```', '', '', 'java')).toBeUndefined();
   });
 
+  it('applies Mercury prefix overlap removal without losing remaining code', () => {
+    expect(prepareCompletion('calculate(value)', 'const x = calc', ';', 'typescript', 'mercury-edit-2')).toBe('ulate(value)');
+  });
+
+  it('keeps pure indentation and CRLF through model-aware filtering', () => {
+    expect(prepareCompletion('  return value;\r\n}', 'function run() {\r\n  ', '', 'typescript', 'codestral-latest'))
+      .toBe('  return value;\r\n}');
+  });
+
+  it('filters repeated lines and looping model output', () => {
+    expect(prepareCompletion('const repeated = 1;\nconst next = 2;', 'const repeated = 1;\n', '', 'typescript', 'codestral')).toBe('');
+    expect(prepareCompletion('repeat this phrase again and again forever. '.repeat(8), '', '', 'plaintext', 'codestral')).toBe('');
+  });
+
+  it('preserves Markdown fences while removing extra empty lines before a closing fence', () => {
+    expect(prepareCompletion('\n\n```\nNext paragraph', '```ts\nconst x = 1;\n', '', 'markdown', 'codestral'))
+      .toBe('```\nNext paragraph');
+    expect(prepareCompletion('```ts\nconst x = 1;\n```', 'Example:\n', '', 'markdown', 'codestral'))
+      .toBe('```ts\nconst x = 1;\n```');
+  });
+
   const cached: CachedCompletion = {
     uri: 'file:///sample.ts', prefix: 'const value = ', suffix: ';', text: 'calculate()', createdAt: 1000,
   };

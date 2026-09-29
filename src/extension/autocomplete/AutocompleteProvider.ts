@@ -4,21 +4,23 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { FimCompletionError } from '../../runtime/autocomplete/FimClient';
 import { requestCompletion } from '../../runtime/autocomplete/requestCompletion';
 import { CompletionContextService } from './context/CompletionContextService';
-import { buildCompletionPrompt } from './context/CompletionPrompt';
+import { KiloContextService } from './context/KiloContextService';
+import { autocompleteScope, getNotebookContext, notebookUri } from './kilo/continuedev/core/autocomplete/notebook';
 import { readLanguageComments } from './context/LanguageComments';
 import {
   prepareCompletion,
 } from './completionText';
 import {
-  COMPLETION_SECTION, completionDocumentBlockReason, completionNeedsKey, completionSecretKey,
-  readCompletionSettings, validateCompletionEndpoint,
+  COMPLETION_SECTION, completionDocumentBlockReason, completionNeedsKey, readCompletionKey,
+  readCompletionSettings, validateCompletionEndpoint, mercuryAlternateEndpoint,
 } from './settings';
 
 import { NextEditSupport } from './NextEditSupport';
 import { requestNextEdit } from '../../runtime/autocomplete/nextEdit';
 import { CompletionHistory } from './CompletionHistory';
 import { CompletionRequests } from './CompletionRequests';
-import { calcDebounceDelay } from './kilo/inline-utils';
+import { shouldSkipAutocomplete } from './kilo/classic-auto-complete/contextualSkip';
+import { calcDebounceDelay, shouldShowOnlyFirstLine, getFirstLine } from './kilo/inline-utils';
 import { ErrorBackoff } from './kilo/ErrorBackoff';
 
 interface PendingCompletion {
@@ -30,12 +32,15 @@ interface PendingCompletion {
   version: number;
   position: vscode.Position;
   contextRevision: number;
+  documentScope: string;
 }
 
 export class AutocompleteProvider implements vscode.InlineCompletionItemProvider, vscode.Disposable {
   private active?: PendingCompletion;
   private sequence = 0;
+  private firstAutomaticRequest = true;
   private nextEdit?: NextEditSupport;
+  private kiloContext?: KiloContextService;
   private readonly history = new CompletionHistory();
   private readonly requests = new CompletionRequests();
   private readonly backoff = new ErrorBackoff();
@@ -43,6 +48,7 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
   private cacheContextRevision = -1;
   private readonly context = new CompletionContextService();
   private lastDocument?: vscode.TextDocument;
+  private lastDocumentScope?: string;
   private contextFileCount = 0;
   private latencyMs: number | undefined;
   private retryAfter = 0;
@@ -55,7 +61,15 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
   private readonly subscriptions: vscode.Disposable[];
 
   constructor(private readonly secrets: vscode.SecretStorage, private readonly diagnostics?: RuntimeDiagnosticSink) {
+    const notebookChanged = () => {
+        if (this.lastDocument?.uri.scheme === 'vscode-notebook-cell' &&
+            autocompleteScope(this.lastDocument) !== this.lastDocumentScope) {
+          this.lastDocumentScope = autocompleteScope(this.lastDocument);
+          this.reset('notebook-context-changed'); this.invalidated.fire();
+        }
+    };
     this.subscriptions = [
+      vscode.workspace.onDidChangeNotebookDocument(notebookChanged),
       this.context.onDidChangeContext(() => {
         if (!this.active && !this.lastDocument) return;
         const document = this.active?.document ?? this.lastDocument;
@@ -66,6 +80,7 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
         }
       }),
       vscode.workspace.onDidChangeTextDocument((event) => {
+        notebookChanged();
         if (this.active && event.document === this.active.document && event.contentChanges.length > 0) {
           this.cancel('document-edited');
         }
@@ -105,6 +120,7 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
   reset(reason = 'reset'): void {
     this.cancel(reason);
     this.nextEdit?.clear();
+    this.kiloContext?.invalidate();
     this.history.clear();
     this.requests.clear();
     this.contextFileCount = 0;
@@ -136,7 +152,10 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
       return [];
     };
     if (this.disposed || token.isCancellationRequested) return skip('inactive');
-    const settings = readCompletionSettings(document.uri);
+    const configured = readCompletionSettings(document.uri);
+    const settings = document.uri.scheme === 'vscode-notebook-cell' && configured.protocol === 'mercury-edit'
+      && mercuryAlternateEndpoint(configured.endpoint)
+      ? { ...configured, protocol: 'fim' as const, endpoint: mercuryAlternateEndpoint(configured.endpoint)! } : configured;
     if (!settings.enabled) return skip('disabled');
     const blocked = completionDocumentBlockReason(document, settings);
     if (blocked) return skip(blocked);
@@ -145,6 +164,8 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
         !editor.selection.isEmpty || !editor.selection.active.isEqual(position)) return skip('editor-selection-mismatch');
 
     const explicit = context.triggerKind === vscode.InlineCompletionTriggerKind.Invoke;
+    if (!explicit && settings.autoTrigger === false) return skip('automatic-disabled');
+    if (!explicit && (settings.snoozeUntil ?? 0) > Date.now()) return skip('snoozed');
     if (!explicit && (this.backoff.blocked() || Date.now() < this.retryAfter)) return skip('error-cooldown');
     const endpointError = validateCompletionEndpoint(settings.endpoint, settings.protocol);
     if (endpointError || !settings.model) {
@@ -163,35 +184,41 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
       if (selected || this.nextEdit?.manager.isPending()) return skip('next-edit-pending');
     }
     const originalOffset = document.offsetAt(position);
-    let inputText = text;
-    let offset = originalOffset;
+    const notebook = getNotebookContext(document, position);
+    let inputText = notebook?.contents ?? text;
+    let offset = notebook ? notebook.contents.split('\n').slice(0, notebook.position.line).reduce((sum, line) => sum + line.length + 1, 0)
+      + notebook.position.character : originalOffset;
+    const cellOffset = offset - originalOffset;
     if (selected) {
       const start = document.offsetAt(selected.range.start);
       const end = document.offsetAt(selected.range.end);
       if (selected.range.start.line !== selected.range.end.line || start > originalOffset ||
           end < originalOffset || !selected.text.startsWith(text.slice(start, originalOffset))) return skip('selected-completion-mismatch');
       // Ask for code after the selected language-server item, then extend that same item/range.
-      inputText = text.slice(0, start) + selected.text + text.slice(end);
-      offset = start + selected.text.length;
+      inputText = inputText.slice(0, cellOffset + start) + selected.text + inputText.slice(cellOffset + end);
+      offset = cellOffset + start + selected.text.length;
     }
     const prefix = inputText.slice(0, offset);
     const suffix = inputText.slice(offset);
     if (!prefix.trim() && !isNextEdit) return skip('empty-prefix');
-    this.lastDocument = document;
+    this.lastDocument = document; this.lastDocumentScope = autocompleteScope(document);
     const contextRevision = this.context.revisionFor(document.uri);
     this.cacheContextRevision = contextRevision;
-    const scope = document.uri.toString() + ':' + contextRevision;
+    const scope = autocompleteScope(document) + ':' + contextRevision;
     const cached = isNextEdit ? undefined : this.history.find(scope, prefix, suffix);
     if (cached !== undefined) {
       this.trace('cache', { id, characters: cached.length, outcome: cached ? 'suggestion-returned' : 'empty' });
       if (!cached) return [];
-      const completion = this.completionItem(cached, document, position, selected);
-      this.history.put(scope, prefix, suffix, completion.text);
+      const completion = this.completionItem(shouldShowOnlyFirstLine(prefix, cached) ? getFirstLine(cached) : cached, document, position, selected);
       return [completion.item];
     }
+    // Cached continuations remain available mid-word; explicit retries can force a request.
+    if (!isNextEdit && !explicit && shouldSkipAutocomplete(prefix, suffix, document.languageId)) return skip('contextual-skip');
+    const leading = !isNextEdit && this.firstAutomaticRequest;
+    if (!explicit) this.firstAutomaticRequest = false;
     const pending: PendingCompletion = {
       id, startedAt: Date.now(), phase: 'debounce',
-      controller: new AbortController(), document, version: document.version, position, contextRevision,
+      controller: new AbortController(), document, version: document.version, position, contextRevision, documentScope: autocompleteScope(document),
     };
     this.active = pending;
     this.trace('started', { id, language: document.languageId, trigger: context.triggerKind, documentVersion: document.version });
@@ -203,18 +230,20 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
     });
     try {
       if (token.isCancellationRequested) return [];
-      if (!explicit && !releaseRequest) await delay(settings.adaptiveDebounce === false ? settings.debounceMs : calcDebounceDelay(this.latencies), undefined, { signal: pending.controller.signal });
+      if (!explicit && !releaseRequest && !(leading && settings.adaptiveDebounce !== false)) await delay(settings.adaptiveDebounce === false ? settings.debounceMs : isNextEdit ? 250 : this.latencies.length < 10 ? 300 : calcDebounceDelay(this.latencies), undefined, { signal: pending.controller.signal });
       if (!this.isCurrent(pending, token)) return [];
       const signal = pending.controller.signal;
       pending.phase = 'policy';
-      if (document.uri.scheme === 'file' && vscode.workspace.getWorkspaceFolder(document.uri) &&
-          !await this.context.isAllowed(document, settings.excludePatterns, signal)) {
+      const policyUri = notebookUri(document.uri) ?? document.uri;
+      const policyDocument = policyUri === document.uri ? document : { uri: policyUri, languageId: document.languageId } as vscode.TextDocument;
+      if (policyUri.scheme === 'file' && vscode.workspace.getWorkspaceFolder(policyUri) &&
+          !await this.context.isAllowed(policyDocument, settings.excludePatterns, signal)) {
         if (this.isCurrent(pending, token)) this.report('This file is excluded by workspace ignore rules or file policy.');
         return skip('file-policy');
       }
       if (!this.isCurrent(pending, token)) return [];
       pending.phase = 'credentials';
-      const apiKey = await this.secrets.get(completionSecretKey(settings.endpoint));
+      const apiKey = await readCompletionKey(this.secrets, settings.endpoint);
       if (!this.isCurrent(pending, token)) return [];
       if (!apiKey && completionNeedsKey(settings.endpoint)) {
         this.report('Configure an API key with Droid: Configure Autocomplete.');
@@ -252,13 +281,14 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
           editableRegionEndLine: editContext.editableRegionEndLine, latencyMs: this.latencyMs,
         }) ?? [];
       }
-      const contextText = buildCompletionPrompt({
-        text: inputText, offset, maxCharacters: settings.maxContextCharacters,
+      const contextText = await (this.kiloContext ??= new KiloContextService(uri => this.context.trackContextFile(uri))).build({
+        document, text: inputText, offset, settings, signal,
         filepath: document.uri.scheme === 'file' ? vscode.workspace.asRelativePath(document.uri, false) : 'untitled',
-        model: settings.model, snippets, comments,
+        snippets, comments,
       });
+      if (!this.isCurrent(pending, token)) return [];
       pending.phase = 'request';
-      this.trace('request', { id, protocol: settings.protocol, prefixCharacters: contextText.prefix.length, suffixCharacters: contextText.suffix.length, relatedFiles: snippets.length });
+      this.trace('request', { id, protocol: settings.protocol, prefixCharacters: contextText.prefix.length, suffixCharacters: contextText.suffix.length, relatedFiles: contextText.relatedFiles });
       const result = await this.requests.run(scope, prefix, suffix, signal, (requestSignal) => requestCompletion({
         ...contextText, protocol: settings.protocol, endpoint: settings.endpoint,
         model: settings.model, apiKey: apiKey ?? '', maxTokens: settings.maxTokens, signal: requestSignal,
@@ -266,13 +296,13 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
       if (!this.isCurrent(pending, token)) return [];
       const normalized = document.eol === vscode.EndOfLine.CRLF
         ? result.replace(/\r?\n/g, '\r\n') : result.replace(/\r\n/g, '\n');
-      const suggestion = prepareCompletion(normalized, prefix, suffix, document.languageId);
+      const suggestion = prepareCompletion(normalized, prefix, suffix, document.languageId, settings.model);
       const completion = suggestion ? this.completionItem(suggestion, document, position, selected) : undefined;
       this.trace('result', { id, receivedCharacters: normalized.length, insertionCharacters: completion?.text.length ?? 0, durationMs: Date.now() - started,
         outcome: suggestion === undefined ? 'format-rejected' : suggestion ? 'suggestion-returned' : normalized.trim() ? 'already-present' : 'empty' });
       this.history.put(scope, prefix, suffix, completion?.text ?? '');
       this.cacheContextRevision = contextRevision;
-      this.contextFileCount = snippets.length;
+      this.contextFileCount = contextText.relatedFiles;
       this.latencyMs = Date.now() - started;
       this.retryAfter = 0;
       this.backoff.success();
@@ -283,7 +313,9 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
         this.report('Autocomplete response included ambiguous code fences. Suggestion hidden; use Request suggestion / retry.');
         return [];
       }
-      return completion ? [completion.item] : [];
+      if (!completion) return [];
+      return [shouldShowOnlyFirstLine(prefix, completion.text)
+        ? this.completionItem(getFirstLine(completion.text), document, position, selected).item : completion.item];
     } catch (error) {
       if (!this.isCurrent(pending, token)) return [];
       this.trace('failed', { id, phase: pending.phase, code: error instanceof FimCompletionError ? error.code : 'internal', status: error instanceof FimCompletionError ? error.status ?? 0 : 0 });
@@ -293,7 +325,8 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
           : error.status === 429 ? ' Provider rate limit reached.' : '';
         this.report(error.message + help);
       } else {
-        this.report('Autocomplete failed. Check the endpoint, model and stored API key.');
+        this.report(pending.phase === 'context' ? 'Autocomplete could not collect editor context. Check Droid logs.'
+          : 'Autocomplete failed. Check the endpoint, model and stored API key.');
       }
       // Automatic typing must not hammer an unavailable provider. Manual invocation can retry.
       const kind = this.backoff.failure(error);
@@ -314,6 +347,7 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
     const current = this.active === pending && !this.disposed &&
       !token.isCancellationRequested && !pending.controller.signal.aborted &&
       !pending.document.isClosed && pending.document.version === pending.version &&
+      autocompleteScope(pending.document) === pending.documentScope &&
       this.context.revisionFor(pending.document.uri) === pending.contextRevision &&
       editor?.document === pending.document && editor.selections.length === 1 &&
       editor.selection.isEmpty && editor.selection.active.isEqual(pending.position);
@@ -365,6 +399,7 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
     this.backoff.reset();
     this.subscriptions.forEach((item) => item.dispose());
     this.nextEdit?.dispose();
+    this.kiloContext?.dispose();
     this.context.dispose();
     this.changed.dispose();
     this.invalidated.dispose();

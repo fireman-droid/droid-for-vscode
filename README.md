@@ -2,7 +2,7 @@
 
 Droid 是 Factory Droid CLI 在 Cursor / VS Code 中的非官方本地可视化工作台。
 聊天复用本机 Droid CLI/SDK 的会话、模型、权限、工具与认证。可选的编辑器
-代码补全独立连接用户配置的 FIM 服务，不占用聊天会话。
+代码补全与编辑预测独立连接用户配置的模型服务，不占用聊天会话。
 
 本项目不由 Factory 官方发布、维护或背书。Factory 和 Droid 名称属于各自权利人；
 开源许可证不授予其商标使用权。扩展不包含 Droid 服务订阅，也不提供免费的模型额度。
@@ -29,26 +29,33 @@ Droid 是 Factory Droid CLI 在 Cursor / VS Code 中的非官方本地可视化�
 功能位于 `codex/droid-autocomplete` 独立分支，默认关闭，无需先打开 Droid 聊天。
 
 1. 命令面板运行 **Droid: Configure Autocomplete**，选择服务，再填写完整地址、
-   模型和密钥。提供 Mistral/Codestral、DeepSeek、SiliconFlow、Ollama、自定义 FIM，以及 Inception/Mercury Next Edit 预设。
+   模型和密钥。提供 Mistral/Codestral、DeepSeek、SiliconFlow、Ollama、自定义 FIM，以及 Inception/Mercury FIM 和 Next Edit 预设。
    Ollama 默认地址是 `http://localhost:11434/api/generate`，模型为
    `qwen2.5-coder:7b-base`，需要先自行安装该模型；本地服务可以不填密钥。
 2. 配置完成后选择 **Enable autocomplete**。稍作停顿显示灰字，**Tab** 接受、
    **Esc** 关闭；**Droid: Request Code Completion** 可手动请求或重试。
    语言服务候选列表打开时，AI 可继续补全选中项之后的代码。
-3. 状态栏 **Droid Tab** 提供暂停、服务配置、相关文件开关、设置和删除已存密钥；
-   关闭后用 **Droid: Toggle Autocomplete** 恢复。错误显示在状态栏，自动请求
+3. 状态栏 **Droid Tab** 提供启停、自动/仅手动请求、暂停 5/15/60 分钟、立即恢复、
+   服务配置、相关文件开关、设置和删除已存密钥；停用后仍可点击状态栏恢复。错误显示在状态栏，自动请求
    对 429/网络/服务错误指数退避，连续失败后暂停 5 分钟；认证/余额错误等待手动重试或重新配置。
 
-上下文包括当前文件的未保存前后文，以及同一工作区根内的符号定义、近期编辑和已打开
-文件片段。最多 6 个关联文件，优先保留定义和近期编辑；总请求默认限制为 12,000 个
-UTF-16 文本单位，含标头，至少 60% 可用预算留给主文件。相关文件可单独关闭。
-定义查询使用编辑器已有语言服务，Go、Java、TS、Vue 等不靠手写 import 规则；没有
-语言服务时仍可使用近期文件和当前文件。Codestral 使用多文件格式，其他模型动态读取
-已安装语言扩展的注释配置。上下文中的其他文件变化会使旧请求和旧建议缓存失效。
+普通续写接入 Kilo/Continue 的导入定义、语法路径、近期编辑/浏览/打开文件、排序与
+token 裁剪。语法分析资源随包提供，定义查询使用已有语言服务。总请求默认限制为
+12,000 个 UTF-16 文本单位，含标头，至少 60% 可用预算留给主文件；优先使用未保存内容。
+相关文件可以关闭；无对应语法或语言服务时仍可用当前文件与允许的近期片段。
+Codestral 使用多文件模板，其他服务使用语言注释承载关联片段；Mercury FIM 保留关联
+片段，修正上游模板丢弃片段后猜错跨文件参数的问题。文件变化会撤回旧请求与旧建议。
 
-密钥只保存到编辑器 SecretStorage，并绑定完整 endpoint；模型和地址只取用户级配置。
+Notebook 代码单元使用相邻同语言单元构造上下文，并映射回当前单元接受和撤销；
+单元内容或顺序变化会使缓存失效。官方 Mercury Next Edit 模式下，Notebook 自动走
+Mercury FIM；普通文件保持当前选定模式，Next Edit 空结果不会自动再请求 FIM。
+
+密钥只保存到编辑器 SecretStorage，并绑定完整 endpoint；官方 Mercury 的 FIM/Edit 两个地址共用凭据。
+模型和地址只取用户级配置。
 跨文件读取遵循 `.gitignore`、`.droidignore` 和 `droidvisx.autocomplete.excludePatterns`，
-跳过已识别的敏感/生成/二进制文件及工作区外链接，不扫描全仓、不读取剪贴板或聊天历史。
+跳过已识别的敏感/生成/二进制文件及工作区外链接，不读取聊天历史。默认不枚举项目文件、
+不读取剪贴板；`staticContext` 开启后为 TypeScript 枚举至多 2,000 个候选，仍遵循读取规则。
+`includeClipboard` 仅接受用户级显式开启，最多读取 4,000 字符；相关文件和剪贴板开关独立。
 设置集中在 `droidvisx.autocomplete`。模型服务独立计费或由本地运行，不使用 Factory
 订阅或聊天 Session；普通聊天接口不能直接当作 FIM 接口。
 
@@ -64,7 +71,8 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 
 选择 **Inception / Mercury Next Edit**，默认模型 `mercury-edit-2`，地址
 `https://api.inceptionlabs.ai/v1/edit/completions`，使用 Inception API key。
-该模式与普通 FIM 通过同一配置向导切换，密钥按地址分别保存；不会用 Qwen FIM 假装编辑预测。
+该模式与 **Inception / Mercury FIM**（`/v1/fim/completions`）可从状态栏切换，
+官方两个地址复用 Inception key。其他服务仍按完整地址隔离凭据。
 
 - 同行可续写的内容显示原生灰字；已有代码替换、删除和跨行修改显示主题化修改提示。
 - 修改位于别处时，第一次 **Tab** 跳转，第二次接受；光标已在修改处时直接接受。
@@ -73,9 +81,11 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
   文件被编辑、切换、权限/配置变化后旧建议失效；不完整或截断的回复不会应用。
 - 请求、缓存、退格复用、防抖和编辑提示部分移植自
   [Kilo Code](https://github.com/Kilo-Org/kilocode/tree/7d977bce994af36f0edf752cb53e3aefc7aeb214)，
-  MIT 许可随包分发；Host 生命周期、读取边界和服务适配由 Droid 负责。
-- `adaptiveDebounce` 默认根据近期延迟在 150–1000ms 间调整；
-  关闭后使用 `debounceMs`。建议历史最多 20 条、30 秒，支持继续输入和退格复用。
+  Kilo MIT、Continue Apache-2.0 及语法包/分词器许可随包分发；Host 生命周期、读取边界和服务适配由 Droid 负责。
+- `adaptiveDebounce` 开启时普通续写首个自动请求立即执行，后续初始等待 300ms，
+  累积 10 次响应后在 150–1000ms 间调整；Next Edit 使用上游的 250ms 等待。关闭后使用 `debounceMs`。
+  建议历史最多 20 条、30 秒，支持继续输入和退格复用。行中续写按 Kilo 只展示首行，
+  完整结果留在缓存，继续输入时复用剩余内容。
 
 验证记录见 [STATUS](docs/STATUS.md)。真实模型小样本通过率不等于日常代码接受率，
 也没有与 Kilo 做同模型、同输入的产品胜率对比。
@@ -94,7 +104,7 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 - Mission Control 已接通聊天、独立 Session、readiness、进度和 Worker
 - Chat、Models、Mission、Viewer、Review 共用 React 19 / Tailwind 4 前端；
   通用界面另行提供 [`@droidvisx/chat-ui`](packages/chat-ui/README.md)
-- 当前交付验证以 Windows / Cursor 为主；干净 VS Code、macOS、Linux、
+- 补全交付验证覆盖 Windows 的隔离 VS Code 与 Cursor；macOS、Linux、
   Remote SSH、WSL 和容器环境未完成本轮验收，不作完整兼容保证
 - 真实运行、恢复和视觉仍需人工验收；已知限制及审查问题以 `docs/STATUS.md`
   为准，构建通过不等于没有缺陷。独立 UI 包不包含 Claude Code／Codex CLI 接入

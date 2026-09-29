@@ -45,32 +45,40 @@ Provider、状态栏和配置向导；`AutocompleteProvider.ts` 持有编辑器�
 返回明确拒绝值，不猜测词法状态或截断文本。Provider 将拒绝缓存为当前上下文的空结果，
 显示状态提示；手动重试清缓存，新文本/新文档不受全局冷却。
 
-`context/CompletionContextService.ts` 从定义、近期编辑和已打开文件提取片段，
-优先使用未保存内容；定义查询限时 150ms、总收集 400ms，最多 6 文件。
-`CompletionFilePolicy.ts` 负责工作区边界、真实路径、Git/Droid 忽略规则及有界读取。
-`CompletionPrompt.ts` 控制总字符预算和模型格式；`LanguageComments.ts` 从已安装
-语言扩展读取 JSONC 注释元数据（150ms 截止），不为每个编程语言编写语法分支。
+普通 FIM 由 `context/KiloContextService.ts` 调用固定版本的 Kilo/Continue：HelperVars、
+ImportDefinitionsService、RootPathContextService、可选 StaticContextService、近期编辑/浏览、
+getSnippets 排序裁剪、模型模板。`KiloContextIde` 是唯一 Host 文件/LSP/剪贴板适配边界，
+复用 CompletionFilePolicy 的同根、真实路径、Git/Droid ignore 与大小限制，优先未保存文本。
+LSP 查询跟随请求取消；文本和外部文件变化清理检索缓存，读取到的新关联文件加入现有 watcher。
+解析器/语法资源来自包内 `dist/extension/autocomplete`；AST/Query 由请求资源作用域释放。
+静态上下文默认关闭，仅 TS 有上游查询，候选枚举最多 2,000 个；剪贴板需要用户级显式启用。
 
-`src/runtime/autocomplete/requestCompletion.ts` 根据显式协议调用原生 FIM、
-Ollama generate 或 SiliconFlow 的 prefix/suffix FIM 扩展；`completionTransport.ts` 共用取消、12 秒超时、大小限制和固定错误。
-Runtime 不引用 VS Code；Host 即时读取按 endpoint 绑定的 SecretStorage key，地址、
-模型、协议只接受用户级配置。本地无认证服务不附认证头。SiliconFlow 在 chat/completions 路径发送固定补全指令与
-顶层 prefix/suffix；显式协议决定请求格式，不根据模型名猜测。当前完整响应收齐后再返回灰字。
+`CompletionContextService` 保留 Next Edit 的轻量片段收集（最多 6 文件/400ms），也提供
+普通 FIM 的原生定义补充与文件失效通知。`CompletionPrompt` 控制最终 UTF-16 字符预算。
+Codestral 使用上游多文件模板；Mercury FIM 将关联片段作为语言注释保留在 prefix 中，
+避免上游 Mercury 模板主动丢弃 snippets。`LanguageComments` 从语言扩展 JSONC 读取元数据。
+Notebook 拼接同语言相邻单元，并将当前光标映射至虚拟上下文；缓存包含所有相关单元版本和顺序。
 
-补全直接使用编辑器 UI，不经过 Webview/Bridge，不进入 `DroidRuntime.sendTurn`
-或聊天队列。启动时注册补全，聊天 daemon 预热延后到聊天视图首次解析。
-相关文件开关关闭时跳过关联内容和语言元数据读取；复用编辑器语言服务，未引入 Tree-sitter。
-移植的 Kilo 原生代码在 autocomplete/kilo 下，固定到
-`7d977bce994af36f0edf752cb53e3aefc7aeb214`；未拷贝其 Continue 衍生子树。
-MIT 原文位于 third-party/KILO-LICENSE.txt，并并入扩展构建 notices。
+`src/runtime/autocomplete/requestCompletion.ts` 根据显式协议调用原生 FIM、Ollama generate
+或 SiliconFlow 的 prefix/suffix FIM 扩展。Runtime 不引用 VS Code；共享 transport 提供
+取消、12 秒超时、大小限制与固定错误。当前完整响应收齐后再返回灰字。
+Host 从 SecretStorage 即时读取完整 endpoint 的 key；仅官方 Mercury FIM/Edit 两个地址共用，
+配置只接受用户级值。本地无认证服务不附认证头，不进入 Droid 聊天 Session。
 
-NextEditSupport 管理有权限过滤的 EditHistoryTracker、待接受修改和接受后的有条件继续预测。
-Runtime nextEdit.ts 使用上游 editPrompt.ts 组装 Mercury 标记格式，按整个可编辑区域裁剪
-外围上下文；通过独立 /edit/completions 请求，要求完整 fenced region 和 finish_reason=stop。
-NextEditPresenter 将纯续写交给原生 InlineCompletionItem；其他编辑用 Kilo decoration
-和 SuggestionManager 的单个待接受项。任何文档版本变化都会失效，接受前再次检查；
-实际应用通过 editor.edit，保留编辑器 Undo。LF/CRLF 在提示拆行与编辑边界分别处理。
-所有新能力仍不经过聊天 Runtime、Bridge 或 Webview。
+Kilo 源码固定为 `7d977bce994af36f0edf752cb53e3aefc7aeb214`，位于 autocomplete/kilo。
+新接入的 Continue 子树保留 Apache-2.0 声明，Kilo 自身为 MIT；llamaTokenizer 保留原作者
+belladore.ai 的 MIT 头，语法包和 js-tiktoken 许可证随包 notices 分发。CLI 文件系统适配器
+未引入生产包。普通补全的后处理接入上游模型、重复与语言过滤，Droid 额外保留明确的
+围栏拒绝反馈、CRLF 和纯缩进；Markdown 不套用代码围栏剥除。
+
+NextEditSupport 管理经过文件策略过滤的 EditHistoryTracker、光标可编辑区域与接受后继续预测。
+Runtime nextEdit.ts 使用上游 editPrompt.ts 组装 Mercury 标记格式，按完整编辑区域裁剪外围上下文，
+请求独立 `/edit/completions`，要求完整 fenced region 和 finish_reason=stop。
+NextEditPresenter 将纯续写交给原生 InlineCompletionItem；其他修改使用 Kilo decoration 和
+SuggestionManager 的单个待接受项。Tab 先跳转再接受，editor.edit 保留 Undo，文档变化使旧建议失效。
+普通文件按配置选择 FIM 或 Next Edit；Notebook 在官方 Mercury 模式切换为其 FIM endpoint。
+自动/手动与 snooze 时间戳同时约束 Provider 和连续预测；定时器只刷新状态，不自动插入代码。
+补全不经过 Webview/Bridge，也不进入聊天队列。聊天 daemon 仍在聊天视图首次解析时预热。
 
 ### 历史内部会话过滤
 
