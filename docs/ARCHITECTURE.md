@@ -47,14 +47,17 @@ Provider、状态栏和配置向导；`AutocompleteProvider.ts` 持有编辑器�
 
 普通 FIM 由 `context/KiloContextService.ts` 调用固定版本的 Kilo/Continue：HelperVars、
 ImportDefinitionsService、RootPathContextService、可选 StaticContextService、近期编辑/浏览、
-getSnippets 排序裁剪、模型模板。`KiloContextIde` 是唯一 Host 文件/LSP/剪贴板适配边界，
+getSnippets 排序裁剪、模型模板。启用补全时立即建立浏览/编辑跟踪，不等首次 FIM 请求。
+原生定义和近期修改补充与 Kilo 片段合并，按来源优先级去重后再套用模型模板与总预算。`KiloContextIde` 是唯一 Host 文件/LSP/剪贴板适配边界，
 复用 CompletionFilePolicy 的同根、真实路径、Git/Droid ignore 与大小限制，优先未保存文本。
 LSP 查询跟随请求取消；文本和外部文件变化清理检索缓存，读取到的新关联文件加入现有 watcher。
 解析器/语法资源来自包内 `dist/extension/autocomplete`；AST/Query 由请求资源作用域释放。
 静态上下文默认关闭，仅 TS 有上游查询，候选枚举最多 2,000 个；剪贴板需要用户级显式启用。
 
-`CompletionContextService` 保留 Next Edit 的轻量片段收集（最多 6 文件/400ms），也提供
-普通 FIM 的原生定义补充与文件失效通知。`CompletionPrompt` 控制最终 UTF-16 字符预算。
+`CompletionContextService` 为 FIM 收集原生定义、近期编辑和打开文件（最多 6 文件/400ms），
+另为 Next Edit 收集实际浏览过的其他文件（最多 5 文件/400ms，按旧→新返回，每个片段围绕
+浏览位置保留最多 20 完整行）。关闭页签保留浏览位置，重新读取磁盘保存内容并检查文件策略。
+`CompletionPrompt` 控制 FIM 最终 UTF-16 字符预算。
 Codestral 使用上游多文件模板；Mercury FIM 将关联片段作为语言注释保留在 prefix 中，
 避免上游 Mercury 模板主动丢弃 snippets。`LanguageComments` 从语言扩展 JSONC 读取元数据。
 Notebook 拼接同语言相邻单元，并将当前光标映射至虚拟上下文；缓存包含所有相关单元版本和顺序。
@@ -72,7 +75,9 @@ belladore.ai 的 MIT 头，语法包和 js-tiktoken 许可证随包 notices 分�
 围栏拒绝反馈、CRLF 和纯缩进；Markdown 不套用代码围栏剥除。
 
 NextEditSupport 管理经过文件策略过滤的 EditHistoryTracker、光标可编辑区域与接受后继续预测。
-Runtime nextEdit.ts 使用上游 editPrompt.ts 组装 Mercury 标记格式，按完整编辑区域裁剪外围上下文，
+启用补全期间持续记录编辑；FIM/Next Edit 切换只清待接受建议，停用时销毁跟踪器并清空编辑历史。
+Runtime nextEdit.ts 使用上游 editPrompt.ts 组装 Mercury 标记格式；预算优先保留完整编辑区域、
+光标及最新可容纳的完整 diff，再分配较旧历史、浏览片段和邻近完整代码行，不截断 diff，
 请求独立 `/edit/completions`，要求完整 fenced region 和 finish_reason=stop。
 NextEditPresenter 将纯续写交给原生 InlineCompletionItem；其他修改使用 Kilo decoration 和
 SuggestionManager 的单个待接受项。Tab 先跳转再接受，editor.edit 保留 Undo，文档变化使旧建议失效。

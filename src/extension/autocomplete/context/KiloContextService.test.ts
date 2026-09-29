@@ -43,6 +43,7 @@ vi.mock('vscode', () => {
 });
 import { KiloContextService } from './KiloContextService';
 import { KiloContextIde } from './KiloContextIde';
+import type { ContextSnippet } from './CompletionContextService';
 import { configureParserAssets, withParserResources } from '../kilo/continuedev/core/util/treeSitter';
 import { getAst } from '../kilo/continuedev/core/autocomplete/util/ast';
 import { readCompletionSettings } from '../settings';
@@ -202,5 +203,57 @@ describe('Mercury reference context', () => {
     expect(prompt.prefix.startsWith('<|fim_prefix|>')).toBe(true);
     expect(prompt.prefix).toContain('RemoteZone'); expect(prompt.prefix).toContain('zone Zone');
     expect(prompt.prefix.length + prompt.suffix.length).toBeLessThanOrEqual(12000);
+  });
+});
+
+
+describe('merged Kilo and editor context', () => {
+  it.each(['codestral-latest', 'mercury-edit-2'])('keeps direct definitions and recent edits alongside Kilo results for %s', async model => {
+    state.config.model = model;
+    const text = 'function answer() {\n  return \n}';
+    const main = await document('main.ts', text);
+    const definition = await document('definition.ts', 'export type Target = { fromDefinition: string };', 'typescript', false);
+    const edited = await document('edited.ts', 'export const fromRecentEdit = 7;', 'typescript', false);
+    const opened = await document('opened.ts', 'export const fromKiloOpened = 3;');
+    const supplemental: ContextSnippet[] = [
+      { uri: definition.uri.toString(), filepath: 'definition.ts', content: definition.getText(), source: 'definition' },
+      { uri: edited.uri.toString(), filepath: 'edited.ts', content: edited.getText(), source: 'recentEdit' },
+      { uri: opened.uri.toString(), filepath: 'opened.ts', content: opened.getText(), source: 'openFile' },
+      { uri: definition.uri.toString(), filepath: 'definition.ts', content: 'fromDefinition: string', source: 'definition' },
+    ];
+    state.editor = { document: main } as vscode.TextEditor;
+    service = new KiloContextService();
+    const prompt = await service.build({ document: main, text, offset: text.indexOf('return ') + 7,
+      filepath: 'main.ts', settings: readCompletionSettings(), signal: new AbortController().signal,
+      snippets: supplemental, comments: { line: '//' },
+    });
+    expect(prompt.prefix).toContain('fromDefinition');
+    expect(prompt.prefix).toContain('fromRecentEdit');
+    expect(prompt.prefix).toContain('fromKiloOpened');
+    expect(prompt.prefix.indexOf('fromDefinition')).toBeLessThan(prompt.prefix.indexOf('fromKiloOpened'));
+    expect(prompt.prefix.match(/fromDefinition/g)).toHaveLength(1);
+    expect(prompt.prefix.match(/fromKiloOpened/g)).toHaveLength(1);
+  });
+
+  it('rechecks supplemental access and preserves the full prompt budget', async () => {
+    state.config.model = 'mercury-edit-2'; state.config.maxContextCharacters = 1000;
+    const text = 'const current = 1;\n'.repeat(120) + 'const answer = \n';
+    const main = await document('main.ts', text);
+    const allowed = await document('allowed.ts', 'export const allowedDefinition = 1;\n' + '// padding\n'.repeat(300), 'typescript', false);
+    const forbidden = await document('blocked.ts', 'forbiddenDefinition', 'typescript', false);
+    await document('.droidignore', 'blocked.ts', 'plaintext');
+    await document('opened.ts', 'kiloAvailableContext');
+    state.editor = { document: main } as vscode.TextEditor;
+    service = new KiloContextService();
+    const snippets: ContextSnippet[] = [allowed, forbidden].map(doc => ({ uri: doc.uri.toString(), filepath: path.basename(doc.uri.fsPath),
+      content: doc.getText(), source: 'definition' }));
+    const input = { document: main, text, offset: text.length - 1, filepath: 'main.ts', settings: readCompletionSettings(),
+      signal: new AbortController().signal, snippets, comments: { line: '//' } };
+    const prompt = await service.build(input);
+    expect(prompt.prefix).toContain('allowedDefinition');
+    expect(prompt.prefix).not.toContain('forbiddenDefinition');
+    expect(prompt.prefix.length + prompt.suffix.length).toBeLessThanOrEqual(1000);
+    const disabled = await service.build({ ...input, settings: { ...input.settings, relatedFiles: false } });
+    expect(disabled.prefix).not.toContain('allowedDefinition');
   });
 });

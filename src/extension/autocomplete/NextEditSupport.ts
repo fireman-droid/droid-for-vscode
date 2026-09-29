@@ -25,8 +25,7 @@ export class NextEditSupport implements vscode.Disposable {
       const active = vscode.window.activeTextEditor?.document;
       if (!document || !active) return false;
       const settings = readCompletionSettings(active.uri);
-      if (!settings.enabled || settings.protocol !== 'mercury-edit' ||
-          completionDocumentBlockReason(document, settings)) return false;
+      if (!settings.enabled || completionDocumentBlockReason(document, settings)) return false;
       const root = vscode.workspace.getWorkspaceFolder(active.uri)?.uri.toString();
       if (!root) return document === active;
       if (vscode.workspace.getWorkspaceFolder(document.uri)?.uri.toString() !== root) return false;
@@ -45,8 +44,8 @@ export class NextEditSupport implements vscode.Disposable {
         ? vscode.workspace.asRelativePath(document.uri, false) : path.basename(document.fileName || 'untitled'),
       currentFileContent: lines.join('\n'), cursorLine: position.line, cursorCharacter: position.character,
       editableRegionStartLine: region.startLine, editableRegionEndLine: region.endLine,
-      recentlyViewedSnippets: settings.relatedFiles ? snippets.slice(0, 5).reverse().map(s => ({
-        filepath: s.filepath, content: s.content.split(/\r?\n/).slice(0, 20).join('\n'),
+      recentlyViewedSnippets: settings.relatedFiles ? snippets.map(s => ({
+        filepath: s.filepath, content: s.content,
       })) : [],
       editDiffHistory: await this.history.getRecentDiffs(),
     };

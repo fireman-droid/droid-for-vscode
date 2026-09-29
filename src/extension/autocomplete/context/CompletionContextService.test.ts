@@ -324,3 +324,95 @@ describe('CompletionContextService', () => {
     expect(service.revisionFor(main.uri)).toBeGreaterThan(revision);
   });
 });
+
+
+function view(document: vscode.TextDocument, line = 0) {
+  mocks.listeners.get('active')!({ document, selection: { active: { line } } });
+}
+function collectViewed(document: vscode.TextDocument, maxCharacters = 8000, excludePatterns: string[] = [], signal = new AbortController().signal) {
+  return service.collectRecentlyViewed(document, { maxCharacters, excludePatterns, signal });
+}
+
+describe('Mercury recently viewed context', () => {
+  it('uses the five most recently viewed other files oldest to newest, centered at their viewed lines', async () => {
+    const main = await document('main.ts', 'target');
+    const viewed = [];
+    for (let i = 0; i < 7; i++) viewed.push(await document(`view${i}.ts`, Array.from({ length: 80 }, (_, line) => `file ${i} line ${line}`).join('\n')));
+    const openedOnly = await document('opened-only.ts', 'not visited');
+    const definition = await document('definition.ts', 'definition context', 'typescript', false);
+    service = new CompletionContextService();
+    viewed.forEach(doc => view(doc, 40));
+    // Editing an older file does not turn it into the newest viewed file.
+    changed(viewed[0], 60); changed(openedOnly);
+    mocks.definition.mockResolvedValue([location(definition)]);
+    view(main);
+    const result = await collectViewed(main);
+    expect(result.map(snippet => snippet.filepath)).toEqual(['view2.ts', 'view3.ts', 'view4.ts', 'view5.ts', 'view6.ts']);
+    for (const [index, snippet] of result.entries()) {
+      expect(snippet.source).toBe('openFile');
+      expect(snippet.content.split('\n')).toHaveLength(20);
+      expect(snippet.content.split('\n')[0]).toBe(`file ${index + 2} line 30`);
+      expect(snippet.content.split('\n')[19]).toBe(`file ${index + 2} line 49`);
+    }
+    expect(mocks.definition).not.toHaveBeenCalled();
+    // Revisiting the same location still advances its actual viewing recency.
+    view(viewed[2], 40);
+    expect((await collectViewed(main)).map(snippet => snippet.filepath)).toEqual(['view3.ts', 'view4.ts', 'view5.ts', 'view6.ts', 'view2.ts']);
+  });
+
+  it('honors the total character budget without cutting a viewed line', async () => {
+    const main = await document('main.ts', 'target');
+    const older = await document('older.ts', 'olderLine');
+    const latest = await document('latest.ts', Array.from({ length: 40 }, (_, i) => `L${String(i).padStart(2, '0')}`).join('\r\n'));
+    service = new CompletionContextService(); view(older); view(latest, 20);
+    const result = await collectViewed(main, 11);
+    expect(result).toEqual([expect.objectContaining({ filepath: 'latest.ts', content: 'L19\nL20\nL21' })]);
+    expect(result.reduce((sum, snippet) => sum + snippet.content.length, 0)).toBeLessThanOrEqual(11);
+    expect(await collectViewed(main, 2)).toEqual([]);
+  });
+
+  it('applies ignore rules, configured exclusions and workspace boundaries to viewed files', async () => {
+    const main = await document('main.ts', 'target');
+    const allowed = await document('allowed.ts', 'visible');
+    const blocked = await document('blocked.ts', 'ignored');
+    const excluded = await document('exclude.ts', 'excluded');
+    const external = await document('second/external.ts', 'external');
+    const secret = await document('.env.local', 'secret');
+    mocks.roots.unshift(uri(path.join(root, 'second')));
+    await writeFile(path.join(root, '.droidignore'), 'blocked.ts\n');
+    mocks.match.mockImplementation((...args: unknown[]) => (args[1] as vscode.TextDocument).uri.fsPath.endsWith('exclude.ts') ? 10 : 0);
+    service = new CompletionContextService();
+    [allowed, blocked, excluded, external, secret].forEach(doc => view(doc));
+    const result = await collectViewed(main, 8000, ['**/exclude.ts']);
+    expect(result.map(snippet => snippet.filepath)).toEqual(['allowed.ts']);
+    const revision = service.revisionFor(main.uri);
+    mocks.listeners.get('disk')!(allowed.uri);
+    expect(service.revisionFor(main.uri)).toBeGreaterThan(revision);
+  });
+
+  it('keeps recently viewed closed files but reads saved content after unsaved changes are discarded', async () => {
+    const main = await document('main.ts', 'target');
+    const saved = Array.from({ length: 40 }, (_, line) => `saved line ${line}`).join('\n');
+    const related = await document('related.ts', saved);
+    Object.assign(related, { getText: () => saved.replace('saved line 20', 'discarded unsaved line 20') });
+    service = new CompletionContextService(); view(related, 20);
+    expect((await collectViewed(main))[0].content).toContain('discarded unsaved line 20');
+    Object.assign(related, { isClosed: true });
+    mocks.documents = mocks.documents.filter(doc => doc !== related);
+    mocks.listeners.get('close')!(related);
+    const result = await collectViewed(main);
+    expect(result).toEqual([expect.objectContaining({ filepath: 'related.ts', source: 'openFile' })]);
+    expect(result[0].content).toContain('saved line 20');
+    expect(result[0].content).not.toContain('discarded unsaved');
+    expect(result[0].content.split('\n')).toHaveLength(20);
+  });
+
+  it('returns no viewed context when cancelled during collection', async () => {
+    const main = await document('main.ts', 'target');
+    const related = await document('related.ts', 'visible');
+    const abort = new AbortController();
+    Object.assign(related, { getText: () => { abort.abort(); return 'visible'; } });
+    service = new CompletionContextService(); view(related);
+    expect(await collectViewed(main, 8000, [], abort.signal)).toEqual([]);
+  });
+});

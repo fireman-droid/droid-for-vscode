@@ -7,7 +7,7 @@ const vscode = require('vscode');
 
 async function runNextEdit() {
   const results = [], config = vscode.workspace.getConfiguration('droidvisx.autocomplete');
-  let scenario, calls = 0, replied = 0;
+  let scenario, lastPrompt, calls = 0, replied = 0;
   const server = createServer(async (request, response) => {
     try {
       assert.equal(request.url, '/v1/edit/completions');
@@ -15,6 +15,7 @@ async function runNextEdit() {
       const payload = JSON.parse(raw);
       assert.equal(payload.stream, false);
       assert.ok(payload.messages[0].content.includes('<|!@#IS_NEXT_EDIT!@#|>'));
+      lastPrompt = payload.messages[0].content;
       const current = scenario; assert.ok(current); calls++;
       await delay(current.delay ?? 50);
       if (response.destroyed) return;
@@ -98,6 +99,65 @@ async function runNextEdit() {
         await config.update('enabled',false,true);
         await vscode.commands.executeCommand('droidvisx.autocomplete.nextEdit.dismiss');
         await vscode.commands.executeCommand('editor.action.inlineSuggest.hide');
+        await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+      }
+    }
+    // Exercise packaged Host tracking before any FIM request, not a synthetic history input.
+    await config.update('autoTrigger', false, true);
+    for (const resetHistory of [false, true]) {
+      const name = resetHistory ? 'Disabling clears history before tracking resumes'
+        : 'FIM edits survive repeated Next Edit mode switches';
+      try {
+        await config.update('enabled', false, true);
+        await config.update('protocol', 'fim', true);
+        const doc = await vscode.workspace.openTextDocument({language:'typescript',content:'const original = 1;'});
+        const editor = await vscode.window.showTextDocument(doc,{preview:false,preserveFocus:false});
+        await config.update('enabled', true, true);
+        await delay(250);
+        const replace = async text => {
+          await editor.edit(edit => edit.replace(new vscode.Range(0,0,0,doc.lineAt(0).text.length),text));
+          const pos = new vscode.Position(0,doc.lineAt(0).text.length);
+          editor.selection = new vscode.Selection(pos,pos);
+        };
+        const capture = async () => {
+          await config.update('protocol', 'mercury-edit', true);
+          scenario = {replacement:doc.getText()};
+          const previousCalls = calls, previousReplies = replied;
+          await vscode.commands.executeCommand('droidvisx.autocomplete.trigger');
+          await until(()=>calls>previousCalls,5000,'No request containing tracked editor context');
+          const prompt = lastPrompt;
+          await until(()=>replied>previousReplies,5000,'No context fixture response');
+          await delay(150);
+          return prompt.slice(prompt.indexOf('<|edit_diff_history|>'),prompt.indexOf('<|/edit_diff_history|>'));
+        };
+        await replace('const renamed = 1;');
+        const first = await capture();
+        assert.ok(first.includes('-const original = 1;') && first.includes('+const renamed = 1;'),
+          'The first Next Edit request must retain edits made in FIM mode before any FIM request');
+        await config.update('protocol', 'fim', true);
+        if (resetHistory) {
+          await config.update('enabled', false, true);
+          await replace('const whileDisabled = 1;');
+          await config.update('enabled', true, true);
+          await delay(250);
+        }
+        await replace('const latest = 1;');
+        const second = await capture();
+        assert.ok(second.includes('+const latest = 1;'));
+        if (resetHistory) {
+          assert.ok(second.includes('-const whileDisabled = 1;'));
+          assert.ok(!second.includes('const original') && !second.includes('const renamed'),
+            'Re-enabling must not restore history from before disabling');
+        } else {
+          assert.ok(second.includes('-const renamed = 1;'));
+          assert.ok(second.indexOf('-const original = 1;') >= 0 &&
+            second.indexOf('-const original = 1;') < second.indexOf('-const renamed = 1;'),
+          'Switching back to FIM must preserve chronological edit history');
+        }
+        results.push({name,passed:true});
+      } catch(error) {results.push({name,passed:false,error:error.message});}
+      finally {
+        await config.update('enabled',false,true);
         await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
       }
     }

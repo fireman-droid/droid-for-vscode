@@ -5,11 +5,11 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
-## Kilo 普通续写与 Next Edit 完整接入
+## Kilo 普通续写与 Next Edit
 
 独立分支 `codex/droid-autocomplete` 固定上游
-`7d977bce994af36f0edf752cb53e3aefc7aeb214`。此前只有核心移植，本轮已补齐普通续写的
-Continue 上下文链、后处理、Mercury FIM、Notebook 和状态栏控制。账号、计费和遥测
+`7d977bce994af36f0edf752cb53e3aefc7aeb214`。已接入普通续写的 Continue 上下文链、
+后处理、Mercury FIM、Notebook 和状态栏控制。接入范围不等于模型质量与上游全部行为已对齐。账号、计费和遥测
 仍使用 Droid 自己的服务边界；不恢复用户已删除的 Quick Edit / Ask / Add to Chat。
 
 | 上游能力 | Droid 生产入口与验收 |
@@ -25,15 +25,29 @@ Continue 上下文链、后处理、Mercury FIM、Notebook 和状态栏控制。
 | 打包资源和来源 | 27 个语法 WASM、解析器与查询文件随包；Kilo MIT、Continue Apache-2.0、分词器和语法许可证随 notices 分发 |
 
 所有关联文件读取仍执行同根、Git/Droid ignore、排除模式、真实路径与大小限制。当前文件
-优先未保存内容；默认总预算 12,000 字符，至少 60% 留给主文件。静态 TS 查询开启后可枚举
+优先未保存内容；默认总预算 12,000 字符，FIM 至少 60% 留给主文件。静态 TS 查询开启后可枚举
 至多 2,000 个候选，剪贴板用户级 opt-in 最多 4,000 字符，不读取聊天历史。
 普通文件按所选模式执行，Next Edit 无修改时不自动补发 FIM；Notebook 使用普通续写。
+
+当前上下文修复：启用补全即开始跟踪，FIM 与 Next Edit 切换保留编辑历史，停用后清空；
+原生定义和近期修改与 Kilo 片段合并去重；Next Edit 浏览上下文最多 5 个其他文件，按旧→新，
+围绕实际浏览位置取最多 20 完整行。关闭页签仍记住位置，后续读取磁盘保存内容。
+长文件请求优先保留完整编辑区域、光标和最新可容纳的完整 diff；超大 diff 跳过，
+再给其他完整历史、浏览片段及邻近代码分配剩余预算。
+
+尚未对生成候选运行编译器类型校验；`NodeJS.Timeout` 等与项目类型环境不匹配的建议仍可能出现。
+这次修复证明上下文不会在这些路径丢失，不代表建议正确率已经提升到某个百分比。
 
 有证据的上游适配包括：Mercury FIM 保留关联片段（上游模板丢弃），代码围栏整条拒绝并
 提示重试，Markdown 围栏保留，纯缩进/CRLF 保持，以及递归类型、解析资源生命周期和
 Notebook 兄弟单元变化时的失效处理。默认不把源码输出到日志，不复制上游账号/遥测网关。
 
-本轮已运行的验证（合成代码，用户明确授权，不操作日常窗口）：
+本次上下文修复验证：6 个定向测试文件共 120 项通过；打包后的隔离 VS Code 1.136.0
+共 34 项通过，其中新增两项检查实际请求中的 FIM→Next Edit 历史保留、再次切换的时间顺序，
+以及停用重启后的历史清理。合成响应只验证调用链；本次未调用真实模型，未重新统计质量成功率。
+`pnpm run typecheck`、`pnpm run lint:budgets`、生产构建及 164 条目 VSIX 校验通过。
+
+此前接入验证基线（以下模型数字尚未针对本次上下文改动重测）：
 
 | 验证 | 结果 |
 | --- | --- |
@@ -41,7 +55,7 @@ Notebook 兄弟单元变化时的失效处理。默认不把源码输出到日�
 | pnpm run typecheck / lint:budgets | 通过 |
 | Mercury FIM，上游丢弃关联片段的模板 | 12 次首轮请求均返回；8/12 编译并执行正确；3 个跨文件参数错误，1 个 Java EOF 缺闭括号 |
 | 关联片段修正的控制对照 | 原失败的 3 个跨文件样例各请求一次，3/3 编译并执行正确 |
-| Mercury FIM，完整生产模板 | 12 次独立首轮请求，11/12 编译并执行正确；Java EOF 仍少类闭括号；中位 451ms、P95 779ms |
+| Mercury FIM，生产模板与手工提供的合成参考片段 | 12 次独立首轮请求，11/12 编译并执行正确；Java EOF 仍少类闭括号；中位 451ms、P95 779ms |
 | 生产构建与 VSIX | 已通过构建及 164 条目校验，包含入口加载、解析资源和许可证 |
 | 原生 VS Code 1.136.0 | 30 项普通/Next Edit + 2 项 Notebook 通过 |
 | 原生 Cursor 3.18.25（API 1.128.0） | 28 项普通/Next Edit + 2 项 Notebook 通过 |
@@ -50,13 +64,10 @@ Notebook 兄弟单元变化时的失效处理。默认不把源码输出到日�
 随后因未进入单元编辑状态失败；补齐测试贡献声明和原生单元焦点后单独重跑，两端各 2 项通过。
 生产包未为测试初始化问题修改。Cursor 不提供 chat.disableAIFeatures，故少两个对应变体。
 
-最终 `dist/droidvisx-autocomplete-complete-0.8.0.vsix` 已覆盖安装到 Microsoft VS Code，
-161 个载荷文件 SHA-256 一致；package.json 除编辑器追加的 __metadata 外一致。
-最终包的 83 个 Host/解析资源与原生验收的包相同；README 等说明更新后重新打包并校验。
-SHA-256：`b1a91bddaebeed6a82e38cc8e9de11c096e8a1da9dfe631a1bdc35829470c021`。
-用户执行 Developer: Reload Window 后加载新代码；日常 Cursor 未覆盖，主分支未修改。
-配置保持原值；希望按注释续写时可在 Droid Tab 菜单切换到 Mercury Code Completion，
-需要预测已有代码的下一处修改时选择 Mercury Next Edit。没有公开发布。
+当前包 `dist/droidvisx-autocomplete-quality-0.8.0.vsix` 已安装到 Microsoft VS Code，
+161 个载荷文件 SHA-256 与验收包一致，package.json 除编辑器追加的 __metadata 外一致。
+包 SHA-256：`b540dd56ce0309c5045025f0d13dc57f7587a99d9f7f3701a8434bab1df14fb1`。
+执行 Developer: Reload Window 后加载新代码。日常 Cursor、主分支与用户配置未修改；没有公开发布。
 
 Next Edit 协议与提示词沿用已验收的生产实现：此前 Mercury 12/12 首轮预测符合预期且
 编译/执行正确（另 1 次连通探针），中位 448ms / P95 818ms。此前 SiliconFlow Qwen FIM

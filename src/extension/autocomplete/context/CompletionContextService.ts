@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import path from 'node:path';
 import { CompletionFilePolicy, inside, readContextFile } from './CompletionFilePolicy';
-import { contextExcerpt } from './contextText';
+import { contextExcerpt, recentlyViewedExcerpt } from './contextText';
 
 export interface ContextSnippet {
   uri: string;
@@ -41,6 +41,8 @@ export class CompletionContextService implements vscode.Disposable {
   private readonly changes = new Map<string, number>();
   private readonly edited = new Map<string, RecentFile>();
   private readonly visited = new Map<string, RecentFile>();
+  private readonly viewed = new Map<string, RecentFile>();
+  private viewSequence = 0;
   private readonly policy = new CompletionFilePolicy();
   private readonly contextFiles = new Set<string>();
   private readonly subscriptions: vscode.Disposable[];
@@ -49,7 +51,10 @@ export class CompletionContextService implements vscode.Disposable {
   constructor() {
     for (const document of vscode.workspace.textDocuments) this.visit(document.uri, 0);
     const editor = vscode.window.activeTextEditor;
-    if (editor) this.visit(editor.document.uri, editor.selection.active.line);
+    if (editor) {
+      this.visit(editor.document.uri, editor.selection.active.line);
+      this.rememberViewed(editor.document.uri, editor.selection.active.line);
+    }
     const watcher = vscode.workspace.createFileSystemWatcher('**/*');
     const invalidateRules = () => { this.policy.invalidate(); this.bumpStructure(); };
     const fileChanged = (uri: vscode.Uri) => {
@@ -75,19 +80,23 @@ export class CompletionContextService implements vscode.Disposable {
         this.bumpStructure();
       }),
       vscode.window.onDidChangeActiveTextEditor((active) => {
-        if (active) this.visit(active.document.uri, active.selection.active.line);
+        if (active) {
+          this.visit(active.document.uri, active.selection.active.line);
+          this.rememberViewed(active.document.uri, active.selection.active.line);
+        }
       }),
       vscode.window.onDidChangeTextEditorSelection((event) => {
         const uri = event.textEditor.document.uri;
         const previous = this.visited.get(uri.toString());
         const line = event.selections[0]?.active.line;
+        if (line !== undefined) this.rememberViewed(uri, line);
         if (previous && line !== undefined && line !== previous.line) {
           this.visited.set(uri.toString(), { uri, line, sequence: this.sequence + 1 });
           this.recordChange(uri.toString());
         }
       }),
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        this.edited.clear(); this.visited.clear(); this.changes.clear(); this.contextFiles.clear(); invalidateRules();
+        this.edited.clear(); this.visited.clear(); this.viewed.clear(); this.changes.clear(); this.contextFiles.clear(); invalidateRules();
       }),
     ];
   }
@@ -123,6 +132,47 @@ export class CompletionContextService implements vscode.Disposable {
       await untilAborted(this.collectWithinBudget(document, position, root, { ...options, signal }, snippets), signal, undefined);
       return options.signal.aborted || this.lifetime.signal.aborted ? [] : snippets.slice();
     } finally { clearTimeout(timer); }
+  }
+
+  /** Mercury expects recently viewed files oldest to newest, separate from definitions and edits. */
+  async collectRecentlyViewed(document: vscode.TextDocument, options: CollectOptions): Promise<ContextSnippet[]> {
+    const root = vscode.workspace.getWorkspaceFolder(document.uri)?.uri;
+    if (options.signal.aborted || this.lifetime.signal.aborted || !vscode.workspace.isTrusted ||
+        document.uri.scheme !== 'file' || !root || options.maxCharacters <= 0) return [];
+    const timeout = new AbortController();
+    const signal = AbortSignal.any([options.signal, timeout.signal, this.lifetime.signal]);
+    const snippets: ContextSnippet[] = [];
+    const timer = setTimeout(() => timeout.abort(), 400);
+    try {
+      await untilAborted(this.collectViewedWithinBudget(document, root, { ...options, signal }, snippets), signal, undefined);
+      return options.signal.aborted || this.lifetime.signal.aborted ? [] : snippets.reverse();
+    } finally { clearTimeout(timer); }
+  }
+
+  private async collectViewedWithinBudget(
+    document: vscode.TextDocument, root: vscode.Uri, options: CollectOptions, snippets: ContextSnippet[],
+  ): Promise<void> {
+    const recent = [...this.viewed.values()].sort((a, b) => b.sequence - a.sequence);
+    let remaining = Math.floor(options.maxCharacters);
+    for (const candidate of recent) {
+      if (options.signal.aborted || remaining <= 0 || snippets.length === 5) break;
+      const id = candidate.uri.toString();
+      if (id === document.uri.toString() || vscode.workspace.getWorkspaceFolder(candidate.uri)?.uri.toString() !== root.toString()
+          || !inside(root.fsPath, candidate.uri.fsPath)) continue;
+      const openDocument = vscode.workspace.textDocuments.find(item => item.uri.toString() === id && !item.isClosed);
+      if (!await this.policy.allows(candidate.uri, root, openDocument?.languageId ?? '', options.excludePatterns, options.signal)) continue;
+      if (options.signal.aborted) break;
+      const text = openDocument ? openDocument.getText() : await readContextFile(candidate.uri.fsPath);
+      if (options.signal.aborted) break;
+      if (text === undefined || text.length > 1024 * 1024) continue;
+      const content = recentlyViewedExcerpt(text, candidate.line, remaining);
+      if (!content.trim()) continue;
+      this.trackContextFile(id);
+      snippets.push({ uri: id, filepath: path.relative(root.fsPath, candidate.uri.fsPath).split(path.sep).join('/'),
+        content, source: 'openFile', ...(openDocument ? { version: openDocument.version } : {}),
+      });
+      remaining -= content.length;
+    }
   }
 
   private async collectWithinBudget(
@@ -201,6 +251,13 @@ export class CompletionContextService implements vscode.Disposable {
     } finally { clearTimeout(timer); }
   }
 
+  private rememberViewed(uri: vscode.Uri, line: number): void {
+    if (uri.scheme !== 'file') return;
+    this.viewed.delete(uri.toString());
+    this.viewed.set(uri.toString(), { uri, line, sequence: ++this.viewSequence });
+    if (this.viewed.size > 24) this.viewed.delete(this.viewed.keys().next().value!);
+  }
+
   private visit(uri: vscode.Uri, line: number): void {
     if (uri.scheme !== 'file') return;
     this.visited.set(uri.toString(), { uri, line, sequence: this.sequence + 1 });
@@ -235,6 +292,6 @@ export class CompletionContextService implements vscode.Disposable {
     this.lifetime.abort();
     this.subscriptions.forEach((subscription) => subscription.dispose());
     this.changed.dispose();
-    this.edited.clear(); this.visited.clear(); this.changes.clear(); this.contextFiles.clear(); this.policy.invalidate();
+    this.edited.clear(); this.visited.clear(); this.viewed.clear(); this.changes.clear(); this.contextFiles.clear(); this.policy.invalidate();
   }
 }

@@ -102,11 +102,18 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
   }
 
   warmNextEdit(): void {
-    if (readCompletionSettings().protocol === 'mercury-edit' && readCompletionSettings().enabled) {
+    const settings = readCompletionSettings(vscode.window.activeTextEditor?.document.uri);
+    if (settings.enabled) {
+      // Track context before the first request, across FIM and Next Edit switches.
+      this.kiloContext ??= new KiloContextService(uri => this.context.trackContextFile(uri));
       this.nextEdit ??= new NextEditSupport(this.context,
         () => { this.trace('history.failed', { code: 'context' }); this.report('Autocomplete edit history could not be read. Check Droid logs.'); },
         event => this.trace('next-edit.result', event));
-    } else if (this.nextEdit) { this.nextEdit.dispose(); this.nextEdit = undefined; }
+      if (settings.protocol !== 'mercury-edit') this.nextEdit.clear();
+    } else {
+      this.nextEdit?.dispose(); this.nextEdit = undefined;
+      this.kiloContext?.dispose(); this.kiloContext = undefined;
+    }
   }
   acceptOrJumpNextEdit(): Promise<void> { return this.nextEdit?.manager.acceptOrJump() ?? Promise.resolve(); }
   dismissNextEdit(): void { this.cancel('dismissed'); this.requests.clear(); this.nextEdit?.clear(); }
@@ -251,11 +258,13 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
       }
       const started = Date.now();
       pending.phase = 'context';
+      const contextOptions = {
+        maxCharacters: Math.floor(settings.maxContextCharacters * 0.4),
+        excludePatterns: settings.excludePatterns, signal,
+      };
       const [snippets, comments] = settings.relatedFiles ? await Promise.all([
-        this.context.collect(document, position, {
-          maxCharacters: Math.floor(settings.maxContextCharacters * 0.4),
-          excludePatterns: settings.excludePatterns, signal,
-        }),
+        isNextEdit ? this.context.collectRecentlyViewed(document, contextOptions)
+          : this.context.collect(document, position, contextOptions),
         readLanguageComments(document.languageId, signal),
       ]) : [[], undefined] as const;
       if (!this.isCurrent(pending, token)) return [];

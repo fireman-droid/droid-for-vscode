@@ -5,6 +5,7 @@ import { HelperVars } from '../kilo/continuedev/core/autocomplete/util/HelperVar
 import { DEFAULT_AUTOCOMPLETE_OPTS } from '../kilo/continuedev/core/util/parameters';
 import { getAllSnippetsWithoutRace } from '../kilo/continuedev/core/autocomplete/snippets/getAllSnippets';
 import { getSnippets } from '../kilo/continuedev/core/autocomplete/templating/filtering';
+import { AutocompleteSnippetType, type AutocompleteSnippet } from '../kilo/continuedev/core/autocomplete/types';
 import { getTemplateForModel } from '../kilo/continuedev/core/autocomplete/templating/AutocompleteTemplate';
 import { RecentlyVisitedRangesService } from '../kilo/continuedev/core/vscode-test-harness/src/autocomplete/RecentlyVisitedRangesService';
 import { RecentlyEditedTracker } from '../kilo/continuedev/core/vscode-test-harness/src/autocomplete/recentlyEdited';
@@ -58,9 +59,26 @@ export class KiloContextService implements vscode.Disposable {
         experimental_enableStaticContextualization: settings.relatedFiles && settings.staticContext === true,
         experimental_includeClipboard: settings.includeClipboard === true }, settings.model, this.ide);
       const payload = await getAllSnippetsWithoutRace({ helper, ide: this.ide, contextRetrievalService: this.retrieval });
-      const candidates = getSnippets(helper, payload);
+      const supplemental = settings.relatedFiles ? input.snippets : [];
+      const asKilo = (snippet: ContextSnippet): AutocompleteSnippet => ({
+        filepath: snippet.uri, content: snippet.content, type: AutocompleteSnippetType.Code,
+      });
+      // Keep direct definitions and recent edits ahead of general opened-file context.
+      const candidates = [
+        ...supplemental.filter(s => s.source !== 'openFile').map(asKilo),
+        ...getSnippets(helper, payload),
+        ...supplemental.filter(s => s.source === 'openFile').map(asKilo),
+      ];
       const access = await Promise.all(candidates.map(s => 'filepath' in s && s.filepath ? this.ide.allowed(s.filepath) : Promise.resolve(settings.includeClipboard === true)));
-      const snippets = candidates.filter((_, index) => access[index]);
+      const snippets: AutocompleteSnippet[] = [];
+      for (const [index, candidate] of candidates.entries()) {
+        const content = candidate.content.trim();
+        if (!access[index] || !content) continue;
+        const filepath = 'filepath' in candidate ? candidate.filepath : undefined;
+        const duplicate = snippets.some(existing => ('filepath' in existing ? existing.filepath : undefined) === filepath
+          && (existing.content.trim().includes(content) || content.includes(existing.content.trim())));
+        if (!duplicate) snippets.push(candidate);
+      }
       if (signal.aborted) throw signal.reason;
       const kiloModel = /codestral/i.test(settings.model);
       if (kiloModel) {
@@ -87,8 +105,8 @@ export class KiloContextService implements vscode.Disposable {
         ? { uri: s.filepath, filepath: this.ide.relative(s.filepath), content: s.content, source: 'definition' }
         : { uri: 'clipboard', filepath: 'Clipboard', content: s.content, source: 'definition' });
       const prompt = buildCompletionPrompt({ text: input.text, offset: input.offset, maxCharacters: settings.maxContextCharacters,
-        filepath: input.filepath, model: settings.model, snippets: contextSnippets.length ? contextSnippets : [...input.snippets], comments: input.comments });
-      return { ...prompt, relatedFiles: contextSnippets.length || input.snippets.length };
+        filepath: input.filepath, model: settings.model, snippets: contextSnippets, comments: input.comments });
+      return { ...prompt, relatedFiles: contextSnippets.length };
     }));
   }
   dispose(): void {
