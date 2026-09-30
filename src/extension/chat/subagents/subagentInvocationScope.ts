@@ -27,20 +27,49 @@ export function invocationTranscripts(
 ): ReadonlyMap<string, readonly SessionTranscriptItem[] | null> {
   const items = entry.state.transcript;
   const rows = [...entry.rows.entries()];
-  if (rows.length === 1 && rows[0]![1].promptMessageId === undefined) return new Map([[rows[0]![0], items]]);
+  const invocations = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const aliases = invocations.get(row[1].toolUseId) ?? [];
+    aliases.push(row);
+    invocations.set(row[1].toolUseId, aliases);
+  }
+  if (invocations.size === 1 && rows.every(([, row]) => row.promptMessageId === undefined))
+    return new Map(rows.map(([key]) => [key, items]));
   const messages = new Map<string, number>();
   items.forEach((item, index) => {
     if (item.kind === 'user' && item.messageId !== undefined && !messages.has(item.messageId)) messages.set(item.messageId, index);
   });
-  const boundaries = rows.map(([key, row]) => ({ key,
-    start: row.promptMessageId === undefined ? undefined : messages.get(row.promptMessageId) }));
+  // Compaction/fork copies the same Task into another parent; it is one invocation.
+  const boundaries = [...invocations.values()].map(aliases => {
+    const prompts = new Set(aliases.flatMap(([, row]) => row.promptMessageId === undefined ? [] : [row.promptMessageId]));
+    return { keys: aliases.map(([key]) => key), start: prompts.size === 1 ? messages.get([...prompts][0]!) : undefined };
+  });
   // Missing or conflicting boundaries must never assign another invocation's tail.
   if (boundaries.some(boundary => boundary.start === undefined) ||
     new Set(boundaries.map(boundary => boundary.start)).size !== boundaries.length)
     return new Map(rows.map(([key]) => [key, null]));
   boundaries.sort((left, right) => left.start! - right.start!);
-  return new Map(boundaries.map((boundary, index) =>
-    [boundary.key, items.slice(boundary.start!, boundaries[index + 1]?.start)]));
+  return new Map(boundaries.flatMap((boundary, index) => {
+    const transcript = items.slice(boundary.start!, boundaries[index + 1]?.start);
+    return boundary.keys.map(key => [key, transcript] as const);
+  }));
+}
+
+/** Only an exact later child user message may replace the active invocation. */
+export function latestInvocationRowKey(entry: Pick<InvocationTranscript, 'state' | 'rows'>, activeKey: string): string {
+  const positions = new Map<string, number>();
+  entry.state.transcript.forEach((item, index) => {
+    if (item.kind === 'user' && item.messageId !== undefined) positions.set(item.messageId, index);
+  });
+  const active = entry.rows.get(activeKey)!;
+  let latest = active.promptMessageId === undefined ? undefined : positions.get(active.promptMessageId);
+  if (latest === undefined) return activeKey;
+  let key = activeKey;
+  for (const [candidateKey, row] of entry.rows) {
+    const position = row.promptMessageId === undefined ? undefined : positions.get(row.promptMessageId);
+    if (position !== undefined && position > latest) { key = candidateKey; latest = position; }
+  }
+  return key;
 }
 
 export function readInvocationEvidence(

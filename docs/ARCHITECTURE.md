@@ -364,6 +364,10 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 - `daemonNotificationSource.ts` 集中归一化子代理通知；Host 不解析 SDK controller。
   实时和历史按消息/调用身份合并，隐藏请求只传有界 ancestry 身份，不传隐藏正文。
   `parentSessionEvents.ts` 观察后台触发的父自动续写，复用原回合消费，不再提交 prompt。
+- 子代理绑定依据 ledger 中的 Task 调用与 child 身份，父聊天分叉后的明确续用不能
+  仅因父 ID 改变而拒绝。同一 Task 在不同父历史中的副本共享 prompt 边界；不同
+  Task 按各自 prompt 分段，缺失或冲突的边界不能归属文件操作。活动所有权沿子会话
+  的真实 prompt 顺序推进，旧父历史刷新不能退回已经结束的调用。
 - Viewer 消费 Host 核验的只读身份，不持有另一套执行器。缺映射、部分历史、未知时间
   明确说明；不能根据相似文本猜 child 或把迟到工具事件改成新的运行状态。
 
