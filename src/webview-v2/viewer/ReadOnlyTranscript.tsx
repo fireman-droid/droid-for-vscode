@@ -29,7 +29,7 @@ export function ReadOnlyTranscript({ items, running, truncated = false }: { read
     const descriptor = byId.get(id)!;
     if (descriptor.kind === 'user') {
       const plan = plans.get(descriptor.item.id);
-      return <><ReadOnlyQuestion item={descriptor.item} images={descriptor.images} />
+      return <><ReadOnlyQuestion item={descriptor.item} images={descriptor.images} onInteract={stopFollowing} />
         {plan ? <PlanLine anchor={plan} running={isPlanLive(plan, running, turnId)} override={planChoices.get(plan.anchorToolUseId) ?? null}
           onToggle={(id, expanded) => { stopFollowing(); setPlanChoices((previous) => new Map(previous).set(id, expanded)); }} /> : null}</>;
     }

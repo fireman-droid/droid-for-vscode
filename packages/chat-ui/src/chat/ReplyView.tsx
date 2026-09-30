@@ -13,7 +13,7 @@ export function ReplyView({ children, replyText, running = false, completedAt, r
   const [copyError, setCopyError] = useState(false);
   const reset = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (reset.current) clearTimeout(reset.current); }, []);
-  const showActions = !readOnly && replyText !== undefined && !running && (!diagnosticOnly || replyText.length > 0);
+  const showActions = replyText !== undefined && !running && (!diagnosticOnly || replyText.length > 0);
   const showTime = !running && !diagnosticOnly && replyText !== undefined;
   return <div className="v2-assistant-reply flex min-w-0 flex-col gap-1" aria-label={label ?? assistantName}>
     {children}
@@ -28,8 +28,8 @@ export function ReplyView({ children, replyText, running = false, completedAt, r
             reset.current = setTimeout(() => setCopied(false), 1500);
           }, () => setCopyError(true));
         }}>{copied ? <Check /> : <Copy />}</Button>
-        {regenerate ? <ReplyAction label="Regenerate response" busyLabel="Regenerating response" action={regenerate}><RotateCcw /></ReplyAction> : null}
-        {fork ? <ReplyAction label="Fork chat" busyLabel="Forking chat" action={fork}><GitBranch /></ReplyAction> : null}
+        {!readOnly && regenerate ? <ReplyAction label="Regenerate response" busyLabel="Regenerating response" action={regenerate}><RotateCcw /></ReplyAction> : null}
+        {!readOnly && fork ? <ReplyAction label="Fork chat" busyLabel="Forking chat" action={fork}><GitBranch /></ReplyAction> : null}
         {copyError ? <span role="alert" className="text-destructive">Could not copy reply.</span> : null}
         </> : null}
       </div>

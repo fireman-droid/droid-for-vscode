@@ -20,7 +20,7 @@ export function UserMessageBubble({ children, attachments, context, onEdit, plac
     {onEdit ? <Button variant="plain" size="none" data-transcript-selectable="" className="v2-user-copy block w-full select-none text-left"
       tabIndex={placeholder ? -1 : undefined} aria-label="Edit message and resend from here"
       title={timestamp === undefined ? 'Click to edit and resend from here' : undefined} onClick={onEdit}>{children}</Button>
-      : <div className="v2-user-copy w-full select-none">{children}</div>}
+      : <div className="v2-user-copy min-w-0 w-full select-none">{children}</div>}
   </div>;
   return timestamp === undefined || placeholder ? bubble : <Tooltip content={formatExactMessageTime(timestamp)}>{bubble}</Tooltip>;
 }

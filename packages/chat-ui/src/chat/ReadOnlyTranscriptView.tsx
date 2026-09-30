@@ -13,7 +13,7 @@ export function ReadOnlyTranscriptView({ messages, truncated = false, renderMess
   const viewport = useRef<HTMLDivElement>(null), content = useRef<HTMLDivElement>(null);
   const scrolling = useTranscriptScroll(viewport, content, null, 0);
   const leading = useRef<HTMLDivElement>(null);
-  const [scrollMargin, setScrollMargin] = useState(24);
+  const [scrollMargin, setScrollMargin] = useState(20);
   useLayoutEffect(() => {
     const element = leading.current, scroller = viewport.current;
     if (!element || !scroller) return;
@@ -41,7 +41,7 @@ export function ReadOnlyTranscriptView({ messages, truncated = false, renderMess
   const visible = virtualizer.getVirtualItems();
   return <div className="relative flex min-h-0 flex-col overflow-hidden">
     <div ref={viewport} aria-label="Read-only session transcript" className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-gutter:stable]">
-      <div ref={content} className="mx-auto min-h-full max-w-[784px] px-3 pt-6 pb-16 max-[520px]:pt-[18px] max-[520px]:pb-11">
+      <div ref={content} className="v2-chat-rail min-h-full pb-3 pt-5">
         <div ref={leading} className="flow-root">
           {truncated ? <p role="note" className="mb-4 border-b border-[var(--panel-edge)] pb-2 text-center text-[11px] text-muted-foreground">Older transcript items were omitted.</p> : null}
         </div>
@@ -49,7 +49,7 @@ export function ReadOnlyTranscriptView({ messages, truncated = false, renderMess
           <div style={{ paddingTop: Math.max(0, (visible[0]?.start ?? scrollMargin) - scrollMargin), paddingBottom: Math.max(0, virtualizer.getTotalSize() - ((visible.at(-1)?.end ?? scrollMargin) - scrollMargin)) }}>
             {visible.map((row) => {
               const descriptor = descriptors[row.index];
-              return <div key={row.key} ref={virtualizer.measureElement} data-index={row.index} data-markdown-row="" style={{ '--markdown-row-height': `${row.size}px` } as CSSProperties} className="flow-root pb-3">{renderMessage(descriptor.id, scrolling.stopFollowing)}</div>;
+              return <div key={row.key} ref={virtualizer.measureElement} data-index={row.index} data-markdown-row="" style={{ '--markdown-row-height': `${row.size}px` } as CSSProperties} className={`flow-root ${descriptor.role === 'user' ? 'pb-2' : 'pb-6'}`}>{renderMessage(descriptor.id, scrolling.stopFollowing)}</div>;
             })}
           </div>
         </ProcessPresentationProvider>

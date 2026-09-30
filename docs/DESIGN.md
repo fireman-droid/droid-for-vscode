@@ -833,8 +833,8 @@ Host／Bridge 安全动作。组件使用项目共享 shadcn/Radix，不移植 C
   Effort 在模型菜单的原有占位内切换，提供返回模型列表入口，不再向侧栏外叠加子菜单。
 - 按钮不因视觉减重缩成难点的小字；关键点击目标至少 24 × 24px，区域不重叠。
 - hover、选中、busy、disabled、focus-visible 各自明确；禁用不显示可执行反馈。
-  普通已完成回复的操作图标常驻；Regenerate/Fork 仍限于最新回复，纯诊断与只读子代理
-  不显示回复操作栏。整段复制成功后才显示勾号，不为反馈改变按钮宽度。
+  普通已完成回复的操作图标常驻；Regenerate/Fork 仍限于可操作的最新回复，只读子代理
+  仅保留复制。整段复制成功后才显示勾号，不为反馈改变按钮宽度。
 - Mode、Autonomy、Theme 的内联选项统一使用 180ms 高度与透明度过渡，箭头同步旋转；
   关闭时退出键盘与辅助技术访问，减少动态效果设置下关闭过渡。
 
@@ -1104,7 +1104,7 @@ stateDiagram-v2
 
 ## 实时子代理只读对话
 
-最后确认：2026-08-26
+最后确认：2026-09-30
 
 ### 产品目标
 
@@ -1113,8 +1113,8 @@ Session 打开独立 Editor，使用主聊天相同的消息、Thinking、Tool�
 组件展示完整只读对话。
 
 运行中和已完成的子代理都能打开。每个 child Session 保留独立 Editor 标签页，
-重复点击只 reveal 已有标签页。Viewer 不提供 Composer、Mode、Model、Sessions、
-Diff、Stop、Retry 或编辑动作。
+重复点击只 reveal 已有标签页。子代理 Viewer 不提供 Composer、Mode、Model、Sessions、
+Stop、Retry 或编辑动作；已有只读 Diff 继续展示，最终结果允许复制。
 
 ### 实时数据流
 
@@ -1150,14 +1150,20 @@ flowchart LR
 
 ### 卡片与 Editor
 
-- 整张子代理卡可点击，支持 Enter 和 Space，hover 只使用克制的边框与表面变化。
-- 卡片保留类型、委派描述、明确状态、最新活动、耗时和工具次数。
+- 整个子代理任务条可点击，支持 Enter 和 Space，hover 使用共享表面颜色。
+  任务目标优先显示，类型、明确状态、记录的子任务耗时与工具次数作为次级信息，
+  最新活动单独一行；不叠加重复的 Delegate task/Executing 标题。
+- 调用详情与结果通过同级折叠入口保留，委派失败仍明确可见。子任务在后台运行时，
+  父工具失败不覆盖其真实运行状态；缺少 child 终态时不从工具调用完成推断完成。
 - child 尚未建立时点击，卡片显示 `Conversation not ready yet`，不创建空标签页。
 - Editor 标题使用 `类型 · 委派描述`，标题过长时截断。
 - Header 使用 `Starting`、`Working`、`Completed`、`Failed` 或 `Cancelled`
   明确表达生命周期。
-- 主体复用 `ReadOnlyTranscript` 和主聊天消息组件。运行中自动跟随底部；用户
-  向上滚动时暂停，回到底部后恢复。
+- 主体复用 `ReadOnlyTranscript`、主聊天样式作用域及阅读列；字号、行距、代码、
+  Thinking、Tool、Diff 与消息气泡统一。委派目标和类型常驻，长任务说明默认折叠，
+  展开使用共享 Markdown，原始 invocation 另行折叠；不继承消息气泡的纯文本换行。
+  折叠状态跨虚拟卸载保留，展开时暂停跟随。运行中自动跟随底部；用户向上滚动时
+  暂停，回到底部后恢复。最终结果保留复制，不能重新生成或分叉只读会话。
 - 历史不可用时显示明确 unavailable 状态，不把失败投影为空对话。
 
 ### 生命周期与恢复

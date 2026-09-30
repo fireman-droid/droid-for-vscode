@@ -79,6 +79,28 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
     {errorMessage ? <pre role="status" className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-destructive/40 bg-destructive/5 p-2.5 font-mono text-[11px] leading-[18px] text-destructive">{errorMessage}</pre> : null}
     {unavailable ? <p className="text-[11px] text-muted-foreground">{unavailable.detail}</p> : null}
   </> : undefined;
+  if (item.subagent) {
+    const delegationFailed = item.status === 'failed' && item.subagent.status !== 'failed';
+    const errorSummary = [delegationFailed ? 'Delegation failed' : '', errorMessage?.split(/\r?\n/, 1)[0]].filter(Boolean).join(' · ');
+    return <div className="min-w-0 space-y-1">
+      <SubagentRow item={item} />
+      {errorSummary ? <p role="status" className="px-2 text-[11px] text-destructive [overflow-wrap:anywhere]">{errorSummary}</p> : null}
+      {hasDetails ? <Tool open={disclosure.expanded} onOpenChange={() => disclosure.toggle()} className="px-2">
+        <div className="flex min-w-0 items-center gap-1">
+          <ToolHeader title="Task details" status="" />
+          {fileActions}
+        </div>
+        <ToolContent className="space-y-1 pb-1">
+          <p>{[title, status].filter(Boolean).join(' · ')}</p>
+          {resultSummary ? <p>{resultSummary}</p> : null}
+          {item.detail ? <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre> : null}
+          {activityDetail}
+        </ToolContent>
+      </Tool> : null}
+      {diff ? <OperationDiff item={item} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
+      {item.backgroundHint?.fireAndForget ? <p className="px-2 text-[11px] text-muted-foreground">Background process · Keeps running until you stop it manually</p> : null}
+    </div>;
+  }
   if (isFoldableFileOperation(item)) return hideConfirmedOperations ? null : <OperationDiff item={item} onInteract={onInteract} />;
   if (item.detailKind === 'plan' && item.detail) {
     const steps = parsePlanSteps(item.detail);
@@ -95,7 +117,6 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
     </ActivityItem>
     {diff ? <OperationDiff item={item} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
     {item.backgroundHint?.fireAndForget ? <p className="pl-6 text-[10.5px] text-muted-foreground">Background process · Keeps running until you stop it manually</p> : null}
-    {item.subagent ? <SubagentRow item={item} /> : null}
   </div>;
   return <div className="space-y-1" title={[item.toolName, unavailable?.detail].filter(Boolean).join(' · ')}>
     {command !== undefined ? <CommandCard item={item} command={command} output={output} open={disclosure.expanded}
@@ -115,6 +136,5 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
     </Tool>}
     {diff ? <OperationDiff item={item} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
     {item.backgroundHint?.fireAndForget ? <p className="pl-4 text-[11px] text-muted-foreground">Background process · Keeps running until you stop it manually</p> : null}
-    {item.subagent ? <SubagentRow item={item} /> : null}
   </div>;
 }
